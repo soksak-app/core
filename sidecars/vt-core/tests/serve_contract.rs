@@ -912,9 +912,10 @@ async fn test_selection_release_emits_one_user_copy_event() {
     assert!(!output.contains("Unknown operation: selection.end"));
 }
 
-/// A point in the region past the last full row or column selects the nearest cell; a point outside the region is an error.
+/// A point in the region past the last full row or column selects to the last row and the right edge of the last
+/// column; a point outside the region is an error.
 #[tokio::test]
-async fn test_selection_in_the_region_padding_selects_the_nearest_cell() {
+async fn test_selection_in_the_region_padding_selects_to_the_last_edge() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     // 801 x 383 픽셀은 칸 크기의 배수가 아니므로 마지막 완전한 행과 열 뒤에 여백이 남는다.
     let input = r#"{"surface":"s1","body":{"operation":"open","shell":"/bin/sh"}}
@@ -957,8 +958,8 @@ async fn test_selection_in_the_region_padding_selects_the_nearest_cell() {
     );
     assert_eq!(
         *cells.lock().unwrap(),
-        vec![(0, 0), (cols - 1, rows - 1)],
-        "the padding point selects the last cell: {output}"
+        vec![(0, 0), (cols, rows - 1)],
+        "the padding point selects to the right edge of the last cell: {output}"
     );
     let errors: Vec<&str> = output
         .lines()
@@ -4267,4 +4268,44 @@ async fn an_inline_image_event_follows_the_presentation_that_draws_the_image() {
         }
     }
     task.abort();
+}
+
+/// A selection point goes to the nearest cell edge, so a cell is selected once the pointer passes its midpoint.
+#[tokio::test]
+async fn test_selection_points_go_to_the_nearest_cell_edge() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let cell = soksak_sidecar_vt_core::platform::metrics(13.0, 1.0).cell_width as f64;
+    let input = format!(
+        r#"{{"surface":"s1","body":{{"operation":"open","shell":"/bin/sh"}}}}
+{{"surface":"s1","body":{{"image":{{"configure":{{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}}}}}
+{{"surface":"s1","body":{{"operation":"selection.start","x":{},"y":1.0}}}}
+{{"surface":"s1","body":{{"operation":"selection.update","x":{},"y":1.0}}}}
+{{"surface":"s1","body":{{"operation":"selection.update","x":{},"y":1.0}}}}
+"#,
+        cell * 0.4,
+        cell * 3.4,
+        cell * 3.6
+    );
+    let reader = std::io::Cursor::new(input.into_bytes());
+    let mut writer = Vec::new();
+    let cells = Arc::new(Mutex::new(Vec::new()));
+    let recorded = cells.clone();
+    let engine_factory = Arc::new(move || {
+        let mut engine = MockEngine::new();
+        engine.selected_cells = recorded.clone();
+        Box::new(engine) as Box<dyn Engine>
+    });
+    let calls_for_factory = calls.clone();
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new(
+            "unused".to_string(),
+            calls_for_factory.clone(),
+        )) as Arc<dyn SessionPort>
+    });
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+    assert_eq!(
+        *cells.lock().unwrap(),
+        vec![(0, 0), (3, 0), (4, 0)],
+        "a point before a cell's midpoint stays at its left edge and a point past it goes to its right edge"
+    );
 }

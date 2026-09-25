@@ -8,7 +8,7 @@ import test from "node:test";
 
 import { APPS, fresh, open } from "../app.mjs";
 import { frames, pixel, readFrame } from "../frame.mjs";
-import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
+import { cellBackgrounds, ensureTerminals, isColor, readScreenUntil, selectionBackground } from "../terminal-screen.mjs";
 import { pasteboardText, writePasteboard } from "../pasteboard.mjs";
 import { activateFinder, appPid, bringFront, click, closeFinderWindow, dragPath, finderItemCenter, frontWindowAt, key, KEYS,
   dragPasteboard, openFinderWindow, waitNotificationBanner, post, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
@@ -192,7 +192,9 @@ for (const app of Object.values(APPS)) {
     const { s, surface, session, origin, row } = await prepare(t, app, "COPYME");
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("BEFORE-COPY").toString("base64") }]);
     const before = (await s.get("terminal.session", surface)).selectionReleases;
-    dragPath(cellPoint(origin, session, 0, row), cellPoint(origin, session, 5, row));
+    // 선택은 포인터가 칸의 가운데를 지나야 그 칸을 덮으므로 첫 칸의 왼쪽 가장자리 가까이에서 누른다.
+    const start = cellPoint(origin, session, 0, row);
+    dragPath({ ...start, x: start.x - 0.3 * session.cellWidth }, cellPoint(origin, session, 5, row));
     await s.until("terminal.session", (value) => value.selectionReleases === before + 1,
       "the sidecar did not answer the release of a real drag", { surface });
     await s.until("terminal.session", () => pasteboardText() === "COPYME",
@@ -261,11 +263,16 @@ for (const app of Object.values(APPS)) {
   });
 }
 
-// 화면에 선택으로 그려진 글자. 사이드카가 그린 화면의 반전 칸을 읽는다.
+// 화면에 선택으로 그려진 글자. 선택한 칸은 테마의 선택 배경으로 그리고 화면 셀에는 색이 없으므로 칸의 배경 픽셀을 읽는다.
 async function selectedCharacters(s, surface, row) {
   await s.run("terminal.screen.read", {}, surface);
   const lines = await s.get("terminal.screen", surface);
-  return lines[row].filter((cell) => cell.inverse).map((cell) => cell.ch ?? " ").join("").trimEnd();
+  const { cols } = await s.get("terminal.session", surface);
+  const selection = await selectionBackground(s);
+  const shown = await cellBackgrounds(s, surface, Array.from({ length: cols }, (_, col) => ({ col, row })));
+  return Array.from({ length: cols }, (_, col) => col)
+    .filter((col) => isColor(shown[col], selection))
+    .map((col) => lines[row][col]?.ch ?? " ").join("").trimEnd();
 }
 
 for (const app of Object.values(APPS)) {
@@ -695,8 +702,10 @@ for (const app of Object.values(APPS)) {
     // ?1002 에서도 Shift 를 누른 끌기는 알리지 않고 글자를 선택한다. 뒤에 쓴 Z 가 PTY 의 첫 바이트여야 한다.
     await read("SHIFT", "\\033[?1002h\\033[?1006h", 1, "\\033[?1002l\\033[?1006l");
     const before = (await s.get("terminal.session", surface)).selectionReleases;
-    const from = cellPoint(origin, session, 0, row);
-    const to = cellPoint(origin, session, 4, row);
+    // 선택은 포인터가 칸의 가운데를 지나야 그 칸을 덮으므로 첫 칸의 왼쪽 가장자리 가까이에서 누르고 마지막 칸의 가운데를
+    // 지나 뗀다(docs/spec/terminal-runtime.md).
+    const from = { ...cellPoint(origin, session, 0, row), x: cellPoint(origin, session, 0, row).x - 0.3 * session.cellWidth };
+    const to = { ...cellPoint(origin, session, 4, row), x: cellPoint(origin, session, 4, row).x + 0.3 * session.cellWidth };
     const steps = [{ type: "move", ...from, modifiers: ["shift"] }, { type: "down", ...from, modifiers: ["shift"] }];
     for (let i = 1; i <= 8; i++) steps.push({ type: "drag", x: from.x + (to.x - from.x) * i / 8, y: from.y, modifiers: ["shift"] });
     steps.push({ type: "up", ...to, modifiers: ["shift"] });

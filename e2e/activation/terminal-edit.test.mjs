@@ -29,10 +29,13 @@ for (const app of Object.values(APPS)) {
     const cell = (column) => ({ x: view.document.x + view.x + (column + 0.5) * session.cellWidth,
       y: view.document.y + view.y + (row + 0.5) * session.cellHeight });
     const before = session.selectionReleases;
-    await s.pointer(cell(0).x, cell(0).y, "down");
+    // 선택은 포인터가 칸의 가운데를 지나야 그 칸을 덮으므로 첫 칸의 왼쪽 가장자리 가까이에서 누르고 마지막 칸의 가운데를
+    // 지나 뗀다(docs/spec/terminal-runtime.md).
+    const shift = 0.3 * session.cellWidth;
+    await s.pointer(cell(0).x - shift, cell(0).y, "down");
     await s.pointer(cell(3).x, cell(3).y, "drag");
-    await s.pointer(cell(7).x, cell(7).y, "drag");
-    await s.pointer(cell(7).x, cell(7).y, "up");
+    await s.pointer(cell(7).x + shift, cell(7).y, "drag");
+    await s.pointer(cell(7).x + shift, cell(7).y, "up");
     await s.until("terminal.session", (value) => value.selectionReleases === before + 1, "the selection was not released", { surface });
     await s.until("host.window", (window) => window.responder?.surface === surface, "the terminal did not take native focus");
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("CHANGED").toString("base64") }]);

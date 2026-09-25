@@ -1392,17 +1392,21 @@ for (const app of Object.values(APPS)) {
     const top = view.document.y + view.y;
     const released = metrics.selectionReleases;
     await s.pointer(viewX + 0.5 * metrics.cellWidth, top + 0.5 * metrics.cellHeight, "down", { button: "left" });
-    await s.pointer(viewX + 3.5 * metrics.cellWidth, top + metrics.rows * metrics.cellHeight + padding / 2, "drag", { button: "left" });
-    // 사이드카는 끌기를 차례로 처리하므로 화면 읽기의 답은 선택을 반영한 뒤에 온다. 넷째 칸 가운데까지 끌면
-    // 마지막 행의 앞 세 칸은 선택된다. 선택은 색으로만 보이므로 픽셀로 잰다.
-    await s.run("terminal.screen.read", {}, surface);
+    // 선택은 포인터가 칸의 가로 가운데를 지나야 그 칸을 덮는다(docs/spec/terminal-runtime.md). 넷째 칸의 가운데 앞까지
+    // 끌면 마지막 행의 앞 세 칸, 가운데를 지나면 네 칸이다. 사이드카는 끌기를 차례로 처리하므로 화면 읽기의 답은 선택을
+    // 반영한 뒤에 온다. 선택은 색으로만 보이므로 픽셀로 잰다.
     const selection = await selectionBackground(s);
     const last = metrics.rows - 1;
-    const shown = await cellBackgrounds(s, surface, [0, 1, 2].map((col) => ({ col, row: last })));
-    assert.deepEqual(shown.map((sample) => isColor(sample, selection)), [true, true, true],
-      `the drag into the bottom padding did not select the first three cells of the last row: ${JSON.stringify(shown)} ` +
-        `against the selection background ${selection}`);
-    await s.pointer(viewX + 3.5 * metrics.cellWidth, top + metrics.rows * metrics.cellHeight + padding / 2, "up", { button: "left" });
+    const below = top + metrics.rows * metrics.cellHeight + padding / 2;
+    for (const [column, expected] of [[3.4, [true, true, true, false]], [3.6, [true, true, true, true]]]) {
+      await s.pointer(viewX + column * metrics.cellWidth, below, "drag", { button: "left" });
+      await s.run("terminal.screen.read", {}, surface);
+      const shown = await cellBackgrounds(s, surface, [0, 1, 2, 3].map((col) => ({ col, row: last })));
+      assert.deepEqual(shown.map((sample) => isColor(sample, selection)), expected,
+        `a drag into the bottom padding to column ${column} selected other cells of the last row: ${JSON.stringify(shown)} ` +
+          `against the selection background ${selection}`);
+    }
+    await s.pointer(viewX + 3.6 * metrics.cellWidth, below, "up", { button: "left" });
     const state = await s.until("terminal.session",
       (value) => value?.selectionReleases > released || value?.error !== undefined,
       "the sidecar did not answer the selection release", { surface });
@@ -1452,8 +1456,9 @@ for (const app of Object.values(APPS)) {
     const before = await terminalFrame(s);
     const viewX = view.document.x + view.x;
     const viewY = view.document.y + view.y;
+    // 선택은 포인터가 칸의 가운데를 지나야 그 칸을 덮으므로 첫 칸의 왼쪽 가장자리 가까이에서 누른다.
     const start = {
-      x: viewX + (col + 0.5) * metrics.cellWidth,
+      x: viewX + (col + 0.2) * metrics.cellWidth,
       y: viewY + (row + 0.5) * metrics.cellHeight,
     };
     const end = {

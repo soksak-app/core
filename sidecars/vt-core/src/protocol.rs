@@ -264,8 +264,12 @@ pub trait Engine: Send + 'static {
     fn drain_events(&mut self) -> Vec<EngineEvent>;
     fn resolve_clipboard(&mut self, request_id: u64, text: &str) -> Result<(), String>;
     fn reject_clipboard(&mut self, request_id: u64, reason: &str) -> Result<(), String>;
-    fn selection_start(&mut self, col: u16, row: u16) -> Result<(), String>;
-    fn selection_update(&mut self, col: u16, row: u16) -> Result<(), String>;
+    /// Starts a selection at a cell edge. `edge` is 0 to the column count: edge `c` is the left
+    /// edge of column `c`, and the column count is the right edge of the last column.
+    fn selection_start(&mut self, edge: u16, row: u16) -> Result<(), String>;
+    /// Moves the selection end to a cell edge. The selection covers the cells between the start
+    /// and end edges; equal edges select nothing.
+    fn selection_update(&mut self, edge: u16, row: u16) -> Result<(), String>;
     /// Ends the selection and returns its text. A selection that covers no text is cleared
     /// and returns `None`; that is a normal gesture, not an error.
     fn selection_end(&mut self) -> Result<Option<String>, String>;
@@ -2009,8 +2013,8 @@ async fn surface_task(
                     }
                     SurfaceCommand::SelectionStart { x, y } => {
                         let result = image_state.as_ref().ok_or_else(|| "selection image is not configured".to_string())
-                            .and_then(|state| state.selection_cell(x, y))
-                            .and_then(|(col, row)| engine.selection_start(col, row));
+                            .and_then(|state| state.selection_edge(x, y))
+                            .and_then(|(edge, row)| engine.selection_start(edge, row));
                         if let Err(error) = result {
                             let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": error}});
                             if output_tx.send(response.to_string()).await.is_err() { return; }
@@ -2027,8 +2031,8 @@ async fn surface_task(
                     }
                     SurfaceCommand::SelectionUpdate { x, y } => {
                         let result = image_state.as_ref().ok_or_else(|| "selection image is not configured".to_string())
-                            .and_then(|state| state.selection_cell(x, y))
-                            .and_then(|(col, row)| engine.selection_update(col, row));
+                            .and_then(|state| state.selection_edge(x, y))
+                            .and_then(|(edge, row)| engine.selection_update(edge, row));
                         if let Err(error) = result {
                             let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": error}});
                             if output_tx.send(response.to_string()).await.is_err() { return; }

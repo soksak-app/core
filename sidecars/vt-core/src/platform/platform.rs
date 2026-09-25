@@ -85,6 +85,16 @@ impl ImageState {
         let row = ((y / cell_height).floor() as u16).min(rows - 1);
         Ok((col, row))
     }
+
+    /// 선택 점의 칸 경계와 행. 점은 그 행의 가장 가까운 칸 경계로 가므로, 포인터가 칸의 가로 가운데를 지나야
+    /// 그 칸이 선택에 든다. 경계는 0부터 열 수까지이고, 마지막 열 뒤의 여백은 마지막 열의 오른쪽 경계다.
+    pub fn selection_edge(&self, x: f64, y: f64) -> Result<(u16, u16), String> {
+        let (_, row) = self.selection_cell(x, y)?;
+        let cell_width = f64::from(self.metrics.cell_width) / f64::from(self.scale);
+        let cols = (self.width_px as f32 / self.metrics.cell_width) as u16;
+        let edge = ((x / cell_width + 0.5).floor() as u16).min(cols);
+        Ok((edge, row))
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -104,6 +114,10 @@ impl ImageState {
     }
 
     pub fn selection_cell(&self, _x: f64, _y: f64) -> Result<(u16, u16), String> {
+        Err("terminal selection is not implemented on this operating system".to_string())
+    }
+
+    pub fn selection_edge(&self, _x: f64, _y: f64) -> Result<(u16, u16), String> {
         Err("terminal selection is not implemented on this operating system".to_string())
     }
 }

@@ -705,7 +705,7 @@ fn native_selection_updates_raster_cells_and_returns_text_once() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"hello");
     engine.selection_start(0, 0).expect("selection start");
-    engine.selection_update(4, 0).expect("selection update");
+    engine.selection_update(5, 0).expect("selection update");
     let selected = engine.screen();
     assert_eq!(
         selected.lines[0][2].bg.as_deref(),
@@ -724,7 +724,7 @@ fn the_current_selection_text_is_readable_until_the_selection_is_cleared() {
     engine.feed(b"hello");
     assert_eq!(engine.selection_text(), None, "no selection has no text");
     engine.selection_start(0, 0).expect("selection start");
-    engine.selection_update(4, 0).expect("selection update");
+    engine.selection_update(5, 0).expect("selection update");
     engine.selection_end().expect("selection copy");
     assert_eq!(engine.selection_text().as_deref(), Some("hello"));
     // 움직이지 않은 클릭은 빈 선택으로 이전 선택을 지운다.
@@ -783,7 +783,7 @@ fn the_viewport_scrolls_through_the_scrollback_and_returns_to_the_newest_output(
 
     // 스크롤한 뷰포트의 선택은 보이는 글자를 복사한다.
     engine.selection_start(0, 1).expect("selection start");
-    engine.selection_update(5, 1).expect("selection update");
+    engine.selection_update(6, 1).expect("selection update");
     assert_eq!(
         engine.selection_end().expect("selection copy").as_deref(),
         Some("LINE01")
@@ -815,10 +815,11 @@ fn inverted_text(screen: &soksak_sidecar_vt_core::Screen, row: usize) -> String 
 #[test]
 fn the_rendered_selection_and_the_copied_text_cover_the_same_cells_in_both_directions() {
     for (from, to, expected) in [
-        (1u16, 5u16, "EFTED"),
-        (5, 1, "EFTED"),
-        (0, 7, "LEFTEDGE"),
-        (7, 0, "LEFTEDGE"),
+        (1u16, 6u16, "EFTED"),
+        (6, 1, "EFTED"),
+        (0, 8, "LEFTEDGE"),
+        (8, 0, "LEFTEDGE"),
+        (3, 3, ""),
     ] {
         let mut engine = AlacrittyEngine::new();
         engine.feed(b"LEFTEDGE");
@@ -832,7 +833,7 @@ fn the_rendered_selection_and_the_copied_text_cover_the_same_cells_in_both_direc
         assert_eq!(
             (rendered.as_str(), copied.as_str()),
             (expected, expected),
-            "a drag from cell {from} to cell {to} rendered {rendered:?} and copied {copied:?}"
+            "a drag from edge {from} to edge {to} rendered {rendered:?} and copied {copied:?}"
         );
     }
 }
@@ -1720,7 +1721,7 @@ fn osc_highlight_colors_are_set_queried_reset_and_draw_the_selection() {
         ]
     );
     engine.selection_start(0, 0).unwrap();
-    engine.selection_update(0, 0).unwrap();
+    engine.selection_update(1, 0).unwrap();
     let cell = engine.screen().lines[0][0].clone();
     assert_eq!(
         (cell.bg.as_deref(), cell.fg.as_deref(), cell.inverse),

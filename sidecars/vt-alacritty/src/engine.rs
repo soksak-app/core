@@ -532,7 +532,7 @@ pub struct AlacrittyEngine {
     pending_csi: Vec<u8>,
     pending_sequence: Vec<u8>,
     /// 선택을 시작한 칸. 끄는 방향에 따라 이 칸과 포인터 칸을 모두 포함하도록 선택의 경계 쪽을 정한다.
-    selection_anchor: Option<Point>,
+    selection_anchor: Option<(Point, Side)>,
     shell: ShellState,
     /// OSC 17 과 19 가 정한 선택 영역의 배경과 글자 색. 없으면 선택 칸을 반전해 그린다.
     highlight_background: Option<Rgb>,
@@ -1272,35 +1272,37 @@ impl AlacrittyEngine {
         )
     }
 
-    pub fn selection_start(&mut self, col: u16, row: u16) -> Result<(), String> {
-        let Some(point) = self.viewport_point(col, row) else {
-            return Err(format!(
-                "selection cell is outside the terminal grid: {col},{row}"
-            ));
-        };
-        self.term.selection = Some(Selection::new(SelectionType::Simple, point, Side::Left));
-        self.selection_anchor = Some(point);
+    /// 칸 경계를 alacritty 의 칸과 쪽으로 바꾼다. 경계 c 는 칸 c 의 왼쪽이고, 열 수는 마지막 칸의 오른쪽이다.
+    fn edge_point(&self, edge: u16, row: u16) -> Result<(Point, Side), String> {
+        let columns = self.term.grid().columns();
+        let outside = || format!("selection edge is outside the terminal grid: {edge},{row}");
+        if usize::from(edge) > columns {
+            return Err(outside());
+        }
+        if usize::from(edge) == columns {
+            let point = self.viewport_point(edge - 1, row).ok_or_else(outside)?;
+            return Ok((point, Side::Right));
+        }
+        let point = self.viewport_point(edge, row).ok_or_else(outside)?;
+        Ok((point, Side::Left))
+    }
+
+    pub fn selection_start(&mut self, edge: u16, row: u16) -> Result<(), String> {
+        let (point, side) = self.edge_point(edge, row)?;
+        self.term.selection = Some(Selection::new(SelectionType::Simple, point, side));
+        self.selection_anchor = Some((point, side));
         Ok(())
     }
 
-    pub fn selection_update(&mut self, col: u16, row: u16) -> Result<(), String> {
-        let Some(point) = self.viewport_point(col, row) else {
-            return Err(format!(
-                "selection cell is outside the terminal grid: {col},{row}"
-            ));
-        };
-        let anchor = self
+    /// 선택은 시작 경계와 이 경계 사이의 칸이다. 같은 경계는 아무 칸도 선택하지 않는다.
+    pub fn selection_update(&mut self, edge: u16, row: u16) -> Result<(), String> {
+        let (point, side) = self.edge_point(edge, row)?;
+        let (anchor, anchor_side) = self
             .selection_anchor
             .filter(|_| self.term.selection.is_some())
             .ok_or_else(|| "selection update without selection start".to_string())?;
-        // 앞쪽으로 끌면 시작 칸의 오른쪽 경계와 포인터 칸의 왼쪽 경계를 쓴다. 두 칸이 모두 선택에 든다.
-        let (anchor_side, point_side) = if point < anchor {
-            (Side::Right, Side::Left)
-        } else {
-            (Side::Left, Side::Right)
-        };
         let mut selection = Selection::new(SelectionType::Simple, anchor, anchor_side);
-        selection.update(point, point_side);
+        selection.update(point, side);
         self.term.selection = Some(selection);
         Ok(())
     }
@@ -1505,12 +1507,12 @@ impl Engine for AlacrittyEngine {
         AlacrittyEngine::reject_clipboard(self, request_id, reason)
     }
 
-    fn selection_start(&mut self, col: u16, row: u16) -> Result<(), String> {
-        AlacrittyEngine::selection_start(self, col, row)
+    fn selection_start(&mut self, edge: u16, row: u16) -> Result<(), String> {
+        AlacrittyEngine::selection_start(self, edge, row)
     }
 
-    fn selection_update(&mut self, col: u16, row: u16) -> Result<(), String> {
-        AlacrittyEngine::selection_update(self, col, row)
+    fn selection_update(&mut self, edge: u16, row: u16) -> Result<(), String> {
+        AlacrittyEngine::selection_update(self, edge, row)
     }
 
     fn selection_end(&mut self) -> Result<Option<String>, String> {
