@@ -5,7 +5,7 @@
 // 탭 선택과 섹션 접힘은 사이드바마다 이 모듈이 보관한다.
 import { bind } from "./commands.js";
 import { registry } from "./exposure.js";
-import { knownSections } from "./registry.js";
+import { section } from "./registry.js";
 
 /* 사이드바 id 마다 고른 탭과 접힌 섹션. */
 const choices = new Map();
@@ -32,7 +32,11 @@ function unmount(entry) {
   entry.mount = null;
   entry.mounted = false;
   entry.error = null;
-  pending.then((result) => result?.dispose()).catch(() => {});
+  // 해제 중의 마운트 실패와 해제 실패는 페이지 오류로 보고한다(docs/spec/plugins.md). 항목은 이미 해제되어
+  // core.sidebars 의 error 로는 보이지 않는다.
+  pending.then((result) => result.dispose()).catch((error) => {
+    dispatchEvent(new ErrorEvent("error", { message: `section ${entry.section.id}: ${error.message}` }));
+  });
   for (const stop of entry.observing.splice(0)) stop();
 }
 
@@ -133,7 +137,7 @@ function apply(record) {
 export function drawSet(container, sidebar, set, context) {
   sweep();
   if (set.layout !== "list" && set.layout !== "tabs") throw new Error(`set ${set.id} layout must be list or tabs`);
-  const sections = knownSections(set.sections);
+  const sections = set.sections.map(section);
   const choice = choiceOf(sidebar);
   if (set.layout === "tabs" && !sections.some((s) => s.id === choice.tab)) choice.tab = sections[0]?.id ?? null;
   const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.surface]);
