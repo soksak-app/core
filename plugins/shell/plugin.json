@@ -81,6 +81,34 @@
         "schema": {
           "type": "integer"
         }
+      },
+      {
+        "name": "shell.history",
+        "description": "The nonblank lines written to the shell session through shell.write, oldest first.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      {
+        "name": "shell.jobs",
+        "description": "The shell.run commands delivered to the shell session that have not finished, in start order, each with its run id and command text.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "command": {
+                "type": "string"
+              }
+            }
+          }
+        }
       }
     ],
     "commands": [

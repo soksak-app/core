@@ -36,7 +36,7 @@ test("the surface module is published", () => {
 
 test("the shell exposes its output, screen, directory, commands, and controls", () => {
   const names = (kind) => manifest.exposes[kind].map((entry) => entry.name).sort();
-  assert.deepEqual(names("status"), ["shell.cwd", "shell.output", "shell.runs", "shell.screen"]);
+  assert.deepEqual(names("status"), ["shell.cwd", "shell.history", "shell.jobs", "shell.output", "shell.runs", "shell.screen"]);
   assert.deepEqual(names("commands"), ["shell.clear", "shell.interrupt", "shell.run", "shell.write"]);
   assert.deepEqual(names("dom"), ["shell.clear", "shell.input", "shell.interrupt", "shell.output"]);
 });

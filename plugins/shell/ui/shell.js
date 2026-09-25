@@ -10,26 +10,34 @@ export async function mount(root, context) {
   const shell = context.runtime.sidecar();
   const runs = new Map();
   let nextRun = 0;
-  const listeners = new Map(["output", "screen", "cwd", "runs"].map((name) => [name, new Set()]));
+  // 세션에 쓴 줄. 사이드바의 실행 기록 섹션이 shell.history 로 보인다.
+  const history = [];
+  const listeners = new Map(["output", "screen", "cwd", "runs", "history", "jobs"].map((name) => [name, new Set()]));
   const read = { output: () => [...out.children].map((line) => line.textContent), cwd: () => cwd,
-    screen: () => ({ lines: [...out.children].map((line) => line.textContent), rows: Math.floor(out.clientHeight / 16), scrollTop: out.scrollTop }), runs: () => runs.size };
+    screen: () => ({ lines: [...out.children].map((line) => line.textContent), rows: Math.floor(out.clientHeight / 16), scrollTop: out.scrollTop }), runs: () => runs.size,
+    history: () => history.slice(), jobs: () => [...runs].map(([id, run]) => ({ id, command: run.command })) };
+  const runsChanged = () => { changed("runs"); changed("jobs"); };
   const changed = (name) => listeners.get(name)?.forEach((fn) => fn(read[name]()));
   const write = (text) => { for (const [i, part] of text.split("\n").entries()) { if (i || !open) out.append(document.createElement("div")); if (part) out.lastElementChild.append(part); } open = !text.endsWith("\n"); changed("output"); changed("screen"); };
   const registrations = [
-    context.exposure.command("shell.write", ({ data }) => shell.send(context.surfaceId, { operation: "write", data })),
+    context.exposure.command("shell.write", ({ data }) => {
+      const written = data.split("\n").filter((line) => line.trim());
+      if (written.length) { history.push(...written); changed("history"); }
+      return shell.send(context.surfaceId, { operation: "write", data });
+    }),
     context.exposure.command("shell.interrupt", () => shell.send(context.surfaceId, { operation: "interrupt" })),
     context.exposure.command("shell.clear", async () => {
       out.replaceChildren(); open = false; changed("output"); changed("screen"); return null;
     }),
     context.exposure.command("shell.run", ({ command }) => {
     const id = `run-${++nextRun}`;
-    const result = new Promise((resolve, reject) => runs.set(id, { resolve, reject }));
-    changed("runs");
+    const result = new Promise((resolve, reject) => runs.set(id, { resolve, reject, command }));
+    runsChanged();
     shell.send(context.surfaceId, { operation: "run", id, command }).catch((error) => {
       const pending = runs.get(id);
       if (!pending) return;
       runs.delete(id);
-      changed("runs");
+      runsChanged();
       pending.reject(error);
     });
     return result;
@@ -41,6 +49,8 @@ export async function mount(root, context) {
     context.exposure.status("shell.screen", read.screen, watch("screen")),
     context.exposure.status("shell.cwd", read.cwd, watch("cwd")),
     context.exposure.status("shell.runs", read.runs, watch("runs")),
+    context.exposure.status("shell.history", read.history, watch("history")),
+    context.exposure.status("shell.jobs", read.jobs, watch("jobs")),
     context.exposure.dom("shell.input", input),
     context.exposure.dom("shell.output", out),
     context.exposure.dom("shell.interrupt", root.querySelector('[data-command="shell.interrupt"]')),
@@ -55,10 +65,10 @@ export async function mount(root, context) {
     if (body.cwd !== undefined) { cwd = body.cwd; changed("cwd"); return; }
     if (body.id !== undefined) {
       const pending = runs.get(body.id); runs.delete(body.id);
-      changed("runs");
+      runsChanged();
       if (body.error !== undefined) pending?.reject(new Error(body.error));
       else pending?.resolve({ output: body.output, exit: body.exit });
-      changed("runs"); return;
+      return;
     }
     if (body.text !== undefined) write(body.text);
     else if (body.error !== undefined) write(`error: ${body.error}\n`);
