@@ -28,6 +28,7 @@ typedef struct {
     uint8_t has_fg;
     uint8_t has_bg;
     uint8_t inverse;
+    uint8_t underline;
 } Cell;
 
 typedef struct {

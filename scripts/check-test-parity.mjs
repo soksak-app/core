@@ -94,6 +94,7 @@ lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scrip
   }),
 
   lane("Darwin clipboard", "objective-c", ["native/darwin/src/clipboard.m"], ["native/darwin/tests/clipboard_test.m"], { sharedTests: true }),
+  lane("Darwin link open", "objective-c", ["native/darwin/src/link.m"], ["native/darwin/tests/link_test.m"], { sharedTests: true }),
   lane("Darwin document and surface", "objective-c", [
     "native/darwin/src/document_view.m",
     "native/darwin/src/image_region.m",

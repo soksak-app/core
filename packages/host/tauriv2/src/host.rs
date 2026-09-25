@@ -21,6 +21,7 @@ pub mod documents;
 pub mod endpoint;
 pub mod exposure;
 pub mod images;
+pub mod link;
 mod modals;
 #[path = "platform/platform.rs"]
 pub mod platform;

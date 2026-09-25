@@ -87,6 +87,7 @@ function createFakeView() {
     clientWidth: 800,
     clientHeight: 600,
     getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 600 }; },
+    style: {},
     setPointerCapture() {},
     releasePointerCapture() {},
     dataset: {},
@@ -2851,4 +2852,67 @@ test("an OSC 9 notification becomes a tab notice and a rejected one is a session
   });
   rejecting.triggerEvent("test-session", { event: "notification", message: "x".repeat(2000) });
   assert.match(errors.join("\n"), /a tab notice must be 1 to 1024 characters/);
+});
+
+async function startWithLink({ links } = {}) {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const view = createFakeView();
+  const errors = [];
+  await startTerminal({
+    view, attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, links,
+    reportSurfaceError: (error) => errors.push(error.message),
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  // 0행의 2~5열(x 16~47)이 링크다.
+  const link = "https://example.test/doc";
+  fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [[
+    { ch: "a", width: 1 }, { ch: " ", width: 1 },
+    ...[..."LINK"].map((ch) => ({ ch, width: 1, link })), { ch: " ", width: 1 },
+  ]] });
+  fakeSidecar.reset();
+  return { fakeSidecar, fakeExpose, view, errors, link };
+}
+
+test("the pointer is a hand over a linked cell and the session reports the hovered link", async () => {
+  const { fakeExpose, view, link } = await startWithLink({ links: { open: async () => {} } });
+  const hovered = () => fakeExpose.getStatus("terminal.session").readFn().link;
+  view._trigger("pointermove", { pointerId: 1, clientX: 20, clientY: 5 });
+  assert.equal(view.style.cursor, "pointer");
+  assert.equal(hovered(), link);
+  view._trigger("pointermove", { pointerId: 1, clientX: 4, clientY: 5 });
+  assert.equal(view.style.cursor, "");
+  assert.equal(hovered(), null);
+  view._trigger("pointermove", { pointerId: 1, clientX: 20, clientY: 5 });
+  view._trigger("pointerleave", { pointerId: 1, clientX: 900, clientY: 5 });
+  assert.equal(hovered(), null);
+});
+
+test("a Command-click on a linked cell opens the link through terminal.link.open without selecting", async () => {
+  const opened = [];
+  const { fakeSidecar, view, link } = await startWithLink({ links: { open: async (url) => { opened.push(url); } } });
+  view._trigger("pointerdown", { button: 0, pointerId: 2, clientX: 20, clientY: 5, metaKey: true });
+  view._trigger("pointerup", { button: 0, pointerId: 2, clientX: 20, clientY: 5, metaKey: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(opened, [link]);
+  assert.equal(fakeSidecar.getMessages().some(({ body }) => String(body.operation).startsWith("selection")), false);
+
+  view._trigger("pointerdown", { button: 0, pointerId: 3, clientX: 20, clientY: 5 });
+  view._trigger("pointerup", { button: 0, pointerId: 3, clientX: 20, clientY: 5 });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(opened, [link], "a click without Command opened the link");
+  assert.equal(fakeSidecar.getMessages().some(({ body }) => body.operation === "selection.start"), true);
+});
+
+test("a link that the host rejects is an input session error", async () => {
+  const { fakeExpose, view } = await startWithLink({
+    links: { open: async () => { throw new Error('link URL scheme "file" is not opened'); } },
+  });
+  view._trigger("pointerdown", { button: 0, pointerId: 2, clientX: 20, clientY: 5, metaKey: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.match(fakeExpose.getStatus("terminal.session").readFn().error ?? "", /is not opened/);
 });

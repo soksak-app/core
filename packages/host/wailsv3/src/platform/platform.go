@@ -139,6 +139,8 @@ type Platform interface {
 	ClipboardRead(kind string) (ClipboardValue, error)
 	ClipboardWriteText(text string) error
 	ClipboardWritePNG(bytes []byte) error
+	// OpenLink 는 URL 을 그 스킴의 사용자 기본 애플리케이션으로 연다. UI 스레드에서 호출한다.
+	OpenLink(url string) error
 	// WindowHit 는 창 좌표 (x, y) 의 히트 테스트 결과 {view, main, identifier} 를 JSON 으로 반환한다.
 	// UI 스레드에서 호출한다.
 	WindowHit(window unsafe.Pointer, x, y float64) (string, error)

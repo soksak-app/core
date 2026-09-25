@@ -70,6 +70,7 @@ const METHOD = {
   sidecarSend: "SidecarSend",
   sidecarsRetain: "SidecarsRetain",
   clipboardRead: "ClipboardRead",
+  linkOpen: "LinkOpen",
   clipboardWriteText: "ClipboardWriteText",
   clipboardPersistPNG: "ClipboardPersistPNG",
 };

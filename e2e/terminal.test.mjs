@@ -478,6 +478,57 @@ for (const app of Object.values(APPS)) {
       "the notice stayed after the tab came into view");
   });
 
+  test(`${app.name}: OSC 8 linked cells are drawn with an underline and plain cells are not`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => closeTerminalTabs(s));
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    await s.run("terminal.input", {
+      bytes: "clear; printf '\\033]8;;https://example.com/\\007LINKED\\033]8;;\\007 PLAINS\\n'\r",
+    }, surface);
+    const lines = await readScreenUntil(s, surface, (screen) => screen.includes("LINKED PLAINS"), "the link row did not render");
+    const row = lines.indexOf("LINKED PLAINS");
+    const session = await s.get("terminal.session", surface);
+    await s.request("diagnostics.capture.start", {});
+    const displayed = await s.presented();
+    const { frames: directory } = await s.request("diagnostics.capture.stop", { after: displayed.displayed });
+    try {
+      const files = frames(directory);
+      assert.ok(files.length > 0, "the capture produced no frames");
+      const frame = readFrame(files.at(-1));
+      const region = (await s.get("host.window")).regions.find((item) => item.surface === surface && item.name === "view");
+      const scale = frame.scale;
+      const background = pixel(frame, Math.round((region.frame.x + 20.5 * session.cellWidth) * scale),
+        Math.round((region.frame.y + (row + 0.5) * session.cellHeight) * scale));
+      // 셀 아래쪽 4분의 1에서, 배경과 다른 픽셀이 가장 많은 한 픽셀 행의 픽셀 수를 센다. 밑줄은 셀 폭 전체를
+      // 채우는 행이고, 글자 아래 끝은 행의 일부만 채운다.
+      const fullestRow = (column0, column1) => {
+        const top = Math.round((region.frame.y + (row + 0.75) * session.cellHeight) * scale);
+        const bottom = Math.round((region.frame.y + (row + 1) * session.cellHeight) * scale);
+        const left = Math.round((region.frame.x + column0 * session.cellWidth) * scale);
+        const right = Math.round((region.frame.x + column1 * session.cellWidth) * scale);
+        let fullest = 0;
+        for (let y = top; y < bottom; y++) {
+          let count = 0;
+          for (let x = left; x < right; x++) {
+            if (pixel(frame, x, y).some((channel, index) => Math.abs(channel - background[index]) > 40)) count++;
+          }
+          fullest = Math.max(fullest, count);
+        }
+        return fullest;
+      };
+      const width = Math.round(6 * session.cellWidth * scale);
+      const linked = fullestRow(0, 6);
+      const plain = fullestRow(7, 13);
+      assert.ok(linked >= width * 0.9, `the fullest row below the linked text has ${linked} of ${width} pixels`);
+      assert.ok(plain < width * 0.75, `the fullest row below the plain text has ${plain} of ${width} pixels`);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test(`${app.name}: a terminal split from a terminal starts in the directory that terminal reported`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

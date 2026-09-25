@@ -813,3 +813,27 @@ fn a_wide_glyph_narrower_than_two_cells_is_centred_in_them() {
         "the wide glyph is not centred in its two cells: {left} px left and {right} px right of its ink, cells {cell} px"
     );
 }
+
+#[test]
+fn underlined_and_linked_cells_draw_a_line_below_the_text() {
+    let metrics = metrics(14.0, 1.0);
+    let (cell_width, cell_height) = (metrics.cell_width as u32, metrics.cell_height as u32);
+    let mut screen = screen(3, 1);
+    screen.cursor.visible = false;
+    screen.lines[0][1].underline = true;
+    screen.lines[0][2].link = Some("https://example.test".to_string());
+    let frame = Frame::new(cell_width * 3, cell_height).expect("frame");
+    frame.draw(&screen, &metrics).expect("draw");
+    let plain = bright_region(&frame, 0, cell_width, 0, cell_height);
+    let underlined = bright_region(&frame, cell_width, cell_width * 2, 0, cell_height);
+    let linked = bright_region(&frame, cell_width * 2, cell_width * 3, 0, cell_height);
+    assert_eq!(plain, 0, "a plain blank cell drew pixels");
+    assert!(
+        underlined >= cell_width as usize,
+        "an underlined blank cell drew {underlined} pixels"
+    );
+    assert!(
+        linked >= cell_width as usize,
+        "a linked blank cell drew {linked} pixels"
+    );
+}

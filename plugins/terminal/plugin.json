@@ -161,6 +161,9 @@
             },
             "selecting": {
               "type": "boolean"
+            },
+            "link": {
+              "type": ["string", "null"]
             }
           }
         }
@@ -293,6 +296,19 @@
           "type": "object",
           "properties": {
             "offset": { "type": "integer" }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "terminal.link.open",
+        "description": "Opens a URI from a terminal hyperlink with the user's default application through the host; the host accepts http, https, and mailto.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "uri": { "type": "string" }
           }
         },
         "result": {

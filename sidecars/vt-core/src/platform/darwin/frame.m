@@ -258,6 +258,15 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
             }
         }
 
+        // 밑줄은 글꼴의 밑줄 위치와 두께로 셀 폭 전체에 그린다. 두께는 한 픽셀보다 얇지 않다.
+        if (cell->underline && cell->width > 0) {
+            CGFloat thickness = MAX(CTFontGetUnderlineThickness(font), 1.0);
+            CGFloat baseline = y + CTFontGetDescent(font);
+            CGFloat top = baseline + CTFontGetUnderlinePosition(font) - thickness / 2;
+            CGContextSetFillColorWithColor(ctx, fg_color);
+            CGContextFillRect(ctx, CGRectMake(x, MAX(top, y), metrics->cell_width * cell->width, thickness));
+        }
+
         if (parsed_bg) CGColorRelease(bg_color);
         if (parsed_fg) CGColorRelease(fg_color);
     }

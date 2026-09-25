@@ -51,6 +51,8 @@ export function createSurfaceContext({
       sidecar: callable(runtime.sidecar, "runtime.sidecar").bind(runtime),
       native: runtime.native,
       clipboard: runtime.clipboard,
+      // 링크 열기(docs/spec/plugins.md#opening-links).
+      links: runtime.links,
       theme: runtime.theme,
       settings: runtime.settings,
       // 이 표면의 실제 글자 배율. read() 는 현재 배율, on(fn) 은 배율이 바뀔 때 fn(배율) 을 부른다.

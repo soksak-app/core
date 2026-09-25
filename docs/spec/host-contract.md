@@ -52,6 +52,8 @@ The scope column is `both`, or `<host> only: <reason>` for behavior that exists 
 | `clipboard.read.requires-user-initiated` | A clipboard read that is not an explicit user paste is rejected. | both |
 | `clipboard.read.rejects-unknown-type` | A user-initiated clipboard read of an unknown type is rejected. | both |
 | `clipboard.read.accepts-known-types` | User-initiated reads of text and file URLs are accepted. | both |
+| `links.open.accepts-web-and-mail-schemes` | Absolute `http`, `https`, and `mailto` URLs are accepted for opening. | both |
+| `links.open.rejects-other-schemes` | A URL with another scheme, a URL that does not parse, and a URL longer than 8192 characters are rejected. | both |
 | `diagnostics.capture-stop.payload-reports-frame-limit` | The capture stop payload of a limited capture reports frames, count, limited true, and the longest gap. | both |
 | `diagnostics.capture-stop.payload-reports-unbounded` | The capture stop payload of a capture below its limit reports limited false. | both |
 | `documents.request.accepts-own-surface` | A document request for the caller's own surface is accepted and returns the surface and name key. | both |

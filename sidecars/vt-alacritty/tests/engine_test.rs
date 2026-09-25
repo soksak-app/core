@@ -1570,3 +1570,28 @@ fn osc7_reports_the_local_path_or_none_for_another_machine_and_rejects_other_uri
         ]
     );
 }
+
+#[test]
+fn osc8_linked_cells_carry_their_uri() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 2);
+    engine.feed(b"\x1b]8;id=a;https://example.test/a\x07LINK\x1b]8;;\x07 no");
+    let screen = engine.screen();
+    let links: Vec<Option<&str>> = screen.lines[0]
+        .iter()
+        .take(7)
+        .map(|cell| cell.link.as_deref())
+        .collect();
+    assert_eq!(
+        links,
+        vec![
+            Some("https://example.test/a"),
+            Some("https://example.test/a"),
+            Some("https://example.test/a"),
+            Some("https://example.test/a"),
+            None,
+            None,
+            None
+        ]
+    );
+}

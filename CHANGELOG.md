@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-51-2: OSC 8 links in the terminal are underlined, show a hand pointer, and open with the default application on Command-click through the new host operation `linkOpen`; the terminal raster now draws SGR 4 and input-method underlines, which it never drew before.
 - V5-51-4 (partial): an OSC 9 notification from a terminal out of view marks its tab and the card's tab list button with a dot until the tab comes into view.
 - V5-51-3: a terminal tab shows the program's OSC 0/2 title unless `terminal.title` is `name`, and a terminal split from a terminal starts in the directory that terminal reported through OSC 7.
 - V5-51-1, V5-48: zsh and bash start with shell integration that reports OSC 133 marks, and a resize at a prompt clears the prompt's reflowed rows and places the cursor where the shell redraws, so a wrapped input line no longer leaves rows of the previous width.

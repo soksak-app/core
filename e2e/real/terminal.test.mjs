@@ -387,3 +387,36 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: thumb ${drawn}, square corner ${squareCorner}, rounded corner ${roundCorner}, track ${trackPixel}`);
   });
 }
+
+// 링크를 여는 검사는 사용자의 기본 브라우저에 example.com 탭을 연다. 사용자가 승인한 실행에서만 돈다.
+const LINK = "https://example.com/soksak-link-check";
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a real Command-click on an OSC 8 link opens it through the host and a plain click does not`, { timeout: 90000 }, async (t) => {
+    const { s, surface, session, origin, row } = await prepare(t, app, "LINKROW");
+    await s.run("terminal.input", { bytes: `clear; printf '\\033]8;;${LINK}\\007LINKTEXT\\033]8;;\\007\\n'\r` }, surface);
+    const lines = await readScreenUntil(s, surface, (screen) => screen.includes("LINKTEXT"), "the link did not render");
+    const linkRow = lines.indexOf("LINKTEXT");
+    const point = cellPoint(origin, session, 3, linkRow);
+    const log = await s.transcript();
+    s.cleanup(() => log.stop());
+    // 누름 없는 이동은 손 모양 포인터와 포인터 아래 링크를 알린다.
+    const cells = (await s.get("terminal.screen", surface))[linkRow].slice(0, 8).map((cell) => cell.link ?? null);
+    assert.deepEqual(cells, Array(8).fill(LINK), "the screen does not carry the link on its cells");
+    // 포인터는 링크 밖의 칸에서 링크 칸으로 들어온다. 같은 점으로의 이동은 페이지에 이동을 알리지 않는다.
+    const outside = cellPoint(origin, session, 20, linkRow);
+    post([{ type: "move", x: outside.x, y: outside.y }, { type: "move", x: point.x, y: point.y }]);
+    await s.until("terminal.session", (value) => value.link === LINK,
+      `the hovered link was not reported at ${JSON.stringify(point)} (view origin ${JSON.stringify(origin)})`, { surface });
+    click(point.x, point.y);
+    await s.until("terminal.session", (value) => value.selectionReleases > session.selectionReleases,
+      "the plain click did not end as a selection click", { surface });
+    assert.equal(log.lines.some((line) => line.startsWith("host linkOpen")), false, "a plain click opened the link");
+    click(point.x, point.y, ["command"]);
+    const opened = await log.until((all) => all.some((line) => line.startsWith("host linkOpen") && line.includes(LINK) && / -> /.test(line)),
+      "the host did not answer a linkOpen request", 10000);
+    const answer = opened.find((line) => line.startsWith("host linkOpen"));
+    assert.doesNotMatch(answer, /error|reject/i, `the host rejected the link: ${answer}`);
+    assert.equal((await s.get("terminal.session", surface)).error ?? null, null, "the link open left a session error");
+  });
+}

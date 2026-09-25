@@ -134,6 +134,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       origin: tabOrigin(surface.surfaceId),
       runtime: { sidecar: scoped.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
         clipboard: scoped.clipboard,
+        links: scoped.links,
         theme: scoped.theme,
         // 이 표면의 실제 글자 배율(docs/spec/text-size.md). 알림마다 다시 읽고 바뀐 값만 전달한다.
         textSize: { read: () => {

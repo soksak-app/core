@@ -51,6 +51,9 @@ pub fn clipboard_write_text(_text: &str) -> Result<(), String> {
 pub fn clipboard_write_png(_bytes: &[u8]) -> Result<(), String> {
     missing("clipboard PNG write")
 }
+pub fn open_link(_url: &str) -> Result<(), String> {
+    missing("link open")
+}
 
 #[cfg(feature = "diagnostics")]
 pub fn window_numbers(_window: &Window) -> Result<Vec<isize>, String> {

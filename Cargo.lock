@@ -2952,6 +2952,7 @@ dependencies = [
  "tauri",
  "tauri-plugin-dialog",
  "tempfile",
+ "url",
  "wait-timeout",
  "windows 0.61.3",
 ]

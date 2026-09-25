@@ -10,7 +10,7 @@
 // 런타임 모듈(@soksak/runtime)이 담당한다.
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
-import { createClipboardBridge, createExpose, orderedSidecar } from "@soksak/plugin-api";
+import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar } from "@soksak/plugin-api";
 import { registerSurfacePort, registry, unregisterSurfacePort } from "./exposure.js";
 
 /**
@@ -223,6 +223,8 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     // Clipboard bridge payloads already follow the typed host contract. In particular,
     // writeText carries a string rather than a surface-scoped object.
     clipboard: createClipboardBridge((name, payload) => bridge.call(name, payload), { allowPersist: true }),
+    // 링크 열기는 다른 호스트 요청처럼 호출 관찰자(watchCalls)에게 알린다.
+    links: createLinkBridge((name, payload) => tell(name, payload)),
   };
 }
 

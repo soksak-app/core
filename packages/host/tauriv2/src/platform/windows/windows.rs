@@ -386,6 +386,9 @@ impl Platform for Windows {
     fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String> {
         unsupported::clipboard_write_png(bytes)
     }
+    fn open_link(&self, url: &str) -> Result<(), String> {
+        unsupported::open_link(url)
+    }
 
     fn create_private_directories(&self, path: &Path) -> Result<(), String> {
         unsupported::create_private_directories(path)

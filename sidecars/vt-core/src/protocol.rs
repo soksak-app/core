@@ -403,6 +403,9 @@ pub struct Cell {
     pub underline: bool,
     #[serde(default)]
     pub inverse: bool,
+    /// OSC 8 하이퍼링크의 URI. 링크가 없는 셀은 없다.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link: Option<String>,
 }
 
 impl Default for Cell {
@@ -416,6 +419,7 @@ impl Default for Cell {
             italic: false,
             underline: false,
             inverse: false,
+            link: None,
         }
     }
 }

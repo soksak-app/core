@@ -12,6 +12,7 @@ use crate::composition;
 use crate::documents;
 use crate::exposure::{self, Changed, Forward, Register};
 use crate::images;
+use crate::link;
 use crate::modals::{self, OverlayRequest, PlaceRequest, RevisedContent, UpdateRequest};
 use crate::projects::{self, CreateProject, Folder};
 use crate::shapes::{self, ShapeRequest};
@@ -70,7 +71,8 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         image_detach,
         clipboard_read,
         clipboard_write_text,
-        clipboard_persist_png
+        clipboard_persist_png,
+        link_open
     ]
 }
 
@@ -403,6 +405,11 @@ fn clipboard_read(
     request: clipboard::ReadRequest,
 ) -> Result<clipboard::ReadResponse, String> {
     clipboard::read(&window, request)
+}
+
+#[tauri::command(async)]
+fn link_open(window: Window, request: link::OpenRequest) -> Result<(), String> {
+    link::open(&window, request)
 }
 
 #[tauri::command(async)]

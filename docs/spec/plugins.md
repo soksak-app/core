@@ -66,6 +66,10 @@ A surface context has `tab.title(text)`, `tab.directory(path)`, and `tab.notify(
 
 `tab.directory(path)` records the surface's working directory, an absolute path, and `tab.directory(null)` removes it; any other value throws. The workbench does not read the filesystem for it and does not save it. When `+` or a split creates a tab, the new surface's `origin.directory` is the directory that the active tab of the card that was added to or split recorded at that moment, or `null`.
 
+## Opening links
+
+A surface context has `runtime.links.open(url)`, which asks the host to open an absolute `http`, `https`, or `mailto` URL with the user's default application for its scheme. The host rejects another scheme, a URL that does not parse, and a URL longer than 8192 characters, and the returned promise rejects with the reason. The macOS hosts open the URL through `NSWorkspace`; the Windows platform returns `not implemented on windows`.
+
 ## environment.json
 
 | Field | Meaning |

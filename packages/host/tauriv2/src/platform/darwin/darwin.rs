@@ -44,6 +44,8 @@ mod input;
 mod input_source;
 #[path = "layout.rs"]
 mod layout;
+#[path = "link.rs"]
+mod link;
 #[path = "shapes.rs"]
 mod shapes;
 #[path = "termination.rs"]
@@ -492,6 +494,9 @@ impl Platform for Darwin {
     }
     fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String> {
         clipboard::write_png(bytes)
+    }
+    fn open_link(&self, url: &str) -> Result<(), String> {
+        link::open(url)
     }
 
     fn create_private_directories(&self, path: &Path) -> Result<(), String> {

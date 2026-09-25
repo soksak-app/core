@@ -62,6 +62,7 @@ func (implementation) ClipboardRead(string) (platform.ClipboardValue, error) {
 }
 func (implementation) ClipboardWriteText(string) error { return unsupported("clipboard text write") }
 func (implementation) ClipboardWritePNG([]byte) error  { return unsupported("clipboard PNG write") }
+func (implementation) OpenLink(string) error           { return unsupported("link open") }
 
 func (implementation) WindowHit(unsafe.Pointer, float64, float64) (string, error) {
 	return "", unsupported("window hit testing")

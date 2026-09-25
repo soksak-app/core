@@ -454,6 +454,8 @@ pub trait Platform: Send + Sync {
     fn clipboard_read(&self, kind: &str) -> Result<ClipboardValue, String>;
     fn clipboard_write_text(&self, text: &str) -> Result<(), String>;
     fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String>;
+    /// URL 을 그 스킴의 사용자 기본 애플리케이션으로 연다. 메인 스레드에서 호출한다.
+    fn open_link(&self, url: &str) -> Result<(), String>;
     /// Dock 메뉴 항목의 제목 목록을 반환한다. 메인 스레드에서 호출한다.
     fn dock_items(&self) -> Result<Value, String>;
     /// 애플리케이션 메뉴를 반환한다. 하위 메뉴마다 {title, items: [{title, key}]} 다. 메인 스레드에서 호출한다.

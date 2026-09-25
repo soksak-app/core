@@ -28,6 +28,7 @@ pub struct CCell {
     pub has_fg: u8,
     pub has_bg: u8,
     pub inverse: u8,
+    pub underline: u8,
 }
 
 #[repr(C)]
@@ -270,6 +271,12 @@ impl Frame {
                     has_fg: if has_fg { 1 } else { 0 },
                     has_bg: if has_bg { 1 } else { 0 },
                     inverse: if cell.inverse { 1 } else { 0 },
+                    // 링크 셀은 밑줄로 보인다.
+                    underline: if cell.underline || cell.link.is_some() {
+                        1
+                    } else {
+                        0
+                    },
                 });
             }
         }

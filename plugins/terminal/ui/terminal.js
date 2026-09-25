@@ -165,6 +165,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   settings, clipboard, scrollbar = null, reportSurfaceError = () => {}, diagnostics = null,
   // 탭 알림(docs/spec/plugins.md#tab-reports)과 이 탭을 만든 카드의 작업 디렉터리.
   tab = { title() {}, directory() {}, notify() {} }, origin = { directory: null },
+  // 링크 열기(docs/spec/plugins.md#opening-links).
+  links = null,
   // 이 표면의 실제 글자 배율(docs/spec/text-size.md). 출처가 없으면 배율은 1 이다.
   textSize = { read: () => 1, on: () => () => {} },
   window: globalWindow = globalThis.window }) {
@@ -199,6 +201,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     selecting: false,
     // 뷰포트가 가장 새 출력보다 위에 있는 줄 수와 보관된 기록 줄 수.
     scrollback: { offset: 0, history: 0 },
+    // 포인터 아래 칸의 OSC 8 링크 URI. 없으면 null.
+    link: null,
     vendor: { directory: null, hyperlink: null, notification: null, shell: null },
     compose: { text: "", selectedRange: null, replacementRange: null, attributed: false },
     theme: "dark",
@@ -597,8 +601,35 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     }
     return { x, y };
   };
+  // 포인터 아래 칸의 OSC 8 링크. 사이드카의 selection_cell 과 같이 CSS 칸 크기로 칸을 정한다.
+  const linkAt = (event) => {
+    const rect = view.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    if (!(session.cellWidth > 0 && session.cellHeight > 0 && session.cols > 0 && session.rows > 0)) return null;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= rect.width || y >= rect.height) return null;
+    const col = Math.min(Math.floor(x / session.cellWidth), session.cols - 1);
+    const row = Math.min(Math.floor(y / session.cellHeight), session.rows - 1);
+    const link = screen[row]?.[col]?.link;
+    return typeof link === "string" ? link : null;
+  };
+  // 링크 칸 위의 포인터는 손 모양이다.
+  const hoverLink = (event) => {
+    const link = event.type === "pointerleave" ? null : linkAt(event);
+    if (link === session.link) return;
+    view.style.cursor = link ? "pointer" : "";
+    session = { ...session, link };
+    changed("session");
+  };
   const beginSelection = (event) => {
     if (event.button !== 0 || selectionPointerId !== null) return;
+    // Command 와 함께 누른 링크 칸은 선언된 명령으로 링크를 열고 선택을 시작하지 않는다.
+    const link = event.metaKey ? linkAt(event) : null;
+    if (link) {
+      event.preventDefault();
+      observeInput(Promise.resolve().then(() => expose.run("terminal.link.open", { uri: link })));
+      return;
+    }
     try {
       const point = selectionPoint(event);
       selectionPointerId = event.pointerId;
@@ -735,6 +766,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   }
   view.addEventListener("pointerdown", beginSelection);
   view.addEventListener("pointermove", updateSelection);
+  view.addEventListener("pointermove", hoverLink);
+  view.addEventListener("pointerleave", hoverLink);
   view.addEventListener("pointerup", endSelection);
   view.addEventListener("pointercancel", endSelection);
   const dragOverFiles = (event) => {
@@ -1118,6 +1151,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     ]);
   }
   // 현재 선택의 텍스트는 사이드카가 copy 이벤트로 보낸다.
+  await expose.command("terminal.link.open", async ({ uri } = {}) => {
+    if (typeof uri !== "string" || uri.length === 0) throw new Error("terminal.link.open requires a uri");
+    if (!links) throw new Error("the terminal has no link capability");
+    await links.open(uri);
+  });
   await expose.command("terminal.copy", async () => {
     await terminal.send(id, { operation: "copy" });
     return null;
@@ -1166,6 +1204,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       view.removeEventListener("pointerdown", preventDefaultFocus);
       view.removeEventListener("pointerdown", beginSelection);
       view.removeEventListener("pointermove", updateSelection);
+      view.removeEventListener("pointermove", hoverLink);
+      view.removeEventListener("pointerleave", hoverLink);
       view.removeEventListener("pointerup", endSelection);
       view.removeEventListener("wheel", scrollWheel);
       if (scrollbar) {

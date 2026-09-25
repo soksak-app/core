@@ -1069,6 +1069,7 @@ impl AlacrittyEngine {
             italic: cell.flags.contains(Flags::ITALIC),
             underline: cell.flags.contains(Flags::UNDERLINE),
             inverse: cell.flags.contains(Flags::INVERSE),
+            link: cell.hyperlink().map(|link| link.uri().to_string()),
         }
     }
 
@@ -1079,6 +1080,7 @@ impl AlacrittyEngine {
             && !cell.italic
             && !cell.underline
             && !cell.inverse
+            && cell.link.is_none()
             && cell
                 .fg
                 .as_deref()
