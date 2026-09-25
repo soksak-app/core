@@ -75,7 +75,7 @@ The native host relays registrations and requests between a surface page and the
 
 | Kind | Name | Meaning |
 | --- | --- | --- |
-| status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter, unbound}`: the document address, time origin, ready state, whether the first theme is applied, device pixel ratio, body and visual viewport sizes in CSS pixels, the computed `filter` of the root element, and the audit of its interactive elements (as in `core.page.audit`) |
+| status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter, unbound}`: the document address, time origin, ready state, whether the first theme is applied, device pixel ratio, `body`, the size of the surface content (the surface element's box plus the content that overflows or scrolls past it) and `viewport`, the size of the surface element's visible box, both in CSS pixels, so `body` exceeds `viewport` only when the content does not fit, the computed `filter` of the root element, and the audit of its interactive elements (as in `core.page.audit`) |
 | status | `core.surface.input` | The last 32 trusted or untrusted input events of the document in order: `{sequence, type, trusted, x, y, key, modifiers}` for `pointerdown`, `pointerup`, `pointermove`, `click`, `wheel`, and `keydown`. `modifiers` lists the modifier keys the event carries (`shift`, `alt`, `control`, `command`). `sequence` starts at 1 and increases by one for each recorded event |
 | command | `core.surface.hit` | `{x, y}` in CSS pixels; returns `true` when an element of the document is at the point |
 

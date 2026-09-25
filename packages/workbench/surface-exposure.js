@@ -25,7 +25,11 @@ export function registerSurfaceExposure({ root, expose, view = root.ownerDocumen
       readyState: doc.readyState,
       themed: Boolean(style?.getPropertyValue("--bg") || (style?.colorScheme && style.colorScheme !== "normal")),
       scale: view.devicePixelRatio ?? 1,
-      body: { width: frame.width, height: frame.height },
+      // body 는 보이는 상자에 넘치거나 스크롤되는 내용을 더한 크기, viewport 는 보이는 상자다.
+      body: {
+        width: frame.width + Math.max(0, host.scrollWidth - host.clientWidth),
+        height: frame.height + Math.max(0, host.scrollHeight - host.clientHeight),
+      },
       viewport: { width: frame.width, height: frame.height },
       filter: documentStyle?.filter ?? "none", unbound: expose.audit(root),
     };
