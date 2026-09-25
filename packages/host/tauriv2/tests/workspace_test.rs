@@ -182,7 +182,7 @@ fn a_project_patch_stores_plugin_data_and_rejects_unknown_fields() {
     );
     apply(
         &store,
-        json!({"kind":"patch", "id":"prj-test", "patch":{"plugins":{"files":{"bookmarks":["a.txt"]}}}}),
+        json!({"kind":"patch", "id":"prj-test", "patch":{"plugins":{"probe":{"marks":["a.txt"]}}}}),
     );
     let snapshot = apply(
         &Workspace::new(config.path().into()),
@@ -190,7 +190,7 @@ fn a_project_patch_stores_plugin_data_and_rejects_unknown_fields() {
     );
     assert_eq!(
         snapshot["projects"][0]["plugins"],
-        json!({"files":{"bookmarks":["a.txt"]}})
+        json!({"probe":{"marks":["a.txt"]}})
     );
     assert!(store
         .apply(

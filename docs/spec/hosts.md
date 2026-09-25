@@ -158,7 +158,7 @@ On macOS each application runs from an application bundle, because the operating
 
 | File | Contents |
 | --- | --- |
-| `go.work` | Uses `apps/wailsv3`, `packages/host/wailsv3`, and `sidecars/shell`; replaces the host module `v0.0.0` with `./packages/host/wailsv3` |
+| `go.work` | Uses `apps/wailsv3`, `packages/host/wailsv3`, `sidecars/files`, and `sidecars/shell`; replaces the host module `v0.0.0` with `./packages/host/wailsv3` |
 | `Cargo.toml` | Workspace with members `apps/tauriv2` and `packages/host/tauriv2`, the shared `[patch.crates-io]` for the Tauri crates, and the `dev` profile |
 | `Cargo.lock` | The single lock file for both crates |
 | `target/` | Cargo output and both application executables; excluded by `.gitignore` |
@@ -171,7 +171,7 @@ On macOS each application runs from an application bundle, because the operating
 | `make wailsv3-build-release`, `make tauriv2-build-release` | Build the release executable |
 | `make wailsv3`, `make tauriv2` | Build and run the debug executable |
 | `make sidecars-debug`, `make sidecars-release` | Build the sidecar packages the applications declare, and their helpers, in that profile. The build list comes from `scripts/sidecar-packages.mjs`, not from a directory glob |
-| `make native-test` | Run `make -C native/darwin test`, `go test` for `packages/host/wailsv3` and `sidecars/shell`, and `cargo test -p soksak-host-tauriv2`, the host tests with and without diagnostics |
+| `make native-test` | Run `make -C native/darwin test`, `go test` for `packages/host/wailsv3`, `sidecars/files`, and `sidecars/shell`, and `cargo test -p soksak-host-tauriv2`, the host tests with and without diagnostics |
 | `make platforms` | Run `scripts/check-platforms.mjs` |
 | `make hosts-check` | Run `scripts/check-hosts.mjs` |
 

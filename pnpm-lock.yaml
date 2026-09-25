@@ -167,6 +167,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/plugin-api
 
+  sidecars/files:
+    devDependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+
   sidecars/shell:
     devDependencies:
       '@soksak/plugin-api':

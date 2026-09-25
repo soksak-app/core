@@ -73,12 +73,13 @@ lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scrip
   lane("CLI", "js-ts", ["packages/cli/**/*.js"], ["packages/cli/test/**/*.mjs"]),
   lane("MCP client", "js-ts", ["packages/mcp/**/*.js"], ["packages/mcp/test/**/*.mjs"]),
   lane("browser plugin", "js-ts", ["plugins/browser/ui/**/*.js"], ["plugins/browser/test/**/*.mjs"], { sharedTests: true }),
+  lane("files plugin", "js-ts", ["plugins/files/ui/**/*.js"], ["plugins/files/test/**/*.mjs"], { sharedTests: true }),
   lane("shell plugin", "js-ts", ["plugins/shell/ui/**/*.js"], ["plugins/shell/test/**/*.mjs"], { sharedTests: true }),
   lane("terminal plugin", "js-ts", ["plugins/terminal/ui/**/*.js"], ["plugins/terminal/test/**/*.mjs"], { sharedTests: true }),
   lane("browser runtime", "js-ts", ["apps/browser/runtime/**/*.js"], ["apps/browser/test/**/*.mjs"], { sharedTests: true }),
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
-  lane("files plugin declaration", "declaration", ["plugins/files/plugin.json"], ["plugins/files/test/manifest.test.mjs"], { testLanguage: "js-ts" }),
+  lane("files plugin declaration", "declaration", ["plugins/files/plugin.json"], ["plugins/files/test/manifest.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
 
   lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs"]),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs"], { testLanguage: "js-ts", sharedTests: true }),
@@ -87,6 +88,11 @@ lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scrip
 
   lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/src/diagnostics_test.go"], { sharedTests: true }),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("files sidecar", "go", ["sidecars/files/src/**/*.go"], ["sidecars/files/tests/**/*.go", "sidecars/files/tests/**/*.mjs"], {
+    testLanguage: "mixed",
+    testExtensions: new Set([".go", ".mjs"]),
+    sharedTests: true,
+  }),
   lane("shell sidecar", "go", ["sidecars/shell/src/**/*.go"], ["sidecars/shell/tests/**/*.go", "sidecars/shell/tests/**/*.mjs"], {
     testLanguage: "mixed",
     testExtensions: new Set([".go", ".mjs"]),
@@ -134,8 +140,8 @@ lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scrip
   lane("Plugin declarations", "declaration", ["plugins/browser/plugin.json", "plugins/shell/plugin.json", "plugins/terminal/plugin.json"], [
     "plugins/browser/test/manifest.test.mjs", "plugins/shell/test/manifest.test.mjs", "plugins/terminal/test/manifest.test.mjs",
   ], { testLanguage: "js-ts", sharedTests: true }),
-  lane("Sidecar declarations", "declaration", ["sidecars/shell/sidecar.json", "sidecars/vt-alacritty/sidecar.json"], [
-    "sidecars/shell/tests/sidecar_test.mjs", "packages/workbench/test/sidecar-packages.test.mjs",
+  lane("Sidecar declarations", "declaration", ["sidecars/files/sidecar.json", "sidecars/shell/sidecar.json", "sidecars/vt-alacritty/sidecar.json"], [
+    "sidecars/files/tests/sidecar_test.mjs", "sidecars/shell/tests/sidecar_test.mjs", "packages/workbench/test/sidecar-packages.test.mjs",
   ], { testLanguage: "js-ts", sharedTests: true }),
   lane("Wails bridge", "js-ts", ["packages/host/wailsv3/src/bridge.js"], ["apps/wailsv3/test/runtime-contract.test.mjs"], { sharedTests: true }),
   lane("Wails native webview bridge", "objective-c", ["packages/host/wailsv3/src/platform/darwin/webview.m"], ["packages/host/wailsv3/tests/documents_test.go"], { testLanguage: "go", sharedTests: true }),
@@ -1467,7 +1473,7 @@ function packageOwner(name) {
     "@soksak/plugin-browser", "@soksak/plugin-files", "@soksak/plugin-shell", "@soksak/plugin-terminal",
   ].includes(base))) return "plugin";
   if (base.startsWith("@soksak/sidecar-") && (base.endsWith("-example") || [
-    "@soksak/sidecar-shell", "@soksak/sidecar-vt-alacritty", "@soksak/sidecar-vt-core",
+    "@soksak/sidecar-files", "@soksak/sidecar-shell", "@soksak/sidecar-vt-alacritty", "@soksak/sidecar-vt-core",
   ].includes(base))) return "sidecar";
   return null;
 }

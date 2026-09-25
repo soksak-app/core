@@ -3,6 +3,7 @@ go 1.25.0
 use (
 	./apps/wailsv3
 	./packages/host/wailsv3
+	./sidecars/files
 	./sidecars/shell
 )
 

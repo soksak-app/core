@@ -159,7 +159,7 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 
 | 파일 | 내용 |
 | --- | --- |
-| `go.work` | `apps/wailsv3`, `packages/host/wailsv3`, `sidecars/shell`을 사용하고, 호스트 모듈 `v0.0.0`을 `./packages/host/wailsv3`로 대체한다 |
+| `go.work` | `apps/wailsv3`, `packages/host/wailsv3`, `sidecars/files`, `sidecars/shell`을 사용하고, 호스트 모듈 `v0.0.0`을 `./packages/host/wailsv3`로 대체한다 |
 | `Cargo.toml` | 멤버 `apps/tauriv2`와 `packages/host/tauriv2`, Tauri 크레이트에 대한 공용 `[patch.crates-io]`, `dev` 프로필을 가진 워크스페이스 |
 | `Cargo.lock` | 두 크레이트가 공유하는 하나의 잠금 파일 |
 | `target/` | Cargo 출력과 두 애플리케이션 실행 파일. `.gitignore`가 제외한다 |
@@ -172,7 +172,7 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 | `make wailsv3-build-release`, `make tauriv2-build-release` | 릴리스 실행 파일을 빌드한다 |
 | `make wailsv3`, `make tauriv2` | 디버그 실행 파일을 빌드하고 실행한다 |
 | `make sidecars-debug`, `make sidecars-release` | 애플리케이션이 선언한 사이드카와 그 헬퍼를 해당 프로필로 빌드한다. 빌드 목록은 디렉터리 글로브가 아니라 `scripts/sidecar-packages.mjs` 가 선언에서 유도한다 |
-| `make native-test` | `make -C native/darwin test`, `packages/host/wailsv3`와 `sidecars/shell`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다 |
+| `make native-test` | `make -C native/darwin test`, `packages/host/wailsv3`, `sidecars/files`, `sidecars/shell`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다 |
 | `make platforms` | `scripts/check-platforms.mjs`를 실행한다 |
 | `make hosts-check` | `scripts/check-hosts.mjs`를 실행한다 |
 
