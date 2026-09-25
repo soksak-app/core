@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- V5-83-1, V5-83-2: 창 검사가 Wails와 Tauri 검사 창을 화면 왼쪽과 오른쪽에 두어 어느 창도 완전히 가려지지 않고, 셸 표면 문서가 쉬는 상태와 경계 끌기 뒤에 네이티브 자리를 채우기를 검사한다.
 - V5-83: bb27d49d로 다시 빌드한 Wails와 Tauri에서 전체 창 검사가 239개 중 239개 통과한다. 창 검사가 V5-75, V5-79, V5-81, V5-81-1, F13-3-4를 따른다. 셸 표면은 입력 구분선으로, 터미널은 OSC 11 배경으로, 선택한 칸은 배경 픽셀로 찾는다. 페이스트보드 보호는 형식 순서와 무관하게 비교하고, 카드 안 사이드바 검사는 끈 배치가 그려진 뒤 경계선을 누른다.
 - V5-83: 터미널 래스터가 칸 격자 밖(마지막 열의 오른쪽과 마지막 행의 아래)을 테마 배경이 아니라 현재 기본 배경으로 채운다. 프로그램이 OSC 11로 정한 색도 포함하며, `Screen.background`는 필수다. Red: `the_padding_outside_the_cell_grid_uses_the_screen_default_background`와 두 앱의 창 검사 `multiple terminals keep fixed cells during a divider drag`(오른쪽 여백 7 px이 카드 색). Green: `make native-test`와 다시 빌드한 Wails와 Tauri의 창 검사.
 - V5-81-1: 터미널과 셸 카드가 초록 대신 그림 색이 아닌 테마의 카드 색과 글자 색으로 그리며, 테마는 따로 된 표면 색을 정의하지 않는다.
