@@ -102,6 +102,13 @@ for (const name of environment.plugins) {
   const dir = packageDir(app, name);
   const manifest = validateManifest(readJson(join(dir, MANIFEST)));
   copyPackage(dir, join(target, modulePath(name, "")));
+  // 섹션 모듈은 패키지의 files 로만 배포된다. 나열되지 않은 모듈은 release 에서 불러올 수 없다.
+  const published = readJson(join(dir, "package.json")).files;
+  for (const section of manifest.sections ?? []) {
+    if (!published.some((file) => section.module === file || section.module.startsWith(`${file}/`))) {
+      throw new Error(`${name}: section ${section.id} module ${section.module} must be listed in files`);
+    }
+  }
   if (existsSync(join(dir, DIAGNOSTICS))) {
     const declared = validateDiagnostics(manifest, readJson(join(dir, DIAGNOSTICS)));
     const { files } = readJson(join(dir, "package.json"));

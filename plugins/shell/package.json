@@ -6,7 +6,8 @@
   "description": "Shell plugin: a console surface connected to a shell session.",
   "files": [
     "plugin.json",
-    "ui/shell.js"
+    "ui/shell.js",
+    "ui/sections"
   ],
   "scripts": {
     "test": "node --test test/"

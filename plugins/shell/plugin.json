@@ -15,15 +15,18 @@
   "sections": [
     {
       "id": "shell.history",
-      "name": "실행 기록"
+      "name": "실행 기록",
+      "module": "ui/sections/history.js"
     },
     {
       "id": "shell.cwd",
-      "name": "cwd"
+      "name": "cwd",
+      "module": "ui/sections/cwd.js"
     },
     {
       "id": "shell.jobs",
-      "name": "작업"
+      "name": "작업",
+      "module": "ui/sections/jobs.js"
     }
   ],
   "sidecars": [

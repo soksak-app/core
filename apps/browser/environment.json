@@ -79,7 +79,8 @@
         "sections": [
           "files.tree",
           "files.bookmarks"
-        ]
+        ],
+        "layout": "list"
       },
       {
         "id": "set-shell",
@@ -87,14 +88,16 @@
         "sections": [
           "shell.history",
           "shell.cwd"
-        ]
+        ],
+        "layout": "list"
       },
       {
         "id": "set-process",
         "title": "프로세스",
         "sections": [
           "shell.jobs"
-        ]
+        ],
+        "layout": "list"
       },
       {
         "id": "set-page",
@@ -102,7 +105,8 @@
         "sections": [
           "browser.dom",
           "browser.network"
-        ]
+        ],
+        "layout": "tabs"
       },
       {
         "id": "set-browser",
@@ -110,7 +114,8 @@
         "sections": [
           "browser.tabs",
           "browser.history"
-        ]
+        ],
+        "layout": "tabs"
       }
     ],
     "links": [

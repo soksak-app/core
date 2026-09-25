@@ -24,19 +24,23 @@
   "sections": [
     {
       "id": "browser.dom",
-      "name": "DOM"
+      "name": "DOM",
+      "module": "ui/sections/dom.js"
     },
     {
       "id": "browser.network",
-      "name": "네트워크"
+      "name": "네트워크",
+      "module": "ui/sections/network.js"
     },
     {
       "id": "browser.tabs",
-      "name": "탭"
+      "name": "탭",
+      "module": "ui/sections/tabs.js"
     },
     {
       "id": "browser.history",
-      "name": "히스토리"
+      "name": "히스토리",
+      "module": "ui/sections/history.js"
     }
   ],
   "exposes": {

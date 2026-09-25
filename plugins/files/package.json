@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Files plugin: sidebar sections for the project directory.",
   "files": [
-    "plugin.json"
+    "plugin.json",
+    "ui/sections"
   ],
   "scripts": {
     "test": "node --test test/"

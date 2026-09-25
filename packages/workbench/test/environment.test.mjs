@@ -17,18 +17,18 @@ const files = {
       },
     },
     sidebars: {
-      sets: [{ id: "set-a", title: "A", sections: ["side.list", "card.info"] }],
+      sets: [{ id: "set-a", title: "A", sections: ["side.list", "card.info"], layout: "list" }],
       links: [{ place: "left", plugin: null, set: "set-a" }],
     },
     settings: { card: { "cursor.shape": "beam" } },
   },
   "/modules/@fixture/card/plugin.json": {
     id: "card", name: "Card", mark: "c", icon: "<path/>",
-    surface: { module: "ui/card.js", composition: { kind: "dom" } }, sections: [{ id: "card.info", name: "Info" }],
+    surface: { module: "ui/card.js", composition: { kind: "dom" } }, sections: [{ id: "card.info", name: "Info", module: "ui/info.js" }],
     preview: { ink: "--fixture-ink" },
     settings: { "cursor.shape": { type: "enum", default: "block", values: ["block", "beam"] } },
   },
-  "/modules/@fixture/side/plugin.json": { id: "side", name: "Side", sections: [{ id: "side.list", name: "List" }] },
+  "/modules/@fixture/side/plugin.json": { id: "side", name: "Side", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] },
   // release 빌드의 스테이징은 진단 선언이 없는 {} 를 둔다.
   "/diagnostic-plugins.json": {},
 };
@@ -57,6 +57,7 @@ test("the environment registers card plugins, sections, and sidebar defaults", a
   assert.equal(registry.plugin("card").diagnostics, null, "a release build has no plugin diagnostic module");
   assert.equal(registry.section("side.list").name, "List");
   assert.equal(registry.section("card.info").name, "Info");
+  assert.equal(registry.section("side.list").module, "/modules/@fixture/side/ui/list.js", "a section module is served from its package");
   assert.deepEqual(settings.defaults.sets, files["/environment.json"].sidebars.sets);
   assert.deepEqual(settings.defaults.links, files["/environment.json"].sidebars.links);
   assert.equal(settings.value("card.cursor.shape"), "beam");

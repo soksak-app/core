@@ -38,6 +38,7 @@ export function registerPlugin(plugin) {
  * @param {object} section
  * @param {string} section.id    세트가 이 id 로 참조한다
  * @param {string} section.name  사이드바에 표시할 이름
+ * @param {string} section.module  섹션을 그리는 모듈의 주소
  */
 export function registerSection(section) {
   if (registeredSections.some((s) => s.id === section.id)) {

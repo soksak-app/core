@@ -57,7 +57,8 @@ export async function loadEnvironment() {
         }),
       });
     }
-    for (const section of manifest.sections ?? []) registerSection(section);
+    // 섹션 모듈은 표면 모듈처럼 그 패키지 경로에서 불러온다.
+    for (const section of manifest.sections ?? []) registerSection({ ...section, module: `/${modulePath(name, section.module)}` });
     if (exposes) exposure.declare(manifest.id, exposes);
   }
   setSidebarDefaults(environment.sidebars);

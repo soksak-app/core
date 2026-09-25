@@ -12,7 +12,7 @@ globalThis.fetch = async (path) => {
       ] } },
       sidebars: { sets: [], links: [] },
     },
-    "/modules/@fixture/side/plugin.json": { id: "side", name: "Side", sections: [{ id: "side.list", name: "List" }] },
+    "/modules/@fixture/side/plugin.json": { id: "side", name: "Side", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] },
   };
   const body = files[path];
   return body ? { ok: true, json: async () => structuredClone(body) } : { ok: false, status: 404 };

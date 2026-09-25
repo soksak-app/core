@@ -6,7 +6,8 @@
   "description": "Browser plugin: an address bar and a document region that shows web pages.",
   "files": [
     "plugin.json",
-    "ui/browser.js"
+    "ui/browser.js",
+    "ui/sections"
   ],
   "scripts": {
     "test": "node --test test/"

@@ -4,11 +4,13 @@
   "sections": [
     {
       "id": "files.tree",
-      "name": "파일 트리"
+      "name": "파일 트리",
+      "module": "ui/sections/tree.js"
     },
     {
       "id": "files.bookmarks",
-      "name": "북마크"
+      "name": "북마크",
+      "module": "ui/sections/bookmarks.js"
     }
   ]
 }
