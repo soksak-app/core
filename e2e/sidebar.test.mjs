@@ -47,6 +47,10 @@ for (const app of Object.values(APPS)) {
     await surfaceAt(260 + GRIP);
     await assert.rejects(s.run("core.card.sidebar.size", { card: card.id, width: 60 }), /120 to 480/);
     assert.ok(before, "the surface was measured");
+    // 손잡이를 두 번 누르면 가장 좁은 폭(120pt)이 된다.
+    await s.act("core.card.sidebar.grip", "dispatch", { index: 0, event: { type: "dblclick" } });
+    await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.width === 120,
+      "a double click on the grip did not set the minimum width");
     // 접기 단추를 네이티브 클릭으로 누르면 접힌다.
     const fold = await s.rect("core.card.sidebar.fold", 0);
     await s.click(fold.x + fold.width / 2, fold.y + fold.height / 2);

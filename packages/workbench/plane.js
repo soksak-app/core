@@ -889,6 +889,11 @@ function drawSidebar(el, card) {
       grip.addEventListener("pointerup", end);
       grip.addEventListener("pointercancel", end);
     });
+    // 두 번 누르면 가장 좁은 폭으로 정리한다.
+    grip.addEventListener("dblclick", (event) => {
+      event.stopPropagation();
+      run("core.card.sidebar.size", { card: el.dataset.cardId, width: SIDEBAR_MIN });
+    });
   }
   const fold = side.querySelector(".side__fold");
   if (!fold.dataset.bound) {
