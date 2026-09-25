@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F13-0: a double click on the inset sidebar grip sets the minimum width 120 (the grip no longer prevents the default pointer action, which suppressed `dblclick`), a sidebar without a stored width opens at 120, and the real-input tool sends the click count so a posted double click is a real one.
+- V5-69-2: the settings window and menus call card and sidebar places "위치", and the group descriptions say what each group changes.
+- V5-69-1: the inset sidebar's fold button folds the sidebar, the grip lies over the border with no gap beside the surface, and dragging does not select sidebar text.
 - V5-69: the setting "사이드바 위치" (formerly "레일 거동") gains the experimental value `inset`, which puts a foldable, resizable sidebar inside the card without changing the card size.
 - V5-68: the Tauri application enables the `custom-protocol` feature, so Tauri no longer replaces the Dock icon at startup and both applications show the bundle icon at the same size.
 - V5-68: the build registers each bundle again with LaunchServices, so the Dock shows the soksak icon for Wails too.
