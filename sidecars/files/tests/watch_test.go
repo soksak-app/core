@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -77,9 +76,6 @@ func (s *session) next(what string) files.Event {
 }
 
 func TestWatchReportsAChangedDirectory(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("directory watching is implemented on darwin only")
-	}
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, "src"), 0o755); err != nil {
 		t.Fatal(err)
