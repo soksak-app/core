@@ -522,8 +522,8 @@ function drawBars() {
   chromeActs.textContent = "";
   if (!browsing) chromeActs.append(act("projects", "프로젝트 목록", false, "core.projects.browse", {}, "core.chrome.projects"));
   chromeActs.append(
-    act("panel-left", "좌측 자리", value("left"), "core.settings.set", { patch: { left: !value("left") } }, "core.chrome.left"),
-    act("panel-right", "우측 자리", value("right"), "core.settings.set", { patch: { right: !value("right") } }, "core.chrome.right"),
+    act("panel-left", "좌측 사이드바 위치", value("left"), "core.settings.set", { patch: { left: !value("left") } }, "core.chrome.left"),
+    act("panel-right", "우측 사이드바 위치", value("right"), "core.settings.set", { patch: { right: !value("right") } }, "core.chrome.right"),
     // 모달의 모드 세그먼트와 같은 경로다. 테마 명령은 테마의 형태 값까지 다시
     // 적용하므로, 그것을 부르면 사용자가 정한 통로와 모서리가 되돌아간다.
     act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,

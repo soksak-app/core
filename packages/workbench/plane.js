@@ -252,6 +252,7 @@ function updateCard(el, card) {
     return;
   }
 
+  drawSidebar(el, card);
   const tabs = tabsOf(card);
   const key = tabs.map((t) => `${t.id}\u0000${tabName(t)}`).join("\u0001");
   let ham = chrome.querySelector(".chrome__ham");
@@ -809,6 +810,95 @@ function dropTab(fromId, tabId, hit) {
   settle();
 }
 
+/* ── 카드 안 사이드바(사이드바 위치 inset, 실험) ──────────────────────────
+   활성 탭의 플러그인에 연결된 세트가 있으면 카드 안 표면 왼쪽에 사이드바를 둔다. 카드의 크기는
+   바뀌지 않고, 표면은 자기 자리(.slot)를 따른다. 폭과 접힘은 카드 데이터에 저장한다. */
+
+const SIDEBAR_MIN = 120;
+const SIDEBAR_MAX = 480;
+
+/** 카드가 inset 사이드바를 가지면 그 상태를, 아니면 null 을 반환한다. */
+export function cardSidebar(card) {
+  if (value("rail") !== "inset" || !card?.data) return null;
+  const kind = activeTab(card)?.plugin;
+  if (!kind || !linkedSet("rail", kind)) return null;
+  const state = card.data.sidebar ?? {};
+  return { width: state.width ?? RAIL_WIDTH, collapsed: state.collapsed === true };
+}
+
+function sidebarCard(id) {
+  const card = grid?.card(id);
+  if (!card || !cardSidebar(card)) throw new Error(`card ${id} has no inset sidebar`);
+  return card;
+}
+
+/** 카드의 inset 사이드바를 접거나 편다. */
+export function toggleSidebar(id) {
+  const card = sidebarCard(id);
+  const state = cardSidebar(card);
+  card.data.sidebar = { width: state.width, collapsed: !state.collapsed };
+  settle();
+}
+
+/** 카드의 inset 사이드바 폭을 정한다. */
+export function sizeSidebar(id, width) {
+  if (!Number.isFinite(width) || width < SIDEBAR_MIN || width > SIDEBAR_MAX) {
+    throw new Error(`sidebar width must be ${SIDEBAR_MIN} to ${SIDEBAR_MAX} points`);
+  }
+  const card = sidebarCard(id);
+  card.data.sidebar = { width: Math.round(width), collapsed: cardSidebar(card).collapsed };
+  settle();
+}
+
+function drawSidebar(el, card) {
+  const state = cardSidebar(card);
+  let side = el.querySelector(":scope > .side");
+  let grip = el.querySelector(":scope > .side__grip");
+  if (!state) {
+    side?.remove();
+    grip?.remove();
+    delete el.dataset.side;
+    el.style.removeProperty("--side-w");
+    return;
+  }
+  if (!side) {
+    side = document.createElement("aside");
+    side.className = "side";
+    side.innerHTML = '<button class="side__fold" type="button" data-expose="core.card.sidebar.fold"></button><div class="set"></div>';
+    grip = document.createElement("div");
+    grip.className = "side__grip";
+    grip.dataset.expose = "core.card.sidebar.grip";
+    el.querySelector(".slot").before(side, grip);
+    // 손잡이를 끄는 동안 폭을 선언된 명령으로 정한다.
+    grip.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+      grip.setPointerCapture(event.pointerId);
+      const left = el.getBoundingClientRect().left;
+      const move = (e) => {
+        const width = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX - left));
+        run("core.card.sidebar.size", { card: el.dataset.cardId, width });
+      };
+      const end = () => {
+        grip.removeEventListener("pointermove", move);
+        grip.removeEventListener("pointerup", end);
+        grip.removeEventListener("pointercancel", end);
+      };
+      grip.addEventListener("pointermove", move);
+      grip.addEventListener("pointerup", end);
+      grip.addEventListener("pointercancel", end);
+    });
+  }
+  const fold = side.querySelector(".side__fold");
+  mark(fold, "core.card.sidebar.toggle", { card: card.id });
+  mark(grip, "core.card.sidebar.size", { card: card.id });
+  fold.textContent = state.collapsed ? "›" : "‹";
+  fold.title = state.collapsed ? "사이드바 펼치기" : "사이드바 접기";
+  el.dataset.side = state.collapsed ? "folded" : "open";
+  el.style.setProperty("--side-w", `${state.width}px`);
+  const set = linkedSet("rail", activeTab(card).plugin);
+  setHTML(side.querySelector(".set"), `<b>${set.title}</b>${sectionNames(set.sections).join(" · ")}`);
+}
+
 /* ── 레일. 카드이므로 이동에 move() 를 사용한다 ───────────────────────── */
 
 /**
@@ -823,7 +913,8 @@ function standRail(kind) {
   const has = !!grid.card(id);
   // 레일은 포커스한 카드 옆에 표시한다. 자기 플러그인 종류가 포커스를 잃으면
   // 닫는다. 그 종류의 레일을 연결하지 않았으면 아무 레일도 표시하지 않는다.
-  if (!linkedSet("rail", kind) || value("rail") === "off" || focusedPlugin() !== kind) {
+  // inset 은 사이드바를 카드 안에 두므로 열을 세우지 않는다.
+  if (!linkedSet("rail", kind) || value("rail") === "off" || value("rail") === "inset" || focusedPlugin() !== kind) {
     if (has) {
       railWidth[kind] = grid.card(id).width ?? railWidth[kind];
       dismiss(id);

@@ -9,10 +9,10 @@ import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
 import {
-  activeTab, addTabTo, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
+  activeTab, addTabTo, capture, cardActs, cardSidebar, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
   currentGrid, currentTextScope, dragState, focusCard,
   focused, fresh, moveTab, onPicker, onSurfaceState, openCardMenu, openCardTabs, pickItem, pickerState, plane, railState, selectTab,
-  settle, splitCard, surfaceState, tabsOf,
+  settle, sizeSidebar, splitCard, surfaceState, tabsOf, toggleSidebar,
 } from "./plane.js";
 import {
   applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, settingProject, value,
@@ -145,6 +145,7 @@ function gridState() {
       tabs: tabs.map(({ id, plugin, title }) => ({ id, plugin, title, label: tabLabel(id), notice: tabNotice(id) })),
       active: tabs.length ? activeTab(card).id : null,
       acts: cardActs(card.id),
+      sidebar: cardSidebar(card),
     };
   }).filter(Boolean);
   const lines = (axis) => grid.lines(axis).map((_, k) => grid.boundaryPos(axis, k));
@@ -311,6 +312,8 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
   registry.command("core.layout.reset", () => { resetLayout(); });
 
   registry.command("core.card.focus", ({ card }) => { focusCard(card); });
+  registry.command("core.card.sidebar.toggle", ({ card }) => { toggleSidebar(card); });
+  registry.command("core.card.sidebar.size", ({ card, width }) => { sizeSidebar(card, width); });
   registry.command("core.text.larger", async () => { await changeTextSize(1); });
   registry.command("core.text.smaller", async () => { await changeTextSize(-1); });
   registry.command("core.text.reset", async () => { await changeTextSize(0); });

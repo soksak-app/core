@@ -246,10 +246,10 @@ function drawGeneral() {
 
   body.append(group("자리", "판의 크기와 카드의 자리가 함께 움직인다.", [
     row("프로젝트 탭", segment("projectTabs", [["top", "위"], ["left", "왼쪽"]], value("projectTabs"))),
-    row("레일 거동", segment("rail",
-      [["flow", "따라감"], ["pin", "고정"], ["off", "없음"]], value("rail"))),
-    row("좌측 자리", toggle("left", value("left"))),
-    row("우측 자리", toggle("right", value("right"))),
+    row("사이드바 위치", segment("rail",
+      [["flow", "따라감"], ["pin", "고정"], ["inset", "카드 안"], ["off", "없음"]], value("rail"))),
+    row("좌측 사이드바 위치", toggle("left", value("left"))),
+    row("우측 사이드바 위치", toggle("right", value("right"))),
   ]));
 
   body.append(group("표시", "자리는 그대로 두고 보이는 것만 바꾼다.", [

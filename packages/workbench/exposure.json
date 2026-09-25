@@ -138,7 +138,7 @@
       },
       {
         "name": "core.grid",
-        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label and its notice), tool buttons (enabled, hidden, title), and header fit.",
+        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label and its notice), tool buttons (enabled, hidden, title), header fit, and inset sidebar {width, collapsed} or null.",
         "schema": {
           "type": [
             "object",
@@ -1630,6 +1630,18 @@
         }
       },
       {
+        "name": "core.card.sidebar.toggle",
+        "description": "Folds a card's inset sidebar to a strip or unfolds it, without changing the card's size.",
+        "params": { "type": "object", "properties": { "card": { "type": "string" } } },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "core.card.sidebar.size",
+        "description": "Sets the width of a card's inset sidebar, 120 to 480 points, without changing the card's size.",
+        "params": { "type": "object", "properties": { "card": { "type": "string" }, "width": { "type": "number" } } },
+        "result": { "type": "null" }
+      },
+      {
         "name": "core.card.tab-list",
         "description": "Opens or closes a card's tab list.",
         "params": {
@@ -2109,6 +2121,16 @@
       {
         "name": "core.card.tab",
         "description": "The tabs of every card in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.sidebar.fold",
+        "description": "The fold buttons of inset sidebars in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.sidebar.grip",
+        "description": "The width grips of inset sidebars in document order.",
         "many": true
       },
       {

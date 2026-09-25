@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-69: the setting "사이드바 위치" (formerly "레일 거동") gains the experimental value `inset`, which puts a foldable, resizable sidebar inside the card without changing the card size.
 - V5-68: the Tauri application enables the `custom-protocol` feature, so Tauri no longer replaces the Dock icon at startup and both applications show the bundle icon at the same size.
 - V5-68: the build registers each bundle again with LaunchServices, so the Dock shows the soksak icon for Wails too.
 - V5-68: the title bar shows the soksak logo in the colors of the dark and light modes, and both applications use the soksak icon in the Dock.
