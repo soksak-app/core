@@ -8,7 +8,7 @@ import {
 const card = {
   id: "probe", name: "Probe", mark: "p", icon: "<path/>",
   surface: { module: "ui/probe.js", composition: { kind: "dom" } }, sidecars: ["@scope/sidecar-worker"],
-  settings: { "cursor.shape": { type: "enum", default: "block", values: ["block", "beam"] } },
+  settings: { "cursor.shape": { type: "enum", label: "커서 모양", default: "block", values: ["block", "beam"] } },
 };
 const side = { id: "side", name: "Side", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] };
 const environment = () => ({
@@ -78,12 +78,12 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, background: { sidecar: "@scope/sidecar-worker", operation: "open", settings: [] } }, /settings must map request fields/],
     [{ ...card, background: { sidecar: "@scope/sidecar-worker", operation: "open", settings: { program: "absent" } } }, /setting absent is not declared/],
     [{ ...card, background: { sidecar: "@scope/sidecar-worker", operation: "open", settings: { operation: "cursor.shape" } } }, /cannot replace operation/],
-    [{ ...card, settings: { "cursor.shape": { type: "enum", default: "block", values: ["block", "block"] } } }, /distinct/],
-    [{ ...card, settings: { "cursor.shape": { type: "integer", default: 1, minimum: 2, maximum: 3 } } }, /default and bounds/],
-    [{ ...card, settings: { "font.family": { type: "string", default: "", maxLength: 8 } } }, /string default and maxLength/],
-    [{ ...card, settings: { "font.family": { type: "string", default: "too long", maxLength: 3 } } }, /string default and maxLength/],
-    [{ ...card, settings: { "font.family": { type: "string", default: "Mono", maxLength: 0 } } }, /string default and maxLength/],
-    [{ ...card, settings: { "font.family": { type: "string", default: "Mono", maxLength: 8, values: [] } } }, /unknown field values/],
+    [{ ...card, settings: { "cursor.shape": { label: "이름", type: "enum", default: "block", values: ["block", "block"] } } }, /distinct/],
+    [{ ...card, settings: { "cursor.shape": { label: "이름", type: "integer", default: 1, minimum: 2, maximum: 3 } } }, /default and bounds/],
+    [{ ...card, settings: { "font.family": { label: "이름", type: "string", default: "", maxLength: 8 } } }, /string default and maxLength/],
+    [{ ...card, settings: { "font.family": { label: "이름", type: "string", default: "too long", maxLength: 3 } } }, /string default and maxLength/],
+    [{ ...card, settings: { "font.family": { label: "글꼴", type: "string", default: "Mono", maxLength: 0 } } }, /string default and maxLength/],
+    [{ ...card, settings: { "font.family": { label: "글꼴", type: "string", default: "Mono", maxLength: 8, values: [] } } }, /unknown field values/],
   ];
   for (const [manifest, message] of cases) assert.throws(() => validateManifest(manifest), message);
 });
@@ -233,8 +233,8 @@ test("a page's import map is read only when the page declares exactly one", () =
 });
 
 test("string settings declare a bounded non-empty default and reject other values", () => {
-  const manifest = { ...card, settings: { "font.family": { type: "string", default: "D2Coding", maxLength: 16 } } };
-  assert.deepEqual(validateManifest(manifest).settings["font.family"], { type: "string", default: "D2Coding", maxLength: 16 });
+  const manifest = { ...card, settings: { "font.family": { label: "글꼴", type: "string", default: "D2Coding", maxLength: 16 } } };
+  assert.deepEqual(validateManifest(manifest).settings["font.family"], { label: "글꼴", type: "string", default: "D2Coding", maxLength: 16 });
   const value = environment();
   value.settings.probe = { "font.family": "Menlo" };
   checkReferences(value, [manifest, side]);
@@ -267,4 +267,14 @@ test("the exported sidebars validator applies the environment rules to stored se
   const unknown = sidebars();
   unknown.sets[0].sections = ["side.gone"];
   assert.throws(() => checkSidebarReferences(unknown, manifests, "settings"), /settings: set set-1 names unknown section side.gone/);
+});
+
+test("a setting declaration requires a label and allows a description", () => {
+  const withSetting = (declaration) => ({ ...card, settings: { "cursor.shape": declaration } });
+  const base = { type: "enum", default: "block", values: ["block", "beam"] };
+  validateManifest(withSetting({ ...base, label: "커서 모양", description: "입력 위치를 그리는 모양." }));
+  assert.throws(() => validateManifest(withSetting(base)), /cursor.shape: label must be 1 to 40 characters/);
+  assert.throws(() => validateManifest(withSetting({ ...base, label: "" })), /label must be 1 to 40/);
+  assert.throws(() => validateManifest(withSetting({ ...base, label: "가".repeat(41) })), /label must be 1 to 40/);
+  assert.throws(() => validateManifest(withSetting({ ...base, label: "모양", description: "" })), /description must be 1 to 200/);
 });

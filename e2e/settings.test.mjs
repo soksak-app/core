@@ -66,6 +66,14 @@ for (const app of Object.values(APPS)) {
       .map((key) => key.startsWith("pick:") ? key.split(":")[1] : key)
       .filter((key) => key.startsWith("terminal.")));
     assert.equal(keys.size, 13, `terminal shows ${keys.size} settings: ${[...keys]}`);
+    // 행 이름은 manifest 의 label 이고, 설명이 있는 설정은 그 아래에 설명을 보인다.
+    assert.equal(terminal.rows.length, 13, `terminal rows: ${JSON.stringify(terminal.rows)}`);
+    assert.deepEqual(terminal.rows.find((row) => row.key === "terminal.cursor.shape"), {
+      key: "terminal.cursor.shape", name: "커서 모양",
+      description: "block은 칸 전체, underline은 밑줄, beam은 세로 막대로 그린다. 프로그램이 모양을 정하면 그 모양을 쓴다.",
+    });
+    assert.equal(terminal.rows.find((row) => row.key === "terminal.cursor.interval").description, null);
+    assert.ok(terminal.rows.every((row) => row.name && !row.name.includes(".")), "a plugin setting row shows its key");
     await press(s, "core.settings-modal.pick", "pick:terminal.cursor.shape:beam");
     await s.until("core.settings", (value) => value.values["terminal.cursor.shape"] === "beam" && !value.saving,
       "the plugin page did not change terminal.cursor.shape");

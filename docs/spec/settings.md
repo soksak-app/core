@@ -34,7 +34,7 @@ The section lists every plugin of `environment.json` in its declared order, each
 
 The page of the selected plugin shows:
 
-- 설정: one row for each setting the manifest declares, labelled with its local name, in manifest order. An `enum` is a choice row, an `integer` a slider between its bounds, and a `string` a text field. A plugin without settings shows the text "이 플러그인에는 설정이 없습니다."
+- 설정: one row for each setting the manifest declares, in manifest order, named with its `label` and followed by its `description` when it has one. An `enum` is a choice row, an `integer` a slider between its bounds, and a `string` a text field. A plugin without settings shows the text "이 플러그인에는 설정이 없습니다."
 - 사이드바: for a plugin with a surface, the set linked to its rail (레일 사이드바) and to its right sidebar (오른쪽 사이드바), each chosen from all sets or 없음 through `core.settings.link`. Below them, the sets that contain a section of this plugin, each with its title and section names.
 - 섹션: the names of the sections the plugin declares.
 
@@ -87,7 +87,7 @@ The following layout constants remain in code because they are tied to the docum
 
 ## Status
 
-`core.settings-modal` reports `section`, `scope`, `plugin` (the selected plugin id or `null`), `editing` (the edited set id or `null`), and every control with its command. `core.settings` reports every effective value, including `sets`, `links`, and the layout values.
+`core.settings-modal` reports `section`, `scope`, `plugin` (the selected plugin id or `null`), `editing` (the edited set id or `null`), `rows` (each declared plugin setting row as `{key, name, description}`), and every control with its command. `core.settings` reports every effective value, including `sets`, `links`, and the layout values.
 
 ## Acceptance
 

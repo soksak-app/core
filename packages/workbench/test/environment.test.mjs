@@ -26,7 +26,7 @@ const files = {
     id: "card", name: "Card", mark: "c", icon: "<path/>",
     surface: { module: "ui/card.js", composition: { kind: "dom" } }, sections: [{ id: "card.info", name: "Info", module: "ui/info.js" }],
     preview: { ink: "--fixture-ink" },
-    settings: { "cursor.shape": { type: "enum", default: "block", values: ["block", "beam"] } },
+    settings: { "cursor.shape": { label: "커서 모양", type: "enum", default: "block", values: ["block", "beam"] } },
   },
   "/modules/@fixture/side/plugin.json": { id: "side", name: "Side", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] },
   // release 빌드의 스테이징은 진단 선언이 없는 {} 를 둔다.

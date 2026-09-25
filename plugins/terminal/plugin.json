@@ -24,69 +24,93 @@
   },
   "settings": {
     "cursor.shape": {
+      "label": "커서 모양",
+      "description": "block은 칸 전체, underline은 밑줄, beam은 세로 막대로 그린다. 프로그램이 모양을 정하면 그 모양을 쓴다.",
       "type": "enum",
       "default": "block",
       "values": ["block", "underline", "beam"]
     },
     "cursor.blink": {
+      "label": "커서 깜박임",
+      "description": "Never는 늘 멈추고 Always는 늘 깜박인다. Off는 멈춘 채로 시작하고 On은 깜박이며 시작하며, 둘 다 프로그램의 요청을 따른다.",
       "type": "enum",
       "default": "Off",
       "values": ["Never", "Off", "On", "Always"]
     },
     "cursor.interval": {
+      "label": "깜박임 간격(ms)",
       "type": "integer",
       "default": 750,
       "minimum": 50,
       "maximum": 5000
     },
     "cursor.idleTimeout": {
+      "label": "깜박임 멈춤 시간(ms)",
+      "description": "입력이 없으면 이 시간 뒤 깜박임을 멈춘다. 0이면 멈추지 않는다.",
       "type": "integer",
       "default": 5000,
       "minimum": 0,
       "maximum": 60000
     },
     "cursor.unfocused": {
+      "label": "포커스 밖 커서",
+      "description": "터미널이 입력을 받지 않을 때의 커서. hollow는 빈 네모, solid는 채운 네모, underline과 beam은 그 모양이며, unchanged는 포커스가 있을 때와 같다.",
       "type": "enum",
       "default": "hollow",
       "values": ["hollow", "solid", "underline", "beam", "unchanged"]
     },
     "clipboard.program": {
+      "label": "프로그램의 클립보드 사용",
+      "description": "deny는 터미널 프로그램이 OSC 요청으로 클립보드를 읽고 쓰는 것을 막고, allow는 허용한다. 사용자가 직접 붙여넣는 것에는 영향이 없다.",
       "type": "enum",
       "default": "deny",
       "values": ["deny", "allow"]
     },
     "font.family": {
+      "label": "글꼴",
+      "description": "세미콜론으로 나눈 글꼴 이름. 앞의 글꼴부터 쓴다.",
       "type": "string",
       "default": "D2Coding;Menlo",
       "maxLength": 256
     },
     "shell": {
+      "label": "셸",
+      "description": "login은 계정의 로그인 셸이다. 다른 값은 실행 파일의 절대 경로다.",
       "type": "string",
       "default": "login",
       "maxLength": 1024
     },
     "title": {
+      "label": "탭 제목",
+      "description": "program은 프로그램이 보낸 제목을 탭에 보이고, name은 프로그램 제목을 쓰지 않고 탭 이름을 유지한다.",
       "type": "enum",
       "default": "program",
       "values": ["program", "name"]
     },
     "scrollbar.track": {
+      "label": "스크롤바 바탕",
+      "description": "terminal은 터미널 바탕색이다. 다른 값은 #rrggbb 또는 #rrggbbaa 색이다.",
       "type": "string",
       "default": "terminal",
       "maxLength": 9
     },
     "scrollbar.thumb": {
+      "label": "스크롤바 손잡이 색",
+      "description": "#rrggbb 또는 #rrggbbaa 색.",
       "type": "string",
       "default": "#8f98a080",
       "maxLength": 9
     },
     "scrollbar.width": {
+      "label": "스크롤바 폭(pt)",
       "type": "integer",
       "default": 10,
       "minimum": 4,
       "maximum": 24
     },
     "scrollbar.shape": {
+      "label": "스크롤바 모양",
+      "description": "rounded는 둥근 끝, square는 각진 끝.",
       "type": "enum",
       "default": "rounded",
       "values": ["rounded", "square"]

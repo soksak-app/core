@@ -76,8 +76,21 @@ function only(where, value, keys) {
   }
 }
 
-function checkSettingDeclaration(where, declaration) {
-  if (!isObject(declaration)) throw new Error(`${where}: setting must be an object`);
+/* 설정 창이 보이는 설정 이름과 설명의 최대 길이. */
+const SETTING_LABEL_MAX = 40;
+const SETTING_DESCRIPTION_MAX = 200;
+
+function checkSettingDeclaration(where, full) {
+  if (!isObject(full)) throw new Error(`${where}: setting must be an object`);
+  // 설정 창은 label 을 행 이름으로, description 을 그 아래 설명으로 보인다.
+  const { label, description, ...declaration } = full;
+  if (typeof label !== "string" || label.length < 1 || label.length > SETTING_LABEL_MAX) {
+    throw new Error(`${where}: label must be 1 to ${SETTING_LABEL_MAX} characters`);
+  }
+  if (description !== undefined &&
+      (typeof description !== "string" || description.length < 1 || description.length > SETTING_DESCRIPTION_MAX)) {
+    throw new Error(`${where}: description must be 1 to ${SETTING_DESCRIPTION_MAX} characters`);
+  }
   if (declaration.type === "enum") {
     only(where, declaration, ["type", "default", "values"]);
     if (!Array.isArray(declaration.values) || declaration.values.length === 0 ||

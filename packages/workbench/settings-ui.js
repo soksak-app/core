@@ -285,7 +285,15 @@ function declaredRow(key, definition) {
     : definition.type === "string"
       ? text(key, definition.maxLength, now)
       : slide(key, definition.minimum, definition.maximum, now, "");
-  return row(definition.local, control);
+  const el = row(definition.label, control);
+  el.dataset.row = key;
+  if (!definition.description) return [el];
+  // 설명은 행 바로 아래 한 줄이다. core.settings-modal 의 rows 가 행과 함께 보고한다.
+  const note = document.createElement("p");
+  note.className = "set-caption";
+  note.dataset.describes = key;
+  note.textContent = definition.description;
+  return [el, note];
 }
 
 /** 세트 한 줄의 설명. 제목, 배치, 섹션 이름. */
@@ -306,7 +314,7 @@ function drawPlugins() {
 
   const declared = Object.entries(settingDefinitions()).filter(([, d]) => d.plugin === unit.id);
   if (declared.length) {
-    body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, declared.map(([key, d]) => declaredRow(key, d))));
+    body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, declared.flatMap(([key, d]) => declaredRow(key, d))));
   } else {
     const none = document.createElement("p");
     none.className = "set-caption";
@@ -481,8 +489,14 @@ export function settingsModalState() {
       command: commandOf(el),
     };
   });
+  // 선언된 설정의 행 이름과 설명. 플러그인 페이지가 manifest 의 label 과 description 으로 그린다.
+  const rows = [...card.querySelectorAll(".set-row[data-row]")].map((el) => ({
+    key: el.dataset.row,
+    name: el.querySelector(".set-row__name").textContent,
+    description: card.querySelector(`[data-describes="${CSS.escape(el.dataset.row)}"]`)?.textContent ?? null,
+  }));
   const r = card.getBoundingClientRect();
-  return { open: true, section: here, scope, plugin: here === "plugins" ? chosen : null, editing,
+  return { open: true, rows, section: here, scope, plugin: here === "plugins" ? chosen : null, editing,
     card: { x: r.left, y: r.top, w: r.width, h: r.height }, controls };
 }
 

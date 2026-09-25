@@ -34,7 +34,7 @@
 
 선택한 플러그인의 페이지는 다음을 보여 준다.
 
-- 설정: manifest가 선언한 설정마다 한 행을 manifest 순서로 보여 주고 로컬 이름을 붙인다. `enum`은 선택 행, `integer`는 경계 사이의 슬라이더, `string`은 글자 입력이다. 설정이 없는 플러그인은 "이 플러그인에는 설정이 없습니다."를 보여 준다.
+- 설정: manifest가 선언한 설정마다 한 행을 manifest 순서로 보여 주고, 행 이름은 `label`이며 `description`이 있으면 행 아래에 보인다. `enum`은 선택 행, `integer`는 경계 사이의 슬라이더, `string`은 글자 입력이다. 설정이 없는 플러그인은 "이 플러그인에는 설정이 없습니다."를 보여 준다.
 - 사이드바: 표면이 있는 플러그인이면 그 레일(레일 사이드바)과 오른쪽 사이드바(오른쪽 사이드바)에 연결된 세트를 보여 주고, 각각 모든 세트 또는 없음 중에서 `core.settings.link`로 고른다. 그 아래에 이 플러그인의 섹션을 담은 세트를 제목과 섹션 이름과 함께 보여 준다.
 - 섹션: 플러그인이 선언한 섹션의 이름.
 
@@ -87,7 +87,7 @@
 
 ## 상태
 
-`core.settings-modal`은 `section`, `scope`, `plugin`(선택한 플러그인 id 또는 `null`), `editing`(편집 중인 세트 id 또는 `null`), 그리고 모든 컨트롤과 그 명령을 보고한다. `core.settings`는 `sets`, `links`, 배치 값을 포함한 모든 유효 값을 보고한다.
+`core.settings-modal`은 `section`, `scope`, `plugin`(선택한 플러그인 id 또는 `null`), `editing`(편집 중인 세트 id 또는 `null`), `rows`(선언된 플러그인 설정 행마다 `{key, name, description}`), 그리고 모든 컨트롤과 그 명령을 보고한다. `core.settings`는 `sets`, `links`, 배치 값을 포함한 모든 유효 값을 보고한다.
 
 ## 완료 기준
 

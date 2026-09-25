@@ -138,7 +138,7 @@
       },
       {
         "name": "core.sidebars",
-        "description": "The drawn sidebars in document order: the sidebar (the id of the card that holds it), its set, layout, selected tab or null, the card and active tab its sections receive, and each section's id, name, fold state, whether its module is mounted, its mount error or null, and the text content the module drew.",
+        "description": "The drawn sidebars in document order: the sidebar (the id of the card that holds it), its set, layout, selected tab or null, the card and active tab its sections receive, and each section's id, name, fold state, whether its module is mounted, its mount error or null, the text content the module drew, and the number of its core.sidebar.section.control elements.",
         "schema": {
           "type": "array",
           "items": {
@@ -200,6 +200,9 @@
                     },
                     "text": {
                       "type": "string"
+                    },
+                    "controls": {
+                      "type": "integer"
                     }
                   }
                 }
@@ -553,7 +556,7 @@
       },
       {
         "name": "core.settings-modal",
-        "description": "The settings modal: whether it is open, its section, scope, the selected plugin in the plugins section or null, the edited set or null, card rectangle in window coordinates, and its controls with the command each control runs.",
+        "description": "The settings modal: whether it is open, its section, scope, the selected plugin in the plugins section or null, the edited set or null, the rows of declared plugin settings with their label and description, card rectangle in window coordinates, and its controls with the command each control runs.",
         "schema": {
           "type": "object",
           "properties": {
@@ -618,6 +621,17 @@
             },
             "plugin": {
               "type": ["string", "null"]
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": { "type": "string" },
+                  "name": { "type": "string" },
+                  "description": { "type": ["string", "null"] }
+                }
+              }
             },
             "editing": {
               "type": ["string", "null"]
