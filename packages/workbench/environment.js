@@ -23,7 +23,7 @@ async function readJson(path) {
 function surfaceOf(name, pluginId, surface) {
   const module = `/${modulePath(name, surface.module)}`;
   return (tabId) => ({ module, composition: surface.composition, surfaceId: tabId,
-    pluginId, home: surface.home ?? null, declarations: surface.declarations ?? {}, sidecars: surface.sidecars ?? [] });
+    pluginId, declarations: surface.declarations ?? {}, sidecars: surface.sidecars ?? [] });
 }
 
 /**

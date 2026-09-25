@@ -22,10 +22,9 @@ async function setup(t) {
     async back() {}, async forward() {}, async reload() {}, async stop() {}, async zoom() {},
   };
   const controller = await mount(root, {
-    runtime: { textSize: { read: () => 1, on: () => () => {} } },
+    runtime: { settings: { read: () => ({ home: "" }), on: () => () => {} }, textSize: { read: () => 1, on: () => () => {} } },
     icon: (name) => `<svg data-icon="${name}"></svg>`,
     surfaceId: "browser-empty-test",
-    metadata: { home: null },
     composition: { async create() { return { region: () => region, async dispose() {} }; } },
     exposure: {
       status() {}, dom(name, element) { doms.set(name, element); }, command(name, run) { commands.set(name, run); },

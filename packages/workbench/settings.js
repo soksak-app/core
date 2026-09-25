@@ -25,7 +25,7 @@
    스타일시트를 물려받지 못하므로, 호스트가 이 값들을 그대로 실어 보낸다.     */
 
 import { surfaces as host } from "./host.js";
-import { checkSidebarReferences, validateSidebars } from "@soksak/plugin-api";
+import { checkSidebarReferences, isSettingAddress, validateSidebars } from "@soksak/plugin-api";
 import { effectiveSettings } from "./settings-scope.js";
 import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
 
@@ -239,6 +239,9 @@ function validatePluginValue(key, value) {
   if (definition.type === "string" &&
       (typeof value !== "string" || value.length === 0 || value.length > definition.maxLength)) {
     throw new Error(`Invalid setting ${key}: string value must be non-empty and at most ${definition.maxLength} characters`);
+  }
+  if (definition.type === "address" && !isSettingAddress(value)) {
+    throw new Error(`Invalid setting ${key}: address value must be empty or an http or https address`);
   }
 }
 

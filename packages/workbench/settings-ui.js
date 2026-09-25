@@ -284,6 +284,8 @@ function declaredRow(key, definition) {
     ? segment(key, definition.values.map((item) => [item, item]), now)
     : definition.type === "string"
       ? text(key, definition.maxLength, now)
+      : definition.type === "address"
+        ? text(key, 2048, now)
       : slide(key, definition.minimum, definition.maximum, now, "");
   const el = row(definition.label, control);
   el.dataset.row = key;

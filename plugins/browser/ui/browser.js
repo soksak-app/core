@@ -90,7 +90,9 @@ export async function mount(root, context) {
     const value = address.value.trim();
     return { url: /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}` };
   }, { event: "keydown", when: (event) => event.key === "Enter" });
-  if (restored ?? context.metadata.home) await region.load(restored ?? context.metadata.home);
+  // 저장된 주소가 없으면 설정 home 을 연다. 비어 있으면 빈 상태로 시작한다.
+  const start = restored ?? context.runtime.settings.read().home;
+  if (start !== "") await region.load(start);
   context.status.report("ready");
   return { async dispose() {
     address.removeEventListener("pointerdown", beginSelection);

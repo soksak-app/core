@@ -17,7 +17,6 @@
       "overlays": []
     }
   },
-  "home": "https://www.google.com",
   "preview": {
     "ink": "--rail"
   },
@@ -43,6 +42,14 @@
       "module": "ui/sections/history.js"
     }
   ],
+  "settings": {
+    "home": {
+      "label": "홈 주소",
+      "description": "새 브라우저 카드가 처음 여는 http 또는 https 주소다. 비우면 주소 입력 안내로 시작한다.",
+      "type": "address",
+      "default": ""
+    }
+  },
   "exposes": {
     "status": [
       {

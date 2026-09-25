@@ -79,6 +79,12 @@ function only(where, value, keys) {
 /* 설정 창이 보이는 설정 이름과 설명의 최대 길이. */
 const SETTING_LABEL_MAX = 40;
 const SETTING_DESCRIPTION_MAX = 200;
+const ADDRESS_MAX = 2048;
+
+/** 주소 설정 값: 빈 문자열이거나 최대 2048자의 http 또는 https 주소. */
+export function isSettingAddress(value) {
+  return value === "" || (typeof value === "string" && value.length <= ADDRESS_MAX && /^https?:\/\/[^/]/i.test(value));
+}
 
 function checkSettingDeclaration(where, full) {
   if (!isObject(full)) throw new Error(`${where}: setting must be an object`);
@@ -121,7 +127,14 @@ function checkSettingDeclaration(where, full) {
     }
     return;
   }
-  throw new Error(`${where}: setting type must be enum, integer, or string`);
+  if (declaration.type === "address") {
+    only(where, declaration, ["type", "default"]);
+    if (!isSettingAddress(declaration.default)) {
+      throw new Error(`${where}: address default must be empty or an http or https address`);
+    }
+    return;
+  }
+  throw new Error(`${where}: setting type must be enum, integer, string, or address`);
 }
 
 function checkSettings(where, settings) {
@@ -144,6 +157,9 @@ function checkSettingValue(where, declaration, value) {
   if (declaration.type === "string" &&
       (typeof value !== "string" || value.length === 0 || value.length > declaration.maxLength)) {
     throw new Error(`${where}: string value must be non-empty and at most ${declaration.maxLength} characters`);
+  }
+  if (declaration.type === "address" && !isSettingAddress(value)) {
+    throw new Error(`${where}: address value must be empty or an http or https address`);
   }
 }
 
@@ -230,7 +246,6 @@ function checkBackground(where, background, sidecars, settings = {}) {
  *   mark      `+` 메뉴와 탭 제목에 표시할 짧은 표식. surface 가 있으면 필수
  *   icon      16×16 뷰박스 SVG 요소. surface 가 있으면 필수
  *   surface   카드 표면. `{ page, composition }` 은 패키지 안 문서와 합성 권한 선언이다
- *   home      표면 페이지가 처음 여는 http 또는 https 주소. page 표면이 있어야 한다
  *   sections  사이드바에 표시할 수 있는 섹션. id 는 `<플러그인 id>.<이름>` 형식
  *   preview   라이브러리 미리보기의 색. `ink` 는 테마 토큰 이름(`--rail` 등). surface 가 있어야 한다
  *   sidecars  표면 페이지가 사용하는 사이드카 패키지 이름. 플러그인 package.json 의 의존성이어야 한다
@@ -238,7 +253,7 @@ function checkBackground(where, background, sidecars, settings = {}) {
  */
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
-  only("plugin.json", manifest, ["id", "name", "mark", "icon", "surface", "home", "sections", "preview", "sidecars", "background", "exposes", "settings"]);
+  only("plugin.json", manifest, ["id", "name", "mark", "icon", "surface", "sections", "preview", "sidecars", "background", "exposes", "settings"]);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
   const where = `plugin ${id}`;
@@ -293,12 +308,6 @@ export function validateManifest(manifest) {
     only(`${where} preview`, manifest.preview, ["ink"]);
     if (typeof manifest.preview.ink !== "string" || !TOKEN.test(manifest.preview.ink)) {
       throw new Error(`${where}: preview.ink must be a theme token name`);
-    }
-  }
-  if (manifest.home !== undefined) {
-    if (manifest.surface === undefined) throw new Error(`${where}: home requires a surface`);
-    if (!isText(manifest.home) || !/^https?:\/\/[^/]/.test(manifest.home)) {
-      throw new Error(`${where}: home must be an http or https address`);
     }
   }
   if (manifest.exposes !== undefined) {

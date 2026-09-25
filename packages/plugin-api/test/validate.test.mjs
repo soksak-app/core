@@ -35,7 +35,9 @@ test("a manifest with a page surface or with sections only is accepted", () => {
   assert.equal(validateManifest(card), card);
   assert.equal(validateManifest(side), side);
   assert.equal(validateManifest({ ...card, preview: { ink: "--surface-fg" } }).preview.ink, "--surface-fg");
-  assert.equal(validateManifest({ ...card, home: "https://example.com/start" }).home, "https://example.com/start");
+  const address = (value) => ({ ...card, settings: { home: { label: "홈 주소", type: "address", default: value } } });
+  assert.equal(validateManifest(address("")).settings.home.default, "");
+  assert.equal(validateManifest(address("https://example.com/start")).settings.home.default, "https://example.com/start");
   assert.deepEqual(validateManifest(card).settings["cursor.shape"].values, ["block", "beam"]);
   const background = { sidecar: "@scope/sidecar-worker", operation: "open" };
   assert.equal(validateManifest({ ...card, background }).background.operation, "open");
@@ -52,9 +54,10 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, surface: { url: "https://a", module: "b.js", composition: { kind: "dom" } } }, /unknown field url/],
     [{ ...card, surface: {} }, /surface requires a module/],
     [{ ...card, surface: { module: "ui/probe.js" } }, /surface requires a composition/],
-    [{ ...card, home: "file:///etc" }, /home must be an http or https address/],
-    [{ ...card, home: "https:///" }, /home must be an http or https address/],
-    [{ ...side, home: "https://example.com" }, /home requires a surface/],
+    [{ ...card, home: "https://example.com" }, /unknown field home/],
+    [{ ...card, settings: { home: { label: "홈 주소", type: "address", default: "file:///etc" } } }, /address default/],
+    [{ ...card, settings: { home: { label: "홈 주소", type: "address", default: "https:///" } } }, /address default/],
+    [{ ...card, settings: { home: { label: "홈 주소", type: "address", default: "", maxLength: 9 } } }, /unknown field maxLength/],
     [{ ...card, surface: { module: "../x.js", composition: { kind: "dom" } } }, /inside the package/],
     [{ ...card, surface: { module: "/x.js", composition: { kind: "dom" } } }, /inside the package/],
     [{ ...card, mark: undefined }, /mark is required/],

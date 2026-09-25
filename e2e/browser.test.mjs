@@ -344,6 +344,51 @@ for (const app of Object.values(APPS)) {
     assert.ok(stat?.isDirectory(), `the configuration directory has no document site data directory: ${directory}`);
   });
 
+  test(`${app.name}: a new browser card opens the home setting or starts empty`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const base = await serve(t);
+    const home = `${base}/home`;
+
+    // 홈 주소는 설정 창의 브라우저 플러그인 페이지에 라벨과 함께 보인다.
+    await s.run("core.settings.open");
+    s.cleanup(() => s.run("core.settings.close"));
+    const nav = (await s.until("core.settings-modal", (modal) => modal.open &&
+      modal.controls.some((c) => c.key === "nav:plugins"), "settings did not open")).controls.find((c) => c.key === "nav:plugins");
+    await s.run(nav.command.name, nav.command.params);
+    const plugin = (await s.until("core.settings-modal", (modal) => modal.section === "plugins" &&
+      modal.controls.some((c) => c.key === "plugin:browser"), "the plugin section did not show the browser")).controls
+      .find((c) => c.key === "plugin:browser");
+    await s.run(plugin.command.name, plugin.command.params);
+    const page = await s.until("core.settings-modal", (modal) => modal.plugin === "browser", "the browser plugin page did not open");
+    assert.equal(page.rows.find((row) => row.key === "browser.home")?.name, "홈 주소", `browser rows: ${JSON.stringify(page.rows)}`);
+    await s.run("core.settings.close");
+    await s.until("core.settings-modal", (modal) => !modal.open, "settings did not close");
+
+    const [browser] = await browsers(s);
+    const card = (await s.get("core.grid")).cards.find((c) => c.tabs.some((x) => x.id === browser.surface)).id;
+    const split = async () => {
+      const { tab } = await s.run("core.card.split", { card, axis: "x", plugin: "browser" });
+      await s.until("core.surfaces", (list) => list.some((x) => x.surface === tab && x.exposes.includes("status browser.location")),
+        "the new browser surface did not register");
+      return tab;
+    };
+
+    await s.run("core.settings.set", { patch: { "browser.home": home } });
+    await s.until("core.settings", (value) => value.values["browser.home"] === home && !value.saving, "browser.home was not saved");
+    const opened = await split();
+    await loaded(s, opened, home);
+    await placed(s, opened, "the home document");
+
+    await s.run("core.settings.set", { patch: { "browser.home": "" } });
+    await s.until("core.settings", (value) => value.values["browser.home"] === "" && !value.saving, "browser.home was not cleared");
+    const empty = await split();
+    assert.equal((await s.get("browser.location", empty)).url, "", "a new browser card without a home has an address");
+    const shown = await s.rect("browser.empty", undefined, empty);
+    assert.ok(shown.width > 0 && shown.height > 0, `the new browser card does not show the empty state: ${JSON.stringify(shown)}`);
+  });
+
   test(`${app.name}: a card focus keeps a shown document visible while its placement is prepared`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

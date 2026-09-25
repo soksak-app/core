@@ -19,9 +19,10 @@ test("every control names a declared dom entry and a declared command", () => {
   assert.ok(names("dom").length > 0);
 });
 
-test("the document region is a declared dom entry and the start address is home", () => {
+test("the document region is a declared dom entry and the start address is the home setting", () => {
   assert.match(source, /browser.document/);
-  assert.match(manifest.home, /^https:\/\//);
+  assert.equal(manifest.home, undefined);
+  assert.deepEqual(manifest.settings.home, { label: "홈 주소", description: manifest.settings.home.description, type: "address", default: "" });
   assert.deepEqual(names("commands"), ["browser.address.select", "browser.navigate", "browser.back", "browser.forward", "browser.reload", "browser.stop"]);
   assert.deepEqual(names("status"), ["browser.location", "browser.address.text"]);
 });
@@ -47,7 +48,6 @@ test("browser mount publishes document state, respects shadow focus, and dispose
   const context = {
     icon: (name) => `<svg data-icon="${name}"></svg>`,
     surfaceId: "browser-page-test",
-    metadata: { home: "https://home.test/" },
     composition: { create: async () => composition },
     exposure: {
       status: async (name, read, subscribe) => exposed.statuses.set(name, { read, subscribe }),
@@ -57,7 +57,7 @@ test("browser mount publishes document state, respects shadow focus, and dispose
       dispose: async () => { exposed.disposed = true; },
     },
     status: { report: (phase) => { exposed.phase = phase; } },
-    runtime: { textSize: { read: () => 1.25,
+    runtime: { settings: { read: () => ({ home: "https://home.test/" }), on: () => () => {} }, textSize: { read: () => 1.25,
       on: (fn) => { notifyTextSize = fn; return () => { notifyTextSize = null; }; } } },
   };
   const { mount } = await import("../ui/browser.js");

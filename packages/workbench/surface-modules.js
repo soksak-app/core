@@ -127,7 +127,6 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     let factor = surfaceTextSize(surface.surfaceId);
     const context = createSurfaceContext({
       root: shadow, surfaceId: surface.surfaceId, pluginId: surface.pluginId,
-      metadata: { home: surface.home },
       declarations: surface.declarations ?? {}, composition, diagnostics: plugin(surface.pluginId).diagnostics,
       tab: { title: (text) => reportTitle(surface.surfaceId, text),
         directory: (path) => reportDirectory(surface.surfaceId, path),

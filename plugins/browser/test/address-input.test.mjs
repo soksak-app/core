@@ -23,10 +23,9 @@ async function setup(t) {
     async back() {}, async forward() {}, async reload() {}, async stop() {}, async zoom() {},
   };
   const controller = await mount(root, {
-    runtime: { textSize: { read: () => 1, on: () => () => {} } },
+    runtime: { settings: { read: () => ({ home: "https://example.test/old" }), on: () => () => {} }, textSize: { read: () => 1, on: () => () => {} } },
     icon: (name) => `<svg data-icon="${name}"></svg>`,
     surfaceId: "browser-address-test",
-    metadata: { home: "https://example.test/old" },
     composition: { async create() { return { region: () => region, async dispose() {} }; } },
     exposure: {
       status() {}, dom() {}, command(name, run) { commands.set(name, run); },

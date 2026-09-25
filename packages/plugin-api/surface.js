@@ -7,7 +7,7 @@ const callable = (value, name) => {
 const readyReleases = new WeakMap();
 
 export function createSurfaceContext({
-  root, surfaceId, pluginId, metadata = {}, declarations = {}, composition = null, diagnostics = null, runtime = {},
+  root, surfaceId, pluginId, declarations = {}, composition = null, diagnostics = null, runtime = {},
   tab, origin = { directory: null }, icon,
 } = {}) {
   if (!root || typeof root.appendChild !== "function") throw new TypeError("surface context requires a root element");
@@ -39,7 +39,7 @@ export function createSurfaceContext({
     publish(phase, error);
   };
   const context = Object.freeze({
-    root, surfaceId, pluginId, metadata: Object.freeze(structuredClone(metadata)),
+    root, surfaceId, pluginId,
     declarations: Object.freeze(structuredClone(declarations)),
     composition,
     // 진단 빌드에서는 플러그인의 진단 모듈, release 빌드에서는 null 이다.
