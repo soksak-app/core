@@ -27,7 +27,13 @@
        막대 자체에 표시하면 그 표시가 자식에게 상속되어 단추를 눌러도 창이
        이동한다. -->
   <div class="chrome-bar__drag" id="winDrag"></div>
-  <div class="brand">SPLIT&#8202;PANE</div>
+  <!-- soksak 로고. 아이콘 타일의 색은 고정이고, 글자는 모드에 따라 app.css 의 .brand 색을 따른다. -->
+  <div class="brand" data-expose="core.brand" role="img" aria-label="soksak">
+    <svg class="brand__logo" viewBox="0 0 323 80" aria-hidden="true">
+      <svg x="0" y="0" width="80" height="80" viewBox="0 0 128 128"><rect x="1" y="1" width="126" height="126" rx="27" fill="#16181D" stroke="#33373F" stroke-width="2"/><path d="M26 37 L56 64 M53 61.3 L26 91" fill="none" stroke="#7FE3B8" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><rect x="70" y="87" width="38" height="10" rx="5" fill="#EDE6D8"/></svg>
+      <svg x="102" y="19.375" width="221.25" height="41.25" viewBox="-1 15 236 44"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path d="M27 25 C24 20.5 19 19 15 19 C8 19 4 22.5 4 27.5 C4 33 10 35 15.5 36 C21.5 37 28 39 28 46 C28 52 22.5 55 16 55 C10.5 55 6 53 3 49"/><circle cx="56" cy="37" r="18"/><path d="M88 19 V55 M108 19 L88 37 M88 37 L110 55"/><path transform="translate(120,0)" d="M27 25 C24 20.5 19 19 15 19 C8 19 4 22.5 4 27.5 C4 33 10 35 15.5 36 C21.5 37 28 39 28 46 C28 52 22.5 55 16 55 C10.5 55 6 53 3 49"/><circle cx="174" cy="37" r="18"/><path d="M192 19 V55"/><path d="M208 19 V55 M228 19 L208 37 M208 37 L230 55"/></g></svg>
+    </svg>
+  </div>
   <div class="tabs tabs--project" id="projectBar"></div>
   <div class="chrome-bar__acts" id="chromeActs"></div>
 </header>

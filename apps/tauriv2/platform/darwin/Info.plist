@@ -6,6 +6,8 @@
 	<string>com.soksak.tauriv2</string>
 	<key>CFBundleExecutable</key>
 	<string>soksak-tauriv2</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleName</key>
 	<string>soksak-tauriv2</string>
 	<key>CFBundlePackageType</key>

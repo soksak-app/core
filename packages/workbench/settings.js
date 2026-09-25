@@ -398,6 +398,8 @@ export function onSaved(fn) {
 export function install() {
   const root = document.documentElement;
   root.style.colorScheme = settings.mode;
+  // 스타일시트가 모드에 따라 다른 색을 고를 때 읽는다(로고의 글자).
+  root.dataset.mode = settings.mode;
   // 스타일시트가 읽는 두 값. 표시만 바뀌므로 판을 다시 만들지 않는다.
   root.dataset.focusInd = settings.focusInd;
   root.dataset.fullRule = settings.fullRule;

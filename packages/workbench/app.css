@@ -105,8 +105,10 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .chrome-bar .tabs{pointer-events:none}
 .chrome-bar .tabs > *{pointer-events:auto}
 /* 이 글자는 누름을 받지 않는다. 누름은 아래의 끄는 영역에 도달한다. */
-.brand{flex:0 0 auto;font-weight:600;letter-spacing:.1em;font-size:var(--text-small);color:var(--muted);
-  margin-right:2px;pointer-events:none}
+/* soksak 로고의 글자는 dark 에서 밝은 색, light 에서 어두운 색이다. 아이콘 타일의 색은 로고에 고정되어 있다. */
+.brand{flex:0 0 auto;color:#EDE6D8;margin-right:2px;pointer-events:none;display:flex;align-items:center}
+:root[data-mode=light] .brand{color:#16181D}
+.brand__logo{display:block;height:calc(var(--size) * 20 / 13);width:auto}
 
 
 .chrome-bar__acts{display:flex;align-items:center;gap:6px;flex:0 0 auto}

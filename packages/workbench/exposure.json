@@ -2056,6 +2056,10 @@
     ],
     "dom": [
       {
+        "name": "core.brand",
+        "description": "The soksak logo at the start of the title bar; its letters are light in dark mode and dark in light mode."
+      },
+      {
         "name": "core.chrome.bar",
         "description": "The window chrome row."
       },

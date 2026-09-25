@@ -156,8 +156,9 @@ TAURI_RELEASE = $(TAURI_RELEASE_BUNDLE)/Contents/MacOS/soksak-tauriv2
 WAILS_DEBUG   = $(WAILS_DEBUG_BUNDLE)/Contents/MacOS/soksak-wailsv3
 WAILS_RELEASE = $(WAILS_RELEASE_BUNDLE)/Contents/MacOS/soksak-wailsv3
 
-# 번들의 Info.plist 를 쓴다. 첫 인자는 번들, 둘째 인자는 애플리케이션이다.
-bundle-info = mkdir -p $(1)/Contents/MacOS && cp apps/$(2)/platform/darwin/Info.plist $(1)/Contents/Info.plist
+# 번들의 Info.plist 와 Dock 아이콘을 쓴다. 첫 인자는 번들, 둘째 인자는 애플리케이션이다.
+bundle-info = mkdir -p $(1)/Contents/MacOS $(1)/Contents/Resources && cp apps/$(2)/platform/darwin/Info.plist $(1)/Contents/Info.plist \
+	&& cp apps/$(2)/platform/darwin/AppIcon.icns $(1)/Contents/Resources/AppIcon.icns
 # 번들 안의 실행 파일과 Info.plist 를 ad hoc 서명으로 봉인한다.
 bundle-sign = codesign --sign - --force --deep $(1)
 
