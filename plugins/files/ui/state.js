@@ -1,5 +1,5 @@
 // 파일 플러그인의 상태 모듈(docs/spec/plugins.md#plugin-state). 파일 사이드카로 프로젝트 폴더를 나열해
-// files.tree 를 만들고, 북마크를 프로젝트 데이터 bookmarks 에 저장해 files.bookmarks 로 공개한다.
+// files.tree 를 만들고, 펼친 디렉터리를 감시해 바뀌면 다시 나열하며, 북마크를 프로젝트 데이터 bookmarks 에 저장해 files.bookmarks 로 공개한다.
 export async function mount(context) {
   /* 펼친 디렉터리의 상대 경로. "" 는 프로젝트 폴더다. */
   const expanded = new Set([""]);
@@ -11,20 +11,26 @@ export async function mount(context) {
   const listeners = { tree: new Set(), bookmarks: new Set() };
 
   await context.sidecar.on((body) => {
+    // 감시한 디렉터리가 바뀌었거나 감시가 도중에 실패했다(docs/spec/sidecars.md#files).
+    if (body.changed !== undefined) { inTurn(refresh).catch(showFailure); return; }
+    if (body.id === undefined) { showFailure(new Error(body.error)); return; }
     const request = pending.get(body.id);
     if (!request) return;
     pending.delete(body.id);
     if (body.error !== undefined) request.reject(new Error(body.error));
     else request.resolve(body.entries);
   });
-  const list = (path) => new Promise((resolve, reject) => {
-    const id = `list-${++next}`;
+  const request = (body) => new Promise((resolve, reject) => {
+    const id = `${body.operation}-${++next}`;
     pending.set(id, { resolve, reject });
-    context.sidecar.send({ operation: "list", id, path }).catch((failure) => {
+    context.sidecar.send({ ...body, id }).catch((failure) => {
       pending.delete(id);
       reject(failure);
     });
   });
+  const list = (path) => request({ operation: "list", path });
+  /** 사이드카가 감시하는 디렉터리를 펼친 디렉터리로 바꾼다. */
+  const watchExpanded = () => request({ operation: "watch", paths: [...expanded] });
   const join = (parent, name) => (parent ? `${parent}/${name}` : name);
 
   function rows(path = "", depth = 0) {
@@ -38,6 +44,8 @@ export async function mount(context) {
   const tree = () => ({ root: context.project.root, error, entries: rows() });
   const bookmarks = () => context.data.get("bookmarks");
   const notify = (name, read) => { const value = read(); for (const fn of listeners[name]) fn(value); };
+  /** 요청 없이 생긴 실패는 files.tree 의 error 로 보인다. */
+  const showFailure = (failure) => { error = failure.message; notify("tree", tree); };
 
   /** 펼친 디렉터리를 모두 다시 나열한다. 사라진 하위 디렉터리는 접는다. 프로젝트 폴더의 실패는 error 로 보인다. */
   async function refresh() {
@@ -56,10 +64,11 @@ export async function mount(context) {
         error = failure.message;
       }
     }
+    await watchExpanded();
     notify("tree", tree);
   }
 
-  // 새로 고침과 펼침은 나열 결과를 함께 바꾸므로 받은 순서대로 하나씩 실행한다.
+  // 새로 고침, 펼침, 변경 알림은 나열 결과를 함께 바꾸므로 받은 순서대로 하나씩 실행한다.
   let turn = Promise.resolve();
   const inTurn = (work) => {
     const done = turn.then(work);
@@ -79,6 +88,7 @@ export async function mount(context) {
       listings.set(path, await list(path));
       expanded.add(path);
     }
+    await watchExpanded();
     notify("tree", tree);
     return null;
   }));
@@ -96,5 +106,11 @@ export async function mount(context) {
     return null;
   });
   await inTurn(refresh);
-  return { dispose() { listeners.tree.clear(); listeners.bookmarks.clear(); } };
+  return {
+    async dispose() {
+      listeners.tree.clear();
+      listeners.bookmarks.clear();
+      await inTurn(() => request({ operation: "watch", paths: [] }));
+    },
+  };
 }

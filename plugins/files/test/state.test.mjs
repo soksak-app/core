@@ -19,6 +19,7 @@ function fakeContext(listing) {
       on: async (fn) => { reply = fn; },
       send: async (body) => {
         sent.push(body);
+        if (body.operation === "watch") { queueMicrotask(() => reply({ id: body.id })); return; }
         const value = listing[body.path];
         queueMicrotask(() => reply(typeof value === "string" ? { id: body.id, error: value } : { id: body.id, entries: value ?? [] }));
       },
@@ -28,7 +29,7 @@ function fakeContext(listing) {
       set: async (key, value) => { stored[key] = value; },
     },
   };
-  return { context, statuses, commands, stored, sent };
+  return { context, statuses, commands, stored, sent, emit: (body) => reply(body) };
 }
 
 const listing = () => ({
@@ -83,4 +84,25 @@ test("bookmarks are stored as project data, kept unique, and removed", async () 
   await f.commands.get("files.bookmarks.remove")({ path: "a.txt" });
   assert.deepEqual(bookmarks(), ["src"]);
   await assert.rejects(f.commands.get("files.bookmarks.remove")({ path: "none" }), /none is not bookmarked/);
+});
+
+test("the state watches the expanded directories, refreshes on a change, and stops watching on dispose", async () => {
+  const files = listing();
+  const f = fakeContext(files);
+  const { mount } = await import("../ui/state.js");
+  const mounted = await mount(f.context);
+  const watched = () => f.sent.filter((body) => body.operation === "watch").at(-1)?.paths;
+  assert.deepEqual(watched(), [""]);
+  await f.commands.get("files.tree.toggle")({ path: "src" });
+  assert.deepEqual(watched(), ["", "src"]);
+  const seen = [];
+  f.statuses.get("files.tree").subscribe((value) => seen.push(value.entries.map((e) => e.path)));
+  files.src = [{ name: "main.go", directory: false }, { name: "new.go", directory: false }];
+  f.emit({ changed: "src" });
+  await f.commands.get("files.refresh")({});
+  assert.deepEqual(seen[0], ["src", "src/main.go", "src/new.go", "a.txt"], "the change refreshed the tree before the next command");
+  await f.commands.get("files.tree.toggle")({ path: "src" });
+  assert.deepEqual(watched(), [""]);
+  await mounted.dispose();
+  assert.deepEqual(watched(), []);
 });

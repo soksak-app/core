@@ -58,7 +58,15 @@ for (const app of Object.values(APPS)) {
     sidebars = await s.until("core.sidebars", (value) => text(value, "files.tree")?.includes(`▾ ${folder}note.txt`),
       "the file tree section did not show the expanded folder");
 
-    // 새 파일은 새로 고침 조작 뒤에 보인다.
+    // 애플리케이션 밖에서 만들거나 지운 파일은 사이드카의 변경 알림으로 새로 고침 없이 나타나고 사라진다.
+    writeFileSync(join(directory, "watched.txt"), "watched\n");
+    await s.until("files.tree", (value) => rowIndex(value, `${folder}/watched.txt`) >= 0,
+      "a file created on disk did not appear without a refresh");
+    rmSync(join(directory, "watched.txt"));
+    await s.until("files.tree", (value) => rowIndex(value, `${folder}/watched.txt`) < 0,
+      "a file removed on disk did not leave without a refresh");
+
+    // 새로 고침 조작이 files.refresh 를 실행한다.
     writeFileSync(join(directory, "added.txt"), "added\n");
     await press(s, "core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", 0));
     tree = await s.until("files.tree", (value) => rowIndex(value, `${folder}/added.txt`) >= 0,

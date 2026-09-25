@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F13-2-4: the file tree follows the disk. The files sidecar watches the project folder and the expanded directories (kqueue on macOS) and reports changes, and the files state lists them again, so a file created or removed outside the application appears or leaves without 새로 고침.
 - V5-77: an inset sidebar without a stored width opens at 190 points (`sidebarWidth`); the minimum stays 120, and a double click on the grip still sets it.
 - V5-75: 사이드바 위치 (`rail`) defaults to `inset`, the sidebar inside the card, and its control lists 카드 안 first. A settings file that stores another value keeps it.
 - V5-76: `environment.json` accepts `sidecars: false` for a runtime that cannot run sidecars, and validation rejects a plugin whose state module uses sidecars there. The browser example declares it and no longer lists the files plugin, so opening a project there no longer reports "requires exactly one declared sidecar".

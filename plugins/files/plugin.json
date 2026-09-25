@@ -35,7 +35,7 @@
     "status": [
       {
         "name": "files.tree",
-        "description": "The project folder, the last failure to list it or null, and the visible rows of the file tree in order: each entry's path relative to the folder, name, whether it is a directory, its depth, and whether it is expanded.",
+        "description": "The project folder, the last failure to list it or null, and the visible rows of the file tree in order: each entry's path relative to the folder, name, whether it is a directory, its depth, and whether it is expanded. The rows are listed again when the files sidecar reports a change in the project folder or an expanded directory.",
         "schema": {
           "type": "object",
           "properties": {
