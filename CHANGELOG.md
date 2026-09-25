@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-60: terminal wheel scrolling over a long history passes its real-input limits on both hosts, and the user accepted its speed.
 - V5-51-4-1, V5-51-4, V5-51: pressing a system notification of a terminal out of view selects its tab on both hosts; the Tauri endpoint declares `diagnostics.notifications`.
 - V5-51-4-1 (partial): the applications run from macOS application bundles, and a tab notice is also posted as a system notification whose activation selects its tab; `core.notifications` reports the permission, the last failure, and the accepted notifications.
 - F8-6-2: a divider drag shows each step's layout within 34 ms (two 60 Hz frames) instead of 50 ms, checked on both hosts.
