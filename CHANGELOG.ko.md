@@ -5,6 +5,7 @@
 ## 미배포
 
 - V5-70-2: 문서 영역이 사이트 데이터를 앱의 WebKit 컨테이너 대신 앱 설정 디렉터리 안의 `document-data`에 두므로, 일회용 검사 디렉터리를 포함해 `--config-dir`마다 쿠키와 캐시가 따로 있다.
+- F13-2(셸): 사이드바 섹션이 실제 내용을 그린다. 섹션 모듈은 카드의 탭(또는 기본 표면)에서 자기 플러그인의 status를 따라가고 감시, 값 읽기, 해제의 실패를 페이지 오류로 보고하는 `context.status(name, fn)`과, 조작 요소를 dom 이름 `core.sidebar.section.control`로 자기 플러그인의 명령에 연결하는 `context.bind(element, name, params)`를 받는다. `core.sidebars`는 섹션마다 `text`와 `controls`를 보고한다. 셸은 `shell.history`(`shell.write`로 쓴 비어 있지 않은 줄)와 `shell.jobs`(끝나지 않은 `shell.run` 명령)를 공개한다. 실행 기록은 그 줄을 보이고 누르면 다시 쓰며, cwd는 `shell.cwd`를 보이고, 작업은 끝나지 않은 실행을 중단 조작과 함께 보인다. 다시 빌드한 Wails와 Tauri 호스트에서 확인했다(`e2e/sidebar.test.mjs`). 브라우저와 파일 섹션은 아직 자리 표시 내용을 그린다(F13-2-1부터 F13-2-3).
 - F13-3-1: 저장된 사이드바 `sets`와 `links`는 `environment.json`을 검사하는 plugin-api 함수 `validateSidebars`와 `checkSidebarReferences`를 거친다. 등록되지 않은 섹션을 가리키는 세트나 없는 세트 또는 플러그인을 가리키는 연결은 설정 불러오기를 오류로 실패시키고, 변경은 -32602로 실패한다. 사이드바는 더 이상 등록되지 않은 섹션을 건너뛰지 않는다.
 - F13-3-2: 사이드바 섹션의 해제 뒤 마운트 실패와 해제 실패를 무시하지 않고 페이지 오류로 보고한다.
 - F13-3-3: 모든 플러그인 설정이 한국어 `label`과 필요한 곳에 `description`을 선언하고, 설정 창의 플러그인 페이지가 이를 보인다.
