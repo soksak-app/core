@@ -74,6 +74,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.modal.held",
     "diagnostics.presentation.failure",
     "diagnostics.input.source",
+    "diagnostics.notifications",
     TRANSCRIPT,
 ];
 #[cfg(not(feature = "diagnostics"))]

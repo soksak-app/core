@@ -11,7 +11,7 @@ import { frames, pixel, readFrame } from "../frame.mjs";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 import { pasteboardText, writePasteboard } from "../pasteboard.mjs";
 import { activateFinder, appPid, bringFront, click, closeFinderWindow, dragPath, finderItemCenter, frontWindowAt, key, KEYS,
-  dragPasteboard, notificationBanners, openFinderWindow, waitNotificationBanner, post, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
+  dragPasteboard, openFinderWindow, waitNotificationBanner, post, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
 
 // 터미널 한 칸의 중심 화면 좌표.
 function cellPoint(origin, session, column, row) {
@@ -746,13 +746,13 @@ for (const app of Object.values(APPS)) {
     const state = await s.get("core.notifications");
     assert.ok(["authorized", "provisional"].includes(state.authorization),
       `system notifications are ${state.authorization}; allow notifications for soksak-${app.name} in System Settings > Notifications`);
-    const before = notificationBanners();
     await s.run("terminal.input", { bytes: "printf '\\033]9;PRESS-NOTICE\\007'\r" }, hidden.surface);
     await s.until("core.notifications", (value) => value.posted.includes(hidden.surface),
       "the notification center did not accept the notification", { timeout: 10000 });
     // 배너는 알림 센터가 게시를 받아들인 뒤 그린다.
-    const { banner, list } = waitNotificationBanner(before, 10000);
-    assert.ok(banner, `no notification banner appeared within 10 s; banners ${JSON.stringify(list)}, before ${JSON.stringify(before)}`);
+    const banner = waitNotificationBanner("PRESS-NOTICE", 10000);
+    assert.ok(banner, "no notification banner with the notice text appeared within 10 s; check that the notification style " +
+      `of soksak-${app.name} shows banners and that no Focus mode hides them`);
     const center = { x: banner.x + banner.width / 2, y: banner.y + banner.height / 2 };
     post([{ type: "move", ...center }, { type: "down", ...center }, { type: "up", ...center }]);
     await s.until("core.grid", (grid) => cardOf(grid, hidden.surface).focused && cardOf(grid, hidden.surface).active === hidden.surface,
