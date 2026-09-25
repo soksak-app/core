@@ -103,12 +103,12 @@ fn osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries() {
     let events = engine.drain_events();
     assert!(matches!(
         events.as_slice(),
-        [EngineEvent::InlineImage(InlineImageCommand::Display {
+        [EngineEvent::InlineImage { command: InlineImageCommand::Display {
             name,
             data,
             width: Dimension::Pixels(2),
             ..
-        })] if name == "file.png" && data == b"hello"
+        }, .. }] if name == "file.png" && data == b"hello"
     ));
     let screen = engine.screen();
     let text = screen
@@ -1737,4 +1737,18 @@ fn osc_special_colors_draw_attributed_text_when_enabled_and_answer_queries() {
     engine.feed(b"\x1b]5;2;#ffffff\x07");
     assert!(engine.drain_events().iter().any(|event| matches!(event, EngineEvent::Error(reason) if reason.contains("blink"))),
         "the blink color cannot apply and must be rejected");
+}
+
+#[test]
+fn an_inline_image_is_anchored_at_the_cursor_where_its_sequence_appears() {
+    // 같은 출력 조각에서 그림 시퀀스 뒤에 온 글자가 커서를 옮겨도 그림은 시퀀스 자리의 커서에 놓인다.
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 10);
+    engine.feed(b"\x1b[6;3H\x1b]1337;File=name=ZmlsZS5wbmc=;inline=1:aGVsbG8=\x07\r\nafter\r\nmore\r\n");
+    let anchors: Vec<_> = engine.drain_events().into_iter().filter_map(|event| match event {
+        EngineEvent::InlineImage { anchor, .. } => Some(anchor),
+        _ => None,
+    }).collect();
+    assert_eq!(anchors.len(), 1, "{anchors:?}");
+    assert_eq!((anchors[0].col, anchors[0].row), (2, 5));
 }

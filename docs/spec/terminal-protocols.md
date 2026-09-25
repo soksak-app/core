@@ -72,7 +72,7 @@ The selected vendor scope is explicit and separate from the standard OSC invento
 - OSC 9 emits a notification event. Empty notifications are rejected and the payload is never executed.
 - OSC 133 emits one of four typed shell markers (`prompt.start`, `prompt.end`, `command.start`, `command.finished`) with string parameters, and sets the engine shell state that the [terminal runtime](terminal-runtime.md) uses on resize. Unknown markers and `redraw` values other than `0`, `1`, and `last` are rejected.
 - OSC 52 remains policy-gated clipboard ownership. Query tokens are single-use, rejection clears ownership, and BEL/ST fragmentation is tested.
-- OSC 1337 remains a bounded image transfer. Invalid payloads reject explicitly, multipart state cannot cross surfaces, and deletion rejects names not owned by that surface.
+- OSC 1337 remains a bounded image transfer. Invalid payloads reject explicitly, multipart state cannot cross surfaces, and deletion rejects names not owned by that surface. An image is anchored at the cursor and scroll position where its sequence appears in the output, even when later output in the same chunk moves the cursor, and the page's `image.inline` and `image.inline.deleted` events are sent with the raster that draws the change; when the draw fails, they follow the draw error.
 
 All six contracts preserve BEL/ST fragmentation. Relay responses include the source surface identifier; no vendor event is broadcast to another surface. The terminal page consumes the typed directory, hyperlink, notification, and shell-state events and stores them in its session status. Unknown future events remain visible in `unsupported` instead of being discarded.
 

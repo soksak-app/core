@@ -72,7 +72,7 @@ unsupported 행은 성공한 무동작 결과가 아니라 명시된 범위 결�
 - OSC 9는 notification event를 낸다. 빈 notification은 거부하며 payload를 실행하지 않는다.
 - OSC 133은 네 가지 typed shell marker(`prompt.start`, `prompt.end`, `command.start`, `command.finished`)와 문자열 parameter를 내고, [터미널 런타임](terminal-runtime.ko.md)이 크기 변경에 쓰는 엔진 셸 상태를 정한다. 알 수 없는 marker와 `0`, `1`, `last`가 아닌 `redraw` 값은 거부한다.
 - OSC 52는 계속 policy-gated clipboard 소유권을 사용한다. 조회 token은 한 번만 사용할 수 있고 거부하면 소유권을 지우며 BEL/ST 분할 입력을 검사한다.
-- OSC 1337은 제한된 image 전송으로 유지한다. 잘못된 payload는 명시적으로 거부하고 multipart 상태는 표면을 넘지 않으며, 해당 표면이 소유하지 않은 이름의 삭제는 거부한다.
+- OSC 1337은 제한된 image 전송으로 유지한다. 잘못된 payload는 명시적으로 거부하고 multipart 상태는 표면을 넘지 않으며, 해당 표면이 소유하지 않은 이름의 삭제는 거부한다. 그림은 같은 출력 조각의 뒤 출력이 커서를 옮겨도 그 시퀀스가 나타난 자리의 커서와 스크롤 위치에 놓이며, 페이지의 `image.inline`과 `image.inline.deleted` 이벤트는 그 변경을 그린 래스터와 함께 보낸다. 그리기가 실패하면 그리기 오류 뒤에 보낸다.
 
 여섯 계약 모두 BEL/ST 분할 입력을 보존한다. relay 응답은 원본 표면 식별자를 포함하며 vendor event를 다른 표면에 방송하지 않는다. 터미널 페이지는 typed directory·hyperlink·notification·shell-state event를 소비해 session status에 기록한다. 미래의 알 수 없는 event는 버리지 않고 `unsupported`에 남긴다.
 

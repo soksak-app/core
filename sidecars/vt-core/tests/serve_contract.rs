@@ -89,13 +89,24 @@ impl Engine for MockEngine {
         self.feed_history.push(bytes.to_vec());
         if bytes == b"\x1b]1337;File=name=ZmlsZS5wbmc=;size=5;inline=1;width=2px:aGVsbG8=\x07" {
             self.pending_events
-                .push(EngineEvent::InlineImage(InlineImageCommand::Display {
+                .push(EngineEvent::InlineImage { anchor: Default::default(), command: InlineImageCommand::Display {
                     name: "file.png".to_string(),
                     data: b"hello".to_vec(),
                     width: Dimension::Pixels(2),
                     height: Dimension::Auto,
                     preserve_aspect_ratio: true,
-                }));
+                }});
+        }
+        if bytes == b"\x1b]1337;File=name=cmVkLnBuZw==;inline=1:RED\x07" {
+            // 그릴 수 있는 2×1 빨간 PNG.
+            self.pending_events
+                .push(EngineEvent::InlineImage { anchor: Default::default(), command: InlineImageCommand::Display {
+                    name: "red.png".to_string(),
+                    data: vec![137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 1, 8, 6, 0, 0, 0, 244, 34, 127, 138, 0, 0, 0, 14, 73, 68, 65, 84, 120, 156, 99, 248, 207, 192, 240, 31, 132, 1, 17, 247, 3, 253, 227, 197, 245, 239, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130],
+                    width: Dimension::Auto,
+                    height: Dimension::Auto,
+                    preserve_aspect_ratio: true,
+                }});
         }
         if bytes == b"\x1b]7;file:///tmp/project\x07" {
             self.pending_events.push(EngineEvent::Directory {
@@ -1379,13 +1390,17 @@ async fn test_inline_image_event_is_explicit_and_base64_encoded() {
     });
 
     let mut found = false;
-    for _ in 0..4 {
+    for _ in 0..12 {
         let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
             .await
             .expect("timeout waiting for inline image event")
             .unwrap()
             .unwrap();
         let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+        // 호스트처럼 표시에 답한다. 그림 이벤트는 그 그림을 그린 표시(또는 그리기 오류) 뒤에 온다.
+        if let Some(sequence) = value["body"]["image"]["sequence"].as_i64() {
+            to_serve.write_all(format!("{{\"surface\":\"s1\",\"body\":{{\"image\":{{\"consumed\":{{\"name\":\"view\",\"generation\":1,\"raster\":1,\"sequence\":{sequence}}}}}}}}}\n").as_bytes()).await.unwrap();
+        }
         if value["body"]["event"] == "image.inline" {
             assert_eq!(value["body"]["command"], "display");
             assert_eq!(value["body"]["name"], "file.png");
@@ -4075,4 +4090,62 @@ async fn keypad_keys_follow_the_application_keypad_mode() {
     assert_eq!(written(&writes), vec!["\x1bOu\x1bOM".to_string()]);
     let (_, _, writes) = serve_scroll(None, keys).await;
     assert_eq!(written(&writes), vec!["5\r".to_string()]);
+}
+
+#[tokio::test]
+async fn an_inline_image_event_follows_the_presentation_that_draws_the_image() {
+    // 페이지의 그림 상태는 그 그림을 그린 래스터와 함께 바뀐다. 먼저 오면 페이지가 그림 없는 화면을 그림으로 여긴다.
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let session = "inline-order".to_string();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let port = Arc::new(FakeSessionPort::new(session.clone(), calls));
+    let port_for_factory = port.clone();
+    let factory = Arc::new(move || port_for_factory.clone() as Arc<dyn SessionPort>);
+    let (mut to_serve, serve_in) = tokio::io::duplex(64 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(1024 * 1024);
+    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
+    let mut lines = tokio::io::BufReader::new(from_serve).lines();
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+"#).await.unwrap();
+    // 열기의 표시를 받되 아직 consumed 로 답하지 않는다. 그 동안 그림 출력이 온다.
+    let mut first = None;
+    while first.is_none() {
+        let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line()).await.unwrap().unwrap().unwrap();
+        let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+        first = value["body"]["image"]["sequence"].as_i64();
+    }
+    port.push_event(DaemonEvent::Output {
+        session_id: session,
+        data: b"\x1b]1337;File=name=cmVkLnBuZw==;inline=1:RED\x07".to_vec(),
+        sequence: 0,
+        truncated: false,
+    });
+    let consumed = |sequence: i64| format!("{{\"surface\":\"s1\",\"body\":{{\"image\":{{\"consumed\":{{\"name\":\"view\",\"generation\":1,\"raster\":1,\"sequence\":{sequence}}}}}}}}}\n");
+    let mut seen = Vec::new();
+    let mut presented_after_output = false;
+    let mut released = false;
+    loop {
+        let line = match tokio::time::timeout(std::time::Duration::from_millis(500), lines.next_line()).await {
+            Ok(line) => line.unwrap().unwrap(),
+            Err(_) if !released => {
+                // 그림 출력이 처리될 시간을 준 뒤 첫 표시를 소비한다.
+                to_serve.write_all(consumed(first.unwrap()).as_bytes()).await.unwrap();
+                released = true;
+                continue;
+            }
+            Err(_) => panic!("no inline image event arrived: {seen:#?}"),
+        };
+        seen.push(line.chars().take(120).collect::<String>());
+        let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+        if let Some(sequence) = value["body"]["image"]["sequence"].as_i64() {
+            presented_after_output = true;
+            to_serve.write_all(consumed(sequence).as_bytes()).await.unwrap();
+        }
+        if value["body"]["event"] == "image.inline" {
+            assert!(presented_after_output, "the inline image event came before the presentation that draws it: {seen:#?}");
+            break;
+        }
+    }
+    task.abort();
 }

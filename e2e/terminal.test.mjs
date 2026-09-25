@@ -96,9 +96,13 @@ async function terminalColorBounds(session, surface, color) {
   let count = 0;
   let minY = Infinity;
   let maxY = -Infinity;
+  // 실패하면 무엇이 그려졌는지 알 수 있도록 영역의 색을 센다.
+  const histogram = new Map();
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
       const px = pixel(frame, x, y);
+      const key = px.slice(0, 3).join(",");
+      histogram.set(key, (histogram.get(key) ?? 0) + 1);
       const matches = color === "red"
         ? px[0] >= 180 && px[1] <= 80 && px[2] <= 80
         : px[0] <= 80 && px[1] <= 80 && px[2] >= 180;
@@ -109,7 +113,8 @@ async function terminalColorBounds(session, surface, color) {
       }
     }
   }
-  return { count, minY, maxY };
+  const colors = [...histogram].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([rgb, n]) => `${rgb}×${n}`).join(" ");
+  return { count, minY, maxY, measured: `region ${JSON.stringify(region.frame)} presented ${JSON.stringify(region.presented)}; colors ${colors}` };
 }
 
 function differentPixels(before, after) {
@@ -927,7 +932,7 @@ for (const app of Object.values(APPS)) {
     await s.until("terminal.session", (state) => state.inlineImages?.includes("plot"),
       "inline image display event was not observed", { surface });
     const beforeScroll = await terminalColorBounds(s, surface, "red");
-    assert.ok(beforeScroll.count >= 2, `red inline image did not reach native pixels: ${beforeScroll.count}`);
+    assert.ok(beforeScroll.count >= 2, `red inline image did not reach native pixels: ${beforeScroll.count}; ${beforeScroll.measured}`);
     t.diagnostic(`${app.name}: inline image displayed ${beforeScroll.count} red pixels`);
 
     await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 100 ]; do printf '\\n'; i=$((i+1)); done; printf '\\nSCROLL_DONE\\n'\r" }, surface);
@@ -943,7 +948,7 @@ for (const app of Object.values(APPS)) {
     await readScreenUntil(s, surface, (lines) => lines.includes("REPLACE_DONE"),
       "terminal did not finish the replacement fixture");
     const replaced = await terminalColorBounds(s, surface, "blue");
-    assert.ok(replaced.count >= 1, `same-name replacement did not reach native pixels: ${replaced.count}`);
+    assert.ok(replaced.count >= 1, `same-name replacement did not reach native pixels: ${replaced.count}; ${replaced.measured}`);
     const redAfterReplacement = await terminalColorBounds(s, surface, "red");
     assert.ok(redAfterReplacement.count < beforeScroll.count / 2,
       `same-name replacement retained the old image: ${redAfterReplacement.count}`);

@@ -8,7 +8,7 @@ use alacritty_terminal::vte::ansi::{Color, CursorShape, Handler, NamedColor, Pro
 use soksak_sidecar_vt_core::directory_uri::local_path;
 use soksak_sidecar_vt_core::{
     default_terminal_color, inline_image::parse as parse_inline_image, Cell, ClipboardSelection,
-    Cursor, CursorShape as ProtocolCursorShape, Engine, EngineEvent, Modes, Screen, ShellMarker,
+    Cursor, CursorShape as ProtocolCursorShape, Engine, EngineEvent, InlineAnchor, Modes, Screen, ShellMarker,
     TerminalTheme,
 };
 use std::collections::{HashMap, VecDeque};
@@ -995,13 +995,20 @@ impl AlacrittyEngine {
             };
             let payload = self.pending_input[body_start..end].to_vec();
             self.pending_input.drain(..end + terminator_len);
+            // 그림은 시퀀스를 만난 자리의 커서에 놓인다. 뒤의 출력이 커서를 옮기기 전에 위치를 싣는다.
+            let cursor = self.term.grid().cursor.point;
+            let anchor = InlineAnchor {
+                col: cursor.column.0 as u16,
+                row: cursor.line.0.max(0) as u16,
+                scroll: self.scroll_generation(),
+            };
             match parse_inline_image(&payload) {
                 Ok(command) => self
                     .events
                     .events
                     .lock()
                     .expect("engine event queue poisoned")
-                    .push_back(QueuedEvent::Neutral(EngineEvent::InlineImage(command))),
+                    .push_back(QueuedEvent::Neutral(EngineEvent::InlineImage { command, anchor })),
                 Err(error) => self
                     .events
                     .events

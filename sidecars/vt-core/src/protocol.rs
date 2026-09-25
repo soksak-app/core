@@ -288,7 +288,11 @@ pub trait Engine: Send + 'static {
 /// 엔진과 서비스 사이에서 전달하는 중립 이벤트.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EngineEvent {
-    InlineImage(InlineImageCommand),
+    /// 인라인 그림 명령과, 그 시퀀스를 만났을 때의 커서 위치와 스크롤 세대.
+    InlineImage {
+        command: InlineImageCommand,
+        anchor: InlineAnchor,
+    },
     Title(String),
     ResetTitle,
     Directory {
@@ -328,6 +332,14 @@ pub enum EngineEvent {
     /// OSC 22 가 정한 포인터 모양. CSS cursor 값이다.
     PointerShape(String),
     Error(String),
+}
+
+/// 인라인 그림 시퀀스를 만났을 때의 커서 칸과 스크롤 세대. 그림은 이 자리에 놓인다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct InlineAnchor {
+    pub col: u16,
+    pub row: u16,
+    pub scroll: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1048,7 +1060,16 @@ async fn present_screen(
             "surface": surface_id,
             "body": {"event": "error", "reason": reason}
         });
-        return output_tx.send(response.to_string()).await.is_ok();
+        if output_tx.send(response.to_string()).await.is_err() {
+            return false;
+        }
+        // 그리기가 실패해도 상태 이벤트는 버리지 않는다. 오류가 그 화면에 그림이 없음을 알린다.
+        for event in std::mem::take(&mut state.presentation_events) {
+            if output_tx.send(event).await.is_err() {
+                return false;
+            }
+        }
+        return true;
     }
     state.sequence += 1;
     state.pending_draw = true;
@@ -1076,8 +1097,18 @@ async fn present_screen(
         }
     });
     // 페이지의 화면은 이 래스터가 그린 화면이다. 둘을 함께 보내야 커서와 글자 상태가 화면 픽셀과 같다.
-    output_tx.send(image_envelope.to_string()).await.is_ok()
-        && output_tx.send(screen_event(surface_id, screen).to_string()).await.is_ok()
+    // 이 래스터가 그린 인라인 그림의 상태 이벤트도 그 뒤에 보낸다.
+    if output_tx.send(image_envelope.to_string()).await.is_err()
+        || output_tx.send(screen_event(surface_id, screen).to_string()).await.is_err()
+    {
+        return false;
+    }
+    for event in std::mem::take(&mut state.presentation_events) {
+        if output_tx.send(event).await.is_err() {
+            return false;
+        }
+    }
+    true
 }
 
 /// 호스트가 앞 래스터를 복사하는 중인지. 그동안의 화면 변경은 dirty 로 남기고 그리거나 화면 JSON 을 보내지
@@ -1136,7 +1167,7 @@ fn resolve_inline_dimension(dimension: &Dimension, cell_size: u32, frame_size: u
 
 fn store_inline_display(
     command: InlineImageCommand,
-    engine: &mut Box<dyn Engine>,
+    anchor: InlineAnchor,
     image_state: &mut Option<ImageState>,
 ) -> Result<(), String> {
     let InlineImageCommand::Display {
@@ -1152,13 +1183,11 @@ fn store_inline_display(
     let Some(state) = image_state.as_mut() else {
         return Err("inline image received before the image region was configured".to_string());
     };
-    let cursor = engine.screen().cursor;
-    let scroll = engine.scroll_generation();
     let placement = InlineImagePlacement {
         name: name.clone(),
         data,
-        x: u32::from(cursor.col).saturating_mul(state.metrics.cell_width.round() as u32),
-        y: u32::from(cursor.row).saturating_mul(state.metrics.cell_height.round() as u32),
+        x: u32::from(anchor.col).saturating_mul(state.metrics.cell_width.round() as u32),
+        y: u32::from(anchor.row).saturating_mul(state.metrics.cell_height.round() as u32),
         width: resolve_inline_dimension(
             &width,
             state.metrics.cell_width.round() as u32,
@@ -1170,8 +1199,8 @@ fn store_inline_display(
             state.height_px,
         ),
         preserve_aspect_ratio,
-        anchor_row: i32::from(cursor.row),
-        anchor_scroll: scroll,
+        anchor_row: i32::from(anchor.row),
+        anchor_scroll: anchor.scroll,
         visible: true,
     };
     if let Some(existing) = state
@@ -1210,12 +1239,12 @@ fn refresh_inline_image_positions(
 
 fn apply_inline_image_command(
     command: InlineImageCommand,
-    engine: &mut Box<dyn Engine>,
+    anchor: InlineAnchor,
     image_state: &mut Option<ImageState>,
     multipart: &mut Option<MultipartAssembly>,
 ) -> Result<(), String> {
     match command {
-        InlineImageCommand::Display { .. } => store_inline_display(command, engine, image_state),
+        InlineImageCommand::Display { .. } => store_inline_display(command, anchor, image_state),
         InlineImageCommand::Transfer { .. } => Ok(()),
         InlineImageCommand::MultipartStart { name } => {
             if multipart.is_some() {
@@ -1256,7 +1285,7 @@ fn apply_inline_image_command(
                     height: Dimension::Auto,
                     preserve_aspect_ratio: true,
                 },
-                engine,
+                anchor,
                 image_state,
             )
         }
@@ -1275,10 +1304,10 @@ async fn send_engine_events(
 ) -> bool {
     for event in engine.drain_events() {
         match event {
-            EngineEvent::InlineImage(command) => {
+            EngineEvent::InlineImage { command, anchor } => {
                 let command_for_event = command.clone();
                 if let Err(error) =
-                    apply_inline_image_command(command, engine, image_state, multipart)
+                    apply_inline_image_command(command, anchor, image_state, multipart)
                 {
                     if !emit_surface_events {
                         continue;
@@ -1332,12 +1361,15 @@ async fn send_engine_events(
                         "command": "multipart.end",
                     }),
                 };
-                if output_tx
-                    .send(json!({"surface": surface_id, "body": body}).to_string())
-                    .await
-                    .is_err()
-                {
-                    return false;
+                let event = json!({"surface": surface_id, "body": body}).to_string();
+                // 그림 영역이 있으면 그 그림을 그린 표시와 함께 보낸다. 출력 처리는 이 이벤트 뒤에 화면을 그린다.
+                match image_state.as_mut() {
+                    Some(state) => state.presentation_events.push(event),
+                    None => {
+                        if output_tx.send(event).await.is_err() {
+                            return false;
+                        }
+                    }
                 }
             }
             EngineEvent::PtyWrite(bytes) => {
@@ -2377,17 +2409,17 @@ async fn surface_task(
                             continue;
                         };
                         state.inline_images.remove(index);
+                        // 삭제 이벤트는 그림을 지운 표시와 함께 보낸다.
+                        state.presentation_events.push(json!({
+                            "surface": surface_id,
+                            "body": {"event": "image.inline.deleted", "name": name}
+                        }).to_string());
                         if state.pending_draw {
                             state.dirty = true;
                         } else {
                             let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
                             if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
                         }
-                        let response = json!({
-                            "surface": surface_id,
-                            "body": {"event": "image.inline.deleted", "name": name}
-                        });
-                        if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
                     SurfaceCommand::SessionClose => {
                         let close_error = if let Some(ref sid) = session_id {
