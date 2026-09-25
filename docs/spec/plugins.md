@@ -31,7 +31,7 @@ Common functionality belongs to the workbench or the native host so plugins do n
 | `home` | no | The `http` or `https` address the surface page opens first; requires `surface` |
 | `mark` | with `surface` | Short text shown in the add menu and new tab titles |
 | `icon` | with `surface` | SVG elements for a 16×16 view box |
-| `sections` | no | Sidebar sections `{ "id": "<plugin id>.<name>", "name" }` |
+| `sections` | no | Sidebar sections `{ "id": "<plugin id>.<name>", "name", "module" }`; `module` is a JavaScript path inside the package that draws the section ([sections](#sections)) |
 | `preview` | no | `{ "ink": "--<token>" }`: the theme token name that colors the plugin's cards in library previews; requires `surface` |
 | `sidecars` | no | Package names of the [sidecars](sidecars.md) the page surface uses; requires `surface`. Each must be a dependency in the plugin's `package.json` |
 | `background` | no | `{ "sidecar": "<declared sidecar>", "operation": "<operation name>", "settings"?: { "<request field>": "<declared setting>" } }`: keeps one declared sidecar session for each non-active tab without creating a native surface; the workbench puts the current value of each mapped plugin setting into the request field, and `settings` cannot name `operation` or an undeclared setting; requires `surface` and `sidecars` |
@@ -41,6 +41,14 @@ A plugin requires `surface`, `sections`, or both. Only plugins with a surface ap
 `surface.drop`, when present, names a command in `exposes` that the page runs on the surface when files are dropped on it, with `{urls}` holding the dropped file URLs ([native surfaces](native-surfaces.md#input-over-native-views)).
 
 `surface.composition` is either `{ "kind": "dom" }` or a hybrid declaration with `kind: "hybrid"`, complete `regions`, and complete `overlays`. An image region names a sidecar already listed in `sidecars`. The manifest declaration is authority data sent to the host; page code cannot add a region, supplier, input owner, or stacking entry that is absent from it.
+
+## Sections
+
+A section is part of a sidebar that a plugin draws. The workbench imports the section's `module` and calls its `mount(root, context)` export in the section's element, as it does for a surface page, and calls the returned dispose function when the section leaves the sidebar. `context.card` is the id of the card the sidebar belongs to and `context.surface` is that card's active tab, or both are `null` for the left sidebar. Sections are drawn in the application document; they have no native surface.
+
+A set combines sections of any plugins in order and has a `layout` chosen when the set is made. With `list` the sidebar shows every section of the set from top to bottom, each under a header with its name that folds and unfolds it. With `tabs` the sidebar shows a row of tabs with the section names and only the section of the selected tab; the selection is kept for each sidebar. Every sidebar that shows the set, whether a rail, an inset sidebar, or the left or right sidebar, draws it the same way.
+
+The sidebar is identified by the id of the card that holds it: the `left`, `right`, or rail card, or the card of an inset sidebar. Folding a section header runs `core.sidebar.section.fold` and choosing a tab runs `core.sidebar.section.select`, both with `{sidebar, section}`; status `core.sidebars` reports every drawn sidebar with its set, layout, selected tab, and each section's fold and mount state. A section module is a file listed in the package's `files`, so release staging copies it; staging fails when a section module is not listed.
 
 ## Diagnostic declarations
 
@@ -82,7 +90,7 @@ A surface context has `runtime.links.open(url)`, which asks the host to open an 
 | `plugins` | Plugin package names. Each must be a dependency of the application package. The order is the add-menu order |
 | `workspace.grid` | Grid lines and cards of a new space. A card with `tabs` lists `{ plugin, title }` entries |
 | `workspace.focus` | Card focused in a new space; it must have tabs |
-| `sidebars.sets` | Default section sets |
+| `sidebars.sets` | Default section sets `{id, title, sections, layout}`; `layout` is `list` or `tabs` |
 | `sidebars.links` | Default assignments of sets to `left` (with `plugin: null`), `right`, or `rail` (with a plugin id) |
 
 The workbench loads `environment.json` and every listed `plugin.json` before it reads settings or builds a space. A tab or link that names a plugin without a surface, or a set that names an unknown section, fails the load before any registration. Saved spaces and settings are not environment files; their unregistered plugins and sections are dropped when a space opens ([projects](projects.md#persistence)).
