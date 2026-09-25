@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { APPS, fresh, open } from "./app.mjs";
 import { pasteboardText, writePasteboard } from "./pasteboard.mjs";
-import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
+import { cellBackgrounds, ensureTerminals, isColor, readScreenUntil, selectionBackground } from "./terminal-screen.mjs";
 
 // d N: 커서를 12행으로 옮기고 완료 표시를 쓴다. r SEQ END N: SEQ 를 쓰고 END 까지의 응답을 16진수로 쓴다.
 const SETUP = "b=$(printf '\\007'); d() { printf '\\033[12;1HDONE%s\\n' \"$1\"; }; " +
@@ -230,15 +230,19 @@ for (const app of Object.values(APPS)) {
       await s.until("terminal.session", (value) => value.selectionReleases === before + 1, "the selection was not released", { surface });
     };
     await selectFirstCells();
-    await s.until("terminal.screen", (lines) => lines[0][1]?.ch === "I" && !lines[0][1].inverse,
-      "a selected cell with highlight colors was drawn inverse", { surface });
+    const [highlighted] = await cellBackgrounds(s, surface, [{ col: 1, row: 0 }]);
+    assert.ok(isColor(highlighted, "#123456"),
+      `a selected cell was drawn on rgb(${highlighted}) instead of the OSC 17 highlight background #123456`);
     await effect(s, surface, "\\033]117\\007\\033]119\\007\\033[1;1HHIGHLIGHT");
     assert.equal(await color("17"), highlight, "OSC 117 reset");
     assert.equal(await color("19"), highlightText, "OSC 119 reset");
     await effect(s, surface, "\\033[1;1HHIGHLIGHT");
     await selectFirstCells();
-    await s.until("terminal.screen", (lines) => lines[0][1]?.ch === "I" && lines[0][1].inverse === true,
-      "a selected cell without highlight colors was not drawn inverse", { surface });
+    // 강조 색이 없으면 선택한 칸은 테마의 선택 배경(--edge) 위에 그린다(docs/spec/terminal-runtime.md).
+    const selection = await selectionBackground(s);
+    const [plain] = await cellBackgrounds(s, surface, [{ col: 1, row: 0 }]);
+    assert.ok(isColor(plain, selection),
+      `a selected cell without highlight colors was drawn on rgb(${plain}) instead of the theme selection background ${selection}`);
 
     // 52: 기본 정책은 거부하고, 허용하면 텍스트를 저장하고 조회에 답한다.
     const before = pasteboardText();

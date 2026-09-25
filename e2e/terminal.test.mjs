@@ -12,7 +12,9 @@ import { frames, pixel, readFrame } from "./frame.mjs";
 import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
 import { assertHeldStatesShown } from "./drag-measurement.mjs";
 import { terminalProcessSnapshot } from "./terminal-processes.mjs";
-import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
+import {
+  cellBackgrounds, ensureTerminals, isColor, MEASURED_BACKGROUND, readScreenUntil, selectionBackground, setMeasuredBackground,
+} from "./terminal-screen.mjs";
 
 // 1x1 RGBA PNG.
 const PNG = Buffer.from("89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000A49444154789C63000100000500010D0A2DB40000000049454E44AE426082", "hex");
@@ -388,37 +390,53 @@ for (const app of Object.values(APPS)) {
         const index = rows.lastIndexOf(above.padEnd(width, " "));
         return index < 0 ? null : { row: index + 1, text: rows.slice(index + 1).join("") };
       };
+      // 좁아지는 재배치는 커서 행을 두고 그 위의 행을 기록으로 올린다(프로젝트 폴더 경로의 프롬프트는 좁은 폭에서
+      // 여러 행이다). 출력 행과 프롬프트의 순서는 기록과 화면을 이어서 읽는다. 기록은 선언된 명령으로 뷰포트를
+      // 옮겨 읽고 다시 최신 출력으로 돌아온다.
+      const history = async (width) => {
+        const { scrollback, rows } = await s.get("terminal.session", opened.surface);
+        if (scrollback.history === 0) return [];
+        assert.ok(scrollback.history <= rows, `${scrollback.history} history rows do not fit one screen of ${rows} rows`);
+        await s.run("terminal.scrollback.set", { offset: scrollback.history }, opened.surface);
+        await s.until("terminal.session", (value) => value.scrollback.offset === scrollback.history,
+          "the viewport did not move to the oldest history row", { surface: opened.surface });
+        const earlier = rowsOf(await s.get("terminal.screen", opened.surface), width).slice(0, scrollback.history);
+        await s.run("terminal.scrollback.set", { offset: 0 }, opened.surface);
+        await s.until("terminal.session", (value) => value.scrollback.offset === 0,
+          "the viewport did not return to the newest output", { surface: opened.surface });
+        return earlier;
+      };
       // 출력 행 바로 다음 행에서 프롬프트와 입력이 한 번만 이어지고, 커서가 입력의 끝에 있어야 한다.
       const consistent = async (width, label, prompt) => {
         let measured = "";
-        let found = null;
+        // 셸이 다시 그리면 화면에 입력이 한 번 나온다. 그리기 전에는 엔진이 프롬프트 행을 지워 없다.
         try {
           await s.until("terminal.screen", (lines) => {
             const rows = rowsOf(lines, width);
-            const line = promptLine(rows, width);
             const count = rows.join("").split("START-").length - 1;
             measured = `START- ${count} times in ${JSON.stringify(rows.join("").trimEnd())}`;
-            const starts = line && (prompt === undefined ? line.text.indexOf(input) > 0 : line.text.startsWith(prompt + input));
-            if (count === 1 && starts) found = line;
-            return count === 1 && Boolean(starts);
-          }, `${label}: the screen did not show the prompt line below the output line`, { surface: opened.surface });
+            return count === 1 && rows.join("").includes(input);
+          }, `${label}: the screen did not show the input once`, { surface: opened.surface });
         } catch (error) {
           const { vendor } = await s.get("terminal.session", opened.surface);
-          throw new Error(`${label}: the prompt line does not follow ${above} once: ${measured}; ` +
-            `last shell mark ${JSON.stringify(vendor?.shell)}`);
+          throw new Error(`${label}: the input is not shown once: ${measured}; last shell mark ${JSON.stringify(vendor?.shell)}`);
         }
-        // 조건을 만족한 뒤에도 화면이 올라갈 수 있으므로 마지막 화면에서 입력의 끝을 계산한다.
+        const earlier = await history(width);
         const current = rowsOf(await s.get("terminal.screen", opened.surface), width);
-        const shown = current.map((row) => row.trimEnd());
-        found = promptLine(current, width);
-        assert.ok(found && found.text.indexOf(input) > 0, `${label}: the prompt line changed after it matched: ${JSON.stringify(shown)}`);
-        const end = found.row * width + found.text.indexOf(input) + input.length;
+        const all = [...earlier, ...current];
+        const line = promptLine(all, width);
+        const count = all.join("").split("START-").length - 1;
+        const starts = line && (prompt === undefined ? line.text.indexOf(input) > 0 : line.text.startsWith(prompt + input));
+        assert.ok(count === 1 && starts, `${label}: the prompt line does not follow ${above} once: START- ${count} times in ` +
+          `${JSON.stringify(all.map((row) => row.trimEnd()))} (${earlier.length} history rows)`);
+        // 커서는 화면에서 입력의 끝 바로 뒤에 있다.
+        const end = current.join("").indexOf(input) + input.length;
         await s.until("terminal.cursor",
           (value) => value.row === Math.floor(end / width) && value.col === end % width,
           `${label}: the cursor is not after the input end at row ${Math.floor(end / width)} col ${end % width} ` +
-            `in ${JSON.stringify(shown)}`,
+            `in ${JSON.stringify(current.map((row) => row.trimEnd()))}`,
           { surface: opened.surface });
-        return found.text.slice(0, found.text.indexOf(input));
+        return line.text.slice(0, line.text.indexOf(input));
       };
       const prompt = await consistent(cols, "before the resize");
       const grid = await s.get("core.grid");
@@ -723,6 +741,7 @@ for (const app of Object.values(APPS)) {
       await readScreenUntil(s, terminal.surface,
         (lines) => lines.some((line) => line.includes("$")),
         `${terminal.surface} must show a shell prompt before divider capture`);
+      await setMeasuredBackground(s, terminal.surface);
     }
     await s.presented();
     const terminalY = (await s.rect("terminal.view", undefined, terminals[0].surface)).y;
@@ -746,7 +765,7 @@ for (const app of Object.values(APPS)) {
         times.push(frame.time);
         let boxes;
         try {
-          boxes = surfaceBoxes(frame, [30, 30, 30], { expectedRow: terminalY }).sort((a, b) => a.card.l - b.card.l);
+          boxes = surfaceBoxes(frame, MEASURED_BACKGROUND, { expectedRow: terminalY }).sort((a, b) => a.card.l - b.card.l);
         } catch (error) {
           throw new Error(`set ${set}, frame ${index} could not measure terminal boxes: ${file}`, { cause: error });
         }
@@ -862,6 +881,7 @@ for (const app of Object.values(APPS)) {
       "terminal session did not report sessionId",
       { surface: terminalSurface }
     );
+    await setMeasuredBackground(s, terminalSurface);
 
     // 명령을 보낸다.
     await s.run("terminal.input", { bytes: "echo hi\r" }, terminalSurface);
@@ -901,7 +921,7 @@ for (const app of Object.values(APPS)) {
     const frame = readFrame(lastFramePath);
 
     // 터미널 영역 내에서 네이티브 IOSurface 가 덮고 있고 글자가 나왔는지 확인한다.
-    const BG_COLOR = [30, 30, 30];
+    const BG_COLOR = MEASURED_BACKGROUND;
     const COLOR_TOLERANCE = 10;
     const BRIGHT_TEXT_THRESHOLD = 160;
     const BRIGHT_TEXT_MIN = 20;
@@ -1100,6 +1120,12 @@ for (const app of Object.values(APPS)) {
       `settings control ${key} did not appear`);
       return modal.controls.find((control) => control.key === key);
     };
+    // 터미널 설정은 플러그인 구역의 터미널 페이지에 있다. 두 단계 모두 선언된 컨트롤의 명령으로 연다.
+    const plugins = await modalControl("nav:plugins");
+    await s.run(plugins.command.name, plugins.command.params);
+    const page = await modalControl("plugin:terminal");
+    await s.run(page.command.name, page.command.params);
+    await s.until("core.settings-modal", (modal) => modal.plugin === "terminal", "the terminal settings page did not open");
     const pick = async (key) => {
       const control = await modalControl(key);
       assert.ok(control.command, `settings control ${key} has no command`);
@@ -1328,14 +1354,16 @@ for (const app of Object.values(APPS)) {
     const state = await s.until("terminal.session",
       (value) => value?.selectionReleases > released || value?.error !== undefined,
       "the sidecar did not answer the selection release", { surface });
-    const lines = await s.run("terminal.screen.read", {}, surface);
+    // 선택한 칸은 테마의 선택 배경으로 그리고 페이지의 화면 셀에는 색이 없으므로, 끈 구간을 픽셀로 잰다.
+    const selection = await selectionBackground(s);
+    const columns = Array.from({ length: 16 }, (_, index) => 5 + index);
+    const shown = await cellBackgrounds(s, surface, columns.map((col) => ({ col, row })));
+    const selected = columns.filter((col, index) => isColor(shown[index], selection));
     assert.equal(state.error, undefined,
-      `a drag over blank row ${row} reported ${state.error}; inverse cells in columns 5–20: ` +
-        `${lines[row].slice(5, 21).filter((cell) => cell.inverse).length}`);
+      `a drag over blank row ${row} reported ${state.error}; selected cells in columns 5–20: ${selected.join(",")}`);
     assert.deepEqual(state.unsupported, [], "the sidecar answers of the drag are declared events");
-    // 커서 블록도 반전 셀이므로 끈 구간만 본다.
-    const dragged = lines[row].slice(5, 21).filter((cell) => cell.inverse).length;
-    assert.equal(dragged, 0, `the blank selection was not cleared: ${dragged} inverse cells in columns 5–20 of row ${row}`);
+    assert.deepEqual(selected, [], `the blank selection was not cleared: columns ${selected.join(",")} of row ${row} ` +
+      `are drawn on the selection background ${selection}`);
   });
 
   test(`${app.name}: a native drag into the padding below the last row selects to the last row`, async (t) => {
@@ -1365,13 +1393,15 @@ for (const app of Object.values(APPS)) {
     const released = metrics.selectionReleases;
     await s.pointer(viewX + 0.5 * metrics.cellWidth, top + 0.5 * metrics.cellHeight, "down", { button: "left" });
     await s.pointer(viewX + 3.5 * metrics.cellWidth, top + metrics.rows * metrics.cellHeight + padding / 2, "drag", { button: "left" });
-    // 사이드카가 선택을 반영한 화면을 알릴 때까지 기다린다. 선택은 칸의 왼쪽 절반에서 끝나므로 넷째 칸
-    // 가운데까지 끌면 마지막 행의 앞 세 칸이 선택된다.
+    // 사이드카는 끌기를 차례로 처리하므로 화면 읽기의 답은 선택을 반영한 뒤에 온다. 넷째 칸 가운데까지 끌면
+    // 마지막 행의 앞 세 칸은 선택된다. 선택은 색으로만 보이므로 픽셀로 잰다.
     await s.run("terminal.screen.read", {}, surface);
-    await s.until("terminal.screen", (lines) => {
-      const cells = lines[metrics.rows - 1]?.slice(0, 3) ?? [];
-      return cells.length === 3 && cells.every((cell) => cell.inverse);
-    }, "the drag into the bottom padding did not select the first three cells of the last row", { surface });
+    const selection = await selectionBackground(s);
+    const last = metrics.rows - 1;
+    const shown = await cellBackgrounds(s, surface, [0, 1, 2].map((col) => ({ col, row: last })));
+    assert.deepEqual(shown.map((sample) => isColor(sample, selection)), [true, true, true],
+      `the drag into the bottom padding did not select the first three cells of the last row: ${JSON.stringify(shown)} ` +
+        `against the selection background ${selection}`);
     await s.pointer(viewX + 3.5 * metrics.cellWidth, top + metrics.rows * metrics.cellHeight + padding / 2, "up", { button: "left" });
     const state = await s.until("terminal.session",
       (value) => value?.selectionReleases > released || value?.error !== undefined,
@@ -1602,6 +1632,7 @@ for (const app of Object.values(APPS)) {
       "terminal session did not report sessionId",
       { surface: terminalSurface }
     );
+    await setMeasuredBackground(s, terminalSurface);
 
     // 화면에 글자를 둔다.
     await s.run("terminal.input", { bytes: "echo hi\r" }, terminalSurface);
@@ -1712,7 +1743,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(frameFiles.length > 0, "no frames were captured");
     const frame = readFrame(frameFiles[frameFiles.length - 1]);
 
-    const BG_COLOR = [30, 30, 30];
+    const BG_COLOR = MEASURED_BACKGROUND;
     const COLOR_TOLERANCE = 10;
     const BRIGHT_TEXT_THRESHOLD = 160;
     const BG_SAMPLE_RATIO_MIN = 0.5;
@@ -1762,6 +1793,8 @@ for (const app of Object.values(APPS)) {
       const session = await s.get("terminal.session", surface.surface);
       before.set(surface.surface, { cellWidth: session.cellWidth, cellHeight: session.cellHeight });
       const marker = `DRAG-TEXT-${index}`;
+      // 배경을 먼저 바꾼다. 아래의 지우기가 그 출력과 기록을 함께 지운다.
+      await setMeasuredBackground(s, surface.surface);
       // 기록도 지운다(ED 3). 이 검사는 네이티브 영역의 정렬을 재며, 기록이 있으면 보이는 스크롤바는 따로 검사한다.
       await s.run("terminal.input", { bytes: `printf '\\033[2J\\033[3J\\033[H${marker}\\n'\r` }, surface.surface);
       await readScreenUntil(
@@ -1792,7 +1825,7 @@ for (const app of Object.values(APPS)) {
     let firstGlyph = null;
     for (const [index, file] of frames(result.frameDir).entries()) {
       const frame = readFrame(file);
-      const boxes = surfaceBoxes(frame, [30, 30, 30]);
+      const boxes = surfaceBoxes(frame, MEASURED_BACKGROUND);
       const terminalBoxes = boxes.filter((box) =>
         Math.abs(box.row / frame.scale - terminalY) <= 5);
       assert.equal(terminalBoxes.length, terminals.length, `frame ${index}: every terminal must be measurable`);

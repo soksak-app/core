@@ -1,5 +1,9 @@
 // 창 검사가 터미널 표면을 준비하고 화면 글자를 읽는 도우미.
 import assert from "node:assert/strict";
+import { rmSync } from "node:fs";
+
+import { frames, pixel, readFrame } from "./frame.mjs";
+import { THEMES } from "../packages/workbench/settings.js";
 
 export function textLines(screen) {
   assert.ok(screen && Array.isArray(screen.lines), `invalid terminal screen: ${JSON.stringify(screen)}`);
@@ -57,4 +61,52 @@ export async function ensureTerminals(session, count) {
     `terminal native surfaces did not reach ${count} with terminal.session registered`
   );
   return session.surfaces("terminal");
+}
+
+/**
+ * 픽셀 측정용 터미널 배경. 터미널은 카드 색(--card)으로 그리므로 배경만으로는 카드와 구별되지 않는다.
+ * 검사는 프로그램이 쓰는 OSC 11 로 기본 배경을 이 색으로 바꾸어 네이티브 래스터가 칠한 자리만 이 색이 되게 한다.
+ */
+export const MEASURED_BACKGROUND = [30, 30, 30];
+
+/** OSC 11 로 터미널의 기본 배경을 MEASURED_BACKGROUND 로 바꾸고 그 뒤의 출력이 화면에 나올 때까지 기다린다. */
+export async function setMeasuredBackground(session, surface) {
+  const hex = MEASURED_BACKGROUND.map((value) => value.toString(16).padStart(2, "0")).join("/");
+  const marker = `BACKGROUND-${surface}`;
+  await session.run("terminal.input", { bytes: `printf '\\033]11;rgb:${hex}\\007${marker}\\n'\r` }, surface);
+  await readScreenUntil(session, surface, (lines) => lines.some((line) => line.startsWith(marker)),
+    `${surface} did not finish the OSC 11 background change`);
+}
+
+/**
+ * 표시된 창 프레임에서 칸마다 배경 픽셀을 읽는다. 페이지의 화면 셀은 색을 싣지 않으므로 선택처럼 색으로만
+ * 보이는 상태는 픽셀로 잰다. 칸의 왼쪽 위 모서리 가까이를 읽어 글자 획을 피한다. cells 는 {col, row} 목록이다.
+ */
+export async function cellBackgrounds(session, surface, cells) {
+  await session.request("diagnostics.capture.start", {});
+  const { displayed } = await session.presented();
+  const { frames: dir } = await session.request("diagnostics.capture.stop", { after: displayed });
+  try {
+    const files = frames(dir);
+    assert.ok(files.length > 0, "the cell capture produced no frames");
+    const frame = readFrame(files.at(-1));
+    const view = await session.rect("terminal.view", undefined, surface);
+    const { cellWidth, cellHeight } = await session.get("terminal.session", surface);
+    return cells.map(({ col, row }) => pixel(frame,
+      Math.round((view.document.x + view.x + (col + 0.1) * cellWidth) * frame.scale),
+      Math.round((view.document.y + view.y + (row + 0.08) * cellHeight) * frame.scale)));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** 강조 색이 없을 때 선택한 칸의 배경. 현재 테마의 --edge 다(docs/spec/terminal-runtime.md). */
+export async function selectionBackground(session) {
+  const { values } = await session.get("core.settings");
+  return THEMES.find((item) => item.name === values.theme)[values.mode].edge;
+}
+
+/** 픽셀이 #rrggbb 색과 채널마다 2 이내인지. */
+export function isColor(sample, hex) {
+  return sample.every((value, index) => Math.abs(value - parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16)) <= 2);
 }
