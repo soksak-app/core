@@ -134,6 +134,7 @@ Public symbols in sidecars and their helpers that are diagnostic-only start with
 | --- | --- |
 | `{operation: "list", id, path}` | `{id, entries: [{name, directory}]}`: the entries of `root/path`, directories first, each group sorted by name; `path` is relative to `root`, `""` names `root` itself |
 | `{operation: "watch", id, paths}` | `{id}`: replaces the session's watched directories with `paths` (relative to `root`, checked like `list`); an empty list stops watching. Afterwards the sidecar sends `{changed: path}` without `id` when an entry of a watched directory is created, removed, or renamed |
+| `{operation: "git", id}` | `{id, entries: [{path, status}]}`: runs `git status --porcelain=v1 -z --untracked-files=all` in `root` and maps each entry to `added`, `deleted`, `modified`, `renamed`, or `untracked` with the path relative to the repository top level made relative to `root`; entries outside `root` are left out. When `root` is not inside a git repository, or git is not installed, `entries` is empty; another git failure is an error |
 | `closed` | stops the session's watches; no reply |
 | any failure | `{id, error}`: a missing `root`, a `path` that is absolute or leaves `root` (after resolving symbolic links), or a directory that cannot be read |
 
@@ -155,4 +156,4 @@ The sidecar sends `{event: "screen", ...}` whenever the terminal screen changes,
 
 ## Tests
 
-Each sidecar runs its tests in its own directory. `shell` tests its protocol, output order, directory reports, command input, `run` results, and interrupts with `go test ./...` and validates its `sidecar.json` with `node --test tests/`. `files` tests listing, ordering, watching, and the rejection of paths outside `root` with `go test ./...` and validates its `sidecar.json` the same way. Each host tests its relay in `tests/sidecars_test.*` and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.
+Each sidecar runs its tests in its own directory. `shell` tests its protocol, output order, directory reports, command input, `run` results, and interrupts with `go test ./...` and validates its `sidecar.json` with `node --test tests/`. `files` tests listing, ordering, watching, git status, and the rejection of paths outside `root` with `go test ./...` and validates its `sidecar.json` the same way. Each host tests its relay in `tests/sidecars_test.*` and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.

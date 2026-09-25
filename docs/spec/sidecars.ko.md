@@ -134,6 +134,7 @@
 | --- | --- |
 | `{operation: "list", id, path}` | `{id, entries: [{name, directory}]}`: `root/path`의 항목. 디렉터리가 먼저 오고 각 묶음은 이름순이다. `path`는 `root` 기준 상대 경로이며 `""`는 `root` 자신이다 |
 | `{operation: "watch", id, paths}` | `{id}`: 세션이 감시하는 디렉터리를 `paths`(`root` 기준 상대 경로, `list`와 같이 검사)로 바꾼다. 빈 목록은 감시를 멈춘다. 그 뒤 감시하는 디렉터리의 항목이 생기거나 지워지거나 이름이 바뀌면 사이드카는 `id` 없이 `{changed: path}`를 보낸다 |
+| `{operation: "git", id}` | `{id, entries: [{path, status}]}`: `root`에서 `git status --porcelain=v1 -z --untracked-files=all`을 실행하고 각 항목을 `added`, `deleted`, `modified`, `renamed`, `untracked` 중 하나와 저장소 최상위 기준 경로를 `root` 기준으로 바꾼 경로로 옮긴다. `root` 밖의 항목은 뺀다. `root`가 git 저장소 안에 있지 않거나 git이 설치되지 않았으면 `entries`는 비어 있고, 다른 git 실패는 오류다 |
 | `closed` | 세션의 감시를 멈춘다. 답하지 않는다 |
 | 모든 실패 | `{id, error}`: `root`가 없거나, `path`가 절대 경로이거나 (심볼릭 링크를 따라간 뒤) `root`를 벗어나거나, 디렉터리를 읽을 수 없는 경우 |
 
@@ -155,4 +156,4 @@
 
 ## 테스트
 
-각 사이드카는 자기 디렉터리에서 테스트를 실행한다. `shell`은 `go test ./...`로 프로토콜, 출력 순서, 디렉터리 보고, 명령 입력, `run` 결과, 중단을, `node --test tests/`로 `sidecar.json`을 검사한다. `files`는 `go test ./...`로 나열, 정렬, 감시, `root` 밖 경로의 거부를 검사하고 같은 방법으로 `sidecar.json`을 검사한다. 각 호스트는 `tests/sidecars_test.*`에서 fake 사이드카 실행 파일로 전달과 스테이징된 선언 파일을 통한 해석을 검사하고 실제 사이드카를 실행하지 않는다.
+각 사이드카는 자기 디렉터리에서 테스트를 실행한다. `shell`은 `go test ./...`로 프로토콜, 출력 순서, 디렉터리 보고, 명령 입력, `run` 결과, 중단을, `node --test tests/`로 `sidecar.json`을 검사한다. `files`는 `go test ./...`로 나열, 정렬, 감시, git 상태, `root` 밖 경로의 거부를 검사하고 같은 방법으로 `sidecar.json`을 검사한다. 각 호스트는 `tests/sidecars_test.*`에서 fake 사이드카 실행 파일로 전달과 스테이징된 선언 파일을 통한 해석을 검사하고 실제 사이드카를 실행하지 않는다.
