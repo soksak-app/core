@@ -6,12 +6,15 @@
   "description": "Files plugin: sidebar sections for the project directory.",
   "files": [
     "plugin.json",
-    "ui/sections"
+    "ui"
   ],
   "scripts": {
     "test": "node --test test/"
   },
   "devDependencies": {
     "@soksak/plugin-api": "workspace:*"
+  },
+  "dependencies": {
+    "@soksak/sidecar-files": "workspace:*"
   }
 }

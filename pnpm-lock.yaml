@@ -142,6 +142,10 @@ importers:
         version: 30.0.1
 
   plugins/files:
+    dependencies:
+      '@soksak/sidecar-files':
+        specifier: workspace:*
+        version: link:../../sidecars/files
     devDependencies:
       '@soksak/plugin-api':
         specifier: workspace:*

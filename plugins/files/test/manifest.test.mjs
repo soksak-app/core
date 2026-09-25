@@ -23,21 +23,63 @@ test("every sidecar the plugin uses is a declared package dependency", () => {
   }
 });
 
-test("every section module is published and draws a list that dispose removes", async () => {
-  // 섹션 모듈이 쓰는 문서 기능만 흉내 낸다.
-  const element = () => ({ children: [], textContent: "", className: "", parent: null,
-    append(...items) { for (const item of items) { item.parent = this; this.children.push(item); } },
-    remove() { this.parent.children.splice(this.parent.children.indexOf(this), 1); } });
+/** 섹션 모듈이 쓰는 문서 기능만 흉내 낸다. */
+const element = (tag) => ({ tag, children: [], dataset: {}, className: "", style: {}, parent: null, _text: "",
+  get textContent() { return this._text + this.children.map((item) => item.textContent).join(""); },
+  set textContent(value) { this._text = value; this.children = []; },
+  append(...items) { for (const item of items) { item.parent = this; this.children.push(item); } },
+  replaceChildren(...items) { this.children = []; this._text = ""; this.append(...items); },
+  remove() { this.parent.children.splice(this.parent.children.indexOf(this), 1); } });
+
+async function mountSection(id) {
+  const section = manifest.sections.find((item) => item.id === id);
   globalThis.document = { createElement: element };
-  for (const section of manifest.sections ?? []) {
-    assert.ok(existsSync(new URL(`../${section.module}`, import.meta.url)), section.module);
-    assert.ok(pkg.files.some((entry) => section.module === entry || section.module.startsWith(`${entry}/`)), section.module);
-    const root = element();
-    const { dispose } = (await import(`../${section.module}`)).mount(root, { card: "c1", surface: "t1" });
-    assert.deepEqual(root.children[0].children.map((item) => item.textContent),
-      [`${section.name}: 내용 준비 중`, "카드: c1", "탭: t1"], section.id);
-    dispose();
-    assert.equal(root.children.length, 0, section.id);
+  const root = element("div");
+  const observers = new Map();
+  const bound = [];
+  const context = { card: null, surface: null,
+    status(name, fn) { observers.set(name, fn); return () => observers.delete(name); },
+    bind(el, name, params) { bound.push({ el, name, params }); return el; } };
+  const mounted = await (await import(`../${section.module}`)).mount(root, context);
+  const send = (name, value, source = "state") => { bound.length = 0; observers.get(name)(value, source); };
+  return { root, observers, bound, send, dispose: () => { mounted.dispose(); delete globalThis.document; } };
+}
+
+test("every section and the state module are published", () => {
+  for (const module of [...manifest.sections.map((section) => section.module), manifest.state.module]) {
+    assert.ok(existsSync(new URL(`../${module}`, import.meta.url)), module);
+    assert.ok(pkg.files.some((entry) => module === entry || module.startsWith(`${entry}/`)), module);
   }
-  delete globalThis.document;
+});
+
+test("the file tree section draws files.tree with toggles, bookmark controls, and a refresh control", async () => {
+  const s = await mountSection("files.tree");
+  s.send("files.tree", null, null);
+  assert.equal(s.root.textContent, "프로젝트 없음");
+  s.send("files.tree", { root: "/work/p1", error: "denied", entries: [] });
+  assert.equal(s.root.textContent, "새로 고침오류: denied");
+  s.send("files.tree", { root: "/work/p1", error: null, entries: [
+    { path: "src", name: "src", directory: true, depth: 0, expanded: true },
+    { path: "src/main.go", name: "main.go", directory: false, depth: 1, expanded: false },
+  ] });
+  assert.equal(s.root.textContent, "새로 고침▾ srcmain.go☆");
+  assert.deepEqual(s.bound.map(({ el, name, params }) => [el.textContent, name, params]), [
+    ["새로 고침", "files.refresh", {}],
+    ["▾ src", "files.tree.toggle", { path: "src" }],
+    ["☆", "files.bookmarks.add", { path: "src/main.go" }],
+  ]);
+  s.dispose();
+  assert.equal(s.observers.size, 0);
+  assert.equal(s.root.children.length, 0);
+});
+
+test("the bookmarks section lists files.bookmarks with remove controls", async () => {
+  const s = await mountSection("files.bookmarks");
+  s.send("files.bookmarks", []);
+  assert.equal(s.root.textContent, "북마크 없음");
+  s.send("files.bookmarks", ["a.txt"]);
+  assert.equal(s.root.textContent, "a.txt삭제");
+  assert.deepEqual(s.bound.map(({ name, params }) => [name, params]), [["files.bookmarks.remove", { path: "a.txt" }]]);
+  s.dispose();
+  assert.equal(s.observers.size, 0);
 });

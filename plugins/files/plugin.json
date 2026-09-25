@@ -1,6 +1,7 @@
 {
   "id": "files",
   "name": "파일",
+  "description": "프로젝트의 파일 트리와 즐겨찾기를 사이드바에 보여 준다. 카드 표면은 없다.",
   "sections": [
     {
       "id": "files.tree",
@@ -12,5 +13,136 @@
       "name": "북마크",
       "module": "ui/sections/bookmarks.js"
     }
-  ]
+  ],
+  "state": {
+    "module": "ui/state.js"
+  },
+  "sidecars": [
+    "@soksak/sidecar-files"
+  ],
+  "data": {
+    "bookmarks": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "default": []
+    }
+  },
+  "exposes": {
+    "status": [
+      {
+        "name": "files.tree",
+        "description": "The project folder, the last failure to list it or null, and the visible rows of the file tree in order: each entry's path relative to the folder, name, whether it is a directory, its depth, and whether it is expanded.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "directory": {
+                    "type": "boolean"
+                  },
+                  "depth": {
+                    "type": "integer"
+                  },
+                  "expanded": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "files.bookmarks",
+        "description": "The bookmarked paths of the project, relative to its folder, in the order they were added.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "name": "files.refresh",
+        "description": "Lists the project folder and every expanded directory again.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "files.tree.toggle",
+        "description": "Expands a listed directory of the file tree, or folds it with its expanded subdirectories.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "files.bookmarks.add",
+        "description": "Adds a path relative to the project folder to the bookmarks unless it is already there.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "files.bookmarks.remove",
+        "description": "Removes a bookmarked path.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      }
+    ],
+    "dom": []
+  }
 }
