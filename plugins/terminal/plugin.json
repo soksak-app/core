@@ -143,12 +143,18 @@
       },
       {
         "name": "terminal.session",
-        "description": "The session state: identifier, dimensions, cell size, the scrollback viewport offset and history, the number of selection releases the sidecar answered, the pointer shape the program set with OSC 22, and the reasons of the last eight output sequences the engine rejected.",
+        "description": "The session state: identifier, dimensions, cell size, the scrollback viewport offset and history, the number of selection releases the sidecar answered, the pointer shape the program set with OSC 22, the theme mode and the default background (`#rrggbb`) the sidecar applied, and the reasons of the last eight output sequences the engine rejected.",
         "schema": {
           "type": "object",
           "properties": {
             "sessionId": {
               "type": "string"
+            },
+            "theme": {
+              "type": "string"
+            },
+            "background": {
+              "type": ["string", "null"]
             },
             "font": {
               "type": "string"

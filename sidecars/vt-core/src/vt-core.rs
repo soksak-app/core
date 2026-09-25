@@ -10,9 +10,9 @@ pub mod service;
 pub mod shell_integration;
 
 pub use palette::{
-    default_terminal_color, TerminalTheme, DEFAULT_BACKGROUND_HEX, DEFAULT_BACKGROUND_RGB,
-    DEFAULT_CURSOR_RGB, DEFAULT_FOREGROUND_HEX, DEFAULT_FOREGROUND_RGB, DEFAULT_PALETTE,
-    LIGHT_PALETTE,
+    default_terminal_color, parse_hex, TerminalTheme, ThemeMode, DEFAULT_BACKGROUND_HEX,
+    DEFAULT_BACKGROUND_RGB, DEFAULT_CURSOR_RGB, DEFAULT_FOREGROUND_HEX, DEFAULT_FOREGROUND_RGB,
+    DEFAULT_PALETTE, LIGHT_PALETTE,
 };
 pub use protocol::{
     make_default_session_port_factory, serve, Cell, ClipboardSelection, Cursor, CursorShape,

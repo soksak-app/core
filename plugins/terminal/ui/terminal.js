@@ -322,9 +322,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     }
   };
 
-  const setTheme = async (mode) => {
+  // 터미널은 자기가 채우는 카드 자리의 표면 색을 쓴다. 배경은 --surface, 글자와 커서는 --surface-fg, 선택 배경은
+  // --edge 다(docs/spec/terminal-runtime.md). 색의 검사는 사이드카가 한다.
+  const setTheme = async (mode, tokens = {}) => {
     if (mode !== "dark" && mode !== "light") throw new Error(`terminal theme mode is invalid: ${String(mode)}`);
-    await terminal.send(id, { operation: "theme", mode });
+    await terminal.send(id, { operation: "theme", mode, background: tokens["--surface"],
+      foreground: tokens["--surface-fg"], cursor: tokens["--surface-fg"], selection: tokens["--edge"] });
   };
   // terminal.cursor 는 사이드카가 정책을 적용하고 다시 그린 뒤 보내는 cursor 응답으로 바뀐다.
   const setCursorPolicy = async (value) => {
@@ -912,7 +915,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         reportInputError(new Error("invalid theme acknowledgement from sidecar"), "theme");
         return;
       }
-      session = { ...session, theme: body.mode };
+      // 사이드카가 적용한 기본 배경을 함께 알린다. 검사는 이 값으로 테마가 적용되었음을 안다.
+      session = { ...session, theme: body.mode, background: typeof body.background === "string" ? body.background : null };
       resolveError("theme");
       changed("session");
     } else if (body.event === "clipboard.store") {
@@ -1058,7 +1062,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         if (first) { first = false; return Promise.reject(error); }
         return Promise.resolve();
       }
-      const request = setTheme(value.scheme);
+      const request = setTheme(value.scheme, value.tokens);
       if (first) {
         first = false;
         return request.then(undefined, (error) => { reportInputError(error); throw error; });

@@ -1002,6 +1002,35 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: PASS inline image lifecycle (scroll/resize/replace/delete)`);
   });
 
+  test(`${app.name}: the terminal background equals the surface color of every theme and mode`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    s.cleanup(async () => {
+      await s.run("core.settings.theme", { name: "midnight", mode: "dark", scope: "common" });
+      await closeTerminalTabs(s);
+    });
+    await s.until("terminal.session", (state) => Boolean(state?.sessionId && state.theme),
+      "terminal session did not report its effective theme", { surface: terminal.surface });
+    const rect = await s.rect("terminal.view", undefined, terminal.surface);
+    // 테마 값은 워크벤치의 테마 목록 그대로다.
+    const { THEMES } = await import("../packages/workbench/settings.js");
+    for (const { name: theme } of THEMES) {
+      for (const mode of ["dark", "light"]) {
+        await s.run("core.settings.theme", { name: theme, mode, scope: "common" });
+        // 터미널 배경은 카드 자리의 표면 색(--surface)이다.
+        const token = THEMES.find((item) => item.name === theme)[mode].surface;
+        await s.until("terminal.session", (state) => state?.theme === mode && state.background === token,
+          `the terminal did not apply ${theme} ${mode} background ${token}`, { surface: terminal.surface });
+        const sample = await terminalBackgroundSample(s, rect);
+        const expected = [1, 3, 5].map((at) => parseInt(token.slice(at, at + 2), 16));
+        assert.ok(sample.every((value, index) => Math.abs(value - expected[index]) <= 2),
+          `${theme} ${mode}: the terminal background pixel is rgb(${sample}), the surface token is ${token}`);
+      }
+    }
+  });
+
   test(`${app.name}: terminal raster follows application light and dark theme`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

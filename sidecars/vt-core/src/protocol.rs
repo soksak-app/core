@@ -2257,8 +2257,7 @@ async fn surface_task(
                                 if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
                             }
                         }
-                        let mode = if theme == crate::palette::TerminalTheme::light() { "light" } else { "dark" };
-                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "theme", "mode": mode}});
+                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "theme", "mode": theme.mode.name(), "background": format!("#{:02x}{:02x}{:02x}", theme.background[0], theme.background[1], theme.background[2])}});
                         if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
                     SurfaceCommand::Font { font, system, skipped, size } => {
@@ -3167,15 +3166,22 @@ where
                                 }
                             }
                             "theme" => {
-                                let mode = body.get("mode").and_then(Value::as_str);
-                                match mode.and_then(crate::palette::TerminalTheme::from_mode) {
-                                    Some(theme) => {
+                                let text = |name: &str| body.get(name).and_then(Value::as_str);
+                                // 모드와 네 색이 모두 맞아야 적용한다. 하나라도 틀리면 아무것도 바꾸지 않는다.
+                                match crate::palette::TerminalTheme::from_request(
+                                    text("mode"),
+                                    text("background"),
+                                    text("foreground"),
+                                    text("cursor"),
+                                    text("selection"),
+                                ) {
+                                    Ok(theme) => {
                                         if tx.send(SurfaceCommand::Theme { theme }).await.is_err() {
                                             break;
                                         }
                                     }
-                                    None => {
-                                        let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "theme.mode must be dark or light"}});
+                                    Err(reason) => {
+                                        let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason}});
                                         if output_tx.send(response.to_string()).await.is_err() {
                                             break;
                                         }

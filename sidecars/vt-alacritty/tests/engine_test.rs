@@ -707,7 +707,11 @@ fn native_selection_updates_raster_cells_and_returns_text_once() {
     engine.selection_start(0, 0).expect("selection start");
     engine.selection_update(4, 0).expect("selection update");
     let selected = engine.screen();
-    assert!(selected.lines[0][2].inverse);
+    assert_eq!(
+        selected.lines[0][2].bg.as_deref(),
+        Some("#44475a"),
+        "a selected cell is drawn on the selection color"
+    );
     assert_eq!(
         engine.selection_end().expect("selection copy").as_deref(),
         Some("hello")
@@ -793,10 +797,17 @@ fn the_viewport_scrolls_through_the_scrollback_and_returns_to_the_newest_output(
     assert!(engine.screen().cursor.visible);
 }
 
+/// 선택 배경(기본 테마의 선택 색)으로 그린 칸의 글자.
 fn inverted_text(screen: &soksak_sidecar_vt_core::Screen, row: usize) -> String {
+    let selection = format!(
+        "#{:02x}{:02x}{:02x}",
+        TerminalTheme::dark().selection[0],
+        TerminalTheme::dark().selection[1],
+        TerminalTheme::dark().selection[2]
+    );
     screen.lines[row]
         .iter()
-        .filter(|cell| cell.inverse)
+        .filter(|cell| cell.bg.as_deref() == Some(selection.as_str()))
         .map(|cell| cell.ch.as_deref().unwrap_or(" "))
         .collect()
 }
@@ -1682,16 +1693,25 @@ fn osc_highlight_colors_are_set_queried_reset_and_draw_the_selection() {
         .background
         .clone()
         .expect("default background");
-    // 설정하지 않은 강조 배경은 기본 전경색, 강조 글자는 기본 배경색이다(반전과 같다).
+    // 설정하지 않은 강조 배경은 테마의 선택 배경, 강조 글자는 기본 전경색이다.
+    engine.set_theme(
+        TerminalTheme::from_request(
+            Some("dark"),
+            Some("#101010"),
+            Some("#e0e0e0"),
+            Some("#e0e0e0"),
+            Some("#334455"),
+        )
+        .unwrap(),
+    );
     engine.feed(b"\x1b]17;?\x07\x1b]19;?\x1b\\");
     let unset = replies(&mut engine);
-    assert_eq!(unset.len(), 2, "{unset:?}");
-    assert!(
-        unset[0].starts_with("\x1b]17;rgb:") && unset[0].ends_with('\x07'),
-        "{unset:?}"
-    );
-    assert!(
-        unset[1].starts_with("\x1b]19;rgb:") && unset[1].ends_with("\x1b\\"),
+    assert_eq!(
+        unset,
+        [
+            "\x1b]17;rgb:3333/4444/5555\x07",
+            "\x1b]19;rgb:e0e0/e0e0/e0e0\x1b\\"
+        ],
         "{unset:?}"
     );
 
@@ -1718,9 +1738,11 @@ fn osc_highlight_colors_are_set_queried_reset_and_draw_the_selection() {
         unset[..1].to_vec(),
         "OSC 117 restores the default highlight background"
     );
-    assert!(
-        engine.screen().lines[0][0].inverse,
-        "without highlight colors a selected cell is inverse"
+    let cell = engine.screen().lines[0][0].clone();
+    assert_eq!(
+        (cell.bg.as_deref(), cell.fg.as_deref(), cell.inverse),
+        (Some("#334455"), Some("#e0e0e0"), false),
+        "without highlight colors a selected cell keeps its text color on the theme selection"
     );
     assert!(default_background.starts_with('#'));
 

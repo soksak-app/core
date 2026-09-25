@@ -722,19 +722,14 @@ impl AlacrittyEngine {
         let terminator = if bel { "\x07" } else { "\x1b\\" };
         Some(match selector {
             "17" | "19" if payload == "?" => {
-                let background = selector == "17";
-                let rgb = if background {
+                // 정하지 않은 강조 배경은 테마의 선택 배경, 강조 글자는 기본 전경색이다.
+                let rgb = if selector == "17" {
                     self.highlight_background
+                        .or(Some(self.theme_rgb(self.theme.selection)))
                 } else {
                     self.highlight_foreground
-                }
-                .or_else(|| {
-                    self.default_rgb(if background {
-                        NamedColor::Foreground
-                    } else {
-                        NamedColor::Background
-                    })
-                });
+                        .or_else(|| self.default_rgb(NamedColor::Foreground))
+                };
                 rgb.map(|rgb| {
                     EngineEvent::PtyWrite(
                         format!(
@@ -1451,6 +1446,14 @@ impl AlacrittyEngine {
                 .is_none_or(|color| color == self.theme_hex(self.theme.background).as_str())
     }
 
+    fn theme_rgb(&self, rgb: [u8; 3]) -> Rgb {
+        Rgb {
+            r: rgb[0],
+            g: rgb[1],
+            b: rgb[2],
+        }
+    }
+
     fn theme_hex(&self, rgb: [u8; 3]) -> String {
         format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])
     }
@@ -1556,24 +1559,20 @@ impl Engine for AlacrittyEngine {
             if renderable.selection.as_ref().is_some_and(|selection| {
                 selection.contains_cell(&indexed, renderable.cursor.point, renderable.cursor.shape)
             }) {
-                if self.highlight_background.is_some() || self.highlight_foreground.is_some() {
-                    // 강조 색이 있으면 반전 대신 그 색으로 그린다. 정하지 않은 쪽은 반전과 같은 색이다.
-                    let hex = |rgb: Rgb| format!("#{:02x}{:02x}{:02x}", rgb.r, rgb.g, rgb.b);
-                    let (foreground, background) = if cell.inverse {
-                        (cell.bg.clone(), cell.fg.clone())
-                    } else {
-                        (cell.fg.clone(), cell.bg.clone())
-                    };
-                    let foreground =
-                        foreground.or_else(|| self.default_rgb(NamedColor::Foreground).map(hex));
-                    let background =
-                        background.or_else(|| self.default_rgb(NamedColor::Background).map(hex));
-                    cell.bg = self.highlight_background.map(hex).or(foreground);
-                    cell.fg = self.highlight_foreground.map(hex).or(background);
-                    cell.inverse = false;
+                // 선택한 칸은 강조 배경(없으면 테마의 선택 배경) 위에 강조 글자(없으면 칸의 글자 색)로 그린다.
+                let hex = |rgb: Rgb| format!("#{:02x}{:02x}{:02x}", rgb.r, rgb.g, rgb.b);
+                let foreground = if cell.inverse {
+                    cell.bg.clone()
                 } else {
-                    cell.inverse = !cell.inverse;
-                }
+                    cell.fg.clone()
+                };
+                let foreground =
+                    foreground.or_else(|| self.default_rgb(NamedColor::Foreground).map(hex));
+                cell.bg = Some(hex(self
+                    .highlight_background
+                    .unwrap_or_else(|| self.theme_rgb(self.theme.selection))));
+                cell.fg = self.highlight_foreground.map(hex).or(foreground);
+                cell.inverse = false;
             }
             lines[row][col] = cell;
         }

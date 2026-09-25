@@ -1551,10 +1551,12 @@ async fn test_a6_unknown_op_returns_error() {
 
 #[tokio::test]
 async fn test_theme_rejects_unknown_mode_without_fallback() {
-    let input = r#"
-{"surface":"s1","body":{"operation":"theme","mode":"light"}}
-{"surface":"s1","body":{"operation":"theme","mode":"sepia"}}
-"#;
+    let input = r##"
+{"surface":"s1","body":{"operation":"theme","mode":"light","background":"#e8f5ee","foreground":"#12684a","cursor":"#12684a","selection":"#d8dbe4"}}
+{"surface":"s1","body":{"operation":"theme","mode":"sepia","background":"#e8f5ee","foreground":"#12684a","cursor":"#12684a","selection":"#d8dbe4"}}
+{"surface":"s1","body":{"operation":"theme","mode":"dark"}}
+{"surface":"s1","body":{"operation":"theme","mode":"dark","background":"red","foreground":"#12684a","cursor":"#12684a","selection":"#d8dbe4"}}
+"##;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
     let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
@@ -1578,6 +1580,20 @@ async fn test_theme_rejects_unknown_mode_without_fallback() {
         value["body"]["error"] == "invalidParams"
             && value["body"]["reason"] == "theme.mode must be dark or light"
     }));
+    // 색이 빠지거나 #rrggbb 가 아니면 모드가 맞아도 거부한다.
+    assert!(outputs.iter().any(|value| {
+        value["body"]["error"] == "invalidParams"
+            && value["body"]["reason"] == "theme.background must be a #rrggbb color"
+    }));
+    assert_eq!(
+        outputs
+            .iter()
+            .filter(|value| value["body"]["event"] == "theme")
+            .map(|value| value["body"]["mode"].clone())
+            .collect::<Vec<_>>(),
+        vec![serde_json::json!("light")],
+        "only the complete light theme is applied"
+    );
 }
 
 #[tokio::test]

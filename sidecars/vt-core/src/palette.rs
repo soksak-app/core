@@ -13,7 +13,26 @@ pub struct TerminalTheme {
     pub foreground: [u8; 3],
     pub background: [u8; 3],
     pub cursor: [u8; 3],
+    /// 선택한 칸의 배경. 프로그램이 OSC 17 강조 배경을 정하지 않았을 때 쓴다.
+    pub selection: [u8; 3],
     pub palette: [[u8; 3]; 256],
+    /// 인덱스 ANSI 팔레트를 고른 외관.
+    pub mode: ThemeMode,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThemeMode {
+    Dark,
+    Light,
+}
+
+impl ThemeMode {
+    pub const fn name(self) -> &'static str {
+        match self {
+            ThemeMode::Dark => "dark",
+            ThemeMode::Light => "light",
+        }
+    }
 }
 
 const ANSI: [[u8; 3]; 16] = [
@@ -115,7 +134,9 @@ impl TerminalTheme {
             foreground: DEFAULT_FOREGROUND_RGB,
             background: DEFAULT_BACKGROUND_RGB,
             cursor: DEFAULT_CURSOR_RGB,
+            selection: [0x44, 0x47, 0x5a],
             palette: DEFAULT_PALETTE,
+            mode: ThemeMode::Dark,
         }
     }
 
@@ -124,16 +145,37 @@ impl TerminalTheme {
             foreground: [0x24, 0x24, 0x24],
             background: [0xf7, 0xf7, 0xf5],
             cursor: [0x24, 0x24, 0x24],
+            selection: [0xc8, 0xcc, 0xd8],
             palette: LIGHT_PALETTE,
+            mode: ThemeMode::Light,
         }
     }
 
-    pub fn from_mode(mode: &str) -> Option<Self> {
-        match mode {
-            "dark" => Some(Self::dark()),
-            "light" => Some(Self::light()),
-            _ => None,
-        }
+    /// 페이지의 theme 요청에서 외관을 만든다. 모드와 네 색(#rrggbb)이 모두 있어야 한다.
+    pub fn from_request(
+        mode: Option<&str>,
+        background: Option<&str>,
+        foreground: Option<&str>,
+        cursor: Option<&str>,
+        selection: Option<&str>,
+    ) -> Result<Self, String> {
+        let base = match mode {
+            Some("dark") => Self::dark(),
+            Some("light") => Self::light(),
+            _ => return Err("theme.mode must be dark or light".to_string()),
+        };
+        let color = |name: &str, value: Option<&str>| {
+            value
+                .and_then(parse_hex)
+                .ok_or_else(|| format!("theme.{name} must be a #rrggbb color"))
+        };
+        Ok(Self {
+            background: color("background", background)?,
+            foreground: color("foreground", foreground)?,
+            cursor: color("cursor", cursor)?,
+            selection: color("selection", selection)?,
+            ..base
+        })
     }
 
     pub const fn color(&self, index: usize) -> Option<[u8; 3]> {
@@ -150,6 +192,16 @@ impl TerminalTheme {
             _ => None,
         }
     }
+}
+
+/// `#rrggbb` 를 읽는다. 다른 형식이면 None.
+pub fn parse_hex(text: &str) -> Option<[u8; 3]> {
+    let digits = text.strip_prefix('#')?;
+    if digits.len() != 6 || !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    let channel = |at: usize| u8::from_str_radix(&digits[at..at + 2], 16).ok();
+    Some([channel(0)?, channel(2)?, channel(4)?])
 }
 
 const fn dim(color: [u8; 3]) -> [u8; 3] {
