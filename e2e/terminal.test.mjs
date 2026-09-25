@@ -1002,7 +1002,7 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: PASS inline image lifecycle (scroll/resize/replace/delete)`);
   });
 
-  test(`${app.name}: the terminal background equals the surface color of every theme and mode`, async (t) => {
+  test(`${app.name}: the terminal background equals the card color of every theme and mode`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -1019,14 +1019,14 @@ for (const app of Object.values(APPS)) {
     for (const { name: theme } of THEMES) {
       for (const mode of ["dark", "light"]) {
         await s.run("core.settings.theme", { name: theme, mode, scope: "common" });
-        // 터미널 배경은 카드 자리의 표면 색(--surface)이다.
-        const token = THEMES.find((item) => item.name === theme)[mode].surface;
+        // 터미널 배경은 카드 색(--card)이다.
+        const token = THEMES.find((item) => item.name === theme)[mode].card;
         await s.until("terminal.session", (state) => state?.theme === mode && state.background === token,
           `the terminal did not apply ${theme} ${mode} background ${token}`, { surface: terminal.surface });
         const sample = await terminalBackgroundSample(s, rect);
         const expected = [1, 3, 5].map((at) => parseInt(token.slice(at, at + 2), 16));
         assert.ok(sample.every((value, index) => Math.abs(value - expected[index]) <= 2),
-          `${theme} ${mode}: the terminal background pixel is rgb(${sample}), the surface token is ${token}`);
+          `${theme} ${mode}: the terminal background pixel is rgb(${sample}), the card token is ${token}`);
       }
     }
   });
