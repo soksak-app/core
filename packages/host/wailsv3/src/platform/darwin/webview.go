@@ -4,6 +4,7 @@ package darwin
 
 /*
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include "webview_geometry.h"
 #include "window_facts.h"
@@ -23,6 +24,16 @@ void nativeWebviewEval(void *view, const char *script);
 void nativeWebviewClose(void *view);
 void nativeWindowConfigureMain(void *window, bool dark);
 bool nativeWindowSetMainWebview(void *window);
+
+extern void fileDropped(void *context, char *json);
+
+static void fileDroppedBridge(void *context, const char *json) {
+    fileDropped(context, (char *)json);
+}
+
+static bool windowFileDrop(void *main, uintptr_t context) {
+    return sp_window_file_drop(main, fileDroppedBridge, (void *)context);
+}
 
 // 연속적인 표면 크기 변경의 시작과 종료를 웹뷰에 전달한다.
 static void surfaceBeginLiveResize(void* handle) {
@@ -83,6 +94,7 @@ import "C"
 
 import (
 	"fmt"
+	"runtime/cgo"
 	"unsafe"
 
 	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
@@ -158,6 +170,21 @@ func (implementation) CloseWebview(view unsafe.Pointer) { C.nativeWebviewClose(v
 func (implementation) ConfigureMainWindow(window unsafe.Pointer, dark bool) {
 	C.nativeWindowConfigureMain(window, C.bool(dark))
 }
+//export fileDropped
+func fileDropped(context unsafe.Pointer, json *C.char) {
+	dropped := cgo.Handle(uintptr(context)).Value().(func(string))
+	dropped(C.GoString(json))
+}
+
+func (implementation) FileDrop(main unsafe.Pointer, dropped func(json string)) error {
+	handle := cgo.NewHandle(dropped)
+	if !bool(C.windowFileDrop(main, C.uintptr_t(handle))) {
+		handle.Delete()
+		return fmt.Errorf("the main webview has no window composition for file drops")
+	}
+	return nil
+}
+
 func (implementation) SetMainWebview(window unsafe.Pointer) error {
 	if bool(C.nativeWindowSetMainWebview(window)) {
 		return nil

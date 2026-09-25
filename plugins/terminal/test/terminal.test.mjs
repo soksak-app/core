@@ -875,15 +875,7 @@ test("terminal file drop quotes local URLs and sends one non-executing paste", a
   openSession(fakeSidecar);
   fakeSidecar.reset();
 
-  fakeView._trigger("drop", {
-    dataTransfer: {
-      types: ["text/uri-list"],
-      getData: (type) => type === "text/uri-list"
-        ? "file:///tmp/dropped%20file.txt\r\nfile:///tmp/quote%27name.txt\r\n"
-        : "",
-    },
-  });
-  await new Promise((resolve) => setImmediate(resolve));
+  await fakeExpose.getCommand("terminal.drop")({ urls: ["file:///tmp/dropped%20file.txt", "file:///tmp/quote%27name.txt"] });
 
   assert.deepEqual(fakeSidecar.getMessages().map(({ body }) => body), [
     { operation: "paste", text: "'/tmp/dropped file.txt' '/tmp/quote'\\''name.txt'" },
@@ -904,11 +896,10 @@ test("terminal file drop rejects unsupported or malformed payloads without input
   fakeSidecar.reset();
 
   await assert.rejects(fakeExpose.getCommand("terminal.drop")({ urls: ["https://example.invalid/file"] }), /not local/);
-  fakeView._trigger("drop", { dataTransfer: { types: ["Files"], getData: () => "" } });
-  await new Promise((resolve) => setImmediate(resolve));
+  await assert.rejects(fakeExpose.getCommand("terminal.drop")({ urls: [] }), /no file URLs/);
+  await assert.rejects(fakeExpose.getCommand("terminal.drop")({}), /no file URLs/);
 
   assert.deepEqual(fakeSidecar.getMessages(), []);
-  assert.match(fakeExpose.getStatus("terminal.session").readFn().error, /text\/uri-list/);
 });
 
 test("program clipboard queries are explicitly denied and do not remain pending", async () => {

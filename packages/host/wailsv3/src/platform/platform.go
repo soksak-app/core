@@ -134,6 +134,9 @@ type Platform interface {
 	// native/darwin/src/window_facts.h 의 sp_window_facts 와 같다. UI 스레드에서 호출한다.
 	WindowFacts(window unsafe.Pointer) (string, error)
 	SetMainWebview(window unsafe.Pointer) error
+	// FileDrop 은 main 웹뷰의 창에 놓인 파일을 dropped 로 받는다. json 은 {"urls":[...],"x":..,"y":..}
+	// (페이지 좌표) 다. UI 스레드에서 호출한다.
+	FileDrop(main unsafe.Pointer, dropped func(json string)) error
 	MainWebview(window unsafe.Pointer) (unsafe.Pointer, error)
 	ConfigureMainWindow(window unsafe.Pointer, dark bool)
 	ClipboardRead(kind string) (ClipboardValue, error)

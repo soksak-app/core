@@ -55,11 +55,54 @@ static void reconfigureSurfaceWebviews(NSView *root) {
     for (NSView *child in root.subviews) reconfigureSurfaceWebviews(child);
 }
 
+// 창의 유일한 네이티브 끌기 대상. 다른 애플리케이션에서 끈 파일을 받아 놓인 점과 함께 호스트에 알리고,
+// 호스트는 이를 페이지로 보낸다. 네이티브 뷰는 DOM 위에 놓인 것이므로 놓인 파일의 처리는 그 점의 DOM 요소를
+// 기준으로 페이지가 정한다. 파일 URL 만 받고 적중 검사에서 뷰를 돌려주지 않으므로 포인터와 다른 끌기는 아래
+// 뷰로 간다.
+@interface SPFileDropView : NSView
+@property(nonatomic, assign) sp_file_drop_event event;
+@property(nonatomic, assign) void *context;
+@end
+
+@implementation SPFileDropView
+- (BOOL)isFlipped { return YES; }
+- (NSView *)hitTest:(NSPoint)point { return nil; }
+- (NSArray<NSURL *> *)fileURLs:(id<NSDraggingInfo>)sender {
+    return [sender.draggingPasteboard readObjectsForClasses:@[NSURL.class]
+        options:@{NSPasteboardURLReadingFileURLsOnlyKey: @YES}] ?: @[];
+}
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+    return self.event && [self fileURLs:sender].count > 0 ? NSDragOperationCopy : NSDragOperationNone;
+}
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender {
+    return [self draggingEntered:sender];
+}
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
+    NSArray<NSURL *> *urls = [self fileURLs:sender];
+    if (!self.event || urls.count == 0) return NO;
+    NSPoint point = [self convertPoint:sender.draggingLocation fromView:nil];
+    NSMutableArray<NSString *> *strings = [NSMutableArray arrayWithCapacity:urls.count];
+    // Finder 는 파일 참조 URL(file:///.file/id=…)을 둔다. 페이지와 표면은 경로를 쓰므로 경로 URL 로 바꾼다.
+    for (NSURL *url in urls) {
+        NSURL *path = url.filePathURL;
+        if (!path) return NO;
+        [strings addObject:path.absoluteString];
+    }
+    NSData *json = [NSJSONSerialization dataWithJSONObject:@{@"urls": strings, @"x": @(point.x), @"y": @(point.y)}
+        options:0 error:NULL];
+    if (!json) return NO;
+    NSString *text = [[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] autorelease];
+    self.event(self.context, text.UTF8String);
+    return YES;
+}
+@end
+
 // 하나의 앱 DOM과 그 아래 네이티브 평면의 입력 소유권을 선택한다.
 @interface SPWindowComposition : NSView
 @property(nonatomic, assign) WKWebView *mainWebview;
 @property(nonatomic, assign) SPSurfaceCoordinates *coordinates;
 @property(nonatomic, retain) NSArray<NSValue *> *overlays;
+@property(nonatomic, assign) SPFileDropView *fileDrop;
 @end
 
 @implementation SPWindowComposition
@@ -71,6 +114,16 @@ static void reconfigureSurfaceWebviews(NSView *root) {
     return self;
 }
 - (void)dealloc { [_overlays release]; [super dealloc]; }
+// 파일 놓기 뷰는 합성 뷰의 맨 위에 둔다. 나중에 더한 뷰가 있어도 놓인 파일은 페이지가 받는다.
+- (void)didAddSubview:(NSView *)subview {
+    [super didAddSubview:subview];
+    if (self.fileDrop && subview != self.fileDrop && self.subviews.lastObject != self.fileDrop) {
+        [self.fileDrop retain];
+        [self.fileDrop removeFromSuperview];
+        [super addSubview:self.fileDrop positioned:NSWindowAbove relativeTo:nil];
+        [self.fileDrop release];
+    }
+}
 // 창의 뷰 배치가 바뀌면 AppKit 은 포인터 아래 뷰에 cursorUpdate: 로 지금 위치의 커서를 정하라고 요청한다. WKWebView 는
 // 이 메시지를 처리하지 않아 창의 기본 동작이 화살표를 설정하고, 페이지가 정한 커서(디바이더의 크기 조절, 아이콘의
 // 손)를 덮는다. WebKit 은 포인터 위치를 추적 영역 소유자의 mouseMoved: 로 받아 페이지 커서를 계산하며, 레이아웃 뒤에는
@@ -364,10 +417,9 @@ static SPSurfaceHost *surfaceHost(NSView *view) {
     return nil;
 }
 
-void *sp_surface_create(void *mainHandle) {
-    NSCAssert(NSThread.isMainThread, @"surface creation requires the UI thread");
-    WKWebView *main = (WKWebView *)mainHandle;
-    if (![main isKindOfClass:WKWebView.class] || !main.window || !main.superview) return NULL;
+// 메인 웹뷰를 담는 창 합성 뷰. 없으면 만든다.
+static SPWindowComposition *windowComposition(WKWebView *main) {
+    if (![main isKindOfClass:WKWebView.class] || !main.window || !main.superview) return nil;
     configureWebViewTransparency(main);
     SPWindowComposition *composition;
     if ([main.superview isKindOfClass:SPWindowComposition.class]) {
@@ -390,6 +442,31 @@ void *sp_surface_create(void *mainHandle) {
         composition.coordinates = coordinates;
         [composition addSubview:coordinates positioned:NSWindowAbove relativeTo:main];
     }
+    return composition;
+}
+
+bool sp_window_file_drop(void *mainHandle, sp_file_drop_event event, void *context) {
+    NSCAssert(NSThread.isMainThread, @"file drop requires the UI thread");
+    SPWindowComposition *composition = windowComposition((WKWebView *)mainHandle);
+    if (!composition || !event) return false;
+    SPFileDropView *view = composition.fileDrop;
+    if (!view) {
+        view = [[[SPFileDropView alloc] initWithFrame:composition.bounds] autorelease];
+        view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+        [view registerForDraggedTypes:@[NSPasteboardTypeFileURL]];
+        [composition addSubview:view positioned:NSWindowAbove relativeTo:nil];
+        composition.fileDrop = view;
+    }
+    view.event = event;
+    view.context = context;
+    return true;
+}
+
+void *sp_surface_create(void *mainHandle) {
+    NSCAssert(NSThread.isMainThread, @"surface creation requires the UI thread");
+    WKWebView *main = (WKWebView *)mainHandle;
+    SPWindowComposition *composition = windowComposition(main);
+    if (!composition) return NULL;
     SPSurfaceHost *surface = [[SPSurfaceHost alloc] initWithFrame:NSZeroRect];
     surface.mainWebview = main;
     surface.hidden = YES;

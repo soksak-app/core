@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-6-5: files dragged from another application onto a window reach the terminal under the drop point as quoted paths through a native file drop view and the surface's declared drop command, instead of being consumed by Wails or Tauri.
 - V5-51-6, V5-44: every implemented CSI and OSC sequence, including the application keypad, is checked in the running applications on both hosts.
 - V5-64: output sequences the terminal rejects are recorded in `terminal.session.rejected` instead of becoming a red surface error.
 - V5-53: an inline image is placed where its sequence appears even when later output in the same chunk moves the cursor, and its events reach the page with the raster that draws it.

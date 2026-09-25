@@ -49,6 +49,7 @@ export async function loadEnvironment() {
         ink: manifest.preview?.ink ?? null,
         background: manifest.background ?? null,
         diagnostics: diagnosticModules.get(name) ?? null,
+        drop: manifest.surface?.drop ?? null,
         surface: surfaceOf(name, manifest.id, {
           ...manifest.surface,
           declarations: exposes ?? {},

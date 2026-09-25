@@ -572,6 +572,20 @@ int main(void) { @autoreleasepool {
         sp_region_close(region11);
     }
 
+    // 포인터 입력과 같이 끌어 놓기도 영역을 지나 페이지로 간다. 영역은 끌기 형식을 등록하지 않는다.
+    {
+        void *region = sp_region_create(surface, "drag", testEvent, NULL);
+        sp_region_place(region, 10, 10, 10, 10, true);
+        NSArray *types = [(NSView *)region registeredDraggedTypes];
+        check(types.count == 0, [NSString stringWithFormat:@"drag: the region registers no dragged types (got %@)", types]);
+        // NSTextView 는 초점을 받거나 편집 상태가 바뀔 때 끌기 형식을 다시 등록한다.
+        sp_region_focus(region);
+        [(NSTextView *)region setEditable:YES];
+        types = [(NSView *)region registeredDraggedTypes];
+        check(types.count == 0, [NSString stringWithFormat:@"drag: a focused region registers no dragged types (got %@)", types]);
+        sp_region_close(region);
+    }
+
     // 숫자 키패드 키는 입력기를 거치지 않고 키패드 키 이름으로 보고한다. 응용 키패드 모드의 인코딩은 사이드카가 정한다.
     {
         void *region = sp_region_create(surface, "keypad", testEvent, NULL);

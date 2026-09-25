@@ -241,7 +241,12 @@ export function validateManifest(manifest) {
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
     if (!isObject(surface)) throw new Error(`${where}: surface must be an object`);
-    only(`${where} surface`, surface, ["module", "composition"]);
+    only(`${where} surface`, surface, ["module", "composition", "drop"]);
+    // 놓기 명령은 파일이 표면에 놓였을 때 페이지가 그 표면에서 {urls} 로 실행하는 선언된 명령이다.
+    if (surface.drop !== undefined && (!isText(surface.drop) ||
+      !(manifest.exposes?.commands ?? []).some((command) => command.name === surface.drop))) {
+      throw new Error(`${where}: surface drop must name a command declared in exposes`);
+    }
     if (!isText(surface.module)) throw new Error(`${where}: surface requires a module`);
     if (surface.module.startsWith("/") || surface.module.split("/").includes("..") || !surface.module.endsWith(".js")) {
       throw new Error(`${where}: surface module must be a JavaScript path inside the package`);

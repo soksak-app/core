@@ -1,7 +1,8 @@
 // 실제 입력 등급 터미널 검사: 사람의 마우스와 키보드가 지나는 경로(창 서버, 키 창, 메뉴 키 대응)로 터미널
 // 선택, 복사, 붙여넣기, 휠을 검사한다. 사용자가 승인한 실행에서 pnpm -F @soksak/e2e verify:real 로만 실행한다.
 import assert from "node:assert/strict";
-import { readFileSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
@@ -9,7 +10,8 @@ import { APPS, fresh, open } from "../app.mjs";
 import { frames, pixel, readFrame } from "../frame.mjs";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 import { pasteboardText, writePasteboard } from "../pasteboard.mjs";
-import { activateFinder, bringFront, click, dragPath, key, KEYS, post, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
+import { activateFinder, appPid, bringFront, click, closeFinderWindow, dragPath, finderItemCenter, frontWindowAt, key, KEYS,
+  dragPasteboard, openFinderWindow, post, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
 
 // 터미널 한 칸의 중심 화면 좌표.
 function cellPoint(origin, session, column, row) {
@@ -28,6 +30,46 @@ async function cellPixel(s, surface, session, column, row) {
     const region = (await s.get("host.window")).regions.find((item) => item.surface === surface && item.name === "view");
     return pixel(frame, Math.round((region.frame.x + (column + 0.5) * session.cellWidth) * frame.scale),
       Math.round((region.frame.y + (row + 0.5) * session.cellHeight) * frame.scale));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+// 표시된 마지막 화면에서, 화면 상태가 빈 칸(커서 칸 제외)과 마지막 열 오른쪽 여백에 그려진 픽셀이 있는 칸을 찾는다.
+async function blankCellsWithPixels(s, surface) {
+  const lines = await readScreenUntil(s, surface, () => true, "the screen did not read");
+  const session = await s.get("terminal.session", surface);
+  const cursor = await s.get("terminal.cursor", surface);
+  await s.request("diagnostics.capture.start", {});
+  const displayed = await s.presented();
+  const { frames: directory } = await s.request("diagnostics.capture.stop", { after: displayed.displayed });
+  try {
+    const files = frames(directory);
+    assert.ok(files.length > 0, "the capture produced no frames");
+    const frame = readFrame(files.at(-1));
+    const region = (await s.get("host.window")).regions.find((item) => item.surface === surface && item.name === "view");
+    const x = (column) => Math.round((region.frame.x + column * session.cellWidth) * frame.scale);
+    const y = (row) => Math.round((region.frame.y + row * session.cellHeight) * frame.scale);
+    const background = pixel(frame, x(session.cols - 1) + 2, y(session.rows - 1) + 2);
+    const inked = (x0, y0, x1, y1) => {
+      let count = 0;
+      for (let py = y0; py < y1; py++) for (let px = x0; px < x1; px++) {
+        if (pixel(frame, px, py).some((channel, index) => Math.abs(channel - background[index]) > 40)) count++;
+      }
+      return count;
+    };
+    const cells = [];
+    for (let row = 0; row < session.rows; row++) {
+      const text = lines[row] ?? "";
+      for (let column = 0; column < session.cols; column++) {
+        if ((text[column] ?? " ") !== " " || (row === cursor.row && column === cursor.col)) continue;
+        const count = inked(x(column), y(row), x(column + 1), y(row + 1));
+        if (count > 0) cells.push({ row, column, count });
+      }
+      const margin = inked(x(session.cols), y(row), Math.round((region.frame.x + region.frame.width) * frame.scale), y(row + 1));
+      if (margin > 0) cells.push({ row, column: "margin", count: margin });
+    }
+    return { cells, lines: lines.filter(Boolean) };
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -690,6 +732,63 @@ for (const app of Object.values(APPS)) {
     await read("NUMERIC", "\\033>", 2, "");
     keypad();
     assert.equal(await result("NUMERIC"), "5\r", "ESC > did not select the numeric keypad");
+  });
+
+  test(`${app.name}: a real Finder drag of a file and of an image pastes their quoted paths without executing`, { timeout: 90000 }, async (t) => {
+    requireTrusted();
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
+    const directory = realpathSync(mkdtempSync(join(tmpdir(), "soksak-drop ")));
+    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    writeFileSync(join(directory, "drop me.txt"), "text");
+    writeFileSync(join(directory, "drop.png"), PNG);
+    const view = await s.rect("terminal.view", undefined, surface);
+    const target = await bringFront(s, app, view);
+    // Finder 창은 터미널 영역 아래, 앱 창 안에 둔다. 끌어 놓는 점은 가려지지 않는다.
+    const { frame } = await s.get("host.window");
+    const top = Math.round(target.y + view.height / 2 + 30);
+    const bounds = { x: Math.round(frame.x + 20), y: top, width: 500, height: Math.min(220, Math.round(frame.y + frame.height) - top) };
+    const finder = openFinderWindow(directory, bounds);
+    t.after(() => closeFinderWindow(finder));
+    // 끌기는 Finder 창에서 시작한다. Finder 를 앞으로 가져오되 놓는 점은 앱 창이어야 한다.
+    activateFinder();
+    assert.equal(frontWindowAt(target.x, target.y)?.pid, appPid(app), "the Finder window covers the drop point");
+    for (const name of ["drop me.txt", "drop.png"]) {
+      const from = finderItemCenter(name);
+      assert.equal(frontWindowAt(from.x, from.y)?.owner, "Finder", `${name} is not in the frontmost window at ${from.x},${from.y}`);
+      const board = dragPasteboard();
+      // 사람처럼 누른 뒤 잠시 멈춰야 Finder 가 끌기로 인식한다.
+      const steps = [{ type: "move", ...from }, { type: "down", ...from, wait: 300 }];
+      for (let i = 1; i <= 20; i++) {
+        steps.push({ type: "drag", x: from.x + (target.x - from.x) * i / 20, y: from.y + (target.y - from.y) * i / 20 });
+      }
+      steps.push({ type: "up", ...target });
+      post(steps);
+      const quoted = `'${join(directory, name).replaceAll("'", "'\\''")}'`;
+      const lines = await readScreenUntil(s, surface, (screen) => screen.join("").includes(name),
+        `the drop of ${name} did not paste it`).catch(async (error) => {
+        const screen = await s.get("terminal.screen", surface);
+        const state = await s.get("terminal.session", surface);
+        throw new Error(`${error.message.split(" (status")[0]}; screen: ${JSON.stringify(screen.map((row) => row.map((cell) => cell.ch ?? " ").join("").trimEnd()).filter(Boolean))}; ` +
+          `session error: ${JSON.stringify(state.error)}; core.drop: ${JSON.stringify(await s.get("core.drop"))}; frontmost at the target: ${JSON.stringify(frontWindowAt(target.x, target.y))}; ` +
+          `drag pasteboard before ${JSON.stringify(board)} after ${JSON.stringify(dragPasteboard())}; from ${JSON.stringify(from)} to ${JSON.stringify(target)}`);
+      });
+      assert.ok(lines.join("").includes(quoted), `the drop of ${name} pasted ${JSON.stringify(lines.filter((line) => line.includes("drop")))} instead of ${quoted}`);
+      assert.ok(!lines.some((line) => line.includes("command not found")), "a drop must not execute a command");
+      const drop = await s.get("core.drop");
+      assert.deepEqual({ surface: drop.surface, command: drop.command, error: drop.error, urls: drop.urls.map((url) => decodeURIComponent(new URL(url).pathname)) },
+        { surface, command: "terminal.drop", error: null, urls: [join(directory, name)] }, `core.drop ${JSON.stringify(drop)}`);
+      // 붙여넣은 입력 줄을 지운다. 그 뒤 화면에서 빈 칸은 그림에서도 비어 있어야 한다. 놓기는 창에 아무것도 남기지 않는다.
+      await s.run("terminal.input", { bytes: "\u0015" }, surface);
+      await readScreenUntil(s, surface, (screen) => !screen.join("").includes(name), `the input line of ${name} was not cleared`);
+      const residue = await blankCellsWithPixels(s, surface);
+      assert.deepEqual(residue.cells.slice(0, 20), [], `after the drop of ${name}, ${residue.cells.length} blank cells hold pixels; ` +
+        `screen ${JSON.stringify(residue.lines)}`);
+    }
   });
 }
 

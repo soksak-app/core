@@ -17,6 +17,7 @@
         "hiddenTitle": true,
         "backgroundColor": "#101117",
         "acceptFirstMouse": true,
+        "dragDropEnabled": false,
         "url": "index.html"
       }
     ],

@@ -99,6 +99,10 @@ pub fn set_window_overlays(_main: Handle, _overlays: &[WindowOverlay]) -> Result
     missing("window DOM overlays")
 }
 
+pub fn file_drop(_main: Handle, _receive: Box<dyn Fn(String)>) -> Result<(), String> {
+    missing("file drop")
+}
+
 pub fn attach_surface(_view: &PlatformWebview, _main: Handle) -> Result<(), String> {
     missing("surface attachment")
 }

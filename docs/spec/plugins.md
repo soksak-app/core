@@ -38,6 +38,8 @@ Common functionality belongs to the workbench or the native host so plugins do n
 
 A plugin requires `surface`, `sections`, or both. Only plugins with a surface appear in the add menu and own a rail. The workbench imports `modules/<package name>/<module>` and calls its `mount(root, context)` export. The surface identifier is an explicit context member, not a URL query. The old `page` declaration is rejected; it does not select an alternate implementation. Unknown fields are rejected.
 
+`surface.drop`, when present, names a command in `exposes` that the page runs on the surface when files are dropped on it, with `{urls}` holding the dropped file URLs ([native surfaces](native-surfaces.md#input-over-native-views)).
+
 `surface.composition` is either `{ "kind": "dom" }` or a hybrid declaration with `kind: "hybrid"`, complete `regions`, and complete `overlays`. An image region names a sidecar already listed in `sidecars`. The manifest declaration is authority data sent to the host; page code cannot add a region, supplier, input owner, or stacking entry that is absent from it.
 
 ## Diagnostic declarations

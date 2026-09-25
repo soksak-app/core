@@ -328,6 +328,19 @@ static void verifyRegion(WKWebView *region, CGFloat scale, double width, double 
         when, scale, width, height]);
 }
 
+static void droppedFiles(void *context, const char *json) {
+    if (context) [(NSMutableArray *)context addObject:[NSString stringWithUTF8String:json]];
+}
+
+// 놓기 뷰가 읽는 끌기 정보(끌기 대지와 창 좌표)만 가진 끌기 정보.
+@interface TestDraggingInfo : NSObject
+@property(nonatomic, retain) NSPasteboard *draggingPasteboard;
+@property(nonatomic, assign) NSPoint draggingLocation;
+@end
+@implementation TestDraggingInfo
+- (void)dealloc { [_draggingPasteboard release]; [super dealloc]; }
+@end
+
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -403,6 +416,50 @@ int main(void) { @autoreleasepool {
     verify(window, surface, 2, 200.5, @"after changing back to 2x");
     verifyRegion(region, 2, 260, 140.5, @"after changing back to 2x");
     sp_document_close(region);
+
+    // 창의 파일 놓기 뷰: 파일 URL 만 받는 유일한 네이티브 끌기 대상이며 적중 검사는 아래 뷰로 간다.
+    check(sp_window_file_drop(main, droppedFiles, NULL), @"file drop: the window composition accepts a drop handler");
+    NSView *composition = main.superview;
+    NSView *drop = composition.subviews.lastObject;
+    check([drop.registeredDraggedTypes isEqualToArray:@[NSPasteboardTypeFileURL]],
+        [NSString stringWithFormat:@"file drop: the drop view registers only file URLs (got %@)", drop.registeredDraggedTypes]);
+    NSPoint inside = [composition.superview convertPoint:NSMakePoint(20, 20) fromView:composition];
+    NSView *hit = [composition hitTest:inside];
+    check(hit != nil && hit != drop, [NSString stringWithFormat:@"file drop: hit testing passes the drop view (got %@)", hit]);
+    NSView *later = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 10, 10)] autorelease];
+    [composition addSubview:later];
+    check(composition.subviews.lastObject == drop, @"file drop: the drop view stays above a view added later");
+    [later removeFromSuperview];
+    check(sp_window_file_drop(main, droppedFiles, NULL) &&
+        [composition.subviews filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(id view, NSDictionary *bindings) {
+            return [view registeredDraggedTypes].count > 0 && view != main;
+        }]].count == 1, @"file drop: registering again keeps one drop view");
+
+    // Finder 는 파일 참조 URL(file:///.file/id=…)을 끌기 대지에 둔다. 페이지에는 경로 URL 로 간다.
+    NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSUUID UUID].UUIDString];
+    [NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:NULL];
+    NSString *path = [directory stringByAppendingPathComponent:@"drop me.txt"];
+    [@"text" writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+    NSURL *reference = [NSURL fileURLWithPath:path].fileReferenceURL;
+    NSPasteboard *board = [NSPasteboard pasteboardWithUniqueName];
+    [board clearContents];
+    [board writeObjects:@[reference]];
+    TestDraggingInfo *info = [[[TestDraggingInfo alloc] init] autorelease];
+    info.draggingPasteboard = board;
+    info.draggingLocation = [drop convertPoint:NSMakePoint(30, 40) toView:nil];
+    NSMutableArray<NSString *> *drops = [NSMutableArray array];
+    sp_window_file_drop(main, droppedFiles, drops);
+    BOOL performed = [(id)drop performDragOperation:(id<NSDraggingInfo>)info];
+    NSDictionary *dropped = drops.count == 1 ? [NSJSONSerialization JSONObjectWithData:[drops[0] dataUsingEncoding:NSUTF8StringEncoding]
+        options:0 error:NULL] : nil;
+    NSArray *urls = dropped[@"urls"];
+    NSURL *sent = urls.count == 1 ? [NSURL URLWithString:urls[0]] : nil;
+    NSString *expected = path.stringByResolvingSymlinksInPath;
+    check(performed && sent.isFileURL && !sent.isFileReferenceURL && [sent.path.stringByResolvingSymlinksInPath isEqualToString:expected] && [dropped[@"x"] doubleValue] == 30 && [dropped[@"y"] doubleValue] == 40,
+        [NSString stringWithFormat:@"file drop: a file reference URL %@ is sent as a path URL of %@ at 30,40 (got %@)",
+            reference.absoluteString, expected, drops]);
+    [board releaseGlobally];
+    [NSFileManager.defaultManager removeItemAtPath:directory error:NULL];
 
     [window close];
     [window release];

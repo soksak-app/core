@@ -4,7 +4,7 @@
 //! 모서리 반경을 설정해 뷰를 자른다. 잘린 모서리에는 모달 뒤의 내용이 보인다. 투명도나
 //! 비공개 인터페이스를 사용하지 않는다.
 
-use std::ffi::c_void;
+use std::ffi::{c_char, c_void, CStr};
 
 use objc2::msg_send;
 use objc2::runtime::AnyObject;
@@ -12,7 +12,14 @@ use tauri::webview::PlatformWebview;
 
 use super::super::{visible_window_overlay_rects, DOMOverlay, Handle, WindowOverlay};
 
+type FileDropEvent = extern "C" fn(*mut c_void, *const c_char);
+
 extern "C" {
+    fn sp_window_file_drop(
+        main_webview: *mut c_void,
+        event: FileDropEvent,
+        context: *mut c_void,
+    ) -> bool;
     fn sp_webview_set_appearance(view: *mut c_void, dark: bool) -> bool;
     fn sp_surface_create(main_webview: *mut c_void) -> *mut c_void;
     fn sp_surface_close(surface: *mut c_void);
@@ -66,6 +73,34 @@ pub fn set_main_appearance(view: &PlatformWebview, dark: bool) -> Result<(), Str
         return Err("requested app appearance is unavailable".into());
     }
     Ok(())
+}
+
+/// 창의 파일 놓기 뷰에 놓인 파일을 받는 함수. 창이 살아 있는 동안 네이티브 뷰가 가리킨다.
+struct FileDropReceiver(Box<dyn Fn(String)>);
+
+extern "C" fn file_drop_callback(context: *mut c_void, json: *const c_char) {
+    let receiver = unsafe { &*(context as *const FileDropReceiver) };
+    let json = unsafe { CStr::from_ptr(json) }
+        .to_string_lossy()
+        .into_owned();
+    (receiver.0)(json);
+}
+
+/// main 웹뷰의 창에 놓인 파일을 receive 로 받는다. 메인 스레드에서 호출한다.
+pub fn file_drop(main: Handle, receive: Box<dyn Fn(String)>) -> Result<(), String> {
+    let receiver = Box::into_raw(Box::new(FileDropReceiver(receive)));
+    if unsafe {
+        sp_window_file_drop(
+            main as *mut c_void,
+            file_drop_callback,
+            receiver as *mut c_void,
+        )
+    } {
+        Ok(())
+    } else {
+        drop(unsafe { Box::from_raw(receiver) });
+        Err("the main webview has no window composition for file drops".into())
+    }
 }
 
 pub fn set_window_overlays(main: Handle, overlays: &[WindowOverlay]) {

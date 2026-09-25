@@ -1301,15 +1301,19 @@ const FEATURE_LINKS = [
   {
     id: "F6.5",
     implementation: [
-      { file: "plugins/terminal/ui/terminal.js", symbol: "dropFilesFromEvent" },
+      { file: "native/darwin/src/webview_geometry.m", symbol: "SPFileDropView" },
+      { file: "packages/workbench/core-exposure.js", symbol: "dropFiles" },
+      { file: "plugins/terminal/ui/terminal.js", symbol: "dropFiles" },
       { file: "plugins/terminal/plugin.json", symbol: "terminal.drop" },
     ],
     tests: [
       { file: "plugins/terminal/test/terminal.test.mjs", id: "terminal file drop quotes local URLs and sends one non-executing paste" },
       { file: "plugins/terminal/test/terminal.test.mjs", id: "terminal file drop rejects unsupported or malformed payloads without input" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a surface drop names a command declared in the manifest's exposes" },
       { file: "e2e/terminal.test.mjs", id: "terminal file drop pastes quoted paths without executing" },
+      { file: "e2e/real/terminal.test.mjs", id: "a real Finder drag of a file and of an image pastes their quoted paths without executing" },
     ],
-    expected: "A user file drop accepts only a declared text/uri-list, validates local URLs, shell-quotes all paths, and sends one non-executing paste; unsupported and malformed drops remain explicit errors on both rebuilt hosts.",
+    expected: "A file dropped on a window reaches the native file drop view, which sends path URLs and the drop point; the page runs the drop command that the plugin of the surface under the point declares, and the terminal validates local URLs, shell-quotes all paths, and sends one non-executing paste; unsupported and malformed drops remain explicit errors on both rebuilt hosts.",
     levels: ["unit", "application"],
   },
   {

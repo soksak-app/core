@@ -66,6 +66,15 @@ There are two kinds of region suppliers:
 - **Document regions**: Created by the core as subviews of surfaces, hosting web documents.
 - **Image regions**: Created by external sidecars, supplying shared images as native surfaces.
 
+## Input over native views
+
+A native view is placed on the DOM: it draws the DOM element it is placed on and does not own that element's input. Input over it is decided by the page for the DOM element under the point, as if the native view were absent:
+
+- Pointer and wheel events pass through image regions to the page; the page decides their meaning, including the cursor.
+- A native view registers no cursor rectangles and no dragged types.
+- Files dragged from another application onto a window go to the window's file drop view, the only native drag destination of the window composition. It lies above the composition's web views, accepts only file URLs, and returns no view from hit testing, so pointer events and other drags reach the views below. The view converts file reference URLs, which Finder places on the drag pasteboard, to file path URLs, and refuses a drop whose reference no longer resolves to a file. A drop sends the page `files-dropped` with the JSON text of `{urls, x, y}`, the file URLs and the drop point in page coordinates; the hosts pass the text unchanged, and the page parses it. The page finds the surface of the DOM element at the point and runs the drop command that the surface's plugin declares as `surface.drop` in `plugin.json`, on that surface, with `{urls}`. `core.drop` reports the last drop as `{urls, x, y, surface, command, error}`; a drop outside every surface, or on a surface whose plugin declares no drop command, sets `error` to its reason and runs nothing, as does text that is not such an object.
+- The hosts disable the file-drop handling of their frameworks, so the file drop view is the only receiver of dropped files.
+
 ## Document regions
 
 A surface page shows a web document in one of its elements through a document region. Surfaces themselves always show a page of their plugin package ([plugins](plugins.md)); a web address is never a surface.

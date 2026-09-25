@@ -98,6 +98,72 @@ for (const item of list) {
 }
 return JSON.stringify(null);`);
 
+const finderOpen = jxa(`
+const finder = Application("Finder");
+finder.open(Path(input.directory));
+const window = finder.finderWindows[0];
+window.currentView = "list view";
+window.bounds = input.bounds;
+return JSON.stringify(window.id());`);
+
+const finderClose = jxa(`
+const finder = Application("Finder");
+const windows = finder.finderWindows.whose({ id: input.id });
+if (windows.length > 0) windows[0].close();
+return JSON.stringify(true);`);
+
+const finderItem = jxa(`
+const window = Application("System Events").processes.byName("Finder").windows[0];
+function find(element, depth) {
+  if (depth > 8) return null;
+  let children = [];
+  try { children = element.uiElements(); } catch (error) { return null; }
+  for (const child of children) {
+    try {
+      // 목록 보기의 항목 이름은 값이 이름인 텍스트 칸이다.
+      const role = child.role();
+      if ((role === "AXTextField" || role === "AXStaticText") && (child.value() === input.name || child.name() === input.name)) {
+        const [x, y] = child.position();
+        const [width, height] = child.size();
+        return { x: x + width / 2, y: y + height / 2 };
+      }
+    } catch (error) {}
+    const found = find(child, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+return JSON.stringify(find(window, 0));`);
+
+const dragBoard = jxa(`
+const board = $.NSPasteboard.pasteboardWithName($.NSPasteboardNameDrag);
+const types = board.types;
+const names = [];
+for (let i = 0; i < types.count; i++) names.push(types.objectAtIndex(i).js);
+return JSON.stringify({ changeCount: board.changeCount, types: names });`);
+
+/** 끌기 페이스트보드의 변경 횟수와 형식. 끌기 세션이 시작되면 바뀐다. */
+export function dragPasteboard() {
+  return dragBoard();
+}
+
+/** directory 를 목록 보기의 Finder 창으로 bounds {x, y, width, height}(화면 좌표) 에 열고 창 번호를 돌려준다. */
+export function openFinderWindow(directory, bounds) {
+  return finderOpen({ directory, bounds });
+}
+
+/** openFinderWindow 가 연 창만 닫는다. */
+export function closeFinderWindow(id) {
+  finderClose({ id });
+}
+
+/** 맨 앞 Finder 창에서 이름이 name 인 항목 이름의 화면 가운데. */
+export function finderItemCenter(name) {
+  const center = finderItem({ name });
+  assert.ok(center, `the Finder window does not show ${name}`);
+  return center;
+}
+
 /** 화면 점 (x, y) 에서 맨 앞에 있는 일반 창의 소유 프로세스. */
 export function frontWindowAt(x, y) {
   return windowAt({ x, y });

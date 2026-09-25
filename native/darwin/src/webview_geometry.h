@@ -3,6 +3,9 @@
 
 // 앱 DOM은 창에 하나만 두며 논리 표면은 웹뷰 없는 클리핑 컨테이너다.
 void *sp_surface_create(void *mainWebview);
+// 창에 놓인 파일을 받는다. event 는 {"urls":[파일 URL...],"x":..,"y":..}(페이지 좌표) 를 받는다.
+typedef void (*sp_file_drop_event)(void *context, const char *json);
+bool sp_window_file_drop(void *mainWebview, sp_file_drop_event event, void *context);
 void sp_surface_close(void *surface);
 void *sp_surface_native_plane(void *surface);
 void *sp_surface_main_webview(void *surface);

@@ -21,7 +21,8 @@ import {
   closeSettings, moveSettings, onSettingsDrawn, openSettings, settingsModalState, showScope, showSection,
 } from "./settings-ui.js";
 import { latest, seated } from "./compositor.js";
-import { modalState, onModalState } from "./host.js";
+import { modalState, onFilesDropped, onModalState } from "./host.js";
+import { plugin } from "./registry.js";
 import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
@@ -42,6 +43,37 @@ export function coreChanged() {
     scheduled = false;
     for (const run of watchers) run();
   });
+}
+
+/* 마지막으로 창에 놓인 파일과 그 처리 결과. docs/spec/native-surfaces.md 의 core.drop 이다. */
+let lastDrop = null;
+
+/**
+ * 창에 놓인 파일을 그 점의 DOM 요소가 속한 표면에 넘긴다. 네이티브 뷰는 DOM 위에 놓였으므로 표면은 DOM 으로
+ * 찾고, 그 표면의 플러그인이 선언한 놓기 명령을 그 표면에서 실행한다.
+ */
+async function dropFiles(payload) {
+  const record = { urls: null, x: null, y: null, surface: null, command: null, error: null };
+  try {
+    // 호스트는 네이티브 놓기 뷰가 만든 JSON 문자열을 그대로 보낸다.
+    const { urls, x, y } = JSON.parse(payload);
+    Object.assign(record, { urls, x, y });
+    if (!Array.isArray(urls) || urls.length === 0 || urls.some((url) => typeof url !== "string") ||
+      !Number.isFinite(x) || !Number.isFinite(y)) {
+      throw new Error("the application sent an invalid file drop");
+    }
+    const slot = document.elementFromPoint(x, y)?.closest("[data-native-surface-id][data-native-surface]");
+    if (!slot) throw new Error("no surface is under the drop point");
+    record.surface = slot.dataset.nativeSurfaceId;
+    const command = plugin(slot.dataset.nativePlugin).drop;
+    if (!command) throw new Error(`plugin ${slot.dataset.nativePlugin} declares no drop command`);
+    record.command = command;
+    const reply = await registry.handle({ method: "command.run", params: { name: command, params: { urls }, surface: record.surface } });
+    if (reply.error) throw new Error(reply.error.message);
+  } catch (error) {
+    record.error = error.message;
+  }
+  lastDrop = record;
 }
 
 /** 코어 status 하나를 등록한다. 값은 coreChanged 가 호출될 때 다시 읽는다. */
@@ -200,6 +232,8 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
   status("core.grid", gridState);
   onTabReports(coreChanged);
   status("core.surfaces", surfacesState);
+  status("core.drop", () => lastDrop);
+  onFilesDropped((drop) => { dropFiles(drop).then(coreChanged); });
   status("core.settings", () => ({
     values: Object.fromEntries(Object.keys(defaults).map((key) => [key, value(key)])),
     project: settingProject(),

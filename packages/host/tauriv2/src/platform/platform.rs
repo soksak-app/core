@@ -219,6 +219,8 @@ pub trait Platform: Send + Sync {
     fn set_surface_hidden_handle(&self, surface: Handle, hidden: bool) -> Result<(), String>;
     fn set_surface_alpha_handle(&self, surface: Handle, alpha: f64) -> Result<(), String>;
     fn set_window_overlays(&self, main: Handle, overlays: &[WindowOverlay]) -> Result<(), String>;
+    /// main 웹뷰의 창에 놓인 파일을 받는다. receive 는 {"urls":[...],"x":..,"y":..}(페이지 좌표) 를 받는다.
+    fn file_drop(&self, main: Handle, receive: Box<dyn Fn(String)>) -> Result<(), String>;
     /// 표면 웹뷰를 main 웹뷰의 표면 컨테이너에 등록한다.
     fn attach_surface(&self, view: &PlatformWebview, main: Handle) -> Result<(), String>;
     /// 표면 웹뷰와 그 SurfaceHost를 표면 컨테이너에서 제거한다.

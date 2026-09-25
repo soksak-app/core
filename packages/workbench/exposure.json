@@ -426,6 +426,21 @@
         }
       },
       {
+        "name": "core.drop",
+        "description": "The files last dropped on the window: their URLs, the drop point in page coordinates, the surface under the point, the drop command its plugin declares, and the reason when nothing ran.",
+        "schema": {
+          "type": ["object", "null"],
+          "properties": {
+            "urls": { "type": ["array", "null"], "items": { "type": "string" } },
+            "x": { "type": ["number", "null"] },
+            "y": { "type": ["number", "null"] },
+            "surface": { "type": ["string", "null"] },
+            "command": { "type": ["string", "null"] },
+            "error": { "type": ["string", "null"] }
+          }
+        }
+      },
+      {
         "name": "core.settings",
         "description": "The effective settings, the project that project-scope changes apply to, the keys that the project overrides, and whether a change is still being saved.",
         "schema": {

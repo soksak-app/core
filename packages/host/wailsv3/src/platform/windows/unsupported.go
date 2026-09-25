@@ -53,6 +53,9 @@ func (implementation) ConfigureMainWindow(unsafe.Pointer, bool) {}
 func (implementation) SetMainWebview(unsafe.Pointer) error {
 	return unsupported("main webview identity")
 }
+func (implementation) FileDrop(unsafe.Pointer, func(string)) error {
+	return unsupported("file drop")
+}
 func (implementation) MainWebview(unsafe.Pointer) (unsafe.Pointer, error) {
 	return nil, unsupported("main webview identity")
 }

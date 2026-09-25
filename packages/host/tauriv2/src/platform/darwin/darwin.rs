@@ -179,6 +179,9 @@ impl Platform for Darwin {
         webview::set_window_overlays(main, overlays);
         Ok(())
     }
+    fn file_drop(&self, main: Handle, receive: Box<dyn Fn(String)>) -> Result<(), String> {
+        webview::file_drop(main, receive)
+    }
     fn attach_surface(&self, view: &PlatformWebview, main: Handle) -> Result<(), String> {
         webview::attach_surface(view, main);
         Ok(())

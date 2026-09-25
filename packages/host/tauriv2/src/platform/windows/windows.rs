@@ -105,6 +105,9 @@ impl Platform for Windows {
     fn set_window_overlays(&self, main: Handle, overlays: &[WindowOverlay]) -> Result<(), String> {
         unsupported::set_window_overlays(main, overlays)
     }
+    fn file_drop(&self, main: Handle, receive: Box<dyn Fn(String)>) -> Result<(), String> {
+        unsupported::file_drop(main, receive)
+    }
     fn attach_surface(&self, view: &PlatformWebview, main: Handle) -> Result<(), String> {
         unsupported::attach_surface(view, main)
     }

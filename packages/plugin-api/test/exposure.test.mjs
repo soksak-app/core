@@ -71,6 +71,17 @@ test("exposes are rejected for each invalid field", () => {
   assert.throws(() => validateExposureFile({ exposes: {}, extra: 1 }), /unknown field extra/);
 });
 
+test("a surface drop names a command declared in the manifest's exposes", () => {
+  const dropping = { ...page, surface: { ...page.surface, drop: "probe.send" }, exposes: exposes() };
+  assert.equal(validateManifest(dropping).surface.drop, "probe.send");
+  assert.throws(() => validateManifest({ ...dropping, surface: { ...page.surface, drop: "probe.missing" } }),
+    /surface drop must name a command declared in exposes/);
+  assert.throws(() => validateManifest({ ...dropping, surface: { ...page.surface, drop: 1 } }),
+    /surface drop must name a command declared in exposes/);
+  assert.throws(() => validateManifest({ ...page, surface: { ...page.surface, drop: "probe.send" } }),
+    /surface drop must name a command declared in exposes/);
+});
+
 test("a schema subset checks type, properties, items, and enum", () => {
   const schema = { type: "object", properties: { n: { type: "integer" }, mode: { enum: ["a", "b"] } } };
   assert.equal(matchesSchema(schema, { n: 1, mode: "a", other: true }), true);

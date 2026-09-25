@@ -218,11 +218,25 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	go h.windowsChanged()
 	// 페이지가 첫 행의 높이를 제목줄에서 읽으므로 창이 표시될 때 만든다. 애플리케이션이 아직
 	// 실행되기 전에는 메인 스레드 호출을 할 수 없으므로 창 이벤트에서 한다.
+	// 네이티브 뷰는 DOM 위에 놓였으므로 놓인 파일은 페이지가 그 점의 DOM 요소를 기준으로 처리한다.
+	var dropOnce sync.Once
 	place := func(*application.WindowEvent) {
 		application.InvokeSync(func() {
 			if err := system.SetMainWebview(win.NativeWindow()); err != nil {
 				log.Fatalf("main webview identity: %v", err)
 			}
+			dropOnce.Do(func() {
+				main, err := system.MainWebview(win.NativeWindow())
+				if err == nil {
+					// 내용의 해석과 오류 보고는 페이지가 한다(core.drop).
+					err = system.FileDrop(main, func(payload string) {
+						s.Emit("files-dropped", payload)
+					})
+				}
+				if err != nil {
+					log.Fatalf("file drop: %v", err)
+				}
+			})
 			system.ConfigureMainWindow(win.NativeWindow(), s.Theme().Scheme == "dark")
 			prepareWindow(win)
 			if _, err := system.UnifiedTitlebar(win.NativeWindow()); err != nil {

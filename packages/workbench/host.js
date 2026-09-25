@@ -288,6 +288,11 @@ const surfacePreparedListeners = new Set();
 let lastPreparedSurfaces = [];
 
 /** Registers a workbench lifecycle listener for prepared native surfaces. */
+/** 창에 놓인 파일 {urls, x, y}(페이지 좌표) 를 받는다. 애플리케이션이 없으면 놓인 파일도 없다. */
+export function onFilesDropped(listener) {
+  if (native) bridge.on("files-dropped", listener);
+}
+
 export function onSurfacePrepared(listener) {
   if (typeof listener !== "function") throw new TypeError("surface preparation listener must be a function");
   surfacePreparedListeners.add(listener);

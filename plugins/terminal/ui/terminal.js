@@ -813,25 +813,6 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   view.addEventListener("pointerleave", hoverLink);
   view.addEventListener("pointerup", endSelection);
   view.addEventListener("pointercancel", endSelection);
-  const dragOverFiles = (event) => {
-    const types = [...(event.dataTransfer?.types ?? [])];
-    if (types.includes("text/uri-list") || types.includes("Files")) event.preventDefault();
-  };
-  const dropFilesFromEvent = (event) => {
-    event.preventDefault();
-    try {
-      const raw = event.dataTransfer?.getData?.("text/uri-list");
-      if (typeof raw !== "string" || raw.trim().length === 0) {
-        throw new Error("terminal file drop requires a text/uri-list payload");
-      }
-      const urls = raw.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
-      observeInput(dropFiles({ urls }));
-    } catch (error) {
-      reportInputError(error);
-    }
-  };
-  view.addEventListener("dragover", dragOverFiles);
-  view.addEventListener("drop", dropFilesFromEvent);
 
   // screen.read 응답을 기다리는 resolver
   let pendingScreenRead = null;
@@ -1276,8 +1257,6 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         scrollbar.thumb.removeEventListener("pointercancel", endThumbDrag);
       }
       view.removeEventListener("pointercancel", endSelection);
-      view.removeEventListener("dragover", dragOverFiles);
-      view.removeEventListener("drop", dropFilesFromEvent);
       await terminal.send(id, { operation: "close" });
     },
   };

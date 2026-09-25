@@ -233,6 +233,8 @@ fn new_window(app: &AppHandle, label: &str, url: &str, title: &str) -> Result<Wi
     let created = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
         .title(title)
         .inner_size(1200.0, 760.0)
+        // 놓인 파일은 창의 파일 놓기 뷰가 받는다(docs/spec/native-surfaces.md).
+        .disable_drag_drop_handler()
         .background_color(Color(16, 17, 23, 255));
     let created = platform::current()?.prepare_window(created)?;
     let window = created
@@ -287,6 +289,17 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     let main = root_view(&window).ok_or("the main webview is gone")?;
     let main = crate::exposure::with_view(&main, move |view| platform.view_id(view))?;
     platform.set_main_webview(owner, main)?;
+    // 네이티브 뷰는 DOM 위에 놓였으므로 놓인 파일은 페이지가 그 점의 DOM 요소를 기준으로 처리한다.
+    let dropped = window.clone();
+    // 내용의 해석과 오류 보고는 페이지가 한다(core.drop).
+    platform.file_drop(
+        main,
+        Box::new(move |json| {
+            if let Err(error) = emit_window(&dropped, "files-dropped", json) {
+                eprintln!("files-dropped: {error}");
+            }
+        }),
+    )?;
     // 페이지가 첫 행의 높이를 제목줄에서 읽으므로 문서를 열기 전에 만든다.
     unified_titlebar(&window)?;
     let host = window.clone();
