@@ -249,4 +249,17 @@ for (const app of Object.values(APPS)) {
     const keys = (await controls(s)).filter((c) => c.key?.startsWith("pick:rail:")).map((c) => c.key);
     assert.deepEqual(keys, ["pick:rail:inset", "pick:rail:flow", "pick:rail:pin", "pick:rail:off"]);
   });
+
+  test(`${app.name}: a new inset sidebar opens at 190 points and a grip double click sets the minimum`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebar),
+      "no card holds an inset sidebar");
+    const card = grid.cards.find((item) => item.sidebar);
+    assert.deepEqual(card.sidebar, { width: 190, collapsed: false });
+    await s.act("core.card.sidebar.grip", "dispatch", { index: 0, event: { type: "dblclick" } });
+    await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.width === 120,
+      "a double click on the grip did not set the minimum width 120");
+  });
 }

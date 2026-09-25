@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-77: an inset sidebar without a stored width opens at 190 points (`sidebarWidth`); the minimum stays 120, and a double click on the grip still sets it.
 - V5-75: 사이드바 위치 (`rail`) defaults to `inset`, the sidebar inside the card, and its control lists 카드 안 first. A settings file that stores another value keeps it.
 - V5-76: `environment.json` accepts `sidecars: false` for a runtime that cannot run sidecars, and validation rejects a plugin whose state module uses sidecars there. The browser example declares it and no longer lists the files plugin, so opening a project there no longer reports "requires exactly one declared sidecar".
 - F13-2-3: the files plugin draws the project folder in 파일 트리 and its bookmarks in 북마크. A plugin can declare a `state` module, which the workbench mounts once for the shown project; it registers the plugin's statuses and commands in the application document, uses its sidecar with the project folder as `root`, and stores declared per-project `data` in `projects.json` under `plugins`. The new files sidecar lists directories inside the project folder. The tree updates after a folder toggle or `files.refresh`. Validated on rebuilt Wails and Tauri hosts (`e2e/files.test.mjs`).

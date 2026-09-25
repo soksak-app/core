@@ -22,7 +22,7 @@ test("the compositing test values are not settings", () => {
 test("the layout values are settings with the former constants as defaults", () => {
   assert.equal(defaults.sidebarMinWidth, 120);
   assert.equal(defaults.sidebarMaxWidth, 480);
-  assert.equal(defaults.sidebarWidth, 120);
+  assert.equal(defaults.sidebarWidth, 190);
   assert.equal(defaults.sidebarFoldedWidth, 28);
   assert.equal(defaults.railWidth, 190);
 });

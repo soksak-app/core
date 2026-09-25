@@ -144,7 +144,7 @@ export const defaults = {
 
   /* 프로젝트 탭의 위치. top = 크롬 행, left = 왼쪽 세로 레일. */
   projectTabs: "top",
-  /* 레일의 포커스 추적 방식. flow = 추적, pin = 고정, off = 표시하지 않음. */
+  /* 사이드바 위치. inset = 카드 안(기본값), flow = 포커스 카드 옆 열, pin = 고정 열, off = 표시하지 않음. */
   rail: "inset",
   /* 좌·우 영역의 표시 여부. 무엇을 표시할지는 links 가 정한다. */
   left: true,
@@ -178,7 +178,7 @@ export const defaults = {
   /* 배치 값(pt). 카드 안 사이드바의 최소·최대·처음·접은 폭과 새 레일 열의 폭이다(docs/spec/settings.md). */
   sidebarMinWidth: 120,
   sidebarMaxWidth: 480,
-  sidebarWidth: 120,
+  sidebarWidth: 190,
   sidebarFoldedWidth: 28,
   railWidth: 190,
 };
