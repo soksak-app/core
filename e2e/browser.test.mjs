@@ -232,6 +232,42 @@ for (const app of Object.values(APPS)) {
     assert.equal(shown.width * shown.height, 0, `the empty state stayed after a load: ${JSON.stringify(shown)}`);
   });
 
+  test(`${app.name}: the address field shows each loaded address and keeps text being typed`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const base = await serve(t);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    const at = (path) => `${base}/${path}`;
+
+    // 입력한 주소를 연 뒤에도 주소창은 초점을 유지한다.
+    const field = await s.rect("browser.address", undefined, surface);
+    await s.click(field.document.x + field.x + field.width / 2, field.document.y + field.y + field.height / 2);
+    await s.press("a", { text: at("typed") });
+    await s.press("Enter");
+    await loaded(s, surface, at("typed"));
+    await s.until("browser.address.text", (text) => text.focused && text.value === at("typed"),
+      "the typed address is not in the focused address field", { surface });
+
+    // 입력에서 오지 않은 이동은 주소창에 연 주소를 보인다.
+    await s.run("browser.navigate", { url: at("other") }, surface);
+    await loaded(s, surface, at("other"));
+    await s.until("browser.address.text", (text) => text.value === at("other"),
+      "the address field does not show the address opened by browser.navigate", { surface });
+
+    // 입력 중인 글자는 문서 상태가 바뀌어도 바뀌지 않는다.
+    await s.press("a", { text: "partial" });
+    const typing = await s.until("browser.address.text", (text) => text.focused && text.value.endsWith("partial"),
+      "the typed text did not reach the address field", { surface });
+    const { rect } = await placed(s, surface, "while typing");
+    await s.pointer(rect.x + rect.width / 2, rect.y + rect.height / 2, "scroll", { deltaY: 120 });
+    await s.until("browser.location", (value) => value.scroll.y >= 120,
+      "the document did not scroll while the address was being typed", { surface });
+    assert.equal((await s.get("browser.address.text", surface)).value, typing.value,
+      "a document state change replaced the text being typed");
+  });
+
   test(`${app.name}: a card focus keeps a shown document visible while its placement is prepared`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

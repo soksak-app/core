@@ -32,13 +32,26 @@ export async function mount(root, context) {
   const composition = await context.composition.create({ regions: { page: area }, overlays: {} });
   const region = composition.region("page");
   const locationListeners = new Set();
+  const addressListeners = new Set();
+  const addressText = () => ({ value: address.value, focused: root.activeElement === address });
+  const notifyAddress = () => { for (const listener of addressListeners) listener(addressText()); };
+  // 사용자가 입력한 글자는 이동 명령이나 초점 해제 전까지 문서 상태로 덮지 않는다.
+  // 입력 뒤 Enter 로 이동해도 주소창은 초점을 유지하므로 초점이 아니라 입력 여부로 판단한다.
+  let editing = false;
+  const typed = () => { editing = true; notifyAddress(); };
+  const left = () => { editing = false; notifyAddress(); };
+  const navigated = (run) => (params) => { editing = false; return run(params); };
+  address.addEventListener("input", typed);
+  address.addEventListener("focus", notifyAddress);
+  address.addEventListener("blur", left);
   let current = { url: restored ?? "", title: "", loading: false, progress: 0, canGoBack: false, canGoForward: false, error: null, scroll: { x: 0, y: 0 } };
   const show = (state) => {
     current = state;
     showEmpty(state.url);
     if (state.url !== "") storage.setItem(storageKey, state.url);
-    if (root.getRootNode().activeElement !== address) address.value = state.url;
+    if (!editing) address.value = state.url;
     for (const listener of locationListeners) listener(current);
+    notifyAddress();
   };
   const stopState = region.onState(show);
   // 문서의 페이지 확대는 이 표면의 실제 글자 배율이다(docs/spec/text-size.md).
@@ -52,11 +65,16 @@ export async function mount(root, context) {
     fn(current);
     return () => locationListeners.delete(fn);
   });
+  context.exposure.status("browser.address.text", addressText, (fn) => {
+    addressListeners.add(fn);
+    fn(addressText());
+    return () => addressListeners.delete(fn);
+  });
   context.exposure.command("browser.address.select", () => { address.focus(); address.select(); return null; });
-  context.exposure.command("browser.navigate", ({ url }) => region.load(url).then(() => null));
-  context.exposure.command("browser.back", () => region.back());
-  context.exposure.command("browser.forward", () => region.forward());
-  context.exposure.command("browser.reload", () => region.reload());
+  context.exposure.command("browser.navigate", navigated(({ url }) => region.load(url).then(() => null)));
+  context.exposure.command("browser.back", navigated(() => region.back()));
+  context.exposure.command("browser.forward", navigated(() => region.forward()));
+  context.exposure.command("browser.reload", navigated(() => region.reload()));
   context.exposure.command("browser.stop", () => region.stop());
   context.exposure.dom("browser.address", address);
   context.exposure.dom("browser.document", area);
@@ -75,6 +93,10 @@ export async function mount(root, context) {
   return { async dispose() {
     address.removeEventListener("pointerdown", beginSelection);
     address.removeEventListener("mouseup", retainSelection);
+    address.removeEventListener("input", typed);
+    address.removeEventListener("focus", notifyAddress);
+    address.removeEventListener("blur", left);
+    addressListeners.clear();
     stopState();
     stopTextSize();
     locationListeners.clear();

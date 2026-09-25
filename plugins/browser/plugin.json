@@ -88,6 +88,17 @@
             }
           }
         }
+      },
+      {
+        "name": "browser.address.text",
+        "description": "The text the address field shows and whether the field has focus.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "value": { "type": "string" },
+            "focused": { "type": "boolean" }
+          }
+        }
       }
     ],
     "commands": [

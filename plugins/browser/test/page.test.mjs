@@ -23,7 +23,7 @@ test("the document region is a declared dom entry and the start address is home"
   assert.match(source, /browser.document/);
   assert.match(manifest.home, /^https:\/\//);
   assert.deepEqual(names("commands"), ["browser.address.select", "browser.navigate", "browser.back", "browser.forward", "browser.reload", "browser.stop"]);
-  assert.deepEqual(names("status"), ["browser.location"]);
+  assert.deepEqual(names("status"), ["browser.location", "browser.address.text"]);
 });
 
 test("browser mount publishes document state, respects shadow focus, and disposes every port", async () => {
@@ -68,9 +68,10 @@ test("browser mount publishes document state, respects shadow focus, and dispose
   assert.deepEqual(zooms, [1.25, 2], "the document follows text size changes");
   const address = shadow.querySelector("#address");
   address.focus();
-  Object.defineProperty(shadow, "activeElement", { configurable: true, value: address });
+  address.value = "https://typing.test/";
+  address.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
   states[0]({ url: "https://changed.test/", title: "changed" });
-  assert.equal(address.value, "https://home.test/", "focused ShadowRoot input is not overwritten");
+  assert.equal(address.value, "https://typing.test/", "text being typed is not overwritten");
   const watchValues = [];
   const stopWatch = exposed.statuses.get("browser.location").subscribe((value) => watchValues.push(value.url));
   states[0]({ url: "https://next.test/" });

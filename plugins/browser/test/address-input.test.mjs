@@ -40,7 +40,7 @@ async function setup(t) {
     address.dispatchEvent(event);
     return event;
   };
-  return { dom, root, address, requests, navigations, controller, dispatch };
+  return { dom, root, address, requests, navigations, controller, dispatch, commands, states };
 }
 
 test("initial address focus selects all and native replacement navigates without appending", { timeout: 10000 }, async (t) => {
@@ -74,4 +74,27 @@ test("subsequent address clicks preserve caret editing and disposal removes hand
   address.dispatchEvent(new dom.window.FocusEvent("focus"));
   assert.equal(dispatch("mouseup").defaultPrevented, false, "disposed handlers must not cancel input");
   assert.equal(requests.filter((name) => name === "browser.address.select").length, 2);
+});
+
+test("a navigation that did not come from typing shows its address in the focused field", { timeout: 10000 }, async (t) => {
+  const { dom, root, address, controller, commands, states } = await setup(t);
+  t.after(() => controller.dispose());
+  const type = (text) => {
+    address.value = text;
+    address.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  };
+  address.focus();
+  type("https://example.test/typed");
+  address.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  await Promise.resolve();
+  assert.equal(root.activeElement, address, "the field keeps focus after Enter");
+  await commands.get("browser.navigate")({ url: "https://example.test/other" });
+  assert.equal(address.value, "https://example.test/other");
+  // 입력 중인 글자는 이동이 아닌 문서 상태 변화로 바뀌지 않는다.
+  type("https://example.test/oth");
+  for (const fn of states) fn({ url: "https://example.test/other", title: "scrolled" });
+  assert.equal(address.value, "https://example.test/oth");
+  await commands.get("browser.back")({});
+  for (const fn of states) fn({ url: "https://example.test/typed", title: "back" });
+  assert.equal(address.value, "https://example.test/typed");
 });
