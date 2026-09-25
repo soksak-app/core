@@ -169,6 +169,8 @@ export function drawSet(container, sidebar, set, context) {
       element.className = "set__section";
       element.dataset.expose = "core.sidebar.section";
       element.dataset.section = section.id;
+      // fill 섹션은 list 레이아웃에서 남은 높이를 나눠 갖는다(docs/spec/plugins.md#sections).
+      if (section.fill) element.dataset.fill = "true";
       const entry = { section, element, header: null, tab: null, body: document.createElement("div"),
         mount: null, mounted: false, error: null, observing: [] };
       entry.body.className = "set__body";
@@ -222,6 +224,7 @@ export function selectSection(sidebar, section) {
   choiceOf(sidebar).tab = section;
   for (const record of records) apply(record);
   notify();
+  choiceListener();
 }
 
 /** list 레이아웃 사이드바에서 섹션 하나를 접거나 편다. */
@@ -232,6 +235,27 @@ export function foldSection(sidebar, section) {
   if (folded.has(section)) folded.delete(section);
   else folded.add(section);
   for (const record of records) apply(record);
+  notify();
+  choiceListener();
+}
+
+/* 사용자가 탭을 고르거나 섹션을 접었을 때 부를 함수. 문서가 스페이스 저장을 연결한다. */
+let choiceListener = () => {};
+
+/** 사용자가 탭을 고르거나 섹션을 접으면 fn 을 호출한다. */
+export function onChoicesChange(fn) {
+  choiceListener = fn;
+}
+
+/** 사이드바마다 고른 탭과 접은 섹션. 스페이스가 저장한다(docs/spec/projects.md#persistence). */
+export const sidebarChoices = () => Object.fromEntries([...choices].map(([sidebar, choice]) =>
+  [sidebar, { tab: choice.tab, folded: [...choice.folded] }]));
+
+/** 저장된 선택으로 바꾸고 그린 사이드바에 적용한다. 스페이스를 열 때 부른다. */
+export function restoreSidebarChoices(saved) {
+  choices.clear();
+  for (const [sidebar, { tab, folded }] of Object.entries(saved)) choices.set(sidebar, { tab, folded: new Set(folded) });
+  for (const record of drawn.values()) apply(record);
   notify();
 }
 

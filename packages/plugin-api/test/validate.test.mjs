@@ -34,6 +34,7 @@ const environment = () => ({
 test("a manifest with a page surface or with sections only is accepted", () => {
   assert.equal(validateManifest(card), card);
   assert.equal(validateManifest(side), side);
+  assert.equal(validateManifest({ ...side, sections: [{ ...side.sections[0], fill: true }] }).sections[0].fill, true);
   assert.equal(validateManifest({ ...card, preview: { ink: "--surface-fg" } }).preview.ink, "--surface-fg");
   const address = (value) => ({ ...card, settings: { home: { label: "홈 주소", type: "address", default: value } } });
   assert.equal(validateManifest(address("")).settings.home.default, "");
@@ -65,6 +66,7 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...side, sections: [{ id: "other.list", name: "x" }] }, /must be side.<name>/],
     [{ ...side, sections: [side.sections[0], side.sections[0]] }, /duplicate section/],
     [{ ...side, sections: [{ id: "side.list", name: "List" }] }, /section side.list requires a module/],
+    [{ ...side, sections: [{ ...side.sections[0], fill: "yes" }] }, /section side.list fill must be a boolean/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "../list.js" }] }, /section side.list module must be a JavaScript path inside the package/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "ui/list.css" }] }, /section side.list module must be a JavaScript path inside the package/],
     [{ id: "empty", name: "Empty", description: "빈 플러그인." }, /surface or sections/],

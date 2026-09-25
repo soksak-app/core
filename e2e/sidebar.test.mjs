@@ -500,10 +500,52 @@ for (const app of Object.values(APPS)) {
       await s.run("core.sidebar.section.fold", { sidebar: "left", section: section.id });
       await s.until("core.sidebars", (value) => value[0].sections[index].folded === true, `${section.id} did not fold`);
       const folded = await place(index);
-      assert.deepEqual(folded.name, open.name, `${section.id}: the name moved when the section folded`);
+      // fill 섹션이 자리를 받으면 머리가 옮겨질 수 있으므로 머리 안의 이름 자리를 비교한다.
+      assert.deepEqual(folded.offset, open.offset, `${section.id}: the name moved inside its header when the section folded`);
       await s.run("core.sidebar.section.fold", { sidebar: "left", section: section.id });
       await s.until("core.sidebars", (value) => value[0].sections[index].folded === false, `${section.id} did not unfold`);
-      assert.deepEqual((await place(index)).name, open.name, `${section.id}: the name moved when the section unfolded`);
+      assert.deepEqual((await place(index)).offset, open.offset, `${section.id}: the name moved inside its header when the section unfolded`);
     }
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a fill section takes the sidebar height the other sections leave and gives it up when folded`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    // 좌측 세트는 파일 트리(fill)와 북마크(내용 높이)다. 좌측 사이드바는 문서에서 첫 사이드바다.
+    const ready = (value) => value[0]?.sidebar === "left" && value[0].sections.every((item) => item.mounted);
+    await s.until("core.sidebars", ready, "the left sidebar did not mount its sections");
+    const measure = async () => {
+      const box = await s.rect("core.sidebar", 0);
+      const [tree, marks] = [await s.rect("core.sidebar.section", 0), await s.rect("core.sidebar.section", 1)];
+      const [treeHead, marksHead] = [await s.rect("core.sidebar.section.header", 0), await s.rect("core.sidebar.section.header", 1)];
+      return { box, tree, marks, treeHead, marksHead };
+    };
+    const open1 = await measure();
+    // 트리 본문의 높이는 사이드바가 북마크와 트리 머리를 빼고 남긴 높이다.
+    const room = open1.box.height - open1.marks.height - open1.treeHead.height;
+    const body = open1.tree.height - open1.treeHead.height;
+    assert.ok(Math.abs(body - room) <= 1, `the tree body is ${body} pt, the room is ${room} pt`);
+    assert.ok(open1.marks.height < open1.box.height / 3, `the bookmarks section stretched to ${open1.marks.height} pt`);
+
+    // 북마크를 접으면 트리가 그 자리를 받는다.
+    await s.run("core.sidebar.section.fold", { sidebar: "left", section: "files.bookmarks" });
+    await s.until("core.sidebars", (value) => value[0].sections[1].folded === true, "the bookmarks did not fold");
+    const marksFolded = await measure();
+    assert.ok(Math.abs(marksFolded.tree.height - (marksFolded.box.height - marksFolded.marksHead.height)) <= 1,
+      `the tree is ${marksFolded.tree.height} pt after the bookmarks folded in a ${marksFolded.box.height} pt sidebar`);
+    await s.run("core.sidebar.section.fold", { sidebar: "left", section: "files.bookmarks" });
+    await s.until("core.sidebars", (value) => value[0].sections[1].folded === false, "the bookmarks did not unfold");
+
+    // 트리를 접으면 머리만 남고, 내용 높이의 북마크는 늘어나지 않는다.
+    await s.run("core.sidebar.section.fold", { sidebar: "left", section: "files.tree" });
+    await s.until("core.sidebars", (value) => value[0].sections[0].folded === true, "the tree did not fold");
+    const treeFolded = await measure();
+    assert.ok(Math.abs(treeFolded.tree.height - treeFolded.treeHead.height) <= 0.5, "a folded tree kept more than its header");
+    assert.ok(Math.abs(treeFolded.marks.height - open1.marks.height) <= 0.5,
+      `the bookmarks changed from ${open1.marks.height} to ${treeFolded.marks.height} pt when the tree folded`);
+    await s.run("core.sidebar.section.fold", { sidebar: "left", section: "files.tree" });
   });
 }

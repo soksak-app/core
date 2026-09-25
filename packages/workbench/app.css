@@ -532,3 +532,6 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set__body li button{border:0;padding:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .set__body li button:hover{color:var(--fg);text-decoration:underline}
 .set__section{flex:0 0 auto}
+/* fill 섹션은 다른 섹션이 쓰고 남은 높이를 나눠 갖고 본문을 그 안에서 스크롤한다. 접히면 머리만 남는다. */
+.set__section[data-fill=true]:not([data-folded=true]):not([hidden]){flex:1 1 0;min-height:0;display:flex;flex-direction:column}
+.set__section[data-fill=true]:not([data-folded=true]) > .set__body{flex:1 1 auto;min-height:0;overflow:auto}

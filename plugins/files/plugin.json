@@ -6,7 +6,8 @@
     {
       "id": "files.tree",
       "name": "파일 트리",
-      "module": "ui/sections/tree.js"
+      "module": "ui/sections/tree.js",
+      "fill": true
     },
     {
       "id": "files.bookmarks",

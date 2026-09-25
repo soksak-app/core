@@ -321,7 +321,7 @@ export function validateManifest(manifest) {
     const seen = new Set();
     for (const section of manifest.sections) {
       if (!isObject(section)) throw new Error(`${where}: section must be an object`);
-      only(`${where} section`, section, ["id", "name", "module"]);
+      only(`${where} section`, section, ["id", "name", "module", "fill"]);
       if (typeof section.id !== "string" || !section.id.startsWith(`${id}.`) || !ID.test(section.id.slice(id.length + 1))) {
         throw new Error(`${where}: section id ${section.id} must be ${id}.<name>`);
       }
@@ -331,6 +331,10 @@ export function validateManifest(manifest) {
       if (!isText(section.module)) throw new Error(`${where}: section ${section.id} requires a module`);
       if (section.module.startsWith("/") || section.module.split("/").includes("..") || !section.module.endsWith(".js")) {
         throw new Error(`${where}: section ${section.id} module must be a JavaScript path inside the package`);
+      }
+      // fill 은 list 레이아웃에서 남은 높이를 받는 섹션이다(docs/spec/plugins.md#sections).
+      if (section.fill !== undefined && typeof section.fill !== "boolean") {
+        throw new Error(`${where}: section ${section.id} fill must be a boolean`);
       }
     }
   }
