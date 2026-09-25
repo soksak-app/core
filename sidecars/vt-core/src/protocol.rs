@@ -572,9 +572,8 @@ pub struct Screen {
     pub cursor: Cursor,
     #[serde(default)]
     pub scrollback: Scrollback,
-    /// 현재 기본 배경색(`#rrggbb`). 프로그램이 OSC 11 로 바꾼 값을 포함한다.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub background: Option<String>,
+    /// 현재 기본 배경색(`#rrggbb`). 프로그램이 OSC 11 로 바꾼 값을 포함한다. 래스터는 칸 밖 여백도 이 색으로 채운다.
+    pub background: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub lines: Vec<Vec<Cell>>,
 }
@@ -3746,7 +3745,7 @@ impl Engine for FakeEngine {
                 preedit: None,
             },
             scrollback: Default::default(),
-            background: None,
+            background: "#1e1e1e".to_string(),
             lines,
         }
     }

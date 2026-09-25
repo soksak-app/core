@@ -1595,7 +1595,11 @@ impl Engine for AlacrittyEngine {
                 offset: offset as u32,
                 history: history as u32,
             },
-            background: self.color(Color::Named(NamedColor::Background), self.term.colors()),
+            // 프로그램이 OSC 11 로 정한 배경이 없으면 테마의 기본 배경이다.
+            background: self.term.colors()[NamedColor::Background].map_or_else(
+                || self.theme_hex(self.theme.background),
+                |rgb| format!("#{:02x}{:02x}{:02x}", rgb.r, rgb.g, rgb.b),
+            ),
             lines,
         }
     }

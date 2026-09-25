@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-83: the terminal raster fills the area outside its cell grid (right of the last column and below the last row) with the current default background, including a color a program set with OSC 11, instead of the theme background; `Screen.background` is required. Red: `the_padding_outside_the_cell_grid_uses_the_screen_default_background` and the window check `multiple terminals keep fixed cells during a divider drag` (right padding 7 px in the card color) on both apps. Green: `make native-test` and the window check on rebuilt Wails and Tauri.
 - V5-81-1: the terminal and the shell card draw in the card color and text color of the theme instead of the green stand-in color, and the themes no longer define separate surface colors.
 - V5-82: the terminal protocol checks close their terminals, so their reply lines such as `R74:1b5b4f1b5b49` no longer stay on screen.
 - V5-81: the terminal draws its background, text, cursor, and selection in the theme's surface colors (`--surface`, `--surface-fg`, `--edge`) and repaints on a theme or mode change; the sidecar rejects a theme without valid colors. The browser empty state paints the card color instead of the window background.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- V5-83: 터미널 래스터가 칸 격자 밖(마지막 열의 오른쪽과 마지막 행의 아래)을 테마 배경이 아니라 현재 기본 배경으로 채운다. 프로그램이 OSC 11로 정한 색도 포함하며, `Screen.background`는 필수다. Red: `the_padding_outside_the_cell_grid_uses_the_screen_default_background`와 두 앱의 창 검사 `multiple terminals keep fixed cells during a divider drag`(오른쪽 여백 7 px이 카드 색). Green: `make native-test`와 다시 빌드한 Wails와 Tauri의 창 검사.
 - V5-81-1: 터미널과 셸 카드가 초록 대신 그림 색이 아닌 테마의 카드 색과 글자 색으로 그리며, 테마는 따로 된 표면 색을 정의하지 않는다.
 - V5-82: 터미널 프로토콜 검사가 자기 터미널을 닫아 `R74:1b5b4f1b5b49` 같은 응답 줄이 화면에 남지 않는다.
 - V5-81: 터미널이 배경, 글자, 커서, 선택을 테마의 표면 색(`--surface`, `--surface-fg`, `--edge`)으로 그리고 테마나 모드가 바뀌면 다시 그린다. 사이드카는 올바른 색이 없는 테마를 거부한다. 브라우저 빈 상태는 창 배경 대신 카드 색을 칠한다.

@@ -248,6 +248,14 @@ impl Frame {
         if let Some(preedit) = render_screen.cursor.preedit.clone() {
             apply_preedit(&mut render_screen, &preedit)?;
         }
+        // 기본 배경은 화면의 현재 기본 배경(OSC 11 포함)이다. 칸 밖 여백도 이 색으로 채운다.
+        let (default_background, valid) = parse_hex_color(&Some(render_screen.background.clone()));
+        if !valid {
+            return Err(format!(
+                "invalid screen background {:?}",
+                render_screen.background
+            ));
+        }
         // render_screen과 CCell이 참조하는 문자열은 이 호출이 끝날 때까지 Rust가 소유한다.
         // 네이티브 함수는 이 빌린 포인터를 저장하지 않는다.
         // Rust Screen을 C Screen으로 변환한다.
@@ -322,7 +330,7 @@ impl Frame {
                 crate::protocol::CursorShape::Hidden => 4,
             },
             default_foreground: theme.foreground,
-            default_background: theme.background,
+            default_background,
             default_cursor: theme.cursor,
             cursor_width,
         };

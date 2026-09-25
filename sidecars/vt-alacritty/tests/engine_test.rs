@@ -840,11 +840,11 @@ fn the_rendered_selection_and_the_copied_text_cover_the_same_cells_in_both_direc
 #[test]
 fn the_screen_reports_the_current_default_background() {
     let mut engine = AlacrittyEngine::new();
-    assert_eq!(engine.screen().background.as_deref(), Some("#1e1e1e"));
+    assert_eq!(engine.screen().background, "#1e1e1e");
     engine.feed(b"\x1b]11;rgb:10/20/30\x07");
     assert_eq!(
-        engine.screen().background.as_deref(),
-        Some("#102030"),
+        engine.screen().background,
+        "#102030",
         "OSC 11 changes the default background"
     );
 }
@@ -1688,11 +1688,7 @@ fn osc_highlight_colors_are_set_queried_reset_and_draw_the_selection() {
     let mut engine = AlacrittyEngine::new();
     engine.resize(10, 2);
     engine.feed(b"AB");
-    let default_background = engine
-        .screen()
-        .background
-        .clone()
-        .expect("default background");
+    let default_background = engine.screen().background;
     // 설정하지 않은 강조 배경은 테마의 선택 배경, 강조 글자는 기본 전경색이다.
     engine.set_theme(
         TerminalTheme::from_request(

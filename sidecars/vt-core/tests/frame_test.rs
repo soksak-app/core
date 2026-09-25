@@ -22,7 +22,7 @@ fn screen(cols: u16, rows: u16) -> Screen {
             preedit: None,
         },
         scrollback: Default::default(),
-        background: None,
+        background: "#1e1e1e".to_string(),
         lines: (0..rows)
             .map(|_| (0..cols).map(|_| Cell::default()).collect())
             .collect(),
@@ -553,6 +553,9 @@ fn terminal_theme_changes_background_foreground_and_cursor_pixels_without_metric
     state.cursor.focused = true;
     let frame = Frame::new(width, height).expect("theme frame");
 
+    // 엔진은 테마의 기본 배경을 화면의 기본 배경으로 보고한다.
+    let hex = |rgb: [u8; 3]| format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]);
+    state.background = hex(TerminalTheme::dark().background);
     frame
         .draw_with_theme(&state, &initial_metrics, cursor, &TerminalTheme::dark())
         .expect("dark theme");
@@ -561,6 +564,7 @@ fn terminal_theme_changes_background_foreground_and_cursor_pixels_without_metric
         .read_pixel(width / 2, height / 2)
         .expect("dark cursor");
 
+    state.background = hex(TerminalTheme::light().background);
     frame
         .draw_with_theme(&state, &initial_metrics, cursor, &TerminalTheme::light())
         .expect("light theme");
@@ -835,5 +839,41 @@ fn underlined_and_linked_cells_draw_a_line_below_the_text() {
     assert!(
         linked >= cell_width as usize,
         "a linked blank cell drew {linked} pixels"
+    );
+}
+
+#[test]
+fn the_padding_outside_the_cell_grid_uses_the_screen_default_background() {
+    // 영역이 칸의 배수가 아니면 격자 오른쪽과 아래에 칸 밖 여백이 남는다. 프로그램이 OSC 11 로 바꾼 기본 배경은
+    // 칸과 여백에 함께 적용되어야 한다. 테마 배경이 남은 여백은 카드 색 띠로 보인다.
+    let metrics = metrics(13.0, 1.0);
+    let width = metrics.cell_width as u32 + 5;
+    let height = metrics.cell_height as u32 + 5;
+    let mut state = screen(1, 1);
+    state.background = "#102030".to_string();
+    let frame = Frame::new(width, height).expect("padding frame");
+    let cursor = CursorRender {
+        visible: false,
+        focused: false,
+        blink_visible: false,
+        shape: CursorShape::Block,
+        unfocused: UnfocusedCursor::Hollow,
+    };
+    frame
+        .draw_with_theme(&state, &metrics, cursor, &TerminalTheme::dark())
+        .expect("draw");
+    let [b, g, r, _] = frame
+        .read_pixel(width - 1, height - 1)
+        .expect("padding pixel");
+    assert_eq!(
+        [r, g, b],
+        [0x10, 0x20, 0x30],
+        "the padding keeps the theme background instead of the screen's"
+    );
+    let [b, g, r, _] = frame.read_pixel(0, 0).expect("cell pixel");
+    assert_eq!(
+        [r, g, b],
+        [0x10, 0x20, 0x30],
+        "the empty cell keeps the theme background instead of the screen's"
     );
 }
