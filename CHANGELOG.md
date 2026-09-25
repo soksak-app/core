@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- V5-84: a terminal drag selection covers a cell once the pointer passes the cell's midpoint, as in macOS Terminal; the sidecar maps selection points to the nearest cell edge.
+- V5-85: `core.surface.document` reports `body` as the surface content size, larger than `viewport` when the content overflows.
+- V5-86: both hosts notify `host.window` watchers when the window's occlusion changes; the spec states that windows at the same frame do not cover each other.
 - V5-83-1 and V5-83-2: window checks place the Wails and Tauri check windows at the left and right of the screen so neither is completely covered, and a check requires the shell surface document to fill its native frame at rest and after a divider drag.
 - V5-83: the full window suite passes 239 of 239 on Wails and Tauri rebuilt at bb27d49d. The window checks follow V5-75, V5-79, V5-81, V5-81-1, and F13-3-4: the shell surface is found by its input rule, terminals by an OSC 11 background, and selected cells by their background pixels; the pasteboard guard compares types regardless of order, and the inset sidebar check waits for the dragged layout before it clicks the divider.
 - V5-83: the terminal raster fills the area outside its cell grid (right of the last column and below the last row) with the current default background, including a color a program set with OSC 11, instead of the theme background; `Screen.background` is required. Red: `the_padding_outside_the_cell_grid_uses_the_screen_default_background` and the window check `multiple terminals keep fixed cells during a divider drag` (right padding 7 px in the card color) on both apps. Green: `make native-test` and the window check on rebuilt Wails and Tauri.
