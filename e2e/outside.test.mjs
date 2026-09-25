@@ -130,3 +130,30 @@ for (const app of Object.values(APPS)) {
     assertNoWhiteSurfaceBleed(wide, "shell divider drag back to wide", marks);
   });
 }
+
+// 셸 표면은 카드와 같은 색이므로 픽셀로는 네이티브 자리와 문서의 폭을 가를 수 없다. 표면 문서가 알리는 크기
+// (core.surface.document)와 호스트가 앉힌 네이티브 자리(host.window)를 비교한다.
+async function assertDocumentFillsFrame(s, surface, label) {
+  await s.presented();
+  const frame = (await s.get("host.window")).surfaces.find((item) => item.id === surface)?.frame;
+  assert.ok(frame?.width > 0, `${label}: the shell surface ${surface} has no native frame`);
+  const { body, viewport } = await s.get("core.surface.document", surface);
+  for (const [name, size] of [["body", body], ["viewport", viewport]]) {
+    assert.ok(Math.abs(size.width - frame.width) <= 0.5 && Math.abs(size.height - frame.height) <= 0.5,
+      `${label}: the shell document ${name} is ${size.width}×${size.height} in a native frame of ${frame.width}×${frame.height}`);
+  }
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the shell document fills its native frame before and after a divider drag`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    await keepCommonSettings(s);
+    await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
+    const surface = (await s.get("core.grid")).cards.find((card) => card.id === "shell").active;
+    await assertDocumentFillsFrame(s, surface, "at rest");
+    await drag(t, s, { axis: "x", line: 2, dx: -250, dy: 0, ms: 96, times: 1 });
+    await assertDocumentFillsFrame(s, surface, "after the drag");
+  });
+}
