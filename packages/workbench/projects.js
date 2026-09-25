@@ -2,7 +2,8 @@
 import { issueId } from "./ids.js";
 import { selectProject, value, flushSettings } from "./settings.js";
 import { windows } from "@soksak/runtime";
-import { retainSidecarSessions } from "./host.js";
+import { retainSidecarSessions, windowSidecar } from "./host.js";
+import { configureStates, showStates } from "./plugin-states.js";
 
 let store;
 let projects = [];
@@ -53,6 +54,7 @@ export function browse() {
   return inTurn(async () => {
     await flush();
     browsing = true;
+    await showStates(null);
     await listener.empty();
     await selectProject(null);
     changed();
@@ -63,8 +65,21 @@ export const pin = (id, pinned) => store.patch(id, { pinned });
 export function onSwitch(callbacks) { listener = callbacks; }
 export function onChange(fn) { changed = fn; }
 
+/** 프로젝트 id 의 플러그인 plugin 데이터 key 를 value 로 저장한다(docs/spec/plugins.md#project-data). */
+async function setPluginData(id, plugin, key, value) {
+  const project = projects.find((p) => p.id === id);
+  if (!project) throw new Error(`Unknown project: ${id}`);
+  const plugins = { ...(project.plugins ?? {}), [plugin]: { ...(project.plugins?.[plugin] ?? {}), [key]: value } };
+  await store.patch(id, { plugins });
+  project.plugins = plugins;
+}
+
 export async function initialise(storage) {
   store = storage;
+  configureStates({
+    sidecar: windowSidecar,
+    data: { get: (id, plugin) => projects.find((p) => p.id === id)?.plugins?.[plugin] ?? {}, set: setPluginData },
+  });
   await refresh();
   store.onChange(() => { refresh().catch(failed); });
   await windows.onActivate((id) => activateHere(id).catch(failed));
@@ -101,6 +116,7 @@ async function readProjects() {
     history.replaceState(null, "", location.pathname);
     savedLayout = "";
     await selectProject(null);
+    await showStates(null);
     await listener?.empty();
   } else if (removed.length && !browsing) listener?.update();
   changed();
@@ -134,6 +150,7 @@ async function showProject(id) {
   activeProjectId = id;
   browsing = false;
   history.replaceState(null, "", `${location.pathname}?project=${encodeURIComponent(id)}`);
+  await showStates({ id, root: project.root });
   changed();
   savedLayout = "";
   listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout);

@@ -60,6 +60,13 @@ export function createRegistry({ call = null } = {}) {
   let forwards = 0;
   /* 이 문서 안에서 surface status 를 따라가는 관찰자. 섹션 모듈이 사용한다. */
   const observers = new Set();
+  /* 플러그인 상태 모듈이 이 문서에 등록한 항목. 플러그인 id 마다 항목 표와 status 의 read·subscribe. */
+  const pages = new Map();
+  /** 플러그인 상태 모듈이 이름을 등록했으면 그 항목 표. */
+  const pageOf = (kind, name) => {
+    const page = pages.get(ownerOf(name));
+    return page?.entries.registered(kind, name) ? page : null;
+  };
 
   const changed = (name, value, surface) => {
     if (call) call("exposureChanged", surface === undefined ? { name, value } : { name, surface, value });
@@ -127,6 +134,9 @@ export function createRegistry({ call = null } = {}) {
     const name = params?.name;
     const kind = METHOD_KINDS[method];
     const found = kind && typeof name === "string" ? declared.get(declarationKey(kind, name)) : undefined;
+    // 상태 모듈이 등록한 이름은 표면을 지정하지 않은 요청에 이 문서가 답한다(docs/spec/exposure.md#choosing-a-surface).
+    const page = found && params.surface === undefined ? pageOf(kind, name) : null;
+    if (page) return page.entries.answer(method, params, changed);
     if (!found || !surfaceName(name)) return core.answer(method, params, changed);
     const requested = params.surface;
     const key = watchKey(name, requested);
@@ -163,7 +173,7 @@ export function createRegistry({ call = null } = {}) {
       out[keyOf[kind]].push({
         ...declaration,
         registered: surfaceName(declaration.name)
-          ? (surfaces.get(key)?.size ?? 0) > 0 : core.registered(kind, declaration.name),
+          ? (surfaces.get(key)?.size ?? 0) > 0 || Boolean(pageOf(kind, declaration.name)) : core.registered(kind, declaration.name),
       });
     }
     return out;
@@ -171,6 +181,7 @@ export function createRegistry({ call = null } = {}) {
 
   /** 이름을 등록한 표면 중 이 문서의 요청이 쓸 표면. wanted 가 등록했으면 그 표면이고, 없으면 null 이다. */
   function target(kind, name, wanted) {
+    if (pageOf(kind, name)) return null;
     const owners = surfaces.get(declarationKey(kind, name));
     if (!owners?.size) return null;
     if (wanted && owners.has(wanted)) return wanted;
@@ -182,6 +193,12 @@ export function createRegistry({ call = null } = {}) {
 
   /** 관찰자의 감시를 끝낸다. 다른 관찰자나 외부 감시가 없으면 표면의 감시도 끝낸다. */
   function detach(observer) {
+    if (observer.stopPage) {
+      const stop = observer.stopPage;
+      observer.stopPage = null;
+      observer.pageEntry = null;
+      stop();
+    }
     const { watch } = observer;
     observer.watch = null;
     if (!watch) return;
@@ -195,6 +212,18 @@ export function createRegistry({ call = null } = {}) {
 
   /** 관찰자가 따라갈 표면을 다시 정한다. 표면이 바뀌면 감시를 옮긴다. */
   function reattach(observer) {
+    const pageEntry = pageOf("status", observer.name)?.statuses.get(observer.name);
+    if (pageEntry) {
+      if (observer.pageEntry === pageEntry) return;
+      detach(observer);
+      observer.surface = "state";
+      observer.pageEntry = pageEntry;
+      observer.stopPage = pageEntry.subscribe((value) => observer.fn(value, "state"));
+      Promise.resolve().then(() => pageEntry.read()).then((value) => {
+        if (observer.pageEntry === pageEntry) observer.fn(value, "state");
+      }, observeFailed(observer.name, "state"));
+      return;
+    }
     const surface = target("status", observer.name, observer.wanted);
     const live = observer.watch && following.get(watchKey(observer.name, surface)) === observer.watch;
     if (observer.surface === surface && (surface === null || live)) return;
@@ -273,8 +302,41 @@ export function createRegistry({ call = null } = {}) {
      */
     chosen: (kind, name, wanted) => target(kind, name, wanted),
 
+    /**
+     * 플러그인 owner 의 상태 모듈이 이 문서에 항목을 등록하는 표를 만든다. 플러그인마다 하나이며,
+     * clear() 가 항목을 모두 제거한다(docs/spec/plugins.md#plugin-state).
+     */
+    plugin(owner) {
+      if (pages.has(owner)) throw new Error(`plugin ${owner} state is already registered`);
+      const page = { entries: exposureEntries(declared), statuses: new Map() };
+      pages.set(owner, page);
+      const own = (name) => {
+        if (ownerOf(name) !== owner) throw new Error(`${name} does not belong to ${owner}`);
+      };
+      return {
+        status(name, read, subscribe) {
+          own(name);
+          page.entries.status(name, read, subscribe);
+          page.statuses.set(name, { read, subscribe });
+          registrationChanged();
+        },
+        command(name, run) {
+          own(name);
+          page.entries.command(name, run);
+          registrationChanged();
+        },
+        clear() {
+          if (pages.get(owner) !== page) return;
+          page.entries.clear();
+          pages.delete(owner);
+          registrationChanged();
+        },
+      };
+    },
+
     observe(name, surface, fn) {
-      const observer = { name, wanted: surface ?? null, fn, surface: undefined, watch: null, listener: null };
+      const observer = { name, wanted: surface ?? null, fn, surface: undefined, watch: null, listener: null,
+        pageEntry: null, stopPage: null };
       observer.listener = (value, from) => fn(value, from);
       observers.add(observer);
       reattach(observer);

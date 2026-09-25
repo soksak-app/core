@@ -26,6 +26,16 @@ const retained = [];
 mock.module("../host.js", {
   namedExports: {
     retainSidecarSessions: async (surfaces) => { retained.push(surfaces); return { closed: 0 }; },
+    windowSidecar: () => null,
+  },
+});
+/* 창이 보인 프로젝트를 상태 모듈에 알린 순서. */
+const shownStates = [];
+let stateOptions = null;
+mock.module("../plugin-states.js", {
+  namedExports: {
+    configureStates: (values) => { stateOptions = values; },
+    showStates: async (project) => { shownStates.push(project?.id ?? null); },
   },
 });
 mock.module("../settings.js", {
@@ -88,6 +98,22 @@ test("opening a project while the library is still clearing the plane loads it a
   await Promise.all([browsing, opening]);
   assert.deepEqual(plane.events, ["empty started", "emptied", "load"]);
   assert.deepEqual(plane.layout, PROJECT.spaces[0].layout);
+  await projects.flush();
+});
+
+test("plugin states follow the shown project and project data is patched under plugins", async () => {
+  const patches = [];
+  await projects.initialise({ ...store, patch: async (id, patch) => { patches.push([id, patch]); } });
+  await projects.browse();
+  shownStates.length = 0;
+  await projects.activate(PROJECT.id);
+  await projects.browse();
+  await projects.activate(PROJECT.id);
+  assert.deepEqual(shownStates, [PROJECT.id, null, PROJECT.id]);
+  assert.deepEqual(stateOptions.data.get(PROJECT.id, "probe"), {});
+  await stateOptions.data.set(PROJECT.id, "probe", "marks", ["a"]);
+  assert.deepEqual(patches.at(-1), [PROJECT.id, { plugins: { probe: { marks: ["a"] } } }]);
+  assert.deepEqual(stateOptions.data.get(PROJECT.id, "probe"), { marks: ["a"] });
   await projects.flush();
 });
 

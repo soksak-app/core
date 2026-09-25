@@ -470,3 +470,34 @@ test("observe reports a failed watch, value read, or release instead of hiding i
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(failures.slice(2), ["probe.lines on tab-b: unwatch lost"]);
 });
+
+test("a plugin state registers entries in the page that answer before surfaces and that observers follow", async () => {
+  const host = fakeHost(({ surface }) => ({ result: `from ${surface}` }));
+  const made = coreRegistry(host);
+  made.configure({ surfacePlugin: () => "probe" });
+  made.registered({ surface: "tab-a", kind: "command", name: "probe.send" });
+  let lines = ["x"];
+  const listeners = new Set();
+  const state = made.plugin("probe");
+  assert.throws(() => made.plugin("probe"), /already registered/);
+  assert.throws(() => state.status("core.fixture.count", () => 0, () => () => {}), /does not belong to probe/);
+  state.status("probe.lines", () => lines, (fn) => { listeners.add(fn); return () => listeners.delete(fn); });
+  state.command("probe.send", ({ n }) => `page ${n}`);
+  assert.deepEqual(await made.handle({ method: "command.run", params: { name: "probe.send", params: { n: 1 } } }), { result: "page 1" });
+  assert.deepEqual(await made.handle({ method: "command.run", params: { name: "probe.send", params: {}, surface: "tab-a" } }),
+    { result: "from tab-a" }, "a request naming a surface still reaches it");
+  assert.equal(await made.run("probe.send", { n: 2 }), "page 2");
+  assert.equal(made.list().status.find((entry) => entry.name === "probe.lines").registered, true);
+  const seen = [];
+  const stop = made.observe("probe.lines", "tab-a", (value, source) => seen.push([source, value]));
+  await new Promise((resolve) => setImmediate(resolve));
+  lines = ["y"];
+  for (const fn of listeners) fn(lines);
+  assert.deepEqual(seen, [["state", ["x"]], ["state", ["y"]]]);
+  state.clear();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(seen.at(-1), [null, null], "the observer loses the status when the state is cleared");
+  assert.equal(listeners.size, 0, "clearing stops the observer's subscription");
+  stop();
+  made.plugin("probe").clear();
+});

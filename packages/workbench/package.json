@@ -32,6 +32,7 @@
     "layout-queue.js",
     "plane.js",
     "projects.js",
+    "plugin-states.js",
     "registry.js",
     "settings.js",
     "sidebar-sets.js",

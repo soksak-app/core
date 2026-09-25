@@ -3,6 +3,7 @@
 // 워크벤치는 특정 플러그인을 알지 않는다. 플러그인 목록, 새 스페이스의 배치,
 // 사이드바 기본값은 모두 이 파일이 불러온 값에서 온다.
 import { registry as exposure } from "./exposure.js";
+import { registerState } from "./plugin-states.js";
 import { registerPlugin, registerSection } from "./registry.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
 import {
@@ -61,6 +62,10 @@ export async function loadEnvironment() {
     // 섹션 모듈은 표면 모듈처럼 그 패키지 경로에서 불러온다.
     for (const section of manifest.sections ?? []) registerSection({ ...section, module: `/${modulePath(name, section.module)}` });
     if (exposes) exposure.declare(manifest.id, exposes);
+    if (manifest.state) {
+      registerState({ plugin: manifest.id, module: `/${modulePath(name, manifest.state.module)}`,
+        sidecars: manifest.sidecars ?? [], data: manifest.data ?? {} });
+    }
   }
   setSidebarDefaults(environment.sidebars);
   units = manifests.map(({ manifest }) => ({
