@@ -92,3 +92,21 @@ test("a section follows a core status and binds a core command but not another p
   await settle();
   assert.ok(reported.some((message) => /probe.other: .*cannot use other.cwd/.test(message)), JSON.stringify(reported));
 });
+
+test("a section context offers the core icons as the surface context does", async () => {
+  const iconSource = `export function mount(root, context) {
+    root.innerHTML = context.icon("rotate-cw");
+    return { dispose() { root.replaceChildren(); } };
+  }`;
+  registerSection({ id: "probe.icon", name: "아이콘", module: `data:text/javascript,${encodeURIComponent(iconSource)}` });
+  const container = document.createElement("div");
+  container.className = "set";
+  document.body.append(container);
+  drawSet(container, "rail-probe-icon", { id: "set-icon", title: "세트", layout: "list", sections: ["probe.icon"] },
+    { card: "rail-probe-icon", surface: null });
+  await settle();
+  const state = sidebarsState().find((item) => item.sidebar === "rail-probe-icon");
+  assert.equal(state.sections[0].error, null);
+  assert.match(container.querySelector(".set__body").innerHTML, /<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9/, "the section drew the core icon");
+  clearSet(container);
+});

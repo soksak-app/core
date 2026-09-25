@@ -4,10 +4,11 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { APPS, fresh, open } from "./app.mjs";
+import { distance, readPng } from "./png.mjs";
 
 /** 요소의 가운데를 네이티브 입력으로 누른다. */
 const press = async (s, name, index) => {
@@ -35,8 +36,8 @@ const controlIndex = (sidebars, sidebar, section, at) => {
 const STAR = 0;
 const REFRESH = 1;
 const HOLDER = 2;
-/* 트리를 담은 요소의 높이는 보이는 행 수 × 행 높이 + 8pt 다(plugins/files/ui/sections/tree.js). */
-const HOLDER_PADDING = 8;
+/* 트리 행의 높이(pt). 사이드바 목록의 행 높이다(plugins/files/ui/sections/tree.js). */
+const ROW = 20;
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the files sections show the project folder and its bookmarks from the files state`, async (t) => {
@@ -62,14 +63,13 @@ for (const app of Object.values(APPS)) {
     await s.until("files.git", (value) => value.some((entry) => entry.path === `${folder}/note.txt` && entry.status === "untracked"),
       "files.git did not report the untracked file");
 
-    /** 트리의 행 at 의 가운데를 네이티브 클릭으로 누른다. 행 높이는 담은 요소의 높이에서 얻는다. */
+    /** 트리의 행 path 의 가운데를 네이티브 클릭으로 누른다. 행은 담은 요소의 위에서부터 ROW 간격이다. */
     const clickRow = async (value, path) => {
       const sidebars = await s.get("core.sidebars");
       const holder = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", HOLDER));
-      const height = (holder.height - HOLDER_PADDING) / value.entries.length;
       const at = rowIndex(value, path);
       assert.ok(at >= 0, `${path} is not a row`);
-      await s.click(holder.x + holder.width / 2, holder.y + (at + 0.5) * height);
+      await s.click(holder.x + holder.width / 2, holder.y + (at + 0.5) * ROW);
     };
 
     // 트리의 폴더를 네이티브 클릭으로 열면 files.tree.toggle 이 그 폴더를 나열한다.
@@ -114,5 +114,95 @@ for (const app of Object.values(APPS)) {
     const bookmarks = await s.get("files.bookmarks");
     await press(s, "core.sidebar.section.control", controlIndex(sidebars, "left", "files.bookmarks", bookmarks.indexOf(note)));
     await s.until("files.bookmarks", (value) => !value.includes(note), "a click on 삭제 did not remove the bookmark");
+  });
+}
+
+/** 캡처의 한 줄 띠에서 바탕과 다른 첫 열(pt). band 는 pt 사각형, 바탕은 띠 왼쪽 끝의 색이다. */
+function firstInk(image, scale, band, { from = band.x, to = band.x + band.width } = {}) {
+  const background = image.pixel(Math.round(from * scale) + 1, Math.round((band.y + band.height / 2) * scale));
+  for (let x = Math.round(from * scale); x < Math.round(to * scale); x++) {
+    for (let y = Math.round(band.y * scale) + 2; y < Math.round((band.y + band.height) * scale) - 2; y++) {
+      if (distance(image.pixel(x, y), background) > 48) return x / scale;
+    }
+  }
+  return null;
+}
+
+/** 띠 안의 잉크 열 묶음. gap 장치 픽셀 이상 떨어진 열은 다른 묶음이다. 묶음마다 [시작, 끝] 장치 픽셀이다. */
+function inkRuns(image, scale, band, gap) {
+  const left = Math.round(band.x * scale);
+  const background = image.pixel(left + 1, Math.round((band.y + band.height / 2) * scale));
+  const runs = [];
+  for (let x = left; x < Math.round((band.x + band.width) * scale); x++) {
+    let ink = false;
+    for (let y = Math.round(band.y * scale) + 1; y < Math.round((band.y + band.height) * scale) - 1 && !ink; y++) {
+      ink = distance(image.pixel(x, y), background) > 48;
+    }
+    if (!ink) continue;
+    const last = runs.at(-1);
+    if (last && x - last[1] <= gap) last[1] = x;
+    else runs.push([x, x]);
+  }
+  return runs;
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the file tree section keeps one horizontal grid and the sidebar's 12-point rows`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const project = await s.get("core.project");
+    const name = `grid-${process.pid}.txt`;
+    writeFileSync(join(project.root, name), "grid\n");
+    s.cleanup(() => rmSync(join(project.root, name), { force: true }));
+    await s.run("files.refresh");
+    const tree = await s.until("files.tree", (value) => value?.entries.some((entry) => entry.path === name), "the tree did not list the file");
+    await s.run("files.bookmarks.add", { path: name });
+    s.cleanup(() => s.run("files.bookmarks.remove", { path: name }));
+    const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === "left")
+      ?.sections.find((item) => item.id === "files.bookmarks")?.text.includes(name), "the bookmark did not show");
+    await s.presented();
+    const { path } = await s.request("diagnostics.capture.still", {});
+    s.cleanup(() => rmSync(dirname(path), { recursive: true, force: true }));
+    const image = readPng(path);
+    const scale = image.width / (await s.get("host.window")).content.width;
+
+    // 섹션 머리: list 레이아웃의 머리 중 좌측 사이드바 files.tree 의 머리.
+    let headerIndex = 0;
+    for (const item of sidebars.filter((value) => value.layout === "list")) {
+      if (item.sidebar === "left") { headerIndex += item.sections.findIndex((value) => value.id === "files.tree"); break; }
+      headerIndex += item.sections.length;
+    }
+    const header = await s.rect("core.sidebar.section.header", headerIndex);
+    const holder = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", HOLDER));
+    const star = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", STAR));
+    // 격자는 섹션 머리의 접기 표시가 그려진 첫 열이다. 머리 글자와 트리 행의 첫 표시도 그 열에서 시작한다.
+    const chevron = firstInk(image, scale, header);
+    const grid = chevron;
+    const title = firstInk(image, scale, { x: holder.x, y: star.y, width: star.x - holder.x, height: star.height });
+    const row = firstInk(image, scale, { x: holder.x, y: holder.y, width: holder.width / 2, height: ROW });
+    const measured = { header: header.x, chevron, title, row };
+    assert.ok(chevron !== null && Math.abs(chevron - header.x - 10) <= 4, `the section chevron is not near its 10-point padding: ${JSON.stringify(measured)}`);
+    for (const [label, x] of Object.entries({ title, row })) {
+      assert.ok(x !== null && Math.abs(x - grid) <= 1, `${label} starts at ${x}, not at the grid ${grid}: ${JSON.stringify(measured)}`);
+    }
+    assert.ok(holder.x <= header.x + 0.5 && holder.width >= header.width - 1, `the section body pads the tree: holder ${JSON.stringify(holder)}, header ${JSON.stringify(header)}`);
+
+    // 글자 크기: 같은 이름을 12pt 사이드바 글자로 그린 북마크 행과 트리 행의 잉크 폭이 같다.
+    const at = tree.entries.findIndex((entry) => entry.path === name);
+    const treeRuns = inkRuns(image, scale, { x: holder.x, y: holder.y + at * ROW, width: holder.width, height: ROW }, 5 * scale / 2);
+    const bookmarks = await s.get("files.bookmarks");
+    const remove = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.bookmarks", bookmarks.indexOf(name)));
+    const bookmarkRuns = inkRuns(image, scale, { x: header.x, y: remove.y, width: remove.x - header.x - 2, height: remove.height }, 5 * scale / 2);
+    const width = ([start, end]) => (end - start + 1) / scale;
+    const treeLabel = width(treeRuns.at(-1));
+    const bookmarkLabel = width(bookmarkRuns.at(-1));
+    assert.ok(Math.abs(treeLabel - bookmarkLabel) <= 1,
+      `the tree row label is ${treeLabel} pt wide and the 12-point bookmark label ${bookmarkLabel} pt: tree runs ${JSON.stringify(treeRuns)}, bookmark runs ${JSON.stringify(bookmarkRuns)}`);
+
+    // 트리는 사이드바가 준 높이를 채운다.
+    const section = await s.rect("core.sidebar.section", headerIndex);
+    assert.ok(holder.y + holder.height >= section.y + section.height - 1,
+      `the tree ends at ${holder.y + holder.height}, before its section ends at ${section.y + section.height}`);
   });
 }

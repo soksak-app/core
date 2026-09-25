@@ -56,6 +56,8 @@ function sectionContext(entry, context) {
   return {
     card: context.card,
     surface: context.surface,
+    // 코어 아이콘. 표면 문맥의 icon 과 같다(docs/spec/plugins.md#icons).
+    icon,
     status(name, fn) {
       own(name);
       const stop = name.startsWith("core.") ? registry.observeCore(name, fn) : registry.observe(name, context.surface, fn);

@@ -14,20 +14,34 @@ const SCROLLBAR = `
 ::-webkit-scrollbar-corner{background:transparent}
 `;
 
-/* 섹션의 스타일. 이 섹션의 요소에만 적용된다. 문서의 stylesheet 로 두어 섹션의 텍스트에 섞이지 않는다. */
+/*
+ * 섹션의 스타일. 이 섹션의 요소에만 적용된다. 문서의 stylesheet 로 두어 섹션의 텍스트에 섞이지 않는다.
+ *
+ * 가로 격자는 하나다. 섹션 본문은 트리 둘레에 여백을 두지 않는다. 섹션 머리의 접기 표시는 사이드바 가장자리에서
+ * GUTTER 떨어진 상자에 그려지고, 그 획은 상자 왼쪽에서 CHEVRON_INK 안쪽에서 시작한다. 머리 글자와 트리 행의 접기
+ * 표시는 그 획과 같은 열에서 시작하도록 각자의 획 여백(TITLE_INK, ROW_INK)을 뺀 자리에 둔다. 값은 두 앱의 캡처에서
+ * 쟀다(e2e/files.test.mjs). 머리의 단추는 카드 머리 단추(.chrome__act)의 크기와 색이다.
+ */
+const GUTTER = 10;
+const CHEVRON_INK = 2.5;
+const TITLE_INK = 1;
+const ROW_INK = 5.5;
 const STYLE = `
-.files-tree{display:flex;flex-direction:column;min-width:0}
-.files-tree__head{display:flex;align-items:center;gap:4px;padding:0 4px 2px 8px}
+.set__section[data-section="files.tree"] > .set__body{padding:0;overflow:hidden}
+.files-tree{display:flex;flex-direction:column;height:100%;min-width:0}
+.files-tree__head{display:flex;align-items:center;gap:1px;flex:0 0 auto;height:28px;padding:0 ${GUTTER - 4}px 0 ${GUTTER + CHEVRON_INK - TITLE_INK}px}
 .files-tree__title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
-.files-tree__button{border:0;padding:0 4px;background:transparent;color:var(--muted);font:inherit;cursor:pointer;border-radius:var(--r-xs)}
-.files-tree__button:hover:not(:disabled){color:var(--fg);background:var(--inset)}
+.files-tree__button{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--r-xs);
+  background:transparent;color:var(--muted);cursor:pointer}
+.files-tree__button svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+.files-tree__button:hover:not(:disabled){background:var(--inset);color:var(--fg)}
 .files-tree__button:disabled{opacity:.4;cursor:default}
-.files-tree__holder{min-height:0}
-.files-tree__message{padding:4px 8px;color:var(--muted)}
+.files-tree__holder{flex:1 1 auto;min-height:0}
+.files-tree__message{padding:0 ${GUTTER + CHEVRON_INK - TITLE_INK}px;color:var(--muted)}
 `;
 
-/* 트리가 한 번에 보이는 가장 많은 행. 그보다 많으면 트리 안에서 스크롤한다. */
-const MAX_ROWS = 20;
+/* 사이드바 목록의 행 높이(12px 글자 × 1.6 을 픽셀에 맞춘 값). */
+const ROW_HEIGHT = 20;
 
 /** 트리 색. 라이브러리 기본값이 드러나지 않도록 모든 색을 앱 토큰의 var() 로 준다. */
 function themeStyles() {
@@ -35,8 +49,12 @@ function themeStyles() {
   const mode = document.documentElement.dataset.mode === "light" ? "light" : "dark";
   return {
     ...themeToTreeStyles({ type: mode, bg: style.getPropertyValue("--card").trim(), fg: style.getPropertyValue("--fg").trim() }),
-    "--trees-padding-inline-override": "2px",
-    "--trees-item-padding-x-override": "2px",
+    // 행은 사이드바의 12px 글자와 행 높이다. 첫 표시는 GUTTER 에서 시작한다.
+    "--trees-font-size-override": "12px",
+    "--trees-font-family-override": "var(--font)",
+    "--trees-padding-inline-override": "0px",
+    "--trees-item-margin-x-override": "0px",
+    "--trees-item-padding-x-override": `${GUTTER + CHEVRON_INK - ROW_INK}px`,
     "--trees-bg-override": "var(--card)",
     "--trees-bg-muted-override": "var(--inset)",
     "--trees-fg-override": "var(--fg)",
@@ -62,12 +80,13 @@ export function mount(root, context) {
   const star = document.createElement("button");
   star.type = "button";
   star.className = "files-tree__button";
-  star.textContent = "☆";
-  star.title = "고른 파일을 북마크에 추가";
+  star.innerHTML = context.icon("star");
+  star.title = "북마크 추가";
   const refresh = document.createElement("button");
   refresh.type = "button";
   refresh.className = "files-tree__button";
-  refresh.textContent = "새로 고침";
+  refresh.innerHTML = context.icon("rotate-cw");
+  refresh.title = "새로 고침";
   const holder = document.createElement("div");
   holder.className = "files-tree__holder";
   const message = document.createElement("div");
@@ -86,6 +105,7 @@ export function mount(root, context) {
   const tree = new FileTree({
     paths: [],
     density: "compact",
+    itemHeight: ROW_HEIGHT,
     flattenEmptyDirectories: false,
     unsafeCSS: SCROLLBAR,
     onSelectionChange(paths) {
@@ -145,7 +165,6 @@ export function mount(root, context) {
     } finally {
       syncing = false;
     }
-    holder.style.height = `${Math.max(1, Math.min(rows.length, MAX_ROWS)) * tree.getItemHeight() + 8}px`;
   });
   const stopGit = context.status("files.git", (entries) => tree.setGitStatus(entries ?? []));
 
