@@ -228,10 +228,13 @@ for (const app of Object.values(APPS)) {
     const wheel = await report(s, surface, "\\033[?1000h\\033[?1006h", "\x1b[<64;10;5M".length * 2, "\\033[?1000l\\033[?1006l",
       () => s.pointer(click.x, click.y, "scroll", { deltaY: 31 }));
     assert.match(wheel, /^(\x1b\[<6[45];10;5M){2}$/, `?1000 wheel report: ${JSON.stringify(wheel)}`);
-    // ?1007: 대체 화면에서 휠은 방향키가 된다.
+    // ?1007: 대체 화면에서 휠은 방향키가 된다. ?1 이 켜지면 방향키는 응용 커서 키(ESC O)다.
     const arrows = await report(s, surface, "\\033[?1049h\\033[?1007h", 6, "\\033[?1007l\\033[?1049l",
       () => s.pointer(click.x, click.y, "scroll", { deltaY: 31 }));
-    assert.match(arrows, /^(\x1b[\[O][AB]){2}$/, `?1007 alternate scroll: ${JSON.stringify(arrows)}`);
+    assert.match(arrows, /^(\x1b\[[AB]){2}$/, `?1007 alternate scroll: ${JSON.stringify(arrows)}`);
+    const application = await report(s, surface, "\\033[?1h\\033[?1049h\\033[?1007h", 6, "\\033[?1007l\\033[?1049l\\033[?1l",
+      () => s.pointer(click.x, click.y, "scroll", { deltaY: 31 }));
+    assert.match(application, /^(\x1bO[AB]){2}$/, `?1 application cursor keys: ${JSON.stringify(application)}`);
     // ?2004: 붙여넣기를 괄호로 감싼다.
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("PASTE").toString("base64") }]);
     assert.equal(await report(s, surface, "\\033[?2004h", 17, "\\033[?2004l", () => s.run("terminal.paste", {}, surface)),
