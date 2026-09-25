@@ -170,6 +170,7 @@ func (implementation) CloseWebview(view unsafe.Pointer) { C.nativeWebviewClose(v
 func (implementation) ConfigureMainWindow(window unsafe.Pointer, dark bool) {
 	C.nativeWindowConfigureMain(window, C.bool(dark))
 }
+
 //export fileDropped
 func fileDropped(context unsafe.Pointer, json *C.char) {
 	dropped := cgo.Handle(uintptr(context)).Value().(func(string))
