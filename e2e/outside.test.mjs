@@ -7,7 +7,7 @@ import { APPS, drag, fresh, open } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 import { outside, whitePixels } from "./outside.mjs";
 import { alignment } from "./alignment.mjs";
-import { assertHeldStatesShown, assertRoundTrips, pointerLag } from "./drag-measurement.mjs";
+import { assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag } from "./drag-measurement.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -250, dy: 0, ms: 400, times: 2 };
 
@@ -50,9 +50,11 @@ function assertAligned(run) {
   assertRoundTrips(positions, 2);
 
   const lag = pointerLag(samples, run.ticks, run.boundary);
+  lag.stages = lagStages(lag, run.ticks, run.layouts);
   assert.ok(lag.lag <= LAG,
     `the card showed a layout ${lag.lag.toFixed(1)}ms after the grid left it (limit ${LAG}ms): ` +
       `offset ${lag.shown?.toFixed(1)}pt at ${lag.time?.toFixed(1)}ms matches step ${lag.step} while step ${lag.sent} was sent; median ${lag.median.toFixed(1)}ms; ` +
+      `transactions ${lag.stages}; ` +
       // 표시 지연은 다른 프로세스의 CPU 사용에 따라 달라지므로 측정 때의 시스템 부하를 함께 적는다.
       `load average ${loadavg().map((value) => value.toFixed(1)).join(" ")} on ${availableParallelism()} processors`);
 
@@ -118,7 +120,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const lag = assertAligned(await drag(t, s, PLAN, { capture: true }));
-    t.diagnostic(`pointer lag: worst ${lag.lag.toFixed(1)}ms, median ${lag.median.toFixed(1)}ms`);
+    t.diagnostic(`pointer lag: worst ${lag.lag.toFixed(1)}ms, median ${lag.median.toFixed(1)}ms; transactions ${lag.stages}`);
   });
 
   test(`${app.name}: shell divider drag does not leave a white surface frame`, async (t) => {

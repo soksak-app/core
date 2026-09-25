@@ -30,6 +30,44 @@ static bool injectSettledFailure;
 
 static void releaseSettled(void);
 
+// 진단 추적. 트랜잭션마다 ticket, begun, presented, committed 를 기록한다. 끌기 검사가 녹화 프레임의
+// 지연을 단계로 나누는 데 쓴다.
+static NSMutableArray<NSMutableArray<NSNumber *> *> *trace;
+
+static void traceMark(uint64_t ticket, NSUInteger stage) {
+    if (!trace) return;
+    double now = CACurrentMediaTime() * 1000;
+    NSMutableArray<NSNumber *> *record = nil;
+    for (NSMutableArray<NSNumber *> *item in trace.reverseObjectEnumerator) {
+        if (item[0].unsignedLongLongValue == ticket) { record = item; break; }
+    }
+    if (!record) {
+        record = [NSMutableArray arrayWithObjects:@(ticket), @(NAN), @(NAN), @(NAN), nil];
+        [trace addObject:record];
+    }
+    // 한 트랜잭션이 표시를 여러 번 확인하면 마지막 확인을 남긴다.
+    record[stage] = @(now);
+}
+
+void surfaceLayoutTraceStart(void) {
+    NSCAssert(NSThread.isMainThread, @"surface layout trace requires the UI thread");
+    [trace release];
+    trace = [[NSMutableArray alloc] init];
+}
+
+size_t surfaceLayoutTraceStop(double *out, size_t capacity) {
+    NSCAssert(NSThread.isMainThread, @"surface layout trace requires the UI thread");
+    size_t count = 0;
+    for (NSMutableArray<NSNumber *> *record in trace) {
+        if (count >= capacity) break;
+        for (NSUInteger i = 0; i < 4; i++) out[count * 4 + i] = record[i].doubleValue;
+        count++;
+    }
+    [trace release];
+    trace = nil;
+    return count;
+}
+
 static void startLayout(SPLayoutRequest *request) {
     if (!activeOwner) {
         [CATransaction begin];
@@ -37,6 +75,7 @@ static void startLayout(SPLayoutRequest *request) {
         activeOwner = request.owner;
     }
     preparation = request.ticket;
+    traceMark(request.ticket, 1);
     request.ready(true);
 }
 
@@ -68,6 +107,7 @@ bool surfaceLayoutCommit(void *owner, uint64_t ticket) {
     }
     activeOwner = NULL;
     [CATransaction commit];
+    traceMark(ticket, 3);
     nextLayout();
     releaseSettled();
     return true;
@@ -142,7 +182,12 @@ void surfaceLayoutAfterPresentation(void *handle, void (^done)(void)) {
     NSCAssert(NSThread.isMainThread, @"surface presentation requires the UI thread");
     WKWebView *main = (WKWebView *)handle;
     // 모든 플러그인 DOM은 이 웹뷰에 있다. 다른 웹뷰는 독립적인 문서 콘텐츠다.
-    [main _doAfterNextPresentationUpdate:done];
+    uint64_t ticket = preparation;
+    void (^finish)(void) = [[done copy] autorelease];
+    [main _doAfterNextPresentationUpdate:^{
+        traceMark(ticket, 2);
+        finish();
+    }];
 }
 
 // 창 owner 에 열렸거나 열릴 차례인 배치 트랜잭션이 있는지 반환한다. 트랜잭션이 열린 동안에는 창의

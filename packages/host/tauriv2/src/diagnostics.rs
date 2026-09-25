@@ -222,6 +222,10 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     } else {
         None
     };
+    if capture {
+        let platform = platform::current().map_err(internal)?;
+        on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
+    }
 
     exposure::log(
         window,
@@ -252,6 +256,13 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         Some(TIMEOUT + length),
         move || tick(app, label, steps, clock, recorded),
     );
+    // 끌기의 성공과 관계없이 기록을 멈춘다.
+    let layouts = if frames.is_some() {
+        let platform = platform::current().map_err(internal)?;
+        Some(on_main(window, move || platform.layout_trace_stop()).map_err(internal)?)
+    } else {
+        None
+    };
     let finished = (|| -> Result<Value, Failure> {
         let result = result?;
         // 마지막 배치가 커밋되고 표시될 때까지 기다린다. 다음 표시 한 번만 기다리면 마지막 단계의
@@ -277,6 +288,10 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
             );
             let ticks = sent.lock().map_err(internal)?.clone();
             merged.insert("ticks".into(), serde_json::json!(ticks));
+            merged.insert(
+                "layouts".into(),
+                layout_trace(layouts.as_deref().unwrap_or_default()),
+            );
         }
         Ok(Value::Object(merged))
     })();
@@ -285,6 +300,30 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         RECORDING.abort(&recorder()?).map_err(internal)?;
     }
     finished
+}
+
+/// 배치 트랜잭션 기록을 {ticket, begun, presented, committed} 로 바꾼다. 일어나지 않은 단계는 null 이다.
+fn layout_trace(records: &[[f64; 4]]) -> Value {
+    let stage = |value: f64| {
+        if value.is_nan() {
+            Value::Null
+        } else {
+            serde_json::json!(value)
+        }
+    };
+    Value::Array(
+        records
+            .iter()
+            .map(|record| {
+                serde_json::json!({
+                    "ticket": record[0] as u64,
+                    "begun": stage(record[1]),
+                    "presented": stage(record[2]),
+                    "committed": stage(record[3]),
+                })
+            })
+            .collect(),
+    )
 }
 
 /// 페이지에 끌기 단계 시각을 steps 번 보낸다. 각 단계는 시작 시각 기준의 예정 시각에 보낸다.

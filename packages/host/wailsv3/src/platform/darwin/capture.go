@@ -10,6 +10,7 @@ package darwin
 #cgo pkg-config: soksak-darwin
 #include <stdlib.h>
 #include "capture.h"
+#include "surface_layout.h"
 #import <Cocoa/Cocoa.h>
 
 // 이 창과 이 창에 붙은 창의 윈도 서버 번호를 최대 max 개 기록하고 기록한 수를 반환한다.
@@ -101,6 +102,21 @@ func (implementation) CaptureLimited() bool { return bool(C.sp_capture_limited()
 func (implementation) CaptureLongestGap() float64 { return float64(C.sp_capture_longest_gap()) }
 
 func (implementation) CaptureClock() float64 { return float64(C.sp_capture_clock()) }
+
+func (implementation) LayoutTraceStart() { C.surfaceLayoutTraceStart() }
+
+func (implementation) LayoutTraceStop() [][4]float64 {
+	const capacity = 4096
+	values := make([]C.double, capacity*4)
+	count := int(C.surfaceLayoutTraceStop(&values[0], capacity))
+	records := make([][4]float64, count)
+	for i := range records {
+		for j := 0; j < 4; j++ {
+			records[i][j] = float64(values[i*4+j])
+		}
+	}
+	return records
+}
 
 func (implementation) CaptureStill(windowNumber int, path string) error {
 	if strings.IndexByte(path, 0) >= 0 {

@@ -327,6 +327,16 @@ pub fn capture_still(_window_number: isize, _path: &str) -> Result<(), String> {
 }
 
 #[cfg(feature = "diagnostics")]
+pub fn layout_trace_start() -> Result<(), String> {
+    missing("surface layout trace")
+}
+
+#[cfg(feature = "diagnostics")]
+pub fn layout_trace_stop() -> Result<Vec<[f64; 4]>, String> {
+    missing("surface layout trace")
+}
+
+#[cfg(feature = "diagnostics")]
 pub fn input_source() -> Result<String, String> {
     missing("keyboard input sources")
 }

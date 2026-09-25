@@ -12,6 +12,25 @@ extern "C" {
     fn sp_capture_longest_gap() -> f64;
     fn sp_capture_clock() -> f64;
     fn sp_capture_still(window_number: isize, path: *const c_char) -> bool;
+    fn surfaceLayoutTraceStart();
+    fn surfaceLayoutTraceStop(out: *mut f64, capacity: usize) -> usize;
+}
+
+/// 배치 트랜잭션 시각의 기록을 시작한다. 메인 스레드에서 호출한다.
+pub fn layout_trace_start() {
+    unsafe { surfaceLayoutTraceStart() }
+}
+
+/// 기록을 멈추고 트랜잭션마다 ticket, begun, presented, committed 를 반환한다. 메인 스레드에서 호출한다.
+pub fn layout_trace_stop() -> Vec<[f64; 4]> {
+    const CAPACITY: usize = 4096;
+    let mut values = vec![0.0; CAPACITY * 4];
+    let count = unsafe { surfaceLayoutTraceStop(values.as_mut_ptr(), CAPACITY) };
+    values
+        .chunks_exact(4)
+        .take(count)
+        .map(|record| [record[0], record[1], record[2], record[3]])
+        .collect()
 }
 
 /// 창 번호의 창을 캡처 대상으로 준비한다. display 이면 창이 있는 디스플레이에서 이 앱의 창을 캡처한다.

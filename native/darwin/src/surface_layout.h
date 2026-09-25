@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 bool surfaceLayoutCommit(void *owner, uint64_t ticket);
@@ -8,6 +9,12 @@ bool surfaceLayoutRenderAtDisplayRate(void *webview);
 // 웹뷰가 60fps 근처의 렌더링 갱신을 선호하면 1, 아니면 0, 기능이 없으면 -1 을 반환한다.
 int surfaceLayoutPrefersNear60FPS(void *webview);
 void surfaceLayoutCancel(void *owner);
+// 진단 전용. 배치 트랜잭션마다 시작, 앱 DOM 표시 확인, 커밋 시각(ms, 녹화 프레임과 같은 mach 시계)을
+// 기록하기 시작한다. 이전 기록은 지운다.
+void surfaceLayoutTraceStart(void);
+// 기록을 멈추고 트랜잭션마다 ticket, begun, presented, committed 네 값을 out 에 최대 capacity 개 쓴다.
+// 일어나지 않은 단계는 NaN 이다. 기록된 트랜잭션 수를 반환한다.
+size_t surfaceLayoutTraceStop(double *out, size_t capacity);
 #ifdef __BLOCKS__
 void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int));
 // 열린 배치를 커밋하기 전에 단일 앱 DOM의 표시 준비를 확인한다.

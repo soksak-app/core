@@ -166,6 +166,9 @@ int main(void) { @autoreleasepool {
     checkSettledWaitsForLayout(window, main);
 
     // 열린 트랜잭션에서도 웹 프로세스의 새 배치 확인이 완료되어야 커밋 전에 기다릴 수 있다.
+    // 진단 추적은 이 트랜잭션의 시작, 앱 DOM 표시 확인, 커밋 시각을 녹화 프레임과 같은 시계로 남긴다.
+    surfaceLayoutTraceStart();
+    double traceBegan = CACurrentMediaTime() * 1000;
     __block BOOL prepared = NO;
     __block BOOL mainReady = NO;
     surfaceLayoutBegin(window, 103, ^(int allowed) { prepared = allowed; });
@@ -177,6 +180,17 @@ int main(void) { @autoreleasepool {
     }];
     until(^BOOL { return mainReady; });
     check(surfaceLayoutCommit(window, 103), @"the app DOM confirms its new layout before native commit");
+    double traceEnded = CACurrentMediaTime() * 1000;
+    double trace[4 * 4];
+    size_t traced = surfaceLayoutTraceStop(trace, 4);
+    check(traced == 1 && trace[0] == 103 && traceBegan <= trace[1] && trace[1] <= trace[2] && trace[2] <= trace[3] &&
+        trace[3] <= traceEnded,
+        [NSString stringWithFormat:@"the trace records ticket 103 begun <= presented <= committed within the transaction "
+            "(%zu records: ticket %.0f, %.3f, %.3f, %.3f within %.3f..%.3f)",
+            traced, trace[0], trace[1], trace[2], trace[3], traceBegan, traceEnded]);
+    surfaceLayoutBegin(window, 104, ^(int allowed) {});
+    check(surfaceLayoutCommit(window, 104) && surfaceLayoutTraceStop(trace, 4) == 0,
+        @"a stopped trace records nothing");
 
     SPWait externalWait = waitWhileBusy(main, external, signal);
     check(externalWait.beforeRelease,

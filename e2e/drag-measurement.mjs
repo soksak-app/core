@@ -68,6 +68,27 @@ export function pointerLag(samples, ticks, boundary) {
   return { ...worst, median: lags[Math.floor(lags.length / 2)] ?? 0 };
 }
 
+/**
+ * 가장 늦은 프레임의 지연을 배치 트랜잭션 단계로 나눈다.
+ *
+ * lag 는 pointerLag 의 결과, layouts 는 호스트가 기록한 { ticket, begun, presented, committed }(ms, 프레임과
+ * 같은 시계) 목록이다. 격자가 그 배치를 떠난 걸음의 시각부터 그 프레임의 표시 시각 사이에 열려 있던
+ * 트랜잭션마다, 떠난 시각에서 각 단계까지의 시간을 적는다. 페이지는 앞선 트랜잭션의 답을 받은 뒤 다음
+ * 준비를 시작하므로(docs/spec/native-surfaces.md) 그때 이미 열려 있던 트랜잭션도 포함한다.
+ */
+export function lagStages(lag, ticks, layouts) {
+  if (!lag.time || !Array.isArray(layouts)) return "no layout trace";
+  const left = ticks[lag.step + 1];
+  const at = (value) => (value === null ? "-" : `+${(value - left).toFixed(1)}`);
+  // 프레임 뒤에 처음 시작한 트랜잭션도 적는다. 그 사이 페이지가 준비를 시작하지 않은 시간이 보인다.
+  const next = layouts.find(({ begun }) => begun !== null && begun > lag.time);
+  const open = layouts.filter(({ begun, committed }) =>
+    begun !== null && begun <= lag.time && (committed === null || committed >= left)).concat(next ? [next] : []);
+  const stages = open.map(({ ticket, begun, presented, committed }) =>
+    `#${ticket} begun ${at(begun)} presented ${at(presented)} committed ${at(committed)}`);
+  return `step ${lag.step + 1} at ${left.toFixed(1)}ms, frame at +${(lag.time - left).toFixed(1)}: ${stages.join("; ") || "no transaction"}`;
+}
+
 /** 녹화에 반드시 나와야 하는 상태의 최소 유지 시간(ms). 60Hz 화면의 두 프레임이다. */
 const HOLD = 34;
 

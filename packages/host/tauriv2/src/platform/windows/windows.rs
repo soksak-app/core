@@ -350,6 +350,14 @@ impl Platform for Windows {
         unsupported::capture_still(window_number, path)
     }
     #[cfg(feature = "diagnostics")]
+    fn layout_trace_start(&self) -> Result<(), String> {
+        unsupported::layout_trace_start()
+    }
+    #[cfg(feature = "diagnostics")]
+    fn layout_trace_stop(&self) -> Result<Vec<[f64; 4]>, String> {
+        unsupported::layout_trace_stop()
+    }
+    #[cfg(feature = "diagnostics")]
     fn input_source(&self) -> Result<String, String> {
         unsupported::input_source()
     }

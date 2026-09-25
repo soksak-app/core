@@ -211,6 +211,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 			return nil, err
 		}
 		clock = capture.CaptureClock
+		application.InvokeSync(capture.LayoutTraceStart)
 	}
 	var tickMu sync.Mutex
 	sent := []float64{}
@@ -241,6 +242,14 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	})
 	close(stop)
 	result, err := dragResult(s, reply)
+	var layouts []map[string]any
+	if p.Capture {
+		if capture, captureErr := recorder(); captureErr == nil {
+			var records [][4]float64
+			application.InvokeSync(func() { records = capture.LayoutTraceStop() })
+			layouts = layoutTrace(records)
+		}
+	}
 	if err != nil {
 		// 요청자가 프레임 폴더를 받지 못하면 녹화를 멈추고 폴더를 지운다.
 		if p.Capture {
@@ -257,8 +266,26 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 		tickMu.Lock()
 		result["ticks"] = append([]float64(nil), sent...)
 		tickMu.Unlock()
+		result["layouts"] = layouts
 	}
 	return result, nil
+}
+
+// layoutTrace 는 배치 트랜잭션 기록을 {ticket, begun, presented, committed} 로 바꾼다. 일어나지 않은 단계는 null 이다.
+func layoutTrace(records [][4]float64) []map[string]any {
+	layouts := make([]map[string]any, 0, len(records))
+	stage := func(value float64) any {
+		if math.IsNaN(value) {
+			return nil
+		}
+		return value
+	}
+	for _, record := range records {
+		layouts = append(layouts, map[string]any{
+			"ticket": uint64(record[0]), "begun": stage(record[1]), "presented": stage(record[2]), "committed": stage(record[3]),
+		})
+	}
+	return layouts
 }
 
 // dragResult 는 페이지의 끌기 응답을 확인하고, 마지막 배치가 표시될 때까지 기다린 뒤 결과를 반환한다.

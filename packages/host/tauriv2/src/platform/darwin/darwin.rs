@@ -458,6 +458,15 @@ impl Platform for Darwin {
         capture::still(window_number, path)
     }
     #[cfg(feature = "diagnostics")]
+    fn layout_trace_start(&self) -> Result<(), String> {
+        capture::layout_trace_start();
+        Ok(())
+    }
+    #[cfg(feature = "diagnostics")]
+    fn layout_trace_stop(&self) -> Result<Vec<[f64; 4]>, String> {
+        Ok(capture::layout_trace_stop())
+    }
+    #[cfg(feature = "diagnostics")]
     fn input_source(&self) -> Result<String, String> {
         input_source::current()
     }
