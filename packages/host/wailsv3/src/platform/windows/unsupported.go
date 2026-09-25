@@ -46,6 +46,10 @@ func (implementation) WindowControls(unsafe.Pointer) (platform.Rect, error) {
 	return platform.Rect{}, unsupported("window controls")
 }
 
+func (implementation) DoubleClickInterval() (float64, error) {
+	return 0, unsupported("double-click interval")
+}
+
 func (implementation) WindowFacts(unsafe.Pointer) (string, error) {
 	return "", unsupported("window state")
 }

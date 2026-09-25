@@ -121,6 +121,9 @@ impl Platform for Darwin {
     fn window_controls(&self, window: Handle) -> Result<Frame, String> {
         Ok(window::controls(window))
     }
+    fn double_click_interval(&self) -> Result<f64, String> {
+        Ok(window::double_click_interval())
+    }
     #[cfg(feature = "diagnostics")]
     fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String> {
         Ok(window::numbers(window::handle(window)?))

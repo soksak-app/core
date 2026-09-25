@@ -37,6 +37,7 @@ const METHOD = {
   projectOpen: "ProjectOpen",
   projectRelease: "ProjectRelease",
   windowState: "WindowState",
+  pointerTiming: "PointerTiming",
   windowReady: "WindowReady",
   windowClose: "WindowClose",
   syncSurfaces: "SyncSurfaces",

@@ -31,6 +31,15 @@ func (h *Host) WindowControls(ctx context.Context) (Chrome, error) {
 	return s.WindowChrome()
 }
 
+// PointerTiming 은 페이지가 한 번 누름과 두 번 누름을 가르는 데 쓰는 시스템 값이다.
+func (h *Host) PointerTiming(ctx context.Context) (PointerTiming, error) {
+	seconds, err := system.DoubleClickInterval()
+	if err != nil {
+		return PointerTiming{}, err
+	}
+	return PointerTiming{DoubleClickInterval: seconds * 1000}, nil
+}
+
 func (h *Host) OverlayShow(ctx context.Context, req OverlayRequest) (Rect, error) {
 	s, err := h.surface(ctx)
 	if err != nil {

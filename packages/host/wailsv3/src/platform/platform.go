@@ -138,6 +138,8 @@ type Platform interface {
 	UnifiedTitlebar(window unsafe.Pointer) (float64, error)
 	// WindowControls 는 창 단추가 차지하는 영역을 페이지 좌표로 반환한다.
 	WindowControls(window unsafe.Pointer) (Rect, error)
+	// DoubleClickInterval 은 시스템 설정의 두 번 누름 간격(초)을 반환한다.
+	DoubleClickInterval() (float64, error)
 	// WindowFacts 는 창의 프레임, 활성 상태, 창 단추와 웹뷰를 JSON 으로 반환한다. 형식은
 	// native/darwin/src/window_facts.h 의 sp_window_facts 와 같다. UI 스레드에서 호출한다.
 	WindowFacts(window unsafe.Pointer) (string, error)

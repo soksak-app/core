@@ -593,6 +593,21 @@ pub(crate) fn window_chrome(window: &Window) -> Result<Chrome, String> {
     Ok(Chrome { controls, row })
 }
 
+/// 시스템의 포인터 시간 값. double_click_interval 은 밀리초다.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PointerTiming {
+    double_click_interval: f64,
+}
+
+/// 페이지가 한 번 누름과 두 번 누름을 가르는 데 쓰는 시스템 값을 반환한다.
+pub(crate) fn pointer_timing() -> Result<PointerTiming, String> {
+    let seconds = platform::current()?.double_click_interval()?;
+    Ok(PointerTiming {
+        double_click_interval: seconds * 1000.0,
+    })
+}
+
 /// 창 버튼이 차지하는 영역을 페이지 좌표로 반환한다. 페이지는 첫 줄에서 그 영역을 비운다.
 pub(crate) fn window_controls(window: &Window) -> Result<Rect, String> {
     let handle = native_owner(window)?;
