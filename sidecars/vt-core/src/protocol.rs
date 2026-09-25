@@ -779,9 +779,11 @@ fn pixels_to_cells(pixels: u32, cell_size: f32) -> u16 {
     (pixels as f32 / cell_size) as u16
 }
 
+/// CSI 14t 는 글자 영역을 기기 픽셀로 알린다. 인라인 그림의 픽셀 크기도 같은 단위이므로, 프로그램이 14t 로 셀 크기를
+/// 계산해 그림을 요청하면 그림이 셀에 맞는다.
 fn set_engine_metrics(engine: &mut Box<dyn Engine>, state: &ImageState) -> Result<(), String> {
-    let width = (state.metrics.cell_width / state.scale).round() as u16;
-    let height = (state.metrics.cell_height / state.scale).round() as u16;
+    let width = state.metrics.cell_width.round() as u16;
+    let height = state.metrics.cell_height.round() as u16;
     engine.set_cell_metrics(width, height)
 }
 

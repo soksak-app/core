@@ -77,7 +77,7 @@ All six contracts preserve BEL/ST fragmentation. Relay responses include the sou
 
 ## CSI selector evidence
 
-The sidecar currently records only selectors with executable behavior evidence: CSI `3C`, `?12h/l`, `?25h/l`, `CSI 1–7 SP q` (DECSCUSR), `m`, `?1049h/l`, `S/T` with `r`, `J/K`, `@/P`, `L/M`, `I/Z`, `6n/c`, `b`, `?1/?1000/?1002/?1003/?1006/?2004 h/l`, `14t`, and the VT keypad controls `ESC =`/`ESC >`. This partial inventory is not a complete CSI implementation claim; all unlisted movement, erase, mode, query, mouse, protected-cell, and attribute-stack categories remain open until named behavior or explicit rejection tests exist.
+The sidecar currently records only selectors with executable behavior evidence: CSI `3C`, `?12h/l`, `?25h/l`, `CSI 1–7 SP q` (DECSCUSR), `m`, `?1049h/l`, `S/T` with `r`, `J/K`, `@/P`, `L/M`, `I/Z`, `6n/c`, `b`, `?1/?1000/?1002/?1003/?1006/?2004 h/l`, `14t`, and the VT keypad controls `ESC =`/`ESC >`. `CSI 14t` reports the text area in device pixels, the unit of inline image pixel sizes, so a program that derives the cell size from it requests images that fit the cells. This partial inventory is not a complete CSI implementation claim; all unlisted movement, erase, mode, query, mouse, protected-cell, and attribute-stack categories remain open until named behavior or explicit rejection tests exist.
 
 The terminal must maintain two separate inventories against the pinned XTerm reference:
 

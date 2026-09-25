@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-51-6-2: `CSI 14t` reports the terminal text area in device pixels, the unit of inline image pixel sizes, instead of rounded points.
 - V5-51-6-1: every terminal raster carries the screen event it draws, so a focus change updates the page's cursor state at once, and `terminal.cursor` reports the drawn cursor shape and blink request in `drawn`.
 - V5-63: real-input checks make the previously active application active again when they end, and a synthetic drag check fails with an explicit error when the application is active.
 - V5-49: every window check saves and restores all general-pasteboard item types through the harness and fails when the pasteboard differs afterwards.
