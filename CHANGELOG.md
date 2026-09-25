@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-63: real-input checks make the previously active application active again when they end, and a synthetic drag check fails with an explicit error when the application is active.
 - V5-49: every window check saves and restores all general-pasteboard item types through the harness and fails when the pasteboard differs afterwards.
 - V5-37: injected wheel events carry no modifier flags instead of the physical modifier state, and `core.surface.input` records the modifier keys of each event.
 - V5-61: `clear` leaves no history and no scrollbar, because the terminal engine erases the screen for `ESC[2J` without moving it into the history; `ESC[1J` also erases the first line when the cursor is on the second line.

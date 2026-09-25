@@ -515,6 +515,13 @@ const GAP = 100;
 const paced = ({ took, asked }) => took <= asked * MARGIN && took >= asked / MARGIN;
 
 async function dragOnce(t, s, plan, capture) {
+  // 활성 창은 배치가 바뀔 때 AppKit 의 커서 갱신을 받고, 창은 실제 포인터 위치를 페이지에 이동으로 넘긴다.
+  // 버튼 없이 합성한 진단 끌기는 그 이동과 섞이므로 비활성 애플리케이션에서만 잰다.
+  if ((await s.get("host.window")).active) {
+    throw new Error(`${s.app.name} is the active application, so the window's cursor updates pass the physical ` +
+      "pointer location to the page during the synthetic drag. Nothing was measured: make another application " +
+      "active and run the check again.");
+  }
   const ms = Math.max(1, Math.round(plan.ms / 16)) * 16 * 2 * plan.times;
   const result = await s.request("diagnostics.drag", { ...plan, capture }, { timeout: REQUEST + ms * 4 });
   if (!capture) return result;
