@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-81-1: the terminal and the shell card draw in the card color and text color of the theme instead of the green stand-in color, and the themes no longer define separate surface colors.
+- V5-82: the terminal protocol checks close their terminals, so their reply lines such as `R74:1b5b4f1b5b49` no longer stay on screen.
 - V5-81: the terminal draws its background, text, cursor, and selection in the theme's surface colors (`--surface`, `--surface-fg`, `--edge`) and repaints on a theme or mode change; the sidecar rejects a theme without valid colors. The browser empty state paints the card color instead of the window background.
 - V5-79: a new terminal or shell in a project starts in the project's root instead of the home directory; a split still starts where the source surface was, and a window without a project keeps the home directory. Surface contexts carry `project.root`, and the shell sidecar's `open` accepts `directory`.
 - V5-78: bookmarking from the file tree works from any tree of the project: the selection is the files state's `files.selection` (`files.select`), shown in every tree. Every tree drops a folder removed from `files.tree`, and `files.tree` no longer reads empty during a refresh.
