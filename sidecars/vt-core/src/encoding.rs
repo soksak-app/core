@@ -405,7 +405,11 @@ pub fn encode_mouse(report: &MouseReport, modes: &Modes) -> Result<Vec<u8>, Stri
     }
     let (x, y) = (u32::from(report.col) + 1, u32::from(report.row) + 1);
     if modes.sgr_mouse {
-        let end = if report.action == MouseAction::Release { 'm' } else { 'M' };
+        let end = if report.action == MouseAction::Release {
+            'm'
+        } else {
+            'M'
+        };
         return Ok(format!("\x1b[<{code};{x};{y}{end}").into_bytes());
     }
     if report.action == MouseAction::Release {
@@ -427,14 +431,32 @@ pub fn encode_mouse(report: &MouseReport, modes: &Modes) -> Result<Vec<u8>, Stri
             report.col, report.row
         ));
     }
-    Ok(vec![0x1b, b'[', b'M', (32 + code) as u8, (32 + x) as u8, (32 + y) as u8])
+    Ok(vec![
+        0x1b,
+        b'[',
+        b'M',
+        (32 + code) as u8,
+        (32 + x) as u8,
+        (32 + y) as u8,
+    ])
 }
 
 /// 포인터 칸 (col, row) 의 휠 버튼 이벤트 하나. older 가 참이면 버튼 64(오래된 출력 쪽), 아니면 65 다.
 pub fn encode_wheel(modes: &Modes, older: bool, col: u16, row: u16) -> Result<Vec<u8>, String> {
-    let button = if older { MouseButton::WheelUp } else { MouseButton::WheelDown };
+    let button = if older {
+        MouseButton::WheelUp
+    } else {
+        MouseButton::WheelDown
+    };
     encode_mouse(
-        &MouseReport { button, action: MouseAction::Press, col, row, alt: false, ctrl: false },
+        &MouseReport {
+            button,
+            action: MouseAction::Press,
+            col,
+            row,
+            alt: false,
+            ctrl: false,
+        },
         modes,
     )
 }
@@ -457,7 +479,6 @@ pub fn encode_paste(text: &str, modes: &Modes) -> Result<Vec<u8>, String> {
 
     Ok(result)
 }
-
 
 /// 조합(IME) 상태를 추적하는 간단한 상태 머신.
 /// 조합 중인 문자열을 보관하고, 확정 시점에만 바이트를 돌려준다.
@@ -529,45 +550,129 @@ mod tests {
     #[test]
     fn keypad_keys_send_ss3_sequences_only_in_application_keypad_mode() {
         let numeric = Modes::default();
-        let application = Modes { app_keypad: true, ..Modes::default() };
-        for (ch, final_byte) in [('0', 'p'), ('5', 'u'), ('9', 'y'), ('.', 'n'), ('+', 'k'), ('-', 'm'), ('*', 'j'), ('/', 'o'), ('=', 'X')] {
-            assert_eq!(encode_key(Key::Keypad(ch), 0, &application).unwrap(), format!("\x1bO{final_byte}").into_bytes());
-            assert_eq!(encode_key(Key::Keypad(ch), 0, &numeric).unwrap(), ch.to_string().into_bytes());
-            assert_eq!(encode_key(Key::Keypad(ch), 1, &application).unwrap(), ch.to_string().into_bytes(),
-                "a modified keypad key sends its character");
+        let application = Modes {
+            app_keypad: true,
+            ..Modes::default()
+        };
+        for (ch, final_byte) in [
+            ('0', 'p'),
+            ('5', 'u'),
+            ('9', 'y'),
+            ('.', 'n'),
+            ('+', 'k'),
+            ('-', 'm'),
+            ('*', 'j'),
+            ('/', 'o'),
+            ('=', 'X'),
+        ] {
+            assert_eq!(
+                encode_key(Key::Keypad(ch), 0, &application).unwrap(),
+                format!("\x1bO{final_byte}").into_bytes()
+            );
+            assert_eq!(
+                encode_key(Key::Keypad(ch), 0, &numeric).unwrap(),
+                ch.to_string().into_bytes()
+            );
+            assert_eq!(
+                encode_key(Key::Keypad(ch), 1, &application).unwrap(),
+                ch.to_string().into_bytes(),
+                "a modified keypad key sends its character"
+            );
         }
-        assert_eq!(encode_key(Key::KeypadEnter, 0, &application).unwrap(), b"\x1bOM");
+        assert_eq!(
+            encode_key(Key::KeypadEnter, 0, &application).unwrap(),
+            b"\x1bOM"
+        );
         assert_eq!(encode_key(Key::KeypadEnter, 0, &numeric).unwrap(), b"\r");
         assert!(encode_key(Key::Keypad('a'), 0, &application).is_err());
     }
 
     fn press(button: MouseButton, action: MouseAction, col: u16, row: u16) -> MouseReport {
-        MouseReport { button, action, col, row, alt: false, ctrl: false }
+        MouseReport {
+            button,
+            action,
+            col,
+            row,
+            alt: false,
+            ctrl: false,
+        }
     }
 
     #[test]
     fn sgr_reports_keep_the_button_on_release_and_add_motion_and_modifier_bits() {
-        let modes = Modes { mouse_click: true, sgr_mouse: true, ..Modes::default() };
-        assert_eq!(encode_mouse(&press(MouseButton::Left, MouseAction::Press, 9, 4), &modes).unwrap(), b"\x1b[<0;10;5M");
-        assert_eq!(encode_mouse(&press(MouseButton::Left, MouseAction::Release, 9, 4), &modes).unwrap(), b"\x1b[<0;10;5m");
-        assert_eq!(encode_mouse(&press(MouseButton::Left, MouseAction::Motion, 9, 4), &modes).unwrap(), b"\x1b[<32;10;5M");
-        assert_eq!(encode_mouse(&press(MouseButton::None, MouseAction::Motion, 9, 4), &modes).unwrap(), b"\x1b[<35;10;5M");
-        let modified = MouseReport { alt: true, ctrl: true, ..press(MouseButton::Left, MouseAction::Press, 0, 0) };
+        let modes = Modes {
+            mouse_click: true,
+            sgr_mouse: true,
+            ..Modes::default()
+        };
+        assert_eq!(
+            encode_mouse(&press(MouseButton::Left, MouseAction::Press, 9, 4), &modes).unwrap(),
+            b"\x1b[<0;10;5M"
+        );
+        assert_eq!(
+            encode_mouse(
+                &press(MouseButton::Left, MouseAction::Release, 9, 4),
+                &modes
+            )
+            .unwrap(),
+            b"\x1b[<0;10;5m"
+        );
+        assert_eq!(
+            encode_mouse(&press(MouseButton::Left, MouseAction::Motion, 9, 4), &modes).unwrap(),
+            b"\x1b[<32;10;5M"
+        );
+        assert_eq!(
+            encode_mouse(&press(MouseButton::None, MouseAction::Motion, 9, 4), &modes).unwrap(),
+            b"\x1b[<35;10;5M"
+        );
+        let modified = MouseReport {
+            alt: true,
+            ctrl: true,
+            ..press(MouseButton::Left, MouseAction::Press, 0, 0)
+        };
         assert_eq!(encode_mouse(&modified, &modes).unwrap(), b"\x1b[<24;1;1M");
     }
 
     #[test]
     fn default_and_utf8_reports_release_as_button_three() {
-        let plain = Modes { mouse_click: true, ..Modes::default() };
-        assert_eq!(encode_mouse(&press(MouseButton::Left, MouseAction::Press, 9, 4), &plain).unwrap(), b"\x1b[M *%");
-        assert_eq!(encode_mouse(&press(MouseButton::Left, MouseAction::Release, 9, 4), &plain).unwrap(), b"\x1b[M#*%");
-        let modified = MouseReport { ctrl: true, ..press(MouseButton::Left, MouseAction::Release, 9, 4) };
+        let plain = Modes {
+            mouse_click: true,
+            ..Modes::default()
+        };
+        assert_eq!(
+            encode_mouse(&press(MouseButton::Left, MouseAction::Press, 9, 4), &plain).unwrap(),
+            b"\x1b[M *%"
+        );
+        assert_eq!(
+            encode_mouse(
+                &press(MouseButton::Left, MouseAction::Release, 9, 4),
+                &plain
+            )
+            .unwrap(),
+            b"\x1b[M#*%"
+        );
+        let modified = MouseReport {
+            ctrl: true,
+            ..press(MouseButton::Left, MouseAction::Release, 9, 4)
+        };
         assert_eq!(encode_mouse(&modified, &plain).unwrap(), b"\x1b[M3*%");
-        assert!(encode_mouse(&press(MouseButton::Left, MouseAction::Press, 223, 0), &plain).is_err(),
-            "the default encoding cannot represent column 224");
-        let utf8 = Modes { mouse_click: true, utf8_mouse: true, ..Modes::default() };
-        assert_eq!(encode_mouse(&press(MouseButton::Left, MouseAction::Press, 99, 4), &utf8).unwrap(),
-            "\x1b[M \u{84}%".as_bytes());
+        assert!(
+            encode_mouse(
+                &press(MouseButton::Left, MouseAction::Press, 223, 0),
+                &plain
+            )
+            .is_err(),
+            "the default encoding cannot represent column 224"
+        );
+        let utf8 = Modes {
+            mouse_click: true,
+            utf8_mouse: true,
+            ..Modes::default()
+        };
+        assert_eq!(
+            encode_mouse(&press(MouseButton::Left, MouseAction::Press, 99, 4), &utf8).unwrap(),
+            "\x1b[M \u{84}%".as_bytes()
+        );
     }
 
     #[test]
@@ -897,7 +1002,6 @@ mod tests {
         let result = encode_paste("hello\rworld", &modes).unwrap();
         assert_eq!(result, b"\x1b[200~hello\rworld\x1b[201~".to_vec());
     }
-
 
     #[test]
     fn test_composition_state_not_composing() {

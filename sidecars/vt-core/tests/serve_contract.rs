@@ -13,7 +13,9 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 
 /// 표시와 함께 오는 화면 줄을 건너뛰고 다음 줄을 읽는다.
-async fn next_line_except_screen<R: tokio::io::AsyncBufRead + Unpin>(lines: &mut tokio::io::Lines<R>) -> String {
+async fn next_line_except_screen<R: tokio::io::AsyncBufRead + Unpin>(
+    lines: &mut tokio::io::Lines<R>,
+) -> String {
     loop {
         let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
             .await
@@ -88,25 +90,34 @@ impl Engine for MockEngine {
     fn feed(&mut self, bytes: &[u8]) {
         self.feed_history.push(bytes.to_vec());
         if bytes == b"\x1b]1337;File=name=ZmlsZS5wbmc=;size=5;inline=1;width=2px:aGVsbG8=\x07" {
-            self.pending_events
-                .push(EngineEvent::InlineImage { anchor: Default::default(), command: InlineImageCommand::Display {
+            self.pending_events.push(EngineEvent::InlineImage {
+                anchor: Default::default(),
+                command: InlineImageCommand::Display {
                     name: "file.png".to_string(),
                     data: b"hello".to_vec(),
                     width: Dimension::Pixels(2),
                     height: Dimension::Auto,
                     preserve_aspect_ratio: true,
-                }});
+                },
+            });
         }
         if bytes == b"\x1b]1337;File=name=cmVkLnBuZw==;inline=1:RED\x07" {
             // 그릴 수 있는 2×1 빨간 PNG.
-            self.pending_events
-                .push(EngineEvent::InlineImage { anchor: Default::default(), command: InlineImageCommand::Display {
+            self.pending_events.push(EngineEvent::InlineImage {
+                anchor: Default::default(),
+                command: InlineImageCommand::Display {
                     name: "red.png".to_string(),
-                    data: vec![137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 1, 8, 6, 0, 0, 0, 244, 34, 127, 138, 0, 0, 0, 14, 73, 68, 65, 84, 120, 156, 99, 248, 207, 192, 240, 31, 132, 1, 17, 247, 3, 253, 227, 197, 245, 239, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130],
+                    data: vec![
+                        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2,
+                        0, 0, 0, 1, 8, 6, 0, 0, 0, 244, 34, 127, 138, 0, 0, 0, 14, 73, 68, 65, 84,
+                        120, 156, 99, 248, 207, 192, 240, 31, 132, 1, 17, 247, 3, 253, 227, 197,
+                        245, 239, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+                    ],
                     width: Dimension::Auto,
                     height: Dimension::Auto,
                     preserve_aspect_ratio: true,
-                }});
+                },
+            });
         }
         if bytes == b"\x1b]7;file:///tmp/project\x07" {
             self.pending_events.push(EngineEvent::Directory {
@@ -3758,7 +3769,10 @@ async fn output_while_the_host_holds_a_raster_sends_one_screen_with_the_next_pre
         .expect("timeout waiting for the first screen")
         .unwrap()
         .unwrap();
-    assert!(opened.contains(r#""event":"screen""#), "the first presentation came without its screen: {opened}");
+    assert!(
+        opened.contains(r#""event":"screen""#),
+        "the first presentation came without its screen: {opened}"
+    );
     for index in 0..50 {
         port.push_event(DaemonEvent::Output {
             session_id: session_id.clone(),
@@ -3942,7 +3956,10 @@ async fn a_focus_change_sends_the_screen_with_the_presentation_that_draws_it() {
     loop {
         rounds += 1;
         assert!(rounds < 20, "the sidecar kept presenting");
-        to_serve.write_all(b"{\"surface\":\"s1\",\"body\":{\"operation\":\"screen.read\"}}\n").await.unwrap();
+        to_serve
+            .write_all(b"{\"surface\":\"s1\",\"body\":{\"operation\":\"screen.read\"}}\n")
+            .await
+            .unwrap();
         let mut presented = false;
         loop {
             let line = next!();
@@ -3952,7 +3969,10 @@ async fn a_focus_change_sends_the_screen_with_the_presentation_that_draws_it() {
                 presented = true;
                 // 표시와 함께 온 화면을 읽는다.
                 let screen = next!();
-                assert!(screen.contains(r#""event":"screen""#), "a presentation came without its screen: {screen}");
+                assert!(
+                    screen.contains(r#""event":"screen""#),
+                    "a presentation came without its screen: {screen}"
+                );
                 continue;
             }
             if value["body"]["event"] == "screen" {
@@ -3975,11 +3995,16 @@ async fn a_focus_change_sends_the_screen_with_the_presentation_that_draws_it() {
             continue;
         }
         if value["body"]["event"] == "screen" {
-            assert!(presented && value["body"]["cursor"]["focused"] == true,
-                "the focused screen did not follow its presentation: {seen:#?}");
+            assert!(
+                presented && value["body"]["cursor"]["focused"] == true,
+                "the focused screen did not follow its presentation: {seen:#?}"
+            );
             break;
         }
-        assert!(value["body"]["ack"] != true, "the focus change was answered without its screen: {seen:#?}");
+        assert!(
+            value["body"]["ack"] != true,
+            "the focus change was answered without its screen: {seen:#?}"
+        );
     }
     task.abort();
 }
@@ -3994,7 +4019,9 @@ fn selection(operation: &str, x: f64) -> String {
     if operation == "selection.end" {
         return "{\"surface\":\"s1\",\"body\":{\"operation\":\"selection.end\"}}\n".to_string();
     }
-    format!("{{\"surface\":\"s1\",\"body\":{{\"operation\":\"{operation}\",\"x\":{x},\"y\":0.5}}}}\n")
+    format!(
+        "{{\"surface\":\"s1\",\"body\":{{\"operation\":\"{operation}\",\"x\":{x},\"y\":0.5}}}}\n"
+    )
 }
 
 /// 페이지는 누름, 움직임, 선택 연산, 뗌 순서로 보낸다.
@@ -4011,37 +4038,64 @@ fn drag_gesture(shift: bool) -> String {
 }
 
 fn written(writes: &[Vec<u8>]) -> Vec<String> {
-    writes.iter().map(|bytes| String::from_utf8_lossy(bytes).into_owned()).collect()
+    writes
+        .iter()
+        .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+        .collect()
 }
 
 #[tokio::test]
 async fn a_drag_is_reported_as_press_motion_and_release_when_the_program_tracks_button_motion() {
-    let modes = Modes { mouse_drag: true, sgr_mouse: true, ..Modes::default() };
+    let modes = Modes {
+        mouse_drag: true,
+        sgr_mouse: true,
+        ..Modes::default()
+    };
     let (output, _, writes) = serve_scroll(Some(modes), &drag_gesture(false)).await;
     let writes = written(&writes);
     assert_eq!(writes.len(), 3, "{writes:?}");
     assert_eq!(writes[0], "\x1b[<0;1;1M");
-    let motion = writes[1].strip_prefix("\x1b[<32;").and_then(|rest| rest.strip_suffix(";1M")).expect("motion report");
+    let motion = writes[1]
+        .strip_prefix("\x1b[<32;")
+        .and_then(|rest| rest.strip_suffix(";1M"))
+        .expect("motion report");
     let col: u16 = motion.parse().unwrap();
     assert!(col > 1, "{writes:?}");
     assert_eq!(writes[2], format!("\x1b[<0;{col};1m"));
-    assert!(!output.contains("selection.copy"), "a reported drag must not select text: {output}");
-    assert!(output.contains(r#""copied":false"#), "the page must receive the release of its selection: {output}");
+    assert!(
+        !output.contains("selection.copy"),
+        "a reported drag must not select text: {output}"
+    );
+    assert!(
+        output.contains(r#""copied":false"#),
+        "the page must receive the release of its selection: {output}"
+    );
 }
 
 #[tokio::test]
 async fn a_click_program_receives_press_and_release_but_no_motion() {
-    let modes = Modes { mouse_click: true, sgr_mouse: true, ..Modes::default() };
+    let modes = Modes {
+        mouse_click: true,
+        sgr_mouse: true,
+        ..Modes::default()
+    };
     let (_, _, writes) = serve_scroll(Some(modes), &drag_gesture(false)).await;
     let writes = written(&writes);
     assert_eq!(writes.len(), 2, "{writes:?}");
     assert_eq!(writes[0], "\x1b[<0;1;1M");
-    assert!(writes[1].starts_with("\x1b[<0;") && writes[1].ends_with(";1m"), "{writes:?}");
+    assert!(
+        writes[1].starts_with("\x1b[<0;") && writes[1].ends_with(";1m"),
+        "{writes:?}"
+    );
 }
 
 #[tokio::test]
 async fn a_shift_drag_selects_instead_of_reporting() {
-    let modes = Modes { mouse_drag: true, sgr_mouse: true, ..Modes::default() };
+    let modes = Modes {
+        mouse_drag: true,
+        sgr_mouse: true,
+        ..Modes::default()
+    };
     let (_, _, writes) = serve_scroll(Some(modes), &drag_gesture(true)).await;
     assert!(writes.is_empty(), "{:?}", written(&writes));
 }
@@ -4054,13 +4108,25 @@ async fn pointer_input_is_not_reported_without_a_mouse_mode() {
 
 #[tokio::test]
 async fn any_motion_tracking_reports_moves_without_a_button_once_per_cell() {
-    let modes = Modes { mouse_motion: true, sgr_mouse: true, ..Modes::default() };
-    let requests = [mouse("move", 0.5, false, false), mouse("move", 1.0, false, false), mouse("move", 200.5, false, false)].concat();
+    let modes = Modes {
+        mouse_motion: true,
+        sgr_mouse: true,
+        ..Modes::default()
+    };
+    let requests = [
+        mouse("move", 0.5, false, false),
+        mouse("move", 1.0, false, false),
+        mouse("move", 200.5, false, false),
+    ]
+    .concat();
     let (_, _, writes) = serve_scroll(Some(modes), &requests).await;
     let writes = written(&writes);
     assert_eq!(writes.len(), 2, "{writes:?}");
     assert_eq!(writes[0], "\x1b[<35;1;1M");
-    assert!(writes[1].starts_with("\x1b[<35;") && writes[1] != writes[0], "{writes:?}");
+    assert!(
+        writes[1].starts_with("\x1b[<35;") && writes[1] != writes[0],
+        "{writes:?}"
+    );
 }
 
 #[tokio::test]
@@ -4073,20 +4139,39 @@ async fn an_invalid_mouse_operation_is_rejected() {
 
 #[tokio::test]
 async fn focus_changes_are_reported_to_a_program_that_enables_focus_reports() {
-    let focus = |focused: bool| format!("{{\"surface\":\"s1\",\"body\":{{\"operation\":\"input\",\"focus\":{{\"focused\":{focused}}}}}}}\n");
+    let focus = |focused: bool| {
+        format!("{{\"surface\":\"s1\",\"body\":{{\"operation\":\"input\",\"focus\":{{\"focused\":{focused}}}}}}}\n")
+    };
     let requests = [focus(true), focus(true), focus(false)].concat();
-    let modes = Modes { focus_in_out: true, ..Modes::default() };
+    let modes = Modes {
+        focus_in_out: true,
+        ..Modes::default()
+    };
     let (_, _, writes) = serve_scroll(Some(modes), &requests).await;
-    assert_eq!(written(&writes), vec!["\x1b[I".to_string(), "\x1b[O".to_string()],
-        "a focus report must follow each change and only a change");
+    assert_eq!(
+        written(&writes),
+        vec!["\x1b[I".to_string(), "\x1b[O".to_string()],
+        "a focus report must follow each change and only a change"
+    );
     let (_, _, writes) = serve_scroll(None, &requests).await;
-    assert!(writes.is_empty(), "focus changes must not be written without ?1004: {:?}", written(&writes));
+    assert!(
+        writes.is_empty(),
+        "focus changes must not be written without ?1004: {:?}",
+        written(&writes)
+    );
 }
 
 #[tokio::test]
 async fn keypad_keys_follow_the_application_keypad_mode() {
     let keys = "{\"surface\":\"s1\",\"body\":{\"operation\":\"input\",\"keys\":[{\"key\":\"Keypad5\",\"text\":\"\",\"shift\":false,\"alt\":false,\"ctrl\":false},{\"key\":\"KeypadEnter\",\"text\":\"\",\"shift\":false,\"alt\":false,\"ctrl\":false}]}}\n";
-    let (_, _, writes) = serve_scroll(Some(Modes { app_keypad: true, ..Modes::default() }), keys).await;
+    let (_, _, writes) = serve_scroll(
+        Some(Modes {
+            app_keypad: true,
+            ..Modes::default()
+        }),
+        keys,
+    )
+    .await;
     assert_eq!(written(&writes), vec!["\x1bOu\x1bOM".to_string()]);
     let (_, _, writes) = serve_scroll(None, keys).await;
     assert_eq!(written(&writes), vec!["5\r".to_string()]);
@@ -4111,7 +4196,11 @@ async fn an_inline_image_event_follows_the_presentation_that_draws_the_image() {
     // 열기의 표시를 받되 아직 consumed 로 답하지 않는다. 그 동안 그림 출력이 온다.
     let mut first = None;
     while first.is_none() {
-        let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line()).await.unwrap().unwrap().unwrap();
+        let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
         let value: serde_json::Value = serde_json::from_str(&line).unwrap();
         first = value["body"]["image"]["sequence"].as_i64();
     }
@@ -4121,29 +4210,43 @@ async fn an_inline_image_event_follows_the_presentation_that_draws_the_image() {
         sequence: 0,
         truncated: false,
     });
-    let consumed = |sequence: i64| format!("{{\"surface\":\"s1\",\"body\":{{\"image\":{{\"consumed\":{{\"name\":\"view\",\"generation\":1,\"raster\":1,\"sequence\":{sequence}}}}}}}}}\n");
+    let consumed = |sequence: i64| {
+        format!("{{\"surface\":\"s1\",\"body\":{{\"image\":{{\"consumed\":{{\"name\":\"view\",\"generation\":1,\"raster\":1,\"sequence\":{sequence}}}}}}}}}\n")
+    };
     let mut seen = Vec::new();
     let mut presented_after_output = false;
     let mut released = false;
     loop {
-        let line = match tokio::time::timeout(std::time::Duration::from_millis(500), lines.next_line()).await {
-            Ok(line) => line.unwrap().unwrap(),
-            Err(_) if !released => {
-                // 그림 출력이 처리될 시간을 준 뒤 첫 표시를 소비한다.
-                to_serve.write_all(consumed(first.unwrap()).as_bytes()).await.unwrap();
-                released = true;
-                continue;
-            }
-            Err(_) => panic!("no inline image event arrived: {seen:#?}"),
-        };
+        let line =
+            match tokio::time::timeout(std::time::Duration::from_millis(500), lines.next_line())
+                .await
+            {
+                Ok(line) => line.unwrap().unwrap(),
+                Err(_) if !released => {
+                    // 그림 출력이 처리될 시간을 준 뒤 첫 표시를 소비한다.
+                    to_serve
+                        .write_all(consumed(first.unwrap()).as_bytes())
+                        .await
+                        .unwrap();
+                    released = true;
+                    continue;
+                }
+                Err(_) => panic!("no inline image event arrived: {seen:#?}"),
+            };
         seen.push(line.chars().take(120).collect::<String>());
         let value: serde_json::Value = serde_json::from_str(&line).unwrap();
         if let Some(sequence) = value["body"]["image"]["sequence"].as_i64() {
             presented_after_output = true;
-            to_serve.write_all(consumed(sequence).as_bytes()).await.unwrap();
+            to_serve
+                .write_all(consumed(sequence).as_bytes())
+                .await
+                .unwrap();
         }
         if value["body"]["event"] == "image.inline" {
-            assert!(presented_after_output, "the inline image event came before the presentation that draws it: {seen:#?}");
+            assert!(
+                presented_after_output,
+                "the inline image event came before the presentation that draws it: {seen:#?}"
+            );
             break;
         }
     }

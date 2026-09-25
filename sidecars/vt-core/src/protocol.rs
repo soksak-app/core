@@ -41,7 +41,10 @@ impl OutputSink {
                 Ok(()) => Ok(()),
                 Err(_) if self.detachable => {
                     let mut current = self.sender.lock().await;
-                    if current.as_ref().is_some_and(|current| current.same_channel(&sender)) {
+                    if current
+                        .as_ref()
+                        .is_some_and(|current| current.same_channel(&sender))
+                    {
                         *current = None;
                     }
                     Ok(())
@@ -925,7 +928,9 @@ fn encode_keys(keys: &[InputKey], modes: &Modes) -> Result<Vec<u8>, String> {
             "Escape" => Key::Escape,
             "KeypadEnter" => Key::KeypadEnter,
             name if name.starts_with("Keypad") => match &name["Keypad".len()..] {
-                digit if digit.len() == 1 && digit.as_bytes()[0].is_ascii_digit() => Key::Keypad(digit.as_bytes()[0] as char),
+                digit if digit.len() == 1 && digit.as_bytes()[0].is_ascii_digit() => {
+                    Key::Keypad(digit.as_bytes()[0] as char)
+                }
                 "Decimal" => Key::Keypad('.'),
                 "Plus" => Key::Keypad('+'),
                 "Minus" => Key::Keypad('-'),
@@ -1099,7 +1104,10 @@ async fn present_screen(
     // 페이지의 화면은 이 래스터가 그린 화면이다. 둘을 함께 보내야 커서와 글자 상태가 화면 픽셀과 같다.
     // 이 래스터가 그린 인라인 그림의 상태 이벤트도 그 뒤에 보낸다.
     if output_tx.send(image_envelope.to_string()).await.is_err()
-        || output_tx.send(screen_event(surface_id, screen).to_string()).await.is_err()
+        || output_tx
+            .send(screen_event(surface_id, screen).to_string())
+            .await
+            .is_err()
     {
         return false;
     }
@@ -1423,7 +1431,8 @@ async fn send_engine_events(
                 if !emit_surface_events {
                     continue;
                 }
-                let response = json!({"surface": surface_id, "body": {"event": "pointer", "shape": shape}});
+                let response =
+                    json!({"surface": surface_id, "body": {"event": "pointer", "shape": shape}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }
@@ -1533,8 +1542,7 @@ async fn send_engine_events(
                     continue;
                 }
                 // 엔진의 거부는 프로그램 출력의 시퀀스에 대한 것이다. 페이지는 이를 터미널 오류가 아니라 기록으로 남긴다.
-                let response =
-                    json!({"surface": surface_id, "body": {"event": "sequence.rejected", "reason": reason}});
+                let response = json!({"surface": surface_id, "body": {"event": "sequence.rejected", "reason": reason}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }
@@ -3264,12 +3272,46 @@ where
                                     Some("up") => Some(MousePhase::Up),
                                     _ => None,
                                 };
-                                let x = body.get("x").and_then(Value::as_f64).filter(|x| x.is_finite());
-                                let y = body.get("y").and_then(Value::as_f64).filter(|y| y.is_finite());
+                                let x = body
+                                    .get("x")
+                                    .and_then(Value::as_f64)
+                                    .filter(|x| x.is_finite());
+                                let y = body
+                                    .get("y")
+                                    .and_then(Value::as_f64)
+                                    .filter(|y| y.is_finite());
                                 let flag = |name: &str| body.get(name).and_then(Value::as_bool);
-                                match (phase, x, y, flag("pressed"), flag("shift"), flag("alt"), flag("ctrl")) {
-                                    (Some(phase), Some(x), Some(y), Some(pressed), Some(shift), Some(alt), Some(ctrl)) => {
-                                        if tx.send(SurfaceCommand::Mouse { phase, x, y, pressed, shift, alt, ctrl }).await.is_err() {
+                                match (
+                                    phase,
+                                    x,
+                                    y,
+                                    flag("pressed"),
+                                    flag("shift"),
+                                    flag("alt"),
+                                    flag("ctrl"),
+                                ) {
+                                    (
+                                        Some(phase),
+                                        Some(x),
+                                        Some(y),
+                                        Some(pressed),
+                                        Some(shift),
+                                        Some(alt),
+                                        Some(ctrl),
+                                    ) => {
+                                        if tx
+                                            .send(SurfaceCommand::Mouse {
+                                                phase,
+                                                x,
+                                                y,
+                                                pressed,
+                                                shift,
+                                                alt,
+                                                ctrl,
+                                            })
+                                            .await
+                                            .is_err()
+                                        {
                                             break;
                                         }
                                     }
@@ -3928,11 +3970,17 @@ mod tests {
         let persistent = OutputSink::detachable(sender);
         drop(receiver);
         assert!(persistent.send("screen".to_string()).await.is_ok());
-        assert!(persistent.sender().await.is_none(), "the closed client must be detached");
+        assert!(
+            persistent.sender().await.is_none(),
+            "the closed client must be detached"
+        );
         let (sender, receiver) = mpsc::channel(4);
         let direct = OutputSink::direct(sender);
         drop(receiver);
-        assert!(direct.send("screen".to_string()).await.is_err(), "a closed direct output is an error");
+        assert!(
+            direct.send("screen".to_string()).await.is_err(),
+            "a closed direct output is an error"
+        );
     }
 
     #[tokio::test]

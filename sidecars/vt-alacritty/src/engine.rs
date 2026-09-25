@@ -8,8 +8,8 @@ use alacritty_terminal::vte::ansi::{Color, CursorShape, Handler, NamedColor, Pro
 use soksak_sidecar_vt_core::directory_uri::local_path;
 use soksak_sidecar_vt_core::{
     default_terminal_color, inline_image::parse as parse_inline_image, Cell, ClipboardSelection,
-    Cursor, CursorShape as ProtocolCursorShape, Engine, EngineEvent, InlineAnchor, Modes, Screen, ShellMarker,
-    TerminalTheme,
+    Cursor, CursorShape as ProtocolCursorShape, Engine, EngineEvent, InlineAnchor, Modes, Screen,
+    ShellMarker, TerminalTheme,
 };
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -29,7 +29,23 @@ fn osc_outcome(selector: &[u8]) -> OscOutcome {
         return OscOutcome::Unsupported;
     };
     match number {
-        0 | 2 | 4 | 5 | 6 | 10..=12 | 17 | 19 | 22 | 50 | 52 | 104 | 105 | 106 | 110..=112 | 117 | 119 => OscOutcome::Implemented,
+        0
+        | 2
+        | 4
+        | 5
+        | 6
+        | 10..=12
+        | 17
+        | 19
+        | 22
+        | 50
+        | 52
+        | 104
+        | 105
+        | 106
+        | 110..=112
+        | 117
+        | 119 => OscOutcome::Implemented,
         7 | 8 | 9 | 133 | 1337 => OscOutcome::Vendor,
         _ => OscOutcome::Unsupported,
     }
@@ -148,14 +164,22 @@ fn parse_x_color(value: &str) -> Option<Rgb> {
         if parts.len() != 3 {
             return None;
         }
-        return Some(Rgb { r: scale(parts[0])?, g: scale(parts[1])?, b: scale(parts[2])? });
+        return Some(Rgb {
+            r: scale(parts[0])?,
+            g: scale(parts[1])?,
+            b: scale(parts[2])?,
+        });
     }
     let hex = value.strip_prefix('#')?;
     if hex.is_empty() || hex.len() % 3 != 0 || hex.len() > 12 {
         return None;
     }
     let width = hex.len() / 3;
-    Some(Rgb { r: scale(&hex[..width])?, g: scale(&hex[width..2 * width])?, b: scale(&hex[2 * width..])? })
+    Some(Rgb {
+        r: scale(&hex[..width])?,
+        g: scale(&hex[width..2 * width])?,
+        b: scale(&hex[2 * width..])?,
+    })
 }
 
 /// OSC 22 의 포인터 이름을 CSS cursor 값으로 바꾼다. X 커서 글꼴 이름과 CSS 이름을 받는다. 빈 이름은 기본값이다.
@@ -687,26 +711,52 @@ impl AlacrittyEngine {
 
     /// 엔진이 직접 처리하는 OSC: 17/19 강조 색의 설정과 조회, 117/119 초기화, 22 포인터 모양. 처리하지 않는
     /// 선택자는 None 이다. 조회의 답은 요청과 같은 종결자로 끝난다.
-    fn engine_osc(&mut self, selector: &[u8], payload: &[u8], bel: bool) -> Option<Option<EngineEvent>> {
+    fn engine_osc(
+        &mut self,
+        selector: &[u8],
+        payload: &[u8],
+        bel: bool,
+    ) -> Option<Option<EngineEvent>> {
         let selector = std::str::from_utf8(selector).ok()?;
         let payload = String::from_utf8_lossy(payload);
         let terminator = if bel { "\x07" } else { "\x1b\\" };
         Some(match selector {
             "17" | "19" if payload == "?" => {
                 let background = selector == "17";
-                let rgb = if background { self.highlight_background } else { self.highlight_foreground }
-                    .or_else(|| self.default_rgb(if background { NamedColor::Foreground } else { NamedColor::Background }));
-                rgb.map(|rgb| EngineEvent::PtyWrite(format!(
+                let rgb = if background {
+                    self.highlight_background
+                } else {
+                    self.highlight_foreground
+                }
+                .or_else(|| {
+                    self.default_rgb(if background {
+                        NamedColor::Foreground
+                    } else {
+                        NamedColor::Background
+                    })
+                });
+                rgb.map(|rgb| {
+                    EngineEvent::PtyWrite(
+                        format!(
                     "\x1b]{selector};rgb:{:02x}{:02x}/{:02x}{:02x}/{:02x}{:02x}{terminator}",
                     rgb.r, rgb.r, rgb.g, rgb.g, rgb.b, rgb.b
-                ).into_bytes()))
+                )
+                        .into_bytes(),
+                    )
+                })
             }
             "17" | "19" => match parse_x_color(&payload) {
                 Some(rgb) => {
-                    if selector == "17" { self.highlight_background = Some(rgb) } else { self.highlight_foreground = Some(rgb) }
+                    if selector == "17" {
+                        self.highlight_background = Some(rgb)
+                    } else {
+                        self.highlight_foreground = Some(rgb)
+                    }
                     None
                 }
-                None => Some(EngineEvent::Error(format!("OSC {selector} color is not an X color: {payload}"))),
+                None => Some(EngineEvent::Error(format!(
+                    "OSC {selector} color is not an X color: {payload}"
+                ))),
             },
             "5" => self.special_color_osc(&payload, terminator),
             "6" | "106" => self.special_mode_osc(selector, &payload),
@@ -719,17 +769,29 @@ impl AlacrittyEngine {
                     for part in payload.split(';') {
                         match part.parse::<usize>() {
                             Ok(index) if index < 5 => self.special_colors[index] = None,
-                            _ => error = Some(EngineEvent::Error(format!("OSC 105 special color number is not 0-4: {part}"))),
+                            _ => {
+                                error = Some(EngineEvent::Error(format!(
+                                    "OSC 105 special color number is not 0-4: {part}"
+                                )))
+                            }
                         }
                     }
                     error
                 }
             }
-            "117" => { self.highlight_background = None; None }
-            "119" => { self.highlight_foreground = None; None }
+            "117" => {
+                self.highlight_background = None;
+                None
+            }
+            "119" => {
+                self.highlight_foreground = None;
+                None
+            }
             "22" => match pointer_shape(&payload) {
                 Some(shape) => Some(EngineEvent::PointerShape(shape.to_string())),
-                None => Some(EngineEvent::Error(format!("OSC 22 pointer shape is not supported: {payload}"))),
+                None => Some(EngineEvent::Error(format!(
+                    "OSC 22 pointer shape is not supported: {payload}"
+                ))),
             },
             _ => return None,
         })
@@ -740,20 +802,34 @@ impl AlacrittyEngine {
     fn special_color_osc(&mut self, payload: &str, terminator: &str) -> Option<EngineEvent> {
         let parts: Vec<_> = payload.split(';').collect();
         if parts.len() % 2 != 0 {
-            return Some(EngineEvent::Error(format!("OSC 5 needs pairs of a color number and a color: {payload}")));
+            return Some(EngineEvent::Error(format!(
+                "OSC 5 needs pairs of a color number and a color: {payload}"
+            )));
         }
         let mut replies = String::new();
         for pair in parts.chunks(2) {
             let index = match pair[0].parse::<usize>() {
                 Ok(index) if index < 5 => index,
-                _ => return Some(EngineEvent::Error(format!("OSC 5 special color number is not 0-4: {}", pair[0]))),
+                _ => {
+                    return Some(EngineEvent::Error(format!(
+                        "OSC 5 special color number is not 0-4: {}",
+                        pair[0]
+                    )))
+                }
             };
             if index == 2 {
-                return Some(EngineEvent::Error("OSC 5 blink color cannot apply: the grid does not keep the blink attribute".to_string()));
+                return Some(EngineEvent::Error(
+                    "OSC 5 blink color cannot apply: the grid does not keep the blink attribute"
+                        .to_string(),
+                ));
             }
             if pair[1] == "?" {
-                let Some(rgb) = self.special_colors[index].or_else(|| self.default_rgb(NamedColor::Foreground)) else {
-                    return Some(EngineEvent::Error("OSC 5 query has no foreground color".to_string()));
+                let Some(rgb) =
+                    self.special_colors[index].or_else(|| self.default_rgb(NamedColor::Foreground))
+                else {
+                    return Some(EngineEvent::Error(
+                        "OSC 5 query has no foreground color".to_string(),
+                    ));
                 };
                 replies.push_str(&format!(
                     "\x1b]5;{index};rgb:{:02x}{:02x}/{:02x}{:02x}/{:02x}{:02x}{terminator}",
@@ -762,7 +838,12 @@ impl AlacrittyEngine {
             } else {
                 match parse_x_color(pair[1]) {
                     Some(rgb) => self.special_colors[index] = Some(rgb),
-                    None => return Some(EngineEvent::Error(format!("OSC 5 color is not an X color: {}", pair[1]))),
+                    None => {
+                        return Some(EngineEvent::Error(format!(
+                            "OSC 5 color is not an X color: {}",
+                            pair[1]
+                        )))
+                    }
                 }
             }
         }
@@ -773,7 +854,9 @@ impl AlacrittyEngine {
     fn special_mode_osc(&mut self, selector: &str, payload: &str) -> Option<EngineEvent> {
         let parts: Vec<_> = payload.split(';').collect();
         if parts.len() % 2 != 0 {
-            return Some(EngineEvent::Error(format!("OSC {selector} needs pairs of a color number and a flag: {payload}")));
+            return Some(EngineEvent::Error(format!(
+                "OSC {selector} needs pairs of a color number and a flag: {payload}"
+            )));
         }
         for pair in parts.chunks(2) {
             match (pair[0].parse::<usize>(), pair[1].parse::<u32>()) {
@@ -781,7 +864,12 @@ impl AlacrittyEngine {
                     return Some(EngineEvent::Error(format!("OSC {selector} blink color cannot apply: the grid does not keep the blink attribute")));
                 }
                 (Ok(index), Ok(flag)) if index < 5 => self.special_enabled[index] = flag != 0,
-                _ => return Some(EngineEvent::Error(format!("OSC {selector} pair is not a color number 0-4 and a flag: {};{}", pair[0], pair[1]))),
+                _ => {
+                    return Some(EngineEvent::Error(format!(
+                        "OSC {selector} pair is not a color number 0-4 and a flag: {};{}",
+                        pair[0], pair[1]
+                    )))
+                }
             }
         }
         None
@@ -792,10 +880,19 @@ impl AlacrittyEngine {
         if foreground != Color::Named(NamedColor::Foreground) {
             return None;
         }
-        [(0, Flags::BOLD), (1, Flags::UNDERLINE), (3, Flags::INVERSE), (4, Flags::ITALIC)]
-            .into_iter()
-            .find(|(index, flag)| flags.contains(*flag) && self.special_enabled[*index] && self.special_colors[*index].is_some())
-            .and_then(|(index, _)| self.special_colors[index])
+        [
+            (0, Flags::BOLD),
+            (1, Flags::UNDERLINE),
+            (3, Flags::INVERSE),
+            (4, Flags::ITALIC),
+        ]
+        .into_iter()
+        .find(|(index, flag)| {
+            flags.contains(*flag)
+                && self.special_enabled[*index]
+                && self.special_colors[*index].is_some()
+        })
+        .and_then(|(index, _)| self.special_colors[index])
     }
 
     /// 테마가 정한 기본 색.
@@ -804,7 +901,11 @@ impl AlacrittyEngine {
             self.theme
                 .color(name as usize)
                 .or_else(|| default_terminal_color(name as usize))
-                .map(|rgb| Rgb { r: rgb[0], g: rgb[1], b: rgb[2] })
+                .map(|rgb| Rgb {
+                    r: rgb[0],
+                    g: rgb[1],
+                    b: rgb[2],
+                })
         })
     }
 
@@ -1008,7 +1109,10 @@ impl AlacrittyEngine {
                     .events
                     .lock()
                     .expect("engine event queue poisoned")
-                    .push_back(QueuedEvent::Neutral(EngineEvent::InlineImage { command, anchor })),
+                    .push_back(QueuedEvent::Neutral(EngineEvent::InlineImage {
+                        command,
+                        anchor,
+                    })),
                 Err(error) => self
                     .events
                     .events
@@ -1455,9 +1559,15 @@ impl Engine for AlacrittyEngine {
                 if self.highlight_background.is_some() || self.highlight_foreground.is_some() {
                     // 강조 색이 있으면 반전 대신 그 색으로 그린다. 정하지 않은 쪽은 반전과 같은 색이다.
                     let hex = |rgb: Rgb| format!("#{:02x}{:02x}{:02x}", rgb.r, rgb.g, rgb.b);
-                    let (foreground, background) = if cell.inverse { (cell.bg.clone(), cell.fg.clone()) } else { (cell.fg.clone(), cell.bg.clone()) };
-                    let foreground = foreground.or_else(|| self.default_rgb(NamedColor::Foreground).map(hex));
-                    let background = background.or_else(|| self.default_rgb(NamedColor::Background).map(hex));
+                    let (foreground, background) = if cell.inverse {
+                        (cell.bg.clone(), cell.fg.clone())
+                    } else {
+                        (cell.fg.clone(), cell.bg.clone())
+                    };
+                    let foreground =
+                        foreground.or_else(|| self.default_rgb(NamedColor::Foreground).map(hex));
+                    let background =
+                        background.or_else(|| self.default_rgb(NamedColor::Background).map(hex));
                     cell.bg = self.highlight_background.map(hex).or(foreground);
                     cell.fg = self.highlight_foreground.map(hex).or(background);
                     cell.inverse = false;

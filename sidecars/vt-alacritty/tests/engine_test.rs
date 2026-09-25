@@ -1336,9 +1336,15 @@ fn csi_private_modes_export_keyboard_paste_and_mouse_state() {
     assert!(!disabled.app_cursor);
     assert!(!disabled.mouse_report());
     engine.feed(b"\x1b=");
-    assert!(engine.modes().app_keypad, "ESC = selects the application keypad");
+    assert!(
+        engine.modes().app_keypad,
+        "ESC = selects the application keypad"
+    );
     engine.feed(b"\x1b>");
-    assert!(!engine.modes().app_keypad, "ESC > selects the numeric keypad");
+    assert!(
+        !engine.modes().app_keypad,
+        "ESC > selects the numeric keypad"
+    );
     engine.feed(b"\x1b[?1000h");
     assert!(engine.modes().mouse_click && !engine.modes().mouse_drag);
     engine.feed(b"\x1b[?1002h");
@@ -1671,29 +1677,58 @@ fn osc_highlight_colors_are_set_queried_reset_and_draw_the_selection() {
     let mut engine = AlacrittyEngine::new();
     engine.resize(10, 2);
     engine.feed(b"AB");
-    let default_background = engine.screen().background.clone().expect("default background");
+    let default_background = engine
+        .screen()
+        .background
+        .clone()
+        .expect("default background");
     // 설정하지 않은 강조 배경은 기본 전경색, 강조 글자는 기본 배경색이다(반전과 같다).
     engine.feed(b"\x1b]17;?\x07\x1b]19;?\x1b\\");
     let unset = replies(&mut engine);
     assert_eq!(unset.len(), 2, "{unset:?}");
-    assert!(unset[0].starts_with("\x1b]17;rgb:") && unset[0].ends_with('\x07'), "{unset:?}");
-    assert!(unset[1].starts_with("\x1b]19;rgb:") && unset[1].ends_with("\x1b\\"), "{unset:?}");
+    assert!(
+        unset[0].starts_with("\x1b]17;rgb:") && unset[0].ends_with('\x07'),
+        "{unset:?}"
+    );
+    assert!(
+        unset[1].starts_with("\x1b]19;rgb:") && unset[1].ends_with("\x1b\\"),
+        "{unset:?}"
+    );
 
     engine.feed(b"\x1b]17;rgb:12/34/56\x07\x1b]19;#abcdef\x07\x1b]17;?\x07\x1b]19;?\x07");
-    assert_eq!(replies(&mut engine), ["\x1b]17;rgb:1212/3434/5656\x07", "\x1b]19;rgb:abab/cdcd/efef\x07"]);
+    assert_eq!(
+        replies(&mut engine),
+        [
+            "\x1b]17;rgb:1212/3434/5656\x07",
+            "\x1b]19;rgb:abab/cdcd/efef\x07"
+        ]
+    );
     engine.selection_start(0, 0).unwrap();
     engine.selection_update(0, 0).unwrap();
     let cell = engine.screen().lines[0][0].clone();
-    assert_eq!((cell.bg.as_deref(), cell.fg.as_deref(), cell.inverse), (Some("#123456"), Some("#abcdef"), false),
-        "a selected cell uses the highlight colors instead of inverse");
+    assert_eq!(
+        (cell.bg.as_deref(), cell.fg.as_deref(), cell.inverse),
+        (Some("#123456"), Some("#abcdef"), false),
+        "a selected cell uses the highlight colors instead of inverse"
+    );
 
     engine.feed(b"\x1b]117\x07\x1b]119\x07\x1b]17;?\x07");
-    assert_eq!(replies(&mut engine), unset[..1].to_vec(), "OSC 117 restores the default highlight background");
-    assert!(engine.screen().lines[0][0].inverse, "without highlight colors a selected cell is inverse");
+    assert_eq!(
+        replies(&mut engine),
+        unset[..1].to_vec(),
+        "OSC 117 restores the default highlight background"
+    );
+    assert!(
+        engine.screen().lines[0][0].inverse,
+        "without highlight colors a selected cell is inverse"
+    );
     assert!(default_background.starts_with('#'));
 
     engine.feed(b"\x1b]17;not-a-color\x07");
-    assert!(engine.drain_events().iter().any(|event| matches!(event, EngineEvent::Error(reason) if reason.contains("OSC 17"))));
+    assert!(engine
+        .drain_events()
+        .iter()
+        .any(|event| matches!(event, EngineEvent::Error(reason) if reason.contains("OSC 17"))));
 }
 
 #[test]
@@ -1701,12 +1736,17 @@ fn osc22_sets_the_pointer_shape_and_rejects_unknown_shapes() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"\x1b]22;hand2\x07\x1b]22;text\x07\x1b]22;\x07\x1b]22;spaceship\x07");
     let events = engine.drain_events();
-    let shapes: Vec<_> = events.iter().filter_map(|event| match event {
-        EngineEvent::PointerShape(shape) => Some(shape.clone()),
-        _ => None,
-    }).collect();
+    let shapes: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            EngineEvent::PointerShape(shape) => Some(shape.clone()),
+            _ => None,
+        })
+        .collect();
     assert_eq!(shapes, ["pointer", "text", "default"]);
-    assert!(events.iter().any(|event| matches!(event, EngineEvent::Error(reason) if reason.contains("spaceship"))));
+    assert!(events
+        .iter()
+        .any(|event| matches!(event, EngineEvent::Error(reason) if reason.contains("spaceship"))));
 }
 
 #[test]
@@ -1715,18 +1755,44 @@ fn osc_special_colors_draw_attributed_text_when_enabled_and_answer_queries() {
     engine.resize(10, 2);
     engine.feed(b"\x1b]5;0;?\x07");
     let unset = replies(&mut engine);
-    assert!(unset.len() == 1 && unset[0].starts_with("\x1b]5;0;rgb:"), "{unset:?}");
-    let default_bold = engine.screen().lines.first().and_then(|line| line.first()).and_then(|cell| cell.fg.clone());
+    assert!(
+        unset.len() == 1 && unset[0].starts_with("\x1b]5;0;rgb:"),
+        "{unset:?}"
+    );
+    let default_bold = engine
+        .screen()
+        .lines
+        .first()
+        .and_then(|line| line.first())
+        .and_then(|cell| cell.fg.clone());
 
-    engine.feed(b"\x1b]5;0;rgb:11/22/33;4;#445566\x07\x1b[1mB\x1b[0m\x1b[3mI\x1b[0m\x1b[1;31mR\x1b[0m");
+    engine.feed(
+        b"\x1b]5;0;rgb:11/22/33;4;#445566\x07\x1b[1mB\x1b[0m\x1b[3mI\x1b[0m\x1b[1;31mR\x1b[0m",
+    );
     let before = engine.screen().lines[0].clone();
-    assert_ne!(before[0].fg.as_deref(), Some("#112233"), "a special color is not used until OSC 6 enables it");
+    assert_ne!(
+        before[0].fg.as_deref(),
+        Some("#112233"),
+        "a special color is not used until OSC 6 enables it"
+    );
     engine.feed(b"\x1b]6;0;1\x07\x1b]106;4;1\x07\x1b]5;0;?\x07");
     assert_eq!(replies(&mut engine), ["\x1b]5;0;rgb:1111/2222/3333\x07"]);
     let line = engine.screen().lines[0].clone();
-    assert_eq!(line[0].fg.as_deref(), Some("#112233"), "bold text with the default foreground uses the bold color");
-    assert_eq!(line[1].fg.as_deref(), Some("#445566"), "italic text uses the italic color");
-    assert_ne!(line[2].fg.as_deref(), Some("#112233"), "an explicit foreground is kept");
+    assert_eq!(
+        line[0].fg.as_deref(),
+        Some("#112233"),
+        "bold text with the default foreground uses the bold color"
+    );
+    assert_eq!(
+        line[1].fg.as_deref(),
+        Some("#445566"),
+        "italic text uses the italic color"
+    );
+    assert_ne!(
+        line[2].fg.as_deref(),
+        Some("#112233"),
+        "an explicit foreground is kept"
+    );
 
     engine.feed(b"\x1b]105;0\x07\x1b]5;0;?\x07");
     assert_eq!(replies(&mut engine), unset, "OSC 105 restores the default");
@@ -1735,8 +1801,13 @@ fn osc_special_colors_draw_attributed_text_when_enabled_and_answer_queries() {
     let _ = default_bold;
 
     engine.feed(b"\x1b]5;2;#ffffff\x07");
-    assert!(engine.drain_events().iter().any(|event| matches!(event, EngineEvent::Error(reason) if reason.contains("blink"))),
-        "the blink color cannot apply and must be rejected");
+    assert!(
+        engine
+            .drain_events()
+            .iter()
+            .any(|event| matches!(event, EngineEvent::Error(reason) if reason.contains("blink"))),
+        "the blink color cannot apply and must be rejected"
+    );
 }
 
 #[test]
@@ -1744,11 +1815,17 @@ fn an_inline_image_is_anchored_at_the_cursor_where_its_sequence_appears() {
     // 같은 출력 조각에서 그림 시퀀스 뒤에 온 글자가 커서를 옮겨도 그림은 시퀀스 자리의 커서에 놓인다.
     let mut engine = AlacrittyEngine::new();
     engine.resize(20, 10);
-    engine.feed(b"\x1b[6;3H\x1b]1337;File=name=ZmlsZS5wbmc=;inline=1:aGVsbG8=\x07\r\nafter\r\nmore\r\n");
-    let anchors: Vec<_> = engine.drain_events().into_iter().filter_map(|event| match event {
-        EngineEvent::InlineImage { anchor, .. } => Some(anchor),
-        _ => None,
-    }).collect();
+    engine.feed(
+        b"\x1b[6;3H\x1b]1337;File=name=ZmlsZS5wbmc=;inline=1:aGVsbG8=\x07\r\nafter\r\nmore\r\n",
+    );
+    let anchors: Vec<_> = engine
+        .drain_events()
+        .into_iter()
+        .filter_map(|event| match event {
+            EngineEvent::InlineImage { anchor, .. } => Some(anchor),
+            _ => None,
+        })
+        .collect();
     assert_eq!(anchors.len(), 1, "{anchors:?}");
     assert_eq!((anchors[0].col, anchors[0].row), (2, 5));
 }
