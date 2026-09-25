@@ -88,7 +88,7 @@ async function documentPixel(t, s, surface) {
 
 const nearColour = (actual, expected) => actual.every((value, index) => Math.abs(value - expected[index]) <= 3);
 
-/** 보이는 브라우저 표면이 browser.location 을 등록할 때까지 기다리고 그 표면들을 반환한다. */
+/** 보이는 브라우저 표면이 browser.location 을 등록할 때까지 기다리고 활성 표면들을 반환한다. */
 async function browsers(s) {
   await s.until("core.surfaces",
     (list) => list.some((x) => x.visible && x.plugin === "browser" && x.exposes.includes("status browser.location")),
@@ -97,13 +97,8 @@ async function browsers(s) {
   const current = await s.get("core.surfaces");
   const selected = current.filter((x) => x.visible && x.plugin === "browser" && active.has(x.surface));
   assert.ok(selected.length > 0, "current grid has no active visible browser surface");
-  const ids = new Set(selected.map((x) => x.surface));
-  await s.until("host.window", (window) => window.documents.some((document) =>
-    ids.has(document.surface) && document.document === "page" && document.visible &&
-    document.frame.width > 0 && document.frame.height > 0),
-  "active browser surface has no visible native document");
-  const settled = await s.get("core.surfaces");
-  return settled.filter((x) => x.visible && x.plugin === "browser" && ids.has(x.surface));
+  // 주소가 없는 표면은 문서 영역을 숨기므로 영역의 표시는 각 검사가 주소를 연 뒤에 확인한다.
+  return selected;
 }
 
 /** 문서 영역이 url 을 다 읽고 제목을 알릴 때까지 기다린다. 제목은 읽기가 끝난 뒤에 올 수 있다. */
@@ -193,7 +188,10 @@ for (const app of Object.values(APPS)) {
       "the second browser surface did not register");
     const other = await s.get("browser.location", tab);
     assert.ok(!other.url.startsWith(base), `surface ${tab} received this surface's document: ${other.url}`);
-    await placed(s, tab, "the second browser");
+    // 주소가 없는 두 번째 표면은 문서 영역을 숨긴다.
+    assert.equal(other.url, "", `surface ${tab} has an address: ${other.url}`);
+    await s.until("host.window", (w) => w.documents.some((d) => d.surface === tab && d.document === "page" && !d.visible),
+      "the second browser without an address shows its document region");
 
     // 표면을 닫으면 문서 영역도 닫힌다.
     await s.run("core.tab.close", { tab: surface });
@@ -201,6 +199,37 @@ for (const app of Object.values(APPS)) {
       "the document region stayed after its surface closed");
     await s.until("host.window", (w) => w.documents.some((d) => d.surface === tab),
       "closing one surface closed another surface's document region");
+  });
+
+  test(`${app.name}: a browser without an address hides its document region and shows the empty state`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const base = await serve(t);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    assert.equal((await s.get("browser.location", surface)).url, "", "the fresh browser surface already has an address");
+
+    // 주소가 없으면 문서 영역은 보이지 않고 빈 상태가 문서 자리를 차지한다.
+    await s.presented();
+    const hidden = await s.until("host.window", (w) => w.documents.some((d) => d.surface === surface && d.document === "page"),
+      "the browser surface has no document region");
+    const region = hidden.documents.find((d) => d.surface === surface && d.document === "page");
+    assert.equal(region.visible, false, `the document region is visible without an address: ${JSON.stringify(region)}`);
+    const empty = await s.rect("browser.empty", undefined, surface);
+    assert.ok(empty.width > 0 && empty.height > 0, `the empty state is not shown: ${JSON.stringify(empty)}`);
+
+    // 빈 상태를 누르면 주소창이 초점을 받아 입력한 주소를 연다.
+    const point = { x: empty.document.x + empty.x + empty.width / 2, y: empty.document.y + empty.y + empty.height / 2 };
+    assert.deepEqual(await s.run("host.hit", point), { kind: "page" },
+      "the empty state point does not belong to the page");
+    await s.click(point.x, point.y);
+    await s.press("a", { text: `${base}/empty` });
+    await s.press("Enter");
+    await loaded(s, surface, `${base}/empty`);
+    await placed(s, surface, "after the first address");
+    const shown = await s.rect("browser.empty", undefined, surface);
+    assert.equal(shown.width * shown.height, 0, `the empty state stayed after a load: ${JSON.stringify(shown)}`);
   });
 
   test(`${app.name}: a card focus keeps a shown document visible while its placement is prepared`, async (t) => {

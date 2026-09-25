@@ -93,7 +93,7 @@
     "commands": [
       {
         "name": "browser.address.select",
-        "description": "Selects the complete address field value for replacement.",
+        "description": "Focuses the address field and selects its complete value for replacement.",
         "params": { "type": "object", "properties": {} },
         "result": { "type": "null" }
       },
@@ -177,6 +177,10 @@
       {
         "name": "browser.document",
         "description": "The element the document region occupies."
+      },
+      {
+        "name": "browser.empty",
+        "description": "The element shown in place of the document while the address is empty; a click focuses the address field."
       }
     ]
   }

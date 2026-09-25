@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F13-4: a browser card without an address hides its document region and shows the empty state `browser.empty` ("주소를 입력하세요") in its place; a click on it focuses the address field through `browser.address.select`, and the first load shows the region again. Before, the visible empty WKWebView took native focus on a click and drew white. Validated on rebuilt Wails and Tauri hosts (`e2e/browser.test.mjs` 14/14, `e2e/audit.test.mjs` 2/2).
 - F13-0: a double click on the inset sidebar grip sets the minimum width 120 (the grip no longer prevents the default pointer action, which suppressed `dblclick`), a sidebar without a stored width opens at 120, and the real-input tool sends the click count so a posted double click is a real one.
 - V5-69-2: the settings window and menus call card and sidebar places "위치", and the group descriptions say what each group changes.
 - V5-69-1: the inset sidebar's fold button folds the sidebar, the grip lies over the border with no gap beside the surface, and dragging does not select sidebar text.

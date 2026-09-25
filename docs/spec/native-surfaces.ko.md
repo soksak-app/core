@@ -82,6 +82,7 @@ macOS 콘텐츠 웹뷰는 장치 픽셀을 좌표 단위로 사용하는 공통 
 - manifest가 `^[a-z0-9][a-z0-9-]{0,63}$`와 일치하는 고유 이름을 선언한다. 페이지는 `createSurfaceComposition`에서 문서 손잡이를 얻는다. 개별 attach, place, detach 연산은 공개하지 않는다.
 - 호스트는 호출한 표면의 `SurfaceHost.NativePlane` 아래에 웹뷰를 만들고, 호출마다 호출한 DOM 웹뷰가 요청에 적힌 표면인지 확인한다. 표면은 다른 표면의 영역을 조작할 수 없다.
 - 완전한 합성이 뷰포트 가장자리에서 요소까지의 여백을 CSS 픽셀로 보고하고 요소가 보이는지를 함께 보낸다. 호스트는 여백을 저장하고 바깥 표면이 바뀔 때 같은 네이티브 트랜잭션에서 다시 적용한다.
+- 페이지는 요소를 숨겨 영역을 숨긴다. 그러면 합성이 영역을 보이지 않는 것으로 보고하고, 호스트는 네이티브 뷰를 숨겨 그 뷰는 그리지도 입력을 받지도 않는다. 브라우저 플러그인은 `browser.location`이 빈 `url`을 보고하는 동안, 즉 첫 주소를 열기 전에 문서 요소를 숨긴다. 그 자리에는 `주소를 입력하세요` 문구의 빈 상태 `browser.empty`를 표시하고, 이를 누르면 `browser.address.select`가 실행되어 주소창에 초점을 주고 값을 선택한다. 상태가 비어 있지 않은 `url`을 보고하면 플러그인은 빈 상태를 없애고 문서 요소를 다시 표시한다.
 - 영역은 `http`와 `https` 주소만 연다. 앱 자체 스킴과 `file`을 포함한 다른 스킴은 요청할 때와 문서가 이동할 때 모두 거부한다. 영역 문서는 앱 문서와 분리된 `soksak-documents` 영구 웹사이트 데이터 저장소를 사용하며 앱 브리지를 받지 않는다.
 - `go`는 `back`, `forward`, `reload`, `stop`을 실행하고 실행 여부를 반환한다.
 - 호스트는 `document-state {surface, document, state}`를 소유 표면에만 보낸다. `state`는 `{url, title, loading, progress, canGoBack, canGoForward, error, scroll: {x, y}}`이다. `error`는 마지막 로드 실패 또는 null이고, `scroll`은 CSS 픽셀 단위의 문서 스크롤 위치다. 한 실행 루프 차례의 변경은 한 번 보고한다.
