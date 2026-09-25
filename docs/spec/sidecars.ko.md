@@ -128,11 +128,13 @@
 
 ## files
 
-`sidecars/files`(`@soksak/sidecar-files`)는 `pnpm run build`로 `build/soksak-files`를 빌드하고 세션의 `root` 안의 디렉터리를 나열한다. 코드는 `src/`(`src/main.go`와 패키지 `src/files`)에 있고 이식 가능한 Go 파일 동작만 쓰므로 플랫폼 디렉터리가 없다. 요청 사이에 상태를 갖지 않는다.
+`sidecars/files`(`@soksak/sidecar-files`)는 `pnpm run build`로 `build/soksak-files`를 빌드하고 세션의 `root` 안의 디렉터리를 나열하고 감시한다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/files`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 디렉터리 감시. macOS는 디렉터리에 kqueue `EVFILT_VNODE` 필터를 걸어 감시하고, Linux와 Windows는 `watching directories is not implemented on <os>`를 반환한다. 세션은 감시하는 디렉터리만 상태로 갖는다.
 
 | 요청 본문 | 답 본문 |
 | --- | --- |
 | `{operation: "list", id, path}` | `{id, entries: [{name, directory}]}`: `root/path`의 항목. 디렉터리가 먼저 오고 각 묶음은 이름순이다. `path`는 `root` 기준 상대 경로이며 `""`는 `root` 자신이다 |
+| `{operation: "watch", id, paths}` | `{id}`: 세션이 감시하는 디렉터리를 `paths`(`root` 기준 상대 경로, `list`와 같이 검사)로 바꾼다. 빈 목록은 감시를 멈춘다. 그 뒤 감시하는 디렉터리의 항목이 생기거나 지워지거나 이름이 바뀌면 사이드카는 `id` 없이 `{changed: path}`를 보낸다 |
+| `closed` | 세션의 감시를 멈춘다. 답하지 않는다 |
 | 모든 실패 | `{id, error}`: `root`가 없거나, `path`가 절대 경로이거나 (심볼릭 링크를 따라간 뒤) `root`를 벗어나거나, 디렉터리를 읽을 수 없는 경우 |
 
 ## 터미널 사이드카 (vt-core)
@@ -153,4 +155,4 @@
 
 ## 테스트
 
-각 사이드카는 자기 디렉터리에서 테스트를 실행한다. `shell`은 `go test ./...`로 프로토콜, 출력 순서, 디렉터리 보고, 명령 입력, `run` 결과, 중단을, `node --test tests/`로 `sidecar.json`을 검사한다. `files`는 `go test ./...`로 나열, 정렬, `root` 밖 경로의 거부를 검사하고 같은 방법으로 `sidecar.json`을 검사한다. 각 호스트는 `tests/sidecars_test.*`에서 fake 사이드카 실행 파일로 전달과 스테이징된 선언 파일을 통한 해석을 검사하고 실제 사이드카를 실행하지 않는다.
+각 사이드카는 자기 디렉터리에서 테스트를 실행한다. `shell`은 `go test ./...`로 프로토콜, 출력 순서, 디렉터리 보고, 명령 입력, `run` 결과, 중단을, `node --test tests/`로 `sidecar.json`을 검사한다. `files`는 `go test ./...`로 나열, 정렬, 감시, `root` 밖 경로의 거부를 검사하고 같은 방법으로 `sidecar.json`을 검사한다. 각 호스트는 `tests/sidecars_test.*`에서 fake 사이드카 실행 파일로 전달과 스테이징된 선언 파일을 통한 해석을 검사하고 실제 사이드카를 실행하지 않는다.

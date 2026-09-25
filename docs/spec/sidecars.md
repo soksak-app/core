@@ -128,11 +128,13 @@ Public symbols in sidecars and their helpers that are diagnostic-only start with
 
 ## files
 
-`sidecars/files` (`@soksak/sidecar-files`) builds `build/soksak-files` with `pnpm run build` and lists directories inside the session's `root`. Its code is in `src/` (`src/main.go` and the package `src/files`) and uses only portable Go file operations, so it has no platform directory. It keeps no state between requests.
+`sidecars/files` (`@soksak/sidecar-files`) builds `build/soksak-files` with `pnpm run build` and lists and watches directories inside the session's `root`. Its code is in `src/`: the entry point `src/main.go`, the protocol in the package `src/files`, and directory watching in `src/platform/{darwin,linux,windows}/`, registered through `src/platform/platform.go`. macOS watches a directory with a kqueue `EVFILT_VNODE` filter on the directory; Linux and Windows return `watching directories is not implemented on <os>`. A session keeps only its watched directories.
 
 | Request body | Reply body |
 | --- | --- |
 | `{operation: "list", id, path}` | `{id, entries: [{name, directory}]}`: the entries of `root/path`, directories first, each group sorted by name; `path` is relative to `root`, `""` names `root` itself |
+| `{operation: "watch", id, paths}` | `{id}`: replaces the session's watched directories with `paths` (relative to `root`, checked like `list`); an empty list stops watching. Afterwards the sidecar sends `{changed: path}` without `id` when an entry of a watched directory is created, removed, or renamed |
+| `closed` | stops the session's watches; no reply |
 | any failure | `{id, error}`: a missing `root`, a `path` that is absolute or leaves `root` (after resolving symbolic links), or a directory that cannot be read |
 
 ## Terminal sidecar (vt-core)
@@ -153,4 +155,4 @@ The sidecar sends `{event: "screen", ...}` whenever the terminal screen changes,
 
 ## Tests
 
-Each sidecar runs its tests in its own directory. `shell` tests its protocol, output order, directory reports, command input, `run` results, and interrupts with `go test ./...` and validates its `sidecar.json` with `node --test tests/`. `files` tests listing, ordering, and the rejection of paths outside `root` with `go test ./...` and validates its `sidecar.json` the same way. Each host tests its relay in `tests/sidecars_test.*` and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.
+Each sidecar runs its tests in its own directory. `shell` tests its protocol, output order, directory reports, command input, `run` results, and interrupts with `go test ./...` and validates its `sidecar.json` with `node --test tests/`. `files` tests listing, ordering, watching, and the rejection of paths outside `root` with `go test ./...` and validates its `sidecar.json` the same way. Each host tests its relay in `tests/sidecars_test.*` and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.
