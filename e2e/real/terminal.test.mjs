@@ -785,7 +785,8 @@ for (const app of Object.values(APPS)) {
     assert.equal(frontWindowAt(target.x, target.y)?.pid, appPid(app), "the Finder window covers the drop point");
     for (const name of ["drop me.txt", "drop.png"]) {
       const from = finderItemCenter(name);
-      assert.equal(frontWindowAt(from.x, from.y)?.owner, "Finder", `${name} is not in the frontmost window at ${from.x},${from.y}`);
+      const front = frontWindowAt(from.x, from.y);
+      assert.equal(front?.owner, "Finder", `${name} is not in the frontmost window at ${from.x},${from.y}: ${JSON.stringify(front)}`);
       const board = dragPasteboard();
       // 사람처럼 누른 뒤 잠시 멈춰야 Finder 가 끌기로 인식한다.
       const steps = [{ type: "move", ...from }, { type: "down", ...from, wait: 300 }];

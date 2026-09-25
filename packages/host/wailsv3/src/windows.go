@@ -227,6 +227,10 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			if err := system.SetMainWebview(win.NativeWindow()); err != nil {
 				log.Fatalf("main webview identity: %v", err)
 			}
+			system.ConfigureMainWindow(win.NativeWindow(), s.Theme().Scheme == "dark")
+			prepareWindow(win)
+			// 놓기 뷰는 창 합성 뷰에 들어가고, 합성 뷰는 만들 때의 메인 웹뷰 크기를 가진다. 메인 웹뷰를 내용
+			// 영역에 맞춘 뒤에 등록한다.
 			dropOnce.Do(func() {
 				main, err := system.MainWebview(win.NativeWindow())
 				if err == nil {
@@ -239,8 +243,6 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 					log.Fatalf("file drop: %v", err)
 				}
 			})
-			system.ConfigureMainWindow(win.NativeWindow(), s.Theme().Scheme == "dark")
-			prepareWindow(win)
 			if _, err := system.UnifiedTitlebar(win.NativeWindow()); err != nil {
 				log.Printf("window: %v", err)
 			}
