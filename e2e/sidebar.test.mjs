@@ -200,6 +200,7 @@ async function serveTitles(t) {
     const name = new URL(request.url, "http://127.0.0.1").pathname.slice(1);
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
     // inspect 는 요소 하나와 이미지 요청 하나를 가진다.
+    if (name === "untitled") { response.end("<!doctype html><body>untitled"); return; }
     response.end(name === "inspect"
       ? `<!doctype html><title>inspect</title><body><div id="box" class="a b"><img src="/pixel"></div>`
       : `<!doctype html><title>${name}</title><body>${name}`);
@@ -332,5 +333,32 @@ for (const app of Object.values(APPS)) {
     await s.until("core.sidebars", (value) => text(value, "browser.dom") === "htmlheadtitlebodydiv#box.a.bimg"
       && text(value, "browser.network").startsWith(`navigation ${base}/inspect `) && text(value, "browser.network").includes(`img ${base}/pixel `),
     "the DOM and network sections did not show the elements and requests");
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a browser tab and the tabs section show the document title or the address`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
+    const base = await serveTitles(t);
+    const sets = (await s.get("core.settings")).values.sets;
+    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-browser"
+      ? { ...set, sections: ["browser.tabs"], layout: "list" } : set) }, scope: "common" });
+    await s.run("core.card.focus", { card: "browser" });
+    const of = (sidebars) => sidebars.find((item) => item.sidebar === "right");
+    const sidebars = await s.until("core.sidebars", (value) => of(value)?.sections.find((item) => item.id === "browser.tabs")?.mounted,
+      "the right sidebar did not mount the tabs section");
+    const surface = of(sidebars).surface;
+    const label = (grid) => grid.cards.flatMap((card) => card.tabs).find((tab) => tab.id === surface)?.label;
+    const section = (value) => of(value)?.sections.find((item) => item.id === "browser.tabs")?.text;
+
+    await s.run("browser.navigate", { url: `${base}/titled` }, surface);
+    await s.until("core.grid", (grid) => label(grid) === "titled", "the tab did not show the document title");
+    await s.until("core.sidebars", (value) => section(value) === "titled", "the tabs section did not show the document title");
+    await s.run("browser.navigate", { url: `${base}/untitled` }, surface);
+    await s.until("core.grid", (grid) => label(grid) === `${base}/untitled`, "the tab did not show the address of an untitled document");
+    await s.until("core.sidebars", (value) => section(value) === `${base}/untitled`, "the tabs section did not show the address");
   });
 }

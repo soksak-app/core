@@ -10,7 +10,7 @@ const manifest = JSON.parse(readFileSync(new URL("../plugin.json", import.meta.u
 async function setup(t) {
   const dom = new JSDOM("<div id='mount'></div>", { url: "https://app.test/" });
   const root = dom.window.document.querySelector("#mount").attachShadow({ mode: "open" });
-  const statuses = new Map(), commands = new Map(), states = new Set(), entries = [];
+  const statuses = new Map(), commands = new Map(), states = new Set(), entries = [], titles = [];
   const region = {
     onState(fn) { states.add(fn); return () => states.delete(fn); },
     async load() {}, async entry(offset) { entries.push(offset); return true; },
@@ -20,6 +20,7 @@ async function setup(t) {
     icon: (name) => `<svg data-icon="${name}"></svg>`,
     runtime: { settings: { read: () => ({ home: "" }), on: () => () => {} }, textSize: { read: () => 1, on: () => () => {} } },
     surfaceId: "browser-history-test",
+    tab: { title: (text) => titles.push(text) },
     composition: { async create() { return { region: () => region, async dispose() {} }; } },
     exposure: {
       status(name, read, subscribe) { statuses.set(name, { read, subscribe }); }, dom() {},
@@ -34,7 +35,9 @@ async function setup(t) {
     for (const fn of states) fn({ url: history.entries[index].url, title: history.entries[index].title, history,
       elements: { nodes: [], truncated: false }, requests: { entries: [], truncated: false } });
   };
-  return { statuses, commands, entries, send };
+  const state = (url, title) => { for (const fn of states) fn({ url, title, history: { entries: [], index: -1 },
+    elements: { nodes: [], truncated: false }, requests: { entries: [], truncated: false } }); };
+  return { statuses, commands, entries, send, titles, state };
 }
 
 test("the browser declares its session history status and the command that loads an entry", () => {
@@ -58,4 +61,13 @@ test("browser.history follows the region state and browser.history.go loads an e
   assert.equal(await commands.get("browser.history.go")({ index: 1 }), true);
   assert.deepEqual(entries, [-1, 1]);
   assert.deepEqual(seen, [-1, 1, 0]);
+});
+
+test("the tab title is the document title, or the address without one, and is removed without both", { timeout: 10000 }, async (t) => {
+  const { titles, state } = await setup(t);
+  state("https://a.test/one", "One");
+  state("https://a.test/plain", "");
+  state("https://a.test/long", `a\u0007b${"x".repeat(300)}`);
+  state("", "");
+  assert.deepEqual(titles.slice(-4), ["One", "https://a.test/plain", `ab${"x".repeat(254)}`, null]);
 });

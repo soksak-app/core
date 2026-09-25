@@ -24,6 +24,7 @@ async function setup(t) {
   const controller = await mount(root, {
     runtime: { settings: { read: () => ({ home: "" }), on: () => () => {} }, textSize: { read: () => 1, on: () => () => {} } },
     icon: (name) => `<svg data-icon="${name}"></svg>`,
+    tab: { title() {} },
     surfaceId: "browser-empty-test",
     composition: { async create() { return { region: () => region, async dispose() {} }; } },
     exposure: {

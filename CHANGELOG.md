@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-74: a browser tab and the 탭 section show the document title, or the address when the page has no title.
 - F13-2-2: the browser DOM section lists the document's elements and the 네트워크 section lists the requests its Performance API recorded (`browser.elements`, `browser.requests`), reported by a content-world script of the shared document view; `make exposure-check` accepts core names in section modules.
 - F13-2-1: the browser 히스토리 section lists the session history of the document region and loads an entry on a click (`browser.history`, `browser.history.go`, document `go` action `entry`), and the 탭 section lists the browser tabs of the card and selects one on a click through `core.grid` and `core.tab.select`; sections may follow core statuses and bind core commands.
 - F13-3-4: the settings window no longer repeats a control per plugin or section. 일반 holds 사이드바 위치, the left and right sidebar switches and sets, and the widths. 플러그인 is a searchable list of manifest names and descriptions (`description` is now required in `plugin.json`); a row opens the plugin page with its settings, sections, and left, right, and rail choices, and 목록 returns. A plugin's left or right choice (a set, 사용 안 함, or 일반 따름) takes precedence over the general choice while its card is focused. 사이드바 lists sets; the editor has the name, the layout, and section rows, each a select box grouped by plugin with ▲ ▼ −, plus +, through `core.settings.sets.row`, which rejects a repeated section. `core.settings.link` takes a set id, `off`, or `inherit`.

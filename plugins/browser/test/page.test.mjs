@@ -47,6 +47,7 @@ test("browser mount publishes document state, respects shadow focus, and dispose
   };
   const context = {
     icon: (name) => `<svg data-icon="${name}"></svg>`,
+    tab: { title() {} },
     surfaceId: "browser-page-test",
     composition: { create: async () => composition },
     exposure: {
