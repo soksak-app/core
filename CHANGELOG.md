@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F8-6-2: a divider drag shows each step's layout within 34 ms (two 60 Hz frames) instead of 50 ms, checked on both hosts.
 - F8-6-2 (partial): `diagnostics.drag` reports the begin, app DOM presentation, and commit times of each native layout transaction, and the drag alignment check reports them for its slowest frame.
 - V5-6-5: files dragged from another application onto a window reach the terminal under the drop point as quoted paths through a native file drop view and the surface's declared drop command, instead of being consumed by Wails or Tauri.
 - V5-51-6, V5-44: every implemented CSI and OSC sequence, including the application keypad, is checked in the running applications on both hosts.

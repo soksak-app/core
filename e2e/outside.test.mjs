@@ -13,8 +13,8 @@ const PLAN = { axis: "x", line: 2, dx: -250, dy: 0, ms: 400, times: 2 };
 
 const READ = 0.5;
 
-// 격자가 한 배치를 떠난 뒤 그 배치가 화면에 남아 있어도 되는 시간(ms). 60Hz 화면의 세 프레임이다.
-const LAG = 50;
+// 격자가 한 배치를 떠난 뒤 그 배치가 화면에 남아 있어도 되는 시간(ms). 60Hz 화면의 두 프레임이다.
+const LAG = 34;
 
 function assertAligned(run) {
   const files = frames(run.frames);

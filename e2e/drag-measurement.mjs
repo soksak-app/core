@@ -82,8 +82,9 @@ export function lagStages(lag, ticks, layouts) {
   const at = (value) => (value === null ? "-" : `+${(value - left).toFixed(1)}`);
   // 프레임 뒤에 처음 시작한 트랜잭션도 적는다. 그 사이 페이지가 준비를 시작하지 않은 시간이 보인다.
   const next = layouts.find(({ begun }) => begun !== null && begun > lag.time);
-  const open = layouts.filter(({ begun, committed }) =>
-    begun !== null && begun <= lag.time && (committed === null || committed >= left)).concat(next ? [next] : []);
+  // 대신된 트랜잭션은 커밋 시각이 없으므로 마지막 단계의 시각으로 끝났는지 본다.
+  const open = layouts.filter(({ begun, presented, committed }) =>
+    begun !== null && begun <= lag.time && (committed ?? presented ?? Infinity) >= left).concat(next ? [next] : []);
   const stages = open.map(({ ticket, begun, presented, committed }) =>
     `#${ticket} begun ${at(begun)} presented ${at(presented)} committed ${at(committed)}`);
   return `step ${lag.step + 1} at ${left.toFixed(1)}ms, frame at +${(lag.time - left).toFixed(1)}: ${stages.join("; ") || "no transaction"}`;
