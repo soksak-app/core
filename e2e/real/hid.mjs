@@ -185,3 +185,28 @@ export async function bringFront(s, app, rect) {
     `${front?.owner} (${front?.pid}), not ${app.name}`);
   return point;
 }
+
+// 시스템 커서를 AppKit 표준 커서와 그림으로 비교한다. 표준 커서는 NSApplication 이 있어야 만들어진다.
+const readCursor = jxa(`
+$.NSApplication.sharedApplication;
+const current = $.NSCursor.currentSystemCursor;
+if (current.isNil()) return JSON.stringify(null);
+const image = (cursor) => cursor.image.TIFFRepresentation;
+const names = { arrow: $.NSCursor.arrowCursor, openHand: $.NSCursor.openHandCursor, closedHand: $.NSCursor.closedHandCursor,
+  pointingHand: $.NSCursor.pointingHandCursor, iBeam: $.NSCursor.IBeamCursor };
+for (const name of Object.keys(names)) {
+  if (image(current).isEqualToData(image(names[name]))) return JSON.stringify(name);
+}
+return JSON.stringify("other");`);
+
+/** 지금 화면의 시스템 커서 이름: arrow, openHand, closedHand, pointingHand, iBeam, other, 또는 null. */
+export function systemCursor() {
+  return readCursor();
+}
+
+const activateFinderApp = jxa(`Application("Finder").activate(); return "";`);
+
+/** Finder 를 활성 애플리케이션으로 만든다. 다시 활성화될 때의 창 상태를 검사하려고 쓴다. */
+export function activateFinder() {
+  activateFinderApp();
+}

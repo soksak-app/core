@@ -191,6 +191,12 @@ static BOOL containsHangul(NSString *text) {
     return nil;
 }
 
+// 선택·편집할 수 있는 NSTextView 는 자기 영역 전체에 I-빔 커서 영역을 둔다. 창이 키 창이 될 때 AppKit 이 커서
+// 영역을 다시 만들면 그 I-빔이 영역 위의 페이지 요소(스크롤바 손잡이 등)의 커서를 덮는다. 포인터는 이 뷰를
+// 지나 페이지로 가므로 커서도 페이지가 정한다.
+- (void)resetCursorRects {
+}
+
 // Edit 메뉴의 붙여넣기는 페이지에 알려 선언된 붙여넣기 명령을 실행하게 한다. NSTextView 의 붙여넣기는 입력기의
 // 작업 공간인 입력 문서에 넣으므로 쓰지 않는다(docs/spec/terminal-runtime.md).
 - (void)paste:(id)sender {

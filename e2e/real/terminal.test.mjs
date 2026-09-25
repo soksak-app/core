@@ -8,7 +8,7 @@ import test from "node:test";
 import { APPS, fresh, open } from "../app.mjs";
 import { frames, pixel, readFrame } from "../frame.mjs";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
-import { bringFront, click, dragPath, key, KEYS, keepPasteboard, pasteboardText, post, requireTrusted, screenCenter, writePasteboard } from "./hid.mjs";
+import { activateFinder, bringFront, click, dragPath, key, KEYS, keepPasteboard, pasteboardText, post, requireTrusted, screenCenter, systemCursor, writePasteboard } from "./hid.mjs";
 
 // 터미널 한 칸의 중심 화면 좌표.
 function cellPoint(origin, session, column, row) {
@@ -521,5 +521,31 @@ for (const app of Object.values(APPS)) {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the scrollbar thumb shows an open hand and a closed hand while it is dragged`, { timeout: 120000 }, async (t) => {
+    const { s, surface, origin, session } = await prepare(t, app, "CURSORSTART");
+    await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 80 ]; do printf 'ROW%02d\\n' $i; i=$((i+1)); done\r" }, surface);
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line === "ROW79"), "the rows did not render");
+    await s.until("terminal.session", (value) => value.scrollback?.history > 0, "the output did not exceed the screen", { surface });
+    const thumb = await screenCenter(s, await s.rect("terminal.scrollbar.thumb", undefined, surface));
+    const text = cellPoint(origin, session, 3, 2);
+    // 포인터가 글자 위에서 손잡이로 들어온다. 표시된 뒤의 시스템 커서를 읽는다.
+    post([{ type: "move", x: text.x, y: text.y }, { type: "move", x: thumb.x, y: thumb.y }]);
+    await s.presented();
+    assert.equal(systemCursor(), "openHand", "the pointer over the scrollbar thumb is not an open hand");
+    // 창이 다시 키 창이 되면 AppKit 이 커서 영역을 다시 만든다. 포인터가 손잡이 위에 있는 채로 다시 활성화한다.
+    activateFinder();
+    await s.until("host.window", (window) => window.active === false, "the application stayed active");
+    await bringFront(s, app, await s.rect("terminal.scrollbar.thumb", undefined, surface));
+    await s.presented();
+    assert.equal(systemCursor(), "openHand", "the pointer over the scrollbar thumb is not an open hand after the window became key");
+    post([{ type: "down", x: thumb.x, y: thumb.y }, { type: "drag", x: thumb.x, y: thumb.y - 10 }, { type: "drag", x: thumb.x, y: thumb.y - 20 }]);
+    await s.presented();
+    const dragging = systemCursor();
+    post([{ type: "up", x: thumb.x, y: thumb.y - 20 }]);
+    assert.equal(dragging, "closedHand", "the pointer while the thumb is dragged is not a closed hand");
   });
 }

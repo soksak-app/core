@@ -739,6 +739,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     event.stopPropagation();
     const { top } = thumbGeometry();
     thumbDrag = { pointerId: event.pointerId, grab: event.clientY - scrollbar.track.getBoundingClientRect().top - top, sent: null };
+    // 끄는 동안 손잡이는 쥔 손 포인터를 보인다.
+    scrollbar.thumb.dataset.dragging = "";
     scrollbar.thumb.setPointerCapture?.(event.pointerId);
   };
   const moveThumb = (event) => {
@@ -755,6 +757,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   const endThumbDrag = (event) => {
     if (!thumbDrag || event.pointerId !== thumbDrag.pointerId) return;
     scrollbar.thumb.releasePointerCapture?.(event.pointerId);
+    delete scrollbar.thumb.dataset.dragging;
     thumbDrag = null;
   };
   if (scrollbar) {
