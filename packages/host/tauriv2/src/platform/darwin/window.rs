@@ -66,6 +66,19 @@ pub fn fullscreen(window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), S
     }
 }
 
+/// 창의 가림 상태가 바뀔 때마다 changed 를 호출한다(NSWindowDidChangeOcclusionStateNotification).
+pub fn observe_occlusion(window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
+    extern "C" {
+        fn sp_window_observe_occlusion(window: *mut c_void, changed: &Block<dyn Fn()>) -> bool;
+    }
+    let changed = RcBlock::new(changed);
+    if unsafe { sp_window_observe_occlusion(window as *mut c_void, &changed) } {
+        Ok(())
+    } else {
+        Err("the window occlusion cannot be observed without a window".into())
+    }
+}
+
 /// 창의 제목줄을 도구막대 높이로 만들고 그 높이를 반환한다. 만들 수 없으면 오류를 반환한다.
 pub fn unified_titlebar(window: Handle) -> Result<f64, String> {
     extern "C" {

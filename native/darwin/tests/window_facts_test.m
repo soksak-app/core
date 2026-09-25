@@ -18,6 +18,17 @@ static id parse(char *text) {
     return value;
 }
 
+// 창 서버의 가림 상태 변경은 AppKit 이벤트로 도착한다. 창과 화면 변경 이벤트만 꺼내 보낸다. 애플리케이션
+// 활성화 이벤트는 꺼내지 않는다(활성화는 검사 프로세스를 활성으로 만든다).
+static void pumpOcclusion(void) {
+    NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAppKitDefined untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02]
+        inMode:NSDefaultRunLoopMode dequeue:NO];
+    if (event && event.subtype != NSEventSubtypeApplicationActivated && event.subtype != NSEventSubtypeApplicationDeactivated) {
+        [NSApp sendEvent:[NSApp nextEventMatchingMask:NSEventMaskAppKitDefined untilDate:nil inMode:NSDefaultRunLoopMode dequeue:YES]];
+    }
+    [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+}
+
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -110,6 +121,23 @@ int main(void) { @autoreleasepool {
         && [screens[0][@"scale"] doubleValue] >= 1, @"the primary display is reported at the screen origin with its scale");
     check(parse(sp_dock_items()) != nil, @"Dock items are reported as an array");
     check(!sp_dock_select("No such item"), @"an unknown Dock item is rejected");
+    // 창을 화면에 보이거나 치우면 창 서버가 가림 상태를 바꾸고, 관찰은 그 변경마다 호출된다.
+    NSWindow *observed = [[[NSWindow alloc] initWithContentRect:NSMakeRect(40, 40, 200, 120)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
+    [observed setReleasedWhenClosed:NO];
+    __block int changes = 0;
+    check(sp_window_observe_occlusion(observed, ^{ changes++; }), @"occlusion observation starts");
+    check(!sp_window_observe_occlusion(NULL, ^{}), @"occlusion observation without a window is rejected");
+    [observed orderFrontRegardless];
+    NSDate *limit = [NSDate dateWithTimeIntervalSinceNow:2];
+    while (changes == 0 && [limit timeIntervalSinceNow] > 0) pumpOcclusion();
+    check(changes > 0 && (observed.occlusionState & NSWindowOcclusionStateVisible) != 0,
+        [NSString stringWithFormat:@"showing the window reports an occlusion change (%d changes)", changes]);
+    int shown = changes;
+    [observed orderOut:nil];
+    limit = [NSDate dateWithTimeIntervalSinceNow:2];
+    while (changes == shown && [limit timeIntervalSinceNow] > 0) pumpOcclusion();
+    check(changes > shown, [NSString stringWithFormat:@"hiding the window reports an occlusion change (%d changes)", changes]);
     check(!NSApp.isActive, @"application stays inactive");
     [window close];
     return failures ? 1 : 0;

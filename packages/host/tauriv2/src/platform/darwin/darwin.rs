@@ -112,6 +112,10 @@ impl Platform for Darwin {
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
         webview::set_main_appearance(view, dark)
     }
+    fn observe_occlusion(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
+        window::observe_occlusion(window, changed)
+    }
+
     fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
         window::fullscreen(window, on, done)
     }

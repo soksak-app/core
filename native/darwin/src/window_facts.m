@@ -255,3 +255,30 @@ bool sp_dock_select(const char *title) {
     [menu performActionForItemAtIndex:index];
     return true;
 }
+
+// 창 하나의 가림 상태 관찰. 창의 연결 객체로 두어 창과 함께 해제되며 그때 관찰을 끝낸다.
+@interface SPOcclusionObserver : NSObject
+@property(nonatomic, retain) id token;
+@end
+
+@implementation SPOcclusionObserver
+- (void)dealloc {
+    if (_token) [NSNotificationCenter.defaultCenter removeObserver:_token];
+    [_token release];
+    [super dealloc];
+}
+@end
+
+static const char occlusionObserverKey;
+
+bool sp_window_observe_occlusion(void *handle, void (^changed)(void)) {
+    NSCAssert(NSThread.isMainThread, @"occlusion observation requires the UI thread");
+    NSWindow *window = (NSWindow *)handle;
+    if (!window || !changed) return false;
+    void (^callback)(void) = [[changed copy] autorelease];
+    SPOcclusionObserver *observer = [[SPOcclusionObserver new] autorelease];
+    observer.token = [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidChangeOcclusionStateNotification
+        object:window queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *notification) { callback(); }];
+    objc_setAssociatedObject(window, &occlusionObserverKey, observer, OBJC_ASSOCIATION_RETAIN);
+    return true;
+}

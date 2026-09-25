@@ -34,6 +34,10 @@ pub fn fullscreen(_window: Handle, _on: bool, _done: Box<dyn Fn()>) -> Result<()
     missing("full screen")
 }
 
+pub fn observe_occlusion(_window: Handle, _changed: Box<dyn Fn()>) -> Result<(), String> {
+    missing("window occlusion")
+}
+
 pub fn unified_titlebar(_window: Handle) -> Result<f64, String> {
     missing("window button placement")
 }

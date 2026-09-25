@@ -257,13 +257,14 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	if win.NativeWindow() != nil {
 		s.prepareNative()
 	}
-	// host.window 를 감시하는 연결에 창의 위치, 크기와 키 상태 변경을 알린다.
+	// host.window 를 감시하는 연결에 창의 위치, 크기, 키 상태와 가림 상태 변경을 알린다. Wails 는 macOS 의 가림
+	// 상태 변경을 WindowShow(보임)와 WindowHide(완전히 가려짐)로 보낸다.
 	changed := func(*application.WindowEvent) {
 		s.windowChanged()
 		go h.windowsChanged()
 	}
 	for _, event := range []events.WindowEventType{events.Common.WindowDidResize, events.Common.WindowDidMove,
-		events.Common.WindowFocus, events.Common.WindowLostFocus} {
+		events.Common.WindowFocus, events.Common.WindowLostFocus, events.Common.WindowShow, events.Common.WindowHide} {
 		win.OnWindowEvent(event, changed)
 	}
 	win.OnWindowEvent(events.Mac.WebViewDidCommitNavigation, func(*application.WindowEvent) {

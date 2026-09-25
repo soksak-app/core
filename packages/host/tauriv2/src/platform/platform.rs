@@ -177,6 +177,8 @@ pub trait Platform: Send + Sync {
     /// 창을 전체 화면으로 바꾸거나 되돌리고, 전환이 끝나면 done 을 호출한다. 전환 중에 온 요청은
     /// 그 전환이 끝난 뒤에 처리한다.
     fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String>;
+    /// 창의 가림 상태가 바뀔 때마다 changed 를 UI 스레드에서 호출한다. 관찰은 창과 함께 끝난다.
+    fn observe_occlusion(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<(), String>;
 
     /// 창의 제목줄을 도구막대 높이로 만들고 그 높이(pt)를 반환한다. AppKit 이 그 높이의 세로 가운데에
     /// 창 단추를 두므로 호스트는 단추를 옮기지 않는다. 창에 단추가 없으면 오류를 반환한다.

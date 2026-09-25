@@ -50,3 +50,9 @@ char *sp_dock_items(void);
 bool sp_dock_select(const char *title);
 
 void sp_facts_free(char *text);
+
+// 창의 가림 상태가 바뀔 때마다(NSWindowDidChangeOcclusionStateNotification) changed 를 메인 스레드에서
+// 호출한다. 관찰은 창이 해제될 때 끝난다. 창에 이미 관찰이 있으면 교체한다. 창이 없으면 false 다.
+#ifdef __BLOCKS__
+bool sp_window_observe_occlusion(void *window, void (^changed)(void));
+#endif

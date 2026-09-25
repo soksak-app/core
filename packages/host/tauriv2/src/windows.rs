@@ -300,6 +300,12 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             }
         }),
     )?;
+    // host.window 를 감시하는 연결에 가림 상태 변경을 알린다. Tauri 는 이 변경을 창 이벤트로 보내지 않는다.
+    let occluded = window.clone();
+    platform.observe_occlusion(
+        owner,
+        Box::new(move || crate::exposure::window_changed(&occluded)),
+    )?;
     // 페이지가 첫 행의 높이를 제목줄에서 읽으므로 문서를 열기 전에 만든다.
     unified_titlebar(&window)?;
     let host = window.clone();

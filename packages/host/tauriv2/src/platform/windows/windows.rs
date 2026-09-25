@@ -41,6 +41,10 @@ impl Platform for Windows {
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
         unsupported::set_main_appearance(view, dark)
     }
+    fn observe_occlusion(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
+        unsupported::observe_occlusion(window, changed)
+    }
+
     fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
         unsupported::fullscreen(window, on, done)
     }
