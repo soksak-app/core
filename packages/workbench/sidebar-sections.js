@@ -105,6 +105,7 @@ export function clearSet(container) {
   drawn.delete(container);
   container.replaceChildren();
   delete container.dataset.sidebar;
+  delete container.dataset.expose;
   notify();
 }
 
@@ -150,10 +151,10 @@ export function drawSet(container, sidebar, set, context) {
     record = { sidebar, key, set: set.id, layout: set.layout, context, entries: [] };
     drawn.set(container, record);
     container.dataset.sidebar = sidebar;
+    container.dataset.expose = "core.sidebar";
     delete container.dataset.html;
-    const title = document.createElement("b");
-    title.textContent = set.title;
-    container.replaceChildren(title);
+    // 세트 제목 줄은 없다. 섹션이 사이드바 맨 위에서 시작한다.
+    container.replaceChildren();
     let strip = null;
     if (set.layout === "tabs") {
       strip = document.createElement("div");
@@ -189,7 +190,8 @@ export function drawSet(container, sidebar, set, context) {
         entry.header.type = "button";
         entry.header.className = "set__head";
         entry.header.dataset.expose = "core.sidebar.section.header";
-        entry.header.textContent = section.name;
+        entry.header.innerHTML = '<span class="set__chevron" aria-hidden="true"></span><span class="set__name"></span>';
+        entry.header.querySelector(".set__name").textContent = section.name;
         bind(entry.header, "core.sidebar.section.fold", params);
         element.append(entry.header, entry.body);
       }

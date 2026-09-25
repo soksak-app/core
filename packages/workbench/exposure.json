@@ -2395,6 +2395,16 @@
         "many": true
       },
       {
+        "name": "core.sidebar",
+        "description": "The drawn sidebars in document order, in the order of core.sidebars; each holds its sections.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar.status",
+        "description": "The 26-point status lines that end the left, right, rail, and inset sidebars in document order.",
+        "many": true
+      },
+      {
         "name": "core.sidebar.section",
         "description": "The section elements of drawn sidebars in document order; each holds the content its plugin module draws.",
         "many": true

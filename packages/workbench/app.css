@@ -17,6 +17,8 @@
   /* 형태. 모드와 무관하다. */
   --r:10px;--half-gap:6px;--bw:1px;
   --font:ui-monospace,SFMono-Regular,Menlo,monospace;--size:13px;
+  /* 사이드바 섹션 이름과 빈 상태 문구의 한글 UI 글꼴. */
+  --ui-font:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",system-ui,sans-serif;
 
   /* 모든 화면의 글자 크기와 간격. 글자 크기는 설정의 기본 크기에 비례한다. */
   --text-control:calc(var(--size) * 12 / 13);
@@ -282,9 +284,12 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 /* 손잡이는 사이드바의 오른쪽 테두리 위에 겹쳐 두므로 표면과 테두리 사이에 틈이 없다. */
 .card[data-side]{grid-template-columns:var(--side-w) minmax(0,1fr)}
 .card[data-side] > .chrome,.card[data-side] > .status{grid-column:1 / -1}
-.side{grid-row:2;grid-column:1;min-width:0;overflow:hidden;display:flex;flex-direction:column;border-right:var(--bw) solid var(--edge)}
-.side__fold{align-self:flex-end;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:2px 8px;font:inherit}
-.card[data-side=folded] .side > .set{display:none}
+.side{grid-row:2;grid-column:1;min-width:0;overflow:hidden;display:flex;flex-direction:column;border-right:var(--bw) solid var(--rule)}
+.side__text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.side__fold{flex:0 0 auto;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0 2px;font:inherit}
+.side__fold:hover{color:var(--fg)}
+.card[data-side=folded] .side > .set,.card[data-side=folded] .side__text{display:none}
+.card[data-side=folded] .side__status{padding:0;justify-content:center}
 .side{user-select:none}
 .side__grip{grid-row:2;grid-column:1;justify-self:end;width:6px;margin-right:-3px;z-index:2;cursor:col-resize}
 .card[data-side=folded] > .side__grip{display:none}
@@ -302,9 +307,6 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .surface-status[data-surface-status=error]::before{border:0;background:currentColor;animation:none}
 .surface-status[hidden]{display:none}
 @keyframes surface-status-spin{to{transform:rotate(360deg)}}
-.set{padding:var(--space-2) var(--space-3);font-size:var(--text-small);color:var(--muted);overflow:hidden}
-.set b{color:var(--fg);display:block;margin-bottom:4px}
-.card[data-role=fixed] .set b{color:var(--rail)}
 
 /* ── 선 ───────────────────────────────────────────────────────────────────
    경계선은 한 좌표가 판을 가로지르는 전체 구간이다. 카드가 실제로 접하는 구간은
@@ -487,16 +489,36 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
    아닐 때만 data-text-zoom 과 --text-zoom 을 쓴다. WebKit 은 zoom 요소의 퍼센트 크기를 확대하지 않으므로
    호스트는 그대로 슬롯을 채우고 그 안의 내용만 커진다. 슬롯 사각형과 네이티브 배치는 바뀌지 않는다. */
 .card[data-text-zoom] .surface-module-host,.card[data-text-zoom] > .set{zoom:var(--text-zoom)}
-/* 사이드바 섹션. list 는 머리로 접고, tabs 는 고른 탭의 섹션만 보인다. */
-.set{overflow:auto}
-.set__tabs{display:flex;gap:2px;margin-bottom:4px}
-.set__tab,.set__head{font:inherit;color:var(--muted);background:none;border:0;padding:2px 4px;cursor:pointer;text-align:left}
-.set__tab[aria-selected=true]{color:var(--fg);box-shadow:inset 0 -1px 0 var(--fg)}
-.set__head{display:block;width:100%;color:var(--fg)}
-.set__head[aria-expanded=false]::before{content:"▸ "}
-.set__head[aria-expanded=true]::before{content:"▾ "}
+/* 사이드바. 세트 제목 줄과 자리 표시 없이 섹션이 맨 위에서 시작하고, 26pt 상태 줄로 끝난다.
+   섹션 머리는 사이드바보다 한 단계 밝은 띠이고, 접으면 머리만 남는다. 색은 모두 테마 토큰에서 온다. */
+.card[data-place]{grid-template-rows:0 minmax(0,1fr) 26px;border-color:var(--rule)}
+.card[data-place] > .chrome{display:none}
+.card[data-place] > .set{grid-row:2}
+.card[data-place] > .status{grid-row:3}
+.set{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column}
+.sidebar-status{display:flex;align-items:center;gap:6px;height:26px;flex:0 0 26px;box-sizing:border-box;padding:0 10px;
+  border-top:var(--bw) solid var(--rule);font:11px var(--font);color:var(--muted);white-space:nowrap;overflow:hidden}
+.set__head,.set__tab{display:flex;align-items:center;gap:6px;height:26px;flex:0 0 26px;box-sizing:border-box;padding:0 10px;
+  border:0;background:color-mix(in srgb,var(--fg) 3%,var(--card));color:var(--fg);
+  font:600 11.5px var(--ui-font);letter-spacing:0;text-align:left;cursor:pointer}
+.set__head{width:100%;border-bottom:var(--bw) solid var(--rule)}
+.set__section + .set__section .set__head{border-top:var(--bw) solid var(--rule)}
+.set__head:hover,.set__tab:hover{background:color-mix(in srgb,var(--fg) 7%,var(--card))}
+.set__chevron{flex:0 0 10px;color:var(--muted);font-size:10px}
+.set__head[aria-expanded=true] .set__chevron::before{content:"▾"}
+.set__head[aria-expanded=false] .set__chevron::before{content:"▸"}
+.set__name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.set__section[data-folded=true] .set__head{border-bottom:0}
 .set__section[data-folded=true] .set__body{display:none}
-.set__body ul{margin:0 0 6px;padding:0 0 0 12px;list-style:none}
-.set__body p{margin:0 0 6px;padding:0 0 0 12px;overflow-wrap:anywhere}
+.set__tabs{display:flex;flex:0 0 26px;border-bottom:var(--bw) solid var(--rule);background:color-mix(in srgb,var(--fg) 3%,var(--card))}
+.set__tab{color:var(--muted);background:transparent}
+.set__tab[aria-selected=true]{color:var(--fg);box-shadow:inset 0 -2px 0 var(--rail)}
+.set__body{padding:9px 14px;font:12px/1.6 var(--font);color:color-mix(in srgb,var(--fg) 80%,var(--muted))}
+.set__body ul{margin:0;padding:0;list-style:none}
+.set__body p{margin:0;overflow-wrap:anywhere}
+/* 목록이 비면 플러그인이 목록 자리에 빈 상태 문구를 적는다. 문구는 UI 글꼴의 흐린 색이다. */
+.set__body ul:not(:has(li)),.set__empty{font:12px/1.6 var(--ui-font);color:var(--muted)}
+.set__empty{margin:0;padding:9px 14px}
 .set__body li button{border:0;padding:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.set__body li button:hover{text-decoration:underline}
+.set__body li button:hover{color:var(--fg);text-decoration:underline}
+.set__section{flex:0 0 auto}

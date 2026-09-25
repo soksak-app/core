@@ -169,7 +169,7 @@ function createCard(card) {
   el.className = "card";
   el.dataset.expose = "core.card";
   el.innerHTML = isPlace(card.id)
-    ? '<header class="chrome"></header><div class="set"></div><footer class="status"></footer>'
+    ? '<header class="chrome"></header><div class="set"></div><footer class="status sidebar-status" data-expose="core.sidebar.status"></footer>'
     : '<header class="chrome"></header><div class="slot"></div><footer class="status"></footer>';
   // 카드 객체를 클로저에 담지 않고 요소의 data-card-id 를 읽는다. 스페이스를
   // 바꾸면 같은 id 로 새 카드 객체가 만들어지므로, 담아 둔 참조는 없어진 객체다.
@@ -229,11 +229,8 @@ function updateCard(el, card) {
 
   if (place) {
     const kind = railKind(place);
-    // 레일의 이름은 그 레일이 담당하는 플러그인의 이름에서 나온다. 여기에 적으면
-    // 플러그인을 추가할 때마다 이 파일을 고쳐야 한다.
-    const name = place === "left" ? "좌측" : place === "right" ? "우측"
-      : kind ? `${plugin(kind).name} 레일` : "레일";
-    setHTML(chrome, `<span class="tab" data-active="true">${name}</span>`);
+    // 사이드바 카드는 머리 줄을 보이지 않는다. 섹션이 맨 위에서 시작하고 자리 설명은 상태 줄이 한다.
+    el.dataset.place = place;
     const set = standingSet(place);
     const holder = el.querySelector(".set");
     if (set) {
@@ -242,7 +239,7 @@ function updateCard(el, card) {
       drawSet(holder, card.id, set, { card: owner?.id ?? null, surface: activeTab(owner)?.id ?? null });
     } else {
       clearSet(holder);
-      setHTML(holder, "<b>—</b>포커스된 플러그인 없음");
+      setHTML(holder, '<p class="set__empty">포커스된 플러그인 없음</p>');
     }
     setText(status, place === "left"
       ? `열 ${card.c0}–${card.c1} · 설치 전체가 한 세트`
@@ -863,7 +860,8 @@ function drawSidebar(el, card) {
   if (!side) {
     side = document.createElement("aside");
     side.className = "side";
-    side.innerHTML = '<button class="side__fold" type="button" data-expose="core.card.sidebar.fold"></button><div class="set"></div>';
+    side.innerHTML = '<div class="set"></div><div class="sidebar-status side__status" data-expose="core.sidebar.status">' +
+      '<span class="side__text"></span><button class="side__fold" type="button" data-expose="core.card.sidebar.fold"></button></div>';
     grip = document.createElement("div");
     grip.className = "side__grip";
     grip.dataset.expose = "core.card.sidebar.grip";
@@ -906,6 +904,8 @@ function drawSidebar(el, card) {
   el.style.setProperty("--side-w", `${state.collapsed ? value("sidebarFoldedWidth") : state.width}px`);
   const set = linkedSet("rail", activeTab(card).plugin);
   drawSet(side.querySelector(".set"), card.id, set, { card: card.id, surface: activeTab(card).id });
+  // 상태 줄은 세트 이름을 보인다. 세트 제목 줄이 없으므로 어떤 세트인지는 여기서 읽는다.
+  setText(side.querySelector(".side__text"), set.title);
 }
 
 /* ── 레일. 카드이므로 이동에 move() 를 사용한다 ───────────────────────── */
