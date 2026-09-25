@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
 
 /** 설정 창의 현재 컨트롤. */
 const controls = async (s) => (await s.get("core.settings-modal")).controls;
@@ -38,6 +38,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await keepCommonSettings(s);
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
     const opened = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
@@ -50,7 +51,7 @@ for (const app of Object.values(APPS)) {
     await control(s, "core.settings-modal.set", "left");
     await control(s, "core.settings-modal.set", "right");
     await control(s, "core.settings-modal.set", "link:left:");
-    for (const key of ["sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth", "railWidth"]) {
+    for (const key of ["sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth"]) {
       await control(s, "core.settings-modal.set", key);
     }
     const pluginKeys = Object.keys((await s.get("core.settings")).values).filter((key) => key.includes("."));
@@ -101,6 +102,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await keepCommonSettings(s);
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
     await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
@@ -171,6 +173,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await keepCommonSettings(s);
     await s.run("core.settings.set", { patch: { rail: "inset", sidebarWidth: 150, sidebarMinWidth: 140 }, scope: "common" });
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebar?.width === 150),
       "an inset sidebar did not open at sidebarWidth");
@@ -188,6 +191,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await keepCommonSettings(s);
     const sets = await settingsValue(s, "sets");
     const broken = sets.map((item, index) => (index === 0 ? { ...item, sections: [...item.sections, "gone.section"] } : item));
     await assert.rejects(s.run("core.settings.set", { patch: { sets: broken }, scope: "common" }),
@@ -217,6 +221,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await keepCommonSettings(s);
     const right = async (card, want, message) => {
       await s.run("core.card.focus", { card });
       await s.until("core.sidebars", (bars) => (bars.find((bar) => bar.sidebar === "right")?.set ?? null) === want, message);
@@ -239,6 +244,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await keepCommonSettings(s);
     assert.equal(await settingsValue(s, "rail"), "inset");
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebar),
       "no card holds an inset sidebar in a fresh configuration");
@@ -255,6 +261,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await keepCommonSettings(s);
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebar),
       "no card holds an inset sidebar");
     const card = grid.cards.find((item) => item.sidebar);

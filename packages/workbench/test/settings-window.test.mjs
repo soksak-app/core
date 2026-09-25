@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { changeRow, chooseLink, createSet, deleteSet, resolveSidebar, updateSet } from "../sidebar-sets.js";
 import { matchPlugins } from "../plugin-search.js";
-import { defaults, set, setPluginSettings, setSidebarDefaults } from "../settings.js";
+import { LAYOUT_RANGES, defaults, set, setPluginSettings, setSidebarDefaults } from "../settings.js";
 
 const sets = [
   { id: "set-1", title: "탐색기", sections: ["alpha.one"], layout: "list" },
@@ -23,14 +23,17 @@ test("the layout values are settings with the former constants as defaults", () 
   assert.equal(defaults.sidebarMinWidth, 120);
   assert.equal(defaults.sidebarMaxWidth, 480);
   assert.equal(defaults.sidebarWidth, 190);
-  assert.equal(defaults.railWidth, 190);
+  assert.equal(Object.hasOwn(defaults, "railWidth"), false, "the rail starts at sidebarWidth");
+  // 세 값은 한 범위를 함께 쓰므로 같은 값이 같은 슬라이더 위치에 놓인다.
+  assert.deepEqual(LAYOUT_RANGES, { sidebarMinWidth: [60, 800], sidebarMaxWidth: [60, 800], sidebarWidth: [60, 800] });
 });
 
 test("a layout value outside its range or order is rejected before anything changes", () => {
-  assert.throws(() => set({ railWidth: 8 }, "common"), /railWidth/);
+  assert.throws(() => set({ sidebarMinWidth: 8 }, "common"), /sidebarMinWidth/);
+  assert.throws(() => set({ railWidth: 190 }, "common"), /Unknown setting: railWidth/);
   assert.throws(() => set({ sidebarMinWidth: 200 }, "common"), /sidebarMinWidth .*sidebarWidth .*sidebarMaxWidth/);
   assert.throws(() => set({ sidebarWidth: 500 }, "common"), /sidebarMinWidth .*sidebarWidth .*sidebarMaxWidth/);
-  assert.throws(() => set({ railWidth: 1.5 }, "common"), /railWidth/);
+  assert.throws(() => set({ sidebarWidth: 1.5 }, "common"), /sidebarWidth/);
 });
 
 test("a created set takes the smallest unused number, the list layout, and no sections", () => {

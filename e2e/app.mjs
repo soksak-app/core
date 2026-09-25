@@ -423,6 +423,20 @@ const START = { width: 1200, height: 760 };
 
 /** 창 검사 터미널의 셸. 로그인 셸의 프로필에 따라 달라지는 프롬프트를 피한다. */
 const CHECK_SHELL = fileURLToPath(new URL("./check-shell", import.meta.url));
+/**
+ * 지금의 공통 설정을 기억하고, 검사가 끝나면 바뀐 값을 되돌린다. 공통 설정을 바꾸는 검사는 fresh 뒤에 이것을
+ * 부른다. 검사 앱은 사람도 쓰므로 검사가 바꾼 값이 남으면 안 된다.
+ */
+export async function keepCommonSettings(s) {
+  const before = (await s.get("core.settings")).values;
+  s.cleanup(async () => {
+    const now = (await s.get("core.settings")).values;
+    const patch = Object.fromEntries(Object.entries(before)
+      .filter(([key, value]) => JSON.stringify(now[key]) !== JSON.stringify(value)));
+    if (Object.keys(patch).length) await s.run("core.settings.set", { patch, scope: "common" });
+  });
+}
+
 export async function fresh(s) {
   for (const window of await s.get("host.windows")) {
     if (window.window !== s.window) await s.on(window.window).close();

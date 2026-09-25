@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { APPS, failure, fresh, open } from "./app.mjs";
+import { APPS, failure, fresh, keepCommonSettings, open } from "./app.mjs";
 
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 
@@ -123,6 +123,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await keepCommonSettings(s);
     // 이 검사는 사이드바 위치 flow 의 레일 카드를 쓴다. 기본값은 inset 이다.
     await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
     const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-projects-")));
@@ -205,19 +206,19 @@ for (const app of Object.values(APPS)) {
     assert.equal(await mode(s), "dark");
     assert.equal(read(join(second.root, ".soksak/settings.json")).mode, "light");
     assert.equal(read(join(config, "settings.json")).mode, "dark");
-    const commonRail = read(join(config, "settings.json")).railWidth;
+    const commonWidth = read(join(config, "settings.json")).sidebarWidth;
     // 다른 절에 다녀와도 프로젝트 범위가 유지된다.
     await press(child, "core.settings-modal.nav", "nav:sidebars");
     await press(child, "core.settings-modal.nav", "nav:general");
-    await press(child, "core.settings-modal.set", "railWidth", "240");
-    await child.until("core.settings", (value) => value.overridden.includes("railWidth") && !value.saving,
+    await press(child, "core.settings-modal.set", "sidebarWidth", "240");
+    await child.until("core.settings", (value) => value.overridden.includes("sidebarWidth") && !value.saving,
       "category change did not retain project scope");
-    assert.equal(read(join(second.root, ".soksak/settings.json")).railWidth, 240);
-    assert.equal(read(join(config, "settings.json")).railWidth, commonRail);
-    await press(child, "core.settings-modal.reset", "reset:railWidth");
-    await child.until("core.settings", (value) => !value.overridden.includes("railWidth") && !value.saving,
+    assert.equal(read(join(second.root, ".soksak/settings.json")).sidebarWidth, 240);
+    assert.equal(read(join(config, "settings.json")).sidebarWidth, commonWidth);
+    await press(child, "core.settings-modal.reset", "reset:sidebarWidth");
+    await child.until("core.settings", (value) => !value.overridden.includes("sidebarWidth") && !value.saving,
       "project override was not removed");
-    assert.equal(read(join(second.root, ".soksak/settings.json")).railWidth, undefined);
+    assert.equal(read(join(second.root, ".soksak/settings.json")).sidebarWidth, undefined);
     await press(child, "core.settings-modal.nav", "nav:general");
     await control(child, "core.settings-modal.scope", "pick:scope:project", (c) => c.on,
       "General did not retain the selected project tab");
@@ -328,6 +329,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await keepCommonSettings(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-unknown-")));
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
     s.cleanup(async () => {

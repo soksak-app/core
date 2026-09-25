@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { availableParallelism, loadavg } from "node:os";
 import test from "node:test";
 
-import { APPS, drag, fresh, open } from "./app.mjs";
+import { APPS, drag, fresh, keepCommonSettings, open } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 import { outside, whitePixels } from "./outside.mjs";
 import { alignment } from "./alignment.mjs";
@@ -119,6 +119,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await keepCommonSettings(s);
     // 이 검사는 사이드바 위치 flow 의 레일 카드를 쓴다. 기본값은 inset 이다.
     await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
     const run = await drag(t, s, PLAN, { capture: true });

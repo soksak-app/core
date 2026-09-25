@@ -265,7 +265,7 @@ function drawGeneral() {
     ...(scope === "project" && overridden("links") ? [row("", press("reset:links", "전역 연결 사용"))] : []),
   ]));
 
-  body.append(group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 최소 폭과 최대 폭 사이여야 한다.",
+  body.append(group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 새 레일 열이 여는 폭이며 최소 폭과 최대 폭 사이여야 한다.",
     Object.entries(LAYOUT_RANGES).map(([key, [min, max]]) => row(SIZE_LABELS[key], slide(key, min, max, value(key), "pt")))));
 
   body.append(group("표시", "배치는 그대로 두고 보이는 모습만 바꾼다.", [
@@ -391,10 +391,9 @@ function drawPlugins() {
 }
 
 const SIZE_LABELS = {
-  sidebarMinWidth: "카드 안 사이드바 최소 폭",
-  sidebarMaxWidth: "카드 안 사이드바 최대 폭",
-  sidebarWidth: "카드 안 사이드바 처음 폭",
-  railWidth: "레일 처음 폭",
+  sidebarMinWidth: "최소 폭",
+  sidebarMaxWidth: "최대 폭",
+  sidebarWidth: "처음 폭",
 };
 
 /** 섹션 행 하나의 선택 상자. 등록된 모든 섹션을 플러그인마다 optgroup 으로 묶는다. */

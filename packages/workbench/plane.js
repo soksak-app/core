@@ -96,7 +96,7 @@ const pickerEl = document.getElementById("picker");
 
 // 레일을 닫으면 카드와 함께 폭도 사라진다. 사용자가 드래그로 지정한 폭을 플러그인
 // 종류별로 보관했다가 다시 열 때 그 폭으로 복원한다. 설정이 아니라 스페이스의 값이다.
-// 폭을 바꾼 적이 없는 종류는 설정 railWidth 로 연다.
+// 폭을 바꾼 적이 없는 종류는 설정 sidebarWidth 로 연다.
 // 등록이 끝난 뒤에 채운다. 모듈 평가 시점에 읽으면 등록 순서에 따라 결과가 달라진다.
 let railWidth = {};
 let edgeWidth = {};
@@ -963,7 +963,7 @@ function standRail(kind) {
   if (!has) {
     const line = railTarget(id, kind);
     if (line === null) return;
-    grid.insertAt("x", line, { id, data: null, size: railWidth[kind] ?? value("railWidth") });
+    grid.insertAt("x", line, { id, data: null, size: railWidth[kind] ?? value("sidebarWidth") });
     grid.setFixed(id, true);
     return;
   }

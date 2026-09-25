@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, failure, fresh, open } from "./app.mjs";
+import { APPS, failure, fresh, keepCommonSettings, open } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 import { terminalProcessSnapshot } from "./terminal-processes.mjs";
 
@@ -104,6 +104,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await keepCommonSettings(s);
     // 이 검사는 사이드바 위치 flow 의 레일 카드를 쓴다. 기본값은 inset 이다.
     await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
     const verification = await s.collect("core.verify");
