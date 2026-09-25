@@ -158,7 +158,10 @@ export async function open(t, app) {
   session.cleanup(() => {
     writePasteboard(pasteboard.items);
     const after = readPasteboard().items;
-    if (JSON.stringify(after) !== JSON.stringify(pasteboard.items)) {
+    // 페이스트보드는 항목 안 형식의 순서를 쓴 순서대로 두지 않는다(쓴 뒤 읽으면 utf16 과 utf8 텍스트 형식의 순서가
+    // 바뀐다). 항목의 순서와 형식별 데이터를 비교한다.
+    const canonical = (items) => JSON.stringify(items.map((item) => Object.keys(item).sort().map((type) => [type, item[type]])));
+    if (canonical(after) !== canonical(pasteboard.items)) {
       throw new Error(`${app.name}: the pasteboard after the check differs from before it: ` +
         `${after.map((item) => Object.keys(item).join("+")).join(", ")} instead of ` +
         `${pasteboard.items.map((item) => Object.keys(item).join("+")).join(", ")}`);

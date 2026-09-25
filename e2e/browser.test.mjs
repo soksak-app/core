@@ -6,7 +6,7 @@ import { rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 
 /** block 문서의 왼쪽 위에 놓는 CSS 크기 120×60 의 빨간 블록. 페이지 확대만큼 픽셀이 커진다. */
@@ -393,6 +393,9 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    // 카드 포커스가 배치를 바꾸는 경우를 잰다. flow 레일은 포커스 카드 옆으로 옮겨 가므로 포커스마다 배치 요청이 생긴다.
+    await keepCommonSettings(s);
+    await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
     const base = await serve(t);
     const [browser] = await browsers(s);
     const surface = browser.surface;

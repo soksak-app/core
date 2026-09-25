@@ -63,6 +63,8 @@ for (const app of Object.values(APPS)) {
     assert.equal(sidebarOf(dragged).collapsed, false, "a drag on the divider folded the sidebar");
 
     // 네이티브 누름은 곧바로 접는다. 다음 표시에 이미 접혀 있어야 한다. 접힌 뒤에는 경계선만 남고, 다시 누르면 펴진다.
+    // core.grid 는 문서가 새 폭을 그리기 전에 바뀐다. 끌기의 배치가 표시된 뒤 경계선의 자리를 읽는다.
+    await s.presented();
     divider = await s.rect("core.card.sidebar.grip", 0);
     await s.click(divider.x + divider.width / 4, y);
     await s.presented();
