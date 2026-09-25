@@ -1595,3 +1595,53 @@ fn osc8_linked_cells_carry_their_uri() {
         ]
     );
 }
+
+#[test]
+fn erase_display_clears_the_screen_without_moving_it_into_the_history() {
+    // ED 2 는 화면을 지우고 기록으로 옮기지 않는다. clear 는 ED 3 뒤에 ED 2 를 보낸다.
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 6);
+    engine.feed(b"one\r\ntwo\r\nsh$ clear\r\n");
+    engine.feed(b"\x1b[3J\x1b[H\x1b[2J");
+    assert_eq!(
+        engine.scrollback(),
+        (0, 0),
+        "clear left lines in the history"
+    );
+    assert_eq!(text(&engine.screen()), "", "clear left text on the screen");
+
+    // 커서는 움직이지 않고, 지운 칸은 현재 배경색을 가진다.
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 6);
+    engine.feed(b"one\r\ntwo\x1b[41m\x1b[2J");
+    assert_eq!(engine.scrollback(), (0, 0));
+    assert_eq!(text(&engine.screen()), "");
+    let cursor = engine.cursor();
+    assert_eq!((cursor.row, cursor.col), (1, 3), "ED 2 moved the cursor");
+    assert_eq!(
+        engine.screen().lines[5][19].bg.as_deref(),
+        engine.screen().lines[0][0].bg.as_deref()
+    );
+    assert_ne!(
+        engine.screen().lines[0][0].bg.as_deref(),
+        Some("#1e1e1e"),
+        "erased cells lost the current background"
+    );
+}
+
+#[test]
+fn erase_above_clears_every_line_above_the_cursor_and_the_line_up_to_it() {
+    // ED 1 은 화면 처음부터 커서까지(커서 칸 포함) 지운다. 커서가 둘째 줄에 있어도 첫 줄을 지워야 한다.
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 6);
+    engine.feed(b"one\r\ntwo-three\x1b[2;4H\x1b[1J");
+    let screen = engine.screen();
+    assert_eq!(row_text(&screen, 0), "", "ED 1 left the first line");
+    assert_eq!(
+        row_text(&screen, 1).trim_start(),
+        "three",
+        "ED 1 did not erase up to the cursor"
+    );
+    let cursor = engine.cursor();
+    assert_eq!((cursor.row, cursor.col), (1, 3));
+}

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-61: `clear` leaves no history and no scrollbar, because the terminal engine erases the screen for `ESC[2J` without moving it into the history; `ESC[1J` also erases the first line when the cursor is on the second line.
 - V5-54: a terminal page that places its image region before its new surface has a native frame no longer fails with `image "view" has no raster geometry` and no longer breaks later layouts and fixtures; the region is configured when the surface is placed, and `core.surfaces` reports each surface page's status.
 - V5-52: dividers and card icons keep their resize and pointing-hand cursors after a layout change or a terminal presentation, because the window composition answers AppKit's cursor update with the page cursor at the pointer.
 - V5-59: the terminal scrollbar thumb shows an open hand and a closed hand while dragged, and the native terminal region no longer registers I-beam cursor rectangles over page elements above it.

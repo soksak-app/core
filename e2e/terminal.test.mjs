@@ -529,6 +529,24 @@ for (const app of Object.values(APPS)) {
     }
   });
 
+  test(`${app.name}: clear leaves no history and hides the scrollbar`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => closeTerminalTabs(s));
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 60 ]; do echo row$i; i=$((i+1)); done\r" }, surface);
+    await s.until("terminal.session", (session) => session.scrollback?.history > 0, "the rows did not exceed the screen", { surface });
+    // macOS clear 는 ED 3 과 ED 2 를 보낸다. 사용자가 보고한 명령 그대로 실행한다.
+    await s.run("terminal.input", { bytes: "clear; printf '\\n한\\n'\r" }, surface);
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.trim() === "한"), "the output after clear did not render");
+    const session = await s.until("terminal.session", (value) => value.scrollback?.history === 0,
+      "clear left lines in the history", { surface });
+    const track = await s.rect("terminal.scrollbar", undefined, surface);
+    assert.equal(track.width, 0, `the scrollbar is shown without history: ${JSON.stringify({ track, scrollback: session.scrollback })}`);
+  });
+
   test(`${app.name}: a presentation that fails while the terminal service is stopped leaves the next fixture and splits usable`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

@@ -223,6 +223,13 @@ enum ShellState {
     Prompt(bool),
 }
 
+/// 엔진 대신 직접 지우는 ED 시퀀스.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Erase {
+    All,
+    Above,
+}
+
 /// 입력 조각 안에서 OSC 133 표시가 끝나는 위치와 그 표시.
 struct ShellMark {
     end: usize,
@@ -446,7 +453,7 @@ pub struct AlacrittyEngine {
     pending_input: Vec<u8>,
     pending_osc: Vec<u8>,
     pending_csi: Vec<u8>,
-    pending_cursor_reset: Vec<u8>,
+    pending_sequence: Vec<u8>,
     /// 선택을 시작한 칸. 끄는 방향에 따라 이 칸과 포인터 칸을 모두 포함하도록 선택의 경계 쪽을 정한다.
     selection_anchor: Option<Point>,
     shell: ShellState,
@@ -469,38 +476,72 @@ impl AlacrittyEngine {
             pending_input: Vec::new(),
             pending_osc: Vec::new(),
             pending_csi: Vec::new(),
-            pending_cursor_reset: Vec::new(),
+            pending_sequence: Vec::new(),
             selection_anchor: None,
             shell: ShellState::Output,
         }
     }
 
-    fn normalize_initial_cursor_resource(&mut self, bytes: &[u8]) -> Vec<u8> {
-        const DECSCUSR_INITIAL: &[u8] = b"\x1b[7 q";
-        let mut input = std::mem::take(&mut self.pending_cursor_reset);
+    /// 입력을 엔진에 넣기 전에 바꾸는 시퀀스. 입력 조각 사이에서 끊긴 앞부분은 다음 조각까지 보관한다.
+    /// - DECSCUSR 7 은 초기 커서 모양(0)으로 바꾼다.
+    /// - ED 2 와 ED 1 은 엔진에 넣지 않고 위치를 돌려주어 그 자리에서 직접 지운다. 엔진은 ED 2 에서 보이는 줄을
+    ///   기록으로 올려 clear 뒤에도 기록이 남고, ED 1 에서 커서가 둘째 줄이면 첫 줄을 지우지 않는다.
+    fn normalize_sequences(&mut self, bytes: &[u8]) -> (Vec<u8>, Vec<(usize, Erase)>) {
+        const REWRITES: &[(&[u8], Option<&[u8]>, Option<Erase>)] = &[
+            (b"\x1b[7 q", Some(b"\x1b[0 q"), None),
+            (b"\x1b[2J", None, Some(Erase::All)),
+            (b"\x1b[1J", None, Some(Erase::Above)),
+        ];
+        let mut input = std::mem::take(&mut self.pending_sequence);
         input.extend_from_slice(bytes);
         let mut normalized = Vec::with_capacity(input.len());
+        let mut erases = Vec::new();
         let mut index = 0;
-        while index < input.len() {
+        'input: while index < input.len() {
             let remaining = &input[index..];
             if remaining[0] == 0x1b {
-                let prefix_len = remaining.len().min(DECSCUSR_INITIAL.len());
-                if remaining[..prefix_len] == DECSCUSR_INITIAL[..prefix_len]
-                    && remaining.len() < DECSCUSR_INITIAL.len()
-                {
-                    self.pending_cursor_reset.extend_from_slice(remaining);
-                    break;
-                }
-                if remaining.starts_with(DECSCUSR_INITIAL) {
-                    normalized.extend_from_slice(b"\x1b[0 q");
-                    index += DECSCUSR_INITIAL.len();
-                    continue;
+                for (from, to, erase) in REWRITES {
+                    if remaining.len() < from.len() && from.starts_with(remaining) {
+                        self.pending_sequence.extend_from_slice(remaining);
+                        break 'input;
+                    }
+                    if remaining.starts_with(from) {
+                        if let Some(to) = to {
+                            normalized.extend_from_slice(to);
+                        }
+                        if let Some(erase) = erase {
+                            erases.push((normalized.len(), *erase));
+                        }
+                        index += from.len();
+                        continue 'input;
+                    }
                 }
             }
             normalized.push(input[index]);
             index += 1;
         }
-        normalized
+        (normalized, erases)
+    }
+
+    /// ED 2(화면 전체)와 ED 1(화면 처음부터 커서 칸까지)을 현재 배경색으로 지운다. 기록과 커서는 그대로다.
+    fn erase(&mut self, erase: Erase) {
+        let bg = self.term.grid().cursor.template.bg;
+        let cursor = self.term.grid().cursor.point;
+        let columns = self.term.grid().columns();
+        let grid = self.term.grid_mut();
+        match erase {
+            Erase::All => grid.reset_region(..),
+            Erase::Above => {
+                if cursor.line.0 > 0 {
+                    grid.reset_region(..cursor.line);
+                }
+                let end = (cursor.column.0 + 1).min(columns);
+                for cell in &mut grid[cursor.line][..Column(end)] {
+                    *cell = bg.into();
+                }
+            }
+        }
+        self.term.selection = None;
     }
 
     /// OSC 시퀀스를 검사하고 이벤트를 쌓는다. 받아들인 OSC 133 표시는 끝 위치와 함께 돌려주어
@@ -694,19 +735,34 @@ impl AlacrittyEngine {
     }
 
     fn feed_plain(&mut self, bytes: &[u8]) {
-        let bytes = self.normalize_initial_cursor_resource(bytes);
-        if !bytes.is_empty() {
-            let marks = self.audit_osc(&bytes);
-            self.audit_csi(&bytes);
-            let mut from = 0;
-            for mark in marks {
-                self.processor
-                    .advance(&mut self.term, &bytes[from..mark.end]);
-                from = mark.end;
-                self.apply_shell_mark(mark.marker, mark.redraw);
-            }
-            self.processor.advance(&mut self.term, &bytes[from..]);
+        let (bytes, erases) = self.normalize_sequences(bytes);
+        let marks = self.audit_osc(&bytes);
+        self.audit_csi(&bytes);
+        // 셸 표시와 지우기를 입력 안의 위치 순서대로 적용한다.
+        enum Step {
+            Mark(ShellMark),
+            Erase(Erase),
         }
+        let mut steps: Vec<(usize, Step)> = marks
+            .into_iter()
+            .map(|mark| (mark.end, Step::Mark(mark)))
+            .collect();
+        steps.extend(
+            erases
+                .into_iter()
+                .map(|(at, erase)| (at, Step::Erase(erase))),
+        );
+        steps.sort_by_key(|(at, _)| *at);
+        let mut from = 0;
+        for (at, step) in steps {
+            self.processor.advance(&mut self.term, &bytes[from..at]);
+            from = at;
+            match step {
+                Step::Mark(mark) => self.apply_shell_mark(mark.marker, mark.redraw),
+                Step::Erase(erase) => self.erase(erase),
+            }
+        }
+        self.processor.advance(&mut self.term, &bytes[from..]);
     }
 
     fn feed_with_inline_images(&mut self, bytes: &[u8]) {
