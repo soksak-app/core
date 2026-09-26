@@ -4,7 +4,9 @@
 
 ## 미배포
 
-- V5-96-6: 플러그인 이름 대신 선언된 hybrid image composition에서 표시 barrier를 정하고, 각 터미널 녹화 세트에 barrier를 기록한다. 다시 빌드한 Tauri 녹화에서 V5-96-5 혼합 프레임이 여전히 보고되어 해당 항목은 열어 둔다. `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, `make docs-check`가 통과했다.
+- V5-96-6: 플러그인 이름 대신 선언된 hybrid image composition에서 표시 barrier를 정하고, 각 터미널 녹화 세트에 barrier를 기록했다. 남은 혼합 프레임은 V5-96-5에서 수정했다. `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, `make docs-check`가 통과했다.
+
+- V5-96-5: 구분선 끌기 중 Tauri 혼합 터미널 프레임을 수정했다. Red에서 `waitForPresentation:true`를 기록했는데도 네이티브 표면은 이전 예측 x에 있고 DOM 카드는 다음 위치로 진행하는 것을 재현했다. 워크벤치 레이아웃 큐가 다음 그리기를 시작하기 전에 브라우저 렌더 틱과 대응하는 호스트 표시까지 기다리도록 고쳤다. 기존 500pt 끌기의 재빌드 Tauri 캡처 3세트(15 왕복)가 픽셀 한도를 바꾸지 않고 모두 통과했고 각 세트가 일반 image-composition barrier를 기록했다. `make -B tauriv2-build`, `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, `make docs-check`가 통과했다.
 
 - V5-87-3: 명시적 알림 정책 추가에 맞춰 터미널 설정 창 계약의 행 개수를 13개에서 14개로 갱신했다.
 
@@ -24,7 +26,7 @@
 
 - V5-96-4: 클라이언트 watch/unwatch 수명주기를 수정했다. Red 검사에서 `watch()`가 마지막 `status.unwatch` 확인 응답보다 먼저 끝나는 것을 재현했다. `Client.#release`가 구독 해제 Promise를 반환하고 `watch.finish`가 이를 기다리며 두 오류가 모두 나면 `AggregateError`로 보존한다. `@soksak/client` 24/24, 브라우저 테마 집중 검사 2/2 통과했고 후속 전체 실행에서 두 호스트 모두 해당 사례가 통과했다. `pnpm test`, `make boundaries`, `make exposure-check`, `make e2e-check`, `make docs-check`가 통과했다. 별도로 한 번 관측한 Tauri 분할 간격은 V5-96-5에서 추적한다.
 
-- V5-96-5 진행: Tauri 터미널 분할 검사가 8번째 프레임에서 오른쪽 간격 57px를 한 번 보고했다. 집중 추적 반복 10/10 및 다음 전체 실행은 통과했다. 원인은 아직 알 수 없고 픽셀 판정 기준은 바꾸지 않았다.
+- V5-96-5 진행: Tauri 터미널 분할 검사가 8번째 프레임에서 오른쪽 간격 57px를 한 번 보고했고 집중 추적 반복 10/10 및 다음 전체 실행은 통과했다. 이후 재빌드 재현에서 레이아웃 큐 순서 원인을 확인해 수정했으며 픽셀 판정 기준은 바꾸지 않았다.
 
 
 - V5-96-3: footer 픽셀 검사가 캡처 메타데이터의 `contentScale * scale`을 사용하고 기록된 콘텐츠 영역 안에서만 탐색하도록 수정했다. 기존 캔버스 너비 비율은 고정된 창 아래 선을 찾아 양쪽 호스트에서 이동량을 0pt로 보고했다. 호스트 간 끌기 검사는 첫 표면의 x만 비교하던 조건을 모든 보이는 확정 표면 프레임과 초기 프레임 비교로 바꿨다. 집중 footer 검사는 2/2, 호스트 비교는 추적 반복 5/5 통과했다. `pnpm test`, `make boundaries`, `make exposure-check`, `make e2e-check`, `make docs-check`가 통과했다. 후속 전체 246개 실행에서 수정한 두 사례는 통과했지만 다른 세 현재 실패가 발견되어 V5-96-4에 기록했다.

@@ -283,7 +283,14 @@ onLayout((made, draw, seated) => {
     const preparation = publishAhead(made, seated);
     if (epoch !== layoutEpoch) return;
     draw();
+    // `draw()` schedules the DOM commit; it does not synchronously run the
+    // render subscriber that publishes the matching surface snapshot. Keep the
+    // layout queue open through that render and its host presentation so a
+    // newer divider step cannot replace the DOM while this native transaction
+    // is still waiting to commit.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     await preparation;
+    await presented;
   });
 });
 

@@ -4,7 +4,9 @@
 
 ## Unreleased
 
-- V5-96-6: route the presentation barrier from the declared hybrid image composition instead of a plugin name, and record the barrier on each terminal capture set. The rebuilt Tauri capture still reports a mixed frame under V5-96-5, which remains open. `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, and `make docs-check` pass.
+- V5-96-6: route the presentation barrier from the declared hybrid image composition instead of a plugin name, and record the barrier on each terminal capture set. The remaining mixed frame was fixed under V5-96-5. `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, and `make docs-check` pass.
+
+- V5-96-5: fix the Tauri mixed terminal frame during divider drags. Red reproduced native surfaces at the previous predicted x while the DOM card had advanced, even though `waitForPresentation:true` was recorded. The workbench layout queue now waits through the browser render tick and the matching host presentation before starting the next draw. The original 500pt drag passed all 3 capture sets (15 round trips) with unchanged pixel limits on the rebuilt Tauri host; each set recorded the generic image-composition barrier. `make -B tauriv2-build`, `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, and `make docs-check` pass.
 
 - V5-87-3: update the terminal settings window contract from 13 to 14 rows after adding the explicit notification policy.
 
@@ -24,7 +26,7 @@
 
 - V5-96-4: fix the client watch/unwatch lifecycle. A Red test reproduced `watch()` resolving before the final `status.unwatch` acknowledgement; `Client.#release` now returns the unwatch promise and `watch.finish` awaits it, preserving both failures with `AggregateError`. `@soksak/client` passes 24/24, the focused browser theme check passes 2/2, and the subsequent full run passes the case on both hosts. `pnpm test`, `make boundaries`, `make exposure-check`, `make e2e-check`, and `make docs-check` pass. The separately observed one-time Tauri divider gap is tracked as V5-96-5.
 
-- V5-96-5 progress: the Tauri terminal divider check reported a 57px right gap at frame 8 once, passed 10/10 focused tracked repeats, and passed in the next full run. Cause remains unknown; the pixel criteria are unchanged.
+- V5-96-5 progress: the Tauri terminal divider check reported a 57px right gap at frame 8 once, passed 10/10 focused tracked repeats, and passed in the next full run. The later rebuilt reproduction identified and fixed the layout-queue ordering cause; the pixel criteria remain unchanged.
 
 
 - V5-96-3: correct the footer pixel test to use capture `contentScale * scale` and limit the scan to the recorded content rectangle; the old canvas-width ratio selected a fixed window-bottom rule and reported 0pt movement on both hosts. Compare every visible settled surface frame with the initial frames in the cross-host drag test; its former first-surface-x-only condition accepted an intermediate layout with a different width. Focused footer checks pass 2/2 and the cross-host comparison passes 5/5 tracked repeats. `pnpm test`, `make boundaries`, `make exposure-check`, `make e2e-check`, and `make docs-check` pass. The subsequent full 246-case run passes both corrected cases but finds three unrelated current failures, recorded under V5-96-4.
