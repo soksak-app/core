@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-6 progress: route the presentation barrier from the declared hybrid image composition instead of a plugin name, and record the barrier on each terminal capture set. The rebuilt Tauri capture still reports a mixed frame under V5-96-5, so the measurement remains open.
+
 - V5-87-3: update the terminal settings window contract from 13 to 14 rows after adding the explicit notification policy.
 
 - F8-6-2-1: start native surface preparation before the page draw and wait for its answer after DOM work is scheduled. Rebuilt Wails and Tauri pass 10/10 tracked divider repeats at the unchanged 34 ms limit.
