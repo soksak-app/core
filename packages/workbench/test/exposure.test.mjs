@@ -405,6 +405,19 @@ test("a core command answers after the configured settling work", async () => {
   assert.equal(await answer, 2);
 });
 
+test("a handled settling failure is reported and does not reject the state-changing command", async () => {
+  const made = createRegistry();
+  made.declare("core", coreExposes());
+  made.command("core.fixture.add", ({ n }) => n + 1);
+  const failures = [];
+  made.configure({
+    settled: async () => { throw new Error("presentation failed"); },
+    failed: (error) => { failures.push(error.message); return true; },
+  });
+  assert.equal(await made.run("core.fixture.add", { n: 1 }), 2);
+  assert.deepEqual(failures, ["presentation failed"]);
+});
+
 test("observe follows a surface status in the page, switches surfaces on registration, and stops on dispose", async () => {
   const pending = [];
   const host = fakeHost(({ surface, method, params }) => {

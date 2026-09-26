@@ -243,6 +243,22 @@ test("a surface page registers declared names once through its port and answers 
   ]);
 });
 
+test("a rejected stale exposure reply is reported instead of becoming an unhandled promise", async () => {
+  const reports = [];
+  let request;
+  const port = {
+    register: async () => {},
+    onRequest: async (fn) => { request = fn; },
+    reply: async () => { throw new Error("exposure reply 11928 has no matching request"); },
+    report: async (message) => { reports.push(message); },
+  };
+  const expose = createExpose(port, async () => exposes());
+  await expose.command("probe.send", ({ data }) => data.length);
+  request({ id: 11928, method: "command.run", params: { name: "probe.send", params: { data: "abc" } } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(reports, ["exposure reply 11928: exposure reply 11928 has no matching request"]);
+});
+
 test("diagnostic declarations extend a surface plugin once and are rejected otherwise", () => {
   const manifest = { ...page, exposes: exposes() };
   const inject = {

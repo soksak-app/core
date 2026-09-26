@@ -287,7 +287,11 @@ export function createRegistry({ call = null } = {}) {
     status: (name, read, subscribe) => core.status(name, read, subscribe),
     command: (name, run) => core.command(name, async (params) => {
       const result = await run(params);
-      await options.settled();
+      try {
+        await options.settled();
+      } catch (error) {
+        if (!options.failed(error)) throw error;
+      }
       return result;
     }),
     /** 코어 dom 항목을 등록한다. 요소는 요청 시점에 data-expose 속성으로 찾는다. */
@@ -502,7 +506,14 @@ export async function loadExposure() {
  * 그 표면에 실패를 돌려줄 경로가 없다.
  */
 export async function connectExposure(values) {
-  registry.configure(values);
+  registry.configure({
+    ...values,
+    failed: values.failed ?? ((error) => {
+      if (!host) return false;
+      host.call("report", `exposure settled failed: ${String(error?.message ?? error)}`);
+      return true;
+    }),
+  });
   if (!host) return;
   await host.on("exposure-request", (request) => {
     dispatchSurfaceRequest(request).then((handled) => {

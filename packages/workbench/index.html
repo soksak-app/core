@@ -263,9 +263,10 @@ function reportSuperseded() {
 const layouts = createLayoutQueue({
   failed(error) {
     layoutFailure = error;
-    console.error(`surface presentation failed: ${error.message}`);
-    showError(`surface presentation failed: ${error.message}`);
-    setVerify([{ name: "Surface presentation", ok: false, note: error.message }]);
+    const message = String(error?.message ?? error);
+    console.error(`surface presentation failed: ${message}`);
+    showError(`surface presentation failed: ${message}`);
+    setVerify([{ name: "Surface presentation", ok: false, note: message }]);
   },
   superseded() {
     supersededLayouts++;

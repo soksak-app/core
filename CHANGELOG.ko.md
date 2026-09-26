@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-96-7: 표면 exposure 응답 요청이 이미 폐기된 뒤 호스트가 거부하면 표면이 명시적 오래된 응답 오류를 진단 경로로 보고하며, 미처리 `RuntimeError`를 만들지 않는다. 처리된 settle 실패 뒤에도 상태 변경 명령이 진행되고 문자열 표시 오류가 측정된 원인을 유지한다.
+
 - V5-96-6: 플러그인 이름 대신 선언된 hybrid image composition에서 표시 barrier를 정하고, 각 터미널 녹화 세트에 barrier를 기록했다. 남은 혼합 프레임은 V5-96-5에서 수정했다. `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, `make docs-check`가 통과했다.
 
 - V5-96-5: 구분선 끌기 중 Tauri 혼합 터미널 프레임을 수정했다. Red에서 `waitForPresentation:true`를 기록했는데도 네이티브 표면은 이전 예측 x에 있고 DOM 카드는 다음 위치로 진행하는 것을 재현했다. 워크벤치 레이아웃 큐가 다음 그리기를 시작하기 전에 브라우저 렌더 틱과 대응하는 호스트 표시까지 기다리도록 고쳤다. 기존 500pt 끌기의 재빌드 Tauri 캡처 3세트(15 왕복)가 픽셀 한도를 바꾸지 않고 모두 통과했고 각 세트가 일반 image-composition barrier를 기록했다. `make -B tauriv2-build`, `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, `make docs-check`가 통과했다.

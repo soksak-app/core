@@ -16,6 +16,13 @@ test("a failed presentation rejects its request, reports failure, and permits th
   assert.deepEqual(reported, [failure]);
 });
 
+test("a string presentation failure keeps its measured reason", async () => {
+  const errors = [];
+  const queue = createLayoutQueue({ failed: (error) => errors.push(String(error?.message ?? error)) });
+  await assert.rejects(queue.run(() => Promise.reject("current image raster did not present within 10s")));
+  assert.deepEqual(errors, ["current image raster did not present within 10s"]);
+});
+
 test("a new layout cannot run before the active presentation finishes", async () => {
   const queue = createLayoutQueue({ failed: assert.fail, superseded: assert.fail });
   let finish;

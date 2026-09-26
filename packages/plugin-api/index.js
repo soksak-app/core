@@ -1063,7 +1063,17 @@ export function createExpose(port, load) {
       const made = exposureEntries(declared);
       loaded = made;
       await port.onRequest(({ id, method, params }) => {
-        replyPayload(() => made.answer(method, params)).then((payload) => port.reply(id, payload));
+        replyPayload(() => made.answer(method, params)).then(async (payload) => {
+          try {
+            await port.reply(id, payload);
+          } catch (error) {
+            // The host may have abandoned the request while the page was answering. Report
+            // that rejected reply through the host diagnostic channel instead of creating an
+            // unhandled promise; the host still owns the request/response decision.
+            if (typeof port.report !== "function") throw error;
+            await port.report(`exposure reply ${id}: ${String(error?.message ?? error)}`);
+          }
+        });
       });
       return made;
     });

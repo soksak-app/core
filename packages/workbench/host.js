@@ -179,10 +179,11 @@ export function surfaceContextRuntime(surface, declarations = {}) {
       dispose: Promise.resolve(registration),
     };
   };
-  const port = {
+    const port = {
     register: (kind, name) => registry.registered({ surface: surfaceId, kind, name }),
     onRequest: (fn) => registerSurfacePort(surfaceId, fn),
-    reply: (id, payload) => bridge.call("exposureReply", { id, ...payload, surface: surfaceId }),
+      reply: (id, payload) => bridge.call("exposureReply", { id, ...payload, surface: surfaceId }),
+      report: (message) => bridge.call("report", message),
     unregister: () => {
       registry.unregisterSurface(surfaceId);
       unregisterSurfacePort(surfaceId, port);

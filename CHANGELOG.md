@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-7: surface exposure replies now report a host rejection when the request was already abandoned, preventing an unhandled `RuntimeError` while preserving the explicit stale-reply error. Handled settling failures let state-changing commands continue, and string presentation errors retain their measured reason.
+
 - V5-96-6: route the presentation barrier from the declared hybrid image composition instead of a plugin name, and record the barrier on each terminal capture set. The remaining mixed frame was fixed under V5-96-5. `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, and `make docs-check` pass.
 
 - V5-96-5: fix the Tauri mixed terminal frame during divider drags. Red reproduced native surfaces at the previous predicted x while the DOM card had advanced, even though `waitForPresentation:true` was recorded. The workbench layout queue now waits through the browser render tick and the matching host presentation before starting the next draw. The original 500pt drag passed all 3 capture sets (15 round trips) with unchanged pixel limits on the rebuilt Tauri host; each set recorded the generic image-composition barrier. `make -B tauriv2-build`, `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, and `make docs-check` pass.
