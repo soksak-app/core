@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F0.5.6-1: fix the shared macOS window compositor to autoresize with its host when the host resizes the WebView directly. A Tauri-shaped Red test kept the wrapper at 800pt after its parent grew to 1200pt and hit a plain `NSView` at x=1100; Green follows the parent and hits the main `WKWebView`. The rebuilt pre-fix Tauri width sweep reproduced the toolbar failure from 1229pt, while rebuilt Wails passed its inactive 756–1512pt sweep. Correct `make native-test` to run the declared VT sidecar artifact and report spawn errors immediately; its former stale `target/debug` path waited 60 seconds on a missing executable. Post-fix non-activating Tauri runtime verification remains in progress.
+
 - Retired checklist entry `G1.3-10`: the entry recorded agent work-process rules instead of project work.
 
 - G4.2-1: derive executable language coverage from tracked workspace files and make `make parity-check` reject missing or extra adapter languages. Add a shell adapter and module-local tests of the actual build-environment CLI; JS/TS 16, Rust 2, Go 15, Objective-C 5, and shell 2 tests pass. Record test ownership and mechanical language coverage in both agent guidance files and the verification specification.

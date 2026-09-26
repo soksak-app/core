@@ -427,7 +427,11 @@ static SPWindowComposition *windowComposition(WKWebView *main) {
     } else {
         NSView *parent = main.superview;
         composition = [[[SPWindowComposition alloc] initWithFrame:main.frame] autorelease];
-        composition.autoresizingMask = main.autoresizingMask;
+        // The platform host may resize the app WebView directly instead of
+        // relying on AppKit autoresizing. The compositor wraps that WebView
+        // and must still fill its parent so native hit testing covers the
+        // complete window content area.
+        composition.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
         composition.mainWebview = main;
         [main retain];
         [parent replaceSubview:main with:composition];

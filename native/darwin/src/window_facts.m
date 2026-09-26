@@ -108,7 +108,7 @@ char *sp_window_facts(void *handle) {
         // drawsBackground 는 비공개 KVC 키다. docs/operations/private-native-apis.md 참고.
         row[@"draws"] = [view valueForKey:@"drawsBackground"];
         row[@"alpha"] = @(view.underPageBackgroundColor.alphaComponent);
-        row[@"main"] = @(view == mainWebview(window));
+        row[@"main"] = @((BOOL)(view == mainWebview(window)));
         int near60 = surfaceLayoutPrefersNear60FPS(view);
         row[@"near60fps"] = near60 < 0 ? (id)NSNull.null : @(near60 == 1);
         NSView *nativePlane = (NSView *)sp_surface_native_plane(view);
@@ -163,8 +163,15 @@ char *sp_window_hit(void *handle, double x, double y) {
     NSView *hit = [content hitTest:[content.superview convertPoint:base fromView:nil]];
     NSView *owner = hit;
     while (owner && ![owner isKindOfClass:WKWebView.class]) owner = owner.superview;
+    id hitFacts = NSNull.null;
+    if (hit) {
+        hitFacts = @{
+            @"class": NSStringFromClass(hit.class),
+            @"frame": windowRect(window, [hit convertRect:hit.bounds toView:nil]),
+        };
+    }
     return copyJSON(@{ @"view": @((unsigned long long)(uintptr_t)owner), @"main": owner && owner == mainWebview(window) ? @YES : @NO,
-        @"identifier": hit.identifier ?: @"" });
+        @"identifier": hit.identifier ?: @"", @"hit": hitFacts });
 }
 
 char *sp_screens(void) {

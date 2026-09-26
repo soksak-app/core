@@ -99,7 +99,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 | 종류 | 이름 | 의미 |
 | --- | --- | --- |
-| status | `host.window` | `{frame, pointer, content, scale, maximized, key, active, occluded, children, controls, surfaces, documents, modal, responder}`: 창 프레임, 상태를 읽은 때의 화면 좌표 시스템 포인터 위치 `{x, y}`, 콘텐츠 크기, 백킹 배율, 프레임이 최대화 프레임인지, 키 창 여부, 애플리케이션 활성 여부, 다른 창이 창 전체를 가리는지(AppKit 의 가림 상태로, 창이나 그 그림자의 일부라도 보이면 보이는 창이므로 같은 자리의 두 창은 서로를 가리지 않는다. 이 값이 바뀌면 호스트가 `host.window` 감시자에게 알린다. 가려진 창은 WebKit 이 덜 자주 그리므로 표시 측정은 이 값이 거짓이어야 한다), 자식 OS 창 수, `hidden`을 포함한 창 단추 프레임, 네이티브 표면 `{id, frame, visible, order}`, [문서 영역](native-surfaces.ko.md#문서-영역) `{surface, document, frame, visible, focused, order}`, 열린 네이티브 모달 `{id, mode, shown, frame, order, background}` 또는 `null`, 창의 첫 응답자 `{class, owner, surface, document}`. `owner`는 `page`, `surface`, `document`, `modal`, `webview`(등록되지 않은 웹뷰), `native`(이미지 영역처럼 모든 웹뷰 밖의 뷰) 중 하나다 |
+| status | `host.window` | `{frame, pointer, content, scale, maximized, key, active, occluded, children, controls, webviews, surfaces, documents, modal, responder}`: 창 프레임, 상태를 읽은 때의 화면 좌표 시스템 포인터 위치 `{x, y}`, 콘텐츠 크기, 백킹 배율, 프레임이 최대화 프레임인지, 키 창 여부, 애플리케이션 활성 여부, 다른 창이 창 전체를 가리는지(AppKit 의 가림 상태로, 창이나 그 그림자의 일부라도 보이면 보이는 창이므로 같은 자리의 두 창은 서로를 가리지 않는다. 이 값이 바뀌면 호스트가 `host.window` 감시자에게 알린다. 가려진 창은 WebKit 이 덜 자주 그리므로 표시 측정은 이 값이 거짓이어야 한다), 자식 OS 창 수, `hidden`을 포함한 창 단추 프레임, 창 좌표계의 웹뷰 프레임 `{frame, main, document, visible, focused, order}`, 네이티브 표면 `{id, frame, visible, order}`, [문서 영역](native-surfaces.ko.md#문서-영역) `{surface, document, frame, visible, focused, order}`, 열린 네이티브 모달 `{id, mode, shown, frame, order, background}` 또는 `null`, 창의 첫 응답자 `{class, owner, surface, document}`. `owner`는 `page`, `surface`, `document`, `modal`, `webview`(등록되지 않은 웹뷰), `native`(이미지 영역처럼 모든 웹뷰 밖의 뷰) 중 하나다 |
 | status | `host.windows` | `windows.list` 결과. 창이 열리거나 닫힐 때와 창의 제목, 프로젝트, 키 상태, 페이지 준비 상태가 바뀔 때 바뀐다 |
 | status | `host.screens` | `[{x, y, width, height, scale, visible}]`: 화면 좌표의 디스플레이와 백킹 배율, 그리고 메뉴 막대와 Dock 을 뺀 영역 `visible`(최대화한 창의 프레임) |
 | status | `host.dock` | 애플리케이션 Dock 메뉴 항목 제목의 순서 목록 |
@@ -112,7 +112,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | command | `host.window.resize` | 콘텐츠 영역 크기를 `{width, height}`로 바꾼다 |
 | command | `host.window.reload` | 메인 페이지를 다시 로드하고 새 페이지가 준비를 알린 뒤 완료한다. 10초 안에 알리지 않으면 1005다 |
 | command | `host.window.presented` | 메인 페이지와 표시 중인 애플리케이션 문서가 현재 배치를 화면에 표시하고, 표시 중인 모든 그림 영역이 정확한 현재 래스터를 표시한 뒤 완료된다. 창의 열린 표면 배치 트랜잭션이 먼저 커밋되기를 기다리며 명령 제한 시간 안에 현재 래스터가 도착하지 않으면 실패한다([네이티브 표면](native-surfaces.ko.md), [표면 합성](surface-composition.ko.md)). 그 상태를 보여 주는 화면 갱신 시각(ms, 녹화 프레임 시각과 같은 시계) `{displayed}`를 반환한다(표시 뒤 창이 있는 화면의 다음 갱신. 창이 어느 화면에도 없으면 호출 시각) |
-| command | `host.hit` | 창 좌표의 점 `{x, y}`를 소유한 대상을 반환한다: 메인 페이지면 `{kind: "page"}`(DOM 표면과 그림 영역은 DOM 입력을 받으므로 여기에 속한다, [표면 합성](surface-composition.ko.md)), 문서 영역이면 `{kind: "document", surface, document}`, 또는 `{kind: "native", identifier}` |
+| command | `host.hit` | 창 좌표의 점 `{x, y}`를 소유한 대상을 반환한다: 메인 페이지면 `{kind: "page"}`(DOM 표면과 그림 영역은 DOM 입력을 받으므로 여기에 속한다, [표면 합성](surface-composition.ko.md)), 문서 영역이면 `{kind: "document", surface, document}`, 네이티브 hit 이면 `{kind: "native", identifier, view}`다. 네이티브 뷰가 없으면 `view`는 `null`, 있으면 hit-test 된 실제 leaf 뷰의 창 콘텐츠 좌표 프레임과 클래스 `{class, frame}`를 담는다 |
 | command | `host.dock.select` | 제목이 `{title}`인 Dock 메뉴 항목을 실행한다 |
 | command | `host.quit` | 대기 중인 저장을 포함한 일반 애플리케이션 종료를 요청한다 |
 

@@ -22,8 +22,10 @@ void *sp_window_main_webview(void *window);
 // 창이나 등록된 메인 웹뷰가 없으면 NULL 을 반환한다.
 char *sp_window_facts(void *window);
 
-// 창 좌표 (x, y) 의 히트 테스트 결과 {view, main, identifier}. view 는 점을 포함한 WKWebView 의
-// 주소이며 없으면 0 이다. main 은 그 웹뷰가 메인 페이지인지다. identifier 는 히트한 뷰의 identifier 다. 창이 없으면 NULL 이다.
+// 창 좌표 (x, y) 의 히트 테스트 결과 {view, main, identifier, hit}. view 는 점을 포함한 WKWebView 의
+// 주소이며 없으면 0 이다. main 은 그 웹뷰가 메인 페이지인지다. identifier 는 히트한 뷰의 identifier 다.
+// hit 는 {class, frame} 이며 leaf 뷰가 없으면 null 이다. frame 은 콘텐츠 영역의 왼쪽 위 원점 창 좌표다.
+// 창이나 메인 웹뷰가 없으면 NULL 이다.
 char *sp_window_hit(void *window, double x, double y);
 
 // 디스플레이 [{x, y, width, height, scale}], 화면 좌표.

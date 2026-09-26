@@ -169,8 +169,13 @@ for (const app of Object.values(APPS)) {
     // 브라우저 표면의 가운데 오른쪽은 그 표면의 문서 영역이다.
     const frame = browser.applied;
     const point = { x: frame.x + frame.w - 4, y: frame.y + frame.h / 2 };
-    assert.deepEqual(await s.run("host.hit", point), { kind: "native", identifier: "modal:settings" },
-      "native input must reach the settings webview");
+    const modalHit = await s.run("host.hit", point);
+    assert.equal(modalHit.kind, "native", "native input must reach the settings webview");
+    assert.equal(modalHit.identifier, "modal:settings", "native input must identify the settings webview");
+    assert.ok(modalHit.view?.class, `the settings hit view must report its class: ${JSON.stringify(modalHit)}`);
+    assert.ok(modalHit.view.frame.x <= point.x && point.x < modalHit.view.frame.x + modalHit.view.frame.width &&
+      modalHit.view.frame.y <= point.y && point.y < modalHit.view.frame.y + modalHit.view.frame.height,
+    `the settings hit view frame must contain ${JSON.stringify(point)}: ${JSON.stringify(modalHit.view)}`);
 
     // 모달 안을 눌러 키보드 초점을 모달 문서에 둔 뒤 Escape 를 보낸다.
     const card = await s.rect("core.settings-modal.card");

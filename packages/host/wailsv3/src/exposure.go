@@ -47,7 +47,7 @@ var presentedSchema = map[string]any{"type": "object", "properties": map[string]
 
 var hostStatus = map[string]hostEntry{
 	"host.window": {
-		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, maximized, key and application active state, whether other windows cover the whole window, child window count, window buttons, native surfaces, document regions, image regions, and the open native modal.",
+		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, maximized, key and application active state, whether other windows cover the whole window, child window count, window buttons, webview frames, native surfaces, document regions, image regions, and the open native modal.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"frame":     rectSchema,
 			"pointer":   map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
@@ -59,6 +59,10 @@ var hostStatus = map[string]hostEntry{
 			"occluded":  map[string]any{"type": "boolean"},
 			"children":  map[string]any{"type": "integer"},
 			"controls":  map[string]any{"type": "array", "items": rectSchema},
+			"webviews": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
+				"frame": rectSchema, "main": map[string]any{"type": "boolean"}, "document": map[string]any{"type": "boolean"},
+				"visible": map[string]any{"type": "boolean"}, "focused": map[string]any{"type": "boolean"}, "order": map[string]any{"type": "integer"},
+			}}},
 			"surfaces": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"id": map[string]any{"type": "string"}, "frame": rectSchema,
 				"visible": map[string]any{"type": "boolean"}, "order": map[string]any{"type": "integer"},
@@ -137,14 +141,16 @@ var hostCommands = map[string]hostEntry{
 		Params: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}}}},
 	"host.window.reload":    {Description: "Reloads the main page.", Params: emptyObject, Result: nullSchema},
 	"host.window.presented": {Description: "Resolves after the main page, visible application documents, and visible image regions have presented their current geometry and raster, with the display time of that frame.", Params: emptyObject, Result: presentedSchema},
-	"host.hit": {Description: "Returns the owner of a point in window coordinates.",
+	"host.hit": {Description: "Returns the owner and native hit-view class and frame of a point in window coordinates.",
 		Params: map[string]any{"type": "object", "properties": map[string]any{
 			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
 		Result: map[string]any{"type": "object", "properties": map[string]any{
 			"kind":       map[string]any{"type": "string", "enum": []string{"page", "document", "native"}},
 			"surface":    map[string]any{"type": "string"},
 			"document":   map[string]any{"type": "string"},
-			"identifier": map[string]any{"type": "string"}}}},
+			"identifier": map[string]any{"type": "string"},
+			"view": map[string]any{"type": []any{"object", "null"}, "properties": map[string]any{
+				"class": map[string]any{"type": "string"}, "frame": rectSchema}}}}},
 	"host.quit": {Description: "Requests normal application termination, including pending saves.", Params: emptyObject, Result: nullSchema},
 }
 
@@ -871,11 +877,13 @@ type windowFacts struct {
 	Controls []WindowControl `json:"controls"`
 	Webviews []struct {
 		frame
-		View    uint64  `json:"view"`
-		Hidden  bool    `json:"hidden"`
-		Focused bool    `json:"focused"`
-		Draws   bool    `json:"draws"`
-		Alpha   float64 `json:"alpha"`
+		View     uint64  `json:"view"`
+		Hidden   bool    `json:"hidden"`
+		Focused  bool    `json:"focused"`
+		Main     bool    `json:"main"`
+		Document bool    `json:"document"`
+		Draws    bool    `json:"draws"`
+		Alpha    float64 `json:"alpha"`
 	} `json:"webviews"`
 	NativeSurfaces []struct {
 		frame
@@ -902,6 +910,16 @@ type WindowDocument struct {
 	Visible  bool   `json:"visible"`
 	Focused  bool   `json:"focused"`
 	Order    int    `json:"order"`
+}
+
+// WindowWebview 는 창 좌표계에서 웹뷰 하나의 프레임이다.
+type WindowWebview struct {
+	Frame    frame `json:"frame"`
+	Main     bool  `json:"main"`
+	Document bool  `json:"document"`
+	Visible  bool  `json:"visible"`
+	Focused  bool  `json:"focused"`
+	Order    int   `json:"order"`
 }
 
 // ModalBackground 는 모달 웹뷰의 배경 그리기 상태다.
@@ -970,6 +988,7 @@ type WindowStatus struct {
 	AppDomWebviews   int              `json:"appDomWebviews"`
 	DocumentWebviews int              `json:"documentWebviews"`
 	Controls         []WindowControl  `json:"controls"`
+	Webviews         []WindowWebview  `json:"webviews"`
 	Surfaces         []WindowSurface  `json:"surfaces"`
 	Documents        []WindowDocument `json:"documents"`
 	Regions          []WindowRegion   `json:"regions"`
@@ -1018,6 +1037,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 		Frame: facts.Frame, Pointer: facts.Pointer, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
 		Scale: facts.Scale, Maximized: facts.Zoomed, Key: facts.Key, Active: facts.Active, Occluded: facts.Occluded, Children: facts.Children,
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
+		Webviews: []WindowWebview{},
 	}
 	out.DocumentWebviews = facts.DocumentWebviews
 	out.AppDomWebviews = facts.AppDomWebviews
@@ -1065,6 +1085,8 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 		out.Surfaces = append(out.Surfaces, WindowSurface{ID: id, Frame: view.frame, Visible: !view.Hidden, Order: order})
 	}
 	for order, view := range facts.Webviews {
+		out.Webviews = append(out.Webviews, WindowWebview{Frame: view.frame, Main: view.Main,
+			Document: view.Document, Visible: !view.Hidden, Focused: view.Focused, Order: order})
 		if key, ok := documents[view.View]; ok {
 			out.Documents = append(out.Documents, WindowDocument{Surface: key.Surface, Document: key.Name,
 				Frame: view.frame, Visible: !view.Hidden, Focused: view.Focused, Order: order})
@@ -1132,6 +1154,10 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 		View       uint64 `json:"view"`
 		Main       bool   `json:"main"`
 		Identifier string `json:"identifier"`
+		Hit        *struct {
+			Class string `json:"class"`
+			Frame frame  `json:"frame"`
+		} `json:"hit"`
 	}
 	var documents map[uint64]DocumentKey
 	err := native(func() (string, error) { return system.WindowHit(s.window.NativeWindow(), x, y) }, &got, func() {
@@ -1147,7 +1173,7 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 	case got.Main:
 		return map[string]any{"kind": "page"}, nil
 	default:
-		return map[string]any{"kind": "native", "identifier": got.Identifier}, nil
+		return map[string]any{"kind": "native", "identifier": got.Identifier, "view": got.Hit}, nil
 	}
 }
 

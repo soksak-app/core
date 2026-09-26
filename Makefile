@@ -241,7 +241,7 @@ wailsv3-release: wailsv3-build-release
 native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) rust-format-check
 	@$(MAKE) -C native/darwin test
-	@node scripts/verify-vt-recovery.mjs target/debug/soksak-vt-alacritty
+	@node scripts/verify-vt-recovery.mjs sidecars/vt-alacritty/build/soksak-vt-alacritty
 	@$(GO_ENV) go test -ldflags "$(GO_LINK)" ./sidecars/files/... ./sidecars/shell/...
 	@$(CARGO_ENV) cargo test --manifest-path sidecars/Cargo.toml --workspace
 	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags "$(GO_LINK)"

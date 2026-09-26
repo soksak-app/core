@@ -100,11 +100,13 @@ pub struct Key {
     pub down: bool,
 }
 
-/// 창 좌표의 한 점에 있는 뷰. chain 은 그 뷰부터 콘텐츠 뷰까지의 주소이고 identifier 는 그 뷰의
-/// 식별자이다.
+/// 창 좌표의 한 점에 있는 뷰. chain 은 leaf 뷰부터 콘텐츠 뷰까지의 주소이며 identifier 는 leaf 뷰의
+/// 식별자다. view_class 와 view_frame 은 그 leaf 의 실제 클래스와 콘텐츠 좌표 프레임이다.
 pub struct Hit {
     pub chain: Vec<Handle>,
     pub identifier: String,
+    pub view_class: Option<String>,
+    pub view_frame: Option<Frame>,
 }
 
 /// 운영체제가 제공하는 창, 웹뷰, 표면 배치, 도형, 입력, 캡처, Dock, 디렉터리 식별, 엔드포인트 기능.

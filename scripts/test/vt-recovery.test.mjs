@@ -35,6 +35,16 @@ test("VT recovery preserves the live service and session across client restart",
   assert.match(result.stdout, /PASS recovery_check_duration_ms=\d+/);
 });
 
+test("VT recovery reports a service spawn error without waiting for the ready guard", { timeout: 10000 }, async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "vt-recovery-missing-"));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+  const missing = join(fixture, "missing-service");
+  const result = await runVerifier(missing);
+  assert.notEqual(result.code, 0, "a missing service executable passed the check");
+  assert.match(result.stderr, /service unstarted could not start: .*ENOENT/);
+  assert.doesNotMatch(result.stderr, /wrote no ready line within 60000ms/);
+});
+
 // 명세상 서비스는 기본 글꼴을 읽은 뒤 엔드포인트를 게시하고, 호스트는 시간 제한 없이 준비 줄을 기다린다.
 // 첫 CoreText 호출은 몇 초 걸릴 수 있으므로 검사도 준비 줄을 기다려야 한다.
 test("VT recovery waits for a ready line that the service writes after several seconds", { timeout: 90000 }, async (t) => {

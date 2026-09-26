@@ -20,9 +20,15 @@ int main(void) { @autoreleasepool {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 500)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     window.releasedWhenClosed = NO;
-    WKWebView *main = [[WKWebView alloc] initWithFrame:window.contentView.bounds];
-    main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-    [window.contentView addSubview:main];
+    NSView *host = [[NSView alloc] initWithFrame:window.contentView.bounds];
+    host.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    host.autoresizesSubviews = YES;
+    [window.contentView addSubview:host];
+    WKWebView *main = [[WKWebView alloc] initWithFrame:host.bounds];
+    // TaoView owns WKWebView resizing directly. Its webview may therefore
+    // begin with no autoresizing mask when the shared compositor wraps it.
+    main.autoresizingMask = NSViewNotSizable;
+    [host addSubview:main];
     check(sp_window_set_main_webview(window, main), "the window registers its app DOM identity");
     check(sp_surface_create(window) == NULL, "a window is rejected instead of being treated as a webview");
     void *surfaces[3];
@@ -32,6 +38,15 @@ int main(void) { @autoreleasepool {
         webviewSetFrame(surfaces[i], 20 + i * 240, 50, 220, 300.5);
         webviewSetSurfaceHidden(surfaces[i], false);
     }
+    NSView *composition = main.superview;
+    [host setFrameSize:NSMakeSize(1200, 500)];
+    check(composition.frame.size.width == host.bounds.size.width,
+        [[NSString stringWithFormat:@"the window compositor follows a host resize from 800 to %@ points",
+            @(host.bounds.size.width)] UTF8String]);
+    NSView *wideHit = [host hitTest:NSMakePoint(1100, 250)];
+    check(wideHit == main || [wideHit isDescendantOf:main],
+        [[NSString stringWithFormat:@"the main page keeps input ownership at x=1100 after resize (hit %@)",
+            NSStringFromClass(wideHit.class)] UTF8String]);
     check(main.underPageBackgroundColor.alphaComponent == 0 && ![[main valueForKey:@"drawsBackground"] boolValue],
         "the app DOM webview does not paint an opaque backing over native regions");
     check(webviews(window.contentView) == 1, "three surfaces use one app DOM webview");

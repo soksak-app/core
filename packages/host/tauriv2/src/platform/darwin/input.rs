@@ -13,7 +13,7 @@ use tauri::webview::PlatformWebview;
 
 use std::time::Duration;
 
-use super::super::{Delivery, Handle, Hit, Key, Pointer};
+use super::super::{Delivery, Frame, Handle, Hit, Key, Pointer};
 use super::{NSPoint, NSRect};
 
 extern "C" {
@@ -188,11 +188,11 @@ pub fn hit(window: Handle, x: f64, y: f64) -> Result<Hit, String> {
         if content.is_null() {
             return Err("window has no content view".into());
         }
-        let bounds: NSRect = msg_send![content, bounds];
+        let content_bounds: NSRect = msg_send![content, bounds];
         // hitTest: 는 받는 뷰의 부모 좌표를 사용한다.
         let local = NSPoint {
             x,
-            y: bounds.size.y - y,
+            y: content_bounds.size.y - y,
         };
         let parent: *mut AnyObject = msg_send![content, superview];
         let point: NSPoint = msg_send![content, convertPoint: local, toView: parent];
@@ -210,7 +210,21 @@ pub fn hit(window: Handle, x: f64, y: f64) -> Result<Hit, String> {
             }
         }
         let mut chain = Vec::new();
+        let mut view_class = None;
+        let mut view_frame: Option<Frame> = None;
         let mut view = found;
+        if !view.is_null() {
+            let class: &AnyClass = msg_send![view, class];
+            view_class = Some(class.name().to_string_lossy().into_owned());
+            let view_bounds: NSRect = msg_send![view, bounds];
+            let rect: NSRect = msg_send![view, convertRect: view_bounds, toView: content];
+            view_frame = Some((
+                rect.origin.x,
+                content_bounds.size.y - rect.origin.y - rect.size.y,
+                rect.size.x,
+                rect.size.y,
+            ));
+        }
         while !view.is_null() {
             chain.push(view as Handle);
             if view == content {
@@ -218,7 +232,12 @@ pub fn hit(window: Handle, x: f64, y: f64) -> Result<Hit, String> {
             }
             view = msg_send![view, superview];
         }
-        Ok(Hit { chain, identifier })
+        Ok(Hit {
+            chain,
+            identifier,
+            view_class,
+            view_frame,
+        })
     }
 }
 

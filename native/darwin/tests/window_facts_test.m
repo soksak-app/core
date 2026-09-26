@@ -96,6 +96,10 @@ int main(void) { @autoreleasepool {
         @"an extra non-document webview is counted instead of reporting a constant app DOM count");
     check([views[0][@"view"] unsignedLongLongValue] == (uintptr_t)main && [views[1][@"view"] unsignedLongLongValue] == (uintptr_t)top,
         @"webviews are listed in drawing order with the main page first");
+    BOOL mainFlagIsBoolean = CFGetTypeID((CFTypeRef)views[0][@"main"]) == CFBooleanGetTypeID();
+    BOOL childFlagIsBoolean = CFGetTypeID((CFTypeRef)views[1][@"main"]) == CFBooleanGetTypeID();
+    check(mainFlagIsBoolean && childFlagIsBoolean && [views[0][@"main"] boolValue] && ![views[1][@"main"] boolValue],
+        [NSString stringWithFormat:@"webview ownership flags are JSON booleans: %@, %@", views[0][@"main"], views[1][@"main"]]);
     NSDictionary *upper = views[1];
     // WKWebView 는 뒤집힌 좌표계라 하위 뷰의 frame 이 곧 콘텐츠 영역 왼쪽 위 기준이다.
     check(main.isFlipped, @"the main webview is a flipped view");
@@ -113,8 +117,20 @@ int main(void) { @autoreleasepool {
     sp_facts_free(raw);
     NSDictionary *hit = parse(sp_window_hit(window, 150, 100));
     check([hit[@"view"] unsignedLongLongValue] == (uintptr_t)top && ![hit[@"main"] boolValue], @"a point inside the child webview hits it");
+    NSDictionary *hitView = hit[@"hit"];
+    NSDictionary *hitFrame = hitView[@"frame"];
+    check([hitView[@"class"] isKindOfClass:NSString.class] && [hitView[@"class"] length] > 0
+        && [hitFrame[@"x"] doubleValue] <= 150 && [hitFrame[@"x"] doubleValue] + [hitFrame[@"width"] doubleValue] > 150
+        && [hitFrame[@"y"] doubleValue] <= 100 && [hitFrame[@"y"] doubleValue] + [hitFrame[@"height"] doubleValue] > 100,
+        [NSString stringWithFormat:@"the hit result reports the actual leaf view class and containing frame: %@", hitView]);
     hit = parse(sp_window_hit(window, 150, 200));
-    check([hit[@"view"] unsignedLongLongValue] == (uintptr_t)main && [hit[@"main"] boolValue], @"a point outside it hits the main webview");
+    hitView = hit[@"hit"];
+    hitFrame = hitView[@"frame"];
+    check([hit[@"view"] unsignedLongLongValue] == (uintptr_t)main && [hit[@"main"] boolValue]
+        && [hitView[@"class"] isKindOfClass:NSString.class] && [hitFrame[@"x"] doubleValue] <= 150
+        && [hitFrame[@"x"] doubleValue] + [hitFrame[@"width"] doubleValue] > 150
+        && [hitFrame[@"y"] doubleValue] <= 200 && [hitFrame[@"y"] doubleValue] + [hitFrame[@"height"] doubleValue] > 200,
+        [NSString stringWithFormat:@"a point outside the child webview reports the actual main-page hit frame: %@", hitView]);
 
     NSArray *screens = parse(sp_screens());
     check(screens.count == NSScreen.screens.count && [screens[0][@"x"] doubleValue] == 0 && [screens[0][@"y"] doubleValue] == 0

@@ -36,6 +36,7 @@ const readyLine = (service) => new Promise((resolve, reject) => {
     clearTimeout(timer);
     service.stdout.off("data", onData);
     service.off("exit", onExit);
+    service.off("error", onError);
     if (error) reject(error);
     else resolve(value);
   };
@@ -46,6 +47,7 @@ const readyLine = (service) => new Promise((resolve, reject) => {
   };
   const onExit = (code, signal) => finish(new Error(`service ${service.pid} exited before its ready line ` +
     `(exit ${code ?? "none"}, signal ${signal ?? "none"}, stdout ${JSON.stringify(buffered)})`));
+  const onError = (error) => finish(new Error(`service ${service.pid ?? "unstarted"} could not start: ${error.message}`));
   // 실패를 해석하도록 서비스가 살아 있는지와 부하를 적는다. 서비스 stderr 는 호출자가 붙인다.
   const timer = setTimeout(() => finish(new Error(`service ${service.pid} wrote no ready line within ${READY_GUARD_MS}ms ` +
     `(exit ${service.exitCode ?? "none"}, signal ${service.signalCode ?? "none"}, stdout ${JSON.stringify(buffered)}, ` +
@@ -53,6 +55,7 @@ const readyLine = (service) => new Promise((resolve, reject) => {
   service.stdout.setEncoding("utf8");
   service.stdout.on("data", onData);
   service.once("exit", onExit);
+  service.once("error", onError);
 });
 
 // root 가 있으면 호스트처럼 표시 요청마다 래스터를 받았다고 consumed 로 답한다. 사이드카는 답을 받기 전에 바뀐
@@ -288,8 +291,8 @@ const main = async () => {
   } finally {
     if (!service.killed) service.kill("SIGTERM");
     await withTimeout(new Promise((resolve) => {
-      if (service.exitCode !== null) resolve();
-      else service.once("exit", resolve);
+      if (service.exitCode !== null || service.signalCode !== null) resolve();
+      else service.once("close", resolve);
     }), "service cleanup");
     await rm(root, { recursive: true, force: false });
   }

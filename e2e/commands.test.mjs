@@ -3,6 +3,7 @@
 // 사람이 누르는 컨트롤은 같은 명령을 실행하므로(docs/spec/exposure.md), 명령의 결과가
 // status 에 나타나면 컨트롤의 결과도 같다.
 import assert from "node:assert/strict";
+import { rmSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, fresh, open } from "./app.mjs";
@@ -125,6 +126,195 @@ for (const app of Object.values(APPS)) {
 
     await s.run("core.settings.close");
     await s.until("core.settings-modal", (modal) => !modal.open, "settings did not close");
+  });
+
+  test(`${app.name}: native clicks reach every chrome icon at wide window sizes`, { timeout: 180000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const initialWindow = await s.get("host.window");
+    const initialSettings = await s.get("core.settings");
+    s.cleanup(async () => {
+      for (const key of ["left", "right", "mode"]) {
+        if (initialSettings.overridden.includes(key)) {
+          await s.run("core.settings.set", { patch: { [key]: initialSettings.values[key] }, scope: "project" });
+        } else {
+          await s.run("core.settings.reset", { key });
+        }
+      }
+      await s.run("host.window.maximize", { on: false });
+      await s.run("host.window.resize", { width: initialWindow.content.width, height: initialWindow.content.height });
+    });
+    let captureActive = false;
+    s.cleanup(async () => {
+      if (!captureActive) return;
+      const stopped = await s.request("diagnostics.capture.stop", { after: 0 });
+      captureActive = false;
+      rmSync(stopped.frames, { recursive: true, force: true });
+      if (stopped.limited) throw new Error("the aborted chrome width capture reached its frame limit");
+    });
+
+    const clickChrome = async (name) => {
+      const geometry = await s.get("host.window");
+      const main = geometry.webviews.find((webview) => webview.main);
+      assert.ok(main, `host.window did not report the main WebView before ${name}: ${JSON.stringify(geometry.webviews)}`);
+      const rect = await s.rect(name);
+      assert.ok(rect.width > 0 && rect.height > 0, `${name} has no visible hit rectangle: ${JSON.stringify(rect)}`);
+      const point = {
+        x: (rect.document?.x ?? 0) + rect.x + rect.width / 2,
+        y: (rect.document?.y ?? 0) + rect.y + rect.height / 2,
+      };
+      const owner = await s.run("host.hit", point);
+      // Send the native click even when hit testing reports another owner. The hit
+      // result and the command effect are recorded independently for a useful Red.
+      await s.click(point.x, point.y);
+      const inMainWebview = point.x >= main.frame.x && point.x < main.frame.x + main.frame.width &&
+        point.y >= main.frame.y && point.y < main.frame.y + main.frame.height;
+      const hitFrame = owner.kind === "native" ? owner.view?.frame : null;
+      const hitViewContains = owner.kind !== "native" || Boolean(hitFrame && point.x >= hitFrame.x &&
+        point.x < hitFrame.x + hitFrame.width && point.y >= hitFrame.y && point.y < hitFrame.y + hitFrame.height);
+      return { name, point, owner, mainFrame: main.frame, inMainWebview, hitViewContains,
+        active: geometry.active, key: geometry.key };
+    };
+
+    // Measure from half the available screen width to the largest content width
+    // that fits inside the visible frame. The steps are in points, independent of
+    // backing scale, and include the reported 2048 physical-pixel viewport.
+    const center = {
+      x: initialWindow.frame.x + initialWindow.frame.width / 2,
+      y: initialWindow.frame.y + initialWindow.frame.height / 2,
+    };
+    const screen = (await s.get("host.screens")).find((item) => center.x >= item.x && center.x < item.x + item.width &&
+      center.y >= item.y && center.y < item.y + item.height);
+    assert.ok(screen, `the initial window center ${JSON.stringify(center)} is outside every screen`);
+    const maxWidth = Math.floor(screen.visible.width - (initialWindow.frame.width - initialWindow.content.width));
+    const minWidth = Math.ceil(maxWidth / 2);
+    const widths = Array.from({ length: 17 }, (_, index) =>
+      Math.round(minWidth + (maxWidth - minWidth) * index / 16));
+    const reportWidth = Math.round(2048 / initialWindow.scale);
+    if (reportWidth >= minWidth && reportWidth <= maxWidth) widths.push(reportWidth);
+    widths.sort((left, right) => left - right);
+    const samples = [...new Set(widths)];
+    const failures = [];
+    const measurements = [];
+    const waitForStatus = async (name, predicate, message) => {
+      try {
+        return { value: await s.until(name, predicate, message, { timeout: 1500 }) };
+      } catch (error) {
+        if (error.code !== "ETIMEDOUT") throw error;
+        return { error: error.message };
+      }
+    };
+    const restoreSetting = async (key) => {
+      if (initialSettings.overridden.includes(key)) {
+        await s.run("core.settings.set", { patch: { [key]: initialSettings.values[key] }, scope: "project" });
+      } else {
+        await s.run("core.settings.reset", { key });
+      }
+      await s.until("core.settings", (settings) => settings.values[key] === initialSettings.values[key] &&
+        settings.overridden.includes(key) === initialSettings.overridden.includes(key),
+      `${key} setting did not return to its initial value and scope`);
+      await s.presented();
+    };
+    for (const width of samples) {
+      let capture = null;
+      if (width === maxWidth) {
+        try {
+          capture = await s.request("diagnostics.capture.start", {});
+        } catch (error) {
+          failures.push({ width, name: "diagnostics.capture.start", error: error.message });
+          t.diagnostic(`recording start failed at ${width}: ${error.message}`);
+        }
+      }
+      captureActive = Boolean(capture);
+      await s.run("host.window.resize", { width, height: initialWindow.content.height });
+      const resized = await s.until("host.window", (window) => window.content.width === width,
+        `the window did not reach test width ${width}`);
+      for (const key of ["left", "right", "mode"]) await restoreSetting(key);
+      await s.presented();
+      const geometry = await s.get("host.window");
+      const main = geometry.webviews.find((webview) => webview.main);
+      assert.ok(main, `host.window did not report a main WebView at ${width}: ${JSON.stringify(geometry.webviews)}`);
+      t.diagnostic(`measured chrome viewport ${JSON.stringify({ requested: width, content: resized.content.width,
+        scale: resized.scale, active: geometry.active, key: geometry.key, mainWebview: main.frame,
+        surfaces: geometry.surfaces.filter((surface) => surface.visible) })}`);
+
+      const outcomes = [];
+      const projectBefore = (await s.get("core.screen")).screen;
+      const projects = await clickChrome("core.chrome.projects");
+      if (capture) {
+        const { displayed } = await s.presented();
+        const stopped = await s.request("diagnostics.capture.stop", { after: displayed });
+        captureActive = false;
+        s.cleanup(() => rmSync(stopped.frames, { recursive: true, force: true }));
+        assert.equal(stopped.limited, false, `the complete resize-and-project-click recording reached its frame limit at ${width}`);
+        assert.ok(stopped.count > 0, `the resize-and-project-click recording has no frames at ${width}`);
+        assert.ok(stopped.longestGap <= 100, `the resize-and-project-click recording has a ${stopped.longestGap}ms frame gap at ${width}`);
+        t.diagnostic(`complete resize-and-project-click recording ${JSON.stringify({ width, count: stopped.count,
+          longestGap: stopped.longestGap, frames: stopped.frames })}`);
+      }
+      projects.before = projectBefore;
+      const projectResult = projects.owner.kind === "page"
+        ? await waitForStatus("core.screen", (value) => value.screen === "library", `projects icon did not open the library at ${width}`)
+        : {};
+      projects.after = (await s.get("core.screen")).screen;
+      projects.effect = projects.after === "library";
+      if (projectResult.error) projects.waitError = projectResult.error;
+      outcomes.push(projects);
+      if (projects.effect) {
+        await s.run("core.library.return");
+        await s.until("core.screen", (value) => value.screen === "workspace", `workspace did not return at ${width}`);
+        await s.presented();
+      }
+
+      for (const key of ["left", "right"]) {
+        const before = initialSettings.values[key];
+        const click = await clickChrome(`core.chrome.${key}`);
+        const result = click.owner.kind === "page"
+          ? await waitForStatus("core.settings", (settings) => settings.values[key] !== before,
+            `${key} sidebar icon did not change the setting at ${width}`)
+          : {};
+        const after = (await s.get("core.settings")).values[key];
+        outcomes.push({ ...click, before, after, effect: after !== before, waitError: result.error });
+        await restoreSetting(key);
+      }
+
+      const mode = initialSettings.values.mode;
+      const modeClick = await clickChrome("core.chrome.mode");
+      const nextMode = mode === "dark" ? "light" : "dark";
+      const modeResult = modeClick.owner.kind === "page"
+        ? await waitForStatus("core.settings", (settings) => settings.values.mode === nextMode,
+          `theme icon did not change the mode at ${width}`)
+        : {};
+      const observedMode = (await s.get("core.settings")).values.mode;
+      outcomes.push({ ...modeClick, before: mode, after: observedMode, effect: observedMode !== mode,
+        waitError: modeResult.error });
+      await restoreSetting("mode");
+
+      const settingsClick = await clickChrome("core.chrome.settings");
+      const settingsResult = settingsClick.owner.kind === "page"
+        ? await waitForStatus("core.settings-modal", (modal) => modal.open, `settings icon did not open settings at ${width}`)
+        : {};
+      const settingsOpen = (await s.get("core.settings-modal")).open;
+      outcomes.push({ ...settingsClick, effect: settingsOpen });
+      if (settingsResult.error) outcomes.at(-1).waitError = settingsResult.error;
+      if (settingsOpen) {
+        await s.run("core.settings.close");
+        await s.until("core.settings-modal", (modal) => !modal.open, `settings did not close at ${width}`);
+      }
+
+      const failed = outcomes.filter(({ owner, effect, inMainWebview, hitViewContains }) =>
+        owner.kind !== "page" || !effect || !inMainWebview || !hitViewContains);
+      t.diagnostic(`chrome click outcomes ${JSON.stringify({ width, outcomes, mainWebview: main.frame })}`);
+      failures.push(...failed.map((outcome) => ({ width, ...outcome })));
+      const finalGeometry = await s.get("host.window");
+      measurements.push({ width, active: geometry.active, key: geometry.key,
+        finalActive: finalGeometry.active, finalKey: finalGeometry.key, outcomes });
+    }
+    assert.deepEqual(failures, [], `chrome controls failed across the width sweep: ${JSON.stringify(measurements)}`);
+    assert.ok(measurements.every(({ active, key, finalActive, finalKey }) =>
+      !active && !key && !finalActive && !finalKey),
+    `the width sweep activated or keyed the tested application: ${JSON.stringify(measurements.map(({ width, active, key, finalActive, finalKey }) => ({ width, active, key, finalActive, finalKey })))}`);
   });
 
   test(`${app.name}: library commands search, sort, and edit the form`, async (t) => {

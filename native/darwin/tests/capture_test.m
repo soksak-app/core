@@ -57,6 +57,24 @@ int main(void) { @autoreleasepool {
     check(centre.redComponent > 0.9 && centre.greenComponent < 0.3 && centre.blueComponent < 0.1,
         [NSString stringWithFormat:@"the still image shows the window content (centre %@)", centre]);
     check(!NSApp.isActive, @"the still capture does not activate the application");
+    // The recording target stays unchanged long enough for its initial compositor frame to become idle.
+    NSDate *settled = [NSDate dateWithTimeIntervalSinceNow:3];
+    while (settled.timeIntervalSinceNow > 0) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
+            [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, settled.timeIntervalSinceNow)]];
+    }
+    check(sp_capture_open(window.windowNumber, false), @"a visible inactive window opens for recording");
+    bool recordingStarted = sp_capture_start(directory);
+    check(recordingStarted, [NSString stringWithFormat:@"recording starts on an unchanged inactive window (%@)",
+        [NSString stringWithUTF8String:sp_capture_error()]]);
+    if (recordingStarted) {
+        int firstFrame = sp_capture_wait();
+        check(firstFrame == 1, [NSString stringWithFormat:@"an unchanged inactive window produces a first frame (%@)",
+            [NSString stringWithUTF8String:sp_capture_error()]]);
+        int frames = sp_capture_stop(0);
+        check(frames > 0, [NSString stringWithFormat:@"recording writes a complete frame (got %d)", frames]);
+    }
+    check(!NSApp.isActive, @"recording an unchanged window does not activate the application");
     [window close];
     [window release];
     [[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:NULL];

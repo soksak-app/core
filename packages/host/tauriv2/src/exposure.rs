@@ -69,7 +69,7 @@ fn host_declarations() -> Value {
                 "scale": {"type": "number"}}}},
         }, {
             "name": "host.window",
-            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, maximized, key and application active state, whether other windows cover the whole window, child window count, window buttons, native surfaces, image regions, and the open native modal.",
+            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, maximized, key and application active state, whether other windows cover the whole window, child window count, window buttons, webview frames, native surfaces, image regions, and the open native modal.",
             "schema": {"type": "object", "properties": {
                 "frame": rect,
                 "pointer": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
@@ -81,6 +81,9 @@ fn host_declarations() -> Value {
                 "occluded": {"type": "boolean"},
                 "children": {"type": "integer"},
                 "controls": {"type": "array", "items": rect},
+                "webviews": {"type": "array", "items": {"type": "object", "properties": {
+                    "frame": rect, "main": {"type": "boolean"}, "document": {"type": "boolean"},
+                    "visible": {"type": "boolean"}, "focused": {"type": "boolean"}, "order": {"type": "integer"}}}},
                 "surfaces": {"type": "array", "items": {"type": "object", "properties": {
                     "id": {"type": "string"}, "frame": rect,
                     "visible": {"type": "boolean"}, "order": {"type": "integer"}}}},
@@ -109,12 +112,14 @@ fn host_declarations() -> Value {
         "commands": [
             {"name": "host.dock.select", "description": "Performs the Dock menu item with the title.",
              "params": {"type": "object", "properties": {"title": {"type": "string"}}}, "result": nothing},
-            {"name": "host.hit", "description": "Returns the owner of a point in window coordinates.",
+            {"name": "host.hit", "description": "Returns the owner and native hit-view class and frame of a point in window coordinates.",
              "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
              "result": {"type": "object", "properties": {
                  "kind": {"type": "string", "enum": ["page", "document", "native"]},
                  "surface": {"type": "string"}, "document": {"type": "string"},
-                 "identifier": {"type": "string"}}}},
+                 "identifier": {"type": "string"},
+                 "view": {"type": ["object", "null"], "properties": {
+                     "class": {"type": "string"}, "frame": rect}}}}},
             {"name": "host.menu.select", "description": "Performs the application menu item with the title in the submenu with the menu title.",
              "params": {"type": "object", "properties": {"menu": {"type": "string"}, "title": {"type": "string"}}}, "result": nothing},
             {"name": "host.quit", "description": "Requests normal application termination, including pending saves.",
@@ -898,6 +903,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     let overlay = &context.overlay;
     let mut surfaces = Vec::new();
     let mut attached = Vec::new();
+    let mut webview_frames = Vec::new();
     // 모달 웹뷰 잠금은 메인 스레드 작업을 기다리기 전에 푼다. 메인 스레드의 모달 배치가 같은 잠금을
     // 기다리므로, 잠금을 쥔 채 with_view 를 기다리면 두 스레드가 서로를 기다린다.
     let modal_webview = overlay.view.lock().map_err(internal)?.clone();
@@ -932,13 +938,23 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
             .as_u64()
             .ok_or_else(|| internal("webview facts missing view"))?;
         let address = address as platform::Handle;
+        let main_webview = view["main"].as_bool().ok_or_else(|| {
+            internal(format!(
+                "webview facts missing main at index {order}: {view}"
+            ))
+        })?;
+        let document_webview = view["document"]
+            .as_bool()
+            .ok_or_else(|| internal("webview facts missing document"))?;
+        let hidden = view["hidden"]
+            .as_bool()
+            .ok_or_else(|| internal("webview facts missing hidden"))?;
+        let focused = view["focused"]
+            .as_bool()
+            .ok_or_else(|| internal("webview facts missing focused"))?;
+        webview_frames.push(json!({"frame": rect(view), "main": main_webview,
+            "document": document_webview, "visible": !hidden, "focused": focused, "order": order}));
         if let Some((surface, document)) = documents.get(&address) {
-            let hidden = view["hidden"]
-                .as_bool()
-                .ok_or_else(|| internal("webview facts missing hidden"))?;
-            let focused = view["focused"]
-                .as_bool()
-                .ok_or_else(|| internal("webview facts missing focused"))?;
             attached.push(
                 json!({"surface": surface, "document": document, "frame": rect(view),
                 "visible": !hidden, "focused": focused, "order": order}),
@@ -1001,6 +1017,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "appDomWebviews": app_dom_webviews,
         "documentWebviews": document_webviews,
         "controls": facts["controls"],
+        "webviews": webview_frames,
         "surfaces": surfaces,
         "documents": attached,
         "regions": regions,
@@ -1153,11 +1170,20 @@ fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
     if let Some(owner) = owner {
         return Ok(owner);
     }
+    let hit_view = match (found.view_class, found.view_frame) {
+        (Some(class), Some((x, y, width, height))) => json!({
+            "class": class, "frame": {"x": x, "y": y, "width": width, "height": height}
+        }),
+        (None, None) => Value::Null,
+        _ => return Err(internal("window hit view class and frame are inconsistent")),
+    };
     let modal = context.overlay.view.lock().map_err(internal)?.clone();
     if let (Some(view), Some((id, _, _))) = (modal, context.overlay.open_state()) {
         let handle = with_view(&view, move |view| platform.view_id(view)).map_err(internal)?;
         if found.chain.contains(&handle) {
-            return Ok(json!({"kind": "native", "identifier": format!("modal:{id}")}));
+            return Ok(
+                json!({"kind": "native", "identifier": format!("modal:{id}"), "view": hit_view}),
+            );
         }
     }
     let main = root_view_on_main(window).map_err(internal)?;
@@ -1165,7 +1191,7 @@ fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
     if found.chain.contains(&page) {
         return Ok(json!({"kind": "page"}));
     }
-    Ok(json!({"kind": "native", "identifier": found.identifier}))
+    Ok(json!({"kind": "native", "identifier": found.identifier, "view": hit_view}))
 }
 
 /// 엔드포인트 요청을 이 애플리케이션의 창에서 실행한다.
