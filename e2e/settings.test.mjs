@@ -85,7 +85,7 @@ for (const app of Object.values(APPS)) {
     await press(s, "core.settings-modal.plugin", "plugin:terminal");
     const terminal = await s.until("core.settings-modal", (modal) => modal.plugin === "terminal", "terminal page did not open");
     assert.deepEqual(terminal.listed, [], "the page still shows the plugin list");
-    assert.equal(terminal.rows.length, 13, `terminal rows: ${JSON.stringify(terminal.rows)}`);
+    assert.equal(terminal.rows.length, 14, `terminal rows: ${JSON.stringify(terminal.rows)}`);
     assert.deepEqual(terminal.rows.find((row) => row.key === "terminal.cursor.shape"), {
       key: "terminal.cursor.shape", name: "커서 모양",
       description: "block은 칸 전체, underline은 밑줄, beam은 세로 막대로 그린다. 프로그램이 모양을 정하면 그 모양을 쓴다.",
