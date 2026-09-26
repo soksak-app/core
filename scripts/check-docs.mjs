@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
-import { checkChangelogTranslations, checkChecklistTranslations, checkCompletedItems } from "./checklist.mjs";
+import { checkChangelogTranslations, checkChecklistTranslations, checkCompletedItems, retiredChecklistItems } from "./checklist.mjs";
 
 const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { encoding: "utf8" }).split("\0"))].filter((file) => file.endsWith(".md") && existsSync(file));
@@ -43,13 +43,17 @@ for (const file of files) {
 }
 
 const statusFiles = ["docs/features.md", "docs/features.ko.md"];
+const changelogEnglish = existsSync("CHANGELOG.md") ? readFileSync("CHANGELOG.md", "utf8") : "";
+const changelogKorean = existsSync("CHANGELOG.ko.md") ? readFileSync("CHANGELOG.ko.md", "utf8") : "";
 if (existsSync("CHANGELOG.md") && existsSync("CHANGELOG.ko.md")) {
-  errors.push(...checkChangelogTranslations(readFileSync("CHANGELOG.md", "utf8"), readFileSync("CHANGELOG.ko.md", "utf8")));
+  errors.push(...checkChangelogTranslations(changelogEnglish, changelogKorean));
 }
+const retired = retiredChecklistItems(changelogEnglish, changelogKorean);
+errors.push(...retired.errors);
 errors.push(...checkChecklistTranslations(...statusFiles.map((file) => readFileSync(file, "utf8"))));
 for (const file of statusFiles) {
   const previous = execFileSync("git", ["show", `HEAD:${file}`], { encoding: "utf8" });
-  errors.push(...checkCompletedItems(previous, readFileSync(file, "utf8"), file));
+  errors.push(...checkCompletedItems(previous, readFileSync(file, "utf8"), file, retired.ids));
 }
 const counts = statusFiles.map((file, language) => {
   const rows = readFileSync(file, "utf8").split("\n").filter((line) => line.startsWith("|"));

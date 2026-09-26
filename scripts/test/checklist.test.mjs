@@ -5,18 +5,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { checkChangelogTranslations } from "../checklist.mjs";
+import { checkChangelogTranslations, retiredChecklistItems } from "../checklist.mjs";
 
 const checker = fileURLToPath(new URL("../check-docs.mjs", import.meta.url));
 const englishTable = "\n| Feature | Implementation | Validation | Release |\n| --- | --- | --- | --- |\n| Test | Source | Unverified | Unreleased |\n";
 const koreanTable = "\n| 기능 | 구현 | 검증 | 배포 |\n| --- | --- | --- | --- |\n| 검사 | 소스 | 미검증 | 미배포 |\n";
-function check(t, english, korean, previous = "") {
+function check(t, english, korean, previous = "", retirement) {
   const root = mkdtempSync(join(tmpdir(), "checklist-audit-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   assert.equal(spawnSync("git", ["init", "-q", root]).status, 0);
   mkdirSync(join(root, "docs"));
   writeFileSync(join(root, "docs/features.md"), previous + englishTable);
   writeFileSync(join(root, "docs/features.ko.md"), previous + koreanTable);
+  if (retirement) {
+    writeFileSync(join(root, "CHANGELOG.md"), `# Changelog\n\n## Unreleased\n\n${retirement.english}\n`);
+    writeFileSync(join(root, "CHANGELOG.ko.md"), `# 변경 기록\n\n## 미배포\n\n${retirement.korean}\n`);
+  }
   assert.equal(spawnSync("git", ["add", "docs"], { cwd: root }).status, 0);
   assert.equal(spawnSync("git", ["-c", "user.name=Checklist fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture baseline"], { cwd: root }).status, 0);
   writeFileSync(join(root, "docs/features.md"), english + englishTable);
@@ -29,6 +33,29 @@ function check(t, english, korean, previous = "") {
 test("checklist permits translated text and linked follow-up identifiers", { timeout: 3000 }, (t) => {
   const result = check(t, "- [o] G1 — done\n- [~] G1-1 — follow up\n", "- [o] G1 — 완료\n- [~] G1-1 — 후속\n");
   assert.equal(result.status, 0, result.stderr);
+});
+
+test("checklist permits retiring a completed entry when paired changelogs record why it was misclassified", { timeout: 3000 }, (t) => {
+  const retirement = {
+    english: "- Retired checklist entry `G1`: it recorded an agent work rule, not project work.",
+    korean: "- 체크리스트 항목 `G1` 폐기: 프로젝트 작업이 아니라 에이전트 업무 규칙을 기록한 항목이었다.",
+  };
+  const previous = "- [o] G1 — procedural rule\n";
+  const result = check(t, "- [~] G2 — task\n", "- [~] G2 — 작업\n", previous, retirement);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test("completed checklist items cannot be removed without a paired retirement record", { timeout: 3000 }, (t) => {
+  const result = check(t, "- [~] G2 — task\n", "- [~] G2 — 작업\n", "- [o] G1 — completed\n");
+  assert.notEqual(result.status, 0, "documentation audit accepted an undocumented removal");
+  assert.match(result.stderr, /completed checklist item G1 must remain complete/);
+});
+
+test("retirement records require a reason and the same IDs in both translations", () => {
+  const noReason = retiredChecklistItems("- Retired checklist entry `G1`:\n", "- 체크리스트 항목 `G1` 폐기:\n");
+  assert.match(noReason.errors.join("\n"), /requires a reason/);
+  const mismatch = retiredChecklistItems("- Retired checklist entry `G1`: mistaken entry.\n", "- 체크리스트 항목 `G2` 폐기: 잘못된 항목.\n");
+  assert.match(mismatch.errors.join("\n"), /entries differ between changelog translations/);
 });
 
 test("checklist permits an explicitly blocked item with a cause and retry condition", { timeout: 3000 }, (t) => {

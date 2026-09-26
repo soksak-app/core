@@ -34,16 +34,37 @@ export function checkChecklistTranslations(english, korean) {
   return errors;
 }
 
-export function checkCompletedItems(previous, current, file) {
+export function checkCompletedItems(previous, current, file, retiredIds = new Set()) {
   const errors = [];
   const before = checklist(previous, file, []);
   const after = new Map(checklist(current, file, []).filter((entry) => entry.id).map((entry) => [entry.id, entry]));
   for (const entry of before) {
-    if (entry.id && entry.state === "o" && after.get(entry.id)?.state !== "o") {
+    if (entry.id && entry.state === "o" && after.get(entry.id)?.state !== "o" && !retiredIds.has(entry.id)) {
       errors.push(`${file}: completed checklist item ${entry.id} must remain complete; add a linked follow-up identifier`);
     }
   }
   return errors;
+}
+
+export function retiredChecklistItems(english, korean) {
+  const parse = (text, pattern, file) => {
+    const entries = new Map();
+    const errors = [];
+    for (const match of text.matchAll(pattern)) {
+      const [, id, reason] = match;
+      if (!reason.trim()) errors.push(`${file}: retired checklist entry ${id} requires a reason`);
+      if (entries.has(id)) errors.push(`${file}: duplicate retired checklist entry ${id}`);
+      entries.set(id, reason.trim());
+    }
+    return { entries, errors };
+  };
+  const en = parse(english, /^- Retired checklist entry `([A-Z]\d+(?:\.\d+)*(?:-\d+)*)`:(.*)$/gm, "CHANGELOG.md");
+  const ko = parse(korean, /^- 체크리스트 항목 `([A-Z]\d+(?:\.\d+)*(?:-\d+)*)` 폐기:(.*)$/gm, "CHANGELOG.ko.md");
+  const errors = [...en.errors, ...ko.errors];
+  const enIds = [...en.entries.keys()].sort();
+  const koIds = [...ko.entries.keys()].sort();
+  if (JSON.stringify(enIds) !== JSON.stringify(koIds)) errors.push("retired checklist entries differ between changelog translations");
+  return { ids: new Set(errors.length ? [] : enIds), errors };
 }
 
 // 변경 기록과 번역이 같은 정보를 같은 순서로 담는지 검사한다. 구역 제목의 수, 구역별 항목 수, 그리고 위치마다
