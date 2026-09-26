@@ -578,9 +578,10 @@ async function dragOnce(t, s, plan, capture) {
       "Nothing was measured: uncover the window, without activating the application, and run the check again.");
   }
   if (window.active) {
-    throw new Error(`${s.app.name} is the active application, so the window's cursor updates pass the physical ` +
-      "pointer location to the page during the synthetic drag. Nothing was measured: make another application " +
-      "active and run the check again.");
+    throw new Error(`${s.app.name}: synthetic drag measurement refused because host.window.active is true; ` +
+      `pointer ${JSON.stringify(window.pointer)}; window frame ${JSON.stringify(window.frame)}. ` +
+      "An active window can receive AppKit cursor updates at the reported pointer location during the synthetic drag; " +
+      "nothing was measured.");
   }
   const ms = Math.max(1, Math.round(plan.ms / 16)) * 16 * 2 * plan.times;
   const result = await s.request("diagnostics.drag", { ...plan, capture }, { timeout: REQUEST + ms * 4 });

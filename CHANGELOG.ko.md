@@ -8,6 +8,8 @@
 
 - V5-96-1: 호스트 간 확정 배치 비교가 실패하면 각 호스트의 창 프레임·내용 크기·배율·표면 프레임·문서 크기와 레이아웃 관련 유효 설정을 기록한다. 판정이나 한계는 바꾸지 않고 초기 조건 차이를 관측할 수 있게 한다. `pnpm test`, `make boundaries`, `make exposure-check`, `make docs-check`가 통과했다. 창 검사는 폐기 가능한 endpoint를 기다린다.
 
+- V5-96-2: 합성 입력 거부가 관측된 상태만 보고하게 했다. 활성 창 끌기 거부는 표본 포인터와 창 프레임을 포함한다. 포인터 버튼 오류 1007은 AppKit의 0이 아닌 `NSEvent.pressedMouseButtons` 마스크를 알리되 발생 원인을 특정하지 않는다. 노출 명세에도 원인을 알 수 없다고 적었다. `pnpm test`, `make native-test`, 집중 geometry 반복, 경계·노출·문서 검사가 통과했다.
+
 - F0.5.6-1: 호스트가 WebView를 직접 키우는 경우 macOS 창 합성 래퍼도 호스트에 맞춰 크기를 조정하게 했다. Tauri 구조의 Red 검사에서는 부모를 800pt에서 1200pt로 늘려도 래퍼가 800pt에 남고 x=1100 hit이 일반 `NSView`로 갔다. Green은 부모를 따라 크기를 늘려 메인 `WKWebView`가 hit을 받는다. 수정 전 재빌드 Tauri 폭 검사에서 1229pt부터 툴바 실패를 재현했고, 재빌드 Wails는 비활성 756–1512pt 검사에 통과했다. `make native-test`의 낡은 `target/debug` 경로를 선언된 VT 사이드카 산출물로 바로잡고 spawn 오류를 즉시 보고하게 했다. 수정 후 비활성 Tauri 런타임 검증은 진행 중이다.
 
 - 체크리스트 항목 `G1.3-10` 폐기: 해당 항목은 프로젝트 작업이 아니라 AGENTS 업무 절차를 기록했다.

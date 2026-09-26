@@ -780,7 +780,7 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	case platform.PointerUnreceived:
 		return rpcError(codeTimeout, "the document did not receive the input within %s", receiveTimeout)
 	case platform.PointerButtonHeld:
-		return rpcError(codeButtonHeld, "a physical mouse button is pressed, so the press or release was not delivered")
+		return rpcError(codeButtonHeld, "AppKit reports a nonzero NSEvent.pressedMouseButtons mask; the synthetic press or release was not delivered")
 	}
 	if input.Phase == "down" {
 		if err := s.pressAt(input.X, input.Y); err != nil {

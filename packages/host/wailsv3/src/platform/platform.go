@@ -336,7 +336,7 @@ const (
 	PointerInactive
 	// PointerUnreceived 는 누름이나 뗌을 전달했지만 문서가 제한 시간 안에 받지 않았다는 뜻이다.
 	PointerUnreceived
-	// PointerButtonHeld 는 실제 마우스 버튼이 눌려 있어 누름이나 뗌을 전달하지 않았다는 뜻이다.
+	// PointerButtonHeld 는 AppKit 이 눌린 마우스 버튼을 보고해 합성 누름이나 뗌을 전달하지 않았다는 뜻이다.
 	PointerButtonHeld
 )
 

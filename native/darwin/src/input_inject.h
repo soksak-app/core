@@ -6,7 +6,7 @@ typedef enum {
     SP_INPUT_REJECTED = 1, // 창, 좌표, 단계, 스레드가 올바르지 않다
     SP_INPUT_INACTIVE = 2, // 버튼 없는 이동이며 창이 키 창이 아니다(WebKit 은 이 이동으로 호버를 갱신하지 않는다), 또는 활성 애플리케이션의 키 창이 아닌 창에 보낸 키다
     SP_INPUT_UNRECEIVED = 3, // 누름이나 뗌을 문서가 제한 시간 안에 받지 않았거나, 스크롤 대상이 제한 시간 안에 표시하지 않았다
-    SP_INPUT_BUTTON_HELD = 4, // 누름이나 뗌이며 실제 마우스 버튼이 눌려 있다. WebKit 은 이벤트의 버튼 상태를 시스템에서 읽는다
+    SP_INPUT_BUTTON_HELD = 4, // AppKit 이 눌린 마우스 단추를 보고해 합성 누름이나 뗌을 전달하지 않았다
 } sp_input_result;
 
 // 창에 네이티브 입력을 전달한다. 좌표는 콘텐츠 영역 왼쪽 위 기준 포인트 값이다.

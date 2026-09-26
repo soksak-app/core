@@ -1420,7 +1420,7 @@ impl Host {
             )),
             Delivery::ButtonHeld => Err(Failure::new(
                 BUTTON_HELD,
-                "a physical mouse button is pressed, so the press or release was not delivered",
+                "AppKit reports a nonzero NSEvent.pressedMouseButtons mask; the synthetic press or release was not delivered",
             )),
         }
     }

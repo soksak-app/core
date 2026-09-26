@@ -95,8 +95,8 @@ sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, in
     NSView *hit = hitView(window, point);
     if (!hit) return SP_INPUT_REJECTED;
     // WebKit 은 마우스 이벤트의 눌린 버튼을 이벤트가 아니라 +[NSEvent pressedMouseButtons] 로 읽는다.
-    // 실제 버튼이 눌린 동안의 누름과 뗌은 다른 버튼과 겹친 입력이 되어 pointerdown 이나 pointerup
-    // 대신 pointermove 로 전달되므로, 전달하지 않고 알린다.
+    // AppKit 이 눌린 버튼을 보고하는 동안의 누름과 뗌은 WebKit 에서 pointerdown 이나 pointerup 대신
+    // pointermove 로 처리될 수 있으므로 전달하지 않고 알린다. 이 상태만으로 버튼 상태의 원인은 알 수 없다.
     if ((phase == 1 || phase == 3) && NSEvent.pressedMouseButtons != 0) return SP_INPUT_BUTTON_HELD;
     BOOL right = button == 1;
     switch (phase) {

@@ -27,7 +27,7 @@ static const char *currentStep = "setup";
 
 static void failTimeout(const char *reason) {
     fprintf(stderr, "FAIL: %s within 10 seconds (step: %s, visible: %d, occlusion visible: %d, on active space: %d, "
-        "app active: %d, physical buttons: %lu)\n", reason, currentStep, testWindow.isVisible,
+        "app active: %d, AppKit mouse-button mask: %lu)\n", reason, currentStep, testWindow.isVisible,
         (testWindow.occlusionState & NSWindowOcclusionStateVisible) != 0, testWindow.isOnActiveSpace,
         NSApp.isActive, (unsigned long)NSEvent.pressedMouseButtons);
     exit(1);
@@ -148,14 +148,14 @@ static NSDictionary *pressLastPixel(NSWindow *window, WKWebView *surface, CGFloa
     check(surfaceHit, [NSString stringWithFormat:@"the last surface pixel resolves to the DOM plane (hit %@)",
         NSStringFromClass(hit.class)]);
     evaluate(surface, @"window.pressed = null; null");
-    // 결과 코드와 실제 마우스 버튼 상태를 보고한다. 실제 버튼이 눌린 동안 합성 누름은 전달되지 않는다
+    // 결과 코드와 AppKit 의 버튼 상태를 보고한다. 눌린 버튼이 보고되는 동안 합성 누름은 전달되지 않는다
     // (SP_INPUT_BUTTON_HELD). 전달되지 않은 누름은 문서가 받을 수 없으므로 기다리지 않고 실패한다.
     NSUInteger buttons = NSEvent.pressedMouseButtons;
     sp_input_result down = sp_input_pointer(window, x, y, 1, 0, 0, 0);
     sp_input_result up = sp_input_pointer(window, x, y, 3, 0, 0, 0);
     BOOL delivered = down == SP_INPUT_DELIVERED && up == SP_INPUT_DELIVERED;
     check(delivered, [NSString stringWithFormat:@"press on the last device pixel delivered at scale %g "
-        "(down %d, up %d; physical buttons before %lu, after %lu)", scale, down, up,
+        "(down %d, up %d; AppKit button mask before %lu, after %lu)", scale, down, up,
         (unsigned long)buttons, (unsigned long)NSEvent.pressedMouseButtons]);
     if (!delivered) {
         fprintf(stderr, "FAIL: the press was not delivered (step: %s)\n", currentStep);
@@ -184,7 +184,7 @@ static WKWebView *webViewAtTopPoint(NSWindow *window, double x, double y) {
 // 앱 이벤트 대기열의 이벤트를 꺼내 처리하며 기다린다. 이벤트 모니터는 꺼낼 때 실행된다.
 // 이 검사가 대기열에 넣은 휠 이벤트만 꺼내 보낸다. 모든 종류를 꺼내면 OS 가 보낸 앱 활성화
 // 이벤트(NSEventTypeAppKitDefined, 활성화 하위 종류)도 처리해 기본 검사가 앱을 활성화한다.
-// 실패하면 꺼내 보낸 휠 이벤트 수, 시작할 때의 실제 마우스 버튼, state 가 돌려준 측정값을 보고한다.
+// 실패하면 꺼내 보낸 휠 이벤트 수, 시작할 때 AppKit이 보고한 마우스 버튼 마스크, state 가 돌려준 측정값을 보고한다.
 static void pumpUntil(BOOL (^done)(void), NSString *(^state)(void)) {
     NSUInteger buttons = NSEvent.pressedMouseButtons;
     NSUInteger sent = 0;
@@ -197,7 +197,7 @@ static void pumpUntil(BOOL (^done)(void), NSString *(^state)(void)) {
             sent++;
             NSView *content = event.window.contentView;
             NSView *hit = [content hitTest:[content.superview convertPoint:event.locationInWindow fromView:nil]];
-            [seen addObject:[NSString stringWithFormat:@"{delta %g,%g modifiers 0x%lx physical modifiers 0x%llx precise %d phase %lu momentum %lu window %d at %@ hit %@}",
+            [seen addObject:[NSString stringWithFormat:@"{delta %g,%g modifiers 0x%lx HID-system modifiers 0x%llx precise %d phase %lu momentum %lu window %d at %@ hit %@}",
                 event.scrollingDeltaX, event.scrollingDeltaY, (unsigned long)event.modifierFlags,
                 (unsigned long long)CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState), event.hasPreciseScrollingDeltas,
                 (unsigned long)event.phase, (unsigned long)event.momentumPhase, event.window == testWindow,
@@ -206,7 +206,7 @@ static void pumpUntil(BOOL (^done)(void), NSString *(^state)(void)) {
         }
     }
     if (!done()) {
-        fprintf(stderr, "wheel events dequeued and sent: %lu %s; physical buttons at start: %lu; %s\n",
+        fprintf(stderr, "wheel events dequeued and sent: %lu %s; AppKit button mask at start: %lu; %s\n",
             (unsigned long)sent, [seen componentsJoinedByString:@" "].UTF8String, (unsigned long)buttons, state().UTF8String);
         failTimeout("the event was not handled");
     }
