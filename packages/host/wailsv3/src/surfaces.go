@@ -574,26 +574,35 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 		err    error
 	}
 	done := make(chan result, 1)
-	// DOM 문서와 이미지 래스터를 모두 확인한다. 두 대기는 AppKit 스레드를 막지 않는다.
+	// Settled frames confirm the DOM document and image raster. Continuous frames
+	// commit after native preparation so the next display cycle is not serialized
+	// behind a document or raster callback; the frame checks cover the transition.
 	go func() {
-		domReady := make(chan struct{})
 		var waiting error
-		application.InvokeSync(func() {
-			waiting = system.AfterPresentation(win.NativeWindow(), func() { close(domReady) })
-		})
-		if waiting == nil {
-			timer := time.NewTimer(pageTimeout)
-			select {
-			case <-domReady:
-			case <-timer.C:
-				waiting = fmt.Errorf("application documents did not present within %s", pageTimeout)
+		if req.Settled {
+			domReady := make(chan struct{})
+			application.InvokeSync(func() {
+				waiting = system.AfterPresentation(win.NativeWindow(), func() { close(domReady) })
+			})
+			if waiting == nil {
+				timer := time.NewTimer(pageTimeout)
+				select {
+				case <-domReady:
+				case <-timer.C:
+					waiting = fmt.Errorf("application documents did not present within %s", pageTimeout)
+				}
+				timer.Stop()
 			}
-			timer.Stop()
 		}
-		if waiting == nil {
+		// During a continuous divider gesture the native surface frame and the
+		// DOM are committed every display cycle. Reconfiguring every image raster
+		// here serializes the next frame behind sidecar raster work and makes the
+		// native layer fall behind the DOM. The settled frame is authoritative and
+		// must complete the raster transaction.
+		if waiting == nil && req.Settled {
 			waiting = s.refreshImageRasters()
 		}
-		if waiting == nil {
+		if waiting == nil && req.Settled {
 			if err := s.images.WaitCurrentError(pageTimeout); err != nil {
 				if err.Error() == "presentationTimeout" {
 					waiting = fmt.Errorf("the current image raster did not present within %s", pageTimeout)
