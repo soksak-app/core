@@ -4,7 +4,7 @@
 
 ## Unreleased
 
-- V5-96-6 progress: route the presentation barrier from the declared hybrid image composition instead of a plugin name, and record the barrier on each terminal capture set. The rebuilt Tauri capture still reports a mixed frame under V5-96-5, so the measurement remains open.
+- V5-96-6: route the presentation barrier from the declared hybrid image composition instead of a plugin name, and record the barrier on each terminal capture set. The rebuilt Tauri capture still reports a mixed frame under V5-96-5, which remains open. `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, and `make docs-check` pass.
 
 - V5-87-3: update the terminal settings window contract from 13 to 14 rows after adding the explicit notification policy.
 

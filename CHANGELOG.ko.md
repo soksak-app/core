@@ -4,7 +4,7 @@
 
 ## 미배포
 
-- V5-96-6 진행: 플러그인 이름 대신 선언된 hybrid image composition에서 표시 barrier를 정하고, 각 터미널 녹화 세트에 barrier를 기록한다. 다시 빌드한 Tauri 녹화에서 V5-96-5 혼합 프레임이 여전히 보고되어 계측을 열어 둔다.
+- V5-96-6: 플러그인 이름 대신 선언된 hybrid image composition에서 표시 barrier를 정하고, 각 터미널 녹화 세트에 barrier를 기록한다. 다시 빌드한 Tauri 녹화에서 V5-96-5 혼합 프레임이 여전히 보고되어 해당 항목은 열어 둔다. `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, `make docs-check`가 통과했다.
 
 - V5-87-3: 명시적 알림 정책 추가에 맞춰 터미널 설정 창 계약의 행 개수를 13개에서 14개로 갱신했다.
 
