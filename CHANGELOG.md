@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-99: current rebuilt Wails and Tauri applications ran with dedicated disposable configurations and endpoint files. The complete `terminal.test.mjs` suite passed 37/37 on each host, including theme card-color and light/dark raster checks; terminal font, protocol, shell, and browser checks also passed, with no `Unknown operation` result. This closes the stale-sidecar retry condition.
+
 - V5-94: current rebuilt Wails and Tauri applications ran with dedicated disposable configurations and endpoint files. The maximize/restore layout check passed on both hosts; the last behind-window frame was 47 ms/42 ms on Wails and 55 ms/43 ms on Tauri, within the existing 150 ms limit. The check compares current window, surface, and recorded-frame geometry without activating either check application.
 
 - V5-96-4: fix the client watch/unwatch lifecycle. A Red test reproduced `watch()` resolving before the final `status.unwatch` acknowledgement; `Client.#release` now returns the unwatch promise and `watch.finish` awaits it, preserving both failures with `AggregateError`. `@soksak/client` passes 24/24, the focused browser theme check passes 2/2, and the subsequent full run passes the case on both hosts. `pnpm test`, `make boundaries`, `make exposure-check`, `make e2e-check`, and `make docs-check` pass. The separately observed one-time Tauri divider gap is tracked as V5-96-5.

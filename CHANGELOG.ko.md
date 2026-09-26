@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-99: 현재 재빌드한 Wails와 Tauri를 전용 폐기 설정과 endpoint로 실행했다. 전체 `terminal.test.mjs`가 두 호스트에서 각각 37/37 통과했고 테마 카드 색·라이트/다크 래스터, 터미널 글꼴·프로토콜·셸·브라우저 검사가 통과했으며 `Unknown operation` 결과가 없었다. 오래된 사이드카 재시도 조건을 닫았다.
+
 - V5-94: 현재 재빌드한 Wails와 Tauri를 전용 폐기 설정과 endpoint로 실행했다. 최대화·복원 배치 검사가 두 호스트에서 통과했으며 창 뒤에 남은 마지막 프레임은 Wails 47ms/42ms, Tauri 55ms/43ms로 기존 150ms 한도 안이었다. 검사는 현재 창·표면·녹화 프레임 좌표를 비교하고 검사 앱을 활성화하지 않는다.
 
 - V5-96-4: 클라이언트 watch/unwatch 수명주기를 수정했다. Red 검사에서 `watch()`가 마지막 `status.unwatch` 확인 응답보다 먼저 끝나는 것을 재현했다. `Client.#release`가 구독 해제 Promise를 반환하고 `watch.finish`가 이를 기다리며 두 오류가 모두 나면 `AggregateError`로 보존한다. `@soksak/client` 24/24, 브라우저 테마 집중 검사 2/2 통과했고 후속 전체 실행에서 두 호스트 모두 해당 사례가 통과했다. `pnpm test`, `make boundaries`, `make exposure-check`, `make e2e-check`, `make docs-check`가 통과했다. 별도로 한 번 관측한 Tauri 분할 간격은 V5-96-5에서 추적한다.
