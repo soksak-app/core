@@ -276,9 +276,14 @@ onLayout((made, draw, seated) => {
   const epoch = layoutEpoch;
   drawing = layouts.run(async () => {
     if (epoch !== layoutEpoch) return;
-    await publishAhead(made, seated);
+    // Native preparation is held inside the host transaction until the next
+    // presentation. Start it before drawing the page so WebKit layout and the
+    // native sync can progress in parallel; waiting here serialized two frame
+    // clocks and added one refresh to divider gestures.
+    const preparation = publishAhead(made, seated);
     if (epoch !== layoutEpoch) return;
     draw();
+    await preparation;
   });
 });
 
