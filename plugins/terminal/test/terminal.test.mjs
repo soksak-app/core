@@ -2798,9 +2798,9 @@ function createFakeTab({ reject = false } = {}) {
       calls.push(["title", text]);
     },
     directory: (path) => calls.push(["directory", path]),
-    notify: (text) => {
+    notify: (text, policy) => {
       if (reject) throw new TypeError("a tab notice must be 1 to 1024 characters without control characters");
-      calls.push(["notify", text]);
+      calls.push(["notify", text, policy]);
     },
   };
 }
@@ -2902,7 +2902,17 @@ test("an OSC 9 notification becomes a tab notice and a rejected one is a session
     window: { TextEncoder: FakeTextEncoder },
   });
   fakeSidecar.triggerEvent("test-session", { event: "notification", message: "build complete" });
-  assert.deepEqual(tab.calls.filter(([kind]) => kind === "notify"), [["notify", "build complete"]]);
+  assert.deepEqual(tab.calls.filter(([kind]) => kind === "notify"), [["notify", "build complete", "tab"]]);
+
+  const systemTab = createFakeTab();
+  const system = createFakeSidecar();
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: system, expose: createFakeExpose(), tab: systemTab, settings: titleSettings({ notifications: "system" }),
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  system.triggerEvent("test-session", { event: "notification", message: "system delivery" });
+  assert.deepEqual(systemTab.calls.filter(([kind]) => kind === "notify"), [["notify", "system delivery", "system"]]);
 
   const errors = [];
   const rejecting = createFakeSidecar();

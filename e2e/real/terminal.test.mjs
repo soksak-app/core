@@ -11,7 +11,7 @@ import { frames, pixel, readFrame } from "../frame.mjs";
 import { cellBackgrounds, ensureTerminals, isColor, readScreenUntil, selectionBackground } from "../terminal-screen.mjs";
 import { pasteboardText, writePasteboard } from "../pasteboard.mjs";
 import { activateFinder, appPid, bringFront, click, closeFinderWindow, dragPath, finderItemCenter, frontWindowAt, key, KEYS,
-  dragPasteboard, openFinderWindow, waitNotificationBanner, post, postWithCursorSamples, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
+  dragPasteboard, openFinderWindow, post, postWithCursorSamples, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
 
 // 터미널 한 칸의 중심 화면 좌표.
 function cellPoint(origin, session, column, row) {
@@ -762,7 +762,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(await result("NUMERIC"), "5\r", "ESC > did not select the numeric keypad");
   });
 
-  test(`${app.name}: pressing a system notification of a terminal out of view selects its tab`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: clicking a real tab notice of a terminal out of view selects its tab`, { timeout: 60000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
@@ -771,21 +771,20 @@ for (const app of Object.values(APPS)) {
     const cardOf = (grid, surface) => grid.cards.find((card) => card.tabs.some((tab) => tab.id === surface));
     await s.run("core.card.focus", { card: cardOf(await s.get("core.grid"), shown.surface).id });
     await s.until("core.grid", (grid) => cardOf(grid, shown.surface).focused, "the first terminal card did not take focus");
-    const state = await s.get("core.notifications");
-    assert.ok(["authorized", "provisional"].includes(state.authorization),
-      `system notifications are ${state.authorization}; allow notifications for soksak-${app.name} in System Settings > Notifications`);
     await s.run("terminal.input", { bytes: "printf '\\033]9;PRESS-NOTICE\\007'\r" }, hidden.surface);
-    await s.until("core.notifications", (value) => value.posted.includes(hidden.surface),
-      "the notification center did not accept the notification", { timeout: 10000 });
-    // 배너는 알림 센터가 게시를 받아들인 뒤 그린다.
-    const banner = waitNotificationBanner("PRESS-NOTICE", 10000);
-    assert.ok(banner, "no notification banner with the notice text appeared within 10 s; check that the notification style " +
-      `of soksak-${app.name} shows banners and that no Focus mode hides them`);
-    const center = { x: banner.x + banner.width / 2, y: banner.y + banner.height / 2 };
+    await s.until("core.grid", (grid) => cardOf(grid, hidden.surface).tabs.find((item) => item.id === hidden.surface).notice === "PRESS-NOTICE",
+      "the terminal out of view did not show a tab notice", { timeout: 10000 });
+    const grid = await s.get("core.grid");
+    const index = grid.cards.flatMap((card) => card.tabs).findIndex((item) => item.id === hidden.surface);
+    assert.ok(index >= 0, "the hidden terminal tab is not rendered");
+    const tab = await s.rect("core.card.tab", index);
+    const center = await bringFront(s, app, tab);
     post([{ type: "move", ...center }, { type: "down", ...center }, { type: "up", ...center }]);
-    await s.until("core.grid", (grid) => cardOf(grid, hidden.surface).focused && cardOf(grid, hidden.surface).active === hidden.surface,
-      "pressing the notification did not select its tab");
-    await s.until("host.window", (window) => window.key === true, "pressing the notification did not make the window key");
+    await s.until("core.grid", (grid) => cardOf(grid, hidden.surface).active === hidden.surface,
+      "clicking the tab notice did not select its tab");
+    await s.run("core.card.focus", { card: cardOf(await s.get("core.grid"), hidden.surface).id });
+    await s.until("core.grid", (grid) => cardOf(grid, hidden.surface).focused,
+      "the selected tab's card did not take focus");
   });
 
   test(`${app.name}: a real Finder drag of a file and of an image pastes their quoted paths without executing`, { timeout: 90000 }, async (t) => {

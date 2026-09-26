@@ -3,11 +3,13 @@ const labels = new Map();
 const directories = new Map();
 const origins = new Map();
 const notices = new Map();
+const noticePolicies = new Map();
 // 탭이 보이는지(포커스된 카드의 활성 탭인지) 판이 알려 준다.
 let visibleTab = () => false;
 const listeners = new Set();
 
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
+const NOTICE_POLICIES = new Set(["tab", "system"]);
 
 function notify() {
   for (const listener of listeners) listener();
@@ -33,20 +35,23 @@ export function setVisibleTab(probe) {
 }
 
 /** 보이지 않는 탭에 알림을 둔다. 보이는 탭이면 표면이 이미 보이므로 아무것도 바꾸지 않는다. */
-export function reportNotice(tabId, text) {
+export function reportNotice(tabId, text, policy = "tab") {
   if (typeof text !== "string" || text.length === 0 || text.length > 1024 || CONTROL.test(text)) {
     throw new TypeError("a tab notice must be 1 to 1024 characters without control characters");
   }
-  if (visibleTab(tabId) || notices.get(tabId) === text) return;
+  if (!NOTICE_POLICIES.has(policy)) throw new TypeError(`unknown tab notice policy: ${String(policy)}`);
+  if (visibleTab(tabId)) return;
+  if (notices.get(tabId) === text && noticePolicies.get(tabId) === policy) return;
   notices.set(tabId, text);
+  noticePolicies.set(tabId, policy);
   notify();
 }
 
 // 기본값: 알림이 없는 탭은 null 이다.
-export const tabNotice = (tabId) => notices.get(tabId) ?? null;
+export const tabNotice = (tabId) => noticePolicies.get(tabId) === "system" ? null : (notices.get(tabId) ?? null);
 
 /** 모든 탭 알림의 [탭 id, 텍스트] 목록. */
-export const tabNotices = () => [...notices];
+export const tabNotices = () => [...notices].filter(([tabId]) => noticePolicies.get(tabId) === "system");
 
 /** 보이게 된 탭의 알림을 지운다. 판이 그릴 때마다 부른다. */
 export function clearVisibleNotices() {
@@ -86,6 +91,7 @@ export function forgetTab(tabId) {
   directories.delete(tabId);
   origins.delete(tabId);
   const noticed = notices.delete(tabId);
+  noticePolicies.delete(tabId);
   if (labels.delete(tabId) || noticed) notify();
 }
 

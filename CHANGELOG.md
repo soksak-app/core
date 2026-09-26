@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-87-1: add `terminal.notifications` with `tab` and `system` policies. Red was the disagreement between the terminal contract and old system-banner checks for executables outside an application bundle. Green validates the setting and passes it to `tab.notify`; tab reports expose system notices only to the notification center without a tab fallback, and invalid policies remain explicit errors. Workbench and terminal unit tests pass; rebuilt Wails and Tauri setting-transition checks pass for system success or native error, tab-only grid notices, and real tab-notice clicks. `make docs-check`, `pnpm test`, `make boundaries`, `make exposure-check`, and `make e2e-check` pass.
+
 - V5-87 progress: the current rebuilt Wails and Tauri activation tier passed 20/20. The real-input tier passed Wails and measured six Tauri failures: two selection pixel cases, two scrollbar pixel/settings cases, long-history display (916 of 929 lines), and notification activation timeout. The measured failures remain open.
 
 - V5-99: current rebuilt Wails and Tauri applications ran with dedicated disposable configurations and endpoint files. The complete `terminal.test.mjs` suite passed 37/37 on each host, including theme card-color and light/dark raster checks; terminal font, protocol, shell, and browser checks also passed, with no `Unknown operation` result. This closes the stale-sidecar retry condition.

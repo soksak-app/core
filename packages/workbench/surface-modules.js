@@ -149,7 +149,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       declarations: surface.declarations, composition, diagnostics: plugin(surface.pluginId).diagnostics,
       tab: { title: (text) => reportTitle(surface.surfaceId, text),
         directory: (path) => reportDirectory(surface.surfaceId, path),
-        notify: (text) => reportNotice(surface.surfaceId, text) },
+        notify: (text, policy) => reportNotice(surface.surfaceId, text, policy) },
       origin: tabOrigin(surface.surfaceId),
       // 표면 창이 보이는 프로젝트의 정규 루트(docs/spec/plugins.md#tab-reports). 라이브러리 창에는 없다.
       project: active() ? { root: active().root } : null,

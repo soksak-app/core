@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { clearVisibleNotices, forgetTab, onTabReports, recordOrigin, reportDirectory, reportNotice, reportTitle,
-  setVisibleTab, tabLabel, tabNotice, tabOrigin } from "../tab-reports.js";
+  setVisibleTab, tabLabel, tabNotice, tabNotices, tabOrigin } from "../tab-reports.js";
 
 test("a reported title is the tab label until it is removed, and changes notify once", () => {
   let notified = 0;
@@ -69,4 +69,13 @@ test("a notice is kept for a tab out of view and removed when the tab comes into
     assert.throws(() => reportNotice("tab-hidden", invalid), /a tab notice must be 1 to 1024 characters/);
   }
   off();
+});
+
+test("a system notification policy hides the tab dot but exposes the notice to the notification center", () => {
+  setVisibleTab(() => false);
+  reportNotice("tab-system", "system body", "system");
+  assert.equal(tabNotice("tab-system"), null);
+  assert.deepEqual(tabNotices(), [["tab-system", "system body"]]);
+  assert.throws(() => reportNotice("tab-invalid-policy", "body", "other"), /unknown tab notice policy/);
+  forgetTab("tab-system");
 });

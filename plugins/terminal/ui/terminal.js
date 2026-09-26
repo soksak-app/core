@@ -63,6 +63,7 @@ const CURSOR_SHAPES = new Set(["block", "underline", "beam"]);
 const CURSOR_BLINK_MODES = new Set(["Never", "Off", "On", "Always"]);
 const CURSOR_UNFOCUSED = new Set(["hollow", "solid", "underline", "beam", "unchanged"]);
 const PROGRAM_CLIPBOARD_POLICIES = new Set(["deny", "allow"]);
+const NOTIFICATION_POLICIES = new Set(["tab", "system"]);
 const DEFAULT_CURSOR = Object.freeze({
   row: 0, col: 0, shape: "block", visible: true, blinking: false, focused: false,
   blink: "Off", interval: 750, idleTimeout: 5000, unfocused: "hollow", hollow: false,
@@ -226,6 +227,16 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   if (!PROGRAM_CLIPBOARD_POLICIES.has(programClipboardPolicy)) {
     throw new Error(`clipboard.program setting is invalid: ${String(programClipboardPolicy)}`);
   }
+  let notificationPolicy = initialSettings.notifications;
+  if (!NOTIFICATION_POLICIES.has(notificationPolicy)) {
+    throw new Error(`notifications setting is invalid: ${String(notificationPolicy)}`);
+  }
+  settings.on((next) => {
+    if (!NOTIFICATION_POLICIES.has(next.notifications)) {
+      throw new Error(`notifications setting is invalid: ${String(next.notifications)}`);
+    }
+    notificationPolicy = next.notifications;
+  });
 
   const read = {
     // 세션 상태
@@ -980,7 +991,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       changed("session");
       // 보이지 않는 탭이면 워크벤치가 탭에 알림을 둔다. 거부된 알림은 세션 오류다.
       try {
-        tab.notify(body.message);
+        tab.notify(body.message, notificationPolicy);
       } catch (error) {
         setError("notification", `terminal notification failed: ${error.message}`);
         reportSurfaceError(error);
