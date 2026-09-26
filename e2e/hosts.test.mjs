@@ -42,6 +42,27 @@ const settledX = (lines) => (transcript(lines).get("syncSurfaces") ?? [])
 /** 페이지가 확정된 배치를 표시했다는 줄. */
 const settled = (lines) => lines.some((line) => /^host presentSurfaces .*"settled":true.* ->/.test(line));
 
+/** 호스트 결과를 비교할 때 콘텐츠 크기와 레이아웃 입력을 기록한다. */
+async function layoutState(s) {
+  const [window, document, settings] = await Promise.all([
+    s.get("host.window"), s.get("core.window.document"), s.get("core.settings"),
+  ]);
+  const values = settings.values;
+  return {
+    window: {
+      frame: window.frame, content: window.content, scale: window.scale,
+      maximized: window.maximized, active: window.active, occluded: window.occluded,
+      surfaces: window.surfaces.map(({ id, frame, visible, order }) => ({ id, frame, visible, order })),
+    },
+    document,
+    settings: Object.fromEntries([
+      "rail", "left", "right", "sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth", "links",
+    ].map((key) => [key, values[key]])),
+    project: settings.project,
+    overridden: settings.overridden,
+  };
+}
+
 /** 두 앱에 모두 연결한다. 한쪽이 빌드되지 않았으면 null 이다. */
 async function both(t) {
   const sessions = {};
@@ -59,8 +80,10 @@ test("both hosts answer the same page the same way", async (t) => {
   const dragged = {};
   const results = {};
   const logs = {};
+  const states = {};
   for (const [name, s] of Object.entries(sessions)) {
     await fresh(s);
+    states[name] = { fresh: await layoutState(s) };
     // 끌기의 확정 배치는 설정 모달을 열기 전에 기록을 멈춰 얻는다. 모달은 창 전체의 오버레이로 다음 배치를
     // 바꾸며, 그 배치가 기록에 들어오는 시점은 호스트마다 다르다.
     const start = (await s.get("host.window")).surfaces.find((item) => item.frame.width > 0)?.frame.x;
@@ -84,6 +107,7 @@ test("both hosts answer the same page the same way", async (t) => {
       throw error;
     }
     dragged[name] = await dragLog.stop();
+    states[name].afterDrag = await layoutState(s);
     const log = await s.transcript();
     await s.run("core.settings.open");
     const { controls } = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
@@ -100,11 +124,14 @@ test("both hosts answer the same page the same way", async (t) => {
   assert.ok(restedTauri, `the Tauri host recorded no settled commit:\n${dragged.tauriv2.join("\n")}`);
   // 실패하면 호스트마다 확정된 배치의 첫 표면 x 순서와 끌기 결과의 경계를 적는다.
   const boundary = (result) => result.boundary && [result.boundary[0], result.boundary.at(-1)];
+  const stateReport = `window, document, and layout settings by host: ${JSON.stringify(states)}`;
   assert.equal(restedTauri.request, restedWails.request, "the two hosts give the page a different plane to lay out " +
     `after the drag:\nWails ${restedWails.request}\nTauri ${restedTauri.request}\n` +
     `settled first-surface x: Wails ${JSON.stringify(settledX(dragged.wailsv3))}, Tauri ${JSON.stringify(settledX(dragged.tauriv2))}; ` +
-    `drag boundary first and last: Wails ${JSON.stringify(boundary(results.wailsv3))}, Tauri ${JSON.stringify(boundary(results.tauriv2))}`);
-  assert.equal(restedTauri.answer, restedWails.answer, "the two hosts place the same surfaces differently");
+    `drag boundary first and last: Wails ${JSON.stringify(boundary(results.wailsv3))}, Tauri ${JSON.stringify(boundary(results.tauriv2))}; ` +
+    stateReport);
+  assert.equal(restedTauri.answer, restedWails.answer,
+    `the two hosts place the same surfaces differently; ${stateReport}`);
   const wails = transcript([...dragged.wailsv3, ...logs.wailsv3]);
   const tauri = transcript([...dragged.tauriv2, ...logs.tauriv2]);
   const onlyWails = [...wails.keys()].filter((name) => !tauri.has(name));
