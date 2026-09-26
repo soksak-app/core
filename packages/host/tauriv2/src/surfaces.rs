@@ -273,6 +273,8 @@ pub(crate) struct PresentRequest {
     ticket: u64,
     placements: Vec<Placement>,
     settled: bool,
+    #[serde(default, rename = "waitForPresentation")]
+    wait_for_presentation: bool,
 }
 
 /// 드래그의 한 단계. phase 는 누름 0, 이동 1, 놓음 2 이다.
@@ -690,55 +692,60 @@ pub(crate) async fn present(
     let presentation_window = finished.clone();
     let placements = request.placements;
     let presentation_settled = request.settled;
-    // 열린 배치 안에서 DOM 문서와 현재 래스터를 모두 기다린다. UI 스레드는 계속 실행된다.
-    let (dom_tx, dom_rx) = mpsc::channel();
-    main.with_webview(move |view| {
-        let outcome = platform::current().and_then(|platform| {
-            let ready = dom_tx.clone();
-            platform.after_presentation(
-                &view,
-                Box::new(move || {
-                    if ready.send(Ok(())).is_err() {
-                        eprintln!("surface readiness had no pending receiver");
-                    }
-                }),
-            )
-        });
-        if let Err(error) = outcome {
-            if dom_tx.send(Err(error)).is_err() {
-                eprintln!("DOM presentation failure had no pending receiver");
-            }
-        }
-    })
-    .map_err(|error| error.to_string())?;
-    let raster_window = window.clone();
-    let ready = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-        dom_rx
-            .recv_timeout(exposure::TIMEOUT)
-            .map_err(|error| format!("application documents did not present: {error}"))??;
-        // During a continuous divider gesture the native surface frame and the
-        // DOM are committed every display cycle. Reconfiguring every image
-        // raster here serializes the next frame behind sidecar raster work and
-        // makes the native layer fall behind the DOM. The settled frame is the
-        // authoritative size and must complete the raster transaction.
-        if presentation_settled {
-            crate::composition::refresh_image_rasters(&raster_window)?;
-            images.wait_current(exposure::TIMEOUT).map_err(|reason| {
-                if reason == "presentationTimeout" {
-                    format!(
-                        "the current image raster did not present within {:?}",
-                        exposure::TIMEOUT
-                    )
-                } else {
-                    format!("the current image raster failed to present: {reason}")
+    let wait_for_presentation = presentation_settled || request.wait_for_presentation;
+    // During a continuous divider gesture the native surface frame and the DOM
+    // are committed every display cycle. Waiting for an application presentation
+    // on every frame serializes the next transaction behind WebKit refreshes.
+    // Settled frames retain the DOM and raster barrier.
+    let ready = if wait_for_presentation {
+        let (dom_tx, dom_rx) = mpsc::channel();
+        main.with_webview(move |view| {
+            let outcome = platform::current().and_then(|platform| {
+                let ready = dom_tx.clone();
+                platform.after_presentation(
+                    &view,
+                    Box::new(move || {
+                        if ready.send(Ok(())).is_err() {
+                            eprintln!("surface readiness had no pending receiver");
+                        }
+                    }),
+                )
+            });
+            if let Err(error) = outcome {
+                if dom_tx.send(Err(error)).is_err() {
+                    eprintln!("DOM presentation failure had no pending receiver");
                 }
-            })?;
-        }
-        Ok(())
-    })
-    .await
-    .map_err(|error| error.to_string())?;
-    if let Err(error) = ready {
+            }
+        })
+        .map_err(|error| error.to_string())?;
+        let raster_window = window.clone();
+        Some(
+            tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+                dom_rx
+                    .recv_timeout(exposure::TIMEOUT)
+                    .map_err(|error| format!("application documents did not present: {error}"))??;
+                if presentation_settled {
+                    crate::composition::refresh_image_rasters(&raster_window)?;
+                    images.wait_current(exposure::TIMEOUT).map_err(|reason| {
+                        if reason == "presentationTimeout" {
+                            format!(
+                                "the current image raster did not present within {:?}",
+                                exposure::TIMEOUT
+                            )
+                        } else {
+                            format!("the current image raster failed to present: {reason}")
+                        }
+                    })?;
+                }
+                Ok(())
+            })
+            .await
+            .map_err(|error| error.to_string())?,
+        )
+    } else {
+        None
+    };
+    if let Some(Err(error)) = ready {
         // A presentation failure occurs after sync has opened the native
         // transaction. Release that transaction before returning so the
         // next split cannot wait forever behind a failed owner.
@@ -757,32 +764,35 @@ pub(crate) async fn present(
     platform::current()?.enqueue_ui(Box::new(move || {
         let result = (|| -> Result<Vec<Placement>, String> {
             let platform = platform::current()?;
-            let prepared = ready.and_then(|_| {
-                placements
-                    .iter()
-                    .map(|p| {
-                        let handle = context
-                            .surface_hosts
-                            .lock()
-                            .map_err(|e| e.to_string())?
-                            .get(&p.id)
-                            .copied()
-                            .ok_or_else(|| {
-                                format!("surface {:?} closed before presentation", p.id)
-                            })?;
-                        platform.set_surface_hidden_handle(handle, !p.visible)?;
-                        let [x, y, w, h] = platform.surface_frame(handle)?;
-                        Ok(Placement {
-                            id: p.id.clone(),
-                            x,
-                            y,
-                            w,
-                            h,
-                            visible: p.visible,
+            let prepared = ready
+                .as_ref()
+                .map_or(Ok(()), |result| result.clone())
+                .and_then(|_| {
+                    placements
+                        .iter()
+                        .map(|p| {
+                            let handle = context
+                                .surface_hosts
+                                .lock()
+                                .map_err(|e| e.to_string())?
+                                .get(&p.id)
+                                .copied()
+                                .ok_or_else(|| {
+                                    format!("surface {:?} closed before presentation", p.id)
+                                })?;
+                            platform.set_surface_hidden_handle(handle, !p.visible)?;
+                            let [x, y, w, h] = platform.surface_frame(handle)?;
+                            Ok(Placement {
+                                id: p.id.clone(),
+                                x,
+                                y,
+                                w,
+                                h,
+                                visible: p.visible,
+                            })
                         })
-                    })
-                    .collect::<Result<Vec<_>, String>>()
-            });
+                        .collect::<Result<Vec<_>, String>>()
+                });
             let placed = match prepared {
                 Ok(placed) => placed,
                 Err(error) => {

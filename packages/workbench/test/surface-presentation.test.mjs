@@ -28,7 +28,16 @@ test("native preparation cannot present before DOM drawing and presents each tic
   const { onSurfacePrepared, surfaces } = await import("../host.js");
   const prepared = [];
   const removePrepared = onSurfacePrepared((placements) => prepared.push(placements.map(({ id }) => id)));
-  const record = { surfaces: [], settled: false, drawn: false };
+  const record = {
+    surfaces: [{
+      id: "surface", dim: false, visible: true,
+      surface: { module: "surface-module", composition: {
+        kind: "hybrid", regions: [{ name: "view", kind: "image" }], overlays: [],
+      } },
+      applied: { x: 1, y: 2, w: 3, h: 4 },
+    }],
+    settled: false, drawn: false,
+  };
   await surfaces.place(record);
   assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces"]);
   assert.deepEqual(prepared, [["surface", "hidden"]],
@@ -45,6 +54,8 @@ test("native preparation cannot present before DOM drawing and presents each tic
     "presentation must receive the visibility declared by preparation");
   assert.equal(calls[1].request.placements[1].visible, false,
     "presentation must retain hidden surfaces instead of reviving them");
+  assert.equal(calls[1].request.waitForPresentation, true,
+    "image composition presentation must retain the DOM and raster barrier");
   for (const stage of ["syncSurfaces", "presentSurfaces"]) {
     calls.length = 0;
     fail = stage;

@@ -373,6 +373,11 @@ export const surfaces = native ? {
         // 마지막 갱신인지, 갱신이 이어지는 중인지. 이어지는 동안 뷰가 커지면
         // 아직 렌더링되지 않은 영역이 흰색으로 보인다.
         settled: record.settled !== false,
+        // Terminal rasters must commit after the page's DOM frame; other
+        // surfaces can commit the continuous frame immediately.
+        waitForPresentation: record.surfaces.some(({ surface, visible }) =>
+          visible === true && surface?.composition?.kind === "hybrid" &&
+          surface.composition.regions?.some(({ kind }) => kind === "image") === true),
         overlays: windowOverlays(),
         surfaces,
       };
@@ -395,7 +400,11 @@ export const surfaces = native ? {
       if (record.drawn && !layoutPresented) {
         const preparedLayout = layoutFrame;
         const presentedLayout = preparedLayout.then((frame) =>
-          tell("presentSurfaces", { ...frame, settled: request.settled }));
+          tell("presentSurfaces", {
+            ...frame,
+            settled: request.settled,
+            waitForPresentation: request.waitForPresentation,
+          }));
         layoutResult = presentedLayout;
         layoutPresented = true;
         layoutTurn = presentedLayout.then(() => undefined, (error) => continueAfterLayoutFailure("presentSurfaces", error));

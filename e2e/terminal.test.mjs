@@ -751,9 +751,17 @@ for (const app of Object.values(APPS)) {
       const started = Date.now();
       t.diagnostic(`${app.name}: START ${roundLabel}`);
       await within((async () => {
+      const trace = await s.transcript();
       const result = await drag(t, s, {
         axis: "x", line: cards[0].c1, dx: 500, dy: 0, ms: 96, times: roundTripsPerSet,
       }, { capture: true });
+      const traceLines = await trace.stop();
+      const terminalPresentations = traceLines.filter((line) =>
+        line.startsWith("host presentSurfaces ") && line.includes('"waitForPresentation":true'));
+      assert.ok(terminalPresentations.length > 0,
+        `set ${set}: terminal capture had no DOM presentation barrier; ` +
+        `presentations=${traceLines.filter((line) => line.startsWith("host presentSurfaces ")).length}`);
+      t.diagnostic(`${app.name}: set ${set + 1} terminal presentation barriers ${terminalPresentations.length}`);
       const edgeWidths = [];
       const times = [];
       const positions = frames(result.frameDir).map((file, index) => {

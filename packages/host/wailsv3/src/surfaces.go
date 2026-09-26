@@ -561,7 +561,8 @@ type PreparedSurfaces struct {
 // PresentRequest 는 DOM 표시 확인 요청이다. PresentSurfaces 는 AppKit 스레드를 막지 않고 확인한다.
 type PresentRequest struct {
 	PreparedSurfaces
-	Settled bool `json:"settled"`
+	Settled             bool `json:"settled"`
+	WaitForPresentation bool `json:"waitForPresentation"`
 }
 
 func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
@@ -579,7 +580,7 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 	// behind a document or raster callback; the frame checks cover the transition.
 	go func() {
 		var waiting error
-		if req.Settled {
+		if req.Settled || req.WaitForPresentation {
 			domReady := make(chan struct{})
 			application.InvokeSync(func() {
 				waiting = system.AfterPresentation(win.NativeWindow(), func() { close(domReady) })
