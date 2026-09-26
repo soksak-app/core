@@ -831,12 +831,19 @@ for (const app of Object.values(APPS)) {
     assert.ok(target, "no exposed point in the terminal view is available for the Finder drop");
     for (const name of ["drop me.txt", "drop.png"]) {
       let from;
-      for (let attempt = 0; attempt < 10; attempt++) {
-        activateFinder();
-        from = finderItemCenter(name);
-        if (frontWindowAt(from.x, from.y)?.owner === "Finder") break;
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
+      await new Promise((resolve, reject) => {
+        const deadline = Date.now() + 1000;
+        const poll = () => {
+          activateFinder();
+          from = finderItemCenter(name);
+          if (frontWindowAt(from.x, from.y)?.owner === "Finder") return resolve();
+          if (Date.now() >= deadline) return reject(new Error(`${name} Finder item did not become frontmost`));
+          setTimeout(() => {
+            try { poll(); } catch (error) { reject(error); }
+          }, 50);
+        };
+        poll();
+      });
       const front = frontWindowAt(from.x, from.y);
       assert.equal(front?.owner, "Finder", `${name} is not in the frontmost window at ${from.x},${from.y}: ${JSON.stringify(front)}`);
       const board = dragPasteboard();
