@@ -379,7 +379,10 @@ export const surfaces = native ? {
       const key = JSON.stringify(request);
       if (key !== last) {
         last = key;
-        const scheduled = layoutTurn.then(() => tellInTurn("syncSurfaces", request));
+        // layoutTurn is the transaction ordering for surface preparation and
+        // presentation. Do not also wait on the global command turn: unrelated
+        // host calls can otherwise add a frame before every divider step.
+        const scheduled = layoutTurn.then(() => tell("syncSurfaces", request));
         layoutFrame = scheduled;
         layoutResult = scheduled.then((frame) => {
           notifySurfacePrepared(frame.placements);
@@ -392,7 +395,7 @@ export const surfaces = native ? {
       if (record.drawn && !layoutPresented) {
         const preparedLayout = layoutFrame;
         const presentedLayout = preparedLayout.then((frame) =>
-          tellInTurn("presentSurfaces", { ...frame, settled: request.settled }));
+          tell("presentSurfaces", { ...frame, settled: request.settled }));
         layoutResult = presentedLayout;
         layoutPresented = true;
         layoutTurn = presentedLayout.then(() => undefined, (error) => continueAfterLayoutFailure("presentSurfaces", error));
