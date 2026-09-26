@@ -685,9 +685,6 @@ enum SurfaceCommand {
     Cursor {
         policy: CursorPolicy,
     },
-    Command {
-        selector: String,
-    },
     ScreenRead,
     SessionClose,
     SessionDetach,
@@ -760,6 +757,20 @@ struct InputKey {
     alt: bool,
     #[serde(default)]
     ctrl: bool,
+}
+
+fn key_for_native_command(selector: &str) -> Result<InputKey, String> {
+    let key = match selector {
+        "insertNewline:" => "Enter",
+        _ => return Err(format!("unsupported native command selector: {selector}")),
+    };
+    Ok(InputKey {
+        key: key.to_string(),
+        text: String::new(),
+        shift: false,
+        alt: false,
+        ctrl: false,
+    })
 }
 
 fn decorate_screen(
@@ -2373,10 +2384,6 @@ async fn surface_task(
                         });
                         if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
-                    SurfaceCommand::Command { selector } => {
-                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "command", "selector": selector}});
-                        if output_tx.send(response.to_string()).await.is_err() { return; }
-                    }
                     SurfaceCommand::ClipboardResolve { request_id, text } => {
                         if let Err(error) = engine.resolve_clipboard(request_id, &text) {
                             let response = json!({"surface": surface_id, "body": {"error": error}});
@@ -3085,14 +3092,28 @@ where
                                     if let Some(selector) =
                                         value.get("selector").and_then(Value::as_str)
                                     {
-                                        if tx
-                                            .send(SurfaceCommand::Command {
-                                                selector: selector.to_string(),
-                                            })
-                                            .await
-                                            .is_err()
-                                        {
-                                            break;
+                                        match key_for_native_command(selector) {
+                                            Ok(key) => {
+                                                if tx
+                                                    .send(SurfaceCommand::InputKeys {
+                                                        keys: vec![key],
+                                                    })
+                                                    .await
+                                                    .is_err()
+                                                {
+                                                    break;
+                                                }
+                                            }
+                                            Err(reason) => {
+                                                let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason}});
+                                                if output_tx
+                                                    .send(response.to_string())
+                                                    .await
+                                                    .is_err()
+                                                {
+                                                    break;
+                                                }
+                                            }
                                         }
                                     } else {
                                         let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "command.selector must be string"}});
@@ -3968,6 +3989,16 @@ impl SessionPort for FakeSessionPort {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_newline_command_sends_enter_and_unknown_commands_fail() {
+        let key = key_for_native_command("insertNewline:").expect("newline command");
+        assert_eq!(encode_keys(&[key], &Modes::default()).unwrap(), b"\r");
+        assert_eq!(
+            key_for_native_command("deleteForward:").unwrap_err(),
+            "unsupported native command selector: deleteForward:"
+        );
+    }
 
     #[test]
     fn unsupported_ctrl_character_error_identifies_the_received_scalar() {

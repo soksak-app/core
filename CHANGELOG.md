@@ -6,7 +6,7 @@
 
 - V5-92, V5-93: native Escape closes the add and split picker through the modal document selector, and the project-directory check waits for terminal surface readiness. Focused tracked repeats and both corresponding full-window cases pass on rebuilt hosts.
 
-- V5-95: the terminal raster places its cursor at the selected UTF-16 grapheme boundary of preedit; a marked `글은` with selection location 2 has its cursor after `은`. The frame test checks end and middle positions and rejects a location inside a grapheme. Host validation is pending.
+- V5-95: the terminal raster places its cursor at the selected UTF-16 grapheme boundary of preedit; a marked `글은` with selection location 2 has its cursor after `은`. The native client commits a Korean suffix when its final character is not Hangul, including `은 `, and the sidecar sends AppKit `insertNewline:` as Enter instead of acknowledging it without input. Native frame and input tests pass; the activation suite passes 20/20 on rebuilt Wails and Tauri hosts, including the real `ddd한글은` cursor and Space commit.
 - V5-88: reject missing required values across the layout library, workbench, plugins, sidecars, and hosts; document contract defaults at their call sites; add a repository check for unexplained defaults and discarded errors with behavior tests.
 - V5-90: expect all 15 Go shell test cases in the language evidence manifest. The former count of 13 rejected a run where every case passed.
 - V5-91: update seven divider gesture mutation targets after the explicit disarm invariant replaced optional calls; all seven mutations are caught again.

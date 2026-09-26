@@ -16,7 +16,7 @@ const ABC = "com.apple.keylayout.ABC";
 const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
 
 // 커서 칸과 그 오른쪽 칸에서 표면 배경과 다른 픽셀의 비율을 잰다. 캡처는 창을 앞으로 가져오지 않는다.
-async function cursorCellCoverage(s, surface) {
+async function cursorCellCoverage(s, surface, offset = 0) {
   // screen.read 응답이 현재 커서를 terminal.cursor 에 반영한다.
   await s.run("terminal.screen.read", {}, surface);
   await s.request("diagnostics.capture.start", {});
@@ -63,7 +63,13 @@ async function cursorCellCoverage(s, surface) {
       }
       return dark / total;
     };
-    return { cursor, first: coverage(cursor.col), second: coverage(cursor.col + 1), secondInk: darkInCell(cursor.col + 1) };
+    return {
+      cursor,
+      first: coverage(cursor.col + offset),
+      second: coverage(cursor.col + offset + 1),
+      preeditSecond: coverage(cursor.col + Math.max(offset - 1, 1)),
+      secondInk: darkInCell(cursor.col + Math.max(offset - 1, 1)),
+    };
   } finally {
     rmSync(frameDir, { recursive: true, force: true });
   }
@@ -114,28 +120,34 @@ for (const app of Object.values(APPS)) {
 
       const steps = [["g", "ㅎ"], ["k", "하"], ["s", "한"], ["r", "ㄱ"], ["m", "그"], ["f", "글"]];
       let preeditCursor;
+      let preeditWidth;
       for (const [key, preedit] of steps) {
         await s.press(key);
-        await s.until("terminal.compose", (compose) => compose.text === preedit,
+        const compose = await s.until("terminal.compose", (value) => value.text === preedit ||
+          (value.text === `한${preedit}` && ["ㄱ", "그", "글"].includes(preedit)),
           `the ${key} key did not show the ${JSON.stringify(preedit)} preedit`, { surface });
         if (preedit === "글") {
-          // 넓은 조합 글자는 커서가 두 칸을 모두 덮는다.
-          const measured = await cursorCellCoverage(s, surface);
+          // 선택 범위가 글 뒤를 가리키므로 커서는 조합 글자 다음 칸에 그린다.
+          assert.equal(compose.selectedRange?.location, compose.text.length,
+            "the input method did not select the end of the preedit");
+          preeditWidth = compose.text.length * 2;
+          const measured = await cursorCellCoverage(s, surface, preeditWidth);
           preeditCursor = measured.cursor;
           t.diagnostic(`${app.name}: preedit 글 cursor coverage ${JSON.stringify(measured)}`);
-          assert.ok(measured.first > 0.5 && measured.second > 0.5,
-            `the block cursor does not cover the wide preedit: ${JSON.stringify(measured)}`);
+          assert.ok(measured.first > 0.9 && measured.second < 0.1,
+            `the block cursor is not after the wide preedit: ${JSON.stringify(measured)}`);
           // 넓은 조합 글자의 오른쪽 절반도 그려진다.
-          assert.ok(measured.secondInk > 0.02,
+          assert.ok(measured.preeditSecond > 0.02,
             `the right half of the wide preedit glyph is missing: ${JSON.stringify(measured)}`);
         }
       }
       // F8-16: Space 는 입력기가 처리하지 않는 키이므로 글과 공백이 다음 키 없이 PTY 에 도착한다.
-      // 셸이 글(두 칸)과 공백(한 칸)을 반향하면 커서가 조합 시작 칸에서 세 칸 이동한다.
+      // 셸이 남은 조합 문자열과 공백을 반향하면 커서가 그 표시 폭만큼 이동한다.
       await s.press("Space");
       await s.until("terminal.compose", (compose) => compose.text === "",
         "the Space key left a preedit", { surface });
-      const spaced = await s.until("terminal.cursor", (cursor) => cursor.row === preeditCursor.row && cursor.col === preeditCursor.col + 3,
+      const spaced = await s.until("terminal.cursor", (cursor) => cursor.row === preeditCursor.row &&
+        cursor.col === preeditCursor.col + preeditWidth + 1,
         `the space after 글 did not reach the PTY before any further key (preedit cursor ${JSON.stringify(preeditCursor)})`, { surface });
       t.diagnostic(`${app.name}: cursor after Space ${JSON.stringify(spaced)} from preedit cursor ${JSON.stringify(preeditCursor)}`);
       const typed = await readScreenUntil(s, surface, (lines) => lines.some((line) => line.trimEnd().endsWith("ddd한글")),
@@ -176,8 +188,14 @@ for (const app of Object.values(APPS)) {
       for (const key of ["g", "k", "s", "Backspace"]) await s.press(key);
       await s.until("terminal.compose", (compose) => compose.text === "하", "Backspace did not edit the composition to 하", { surface });
       await s.press("Enter");
-      await readScreenUntil(s, surface, (lines) => lines.some((line) => /하: command not found/.test(line)),
-        "the shell did not run the edited syllable");
+      try {
+        await readScreenUntil(s, surface, (lines) => lines.some((line) => /하: command not found/.test(line)),
+          "the shell did not run the edited syllable");
+      } catch (error) {
+        const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
+        error.message += `; input trace ${JSON.stringify(trace.entries)}`;
+        throw error;
+      }
 
       const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
       assert.equal(trace.overflow, false, "the IME trace overflowed");
@@ -188,13 +206,65 @@ for (const app of Object.values(APPS)) {
       t.diagnostic(`${app.name}: native inserts ${JSON.stringify(inserts)}, terminal inserts ${JSON.stringify(written)}, preedit ${JSON.stringify(composed)}`);
       assert.equal(inserts, "ddd한글 한 한1하", "the native client did not commit each syllable exactly once in order");
       assert.equal(written, "ddd한글 한 한1하", "the terminal input queue did not receive each committed syllable exactly once in order");
-      assert.deepEqual(composed.slice(0, 6), ["ㅎ", "하", "한", "ㄱ", "그", "글"], "the preedit did not show each composition state in order");
+      assert.deepEqual(composed.slice(0, 3), ["ㅎ", "하", "한"], "the first syllable did not compose in order");
+      for (const [index, suffix] of [[3, "ㄱ"], [4, "그"], [5, "글"]]) {
+        assert.ok([suffix, `한${suffix}`].includes(composed[index]),
+          `the second syllable did not compose in order: ${JSON.stringify(composed.slice(0, 6))}`);
+      }
       assert.ok(!trace.entries.some((entry) => entry.kind === "native-key" && entry.key === "Backspace"),
         "Backspace during a composition reached the terminal as a key");
-      const enters = trace.entries.filter((entry) => entry.kind === "native-key" && entry.key === "Enter").map((entry) => entry.sequence);
+      const enters = trace.entries.filter((entry) =>
+        (entry.kind === "native-key" && entry.key === "Enter") ||
+        (entry.kind === "terminal-input" && entry.input?.type === "command" && entry.input.selector === "insertNewline:"))
+        .map((entry) => entry.sequence);
       const lastInsert = trace.entries.filter((entry) => entry.kind === "native-insert").at(-1).sequence;
-      assert.equal(enters.length, 4, "four Enter keys were not traced");
+      assert.equal(enters.length, 4, "four Enter actions were not traced");
       assert.ok(enters[3] > lastInsert, "Enter was delivered before the committed text");
       t.diagnostic(`${app.name}: PASS ddd한글 after an input-source switch`);
     });
+
+  test(`${app.name}: the cursor follows the selected end of Korean preedit`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    const original = (await s.request("diagnostics.input.source")).current;
+    s.cleanup(() => s.request("diagnostics.input.source", { select: original }));
+    await s.keepPointerOutside();
+    const view = await s.rect("terminal.view", undefined, surface);
+    const x = view.document.x + view.x + view.width / 2;
+    const y = view.document.y + view.y + view.height / 2;
+    await s.pointer(x, y, "move", { activate: true });
+    await s.click(x, y);
+    await s.until("host.window", (host) => host.active === true &&
+      host.regions.some((region) => region.surface === surface && region.focused),
+    "the terminal did not receive native focus in the active window");
+    assert.equal((await s.request("diagnostics.input.source", { select: ABC })).current, ABC);
+    for (const key of "ddd") await s.press(key);
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("ddd")),
+      "ASCII input did not reach the PTY before Korean input");
+    assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
+    await s.run("terminal.ime.trace", { action: "start" }, surface);
+    s.cleanup(() => s.run("terminal.ime.trace", { action: "stop" }, surface));
+    for (const key of ["g", "k", "s", "r", "m", "f", "d", "m", "s"]) await s.press(key);
+    const compose = await s.until("terminal.compose", (value) => value.text.endsWith("은") &&
+      value.selectedRange?.location === value.text.length,
+    "Korean preedit did not reach its selected end", { surface });
+    assert.match(compose.text, /^[가-힣]+$/, "the preedit contains input other than Hangul syllables");
+    const measured = await cursorCellCoverage(s, surface, compose.text.length * 2);
+    t.diagnostic(`${app.name}: preedit ${compose.text} selected end coverage ${JSON.stringify(measured)}`);
+    assert.ok(measured.first > 0.9 && measured.second < 0.1,
+      `the cursor is not after the selected Korean preedit: ${JSON.stringify(measured)}`);
+    await s.press("Space");
+    try {
+      await s.until("terminal.compose", (value) => value.text === "", "Space did not commit the preedit", { surface });
+    } catch (error) {
+      const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
+      error.message += `; input trace ${JSON.stringify(trace.entries)}`;
+      throw error;
+    }
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.trimEnd().endsWith("ddd한글은")),
+      "committed Korean text did not reach the PTY before another key");
+  });
 }

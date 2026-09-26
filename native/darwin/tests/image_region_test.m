@@ -422,6 +422,14 @@ int main(void) { @autoreleasepool {
                 check([[committedTexts(beforeSpace) componentsJoinedByString:@""] isEqual:@"한 1"]
                     && [lastPreedit(beforeSpace) isEqual:@"ㄱ"],
                     [NSString stringWithFormat:@"TEST 8: a digit is committed at once and a new jamo stays preedit (got %@)", collectedEvents]);
+                [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(insertNewline:)];
+                NSUInteger beforeBatch = [collectedEvents count];
+                NSUInteger batchStart = regionView.textStorage.length;
+                inputMethod(@"은", NSMakeRange(NSNotFound, 0));
+                inputMethod(@"은 ", NSMakeRange(batchStart, 1));
+                check([[committedTexts(beforeBatch) componentsJoinedByString:@""] isEqual:@"은 "]
+                    && [lastPreedit(beforeBatch) isEqual:@""],
+                    [NSString stringWithFormat:@"TEST 8: a Korean syllable and Space in one insert are committed at once (got %@)", collectedEvents]);
             } else {
                 printf("TEST 8: the selected input source is not the Korean input method; the Korean commit rule needs it\n");
             }

@@ -364,6 +364,33 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"image region: ddd한글 and a space are committed exactly once before Enter (committed %@, events %@)",
             committed, events]);
 
+    // 글 뒤에 은을 조합한 경우에도 Space 가 다음 키 없이 한글과 공백을 확정해야 한다.
+    [events removeAllObjects];
+    selectSource(ABC, context);
+    for (NSString *key in @[@"d", @"d", @"d"]) typeKey(window, key, regionAnswered);
+    selectSource(KOREAN_2SET, context);
+    for (NSString *key in @[@"g", @"k", @"s", @"r", @"m", @"f", @"d", @"m", @"s", @"Space"]) {
+        typeKey(window, key, regionAnswered);
+    }
+    committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
+    preedit = [valuesOfType(@"compose", 0) lastObject] ?: @"";
+    check([committed isEqual:@"ddd한글은 "] && [preedit isEqual:@""],
+        [NSString stringWithFormat:@"image region: ddd한글은 and Space commit before another key (committed %@, preedit '%@', events %@)",
+            committed, preedit, events]);
+    typeKey(window, @"Enter", regionAnswered);
+
+    // Tauri 에서 관찰한 것처럼 마지막 음절과 Space 가 한 번의 insert 에 남는 콜백도 검사한다.
+    [events removeAllObjects];
+    NSUInteger batchStart = ((NSTextView *)region).textStorage.length;
+    [(id<NSTextInputClient>)region insertText:@"은" replacementRange:NSMakeRange(NSNotFound, 0)];
+    [(id<NSTextInputClient>)region insertText:@"은 " replacementRange:NSMakeRange(batchStart, 1)];
+    committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
+    preedit = [valuesOfType(@"compose", 0) lastObject] ?: @"";
+    check([committed isEqual:@"은 "] && [preedit isEqual:@""],
+        [NSString stringWithFormat:@"image region: a batched final syllable and Space commit before another key (committed %@, preedit '%@', events %@)",
+            committed, preedit, events]);
+    [(id<NSTextInputClient>)region doCommandBySelector:@selector(insertNewline:)];
+
     // 전환 직후 교체 범위로 조합한 첫 음절 뒤의 Space 도 다음 키 없이 확정되어야 한다.
     [events removeAllObjects];
     typeSwitchedSyllable(window, context, regionAnswered);

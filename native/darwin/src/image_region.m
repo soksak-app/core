@@ -130,14 +130,10 @@ static NSString *keypadKeyName(unsigned short keyCode) {
     }
 }
 
-// 한글 자모(U+1100–U+11FF, U+3130–U+318F, U+A960–U+A97F, U+D7B0–U+D7FF)나 음절(U+AC00–U+D7A3)이 있으면 YES.
-static BOOL containsHangul(NSString *text) {
-    for (NSUInteger i = 0; i < text.length; i++) {
-        unichar ch = [text characterAtIndex:i];
-        if ((ch >= 0x1100 && ch <= 0x11FF) || (ch >= 0x3130 && ch <= 0x318F) || (ch >= 0xA960 && ch <= 0xA97F)
-            || (ch >= 0xAC00 && ch <= 0xD7A3) || (ch >= 0xD7B0 && ch <= 0xD7FF)) return YES;
-    }
-    return NO;
+// 한글 자모(U+1100–U+11FF, U+3130–U+318F, U+A960–U+A97F, U+D7B0–U+D7FF)나 음절(U+AC00–U+D7A3)이면 YES.
+static BOOL isHangul(unichar ch) {
+    return (ch >= 0x1100 && ch <= 0x11FF) || (ch >= 0x3130 && ch <= 0x318F) || (ch >= 0xA960 && ch <= 0xA97F)
+        || (ch >= 0xAC00 && ch <= 0xD7A3) || (ch >= 0xD7B0 && ch <= 0xD7FF);
 }
 
 @implementation SPImageRegion
@@ -571,7 +567,7 @@ static BOOL containsHangul(NSString *text) {
 // 입력기는 조합 중인 음절의 문서 위치를 기억하므로, 조합하는 입력 소스가 선택된 동안 입력기가 넣은
 // 문자열은 확정한 뒤에도 문서에 남긴다. 새로 넣은 문자열의 시작보다 앞은 입력기가 더 고치지 않으므로
 // insert 로 확정하고, 그 뒤는 조합 문자열로 보고한다. 한국어 입력기는 한글만 조합하므로, 이 입력기가 넣은
-// 문자열에 한글이 없으면(예: 음절 뒤의 공백이나 숫자) 입력기가 더 고치지 않으므로 바로 확정한다.
+// 문자열이 한글 아닌 문자로 끝나면(예: 음절 뒤의 공백이나 숫자) 입력기가 더 고치지 않으므로 바로 확정한다.
 // 문서는 입력기의 조합을 끝낼 때 비운다.
 - (void)insertText:(id)string replacementRange:(NSRange)range {
     NSString *text = [string isKindOfClass:NSAttributedString.class]
@@ -599,8 +595,9 @@ static BOOL containsHangul(NSString *text) {
     NSUInteger end = self.selectedRange.location;
     NSUInteger start = end >= text.length ? end - text.length : 0;
     if (start > self.committedLength) [self commitThrough:start];
-    if ([self selectedSourceComposesOnlyHangul] && !containsHangul([self.textStorage.string substringFromIndex:self.committedLength])) {
-        [self commitThrough:self.textStorage.length];
+    if ([self selectedSourceComposesOnlyHangul] && self.textStorage.length > self.committedLength) {
+        unichar last = [self.textStorage.string characterAtIndex:self.textStorage.length - 1];
+        if (!isHangul(last)) [self commitThrough:self.textStorage.length];
     }
     [self reportPreedit];
 }

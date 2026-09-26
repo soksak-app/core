@@ -88,12 +88,12 @@ for (const app of Object.values(APPS)) {
           `${JSON.stringify({ sessionId: sessionAfterTyping.sessionId, error: sessionAfterTyping.error })}`);
         t.diagnostic(`${app.name}: terminal ${index + 1} screen after typing ` +
           `${JSON.stringify(textLines({ lines: screenAfterTyping }).filter(Boolean))}`);
-        await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith(`${line}x`)), "native characters were not delivered");
+        await readScreenUntil(s, surface, (lines) => lines.join("").endsWith(`${line}x`), "native characters were not delivered");
         const focusedAfterFirstInput = await s.get("host.window");
         assert.ok(focusedAfterFirstInput.regions.some((region) => region.surface === surface && region.focused),
           `terminal ${index + 1} lost native focus before its first command completed`);
         await s.press("Backspace");
-        await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith(line)), "native Backspace was not delivered");
+        await readScreenUntil(s, surface, (lines) => lines.join("").endsWith(line), "native Backspace was not delivered");
         await s.press("u", { modifiers: ["control"] });
         await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith("$")) && !lines.some((row) => row.includes(marker)),
           "native Ctrl+U did not clear the input line");
@@ -122,11 +122,14 @@ for (const app of Object.values(APPS)) {
         const recalled = await readScreenUntil(s, surface, (lines) => lines.filter((row) => row === arrowed).length === 2,
           "native Up did not recall the previous command");
         assert.equal(recalled.filter((row) => row === arrowed).length, 2, "the recalled command must run once more");
-        // Ctrl+C 는 실행 중인 명령을 끊는다. 셸 내장 read 는 자식 프로세스 없이 실행되므로, Ctrl+C 가 명령 시작
-        // 전후 어느 때 도착해도 셸이 프롬프트로 돌아온다. Ctrl+C 가 도착하지 않으면 다음 줄은 read 의 입력이 된다.
+        // read 의 입력 줄이 표시된 뒤 Ctrl+C 를 보내고, 새 프롬프트를 확인한 뒤 다음 줄을 입력한다.
         for (const ch of "read x") await s.press(ch === " " ? "Space" : ch);
         await s.press("Enter");
+        await readScreenUntil(s, surface, (lines) => lines.join("").includes("read x") &&
+          !lines.filter(Boolean).at(-1)?.endsWith("$"), "the read command did not start");
         await s.press("c", { modifiers: ["control"] });
+        await readScreenUntil(s, surface, (lines) => lines.filter(Boolean).at(-1)?.endsWith("$"),
+          "native Ctrl+C did not return the shell to its prompt");
         const interrupted = `interrupted${index}`;
         for (const ch of `echo ${interrupted}`) await s.press(ch === " " ? "Space" : ch);
         await s.press("Enter");
