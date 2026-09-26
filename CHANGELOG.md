@@ -12,6 +12,8 @@
 
 - V5-96-2: make synthetic-input refusals report only observed state. Active-window drag refusals include the sampled pointer and frame; pointer-button error 1007 names AppKit's nonzero `NSEvent.pressedMouseButtons` mask without attributing its source. The exposure specification states that the source is unknown. `pnpm test`, `make native-test`, the focused geometry repeat, boundary, exposure, and documentation checks pass.
 
+- V5-96 progress: the inactive-window native `capture_test` passes and records one complete frame. It does not reproduce the archived Tauri full-suite capture-stop timeout because it exercises a static AppKit window; the timeout remains unresolved pending a tracked run against the disposable Tauri endpoint.
+
 - F0.5.6-1: fix the shared macOS window compositor to autoresize with its host when the host resizes the WebView directly. A Tauri-shaped Red test kept the wrapper at 800pt after its parent grew to 1200pt and hit a plain `NSView` at x=1100; Green follows the parent and hits the main `WKWebView`. The rebuilt pre-fix Tauri width sweep reproduced the toolbar failure from 1229pt, while rebuilt Wails passed its inactive 756–1512pt sweep. Correct `make native-test` to run the declared VT sidecar artifact and report spawn errors immediately; its former stale `target/debug` path waited 60 seconds on a missing executable. Post-fix non-activating Tauri runtime verification remains in progress.
 
 - Retired checklist entry `G1.3-10`: the entry recorded agent work-process rules instead of project work.
