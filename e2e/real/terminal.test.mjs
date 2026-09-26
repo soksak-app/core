@@ -800,7 +800,13 @@ for (const app of Object.values(APPS)) {
     writeFileSync(join(directory, "drop me.txt"), "text");
     writeFileSync(join(directory, "drop.png"), PNG);
     const view = await s.rect("terminal.view", undefined, surface);
-    const target = await bringFront(s, app, view);
+    const initial = (await s.get("host.window")).frame;
+    const screen = (await s.get("host.screens")).find((item) => initial.x >= item.x && initial.x < item.x + item.width);
+    assert.ok(screen, "the terminal window is not on a visible screen");
+    const rightAlignedX = screen.visible.x + screen.visible.width - initial.width;
+    await s.run("host.window.move", { x: rightAlignedX, y: initial.y });
+    await s.until("host.window", (window) => window.frame.x === rightAlignedX, "the terminal window did not move to the visible right edge");
+    let target = await bringFront(s, app, view);
     // Finder 창은 터미널 영역 아래, 앱 창 안에 둔다. 끌어 놓는 점은 가려지지 않는다.
     const { frame } = await s.get("host.window");
     const top = Math.round(target.y + view.height / 2 + 30);
@@ -809,9 +815,28 @@ for (const app of Object.values(APPS)) {
     t.after(() => closeFinderWindow(finder));
     // 끌기는 Finder 창에서 시작한다. Finder 를 앞으로 가져오되 놓는 점은 앱 창이어야 한다.
     activateFinder();
-    assert.equal(frontWindowAt(target.x, target.y)?.pid, appPid(app), "the Finder window covers the drop point");
+    // Other Finder windows may remain open on the desktop. Choose an exposed point
+    // in this terminal view instead of assuming its center is uncovered.
+    const pid = appPid(app);
+    const candidates = [];
+    for (let row = 1; row < 8; row++) {
+      for (let column = 1; column < 10; column++) {
+        candidates.push({
+          x: Math.round(target.x - view.width / 2 + view.width * column / 10),
+          y: Math.round(target.y - view.height / 2 + view.height * row / 8),
+        });
+      }
+    }
+    target = candidates.find((point) => frontWindowAt(point.x, point.y)?.pid === pid);
+    assert.ok(target, "no exposed point in the terminal view is available for the Finder drop");
     for (const name of ["drop me.txt", "drop.png"]) {
-      const from = finderItemCenter(name);
+      let from;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        activateFinder();
+        from = finderItemCenter(name);
+        if (frontWindowAt(from.x, from.y)?.owner === "Finder") break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
       const front = frontWindowAt(from.x, from.y);
       assert.equal(front?.owner, "Finder", `${name} is not in the frontmost window at ${from.x},${from.y}: ${JSON.stringify(front)}`);
       const board = dragPasteboard();

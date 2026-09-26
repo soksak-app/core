@@ -165,6 +165,8 @@ finder.open(Path(input.directory));
 const window = finder.finderWindows[0];
 window.currentView = "list view";
 window.bounds = input.bounds;
+finder.activate();
+window.index = 1;
 return JSON.stringify(window.id());`);
 
 const finderClose = jxa(`

@@ -6,7 +6,7 @@
 
 - V5-87-1: `terminal.notifications` 설정에 `tab`과 `system` 정책을 추가했다. Red는 시스템 배너를 요구하던 낡은 창 검사와 번들 밖 실행 파일의 탭 알림 계약 충돌이었다. Green은 터미널이 선택 정책을 `tab.notify`에 전달하고, `system`은 호스트의 성공 또는 네이티브 오류만 보고하며 탭 알림으로 fallback하지 않는다. 두 호스트의 설정 전환·탭 알림 창 검사와 실제 탭 클릭 검사가 통과했다. `make docs-check`, `pnpm test`, `make boundaries`, `make exposure-check`, `make e2e-check`가 통과했다.
 
-- V5-87 진행: 현재 재빌드 Wails와 Tauri 활성화 등급이 20/20 통과했다. 실제 입력 등급은 Wails가 통과했지만 Tauri에서 선택 픽셀 2건, 스크롤바 픽셀·설정 2건, 긴 기록 표시(929줄 중 916줄), 알림 활성화 시간 초과를 측정했다. 측정된 실패는 열어 둔다.
+- V5-87: 다시 빌드한 Wails와 Tauri 실제 입력 등급이 각각 25/25, 활성화 등급이 각각 10/10 통과했고 `make -C native/darwin test-activation`도 통과했다. 선택 래스터 순서, 터미널 스크롤바·기록, 명시적 알림 정책, Finder 검사 창 위치·재활성화, 네이티브 WebKit 겹침 측정을 수정했다.
 
 - V5-99: 현재 재빌드한 Wails와 Tauri를 전용 폐기 설정과 endpoint로 실행했다. 전체 `terminal.test.mjs`가 두 호스트에서 각각 37/37 통과했고 테마 카드 색·라이트/다크 래스터, 터미널 글꼴·프로토콜·셸·브라우저 검사가 통과했으며 `Unknown operation` 결과가 없었다. 오래된 사이드카 재시도 조건을 닫았다.
 

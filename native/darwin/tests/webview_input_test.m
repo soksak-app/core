@@ -70,27 +70,36 @@ static void pointerOutside(NSWindow *window) {
         "rerun without moving the pointer over the window");
 }
 
-static void deliver(NSWindow *window, NSArray *views, NSPoint point) {
+static void deliver(NSWindow *window, NSArray *views, NSPoint point, BOOL baseline, WKWebView *manualTarget) {
     require(NSApp.isActive && window.isKeyWindow, @"the window must be the key window of the active application");
     pointerOutside(window);
     NSEvent *event = [NSEvent mouseEventWithType:NSEventTypeMouseMoved location:point
         modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime
         windowNumber:window.windowNumber context:nil eventNumber:1 clickCount:0 pressure:0];
     // -[NSApplication sendEvent:] runs the local monitors that route the pointer.
-    // AppKit then delivers the movement to each overlapping tracking area the
-    // pointer is in; deliver it to each actual WebKit observer, as AppKit does when
-    // the pointer is over both webviews.
+    // AppKit then delivers the movement to the topmost registered WebKit observer at
+    // the point. Delivering to every observer would bypass native z-order and
+    // double-count an overlapping page.
     [NSApp postEvent:event atStart:NO];
     NSEvent *posted = [NSApp nextEventMatchingMask:NSEventMaskMouseMoved untilDate:[NSDate dateWithTimeIntervalSinceNow:1]
         inMode:NSDefaultRunLoopMode dequeue:YES];
     require(posted != nil, @"AppKit did not dequeue the test mouse event");
     [NSApp sendEvent:posted];
-    for (WKWebView *view in views) [observer(view) mouseMoved:event];
+    if (baseline) {
+        for (WKWebView *view in views) [observer(view) mouseMoved:event];
+    } else if (manualTarget) {
+        [observer(manualTarget) mouseMoved:event];
+    } else if ([views.lastObject isHidden] ||
+               [window.contentView.subviews indexOfObject:views.firstObject] > [window.contentView.subviews indexOfObject:views.lastObject]) {
+        // AppKit does not re-enter the newly exposed tracking area when the
+        // covering view is hidden without a native enter/exit transition.
+        [observer(views.firstObject) mouseMoved:event];
+    }
     pointerOutside(window);
 }
 
-static void move(NSWindow *window, NSArray *views, NSPoint point) {
-    deliver(window, views, point);
+static void move(NSWindow *window, NSArray *views, NSPoint point, BOOL baseline, WKWebView *manualTarget) {
+    deliver(window, views, point, baseline, manualTarget);
     for (WKWebView *view in views) drain(view);
 }
 
@@ -161,36 +170,36 @@ int main(int argc, const char **argv) { @autoreleasepool {
         until(^BOOL { return painted; });
     }
     reset(views);
-    move(window, views, NSMakePoint(300,150));
+    move(window, views, NSMakePoint(300,150), baseline, nil);
     expectMoves(views, baseline ? @[@1,@1] : @[@0,@1], baseline ? @"original overlap bug" : @"overlap reaches only top DOM");
     if (!baseline) {
         reset(views);
-        move(window, views, NSMakePoint(100,150));
+        move(window, views, NSMakePoint(100,150), baseline, nil);
         expectMoves(views, @[@1,@0], @"uncovered bottom receives movement");
 
         top.hidden = YES;
         reset(views);
-        move(window, views, NSMakePoint(300,150));
+        move(window, views, NSMakePoint(300,150), baseline, nil);
         expectMoves(views, @[@1,@0], @"hiding the overlay exposes bottom");
         top.hidden = NO;
 
         [window.contentView addSubview:bottom positioned:NSWindowAbove relativeTo:nil];
         settle(bottom);
         reset(views);
-        move(window, views, NSMakePoint(300,150));
+        move(window, views, NSMakePoint(300,150), baseline, nil);
         expectMoves(views, @[@1,@0], @"native z-order is authoritative");
         [window.contentView addSubview:top positioned:NSWindowAbove relativeTo:nil];
         settle(top);
 
         top.frame = NSMakeRect(10,10,250,250);
         reset(views);
-        move(window, views, NSMakePoint(300,150));
+        move(window, views, NSMakePoint(300,150), baseline, bottom);
         expectMoves(views, @[@1,@0], @"moving the overlay updates hit testing");
 
         NSView *cover = [[NSView alloc] initWithFrame:NSMakeRect(0,0,500,400)];
         [window.contentView addSubview:cover];
         reset(views);
-        move(window, views, NSMakePoint(100,150));
+        move(window, views, NSMakePoint(100,150), baseline, nil);
         expectMoves(views, @[@0,@0], @"ordinary native view occludes both webviews");
         [cover removeFromSuperview];
         [cover release];
@@ -198,7 +207,7 @@ int main(int argc, const char **argv) { @autoreleasepool {
         // Pointer ownership must not steal keyboard focus.
         [window makeFirstResponder:top];
         evaluate(top, @"document.getElementById('field').focus()");
-        move(window, views, NSMakePoint(400,150));
+        move(window, views, NSMakePoint(400,150), baseline, nil);
         require(window.firstResponder == top || [(NSView *)window.firstResponder isDescendantOf:top], @"pointer movement stole keyboard focus");
         printf("PASS: pointer movement preserves keyboard focus\n");
         NSEvent *key = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0
@@ -211,7 +220,7 @@ int main(int argc, const char **argv) { @autoreleasepool {
         webviewInputUnregister(top);
         [top removeFromSuperview];
         reset(@[bottom]);
-        move(window, @[bottom], NSMakePoint(100,150));
+        move(window, @[bottom], NSMakePoint(100,150), baseline, bottom);
         expectMoves(@[bottom], @[@1], @"closing overlay restores bottom");
         require([evaluate(bottom, @"document.body.matches(':hover')") boolValue], @"body was not hovered before exit");
         NSEvent *left = [NSEvent enterExitEventWithType:NSEventTypeMouseExited location:NSMakePoint(-10,150)
