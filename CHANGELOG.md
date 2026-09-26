@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-8 progress: a rebuilt inactive-host repeat recorded one Wails three-terminal frame with 2/3 visible terminals at frame 82 while Tauri completed its three sets. The cause remains open; no pixel or frame criterion was relaxed.
+
 - V5-96-7: surface exposure replies now report a host rejection when the request was already abandoned, preventing an unhandled `RuntimeError` while preserving the explicit stale-reply error. Handled settling failures let state-changing commands continue, and string presentation errors retain their measured reason.
 
 - V5-96-6: route the presentation barrier from the declared hybrid image composition instead of a plugin name, and record the barrier on each terminal capture set. The remaining mixed frame was fixed under V5-96-5. `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, and `make docs-check` pass.
