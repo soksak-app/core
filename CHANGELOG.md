@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.3-9: teach the canonical checklist checker to accept `[!]` only when each language records a nonempty cause and retry condition. Tracked tests cover valid, missing, and empty fields; all checklist tests and `make docs-check` pass.
+
 - V5-98: consume AppKit's `noop:` text command in the native terminal input view without committing pending composition or sending a sidecar command. Other unsupported selectors still return an explicit error. The native regression and full native test suites pass; documentation, boundary, and exposure checks pass.
 
 - V5-97: a TUI-reported click clears a previous terminal selection while retaining the PTY mouse event. The native text input region removes its `NSTextView` cursor tracking areas, the terminal raster requests the I-beam, and pointer routing refreshes WebKit cursor tracking when its target changes or the application becomes active. A tracked real-input check samples the system cursor during 600 slow moves; two runs on rebuilt Wails and Tauri hosts each saw 2,400 I-beam samples and no arrows. Focused sidecar selection and mouse-report tests pass. The real selection check now starts inside the first cell before its midpoint; its old midpoint start copied `ELECTME` while incorrectly expecting `SELECTME`. On the final rebuilt hosts, the corrected real click, slow pointer, and TUI Shift-drag cases pass for both apps. The vt-core output contract check now consumes every presented image before expecting later PTY output; its previous fixture left sequence 2 in flight and timed out. The focused tracked repeat passes 10/10.

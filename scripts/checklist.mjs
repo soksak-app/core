@@ -6,8 +6,18 @@ export function checklist(text, file, errors) {
     const match = line.match(/^(\s*)- \[([^\]]*)\] (.*)$/);
     if (!match) continue;
     const [, indent, state, label] = match;
-    if (![" ", "~", "o"].includes(state)) errors.push(`${file}:${index + 1}: invalid checklist state [${state}]`);
+    if (![" ", "~", "o", "!"].includes(state)) errors.push(`${file}:${index + 1}: invalid checklist state [${state}]`);
     const id = label.match(/^([A-Z]\d+(?:\.\d+)*(?:-\d+)*)\s+—\s+/)?.[1] ?? null;
+    if (state === "!") {
+      const korean = file.endsWith(".ko.md");
+      const cause = korean ? /원인:\s*(.*?)\s+재시도 조건:/u : /Cause:\s*(.*?)\s+Retry when:/i;
+      const retry = korean ? /재시도 조건:\s*(.+)$/u : /Retry when:\s*(.+)$/i;
+      const causeValue = label.match(cause)?.[1]?.trim();
+      const retryValue = label.match(retry)?.[1]?.trim();
+      const hasContent = (value) => value && /[\p{L}\p{N}]/u.test(value);
+      const missing = [!hasContent(causeValue) && (korean ? "원인" : "cause"), !hasContent(retryValue) && (korean ? "재시도 조건" : "retry condition")].filter(Boolean);
+      if (missing.length) errors.push(`${file}:${index + 1}: blocked checklist item ${id ?? "without an identifier"} requires nonempty ${missing.join(" and ")}`);
+    }
     if (id && identifiers.has(id)) errors.push(`${file}:${index + 1}: duplicate checklist identifier ${id}`);
     if (id) identifiers.add(id);
     entries.push({ id, indent: indent.length, state });

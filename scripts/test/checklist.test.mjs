@@ -31,6 +31,26 @@ test("checklist permits translated text and linked follow-up identifiers", { tim
   assert.equal(result.status, 0, result.stderr);
 });
 
+test("checklist permits an explicitly blocked item with a cause and retry condition", { timeout: 3000 }, (t) => {
+  const english = "- [!] G1 — blocked. Cause: the process is active. Retry when: the process exits.\n";
+  const korean = "- [!] G1 — 보류. 원인: 프로세스가 실행 중이다. 재시도 조건: 프로세스가 종료된다.\n";
+  const result = check(t, english, korean);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+for (const [name, english, korean] of [
+  ["missing cause", "- [!] G1 — blocked. Retry when: available.\n", "- [!] G1 — 보류. 원인: 이유. 재시도 조건: 가능할 때.\n"],
+  ["empty cause", "- [!] G1 — blocked. Cause: . Retry when: available.\n", "- [!] G1 — 보류. 원인: 이유. 재시도 조건: 가능할 때.\n"],
+  ["missing retry condition", "- [!] G1 — blocked. Cause: unavailable.\n", "- [!] G1 — 보류. 원인: 이유. 재시도 조건: 가능할 때.\n"],
+  ["empty retry condition", "- [!] G1 — blocked. Cause: unavailable. Retry when: .\n", "- [!] G1 — 보류. 원인: 이유. 재시도 조건: 가능할 때.\n"],
+]) {
+  test(`checklist rejects [!] with ${name}`, { timeout: 3000 }, (t) => {
+    const result = check(t, english, korean);
+    assert.notEqual(result.status, 0, "documentation audit accepted an incomplete blocked record");
+    assert.match(result.stderr, /blocked checklist item .* requires/);
+  });
+}
+
 for (const updated of ["- [~] G1 — reopened\n", "- [~] G1-1 — replaced\n"]) {
   test(`checklist preserves completed scope: ${updated.trim()}`, { timeout: 3000 }, (t) => {
     const result = check(t, updated, updated, "- [o] G1 — completed\n");
