@@ -1721,6 +1721,10 @@ async fn surface_task(
     // 마우스 보고로 시작한 누름. 뗄 때까지 선택 연산은 선택하지 않는다.
     let mut mouse_gesture = false;
     let mut mouse_cell: Option<(u16, u16)> = None;
+    // A selection release describes the raster produced immediately before it.
+    // Hold the event until that raster is consumed so a client cannot observe
+    // the copy acknowledgement while the old selection is still on screen.
+    let mut pending_selection_event: Option<String> = None;
     let mut preedit: Option<Preedit> = None;
     let mut current_theme = crate::palette::TerminalTheme::dark();
     let mut cursor_policy = CursorPolicy::default();
@@ -2070,11 +2074,25 @@ async fn surface_task(
                         }
                     }
                     SurfaceCommand::SelectionEnd => {
+                        if pending_selection_event.is_some() {
+                            let response = json!({"surface": surface_id, "body": {
+                                "error": "invalidParams",
+                                "reason": "selection presentation is still pending"
+                            }});
+                            if output_tx.send(response.to_string()).await.is_err() { return; }
+                            continue;
+                        }
                         match engine.selection_end() {
                             Ok(text) => {
                                 if let Some(state) = image_state.as_mut() {
                                     let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
                                     if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                                    let body = match text {
+                                        Some(text) => json!({"event": "selection.copy", "text": text, "userInitiated": true}),
+                                        None => json!({"event": "selection.end", "copied": false}),
+                                    };
+                                    pending_selection_event = Some(json!({"surface": surface_id, "body": body}).to_string());
+                                    continue;
                                 }
                                 // A selection without text copies nothing and reports the release.
                                 let body = match text {
@@ -2551,6 +2569,11 @@ async fn surface_task(
                                 // 기다린 동안의 변경을 담은 화면 하나를 래스터와 함께 보낸다.
                                 if !present_screen(&surface_id, &screen, image_state.as_mut().unwrap(), &output_tx).await {
                                     return;
+                                }
+                            }
+                            if image_state.as_ref().is_none_or(|state| !state.pending_draw) {
+                                if let Some(event) = pending_selection_event.take() {
+                                    if output_tx.send(event).await.is_err() { return; }
                                 }
                             }
                         }

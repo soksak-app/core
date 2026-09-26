@@ -896,6 +896,8 @@ async fn test_selection_release_emits_one_user_copy_event() {
 {"surface":"s1","body":{"operation":"selection.start","x":1.0,"y":1.0}}
 {"surface":"s1","body":{"operation":"selection.update","x":25.0,"y":1.0}}
 {"surface":"s1","body":{"operation":"selection.end"}}
+{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
+{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":2}}}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -987,6 +989,8 @@ async fn test_blank_selection_release_reports_end_without_copy() {
 {"surface":"s1","body":{"operation":"selection.start","x":700.0,"y":300.0}}
 {"surface":"s1","body":{"operation":"selection.update","x":760.0,"y":300.0}}
 {"surface":"s1","body":{"operation":"selection.end"}}
+{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
+{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":2}}}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
