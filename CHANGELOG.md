@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.3-10: require tracked Red/Green regression evidence for reported or hypothesized behavior defects. The test must fail against unchanged code and pass after correction; explicit test-controlled fault injection is permitted only when ordinary inputs cannot reproduce the failure. Add the rule to both agent guidance files and the verification specification.
+
 - G4.2-1: derive executable language coverage from tracked workspace files and make `make parity-check` reject missing or extra adapter languages. Add a shell adapter and module-local tests of the actual build-environment CLI; JS/TS 16, Rust 2, Go 15, Objective-C 5, and shell 2 tests pass. Record test ownership and mechanical language coverage in both agent guidance files and the verification specification.
 
 - G1.3-9: teach the canonical checklist checker to accept `[!]` only when each language records a nonempty cause and retry condition. Tracked tests cover valid, missing, and empty fields; all checklist tests and `make docs-check` pass.
