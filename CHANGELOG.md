@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F13-5-3: classify the completed F13 parent as an aggregate in the feature-evidence audit. The tracked regression proves that F13 is exempt and another completed top-level capability without a feature link still fails. Red reproduced the false error after F13 became `[o]`; the focused check and full `pnpm test` pass after the correction.
+
 - F0.5.6-1: fix the shared macOS window compositor to autoresize with its host when the host resizes the WebView directly. A Tauri-shaped Red test kept the wrapper at 800pt after its parent grew to 1200pt and hit a plain `NSView` at x=1100; Green follows the parent and hits the main `WKWebView`. The rebuilt pre-fix Tauri width sweep reproduced the toolbar failure from 1229pt, while rebuilt Wails passed its inactive 756–1512pt sweep. Correct `make native-test` to run the declared VT sidecar artifact and report spawn errors immediately; its former stale `target/debug` path waited 60 seconds on a missing executable. Post-fix non-activating Tauri runtime verification remains in progress.
 
 - Retired checklist entry `G1.3-10`: the entry recorded agent work-process rules instead of project work.

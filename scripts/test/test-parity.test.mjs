@@ -136,6 +136,13 @@ test("completed capability entries all have feature evidence links", { timeout: 
   assert.ok(!inventory.featureLinks.some((feature) => feature.id === "V3"));
 });
 
+test("completed aggregate F13 is exempt while other completed top-level capabilities still need feature links", () => {
+  assert.deepEqual(
+    auditCompletedFeatureLinks([], "- [o] F13 — aggregate\n- [o] F99 — capability\n"),
+    ["F99: completed capability has no feature link"],
+  );
+});
+
 test("recorded parity counts cannot drift from the current inventory", { timeout: 1000 }, () => {
   const inventory = auditInventory(files);
   assert.deepEqual(auditRecordedInventoryCounts(inventory), []);
