@@ -737,6 +737,24 @@ fn the_current_selection_text_is_readable_until_the_selection_is_cleared() {
     );
 }
 
+#[test]
+fn a_program_mouse_click_can_clear_a_previous_selection_without_copying() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"hello");
+    engine.selection_start(0, 0).expect("selection start");
+    engine.selection_update(5, 0).expect("selection update");
+    engine.selection_end().expect("selection copy");
+    assert_eq!(engine.selection_text().as_deref(), Some("hello"));
+    let selected_pixel = engine.screen().lines[0][2].bg.clone();
+    assert!(engine.selection_clear(), "the selected pixels changed");
+    assert_eq!(engine.selection_text(), None);
+    assert_ne!(engine.screen().lines[0][2].bg, selected_pixel);
+    assert!(
+        !engine.selection_clear(),
+        "an empty selection changes no pixels"
+    );
+}
+
 fn line_text(screen: &soksak_sidecar_vt_core::Screen, row: usize) -> String {
     screen.lines[row]
         .iter()

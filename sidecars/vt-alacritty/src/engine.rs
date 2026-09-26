@@ -1329,6 +1329,11 @@ impl AlacrittyEngine {
         Ok(text)
     }
 
+    pub fn selection_clear(&mut self) -> bool {
+        self.selection_anchor = None;
+        self.term.selection.take().is_some()
+    }
+
     fn color_request(&self, index: usize) -> Result<Rgb, String> {
         if index >= 269 {
             return Err(format!("unsupported terminal color index {index}"));
@@ -1522,6 +1527,10 @@ impl Engine for AlacrittyEngine {
 
     fn selection_end(&mut self) -> Result<Option<String>, String> {
         AlacrittyEngine::selection_end(self)
+    }
+
+    fn selection_clear(&mut self) -> bool {
+        AlacrittyEngine::selection_clear(self)
     }
 
     fn selection_text(&self) -> Option<String> {

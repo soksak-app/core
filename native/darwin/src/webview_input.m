@@ -6,6 +6,20 @@
 #import "webview_geometry.h"
 
 static NSHashTable *inputViews;
+static NSMapTable<NSWindow *, WKWebView *> *lastPointerTargets;
+
+// 추적을 켠 바로 그 이동은 WebKit의 추적 소유자에게 도달하지 않을 수 있다.
+// 새 대상의 첫 이동을 전달해 페이지가 현재 위치의 커서를 계산하게 한다.
+static void refreshPointerCursor(WKWebView *view, NSEvent *event) {
+    if (NSEvent.pressedMouseButtons != 0) return;
+    [view updateTrackingAreas];
+    for (NSTrackingArea *area in view.trackingAreas) {
+        if ((area.options & NSTrackingMouseMoved) && [area.owner respondsToSelector:@selector(mouseMoved:)]) {
+            [area.owner mouseMoved:event];
+            return;
+        }
+    }
+}
 
 // 문서가 받은 신뢰 포인터 이벤트를 알리는 스크립트. 페이지와 분리된 content world 에서 실행한다.
 static NSString *const kReceiptWorld = @"soksak-input";
@@ -130,8 +144,16 @@ static NSEvent *routePointer(NSEvent *event) {
     // 등록한 웹뷰 안에 다른 등록한 웹뷰(문서 영역)가 있으면 가장 안쪽의 웹뷰만 이동을 받는다.
     NSView *target = hit;
     while (target && ![inputViews containsObject:target]) target = target.superview;
+    WKWebView *previous = [lastPointerTargets objectForKey:window];
     for (WKWebView *view in inputViews) {
         if (view.window == window) [view _setIgnoresMouseMoveEvents:view != target];
+    }
+    if (NSEvent.pressedMouseButtons != 0) {
+        [lastPointerTargets removeObjectForKey:window];
+    } else if (target != previous) {
+        if (target) [lastPointerTargets setObject:(WKWebView *)target forKey:window];
+        else [lastPointerTargets removeObjectForKey:window];
+        if (target) refreshPointerCursor((WKWebView *)target, event);
     }
     return event;
 }
@@ -141,6 +163,9 @@ BOOL webviewInputRegister(WKWebView *view) {
     if (![view respondsToSelector:@selector(_setIgnoresMouseMoveEvents:)]) return NO;
     if (!inputViews) {
         inputViews = [[NSHashTable weakObjectsHashTable] retain];
+        lastPointerTargets = [[NSMapTable weakToWeakObjectsMapTable] retain];
+        [NSNotificationCenter.defaultCenter addObserverForName:NSApplicationDidBecomeActiveNotification object:NSApp queue:nil
+            usingBlock:^(NSNotification *note) { [lastPointerTargets removeAllObjects]; }];
         // 마우스 이탈 이벤트에서는 추적 대상을 변경하지 않는다. 휠 이벤트는 표면 좌표계의 단위로 바꾼다.
         [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMouseMoved | NSEventMaskMouseEntered | NSEventMaskScrollWheel
             handler:^NSEvent *(NSEvent *event) {

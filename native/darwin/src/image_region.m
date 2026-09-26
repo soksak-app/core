@@ -218,6 +218,16 @@ static BOOL isHangul(unichar ch) {
 - (void)resetCursorRects {
 }
 
+// NSTextView 는 updateTrackingAreas 에서 I-빔 커서 추적 영역을 다시 만든다.
+// 이 뷰는 포인터 적중 대상이 아니므로 그 영역을 제거하고 페이지의 커서를 유지한다.
+- (void)updateTrackingAreas {
+    [super updateTrackingAreas];
+    for (NSTrackingArea *area in [[self.trackingAreas copy] autorelease]) {
+        if (area.options & NSTrackingCursorUpdate) [self removeTrackingArea:area];
+    }
+}
+
+
 // Edit 메뉴의 붙여넣기는 페이지에 알려 선언된 붙여넣기 명령을 실행하게 한다. NSTextView 의 붙여넣기는 입력기의
 // 작업 공간인 입력 문서에 넣으므로 쓰지 않는다(docs/spec/terminal-runtime.md).
 - (void)paste:(id)sender {

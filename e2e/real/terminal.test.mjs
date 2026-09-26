@@ -11,7 +11,7 @@ import { frames, pixel, readFrame } from "../frame.mjs";
 import { cellBackgrounds, ensureTerminals, isColor, readScreenUntil, selectionBackground } from "../terminal-screen.mjs";
 import { pasteboardText, writePasteboard } from "../pasteboard.mjs";
 import { activateFinder, appPid, bringFront, click, closeFinderWindow, dragPath, finderItemCenter, frontWindowAt, key, KEYS,
-  dragPasteboard, openFinderWindow, waitNotificationBanner, post, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
+  dragPasteboard, openFinderWindow, waitNotificationBanner, post, postWithCursorSamples, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
 
 // 터미널 한 칸의 중심 화면 좌표.
 function cellPoint(origin, session, column, row) {
@@ -104,7 +104,8 @@ for (const app of Object.values(APPS)) {
     const background = await cellPixel(s, surface, session, blank, row);
 
     const before = (await s.get("terminal.session", surface)).selectionReleases;
-    dragPath(cellPoint(origin, session, 0, row), cellPoint(origin, session, blank + 2, row));
+    const start = cellPoint(origin, session, 0, row);
+    dragPath({ x: start.x - 0.3 * session.cellWidth, y: start.y }, cellPoint(origin, session, blank + 2, row));
     await s.until("terminal.session", (value) => value.selectionReleases === before + 1,
       "the sidecar did not answer the release of a real drag", { surface });
     const selected = await cellPixel(s, surface, session, blank, row);
@@ -600,6 +601,24 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
+  test(`${app.name}: slow pointer movement over terminal text`, { timeout: 90000 }, async (t) => {
+    const { s, surface, session, origin, row } = await prepare(t, app, "CURSORSHAPE");
+    const first = cellPoint(origin, session, 4, row);
+    const view = await s.rect("terminal.view", undefined, surface);
+    const hit = await s.run("host.hit", { x: view.x + 4.5 * session.cellWidth, y: view.y + (row + 0.5) * session.cellHeight });
+    const { active, responder } = await s.get("host.window");
+    t.diagnostic(`${app.name}: pointer hit ${JSON.stringify(hit)}, window ${JSON.stringify({ active, responder })}`);
+    post([{ type: "move", x: first.x, y: first.y }]);
+    const steps = [];
+    for (let step = 0; step < 600; step++) {
+      steps.push({ type: "move", x: first.x + Math.sin(step * 0.05) * session.cellWidth * 0.7, y: first.y, wait: 16 });
+    }
+    const cursors = postWithCursorSamples(steps);
+    t.diagnostic(`${app.name}: slow terminal pointer samples ${JSON.stringify(cursors)}`);
+    assert.ok(cursors.iBeam === steps.length * 4 && cursors.arrow === 0 && cursors.other === 0 && cursors.missing === 0,
+      `terminal pointer flickered during smooth movement: ${JSON.stringify(cursors)}`);
+  });
+
   test(`${app.name}: dividers and card icons show their cursors after moves, focus changes, and terminal output`, { timeout: 180000 }, async (t) => {
     const { s, surface, origin, session } = await prepare(t, app, "CURSORS");
     const grid = await s.get("core.grid");
@@ -827,4 +846,3 @@ for (const app of Object.values(APPS)) {
     }
   });
 }
-

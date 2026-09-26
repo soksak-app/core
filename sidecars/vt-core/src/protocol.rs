@@ -273,6 +273,8 @@ pub trait Engine: Send + 'static {
     /// Ends the selection and returns its text. A selection that covers no text is cleared
     /// and returns `None`; that is a normal gesture, not an error.
     fn selection_end(&mut self) -> Result<Option<String>, String>;
+    /// 이전 선택을 복사하지 않고 지운다. 픽셀이 바뀌었는지 돌려준다.
+    fn selection_clear(&mut self) -> bool;
     /// 현재 선택의 텍스트. 선택이 없거나 글자를 담지 않으면 `None` 이다.
     fn selection_text(&self) -> Option<String>;
     /// 기본 화면의 뷰포트를 lines 만큼 움직인다. 양수는 오래된 출력 쪽이다.
@@ -1975,6 +1977,13 @@ async fn surface_task(
                         let report = match phase {
                             MousePhase::Down if modes.mouse_report() && !shift => {
                                 mouse_gesture = true;
+                                if engine.selection_clear() {
+                                    last_cursor_frame = None;
+                                    if let Some(state) = image_state.as_mut() {
+                                        let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
+                                        if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                                    }
+                                }
                                 Some((encoding::MouseButton::Left, encoding::MouseAction::Press))
                             }
                             MousePhase::Down => None,
@@ -3727,6 +3736,9 @@ impl Engine for FakeEngine {
     }
     fn selection_end(&mut self) -> Result<Option<String>, String> {
         Ok(Some("selected".to_string()))
+    }
+    fn selection_clear(&mut self) -> bool {
+        false
     }
     fn selection_text(&self) -> Option<String> {
         Some("selected".to_string())

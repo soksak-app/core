@@ -116,6 +116,13 @@ int main(void) { @autoreleasepool {
 
         // 레이어를 찾아서 속성을 확인한다
         NSView *regionView = (NSView *)region1;
+        [regionView updateTrackingAreas];
+        NSUInteger cursorAreas = 0;
+        for (NSTrackingArea *area in regionView.trackingAreas) {
+            if (area.options & NSTrackingCursorUpdate) cursorAreas++;
+        }
+        check(cursorAreas == 0, [NSString stringWithFormat:@"TEST 1: image input view has no cursor tracking area (%lu)",
+            (unsigned long)cursorAreas]);
         // 구현에서 imageLayer는 SPImageRegion의 sublayer
         NSArray *sublayers = regionView.layer.sublayers;
         CALayer *imageLayer = [sublayers firstObject];

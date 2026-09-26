@@ -32,8 +32,21 @@ const FLAGS = { shift: 0x20000, control: 0x40000, option: 0x80000, command: 0x10
 
 const postSteps = jxa(`
 ObjC.import("Foundation");
+$.NSApplication.sharedApplication;
 const types = ${JSON.stringify(TYPES)};
 const times = [];
+const cursors = { arrow: 0, iBeam: 0, other: 0, missing: 0 };
+const cursorImage = (cursor) => cursor.image.TIFFRepresentation;
+const arrowImage = input.sampleCursor ? cursorImage($.NSCursor.arrowCursor) : null;
+const textImage = input.sampleCursor ? cursorImage($.NSCursor.IBeamCursor) : null;
+const sampleCursor = () => {
+  const current = $.NSCursor.currentSystemCursor;
+  if (current.isNil()) { cursors.missing++; return; }
+  const image = cursorImage(current);
+  if (image.isEqualToData(arrowImage)) cursors.arrow++;
+  else if (image.isEqualToData(textImage)) cursors.iBeam++;
+  else cursors.other++;
+};
 for (const step of input.steps) {
   let event;
   const flags = (step.modifiers || []).reduce((sum, name) => sum + ${JSON.stringify(FLAGS)}[name], 0);
@@ -53,9 +66,14 @@ for (const step of input.steps) {
   $.CGEventPost(0, event);
   // 녹화 프레임의 표시 시각과 같은 시계(mach 시각, 잠자기 제외)로 보낸 시각을 기록한다.
   times.push($.NSProcessInfo.processInfo.systemUptime * 1000);
-  if (step.wait) delay(step.wait / 1000);
+  if (input.sampleCursor) {
+    for (let sample = 0; sample < 4; sample++) {
+      delay((step.wait || 0) / 4000);
+      sampleCursor();
+    }
+  } else if (step.wait) delay(step.wait / 1000);
 }
-return JSON.stringify(times);`);
+return JSON.stringify(input.sampleCursor ? cursors : times);`);
 
 /**
  * HID 이벤트를 차례로 보낸다. step 은 {type, x, y, modifiers, wait, clicks} 이다. clicks 는 누름 횟수다. type 은 move, down, up, drag,
@@ -64,6 +82,11 @@ return JSON.stringify(times);`);
  */
 export function post(steps) {
   return postSteps({ steps: steps.map((step) => ({ wait: 16, ...step })) });
+}
+
+/** HID 이동 사이에도 시스템 커서를 읽어 한 프레임만 나타나는 모양을 센다. */
+export function postWithCursorSamples(steps) {
+  return postSteps({ steps: steps.map((step) => ({ wait: 16, ...step })), sampleCursor: true });
 }
 
 /** 누르고 떼는 클릭이다. */

@@ -151,6 +151,9 @@ impl Engine for MockEngine {
     fn selection_end(&mut self) -> Result<Option<String>, String> {
         Ok(self.selection.clone())
     }
+    fn selection_clear(&mut self) -> bool {
+        self.selection.take().is_some()
+    }
     fn selection_text(&self) -> Option<String> {
         self.selection.clone()
     }
@@ -3093,6 +3096,9 @@ async fn test_panicking_surface_reports_error() {
         fn selection_end(&mut self) -> Result<Option<String>, String> {
             Ok(Some("selected".to_string()))
         }
+        fn selection_clear(&mut self) -> bool {
+            false
+        }
         fn selection_text(&self) -> Option<String> {
             Some("selected".to_string())
         }
@@ -4132,6 +4138,29 @@ async fn a_click_program_receives_press_and_release_but_no_motion() {
     assert!(
         writes[1].starts_with("\x1b[<0;") && writes[1].ends_with(";1m"),
         "{writes:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_reported_click_clears_a_previous_text_selection() {
+    let modes = Modes {
+        mouse_click: true,
+        sgr_mouse: true,
+        ..Modes::default()
+    };
+    let requests = [
+        mouse("down", 0.5, true, false),
+        selection("selection.start", 0.5),
+        selection("selection.end", 0.0),
+        mouse("up", 0.5, false, false),
+        "{\"surface\":\"s1\",\"body\":{\"operation\":\"copy\"}}\n".to_string(),
+    ]
+    .concat();
+    let (output, _, writes) = serve_scroll(Some(modes), &requests).await;
+    assert_eq!(written(&writes), vec!["\x1b[<0;1;1M", "\x1b[<0;1;1m"]);
+    assert!(
+        output.contains("\"copied\":false,\"event\":\"copy\""),
+        "{output}"
     );
 }
 
