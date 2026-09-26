@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-87 progress: the current rebuilt Wails and Tauri activation tier passed 20/20. The real-input tier passed Wails and measured six Tauri failures: two selection pixel cases, two scrollbar pixel/settings cases, long-history display (916 of 929 lines), and notification activation timeout. The measured failures remain open.
+
 - V5-99: current rebuilt Wails and Tauri applications ran with dedicated disposable configurations and endpoint files. The complete `terminal.test.mjs` suite passed 37/37 on each host, including theme card-color and light/dark raster checks; terminal font, protocol, shell, and browser checks also passed, with no `Unknown operation` result. This closes the stale-sidecar retry condition.
 
 - V5-94: current rebuilt Wails and Tauri applications ran with dedicated disposable configurations and endpoint files. The maximize/restore layout check passed on both hosts; the last behind-window frame was 47 ms/42 ms on Wails and 55 ms/43 ms on Tauri, within the existing 150 ms limit. The check compares current window, surface, and recorded-frame geometry without activating either check application.
