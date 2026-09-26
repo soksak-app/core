@@ -91,6 +91,29 @@ test("watch resolves with the current value when it already satisfies the predic
   assert.deepEqual(server.requests.map((m) => m.method), ["status.watch", "status.get", "status.unwatch"]);
 });
 
+test("watch resolves only after its final status.unwatch is acknowledged", async (t) => {
+  let finishUnwatch;
+  const server = await startFakeEndpoint({
+    "status.watch": () => null,
+    "status.get": () => "home",
+    "status.unwatch": () => new Promise((resolve) => { finishUnwatch = () => resolve(null); }),
+  });
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  const unwatchRequest = requested(server, (message) => message.method === "status.unwatch");
+  let resolved = false;
+  const watching = client.watch("main", "core.screen", (value) => value === "home").then((value) => {
+    resolved = true;
+    return value;
+  });
+  await unwatchRequest;
+  await Promise.resolve();
+  assert.equal(resolved, false, "watch resolved before the endpoint acknowledged unwatch");
+  finishUnwatch();
+  assert.equal(await watching, "home");
+});
+
 test("watch resolves from a status.changed notification without further requests", async (t) => {
   const sample = sampleHandlers();
   const server = await startFakeEndpoint(sample.handlers);
@@ -156,12 +179,17 @@ test("a watch that ends before its subscription is confirmed is unsubscribed bef
   t.after(() => server.close());
   const client = await connect({ configDir: server.configDir });
   t.after(() => client.close());
-  await assert.rejects(client.watch("main", "core.screen", () => false, { timeout: 20 }), { code: "ETIMEDOUT" });
-  const next = client.watch("main", "core.screen", (value) => value === "later");
+  const unwatch = requested(server, (message) => message.method === "status.unwatch");
+  const expired = client.watch("main", "core.screen", () => false, { timeout: 20 });
+  const timedOut = assert.rejects(expired, { code: "ETIMEDOUT" });
   await client.request("windows.list");
   confirm();
+  await unwatch;
+  await timedOut;
+  const nextStatusWatch = requested(server, (message) => message.method === "status.watch");
+  const next = client.watch("main", "core.screen", (value) => value === "later");
+  await nextStatusWatch;
   const subscriptions = () => server.requests.map((m) => m.method).filter((m) => m === "status.watch" || m === "status.unwatch");
-  await requested(server, () => subscriptions().length === 3);
   assert.deepEqual(subscriptions(), ["status.watch", "status.unwatch", "status.watch"]);
   sample.set("core.screen", "later");
   assert.equal(await next, "later");

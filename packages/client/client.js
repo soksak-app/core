@@ -138,9 +138,12 @@ class Client {
         clearTimeout(timer);
         off();
         offClose();
-        this.#release(key, target);
-        if (error) reject(error);
-        else resolve(value);
+        this.#release(key, target).then(() => {
+          if (error) reject(error);
+          else resolve(value);
+        }, (releaseError) => {
+          reject(error ? new AggregateError([error, releaseError], `status ${name} and its unwatch both failed`) : releaseError);
+        });
       };
       const check = (value) => {
         seen = true;
@@ -233,17 +236,19 @@ class Client {
 
   #release(key, target) {
     const entry = this.#watches.get(key);
-    if (!entry) return;
+    if (!entry) return Promise.resolve();
     entry.count -= 1;
-    if (entry.count > 0) return;
+    if (entry.count > 0) return Promise.resolve();
     this.#watches.delete(key);
-    if (this.#closed) return;
+    if (this.#closed) return Promise.resolve();
     // 구독은 이 차례보다 앞에 있으므로 여기서는 결과가 정해져 있다. 실패한 구독은 해제하지 않는다.
-    this.#subscribe(key, () => entry.ready.then(() => this.request("status.unwatch", target), (error) => {
+    const released = this.#subscribe(key, () => entry.ready.then(() => this.request("status.unwatch", target), (error) => {
       throw new Error(`status.unwatch skipped because status.watch failed: ${error.message}`);
-    })).then(undefined, (error) => {
+    }));
+    released.then(undefined, (error) => {
       this.#fail(new Error(`status.unwatch failed: ${error.message}`));
     });
+    return released;
   }
 
   #receive(message) {
