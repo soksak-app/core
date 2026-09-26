@@ -57,8 +57,9 @@ export async function mount(root, context) {
   let requests = { entries: [], truncated: false };
   const elementListeners = new Set();
   const requestListeners = new Set();
-  // 탭 제목은 문서 제목, 없으면 주소다. 탭 제목 규칙에 맞게 제어 문자를 지우고 256자로 자른다.
+  // 기본값: 문서 제목이 비어 있으면 주소가 탭의 식별 텍스트다. 제어 문자를 지우고 256자로 자른다.
   const tabTitle = (state) => {
+    // 기본값: 문서 제목이 비어 있으면 주소가 탭의 식별 텍스트다.
     const text = (state.title || state.url).replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, 256);
     context.tab.title(text === "" ? null : text);
   };

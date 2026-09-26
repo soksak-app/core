@@ -11,6 +11,7 @@ export function mount(root, context) {
       const item = document.createElement("li");
       const button = document.createElement("button");
       button.type = "button";
+      // 기본값: 기록 제목이 비어 있으면 해당 항목의 주소를 표시한다.
       button.textContent = entry.title || entry.url;
       button.title = entry.url;
       if (index === history.index) button.setAttribute("aria-current", "page");

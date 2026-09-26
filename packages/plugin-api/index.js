@@ -1055,6 +1055,7 @@ export function createExpose(port, load) {
   let entries = null;
   let loaded = null;
   const ready = () => {
+    // 기본값: 동시 요청은 같은 manifest 로딩 Promise 를 공유한다.
     entries ??= Promise.resolve().then(load).then(async (declarations) => {
       // Manifest files carry grouped arrays; the request path needs the canonical
       // declaration map used by the registry and exposureEntries.

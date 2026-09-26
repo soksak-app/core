@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { findFallbacks } from "../check-fallbacks.mjs";
+import { findFallbacks, listFallbacks } from "../check-fallbacks.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const scan = (files) => findFallbacks(Object.keys(files), (file) => files[file]);
@@ -38,6 +38,58 @@ test("a reason on the line or in the comment block above accepts a default", () 
   }), []);
 });
 
+test("the audit lists justified and unjustified defaults with their locations and reasons", () => {
+  const listed = listFallbacks(["packages/a/a.js"], () => [
+    "const width = card.width ?? 120; // default: the public layout contract starts at 120 points.",
+    "const callback = readCallback() || fallbackCallback;",
+    "selected = readSelected() || defaultSelection;",
+    "const parsed = parseInput() || defaultValue;",
+    "return readValue() || emptyValue;",
+    "const multiline = readValue()\n  || multilineFallback;",
+    "configure(readValue() || null);",
+    "configure(readValue() || configuredDefault);",
+    "value ??= declaredDefault;",
+    "value ||= declaredDefault;",
+  ].join("\n"));
+  assert.deepEqual(listed.map(({ line, pattern, reason }) => ({ line, pattern, reason })), [
+    { line: 1, pattern: "nullish default", reason: "default: the public layout contract starts at 120 points." },
+    { line: 2, pattern: "or default", reason: null },
+    { line: 3, pattern: "or default", reason: null },
+    { line: 4, pattern: "or default", reason: null },
+    { line: 5, pattern: "or default", reason: null },
+    { line: 7, pattern: "or default", reason: null },
+    { line: 8, pattern: "or default", reason: null },
+    { line: 9, pattern: "or default", reason: null },
+    { line: 10, pattern: "nullish assignment", reason: null },
+    { line: 11, pattern: "or assignment", reason: null },
+  ]);
+  assert.deepEqual(findFallbacks(["packages/a/a.js"], () => [
+    "const width = card.width ?? 120; // default: the public layout contract starts at 120 points.",
+    "const callback = readCallback() || fallbackCallback;",
+    "selected = readSelected() || defaultSelection;",
+    "const parsed = parseInput() || defaultValue;",
+    "return readValue() || emptyValue;",
+    "const multiline = readValue()\n  || multilineFallback;",
+    "configure(readValue() || null);",
+    "configure(readValue() || configuredDefault);",
+    "value ??= declaredDefault;",
+    "value ||= declaredDefault;",
+  ].join("\n")).map(({ line }) => line), [2, 3, 4, 5, 7, 8, 9, 10, 11]);
+});
+
+test("ordinary boolean OR conditions are not value fallbacks", () => {
+  assert.deepEqual(scan({
+    "packages/a/a.js": [
+      "if (width < minimum || width > maximum) reject();",
+      "const isAhead = side === 'left' || side === 'top';",
+      "const aside = (id) => isPlace(id) || isRailId(id);",
+      "return !!card && (!!fillOf(id) || soleSlots(card) !== null);",
+      "const callback = readCallback() || fallbackCallback;",
+      "button.textContent = entry.title || entry.url;",
+    ].join("\n"),
+  }).map(({ line, pattern }) => `${line} ${pattern}`), ["5 or default", "6 or default"]);
+});
+
 test("a short or missing reason does not accept a default", () => {
   const found = scan({ "packages/a/a.js": "// 기본값: 그냥\nconst x = y ?? 0;\n// 다른 설명\nconst z = y ?? 1;\n" });
   assert.deepEqual(found.map((item) => item.line), [2, 4]);
@@ -64,4 +116,15 @@ test("tests, tools, vendored code, and generated output are not product code", (
 test("the repository states a reason for every default and discarded error in product code", () => {
   const output = spawnSync(process.execPath, [join(ROOT, "scripts/check-fallbacks.mjs")], { encoding: "utf8" });
   assert.equal(output.status, 0, output.stderr);
+});
+
+test("the command lists repository candidates with locations and contract reasons", () => {
+  const output = spawnSync(process.execPath, [join(ROOT, "scripts/check-fallbacks.mjs"), "--list"], { encoding: "utf8" });
+  assert.equal(output.status, 0, output.stderr);
+  assert.match(output.stdout, /plugins\/browser\/ui\/browser\.js:\d+: or default \[reason=기본값:/);
+  assert.match(output.stdout, /Fallback checks passed: \d+ occurrences listed; \d+ have a stated contract reason\./);
+
+  const invalid = spawnSync(process.execPath, [join(ROOT, "scripts/check-fallbacks.mjs"), "--unknown"], { encoding: "utf8" });
+  assert.equal(invalid.status, 2);
+  assert.match(invalid.stderr, /usage: node scripts\/check-fallbacks\.mjs \[--list\]/);
 });

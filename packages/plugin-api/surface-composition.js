@@ -205,6 +205,7 @@ export async function createSurfaceCompositionController(
   };
 
   let cleanupPromise = null;
+  // 기본값: 반복 호출은 동일한 정리 작업을 기다려야 한다.
   const detachAll = () => cleanupPromise ??= (async () => {
     active = false;
     observer?.disconnect();
