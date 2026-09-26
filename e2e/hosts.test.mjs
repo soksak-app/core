@@ -39,6 +39,14 @@ const SIZE = { width: 1000, height: 620 };
 const settledX = (lines) => (transcript(lines).get("syncSurfaces") ?? [])
   .filter((call) => /"settled":true/.test(call.request)).map((call) => JSON.parse(call.request).surfaces[0]?.x);
 
+/** Every visible settled surface frame in the last layout request. */
+const settledFrames = (lines) => {
+  const call = [...(transcript(lines).get("syncSurfaces") ?? [])].reverse()
+    .find((entry) => /"settled":true/.test(entry.request));
+  return call && JSON.parse(call.request).surfaces.filter((surface) => surface.visible)
+    .map(({ x, y, w, h }) => ({ x, y, width: w, height: h }));
+};
+
 /** 페이지가 확정된 배치를 표시했다는 줄. */
 const settled = (lines) => lines.some((line) => /^host presentSurfaces .*"settled":true.* ->/.test(line));
 
@@ -87,17 +95,20 @@ test("both hosts answer the same page the same way", async (t) => {
     // 끌기의 확정 배치는 설정 모달을 열기 전에 기록을 멈춰 얻는다. 모달은 창 전체의 오버레이로 다음 배치를
     // 바꾸며, 그 배치가 기록에 들어오는 시점은 호스트마다 다르다.
     const start = (await s.get("host.window")).surfaces.find((item) => item.frame.width > 0)?.frame.x;
+    const expectedFrames = states[name].fresh.window.surfaces.filter((item) => item.visible).map((item) => item.frame);
     const dragLog = await s.transcript();
     results[name] = await drag(t, s, PLAN);
     // 끌기 도중 멈춘 순간에도 확정 배치가 생긴다. 끌기는 제자리로 돌아오므로, 마지막 확정 배치가 끌기 전
     // 배치와 같아질 때까지 기다린다.
     try {
       await dragLog.until((lines) => {
-        const xs = settledX(lines);
+        const actualFrames = settledFrames(lines);
         const lastSync = lines.findLastIndex((line) => /^host syncSurfaces .*"settled":true/.test(line));
         const lastPresent = lines.findLastIndex((line) => /^host presentSurfaces .*"settled":true.* ->/.test(line));
-        return xs.length > 0 && xs.at(-1) === start && lastPresent > lastSync;
-      }, "the drag did not end with a settled commit at its start position");
+        return actualFrames?.length === expectedFrames.length && actualFrames.every((frame, index) =>
+          ["x", "y", "width", "height"].every((key) => Math.abs(frame[key] - expectedFrames[index][key]) < 0.5)) &&
+          lastPresent > lastSync;
+      }, "the drag did not end with a settled commit at its starting surface frames");
     } catch (error) {
       const now = await s.get("host.window");
       const grid = await s.get("core.grid");
@@ -124,11 +135,15 @@ test("both hosts answer the same page the same way", async (t) => {
   assert.ok(restedTauri, `the Tauri host recorded no settled commit:\n${dragged.tauriv2.join("\n")}`);
   // 실패하면 호스트마다 확정된 배치의 첫 표면 x 순서와 끌기 결과의 경계를 적는다.
   const boundary = (result) => result.boundary && [result.boundary[0], result.boundary.at(-1)];
+  const dragState = Object.fromEntries(Object.entries(results).map(([name, result]) => [name, {
+    from: result.from, steps: result.steps, took: result.took, asked: result.asked,
+    late: result.late, deepest: result.deepest, boundary: boundary(result),
+  }]));
   const stateReport = `window, document, and layout settings by host: ${JSON.stringify(states)}`;
   assert.equal(restedTauri.request, restedWails.request, "the two hosts give the page a different plane to lay out " +
     `after the drag:\nWails ${restedWails.request}\nTauri ${restedTauri.request}\n` +
     `settled first-surface x: Wails ${JSON.stringify(settledX(dragged.wailsv3))}, Tauri ${JSON.stringify(settledX(dragged.tauriv2))}; ` +
-    `drag boundary first and last: Wails ${JSON.stringify(boundary(results.wailsv3))}, Tauri ${JSON.stringify(boundary(results.tauriv2))}; ` +
+    `drag measurements: ${JSON.stringify(dragState)}; ` +
     stateReport);
   assert.equal(restedTauri.answer, restedWails.answer,
     `the two hosts place the same surfaces differently; ${stateReport}`);

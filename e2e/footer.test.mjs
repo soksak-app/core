@@ -21,11 +21,12 @@ for (const app of Object.values(APPS)) {
     let offset = null;
     files.forEach((path, index) => {
       const frame = readFrame(path);
-      const scale = frame.width / initial.content.width;
+      const scale = frame.contentScale * frame.scale;
+      const contentBottom = Math.round(frame.content.height * scale);
       // 셸 표면은 카드 색이므로 표면의 아래 끝은 표면이 그리는 입력 구분선으로 찾는다. 구분선은 표면 아래 끝에서
       // 입력 줄 높이만큼 위에 있고, 그 높이는 선언된 자리에서 잰다.
       const x = Math.round(marks.cx * scale);
-      const line = shellLine(frame, { cx: x, top: Math.round(marks.top * scale) + 1, bottom: frame.height });
+      const line = shellLine(frame, { cx: x, top: Math.round(marks.top * scale) + 1, bottom: contentBottom });
       if (!line) return;
       offset ??= Math.round(marks.bottom * scale) - line.y;
       const bottom = line.y + offset - 1;
@@ -37,7 +38,8 @@ for (const app of Object.values(APPS)) {
       }
     });
     assert.ok(measured > files.length * .9, `only ${measured}/${files.length} footer positions measured`);
-    assert.ok(high - low > 100, `the recorded surface moved only ${high - low}pt`);
+    assert.ok(high - low > 100, `the recorded surface moved only ${high - low}pt; ` +
+      `divider ${JSON.stringify(run.boundary)}, shell marks ${JSON.stringify(marks)}, recording ${run.frameDir}`);
     assert.ok(worst.brightness <= 80,
       `footer brightness ${worst.brightness} exceeds the dark border in frame ${worst.frame} of ${files.length}`);
   });
