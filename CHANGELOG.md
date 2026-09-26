@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G4.2-1: derive executable language coverage from tracked workspace files and make `make parity-check` reject missing or extra adapter languages. Add a shell adapter and module-local tests of the actual build-environment CLI; JS/TS 16, Rust 2, Go 15, Objective-C 5, and shell 2 tests pass. Record test ownership and mechanical language coverage in both agent guidance files and the verification specification.
+
 - G1.3-9: teach the canonical checklist checker to accept `[!]` only when each language records a nonempty cause and retry condition. Tracked tests cover valid, missing, and empty fields; all checklist tests and `make docs-check` pass.
 
 - V5-98: consume AppKit's `noop:` text command in the native terminal input view without committing pending composition or sending a sidecar command. Other unsupported selectors still return an explicit error. The native regression and full native test suites pass; documentation, boundary, and exposure checks pass.

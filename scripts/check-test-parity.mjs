@@ -52,8 +52,8 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
     "scripts/check-terminal-protocol-inventory.mjs",
     "scripts/sidecar-packages.mjs",
   ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs"], { sharedTests: true }),
-  lane("build environment audit", "shell", ["scripts/check-build-environment.sh"], ["scripts/test/soksak-scripts.test.mjs"], {
-    testLanguage: "js-ts", sharedTests: true,
+  lane("build environment audit", "shell", ["scripts/check-build-environment.sh"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-build-environment.sh"], {
+    testLanguage: "js-ts", testExtensions: new Set([".mjs", ".sh"]), sharedTests: true,
   }),
   lane("break and mutation inventory", "js-ts", [
     "packages/soksak/scripts/check-breaks.mjs",
@@ -1659,6 +1659,23 @@ export function discoverInventory(files) {
   return { implementations, tests, manifests, generated };
 }
 
+const nonExecutableLanguages = new Set(["native-interface", "declaration", "document", "stylesheet"]);
+
+export function auditExecutableLanguageCoverage(files, adapterLanguages) {
+  const implemented = new Set(discoverInventory(files).implementations
+    .map(({ language }) => language)
+    .filter((language) => !nonExecutableLanguages.has(language)));
+  const covered = new Set(adapterLanguages);
+  const errors = [];
+  for (const language of [...implemented].sort()) {
+    if (!covered.has(language)) errors.push(`executable implementation language ${language} has no language adapter test case`);
+  }
+  for (const language of [...covered].sort()) {
+    if (!implemented.has(language)) errors.push(`language adapter declares ${language} but no executable implementation uses it`);
+  }
+  return errors;
+}
+
 function repositoryFiles() {
   return execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
     cwd: ROOT,
@@ -1900,6 +1917,14 @@ export { MATRIX, repositoryFiles };
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   const { errors, warnings, uncoveredImplementations, uncoveredTests, featureErrors, featureLinks, trackCount, implementationCount, testCount } = auditInventory(repositoryFiles());
+  const adapterManifestFile = `${ROOT}scripts/language-test-cases.json`;
+  try {
+    const adapterManifest = JSON.parse(readFileSync(adapterManifestFile, "utf8"));
+    if (!Array.isArray(adapterManifest.cases)) errors.push(`${adapterManifestFile}: cases must be an array`);
+    else errors.push(...auditExecutableLanguageCoverage(repositoryFiles(), adapterManifest.cases.map(({ language }) => language)));
+  } catch (error) {
+    errors.push(`${adapterManifestFile}: cannot read language adapter cases: ${error.message}`);
+  }
   errors.push(...auditCompletedFeatureLinks(featureLinks));
   errors.push(...auditRecordedInventoryCounts({ trackCount, implementationCount, testCount }));
   errors.push(...auditHistoricalScopeWording());

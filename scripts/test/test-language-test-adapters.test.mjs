@@ -7,7 +7,7 @@ const command = (source) => ({ command: process.execPath, args: ['-e', source] }
 test('discovers all supported language cases with explicit default limits', () => {
   const cases = discoverLanguageCases({ cases: Object.entries(DEFAULT_TIMEOUT_MS).filter(([language]) => language !== 'application').map(([language]) => ({ id: language, language, ...command('process.exit(0)') })) });
   assert.deepEqual(cases.map(({ language, timeoutMs }) => [language, timeoutMs]), [
-    ['js-ts', 10_000], ['rust', 30_000], ['go', 30_000], ['objective-c', 30_000],
+    ['js-ts', 10_000], ['rust', 30_000], ['go', 30_000], ['objective-c', 30_000], ['shell', 30_000],
   ]);
 });
 
@@ -24,6 +24,12 @@ test('parses each language result and rejects zero, skipped, and crashed outcome
   assert.equal(parseLanguageResult('go', '{"Action":"pass","Test":"TestOne"}\n{"Action":"pass","Test":"TestTwo"}', '').tests, 2);
   assert.equal(parseLanguageResult('go', '{"Action":"skip","Package":"example/no-tests","Output":"[no test files]\\n"}', '').skipped, 1);
   assert.equal(parseLanguageResult('objective-c', 'PASS: first\nPASS: second', '').tests, 2);
+  assert.deepEqual(parseLanguageResult('shell', 'PASS: first\nFAIL: second\nSKIP: third\nCANCEL: fourth\nTODO: fifth', ''), {
+    tests: 2, failed: 1, skipped: 1, cancelled: 1, todo: 1,
+  });
+  assert.deepEqual(parseLanguageResult('shell', 'PASS: first\nFAIL:', ''), {
+    tests: 2, failed: 1, skipped: 0, cancelled: 0, todo: 0,
+  });
 
   const cases = discoverLanguageCases({ cases: [
     { id: 'pass', language: 'js-ts', ...command("console.log('ℹ tests 1\\nℹ pass 1\\nℹ fail 0\\nℹ skipped 0\\nℹ todo 0\\nℹ cancelled 0')") },

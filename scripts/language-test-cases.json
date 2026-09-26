@@ -44,6 +44,17 @@
       "testFiles": ["native/darwin/tests/appearance_test.m"],
       "dependencyFiles": ["native/darwin/Makefile"],
       "buildFlags": ["clang -fblocks -fmodules -mmacosx-version-min=14.4", "Cocoa WebKit"]
+    },
+    {
+      "id": "shell-build-environment",
+      "language": "shell",
+      "command": "sh",
+      "args": ["scripts/test/check-build-environment.sh"],
+      "expectedTests": 2,
+      "implementationFiles": ["scripts/check-build-environment.sh"],
+      "testFiles": ["scripts/test/check-build-environment.sh"],
+      "dependencyFiles": [".node-version", "package.json", "pnpm-lock.yaml"],
+      "buildFlags": ["sh scripts/test/check-build-environment.sh"]
     }
   ]
 }

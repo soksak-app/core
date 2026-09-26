@@ -8,6 +8,7 @@ export const DEFAULT_TIMEOUT_MS = Object.freeze({
   rust: 30_000,
   go: 30_000,
   'objective-c': 30_000,
+  shell: 30_000,
   application: 60_000,
 });
 
@@ -111,12 +112,29 @@ function parseObjectiveC(output) {
   return { tests: passed.length + failed.length, failed: failed.length, skipped: 0, cancelled: 0, todo: 0 };
 }
 
+function parseShell(output) {
+  const results = [];
+  for (const line of output.split('\n')) {
+    const marker = line.match(/^(PASS|FAIL|SKIP|CANCEL|TODO):/);
+    if (!marker) continue;
+    results.push(/^((PASS|FAIL|SKIP|CANCEL|TODO):)\s+\S.*$/.test(line) ? marker[1] : 'FAIL');
+  }
+  return {
+    tests: results.filter((result) => result === 'PASS' || result === 'FAIL').length,
+    failed: results.filter((result) => result === 'FAIL').length,
+    skipped: results.filter((result) => result === 'SKIP').length,
+    cancelled: results.filter((result) => result === 'CANCEL').length,
+    todo: results.filter((result) => result === 'TODO').length,
+  };
+}
+
 export function parseLanguageResult(language, stdout, stderr) {
   const output = `${stdout}\n${stderr}`;
   if (language === 'js-ts') return parseNode(output);
   if (language === 'rust') return parseRust(output);
   if (language === 'go') return parseGo(output);
   if (language === 'objective-c') return parseObjectiveC(output);
+  if (language === 'shell') return parseShell(output);
   throw invalid(`unsupported language: ${language}`);
 }
 

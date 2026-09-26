@@ -1,9 +1,19 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditNativeFailurePropagation, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
+import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditNativeFailurePropagation, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
+
+test("language coverage audit rejects missing and extra adapter languages", () => {
+  assert.deepEqual(auditExecutableLanguageCoverage(["src/app.rs", "scripts/check.sh"], ["rust"]), [
+    "executable implementation language shell has no language adapter test case",
+  ]);
+  assert.deepEqual(auditExecutableLanguageCoverage(["src/app.rs", "scripts/check.sh"], ["rust", "shell", "go"]), [
+    "language adapter declares go but no executable implementation uses it",
+  ]);
+  assert.deepEqual(auditExecutableLanguageCoverage(["src/app.rs", "scripts/check.sh", "docs/page.html", "ui/main.css"], ["rust", "shell"]), []);
+});
 
 for (const file of [
   "packages/host/wailsv3/src/platform/darwin/uncovered.m",
