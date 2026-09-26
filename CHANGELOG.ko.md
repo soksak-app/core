@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F8-6-2-1 진행: 추적 반복에서 직렬 표시 대기가 남아 있음을 측정했다(Wails 9/10의 34.1ms, 높은 부하 Tauri 1회차의 109.4ms). 34ms 기준은 유지하며 항목은 열어 둔다.
+
 - V5-87-2: 네이티브 겹침 활성화 근거에서 포인터 중복 전달을 고쳤고 `make -C native/darwin test-activation`이 통과한다.
 
 - V5-87-1: `terminal.notifications` 설정에 `tab`과 `system` 정책을 추가했다. Red는 시스템 배너를 요구하던 낡은 창 검사와 번들 밖 실행 파일의 탭 알림 계약 충돌이었다. Green은 터미널이 선택 정책을 `tab.notify`에 전달하고, `system`은 호스트의 성공 또는 네이티브 오류만 보고하며 탭 알림으로 fallback하지 않는다. 두 호스트의 설정 전환·탭 알림 창 검사와 실제 탭 클릭 검사가 통과했다. `make docs-check`, `pnpm test`, `make boundaries`, `make exposure-check`, `make e2e-check`가 통과했다.

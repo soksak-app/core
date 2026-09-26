@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F8-6-2-1 progress: tracked repeats measured the remaining serialized presentation wait (Wails 34.1 ms at run 9/10; Tauri 109.4 ms at run 1 under high load). The 34 ms criterion remains unchanged and open.
+
 - V5-87-2: correct native overlap activation evidence to avoid duplicate pointer delivery; `make -C native/darwin test-activation` passes.
 
 - V5-87-1: add `terminal.notifications` with `tab` and `system` policies. Red was the disagreement between the terminal contract and old system-banner checks for executables outside an application bundle. Green validates the setting and passes it to `tab.notify`; tab reports expose system notices only to the notification center without a tab fallback, and invalid policies remain explicit errors. Workbench and terminal unit tests pass; rebuilt Wails and Tauri setting-transition checks pass for system success or native error, tab-only grid notices, and real tab-notice clicks. `make docs-check`, `pnpm test`, `make boundaries`, `make exposure-check`, and `make e2e-check` pass.
