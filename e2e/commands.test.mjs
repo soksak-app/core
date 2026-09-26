@@ -187,6 +187,11 @@ for (const app of Object.values(APPS)) {
     const screen = (await s.get("host.screens")).find((item) => center.x >= item.x && center.x < item.x + item.width &&
       center.y >= item.y && center.y < item.y + item.height);
     assert.ok(screen, `the initial window center ${JSON.stringify(center)} is outside every screen`);
+    // `fresh` 는 Tauri 창을 시작 너비에서 오른쪽에 둔다. 폭을 키울 때 전체 검사가 화면 안에 남도록 왼쪽으로 옮긴다.
+    // 그렇지 않으면 넓은 표본의 단추 좌표가 화면 밖으로 나가 보이는 창의 동작을 측정하지 못한다.
+    await s.run("host.window.move", { x: screen.visible.x, y: screen.visible.y });
+    await s.until("host.window", (window) => window.frame.x === screen.visible.x && window.frame.y === screen.visible.y,
+      "the width sweep window did not move to the visible screen origin");
     const maxWidth = Math.floor(screen.visible.width - (initialWindow.frame.width - initialWindow.content.width));
     const minWidth = Math.ceil(maxWidth / 2);
     const widths = Array.from({ length: 17 }, (_, index) =>
@@ -233,6 +238,8 @@ for (const app of Object.values(APPS)) {
       for (const key of ["left", "right", "mode"]) await restoreSetting(key);
       await s.presented();
       const geometry = await s.get("host.window");
+      assert.ok(geometry.frame.x >= screen.visible.x && geometry.frame.x + geometry.frame.width <= screen.visible.x + screen.visible.width,
+        `the window frame is outside the visible screen at ${width}: ${JSON.stringify(geometry.frame)}, screen ${JSON.stringify(screen.visible)}`);
       const main = geometry.webviews.find((webview) => webview.main);
       assert.ok(main, `host.window did not report a main WebView at ${width}: ${JSON.stringify(geometry.webviews)}`);
       t.diagnostic(`measured chrome viewport ${JSON.stringify({ requested: width, content: resized.content.width,

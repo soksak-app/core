@@ -14,7 +14,7 @@
 
 - V5-96 진행: 비활성 창 native `capture_test`가 완전한 프레임 한 장을 기록하며 통과한다. 정적인 AppKit 창을 대상으로 하므로 보관된 Tauri 전체 검사 캡처 정지 타임아웃은 재현하지 않는다. 폐기 가능한 Tauri endpoint에서 추적 검사를 실행하기 전까지 타임아웃은 해결되지 않은 상태다.
 
-- F0.5.6-1: 호스트가 WebView를 직접 키우는 경우 macOS 창 합성 래퍼도 호스트에 맞춰 크기를 조정하게 했다. Tauri 구조의 Red 검사에서는 부모를 800pt에서 1200pt로 늘려도 래퍼가 800pt에 남고 x=1100 hit이 일반 `NSView`로 갔다. Green은 부모를 따라 크기를 늘려 메인 `WKWebView`가 hit을 받는다. 수정 전 재빌드 Tauri 폭 검사에서 1229pt부터 툴바 실패를 재현했고, 재빌드 Wails는 비활성 756–1512pt 검사에 통과했다. `make native-test`의 낡은 `target/debug` 경로를 선언된 VT 사이드카 산출물로 바로잡고 spawn 오류를 즉시 보고하게 했다. 수정 후 비활성 Tauri 런타임 검증은 진행 중이다.
+- F0.5.6-1: 호스트가 WebView를 직접 키우는 경우 macOS 창 합성 래퍼도 호스트에 맞춰 크기를 조정하게 했다. Tauri 구조의 Red 검사에서는 부모를 800pt에서 1200pt로 늘려도 래퍼가 800pt에 남고 x=1100 hit이 일반 `NSView`로 갔다. Green은 부모를 따라 크기를 늘려 메인 `WKWebView`가 hit을 받는다. 수정 전 재빌드 Tauri 폭 검사에서 1229pt부터 툴바 실패를 재현했다. 추적 너비 검사는 이제 모든 표본을 화면 안에 유지한다. 현재 재빌드 Tauri와 Wails는 756–1512pt의 18개 너비에서 다섯 네이티브 툴바 단추 모두 통과하고, 비활성·비키 상태를 유지한다. 최대 너비 녹화는 각각 20프레임/최대 간격 11.59ms, 24프레임/최대 간격 22.83ms다. `make native-test`의 낡은 `target/debug` 경로를 선언된 VT 사이드카 산출물로 바로잡고 spawn 오류를 즉시 보고하게 했다. `pnpm test`, `make boundaries`, `make exposure-check`, `make e2e-check`가 통과했다.
 
 - 체크리스트 항목 `G1.3-10` 폐기: 해당 항목은 프로젝트 작업이 아니라 AGENTS 업무 절차를 기록했다.
 
