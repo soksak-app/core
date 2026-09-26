@@ -17,7 +17,7 @@ const EXCLUDED = /(^|\/)(test|tests|testing|bench|vendor|dist|build|scripts|fron
 const PATTERNS = {
   js: [
     ["nullish default", /\?\?(?!=)/],
-    ["or default", /\|\|\s*(["'`]|-?\d|\[\]|\{\}|null\b|false\b|true\b|undefined\b)/],
+    ["or default", /(?:\|\|\s*(?:["'`]|-?\d|\[\]|\{\}|null\b|false\b|true\b|undefined\b)|\b(?:const|let|var)\s+\w+\s*=\s*[\w$.]+\s*\|\|\s*[\w$.]+)/],
     ["optional call", /\?\.\(/],
     ["empty catch", /catch\s*(\([^)]*\))?\s*\{\s*\}/],
     ["swallowing catch", /\.catch\(\s*\(\)\s*=>\s*(\{\s*\}|null|undefined|false|\[\])\s*\)/],
@@ -62,13 +62,21 @@ export function findFallbacks(files, read) {
   for (const file of files) {
     const kind = language(file);
     if (!kind || !PRODUCT.test(file) || EXCLUDED.test(file)) continue;
-    const lines = read(file).split("\n");
+    const source = read(file);
+    const lines = source.split("\n");
     lines.forEach((line, index) => {
       if (COMMENT.test(line)) return;
       for (const [pattern, regex] of PATTERNS[kind]) {
         if (regex.test(line) && !reasoned(lines, index)) found.push({ file, line: index + 1, pattern, code: line.trim() });
       }
     });
+    if (kind === "js") {
+      for (const match of source.matchAll(/catch\s*(?:\([^)]*\))?\s*\{\s*\}/g)) {
+        const index = source.slice(0, match.index).split("\n").length - 1;
+        if (found.some((item) => item.file === file && item.line === index + 1 && item.pattern === "empty catch") || reasoned(lines, index)) continue;
+        found.push({ file, line: index + 1, pattern: "empty catch", code: lines[index].trim() });
+      }
+    }
   }
   return found;
 }

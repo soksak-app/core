@@ -43,6 +43,13 @@ test("a short or missing reason does not accept a default", () => {
   assert.deepEqual(found.map((item) => item.line), [2, 4]);
 });
 
+test("variable defaults and multiline empty catches are audited", () => {
+  const found = scan({
+    "packages/a/a.js": "const x = value || fallback;\ntry { run(); } catch (error) {\n  \n}\n",
+  });
+  assert.deepEqual(found.map((item) => `${item.line} ${item.pattern}`), ["1 or default", "2 empty catch"]);
+});
+
 test("tests, tools, vendored code, and generated output are not product code", () => {
   assert.deepEqual(scan({
     "packages/a/test/a.test.mjs": "const x = y ?? 0;",
