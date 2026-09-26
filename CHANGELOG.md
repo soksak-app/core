@@ -5,6 +5,7 @@
 ## Unreleased
 
 - V5-96-8 progress: a rebuilt inactive-host repeat recorded one Wails three-terminal frame with 2/3 visible terminals at frame 82 while Tauri completed its three sets. The cause remains open; no pixel or frame criterion was relaxed.
+- V5-96-7: completed stale exposure-reply reporting and handled presentation-settling failures; Wails/Tauri relay contracts, plugin API rejection, and rebuilt service-stop recovery checks pass without an unhandled exposure runtime error.
 
 - V5-96-7: surface exposure replies now report a host rejection when the request was already abandoned, preventing an unhandled `RuntimeError` while preserving the explicit stale-reply error. Handled settling failures let state-changing commands continue, and string presentation errors retain their measured reason.
 
