@@ -11,16 +11,26 @@ const scan = (files) => findFallbacks(Object.keys(files), (file) => files[file])
 
 test("defaults and discarded errors without a stated reason are found in product code", () => {
   const found = scan({
-    "packages/a/a.js": "const x = y ?? 0;\nconst z = w || \"\";\nf?.();\ntry { g(); } catch {}\np.catch(() => {});\n",
+    "packages/a/a.js": "const x = y ?? 0;\nconst z = w || \"\";\nf?.();\ntry { g(); } catch {}\np.catch(() => {});\np.catch((error) => {});\np.catch((error) => undefined);\np.catch(\n  (error) => {\n  },\n);\n",
+    "packages/a/component.tsx": "const props = input ?? {};",
+    "packages/a/component.jsx": "const props = input ?? {};",
+    "packages/a/module.cjs": "callback?.();",
+    "packages/a/module.mjs": "callback?.();",
+    "packages/a/module.mts": "const value = input ?? 0;",
+    "packages/a/module.cts": "const value = input ?? 0;",
     "sidecars/b/src/b.rs": "let _ = send();\nlet v = x.unwrap_or(0);\nx.ok();\n",
-    "sidecars/c/src/c.go": "_ = file.Close()\nv, _ := strconv.Atoi(s)\n",
+    "sidecars/c/src/c.go": "_ = file.Close()\nv, _ := strconv.Atoi(s)\nfunc closeIt() { _ = err }\n",
     "native/darwin/src/d.m": "@try { f(); } @catch (NSException *e) {}\n",
   });
   assert.deepEqual(found.map((item) => `${item.file}:${item.line} ${item.pattern}`), [
     "packages/a/a.js:1 nullish default", "packages/a/a.js:2 or default", "packages/a/a.js:3 optional call",
-    "packages/a/a.js:4 empty catch", "packages/a/a.js:5 swallowing catch",
+    "packages/a/a.js:4 empty catch", "packages/a/a.js:5 swallowing catch", "packages/a/a.js:6 swallowing catch",
+    "packages/a/a.js:7 swallowing catch", "packages/a/a.js:8 swallowing catch",
+    "packages/a/component.tsx:1 nullish default", "packages/a/component.jsx:1 nullish default",
+    "packages/a/module.cjs:1 optional call", "packages/a/module.mjs:1 optional call",
+    "packages/a/module.mts:1 nullish default", "packages/a/module.cts:1 nullish default",
     "sidecars/b/src/b.rs:1 discarded result", "sidecars/b/src/b.rs:2 defaulting unwrap", "sidecars/b/src/b.rs:3 discarded error",
-    "sidecars/c/src/c.go:1 discarded error", "sidecars/c/src/c.go:2 ignored second result",
+    "sidecars/c/src/c.go:1 discarded error", "sidecars/c/src/c.go:2 ignored second result", "sidecars/c/src/c.go:3 discarded error",
     "native/darwin/src/d.m:1 caught exception",
   ]);
 });
@@ -102,15 +112,17 @@ test("variable defaults and multiline empty catches are audited", () => {
   assert.deepEqual(found.map((item) => `${item.line} ${item.pattern}`), ["1 or default", "2 empty catch"]);
 });
 
-test("tests, tools, vendored code, and generated output are not product code", () => {
+test("tests, tools, vendored code, and generated output are excluded while product frontend is scanned", () => {
   assert.deepEqual(scan({
     "packages/a/test/a.test.mjs": "const x = y ?? 0;",
     "plugins/files/ui/vendor/trees.js": "const x = y ?? 0;",
     "packages/soksak/dist/index.js": "const x = y ?? 0;",
     "scripts/check.mjs": "const x = y ?? 0;",
+    "packages/a/frontend/module.ts": "const x = y ?? 0;",
+    "packages/a/types.d.mts": "const x = y ?? 0;",
     "e2e/app.mjs": "const x = y ?? 0;",
     "sidecars/b/tests/b_test.rs": "let _ = f();",
-  }), []);
+  }).map(({ file, line, pattern }) => `${file}:${line} ${pattern}`), ["packages/a/frontend/module.ts:1 nullish default"]);
 });
 
 test("the repository states a reason for every default and discarded error in product code", () => {

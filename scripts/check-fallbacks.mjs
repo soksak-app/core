@@ -11,7 +11,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** 제품 코드. 테스트, 검사 도구, 벤치, 벤더, 생성물은 뺀다. */
 const PRODUCT = /^(packages|plugins|sidecars|native|apps)\//;
-const EXCLUDED = /(^|\/)(test|tests|testing|bench|vendor|dist|build|scripts|frontend|node_modules)\/|\.test\.|_test\.(go|rs|m)$|\.d\.ts$/;
+const EXCLUDED = /(^|\/)(test|tests|testing|bench|vendor|dist|build|scripts|node_modules)\/|\.test\.|_test\.(go|rs|m)$|\.d\.(ts|mts|cts)$/;
 
 /** 언어별 형태. 한 줄에서 찾는다. */
 const PATTERNS = {
@@ -22,7 +22,7 @@ const PATTERNS = {
     ["or assignment", /\|\|=/],
     ["optional call", /\?\.\(/],
     ["empty catch", /catch\s*(\([^)]*\))?\s*\{\s*\}/],
-    ["swallowing catch", /\.catch\(\s*\(\)\s*=>\s*(\{\s*\}|null|undefined|false|\[\])\s*\)/],
+    ["swallowing catch", /\.catch\(\s*(?:\(\s*[^)]*\s*\)|[\w$]+)\s*=>\s*(?:\{\s*\}|null\b|undefined\b|false\b|\[\]|\{\s*return\s+(?:null|undefined|false|\[\])\s*;?\s*\})\s*,?\s*\)/],
   ],
   rs: [
     ["discarded result", /\blet _ =/],
@@ -30,7 +30,7 @@ const PATTERNS = {
     ["discarded error", /\.ok\(\)\s*;/],
   ],
   go: [
-    ["discarded error", /^\s*_\s*=\s*/],
+    ["discarded error", /\b_\s*=\s*[^\n;]+/],
     ["ignored second result", /,\s*_\s*:?=/],
   ],
   m: [
@@ -39,7 +39,7 @@ const PATTERNS = {
 };
 
 const language = (file) => {
-  if (/\.(m?js|ts)$/.test(file)) return "js";
+  if (/\.(?:mjs|cjs|js|mts|cts|jsx|tsx|ts)$/.test(file)) return "js";
   if (file.endsWith(".rs")) return "rs";
   if (file.endsWith(".go")) return "go";
   if (/\.(m|mm)$/.test(file)) return "m";
@@ -112,6 +112,12 @@ export function listFallbacks(files, read) {
         const index = source.slice(0, match.index).split("\n").length - 1;
         if (found.some((item) => item.file === file && item.line === index + 1 && item.pattern === "empty catch")) continue;
         found.push({ file, line: index + 1, pattern: "empty catch", code: lines[index].trim(), reason: reasonFor(lines, index) });
+      }
+      for (const match of source.matchAll(/\.catch\(\s*(?:\(\s*[^)]*\s*\)|[\w$]+)\s*=>\s*\{\s*\}\s*,?\s*\)/gs)) {
+        const index = source.slice(0, match.index).split("\n").length - 1;
+        if (COMMENT.test(lines[index])) continue;
+        if (found.some((item) => item.file === file && item.line === index + 1 && item.pattern === "swallowing catch")) continue;
+        found.push({ file, line: index + 1, pattern: "swallowing catch", code: lines[index].trim(), reason: reasonFor(lines, index) });
       }
     }
   }
