@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-25-2: correct historical claims that AppKit button masks or HID-system modifier flags proved a person supplied input. Preserve the observed values and state explicitly that their source was not identified. Rename the real-input check to describe the posted HID state. Repository checks pass; approval-gated real-input checks were not run.
+
 - F13-5-3: classify the completed F13 parent as an aggregate in the feature-evidence audit. The tracked regression proves that F13 is exempt and another completed top-level capability without a feature link still fails. Red reproduced the false error after F13 became `[o]`; the focused check and full `pnpm test` pass after the correction.
 
 - V5-96-1: record each host's window frame and content size, scale, surface frames, document size, and layout-related effective settings when the cross-host settled layout comparison fails. The diagnostic makes unequal initial conditions observable without changing the assertion or its limit. `pnpm test`, `make boundaries`, `make exposure-check`, and `make docs-check` pass; the window check awaits disposable endpoints.
@@ -102,7 +104,7 @@
 - V5-51-6-1: every terminal raster carries the screen event it draws, so a focus change updates the page's cursor state at once, and `terminal.cursor` reports the drawn cursor shape and blink request in `drawn`.
 - V5-63: real-input checks make the previously active application active again when they end, and a synthetic drag check fails with an explicit error when the application is active.
 - V5-49: every window check saves and restores all general-pasteboard item types through the harness and fails when the pasteboard differs afterwards.
-- V5-37: injected wheel events carry no modifier flags instead of the physical modifier state, and `core.surface.input` records the modifier keys of each event.
+- V5-37: injected wheel events carry no modifier flags instead of inherited HID-system modifier flags, and `core.surface.input` records the modifier keys of each event.
 - V5-61: `clear` leaves no history and no scrollbar, because the terminal engine erases the screen for `ESC[2J` without moving it into the history; `ESC[1J` also erases the first line when the cursor is on the second line.
 - V5-54: a terminal page that places its image region before its new surface has a native frame no longer fails with `image "view" has no raster geometry` and no longer breaks later layouts and fixtures; the region is configured when the surface is placed, and `core.surfaces` reports each surface page's status.
 - V5-52: dividers and card icons keep their resize and pointing-hand cursors after a layout change or a terminal presentation, because the window composition answers AppKit's cursor update with the page cursor at the pointer.
@@ -127,8 +129,8 @@
 - V5-46: a click on another card records the surface to focus before the card focus renders, so the clicked terminal receives native focus.
 - V5-40: a click without movement clears the terminal selection by ending an empty selection at the pressed cell.
 - V5-38: a real-input window check tier posts HID events through the window server with `CGEventPost` and restores every pasteboard item type.
-- V5-25-1: the webview geometry scroll failure was traced to a held Shift key that a source-less wheel event inherited; the check sets the event flags explicitly and reports the dequeued events.
-- V5-25: the intermittent `webview_geometry_test` press failure was traced to a physical mouse button held during the check, which the press step now reports with its result code.
+- V5-25-1: the webview geometry scroll failure was traced to a Shift flag in the HID-system modifier state inherited by a source-less wheel event; the check sets the event flags explicitly and reports the dequeued events.
+- V5-25: the intermittent `webview_geometry_test` press failure was traced to `NSEvent.pressedMouseButtons` reporting mask 1 during the check; the report did not identify its source, which the press step now reports with its result code.
 - V5-19: the recovery check waits for the service's ready line, as the host does, instead of polling `endpoint.json` for 5 s.
 - V5-34: the application ends its terminal sessions that no layout holds when it starts, when a project is removed, and when a space is closed, through a `retain` request to each persistent service.
 - V5-36: the Tauri release executable is stripped (14.8 MB to 10.3 MB, smaller than the 12.8 MB Wails executable), and the release check finds capture code by its class name.
@@ -166,7 +168,7 @@
 - V5-20: The Tauri `host.window` reader releases the modal webview mutex before it waits for the main thread, which removes a deadlock with modal placement.
 - V5-17: A surface hidden during a placement returns the keyboard focus to its owner when it is shown again, so one click focuses a browser document. `host.window` reports the first responder. Registered V5-17-1.
 - F8-22: The terminal module accepts the sidecar acknowledgements of `selection.start`, `selection.update`, and `paste` instead of recording them as unsupported events.
-- F8-21-1: A synthetic pointer press or release while a physical mouse button is pressed returns 1007 instead of reaching the document as a move, and a release completes after the document receives `pointerup`. Registered V5-19.
+- F8-21-1: A synthetic pointer press or release while `NSEvent.pressedMouseButtons` is nonzero returns 1007 instead of reaching the document as a move, and a release completes after the document receives `pointerup`. Registered V5-19.
 - F8-21: A terminal drag over blank cells no longer reports `invalidParams: selection is empty`. The sidecar clears a selection without text and answers `selection.end` with `copied: false`; `terminal.session` reports `selecting` and `selectionReleases`.
 - V5-12: `native content, cards, and the sidebar rail stay aligned` passes on both hosts after the F8-6 corrections.
 - F8-6: Divider drags follow the pointer. The layout queue keeps only the newest waiting layout and reports replaced layouts in the application log; the rail outline follows the painted cards through `SoksakView.painted`; the app DOM webview renders at the display rate. The alignment check measures the drag delay, limited to 50ms.

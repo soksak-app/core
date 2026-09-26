@@ -30,7 +30,7 @@ for (const app of Object.values(APPS)) {
       "a posted click did not give the terminal region native focus");
   });
 
-  test(`${app.name}: an injected wheel keeps its own modifier flags while a physical Shift is held`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: an injected wheel keeps its own modifier flags while HID system reports Shift`, { timeout: 60000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
@@ -41,7 +41,7 @@ for (const app of Object.values(APPS)) {
     await s.until("terminal.session", (session) => session.scrollback?.history > 20, "the rows did not exceed the screen", { surface });
     const view = await s.rect("terminal.view", undefined, surface);
     await bringFront(s, app, view);
-    // 실제 Shift 를 누른 상태를 만든다. 원본 없는 이벤트는 이 상태를 물려받는다.
+    // HID 시스템에 Shift 키 상태를 게시한다. 원본 없는 이벤트는 이 플래그를 물려받는다.
     post([{ type: "key", code: 56, down: true, modifiers: ["shift"] }]);
     t.after(() => post([{ type: "key", code: 56, down: false }]));
     const seen = (await s.get("core.surface.input", surface)).at(-1)?.sequence ?? 0;
@@ -49,7 +49,7 @@ for (const app of Object.values(APPS)) {
     const events = await s.until("core.surface.input", (list) => list.some((event) => event.sequence > seen && event.type === "wheel"),
       "the injected wheel did not reach the terminal page", { surface });
     const wheel = events.find((event) => event.sequence > seen && event.type === "wheel");
-    assert.deepEqual(wheel.modifiers, [], "the injected wheel carried the physical modifier state");
+    assert.deepEqual(wheel.modifiers, [], "the injected wheel carried inherited HID-system modifier flags");
     await s.until("terminal.session", (value) => value.scrollback.offset > 0,
       "the injected vertical wheel did not scroll the history while Shift was held", { surface });
   });

@@ -61,7 +61,7 @@ for (const step of input.steps) {
     // 창 서버는 게시된 이벤트의 누름 횟수를 세지 않는다. 두 번 누름은 kCGMouseEventClickState(1)에 2 를 싣는다.
     if (step.clicks) $.CGEventSetIntegerValueField(event, 1, step.clicks);
   }
-  // 원본이 없는 이벤트는 실제 수정키 상태를 물려받으므로 플래그를 명시한다.
+  // 원본이 없는 이벤트는 HID 시스템 수정키 플래그를 물려받으므로 플래그를 명시한다.
   $.CGEventSetFlags(event, flags);
   $.CGEventPost(0, event);
   // 녹화 프레임의 표시 시각과 같은 시계(mach 시각, 잠자기 제외)로 보낸 시각을 기록한다.
