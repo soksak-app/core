@@ -10,8 +10,9 @@ import { readScreenUntil } from "./terminal-screen.mjs";
 async function addTab(s, plugin) {
   const { tab } = await s.run("core.card.add-tab", { card: "browser", plugin });
   s.cleanup(() => s.run("core.tab.close", { tab }));
-  await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === tab && item.visible),
-    `the new ${plugin} tab did not show`);
+  await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
+    item.surface === tab && item.visible && item.status.phase === "ready"),
+  `the new ${plugin} tab did not become ready`);
   return tab;
 }
 

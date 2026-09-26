@@ -231,6 +231,44 @@ fn preedit_uses_json_location_length_and_document_replacement_range() {
 }
 
 #[test]
+fn preedit_cursor_follows_selected_utf16_location() {
+    let metrics = metrics(13.0, 1.0);
+    let cell = metrics.cell_width as u32;
+    let height = metrics.cell_height as u32;
+    let mut state = screen(8, 1);
+    state.cursor.focused = true;
+    state.cursor.preedit = Some(Preedit {
+        text: "글은".to_string(),
+        selected_range: Some(JsonRange {
+            location: 2,
+            length: 0,
+        }),
+        replacement_range: None,
+        attributed: false,
+    });
+    let frame = Frame::new(cell * 8, height).expect("frame");
+    frame.draw(&state, &metrics).expect("preedit at end");
+    assert!(bright_in_cell(&frame, cell, height, 4) > 0.5);
+    assert!(bright_in_cell(&frame, cell, height, 0) < 0.5);
+
+    state.cursor.preedit.as_mut().unwrap().selected_range = Some(JsonRange {
+        location: 1,
+        length: 0,
+    });
+    frame
+        .draw(&state, &metrics)
+        .expect("preedit between syllables");
+    assert!(bright_in_cell(&frame, cell, height, 2) > 0.5);
+
+    state.cursor.preedit.as_mut().unwrap().text = "😀글".to_string();
+    state.cursor.preedit.as_mut().unwrap().selected_range = Some(JsonRange {
+        location: 1,
+        length: 0,
+    });
+    assert!(frame.draw(&state, &metrics).is_err());
+}
+
+#[test]
 fn cursor_metrics_are_stable_across_style_changes() {
     let before = metrics(13.0, 1.0);
     let frame = Frame::new(before.cell_width as u32, before.cell_height as u32).expect("frame");

@@ -1563,15 +1563,15 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(await s.run("terminal.ime.trace", { action: "start" }, surface),
       { enabled: true, overflow: false, entries: [] });
     s.cleanup(() => s.run("terminal.ime.trace", { action: "stop" }, surface));
-    await s.run("terminal.compose.update", { text: "한", selectedRange: { location: 1, length: 0 } }, surface);
-    await s.until("terminal.compose", (compose) => compose.text === "한",
+    await s.run("terminal.compose.update", { text: "글은", selectedRange: { location: 2, length: 0 } }, surface);
+    await s.until("terminal.compose", (compose) => compose.text === "글은" && compose.selectedRange?.location === 2,
       "the injected preedit did not reach terminal.compose", { surface });
     await s.run("terminal.compose.update", { text: "" }, surface);
     await s.until("terminal.compose", (compose) => compose.text === "",
       "the empty preedit did not clear terminal.compose", { surface });
     const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
     assert.deepEqual(trace.entries.map((entry) => [entry.kind, entry.input?.type, entry.input?.text]),
-      [["terminal-input", "compose", "한"], ["terminal-input", "compose", ""]]);
+      [["terminal-input", "compose", "글은"], ["terminal-input", "compose", ""]]);
   });
 
   // 세션 오류는 관련 없는 이벤트(테마 확인)가 지우지 않고, 그 오류를 해소하는 이벤트(새 trace)만 지운다.

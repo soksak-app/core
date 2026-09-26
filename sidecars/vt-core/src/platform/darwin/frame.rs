@@ -432,11 +432,24 @@ fn apply_preedit(
     let line = &mut screen.lines[row];
     let mut marked = Vec::new();
     let mut utf16_col = 0;
+    let mut selected_col = None;
     for grapheme in preedit.text.graphemes(true) {
         if grapheme.contains('\n') || grapheme.contains('\r') {
             return Err("preedit must be a single-line renderable grapheme sequence".to_string());
         }
         let utf16_end = utf16_col + grapheme.encode_utf16().count();
+        if preedit
+            .selected_range
+            .is_some_and(|range| range.location == utf16_col)
+        {
+            selected_col = Some(display_col + marked.len());
+        }
+        if preedit
+            .selected_range
+            .is_some_and(|range| range.location > utf16_col && range.location < utf16_end)
+        {
+            return Err("selectedRange location splits a preedit grapheme".to_string());
+        }
         let width = UnicodeWidthStr::width(grapheme);
         if width == 0 {
             utf16_col = utf16_end;
@@ -462,6 +475,12 @@ fn apply_preedit(
         }
         utf16_col = utf16_end;
     }
+    if preedit
+        .selected_range
+        .is_some_and(|range| range.location == utf16_col)
+    {
+        selected_col = Some(display_col + marked.len());
+    }
     if display_col + marked.len() > screen.cols as usize {
         return Err("preedit extends beyond terminal columns".to_string());
     }
@@ -472,6 +491,9 @@ fn apply_preedit(
     line.truncate(display_col);
     line.extend(marked);
     line.extend(tail);
+    if let Some(col) = selected_col {
+        screen.cursor.col = col.min(screen.cols.saturating_sub(1) as usize) as u16;
+    }
     Ok(())
 }
 
