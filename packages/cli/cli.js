@@ -50,6 +50,11 @@ function number(values, name) {
   return value;
 }
 
+function requiredNumber(values, name) {
+  required(values, name);
+  return number(values, name);
+}
+
 function required(values, name) {
   if (values[name] === undefined) throw new UsageError(`--${name} is required`);
   return values[name];
@@ -127,8 +132,8 @@ function plan(positionals, values) {
           method: "input.pointer",
           params: compact({
             window: window(),
-            x: number(values, "x") ?? required(values, "x"),
-            y: number(values, "y") ?? required(values, "y"),
+            x: requiredNumber(values, "x"),
+            y: requiredNumber(values, "y"),
             phase,
             button: values.button,
             deltaX: number(values, "delta-x"),
@@ -198,6 +203,7 @@ async function main(argv) {
       return;
     }
     const result = await client.request(request.method, request.params);
+    // 기본값: 결과가 없는 명령은 undefined 를 돌려주고, JSON 출력에는 undefined 가 없으므로 null 로 적는다.
     process.stdout.write(`${JSON.stringify(result ?? null, null, 2)}\n`);
   } finally {
     client.close();

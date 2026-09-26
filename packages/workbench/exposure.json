@@ -1521,7 +1521,7 @@
       },
       {
         "name": "core.settings.change",
-        "description": "Sets one setting from a control value; strings are converted to the setting's type.",
+        "description": "Sets one setting from a control value; strings are converted to the setting's type. Without scope it sets the common value.",
         "params": {
           "type": "object",
           "properties": {
@@ -1543,7 +1543,7 @@
       },
       {
         "name": "core.settings.theme",
-        "description": "Applies a theme with its shape values in the given mode (the current mode by default).",
+        "description": "Applies a theme with its shape values in the given mode (the current mode by default) and scope (common by default).",
         "params": {
           "type": "object",
           "properties": {

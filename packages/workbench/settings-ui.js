@@ -55,7 +55,8 @@ function row(label, control) {
   name.className = "set-row__name";
   name.textContent = label;
   el.append(name, control);
-  const field = control.matches?.("[data-set]") ? control : control.querySelector("[data-set], [data-key]");
+  const field = control.matches("[data-set]") ? control : control.querySelector("[data-set], [data-key]");
+  // 기본값: 설정 컨트롤이 없는 행은 키가 없고, data-set 이 없는 선택지는 data-key(pick:키:값)의 둘째 부분이 설정 키다.
   const key = field?.dataset.set ?? field?.dataset.key?.split(":")[1];
   if (scope === "project" && key && overridden(key)) {
     const resetButton = press(`reset:${key}`, "전역값 사용");
@@ -93,6 +94,7 @@ function group(name, text, children) {
  */
 function valueCommand(el, key) {
   const [kind, place, plugin] = key.split(":");
+  // 기본값: link:left: 처럼 플러그인 부분이 빈 키는 일반 선택이므로 plugin 은 null 이다(docs/spec/settings.md).
   if (kind === "link") mark(el, "core.settings.link", { place, plugin: plugin || null, scope }, "set");
   else mark(el, "core.settings.change", { key, scope });
 }
@@ -289,6 +291,7 @@ function button(key, name, label, command, params, on = null) {
 }
 
 /** 세트 선택 상자의 세트 항목. 값은 세트 id 다. */
+// 기본값: 섹션이 없는 세트는 섹션 없음으로 보인다.
 const setItems = () => value("sets").map((s) => [s.id, `${s.title} — ${sectionNames(s.sections).join(" · ") || "섹션 없음"}`]);
 /** 일반 선택의 항목: 사용 안 함과 모든 세트. */
 const generalOptions = () => [["off", "사용 안 함"], ...setItems()];
@@ -296,6 +299,7 @@ const generalOptions = () => [["off", "사용 안 함"], ...setItems()];
 function choiceOf(place, plugin) {
   const found = value("links").find((l) => l.place === place && l.plugin === plugin);
   if (!found) return plugin === null || place === "rail" ? "off" : "inherit";
+  // 기본값: set 이 null 인 플러그인 연결은 사용 안 함이다(docs/spec/settings.md).
   return found.set ?? "off";
 }
 
@@ -321,6 +325,7 @@ function declaredRow(key, definition) {
 }
 
 /** 세트 한 줄의 설명. 제목, 배치, 섹션 이름. */
+// 기본값: 섹션이 없는 세트는 섹션 없음으로 보인다.
 const setLine = (s) => `${s.title} · ${s.layout === "tabs" ? "탭" : "목록"} · ${sectionNames(s.sections).join(", ") || "섹션 없음"}`;
 
 /** 플러그인 목록. 검색 칸과 검색어에 맞는 행이다. */
@@ -534,11 +539,14 @@ export function settingsModalState() {
   const counts = new Map();
   const controls = [...card.querySelectorAll("[data-expose]")].map((el) => {
     const name = el.dataset.expose;
+    // 기본값: 이름이 처음 나온 컨트롤의 순번은 0 이다.
     const index = counts.get(name) ?? 0;
     counts.set(name, index + 1);
+    // 기본값: data-on 이 없는 컨트롤은 체크 상자이면 체크 상태, 아니면 켬 상태가 없다(null).
     const on = el.dataset.on ?? (el.type === "checkbox" ? String(el.checked) : null);
     return {
       name, index,
+      // 기본값: 키도 설정도 가리키지 않는 컨트롤은 key 가 null 이다.
       key: el.dataset.key ?? el.dataset.set ?? null,
       label: el.tagName === "SELECT" ? "" : el.textContent.trim(),
       on: on === null ? null : on === "true",
@@ -554,6 +562,7 @@ export function settingsModalState() {
   const rows = [...card.querySelectorAll(".set-row[data-row]")].map((el) => ({
     key: el.dataset.row,
     name: el.querySelector(".set-row__name").textContent,
+    // 기본값: description 이 없는 설정 행은 설명이 null 이다.
     description: card.querySelector(`[data-describes="${CSS.escape(el.dataset.row)}"]`)?.textContent ?? null,
   }));
   const r = card.getBoundingClientRect();
@@ -637,7 +646,9 @@ export function drawSettings() {
   if (scope === "project") {
     const folder = document.createElement("p");
     folder.className = "set-caption";
-    folder.textContent = active()?.root ?? "";
+    const project = active();
+    if (!project) throw new Error("the project settings scope has no active project");
+    folder.textContent = project.root;
     body.append(folder);
   }
   SECTIONS.find(([id]) => id === here)[2]();

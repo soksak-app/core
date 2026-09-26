@@ -215,6 +215,7 @@ impl PtyService {
             let oldest = output
                 .front()
                 .map(|(sequence, _)| *sequence)
+                // 기본값: 보관한 출력이 없으면 잘린 부분이 없다.
                 .unwrap_or(from);
             let truncated = from < oldest;
             output

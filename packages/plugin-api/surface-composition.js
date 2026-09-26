@@ -7,6 +7,7 @@ function sameNames(actual, expected, what) {
   const left = [...actual].sort();
   const right = [...expected].sort();
   if (left.length !== right.length || left.some((name, index) => name !== right[index])) {
+    // 기본값: 선언이 빈 목록이면 오류 문장은 기대한 이름을 none 으로 적는다.
     throw new Error(`${what} must exactly match the surface declaration (expected ${right.join(", ") || "none"})`);
   }
 }
@@ -74,7 +75,7 @@ function installHybridPaintBoundary(regionElements, overlayElements, view, viewp
   const ancestors = new Set();
   for (const region of regionElements) {
     for (let node = region.parentElement; node; node = node.parentElement) ancestors.add(node);
-    const root = region.getRootNode?.();
+    const root = region.getRootNode();
     if (root?.host) ancestors.add(root.host);
   }
   if (viewport) {
@@ -116,7 +117,8 @@ function installHybridPaintBoundary(regionElements, overlayElements, view, viewp
     });
     observers.push(observer);
   };
-  observe(regionElements[0]?.getRootNode?.() ?? view.document.documentElement);
+  // 기본값: 영역이 없는 표면은 문서 전체를 관찰한다.
+  observe(regionElements.length ? regionElements[0].getRootNode() : view.document.documentElement);
   if (viewport) observe(viewport);
   return {
     enforce,
@@ -178,6 +180,7 @@ export async function createSurfaceCompositionController(
   }
 
   const viewportOf = () => typeof viewport === "function" ? viewport() : viewport;
+  // 기본값: viewport 를 넘기지 않은 페이지는 문서 전체가 합성 뿌리다.
   const compositionRoot = viewportOf() ?? view.document.documentElement;
   const root = compositionRoot;
   const previousComposition = root.dataset.surfaceComposition;
@@ -195,6 +198,7 @@ export async function createSurfaceCompositionController(
     { code: "SURFACE_COMPOSITION_INACTIVE" },
   );
   const reportFailure = (error) => {
+    // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
     const message = `surface composition failed: ${error?.message ?? error}`;
     runtimePage.surfaces.report(message);
     console.error(message);
@@ -215,6 +219,7 @@ export async function createSurfaceCompositionController(
     paintBoundary?.restore();
     restoreDataset(root, previousComposition);
     const failures = results.filter((result) => result.status === "rejected");
+    // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
     for (const failure of failures) runtimePage.surfaces.report(`surface composition cleanup failed: ${failure.reason?.message ?? failure.reason}`);
     if (failures.length) throw new AggregateError(failures.map(({ reason }) => reason), "surface composition cleanup failed");
   })();

@@ -1681,6 +1681,7 @@ fn local_surface_key(
         .keys()
         .find(|key| key.ends_with(&format!("\0{surface}")))
         .cloned()
+        // 기본값: 루트 없이 온 표면을 등록된 키에서 찾지 못하면 루트 없는 키가 되고, 그 키로 찾는 쪽이 없는 표면으로 알린다.
         .unwrap_or_else(|| format!("\0{surface}"))
 }
 
@@ -1809,6 +1810,7 @@ async fn surface_task(
                         new_state.theme = current_theme;
                         new_state.inline_images = image_state.as_ref()
                             .map(|previous_state| previous_state.inline_images.clone())
+                            // 기본값: 앞 이미지 상태가 없으면 그 사이 보관한 인라인 그림을 이어받는다.
                             .unwrap_or_else(|| std::mem::take(&mut preserved_inline_images));
                         let (cols, rows) = match calculate_terminal_size(
                             configuration.width, configuration.height, &new_state.metrics) {
@@ -2440,6 +2442,7 @@ async fn surface_task(
                         };
                         let body = close_error
                             .map(|error| json!({"error": format!("Close failed: {error}")}))
+                            // 기본값: 닫기에 오류가 없으면 빈 본문으로 답한다.
                             .unwrap_or_else(|| json!({}));
                         let response = json!({"surface": surface_id, "body": body});
                         if output_tx.send(response.to_string()).await.is_err() {
@@ -2746,10 +2749,17 @@ where
 
         if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
             if value.get("operation").and_then(Value::as_str) == Some("close-owner") {
-                let request = value.get("request").and_then(Value::as_str).unwrap_or("");
+                let Some(request) = value.get("request").and_then(Value::as_str) else {
+                    let reply = json!({"error": "invalidParams", "reason": "the owner request has no request id"});
+                    if output_tx.send(reply.to_string()).await.is_err() {
+                        break;
+                    }
+                    continue;
+                };
                 let mut result = owner_close
                     .as_ref()
                     .map(|close| close())
+                    // 기본값: 소유자 닫기가 없는 서비스는 그 요청을 오류로 답한다.
                     .unwrap_or_else(|| Err("owner close is unavailable".to_string()));
                 if result.is_ok() {
                     if let Some(registry) = registry.as_ref() {
@@ -2768,7 +2778,13 @@ where
                 continue;
             }
             if value.get("operation").and_then(Value::as_str) == Some("retain") {
-                let request = value.get("request").and_then(Value::as_str).unwrap_or("");
+                let Some(request) = value.get("request").and_then(Value::as_str) else {
+                    let reply = json!({"error": "invalidParams", "reason": "the owner request has no request id"});
+                    if output_tx.send(reply.to_string()).await.is_err() {
+                        break;
+                    }
+                    continue;
+                };
                 let result = match (registry.as_ref(), retain_keys(&value)) {
                     (Some(registry), Ok(keep)) => registry.retain(&owner, &keep).await,
                     (None, _) => Err("retain is unavailable".to_string()),
@@ -2788,7 +2804,13 @@ where
                 continue;
             }
             if value.get("operation").and_then(Value::as_str) == Some("shutdown") {
-                let request = value.get("request").and_then(Value::as_str).unwrap_or("");
+                let Some(request) = value.get("request").and_then(Value::as_str) else {
+                    let reply = json!({"error": "invalidParams", "reason": "the owner request has no request id"});
+                    if output_tx.send(reply.to_string()).await.is_err() {
+                        break;
+                    }
+                    continue;
+                };
                 let result = if let Some(registry) = registry.as_ref() {
                     registry.request_shutdown();
                     Ok(())
@@ -2841,6 +2863,7 @@ where
                         local_surface_key(&surface_txs, env.root.as_deref(), &surface_id);
                     let tx = if let Some(tx) = surface_txs.get(&registry_key) {
                         if let Some(registry) = registry.as_ref() {
+                            // 기본값: 부착 판을 기록하지 않은 표면은 0 이며 등록부의 현재 판과 다르면 낡은 부착으로 거부한다.
                             let epoch = surface_epochs.get(&registry_key).copied().unwrap_or(0);
                             if registry.current_epoch(&registry_key, &owner).await != Some(epoch) {
                                 let response = json!({"surface": surface_id, "body": {"error": "stale attachment"}});

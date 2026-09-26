@@ -24,6 +24,7 @@
     },
     receive(message) {
       if (message.event) {
+        // 기본값: 그 이벤트에 등록한 수신자가 없으면 알릴 곳이 없다.
         for (const fn of listeners.get(message.event) ?? []) fn(message.data);
         return;
       }

@@ -167,6 +167,7 @@ function checkSettingValue(where, declaration, value) {
 }
 
 export function settingDeclarations(manifest) {
+  // 기본값: settings 는 plugin.json 의 선택 필드이며, 없는 플러그인은 설정이 없다.
   return Object.fromEntries(Object.entries(manifest.settings ?? {}).map(([key, declaration]) => [
     `${manifest.id}.${key}`, { ...declaration, plugin: manifest.id, key },
   ]));
@@ -228,6 +229,7 @@ function checkBackground(where, background, sidecars, settings = {}) {
     if (!isObject(background.settings)) throw new Error(`${where} background: settings must map request fields to setting names`);
     for (const [field, setting] of Object.entries(background.settings)) {
       if (field === "operation") throw new Error(`${where} background: a setting cannot replace operation`);
+      // 기본값: settings 는 plugin.json 의 선택 필드이며, 없는 플러그인에는 background 가 가리킬 설정이 없다.
       if (typeof setting !== "string" || !Object.hasOwn(settings ?? {}, setting)) {
         throw new Error(`${where} background: setting ${setting} is not declared by the plugin`);
       }
@@ -296,6 +298,7 @@ export function validateManifest(manifest) {
   }
   if (manifest.background !== undefined) {
     if (manifest.surface === undefined) throw new Error(`${where}: background requires a surface`);
+    // 기본값: sidecars 는 plugin.json 의 선택 필드이며, 없는 플러그인은 사이드카를 쓰지 않는다.
     checkBackground(`${where}`, manifest.background, manifest.sidecars ?? [], manifest.settings);
   }
   if (manifest.surface !== undefined) {
@@ -304,6 +307,7 @@ export function validateManifest(manifest) {
     only(`${where} surface`, surface, ["module", "composition", "drop"]);
     // 놓기 명령은 파일이 표면에 놓였을 때 페이지가 그 표면에서 {urls} 로 실행하는 선언된 명령이다.
     if (surface.drop !== undefined && (!isText(surface.drop) ||
+      // 기본값: exposes 와 그 commands 는 선택 필드이며, 명령을 선언하지 않은 플러그인에는 놓기 명령이 없다.
       !(manifest.exposes?.commands ?? []).some((command) => command.name === surface.drop))) {
       throw new Error(`${where}: surface drop must name a command declared in exposes`);
     }
@@ -312,6 +316,7 @@ export function validateManifest(manifest) {
       throw new Error(`${where}: surface module must be a JavaScript path inside the package`);
     }
     if (surface.composition === undefined) throw new Error(`${where}: surface requires a composition`);
+    // 기본값: sidecars 는 plugin.json 의 선택 필드이며, 없는 플러그인은 사이드카를 쓰지 않는다.
     checkComposition(`${where} surface`, surface.composition, manifest.sidecars ?? []);
     if (!isText(manifest.mark)) throw new Error(`${where}: mark is required with a surface`);
     if (!isText(manifest.icon)) throw new Error(`${where}: icon is required with a surface`);
@@ -478,10 +483,12 @@ export function checkReferences(environment, manifests) {
   const ids = manifests.map((m) => m.id);
   if (new Set(ids).size !== ids.length) throw new Error("environment.json: two plugins declare the same id");
   const byId = new Map(manifests.map((manifest) => [manifest.id, manifest]));
+  // 기본값: settings 는 environment.json 의 선택 필드이며, 없으면 플러그인 설정 기본값을 바꾸지 않는다.
   for (const [pluginId, values] of Object.entries(environment.settings ?? {})) {
     const manifest = byId.get(pluginId);
     if (!manifest) throw new Error(`environment.json: settings names unknown plugin ${pluginId}`);
     if (!isObject(values)) throw new Error(`environment.json: settings for ${pluginId} must be an object`);
+    // 기본값: settings 는 plugin.json 의 선택 필드이며, 없는 플러그인은 설정이 없다.
     const declarations = manifest.settings ?? {};
     for (const [key, value] of Object.entries(values)) {
       const declaration = declarations[key];
@@ -490,6 +497,7 @@ export function checkReferences(environment, manifests) {
     }
   }
   for (const card of environment.workspace.grid.cards) {
+    // 기본값: tabs 는 environment.json 카드의 선택 필드이며, 없는 카드는 빈 자리다.
     for (const tab of card.tabs ?? []) {
       if (!cards.has(tab.plugin)) throw new Error(`environment.json: tab plugin ${tab.plugin} has no surface`);
     }
@@ -556,6 +564,7 @@ export function validateSidebars(sidebars, where) {
     } else if (!setIds.has(link.set)) {
       throw new Error(`${where}: every link requires a place (left, right, rail) and a known set`);
     }
+    // 기본값: plugin 이 없는 연결은 일반 사이드바 연결이며, 겹침 검사 키에서 general 로 적는다.
     const key = `${link.place} ${link.plugin ?? "general"}`;
     if (seen.has(key)) throw new Error(`${where}: link ${key} appears twice`);
     seen.add(key);
@@ -566,6 +575,7 @@ export function validateSidebars(sidebars, where) {
 /** 세트의 섹션 id 와 연결의 플러그인 id 가 불러온 manifest 에 있는지 검사한다. 없으면 예외를 던진다. */
 export function checkSidebarReferences(sidebars, manifests, where) {
   const cards = new Set(manifests.filter((m) => m.surface).map((m) => m.id));
+  // 기본값: sections 는 plugin.json 의 선택 필드이며, 없는 플러그인은 섹션이 없다.
   const sections = new Set(manifests.flatMap((m) => (m.sections ?? []).map((s) => s.id)));
   for (const set of sidebars.sets) {
     for (const id of set.sections) {
@@ -713,6 +723,7 @@ export function validateDiagnostics(manifest, diagnostics) {
     throw new Error(`${where}: module must be a JavaScript path inside the package`);
   }
   validateExposes(manifest.id, diagnostics.exposes);
+  // 기본값: exposes 는 plugin.json 의 선택 필드이며, 없는 플러그인은 진단 항목만 공개한다.
   mergeExposes(manifest.exposes ?? {}, diagnostics.exposes);
   return diagnostics;
 }
@@ -722,6 +733,7 @@ export function mergeExposes(first, second) {
   declarationMap(second, declarationMap(first));
   return Object.fromEntries(Object.keys(EXPOSE_KINDS)
     .filter((key) => first[key] !== undefined || second[key] !== undefined)
+    // 기본값: 공개 항목 묶음의 각 목록은 선택 필드이며, 없는 목록은 비어 있다.
     .map((key) => [key, [...(first[key] ?? []), ...(second[key] ?? [])]]));
 }
 
@@ -762,6 +774,7 @@ export const declarationKey = (kind, name) => `${kind} ${name}`;
  */
 export function declarationMap(exposes, into = new Map()) {
   for (const [key, kind] of Object.entries(EXPOSE_KINDS)) {
+    // 기본값: 공개 항목 묶음의 각 목록은 선택 필드이며, 없는 목록은 비어 있다.
     for (const declaration of exposes[key] ?? []) {
       const at = declarationKey(kind, declaration.name);
       if (into.has(at)) throw new Error(`${kind} ${declaration.name} is declared twice`);
@@ -824,7 +837,7 @@ export function actOn(element, { action, value, event }) {
     }
     const { type, ...init } = event;
     const Kind = KEYBOARD.test(type) ? view.KeyboardEvent
-      : POINTER.test(type) ? (view.PointerEvent ?? view.MouseEvent)
+      : POINTER.test(type) ? view.PointerEvent
         : MOUSE.test(type) ? view.MouseEvent : view.Event;
     element.dispatchEvent(new Kind(type, { bubbles: true, cancelable: true, ...init }));
     return null;
@@ -851,6 +864,7 @@ export function exposureEntries(declared) {
     return found.declaration;
   };
 
+  // 기본값: 등록하지 않은 dom 이름에는 요소가 없고, 부르는 곳이 그 경우를 unregistered 오류로 알린다.
   const elements = (name) => (doms.get(name) ?? []).flatMap((provide) => provide()).filter((el) => el.isConnected !== false);
 
   function status(name) {
@@ -869,9 +883,11 @@ export function exposureEntries(declared) {
 
   function update(entry, value, changed) {
     if (!entry.watching) return;
+    // 기본값: 상태 값의 undefined 는 JSON 에 없으므로 null 로 공개한다.
     const text = JSON.stringify(value ?? null);
     if (text === entry.text) return;
     entry.text = text;
+    // 기본값: 상태 값의 undefined 는 JSON 에 없으므로 null 로 공개한다.
     entry.value = value ?? null;
     entry.version++;
     for (const resolve of entry.waiters.splice(0)) resolve({ version: entry.version, value: entry.value });
@@ -890,9 +906,11 @@ export function exposureEntries(declared) {
       let active = true;
       let text;
       const deliver = (value) => {
+        // 기본값: 상태 값의 undefined 는 JSON 에 없으므로 null 로 공개한다.
         const next = JSON.stringify(value ?? null);
         if (!active || next === text) return;
         text = next;
+        // 기본값: 상태 값의 undefined 는 JSON 에 없으므로 null 로 공개한다.
         fn(value ?? null);
       };
       const stopper = entry.subscribe(deliver);
@@ -928,6 +946,7 @@ export function exposureEntries(declared) {
     dom(name, provide) {
       const { many } = declaration("dom", name);
       if (!many && doms.has(name)) throw new Error(`dom ${name} is already registered`);
+      // 기본값: 이 이름의 첫 등록이면 앞선 제공자가 없다.
       doms.set(name, [...(doms.get(name) ?? []), provide]);
     },
 
@@ -952,6 +971,7 @@ export function exposureEntries(declared) {
       const { name } = params;
       const found = declared.get(declarationKey(kind, name));
       if (!found) throw new ExposureError(EXPOSURE_ERRORS.unknownName, `unknown ${kind} ${name}`);
+      // 기본값: 상태 값의 undefined 는 JSON 에 없으므로 null 로 답한다.
       if (method === "status.get") return (await status(name).read()) ?? null;
       if (method === "status.watch") {
         const entry = status(name);
@@ -970,16 +990,24 @@ export function exposureEntries(declared) {
       if (method === "status.next") {
         const entry = status(name);
         if (!entry.watching) return { closed: true };
-        if (entry.version > (params.version ?? 0)) return { version: entry.version, value: entry.value };
+        if (!Number.isInteger(params.version)) {
+          throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `status.next for ${name} requires an integer version`);
+        }
+        if (entry.version > params.version) return { version: entry.version, value: entry.value };
         return new Promise((resolve) => entry.waiters.push(resolve));
       }
       if (method === "command.run") {
         const run = commands.get(name);
         if (!run) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `command ${name} is not registered`);
-        const input = params.params ?? {};
+        // command.run 은 params 를 반드시 담는다(docs/spec/exposure.md).
+        if (!isObject(params.params)) {
+          throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `command.run for ${name} requires params`);
+        }
+        const input = params.params;
         if (!matchesSchema(found.declaration.params, input)) {
           throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `invalid params for ${name}`);
         }
+        // 기본값: 결과가 없는 명령의 undefined 는 JSON 에 없으므로 null 로 답한다.
         return (await run(input)) ?? null;
       }
       const list = elements(name);
@@ -987,6 +1015,7 @@ export function exposureEntries(declared) {
       if (!found.declaration.many && list.length > 1) {
         throw new ExposureError(EXPOSURE_ERRORS.unregistered, `dom ${name} has ${list.length} elements`);
       }
+      // 기본값: dom.rect 와 dom.act 의 index 는 선택 필드이며, 없으면 첫 요소다.
       const index = params.index ?? 0;
       if (!Number.isInteger(index) || index < 0) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "index must be a non-negative integer");
       const element = list[index];
@@ -1000,10 +1029,12 @@ export function exposureEntries(declared) {
 /** 요청 처리 결과를 relay 의 답 형식 {result} 또는 {error: {code, message}} 로 바꾼다. */
 export async function replyPayload(work) {
   try {
+    // 기본값: 결과가 없는 요청의 undefined 는 JSON 에 없으므로 null 로 답한다.
     return { result: (await work()) ?? null };
   } catch (error) {
     // 등록한 함수가 던진 일반 예외는 요청 형식이 아니라 실행의 실패다.
     const code = error instanceof ExposureError ? error.code : EXPOSURE_ERRORS.failed;
+    // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
     return { error: { code, message: String(error?.message ?? error) } };
   }
 }
@@ -1081,6 +1112,7 @@ export function createExpose(port, load) {
       binder.dispose();
       loaded?.clear();
       registered.clear();
+      // 기본값: 메인 페이지 안의 표면만 등록을 해제한다. 별도 문서의 포트에는 unregister 가 없고 그 등록은 문서와 함께 끝난다.
       await port.unregister?.();
     },
   };

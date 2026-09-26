@@ -304,14 +304,14 @@ export const BREAKS = [
     id: "stale-hold",
     what: "a press with a pointer already down leaves the divider it held marked",
     file: "dist/dom.js",
-    find: "            const stale = this.drop(e.pointerId);\n            if (stale === null || stale === void 0 ? void 0 : stale.moved)\n                (_a = this.disarms.get(stale.on)) === null || _a === void 0 ? void 0 : _a();",
+    find: "            const stale = this.drop(e.pointerId);\n            if (stale === null || stale === void 0 ? void 0 : stale.moved)\n                this.disarm(stale.on);",
     to: "            ;",
   },
   {
     id: "stale-pair",
     what: "a drag dropped by a press with the same pointer leaves the pair armed",
     file: "dist/dom.js",
-    find: "            const stale = this.drop(e.pointerId);\n            if (stale === null || stale === void 0 ? void 0 : stale.moved)\n                (_a = this.disarms.get(stale.on)) === null || _a === void 0 ? void 0 : _a();",
+    find: "            const stale = this.drop(e.pointerId);\n            if (stale === null || stale === void 0 ? void 0 : stale.moved)\n                this.disarm(stale.on);",
     to: "            this.drop(e.pointerId);",
   },
   {
@@ -395,7 +395,7 @@ export const BREAKS = [
     id: "settle-pair",
     what: "a gesture the settle ends leaves the press that moved the boundary armed as the first of a pair",
     file: "dist/dom.js",
-    find: "        if (drag.moved)\n            (_a = this.disarms.get(drag.on)) === null || _a === void 0 ? void 0 : _a();",
+    find: "        if (drag.moved)\n            this.disarm(drag.on);",
     to: "        ;",
   },
   {
@@ -458,14 +458,14 @@ export const BREAKS = [
     id: "stale-pair-divider",
     what: "a press disarms the divider it landed on rather than the one the drag it dropped was on, so a drag another divider's press dropped leaves its own pair armed",
     file: "dist/dom.js",
-    find: "            const stale = this.drop(e.pointerId);\n            if (stale === null || stale === void 0 ? void 0 : stale.moved)\n                (_a = this.disarms.get(stale.on)) === null || _a === void 0 ? void 0 : _a();",
+    find: "            const stale = this.drop(e.pointerId);\n            if (stale === null || stale === void 0 ? void 0 : stale.moved)\n                this.disarm(stale.on);",
     to: "            const stale = this.drop(e.pointerId);\n            if (stale === null || stale === void 0 ? void 0 : stale.moved)\n                lastTap = -Infinity;",
   },
   {
     id: "lost-release-divider",
     what: "a mouse press disarms the divider it landed on rather than the one the drag it dropped was on, so a drag another divider's press dropped leaves its own pair armed",
     file: "dist/dom.js",
-    find: "            const stale = this.dropMouse();\n            if (stale === null || stale === void 0 ? void 0 : stale.moved)\n                (_a = this.disarms.get(stale.on)) === null || _a === void 0 ? void 0 : _a();",
+    find: "            const stale = this.dropMouse();\n            if (stale === null || stale === void 0 ? void 0 : stale.moved)\n                this.disarm(stale.on);",
     to: "            const stale = this.dropMouse();\n            if (stale === null || stale === void 0 ? void 0 : stale.moved)\n                lastPress = -Infinity;",
   },
   {
@@ -535,7 +535,7 @@ export const BREAKS = [
     id: "second-finger",
     what: "a second finger on a held divider centres the boundary",
     file: "dist/dom.js",
-    find: "            if (((_b = this.drags.get(tapId)) === null || _b === void 0 ? void 0 : _b.on) !== el && e.timeStamp - lastTap < DOUBLE_TAP_MS) {",
+    find: "            if (((_a = this.drags.get(tapId)) === null || _a === void 0 ? void 0 : _a.on) !== el && e.timeStamp - lastTap < DOUBLE_TAP_MS) {",
     to: "            if (e.timeStamp - lastTap < DOUBLE_TAP_MS) {",
   },
   {
@@ -608,7 +608,7 @@ export const BREAKS = [
     id: "lost-release",
     what: "a press after a drag whose release was lost centres the boundary",
     file: "dist/dom.js",
-    find: "            const stale = this.dropMouse();\n            if (stale === null || stale === void 0 ? void 0 : stale.moved)\n                (_a = this.disarms.get(stale.on)) === null || _a === void 0 ? void 0 : _a();",
+    find: "            const stale = this.dropMouse();\n            if (stale === null || stale === void 0 ? void 0 : stale.moved)\n                this.disarm(stale.on);",
     to: "            this.dropMouse();",
   },
   {

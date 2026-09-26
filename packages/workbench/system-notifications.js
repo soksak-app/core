@@ -18,6 +18,7 @@ export function createSystemNotifications({ post, remove, notices, tabName, sele
   const listeners = new Set();
   const changed = () => { for (const listener of listeners) listener(); };
   const failed = (operation) => (error) => {
+    // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
     current = { ...current, error: `${operation}: ${error?.message ?? error}` };
     changed();
   };
@@ -42,6 +43,7 @@ export function createSystemNotifications({ post, remove, notices, tabName, sele
       }
     },
     setState(state) {
+      // 기본값: 호스트의 알림 상태는 오류가 있을 때만 error 를 싣는다.
       current = { authorization: state.authorization, error: state.error ?? null };
       changed();
     },
@@ -66,7 +68,9 @@ let selectTab = () => Promise.reject(new Error("no tab selection is configured")
 
 /** 이 창의 시스템 알림. 애플리케이션이 없으면 게시하지 않는다. */
 export const systemNotifications = createSystemNotifications({
+  // 기본값: 위 주석대로 호스트가 없는 브라우저 예제는 시스템 알림을 게시하지 않는다.
   post: (request) => notificationCenter?.post(request) ?? Promise.resolve(),
+  // 기본값: 호스트가 없는 브라우저 예제에는 지울 시스템 알림이 없다.
   remove: (request) => notificationCenter?.remove(request) ?? Promise.resolve(),
   notices: tabNotices,
   tabName: (tab) => nameOf(tab),
@@ -85,8 +89,10 @@ if (notificationCenter) {
   notificationCenter.onPosted((post) => systemNotifications.posted(post));
   notificationCenter.onActivated((activation) => {
     systemNotifications.activated(activation).catch((error) =>
+      // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
       systemNotifications.setState({ ...systemNotifications.state(), error: `activate: ${error?.message ?? error}` }));
   });
   notificationCenter.state().then((state) => systemNotifications.setState(state),
+    // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
     (error) => systemNotifications.setState({ ...systemNotifications.state(), error: `state: ${error?.message ?? error}` }));
 }

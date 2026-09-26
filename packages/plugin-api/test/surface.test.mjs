@@ -77,3 +77,7 @@ test("surface context carries the window's project root or null", () => {
   assert.equal(Object.isFrozen(context.project), true);
   assert.equal(createSurfaceContext({ root, surfaceId: "tab-2", runtime, tab: TAB, icon: ICON }).project, null);
 });
+
+test("releasing the ready state of an unknown context is an error", () => {
+  assert.throws(() => releaseSurfaceReady({}), /createSurfaceContext/);
+});

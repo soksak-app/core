@@ -109,6 +109,7 @@ pub fn apply(shell: &str, command: &mut CommandBuilder) -> Result<(), String> {
     let name = Path::new(shell)
         .file_name()
         .and_then(|name| name.to_str())
+        // 기본값: 이름을 읽지 못한 셸은 zsh 나 bash 가 아니므로 바꾸지 않는다.
         .unwrap_or_default();
     match name {
         "zsh" => {

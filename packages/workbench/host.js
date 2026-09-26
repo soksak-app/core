@@ -22,9 +22,10 @@ import { registerSurfacePort, registry, unregisterSurfacePort } from "./exposure
  */
 function rgba(css) {
   const text = String(css).trim();
-  const n = (text.match(/[\d.]+/g) ?? []).map(Number);
+  const n = text.match(/[\d.]+/g)?.map(Number);
+  if (!n || n.length < 3) throw new Error(`the CSS color ${JSON.stringify(text)} has no red, green, and blue channels`);
   const unit = text.startsWith("color(") ? 255 : 1;
-  return [(n[0] || 0) * unit, (n[1] || 0) * unit, (n[2] || 0) * unit, n[3] === undefined ? 1 : n[3]];
+  return [n[0] * unit, n[1] * unit, n[2] * unit, n[3] === undefined ? 1 : n[3]];
 }
 
 /**
@@ -63,6 +64,7 @@ function drawing(el) {
   return {
     mode: el.dataset.nativeModal,
     card: cardFrame(el),
+    // 기본값: 이름표가 없는 모달은 제목이 빈 문자열이다.
     title: el.getAttribute("aria-label") || "",
     className: el.className,
     html: el.innerHTML,
@@ -149,9 +151,11 @@ export function retainSidecarSessions(surfaces) {
 /* 이 문서에 표면 모듈이 마운트되므로 모든 네이티브 연산은 호스트 경계를 넘기
    전에 명시적인 표면 범위로 제한한다. */
 export function surfaceContextRuntime(surface, declarations = {}) {
-  const surfaceId = surface.surfaceId ?? surface.id;
+  const { surfaceId } = surface;
+  if (typeof surfaceId !== "string" || !surfaceId) throw new TypeError("surface runtime requires surface.surfaceId");
   const invoke = (name, payload) => name === "report"
     ? bridge.call(name, payload)
+    // 기본값: 매개변수가 없는 호출은 payload 를 생략한다.
     : bridge.call(name, { ...(payload ?? {}), surface: surfaceId });
   const listeners = new Map();
   const on = (name, fn) => {
@@ -163,7 +167,7 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     });
     return Promise.resolve(registered).then((off) => () => {
       set.delete(fn);
-      off?.();
+      off();
     });
   };
   const theme = (fn) => {
@@ -192,12 +196,14 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     theme,
     call(name, payload) {
       if (name.includes(".")) {
+        // 기본값: 매개변수가 없는 명령은 payload 를 생략한다.
         return registry.handle({ method: "command.run", params: { name, params: payload ?? {}, surface: surfaceId } })
           .then((reply) => reply.error ? Promise.reject(new Error(reply.error.message)) : reply.result);
       }
       return invoke(name, payload);
     },
     sidecar(name) {
+      // 기본값: sidecars 는 plugin.json 의 선택 필드이며 없으면 사이드카가 없다(docs/spec/plugins.md).
       const declared = surface.sidecars ?? [];
       if (name !== undefined) throw new Error("surface runtime sidecar() does not accept a package name; use the declared sidecar");
       if (declared.length !== 1) throw new Error(`surface runtime requires exactly one declared sidecar, got ${declared.length}`);
@@ -215,8 +221,11 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     exposure: createExpose(port, async () => {
       const core = registry.surfaceDeclarations();
       return {
+        // 기본값: 선언 파일에 없는 종류(status, commands, dom)는 그 플러그인이 더하는 항목이 없다.
         status: [...core.status, ...(declarations.status ?? [])],
+        // 기본값: 선언 파일에 없는 종류는 그 플러그인이 더하는 항목이 없다.
         commands: [...core.commands, ...(declarations.commands ?? [])],
+        // 기본값: 선언 파일에 없는 종류는 그 플러그인이 더하는 항목이 없다.
         dom: [...core.dom, ...(declarations.dom ?? [])],
       };
     }),
@@ -277,8 +286,10 @@ let layoutFrame = layoutTurn;
 let layoutResult = layoutTurn;
 
 function continueAfterLayoutFailure(phase, error) {
+  // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
   const message = `host ${phase} failed while advancing the layout queue: ${error?.message ?? error}`;
   bridge.call("report", message).then(undefined, (reportError) => {
+    // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
     console.error(`${message}; reporting failed: ${reportError?.message ?? reportError}`);
   });
   return undefined;
@@ -418,7 +429,8 @@ const modalChanged = () => { for (const fn of modalListeners) fn(); };
 export function modalState() {
   if (!shown) return null;
   const el = document.getElementById(shown);
-  return { id: shown, mode: el?.dataset.nativeModal ?? null, document: modalDocument };
+  if (!el) throw new Error(`the shown modal ${shown} is not in the document`);
+  return { id: shown, mode: el.dataset.nativeModal, document: modalDocument };
 }
 
 /** 모달 상태가 바뀌면 fn 을 호출한다. 해제 함수를 반환한다. */
@@ -524,7 +536,7 @@ export const overlay = native ? {
         title: name,
         rect: overlayFrame(el, rect),
         ...drawing(el),
-        radius: el.dataset.nativeModal === "dialog" ? 0 : parseFloat(style.borderTopLeftRadius) || 0,
+        radius: el.dataset.nativeModal === "dialog" ? 0 : parseFloat(style.borderTopLeftRadius),
       });
     },
 

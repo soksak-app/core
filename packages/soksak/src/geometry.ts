@@ -114,6 +114,7 @@ export function heldSizes(plane: Plane, axis: Axis): (number | null)[] {
   for (const card of plane.cards) {
     const size = fixedSize(card, axis);
     if (size === null) continue;
+    // default: a null slot holds no fixed card yet, so the first fixed size is taken as is.
     held[card[lo]] = Math.max(held[card[lo]] ?? 0, size);
   }
   return held;
@@ -779,6 +780,7 @@ export function zoneAt(plane: Plane, x: number, y: number, options: ZoneOptions 
   const footer = size(options.footerPx);
   // Every option is checked the same way the plane's are. A fraction that is
   // not one, or one outside the body, makes every point land on a side.
+  // default: `edge` is optional and documented as 0.25.
   const asked = options.edge ?? 0.25;
   const edge = Number.isFinite(asked) && asked >= 0 && asked <= 0.5 ? asked : 0.25;
 

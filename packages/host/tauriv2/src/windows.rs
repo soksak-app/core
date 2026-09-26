@@ -594,7 +594,7 @@ pub(crate) fn window_chrome(window: &Window) -> Result<Chrome, String> {
     let controls = window_controls(window)?;
     let handle = native_owner(window)?;
     let row = crate::exposure::on_main(window, move || {
-        Ok(platform::current()?.unified_titlebar(handle).unwrap_or(0.0))
+        platform::current()?.unified_titlebar(handle)
     })?;
     Ok(Chrome { controls, row })
 }

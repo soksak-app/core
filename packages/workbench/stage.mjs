@@ -104,6 +104,7 @@ for (const name of environment.plugins) {
   copyPackage(dir, join(target, modulePath(name, "")));
   // 섹션 모듈은 패키지의 files 로만 배포된다. 나열되지 않은 모듈은 release 에서 불러올 수 없다.
   const published = readJson(join(dir, "package.json")).files;
+  // 기본값: sections 는 plugin.json 의 선택 필드다(docs/spec/plugins.md).
   for (const section of manifest.sections ?? []) {
     if (!published.some((file) => section.module === file || section.module.startsWith(`${file}/`))) {
       throw new Error(`${name}: section ${section.id} module ${section.module} must be listed in files`);
@@ -128,6 +129,7 @@ for (const name of environment.plugins) {
       diagnosticPlugins[name] = declared;
     }
   }
+  // 기본값: sidecars 는 plugin.json 의 선택 필드다(docs/spec/plugins.md).
   for (const sidecar of manifest.sidecars ?? []) {
     if (sidecars.has(sidecar)) continue;
     sidecars.add(sidecar);
@@ -139,6 +141,7 @@ for (const name of environment.plugins) {
 
     place(sidecar, sidecarDir, declared.executable);
     // 헬퍼는 그 사이드카의 의존성이므로 사이드카 디렉터리에서 해석한다.
+    // 기본값: helpers 는 sidecar.json 의 선택 필드다(docs/spec/sidecars.md).
     for (const helper of declared.helpers ?? []) {
       place(helper.package, packageDir(sidecarDir, helper.package), helper.executable);
     }

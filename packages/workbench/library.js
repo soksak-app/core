@@ -40,6 +40,7 @@ export function createLibrary(root, rendered = () => {}) {
   const back = root.querySelector('.library-return');
   let pending = false;
 
+  // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 보인다.
   const fail = (reason) => { error.textContent = String(reason.message ?? reason); error.hidden = false; };
   async function perform(work) {
     if (pending) return;
@@ -49,6 +50,7 @@ export function createLibrary(root, rendered = () => {}) {
     finally { pending = false; root.removeAttribute('aria-busy'); render(); }
   }
   function record(root) {
+    // 기본값: 모든 색을 이미 쓰고 있으면 첫 색을 다시 쓴다.
     return projects.open({ root, color:TINTS.find(t=>!projects.all().some(p=>p.color===t)) ?? TINTS[0], layout:fresh() });
   }
   let formMode = null;
@@ -108,6 +110,7 @@ export function createLibrary(root, rendered = () => {}) {
     const query=search.value.trim().toLocaleLowerCase();
     const shown=all.filter(p=>`${p.title} ${p.root}`.toLocaleLowerCase().includes(query));
     if(sort.value==='name') shown.sort((a,b)=>a.title.localeCompare(b.title));
+    // 기본값: 한 번도 열지 않은 프로젝트는 lastOpened 가 없으므로 가장 오래된 것으로 정렬한다.
     if(sort.value==='recent') shown.sort((a,b)=>(b.lastOpened??0)-(a.lastOpened??0));
     if(sort.value==='open') shown.sort((a,b)=>Number(projects.isOpen(b.id))-Number(projects.isOpen(a.id)));
     grid.replaceChildren();
@@ -148,6 +151,7 @@ export function createLibrary(root, rendered = () => {}) {
         const r=pane.getBoundingClientRect();return {card:pane.dataset.cardId,x:r.x,y:r.y,w:r.width,h:r.height};
       });
     }
+    // 기본값: 폴더 이름 칸은 새 폴더를 만들 때만 있으므로 없는 칸의 값은 null 이다.
     const input=(name)=>form.querySelector(`input[name="${name}"]`)?.value ?? null;
     return {
       shown:[...grid.querySelectorAll('.library-project')].map(card=>card.dataset.projectId),
@@ -194,8 +198,11 @@ function preview(project) {
     const pane=element('div','library-preview__pane');
     pane.dataset.cardId=card.id;
     pane.style.gridArea=`${card.r0+1} / ${card.c0+1} / ${card.r1+1} / ${card.c1+1}`;
+    // 기본값: 자리 카드는 data 가 null 이므로 탭이 없다.
     const tabs=(card.data?.tabs ?? []).filter(t=>hasPlugin(t.plugin));
+    // 기본값: 활성 탭의 플러그인이 설치되지 않아 걸러졌으면 남은 첫 탭을 미리 본다.
     const active=tabs.find(t=>t.id===card.data?.activeId) ?? tabs[0];
+    // 기본값: 설치된 플러그인의 탭이 없는 카드는 플러그인이 없다(빈 문자열).
     pane.dataset.plugin=aside(card.id)?'sidebar':active?.plugin ?? '';
     if(active) {
       const {ink}=plugin(active.plugin);

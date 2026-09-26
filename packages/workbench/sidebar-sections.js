@@ -146,6 +146,7 @@ export function drawSet(container, sidebar, set, context) {
   if (set.layout !== "list" && set.layout !== "tabs") throw new Error(`set ${set.id} layout must be list or tabs`);
   const sections = set.sections.map(section);
   const choice = choiceOf(sidebar);
+  // 기본값: 섹션이 없는 세트에는 고를 탭이 없다(null).
   if (set.layout === "tabs" && !sections.some((s) => s.id === choice.tab)) choice.tab = sections[0]?.id ?? null;
   const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.surface]);
   let record = drawn.get(container);

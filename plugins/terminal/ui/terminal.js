@@ -42,7 +42,7 @@ function keyToMessage(keyName, text = "", modifiers = {}) {
     operation: "input",
     keys: [{
       key: keyName,
-      text: text || "",
+      text,
       shift: modifiers.shift,
       alt: modifiers.alt,
       ctrl: modifiers.ctrl,
@@ -85,74 +85,66 @@ function normalizeRange(range) {
   return { location: range.location, length: range.length };
 }
 
+// 커서 상태를 검사한다. 값은 이전 상태에 사이드카가 알린 필드를 덮은 전체 상태이므로 모든 필드가 있어야 한다.
 function normalizeCursor(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("cursor must be an object");
   }
   const cursor = value;
-  const rawShape = cursor.shape ?? DEFAULT_CURSOR.shape;
   const shapes = { block: "block", Block: "block", underline: "underline", Underline: "underline", beam: "beam", Beam: "beam", HollowBlock: "block", Hidden: "block" };
-  if (typeof rawShape !== "string" || !Object.hasOwn(shapes, rawShape)) {
-    throw new Error(`cursor.shape is invalid: ${String(rawShape)}`);
+  if (typeof cursor.shape !== "string" || !Object.hasOwn(shapes, cursor.shape)) {
+    throw new Error(`cursor.shape is invalid: ${String(cursor.shape)}`);
   }
-  const shape = shapes[rawShape];
-  const blink = cursor.blink ?? (cursor.blinking === true ? "On" : DEFAULT_CURSOR.blink);
-  if (!CURSOR_BLINK_MODES.has(blink)) throw new Error(`cursor.blink is invalid: ${String(blink)}`);
-  const integer = (field, fallback) => {
-    if (cursor[field] === undefined) return fallback;
+  if (!CURSOR_BLINK_MODES.has(cursor.blink)) throw new Error(`cursor.blink is invalid: ${String(cursor.blink)}`);
+  const integer = (field) => {
     if (!Number.isInteger(cursor[field]) || cursor[field] < 0) throw new Error(`cursor.${field} is invalid`);
     return cursor[field];
   };
-  const number = (field, fallback) => {
-    if (cursor[field] === undefined) return fallback;
+  const number = (field) => {
     if (typeof cursor[field] !== "number" || !Number.isFinite(cursor[field]) || cursor[field] < 0) {
       throw new Error(`cursor.${field} is invalid`);
     }
     return cursor[field];
   };
-  const boolean = (field, fallback) => {
-    if (cursor[field] === undefined) return fallback;
+  const boolean = (field) => {
     if (typeof cursor[field] !== "boolean") throw new Error(`cursor.${field} is invalid`);
     return cursor[field];
   };
-  if (cursor.unfocused !== undefined && !CURSOR_UNFOCUSED.has(cursor.unfocused)) {
-    throw new Error(`cursor.unfocused is invalid: ${String(cursor.unfocused)}`);
-  }
+  if (!CURSOR_UNFOCUSED.has(cursor.unfocused)) throw new Error(`cursor.unfocused is invalid: ${String(cursor.unfocused)}`);
+  if (!cursor.drawn || typeof cursor.drawn !== "object") throw new Error("cursor.drawn is invalid");
   return {
-    row: integer("row", DEFAULT_CURSOR.row),
-    col: integer("col", DEFAULT_CURSOR.col),
-    shape,
-    visible: boolean("visible", rawShape === "Hidden" ? false : DEFAULT_CURSOR.visible),
-    blinking: boolean("blinking", blink === "On" || blink === "Always"),
-    focused: boolean("focused", DEFAULT_CURSOR.focused),
-    blink,
-    interval: number("interval", DEFAULT_CURSOR.interval),
-    idleTimeout: number("idleTimeout", DEFAULT_CURSOR.idleTimeout),
-    unfocused: cursor.unfocused ?? DEFAULT_CURSOR.unfocused,
-    hollow: boolean("hollow", rawShape === "HollowBlock" || DEFAULT_CURSOR.hollow),
-    blinkVisible: boolean("blinkVisible", DEFAULT_CURSOR.blinkVisible),
-    drawn: cursor.drawn ?? DEFAULT_CURSOR.drawn,
+    row: integer("row"),
+    col: integer("col"),
+    shape: shapes[cursor.shape],
+    visible: boolean("visible"),
+    blinking: boolean("blinking"),
+    focused: boolean("focused"),
+    blink: cursor.blink,
+    interval: number("interval"),
+    idleTimeout: number("idleTimeout"),
+    unfocused: cursor.unfocused,
+    hollow: boolean("hollow"),
+    blinkVisible: boolean("blinkVisible"),
+    drawn: cursor.drawn,
   };
 }
 
+// 커서 정책을 검사한다. 설정과 사이드카의 cursor 답은 다섯 필드를 모두 담는다.
 function normalizeCursorPolicy(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("cursor policy must be an object");
-  const shape = value.shape ?? DEFAULT_CURSOR.shape;
+  const { shape, blink, unfocused } = value;
   if (!CURSOR_SHAPES.has(shape)) throw new Error(`cursor policy shape is invalid: ${String(shape)}`);
-  const blink = value.blink ?? DEFAULT_CURSOR.blink;
   if (!CURSOR_BLINK_MODES.has(blink)) throw new Error(`cursor policy blink is invalid: ${String(blink)}`);
-  const unfocused = value.unfocused ?? DEFAULT_CURSOR.unfocused;
   if (!CURSOR_UNFOCUSED.has(unfocused)) throw new Error(`cursor policy unfocused is invalid: ${String(unfocused)}`);
-  const integer = (name, fallback, minimum) => {
-    if (value[name] === undefined) return fallback;
+  const integer = (name, minimum) => {
     if (!Number.isInteger(value[name]) || value[name] < minimum) throw new Error(`cursor policy ${name} is invalid`);
     return value[name];
   };
   return {
     shape,
     blink,
-    interval: integer("interval", DEFAULT_CURSOR.interval, 1),
-    idleTimeout: integer("idleTimeout", DEFAULT_CURSOR.idleTimeout, 0),
+    interval: integer("interval", 1),
+    idleTimeout: integer("idleTimeout", 0),
     unfocused,
   };
 }
@@ -228,8 +220,9 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     for (const fn of inputObservers) fn(entry);
   };
   let cursor = { ...DEFAULT_CURSOR };
-  const initialSettings = settings?.read?.() ?? {};
-  let programClipboardPolicy = initialSettings["clipboard.program"] ?? "deny";
+  if (!settings || typeof settings.read !== "function") throw new Error("terminal settings reader is required");
+  const initialSettings = settings.read();
+  let programClipboardPolicy = initialSettings["clipboard.program"];
   if (!PROGRAM_CLIPBOARD_POLICIES.has(programClipboardPolicy)) {
     throw new Error(`clipboard.program setting is invalid: ${String(programClipboardPolicy)}`);
   }
@@ -312,7 +305,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   // 탭이 거부한 제목은 세션 오류이며 다음에 받아들여진 제목이 그 오류를 해소한다.
   let programTitle = null;
   const applyTitle = () => {
-    const shown = (settings?.read?.() ?? {}).title === "program" ? programTitle : null;
+    const shown = settings.read().title === "program" ? programTitle : null;
     try {
       tab.title(shown);
       if (resolveError("title")) changed("session");
@@ -458,8 +451,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     } else if (entry.type === "compose") {
       await terminal.send(id, { operation: "input", compose: {
         text: entry.text,
-        selectedRange: entry.selectedRange ?? null,
-        replacementRange: entry.replacementRange ?? null,
+        selectedRange: entry.selectedRange,
+        replacementRange: entry.replacementRange,
         attributed: entry.attributed === true,
       }});
     } else if (entry.type === "command") {
@@ -674,7 +667,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       selectionStarted = false;
       session = { ...session, selecting: true };
       changed("session");
-      view.setPointerCapture?.(event.pointerId);
+      view.setPointerCapture(event.pointerId);
       event.preventDefault();
     } catch (error) {
       reportInputError(error);
@@ -705,7 +698,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     selectionStarted = false;
     session = { ...session, selecting: false };
     changed("session");
-    view.releasePointerCapture?.(event.pointerId);
+    view.releasePointerCapture(event.pointerId);
     event.preventDefault();
     // 움직이지 않은 클릭은 누른 칸에서 빈 선택을 시작하고 끝낸다. 빈 선택의 뗌은 이전 선택을 지운다.
     if (!started) observeInput(terminal.send(id, { operation: "selection.start", ...start }));
@@ -749,9 +742,9 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   let terminalBackground = null;
   const applyScrollbarSettings = (values) => {
     const next = { track: values["scrollbar.track"], thumb: values["scrollbar.thumb"], width: values["scrollbar.width"], shape: values["scrollbar.shape"] };
-    if (next.track === "terminal" || COLOR.test(next.track ?? "")) scrollbarStyle.track = next.track;
+    if (next.track === "terminal" || (typeof next.track === "string" && COLOR.test(next.track))) scrollbarStyle.track = next.track;
     else reportInputError(new Error(`scrollbar.track setting is invalid: ${String(next.track)}`));
-    if (COLOR.test(next.thumb ?? "")) scrollbarStyle.thumb = next.thumb;
+    if (typeof next.thumb === "string" && COLOR.test(next.thumb)) scrollbarStyle.thumb = next.thumb;
     else reportInputError(new Error(`scrollbar.thumb setting is invalid: ${String(next.thumb)}`));
     if (Number.isInteger(next.width) && next.width >= 4 && next.width <= 24) scrollbarStyle.width = next.width;
     else reportInputError(new Error(`scrollbar.width setting is invalid: ${String(next.width)}`));
@@ -763,6 +756,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   const paintScrollbar = () => {
     if (!scrollbar) return;
     scrollbar.track.style.width = `${scrollbarStyle.width}px`;
+    // 기본값: 첫 화면의 배경을 받기 전에는 트랙을 아직 색칠하지 않는다.
     scrollbar.track.style.background = scrollbarStyle.track === "terminal" ? (terminalBackground ?? "") : scrollbarStyle.track;
     scrollbar.thumb.style.background = scrollbarStyle.thumb;
     scrollbar.thumb.style.borderRadius = scrollbarStyle.shape === "square" ? "0px" : "999px";
@@ -785,7 +779,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     thumbDrag = { pointerId: event.pointerId, grab: event.clientY - scrollbar.track.getBoundingClientRect().top - top, sent: null };
     // 끄는 동안 손잡이는 쥔 손 포인터를 보인다.
     scrollbar.thumb.dataset.dragging = "";
-    scrollbar.thumb.setPointerCapture?.(event.pointerId);
+    scrollbar.thumb.setPointerCapture(event.pointerId);
   };
   const moveThumb = (event) => {
     if (!thumbDrag || event.pointerId !== thumbDrag.pointerId) return;
@@ -800,7 +794,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   };
   const endThumbDrag = (event) => {
     if (!thumbDrag || event.pointerId !== thumbDrag.pointerId) return;
-    scrollbar.thumb.releasePointerCapture?.(event.pointerId);
+    scrollbar.thumb.releasePointerCapture(event.pointerId);
     delete scrollbar.thumb.dataset.dragging;
     thumbDrag = null;
   };
@@ -877,7 +871,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         paintScrollbar();
       }
       if (body.scrollback !== undefined) {
-        const { offset, history } = body.scrollback ?? {};
+        const { offset, history } = body.scrollback;
         if (!Number.isInteger(offset) || !Number.isInteger(history) || offset < 0 || history < 0) {
           reportInputError(`invalid screen scrollback from sidecar: ${JSON.stringify(body.scrollback)}`, "screen");
         } else if (offset !== session.scrollback.offset || history !== session.scrollback.history) {
@@ -889,7 +883,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       // 화면의 커서는 현재 위치·표시·포커스와 그린 모양이다. 그린 모양은 표시 규칙이 적용된 값이므로 정책 값을 바꾸지 않고
       // drawn 에 둔다.
       if (body.cursor !== undefined) {
-        const { col, row, visible, focused, shape, blinking } = body.cursor ?? {};
+        const { col, row, visible, focused, shape, blinking } = body.cursor;
         if (!Number.isInteger(col) || !Number.isInteger(row) || typeof visible !== "boolean" || typeof focused !== "boolean" ||
           !Object.hasOwn(DRAWN_SHAPES, shape) || typeof blinking !== "boolean") {
           reportInputError(`invalid screen cursor from sidecar: ${JSON.stringify(body.cursor)}`, "screen");
@@ -1043,11 +1037,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   // 세션 열기는 크기를 보내지 않는다. 호스트가 네이티브 영역을 적용하며 보낸 configure만
   // 이미지와 PTY 크기의 권위 있는 입력이다.
   // 세션은 설정 shell 이 가리키는 셸을 연다(login 은 계정의 로그인 셸). 설정이 없으면 다른 셸로 대신하지 않는다.
-  const shell = (settings?.read?.() ?? {}).shell;
+  const shell = settings.read().shell;
   if (typeof shell !== "string" || shell.length === 0) throw new Error("terminal shell setting is missing");
   applyTitle();
   // 터미널에서 쪼갠 터미널은 그 터미널이 마지막으로 알린 디렉터리에서, 아니면 프로젝트 루트에서 시작한다.
   // 프로젝트가 없는 창에서는 홈 디렉터리에서 시작한다(docs/spec/terminal-runtime.md).
+  // 기본값: 분할 출처에 디렉터리가 없으면 프로젝트 루트, 프로젝트도 없으면 홈 디렉터리에서 연다.
   const directory = origin.directory ?? project?.root ?? null;
   await terminal.send(id, { operation: "open", image: "view", shell, ...(directory === null ? {} : { directory }) });
 
@@ -1069,6 +1064,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       }
       return request.catch(reportInputError);
     });
+    // 기본값: 구독 결과에 ready 약속이 없으면 구독 결과 자체가 첫 테마 적용의 완료다.
     themeReady = Promise.resolve(themeSubscription?.ready ?? themeSubscription).catch((error) => {
       reportInputError(error);
       throw error;
@@ -1078,7 +1074,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
 
   let settingsSubscription = null;
   const settingsPolicy = () => {
-    const values = settings?.read?.() ?? {};
+    const values = settings.read();
     return {
       shape: values["cursor.shape"],
       blink: values["cursor.blink"],
@@ -1088,11 +1084,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     };
   };
   if (settings) {
-    await setFont((settings.read?.() ?? {})["font.family"]).catch((error) => {
+    await setFont(settings.read()["font.family"]).catch((error) => {
       reportInputError(error);
     });
     await setCursorPolicy(settingsPolicy());
-    applyScrollbarSettings(settings.read?.() ?? {});
+    applyScrollbarSettings(settings.read());
     settingsSubscription = settings.on((values) => {
       applyScrollbarSettings(values);
       applyTitle();
@@ -1184,7 +1180,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       throw error;
     }
   });
-  await expose.command("terminal.cursor.set", async (policy) => setCursorPolicy(policy));
+  // 빠진 필드는 지금 정책 값을 유지한다.
+  await expose.command("terminal.cursor.set", async (policy) => setCursorPolicy({
+    shape: cursor.shape, blink: cursor.blink, interval: cursor.interval, idleTimeout: cursor.idleTimeout,
+    unfocused: cursor.unfocused, ...policy,
+  }));
   await expose.command("terminal.paste", pasteText);
   await expose.command("terminal.scrollback.set", async ({ offset } = {}) => {
     if (!Number.isInteger(offset) || offset < 0) throw new Error(`terminal.scrollback.set requires a nonnegative integer offset: ${String(offset)}`);
@@ -1245,9 +1245,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     },
     async dispose() {
       const offTheme = await themeSubscription?.dispose;
+      // 기본값: 테마나 설정 구독이 없으면 해제 함수도 없다.
       offTheme?.();
+      // 기본값: 설정 구독이 없으면 해제 함수도 없다.
       settingsSubscription?.();
       textSizeSubscription();
+      // 기본값: 사이드카 구독을 만들지 못한 경우에는 해제 함수가 없다.
       stopSidecar?.();
       view.removeEventListener("pointerdown", preventDefaultFocus);
       view.removeEventListener("pointerdown", beginSelection);

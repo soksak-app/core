@@ -10,6 +10,7 @@ pub fn host_name() -> Result<String, String> {
     let end = buffer
         .iter()
         .position(|byte| *byte == 0)
+        // 기본값: 이름이 버퍼를 채워 NUL 이 없으면 버퍼 전체가 이름이다.
         .unwrap_or(buffer.len());
     String::from_utf8(buffer[..end].to_vec()).map_err(|_| "the host name is not UTF-8".to_string())
 }

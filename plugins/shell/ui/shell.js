@@ -74,7 +74,8 @@ export async function mount(root, context) {
     else if (body.error !== undefined) write(`error: ${body.error}\n`);
   });
   // 셸에서 쪼갠 셸은 그 셸이 있던 곳에서, 아니면 사이드카가 프로젝트 루트에서 시작한다(docs/spec/sidecars.md).
-  const directory = context.origin?.directory ?? null;
+  // origin.directory 는 기록된 디렉터리이거나 null 이다(표면 문맥).
+  const directory = context.origin.directory;
   await shell.send(context.surfaceId, { operation: "open", ...(directory === null ? {} : { directory }) });
   context.status.report("ready");
   return { async dispose() {

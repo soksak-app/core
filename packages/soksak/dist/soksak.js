@@ -159,27 +159,36 @@ export class Soksak {
         /** True while canSplit runs a trial split and restores the state. */
         this.probing = false;
         this.g = 24;
+        // default: each layout option is optional and documented with this default in SoksakOptions.
         this.gap = (_a = options.gap) !== null && _a !== void 0 ? _a : 24;
+        // default: documented in SoksakOptions.
         const min = (_b = options.minSize) !== null && _b !== void 0 ? _b : 96;
         this.min = Number.isFinite(min) && min >= 0 ? min : 96;
         // Every option is checked the same way. A number that is not one puts NaN
         // into every rect the plane computes, and the elements then carry a length
         // the CSSOM discards.
         this.grab = 11;
+        // default: documented in SoksakOptions.
         this.grabSize = (_c = options.grabSize) !== null && _c !== void 0 ? _c : 11;
         this.snapAt = 7;
+        // default: documented in SoksakOptions.
         this.snapDistance = (_d = options.snapDistance) !== null && _d !== void 0 ? _d : 7;
         this.snapMode = 'merge';
+        // default: documented in SoksakOptions.
         this.snap = (_e = options.snap) !== null && _e !== void 0 ? _e : 'merge';
+        // default: documented in SoksakOptions.
         this.order = (_f = options.fillOrder) !== null && _f !== void 0 ? _f : 'v';
         this.w = 0;
         this.h = 0;
+        // default: a plane made before its host has a size starts empty; `resize` sets it.
         this.resize((_g = options.width) !== null && _g !== void 0 ? _g : 0, (_h = options.height) !== null && _h !== void 0 ? _h : 0);
         if (state) {
             checkState(state);
             this.xs = [...state.xs];
             this.ys = [...state.ys];
+            // default: `fixed` is optional on CardInit; an unmarked card is not fixed.
             this.list = state.cards.map((c) => { var _a; return ({ ...c, fixed: (_a = c.fixed) !== null && _a !== void 0 ? _a : false }); });
+            // default: `paidBy` is optional in SoksakState; a state without it records no payer.
             this.paidBy = new Map(Object.entries((_j = state.paidBy) !== null && _j !== void 0 ? _j : {}));
         }
         else {
@@ -310,7 +319,9 @@ export class Soksak {
         checkState(state);
         this.xs = [...state.xs];
         this.ys = [...state.ys];
+        // default: `fixed` is optional on CardInit; an unmarked card is not fixed.
         this.list = state.cards.map((c) => { var _a; return ({ ...c, fixed: (_a = c.fixed) !== null && _a !== void 0 ? _a : false }); });
+        // default: `paidBy` is optional in SoksakState; a state without it records no payer.
         this.paidBy = new Map(Object.entries((_a = state.paidBy) !== null && _a !== void 0 ? _a : {}));
         this.sliceMemo.clear();
         this.splitMemo.clear();
@@ -959,6 +970,8 @@ export class Soksak {
         const [lo, hi] = SPAN[axis];
         // px per unit of span: the card's own px size, or the sharing slots' ratio.
         const own = fixedSize(card, axis);
+        // default: a fixed card takes its px size from `width`/`height`, not from units, so its span can be zero
+        // units; its px size then counts per one unit.
         const per = own !== null ? own / (a[card[hi]] - a[card[lo]] || 1) : this.sharedExtent(axis);
         if (per <= EPS)
             return null;
@@ -1115,6 +1128,7 @@ export class Soksak {
             }
         }
         const fresh = {
+            // default: `id` is optional; the plane issues one.
             id: (_a = init.id) !== null && _a !== void 0 ? _a : this.nextId(),
             c0: card.c0,
             c1: card.c1,
@@ -1321,6 +1335,7 @@ export class Soksak {
                 // and an offset that no longer lands inside the payer names a slot the
                 // payer never gave anything from. The width then goes to the slot beside
                 // the boundary instead, which is where a close with no record puts it.
+                // default: `at` is absent on a record saved before it existed; its slot is the payer's first.
                 const paidAt = back ? back[lo] + ((_a = paid.at) !== null && _a !== void 0 ? _a : 0) : merged;
                 const first = back && paidAt >= back[lo] && paidAt < back[hi] ? paidAt : merged;
                 this.settleOn(axis, want, paid.to === '' ? [] : order(first, want.length));
@@ -1351,6 +1366,7 @@ export class Soksak {
             // payer that is itself one of the growers takes the width back with the
             // slots, so nothing is named there.
             const back = paid && this.find(paid.to);
+            // default: `at` is absent on a record saved before it existed; its slot is the payer's first.
             const paidAt = back ? back[lo] + ((_b = paid.at) !== null && _b !== void 0 ? _b : 0) : -1;
             const gives = !!back &&
                 !filling.cards.includes(back) &&
@@ -1462,6 +1478,7 @@ export class Soksak {
         const held = slotWidths(this.plane, axis);
         const gave = this.openSlot(axis, line, init.size / plane);
         const fresh = {
+            // default: `id` is optional; the plane issues one.
             id: (_a = init.id) !== null && _a !== void 0 ? _a : this.nextId(),
             c0: 0, c1: 1, r0: 0, r1: 1,
             fixed: false,
@@ -1815,7 +1832,9 @@ export class Soksak {
         var _a;
         this.xs = [...state.xs];
         this.ys = [...state.ys];
+        // default: `fixed` is optional on CardInit; an unmarked card is not fixed.
         this.list = state.cards.map((c) => { var _a; return ({ ...c, fixed: (_a = c.fixed) !== null && _a !== void 0 ? _a : false }); });
+        // default: `paidBy` is optional in SoksakState; a state without it records no payer.
         this.paidBy = new Map(Object.entries((_a = state.paidBy) !== null && _a !== void 0 ? _a : {}));
         this.agreeSizes();
         this.sliceMemo.clear();

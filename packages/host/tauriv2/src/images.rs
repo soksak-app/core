@@ -121,6 +121,7 @@ impl Images {
         self.shared
             .inner
             .lock()
+            // 기본값: 잠금을 쥔 채 멈춘 스레드도 상태를 한 번의 넣기, 빼기, 읽기로만 바꾸므로 상태는 일관되고, 그 멈춤은 패닉 보고로 이미 알려졌다.
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
@@ -236,8 +237,13 @@ impl Images {
     /// 그림 영역을 등록한 사이드카 소유자를 반환한다.
     pub fn get_owner(&self, key: &Key) -> Result<String, String> {
         let inner = self.lock();
+        // 기본값: 등록하지 않은 영역에는 주소가 없고, 주소 0 은 만드는 중이라 붙지 않은 영역이다.
         if inner.handles.get(key).map(|&h| h != 0).unwrap_or(false) {
-            Ok(inner.owners.get(key).cloned().unwrap_or_default())
+            inner
+                .owners
+                .get(key)
+                .cloned()
+                .ok_or_else(|| format!("image {:?} has no recorded owner", key.1))
         } else {
             Err(format!("image {:?} is not attached", key.1))
         }
@@ -246,8 +252,13 @@ impl Images {
     /// 그림 영역을 등록한 사이드카 이름을 반환한다.
     pub fn get_sidecar(&self, key: &Key) -> Result<String, String> {
         let inner = self.lock();
+        // 기본값: 등록하지 않은 영역에는 주소가 없고, 주소 0 은 만드는 중이라 붙지 않은 영역이다.
         if inner.handles.get(key).map(|&h| h != 0).unwrap_or(false) {
-            Ok(inner.sidecars.get(key).cloned().unwrap_or_default())
+            inner
+                .sidecars
+                .get(key)
+                .cloned()
+                .ok_or_else(|| format!("image {:?} has no recorded sidecar", key.1))
         } else {
             Err(format!("image {:?} is not attached", key.1))
         }
@@ -338,7 +349,9 @@ impl Images {
                     .surface_visibility
                     .get(&key.0)
                     .copied()
+                    // 기본값: 숨김을 알리지 않은 표면은 보인다(숨길 때만 surface_visibility 에 적는다).
                     .unwrap_or(true);
+                // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
                 let handle = inner.handles.get(key).copied().unwrap_or_default();
                 (state.visible && outer && handle != 0).then(|| (key.clone(), handle))
             })
@@ -359,7 +372,9 @@ impl Images {
             .surface_visibility
             .get(&key.0)
             .copied()
+            // 기본값: 숨김을 알리지 않은 표면은 보인다(숨길 때만 surface_visibility 에 적는다).
             .unwrap_or(true);
+        // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
         if inner.handles.get(key).copied().unwrap_or_default() == 0 {
             return Err(format!("image {:?} is not attached", key.1));
         }
@@ -409,6 +424,7 @@ impl Images {
     /// 래스터가 없는 0 크기 배치에서도 영역의 표시 상태를 기록한다.
     pub fn set_visible(&self, key: &Key, visible: bool) -> Result<(), String> {
         let mut inner = self.lock();
+        // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
         if inner.handles.get(key).copied().unwrap_or_default() == 0 {
             return Err(format!("image {:?} is not attached", key.1));
         }
@@ -446,6 +462,7 @@ impl Images {
         sequence: i32,
     ) -> Result<(), &'static str> {
         let mut inner = self.lock();
+        // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
         let attached = inner.handles.get(key).copied().unwrap_or_default() != 0;
         let sender_matches = inner
             .sidecars
@@ -480,6 +497,7 @@ impl Images {
         sequence: i32,
     ) -> Result<(), &'static str> {
         let inner = self.lock();
+        // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
         let attached = inner.handles.get(key).copied().unwrap_or_default() != 0;
         let Some(state) = inner.states.get(key) else {
             return Err("notAttached");
@@ -542,7 +560,9 @@ impl Images {
                 .surface_visibility
                 .get(&key.0)
                 .copied()
+                // 기본값: 숨김을 알리지 않은 표면은 보인다(숨길 때만 surface_visibility 에 적는다).
                 .unwrap_or(true);
+            // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
             inner.handles.get(key).copied().unwrap_or_default() == 0
                 || !state.visible
                 || !surface_visible
@@ -580,6 +600,7 @@ impl Images {
                 .shared
                 .changed
                 .wait_timeout(inner, remaining)
+                // 기본값: 잠금을 쥔 채 멈춘 스레드도 상태를 한 번의 넣기, 빼기, 읽기로만 바꾸므로 상태는 일관되고, 그 멈춤은 패닉 보고로 이미 알려졌다.
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             inner = next;
             if result.timed_out() && !Self::current_presented_locked(&inner) {
@@ -591,7 +612,9 @@ impl Images {
                             .surface_visibility
                             .get(&key.0)
                             .copied()
+                            // 기본값: 숨김을 알리지 않은 표면은 보인다(숨길 때만 surface_visibility 에 적는다).
                             .unwrap_or(true);
+                        // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
                         let handle = inner.handles.get(key).copied().unwrap_or_default();
                         let waiting = handle != 0
                             && state.visible
@@ -988,30 +1011,28 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
 }
 
 /// 이미지 표시 후 응답을 생성한다.
-/// ok 가 true 면 consumed 응답을 반환하고, false 면 reason 을 오류로 반환한다.
+/// 표시가 되었으면 consumed 응답을, 실패했으면 그 까닭을 오류로 반환한다.
 pub fn after_present(
-    ok: bool,
-    reason: Option<&str>,
+    outcome: Result<(), &str>,
     name: &str,
     generation: u64,
     raster: u64,
     sequence: i32,
 ) -> serde_json::Value {
-    if ok {
-        serde_json::json!({
+    match outcome {
+        Ok(()) => serde_json::json!({
             "image": {
                 "consumed": {
                     "name": name, "generation": generation, "raster": raster, "sequence": sequence
                 }
             }
-        })
-    } else {
-        serde_json::json!({
+        }),
+        Err(reason) => serde_json::json!({
             "image": {
-                "error": reason.unwrap_or("unknown"), "name": name,
+                "error": reason, "name": name,
                 "generation": generation, "raster": raster, "sequence": sequence
             }
-        })
+        }),
     }
 }
 
@@ -1105,8 +1126,8 @@ where
                                     .ok_or_else(|| "presentFailed".to_string())
                             })
                     }));
-                    let (ok, reason) = match presentation {
-                        Ok(()) => (true, None),
+                    let reason = match presentation {
+                        Ok(()) => None,
                         Err(e) => {
                             if e == "notAttached" {
                                 eprintln!(
@@ -1133,7 +1154,7 @@ where
                                 "presentFailed" => "presentFailed",
                                 _ => "presentFailed",
                             };
-                            (false, Some(reason))
+                            Some(reason)
                         }
                     };
 
@@ -1149,25 +1170,22 @@ where
                         }
                     }
 
-                    let response = if ok {
-                        images.mark_presented(&key, generation, raster, sequence);
-                        after_present(true, None, &name, generation, raster, sequence)
-                    } else {
-                        after_present(false, reason, &name, generation, raster, sequence)
+                    let response = match reason {
+                        None => {
+                            images.mark_presented(&key, generation, raster, sequence);
+                            after_present(Ok(()), &name, generation, raster, sequence)
+                        }
+                        Some(reason) => {
+                            after_present(Err(reason), &name, generation, raster, sequence)
+                        }
                     };
                     if let Err(e) = send_response(&name, response) {
                         eprintln!("image response {}: {}", name, e);
                     }
                 }
                 Err(_) => {
-                    let response = after_present(
-                        false,
-                        Some("notAttached"),
-                        &name,
-                        generation,
-                        raster,
-                        sequence,
-                    );
+                    let response =
+                        after_present(Err("notAttached"), &name, generation, raster, sequence);
                     if let Err(e) = send_response(&name, response) {
                         eprintln!("image notAttached {}: {}", name, e);
                     }

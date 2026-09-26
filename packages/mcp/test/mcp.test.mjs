@@ -273,3 +273,23 @@ test("the server exits when stdin closes", async (t) => {
   mcp.child.stdin.end();
   assert.equal(await mcp.exited, 0);
 });
+
+test("tools/list reports an exposure.list without a list or a command params schema instead of filling them in", async (t) => {
+  for (const [label, change, message] of [
+    ["no dom list", (entries) => { delete entries.dom; }, /exposure.list has no dom list/],
+    ["no params schema", (entries) => { delete entries.commands[0].params; }, /declares no params schema/],
+  ]) {
+    const sample = sampleHandlers();
+    const list = sample.handlers["exposure.list"];
+    sample.handlers["exposure.list"] = (params) => {
+      const entries = structuredClone(list(params));
+      change(entries);
+      return entries;
+    };
+    const endpoint = await startFakeEndpoint(sample.handlers);
+    t.after(() => endpoint.close());
+    const mcp = startMcp(t, ["--config-dir", endpoint.configDir, "--window", "main"]);
+    const reply = await mcp.modern("tools/list");
+    assert.match(JSON.stringify(reply), message, `${label}: ${JSON.stringify(reply)}`);
+  }
+});

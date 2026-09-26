@@ -42,6 +42,7 @@ fn send_image_configurations(
 
 /// 래스터 크기를 정하지 못한 영역의 측정 상태(배치, 크기, 표면 배율)를 오류에 싣는다.
 fn raster_facts(platform: &dyn platform::Platform, handle: platform::Handle) -> String {
+    // 기본값: 측정 상태를 읽지 못하면 그 오류 문장을 대신 싣는다. 어느 쪽이든 오류 보고에 들어간다.
     platform.image_facts(handle).unwrap_or_else(|error| error)
 }
 
@@ -166,6 +167,7 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
         .iter()
         .map(|region| region.name.clone())
         .collect();
+    // 기본값: overlays 를 선언하지 않은 표면에는 오버레이가 없다.
     let overlay_names = declaration.overlays.clone().unwrap_or_default();
     let regions = exact_placements(request.regions, &region_names, "regions")?;
     let overlays = exact_placements(request.overlays, &overlay_names, "overlays")?;
@@ -186,6 +188,7 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
             .composition_revisions
             .lock()
             .map_err(|e| e.to_string())?;
+        // 기본값: 아직 배치를 받지 않은 표면의 마지막 판은 0 이다.
         if revision <= revisions.get(&surface).copied().unwrap_or_default() {
             return Err(format!("stale composition revision {revision}"));
         }

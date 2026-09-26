@@ -22,6 +22,7 @@ export function attachImage(port, element, name, sidecar, view = element.ownerDo
     const next = chain.then(work);
     // 내부 체인에서만 에러를 기록한다. 호출자는 next를 받으므로 실패 시 rejection이 전달된다.
     chain = next.catch((error) => {
+      // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
       console.error(`image ${name} operation failed:`, error?.message ?? error);
     });
     return next;
@@ -73,7 +74,7 @@ export function attachImage(port, element, name, sidecar, view = element.ownerDo
       detached = true;
       stopObserving();
       listeners.clear();
-      unlisten.then((stop) => stop?.());
+      unlisten.then((stop) => stop());
       return done;
     },
   };

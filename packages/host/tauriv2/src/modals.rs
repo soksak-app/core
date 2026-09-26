@@ -332,6 +332,7 @@ pub(crate) fn content(
             revision: modal.revision,
             content: modal.content.clone(),
         })
+        // 기본값: 다른 모달의 요청에는 번호 0 의 빈 내용으로 답하고 모달 페이지가 그것을 버린다(위 설명).
         .unwrap_or_default();
     // 검사가 응답을 붙잡았으면 놓을 때까지 보내지 않는다.
     #[cfg(feature = "diagnostics")]

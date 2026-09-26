@@ -22,7 +22,7 @@ export function onAnswer(root, send) {
   // 메뉴는 Escape 로 취소한다. dialog 는 자기 닫기 버튼으로만 닫는다.
   root.addEventListener("keydown", (e) => {
     const menu = '[data-native-modal="menu"]';
-    if (e.key === "Escape" && (root.matches?.(menu) || root.querySelector(menu))) send("", "");
+    if (e.key === "Escape" && (root.matches(menu) || root.querySelector(menu))) send("", "");
   });
 }
 

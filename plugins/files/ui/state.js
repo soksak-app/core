@@ -38,6 +38,7 @@ export async function mount(context) {
   const join = (parent, name) => (parent ? `${parent}/${name}` : name);
 
   function rows(path = "", depth = 0) {
+    // 기본값: 아직 나열하지 않은(접힌) 디렉터리에는 보일 하위 행이 없다.
     return (listings.get(path) ?? []).flatMap((entry) => {
       const child = join(path, entry.name);
       const open = entry.directory && expanded.has(child);
@@ -58,6 +59,7 @@ export async function mount(context) {
     let failed = null;
     for (const path of [...expanded].sort((a, b) => a.length - b.length)) {
       const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+      // 기본값: 새 목록에 부모가 없으면(부모가 사라졌거나 나열에 실패했으면) 이 폴더도 없는 것으로 보고 접는다.
       if (path && !(fresh.get(parent) ?? []).some((entry) => entry.directory && join(parent, entry.name) === path)) {
         expanded.delete(path);
         continue;
@@ -91,7 +93,9 @@ export async function mount(context) {
   context.exposure.status("files.git", () => git, watch("git"));
   context.exposure.status("files.selection", () => selection, watch("selection"));
   context.exposure.command("files.select", async ({ path }) => {
-    selection = path ?? null;
+    // 선택을 지우는 요청은 path 를 null 로 보낸다. path 가 빠진 요청을 지우기로 바꾸지 않는다.
+    if (path === undefined) throw new Error("files.select requires path, a string or null");
+    selection = path;
     notify("selection", () => selection);
     return null;
   });

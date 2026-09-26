@@ -137,6 +137,9 @@ test("registered entries answer requests and reject undeclared or unregistered n
   });
   assert.deepEqual(await replyPayload(() => entries.answer("command.run", { name: "probe.send", params: { data: "x" } })),
     { result: null });
+  // command.run 은 params 를 반드시 담는다. 빈 매개변수로 바꾸어 실행하지 않는다.
+  assert.equal(await code(() => entries.answer("command.run", { name: "probe.send" })), EXPOSURE_ERRORS.invalidParams);
+  assert.deepEqual(sent, ["x"]);
   assert.equal(await code(() => entries.answer("command.run", { name: "probe.send", params: { data: 1 } })),
     EXPOSURE_ERRORS.invalidParams);
   assert.deepEqual(await replyPayload(() => entries.answer("command.run", { name: "probe.send", params: { data: "fail" } })),
@@ -187,6 +190,9 @@ test("a watched status reports each changed value once and ends with unwatch", a
   assert.equal(await entries.answer("status.watch", { name: "probe.lines" }, changed), null);
   assert.equal(await entries.answer("status.watch", { name: "probe.lines" }, changed), null, "a second watch is the same watch");
   assert.deepEqual(await entries.answer("status.next", { name: "probe.lines", version: 0 }), { version: 1, value: ["a"] });
+  // status.next 는 version 을 반드시 담는다. 없는 version 을 0 으로 보지 않는다.
+  assert.equal((await replyPayload(() => entries.answer("status.next", { name: "probe.lines" }))).error?.code,
+    EXPOSURE_ERRORS.invalidParams);
   const next = entries.answer("status.next", { name: "probe.lines", version: 1 });
   emit(["a"]);
   value = ["a", "b"];

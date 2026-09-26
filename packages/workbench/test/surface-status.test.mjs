@@ -26,3 +26,15 @@ test("surface loading status is visible until the module becomes ready", async (
   assert.match(indicator.textContent, /network/);
   dom.window.close();
 });
+
+test("a surface status without a phase or an error state without an error is rejected", async () => {
+  const dom = new JSDOM("<footer class=status></footer>");
+  globalThis.document = dom.window.document;
+  const { setSurfaceStatus } = await import("../surface-status.js");
+  const status = document.querySelector(".status");
+  assert.throws(() => setSurfaceStatus(status, {}), /invalid surface phase/);
+  assert.throws(() => setSurfaceStatus(status, { phase: "error", error: null }), /carries no error/);
+  setSurfaceStatus(status, { phase: "error", error: new Error("broken") });
+  assert.match(status.querySelector("[data-surface-status]").textContent, /broken/);
+  dom.window.close();
+});

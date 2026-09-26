@@ -67,6 +67,7 @@ async function selectWindow(c, requested) {
   if (requested !== undefined) return requested;
   if (values.window !== undefined) return values.window;
   const windows = await c.request("windows.list");
+  // 기본값: 키 창이 없으면(애플리케이션이 비활성이면) windows.list 의 첫 창이다(선택 순서는 위 주석).
   const selected = windows.find((w) => w.key) ?? windows[0];
   if (!selected) throw new Error("the application has no window");
   return selected.window;
@@ -87,11 +88,19 @@ function describe(entries) {
   return entries.map((entry) => `${entry.name}${entry.registered ? "" : " (not registered)"}: ${entry.description}`).join("\n");
 }
 
+// 명령 선언은 params 스키마를 반드시 담는다(docs/spec/exposure.md).
+function paramsOf(command) {
+  if (!command.params) throw new Error(`command ${command.name} declares no params schema`);
+  return command.params;
+}
+
 // exposure.list 결과로 도구 목록을 만든다.
 function buildTools(window, exposure) {
-  const status = exposure.status ?? [];
-  const commands = exposure.commands ?? [];
-  const dom = exposure.dom ?? [];
+  // exposure.list 는 항상 세 목록을 모두 담는다(docs/spec/endpoint.md). 빠진 목록은 응답 오류다.
+  for (const key of ["status", "commands", "dom"]) {
+    if (!Array.isArray(exposure[key])) throw new Error(`exposure.list has no ${key} list`);
+  }
+  const { status, commands, dom } = exposure;
   const object = (properties, required = []) => ({ type: "object", properties, required, additionalProperties: false });
   const tools = [
     {
@@ -128,7 +137,7 @@ function buildTools(window, exposure) {
     tools.push({
       name: COMMAND_PREFIX + command.name.replaceAll(".", "_"),
       description: `Runs command ${command.name}${command.registered ? "" : " (not registered)"}: ${command.description}`,
-      inputSchema: object({ window: windowProperty, surface: surfaceProperty, params: command.params ?? { type: "object" } }),
+      inputSchema: object({ window: windowProperty, surface: surfaceProperty, params: paramsOf(command) }),
     });
   }
   tools.push(
@@ -209,6 +218,7 @@ function withWindow(window, args, keys) {
 
 async function callTool(params) {
   const name = params?.name;
+  // 기본값: MCP tools/call 의 arguments 는 선택 필드이며, 없으면 인자가 없는 호출이다.
   const args = params?.arguments ?? {};
   if (typeof name !== "string") throw new RpcError(-32602, "tools/call requires name");
   if (typeof args !== "object" || Array.isArray(args)) throw new RpcError(-32602, "arguments must be an object");
@@ -246,6 +256,7 @@ async function callTool(params) {
           value = await c.request("command.run", {
             ...withWindow(window, args, ["surface"]),
             name: name.slice(COMMAND_PREFIX.length).replaceAll("_", "."),
+            // 기본값: 명령 도구의 params 는 선택 인자이며, 없으면 빈 매개변수로 실행한다.
             params: args.params ?? {},
           });
       }
@@ -254,11 +265,13 @@ async function callTool(params) {
     const code = error.code !== undefined ? ` (${error.code})` : "";
     return { content: [{ type: "text", text: `${error.message}${code}` }], isError: true };
   }
+  // 기본값: 결과가 없는 요청은 undefined 이고, JSON 에는 undefined 가 없으므로 null 로 적는다.
   return { content: [{ type: "text", text: JSON.stringify(value ?? null) }] };
 }
 
 async function watchOnce(c, window, args) {
   if (typeof args.name !== "string") throw new Error("name is required");
+  // 기본값: watch 도구 설명이 밝힌 기본 대기 시간 10000 ms 다.
   const timeout = args.timeout ?? 10000;
   const surface = args.surface;
   if ("equals" in args) {
@@ -298,6 +311,7 @@ function era(params) {
 }
 
 function complete(result) {
+  // 기본값: _meta 는 MCP 결과의 선택 필드다. 없으면 서버 정보만 담는다.
   return { resultType: "complete", ...result, _meta: { ...(result._meta ?? {}), [META_SERVER]: SERVER_INFO } };
 }
 
@@ -350,6 +364,7 @@ lines.on("line", (line) => {
     return;
   }
   if (!message || typeof message !== "object" || Array.isArray(message) || message.jsonrpc !== "2.0") {
+    // 기본값: JSON-RPC 2.0 은 요청 id 를 알 수 없는 오류 응답의 id 를 null 로 정한다.
     send({ id: message?.id ?? null, error: { code: -32600, message: "Invalid Request" } });
     return;
   }

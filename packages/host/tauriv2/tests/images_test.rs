@@ -187,7 +187,7 @@ fn attached_image_is_presented() {
 // contract: images.ack.consumed-carries-frame-identity
 #[test]
 fn successful_present_is_consumed() {
-    let response = after_present(true, None, "view", 7, 3, 1);
+    let response = after_present(Ok(()), "view", 7, 3, 1);
     assert!(response["image"]["consumed"].is_object());
     assert_eq!(response["image"]["consumed"]["name"], "view");
     assert_eq!(response["image"]["consumed"]["generation"], 7);
@@ -494,7 +494,7 @@ fn frame_detached_before_main_thread_presentation_is_reported_as_stale() {
 // contract: images.ack.failure-carries-error-and-frame-identity
 #[test]
 fn failed_present_is_reported() {
-    let response = after_present(false, Some("forbidden"), "view", 7, 3, 1);
+    let response = after_present(Err("forbidden"), "view", 7, 3, 1);
     assert!(response["image"]["error"].is_string());
     assert_eq!(response["image"]["error"], "forbidden");
     assert_eq!(response["image"]["name"], "view");

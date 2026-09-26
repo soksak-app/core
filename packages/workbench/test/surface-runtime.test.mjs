@@ -120,3 +120,11 @@ test("a surface sidecar send to another surface is rejected instead of being red
   await assert.rejects(port.send("other-surface", { operation: "open" }), /own-surface cannot send to sidecar surface other-surface/);
   assert.equal(calls.some(([name]) => name === "sidecarSend"), false);
 });
+
+test("a surface runtime without a surface id is rejected instead of using another field", async () => {
+  const dom = new JSDOM("<body></body>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  const { surfaceContextRuntime } = await import("../host.js");
+  assert.throws(() => surfaceContextRuntime({ id: "old-shape" }), /surface\.surfaceId/);
+  dom.window.close();
+});

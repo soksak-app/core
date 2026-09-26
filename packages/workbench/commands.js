@@ -16,7 +16,9 @@ const listeners = new Set();
  */
 const runFrom = (name, params = {}, el) => {
   if (!registry.declared("command", name) || name.startsWith("core.")) return registry.run(name, params);
-  const wanted = el?.closest?.("[data-surface]")?.dataset.surface ?? null;
+  // 기본값: 요소 없이 실행한 명령이나 표면 밖 요소의 명령은 원하는 표면이 없다(null).
+  const wanted = el?.closest("[data-surface]")?.dataset.surface ?? null;
+  // 기본값: 고를 표면이 없으면 표면을 지정하지 않고 실행해 레지스트리가 등록 순서로 고른다.
   return registry.run(name, params, registry.chosen("command", name, wanted) ?? undefined);
 };
 

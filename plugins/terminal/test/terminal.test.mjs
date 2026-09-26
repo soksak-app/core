@@ -560,7 +560,7 @@ test("a session opens the shell that the shell setting names", async () => {
   await startTerminal({
     view: createFakeView(), attachImage: createFakeAttachImage().function,
     sidecar: fakeSidecar, expose: createFakeExpose(),
-    settings: { read: () => ({ shell: "login" }), on: () => () => {} },
+    settings: { read: () => ({ ...SHELL_SETTINGS.read(), shell: "login" }), on: () => () => {} },
     window: { TextEncoder: FakeTextEncoder },
   });
   const open = fakeSidecar.getMessages().find((message) => message.body.operation === "open");
@@ -573,7 +573,7 @@ test("a session without a shell setting is not opened", async () => {
   await assert.rejects(startTerminal({
     view: createFakeView(), attachImage: createFakeAttachImage().function,
     sidecar: fakeSidecar, expose: createFakeExpose(),
-    settings: { read: () => ({}), on: () => () => {} },
+    settings: { read: () => ({ ...SHELL_SETTINGS.read(), shell: undefined }), on: () => () => {} },
     window: { TextEncoder: FakeTextEncoder },
   }), /terminal shell setting is missing/);
   assert.equal(fakeSidecar.getMessages().some((message) => message.body.operation === "open"), false);
@@ -2224,7 +2224,7 @@ test("cursor policy sends explicit shape, blink, interval, idle timeout, and unf
     unfocused: "unchanged",
   });
   await assert.rejects(
-    terminal.setCursorPolicy({ blink: "Sometimes" }),
+    terminal.setCursorPolicy({ shape: "beam", blink: "Sometimes", interval: 750, idleTimeout: 5000, unfocused: "unchanged" }),
     /cursor policy blink is invalid/
   );
 });
@@ -2807,7 +2807,7 @@ function createFakeTab({ reject = false } = {}) {
 
 function titleSettings(values) {
   const listeners = [];
-  let current = { shell: "login", title: "program", ...values };
+  let current = { ...SHELL_SETTINGS.read(), shell: "login", title: "program", ...values };
   return {
     read: () => current,
     on: (listener) => { listeners.push(listener); return () => {}; },
@@ -2990,4 +2990,20 @@ test("a session without an origin directory opens in the project root, and witho
     const open = fakeSidecar.getMessages().find((message) => message.body.operation === "open");
     assert.deepEqual(open.body, { operation: "open", image: "view", shell: "login", ...expected });
   }
+});
+
+test("terminal.cursor.set keeps the current value of each field it does not name", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, window: { TextEncoder: FakeTextEncoder },
+  });
+  await fakeExpose.getCommand("terminal.cursor.set")({ shape: "beam", blink: "Always", interval: 900, idleTimeout: 0, unfocused: "solid" });
+  fakeSidecar.triggerEvent("test-session", { ack: true, event: "cursor", shape: "beam", blink: "Always", interval: 900, idleTimeout: 0, unfocused: "solid" });
+  await fakeExpose.getCommand("terminal.cursor.set")({ shape: "underline" });
+  assert.deepEqual(fakeSidecar.getMessages().at(-1).body, {
+    operation: "cursor", shape: "underline", blink: "Always", interval: 900, idleTimeout: 0, unfocused: "solid",
+  });
 });

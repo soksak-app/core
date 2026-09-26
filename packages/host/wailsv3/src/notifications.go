@@ -44,6 +44,7 @@ func ValidateNotification(request NotificationRequest, removal bool) error {
 
 // notificationIdentifier 는 알림 센터의 식별자다. 누른 알림을 창 이름과 표면으로 돌려받는다.
 func notificationIdentifier(window, surface string) string {
+	// 기본값: 문자열 목록의 JSON 변환은 실패하지 않으므로 오류 값을 받지 않는다.
 	identifier, _ := json.Marshal([]string{window, surface})
 	return string(identifier)
 }

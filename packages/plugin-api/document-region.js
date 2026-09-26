@@ -57,6 +57,7 @@ export function observeRegionInsets(element, view, onPlace) {
     placed = key;
     onPlace(next).catch((error) => {
       // 배치 작업이 실패해도 관찰은 계속 진행한다. 실패를 기록한다.
+      // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
       console.error(`place operation failed: ${error?.message ?? error}`);
     });
   };
@@ -90,6 +91,7 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     const next = chain.then(work);
     // 내부 체인에서만 에러를 기록한다. 호출자는 next를 받으므로 실패 시 rejection이 전달된다.
     chain = next.catch((error) => {
+      // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
       console.error(`document ${name} operation failed:`, error?.message ?? error);
     });
     return next;
@@ -141,7 +143,7 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       detached = true;
       stopObserving();
       listeners.clear();
-      unlisten.then((stop) => stop?.());
+      unlisten.then((stop) => stop());
       return done;
     },
   };

@@ -171,6 +171,7 @@ function deliver(mine, snapshot) {
   const running = !settled();
   if (running !== going) {
     going = running;
+    // 기본값: 실행 경계 수신자는 등록한 때만 있다.
     edge?.(going);
   }
   return commit(mine, snapshot, !running);
@@ -264,6 +265,7 @@ function commit(mine, snapshot, final) {
   // 다른 스페이스의 표면도 살아 있어야 한다.
   //
   // 수신자의 반환값을 그대로 반환한다. 렌더링 전에 커밋한 쪽이 이 값을 기다린다.
+  // 기본값: 커밋 수신자를 등록하기 전의 커밋은 알릴 곳이 없다.
   const answered = listener?.(record);
   if (answered && typeof answered.then === "function") {
     return answered.then((placed) => {

@@ -24,7 +24,7 @@ async function readJson(path) {
 function surfaceOf(name, pluginId, surface) {
   const module = `/${modulePath(name, surface.module)}`;
   return (tabId) => ({ module, composition: surface.composition, surfaceId: tabId,
-    pluginId, declarations: surface.declarations ?? {}, sidecars: surface.sidecars ?? [] });
+    pluginId, declarations: surface.declarations, sidecars: surface.sidecars });
 }
 
 /**
@@ -39,37 +39,49 @@ export async function loadEnvironment() {
   checkReferences(environment, manifests.map((m) => m.manifest));
   const diagnosticPlugins = validateDiagnosticPlugins(await readJson(DIAGNOSTIC_PLUGINS),
     new Map(manifests.map((m) => [m.name, m.manifest])));
+  // 기본값: environment.json 의 settings 는 선택 필드이며 없으면 플러그인 설정을 덮어쓰지 않는다.
   setPluginSettings(manifests.map((m) => m.manifest), environment.settings ?? {});
   const diagnosticModules = new Map(await Promise.all(Object.entries(diagnosticPlugins).map(async ([name, declared]) =>
     [name, await import(`/${modulePath(name, declared.module)}`)])));
   for (const { name, manifest } of manifests) {
+    // 기본값: 진단 모듈은 진단 빌드의 일부 플러그인에만 있으며 없으면 null 이다.
     const diagnostics = diagnosticPlugins[name] ?? null;
+    // 기본값: exposes 는 plugin.json 의 선택 필드이며 없으면 선언이 없다(docs/spec/plugins.md).
     const exposes = diagnostics ? mergeExposes(manifest.exposes ?? {}, diagnostics.exposes) : manifest.exposes;
     if (manifest.surface) {
       registerPlugin({
         id: manifest.id, name: manifest.name, mark: manifest.mark, svg: manifest.icon,
+        // 기본값: preview 는 plugin.json 의 선택 필드이며 없으면 미리 보기 잉크가 없다(null).
         ink: manifest.preview?.ink ?? null,
+        // 기본값: background 는 plugin.json 의 선택 필드이며 없으면 배경 세션이 없다(null).
         background: manifest.background ?? null,
+        // 기본값: 진단 모듈은 진단 빌드의 일부 플러그인에만 있으며 없으면 null 이다.
         diagnostics: diagnosticModules.get(name) ?? null,
+        // 기본값: surface.drop 은 선택 필드이며 없으면 그 표면은 놓기를 받지 않는다(null).
         drop: manifest.surface?.drop ?? null,
         surface: surfaceOf(name, manifest.id, {
           ...manifest.surface,
+          // 기본값: exposes 는 plugin.json 의 선택 필드이며 없으면 선언이 없다.
           declarations: exposes ?? {},
+          // 기본값: sidecars 는 plugin.json 의 선택 필드이며 없으면 사이드카가 없다.
           sidecars: manifest.sidecars ?? [],
         }),
       });
     }
     // 섹션 모듈은 표면 모듈처럼 그 패키지 경로에서 불러온다.
+    // 기본값: sections 는 plugin.json 의 선택 필드이며 없으면 섹션이 없다.
     for (const section of manifest.sections ?? []) registerSection({ ...section, module: `/${modulePath(name, section.module)}` });
     if (exposes) exposure.declare(manifest.id, exposes);
     if (manifest.state) {
       registerState({ plugin: manifest.id, module: `/${modulePath(name, manifest.state.module)}`,
+        // 기본값: sidecars 와 data 는 plugin.json 의 선택 필드이며 없으면 비어 있다.
         sidecars: manifest.sidecars ?? [], data: manifest.data ?? {} });
     }
   }
   setSidebarDefaults(environment.sidebars);
   units = manifests.map(({ manifest }) => ({
     id: manifest.id, name: manifest.name, description: manifest.description, surface: Boolean(manifest.surface),
+    // 기본값: sections 는 plugin.json 의 선택 필드이며 없으면 섹션이 없다.
     sections: (manifest.sections ?? []).map((s) => s.id),
   }));
   loaded = environment;

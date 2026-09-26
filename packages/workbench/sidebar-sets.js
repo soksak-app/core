@@ -88,6 +88,7 @@ export function chooseLink(links, place, plugin, choice) {
   const rest = links.filter((l) => !(l.place === place && l.plugin === plugin));
   const general = plugin === null || place === "rail";
   if (choice === "inherit") {
+    // 기본값: 오류 문장에서 플러그인이 없는 일반 선택을 general 로 적는다.
     if (general) throw new Error(`${place} ${plugin ?? "general"} has no inherit choice`);
     return rest;
   }
@@ -101,6 +102,7 @@ export function chooseLink(links, place, plugin, choice) {
  */
 export function resolveSidebar(links, sets, place, plugin) {
   const own = links.find((l) => l.place === place && l.plugin === plugin && plugin !== null);
+  // 기본값: 플러그인 연결이 없으면 그 플러그인은 일반 선택을 따른다(docs/spec/settings.md). 레일에는 일반 선택이 없다.
   const chosen = own ?? (place === "rail" ? null : links.find((l) => l.place === place && l.plugin === null));
   if (!chosen || chosen.set === null) return null;
   const set = sets.find((s) => s.id === chosen.set);

@@ -81,7 +81,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   if (!slot || !surface?.module) throw new TypeError("surface module mount requires a slot and module");
   // 호스트가 없으면 사이드카와 네이티브 영역이 없다. 그것이 필요한 표면은 마운트하지 않고 자리 표시를 그린다
   // (docs/spec/plugins.md#runtime-module).
-  if (!native && ((surface.sidecars ?? []).length > 0 || surface.composition?.kind === "hybrid")) {
+  if (!native && (surface.sidecars.length > 0 || surface.composition?.kind === "hybrid")) {
     const placeholder = document.createElement("div");
     placeholder.className = "surface-placeholder";
     placeholder.dataset.surfaceId = surface.surfaceId;
@@ -94,7 +94,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     onState({ phase: "ready" });
     return null;
   }
-  const view = slot.ownerDocument?.defaultView ?? globalThis;
+  const view = slot.ownerDocument.defaultView;
   let entry = mounted.get(surface.surfaceId);
   if (entry && entry.slot === slot) {
     if (entry.host.parentNode !== slot) slot.appendChild(entry.host);
@@ -114,7 +114,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     host.style.cssText = "position:absolute;inset:0;overflow:hidden";
     slot.append(host);
     const shadow = host.attachShadow({ mode: "open" });
-    const scoped = surfaceContextRuntime(surface, surface.declarations ?? {});
+    const scoped = surfaceContextRuntime(surface, surface.declarations);
     let resolveComposition;
     let rejectComposition;
     const compositionReady = {
@@ -127,6 +127,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     let viewport = slot;
     const eventListeners = new Map();
     const emit = (type, detail) => {
+      // 기본값: 듣는 곳이 없는 사건 종류는 알릴 수신자가 없다.
       for (const listener of eventListeners.get(type) ?? []) listener(detail);
     };
     const on = (type, listener) => {
@@ -145,7 +146,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     let factor = surfaceTextSize(surface.surfaceId);
     const context = createSurfaceContext({
       root: shadow, surfaceId: surface.surfaceId, pluginId: surface.pluginId,
-      declarations: surface.declarations ?? {}, composition, diagnostics: plugin(surface.pluginId).diagnostics,
+      declarations: surface.declarations, composition, diagnostics: plugin(surface.pluginId).diagnostics,
       tab: { title: (text) => reportTitle(surface.surfaceId, text),
         directory: (path) => reportDirectory(surface.surfaceId, path),
         notify: (text) => reportNotice(surface.surfaceId, text) },
@@ -159,10 +160,12 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         theme: scoped.theme,
         // 이 표면의 실제 글자 배율(docs/spec/text-size.md). 알림마다 다시 읽고 바뀐 값만 전달한다.
         textSize: { read: () => {
+          // 기본값: 판에 없는 탭의 배율은 null 이므로 마지막으로 알린 배율을 유지한다.
           factor = surfaceTextSize(surface.surfaceId) ?? factor;
           if (factor === null) throw new Error(`surface ${surface.surfaceId} is not in the layout`);
           return factor;
         }, on: (listener) => {
+          // 기본값: 판에 없는 탭의 배율은 null 이므로 마지막으로 알린 배율을 유지한다.
           let last = surfaceTextSize(surface.surfaceId) ?? factor;
           return onTextSize(() => {
             const next = surfaceTextSize(surface.surfaceId);
@@ -277,6 +280,7 @@ export async function disposeSurface(surfaceId) {
   return entry.disposing;
 }
 
+// 기본값: 마운트되지 않은 표면은 null 이다.
 export const mountedSurface = (surfaceId) => mounted.get(surfaceId) ?? null;
 
 /** Dispose modules whose tabs are no longer declared by the current workspace. */

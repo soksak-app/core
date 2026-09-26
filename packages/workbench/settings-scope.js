@@ -2,6 +2,7 @@
 
 export function effectiveSettings(defaults, common, project) {
   const values = { ...defaults, ...common, ...project };
+  // 기본값: projectOpening 은 공통 값만 있으며 저장하지 않았으면 기본값이다.
   values.projectOpening = common.projectOpening ?? defaults.projectOpening;
   return values;
 }

@@ -69,6 +69,7 @@ export function themeTokens(prefix = 'sp'): Record<keyof ThemePalette | keyof Th
 
 /** Returns the stylesheet as text. */
 export function themeCSS(options: ThemeOptions = {}): string {
+  // default: `prefix` is optional and documented as `sp`, matching the view's.
   const prefix = options.prefix ?? 'sp';
   const palette = { ...PALETTE, ...options.palette };
   const metrics = { ...METRICS, ...options.metrics };
@@ -145,6 +146,7 @@ export function themeCSS(options: ThemeOptions = {}): string {
  * in the head so a host's own rules follow it and win at equal specificity.
  */
 export function installTheme(doc: Document, options: ThemeOptions = {}): HTMLStyleElement {
+  // default: `prefix` is optional and documented as `sp`, matching the view's.
   const prefix = options.prefix ?? 'sp';
   const id = `${prefix}-theme`;
   const found = doc.getElementById(id);

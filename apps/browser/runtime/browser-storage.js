@@ -35,6 +35,7 @@ export class WorkspaceStore {
         if (mode === "readwrite") { this.channel?.postMessage(null); this.changed(); }
         resolve(result);
       };
+      // 기본값: abort() 로 끝난 트랜잭션은 error 가 null 이므로 중단 사실을 오류로 만든다.
       tx.onabort = () => reject(tx.error ?? new Error("Workspace transaction was aborted"));
       tx.onerror = () => {};
       run(tx.objectStore("projects"), tx.objectStore("settings"), (value) => { result = value; });
@@ -45,8 +46,10 @@ export class WorkspaceStore {
     return this.transaction("readonly", (projects, settings, done) => {
       const out = { projects: [], common: {} };
       projects.getAll().onsuccess = (e) => { out.projects = e.target.result; };
+      // 기본값: IndexedDB 의 get 은 없는 키에 undefined 를 돌려준다. 공통 설정을 한 번도 저장하지 않은 저장소의 공통 설정은 비어 있다.
       settings.get("common").onsuccess = (e) => { out.common = e.target.result ?? {}; };
       settings.get("order").onsuccess = (e) => {
+        // 기본값: 프로젝트를 한 번도 추가하지 않은 저장소에는 순서 기록이 없고, 그 순서는 빈 목록이다.
         out.order = e.target.result ?? [];
         done(out);
       };
@@ -60,6 +63,7 @@ export class WorkspaceStore {
         projects.index("root").get(project.root).onsuccess = (e) => {
           if (e.target.result) { done(e.target.result); return; }
           projects.add(project);
+          // 기본값: 프로젝트를 한 번도 추가하지 않은 저장소에는 순서 기록이 없고, 그 순서는 빈 목록이다.
           settings.get("order").onsuccess = (e) => settings.put([...(e.target.result ?? []), project.id], "order");
           done(project);
         };
@@ -80,6 +84,7 @@ export class WorkspaceStore {
   remove(id) {
     return this.transaction("readwrite", (projects, settings) => {
       projects.delete(id);
+      // 기본값: 프로젝트를 한 번도 추가하지 않은 저장소에는 순서 기록이 없고, 그 순서는 빈 목록이다.
       settings.get("order").onsuccess = (e) => settings.put((e.target.result ?? []).filter((key) => key !== id), "order");
     });
   }
@@ -87,6 +92,7 @@ export class WorkspaceStore {
   move(id, delta) {
     return this.transaction("readwrite", (_, settings) => {
       settings.get("order").onsuccess = (e) => {
+        // 기본값: 프로젝트를 한 번도 추가하지 않은 저장소에는 순서 기록이 없고, 그 순서는 빈 목록이다.
         const order = e.target.result ?? [];
         const from = order.indexOf(id), to = from + delta;
         if (from < 0 || to < 0 || to >= order.length) return;
@@ -100,8 +106,10 @@ export class WorkspaceStore {
     if (id && Object.hasOwn(patch, "projectOpening")) return Promise.reject(new Error("Project opening mode is common-only"));
     return this.transaction("readwrite", (projects, settings) => {
       const store = id ? projects : settings;
+      // 기본값: id 가 없으면 공통 설정을 바꾼다(settings(null, patch)).
       store.get(id ?? "common").onsuccess = (e) => {
         if (id && !e.target.result) return;
+        // 기본값: 공통 설정을 한 번도 저장하지 않은 저장소의 공통 설정 기록은 없고, 빈 기록에서 시작한다. 프로젝트 기록은 위에서 확인했다.
         const record = e.target.result ?? {};
         const values = id ? record.settings : record;
         for (const [key, value] of Object.entries(patch)) {

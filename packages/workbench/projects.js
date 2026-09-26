@@ -27,9 +27,11 @@ export function layoutSurfaces() {
   return projects.flatMap((project) => project.spaces.flatMap((space) => {
     const cards = space.layout?.state?.cards;
     if (!Array.isArray(cards)) throw new Error(`project ${project.id} space ${space.id} has no layout cards`);
+    // 기본값: 자리 카드는 data 가 null 이므로 탭이 없다.
     return cards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => ({ surface: tab.id, root: project.root })));
   }));
 }
+// 기본값: 활성 프로젝트가 없는 창(라이브러리)은 null 이다.
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
 export const local = () => projects.filter((p) => owned.has(p.id));
 export const inLibrary = () => browsing;
@@ -69,6 +71,7 @@ export function onChange(fn) { changed = fn; }
 async function setPluginData(id, plugin, key, value) {
   const project = projects.find((p) => p.id === id);
   if (!project) throw new Error(`Unknown project: ${id}`);
+  // 기본값: 플러그인 데이터를 한 번도 저장하지 않은 프로젝트에는 plugins 가 없다.
   const plugins = { ...(project.plugins ?? {}), [plugin]: { ...(project.plugins?.[plugin] ?? {}), [key]: value } };
   await store.patch(id, { plugins });
   project.plugins = plugins;
@@ -78,6 +81,7 @@ export async function initialise(storage) {
   store = storage;
   configureStates({
     sidecar: windowSidecar,
+    // 기본값: 플러그인 데이터를 저장하지 않은 프로젝트의 데이터는 비어 있다.
     data: { get: (id, plugin) => projects.find((p) => p.id === id)?.plugins?.[plugin] ?? {}, set: setPluginData },
   });
   await refresh();
@@ -102,6 +106,7 @@ function refresh() {
 
 async function readProjects() {
   const snapshot = await store.snapshot();
+  // 기본값: 브라우저 예제의 저장소는 다른 창이 없으므로 open 을 싣지 않는다.
   openProjects = new Set(snapshot.open ?? []);
   const previous = new Map(projects.map((p) => [p.id, p]));
   projects = snapshot.projects.map((p) => {
@@ -173,6 +178,7 @@ async function activateInTurn(id) {
   const folder = await windows.folder(project.root);
   if (folder.identity !== project.identity) throw new Error(`Project directory has changed: ${project.root}`);
   const result = await windows.openProject({
+    // 기본값: 창을 한 번도 닫지 않은 프로젝트는 저장된 창 자리가 없다(null).
     id, root: project.root, title: project.title, geometry: project.geometry ?? null,
     separate: value("projectOpening") === "windows", current: active() && !owned.has(id) ? activeProjectId : null,
   });

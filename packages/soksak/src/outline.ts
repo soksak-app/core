@@ -123,6 +123,7 @@ export function unionLoops(rects: readonly Rect[]): Point[][] {
     while (e && !used.has(e)) {
       used.add(e);
       pts.push({ x: e[0], y: e[1] });
+      // default: a point with no outgoing edge ends the path.
       e = (from.get(key(e[2], e[3])) ?? []).find((n) => !used.has(n));
     }
     if (pts.length >= 4) loops.push(dropCollinear(pts));
@@ -187,7 +188,9 @@ export function roundedPath(
  * which reports the separation rather than failing.
  */
 export function outline(rects: readonly Rect[], options: OutlineOptions = {}): Outline {
+  // default: `pad` is optional and documented as 0.
   const pad = options.pad ?? 0;
+  // default: `radius` is optional and documented as `pad`.
   const radius = options.radius ?? pad;
   const grown = rects.map((r) => ({ x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 }));
   const loops = unionLoops(grown);

@@ -94,6 +94,7 @@ impl Documents {
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<Key, Handle>> {
         self.0
             .lock()
+            // 기본값: 잠금을 쥔 채 멈춘 스레드도 맵을 한 번의 넣기, 빼기, 읽기로만 바꾸므로 맵은 일관되고, 그 멈춤은 패닉 보고로 이미 알려졌다.
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
@@ -225,7 +226,13 @@ fn create(
     let state_document = name.clone();
     on_main(window, move || {
         let changed = Box::new(move |state: String| {
-            let state = serde_json::from_str(&state).unwrap_or(Value::Null);
+            let state = match serde_json::from_str(&state) {
+                Ok(state) => state,
+                Err(error) => {
+                    log_error(Err(format!("document state is not JSON: {error}: {state}")));
+                    return;
+                }
+            };
             let payload = State {
                 surface: state_surface.clone(),
                 document: state_document.clone(),
@@ -256,7 +263,13 @@ fn create(
         platform.set_document_event(
             handle,
             Box::new(move |value| {
-                let event = serde_json::from_str(&value).unwrap_or(Value::Null);
+                let event = match serde_json::from_str(&value) {
+                    Ok(event) => event,
+                    Err(error) => {
+                        log_error(Err(format!("document event is not JSON: {error}: {value}")));
+                        return;
+                    }
+                };
                 log_error(
                     emit_window(
                         &event_host,

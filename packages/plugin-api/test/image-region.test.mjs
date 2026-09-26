@@ -42,7 +42,8 @@ function port() {
     caret: async (name, x, y, w, h) => { calls.push(["caret", name, x, y, w, h]); },
     text: async (name, text) => { calls.push(["text", name, text]); },
     detach: async (name) => { calls.push(["detach", name]); },
-    on: (fn) => { eventListeners = fn; return Promise.resolve(); },
+    // 런타임의 listen 처럼 등록을 끝내는 함수를 돌려준다.
+    on: (fn) => { eventListeners = fn; return Promise.resolve(() => { calls.push(["unlisten"]); }); },
     send: (name, event) => { if (eventListeners) eventListeners(name, event); },
   };
 }
@@ -158,7 +159,7 @@ test("detach stops observation and rejects later calls", async () => {
   await settle();
   await image.detach();
   await settle();
-  assert.equal(p.calls.at(-1)[0], "detach");
+  assert.deepEqual(p.calls.slice(-2).map(([name]) => name).sort(), ["detach", "unlisten"], "detach must stop the event listener");
   const countAfterDetach = p.calls.length;
   await assert.rejects(image.focus(), /detached/);
   await settle();

@@ -17,7 +17,7 @@ test("shell module disposes its composition controller before removing the surfa
   let compositionDisposed = 0;
   const sent = [];
   const context = {
-    surfaceId: "shell-test",
+    surfaceId: "shell-test", origin: Object.freeze({ directory: null }),
     composition: { create: async () => ({ dispose: async () => { compositionDisposed += 1; } }) },
     runtime: { sidecar: () => ({
       send: async (_surface, body) => { sent.push(body.operation); },
@@ -51,7 +51,7 @@ test("shell module reports written lines as shell.history and pending runs as sh
   const statuses = new Map();
   const sent = [];
   const context = {
-    surfaceId: "shell-test",
+    surfaceId: "shell-test", origin: Object.freeze({ directory: null }),
     composition: { create: async () => ({ dispose: async () => {} }) },
     runtime: { sidecar: () => ({ send: async (_surface, body) => { sent.push(body); }, on: async () => () => {} }) },
     exposure: {

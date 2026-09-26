@@ -139,6 +139,7 @@ impl Workspace {
                 let Some(at) = at else {
                     return Ok(false.into());
                 };
+                // 기본값: 요청의 patch 는 선택 인자이며 없으면 바꿀 값이 없다.
                 for (key, value) in req.patch.unwrap_or_default() {
                     if ![
                         "title",
@@ -173,6 +174,7 @@ impl Workspace {
                 projects.insert(to as usize, project);
             }
             "settings" => {
+                // 기본값: 요청의 patch 는 선택 인자이며 없으면 바꿀 값이 없다.
                 let patch = req.patch.unwrap_or_default();
                 let path = if req.id.is_some() {
                     let at = at.ok_or("unknown project")?;
@@ -190,6 +192,7 @@ impl Workspace {
                 };
                 let mut settings: Map<String, Value> = read(&path)?;
                 settings.extend(patch);
+                // 기본값: 요청의 remove 는 선택 인자이며 없으면 지울 키가 없다.
                 for key in req.remove.unwrap_or_default() {
                     settings.remove(&key);
                 }

@@ -249,6 +249,8 @@ export declare class SoksakView {
      * by an exact match.
      */
     private refile;
+    /** Ends the double-press wait of a divider. Every divider element has one from its creation. */
+    private disarm;
     /** Whether a gesture holds the element filed under this key. */
     private holding;
     /** Drop what holds this element, remove its listeners, remove it. */

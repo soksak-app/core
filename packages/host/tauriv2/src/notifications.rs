@@ -95,6 +95,7 @@ fn event(app: &AppHandle, raw: String) {
             emit_state(app);
         }
         kind @ ("posted" | "activated") => {
+            // 기본값: 읽지 못한 식별자는 빈 목록이 되어 바로 아래에서 알림 실패로 보고된다.
             let target: Vec<String> = serde_json::from_str(&parsed.identifier).unwrap_or_default();
             let [window, surface] = target.as_slice() else {
                 return failed(

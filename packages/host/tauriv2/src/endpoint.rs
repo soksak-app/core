@@ -460,7 +460,7 @@ impl Endpoint {
             "application": application,
             "version": env!("CARGO_PKG_VERSION"),
             "executable": executable.to_string_lossy(),
-            "started": timestamp(SystemTime::now()),
+            "started": timestamp(SystemTime::now())?,
         });
         endpoint.record = record;
         let listener = endpoint.listener.clone();
@@ -615,11 +615,11 @@ fn write_record(directory: &Path, file: &Path, record: &Value) -> Result<(), Str
 }
 
 /// 시각을 초 단위 UTC ISO 8601 문자열로 바꾼다.
-fn timestamp(time: SystemTime) -> String {
+fn timestamp(time: SystemTime) -> Result<String, String> {
     let seconds = time
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
-        .unwrap_or(0) as i64;
+        .map_err(|e| format!("the system clock is before 1970: {e}"))? as i64;
     let (days, rest) = (seconds.div_euclid(86_400), seconds.rem_euclid(86_400));
     // 1970-01-01 기준 일 수를 그레고리력 날짜로 바꾼다(Howard Hinnant 의 civil_from_days).
     let z = days + 719_468;
@@ -631,12 +631,12 @@ fn timestamp(time: SystemTime) -> String {
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + i64::from(month <= 2);
-    format!(
+    Ok(format!(
         "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
         rest / 3600,
         rest / 60 % 60,
         rest % 60
-    )
+    ))
 }
 
 /// 검사를 통과한 요청.

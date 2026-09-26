@@ -19,6 +19,7 @@ export function commandOf(el, value) {
   const name = el.dataset.command;
   if (!name) return null;
   const params = el.dataset.params ? JSON.parse(el.dataset.params) : {};
+  // 기본값: data-value 가 없는 컨트롤은 값을 value 매개변수로 보낸다(docs/spec/exposure.md).
   if (value !== undefined) params[el.dataset.value ?? "value"] = value;
   return { name, params };
 }
@@ -78,7 +79,7 @@ export function createBinder(run, { check, changed = () => {} }) {
       return failed ? Promise.resolve(done).catch(failed) : done;
     };
     const click = (e) => {
-      const el = e.target.closest?.("[data-command]");
+      const el = e.target.closest("[data-command]");
       if (!el || !root.contains(el) || el.matches("input, select, textarea")) return;
       return go(commandOf(el), el);
     };
@@ -86,7 +87,7 @@ export function createBinder(run, { check, changed = () => {} }) {
     cleanup.add(() => root.removeEventListener("click", click));
     for (const type of ["change", "input"]) {
       const listener = (e) => {
-        const el = e.target.closest?.("[data-command]");
+        const el = e.target.closest("[data-command]");
         if (!el || !root.contains(el) || !el.matches("input, select, textarea")) return;
         if (type === "input" && !("live" in el.dataset)) return;
         return go(commandOf(el, valueOf(el)), el);
@@ -118,8 +119,11 @@ export function createBinder(run, { check, changed = () => {} }) {
       .filter((el) => !connected(el) || !el.dataset.expose)
       .map((el) => ({
         tag: el.tagName.toLowerCase(),
+        // 기본값: 감사 행은 없는 dom 이름과 명령을 null 로 적는다.
         expose: el.dataset.expose ?? null,
+        // 기본값: 감사 행은 없는 dom 이름과 명령을 null 로 적는다.
         command: connected(el) ? el.dataset.command ?? null : null,
+        // 기본값: 요소를 알아보게 하는 글은 접근 가능한 이름, 제목, 글자 순이며 셋 다 없는 요소는 빈 글이다.
         text: (el.getAttribute("aria-label") || el.title || el.textContent || "").trim().slice(0, 40),
       }));
   }

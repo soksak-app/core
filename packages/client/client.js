@@ -124,6 +124,7 @@ class Client {
    * surface 는 표면 페이지가 등록한 이름의 표면을 지정한다.
    */
   watch(window, name, predicate, { timeout = 10000, surface } = {}) {
+    // 기본값: surface 는 선택 옵션이며, 없으면 페이지 상태를 감시하므로 키의 표면 자리는 null 이다.
     const key = JSON.stringify([window, name, surface ?? null]);
     const target = surface === undefined ? { window, name } : { window, name, surface };
     return new Promise((resolve, reject) => {
@@ -205,6 +206,7 @@ class Client {
    * 전송되고 적용되어야 한다(docs/spec/endpoint.md).
    */
   #subscribe(key, send) {
+    // 기본값: 같은 키의 앞선 구독 요청이 없으면 기다릴 것이 없다.
     const previous = this.#subscriptions.get(key) ?? Promise.resolve();
     const sent = previous.then(send);
     const settled = sent.then(() => {}, () => {});
@@ -254,6 +256,7 @@ class Client {
       return;
     }
     if (typeof message?.method === "string") {
+      // 기본값: 그 알림에 등록한 수신자가 없으면 알릴 곳이 없다.
       for (const fn of [...(this.#listeners.get(message.method) ?? [])]) fn(message.params);
     }
   }

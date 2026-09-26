@@ -134,6 +134,10 @@ test("the selection is the project's state, shared by every tree", async () => {
   assert.equal(f.statuses.get("files.selection").read(), "a.txt");
   await f.commands.get("files.select")({ path: null });
   assert.deepEqual(seen, ["a.txt", null]);
+  // path 가 빠진 요청은 선택을 지우지 않고 거절한다.
+  await f.commands.get("files.select")({ path: "a.txt" });
+  await assert.rejects(f.commands.get("files.select")({}), /requires path/);
+  assert.equal(f.statuses.get("files.selection").read(), "a.txt");
 });
 
 test("files.tree read during a refresh shows the previous listing, not an empty tree", async () => {

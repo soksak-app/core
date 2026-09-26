@@ -47,6 +47,7 @@ export function createSurfaceContext({
     // 탭 알림(docs/spec/plugins.md#tab-reports): 탭에 보일 제목과 작업 디렉터리를 워크벤치에 알린다.
     tab: Object.freeze({ title: tab.title, directory: tab.directory, notify: tab.notify }),
     // 이 탭을 만든 카드의 활성 탭이 그때 기록한 작업 디렉터리.
+    // 기본값: 원래 카드의 활성 탭이 디렉터리를 기록하지 않았으면 origin.directory 는 null 이다.
     origin: Object.freeze({ directory: origin.directory ?? null }),
     // 표면 창이 보이는 프로젝트의 정규 루트. 프로젝트가 없는 창에서는 null 이다.
     project: project === null ? null : Object.freeze({ root: project.root }),
@@ -66,6 +67,7 @@ export function createSurfaceContext({
     exposure: Object.freeze(runtime.exposure),
     events: Object.freeze({
       emit: (type, detail) => {
+        // 기본값: 그 이벤트에 등록한 수신자가 없으면 알릴 곳이 없다.
         for (const listener of eventListeners.get(type) ?? []) listener(detail);
         runtime.emit(type, detail);
       },
@@ -85,7 +87,9 @@ export function createSurfaceContext({
 }
 
 export function releaseSurfaceReady(context) {
-  readyReleases.get(context)?.();
+  const release = readyReleases.get(context);
+  if (!release) throw new Error("releaseSurfaceReady requires a context from createSurfaceContext");
+  release();
 }
 
 export async function mountSurfaceModule(module, root, context) {

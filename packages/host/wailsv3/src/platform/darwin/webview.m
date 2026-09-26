@@ -149,6 +149,7 @@ void *nativeWebviewCreate(void *handle, unsigned long long identifier, const cha
         @try {
             [view setValue:@NO forKey:@"drawsBackground"];
             if ([[view valueForKey:@"drawsBackground"] boolValue]) { [view release]; return NULL; }
+        // 기본값: 키를 모르는 WebKit 은 예외를 던지고, 이 함수의 NULL 은 호출자가 웹뷰를 만들지 못한 오류로 알린다.
         } @catch (NSException *error) { [view release]; return NULL; }
     }
     // 표면과 모달의 페이지는 창의 키보드 초점을 옮기지 않는다. 메인 페이지는 옮긴다.

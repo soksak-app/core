@@ -198,7 +198,9 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         Some(Value::Bool(capture)) => capture,
         Some(_) => return Err(Failure::params("capture must be a boolean")),
     };
+    // 기본값: 없거나 숫자가 아닌 값은 0 으로 두어 바로 아래 검사가 잘못된 인자로 거부한다.
     let ms = params["ms"].as_f64().unwrap_or_default();
+    // 기본값: 없거나 숫자가 아닌 값은 0 으로 두어 바로 아래 검사가 잘못된 인자로 거부한다.
     let times = params["times"].as_u64().unwrap_or_default();
     if ms <= 0.0 || times < 1 {
         return Err(Failure::params(
@@ -222,6 +224,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         window,
         &format!(
             "diagnostics: drag {}:{} by {},{} in {per} steps, {times} times",
+            // 기본값: 로그 문장만 만든다. 축은 페이지가 검사하고 잘못된 값을 오류로 답한다.
             params["axis"].as_str().unwrap_or_default(),
             params["line"],
             params["dx"],
@@ -281,7 +284,11 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
             merged.insert("ticks".into(), serde_json::json!(ticks));
             merged.insert(
                 "layouts".into(),
-                layout_trace(layouts.as_deref().unwrap_or_default()),
+                layout_trace(
+                    layouts
+                        .as_deref()
+                        .ok_or_else(|| internal("the recorded drag has no layout trace"))?,
+                ),
             );
         }
         Ok(Value::Object(merged))
@@ -359,7 +366,7 @@ fn capture_start(window: &Window, display: bool) -> Result<PathBuf, Failure> {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
-        .unwrap_or(0);
+        .map_err(|e| internal(format!("the system clock is before 1970: {e}")))?;
     let directory = window
         .state::<Workspace>()
         .directory()

@@ -238,6 +238,7 @@ fn parse_vendor_osc(selector: &[u8], payload: &[u8]) -> Result<Option<EngineEven
                         return Err("OSC 8 hyperlink id is duplicated".to_string());
                     }
                 }
+                // 기본값: id 가 없는 OSC 8 링크는 빈 id 를 가진다(id 는 선택 인자다).
                 id.unwrap_or_default().to_string()
             };
             Ok(Some(EngineEvent::Hyperlink {
@@ -254,6 +255,7 @@ fn parse_vendor_osc(selector: &[u8], payload: &[u8]) -> Result<Option<EngineEven
             }))
         }
         "133" => {
+            // 기본값: 인자 없는 OSC 133 표시는 인자가 비어 있다.
             let (marker, params) = payload.split_once(';').unwrap_or((payload, ""));
             for parameter in params.split(';') {
                 if let Some(value) = parameter.strip_prefix("redraw=") {
@@ -667,6 +669,7 @@ impl AlacrittyEngine {
                 .iter()
                 .position(|byte| *byte == b';')
                 .map(|position| (&body[..position], &body[position + 1..]))
+                // 기본값: ; 가 없는 OSC 는 선택자만 있고 내용이 비어 있다.
                 .unwrap_or((body, &[]));
             let outcome = osc_outcome(selector);
             let bel = self.pending_osc.last() == Some(&b'\x07');
@@ -912,6 +915,7 @@ impl AlacrittyEngine {
                 if cursor.point.column.0 != 0 || cursor.input_needs_wrap {
                     self.processor.advance(&mut self.term, b"\r\n");
                 }
+                // 기본값: redraw 인자가 없는 A 표시는 redraw=1 이다(docs/spec/terminal-runtime.md).
                 ShellState::Prompt(redraw.unwrap_or(true))
             }
             ShellMarker::PromptEnd => match (self.shell, redraw) {
@@ -1063,6 +1067,7 @@ impl AlacrittyEngine {
                 let keep = (1..PREFIX.len())
                     .rev()
                     .find(|length| self.pending_input.ends_with(&PREFIX[..*length]))
+                    // 기본값: 입력 끝이 접두어의 앞부분과 겹치지 않으면 남길 바이트가 없다.
                     .unwrap_or(0);
                 let split = self.pending_input.len().saturating_sub(keep);
                 let plain = self.pending_input[..split].to_vec();
@@ -1572,6 +1577,7 @@ impl Engine for AlacrittyEngine {
                     foreground.or_else(|| self.default_rgb(NamedColor::Foreground).map(hex));
                 cell.bg = Some(hex(self
                     .highlight_background
+                    // 기본값: OSC 17 강조 배경이 없으면 선택 칸은 테마의 선택 배경을 쓴다(docs/spec/terminal-runtime.md).
                     .unwrap_or_else(|| self.theme_rgb(self.theme.selection))));
                 cell.fg = self.highlight_foreground.map(hex).or(foreground);
                 cell.inverse = false;

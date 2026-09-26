@@ -59,9 +59,13 @@ export interface SoksakOptions {
     grabSize?: number;
     /** How close a dragged boundary must come to a neighbour to snap onto it, in px. Default 7. */
     snapDistance?: number;
+    /** How a dragged boundary snaps. Default `merge`. */
     snap?: SnapMode;
+    /** Which axis a fill walks first. Default `v`. */
     fillOrder?: FillOrder;
+    /** Plane width in px. Default 0 until `resize`. */
     width?: number;
+    /** Plane height in px. Default 0 until `resize`. */
     height?: number;
 }
 /**

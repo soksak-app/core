@@ -31,6 +31,7 @@ export function registerState(state) {
 
 function contextOf(state, project, table) {
   const session = `state:${state.plugin}:${project.id}`;
+  // 기본값: data 는 plugin.json 의 선택 필드이며 없으면 프로젝트 데이터가 없다(docs/spec/plugins.md).
   const declared = state.data ?? {};
   const read = (key) => {
     const stored = options.data.get(project.id, state.plugin);
@@ -62,9 +63,11 @@ function contextOf(state, project, table) {
 }
 
 async function show(project) {
+  // 기본값: 프로젝트가 없는 창의 프로젝트 id 는 null 이다.
   if ((project?.id ?? null) === shown) return;
   const previous = mounts;
   mounts = [];
+  // 기본값: 프로젝트가 없는 창의 프로젝트 id 는 null 이다.
   shown = project?.id ?? null;
   for (const { state, table, done } of previous) {
     try {

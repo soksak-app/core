@@ -42,6 +42,7 @@ export function reportNotice(tabId, text) {
   notify();
 }
 
+// 기본값: 알림이 없는 탭은 null 이다.
 export const tabNotice = (tabId) => notices.get(tabId) ?? null;
 
 /** 모든 탭 알림의 [탭 id, 텍스트] 목록. */
@@ -68,13 +69,16 @@ export function reportDirectory(tabId, path) {
   directories.set(tabId, path);
 }
 
+// 기본값: 제목을 알리지 않은 탭은 null 이다.
 export const tabLabel = (tabId) => labels.get(tabId) ?? null;
 
 /** 새 탭의 출처: 탭을 더하거나 쪼갠 카드의 활성 탭이 그 순간 기록한 디렉터리. */
 export function recordOrigin(tabId, fromTabId) {
+  // 기본값: 위 주석대로 출처 탭이 없거나 디렉터리를 기록하지 않았으면 디렉터리가 없다(null).
   origins.set(tabId, Object.freeze({ directory: (fromTabId && directories.get(fromTabId)) ?? null }));
 }
 
+// 기본값: 출처를 기록하지 않은 탭은 디렉터리가 없다.
 export const tabOrigin = (tabId) => origins.get(tabId) ?? Object.freeze({ directory: null });
 
 /** 표면을 해제하면 그 탭의 알림도 지운다. */

@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- V5-88: reject missing required values across the layout library, workbench, plugins, sidecars, and hosts; document contract defaults at their call sites; add a repository check for unexplained defaults and discarded errors with behavior tests.
+- V5-90: expect all 15 Go shell test cases in the language evidence manifest. The former count of 13 rejected a run where every case passed.
+- V5-91: update seven divider gesture mutation targets after the explicit disarm invariant replaced optional calls; all seven mutations are caught again.
 - V5-86-1, V5-89: the occlusion notification check covers each app with its own project window, the placement check asserts only the frames it sets, and a check that refuses a covered window names the covering windows.
 - V5-84: a terminal drag selection covers a cell once the pointer passes the cell's midpoint, as in macOS Terminal; the sidecar maps selection points to the nearest cell edge.
 - V5-85: `core.surface.document` reports `body` as the surface content size, larger than `viewport` when the content overflows.

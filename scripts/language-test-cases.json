@@ -28,9 +28,9 @@
       "language": "go",
       "command": "go",
       "args": ["test", "-json", "./sidecars/shell/tests"],
-      "expectedTests": 13,
+      "expectedTests": 15,
       "implementationFiles": ["sidecars/shell/src/shell/shell.go"],
-      "testFiles": ["sidecars/shell/tests/serve_test.go"],
+      "testFiles": ["sidecars/shell/tests/serve_test.go", "sidecars/shell/tests/platform_test.go"],
       "dependencyFiles": ["sidecars/shell/go.mod"],
       "buildFlags": ["CGO_ENABLED=1", "go test -json"]
     },

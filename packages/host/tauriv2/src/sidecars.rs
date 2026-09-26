@@ -152,7 +152,9 @@ fn write_pending_socket<O>(
     let (replies, closes) = {
         let mut state = state.lock().expect("sidecar state");
         (
+            // 기본값: 보관분이 없는 사이드카에는 쓸 반납과 닫힘이 없다.
             state.pending_replies.remove(name).unwrap_or_default(),
+            // 기본값: 보관분이 없는 사이드카에는 쓸 반납과 닫힘이 없다.
             state.pending_closes.remove(name).unwrap_or_default(),
         )
     };
@@ -175,7 +177,9 @@ fn write_pending<O: Owner>(state: &Mutex<State<O>>, name: &str, stdin: &mut Chil
     let (replies, closes) = {
         let mut state = state.lock().expect("sidecar state");
         (
+            // 기본값: 보관분이 없는 사이드카에는 쓸 반납과 닫힘이 없다.
             state.pending_replies.remove(name).unwrap_or_default(),
+            // 기본값: 보관분이 없는 사이드카에는 쓸 반납과 닫힘이 없다.
             state.pending_closes.remove(name).unwrap_or_default(),
         )
     };
@@ -341,6 +345,7 @@ impl<O: Owner> Sidecars<O> {
         let current = owner.root()?;
         let root = {
             let state = self.state.lock().map_err(|e| e.to_string())?;
+            // 기본값: 디렉터리를 기록하지 않은 표면은 창의 현재 프로젝트 루트에서 시작한다.
             state.roots.get(surface).cloned().unwrap_or(current)
         };
 
@@ -403,6 +408,7 @@ impl<O: Owner> Sidecars<O> {
             .running
             .iter()
             .filter(|(name, process)| {
+                // 기본값: persistent 를 선언하지 않은 사이드카는 창마다 실행된다.
                 self.persistent.get(*name).copied().unwrap_or(false)
                     && process
                         .persistent
@@ -751,6 +757,7 @@ impl<O: Owner> Sidecars<O> {
             .declared
             .get(name)
             .ok_or_else(|| format!("sidecar {name} is not declared by any plugin"))?;
+        // 기본값: persistent 를 선언하지 않은 사이드카는 창마다 실행된다.
         if *self.persistent.get(name).unwrap_or(&false) {
             return self.start_persistent(name, program);
         }
@@ -986,6 +993,7 @@ impl<O: Owner> Sidecars<O> {
             let reason = response
                 .get("error")
                 .and_then(|v| v.as_str())
+                // 기본값: 사이드카 오류에 문장이 없으면 일반 문장으로 같은 실패를 알린다.
                 .unwrap_or("invalid hello response");
             return Err(format!(
                 "sidecar {name}: authentication handshake failed: {reason}"
@@ -1118,6 +1126,7 @@ impl<O: Owner> Sidecars<O> {
                                 Err(value
                                     .get("error")
                                     .and_then(|v| v.as_str())
+                                    // 기본값: 사이드카 오류에 문장이 없으면 일반 문장으로 같은 실패를 알린다.
                                     .unwrap_or("retain failed")
                                     .to_string())
                             };
@@ -1140,6 +1149,7 @@ impl<O: Owner> Sidecars<O> {
                                 Err(value
                                     .get("error")
                                     .and_then(|v| v.as_str())
+                                    // 기본값: 사이드카 오류에 문장이 없으면 일반 문장으로 같은 실패를 알린다.
                                     .unwrap_or("close-owner failed")
                                     .to_string())
                             };
@@ -1165,6 +1175,7 @@ impl<O: Owner> Sidecars<O> {
                                 Err(value
                                     .get("error")
                                     .and_then(|v| v.as_str())
+                                    // 기본값: 사이드카 오류에 문장이 없으면 일반 문장으로 같은 실패를 알린다.
                                     .unwrap_or("shutdown failed")
                                     .to_string())
                             };

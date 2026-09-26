@@ -58,6 +58,7 @@ export class SoksakView {
      */
     get bleed() {
         var _a;
+        // default: `bleed` is optional and documented as 0: a plane without a frame needs no reach.
         return (_a = this.options.bleed) !== null && _a !== void 0 ? _a : 0;
     }
     set bleed(px) {
@@ -136,6 +137,7 @@ export class SoksakView {
         this.host = host;
         this.grid = grid;
         this.options = options;
+        // default: `classPrefix` is optional and documented as `sp`.
         this.prefix = (_a = options.classPrefix) !== null && _a !== void 0 ? _a : 'sp';
         this.observeResolution();
         if (options.observeResize !== false && typeof ResizeObserver !== 'undefined') {
@@ -273,6 +275,7 @@ export class SoksakView {
             const rect = onGrid(box.get(card.id), step);
             place(held.el, rect);
             this.paintedRects.set(card.id, rect);
+            // default: `updateCard` is an optional hook; without it the view only places the card.
             (_b = (_a = this.options).updateCard) === null || _b === void 0 ? void 0 : _b.call(_a, held.el, card, rect);
         }
         // The card is gone from the grid, so `destroyCard` receives the last copy
@@ -280,6 +283,7 @@ export class SoksakView {
         for (const [id, held] of this.cardEls) {
             if (live.has(id))
                 continue;
+            // default: `destroyCard` is an optional hook; without it the view only removes the element.
             (_d = (_c = this.options).destroyCard) === null || _d === void 0 ? void 0 : _d.call(_c, held.el, held.card);
             held.el.remove();
             this.cardEls.delete(id);
@@ -301,6 +305,7 @@ export class SoksakView {
                     this.host.appendChild(el);
                     this.ruleEls.set(rule.key, el);
                 }
+                // default: `bleed` is optional and documented as 0.
                 place(el, onGrid(reach(rule, snapshot.width, snapshot.height, (_j = this.options.bleed) !== null && _j !== void 0 ? _j : 0), step));
             }
             this.sweep(this.ruleEls, keep);
@@ -321,11 +326,13 @@ export class SoksakView {
                 this.dividerEls.set(divider.key, el);
             }
             place(el, onGrid(divider, step));
+            // default: `updateDivider` is an optional hook; without it the view only places the divider.
             (_f = (_e = this.options).updateDivider) === null || _f === void 0 ? void 0 : _f.call(_e, el, divider);
         }
         this.sweep(this.dividerEls, keep);
         // Every element now carries the line the grid has.
         this.renumbered = false;
+        // default: `onChange` is an optional listener.
         (_h = (_g = this.options).onChange) === null || _h === void 0 ? void 0 : _h.call(_g, reason);
     }
     /**
@@ -462,10 +469,9 @@ export class SoksakView {
      * holds it any more, so it is an ordinary divider again.
      */
     release(drag) {
-        var _a;
         // The press that moved the boundary is not the first press of a pair.
         if (drag.moved)
-            (_a = this.disarms.get(drag.on)) === null || _a === void 0 ? void 0 : _a();
+            this.disarm(drag.on);
         for (const [pointer, held] of [...this.drags])
             if (held === drag)
                 this.drop(pointer);
@@ -535,6 +541,13 @@ export class SoksakView {
             drag.on.dataset.line = String(to.line);
         }
     }
+    /** Ends the double-press wait of a divider. Every divider element has one from its creation. */
+    disarm(el) {
+        const disarm = this.disarms.get(el);
+        if (!disarm)
+            throw new Error('a divider element has no double-press state');
+        disarm();
+    }
     /** Whether a gesture holds the element filed under this key. */
     holding(key) {
         const el = this.dividerEls.get(key);
@@ -553,6 +566,7 @@ export class SoksakView {
         // not remove them. Left behind, they keep driving the boundary of a
         // divider that is gone, and they accumulate one pair per divider. The
         // disposer drops that divider's mouse drag before it removes them.
+        // default: the sweep also removes card elements, which have no mouse listeners; every divider has them.
         (_a = this.mouseDisposers.get(el)) === null || _a === void 0 ? void 0 : _a();
         this.disarms.delete(el);
         el.remove();
@@ -676,7 +690,7 @@ export class SoksakView {
         // has ended, whether it was released or dropped, the pair is open again.
         let tapId = -1;
         el.addEventListener('pointerdown', (e) => {
-            var _a, _b;
+            var _a;
             // Only the primary button drags, as on the mouse path. A press of any
             // other button reports button 2 or 1 and its move reports the same
             // buttons bitmask a drag does, so without this it moves the boundary.
@@ -698,10 +712,10 @@ export class SoksakView {
             // whenever this pointer was last pressed on one.
             const stale = this.drop(e.pointerId);
             if (stale === null || stale === void 0 ? void 0 : stale.moved)
-                (_a = this.disarms.get(stale.on)) === null || _a === void 0 ? void 0 : _a();
+                this.disarm(stale.on);
             // A press that lands while the press before it is still down is a second
             // finger, not the second press of a pair.
-            if (((_b = this.drags.get(tapId)) === null || _b === void 0 ? void 0 : _b.on) !== el && e.timeStamp - lastTap < DOUBLE_TAP_MS) {
+            if (((_a = this.drags.get(tapId)) === null || _a === void 0 ? void 0 : _a.on) !== el && e.timeStamp - lastTap < DOUBLE_TAP_MS) {
                 lastTap = -Infinity;
                 this.carry(() => this.grid.centerBoundary(axis, line), el);
                 this.draw('center');
@@ -770,7 +784,6 @@ export class SoksakView {
         // pointer path. A press that moved the boundary is not the first of a pair.
         let lastPress = -Infinity;
         const mouseDown = (e) => {
-            var _a;
             if (this.disposed || e.button !== 0)
                 return;
             e.preventDefault();
@@ -789,7 +802,7 @@ export class SoksakView {
             // the mouse was last pressed on one.
             const stale = this.dropMouse();
             if (stale === null || stale === void 0 ? void 0 : stale.moved)
-                (_a = this.disarms.get(stale.on)) === null || _a === void 0 ? void 0 : _a();
+                this.disarm(stale.on);
             if (e.timeStamp - lastPress < DOUBLE_TAP_MS) {
                 lastPress = -Infinity;
                 this.carry(() => this.grid.centerBoundary(axis, line), el);
@@ -929,6 +942,7 @@ export class SoksakView {
         (_b = this.resolution) === null || _b === void 0 ? void 0 : _b.removeEventListener('change', this.resolutionChanged);
         this.resolution = null;
         for (const held of this.cardEls.values()) {
+            // default: `destroyCard` is an optional hook; without it the view only removes the element.
             (_d = (_c = this.options).destroyCard) === null || _d === void 0 ? void 0 : _d.call(_c, held.el, held.card);
             held.el.remove();
         }

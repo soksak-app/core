@@ -1,7 +1,8 @@
 use std::env;
 
 fn main() {
-    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let os =
+        env::var("CARGO_CFG_TARGET_OS").expect("cargo sets CARGO_CFG_TARGET_OS for build scripts");
 
     if os == "macos" {
         println!("cargo:rerun-if-changed=src/platform/darwin/frame.m");

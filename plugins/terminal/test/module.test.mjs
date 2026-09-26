@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+
+const manifest = JSON.parse(readFileSync(new URL("../plugin.json", import.meta.url), "utf8"));
 
 
 // 터미널은 설정 shell 이 가리키는 셸을 연다.
-const SHELL_SETTINGS = { read: () => ({ shell: "/bin/sh" }), on: () => () => {} };
+// 실제 표면 문맥처럼 매니페스트의 모든 설정 기본값을 읽는다.
+const SHELL_SETTINGS = {
+  read: () => ({ ...Object.fromEntries(Object.entries(manifest.settings).map(([key, { default: value }]) => [key, value])), shell: "/bin/sh" }),
+  on: () => () => {},
+};
 test("terminal module waits for composition presentation, publishes state, and disposes the controller", async () => {
   const view = { addEventListener() {}, removeEventListener() {} };
   const element = () => ({ style: {}, hidden: true, addEventListener() {}, removeEventListener() {},

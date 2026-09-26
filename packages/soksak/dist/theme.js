@@ -37,6 +37,7 @@ export function themeTokens(prefix = 'sp') {
 /** Returns the stylesheet as text. */
 export function themeCSS(options = {}) {
     var _a;
+    // default: `prefix` is optional and documented as `sp`, matching the view's.
     const prefix = (_a = options.prefix) !== null && _a !== void 0 ? _a : 'sp';
     const palette = { ...PALETTE, ...options.palette };
     const metrics = { ...METRICS, ...options.metrics };
@@ -112,6 +113,7 @@ export function themeCSS(options = {}) {
  */
 export function installTheme(doc, options = {}) {
     var _a;
+    // default: `prefix` is optional and documented as `sp`, matching the view's.
     const prefix = (_a = options.prefix) !== null && _a !== void 0 ? _a : 'sp';
     const id = `${prefix}-theme`;
     const found = doc.getElementById(id);

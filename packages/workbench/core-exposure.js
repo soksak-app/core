@@ -106,6 +106,7 @@ const shift = (rect, origin) => ({ x: rect.x + origin.x, y: rect.y + origin.y, w
 
 /** 활성 공간의 탭과 저장된 공간의 탭에서 표면의 플러그인을 찾는다. */
 function surfacePlugin(surface) {
+  // 기본값: 판을 만들기 전에는 카드가 없다.
   for (const card of currentGrid()?.cards ?? []) {
     const tab = tabsOf(card).find((t) => t.id === surface);
     if (tab) return tab.plugin;
@@ -113,6 +114,7 @@ function surfacePlugin(surface) {
   for (const project of projects.local()) {
     for (const space of project.spaces) {
       for (const card of space.layout.state.cards) {
+        // 기본값: 자리 카드는 data 가 null 이므로 탭이 없다.
         const tab = (card.data?.tabs ?? []).find((t) => t.id === surface);
         if (tab) return tab.plugin;
       }
@@ -126,6 +128,7 @@ function preferred() {
   const grid = currentGrid();
   const card = grid && focused() ? grid.card(focused()) : null;
   const first = card ? activeTab(card)?.id : null;
+  // 기본값: 아직 합성을 보고하지 않은 창에는 보이는 표면이 없다.
   const visible = (latest()?.surfaces ?? []).filter((s) => s.visible).map((s) => s.id);
   return [first, ...visible].filter(Boolean);
 }
@@ -143,6 +146,7 @@ function gridState() {
     return {
       id: card.id, x: rect.x, y: rect.y, w: rect.w, h: rect.h,
       c0: card.c0, c1: card.c1, r0: card.r0, r1: card.r1,
+      // 기본값: px 폭을 정하지 않은 카드는 width 가 null 이다.
       fixed: Boolean(card.fixed), width: card.width ?? null, focused: card.id === focused(),
       pane: el.querySelector(".chrome__acts") ? pane++ : null,
       tabs: tabs.map(({ id, plugin, title }) => ({ id, plugin, title, label: tabLabel(id), notice: tabNotice(id) })),
@@ -173,7 +177,7 @@ const withOpen = (project) => ({ ...project, open: projects.isOpen(project.id) }
 
 /** 키보드 초점이 있는 요소의 공개 이름과 순서. 공개 이름이 없으면 null 이다. */
 function focusState() {
-  const el = document.activeElement?.closest?.("[data-expose]");
+  const el = document.activeElement?.closest("[data-expose]");
   if (!el || el === document.body) return null;
   const name = el.dataset.expose;
   return { name, index: [...document.querySelectorAll(`[data-expose="${name}"]`)].indexOf(el) };
@@ -190,6 +194,7 @@ function focusElement(name, index = 0) {
 /** 설정 하나를 입력 값으로 바꾼다. 컨트롤은 문자열을 주므로 현재 값의 타입으로 변환한다. */
 function changeSetting(key, input, scope) {
   if (!Object.hasOwn(defaults, key)) throw new Error(`Unknown setting: ${key}`);
+  // 기본값: scope 는 선택 매개변수이며 생략하면 전역 범위다(exposure.json 의 core.settings.change).
   const now = scopedValue(key, scope ?? "common");
   const next = typeof now === "boolean" ? input === true || input === "true"
     : typeof now === "number" ? Number(input) : String(input);
@@ -227,6 +232,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   }));
   status("core.page.audit", () => ({ unbound: audit(document.body) }));
   onBinding(coreChanged);
+  // 기본값: 오류를 보이지 않는 문서의 core.page.error 는 null 이다(exposure.json).
   status("core.page.error", () => document.getElementById("applicationError")?.textContent ?? null);
   status("core.projects", () => projects.all().map(withOpen));
   status("core.project", () => {
@@ -274,6 +280,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
     await changeSetting(key, input, scope);
   });
   registry.command("core.settings.theme", async ({ name, mode, scope }) => {
+    // 기본값: mode 를 생략하면 현재 모드, scope 를 생략하면 전역 범위다(exposure.json 의 core.settings.theme).
     await applyTheme(name, mode ?? scopedValue("mode", scope ?? "common"), scope);
   });
   // 사이드바 선택과 세트 변경의 거부는 잘못된 요청 인자다(docs/spec/settings.md).

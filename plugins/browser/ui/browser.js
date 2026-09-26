@@ -30,6 +30,7 @@ export async function mount(root, context) {
   };
   address.addEventListener("pointerdown", beginSelection);
   address.addEventListener("mouseup", retainSelection);
+  // 기본값: 새 탭에는 저장된 주소(restored)가 없다. 주소 없이 빈 상태를 보이고, 아래에서 home 을 연다.
   showEmpty(restored ?? "");
   const composition = await context.composition.create({ regions: { page: area }, overlays: {} });
   const region = composition.region("page");
@@ -46,6 +47,7 @@ export async function mount(root, context) {
   address.addEventListener("input", typed);
   address.addEventListener("focus", notifyAddress);
   address.addEventListener("blur", left);
+  // 기본값: 새 탭에는 저장된 주소(restored)가 없다. 문서를 열기 전의 위치는 빈 주소다.
   let current = { url: restored ?? "", title: "", loading: false, progress: 0, canGoBack: false, canGoForward: false, error: null, scroll: { x: 0, y: 0 } };
   // 세션 기록은 문서 영역 상태의 history 다(docs/spec/native-surfaces.md#document-regions).
   let history = { entries: [], index: -1 };
@@ -133,6 +135,7 @@ export async function mount(root, context) {
     return { url: /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}` };
   }, { event: "keydown", when: (event) => event.key === "Enter" });
   // 저장된 주소가 없으면 설정 home 을 연다. 비어 있으면 빈 상태로 시작한다.
+  // 기본값: 새 탭에는 저장된 주소(restored)가 없다. 그 탭은 설정 home 을 연다.
   const start = restored ?? context.runtime.settings.read().home;
   if (start !== "") await region.load(start);
   context.status.report("ready");

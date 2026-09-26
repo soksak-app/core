@@ -65,6 +65,7 @@ export async function ownManifest() {
  * 문서 항목(core.surface.*)을 더한다.
  */
 async function ownDeclarations() {
+  // 기본값: exposes 는 plugin.json 의 선택 필드이며, 없는 플러그인은 코어 표면 항목만 등록한다.
   const plugin = (await ownManifest()).exposes ?? {};
   const core = validateExposureFile(await fetchJson(`/${EXPOSURE}`)).exposes;
   const surfaceCore = Object.fromEntries(Object.entries(core)
@@ -123,6 +124,7 @@ function exposeSurfaceDocument() {
   const input = observed(() => events.slice());
   for (const type of INPUT_TYPES) {
     addEventListener(type, (event) => {
+      // 기본값: 키 이벤트에는 좌표가 없고 포인터 이벤트에는 키가 없으므로 그 필드는 null 이다.
       events.push({ sequence: ++sequence, type, trusted: event.isTrusted, x: event.clientX ?? null, y: event.clientY ?? null, key: event.key ?? null });
       if (events.length > INPUT_KEPT) events.shift();
       input.notify();

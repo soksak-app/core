@@ -22,6 +22,7 @@ const ownerOf = (name) => name.slice(0, name.indexOf("."));
 const surfaceName = (name) => ownerOf(name) !== "core" || name.startsWith(SURFACE_CORE);
 
 /** 감시 하나의 키. 표면을 지정한 감시와 지정하지 않은 감시는 서로 다르다. */
+// 기본값: 위 주석대로 표면을 지정하지 않은 감시의 표면은 null 이다.
 const watchKey = (name, surface) => JSON.stringify([name, surface ?? null]);
 
 // 이 문서에 마운트된 표면 모듈의 요청 수신자를 보관한다.
@@ -82,8 +83,9 @@ export function createRegistry({ call = null } = {}) {
       ? declared.get(declarationKey("command", params?.name))?.declaration.timeout : undefined;
     if (timeout !== undefined) request.timeout = timeout;
     const reply = await call("exposureForward", request);
-    if (reply?.error) throw new ExposureError(reply.error.code, reply.error.message);
-    return reply?.result ?? null;
+    if (reply.error) throw new ExposureError(reply.error.code, reply.error.message);
+    // 기본값: 결과를 싣지 않은 답은 결과가 null 인 명령의 답이다.
+    return reply.result ?? null;
   }
 
   /** 항목을 등록한 표면 중 요청을 받을 표면. 요청이 표면을 지정하면 그 표면이다. */
@@ -98,6 +100,7 @@ export function createRegistry({ call = null } = {}) {
     }
     if (!owners?.size) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `${kind} ${name} is not registered`);
     const first = options.preferred().find((surface) => owners.has(surface));
+    // 기본값: 선호하는 표면이 등록하지 않았으면 마지막에 등록한 표면이 답한다.
     return first ?? [...owners.keys()].at(-1);
   }
 
@@ -129,6 +132,7 @@ export function createRegistry({ call = null } = {}) {
   }
 
   async function answer(method, params) {
+    // 기본값: 매개변수가 없는 요청은 params 를 생략한다.
     if (methods.has(method)) return methods.get(method)(params ?? {});
     if (method === "exposure.list") return list();
     const name = params?.name;
@@ -173,6 +177,7 @@ export function createRegistry({ call = null } = {}) {
       out[keyOf[kind]].push({
         ...declaration,
         registered: surfaceName(declaration.name)
+          // 기본값: 그 이름을 등록한 표면이 없으면 표면 등록 수는 0 이다.
           ? (surfaces.get(key)?.size ?? 0) > 0 || Boolean(pageOf(kind, declaration.name)) : core.registered(kind, declaration.name),
       });
     }
@@ -185,6 +190,7 @@ export function createRegistry({ call = null } = {}) {
     const owners = surfaces.get(declarationKey(kind, name));
     if (!owners?.size) return null;
     if (wanted && owners.has(wanted)) return wanted;
+    // 기본값: 선호하는 표면이 등록하지 않았으면 마지막에 등록한 표면이 답한다.
     return options.preferred().find((surface) => owners.has(surface)) ?? [...owners.keys()].at(-1);
   }
 
@@ -338,6 +344,7 @@ export function createRegistry({ call = null } = {}) {
     observeCore: (name, fn) => core.follow(name, (value) => fn(value, "core")),
 
     observe(name, surface, fn) {
+      // 기본값: 표면을 지정하지 않은 관찰은 원하는 표면이 null 이다.
       const observer = { name, wanted: surface ?? null, fn, surface: undefined, watch: null, listener: null,
         pageEntry: null, stopPage: null };
       observer.listener = (value, from) => fn(value, from);
@@ -412,6 +419,7 @@ export function createRegistry({ call = null } = {}) {
     },
 
     /** 이 항목을 등록한 표면 id. 등록 순서다. */
+    // 기본값: 등록한 표면이 없는 항목의 등록자는 비어 있다.
     registrants: (kind, name) => [...(surfaces.get(declarationKey(kind, name))?.keys() ?? [])],
 
     /** 표면을 닫을 때 등록·보류·감시를 모두 제거한다. */

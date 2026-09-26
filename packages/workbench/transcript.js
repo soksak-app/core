@@ -6,6 +6,7 @@
  *
  * send(line) 은 줄 하나를 애플리케이션에 보내고 그 완료를 promise 로 반환한다.
  */
+// 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
 export function createTranscript(send, reportError = (error) => console.error("transcript send failed:", error?.message ?? error)) {
   let recording = false;
   let sent = Promise.resolve();
@@ -32,6 +33,7 @@ export function createTranscript(send, reportError = (error) => console.error("t
       Promise.resolve(answered).then((answer) => {
         const line = `host ${name} ${say(payload)} -> ${say(answer)}`;
         sent = sent.then(() => send(line)).then(undefined, reportError);
+      // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
       }, (error) => reportError(new Error(`host ${name} failed before transcript: ${error?.message ?? error}`)));
     },
   };

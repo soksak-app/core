@@ -17,7 +17,7 @@ test("a surface context carries its plugin's diagnostic module", async () => {
   registerPlugin({ id: "fixture-diagnostics", diagnostics, surface: () => null });
   const moduleUrl = "data:text/javascript,export function mount(root,c){globalThis.mountedDiagnostics=c.diagnostics;return {dispose(){}}}";
   await mountSurface(document.querySelector("#slot"),
-    { module: moduleUrl, surfaceId: "tab-diagnostics", pluginId: "fixture-diagnostics", composition: { kind: "dom" } });
+    { module: moduleUrl, surfaceId: "tab-diagnostics", pluginId: "fixture-diagnostics", composition: { kind: "dom" }, declarations: {}, sidecars: [] });
   assert.equal(globalThis.mountedDiagnostics, diagnostics);
   dom.window.close();
 });
@@ -27,7 +27,7 @@ test("surface mount keeps one module host when a tab moves slots", async () => {
   globalThis.document = dom.window.document;
   const { mountSurface } = await import("../surface-modules.js");
   const moduleUrl = "data:text/javascript,export function mount(root,c){c.status.report('ready');return {dispose(){}}}";
-  const surface = { module: moduleUrl, surfaceId: "tab-1", pluginId: "fixture", composition: { kind: "dom" } };
+  const surface = { module: moduleUrl, surfaceId: "tab-1", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] };
   const first = document.querySelector("#a");
   const second = document.querySelector("#b");
   const mounts = await Promise.all([mountSurface(first, surface), mountSurface(first, surface)]);
@@ -44,8 +44,8 @@ test("selecting a parked tab reattaches its existing module host", async () => {
   globalThis.document = dom.window.document;
   const { mountSurface } = await import("../surface-modules.js");
   const moduleUrl = "data:text/javascript,export function mount(){return {dispose(){}}}";
-  const first = { module: moduleUrl, surfaceId: "tab-park-first", pluginId: "fixture", composition: { kind: "dom" } };
-  const second = { module: moduleUrl, surfaceId: "tab-park-second", pluginId: "fixture", composition: { kind: "dom" } };
+  const first = { module: moduleUrl, surfaceId: "tab-park-first", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] };
+  const second = { module: moduleUrl, surfaceId: "tab-park-second", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] };
   const slot = document.querySelector("#slot");
 
   await mountSurface(slot, first);
@@ -93,7 +93,7 @@ test("a mounted module registers and releases its declared exposure through the 
     return { dispose() { context.exposure.dispose(); } };
   }`)}`;
   const surface = {
-    module: moduleUrl, surfaceId, pluginId, declarations, composition: { kind: "dom" },
+    module: moduleUrl, surfaceId, pluginId, declarations, sidecars: [], composition: { kind: "dom" },
   };
   await mountSurface(document.querySelector("#slot"), surface);
   assert.deepEqual(registry.registrants("command", `${pluginId}.ping`), [surfaceId]);
@@ -114,7 +114,7 @@ test("surface mount readiness separates module mount from native presentation", 
     await new Promise((resolve) => setTimeout(resolve, 5));
     return { dispose() {} };
   }`)}`;
-  const surface = { module: moduleUrl, surfaceId: "tab-mounted", pluginId: "fixture", composition: { kind: "dom" } };
+  const surface = { module: moduleUrl, surfaceId: "tab-mounted", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] };
   const mounting = mountSurface(document.querySelector("#slot"), surface);
   await waitSurfaceCompositionDeclared(surface.surfaceId);
   await mounting;
@@ -132,7 +132,7 @@ test("a tab that leaves the layout during its mount reads the factor it was moun
   const moduleUrl = "data:text/javascript,export async function mount(root,c){await Promise.resolve();" +
     "globalThis.leaveLayout();globalThis.readFactor=c.runtime.textSize.read();return {dispose(){}}}";
   await mountSurface(document.querySelector("#slot"),
-    { module: moduleUrl, surfaceId: "tab-leaving", pluginId: "fixture", composition: { kind: "dom" } });
+    { module: moduleUrl, surfaceId: "tab-leaving", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] });
   assert.equal(globalThis.readFactor, 1.5);
   dom.window.close();
 });

@@ -130,7 +130,11 @@ export function mount(root, context) {
   let paths = [];
   let syncing = false;
   const pending = new Set();
-  const isExpanded = (path) => tree.getItem(path)?.isExpanded?.() ?? false;
+  // 트리에 아직 없는 경로와 파일은 펼쳐져 있지 않다.
+  const isExpanded = (path) => {
+    const item = tree.getItem(path);
+    return item !== null && item.isDirectory() && item.isExpanded();
+  };
   const unsubscribe = tree.subscribe(() => {
     if (syncing) return;
     for (const path of expansionRequests(rows, isExpanded, pending)) {
@@ -145,6 +149,7 @@ export function mount(root, context) {
       return;
     }
     message.hidden = true;
+    // 기본값: 루트 폴더(/)에는 이름 조각이 없으므로 경로 전체를 보인다.
     title.textContent = value.root.split("/").filter(Boolean).at(-1) ?? value.root;
     title.title = value.root;
     rows = value.entries;
@@ -171,6 +176,7 @@ export function mount(root, context) {
     }
     applySelection();
   });
+  // 기본값: files 상태를 등록한 표면이 없으면(프로젝트가 없으면) 값이 없고, 보일 git 상태도 없다.
   const stopGit = context.status("files.git", (entries) => tree.setGitStatus(entries ?? []));
   /** 트리의 선택을 files.selection 에 맞추고, 파일이 골라져 있을 때만 별을 켠다. */
   const applySelection = () => {
@@ -185,6 +191,7 @@ export function mount(root, context) {
     star.disabled = !rows.some((row) => row.path === selection && !row.directory);
   };
   const stopSelection = context.status("files.selection", (value) => {
+    // 기본값: files 상태를 등록한 표면이 없으면(프로젝트가 없으면) 값이 없고, 고른 경로도 없다.
     selection = value ?? null;
     applySelection();
   });

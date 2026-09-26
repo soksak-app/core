@@ -177,6 +177,7 @@ export function verify(controls = null) {
     add("V7a element − declared == 0", gone === 0 && missed === 0 && worst < 0.5 && dim === 0,
         `최대 ${worst.toFixed(2)}px · 커밋에 없는 표면 ${missed} · 사라진 표면 ${gone} · ` +
         `흐림이 다른 표면 ${dim} · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq}, ` +
+        // 기본값: 아직 앉힌 배치가 없으면 none 으로 적는다.
         `seated ${seated()?.seq ?? "none"}, pending ${pendingPlacement})`);
   }
 
@@ -197,6 +198,7 @@ export function verify(controls = null) {
   // 화면의 프레임 간 정렬은 outside.test.mjs가 별도로 검사한다.
   const placed = seated();
   let land = 0, landed = 0, escaped = 0;
+  // 기본값: 아직 앉힌 배치가 없으면 잴 표면이 없다.
   for (const s of placed?.surfaces ?? []) {
     if (!s.visible || s.declared.w < 1 || s.declared.h < 1) continue;
     land = Math.max(land, maxDelta(s.declared, s.applied));
@@ -234,6 +236,7 @@ export function verify(controls = null) {
   // V10 — 네이티브 표면은 DOM overflow 로 잘리지 않는다. 선언 rect 가 클립 영역보다
   // 크면 표면이 카드 밖에 그려진다.
   let escape = 0;
+  // 기본값: 아직 커밋이 없으면 잴 표면이 없다.
   for (const s of latest()?.surfaces ?? []) {
     // 표면의 id 는 탭이므로 카드는 그 슬롯에서 거슬러 찾는다.
     const el = plane

@@ -244,7 +244,8 @@ function validatePluginValue(key, value) {
 }
 
 function validateValues(values, where) {
-  for (const [key, value] of Object.entries(values ?? {})) {
+  if (!values || typeof values !== "object") throw new Error(`${where} are not an object`);
+  for (const [key, value] of Object.entries(values)) {
     if (!Object.hasOwn(defaults, key)) throw new Error(`${where}: unknown setting ${key}`);
     validatePluginValue(key, value);
   }
@@ -255,6 +256,7 @@ export function setPluginSettings(manifests, applicationValues = {}) {
   if (store) throw new Error("plugin settings must be set before settings are connected");
   manifestList = manifests;
   for (const manifest of manifests) {
+    // 기본값: settings 는 plugin.json 의 선택 필드이며 없으면 플러그인 설정이 없다(docs/spec/plugins.md).
     for (const [local, definition] of Object.entries(manifest.settings ?? {})) {
       const key = `${manifest.id}.${local}`;
       if (pluginDefinitions.has(key) || Object.hasOwn(defaults, key)) {
@@ -262,6 +264,7 @@ export function setPluginSettings(manifests, applicationValues = {}) {
       }
       pluginDefinitions.set(key, Object.freeze({ ...definition, plugin: manifest.id, local }));
       defaults[key] = definition.default;
+      // 기본값: environment.json 이 초기 값을 주지 않은 플러그인은 초기 값이 없다.
       if (Object.hasOwn(applicationValues[manifest.id] ?? {}, local)) {
         validatePluginValue(key, applicationValues[manifest.id][local]);
         defaults[key] = applicationValues[manifest.id][local];
@@ -301,6 +304,7 @@ async function refresh() {
   const mine = ++revision;
   const snapshot = await store.snapshot();
   if (changes || mine !== revision) return;
+  // 기본값: 설정을 덮어쓰지 않은 프로젝트에는 settings 가 없다.
   const nextOverrides = snapshot.projects.find((p) => p.id === projectId)?.settings ?? {};
   validateValues(snapshot.common, "common settings");
   validateValues(nextOverrides, "project settings");
@@ -325,6 +329,7 @@ export async function selectProject(id) {
 
 export const settingProject = () => projectId;
 export const scopedValue = (key, scope) => scope === "common"
+  // 기본값: 저장된 공통 값이 없는 설정은 기본값이다.
   ? (common[key] ?? defaults[key]) : settings[key];
 export const overridden = (key) => Object.hasOwn(overrides, key);
 export const flushSettings = () => writing;

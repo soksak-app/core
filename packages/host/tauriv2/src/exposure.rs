@@ -182,7 +182,13 @@ pub fn with_host_entries(listed: Value) -> Result<Value, Failure> {
                 format!("the page returned {kind} that is not an array"),
             ));
         };
-        for mut entry in entries.as_array().cloned().unwrap_or_default() {
+        let Some(entries) = entries.as_array().cloned() else {
+            return Err(Failure::new(
+                -32603,
+                format!("the host declarations of {kind} are not an array"),
+            ));
+        };
+        for mut entry in entries {
             entry["registered"] = Value::Bool(true);
             target.push(entry);
         }
@@ -316,6 +322,7 @@ impl Relay {
             return Err(Failure::new(MISSING_DOCUMENT, error));
         }
         let Some(timeout) = timeout else {
+            // 기본값: 답을 보낼 쪽이 사라지면 문서가 닫힌 것이므로 그 오류로 답한다.
             return rx.recv().unwrap_or_else(|_| {
                 Err(Failure::new(MISSING_DOCUMENT, format!("{target} closed")))
             });
@@ -350,12 +357,15 @@ impl Relay {
         let Some((_, tx)) = waiting else { return false };
         let outcome = match payload.get("error") {
             Some(error) if !error.is_null() => Err(Failure::new(
+                // 기본값: 코드가 없는 페이지 오류는 JSON-RPC 내부 오류(-32603)로 알린다.
                 error.get("code").and_then(Value::as_i64).unwrap_or(-32603),
                 error
                     .get("message")
                     .and_then(Value::as_str)
+                    // 기본값: 문장이 없는 페이지 오류는 일반 문장으로 같은 오류를 알린다.
                     .unwrap_or("the document failed"),
             )),
+            // 기본값: 값을 돌려주지 않은 명령의 답에는 result 가 없고, 그 결과는 null 이다.
             _ => Ok(payload.get("result").cloned().unwrap_or(Value::Null)),
         };
         tx.send(outcome).is_ok()
@@ -748,7 +758,11 @@ pub(crate) fn windows_changed(app: &AppHandle) {
                 return;
             }
         };
-        for entry in list.as_array().cloned().unwrap_or_default() {
+        let Some(entries) = list.as_array().cloned() else {
+            eprintln!("host.windows: the window list is not an array: {list}");
+            return;
+        };
+        for entry in entries {
             let Some(window) = entry["window"].as_str() else {
                 continue;
             };
@@ -1434,6 +1448,7 @@ impl Service for Host {
                 let name = params
                     .get("name")
                     .and_then(Value::as_str)
+                    // 기본값: 이름이 없는 요청은 host 항목이 아니므로 그대로 페이지에 보내고, 페이지가 인자를 검사한다.
                     .unwrap_or_default()
                     .to_string();
                 if name == "host" || name.starts_with("host.") {
