@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-87-2: correct native overlap activation evidence to avoid duplicate pointer delivery; `make -C native/darwin test-activation` passes.
+
 - V5-87-1: add `terminal.notifications` with `tab` and `system` policies. Red was the disagreement between the terminal contract and old system-banner checks for executables outside an application bundle. Green validates the setting and passes it to `tab.notify`; tab reports expose system notices only to the notification center without a tab fallback, and invalid policies remain explicit errors. Workbench and terminal unit tests pass; rebuilt Wails and Tauri setting-transition checks pass for system success or native error, tab-only grid notices, and real tab-notice clicks. `make docs-check`, `pnpm test`, `make boundaries`, `make exposure-check`, and `make e2e-check` pass.
 
 - V5-87: rebuilt Wails and Tauri real-input tiers pass 25/25 each, activation tiers pass 10/10 each, and `make -C native/darwin test-activation` passes. Fixes cover selection raster ordering, terminal scrollbar/history behavior, explicit notification policy delivery, Finder test window placement and reactivation, and native WebKit overlap measurement.
