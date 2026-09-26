@@ -301,7 +301,10 @@ impl FakeSessionPort {
     }
 
     pub fn push_event(&self, event: DaemonEvent) {
-        let _ = self.event_tx.send(event);
+        assert!(
+            self.event_tx.send(event).is_ok(),
+            "fake session event receiver closed"
+        );
     }
 }
 
@@ -1327,16 +1330,42 @@ async fn test_a2_pushed_output_reaches_screen() {
 
     // Wait for screen event (should contain "hi")
     let mut found_hi = false;
+    let mut observed = vec![state_line];
+    let mut last_consumed = 1;
     loop {
         let screen_line =
             tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
                 .await
-                .expect("timeout waiting for screen")
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "timeout waiting for screen; observed {observed:?}; calls {:?}",
+                        calls.lock().unwrap()
+                    )
+                })
                 .expect("failed to read screen line")
                 .expect("screen line is empty");
+        observed.push(screen_line.clone());
 
         let screen_json: serde_json::Value =
             serde_json::from_str(&screen_line).expect("failed to parse screen JSON");
+
+        // 커서 상태 변경도 프레임을 만들 수 있다. 실제 호스트처럼 다음 프레임을 소비해야
+        // 그 뒤에 도착한 PTY 출력이 화면으로 진행된다.
+        if let Some(image) = screen_json["body"].get("image") {
+            let sequence = image["sequence"]
+                .as_u64()
+                .expect("image sequence is missing");
+            if sequence > last_consumed {
+                let consumed = serde_json::json!({"surface": "s1", "body": {"image": {"consumed": {
+                    "name": "view", "generation": 1, "raster": 1, "sequence": sequence
+                }}}});
+                to_serve
+                    .write_all(format!("{consumed}\n").as_bytes())
+                    .await
+                    .expect("failed to consume the next image");
+                last_consumed = sequence;
+            }
+        }
 
         if let Some(event) = screen_json.get("body").and_then(|b| b.get("event")) {
             if event == "screen" {
