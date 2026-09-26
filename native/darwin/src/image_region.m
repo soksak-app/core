@@ -564,6 +564,9 @@ static BOOL isHangul(unichar ch) {
         [self report:key.UTF8String];
         return;
     }
+    // AppKit의 표준 키 바인딩은 아무 동작도 하지 않는 입력에 noop:을 보낸다.
+    // 이를 사이드카에 전달하면 키 입력이 아닌 selector가 터미널 오류가 된다.
+    if (selector == @selector(noop:)) return;
     // NSTextInputClient commands are part of the input stream. Dropping them
     // loses IME actions such as cancel, delete, and accept.
     [self commitPending];

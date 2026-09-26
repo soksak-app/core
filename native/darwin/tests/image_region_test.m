@@ -469,6 +469,15 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"TEST 8: unmarkText without marked text reports nothing (got %lu events)",
                 [collectedEvents count] - afterUnmark]);
 
+        NSUInteger beforeNoop = [collectedEvents count];
+        [(id<NSTextInputClient>)regionView setMarkedText:@"pending" selectedRange:NSMakeRange(7, 0)
+            replacementRange:NSMakeRange(NSNotFound, 0)];
+        NSUInteger beforeNoopCommand = [collectedEvents count];
+        [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(noop:)];
+        check([collectedEvents count] == beforeNoopCommand && [regionView.string isEqual:@"pending"]
+            && [lastPreedit(beforeNoop) isEqual:@"pending"],
+            [NSString stringWithFormat:@"TEST 8: noop: preserves pending input without reporting a command (got %@)", collectedEvents]);
+
         sp_region_close(region8);
     }
 
