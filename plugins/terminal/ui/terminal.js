@@ -199,6 +199,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     inlineImages: [],
     // 사이드카가 답한 선택 해제의 수. 해제의 결과(복사 또는 빈 선택)가 도착했음을 알린다.
     selectionReleases: 0,
+    mouse: { phase: null, x: null, y: null, pressed: false, shift: false, alt: false, ctrl: false,
+      reported: false, written: false, modes: { click: false, drag: false, motion: false }, bytes: null, error: null },
     // 왼쪽 버튼을 누른 선택 제스처가 진행 중인지.
     selecting: false,
     // 뷰포트가 가장 새 출력보다 위에 있는 줄 수와 보관된 기록 줄 수.
@@ -923,6 +925,21 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       // 사이드카가 적용한 기본 배경을 함께 알린다. 검사는 이 값으로 테마가 적용되었음을 안다.
       session = { ...session, theme: body.mode, background: typeof body.background === "string" ? body.background : null };
       resolveError("theme");
+      changed("session");
+    } else if (body.event === "mouse") {
+      const modes = body.modes;
+      if (!["down", "move", "up"].includes(body.phase) || !modes ||
+          !["click", "drag", "motion"].every((key) => typeof modes[key] === "boolean") ||
+          typeof body.reported !== "boolean" || typeof body.written !== "boolean" ||
+          (body.bytes !== null && typeof body.bytes !== "string")) {
+        reportInputError(new Error("invalid mouse measurement from sidecar"));
+        return;
+      }
+      session = { ...session, mouse: {
+        phase: body.phase, x: body.x, y: body.y, pressed: body.pressed, shift: body.shift,
+        alt: body.alt, ctrl: body.ctrl, reported: body.reported, written: body.written,
+        modes, bytes: body.bytes, error: typeof body.error === "string" ? body.error : null,
+      }};
       changed("session");
     } else if (body.event === "clipboard.store") {
       handleClipboardStore(body).catch(reportInputError);

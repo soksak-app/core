@@ -69,6 +69,12 @@ test("terminal module waits for composition presentation, publishes state, and d
   assert.deepEqual(phases, ["ready"]);
   sidecarListeners.get("terminal-test")({ event: "state", sessionId: "s1", cols: 80, rows: 24, cellWidth: 8, cellHeight: 16 });
   assert.equal(statuses.get("terminal.session").read().sessionId, "s1");
+  sidecarListeners.get("terminal-test")({ event: "mouse", phase: "down", x: 3, y: 4, pressed: true,
+    shift: false, alt: false, ctrl: false, reported: true, written: true,
+    modes: { click: true, drag: false, motion: false }, bytes: "Gg==" });
+  assert.deepEqual(statuses.get("terminal.session").read().mouse, {
+    phase: "down", x: 3, y: 4, pressed: true, shift: false, alt: false, ctrl: false,
+    reported: true, written: true, modes: { click: true, drag: false, motion: false }, bytes: "Gg==", error: null });
   // 테마는 모드와 함께 카드 색 토큰에서 가져온 네 색을 보낸다(docs/spec/terminal-runtime.md).
   assert.deepEqual(messages.find(({ body }) => body.operation === "theme")?.body,
     { operation: "theme", mode: "light", background: "#ffffff", foreground: "#252735", cursor: "#252735", selection: "#5962e8" });

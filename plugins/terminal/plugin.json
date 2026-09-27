@@ -191,6 +191,30 @@
             "selectionReleases": {
               "type": "integer"
             },
+            "mouse": {
+              "type": "object",
+              "properties": {
+                "phase": { "type": ["string", "null"], "enum": ["down", "move", "up", null] },
+                "x": { "type": ["integer", "null"] },
+                "y": { "type": ["integer", "null"] },
+                "pressed": { "type": "boolean" },
+                "shift": { "type": "boolean" },
+                "alt": { "type": "boolean" },
+                "ctrl": { "type": "boolean" },
+                "reported": { "type": "boolean" },
+                "written": { "type": "boolean" },
+                "modes": {
+                  "type": "object",
+                  "properties": {
+                    "click": { "type": "boolean" },
+                    "drag": { "type": "boolean" },
+                    "motion": { "type": "boolean" }
+                  }
+                },
+                "bytes": { "type": ["string", "null"] },
+                "error": { "type": ["string", "null"] }
+              }
+            },
             "scrollback": {
               "type": "object",
               "properties": {

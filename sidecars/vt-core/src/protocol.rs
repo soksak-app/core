@@ -2010,17 +2010,31 @@ async fn surface_task(
                             let encoded = encoding::encode_mouse(&encoding::MouseReport {
                                 button, action, col: cell.0, row: cell.1, alt, ctrl,
                             }, &modes);
+                            let phase_name = match phase { MousePhase::Down => "down", MousePhase::Move => "move", MousePhase::Up => "up" };
                             match encoded {
                                 Ok(bytes) => {
-                                    if let Some(ref sid) = session_id {
+                                    let written = if let Some(ref sid) = session_id {
                                         if let Err(error) = session_port.write(sid, &bytes).await {
                                             let response = json!({"surface": surface_id, "body": {"error": "mouse write failed", "reason": error}});
                                             if output_tx.send(response.to_string()).await.is_err() { return; }
-                                        }
-                                    }
+                                            false
+                                        } else { true }
+                                    } else { false };
+                                    let response = json!({"surface": surface_id, "body": {
+                                        "event": "mouse", "phase": phase_name, "x": cell.0, "y": cell.1,
+                                        "pressed": pressed, "shift": shift, "alt": alt, "ctrl": ctrl,
+                                        "reported": true, "written": written,
+                                        "modes": {"click": modes.mouse_click, "drag": modes.mouse_drag, "motion": modes.mouse_motion},
+                                        "bytes": base64_encode(&bytes)
+                                    }});
+                                    if output_tx.send(response.to_string()).await.is_err() { return; }
                                 }
                                 Err(reason) => {
-                                    let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason}});
+                                    let response = json!({"surface": surface_id, "body": {"event": "mouse", "phase": phase_name,
+                                        "x": cell.0, "y": cell.1, "pressed": pressed, "shift": shift, "alt": alt, "ctrl": ctrl,
+                                        "reported": true, "written": false,
+                                        "modes": {"click": modes.mouse_click, "drag": modes.mouse_drag, "motion": modes.mouse_motion},
+                                        "bytes": null, "error": reason}});
                                     if output_tx.send(response.to_string()).await.is_err() { return; }
                                 }
                             }
