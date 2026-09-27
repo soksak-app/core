@@ -184,10 +184,13 @@ export function surfaceBoxes(f, colour, { expectedRow, rowTolerance = 40 } = {})
   for (const r of candidates) {
     // 브라우저 문서처럼 같은 배경색을 쓰는 다른 행은 호출자가 선언한
     // 터미널 행 측정 범위 밖이다. 범위 안의 후보는 계속 검증하고 실패를 숨기지 않는다.
-    if (expectedRow !== undefined && Math.abs(r.t / f.scale - expectedRow) > rowTolerance) continue;
     if (boxes.some((b) => r.l < b.r && r.r > b.l && r.t < b.b && r.b > b.t)) continue;
     const row = headRow(f, { ...r, y: r.t });
     if (row === null) throw new Error(`content at ${r.l},${r.t} has no DOM header`);
+    // Text can cover the first rows of a terminal, so the first uninterrupted
+    // background row is not the terminal's top. Filter against the measured
+    // card header that is stable across the whole surface instead.
+    if (expectedRow !== undefined && Math.abs(row / f.scale - expectedRow) > rowTolerance) continue;
     const card = span(f, row, Math.floor((r.l + r.r) / 2));
     if (!card) throw new Error(`content at ${r.l},${r.t} has no DOM card`);
     const sameCard = boxes.find((b) => b.card.l === card.l && b.card.r === card.r && b.row === row);

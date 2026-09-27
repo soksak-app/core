@@ -4,7 +4,8 @@
 
 ## Unreleased
 
-- V5-96-8 progress: a rebuilt inactive-host repeat recorded one Wails three-terminal frame with 2/3 visible terminals at frame 82 while Tauri completed its three sets. The cause remains open; no pixel or frame criterion was relaxed.
+- V5-96-8: fix the terminal capture measurement that discarded a visible terminal when text covered its first background rows. `surfaceBoxes` now resolves the stable card header before applying the expected-row filter, with a regression fixture for delayed background runs. Rebuilt inactive Wails and Tauri hosts pass 5/5 tracked repeats each (15 round trips per host) with unchanged pixel and frame criteria.
+- V5-96-9: wait for the host refresh after each native layout commit before starting the next divider step. Rebuilt Wails and Tauri pass 5/5 tracked repeats of the shell divider and horizontal paint captures with every frame measured.
 - V5-96-7: completed stale exposure-reply reporting and handled presentation-settling failures; Wails/Tauri relay contracts, plugin API rejection, and rebuilt service-stop recovery checks pass without an unhandled exposure runtime error.
 
 - V5-96-7: surface exposure replies now report a host rejection when the request was already abandoned, preventing an unhandled `RuntimeError` while preserving the explicit stale-reply error. Handled settling failures let state-changing commands continue, and string presentation errors retain their measured reason.

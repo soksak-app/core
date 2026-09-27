@@ -55,6 +55,13 @@ test("composition measurement locates all three terminals in one frame", () => {
   assert.ok(boxes.every((b) => b.l > b.card.l && b.r - 1 < b.card.r));
 });
 
+test("composition measurement uses the card header when terminal text hides its first background rows", () => {
+  const { frame, paint } = fixture();
+  paint(131, 40, 229, 85, [191, 191, 198]);
+  const boxes = surfaceBoxes(frame, [30, 30, 30], { expectedRow: 9, rowTolerance: 5 });
+  assert.equal(boxes.length, 3);
+});
+
 test("composition measurement detects one pixel of left border invasion", () => {
   const { frame, paint } = fixture();
   paint(130, 40, 131, 130, [30, 30, 30]);
