@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-11-1 completed: after restarting the process from the rebuilt binary, a declared native pointer click on `core.chrome.mode` changed the real Tauri window from `dark` to `light`. Before/after captures had SHA-256 values `597da162a727c00594fbb4bdd7abd8ee417503545ea095f89c0d447a57870d24` and `ea25d05266bbd3c442c178b6585243dc342e5725e855e21959b4365d975d38ab`, showing native chrome and document appearance changed with no host error. The observed cause was the stale pre-rebuild process; the host now applies native appearance synchronously and propagates errors.
+
 - V5-96-11 completed: Tauri theme application no longer returns before the native update finishes or hides its error in a log-only callback; it now applies synchronously and returns failures explicitly. The reported visual failure did not reproduce in the current rebuild, but the Tauri theme-pixel check passed 5/5, the wide-chrome theme-button check passed 1/1, and `pnpm test`, `make native-test`, `make boundaries`, `make exposure-check`, and `make docs-check` passed.
 
 - V5-96-10: completed the inactive-host full-run acceptance. With the official BuildKit builder stopped, rebuilt foreground Wails and Tauri hosts, and Finder frontmost, the unchanged `pnpm -F @soksak/e2e run verify` suite passed 248/248 in 304533.973 ms with zero failures, cancellations, or skips; the Tauri padding-drag repeat passed 3/3.
