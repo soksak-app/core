@@ -8,6 +8,8 @@
 
 - Started V5-96-14-1 to expose measured TUI terminal mouse ownership, pointer phases, and encoded PTY reports.
 
+- Started V5-96-14-2 to give plain drags text-selection priority and reserve Shift drags for TUI mouse reports.
+
 - Started V5-96-15 to measure and correct terminal selection highlight contrast across every declared theme palette.
 
 - V5-96-14 started: the user reports that text cannot be selected in a Tauri terminal running TUI. The Red reproduction will measure child mouse tracking, pointer phases, selection status, sidecar operations, and captures.
