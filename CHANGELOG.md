@@ -18,6 +18,7 @@
 - Observed a live Tauri TUI drag without mouse tracking: part of the header was highlighted, `selectionReleases` changed 7→8, and no PTY mouse report was emitted. V5-96-14-1 remains open until the mouse-reporting case is observed.
 - VT mouse handling now emits an explicit `reported:false` measurement for every accepted pointer phase that is routed to selection, preserving the active modes and phase instead of silently omitting it.
 - VT mouse drags now latch PTY motion ownership at button-down, so a child mode change cannot split one gesture between PTY reporting and text selection. The focused ownership predicate test passes; live mouse-reporting reproduction remains required before claiming the reported issue is fixed.
+- Started V5-96-16 to reproduce Tauri becoming unresponsive during termination. A prior diagnostic report records `EXC_BAD_ACCESS` in `SPWindowComposition hitTest:` during native pointer routing; this remains a hypothesis until a current close capture or report confirms the path.
 
 - Started V5-96-15 to measure and correct terminal selection highlight contrast across every declared theme palette.
 
