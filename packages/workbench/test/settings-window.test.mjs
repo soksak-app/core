@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { changeRow, chooseLink, createSet, deleteSet, resolveSidebar, updateSet } from "../sidebar-sets.js";
 import { matchPlugins } from "../plugin-search.js";
-import { LAYOUT_RANGES, defaults, set, setPluginSettings, setSidebarDefaults } from "../settings.js";
+import { LAYOUT_RANGES, defaults, set, setPluginSettings, setSidebarDefaults, THEMES } from "../settings.js";
 
 const sets = [
   { id: "set-1", title: "탐색기", sections: ["alpha.one"], layout: "list" },
@@ -13,6 +13,24 @@ const links = [
   { place: "left", plugin: null, set: "set-1" },
   { place: "rail", plugin: "beta", set: "set-3" },
 ];
+
+function relativeLuminance(hex) {
+  const channels = [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255)
+    .map((value) => value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+test("every theme rail has measurable selection contrast against its card", () => {
+  for (const theme of THEMES) {
+    for (const mode of ["dark", "light"]) {
+      const colors = theme[mode];
+      const card = relativeLuminance(colors.card);
+      const rail = relativeLuminance(colors.rail);
+      const ratio = (Math.max(card, rail) + 0.05) / (Math.min(card, rail) + 0.05);
+      assert.ok(ratio >= 2.4, `${theme.name}/${mode} selection ratio ${ratio.toFixed(2)} is below 2.4`);
+    }
+  }
+});
 
 test("the compositing test values are not settings", () => {
   assert.equal(Object.hasOwn(defaults, "latency"), false);

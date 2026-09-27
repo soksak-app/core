@@ -41,7 +41,7 @@ test("terminal module waits for composition presentation, publishes state, and d
   const context = {
     surfaceId: "terminal-test",
     runtime: { sidecar: () => sidecar, theme: (listener) => listener({ scheme: "light",
-      tokens: { "--card": "#ffffff", "--fg": "#252735", "--edge": "#d8dbe4" } }), settings: SHELL_SETTINGS },
+      tokens: { "--card": "#ffffff", "--fg": "#252735", "--edge": "#d8dbe4", "--rail": "#5962e8" } }), settings: SHELL_SETTINGS },
     composition: {
       async create() {
         await presentation;
@@ -71,7 +71,7 @@ test("terminal module waits for composition presentation, publishes state, and d
   assert.equal(statuses.get("terminal.session").read().sessionId, "s1");
   // 테마는 모드와 함께 카드 색 토큰에서 가져온 네 색을 보낸다(docs/spec/terminal-runtime.md).
   assert.deepEqual(messages.find(({ body }) => body.operation === "theme")?.body,
-    { operation: "theme", mode: "light", background: "#ffffff", foreground: "#252735", cursor: "#252735", selection: "#d8dbe4" });
+    { operation: "theme", mode: "light", background: "#ffffff", foreground: "#252735", cursor: "#252735", selection: "#5962e8" });
   await mounted.dispose();
   assert.equal(compositionDisposed, true);
   assert.equal(exposureDisposed, true);

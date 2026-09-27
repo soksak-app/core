@@ -326,12 +326,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     }
   };
 
-  // 터미널은 카드의 색을 쓴다. 배경은 --card, 글자와 커서는 --fg, 선택 배경은 --edge 다
+  // 터미널은 카드의 색을 쓴다. 배경은 --card, 글자와 커서는 --fg, 선택 배경은 강조 레일 --rail 이다
   // (docs/spec/terminal-runtime.md). 색의 검사는 사이드카가 한다.
   const setTheme = async (mode, tokens = {}) => {
     if (mode !== "dark" && mode !== "light") throw new Error(`terminal theme mode is invalid: ${String(mode)}`);
     await terminal.send(id, { operation: "theme", mode, background: tokens["--card"],
-      foreground: tokens["--fg"], cursor: tokens["--fg"], selection: tokens["--edge"] });
+      foreground: tokens["--fg"], cursor: tokens["--fg"], selection: tokens["--rail"] });
   };
   // terminal.cursor 는 사이드카가 정책을 적용하고 다시 그린 뒤 보내는 cursor 응답으로 바뀐다.
   const setCursorPolicy = async (value) => {
