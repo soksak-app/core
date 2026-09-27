@@ -1979,9 +1979,9 @@ async fn surface_task(
                                 continue;
                             }
                         };
-                        // Shift 를 누른 누름은 프로그램의 마우스 보고와 상관없이 글자를 선택한다.
+                        // 일반 드래그는 글자를 선택하고 Shift 드래그만 프로그램의 마우스 보고를 보낸다.
                         let report = match phase {
-                            MousePhase::Down if modes.mouse_report() && !shift => {
+                            MousePhase::Down if modes.mouse_report() && shift => {
                                 mouse_gesture = true;
                                 if engine.selection_clear() {
                                     last_cursor_frame = None;

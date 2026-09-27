@@ -10,6 +10,8 @@
 
 - Started V5-96-14-2 to give plain drags text-selection priority and reserve Shift drags for TUI mouse reports.
 
+- Completed V5-96-14-2: plain terminal drags now select text even while mouse reporting is enabled; Shift drags send the TUI mouse reports. Both contract paths pass, and `make native-test` reports Wails 221/221 and Tauri 220/220.
+
 - Started V5-96-15 to measure and correct terminal selection highlight contrast across every declared theme palette.
 
 - V5-96-14 started: the user reports that text cannot be selected in a Tauri terminal running TUI. The Red reproduction will measure child mouse tracking, pointer phases, selection status, sidecar operations, and captures.

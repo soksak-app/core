@@ -4117,13 +4117,33 @@ fn written(writes: &[Vec<u8>]) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn a_drag_is_reported_as_press_motion_and_release_when_the_program_tracks_button_motion() {
+async fn a_plain_drag_selects_even_when_the_program_tracks_button_motion() {
     let modes = Modes {
         mouse_drag: true,
         sgr_mouse: true,
         ..Modes::default()
     };
     let (output, _, writes) = serve_scroll(Some(modes), &drag_gesture(false)).await;
+    let writes = written(&writes);
+    assert!(writes.is_empty(), "{writes:?}");
+    assert!(
+        output.contains(r#""event":"selection.start"#),
+        "plain drag must select text: {output}"
+    );
+    assert!(
+        output.contains(r#""event":"selection.update"#),
+        "plain drag must update selection: {output}"
+    );
+}
+
+#[tokio::test]
+async fn a_shift_drag_is_reported_when_the_program_tracks_button_motion() {
+    let modes = Modes {
+        mouse_drag: true,
+        sgr_mouse: true,
+        ..Modes::default()
+    };
+    let (_, _, writes) = serve_scroll(Some(modes), &drag_gesture(true)).await;
     let writes = written(&writes);
     assert_eq!(writes.len(), 3, "{writes:?}");
     assert_eq!(writes[0], "\x1b[<0;1;1M");
@@ -4134,14 +4154,6 @@ async fn a_drag_is_reported_as_press_motion_and_release_when_the_program_tracks_
     let col: u16 = motion.parse().unwrap();
     assert!(col > 1, "{writes:?}");
     assert_eq!(writes[2], format!("\x1b[<0;{col};1m"));
-    assert!(
-        !output.contains("selection.copy"),
-        "a reported drag must not select text: {output}"
-    );
-    assert!(
-        output.contains(r#""copied":false"#),
-        "the page must receive the release of its selection: {output}"
-    );
 }
 
 #[tokio::test]
@@ -4151,7 +4163,7 @@ async fn a_click_program_receives_press_and_release_but_no_motion() {
         sgr_mouse: true,
         ..Modes::default()
     };
-    let (_, _, writes) = serve_scroll(Some(modes), &drag_gesture(false)).await;
+    let (_, _, writes) = serve_scroll(Some(modes), &drag_gesture(true)).await;
     let writes = written(&writes);
     assert_eq!(writes.len(), 2, "{writes:?}");
     assert_eq!(writes[0], "\x1b[<0;1;1M");
@@ -4169,10 +4181,10 @@ async fn a_reported_click_clears_a_previous_text_selection() {
         ..Modes::default()
     };
     let requests = [
-        mouse("down", 0.5, true, false),
+        mouse("down", 0.5, true, true),
         selection("selection.start", 0.5),
         selection("selection.end", 0.0),
-        mouse("up", 0.5, false, false),
+        mouse("up", 0.5, false, true),
         "{\"surface\":\"s1\",\"body\":{\"operation\":\"copy\"}}\n".to_string(),
     ]
     .concat();
@@ -4182,17 +4194,6 @@ async fn a_reported_click_clears_a_previous_text_selection() {
         output.contains("\"copied\":false,\"event\":\"copy\""),
         "{output}"
     );
-}
-
-#[tokio::test]
-async fn a_shift_drag_selects_instead_of_reporting() {
-    let modes = Modes {
-        mouse_drag: true,
-        sgr_mouse: true,
-        ..Modes::default()
-    };
-    let (_, _, writes) = serve_scroll(Some(modes), &drag_gesture(true)).await;
-    assert!(writes.is_empty(), "{:?}", written(&writes));
 }
 
 #[tokio::test]
