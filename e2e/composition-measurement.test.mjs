@@ -145,3 +145,11 @@ test("the card size follows the card borders from a point in its header", () => 
   paint(60, 10, 61, 150, [43, 46, 61]);
   assert.deepEqual(cardSize(frame, { x: 85, y: 20 }), { width: 51, height: 130 });
 });
+
+test("the card size rejects a missing card but tolerates one covered probe pixel", () => {
+  const { frame, paint } = shellFixture();
+  paint(84, 20, 87, 21, [16, 17, 23]);
+  assert.deepEqual(cardSize(frame, { x: 85, y: 20 }), { width: 101, height: 130 });
+  paint(10, 10, 111, 151, [16, 17, 23]);
+  assert.equal(cardSize(frame, { x: 85, y: 20 }), null);
+});

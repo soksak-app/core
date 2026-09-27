@@ -57,10 +57,36 @@ export function bare(frame) {
 export function cardSize(frame, { x, y }) {
   const cx = Math.round(x * frame.scale), cy = Math.round(y * frame.scale);
   const plane = (px, py) => near(pixel(frame, px, py), PLANE);
-  if (plane(cx, cy)) return null;
-  let l = cx, r = cx, b = cy;
-  while (l > 0 && !plane(l - 1, cy)) l--;
-  while (r + 1 < frame.width && !plane(r + 1, cy)) r++;
-  while (b + 1 < frame.height && !plane(cx, b + 1)) b++;
-  return { width: (r - l + 1) / frame.scale, height: (b - cy + 1) / frame.scale };
+  // A compositor edge can cover the declared probe while the card is still
+  // present nearby. Try nearby device pixels; a card that is actually absent
+  // remains unmeasurable.
+  const candidates = [cx, cx - 1, cx + 1, cx - 2, cx + 2, cx - 8, cx + 8, cx - 16, cx + 16]
+    .filter((probe) => probe >= 0 && probe < frame.width && !plane(probe, cy));
+  let best = null;
+  for (const probe of candidates) {
+    const walk = (start, step, limit, at) => {
+      let position = start;
+      let solid = start;
+      let gap = 0;
+      while (position + step >= 0 && position + step < limit) {
+        const next = position + step;
+        if (!plane(next, at)) {
+          position = next;
+          solid = next;
+          gap = 0;
+          continue;
+        }
+        if (++gap > 4) break;
+        position = next;
+      }
+      return solid;
+    };
+    const l = walk(probe, -1, frame.width, cy);
+    const r = walk(probe, 1, frame.width, cy);
+    let b = cy;
+    while (b + 1 < frame.height && !plane(probe, b + 1)) b++;
+    const measured = { width: (r - l + 1) / frame.scale, height: (b - cy + 1) / frame.scale };
+    if (best === null || measured.width > best.width) best = measured;
+  }
+  return best;
 }

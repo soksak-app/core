@@ -162,7 +162,6 @@ export function publish() {
       frame,
     });
   }
-  syncNativePaintMask();
   return deliver(mine, snapshot);
 }
 
@@ -270,6 +269,11 @@ function commit(mine, snapshot, final) {
   if (answered && typeof answered.then === "function") {
     return answered.then((placed) => {
       seat(record, placed);
+      // Keep the previous mask until the native views have accepted this
+      // placement. Applying a new hole before that answer exposes the page
+      // background for one compositor frame while the native view is still at
+      // its old rectangle.
+      syncNativePaintMask();
       return placed;
     });
   }
