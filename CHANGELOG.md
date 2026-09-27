@@ -6,7 +6,7 @@
 
 - V5-96-8: fix the terminal capture measurement that discarded a visible terminal when text covered its first background rows. `surfaceBoxes` now resolves the stable card header before applying the expected-row filter, with a regression fixture for delayed background runs. Rebuilt inactive Wails and Tauri hosts pass 5/5 tracked repeats each (15 round trips per host) with unchanged pixel and frame criteria.
 - V5-96-9: wait for the host refresh after each native layout commit before starting the next divider step. Rebuilt Wails and Tauri pass 5/5 tracked repeats of the shell divider and horizontal paint captures with every frame measured.
-- V5-96-10 progress: a full rebuilt inactive-host run still reported 244/247, including shell and paint capture failures; another run reported 246/247 with one transient Tauri modal channel failure. The full-suite gate remains open.
+- V5-96-10 progress: a clean two-host run reported 234/247; all 13 failures were Wails synthetic drags rejected because host.window.active was true. A Finder-frontmost Wails-only run removed those active-window failures but cannot validate cross-host tests and still had one shell-divider capture failure. The full-suite gate remains open.
 - V5-96-7: completed stale exposure-reply reporting and handled presentation-settling failures; Wails/Tauri relay contracts, plugin API rejection, and rebuilt service-stop recovery checks pass without an unhandled exposure runtime error.
 
 - V5-96-7: surface exposure replies now report a host rejection when the request was already abandoned, preventing an unhandled `RuntimeError` while preserving the explicit stale-reply error. Handled settling failures let state-changing commands continue, and string presentation errors retain their measured reason.

@@ -292,7 +292,6 @@ onLayout((made, draw, seated) => {
     await new Promise((resolve) => requestAnimationFrame(resolve));
     await preparation;
     await presented;
-    await host.waitPresented();
   });
 });
 
