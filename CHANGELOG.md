@@ -4,7 +4,7 @@
 
 ## Unreleased
 
-- V5-96-12 started: the user reports that a Tauri terminal text drag stops partway through and emits `selection update without selection start`. The follow-up will measure the complete gesture, sidecar order, terminal selection status, and captures before changing code.
+- V5-96-12 completed: the current rebuilt Tauri process passed the tracked real terminal selection-and-copy check 5/5 with no selection error or sidecar ordering failure. The reported message matches the pre-`1ee6cb9b` unordered sidecar-send path; restart the rebuilt host before retesting.
 
 - V5-96-11-2 completed: after restarting the rebuilt Tauri binary, project-scope native pointer input changed the settings palette `nord` to `midnight` and back to `nord`; real-window captures changed with no input or host error. The reported failure did not reproduce in the current process, and the earlier screenshot already showed `nord` selected.
 
