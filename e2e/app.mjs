@@ -67,6 +67,8 @@ function running(pid) {
 
 let locked = false;
 const sessionTails = new Map();
+let baselineFrontmost = null;
+let baselineCaptured = false;
 
 /** 같은 앱 창을 조작하는 Node 테스트의 중복 세션을 즉시 거부한다. */
 export async function acquireWindowCheckSlot(appName) {
@@ -148,10 +150,14 @@ export async function open(t, app) {
   // 전체 화면 전환이나 새 프로젝트 창은 애플리케이션을 활성화한다. 검사가 활성화했으면 끝날 때 앞서 활성이던
   // 애플리케이션을 되돌린다. 다음 검사의 합성 끌기는 비활성 애플리케이션을 전제한다.
   const previous = frontmostApp();
-  if (previous !== null && previous !== client.endpoint.pid) {
+  if (!baselineCaptured) {
+    baselineFrontmost = previous;
+    baselineCaptured = true;
+  }
+  if (baselineFrontmost !== null && baselineFrontmost !== client.endpoint.pid) {
     session.cleanup(async () => {
       if (frontmostApp() !== client.endpoint.pid) return;
-      activateApp(previous);
+      activateApp(baselineFrontmost);
       await session.until("host.window", (w) => w.active === false, "the application stayed active after the check");
     });
   }
