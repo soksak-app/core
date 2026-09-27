@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Started V5-96-15 to measure and correct terminal selection highlight contrast across every declared theme palette.
+
 - V5-96-14 started: the user reports that text cannot be selected in a Tauri terminal running TUI. The Red reproduction will measure child mouse tracking, pointer phases, selection status, sidecar operations, and captures.
 
 - V5-96-13 completed: AppKit `deleteBackward:` now maps to terminal `Backspace` and `deleteForward:` to `Delete`, with protocol coverage for encoded bytes and unknown-selector rejection. The focused Rust test, rebuilt Tauri host, and `make native-test` pass.
