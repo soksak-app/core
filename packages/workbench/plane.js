@@ -385,11 +385,16 @@ function updateCard(el, card) {
 
 /* ── T5 — 마지막 탭이 이동하면 카드를 닫는다 ─────────────────────────── */
 
-function closeTab(cardId, tabId) {
+async function closeTab(cardId, tabId) {
   const card = grid.card(cardId);
   if (!card) return;
   if (!tabsOf(card).some((t) => t.id === tabId)) return;
-  disposeSurface(tabId);
+  // A tab close is complete only after the module has released its native
+  // composition and sidecar session. The command registry waits for this
+  // promise before running its settled barrier; otherwise the barrier can
+  // race the asynchronous disposal and time out while the tab is still
+  // visible to the host.
+  await disposeSurface(tabId);
   card.data.tabs = tabsOf(card).filter((t) => t.id !== tabId);
   if (card.data.tabs.length === 0) {
     // 닫을 수 없는 카드는 남으므로 탭 하나를 다시 넣는다. 종류는 포커스가 보던
@@ -1552,8 +1557,8 @@ export function selectTab(tabId) {
   settle();
 }
 
-export function closeTabById(tabId) {
-  closeTab(cardOfTab(tabId).id, tabId);
+export async function closeTabById(tabId) {
+  await closeTab(cardOfTab(tabId).id, tabId);
 }
 
 const ZONES = ["centre", "left", "right", "top", "bottom"];

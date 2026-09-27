@@ -1034,6 +1034,7 @@ async fn test_a7_close_op_ends_the_session() {
     let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"close"}}
+{"surface":"s1","body":{"operation":"close"}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -1049,6 +1050,21 @@ async fn test_a7_close_op_ends_the_session() {
     });
 
     let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+
+    let close_replies: Vec<serde_json::Value> = String::from_utf8(writer)
+        .unwrap()
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|message| message["body"] == serde_json::json!({}))
+        .collect();
+    assert_eq!(
+        close_replies.len(),
+        2,
+        "repeated close must be acknowledged idempotently"
+    );
+    assert!(close_replies
+        .iter()
+        .all(|message| message["surface"] == "s1"));
 
     // Verify that close was called and detach was NOT called
     let calls_lock = calls.lock().unwrap();
