@@ -1979,9 +1979,9 @@ async fn surface_task(
                                 continue;
                             }
                         };
-                        // 일반 드래그는 글자를 선택하고 Shift 드래그만 프로그램의 마우스 보고를 보낸다.
+                        // 프로그램이 마우스 보고를 켜면 일반 드래그를 프로그램에 보내고, Shift 드래그는 글자를 선택한다.
                         let report = match phase {
-                            MousePhase::Down if modes.mouse_report() && shift => {
+                            MousePhase::Down if modes.mouse_report() && !shift => {
                                 mouse_gesture = true;
                                 if engine.selection_clear() {
                                     last_cursor_frame = None;

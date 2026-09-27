@@ -4117,7 +4117,7 @@ fn written(writes: &[Vec<u8>]) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn a_plain_drag_selects_even_when_the_program_tracks_button_motion() {
+async fn a_drag_is_reported_as_press_motion_and_release_when_the_program_tracks_button_motion() {
     let modes = Modes {
         mouse_drag: true,
         sgr_mouse: true,
@@ -4125,35 +4125,23 @@ async fn a_plain_drag_selects_even_when_the_program_tracks_button_motion() {
     };
     let (output, _, writes) = serve_scroll(Some(modes), &drag_gesture(false)).await;
     let writes = written(&writes);
-    assert!(writes.is_empty(), "{writes:?}");
+    assert_eq!(writes.len(), 3, "{writes:?}");
+    assert_eq!(writes[0], "\x1b[<0;1;1M");
     assert!(
-        output.contains(r#""event":"selection.start"#),
-        "plain drag must select text: {output}"
-    );
-    assert!(
-        output.contains(r#""event":"selection.update"#),
-        "plain drag must update selection: {output}"
+        output.contains(r#""copied":false"#),
+        "reported drag must not select text: {output}"
     );
 }
 
 #[tokio::test]
-async fn a_shift_drag_is_reported_when_the_program_tracks_button_motion() {
+async fn a_shift_drag_selects_instead_of_reporting() {
     let modes = Modes {
         mouse_drag: true,
         sgr_mouse: true,
         ..Modes::default()
     };
     let (_, _, writes) = serve_scroll(Some(modes), &drag_gesture(true)).await;
-    let writes = written(&writes);
-    assert_eq!(writes.len(), 3, "{writes:?}");
-    assert_eq!(writes[0], "\x1b[<0;1;1M");
-    let motion = writes[1]
-        .strip_prefix("\x1b[<32;")
-        .and_then(|rest| rest.strip_suffix(";1M"))
-        .expect("motion report");
-    let col: u16 = motion.parse().unwrap();
-    assert!(col > 1, "{writes:?}");
-    assert_eq!(writes[2], format!("\x1b[<0;{col};1m"));
+    assert!(writes.is_empty(), "{:?}", written(&writes));
 }
 
 #[tokio::test]
