@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-14 started: the user reports that text cannot be selected in a Tauri terminal running TUI. The Red reproduction will measure child mouse tracking, pointer phases, selection status, sidecar operations, and captures.
+
 - V5-96-13 completed: AppKit `deleteBackward:` now maps to terminal `Backspace` and `deleteForward:` to `Delete`, with protocol coverage for encoded bytes and unknown-selector rejection. The focused Rust test, rebuilt Tauri host, and `make native-test` pass.
 
 - V5-96-12 completed: the current rebuilt Tauri process passed the tracked real terminal selection-and-copy check 5/5 with no selection error or sidecar ordering failure. The reported message matches the pre-`1ee6cb9b` unordered sidecar-send path; restart the rebuilt host before retesting.
