@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- V5-96-14와 V5-96-14-1을 완료했다. 터미널 계약에 맞게 Red 기준을 정정했다. 마우스 보고 TUI가 일반 드래그를 소유하고 Shift 드래그가 텍스트를 선택한다. 재빌드한 Tauri와 Wails 실제 HID 검사는 `?1003` SGR 이동 바이트와 `?1002` Shift 선택을 관측했고 `SHIFT`를 복사하면서 PTY에 드래그 바이트를 보내지 않았다. 추적 가능한 `normal-shutdown` 대상은 이제 `host.quit` 전에 터미널 세션을 준비한다. 재빌드 Tauri는 endpoint 64ms·종료 32ms, Wails는 endpoint 64ms·종료 38ms였고 새 Tauri 진단 보고서는 생성되지 않았다.
+
+- V5-96-16을 완료했다. 종료 대상에 터미널 세션 준비 단계를 추가해 endpoint 제거와 프로세스 종료를 추정하지 않고 측정한다.
+
 - V5-96-15를 완료했다. 터미널 선택은 이제 테두리 색 대신 각 테마의 강조 레일을 사용한다. 모든 dark/light 팔레트가 카드 대비 상대 휘도 기준 2.4를 통과했고, 집중 터미널 테스트와 `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, `make -B tauriv2-build`, `make docs-check`가 통과했다.
 
 - V5-96-14-1을 시작했다. TUI 터미널의 마우스 소유권, 포인터 단계, 인코딩된 PTY 보고를 측정해 노출한다.

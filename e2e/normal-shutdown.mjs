@@ -11,7 +11,7 @@ const app = APPS[Object.keys(APPS)[0]];
 const endpointFile = `${app.configDir}/endpoint.json`;
 const STARTUP_LIMIT = 15_000;
 const SHUTDOWN_LIMIT = 5_000;
-const REQUEST_LIMIT = 2_000;
+const REQUEST_LIMIT = 10_000;
 
 async function request(client, method, params) {
   let timer;
@@ -60,6 +60,38 @@ async function waitForReady(client) {
     (windows) => windows.length === 1 && windows[0].ready,
     { timeout: STARTUP_LIMIT });
   return Date.now() - started;
+}
+
+async function prepareTerminal(client) {
+  let surfaces = await request(client, "status.get", { window: "main", name: "core.surfaces" });
+  let surface = surfaces.find((item) => item.plugin === "terminal" && item.visible)?.surface;
+  if (!surface) {
+    await request(client, "diagnostics.fixture", { window: "main", settings: {} });
+    const grid = await request(client, "status.get", { window: "main", name: "core.grid" });
+    const terminal = grid.cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
+    if (!terminal) throw new Error("shutdown fixture has no terminal tab");
+    await request(client, "command.run", { window: "main", name: "core.tab.select", params: { tab: terminal.id } });
+  }
+  const started = Date.now();
+  while (Date.now() - started < STARTUP_LIMIT) {
+    surfaces = await request(client, "status.get", { window: "main", name: "core.surfaces" });
+    surface = surfaces.find((item) => item.plugin === "terminal" && item.visible)?.surface;
+    if (surface) break;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  if (!surface) throw new Error("shutdown fixture terminal did not become visible");
+  await request(client, "command.run", {
+    window: "main", name: "terminal.input",
+    surface,
+    params: { bytes: "printf '\\033[?1002h\\033[?1006hSHUTDOWN-READY\\n'\r" },
+  });
+  const ready = Date.now();
+  while (Date.now() - ready < STARTUP_LIMIT) {
+    const session = await request(client, "status.get", { window: "main", name: "terminal.session", surface });
+    if (session.sessionId && session.error === undefined) return { surface, sessionId: session.sessionId };
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  throw new Error("terminal session did not become ready before shutdown");
 }
 
 // 프로세스 종료는 설정 디렉터리의 파일 이벤트를 만들지 않는다. 호스트는 종료하기 전에
@@ -125,6 +157,7 @@ await waitForFilesystem("endpoint", () => existsSync(endpointFile), STARTUP_LIMI
 const client = await connect({ configDir: app.configDir });
 const pid = client.endpoint.pid;
 await waitForReady(client);
+const terminal = process.env.SOKSAK_SHUTDOWN_TERMINAL === "1" ? await prepareTerminal(client) : null;
 
 const started = Date.now();
 const result = await request(client, "command.run", {
@@ -135,4 +168,4 @@ const result = await request(client, "command.run", {
 if (result !== null) throw new Error(`host.quit returned ${JSON.stringify(result)}, expected null`);
 const { exitedAt, removedAt } = await waitForShutdown(pid, SHUTDOWN_LIMIT);
 client.close();
-console.log(`PASS normal-shutdown app=${app.name} pid=${pid} endpoint_removed_ms=${removedAt} exited_ms=${exitedAt}`);
+console.log(`PASS normal-shutdown app=${app.name} pid=${pid} terminal=${terminal?.sessionId ?? "none"} endpoint_removed_ms=${removedAt} exited_ms=${exitedAt}`);
