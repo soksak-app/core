@@ -16,6 +16,7 @@
 
 - Completed V5-96-14-3: restored plain-drag PTY mouse ownership for TUI and kept Shift-drag text selection. Focused Rust tests and the prior full native test pass.
 - Observed a live Tauri TUI drag without mouse tracking: part of the header was highlighted, `selectionReleases` changed 7→8, and no PTY mouse report was emitted. V5-96-14-1 remains open until the mouse-reporting case is observed.
+- VT mouse handling now emits an explicit `reported:false` measurement for every accepted pointer phase that is routed to selection, preserving the active modes and phase instead of silently omitting it.
 
 - Started V5-96-15 to measure and correct terminal selection highlight contrast across every declared theme palette.
 

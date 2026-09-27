@@ -4151,7 +4151,7 @@ async fn a_click_program_receives_press_and_release_but_no_motion() {
         sgr_mouse: true,
         ..Modes::default()
     };
-    let (_, _, writes) = serve_scroll(Some(modes), &drag_gesture(true)).await;
+    let (_, _, writes) = serve_scroll(Some(modes), &drag_gesture(false)).await;
     let writes = written(&writes);
     assert_eq!(writes.len(), 2, "{writes:?}");
     assert_eq!(writes[0], "\x1b[<0;1;1M");
@@ -4169,10 +4169,10 @@ async fn a_reported_click_clears_a_previous_text_selection() {
         ..Modes::default()
     };
     let requests = [
-        mouse("down", 0.5, true, true),
+        mouse("down", 0.5, true, false),
         selection("selection.start", 0.5),
         selection("selection.end", 0.0),
-        mouse("up", 0.5, false, true),
+        mouse("up", 0.5, false, false),
         "{\"surface\":\"s1\",\"body\":{\"operation\":\"copy\"}}\n".to_string(),
     ]
     .concat();

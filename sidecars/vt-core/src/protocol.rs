@@ -2038,6 +2038,23 @@ async fn surface_task(
                                     if output_tx.send(response.to_string()).await.is_err() { return; }
                                 }
                             }
+                        } else {
+                            // Emit a measurement for every pointer phase, including phases that the
+                            // current mouse modes intentionally route to text selection. This keeps
+                            // ownership observable instead of making an unreported phase disappear.
+                            let phase_name = match phase {
+                                MousePhase::Down => "down",
+                                MousePhase::Move => "move",
+                                MousePhase::Up => "up",
+                            };
+                            let response = json!({"surface": surface_id, "body": {
+                                "event": "mouse", "phase": phase_name, "x": cell.0, "y": cell.1,
+                                "pressed": pressed, "shift": shift, "alt": alt, "ctrl": ctrl,
+                                "reported": false, "written": false,
+                                "modes": {"click": modes.mouse_click, "drag": modes.mouse_drag, "motion": modes.mouse_motion},
+                                "bytes": null, "error": null
+                            }});
+                            if output_tx.send(response.to_string()).await.is_err() { return; }
                         }
                     }
                     // 마우스 보고 제스처는 글자를 선택하지 않는다. 페이지는 선택 연산의 답을 기다린다.
