@@ -7,7 +7,7 @@
 
 @interface SPSurfaceCoordinates : NSView
 @property CGFloat scale;
-@property(nonatomic, assign) WKWebView *mainView;
+@property(nonatomic, retain) WKWebView *mainView;
 @end
 
 static void normalizeCoordinateBounds(SPSurfaceCoordinates *coordinates) {
@@ -31,7 +31,7 @@ static void normalizeCoordinateBounds(SPSurfaceCoordinates *coordinates) {
 
 @interface SPSurfaceHost : NSView
 @property(nonatomic, assign) WKWebView *webview;
-@property(nonatomic, assign) WKWebView *mainWebview;
+@property(nonatomic, retain) WKWebView *mainWebview;
 @property(retain) SPSurfaceNativePlane *nativePlane;
 @property(nonatomic, copy) NSArray<NSValue *> *domOverlays;
 @end
@@ -99,7 +99,7 @@ static void reconfigureSurfaceWebviews(NSView *root) {
 
 // 하나의 앱 DOM과 그 아래 네이티브 평면의 입력 소유권을 선택한다.
 @interface SPWindowComposition : NSView
-@property(nonatomic, assign) WKWebView *mainWebview;
+@property(nonatomic, retain) WKWebView *mainWebview;
 @property(nonatomic, assign) SPSurfaceCoordinates *coordinates;
 @property(nonatomic, retain) NSArray<NSValue *> *overlays;
 @property(nonatomic, assign) SPFileDropView *fileDrop;
@@ -113,7 +113,11 @@ static void reconfigureSurfaceWebviews(NSView *root) {
     self.layer.backgroundColor = NSColor.clearColor.CGColor;
     return self;
 }
-- (void)dealloc { [_overlays release]; [super dealloc]; }
+- (void)dealloc {
+    [_mainWebview release];
+    [_overlays release];
+    [super dealloc];
+}
 // 파일 놓기 뷰는 합성 뷰의 맨 위에 둔다. 나중에 더한 뷰가 있어도 놓인 파일은 페이지가 받는다.
 - (void)didAddSubview:(NSView *)subview {
     [super didAddSubview:subview];
@@ -184,6 +188,7 @@ static void notifyScale(NSView *view) {
     return self;
 }
 - (void)dealloc {
+    [_mainWebview release];
     [_nativePlane release];
     [_domOverlays release];
     [super dealloc];
@@ -345,6 +350,10 @@ static void notifyScale(NSView *view) {
 }
 - (void)viewDidMoveToWindow { [super viewDidMoveToWindow]; [self updateScale]; }
 - (void)viewDidChangeBackingProperties { [super viewDidChangeBackingProperties]; [self updateScale]; }
+- (void)dealloc {
+    [_mainView release];
+    [super dealloc];
+}
 @end
 
 NSEvent *webviewScrollInViewUnits(NSEvent *event, NSView *view) {
