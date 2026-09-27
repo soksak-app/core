@@ -557,6 +557,10 @@ pub enum MousePhase {
     Up,
 }
 
+fn mouse_drag_motion_owned(gesture: bool, motion_owner: bool, pressed: bool) -> bool {
+    gesture && motion_owner && pressed
+}
+
 impl Modes {
     /// 프로그램이 마우스 보고를 켰는지.
     pub fn mouse_report(&self) -> bool {
@@ -1722,6 +1726,10 @@ async fn surface_task(
     let mut focused = false;
     // 마우스 보고로 시작한 누름. 뗄 때까지 선택 연산은 선택하지 않는다.
     let mut mouse_gesture = false;
+    // Motion ownership is fixed at button-down.  A terminal can change its
+    // mouse mode while a drag is in progress; re-reading the mode on every
+    // move would split one gesture between the TUI and page selection.
+    let mut mouse_gesture_motion = false;
     let mut mouse_cell: Option<(u16, u16)> = None;
     // A selection release describes the raster produced immediately before it.
     // Hold the event until that raster is consumed so a client cannot observe
@@ -1983,6 +1991,7 @@ async fn surface_task(
                         let report = match phase {
                             MousePhase::Down if modes.mouse_report() && !shift => {
                                 mouse_gesture = true;
+                                mouse_gesture_motion = modes.mouse_drag || modes.mouse_motion;
                                 if engine.selection_clear() {
                                     last_cursor_frame = None;
                                     if let Some(state) = image_state.as_mut() {
@@ -1994,13 +2003,14 @@ async fn surface_task(
                             }
                             MousePhase::Down => None,
                             MousePhase::Move if mouse_cell == Some(cell) => None,
-                            MousePhase::Move if mouse_gesture && pressed && (modes.mouse_drag || modes.mouse_motion) =>
+                            MousePhase::Move if mouse_drag_motion_owned(mouse_gesture, mouse_gesture_motion, pressed) =>
                                 Some((encoding::MouseButton::Left, encoding::MouseAction::Motion)),
                             MousePhase::Move if !pressed && !mouse_gesture && modes.mouse_motion =>
                                 Some((encoding::MouseButton::None, encoding::MouseAction::Motion)),
                             MousePhase::Move => None,
                             MousePhase::Up if mouse_gesture => {
                                 mouse_gesture = false;
+                                mouse_gesture_motion = false;
                                 Some((encoding::MouseButton::Left, encoding::MouseAction::Release))
                             }
                             MousePhase::Up => None,
@@ -4057,6 +4067,14 @@ impl SessionPort for FakeSessionPort {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mouse_drag_motion_uses_the_owner_latched_at_press() {
+        assert!(mouse_drag_motion_owned(true, true, true));
+        assert!(!mouse_drag_motion_owned(true, false, true));
+        assert!(!mouse_drag_motion_owned(false, true, true));
+        assert!(!mouse_drag_motion_owned(true, true, false));
+    }
 
     #[test]
     fn native_edit_commands_encode_and_unknown_commands_fail() {
