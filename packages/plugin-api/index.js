@@ -1071,6 +1071,7 @@ export function createExpose(port, load) {
             // that rejected reply through the host diagnostic channel instead of creating an
             // unhandled promise; the host still owns the request/response decision.
             if (typeof port.report !== "function") throw error;
+            // default: a non-Error rejection carries its value as the diagnostic reason.
             await port.report(`exposure reply ${id}: ${String(error?.message ?? error)}`);
           }
         });
