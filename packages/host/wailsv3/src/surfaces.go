@@ -521,16 +521,20 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 		s.sidecars.Close(id)
 	}
 	s.surfacesClosed(gone)
-	// DOM 표시를 기다리기 전에 적용한 크기의 이미지 준비를 시작한다.
-	if err := s.refreshImageRasters(); err != nil {
-		if cancel := system.EnqueueUI(func() {
-			if failure := system.CancelLayout(win.NativeWindow()); failure != nil {
-				log.Printf("cancel surface preparation: %v", failure)
+	// Continuous frames update native positions only. Reconfiguring image rasters
+	// for every divider step serializes sidecar work behind the display queue;
+	// the settled frame below performs the authoritative raster refresh.
+	if req.Settled {
+		if err := s.refreshImageRasters(); err != nil {
+			if cancel := system.EnqueueUI(func() {
+				if failure := system.CancelLayout(win.NativeWindow()); failure != nil {
+					log.Printf("cancel surface preparation: %v", failure)
+				}
+			}); cancel != nil {
+				return prepared, fmt.Errorf("%w; scheduling layout cancellation: %v", err, cancel)
 			}
-		}); cancel != nil {
-			return prepared, fmt.Errorf("%w; scheduling layout cancellation: %v", err, cancel)
+			return prepared, err
 		}
-		return prepared, err
 	}
 	return prepared, nil
 }
