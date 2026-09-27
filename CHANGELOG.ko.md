@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-96-11 완료: Tauri 테마 적용을 비동기 콜백에서 기다리지 않고 오류를 로그로만 남기던 경로를 동기 네이티브 적용과 명시적 오류 반환으로 고쳤다. 보고된 화면 실패는 현재 재빌드에서 재현되지 않았지만, Tauri 테마 픽셀 검사는 5/5, wide chrome 테마 단추 검사는 1/1 통과했고 `pnpm test`, `make native-test`, `make boundaries`, `make exposure-check`, `make docs-check`가 통과했다.
+
 - V5-96-10: 비활성 호스트 전체 실행 수용을 완료했다. 공식 BuildKit builder를 중지하고 재빌드한 Wails·Tauri 호스트를 포그라운드로 유지하며 Finder를 전면에 둔 상태에서 변경하지 않은 `pnpm -F @soksak/e2e run verify`가 304533.973ms에 248/248, 실패·취소·건너뜀 0으로 통과했고 Tauri 패딩 드래그 추적 반복도 3/3 통과했다.
 
 - V5-96-10 진행: 공식 builder stop으로 고부하 VM을 중지한 뒤 깨끗한 전체 실행은 247/248이었다. 남은 Tauri 패딩 드래그는 추적 반복 2회차에 AppKit 비제로 `NSEvent.pressedMouseButtons`를 보고해 거부됐고, 경계가 상태를 명시적으로 보고하며 이를 지우거나 위조하지 않았다.

@@ -42,12 +42,8 @@ pub(crate) fn set(window: &Window, theme: Theme) -> Result<(), String> {
     let documents = context.documents.all();
     let dark = theme.scheme == "dark";
     if let Some(main) = crate::windows::root_view(window) {
-        main.with_webview(move |view| {
-            if let Ok(platform) = crate::platform::current() {
-                crate::log_error(platform.set_main_appearance(&view, dark));
-            }
-        })
-        .map_err(|e| e.to_string())?;
+        let platform = crate::platform::current()?;
+        crate::exposure::with_view(&main, move |view| platform.set_main_appearance(view, dark))?;
     }
     let platform = crate::platform::current()?;
     for document in documents {

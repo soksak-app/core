@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-11 completed: Tauri theme application no longer returns before the native update finishes or hides its error in a log-only callback; it now applies synchronously and returns failures explicitly. The reported visual failure did not reproduce in the current rebuild, but the Tauri theme-pixel check passed 5/5, the wide-chrome theme-button check passed 1/1, and `pnpm test`, `make native-test`, `make boundaries`, `make exposure-check`, and `make docs-check` passed.
+
 - V5-96-10: completed the inactive-host full-run acceptance. With the official BuildKit builder stopped, rebuilt foreground Wails and Tauri hosts, and Finder frontmost, the unchanged `pnpm -F @soksak/e2e run verify` suite passed 248/248 in 304533.973 ms with zero failures, cancellations, or skips; the Tauri padding-drag repeat passed 3/3.
 
 - V5-96-10 progress: the official builder stop removed the high-load VM and a clean full run reached 247/248. The remaining Tauri padding drag was rejected on tracked repeat run 2 because AppKit reported a nonzero `NSEvent.pressedMouseButtons` mask; the boundary reported the state explicitly and the test did not clear or fake it.
