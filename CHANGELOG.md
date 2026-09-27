@@ -14,6 +14,8 @@
 
 - Started V5-96-14-6 to directly test the user's existing running Tauri TUI window instead of a disposable endpoint.
 
+- Completed V5-96-14-6 by testing the currently running user Tauri window directly. The current TUI surface reported `selecting:true` during a held real-HID drag and `selecting:false` after release; 10/10 drags increased `selectionReleases` by one with no session error. The complete capture had 316 frames and a 25.65ms longest gap. The user's manual intermittent failure was not reproduced and is not declared fixed.
+
 - Completed V5-96-14 and V5-96-14-1 after correcting the Red criterion to match the terminal contract: plain drags remain owned by a mouse-reporting TUI and Shift drags select text. Rebuilt Tauri and Wails real-HID checks observed `?1003` SGR motion bytes and a `?1002` Shift selection that copied `SHIFT` without sending drag bytes to the PTY. The tracked `normal-shutdown` target now prepares a terminal session before `host.quit`; rebuilt Tauri removed its endpoint in 64 ms and exited in 32 ms, while Wails removed it in 64 ms and exited in 38 ms. No new Tauri diagnostic report was produced.
 
 - Completed V5-96-16: added terminal-session coverage to the tracked shutdown target so endpoint removal and process exit are measured rather than inferred.
