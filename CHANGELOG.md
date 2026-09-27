@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-96-10 progress: the official builder stop removed the high-load VM and a clean full run reached 247/248. The remaining Tauri padding drag was rejected on tracked repeat run 2 because AppKit reported a nonzero `NSEvent.pressedMouseButtons` mask; the boundary reported the state explicitly and the test did not clear or fake it.
 - V5-96-10 resumed: the BuildKit VM load dropped to 3.4/3.6/3.7; rebuilt hosts reached 246/248, and the two remaining Tauri cases pass 5/5 tracked repeats each. The full run remains open for a clean 248/248 result.
 - V5-96-10: temporarily mark the full inactive-host run `[!]` because the user-owned BuildKit Virtualization VM (PID 96112) remained at approximately 198% CPU for over four hours and prevented a valid low-load capture. Retry when it exits with the 34ms and complete-frame criteria unchanged.
 - V5-96-10 progress: retain the main app WebView in native composition and coordinate containers, and release it with those owners. This fixes the observed Tauri `EXC_BAD_ACCESS` in `SPWindowComposition hitTest:` after WebView replacement. `make -C native/darwin test`, rebuilt hosts, and the focused Tauri alignment repeat pass 5/5. A clean inactive full run reached 244/248; the four remaining failures are measured Wails/Tauri capture timing or missing-frame results under load, so the checklist remains open.
