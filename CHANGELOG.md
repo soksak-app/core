@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-11-2 started: the user reports that selecting a Tauri settings palette such as `nord` does not apply. The existing direct theme-command check is not evidence that the native settings control works; the real control path must be measured by scope, effective status, capture, and host error.
+
 - V5-96-11-1 completed: after restarting the process from the rebuilt binary, a declared native pointer click on `core.chrome.mode` changed the real Tauri window from `dark` to `light`. Before/after captures had SHA-256 values `597da162a727c00594fbb4bdd7abd8ee417503545ea095f89c0d447a57870d24` and `ea25d05266bbd3c442c178b6585243dc342e5725e855e21959b4365d975d38ab`, showing native chrome and document appearance changed with no host error. The observed cause was the stale pre-rebuild process; the host now applies native appearance synchronously and propagates errors.
 
 - V5-96-11 completed: Tauri theme application no longer returns before the native update finishes or hides its error in a log-only callback; it now applies synchronously and returns failures explicitly. The reported visual failure did not reproduce in the current rebuild, but the Tauri theme-pixel check passed 5/5, the wide-chrome theme-button check passed 1/1, and `pnpm test`, `make native-test`, `make boundaries`, `make exposure-check`, and `make docs-check` passed.
