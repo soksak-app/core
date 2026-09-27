@@ -6,6 +6,8 @@
 
 - Completed V5-96-15: terminal selections now use each theme's accent rail instead of the border shade. Every dark/light palette passes the 2.4 measured card contrast criterion; focused terminal tests, `pnpm test`, `make boundaries`, `make exposure-check`, `make native-test`, `make -B tauriv2-build`, and `make docs-check` pass.
 
+- Started V5-96-14-1 to expose measured TUI terminal mouse ownership, pointer phases, and encoded PTY reports.
+
 - Started V5-96-15 to measure and correct terminal selection highlight contrast across every declared theme palette.
 
 - V5-96-14 started: the user reports that text cannot be selected in a Tauri terminal running TUI. The Red reproduction will measure child mouse tracking, pointer phases, selection status, sidecar operations, and captures.
