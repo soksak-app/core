@@ -736,6 +736,38 @@ for (const app of Object.values(APPS)) {
     assert.equal(await result("SHIFT"), "Z", "the Shift drag was reported to the program");
   });
 
+  test(`${app.name}: a real Shift drag selects while ?1003 motion reporting is on`, { timeout: 90000 }, async (t) => {
+    const { s, surface, session, origin, row } = await prepare(t, app, "SHIFT1003");
+    const read = async (id, on, count, off) => {
+      await s.run("terminal.input", { bytes: `printf '${on}'; stty raw -echo; printf 'WAIT%s\\r\\n' ${id}; ` +
+        `R=$(dd bs=1 count=${count} 2>/dev/null | od -An -tx1 | tr -d ' \\n'); stty sane; printf '${off}'; printf 'R%s:%s\\n' ${id} "$R"\\r` }, surface);
+      await readScreenUntil(s, surface, (lines) => lines.some((line) => line.startsWith(`WAIT${id}`)), `${id} did not start reading`);
+    };
+    const result = async (id) => {
+      const lines = await readScreenUntil(s, surface, (screen) => screen.some((line) => line.startsWith(`R${id}:`)), `${id} did not finish`);
+      return Buffer.from(lines.find((line) => line.startsWith(`R${id}:`)).slice(`R${id}:`.length).trim(), "hex").toString("latin1");
+    };
+    // TUI uses ?1003: Shift keeps motion reporting active but owns text selection.
+    await read("SHIFT1003", "\\033[?1003h\\033[?1006h", 1, "\\033[?1003l\\033[?1006l");
+    const before = (await s.get("terminal.session", surface)).selectionReleases;
+    const start = cellPoint(origin, session, 0, row);
+    const from = { ...start, x: start.x - 0.3 * session.cellWidth };
+    const end = cellPoint(origin, session, 4, row);
+    const to = { ...end, x: end.x + 0.3 * session.cellWidth };
+    const steps = [{ type: "move", ...from, modifiers: ["shift"] }, { type: "down", ...from, modifiers: ["shift"] }];
+    for (let i = 1; i <= 8; i++) steps.push({ type: "drag", x: from.x + (to.x - from.x) * i / 8, y: from.y, modifiers: ["shift"] });
+    steps.push({ type: "up", ...to, modifiers: ["shift"] });
+    post(steps);
+    await s.until("terminal.session", (value) => value.selectionReleases === before + 1,
+      "the sidecar did not answer the release of the Shift drag in ?1003", { surface });
+    await s.until("terminal.session", (value) => value.mouse.reported === false && value.mouse.bytes === null,
+      "the Shift drag was reported to the ?1003 program", { surface });
+    await s.until("terminal.session", () => pasteboardText() === "SHIFT1003",
+      `the ?1003 Shift drag did not copy the selection (the pasteboard holds ${JSON.stringify(pasteboardText())})`, { surface });
+    await s.run("terminal.input", { bytes: "Z" }, surface);
+    assert.equal(await result("SHIFT1003"), "Z", "the ?1003 Shift drag was reported to the program");
+  });
+
   test(`${app.name}: real keypad keys send SS3 sequences in application keypad mode and characters otherwise`, { timeout: 90000 }, async (t) => {
     const { s, surface, session, origin } = await prepare(t, app, "KEYPAD");
     // 키는 초점을 가진 터미널 영역에 간다.

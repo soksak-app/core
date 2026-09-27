@@ -20,6 +20,8 @@
 
 - Directly measured the same current window with Shift held: the TUI surface reported `reported:false`, `bytes:null`, and one selection release, while the plain drag reported PTY mouse bytes. This confirms the two gesture ownership paths; it does not yet prove the selected raster or clipboard text for the live TUI content.
 
+- Completed V5-96-14-6-1. The tracked rebuilt-Tauri test `a real Shift drag selects while ?1003 motion reporting is on` passed with clipboard and PTY assertions. In the current user window, a correctly mapped plain drag produced PTY bytes and left the clipboard unchanged; a Shift drag copied exactly `TUI header`. Both measurements had `active:true`, `key:true`, and `occluded:false`. The plain capture contained 130 complete frames with a 23.69ms longest gap.
+
 - Completed V5-96-14 and V5-96-14-1 after correcting the Red criterion to match the terminal contract: plain drags remain owned by a mouse-reporting TUI and Shift drags select text. Rebuilt Tauri and Wails real-HID checks observed `?1003` SGR motion bytes and a `?1002` Shift selection that copied `SHIFT` without sending drag bytes to the PTY. The tracked `normal-shutdown` target now prepares a terminal session before `host.quit`; rebuilt Tauri removed its endpoint in 64 ms and exited in 32 ms, while Wails removed it in 64 ms and exited in 38 ms. No new Tauri diagnostic report was produced.
 
 - Completed V5-96-16: added terminal-session coverage to the tracked shutdown target so endpoint removal and process exit are measured rather than inferred.
