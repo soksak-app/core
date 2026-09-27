@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-10: completed the inactive-host full-run acceptance. With the official BuildKit builder stopped, rebuilt foreground Wails and Tauri hosts, and Finder frontmost, the unchanged `pnpm -F @soksak/e2e run verify` suite passed 248/248 in 304533.973 ms with zero failures, cancellations, or skips; the Tauri padding-drag repeat passed 3/3.
+
 - V5-96-10 progress: the official builder stop removed the high-load VM and a clean full run reached 247/248. The remaining Tauri padding drag was rejected on tracked repeat run 2 because AppKit reported a nonzero `NSEvent.pressedMouseButtons` mask; the boundary reported the state explicitly and the test did not clear or fake it.
 - V5-96-10 resumed: the BuildKit VM load dropped to 3.4/3.6/3.7; rebuilt hosts reached 246/248, and the two remaining Tauri cases pass 5/5 tracked repeats each. The full run remains open for a clean 248/248 result.
 - V5-96-10: temporarily mark the full inactive-host run `[!]` because the user-owned BuildKit Virtualization VM (PID 96112) remained at approximately 198% CPU for over four hours and prevented a valid low-load capture. Retry when it exits with the 34ms and complete-frame criteria unchanged.
