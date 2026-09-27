@@ -764,6 +764,8 @@ struct InputKey {
 fn key_for_native_command(selector: &str) -> Result<InputKey, String> {
     let key = match selector {
         "insertNewline:" => "Enter",
+        "deleteBackward:" => "Backspace",
+        "deleteForward:" => "Delete",
         _ => return Err(format!("unsupported native command selector: {selector}")),
     };
     Ok(InputKey {
@@ -4026,12 +4028,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn native_newline_command_sends_enter_and_unknown_commands_fail() {
+    fn native_edit_commands_encode_and_unknown_commands_fail() {
         let key = key_for_native_command("insertNewline:").expect("newline command");
         assert_eq!(encode_keys(&[key], &Modes::default()).unwrap(), b"\r");
+        let backspace = key_for_native_command("deleteBackward:").expect("backspace command");
         assert_eq!(
-            key_for_native_command("deleteForward:").unwrap_err(),
-            "unsupported native command selector: deleteForward:"
+            encode_keys(&[backspace], &Modes::default()).unwrap(),
+            b"\x7f"
+        );
+        let delete = key_for_native_command("deleteForward:").expect("delete command");
+        assert_eq!(
+            encode_keys(&[delete], &Modes::default()).unwrap(),
+            b"\x1b[3~"
+        );
+        assert_eq!(
+            key_for_native_command("cancelOperation:").unwrap_err(),
+            "unsupported native command selector: cancelOperation:"
         );
     }
 

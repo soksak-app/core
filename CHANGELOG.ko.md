@@ -4,7 +4,7 @@
 
 ## 미배포
 
-- V5-96-13 시작: 사용자는 Tauri 터미널 입력 중 AppKit `deleteBackward` selector가 거부된다고 보고했다. 수정 전에 selector 매핑과 터미널 입력 계약의 Red 재현이 필요하다.
+- V5-96-13 완료: AppKit `deleteBackward:`를 터미널 `Backspace`, `deleteForward:`를 `Delete`로 매핑했고 바이트 인코딩과 알 수 없는 selector 거부를 프로토콜 테스트로 보장했다. 집중 Rust 테스트, 재빌드한 Tauri 호스트, `make native-test`가 통과했다.
 
 - V5-96-12 완료: 현재 재빌드한 Tauri 프로세스가 실제 터미널 선택·복사 추적 검사를 5/5 통과했고 선택 오류나 사이드카 순서 위반은 없었다. 보고된 메시지는 `1ee6cb9b` 이전 순서 없는 사이드카 전송 경로와 일치하므로 다시 시험하기 전에 재빌드한 호스트를 재시작해야 한다.
 
