@@ -5,8 +5,8 @@
 - Date: 2026-09-28 (Asia/Seoul).
 - Repository: `~/polyspec/soksak`.
 - Branch: `fix/tui-repeat-drag`.
-- Current HEAD: `3b5fc1b0 test: reproduce TUI drag selection loss`.
-- The working tree has uncommitted changes for the completed `.3.2.1` child-receipt instrumentation: the real-window test, its measurement helper and tests, the vt-core `pty.pending` measurement and its sidecar tests, the terminal plugin's diagnostic command with its tests, the runtime spec, the canonical feature checklist, both changelogs, and this paired handoff document. Do not discard or commit these changes without first reviewing them.
+- Current HEAD: `59c34ae5 feat: measure PTY child input receipt with sidecar instrumentation`.
+- The `.3.2.1` child-receipt instrumentation (sidecar, plugin, e2e, spec, checklist, changelogs, and this document) is committed. The 2026-09-28 first measurement recorded in item 9 below is committed together with this evidence update.
 - The task is still active: `V5-96-14-6-8-2-1`, with `.3.2.1` (sidecar-owned PTY child-receipt instrumentation) complete and `.3.2` (find the first divergence after host PTY writes) continuing. No product correction has been identified or made. Neither host has passed the required 60-cycle acceptance.
 
 ## User-visible failure and acceptance contract
@@ -25,6 +25,7 @@ The canonical checklist requires, per host, one continuing TUI session and 60 un
 6. The direct-retry visual check was strengthened to reject stale selection and wait up to 1000 ms for a new terminal selection. The capture therefore continues to about 1.13 seconds after mouse-up. In the most recent short diagnostics, failed direct attempts remained at zero selected cells and the terminal status wait timed out. The focused checker Red was 7/9 before the new timeout/stale-selection assertions were implemented, and Green is 9/9 afterward.
 7. macOS `dtruss` could not attach because System Integrity Protection is enabled and tracing requires additional privileges in this environment. This only rules out that observation method here; it does not explain the product defect.
 8. Child input receipt is now measured by sidecar-owned instrumentation (`.3.2.1` complete). vt-core answers a `pty.pending` operation for the open session with the FIONREAD count of master-written bytes the child has not yet read; on macOS the master and slave share one tty, so the master fd reads that shared input queue. TIOCOUTQ was rejected by measurement because it reads the child's output queue. Owning fixtures prove the pending count for a non-reading raw child, the drain for a reading child, and exact child receipt through the production write path (sidecar suite 172/172). Error replies, including a missing session, carry the same `pty.pending` event marker, and diagnostic builds expose the `terminal.pty.pending` command with single-request correlation and a five-second bound (plugin suite 115/115). The never-run host-side Perl receiver was removed. A canonical-mode line that has not been assembled is not counted, so a raw-mode child is the measured contract, and a drained queue proves delivery to the child, not interpretation by the program.
+9. The first real measurement with that instrumentation (2026-09-28, rebuilt hosts) exonerates the delivery path. Both short diagnostics failed 3/3 cycles — Tauri had one first gesture selecting all six cells and failed direct retries in all cycles; Wails failed every gesture at zero cells — and every gesture, successful or failed, recorded both `terminal.pty.pending` samples as zero (2–6 ms after the gesture and after the bounded selection settle wait) with no measurement error. The terminal's mouse modes (`click: false, drag: false, motion: true`), `selecting`, and `selectionReleases` were identical between successful and failed gestures. The first divergence therefore lies after the child's read: in the TUI's parsing of the received SGR sequence or its selection rendering. The next observation target is whether a failed gesture produces any child output after the mouse-up.
 
 ## Child-receipt instrumentation state
 
@@ -47,7 +48,7 @@ What remains under `.3.2` is the measurement itself: rebuild both hosts, run the
 - `plugins/terminal`: the `terminal.pty.pending` diagnostic declaration, module wiring, and plugin tests.
 - `docs/features.md` and `docs/features.ko.md`: the single source-of-truth checklist. `.3.2.1` is complete; continue under `.3.2` and do not reopen completed items.
 - `CHANGELOG.md` and `CHANGELOG.ko.md`: current evidence records so far; update the pair when the next verified result is available.
-- Latest prior JSON snapshots: `${TMPDIR}/soksak-tui-drag-tauriv2.json` and `${TMPDIR}/soksak-tui-drag-wailsv3.json` (the actual system temp directory resolves under `/var/folders/.../T`). They predate the pending-drain recording and contain no `ptyPending` samples. Captured video frames were removed after measurement.
+- Current JSON evidence: `${TMPDIR}/soksak-tui-drag-tauriv2.json` and `${TMPDIR}/soksak-tui-drag-wailsv3.json` (the actual system temp directory resolves under `/var/folders/.../T`) are the 2026-09-28 rebuilt-host diagnostics and contain both `ptyPending` samples for every gesture. Captured video frames were removed after measurement; copy any further summary into this document before the temporary files expire.
 - `docs/operations/tui-drag-handoff.md` and `.ko.md`: this transfer document. Keep its paired versions aligned as the investigation advances.
 
 The last observed process listing contained one Tauri process using `/tmp/soksak-check-tui-repeat-tauriv2` and one Wails process using the user's normal configuration directory. Recheck before any action; never infer that a recorded PID or endpoint is still current. At the end of a test session, leave one Tauri and one Wails user-path app open, and remove disposable instances through the declared graceful shutdown path.
@@ -55,7 +56,7 @@ The last observed process listing contained one Tauri process using `/tmp/soksak
 ## Resume procedure
 
 1. Read this handoff, `AGENTS.md`, `docs/features.md` at `V5-96-14-6-8-2-1`, and the current diff. Check `git status`, current branch/HEAD, `pgrep -alf 'soksak-(tauriv2|wailsv3)'`, each endpoint's PID/executable/config directory, and executable hashes. Do not assume a previous process is running the current bundle.
-2. If the `.3.2.1` changes are still uncommitted, run the gates first — `make docs-check`, `pnpm test`, `make boundaries`, `make exposure-check`, `pnpm -F @soksak/e2e test`, and `make native-test` for the Rust changes — and then commit the explicit paths as one unit (sidecar, plugin, e2e, spec, features, changelogs, this document). Do not use `git add -A`.
+2. The `.3.2.1` instrumentation is committed (`59c34ae5`). If the working tree has new uncommitted changes, review them, run the applicable gates — `make docs-check`, `pnpm test`, `make boundaries`, `make exposure-check`, `pnpm -F @soksak/e2e test`, and `make native-test` for Rust changes — and commit explicit paths as one unit. Do not use `git add -A`.
 3. Run the focused unit tests:
 
    ```sh
@@ -68,7 +69,7 @@ The last observed process listing contained one Tauri process using `/tmp/soksak
    make -B tauriv2-build wailsv3-build
    ```
 
-5. Run a short diagnostic on each host before any 60-cycle attempt. A diagnostic run intentionally exits nonzero if a cycle fails; retain that Red and inspect its full JSON and recording-derived measurements. Example for Tauri:
+5. Run a short diagnostic on each host before any 60-cycle attempt. Done 2026-09-28 on both rebuilt hosts — see item 9; re-run only for a new build or a new question. A diagnostic run intentionally exits nonzero if a cycle fails; retain that Red and inspect its full JSON and recording-derived measurements. Example for Tauri:
 
    ```sh
    SOKSAK_APP=tauriv2 \

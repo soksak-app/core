@@ -5,8 +5,8 @@
 - 날짜: 2026-09-28 (Asia/Seoul).
 - 저장소: `~/polyspec/soksak`.
 - 브랜치: `fix/tui-repeat-drag`.
-- 현재 HEAD: `3b5fc1b0 test: reproduce TUI drag selection loss`.
-- 작업 트리에는 완료한 `.3.2.1` 자식 수신 계측의 미커밋 변경이 있다: 실제 창 검사와 측정 판정기·테스트, vt-core의 `pty.pending` 측정과 사이드카 검사, 터미널 플러그인의 진단 명령과 검사, 런타임 명세, 정식 기능 체크리스트, 영·한 체인지로그, 이 영·한 인수인계 문서. 내용을 검토하지 않고 버리거나 커밋하지 않는다.
+- 현재 HEAD: `59c34ae5 feat: measure PTY child input receipt with sidecar instrumentation`.
+- `.3.2.1` 자식 수신 계측(사이드카, 플러그인, e2e, 명세, 체크리스트, 체인지로그, 이 문서)은 커밋됐다. 아래 9번의 2026-09-28 첫 측정 결과도 이 증거 갱신과 함께 커밋된다.
 - 작업은 아직 진행 중이다. 정식 체크리스트 `V5-96-14-6-8-2-1`에서 `.3.2.1`(사이드카 소유 PTY 자식 수신 계측)은 완료였고 `.3.2`(호스트의 PTY 기록 뒤 최초 차이 찾기)가 계속된다. 제품 수정 원인은 아직 확인하지 못했고 제품 코드도 고치지 않았다. 어느 호스트도 요구된 60주기 수락 검사를 통과하지 않았다.
 
 ## 사용자 증상과 수락 조건
@@ -25,6 +25,7 @@
 6. 직접 재시도의 시각 검사는 기존 선택을 새 선택으로 오인하지 않도록 강화했고 새 터미널 선택 상태를 최대 1000ms 기다린다. 이에 따라 녹화는 마우스-up 뒤 약 1.13초까지 지속된다. 최근 짧은 진단의 실패는 계속 선택 셀 0개였고 terminal 상태 대기가 시간 초과됐다. 새 시간초과·기존 선택 assertion을 넣기 전 집중 판정기 Red는 7/9였고, 수정 후 Green은 9/9다.
 7. macOS의 `dtruss`는 System Integrity Protection 활성화 상태와 추가 추적 권한 요구로 연결할 수 없었다. 이는 이 환경에서 해당 관측 수단을 사용할 수 없다는 뜻일 뿐 제품 결함의 설명은 아니다.
 8. 자식 입력 수신은 이제 사이드카 소유 계측으로 잰다(`.3.2.1` 완료). vt-core는 열린 세션의 `pty.pending` 연산에 마스터가 쓰고 자식이 아직 읽지 않은 바이트 수를 FIONREAD로 답한다. macOS는 마스터와 슬레이브가 tty 하나를 공유하므로 마스터 fd가 그 공유 입력 큐를 읽는다. TIOCOUTQ는 자식의 출력 큐를 읽음을 측정으로 기각했다. 소유 fixture로 읽지 않는 raw 자식의 잔량, 읽는 자식의 드레인, 생산 write 경로의 정확한 자식 수신을 증명했다(사이드카 모음 172/172). 세션이 없는 경우를 포함한 오류 응답도 같은 `pty.pending` 이벤트 표식을 실으며, 진단 빌드는 `terminal.pty.pending` 명령을 단일 요청 상관과 5초 제한으로 노출한다(플러그인 모음 115/115). 한 번도 실행하지 않은 호스트 측 Perl 수신기는 폐기했다. canonical 모드에서 아직 조립 전인 줄은 세지 않으므로 raw 모드 자식이 측정 계약이고, 큐가 비었다는 사실은 자식에 대한 전달은 증명해도 프로그램이 바이트를 해석했음은 증명하지 않는다.
+9. 그 계측의 첫 실측(2026-09-28, 재빌드 호스트)이 전달 경로를 무죄로 만들었다. 두 짧은 진단 모두 3주기 전부 실패했다 — 타우리는 첫 제스처 하나가 여섯 셀을 선택했고 직접 재시도는 전 주기에서 실패했으며, 웨일즈는 전 제스처가 0셀이었다 — 그리고 성공·실패 무관하게 모든 제스처의 `terminal.pty.pending` 표본 두 개가 모두 0이었다(제스처 직후 2–6ms와 선택 정착 대기 뒤). 측정 오류는 없었다. 터미널의 mouse mode(`click: false, drag: false, motion: true`)와 `selecting`, `selectionReleases`도 성공·실패 제스처에서 동일했다. 따라서 최초 분기는 자식이 읽은 뒤, 수신한 SGR 시퀀스의 파싱 또는 선택 렌더링(TUI 내부)에 있다. 다음 관측 대상은 실패 제스처에서 mouse-up 뒤 자식 출력이 있는지다.
 
 ## 자식 수신 계측 상태
 
@@ -47,7 +48,7 @@
 - `plugins/terminal`: `terminal.pty.pending` 진단 선언, 모듈 연결, 플러그인 검사.
 - `docs/features.md`, `docs/features.ko.md`: 단일 기준 체크리스트. `.3.2.1`은 완료이며 `.3.2`에서 계속하고 완료한 항목은 다시 열지 않는다.
 - `CHANGELOG.md`, `CHANGELOG.ko.md`: 현재까지 확인된 증거 기록. 다음 검증 결과가 생기면 쌍으로 갱신한다.
-- 최근 JSON 결과: `${TMPDIR}/soksak-tui-drag-tauriv2.json`, `${TMPDIR}/soksak-tui-drag-wailsv3.json` (실제 시스템 임시 경로는 `/var/folders/.../T` 아래). 잔량 드레인 기록 이전 실행이므로 `ptyPending` 표본은 없다. 프레임 원본은 측정 뒤 제거됐다.
+- 현재 JSON 증거: `${TMPDIR}/soksak-tui-drag-tauriv2.json`, `${TMPDIR}/soksak-tui-drag-wailsv3.json` (실제 시스템 임시 경로는 `/var/folders/.../T` 아래)은 2026-09-28 재빌드 호스트 진단이며 모든 제스처의 `ptyPending` 표본 두 개를 담고 있다. 프레임 원본은 측정 뒤 제거됐다. 임시 파일이 사라지기 전 필요한 요약을 이 문서로 옮긴다.
 - `docs/operations/tui-drag-handoff.md` 및 `.ko.md`: 이 인수인계 문서. 조사 진행에 따라 영문·한글 내용을 함께 유지한다.
 
 마지막으로 관측한 프로세스 목록에는 임시 설정 `/tmp/soksak-check-tui-repeat-tauriv2`를 쓰는 Tauri 하나와 사용자 기본 설정을 쓰는 Wails 하나가 있었다. 이후에는 PID나 endpoint가 아직 유효하다고 가정하지 말고 매번 다시 확인한다. 실행 세션 종료 시 사용자 경로 앱을 호스트별 하나씩 남기고 임시 앱은 선언된 정상 종료 경로로 닫는다.
@@ -55,7 +56,7 @@
 ## 재개 절차
 
 1. 이 문서, `AGENTS.md`, `docs/features.md`의 `V5-96-14-6-8-2-1`, 현재 diff를 읽는다. `git status`, 브랜치·HEAD, `pgrep -alf 'soksak-(tauriv2|wailsv3)'`, 각 endpoint의 PID·실행파일·설정 디렉터리와 실행파일 hash를 확인한다. 이전 프로세스가 현재 빌드를 실행한다고 가정하지 않는다.
-2. `.3.2.1` 변경이 여전히 미커밋이면 먼저 게이트를 실행한다 — `make docs-check`, `pnpm test`, `make boundaries`, `make exposure-check`, `pnpm -F @soksak/e2e test`, Rust 변경에 대해 `make native-test` — 그리고 명시적 경로를 하나의 단위로 커밋한다(사이드카, 플러그인, e2e, 명세, 체크리스트, 체인지로그, 이 문서). `git add -A`는 쓰지 않는다.
+2. `.3.2.1` 계측은 커밋됐다(`59c34ae5`). 작업 트리에 새 미커밋 변경이 있으면 검토한 뒤 해당 게이트 — `make docs-check`, `pnpm test`, `make boundaries`, `make exposure-check`, `pnpm -F @soksak/e2e test`, Rust 변경에 대해 `make native-test` — 를 실행하고 명시적 경로를 하나의 단위로 커밋한다. `git add -A`는 쓰지 않는다.
 3. 집중 단위 검사를 실행한다.
 
    ```sh
@@ -68,7 +69,7 @@
    make -B tauriv2-build wailsv3-build
    ```
 
-5. 60주기 수락 검사 전에 두 호스트에서 짧은 진단을 실행한다. 진단 검사는 한 주기라도 실패하면 의도적으로 nonzero 종료한다. 이를 Red 그대로 보존하고 전체 JSON과 녹화에서 추출한 측정을 본다. Tauri 예시:
+5. 60주기 수락 검사 전에 두 호스트에서 짧은 진단을 실행한다. 2026-09-28에 재빌드 호스트 양쪽에서 완료했다 — 위 9번 참조. 새 빌드나 새 질문이 있을 때만 다시 실행한다. 진단 검사는 한 주기라도 실패하면 의도적으로 nonzero 종료한다. 이를 Red 그대로 보존하고 전체 JSON과 녹화에서 추출한 측정을 본다. Tauri 예시:
 
    ```sh
    SOKSAK_APP=tauriv2 \
