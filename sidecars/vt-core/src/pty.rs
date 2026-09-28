@@ -48,6 +48,15 @@ pub fn resolve_directory(request: &str) -> Result<String, String> {
 
 const RETAINED_OUTPUT: usize = 10_000;
 
+/// 한 시점의 PTY 전송 상태 측정. pending 은 마스터가 쓰고 자식이 아직 읽지 않은 입력 바이트 수이고,
+/// written 는 세션 reader 가 지금까지 읽은 자식 출력의 누적 바이트 수다. 한 번의 측정 왕복이 두 값을
+/// 함께 돌려주므로 쓰기 성공, 자식 수신, 자식 출력을 같은 시점에 구분할 수 있다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PtyMeasurement {
+    pub pending: usize,
+    pub written: u64,
+}
+
 struct Session {
     id: String,
     owner: String,
@@ -56,6 +65,7 @@ struct Session {
     writer: Mutex<Option<Box<dyn Write + Send>>>,
     child: Mutex<Box<dyn Child + Send>>,
     next_sequence: Mutex<i64>,
+    written_output: Mutex<u64>,
     output: Mutex<VecDeque<(i64, Vec<u8>)>>,
     attachments: Mutex<HashMap<String, tokio::sync::mpsc::UnboundedSender<DaemonEvent>>>,
     closed: Mutex<bool>,
@@ -167,6 +177,7 @@ impl PtyService {
             writer: Mutex::new(Some(writer)),
             child: Mutex::new(child),
             next_sequence: Mutex::new(0),
+            written_output: Mutex::new(0),
             output: Mutex::new(VecDeque::with_capacity(RETAINED_OUTPUT)),
             attachments: Mutex::new(HashMap::new()),
             closed: Mutex::new(false),
@@ -291,17 +302,23 @@ impl PtyService {
         result
     }
 
-    /// 마스터가 쓰고 자식이 아직 읽지 않은 입력 바이트 수. 쓰기 성공과 자식 수신을 구분하는 측정 관측이다.
-    pub fn pending_input(&self, session_id: &str) -> Result<usize, String> {
+    /// 한 시점의 PTY 전송 상태 측정. 쓰기 성공, 자식 수신, 자식 출력을 구분하는 진단 관측이다.
+    /// pending 은 마스터가 쓰고 자식이 아직 읽지 않은 입력 바이트 수(FIONREAD)이고, written 는
+    /// reader 가 지금까지 읽은 자식 출력의 누적 바이트 수다.
+    pub fn pty_measurement(&self, session_id: &str) -> Result<PtyMeasurement, String> {
         let session = self.session(session_id)?;
         if *session.closed.lock().unwrap() {
             return Err("session is closed".into());
         }
-        let guard = session.master.lock().unwrap();
-        let master = guard
-            .as_ref()
-            .ok_or_else(|| "session master is closed".to_string())?;
-        pending_input(master.as_ref())
+        let pending = {
+            let guard = session.master.lock().unwrap();
+            let master = guard
+                .as_ref()
+                .ok_or_else(|| "session master is closed".to_string())?;
+            pending_input(master.as_ref())?
+        };
+        let written = *session.written_output.lock().unwrap();
+        Ok(PtyMeasurement { pending, written })
     }
 
     pub fn close(&self, session_id: &str) -> Result<(), String> {
@@ -398,6 +415,7 @@ fn read_output(session: Arc<Session>, mut reader: Box<dyn Read + Send>) {
             Ok(0) => break,
             Ok(size) => {
                 let data = buffer[..size].to_vec();
+                *session.written_output.lock().unwrap() += size as u64;
                 let sequence = {
                     let mut next = session.next_sequence.lock().unwrap();
                     let sequence = *next;

@@ -47,9 +47,9 @@
       },
       {
         "name": "terminal.pty.pending",
-        "description": "Reads the count of master-written PTY bytes the child has not yet read.",
+        "description": "Reads the master-written PTY bytes the child has not yet read and the cumulative child output bytes the session reader has read.",
         "params": { "type": "object", "properties": {} },
-        "result": { "type": "object", "properties": { "pending": { "type": "integer" } } }
+        "result": { "type": "object", "properties": { "pending": { "type": "integer" }, "written": { "type": "integer" } } }
       },
       {
         "name": "terminal.ime.trace",

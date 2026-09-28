@@ -3177,7 +3177,7 @@ test("pointer diagnostics are opt-in, bounded, and report malformed actions", as
   assert.equal(result.entries.length, 4096);
 });
 
-test("pty pending reads the session queue depth and rejects explicit errors", async () => {
+test("pty pending reads the session transport measurement and rejects explicit errors", async () => {
   const sidecar = createFakeSidecar();
   const expose = createFakeExpose();
   await startTerminal({ view: createFakeView(), attachImage: createFakeAttachImage().function, sidecar, expose,
@@ -3187,15 +3187,18 @@ test("pty pending reads the session queue depth and rejects explicit errors", as
   assert.equal(typeof read, "function", "pty pending command must be declared");
   const answered = read();
   assert.deepEqual(sidecar.getMessages().at(-1).body, { operation: "pty.pending" });
-  sidecar.triggerEvent("test-session", { event: "pty.pending", pending: 13 });
-  assert.deepEqual(await answered, { pending: 13 });
+  sidecar.triggerEvent("test-session", { event: "pty.pending", pending: 13, written: 4096 });
+  assert.deepEqual(await answered, { pending: 13, written: 4096 });
   const failed = read();
   sidecar.triggerEvent("test-session", { event: "pty.pending", error: "Session not open" });
   await assert.rejects(failed, /Session not open/);
   const malformed = read();
-  sidecar.triggerEvent("test-session", { event: "pty.pending", pending: -1 });
+  sidecar.triggerEvent("test-session", { event: "pty.pending", pending: -1, written: 4096 });
   await assert.rejects(malformed, /invalid pty\.pending measurement/);
-  assert.match(expose.getStatus("terminal.session").readFn().error, /invalid pty\.pending measurement/);
+  const missingWritten = read();
   sidecar.triggerEvent("test-session", { event: "pty.pending", pending: 0 });
+  await assert.rejects(missingWritten, /invalid pty\.pending measurement/);
+  assert.match(expose.getStatus("terminal.session").readFn().error, /invalid pty\.pending measurement/);
+  sidecar.triggerEvent("test-session", { event: "pty.pending", pending: 0, written: 0 });
   assert.match(expose.getStatus("terminal.session").readFn().error, /unexpected pty\.pending response/);
 });

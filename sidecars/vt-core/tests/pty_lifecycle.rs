@@ -172,7 +172,7 @@ async fn three_real_sessions_reconnect_with_same_pid_and_retained_output() {
 // 측정 대상 프로그램(TUI)처럼 자식이 raw 모드를 켠 뒤에 쓴다. canonical 모드에서는 줄이
 // 완성되기 전 바이트가 줄 조립 버퍼에 남아 큐에 반영되지 않는다.
 #[tokio::test]
-async fn pending_input_counts_master_written_bytes_a_non_reading_child_has_not_read() {
+async fn pty_measurement_counts_master_written_bytes_a_non_reading_child_has_not_read() {
     let _test_lock = lifecycle_test_lock();
     let _native_test_lock = native_pty_test_lock();
     let service = PtyService::new();
@@ -210,8 +210,9 @@ async fn pending_input_counts_master_written_bytes_a_non_reading_child_has_not_r
         .expect("first production-path write failed");
     assert_eq!(
         service
-            .pending_input(&session)
-            .expect("pending input is unavailable"),
+            .pty_measurement(&session)
+            .expect("PTY measurement is unavailable")
+            .pending,
         first.len(),
         "a child that reads nothing must leave every written byte pending"
     );
@@ -220,8 +221,9 @@ async fn pending_input_counts_master_written_bytes_a_non_reading_child_has_not_r
         .expect("second production-path write failed");
     assert_eq!(
         service
-            .pending_input(&session)
-            .expect("pending input is unavailable"),
+            .pty_measurement(&session)
+            .expect("PTY measurement is unavailable")
+            .pending,
         first.len() + second.len(),
         "pending input must accumulate across writes until the child reads"
     );
@@ -230,7 +232,7 @@ async fn pending_input_counts_master_written_bytes_a_non_reading_child_has_not_r
 
 // 읽는 자식은 큐를 비운다. 유한 시간 안에 0 이 되지 않으면 실패한다.
 #[tokio::test]
-async fn pending_input_drains_to_zero_as_the_child_reads() {
+async fn pty_measurement_drains_to_zero_as_the_child_reads() {
     let _test_lock = lifecycle_test_lock();
     let _native_test_lock = native_pty_test_lock();
     let service = PtyService::new();
@@ -270,8 +272,9 @@ async fn pending_input_drains_to_zero_as_the_child_reads() {
     let started = std::time::Instant::now();
     loop {
         let pending = service
-            .pending_input(&session)
-            .expect("pending input is unavailable");
+            .pty_measurement(&session)
+            .expect("PTY measurement is unavailable")
+            .pending;
         if pending == 0 {
             break;
         }
@@ -284,15 +287,15 @@ async fn pending_input_drains_to_zero_as_the_child_reads() {
     service.close(&session).expect("close failed");
 }
 
-// 없는 세션과 닫은 세션의 잔량은 오류이다. 0 이 아니라 명시적 실패로 구분한다.
+// 없는 세션과 닫은 세션의 측정은 오류이다. 0 이 아니라 명시적 실패로 구분한다.
 #[tokio::test]
-async fn pending_input_rejects_unknown_and_closed_sessions() {
+async fn pty_measurement_rejects_unknown_and_closed_sessions() {
     let _test_lock = lifecycle_test_lock();
     let _native_test_lock = native_pty_test_lock();
     let service = PtyService::new();
     assert!(
-        service.pending_input("no-such-session").is_err(),
-        "an unknown session must not report a pending count"
+        service.pty_measurement("no-such-session").is_err(),
+        "an unknown session must not report a measurement"
     );
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     let (session, _) = service
@@ -307,9 +310,71 @@ async fn pending_input_rejects_unknown_and_closed_sessions() {
         .expect("PTY setup failed; real PTY errors must fail this test");
     service.close(&session).expect("close failed");
     assert!(
-        service.pending_input(&session).is_err(),
-        "a closed session must not report a pending count"
+        service.pty_measurement(&session).is_err(),
+        "a closed session must not report a measurement"
     );
+}
+
+// reader 가 읽은 자식 출력의 누적 바이트 계약. 정확히 알려진 바이트만 출력하고 조용히 있는 자식에서
+// 카운터는 그 수에 정확히 도달한다. mouse-up 뒤 자식 출력이 있었는지 묻는 진단 질문의 소유 검증이다.
+// stty -opost 로 출력 후처리를 끊어 reader 가 읽은 바이트가 자식이 쓴 바이트와 정확히 일치한다.
+#[tokio::test]
+async fn written_output_counts_exact_child_output_bytes() {
+    let _test_lock = lifecycle_test_lock();
+    let _native_test_lock = native_pty_test_lock();
+    let service = PtyService::new();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (session, _) = service
+        .open(
+            "/bin/sh",
+            &["-c".into(), "stty -opost; printf MEASURED; sleep 30".into()],
+            None,
+            80,
+            24,
+            tx,
+        )
+        .expect("PTY setup failed; real PTY errors must fail this test");
+    let mut seen = Vec::new();
+    let ready = timeout(Duration::from_secs(2), async {
+        loop {
+            if let Some(DaemonEvent::Output { data, .. }) = rx.recv().await {
+                seen.extend_from_slice(&data);
+                if seen.ends_with(b"MEASURED") {
+                    return;
+                }
+            }
+        }
+    })
+    .await;
+    assert!(
+        ready.is_ok(),
+        "the child never finished its measured output; output so far: {seen:?}"
+    );
+    let expected = b"MEASURED".len() as u64;
+    let started = std::time::Instant::now();
+    let written = loop {
+        let measurement = service
+            .pty_measurement(&session)
+            .expect("PTY measurement is unavailable");
+        assert_eq!(
+            measurement.pending, 0,
+            "nothing was written to this child, so no input byte may be pending"
+        );
+        if measurement.written >= expected {
+            break measurement.written;
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "the reader did not count {expected} output bytes within two seconds; counted {} so far",
+            measurement.written
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    };
+    assert_eq!(
+        written, expected,
+        "a child that emits exactly {expected} bytes must move exactly that many bytes through the reader"
+    );
+    service.close(&session).expect("close failed");
 }
 
 // 생산 write 경로로 쓴 정확한 바이트를 자식이 읽어 되돌리는 수신 fixture. READY 뒤에만 쓰므로

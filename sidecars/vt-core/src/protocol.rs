@@ -641,10 +641,14 @@ pub trait SessionPort: Send + Sync {
     async fn attach(&self, _session_id: &str, _from: i64) -> Result<String, String> {
         Err("session attach is not supported".to_string())
     }
-    /// 마스터가 쓰고 자식이 아직 읽지 않은 입력 바이트 수. 측정 관측이므로 제공하지 않는 포트는
+    /// 한 시점의 PTY 전송 상태 측정. pending 은 마스터가 쓰고 자식이 아직 읽지 않은 입력 바이트 수이고
+    /// written 는 reader 가 읽은 자식 출력의 누적 바이트 수다. 측정 관측이므로 제공하지 않는 포트는
     /// 명시적으로 실패한다.
-    async fn pending_input(&self, _session_id: &str) -> Result<usize, String> {
-        Err("session pending input is not supported".to_string())
+    async fn pty_measurement(
+        &self,
+        _session_id: &str,
+    ) -> Result<crate::pty::PtyMeasurement, String> {
+        Err("session PTY measurement is not supported".to_string())
     }
     async fn get_events(&self) -> mpsc::Receiver<DaemonEvent>;
 }
@@ -2075,13 +2079,13 @@ async fn surface_task(
                             if output_tx.send(response.to_string()).await.is_err() { return; }
                         }
                     }
-                    // 표면의 현재 세션에서 마스터가 쓰고 자식이 아직 읽지 않은 바이트 수를 측정해 응답한다.
-                    // 쓰기 성공과 자식 수신을 구분하는 진단 관측이다.
+                    // 표면의 현재 세션에서 읽지 않은 입력 바이트 수와 reader 가 읽은 자식 출력 누적 바이트
+                    // 수를 한 번에 측정해 응답한다. 쓰기 성공, 자식 수신, 자식 출력을 구분하는 진단 관측이다.
                     SurfaceCommand::PtyPending => {
                         // 오류 응답도 같은 event 표식을 실어 보낸다. 측정 요청의 답임이 응답만으로 드러나야 한다.
                         let response = match session_id.as_ref() {
-                            Some(sid) => match session_port.pending_input(sid).await {
-                                Ok(pending) => json!({"surface": surface_id, "body": {"event": "pty.pending", "pending": pending}}),
+                            Some(sid) => match session_port.pty_measurement(sid).await {
+                                Ok(measurement) => json!({"surface": surface_id, "body": {"event": "pty.pending", "pending": measurement.pending, "written": measurement.written}}),
                                 Err(error) => json!({"surface": surface_id, "body": {"event": "pty.pending", "error": error}}),
                             },
                             None => json!({"surface": surface_id, "body": {"event": "pty.pending", "error": "Session not open"}}),
@@ -4010,8 +4014,11 @@ impl SessionPort for LocalSessionPort {
         Ok(attachment_id)
     }
 
-    async fn pending_input(&self, session_id: &str) -> Result<usize, String> {
-        self.service.pending_input(session_id)
+    async fn pty_measurement(
+        &self,
+        session_id: &str,
+    ) -> Result<crate::pty::PtyMeasurement, String> {
+        self.service.pty_measurement(session_id)
     }
 
     async fn get_events(&self) -> mpsc::Receiver<DaemonEvent> {

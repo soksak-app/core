@@ -3,7 +3,8 @@
 // terminal.compose.update 는 OS 입력기가 만드는 preedit 를 주입한다. terminal.ime.trace 는
 // 명시적으로 시작한 동안 네이티브 입력 callback 과 순서대로 보낸 터미널 입력 작업을 기록한다.
 // 기록이 용량에 이르면 이벤트를 버리지 않고 기록을 멈추며 오류를 보고한다.
-// terminal.pty.pending 은 마스터가 쓰고 자식이 아직 읽지 않은 PTY 입력 바이트 수를 잰다.
+// terminal.pty.pending 은 마스터가 쓰고 자식이 아직 읽지 않은 PTY 입력 바이트 수와 reader 가
+// 읽은 자식 출력 누적 바이트 수를 한 시점에 함께 잰다.
 
 const IME_TRACE_CAPACITY = 256;
 
@@ -13,7 +14,8 @@ const IME_TRACE_CAPACITY = 256;
  *   expose          표면의 공개 항목 등록 함수
  *   updateCompose   네이티브 compose callback 과 같은 경로로 preedit 를 바꾼다
  *   onInput         입력 기록 함수를 등록한다
- *   readPtyPending  현재 세션의 PTY 잔량을 사이드카에 묻는 측정 함수
+ *   readPtyPending  현재 세션의 PTY 전송 상태(읽지 않은 입력 바이트 수와 읽은 자식 출력 누적
+ *                   바이트 수)를 사이드카에 묻는 측정 함수
  *   reportError     trace 출처의 세션 오류를 보고한다
  *   resolveError    trace 출처의 세션 오류를 지운다. 새 trace 를 시작하면 해소된다
  */
@@ -41,7 +43,7 @@ export async function attach({ expose, updateCompose, onInput, onPointer, readPt
       return () => watchers.delete(fn);
     }),
     expose.command("terminal.compose.update", updateCompose),
-    expose.command("terminal.pty.pending", async () => ({ pending: await readPtyPending() })),
+    expose.command("terminal.pty.pending", readPtyPending),
     expose.command("terminal.ime.trace", async ({ action }) => {
       if (action === "start") {
         trace = { enabled: true, overflow: false, entries: [] };

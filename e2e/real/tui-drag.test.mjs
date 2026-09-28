@@ -88,14 +88,16 @@ for (const app of Object.values(APPS)) {
             return up && value.entries.some((entry) => entry.kind === "pointer-result" && entry.body.inputId === up.body.inputId);
           }, "the current drag has no matching mouse-up result", { surface, timeout: 5000 });
         } catch (error) { waitError = String(error); }
-        // 제스처 뒤 PTY 입력 큐 잔량을 잰다. 쓰기 성공과 자식 수신을 구분하는 관측이며,
+        // 제스처 뒤 PTY 전송 상태를 잰다. 쓰기 성공과 자식 수신을 구분하는 관측이며,
         // 커널 큐는 알림이 없어 샘플으로만 볼 수 있다: 직후와 선택 정착 뒤에 한 번씩 잰다.
+        // 표본 사이 written 가 자라면 자식이 mouse-up 뒤 출력을 했다는 뜻이라 파싱과
+        // 렌더링 단계를 나누는 증거가 된다.
         const ptySamples = [];
         let ptyPendingError;
         const ptyStarted = performance.now();
         const samplePtyPending = async () => {
-          const { pending } = await s.run("terminal.pty.pending", {}, surface);
-          ptySamples.push({ pending, at: Math.round(performance.now() - ptyStarted) });
+          const { pending, written } = await s.run("terminal.pty.pending", {}, surface);
+          ptySamples.push({ pending, written, at: Math.round(performance.now() - ptyStarted) });
         };
         try { await samplePtyPending(); } catch (error) { ptyPendingError = String(error); }
         if (waitForSelection) {

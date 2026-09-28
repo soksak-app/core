@@ -5,9 +5,9 @@
 - 날짜: 2026-09-28 (Asia/Seoul).
 - 저장소: `~/polyspec/soksak`.
 - 브랜치: `fix/tui-repeat-drag`.
-- 현재 HEAD: `59c34ae5 feat: measure PTY child input receipt with sidecar instrumentation`.
-- `.3.2.1` 자식 수신 계측(사이드카, 플러그인, e2e, 명세, 체크리스트, 체인지로그, 이 문서)은 커밋됐다. 아래 9번의 2026-09-28 첫 측정 결과도 이 증거 갱신과 함께 커밋된다.
-- 작업은 아직 진행 중이다. 정식 체크리스트 `V5-96-14-6-8-2-1`에서 `.3.2.1`(사이드카 소유 PTY 자식 수신 계측)은 완료였고 `.3.2`(호스트의 PTY 기록 뒤 최초 차이 찾기)가 계속된다. 제품 수정 원인은 아직 확인하지 못했고 제품 코드도 고치지 않았다. 어느 호스트도 요구된 60주기 수락 검사를 통과하지 않았다.
+- 현재 HEAD: `000553f5 docs: record first child-receipt measurement exonerating delivery`이며 아래 `.3.2.2` 계측이 이 문서가 속한 커밋이다.
+- `.3.2.1` 자식 수신 계측과 아래 9번의 2026-09-28 첫 실측은 커밋됐다. `.3.2.2` 계측 — `pending` 옆의 `written` 출력 카운터, 소유 fixture, serve 계약·플러그인 계약 갱신, e2e 표본 확장, 명세, 체인지로그, 이 문서 — 은 이 갱신과 함께 하나의 단위로 커밋된다.
+- 작업은 아직 진행 중이다. 정식 체크리스트 `V5-96-14-6-8-2-1`에서 `.3.2.1`(자식 수신 계측과 첫 실측)은 완료, `.3.2.2`(mouse-up 뒤 자식 출력 관측)는 계측만 완료되고 측정은 남았으며, `.3.2`(호스트의 PTY 기록 뒤 최초 차이 찾기)가 계속된다. 제품 수정 원인은 아직 확인하지 못했고 제품 코드도 고치지 않았다. 어느 호스트도 요구된 60주기 수락 검사를 통과하지 않았다.
 
 ## 사용자 증상과 수락 조건
 
@@ -27,26 +27,26 @@
 8. 자식 입력 수신은 이제 사이드카 소유 계측으로 잰다(`.3.2.1` 완료). vt-core는 열린 세션의 `pty.pending` 연산에 마스터가 쓰고 자식이 아직 읽지 않은 바이트 수를 FIONREAD로 답한다. macOS는 마스터와 슬레이브가 tty 하나를 공유하므로 마스터 fd가 그 공유 입력 큐를 읽는다. TIOCOUTQ는 자식의 출력 큐를 읽음을 측정으로 기각했다. 소유 fixture로 읽지 않는 raw 자식의 잔량, 읽는 자식의 드레인, 생산 write 경로의 정확한 자식 수신을 증명했다(사이드카 모음 172/172). 세션이 없는 경우를 포함한 오류 응답도 같은 `pty.pending` 이벤트 표식을 실으며, 진단 빌드는 `terminal.pty.pending` 명령을 단일 요청 상관과 5초 제한으로 노출한다(플러그인 모음 115/115). 한 번도 실행하지 않은 호스트 측 Perl 수신기는 폐기했다. canonical 모드에서 아직 조립 전인 줄은 세지 않으므로 raw 모드 자식이 측정 계약이고, 큐가 비었다는 사실은 자식에 대한 전달은 증명해도 프로그램이 바이트를 해석했음은 증명하지 않는다.
 9. 그 계측의 첫 실측(2026-09-28, 재빌드 호스트)이 전달 경로를 무죄로 만들었다. 두 짧은 진단 모두 3주기 전부 실패했다 — 타우리는 첫 제스처 하나가 여섯 셀을 선택했고 직접 재시도는 전 주기에서 실패했으며, 웨일즈는 전 제스처가 0셀이었다 — 그리고 성공·실패 무관하게 모든 제스처의 `terminal.pty.pending` 표본 두 개가 모두 0이었다(제스처 직후 2–6ms와 선택 정착 대기 뒤). 측정 오류는 없었다. 터미널의 mouse mode(`click: false, drag: false, motion: true`)와 `selecting`, `selectionReleases`도 성공·실패 제스처에서 동일했다. 따라서 최초 분기는 자식이 읽은 뒤, 수신한 SGR 시퀀스의 파싱 또는 선택 렌더링(TUI 내부)에 있다. 다음 관측 대상은 실패 제스처에서 mouse-up 뒤 자식 출력이 있는지다.
 
-## 자식 수신 계측 상태
+## PTY 측정 계측 상태
 
 이전 인수인계가 지시했던 Perl 수신기는 실행 전 폐기했으므로 다시 만들지 않는다. 대체 구현은 완료·검증·문서화됐다:
 
-- `sidecars/vt-core`는 열린 세션의 `{operation: "pty.pending"}`에 플랫폼 PTY 입력 큐(`sidecars/vt-core/src/platform/pty.rs`)에서 잰 `{event: "pty.pending", pending}`으로 답하고, 세션이 없는 경우를 포함한 모든 오류 응답에 같은 이벤트 표식을 실어 답이 자기 요청을 밝힌다(`src/protocol.rs`, `tests/serve_contract.rs`).
-- 소유 fixture는 읽지 않는 raw 자식, 드레인하는 자식, 생산 write 경로를 다룬다(`tests/pty_lifecycle.rs`).
-- 진단 빌드는 `plugins/terminal/diagnostics.json`, `ui/terminal-diagnostics.js`, `ui/terminal.js`의 단일 슬롯 resolver로 `terminal.pty.pending`을 노출하며 이 명령은 `{pending}`으로 해소되고 사이드카의 명시적 오류는 거절한다(`test/terminal.test.mjs`, `test/manifest.test.mjs`).
-- `e2e/real/tui-drag.test.mjs`는 제거한 probe 대신 제스처마다 `terminal.pty.pending` 표본 두 개 — 제스처 직후와 선택 정착 대기 뒤 — 와 `ptyPendingError`를 기록한다. 커널 큐는 알림이 없어 이 시점의 샘플이 유일한 관측이며, e2e 소스 감사가 고정 대기 폴링을 거부하므로 25ms 폴링은 제거했고 모든 제스처(최초·직접·회복)가 선택 정착 대기를 사용해 두 번째 표본의 시점을 제한한다.
+- `sidecars/vt-core`는 열린 세션의 `{operation: "pty.pending"}`에 측정 왕복 한 번으로 `{event: "pty.pending", pending, written}`을 답한다(`sidecars/vt-core/src/pty.rs`). `pending`은 마스터가 쓰고 자식이 아직 읽지 않은 입력 바이트 수의 FIONREAD 값이고, `written`은 세션 reader가 지금까지 읽은 자식 출력 누적 바이트 수로 `read_output`에서 출력을 broadcast하기 전에 증가한다. 세션이 없는 경우를 포함한 모든 오류 응답에 같은 이벤트 표식을 실어 답이 자기 요청을 밝힌다(`src/protocol.rs`, `tests/serve_contract.rs`).
+- 소유 fixture는 읽지 않는 raw 자식, 드레인하는 자식, 생산 write 경로, 출력하는 자식의 정확한 출력 바이트 수(`stty -opost; printf MEASURED` → 8)를 다룬다(`tests/pty_lifecycle.rs`).
+- 진단 빌드는 `plugins/terminal/diagnostics.json`, `ui/terminal-diagnostics.js`, `ui/terminal.js`의 단일 슬롯 resolver로 `terminal.pty.pending`을 노출하며 이 명령은 `{pending, written}`으로 해소되고 사이드카의 명시적 오류와 한쪽이라도 빠진 응답을 거절한다(`test/terminal.test.mjs`, `test/manifest.test.mjs`).
+- `e2e/real/tui-drag.test.mjs`는 제거한 probe 대신 제스처마다 두 값을 모두 실은 `terminal.pty.pending` 표본 두 개 — 제스처 직후와 선택 정착 대기 뒤 — 와 `ptyPendingError`를 기록한다. 커널 큐는 알림이 없어 이 시점의 샘플이 유일한 관측이며, e2e 소스 감사가 고정 대기 폴링을 거부하므로 25ms 폴링은 제거했고 모든 제스처(최초·직접·회복)가 선택 정착 대기를 사용해 두 번째 표본의 시점을 제한한다.
 - 계약은 `docs/spec/terminal-runtime.md`(쌍동 `.ko.md`)에 정의돼 있다.
 
-`.3.2`에 남은 것은 측정 자체다. 양쪽 호스트를 재빌드하고 짧은 진단을 실행한 뒤, 기록된 `ptyPending` 표본을 연결된 포인터 추적과 대응해 호스트 PTY 기록 뒤 최초 분기를 특정한다.
+`.3.2`에 남은 것은 `.3.2.2` 측정 자체다. 양쪽 호스트를 재빌드하고 짧은 진단을 다시 실행한 뒤, 제스처별 표본 두 개 사이 `written` 증가를 성공·실패 제스처에서 비교한다. mouse-up 뒤 증가는 자식이 출력을 했다는 뜻이라 입력을 처리해 다시 그렸다는 것이고, `written`이 자라는데도 선택이 없는 실패는 TUI의 선택 상태·렌더링을 가리키며 성공은 자라는데 실패만 자라지 않는다면 입력 해석 자체를 가리킨다.
 
 ## 현재 파일과 증거
 
-- `e2e/real/tui-drag.test.mjs`: 실제 TUI 준비, 3지점 진단 주기, 네이티브 포인터 입력·녹화, 최초·직접·회복 결과 분리 기록, 제스처별 PTY 잔량 표본 두 개.
+- `e2e/real/tui-drag.test.mjs`: 실제 TUI 준비, 3지점 진단 주기, 네이티브 포인터 입력·녹화, 최초·직접·회복 결과 분리 기록, 제스처별 PTY 측정 표본 두 개(`pending`·`written`).
 - `e2e/tui-drag-measurement.mjs`: 새 선택 확인과 release 뒤 대기를 포함한 엄격한 제스처 결과 assertion.
 - `e2e/test/tui-drag-measurement.test.mjs`: 오판 fixture와 새 선택 대기 규칙.
-- `sidecars/vt-core`: `pty.pending` 측정, 프로토콜 오류 표식, 소유 수명주기·serve 계약 검사.
+- `sidecars/vt-core`: `pty.pending` 측정(`pending`·`written`), 프로토콜 오류 표식, 소유 수명주기·serve 계약 검사.
 - `plugins/terminal`: `terminal.pty.pending` 진단 선언, 모듈 연결, 플러그인 검사.
-- `docs/features.md`, `docs/features.ko.md`: 단일 기준 체크리스트. `.3.2.1`은 완료이며 `.3.2`에서 계속하고 완료한 항목은 다시 열지 않는다.
+- `docs/features.md`, `docs/features.ko.md`: 단일 기준 체크리스트. `.3.2.1`은 완료, `.3.2.2`는 진행 중이며 `.3.2`에서 계속하고 완료한 항목은 다시 열지 않는다.
 - `CHANGELOG.md`, `CHANGELOG.ko.md`: 현재까지 확인된 증거 기록. 다음 검증 결과가 생기면 쌍으로 갱신한다.
 - 현재 JSON 증거: `${TMPDIR}/soksak-tui-drag-tauriv2.json`, `${TMPDIR}/soksak-tui-drag-wailsv3.json` (실제 시스템 임시 경로는 `/var/folders/.../T` 아래)은 2026-09-28 재빌드 호스트 진단이며 모든 제스처의 `ptyPending` 표본 두 개를 담고 있다. 프레임 원본은 측정 뒤 제거됐다. 임시 파일이 사라지기 전 필요한 요약을 이 문서로 옮긴다.
 - `docs/operations/tui-drag-handoff.md` 및 `.ko.md`: 이 인수인계 문서. 조사 진행에 따라 영문·한글 내용을 함께 유지한다.
@@ -69,7 +69,7 @@
    make -B tauriv2-build wailsv3-build
    ```
 
-5. 60주기 수락 검사 전에 두 호스트에서 짧은 진단을 실행한다. 2026-09-28에 재빌드 호스트 양쪽에서 완료했다 — 위 9번 참조. 새 빌드나 새 질문이 있을 때만 다시 실행한다. 진단 검사는 한 주기라도 실패하면 의도적으로 nonzero 종료한다. 이를 Red 그대로 보존하고 전체 JSON과 녹화에서 추출한 측정을 본다. Tauri 예시:
+5. 60주기 수락 검사 전에 두 호스트에서 짧은 진단을 실행한다. pending 질문은 2026-09-28에 재빌드 호스트 양쪽에서 완료했다 — 위 9번 참조. `.3.2.2` written 관측은 새 빌드가 필요하므로 재실행 대상이다. 먼저 재빌드(4단계)하고 같은 명령으로 양쪽 호스트의 짧은 진단을 다시 실행한다. 진단 검사는 한 주기라도 실패하면 의도적으로 nonzero 종료한다. 이를 Red 그대로 보존하고 전체 JSON과 녹화에서 추출한 측정을 본다. Tauri 예시:
 
    ```sh
    SOKSAK_APP=tauriv2 \
@@ -79,8 +79,8 @@
    ```
 
    Wails는 `SOKSAK_APP=wailsv3`, `/tmp/soksak-check-tui-repeat-wailsv3`를 사용한다. 검사 전에 일치하는 재빌드 앱을 해당 임시 설정으로 한 번 실행한다. `e2e/app.mjs`는 이미 실행 중인 endpoint에 연결하며 앱을 띄우지 않는다. 사용자 기본 설정은 보존한다. Wails 사용자 경로 프로세스를 잠시 교체해야 하면 정확한 설정 경로를 `SOKSAK_APP=wailsv3`, `SOKSAK_CONFIG_DIR`로 지정해 `node e2e/normal-shutdown.mjs`를 실행한다. 임시 인스턴스를 시작해 검사하고 정상 종료한 뒤 사용자 경로 앱 하나를 복원한다.
-6. JSON 결과를 열어 각 시도를 확인한다. 현재 `inputId`, 연결된 포인터 응답, phase, trace overflow, DOM capture/focus, host/window responder, mouse mode, 입력 전·직후·최대 1000ms 뒤 선택 셀, 녹화 frame 수·간격과 대상 글자 셀 픽셀, `ptyPending` 표본 두 개와 `ptyPendingError`를 확인한다. 두 번째 표본이 0인 것은 자식에 대한 전달은 증명해도 TUI 선택 결과가 아니며, 두 번째 표본이 0이 아니거나 명시적 오류가 나는 것 자체가 발견이다. 기계 비교가 없는 정지화면·영상은 통과 결과가 아니다.
-7. 최초 실패와 최초 성공을 가장 먼저 달라지는 계층에서 비교하되, `ptyPending` 표본으로 호스트 쓰기 성공과 자식 수신을 구분한다. 양쪽 모두 큐가 비면 다음 대상은 TUI 자체 동작이다. 수신된 SGR down/move/up이 TUI 입력 처리 루프에 도달하는지, transcript selection 상태가 변하는지 확인한다. 추적 가능한 진단 명령이나 소유 모듈의 제어 fixture를 쓴다. host write나 DOM pointer만 보고 내부 선택을 추론하지 않는다. TUI transcript/composer source는 측정으로 구분되기 전까지 가설로만 취급한다.
+6. JSON 결과를 열어 각 시도를 확인한다. 현재 `inputId`, 연결된 포인터 응답, phase, trace overflow, DOM capture/focus, host/window responder, mouse mode, 입력 전·직후·최대 1000ms 뒤 선택 셀, 녹화 frame 수·간격과 대상 글자 셀 픽셀, `ptyPending` 표본 두 개(`pending`·`written`)와 `ptyPendingError`를 확인한다. 두 번째 표본의 `pending`이 0인 것은 자식에 대한 전달은 증명해도 TUI 선택 결과가 아니며, 0이 아니거나 명시적 오류가 나는 것 자체가 발견이다. 표본 사이 `written` 증가가 자식 출력 관측이다. 성공·실패 제스처에서 비교한다. 기계 비교가 없는 정지화면·영상은 통과 결과가 아니다.
+7. 최초 실패와 최초 성공을 가장 먼저 달라지는 계층에서 비교하되, `ptyPending` 표본으로 호스트 쓰기 성공, 자식 수신, 자식 출력을 구분한다. 양쪽 모두 큐가 비면 mouse-up 뒤 `written` 증가를 비교한다. `written`이 자라는데도 선택이 없는 실패는 TUI가 입력을 파싱한 뒤(선택 상태·렌더링)에서, 성공은 자라는데 실패만 자라지 않으면 입력 해석 자체에서 분기가 생긴 것이다. 다음 대상은 TUI 자체 동작이다. 수신된 SGR down/move/up이 TUI 입력 처리 루프에 도달하는지, transcript selection 상태가 변하는지 확인한다. 추적 가능한 진단 명령이나 소유 모듈의 제어 fixture를 쓴다. host write나 DOM pointer만 보고 내부 선택을 추론하지 않는다. TUI transcript/composer source는 측정으로 구분되기 전까지 가설로만 취급한다.
 8. 최초 실패 경계를 측정한 뒤 소유 모듈 Red를 추가하고 변경 전 구현에서 실패시킨다. 해당 경계를 수정한 뒤 동일 테스트 Green과 추적 반복을 실행한다. 양쪽 호스트가 모든 주기·화면·입력·추적·Shift 조건을 통과하기 전까지 항목을 진행 상태로 유지한다.
 9. 새 사실이 확인될 때마다 다른 업무로 넘어가기 전에 활성 `.3.2` 체크리스트와 쌍을 이룬 체인지로그를 갱신한다. 다음 작업자가 최신 프로세스나 증거 상태를 모르게 될 때 이 문서도 함께 갱신한다. 구현 후 `make docs-check`, 소유 테스트, 적용되는 workspace 검사, `make boundaries`, `make exposure-check`를 실행한다. 항목과 증거를 마친 뒤에만 커밋한다. 상위 작업은 `.3`–`.6` 완료와 사용자 경로 양쪽 앱의 검증된 실행 파일 복구 전에는 완료가 아니다.
 
@@ -90,5 +90,5 @@
 - 해당 환경변수 없이 실행하면 추적 검사는 호스트별 60주기(속도 2 × 제3지점 3 × 반복 10)를 실행하고 직접 재시도 실패 즉시 전체를 실패시킨다.
 - 기계 JSON은 OS 임시 폴더에 남고 추출이 끝난 원본 영상은 지운다. 임시 JSON이 사라지기 전에 필요한 요약을 이 문서/체크리스트로 옮긴다. 구체적인 측정 이유 없이 큰 영상 원본을 보관하지 않는다.
 - 네이티브 포인터 helper는 실제 HID를 사용하며 신뢰 권한이 필요하다. 권한·앱·상태·응답·프레임 누락을 통과나 skip으로 바꾸지 않는다.
-- `terminal.pty.pending`은 `diagnostics.json`에 선언되어 진단 빌드에만 있으며, 잔량 측정은 전송 수준 증거다. 큐가 비었다는 사실은 자식에 대한 전달은 증명해도 프로그램이 바이트를 해석했음은 증명하지 않는다.
+- `terminal.pty.pending`은 `diagnostics.json`에 선언되어 진단 빌드에만 있다. `pending` 값은 전송 수준 증거로 큐가 비었다는 사실은 자식에 대한 전달은 증명해도 프로그램이 바이트를 해석했음은 증명하지 않는다. `written` 값은 reader가 읽은 자식 출력 누적이며 표본 사이 증가는 mouse-up 뒤 자식 출력의 관측이지 선택 결과는 아니다.
 - 계측은 제품 수정이 아니다. 측정된 제품 수정, Red→Green, 반복 검사, 양쪽 호스트 전체 수락, 사용자에게 연 실행 파일이 검증 빌드와 일치하기 전까지 완료로 보고하지 않는다.

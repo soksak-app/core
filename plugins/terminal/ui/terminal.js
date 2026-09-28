@@ -1011,12 +1011,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       pendingPtyRead = null;
       if (typeof body.error === "string") {
         waiter.reject(new Error(body.error));
-      } else if (!Number.isInteger(body.pending) || body.pending < 0) {
+      } else if (!Number.isInteger(body.pending) || body.pending < 0 || !Number.isInteger(body.written) || body.written < 0) {
         const error = new Error(`invalid pty.pending measurement from sidecar: ${JSON.stringify(body)}`);
         reportInputError(error);
         waiter.reject(error);
       } else {
-        waiter.resolve(body.pending);
+        waiter.resolve({ pending: body.pending, written: body.written });
       }
     } else if (body.event === "clipboard.store") {
       handleClipboardStore(body).catch(reportInputError);
@@ -1314,7 +1314,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     return null;
   });
   await expose.command("terminal.drop", dropFiles);
-  // 진단 측정: 현재 세션에서 마스터가 쓰고 자식이 아직 읽지 않은 입력 바이트 수를 사이드카에 묻는다.
+  // 진단 측정: 현재 세션에서 마스터가 쓰고 자식이 아직 읽지 않은 입력 바이트 수와 reader 가 읽은
+  // 자식 출력 누적 바이트 수를 한 번의 왕복으로 사이드카에 묻는다.
   const readPtyPending = () => new Promise((resolve, reject) => {
     let settled = false;
     const timeout = setTimeout(() => {
@@ -1345,7 +1346,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       reject(error);
     });
   });
-  // 진단 빌드에서는 진단 모듈이 preedit 주입, 입력 기록, PTY 잔량 측정 항목을 이 연산으로 등록한다.
+  // 진단 빌드에서는 진단 모듈이 preedit 주입, 입력 기록, PTY 전송 상태 측정 항목을 이 연산으로 등록한다.
   if (diagnostics) {
     await diagnostics.attach({
       expose,

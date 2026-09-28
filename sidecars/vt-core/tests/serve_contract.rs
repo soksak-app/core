@@ -4,6 +4,7 @@ use soksak_sidecar_vt_core::protocol::{
     serve, Cell, Cursor, CursorShape, DaemonEvent, Engine, EngineEvent, Modes, Screen, SessionPort,
     ShellRequest,
 };
+use soksak_sidecar_vt_core::pty::PtyMeasurement;
 use soksak_sidecar_vt_core::{
     inline_image::{Dimension, InlineImageCommand},
     TerminalTheme,
@@ -365,13 +366,16 @@ impl SessionPort for FakeSessionPort {
         Ok(())
     }
 
-    async fn pending_input(&self, session_id: &str) -> Result<usize, String> {
+    async fn pty_measurement(&self, session_id: &str) -> Result<PtyMeasurement, String> {
         self.calls
             .lock()
             .unwrap()
             .pendings
             .push(session_id.to_string());
-        Ok(7)
+        Ok(PtyMeasurement {
+            pending: 7,
+            written: 123,
+        })
     }
 
     async fn get_events(&self) -> mpsc::Receiver<DaemonEvent> {
@@ -422,9 +426,10 @@ async fn test_a3_input_calls_write() {
     assert_eq!(calls_lock.writes[0].1, b"hi", "write data mismatch");
 }
 
-// pty.pending 은 열린 세션의 잔량을 응답하고 세션이 없으면 명시적 오류를 낸다.
+// pty.pending 은 열린 세션의 읽지 않은 입력 바이트 수와 reader 가 읽은 자식 출력 누적 바이트 수를
+// 함께 응답하고 세션이 없으면 명시적 오류를 낸다.
 #[tokio::test]
-async fn pty_pending_reports_the_session_queue_depth() {
+async fn pty_pending_reports_the_session_transport_measurement() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
@@ -444,8 +449,9 @@ async fn pty_pending_reports_the_session_queue_depth() {
     let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
     let output = String::from_utf8(writer).unwrap();
     assert!(
-        output.contains(r#""body":{"event":"pty.pending","pending":7},"surface":"s1""#),
-        "an open session did not report its pending input count: {output}"
+        output
+            .contains(r#""body":{"event":"pty.pending","pending":7,"written":123},"surface":"s1""#),
+        "an open session did not report its pending input count and read output bytes: {output}"
     );
     assert!(
         output.contains(r#""body":{"error":"Session not open","event":"pty.pending"},"surface":"s2""#),
