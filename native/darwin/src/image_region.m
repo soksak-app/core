@@ -39,6 +39,7 @@
 @property double caretWidth;
 @property double caretHeight;
 @property(copy) NSString *accessibilityText;
+@property(assign) NSView *observedSurface;
 @property BOOL wanted;
 @property BOOL placed;
 @property BOOL closed;
@@ -54,6 +55,7 @@
 - (void)reject:(NSString *)reason;
 - (NSString *)jsonRange:(NSRange)range;
 - (void)surfaceScaleChanged;
+- (void)observeSurface:(NSView *)surface;
 @end
 
 // Logical-surface geometry is owned by the surface host. Weak imports keep
@@ -320,21 +322,26 @@ static BOOL isHangul(unichar ch) {
 }
 
 - (void)viewWillMoveToSuperview:(NSView *)superview {
-    NSView *clipView = self.superview;
-    if (clipView && clipView.superview) {
-        [NSNotificationCenter.defaultCenter removeObserver:self name:NSViewFrameDidChangeNotification object:clipView.superview];
-    }
+    [self observeSurface:nil];
     [super viewWillMoveToSuperview:superview];
+}
+
+- (void)observeSurface:(NSView *)surface {
+    if (self.observedSurface == surface) return;
+    if (self.observedSurface) {
+        [NSNotificationCenter.defaultCenter removeObserver:self name:NSViewFrameDidChangeNotification object:self.observedSurface];
+    }
+    self.observedSurface = surface;
+    if (!surface) return;
+    surface.postsFrameChangedNotifications = YES;
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(surfaceResized:)
+        name:NSViewFrameDidChangeNotification object:surface];
 }
 
 - (void)viewDidMoveToSuperview {
     [super viewDidMoveToSuperview];
     NSView *clipView = self.superview;
-    if (!clipView || !clipView.superview) return;
-    NSView *surface = clipView.superview;
-    surface.postsFrameChangedNotifications = YES;
-    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(surfaceResized:)
-        name:NSViewFrameDidChangeNotification object:surface];
+    [self observeSurface:clipView && clipView.superview ? clipView.superview : nil];
 }
 
 // 레이어 한 단위가 덮는 장치 픽셀 수. 표면을 담은 뷰 계층은 bounds 배율을 따로 가질 수 있으므로
@@ -792,15 +799,10 @@ void sp_region_place(void *handle, double left, double top, double right, double
     view.wanted = visible;
     view.placed = YES;
 
-    // 표면 프레임 변경 알림을 등록한다. viewDidMoveToSuperview에서는 표면이 설정되지 않았을 수 있으므로
-    // 여기서 명시적으로 등록한다.
+    // 표면 프레임 변경 알림을 한 번만 등록한다. 배치는 모든 레이아웃 프레임에서 호출되므로
+    // 등록을 호출부에 직접 두면 같은 표면에 관찰자가 누적된다.
     NSView *clipView = view.superview;
-    if (clipView && clipView.superview) {
-        NSView *surface = clipView.superview;
-        surface.postsFrameChangedNotifications = YES;
-        [NSNotificationCenter.defaultCenter addObserver:view selector:@selector(surfaceResized:)
-            name:NSViewFrameDidChangeNotification object:surface];
-    }
+    [view observeSurface:clipView && clipView.superview ? clipView.superview : nil];
 
     [view applyInsets];
 }

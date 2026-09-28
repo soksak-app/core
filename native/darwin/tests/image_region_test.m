@@ -1,10 +1,22 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <IOSurface/IOSurface.h>
+#import <objc/runtime.h>
 #import "image_region.h"
 #import "webview_geometry.h"
 
 static int failures = 0;
+static NSUInteger countedSurfaceObserverRegistrations = 0;
+static IMP originalAddObserverImplementation = NULL;
+
+static void countSurfaceObserverRegistration(id self, SEL selector, id observer, SEL observerSelector,
+    NSString *name, id object) {
+    if ([name isEqual:NSViewFrameDidChangeNotification] && [observer isKindOfClass:NSClassFromString(@"SPImageRegion")]) {
+        countedSurfaceObserverRegistrations++;
+    }
+    ((void (*)(id, SEL, id, SEL, NSString *, id))originalAddObserverImplementation)(self, selector,
+        observer, observerSelector, name, object);
+}
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
@@ -101,10 +113,24 @@ int main(void) { @autoreleasepool {
     // TEST 1: 방향·크기 - 레이어 속성과 표면 ID 확인
     {
         [collectedEvents removeAllObjects];
+        Class notificationCenterClass = NSNotificationCenter.class;
+        Method addObserverMethod = class_getInstanceMethod(notificationCenterClass,
+            @selector(addObserver:selector:name:object:));
+        originalAddObserverImplementation = method_getImplementation(addObserverMethod);
+        method_setImplementation(addObserverMethod, (IMP)countSurfaceObserverRegistration);
         void *region1 = sp_region_create(surface, "test1", testEvent, NULL);
         check(region1 != NULL, @"TEST 1: region created");
 
+        countedSurfaceObserverRegistrations = 0;
         sp_region_place(region1, 10, 20, 30, 40, true);
+        for (NSUInteger placement = 0; placement < 20; placement++) {
+            sp_region_place(region1, 10 + placement, 20, 30, 40, true);
+        }
+        check(countedSurfaceObserverRegistrations == 1,
+            [NSString stringWithFormat:@"TEST 1: repeated placement keeps one frame observer (got %lu registrations)",
+                (unsigned long)countedSurfaceObserverRegistrations]);
+        method_setImplementation(addObserverMethod, originalAddObserverImplementation);
+        originalAddObserverImplementation = NULL;
         double raster1[3] = {0};
         check(sp_region_raster(region1, raster1), @"TEST 1: placed region reports its native raster");
         unsigned char nonce1[16];

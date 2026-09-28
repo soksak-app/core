@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-14-6-4 native Red/Green: the shared macOS image-region test reproduced 21 `NSViewFrameDidChangeNotification` registrations after one create and 20 placements. `SPImageRegion` now tracks one observed surface, removes the old surface before switching, and reuses that registration from both view attachment and placement; the same test reports one registration. Rebuilt Wails and Tauri both link this shared correction. The full native suite still reports two unrelated display-scale assumptions in TEST 19 and the unplaced-surface check, so the checklist remains open while WebContent reload retention is investigated.
+
 - V5-96-14-6-4 Red measurement update: after listener cleanup, a rebuilt Wails blank window still grew WebContent RSS from 55 MB to 319 MB over 40 reloads; the rebuilt Wails/Tauri fixture reached 514/540 MB after 80 reloads. The remaining retention is in the reload path and the checklist stays open.
 
 - V5-96-14-6-4 implementation update: both runtime bridges now release event-listener registrations on `pagehide`, including registrations whose native unlisten promise resolves after unload. The bounded rebuilt memory repeat remains open.
