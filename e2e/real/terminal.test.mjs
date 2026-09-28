@@ -740,7 +740,7 @@ for (const app of Object.values(APPS)) {
     const { s, surface, session, origin, row } = await prepare(t, app, "SHIFT1003");
     const read = async (id, on, count, off) => {
       await s.run("terminal.input", { bytes: `printf '${on}'; stty raw -echo; printf 'WAIT%s\\r\\n' ${id}; ` +
-        `R=$(dd bs=1 count=${count} 2>/dev/null | od -An -tx1 | tr -d ' \\n'); stty sane; printf '${off}'; printf 'R%s:%s\\n' ${id} "$R"\\r` }, surface);
+        `R=$(dd bs=1 count=${count} 2>/dev/null | od -An -tx1 | tr -d ' \\n'); stty sane; printf '${off}'; printf 'R%s:%s\\n' ${id} "$R"\r` }, surface);
       await readScreenUntil(s, surface, (lines) => lines.some((line) => line.startsWith(`WAIT${id}`)), `${id} did not start reading`);
     };
     const result = async (id) => {
@@ -754,7 +754,9 @@ for (const app of Object.values(APPS)) {
     const from = { ...start, x: start.x - 0.3 * session.cellWidth };
     const end = cellPoint(origin, session, 4, row);
     const to = { ...end, x: end.x + 0.3 * session.cellWidth };
-    const steps = [{ type: "move", ...from, modifiers: ["shift"] }, { type: "down", ...from, modifiers: ["shift"] }];
+    // ?1003 은 누르지 않은 이동도 보고하므로 호버 move 를 넣지 않는다. 읽기가 1바이트이므로 호버의
+    // motion 보고가 그 한 바이트를 먹는다. 누름·끌기·뗌만 남겨 첫 바이트가 Z 임을 증명한다.
+    const steps = [{ type: "down", ...from, modifiers: ["shift"] }];
     for (let i = 1; i <= 8; i++) steps.push({ type: "drag", x: from.x + (to.x - from.x) * i / 8, y: from.y, modifiers: ["shift"] });
     steps.push({ type: "up", ...to, modifiers: ["shift"] });
     post(steps);
@@ -762,7 +764,7 @@ for (const app of Object.values(APPS)) {
       "the sidecar did not answer the release of the Shift drag in ?1003", { surface });
     await s.until("terminal.session", (value) => value.mouse.reported === false && value.mouse.bytes === null,
       "the Shift drag was reported to the ?1003 program", { surface });
-    await s.until("terminal.session", () => pasteboardText() === "SHIFT1003",
+    await s.until("terminal.session", () => pasteboardText() === "SHIFT",
       `the ?1003 Shift drag did not copy the selection (the pasteboard holds ${JSON.stringify(pasteboardText())})`, { surface });
     await s.run("terminal.input", { bytes: "Z" }, surface);
     assert.equal(await result("SHIFT1003"), "Z", "the ?1003 Shift drag was reported to the program");

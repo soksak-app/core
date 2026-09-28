@@ -100,10 +100,10 @@ export async function cellBackgrounds(session, surface, cells) {
   }
 }
 
-/** 강조 색이 없을 때 선택한 칸의 배경. 현재 테마의 --edge 다(docs/spec/terminal-runtime.md). */
+/** 강조 색이 없을 때 선택한 칸의 배경. 현재 테마의 --rail 다(docs/spec/terminal-runtime.md). */
 export async function selectionBackground(session) {
   const { values } = await session.get("core.settings");
-  return THEMES.find((item) => item.name === values.theme)[values.mode].edge;
+  return THEMES.find((item) => item.name === values.theme)[values.mode].rail;
 }
 
 /** 픽셀이 #rrggbb 색과 채널마다 2 이내인지. */

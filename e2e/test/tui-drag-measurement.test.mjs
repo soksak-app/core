@@ -43,16 +43,29 @@ test("the final recorded frame must show every selected text cell", () => {
 });
 test("a direct retry waits for a fresh terminal selection after release", () => {
   const attempt = complete();
-  attempt.selectedBefore = [];
   attempt.selectionWaitMs = 1000;
   attempt.selectionWaitError = "selection status timed out";
   assert.throws(() => assertTuiGesture(attempt), /selection.*status/);
 });
-test("a pre-existing selection cannot satisfy the new gesture", () => {
+test("a gesture that reforms the selection over a pre-existing one passes", () => {
   const attempt = complete();
-  attempt.selectedBefore = ["2:3", "2:4"];
-  attempt.selectionWaitMs = 1;
-  assert.throws(() => assertTuiGesture(attempt), /before the drag/);
+  attempt.selectionWaitMs = 1000;
+  attempt.selectionByFrame = [
+    { time: 0, selectedCells: ["2:3", "2:4"] },
+    { time: 40, selectedCells: [] },
+    { time: 80, selectedCells: ["2:3"] },
+    { time: 120, selectedCells: ["2:3", "2:4"] },
+  ];
+  assert.doesNotThrow(() => assertTuiGesture(attempt));
+});
+test("a recording that never forms the selection cannot pass", () => {
+  const attempt = complete();
+  attempt.selectionWaitMs = 1000;
+  attempt.selectionByFrame = [
+    { time: 0, selectedCells: ["2:3", "2:4"] },
+    { time: 120, selectedCells: ["2:3", "2:4"] },
+  ];
+  assert.throws(() => assertTuiGesture(attempt), /forming/);
 });
 test("incomplete input or capture evidence fails", () => {
   for (const change of [

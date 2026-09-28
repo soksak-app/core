@@ -86,6 +86,7 @@ test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUIL
 	@$(BUILD)/webview_input_test --baseline
 	@$(BUILD)/webview_input_test
 	@$(BUILD)/document_view_test --activation
+	@$(BUILD)/image_region_test --activation
 	@$(BUILD)/image_region_ime_test
 
 repeat: $(BUILD)/$(TEST)

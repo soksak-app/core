@@ -6,7 +6,7 @@ import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 import { APPS, open, fresh } from "../app.mjs";
-import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
+import { ensureTerminals, readScreenUntil, textLines } from "../terminal-screen.mjs";
 import { frames, pixel, readFrame } from "../frame.mjs";
 import { assertTuiGesture } from "../tui-drag-measurement.mjs";
 import { bringFront, click, post, requireTrusted, screenCenter } from "./hid.mjs";
@@ -34,6 +34,18 @@ for (const app of Object.values(APPS)) {
     const point = (col, line) => ({ x: origin.x + col * session.cellWidth, y: origin.y + (line + 0.5) * session.cellHeight });
     await s.run("terminal.input", { bytes: "tui-program\r" }, surface);
     const lines = await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("Ask TUI")), "TUI prompt did not appear");
+    // TUI 는 사용 중 버전보다 새 릴리스가 있으면 시작할 때 갱신 모달을 프롬프트 뒤에 비동기로
+    // 띄운다. 모달이 입력을 소유하는 동안 transcript 포인터 제스처가 설계상 죽으므로, 모달이
+    // 안내하는 esc 로 닫고 닫힘을 확인한다. 유한 시간 안에 모달이 오지 않으면 그대로 진행한다.
+    try {
+      await s.until("terminal.screen", (rows) => textLines({ lines: rows }).some((line) => line.includes("Update available")),
+        "no TUI update notice appeared", { surface, timeout: 4000 });
+      await s.run("terminal.input", { bytes: "\x1b" }, surface);
+      await readScreenUntil(s, surface, (rows) => !rows.some((line) => line.includes("Update available")),
+        "TUI update notice did not close");
+    } catch (error) {
+      if (!String(error).includes("no TUI update notice appeared")) throw error;
+    }
     const row = lines.findIndex((line) => line.includes("TUI header"));
     assert.ok(row >= 0, "TUI output header is missing");
     const text = "header";
@@ -117,7 +129,10 @@ for (const app of Object.values(APPS)) {
         }
         trace = await s.run("terminal.pointer.trace", { action: "stop" }, surface);
         const displayed = await s.presented();
-        await s.request("diagnostics.capture.stop", { after: displayed.displayed });
+        // 선택 상태의 확정과 그 칠의 래스터 제시는 별개다. 마지막 제시 시각만 넘기면 아직 칠이
+        // 스트림에 못 미친 프레임에서 녹화가 멈출 수 있으므로 제시 간격과 합성 지연을 덮는 여유를
+        // 더해 녹화 마지막 프레임이 확정된 선택을 담게 한다.
+        await s.request("diagnostics.capture.stop", { after: displayed.displayed + 0.25 });
         stopped = true;
         const files = frames(recording.frames);
         const samples = files.map((file) => {

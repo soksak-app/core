@@ -138,6 +138,23 @@ static BOOL isHangul(unichar ch) {
         || (ch >= 0xAC00 && ch <= 0xD7A3) || (ch >= 0xD7B0 && ch <= 0xD7FF);
 }
 
+// 마우스 눌림은 hitTest 가 nil 이므로 이 뷰를 지나 페이지 웹뷰에 적중하고, NSWindow 가 적중 뷰를
+// 첫 응답자로 지정하면서 이 뷰를 resign 시킨다. 페이지의 포커스 명령이 영역으로 되돌리는 이 왕복은
+// 터미널의 초점 변화가 아니다. 눌림 지점이 이 뷰 안일 때만 참이다.
+static BOOL spRegionResignIsPassThroughPress(SPImageRegion *view) {
+    NSEvent *event = NSApp.currentEvent;
+    if (!event || event.window != view.window) return NO;
+    switch (event.type) {
+        case NSEventTypeLeftMouseDown:
+        case NSEventTypeRightMouseDown:
+        case NSEventTypeOtherMouseDown:
+            break;
+        default:
+            return NO;
+    }
+    return NSPointInRect([view convertPoint:event.locationInWindow fromView:nil], view.bounds);
+}
+
 @implementation SPImageRegion
 
 - (id)initWithFrame:(NSRect)frame {
@@ -392,6 +409,17 @@ static BOOL isHangul(unichar ch) {
 - (BOOL)resignFirstResponder {
     [self commitPending];
     BOOL result = [super resignFirstResponder];
+    if (result && self.hasFocus && spRegionResignIsPassThroughPress(self)) {
+        // 눌림 통과로 웹뷰가 첫 응답자가 된 동안 초점 보고를 하지 않는다. 보고가 없으면 페이지의
+        // 포커스 명령도 이미 초점이 있다고 믿고 무연산으로 돌아가므로, 이 뷰가 응답자를 직접
+        // 되찾는다. 키보드 입력이 페이지로 색지 않도록 같은 이벤트 처리 뒤 즉시 실행한다.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!self.closed && self.window && self.window.firstResponder != self && self.hasFocus) {
+                [self.window makeFirstResponder:self];
+            }
+        });
+        return result;
+    }
     if (result && self.hasFocus) {
         self.hasFocus = NO;
         [self report:"{\"type\":\"focus\",\"focused\":false}"];

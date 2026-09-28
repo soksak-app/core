@@ -91,8 +91,17 @@ static IOSurfaceRef createColoredGlobalSurface(size_t width, size_t height, unsi
     return surface;
 }
 
-int main(void) { @autoreleasepool {
+void sp_test_declare_activation(void);
+
+int main(int argc, char **argv) { @autoreleasepool {
+    // --activation 은 앱을 활성화해 OS 이벤트 대기열의 눌림이 웹뷰를 첫 응답자로 만드는지 검사한다.
+    // make test-activation 만 사용한다.
+    BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
+    if (activation) sp_test_declare_activation();
     [NSApplication sharedApplication];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
+    [NSApp finishLaunching];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -1191,6 +1200,77 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"unplaced surface: placing the surface gives the region a %.0fx%.0f raster (got %.0fx%.0f)",
                 expectedWidth, expectedHeight, raster[0], raster[1]]);
         sp_region_close(region);
+    }
+
+    // 영역 프레임 안의 포인터 눌림은 터미널 초점 상실로 보고되지 않는다. 포인터는 이 뷰를 뚫고
+    // 페이지로 가므로(hitTest 가 nil) WebKit 이 눌린 웹뷰를 첫 응답자로 만들고, 페이지의 포커스
+    // 명령이 영역으로 되돌린다. 그 왕복의 resign 을 ?1004 자식에게 보고하면 자식이 진행 중인
+    // 드래그를 취소하므로, 눌림 지점이 영역 안일 때의 resign 은 초점 변화가 아니다.
+    if (activation) {
+        void *region15 = sp_region_create(surface, "test15", testEvent, NULL);
+        sp_region_place(region15, 100, 150, 100, 50, true);
+        sp_region_focus(region15);
+        check(window.firstResponder == (NSResponder *)region15,
+            @"press focus: the focused region starts as the window first responder");
+        [collectedEvents removeAllObjects];
+
+        [NSApp activateIgnoringOtherApps:YES];
+        [window makeKeyAndOrderFront:nil];
+        NSView *regionView15 = (NSView *)region15;
+        NSRect frame15 = [regionView15 convertRect:regionView15.bounds toView:nil];
+        NSPoint inside15 = NSMakePoint(NSMidX(frame15), NSMidY(frame15));
+        NSEvent *down15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:inside15
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:1 clickCount:1 pressure:1];
+        NSEvent *up15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:inside15
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:1 clickCount:1 pressure:0];
+        [NSApp postEvent:down15 atStart:NO];
+        [NSApp postEvent:up15 atStart:NO];
+        NSDate *drain15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
+        while ([drain15 timeIntervalSinceNow] > 0) {
+            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]
+                inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (pending) [NSApp sendEvent:pending];
+        }
+
+        BOOL reportedLoss15 = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound &&
+                [eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) reportedLoss15 = YES;
+        }
+        check(!reportedLoss15,
+            [NSString stringWithFormat:@"press focus: a pointer press inside the region frame does not report a focus loss (events %@)",
+                collectedEvents]);
+        check(window.firstResponder == (NSResponder *)region15,
+            @"press focus: the pass-through press does not leave the page webview holding the terminal responder");
+
+        // 영역 밖 눌림은 실제 초점 이동이므로 그대로 보고한다. 과억제 방지 대조군이다.
+        [collectedEvents removeAllObjects];
+        NSPoint outside15 = NSMinX(frame15) - 40 > 0 ? NSMakePoint(NSMinX(frame15) - 40, NSMidY(frame15))
+            : NSMakePoint(NSMaxX(frame15) + 40, NSMidY(frame15));
+        NSEvent *downOut15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:outside15
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:2 clickCount:1 pressure:1];
+        NSEvent *upOut15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:outside15
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:2 clickCount:1 pressure:0];
+        [NSApp postEvent:downOut15 atStart:NO];
+        [NSApp postEvent:upOut15 atStart:NO];
+        NSDate *drainOut15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
+        while ([drainOut15 timeIntervalSinceNow] > 0) {
+            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]
+                inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (pending) [NSApp sendEvent:pending];
+        }
+        BOOL reportedOutsideLoss15 = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound &&
+                [eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) reportedOutsideLoss15 = YES;
+        }
+        check(reportedOutsideLoss15,
+            @"press focus: a pointer press outside the region frame still reports the focus loss");
+        sp_region_close(region15);
     }
 
     [window close];

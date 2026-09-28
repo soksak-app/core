@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 // 기록된 새 입력만 판정한다. 회복 시도의 성공은 앞선 실패의 증거를 바꾸지 않는다.
 export function assertTuiGesture({ expected, events, visual, capture, overflow, dom, pointerStart, pointerEnd, waitError,
-  selectedBefore, selectionWaitError, selectionWaitMs }) {
+  selectionByFrame, selectionWaitError, selectionWaitMs }) {
   assert.equal(overflow, false, "pointer trace overflow or missing trace status");
   assert.equal(waitError, undefined, `pointer result wait failed: ${waitError}`);
   assert.ok(Array.isArray(dom) && dom.length >= 2 && pointerStart && pointerEnd, "missing pointer DOM evidence");
@@ -38,9 +38,16 @@ export function assertTuiGesture({ expected, events, visual, capture, overflow, 
   assert.deepEqual(visual.selectedCells, visual.expectedCells, "visible selection differs from expected cells");
   assert.deepEqual(visual.recordedCells, visual.expectedCells, "recorded selection differs from expected cells");
   if (selectionWaitMs !== undefined) {
-    assert.deepEqual(selectedBefore, [], "the expected selection was already visible before the drag");
     assert.equal(selectionWaitError, undefined, `selection status did not arrive: ${selectionWaitError}`);
     assert.ok(selectionWaitMs <= 1050, `selection appeared after ${selectionWaitMs}ms`);
+    // 선택이 다음 제스처까지 남는 것은 올바른 동작이므로 사전 무결결 대신, 이 녹화 안에서 선택이
+    // 형성됐음을 요구한다. 드래그의 down 은 이전 선택을 무너뜨리고 새 선택을 만들므로 완전한 선택
+    // 프레임보다 앞에 덜 선택된 프레임이 반드시 잡힌다. 처음부터 끝까지 같은 선택만 보이는 녹화는
+    // 이 제스처의 결과가 아니다.
+    const counts = (selectionByFrame ?? []).map((frame) => frame.selectedCells.length);
+    const want = visual.expectedCells.length;
+    assert.ok(counts.some((count, index) => count < want && counts.lastIndexOf(want) > index),
+      "the recording never shows the selection forming during the gesture");
   }
   assert.ok(capture && [capture.first, capture.last, capture.inputStart, capture.inputEnd,
     capture.frameCount, capture.maxGap].every(Number.isFinite), "missing capture evidence");
