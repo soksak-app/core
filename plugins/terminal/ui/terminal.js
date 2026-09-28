@@ -723,7 +723,14 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     selectionStarted = false;
     session = { ...session, selecting: false };
     changed("session");
-    view.releasePointerCapture(event.pointerId);
+    try {
+      view.releasePointerCapture(event.pointerId);
+    } catch (error) {
+      // The browser may have already released capture before this boundary.
+      // Keep the failure observable, but do not abandon the terminal release
+      // sequence or leave the next gesture dependent on this call.
+      reportInputError(error);
+    }
     event.preventDefault();
     // 움직이지 않은 클릭은 누른 칸에서 빈 선택을 시작하고 끝낸다. 빈 선택의 뗌은 이전 선택을 지운다.
     if (!started) queuePointerInput({ operation: "selection.start", ...start });

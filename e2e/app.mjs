@@ -24,8 +24,8 @@ if (!appNames.every((name) => ["wailsv3", "tauriv2"].includes(name))) {
 export const APPS = Object.fromEntries(appNames.map((name) => [name, {
   name,
   binary: built(`soksak-${name}`),
-  // default: window checks use disposable temporary endpoint directories unless a run supplies an isolated root.
-  configDir: join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), `soksak-check-${name}`),
+  // default: window checks use disposable temporary endpoint directories unless a run supplies an explicit config directory or isolated root.
+  configDir: process.env.SOKSAK_CONFIG_DIR ?? join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), `soksak-check-${name}`),
 }]));
 
 /** 실행 중인 엔드포인트가 현재 빌드보다 오래되지 않았는지 검증한다. */

@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- Follow-up V5-96-14-6-8 opened: the completed capture-ownership correction did not test idempotence across repeated card focus, TUI return, and prompt-click transitions. The new Red requires the same drag sequence to record active/key/occluded state, pointer capture, mouse phase, PTY bytes, selection, and session errors on every attempt; no endpoint pass is accepted as evidence for the user-reported intermittent failure.
+- V5-96-14-6-8 Green: a tracked release-capture Red reproduced `releasePointerCapture()` throwing after capture was already lost, which aborted the release sequence. The terminal now reports that error while continuing `mouse.up`; the repeated focus case passes 5/5 on rebuilt Wails and 5/5 on rebuilt Tauri with complete SGR bytes and no session errors. The plugin suite passes 112/112.
+
+
 - V5-96-14-6-6 Green: after moving pointer capture establishment before selection state publication, the terminal suite passes 111/111. The tracked endpoint selection/render/copy case passes 3/3 on rebuilt Wails and 3/3 on rebuilt Tauri; the capture-loss case permits the next gesture. The earlier inactive-window observation remains recorded as the cause of motion-only input.
 
 - V5-96-14-6-7 Red/Green: equal-state restart disproved a host-specific idle leak. Both rebuilt hosts now report zero pane cards and surfaces, one WebView, and zero native regions; Tauri RSS is 113,552KB and Wails RSS is 111,952KB. The earlier Wails RSS was from retained layout state with six cards, ten tabs, six surfaces, three WebViews, and three native regions.

@@ -71,7 +71,7 @@ class FakeTextEncoder {
 /**
  * 가짜 view 구현.
  */
-function createFakeView({ captureError = null } = {}) {
+function createFakeView({ captureError = null, releaseError = null } = {}) {
   const listeners = new Map();
   const parent = {
     bubbleCount: 0,
@@ -89,7 +89,7 @@ function createFakeView({ captureError = null } = {}) {
     getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 600 }; },
     style: {},
     setPointerCapture() { if (captureError) throw captureError; },
-    releasePointerCapture() {},
+    releasePointerCapture() { if (releaseError) throw releaseError; },
     dataset: {},
     parentElement: parent,
     addEventListener(event, handler) { if (!listeners.has(event)) listeners.set(event, []); listeners.get(event).push(handler); },
@@ -1275,6 +1275,34 @@ test("a lost pointer capture resets terminal drag ownership for the next card fo
   assert.deepEqual(mouse.map(({ body }) => `${body.phase}.${body.pressed}`), [
     "down.true", "move.true", "up.false", "down.true", "move.true", "up.false",
   ]);
+});
+
+test("a lost capture that rejects release still permits the next idempotent drag", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const view = createFakeView({ releaseError: new Error("capture already lost") });
+  await startTerminal({
+    view, attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+
+  view._trigger("pointerdown", { button: 0, pointerId: 4, clientX: 10, clientY: 12 });
+  view._trigger("pointermove", { pointerId: 4, clientX: 42, clientY: 12 });
+  assert.doesNotThrow(() => view._trigger("lostpointercapture", { pointerId: 4, clientX: 42, clientY: 12 }));
+  view._trigger("pointerdown", { button: 0, pointerId: 5, clientX: 18, clientY: 20 });
+  view._trigger("pointermove", { pointerId: 5, clientX: 50, clientY: 20 });
+  view._trigger("pointerup", { pointerId: 5, clientX: 50, clientY: 20 });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const mouse = fakeSidecar.getMessages().filter(({ body }) => body.operation === "mouse");
+  assert.deepEqual(mouse.map(({ body }) => `${body.phase}.${body.pressed}`), [
+    "down.true", "move.true", "up.false", "down.true", "move.true", "up.false",
+  ]);
+  assert.equal(fakeExpose.getStatus("terminal.session").readFn().selecting, false);
 });
 
 test("a drag that leaves the view selects to the nearest edge point", async () => {

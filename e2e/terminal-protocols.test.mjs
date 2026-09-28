@@ -313,4 +313,51 @@ for (const app of Object.values(APPS)) {
       await s.run("terminal.focus", {}, surface);
     }), "\x1b[O\x1b[I", "?1004 focus report");
   });
+
+  test(`${app.name}: repeated card focus keeps terminal drag PTY ownership idempotent`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const terminals = await ensureTerminals(s, 1);
+    s.cleanup(() => closeTerminalTabs(s));
+    const [first] = terminals;
+    const surface = first.surface;
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "first terminal prompt missing");
+    await s.run("terminal.input", { bytes: SETUP }, surface);
+    const view = await s.rect("terminal.view", undefined, surface);
+    const metrics = await s.get("terminal.session", surface);
+    const point = (col, row) => ({
+      x: view.document.x + view.x + (col + 0.5) * metrics.cellWidth,
+      y: view.document.y + view.y + (row + 0.5) * metrics.cellHeight,
+    });
+    const from = point(8, 4);
+    const to = point(12, 4);
+    const grid = await s.get("core.grid");
+    const card = (surfaceId) => grid.cards.find((item) => item.tabs.some((tab) => tab.id === surfaceId))?.id;
+    const firstCard = card(first.surface);
+    const secondCard = grid.cards.find((item) => item.id !== firstCard && item.id !== "left")?.id;
+    assert.ok(firstCard && secondCard, `two cards are required for the focus sequence: ${JSON.stringify(grid)}`);
+    assert.ok(firstCard && secondCard, "two terminal cards are required for the focus sequence");
+    const expected = "\x1b[<0;9;5M\x1b[<32;13;5M\x1b[<0;13;5m";
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const bytes = await report(s, surface, "\\033[?1003h\\033[?1006h", expected.length,
+        "\\033[?1003l\\033[?1006l", async () => {
+        await s.run("core.card.focus", { card: secondCard });
+        await s.until("core.grid", (value) => value.cards.some((item) => item.id === secondCard && item.focused),
+          `attempt ${attempt + 1}: second card did not focus`);
+        await s.run("core.card.focus", { card: firstCard });
+        await s.until("core.grid", (value) => value.cards.some((item) => item.id === firstCard && item.focused),
+          `attempt ${attempt + 1}: first card did not refocus`);
+        await s.run("terminal.focus", {}, surface);
+        await s.until("terminal.cursor", (value) => value.focused === true,
+          `attempt ${attempt + 1}: first terminal did not regain focus`, { surface });
+        await s.pointer(from.x, from.y, "down", { button: "left" });
+        await s.pointer(to.x, to.y, "drag", { button: "left" });
+        await s.pointer(to.x, to.y, "up", { button: "left" });
+      });
+      assert.equal(bytes, expected, `attempt ${attempt + 1}: drag PTY bytes were missing or reordered`);
+      const state = await s.get("terminal.session", surface);
+      assert.equal(state.error, undefined, `attempt ${attempt + 1}: terminal session error ${state.error}`);
+    }
+  });
 }
