@@ -22,6 +22,7 @@
 
 - V5-96-14-6-1을 완료했다. 다시 빌드한 Tauri의 추적 테스트 `a real Shift drag selects while ?1003 motion reporting is on`이 클립보드·PTY 검증과 함께 통과했다. 현재 사용자 창에서 좌표를 정확히 매핑한 일반 드래그는 PTY 바이트를 만들고 클립보드를 그대로 두었으며, Shift 드래그는 정확히 `TUI header`를 복사했다. 두 측정 모두 `active:true`, `key:true`, `occluded:false`였다. 일반 드래그 캡처는 완전한 130프레임, 최대 간격 23.69ms였다.
 - 요구사항을 바로잡아 V5-96-14-6-2를 시작했다. `?1003`을 켠 TUI의 일반 드래그는 PTY에 도달해야 하며 텍스트 선택은 대체 요구사항이 아니다. 새 Red는 페이지의 마우스 상태만이 아니라 현재 Tauri·Wails 창에서 PTY가 받은 정확한 SGR 바이트를 요구한다.
+- V5-96-14-6-2의 현재 Red: 활성 현재 Tauri TUI 영역은 실제 HID 뒤 `phase:up`, `reported:true`, `written:true`, SGR 바이트를 기록했다. 활성 현재 Wails TUI 영역은 `motion:true`였지만 같은 드래그 뒤 `phase:move`, `reported:false`, `written:false`, `bytes:null`로 남았고 이동만 도착했다. 양 호스트 endpoint 주입 테스트는 통과하므로 이 Wails 네이티브 HID 경로를 검사하지 않는다.
 
 - 사용자가 Tauri TUI의 키보드 입력이 불완전하다고 보고해 V5-96-14-7을 시작했다. 이전 완료 처리는 현재 창의 이 동작을 검사하지 않았다.
 - V5-96-14-7을 완료했다. 이동한 현재 Tauri endpoint 창과 터미널 영역을 화면 좌표로 다시 매핑했고 `active:true`, `key:true`, `occluded:false`, 터미널 초점 `true`를 기록했다. IME trace에는 native `Backspace`와 `x` 입력이 순서대로 기록됐고, 명시적 화면 읽기에서 `› x`와 프롬프트 복원을 확인했다. 재빌드한 추적 키보드 테스트가 4/4 통과했으며 편집·실행·중단과 브라우저 탭·리사이즈·모달 닫기·프로젝트 복귀·윈도우 전환 뒤 초점 유지를 검증했다. 앞선 실패 보고는 창 이동 뒤 오래된 좌표를 사용한 잘못된 관측이어서 제품 실패의 근거가 아니었다.
