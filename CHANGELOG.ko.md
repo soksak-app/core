@@ -23,6 +23,7 @@
 - V5-96-14-6-1을 완료했다. 다시 빌드한 Tauri의 추적 테스트 `a real Shift drag selects while ?1003 motion reporting is on`이 클립보드·PTY 검증과 함께 통과했다. 현재 사용자 창에서 좌표를 정확히 매핑한 일반 드래그는 PTY 바이트를 만들고 클립보드를 그대로 두었으며, Shift 드래그는 정확히 `TUI header`를 복사했다. 두 측정 모두 `active:true`, `key:true`, `occluded:false`였다. 일반 드래그 캡처는 완전한 130프레임, 최대 간격 23.69ms였다.
 
 - 사용자가 Tauri TUI의 키보드 입력이 불완전하다고 보고해 V5-96-14-7을 시작했다. 이전 완료 처리는 현재 창의 이 동작을 검사하지 않았다.
+- V5-96-14-7을 완료했다. 이동한 현재 Tauri endpoint 창과 터미널 영역을 화면 좌표로 다시 매핑했고 `active:true`, `key:true`, `occluded:false`, 터미널 초점 `true`를 기록했다. IME trace에는 native `Backspace`와 `x` 입력이 순서대로 기록됐고, 명시적 화면 읽기에서 `› x`와 프롬프트 복원을 확인했다. 재빌드한 추적 키보드 테스트가 4/4 통과했으며 편집·실행·중단과 브라우저 탭·리사이즈·모달 닫기·프로젝트 복귀·윈도우 전환 뒤 초점 유지를 검증했다. 앞선 실패 보고는 창 이동 뒤 오래된 좌표를 사용한 잘못된 관측이어서 제품 실패의 근거가 아니었다.
 
 - V5-96-14와 V5-96-14-1을 완료했다. 터미널 계약에 맞게 Red 기준을 정정했다. 마우스 보고 TUI가 일반 드래그를 소유하고 Shift 드래그가 텍스트를 선택한다. 재빌드한 Tauri와 Wails 실제 HID 검사는 `?1003` SGR 이동 바이트와 `?1002` Shift 선택을 관측했고 `SHIFT`를 복사하면서 PTY에 드래그 바이트를 보내지 않았다. 추적 가능한 `normal-shutdown` 대상은 이제 `host.quit` 전에 터미널 세션을 준비한다. 재빌드 Tauri는 endpoint 64ms·종료 32ms, Wails는 endpoint 64ms·종료 38ms였고 새 Tauri 진단 보고서는 생성되지 않았다.
 
