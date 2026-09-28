@@ -13,6 +13,7 @@ use crate::documents;
 use crate::exposure::{self, Changed, Forward, Register};
 use crate::images;
 use crate::link;
+use crate::menu;
 use crate::modals::{self, OverlayRequest, PlaceRequest, RevisedContent, UpdateRequest};
 use crate::projects::{self, CreateProject, Folder};
 use crate::shapes::{self, ShapeRequest};
@@ -52,6 +53,7 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         sidecars_retain,
         theme,
         set_theme,
+        set_menu_language,
         report,
         exposure_reply,
         exposure_changed,
@@ -283,6 +285,13 @@ fn theme(window: Window) -> Result<Theme, String> {
 #[tauri::command]
 fn set_theme(window: Window, theme: Theme) -> Result<(), String> {
     theme::set(&window, theme)
+}
+
+/// 페이지가 유효 메뉴 언어를 알린다. 표의 언어가 아니면 명시적인 오류이고 언어가 같으면
+/// 메뉴를 다시 만들지 않는다(docs/spec/host-contract.md 의 Application menu).
+#[tauri::command]
+fn set_menu_language(app: AppHandle, language: String) -> Result<(), String> {
+    menu::set_language(&app, &language)
 }
 
 /// 페이지 자체 검사가 보낸 한 줄을 표준 오류와 창의 기록을 요청한 연결에 보낸다. 페이지에는 쓸

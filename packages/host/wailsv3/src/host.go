@@ -122,9 +122,6 @@ func Run(assets fs.FS, options Options) error {
 				log.Printf("local endpoint: %v", err)
 			}
 		},
-		KeyBindings: map[string]func(application.Window){
-			"CmdOrCtrl+Shift+N": func(application.Window) { go host.WindowNew() },
-		},
 	})
 	// 클라이언트는 endpoint.json 을 읽자마자 첫 창에 요청하므로 창을 등록한 뒤 쓴다. 쓰지 못하면
 	// 애플리케이션을 끝내고 그 오류를 반환한다.
@@ -142,7 +139,16 @@ func Run(assets fs.FS, options Options) error {
 			app.Quit()
 		}
 	})
-	app.Menu.Set(ApplicationMenu())
+	// 메뉴의 새 창 항목은 Host.WindowNew 로 창을 연다. 초기 메뉴 언어는 시스템 선호 언어를 계약
+	// 표의 언어에 대응한 값이고 페이지가 설정 언어를 알리면 SetMenuLanguage 가 같은 표로 메뉴를
+	// 다시 만든다(docs/spec/host-contract.md 의 Application menu).
+	menuWindowNew = host.WindowNew
+	assignMenuLanguage(InitialMenuLanguage())
+	menu, menuFailure := ApplicationMenu()
+	if menuFailure != nil {
+		return menuFailure
+	}
+	app.Menu.Set(menu)
 	setupDockMenu(host)
 	main := host.newWindow("main", "/")
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {

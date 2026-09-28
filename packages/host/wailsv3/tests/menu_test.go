@@ -22,21 +22,29 @@ func labels(menu *application.Menu) []string {
 	return out
 }
 
+// submenuOf 는 제목이 title 인 하위 메뉴를 찾는다.
+func submenuOf(menu *application.Menu, title string) *application.Menu {
+	for index := 0; menu.ItemAt(index) != nil; index++ {
+		if item := menu.ItemAt(index); item.Label() == title {
+			return item.GetSubmenu()
+		}
+	}
+	return nil
+}
+
 // contract: menu.application.view-has-full-screen-and-text-size
 func TestApplicationMenuViewHasFullScreenAndTextSize(t *testing.T) {
 	// 앱 메뉴의 About 항목은 애플리케이션 이름을 읽으므로 실행하지 않는 애플리케이션을 만든다.
 	application.New(application.Options{Name: "soksak-menu-test"})
-	menu := host.ApplicationMenu()
-	var view *application.Menu
-	for index := 0; menu.ItemAt(index) != nil; index++ {
-		if item := menu.ItemAt(index); item.Label() == "View" {
-			view = item.GetSubmenu()
-		}
+	menu, err := host.ApplicationMenuFor("en")
+	if err != nil {
+		t.Fatal(err)
 	}
+	view := submenuOf(menu, "View")
 	if view == nil {
 		t.Fatalf("the application menu has no View menu: %v", labels(menu))
 	}
-	want := []string{"Toggle Full Screen", "글자 크게", "글자 작게", "글자 기본 크기"}
+	want := []string{"Toggle Full Screen", "Bigger Text", "Smaller Text", "Default Text Size"}
 	if got := labels(view); !slices.Equal(got, want) {
 		t.Fatalf("View menu items = %v, want %v", got, want)
 	}
@@ -52,5 +60,44 @@ func TestApplicationMenuViewHasFullScreenAndTextSize(t *testing.T) {
 		case "Zoom In", "Zoom Out", "Actual Size", "Reload", "Force Reload":
 			t.Fatalf("the application menu has %q, which zooms or reloads the whole webview", label)
 		}
+	}
+}
+
+// contract: menu.application.view-has-full-screen-and-text-size
+func TestApplicationMenuLanguages(t *testing.T) {
+	application.New(application.Options{Name: "soksak-menu-test"})
+	// 각 언어의 file·edit·view 하위 메뉴 제목과 항목 순서는 계약 표와 같다.
+	want := []struct {
+		language string
+		menu     string
+		items    []string
+	}{
+		{"ko", "파일", []string{"윈도우 닫기"}},
+		{"ko", "편집", []string{"실행 취소", "다시 실행", "잘라내기", "복사", "붙여넣기", "모두 선택"}},
+		{"ko", "보기", []string{"전체 화면으로 전환", "글자 크게", "글자 작게", "글자 기본 크기"}},
+		{"en", "File", []string{"Close Window"}},
+		{"en", "Edit", []string{"Undo", "Redo", "Cut", "Copy", "Paste", "Select All"}},
+		{"en", "View", []string{"Toggle Full Screen", "Bigger Text", "Smaller Text", "Default Text Size"}},
+	}
+	menus := map[string]*application.Menu{}
+	for _, language := range []string{"ko", "en"} {
+		menu, err := host.ApplicationMenuFor(language)
+		if err != nil {
+			t.Fatalf("%s: %v", language, err)
+		}
+		menus[language] = menu
+	}
+	for _, expected := range want {
+		submenu := submenuOf(menus[expected.language], expected.menu)
+		if submenu == nil {
+			t.Fatalf("%s menu has no %s submenu: %v", expected.language, expected.menu, labels(menus[expected.language]))
+		}
+		if got := labels(submenu); !slices.Equal(got, expected.items) {
+			t.Fatalf("%s %s items = %v, want %v", expected.language, expected.menu, got, expected.items)
+		}
+	}
+	// 계약 표에 없는 언어는 메뉴를 만들지 않는다.
+	if _, err := host.ApplicationMenuFor("fr"); err == nil {
+		t.Fatal("an unknown menu language built a menu")
 	}
 }

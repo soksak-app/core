@@ -211,6 +211,18 @@ static NSString *menuKey(NSMenuItem *item) {
     return key;
 }
 
+// 시스템 선호 언어의 주 태그(예: "ko", "ja"). 어떤 언어가 지원되는지는 호출자의 표가 정하고
+// 표에 없으면 호출자가 기본 언어를 쓴다. 반환값은 sp_facts_free 로 해제한다. 페이지가 설정 언어를
+// 보내기 전의 초기 메뉴가 시스템 언어를 따르게 한다(docs/spec/host-contract.md 의 Application menu).
+char *sp_preferred_language(void) {
+    NSArray<NSString *> *languages = [[NSUserDefaults standardUserDefaults] stringArrayForKey:@"AppleLanguages"];
+    NSString *first = languages.firstObject ?: NSLocale.preferredLanguages.firstObject;
+    NSString *tag = [[first componentsSeparatedByString:@"-"] firstObject].lowercaseString;
+    const char *utf8 = tag.UTF8String ?: "en";
+    char *copy = strdup(utf8);
+    return copy;
+}
+
 char *sp_menu_items(void) {
     NSMutableArray *menus = [NSMutableArray array];
     for (NSMenuItem *top in NSApp.mainMenu.itemArray) {

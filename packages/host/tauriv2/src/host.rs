@@ -25,6 +25,7 @@ pub mod endpoint;
 pub mod exposure;
 pub mod images;
 pub mod link;
+pub mod menu;
 mod modals;
 pub mod notifications;
 #[path = "platform/platform.rs"]
@@ -82,18 +83,6 @@ pub(crate) fn config_directory(app: &tauri::AppHandle) -> tauri::Result<std::pat
     .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))
 }
 
-/// 애플리케이션을 만들고 종료할 때까지 실행한다.
-///
-/// context 는 애플리케이션의 `tauri::generate_context!()` 이다. background 는 표면 웹뷰가
-/// 문서보다 먼저 실행하는 스크립트이며, 애플리케이션이 프론트엔드의 `background.js` 를
-/// 포함해 전달한다.
-/// View 메뉴의 글자 크기 항목. 명령 이름, 제목, 단축키다.
-const TEXT_SIZE_ITEMS: [(&str, &str, &str); 3] = [
-    ("core.text.larger", "글자 크게", "CmdOrCtrl+="),
-    ("core.text.smaller", "글자 작게", "CmdOrCtrl+-"),
-    ("core.text.reset", "글자 기본 크기", "CmdOrCtrl+0"),
-];
-
 /// 애플리케이션 주 창의 메인 페이지에 명령 실행을 요청한다. 메뉴 이벤트는 메인 스레드에서 처리된다.
 /// 주 창이 없으면 가장 앞의 보이는 창이 대상이고, 그것도 없으면 오류다.
 fn run_menu_command(app: &tauri::AppHandle, command: &str) -> Result<(), String> {
@@ -112,6 +101,11 @@ fn run_menu_command(app: &tauri::AppHandle, command: &str) -> Result<(), String>
     Err("no main window".into())
 }
 
+/// 애플리케이션을 만들고 종료할 때까지 실행한다.
+///
+/// context 는 애플리케이션의 `tauri::generate_context!()` 이다. background 는 표면 웹뷰가
+/// 문서보다 먼저 실행하는 스크립트이며, 애플리케이션이 프론트엔드의 `background.js` 를
+/// 포함해 전달한다.
 pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
     // 창 확대 애니메이션은 창 프레임만 움직이고 웹 문서는 그 뒤에 따라온다. AppKit 이 기본값을
     // 읽기 전에 그 길이를 줄인다.
@@ -160,42 +154,11 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     eprintln!("{error}");
                 }
             }))?;
-            let menu = tauri::menu::Menu::default(app.handle())?;
-            let Some(tauri::menu::MenuItemKind::Submenu(submenu)) =
-                menu.get(tauri::menu::WINDOW_SUBMENU_ID)
-            else {
-                return Err("default window menu is missing".into());
-            };
-            submenu.prepend(&tauri::menu::MenuItem::with_id(
-                app,
-                "new-window",
-                "새 창",
-                true,
-                Some("CmdOrCtrl+Shift+N"),
-            )?)?;
-            // 글자 크기 항목은 View 메뉴에 둔다(docs/spec/text-size.md). 메뉴 단축키는 어느 뷰가
-            // 키보드 포커스를 가져도 동작한다.
-            let view = menu
-                .items()?
-                .into_iter()
-                .find_map(|item| match item {
-                    tauri::menu::MenuItemKind::Submenu(submenu)
-                        if submenu.text().ok().as_deref() == Some("View") =>
-                    {
-                        Some(submenu)
-                    }
-                    _ => None,
-                })
-                .ok_or("default view menu is missing")?;
-            for (command, label, accelerator) in TEXT_SIZE_ITEMS {
-                view.append(&tauri::menu::MenuItem::with_id(
-                    app,
-                    command,
-                    label,
-                    true,
-                    Some(accelerator),
-                )?)?;
-            }
+            // 페이지가 설정 언어를 보내기 전에는 시스템 언어로 메뉴를 만든다. 언어 상태는
+            // set_menu_language 와 host.menu 보고가 같이 쓴다(docs/spec/host-contract.md).
+            let language = menu::initial_language();
+            let menu = menu::build(app.handle(), &language)?;
+            app.manage(menu::MenuLanguage(std::sync::Mutex::new(language)));
             app.set_menu(menu)?;
             let directory = config_directory(app.handle())?;
             app.manage(workspace::Workspace::new(directory.clone()));
@@ -222,7 +185,7 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 if let Err(error) = windows::window_new_on_main(app.clone()) {
                     eprintln!("{error}");
                 }
-            } else if TEXT_SIZE_ITEMS.iter().any(|(command, _, _)| *command == id) {
+            } else if menu::text_command(id) {
                 if let Err(error) = run_menu_command(app, id) {
                     eprintln!("menu command {id}: {error}");
                 }

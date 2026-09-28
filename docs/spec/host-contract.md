@@ -33,6 +33,48 @@ A test function may declare several cases, separated by commas. Every test funct
 
 The scope column is `both`, or `<host> only: <reason>` for behavior that exists in one host. The check runs on macOS, the only platform that both hosts implement; Windows and Linux entry points return `not implemented` errors and have no cases. The unit tests of the check (`scripts/test/check-host-contract.test.mjs`) inject each failure and run in `pnpm test`.
 
+## Application menu
+
+Both hosts build the application menu from one table, so a menu item present on one host and absent on the other is a defect. The `title` items take their titles from the selected language; `system` items keep the framework-provided title (the bundle declares the table's languages as localizations, so system-managed titles follow the same language). Keys use the `host.menu` report format. The supported languages are the table's language columns — `ko` and `en` today, extended by adding a column together with the workbench language declaration. The language is the 일반 setting `language`: `auto` follows the system language's primary tag matched against the supported set, and an unsupported system language falls back to the default language `en`; the page pushes the effective language to the host (`set_menu_language`) before first use and on every change, and before that push the host builds the menu from the system language with the same matching and fallback.
+
+Menus:
+
+| id | ko | en |
+|---|---|---|
+| app | (the application name) | (the application name) |
+| file | 파일 | File |
+| edit | 편집 | Edit |
+| view | 보기 | View |
+| window | 윈도우 | Window |
+| help | 도움말 | Help |
+
+Items:
+
+| menu | id | source | ko | en | key |
+|---|---|---|---|---|---|
+| app | about | system | | | |
+| app | services | system | | | |
+| app | hide | system | | | |
+| app | hide-others | system | | | |
+| app | show-all | system | | | |
+| app | quit | system | | | |
+| file | close-window | title | 윈도우 닫기 | Close Window | cmd+w |
+| file | close-all | system | | | |
+| edit | undo | title | 실행 취소 | Undo | cmd+z |
+| edit | redo | title | 다시 실행 | Redo | shift+cmd+z |
+| edit | cut | title | 잘라내기 | Cut | cmd+x |
+| edit | copy | title | 복사 | Copy | cmd+c |
+| edit | paste | title | 붙여넣기 | Paste | cmd+v |
+| edit | select-all | title | 모두 선택 | Select All | cmd+a |
+| view | fullscreen | title | 전체 화면으로 전환 | Toggle Full Screen | ctrl+cmd+f |
+| view | text-larger | title | 글자 크게 | Bigger Text | cmd+= |
+| view | text-smaller | title | 글자 작게 | Smaller Text | cmd+- |
+| view | text-default | title | 글자 기본 크기 | Default Text Size | cmd+0 |
+| window | new-window | title | 새 창 | New Window | shift+cmd+n |
+| window | bring-all-to-front | system | | | |
+
+`host.menu` reports `{language, menus}` — the active menu language and the built menus; the language is the host's own state, never inferred from titles. Its per-host comparison and the table above are checked at the window tier, and `scripts/check-host-parity.mjs` checks that both hosts carry this same table in their menu builders.
+
 ## Contract cases
 
 | Case | Behavior | Scope |
@@ -204,7 +246,7 @@ The scope column is `both`, or `<host> only: <reason>` for behavior that exists 
 | `sidecars.retain.sends-layout-and-known-surfaces` | Retaining sends each running or published persistent service one `retain` request whose surfaces are the given layout surfaces and every surface this process has sent, an empty array when there are none, and returns the service's closed count. | both |
 | `sidecars.retain.reports-service-failure` | A `retained` reply with `ok: false` is returned as an error that carries the service's reason. | both |
 | `sidecars.retain.skips-service-without-endpoint` | Retaining without a running service or its endpoint file starts no service and closes nothing. | both |
-| `menu.application.view-has-full-screen-and-text-size` | The application menu's View menu has full screen and the [text size](text-size.md) items with Command `=`, `-`, and `0`; no menu item zooms or reloads the whole webview. | wailsv3 only: the Tauri host builds its menu from Tauri's default menu, whose View menu has only full screen, while the Wails default menu adds zoom and reload |
+| `menu.application.view-has-full-screen-and-text-size` | The application menu's View menu has full screen and the [text size](text-size.md) items with Command `=`, `-`, and `0`; no menu item zooms or reloads the whole webview. | both |
 | `sidecars.protocol.surface-keeps-its-first-root` | After the owning window changes project, requests and the closed notice of an open surface carry the root of its first request. | both |
 | `sidecars.send.rejects-undeclared-sidecar` | Sending to a sidecar that no plugin declares fails with "not declared". | both |
 | `sidecars.send.rejects-after-stop` | Sending after the sidecars stop fails with "stopped". | both |

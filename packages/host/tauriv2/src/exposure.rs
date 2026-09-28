@@ -51,14 +51,17 @@ fn host_declarations() -> Value {
             "schema": {"type": "array", "items": {"type": "string"}},
         }, {
             "name": "host.menu",
-            "description": "The application menu: each submenu's title and its items' titles and key equivalents, without separators.",
-            "schema": {"type": "array", "items": {"type": "object", "properties": {
-                "title": {"type": "string"},
-                "items": {"type": "array", "items": {"type": "object", "properties": {
+            "description": "The active menu language and the application menu: each submenu's title and its items' titles and key equivalents, without separators.",
+            "schema": {"type": "object", "properties": {
+                "language": {"type": "string"},
+                "menus": {"type": "array", "items": {"type": "object", "properties": {
                     "title": {"type": "string"},
-                    "key": {"type": "string"},
+                    "items": {"type": "array", "items": {"type": "object", "properties": {
+                        "title": {"type": "string"},
+                        "key": {"type": "string"},
+                    }}},
                 }}},
-            }}},
+            }},
         }, {
             "name": "host.screens",
             "description": "The displays in screen coordinates with their backing scale and the area not covered by the menu bar and Dock.",
@@ -1251,6 +1254,17 @@ impl Host {
             })
     }
 
+    /// host.menu 가 보고하는 현재 메뉴 언어. 메뉴를 다시 만들지 않을지 정하는 상태와 같은
+    /// 값이다.
+    fn menu_language(&self) -> Result<String, Failure> {
+        self.0
+            .state::<crate::menu::MenuLanguage>()
+            .0
+            .lock()
+            .map(|language| language.clone())
+            .map_err(|_| internal("the menu language state is poisoned"))
+    }
+
     /// 소유자가 host 인 이름의 요청을 실행한다.
     fn host_entry(
         &self,
@@ -1273,8 +1287,12 @@ impl Host {
                 on_main(window, move || platform.dock_items()).map_err(internal)
             }
             ("status.get", "host.menu") => {
+                // 언어는 호스트 상태에서 읽는다. 제목에서 유추하지 않는다
+                // (docs/spec/host-contract.md 의 Application menu).
+                let language = self.menu_language()?;
                 let platform = platform::current().map_err(internal)?;
-                on_main(window, move || platform.menu_items()).map_err(internal)
+                let menus = on_main(window, move || platform.menu_items()).map_err(internal)?;
+                Ok(json!({ "language": language, "menus": menus }))
             }
             (
                 "status.watch" | "status.unwatch",

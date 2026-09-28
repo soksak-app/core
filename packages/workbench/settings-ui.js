@@ -22,7 +22,7 @@ import { pluginUnits } from "./environment.js";
 import { matchPlugins } from "./plugin-search.js";
 import { section, sectionNames } from "./registry.js";
 import {
-  FONTS, LAYOUT_RANGES, MODES, THEMES, scopedValue, settingProject, overridden,
+  FONTS, LAYOUT_RANGES, MENU_LANGUAGES, MODES, THEMES, scopedValue, settingProject, overridden,
   settingDefinitions,
 } from "./settings.js";
 
@@ -274,6 +274,11 @@ function drawGeneral() {
     row("포커스 표시", segment("focusInd", [["border", "테두리"], ["corner", "꺽쇠"]], value("focusInd"))),
     row("경계선", segment("fullRule", [["under", "가림"], ["over", "보임"], ["none", "숨김"]], value("fullRule"))),
     row("포커스 밖 흐리게", toggle("dim", value("dim"))),
+  ]));
+
+  body.append(group("언어", "애플리케이션 메뉴가 이 언어를 따른다. 자동은 시스템 언어이고 목록에 없으면 영어다.", [
+    row("언어", segment("language",
+      [["auto", "자동"], ...MENU_LANGUAGES.map(({ id, label }) => [id, label])], value("language"))),
   ]));
 }
 

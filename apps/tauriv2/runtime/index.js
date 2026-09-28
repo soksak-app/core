@@ -16,6 +16,7 @@ const COMMAND = {
   presentSurfaces: "present_surfaces",
   waitPresented: "wait_presented",
   setTheme: "set_theme",
+  setMenuLanguage: "set_menu_language",
   theme: "theme",
   report: "report",
   overlayShow: "overlay_show",
@@ -61,6 +62,10 @@ const ARG = {
   presentSurfaces: (v) => ({ request: v }),
   waitPresented: () => ({}),
   setTheme: (v) => ({ theme: v }),
+  setMenuLanguage: (v) => {
+    if (!/^[a-z]{2,8}$/.test(v)) throw new TypeError(`menu language must be a language tag, got ${v}`);
+    return { language: v };
+  },
   theme: () => ({}),
   report: (v) => {
     if (typeof v !== "string") throw new TypeError("report requires a string");

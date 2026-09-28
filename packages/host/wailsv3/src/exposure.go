@@ -107,14 +107,17 @@ var hostStatus = map[string]hostEntry{
 		}}},
 	},
 	"host.menu": {
-		Description: "The application menu: each submenu's title and its items' titles and key equivalents, without separators.",
-		Schema: map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
-			"title": map[string]any{"type": "string"},
-			"items": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
+		Description: "The application menu with the active menu language: {language, menus}. Each submenu's title and its items' titles and key equivalents, without separators.",
+		Schema: map[string]any{"type": "object", "properties": map[string]any{
+			"language": map[string]any{"type": "string"},
+			"menus": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"title": map[string]any{"type": "string"},
-				"key":   map[string]any{"type": "string"},
+				"items": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
+					"title": map[string]any{"type": "string"},
+					"key":   map[string]any{"type": "string"},
+				}}},
 			}}},
-		}}},
+		}},
 	},
 	"host.dock": {
 		Description: "The titles of the application's Dock menu items in order.",
@@ -1142,13 +1145,14 @@ func screens() (any, error) {
 	return out, nil
 }
 
-// menuItems 는 host.menu 의 현재 값을 읽는다.
+// menuItems 는 host.menu 의 현재 값을 읽는다. language 는 호스트가 관리하는 메뉴 언어이고
+// menus 는 구성된 메뉴다. 언어는 호스트 자신의 상태이지 메뉴 제목에서 추측하는 값이 아니다.
 func menuItems() (any, error) {
-	var out []any
-	if err := native(system.MenuItems, &out, nil); err != nil {
+	var menus []any
+	if err := native(system.MenuItems, &menus, nil); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return map[string]any{"language": currentMenuLanguage(), "menus": menus}, nil
 }
 
 // dockItems 는 host.dock 의 현재 값을 읽는다.

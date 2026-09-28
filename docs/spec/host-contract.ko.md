@@ -33,6 +33,48 @@ fn invalid_json_closes_connection() {
 
 범위 열은 `both`이거나, 한 호스트에만 있는 동작이면 `<host> only: <이유>`다. 검사는 두 호스트가 모두 구현한 유일한 플랫폼인 macOS에서 실행한다. Windows와 Linux 진입점은 `not implemented` 오류를 반환하며 사례가 없다. 검사의 단위 테스트(`scripts/test/check-host-contract.test.mjs`)는 각 실패를 주입하며 `pnpm test`에서 실행된다.
 
+## 애플리케이션 메뉴
+
+두 호스트는 하나의 표로 애플리케이션 메뉴를 구성하므로 한쪽에만 있는 메뉴 항목은 결함이다. `title` 항목의 제목은 선택된 언어에서 온다. `system` 항목은 프레임워크가 제공하는 제목을 유지한다(번들이 표의 언어들을 현지화로 선언하므로 시스템이 관리하는 제목도 같은 언어를 따른다). 키는 `host.menu` 보고 형식을 쓴다. 지원 언어는 표의 언어 열이다 — 현재 `ko`·`en` 이며 새 언어는 워크벤치의 언어 선언과 함께 열을 추가해 확장한다. 언어는 일반 설정 `language`다. `auto` 는 시스템 언어의 주 태그를 지원 집합에서 찾고 없는 시스템 언어는 기본 언어 `en` 으로 내려간다. 페이지는 처음 사용 전과 변경마다 유효 언어를 호스트에 보낸다(`set_menu_language`). 그 전에 호스트는 같은 대응과 대비로 시스템 언어에서 메뉴를 구성한다.
+
+메뉴:
+
+| id | ko | en |
+|---|---|---|
+| app | (애플리케이션 이름) | (the application name) |
+| file | 파일 | File |
+| edit | 편집 | Edit |
+| view | 보기 | View |
+| window | 윈도우 | Window |
+| help | 도움말 | Help |
+
+항목:
+
+| menu | id | source | ko | en | key |
+|---|---|---|---|---|---|
+| app | about | system | | | |
+| app | services | system | | | |
+| app | hide | system | | | |
+| app | hide-others | system | | | |
+| app | show-all | system | | | |
+| app | quit | system | | | |
+| file | close-window | title | 윈도우 닫기 | Close Window | cmd+w |
+| file | close-all | system | | | |
+| edit | undo | title | 실행 취소 | Undo | cmd+z |
+| edit | redo | title | 다시 실행 | Redo | shift+cmd+z |
+| edit | cut | title | 잘라내기 | Cut | cmd+x |
+| edit | copy | title | 복사 | Copy | cmd+c |
+| edit | paste | title | 붙여넣기 | Paste | cmd+v |
+| edit | select-all | title | 모두 선택 | Select All | cmd+a |
+| view | fullscreen | title | 전체 화면으로 전환 | Toggle Full Screen | ctrl+cmd+f |
+| view | text-larger | title | 글자 크게 | Bigger Text | cmd+= |
+| view | text-smaller | title | 글자 작게 | Smaller Text | cmd+- |
+| view | text-default | title | 글자 기본 크기 | Default Text Size | cmd+0 |
+| window | new-window | title | 새 창 | New Window | shift+cmd+n |
+| window | bring-all-to-front | system | | | |
+
+`host.menu`는 `{language, menus}` 를 보고한다 — 활성 메뉴 언어와 구성된 메뉴다. 언어는 호스트 자신의 상태이지 제목에서 추측하는 값이 아니다. 호스트 사이 비교와 위 표 대조는 창 검사 계층에서 확인하고, `scripts/check-host-parity.mjs`가 두 호스트의 메뉴 빌더가 이 표와 같은 표를 담고 있는지 검사한다.
+
 ## Contract cases
 
 | 사례 | 동작 | 범위 |
@@ -204,7 +246,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.retain.sends-layout-and-known-surfaces` | retain은 실행 중이거나 엔드포인트가 게시된 영속 서비스마다, 주어진 레이아웃 표면과 이 프로세스가 보낸 모든 표면(없으면 빈 배열)을 담은 `retain` 요청 하나를 보내고 서비스가 닫은 수를 반환한다. | both |
 | `sidecars.retain.reports-service-failure` | `ok: false`인 `retained` 응답은 서비스의 사유를 담은 오류로 반환한다. | both |
 | `sidecars.retain.skips-service-without-endpoint` | 실행 중인 서비스와 그 엔드포인트 파일이 없으면 retain은 서비스를 시작하지 않고 아무것도 닫지 않는다. | both |
-| `menu.application.view-has-full-screen-and-text-size` | 애플리케이션 메뉴의 View 메뉴에는 전체 화면과 Command `=`, `-`, `0`의 [글자 크기](text-size.ko.md) 항목이 있고, 웹뷰 전체를 확대하거나 다시 읽는 메뉴 항목이 없다. | wailsv3 only: Tauri 호스트는 View 메뉴에 전체 화면만 있는 Tauri 기본 메뉴로 메뉴를 만들고, Wails 기본 메뉴는 확대와 다시 읽기를 더한다 |
+| `menu.application.view-has-full-screen-and-text-size` | 애플리케이션 메뉴의 View 메뉴에는 전체 화면과 Command `=`, `-`, `0`의 [글자 크기](text-size.ko.md) 항목이 있고, 웹뷰 전체를 확대하거나 다시 읽는 메뉴 항목이 없다. | both |
 | `sidecars.protocol.surface-keeps-its-first-root` | 소유 창의 프로젝트가 바뀐 뒤에도 열린 표면의 요청과 closed 알림은 첫 요청의 root를 가진다. | both |
 | `sidecars.send.rejects-undeclared-sidecar` | 어떤 플러그인도 선언하지 않은 사이드카로 보내면 "not declared"로 실패한다. | both |
 | `sidecars.send.rejects-after-stop` | 사이드카가 멈춘 뒤 보내면 "stopped"로 실패한다. | both |

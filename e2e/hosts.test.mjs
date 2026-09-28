@@ -1,5 +1,6 @@
 // 두 호스트의 최종 요청과 표시 좌표를 비교한다.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, drag, fresh, open } from "./app.mjs";
@@ -185,24 +186,76 @@ test("both hosts lay out the same page the same way after a resize", async (t) =
     `the two hosts place the same surfaces differently at ${SIZE.width}x${SIZE.height}`);
 });
 
-for (const app of Object.values(APPS)) {
-  test(`${app.name}: the application menu does not zoom or reload the whole webview`, async (t) => {
-    const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
-    const menus = await s.get("host.menu");
-    const view = menus.find((menu) => menu.title === "View");
-    assert.ok(view, `the application menu has no View menu: ${JSON.stringify(menus.map((menu) => menu.title))}`);
-    // 배치와 네이티브 표면은 웹뷰 확대를 따르지 않고, 다시 읽기는 메인 페이지 상태를 바꾼다.
-    // View 메뉴에는 전체 화면과 글자 크기 항목만 있다(docs/spec/text-size.md). macOS 는 F 키의 전체
-    // 화면 항목을 스스로 더한다.
-    const text = view.items.filter((item) => item.title.startsWith("글자 "));
-    assert.deepEqual(text, [
-      { title: "글자 크게", key: "cmd+=" }, { title: "글자 작게", key: "cmd+-" }, { title: "글자 기본 크기", key: "cmd+0" },
-    ], `the View menu must have the text size items: ${JSON.stringify(view.items)}`);
-    assert.ok(view.items.every((item) => /Full Screen/.test(item.title) || text.includes(item)),
-      `the View menu must have only full screen and text size items: ${JSON.stringify(view.items)}`);
-    const forbidden = menus.flatMap((menu) => menu.items)
-      .filter((item) => /zoom in|zoom out|actual size|reload/i.test(item.title));
-    assert.deepEqual(forbidden, [], "no menu item zooms or reloads the whole webview");
-  });
+/** 호스트 계약 명세의 메뉴 표. 선언이 곧 기준이므로 검사는 명세 파일에서 읽는다. */
+async function menuContract() {
+  const { specMenuTables } = await import("../scripts/check-host-parity.mjs");
+  return specMenuTables(readFileSync(new URL("../docs/spec/host-contract.md", import.meta.url), "utf8"));
 }
+
+/** 관측된 메뉴에서 호스트마다 다른 값(앱 이름, 창 목록)을 정규화한다. */
+function normalizeMenus(menus, appName, windowTitles) {
+  return menus.map((menu) => ({
+    title: menu.title.replaceAll(appName, "APP"),
+    items: menu.items
+      .filter((item) => !windowTitles.includes(item.title))
+      .map((item) => ({ title: item.title.replaceAll(appName, "APP"), key: item.key })),
+  }));
+}
+
+test("both hosts serve the declared application menu", async (t) => {
+  const sessions = await both(t);
+  if (!sessions) return t.skip("both hosts must be built");
+  const contract = await menuContract();
+  // 호스트가 보고한 활성 언어가 기준이다. 제목에서 추측하지 않는다(docs/spec/host-contract.md).
+  // 보고된 언어는 표의 언어 열이어야 하고, 새 언어는 열을 추가해 선언된다.
+  const columns = contract.languages;
+  const observed = {};
+  for (const [name, s] of Object.entries(sessions)) {
+    const report = await s.get("host.menu");
+    assert.ok(typeof report?.language === "string" && columns.includes(report.language),
+      `host.menu must report a declared language: ${JSON.stringify(report).slice(0, 200)}`);
+    const appName = report.menus[0].title;
+    const titles = (await s.get("host.windows")).map((entry) => entry.title);
+    observed[name] = { language: report.language, menus: normalizeMenus(report.menus, appName, titles) };
+  }
+  const languages = Object.values(observed).map((value) => value.language);
+  assert.equal(new Set(languages).size, 1, `both hosts must serve the same menu language: ${JSON.stringify(languages)}`);
+  const column = columns.indexOf(languages[0]) + 1;
+
+  // 관측된 메뉴는 선언된 상위 메뉴 순서와 제목을 따른다. app 메뉴 제목은 정규화된 앱 이름이다.
+  const [first, ...rest] = Object.values(observed).map((value) => value.menus);
+  for (const menus of [first, ...rest]) {
+    assert.equal(menus.length, contract.menus.length, `menu count differs: ${JSON.stringify(menus.map((m) => m.title))}`);
+    contract.menus.forEach((row, index) => {
+      const expected = row[column];
+      assert.equal(menus[index].title, row[0] === "app" ? "APP" : expected,
+        `menu ${row[0]} title differs: ${JSON.stringify(menus[index])}`);
+    });
+  }
+
+  // 각 메뉴의 처음 항목들은 선언된 표와 같다. title 항목은 제목과 키까지 같아야 하고 system 항목은
+  // 자리와 존재만 같으면 된다(제목은 프레임워크가 언어에 따라 정한다). 표 뒤의 항목들은 시스템이
+  // 더한 것이므로 호스트 사이 같음만 확인한다.
+  const declared = Object.fromEntries(contract.menus.map(([id]) => [id, []]));
+  for (const row of contract.items) declared[row[0]].push({ id: row[1], source: row[2], title: row[column + 2], key: row.at(-1) });
+  for (const menus of [first, ...rest]) {
+    contract.menus.forEach(([id], index) => {
+      declared[id].forEach((item, offset) => {
+        const actual = menus[index].items[offset];
+        assert.ok(actual, `menu ${id} item ${item.id} is missing: ${JSON.stringify(menus[index])}`);
+        if (item.source === "title") {
+          assert.deepEqual(actual, { title: item.title, key: item.key },
+            `menu ${id} item ${item.id} differs from the table: ${JSON.stringify(actual)}`);
+        } else {
+          assert.ok(actual.title.length > 0, `menu ${id} system item ${item.id} is empty`);
+        }
+      });
+    });
+  }
+  assert.deepEqual(first, rest[0], "the two hosts must serve the same application menu");
+
+  // 배치와 네이티브 표면은 웹뷰 확대를 따르지 않고, 다시 읽기는 메인 페이지 상태를 바꾼다.
+  const forbidden = Object.values(observed).flatMap(({ menus }) => menus.flatMap((menu) => menu.items))
+    .filter((item) => /zoom in|zoom out|actual size|reload/i.test(item.title));
+  assert.deepEqual(forbidden, [], "no menu item zooms or reloads the whole webview");
+});

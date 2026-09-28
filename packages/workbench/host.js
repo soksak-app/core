@@ -358,6 +358,9 @@ export const surfaces = native ? {
 
     theme: (values) => tellInTurn("setTheme", values),
 
+    /** 애플리케이션 메뉴의 언어. 같은 언어의 반복 전송은 호스트가 무시한다. */
+    menuLanguage: (language) => tellInTurn("setMenuLanguage", language),
+
     place(record) {
       const surfaces = record.surfaces.map((s) => ({
         id: s.id,
@@ -425,6 +428,7 @@ export const surfaces = native ? {
   kinds: [],
   report: () => {},
   theme: () => {},
+  menuLanguage: () => {},
   // 호스트가 없으면 이 문서가 앉힌 자리가 실제 자리다. 컴포지터는 그 답을 기록한다.
   place: (record) => record.surfaces.map((s) => ({ id: s.id, ...s.applied })),
   waitPresented: async () => null,

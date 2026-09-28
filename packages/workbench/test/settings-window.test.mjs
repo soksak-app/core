@@ -54,6 +54,40 @@ test("a layout value outside its range or order is rejected before anything chan
   assert.throws(() => set({ sidebarWidth: 1.5 }, "common"), /sidebarWidth/);
 });
 
+test("the menu language follows the setting, the supported system tag, or the default", async () => {
+  // set 의 적용은 문서 루트에 값을 심고 저장소에 쓴다. 검사 문맥에 문서와 저장소가 없으므로
+  // 최소한의 루트와 메모리 저장소를 둔다. 질의 문자로 이 검사만 별도의 모듈 사본을 써서
+  // 다른 검사의 모듈 상태(저장소 연결 여부)를 오염시키지 않는다.
+  const realDocument = globalThis.document;
+  globalThis.document = { documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const memory = { common: {}, projects: [] };
+  try {
+    const { MENU_LANGUAGES, connectSettings, menuLanguage, set: change, value } = await import("../settings.js?test=menu-language");
+    await connectSettings({
+      snapshot: async () => structuredClone(memory),
+      settings: async (id, values) => {
+        assert.equal(id, null, "common settings carry no project id");
+        memory.common = { ...memory.common, ...values };
+      },
+      onChange: () => () => {},
+    });
+    assert.equal(value("language"), "auto");
+    assert.deepEqual(MENU_LANGUAGES.map(({ id }) => id), ["ko", "en"]);
+    // auto 는 시스템 언어의 주 태그를 표에서 찾는다. 검사 문맥의 시스템 언어와 무관하게
+    // 표에 있는 태그는 그대로, 없는 태그는 기본 언어로 내려간다.
+    assert.ok(["ko", "en"].includes(menuLanguage()), `auto resolves to a declared language: ${menuLanguage()}`);
+    await change({ language: "ko" }, "common");
+    assert.equal(menuLanguage(), "ko");
+    await change({ language: "en" }, "common");
+    assert.equal(menuLanguage(), "en");
+    assert.throws(() => change({ language: "ja" }, "common"), /Invalid setting language/);
+    await change({ language: "auto" }, "common");
+    assert.equal(memory.common.language, "auto");
+  } finally {
+    globalThis.document = realDocument;
+  }
+});
+
 test("a created set takes the smallest unused number, the list layout, and no sections", () => {
   const next = createSet(sets);
   assert.deepEqual(next.at(-1), { id: "set-2", title: "새 세트", sections: [], layout: "list" });

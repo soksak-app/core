@@ -141,6 +141,8 @@ export const defaults = {
   projectOpening: "windows",
   theme: THEMES[0].name,
   mode: "dark",
+  /* 애플리케이션 메뉴의 언어. auto = 시스템 언어(지원하지 않으면 en). */
+  language: "auto",
 
   /* 프로젝트 탭의 위치. top = 크롬 행, left = 왼쪽 세로 레일. */
   projectTabs: "top",
@@ -189,6 +191,14 @@ export const LAYOUT_RANGES = {
   sidebarWidth: WIDTH_RANGE,
 };
 
+/* 애플리케이션 메뉴가 지원하는 언어. 새 언어는 이 선언과 호스트 계약의 메뉴 표에 함께 추가된다. */
+export const MENU_LANGUAGES = [
+  { id: "ko", label: "한국어" },
+  { id: "en", label: "English" },
+];
+/* 시스템 언어가 표에 없을 때 쓰는 기본 언어. */
+const DEFAULT_LANGUAGE = "en";
+
 /** 유효 설정을 검사한다. 사이드바 세트와 연결, 그리고 카드 안 사이드바의 처음 폭이 최소와 최대 사이에 있는지. */
 function checkValues(values) {
   checkSidebars(values);
@@ -220,6 +230,9 @@ let revision = 0;
 function validatePluginValue(key, value) {
   if (key === "textSize" && !TEXT_STEPS.includes(value)) {
     throw new Error(`Invalid setting textSize: ${JSON.stringify(value)} is not a text size step`);
+  }
+  if (key === "language" && value !== "auto" && !MENU_LANGUAGES.some((language) => language.id === value)) {
+    throw new Error(`Invalid setting language: ${JSON.stringify(value)}`);
   }
   const range = LAYOUT_RANGES[key];
   if (range && (!Number.isInteger(value) || value < range[0] || value > range[1])) {
@@ -465,6 +478,17 @@ export function install() {
   // 호스트가 서비스하는 페이지는 이 문서의 스타일시트를 상속하지 않으므로 값을
   // 따로 전송한다.
   host.theme(pageTheme());
+  // 애플리케이션 메뉴의 언어. 유효 언어가 바뀔 때만 호스트가 메뉴를 다시 만든다.
+  host.menuLanguage(menuLanguage());
+}
+
+/** 애플리케이션 메뉴의 유효 언어. 설정이 auto 이면 시스템 언어의 주 태그를 표에서 찾고 없으면 기본 언어다. */
+export function menuLanguage() {
+  const chosen = settings.language;
+  if (chosen !== "auto") return chosen;
+  // 기본값: navigator.language 는 삽입 문맥 등에서 비울 수 있고 그때 계약의 기본 언어가 시스템 언어를 대신한다.
+  const tag = (navigator.language ?? DEFAULT_LANGUAGE).split("-")[0].toLowerCase();
+  return MENU_LANGUAGES.some((language) => language.id === tag) ? tag : DEFAULT_LANGUAGE;
 }
 /** 카드의 모서리 반경(px). 이음새가 line 이면 카드는 각지다. */
 export const cardRadius = () => (seam() === "line" ? 0 : settings.radius);

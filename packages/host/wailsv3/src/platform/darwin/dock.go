@@ -41,6 +41,14 @@ func (implementation) MenuItems() (string, error) {
 	return facts(C.sp_menu_items(), "application menu")
 }
 
+// PreferredLanguage 는 시스템 선호 언어의 주 태그를 반환한다(window_facts.h 의
+// sp_preferred_language). 그 태그가 계약 표의 언어인지는 호출자가 정한다.
+func (implementation) PreferredLanguage() string {
+	tag := C.sp_preferred_language()
+	defer C.free(unsafe.Pointer(tag))
+	return C.GoString(tag)
+}
+
 func (implementation) MenuSelect(menu, title string) error {
 	menuText, titleText := C.CString(menu), C.CString(title)
 	defer C.free(unsafe.Pointer(menuText))

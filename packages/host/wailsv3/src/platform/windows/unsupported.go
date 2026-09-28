@@ -105,6 +105,10 @@ func (implementation) MenuItems() (string, error) {
 	return "", unsupported("application menu")
 }
 
+// 이 애플리케이션은 메뉴를 만들기 전에 다른 미구현 동작에서 실패하므로 시스템 언어를 읽지
+// 않는다. 빈 태그는 호출자의 계약 표에 없는 언어다.
+func (implementation) PreferredLanguage() string { return "" }
+
 func (implementation) MenuSelect(string, string) error {
 	return unsupported("application menu")
 }

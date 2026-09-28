@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditHostParity, snake } from "../check-host-parity.mjs";
+import { auditHostParity, auditMenuTables, goMenuTables, rustMenuTables, snake, specMenuTables } from "../check-host-parity.mjs";
 
 // 주입 검사의 기준 소스. 실제 소스에서 이름 하나만 바꿔 각 실패가 기계적으로 나오는지 증명한다.
 const sources = () => ({
@@ -11,7 +11,31 @@ const sources = () => ({
   tauriv2EndpointSource: 'const METHODS: &[&str] = &[\n  "windows.list",\n];\nconst DIAGNOSTICS: &[&str] = &[\n  "diagnostics.fixture",\n];',
   wailsv3EndpointSource: 'var endpointMethods = map[string]endpointMethod{\n  "windows.list": nil,\n}\nvar subscriptionMethods = map[string]subscriptionMethod{}\nvar diagnosticSubscriptions = map[string]subscriptionMethod{}',
   wailsv3DiagnosticsSource: 'func init() {\n  diagnosticMethods["diagnostics.fixture"] = nil\n}',
+  hostContractSpec: specFixture,
+  tauriv2MenuSource: rustMenuFixture,
+  wailsv3MenuSource: goMenuFixture,
 });
+
+const specFixture = `## Application menu
+
+Menus:
+
+| id | ko | en |
+|---|---|---|
+| app | (the application name) | (the application name) |
+| file | 파일 | File |
+
+Items:
+
+| menu | id | source | ko | en | key |
+|---|---|---|---|---|---|
+| file | close-window | title | 윈도우 닫기 | Close Window | cmd+w |
+
+## Contract cases`;
+
+const rustMenuFixture = 'pub const MENUS: &[(&str, &str, &str)] = &[\n    ("app", "", ""),\n    ("file", "파일", "File"),\n];\npub const ITEMS: &[(&str, &str, &str, &str, &str, &str)] = &[\n    ("file", "close-window", "title", "윈도우 닫기", "Close Window", "cmd+w"),\n];';
+
+const goMenuFixture = 'var menuTable = []struct{ id, ko, en string }{\n\t{"app", "", ""},\n\t{"file", "파일", "File"},\n}\nvar itemTable = []struct{ menu, id, source, ko, en, key string }{\n\t{"file", "close-window", "title", "윈도우 닫기", "Close Window", "cmd+w"},\n}';
 
 test("equal surfaces pass with no failure", () => {
   assert.deepEqual(auditHostParity(sources()), []);
@@ -49,4 +73,12 @@ test("an endpoint method that exists on one host only fails per build flavor", (
 test("snake keeps concatenated capitals apart", () => {
   assert.equal(snake("ClipboardPersistPNG"), "clipboard_persist_png");
   assert.equal(snake("WindowNew"), "window_new");
+});
+
+test("menu tables that differ from the spec fail mechanically", () => {
+  const spec = specMenuTables(specFixture);
+  const changed = rustMenuFixture.replace('("file", "파일", "File")', '("file", "파일", "Files")');
+  const failures = auditMenuTables(spec, rustMenuTables(changed), goMenuTables(goMenuFixture));
+  assert.ok(failures.some((line) => line.includes("menu menus table differs")), JSON.stringify(failures));
+  assert.deepEqual(auditMenuTables(spec, rustMenuTables(rustMenuFixture), goMenuTables(goMenuFixture)), []);
 });

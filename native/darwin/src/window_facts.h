@@ -38,6 +38,9 @@ bool sp_window_move(void *window, double x, double y);
 // key 는 단축키로, 수정 키를 ctrl, opt, shift, cmd 순서로 + 로 이어 붙인 뒤 키 문자를 붙인다.
 char *sp_menu_items(void);
 
+/** 시스템 선호 언어의 주 태그. 지원 여부는 호출자의 표가 정한다. sp_facts_free 로 해제한다. */
+char *sp_preferred_language(void);
+
 // 제목이 menu 인 하위 메뉴에서 제목이 title 인 항목을 실행한다. 항목이 없으면 false 다.
 bool sp_menu_select(const char *menu, const char *title);
 

@@ -315,6 +315,9 @@ type Platform interface {
 	// MenuItems 는 애플리케이션 메뉴를 JSON 배열로 반환한다. 하위 메뉴마다 {title, items: [{title, key}]} 다.
 	// UI 스레드에서 호출한다.
 	MenuItems() (string, error)
+	// PreferredLanguage 는 시스템 선호 언어의 주 태그(예: "ko")를 반환한다. 초기 메뉴 언어를
+	// 계약 표의 언어와 대응할 때 쓴다. UI 스레드에서 호출한다.
+	PreferredLanguage() string
 	// MenuSelect 는 제목이 menu 인 하위 메뉴에서 제목이 title 인 항목을 실행한다. UI 스레드에서 호출한다.
 	MenuSelect(menu, title string) error
 	// MainWindow 는 애플리케이션의 주 창 핸들이다. 없으면 nil 이다. UI 스레드에서 호출한다.
