@@ -768,6 +768,36 @@ for (const app of Object.values(APPS)) {
     assert.equal(await result("SHIFT1003"), "Z", "the ?1003 Shift drag was reported to the program");
   });
 
+  test(`${app.name}: a real plain pointer press reaches the PTY while ?1003 motion reporting is on`, { timeout: 90000 }, async (t) => {
+    const { s, surface, session, origin, row } = await prepare(t, app, "PLAIN1003");
+    const hover = `\x1b[<35;80;${row + 1}M`;
+    const press = `\x1b[<0;1;${row + 1}M`;
+    const on = "\\033[?1003h\\033[?1006h";
+    const off = "\\033[?1003l\\033[?1006l";
+    const read = async (id, expected) => {
+      await s.run("terminal.input", { bytes: `printf '${on}'; stty raw -echo; printf 'WAIT%s\\r\\n' ${id}; ` +
+        `R=$(dd bs=1 count=${expected.length} 2>/dev/null | od -An -tx1 | tr -d ' \\n'); stty sane; ` +
+        `printf '${off}'; printf 'R%s:%s\\n' ${id} "$R"\r` }, surface);
+      await readScreenUntil(s, surface, (lines) => lines.some((line) => line.startsWith(`WAIT${id}`)),
+        `the plain ?1003 PTY reader ${id} did not start`);
+      return () => readScreenUntil(s, surface, (screen) => screen.some((line) => line.startsWith(`R${id}:`)),
+        `the plain ?1003 PTY reader ${id} did not finish`).then((lines) =>
+        Buffer.from(lines.find((line) => line.startsWith(`R${id}:`)).slice(`R${id}:`.length).trim(), "hex").toString("latin1"));
+    };
+    const start = cellPoint(origin, session, 0, row);
+    const hoverPoint = cellPoint(origin, session, 79, row);
+    const first = await read("PLAIN1003PRESS", hover + press);
+    post([{ type: "move", ...hoverPoint }, { type: "down", ...start }]);
+    assert.equal(await first(), hover + press, "plain ?1003 press bytes differed");
+    const end = cellPoint(origin, session, 1, row);
+    const motion = `\x1b[<32;2;${row + 1}M`;
+    const release = `\x1b[<0;2;${row + 1}m`;
+    const second = await read("PLAIN1003DRAG", motion + release);
+    post([{ type: "drag", ...end }, { type: "up", ...end }]);
+    assert.equal(await second(), motion + release, "plain ?1003 drag bytes differed");
+    await s.run("terminal.input", { bytes: "\x1b[?1003l\x1b[?1006l" }, surface);
+  });
+
   test(`${app.name}: real keypad keys send SS3 sequences in application keypad mode and characters otherwise`, { timeout: 90000 }, async (t) => {
     const { s, surface, session, origin } = await prepare(t, app, "KEYPAD");
     // 키는 초점을 가진 터미널 영역에 간다.
