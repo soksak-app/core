@@ -227,6 +227,9 @@ char *sp_menu_items(void) {
     NSMutableArray *menus = [NSMutableArray array];
     for (NSMenuItem *top in NSApp.mainMenu.itemArray) {
         NSMutableArray *items = [NSMutableArray array];
+        // AppKit 은 메뉴를 처음 열 때야 시스템 항목(예: 전체 화면 시작)을 늦게 넣는다.
+        // 열기 전의 항목 배열은 불완전하므로 update 로 확정한 뒤 읽는다.
+        [top.submenu update];
         for (NSMenuItem *item in top.submenu.itemArray) {
             if (item.isSeparatorItem) continue;
             [items addObject:@{ @"title": item.title, @"key": menuKey(item) }];

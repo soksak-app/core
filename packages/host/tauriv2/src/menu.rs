@@ -39,10 +39,10 @@ pub const ITEMS: &[(&str, &str, &str, &str, &str, &str)] = &[
     ("edit", "copy", "title", "복사", "Copy", "cmd+c"),
     ("edit", "paste", "title", "붙여넣기", "Paste", "cmd+v"),
     ("edit", "select-all", "title", "모두 선택", "Select All", "cmd+a"),
-    ("view", "fullscreen", "title", "전체 화면으로 전환", "Toggle Full Screen", "ctrl+cmd+f"),
     ("view", "text-larger", "title", "글자 크게", "Bigger Text", "cmd+="),
     ("view", "text-smaller", "title", "글자 작게", "Smaller Text", "cmd+-"),
     ("view", "text-default", "title", "글자 기본 크기", "Default Text Size", "cmd+0"),
+    ("view", "fullscreen", "system", "", "", ""),
     ("window", "new-window", "title", "새 창", "New Window", "shift+cmd+n"),
     ("window", "bring-all-to-front", "system", "", "", ""),
 ];
@@ -273,10 +273,10 @@ fn edit_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String>
 
 /// view 메뉴를 만든다. 전체 화면과 글자 크기 항목의 제목은 표에서 온다. 글자 크기 항목의
 /// 메뉴 항목 id 는 페이지로 보내는 명령 이름이다(docs/spec/text-size.md).
+/// view 메뉴를 만든다. 전체 화면 항목은 만들지 않는다. 측정하면 시스템이 앱 시작을 마칠 때
+/// View 메뉴에 자기 전체 화면 항목(keyEquivalent f)을 항상 먼저 삽입하므로(Close All 과 같은
+/// 사례, 접근성에서는 숨는다) 계약표에는 있지만 여기서 만들 항목이 없다.
 fn view_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String> {
-    let fullscreen =
-        PredefinedMenuItem::fullscreen(app, Some(&item_title("view", "fullscreen", language)?))
-            .map_err(string)?;
     let mut text_items = Vec::new();
     for (row, command) in TEXT_COMMANDS {
         let item = MenuItem::with_id(
@@ -289,8 +289,10 @@ fn view_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String>
         .map_err(string)?;
         text_items.push(item);
     }
-    let mut items: Vec<&dyn IsMenuItem<Wry>> = vec![&fullscreen];
-    items.extend(text_items.iter().map(|item| item as &dyn IsMenuItem<Wry>));
+    let items: Vec<&dyn IsMenuItem<Wry>> = text_items
+        .iter()
+        .map(|item| item as &dyn IsMenuItem<Wry>)
+        .collect();
     Submenu::with_id_and_items(app, "view", menu_title("view", language)?, true, &items)
         .map_err(string)
 }

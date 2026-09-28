@@ -1,9 +1,11 @@
 // 두 호스트의 최종 요청과 표시 좌표를 비교한다.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, drag, fresh, open } from "./app.mjs";
+import { activateApp, frontmostApp } from "./frontmost.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -120, dy: 0, ms: 48, times: 2 };
 
@@ -192,13 +194,41 @@ async function menuContract() {
   return specMenuTables(readFileSync(new URL("../docs/spec/host-contract.md", import.meta.url), "utf8"));
 }
 
-/** 관측된 메뉴에서 호스트마다 다른 값(앱 이름, 창 목록)을 정규화한다. */
-function normalizeMenus(menus, appName, windowTitles) {
-  return menus.map((menu) => ({
-    title: menu.title.replaceAll(appName, "APP"),
+/** 프로세스의 보기 메뉴를 연다. macOS 가 시스템 전체 화면 항목을 늦게 넣기 때문이다.
+    메뉴 막대는 앞의 프로세스 것이므로 먼저 활성화한다. */
+function clickViewMenu(host) {
+  // 메뉴 막대의 5번째 메뉴가 보기다(사과·앱·파일·편집·보기).
+  execFileSync("osascript", ["-e",
+    `tell application "System Events" to set frontmost of process "soksak-${host}" to true`,
+    "-e", "delay 0.3",
+    "-e",
+    `tell application "System Events" to tell process "soksak-${host}" to click menu bar item 5 of menu bar 1`]);
+}
+
+/** 프로세스의 보기 메뉴를 닫는다. */
+function closeMenus() {
+  execFileSync("osascript", ["-e",
+    'tell application "System Events" to key code 53']);
+}
+
+/** 계약표의 보기 메뉴에서 빌더가 만드는(title) 항목 제목의 수. 시스템 행은 이보다 많은 항목을 기다린다. */
+function declaredViewTitles(contract) {
+  return contract.items.filter(([menu, , source]) => menu === "view" && source === "title");
+}
+
+/** 관측된 메뉴에서 호스트마다 다른 값(앱 이름, 창 목록, 시스템이 더한 꼬리)을 정규화한다.
+    계약표의 행 수만큼만 비교한다. 그 뒤의 항목(자동 완성·받아쓰기·이모지 대체키 등)은 macOS 가
+    프레임워크 구성에 따라 제각각 더하므로 어느 호스트도 소유하지 않는다. */
+function normalizeMenus(menus, names, windowTitles, declaredCounts) {
+  // 이름은 긴 것부터 바꾼다(짧은 이름이 긴 이름의 앞부분이기 때문이다).
+  const neutralize = (text) => [...names].sort((a, b) => b.length - a.length)
+    .reduce((value, name) => value.replaceAll(name, "APP"), text);
+  return menus.map((menu, index) => ({
+    title: neutralize(menu.title),
     items: menu.items
       .filter((item) => !windowTitles.includes(item.title))
-      .map((item) => ({ title: item.title.replaceAll(appName, "APP"), key: item.key })),
+      .slice(0, declaredCounts?.[index] ?? menu.items.length)
+      .map((item) => ({ title: neutralize(item.title), key: item.key })),
   }));
 }
 
@@ -209,14 +239,30 @@ test("both hosts serve the declared application menu", async (t) => {
   // 호스트가 보고한 활성 언어가 기준이다. 제목에서 추측하지 않는다(docs/spec/host-contract.md).
   // 보고된 언어는 표의 언어 열이어야 하고, 새 언어는 열을 추가해 선언된다.
   const columns = contract.languages;
+  // 각 상위 메뉴에서 비교할 항목 수는 계약표의 행 수다(시스템 꼬리는 제외).
+  const declaredCounts = contract.menus.map(([id]) => contract.items.filter(([menu]) => menu === id).length);
   const observed = {};
   for (const [name, s] of Object.entries(sessions)) {
-    const report = await s.get("host.menu");
+    // macOS 는 보기 메뉴를 처음 열 때야 자기 전체 화면 항목을 넣는다. 열고 확정될 때까지
+    // 기다린 뒤 닫는다(계약표의 system 행). 확정되지 않으면 다음 단계의 표 대조가 실패한다.
+    const before = frontmostApp();
+    clickViewMenu(name);
+    const settled = await s.until("host.menu", (value) => {
+      const view = value?.menus?.find((menu) => menu.title === "보기" || menu.title === "View");
+      return view && view.items.length > declaredViewTitles(contract).length - 1
+        && view.items.some((item) => item.title === "전체 화면 시작" || item.title === "Enter Full Screen");
+    }, "the system full screen item did not settle into the View menu", { timeout: 5000 });
+    closeMenus();
+    // 드래그 검사는 활성이 아닌 창을 재구하므로 검사 전 활성 앱을 되돌린다.
+    if (before !== null) activateApp(before);
+    const report = settled;
     assert.ok(typeof report?.language === "string" && columns.includes(report.language),
       `host.menu must report a declared language: ${JSON.stringify(report).slice(0, 200)}`);
-    const appName = report.menus[0].title;
+    // 앱 이름은 메뉴 제목과 항목 제목에서 서로 다른 길이로 나타난다(예: soksak 과
+    // soksak-tauriv2). 둘 다 앱 이름이므로 함께 지운다.
+    const names = [...new Set([report.menus[0].title, `soksak-${name}`])];
     const titles = (await s.get("host.windows")).map((entry) => entry.title);
-    observed[name] = { language: report.language, menus: normalizeMenus(report.menus, appName, titles) };
+    observed[name] = { language: report.language, menus: normalizeMenus(report.menus, names, titles, declaredCounts) };
   }
   const languages = Object.values(observed).map((value) => value.language);
   assert.equal(new Set(languages).size, 1, `both hosts must serve the same menu language: ${JSON.stringify(languages)}`);

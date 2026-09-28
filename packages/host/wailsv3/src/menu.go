@@ -38,10 +38,10 @@ var itemTable = []struct{ menu, id, source, ko, en, key string }{
 	{"edit", "copy", "title", "복사", "Copy", "cmd+c"},
 	{"edit", "paste", "title", "붙여넣기", "Paste", "cmd+v"},
 	{"edit", "select-all", "title", "모두 선택", "Select All", "cmd+a"},
-	{"view", "fullscreen", "title", "전체 화면으로 전환", "Toggle Full Screen", "ctrl+cmd+f"},
 	{"view", "text-larger", "title", "글자 크게", "Bigger Text", "cmd+="},
 	{"view", "text-smaller", "title", "글자 작게", "Smaller Text", "cmd+-"},
 	{"view", "text-default", "title", "글자 기본 크기", "Default Text Size", "cmd+0"},
+	{"view", "fullscreen", "system", "", "", ""},
 	{"window", "new-window", "title", "새 창", "New Window", "shift+cmd+n"},
 	{"window", "bring-all-to-front", "system", "", "", ""},
 }
@@ -57,7 +57,6 @@ var menuRoles = map[string]application.Role{
 	"copy":               application.Copy,
 	"paste":              application.Paste,
 	"select-all":         application.SelectAll,
-	"fullscreen":         application.ToggleFullscreen,
 	"bring-all-to-front": application.BringAllToFront,
 }
 
@@ -174,8 +173,11 @@ func ApplicationMenuFor(language string) (*application.Menu, error) {
 // 통째로 만들므로 여기에 오지 않고, close-all 은 close-window 의 performClose: 역할이 시스템과
 // 함께 제공하므로 만들지 않는다.
 func addMenuItems(submenu *application.Menu, menu, language string) error {
+	// close-all 과 fullscreen 은 만들지 않는다. 측정하면 시스템이 앱 시작을 마칠 때 close-window 의
+	// performClose: 곁에 Close All 대체 항목을, View 메뉴에 자기 전체 화면 항목(keyEquivalent f)을
+	// 각각 먼저 놓는다(접근성에서는 둘 다 숨는다). 계약표에는 있지만 여기서 만들 항목이 없다.
 	for _, row := range itemTable {
-		if row.menu != menu || row.id == "close-all" {
+		if row.menu != menu || row.id == "close-all" || row.id == "fullscreen" {
 			continue
 		}
 		title, err := titleOf(language, row.ko, row.en)

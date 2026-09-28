@@ -44,12 +44,14 @@ func TestApplicationMenuViewHasFullScreenAndTextSize(t *testing.T) {
 	if view == nil {
 		t.Fatalf("the application menu has no View menu: %v", labels(menu))
 	}
-	want := []string{"Toggle Full Screen", "Bigger Text", "Smaller Text", "Default Text Size"}
+	// 전체 화면 항목은 앱 시작을 마칠 때 시스템이 View 메뉴에 스스로 놓는다(계약표의 system 행).
+	// 빌더가 만드는 View 항목은 글자 크기 셋뿐이고 실창 검사가 시스템 항목까지 확인한다.
+	want := []string{"Bigger Text", "Smaller Text", "Default Text Size"}
 	if got := labels(view); !slices.Equal(got, want) {
 		t.Fatalf("View menu items = %v, want %v", got, want)
 	}
 	accelerators := []string{}
-	for index := 1; view.ItemAt(index) != nil; index++ {
+	for index := 0; view.ItemAt(index) != nil; index++ {
 		accelerators = append(accelerators, view.ItemAt(index).GetAccelerator())
 	}
 	if !slices.Equal(accelerators, []string{"Cmd+=", "Cmd+-", "Cmd+0"}) {
@@ -74,10 +76,10 @@ func TestApplicationMenuLanguages(t *testing.T) {
 	}{
 		{"ko", "파일", []string{"윈도우 닫기"}},
 		{"ko", "편집", []string{"실행 취소", "다시 실행", "잘라내기", "복사", "붙여넣기", "모두 선택"}},
-		{"ko", "보기", []string{"전체 화면으로 전환", "글자 크게", "글자 작게", "글자 기본 크기"}},
+		{"ko", "보기", []string{"글자 크게", "글자 작게", "글자 기본 크기"}},
 		{"en", "File", []string{"Close Window"}},
 		{"en", "Edit", []string{"Undo", "Redo", "Cut", "Copy", "Paste", "Select All"}},
-		{"en", "View", []string{"Toggle Full Screen", "Bigger Text", "Smaller Text", "Default Text Size"}},
+		{"en", "View", []string{"Bigger Text", "Smaller Text", "Default Text Size"}},
 	}
 	menus := map[string]*application.Menu{}
 	for _, language := range []string{"ko", "en"} {

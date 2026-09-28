@@ -66,10 +66,10 @@ fn invalid_json_closes_connection() {
 | edit | copy | title | 복사 | Copy | cmd+c |
 | edit | paste | title | 붙여넣기 | Paste | cmd+v |
 | edit | select-all | title | 모두 선택 | Select All | cmd+a |
-| view | fullscreen | title | 전체 화면으로 전환 | Toggle Full Screen | ctrl+cmd+f |
 | view | text-larger | title | 글자 크게 | Bigger Text | cmd+= |
 | view | text-smaller | title | 글자 작게 | Smaller Text | cmd+- |
 | view | text-default | title | 글자 기본 크기 | Default Text Size | cmd+0 |
+| view | fullscreen | system | | | |
 | window | new-window | title | 새 창 | New Window | shift+cmd+n |
 | window | bring-all-to-front | system | | | |
 
