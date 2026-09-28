@@ -14,6 +14,7 @@ export function createLifecycleListener(register, root = globalThis.window) {
     for (const entry of active) dispose(entry, entry.off);
   };
   for (const event of ["pagehide", "beforeunload", "unload"]) {
+    // default: contract tests may provide no DOM root, so there is no native listener to register.
     root?.addEventListener?.(event, unload, { once: true });
   }
   return (event, listener) => {

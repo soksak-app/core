@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-96-14-6-4-2 Red/Green: WebContent 수정 뒤 최초 전체 `pnpm test`에서 설명 없는 optional-root 기본값 2개, `platform/<os>/` 밖의 Tauri 플랫폼 `cfg`, 낡은 parity 수를 발견했다. optional-root 계약에 DOM root가 없는 경우의 이유를 기록하고, reload 전달은 외부 OS 조건 없이 플랫폼 경계를 호출하며, 두 parity 번역은 63 lane·구현 파일 313개·테스트 파일 240개를 기록한다. 전체 `pnpm test`가 저장소 검사 127개와 모든 workspace 패키지에서 통과했다.
+
 - V5-96-14-6-4-1 Red/Green: 메인 페이지를 반복 reload할 때 두 호스트의 WebContent 프로세스가 WebKit allocator 페이지를 보유했다. 이제 두 호스트가 `WKWebView._killWebContentProcessAndResetState`를 호출하고 WebContent PID가 0이 될 때까지 기다린 뒤 reload하며, 선택자가 없으면 명시적인 오류다. `webview_process_test`가 종료·reload 순서를 통과한다. 추적 40회 reload 반복은 재빌드 웨일즈 RSS 76,688→76,784KB·WebContent 최대 79,040KB, 타우리 RSS 89,072→89,056KB·WebContent 최대 77,840KB로 제한됨을 보고한다. 체크리스트 항목을 완료했다.
 
 - V5-96-14-6-4 네이티브 Red/Green: 공용 macOS 이미지 영역 테스트에서 생성 1회와 배치 20회 뒤 `NSViewFrameDidChangeNotification` 등록이 21회로 재현됐다. `SPImageRegion`은 이제 관찰 중인 표면 하나를 추적하고 표면이 바뀌기 전에 이전 등록을 제거하며 뷰 연결과 배치에서 같은 등록을 재사용한다. 같은 테스트는 등록 1회를 보고한다. 재빌드한 웨일즈와 타우리 fixture에서 교차 창 크기 변경 배치 1,000회를 끝낸 뒤 호스트 RSS는 웨일즈 122MB, 타우리 115MB였고 옵저버 증가는 없었다. 전체 네이티브 모음에는 이번 수정과 무관한 TEST 19와 배치되지 않은 표면의 디스플레이 배율 가정 실패 2건이 여전히 있어, WebContent reload 보유를 조사하는 동안 체크리스트는 열린 상태다.
