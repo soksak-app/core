@@ -6,7 +6,7 @@
 - Repository: `~/polyspec/soksak`.
 - Branch: `fix/tui-repeat-drag`.
 - Current HEAD: `bfcc78ba docs: identify the mid-gesture focus report as the first failing boundary` plus the correction commit this document belongs to.
-- `.3` through `.5` are complete (items 9–11 below): the boundary is measured, corrected with an owning native Red→Green, and both rebuilt hosts pass the full 60-cycle acceptance and the real-window terminal suite. `.6` delivery is in progress: `.6.1` and `.6.2` are closed, `.6.3` (apparent font growth report) has its first invariant measurement recorded.
+- `.3` through `.5` are complete (items 9–11 below): the boundary is measured, corrected with an owning native Red→Green, and both rebuilt hosts pass the full 60-cycle acceptance and the real-window terminal suite. `.6` delivery is in progress: `.6.1` through `.6.3` are closed (the apparent font growth report is closed by measurement — cell metrics, zoom, and text-size settings are invariant while the child runs, so no observable change exists in the measured path).
 - The task remains open at `.6`: run the remaining gates, commit, and restore both user-path bundles on the corrected build.
 
 ## User-visible failure and acceptance contract
