@@ -638,9 +638,19 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   // 포인터 입력을 사이드카에 알린다. 프로그램이 마우스 보고를 켰으면 사이드카가 보고로 바꾸고, 아니면 무시한다.
   // 버튼 없는 움직임은 칸이 바뀔 때만 보낸다.
   let hoverCell = null;
+  // 마우스 보고와 선택 연산은 같은 PTY 상태를 갱신한다. 요청을 동시에 보내면
+  // transport 응답 순서가 달라져 selection.update 가 selection.start 보다 먼저
+  // 처리될 수 있다. 제스처 전체를 하나의 순서열로 보낸다.
+  let pointerInputChain = Promise.resolve();
+  const queuePointerInput = (body) => {
+    const request = pointerInputChain.then(() => terminal.send(id, body));
+    pointerInputChain = request.catch(recoverInputTail);
+    observeInput(request);
+    return request;
+  };
   const sendMouse = (phase, point, event, pressed) => {
-    observeInput(terminal.send(id, { operation: "mouse", phase, ...point, pressed,
-      shift: event.shiftKey === true, alt: event.altKey === true, ctrl: event.ctrlKey === true }));
+    queuePointerInput({ operation: "mouse", phase, ...point, pressed,
+      shift: event.shiftKey === true, alt: event.altKey === true, ctrl: event.ctrlKey === true });
   };
   const hoverMouse = (event) => {
     if (selectionPointerId !== null || !(session.cellWidth > 0 && session.cellHeight > 0)) return;
@@ -695,9 +705,9 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       if (!selectionStarted) {
         if (point.x === selectionStart.x && point.y === selectionStart.y) return;
         selectionStarted = true;
-        observeInput(terminal.send(id, { operation: "selection.start", ...selectionStart }));
+        queuePointerInput({ operation: "selection.start", ...selectionStart });
       }
-      observeInput(terminal.send(id, { operation: "selection.update", ...point }));
+      queuePointerInput({ operation: "selection.update", ...point });
     } catch (error) {
       reportInputError(error);
     }
@@ -714,8 +724,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     view.releasePointerCapture(event.pointerId);
     event.preventDefault();
     // 움직이지 않은 클릭은 누른 칸에서 빈 선택을 시작하고 끝낸다. 빈 선택의 뗌은 이전 선택을 지운다.
-    if (!started) observeInput(terminal.send(id, { operation: "selection.start", ...start }));
-    observeInput(terminal.send(id, { operation: "selection.end" }));
+    if (!started) queuePointerInput({ operation: "selection.start", ...start });
+    queuePointerInput({ operation: "selection.end" });
     // 뗌은 선택 연산 뒤에 보낸다. 사이드카는 마우스 보고 제스처의 선택 연산을 뗌 전에 받아 선택하지 않는다.
     try {
       sendMouse("up", selectionPoint(event, true), event, false);

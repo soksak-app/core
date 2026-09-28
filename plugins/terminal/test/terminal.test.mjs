@@ -160,12 +160,14 @@ function createFakeAttachImage() {
 /**
  * 가짜 sidecar 구현.
  */
-function createFakeSidecar() {
+function createFakeSidecar({ delay = () => 0 } = {}) {
   const messages = [];
   const listeners = new Map();
 
   return {
     send: async function(id, body) {
+      const wait = delay(body);
+      if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
       messages.push({ id, body });
       return Promise.resolve();
     },
@@ -1202,6 +1204,30 @@ test("terminal pointer drag sends one complete selection gesture to the sidecar"
   assert.equal(messages[2].x, 10);
   assert.equal(messages[3].x, 42);
   assert.deepEqual(messages[5], { operation: "mouse", phase: "up", x: 42, y: 12, pressed: false, shift: false, alt: false, ctrl: false });
+});
+
+test("terminal pointer gesture serializes selection commands when sidecar replies finish out of order", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar({ delay: (body) => body.operation === "selection.start" ? 10 : 0 });
+  const fakeExpose = createFakeExpose();
+  const view = createFakeView();
+  await startTerminal({
+    view, attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+
+  view._trigger("pointerdown", { button: 0, pointerId: 4, clientX: 10, clientY: 12 });
+  view._trigger("pointermove", { pointerId: 4, clientX: 42, clientY: 12 });
+  view._trigger("pointerup", { pointerId: 4, clientX: 42, clientY: 12 });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  assert.deepEqual(fakeSidecar.getMessages().map(({ body }) => body.operation === "mouse" ? `mouse.${body.phase}` : body.operation), [
+    "mouse.down", "mouse.move", "selection.start", "selection.update", "selection.end", "mouse.up",
+  ]);
+  assert.equal(fakeExpose.getStatus("terminal.session").readFn().error, undefined);
 });
 
 test("a lost pointer capture resets terminal drag ownership for the next card focus", async () => {

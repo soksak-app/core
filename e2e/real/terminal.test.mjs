@@ -798,6 +798,31 @@ for (const app of Object.values(APPS)) {
     await s.run("terminal.input", { bytes: "\x1b[?1003l\x1b[?1006l" }, surface);
   });
 
+  test(`${app.name}: rebuilt TUI plain drag reaches the PTY`, { timeout: 90000 }, async (t) => {
+    const { s, surface } = await prepare(t, app, "TUI");
+    await s.run("terminal.input", { bytes: "tui-program\r" }, surface);
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("Ask TUI")),
+      "the rebuilt TUI prompt did not appear");
+    const session = await s.get("terminal.session", surface);
+    const view = await s.rect("terminal.view", undefined, surface);
+    const center = await bringFront(s, app, view);
+    const origin = { x: center.x - view.width / 2, y: center.y - view.height / 2 };
+    const row = Math.max(1, Math.floor(session.rows / 2));
+    const from = { x: origin.x + session.cellWidth, y: origin.y + (row + 0.5) * session.cellHeight };
+    const to = { x: origin.x + session.cellWidth * 5, y: from.y };
+    dragPath(from, to, 8);
+    await s.until("terminal.session", (value) => value.mouse.phase === "up",
+      "the TUI drag did not reach the terminal release", { surface });
+    const result = await s.get("terminal.session", surface);
+    const window = await s.get("host.window");
+    assert.equal(window.active, true);
+    assert.equal(window.key, true);
+    assert.equal(result.mouse.reported, true, "TUI did not report the plain drag");
+    assert.equal(result.mouse.written, true, "TUI did not write the plain drag to the PTY");
+    assert.match(result.mouse.bytes ?? "", /^[A-Za-z0-9+/]+=*$/, "TUI PTY bytes were not recorded");
+    assert.equal(result.error, undefined);
+  });
+
   test(`${app.name}: real keypad keys send SS3 sequences in application keypad mode and characters otherwise`, { timeout: 90000 }, async (t) => {
     const { s, surface, session, origin } = await prepare(t, app, "KEYPAD");
     // 키는 초점을 가진 터미널 영역에 간다.

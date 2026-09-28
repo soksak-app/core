@@ -24,6 +24,7 @@
 - 요구사항을 바로잡아 V5-96-14-6-2를 시작했다. `?1003`을 켠 TUI의 일반 드래그는 PTY에 도달해야 하며 텍스트 선택은 대체 요구사항이 아니다. 새 Red는 페이지의 마우스 상태만이 아니라 현재 Tauri·Wails 창에서 PTY가 받은 정확한 SGR 바이트를 요구한다.
 - V5-96-14-6-2의 현재 Red: 활성 현재 Tauri TUI 영역은 실제 HID 뒤 `phase:up`, `reported:true`, `written:true`, SGR 바이트를 기록했다. 활성 현재 Wails TUI 영역은 `motion:true`였지만 같은 드래그 뒤 `phase:move`, `reported:false`, `written:false`, `bytes:null`로 남았고 이동만 도착했다. 양 호스트 endpoint 주입 테스트는 통과하므로 이 Wails 네이티브 HID 경로를 검사하지 않는다.
 - V5-96-14-6-2의 웨일즈 네이티브 감시기 재진입을 수정했다. 이제 AppKit 이벤트가 반환된 뒤 메인 런루프에서 `surface-pressed`와 `surface-input`을 발행한다. 재빌드한 추적 실제 HID `?1003` PTY 테스트가 웨일즈 5/5, 타우리 5/5 통과했다. 체크리스트 완료 전 현재 TUI 창 직접 측정은 계속한다.
+- V5-96-14-6-2를 완료했다. 터미널 포인터·선택·마우스 보고 명령이 하나의 순서화된 전송열을 공유해 `selection update without selection start`를 방지한다. 추적 재빌드 TUI 테스트가 웨일즈 3/3, 타우리 3/3 통과했고 `phase:up`, `reported:true`, `written:true`, PTY 바이트와 세션 오류 없음을 확인했다. 기본 실제 HID `?1003` 테스트도 각 호스트 5/5 통과했다.
 - 사용자가 텍스트 선택, 카드 전환, TUI 복귀, TUI 입력 클릭 뒤 드래그가 멈춘다고 보고해 V5-96-14-6-3을 시작했다. Red는 각 초점 전환 뒤 완전한 down/drag/up 순서를 요구하고 오래된 포인터 캡처나 마우스 제스처 상태를 허용하지 않는다.
 - V5-96-14-6-3을 완료했다. 포인터 캡처를 잃은 뒤 `selectionPointerId`가 남아 다음 카드 초점의 드래그가 무시됐다. 이제 `lostpointercapture`에서 선택을 닫고 `mouse.up`을 보내며 터미널 플러그인 테스트 109/109가 통과한다.
 
