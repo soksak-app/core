@@ -7,8 +7,15 @@ function complete() {
   return {
     expected,
     events: expected.map((item) => ({ ...item, reported: true, written: true, bytes: "eA==", error: null })),
-    visual: { expectedCells: ["2:3", "2:4"], selectedCells: ["2:3", "2:4"] },
+    visual: { expectedCells: ["2:3", "2:4"], selectedCells: ["2:3", "2:4"], recordedCells: ["2:3", "2:4"] },
     capture: { first: 90, last: 160, inputStart: 100, inputEnd: 150, frameCount: 5, maxGap: 20 },
+    dom: [
+      { type: "pointerdown", x: 10, y: 12, buttons: 1 },
+      { type: "pointermove", x: 20, y: 12, buttons: 1 },
+      { type: "pointerup", x: 30, y: 12, buttons: 0 },
+    ],
+    pointerStart: { x: 10, y: 12 },
+    pointerEnd: { x: 30, y: 12 },
     overflow: false,
   };
 }
@@ -29,6 +36,11 @@ test("PTY write success without the required visible selection fails", () => {
   attempt.visual.selectedCells = [];
   assert.throws(() => assertTuiGesture(attempt), /selection/);
 });
+test("the final recorded frame must show every selected text cell", () => {
+  const attempt = complete();
+  attempt.visual.recordedCells = ["2:3"];
+  assert.throws(() => assertTuiGesture(attempt), /recorded selection/);
+});
 test("incomplete input or capture evidence fails", () => {
   for (const change of [
     (a) => a.events.splice(1, 1),
@@ -39,5 +51,16 @@ test("incomplete input or capture evidence fails", () => {
     const attempt = complete();
     change(attempt);
     assert.throws(() => assertTuiGesture(attempt));
+  }
+});
+test("an early pointer-up or absent pointer-down fails even if the final PTY report exists", () => {
+  for (const change of [
+    (a) => { a.dom.splice(0, 1); },
+    (a) => { a.dom.splice(2, 0, { type: "pointerup", x: 22, y: 12, buttons: 0 }); },
+    (a) => { a.dom.at(-1).x = 22; },
+  ]) {
+    const attempt = complete();
+    change(attempt);
+    assert.throws(() => assertTuiGesture(attempt), /pointer/);
   }
 });

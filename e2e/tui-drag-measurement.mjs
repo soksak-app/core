@@ -1,8 +1,23 @@
 import assert from "node:assert/strict";
 
 // 기록된 새 입력만 판정한다. 회복 시도의 성공은 앞선 실패의 증거를 바꾸지 않는다.
-export function assertTuiGesture({ expected, events, visual, capture, overflow }) {
+export function assertTuiGesture({ expected, events, visual, capture, overflow, dom, pointerStart, pointerEnd, waitError }) {
   assert.equal(overflow, false, "pointer trace overflow or missing trace status");
+  assert.equal(waitError, undefined, `pointer result wait failed: ${waitError}`);
+  assert.ok(Array.isArray(dom) && dom.length >= 2 && pointerStart && pointerEnd, "missing pointer DOM evidence");
+  const downs = dom.filter((entry) => entry.type === "pointerdown");
+  const ups = dom.filter((entry) => entry.type === "pointerup");
+  assert.equal(downs.length, 1, "pointer DOM down count differs from input");
+  assert.equal(ups.length, 1, "pointer DOM up count differs from input");
+  const downIndex = dom.indexOf(downs[0]);
+  const upIndex = dom.indexOf(ups[0]);
+  assert.ok(downIndex < upIndex, "pointer DOM up preceded down");
+  for (const [actual, target, phase] of [[downs[0], pointerStart, "down"], [ups[0], pointerEnd, "up"]]) {
+    assert.ok(Math.abs(actual.x - target.x) <= 2 && Math.abs(actual.y - target.y) <= 2,
+      `pointer DOM ${phase} at ${actual.x},${actual.y} differs from ${target.x},${target.y}`);
+  }
+  assert.ok(dom.slice(downIndex + 1, upIndex).every((entry) => entry.type !== "pointermove" || entry.buttons === 1),
+    "pointer DOM drag moved without pressed button");
   assert.ok(expected.length >= 3, "missing drag input");
   assert.equal(expected[0].phase, "down", "missing input down");
   assert.equal(expected.at(-1).phase, "up", "missing input up");
@@ -20,6 +35,7 @@ export function assertTuiGesture({ expected, events, visual, capture, overflow }
   }
   assert.ok(visual?.expectedCells?.length > 0, "missing expected selection cells");
   assert.deepEqual(visual.selectedCells, visual.expectedCells, "visible selection differs from expected cells");
+  assert.deepEqual(visual.recordedCells, visual.expectedCells, "recorded selection differs from expected cells");
   assert.ok(capture && [capture.first, capture.last, capture.inputStart, capture.inputEnd,
     capture.frameCount, capture.maxGap].every(Number.isFinite), "missing capture evidence");
   assert.ok(capture.frameCount >= 2 && capture.first <= capture.inputStart && capture.last >= capture.inputEnd,
