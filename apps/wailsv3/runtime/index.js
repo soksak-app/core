@@ -11,6 +11,7 @@
 import { HostWorkspaceStore } from "@soksak/workbench/host-store.js";
 import { hostWindows } from "@soksak/workbench/host-windows.js";
 import { createClipboardBridge } from "@soksak/plugin-api";
+import { createLifecycleListener } from "./listener-lifecycle.js";
 
 const SERVICE = "github.com/min-median-max/soksak/packages/host/wailsv3/src.Host";
 
@@ -24,11 +25,11 @@ const call = (method, ...args) =>
     : runtime().then((r) => r.Call.ByName(`${SERVICE}.${method}`, ...args));
 
 /** 이벤트 수신. payload 는 `data` 필드에 담긴다. */
-const listen = (event, fn) =>
+const listen = createLifecycleListener((event, fn) =>
   runtime().then(async (r) => {
     const name = await r.Window.Name();
     return r.Events.On(event, (e) => { if (e.sender === name) fn(e.data); });
-  });
+  }));
 
 const METHOD = {
   workspace: "Workspace",
@@ -105,7 +106,7 @@ export const clipboard = createClipboardBridge((name, payload) => host.call(name
 
 export const page = (() => {
   const call = (method, ...args) => window.__soksakNative.call(method, args);
-  const listen = (event, fn) => window.__soksakNative.on(event, fn);
+  const listen = createLifecycleListener((event, fn) => window.__soksakNative.on(event, fn));
   // 표면 id 는 문서 주소의 id 다. 워크벤치가 표면을 그 탭 id 로 연다.
   const surface = new URLSearchParams(location.search).get("id");
   return {

@@ -5,6 +5,7 @@
 import { HostWorkspaceStore } from "@soksak/workbench/host-store.js";
 import { hostWindows } from "@soksak/workbench/host-windows.js";
 import { createClipboardBridge } from "@soksak/plugin-api";
+import { createLifecycleListener } from "./listener-lifecycle.js";
 
 const COMMAND = {
   workspace: "workspace",
@@ -100,8 +101,8 @@ const ARG = {
 
 export const host = (() => {
   const { invoke } = window.__TAURI__.core;
-  const listen = (event, fn) => window.__TAURI__.event.listen(event, fn,
-    { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } });
+  const listen = createLifecycleListener((event, fn) => window.__TAURI__.event.listen(event, fn,
+    { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } }));
   return {
     call(name, arg) {
       const command = COMMAND[name];
@@ -122,8 +123,8 @@ export const clipboard = createClipboardBridge((name, payload) => host.call(name
 
 export const page = (() => {
   const { invoke } = window.__TAURI__.core;
-  const listen = (event, fn) => window.__TAURI__.event.listen(event, fn,
-    { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } });
+  const listen = createLifecycleListener((event, fn) => window.__TAURI__.event.listen(event, fn,
+    { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } }));
   // 표면 id 는 문서 주소의 id 다. 워크벤치가 표면을 그 탭 id 로 연다.
   const surface = new URLSearchParams(location.search).get("id");
   return {

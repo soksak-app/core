@@ -21,7 +21,7 @@ test("Wails page regions expose operations but only composition places geometry"
             fn({ surface: "s2", name: "test-img", event: { type: "test" } });
           }, 0);
         }
-        return Promise.resolve();
+        return Promise.resolve(() => {});
       },
     },
   };

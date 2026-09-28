@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- V5-96-14-6-4 implementation update: both runtime bridges now release event-listener registrations on `pagehide`, including registrations whose native unlisten promise resolves after unload. The bounded rebuilt memory repeat remains open.
+
+- V5-96-14-6-4 Red update: repeated reloads showed unbounded WebContent RSS in both hosts, and both runtime bridges discarded native event-listener unlisten handles on page unload. Added failing lifecycle tests for synchronous and delayed registrations; the fix and bounded rebuilt repeat remain pending.
+
 - Started V5-96-14-6-4 after the system process list showed a Tauri process using approximately 7.83 GB while another Tauri process used 235.6 MB and Wails used 99.4 MB. The cause is not yet established; a tracked RSS and child-process repeat measurement is required.
 - Initial measurement for V5-96-14-6-4: after 40 fresh three-terminal cycles, host physical footprints stayed at 35–47 MB, while WebKit WebContent RSS grew Wails 393→466 MB and Tauri 349→466 MB. A stale temporary Tauri process was also removed. This is Red evidence for WebContent retention, not yet proof of an application-owned allocation leak.
 
