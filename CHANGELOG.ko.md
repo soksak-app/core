@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-96-14-6-4-3 Red/Green: 빠진 rustfmt 구성요소를 설치한 뒤 `cargo fmt --all -- --check`가 통과하고 집중 `webview_process_test`가 통과했다. native 모음은 테스트까지 실행되며, 남은 실패는 무관한 디스플레이 배율 가정인 TEST 19(`contentsScale` 기대 2, 실제 1)와 배치되지 않은 표면 raster 검사(기대 400x200, 실제 200x100)뿐이다. 이 실패들을 명시적으로 남기고 통과로 보고하지 않는다.
+
 - V5-96-14-6-4-2 Red/Green: WebContent 수정 뒤 최초 전체 `pnpm test`에서 설명 없는 optional-root 기본값 2개, `platform/<os>/` 밖의 Tauri 플랫폼 `cfg`, 낡은 parity 수를 발견했다. optional-root 계약에 DOM root가 없는 경우의 이유를 기록하고, reload 전달은 외부 OS 조건 없이 플랫폼 경계를 호출하며, 두 parity 번역은 63 lane·구현 파일 313개·테스트 파일 240개를 기록한다. 전체 `pnpm test`가 저장소 검사 127개와 모든 workspace 패키지에서 통과했다.
 
 - V5-96-14-6-4-1 Red/Green: 메인 페이지를 반복 reload할 때 두 호스트의 WebContent 프로세스가 WebKit allocator 페이지를 보유했다. 이제 두 호스트가 `WKWebView._killWebContentProcessAndResetState`를 호출하고 WebContent PID가 0이 될 때까지 기다린 뒤 reload하며, 선택자가 없으면 명시적인 오류다. `webview_process_test`가 종료·reload 순서를 통과한다. 추적 40회 reload 반복은 재빌드 웨일즈 RSS 76,688→76,784KB·WebContent 최대 79,040KB, 타우리 RSS 89,072→89,056KB·WebContent 최대 77,840KB로 제한됨을 보고한다. 체크리스트 항목을 완료했다.

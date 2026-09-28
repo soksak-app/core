@@ -1032,7 +1032,9 @@ fn reload(window: &Window) -> Result<Value, Failure> {
         let view = crate::windows::root_view(&target)
             .ok_or_else(|| "the main page is gone".to_string())?;
         let platform = platform::current()?;
-        with_view(&view, move |native| platform.kill_web_content_process(native))
+        with_view(&view, move |native| {
+            platform.kill_web_content_process(native)
+        })
     })
     .map_err(internal)?;
     let (tx, rx) = mpsc::channel();

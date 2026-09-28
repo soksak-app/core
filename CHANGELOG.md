@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-14-6-4-3 Red/Green: after the missing rustfmt component was installed, `cargo fmt --all -- --check` passes and the focused `webview_process_test` passes. The native suite reaches its tests; its only failures are the unrelated display-scale assumptions in TEST 19 (`contentsScale` expected 2, got 1) and the unplaced-surface raster check (expected 400x200, got 200x100). The failures remain explicit and are not reported as a pass.
+
 - V5-96-14-6-4-2 Red/Green: the first full `pnpm test` after the WebContent correction exposed two undocumented optional-root defaults, a Tauri platform `cfg` outside `platform/<os>/`, and stale parity counts. The optional-root contract now states its no-DOM-root reason, reload dispatch calls the platform boundary without an external OS conditional, and both parity translations report 63 lanes, 313 implementation files, and 240 test files. Full `pnpm test` passes 127 repository checks and all workspace packages.
 
 - V5-96-14-6-4-1 Red/Green: repeated main-page reloads retained WebKit allocator pages in both hosts' WebContent processes. Both hosts now call `WKWebView._killWebContentProcessAndResetState` and wait for the WebContent PID to become zero before reloading; an unavailable selector is an explicit error. `webview_process_test` passes the termination and reload sequence. The tracked 40-reload repeat reports bounded rebuilt Wails RSS (76,688→76,784 KB; WebContent maximum 79,040 KB) and Tauri RSS (89,072→89,056 KB; WebContent maximum 77,840 KB). The checklist item is complete.
