@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-96-14-6-4-4 Red/Green: native 디스플레이 배율 실패는 테스트가 Retina `2x`를 고정한 것이 원인이었다. TEST 19와 배치되지 않은 표면 raster 검사는 창의 실제 양수 `backingScaleFactor`에서 장치 픽셀과 `contentsScale` 기대값을 계산한다. 현재 1x 디스플레이에서 `image_region_test`와 전체 `make -C native/darwin test`가 통과했다.
+
 - 후속 V5-96-14-6-4-4/5를 열었다. native 디스플레이 배율 실패와 분할·WebView 지속 부하 측정 부재가 남아 있다. reload 수정 완료를 전체 완료로 처리하지 않으며 두 항목에 Red/Green 증거가 있어야 한다.
 
 - V5-96-14-6-4-3 Red/Green: 빠진 rustfmt 구성요소를 설치한 뒤 `cargo fmt --all -- --check`가 통과하고 집중 `webview_process_test`가 통과했다. native 모음은 테스트까지 실행되며, 남은 실패는 무관한 디스플레이 배율 가정인 TEST 19(`contentsScale` 기대 2, 실제 1)와 배치되지 않은 표면 raster 검사(기대 400x200, 실제 200x100)뿐이다. 이 실패들을 명시적으로 남기고 통과로 보고하지 않는다.

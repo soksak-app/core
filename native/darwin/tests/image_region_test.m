@@ -985,7 +985,7 @@ int main(void) { @autoreleasepool {
         sp_region_close(region18);
     }
 
-    // TEST 19: 표시된 이미지의 scale이 제대로 설정되는지 확인 (scale 2)
+    // TEST 19: 표시된 이미지의 scale이 실제 창 backing scale로 설정되는지 확인한다.
     {
         [collectedEvents removeAllObjects];
         void *region19 = sp_region_create(surface, "test19", testEvent, NULL);
@@ -993,7 +993,9 @@ int main(void) { @autoreleasepool {
         // 500 - 200 - 200 = 100, 400 - 160 - 160 = 80
         sp_region_place(region19, 200, 160, 200, 160, true);
         double raster19[3] = {0};
-        check(sp_region_raster(region19, raster19), @"TEST 19: region reports its scale-2 raster");
+        CGFloat backingScale19 = window.backingScaleFactor;
+        check(backingScale19 > 0, @"TEST 19: window reports a positive backing scale");
+        check(sp_region_raster(region19, raster19), @"TEST 19: region reports its backing-scale raster");
         unsigned char nonce19[16];
         IOSurfaceRef testSurface19 = createColoredGlobalSurface((size_t)raster19[0], (size_t)raster19[1], nonce19);
         BOOL presented = sp_region_present(region19, IOSurfaceGetID(testSurface19), nonce19,
@@ -1019,8 +1021,9 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"TEST 19: imageLayer bounds are point units (expected 100x80, got %.0f x%.0f)",
                 layerWidth, layerHeight]);
 
-        check(imageLayer.contentsScale == 2.0,
-            [NSString stringWithFormat:@"TEST 19: contentsScale is 2 (got %g)", imageLayer.contentsScale]);
+        check(fabs(imageLayer.contentsScale - backingScale19) < 0.000001,
+            [NSString stringWithFormat:@"TEST 19: contentsScale is the window backing scale %g (got %g)",
+                backingScale19, imageLayer.contentsScale]);
 
         sp_region_close(region19);
         CFRelease(testSurface19);
@@ -1180,9 +1183,13 @@ int main(void) { @autoreleasepool {
         check(!sp_region_raster(region, raster) && !sp_region_surface_placed(region),
             @"unplaced surface: a shown region has no raster geometry and reports its surface as not placed");
         webviewSetFrame(unplaced, 0, 0, 200, 100);
-        check(sp_region_raster(region, raster) && sp_region_surface_placed(region) && raster[0] == 400 && raster[1] == 200,
-            [NSString stringWithFormat:@"unplaced surface: placing the surface gives the region a 400x200 raster (got %.0fx%.0f)",
-                raster[0], raster[1]]);
+        CGFloat backingScale = window.backingScaleFactor;
+        double expectedWidth = 200 * backingScale;
+        double expectedHeight = 100 * backingScale;
+        check(sp_region_raster(region, raster) && sp_region_surface_placed(region)
+            && raster[0] == expectedWidth && raster[1] == expectedHeight,
+            [NSString stringWithFormat:@"unplaced surface: placing the surface gives the region a %.0fx%.0f raster (got %.0fx%.0f)",
+                expectedWidth, expectedHeight, raster[0], raster[1]]);
         sp_region_close(region);
     }
 

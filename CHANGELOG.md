@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-14-6-4-4 Red/Green: the native display-scale failures were caused by tests hardcoding Retina `2x` expectations. TEST 19 and the unplaced-surface raster check now derive expected device pixels and `contentsScale` from the window's actual positive `backingScaleFactor`. `image_region_test` and the full `make -C native/darwin test` pass on the current 1x display.
+
 - Follow-up V5-96-14-6-4-4/5 opened: the native display-scale failures and the missing sustained split/WebView load measurement remain open. The completed reload correction is not treated as overall completion until both tracked items have Red/Green evidence.
 
 - V5-96-14-6-4-3 Red/Green: after the missing rustfmt component was installed, `cargo fmt --all -- --check` passes and the focused `webview_process_test` passes. The native suite reaches its tests; its only failures are the unrelated display-scale assumptions in TEST 19 (`contentsScale` expected 2, got 1) and the unplaced-surface raster check (expected 400x200, got 200x100). The failures remain explicit and are not reported as a pass.
