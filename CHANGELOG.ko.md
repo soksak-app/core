@@ -22,6 +22,8 @@
 
 - V5-96-14-6-1을 완료했다. 다시 빌드한 Tauri의 추적 테스트 `a real Shift drag selects while ?1003 motion reporting is on`이 클립보드·PTY 검증과 함께 통과했다. 현재 사용자 창에서 좌표를 정확히 매핑한 일반 드래그는 PTY 바이트를 만들고 클립보드를 그대로 두었으며, Shift 드래그는 정확히 `TUI header`를 복사했다. 두 측정 모두 `active:true`, `key:true`, `occluded:false`였다. 일반 드래그 캡처는 완전한 130프레임, 최대 간격 23.69ms였다.
 
+- 사용자가 Tauri TUI의 키보드 입력이 불완전하다고 보고해 V5-96-14-7을 시작했다. 이전 완료 처리는 현재 창의 이 동작을 검사하지 않았다.
+
 - V5-96-14와 V5-96-14-1을 완료했다. 터미널 계약에 맞게 Red 기준을 정정했다. 마우스 보고 TUI가 일반 드래그를 소유하고 Shift 드래그가 텍스트를 선택한다. 재빌드한 Tauri와 Wails 실제 HID 검사는 `?1003` SGR 이동 바이트와 `?1002` Shift 선택을 관측했고 `SHIFT`를 복사하면서 PTY에 드래그 바이트를 보내지 않았다. 추적 가능한 `normal-shutdown` 대상은 이제 `host.quit` 전에 터미널 세션을 준비한다. 재빌드 Tauri는 endpoint 64ms·종료 32ms, Wails는 endpoint 64ms·종료 38ms였고 새 Tauri 진단 보고서는 생성되지 않았다.
 
 - V5-96-16을 완료했다. 종료 대상에 터미널 세션 준비 단계를 추가해 endpoint 제거와 프로세스 종료를 추정하지 않고 측정한다.
