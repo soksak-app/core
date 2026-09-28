@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Follow-up V5-96-14-6-6 opened after the restarted Tauri and Wails builds still showed a user-visible TUI drag failure. Prior selection-release counts are not acceptance evidence; the new item requires pointer ownership, PTY bytes, selection, clipboard, active-window state, and complete capture evidence.
+
 - V5-96-14-6-4-5 Red/Green: the tracked `e2e/split-load-memory.test.mjs` ran 32 split/resize/three-reload/close cycles on each rebuilt host while recording RSS and WebContent process counts. Tauri grew 32KB host and 4,992KB WebContent RSS; Wails grew 48KB and 4,528KB. Both stayed below the 128MB host, 256MB WebContent, and four-process limits. Each run used an isolated endpoint root and the harness did not launch applications. During setup, a stale multi-instance run was discarded and its temporary parents and sidecars were explicitly removed; it is not acceptance evidence.
 
 - V5-96-14-6-4-4 Red/Green: the native display-scale failures were caused by tests hardcoding Retina `2x` expectations. TEST 19 and the unplaced-surface raster check now derive expected device pixels and `contentsScale` from the window's actual positive `backingScaleFactor`. `image_region_test` and the full `make -C native/darwin test` pass on the current 1x display.

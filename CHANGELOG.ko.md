@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- 재기동한 타우리·웨일즈에서도 사용자가 TUI 드래그 실패를 보고해 후속 V5-96-14-6-6을 열었다. 이전 선택 해제 카운트는 수용 증거로 쓰지 않으며, 새 항목은 pointer 소유권, PTY 바이트, 선택, 클립보드, 활성 창 상태, 완전한 캡처 증거를 요구한다.
+
 - V5-96-14-6-4-5 Red/Green: 추적 `e2e/split-load-memory.test.mjs`가 재빌드 호스트마다 분할·리사이즈·reload 3회·닫기 32주기를 실행하며 RSS와 WebContent 프로세스 수를 기록했다. 타우리는 호스트 32KB·WebContent 4,992KB, 웨일즈는 48KB·4,528KB 증가했고 호스트 128MB, WebContent 256MB, 프로세스 4개 한도를 모두 지켰다. 실행마다 endpoint 경로를 격리했고 하네스는 앱을 실행하지 않았다. 준비 중 발생한 다중 인스턴스 실행은 폐기했으며 임시 부모와 사이드카를 명시적으로 제거했으므로 수용 증거로 사용하지 않는다.
 
 - V5-96-14-6-4-4 Red/Green: native 디스플레이 배율 실패는 테스트가 Retina `2x`를 고정한 것이 원인이었다. TEST 19와 배치되지 않은 표면 raster 검사는 창의 실제 양수 `backingScaleFactor`에서 장치 픽셀과 `contentsScale` 기대값을 계산한다. 현재 1x 디스플레이에서 `image_region_test`와 전체 `make -C native/darwin test`가 통과했다.
