@@ -13,7 +13,9 @@ export function createLifecycleListener(register, root = globalThis.window) {
     unloaded = true;
     for (const entry of active) dispose(entry, entry.off);
   };
-  root?.addEventListener?.("pagehide", unload, { once: true });
+  for (const event of ["pagehide", "beforeunload", "unload"]) {
+    root?.addEventListener?.(event, unload, { once: true });
+  }
   return (event, listener) => {
     if (unloaded) return Promise.reject(new Error("cannot register a native listener after page unload"));
     const entry = { disposed: false, off: null };

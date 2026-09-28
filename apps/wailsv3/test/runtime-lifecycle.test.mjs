@@ -4,13 +4,21 @@ import { createLifecycleListener } from "../runtime/listener-lifecycle.js";
 
 test("Wails runtime removes native event listeners when the page is unloaded", async () => {
   let pagehide;
+  let beforeunload;
+  let unload;
   let removed = 0;
   const listen = createLifecycleListener(async () => () => { removed++; }, {
-    addEventListener(name, listener) { if (name === "pagehide") pagehide = listener; },
+    addEventListener(name, listener) {
+      if (name === "pagehide") pagehide = listener;
+      if (name === "beforeunload") beforeunload = listener;
+      if (name === "unload") unload = listener;
+    },
   });
   await listen("workspace-changed", () => {});
   assert.equal(removed, 0);
   pagehide();
+  beforeunload();
+  unload();
   assert.equal(removed, 1);
 });
 
