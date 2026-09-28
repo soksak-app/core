@@ -49,9 +49,10 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
     "scripts/check-e2e.mjs",
     "scripts/check-e2e-host-parity.mjs",
     "scripts/check-exposure.mjs",
+    "scripts/check-host-parity.mjs",
     "scripts/check-terminal-protocol-inventory.mjs",
     "scripts/sidecar-packages.mjs",
-  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs"], { sharedTests: true }),
+  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs", "scripts/test/check-host-parity.test.mjs"], { sharedTests: true }),
   lane("build environment audit", "shell", ["scripts/check-build-environment.sh"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-build-environment.sh"], {
     testLanguage: "js-ts", testExtensions: new Set([".mjs", ".sh"]), sharedTests: true,
   }),

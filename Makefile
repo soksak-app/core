@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify browser-example-check docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check terminal-protocols-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat
+.PHONY: preflight prepare build verify browser-example-check docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check host-parity-check terminal-protocols-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -29,6 +29,10 @@ exposure-check:
 # 전체 소스·테스트 목록의 연결을 검사한다. 동작 검증 결과와 구분한다.
 parity-check:
 	@node scripts/check-test-parity.mjs
+
+# 두 호스트의 공개 API 면(호출 이름·연결·엔드포인트 메서드)이 같은지 기계로 검사한다(docs/spec/host-parity.md).
+host-parity-check:
+	@node scripts/check-host-parity.mjs
 
 # 고정한 XTerm reference와 CSI/OSC selector inventory의 중복·누락·검사 연결을 기계적으로 감사한다.
 terminal-protocols-check:
@@ -115,7 +119,7 @@ prepare: preflight
 build: prepare
 	@pnpm build
 
-verify: prepare docs-check exposure-check parity-check terminal-protocols-check
+verify: prepare docs-check exposure-check parity-check host-parity-check terminal-protocols-check
 	@pnpm test
 	@$(MAKE) language-test
 	@pnpm breaks
