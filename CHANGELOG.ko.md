@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- V5-96-17-3 Green: OSC/CSI 커버리지 조사가 빠진 발산 없이 닫힌다. 고정 XTerm 참조 검사가 25개 CSI 행과 17개 OSC 셀렉터를 이름 있는 검사와 함께 덮고 통과한다. 자식 소스 조사에서 자식이 CSI u 키보드 프로토콜 설정(`\x1b[>1u`, `\x1b[>4;2m`, `\x1b[>5u`)을 내보내는 것을 찾았다. 엔진은 이를 효과 없는 비-DECSET CSI 로 분류하고 자식은 표준 입력 대비 모드로 동작하며 모든 관측 가능한 동작이 작동하고 거부된 시퀀스가 없다. V5-96-17 의 세 하위 항목이 모두 완료된다.
 - V5-96-14-6-8-3.4/.3 Green: 테스트 위치·언어 검사 수준 감사가 기존 기계 게이트로 닫힌다. `make parity-check` 가 315개 구현 파일과 246개 검사 파일 각각을 언어가 있는 명시적 소유 레인(63레인)에 배정하고 커버되지 않은 구현과 검사를 거부하며 검사 파일이 기능과 같은 트리에 있는지 확인한다. `make language-test` 가 같은 5개 관측 계약 사례를 5개 언어로 사례별 상태·수·경과 시간과 함께 실행한다. 두 게이트가 현재 트리에서 통과하며 호스트 동일성 강제 작업 V5-96-14-6-8-3 의 네 하위 항목이 모두 완료된다.
 - V5-96-17-2 Green: Alt+Backspace 가 readline 의 backward-kill-word 시퀀스 `ESC DEL`(`\x1b\x7f`) 를 보내고 막 `\x7f` 를 쓰지 않는다. Red(`encode_key(Key::Backspace, alt)` 가 그 시퀀스를 주장)가 수정 전 인코더에서 실패했다. 양쪽 호스트 Green: 셸 프롬프트에서 `echo hello world` 에 실제 Option+Backspace 를 누르자 양쪽 모두 `world` 가 지워졌다. Option+Left/Right 는 이미 xterm 수정 키 형식을 보내고 Cmd+Left/Right 는 설계상 메뉴에 남는다.
 - V5-96-17-1 Green: Shift+Tab 이 이제 BackTab(`CSI Z`, xterm 기본 변환, ncurses terminfo `kcbt=\E[Z`) 을 보낸다. Red(`encode_key(Key::Tab, shift)` 가 `\x1b[Z` 를 주장하는 `test_special_keys`)가 수정 전 인코더에서 실패했고 가드로 통과하며 vt-core 모음이 Green 이다. Up·Down 은 이미 올바랐다(`\x1b[A`/`\x1b[B`, 응용 커서 `\x1bOA`/`\x1bOB`). 양쪽 호스트 Green: 실제 Shift+Tab 으로 실 TUI 의 협업 모드가 전환됐다 — 타우리 화면에 플랜 모드 모델 배너, 웨일즈는 푸터 변화. 줄 편집 키 목록(Option+Backspace 단어 삭제, 단어·줄 건너뛰기, emacs readline 결속)과 OSC/CSI 커버리지 조사가 다음 항목으로 등록됐다.
