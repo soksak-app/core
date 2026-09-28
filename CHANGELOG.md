@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-14-6-4 Red measurement update: after listener cleanup, a rebuilt Wails blank window still grew WebContent RSS from 55 MB to 319 MB over 40 reloads; the rebuilt Wails/Tauri fixture reached 514/540 MB after 80 reloads. The remaining retention is in the reload path and the checklist stays open.
+
 - V5-96-14-6-4 implementation update: both runtime bridges now release event-listener registrations on `pagehide`, including registrations whose native unlisten promise resolves after unload. The bounded rebuilt memory repeat remains open.
 
 - V5-96-14-6-4 Red update: repeated reloads showed unbounded WebContent RSS in both hosts, and both runtime bridges discarded native event-listener unlisten handles on page unload. Added failing lifecycle tests for synchronous and delayed registrations; the fix and bounded rebuilt repeat remain pending.
