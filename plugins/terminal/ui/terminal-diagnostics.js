@@ -15,7 +15,8 @@ const IME_TRACE_CAPACITY = 256;
  *   reportError    trace 출처의 세션 오류를 보고한다
  *   resolveError   trace 출처의 세션 오류를 지운다. 새 trace 를 시작하면 해소된다
  */
-export async function attach({ expose, updateCompose, onInput, reportError, resolveError }) {
+export async function attach({ expose, updateCompose, onInput, onPointer, reportError, resolveError }) {
+  await attachPointerTrace({ expose, onPointer, reportError });
   let trace = { enabled: false, overflow: false, entries: [] };
   const watchers = new Set();
   const changed = () => {
@@ -51,4 +52,34 @@ export async function attach({ expose, updateCompose, onInput, reportError, reso
       return trace;
     }),
   ]);
+}
+
+// 한 번에 한 제스처 묶음을 기록한다. 가득 차면 기록을 중지하고 검증 실패를 명시한다.
+async function attachPointerTrace({ expose, onPointer, reportError }) {
+  const capacity = 4096;
+  let state = { enabled: false, overflow: false, entries: [] };
+  const watchers = new Set();
+  const changed = () => { for (const fn of watchers) fn(state); };
+  onPointer((entry) => {
+    if (!state.enabled) return;
+    if (state.entries.length === capacity) {
+      state = { ...state, enabled: false, overflow: true };
+      changed();
+      reportError("Pointer diagnostic trace capacity exceeded");
+      return;
+    }
+    state.entries.push({ sequence: state.entries.length, ...entry });
+    changed();
+  });
+  await expose.status("terminal.pointer.trace", () => state, (fn) => {
+    watchers.add(fn);
+    return () => watchers.delete(fn);
+  });
+  await expose.command("terminal.pointer.trace", async ({ action }) => {
+    if (action === "start") state = { enabled: true, overflow: false, entries: [] };
+    else if (action === "stop") state = { ...state, enabled: false };
+    else throw new Error("terminal.pointer.trace action must be start or stop");
+    changed();
+    return state;
+  });
 }

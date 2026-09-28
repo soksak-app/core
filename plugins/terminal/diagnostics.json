@@ -2,6 +2,11 @@
   "module": "ui/terminal-diagnostics.js",
   "exposes": {
     "status": [
+      { "name": "terminal.pointer.trace", "description": "Bounded pointer, capture, focus and mouse result trace.",
+        "schema": { "type": "object", "properties": {
+          "enabled": { "type": "boolean" }, "overflow": { "type": "boolean" }, "entries": { "type": "array" }
+        } }
+      },
       {
         "name": "terminal.ime.trace",
         "description": "The explicitly enabled bounded IME callback and terminal-input diagnostic trace.",
@@ -16,6 +21,12 @@
       }
     ],
     "commands": [
+      { "name": "terminal.pointer.trace", "description": "Starts or stops the bounded pointer trace.",
+        "params": { "type": "object", "properties": { "action": { "type": "string", "enum": ["start", "stop"] } } },
+        "result": { "type": "object", "properties": {
+          "enabled": { "type": "boolean" }, "overflow": { "type": "boolean" }, "entries": { "type": "array" }
+        } }
+      },
       {
         "name": "terminal.compose.update",
         "description": "Updates the active native terminal preedit without writing PTY bytes.",

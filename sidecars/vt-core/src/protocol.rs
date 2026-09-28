@@ -710,6 +710,7 @@ enum SurfaceCommand {
     },
     /// 페이지의 포인터 입력. 프로그램이 마우스 보고를 켰으면 보고로 바꾼다.
     Mouse {
+        input_id: String,
         phase: MousePhase,
         x: f64,
         y: f64,
@@ -1975,7 +1976,7 @@ async fn surface_task(
                             }
                         }
                     }
-                    SurfaceCommand::Mouse { phase, x, y, pressed, shift, alt, ctrl } => {
+                    SurfaceCommand::Mouse { input_id, phase, x, y, pressed, shift, alt, ctrl } => {
                         let modes = engine.modes();
                         let cell = match image_state.as_ref()
                             .ok_or_else(|| "mouse image is not configured".to_string())
@@ -2031,7 +2032,7 @@ async fn surface_task(
                                         } else { true }
                                     } else { false };
                                     let response = json!({"surface": surface_id, "body": {
-                                        "event": "mouse", "phase": phase_name, "x": cell.0, "y": cell.1,
+                                        "event": "mouse", "inputId": input_id, "phase": phase_name, "x": cell.0, "y": cell.1,
                                         "pressed": pressed, "shift": shift, "alt": alt, "ctrl": ctrl,
                                         "reported": true, "written": written,
                                         "modes": {"click": modes.mouse_click, "drag": modes.mouse_drag, "motion": modes.mouse_motion},
@@ -2040,7 +2041,7 @@ async fn surface_task(
                                     if output_tx.send(response.to_string()).await.is_err() { return; }
                                 }
                                 Err(reason) => {
-                                    let response = json!({"surface": surface_id, "body": {"event": "mouse", "phase": phase_name,
+                                    let response = json!({"surface": surface_id, "body": {"event": "mouse", "inputId": input_id, "phase": phase_name,
                                         "x": cell.0, "y": cell.1, "pressed": pressed, "shift": shift, "alt": alt, "ctrl": ctrl,
                                         "reported": true, "written": false,
                                         "modes": {"click": modes.mouse_click, "drag": modes.mouse_drag, "motion": modes.mouse_motion},
@@ -2058,7 +2059,7 @@ async fn surface_task(
                                 MousePhase::Up => "up",
                             };
                             let response = json!({"surface": surface_id, "body": {
-                                "event": "mouse", "phase": phase_name, "x": cell.0, "y": cell.1,
+                                "event": "mouse", "inputId": input_id, "phase": phase_name, "x": cell.0, "y": cell.1,
                                 "pressed": pressed, "shift": shift, "alt": alt, "ctrl": ctrl,
                                 "reported": false, "written": false,
                                 "modes": {"click": modes.mouse_click, "drag": modes.mouse_drag, "motion": modes.mouse_motion},
@@ -3409,7 +3410,12 @@ where
                                     .and_then(Value::as_f64)
                                     .filter(|y| y.is_finite());
                                 let flag = |name: &str| body.get(name).and_then(Value::as_bool);
+                                let input_id = body
+                                    .get("inputId")
+                                    .and_then(Value::as_str)
+                                    .filter(|id| !id.is_empty());
                                 match (
+                                    input_id,
                                     phase,
                                     x,
                                     y,
@@ -3419,6 +3425,7 @@ where
                                     flag("ctrl"),
                                 ) {
                                     (
+                                        Some(input_id),
                                         Some(phase),
                                         Some(x),
                                         Some(y),
@@ -3429,6 +3436,7 @@ where
                                     ) => {
                                         if tx
                                             .send(SurfaceCommand::Mouse {
+                                                input_id: input_id.to_string(),
                                                 phase,
                                                 x,
                                                 y,
@@ -3445,7 +3453,7 @@ where
                                     }
                                     _ => {
                                         let response = json!({"surface": surface_id, "body": {"error": "invalidParams",
-                                            "reason": "mouse requires phase down, move, or up, finite x and y, and boolean pressed, shift, alt, and ctrl"}});
+                                            "reason": "mouse requires phase down, move, or up, finite x and y, boolean pressed, shift, alt, and ctrl, and non-empty inputId"}});
                                         if output_tx.send(response.to_string()).await.is_err() {
                                             break;
                                         }

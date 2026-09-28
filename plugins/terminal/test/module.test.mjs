@@ -12,7 +12,10 @@ const SHELL_SETTINGS = {
   on: () => () => {},
 };
 test("terminal module waits for composition presentation, publishes state, and disposes the controller", async () => {
-  const view = { addEventListener() {}, removeEventListener() {} };
+  const listeners = new Map();
+  const view = { addEventListener(type, fn) { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); },
+    removeEventListener() {}, setPointerCapture() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 640, height: 384 }) };
   const element = () => ({ style: {}, hidden: true, addEventListener() {}, removeEventListener() {},
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 10, height: 300 }) });
   const parts = { "#view": view, "#scrollbar": element(), "#thumb": element() };
@@ -69,10 +72,13 @@ test("terminal module waits for composition presentation, publishes state, and d
   assert.deepEqual(phases, ["ready"]);
   sidecarListeners.get("terminal-test")({ event: "state", sessionId: "s1", cols: 80, rows: 24, cellWidth: 8, cellHeight: 16 });
   assert.equal(statuses.get("terminal.session").read().sessionId, "s1");
-  sidecarListeners.get("terminal-test")({ event: "mouse", phase: "down", x: 3, y: 4, pressed: true,
+  for (const fn of listeners.get("pointerdown")) fn({ button: 0, pointerId: 1, clientX: 24, clientY: 64, preventDefault() {} });
+  await new Promise((resolve) => setImmediate(resolve));
+  const inputId = messages.find(({ body }) => body.operation === "mouse").body.inputId;
+  sidecarListeners.get("terminal-test")({ inputId, event: "mouse", phase: "down", x: 3, y: 4, pressed: true,
     shift: false, alt: false, ctrl: false, reported: true, written: true,
     modes: { click: true, drag: false, motion: false }, bytes: "Gg==" });
-  assert.deepEqual(statuses.get("terminal.session").read().mouse, {
+  assert.deepEqual(statuses.get("terminal.session").read().mouse, { inputId,
     phase: "down", x: 3, y: 4, pressed: true, shift: false, alt: false, ctrl: false,
     reported: true, written: true, modes: { click: true, drag: false, motion: false }, bytes: "Gg==", error: null });
   // 테마는 모드와 함께 카드 색 토큰에서 가져온 네 색을 보낸다(docs/spec/terminal-runtime.md).

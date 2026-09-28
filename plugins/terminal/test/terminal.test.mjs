@@ -90,6 +90,7 @@ function createFakeView({ captureError = null, releaseError = null } = {}) {
     style: {},
     setPointerCapture() { if (captureError) throw captureError; },
     releasePointerCapture() { if (releaseError) throw releaseError; },
+    hasPointerCapture() { return false; },
     dataset: {},
     parentElement: parent,
     addEventListener(event, handler) { if (!listeners.has(event)) listeners.set(event, []); listeners.get(event).push(handler); },
@@ -1199,11 +1200,11 @@ test("terminal pointer drag sends one complete selection gesture to the sidecar"
     "mouse.down", "mouse.move", "selection.start", "selection.update", "selection.end", "mouse.up",
   ]);
   const messages = fakeSidecar.getMessages().map(({ body }) => body);
-  assert.deepEqual(messages[0], { operation: "mouse", phase: "down", x: 10, y: 12, pressed: true, shift: false, alt: false, ctrl: false });
-  assert.deepEqual(messages[1], { operation: "mouse", phase: "move", x: 42, y: 12, pressed: true, shift: false, alt: false, ctrl: false });
+  assert.deepEqual(messages[0], { inputId: messages[0].inputId, operation: "mouse", phase: "down", x: 10, y: 12, pressed: true, shift: false, alt: false, ctrl: false });
+  assert.deepEqual(messages[1], { inputId: messages[1].inputId, operation: "mouse", phase: "move", x: 42, y: 12, pressed: true, shift: false, alt: false, ctrl: false });
   assert.equal(messages[2].x, 10);
   assert.equal(messages[3].x, 42);
-  assert.deepEqual(messages[5], { operation: "mouse", phase: "up", x: 42, y: 12, pressed: false, shift: false, alt: false, ctrl: false });
+  assert.deepEqual(messages[5], { inputId: messages[5].inputId, operation: "mouse", phase: "up", x: 42, y: 12, pressed: false, shift: false, alt: false, ctrl: false });
 });
 
 test("a failed pointer capture does not leave terminal selection ownership stuck", async () => {
@@ -3117,4 +3118,61 @@ test("terminal.cursor.set keeps the current value of each field it does not name
   assert.deepEqual(fakeSidecar.getMessages().at(-1).body, {
     operation: "cursor", shape: "underline", blink: "Always", interval: 900, idleTimeout: 0, unfocused: "solid",
   });
+});
+
+test("pointer trace correlates new gestures and records capture and focus without resetting input", async () => {
+  const sidecar = createFakeSidecar();
+  const expose = createFakeExpose();
+  const view = createFakeView();
+  const native = createFakeAttachImage();
+  await startTerminal({ view, attachImage: native.function, sidecar, expose,
+    diagnostics: terminalDiagnostics, window: { TextEncoder } });
+  openSession(sidecar);
+  const trace = expose.getCommand("terminal.pointer.trace");
+  assert.equal(typeof trace, "function", "pointer trace command must be declared");
+  await trace({ action: "start" });
+  for (let i = 0; i < 2; i++) {
+    view._trigger("pointerdown", { button: 0, buttons: 1, pointerId: 4, clientX: 10, clientY: 12 });
+    view._trigger("gotpointercapture", { pointerId: 4 });
+    view._trigger("pointermove", { buttons: 1, pointerId: 4, clientX: 42, clientY: 12 });
+    view._trigger("pointerup", { button: 0, buttons: 0, pointerId: 4, clientX: 42, clientY: 12 });
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+  const inputs = sidecar.getMessages().filter(({ body }) => body.operation === "mouse").map(({ body }) => body);
+  assert.equal(inputs.length, 6);
+  assert.ok(inputs.every((body) => typeof body.inputId === "string" && body.inputId.length > 0));
+  assert.equal(new Set(inputs.map(({ inputId }) => inputId)).size, 6);
+  for (const input of inputs) sidecar.triggerEvent("test-session", {
+    ...input, event: "mouse", modes: { click: false, drag: false, motion: true },
+    reported: true, written: true, bytes: "eA==",
+  });
+  const snapshot = await trace({ action: "stop" });
+  assert.equal(snapshot.overflow, false);
+  assert.deepEqual(snapshot.entries.filter((e) => e.kind === "pointer-result").map((e) => e.body.inputId), inputs.map((e) => e.inputId));
+  assert.equal(snapshot.entries.filter((e) => e.kind === "pointer-dom" && e.type === "gotpointercapture").length, 2);
+  assert.equal(expose.getStatus("terminal.session").readFn().mouse.inputId, inputs.at(-1).inputId);
+  sidecar.triggerEvent("test-session", { ...inputs[0], event: "mouse", modes: { click: false, drag: false, motion: true }, reported: true, written: true, bytes: "eA==" });
+  assert.match(expose.getStatus("terminal.session").readFn().error, /unexpected mouse inputId/);
+});
+
+test("pointer diagnostics are opt-in, bounded, and report malformed actions", async () => {
+  const expose = createFakeExpose();
+  const sidecar = createFakeSidecar();
+  const view = createFakeView();
+  await startTerminal({ view, attachImage: createFakeAttachImage().function, sidecar, expose,
+    diagnostics: terminalDiagnostics, window: { TextEncoder } });
+  const trace = expose.getCommand("terminal.pointer.trace");
+  const emit = () => view._trigger("gotpointercapture", { pointerId: 1 });
+  emit();
+  assert.equal(expose.getStatus("terminal.pointer.trace").readFn().entries.length, 0);
+  await assert.rejects(trace({ action: "invalid" }), /action must be start or stop/);
+  await trace({ action: "start" });
+  for (let i = 0; i < 4097; i++) emit();
+  const result = await trace({ action: "stop" });
+  assert.equal(result.entries.length, 4096);
+  assert.equal(result.overflow, true);
+  assert.equal(result.enabled, false);
+  assert.equal(expose.getStatus("terminal.session").readFn().error, "Pointer diagnostic trace capacity exceeded");
+  emit();
+  assert.equal(result.entries.length, 4096);
 });

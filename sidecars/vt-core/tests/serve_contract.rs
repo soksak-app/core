@@ -4082,8 +4082,9 @@ async fn a_focus_change_sends_the_screen_with_the_presentation_that_draws_it() {
 }
 
 fn mouse(phase: &str, x: f64, pressed: bool, shift: bool) -> String {
+    let input_id = uuid::Uuid::new_v4().to_string();
     format!(
-        "{{\"surface\":\"s1\",\"body\":{{\"operation\":\"mouse\",\"phase\":\"{phase}\",\"x\":{x},\"y\":0.5,\"pressed\":{pressed},\"shift\":{shift},\"alt\":false,\"ctrl\":false}}}}\n"
+        "{{\"surface\":\"s1\",\"body\":{{\"operation\":\"mouse\",\"inputId\":\"{input_id}\",\"phase\":\"{phase}\",\"x\":{x},\"y\":0.5,\"pressed\":{pressed},\"shift\":{shift},\"alt\":false,\"ctrl\":false}}}}\n"
     )
 }
 
@@ -4375,4 +4376,58 @@ async fn test_selection_points_go_to_the_nearest_cell_edge() {
         vec![(0, 0), (3, 0), (4, 0)],
         "a point before a cell's midpoint stays at its left edge and a point past it goes to its right edge"
     );
+}
+
+#[tokio::test]
+async fn mouse_results_echo_the_requested_input_identity() {
+    let requests = ["down", "move", "up"]
+        .iter()
+        .enumerate()
+        .map(|(index, phase)| {
+            serde_json::json!({"surface":"s1","body": {
+                "operation":"mouse", "inputId":format!("gesture-{index}"), "phase":phase,
+                "x":0.5 + index as f64 * 20.0, "y":0.5, "pressed":*phase != "up",
+                "shift":false,"alt":false,"ctrl":false
+            }})
+            .to_string()
+                + "\n"
+        })
+        .collect::<String>();
+    let (output, _, _) = serve_scroll(
+        Some(Modes {
+            mouse_motion: true,
+            sgr_mouse: true,
+            ..Modes::default()
+        }),
+        &requests,
+    )
+    .await;
+    let ids = output
+        .lines()
+        .filter_map(|line| {
+            let value: serde_json::Value = serde_json::from_str(line).unwrap();
+            (value["body"]["event"] == "mouse").then(|| value["body"]["inputId"].clone())
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(ids, vec!["gesture-0", "gesture-1", "gesture-2"]);
+}
+
+#[tokio::test]
+async fn mouse_without_an_input_identity_is_rejected() {
+    let request = serde_json::json!({"surface":"s1","body": {
+        "operation":"mouse", "phase":"down", "x":0.5, "y":0.5,
+        "pressed":true,"shift":false,"alt":false,"ctrl":false
+    }})
+    .to_string()
+        + "\n";
+    let (output, _, writes) = serve_scroll(
+        Some(Modes {
+            mouse_motion: true,
+            ..Modes::default()
+        }),
+        &request,
+    )
+    .await;
+    assert!(output.contains("inputId"), "{output}");
+    assert!(writes.is_empty());
 }

@@ -194,6 +194,7 @@
             "mouse": {
               "type": "object",
               "properties": {
+                "inputId": { "type": ["string", "null"] },
                 "phase": { "type": ["string", "null"], "enum": ["down", "move", "up", null] },
                 "x": { "type": ["integer", "null"] },
                 "y": { "type": ["integer", "null"] },

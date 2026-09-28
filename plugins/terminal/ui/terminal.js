@@ -199,7 +199,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     inlineImages: [],
     // 사이드카가 답한 선택 해제의 수. 해제의 결과(복사 또는 빈 선택)가 도착했음을 알린다.
     selectionReleases: 0,
-    mouse: { phase: null, x: null, y: null, pressed: false, shift: false, alt: false, ctrl: false,
+    mouse: { inputId: null, phase: null, x: null, y: null, pressed: false, shift: false, alt: false, ctrl: false,
       reported: false, written: false, modes: { click: false, drag: false, motion: false }, bytes: null, error: null },
     // 왼쪽 버튼을 누른 선택 제스처가 진행 중인지.
     selecting: false,
@@ -219,6 +219,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   let compose = session.compose;
   // 네이티브 입력 callback 과 터미널 입력 작업을 받는 함수. 진단 빌드의 진단 모듈만 등록한다.
   const inputObservers = new Set();
+  const pointerObservers = new Set();
+  const notifyPointer = (entry) => {
+    if (pointerObservers.size === 0) return;
+    for (const fn of pointerObservers) fn({ time: performance.now(), ...entry });
+  };
   const notifyInput = (entry) => {
     for (const fn of inputObservers) fn(entry);
   };
@@ -594,6 +599,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       return;
     }
     nativeFocused = event.focused;
+    notifyPointer({ kind: "pointer-focus", focused: nativeFocused });
     await observeInput(enqueueInput({ type: "focus", focused: event.focused }));
     if (event.focused) {
       for (const resolve of focusWaiters) resolve();
@@ -642,14 +648,29 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   // transport 응답 순서가 달라져 selection.update 가 selection.start 보다 먼저
   // 처리될 수 있다. 제스처 전체를 하나의 순서열로 보낸다.
   let pointerInputChain = Promise.resolve();
+  const mouseInputs = new Map();
   const queuePointerInput = (body) => {
-    const request = pointerInputChain.then(() => terminal.send(id, body));
+    notifyPointer({ kind: "pointer-queued", body });
+    const request = pointerInputChain.then(async () => {
+      if (body.operation === "mouse") {
+        if (mouseInputs.size >= 4096) throw new Error("unanswered mouse input capacity exceeded");
+        mouseInputs.set(body.inputId, body.phase);
+      }
+      notifyPointer({ kind: "pointer-sent", body });
+      try {
+        return await terminal.send(id, body);
+      } catch (error) {
+        if (body.operation === "mouse") mouseInputs.delete(body.inputId);
+        notifyPointer({ kind: "pointer-error", inputId: body.inputId, error: String(error) });
+        throw error;
+      }
+    });
     pointerInputChain = request.catch(recoverInputTail);
     observeInput(request);
     return request;
   };
   const sendMouse = (phase, point, event, pressed) => {
-    queuePointerInput({ operation: "mouse", phase, ...point, pressed,
+    queuePointerInput({ operation: "mouse", inputId: crypto.randomUUID(), phase, ...point, pressed,
       shift: event.shiftKey === true, alt: event.altKey === true, ctrl: event.ctrlKey === true });
   };
   const hoverMouse = (event) => {
@@ -847,6 +868,13 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   // 카드 전환이나 창 비활성화로 캡처가 풀리면 pointerup이 오지 않을 수 있다. 선택 포인터와
   // 사이드카의 누른 상태를 같은 경계에서 닫아 다음 카드 복귀 뒤 새 드래그를 허용한다.
   view.addEventListener("lostpointercapture", endSelection);
+  const pointerTraceTypes = ["pointerdown", "pointermove", "pointerup", "pointercancel", "gotpointercapture", "lostpointercapture"];
+  const tracePointer = (event) => notifyPointer({ kind: "pointer-dom", type: event.type,
+    pointerId: event.pointerId, buttons: event.buttons, button: event.button,
+    x: event.clientX, y: event.clientY, shift: event.shiftKey === true,
+    captured: view.hasPointerCapture(event.pointerId), selectionPointerId, nativeFocused,
+    trusted: event.isTrusted, defaultPrevented: event.defaultPrevented });
+  if (diagnostics) for (const type of pointerTraceTypes) view.addEventListener(type, tracePointer);
 
   // screen.read 응답을 기다리는 resolver
   let pendingScreenRead = null;
@@ -949,6 +977,13 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       resolveError("theme");
       changed("session");
     } else if (body.event === "mouse") {
+      notifyPointer({ kind: "pointer-result", body });
+      if (typeof body.inputId !== "string" || mouseInputs.keys().next().value !== body.inputId ||
+          mouseInputs.get(body.inputId) !== body.phase) {
+        reportInputError(new Error(`unexpected mouse inputId: ${String(body.inputId)}`));
+        return;
+      }
+      mouseInputs.delete(body.inputId);
       const modes = body.modes;
       if (!["down", "move", "up"].includes(body.phase) || !modes ||
           !["click", "drag", "motion"].every((key) => typeof modes[key] === "boolean") ||
@@ -958,6 +993,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         return;
       }
       session = { ...session, mouse: {
+        inputId: body.inputId,
         phase: body.phase, x: body.x, y: body.y, pressed: body.pressed, shift: body.shift,
         alt: body.alt, ctrl: body.ctrl, reported: body.reported, written: body.written,
         modes, bytes: body.bytes, error: typeof body.error === "string" ? body.error : null,
@@ -1268,6 +1304,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         inputObservers.add(fn);
         return () => inputObservers.delete(fn);
       },
+      onPointer: (fn) => {
+        pointerObservers.add(fn);
+        return () => pointerObservers.delete(fn);
+      },
       reportError: (message) => setError("trace", message),
       resolveError: () => {
         if (resolveError("trace")) changed("session");
@@ -1294,6 +1334,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       }
     },
     async dispose() {
+      if (diagnostics) for (const type of pointerTraceTypes) view.removeEventListener(type, tracePointer);
       const offTheme = await themeSubscription?.dispose;
       // 기본값: 테마나 설정 구독이 없으면 해제 함수도 없다.
       offTheme?.();

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-14-6-8-2-1.2: add mouse request/result inputId and diagnostic-only terminal.pointer.trace. Stale, duplicate, reordered responses and trace overflow are explicit errors. Red reproduced a missing trace command and reply IDs `[null,null,null]`. Green: 114 plugin tests, sidecar wire tests, pnpm test, native-test, docs, boundaries and exposure checks. Actual TUI repetition is not yet verified.
+
 - V5-96-14-6-8-2-1.1: correct the prior acceptance claim: the real TUI test could replace a failed direct retry with recovery and accept stale mouse-up. Preserve the failed retry independently. Extracted the previous acceptance logic and reproduced four false positives (`Missing expected exception`); the new correlated-input, visible-cell and complete-recording oracle passes all five unit fixtures. Actual TUI correction and cross-host acceptance remain pending.
 
 - Follow-up V5-96-14-6-8-2 opened: a three-run real Tauri TUI check reproduced one intermittent plain-drag failure (`mouse.reported:false`) while Shift selection passed. The failure needs complete session, host, pointer-capture, PTY, and capture evidence before correction.
