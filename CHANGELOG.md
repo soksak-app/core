@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- Follow-up V5-96-14-6-8-2 opened: a three-run real Tauri TUI check reproduced one intermittent plain-drag failure (`mouse.reported:false`) while Shift selection passed. The failure needs complete session, host, pointer-capture, PTY, and capture evidence before correction.
+- V5-96-14-6-8-2 Green: the tracked real-window case now performs first drag, third-point click, immediate repeat, and conditional other-card/prompt retry only after failure. Three cycles pass on rebuilt Tauri and Wails with no session error and final PTY mouse report/write; no simple isolated test is used as acceptance.
+
+
 - Follow-up V5-96-14-6-8-1 opened: the previous Green evidence proved only synthetic endpoint PTY bytes, not user-visible TUI text selection or clipboard output. A real-window Red must measure selection and capture state on rebuilt Tauri and Wails before any drag fix is claimed.
 - V5-96-14-6-8-1 Green: the first real-window Red copied `sk TUI` because the gesture began at the cell center. Starting before the first cell and ending after the last now copies exactly `Ask TUI` on rebuilt Wails 1/1 and Tauri 1/1. The companion real TUI plain-drag PTY case passes 1/1 on each host.
 

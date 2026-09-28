@@ -859,6 +859,66 @@ for (const app of Object.values(APPS)) {
     assert.equal(pasteboardText(), "Ask TUI", `the TUI Shift drag copied ${JSON.stringify(pasteboardText())}`);
   });
 
+  test(`${app.name}: TUI drag repeats after a third point and card focus round trip`, { timeout: 180000 }, async (t) => {
+    const { s, surface } = await prepare(t, app, "TUIROUNDTRIP");
+    await s.run("terminal.input", { bytes: "tui-program\r" }, surface);
+    const lines = await readScreenUntil(s, surface, (value) => value.some((line) => line.includes("Ask TUI")),
+      "the rebuilt TUI prompt did not appear for the round-trip drag");
+    const row = lines.findIndex((line) => line.includes("Ask TUI"));
+    const startColumn = lines[row].indexOf("Ask TUI");
+    const session = await s.get("terminal.session", surface);
+    const view = await s.rect("terminal.view", undefined, surface);
+    const center = await bringFront(s, app, view);
+    const origin = { x: center.x - view.width / 2, y: center.y - view.height / 2 };
+    const point = (column) => cellPoint(origin, session, column, row);
+    const from = { ...point(startColumn), x: point(startColumn).x - 0.3 * session.cellWidth };
+    const to = { ...point(startColumn + 8), x: point(startColumn + 8).x + 0.3 * session.cellWidth };
+    const third = point(startColumn + 18);
+    const grid = await s.get("core.grid");
+    const owner = grid.cards.find((item) => item.tabs.some((tab) => tab.id === surface));
+    const other = grid.cards.find((item) => item.id !== owner?.id && item.id !== "left");
+    assert.ok(owner && other, `round-trip requires two cards: ${JSON.stringify(grid)}`);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const before = await s.get("terminal.session", surface);
+      dragPath(from, to, 12);
+      await s.until("terminal.session", (value) => value.mouse.phase === "up" || value.error !== undefined,
+        `round-trip ${attempt + 1}: first drag did not finish`, { surface });
+      const first = await s.get("terminal.session", surface);
+      const firstWindow = await s.get("host.window");
+      assert.equal(first.error, undefined, `round-trip ${attempt + 1}: first drag error ${first.error}`);
+      assert.equal(first.mouse.reported, true,
+        `round-trip ${attempt + 1}: first drag was not reported; before=${JSON.stringify(before)} window=${JSON.stringify(firstWindow)}`);
+
+      // A successful drag is followed by a third-point click and an immediate retry.
+      click(third.x, third.y);
+      dragPath(from, to, 12);
+      await s.until("terminal.session", (value) => value.mouse.phase === "up" || value.error !== undefined,
+        `round-trip ${attempt + 1}: third-point retry did not finish`, { surface });
+      let repeated = await s.get("terminal.session", surface);
+      if (repeated.error !== undefined || repeated.mouse.reported !== true || repeated.mouse.written !== true) {
+        // Only after the direct retry fails, round-trip through another card and retry again.
+        await s.run("core.card.focus", { card: other.id });
+        await s.until("core.grid", (value) => value.cards.some((item) => item.id === other.id && item.focused),
+          `round-trip ${attempt + 1}: other card did not focus`);
+        await s.run("core.card.focus", { card: owner.id });
+        await s.until("core.grid", (value) => value.cards.some((item) => item.id === owner.id && item.focused),
+          `round-trip ${attempt + 1}: TUI card did not refocus`);
+        click(from.x, from.y);
+        await s.until("host.window", (value) => value.regions.some((region) => region.surface === surface && region.focused),
+          `round-trip ${attempt + 1}: TUI input did not regain native focus`);
+        dragPath(from, to, 12);
+        await s.until("terminal.session", (value) => value.mouse.phase === "up" || value.error !== undefined,
+          `round-trip ${attempt + 1}: card retry did not finish`, { surface });
+        repeated = await s.get("terminal.session", surface);
+      }
+      const repeatedWindow = await s.get("host.window");
+      assert.equal(repeated.error, undefined, `round-trip ${attempt + 1}: repeated drag error ${repeated.error}`);
+      assert.equal(repeated.mouse.reported, true,
+        `round-trip ${attempt + 1}: repeated drag was not reported; window=${JSON.stringify(repeatedWindow)}`);
+      assert.equal(repeated.mouse.written, true, `round-trip ${attempt + 1}: repeated drag was not written to PTY`);
+    }
+  });
+
   test(`${app.name}: real keypad keys send SS3 sequences in application keypad mode and characters otherwise`, { timeout: 90000 }, async (t) => {
     const { s, surface, session, origin } = await prepare(t, app, "KEYPAD");
     // 키는 초점을 가진 터미널 영역에 간다.
