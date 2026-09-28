@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-14-6-7 Red/Green: equal-state restart disproved a host-specific idle leak. Both rebuilt hosts now report zero pane cards and surfaces, one WebView, and zero native regions; Tauri RSS is 113,552KB and Wails RSS is 111,952KB. The earlier Wails RSS was from retained layout state with six cards, ten tabs, six surfaces, three WebViews, and three native regions.
+
 - V5-96-14-6-6 Red/Green progress: Wails monitoring recorded inactive motion-only input and active selection transitions. A tracked terminal Red test reproduced `setPointerCapture` rejection leaving ownership stuck; selection state is now published only after capture succeeds. The terminal suite passes 111/111. Real cross-host drag evidence remains open.
 
 - Follow-up V5-96-14-6-7 opened for the reported idle Tauri/Wails RSS discrepancy. The current Wails endpoint is not equivalent to one TUI: it reports 6 pane cards, 10 tabs, 6 visible surfaces, 3 WebViews, and 3 native regions. Equal-state measurements are required before attributing the difference to a host leak.
