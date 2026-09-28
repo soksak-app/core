@@ -825,6 +825,9 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   view.addEventListener("pointerleave", hoverLink);
   view.addEventListener("pointerup", endSelection);
   view.addEventListener("pointercancel", endSelection);
+  // 카드 전환이나 창 비활성화로 캡처가 풀리면 pointerup이 오지 않을 수 있다. 선택 포인터와
+  // 사이드카의 누른 상태를 같은 경계에서 닫아 다음 카드 복귀 뒤 새 드래그를 허용한다.
+  view.addEventListener("lostpointercapture", endSelection);
 
   // screen.read 응답을 기다리는 resolver
   let pendingScreenRead = null;
@@ -1295,6 +1298,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         scrollbar.thumb.removeEventListener("pointercancel", endThumbDrag);
       }
       view.removeEventListener("pointercancel", endSelection);
+      view.removeEventListener("lostpointercapture", endSelection);
       await terminal.send(id, { operation: "close" });
     },
   };

@@ -1204,6 +1204,33 @@ test("terminal pointer drag sends one complete selection gesture to the sidecar"
   assert.deepEqual(messages[5], { operation: "mouse", phase: "up", x: 42, y: 12, pressed: false, shift: false, alt: false, ctrl: false });
 });
 
+test("a lost pointer capture resets terminal drag ownership for the next card focus", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const view = createFakeView();
+  await startTerminal({
+    view, attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+
+  view._trigger("pointerdown", { button: 0, pointerId: 4, clientX: 10, clientY: 12 });
+  view._trigger("pointermove", { pointerId: 4, clientX: 42, clientY: 12 });
+  view._trigger("lostpointercapture", { pointerId: 4, clientX: 42, clientY: 12 });
+  view._trigger("pointerdown", { button: 0, pointerId: 5, clientX: 18, clientY: 20 });
+  view._trigger("pointermove", { pointerId: 5, clientX: 50, clientY: 20 });
+  view._trigger("pointerup", { pointerId: 5, clientX: 50, clientY: 20 });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const mouse = fakeSidecar.getMessages().filter(({ body }) => body.operation === "mouse");
+  assert.deepEqual(mouse.map(({ body }) => `${body.phase}.${body.pressed}`), [
+    "down.true", "move.true", "up.false", "down.true", "move.true", "up.false",
+  ]);
+});
+
 test("a drag that leaves the view selects to the nearest edge point", async () => {
   FakeResizeObserver.reset();
   const fakeSidecar = createFakeSidecar();
