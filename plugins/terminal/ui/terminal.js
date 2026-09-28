@@ -684,13 +684,15 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     }
     try {
       const point = selectionPoint(event);
+      // Pointer capture is the ownership boundary. Do not publish a selecting
+      // state or enqueue a mouse down until the browser confirms the capture.
+      view.setPointerCapture(event.pointerId);
       sendMouse("down", point, event, true);
       selectionPointerId = event.pointerId;
       selectionStart = point;
       selectionStarted = false;
       session = { ...session, selecting: true };
       changed("session");
-      view.setPointerCapture(event.pointerId);
       event.preventDefault();
     } catch (error) {
       reportInputError(error);

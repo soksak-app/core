@@ -71,7 +71,7 @@ class FakeTextEncoder {
 /**
  * 가짜 view 구현.
  */
-function createFakeView() {
+function createFakeView({ captureError = null } = {}) {
   const listeners = new Map();
   const parent = {
     bubbleCount: 0,
@@ -88,7 +88,7 @@ function createFakeView() {
     clientHeight: 600,
     getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 600 }; },
     style: {},
-    setPointerCapture() {},
+    setPointerCapture() { if (captureError) throw captureError; },
     releasePointerCapture() {},
     dataset: {},
     parentElement: parent,
@@ -1204,6 +1204,26 @@ test("terminal pointer drag sends one complete selection gesture to the sidecar"
   assert.equal(messages[2].x, 10);
   assert.equal(messages[3].x, 42);
   assert.deepEqual(messages[5], { operation: "mouse", phase: "up", x: 42, y: 12, pressed: false, shift: false, alt: false, ctrl: false });
+});
+
+test("a failed pointer capture does not leave terminal selection ownership stuck", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const view = createFakeView({ captureError: new Error("capture rejected") });
+  await startTerminal({
+    view, attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+  view._trigger("pointerdown", { button: 0, pointerId: 4, clientX: 10, clientY: 12 });
+  await new Promise((resolve) => setImmediate(resolve));
+  const state = fakeExpose.getStatus("terminal.session").readFn();
+  assert.equal(state.selecting, false, "capture failure must not publish selecting state");
+  assert.equal(fakeSidecar.getMessages().length, 0, "capture failure must not send a stale mouse down");
+  assert.match(state.error, /capture rejected/, "capture failure must remain observable");
 });
 
 test("terminal pointer gesture serializes selection commands when sidecar replies finish out of order", async () => {

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-14-6-6 Red/Green progress: Wails monitoring recorded inactive motion-only input and active selection transitions. A tracked terminal Red test reproduced `setPointerCapture` rejection leaving ownership stuck; selection state is now published only after capture succeeds. The terminal suite passes 111/111. Real cross-host drag evidence remains open.
+
 - Follow-up V5-96-14-6-7 opened for the reported idle Tauri/Wails RSS discrepancy. The current Wails endpoint is not equivalent to one TUI: it reports 6 pane cards, 10 tabs, 6 visible surfaces, 3 WebViews, and 3 native regions. Equal-state measurements are required before attributing the difference to a host leak.
 
 - Follow-up V5-96-14-6-6 opened after the restarted Tauri and Wails builds still showed a user-visible TUI drag failure. Prior selection-release counts are not acceptance evidence; the new item requires pointer ownership, PTY bytes, selection, clipboard, active-window state, and complete capture evidence.
