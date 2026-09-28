@@ -301,6 +301,8 @@ pub fn encode_key(key: Key, modifiers: Modifiers, modes: &Modes) -> Result<Vec<u
 
         // 특수 키
         Key::Enter => Ok(b"\r".to_vec()),
+        // Shift+Tab 은 BackTab(CSI Z) 이다. 전체화면 프로그램이 이 시퀀스로 모드 순환을 묶는다.
+        Key::Tab if modifiers & 1 != 0 => Ok(b"\x1b[Z".to_vec()),
         Key::Tab => Ok(b"\t".to_vec()),
         Key::Backspace => Ok(b"\x7f".to_vec()),
         Key::Escape => Ok(b"\x1b".to_vec()),
@@ -917,6 +919,8 @@ mod tests {
 
         assert_eq!(encode_key(Key::Enter, 0, &modes).unwrap(), b"\r".to_vec());
         assert_eq!(encode_key(Key::Tab, 0, &modes).unwrap(), b"\t".to_vec());
+        // Shift+Tab 은 BackTab(CSI Z) 이다. 전체화면 프로그램이 이 시퀀스로 모드 전환을 묶는다.
+        assert_eq!(encode_key(Key::Tab, 1, &modes).unwrap(), b"\x1b[Z".to_vec());
         assert_eq!(
             encode_key(Key::Backspace, 0, &modes).unwrap(),
             b"\x7f".to_vec()
