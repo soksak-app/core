@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-14-6-4-1 Red/Green: repeated main-page reloads retained WebKit allocator pages in both hosts' WebContent processes. Both hosts now call `WKWebView._killWebContentProcessAndResetState` and wait for the WebContent PID to become zero before reloading; an unavailable selector is an explicit error. `webview_process_test` passes the termination and reload sequence. The tracked 40-reload repeat reports bounded rebuilt Wails RSS (76,688→76,784 KB; WebContent maximum 79,040 KB) and Tauri RSS (89,072→89,056 KB; WebContent maximum 77,840 KB). The checklist item is complete.
+
 - V5-96-14-6-4 native Red/Green: the shared macOS image-region test reproduced 21 `NSViewFrameDidChangeNotification` registrations after one create and 20 placements. `SPImageRegion` now tracks one observed surface, removes the old surface before switching, and reuses that registration from both view attachment and placement; the same test reports one registration. Rebuilt Wails and Tauri both link this shared correction. A rebuilt fixture then completed 1,000 alternating window-resize placements with host RSS at 122 MB (Wails) and 115 MB (Tauri), without observer growth. The full native suite still reports two unrelated display-scale assumptions in TEST 19 and the unplaced-surface check, so the checklist remains open while WebContent reload retention is investigated.
 
 - V5-96-14-6-4 completion and follow-up: the host memory leak is complete under `d656e6a3` and `66cc4fc0`. A separate `[!]` item records that 40 reloads leave approximately 196 MB in the WebKit WebContent process, while `leaks` reports only 1.66 KB and `vmmap` attributes resident pages to `WebKit Malloc`; no supported host-side reclamation API exists.

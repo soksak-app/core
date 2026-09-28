@@ -146,6 +146,8 @@ type Platform interface {
 	// (페이지 좌표) 다. UI 스레드에서 호출한다.
 	FileDrop(main unsafe.Pointer, dropped func(json string)) error
 	MainWebview(window unsafe.Pointer) (unsafe.Pointer, error)
+	// KillWebContentProcess 는 현재 WebContent 프로세스를 종료하며 호출자가 페이지를 다시 읽어야 한다.
+	KillWebContentProcess(view unsafe.Pointer) error
 	ConfigureMainWindow(window unsafe.Pointer, dark bool)
 	ClipboardRead(kind string) (ClipboardValue, error)
 	ClipboardWriteText(text string) error

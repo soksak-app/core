@@ -25,6 +25,7 @@
 | `WKWebView._inspector`와 `_WKInspector`(`connect`, `show`, `attach`, `close`, `isVisible`, `isConnected`, `inspectorWebView`) | [`native/darwin/tests/webview_inspector_test.m`](../../native/darwin/tests/webview_inspector_test.m), 검사 전용 | 표면 웹뷰의 웹 인스펙터를 열고 창에 붙여 표면이 자리를 유지하는지 확인 |
 | `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/webview_input_test.m`](../../native/darwin/tests/webview_input_test.m)의 `drain`; 독립 검사 전용 | DOM 이벤트 횟수를 검사하기 전에 네이티브 마우스 처리 완료 대기 |
 | `_WKWebsiteDataStoreConfiguration.initWithDirectory:`, `WKWebsiteDataStore._initWithConfiguration:` | 두 호스트; [`document_view.m`](../../native/darwin/src/document_view.m), `storeForDirectory`, `sp_document_create`가 `<config-dir>/document-data`로 호출 | 문서 영역의 사이트 데이터를 앱 설정 디렉터리 안에 둔다 |
+| `WKWebView._killWebContentProcessAndResetState`, `_webProcessIdentifier` | 두 호스트; [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), 선언된 메인 페이지 reload 명령 직전에 호출 | 반복 reload 뒤 allocator 페이지를 보유하는 WebContent 프로세스를 종료하고 상태를 초기화한 뒤 프로세스 식별자가 0이 될 때까지 기다린다. 두 선택자를 사용할 수 없으면 호출자는 reload 오류를 보고한다 |
 
 공용 라이브러리의 비공개 선언은 모두 [`native/darwin/src/private/`](../../native/darwin/src/private/)의 `webkit.h`, `coregraphics.h`에 있다. 소스와 검사는 이 헤더를 포함하며 비공개 API를 직접 선언하지 않는다. 다른 플랫폼은 `native/<os>/src/private/`에 선언을 둔다.
 
@@ -87,6 +88,12 @@ Tauri 이벤트 전달 콜백은 Tao의 이벤트 처리 잠금을 가진다. �
 문서 영역에 이 저장소를 유지한다. 공개 `+[WKWebsiteDataStore dataStoreForIdentifier:]`는 모든 영구 저장소를 앱의 WebKit 컨테이너(`~/Library/WebKit/<bundle>/WebsiteDataStore/<identifier>`)에 두므로, 일회용 `--config-dir`로 실행한 창 검사가 이전 실행과 사용자 자신의 인스턴스의 쿠키를 다시 썼다. `-[_WKWebsiteDataStoreConfiguration initWithDirectory:]`는 데이터 디렉터리가 주어진 디렉터리 아래에 있는 영구 구성을 만들고, `-[WKWebsiteDataStore _initWithConfiguration:]`는 그 구성으로 저장소를 만든다. 이것이 호출자가 고른 디렉터리에 저장소를 두도록 WebKit이 제공하는 인터페이스다. 한 디렉터리의 저장소 객체 둘은 같은 파일을 쓰므로 라이브러리는 프로세스가 끝날 때까지 디렉터리마다 저장소 하나를 유지한다. 디렉터리를 만들 수 없거나 저장소를 초기화할 수 없으면 문서 생성이 실패하고 호스트가 오류를 보고한다.
 
 [`document_view_test.m`](../../native/darwin/tests/document_view_test.m)으로 같은 디렉터리의 문서는 쿠키를 공유하고 다른 디렉터리의 문서는 공유하지 않으며 디렉터리가 있는지 확인하고, [`browser.test.mjs`](../../e2e/browser.test.mjs)의 `document site data lives in the configuration directory`로 확인한다. 선언은 [`_WKWebsiteDataStoreConfiguration.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/_WKWebsiteDataStoreConfiguration.h)와 [`WKWebsiteDataStorePrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebsiteDataStorePrivate.h)에서 검토한다.
+
+### reload 후 WebContent 프로세스 메모리
+
+메인 페이지 reload 명령에는 이 연산을 유지한다. 현재 macOS WebKit에서 반복 reload를 하면 `leaks --noContent`가 4개 누수 기록 1.66KB만 보고하는 동안에도 WebContent 프로세스의 allocator 페이지가 보유되었다. 공개 `WKWebView` API에는 현재 WebContent 프로세스를 종료하거나 페이지를 반환하는 연산이 없다. `_killWebContentProcessAndResetState`는 WebKit이 제공하는 해당 경계의 연산이다. 두 호스트는 reload 직전에 메인 웹뷰에 호출하고, 선택자가 없으면 명령을 실패시킨다. 측정된 상태를 그대로 둔 채 reload를 조용히 계속하지 않는다.
+
+이 연산은 선언된 메인 페이지 reload 명령으로만 제한한다. 현재 WebContent 실행 상태를 없애므로 명령은 교체 페이지의 ready 알림을 기다린 뒤 반환한다. [`webview_process_test.m`](../../native/darwin/tests/webview_process_test.m)은 연산이 사용 가능하고 종료 뒤 새 페이지가 로드되는지 검사한다. 40회·80회 reload RSS 측정은 [기능 V5-96-14-6-4-1](../features.ko.md)에 기록하며 WebKit을 업데이트할 때마다 반복한다. [`WKWebViewPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h)의 `_killWebContentProcessAndResetState`를 검토하고 선택자가 대상 뷰의 프로세스만 종료하는지 확인한다.
 
 ### 독립 검사의 마우스 처리 완료
 

@@ -1027,6 +1027,17 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
 
 /// 메인 페이지를 다시 읽고, 새 페이지가 준비를 알릴 때까지 기다린다.
 fn reload(window: &Window) -> Result<Value, Failure> {
+    #[cfg(target_os = "macos")]
+    {
+        let target = window.clone();
+        on_main(window, move || {
+            let view = crate::windows::root_view(&target)
+                .ok_or_else(|| "the main page is gone".to_string())?;
+            let platform = platform::current()?;
+            with_view(&view, move |native| platform.kill_web_content_process(native))
+        })
+        .map_err(internal)?;
+    }
     let (tx, rx) = mpsc::channel();
     window_data(window)
         .map_err(internal)?

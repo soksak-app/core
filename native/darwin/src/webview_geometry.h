@@ -29,6 +29,8 @@ void webviewSetFrame(void *webview, double x, double y, double width, double hei
 void webviewGetFrame(void *webview, double *rect);
 void webviewSetSurfaceHidden(void *webview, bool hidden);
 void webviewSetSurfaceAlpha(void *webview, double alpha);
+// 현재 WebContent 프로세스를 종료한다. 호출 뒤 호스트가 새 페이지를 읽어야 한다.
+bool sp_webview_kill_content_process(void *webview);
 // 선언된 DOM 오버레이의 CSS 픽셀 여백과 표시 여부를 설정한다. values 는 항목마다
 // left, top, right, bottom, visible 순서의 다섯 값이다.
 void webviewSetSurfaceOverlays(void *webview, const double *values, size_t count);

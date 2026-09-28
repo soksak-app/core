@@ -510,10 +510,22 @@ func (s *Surfaces) replayRegistrations() {
 // reloadPage 는 메인 페이지를 다시 읽고, 새 페이지가 준비를 알릴 때까지 기다린다.
 func (s *Surfaces) reloadPage() error {
 	ready := make(chan struct{})
+	var reloadErr error
+	application.InvokeSync(func() {
+		main, err := system.MainWebview(s.window.NativeWindow())
+		if err != nil {
+			reloadErr = err
+			return
+		}
+		reloadErr = system.KillWebContentProcess(main)
+	})
+	if reloadErr != nil {
+		return reloadErr
+	}
 	s.host.mu.Lock()
 	s.readied = append(s.readied, ready)
 	s.host.mu.Unlock()
-	s.window.Reload()
+	application.InvokeSync(func() { s.window.Reload() })
 	select {
 	case <-ready:
 		return nil

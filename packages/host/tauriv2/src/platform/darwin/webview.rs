@@ -21,6 +21,7 @@ extern "C" {
         context: *mut c_void,
     ) -> bool;
     fn sp_webview_set_appearance(view: *mut c_void, dark: bool) -> bool;
+    fn sp_webview_kill_content_process(view: *mut c_void) -> bool;
     fn sp_surface_create(main_webview: *mut c_void) -> *mut c_void;
     fn sp_surface_close(surface: *mut c_void);
     fn webviewSetFrame(view: *mut c_void, x: f64, y: f64, width: f64, height: f64);
@@ -73,6 +74,14 @@ pub fn set_main_appearance(view: &PlatformWebview, dark: bool) -> Result<(), Str
         return Err("requested app appearance is unavailable".into());
     }
     Ok(())
+}
+
+pub fn kill_content_process(view: &PlatformWebview) -> Result<(), String> {
+    if unsafe { sp_webview_kill_content_process(view.inner() as *mut c_void) } {
+        Ok(())
+    } else {
+        Err("the WebContent process cannot be terminated".into())
+    }
 }
 
 /// 창의 파일 놓기 뷰에 놓인 파일을 받는 함수. 창이 살아 있는 동안 네이티브 뷰가 가리킨다.

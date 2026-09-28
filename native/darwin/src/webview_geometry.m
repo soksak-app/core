@@ -669,6 +669,18 @@ void webviewSetSurfaceAlpha(void *handle, double alpha) {
     if (view != host) view.alphaValue = 1;
 }
 
+bool sp_webview_kill_content_process(void *handle) {
+    WKWebView *view = (WKWebView *)handle;
+    if (!view || ![view respondsToSelector:@selector(_killWebContentProcessAndResetState)]) return false;
+    [view _killWebContentProcessAndResetState];
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
+    while (view._webProcessIdentifier != 0 && deadline.timeIntervalSinceNow > 0) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+                                 beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    }
+    return view._webProcessIdentifier == 0;
+}
+
 void webviewSetSurfaceOverlays(void *handle, const double *values, size_t count) {
     NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
     SPSurfaceHost *host = surfaceHost((NSView *)handle);

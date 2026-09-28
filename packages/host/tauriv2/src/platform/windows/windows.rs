@@ -127,6 +127,9 @@ impl Platform for Windows {
     fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String> {
         unsupported::set_alpha(view, alpha)
     }
+    fn kill_web_content_process(&self, view: &PlatformWebview) -> Result<(), String> {
+        unsupported::kill_web_content_process(view)
+    }
 
     fn set_live_resize(&self, view: &PlatformWebview, live: bool) -> Result<(), String> {
         unsupported::set_live_resize(view, live)

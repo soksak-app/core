@@ -136,6 +136,10 @@ pub fn set_alpha(_view: &PlatformWebview, _alpha: f64) -> Result<(), String> {
     missing("webview alpha")
 }
 
+pub fn kill_web_content_process(_view: &PlatformWebview) -> Result<(), String> {
+    missing("WebContent process termination")
+}
+
 pub fn set_live_resize(_view: &PlatformWebview, _live: bool) -> Result<(), String> {
     missing("webview live resize")
 }

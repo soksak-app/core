@@ -235,6 +235,8 @@ pub trait Platform: Send + Sync {
     fn set_surface_overlays(&self, surface: Handle, overlays: &[DOMOverlay]) -> Result<(), String>;
     /// 웹뷰의 불투명도를 설정한다.
     fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String>;
+    /// 현재 WebContent 프로세스를 종료한다. 호출자는 종료 뒤 페이지를 다시 읽어야 한다.
+    fn kill_web_content_process(&self, view: &PlatformWebview) -> Result<(), String>;
     /// 연속적인 크기 변경의 시작과 종료를 웹뷰에 전달한다.
     fn set_live_resize(&self, view: &PlatformWebview, live: bool) -> Result<(), String>;
     /// 웹뷰를 같은 부모의 다른 뷰 위로 올린다.
