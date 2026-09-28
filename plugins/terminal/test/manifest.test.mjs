@@ -58,7 +58,7 @@ test("diagnostics.json declares the entries its module registers and is not publ
 test("the diagnostic entries inject preedit and record the IME trace", () => {
   const names = (kind) => diagnostics.exposes[kind].map((entry) => entry.name).sort();
   assert.deepEqual(names("status"), ["terminal.ime.trace", "terminal.pointer.trace"]);
-  assert.deepEqual(names("commands"), ["terminal.compose.update", "terminal.ime.trace", "terminal.pointer.trace"]);
+  assert.deepEqual(names("commands"), ["terminal.compose.update", "terminal.ime.trace", "terminal.pointer.trace", "terminal.pty.pending"]);
 });
 
 test("the terminal exposes its session, input, preedit, paste, file drop, screen.read, close commands, and view", () => {

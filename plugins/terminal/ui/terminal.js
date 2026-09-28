@@ -878,6 +878,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
 
   // screen.read 응답을 기다리는 resolver
   let pendingScreenRead = null;
+  // pty.pending 측정 응답을 기다리는 resolver. 진단 명령이 한 번에 하나만 요청한다.
+  let pendingPtyRead = null;
 
   // 사이드카 메시지 수신
   const stopSidecar = await terminal.on(id, (body) => {
@@ -999,6 +1001,23 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         modes, bytes: body.bytes, error: typeof body.error === "string" ? body.error : null,
       }};
       changed("session");
+    } else if (body.event === "pty.pending") {
+      // 진단 측정의 답이다. 요청이 없으면 계약 위반이고 오류는 요청을 거절한다.
+      if (!pendingPtyRead) {
+        reportInputError(new Error("unexpected pty.pending response from sidecar"));
+        return;
+      }
+      const waiter = pendingPtyRead;
+      pendingPtyRead = null;
+      if (typeof body.error === "string") {
+        waiter.reject(new Error(body.error));
+      } else if (!Number.isInteger(body.pending) || body.pending < 0) {
+        const error = new Error(`invalid pty.pending measurement from sidecar: ${JSON.stringify(body)}`);
+        reportInputError(error);
+        waiter.reject(error);
+      } else {
+        waiter.resolve(body.pending);
+      }
     } else if (body.event === "clipboard.store") {
       handleClipboardStore(body).catch(reportInputError);
     } else if (body.event === "clipboard.query") {
@@ -1295,7 +1314,38 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     return null;
   });
   await expose.command("terminal.drop", dropFiles);
-  // 진단 빌드에서는 진단 모듈이 preedit 주입과 입력 기록 항목을 이 연산으로 등록한다.
+  // 진단 측정: 현재 세션에서 마스터가 쓰고 자식이 아직 읽지 않은 입력 바이트 수를 사이드카에 묻는다.
+  const readPtyPending = () => new Promise((resolve, reject) => {
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      pendingPtyRead = null;
+      reject(new Error("pty.pending timeout"));
+    }, 5000);
+    pendingPtyRead = {
+      resolve: (pending) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        resolve(pending);
+      },
+      reject: (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        reject(error);
+      },
+    };
+    terminal.send(id, { operation: "pty.pending" }).catch((error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      pendingPtyRead = null;
+      reject(error);
+    });
+  });
+  // 진단 빌드에서는 진단 모듈이 preedit 주입, 입력 기록, PTY 잔량 측정 항목을 이 연산으로 등록한다.
   if (diagnostics) {
     await diagnostics.attach({
       expose,
@@ -1308,6 +1358,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         pointerObservers.add(fn);
         return () => pointerObservers.delete(fn);
       },
+      readPtyPending,
       reportError: (message) => setError("trace", message),
       resolveError: () => {
         if (resolveError("trace")) changed("session");

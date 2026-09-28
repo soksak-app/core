@@ -4,7 +4,7 @@
 //! deliberately not represented by PTY handles: dropping an attachment only
 //! stops delivery to that client, while an explicit close owns session exit.
 
-use crate::platform::pty::{kill_process_group, process_group_leader};
+use crate::platform::pty::{kill_process_group, pending_input, process_group_leader};
 use crate::protocol::DaemonEvent;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use std::collections::{HashMap, VecDeque};
@@ -289,6 +289,19 @@ impl PtyService {
             })
             .map_err(|error| format!("resize PTY: {error}"));
         result
+    }
+
+    /// 마스터가 쓰고 자식이 아직 읽지 않은 입력 바이트 수. 쓰기 성공과 자식 수신을 구분하는 측정 관측이다.
+    pub fn pending_input(&self, session_id: &str) -> Result<usize, String> {
+        let session = self.session(session_id)?;
+        if *session.closed.lock().unwrap() {
+            return Err("session is closed".into());
+        }
+        let guard = session.master.lock().unwrap();
+        let master = guard
+            .as_ref()
+            .ok_or_else(|| "session master is closed".to_string())?;
+        pending_input(master.as_ref())
     }
 
     pub fn close(&self, session_id: &str) -> Result<(), String> {

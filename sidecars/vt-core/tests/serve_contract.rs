@@ -283,6 +283,7 @@ struct Calls {
     resizes: Vec<(String, u16, u16)>,
     detaches: Vec<String>,
     closes: Vec<String>,
+    pendings: Vec<String>,
 }
 
 struct FakeSessionPort {
@@ -364,6 +365,15 @@ impl SessionPort for FakeSessionPort {
         Ok(())
     }
 
+    async fn pending_input(&self, session_id: &str) -> Result<usize, String> {
+        self.calls
+            .lock()
+            .unwrap()
+            .pendings
+            .push(session_id.to_string());
+        Ok(7)
+    }
+
     async fn get_events(&self) -> mpsc::Receiver<DaemonEvent> {
         let (tx, rx) = mpsc::channel(10);
         let mut rx_guard = self.event_rx.lock().await;
@@ -410,6 +420,42 @@ async fn test_a3_input_calls_write() {
         "session_id mismatch"
     );
     assert_eq!(calls_lock.writes[0].1, b"hi", "write data mismatch");
+}
+
+// pty.pending 은 열린 세션의 잔량을 응답하고 세션이 없으면 명시적 오류를 낸다.
+#[tokio::test]
+async fn pty_pending_reports_the_session_queue_depth() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+{"surface":"s1","body":{"operation":"pty.pending"}}
+{"surface":"s2","root":"/tmp","body":{"operation":"pty.pending"}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let factory_calls = calls.clone();
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new(
+            "pending-session".to_string(),
+            factory_calls.clone(),
+        )) as Arc<dyn SessionPort>
+    });
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+    let output = String::from_utf8(writer).unwrap();
+    assert!(
+        output.contains(r#""body":{"event":"pty.pending","pending":7},"surface":"s1""#),
+        "an open session did not report its pending input count: {output}"
+    );
+    assert!(
+        output.contains(r#""body":{"error":"Session not open","event":"pty.pending"},"surface":"s2""#),
+        "a surface without a session must answer an explicit error marked as the pty.pending reply: {output}"
+    );
+    assert_eq!(
+        calls.lock().unwrap().pendings,
+        vec!["pending-session".to_string()],
+        "pty.pending must query only the open session"
+    );
 }
 
 #[tokio::test]

@@ -641,6 +641,11 @@ pub trait SessionPort: Send + Sync {
     async fn attach(&self, _session_id: &str, _from: i64) -> Result<String, String> {
         Err("session attach is not supported".to_string())
     }
+    /// 마스터가 쓰고 자식이 아직 읽지 않은 입력 바이트 수. 측정 관측이므로 제공하지 않는 포트는
+    /// 명시적으로 실패한다.
+    async fn pending_input(&self, _session_id: &str) -> Result<usize, String> {
+        Err("session pending input is not supported".to_string())
+    }
     async fn get_events(&self) -> mpsc::Receiver<DaemonEvent>;
 }
 
@@ -740,6 +745,8 @@ enum SurfaceCommand {
     Viewport {
         offset: u32,
     },
+    /// 현재 세션에서 마스터가 쓰고 자식이 아직 읽지 않은 입력 바이트 수를 묻는 측정 연산.
+    PtyPending,
 }
 
 #[derive(Debug, Clone)]
@@ -2067,6 +2074,19 @@ async fn surface_task(
                             }});
                             if output_tx.send(response.to_string()).await.is_err() { return; }
                         }
+                    }
+                    // 표면의 현재 세션에서 마스터가 쓰고 자식이 아직 읽지 않은 바이트 수를 측정해 응답한다.
+                    // 쓰기 성공과 자식 수신을 구분하는 진단 관측이다.
+                    SurfaceCommand::PtyPending => {
+                        // 오류 응답도 같은 event 표식을 실어 보낸다. 측정 요청의 답임이 응답만으로 드러나야 한다.
+                        let response = match session_id.as_ref() {
+                            Some(sid) => match session_port.pending_input(sid).await {
+                                Ok(pending) => json!({"surface": surface_id, "body": {"event": "pty.pending", "pending": pending}}),
+                                Err(error) => json!({"surface": surface_id, "body": {"event": "pty.pending", "error": error}}),
+                            },
+                            None => json!({"surface": surface_id, "body": {"event": "pty.pending", "error": "Session not open"}}),
+                        };
+                        if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
                     // 마우스 보고 제스처는 글자를 선택하지 않는다. 페이지는 선택 연산의 답을 기다린다.
                     SurfaceCommand::SelectionStart { .. } if mouse_gesture => {
@@ -3622,6 +3642,11 @@ where
                                     }
                                 }
                             }
+                            "pty.pending" => {
+                                if tx.send(SurfaceCommand::PtyPending).await.is_err() {
+                                    break;
+                                }
+                            }
                             "close" => {
                                 let close_result = if let Some(registry) = registry.as_ref() {
                                     registry.close_surface(&registry_key, &owner).await
@@ -3983,6 +4008,10 @@ impl SessionPort for LocalSessionPort {
             .await
             .insert(session_id.to_string(), attachment_id.clone());
         Ok(attachment_id)
+    }
+
+    async fn pending_input(&self, session_id: &str) -> Result<usize, String> {
+        self.service.pending_input(session_id)
     }
 
     async fn get_events(&self) -> mpsc::Receiver<DaemonEvent> {

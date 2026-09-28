@@ -46,6 +46,12 @@
         "result": { "type": "null" }
       },
       {
+        "name": "terminal.pty.pending",
+        "description": "Reads the count of master-written PTY bytes the child has not yet read.",
+        "params": { "type": "object", "properties": {} },
+        "result": { "type": "object", "properties": { "pending": { "type": "integer" } } }
+      },
+      {
         "name": "terminal.ime.trace",
         "description": "Starts or stops the bounded real IME callback and terminal-input trace.",
         "params": {

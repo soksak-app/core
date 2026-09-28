@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 
 // 기록된 새 입력만 판정한다. 회복 시도의 성공은 앞선 실패의 증거를 바꾸지 않는다.
-export function assertTuiGesture({ expected, events, visual, capture, overflow, dom, pointerStart, pointerEnd, waitError }) {
+export function assertTuiGesture({ expected, events, visual, capture, overflow, dom, pointerStart, pointerEnd, waitError,
+  selectedBefore, selectionWaitError, selectionWaitMs }) {
   assert.equal(overflow, false, "pointer trace overflow or missing trace status");
   assert.equal(waitError, undefined, `pointer result wait failed: ${waitError}`);
   assert.ok(Array.isArray(dom) && dom.length >= 2 && pointerStart && pointerEnd, "missing pointer DOM evidence");
@@ -36,6 +37,11 @@ export function assertTuiGesture({ expected, events, visual, capture, overflow, 
   assert.ok(visual?.expectedCells?.length > 0, "missing expected selection cells");
   assert.deepEqual(visual.selectedCells, visual.expectedCells, "visible selection differs from expected cells");
   assert.deepEqual(visual.recordedCells, visual.expectedCells, "recorded selection differs from expected cells");
+  if (selectionWaitMs !== undefined) {
+    assert.deepEqual(selectedBefore, [], "the expected selection was already visible before the drag");
+    assert.equal(selectionWaitError, undefined, `selection status did not arrive: ${selectionWaitError}`);
+    assert.ok(selectionWaitMs <= 1050, `selection appeared after ${selectionWaitMs}ms`);
+  }
   assert.ok(capture && [capture.first, capture.last, capture.inputStart, capture.inputEnd,
     capture.frameCount, capture.maxGap].every(Number.isFinite), "missing capture evidence");
   assert.ok(capture.frameCount >= 2 && capture.first <= capture.inputStart && capture.last >= capture.inputEnd,

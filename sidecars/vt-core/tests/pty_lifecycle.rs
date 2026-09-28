@@ -168,6 +168,211 @@ async fn three_real_sessions_reconnect_with_same_pid_and_retained_output() {
     }
 }
 
+// 마스터가 쓴 바이트 중 자식이 아직 읽지 않은 양의 계약. 읽지 않는 자식에서는 쓴 만큼 남는다.
+// 측정 대상 프로그램(TUI)처럼 자식이 raw 모드를 켠 뒤에 쓴다. canonical 모드에서는 줄이
+// 완성되기 전 바이트가 줄 조립 버퍼에 남아 큐에 반영되지 않는다.
+#[tokio::test]
+async fn pending_input_counts_master_written_bytes_a_non_reading_child_has_not_read() {
+    let _test_lock = lifecycle_test_lock();
+    let _native_test_lock = native_pty_test_lock();
+    let service = PtyService::new();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (session, _) = service
+        .open(
+            "/bin/sh",
+            &["-c".into(), "stty raw; printf READY; sleep 30".into()],
+            None,
+            80,
+            24,
+            tx,
+        )
+        .expect("PTY setup failed; real PTY errors must fail this test");
+    let mut seen = Vec::new();
+    let ready = timeout(Duration::from_secs(2), async {
+        loop {
+            if let Some(DaemonEvent::Output { data, .. }) = rx.recv().await {
+                seen.extend_from_slice(&data);
+                if seen.ends_with(b"READY") {
+                    return;
+                }
+            }
+        }
+    })
+    .await;
+    assert!(
+        ready.is_ok(),
+        "the child never reported its raw mode; output so far: {seen:?}"
+    );
+    let first = b"pending-probe";
+    let second = b"-second";
+    service
+        .write(&session, first)
+        .expect("first production-path write failed");
+    assert_eq!(
+        service
+            .pending_input(&session)
+            .expect("pending input is unavailable"),
+        first.len(),
+        "a child that reads nothing must leave every written byte pending"
+    );
+    service
+        .write(&session, second)
+        .expect("second production-path write failed");
+    assert_eq!(
+        service
+            .pending_input(&session)
+            .expect("pending input is unavailable"),
+        first.len() + second.len(),
+        "pending input must accumulate across writes until the child reads"
+    );
+    service.close(&session).expect("close failed");
+}
+
+// 읽는 자식은 큐를 비운다. 유한 시간 안에 0 이 되지 않으면 실패한다.
+#[tokio::test]
+async fn pending_input_drains_to_zero_as_the_child_reads() {
+    let _test_lock = lifecycle_test_lock();
+    let _native_test_lock = native_pty_test_lock();
+    let service = PtyService::new();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (session, _) = service
+        .open(
+            "/bin/sh",
+            &[
+                "-c".into(),
+                "stty raw; printf READY; cat > /dev/null".into(),
+            ],
+            None,
+            80,
+            24,
+            tx,
+        )
+        .expect("PTY setup failed; real PTY errors must fail this test");
+    let mut seen = Vec::new();
+    let ready = timeout(Duration::from_secs(2), async {
+        loop {
+            if let Some(DaemonEvent::Output { data, .. }) = rx.recv().await {
+                seen.extend_from_slice(&data);
+                if seen.ends_with(b"READY") {
+                    return;
+                }
+            }
+        }
+    })
+    .await;
+    assert!(
+        ready.is_ok(),
+        "the child never reported its raw mode; output so far: {seen:?}"
+    );
+    service
+        .write(&session, b"drain-probe")
+        .expect("production-path write failed");
+    let started = std::time::Instant::now();
+    loop {
+        let pending = service
+            .pending_input(&session)
+            .expect("pending input is unavailable");
+        if pending == 0 {
+            break;
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "a reading child did not drain {pending} pending bytes within two seconds"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    service.close(&session).expect("close failed");
+}
+
+// 없는 세션과 닫은 세션의 잔량은 오류이다. 0 이 아니라 명시적 실패로 구분한다.
+#[tokio::test]
+async fn pending_input_rejects_unknown_and_closed_sessions() {
+    let _test_lock = lifecycle_test_lock();
+    let _native_test_lock = native_pty_test_lock();
+    let service = PtyService::new();
+    assert!(
+        service.pending_input("no-such-session").is_err(),
+        "an unknown session must not report a pending count"
+    );
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let (session, _) = service
+        .open(
+            "/bin/sh",
+            &["-c".into(), "sleep 30".into()],
+            None,
+            80,
+            24,
+            tx,
+        )
+        .expect("PTY setup failed; real PTY errors must fail this test");
+    service.close(&session).expect("close failed");
+    assert!(
+        service.pending_input(&session).is_err(),
+        "a closed session must not report a pending count"
+    );
+}
+
+// 생산 write 경로로 쓴 정확한 바이트를 자식이 읽어 되돌리는 수신 fixture. READY 뒤에만 쓰므로
+// stty -echo 가 이미 적용됐고, stty -opost 로 출력 후처리(\n 을 \r\n 으로 바꾸는 등)를 끊어
+// 돌아온 바이트는 echo 나 가공이 아니라 cat 이 읽은 그대로다.
+#[tokio::test]
+async fn child_reads_exact_bytes_written_through_the_production_path() {
+    let _test_lock = lifecycle_test_lock();
+    let _native_test_lock = native_pty_test_lock();
+    let service = PtyService::new();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (session, _) = service
+        .open(
+            "/bin/sh",
+            &["-c".into(), "stty -echo -opost; printf READY; cat".into()],
+            None,
+            80,
+            24,
+            tx,
+        )
+        .expect("PTY setup failed; real PTY errors must fail this test");
+    let mut seen = Vec::new();
+    let ready = timeout(Duration::from_secs(2), async {
+        loop {
+            if let Some(DaemonEvent::Output { data, .. }) = rx.recv().await {
+                seen.extend_from_slice(&data);
+                if seen.ends_with(b"READY") {
+                    return;
+                }
+            }
+        }
+    })
+    .await;
+    assert!(
+        ready.is_ok(),
+        "the receiving child never reported READY; output so far: {seen:?}"
+    );
+    // 실제 TUI 드래그 보고와 같은 SGR 바이트 형태를 쓴다. 행 끝 newline 이 cat 의 읽기를 끝낸다.
+    let bytes = b"\x1b[<0;5;2M\x1b[<32;6;2m\x1b[<35;7;2m\x1b[<0;7;2m\n";
+    service
+        .write(&session, bytes)
+        .expect("production-path write failed");
+    let receipt = timeout(Duration::from_secs(2), async {
+        loop {
+            if seen.len() >= b"READY".len() + bytes.len() {
+                return seen[b"READY".len()..].to_vec();
+            }
+            match rx.recv().await {
+                Some(DaemonEvent::Output { data, .. }) => seen.extend_from_slice(&data),
+                other => panic!("the session ended before the child returned the bytes: {other:?}"),
+            }
+        }
+    })
+    .await
+    .expect("the child did not return the written bytes within two seconds");
+    assert_eq!(
+        receipt,
+        bytes.to_vec(),
+        "bytes read by the child differ from the production write path"
+    );
+    service.close(&session).expect("close failed");
+}
+
 /// macOS answers EPERM to a signal for a process group whose members are all zombies.
 /// Such a group has nothing left to terminate, so closing it succeeds.
 #[test]

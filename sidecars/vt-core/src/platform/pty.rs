@@ -23,6 +23,35 @@ pub fn process_group_leader(
     }
 }
 
+/// 마스터가 썼고 자식이 아직 읽지 않은 PTY 입력 큐의 바이트 수. 진단 측정 관측이다.
+pub fn pending_input(
+    #[cfg(unix)] master: &dyn MasterPty,
+    #[cfg(not(unix))] _master: &dyn MasterPty,
+) -> Result<usize, String> {
+    #[cfg(unix)]
+    {
+        let fd = master.as_raw_fd().ok_or("PTY master fd is unavailable")?;
+        let mut pending: libc::c_int = 0;
+        // xnu(BSD 계열) PTY 는 마스터와 슬레이브가 struct tty 를 공유한다. 마스터의 쓰기는 줄 규율
+        // 입력 처리로 t_rawq/t_canq 에 쌓이고 FIONREAD(ttnread) 는 그 합, 즉 마스터가 쓰고 자식이
+        // 아직 읽지 않은 바이트 수를 반환한다. TIOCOUTQ 는 t_outq, 즉 자식이 쓴 출력이므로 이 값이
+        // 아니다(소유 검사에서 둘 다 측정해 구별했다). canonical 모드에서는 완성 전 줄이 t_rawq 의
+        // 조립 버퍼에 남아 세지 않는다.
+        let result = unsafe { libc::ioctl(fd, libc::FIONREAD, &mut pending) };
+        if result < 0 {
+            return Err(format!(
+                "read PTY pending input: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        usize::try_from(pending).map_err(|_| format!("PTY pending input {pending} is negative"))
+    }
+    #[cfg(not(unix))]
+    {
+        Err("PTY pending input is not implemented on this platform".to_string())
+    }
+}
+
 /// Terminates the PTY process group when the platform exposes one.
 pub fn kill_process_group(
     #[cfg(unix)] group: Option<i32>,
