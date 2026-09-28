@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- Started V5-96-14-6-4 after the system process list showed a Tauri process using approximately 7.83 GB while another Tauri process used 235.6 MB and Wails used 99.4 MB. The cause is not yet established; a tracked RSS and child-process repeat measurement is required.
+- Initial measurement for V5-96-14-6-4: after 40 fresh three-terminal cycles, host physical footprints stayed at 35–47 MB, while WebKit WebContent RSS grew Wails 393→466 MB and Tauri 349→466 MB. A stale temporary Tauri process was also removed. This is Red evidence for WebContent retention, not yet proof of an application-owned allocation leak.
+
 - Started V5-96-14-4 after correcting the previous report: the real-HID checks used a shell fixture, not an actual TUI process, so they do not prove the user-visible TUI drag behavior.
 
 - Completed V5-96-14-4 with an actual TUI process in rebuilt Tauri. Real HID movement enabled `motion:true`; a plain drag changed `selectionReleases` 6→7 with `reported:false`, no session error, and 93 complete capture frames. The reported failure did not reproduce in this current rebuild.
