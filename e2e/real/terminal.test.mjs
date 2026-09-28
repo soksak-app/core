@@ -823,6 +823,42 @@ for (const app of Object.values(APPS)) {
     assert.equal(result.error, undefined);
   });
 
+  test(`${app.name}: rebuilt TUI Shift drag selects visible prompt text`, { timeout: 120000 }, async (t) => {
+    const { s, surface } = await prepare(t, app, "TUISHIFT");
+    await s.run("terminal.input", { bytes: "tui-program\r" }, surface);
+    const lines = await readScreenUntil(s, surface, (value) => value.some((line) => line.includes("Ask TUI")),
+      "the rebuilt TUI prompt did not appear for Shift selection");
+    const row = lines.findIndex((line) => line.includes("Ask TUI"));
+    const line = lines[row];
+    const startColumn = line.indexOf("Ask TUI");
+    assert.ok(startColumn >= 0, `TUI prompt text was not found in ${JSON.stringify(line)}`);
+    const endColumn = startColumn + "Ask TUI".length - 1;
+    const session = await s.get("terminal.session", surface);
+    const view = await s.rect("terminal.view", undefined, surface);
+    const center = await bringFront(s, app, view);
+    const origin = { x: center.x - view.width / 2, y: center.y - view.height / 2 };
+    const point = (column) => cellPoint(origin, session, column, row);
+    const startPoint = { ...point(startColumn), x: point(startColumn).x - 0.3 * session.cellWidth };
+    const endPoint = { ...point(endColumn), x: point(endColumn).x + 0.3 * session.cellWidth };
+    const before = (await s.get("terminal.session", surface)).selectionReleases;
+    post([
+      { type: "move", ...startPoint, modifiers: ["shift"] },
+      { type: "down", ...startPoint, modifiers: ["shift"] },
+      ...Array.from({ length: 8 }, (_, index) => ({
+        type: "drag",
+        x: startPoint.x + (endPoint.x - startPoint.x) * (index + 1) / 8,
+        y: startPoint.y,
+        modifiers: ["shift"],
+      })),
+      { type: "up", ...endPoint, modifiers: ["shift"] },
+    ]);
+    await s.until("terminal.session", (value) => value.selectionReleases === before + 1,
+      "the TUI Shift drag did not release a selection", { surface });
+    await s.until("terminal.session", (value) => value.error === undefined,
+      "the TUI Shift drag reported a terminal error", { surface });
+    assert.equal(pasteboardText(), "Ask TUI", `the TUI Shift drag copied ${JSON.stringify(pasteboardText())}`);
+  });
+
   test(`${app.name}: real keypad keys send SS3 sequences in application keypad mode and characters otherwise`, { timeout: 90000 }, async (t) => {
     const { s, surface, session, origin } = await prepare(t, app, "KEYPAD");
     // 키는 초점을 가진 터미널 영역에 간다.

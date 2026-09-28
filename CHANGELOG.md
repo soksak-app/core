@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- Follow-up V5-96-14-6-8-1 opened: the previous Green evidence proved only synthetic endpoint PTY bytes, not user-visible TUI text selection or clipboard output. A real-window Red must measure selection and capture state on rebuilt Tauri and Wails before any drag fix is claimed.
+- V5-96-14-6-8-1 Green: the first real-window Red copied `sk TUI` because the gesture began at the cell center. Starting before the first cell and ending after the last now copies exactly `Ask TUI` on rebuilt Wails 1/1 and Tauri 1/1. The companion real TUI plain-drag PTY case passes 1/1 on each host.
+
+
 - Follow-up V5-96-14-6-8 opened: the completed capture-ownership correction did not test idempotence across repeated card focus, TUI return, and prompt-click transitions. The new Red requires the same drag sequence to record active/key/occluded state, pointer capture, mouse phase, PTY bytes, selection, and session errors on every attempt; no endpoint pass is accepted as evidence for the user-reported intermittent failure.
 - V5-96-14-6-8 Green: a tracked release-capture Red reproduced `releasePointerCapture()` throwing after capture was already lost, which aborted the release sequence. The terminal now reports that error while continuing `mouse.up`; the repeated focus case passes 5/5 on rebuilt Wails and 5/5 on rebuilt Tauri with complete SGR bytes and no session errors. The plugin suite passes 112/112.
 
