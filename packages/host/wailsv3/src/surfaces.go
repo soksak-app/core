@@ -347,7 +347,10 @@ func (s *Surfaces) press(view uintptr) bool {
 	if !ok {
 		return false
 	}
-	s.Emit("surface-pressed", id)
+	// AppKit의 로컬 마우스 감시기 안에서 Wails의 EmitEvent를 동기 실행하면
+	// 현재 NSEvent 처리가 재진입하여 다음 버튼 이벤트가 WebView에 이동으로
+	// 전달될 수 있다. 원래 이벤트가 반환된 뒤 같은 메인 런루프 순서로 발행한다.
+	application.InvokeAsync(func() { s.Emit("surface-pressed", id) })
 	return true
 }
 
@@ -382,7 +385,10 @@ func SurfaceOwnerID(named map[uintptr]string, view uintptr) (string, bool) {
 // 경계의 잡기 영역은 두 카드 사이 통로보다 넓으므로, 통로 폭이 선 하나이면 그 영역이
 // 표면 아래에 있다. 페이지가 위치를 자기 경계와 비교한다.
 func (s *Surfaces) point(phase int, x float64, y float64) {
-	s.Emit("surface-input", InputStep{Phase: phase, X: x, Y: y})
+	// 표면 누름과 같은 이유로 네이티브 이벤트 감시기에서 DOM 이벤트를 동기
+	// 실행하지 않는다. 메인 런루프가 입력 이벤트를 먼저 완료하게 한다.
+	step := InputStep{Phase: phase, X: x, Y: y}
+	application.InvokeAsync(func() { s.Emit("surface-input", step) })
 }
 
 // InputStep 은 페이지가 받는 끌기의 한 단계다.
