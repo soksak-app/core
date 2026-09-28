@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- 후속 V5-96-14-6-4-4/5를 열었다. native 디스플레이 배율 실패와 분할·WebView 지속 부하 측정 부재가 남아 있다. reload 수정 완료를 전체 완료로 처리하지 않으며 두 항목에 Red/Green 증거가 있어야 한다.
+
 - V5-96-14-6-4-3 Red/Green: 빠진 rustfmt 구성요소를 설치한 뒤 `cargo fmt --all -- --check`가 통과하고 집중 `webview_process_test`가 통과했다. native 모음은 테스트까지 실행되며, 남은 실패는 무관한 디스플레이 배율 가정인 TEST 19(`contentsScale` 기대 2, 실제 1)와 배치되지 않은 표면 raster 검사(기대 400x200, 실제 200x100)뿐이다. 이 실패들을 명시적으로 남기고 통과로 보고하지 않는다.
 
 - V5-96-14-6-4-2 Red/Green: WebContent 수정 뒤 최초 전체 `pnpm test`에서 설명 없는 optional-root 기본값 2개, `platform/<os>/` 밖의 Tauri 플랫폼 `cfg`, 낡은 parity 수를 발견했다. optional-root 계약에 DOM root가 없는 경우의 이유를 기록하고, reload 전달은 외부 OS 조건 없이 플랫폼 경계를 호출하며, 두 parity 번역은 63 lane·구현 파일 313개·테스트 파일 240개를 기록한다. 전체 `pnpm test`가 저장소 검사 127개와 모든 workspace 패키지에서 통과했다.
