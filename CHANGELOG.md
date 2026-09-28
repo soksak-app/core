@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-96-14-6-8-2-1.1: correct the prior acceptance claim: the real TUI test could replace a failed direct retry with recovery and accept stale mouse-up. Preserve the failed retry independently. Extracted the previous acceptance logic and reproduced four false positives (`Missing expected exception`); the new correlated-input, visible-cell and complete-recording oracle passes all five unit fixtures. Actual TUI correction and cross-host acceptance remain pending.
+
 - Follow-up V5-96-14-6-8-2 opened: a three-run real Tauri TUI check reproduced one intermittent plain-drag failure (`mouse.reported:false`) while Shift selection passed. The failure needs complete session, host, pointer-capture, PTY, and capture evidence before correction.
 - V5-96-14-6-8-2 Green: the tracked real-window case now performs first drag, third-point click, immediate repeat, and conditional other-card/prompt retry only after failure. Three cycles pass on rebuilt Tauri and Wails with no session error and final PTY mouse report/write; no simple isolated test is used as acceptance.
 

@@ -894,7 +894,7 @@ for (const app of Object.values(APPS)) {
       dragPath(from, to, 12);
       await s.until("terminal.session", (value) => value.mouse.phase === "up" || value.error !== undefined,
         `round-trip ${attempt + 1}: third-point retry did not finish`, { surface });
-      let repeated = await s.get("terminal.session", surface);
+      const repeated = await s.get("terminal.session", surface);
       if (repeated.error !== undefined || repeated.mouse.reported !== true || repeated.mouse.written !== true) {
         // Only after the direct retry fails, round-trip through another card and retry again.
         await s.run("core.card.focus", { card: other.id });
@@ -909,7 +909,8 @@ for (const app of Object.values(APPS)) {
         dragPath(from, to, 12);
         await s.until("terminal.session", (value) => value.mouse.phase === "up" || value.error !== undefined,
           `round-trip ${attempt + 1}: card retry did not finish`, { surface });
-        repeated = await s.get("terminal.session", surface);
+        const recovered = await s.get("terminal.session", surface);
+        t.diagnostic(JSON.stringify({ attempt: attempt + 1, failedDirectRetry: repeated, recovery: recovered }));
       }
       const repeatedWindow = await s.get("host.window");
       assert.equal(repeated.error, undefined, `round-trip ${attempt + 1}: repeated drag error ${repeated.error}`);
