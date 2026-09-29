@@ -5,8 +5,6 @@
 //! 표의 제목을 쓰고 "system" 인 항목은 프레임워크가 준 제목과 단축키를 유지한다. 두 호스트가
 //! 같은 표를 싣는지 scripts/check-host-parity.mjs 가 기계로 검사한다.
 
-use std::ffi::CString;
-
 use tauri::menu::{AboutMetadata, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Manager, Wry};
 
