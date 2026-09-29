@@ -10,8 +10,6 @@
 	<string>AppIcon</string>
 	<key>CFBundleName</key>
 	<string>soksak-wailsv3</string>
-	<key>CFBundleDisplayName</key>
-	<string>soksak</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
