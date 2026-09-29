@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// 서비스 디렉터리의 플래그 파일을 읽어 만든 트레이스.
+#[derive(Clone)]
 pub struct PerformanceTrace {
     target: Option<PathBuf>,
 }
@@ -28,6 +29,11 @@ impl PerformanceTrace {
             .filter(|line| line.starts_with('/'))
             .map(PathBuf::from);
         Self { target }
+    }
+
+    /// 꺼진 트레이스. 검사 하네스의 serve 경로가 쓴다.
+    pub fn disabled() -> Self {
+        Self { target: None }
     }
 
     /// 트레이스가 켜져 있는가.

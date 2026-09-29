@@ -269,6 +269,9 @@ pub async fn serve_persistent(
                     let close_service = Arc::clone(&service);
                     let close_client = client.clone();
                     let close_owner = Arc::new(move || close_service.close_owner(&close_client));
+                    // 연결마다 새로 읽은 트레이스를 표면 작업까지 내려보낸다(V5-104).
+                    let connection_trace =
+                        crate::performance::PerformanceTrace::from_service_dir(&trace_dir);
                     if let Err(error) = serve_with_registry(
                         engine_factory,
                         reader,
@@ -277,6 +280,7 @@ pub async fn serve_persistent(
                         close_owner,
                         registry,
                         client,
+                        connection_trace,
                     )
                     .await
                     {

@@ -62,3 +62,123 @@ fn trace_rechecks_the_flag_on_each_service_dir_read() {
     assert!(on.enabled(), "the flag is read again on the next construction");
     let _ = fs::remove_dir_all(&service);
 }
+
+// 프레임 생산자: 트레이스가 켜진 serve 는 프레임마다 reason 과 그리기 시간을 남긴다.
+use soksak_sidecar_vt_core::protocol::{
+    serve_with_performance, Cursor, CursorShape, Engine, EngineEvent, Modes, Screen,
+    SessionPort, ShellRequest,
+};
+use std::sync::Arc;
+use tokio::sync::mpsc;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+#[derive(Default)]
+struct TraceEngine {
+    cols: u16,
+    rows: u16,
+}
+
+#[async_trait::async_trait]
+impl Engine for TraceEngine {
+    fn set_theme(&mut self, _theme: soksak_sidecar_vt_core::TerminalTheme) {}
+    fn resize(&mut self, cols: u16, rows: u16) {
+        self.cols = cols;
+        self.rows = rows;
+    }
+    fn set_cell_metrics(&mut self, _width: u16, _height: u16) -> Result<(), String> {
+        Ok(())
+    }
+    fn feed(&mut self, _bytes: &[u8]) {}
+    fn drain_events(&mut self) -> Vec<EngineEvent> {
+        Vec::new()
+    }
+    fn resolve_clipboard(&mut self, _request_id: u64, _text: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn reject_clipboard(&mut self, _request_id: u64, _reason: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn selection_start(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
+    fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
+    fn selection_end(&mut self) -> Result<Option<String>, String> { Ok(None) }
+    fn selection_clear(&mut self) -> bool { false }
+    fn selection_text(&self) -> Option<String> { None }
+    fn scroll_viewport(&mut self, _lines: i32) {}
+    fn scroll_to_newest(&mut self) -> bool { false }
+    fn cursor(&self) -> Cursor {
+        Cursor { col: 0, row: 0, shape: CursorShape::Block, visible: true, blinking: false,
+                 blink_visible: true, focused: false, preedit: None }
+    }
+    fn screen(&mut self) -> Screen {
+        Screen { cols: self.cols, rows: self.rows,
+                 cursor: Cursor { col: 0, row: 0, shape: CursorShape::Block, visible: true,
+                                  blinking: false, blink_visible: true, focused: false, preedit: None },
+                 scrollback: Default::default(), background: "#1e1e1e".to_string(), lines: Vec::new() }
+    }
+    fn modes(&self) -> Modes { Modes::default() }
+    fn reset(&mut self) {}
+}
+
+struct TracePort;
+
+#[async_trait::async_trait]
+impl SessionPort for TracePort {
+    async fn open(&self, _request: &ShellRequest, _cols: u16, _rows: u16) -> Result<String, String> {
+        Ok("perf-session".to_string())
+    }
+    async fn write(&self, _session_id: &str, _data: &[u8]) -> Result<(), String> { Ok(()) }
+    async fn resize(&self, _session_id: &str, _cols: u16, _rows: u16) -> Result<(), String> { Ok(()) }
+    async fn detach(&self, _session_id: &str) -> Result<(), String> { Ok(()) }
+    async fn close(&self, _session_id: &str) -> Result<(), String> { Ok(()) }
+    async fn get_events(&self) -> mpsc::Receiver<soksak_sidecar_vt_core::protocol::DaemonEvent> {
+        mpsc::channel(1).1
+    }
+}
+
+#[tokio::test]
+async fn a_served_surface_records_its_frames_with_reasons() {
+    let service = temp_dir("frames");
+    let log = service.join("performance.ndjson");
+    std::fs::write(service.join("performance"), format!("{}\n", log.display())).unwrap();
+    let trace = PerformanceTrace::from_service_dir(&service);
+    assert!(trace.enabled());
+
+    let engine_factory = Arc::new(|| Box::new(TraceEngine::default()) as Box<dyn Engine>);
+    let port = Arc::new(TracePort);
+    let factory: Arc<dyn Fn() -> Arc<dyn SessionPort> + Send + Sync> =
+        Arc::new(move || port.clone() as Arc<dyn SessionPort>);
+
+    let (mut to_serve, serve_in) = tokio::io::duplex(64 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(64 * 1024);
+    let task = tokio::spawn(async move {
+        let _ = serve_with_performance(engine_factory, serve_in, serve_out, factory, trace).await;
+    });
+    let mut lines = BufReader::new(from_serve).lines();
+
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+"#).await.unwrap();
+    // 상태 이벤트와 이미지 봉투가 올 때까지 줄을 읽는다(프레임은 그 사이에 그려진다).
+    for _ in 0..3 {
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line()).await;
+    }
+    drop(to_serve);
+    let _ = task.await;
+
+    let text = std::fs::read_to_string(&log).expect("a served frame reaches the flagged log");
+    let frames: Vec<serde_json::Value> = text
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .filter(|v: &serde_json::Value| v["event"] == "frame")
+        .collect();
+    assert!(!frames.is_empty(), "at least one frame is recorded: {text}");
+    assert!(
+        frames.iter().all(|f| f["reason"].is_string() && f["draw_us"].is_u64()),
+        "every frame carries a reason and a draw time: {frames:?}"
+    );
+    assert!(
+        frames.iter().any(|f| f["reason"] == "open" || f["reason"] == "resize"),
+        "the open and configure paths name themselves: {frames:?}"
+    );
+    let _ = std::fs::remove_dir_all(&service);
+}
