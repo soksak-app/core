@@ -260,8 +260,11 @@ pub fn cleanup_orphan_webkit() {
         }
         // 소켓 없음 = 클라이언트가 없다 = 고아다.
         eprintln!("performance: killing orphan WebKit XPC process {pid}");
-        let _ = std::process::Command::new("kill")
+        if let Err(error) = std::process::Command::new("kill")
             .arg(pid.to_string())
-            .output();
+            .output()
+        {
+            eprintln!("performance: kill orphan {pid}: {error}");
+        }
     }
 }

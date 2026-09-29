@@ -129,10 +129,12 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 for (label, _) in quit.webview_windows() {
                     if let Some(window) = quit.get_window(&label) {
                         if let Some(view) = crate::windows::root_view(&window) {
-                            let _ = crate::exposure::with_view(&view, |native| {
+                            if let Err(error) = crate::exposure::with_view(&view, |native| {
                                 platform::current()?
                                     .kill_web_content_process(native)
-                            });
+                            }) {
+                                eprintln!("termination web content kill: {error}");
+                            }
                         }
                     }
                 }
