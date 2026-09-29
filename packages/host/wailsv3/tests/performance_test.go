@@ -22,6 +22,7 @@ func tempConfig(t *testing.T) string {
 	return dir
 }
 
+// contract: performance.trace.enable-writes-log-and-sidecar-flags
 func TestEnableWritesTheLogAndTheSidecarFlags(t *testing.T) {
 	config := tempConfig(t)
 	target, err := host.PerformanceEnable(config)
@@ -52,6 +53,7 @@ func TestEnableWritesTheLogAndTheSidecarFlags(t *testing.T) {
 	}
 }
 
+// contract: performance.trace.disable-removes-flags-keeps-log
 func TestDisableRemovesTheFlagsButKeepsTheLog(t *testing.T) {
 	config := tempConfig(t)
 	target, err := host.PerformanceEnable(config)
@@ -70,6 +72,7 @@ func TestDisableRemovesTheFlagsButKeepsTheLog(t *testing.T) {
 	}
 }
 
+// contract: performance.trace.relay-requires-object-with-event
 func TestRelayedPageLinesRequireAnEvent(t *testing.T) {
 	config := tempConfig(t)
 	target, err := host.PerformanceEnable(config)

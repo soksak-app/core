@@ -193,6 +193,10 @@ Items:
 | `flush.buffer.closes-delivered-after-drain` | Surface close notices buffered while the queue is full reach the sidecar. | both |
 | `flush.buffer.consumed-acks-not-coalesced` | Each buffered consumed acknowledgement arrives once, including two for the same image. | both |
 | `flush.buffer.delivered-after-queued-bodies` | Buffered replies and close notices arrive after the bodies already queued. | both |
+| `images.invalidate.sidecar-connection-loss-resends-configure` | Invalidating a sidecar's images re-sends its configure at the same size and leaves other sidecars' images untouched. | both |
+| `performance.trace.enable-writes-log-and-sidecar-flags` | Enabling the trace creates the log file and writes the log-path flag into every existing service directory. | both |
+| `performance.trace.disable-removes-flags-keeps-log` | Disabling the trace removes the sidecar flags and keeps the log file. | both |
+| `performance.trace.relay-requires-object-with-event` | A relayed page line must be an object with an event; rejected lines append nothing. | both |
 | `images.envelope.rejects-unattached-image` | An envelope for an image name that was never attached is answered with notAttached. | both |
 | `images.envelope.refusal-echoes-name-and-sequence` | A refusal carries the name and sequence of the envelope. | both |
 | `images.envelope.refusal-preserves-quoted-name` | A refusal for a name containing a quote is valid JSON and keeps the name. | both |
@@ -274,6 +278,9 @@ Items:
 | `sidecars-transport.endpoint.replaces-dead-service-endpoint` | An endpoint left by a dead service is replaced by the new service endpoint. | both |
 | `sidecars-transport.endpoint.live-unreachable-reported-without-replacement` | An endpoint of a live but unreachable service fails the send and is not replaced. | both |
 | `sidecars-transport.stop.close-owner-then-shutdown` | Stop sends close-owner and, after a successful reply, shutdown. | both |
+| `sidecars-transport.persistent.revives-a-lost-connection` | When the service drops the connection, the host restarts it without a send and the owning surface receives the connection event. | both |
+| `sidecars-transport.endpoint.zombie-service-does-not-exist` | A zombie service pid does not count as an existing service, so its stale endpoint is replaced. | both |
+| `sidecars-transport.persistent.revive-failure-is-reported` | A failed restart reports the disconnection and its reason to the owning surface. | both |
 | `surface-activation.owner.resolves-registered-view` | A registered native view resolves to its surface id. | both |
 | `surface-activation.owner.ignores-unknown-view` | An unregistered native view resolves to no surface. | both |
 | `surface-activation.owner.ignores-empty-owner` | A view registered with an empty surface id resolves to no surface. | both |

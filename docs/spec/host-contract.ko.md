@@ -193,6 +193,10 @@ fn invalid_json_closes_connection() {
 | `flush.buffer.closes-delivered-after-drain` | 대기열이 가득 찬 동안 버퍼에 넣은 표면 닫기 알림이 사이드카에 도착한다. | both |
 | `flush.buffer.consumed-acks-not-coalesced` | 버퍼에 넣은 consumed 응답은 같은 이미지의 두 응답을 포함해 각각 한 번 도착한다. | both |
 | `flush.buffer.delivered-after-queued-bodies` | 버퍼에 넣은 응답과 닫기 알림은 이미 대기열에 있던 본문 뒤에 도착한다. | both |
+| `images.invalidate.sidecar-connection-loss-resends-configure` | 사이드카의 그림을 무효화하면 같은 크기의 configure 를 다시 보내고 다른 사이드카의 그림은 그대로 둔다. | both |
+| `performance.trace.enable-writes-log-and-sidecar-flags` | 트레이스를 켜면 로그 파일을 만들고 이미 있는 모든 서비스 디렉터리에 로그 경로 플래그를 쓴다. | both |
+| `performance.trace.disable-removes-flags-keeps-log` | 트레이스를 끄면 사이드카 플래그를 지우고 로그 파일은 남긴다. | both |
+| `performance.trace.relay-requires-object-with-event` | 중계하는 페이지 줄은 event 를 담은 객체여야 한다. 거부된 줄은 아무 것도 덧붙이지 않는다. | both |
 | `images.envelope.rejects-unattached-image` | 연결된 적 없는 이미지 이름의 봉투에 notAttached로 응답한다. | both |
 | `images.envelope.refusal-echoes-name-and-sequence` | 거부 응답은 봉투의 name과 sequence를 담는다. | both |
 | `images.envelope.refusal-preserves-quoted-name` | 따옴표가 든 이름의 거부 응답은 올바른 JSON이며 이름을 유지한다. | both |
@@ -274,6 +278,9 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.endpoint.replaces-dead-service-endpoint` | 죽은 서비스가 남긴 엔드포인트는 새 서비스 엔드포인트로 바뀐다. | both |
 | `sidecars-transport.endpoint.live-unreachable-reported-without-replacement` | 살아 있지만 연결할 수 없는 서비스의 엔드포인트는 보내기를 실패시키고 바뀌지 않는다. | both |
 | `sidecars-transport.stop.close-owner-then-shutdown` | 중지는 close-owner를 보내고 성공 응답 뒤에 shutdown을 보낸다. | both |
+| `sidecars-transport.persistent.revives-a-lost-connection` | 서비스가 연결을 끊으면 호스트가 전송 없이 다시 시작하고 소유 표면이 연결 이벤트를 받는다. | both |
+| `sidecars-transport.endpoint.zombie-service-does-not-exist` | 좀비 서비스 pid 는 존재하는 서비스로 치지 않아 낡은 endpoint 를 교체한다. | both |
+| `sidecars-transport.persistent.revive-failure-is-reported` | 재시작 실패는 연결 끊김과 그 까닭을 소유 표면에 알린다. | both |
 | `surface-activation.owner.resolves-registered-view` | 등록된 네이티브 뷰는 그 표면 id로 해석된다. | both |
 | `surface-activation.owner.ignores-unknown-view` | 등록되지 않은 네이티브 뷰는 표면으로 해석되지 않는다. | both |
 | `surface-activation.owner.ignores-empty-owner` | 빈 표면 id로 등록된 뷰는 표면으로 해석되지 않는다. | both |
