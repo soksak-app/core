@@ -28,6 +28,7 @@ pub mod link;
 pub mod menu;
 mod modals;
 pub mod notifications;
+pub mod performance;
 #[path = "platform/platform.rs"]
 pub mod platform;
 pub mod projects;

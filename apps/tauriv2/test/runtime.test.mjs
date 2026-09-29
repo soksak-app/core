@@ -29,3 +29,22 @@ test("every host command has an argument mapping, so a call never throws before 
   assert.deepEqual(commands.filter((name) => !mapped.includes(name)), [], "commands without an argument mapping");
   assert.deepEqual(mapped.filter((name) => !commands.includes(name)), [], "argument mappings without a command");
 });
+
+test("the performance trace command carries the page request to the host", async () => {
+  const calls = [];
+  globalThis.window = { __TAURI__: {
+    core: { invoke: async (command, args) => { calls.push([command, args]); return null; } },
+    event: { listen: async () => () => {} },
+    webview: { getCurrentWebview: () => ({ label: "main" }) },
+  } };
+  globalThis.location = { search: "" };
+  try {
+    // 이 검사만 별도의 모듈 사본을 쓴다 — 런타임은 첫 불러오기에 window 를 붙잡는다.
+    const { host } = await import("../runtime/index.js?test=performance-command");
+    await host.call("performance", { action: "on" });
+    assert.deepEqual(calls, [["performance", { request: { action: "on" } }]]);
+  } finally {
+    delete globalThis.window;
+    delete globalThis.location;
+  }
+});

@@ -24,6 +24,7 @@
    적용은 값을 루트에 심는 것이다. 표면과 모달은 각자 다른 문서라 이 문서의
    스타일시트를 물려받지 못하므로, 호스트가 이 값들을 그대로 실어 보낸다.     */
 
+import { host as bridge } from "@soksak/runtime";
 import { surfaces as host } from "./host.js";
 import { checkSidebarReferences, isSettingAddress, validateSidebars } from "@soksak/plugin-api";
 import { effectiveSettings } from "./settings-scope.js";
@@ -319,6 +320,11 @@ export async function connectSettings(storage) {
   store = storage;
   store.onChange(() => { if (!changes) refresh().catch((e) => dispatchEvent(new ErrorEvent("error", { message: e.message }))); });
   await refresh();
+  // 저장된 성능 트레이스 스위치를 시작부터 반영한다(V5-104). 호스트가 없는 문서
+  // (검사 문맥)에서는 호출하지 않는다.
+  if (bridge && common["diagnostics.performance"] === true) {
+    bridge.call("performance", { action: "on" }).then(undefined, () => {});
+  }
 }
 
 async function refresh() {
@@ -445,6 +451,13 @@ export function set(patch, scope = projectId ? "project" : "common") {
   changes++;
   revision++;
   apply();
+  if (Object.hasOwn(patch, "diagnostics.performance")) {
+    // 성능 트레이스의 스위치는 페이지가 호스트에게 전한다(V5-104). 호스트가 자기
+    // 줄과 사이드카 플래그를 책임진다. 전파 실패는 설정 변경을 되돌리지 않고
+    // 그대로 드러난다 — 하지만 저장보다 먼저 기다린다.
+    const on = patch["diagnostics.performance"] === true;
+    if (bridge) bridge.call("performance", { action: on ? "on" : "off" }).then(undefined, () => {});
+  }
   const saved = writing.then(() => store.settings(id, patch));
   writing = saved.finally(async () => {
     changes--;

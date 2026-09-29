@@ -19,7 +19,7 @@ Every layer is a producer; the trace is not defined by one of them.
 
 ## Flag propagation
 
-The page and each host read `diagnostics.performance` from the settings they already load. A host that enables its own logging also writes a `performance` flag file into each sidecar's service directory; a sidecar checks the flag at start and on each session open, so the protocol between host and sidecar does not change.
+The page reads `diagnostics.performance` from the settings it already loads and tells the host through the `host.performance` command — `on` when the setting turns true, `off` when it turns false, and once at startup when a stored setting is already true. `on` makes the host write a `performance` flag file carrying the log path into each sidecar's service directory; a sidecar checks the flag at start and on each accepted connection, so the protocol between host and sidecar does not change. `line` relays a page event and is refused while the trace is off, so an off trace never creates the file.
 
 ## Reading
 
