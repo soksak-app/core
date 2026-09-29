@@ -3,6 +3,7 @@ pub mod directory_uri;
 pub mod encoding;
 pub mod inline_image;
 pub mod palette;
+pub mod performance;
 pub mod platform;
 pub mod protocol;
 pub mod pty;

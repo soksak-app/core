@@ -234,6 +234,9 @@ pub async fn serve_persistent(
         .flush()
         .map_err(|e| format!("flush ready endpoint: {e}"))?;
 
+    // 성능 트레이스(V5-104). 플래그가 없으면 아래 두 호출은 아무 파일 작업도 하지 않는다.
+    let performance = crate::performance::PerformanceTrace::from_service_dir(service_dir);
+    performance.line("session_start", serde_json::json!({"role": "vt-core"}));
     let service = Arc::new(crate::pty::PtyService::new());
     let registry = PersistentRegistry::new();
     let mut clients = JoinSet::new();
@@ -247,9 +250,14 @@ pub async fn serve_persistent(
                 let service = Arc::clone(&service);
                 let engine_factory = Arc::clone(&engine_factory);
                 let registry = Arc::clone(&registry);
+                // 연결마다 플래그를 다시 읽는다. 세션 열기와 같은 주기라 설정 변경이
+                // 다음 연결에 반영된다(docs/spec/performance-trace.md).
+                let trace_dir = service_dir.to_path_buf();
                 clients.spawn(async move {
             match authenticate(stream, &token).await {
                 Ok((reader, writer, client)) => {
+                    crate::performance::PerformanceTrace::from_service_dir(&trace_dir)
+                        .line("client_connect", serde_json::json!({"owner": client}));
                     let owner = client.clone();
                     let factory_service = Arc::clone(&service);
                     let factory = Arc::new(move || {
