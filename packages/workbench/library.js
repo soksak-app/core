@@ -62,8 +62,17 @@ export function createLibrary(root, rendered = () => {}) {
     form.hidden = false;
     form.innerHTML = '';
     const creates = mode === 'create';
-    const heading = element('h2', '', creates?'새 프로젝트':'폴더 열기');
+    const heading = element('h2', '', creates?'새 폴더로 프로젝트 만들기':'기존 폴더로 프로젝트 만들기');
     const fields = element('form', 'library-fields');
+    // 두 경로를 나란히 보여 사용자가 새 폴더를 만들지 이미 있는 폴더를 쓸지 바로 고른다.
+    const toggle=element('div','library-form__toggle');
+    const newFolder=element('button','ui-button',creates?'● 새 폴더 만들기':'○ 새 폴더 만들기');
+    newFolder.type='button'; newFolder.dataset.expose='core.library.form.mode-new';
+    mark(newFolder,'core.library.form.open',{mode:'create'});
+    const existingFolder=element('button','ui-button',creates?'○ 기존 폴더 선택':'● 기존 폴더 선택');
+    existingFolder.type='button'; existingFolder.dataset.expose='core.library.form.mode-existing';
+    mark(existingFolder,'core.library.form.open',{mode:'open'});
+    toggle.append(newFolder,existingFolder);
     function field(name, title, placeholder, expose) {
       const label=element('label','',title), input=element('input','text-field');
       input.name=name; input.dataset.expose=expose; input.placeholder=placeholder; input.required=true; input.autocomplete='off';
@@ -72,15 +81,14 @@ export function createLibrary(root, rendered = () => {}) {
     }
     const name=creates?field('name','프로젝트 폴더 이름','my-project','core.library.form.name'):null;
     const parent=field('parent',creates?'생성 위치':'폴더 경로','/Users/…','core.library.form.parent');
-    if (creates) {
-      const choose=element('button','ui-button','폴더 선택'); choose.type='button'; choose.dataset.expose='core.library.form.choose';
-      mark(choose,'core.library.choose-folder');
-      parent.parentElement.append(choose);
-    }
+    // 두 모드 모두 네이티브 선택기로 경로를 고를 수 있다.
+    const choose=element('button','ui-button','폴더 선택'); choose.type='button'; choose.dataset.expose='core.library.form.choose';
+    mark(choose,'core.library.choose-folder');
+    parent.parentElement.append(choose);
     const actions=element('div','library-form__actions');
     const cancel=element('button','ui-button','취소'); cancel.type='button'; cancel.dataset.expose='core.library.form.cancel'; mark(cancel,'core.library.form.cancel');
-    const submit=element('button','ui-button library-primary',creates?'생성 후 열기':'열기'); submit.type='button'; submit.dataset.expose='core.library.form.submit'; mark(submit,'core.library.form.submit');
-    actions.append(cancel,submit); fields.append(actions); form.append(heading,fields);
+    const submit=element('button','ui-button library-primary',creates?'생성 후 열기':'프로젝트로 열기'); submit.type='button'; submit.dataset.expose='core.library.form.submit'; mark(submit,'core.library.form.submit');
+    actions.append(cancel,submit); fields.append(actions); form.append(heading,toggle,fields);
     // Enter 는 제출 명령을 실행한다. 폼의 기본 제출은 쓰지 않는다.
     fields.addEventListener('keydown',(event)=>{ if(event.key==='Enter'){ event.preventDefault(); submit.click(); } });
     fields.querySelector('input').focus();
@@ -135,7 +143,7 @@ export function createLibrary(root, rendered = () => {}) {
       mark(pin,'core.library.pin',{id:project.id,pinned:!project.pinned});
       card.append(choose,pin); grid.append(card);
     }
-    const add=element('button','library-add',windows.createsFolders?'＋ 새 프로젝트':'＋ 폴더 열기');add.type='button';add.dataset.action='create';add.dataset.expose='core.library.add';
+    const add=element('button','library-add','＋ 프로젝트 만들기');add.type='button';add.dataset.action='create';add.dataset.expose='core.library.add';
     mark(add,'core.library.form.open');grid.append(add);
     const empty=root.querySelector('.library-empty');empty.hidden=all.length>0;
     if(!shown.length&&all.length) {

@@ -2510,6 +2510,14 @@
         "description": "The folder selection button."
       },
       {
+        "name": "core.library.form.mode-new",
+        "description": "The toggle that switches the form to making a new folder."
+      },
+      {
+        "name": "core.library.form.mode-existing",
+        "description": "The toggle that switches the form to adopting an existing folder."
+      },
+      {
         "name": "core.library.form.cancel",
         "description": "The form cancel button."
       },
