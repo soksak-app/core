@@ -52,12 +52,12 @@ fn invalid_json_closes_connection() {
 
 | menu | id | source | ko | en | key |
 |---|---|---|---|---|---|
-| app | about | system | | | |
+| app | about | title | 정보 | About | |
 | app | services | system | | | |
-| app | hide | system | | | |
-| app | hide-others | system | | | |
-| app | show-all | system | | | |
-| app | quit | system | | | |
+| app | hide | title | 가리기 | Hide | cmd+h |
+| app | hide-others | title | 기타 가리기 | Hide Others | opt+cmd+h |
+| app | show-all | title | 모두 보이기 | Show All | |
+| app | quit | title | 종료 | Quit | cmd+q |
 | file | close-window | title | 윈도우 닫기 | Close Window | cmd+w |
 | file | close-all | system | | | |
 | edit | undo | title | 실행 취소 | Undo | cmd+z |

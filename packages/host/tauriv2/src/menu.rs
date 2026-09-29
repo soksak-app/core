@@ -25,12 +25,12 @@ pub const MENUS: &[(&str, &str, &str)] = &[
 /// scripts/check-host-parity.mjs 가 행을 읽을 수 있으므로 이 표는 줄맞춤에서 뺀다.
 #[rustfmt::skip]
 pub const ITEMS: &[(&str, &str, &str, &str, &str, &str)] = &[
-    ("app", "about", "system", "", "", ""),
+    ("app", "about", "title", "정보", "About", ""),
     ("app", "services", "system", "", "", ""),
-    ("app", "hide", "system", "", "", ""),
-    ("app", "hide-others", "system", "", "", ""),
-    ("app", "show-all", "system", "", "", ""),
-    ("app", "quit", "system", "", "", ""),
+    ("app", "hide", "title", "가리기", "Hide", "cmd+h"),
+    ("app", "hide-others", "title", "기타 가리기", "Hide Others", "opt+cmd+h"),
+    ("app", "show-all", "title", "모두 보이기", "Show All", ""),
+    ("app", "quit", "title", "종료", "Quit", "cmd+q"),
     ("file", "close-window", "title", "윈도우 닫기", "Close Window", "cmd+w"),
     ("file", "close-all", "system", "", "", ""),
     ("edit", "undo", "title", "실행 취소", "Undo", "cmd+z"),
@@ -159,7 +159,7 @@ pub fn build(app: &AppHandle, language: &str) -> Result<Menu<Wry>, String> {
     let menu = Menu::new(app).map_err(|error| error.to_string())?;
     for id in MENUS.iter().map(|(menu, _, _)| *menu) {
         let submenu = match id {
-            "app" => app_submenu(app),
+            "app" => app_submenu(app, language),
             "file" => file_submenu(app, language),
             "edit" => edit_submenu(app, language),
             "view" => view_submenu(app, language),
@@ -173,9 +173,8 @@ pub fn build(app: &AppHandle, language: &str) -> Result<Menu<Wry>, String> {
     Ok(menu)
 }
 
-/// app 메뉴를 만든다. 항목은 tauri 기본 메뉴의 사전정의 항목을 표 순서로 두고 여기에
-/// show_all 을 더한다. 제목은 모두 프레임워크가 준다.
-fn app_submenu(app: &AppHandle) -> Result<Submenu<Wry>, String> {
+/// app 메뉴를 만든다. about·hide·quit 는 "앱이름 제목" 꼴이고 제목은 계약표에서 온다.
+fn app_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String> {
     let package = app.package_info();
     let bundle = &app.config().bundle;
     let about = AboutMetadata {
@@ -185,15 +184,23 @@ fn app_submenu(app: &AppHandle) -> Result<Submenu<Wry>, String> {
         authors: bundle.publisher.clone().map(|publisher| vec![publisher]),
         ..Default::default()
     };
-    let about_item = PredefinedMenuItem::about(app, None, Some(about)).map_err(string)?;
+    let about_title = format!("{} {}", package.name, item_title("app", "about", language)?);
+    let about_item =
+        PredefinedMenuItem::about(app, Some(&about_title), Some(about)).map_err(string)?;
     let after_about = separator(app)?;
     let services_item = PredefinedMenuItem::services(app, None).map_err(string)?;
     let after_services = separator(app)?;
-    let hide_item = PredefinedMenuItem::hide(app, None).map_err(string)?;
-    let hide_others_item = PredefinedMenuItem::hide_others(app, None).map_err(string)?;
-    let show_all_item = PredefinedMenuItem::show_all(app, None).map_err(string)?;
+    let hide_title = format!("{} {}", package.name, item_title("app", "hide", language)?);
+    let hide_item = PredefinedMenuItem::hide(app, Some(&hide_title)).map_err(string)?;
+    let hide_others_item =
+        PredefinedMenuItem::hide_others(app, Some(&item_title("app", "hide-others", language)?))
+            .map_err(string)?;
+    let show_all_item =
+        PredefinedMenuItem::show_all(app, Some(&item_title("app", "show-all", language)?))
+            .map_err(string)?;
     let after_show_all = separator(app)?;
-    let quit_item = PredefinedMenuItem::quit(app, None).map_err(string)?;
+    let quit_title = format!("{} {}", package.name, item_title("app", "quit", language)?);
+    let quit_item = PredefinedMenuItem::quit(app, Some(&quit_title)).map_err(string)?;
     Submenu::with_id_and_items(
         app,
         "app",

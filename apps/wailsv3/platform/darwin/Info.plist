@@ -23,6 +23,8 @@
 		<string>ko</string>
 		<string>en</string>
 	</array>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 </dict>

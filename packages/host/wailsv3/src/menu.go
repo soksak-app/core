@@ -24,12 +24,12 @@ var menuTable = []struct{ id, ko, en string }{
 // 메뉴 항목의 계약 표. (menu, id, source, ko, en, key). source 가 "system" 인 항목은
 // 프레임워크 제목을 유지하고 "title" 인 항목은 표의 제목을 쓴다.
 var itemTable = []struct{ menu, id, source, ko, en, key string }{
-	{"app", "about", "system", "", "", ""},
+	{"app", "about", "title", "정보", "About", ""},
 	{"app", "services", "system", "", "", ""},
-	{"app", "hide", "system", "", "", ""},
-	{"app", "hide-others", "system", "", "", ""},
-	{"app", "show-all", "system", "", "", ""},
-	{"app", "quit", "system", "", "", ""},
+	{"app", "hide", "title", "가리기", "Hide", "cmd+h"},
+	{"app", "hide-others", "title", "기타 가리기", "Hide Others", "opt+cmd+h"},
+	{"app", "show-all", "title", "모두 보이기", "Show All", ""},
+	{"app", "quit", "title", "종료", "Quit", "cmd+q"},
 	{"file", "close-window", "title", "윈도우 닫기", "Close Window", "cmd+w"},
 	{"file", "close-all", "system", "", "", ""},
 	{"edit", "undo", "title", "실행 취소", "Undo", "cmd+z"},
@@ -46,10 +46,16 @@ var itemTable = []struct{ menu, id, source, ko, en, key string }{
 	{"window", "bring-all-to-front", "system", "", "", ""},
 }
 
-// menuRoles 는 계약 표의 항목 id 가 쓰는 Wails 역할이다. app 항목은 AppMenu 역할이 통째로
-// 만들고 close-all 은 close-window 의 performClose: 역할이 시스템과 함께 제공하므로 여기에
+// menuRoles 는 계약 표의 항목 id 가 쓰는 Wails 역할이다. app 항목도 언어표 제목과 함께 여기를 지나며
+// close-all 은 close-window 의 performClose: 역할이 시스템과 함께 제공하므로 여기에
 // 없다.
 var menuRoles = map[string]application.Role{
+	"about":              application.About,
+	"services":           application.ServicesMenu,
+	"hide":               application.Hide,
+	"hide-others":        application.HideOthers,
+	"show-all":           application.ShowAll,
+	"quit":               application.Quit,
 	"close-window":       application.CloseWindow,
 	"undo":               application.Undo,
 	"redo":               application.Redo,
@@ -144,6 +150,13 @@ func ApplicationMenu() (*application.Menu, error) {
 // 메뉴의 View 메뉴는 메인 웹뷰 전체를 확대하거나 메인 페이지를 다시 읽는다. 배치와 네이티브
 // 표면은 웹뷰 확대를 따르지 않고, 다시 읽기는 페이지 상태를 바꾼다. 그래서 View 메뉴에는 전체
 // 화면과 글자 크기 항목만 둔다.
+// menuAppName 은 app 메뉴의 제목과 about·hide·quit 의 접두에 쓰는 애플리케이션 이름이다.
+// Run 이 Wails Options.Name 으로 정한다.
+var menuAppName = "soksak"
+
+// SetMenuAppName 은 app 메뉴가 쓸 애플리케이션 이름을 정한다.
+func SetMenuAppName(name string) { menuAppName = name }
+
 func ApplicationMenuFor(language string) (*application.Menu, error) {
 	if !menuLanguageInTable(language) {
 		return nil, fmt.Errorf("menu language %q is not in the menu table", language)
@@ -151,10 +164,12 @@ func ApplicationMenuFor(language string) (*application.Menu, error) {
 	menu := application.NewMenu()
 	for _, row := range menuTable {
 		if row.id == "app" {
-			// AppMenu 역할이 애플리케이션 이름 제목의 하위 메뉴와 about·services·hide·
-			// hide-others·show-all·quit 항목을 만든다. 시스템이 관리하는 항목이므로 제목을
-			// 바꾸지 않는다.
-			menu.AddRole(application.AppMenu)
+			// app 메뉴의 제목은 애플리케이션 이름이고 항목 제목은 계약표에서 온다.
+			// about·hide·quit 는 "앱이름 제목" 꼴이다.
+			submenu := menu.AddSubmenu(menuAppName)
+			if err := addMenuItems(submenu, row.id, language); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		title, err := titleOf(language, row.ko, row.en)
@@ -169,9 +184,8 @@ func ApplicationMenuFor(language string) (*application.Menu, error) {
 	return menu, nil
 }
 
-// addMenuItems 는 계약 표의 menu 항목을 submenu 에 순서대로 만든다. app 항목은 AppMenu 역할이
-// 통째로 만들므로 여기에 오지 않고, close-all 은 close-window 의 performClose: 역할이 시스템과
-// 함께 제공하므로 만들지 않는다.
+// addMenuItems 는 계약 표의 menu 항목을 submenu 에 순서대로 만든다. close-all 은 close-window 의
+// performClose: 역할이 시스템과 함께 제공하므로 만들지 않는다.
 func addMenuItems(submenu *application.Menu, menu, language string) error {
 	// close-all 과 fullscreen 은 만들지 않는다. 측정하면 시스템이 앱 시작을 마칠 때 close-window 의
 	// performClose: 곁에 Close All 대체 항목을, View 메뉴에 자기 전체 화면 항목(keyEquivalent f)을
@@ -187,6 +201,10 @@ func addMenuItems(submenu *application.Menu, menu, language string) error {
 		accelerator, err := menuAccelerator(row.key)
 		if err != nil {
 			return err
+		}
+		// app 의 about·hide·quit 는 "앱이름 제목" 꼴로 제목을 바꾼다.
+		if menu == "app" && (row.id == "about" || row.id == "hide" || row.id == "quit") {
+			title = menuAppName + " " + title
 		}
 		switch {
 		case row.id == "new-window":
