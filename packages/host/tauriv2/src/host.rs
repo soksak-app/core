@@ -119,7 +119,22 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
             // 종료 신호는 엔드포인트를 열기 전부터 받는다. host.quit 과 같은 일반 종료 요청이며,
             // 이벤트 루프가 시작한 뒤 처리되어 준비된 창의 저장을 마친 뒤 끝난다.
             let quit = app.clone();
-            termination::on_termination(Box::new(move || quit.exit(0)))?;
+            termination::on_termination(Box::new(move || {
+                // 종료 전에 모든 웹뷰의 웹 프로세스를 죽인다. AppKit 은 XPC 서비스를
+                // 클라이언트보다 오래 살려두므로(V5-105), 죽이지 않으면 WebContent·GPU·
+                // Networking 프로세스가 앱 종료 후에도 남아 메모리를 차지한다.
+                for (label, _) in quit.webview_windows() {
+                    if let Some(window) = quit.get_window(&label) {
+                        if let Some(view) = crate::windows::root_view(&window) {
+                            let _ = crate::exposure::with_view(&view, |native| {
+                                platform::current()?
+                                    .kill_web_content_process(native)
+                            });
+                        }
+                    }
+                }
+                quit.exit(0);
+            }))?;
             let directory = config_directory(app)?;
             exposure::start(app, &directory)?;
             Ok(())

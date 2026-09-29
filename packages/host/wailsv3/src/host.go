@@ -117,6 +117,25 @@ func Run(assets fs.FS, options Options) error {
 		// Run 이 등록한 처리기가 종료 신호를 받는다.
 		DisableDefaultSignalHandler: true,
 		OnShutdown: func() {
+			// 종료 전에 모든 창의 웹 프로세스를 죽인다. AppKit 은 XPC 서비스를 클라이언트보다
+			// 오래 살려두므로(V5-105), 죽이지 않으면 WebContent·GPU·Networking 프로세스가
+			// 앱 종료 후에도 남아 메모리를 차지한다.
+			host.mu.Lock()
+			shutdown := make([]*application.WebviewWindow, 0, len(host.windows))
+			for _, s := range host.windows {
+				shutdown = append(shutdown, s.window)
+			}
+			host.mu.Unlock()
+			for _, win := range shutdown {
+				window := win
+				application.InvokeSync(func() {
+					if main, err := system.MainWebview(window.NativeWindow()); err == nil {
+						if err := system.KillWebContentProcess(main); err != nil {
+							log.Printf("shutdown web content kill: %v", err)
+						}
+					}
+				})
+			}
 			sidecars.Stop()
 			if err := host.endpoint.Close(); err != nil {
 				log.Printf("local endpoint: %v", err)
