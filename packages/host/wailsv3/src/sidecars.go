@@ -581,6 +581,10 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 			return nil, fmt.Errorf("sidecar %s: invalid endpoint: %w", name, err)
 		}
 	} else if errors.Is(err, os.ErrNotExist) {
+		// 성능 트레이스가 켜져 있으면 나중에 뜨는 사이드카에도 플래그를 쓴다(V5-104).
+		if PerformanceEnabled(c.configDir) {
+			_ = performanceWriteFlags(c.configDir, PerformanceTarget(c.configDir))
+		}
 		cmd = exec.Command(program, "--service-dir", serviceDir)
 		// A persistent service belongs to the configuration directory, not to
 		// the lifetime of this application process. Start a new session so an

@@ -320,10 +320,11 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.settings.close", () => { closeSettings(); });
   registry.command("core.projects.browse", async () => { await projects.browse(); });
   registry.command("core.projects.flush", async () => { await projects.flush(); });
-  registry.command("core.project.open", ({ root, color = "#ffb36b" }) =>
+  registry.command("core.project.open", ({ root, color = "#ffb36b" }) => {
     // 창 크기는 아래 등록된 resize 마커가, 프로젝트 열기는 여기가 담당한다(V5-104).
-    trace("action", { kind: "project.open", root }),
-    projects.open({ root, color, layout: fresh() }));
+    trace("action", { kind: "project.open", root });
+    return projects.open({ root, color, layout: fresh() });
+  });
   registry.command("core.project.activate", async ({ id }) => { await projects.activate(id); });
   registry.command("core.project.close", async ({ id }) => {
     need(projects.all().find((p) => p.id === id), id);
