@@ -190,7 +190,6 @@ export async function createSurfaceCompositionController(
   let active = true;
   let observer = null;
   let changed = null;
-  let frame = null;
   let resizeFrame = null;
   let pending = Promise.resolve();
   const inactiveError = () => Object.assign(
@@ -213,7 +212,6 @@ export async function createSurfaceCompositionController(
       view.removeEventListener("resize", changed);
       view.removeEventListener("scroll", changed, true);
     }
-    if (frame !== null) view.cancelAnimationFrame(frame);
     if (resizeFrame !== null) view.cancelAnimationFrame(resizeFrame);
     await pending;
     const results = await Promise.allSettled([...internal.values()].map(({ handle }) => handle.detach()));
@@ -242,8 +240,6 @@ export async function createSurfaceCompositionController(
     if (failed) throw failed.reason;
 
     let revision = 0;
-    let acceptedGeometry = null;
-    let pendingGeometry = null;
     const measured = (name, element) => {
       const { insets: viewportInsets, visible } = regionInsets(element, view);
       const currentViewport = viewportOf();
@@ -269,24 +265,14 @@ export async function createSurfaceCompositionController(
         .map((name) => measured(name, overlays[name]));
       return { regionSnapshot, overlaySnapshot };
     };
-    const place = (force = false) => {
+    const place = () => {
       const { regionSnapshot, overlaySnapshot } = snapshot();
-      const geometry = JSON.stringify([regionSnapshot, overlaySnapshot]);
-      if (!force && (geometry === acceptedGeometry || geometry === pendingGeometry)) return pending;
       const current = ++revision;
-      pendingGeometry = geometry;
       const work = pending.catch((error) => {
         if (error?.code !== "SURFACE_COMPOSITION_INACTIVE") reportFailure(error);
       }).then(() => {
         if (!active) throw inactiveError();
         return runtimePage.composition.place(current, regionSnapshot, overlaySnapshot);
-      }).then((result) => {
-        acceptedGeometry = geometry;
-        if (pendingGeometry === geometry) pendingGeometry = null;
-        return result;
-      }, (error) => {
-        if (pendingGeometry === geometry) pendingGeometry = null;
-        throw error;
       });
       pending = work.catch((error) => {
         if (error?.code !== "SURFACE_COMPOSITION_INACTIVE") reportFailure(error);
@@ -294,9 +280,12 @@ export async function createSurfaceCompositionController(
       return work;
     };
 
-    // A full-surface region can keep identical insets while its raster size changes.
-    // The host must receive a new composition snapshot for that size change.
-    observer = new view.ResizeObserver(() => { place(true).catch(reportFailure); });
+    // 지오메트리 변화는 옵저버가 잡는다 — 폴링하지 않는다.
+    // ResizeObserver 는 지역과 모든 조상과 뷰포트의 크기 변화를 잡고, scroll/resize 리스너는
+    // 창 크기와 스크롤을 잡는다. MutationObserver 는 스타일 변경으로 같은 크기의 위치 이동을
+    // 잡는다(예: 그리드가 left/top 을 바꿀 때 ResizeObserver 는 발화하지 않는다).
+    const submit = () => { place().catch(reportFailure); };
+    observer = new view.ResizeObserver(submit);
     const observed = new Set();
     for (const element of [...Object.values(regions), ...Object.values(overlays)]) {
       for (let node = element; node; node = node.parentElement) {
@@ -315,18 +304,12 @@ export async function createSurfaceCompositionController(
       if (resizeFrame !== null) return;
       resizeFrame = view.requestAnimationFrame(() => {
         resizeFrame = null;
-        place(true).catch(reportFailure);
+        submit();
       });
     };
     view.addEventListener("resize", changed);
     view.addEventListener("scroll", changed, true);
-    await place(true);
-    const compareGeometry = () => {
-      if (!active) return;
-      place().catch(reportFailure);
-      frame = view.requestAnimationFrame(compareGeometry);
-    };
-    frame = view.requestAnimationFrame(compareGeometry);
+    await place();
 
     const region = (name) => {
       const entry = internal.get(name);

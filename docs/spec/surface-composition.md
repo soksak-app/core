@@ -80,7 +80,7 @@ const view = composition.region("view");
 
 The keys must exactly equal the manifest declarations, and every value must be an element in the calling document. Creation attaches every region and submits one complete layout snapshot. It fails without attaching anything if any declaration or element is missing or extra.
 
-`composition.update(change)` applies a code-driven DOM change, measures all declared anchors and overlays, and submits one complete snapshot. The controller also compares their geometry on animation frames and observes every anchor, overlay, and ancestor for resize, viewport resize, and scroll. Every detected change submits the same complete snapshot. No observer or caller can submit one region independently. Individual public `attach`, `place`, and raw region ports do not exist.
+`composition.update(change)` applies a code-driven DOM change, measures all declared anchors and overlays, and submits one complete snapshot. The controller observes every anchor, overlay, and ancestor for resize, viewport resize, scroll, and DOM mutation; every observed change submits the same complete snapshot. Every detected change submits the same complete snapshot. No observer or caller can submit one region independently. Individual public `attach`, `place`, and raw region ports do not exist.
 
 A viewport or observed-element size change always submits a composition snapshot, even when all measured insets are unchanged. A full-surface image region therefore receives a new raster configuration when its surface size changes. A visible hybrid surface has exactly one attached native region for each declared visible native region; an orphan region or a visible surface without its declared region is an error.
 

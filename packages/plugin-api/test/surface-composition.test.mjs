@@ -234,7 +234,7 @@ test("an observed overlay change submits every region and overlay through compos
   assert(f.observed.includes("overlay-parent"), "the overlay ancestor is observed");
 });
 
-test("the frame comparison catches a same-size move and still submits a complete snapshot", async () => {
+test("a same-size move caught by an observer still submits a complete snapshot", async () => {
   const f = fixture();
   const r = runtime();
   await createSurfaceCompositionController(r.page, declaration, {
@@ -243,7 +243,7 @@ test("the frame comparison catches a same-size move and still submits a complete
   }, f.window);
   r.placements.length = 0;
   f.setRect("page", { left: 40, top: 20, right: 340, bottom: 220, width: 300, height: 200 });
-  f.frame();
+  f.resize();
   await settle();
 
   assert.equal(r.placements.length, 1);
