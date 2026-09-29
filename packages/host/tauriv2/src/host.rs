@@ -108,9 +108,6 @@ fn run_menu_command(app: &tauri::AppHandle, command: &str) -> Result<(), String>
 /// 문서보다 먼저 실행하는 스크립트이며, 애플리케이션이 프론트엔드의 `background.js` 를
 /// 포함해 전달한다.
 pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
-    // 이전 실행이 남긴 고아 WebKit XPC 를 죽인다(V5-105). 시작 시 WebKit 을 만들기
-    // 전이므로 소켓 없는 WebKit 은 모두 이전 실행의 잔재다.
-    crate::performance::cleanup_orphan_webkit();
     // 창 확대 애니메이션은 창 프레임만 움직이고 웹 문서는 그 뒤에 따라온다. AppKit 이 기본값을
     // 읽기 전에 그 길이를 줄인다.
     if let Ok(platform) = platform::current() {

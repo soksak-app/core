@@ -249,8 +249,12 @@ bool sp_menu_select(const char *menu, const char *title) {
         if (![name isEqualToString:menuTitle]) continue;
         NSInteger index = [top.submenu indexOfItemWithTitle:itemTitle];
         if (index < 0) return false;
-        [top.submenu performActionForItemAtIndex:index];
-        return true;
+        NSMenuItem *item = [top.submenu itemAtIndex:index];
+        if (!item.action) return false;
+        // performActionForItemAtIndex: 는 이 시스템에서 행위를 실행 루프로 미루므로(V5-108)
+        // 동등한 동기 형식으로 항목을 고른다. 대상이 없으면 응답자 사슬을 지나며, 전달
+        // 여부를 그대로 돌려준다.
+        return [NSApp sendAction:item.action to:item.target from:item];
     }
     return false;
 }

@@ -237,7 +237,15 @@ int main(int argc, char **argv) { @autoreleasepool {
         @"an invalid page zoom is rejected and leaves the zoom unchanged");
     check(sp_document_zoom(document, 1) && view.pageZoom == 1, @"the document page zoom returns to 1");
 
-    check(!sp_document_load(document, "file:///etc/hosts"), @"a file address is rejected");
+    // V5-103 정책: 파일 주소는 그 파일이 있는 디렉터리까지 읽기 권한을 받아 연다. 번들 안의
+    // 앱에서는 파일이 실제로 뜬다(V5-103 의 앱 실측). 이 검사 실행 파일은 번들이 없어
+    // WebKit 이 파일 탐색을 내부 오류로 끝내므로, 여기서는 주소가 받아들여지고 탐색이
+    // 시작되었음을 증명한다 — 거부된 주소와 달리 상태에 탐색의 결과가 남는다.
+    check(sp_document_load(document, "file:///etc/hosts"), @"a file address is accepted");
+    settle(@"the file navigation did not report", ^BOOL(NSDictionary *state) {
+        return ([state[@"url"] isEqual:@"file:///etc/hosts"] || state[@"error"] != NSNull.null)
+            && ![state[@"loading"] boolValue];
+    });
     check(!sp_document_load(document, "not a url"), @"an invalid address is rejected");
 
     check(sp_document_load(document, [base stringByAppendingString:@"/one"].UTF8String), @"a web address is accepted");

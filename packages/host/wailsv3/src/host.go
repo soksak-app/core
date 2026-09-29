@@ -47,9 +47,6 @@ func Run(assets fs.FS, options Options) error {
 		return err
 	}
 	system = current
-	// 이전 실행이 남긴 고아 WebKit XPC 를 죽인다(V5-105). 시작 시 WebKit 을 만들기
-	// 전이므로 소켓 없는 WebKit 은 모두 이전 실행의 잔재다.
-	cleanupOrphanWebKit()
 	// 창 확대 애니메이션은 창 프레임만 움직이고 웹 문서는 그 뒤에 따라온다. AppKit 이 기본값을
 	// 읽기 전에 그 길이를 줄인다.
 	if err := system.InstantWindowResize(); err != nil {
