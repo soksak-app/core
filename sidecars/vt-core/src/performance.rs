@@ -43,7 +43,9 @@ impl PerformanceTrace {
 
     /// 한 이벤트 줄을 덧붙인다. 꺼져 있으면 아무 일도 하지 않는다.
     pub fn line(&self, event: &str, fields: Value) {
-        let Some(target) = self.target.as_ref() else { return };
+        let Some(target) = self.target.as_ref() else {
+            return;
+        };
         let mut record = Map::new();
         record.insert("ts".into(), json!(now_iso8601_ms()));
         record.insert("pid".into(), json!(std::process::id()));
@@ -66,7 +68,9 @@ impl PerformanceTrace {
 
 /// 유닉스 시각(밀리초)을 ISO-8601 로 바꾼다(종속성을 더하지 않고 직접 계산).
 fn now_iso8601_ms() -> String {
-    let since = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default(); // 기본값: 시계는 에포크 이전을 돌려주지 않는다
+    let since = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default(); // 기본값: 시계는 에포크 이전을 돌려주지 않는다
     let millis_total = since.as_millis();
     let days = (millis_total / 86_400_000) as i64;
     let millis_day = (millis_total % 86_400_000) as u32;
@@ -100,6 +104,9 @@ mod tests {
     fn the_time_converter_matches_a_known_instant() {
         // 2026-09-29T10:20:30.400Z — 유닉스 밀리초 1790665230400.
         let since = std::time::Duration::from_millis(1_790_665_230_400);
-        assert_eq!(civil_from_days((since.as_millis() / 86_400_000) as i64), (2026, 9, 29));
+        assert_eq!(
+            civil_from_days((since.as_millis() / 86_400_000) as i64),
+            (2026, 9, 29)
+        );
     }
 }

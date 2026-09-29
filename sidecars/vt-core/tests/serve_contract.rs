@@ -3144,8 +3144,12 @@ async fn test_sub_cell_replacement_holds_the_grid() {
     let state_json: serde_json::Value =
         serde_json::from_str(&state_line).expect("failed to parse state JSON");
     let (opened_cols, opened_rows) = (
-        state_json["body"]["cols"].as_u64().expect("state carries cols"),
-        state_json["body"]["rows"].as_u64().expect("state carries rows"),
+        state_json["body"]["cols"]
+            .as_u64()
+            .expect("state carries cols"),
+        state_json["body"]["rows"]
+            .as_u64()
+            .expect("state carries rows"),
     );
     let initial_image = next_image_envelope(&mut lines).await;
     acknowledge_image(&mut to_serve, &initial_image).await;
@@ -3187,12 +3191,18 @@ async fn test_sub_cell_replacement_holds_the_grid() {
     let held_state = held_state.expect("no state event arrived for the held raster");
     let held_image = held_image.expect("no image envelope arrived for the held raster");
     assert_eq!(
-        (held_state["body"]["cols"].as_u64(), held_state["body"]["rows"].as_u64()),
+        (
+            held_state["body"]["cols"].as_u64(),
+            held_state["body"]["rows"].as_u64()
+        ),
         (Some(opened_cols), Some(opened_rows)),
         "the grid is unchanged while the raster is smaller than one cell"
     );
     assert_eq!(
-        (held_image["body"]["image"]["width"].as_u64(), held_image["body"]["image"]["height"].as_u64()),
+        (
+            held_image["body"]["image"]["width"].as_u64(),
+            held_image["body"]["image"]["height"].as_u64()
+        ),
         (Some(3), Some(3)),
         "the frame is drawn for the sub-cell raster, so the presentation barrier completes"
     );
@@ -3204,7 +3214,10 @@ async fn test_sub_cell_replacement_holds_the_grid() {
         "the sub-cell replacement resizes the PTY once, to the unchanged grid"
     );
     assert_eq!(
-        (calls_lock.resizes[0].1 as u64, calls_lock.resizes[0].2 as u64),
+        (
+            calls_lock.resizes[0].1 as u64,
+            calls_lock.resizes[0].2 as u64
+        ),
         (opened_cols, opened_rows),
         "the PTY keeps the held grid dimensions"
     );

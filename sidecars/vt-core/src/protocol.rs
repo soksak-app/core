@@ -1114,13 +1114,16 @@ async fn present_screen(
         return true;
     }
     // 프레임 한 장의 계기(V5-104): 무엇 때문에 그렸는지, 얼마나 걸렸는지, 어떤 래스터에.
-    performance.line("frame", serde_json::json!({
-        "reason": reason,
-        "surface": surface_id,
-        "draw_us": draw_started.elapsed().as_micros() as u64,
-        "raster": format!("{}x{}", state.width_px, state.height_px),
-        "seq": state.sequence + 1,
-    }));
+    performance.line(
+        "frame",
+        serde_json::json!({
+            "reason": reason,
+            "surface": surface_id,
+            "draw_us": draw_started.elapsed().as_micros() as u64,
+            "raster": format!("{}x{}", state.width_px, state.height_px),
+            "seq": state.sequence + 1,
+        }),
+    );
     state.sequence += 1;
     state.pending_draw = true;
     state.sent_at = Some(std::time::Instant::now());
@@ -1656,17 +1659,14 @@ async fn open_if_configured(
     {
         return true;
     }
-    let (cols, rows) = match calculate_terminal_size(
-        state.width_px,
-        state.height_px,
-        &state.metrics,
-    ) {
-        Ok(size) => size,
-        // 셀 하나의 공간도 없는 래스터는 끌기 중 카드가 무너지는 과도 상태이다. 여기서
-        // 오류를 내면 열기 요청이 사라지고 나중 크기로 다시 열리지 않는다. 열지 않고
-        // 기다리면 다음 configure 가 세션을 연다(V5-96-14-6-4-8).
-        Err(_) => return true,
-    };
+    let (cols, rows) =
+        match calculate_terminal_size(state.width_px, state.height_px, &state.metrics) {
+            Ok(size) => size,
+            // 셀 하나의 공간도 없는 래스터는 끌기 중 카드가 무너지는 과도 상태이다. 여기서
+            // 오류를 내면 열기 요청이 사라지고 나중 크기로 다시 열리지 않는다. 열지 않고
+            // 기다리면 다음 configure 가 세션을 연다(V5-96-14-6-4-8).
+            Err(_) => return true,
+        };
     engine.resize(cols, rows);
     if let Err(error) = set_engine_metrics(engine, state) {
         let response = json!({"surface": surface_id, "body": {"error": "invalid renderer metrics", "reason": error}});
@@ -2757,7 +2757,14 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    serve_with_performance(engine_factory, reader, writer, session_port_factory, crate::performance::PerformanceTrace::disabled()).await
+    serve_with_performance(
+        engine_factory,
+        reader,
+        writer,
+        session_port_factory,
+        crate::performance::PerformanceTrace::disabled(),
+    )
+    .await
 }
 
 /// 성능 트레이스를 직접 받는 검사용 진입점. 플래그 파일 경로의 트레이스를 넣으면
@@ -3083,7 +3090,15 @@ where
                                 let sid = surface_id.clone();
                                 let task_trace = performance.clone();
                                 let actor = tokio::spawn(async move {
-                                    surface_task(sid, task_trace, factory, session_port, cmd_rx, out_tx).await;
+                                    surface_task(
+                                        sid,
+                                        task_trace,
+                                        factory,
+                                        session_port,
+                                        cmd_rx,
+                                        out_tx,
+                                    )
+                                    .await;
                                 });
                                 match registry
                                     .insert(
@@ -3121,7 +3136,8 @@ where
 
                         // Spawn the actual surface task in a separate handle
                         let surface_handle = tokio::spawn(async move {
-                            surface_task(sid, task_trace, factory, session_port, cmd_rx, out_tx).await;
+                            surface_task(sid, task_trace, factory, session_port, cmd_rx, out_tx)
+                                .await;
                         });
 
                         // Spawn a monitor task to watch for panics
