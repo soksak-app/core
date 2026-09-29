@@ -122,22 +122,41 @@ const settled = () => plane.querySelector(".sp-divider[data-dragging]") === null
 const slots = () =>
   plane.querySelectorAll("[data-native-surface][data-native-surface-id]");
 
+/* 페인트 클립을 담는 스타일 노드. body::before 는 요소가 아니므로 인라인 스타일로 자를 수
+   없어 문서 안의 스타일 노드에 리터럴 경로를 쓴다. 커스텀 프로퍼티로 전달하면 WebKit 이
+   body::before 의 클립을 잘못 그려 문서 전체가 지워진다. */
+let paintClip = null;
+
 /** 앱 배경에서 표시 중인 네이티브 표면 사각형만 실제 픽셀 구멍으로 제외한다. */
-function syncNativePaintMask() {
+function syncNativePaintClip() {
   if (!native) {
-    document.body.style.removeProperty("--native-paint-mask");
+    paintClip?.remove();
+    paintClip = null;
     return;
   }
   const width = Math.max(1, window.innerWidth);
   const height = Math.max(1, window.innerHeight);
+  // 구멍은 바깥 사각형과 반대 방향으로 감아 기본 nonzero 규칙이 그것을 빼게 한다.
+  // evenodd 키워드 형식은 엔진마다 지원이 다르지만 감기 방향은 path() 를 아는 모든
+  // 엔진이 같게 해석한다.
   const holes = [...slots()]
     .filter((slot) => effectiveVisible(slot) && app.kinds.includes(slot.dataset.nativePlugin))
     .map((slot) => {
       const rect = slot.getBoundingClientRect();
-      return `<rect x="${rect.left}" y="${rect.top}" width="${rect.width}" height="${rect.height}" fill="black"/>`;
-    });
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="white"/>${holes.join("")}</svg>`;
-  document.body.style.setProperty("--native-paint-mask", `url("data:image/svg+xml,${encodeURIComponent(svg)}")`);
+      return `M${rect.left},${rect.top}v${rect.height}h${rect.width}v${-rect.height}Z`;
+    }).join("");
+  // 커밋마다 새 data URL 을 만들면 웹 프로세스가 URL 마다 디코드한 이미지를 남겨 창 크기
+  // 조절만으로 메모리가 쌓인다(V5-96-14-6-4-7). 경로는 이미지 리소스를 만들지 않으므로
+  // 커밋마다 다시 써도 남는 것이 없다. 경로 좌표는 요소의 테두리 상자를 기준으로 하고
+  // body::before 는 inset:0 의 고정 위치이므로 뷰포트 좌표를 그대로 쓴다.
+  // 클립은 body::before 에만 건다. 배경을 칠하는 곳은 거기뿐이고, clip-path 는 마스크와
+  // 달리 잘린 영역에서 포인터 이벤트도 막으므로 body 를 자르면 구멍 위에서 끌기가 끊긴다.
+  const rule = `body::before{clip-path:path("M0,0H${width}V${height}H0Z${holes}")}`;
+  if (!paintClip) {
+    paintClip = document.createElement("style");
+    document.head.appendChild(paintClip);
+  }
+  paintClip.textContent = rule;
 }
 
 /**
@@ -269,11 +288,14 @@ function commit(mine, snapshot, final) {
   if (answered && typeof answered.then === "function") {
     return answered.then((placed) => {
       seat(record, placed);
-      // Keep the previous mask until the native views have accepted this
-      // placement. Applying a new hole before that answer exposes the page
-      // background for one compositor frame while the native view is still at
-      // its old rectangle.
-      syncNativePaintMask();
+      // Keep the previous clip until the native views have accepted this
+      // placement AND the next frame begins. Applying a new hole at the answer
+      // runs ahead of the screen: the host applies some placements inside a
+      // window layer transaction that the display has not shown yet, so for
+      // one compositor frame the hole exposes the page background where the
+      // native view is still at its old rectangle. The next animation frame
+      // starts after that transaction has reached the display.
+      requestAnimationFrame(syncNativePaintClip);
       return placed;
     });
   }

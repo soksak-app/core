@@ -5,10 +5,12 @@ import { JSDOM } from "jsdom";
 test("a layout published before drawing waits for the host's placement answer", async () => {
   const dom = new JSDOM(`<div id="plane"><div data-card-id="card">
     <div data-native-surface data-native-surface-id="surface" data-native-plugin="probe" data-native-layer="0"></div>
-  </div></div>`, { url: "https://example.test/" });
+  </div></div>`, { url: "https://example.test/", pretendToBeVisual: true });
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
+  // compositor 는 배치 답 뒤의 다음 프레임에 페인트 클립을 갱신하므로 페이지의 rAF 를 제공한다.
+  globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
   const card = document.querySelector("[data-card-id]");
   const slot = document.querySelector("[data-native-surface]");
   card.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 150 });

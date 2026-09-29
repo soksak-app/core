@@ -62,17 +62,11 @@
 html,body{height:100%}
 body{margin:0;background:transparent;color:var(--fg);
   font:var(--size)/var(--line-height) var(--font);letter-spacing:var(--letter-spacing);
-  box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;isolation:isolate;
-  -webkit-mask-image:var(--native-paint-mask,linear-gradient(#000,#000));
-  mask-image:var(--native-paint-mask,linear-gradient(#000,#000));
-  -webkit-mask-size:100% 100%;mask-size:100% 100%;
-  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
-/* 창 배경은 하나의 페인트 소유자다. compositor.js가 네이티브 표면 사각형만
-   마스크하므로 합성 조상은 네이티브 픽셀을 드러내고 전체 앱 배경은 유지한다. */
+  box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;isolation:isolate}
+/* 창 배경은 하나의 페인트 소유자다. compositor.js가 문서에 넣는 스타일 노드가 네이티브
+   표면 사각형만 잘라내므로 합성 조상은 네이티브 픽셀을 드러내고 전체 앱 배경은 유지한다. */
 body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background:var(--bg);-webkit-mask-image:var(--native-paint-mask,linear-gradient(#000,#000));
-  mask-image:var(--native-paint-mask,linear-gradient(#000,#000));
-  -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
+  background:var(--bg)}
 
 button,input,select,textarea{font:inherit;letter-spacing:inherit}
 button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
