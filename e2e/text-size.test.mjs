@@ -5,8 +5,15 @@ import test from "node:test";
 
 import { APPS, fresh, open } from "./app.mjs";
 
-const LARGER = "글자 크게";
-const RESET = "글자 기본 크기";
+// 애플리케이션 메뉴는 하나의 ko/en 표로 만들어지므로 검사도 메뉴 언어를 따라간다.
+const TITLES = {
+  ko: { menu: "보기", larger: "글자 크게", reset: "글자 기본 크기" },
+  en: { menu: "View", larger: "Bigger Text", reset: "Default Text Size" },
+};
+const menuTitles = async (s) => {
+  const menu = await s.get("host.menu");
+  return TITLES[menu.language] ?? TITLES.en;
+};
 
 // 글꼴의 줄 높이는 픽셀로 반올림되므로 요소 크기는 배율과 정확히 같게 커지지 않는다. 목표 배율의 5% 안이면
 // 그 배율로 커진 것으로 본다.
@@ -41,7 +48,8 @@ for (const app of Object.values(APPS)) {
     await press(s, before);
     await s.until("core.text", (value) => value.scope.kind === "card" && value.scope.card === card.id,
       "pressing the card did not make it the text size scope");
-    await s.run("host.menu.select", { menu: "View", title: LARGER });
+    const titles = await menuTitles(s);
+    await s.run("host.menu.select", { menu: titles.menu, title: titles.larger });
     const cardText = await s.until("core.text", (value) => value.cards[card.id] === 1.1,
       "the menu item did not enlarge the pressed card");
     assert.equal(cardText.frame, 1, "enlarging a card must not change the frame factor");
@@ -63,7 +71,7 @@ for (const app of Object.values(APPS)) {
     await press(s, spaceTab);
     await s.until("core.text", (value) => value.scope.kind === "frame", "pressing the frame did not make it the scope");
     // 1 에서 세 단계(1.1, 1.25, 1.5)를 올린다.
-    for (let step = 0; step < 3; step++) await s.run("host.menu.select", { menu: "View", title: LARGER });
+    for (let step = 0; step < 3; step++) await s.run("host.menu.select", { menu: titles.menu, title: titles.larger });
     await s.until("core.text", (value) => value.frame === 1.5, "three frame steps did not reach factor 1.5");
     await s.presented();
     const spaceAfter = await s.rect("core.space-tab", 0);
@@ -74,7 +82,7 @@ for (const app of Object.values(APPS)) {
       `the plane must stay inside the window: card bottom ${cardRect.y + cardRect.height}, content ${window.content.height}`);
 
     // 기본 크기는 현재 범위(프레임)를 1 로 되돌린다.
-    await s.run("host.menu.select", { menu: "View", title: RESET });
+    await s.run("host.menu.select", { menu: titles.menu, title: titles.reset });
     await s.until("core.text", (value) => value.frame === 1 && value.cards[card.id] === 1.1,
       "restoring the frame must not change the card factor");
   });

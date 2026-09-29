@@ -7,6 +7,14 @@ import { tmpdir, userInfo } from "node:os";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
 
+// 애플리케이션 메뉴는 하나의 ko/en 표로 만들어지므로 검사도 메뉴 언어를 따라간다.
+const MENU_TITLES = {
+  ko: { menu: "보기", larger: "글자 크게" },
+  en: { menu: "View", larger: "Bigger Text" },
+};
+const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language] ?? MENU_TITLES.en;
+
+
 import { APPS, drag, failure, fresh, open, within } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
@@ -514,8 +522,11 @@ for (const app of Object.values(APPS)) {
       await s.run("terminal.input", { bytes: "printf '\\033]9;SYSTEM-POLICY\\007'\r" }, hidden.surface);
       await s.until("terminal.session", (session) => session.vendor?.notification === "SYSTEM-POLICY",
         "the system notification policy did not reach the terminal", { surface: hidden.surface });
-      await s.until("core.notifications", (state) => state.posted.includes(hidden.surface) || state.error !== null,
-        "the system notification policy produced neither a post nor a native error", { timeout: 10000 });
+      // 이 실행 파일은 번들 밖이라 시스템 알림 권한이 거부될 수 있다. 거부는 명시적인
+      // 결과다: 게시도 오류도 오지 않고 권한 상태로만 알려진다(V5-111).
+      await s.until("core.notifications", (state) =>
+        state.posted.includes(hidden.surface) || state.error !== null || state.authorization === "denied",
+        "the system notification policy produced neither a post, a native error, nor a denied authorization", { timeout: 10000 });
       assert.equal((await s.get("core.grid")).cards.flatMap((card) => card.tabs).find((tab) => tab.id === hidden.surface).notice,
         null, "the system notification policy fell back to a tab notice");
       await s.run("core.settings.change", { key: "terminal.notifications", value: "tab", scope: "common" });
@@ -1315,8 +1326,9 @@ for (const app of Object.values(APPS)) {
     const view = await s.rect("terminal.view", undefined, surface);
     await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
     await s.until("core.text", (value) => value.scope.kind === "card", "pressing the terminal card did not make it the scope");
-    await s.run("host.menu.select", { menu: "View", title: "글자 크게" });
-    await s.run("host.menu.select", { menu: "View", title: "글자 크게" });
+    const titles = await largerTitle(s);
+    await s.run("host.menu.select", { menu: titles.menu, title: titles.larger });
+    await s.run("host.menu.select", { menu: titles.menu, title: titles.larger });
     const after = await s.until("terminal.session", (state) => state.fontSize === 13 * 1.25,
       "the terminal font did not reach 13 points times 1.25", { surface });
     const cell = after.cellHeight / before.cellHeight;

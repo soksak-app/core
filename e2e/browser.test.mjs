@@ -6,6 +6,14 @@ import { rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+// 애플리케이션 메뉴는 하나의 ko/en 표로 만들어지므로 검사도 메뉴 언어를 따라간다.
+const MENU_TITLES = {
+  ko: { menu: "보기", larger: "글자 크게" },
+  en: { menu: "View", larger: "Bigger Text" },
+};
+const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language] ?? MENU_TITLES.en;
+
+
 import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 
@@ -586,8 +594,9 @@ for (const app of Object.values(APPS)) {
     await s.until("core.text", (value) => value.scope.kind === "card", "pressing the browser card did not make it the scope");
     const before = await blockSize(s, surface);
     // 두 단계 뒤 배율은 1.25 다.
-    await s.run("host.menu.select", { menu: "View", title: "글자 크게" });
-    await s.run("host.menu.select", { menu: "View", title: "글자 크게" });
+    const titles = await largerTitle(s);
+    await s.run("host.menu.select", { menu: titles.menu, title: titles.larger });
+    await s.run("host.menu.select", { menu: titles.menu, title: titles.larger });
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface));
     await s.until("core.text", (value) => value.cards[card.id] === 1.25, "the browser card did not reach factor 1.25");
     const after = await blockSize(s, surface);
