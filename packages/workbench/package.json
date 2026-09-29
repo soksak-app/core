@@ -34,6 +34,7 @@
     "projects.js",
     "plugin-states.js",
     "registry.js",
+    "performance.js",
     "settings.js",
     "sidebar-sets.js",
     "plugin-search.js",

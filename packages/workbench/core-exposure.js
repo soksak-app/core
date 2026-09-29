@@ -6,6 +6,7 @@
 // 변경, 모달과 라이브러리의 그리기 뒤에 호출하고, 등록소는 감시 중인 값 중 달라진
 // 것만 호스트에 보낸다.
 import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
+import { trace } from "./performance.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
 import {
@@ -320,6 +321,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.projects.browse", async () => { await projects.browse(); });
   registry.command("core.projects.flush", async () => { await projects.flush(); });
   registry.command("core.project.open", ({ root, color = "#ffb36b" }) =>
+    // 창 크기는 아래 등록된 resize 마커가, 프로젝트 열기는 여기가 담당한다(V5-104).
+    trace("action", { kind: "project.open", root }),
     projects.open({ root, color, layout: fresh() }));
   registry.command("core.project.activate", async ({ id }) => { await projects.activate(id); });
   registry.command("core.project.close", async ({ id }) => {
@@ -364,7 +367,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.card.add-tab", ({ card, plugin }) => ({ tab: addTabTo(card, plugin) }));
   registry.command("core.card.split", ({ card, axis, plugin }) => splitCard(card, axis, plugin));
   registry.command("core.card.close", ({ card }) => { closeCard(card); });
-  registry.command("core.tab.select", ({ tab }) => { selectTab(tab); });
+  registry.command("core.tab.select", ({ tab }) => { trace("action", { kind: "tab.select", tab }); selectTab(tab); });
   registry.command("core.tab.close", ({ tab }) => { closeTabById(tab); });
   registry.command("core.tab.move", ({ tab, card, zone }) => { moveTab(tab, card, zone); });
   registry.command("core.picker.pick", ({ index }) => { pickItem(index); });
@@ -408,3 +411,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
 
   await connectExposure({ surfacePlugin, preferred, registrationChanged: coreChanged, settled: drawn });
 }
+
+// 창 크기 변화의 행위 마커(V5-104). 로그의 닻 — 무엇을 했을 때 무엇이 일어났나.
+addEventListener("resize", () => {
+  trace("action", { kind: "resize", width: innerWidth, height: innerHeight });
+});

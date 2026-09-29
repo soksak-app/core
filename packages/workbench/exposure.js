@@ -8,6 +8,7 @@
 // 호스트가 없는 브라우저 런타임에서도 등록소는 이 문서 안에서 동작한다. 그때는 요청을
 // 받는 경로와 표면이 없다.
 import { host } from "@soksak/runtime";
+import { timed } from "./performance.js";
 import {
   EXPOSE_KINDS, EXPOSURE, EXPOSURE_ERRORS, ExposureError, METHOD_KINDS, SURFACE_CORE, declarationKey, declarationMap,
   exposureEntries, replyPayload, validateExposes, validateExposureFile,
@@ -444,7 +445,8 @@ export function createRegistry({ call = null } = {}) {
 
     /** 요청 하나에 답한다. 결과는 {result} 또는 {error: {code, message}} 다. */
     handle: ({ method, params }) => replyPayload(async () => {
-      const result = await answer(method, params);
+      // 모든 core·플러그인 명령의 시간을 성능 트레이스에 남긴다(V5-104).
+      const result = await timed(method, () => answer(method, params));
       // 코어와 마운트된 플러그인은 앱 문서를 공유한다. 별도 문서가 지정한 원점은 유지한다.
       if (method === "dom.rect" && result && result.document === undefined) return { ...result, document: { x: 0, y: 0 } };
       return result;
