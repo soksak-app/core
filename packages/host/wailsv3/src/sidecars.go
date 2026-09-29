@@ -595,6 +595,13 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		if err := cmd.Start(); err != nil {
 			return nil, fmt.Errorf("sidecar %s: %w", name, err)
 		}
+		// 프로세스 등록부의 계기(V5-104): 뜨는 사이드카의 pid 와 역할을 남긴다.
+		if PerformanceEnabled(c.configDir) {
+			_ = PerformanceLine(PerformanceTarget(c.configDir), "host", map[string]any{
+				"event": "process", "role": "sidecar", "name": name,
+				"pid": cmd.Process.Pid,
+			})
+		}
 		line, err := bufio.NewReader(stdout).ReadBytes('\n')
 		if err != nil {
 			return nil, fmt.Errorf("sidecar %s: service startup: %w", name, err)

@@ -1256,7 +1256,16 @@ func (s *Surfaces) presented() (float64, error) {
 		if remaining <= 0 {
 			return 0, rpcError(codeTimeout, "the current image raster did not present within %s", pageTimeout)
 		}
-		if err := s.images.WaitCurrentError(remaining); err != nil {
+		// 표시 장벽 대기의 계기(V5-104): 이 대기가 타임아웃에 걸리면 화면이 멈춘다.
+		barrierStarted := time.Now()
+		barrierErr := s.images.WaitCurrentError(remaining)
+		if PerformanceEnabled(s.host.configDir) {
+			_ = PerformanceLine(PerformanceTarget(s.host.configDir), "host", map[string]any{
+				"event": "barrier", "wait_us": time.Since(barrierStarted).Microseconds(),
+				"ok":    barrierErr == nil,
+			})
+		}
+		if err := barrierErr; err != nil {
 			if err.Error() == "presentationTimeout" {
 				return 0, rpcError(codeTimeout, "the current image raster did not present within %s", pageTimeout)
 			}

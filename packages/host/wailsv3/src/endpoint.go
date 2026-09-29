@@ -163,6 +163,8 @@ var transcribe func(e *Endpoint, window, line string)
 // Endpoint 는 연결을 받고 요청을 처리한다.
 type Endpoint struct {
 	backend Backend
+	// 구성 디렉터리. 성능 트레이스의 스위치와 대상이 여기에 있다(V5-104).
+	configDir string
 
 	mu          sync.Mutex
 	listener    net.Listener
@@ -250,6 +252,8 @@ func NewEndpoint(backend Backend) *Endpoint {
 // Serve 는 configDir 의 소유권을 얻고 listener 의 연결을 받기 시작한다. endpoint.json 은
 // 첫 창을 등록한 뒤 Publish 가 쓴다.
 func (e *Endpoint) Serve(listener net.Listener, info EndpointInfo, configDir string) error {
+	e.configDir = configDir
+
 	lock, err := acquireProcessLock(configDir)
 	if err != nil {
 		return err
@@ -600,7 +604,20 @@ func (e *Endpoint) notifyPage(t topic, on bool) error {
 }
 
 func (e *Endpoint) run(c *endpointConn, req request, method endpointMethod) {
+	// 모든 엔드포인트 메서드의 시간과 결과를 성능 트레이스에 남긴다(V5-104).
+	// 거부도 그대로 기록한다 — 어긋난 값은 오류 문자열이 담는다.
+	started := time.Now()
 	result, err := method(e, c, req.Params)
+	if PerformanceEnabled(e.configDir) {
+		fields := map[string]any{
+			"event": "endpoint", "name": methodOf(req), "us": time.Since(started).Microseconds(),
+			"ok":    err == nil,
+		}
+		if err != nil {
+			fields["error"] = err.Error()
+		}
+		_ = PerformanceLine(PerformanceTarget(e.configDir), "host", fields)
+	}
 	e.reply(c, req, result, err)
 }
 
@@ -894,4 +911,12 @@ func inputKey(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error)
 		mask |= bit
 	}
 	return nil, e.backend.Key(window, KeyInput{Key: k.Key, Text: k.Text, Modifiers: mask, Down: k.Phase == "down"})
+}
+
+// 요청의 메서드 이름. 없는 요청은 빈 문자열이다.
+func methodOf(req request) string {
+	if req.Method == nil {
+		return ""
+	}
+	return *req.Method
 }

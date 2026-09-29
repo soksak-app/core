@@ -767,6 +767,18 @@ impl<O: Owner> Sidecars<O> {
             .stderr(Stdio::inherit())
             .spawn()
             .map_err(|e| format!("sidecar {name}: {}: {e}", program.display()))?;
+        // 프로세스 등록부의 계기(V5-104): 뜨는 사이드카의 pid 와 역할을 남긴다.
+        if let Some(config) = self.config_directory.to_str() {
+            let directory = std::path::PathBuf::from(config);
+            if crate::performance::enabled(&directory) {
+                let _ = crate::performance::line(
+                    &crate::performance::target(&directory),
+                    "host",
+                    serde_json::json!({"event": "process", "role": "sidecar", "name": name,
+                        "pid": child.id()}),
+                );
+            }
+        }
         let mut stdin = child.stdin.take().ok_or("sidecar stdin is missing")?;
         let stdout = child.stdout.take().ok_or("sidecar stdout is missing")?;
 

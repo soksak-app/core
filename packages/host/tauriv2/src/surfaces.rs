@@ -601,6 +601,17 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             .map(|(id, handle)| (id.clone(), *handle))
             .collect();
         for (id, handle) in removed {
+            // 표면 생명주기의 계기(V5-104): 목록에서 사라진 표면은 이 자리에서 파괴된다.
+            {
+                let directory = window.state::<crate::workspace::Workspace>().directory().to_path_buf();
+                if crate::performance::enabled(&directory) {
+                    let _ = crate::performance::line(
+                        &crate::performance::target(&directory),
+                        "host",
+                        serde_json::json!({"event": "surface", "phase": "destroyed", "surface": id}),
+                    );
+                }
+            }
             if let Ok(mut named) = views.0.lock() {
                 named.remove(&handle);
             }
