@@ -262,16 +262,60 @@ func (i *Images) RemoveSurface(surface string) []unsafe.Pointer {
 
 // Visible 은 영역 자체와 바깥 표면이 모두 표시된 그림의 핸들을 반환한다.
 func (i *Images) Visible() map[ImageKey]unsafe.Pointer {
+	return i.visibleWhere(func(key ImageKey) bool { return true })
+}
+
+// VisibleForSidecar 는 그 사이드카가 그리는 보이는 그림만 반환한다. 영속 사이드카의
+// 연결이 다시 맺혔을 때 그 사이드카의 configure 를 다시 보내는 데 쓴다(V5-106).
+func (i *Images) VisibleForSidecar(sidecar string) map[ImageKey]unsafe.Pointer {
+	return i.visibleWhere(func(key ImageKey) bool {
+		owner := i.owners[key]
+		return owner != nil && owner.SidecarName == sidecar
+	})
+}
+
+func (i *Images) visibleWhere(belongs func(ImageKey) bool) map[ImageKey]unsafe.Pointer {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	visible := map[ImageKey]unsafe.Pointer{}
 	for key, state := range i.states {
+		if !belongs(key) {
+			continue
+		}
 		outer, known := i.surfaceVisible[key.Surface]
 		if state.Visible && (!known || outer) && i.handles[key] != nil {
 			visible[key] = i.handles[key]
 		}
 	}
 	return visible
+}
+
+// InvalidateSidecar 는 그 사이드카의 연결이 끊겼다고 표시한다(V5-106). configure 를
+// 받아든 연결이 죽었으므로 configure 상태도 함께 죽는다 — 같은 크기라도 다시 보내야
+// 새 연결의 서비스가 그림 상태를 만든다. 표시 순서 기록도 지운다 — 새 연결의 프레임은
+// 순번을 처음부터 센다.
+func (i *Images) InvalidateSidecar(sidecar string) int {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	invalidated := 0
+	for key, owner := range i.owners {
+		if owner == nil || owner.SidecarName != sidecar {
+			continue
+		}
+		state, ok := i.states[key]
+		if !ok {
+			continue
+		}
+		state.Configured = false
+		state.LastSequence = 0
+		state.PresentedSequence = 0
+		state.PresentationError = ""
+		invalidated++
+	}
+	if invalidated > 0 {
+		i.changedLocked()
+	}
+	return invalidated
 }
 
 // ConfigureRaster 는 적용된 네이티브 래스터가 달라졌을 때 리비전을 올리고 보낼 설정을 반환한다.

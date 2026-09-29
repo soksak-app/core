@@ -103,7 +103,10 @@ fn project_release(window: Window, id: String) -> Result<(), String> {
 /// 성능 트레이스를 켜고 끄고 페이지 줄을 중계한다(V5-104).
 #[tauri::command(async)]
 fn performance(window: Window, request: serde_json::Value) -> Result<serde_json::Value, String> {
-    crate::performance::command(window.state::<crate::workspace::Workspace>().directory(), request)
+    crate::performance::command(
+        window.state::<crate::workspace::Workspace>().directory(),
+        request,
+    )
 }
 
 /// 창의 위치와 크기를 반환한다.

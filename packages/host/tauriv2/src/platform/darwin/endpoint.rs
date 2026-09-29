@@ -23,19 +23,31 @@ extern "C" {
 const ESRCH: i32 = 3;
 
 /// persistent service endpoint의 프로세스가 아직 존재하는지 확인한다.
+///
+/// 시그널을 받을 수 있는 프로세스만 존재한다. 기다리지 않은 스폰은 좀비로 남아
+/// kill(pid, 0) 을 통과하므로(V5-106), 통과한 프로세스는 상태를 읽어 좀비를 가려낸다 —
+/// 좀비는 이미 끝났고, 그 endpoint 는 낡은 것이다.
 pub fn service_process_exists(pid: u32) -> Result<bool, String> {
     if pid == 0 {
         return Ok(false);
     }
     let result = unsafe { kill(pid as i32, 0) };
-    if result == 0 {
+    if result != 0 {
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() == Some(ESRCH) {
+            return Ok(false);
+        }
+        return Err(format!("cannot inspect service process {pid}: {error}"));
+    }
+    let output = std::process::Command::new("ps")
+        .args(["-o", "stat=", "-p", &pid.to_string()])
+        .output()
+        .map_err(|e| format!("cannot inspect service process {pid} state: {e}"))?;
+    let state = String::from_utf8_lossy(&output.stdout);
+    if !state.trim_start().starts_with('Z') {
         return Ok(true);
     }
-    let error = std::io::Error::last_os_error();
-    if error.raw_os_error() == Some(ESRCH) {
-        return Ok(false);
-    }
-    Err(format!("cannot inspect service process {pid}: {error}"))
+    Ok(false)
 }
 
 /// 번호 pid 의 프로세스가 끝났는지 반환한다.

@@ -683,3 +683,194 @@ func TestPersistentRetainSkipsAServiceWithoutEndpoint(t *testing.T) {
 		t.Fatal("retain without a surfaces list was accepted")
 	}
 }
+
+// contract: sidecars-transport.persistent.revives-a-lost-connection
+func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-revive")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDirectory)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeHarnessEndpoint(t, root, socket)
+
+	// 첫 연결은 요청 하나를 되돌린 뒤 스스로 끊는다. 다시 맺은 연결은 닫지 않는다 —
+	// 끊김이 한 번만 일어나야 재시작도 한 번만 일어난다.
+	serverDone := make(chan struct{})
+	go func() {
+		defer close(serverDone)
+		for index := 0; index < 2; index++ {
+			connection, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			keepOpen := index == 1
+			go func() {
+				defer connection.Close()
+				reader := bufio.NewReader(connection)
+				line, err := reader.ReadBytes('\n')
+				if err != nil {
+					return
+				}
+				if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+					return
+				}
+				for {
+					line, err = reader.ReadBytes('\n')
+					if err != nil {
+						return
+					}
+					var request map[string]any
+					if keepOpen && json.Unmarshal(line, &request) == nil && request["operation"] == "close-owner" {
+						reply, _ := json.Marshal(map[string]any{"operation": "closed-owner", "request": request["request"], "ok": false, "error": "test close"})
+						_, _ = connection.Write(append(reply, '\n'))
+						return
+					}
+					if _, err := connection.Write(line); err != nil {
+						return
+					}
+					if !keepOpen {
+						return
+					}
+				}
+			}()
+		}
+	}()
+
+	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/only", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	first := receiveSidecarMessage(t, owner.seen)
+	if first.Surface != "surface-1" || string(first.Body) != `{"operation":"open"}` {
+		t.Fatalf("the first message was not the open echo: %v %s", first.Surface, first.Body)
+	}
+
+	// 연결이 끊기면 전송 없이 다시 맞아야 한다 — 연결 이벤트가 그 증거다(V5-106).
+	revived := receiveSidecarMessage(t, owner.seen)
+	if revived.Surface != "surface-1" {
+		t.Fatalf("the connection notice went to %q", revived.Surface)
+	}
+	var notice map[string]any
+	if err := json.Unmarshal(revived.Body, &notice); err != nil {
+		t.Fatalf("the connection notice is not JSON: %v", err)
+	}
+	if notice["event"] != "connection" || notice["connected"] != true {
+		t.Fatalf("the connection notice is not a successful reconnection: %v", notice)
+	}
+
+	// 다음 전송은 다시 맺은 연결로 지나간다.
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+		t.Fatal(err)
+	}
+	echoed := receiveSidecarMessage(t, owner.seen)
+	if echoed.Surface != "surface-1" || string(echoed.Body) != `{"operation":"input"}` {
+		t.Fatalf("the input did not ride the revived connection: %v %s", echoed.Surface, echoed.Body)
+	}
+
+	sidecars.Stop()
+	listener.Close()
+	<-serverDone
+}
+
+// contract: sidecars-transport.persistent.revive-failure-is-reported
+func TestPersistentTransportReportsFailedReviveToOwner(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-failed-revive")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDirectory)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeHarnessEndpoint(t, root, socket)
+
+	// 첫 연결은 요청 하나를 되돌린 뒤, 수신기가 닫힌 뒤에야 끊는다 — 재시작의 연결이
+	// 큐에 쌓이는 대신 거절되어야 실패 알림이 결정적으로 도착한다.
+	closed := make(chan struct{})
+	serverDone := make(chan struct{})
+	go func() {
+		defer close(serverDone)
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		if _, err := reader.ReadBytes('\n'); err != nil {
+			return
+		}
+		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+			return
+		}
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			return
+		}
+		if _, err := connection.Write(line); err != nil {
+			return
+		}
+		// 수신기가 닫힌 뒤에야 연결을 끊는다.
+		<-closed
+	}()
+
+	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/only", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	first := receiveSidecarMessage(t, owner.seen)
+	if first.Surface != "surface-1" || string(first.Body) != `{"operation":"open"}` {
+		t.Fatalf("the first message was not the open echo: %v %s", first.Surface, first.Body)
+	}
+
+	// 수신기를 먼저 닫은 뒤 연결이 끊긴다. 엔드포인트의 pid 는 이 검사 프로세스이므로
+	// 살아 있고, 재시작은 같은 소켓에 연결을 시도해 거절된다.
+	listener.Close()
+	close(closed)
+	<-serverDone
+
+	// 재시작이 실패하면 연결 끊김과 그 까닭이 표면에 알려진다(V5-106).
+	failure := receiveSidecarMessage(t, owner.seen)
+	if failure.Surface != "surface-1" {
+		t.Fatalf("the failure notice went to %q", failure.Surface)
+	}
+	var notice map[string]any
+	if err := json.Unmarshal(failure.Body, &notice); err != nil {
+		t.Fatalf("the failure notice is not JSON: %v", err)
+	}
+	if notice["event"] != "connection" || notice["connected"] != false {
+		t.Fatalf("the failure notice is not a failed reconnection: %v", notice)
+	}
+	reason, _ := notice["reason"].(string)
+	if reason == "" {
+		t.Fatal("the failure notice carries no restart reason")
+	}
+	sidecars.Stop()
+}
+
+func receiveSidecarMessage(t *testing.T, seen <-chan SidecarMessage) SidecarMessage {
+	t.Helper()
+	select {
+	case message := <-seen:
+		return message
+	case <-time.After(10 * time.Second):
+		t.Fatal("no sidecar message arrived within 10s")
+		return SidecarMessage{}
+	}
+}

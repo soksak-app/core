@@ -17,6 +17,10 @@ use tauri::{AppHandle, WebviewWindowBuilder, Window, Wry};
 pub trait PersistentStream: Read + Write + Send {
     fn try_clone(&self) -> Result<Box<dyn PersistentStream>, String>;
     fn shutdown(&self) -> Result<(), String>;
+    /// 다음 읽기를 기한 안에 끝나게 한다. None 은 무한 대기다. 인사(hello) 왕복이
+    /// 상태 잠금을 쥔 채 무한히 멈추지 않게 한다(V5-106). 이어지는 읽기 스레드는 다시
+    /// 무한 대기로 돌려놓는다.
+    fn set_read_deadline(&self, timeout: Option<std::time::Duration>) -> Result<(), String>;
 }
 
 #[cfg(target_os = "macos")]

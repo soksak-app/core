@@ -72,10 +72,24 @@ func rasterFacts(handle unsafe.Pointer) string {
 
 // 표면 복귀나 바깥 크기 변경은 DOM 여백이 같아도 실제 네이티브 래스터를 갱신해야 한다.
 func (s *Surfaces) refreshImageRasters() error {
+	return s.refreshRastersWhere(func() map[ImageKey]unsafe.Pointer { return s.images.Visible() })
+}
+
+// RefreshSidecarRasters 는 영속 사이드카의 연결이 다시 맺히면 그 사이드카의 그림
+// configure 를 다시 보낸다(V5-106). 새 연결의 서비스는 그림 상태가 없고, 크기가 같아도
+// configure 상태는 연결과 함께 죽었으므로(InvalidateSidecar) 같은 크기의 재전송이 일어난다.
+func (s *Surfaces) RefreshSidecarRasters(sidecar string) error {
+	s.images.InvalidateSidecar(sidecar)
+	return s.refreshRastersWhere(func() map[ImageKey]unsafe.Pointer {
+		return s.images.VisibleForSidecar(sidecar)
+	})
+}
+
+func (s *Surfaces) refreshRastersWhere(visible func() map[ImageKey]unsafe.Pointer) error {
 	var configurations []pendingConfigure
 	var failure error
 	application.InvokeSync(func() {
-		for key, handle := range s.images.Visible() {
+		for key, handle := range visible() {
 			// 아직 배치되지 않은 표면의 영역은 래스터 크기가 없다. 표면을 배치하는 다음 준비에서 갱신한다.
 			if !system.SurfacePlacedImage(handle) {
 				continue

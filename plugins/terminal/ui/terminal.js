@@ -353,6 +353,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   let fontFamily = null;
   let textFactor = textSize.read();
   let requested = null;
+  // 마지막으로 적용한 테마. 연결이 다시 맺히면 그 값으로 다시 보낸다(V5-106).
+  let lastTheme = null;
   const sendFont = async () => {
     if (fontFamily === null) return;
     const size = BASE_FONT_SIZE * textFactor;
@@ -876,6 +878,55 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     trusted: event.isTrusted, defaultPrevented: event.defaultPrevented });
   if (diagnostics) for (const type of pointerTraceTypes) view.addEventListener(type, tracePointer);
 
+  // 세션 열기는 크기를 보내지 않는다. 호스트가 네이티브 영역을 적용하며 보낸 configure만
+  // 이미지와 PTY 크기의 권위 있는 입력이다.
+  // 세션은 설정 shell 이 가리키는 셸을 연다(login 은 계정의 로그인 셸). 설정이 없으면 다른 셸로 대신하지 않는다.
+  const shell = settings.read().shell;
+  if (typeof shell !== "string" || shell.length === 0) throw new Error("terminal shell setting is missing");
+  // 터미널에서 쪼갠 터미널은 그 터미널이 마지막으로 알린 디렉터리에서, 아니면 프로젝트 루트에서 시작한다.
+  // 프로젝트가 없는 창에서는 홈 디렉터리에서 시작한다(docs/spec/terminal-runtime.md).
+  // 기본값: 분할 출처에 디렉터리가 없으면 프로젝트 루트, 프로젝트도 없으면 홈 디렉터리에서 연다.
+  const directory = origin.directory ?? project?.root ?? null;
+  const openSession = () => terminal.send(id, { operation: "open", image: "view", shell,
+    ...(directory === null ? {} : { directory }) });
+  const settingsPolicy = () => {
+    const values = settings.read();
+    return {
+      shape: values["cursor.shape"],
+      blink: values["cursor.blink"],
+      interval: values["cursor.interval"],
+      idleTimeout: values["cursor.idleTimeout"],
+      unfocused: values["cursor.unfocused"],
+    };
+  };
+  // 세션 부트스트랩: 처음과 연결이 다시 맺길 때 같은 값을 같은 순서로 보낸다(V5-106).
+  // 보존 세션에서 열기는 아무 일도 하지 않고, 재스폰된 서비스에서는 새 세션을 연다.
+  // 새 연결의 서비스는 테마·글꼴·커서 정책을 모르므로 다시 보낸다 — 글꼴의 중복 제거
+  // 캐시(requested)를 지우고 같은 값을 다시 보낸다.
+  const bootstrapSession = async () => {
+    applyTitle();
+    await openSession();
+    if (lastTheme) await setTheme(lastTheme.scheme, lastTheme.tokens);
+    requested = null;
+    await setFont(settings.read()["font.family"]).catch((error) => {
+      reportInputError(error);
+    });
+    await setCursorPolicy(settingsPolicy());
+  };
+  // 재실행은 하나의 순서열로 보낸다 — 두 연결 이벤트가 겹쳐도 부트스트랩은 순서대로
+  // 완료된다. 꼬리의 실패 삼킴은 다음 재실행을 막지 않기 위함이고, 오류 자체는
+  // 연결 이벤트 처리가 관측한다. 정의는 사이드카 수신 등록보다 앞선다 — 연결 이벤트가
+  // 첫 부팅 중에도 도착할 수 있으므로.
+  let bootstrapChain = Promise.resolve();
+  // 꼬리 회복: 실패한 부트스트랩이 다음 재실행을 막지 않게 한다. 그 실패 자체는
+  // rerunBootstrap 을 부른 연결 이벤트 처리가 관측한다.
+  const recoverBootstrapTail = () => undefined;
+  const rerunBootstrap = () => {
+    const run = bootstrapChain.then(bootstrapSession);
+    bootstrapChain = run.catch(recoverBootstrapTail);
+    return run;
+  };
+
   // screen.read 응답을 기다리는 resolver
   let pendingScreenRead = null;
   // pty.pending 측정 응답을 기다리는 resolver. 진단 명령이 한 번에 하나만 요청한다.
@@ -927,6 +978,18 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       resolveError("session");
       sessionOpen = true;
       changed("session");
+    } else if (body.event === "connection") {
+      // 영속 사이드카의 연결이 다시 맺혔다(V5-106). 이전 연결이 남긴 사이드카 오류는
+      // 해소하고 세션을 다시 연다 — 재스폰된 서비스에는 이 표면의 세션이 없다. 실패했으면
+      // 연결 끊김과 그 까닭을 세션 오류로 남긴다. 입력은 다시 열릴 때까지 대기열에 쌓인다.
+      sessionOpen = false;
+      if (body.connected === true) {
+        if (resolveError("sidecar")) changed("session");
+        rerunBootstrap().catch((error) => reportInputError(error));
+      } else {
+        const reason = typeof body.reason === "string" && body.reason.length > 0 ? `: ${body.reason}` : "";
+        setError("sidecar", `sidecar connection failed${reason}`);
+      }
     } else if (body.event === "screen") {
       // screen 이벤트를 처리한다. screen.read 응답이나 화면 변화 알림.
       screen = body.lines;
@@ -1139,17 +1202,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     }
   });
 
-  // 세션 열기는 크기를 보내지 않는다. 호스트가 네이티브 영역을 적용하며 보낸 configure만
-  // 이미지와 PTY 크기의 권위 있는 입력이다.
-  // 세션은 설정 shell 이 가리키는 셸을 연다(login 은 계정의 로그인 셸). 설정이 없으면 다른 셸로 대신하지 않는다.
-  const shell = settings.read().shell;
-  if (typeof shell !== "string" || shell.length === 0) throw new Error("terminal shell setting is missing");
-  applyTitle();
-  // 터미널에서 쪼갠 터미널은 그 터미널이 마지막으로 알린 디렉터리에서, 아니면 프로젝트 루트에서 시작한다.
-  // 프로젝트가 없는 창에서는 홈 디렉터리에서 시작한다(docs/spec/terminal-runtime.md).
-  // 기본값: 분할 출처에 디렉터리가 없으면 프로젝트 루트, 프로젝트도 없으면 홈 디렉터리에서 연다.
-  const directory = origin.directory ?? project?.root ?? null;
-  await terminal.send(id, { operation: "open", image: "view", shell, ...(directory === null ? {} : { directory }) });
+  await rerunBootstrap();
 
   let themeReady = Promise.resolve();
   let themeSubscription = null;
@@ -1162,6 +1215,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         if (first) { first = false; return Promise.reject(error); }
         return Promise.resolve();
       }
+      // 마지막 테마를 기록한다 — 연결이 다시 맺히면 그 값으로 다시 보낸다(V5-106).
+      lastTheme = value;
       const request = setTheme(value.scheme, value.tokens);
       if (first) {
         first = false;
@@ -1178,21 +1233,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   await themeReady;
 
   let settingsSubscription = null;
-  const settingsPolicy = () => {
-    const values = settings.read();
-    return {
-      shape: values["cursor.shape"],
-      blink: values["cursor.blink"],
-      interval: values["cursor.interval"],
-      idleTimeout: values["cursor.idleTimeout"],
-      unfocused: values["cursor.unfocused"],
-    };
-  };
   if (settings) {
-    await setFont(settings.read()["font.family"]).catch((error) => {
-      reportInputError(error);
-    });
-    await setCursorPolicy(settingsPolicy());
     applyScrollbarSettings(settings.read());
     settingsSubscription = settings.on((values) => {
       applyScrollbarSettings(values);

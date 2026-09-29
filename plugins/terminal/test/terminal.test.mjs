@@ -3202,3 +3202,77 @@ test("pty pending reads the session transport measurement and rejects explicit e
   sidecar.triggerEvent("test-session", { event: "pty.pending", pending: 0, written: 0 });
   assert.match(expose.getStatus("terminal.session").readFn().error, /unexpected pty\.pending response/);
 });
+
+test("a sidecar reconnection reopens the session and re-sends the bootstrap", async () => {
+  const attach = createFakeAttachImage();
+  const sidecar = createFakeSidecar();
+  const expose = createFakeExpose();
+  const themeTokens = { "--card": "#10121a", "--fg": "#e6e6e6", "--rail": "#2c3140" };
+  let region;
+  await startTerminal({
+    view: createFakeView(), attachImage: (...args) => (region = attach.function(...args)), sidecar, expose,
+    theme: (listener) => {
+      listener({ scheme: "dark", tokens: themeTokens });
+      return { ready: Promise.resolve(), dispose: () => {} };
+    },
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(sidecar);
+  const messages = () => sidecar.getMessages();
+  const settle = async (predicate, what) => {
+    for (let i = 0; i < 50 && !predicate(); i++) await new Promise((resolve) => setImmediate(resolve));
+    assert.ok(predicate(), what);
+  };
+
+  // 연결이 다시 맺히면(V5-106) 재부트스트랩이 열기·테마·글꼴·커서 정책을 다시 보낸다.
+  sidecar.triggerEvent("test-session", { event: "connection", connected: true });
+  await settle(() => messages().filter(({ body }) => body.operation === "open").length >= 2,
+    "open was not re-sent after the reconnection");
+  const reopened = messages().filter(({ body }) => body.operation === "open").at(-1).body;
+  assert.equal(reopened.shell, "/bin/sh");
+  assert.equal(reopened.image, "view");
+  const retheme = messages().filter(({ body }) => body.operation === "theme").at(-1).body;
+  assert.deepEqual(retheme, { operation: "theme", mode: "dark", background: themeTokens["--card"],
+    foreground: themeTokens["--fg"], cursor: themeTokens["--fg"], selection: themeTokens["--rail"] });
+  const refont = messages().filter(({ body }) => body.operation === "font").at(-1).body;
+  assert.equal(refont.family, SHELL_SETTINGS.read()["font.family"]);
+  const recursor = messages().filter(({ body }) => body.operation === "cursor").at(-1).body;
+  assert.equal(recursor.shape, SHELL_SETTINGS.read()["cursor.shape"]);
+
+  // 새 세션이 열리기 전까지 입력은 대기하고, state 이벤트가 오면 흘러간다.
+  region._trigger("key", { key: "Enter", text: "\r", shift: false, alt: false, ctrl: false });
+  const inputs = () => messages().filter(({ body }) => body.operation === "input" && body.keys).length;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(inputs(), 0, "input did not wait for the reopened session");
+  sidecar.triggerEvent("test-session", { event: "state", sessionId: "s2", cols: 100, rows: 50, cellWidth: 8, cellHeight: 16 });
+  await settle(() => inputs() === 1, "queued input did not flow after the reopened session");
+  assert.equal(expose.getStatus("terminal.session").readFn().sessionId, "s2");
+});
+
+test("a failed reconnection reports the reason and keeps input queued", async () => {
+  const attach = createFakeAttachImage();
+  const sidecar = createFakeSidecar();
+  const expose = createFakeExpose();
+  let region;
+  await startTerminal({
+    view: createFakeView(), attachImage: (...args) => (region = attach.function(...args)), sidecar, expose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(sidecar);
+  sidecar.triggerEvent("test-session", { event: "connection", connected: false, reason: "spawn failed" });
+  region._trigger("key", { key: "Enter", text: "\r", shift: false, alt: false, ctrl: false });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(sidecar.getMessages().filter(({ body }) => body.operation === "input" && body.keys).length, 0,
+    "input did not wait while the connection is down");
+  assert.equal(expose.getStatus("terminal.session").readFn().error, "sidecar connection failed: spawn failed");
+  // 다음 연결 이벤트가 오면 재부트스트랩이 다시 흐른다.
+  sidecar.triggerEvent("test-session", { event: "connection", connected: true });
+  let reopened = false;
+  for (let i = 0; i < 50 && !reopened; i++) {
+    await new Promise((resolve) => setImmediate(resolve));
+    reopened = sidecar.getMessages().filter(({ body }) => body.operation === "open").length >= 2;
+  }
+  assert.ok(reopened, "the bootstrap did not rerun after the failed reconnection");
+  assert.equal(expose.getStatus("terminal.session").readFn().error, undefined,
+    "the successful reconnection resolved the connection error");
+});

@@ -48,10 +48,7 @@ fn settings_use_common_and_project_files_and_reset_removes_override() {
         &store,
         json!({"kind":"settings", "id":"prj-test", "remove":["gap"]}),
     );
-    assert_eq!(
-        read(&root.path().join(".soksak/settings.json")),
-        json!({})
-    );
+    assert_eq!(read(&root.path().join(".soksak/settings.json")), json!({}));
     assert!(store
         .apply(
             serde_json::from_value(

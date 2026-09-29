@@ -71,6 +71,10 @@ pub trait Owner: Clone + Send + 'static {
     ) -> bool {
         false
     }
+    /// 영속 사이드카의 연결이 끊긴 뒤 다시 맺히면 호출된다(V5-106). 창은 그 사이드카의
+    /// 그림 configure 를 다시 보내야 한다 — 이전 연결이 확인한 configure 상태는 연결과
+    /// 함께 죽었다. 기본 구현은 없음: 그림을 소유하지 않은 소유자는 다시 보낼 것이 없다.
+    fn sidecar_reconnected(&self, _sidecar: &str) {}
 }
 
 #[derive(Serialize)]
@@ -220,15 +224,24 @@ struct State<O> {
     // pending_closes: 각 사이드카별로 표면의 닫힘 메시지를 버퍼링한다 (surface → close message)
     pending_replies: HashMap<String, Vec<Vec<u8>>>,
     pending_closes: HashMap<String, Vec<Vec<u8>>>,
+    // 연결이 끊겼고 아직 소유 표면에 알리지 않은 영속 사이드카(V5-106). 끊김을 알린
+    // 시작이 이 기록을 소진한다 — 첫 시작은 알림이 없다.
+    unannounced_loss: std::collections::HashSet<String>,
 }
 
-/// 애플리케이션 하나의 사이드카 프로세스와 표면 소유 창을 관리한다.
-pub struct Sidecars<O: Owner> {
+/// 사이드카 채널의 스레드 공유 부분. 읽기 스레드가 연결 끊김을 감지하면 같은 시작
+/// 경로로 다시 시작해야 하므로(V5-106) 시작에 필요한 구성과 상태를 여기 둔다.
+struct Core<O> {
     /// 사이드카 패키지 이름과 실행 파일 경로.
     declared: HashMap<String, PathBuf>,
     persistent: HashMap<String, bool>,
     config_directory: PathBuf,
     state: Arc<Mutex<State<O>>>,
+}
+
+/// 애플리케이션 하나의 사이드카 프로세스와 표면 소유 창을 관리한다.
+pub struct Sidecars<O: Owner> {
+    core: Arc<Core<O>>,
     /// 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
     pub stop_timeout: Duration,
 }
@@ -318,17 +331,20 @@ impl<O: Owner> Sidecars<O> {
             }
         }
         Ok(Self {
-            declared,
-            persistent,
-            config_directory,
-            state: Arc::new(Mutex::new(State {
-                running: HashMap::new(),
-                owners: HashMap::new(),
-                roots: HashMap::new(),
-                stopped: false,
-                pending_replies: HashMap::new(),
-                pending_closes: HashMap::new(),
-            })),
+            core: Arc::new(Core {
+                declared,
+                persistent,
+                config_directory,
+                state: Arc::new(Mutex::new(State {
+                    running: HashMap::new(),
+                    owners: HashMap::new(),
+                    roots: HashMap::new(),
+                    stopped: false,
+                    pending_replies: HashMap::new(),
+                    pending_closes: HashMap::new(),
+                    unannounced_loss: std::collections::HashSet::new(),
+                })),
+            }),
             stop_timeout: Duration::from_secs(5),
         })
     }
@@ -344,7 +360,7 @@ impl<O: Owner> Sidecars<O> {
     ) -> Result<(), String> {
         let current = owner.root()?;
         let root = {
-            let state = self.state.lock().map_err(|e| e.to_string())?;
+            let state = self.core.state.lock().map_err(|e| e.to_string())?;
             // 기본값: 디렉터리를 기록하지 않은 표면은 창의 현재 프로젝트 루트에서 시작한다.
             state.roots.get(surface).cloned().unwrap_or(current)
         };
@@ -359,11 +375,11 @@ impl<O: Owner> Sidecars<O> {
         .map_err(|e| e.to_string())?;
         line.push(b'\n');
 
-        let mut state = self.state.lock().map_err(|e| e.to_string())?;
+        let mut state = self.core.state.lock().map_err(|e| e.to_string())?;
         if state.stopped {
             return Err("sidecars are stopped".into());
         }
-        if !self.declared.contains_key(name) {
+        if !self.core.declared.contains_key(name) {
             return Err(format!("sidecar {name} is not declared by any plugin"));
         }
         if let Some(other) = state.owners.get(surface) {
@@ -380,9 +396,14 @@ impl<O: Owner> Sidecars<O> {
             state.running.remove(name);
             eprintln!("sidecar {name}: discarding disconnected persistent connection");
         }
+        // 끊김을 알린 적 없는 첫 시작은 알림이 없다. 시작이 앞선 연결 끊김의 기록을
+        // 소진하면 이 호출이 연결 알림을 보낸다(V5-106). 시작에 실패하면 이 전송의
+        // 오류가 그 실패를 호출자에게 전한다.
+        let mut restarted = false;
         if !state.running.contains_key(name) {
-            let process = self.start(name)?;
+            let process = Core::start(&self.core, name)?;
             state.running.insert(name.to_string(), process);
+            restarted = state.unannounced_loss.remove(name);
         }
         state.owners.insert(surface.to_string(), owner.clone());
         state
@@ -392,10 +413,15 @@ impl<O: Owner> Sidecars<O> {
         let process = state.running.get(name).expect("started above");
 
         // 논블로킹으로 채널에 전송한다. 채널이 가득 차면 "is not keeping up" 오류를 반환한다.
-        process
+        let delivered = process
             .outbox
             .try_send(Outgoing::Line(line))
-            .map_err(|_| format!("sidecar {name} is not keeping up"))
+            .map_err(|_| format!("sidecar {name} is not keeping up"));
+        drop(state);
+        if restarted {
+            notify_connection(&self.core, name, Ok(()));
+        }
+        delivered
     }
 
     /// 이미 실행 중인 영속 사이드카를 반환한다.
@@ -403,13 +429,13 @@ impl<O: Owner> Sidecars<O> {
     /// 페이지가 호스트에서 그림 등록을 먼저 제거한 경우에도 다시 읽기 복구는
     /// 영속 표면 작업을 초기화해야 한다.
     pub fn running_persistent_names(&self) -> Result<Vec<String>, String> {
-        let state = self.state.lock().map_err(|e| e.to_string())?;
+        let state = self.core.state.lock().map_err(|e| e.to_string())?;
         let mut names: Vec<_> = state
             .running
             .iter()
             .filter(|(name, process)| {
                 // 기본값: persistent 를 선언하지 않은 사이드카는 창마다 실행된다.
-                self.persistent.get(*name).copied().unwrap_or(false)
+                self.core.persistent.get(*name).copied().unwrap_or(false)
                     && process
                         .persistent
                         .as_ref()
@@ -423,7 +449,7 @@ impl<O: Owner> Sidecars<O> {
 
     /// owner 창의 표면 중 alive 에 없는 것을 실행 중인 모든 사이드카에 알린다.
     pub fn retain(&self, owner: &O, alive: &dyn Fn(&str) -> bool) -> Result<(), String> {
-        let mut state = self.state.lock().map_err(|e| e.to_string())?;
+        let mut state = self.core.state.lock().map_err(|e| e.to_string())?;
         let key = owner.key();
         let gone: Vec<String> = state
             .owners
@@ -480,6 +506,7 @@ impl<O: Owner> Sidecars<O> {
     pub fn retain_sessions(&self, surfaces: &[(String, String)]) -> Result<usize, String> {
         let mut total = 0;
         let mut names: Vec<String> = self
+            .core
             .persistent
             .iter()
             .filter(|(_, persistent)| **persistent)
@@ -494,7 +521,7 @@ impl<O: Owner> Sidecars<O> {
             );
             let (waiter, answer) = sync_channel(1);
             {
-                let mut state = self.state.lock().map_err(|e| e.to_string())?;
+                let mut state = self.core.state.lock().map_err(|e| e.to_string())?;
                 if state.stopped {
                     return Err("sidecars are stopped".into());
                 }
@@ -509,6 +536,7 @@ impl<O: Owner> Sidecars<O> {
                 );
                 if !state.running.contains_key(&name) {
                     let program = self
+                        .core
                         .declared
                         .get(&name)
                         .ok_or_else(|| format!("sidecar {name} is not declared"))?;
@@ -519,6 +547,7 @@ impl<O: Owner> Sidecars<O> {
                             format!("sidecar {name}: executable has no valid basename")
                         })?;
                     let endpoint = self
+                        .core
                         .config_directory
                         .join("services")
                         .join(basename)
@@ -530,7 +559,7 @@ impl<O: Owner> Sidecars<O> {
                             return Err(format!("sidecar {name}: read endpoint: {error}"))
                         }
                     }
-                    let process = self.start(&name)?;
+                    let process = Core::start(&self.core, &name)?;
                     state.running.insert(name.clone(), process);
                 }
                 let process = state.running.get(&name).expect("started above");
@@ -585,7 +614,7 @@ impl<O: Owner> Sidecars<O> {
             .map_err(|e| format!("sidecar {name}: response serialize: {e}"))?;
         line.push(b'\n');
 
-        let mut state = self.state.lock().expect("sidecar state");
+        let mut state = self.core.state.lock().expect("sidecar state");
         if state.stopped {
             return Err("sidecars are stopped".into());
         }
@@ -618,7 +647,7 @@ impl<O: Owner> Sidecars<O> {
     /// 프로세스 종료를 대기하고, 기한 초과 시 강제 종료한다.
     pub fn stop(&self) {
         let processes: Vec<(String, Process)> = {
-            let mut state = self.state.lock().expect("sidecar state");
+            let mut state = self.core.state.lock().expect("sidecar state");
             state.stopped = true;
             state.running.drain().collect()
         };
@@ -750,16 +779,18 @@ impl<O: Owner> Sidecars<O> {
             }
         }
     }
+}
 
-    /// 이벤트가 이미지 봉투인지 확인하고 처리한다. 봉투면 true 를 반환한다.
-    fn start(&self, name: &str) -> Result<Process, String> {
-        let program = self
+impl<O: Owner> Core<O> {
+    /// 사이드카를 시작한다. 영속 선언이면 서비스에 붙고, 아니면 창의 자식 프로세스로 띄운다.
+    fn start(core: &Arc<Self>, name: &str) -> Result<Process, String> {
+        let program = core
             .declared
             .get(name)
             .ok_or_else(|| format!("sidecar {name} is not declared by any plugin"))?;
         // 기본값: persistent 를 선언하지 않은 사이드카는 창마다 실행된다.
-        if *self.persistent.get(name).unwrap_or(&false) {
-            return self.start_persistent(name, program);
+        if *core.persistent.get(name).unwrap_or(&false) {
+            return Self::start_persistent(core, name, program);
         }
         let mut child = Command::new(program)
             .stdin(Stdio::piped())
@@ -768,7 +799,7 @@ impl<O: Owner> Sidecars<O> {
             .spawn()
             .map_err(|e| format!("sidecar {name}: {}: {e}", program.display()))?;
         // 프로세스 등록부의 계기(V5-104): 뜨는 사이드카의 pid 와 역할을 남긴다.
-        if let Some(config) = self.config_directory.to_str() {
+        if let Some(config) = core.config_directory.to_str() {
             let directory = std::path::PathBuf::from(config);
             if crate::performance::enabled(&directory) {
                 crate::performance::line(
@@ -790,7 +821,7 @@ impl<O: Owner> Sidecars<O> {
         // 이렇게 하면 보관분(큐가 가득 찼을 때만 생김)이 큐에 먼저 있던 메시지보다 뒤에 나가므로 순서가 맞다.
         // 채널이 닫혀 종료할 때도 보관분을 전부 쓴 뒤 stdin을 닫는다.
         let write_name = name.to_string();
-        let state_clone = Arc::clone(&self.state);
+        let state_clone = Arc::clone(&core.state);
 
         thread::spawn(move || loop {
             loop {
@@ -824,7 +855,7 @@ impl<O: Owner> Sidecars<O> {
         });
 
         // 읽기 스레드: stdout에서 읽어 이벤트를 전달한다
-        let state = Arc::clone(&self.state);
+        let state = Arc::clone(&core.state);
         let sidecar = name.to_string();
         let tx_clone = tx.clone();
         thread::spawn(move || {
@@ -893,7 +924,7 @@ impl<O: Owner> Sidecars<O> {
         })
     }
 
-    fn start_persistent(&self, name: &str, program: &Path) -> Result<Process, String> {
+    fn start_persistent(core: &Arc<Self>, name: &str, program: &Path) -> Result<Process, String> {
         #[derive(Deserialize)]
         struct Endpoint {
             protocol: u64,
@@ -902,7 +933,7 @@ impl<O: Owner> Sidecars<O> {
             token: String,
         }
 
-        let config = &self.config_directory;
+        let config = &core.config_directory;
         let basename = program
             .file_name()
             .and_then(|value| value.to_str())
@@ -930,7 +961,7 @@ impl<O: Owner> Sidecars<O> {
                         .map_err(|e| format!("sidecar {name}: remove stale endpoint: {e}"))?;
                     // Re-enter the one creation path. A stale endpoint is an
                     // explicit crash-recovery case, not a fallback transport.
-                    return self.start_persistent(name, program);
+                    return Self::start_persistent(core, name, program);
                 }
                 endpoint
             }
@@ -978,6 +1009,18 @@ impl<O: Owner> Sidecars<O> {
         let mut stream = current()?
             .connect_service(&endpoint.socket)
             .map_err(|e| format!("sidecar {name}: connect authenticated service: {e}"))?;
+        // 인사 왕복에만 읽기 기한을 둔다(V5-106). 이 시작은 상태 잠금 안에서 일어나므로,
+        // 소켓을 받아 놓고 답하지 않는 서비스가 모든 전송을 멈추게 해서는 안 된다. 기한이
+        // 지나면 연결은 실패이고, 끊김 기록이 다음 시작에게 같은 경로를 다시 시도하게 한다.
+        // 왕복이 끝나면 이어지는 읽기 스레드를 위해 무한 대기로 돌린다.
+        const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
+        // macOS 는 SO_RCVTIMEO 에 0(해제)을 EINVAL 로 거부하므로, 해제는 하루 기한으로
+        // 대신한다. 이어지는 읽기 스레드는 하루에 한 번 WouldBlock 으로 깨어나 다시
+        // 기다린다.
+        const NO_READ_DEADLINE: Duration = Duration::from_secs(24 * 60 * 60);
+        stream
+            .set_read_deadline(Some(HELLO_TIMEOUT))
+            .map_err(|e| format!("sidecar {name}: hello deadline: {e}"))?;
         let hello = serde_json::json!({
             "operation": "hello",
             "protocol": 1,
@@ -1020,6 +1063,12 @@ impl<O: Owner> Sidecars<O> {
                 "sidecar {name}: service protocol mismatch in hello response"
             ));
         }
+        // 인사가 성공했으니 읽기 기한을 하루로 늘린다. macOS 는 상대가 닫은 소켓의
+        // SO_RCVTIMEO 설정을 EINVAL 으로 거부하므로 이 단계의 실패는 닫힌 연결이다 —
+        // 인사에 답하고 곧 닫는 서비스는 살아 있는 연결이 아니다.
+        stream
+            .set_read_deadline(Some(NO_READ_DEADLINE))
+            .map_err(|e| format!("sidecar {name}: hello deadline extend: {e}"))?;
 
         let reader_stream = response_reader.into_inner();
         let (tx, rx) = sync_channel::<Outgoing>(256);
@@ -1030,7 +1079,7 @@ impl<O: Owner> Sidecars<O> {
         let retain_waiters: RetainWaiters = Arc::new(Mutex::new(HashMap::new()));
         let connected = Arc::new(AtomicBool::new(true));
         let write_name = name.to_string();
-        let write_state = Arc::clone(&self.state);
+        let write_state = Arc::clone(&core.state);
         let writer = stream;
         let writer_connected = Arc::clone(&connected);
         thread::spawn(move || {
@@ -1084,7 +1133,8 @@ impl<O: Owner> Sidecars<O> {
             }
         });
 
-        let state = Arc::clone(&self.state);
+        let state = Arc::clone(&core.state);
+        let reader_core = Arc::clone(core);
         let sidecar = name.to_string();
         let waiters = Arc::clone(&close_waiters);
         let shutdown_waiters_for_reader = Arc::clone(&shutdown_waiters);
@@ -1238,6 +1288,7 @@ impl<O: Owner> Sidecars<O> {
                 }
                 line.clear();
             }
+            let mut was_current = false;
             if let Ok(mut state) = state.lock() {
                 let is_current = state
                     .running
@@ -1248,6 +1299,8 @@ impl<O: Owner> Sidecars<O> {
                     });
                 if is_current {
                     state.running.remove(&sidecar);
+                    state.unannounced_loss.insert(sidecar.clone());
+                    was_current = true;
                 }
             }
             let close_error =
@@ -1267,6 +1320,11 @@ impl<O: Owner> Sidecars<O> {
                     eprintln!("sidecar {sidecar}: shutdown waiter disconnected");
                 }
             }
+            // 연결이 끊겼다. 다음 전송을 기다리지 않고 즉시 다시 맺는다 — 서비스가 살아 있으면
+            // 다시 붙고, 죽었으면 start_persistent 의 낡은 endpoint 정리가 재스폰한다(V5-106).
+            if was_current {
+                revive_persistent(&reader_core, &sidecar);
+            }
         });
         // The bootstrap child must not be waited on or killed by application shutdown.
         drop(child);
@@ -1280,6 +1338,74 @@ impl<O: Owner> Sidecars<O> {
                 connected,
             }),
         })
+    }
+}
+
+/// 끊긴 영속 연결을 다시 맺고 결과를 소유 표면에 알린다(V5-106). 이미 다른 경로가 다시
+/// 시작했거나 종료 중이면 아무 일도 하지 않는다. 한 번의 연결 끊김에 한 번만 시도한다 —
+/// 실패는 알림으로 보고하고, 다음 전송이 같은 경로를 다시 지나간다.
+fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
+    let outcome = {
+        let mut state = core.state.lock().expect("sidecar state");
+        if state.stopped || state.running.contains_key(name) {
+            return;
+        }
+        Core::start(core, name).map(|process| {
+            state.running.insert(name.to_string(), process);
+            state.unannounced_loss.remove(name)
+        })
+    };
+    match &outcome {
+        // 다른 경로(전송)가 이미 다시 시작했으면 알림도 그 호출이 보냈다.
+        Ok(false) => {}
+        Ok(true) => {
+            eprintln!("sidecar {name}: connection lost; restarted");
+            notify_connection(core, name, Ok(()));
+        }
+        Err(reason) => {
+            // 시작에 실패했다 — 끊김 기록은 남겨 다음 시작이 알린다.
+            eprintln!("sidecar {name}: connection lost; restart failed: {reason}");
+            notify_connection(core, name, Err(reason.clone()));
+        }
+    }
+}
+
+/// 다시 맺긴 영속 연결을 소유 표면에 알린다(V5-106). 창은 그 사이드카의 그림 configure 를
+/// 다시 보내고([Owner::sidecar_reconnected]), 표면은 연결 이벤트를 받아 자기 세션을 다시
+/// 연다. 시작에 실패했으면 연결 끊김과 그 까닭을 알린다.
+fn notify_connection<O: Owner>(core: &Arc<Core<O>>, name: &str, outcome: Result<(), String>) {
+    let surfaces: Vec<(String, O)> = {
+        let state = core.state.lock().expect("sidecar state");
+        state
+            .owners
+            .iter()
+            .map(|(surface, owner)| (surface.clone(), owner.clone()))
+            .collect()
+    };
+    let value = match &outcome {
+        Ok(()) => serde_json::json!({"event": "connection", "connected": true}),
+        Err(reason) => {
+            serde_json::json!({"event": "connection", "connected": false, "reason": reason})
+        }
+    };
+    let body = match RawValue::from_string(value.to_string()) {
+        Ok(body) => body,
+        Err(error) => {
+            eprintln!("sidecar {name}: connection notice serialization: {error}");
+            return;
+        }
+    };
+    let mut reconfigured: Vec<String> = Vec::new();
+    for (surface, owner) in surfaces {
+        if outcome.is_ok() && !reconfigured.contains(&owner.key()) {
+            reconfigured.push(owner.key());
+            owner.sidecar_reconnected(name);
+        }
+        owner.deliver(Message {
+            sidecar: name.to_string(),
+            surface,
+            body: body.clone(),
+        });
     }
 }
 
@@ -1306,6 +1432,11 @@ impl Owner for Window {
         let context = window_data(self)?;
         let root = context.root.lock().map_err(|e| e.to_string())?.clone();
         Ok(root)
+    }
+    fn sidecar_reconnected(&self, sidecar: &str) {
+        if let Err(error) = crate::composition::refresh_sidecar_rasters(self, sidecar) {
+            eprintln!("sidecar {sidecar} reconnection reconfigure: {error}");
+        }
     }
     fn deliver(&self, message: Message) {
         if let Err(error) = emit_window(self, "sidecar-message", message) {

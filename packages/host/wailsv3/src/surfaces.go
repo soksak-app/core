@@ -260,6 +260,14 @@ func (s *Surfaces) sidecarSendFrom(viewID uint64, name, surface string, body jso
 	return s.SidecarSend(name, surface, body)
 }
 
+// SidecarReconnected 는 영속 사이드카의 연결이 끊긴 뒤 다시 맺히면 그 사이드카의 그림
+// configure 를 다시 보낸다(V5-106) — 이전 연결이 확인한 configure 상태는 연결과 함께 죽는다.
+func (s *Surfaces) SidecarReconnected(sidecar string) {
+	if err := s.RefreshSidecarRasters(sidecar); err != nil {
+		log.Printf("sidecar %s reconnection reconfigure: %v", sidecar, err)
+	}
+}
+
 // DecideImageEnvelope 은 사이드카가 보낸 이미지 봉투를 결정하고 처리한다.
 func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.RawMessage) bool {
 	sidecars := s.sidecars

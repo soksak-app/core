@@ -1148,7 +1148,9 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
         let barrier = data.images.wait_current(remaining);
         if crate::performance::enabled(window.state::<crate::workspace::Workspace>().directory()) {
             crate::performance::line(
-                &crate::performance::target(window.state::<crate::workspace::Workspace>().directory()),
+                &crate::performance::target(
+                    window.state::<crate::workspace::Workspace>().directory(),
+                ),
                 "host",
                 serde_json::json!({"event": "barrier", "wait_us": barrier_started.elapsed().as_micros() as u64,
                     "ok": barrier.is_ok()}),

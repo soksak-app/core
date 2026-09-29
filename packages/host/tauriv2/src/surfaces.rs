@@ -603,7 +603,10 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         for (id, handle) in removed {
             // 표면 생명주기의 계기(V5-104): 목록에서 사라진 표면은 이 자리에서 파괴된다.
             {
-                let directory = window.state::<crate::workspace::Workspace>().directory().to_path_buf();
+                let directory = window
+                    .state::<crate::workspace::Workspace>()
+                    .directory()
+                    .to_path_buf();
                 if crate::performance::enabled(&directory) {
                     crate::performance::line(
                         &crate::performance::target(&directory),

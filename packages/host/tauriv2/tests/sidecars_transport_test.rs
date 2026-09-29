@@ -91,26 +91,42 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     )
     .unwrap();
 
+    // 연결마다 스레드로 담는다 — 실제 서비스처럼 동시에 받아야 한 인사가 다른 연결의
+    // 요청 왕복 뒤에 줄서지 않는다. 넉 연결을 받는다: 두 초기 연결과, 검사가 연결을
+    // 닫을 때마다 다시 맺는 자동 재시작의 연결(V5-106). 요청을 기다리다 기한이 지나면
+    // 조용히 끝난다 — 재시작 연결은 검사가 끝날 때까지 요청을 받지 않는다.
     let service = std::thread::spawn(move || {
-        for stream in listener.incoming().take(2) {
+        let mut workers = Vec::new();
+        for stream in listener.incoming().take(4) {
             let mut stream = stream.unwrap();
-            let reader_stream = stream.try_clone().unwrap();
-            let mut reader = BufReader::new(reader_stream);
-            let mut line = String::new();
-            reader.read_line(&mut line).unwrap();
-            let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
-            assert_eq!(hello["operation"], "hello");
-            assert_eq!(hello["protocol"], 1);
-            assert_eq!(hello["token"], "test-token");
             stream
-                .write_all(
-                    br#"{"operation":"hello","protocol":1,"ok":true}
-"#,
-                )
+                .set_read_timeout(Some(Duration::from_secs(10)))
                 .unwrap();
-            line.clear();
-            reader.read_line(&mut line).unwrap();
-            stream.write_all(line.as_bytes()).unwrap();
+            workers.push(std::thread::spawn(move || {
+                let reader_stream = stream.try_clone().unwrap();
+                let mut reader = BufReader::new(reader_stream);
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
+                assert_eq!(hello["operation"], "hello");
+                assert_eq!(hello["protocol"], 1);
+                assert_eq!(hello["token"], "test-token");
+                stream
+                    .write_all(
+                        br#"{"operation":"hello","protocol":1,"ok":true}
+"#,
+                    )
+                    .unwrap();
+                line.clear();
+                match reader.read_line(&mut line) {
+                    Ok(0) | Err(_) => return,
+                    Ok(_) => {}
+                }
+                stream.write_all(line.as_bytes()).unwrap();
+            }));
+        }
+        for worker in workers {
+            worker.join().unwrap();
         }
     });
 
@@ -173,13 +189,16 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
         serde_json::to_vec(&endpoint).unwrap(),
     )
     .unwrap();
-    let (disconnected_tx, disconnected_rx) = channel();
-
     let service = thread::spawn(move || {
         let mut workers = Vec::new();
-        for connection_index in 0..4 {
-            let (mut stream, _) = listener.accept().unwrap();
-            let disconnected_tx = disconnected_tx.clone();
+        // 이 서비스는 연결을 제멋대로 끊지 않는다(V5-106 의 자동 재시작과 연결 순서가
+        // 경합하지 않게). `drop` 요청을 받은 연결만 끊고, 그 외 요청은 되돌린다.
+        // close-owner 에는 실패로 답해 stop 이 기한을 기다리지 않게 한다.
+        for _ in 0..4 {
+            let (mut stream, _) = match listener.accept() {
+                Ok((stream, _)) => (stream, ()),
+                Err(_) => break,
+            };
             workers.push(thread::spawn(move || {
                 stream
                     .set_read_timeout(Some(Duration::from_secs(30)))
@@ -197,17 +216,13 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
 "#,
                     )
                     .unwrap();
-
-                line.clear();
-                reader.read_line(&mut line).unwrap();
-                let mut request: serde_json::Value = serde_json::from_str(&line).unwrap();
-                if connection_index < 2 {
-                    stream.write_all(line.as_bytes()).unwrap();
-                    stream.shutdown(Shutdown::Both).unwrap();
-                    disconnected_tx.send(connection_index).unwrap();
-                    return;
-                }
                 loop {
+                    line.clear();
+                    match reader.read_line(&mut line) {
+                        Ok(0) | Err(_) => return,
+                        Ok(_) => {}
+                    }
+                    let request: serde_json::Value = serde_json::from_str(&line).unwrap();
                     if request["operation"] == "close-owner" {
                         let reply = serde_json::json!({
                             "operation": "closed-owner",
@@ -218,12 +233,13 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
                         writeln!(stream, "{reply}").unwrap();
                         return;
                     }
-                    stream.write_all(line.as_bytes()).unwrap();
-                    line.clear();
-                    if reader.read_line(&mut line).unwrap() == 0 {
+                    // 페이지 요청의 operation 은 body 안에 있다. drop 은 이 연결을 끊는
+                    // 검사 신호다.
+                    if request["body"]["operation"] == "drop" {
+                        stream.shutdown(Shutdown::Both).unwrap();
                         return;
                     }
-                    request = serde_json::from_str(&line).unwrap();
+                    stream.write_all(line.as_bytes()).unwrap();
                 }
             }));
         }
@@ -269,12 +285,30 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
             .surface,
         "s2"
     );
-    disconnected_rx
-        .recv_timeout(Duration::from_secs(1))
+    // 서비스가 두 연결을 끊게 한다. 끊김은 연결 이벤트로 기다린다(V5-106). 자동 재시작은
+    // EOF 에만 반응하므로, 각 인스턴스의 연결 이벤트가 도착했다는 것이 서비스가 그 연결을
+    // 끊었다는 증거다.
+    first
+        .send(&first_owner, ECHO, "s1", &raw(r#"{"operation":"drop"}"#))
         .unwrap();
-    disconnected_rx
-        .recv_timeout(Duration::from_secs(1))
+    second
+        .send(&second_owner, ECHO, "s2", &raw(r#"{"operation":"drop"}"#))
         .unwrap();
+    let await_revived = |label: &str, events: &Receiver<Message>| loop {
+        let message = events
+            .recv_timeout(Duration::from_secs(10))
+            .unwrap_or_else(|error| panic!("{label} connection event: {error}"));
+        let body = message.body.get();
+        if body.contains(r#""event":"connection""#) {
+            assert!(
+                body.contains(r#""connected":true"#),
+                "unexpected connection failure notice: {body}"
+            );
+            return;
+        }
+    };
+    await_revived("first", &first_events);
+    await_revived("second", &second_events);
 
     first
         .send(
@@ -751,5 +785,179 @@ fn persistent_retain_skips_a_service_without_endpoint() {
     )
     .unwrap();
     assert_eq!(sidecars.retain_sessions(&[]), Ok(0));
+    sidecars.stop();
+}
+
+// contract: sidecars-transport.persistent.revives-a-lost-connection
+#[test]
+fn persistent_transport_revives_a_lost_connection_without_a_send() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("revive.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "revive-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+
+    let service = thread::spawn(move || {
+        let mut workers = Vec::new();
+        for connection_index in 0..2 {
+            let (mut stream, _) = listener.accept().unwrap();
+            workers.push(thread::spawn(move || {
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(30)))
+                    .unwrap();
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
+                assert_eq!(hello["operation"], "hello");
+                stream
+                    .write_all(
+                        br#"{"operation":"hello","protocol":1,"ok":true}
+"#,
+                    )
+                    .unwrap();
+                if connection_index == 0 {
+                    // 첫 연결은 요청 하나를 되돌린 뒤 스스로 끊는다.
+                    line.clear();
+                    reader.read_line(&mut line).unwrap();
+                    stream.write_all(line.as_bytes()).unwrap();
+                    stream.shutdown(Shutdown::Both).unwrap();
+                    return;
+                }
+                // 다시 맺은 연결은 요청을 계속 되돌린다.
+                loop {
+                    line.clear();
+                    if reader.read_line(&mut line).unwrap() == 0 {
+                        return;
+                    }
+                    stream.write_all(line.as_bytes()).unwrap();
+                }
+            }));
+        }
+        for worker in workers {
+            worker.join().unwrap();
+        }
+    });
+
+    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let sidecars = Sidecars::new(
+        &read,
+        executable_directory.path().to_path_buf(),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, events) = owner("only", "/projects/only");
+    sidecars
+        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    assert_eq!(
+        events.recv_timeout(Duration::from_secs(1)).unwrap().surface,
+        "s1"
+    );
+
+    // 연결이 끊기면 전송 없이 다시 맞아야 한다 — 연결 이벤트가 그 증거다(V5-106).
+    let revived = events.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!(revived.surface, "s1");
+    let notice: serde_json::Value = serde_json::from_str(revived.body.get()).unwrap();
+    assert_eq!(notice["event"], "connection");
+    assert_eq!(notice["connected"], true);
+
+    // 다음 전송은 다시 맺은 연결로 지나간다.
+    sidecars
+        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
+        .unwrap();
+    let echoed = events.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!(echoed.surface, "s1");
+    assert!(echoed.body.get().contains(r#""operation":"input""#));
+
+    sidecars.stop();
+    service.join().unwrap();
+}
+
+// contract: sidecars-transport.persistent.revive-failure-is-reported
+#[test]
+fn persistent_transport_reports_a_failed_revive_to_the_owner() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("failed-revive.sock");
+    // 이 수신기는 첫 연결만 받고 닫힌다. 엔드포인트의 pid 는 이 검사 프로세스이므로 살아
+    // 있고, 재시작은 같은 소켓에 연결을 시도해 거절된다.
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "failed-revive-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let service = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(hello["operation"], "hello");
+        stream
+            .write_all(
+                br#"{"operation":"hello","protocol":1,"ok":true}
+"#,
+            )
+            .unwrap();
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        stream.write_all(line.as_bytes()).unwrap();
+        stream.shutdown(Shutdown::Both).unwrap();
+        drop(listener);
+    });
+
+    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let sidecars = Sidecars::new(
+        &read,
+        executable_directory.path().to_path_buf(),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, events) = owner("only", "/projects/only");
+    sidecars
+        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    assert_eq!(
+        events.recv_timeout(Duration::from_secs(1)).unwrap().surface,
+        "s1"
+    );
+    service.join().unwrap();
+
+    // 재시작이 실패하면 연결 끊김과 그 까닭이 표면에 알려진다(V5-106).
+    let failure = events.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!(failure.surface, "s1");
+    let notice: serde_json::Value = serde_json::from_str(failure.body.get()).unwrap();
+    assert_eq!(notice["event"], "connection");
+    assert_eq!(notice["connected"], false);
+    assert!(
+        notice["reason"]
+            .as_str()
+            .is_some_and(|reason| !reason.is_empty()),
+        "the failure notice carries the restart reason"
+    );
     sidecars.stop();
 }

@@ -114,7 +114,9 @@ fn append(target: &Path, record: &Value) {
 
 /// 유닉스 시각(밀리초)을 ISO-8601 로 바꾼다(종속성을 더하지 않는다).
 fn now_iso8601_ms() -> String {
-    let since = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default(); // 기본값: 시계는 에포크 이전을 돌려주지 않는다
+    let since = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default(); // 기본값: 시계는 에포크 이전을 돌려주지 않는다
     let millis_total = since.as_millis();
     let days = (millis_total / 86_400_000) as i64;
     let millis_day = (millis_total % 86_400_000) as u32;
@@ -145,10 +147,7 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
 /// 페이지의 `host.performance` 요청. `on` 은 트레이스를 켜고 사이드카 플래그를 쓰며,
 /// `off` 는 끄고 플래그를 지우고, `line` 은 페이지 이벤트 줄을 중계한다. `line` 은
 /// 트레이스가 켜져 있을 때만 받는다 — 꺼진 트레이스에 파일을 만들지 않는다.
-pub fn command(
-    config: &Path,
-    request: serde_json::Value,
-) -> Result<serde_json::Value, String> {
+pub fn command(config: &Path, request: serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::Value;
     let action = request
         .get("action")
@@ -187,7 +186,9 @@ pub fn enabled(config: &Path) -> bool {
     let Ok(entries) = fs::read_dir(config.join("services")) else {
         return false;
     };
-    entries.flatten().any(|entry| entry.path().join("performance").is_file())
+    entries
+        .flatten()
+        .any(|entry| entry.path().join("performance").is_file())
 }
 
 /// 메모리 샘플러(V5-104). 트레이스가 켜져 있는 동안 5초마다 이 프로세스의 상주
@@ -219,7 +220,10 @@ fn resident_kb(pid: u32) -> u64 {
         .args(["-o", "rss=", "-p", &pid.to_string()])
         .output();
     match output {
-        Ok(out) => String::from_utf8_lossy(&out.stdout).trim().parse().unwrap_or(0), // 기본값: ps 출력이 비었으면 프로세스가 끝났다
+        Ok(out) => String::from_utf8_lossy(&out.stdout)
+            .trim()
+            .parse()
+            .unwrap_or(0), // 기본값: ps 출력이 비었으면 프로세스가 끝났다
         Err(_) => 0,
     }
 }
@@ -234,9 +238,7 @@ fn resident_kb(pid: u32) -> u64 {
 pub fn cleanup_orphan_webkit() {
     let Ok(output) = std::process::Command::new("sh")
         .arg("-c")
-        .arg(
-            r#"ps -axo pid,command | grep 'WebKit\.' | grep -v grep | awk '{print $1}'"#,
-        )
+        .arg(r#"ps -axo pid,command | grep 'WebKit\.' | grep -v grep | awk '{print $1}'"#)
         .output()
     else {
         return;

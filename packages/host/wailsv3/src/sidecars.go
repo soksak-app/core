@@ -91,9 +91,12 @@ type Sidecars struct {
 	// 창의 프로젝트가 바뀐 뒤에도 이미 열린 표면의 요청과 닫힘은 이 root 로 보낸다.
 	roots       map[string]string
 	stopped     bool
-	StopTimeout time.Duration // 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
-	configDir   string
-	nextRequest uint64
+	// unannouncedLoss 는 연결이 끊겼고 아직 소유 표면에 알리지 않은 영속 사이드카다(V5-106).
+	// 끊김을 알린 시작이 이 기록을 소진한다 — 첫 시작은 알림이 없다.
+	unannouncedLoss map[string]bool
+	StopTimeout     time.Duration // 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
+	configDir       string
+	nextRequest     uint64
 }
 
 // NewSidecars 는 스테이징된 프런트엔드 frontend 의 설정 파일로 사이드카를 찾아 채널을 생성한다.
@@ -116,12 +119,13 @@ func NewSidecars(frontend fs.FS, directory, configDirectory string) (*Sidecars, 
 		return nil, err
 	}
 	c := &Sidecars{
-		declared:    map[string]string{},
-		persistent:  map[string]bool{},
-		running:     map[string]*sidecar{},
-		owners:      map[string]SidecarOwner{},
-		roots:       map[string]string{},
-		StopTimeout: 5 * time.Second,
+		declared:        map[string]string{},
+		persistent:      map[string]bool{},
+		running:         map[string]*sidecar{},
+		owners:          map[string]SidecarOwner{},
+		roots:           map[string]string{},
+		unannouncedLoss: map[string]bool{},
+		StopTimeout:     5 * time.Second,
 	}
 	configDirectoryProvided := strings.TrimSpace(configDirectory) != ""
 	if configDirectoryProvided {
@@ -201,6 +205,14 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 	}
 	line = append(line, '\n')
 
+	// 이 전송이 끊김 뒤의 첫 시작이면 잠금 해제 뒤에 연결 알림을 보낸다(V5-106).
+	// 알림은 소유자 그림 재구성을 되부르므로 뮤텍스 안에서 실행할 수 없다.
+	var reconnected bool
+	defer func() {
+		if reconnected {
+			c.notifyConnection(name, nil)
+		}
+	}()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.stopped {
@@ -212,10 +224,14 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 	if other, ok := c.owners[surface]; ok && other != owner {
 		return fmt.Errorf("surface %s belongs to another window", surface)
 	}
-	process, err := c.process(name)
-	if err != nil {
-		return err
+	if _, running := c.running[name]; !running {
+		if _, err := c.process(name); err != nil {
+			return err
+		}
+		reconnected = c.unannouncedLoss[name]
+		delete(c.unannouncedLoss, name)
 	}
+	process := c.running[name]
 	c.owners[surface] = owner
 	if _, ok := c.roots[surface]; !ok {
 		c.roots[surface] = root
@@ -940,6 +956,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		}
 	}
 	process.conn.Close()
+	wasCurrent := false
 	c.mu.Lock()
 	waiters := make([]chan error, 0, len(process.closeWaiters))
 	for request, waiter := range process.closeWaiters {
@@ -948,12 +965,88 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	}
 	if c.running[process.name] == process {
 		delete(c.running, process.name)
+		c.unannouncedLoss[process.name] = true
+		wasCurrent = true
 	}
 	c.mu.Unlock()
 	for _, waiter := range waiters {
 		waiter <- errors.New("persistent service disconnected before close-owner ack")
 	}
 	close(process.exited)
+	// 연결이 끊겼다. 다음 전송을 기다리지 않고 즉시 다시 맺는다 — 서비스가 살아 있으면
+	// 다시 붙고, 죽었으면 processPersistent 의 낡은 endpoint 정리가 재스폰한다(V5-106).
+	if wasCurrent {
+		c.revivePersistent(process.name)
+	}
+}
+
+// revivePersistent 는 끊긴 영속 연결을 다시 맺고 결과를 소유 표면에 알린다(V5-106). 이미
+// 다른 경로가 다시 시작했거나 종료 중이면 아무 일도 하지 않는다. 한 번의 연결 끊김에 한 번만
+// 시도한다 — 실패는 알림으로 보고하고, 다음 전송이 같은 경로를 다시 지나간다.
+func (c *Sidecars) revivePersistent(name string) {
+	var failure error
+	announced := false
+	func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.stopped {
+			return
+		}
+		if _, running := c.running[name]; running {
+			return
+		}
+		if _, err := c.process(name); err != nil {
+			failure = err
+			return
+		}
+		announced = c.unannouncedLoss[name]
+		delete(c.unannouncedLoss, name)
+	}()
+	switch {
+	case failure != nil:
+		// 시작에 실패했다 — 끊김 기록은 남겨 다음 시작이 알린다.
+		log.Printf("sidecar %s: connection lost; restart failed: %v", name, failure)
+		c.notifyConnection(name, failure)
+	case announced:
+		// 다른 경로(전송)가 이미 다시 시작했으면 알림도 그 호출이 보냈다.
+		log.Printf("sidecar %s: connection lost; restarted", name)
+		c.notifyConnection(name, nil)
+	}
+}
+
+// notifyConnection 은 다시 맺긴 영속 연결을 소유 표면에 알린다(V5-106). 창은 그 사이드카의
+// 그림 configure 를 다시 보내고(SidecarReconnected), 표면은 연결 이벤트를 받아 자기 세션을
+// 다시 연다. 시작에 실패했으면 연결 끊김과 그 까닭을 알린다.
+func (c *Sidecars) notifyConnection(name string, failure error) {
+	type ownerSurface struct {
+		surface string
+		owner   SidecarOwner
+	}
+	c.mu.Lock()
+	entries := make([]ownerSurface, 0, len(c.owners))
+	for surface, owner := range c.owners {
+		entries = append(entries, ownerSurface{surface, owner})
+	}
+	c.mu.Unlock()
+	body := map[string]any{"event": "connection", "connected": failure == nil}
+	if failure != nil {
+		body["reason"] = failure.Error()
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		log.Printf("sidecar %s: connection notice encoding: %v", name, err)
+		return
+	}
+	reconfigured := map[SidecarOwner]bool{}
+	for _, item := range entries {
+		if failure == nil && !reconfigured[item.owner] {
+			reconfigured[item.owner] = true
+			if window, ok := item.owner.(interface{ SidecarReconnected(sidecar string) }); ok {
+				window.SidecarReconnected(name)
+			}
+		}
+		item.owner.Emit("sidecar-message", SidecarMessage{Sidecar: name, Surface: item.surface, Body: raw})
+	}
 }
 
 // tryHandleImageEnvelope 은 이벤트가 이미지 봉투인지 확인하고 처리한다. 봉투면 true 를 반환한다.

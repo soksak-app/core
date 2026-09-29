@@ -1095,7 +1095,28 @@ function syncBackgroundSessions() {
     if (!port) throw new Error(`background sidecar unavailable: ${descriptor.sidecar}`);
     const state = { stop: null };
     backgroundSessions.set(tab.id, state);
+    // manifest가 연산을 명시한다. 사이드카 전송은 기존 wire 필드 `op`를 유지하며
+    // 이 위치가 유일한 프로토콜 변환 지점이다.
+    // background.settings 가 선언한 요청 필드에 그 플러그인 설정의 현재 값을 넣는다.
+    const open = () => {
+      const values = pluginSettings(tab.plugin);
+      // 기본값: background.settings 는 선택 필드이며 없으면 설정 값을 넣지 않는다(docs/spec/plugins.md).
+      const fields = Object.fromEntries(Object.entries(descriptor.settings ?? {}).map(([field, setting]) => [field, values[setting]]));
+      return port.send(tab.id, { ...fields, operation: descriptor.operation });
+    };
     Promise.resolve(port.on(tab.id, (body) => {
+      // 영속 사이드카의 연결이 다시 맺히면 백그라운드 세션도 다시 연다 — 재스폰된
+      // 서비스에는 그 세션이 없다(V5-106). 실패 알림은 세션 오류로 남긴다.
+      if (body?.event === "connection") {
+        if (body.connected === true) {
+          open().catch((error) => {
+            report(`background session ${tab.id} reopen failed: ${error.message}`);
+          });
+        } else {
+          report(`background session ${tab.id}: sidecar connection failed${typeof body.reason === "string" ? `: ${body.reason}` : ""}`);
+        }
+        return;
+      }
       if (body?.error || body?.body?.error) {
         const reply = body.error ? body : body.body;
         report(`background session ${tab.id}: ${reply.error}${typeof reply.reason === "string" ? `: ${reply.reason}` : ""}`);
@@ -1103,13 +1124,7 @@ function syncBackgroundSessions() {
     })).then((stop) => { state.stop = stop; }, (error) => {
       report(`background session ${tab.id} listener failed: ${error.message}`);
     });
-    // manifest가 연산을 명시한다. 사이드카 전송은 기존 wire 필드 `op`를 유지하며
-    // 이 위치가 유일한 프로토콜 변환 지점이다.
-    // background.settings 가 선언한 요청 필드에 그 플러그인 설정의 현재 값을 넣는다.
-    const values = pluginSettings(tab.plugin);
-    // 기본값: background.settings 는 선택 필드이며 없으면 설정 값을 넣지 않는다(docs/spec/plugins.md).
-    const fields = Object.fromEntries(Object.entries(descriptor.settings ?? {}).map(([field, setting]) => [field, values[setting]]));
-    port.send(tab.id, { ...fields, operation: descriptor.operation }).catch((error) => {
+    open().catch((error) => {
       backgroundSessions.delete(tab.id);
       report(`background session ${tab.id} open failed: ${error.message}`);
     });

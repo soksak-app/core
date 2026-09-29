@@ -46,14 +46,19 @@ fn raster_facts(platform: &dyn platform::Platform, handle: platform::Handle) -> 
     platform.image_facts(handle).unwrap_or_else(|error| error)
 }
 
-/// 표면 복귀나 바깥 크기 변경은 DOM 여백이 같아도 실제 네이티브 래스터를 갱신해야 한다.
-pub(crate) fn refresh_image_rasters(window: &Window) -> Result<(), String> {
+/// 보이는 영역의 래스터를 측정해 다시 보낼 configure 를 모은다. selection 이 대상을 고른다.
+fn collect_raster_configurations(
+    window: &Window,
+    selection: impl Fn(&crate::images::Images) -> Vec<(crate::images::Key, platform::Handle)>
+        + Send
+        + 'static,
+) -> Result<Vec<(crate::images::Key, crate::images::Configure)>, String> {
     let data = window_data(window)?;
-    let configurations = exposure::on_main(window, move || {
+    exposure::on_main(window, move || {
         let platform = platform::current()?;
         let mut configurations = Vec::new();
         let result = (|| -> Result<(), String> {
-            for (key, handle) in data.images.visible() {
+            for (key, handle) in selection(&data.images) {
                 // 아직 배치되지 않은 표면의 영역은 래스터 크기가 없다. 표면을 배치하는 다음 준비에서 갱신한다.
                 if !platform.image_surface_placed(handle)? {
                     continue;
@@ -82,7 +87,23 @@ pub(crate) fn refresh_image_rasters(window: &Window) -> Result<(), String> {
             return Err(error);
         }
         Ok(configurations)
-    })?;
+    })
+}
+
+/// 표면 복귀나 바깥 크기 변경은 DOM 여백이 같아도 실제 네이티브 래스터를 갱신해야 한다.
+pub(crate) fn refresh_image_rasters(window: &Window) -> Result<(), String> {
+    let configurations = collect_raster_configurations(window, |images| images.visible())?;
+    send_image_configurations(window, configurations)
+}
+
+/// 영속 사이드카의 연결이 다시 맺히면 그 사이드카의 그림 configure 를 다시 보낸다(V5-106).
+/// 새 연결의 서비스는 그림 상태가 없고, 크기가 같아도 configure 상태는 연결과 함께
+/// 죽었으므로([Images::invalidate_sidecar]) 같은 크기의 재전송이 일어난다.
+pub(crate) fn refresh_sidecar_rasters(window: &Window, sidecar: &str) -> Result<(), String> {
+    window_data(window)?.images.invalidate_sidecar(sidecar);
+    let sidecar = sidecar.to_string();
+    let configurations =
+        collect_raster_configurations(window, move |images| images.visible_for_sidecar(&sidecar))?;
     send_image_configurations(window, configurations)
 }
 

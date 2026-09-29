@@ -606,6 +606,10 @@ impl PersistentStream for PersistentUnixStream {
             .shutdown(std::net::Shutdown::Both)
             .map_err(|error| error.to_string())
     }
+
+    fn set_read_deadline(&self, timeout: Option<std::time::Duration>) -> Result<(), String> {
+        self.0.set_read_timeout(timeout).map_err(|e| e.to_string())
+    }
 }
 
 fn connect_service(address: &str) -> Result<Box<dyn PersistentStream>, String> {

@@ -993,3 +993,47 @@ func TestMissingNativeSurfaceRequestsAFreshRasterConfiguration(t *testing.T) {
 		t.Fatal("the failed raster is reported as presented")
 	}
 }
+
+// contract: images.invalidate.sidecar-connection-loss-resends-configure
+func TestInvalidatingASidecarResendsItsConfigureAndLeavesOtherSidecars(t *testing.T) {
+	images := host.NewImages()
+	terminal := host.ImageKey{Surface: "tab-1", Name: "view"}
+	browser := host.ImageKey{Surface: "tab-2", Name: "view"}
+	var a, b int
+	if err := images.Reserve(terminal, &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}); err != nil {
+		t.Fatalf("reserve terminal failed: %v", err)
+	}
+	images.Set(terminal, unsafe.Pointer(&a))
+	if err := images.Reserve(browser, &host.ImageOwner{SidecarName: "sidecar-b", SidecarOwner: newFakeImageOwner("")}); err != nil {
+		t.Fatalf("reserve browser failed: %v", err)
+	}
+	images.Set(browser, unsafe.Pointer(&b))
+	configureImage(t, images, terminal, 800, 600, 2.0)
+	configureImage(t, images, browser, 800, 600, 2.0)
+	// 같은 크기의 재구성은 전송하지 않는다 — 상태가 이미 구성되었기 때문이다.
+	if configuration, err := images.ConfigureRaster(terminal, 800, 600, 2.0, true); err != nil || configuration != nil {
+		t.Fatalf("same-size reconfigure sent again: %v %v", configuration, err)
+	}
+
+	// 연결이 끊긴 사이드카의 configure 상태만 무효화한다(V5-106).
+	if invalidated := images.InvalidateSidecar("sidecar-a"); invalidated != 1 {
+		t.Fatalf("exactly sidecar-a's images are invalidated, got %d", invalidated)
+	}
+	if invalidated := images.InvalidateSidecar("sidecar-c"); invalidated != 0 {
+		t.Fatalf("an unknown sidecar invalidates nothing, got %d", invalidated)
+	}
+
+	// 무효화된 사이드카의 같은 크기 구성은 다시 전송된다 — 새 연결의 서비스는 그림 상태가 없다.
+	resent, err := images.ConfigureRaster(terminal, 800, 600, 2.0, true)
+	if err != nil || resent == nil {
+		t.Fatalf("the invalidated sidecar's configure was not resent at the same size: %v %v", resent, err)
+	}
+	if resent.Sidecar != "sidecar-a" {
+		t.Fatalf("the resent configure belongs to %q", resent.Sidecar)
+	}
+
+	// 다른 사이드카의 영역은 무효화되지 않았으므로 같은 크기 재구성은 여전히 전송하지 않는다.
+	if configuration, err := images.ConfigureRaster(browser, 800, 600, 2.0, true); err != nil || configuration != nil {
+		t.Fatalf("the other sidecar's same-size reconfigure sent again: %v %v", configuration, err)
+	}
+}

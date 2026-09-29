@@ -340,11 +340,26 @@ impl Images {
 
     /// 영역 자체와 바깥 표면이 모두 표시된 그림의 핸들을 반환한다.
     pub fn visible(&self) -> Vec<(Key, Handle)> {
+        self.visible_where(|_, _| true)
+    }
+
+    /// 그 사이드카가 그리는 보이는 영역. 영속 사이드카의 연결이 다시 맺혔을 때 그
+    /// 사이드카의 configure 를 다시 보내는 데 쓴다(V5-106).
+    pub fn visible_for_sidecar(&self, sidecar: &str) -> Vec<(Key, Handle)> {
+        self.visible_where(|inner, key| {
+            inner.sidecars.get(key).map(String::as_str) == Some(sidecar)
+        })
+    }
+
+    fn visible_where(&self, belongs: impl Fn(&Inner, &Key) -> bool) -> Vec<(Key, Handle)> {
         let inner = self.lock();
         inner
             .states
             .iter()
             .filter_map(|(key, state)| {
+                if !belongs(&inner, key) {
+                    return None;
+                }
                 let outer = inner
                     .surface_visibility
                     .get(&key.0)
@@ -356,6 +371,34 @@ impl Images {
                 (state.visible && outer && handle != 0).then(|| (key.clone(), handle))
             })
             .collect()
+    }
+
+    /// 그 사이드카의 연결이 끊겼다고 표시한다(V5-106). configure 를 받아든 연결이 죽었으므로
+    /// configure 상태도 함께 죽는다 — 같은 크기라도 다시 보내야 새 연결의 서비스가 그림
+    /// 상태를 만든다. 표시 순서 기록도 지운다 — 새 연결의 프레임은 순번을 처음부터 센다.
+    pub fn invalidate_sidecar(&self, sidecar: &str) -> usize {
+        let mut inner = self.lock();
+        let mut invalidated = 0;
+        let keys: Vec<Key> = inner
+            .sidecars
+            .iter()
+            .filter(|(_, owner)| owner.as_str() == sidecar)
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in keys {
+            let Some(state) = inner.states.get_mut(&key) else {
+                continue;
+            };
+            state.configured = false;
+            state.last_sequence = 0;
+            state.presented_sequence = 0;
+            state.presentation_error = None;
+            invalidated += 1;
+        }
+        if invalidated > 0 {
+            self.changed();
+        }
+        invalidated
     }
 
     /// 적용된 네이티브 래스터가 달라졌을 때 리비전을 올리고 보낼 설정을 반환한다.

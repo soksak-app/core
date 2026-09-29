@@ -833,3 +833,55 @@ fn missing_native_surface_requests_a_fresh_raster_configuration() {
     assert_eq!(next.raster, configured.raster);
     assert!(!images.current_presented());
 }
+
+// contract: images.invalidate.sidecar-connection-loss-resends-configure
+#[test]
+fn invalidating_a_sidecar_resends_its_configure_and_leaves_other_sidecars() {
+    let images = Images::default();
+    let terminal: Key = ("tab-1".to_string(), "view".to_string());
+    let browser: Key = ("tab-2".to_string(), "view".to_string());
+    images
+        .reserve(&terminal, "owner-a", "sidecar-a")
+        .expect("reserve terminal");
+    images.set(&terminal, 100);
+    images
+        .reserve(&browser, "owner-b", "sidecar-b")
+        .expect("reserve browser");
+    images.set(&browser, 200);
+    images
+        .configure_raster(&terminal, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    images
+        .configure_raster(&browser, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    // 같은 크기의 재구성은 전송하지 않는다 — 상태가 이미 구성되었기 때문이다.
+    assert!(images
+        .configure_raster(&terminal, 800, 600, 2.0, true)
+        .unwrap()
+        .is_none());
+
+    // 연결이 끊긴 사이드카의 configure 상태만 무효화한다(V5-106).
+    let invalidated = images.invalidate_sidecar("sidecar-a");
+    assert_eq!(invalidated, 1, "exactly sidecar-a's images are invalidated");
+    assert_eq!(
+        images.invalidate_sidecar("sidecar-c"),
+        0,
+        "an unknown sidecar invalidates nothing"
+    );
+
+    // 무효화된 사이드카의 같은 크기 구성은 다시 전송된다 — 새 연결의 서비스는 그림 상태가 없다.
+    let resent = images
+        .configure_raster(&terminal, 800, 600, 2.0, true)
+        .unwrap()
+        .expect("the invalidated sidecar's configure is resent at the same size");
+    assert_eq!(resent.name, "view");
+    assert_eq!(resent.sidecar, "sidecar-a");
+
+    // 다른 사이드카의 영역은 무효화되지 않았으므로 같은 크기 재구성은 여전히 전송하지 않는다.
+    assert!(images
+        .configure_raster(&browser, 800, 600, 2.0, true)
+        .unwrap()
+        .is_none());
+}
