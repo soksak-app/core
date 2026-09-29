@@ -165,14 +165,12 @@ TAURI_RELEASE = $(TAURI_RELEASE_BUNDLE)/Contents/MacOS/soksak-tauriv2
 WAILS_DEBUG   = $(WAILS_DEBUG_BUNDLE)/Contents/MacOS/soksak-wailsv3
 WAILS_RELEASE = $(WAILS_RELEASE_BUNDLE)/Contents/MacOS/soksak-wailsv3
 
-# 번들의 Info.plist 와 Dock 아이콘을 쓴다. 첫 인자는 번들, 둘째 인자는 애플리케이션이다. 현지화 선언(ko·en)은
-# 시스템이 관리하는 메뉴 제목이 같은 언어를 따르게 하고 .lproj 의 InfoPlist.strings 이 앱 이름을
-# 현지화해 About·Hide·Quit 의 앱 이름도 시스템 언어로 나오게 한다. 모든 번들 자원과 같이 소스에서 복사한다.
-bundle-info = mkdir -p $(1)/Contents/MacOS $(1)/Contents/Resources/ko.lproj $(1)/Contents/Resources/en.lproj \
+# 번들의 Info.plist 와 Dock 아이콘을 쓴다. 첫 인자는 번들, 둘째 인자는 애플리케이션이다. 앱 이름은
+# Info.plist 의 CFBundleDisplayName 이 정한다(지원 언어는 같은 plist 의 CFBundleLocalizations 선언).
+# 이름을 언어마다 다르게 주게 되는 날에는 그 언어의 .lproj/InfoPlist.strings 를 그때 다시 둔다.
+bundle-info = mkdir -p $(1)/Contents/MacOS $(1)/Contents/Resources \
 	&& cp apps/$(2)/platform/darwin/Info.plist $(1)/Contents/Info.plist \
-	&& cp apps/$(2)/platform/darwin/AppIcon.icns $(1)/Contents/Resources/AppIcon.icns \
-	&& cp apps/$(2)/platform/darwin/ko.lproj/InfoPlist.strings $(1)/Contents/Resources/ko.lproj/InfoPlist.strings \
-	&& cp apps/$(2)/platform/darwin/en.lproj/InfoPlist.strings $(1)/Contents/Resources/en.lproj/InfoPlist.strings
+	&& cp apps/$(2)/platform/darwin/AppIcon.icns $(1)/Contents/Resources/AppIcon.icns
 # 번들 안의 실행 파일과 Info.plist 를 ad hoc 서명으로 봉인하고 LaunchServices 에 다시 등록한다. Dock 은
 # 등록된 번들 정보로 아이콘을 보이며, 번들 안의 파일만 바뀌면 LaunchServices 는 등록을 새로 읽지 않는다.
 LSREGISTER = /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
