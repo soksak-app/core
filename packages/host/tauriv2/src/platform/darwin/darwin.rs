@@ -503,6 +503,10 @@ impl Platform for Darwin {
     fn dock_items(&self) -> Result<Value, String> {
         dock::items()
     }
+    fn preferred_language(&self) -> Result<String, String> {
+        dock::preferred_language()
+    }
+
     fn menu_items(&self) -> Result<Value, String> {
         dock::menu()
     }

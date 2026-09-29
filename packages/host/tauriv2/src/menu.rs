@@ -120,31 +120,18 @@ pub fn text_command(id: &str) -> bool {
 
 /// 페이지가 설정 언어를 보내기 전의 초기 메뉴 언어. 시스템 선호 언어의 주 태그를 표의
 /// 언어에서 찾고 표에 없으면 기본 언어를 쓴다(docs/spec/host-contract.md 의 Application menu).
-#[cfg(target_os = "macos")]
+/// 시스템 언어 조사는 플랫폼 계층이 제공한다.
 pub fn initial_language() -> String {
-    extern "C" {
-        fn sp_preferred_language() -> *mut std::ffi::c_char;
-    }
-    let tag = unsafe {
-        let value = sp_preferred_language();
-        if value.is_null() {
-            return DEFAULT_LANGUAGE.to_string();
-        }
-        // native/darwin 이 strdup 으로 만든 문자열이므로 해제까지 여기서 맡는다.
-        CString::from_raw(value).to_string_lossy().into_owned()
-    };
+    // 기본값: 시스템 언어 조사가 없는 플랫폼은 기본 언어가 초기 언어다.
+    let tag = crate::platform::current()
+        .and_then(|platform| platform.preferred_language())
+        // 기본값: 시스템 언어 조사가 없는 플랫폼은 빈 태그가 와 표의 기본 언어로 내려간다.
+        .unwrap_or_default();
     if LANGUAGES.iter().any(|(tag_name, _)| *tag_name == tag) {
         tag
     } else {
         DEFAULT_LANGUAGE.to_string()
     }
-}
-
-/// macOS 가 아닌 운영체제에는 시스템 언어 조사가 없다. 그 운영체제의 앱은 설정 단계의 다른
-/// 네이티브 기능이 먼저 실패하므로 기본 언어가 초기 언어다.
-#[cfg(not(target_os = "macos"))]
-pub fn initial_language() -> String {
-    DEFAULT_LANGUAGE.to_string()
 }
 
 /// 메뉴 언어를 바꾼다. 표의 언어가 아니면 명시적인 오류이고 언어가 같으면 메뉴를 다시

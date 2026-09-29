@@ -7,6 +7,21 @@ use serde_json::Value;
 
 use super::window::facts_value;
 
+/// 시스템 선호 언어의 주 태그를 반환한다(window_facts.h 의 sp_preferred_language).
+/// 그 태그가 계약 표의 언어인지는 호출자가 정한다.
+pub fn preferred_language() -> Result<String, String> {
+    extern "C" {
+        fn sp_preferred_language() -> *mut std::ffi::c_char;
+    }
+    let value = unsafe { sp_preferred_language() };
+    if value.is_null() {
+        return Ok(String::new());
+    }
+    // native/darwin 이 strdup 으로 만든 문자열이므로 해제까지 여기서 맡는다.
+    let tag = unsafe { std::ffi::CString::from_raw(value) };
+    Ok(tag.to_string_lossy().into_owned())
+}
+
 /// Dock 메뉴에 새 창 항목을 설치한다.
 pub fn install(new_window: Box<dyn Fn()>) -> Result<(), String> {
     extern "C" {
