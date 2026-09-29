@@ -30,8 +30,13 @@ The left navigation lists three sections in this order. Every section shows the 
 | 사이드바 크기 | the width settings of [layout values](#layout-values) |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
+| 진단 | 성능 트레이스 `diagnostics.performance` |
 
 사이드바 위치 is one setting for every plugin; its default is `inset`, and its control lists 카드 안 first. `flow` shows the rail beside the focused card, `pin` keeps it where it stood, `inset` shows it inside every card, and `off` hides it ([example model](example-model.md)). No plugin setting appears in 일반.
+### 진단
+
+`diagnostics.performance` is the permanent performance trace ([performance trace](performance-trace.md)). It is a boolean, default false, set through the settings file rather than a settings-window control. While it is false no layer performs any performance logging work — no file is created, no formatting runs. Setting it true makes every layer append events to `logs/performance.ndjson` under the configuration directory, and setting it back false stops the logging at the next event boundary; the file and its rotation belong to the trace, not to the setting, so an old log survives a restart with the flag off.
+
 
 ### 플러그인
 

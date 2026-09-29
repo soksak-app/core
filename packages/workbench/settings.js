@@ -144,6 +144,11 @@ export const defaults = {
   /* 애플리케이션 메뉴의 언어. auto = 시스템 언어(지원하지 않으면 en). */
   language: "auto",
 
+  /* 성능 트레이스(V5-104). 켜면 모든 계층이 <config-dir>/logs/performance.ndjson 에
+     성능 줄을 기록하고 꺼지면 어떤 파일 작업도 하지 않는다. 진단 빌드 전용이 아니라
+     모든 빌드에 상시 있는 장치다(docs/spec/settings.md). */
+  "diagnostics.performance": false,
+
   /* 프로젝트 탭의 위치. top = 크롬 행, left = 왼쪽 세로 레일. */
   projectTabs: "top",
   /* 사이드바 위치. inset = 카드 안(기본값), flow = 포커스 카드 옆 열, pin = 고정 열, off = 표시하지 않음. */
@@ -233,6 +238,9 @@ function validatePluginValue(key, value) {
   }
   if (key === "language" && value !== "auto" && !MENU_LANGUAGES.some((language) => language.id === value)) {
     throw new Error(`Invalid setting language: ${JSON.stringify(value)}`);
+  }
+  if (key === "diagnostics.performance" && typeof value !== "boolean") {
+    throw new Error(`Invalid setting diagnostics.performance: ${JSON.stringify(value)} is not a boolean`);
   }
   const range = LAYOUT_RANGES[key];
   if (range && (!Number.isInteger(value) || value < range[0] || value > range[1])) {

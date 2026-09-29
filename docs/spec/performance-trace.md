@@ -1,0 +1,26 @@
+# Performance trace
+
+[한국어](performance-trace.ko.md)
+
+The performance trace is a permanent instrument, present in every build, that records what the application spends time and memory on. It is not a diagnostics-build feature and is never removed after use. The switch is the declared setting `diagnostics.performance` ([settings](settings.md)); while it is false no layer does any logging work — no file is created and no formatting runs.
+
+## Output
+
+Events append to `logs/performance.ndjson` under the configuration directory. Every line is one event object with at least `ts` (ISO-8601 with milliseconds), `pid` (the writing process), `layer` (`page`, `host`, `vt-core`, `files`, `shell`, `sampler`), and `event`; further fields depend on the event. One file carries every layer, so one timeline reads the whole application. The file rotates at 10 MB to `performance.ndjson.1`, keeping one previous generation; rotation and the file itself belong to the trace, so an old log survives a restart with the flag off. A `session_start` event marks each process start and carries the role of the writer.
+
+## Producers
+
+Every layer is a producer; the trace is not defined by one of them.
+
+- **Page** — every `core.*` and plugin command with name, duration, and result class; exposure watch notification volume; layout queue waits and supersessions; grid renders; card and tab operations; surface mount lifecycle; compositor publishes and clip updates; screen-event handling time; settings, project, and reload markers; JS heap readings; user action markers with values (a window resize carries its size, a tab switch its ids). The page owns no filesystem, so its lines relay through a host command that appends them.
+- **Host** (both hosts as a parity pair) — every endpoint method with name, duration, and result class; window events with values (size, move, focus, occlusion, scale); surface lifecycle with geometry (created, destroyed, placed, visibility); document, image, and composition operations including presentation barrier wait durations; protocol rejections with the offending payload values; a process registry naming every spawned pid and its role; sidecar spawn and exit.
+- **Sidecars** (`vt-core`, `files`, `shell`) — request handling with operation, duration, and result. `vt-core` adds frame events with the reason the frame was drawn (`output`, `blink`, `resize`, `metrics`, `selection`), the draw, transfer, and consumed-wait timings as separate fields, and the raster size; PTY read byte counts and PTY resizes with the grid before and after; and session lifecycle.
+- **Sampler** — every five seconds, the resident size of every process the registry names, so memory readings attribute themselves.
+
+## Flag propagation
+
+The page and each host read `diagnostics.performance` from the settings they already load. A host that enables its own logging also writes a `performance` flag file into each sidecar's service directory; a sidecar checks the flag at start and on each session open, so the protocol between host and sidecar does not change.
+
+## Reading
+
+The file is NDJSON, so field tools answer questions directly: the frame reasons of an idle terminal (`select(.event=="frame") | group_by(.reason)`), the raster values a drag through collapse produced (`select(.event=="configure")`), whether tab switching recreated webviews (`select(.event=="surface")`), and what memory did around a user action (`select(.event=="action")`).

@@ -11,3 +11,26 @@ test('project values override common values and opening mode remains common-only
   assert.equal(effectiveSettings(defaults,common,overrides).gap,8);
   assert.equal(effectiveSettings(defaults,{},{}).projectOpening,'windows');
 });
+
+test('the performance trace flag is a declared boolean defaulting to false', async () => {
+  const realDocument = globalThis.document;
+  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const memory = { common: {}, projects: [] };
+  const { connectSettings, set: change, value } = await import('../settings.js?test=performance-flag');
+  try {
+    await connectSettings({
+      snapshot: async () => structuredClone(memory),
+      settings: async (id, values) => { memory.common = { ...memory.common, ...values }; },
+      onChange: () => () => {},
+    });
+    // 기본은 꺼짐 — 꺼진 상태가 성능 기록의 정상이다.
+    assert.equal(value('diagnostics.performance'), false);
+    await change({ 'diagnostics.performance': true }, 'common');
+    assert.equal(memory.common['diagnostics.performance'], true);
+    assert.equal(value('diagnostics.performance'), true);
+    assert.throws(() => change({ 'diagnostics.performance': 'yes' }, 'common'),
+      /Invalid setting diagnostics.performance/);
+  } finally {
+    globalThis.document = realDocument;
+  }
+});
