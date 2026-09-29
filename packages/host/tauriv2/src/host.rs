@@ -108,6 +108,9 @@ fn run_menu_command(app: &tauri::AppHandle, command: &str) -> Result<(), String>
 /// 문서보다 먼저 실행하는 스크립트이며, 애플리케이션이 프론트엔드의 `background.js` 를
 /// 포함해 전달한다.
 pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
+    // 이전 실행이 남긴 고아 WebKit XPC 를 죽인다(V5-105). 시작 시 WebKit 을 만들기
+    // 전이므로 소켓 없는 WebKit 은 모두 이전 실행의 잔재다.
+    crate::performance::cleanup_orphan_webkit();
     // 창 확대 애니메이션은 창 프레임만 움직이고 웹 문서는 그 뒤에 따라온다. AppKit 이 기본값을
     // 읽기 전에 그 길이를 줄인다.
     if let Ok(platform) = platform::current() {
@@ -133,7 +136,10 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
                         }
                     }
                 }
-                quit.exit(0);
+                // 종료 신호는 강제 종료다. quit.exit(0) 은 ExitRequested 를 거쳐 준비된 창의
+                // 저장을 기다리므로 페이지가 응답하지 않으면 영원히 대기한다. 종료 신호에서는
+                // 프로세스를 즉시 끝낸다 — 저장 없이 끝나는 것은 이미 두 번째 신호의 설계다.
+                std::process::exit(0);
             }))?;
             let directory = config_directory(app)?;
             exposure::start(app, &directory)?;

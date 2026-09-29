@@ -13,6 +13,7 @@ package host
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -206,4 +207,34 @@ func residentKB(pid int) uint64 {
 
 func performanceNow() string {
 	return time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00")
+}
+
+// cleanupOrphanWebKit 은 이전 실행이 남긴 고아 WebKit XPC 프로세스를 죽인다(V5-105).
+// WebKit XPC(WebContent·GPU·Networking)는 클라이언트가 죽어도 저절로 종료되지 않을 수 있다.
+// 연결이 끊긴 XPC 는 unix 소켓이 없다. 시작 시 소켓이 없는 WebKit XPC 를 죽이면 이전
+// 실행의 잔재가 사라진다. 살아 있는 다른 앱의 WebKit 은 소켓이 있어 죽지 않는다.
+// 이 정리는 멱등이다: 고아가 없으면 아무 일도 일어나지 않는다.
+func cleanupOrphanWebKit() {
+	out, err := exec.Command("sh", "-c",
+		`ps -axo pid,command | grep 'WebKit\.' | grep -v grep | awk '{print $1}'`).Output()
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		pid, err := strconv.Atoi(strings.TrimSpace(line))
+		if err != nil {
+			continue
+		}
+		lsof, err := exec.Command("lsof", "-p", strconv.Itoa(pid)).Output()
+		if err != nil {
+			continue
+		}
+		if strings.Contains(string(lsof), "unix") {
+			continue
+		}
+		log.Printf("performance: killing orphan WebKit XPC process %d", pid)
+		if err := exec.Command("kill", strconv.Itoa(pid)).Run(); err != nil {
+			log.Printf("performance: kill orphan %d: %v", pid, err)
+		}
+	}
 }
