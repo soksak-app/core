@@ -11,7 +11,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -108,6 +112,7 @@ func (h *Host) Performance(request map[string]any) (any, error) {
 		if err := PerformanceLine(target, "host", map[string]any{"event": "trace_on"}); err != nil {
 			return nil, err
 		}
+		performanceSampler(h.configDir)
 		return nil, nil
 	case "off":
 		// 끄는 줄이 마지막이 된다. 실패해도 플래그는 지운다 — 꺼짐이 우선이다.
@@ -169,4 +174,40 @@ func performanceAppend(target string, record map[string]any) error {
 
 func performanceNow() string {
 	return time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00")
+}
+
+// performanceSampler 는 메모리 샘플러(V5-104). 트레이스가 켜져 있는 동안 5초마다
+// 이 프로세스의 상주 크기를 한 줄로 남긴다. 사이드카 pid 는 프로세스 등록부 줄에
+// 쌓이므로 로그 소비자가 짝지는다. 꺼지면 대기로 돌아간다.
+func performanceSampler(config string) {
+	if !performanceSamplerOnce.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		for {
+			if !PerformanceEnabled(config) {
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			_ = PerformanceLine(PerformanceTarget(config), "sampler", map[string]any{
+				"event": "memory", "rss_host_kb": residentKB(os.Getpid()),
+			})
+			time.Sleep(5 * time.Second)
+		}
+	}()
+}
+
+var performanceSamplerOnce atomic.Bool
+
+// residentKB 는 pid 의 상주 크기(KB). 실패는 0 — 프로세스가 끝났을 수 있다.
+func residentKB(pid int) uint64 {
+	out, err := exec.Command("ps", "-o", "rss=", "-p", strconv.Itoa(pid)).Output()
+	if err != nil {
+		return 0
+	}
+	value, err := strconv.ParseUint(strings.TrimSpace(string(out)), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return value
 }

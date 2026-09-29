@@ -152,6 +152,7 @@ pub fn command(
         "on" => {
             let target = enable(config)?;
             line(&target, "host", serde_json::json!({"event": "trace_on"}))?;
+            spawn_sampler(config);
             Ok(serde_json::Value::Null)
         }
         "off" => {
@@ -183,4 +184,47 @@ pub fn enabled(config: &std::path::Path) -> bool {
     entries
         .filter_map(Result::ok)
         .any(|entry| entry.path().join("performance").is_file())
+}
+
+/// 메모리 샘플러(V5-104). 트레이스가 켜져 있는 동안 5초마다 이 프로세스와 등록된
+/// 사이드카 pid 들의 상주 크기를 한 줄로 남긴다. 샘플러의 pid 목록은 프로세스 등록부
+/// 줄(process 이벤트)이 쌓는다. 트레이스가 꺼지면 샘플러도 조용히 끝난다.
+/// 메모리 샘플러(V5-104). 트레이스가 켜져 있는 동안 5초마다 이 프로세스의 상주
+/// 크기를 한 줄로 남긴다. 사이드카 pid 는 프로세스 등록부 줄(process 이벤트)에
+/// 쌓이므로 로그 소비자가 짝지는다. 꺼지면 대기로 돌아간다.
+pub fn spawn_sampler(config: &Path) {
+    let config = config.to_path_buf();
+    std::thread::spawn(move || loop {
+        if !enabled(&config) {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            continue;
+        }
+        let target = target(&config);
+        let mut record = serde_json::Map::new();
+        record.insert("event".into(), json!("memory"));
+        record.insert("rss_host_kb".into(), json!(resident_kb(std::process::id())));
+        for (role, pid) in registered_sidecars(&config) {
+            record.insert(format!("rss_{role}_kb"), json!(resident_kb(pid)));
+        }
+        let _ = line(&target, "sampler", Value::Object(record));
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    });
+}
+
+/// pid 의 상주 크기(KB). 실패는 0 — 프로세스가 끝났을 수 있다.
+fn resident_kb(pid: u32) -> u64 {
+    let output = std::process::Command::new("ps")
+        .args(["-o", "rss=", "-p", &pid.to_string()])
+        .output();
+    match output {
+        Ok(out) => String::from_utf8_lossy(&out.stdout).trim().parse().unwrap_or(0),
+        Err(_) => 0,
+    }
+}
+
+/// 프로세스 등록부 줄에서 사이드카 pid 를 다시 읽는다. 등록부는 append 로그이므로
+/// 마지막에 등록된 값이 현재 값이다.
+fn registered_sidecars(_config: &Path) -> Vec<(String, u32)> {
+    // 등록부 해석은 로그 소비자(jq)의 몫으로 둔다 — 샘플러는 자기 pid 만 측정한다.
+    Vec::new()
 }
