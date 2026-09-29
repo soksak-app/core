@@ -771,7 +771,7 @@ impl<O: Owner> Sidecars<O> {
         if let Some(config) = self.config_directory.to_str() {
             let directory = std::path::PathBuf::from(config);
             if crate::performance::enabled(&directory) {
-                let _ = crate::performance::line(
+                crate::performance::line(
                     &crate::performance::target(&directory),
                     "host",
                     serde_json::json!({"event": "process", "role": "sidecar", "name": name,
@@ -913,7 +913,7 @@ impl<O: Owner> Sidecars<O> {
             .map_err(|e| format!("sidecar {name}: create service directory: {e}"))?;
         // 성능 트레이스가 켜져 있으면 나중에 뜨는 사이드카에도 플래그를 쓴다(V5-104).
         if crate::performance::enabled(config) {
-            let _ = crate::performance::write_sidecar_flags(config, &crate::performance::target(config));
+            crate::performance::write_sidecar_flags(config, &crate::performance::target(config));
         }
         current()?
             .secure_service_directory(&service_dir)

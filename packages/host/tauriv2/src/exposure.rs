@@ -1147,7 +1147,7 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
         let barrier_started = std::time::Instant::now();
         let barrier = data.images.wait_current(remaining);
         if crate::performance::enabled(window.state::<crate::workspace::Workspace>().directory()) {
-            let _ = crate::performance::line(
+            crate::performance::line(
                 &crate::performance::target(window.state::<crate::workspace::Workspace>().directory()),
                 "host",
                 serde_json::json!({"event": "barrier", "wait_us": barrier_started.elapsed().as_micros() as u64,
@@ -1518,7 +1518,7 @@ impl Service for Host {
             if let Some(message) = error {
                 fields["error"] = serde_json::Value::String(message);
             }
-            let _ = crate::performance::line(&performance_target, "host", {
+            crate::performance::line(&performance_target, "host", {
                 let mut record = fields;
                 record["event"] = serde_json::Value::String("endpoint".into());
                 record

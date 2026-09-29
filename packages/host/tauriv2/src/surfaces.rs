@@ -605,7 +605,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             {
                 let directory = window.state::<crate::workspace::Workspace>().directory().to_path_buf();
                 if crate::performance::enabled(&directory) {
-                    let _ = crate::performance::line(
+                    crate::performance::line(
                         &crate::performance::target(&directory),
                         "host",
                         serde_json::json!({"event": "surface", "phase": "destroyed", "surface": id}),

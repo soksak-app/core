@@ -1260,7 +1260,7 @@ func (s *Surfaces) presented() (float64, error) {
 		barrierStarted := time.Now()
 		barrierErr := s.images.WaitCurrentError(remaining)
 		if PerformanceEnabled(s.host.configDir) {
-			_ = PerformanceLine(PerformanceTarget(s.host.configDir), "host", map[string]any{
+			PerformanceLine(PerformanceTarget(s.host.configDir), "host", map[string]any{
 				"event": "barrier", "wait_us": time.Since(barrierStarted).Microseconds(),
 				"ok":    barrierErr == nil,
 			})

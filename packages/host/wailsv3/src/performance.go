@@ -5,6 +5,9 @@
 // 대상 경로를 담은 performance 플래그 파일을 쓴다 — 사이드카는 그 파일이 가리키는
 // 대상에 직접 덧붙인다. 끄면 플래그 파일을 지운다. 로그 파일과 로테이션은 설정이 아니라
 // 트레이스의 소유물이므로 끄고 재시작해도 로그는 남는다.
+//
+// 계기는 진단이다: 모든 쓰기 함수는 실패를 조용히 흡수한다. 트레이스가 실패해서
+// 애플리케이션이 실패하는 일이 없어야 하기 때문이다.
 package host
 
 import (
@@ -31,9 +34,7 @@ func PerformanceEnable(config string) (string, error) {
 	if err := os.MkdirAll(filepath.Join(config, "logs"), 0o700); err != nil {
 		return "", fmt.Errorf("create logs directory: %w", err)
 	}
-	if err := performanceWriteFlags(config, target); err != nil {
-		return "", err
-	}
+	performanceWriteFlags(config, target)
 	return target, nil
 }
 
@@ -70,10 +71,11 @@ func PerformanceEnabled(config string) bool {
 }
 
 // PerformanceLine 은 한 계층의 줄을 대상에 남긴다. fields 는 문자열 event 를 담아야 한다.
-func PerformanceLine(target, layer string, fields map[string]any) error {
+// 쓰기 실패는 조용히 흡수한다.
+func PerformanceLine(target, layer string, fields map[string]any) {
 	event, ok := fields["event"].(string)
 	if !ok {
-		return fmt.Errorf("a %s line requires a string event", layer)
+		return
 	}
 	record := map[string]any{
 		"ts":    performanceNow(),
@@ -86,22 +88,23 @@ func PerformanceLine(target, layer string, fields map[string]any) error {
 			record[key] = value
 		}
 	}
-	return performanceAppend(target, record)
+	performanceAppend(target, record)
 }
 
 // PerformanceRelay 는 페이지가 보낸 줄을 중계한다. 객체이고 문자열 event 를 담았을 때만
 // 대상에 덧붙인다. 계층은 호스트가 page 로 못박는다 — 페이지는 이 파일의 소유자가 아니다.
-func PerformanceRelay(target string, record map[string]any) error {
+// 쓰기 실패는 조용히 흡수한다.
+func PerformanceRelay(target string, record map[string]any) {
 	if _, ok := record["event"].(string); !ok {
-		return fmt.Errorf("a relayed line requires a string event")
+		return
 	}
 	record["layer"] = "page"
-	return performanceAppend(target, record)
+	performanceAppend(target, record)
 }
 
 // PerformanceCommand 는 페이지의 host.performance 요청을 처리한다.
 func (h *Host) Performance(request map[string]any) (any, error) {
-	action, _ := request["action"].(string)
+	action, _ := request["action"].(string) // 기본값: action 이 문자열이 아니면 switch 의 default 가 답한다
 	target := PerformanceTarget(h.configDir)
 	switch action {
 	case "on":
@@ -109,24 +112,22 @@ func (h *Host) Performance(request map[string]any) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := PerformanceLine(target, "host", map[string]any{"event": "trace_on"}); err != nil {
-			return nil, err
-		}
+		PerformanceLine(target, "host", map[string]any{"event": "trace_on"})
 		performanceSampler(h.configDir)
 		return nil, nil
 	case "off":
-		// 끄는 줄이 마지막이 된다. 실패해도 플래그는 지운다 — 꺼짐이 우선이다.
-		_ = PerformanceLine(target, "host", map[string]any{"event": "trace_off"})
+		PerformanceLine(target, "host", map[string]any{"event": "trace_off"})
 		return nil, PerformanceDisable(h.configDir)
 	case "line":
-		record, _ := request["line"].(map[string]any)
+		record, _ := request["line"].(map[string]any) // 기본값: line 이 객체가 아니면 nil 로 아래에서 거부한다
 		if record == nil {
 			return nil, fmt.Errorf("line requires the page event object")
 		}
 		if !PerformanceEnabled(h.configDir) {
 			return nil, fmt.Errorf("the performance trace is off")
 		}
-		return nil, PerformanceRelay(target, record)
+		PerformanceRelay(target, record)
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("action must be on, off, or line, not %q", action)
 	}
@@ -136,13 +137,10 @@ func servicesDir(config string) string {
 	return filepath.Join(config, "services")
 }
 
-func performanceWriteFlags(config, target string) error {
+func performanceWriteFlags(config, target string) {
 	entries, err := os.ReadDir(servicesDir(config))
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
+		return
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -150,30 +148,24 @@ func performanceWriteFlags(config, target string) error {
 		}
 		flag := filepath.Join(servicesDir(config), entry.Name(), "performance")
 		if err := os.WriteFile(flag, []byte(target+"\n"), 0o600); err != nil {
-			return fmt.Errorf("write performance flag: %w", err)
+			// 계기는 진단이다: 실패해도 앱이 계속 돈다.
 		}
 	}
-	return nil
 }
 
-func performanceAppend(target string, record map[string]any) error {
+func performanceAppend(target string, record map[string]any) {
 	file, err := os.OpenFile(target, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
-		return fmt.Errorf("open performance log: %w", err)
+		return
 	}
 	defer file.Close()
 	encoded, err := json.Marshal(record)
 	if err != nil {
-		return err
+		return
 	}
 	if _, err := file.Write(append(encoded, '\n')); err != nil {
-		return fmt.Errorf("append performance line: %w", err)
+		// 계기는 진단이다: 실패해도 앱이 계속 돈다.
 	}
-	return nil
-}
-
-func performanceNow() string {
-	return time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00")
 }
 
 // performanceSampler 는 메모리 샘플러(V5-104). 트레이스가 켜져 있는 동안 5초마다
@@ -189,7 +181,7 @@ func performanceSampler(config string) {
 				time.Sleep(5 * time.Second)
 				continue
 			}
-			_ = PerformanceLine(PerformanceTarget(config), "sampler", map[string]any{
+			PerformanceLine(PerformanceTarget(config), "sampler", map[string]any{
 				"event": "memory", "rss_host_kb": residentKB(os.Getpid()),
 			})
 			time.Sleep(5 * time.Second)
@@ -210,4 +202,8 @@ func residentKB(pid int) uint64 {
 		return 0
 	}
 	return value
+}
+
+func performanceNow() string {
+	return time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00")
 }

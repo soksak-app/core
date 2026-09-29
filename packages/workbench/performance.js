@@ -30,7 +30,7 @@ export async function timed(name, answer, send = defaultSend) {
     return result;
   } catch (error) {
     trace("command", { name, us: Math.round((performance.now() - started) * 1000), ok: false,
-      error: String(error?.message ?? error) }, send);
+      error: String(error?.message ?? error) }, send); // 기본값: Error 가 아닌 값을 그대로 문자열로 쓴다
     throw error;
   }
 }

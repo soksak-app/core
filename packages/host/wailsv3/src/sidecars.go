@@ -583,7 +583,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 	} else if errors.Is(err, os.ErrNotExist) {
 		// 성능 트레이스가 켜져 있으면 나중에 뜨는 사이드카에도 플래그를 쓴다(V5-104).
 		if PerformanceEnabled(c.configDir) {
-			_ = performanceWriteFlags(c.configDir, PerformanceTarget(c.configDir))
+			performanceWriteFlags(c.configDir, PerformanceTarget(c.configDir))
 		}
 		cmd = exec.Command(program, "--service-dir", serviceDir)
 		// A persistent service belongs to the configuration directory, not to
@@ -601,7 +601,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		}
 		// 프로세스 등록부의 계기(V5-104): 뜨는 사이드카의 pid 와 역할을 남긴다.
 		if PerformanceEnabled(c.configDir) {
-			_ = PerformanceLine(PerformanceTarget(c.configDir), "host", map[string]any{
+			PerformanceLine(PerformanceTarget(c.configDir), "host", map[string]any{
 				"event": "process", "role": "sidecar", "name": name,
 				"pid": cmd.Process.Pid,
 			})

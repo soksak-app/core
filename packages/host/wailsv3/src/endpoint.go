@@ -616,7 +616,7 @@ func (e *Endpoint) run(c *endpointConn, req request, method endpointMethod) {
 		if err != nil {
 			fields["error"] = err.Error()
 		}
-		_ = PerformanceLine(PerformanceTarget(e.configDir), "host", fields)
+		PerformanceLine(PerformanceTarget(e.configDir), "host", fields)
 	}
 	e.reply(c, req, result, err)
 }

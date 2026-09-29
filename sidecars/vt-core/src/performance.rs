@@ -56,15 +56,17 @@ impl PerformanceTrace {
         }
         let mut file = match OpenOptions::new().create(true).append(true).open(target) {
             Ok(file) => file,
+            // 계기는 진단이다: 파일을 못 열면 조용히 넘어간다 — 앱이 계기 때문에 실패하지 않는다.
             Err(_) => return,
         };
-        let _ = writeln!(file, "{}", Value::Object(record));
+        // 계기 쓰기 실패는 관측 대상이 아니다: 파이프가 끊기거나 디스크가 찼을 수 있다.
+        drop(writeln!(file, "{}", Value::Object(record)));
     }
 }
 
 /// 유닉스 시각(밀리초)을 ISO-8601 로 바꾼다(종속성을 더하지 않고 직접 계산).
 fn now_iso8601_ms() -> String {
-    let since = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let since = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default(); // 기본값: 시계는 에포크 이전을 돌려주지 않는다
     let millis_total = since.as_millis();
     let days = (millis_total / 86_400_000) as i64;
     let millis_day = (millis_total % 86_400_000) as u32;
