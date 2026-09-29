@@ -517,6 +517,8 @@ Previous completed component work remains evidence, not completion of these wide
       - [ ] V5-100-2 — Extend the library form so the create flow offers both "새 폴더로 만들기" (create a new folder under the chosen parent, today's behavior) and "기존 폴더로 만들기" (pick an existing folder through the native chooser and adopt it as the project root without creating anything). The host command gains the adopt path: projectCreate with an explicit existing-folder mode that must not mkdir and must fail if the folder does not exist. Both hosts implement it. The library list shows the adopted project like any other.
       - [ ] V5-100-3 — Verify on both hosts with the real library: the Red fixture (no adopt path, explicit mkdir) fails first, then the new flow adopts an existing folder containing files without modifying it, the project appears in the library, and opening it works. The existing create-new-folder flow keeps working unchanged.
 
+    - [ ] V5-101 — P1: Localize the app menu items (About, Hide, Hide Others, Show All, Quit) through the declared ko/en menu table. The items are `system` today because the framework provides English text; the constructors accept a title override, so changing them to `title` rows with ko translations (예: soksak 정보, soksak 숨기기, soksak 종료) makes the first menu follow the language setting like every other menu.
+
 ## Tauri/Wails parity audit (2026-09-21)
 
 The mechanical host check reports `apps/tauriv2/test/runtime.test.mjs: no counterpart in apps/wailsv3`. This remains a file-structure mismatch. Wails tests `waitPresented` dispatch in `runtime-contract.test.mjs`, and G2.5 now asserts the returned `{ displayed: 42 }` value through both adapters; the missing filename alone does not establish missing behavior coverage.
