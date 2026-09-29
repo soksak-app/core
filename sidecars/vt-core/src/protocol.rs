@@ -1776,6 +1776,20 @@ async fn surface_task(
     loop {
         tokio::select! {
             _ = cursor_tick.tick(), if image_state.is_some() && !headless => {
+                // 커서 깜빡임이 아예 꺼져 있으면 이 틱은 아무것도 하지 않는다(V5-96-14-6-4-9).
+                // engine.screen() 은 전체 그리드를 복사하므로, "바뀌었나?"를 검사하려고
+                // 50ms마다 전체 화면을 복사하는 것이 대기 CPU 의 원인이었다.
+                // 측정: 아이들에서 blink 프레임은 초당 0.15회(무시할 만함)였지만 틱은
+                // 초당 20회 돌며 매번 화면을 복사했다. 커서가 안 깜빡이면 화면이 안
+                // 바뀌므로 복사할 필요도 없다.
+                let blink_enabled = focused
+                    && !matches!(cursor_policy.blink, crate::platform::darwin::frame::CursorBlinkPolicy::Never)
+                    && (cursor_policy.idle_timeout_ms == 0
+                        || (cursor_activity.elapsed().as_millis() as u64) < cursor_policy.idle_timeout_ms)
+                    && engine.screen().cursor.visible;
+                if !blink_enabled {
+                    continue;
+                }
                 let screen = decorate_screen(
                     engine.screen(),
                     focused,
