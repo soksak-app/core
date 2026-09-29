@@ -99,7 +99,7 @@ The shell sidecar uses the same Go mechanism in `sidecars/shell/src/platform/`.
 | Input | Input monitoring and its removal; Tauri also registers webviews for pointer routing |
 | Capture | Window capture: open, start, wait for the first frame, stop |
 | Document regions | Creation inside a surface webview, navigation, history actions, placement by insets, dialog blur, close |
-| Termination | Termination signals (SIGTERM, SIGINT, SIGHUP): the first one calls the host's quit request; later ones end the process with the default action |
+| Termination | Termination signals (SIGTERM, SIGINT, SIGHUP): the first one calls the host's quit request; later ones end the process with the default action. The quit request kills every window's web process first — see [Process lifecycle](#process-lifecycle) |
 | Window motion | Shortening the window resize animation before any window exists |
 | Dock | Dock menu installation |
 | Identity | Directory identity |
@@ -128,6 +128,18 @@ On Windows both hosts implement only directory identity (`platform/windows/ident
 | A2 | none | `build.rs` | Tauri requires `tauri_build::build()` |
 | A3 | none | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri configuration |
 | A4 | `go.mod`, `go.sum` | `Cargo.toml` | Each language has its own manifest; the host packages have the same difference |
+
+## Process lifecycle
+
+The hosts own three child-process families, each with one rule.
+
+**WebKit XPC die with the application.** Every exit path kills each window's WebContent process through the native `_killWebContentProcessAndResetState` before the process ends: a termination signal kills them and the Tauri host then exits immediately (`std::process::exit(0)`), because the graceful exit path waits on a ready window's save and a termination signal is a forced exit; the Wails host ends through its normal quit, whose shutdown step kills them the same way. Without the kill, macOS keeps the WebContent, GPU, and Networking processes alive after the client dies.
+
+Crash leftovers are accepted until the operating system reclaims them. A startup cleanup was tried and removed as unsound (measured 2026-09-30): live WebKit of a running application also shows no unix sockets on this system, so socket presence discriminates nothing, WebKit XPC ignore SIGTERM, and the only sound ownership proof — a Networking process holding the owning bundle's `WebsiteData` store open — identifies a minority of an orphan group, because the memory-heavy WebContent holds no identifiable path. A cleanup that cannot prove which WebKit belong to dead applications must not run.
+
+**Persistent sidecars outlive the application and reconnect.** The terminal service keeps its sessions across application restarts and connection losses; a lost connection is revived at once and a dead service respawned ([terminal runtime](terminal-runtime.md)). The application never kills a persistent service on exit.
+
+**Non-persistent sidecars die with their window.** Removing a surface or closing its window sends the close notice; the process ends with the channel.
 
 ## Application tree
 
