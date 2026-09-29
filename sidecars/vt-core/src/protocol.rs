@@ -1123,6 +1123,7 @@ async fn present_screen(
     }));
     state.sequence += 1;
     state.pending_draw = true;
+    state.sent_at = Some(std::time::Instant::now());
     state.dirty = false;
     let nonce = state.frame.nonce();
     let nonce_b64 = base64_encode(&nonce);
@@ -2604,6 +2605,14 @@ async fn surface_task(
                                 && Some(state.name.as_str()) == name
                                 && (consumed.is_some() || is_error));
                         if releases_pending {
+                            // 전송 완료 대기의 계기(V5-104): 보낸 순간부터 consumed/오류 응답까지.
+                            if let Some(sent) = image_state.as_mut().unwrap().sent_at.take() {
+                                performance.line("consumed_wait", serde_json::json!({
+                                    "surface": surface_id,
+                                    "wait_us": sent.elapsed().as_micros() as u64,
+                                    "answer": if consumed.is_some() { "consumed" } else { "error" },
+                                }));
+                            }
                             image_state.as_mut().unwrap().pending_draw = false;
                             if let Some(configuration) = pending_configuration.take() {
                                 let new_state = match ImageState::new(configuration.name.clone(), configuration.generation,

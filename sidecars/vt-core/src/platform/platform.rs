@@ -24,6 +24,8 @@ pub struct ImageState {
     pub inline_images: Vec<crate::protocol::InlineImagePlacement>,
     /// 다음 표시와 함께 보낼 페이지 이벤트. 인라인 그림의 상태는 그 그림을 그린 래스터와 함께 바뀐다.
     pub presentation_events: Vec<String>,
+    /// 대기 중인 전송을 보낸 시각. consumed 대기 시간의 계기다(V5-104).
+    pub sent_at: Option<std::time::Instant>,
 }
 
 #[cfg(target_os = "macos")]
@@ -56,6 +58,7 @@ impl ImageState {
             theme: crate::palette::TerminalTheme::dark(),
             inline_images: Vec::new(),
             presentation_events: Vec::new(),
+            sent_at: None,
         })
     }
 
