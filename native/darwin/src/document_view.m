@@ -256,10 +256,11 @@ static CGFloat documentSurfaceScale(NSView *surface) {
     [self report];
 }
 
-// 문서 영역은 웹 주소만 연다. 앱의 스킴과 파일 주소는 거부한다.
+// 문서 영역은 웹 주소와 파일 주소를 연다. 앱의 스킴은 거부한다.
 static BOOL webAddress(NSURL *url) {
     NSString *scheme = url.scheme.lowercaseString;
-    return [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"] || [url.absoluteString isEqualToString:@"about:blank"];
+    return [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"]
+        || [scheme isEqualToString:@"file"] || [url.absoluteString isEqualToString:@"about:blank"];
 }
 
 - (void)webView:(WKWebView *)view decidePolicyForNavigationAction:(WKNavigationAction *)action
@@ -421,6 +422,13 @@ bool sp_document_load(void *handle, const char *address) {
     SPDocumentView *view = (SPDocumentView *)handle;
     NSURL *url = address ? [NSURL URLWithString:[NSString stringWithUTF8String:address]] : nil;
     if (!url || !webAddress(url)) return false;
+    // 파일 주소는 파일이 있는 디렉터리까지 읽기 권한을 주어 연다. WKWebView 의
+    // loadRequest 로는 파일을 열 수 없고 loadFileURL 이 필요하다.
+    if ([url.scheme.lowercaseString isEqualToString:@"file"]) {
+        NSURL *directory = [url URLByDeletingLastPathComponent] ?: [NSURL fileURLWithPath:@"/"];
+        [view request:[view loadFileURL:url allowingReadAccessToURL:directory]];
+        return true;
+    }
     [view request:[view loadRequest:[NSURLRequest requestWithURL:url]]];
     return true;
 }

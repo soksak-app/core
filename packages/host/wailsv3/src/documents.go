@@ -279,7 +279,7 @@ func (s *Surfaces) withDocument(viewID uint64, req DocumentRequest, run func(han
 func (s *Surfaces) loadDocument(viewID uint64, req DocumentRequest) error {
 	return s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
 		if !system.LoadDocument(handle, req.URL) {
-			return fmt.Errorf("only http and https addresses can be opened: %q", req.URL)
+			return fmt.Errorf("only http, https, and file addresses can be opened: %q", req.URL)
 		}
 		return nil
 	})

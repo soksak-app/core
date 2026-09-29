@@ -311,7 +311,7 @@ pub(crate) fn load(webview: &Webview, request: Request) -> Result<(), String> {
             Ok(())
         } else {
             Err(format!(
-                "only http and https addresses can be opened: {url:?}"
+                "only http, https, and file addresses can be opened: {url:?}"
             ))
         }
     })
