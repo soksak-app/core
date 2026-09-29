@@ -3046,9 +3046,13 @@ async fn test_replacement_raster_with_zero_size_is_rejected() {
     task.await.unwrap().unwrap();
 }
 
-/// Test: too small size (results in 0 cols/rows) is rejected
+/// Test: a raster too small for one cell holds the session closed without an
+/// error; the next valid raster opens it. A drag through the collapse
+/// transient sends these rasters every frame, and an error there would both
+/// surface a bogus surface error and leave the host presentation barrier
+/// waiting for a frame that never comes (V5-96-14-6-4-8).
 #[tokio::test]
-async fn test_too_small_size_is_rejected() {
+async fn test_too_small_raster_holds_the_open() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session-small".to_string();
 
@@ -3072,27 +3076,140 @@ async fn test_too_small_size_is_rejected() {
     // This raster is positive but too small to contain one terminal cell.
     to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":3,"height":3,"scale":1.0}}}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":2,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
-    // Should receive error response
-    let error_line = next_line_except_screen(&mut lines).await;
+    // The sub-cell raster must not answer with an error, so the first line
+    // back is the state event of the valid raster's open.
+    let state_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+        .await
+        .expect("timeout waiting for state")
+        .expect("failed to read state line")
+        .expect("state line is empty");
 
-    let error_json: serde_json::Value =
-        serde_json::from_str(&error_line).expect("failed to parse error JSON");
+    let state_json: serde_json::Value =
+        serde_json::from_str(&state_line).expect("failed to parse state JSON");
 
     assert_eq!(
-        error_json["body"]["error"], "invalidParams",
-        "too small size should return invalidParams"
+        state_json["body"]["event"], "state",
+        "the sub-cell raster must be held silently and the valid raster must open the session"
     );
 
-    // Verify daemon was NOT called
     let calls_lock = calls.lock().unwrap();
     assert_eq!(
         calls_lock.opens.len(),
-        0,
-        "daemon open should not be called"
+        1,
+        "the valid raster opens exactly one session"
     );
 
+    drop(calls_lock);
+    drop(to_serve);
+    task.await.unwrap().unwrap();
+}
+
+/// Test: a sub-cell replacement raster keeps the current grid and still
+/// presents a frame, so the host presentation barrier completes. The PTY is
+/// resized to the unchanged grid, which sends no SIGWINCH.
+#[tokio::test]
+async fn test_sub_cell_replacement_holds_the_grid() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let fake_session_id = "test-session-hold-grid".to_string();
+
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let calls_for_factory = calls.clone();
+    let session_id_for_factory = fake_session_id.clone();
+
+    let port = Arc::new(FakeSessionPort::new(
+        session_id_for_factory.clone(),
+        calls_for_factory.clone(),
+    ));
+    let port_for_factory = port.clone();
+    let factory = Arc::new(move || port_for_factory.clone() as Arc<dyn SessionPort>);
+
+    let (mut to_serve, serve_in) = tokio::io::duplex(64 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(64 * 1024);
+
+    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
+    let mut lines = tokio::io::BufReader::new(from_serve).lines();
+
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+"#).await.unwrap();
+
+    let state_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+        .await
+        .expect("timeout waiting for state")
+        .expect("failed to read state line")
+        .expect("state line is empty");
+    let state_json: serde_json::Value =
+        serde_json::from_str(&state_line).expect("failed to parse state JSON");
+    let (opened_cols, opened_rows) = (
+        state_json["body"]["cols"].as_u64().expect("state carries cols"),
+        state_json["body"]["rows"].as_u64().expect("state carries rows"),
+    );
+    let initial_image = next_image_envelope(&mut lines).await;
+    acknowledge_image(&mut to_serve, &initial_image).await;
+
+    to_serve.write_all(br#"{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":2,"width":3,"height":3,"scale":1.0}}}}
+"#).await.unwrap();
+
+    // The sub-cell raster presents: a state event (same grid) and an image
+    // envelope arrive instead of an error. The frame's screen event comes with
+    // the image, so screen lines are skipped while waiting for the state.
+    // The sub-cell raster still presents: after the transfer is acknowledged
+    // the pending configuration applies, sends a state event with the
+    // unchanged grid, and draws the frame for the 3x3 raster. Intermediate
+    // envelopes of the old raster are acknowledged like the host does.
+    let mut held_state = None;
+    let mut held_image = None;
+    for _ in 0..30 {
+        let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+            .await
+            .expect("timeout waiting for the held raster")
+            .expect("failed to read a line")
+            .expect("output ended");
+        let json: serde_json::Value = serde_json::from_str(&line).expect("failed to parse line");
+        assert!(
+            json["body"]["error"].is_null(),
+            "the sub-cell replacement must not answer with an error: {line}"
+        );
+        if json["body"]["event"] == "state" {
+            held_state = Some(json.clone());
+        }
+        if let Some(image) = json["body"]["image"].as_object() {
+            if image.get("raster").and_then(|v| v.as_u64()) == Some(2) {
+                held_image = Some(json);
+                break;
+            }
+            acknowledge_image(&mut to_serve, &json).await;
+        }
+    }
+    let held_state = held_state.expect("no state event arrived for the held raster");
+    let held_image = held_image.expect("no image envelope arrived for the held raster");
+    assert_eq!(
+        (held_state["body"]["cols"].as_u64(), held_state["body"]["rows"].as_u64()),
+        (Some(opened_cols), Some(opened_rows)),
+        "the grid is unchanged while the raster is smaller than one cell"
+    );
+    assert_eq!(
+        (held_image["body"]["image"]["width"].as_u64(), held_image["body"]["image"]["height"].as_u64()),
+        (Some(3), Some(3)),
+        "the frame is drawn for the sub-cell raster, so the presentation barrier completes"
+    );
+
+    let calls_lock = calls.lock().unwrap();
+    assert_eq!(
+        calls_lock.resizes.len(),
+        1,
+        "the sub-cell replacement resizes the PTY once, to the unchanged grid"
+    );
+    assert_eq!(
+        (calls_lock.resizes[0].1 as u64, calls_lock.resizes[0].2 as u64),
+        (opened_cols, opened_rows),
+        "the PTY keeps the held grid dimensions"
+    );
+
+    drop(calls_lock);
     drop(to_serve);
     task.await.unwrap().unwrap();
 }

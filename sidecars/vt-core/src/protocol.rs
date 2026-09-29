@@ -1649,10 +1649,10 @@ async fn open_if_configured(
         &state.metrics,
     ) {
         Ok(size) => size,
-        Err(reason) => {
-            let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason}});
-            return output_tx.send(response.to_string()).await.is_ok();
-        }
+        // 셀 하나의 공간도 없는 래스터는 끌기 중 카드가 무너지는 과도 상태이다. 여기서
+        // 오류를 내면 열기 요청이 사라지고 나중 크기로 다시 열리지 않는다. 열지 않고
+        // 기다리면 다음 configure 가 세션을 연다(V5-96-14-6-4-8).
+        Err(_) => return true,
     };
     engine.resize(cols, rows);
     if let Err(error) = set_engine_metrics(engine, state) {
@@ -1854,11 +1854,13 @@ async fn surface_task(
                         let (cols, rows) = match calculate_terminal_size(
                             configuration.width, configuration.height, &new_state.metrics) {
                             Ok(size) => size,
-                            Err(reason) => {
-                                let response = json!({"surface": surface_id,
-                                    "body": {"error": "invalidParams", "reason": reason}});
-                                if output_tx.send(response.to_string()).await.is_err() { return; }
-                                continue;
+                            // 셀 하나의 공간도 없는 래스터는 끌기 중 카드가 무너지는 과도 상태이다.
+                            // 현재 격자를 유지해 정상 경로를 지나면(같은 크기 재조정은 아무 것도
+                            // 바꾸지 않는다) 그리기가 IOSurface 경계로 잘려 들어가고, 프레임이
+                            // 표시되므로 호스트의 표시 장벽이 멈추지 않는다(V5-96-14-6-4-8).
+                            Err(_) => {
+                                let screen = engine.screen();
+                                (screen.cols, screen.rows)
                             }
                         };
                         engine.resize(cols, rows);
@@ -2392,10 +2394,11 @@ async fn surface_task(
                             };
                             let (cols, rows) = match calculate_terminal_size(state.width_px, state.height_px, &metrics) {
                                 Ok(size) => size,
-                                Err(reason) => {
-                                    let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason}});
-                                    if output_tx.send(response.to_string()).await.is_err() { return; }
-                                    continue;
+                                // 서브셀 래스터에서 글꼴이 바뀌어도 격자를 유지한다. 다음 유효한
+                                // 래스터가 새 글꼴의 격자로 다시 계산한다(V5-96-14-6-4-8).
+                                Err(_) => {
+                                    let screen = engine.screen();
+                                    (screen.cols, screen.rows)
                                 }
                             };
                             state.metrics = metrics;
@@ -2605,11 +2608,11 @@ async fn surface_task(
                                 let (cols, rows) = match calculate_terminal_size(
                                     configuration.width, configuration.height, &new_state.metrics) {
                                     Ok(size) => size,
-                                    Err(reason) => {
-                                        let response = json!({"surface": surface_id,
-                                            "body": {"error": "invalidParams", "reason": reason}});
-                                        if output_tx.send(response.to_string()).await.is_err() { return; }
-                                        continue;
+                                    // Configure 와 같은 유지 규칙: 서브셀 래스터는 현재 격자를
+                                    // 유지하고 프레임을 표시한다(V5-96-14-6-4-8).
+                                    Err(_) => {
+                                        let screen = engine.screen();
+                                        (screen.cols, screen.rows)
                                     }
                                 };
                                 engine.resize(cols, rows);
