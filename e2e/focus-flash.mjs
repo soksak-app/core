@@ -18,8 +18,10 @@ async function until(predicate, what, limit = 10_000) {
   throw new Error(`${what} did not happen within ${limit}ms`);
 }
 
-// 준비: 터미널 2 + 브라우저 1 배치.
+// 준비: 터미널 2 + 브라우저 1 배치. fixture 가 성능 트레이스를 기본값(끔)으로 되돌리므로
+// fixture 뒤에 다시 켠다 — 이 관측의 줄은 트레이스 타임라인에 남아야 한다.
 await client.request("diagnostics.fixture", { window: "main", settings: {} });
+await client.request("command.run", { window: "main", name: "core.settings.change", params: { key: "diagnostics.performance", value: true, scope: "common" } });
 const grid = async () => await client.request("status.get", { window: "main", name: "core.grid" });
 let g = await grid();
 const terminalTab = g.cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
