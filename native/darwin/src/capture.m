@@ -14,6 +14,7 @@
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 
 static void setCaptureError(NSString* message);
+static bool hasCaptureError(void);
 
 static dispatch_semaphore_t captureFirstFrame;
 // 종료 요청 시각(mach 절대 시각)과, 그 이후에 표시된 프레임이 도착했음을 알리는 신호.
@@ -42,11 +43,11 @@ static uint64_t captureStartedAt;
 @property (nonatomic) int idle;
 // 완성되지 않은 프레임의 상태별 수. 인덱스는 SCFrameStatus 값이다.
 @property (nonatomic) int *statuses;
-// 받은 완성 프레임 수, 쓰기 큐에 넣은 수, 쓰기 대기 상한 때문에 기다린 횟수, 가장 느린 쓰기(초),
+// 받은 완성 프레임 수, 쓰기 큐에 넣은 수, 쓰기 대기 상한 때문에 거부한 수, 가장 느린 쓰기(초),
 // 연속한 완성 프레임 사이의 가장 긴 표시 간격(mach 시각). written 과 slowestWrite 는 쓰기 큐가 바꾼다.
 @property (nonatomic) int complete;
 @property (nonatomic) int queued;
-@property (nonatomic) int waited;
+@property (nonatomic) int rejected;
 @property (nonatomic) double slowestWrite;
 @property (nonatomic) uint64_t lastShown;
 @property (nonatomic) uint64_t longestGap;
@@ -120,6 +121,7 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
         if ((int)status >= 0 && (int)status < 6) self.statuses[status]++;
         return;
     }
+    if (hasCaptureError()) return;
     CVImageBufferRef buffer = CMSampleBufferGetImageBuffer(sample);
     if (buffer == NULL) return;
     uint64_t shown = displayTime(sample);
@@ -136,12 +138,12 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
         self.longestGap = shown - self.lastShown;
     }
     self.lastShown = shown;
-    // 처리기가 디스크 쓰기를 기다리면 그동안 스트림이 프레임을 버리고, 버려진 프레임이 측정 대상이다.
-    // 처리기는 프레임을 메모리로 복사만 하고 쓰기는 쓰기 큐가 한다. 쓰기를 기다리는 프레임은
-    // kCapturePending 장까지이며, 그보다 밀리면 처리기가 기다리고 그 횟수를 알린다.
+    // 샘플 콜백이 쓰기를 기다리면 스트림이 다음 프레임을 잃는다. 대기 용량이 소진되면
+    // 녹화 자체를 실패시키고 다음 콜백과 종료 시각 전달을 막지 않는다.
     if (dispatch_semaphore_wait(capturePending, DISPATCH_TIME_NOW) != 0) {
-        self.waited++;
-        dispatch_semaphore_wait(capturePending, DISPATCH_TIME_FOREVER);
+        self.rejected++;
+        setCaptureError([NSString stringWithFormat:@"capture pending writer capacity exceeded (%ld frames)", kCapturePending]);
+        return;
     }
     CVPixelBufferLockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
     size_t width = CVPixelBufferGetWidth(buffer);
@@ -229,9 +231,15 @@ static void clearCaptureError(void) {
 
 static void setCaptureError(NSString* message) {
     @synchronized([SPCapture class]) {
+        NSString *combined = captureError == nil ? [message copy]
+            : [[captureError stringByAppendingFormat:@"; %@", message] copy];
         [captureError release];
-        captureError = [message copy];
+        captureError = combined;
     }
+}
+
+static bool hasCaptureError(void) {
+    @synchronized([SPCapture class]) { return captureError != nil; }
 }
 
 const char *sp_capture_error(void) {
@@ -344,7 +352,7 @@ bool sp_capture_start(const char* directory) {
     }
     captureBefore = captureSink.written;
     captureSink.queued = captureSink.written;
-    captureSink.waited = 0;
+    captureSink.rejected = 0;
     captureSink.idle = 0;
     captureSink.complete = 0;
     captureSink.slowestWrite = 0;
@@ -406,7 +414,6 @@ int sp_capture_wait(void) {
 // written while it runs. Reading the count before that would under-report, and
 // the process exiting then would leave the last file short.
 int sp_capture_stop(double after) {
-    clearCaptureError();
     if (captureStream == nil) {
         setCaptureError(@"capture is not running");
         return 0;
@@ -437,6 +444,7 @@ int sp_capture_stop(double after) {
     dispatch_semaphore_t stopped = dispatch_semaphore_create(0);
     [stream stopCaptureWithCompletionHandler:^(NSError* failed) {
         if (failed != nil) {
+            setCaptureError([NSString stringWithFormat:@"capture did not stop: %@", failed.localizedDescription]);
             fprintf(stderr, "observe: capture not stopped, %s\n",
                 failed.localizedDescription.UTF8String);
         }
@@ -456,9 +464,9 @@ int sp_capture_stop(double after) {
     int *counts = captureSink.statuses;
     mach_timebase_info_data_t timebase;
     mach_timebase_info(&timebase);
-    fprintf(stderr, "observe: %d complete frames received, %d written, %d waited for the writer, "
+    fprintf(stderr, "observe: %d complete frames received, %d written, %d rejected for pending writer capacity, "
         "slowest write %.1fms, longest display gap %.1fms\n",
-        captureSink.complete, captureSink.written - captureBefore, captureSink.waited, captureSink.slowestWrite * 1000,
+        captureSink.complete, captureSink.written - captureBefore, captureSink.rejected, captureSink.slowestWrite * 1000,
         (double)captureSink.longestGap * timebase.numer / timebase.denom / 1e6);
     if (counts[SCFrameStatusBlank] || counts[SCFrameStatusSuspended]) {
         fprintf(stderr, "observe: %d blank and %d suspended frames were not written\n",

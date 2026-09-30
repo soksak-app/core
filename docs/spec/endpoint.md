@@ -92,6 +92,8 @@ The following methods exist only in diagnostic builds (Go build tag `diagnostics
 
 For direct capture.start/stop recordings, layouts is an array of `{ticket, begun, presented, committed}` transactions since start, with times in milliseconds on the frame clock. Stages that did not occur are null; no transactions means an empty array. diagnostics.drag retains its own timeline in its existing reply. Trace-stop failures remove the frame directory that the requester cannot receive and preserve errors.
 
+Recording callbacks never wait for pending disk writes. Exhausting the 64-frame pending-write capacity rejects the recording with an explicit error; it is not a successful partial capture. Stop preserves recording errors and appends any stop error. The 600-frame burst cap remains a reported bounded result.
+
 Layout timeline replies have a capacity of 4096 transactions. When the actual record count exceeds capacity, the host returns an error and removes the recording directory that the requester cannot receive. A truncated timeline is never a successful reply.
 
 The host writes large data, such as captures, to files under the configuration directory, and the reply contains the file paths. The requester removes the capture files after measurement.

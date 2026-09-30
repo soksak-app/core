@@ -11,6 +11,8 @@ int sp_capture_wait(void);
 // 표시 시각 after(ms, mach 절대 시각)와 호출 시각 중 늦은 시각 이후의 화면이 스트림에 전달된 뒤
 // 녹화를 멈추고 기록한 프레임 수를 반환한다. 상한에 도달해 자동으로 멈춘 경우에도 기록된 수를
 // 그대로 반환한다. 상한 도달 여부는 sp_capture_limited 로 확인한다.
+// 쓰기 대기 용량이 소진되면 녹화가 실패한다. 종료는 이전 녹화 오류와 종료 오류를 모두
+// sp_capture_error 에 보존하므로 반환한 프레임 수만으로 성공을 판단하지 않는다.
 int sp_capture_stop(double after);
 // 마지막 녹화가 유한한 프레임 상한에 도달해 멈췄으면 true를 반환한다.
 bool sp_capture_limited(void);
