@@ -73,7 +73,12 @@ await until(async () => {
   return now.responder?.surface === terminalSurface
     || (await status("terminal.cursor", terminalSurface)).focused === true;
 }, "the responder returned to the terminal");
-await new Promise((resolve) => setTimeout(resolve, 300));
+// 안착 여유: 비동기 응답자 반환과 마지막 초점 보고가 흐르기를 조건으로 기다린다.
+await until(async () => {
+  const now = await status("host.window");
+  return now.responder?.surface === terminalSurface
+    || (await status("terminal.cursor", terminalSurface)).focused === true;
+}, "the responder stayed on the terminal");
 
 // 5) 판정: 클릭 창 동안 페이지가 키보드 포커스를 얻으며 주소창에 focus in 이 재발화되었는가.
 const addressFocusIns = lines.filter((line) => /^focus in .*(browser.address|INPUT)/.test(line));
