@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { rmSync } from 'node:fs';
 import { APPS, fresh, open } from './app.mjs';
-import { frames, readFrame, pixel } from './frame.mjs';
+import { frames, readFrame } from './frame.mjs';
+import { recordedEdges } from './sidebar-gesture-recording.mjs';
 
 const sides = ['top','bottom','left','right'];
 const sign = side => side === 'top' || side === 'left' ? 1 : -1;
@@ -22,30 +23,10 @@ async function measure(s,id) {
   near(surface.applied.h,card.h-2-32-22-bands.top-bands.bottom,'native height');
   return {grid,card,surface};
 }
-function border(frame,side,at,cross) {
-  const ratio=frame.scale*frame.contentScale;
-  const vertical=side==='left'||side==='right';
-  const offsets=[-12,-6,0,6,12];
-  return offsets.every(offset=>{
-    const point=vertical?[at,cross+offset]:[cross+offset,at];
-    const rgb=pixel(frame,Math.floor(point[0]*ratio),Math.floor(point[1]*ratio));
-    return rgb.every((value,index)=>Math.abs(value-[43,46,61][index])<=3);
-  });
-}
-function recordedEdges(captured,side,initial,cross) {
-  return captured.map(frame=>{
-    const matches=[];
-    for(let step=-2;step<=42;step+=0.5){
-      const coordinate=initial+sign(side)*step;
-      if(border(frame,side,coordinate,cross)) matches.push(coordinate);
-    }
-    assert.ok(matches.length,`${side}: frame ${frame.time} has no measured sidebar border`);
-    return matches;
-  });
-}
 
 for(const app of Object.values(APPS)) {
   test(`${app.name}: native pointer drags all four card sidebar borders by their displacement`,{timeout:120000},async t=>{
+    console.info(`START ${app.name}: sidebar gesture`);
     const s=await open(t,app);
     assert.ok(s,`${app.binary} is not built`);
     t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
@@ -71,6 +52,7 @@ for(const app of Object.values(APPS)) {
     }
     try {
       for(const side of sides){
+        const began=performance.now();console.info(`START ${app.name}: ${side} sidebar gesture`);
         await inactive();
         const before=await measure(s,card.id);
         const index=sides.indexOf(side);
@@ -82,6 +64,8 @@ for(const app of Object.values(APPS)) {
         const initial=side==='left'?applied.x-1:side==='right'?applied.x+applied.w
           :side==='top'?applied.y-1:applied.y+applied.h;
         const cross=vertical?applied.y+applied.h/2:applied.x+applied.w/2;
+        const initialPresentation=await s.presented();
+        const poses=[{phase:'initial',displayed:initialPresentation.displayed,size:120,applied}];
         const {frames:directory}=await s.request('diagnostics.capture.start',{});
         let down=false;
         let stopped;
@@ -95,9 +79,10 @@ for(const app of Object.values(APPS)) {
               const began=performance.now();
               await s.pointer(x+(vertical?sign(side)*distance:0),y+(vertical?0:sign(side)*distance),'drag');
               await s.until('core.grid',grid=>grid.cards.find(c=>c.id===card.id)?.sidebars?.[side]?.size===120+distance,`${side}: drag did not save ${120+distance} points`);
-              await s.presented();
+              const {displayed}=await s.presented();
               await inactive();
               const current=await measure(s,card.id);
+              poses.push({phase:'drag',distance,displayed,size:current.card.sidebars[side].size,applied:current.surface.applied});
               assert.equal(current.card.sidebars[side].collapsed,false,'drag folded the sidebar');
               assert.deepEqual([current.card.x,current.card.y,current.card.w,current.card.h],
                 [baseline.card.x,baseline.card.y,baseline.card.w,baseline.card.h],'drag changed card geometry');
@@ -109,6 +94,8 @@ for(const app of Object.values(APPS)) {
             try {if(down) await s.pointer(x,y,'up');} catch(error) {gestureErrors.push(error);}
             let displayed;
             try {({displayed}=await s.presented());} catch(error) {gestureErrors.push(error);}
+            try {const current=await measure(s,card.id);poses.push({phase:'release',displayed,size:current.card.sidebars[side].size,applied:current.surface.applied});}
+            catch(error) {gestureErrors.push(error);}
             try {stopped=await s.request('diagnostics.capture.stop',{after:displayed===undefined?0:displayed+100});}
             catch(error) {gestureErrors.push(error);}
           }
@@ -117,13 +104,14 @@ for(const app of Object.values(APPS)) {
           assert.ok(captured.length>4,`${side}: incomplete gesture recording`);
           assert.equal(stopped.limited,false,'recording exhausted its buffer');
           assert.ok(stopped.longestGap<=100,`${side}: missing frames, gap ${stopped.longestGap}ms`);
-          const measured=recordedEdges(captured,side,initial,cross);
+          const measured=recordedEdges(captured,side,initial,cross,poses);
           assert.ok(measured[0].some(at=>Math.abs(at-initial)<=1),`${side}: initial border not recorded`);
           const final=initial+sign(side)*40;
           assert.ok(measured.some(matches=>matches.some(at=>Math.abs(at-final)<=1)),`${side}: far border not recorded`);
           assert.ok(measured.at(-1).some(at=>Math.abs(at-initial)<=1),`${side}: restored border not recorded`);
           assert.ok(measured.some(matches=>matches.some(at=>Math.abs(at-initial)>=8&&Math.abs(at-final)>=8)),`${side}: no intermediate movement frame`);
           t.diagnostic(`${side}: 120 -> 160 -> 120 points, ${captured.length} frames, gap ${stopped.longestGap}ms, input/presentation steps ${elapsed.join(',')}ms`);
+          console.info(`PASS ${app.name}: ${side} sidebar gesture (${Math.round(performance.now()-began)}ms)`);
         } finally {
           try {rmSync(directory,{recursive:true,force:true});} catch(error) {failures.push(error);}
         }
