@@ -46,6 +46,8 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 
 ## 창 검사
 
+고정 사이드바 창 검사는 준비 중 실패한 경우를 포함해 연결 종료 전에 임시 카드 사이드바 명시 선택을 복원한다. 카드의 명시적 `off`는 플러그인 기본값보다 우선한다. 선언된 `core.card.sidebar.set` 명령에 `set: "inherit"`를 보내면 크기와 접힘 선택을 보존하며 명시 선택을 해제한다. 기존 일반 창의 프로젝트·설정을 교체하지 않고 관측하려면 `SOKSAK_APP=tauriv2 SOKSAK_CONFIG_DIR=<config-dir> pnpm -F @soksak/e2e verify:terminal-sidebar-current`를 실행한다. 활성 터미널 카드와 저장된 터미널 `card-right` 할당이 필요하며 일반·전체화면·복귀 표시를 녹화하고 기존 탭과 설정을 보존한다. 이 검사는 fixture를 만들거나 비활성 선택을 복구하지 않는다.
+
 각각 다른 터미널에서, 하네스가 읽는 설정 디렉터리(Node.js의 `os.tmpdir()`, macOS에서는 `$TMPDIR`)로 앱을 한 번씩 실행한다.
 
 ```sh

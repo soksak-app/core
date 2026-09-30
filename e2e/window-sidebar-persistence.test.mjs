@@ -43,6 +43,11 @@ for(const app of Object.values(APPS))test(`${app.name}: independent window and c
  const terminal=target.tabs.find(tab=>tab.plugin==='terminal');
  const windowBar=(await s.get('core.sidebars')).find(bar=>bar.placement==='window'&&bar.card===target.id);
  assert.ok(windowBar,'associated external sidebar absent');
+ const choices=(await s.get('core.layout')).state.cards.find(card=>card.id===target.id).data.sidebars;
+ s.cleanup(async()=>{
+  for(const side of ['left','right','top','bottom'])await s.run('core.card.sidebar.set',{card:target.id,side,set:choices?.[side]?.set??'inherit'});
+  await s.presented();
+ });
  for(const side of ['left','right','top','bottom'])await s.run('core.card.sidebar.set',{card:target.id,side,set:'off'});
  await s.run('core.tab.select',{tab:terminal.id});
  const settings=(await s.get('core.settings')).values;

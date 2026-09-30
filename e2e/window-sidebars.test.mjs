@@ -37,6 +37,11 @@ for(const app of Object.values(APPS))test(`${app.name}: fixed sidebars apply plu
  await fresh(s);await s.run('core.settings.theme',{name:'midnight',mode:'dark'});
  const initial=await s.get('core.grid');
  const target=initial.cards.find(card=>new Set(card.tabs.map(tab=>tab.plugin)).size>1);assert.ok(target,'different-plugin tabs are required');
+ const choices=(await s.get('core.layout')).state.cards.find(card=>card.id===target.id).data.sidebars;
+ s.cleanup(async()=>{
+  for(const side of ['left','right','top','bottom'])await s.run('core.card.sidebar.set',{card:target.id,side,set:choices?.[side]?.set??'inherit'});
+  await s.presented();
+ });
  for(const side of ['left','right','top','bottom'])await s.run('core.card.sidebar.set',{card:target.id,side,set:'off'});
  await s.presented();
  const baseline=await s.get('core.grid');

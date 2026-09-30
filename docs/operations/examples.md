@@ -46,6 +46,8 @@ Run the four-language adapter gate with `make language-test`. It emits case-leve
 
 ## Window checks
 
+The fixed-sidebar window checks restore temporary explicit card-sidebar selections before disconnecting, including after preparation fails. An explicit card `off` takes precedence over plugin defaults; use the declared `core.card.sidebar.set` command with `set: "inherit"` to clear that selection while retaining size and fold choices. To observe an existing normal window without replacing its project or settings, run `SOKSAK_APP=tauriv2 SOKSAK_CONFIG_DIR=<config-dir> pnpm -F @soksak/e2e verify:terminal-sidebar-current`. This check requires an active terminal card and a saved terminal `card-right` assignment, records normal/fullscreen/restored presentation, and retains the original tabs and settings. It does not create a fixture or repair a disabled selection.
+
 Start each application once, from separate terminals, with the configuration directories the harness reads (`os.tmpdir()` of Node.js, `$TMPDIR` on macOS):
 
 ```sh
