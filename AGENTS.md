@@ -44,7 +44,7 @@ This workspace contains the headless layout library `soksak`, the workbench fron
 - Read the applicable specification before changing behavior. Update it first when the contract changes and mark incomplete implementation in [features](docs/features.md).
 - Keep one canonical document per topic. `docs/spec/` defines current contracts without checklist IDs, progress, or history; `docs/features.md` separates implementation, validation, and release; `docs/operations/` contains current procedures; `CHANGELOG.md` records actual changes and validation.
 - Keep README files limited to an introduction, minimum startup steps, and document links. Use `docs/plans/` only for pending proposals; remove a proposal after incorporating its approved content into the specification.
-- Write documents in English. Update the matching `.ko.md` translation in the same change with the same information.
+- Write documents in English. Update the matching `.ko.md` translation in the same change with the same information; Korean text keeps technical terms in English and translates only the surrounding context.
 - Describe current behavior and actual reasons. Personal preferences and conversation context belong in memory outside Git.
 - Use direct action names and explicit subjects and objects. State a cause in one sentence. Do not use metaphors, personification, or colloquial wording in comments, documents, logs, or commits.
 - Comments in `packages/soksak` use English. Comments in other directories use Korean. Identifiers, logs, errors, and test names use English.
