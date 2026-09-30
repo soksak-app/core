@@ -78,7 +78,7 @@
 
 ## 저장되는 세트와 연결
 
-`sets`와 `links`는 설정이다. 기본값은 `environment.json`의 `sidebars`에서 온다. 변경은 다른 설정처럼 목록 전체를 보이는 범위에 쓴다. 프로젝트의 `sets`나 `links` 재정의는 전역 목록을 대신한다.
+`sets`와 `links`는 설정이다. 기본값은 플러그인 사이드바 선언을 정규화한 값이며 명시적 `environment.json`의 `sidebars`가 있으면 그것으로 교체한다. 변경은 다른 설정처럼 목록 전체를 보이는 범위에 쓴다. 프로젝트의 `sets`나 `links` 재정의는 전역 목록을 대신한다.
 
 세트는 `{id, title, sections, layout}`이다.
 

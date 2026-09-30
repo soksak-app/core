@@ -32,6 +32,7 @@ Common functionality belongs to the workbench or the native host so plugins do n
 | `mark` | with `surface` | Short text shown in the add menu and new tab titles |
 | `icon` | with `surface` | SVG elements for a 16×16 view box |
 | `sections` | no | Sidebar sections `{ "id": "<plugin id>.<name>", "name", "module" }`; `module` is a JavaScript path inside the package that draws the section, and the optional `fill: true` gives it the remaining sidebar height ([sections](#sections)) |
+| `sidebars` | no | Local default sets and optional four-side `card` assignments ([default sidebar sets](#default-sidebar-sets)) |
 | `preview` | no | `{ "ink": "--<token>" }`: the theme token name that colors the plugin's cards in library previews; requires `surface` |
 | `sidecars` | no | Package names of the [sidecars](sidecars.md) the page surface or the state module uses; requires `surface` or `state`. Each must be a dependency in the plugin's `package.json` |
 | `state` | no | `{ "module": "ui/state.js" }`: the [plugin state](#plugin-state) module that holds state outside a surface; requires `sections` |
@@ -43,6 +44,12 @@ A plugin requires `surface`, `sections`, or both. Only plugins with a surface ap
 `surface.drop`, when present, names a command in `exposes` that the page runs on the surface when files are dropped on it, with `{urls}` holding the dropped file URLs ([native surfaces](native-surfaces.md#input-over-native-views)).
 
 `surface.composition` is either `{ "kind": "dom" }` or a hybrid declaration with `kind: "hybrid"`, complete `regions`, and complete `overlays`. An image region names a sidecar already listed in `sidecars`. The manifest declaration is authority data sent to the host; page code cannot add a region, supplier, input owner, or stacking entry that is absent from it.
+
+## Default sidebar sets
+
+Optional plugin `sidebars` contains `sets` and an optional `card` mapping. Each set is `{id, title, sections, layout}` with a local lowercase identifier; `layout` is `list` or `tabs`. Section IDs may refer to any installed plugin. A `card` mapping requires a surface and maps `top`, `bottom`, `left`, and `right` to local set IDs. Missing sides declare no default. Unknown fields, duplicate or reserved local IDs, missing sets, and uninstalled sections fail explicitly.
+
+Core normalizes each local set ID to `<plugin>.<local>` and each card mapping to `{place: "card-<side>", plugin, set}`. An omitted environment `sidebars` uses these normalized defaults. An explicit environment `sidebars` supplies both `sets` and `links` and replaces both lists completely. Stored common and project lists then override each effective list as specified in [settings](settings.md#stored-sets-and-links). Defaults removed by an override are not restored. Plugin declarations are validated even when environment overrides replace their output.
 
 ## Sections
 
@@ -123,7 +130,7 @@ The browser back, forward, and reload buttons draw `chevron-left`, `chevron-righ
 | `plugins` | Plugin package names. Each must be a dependency of the application package. The order is the add-menu order |
 | `workspace.grid` | Grid lines and cards of a new space. A card with `tabs` lists `{ plugin, title }` entries |
 | `workspace.focus` | Card focused in a new space; it must have tabs |
-| `sidebars.sets` | Default section sets `{id, title, sections, layout}`; `layout` is `list` or `tabs` |
+| `sidebars.sets` | Optional explicit override of plugin defaults: section sets `{id, title, sections, layout}`; `layout` is `list` or `tabs` |
 | `sidecars` | Optional. `false` states that the runtime cannot run [sidecars](sidecars.md), as in the browser example; such an environment cannot list a plugin whose `state` module uses sidecars. The default is `true` |
 | `sidebars.links` | Default sidebar choices in the form of [sidebar choices](settings.md#sidebar-choices): general `left` and `right` links with `plugin: null`, plugin `left` and `right` links with a set or `null`, and `rail` links with a plugin id |
 

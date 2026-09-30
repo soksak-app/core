@@ -259,7 +259,7 @@ function checkBackground(where, background, sidecars, settings = {}) {
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "sidecars", "background", "exposes", "settings",
-    "state", "data"]);
+    "state", "data", "sidebars"]);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
   const where = `plugin ${id}`;
@@ -361,6 +361,7 @@ export function validateManifest(manifest) {
   if (manifest.surface === undefined && manifest.sections === undefined) {
     throw new Error(`${where}: a plugin requires a surface or sections`);
   }
+  if (manifest.sidebars !== undefined) validatePluginSidebarDefaults(manifest);
   return manifest;
 }
 
@@ -470,7 +471,7 @@ export function validateEnvironment(environment) {
   if (!grid.cards.some((card) => card.id === workspace.focus && card.tabs)) {
     throw new Error("environment.json: workspace.focus must name a card with tabs");
   }
-  validateSidebars(environment.sidebars, "environment.json");
+  if (environment.sidebars !== undefined) validateSidebars(environment.sidebars, "environment.json");
   return environment;
 }
 
@@ -502,7 +503,7 @@ export function checkReferences(environment, manifests) {
       if (!cards.has(tab.plugin)) throw new Error(`environment.json: tab plugin ${tab.plugin} has no surface`);
     }
   }
-  checkSidebarReferences(environment.sidebars, manifests, "environment.json");
+  normalizeSidebarDefaults(environment, manifests);
   // 사이드카를 실행하지 못하는 런타임은 표면을 열지 않지만 상태 모듈은 마운트한다(docs/spec/plugins.md#environmentjson).
   if (environment.sidecars === false) {
     for (const manifest of manifests) {
@@ -518,6 +519,47 @@ const RESERVED_SET_IDS = ["off", "inherit"];
 
 /** 세트 제목의 최대 길이. */
 const SET_TITLE_MAX = 40;
+
+function validatePluginSidebarDefaults(manifest) {
+  const where = `plugin ${manifest.id}`;
+  const sidebars = manifest.sidebars;
+  if (!isObject(sidebars)) throw new Error(`${where}: sidebars must be an object`);
+  only(`${where} sidebars`, sidebars, ["sets", "card"]);
+  validateSidebars({ sets: sidebars.sets, links: [] }, where);
+  for (const set of sidebars.sets) {
+    if (!ID.test(set.id)) throw new Error(`${where}: invalid local set id ${set.id}`);
+  }
+  if (sidebars.card !== undefined) {
+    if (!manifest.surface) throw new Error(`${where}: card defaults require a surface`);
+    if (!isObject(sidebars.card)) throw new Error(`${where}: sidebar card defaults must be an object`);
+    only(`${where} sidebar card`, sidebars.card, ["top", "bottom", "left", "right"]);
+    const ids = new Set(sidebars.sets.map((set) => set.id));
+    for (const [side, set] of Object.entries(sidebars.card)) {
+      if (!ids.has(set)) throw new Error(`${where}: card ${side} names unknown set ${String(set)}`);
+    }
+  }
+}
+
+/** 플러그인 기본값을 정규화하고 명시적 환경 목록으로 교체한다. */
+export function normalizeSidebarDefaults(environment, manifests) {
+  const defaults = { sets: [], links: [] };
+  for (const manifest of manifests) {
+    if (manifest.sidebars === undefined) continue;
+    validatePluginSidebarDefaults(manifest);
+    for (const set of manifest.sidebars.sets) {
+      defaults.sets.push({ ...set, id: `${manifest.id}.${set.id}`, sections: [...set.sections] });
+    }
+    for (const [side, set] of Object.entries(manifest.sidebars.card ?? {})) {
+      defaults.links.push({ place: `card-${side}`, plugin: manifest.id, set: `${manifest.id}.${set}` });
+    }
+  }
+  validateSidebars(defaults, "plugin defaults");
+  checkSidebarReferences(defaults, manifests, "plugin defaults");
+  const result = environment.sidebars === undefined ? defaults : structuredClone(environment.sidebars);
+  validateSidebars(result, "environment.json");
+  checkSidebarReferences(result, manifests, "environment.json");
+  return result;
+}
 
 /**
  * 사이드바 세트(sets)와 연결(links)의 형식을 검사한다. environment.json 의 sidebars 와 설정에

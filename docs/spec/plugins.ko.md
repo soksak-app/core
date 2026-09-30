@@ -32,6 +32,7 @@
 | `mark` | `surface`가 있으면 | 추가 메뉴와 새 탭 제목에 표시하는 짧은 텍스트 |
 | `icon` | `surface`가 있으면 | 16×16 뷰박스용 SVG 요소 |
 | `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name", "module" }`. `module`은 섹션을 그리는 패키지 안의 JavaScript 경로이고, 선택 항목 `fill: true`는 섹션에 남은 사이드바 높이를 준다([섹션](#섹션)) |
+| `sidebars` | 아니오 | 로컬 기본 세트와 선택적인 네 변 `card` 연결([기본 사이드바 세트](#기본-사이드바-세트)) |
 | `preview` | 아니오 | `{ "ink": "--<토큰>" }`: 라이브러리 미리보기에서 플러그인 카드의 색을 정하는 테마 토큰 이름. `surface`가 필요하다 |
 | `sidecars` | 아니오 | 표면 페이지나 상태 모듈이 사용하는 [사이드카](sidecars.ko.md)의 패키지 이름. `surface`나 `state`가 필요하다. 각각 플러그인 `package.json`의 의존성이어야 한다 |
 | `state` | 아니오 | `{ "module": "ui/state.js" }`: 표면 밖의 상태를 갖는 [플러그인 상태](#플러그인-상태) 모듈. `sections`가 필요하다 |
@@ -43,6 +44,12 @@
 `surface.drop`이 있으면 파일이 표면에 놓였을 때 페이지가 그 표면에서 실행할 `exposes`의 명령을 가리키며, `{urls}`에 놓인 파일 URL을 담는다([네이티브 표면](native-surfaces.ko.md#네이티브-뷰-위의-입력)).
 
 `surface.composition`은 `{ "kind": "dom" }`이거나 `kind: "hybrid"`, 완전한 `regions`, 완전한 `overlays`를 가진 혼합 선언이다. 그림 영역은 `sidecars`에 이미 나열한 사이드카를 지정한다. manifest 선언은 호스트에 전달하는 권한 데이터다. 페이지 코드는 선언에 없는 영역, 공급자, 입력 소유자, 쌓임 항목을 추가할 수 없다.
+
+## 기본 사이드바 세트
+
+플러그인의 선택 필드 `sidebars`는 `sets`와 선택 필드 `card` 매핑을 포함한다. 각 세트는 로컬 소문자 식별자를 가진 `{id, title, sections, layout}`이며 `layout`은 `list` 또는 `tabs`다. 섹션 ID는 설치된 어느 플러그인도 참조할 수 있다. `card` 매핑은 표면이 있어야 하며 `top`, `bottom`, `left`, `right`를 로컬 세트 ID에 연결한다. 없는 변은 기본 연결을 선언하지 않는다. 알 수 없는 필드, 중복·예약 로컬 ID, 없는 세트와 설치되지 않은 섹션은 명시적으로 실패한다.
+
+코어는 로컬 세트 ID를 `<plugin>.<local>`로, 카드 매핑을 `{place: "card-<side>", plugin, set}`으로 정규화한다. 환경의 `sidebars`가 없으면 정규화한 기본값을 사용한다. 명시적 환경 `sidebars`는 `sets`와 `links`를 모두 제공하고 두 목록 전체를 교체한다. 저장된 공통·프로젝트 목록은 [설정](settings.ko.md#저장되는-세트와-연결)의 규칙으로 각 유효 목록을 덮어쓴다. 덮어쓰기가 제거한 기본값은 복원하지 않는다. 환경이 출력을 덮어써도 플러그인 선언은 검증한다.
 
 ## 섹션
 
@@ -123,7 +130,7 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 | `plugins` | 플러그인 패키지 이름. 각각 애플리케이션 패키지의 의존성이어야 한다. 순서가 추가 메뉴 순서다 |
 | `workspace.grid` | 새 스페이스의 격자선과 카드. `tabs`가 있는 카드는 `{ plugin, title }` 항목을 나열한다 |
 | `workspace.focus` | 새 스페이스에서 포커스할 카드. 탭이 있어야 한다 |
-| `sidebars.sets` | 기본 섹션 세트 `{id, title, sections, layout}`. `layout`은 `list` 또는 `tabs`다 |
+| `sidebars.sets` | 플러그인 기본값의 선택적 명시적 덮어쓰기: 섹션 세트 `{id, title, sections, layout}`. `layout`은 `list` 또는 `tabs`다 |
 | `sidecars` | 선택. `false`는 런타임이 [사이드카](sidecars.ko.md)를 실행할 수 없다는 뜻이며 브라우저 예제가 그렇다. 이런 환경은 상태 모듈이 사이드카를 쓰는 플러그인을 나열할 수 없다. 기본값은 `true`다 |
 | `sidebars.links` | [사이드바 선택](settings.ko.md#사이드바-선택) 형식의 기본 선택. `plugin: null`인 일반 `left`, `right` 연결, 세트나 `null`을 가진 플러그인 `left`, `right` 연결, 플러그인 id를 가진 `card-left` 연결 |
 

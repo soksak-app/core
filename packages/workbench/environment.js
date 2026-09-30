@@ -8,7 +8,7 @@ import { registerPlugin, registerSection } from "./registry.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
 import {
   DIAGNOSTIC_PLUGINS, ENVIRONMENT, MANIFEST, checkReferences, mergeExposes, modulePath, validateDiagnosticPlugins,
-  validateEnvironment, validateManifest,
+  normalizeSidebarDefaults, validateEnvironment, validateManifest,
 } from "@soksak/plugin-api";
 
 let loaded = null;
@@ -78,7 +78,7 @@ export async function loadEnvironment() {
         sidecars: manifest.sidecars ?? [], data: manifest.data ?? {} });
     }
   }
-  setSidebarDefaults(environment.sidebars);
+  setSidebarDefaults(normalizeSidebarDefaults(environment, manifests.map(({ manifest }) => manifest)));
   units = manifests.map(({ manifest }) => ({
     id: manifest.id, name: manifest.name, description: manifest.description, surface: Boolean(manifest.surface),
     // 기본값: sections 는 plugin.json 의 선택 필드이며 없으면 섹션이 없다.

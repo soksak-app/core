@@ -78,7 +78,7 @@ A change that would repeat a section in the set fails with -32602 (invalid param
 
 ## Stored sets and links
 
-`sets` and `links` are settings. Their default values come from `environment.json` `sidebars`. A change writes the whole list to the shown scope, like any other setting; a project override of `sets` or `links` replaces the common list.
+`sets` and `links` are settings. Their default values come from normalized plugin sidebar declarations, replaced by explicit `environment.json` `sidebars` when present. A change writes the whole list to the shown scope, like any other setting; a project override of `sets` or `links` replaces the common list.
 
 A set is `{id, title, sections, layout}`:
 

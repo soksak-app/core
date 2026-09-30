@@ -26,6 +26,7 @@ const files = {
     id: "card", name: "Card", description: "검사용 카드.", mark: "c", icon: "<path/>",
     surface: { module: "ui/card.js", composition: { kind: "dom" } }, sections: [{ id: "card.info", name: "Info", module: "ui/info.js" }],
     preview: { ink: "--fixture-ink" },
+    sidebars: { sets: [{ id: "info", title: "Info", sections: ["card.info"], layout: "tabs" }], card: { top: "info" } },
     settings: { "cursor.shape": { label: "커서 모양", type: "enum", default: "block", values: ["block", "beam"] } },
   },
   "/modules/@fixture/side/plugin.json": { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] },
