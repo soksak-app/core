@@ -1344,30 +1344,61 @@ impl<O: Owner> Core<O> {
 /// 끊긴 영속 연결을 다시 맺고 결과를 소유 표면에 알린다(V5-106). 이미 다른 경로가 다시
 /// 시작했거나 종료 중이면 아무 일도 하지 않는다. 한 번의 연결 끊김에 한 번만 시도한다 —
 /// 실패는 알림으로 보고하고, 다음 전송이 같은 경로를 다시 지나간다.
+/// 끊긴 영속 연결을 다시 맺고 결과를 소유 표면에 알린다(V5-106). 이미 다른 경로가 다시
+/// 시작했거나 종료 중이면 아무 일도 하지 않는다. 한 번의 연결 끊김에 한 번만 시도한다 —
+/// 실패는 알림으로 보고하고, 다음 전송이 같은 경로를 다시 지나간다. 단, 연결이 거부된
+/// 첫 시도는 endpoint 가 더는 듣지 않는다는 증거다(재활용된 pid 가 kill(pid, 0) 을 통과시켜도
+/// 소켓은 죽었다). 끊김 기록이 있는 재시작에서만 endpoint 를 버리고 한 번 더 시도한다.
+/// 전송 경로의 계약은 그대로다: 차가운 전송의 live-unreachable 보고는 endpoint 를 바꾸지
+/// 않는다.
 fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
-    let outcome = {
-        let mut state = core.state.lock().expect("sidecar state");
-        if state.stopped || state.running.contains_key(name) {
-            return;
-        }
-        Core::start(core, name).map(|process| {
-            state.running.insert(name.to_string(), process);
-            state.unannounced_loss.remove(name)
-        })
-    };
-    match &outcome {
-        // 다른 경로(전송)가 이미 다시 시작했으면 알림도 그 호출이 보냈다.
-        Ok(false) => {}
-        Ok(true) => {
-            eprintln!("sidecar {name}: connection lost; restarted");
-            notify_connection(core, name, Ok(()));
-        }
-        Err(reason) => {
-            // 시작에 실패했다 — 끊김 기록은 남겨 다음 시작이 알린다.
-            eprintln!("sidecar {name}: connection lost; restart failed: {reason}");
-            notify_connection(core, name, Err(reason.clone()));
+    let mut outcome = revive_attempt(core, name);
+    if let Err(reason) = &outcome {
+        if refused_connect(reason, name) {
+            let endpoint = core
+                .declared
+                .get(name)
+                .and_then(|program| program.file_name())
+                .and_then(|value| value.to_str())
+                .map(|basename| {
+                    core.config_directory
+                        .join("services")
+                        .join(basename)
+                        .join("endpoint.json")
+                });
+            if let Some(endpoint) = endpoint {
+                if let Err(error) = std::fs::remove_file(&endpoint) {
+                    if error.kind() != std::io::ErrorKind::NotFound {
+                        eprintln!("sidecar {name}: remove refused endpoint: {error}");
+                    }
+                }
+            }
+            outcome = revive_attempt(core, name);
         }
     }
+    match &outcome {
+        Ok(true) => eprintln!("sidecar {name}: connection lost; restarted"),
+        Ok(false) => {}
+        Err(reason) => eprintln!("sidecar {name}: connection lost; restart failed: {reason}"),
+    }
+    notify_connection(core, name, outcome.map(|_| ()));
+}
+
+/// 재시작 한 번. 이미 다른 경로가 다시 시작했으면 Ok(false), 시작에 실패하면 Err.
+fn revive_attempt<O: Owner>(core: &Arc<Core<O>>, name: &str) -> Result<bool, String> {
+    let mut state = core.state.lock().expect("sidecar state");
+    if state.stopped || state.running.contains_key(name) {
+        return Ok(false);
+    }
+    let process = Core::start(core, name)?;
+    state.running.insert(name.to_string(), process);
+    Ok(state.unannounced_loss.remove(name))
+}
+
+/// start_persistent 의 연결 실패 문장인가. 문장은 이 파일의 connect_service 오류에서
+/// 만들어진다.
+fn refused_connect(reason: &str, name: &str) -> bool {
+    reason.starts_with(&format!("sidecar {name}: connect authenticated service:"))
 }
 
 /// 다시 맺긴 영속 연결을 소유 표면에 알린다(V5-106). 창은 그 사이드카의 그림 configure 를

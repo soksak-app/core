@@ -281,9 +281,14 @@ fn view_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String>
         .map_err(string)?;
         text_items.push(item);
     }
+    // 전체 화면 항목은 프레임워크가 준 제목과 단축키를 쓴다. 시스템이 보기 메뉴에 스스로
+    // 넣는다는 과거 측정과 달리 이 앱들에서는 메뉴를 열어도 오지 않음을 실측했다(2026-09-30,
+    // V5-112) — 계약표의 system 행을 여기서 만든다.
+    let fullscreen = PredefinedMenuItem::fullscreen(app, None).map_err(string)?;
     let items: Vec<&dyn IsMenuItem<Wry>> = text_items
         .iter()
         .map(|item| item as &dyn IsMenuItem<Wry>)
+        .chain(std::iter::once(&fullscreen as &dyn IsMenuItem<Wry>))
         .collect();
     Submenu::with_id_and_items(app, "view", menu_title("view", language)?, true, &items)
         .map_err(string)

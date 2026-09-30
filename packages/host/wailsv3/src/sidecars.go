@@ -984,24 +984,20 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 // 다른 경로가 다시 시작했거나 종료 중이면 아무 일도 하지 않는다. 한 번의 연결 끊김에 한 번만
 // 시도한다 — 실패는 알림으로 보고하고, 다음 전송이 같은 경로를 다시 지나간다.
 func (c *Sidecars) revivePersistent(name string) {
-	var failure error
-	announced := false
-	func() {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		if c.stopped {
-			return
+	announced, failure := c.reviveAttempt(name)
+	// 연결이 거부된 첫 시도는 endpoint 가 더는 듣지 않는다는 증거다 — 재활용된 pid 가
+	// kill(pid, 0) 을 통과시켜도 소켓은 죽었다. 끊김 기록이 있는 재시작에서만 endpoint 를
+	// 버리고 한 번 더 시도한다(V5-106). 전송 경로의 계약은 그대로다: 차가운 전송의
+	// live-unreachable 보고는 endpoint 를 바꾸지 않는다.
+	if failure != nil && refusedConnect(failure, name) {
+		if program, ok := c.declared[name]; ok {
+			endpoint := filepath.Join(c.configDir, "services", filepath.Base(program), "endpoint.json")
+			if err := os.Remove(endpoint); err != nil && !errors.Is(err, os.ErrNotExist) {
+				log.Printf("sidecar %s: remove refused endpoint: %v", name, err)
+			}
 		}
-		if _, running := c.running[name]; running {
-			return
-		}
-		if _, err := c.process(name); err != nil {
-			failure = err
-			return
-		}
-		announced = c.unannouncedLoss[name]
-		delete(c.unannouncedLoss, name)
-	}()
+		announced, failure = c.reviveAttempt(name)
+	}
 	switch {
 	case failure != nil:
 		// 시작에 실패했다 — 끊김 기록은 남겨 다음 시작이 알린다.
@@ -1012,6 +1008,30 @@ func (c *Sidecars) revivePersistent(name string) {
 		log.Printf("sidecar %s: connection lost; restarted", name)
 		c.notifyConnection(name, nil)
 	}
+}
+
+// reviveAttempt 는 재시작 한 번. 이미 다른 경로가 다시 시작했으면 announced=false,
+// 시작에 실패하면 failure 를 돌려준다.
+func (c *Sidecars) reviveAttempt(name string) (announced bool, failure error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stopped {
+		return false, nil
+	}
+	if _, running := c.running[name]; running {
+		return false, nil
+	}
+	if _, err := c.process(name); err != nil {
+		return false, err
+	}
+	announced = c.unannouncedLoss[name]
+	delete(c.unannouncedLoss, name)
+	return announced, nil
+}
+
+// refusedConnect 는 processPersistent 의 연결 실패 문장인가.
+func refusedConnect(failure error, name string) bool {
+	return failure != nil && strings.HasPrefix(failure.Error(), fmt.Sprintf("sidecar %s: connect authenticated service:", name))
 }
 
 // notifyConnection 은 다시 맺긴 영속 연결을 소유 표면에 알린다(V5-106). 창은 그 사이드카의

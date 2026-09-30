@@ -48,7 +48,8 @@ var itemTable = []struct{ menu, id, source, ko, en, key string }{
 
 // menuRoles 는 계약 표의 항목 id 가 쓰는 Wails 역할이다. app 항목도 언어표 제목과 함께 여기를 지나며
 // close-all 은 close-window 의 performClose: 역할이 시스템과 함께 제공하므로 여기에
-// 없다.
+// 없다. fullscreen 은 시스템이 보기 메뉴에 스스로 넣는다는 과거 측정과 달리 이 앱들에서는
+// 메뉴를 열어도 오지 않음을 실측했다(2026-09-30, V5-112) — 여기서 만든다.
 var menuRoles = map[string]application.Role{
 	"about":              application.About,
 	"services":           application.ServicesMenu,
@@ -63,6 +64,7 @@ var menuRoles = map[string]application.Role{
 	"copy":               application.Copy,
 	"paste":              application.Paste,
 	"select-all":         application.SelectAll,
+	"fullscreen":         application.FullScreen,
 	"bring-all-to-front": application.BringAllToFront,
 }
 
@@ -187,11 +189,11 @@ func ApplicationMenuFor(language string) (*application.Menu, error) {
 // addMenuItems 는 계약 표의 menu 항목을 submenu 에 순서대로 만든다. close-all 은 close-window 의
 // performClose: 역할이 시스템과 함께 제공하므로 만들지 않는다.
 func addMenuItems(submenu *application.Menu, menu, language string) error {
-	// close-all 과 fullscreen 은 만들지 않는다. 측정하면 시스템이 앱 시작을 마칠 때 close-window 의
-	// performClose: 곁에 Close All 대체 항목을, View 메뉴에 자기 전체 화면 항목(keyEquivalent f)을
-	// 각각 먼저 놓는다(접근성에서는 둘 다 숨는다). 계약표에는 있지만 여기서 만들 항목이 없다.
+	// close-all 은 만들지 않는다. 측정하면 시스템이 앱 시작을 마칠 때 close-window 의 performClose:
+	// 곁에 Close All 대체 항목을 스스로 놓는다(접근성에서는 숨는다). 계약표에는 있지만 여기서 만들
+	// 항목이 없다. fullscreen 은 시스템이 넣어 주지 않음을 실측했으므로(V5-112) 여기서 만든다.
 	for _, row := range itemTable {
-		if row.menu != menu || row.id == "close-all" || row.id == "fullscreen" {
+		if row.menu != menu || row.id == "close-all" {
 			continue
 		}
 		title, err := titleOf(language, row.ko, row.en)
