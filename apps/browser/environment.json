@@ -111,7 +111,7 @@
     ],
     "links": [
       {
-        "place": "rail",
+        "place": "card-left",
         "plugin": "shell",
         "set": "set-shell"
       },

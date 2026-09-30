@@ -258,8 +258,8 @@ function drawGeneral() {
   ]));
 
   body.append(group("사이드바", "사이드바 위치는 모든 플러그인에 적용된다. 플러그인 페이지에서 고른 왼쪽·오른쪽 사이드바가 이 선택보다 앞선다.", [
-    row("사이드바 위치", segment("rail",
-      [["inset", "카드 안"], ["flow", "포커스 카드 옆"], ["pin", "고정"], ["off", "없음"]], value("rail"))),
+    row("카드 사이드바 위치", segment("cardSidebar",
+      [["inset", "카드 안"], ["flow", "포커스 카드 옆"], ["pin", "고정"], ["off", "없음"]], value("cardSidebar"))),
     row("왼쪽 사이드바 보이기", toggle("left", value("left"))),
     row("오른쪽 사이드바 보이기", toggle("right", value("right"))),
     row("왼쪽 사이드바 세트", choose("link:left:", generalOptions(), choiceOf("left", null))),
@@ -267,7 +267,7 @@ function drawGeneral() {
     ...(scope === "project" && overridden("links") ? [row("", press("reset:links", "전역 연결 사용"))] : []),
   ]));
 
-  body.append(group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 새 레일 열이 여는 폭이며 최소 폭과 최대 폭 사이여야 한다.",
+  body.append(group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 새 카드 사이드바 열이 여는 폭이며 최소 폭과 최대 폭 사이여야 한다.",
     Object.entries(LAYOUT_RANGES).map(([key, [min, max]]) => row(SIZE_LABELS[key], slide(key, min, max, value(key), "pt")))));
 
   body.append(group("표시", "배치는 그대로 두고 보이는 모습만 바꾼다.", [
@@ -303,7 +303,7 @@ const generalOptions = () => [["off", "사용 안 함"], ...setItems()];
 /** 선택 상자에 보일 현재 선택. 세트 id, off, 또는 inherit(플러그인의 일반 따름)이다. */
 function choiceOf(place, plugin) {
   const found = value("links").find((l) => l.place === place && l.plugin === plugin);
-  if (!found) return plugin === null || place === "rail" ? "off" : "inherit";
+  if (!found) return plugin === null || place === "card-left" ? "off" : "inherit";
   // 기본값: set 이 null 인 플러그인 연결은 사용 안 함이다(docs/spec/settings.md).
   return found.set ?? "off";
 }
@@ -386,7 +386,7 @@ function drawPluginPage(unit) {
     body.append(group("사이드바", "이 플러그인의 카드가 포커스된 동안 쓰는 사이드바. 일반 따름이면 일반의 선택을 쓴다.", [
       row("왼쪽 사이드바", choose(`link:left:${unit.id}`, own, choiceOf("left", unit.id))),
       row("오른쪽 사이드바", choose(`link:right:${unit.id}`, own, choiceOf("right", unit.id))),
-      row("레일 사이드바", choose(`link:rail:${unit.id}`, generalOptions(), choiceOf("rail", unit.id))),
+      row("카드 왼쪽 사이드바", choose(`link:card-left:${unit.id}`, generalOptions(), choiceOf("card-left", unit.id))),
     ]));
   }
 }

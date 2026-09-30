@@ -83,10 +83,10 @@ export function changeRow(sets, id, { action, index, section }, registered) {
  * choice 는 세트 id, off, inherit 이다. plugin 이 null 이면 left, right 의 일반 선택이다.
  */
 export function chooseLink(links, place, plugin, choice) {
-  if (!["left", "right", "rail"].includes(place)) throw new Error(`unknown place ${place}`);
-  if (place === "rail" && plugin === null) throw new Error("a rail choice names a plugin");
+  if (!["left", "right", "card-left"].includes(place)) throw new Error(`unknown place ${place}`);
+  if (place === "card-left" && plugin === null) throw new Error("a card-left choice names a plugin");
   const rest = links.filter((l) => !(l.place === place && l.plugin === plugin));
-  const general = plugin === null || place === "rail";
+  const general = plugin === null || place === "card-left";
   if (choice === "inherit") {
     // 기본값: 오류 문장에서 플러그인이 없는 일반 선택을 general 로 적는다.
     if (general) throw new Error(`${place} ${plugin ?? "general"} has no inherit choice`);
@@ -103,7 +103,7 @@ export function chooseLink(links, place, plugin, choice) {
 export function resolveSidebar(links, sets, place, plugin) {
   const own = links.find((l) => l.place === place && l.plugin === plugin && plugin !== null);
   // 기본값: 플러그인 연결이 없으면 그 플러그인은 일반 선택을 따른다(docs/spec/settings.md). 레일에는 일반 선택이 없다.
-  const chosen = own ?? (place === "rail" ? null : links.find((l) => l.place === place && l.plugin === null));
+  const chosen = own ?? (place === "card-left" ? null : links.find((l) => l.place === place && l.plugin === null));
   if (!chosen || chosen.set === null) return null;
   const set = sets.find((s) => s.id === chosen.set);
   if (!set) throw new Error(`link points at a set that is gone: ${chosen.set}`);

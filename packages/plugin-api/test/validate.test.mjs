@@ -300,7 +300,7 @@ test("sidebar links allow a plugin choice with a set or null and reject repeats 
       { place: "right", plugin: null, set: "set-1" },
       { place: "right", plugin: "side", set: null },
       { place: "left", plugin: "side", set: "set-1" },
-      { place: "rail", plugin: "side", set: "set-1" },
+      { place: "card-left", plugin: "side", set: "set-1" },
     ],
   });
   validateSidebars(base(), "settings");
@@ -308,7 +308,7 @@ test("sidebar links allow a plugin choice with a set or null and reject repeats 
     [(s) => { s.links.push({ place: "right", plugin: "side", set: "set-1" }); }, /settings: link right side appears twice/],
     [(s) => { s.links[0].set = null; }, /set null requires a left or right link that names a plugin/],
     [(s) => { s.links[4].set = null; }, /set null requires a left or right link that names a plugin/],
-    [(s) => { s.links[4].plugin = null; }, /a rail link names a plugin/],
+    [(s) => { s.links[4].plugin = null; }, /a card-left link names a plugin/],
     [(s) => { s.sets[0].id = "off"; s.links = []; }, /set id off is reserved/],
     [(s) => { s.sets[0].id = "inherit"; s.links = []; }, /set id inherit is reserved/],
   ]) {

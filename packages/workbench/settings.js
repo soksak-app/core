@@ -152,8 +152,8 @@ export const defaults = {
 
   /* 프로젝트 탭의 위치. top = 크롬 행, left = 왼쪽 세로 레일. */
   projectTabs: "top",
-  /* 사이드바 위치. inset = 카드 안(기본값), flow = 포커스 카드 옆 열, pin = 고정 열, off = 표시하지 않음. */
-  rail: "inset",
+  /* 카드 사이드바 위치. inset = 카드 안(기본값), flow = 포커스 카드 옆 열, pin = 고정 열, off = 표시하지 않음. */
+  cardSidebar: "inset",
   /* 좌·우 영역의 표시 여부. 무엇을 표시할지는 links 가 정한다. */
   left: true,
   right: true,

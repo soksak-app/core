@@ -151,7 +151,7 @@ function standingSet(place) {
   // 이동해도 레일의 종류는 바뀌지 않는다.
   const kind = railKind(place);
   // 좌·우는 포커스 카드 플러그인의 선택이 일반 선택보다 앞선다(docs/spec/settings.md 의 사이드바 선택).
-  const set = kind ? linkedSet("rail", kind) : linkedSet(place, focusedPlugin());
+  const set = kind ? linkedSet("card-left", kind) : linkedSet(place, focusedPlugin());
   return set;
 }
 
@@ -832,9 +832,9 @@ function dropTab(fromId, tabId, hit) {
 
 /** 카드가 inset 사이드바를 가지면 그 상태를, 아니면 null 을 반환한다. */
 export function cardSidebar(card) {
-  if (value("rail") !== "inset" || !card?.data) return null;
+  if (value("cardSidebar") !== "inset" || !card?.data) return null;
   const kind = activeTab(card)?.plugin;
-  if (!kind || !linkedSet("rail", kind)) return null;
+  if (!kind || !linkedSet("card-left", kind)) return null;
   // 기본값: 폭을 저장하지 않은 카드는 사이드바를 sidebarWidth 로 연다(docs/spec/example-model.md).
   const state = card.data.sidebar ?? {};
   // 기본값: 폭을 저장하지 않은 카드는 사이드바를 sidebarWidth 로 연다(docs/spec/example-model.md).
@@ -1057,7 +1057,7 @@ function drawSidebar(el, card) {
   el.dataset.side = state.collapsed ? "folded" : "open";
   // 접은 사이드바는 내용 없이 경계선만 남는다. 경계선 폭은 손잡이 폭이어서 접은 뒤에도 누를 수 있다.
   el.style.setProperty("--side-w", state.collapsed ? "var(--divider)" : `${state.width}px`);
-  const set = linkedSet("rail", activeTab(card).plugin);
+  const set = linkedSet("card-left", activeTab(card).plugin);
   drawSet(side.querySelector(".set"), card.id, set, { card: card.id, surface: activeTab(card).id });
 }
 
@@ -1076,7 +1076,7 @@ function standRail(kind) {
   // 레일은 포커스한 카드 옆에 표시한다. 자기 플러그인 종류가 포커스를 잃으면
   // 닫는다. 그 종류의 레일을 연결하지 않았으면 아무 레일도 표시하지 않는다.
   // inset 은 사이드바를 카드 안에 두므로 열을 세우지 않는다.
-  if (!linkedSet("rail", kind) || value("rail") === "off" || value("rail") === "inset" || focusedPlugin() !== kind) {
+  if (!linkedSet("card-left", kind) || value("cardSidebar") === "off" || value("cardSidebar") === "inset" || focusedPlugin() !== kind) {
     if (has) {
       // 기본값: 경계를 끌어 px 폭을 정하지 않은 카드에는 width 가 없으므로 보관한 폭을 유지한다.
       railWidth[kind] = grid.card(id).width ?? railWidth[kind];
@@ -1096,7 +1096,7 @@ function standRail(kind) {
   // 변경을 놓친다.
   // 기본값: 경계를 끌어 px 폭을 정하지 않은 카드에는 width 가 없으므로 보관한 폭을 유지한다.
   railWidth[kind] = grid.card(id).width ?? railWidth[kind];
-  if (value("rail") !== "flow") return;                  // PIN — 자리를 지킨다
+  if (value("cardSidebar") !== "flow") return;                  // PIN — 자리를 지킨다
   const line = railTarget(id, kind);
   if (line !== null) grid.moveTo(id, "x", line);
 }

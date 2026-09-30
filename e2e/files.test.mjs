@@ -224,12 +224,12 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
-    s.cleanup(() => s.run("core.settings.reset", { key: "rail" }));
+    s.cleanup(() => s.run("core.settings.reset", { key: "cardSidebar" }));
     // 셸 카드의 inset 사이드바에도 파일 트리를 둔다. 좌측 사이드바의 트리와 함께 둘이 마운트된다.
     const sets = (await s.get("core.settings")).values.sets;
     await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-shell" ? { ...set, sections: ["files.tree"] } : set) },
       scope: "common" });
-    await s.run("core.settings.change", { key: "rail", value: "inset", scope: "common" });
+    await s.run("core.settings.change", { key: "cardSidebar", value: "inset", scope: "common" });
     const project = await s.get("core.project");
     const folder = `pair-${process.pid}`;
     const directory = join(project.root, folder);

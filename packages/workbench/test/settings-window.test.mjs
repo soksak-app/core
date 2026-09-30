@@ -11,7 +11,7 @@ const sets = [
 ];
 const links = [
   { place: "left", plugin: null, set: "set-1" },
-  { place: "rail", plugin: "beta", set: "set-3" },
+  { place: "card-left", plugin: "beta", set: "set-3" },
 ];
 
 function relativeLuminance(hex) {
@@ -157,7 +157,9 @@ test("a stored set or link that breaks the sidebars rules is rejected before any
   assert.throws(() => set({ sets: stored((v) => { v[0].layout = "grid"; }) }, "common"), /layout must be list or tabs/);
   assert.throws(() => set({ sets: stored((v) => { v[0].title = ""; }) }, "common"), /title must be 1 to 40/);
   assert.throws(() => set({ links: [{ place: "left", plugin: null, set: "set-9" }] }, "common"), /known set/);
-  assert.throws(() => set({ links: [{ place: "rail", plugin: "beta", set: "set-1" }] }, "common"), /plugin beta without a surface/);
+  // 이름 바꿈(V5-116-1): 낡은 rail 자리는 알 수 없는 자리로 거부된다.
+  assert.throws(() => set({ links: [{ place: "rail", plugin: "alpha", set: "set-1" }] }, "common"), /left, right, card-left/);
+  assert.throws(() => set({ links: [{ place: "card-left", plugin: "beta", set: "set-1" }] }, "common"), /plugin beta without a surface/);
 });
 
 test("a plugin's left or right choice takes precedence over the general choice", () => {
@@ -179,11 +181,11 @@ test("a plugin's left or right choice takes precedence over the general choice",
   // 일반 사용 안 함은 일반 연결을 뺀다.
   assert.deepEqual(chooseLink(links, "right", null, "off"), []);
   assert.throws(() => chooseLink([], "left", null, "inherit"), /inherit/);
-  assert.throws(() => chooseLink([], "rail", "alpha", "inherit"), /inherit/);
-  assert.deepEqual(chooseLink(chooseLink([], "rail", "alpha", "set-a"), "rail", "alpha", "off"), []);
-  assert.equal(resolveSidebar([{ place: "rail", plugin: "alpha", set: "set-a" }], two, "rail", "alpha").id, "set-a");
+  assert.throws(() => chooseLink([], "card-left", "alpha", "inherit"), /inherit/);
+  assert.deepEqual(chooseLink(chooseLink([], "card-left", "alpha", "set-a"), "card-left", "alpha", "off"), []);
+  assert.equal(resolveSidebar([{ place: "card-left", plugin: "alpha", set: "set-a" }], two, "card-left", "alpha").id, "set-a");
 });
 
 test("the sidebar position defaults to the inset sidebar", () => {
-  assert.equal(defaults.rail, "inset");
+  assert.equal(defaults.cardSidebar, "inset");
 });

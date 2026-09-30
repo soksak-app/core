@@ -26,13 +26,13 @@ The left navigation lists three sections in this order. Every section shows the 
 | 테마 | theme swatches `theme`, 모드 `mode` |
 | 형태 | 통로 `gap`, 모서리 `radius`, 폰트 `font`, 글자 크기 `size` |
 | 위치 | 프로젝트 탭 위치 `projectTabs` |
-| 사이드바 | 사이드바 위치 `rail`, 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 왼쪽 사이드바 세트 and 오른쪽 사이드바 세트 (each a select of all sets and 사용 안 함, `core.settings.link {place, plugin: null, set}`) |
+| 사이드바 | 사이드바 위치 `cardSidebar`, 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 왼쪽 사이드바 세트 and 오른쪽 사이드바 세트 (each a select of all sets and 사용 안 함, `core.settings.link {place, plugin: null, set}`) |
 | 사이드바 크기 | the width settings of [layout values](#layout-values) |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
 | 진단 | 성능 트레이스 `diagnostics.performance` |
 
-사이드바 위치 is one setting for every plugin; its default is `inset`, and its control lists 카드 안 first. `flow` shows the rail beside the focused card, `pin` keeps it where it stood, `inset` shows it inside every card, and `off` hides it ([example model](example-model.md)). No plugin setting appears in 일반.
+사이드바 위치 is one setting for every plugin; its default is `inset`, and its control lists 카드 안 first. `flow` shows the card sidebar beside the focused card, `pin` keeps it where it stood, `inset` shows it inside every card, and `off` hides it ([example model](example-model.md)). No plugin setting appears in 일반.
 ### 진단
 
 `diagnostics.performance` is the permanent performance trace ([performance trace](performance-trace.md)). It is a boolean, default false, set through the settings file rather than a settings-window control. While it is false no layer performs any performance logging work — no file is created, no formatting runs. Setting it true makes every layer append events to `logs/performance.ndjson` under the configuration directory, and setting it back false stops the logging at the next event boundary; the file and its rotation belong to the trace, not to the setting, so an old log survives a restart with the flag off.
@@ -100,7 +100,7 @@ Deleting a set writes the remaining sets and the links without the ones to it to
 | `{place: "left" or "right", plugin: null, set: "<set id>"}` | The general choice of that sidebar. Without it the general choice is 사용 안 함 |
 | `{place: "left" or "right", plugin: "<plugin id>", set: "<set id>"}` | The plugin shows that set in that sidebar |
 | `{place: "left" or "right", plugin: "<plugin id>", set: null}` | The plugin hides that sidebar (사용 안 함). Without a link for the plugin, the plugin follows the general choice (일반 따름) |
-| `{place: "rail", plugin: "<plugin id>", set: "<set id>"}` | The rail of that plugin shows the set. Without it the plugin has no rail |
+| `{place: "card-left", plugin: "<plugin id>", set: "<set id>"}` | The card-left sidebar of that plugin shows the set. Without it the plugin has no card-left sidebar |
 
 `place` and `plugin` together appear at most once. `set: null` is allowed only on a left or right link that names a plugin. A set id cannot be `off` or `inherit`, because the selects use those two values.
 
@@ -118,7 +118,7 @@ So both levels can hide a sidebar: with the general choice 사용 안 함, a plu
 |---|---|---|---|
 | left or right, `plugin: null` | Stores the general link | Removes the general link (사용 안 함) | Fails with -32602 |
 | left or right, a plugin | Stores the plugin link | Stores the plugin link with `set: null` | Removes the plugin link (일반 따름) |
-| rail, a plugin | Stores the rail link | Removes the rail link | Fails with -32602 |
+| card-left, a plugin | Stores the card-left link | Removes the card-left link | Fails with -32602 |
 
 ## Layout values
 
@@ -128,7 +128,7 @@ The following values were constants in `plane.js` and `app.css`. They are core s
 |---|---|---|---|---|
 | `sidebarMinWidth` | 최소 폭 | 120 | 60–800 | Smallest width of an inset sidebar |
 | `sidebarMaxWidth` | 최대 폭 | 480 | 60–800 | Largest width of an inset sidebar |
-| `sidebarWidth` | 처음 폭 | 190 | 60–800 | Width of an inset sidebar that has no stored width, and of a rail column that its plugin has not resized in the space |
+| `sidebarWidth` | 처음 폭 | 190 | 60–800 | Width of an inset sidebar that has no stored width, and of a card sidebar column that its plugin has not resized in the space |
 
 The three values share one range, 60 to 800 points, and their sliders use that range, so equal values sit at equal slider positions. The rows are named 최소 폭, 최대 폭, and 처음 폭 on one line under the group 사이드바 크기.
 
@@ -155,9 +155,9 @@ The following layout constants remain in code because they are tied to the docum
 
 ## Acceptance
 
-- 일반 holds the sidebar appearance controls (`rail`, `left`, `right`, the left link, the widths) and no plugin setting.
+- 일반 holds the sidebar appearance controls (`cardSidebar`, `left`, `right`, the left link, the widths) and no plugin setting.
 - 사이드바 holds only the set list, 새 세트, and the editor. The editor has no control per registered section: its section controls are one select box and ▲ ▼ − per row, and one +.
 - The section rows choose, move, remove, and add sections through `core.settings.sets.row`; a repeated section is rejected.
 - 플러그인 shows a filtered list; a row opens the plugin page with its settings, sections, and sidebar choices, and 목록 returns to the list.
 - The sidebar resolution holds: general 사용 안 함 with a plugin set shows the set while that plugin's card is focused; a general set with plugin 사용 안 함 hides the sidebar; plugin 일반 따름 shows the general set.
-- The layout values change the inset sidebar limits, default width, folded width, and new rail width.
+- The layout values change the inset sidebar limits, default width, folded width, and new card sidebar width.
