@@ -2,6 +2,8 @@
 
 [한국어](projects.ko.md)
 
+The replacement window declaration, placement, association and rail-border contract is [external window sidebars](external-sidebars.md); implementation remains pending under V5-117-1-3. It does not change the implemented internal card-side contract.
+
 This specification defines the application project registry, persistent settings, and project windows. [Features](../features.md) records implementation and validation separately.
 
 ## Project identity

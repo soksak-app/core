@@ -2,6 +2,8 @@
 
 [한국어](example-model.ko.md)
 
+The replacement window declaration, placement, association and rail-border contract is [external window sidebars](external-sidebars.md); implementation remains pending under V5-117-1-3. It does not change the implemented internal card-side contract.
+
 The example application owns projects, spaces, and tabs. The layout library owns card geometry.
 
 | Object | Contents |

@@ -2,6 +2,8 @@
 
 [한국어](settings.ko.md)
 
+The replacement window declaration, placement, association and rail-border contract is [external window sidebars](external-sidebars.md); implementation remains pending under V5-117-1-3. It does not change the implemented internal card-side contract.
+
 This specification defines the sections of the settings window, the settings they show, and the stored form of sidebar sets. [Projects](projects.md#settings) defines scopes and storage files, [native modals](native-modals.md) defines how the window is drawn, and [plugins](plugins.md) defines plugin declarations. [Features](../features.md) records implementation and validation.
 
 ## Sections

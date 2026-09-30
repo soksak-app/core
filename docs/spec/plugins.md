@@ -2,6 +2,8 @@
 
 [한국어](plugins.ko.md)
 
+The replacement window declaration, placement, association and rail-border contract is [external window sidebars](external-sidebars.md); implementation remains pending under V5-117-1-3. It does not change the implemented internal card-side contract.
+
 The workbench does not reference any specific plugin. Each application declares its plugins and defaults in `environment.json`. Each plugin declares itself in `plugin.json`. [`@soksak/plugin-api`](../../packages/plugin-api/index.js) defines both formats, the `sidecar.json` format, the staged file layout, and the page import map. The workbench, plugins, and applications validate their own files with those functions.
 
 ## Workspace layout
