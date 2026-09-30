@@ -721,18 +721,14 @@ fn create(
                 // 않는다.
                 if event.get("type").and_then(|value| value.as_str()) == Some("focus") {
                     if let Some(workspace) = host.try_state::<crate::workspace::Workspace>() {
-                        if crate::performance::enabled(workspace.directory()) {
-                            crate::performance::line(
-                                &crate::performance::target(workspace.directory()),
-                                "host",
-                                serde_json::json!({
-                                    "event": "focus",
-                                    "surface": event_surface,
-                                    "name": event_name,
-                                    "focused": event.get("focused"),
-                                }),
-                            );
-                        }
+                        crate::performance::observe(workspace.directory(), "host", || {
+                            serde_json::json!({
+                                "event": "focus",
+                                "surface": event_surface,
+                                "name": event_name,
+                                "focused": event.get("focused"),
+                            })
+                        });
                     }
                 }
                 let report_surface = event_surface.clone();

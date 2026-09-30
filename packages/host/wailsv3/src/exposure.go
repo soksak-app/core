@@ -1259,12 +1259,12 @@ func (s *Surfaces) presented() (float64, error) {
 		// 표시 장벽 대기의 계기(V5-104): 이 대기가 타임아웃에 걸리면 화면이 멈춘다.
 		barrierStarted := time.Now()
 		barrierErr := s.images.WaitCurrentError(remaining)
-		if PerformanceEnabled(s.host.configDir) {
-			PerformanceLine(PerformanceTarget(s.host.configDir), "host", map[string]any{
+		PerformanceObserve(s.host.configDir, "host", func() map[string]any {
+			return map[string]any{
 				"event": "barrier", "wait_us": time.Since(barrierStarted).Microseconds(),
-				"ok":    barrierErr == nil,
-			})
-		}
+				"ok": barrierErr == nil,
+			}
+		})
 		if err := barrierErr; err != nil {
 			if err.Error() == "presentationTimeout" {
 				return 0, rpcError(codeTimeout, "the current image raster did not present within %s", pageTimeout)

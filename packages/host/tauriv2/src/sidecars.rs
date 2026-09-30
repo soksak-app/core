@@ -799,17 +799,10 @@ impl<O: Owner> Core<O> {
             .spawn()
             .map_err(|e| format!("sidecar {name}: {}: {e}", program.display()))?;
         // 프로세스 등록부의 계기(V5-104): 뜨는 사이드카의 pid 와 역할을 남긴다.
-        if let Some(config) = core.config_directory.to_str() {
-            let directory = std::path::PathBuf::from(config);
-            if crate::performance::enabled(&directory) {
-                crate::performance::line(
-                    &crate::performance::target(&directory),
-                    "host",
-                    serde_json::json!({"event": "process", "role": "sidecar", "name": name,
-                        "pid": child.id()}),
-                );
-            }
-        }
+        crate::performance::observe(&core.config_directory, "host", || {
+            serde_json::json!({"event": "process", "role": "sidecar", "name": name,
+                        "pid": child.id()})
+        });
         let mut stdin = child.stdin.take().ok_or("sidecar stdin is missing")?;
         let stdout = child.stdout.take().ok_or("sidecar stdout is missing")?;
 
@@ -943,9 +936,7 @@ impl<O: Owner> Core<O> {
         std::fs::create_dir_all(&service_dir)
             .map_err(|e| format!("sidecar {name}: create service directory: {e}"))?;
         // 성능 트레이스가 켜져 있으면 나중에 뜨는 사이드카에도 플래그를 쓴다(V5-104).
-        if crate::performance::enabled(config) {
-            crate::performance::write_sidecar_flags(config, &crate::performance::target(config));
-        }
+        crate::performance::sync_services(config)?;
         current()?
             .secure_service_directory(&service_dir)
             .map_err(|e| format!("sidecar {name}: service directory permissions: {e}"))?;

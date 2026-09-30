@@ -795,11 +795,11 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		s.mu.Unlock()
 		delete(s.compositionRevisions, id)
 		// 표면 생명주기의 계기(V5-104): 목록에서 사라진 표면은 이 자리에서 파괴된다.
-		if PerformanceEnabled(s.host.configDir) {
-			PerformanceLine(PerformanceTarget(s.host.configDir), "host", map[string]any{
+		PerformanceObserve(s.host.configDir, "host", func() map[string]any {
+			return map[string]any{
 				"event": "surface", "phase": "destroyed", "surface": id,
-			})
-		}
+			}
+		})
 		gone = append(gone, id)
 	}
 	return gone, placed, nil

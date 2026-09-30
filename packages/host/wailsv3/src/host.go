@@ -86,6 +86,9 @@ func Run(assets fs.FS, options Options) error {
 	if err != nil {
 		return fmt.Errorf("config directory: %w", err)
 	}
+	if err := PerformanceDisable(configDirectory); err != nil {
+		return fmt.Errorf("reset performance switch: %w", err)
+	}
 	// 지난 실행이 남긴 WebKit 자식을 기록으로 수확하고, 남의 것을 덮지 않게 지금 떠 있는
 	// WebKit 을 기준선으로 찍는다(V5-113). 아직 창이 없으므로 이 실행의 WebKit 은 없다.
 	ReapRecordedWebKit(configDirectory)

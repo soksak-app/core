@@ -607,13 +607,11 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                     .state::<crate::workspace::Workspace>()
                     .directory()
                     .to_path_buf();
-                if crate::performance::enabled(&directory) {
-                    crate::performance::line(
-                        &crate::performance::target(&directory),
-                        "host",
-                        serde_json::json!({"event": "surface", "phase": "destroyed", "surface": id}),
-                    );
-                }
+                crate::performance::observe(
+                    &directory,
+                    "host",
+                    || serde_json::json!({"event": "surface", "phase": "destroyed", "surface": id}),
+                );
             }
             if let Ok(mut named) = views.0.lock() {
                 named.remove(&handle);

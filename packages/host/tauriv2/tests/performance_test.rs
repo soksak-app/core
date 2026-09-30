@@ -1,72 +1,202 @@
 // 성능 트레이스 호스트 쪽 계약(docs/spec/performance-trace.md, V5-104).
 // 켜기는 로그 파일과 사이드카 플래그 파일을 만들고, 끄기는 플래그를 지운다.
-// 페이지 줄 중계는 객체 형식을 검증하고 대상에 그대로 덧붙인다. 계기는 진단이므로 모든
-// 쓰기 함수가 실패를 조용히 흡수한다 — 거부는 파일에 줄이 남지 않는 것으로 관측한다.
+// 페이지 줄 중계는 객체 형식을 검증하며 거부와 쓰기 오류를 명시적으로 반환한다.
 use serde_json::json;
 use soksak_host_tauriv2::performance;
 
-fn temp_config(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("tauri-performance-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(dir.join("services").join("soksak-vt-alacritty")).unwrap();
+// contract: performance.trace.enable-without-services
+#[test]
+fn enable_without_services_accepts_page_events() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = directory.path();
+    performance::command(config, json!({"action":"on"})).unwrap();
+    let result = performance::command(config, json!({"action":"line","line":{"event":"focus"}}));
+    performance::disable(config).unwrap();
+    assert!(
+        result.is_ok(),
+        "enabled trace rejected a page event without services: {result:?}"
+    );
+}
+
+// contract: performance.trace.already-off-writes-nothing
+#[test]
+fn already_off_writes_nothing() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = directory.path();
+    std::fs::create_dir_all(config.join("logs")).unwrap();
+    performance::command(config, json!({"action":"off"})).unwrap();
+    assert!(
+        !performance::target(config).exists(),
+        "disabled trace created output"
+    );
+}
+
+// contract: performance.trace.switch-and-relay-report-filesystem-errors
+#[test]
+fn switch_and_relay_report_filesystem_errors() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = directory.path();
+    std::fs::write(config.join("services"), "not a directory").unwrap();
+    let directory_error = performance::command(config, json!({"action":"on"})).is_err();
+    std::fs::remove_file(config.join("services")).unwrap();
+    let flag = config
+        .join("services")
+        .join("fixture-service")
+        .join("performance");
+    std::fs::create_dir_all(&flag).unwrap();
+    let flag_error = performance::command(config, json!({"action":"on"})).is_err();
+    std::fs::remove_dir(&flag).unwrap();
+    performance::command(config, json!({"action":"on"})).unwrap();
+    let target = performance::target(config);
+    std::fs::remove_file(&target).unwrap();
+    std::fs::create_dir(&target).unwrap();
+    let result = performance::command(config, json!({"action":"line","line":{"event":"focus"}}));
+    performance::disable(config).unwrap();
+    assert_eq!(
+        [directory_error, flag_error, result.is_err()],
+        [true; 3],
+        "directory, flag, and output errors must all be returned"
+    );
+}
+
+// contract: performance.trace.relay-requires-object-with-event
+#[test]
+fn relay_rejects_invalid_event_explicitly() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = directory.path();
+    std::fs::create_dir_all(config.join("services").join("fixture-service")).unwrap();
+    performance::command(config, json!({"action":"on"})).unwrap();
+    let result = performance::command(config, json!({"action":"line","line":{"event":7}}));
+    performance::disable(config).unwrap();
+    assert!(result.is_err(), "relay accepted a non-string event");
+}
+
+// contract: performance.trace.invalid-switch-and-cleanup-errors
+#[test]
+fn invalid_switch_and_cleanup_errors() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = directory.path();
+    std::fs::create_dir(config.join("performance")).unwrap();
+    let error = performance::command(config, json!({"action":"line","line":{"event":"focus"}}))
+        .unwrap_err();
+    assert!(
+        error.contains("performance switch"),
+        "invalid switch was hidden: {error}"
+    );
+    std::fs::remove_dir(config.join("performance")).unwrap();
+    let flag = config
+        .join("services")
+        .join("fixture-service")
+        .join("performance");
+    std::fs::create_dir_all(&flag).unwrap();
+    assert!(
+        performance::disable(config).is_err(),
+        "disable removed an invalid flag directory instead of reporting it"
+    );
+    assert!(flag.is_dir(), "invalid flag directory was removed");
+}
+
+// contract: performance.trace.derive-service-flags-and-reset
+#[test]
+fn derive_service_flags_and_reset() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = directory.path();
+    performance::command(config, json!({"action":"on"})).unwrap();
+    let flag = config
+        .join("services")
+        .join("fixture-service")
+        .join("performance");
+    std::fs::create_dir_all(flag.parent().unwrap()).unwrap();
+    performance::sync_services(config).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&flag).unwrap(),
+        format!("{}\n", performance::target(config).display())
+    );
+    performance::disable(config).unwrap();
+    assert!(!flag.exists());
+    assert!(!config.join("performance").exists());
+    let mut formatted = 0;
+    performance::observe(config, "host", || {
+        formatted += 1;
+        json!({"event":"focus"})
+    });
+    assert_eq!(formatted, 0, "disabled observation formatted events");
+    std::fs::write(
+        &flag,
+        format!("{}\n", performance::target(config).display()),
+    )
+    .unwrap();
+    performance::sync_services(config).unwrap();
+    assert!(!flag.exists(), "disabled reattachment retained stale flag");
+}
+
+fn temp_config(name: &str) -> tempfile::TempDir {
+    let dir = tempfile::Builder::new()
+        .prefix(&format!("tauri-performance-{name}-"))
+        .tempdir()
+        .unwrap();
+    std::fs::create_dir_all(dir.path().join("services").join("fixture-service")).unwrap();
     dir
 }
 
 // contract: performance.trace.enable-writes-log-and-sidecar-flags
 #[test]
 fn enable_writes_the_log_and_the_sidecar_flags() {
-    let config = temp_config("enable");
-    let target = performance::enable(&config);
+    let directory = temp_config("enable");
+    let config = directory.path();
+    let target = performance::enable(&config).unwrap();
     assert_eq!(target, config.join("logs").join("performance.ndjson"));
 
     let flag = std::fs::read_to_string(
         config
             .join("services")
-            .join("soksak-vt-alacritty")
+            .join("fixture-service")
             .join("performance"),
     )
     .expect("every existing service directory receives the flag");
     assert_eq!(flag.trim(), target.display().to_string());
 
-    performance::line(&target, "host", json!({"event": "trace_on"}));
+    performance::line(&target, "host", json!({"event": "trace_on"})).unwrap();
     let text = std::fs::read_to_string(&target).unwrap();
     let record: serde_json::Value = serde_json::from_str(text.trim()).unwrap();
     assert_eq!(record["layer"], "host");
     assert_eq!(record["event"], "trace_on");
-    let _ = std::fs::remove_dir_all(&config);
+    directory.close().unwrap();
 }
 
 // contract: performance.trace.disable-removes-flags-keeps-log
 #[test]
 fn disable_removes_the_sidecar_flags_but_keeps_the_log() {
-    let config = temp_config("disable");
-    let target = performance::enable(&config);
-    performance::line(&target, "host", json!({"event": "trace_on"}));
-    performance::disable(&config);
+    let directory = temp_config("disable");
+    let config = directory.path();
+    let target = performance::enable(&config).unwrap();
+    performance::line(&target, "host", json!({"event": "trace_on"})).unwrap();
+    performance::disable(&config).unwrap();
     assert!(!config
         .join("services")
-        .join("soksak-vt-alacritty")
+        .join("fixture-service")
         .join("performance")
         .exists());
     assert!(
         target.exists(),
         "the log belongs to the trace, not the switch"
     );
-    let _ = std::fs::remove_dir_all(&config);
+    directory.close().unwrap();
 }
 
 // contract: performance.trace.relay-requires-object-with-event
 #[test]
 fn relayed_page_lines_require_an_object_with_an_event() {
-    let config = temp_config("relay");
-    let target = performance::enable(&config);
-    performance::relay(&target, json!({"event": "action", "kind": "resize"}));
-    performance::relay(&target, json!({"kind": "resize"}));
-    performance::relay(&target, json!("action"));
+    let directory = temp_config("relay");
+    let config = directory.path();
+    let target = performance::enable(&config).unwrap();
+    performance::relay(&target, json!({"event": "action", "kind": "resize"})).unwrap();
+    assert!(performance::relay(&target, json!({"kind": "resize"})).is_err());
+    assert!(performance::relay(&target, json!("action")).is_err());
     let text = std::fs::read_to_string(&target).unwrap();
     assert_eq!(text.lines().count(), 1, "rejected lines append nothing");
     let record: serde_json::Value = serde_json::from_str(text.trim()).unwrap();
     assert_eq!(record["layer"], "page");
     assert_eq!(record["kind"], "resize");
-    let _ = std::fs::remove_dir_all(&config);
+    directory.close().unwrap();
 }

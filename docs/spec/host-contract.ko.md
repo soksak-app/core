@@ -197,6 +197,11 @@ fn invalid_json_closes_connection() {
 | `performance.trace.enable-writes-log-and-sidecar-flags` | 트레이스를 켜면 로그 파일을 만들고 이미 있는 모든 서비스 디렉터리에 로그 경로 플래그를 쓴다. | both |
 | `performance.trace.disable-removes-flags-keeps-log` | 트레이스를 끄면 사이드카 플래그를 지우고 로그 파일은 남긴다. | both |
 | `performance.trace.relay-requires-object-with-event` | 중계하는 페이지 줄은 event 를 담은 객체여야 한다. 거부된 줄은 아무 것도 덧붙이지 않는다. | both |
+| `performance.trace.enable-without-services` | 서비스가 생기기 전에도 활성 호스트는 페이지 이벤트를 받는다. | both |
+| `performance.trace.already-off-writes-nothing` | 이미 비활성인 추적을 끄면 출력을 만들거나 덧붙이지 않는다. | both |
+| `performance.trace.switch-and-relay-report-filesystem-errors` | 스위치와 중계 요청은 디렉터리·플래그·출력 실패를 반환한다. | both |
+| `performance.trace.invalid-switch-and-cleanup-errors` | 잘못된 스위치 읽기와 플래그 디렉터리는 오류이며 정리는 잘못된 디렉터리를 보존한다. | both |
+| `performance.trace.derive-service-flags-and-reset` | 새 서비스는 호스트 스위치를 받는다. 초기화와 비활성 재접속은 잔여 플래그를 제거하고 비활성 계측은 이벤트를 구성하지 않는다. | both |
 | `images.envelope.rejects-unattached-image` | 연결된 적 없는 이미지 이름의 봉투에 notAttached로 응답한다. | both |
 | `images.envelope.refusal-echoes-name-and-sequence` | 거부 응답은 봉투의 name과 sequence를 담는다. | both |
 | `images.envelope.refusal-preserves-quoted-name` | 따옴표가 든 이름의 거부 응답은 올바른 JSON이며 이름을 유지한다. | both |

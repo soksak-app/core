@@ -1,6 +1,6 @@
 // 설정 창의 절(일반, 플러그인, 사이드바), 세트 만들기·편집·삭제, 배치 값 설정을 검사한다(docs/spec/settings.md).
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -258,19 +258,34 @@ for (const app of Object.values(APPS)) {
     assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
-    const file = join(app.configDir, "logs", "performance.ndjson");
+    // 호스트는 설정 디렉터리의 심볼릭 링크를 해소한 경로를 사용한다.
+    const config = realpathSync(app.configDir);
+    const file = join(config, "logs", "performance.ndjson");
+    const flag = join(config, "performance");
+    const services = join(config, "services");
+    const serviceFlags = () => existsSync(services) ? readdirSync(services, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory()).map((entry) => join(services, entry.name, "performance")) : [];
     const read = () => existsSync(file) ? readFileSync(file, "utf8") : "";
     const change = (enabled) => s.run("core.settings.set", {
       scope: "common", patch: { "diagnostics.performance": enabled },
     });
     await change(false);
+    assert.ok(!existsSync(flag), "disabled host retained its runtime switch");
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.length).id;
     const before = read();
     await s.run("core.card.focus", { card });
     assert.equal(read(), before, "disabled focus changed the trace output");
     await change(true);
+    assert.equal(readFileSync(flag, "utf8"), `${file}\n`, "enabled host switch does not contain its trace target");
+    for (const serviceFlag of serviceFlags()) {
+      assert.equal(readFileSync(serviceFlag, "utf8"), `${file}\n`, `enabled service flag does not contain its trace target: ${serviceFlag}`);
+    }
     await s.run("core.card.focus", { card });
     await change(false);
+    assert.ok(!existsSync(flag), "host disable retained its runtime switch");
+    for (const serviceFlag of serviceFlags()) {
+      assert.ok(!existsSync(serviceFlag), `host disable retained a service flag: ${serviceFlag}`);
+    }
     assert.ok(existsSync(file), "enabled tracing did not create its declared output");
     const after = read();
     const events = after.slice(before.length).trim().split("\n").filter(Boolean).map(JSON.parse);

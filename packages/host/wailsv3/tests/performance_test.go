@@ -13,12 +13,10 @@ import (
 )
 
 func tempConfig(t *testing.T) string {
-	dir := filepath.Join(os.TempDir(), "wails-performance-", t.Name())
-	os.RemoveAll(dir)
-	if err := os.MkdirAll(filepath.Join(dir, "services", "soksak-vt-alacritty"), 0o700); err != nil {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "services", "fixture-service"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
 	return dir
 }
 
@@ -32,14 +30,16 @@ func TestEnableWritesTheLogAndTheSidecarFlags(t *testing.T) {
 	if target != filepath.Join(config, "logs", "performance.ndjson") {
 		t.Fatalf("target %q", target)
 	}
-	flag, err := os.ReadFile(filepath.Join(config, "services", "soksak-vt-alacritty", "performance"))
+	flag, err := os.ReadFile(filepath.Join(config, "services", "fixture-service", "performance"))
 	if err != nil {
 		t.Fatal("every existing service directory receives the flag")
 	}
 	if strings.TrimSpace(string(flag)) != target {
 		t.Fatalf("flag %q points elsewhere", flag)
 	}
-	host.PerformanceLine(target, "host", map[string]any{"event": "trace_on"})
+	if err := host.PerformanceLine(target, "host", map[string]any{"event": "trace_on"}); err != nil {
+		t.Fatal(err)
+	}
 	text, err := os.ReadFile(target)
 	if err != nil {
 		t.Fatal(err)
@@ -60,11 +60,13 @@ func TestDisableRemovesTheFlagsButKeepsTheLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	host.PerformanceLine(target, "host", map[string]any{"event": "trace_on"})
+	if err := host.PerformanceLine(target, "host", map[string]any{"event": "trace_on"}); err != nil {
+		t.Fatal(err)
+	}
 	if err := host.PerformanceDisable(config); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(config, "services", "soksak-vt-alacritty", "performance")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(config, "services", "fixture-service", "performance")); !os.IsNotExist(err) {
 		t.Fatal("disable removes the flag")
 	}
 	if _, err := os.Stat(target); err != nil {
@@ -79,7 +81,9 @@ func TestRelayedPageLinesRequireAnEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	host.PerformanceRelay(target, map[string]any{"event": "action", "kind": "resize"})
+	if err := host.PerformanceRelay(target, map[string]any{"event": "action", "kind": "resize"}); err != nil {
+		t.Fatal(err)
+	}
 	text, err := os.ReadFile(target)
 	if err != nil {
 		t.Fatal(err)
@@ -93,5 +97,157 @@ func TestRelayedPageLinesRequireAnEvent(t *testing.T) {
 	}
 	if record["layer"] != "page" || record["kind"] != "resize" {
 		t.Fatalf("record %v", record)
+	}
+}
+
+// contract: performance.trace.enable-without-services
+func TestEnableWithoutServicesAcceptsPageEvents(t *testing.T) {
+	config := t.TempDir()
+	if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := host.PerformanceDisable(config); err != nil {
+			t.Error(err)
+		}
+	})
+	if _, err := host.PerformanceCommand(config, map[string]any{"action": "line", "line": map[string]any{"event": "focus"}}); err != nil {
+		t.Fatalf("enabled trace rejected a page event without services: %v", err)
+	}
+}
+
+// contract: performance.trace.already-off-writes-nothing
+func TestAlreadyOffWritesNothing(t *testing.T) {
+	config := tempConfig(t)
+	if err := os.MkdirAll(filepath.Join(config, "logs"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.PerformanceCommand(config, map[string]any{"action": "off"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(host.PerformanceTarget(config)); !os.IsNotExist(err) {
+		t.Fatalf("disabled trace created output: %v", err)
+	}
+}
+
+// contract: performance.trace.switch-and-relay-report-filesystem-errors
+func TestSwitchAndRelayReportFilesystemErrors(t *testing.T) {
+	t.Run("service-directory", func(t *testing.T) {
+		config := t.TempDir()
+		if err := os.WriteFile(filepath.Join(config, "services"), []byte("not a directory"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err == nil {
+			t.Fatal("enable hid an invalid services directory")
+		}
+	})
+	t.Run("service-flag", func(t *testing.T) {
+		config := tempConfig(t)
+		if err := os.Mkdir(filepath.Join(config, "services", "fixture-service", "performance"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err == nil {
+			t.Fatal("enable hid a service flag write failure")
+		}
+	})
+	t.Run("event-output", func(t *testing.T) {
+		config := tempConfig(t)
+		if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := host.PerformanceDisable(config); err != nil {
+				t.Error(err)
+			}
+		})
+		if err := os.Remove(host.PerformanceTarget(config)); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(host.PerformanceTarget(config), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := host.PerformanceCommand(config, map[string]any{"action": "line", "line": map[string]any{"event": "focus"}}); err == nil {
+			t.Fatal("relay hid an output write failure")
+		}
+	})
+}
+
+// contract: performance.trace.relay-requires-object-with-event
+func TestRelayRejectsInvalidEventExplicitly(t *testing.T) {
+	config := tempConfig(t)
+	if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := host.PerformanceDisable(config); err != nil {
+			t.Error(err)
+		}
+	})
+	if _, err := host.PerformanceCommand(config, map[string]any{"action": "line", "line": map[string]any{"event": 7}}); err == nil {
+		t.Fatal("relay accepted a non-string event")
+	}
+}
+
+// contract: performance.trace.invalid-switch-and-cleanup-errors
+func TestInvalidSwitchAndCleanupErrors(t *testing.T) {
+	config := t.TempDir()
+	if err := os.Mkdir(filepath.Join(config, "performance"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.PerformanceCommand(config, map[string]any{"action": "line", "line": map[string]any{"event": "focus"}}); err == nil || !strings.Contains(err.Error(), "performance switch") {
+		t.Fatalf("invalid switch was hidden: %v", err)
+	}
+	if err := os.Remove(filepath.Join(config, "performance")); err != nil {
+		t.Fatal(err)
+	}
+	flag := filepath.Join(config, "services", "fixture-service", "performance")
+	if err := os.MkdirAll(flag, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := host.PerformanceDisable(config); err == nil {
+		t.Fatal("disable removed an invalid flag directory instead of reporting it")
+	}
+	if stat, err := os.Stat(flag); err != nil || !stat.IsDir() {
+		t.Fatalf("invalid flag directory was removed: %v", err)
+	}
+}
+
+// contract: performance.trace.derive-service-flags-and-reset
+func TestDeriveServiceFlagsAndReset(t *testing.T) {
+	config := t.TempDir()
+	if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err != nil {
+		t.Fatal(err)
+	}
+	flag := filepath.Join(config, "services", "fixture-service", "performance")
+	if err := os.MkdirAll(filepath.Dir(flag), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := host.PerformanceSyncServices(config); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(flag); err != nil || string(data) != host.PerformanceTarget(config)+"\n" {
+		t.Fatalf("new service did not receive the active target: %q %v", data, err)
+	}
+	if err := host.PerformanceDisable(config); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{flag, filepath.Join(config, "performance")} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("reset retained %s: %v", path, err)
+		}
+	}
+	formatted := 0
+	host.PerformanceObserve(config, "host", func() map[string]any { formatted++; return map[string]any{"event": "focus"} })
+	if formatted != 0 {
+		t.Fatalf("disabled observation formatted %d events", formatted)
+	}
+	if err := os.WriteFile(flag, []byte(host.PerformanceTarget(config)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := host.PerformanceSyncServices(config); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(flag); !os.IsNotExist(err) {
+		t.Fatalf("disabled reattachment retained stale flag: %v", err)
 	}
 }

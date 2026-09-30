@@ -202,6 +202,7 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
             app.manage(menu::MenuLanguage(std::sync::Mutex::new(language)));
             app.set_menu(menu)?;
             let directory = config_directory(app.handle())?;
+            crate::performance::disable(&directory)?;
             app.manage(workspace::Workspace::new(directory.clone()));
             let executable = std::env::current_exe()?;
             let sidecar_directory = executable

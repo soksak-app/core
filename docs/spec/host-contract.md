@@ -197,6 +197,11 @@ Items:
 | `performance.trace.enable-writes-log-and-sidecar-flags` | Enabling the trace creates the log file and writes the log-path flag into every existing service directory. | both |
 | `performance.trace.disable-removes-flags-keeps-log` | Disabling the trace removes the sidecar flags and keeps the log file. | both |
 | `performance.trace.relay-requires-object-with-event` | A relayed page line must be an object with an event; rejected lines append nothing. | both |
+| `performance.trace.enable-without-services` | The enabled host accepts page events before any service exists. | both |
+| `performance.trace.already-off-writes-nothing` | Disabling an already disabled trace does not create or append output. | both |
+| `performance.trace.switch-and-relay-report-filesystem-errors` | Switch and relay requests return directory, flag, and output failures. | both |
+| `performance.trace.invalid-switch-and-cleanup-errors` | Invalid switch reads and invalid flag directories are errors; cleanup preserves the invalid directory. | both |
+| `performance.trace.derive-service-flags-and-reset` | New services receive the host switch; reset and disabled reattachment remove stale flags, and disabled observation does not format events. | both |
 | `images.envelope.rejects-unattached-image` | An envelope for an image name that was never attached is answered with notAttached. | both |
 | `images.envelope.refusal-echoes-name-and-sequence` | A refusal carries the name and sequence of the envelope. | both |
 | `images.envelope.refusal-preserves-quoted-name` | A refusal for a name containing a quote is valid JSON and keeps the name. | both |

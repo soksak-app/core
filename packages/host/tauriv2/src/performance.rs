@@ -1,79 +1,191 @@
-//! 성능 트레이스의 호스트 쪽(V5-104, [performance trace](../../../docs/spec/performance-trace.md)).
-//!
-//! 페이지가 `host.performance` 로 트레이스를 켜고 끈다. 켜면 호스트는 구성 디렉터리의
-//! `logs/performance.ndjson` 에 자기 줄을 남기고 이미 있는 모든 사이드카 서비스 디렉터리에
-//! 대상 경로를 담은 `performance` 플래그 파일을 쓴다 — 사이드카는 그 파일이 가리키는
-//! 대상에 직접 덧붙인다. 끄면 플래그 파일을 지운다. 로그 파일과 로테이션은 설정이 아니라
-//! 트레이스의 소유물이므로 끄고 재시작해도 로그는 남는다.
-//!
-//! 계기는 진단이다: 모든 쓰기 함수는 실패를 조용히 흡수한다. 트레이스가 실패해서
-//! 애플리케이션이 실패하는 일이 없어야 하기 때문이다. 이 파일의 함수는 `Result` 를
-//! 돌려주지 않는다.
+//! 성능 트레이스의 호스트 스위치와 기록기(docs/spec/performance-trace.md).
+//! 스위치·중계 오류는 호출자에게 반환하고, 수동 계측 오류는 stderr 에 보고한다.
 
 use serde_json::{json, Map, Value};
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+static WRITING: Mutex<()> = Mutex::new(());
 
 /// 구성 디렉터리가 가리키는 트레이스 대상.
 pub fn target(config: &Path) -> PathBuf {
     config.join("logs").join("performance.ndjson")
 }
 
-/// 트레이스를 켠다. 로그 디렉터리를 만들고, 서비스 디렉터리마다 플래그 파일을 쓴다.
-/// 나중에 뜨는 사이드카는 아직 플래그가 없으므로, 켜진 상태에서의 스폰마다 호스트가
-/// 다시 쓴다(`sidecars`). 대상을 반환한다.
-pub fn enable(config: &Path) -> PathBuf {
+/// 서비스 플래그를 쓴 뒤 호스트 실행 스위치를 켠다.
+pub fn enable(config: &Path) -> Result<PathBuf, String> {
     let target = target(config);
-    if let Err(error) = fs::create_dir_all(config.join("logs")) {
-        eprintln!("performance: create logs directory: {error}");
+    fs::create_dir_all(config.join("logs"))
+        .map_err(|error| format!("create logs directory: {error}"))?;
+    if let Err(error) = write_sidecar_flags(config, &target) {
+        return Err(rollback_enable(config, error));
     }
-    write_sidecar_flags(config, &target);
-    target
+    if let Err(error) = fs::write(
+        config.join("performance"),
+        format!("{}\n", target.display()),
+    ) {
+        return Err(rollback_enable(
+            config,
+            format!("write performance switch: {error}"),
+        ));
+    }
+    Ok(target)
 }
 
-/// 트레이스를 끈다. 사이드카 플래그 파일을 지운다; 로그 파일은 남는다.
-pub fn disable(config: &Path) {
-    let services = config.join("services");
-    let Ok(entries) = fs::read_dir(&services) else {
-        return;
+fn rollback_enable(config: &Path, error: String) -> String {
+    match disable(config) {
+        Ok(()) => error,
+        Err(cleanup) => format!("{error}; {cleanup}"),
+    }
+}
+
+fn report_errors(errors: Vec<String>) -> Result<(), String> {
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
+}
+
+/// 실행·서비스 플래그를 지우고 모든 정리 오류를 반환한다.
+pub fn disable(config: &Path) -> Result<(), String> {
+    let mut errors = Vec::new();
+    if let Err(error) = fs::remove_file(config.join("performance")) {
+        if error.kind() != ErrorKind::NotFound {
+            errors.push(format!("remove performance switch: {error}"));
+        }
+    }
+    let entries = match fs::read_dir(config.join("services")) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == ErrorKind::NotFound => return report_errors(errors),
+        Err(error) => {
+            errors.push(format!("read performance services: {error}"));
+            return report_errors(errors);
+        }
     };
-    for entry in entries.flatten() {
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                errors.push(format!("read performance service entry: {error}"));
+                continue;
+            }
+        };
+        match entry.file_type() {
+            Ok(kind) if !kind.is_dir() => continue,
+            Err(error) => {
+                errors.push(format!(
+                    "read performance service type {}: {error}",
+                    entry.path().display()
+                ));
+                continue;
+            }
+            _ => {}
+        }
         let flag = entry.path().join("performance");
-        if flag.is_file() {
-            if let Err(error) = fs::remove_file(&flag) {
-                eprintln!("performance: remove flag: {error}");
+        if let Err(error) = fs::remove_file(&flag) {
+            if error.kind() != ErrorKind::NotFound {
+                errors.push(format!(
+                    "remove performance flag {}: {error}",
+                    flag.display()
+                ));
             }
         }
+    }
+    report_errors(errors)
+}
+
+/// 호스트 실행 플래그를 읽는다. 읽기·내용 오류는 상태로 바꾸지 않는다.
+pub fn enabled(config: &Path) -> Result<bool, String> {
+    let data = match fs::read(config.join("performance")) {
+        Ok(data) => data,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(format!("read performance switch: {error}")),
+    };
+    if data != format!("{}\n", target(config).display()).as_bytes() {
+        return Err(format!(
+            "invalid performance switch in {}",
+            config.display()
+        ));
+    }
+    Ok(true)
+}
+
+/// 활성 계측만 구성·기록하고 오류를 보고한다. 측정한 동작은 그대로 진행한다.
+pub fn observe(config: &Path, layer: &str, fields: impl FnOnce() -> Value) {
+    let result = (|| {
+        let _writing = WRITING
+            .lock()
+            .map_err(|error| format!("performance writer lock: {error}"))?;
+        if enabled(config)? {
+            line(&target(config), layer, fields())?;
+        }
+        Ok::<(), String>(())
+    })();
+    if let Err(error) = result {
+        eprintln!("performance trace failed: {error}");
+    }
+}
+
+/// 서비스 생성·재접속 전에 유효 실행 스위치를 전파한다.
+pub fn sync_services(config: &Path) -> Result<(), String> {
+    let _writing = WRITING
+        .lock()
+        .map_err(|error| format!("performance writer lock: {error}"))?;
+    if enabled(config)? {
+        write_sidecar_flags(config, &target(config))
+    } else {
+        disable(config)
     }
 }
 
 /// 서비스 디렉터리마다 대상 경로를 담은 플래그 파일을 쓴다.
-pub fn write_sidecar_flags(config: &Path, target: &Path) {
-    let services = config.join("services");
-    let Ok(entries) = fs::read_dir(&services) else {
-        return;
+pub fn write_sidecar_flags(config: &Path, target: &Path) -> Result<(), String> {
+    let entries = match fs::read_dir(config.join("services")) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(format!("read performance services: {error}")),
     };
-    for entry in entries.flatten() {
-        if !entry.path().is_dir() {
-            continue;
+    let mut errors = Vec::new();
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                errors.push(format!("read performance service entry: {error}"));
+                continue;
+            }
+        };
+        match entry.file_type() {
+            Ok(kind) if !kind.is_dir() => continue,
+            Err(error) => {
+                errors.push(format!(
+                    "read performance service type {}: {error}",
+                    entry.path().display()
+                ));
+                continue;
+            }
+            _ => {}
         }
-        if let Err(error) = fs::write(
-            entry.path().join("performance"),
-            format!("{}\n", target.display()),
-        ) {
-            eprintln!("performance: write flag: {error}");
+        let flag = entry.path().join("performance");
+        if let Err(error) = fs::write(&flag, format!("{}\n", target.display())) {
+            errors.push(format!(
+                "write performance flag {}: {error}",
+                flag.display()
+            ));
         }
     }
+    report_errors(errors)
 }
 
-/// 호스트 계층의 한 줄을 남긴다. `fields` 는 문자열 `event` 를 담아야 한다.
-/// 쓰기 실패는 조용히 흡수한다.
-pub fn line(target: &Path, layer: &str, fields: Value) {
-    let Some(event) = fields.get("event").and_then(Value::as_str) else {
-        return;
-    };
+/// 한 계층의 이벤트를 기록하고 잘못된 이벤트·쓰기 실패를 반환한다.
+pub fn line(target: &Path, layer: &str, fields: Value) -> Result<(), String> {
+    let event = fields
+        .get("event")
+        .and_then(Value::as_str)
+        .ok_or("event must be a string")?;
     let mut record = Map::new();
     record.insert("ts".into(), json!(now_iso8601_ms()));
     record.insert("pid".into(), json!(std::process::id()));
@@ -86,33 +198,84 @@ pub fn line(target: &Path, layer: &str, fields: Value) {
             }
         }
     }
-    append(target, &Value::Object(record));
+    append(target, &Value::Object(record))
 }
 
-/// 페이지가 보낸 줄을 중계한다. 객체이고 문자열 `event` 를 담았을 때만 대상에
-/// 덧붙인다. 계층은 호스트가 `page` 로 못박는다 — 페이지는 이 파일의 소유자가 아니다.
-/// 쓰기 실패는 조용히 흡수한다.
-pub fn relay(target: &Path, mut record: Value) {
-    if !record.is_object() {
-        return;
+/// 페이지 이벤트의 계층을 지정하여 기록하고 거부·쓰기 실패를 반환한다.
+pub fn relay(target: &Path, mut record: Value) -> Result<(), String> {
+    let object = record
+        .as_object_mut()
+        .ok_or("line requires the page event object")?;
+    if object.get("event").and_then(Value::as_str).is_none() {
+        return Err("event must be a string".into());
     }
-    if record.get("event").and_then(Value::as_str).is_none() {
-        return;
-    }
-    let object = record.as_object_mut().expect("checked above");
     object.insert("layer".into(), json!("page"));
-    append(target, &record);
+    append(target, &record)
 }
 
-fn append(target: &Path, record: &Value) {
-    // 한 줄을 한 번의 write_all 로 쓴다. writeln! 은 형식 조각마다 write 를 하므로 동시
-    // 덧붙임이 한 줄 안에서 겹친다(실측: 페이지 줄과 호스트 줄이 섞여 기록됨).
-    let mut line = record.to_string();
-    line.push('\n');
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(target) {
-        if let Err(error) = file.write_all(line.as_bytes()) {
-            eprintln!("performance: append line: {error}");
+fn append(target: &Path, record: &Value) -> Result<(), String> {
+    let mut line =
+        serde_json::to_vec(record).map_err(|error| format!("encode performance event: {error}"))?;
+    line.push(b'\n');
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(target)
+        .map_err(|error| format!("open performance output {}: {error}", target.display()))?;
+    file.write_all(&line)
+        .map_err(|error| format!("append performance output {}: {error}", target.display()))
+}
+
+/// 스위치와 중계를 같은 순서로 실행한다.
+pub fn command(config: &Path, request: Value) -> Result<Value, String> {
+    let action = request
+        .get("action")
+        .and_then(Value::as_str)
+        .ok_or("action must be on, off, or line")?;
+    if !["on", "off", "line"].contains(&action) {
+        return Err(format!("action must be on, off, or line, not {action}"));
+    }
+    let _writing = WRITING
+        .lock()
+        .map_err(|error| format!("performance writer lock: {error}"))?;
+    let enabled = enabled(config)?;
+    match action {
+        "on" => {
+            if enabled {
+                return Ok(Value::Null);
+            }
+            let target = enable(config)?;
+            if let Err(error) = line(&target, "host", json!({"event":"trace_on"})) {
+                return Err(rollback_enable(config, error));
+            }
+            spawn_sampler(config);
+            Ok(Value::Null)
         }
+        "off" => {
+            let mut errors = Vec::new();
+            if enabled {
+                if let Err(error) = line(&target(config), "host", json!({"event":"trace_off"})) {
+                    errors.push(error);
+                }
+            }
+            if let Err(error) = disable(config) {
+                errors.push(error);
+            }
+            report_errors(errors)?;
+            Ok(Value::Null)
+        }
+        "line" => {
+            let record = request
+                .get("line")
+                .cloned()
+                .ok_or("line requires the page event object")?;
+            if !enabled {
+                return Err("the performance trace is off".into());
+            }
+            relay(&target(config), record)?;
+            Ok(Value::Null)
+        }
+        _ => unreachable!("validated performance action"),
     }
 }
 
@@ -148,53 +311,6 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     (if month <= 2 { year + 1 } else { year }, month, day)
 }
 
-/// 페이지의 `host.performance` 요청. `on` 은 트레이스를 켜고 사이드카 플래그를 쓰며,
-/// `off` 는 끄고 플래그를 지우고, `line` 은 페이지 이벤트 줄을 중계한다. `line` 은
-/// 트레이스가 켜져 있을 때만 받는다 — 꺼진 트레이스에 파일을 만들지 않는다.
-pub fn command(config: &Path, request: serde_json::Value) -> Result<serde_json::Value, String> {
-    use serde_json::Value;
-    let action = request
-        .get("action")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "action must be on, off, or line".to_string())?;
-    let target = target(config);
-    match action {
-        "on" => {
-            let target = enable(config);
-            line(&target, "host", json!({"event": "trace_on"}));
-            spawn_sampler(config);
-            Ok(Value::Null)
-        }
-        "off" => {
-            line(&target, "host", json!({"event": "trace_off"}));
-            disable(config);
-            Ok(Value::Null)
-        }
-        "line" => {
-            let record = request
-                .get("line")
-                .cloned()
-                .ok_or_else(|| "line requires the page event object".to_string())?;
-            if !enabled(config) {
-                return Err("the performance trace is off".into());
-            }
-            relay(&target, record);
-            Ok(Value::Null)
-        }
-        other => Err(format!("action must be on, off, or line, not {other}")),
-    }
-}
-
-/// 트레이스가 켜져 있는가. 스위치의 상태는 사이드카 플래그 파일이다.
-pub fn enabled(config: &Path) -> bool {
-    let Ok(entries) = fs::read_dir(config.join("services")) else {
-        return false;
-    };
-    entries
-        .flatten()
-        .any(|entry| entry.path().join("performance").is_file())
-}
-
 /// 메모리 샘플러(V5-104). 트레이스가 켜져 있는 동안 5초마다 이 프로세스의 상주
 /// 크기를 한 줄로 남긴다. 사이드카 pid 는 프로세스 등록부 줄(process 이벤트)에
 /// 쌓이므로 로그 소비자가 짝지는다. 꺼지면 대기로 돌아간다.
@@ -205,15 +321,11 @@ pub fn spawn_sampler(config: &Path) {
     }
     let config = config.to_path_buf();
     std::thread::spawn(move || loop {
-        if !enabled(&config) {
-            std::thread::sleep(std::time::Duration::from_secs(5));
-            continue;
-        }
-        let target = target(&config);
-        let mut record = Map::new();
-        record.insert("event".into(), json!("memory"));
-        record.insert("rss_host_kb".into(), json!(resident_kb(std::process::id())));
-        line(&target, "sampler", Value::Object(record));
+        observe(
+            &config,
+            "sampler",
+            || json!({"event":"memory", "rss_host_kb":resident_kb(std::process::id())}),
+        );
         std::thread::sleep(std::time::Duration::from_secs(5));
     });
 }
