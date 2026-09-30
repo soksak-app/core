@@ -513,20 +513,59 @@ double sp_capture_longest_gap(void) {
     return (double)captureSink.longestGap * timebase.numer / timebase.denom / 1e6;
 }
 
-bool sp_capture_still(long windowNumber, const char *path) {
-    clearCaptureError();
-    if (path == NULL) {
-        setCaptureError(@"still capture needs a path");
+// 정지 캡처의 비동기 상태는 해당 호출의 콜백만 소유한다.
+@interface SPCaptureStillResult : NSObject
+@property (nonatomic, copy) NSString *error;
+@property (nonatomic) bool written;
+@property (nonatomic, assign) dispatch_semaphore_t answered;
+- (void)complete:(bool)written error:(NSString *)error;
+@end
+@implementation SPCaptureStillResult
+- (instancetype)init {
+    self = [super init];
+    if (self) _answered = dispatch_semaphore_create(0);
+    return self;
+}
+- (void)complete:(bool)written error:(NSString *)error {
+    self.written = written;
+    self.error = error;
+    // 호출자가 시간 초과로 돌아간 뒤 도착한 오류도 로그로 보고한다.
+    if (error != nil) fprintf(stderr, "still capture callback failed: %s\n", error.UTF8String);
+    dispatch_semaphore_signal(self.answered);
+}
+- (void)dealloc {
+    [_error release];
+    dispatch_release(_answered);
+    [super dealloc];
+}
+@end
+
+static bool failStillCapture(char **errorOut, NSString *message) {
+    *errorOut = strdup(message.UTF8String);
+    if (*errorOut == NULL) {
+        fprintf(stderr, "still capture error allocation failed\n");
+        abort();
+    }
+    return false;
+}
+
+bool sp_capture_still(long windowNumber, const char *path, char **errorOut) {
+    if (errorOut == NULL) {
+        fprintf(stderr, "still capture needs an error output\n");
         return false;
     }
-    NSURL *url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path]];
-    __block bool written = false;
-    dispatch_semaphore_t answered = dispatch_semaphore_create(0);
+    *errorOut = NULL;
+    if (path == NULL) {
+        return failStillCapture(errorOut, @"still capture needs a path");
+    }
+    NSString *decoded = [NSString stringWithUTF8String:path];
+    if (decoded == nil) return failStillCapture(errorOut, @"still capture path is not valid UTF-8");
+    NSURL *url = [NSURL fileURLWithPath:decoded];
+    SPCaptureStillResult *result = [[SPCaptureStillResult alloc] init];
     [SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:
         ^(SCShareableContent *content, NSError *error) {
         if (error != nil) {
-            setCaptureError([NSString stringWithFormat:@"current-process capture unavailable: %@", error.localizedDescription]);
-            dispatch_semaphore_signal(answered);
+            [result complete:NO error:[NSString stringWithFormat:@"current-process capture unavailable: %@", error.localizedDescription]];
             return;
         }
         SCWindow *target = nil;
@@ -534,13 +573,11 @@ bool sp_capture_still(long windowNumber, const char *path) {
             if ((long)window.windowID == windowNumber) target = window;
         }
         if (target == nil) {
-            setCaptureError([NSString stringWithFormat:@"window %ld not found", windowNumber]);
-            dispatch_semaphore_signal(answered);
+            [result complete:NO error:[NSString stringWithFormat:@"window %ld not found", windowNumber]];
             return;
         }
         if (CGRectIsEmpty(target.frame)) {
-            setCaptureError([NSString stringWithFormat:@"window %ld has no on-screen frame", windowNumber]);
-            dispatch_semaphore_signal(answered);
+            [result complete:NO error:[NSString stringWithFormat:@"window %ld has no on-screen frame", windowNumber]];
             return;
         }
         SCContentFilter *filter = [[[SCContentFilter alloc] initWithDesktopIndependentWindow:target] autorelease];
@@ -553,31 +590,30 @@ bool sp_capture_still(long windowNumber, const char *path) {
         [SCScreenshotManager captureImageWithFilter:filter configuration:config
             completionHandler:^(CGImageRef image, NSError *captureError) {
             if (image == NULL) {
-                setCaptureError([NSString stringWithFormat:@"still capture failed: %@",
-                    captureError.localizedDescription ?: @"no image"]);
-                dispatch_semaphore_signal(answered);
+                [result complete:NO error:[NSString stringWithFormat:@"still capture failed: %@",
+                    captureError.localizedDescription ?: @"no image"]];
                 return;
             }
             CGImageDestinationRef destination = CGImageDestinationCreateWithURL(
                 (CFURLRef)url, (CFStringRef)@"public.png", 1, NULL);
             if (destination == NULL) {
-                setCaptureError([NSString stringWithFormat:@"cannot write %@", url.path]);
-                dispatch_semaphore_signal(answered);
+                [result complete:NO error:[NSString stringWithFormat:@"cannot write %@", url.path]];
                 return;
             }
             CGImageDestinationAddImage(destination, image, NULL);
-            written = CGImageDestinationFinalize(destination);
+            bool written = CGImageDestinationFinalize(destination);
             CFRelease(destination);
-            if (!written) setCaptureError([NSString stringWithFormat:@"cannot write %@", url.path]);
-            dispatch_semaphore_signal(answered);
+            [result complete:written error:written ? nil : [NSString stringWithFormat:@"cannot write %@", url.path]];
         }];
     }];
-    long wait = dispatch_semaphore_wait(answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
-    dispatch_release(answered);
+    long wait = dispatch_semaphore_wait(result.answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
     if (wait != 0) {
-        setCaptureError(@"still capture timed out after 10000ms");
-        return false;
+        [result release];
+        return failStillCapture(errorOut, @"still capture timed out after 10000ms");
     }
+    bool written = result.written;
+    if (!written) failStillCapture(errorOut, result.error);
+    [result release];
     return written;
 }
 

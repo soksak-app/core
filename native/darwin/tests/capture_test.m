@@ -28,8 +28,10 @@ int main(void) { @autoreleasepool {
     check(files.count == 0, @"an invalid capture leaves no frame files");
     // 정지 캡처: 활성화하지 않은 창을 PNG 로 찍는다. 관측 자료이며 크기와 색으로 내용을 확인한다.
     NSString *still = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"still.png"];
-    check(!sp_capture_still(-1, still.UTF8String) && strlen(sp_capture_error()) > 0,
+    char *stillError = NULL;
+    check(!sp_capture_still(-1, still.UTF8String, &stillError) && stillError != NULL && strlen(stillError) > 0,
         @"a still capture of a missing window reports an error");
+    free(stillError); stillError = NULL;
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 200, 100)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
@@ -49,9 +51,10 @@ int main(void) { @autoreleasepool {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
     }
     check(onScreen(), @"the window server shows the capture window");
-    bool stillWritten = sp_capture_still(window.windowNumber, still.UTF8String);
+    bool stillWritten = sp_capture_still(window.windowNumber, still.UTF8String, &stillError);
     check(stillWritten, [NSString stringWithFormat:@"a still capture of an inactive window is written (%@)",
-        [NSString stringWithUTF8String:sp_capture_error()]]);
+        [NSString stringWithUTF8String:stillError == NULL ? "" : stillError]]);
+    free(stillError);
     NSBitmapImageRep *image = [NSBitmapImageRep imageRepWithData:[NSData dataWithContentsOfFile:still]];
     CGFloat scale = window.backingScaleFactor;
     check(image != nil && image.pixelsWide == (NSInteger)(200 * scale) && image.pixelsHigh == (NSInteger)(100 * scale),

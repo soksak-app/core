@@ -1,10 +1,17 @@
 // 실제 샘플 처리기에 큐 용량과 파일 쓰기 결함을 주입한다. 캡처 내부 상태는 소유 검사에서만 접근한다.
 #import "../src/capture.m"
+#import <objc/runtime.h>
 
 static int failures;
 static void check(BOOL ok, NSString *label) {
     fprintf(ok ? stdout : stderr, "%s: %s\n", ok ? "PASS" : "FAIL", label.UTF8String);
     if (!ok) failures++;
+}
+
+// 실제 10초 제한 뒤 콜백을 전달하여 호출별 상태의 수명을 확인한다.
+static void (^heldStillReply)(SCShareableContent *, NSError *);
+static void holdStillQuery(id receiver, SEL selector, void (^reply)(SCShareableContent *, NSError *)) {
+    heldStillReply = [reply copy];
 }
 
 @interface CaptureStopFixture : NSObject
@@ -54,6 +61,8 @@ static void reset(NSString *directory, long capacity) {
 }
 
 int main(void) { @autoreleasepool {
+    CFTimeInterval began = CACurrentMediaTime();
+    fprintf(stderr, "START: capture pressure and still-result isolation\n");
     [NSApplication sharedApplication];
     char path[] = "/tmp/soksak-capture-pressure-XXXXXX";
     check(mkdtemp(path) != NULL, @"a private fault-injection directory is created");
@@ -113,6 +122,67 @@ int main(void) { @autoreleasepool {
         @"first-frame readiness preserves the asynchronous start failure");
     [captureStream release]; captureStream = nil;
 
+    reset(directory, 1);
+    [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
+    captureStream = (SCStream *)[NSObject new];
+    setCaptureError(@"fixture active recording failure");
+    char *stillError = NULL;
+    check(!sp_capture_still(-1, NULL, &stillError), @"a null still path is rejected during recording");
+    check(strstr(sp_capture_error(), "fixture active recording failure") != NULL,
+        @"a failed still request preserves the existing recording error");
+    check(stillError != NULL && strstr(stillError, "needs a path") != NULL,
+        @"the still call returns its own path failure");
+    free(stillError); stillError = NULL;
+    [captureStream release]; captureStream = nil;
+
+    reset(directory, 1);
+    [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
+    captureStream = (SCStream *)[NSObject new];
+    NSString *stillPath = [directory stringByAppendingPathComponent:@"invalid-window.png"];
+    check(!sp_capture_still(-1, stillPath.UTF8String, &stillError),
+        @"an asynchronous invalid-window still capture is rejected");
+    check(sp_capture_wait() == 1,
+        @"an unrelated asynchronous still failure preserves healthy recording readiness");
+    [captureStream release]; captureStream = nil;
+    check(stillError != NULL && strstr(stillError, "not found") != NULL,
+        @"the asynchronous still call returns its own window failure");
+    free(stillError); stillError = NULL;
+    BOOL invalidRejected = NO;
+    @try { invalidRejected = !sp_capture_still(-1, "\xff", &stillError); }
+    @catch (NSException *exception) {
+        fprintf(stderr, "UTF8 fixture exception: %s\n", exception.reason.UTF8String);
+    }
+    check(invalidRejected, @"invalid UTF-8 still paths return an explicit failure without exceptions");
+    check(stillError != NULL && strstr(stillError, "UTF-8") != NULL,
+        @"invalid UTF-8 has its own explicit still error");
+    free(stillError);
+
+    fprintf(stderr, "START: still timeout and retained late callback\n");
+    Method query = class_getClassMethod([SCShareableContent class],
+        @selector(getCurrentProcessShareableContentWithCompletionHandler:));
+    check(query != NULL, @"the still-query fault boundary is available");
+    if (query != NULL) {
+        IMP original = method_setImplementation(query, (IMP)holdStillQuery);
+        stillError = NULL;
+        BOOL timedOut = !sp_capture_still(-1, stillPath.UTF8String, &stillError);
+        method_setImplementation(query, original);
+        check(timedOut && stillError != NULL && strstr(stillError, "timed out") != NULL,
+            @"a held still query returns its own bounded timeout error");
+        check(heldStillReply != nil, @"the delayed still callback is retained");
+        clearCaptureError(); setCaptureError(@"fixture later recording failure");
+        if (heldStillReply != nil) {
+            heldStillReply(nil, [NSError errorWithDomain:@"capture.test" code:3
+                userInfo:@{NSLocalizedDescriptionKey: @"fixture late still failure"}]);
+            [heldStillReply release]; heldStillReply = nil;
+        }
+        check(strstr(sp_capture_error(), "fixture later recording failure") != NULL,
+            @"a late still callback cannot replace a later recording error");
+        check(stillError != NULL && strstr(stillError, "timed out") != NULL,
+            @"a returned still timeout error remains owned by its caller");
+        free(stillError);
+    }
+    fprintf(stderr, "END: still timeout and retained late callback\n");
+
     reset([directory stringByAppendingPathComponent:@"missing"], 1);
     [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
     check(strstr(sp_capture_error(), "not written") != NULL,
@@ -130,5 +200,7 @@ int main(void) { @autoreleasepool {
     NSError *error = nil;
     check([[NSFileManager defaultManager] removeItemAtPath:directory error:&error],
         [NSString stringWithFormat:@"fault-injection files are removed (%@)", error]);
+    fprintf(stderr, "%s: capture pressure and still-result isolation (%.1fms)\n",
+        failures ? "FAIL" : "PASS", (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;
 }}

@@ -146,8 +146,14 @@ func (implementation) CaptureStill(windowNumber int, path string) error {
 	}
 	target := C.CString(path)
 	defer C.free(unsafe.Pointer(target))
-	if !bool(C.sp_capture_still(C.long(windowNumber), target)) {
-		return captureError("still")
+	var nativeError *C.char
+	written := bool(C.sp_capture_still(C.long(windowNumber), target, &nativeError))
+	if nativeError != nil {
+		defer C.free(unsafe.Pointer(nativeError))
+		return fmt.Errorf("capture still: %s", C.GoString(nativeError))
+	}
+	if !written {
+		return errors.New("capture still failed without a native reason")
 	}
 	return nil
 }

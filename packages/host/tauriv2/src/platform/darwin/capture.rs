@@ -11,7 +11,8 @@ extern "C" {
     fn sp_capture_limited() -> bool;
     fn sp_capture_longest_gap() -> f64;
     fn sp_capture_clock() -> f64;
-    fn sp_capture_still(window_number: isize, path: *const c_char) -> bool;
+    fn sp_capture_still(window_number: isize, path: *const c_char, error: *mut *mut c_char)
+        -> bool;
     fn sp_notifications_delivered(
         done: extern "C" fn(context: *mut std::ffi::c_void, json: *const c_char),
         context: *mut std::ffi::c_void,
@@ -121,9 +122,18 @@ pub fn wait() -> Result<bool, String> {
 pub fn still(window_number: isize, path: &str) -> Result<(), String> {
     let target =
         CString::new(path).map_err(|_| "still capture failed: path contains NUL".to_owned())?;
-    if unsafe { sp_capture_still(window_number, target.as_ptr()) } {
-        Ok(())
-    } else {
-        Err(last_error("still capture failed"))
+    let mut error = std::ptr::null_mut();
+    let written = unsafe { sp_capture_still(window_number, target.as_ptr(), &mut error) };
+    if !error.is_null() {
+        let message = unsafe { CStr::from_ptr(error) }
+            .to_str()
+            .map(|message| format!("still capture failed: {message}"))
+            .unwrap_or_else(|error| format!("still capture returned invalid UTF-8 error: {error}"));
+        unsafe { libc::free(error.cast()) };
+        return Err(message);
     }
+    if !written {
+        return Err("still capture failed without a native reason".to_owned());
+    }
+    Ok(())
 }
