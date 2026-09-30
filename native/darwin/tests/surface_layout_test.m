@@ -4,6 +4,9 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
+#import "capture.h"
+#import "webview_geometry.h"
+#import "window_facts.h"
 #import "private/webkit.h"
 
 static const NSTimeInterval kBusy = 3;
@@ -13,6 +16,16 @@ static int failures = 0;
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
+}
+
+// 콜백 타임아웃으로 프로세스가 종료돼도 녹화 파일을 남기지 않는다.
+static NSString *compositionDirectory;
+static void cleanupCompositionRecording(void) {
+    if (compositionDirectory == nil) return;
+    NSError *error = nil;
+    if (![[NSFileManager defaultManager] removeItemAtPath:compositionDirectory error:&error])
+        fprintf(stderr, "FAIL: composition recording cleanup: %s\n", error.localizedDescription.UTF8String);
+    [compositionDirectory release]; compositionDirectory = nil;
 }
 
 static void until(BOOL (^done)(void)) {
@@ -108,6 +121,126 @@ static WKWebView *page(NSWindow *window, WKWebViewConfiguration *configuration, 
     return view;
 }
 
+// 실제 DOM 경계와 네이티브 영역의 합성은 준비 중에도 양쪽 경계를 보존해야 한다.
+// 표시 확인 뒤 커밋을 제어해 진행 중 트랜잭션의 프레임도 녹화한다.
+static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 400, 200)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    window.animationBehavior = NSWindowAnimationBehaviorNone;
+    WKWebView *main = page(window, configuration, NSMakeRect(0, 0, 400, 200), @"sptest://app/composition");
+    check(sp_window_set_main_webview(window, main), @"the composition fixture registers its main DOM");
+    void *surface = sp_surface_create(main);
+    check(surface != NULL, @"the composition fixture creates its native surface");
+    if (surface == NULL) { [window close]; [window release]; return; }
+    webviewSetFrame(surface, 40, 40, 260, 120);
+    webviewSetSurfaceHidden(surface, false);
+    NSView *region = (NSView *)sp_surface_native_plane(surface);
+    region.wantsLayer = YES;
+    region.layer.backgroundColor = [NSColor colorWithSRGBRed:25.0/255 green:27.0/255 blue:36.0/255 alpha:1].CGColor;
+    __block BOOL loaded = NO;
+    [main evaluateJavaScript:@"document.head.innerHTML='<style>body{margin:0;isolation:isolate}body::before{content:\"\";position:fixed;inset:0;z-index:-1;background:rgb(25,27,36);clip-path:path(\"M0,0H400V200H0ZM40,40v120h260v-120Z\")}</style>';"
+        "document.body.innerHTML='<div id=box style=\"position:absolute;left:39px;top:39px;width:260px;height:120px;border:1px solid rgb(43,46,61)\"></div>'"
+        completionHandler:^(id value, NSError *error) {
+            check(error == nil, @"the composition fixture installs its DOM border"); loaded = YES;
+        }];
+    until(^BOOL { return loaded; });
+    [window orderFrontRegardless];
+    __block double shown = 0;
+    surfaceLayoutAfterSettled(main, ^(double at, const char *error) {
+        check(error == NULL, @"the initial composition fixture is presented"); shown = at;
+    });
+    until(^BOOL { return shown != 0; });
+    char directory[] = "/tmp/soksak-composition-test-XXXXXX";
+    BOOL created = mkdtemp(directory) != NULL;
+    check(created, @"the composition recording directory is created");
+    if (!created) { sp_surface_close(surface); [window close]; [window release]; return; }
+    compositionDirectory = [[NSString stringWithUTF8String:directory] copy];
+    BOOL opened = sp_capture_open(window.windowNumber, false);
+    BOOL started = opened && sp_capture_start(directory);
+    check(started, [NSString stringWithFormat:@"the composition recording starts (%s)", sp_capture_error()]);
+    if (started) {
+        check(sp_capture_wait() > 0, @"the composition recording contains its initial frame");
+        surfaceLayoutTraceStart();
+        surfaceLayoutBegin(window, 107, ^(int allowed) { check(allowed, @"the composition transaction starts"); });
+        webviewSetFrame(surface, 40, 40, 250, 120);
+        __block BOOL ready = NO;
+        [main evaluateJavaScript:@"document.getElementById('box').style.width='250px'"
+            completionHandler:^(id value, NSError *error) {
+                check(error == nil, @"the composition DOM border moves during preparation");
+                surfaceLayoutAfterPresentation(main, ^{ ready = YES; });
+            }];
+        until(^BOOL { return ready; });
+        waitFrames(window.screen, 1);
+        __block BOOL clipped = NO;
+        [main evaluateJavaScript:@"document.styleSheets[0].cssRules[1].style.clipPath='path(\"M0,0H400V200H0ZM40,40v120h250v-120Z\")'"
+            completionHandler:^(id value, NSError *error) {
+                check(error == nil, @"the composition paint clip changes while the native transaction is pending");
+                surfaceLayoutAfterPresentation(main, ^{ clipped = YES; });
+            }];
+        until(^BOOL { return clipped; });
+        waitFrames(window.screen, 5);
+        check(surfaceLayoutCommit(window, 107), @"the controlled composition transaction commits");
+        shown = 0;
+        surfaceLayoutAfterSettled(main, ^(double at, const char *error) {
+            check(error == NULL, @"the final composition fixture is presented"); shown = at;
+        });
+        until(^BOOL { return shown != 0; });
+        int count = sp_capture_stop(shown);
+        check(count >= 2 && !sp_capture_limited(), @"the composition recording includes initial and final frames without truncation");
+        double timeline[4] = {0};
+        check(surfaceLayoutTraceStop(timeline, 1) == 1, @"the composition recording contains its transaction timeline");
+        for (int index = 1; index <= count; index++) {
+            NSString *path = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:
+                [NSString stringWithFormat:@"frame-%04d.bgra", index]];
+            NSData *data = [NSData dataWithContentsOfFile:path];
+            uint32_t head[3] = {0}; double info[7] = {0};
+            BOOL valid = data.length >= sizeof(head) + sizeof(info);
+            if (valid) {
+                [data getBytes:head length:sizeof(head)];
+                [data getBytes:info range:NSMakeRange(sizeof(head), sizeof(info))];
+                valid = head[0] > 0 && head[1] > 0 && head[2] >= head[0] * 4 &&
+                    data.length == sizeof(head) + sizeof(info) + (size_t)head[2] * head[1] &&
+                    info[4] > 0 && info[5] > 0;
+            }
+            check(valid, [NSString stringWithFormat:@"composition frame %d has complete pixels and metadata", index]);
+            if (!valid) continue;
+            const uint8_t *pixels = (const uint8_t *)data.bytes + sizeof(head) + sizeof(info);
+            double scale = info[4] * info[5];
+            BOOL found = NO;
+            double borderAt = NAN;
+            for (double x = 290; x <= 302 && !found; x += 0.5) {
+                BOOL matches = YES;
+                for (int offset = -12; offset <= 12; offset += 6) {
+                    size_t px = (size_t)floor((info[0] + x) * scale);
+                    size_t py = (size_t)floor((info[1] + 100 + offset) * scale);
+                    if (px >= head[0] || py >= head[1]) { matches = NO; break; }
+                    const uint8_t *rgb = pixels + py * head[2] + px * 4;
+                    if (abs((int)rgb[2] - 43) > 3 || abs((int)rgb[1] - 46) > 3 || abs((int)rgb[0] - 61) > 3)
+                        matches = NO;
+                }
+                found = matches;
+                if (matches) borderAt = x;
+            }
+            check(found, [NSString stringWithFormat:@"composition frame %d/%d preserves the right DOM border "
+                "(display %.3f, begun %.3f, presented %.3f, committed %.3f)",
+                index, count, info[6], timeline[1], timeline[2], timeline[3]]);
+            if (index == 1 || info[6] < timeline[3])
+                check(borderAt >= 300 && borderAt < 301, [NSString stringWithFormat:
+                    @"a pre-commit composition frame retains the initial border (x %.1f)", borderAt]);
+            if (index == count)
+                check(borderAt >= 290 && borderAt < 291, [NSString stringWithFormat:
+                    @"the final composition frame contains the moved border (x %.1f)", borderAt]);
+        }
+    }
+    NSError *cleanupError = nil;
+    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:&cleanupError],
+        [NSString stringWithFormat:@"the composition recording is removed (%@)", cleanupError]);
+    if (cleanupError == nil) { [compositionDirectory release]; compositionDirectory = nil; }
+    sp_surface_close(surface);
+    [window close]; [window release];
+}
+
 typedef struct { NSTimeInterval took; BOOL beforeRelease; double requested; double finished; double displayed; } SPWait;
 
 // busy 의 웹 프로세스를 붙잡은 뒤 메인 웹뷰 크기를 바꾸고, 표시 대기가 끝날 때까지의 시간과 그 대기가
@@ -142,6 +275,7 @@ static SPWait waitWhileBusy(WKWebView *main, WKWebView *busy, SPBusySignal *sign
 }
 
 int main(void) { @autoreleasepool {
+    atexit(cleanupCompositionRecording);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
@@ -163,6 +297,7 @@ int main(void) { @autoreleasepool {
     [main _doAfterNextPresentationUpdate:^{ painted = YES; }];
     until(^BOOL { return painted; });
 
+    checkRecordedComposition([[configuration copy] autorelease]);
     checkSettledWaitsForLayout(window, main);
 
     // 열린 트랜잭션에서도 웹 프로세스의 새 배치 확인이 완료되어야 커밋 전에 기다릴 수 있다.
