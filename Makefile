@@ -90,13 +90,15 @@ go-repeat:
 
 # 저장소 루트에서 Node 테스트 파일의 이름 패턴에 맞는 테스트를 COUNT 번 차례로 실행한다.
 # 간헐 실패를 재현하고 수용하는 대상이다. 첫 실패에서 실행 번호, 시스템 부하, 그 실행의 출력을 보고한다.
+node-repeat: SHELL := /bin/bash -o pipefail
 node-repeat:
 	@case "$(FILE)" in '') echo "node-repeat requires FILE=<test file> NAME=<test name pattern> COUNT=<n>" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "node-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
 	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    node --test --experimental-test-module-mocks --test-name-pattern='$(NAME)' $(FILE) > "$$output" 2>&1 \
-	      || { cat "$$output"; echo "FAIL: $(FILE) $(NAME) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
+	    echo "START: $(FILE) $(NAME) run $$run of $(COUNT)"; \
+	    node --test --experimental-test-module-mocks --test-name-pattern='$(NAME)' $(FILE) 2>&1 | tee "$$output" \
+	      || { echo "FAIL: $(FILE) $(NAME) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
 	    grep -q "^ℹ pass [1-9]" "$$output" || { cat "$$output"; echo "FAIL: no test in $(FILE) matched $(NAME)" >&2; exit 1; }; \
 	    run=$$((run + 1)); \
 	  done; \

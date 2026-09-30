@@ -27,6 +27,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 
 // 기존 구성요소 연결도 파일 목록으로 유지한다. 동작 증거로 해석하지 않는다.
 const MATRIX = [
+  lane("Node repeat target", "declaration", ["Makefile"], ["scripts/test/node-repeat.test.mjs"], { testLanguage: "js-ts" }),
   lane("test inventory", "js-ts", ["scripts/check-test-parity.mjs"], ["scripts/test/test-parity.test.mjs"]),
   lane("host contract audit", "js-ts", ["scripts/check-host-contract.mjs"], ["scripts/test/check-host-contract.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),

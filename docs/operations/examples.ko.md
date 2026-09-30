@@ -42,6 +42,8 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 
 네 언어 어댑터 게이트는 `make language-test`로 실행한다. 선언된 JS/TS·Rust·Go·Objective-C 케이스별 기대·실제 테스트 수와 증거 해시를 출력한다. 재시도 사이에 실패를 보존하려면 저장소 밖 파일을 지정한다: `node scripts/language-test-adapters.mjs --evidence-file "$TMPDIR/soksak-language-evidence.json" scripts/language-test-cases.json`. 다음 실행은 소스·테스트·의존성·dirty 작업 트리·빌드 옵션·프로세스 snapshot이 같을 때만 시도를 추가하고, 다르면 오래된 증거로 실패한다.
 
+`make node-repeat FILE=<test> NAME=<pattern> COUNT=<n>`은 회차 번호와 자식 검사의 stdout/stderr를 실행 중 출력하고 첫 실패에서 중단한다. 출력 전달은 자식의 실패 종료 상태를 보존해야 하며 일치하는 성공 검사가 없는 실행도 실패한다.
+
 ## 창 검사
 
 각각 다른 터미널에서, 하네스가 읽는 설정 디렉터리(Node.js의 `os.tmpdir()`, macOS에서는 `$TMPDIR`)로 앱을 한 번씩 실행한다.
