@@ -2,14 +2,12 @@
 // 지정은 카드 데이터이고 활성 탭에서 다시 계산되지 않는다 — 연동 차단이 이 검사의 핵심 주장이다.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 
 const moduleUrl = new URL("../card-panels.js", import.meta.url);
-const exists = readFileSync(moduleUrl, "utf8").length > 0; // 레드 단계에서는 모듈이 없어 이 줄은 예외를 낸다.
 
 const panels = await import(moduleUrl);
 const {
-  PANEL_SIDES, panelState, resolvePanelSet, setPanel, togglePanel, sizePanel, panelsReport,
+  PANEL_SIDES, panelState, effectivePanel, resolvePanelSet, setPanel, togglePanel, sizePanel, panelsReport,
 } = panels;
 
 const DEFAULTS = { size: 190, min: 120, max: 480 };
@@ -34,7 +32,7 @@ test("an assigned panel resolves its set and keeps the assignment when the set i
   const c = card();
   setPanel(c, "right", "set-a", SETS);
   assert.equal(resolvePanelSet(c, "right", SETS), SETS["set-a"]);
-  // dangling: 세트가 삭제되어도 지정은 지워지지 않는다 — 조용한 삭제 금지.
+  // dangling: 세트가 삭제되어도 지정은 지워지지 않는다.
   assert.equal(resolvePanelSet(c, "right", {}), null);
   assert.equal(panelState(c, "right", DEFAULTS).set, "set-a");
 });
@@ -80,4 +78,18 @@ test("turning a panel off clears the side and the report omits it", () => {
 test("an unassigned card reports no panels", () => {
   assert.deepEqual(panelsReport(card(), SETS, DEFAULTS), {});
   assert.equal(panelState(card(), "top", DEFAULTS), null);
+});
+
+test("a linked plugin default stands in when the card has no explicit assignment", () => {
+  const c = card();
+  const linked = { id: "set-c", title: "C", sections: [], layout: "list" };
+  // 기본 지정: 명시 지정이 없으면 플러그인 연결이 그 변에 선다.
+  assert.deepEqual(effectivePanel(c, "top", DEFAULTS, linked), { set: "set-c", size: 190, collapsed: false });
+  assert.equal(effectivePanel(c, "top", DEFAULTS, null), null, "no link and no assignment means no panel");
+  // 명시 지정이 우선이다 — 연결과 다른 세트가 그 변에 선다.
+  setPanel(c, "top", "set-a", SETS);
+  assert.equal(effectivePanel(c, "top", DEFAULTS, linked).set, "set-a");
+  // 명시 지정을 해지하면 연결 기본이 다시 선다(지정이 없어진 것이지 패널이 금지된 것이 아니다).
+  setPanel(c, "top", "off", SETS);
+  assert.equal(effectivePanel(c, "top", DEFAULTS, linked).set, "set-c");
 });

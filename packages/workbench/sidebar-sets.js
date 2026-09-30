@@ -83,10 +83,11 @@ export function changeRow(sets, id, { action, index, section }, registered) {
  * choice 는 세트 id, off, inherit 이다. plugin 이 null 이면 left, right 의 일반 선택이다.
  */
 export function chooseLink(links, place, plugin, choice) {
-  if (!["left", "right", "card-left"].includes(place)) throw new Error(`unknown place ${place}`);
-  if (place === "card-left" && plugin === null) throw new Error("a card-left choice names a plugin");
+  if (!["left", "right", "card-left", "card-right", "card-top", "card-bottom"].includes(place)) throw new Error(`unknown place ${place}`);
+  const isCardSide = place.startsWith("card-");
+  if (isCardSide && plugin === null) throw new Error(`a ${place} choice names a plugin`);
   const rest = links.filter((l) => !(l.place === place && l.plugin === plugin));
-  const general = plugin === null || place === "card-left";
+  const general = plugin === null || isCardSide;
   if (choice === "inherit") {
     // 기본값: 오류 문장에서 플러그인이 없는 일반 선택을 general 로 적는다.
     if (general) throw new Error(`${place} ${plugin ?? "general"} has no inherit choice`);
@@ -98,12 +99,13 @@ export function chooseLink(links, place, plugin, choice) {
 
 /**
  * 사이드바에 보일 세트를 반환한다. 없거나 사용 안 함이면 null.
- * left, right 는 plugin 의 선택이 있으면 그것을, 없으면 일반 선택을 쓴다. rail 은 그 플러그인의 연결만 쓴다.
+ * left, right 는 plugin 의 선택이 있으면 그것을, 없으면 일반 선택을 쓴다. 카드 사방(card-*) 자리는 그
+ * 플러그인의 연결만 쓴다.
  */
 export function resolveSidebar(links, sets, place, plugin) {
   const own = links.find((l) => l.place === place && l.plugin === plugin && plugin !== null);
-  // 기본값: 플러그인 연결이 없으면 그 플러그인은 일반 선택을 따른다(docs/spec/settings.md). 레일에는 일반 선택이 없다.
-  const chosen = own ?? (place === "card-left" ? null : links.find((l) => l.place === place && l.plugin === null));
+  // 기본값: 플러그인 연결이 없으면 그 플러그인은 일반 선택을 따른다(docs/spec/settings.md). 카드 사방 자리에는 일반 선택이 없다.
+  const chosen = own ?? (place.startsWith("card-") ? null : links.find((l) => l.place === place && l.plugin === null));
   if (!chosen || chosen.set === null) return null;
   const set = sets.find((s) => s.id === chosen.set);
   if (!set) throw new Error(`link points at a set that is gone: ${chosen.set}`);

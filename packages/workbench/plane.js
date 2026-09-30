@@ -9,7 +9,7 @@ import { cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stag
 import { nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
-import { PANEL_SIDES, panelState, panelsReport, resolvePanelSet, setPanel, sizePanel, togglePanel } from "./card-panels.js";
+import { PANEL_SIDES, effectivePanel, panelState, resolvePanelSet, setPanel, sizePanel, togglePanel } from "./card-panels.js";
 import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
@@ -886,8 +886,24 @@ function panelCard(id, side) {
 }
 
 /** core.grid 보고용: 카드의 패널 상태. 지정된 변만 담는다. */
+/** 변의 플러그인 연결 세트(card-<side>). 연결이 없으면 null 이다.
+ * 카드 왼쪽은 예외다 — 그 자리는 inset 사이드바의 것이다(cardSidebar 가 card-left 연결을
+ * 쓴다). 왼쪽 패널은 명시 지정만으로 존재하고, 우·상·하는 플러그인 연결을 기본으로 받는다. */
+function linkedPanelSet(card, side) {
+  if (side === "left") return null;
+  const kind = activeTab(card)?.plugin;
+  if (!kind) return null;
+  return linkedSet(`card-${side}`, kind);
+}
+
+/** core.grid 보고: 명시 지정이 우선이고 없으면 플러그인 연결이 기본으로 선다. */
 export function cardPanels(card) {
-  return panelsReport(card, panelSets(), panelDefaults());
+  const report = {};
+  for (const side of PANEL_SIDES) {
+    const state = effectivePanel(card, side, panelDefaults(), linkedPanelSet(card, side));
+    if (state !== null) report[side] = state;
+  }
+  return report;
 }
 
 /** 카드의 변에 세트를 지정하거나 해지한다. */
@@ -921,8 +937,11 @@ function drawPanels(el, card) {
   const sets = panelSets();
   for (const side of PANEL_SIDES) {
     const panel = el.querySelector(`:scope > .panel[data-side-of="${side}"]`);
-    const state = panelState(card, side, defaults);
-    const set = state === null ? null : resolvePanelSet(card, side, sets);
+    const state = effectivePanel(card, side, defaults, linkedPanelSet(card, side));
+    // 명시 지정이면 id 로 해석하고(dangling 보존), 연결 기본이면 linkedSet 이 이미 세트 객체를 준다.
+    const set = state === null ? null
+      : panelState(card, side, defaults) === null ? linkedPanelSet(card, side)
+      : resolvePanelSet(card, side, sets);
     if (state === null || set === null) {
       if (panel) clearSet(panel.querySelector(".set"));
       panel?.remove();

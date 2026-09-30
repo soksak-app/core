@@ -551,14 +551,15 @@ export function validateSidebars(sidebars, where) {
   // 플러그인을 가리키는 left, right 연결은 그 플러그인의 선택(set null 은 사용 안 함), card-left 연결은 플러그인의 카드 왼쪽 사이드바이다.
   const seen = new Set();
   for (const link of sidebars.links) {
-    if (!isObject(link) || !["left", "right", "card-left"].includes(link.place)) {
-      throw new Error(`${where}: every link requires a place (left, right, card-left) and a known set`);
+    if (!isObject(link) || !["left", "right", "card-left", "card-right", "card-top", "card-bottom"].includes(link.place)) {
+      throw new Error(`${where}: every link requires a place (left, right, card-left, card-right, card-top, card-bottom) and a known set`);
     }
     only(`${where} link`, link, ["place", "plugin", "set"]);
     if (link.plugin !== null && !isText(link.plugin)) throw new Error(`${where}: a link plugin is null or a plugin id`);
-    if (link.place === "card-left" && link.plugin === null) throw new Error(`${where}: a card-left link names a plugin`);
+    const isCardSide = link.place.startsWith("card-");
+    if (isCardSide && link.plugin === null) throw new Error(`${where}: a ${link.place} link names a plugin`);
     if (link.set === null) {
-      if (link.place === "card-left" || link.plugin === null) {
+      if (isCardSide || link.plugin === null) {
         throw new Error(`${where}: set null requires a left or right link that names a plugin`);
       }
     } else if (!setIds.has(link.set)) {

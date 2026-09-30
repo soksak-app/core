@@ -66,7 +66,7 @@ async function layoutState(s) {
     },
     document,
     settings: Object.fromEntries([
-      "rail", "left", "right", "sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth", "links",
+      "cardSidebar", "left", "right", "sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth", "links",
     ].map((key) => [key, values[key]])),
     project: settings.project,
     overridden: settings.overridden,

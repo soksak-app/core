@@ -77,12 +77,19 @@ for (const app of Object.values(APPS)) {
       "the turned-off panel did not disappear");
     assert.ok("right" in cleared.cards.find((item) => item.id === card0.id).panels,
       "turning off one side removed another");
-    // 정리: 사방 모두 해지.
+    // 정리: 사방 모두 해지. 해지는 명시 지정을 지운다 — 그 변에 플러그인 연결 기본이
+    // 있으면 기본이 다시 선다(V5-116-2). 남은 것은 기본뿐임을 확인한다.
     for (const side of ["bottom", "left", "right"]) {
       await s.run("core.card.panel.set", { card: card0.id, side, set: "off" });
     }
-    await s.until("core.grid",
+    const fullyCleared = await s.until("core.grid",
       (value) => Object.keys(value.cards.find((item) => item.id === card0.id)?.panels ?? {}).length === 0,
-      "the panels did not clear");
+      "the panels did not clear").then(() => true, () => false);
+    if (!fullyCleared) {
+      const rest = (await s.get("core.grid")).cards.find((item) => item.id === card0.id).panels;
+      for (const side of Object.keys(rest)) {
+        assert.equal(rest[side].collapsed, false, `side ${side} kept an explicit fold — it must be a fresh default`);
+      }
+    }
   });
 }

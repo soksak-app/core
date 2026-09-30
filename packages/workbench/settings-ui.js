@@ -383,10 +383,13 @@ function drawPluginPage(unit) {
 
   if (unit.surface) {
     const own = [["inherit", "일반 따름"], ["off", "사용 안 함"], ...setItems()];
-    body.append(group("사이드바", "이 플러그인의 카드가 포커스된 동안 쓰는 사이드바. 일반 따름이면 일반의 선택을 쓴다.", [
+    body.append(group("사이드바", "이 플러그인의 카드가 쓰는 사이드바. 창 좌우는 포커스된 동안, 카드 사방은 그 플러그인 카드의 기본 패널이다.", [
       row("왼쪽 사이드바", choose(`link:left:${unit.id}`, own, choiceOf("left", unit.id))),
       row("오른쪽 사이드바", choose(`link:right:${unit.id}`, own, choiceOf("right", unit.id))),
       row("카드 왼쪽 사이드바", choose(`link:card-left:${unit.id}`, generalOptions(), choiceOf("card-left", unit.id))),
+      row("카드 오른쪽 사이드바", choose(`link:card-right:${unit.id}`, generalOptions(), choiceOf("card-right", unit.id))),
+      row("카드 상단 사이드바", choose(`link:card-top:${unit.id}`, generalOptions(), choiceOf("card-top", unit.id))),
+      row("카드 하단 사이드바", choose(`link:card-bottom:${unit.id}`, generalOptions(), choiceOf("card-bottom", unit.id))),
     ]));
   }
 }

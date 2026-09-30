@@ -17,7 +17,7 @@ for (const app of Object.values(APPS)) {
     await keepCommonSettings(s);
     // 셸 레일은 tabs 세트, 왼쪽 사이드바는 list 세트로 둔다.
     const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { rail: "flow",
+    await s.run("core.settings.set", { patch: { cardSidebar: "flow",
       sets: sets.map((set) => (set.id === "set-shell" ? { ...set, layout: "tabs" } : set)) }, scope: "common" });
     const of = (bars, id) => bars.find((bar) => bar.sidebar === id);
     await s.until("core.sidebars", (bars) => of(bars, "rail-shell")?.layout === "tabs" && of(bars, "left")?.layout === "list",

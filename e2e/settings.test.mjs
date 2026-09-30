@@ -47,7 +47,7 @@ for (const app of Object.values(APPS)) {
 
     // 일반: 사이드바 모양이 여기 있고 플러그인 설정은 없다.
     await section(s, "general");
-    await control(s, "core.settings-modal.pick", "pick:rail:inset");
+    await control(s, "core.settings-modal.pick", "pick:cardSidebar:inset");
     await control(s, "core.settings-modal.set", "left");
     await control(s, "core.settings-modal.set", "right");
     await control(s, "core.settings-modal.set", "link:left:");
@@ -174,7 +174,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
-    await s.run("core.settings.set", { patch: { rail: "inset", sidebarWidth: 150, sidebarMinWidth: 140 }, scope: "common" });
+    await s.run("core.settings.set", { patch: { cardSidebar: "inset", sidebarWidth: 150, sidebarMinWidth: 140 }, scope: "common" });
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebar?.width === 150),
       "an inset sidebar did not open at sidebarWidth");
     const card = grid.cards.find((item) => item.sidebar);
@@ -241,16 +241,16 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
-    assert.equal(await settingsValue(s, "rail"), "inset");
+    assert.equal(await settingsValue(s, "cardSidebar"), "inset");
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebar),
       "no card holds an inset sidebar in a fresh configuration");
     assert.equal(grid.cards.some((card) => card.id.startsWith("rail-")), false, "a rail column stands in a fresh configuration");
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
     await section(s, "general");
-    await control(s, "core.settings-modal.pick", "pick:rail:inset");
-    const keys = (await controls(s)).filter((c) => c.key?.startsWith("pick:rail:")).map((c) => c.key);
-    assert.deepEqual(keys, ["pick:rail:inset", "pick:rail:flow", "pick:rail:pin", "pick:rail:off"]);
+    await control(s, "core.settings-modal.pick", "pick:cardSidebar:inset");
+    const keys = (await controls(s)).filter((c) => c.key?.startsWith("pick:cardSidebar:")).map((c) => c.key);
+    assert.deepEqual(keys, ["pick:cardSidebar:inset", "pick:cardSidebar:flow", "pick:cardSidebar:pin", "pick:cardSidebar:off"]);
   });
 
   test(`${app.name}: a new inset sidebar opens at 190 points`, { timeout: 60000 }, async (t) => {

@@ -25,6 +25,17 @@ export function panelState(card, side, defaults) {
   };
 }
 
+/** 변의 시각 상태: 명시 지정이 우선이고, 없으면 플러그인 연결(card-<side>)이 기본 지정이다.
+ * 연결 해제는 지정이 아니다 — 명시 지정이 없고 연결도 없으면 패널은 없다. */
+export function effectivePanel(card, side, defaults, linked) {
+  assertSide(side);
+  const own = panelState(card, side, defaults);
+  if (own !== null) return own;
+  const set = linked === null || linked === undefined ? null : linked.id;
+  if (set === null || set === undefined) return null;
+  return { set, size: defaults.size, collapsed: false };
+}
+
 /** 지정을 세트 객체로 해석한다. 세트가 없으면(dangling) null — 지정 id 는 보존된다. */
 export function resolvePanelSet(card, side, sets) {
   const state = panelState(card, side, { size: 0 });
