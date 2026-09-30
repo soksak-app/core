@@ -65,7 +65,7 @@ A sidebar shows no set title or place label: its sections start at its top. A le
 
 The sidebar is identified by the id of the card that holds it: the `left`, `right`, or rail card, the card of an inset sidebar, or `cardId:side` for an assigned panel on one side of a card (`top`, `bottom`, `left`, `right`). Folding a section header runs `core.sidebar.section.fold` and choosing a tab runs `core.sidebar.section.select`, both with `{sidebar, section}`; status `core.sidebars` reports every drawn sidebar with its set, layout, selected tab, and each section's fold and mount state. A section module is a file listed in the package's `files`, so release staging copies it; staging fails when a section module is not listed.
 
-An open fill section in a vertical list retains its intrinsic header and body minimum height. When the sidebar is smaller, the whole set scrolls rather than shrinking a section to zero height. A plugin using a virtual list declares its minimum visible row height. The file tree reserves a 28-point toolbar and at least one 20-point row. This does not increase the card content residual or change saved sidebar sizes; the minimum card-content space contract remains under V5-115-1-4.
+An open fill section in a vertical list retains its intrinsic header and body minimum height. When the sidebar is smaller, the whole set scrolls rather than shrinking a section to zero height. A plugin using a virtual list declares its minimum visible row height. The file tree reserves a 28-point toolbar and at least one 20-point row. This does not increase the card content residual or change saved sidebar sizes; the minimum card-content space contract is verified under V5-115-1-4.
 
 ## Plugin state
 
