@@ -9,6 +9,8 @@ import { cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stag
 import { nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
+import { targetCardInsets } from "./card-insets.js";
+import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.js";
 import { SIDEBAR_SIDES, effectiveSidebar, resolveSidebarSet, setSidebar, sizeSidebar, toggleSidebar } from "./card-sidebars.js";
 import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
@@ -310,50 +312,16 @@ function updateCard(el, card) {
   }
   drawNotices(chrome, tabs);
 
-  // 카드의 연산은 넷이다: 탭 추가(T2), 세로 분할, 가로 분할, 닫기.
-  // 탭 ✕ 는 그 탭 하나를 닫고 마지막 탭이면 카드도 닫는다(T5). 카드 ✕ 는 탭 수와
-  // 무관하게 카드를 닫는다. 서로 다른 연산이므로 둘 다 둔다.
   if (!acts) {
-    acts = document.createElement("span");
-    acts.className = "chrome__acts";
-    // 생성 버튼 3개를 앞에, 닫기를 끝에 배치한다. 닫기는 되돌릴 수 없으므로 다른
-    // 버튼 사이에 두지 않는다.
-    for (const [what, title, svg] of [
-      ["add", "이 카드에 탭 추가 — 무엇을 띄울지 묻는다", '<path d="M8 3v10M3 8h10"/>'],
-      ["x", "세로선으로 쪼개기 — 좌우로 나뉜다",
-        '<rect class="half" x="2" y="3" width="6" height="10" rx="1.5"/>' +
-        '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M8 3v10"/>'],
-      ["y", "가로선으로 쪼개기 — 위아래로 나뉜다",
-        '<rect class="half" x="3" y="2" width="10" height="6" rx="1.5"/>' +
-        '<rect x="3" y="2" width="10" height="12" rx="2"/><path d="M3 8h10"/>'],
-      ["close", "이 카드를 닫는다 — 안의 탭이 몇 개든 함께 간다",
-        '<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>'],
-    ]) {
-      const b = document.createElement("button");
-      b.className = "chrome__act";
-      b.dataset.do = what;
-      b.dataset.expose = { add: "core.card.add", x: "core.card.split-x", y: "core.card.split-y", close: "core.card.close" }[what];
-      b.dataset.title = title;
-      b.title = title;
-      b.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${svg}</svg>`;
-      // 닫기는 카드를 닫는다. 나머지 3개는 무엇을 띄울지 묻는 메뉴를 연다.
-      if (what === "close") bind(b, "core.card.close", () => ({ card: el.dataset.cardId }));
-      else bind(b, "core.card.menu", () => ({ card: el.dataset.cardId, menu: MENU_OF[what] }));
-      acts.appendChild(b);
-    }
+    acts = createCardTools(card.id);
     chrome.appendChild(acts);
   }
-  for (const b of acts.querySelectorAll(".chrome__act")) {
-    const what = b.dataset.do;
-    const off = what === "close" ? !grid.canClose(card.id)
-      : what === "add" ? false : !grid.canSplit(card.id, what);
-    if (b.disabled !== off) b.disabled = off;
-    // 이 카드는 자리가 아니므로 `fixed` 가 아니다. 닫히지 않는 이유는 하나다.
-    const title = off && what === "close"
-      ? "닫을 수 없다 — 어느 이웃도 이 위치를 빈틈없이 못 메운다"
-      : b.dataset.title;
-    if (b.title !== title) b.title = title;
-  }
+  updateCardTools(acts, {
+    canClose: grid.canClose(card.id),
+    canSplitX: grid.canSplit(card.id, "x"),
+    canSplitY: grid.canSplit(card.id, "y"),
+    fullscreen: el.dataset.fullscreen === "true",
+  });
 
   // 표면의 슬롯. 컴포지터는 판의 구조를 알지 않으므로 필요한 값을 여기에 기록한다.
   //
@@ -477,6 +445,7 @@ export const dropBands = () => {
 };
 
 function beginTabDrag(e, cardId, tabId) {
+  restoreFullscreen();
   e.preventDefault();
   // 보더는 드래그 한 번 동안 바뀌지 않으므로 시작할 때 한 번 잰다.
   const band = dropBands();
@@ -556,7 +525,7 @@ export const pickerState = () => ({
 });
 
 /* 카드 도구 버튼의 data-do 와 core.card.menu 의 menu 값. */
-const MENU_OF = { add: "add", x: "split-x", y: "split-y" };
+const MENU_OF = CARD_TOOL_MENUS;
 const DO_OF = Object.fromEntries(Object.entries(MENU_OF).map(([what, menu]) => [menu, what]));
 
 const PICKER_ASK = {
@@ -691,6 +660,7 @@ function closePicker() {
 
 /** + 버튼의 후속 처리. 배치를 변경하지 않고 탭만 추가한다. */
 function addTab(cardId, plugin) {
+  if (view.fullscreenCard !== cardId) restoreFullscreen();
   const card = grid.card(cardId);
   if (!card?.data) return;
   const t = newTab(plugin);
@@ -704,6 +674,7 @@ function addTab(cardId, plugin) {
 
 /** 쪼개기 버튼의 후속 처리. 새 카드를 만들고 선택한 종류의 탭을 그 카드에 추가한다. */
 function splitWith(cardId, axis, plugin) {
+  restoreFullscreen();
   const card = grid.card(cardId);
   if (!card?.data) return;
   const t = newTab(plugin);
@@ -1356,7 +1327,20 @@ function seats() {
   const out = new Map();
   for (const card of grid.cards) {
     if (isPlace(card.id)) continue;
-    out.set(card.id, { id: activeTab(card).id, dim: dimmed(card.id) });
+    const el = cardElement(card.id);
+    const slot = el?.querySelector(":scope > .slot[data-native-surface]");
+    let inset = null;
+    if (slot) {
+      const folded = parseFloat(getComputedStyle(el).getPropertyValue("--divider"));
+      if (!Number.isFinite(folded) || folded < 0) throw new Error("invalid sidebar divider width");
+      const effective = cardSidebars(card);
+      const bands = Object.fromEntries(SIDEBAR_SIDES.map(side => {
+        const state = effective[side];
+        return [side, state ? (state.collapsed ? folded : state.size) : 0];
+      }));
+      inset = targetCardInsets(el, slot, bands);
+    }
+    out.set(card.id, { id: activeTab(card).id, dim: dimmed(card.id), inset });
   }
   return out;
 }
@@ -1537,8 +1521,23 @@ function knownPlugin(id) {
 /** 카드의 요소. 도구 버튼과 탭 목록 버튼이 그 안에 있다. */
 const cardElement = (id) => plane.querySelector(`.card[data-card-id="${CSS.escape(id)}"]`);
 
+export const fullscreenCard = () => plane.querySelector('.card[data-fullscreen="true"]')?.dataset.cardId ?? null;
+export const presentedCardRect = (id) => view?.painted(id);
+
+function restoreFullscreen() {
+  if (view?.fullscreenCard !== null && view?.fullscreenCard !== undefined) view.fullscreen(null);
+}
+
+export function toggleCardFullscreen(id) {
+  paneCard(id);
+  focusedId = id;
+  closePicker();
+  view.fullscreen(view.fullscreenCard === id ? null : id);
+}
+
 export function focusCard(id) {
   paneCard(id);
+  if (view.fullscreenCard !== id) restoreFullscreen();
   focusedId = id;
   settle();
 }
@@ -1584,6 +1583,7 @@ export function splitCard(id, axis, kind) {
 export function closeCard(id) {
   paneCard(id);
   if (!grid.canClose(id)) throw new Error(`card ${id} cannot close`);
+  restoreFullscreen();
   grid.close(id);
   // 기본값: 자리 카드만 남으면 포커스할 카드가 없다(null).
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
@@ -1592,13 +1592,16 @@ export function closeCard(id) {
 
 export function selectTab(tabId) {
   const card = cardOfTab(tabId);
+  if (view.fullscreenCard !== card.id) restoreFullscreen();
   card.data.activeId = tabId;
   focusedId = card.id;
   settle();
 }
 
 export async function closeTabById(tabId) {
-  await closeTab(cardOfTab(tabId).id, tabId);
+  const card = cardOfTab(tabId);
+  restoreFullscreen();
+  await closeTab(card.id, tabId);
 }
 
 const ZONES = ["centre", "left", "right", "top", "bottom"];
@@ -1612,6 +1615,7 @@ export function moveTab(tabId, cardId, zone) {
   if (zone !== "centre" && dropRect(from.id, hit) === undefined) {
     throw new Error(`tab ${tabId} cannot move to the ${zone} of ${cardId}`);
   }
+  restoreFullscreen();
   dropTab(from.id, tabId, hit);
 }
 
@@ -1633,7 +1637,7 @@ export function cardActs(id) {
   const acts = chrome?.querySelector(".chrome__acts");
   if (!acts) return null;
   const buttons = Object.fromEntries([...acts.querySelectorAll(".chrome__act")].map((b) => [
-    b.dataset.do === "close" ? "close" : MENU_OF[b.dataset.do],
+    ["close", "fullscreen"].includes(b.dataset.do) ? b.dataset.do : MENU_OF[b.dataset.do],
     { enabled: !b.disabled, hidden: b.hidden, title: b.title },
   ]));
   // 기본값: 탭 줄을 아직 맞추지 않은 카드의 머리는 접히지 않은 strip 이다.

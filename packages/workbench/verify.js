@@ -238,6 +238,7 @@ export function verify(controls = null) {
   let escape = 0;
   // 기본값: 아직 커밋이 없으면 잴 표면이 없다.
   for (const s of latest()?.surfaces ?? []) {
+    if (!s.visible) continue;
     // 표면의 id 는 탭이므로 카드는 그 슬롯에서 거슬러 찾는다.
     const el = plane
       .querySelector(`[data-native-surface-id="${s.id}"][data-native-surface]`)

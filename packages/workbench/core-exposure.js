@@ -13,7 +13,7 @@ import * as projects from "./projects.js";
 import {
   activeTab, addTabTo, assignSidebar, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
-  focused, fresh, moveTab, onPicker, onSurfaceState, openCardMenu, openCardTabs, pickItem, pickerState, plane, railState, selectTab,
+  focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, splitCard, surfaceState, tabsOf,
 } from "./plane.js";
 import {
@@ -139,13 +139,15 @@ function gridState() {
   const grid = currentGrid();
   if (!grid) return null;
   const rects = grid.rects();
+  const fullscreen = fullscreenCard();
   let pane = 0;
   const cards = [...plane.querySelectorAll(".card[data-card-id]")].map((el) => {
     const card = grid.card(el.dataset.cardId);
     if (!card) return null;
-    const rect = rects.get(card.id);
+    const rect = fullscreen === null ? rects.get(card.id) : presentedCardRect(card.id);
     const tabs = tabsOf(card);
     return {
+      fullscreen: card.id === fullscreen,
       id: card.id, x: rect.x, y: rect.y, w: rect.w, h: rect.h,
       c0: card.c0, c1: card.c1, r0: card.r0, r1: card.r1,
       // 기본값: px 폭을 정하지 않은 카드는 width 가 null 이다.
@@ -159,6 +161,7 @@ function gridState() {
   }).filter(Boolean);
   const lines = (axis) => grid.lines(axis).map((_, k) => grid.boundaryPos(axis, k));
   return {
+    fullscreen,
     width: grid.width, height: grid.height, gap: grid.gap, plane: planeOrigin(),
     lines: { x: lines("x"), y: lines("y") }, cards,
   };
@@ -365,6 +368,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.text.larger", async () => { await changeTextSize(1); });
   registry.command("core.text.smaller", async () => { await changeTextSize(-1); });
   registry.command("core.text.reset", async () => { await changeTextSize(0); });
+  registry.command("core.card.fullscreen", ({ card }) => { toggleCardFullscreen(card); });
   registry.command("core.card.menu", ({ card, menu }) => { openCardMenu(card, menu); });
   registry.command("core.card.tab-list", ({ card }) => { openCardTabs(card); });
   registry.command("core.card.add-tab", ({ card, plugin }) => ({ tab: addTabTo(card, plugin) }));

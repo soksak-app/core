@@ -124,7 +124,9 @@ test("the core declaration file is valid and every main-page entry is registered
   assert.ok(file.exposes.status.some(({ name }) => name.startsWith(SURFACE_CORE)), "surface document entries are declared");
   for (const { name } of main(file.exposes.status)) assert.match(code, new RegExp(`status\\("${name}"`), name);
   for (const { name } of main(file.exposes.commands)) assert.match(code, new RegExp(`command\\("${name}"`), name);
-  const markup = ["index.html", "plane.js", "sidebar-sections.js", "settings-ui.js", "library.js"].map(source).join("\n");
+  // 스테이징 선언의 모든 소유 모듈을 읽는다. 분리된 조작 모듈도 같은 이름 검사를 받는다.
+  const modules = JSON.parse(source("package.json")).files.filter((name) => name.endsWith(".js"));
+  const markup = ["index.html", ...modules].map(source).join("\n");
   for (const { name } of file.exposes.dom) {
     assert.ok(markup.includes(`"${name}"`) || markup.includes(`'${name}'`), `${name} has no data-expose in the markup`);
   }

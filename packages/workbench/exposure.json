@@ -216,13 +216,14 @@
       },
       {
         "name": "core.grid",
-        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label and its notice), tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, and collapsed state.",
+        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label and its notice), tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, and collapsed state; fullscreen is the presented card ID or null, and card rectangles describe current presentation.",
         "schema": {
           "type": [
             "object",
             "null"
           ],
           "properties": {
+            "fullscreen": { "type": ["string", "null"] },
             "width": {
               "type": "number"
             },
@@ -271,6 +272,7 @@
               "items": {
                 "type": "object",
                 "properties": {
+                  "fullscreen": { "type": "boolean" },
                   "id": {
                     "type": "string"
                   },
@@ -1839,6 +1841,21 @@
         }
       },
       {
+        "name": "core.card.fullscreen",
+        "description": "Toggles one content card across the work area without changing the saved arrangement or OS window state.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.card.menu",
         "description": "Opens or closes a card's add or split menu.",
         "params": {
@@ -2524,6 +2541,11 @@
       {
         "name": "core.card.split-y",
         "description": "The horizontal split buttons of pane cards in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.fullscreen",
+        "description": "The card fullscreen toggles immediately before each header close button, in document order.",
         "many": true
       },
       {

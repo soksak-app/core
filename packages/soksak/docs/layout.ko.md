@@ -172,7 +172,7 @@ view.render();
 
 | 요소 | 클래스 | 뷰가 쓰는 속성 | 인라인 스타일 |
 | --- | --- | --- | --- |
-| `createCard` 가 만든 카드 | 호출자의 것 | `data-card-id` | `position`, `left`, `top`, `width`, `height` |
+| `createCard` 가 만든 카드 | 호출자의 것 | `data-card-id`, `data-fullscreen`, `hidden` | `position`, `left`, `top`, `width`, `height` |
 | 잡는 영역 | `sp-divider` | `data-axis`, `data-line`, 잡고 있는 동안 `data-dragging`, `tabindex="0"`, `role="separator"` | 위와 같고 `touch-action: none` 이 더해진다 |
 | 경계선 | `sp-rule` | `data-axis`, `data-virtual` | 위와 같고 `pointer-events: none` 이 더해진다 |
 
@@ -183,6 +183,7 @@ rule 을 표시한다. `isVirtual` 은 다른 것을 보고한다. 어떤 카드
 ```css
 #stage { position: relative; }
 .card { box-sizing: border-box; }
+.card[hidden] { display: none !important; }
 .card > * { min-width: 0; }                /* 아래의 위험을 보라 */
 ```
 
@@ -453,8 +454,10 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 그것으로 다시 만든 grid 는 카드를 같은 방식으로 닫는다. `checkState` 는 생성자가
 실행하는 것이다. 오래된 저장 배치를 설치하기 전에 거절하려면 직접 호출하라.
 
+`fullscreen(id)`는 격자 모델을 바꾸지 않고 기존 카드 하나를 판 전체에 표시한다. `fullscreen(null)`은 배치를 복원한다. `fullscreenCard` 접근자는 현재 표시 선택을 보고한다. 다른 카드 요소는 살아 있지만 숨기며 표시 사각형의 넓이는 0이다. 전체 화면에는 선과 경계선 손잡이가 없다. 커밋 사각형과 그림은 크기 변경·비동기 복원 중에도 같은 스냅샷을 사용한다. 잘못된 ID는 상태를 바꾸지 않고 실패한다. 호스트는 전체 화면 카드를 제거하거나 배치를 변경하기 전에 일반 표시를 복원한다.
+
 `SoksakView(host, grid, options)` — `render(reason?)`, `element(id)`,
-`painted(id)`, `destroy()`. 옵션: `createCard`(필수), `updateCard`, `destroyCard`,
+`painted(id)`, `fullscreen(id)`, `fullscreenCard`, `destroy()`. 옵션: `createCard`(필수), `updateCard`, `destroyCard`,
 `onChange(reason)`, `updateDivider`, `rules`(기본 켜짐), `commit(rects, draw)`,
 `classPrefix`(기본 `sp`), `observeResize`(기본 켜짐), `bleed`(기본 0).
 

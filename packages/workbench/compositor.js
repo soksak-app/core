@@ -45,26 +45,6 @@ const drawn = new Map();
 /** 슬롯이 속한 카드의 요소. 판이 기록한 data-card-id 를 가진 조상이다. */
 const cardEl = (slot) => slot.closest("[data-card-id]");
 
-/**
- * 카드 안에서 슬롯이 차지하는 여백. 지금 그려져 있는 카드에서 잰다.
- *
- * 여백은 카드의 보더와 머리와 발이고 카드의 크기와 무관하다. 앞선 커밋에서 잰 값을
- * 보관하면 그 사이에 테마가 보더 굵기를 바꾼 렌더에서 지난 여백으로 예측하게 된다.
- */
-function insetOf(slot, el) {
-  const s = slot.getBoundingClientRect();
-  const c = el.getBoundingClientRect();
-  return {
-    left: s.left - c.left,
-    top: s.top - c.top,
-    width: c.width - s.width,
-    height: c.height - s.height,
-    // 슬롯이 한 변을 잃었으면 카드가 머리와 발을 담지 못한 것이고, 이 뺄셈은 여백이
-    // 아니라 눌린 카드의 크기다. 그 값으로는 다른 크기의 카드를 예측할 수 없다.
-    flat: s.width <= 0 || s.height <= 0,
-  };
-}
-
 /** 마지막 커밋 레코드를 반환한다. 없으면 null. */
 export const latest = () => latestRecord;
 
@@ -107,7 +87,10 @@ function surfaceEl(id) {
  * DOM 은 네이티브 표면 위에 그릴 수 없으므로, 표면 위에 무언가를 그리는 동안
  * capture-hidden 으로 표면을 숨기고 DOM 이 스냅샷을 그린다.
  */
-const effectiveVisible = (slot) => slot.dataset.nativeCaptureHidden !== "true";
+const effectiveVisible = (slot) => {
+  const { width, height } = slot.getBoundingClientRect();
+  return slot.dataset.nativeCaptureHidden !== "true" && slot.closest("[hidden]") === null && width > 0 && height > 0;
+};
 
 /* 이 커밋이 마지막 갱신인지, 갱신이 이어지는 중인지.
    경계를 끄는 동안 매 프레임 커밋이 발생하고 놓으면 멈춘다. 뷰는 끄는 동안 divider 에
@@ -205,8 +188,12 @@ export function publishAhead(rects, seated) {
     const el = cardEl(slot);
     const card = el && rects.get(el.dataset.cardId);
     const seat = el && seated.get(el.dataset.cardId);
-    const inset = el && insetOf(slot, el);
-    const measurable = Boolean(card && seat?.id === id && inset && !inset.flat
+    const inset = seat ? seat.inset : null;
+    if (seat && inset !== null && (!inset || ["left", "top", "width", "height"].some(
+      key => !Number.isFinite(inset[key]) || inset[key] < 0))) {
+      throw new Error(`invalid target surface inset ${id}`);
+    }
+    const measurable = Boolean(card && seat?.id === id && inset
       && card.w >= inset.width && card.h >= inset.height);
     if (!measurable) aheadComplete = false;
     seats.push({

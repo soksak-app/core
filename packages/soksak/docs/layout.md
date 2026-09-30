@@ -178,7 +178,7 @@ keeps the original card and its near half; the new card takes the far half.
 
 | Element | Class | Attributes the view writes | Inline style |
 | --- | --- | --- | --- |
-| card, from `createCard` | yours | `data-card-id` | `position`, `left`, `top`, `width`, `height` |
+| card, from `createCard` | yours | `data-card-id`, `data-fullscreen`, `hidden` | `position`, `left`, `top`, `width`, `height` |
 | grab area | `sp-divider` | `data-axis`, `data-line`, `data-dragging` while held, `tabindex="0"`, `role="separator"` | the same, plus `touch-action: none` |
 | boundary line | `sp-rule` | `data-axis`, `data-virtual` | the same, plus `pointer-events: none` |
 
@@ -189,6 +189,7 @@ card reads the line at all.
 ```css
 #stage { position: relative; }
 .card { box-sizing: border-box; }
+.card[hidden] { display: none !important; }
 .card > * { min-width: 0; }                /* see the hazard below */
 ```
 
@@ -479,8 +480,10 @@ refusal returns `null`, `false` or an empty answer and changes nothing.
 a grid rebuilt from it closes cards the same way. `checkState` is what the
 constructor runs; call it to reject a stale saved layout before installing one.
 
+`fullscreen(id)` presents one existing card across the plane without changing the grid model. `fullscreen(null)` restores the arrangement. The `fullscreenCard` getter reports the current presentation choice. Other card elements remain alive but hidden; their presented rectangles have zero area. Rules and dividers are absent in fullscreen. Commit rectangles and the draw use the same snapshot, including during resize and asynchronous restore. Invalid IDs fail without changing state. A host restores normal presentation before removing the fullscreen card or changing the arrangement.
+
 `SoksakView(host, grid, options)` — `render(reason?)`, `element(id)`,
-`painted(id)`, `destroy()`. Options: `createCard` (required), `updateCard`, `destroyCard`,
+`painted(id)`, `fullscreen(id)`, `fullscreenCard`, `destroy()`. Options: `createCard` (required), `updateCard`, `destroyCard`,
 `onChange(reason)`, `updateDivider`, `rules` (default on), `commit(rects, draw)`,
 `classPrefix` (default `sp`), `observeResize` (default on), `bleed` (default 0).
 

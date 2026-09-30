@@ -2641,3 +2641,66 @@ test("a release delivered to another divider does not end the drag this one hold
   );
   view.destroy();
 });
+
+test("fullscreen presents one card without mutating the layout or disposing siblings", () => {
+  const planned = [];
+  const { dom, host, grid, view, gone } = mount({ commit: (rects, draw) => { planned.push(new Map(rects)); draw(); } });
+  try {
+    const before = grid.toJSON();
+    const elements = new Map(grid.cards.map((card) => [card.id, view.element(card.id)]));
+    const normal = new Map(grid.cards.map((card) => [card.id, view.painted(card.id)]));
+    view.fullscreen("card");
+    assert.equal(view.fullscreenCard, "card");
+    assert.deepEqual(view.painted("card"), { x: 0, y: 0, w: W, h: H });
+    assert.deepEqual(planned.at(-1).get("card"), view.painted("card"));
+    assert.equal(view.element("card").hidden, false);
+    assert.equal(view.element("card-1").hidden, true);
+    assert.deepEqual(view.painted("card-1"), { x: 0, y: 0, w: 0, h: 0 });
+    assert.equal(host.querySelectorAll(".sp-divider,.sp-rule").length, 0);
+    assert.deepEqual(gone, []);
+    assert.deepEqual(grid.toJSON(), before);
+    view.fullscreen(null);
+    assert.equal(view.fullscreenCard, null);
+    for (const [id, el] of elements) {
+      assert.equal(view.element(id), el);
+      assert.equal(el.hidden, false);
+      assert.deepEqual(view.painted(id), normal.get(id));
+    }
+    assert.deepEqual(grid.toJSON(), before);
+  } finally { view.destroy(); dom.window.close(); }
+});
+
+test("fullscreen rejects invalid cards and retains fullscreen across resize", () => {
+  const { dom, grid, view } = mount();
+  try {
+    view.fullscreen("card");
+    for (const id of ["missing", undefined, 42]) {
+      assert.throws(() => view.fullscreen(id), /unknown fullscreen card/);
+      assert.equal(view.fullscreenCard, "card");
+    }
+    grid.resize(900, 500);
+    view.render();
+    assert.deepEqual(view.painted("card"), { x: 0, y: 0, w: 900, h: 500 });
+    view.fullscreen(null);
+    for (const card of grid.cards) assert.deepEqual(view.painted(card.id), grid.rect(card.id));
+  } finally { view.destroy(); dom.window.close(); }
+});
+
+test("fullscreen commit snapshots keep their own visibility through deferred restore", () => {
+  const pending = [];
+  const { dom, host, grid, view } = mount({ commit: (rects, draw) => pending.push({ rects, draw }) });
+  try {
+    pending.shift().draw();
+    view.fullscreen("card");
+    view.fullscreen(null);
+    const full = pending.shift();
+    full.draw();
+    assert.equal(host.querySelector('[data-card-id="card-1"]').hidden, true);
+    assert.deepEqual(view.painted("card"), full.rects.get("card"));
+    const restore = pending.shift();
+    restore.draw();
+    assert.equal(host.querySelector('[data-card-id="card-1"]').hidden, false);
+    assert.deepEqual(view.painted("card"), restore.rects.get("card"));
+    assert.deepEqual(view.painted("card"), grid.rect("card"));
+  } finally { view.destroy(); dom.window.close(); }
+});

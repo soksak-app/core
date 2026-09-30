@@ -15,6 +15,8 @@
     "library.css",
     "card.js",
     "card-sidebars.js",
+    "card-tools.js",
+    "card-insets.js",
     "sidebar-sections.js",
     "commands.js",
     "compositor.js",

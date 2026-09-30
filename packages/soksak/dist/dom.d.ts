@@ -59,6 +59,11 @@ export declare class SoksakView {
     private host;
     private grid;
     private options;
+    private fullscreenId;
+    /** The chosen fullscreen presentation; it does not change the grid. */
+    get fullscreenCard(): string | null;
+    /** Present a card across the plane, or restore normal presentation with null. */
+    fullscreen(id: string | null): void;
     /**
      * One device pixel, in the units the rects are written in.
      *

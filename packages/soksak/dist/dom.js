@@ -37,6 +37,21 @@ function reach(rule, width, height, bleed) {
 const EDGE = 0.5;
 const DOUBLE_TAP_MS = 350;
 export class SoksakView {
+    /** The chosen fullscreen presentation; it does not change the grid. */
+    get fullscreenCard() { return this.fullscreenId; }
+    /** Present a card across the plane, or restore normal presentation with null. */
+    fullscreen(id) {
+        if (this.disposed)
+            throw new Error('cannot fullscreen a destroyed view');
+        if (id !== null && (typeof id !== 'string' || !this.grid.card(id))) {
+            throw new Error(`unknown fullscreen card ${String(id)}`);
+        }
+        if (this.drags.size > 0 || this.mouseDrag !== null) {
+            throw new Error('cannot change fullscreen during a divider gesture');
+        }
+        this.fullscreenId = id;
+        this.render();
+    }
     /**
      * One device pixel, in the units the rects are written in.
      *
@@ -75,6 +90,7 @@ export class SoksakView {
     }
     constructor(host, grid, options) {
         var _a;
+        this.fullscreenId = null;
         this.cardEls = new Map();
         /** The device-pixel rects the last paint wrote to the card elements. */
         this.paintedRects = new Map();
@@ -191,11 +207,20 @@ export class SoksakView {
         // plane that is gone.
         if (this.disposed)
             return;
+        const fullscreen = this.fullscreenId;
+        if (fullscreen !== null && !this.grid.card(fullscreen)) {
+            throw new Error(`unknown fullscreen card ${fullscreen}`);
+        }
+        const rects = fullscreen === null ? new Map(this.grid.rects())
+            : new Map(this.grid.cards.map((card) => [card.id, card.id === fullscreen
+                    ? { x: 0, y: 0, w: this.grid.width, h: this.grid.height }
+                    : { x: 0, y: 0, w: 0, h: 0 }]));
         const snapshot = {
+            fullscreen,
             cards: [...this.grid.cards],
-            rects: new Map(this.grid.rects()),
-            rules: [...this.grid.rules()],
-            dividers: [...this.grid.dividers()],
+            rects,
+            rules: fullscreen === null ? [...this.grid.rules()] : [],
+            dividers: fullscreen === null ? [...this.grid.dividers()] : [],
             width: this.grid.width,
             height: this.grid.height,
         };
@@ -273,6 +298,8 @@ export class SoksakView {
             }
             held.card = card;
             const rect = onGrid(box.get(card.id), step);
+            held.el.hidden = snapshot.fullscreen !== null && card.id !== snapshot.fullscreen;
+            held.el.dataset.fullscreen = String(card.id === snapshot.fullscreen);
             place(held.el, rect);
             this.paintedRects.set(card.id, rect);
             // default: `updateCard` is an optional hook; without it the view only places the card.
