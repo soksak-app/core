@@ -251,14 +251,27 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         move || tick(app, label, steps, clock, recorded),
     );
     // 끌기의 성공과 관계없이 기록을 멈춘다.
-    let layouts = if frames.is_some() {
-        let platform = platform::current().map_err(internal)?;
-        Some(on_main(window, move || platform.layout_trace_stop()).map_err(internal)?)
-    } else {
-        None
-    };
+    let layouts = (|| -> Result<_, Failure> {
+        if frames.is_some() {
+            let platform = platform::current().map_err(internal)?;
+            on_main(window, move || platform.layout_trace_stop())
+                .map(Some)
+                .map_err(internal)
+        } else {
+            Ok(None)
+        }
+    })();
     let finished = (|| -> Result<Value, Failure> {
-        let result = result?;
+        let (result, layouts) = match (result, layouts) {
+            (Ok(result), Ok(layouts)) => (result, layouts),
+            (Err(error), Ok(_)) | (Ok(_), Err(error)) => return Err(error),
+            (Err(error), Err(trace)) => {
+                return Err(internal(format!(
+                    "{}; layout trace: {}",
+                    error.message, trace.message
+                )))
+            }
+        };
         // 마지막 배치가 커밋되고 표시될 때까지 기다린다. 다음 표시 한 번만 기다리면 마지막 단계의
         // 커밋보다 앞선 표시에서 끝날 수 있다. Wails 호스트도 같은 시점을 기다린다.
         let context = crate::windows::window_data(window).map_err(internal)?;
@@ -294,8 +307,18 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         Ok(Value::Object(merged))
     })();
     // 요청자가 프레임 폴더를 받지 못하면 녹화를 멈추고 폴더를 지운다.
-    if finished.is_err() && frames.is_some() {
-        RECORDING.abort(&recorder()?).map_err(internal)?;
+    if let Err(error) = finished {
+        if frames.is_some() {
+            let cleanup =
+                recorder().and_then(|capture| RECORDING.abort(&capture).map_err(internal));
+            if let Err(cleanup) = cleanup {
+                return Err(internal(format!(
+                    "{}; abort capture: {}",
+                    error.message, cleanup.message
+                )));
+            }
+        }
+        return Err(error);
     }
     finished
 }

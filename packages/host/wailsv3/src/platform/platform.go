@@ -114,7 +114,7 @@ type Capturer interface {
 	LayoutTraceStart()
 	// LayoutTraceStop 은 기록을 멈추고 트랜잭션마다 ticket, begun, presented, committed(ms, 표시 시각과 같은 시계)를
 	// 반환한다. 일어나지 않은 단계는 NaN 이다. UI 스레드에서 부른다.
-	LayoutTraceStop() [][4]float64
+	LayoutTraceStop() ([][4]float64, error)
 	// CaptureStill 은 윈도 서버 번호 windowNumber 의 창을 포커스를 주지 않고 한 장 찍어 path 에 PNG 로 쓴다.
 	// 관측 자료다.
 	CaptureStill(windowNumber int, path string) error

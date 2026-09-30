@@ -57,6 +57,7 @@ void surfaceLayoutTraceStart(void) {
 
 size_t surfaceLayoutTraceStop(double *out, size_t capacity) {
     NSCAssert(NSThread.isMainThread, @"surface layout trace requires the UI thread");
+    size_t total = trace.count;
     size_t count = 0;
     for (NSMutableArray<NSNumber *> *record in trace) {
         if (count >= capacity) break;
@@ -65,7 +66,7 @@ size_t surfaceLayoutTraceStop(double *out, size_t capacity) {
     }
     [trace release];
     trace = nil;
-    return count;
+    return total;
 }
 
 static void startLayout(SPLayoutRequest *request) {

@@ -13,7 +13,7 @@ void surfaceLayoutCancel(void *owner);
 // 기록하기 시작한다. 이전 기록은 지운다.
 void surfaceLayoutTraceStart(void);
 // 기록을 멈추고 트랜잭션마다 ticket, begun, presented, committed 네 값을 out 에 최대 capacity 개 쓴다.
-// 일어나지 않은 단계는 NaN 이다. 기록된 트랜잭션 수를 반환한다.
+// 일어나지 않은 단계는 NaN 이다. 전체 트랜잭션 수를 반환한다. capacity 초과는 호출자가 오류로 처리한다.
 size_t surfaceLayoutTraceStop(double *out, size_t capacity);
 #ifdef __BLOCKS__
 void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int));

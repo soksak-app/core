@@ -90,6 +90,8 @@ The following methods exist only in diagnostic builds (Go build tag `diagnostics
 | `diagnostics.capture.still` | `{window}` | Writes a still PNG of the window at device-pixel resolution without focusing it and returns `{path}` inside a private `<config-dir>/captures/still-*` directory. It is observation material for development, not measurement; measurements use `diagnostics.capture.start`/`stop` frames. The requester removes the directory after viewing |
 | `diagnostics.input.source` | `{window, select?}` | With `select`, selects that enabled keyboard input source; returns `{current}`, the selected source identifier. A platform without keyboard input sources returns an error. Activation-tier window checks use it to reproduce a user's input-source sequence |
 
+Layout timeline replies have a capacity of 4096 transactions. When the actual record count exceeds capacity, the host returns an error and removes the recording directory that the requester cannot receive. A truncated timeline is never a successful reply.
+
 The host writes large data, such as captures, to files under the configuration directory, and the reply contains the file paths. The requester removes the capture files after measurement.
 
 `diagnostics.drag` drives the page's existing surface-input route with host-timed steps. Its native recording measures composition during that gesture; it does not establish OS mouse-button delivery. A composition check must also measure actual card movement and every requested round trip. Native pointer delivery is a separate `input.pointer` check.

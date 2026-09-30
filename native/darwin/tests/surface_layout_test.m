@@ -191,6 +191,14 @@ int main(void) { @autoreleasepool {
     surfaceLayoutBegin(window, 104, ^(int allowed) {});
     check(surfaceLayoutCommit(window, 104) && surfaceLayoutTraceStop(trace, 4) == 0,
         @"a stopped trace records nothing");
+    surfaceLayoutTraceStart();
+    surfaceLayoutBegin(window, 105, ^(int allowed) {});
+    check(surfaceLayoutCommit(window, 105), @"the first capacity fixture commits");
+    surfaceLayoutBegin(window, 106, ^(int allowed) {});
+    check(surfaceLayoutCommit(window, 106), @"the second capacity fixture commits");
+    size_t capacityCount = surfaceLayoutTraceStop(trace, 1);
+    check(capacityCount == 2, [NSString stringWithFormat:
+        @"the trace reports all records when output capacity is exceeded (got %zu, expected 2)", capacityCount]);
 
     SPWait externalWait = waitWhileBusy(main, external, signal);
     check(externalWait.beforeRelease,

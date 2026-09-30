@@ -246,8 +246,12 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	if p.Capture {
 		if capture, captureErr := recorder(); captureErr == nil {
 			var records [][4]float64
-			application.InvokeSync(func() { records = capture.LayoutTraceStop() })
+			var traceErr error
+			application.InvokeSync(func() { records, traceErr = capture.LayoutTraceStop() })
+			err = errors.Join(err, traceErr)
 			layouts = layoutTrace(records)
+		} else {
+			err = errors.Join(err, captureErr)
 		}
 	}
 	if err != nil {
@@ -257,6 +261,8 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 				if abortErr := recording.Abort(capture); abortErr != nil {
 					err = fmt.Errorf("%w; abort capture: %v", err, abortErr)
 				}
+			} else {
+				err = errors.Join(err, captureErr)
 			}
 		}
 		return nil, err
