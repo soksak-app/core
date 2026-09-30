@@ -17,10 +17,13 @@ int main(void) { @autoreleasepool {
     [NSApp finishLaunching];
     char directory[] = "/tmp/soksak-capture-test-XXXXXX";
     check(mkdtemp(directory) != NULL, @"a private capture directory is created");
-    check(!sp_capture_open(-1, false), @"an invalid window is rejected by the native capture boundary");
-    check(sp_capture_error() != NULL && strlen(sp_capture_error()) > 0, @"open failure is observable to the caller");
-    check(!sp_capture_start(directory), @"starting without a capture target is rejected");
-    check(sp_capture_error() != NULL && strlen(sp_capture_error()) > 0, @"start failure is observable to the caller");
+    char *operationError = NULL;
+    check(!sp_capture_open(-1, false, &operationError), @"an invalid window is rejected by the native capture boundary");
+    check(operationError != NULL && strlen(operationError) > 0, @"open failure is observable to the caller");
+    free(operationError); operationError = NULL;
+    check(!sp_capture_start(directory, &operationError), @"starting without a capture target is rejected");
+    check(operationError != NULL && strlen(operationError) > 0, @"start failure is observable to the caller");
+    free(operationError); operationError = NULL;
     check(sp_capture_wait() == 0, @"an invalid window cannot produce a capture frame");
     check(sp_capture_stop(0) == 0, @"stopping an invalid capture reports no written frames");
     NSArray *files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:
@@ -70,10 +73,12 @@ int main(void) { @autoreleasepool {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
             [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, settled.timeIntervalSinceNow)]];
     }
-    check(sp_capture_open(window.windowNumber, false), @"a visible inactive window opens for recording");
-    bool recordingStarted = sp_capture_start(directory);
+    check(sp_capture_open(window.windowNumber, false, &operationError), @"a visible inactive window opens for recording");
+    free(operationError); operationError = NULL;
+    bool recordingStarted = sp_capture_start(directory, &operationError);
     check(recordingStarted, [NSString stringWithFormat:@"recording starts on an unchanged inactive window (%@)",
-        [NSString stringWithUTF8String:sp_capture_error()]]);
+        [NSString stringWithUTF8String:operationError == NULL ? "" : operationError]]);
+    free(operationError);
     if (recordingStarted) {
         int firstFrame = sp_capture_wait();
         check(firstFrame == 1, [NSString stringWithFormat:@"an unchanged inactive window produces a first frame (%@)",

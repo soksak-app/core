@@ -109,6 +109,8 @@ Capture first-frame readiness succeeds only after a complete frame is written an
 
 Still capture returns its own caller-owned error string, freed with free(), separately from recording errors. A failed still capture neither clears an existing recording error nor makes a healthy recording fail. Invalid UTF-8 paths are rejected before platform APIs. Late still callbacks retain only their own call state and cannot change recording results. The native sp_capture_still error output pointer is mandatory; success sets its value to NULL, and failure allocates a UTF-8 error string. Both hosts consume and free that per-call output rather than reading sp_capture_error.
 
+Recording target preparation and start reject an already active recording before changing target, frame counters or recording errors. Each open/start call returns a separate caller-owned UTF-8 error through a mandatory output pointer (NULL on success; free() on failure). Rejected overlapping operations cannot invalidate healthy recording readiness or erase an earlier recording failure.
+
 The webview operation attaches the DOM plane to a `SurfaceHost`, not directly to the window's shared surface container. Document and image operations create descendants of that host's native plane. The platform interface does not expose an operation that can place a region as a sibling of its `SurfaceHost`. Both language hosts validate the [surface composition](surface-composition.md) before calling platform code.
 
 ### Window buttons

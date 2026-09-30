@@ -157,9 +157,12 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
     check(created, @"the composition recording directory is created");
     if (!created) { sp_surface_close(surface); [window close]; [window release]; return; }
     compositionDirectory = [[NSString stringWithUTF8String:directory] copy];
-    BOOL opened = sp_capture_open(window.windowNumber, false);
-    BOOL started = opened && sp_capture_start(directory);
-    check(started, [NSString stringWithFormat:@"the composition recording starts (%s)", sp_capture_error()]);
+    char *operationError = NULL;
+    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
+    BOOL started = NO;
+    if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, &operationError); }
+    check(started, [NSString stringWithFormat:@"the composition recording starts (%s)", operationError == NULL ? "" : operationError]);
+    free(operationError);
     if (started) {
         check(sp_capture_wait() > 0, @"the composition recording contains its initial frame");
         surfaceLayoutTraceStart();

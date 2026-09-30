@@ -5,8 +5,8 @@
 
 static NSString *recordingDirectory;
 static BOOL faultApplied;
-static bool startWithDirectory(const char *directory) {
-    bool started = sp_capture_start(directory);
+static bool startWithDirectory(const char *directory, char **error) {
+    bool started = sp_capture_start(directory, error);
     if (started) recordingDirectory = [[NSString stringWithUTF8String:directory] copy];
     return started;
 }

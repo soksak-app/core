@@ -5,8 +5,10 @@
 #include <stdbool.h>
 // display 이면 창이 있는 디스플레이에서 이 앱의 창을 녹화한다. 창이 다른 Space(전체 화면)로
 // 옮겨지면 창 녹화는 멈추지만 디스플레이 녹화는 그 Space 를 계속 녹화한다.
-bool sp_capture_open(long windowNumber, bool display);
-bool sp_capture_start(const char *directory);
+// open/start의 error는 필수 출력 포인터다. 성공은 NULL, 실패는 호출자가 free()로 해제하는
+// UTF-8 문자열이다. 활성 녹화 중 재요청은 녹화 상태·오류를 바꾸지 않고 거부한다.
+bool sp_capture_open(long windowNumber, bool display, char **error);
+bool sp_capture_start(const char *directory, char **error);
 const char *sp_capture_error(void);
 int sp_capture_wait(void);
 // 표시 시각 after(ms, mach 절대 시각)와 호출 시각 중 늦은 시각 이후의 화면이 스트림에 전달된 뒤

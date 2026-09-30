@@ -122,6 +122,61 @@ int main(void) { @autoreleasepool {
         @"first-frame readiness preserves the asynchronous start failure");
     [captureStream release]; captureStream = nil;
 
+    char *operationError = NULL;
+    SCContentFilter *prepared = (SCContentFilter *)[NSObject new];
+    SCStreamConfiguration *configuration = (SCStreamConfiguration *)[NSObject new];
+    reset(directory, 1);
+    [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
+    captureFilter = prepared; captureConfig = configuration;
+    captureStream = (SCStream *)[NSObject new];
+    setCaptureError(@"fixture recording failure before open");
+    check(!sp_capture_open(-1, false, &operationError), @"open rejects an active recording");
+    check(strstr(sp_capture_error(), "fixture recording failure before open") != NULL,
+        @"rejected open preserves the active recording error");
+    check(captureFilter == prepared && captureConfig == configuration,
+        @"rejected open preserves the prepared recording target");
+    check(operationError != NULL && strstr(operationError, "already running") != NULL,
+        @"the rejected operation returns its own active-recording reason");
+    free(operationError); operationError = NULL;
+    [captureStream release]; captureStream = nil;
+
+    reset(directory, 1);
+    [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
+    captureFilter = prepared; captureConfig = configuration;
+    captureStream = (SCStream *)[NSObject new];
+    check(!sp_capture_open(-1, false, &operationError), @"open also rejects a healthy active recording");
+    check(sp_capture_wait() == 1, @"rejected open preserves healthy recording readiness");
+    check(operationError != NULL && strstr(operationError, "already running") != NULL,
+        @"the rejected operation returns its own active-recording reason");
+    free(operationError); operationError = NULL;
+    [captureStream release]; captureStream = nil;
+
+    reset(directory, 1);
+    [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
+    captureFilter = prepared; captureConfig = configuration;
+    captureStream = (SCStream *)[NSObject new];
+    setCaptureError(@"fixture recording failure before start");
+    check(!sp_capture_start(directory.UTF8String, &operationError), @"start rejects an active recording");
+    check(strstr(sp_capture_error(), "fixture recording failure before start") != NULL,
+        @"rejected start preserves the active recording error");
+    check(operationError != NULL && strstr(operationError, "already running") != NULL,
+        @"the rejected operation returns its own active-recording reason");
+    free(operationError); operationError = NULL;
+    [captureStream release]; captureStream = nil;
+
+    reset(directory, 1);
+    [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
+    captureFilter = prepared; captureConfig = configuration;
+    captureStream = (SCStream *)[NSObject new];
+    check(!sp_capture_start(directory.UTF8String, &operationError), @"start also rejects a healthy active recording");
+    check(sp_capture_wait() == 1, @"rejected start preserves healthy recording readiness");
+    check(operationError != NULL && strstr(operationError, "already running") != NULL,
+        @"the rejected operation returns its own active-recording reason");
+    free(operationError); operationError = NULL;
+    [captureStream release]; captureStream = nil;
+    captureFilter = nil; captureConfig = nil;
+    [prepared release]; [configuration release];
+
     reset(directory, 1);
     [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
     captureStream = (SCStream *)[NSObject new];

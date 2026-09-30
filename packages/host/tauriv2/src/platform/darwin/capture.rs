@@ -3,8 +3,8 @@
 use std::ffi::{c_char, c_int, CStr, CString};
 
 extern "C" {
-    fn sp_capture_open(window_number: isize, display: bool) -> bool;
-    fn sp_capture_start(directory: *const c_char) -> bool;
+    fn sp_capture_open(window_number: isize, display: bool, error: *mut *mut c_char) -> bool;
+    fn sp_capture_start(directory: *const c_char, error: *mut *mut c_char) -> bool;
     fn sp_capture_error() -> *const c_char;
     fn sp_capture_wait() -> c_int;
     fn sp_capture_stop(after: f64) -> c_int;
@@ -64,23 +64,35 @@ fn last_error(operation: &str) -> String {
     format!("{operation}: {}", message.to_string_lossy())
 }
 
-pub fn open(window_number: isize, display: bool) -> Result<(), String> {
-    if unsafe { sp_capture_open(window_number, display) } {
-        Ok(())
-    } else {
-        Err(last_error("capture open failed"))
+// 호출별 오류를 읽고 해제하며 녹화의 공유 오류는 조회하지 않는다.
+fn call_result(operation: &str, success: bool, error: *mut c_char) -> Result<(), String> {
+    if !error.is_null() {
+        let message = unsafe { CStr::from_ptr(error) }
+            .to_str()
+            .map(|message| format!("{operation}: {message}"))
+            .unwrap_or_else(|error| format!("{operation}: native error is invalid UTF-8: {error}"));
+        unsafe { libc::free(error.cast()) };
+        return Err(message);
     }
+    if !success {
+        return Err(format!("{operation}: native failure has no reason"));
+    }
+    Ok(())
+}
+
+pub fn open(window_number: isize, display: bool) -> Result<(), String> {
+    let mut error = std::ptr::null_mut();
+    let prepared = unsafe { sp_capture_open(window_number, display, &mut error) };
+    call_result("capture open failed", prepared, error)
 }
 
 /// directory 에 프레임 기록을 시작한다. NUL 문자를 포함한 경로는 무시한다.
 pub fn start(directory: &str) -> Result<(), String> {
     let where_to = CString::new(directory)
         .map_err(|_| "capture start failed: directory contains NUL".to_owned())?;
-    if unsafe { sp_capture_start(where_to.as_ptr()) } {
-        Ok(())
-    } else {
-        Err(last_error("capture start failed"))
-    }
+    let mut error = std::ptr::null_mut();
+    let started = unsafe { sp_capture_start(where_to.as_ptr(), &mut error) };
+    call_result("capture start failed", started, error)
 }
 
 /// after 의 표시 시각(ms, 0 이면 호출 시각)까지 기록한 뒤 기록을 끝내고 기록한 프레임 수를 반환한다.
@@ -124,16 +136,5 @@ pub fn still(window_number: isize, path: &str) -> Result<(), String> {
         CString::new(path).map_err(|_| "still capture failed: path contains NUL".to_owned())?;
     let mut error = std::ptr::null_mut();
     let written = unsafe { sp_capture_still(window_number, target.as_ptr(), &mut error) };
-    if !error.is_null() {
-        let message = unsafe { CStr::from_ptr(error) }
-            .to_str()
-            .map(|message| format!("still capture failed: {message}"))
-            .unwrap_or_else(|error| format!("still capture returned invalid UTF-8 error: {error}"));
-        unsafe { libc::free(error.cast()) };
-        return Err(message);
-    }
-    if !written {
-        return Err("still capture failed without a native reason".to_owned());
-    }
-    Ok(())
+    call_result("still capture failed", written, error)
 }

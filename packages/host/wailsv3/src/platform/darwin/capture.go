@@ -51,6 +51,18 @@ func captureError(operation string) error {
 	return fmt.Errorf("capture %s: %s", operation, message)
 }
 
+// 호출자가 소유하는 준비·시작·정지 캡처 오류를 읽고 해제한다.
+func captureCallError(operation string, success bool, nativeError *C.char) error {
+	if nativeError != nil {
+		defer C.free(unsafe.Pointer(nativeError))
+		return fmt.Errorf("capture %s: %s", operation, C.GoString(nativeError))
+	}
+	if !success {
+		return fmt.Errorf("capture %s failed without a native reason", operation)
+	}
+	return nil
+}
+
 func (implementation) WindowNumbers(window unsafe.Pointer) ([]int, error) {
 	var buf [32]C.long
 	n := int(C.windowNumbers(window, &buf[0], C.int(len(buf))))
@@ -62,10 +74,9 @@ func (implementation) WindowNumbers(window unsafe.Pointer) ([]int, error) {
 }
 
 func (implementation) CaptureOpen(windowNumber int, display bool) error {
-	if !bool(C.sp_capture_open(C.long(windowNumber), C.bool(display))) {
-		return captureError("open")
-	}
-	return nil
+	var nativeError *C.char
+	prepared := bool(C.sp_capture_open(C.long(windowNumber), C.bool(display), &nativeError))
+	return captureCallError("open", prepared, nativeError)
 }
 
 func (implementation) CaptureStart(directory string) error {
@@ -74,10 +85,9 @@ func (implementation) CaptureStart(directory string) error {
 	}
 	where := C.CString(directory)
 	defer C.free(unsafe.Pointer(where))
-	if !bool(C.sp_capture_start(where)) {
-		return captureError("start")
-	}
-	return nil
+	var nativeError *C.char
+	started := bool(C.sp_capture_start(where, &nativeError))
+	return captureCallError("start", started, nativeError)
 }
 
 func (implementation) CaptureStop(after float64) (int, error) {
@@ -148,12 +158,5 @@ func (implementation) CaptureStill(windowNumber int, path string) error {
 	defer C.free(unsafe.Pointer(target))
 	var nativeError *C.char
 	written := bool(C.sp_capture_still(C.long(windowNumber), target, &nativeError))
-	if nativeError != nil {
-		defer C.free(unsafe.Pointer(nativeError))
-		return fmt.Errorf("capture still: %s", C.GoString(nativeError))
-	}
-	if !written {
-		return errors.New("capture still failed without a native reason")
-	}
-	return nil
+	return captureCallError("still", written, nativeError)
 }

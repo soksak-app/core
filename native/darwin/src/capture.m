@@ -272,11 +272,27 @@ const char *sp_capture_error(void) {
     }
 }
 
+static bool captureOperationFailure(char **errorOut, NSString *message) {
+    *errorOut = strdup(message.UTF8String);
+    if (*errorOut == NULL) {
+        fprintf(stderr, "capture error allocation failed\n");
+        abort();
+    }
+    return false;
+}
+
+
 // sp_capture_open 은 창을 조회해 캡처에 필요한 값을 보관한다.
 //
 // 조회는 비동기이므로 답을 기다린다. 기다리지 않으면 그 사이에 시작한 캡처가 조용히
 // 아무 일도 하지 않고, 프레임이 0 장인 이유가 어디에도 남지 않는다.
-bool sp_capture_open(long windowNumber, bool display) {
+bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
+    if (errorOut == NULL) {
+        fprintf(stderr, "capture open needs an error output\n");
+        return false;
+    }
+    *errorOut = NULL;
+    if (captureStream != nil) return captureOperationFailure(errorOut, @"capture is already running");
     clearCaptureError();
     // 이전 대상을 지운다. 조회에 실패하면 이전 대상을 녹화하지 않고 녹화가 시작되지 않는다.
     captureFilter = nil;
@@ -345,25 +361,30 @@ bool sp_capture_open(long windowNumber, bool display) {
     dispatch_release(answered);
     if (wait != 0) {
         setCaptureError(@"shareable content query timed out after 10000ms");
-        return false;
+        return captureOperationFailure(errorOut, @"shareable content query timed out after 10000ms");
     }
-    return captureFilter != nil;
+    if (captureFilter == nil) {
+        @synchronized([SPCapture class]) { return captureOperationFailure(errorOut, captureError); }
+    }
+    return true;
 }
 
-bool sp_capture_start(const char* directory) {
+bool sp_capture_start(const char* directory, char **errorOut) {
+    if (errorOut == NULL) {
+        fprintf(stderr, "capture start needs an error output\n");
+        return false;
+    }
+    *errorOut = NULL;
+    if (captureStream != nil) return captureOperationFailure(errorOut, @"capture is already running");
     clearCaptureError();
     if (captureFilter == nil) {
         setCaptureError(@"capture has no prepared window");
         fprintf(stderr, "observe: capture has no window to record\n");
-        return false;
-    }
-    if (captureStream != nil) {
-        setCaptureError(@"capture is already running");
-        return false;
+        return captureOperationFailure(errorOut, @"capture has no prepared window");
     }
     if (directory == NULL) {
         setCaptureError(@"capture directory is null");
-        return false;
+        return captureOperationFailure(errorOut, @"capture directory is null");
     }
     captureStartedAt = mach_absolute_time();
     captureLimitReached = false;
@@ -390,7 +411,7 @@ bool sp_capture_start(const char* directory) {
     captureSink.directory = [NSString stringWithUTF8String:directory];
     if (captureSink.directory == nil) {
         setCaptureError(@"capture directory is not valid UTF-8");
-        return false;
+        return captureOperationFailure(errorOut, @"capture directory is not valid UTF-8");
     }
     captureStream = [[SCStream alloc] initWithFilter:captureFilter
                                        configuration:captureConfig
@@ -407,7 +428,8 @@ bool sp_capture_start(const char* directory) {
             error.localizedDescription.UTF8String);
         [captureStream release];
         captureStream = nil;
-        return false;
+        return captureOperationFailure(errorOut,
+            [NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription]);
     }
     [captureStream startCaptureWithCompletionHandler:^(NSError* failed) {
         if (failed != nil) {
@@ -540,14 +562,6 @@ double sp_capture_longest_gap(void) {
 }
 @end
 
-static bool failStillCapture(char **errorOut, NSString *message) {
-    *errorOut = strdup(message.UTF8String);
-    if (*errorOut == NULL) {
-        fprintf(stderr, "still capture error allocation failed\n");
-        abort();
-    }
-    return false;
-}
 
 bool sp_capture_still(long windowNumber, const char *path, char **errorOut) {
     if (errorOut == NULL) {
@@ -556,10 +570,10 @@ bool sp_capture_still(long windowNumber, const char *path, char **errorOut) {
     }
     *errorOut = NULL;
     if (path == NULL) {
-        return failStillCapture(errorOut, @"still capture needs a path");
+        return captureOperationFailure(errorOut, @"still capture needs a path");
     }
     NSString *decoded = [NSString stringWithUTF8String:path];
-    if (decoded == nil) return failStillCapture(errorOut, @"still capture path is not valid UTF-8");
+    if (decoded == nil) return captureOperationFailure(errorOut, @"still capture path is not valid UTF-8");
     NSURL *url = [NSURL fileURLWithPath:decoded];
     SPCaptureStillResult *result = [[SPCaptureStillResult alloc] init];
     [SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:
@@ -609,10 +623,10 @@ bool sp_capture_still(long windowNumber, const char *path, char **errorOut) {
     long wait = dispatch_semaphore_wait(result.answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
     if (wait != 0) {
         [result release];
-        return failStillCapture(errorOut, @"still capture timed out after 10000ms");
+        return captureOperationFailure(errorOut, @"still capture timed out after 10000ms");
     }
     bool written = result.written;
-    if (!written) failStillCapture(errorOut, result.error);
+    if (!written) captureOperationFailure(errorOut, result.error);
     [result release];
     return written;
 }
