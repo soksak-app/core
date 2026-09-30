@@ -12,7 +12,7 @@ const dom = new JSDOM(`<body>
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 
-const { createRegistry, loadExposure, registry, registerSurfacePort, unregisterSurfacePort, dispatchSurfaceRequest } = await import("../exposure.js");
+const { createRegistry, loadExposure, registry, registerSurfacePort, dispatchSurfaceRequest } = await import("../exposure.js");
 
 test("mounted surface exposure routes through its registered module and releases ownership", async () => {
   const received = [];
@@ -23,7 +23,7 @@ test("mounted surface exposure routes through its registered module and releases
     assert.equal(await dispatchSurfaceRequest(request), true);
     assert.deepEqual(received, [request]);
     assert.throws(() => registerSurfacePort("fixture-surface", port), /already has/);
-    unregisterSurfacePort("fixture-surface", port);
+    remove();
     assert.equal(await dispatchSurfaceRequest(request), false);
   } finally {
     remove();

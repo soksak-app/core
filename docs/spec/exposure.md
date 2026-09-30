@@ -79,6 +79,8 @@ The native host relays registrations and requests between a surface page and the
 | status | `core.surface.input` | The last 32 trusted or untrusted input events of the document in order: `{sequence, type, trusted, x, y, key, modifiers}` for `pointerdown`, `pointerup`, `pointermove`, `click`, `wheel`, and `keydown`. `modifiers` lists the modifier keys the event carries (`shift`, `alt`, `control`, `command`). `sequence` starts at 1 and increases by one for each recorded event |
 | command | `core.surface.hit` | `{x, y}` in CSS pixels; returns `true` when an element of the document is at the point |
 
+A mounted module owns its request callback in the application document. Disposal removes that callback and its registrations before the same logical surface identifier can be mounted again. Repeated disposal has no effect on a later owner of that identifier. Requests after disposal are not dispatched to the disposed module.
+
 ### Modal documents
 
 A native modal document reports its state to the main page through the modal answer channel with the key `document` after each render, placement, and theme change. The main page publishes it as status `core.modal`: `null` without an open modal, or `{id, mode, document}` where `document` is `null` until the first report and then `{mode, filter, htmlBackground, bodyBackground, scrimBackground, loaded, rect}`: the rendered element's `data-native-modal`, the root's computed `filter`, the computed background colors of the root and the body, the computed `body::before` background used for the dialog scrim, whether the document has handled the answer to its first content request (also when it dropped that answer as older than applied changes), and the element rectangle in CSS pixels.

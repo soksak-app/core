@@ -95,7 +95,7 @@ node-repeat:
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "node-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
 	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    node --test --test-name-pattern='$(NAME)' $(FILE) > "$$output" 2>&1 \
+	    node --test --experimental-test-module-mocks --test-name-pattern='$(NAME)' $(FILE) > "$$output" 2>&1 \
 	      || { cat "$$output"; echo "FAIL: $(FILE) $(NAME) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
 	    grep -q "^ℹ pass [1-9]" "$$output" || { cat "$$output"; echo "FAIL: no test in $(FILE) matched $(NAME)" >&2; exit 1; }; \
 	    run=$$((run + 1)); \

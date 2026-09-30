@@ -79,6 +79,8 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | status | `core.surface.input` | 문서의 최근 입력 이벤트 32개(신뢰 여부 포함)를 순서대로 담는다. `pointerdown`, `pointerup`, `pointermove`, `click`, `wheel`, `keydown`에 대한 `{sequence, type, trusted, x, y, key, modifiers}`. `modifiers`는 이벤트가 담은 수정 키(`shift`, `alt`, `control`, `command`)의 목록이다. `sequence`는 1부터 기록한 이벤트마다 1씩 증가한다 |
 | command | `core.surface.hit` | CSS 픽셀 단위 `{x, y}`. 그 점에 문서의 요소가 있으면 `true`를 반환한다 |
 
+마운트된 모듈은 애플리케이션 문서에서 자기 요청 콜백을 소유한다. 해제는 같은 논리 표면 식별자로 다시 마운트하기 전에 콜백과 등록을 제거한다. 반복 해제는 그 식별자의 이후 소유자에게 영향을 주지 않는다. 해제 후 요청은 해제된 모듈에 전달되지 않는다.
+
 ### 모달 문서
 
 네이티브 모달 문서는 렌더, 배치, 테마 변경마다 모달 응답 경로로 키 `document`를 사용해 자기 상태를 메인 페이지에 보고한다. 메인 페이지는 이를 status `core.modal`로 공개한다. 열린 모달이 없으면 `null`이고, 있으면 `{id, mode, document}`다. `document`는 첫 보고 전에는 `null`이며 이후 `{mode, filter, htmlBackground, bodyBackground, scrimBackground, loaded, rect}`다: 렌더한 요소의 `data-native-modal`, 루트의 계산된 `filter`, 루트와 body의 계산된 배경색, 대화상자 scrim에 사용하는 `body::before`의 계산된 배경색, 문서가 첫 내용 요청의 응답을 처리했는지(적용한 변경보다 오래되어 버린 경우도 포함), CSS 픽셀 단위 요소 사각형.

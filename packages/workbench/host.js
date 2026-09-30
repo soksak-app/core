@@ -1,17 +1,15 @@
 // 네이티브 표면과 모달 뷰를 애플리케이션에 요청한다.
 //
-// 페이지는 커밋마다 표면의 프레임을 선언하고 호스트가 각각을 웹뷰로 만든다.
-// 표면은 플러그인 패키지 안의, 이 호스트가 서비스하는 문서를 표시한다.
-//
-// DOM 은 네이티브 뷰 위에 그릴 수 없으므로 [data-native-modal] 요소는 별도 뷰에
-// 렌더링한다. 그 뷰는 메인창 내부에 배치되어 표면 위에 그려진다.
+// 플러그인 모듈은 애플리케이션 DOM 에 마운트된다. 페이지는 논리 표면의 프레임을
+// 선언하고 호스트는 네이티브 문서·그림 영역을 그 표면에 배치한다.
+// 모달 문서는 메인창 내부의 별도 네이티브 웹뷰에 표시된다.
 //
 // 이 파일은 애플리케이션마다 복제하지 않는다. 애플리케이션별 차이는 전송 방식뿐이고
 // 런타임 모듈(@soksak/runtime)이 담당한다.
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
 import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar } from "@soksak/plugin-api";
-import { registerSurfacePort, registry, unregisterSurfacePort } from "./exposure.js";
+import { registerSurfacePort, registry } from "./exposure.js";
 
 /**
  * 계산된 CSS 색을 [r, g, b, a] 로 반환한다. 알파가 없으면 1 이다.
@@ -179,14 +177,20 @@ export function surfaceContextRuntime(surface, declarations = {}) {
       dispose: Promise.resolve(registration),
     };
   };
-    const port = {
+  let removeExposurePort = null;
+  const port = {
     register: (kind, name) => registry.registered({ surface: surfaceId, kind, name }),
-    onRequest: (fn) => registerSurfacePort(surfaceId, fn),
-      reply: (id, payload) => bridge.call("exposureReply", { id, ...payload, surface: surfaceId }),
-      report: (message) => bridge.call("report", message),
+    onRequest: (fn) => {
+      removeExposurePort = registerSurfacePort(surfaceId, fn);
+      return removeExposurePort;
+    },
+    reply: (id, payload) => bridge.call("exposureReply", { id, ...payload, surface: surfaceId }),
+    report: (message) => bridge.call("report", message),
     unregister: () => {
+      if (removeExposurePort === null) return;
+      removeExposurePort();
+      removeExposurePort = null;
       registry.unregisterSurface(surfaceId);
-      unregisterSurfacePort(surfaceId, port);
     },
   };
   return {

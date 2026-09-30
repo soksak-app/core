@@ -113,6 +113,40 @@ test("surface sidecar sends reach the host one at a time in send order", async (
   answerCall = undefined;
 });
 
+test("disposing surface exposure removes its request callback", async () => {
+  const { surfaceContextRuntime } = await import("../host.js");
+  const { dispatchSurfaceRequest, registry } = await import("../exposure.js");
+  const surface = "disposed-port-surface", plugin = "disposed-port-plugin";
+  const declarations = { commands: [{ name: `${plugin}.ping`, description: "Replies.", params: { type: "object" }, result: { type: "string" } }] };
+  registry.declare(plugin, declarations);
+  registry.configure({ surfacePlugin: (id) => id === surface ? plugin : null });
+  const runtime = surfaceContextRuntime({ surfaceId: surface }, declarations);
+  await runtime.exposure.command(`${plugin}.ping`, () => "old");
+  await runtime.exposure.dispose();
+  assert.equal(await dispatchSurfaceRequest({ surface, id: 71, method: "command.run", params: { name: `${plugin}.ping`, params: {} } }), false,
+    "disposed surface retained its request callback");
+});
+
+test("a disposed surface ID can be reused and previous disposal cannot remove its new owner", async () => {
+  const { surfaceContextRuntime } = await import("../host.js");
+  const { registry } = await import("../exposure.js");
+  const surface = "reused-port-surface", plugin = "reused-port-plugin";
+  const declarations = { commands: [{ name: `${plugin}.ping`, description: "Replies.", params: { type: "object" }, result: { type: "string" } }] };
+  registry.declare(plugin, declarations);
+  registry.configure({ surfacePlugin: (id) => id === surface ? plugin : null });
+  const first = surfaceContextRuntime({ surfaceId: surface }, declarations);
+  await first.exposure.command(`${plugin}.ping`, () => "old");
+  await first.exposure.dispose();
+  const next = surfaceContextRuntime({ surfaceId: surface }, declarations);
+  try {
+    await assert.doesNotReject(next.exposure.command(`${plugin}.ping`, () => "new"), "disposed callback blocked its replacement");
+    await first.exposure.dispose();
+    assert.deepEqual(registry.registrants("command", `${plugin}.ping`), [surface], "previous disposal removed new registrations");
+  } finally {
+    await next.exposure.dispose();
+  }
+});
+
 test("a surface sidecar send to another surface is rejected instead of being redirected", async () => {
   const { surfaceContextRuntime } = await import("../host.js");
   calls.length = 0;

@@ -478,10 +478,6 @@ export function registerSurfacePort(surface, port) {
   return () => { if (surfacePorts.get(surface) === port) surfacePorts.delete(surface); };
 }
 
-export function unregisterSurfacePort(surface, port) {
-  if (surfacePorts.get(surface) === port) surfacePorts.delete(surface);
-}
-
 export async function dispatchSurfaceRequest(request) {
   const port = surfacePorts.get(request.surface);
   if (!port) return false;
