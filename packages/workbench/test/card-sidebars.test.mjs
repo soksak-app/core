@@ -79,3 +79,17 @@ test("a folded sidebar keeps its divider visible", async () => {
     } finally { dom.window.close(); }
   }
 });
+
+test("an open sidebar keeps its whole divider input area inside the sidebar", async () => {
+  const { JSDOM } = await import("jsdom");
+  const { readFile } = await import("node:fs/promises");
+  const css = await readFile(new URL("../app.css", import.meta.url), "utf8");
+  const inner = {top:"bottom",bottom:"top",left:"right",right:"left"};
+  for (const side of model.SIDEBAR_SIDES) {
+    const dom = new JSDOM(`<style>${css}</style><article class="card" data-sidebar-${side}="open"><aside class="card-sidebar" data-side-of="${side}"><div class="card-sidebar__grip" data-side-of="${side}"></div></aside></article>`);
+    try {
+      const style = dom.window.getComputedStyle(dom.window.document.querySelector(".card-sidebar__grip"));
+      assert.equal(style[inner[side]], "0px", `${side}: divider center is outside the sidebar's clipped input area`);
+    } finally {dom.window.close();}
+  }
+});

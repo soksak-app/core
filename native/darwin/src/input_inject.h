@@ -12,11 +12,12 @@ typedef enum {
 // 창에 네이티브 입력을 전달한다. 좌표는 콘텐츠 영역 왼쪽 위 기준 포인트 값이다.
 //
 // phase: 0 이동, 1 누름, 2 끌기, 3 뗌, 4 스크롤. button: 0 왼쪽, 1 오른쪽.
+// 끌기와 뗌은 창·버튼별 누름 대상에 전달한다. 누름 없는 끌기·뗌과 중복 누름은 거부한다.
 sp_input_result sp_input_pointer(void *window, double x, double y, int phase, int button, double deltaX, double deltaY);
 
 typedef void (*sp_input_done)(void *context, sp_input_result result);
 
-// sp_input_pointer 와 같고, 누름과 뗌은 좌표의 문서가 그 이벤트를 받은 뒤 done 을 호출한다.
+// sp_input_pointer 와 같고, 누름과 뗌은 제스처를 소유한 문서가 그 이벤트를 받은 뒤 done 을 호출한다.
 // WebKit 은 입력 칸에 초점이 있으면 마우스 이벤트를 입력기에 먼저 비동기로 넘기므로, 곧바로 이어서
 // 전달한 누름과 뗌의 순서가 문서에서 바뀔 수 있다. 스크롤은 좌표의 웹뷰가 현재 상태를 표시한 뒤
 // 전달한다. 새 문서의 스크롤 트리가 표시되기 전에 받은 휠 이벤트는 문서를 움직이지 않는다.

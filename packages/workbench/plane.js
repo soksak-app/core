@@ -9,6 +9,7 @@ import { cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stag
 import { nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
+import { bindSidebarGrip } from "./sidebar-grip.js";
 import { targetCardInsets } from "./card-insets.js";
 import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.js";
 import { SIDEBAR_SIDES, effectiveSidebar, resolveSidebarSet, setSidebar, sizeSidebar, toggleSidebar } from "./card-sidebars.js";
@@ -835,9 +836,6 @@ export function resizeSidebar(id, side, size) {
   settle();
 }
 
-/* 경계선에서 누름과 끌기를 가르는 움직임(pt). */
-const DRAG_THRESHOLD = 3;
-
 /** 카드의 사방 사이드바를 그린다. 없는 변은 공간을 차지하지 않는다. */
 function drawCardSidebars(el, card) {
   if (!card.data) return;
@@ -869,50 +867,7 @@ function drawCardSidebars(el, card) {
       const status = el.querySelector(".status");
       if (!status) throw new Error(`card ${card.id} has no status region`);
       status.before(body);
-      // 경계선의 움직임으로 끌기와 누름을 구분한다.
-      let dragged = false;
-      handle.addEventListener("pointerdown", (event) => {
-        event.stopPropagation();
-        handle.setPointerCapture(event.pointerId);
-        dragged = false;
-        const startX = event.clientX, startY = event.clientY;
-        const rect = el.getBoundingClientRect();
-        const move = (e) => {
-          if (!dragged && Math.hypot(e.clientX - startX, e.clientY - startY) < DRAG_THRESHOLD) return;
-          dragged = true;
-          const clamp = (raw) => Math.min(defaults.max, Math.max(defaults.min, raw));
-          // 안쪽으로 끌수록 커진다. 카드에서 반대편 사이드바과 표면이 차지한 만큼을 뺀다.
-          const track = (name) => {
-            const raw = parseFloat(el.style.getPropertyValue(name));
-            // 기본값: 반대편 사이드바이 없으면 그 칸은 0 이다(문자열 변수는 남지 않는다).
-            return Number.isFinite(raw) ? raw : 0;
-          };
-          const used = {
-            left: track("--pr"),
-            right: track("--pl"),
-            top: track("--pb"),
-            bottom: track("--pt"),
-          };
-          const size = side === "right" ? clamp(rect.right - e.clientX - used.right)
-            : side === "left" ? clamp(e.clientX - rect.left - used.left)
-            : side === "top" ? clamp(rect.bottom - e.clientY - used.top)
-            : clamp(e.clientY - rect.top - used.bottom);
-          run("core.card.sidebar.size", { card: el.dataset.cardId, side, size });
-        };
-        const end = () => {
-          handle.removeEventListener("pointermove", move);
-          handle.removeEventListener("pointerup", end);
-          handle.removeEventListener("pointercancel", end);
-        };
-        handle.addEventListener("pointermove", move);
-        handle.addEventListener("pointerup", end);
-        handle.addEventListener("pointercancel", end);
-      });
-      handle.addEventListener("click", (event) => {
-        event.stopPropagation();
-        if (dragged) return;
-        run("core.card.sidebar.toggle", { card: el.dataset.cardId, side });
-      });
+      bindSidebarGrip(el, handle, side, defaults, run);
     }
     const handle = body.querySelector(".card-sidebar__grip");
     mark(handle, "core.card.sidebar.size", { card: card.id, side });

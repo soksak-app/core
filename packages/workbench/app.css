@@ -275,7 +275,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 /* `[hidden]` 은 display:grid 를 이기지 못하므로 여기서 명시한다. */
 .chrome__act[hidden]{display:none}
 .slot{position:relative}
-/* 카드 안 사이드바(사이드바 위치 inset). 내용 행을 사이드바, 손잡이, 표면 자리로 나눈다. */
+/* 카드 내부의 사방 사이드바와 내용 자리를 행과 열로 배치한다. */
 .card:has(> .card-sidebar){
   grid-template-columns:var(--pl,0px) minmax(0,1fr) var(--pr,0px);
   grid-template-rows:minmax(0,var(--head)) var(--pt,0px) minmax(0,1fr) var(--pb,0px) minmax(0,var(--foot));
@@ -298,21 +298,17 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 /* 경계선은 사이드바의 안쪽 변 위에 절대 위치로 겹친다: 끌기는 크기, 누름은 접기. */
 .card-sidebar__grip{position:absolute;z-index:2;background:transparent}
 .card-sidebar__grip[data-side-of=top],.card-sidebar__grip[data-side-of=bottom]{left:0;right:0;height:var(--divider);cursor:row-resize}
-.card-sidebar__grip[data-side-of=top]{bottom:calc(var(--divider) / -2)}
-.card-sidebar__grip[data-side-of=bottom]{top:calc(var(--divider) / -2)}
+.card-sidebar__grip[data-side-of=top]{bottom:0}
+.card-sidebar__grip[data-side-of=bottom]{top:0}
 .card-sidebar__grip[data-side-of=left],.card-sidebar__grip[data-side-of=right]{top:0;bottom:0;width:var(--divider);cursor:col-resize}
-.card-sidebar__grip[data-side-of=left]{right:calc(var(--divider) / -2)}
-.card-sidebar__grip[data-side-of=right]{left:calc(var(--divider) / -2)}
+.card-sidebar__grip[data-side-of=left]{right:0}
+.card-sidebar__grip[data-side-of=right]{left:0}
 /* 접은 사이드바의 경계선은 남은 줄을 누를 수 있게 한다. */
 .card[data-sidebar-top=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=top],
 .card[data-sidebar-bottom=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=bottom],
 .card[data-sidebar-left=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=left],
 .card[data-sidebar-right=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=right]{cursor:pointer;
   background:linear-gradient(var(--muted),var(--muted)) center / 100% calc(var(--bw) * 2) no-repeat}
-.card[data-sidebar-top=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=top]{bottom:0}
-.card[data-sidebar-bottom=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=bottom]{top:0}
-.card[data-sidebar-left=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=left]{right:0}
-.card[data-sidebar-right=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=right]{left:0}
 /* 상태줄은 카드가 좁아져도 한 줄을 유지한다. 줄바꿈이 생기면 22px 안에서 잘려
    두 번째 줄이 사라지고 첫 줄의 세로 정렬도 어긋난다. */
 .status{display:flex;align-items:center;padding:0 var(--space-2);font-size:var(--text-caption);

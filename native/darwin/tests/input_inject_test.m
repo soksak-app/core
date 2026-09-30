@@ -148,6 +148,62 @@ static void checkReceipts(void) {
     [window close];
 }
 
+// 끌기와 뗌은 좌표 아래의 다른 뷰가 아니라 누름을 받은 뷰로 전달해야 한다.
+@interface SPPointerTarget : NSView
+@property(nonatomic) NSUInteger downs;
+@property(nonatomic) NSUInteger drags;
+@property(nonatomic) NSUInteger ups;
+@property(nonatomic) NSUInteger rightDowns;
+@property(nonatomic) NSUInteger rightDrags;
+@property(nonatomic) NSUInteger rightUps;
+@end
+@implementation SPPointerTarget
+- (void)mouseDown:(NSEvent *)event { self.downs++; }
+- (void)mouseDragged:(NSEvent *)event { self.drags++; }
+- (void)mouseUp:(NSEvent *)event { self.ups++; }
+- (void)rightMouseDown:(NSEvent *)event { self.rightDowns++; }
+- (void)rightMouseDragged:(NSEvent *)event { self.rightDrags++; }
+- (void)rightMouseUp:(NSEvent *)event { self.rightUps++; }
+@end
+
+static void checkPointerTargetAcrossViews(void) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(240, 120))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    [window setReleasedWhenClosed:NO];
+    NSView *content = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 240, 120)] autorelease];
+    SPPointerTarget *first = [[[SPPointerTarget alloc] initWithFrame:NSMakeRect(0, 0, 120, 120)] autorelease];
+    SPPointerTarget *second = [[[SPPointerTarget alloc] initWithFrame:NSMakeRect(120, 0, 120, 120)] autorelease];
+    [content addSubview:first]; [content addSubview:second]; window.contentView = content;
+    check(sp_input_pointer(window, 30, 30, 1, 0, 0, 0) == SP_INPUT_DELIVERED, @"cross-view press delivered");
+    check(sp_input_pointer(window, 150, 30, 2, 0, 0, 0) == SP_INPUT_DELIVERED, @"cross-view drag delivered");
+    check(sp_input_pointer(window, 150, 30, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"cross-view release delivered");
+    check(first.downs == 1 && first.drags == 1 && first.ups == 1 && second.downs == 0 && second.drags == 0 && second.ups == 0,
+        [NSString stringWithFormat:@"press target keeps the entire gesture: first %lu/%lu/%lu, second %lu/%lu/%lu",
+            (unsigned long)first.downs, (unsigned long)first.drags, (unsigned long)first.ups,
+            (unsigned long)second.downs, (unsigned long)second.drags, (unsigned long)second.ups]);
+    check(sp_input_pointer(window, 30, 30, 2, 0, 0, 0) == SP_INPUT_REJECTED &&
+        sp_input_pointer(window, 30, 30, 3, 0, 0, 0) == SP_INPUT_REJECTED,
+        @"drag and release without a press are rejected");
+    check(sp_input_pointer(window, 30, 30, 1, 0, 0, 0) == SP_INPUT_DELIVERED &&
+        sp_input_pointer(window, 150, 30, 1, 0, 0, 0) == SP_INPUT_REJECTED,
+        @"a duplicate press does not replace the gesture target");
+    check(sp_input_pointer(window, 150, 30, 1, 1, 0, 0) == SP_INPUT_DELIVERED &&
+        sp_input_pointer(window, 30, 30, 2, 1, 0, 0) == SP_INPUT_DELIVERED &&
+        sp_input_pointer(window, 30, 30, 3, 1, 0, 0) == SP_INPUT_DELIVERED &&
+        sp_input_pointer(window, 150, 30, 2, 0, 0, 0) == SP_INPUT_DELIVERED &&
+        sp_input_pointer(window, 150, 30, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+        @"left and right gestures keep separate targets");
+    check(first.downs == 2 && first.drags == 2 && first.ups == 2 &&
+        second.rightDowns == 1 && second.rightDrags == 1 && second.rightUps == 1,
+        @"each button receives its complete gesture on its press target");
+    check(sp_input_pointer(window, 30, 30, 1, 0, 0, 0) == SP_INPUT_DELIVERED,
+        @"a released button starts a new gesture");
+    [first removeFromSuperview];
+    check(sp_input_pointer(window, 150, 30, 2, 0, 0, 0) == SP_INPUT_REJECTED,
+        @"a removed press target rejects the remaining gesture");
+    [window close]; [window release];
+}
+
 static void checkIndependentWindowKeys(void) {
     NSWindow *first = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(240, 120))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -194,6 +250,7 @@ int main(void) { @autoreleasepool {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+    checkPointerTargetAcrossViews();
     NSWindow *window = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(400, 300))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];

@@ -23,7 +23,7 @@
 | `WKWebView._doAfterActivityStateUpdate:` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_activate_at` | 브라우저 좌표에서는 대상 웹뷰만 활성 창 상태를 웹 프로세스에 보낸 뒤 활성화를 완료하고, native 좌표에서는 관련 없는 웹뷰를 기다리지 않음 |
 | `CGEventField` 51(창 번호), `CGEventSetWindowLocation` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer`의 스크롤과 `sp_input_key`의 키(필드 51만) | 창과 창 좌표를 가진 스크롤 `NSEvent` 생성, `-[NSApplication sendEvent:]`에 보낼 창을 가진 키 `NSEvent` 생성 |
 | `WKWebView._inspector`와 `_WKInspector`(`connect`, `show`, `attach`, `close`, `isVisible`, `isConnected`, `inspectorWebView`) | [`native/darwin/tests/webview_inspector_test.m`](../../native/darwin/tests/webview_inspector_test.m), 검사 전용 | 표면 웹뷰의 웹 인스펙터를 열고 창에 붙여 표면이 자리를 유지하는지 확인 |
-| `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/webview_input_test.m`](../../native/darwin/tests/webview_input_test.m)의 `drain`; 독립 검사 전용 | DOM 이벤트 횟수를 검사하기 전에 네이티브 마우스 처리 완료 대기 |
+| `WKWebView._doAfterProcessingAllPendingMouseEvents:` | 양호스트; [`webview_input.m`](../../native/darwin/src/webview_input.m)의 `webviewInputSendThen`, `sp_input_pointer_then`에서 호출; 독립 입력 검사에서도 사용한다. 끌기 후 뗌은 뗀 좌표의 문서 대신 누름 때 잡은 문서를 따른다. | 전달 전과 수신 후 대기 중인 마우스 처리를 완료해 결과 클릭이 다음 요청보다 먼저 끝나도록 함 |
 | `_WKWebsiteDataStoreConfiguration.initWithDirectory:`, `WKWebsiteDataStore._initWithConfiguration:` | 두 호스트; [`document_view.m`](../../native/darwin/src/document_view.m), `storeForDirectory`, `sp_document_create`가 `<config-dir>/document-data`로 호출 | 문서 영역의 사이트 데이터를 앱 설정 디렉터리 안에 둔다 |
 | `WKWebView._killWebContentProcessAndResetState`, `_webProcessIdentifier` | 두 호스트; [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), 선언된 메인 페이지 reload 명령 직전에 호출 | 반복 reload 뒤 allocator 페이지를 보유하는 WebContent 프로세스를 종료하고 상태를 초기화한 뒤 프로세스 식별자가 0이 될 때까지 기다린다. 두 선택자를 사용할 수 없으면 호출자는 reload 오류를 보고한다 |
 
@@ -95,9 +95,9 @@ Tauri 이벤트 전달 콜백은 Tao의 이벤트 처리 잠금을 가진다. �
 
 이 연산은 선언된 메인 페이지 reload 명령으로만 제한한다. 현재 WebContent 실행 상태를 없애므로 명령은 교체 페이지의 ready 알림을 기다린 뒤 반환한다. [`webview_process_test.m`](../../native/darwin/tests/webview_process_test.m)은 연산이 사용 가능하고 종료 뒤 새 페이지가 로드되는지 검사한다. 40회·80회 reload RSS 측정은 [기능 V5-96-14-6-4-1](../features.ko.md)에 기록하며 WebKit을 업데이트할 때마다 반복한다. [`WKWebViewPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h)의 `_killWebContentProcessAndResetState`를 검토하고 선택자가 대상 뷰의 프로세스만 종료하는지 확인한다.
 
-### 독립 검사의 마우스 처리 완료
+### 마우스 처리 완료
 
-독립 검사에서 `_doAfterProcessingAllPendingMouseEvents:`를 유지한다. 네이티브 마우스 처리는 비동기이므로 이벤트 제출 직후 JavaScript로 조회하면 처리 전 횟수를 읽을 수 있다. 이 콜백은 고정 지연 없이 완료를 확인한다. 간섭을 생성하는 API가 아니며 앱 런타임에 포함하지 않는다. 선택자가 없거나 완료 제한 시간을 초과하면 검사는 실패한다.
+네이티브 마우스 처리가 비동기이므로 런타임과 독립 검사는 `_doAfterProcessingAllPendingMouseEvents:`를 사용한다. 런타임은 누름·뗌 전송 전과 수신 후 대기 중인 작업을 완료한다. 다른 네이티브 뷰 위에서 놓더라도 제스처를 소유한 문서를 기다린다. 기존 목록의 검사 전용 설명은 잘못됐다. 현재 런타임은 선택자가 없으면 완료 대기를 우회하며, 이 기능 부재의 명시적 거부는 V5-115-1-2에서 추적한다.
 
 [`WKWebViewPrivateForTesting.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivateForTesting.h)의 선언을 검토하고, 이 API나 입력 모듈을 업데이트하면 독립 검사 두 실행을 수행한다.
 

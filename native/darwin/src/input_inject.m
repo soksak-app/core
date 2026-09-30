@@ -2,7 +2,7 @@
 //
 // 키 이벤트는 -[NSWindow sendEvent:] 로 창의 응답자에게 전달한다. 포인터 이벤트는 창이
 // 활성 상태가 아니면 AppKit 이 첫 클릭으로 처리해 뷰에 전달하지 않으므로, 좌표의 뷰를
-// 히트 테스트해 그 뷰의 이벤트 메서드로 전달한다. 이동은 좌표를 포함하는 추적 영역의
+// 히트 테스트해 누름을 전달하고 끌기와 뗌은 누름 대상에 전달한다. 이동은 좌표를 포함하는 추적 영역의
 // 소유자에게 전달한다. 어느 경우든 웹뷰는 네이티브 이벤트를 받아 페이지에 신뢰 이벤트를
 // 전달한다. 스크롤은 창 정보를 가진 이벤트로 만들어 -[NSWindow sendEvent:] 로 전달한다.
 // 시스템 커서를 움직이지 않고, sp_input_activate 외에는 애플리케이션을 활성화하지 않는다.
@@ -11,6 +11,7 @@
 // (WebFrame::handleMouseEvent). 그래서 키 창이 아닌 창의 이동은 SP_INPUT_INACTIVE 로 거부하고,
 // 호버가 필요한 호출자는 sp_input_activate 로 창을 실제로 활성화한 뒤 이동을 보낸다.
 #import <Cocoa/Cocoa.h>
+#import <objc/runtime.h>
 #import "input_inject.h"
 #import "webview_input.h"
 #import "webview_geometry.h"
@@ -36,6 +37,15 @@ static NSEventModifierFlags flags(unsigned modifiers) {
 static NSView *hitView(NSWindow *window, NSPoint point) {
     NSView *content = window.contentView;
     return [content hitTest:[content.superview convertPoint:point fromView:nil]];
+}
+
+// 창과 버튼마다 누름을 받은 뷰가 뗌까지 같은 제스처를 받는다.
+static char leftPressedViewKey, rightPressedViewKey;
+static const void *pressedViewKey(int button) {
+    return button == 1 ? &rightPressedViewKey : &leftPressedViewKey;
+}
+static NSView *pointerTarget(NSWindow *window, NSPoint point, int phase, int button) {
+    return phase == 2 || phase == 3 ? objc_getAssociatedObject(window, pressedViewKey(button)) : hitView(window, point);
 }
 
 static NSEvent *mouseEvent(NSWindow *window, NSEventType type, NSPoint point, NSInteger clicks, float pressure) {
@@ -92,8 +102,12 @@ sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, in
         [window sendEvent:webviewScrollInViewUnits(event, hitView(window, point))];
         return SP_INPUT_DELIVERED;
     }
-    NSView *hit = hitView(window, point);
+    NSView *hit = pointerTarget(window, point, phase, button);
     if (!hit) return SP_INPUT_REJECTED;
+    if (hit.window != window) {
+        objc_setAssociatedObject(window, pressedViewKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        return SP_INPUT_REJECTED;
+    }
     // WebKit 은 마우스 이벤트의 눌린 버튼을 이벤트가 아니라 +[NSEvent pressedMouseButtons] 로 읽는다.
     // AppKit 이 눌린 버튼을 보고하는 동안의 누름과 뗌은 WebKit 에서 pointerdown 이나 pointerup 대신
     // pointermove 로 처리될 수 있으므로 전달하지 않고 알린다. 이 상태만으로 버튼 상태의 원인은 알 수 없다.
@@ -101,6 +115,8 @@ sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, in
     BOOL right = button == 1;
     switch (phase) {
         case 1:
+            if (objc_getAssociatedObject(window, pressedViewKey(button))) return SP_INPUT_REJECTED;
+            objc_setAssociatedObject(window, pressedViewKey(button), hit, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             // -[NSWindow sendEvent:] 는 누른 뷰가 받을 수 있으면 첫 응답자로 만든 뒤 누름을 전달한다.
             // 이 경로는 뷰에 직접 전달하므로 같은 순서를 따른다. 호스트의 표면 웹뷰는 누름만으로
             // 첫 응답자가 되지 않는다(e2e/shell.test.mjs). 창이나 앱을 활성화하지 않는다.
@@ -115,6 +131,7 @@ sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, in
         case 3:
             if (right) [hit rightMouseUp:mouseEvent(window, NSEventTypeRightMouseUp, point, 1, 0)];
             else [hit mouseUp:mouseEvent(window, NSEventTypeLeftMouseUp, point, 1, 0)];
+            objc_setAssociatedObject(window, pressedViewKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             return SP_INPUT_DELIVERED;
         default:
             return SP_INPUT_REJECTED;
@@ -131,7 +148,9 @@ static WKWebView *webViewAt(NSWindow *window, double x, double y) {
 void sp_input_pointer_then(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
     double timeoutSeconds, sp_input_done done, void *context) {
     NSWindow *window = (__bridge NSWindow *)handle;
-    WKWebView *target = window && NSThread.isMainThread ? webViewAt(window, x, y) : nil;
+    NSView *pressed = window && NSThread.isMainThread ? pointerTarget(window, windowPoint(window, x, y), phase, button) : nil;
+    while (pressed && ![pressed isKindOfClass:WKWebView.class]) pressed = pressed.superview;
+    WKWebView *target = (WKWebView *)pressed;
     if (phase == 4 && target) {
         // 새 문서의 스크롤 트리가 표시되기 전에 받은 휠 이벤트는 문서를 움직이지 않는다. 대상 웹뷰가 현재
         // 상태를 표시한 뒤 전달한다. 제한 시간 안에 표시하지 않으면 전달하지 않고 알린다.
