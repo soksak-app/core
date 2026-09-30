@@ -66,6 +66,7 @@ for(const app of Object.values(APPS)) {
         const cross=vertical?applied.y+applied.h/2:applied.x+applied.w/2;
         const initialPresentation=await s.presented();
         const poses=[{phase:'initial',displayed:initialPresentation.displayed,size:120,applied}];
+        const recordingWindow=await s.get('host.window');
         const {frames:directory}=await s.request('diagnostics.capture.start',{});
         let down=false;
         let stopped;
@@ -101,6 +102,10 @@ for(const app of Object.values(APPS)) {
           }
           if(gestureErrors.length) throw new AggregateError(gestureErrors,`${side}: pointer input or capture failed`);
           const captured=frames(directory).map(readFrame);
+          for(const frame of captured){
+            assert.equal(frame.width,recordingWindow.content.width*recordingWindow.scale,'recording device-pixel width');
+            assert.equal(frame.height,recordingWindow.content.height*recordingWindow.scale,'recording device-pixel height');
+          }
           assert.ok(captured.length>4,`${side}: incomplete gesture recording`);
           assert.equal(stopped.limited,false,'recording exhausted its buffer');
           assert.ok(stopped.longestGap<=100,`${side}: missing frames, gap ${stopped.longestGap}ms`);
@@ -110,7 +115,7 @@ for(const app of Object.values(APPS)) {
           assert.ok(measured.some(matches=>matches.some(at=>Math.abs(at-final)<=1)),`${side}: far border not recorded`);
           assert.ok(measured.at(-1).some(at=>Math.abs(at-initial)<=1),`${side}: restored border not recorded`);
           assert.ok(measured.some(matches=>matches.some(at=>Math.abs(at-initial)>=8&&Math.abs(at-final)>=8)),`${side}: no intermediate movement frame`);
-          t.diagnostic(`${side}: 120 -> 160 -> 120 points, ${captured.length} frames, gap ${stopped.longestGap}ms, input/presentation steps ${elapsed.join(',')}ms`);
+          t.diagnostic(`${side}: 120 -> 160 -> 120 points, ${captured.length} frames at ${captured[0].width}x${captured[0].height}, gap ${stopped.longestGap}ms, input/presentation steps ${elapsed.join(',')}ms`);
           console.info(`PASS ${app.name}: ${side} sidebar gesture (${Math.round(performance.now()-began)}ms)`);
         } finally {
           try {rmSync(directory,{recursive:true,force:true});} catch(error) {failures.push(error);}

@@ -296,13 +296,6 @@ bool sp_capture_open(long windowNumber, bool display) {
             config.showsCursor = NO;
             config.captureResolution = SCCaptureResolutionBest;
             // 화면이 갱신되는 만큼 받는다. 변경이 없으면 프레임도 오지 않는다.
-            // The acceptance gesture is measured at the compositor's 120 Hz
-            // cadence. Keep every frame, but use nominal (point-sized) capture
-            // so the recorder can persist the complete gesture without
-            // changing the pointer event rate or silently dropping frames.
-            config.captureResolution = SCCaptureResolutionNominal;
-            config.width = (size_t)filter.contentRect.size.width;
-            config.height = (size_t)filter.contentRect.size.height;
             config.minimumFrameInterval = CMTimeMake(1, 120);
             config.queueDepth = 8;
             captureConfig = config;

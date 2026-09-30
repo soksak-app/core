@@ -73,6 +73,15 @@ int main(void) { @autoreleasepool {
             [NSString stringWithUTF8String:sp_capture_error()]]);
         int frames = sp_capture_stop(0);
         check(frames > 0, [NSString stringWithFormat:@"recording writes a complete frame (got %d)", frames]);
+        // 정지 이미지와 녹화 모두 창의 장치 픽셀 크기를 보존한다.
+        NSString *first = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"frame-0001.bgra"];
+        NSData *recorded = [NSData dataWithContentsOfFile:first];
+        uint32_t dimensions[3] = {0, 0, 0};
+        if (recorded.length >= sizeof(dimensions)) [recorded getBytes:dimensions length:sizeof(dimensions)];
+        check(recorded.length >= sizeof(dimensions) && dimensions[0] == (uint32_t)(200 * scale)
+            && dimensions[1] == (uint32_t)(100 * scale),
+            [NSString stringWithFormat:@"the recording has the window's device-pixel size (got %ux%u, expected %.0fx%.0f at scale %.1f)",
+                dimensions[0], dimensions[1], 200 * scale, 100 * scale, scale]);
     }
     check(!NSApp.isActive, @"recording an unchanged window does not activate the application");
     [window close];
