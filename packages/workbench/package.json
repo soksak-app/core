@@ -14,7 +14,7 @@
     "app.css",
     "library.css",
     "card.js",
-    "card-panels.js",
+    "card-sidebars.js",
     "sidebar-sections.js",
     "commands.js",
     "compositor.js",

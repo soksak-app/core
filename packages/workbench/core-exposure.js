@@ -11,10 +11,10 @@ import { trace } from "./performance.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
 import {
-  activeTab, addTabTo, assignPanel, capture, cardActs, cardSidebar, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
-  currentGrid, currentTextScope, dragState, focusCard, foldPanel,
+  activeTab, addTabTo, assignSidebar, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
+  currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
   focused, fresh, moveTab, onPicker, onSurfaceState, openCardMenu, openCardTabs, pickItem, pickerState, plane, railState, selectTab,
-  cardPanels, resizePanel, settle, sizeSidebar, splitCard, surfaceState, tabsOf, toggleSidebar,
+  cardSidebars, resizeSidebar, settle, splitCard, surfaceState, tabsOf,
 } from "./plane.js";
 import {
   applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, settingProject, value,
@@ -154,8 +154,7 @@ function gridState() {
       tabs: tabs.map(({ id, plugin, title }) => ({ id, plugin, title, label: tabLabel(id), notice: tabNotice(id) })),
       active: tabs.length ? activeTab(card).id : null,
       acts: cardActs(card.id),
-      sidebar: cardSidebar(card),
-      panels: cardPanels(card),
+      sidebars: cardSidebars(card),
     };
   }).filter(Boolean);
   const lines = (axis) => grid.lines(axis).map((_, k) => grid.boundaryPos(axis, k));
@@ -358,11 +357,9 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.settings-modal.move", ({ dx, dy }) => { moveSettings(dx, dy); });
 
   registry.command("core.card.focus", ({ card }) => { trace("action", { kind: "card.focus", card }); focusCard(card); });
-  registry.command("core.card.sidebar.toggle", ({ card }) => { toggleSidebar(card); });
-  registry.command("core.card.sidebar.size", ({ card, width }) => { sizeSidebar(card, width); });
-  registry.command("core.card.panel.set", ({ card, side, set }) => { assignPanel(card, side, set); });
-  registry.command("core.card.panel.toggle", ({ card, side }) => { foldPanel(card, side); });
-  registry.command("core.card.panel.size", ({ card, side, size }) => { resizePanel(card, side, size); });
+  registry.command("core.card.sidebar.set", ({ card, side, set }) => { assignSidebar(card, side, set); });
+  registry.command("core.card.sidebar.toggle", ({ card, side }) => { foldSidebar(card, side); });
+  registry.command("core.card.sidebar.size", ({ card, side, size }) => { resizeSidebar(card, side, size); });
   registry.command("core.sidebar.section.select", ({ sidebar, section }) => { selectSection(sidebar, section); });
   registry.command("core.sidebar.section.fold", ({ sidebar, section }) => { foldSection(sidebar, section); });
   registry.command("core.text.larger", async () => { await changeTextSize(1); });

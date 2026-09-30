@@ -239,16 +239,16 @@ for (const app of Object.values(APPS)) {
     await s.run("files.refresh");
     let tree = await s.until("files.tree", (value) => value?.entries.some((entry) => entry.path === folder),
       "files.tree did not list the folder");
-    const mountedTrees = (value) => ["left", "shell"].every((id) => value.find((item) => item.sidebar === id)
+    const mountedTrees = (value) => ["left", "shell:left"].every((id) => value.find((item) => item.sidebar === id)
       ?.sections.find((item) => item.id === "files.tree")?.mounted);
     // 트리는 files.tree 값을 받은 콜백에서 머리 제목을 적고 같은 콜백에서 행을 바꾼다. 두 트리의 제목이 보이면
     // 두 트리가 값을 받은 것이다.
-    const titled = (value) => mountedTrees(value) && ["left", "shell"].every((id) => value.find((item) => item.sidebar === id)
+    const titled = (value) => mountedTrees(value) && ["left", "shell:left"].every((id) => value.find((item) => item.sidebar === id)
       ?.sections.find((item) => item.id === "files.tree")?.text.includes(project.root.split("/").at(-1)));
     let sidebars = await s.until("core.sidebars", titled, "the left and inset trees did not receive files.tree");
     const holders = async () => {
       const value = await s.get("core.sidebars");
-      return Promise.all(["left", "shell"].map((id) =>
+      return Promise.all(["left", "shell:left"].map((id) =>
         s.rect("core.sidebar.section.control", controlIndex(value, id, "files.tree", HOLDER))));
     };
     /** 두 트리가 그린 행의 수. 캡처는 검사가 끝나기 전에 지운다. */

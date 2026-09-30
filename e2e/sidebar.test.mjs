@@ -20,11 +20,12 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => s.run("core.settings.reset", { key: "cardSidebar" }));
     const railed = (grid) => grid.cards.filter((card) => card.id.startsWith("rail"));
     await s.run("core.settings.change", { key: "cardSidebar", value: "inset", scope: "common" });
-    const grid = await s.until("core.grid", (value) => railed(value).length === 0 && value.cards.some((card) => card.sidebar),
+    const grid = await s.until("core.grid", (value) => railed(value).length === 0 && value.cards.some((card) => card.sidebars?.left),
       "no card holds an inset sidebar");
-    const card = grid.cards.find((item) => item.sidebar);
-    assert.deepEqual(card.sidebar, { width: 190, collapsed: false });
-    const sidebarOf = (value) => value.cards.find((item) => item.id === card.id)?.sidebar;
+    const card = grid.cards.find((item) => item.sidebars?.left);
+    assert.equal(card.sidebars.left.size, 190);
+    assert.equal(card.sidebars.left.collapsed, false);
+    const sidebarOf = (value) => value.cards.find((item) => item.id === card.id)?.sidebars?.left;
     const surfaceOf = async () => (await s.get("core.surfaces")).find((item) => item.surface === card.active);
     // 표면 위치는 판의 원점과 카드 테두리(1pt)를 더한 문서 좌표다.
     const origin = grid.plane.x + card.x + 1;
@@ -35,21 +36,21 @@ for (const app of Object.values(APPS)) {
     await surfaceAt(190 + GRIP);
     const before = await surfaceOf();
 
-    await s.run("core.card.sidebar.toggle", { card: card.id });
+    await s.run("core.card.sidebar.toggle", { card: card.id, side: "left" });
     const folded = await s.until("core.grid", (value) => sidebarOf(value)?.collapsed === true, "the sidebar did not fold");
     const same = folded.cards.find((item) => item.id === card.id);
     assert.deepEqual([same.x, same.w, same.h], [card.x, card.w, card.h], "folding changed the card");
     await surfaceAt(DIVIDER);
 
-    await s.run("core.card.sidebar.toggle", { card: card.id });
-    await s.run("core.card.sidebar.size", { card: card.id, width: 260 });
-    const resized = await s.until("core.grid", (value) => sidebarOf(value)?.width === 260, "the sidebar did not take the new width");
+    await s.run("core.card.sidebar.toggle", { card: card.id, side: "left" });
+    await s.run("core.card.sidebar.size", { card: card.id, side: "left", size: 260 });
+    const resized = await s.until("core.grid", (value) => sidebarOf(value)?.size === 260, "the sidebar did not take the new width");
     const kept = resized.cards.find((item) => item.id === card.id);
     assert.deepEqual([kept.x, kept.w, kept.h], [card.x, card.w, card.h], "resizing the sidebar changed the card");
     await surfaceAt(260 + GRIP);
-    await assert.rejects(s.run("core.card.sidebar.size", { card: card.id, width: 60 }), /120 to 480/);
+    await assert.rejects(s.run("core.card.sidebar.size", { card: card.id, side: "left", size: 60 }), /120 to 480/);
     assert.ok(before, "the surface was measured");
-    await s.run("core.card.sidebar.size", { card: card.id, width: 190 });
+    await s.run("core.card.sidebar.size", { card: card.id, side: "left", size: 190 });
 
     // 경계선의 사이드바 쪽 절반을 네이티브로 끌면 폭이 바뀐다. 끌기는 누름이 아니므로 접히지 않는다.
     let divider = await s.rect("core.card.sidebar.grip", 0);
@@ -59,7 +60,7 @@ for (const app of Object.values(APPS)) {
     await s.pointer(x + 30, y, "drag");
     await s.pointer(x + 60, y, "drag");
     await s.pointer(x + 60, y, "up");
-    const dragged = await s.until("core.grid", (value) => Math.abs(sidebarOf(value)?.width - 250) <= 2, "a drag on the divider did not resize");
+    const dragged = await s.until("core.grid", (value) => Math.abs(sidebarOf(value)?.size - 250) <= 2, "a drag on the divider did not resize");
     assert.equal(sidebarOf(dragged).collapsed, false, "a drag on the divider folded the sidebar");
 
     // 네이티브 누름은 곧바로 접는다. 다음 표시에 이미 접혀 있어야 한다. 접힌 뒤에는 경계선만 남고, 다시 누르면 펴진다.
@@ -75,7 +76,7 @@ for (const app of Object.values(APPS)) {
     await s.click(divider.x + divider.width / 2, y);
     await s.presented();
     assert.equal(sidebarOf(await s.get("core.grid")).collapsed, false, "a click on the folded divider did not unfold the sidebar by the next presentation");
-    await surfaceAt(sidebarOf(dragged).width + GRIP);
+    await surfaceAt(sidebarOf(dragged).size + GRIP);
   });
 }
 
@@ -140,10 +141,10 @@ for (const app of Object.values(APPS)) {
 
     // 선택은 사이드바마다 유지된다. inset 사이드바는 자기 선택으로 시작하고, 레일로 돌아오면 레일의 선택이 남아 있다.
     await s.run("core.settings.change", { key: "cardSidebar", value: "inset", scope: "common" });
-    sidebars = await s.until("core.sidebars", (value) => !of(value, rail) && mounted(of(value, "shell"), ["shell.history"]),
+    sidebars = await s.until("core.sidebars", (value) => !of(value, rail) && mounted(of(value, "shell:left"), ["shell.history"]),
       "the inset sidebar did not mount its first tab");
-    assert.equal(of(sidebars, "shell").tab, "shell.history");
-    await s.run("core.sidebar.section.select", { sidebar: "shell", section: "shell.history" });
+    assert.equal(of(sidebars, "shell:left").tab, "shell.history");
+    await s.run("core.sidebar.section.select", { sidebar: "shell:left", section: "shell.history" });
     await s.run("core.settings.change", { key: "cardSidebar", value: "flow", scope: "common" });
     sidebars = await s.until("core.sidebars", (value) => of(value, rail)?.tab === "shell.cwd" && mounted(of(value, rail), ["shell.cwd"]),
       "the rail did not keep its selection");
@@ -368,11 +369,11 @@ for (const app of Object.values(APPS)) {
     assert.ok(ratio >= DESIGN_RULE_CONTRAST, `the header rule contrast ${ratio.toFixed(3)} is below the design's ${DESIGN_RULE_CONTRAST.toFixed(3)}`);
     // inset 사이드바는 카드 머리 줄을 함께 쓰므로 첫 섹션이 그 머리 바로 아래에서 시작한다.
     await s.run("core.settings.change", { key: "cardSidebar", value: "inset", scope: "common" });
-    await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "shell"), "the inset sidebar was not drawn");
+    await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "shell:left"), "the inset sidebar was not drawn");
     const shellHeader = (await rects(s, "core.card.header")).reduce((a, b) => (b.y < a.y ? b : a));
-    const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === "shell")?.sections.every((item) => item.mounted),
+    const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === "shell:left")?.sections.every((item) => item.mounted),
       "the inset sidebar did not mount its sections");
-    const box = await s.rect("core.sidebar", sidebars.findIndex((item) => item.sidebar === "shell"));
+    const box = await s.rect("core.sidebar", sidebars.findIndex((item) => item.sidebar === "shell:left"));
     assert.ok(near(box.y, shellHeader.y + shellHeader.height), `shell: the inset sections start at ${box.y}, the card header ends at ${shellHeader.y + shellHeader.height}`);
     // 카드 안 사이드바는 상태 줄이 없고 섹션이 카드 발의 위 선까지 채운다.
     const inside = (rect) => rect.x + rect.width / 2 > box.x && rect.x + rect.width / 2 < box.x + box.width;

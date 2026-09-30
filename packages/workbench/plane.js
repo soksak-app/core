@@ -9,7 +9,7 @@ import { cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stag
 import { nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
-import { PANEL_SIDES, effectivePanel, panelState, resolvePanelSet, setPanel, sizePanel, togglePanel } from "./card-panels.js";
+import { SIDEBAR_SIDES, effectiveSidebar, resolveSidebarSet, setSidebar, sizeSidebar, toggleSidebar } from "./card-sidebars.js";
 import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
@@ -183,7 +183,7 @@ function createCard(card) {
     const id = el.dataset.cardId;
     // 누른 카드가 글자 크기의 범위다(docs/spec/text-size.md).
     if (id) setTextScope({ kind: "card", card: id });
-    if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham, .side__grip, .set button")) return;
+    if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham, .card-sidebar__grip, .set button")) return;
     const active = activeTab(grid.card(id));
     if (focusedId !== id) {
       // 카드 포커스가 만든 렌더는 표시를 마치면 대기 중인 표면 포커스를 가져간다. 명령이 끝난 뒤에 적으면
@@ -256,8 +256,7 @@ function updateCard(el, card) {
     return;
   }
 
-  drawSidebar(el, card);
-  drawPanels(el, card);
+  drawCardSidebars(el, card);
   const tabs = tabsOf(card);
   const key = tabs.map((t) => `${t.id}\u0000${tabName(t)}`).join("\u0001");
   let ham = chrome.querySelector(".chrome__ham");
@@ -826,143 +825,80 @@ function dropTab(fromId, tabId, hit) {
   settle();
 }
 
-/* ── 카드 안 사이드바(사이드바 위치 inset, 실험) ──────────────────────────
-   활성 탭의 플러그인에 연결된 세트가 있으면 카드 안 표면 왼쪽에 사이드바를 둔다. 카드의 크기는
-   바뀌지 않고, 표면은 자기 자리(.slot)를 따른다. 폭과 접힘은 카드 데이터에 저장한다. */
+/* ── 카드 사이드바 ─────────────────────────────────────────────────────
+   각 변의 세트와 배치는 독립적이다. 사이드바는 카드 크기를 바꾸지 않고 내용 영역을 나눈다. */
 
-/** 카드가 inset 사이드바를 가지면 그 상태를, 아니면 null 을 반환한다. */
-export function cardSidebar(card) {
-  if (value("cardSidebar") !== "inset" || !card?.data) return null;
-  const kind = activeTab(card)?.plugin;
-  if (!kind || !linkedSet("card-left", kind)) return null;
-  // 기본값: 폭을 저장하지 않은 카드는 사이드바를 sidebarWidth 로 연다(docs/spec/example-model.md).
-  const state = card.data.sidebar ?? {};
-  // 기본값: 폭을 저장하지 않은 카드는 사이드바를 sidebarWidth 로 연다(docs/spec/example-model.md).
-  return { width: state.width ?? value("sidebarWidth"), collapsed: state.collapsed === true };
-}
-
+/** 카드 사이드바의 공용 크기 설정. */
+const sidebarDefaults = () => ({ size: value("sidebarWidth"), min: value("sidebarMinWidth"), max: value("sidebarMaxWidth") });
+const sidebarSets = () => Object.fromEntries(value("sets").map((set) => [set.id, set]));
 function sidebarCard(id) {
   const card = grid?.card(id);
-  if (!card || !cardSidebar(card)) throw new Error(`card ${id} has no inset sidebar`);
+  if (!card?.data) throw new Error(`card ${String(id)} has no content`);
   return card;
 }
-
-/** 카드의 inset 사이드바를 접거나 편다. */
-export function toggleSidebar(id) {
-  const card = sidebarCard(id);
-  const state = cardSidebar(card);
-  card.data.sidebar = { width: state.width, collapsed: !state.collapsed };
-  settle();
-}
-
-/** 카드의 inset 사이드바 폭을 정한다. */
-export function sizeSidebar(id, width) {
-  const min = value("sidebarMinWidth"), max = value("sidebarMaxWidth");
-  if (!Number.isFinite(width) || width < min || width > max) {
-    throw new Error(`sidebar width must be ${min} to ${max} points`);
-  }
-  const card = sidebarCard(id);
-  card.data.sidebar = { width: Math.round(width), collapsed: cardSidebar(card).collapsed };
-  settle();
-}
-
-/* ── 카드 사방 패널(V5-115) ──────────────────────────────────────────────
-   지정은 카드 데이터다(card-panels.js). 활성 탭에서 다시 계산하지 않는다 — 연동 좌측
-   사이드바와의 차이다. 상하 패널은 카드 전체 폭을, 좌우 패널은 중앙 칸의 양옆에 선다. */
-
-/** 패널이 쓰는 공용 크기 값: 기본·최소·최대. 사방 모두 같다(같은 취급). */
-const panelDefaults = () => ({ size: value("sidebarWidth"), min: value("sidebarMinWidth"), max: value("sidebarMaxWidth") });
-
-/** 패널이 그릴 수 있는 세트 목록(설정의 sets). */
-const panelSets = () => Object.fromEntries(value("sets").map((set) => [set.id, set]));
-
-function panelCard(id, side) {
-  const card = grid?.card(id);
-  if (!card) throw new Error(`card ${String(id)} does not exist`);
-  if (panelState(card, side, panelDefaults()) === null) {
-    throw new Error(`card ${String(id)} has no ${String(side)} panel`);
-  }
-  return card;
-}
-
-/** core.grid 보고용: 카드의 패널 상태. 지정된 변만 담는다. */
-/** 변의 플러그인 연결 세트(card-<side>). 연결이 없으면 null 이다.
- * 카드 왼쪽은 예외다 — 그 자리는 inset 사이드바의 것이다(cardSidebar 가 card-left 연결을
- * 쓴다). 왼쪽 패널은 명시 지정만으로 존재하고, 우·상·하는 플러그인 연결을 기본으로 받는다. */
-function linkedPanelSet(card, side) {
-  if (side === "left") return null;
+function linkedCardSet(card, side) {
   const kind = activeTab(card)?.plugin;
-  if (!kind) return null;
-  return linkedSet(`card-${side}`, kind);
+  return kind ? linkedSet(`card-${side}`, kind) : null;
 }
-
-/** core.grid 보고: 명시 지정이 우선이고 없으면 플러그인 연결이 기본으로 선다. */
-export function cardPanels(card) {
+export function cardSidebars(card) {
+  if (!card.data) return {};
   const report = {};
-  for (const side of PANEL_SIDES) {
-    const state = effectivePanel(card, side, panelDefaults(), linkedPanelSet(card, side));
-    if (state !== null) report[side] = state;
+  for (const side of SIDEBAR_SIDES) {
+    const current = effectiveSidebar(card, side, sidebarDefaults(), linkedCardSet(card, side));
+    if (current !== null) report[side] = current;
   }
   return report;
 }
-
-/** 카드의 변에 세트를 지정하거나 해지한다. */
-export function assignPanel(id, side, set) {
-  const card = grid?.card(id);
-  if (!card) throw new Error(`card ${String(id)} does not exist`);
-  setPanel(card, side, set, panelSets());
+export function assignSidebar(id, side, set) {
+  setSidebar(sidebarCard(id), side, set, sidebarSets());
   settle();
 }
-
-/** 카드 패널을 접거나 편다. */
-export function foldPanel(id, side) {
-  const card = panelCard(id, side);
-  togglePanel(card, side, panelDefaults());
+export function foldSidebar(id, side) {
+  const card = sidebarCard(id);
+  toggleSidebar(card, side, sidebarDefaults(), linkedCardSet(card, side));
   settle();
 }
-
-/** 카드 패널의 크기를 정한다. 좌우는 폭, 상하는 높이다. */
-export function resizePanel(id, side, size) {
-  const card = panelCard(id, side);
-  sizePanel(card, side, size, panelDefaults());
+export function resizeSidebar(id, side, size) {
+  const card = sidebarCard(id);
+  sizeSidebar(card, side, size, sidebarDefaults(), linkedCardSet(card, side));
   settle();
 }
 
 /* 경계선에서 누름과 끌기를 가르는 움직임(pt). */
 const DRAG_THRESHOLD = 3;
 
-/** 카드의 사방 패널을 그린다. 지정 없는 변은 요소와 변수를 치운다(drawSidebar 와 같은 길). */
-function drawPanels(el, card) {
-  const defaults = panelDefaults();
-  const sets = panelSets();
-  for (const side of PANEL_SIDES) {
-    const panel = el.querySelector(`:scope > .panel[data-side-of="${side}"]`);
-    const state = effectivePanel(card, side, defaults, linkedPanelSet(card, side));
-    // 명시 지정이면 id 로 해석하고(dangling 보존), 연결 기본이면 linkedSet 이 이미 세트 객체를 준다.
-    const set = state === null ? null
-      : panelState(card, side, defaults) === null ? linkedPanelSet(card, side)
-      : resolvePanelSet(card, side, sets);
+/** 카드의 사방 사이드바를 그린다. 없는 변은 공간을 차지하지 않는다. */
+function drawCardSidebars(el, card) {
+  if (!card.data) return;
+  const defaults = sidebarDefaults();
+  const sets = sidebarSets();
+  for (const side of SIDEBAR_SIDES) {
+    const existing = el.querySelector(`:scope > .card-sidebar[data-side-of="${side}"]`);
+    const state = effectiveSidebar(card, side, defaults, linkedCardSet(card, side));
+    const set = resolveSidebarSet(card, side, sets, defaults, linkedCardSet(card, side));
     if (state === null || set === null) {
-      if (panel) clearSet(panel.querySelector(".set"));
-      panel?.remove();
-      delete el.dataset[`panel${side[0].toUpperCase()}${side.slice(1)}`];
+      if (existing) clearSet(existing.querySelector(".set"));
+      existing?.remove();
+      delete el.dataset[`sidebar${side[0].toUpperCase()}${side.slice(1)}`];
       el.style.removeProperty(`--p${side[0]}`);
       continue;
     }
-    let body = panel;
+    let body = existing;
     if (!body) {
       body = document.createElement("aside");
-      body.className = "panel";
+      body.className = "card-sidebar";
       body.dataset.sideOf = side;
       body.innerHTML = '<div class="set"></div>';
       const handle = document.createElement("div");
-      handle.className = "panel__grip";
+      handle.className = "card-sidebar__grip";
       handle.dataset.sideOf = side;
-      handle.dataset.expose = "core.card.panel.grip";
+      handle.dataset.expose = "core.card.sidebar.grip";
       body.appendChild(handle);
-      // 그림 영역 뒤는 표면이 아니라 패널 프레임이므로 .slot 뒤가 아니라 카드 끝에 둔다.
-      el.querySelector(".status")?.before(body);
-      // 경계선은 끌기와 누름을 가른다(inset 사이드바와 같은 문턱과 제스처).
+      // 그림 영역 뒤는 표면이 아니라 사이드바 프레임이므로 .slot 뒤가 아니라 카드 끝에 둔다.
+      const status = el.querySelector(".status");
+      if (!status) throw new Error(`card ${card.id} has no status region`);
+      status.before(body);
+      // 경계선의 움직임으로 끌기와 누름을 구분한다.
       let dragged = false;
       handle.addEventListener("pointerdown", (event) => {
         event.stopPropagation();
@@ -974,10 +910,10 @@ function drawPanels(el, card) {
           if (!dragged && Math.hypot(e.clientX - startX, e.clientY - startY) < DRAG_THRESHOLD) return;
           dragged = true;
           const clamp = (raw) => Math.min(defaults.max, Math.max(defaults.min, raw));
-          // 안쪽으로 끌수록 커진다. 카드에서 반대편 패널과 표면이 차지한 만큼을 뺀다.
+          // 안쪽으로 끌수록 커진다. 카드에서 반대편 사이드바과 표면이 차지한 만큼을 뺀다.
           const track = (name) => {
             const raw = parseFloat(el.style.getPropertyValue(name));
-            // 기본값: 반대편 패널이 없으면 그 칸은 0 이다(문자열 변수는 남지 않는다).
+            // 기본값: 반대편 사이드바이 없으면 그 칸은 0 이다(문자열 변수는 남지 않는다).
             return Number.isFinite(raw) ? raw : 0;
           };
           const used = {
@@ -990,7 +926,7 @@ function drawPanels(el, card) {
             : side === "left" ? clamp(e.clientX - rect.left - used.left)
             : side === "top" ? clamp(rect.bottom - e.clientY - used.top)
             : clamp(e.clientY - rect.top - used.bottom);
-          run("core.card.panel.size", { card: el.dataset.cardId, side, size });
+          run("core.card.sidebar.size", { card: el.dataset.cardId, side, size });
         };
         const end = () => {
           handle.removeEventListener("pointermove", move);
@@ -1004,80 +940,18 @@ function drawPanels(el, card) {
       handle.addEventListener("click", (event) => {
         event.stopPropagation();
         if (dragged) return;
-        run("core.card.panel.toggle", { card: el.dataset.cardId, side });
+        run("core.card.sidebar.toggle", { card: el.dataset.cardId, side });
       });
     }
-    const handle = body.querySelector(".panel__grip");
-    mark(handle, "core.card.panel.size", { card: card.id, side });
-    handle.title = state.collapsed ? `눌러 ${side} 패널 펼치기` : `끌어 크기 바꾸기 · 눌러 ${side} 패널 접기`;
-    el.dataset[`panel${side[0].toUpperCase()}${side.slice(1)}`] = state.collapsed ? "folded" : "open";
+    const handle = body.querySelector(".card-sidebar__grip");
+    mark(handle, "core.card.sidebar.size", { card: card.id, side });
+    handle.title = state.collapsed ? `눌러 ${side} 사이드바 펼치기` : `끌어 크기 바꾸기 · 눌러 ${side} 사이드바 접기`;
+    el.dataset[`sidebar${side[0].toUpperCase()}${side.slice(1)}`] = state.collapsed ? "folded" : "open";
     el.style.setProperty(`--p${side[0]}`, state.collapsed ? "var(--divider)" : `${state.size}px`);
-    // 기본값: 탭 없는 카드의 패널 섹션에는 표면 문맥이 없다(null) — 좌측 창 사이드바와 같은 문맥이다.
+    // 기본값: 탭 없는 카드의 사이드바 섹션에는 표면 문맥이 없다(null) — 좌측 창 사이드바와 같은 문맥이다.
     const surface = activeTab(card) === null || activeTab(card) === undefined ? null : activeTab(card).id;
     drawSet(body.querySelector(".set"), `${card.id}:${side}`, set, { card: card.id, surface });
   }
-}
-
-function drawSidebar(el, card) {
-  const state = cardSidebar(card);
-  let side = el.querySelector(":scope > .side");
-  let grip = el.querySelector(":scope > .side__grip");
-  if (!state) {
-    if (side) clearSet(side.querySelector(".set"));
-    side?.remove();
-    grip?.remove();
-    delete el.dataset.side;
-    el.style.removeProperty("--side-w");
-    return;
-  }
-  if (!side) {
-    side = document.createElement("aside");
-    side.className = "side";
-    // 카드 발이 사이드바를 닫으므로 카드 안 사이드바는 자기 상태 줄이 없다. 섹션이 카드 발까지 채운다.
-    side.innerHTML = '<div class="set"></div>';
-    grip = document.createElement("div");
-    grip.className = "side__grip";
-    grip.dataset.expose = "core.card.sidebar.grip";
-    el.querySelector(".slot").before(side, grip);
-    // 경계선은 두 동작을 받는다. 끌기는 폭을 바꾸고, 누름은 곧바로 접거나 편다.
-    let dragged = false;
-    grip.addEventListener("pointerdown", (event) => {
-      // 글자 선택은 .side 의 user-select 가 막는다. 여기서 기본 동작을 막으면 WebKit 이 마우스 호환 이벤트를
-      // 보내지 않아 click 이 오지 않는다.
-      event.stopPropagation();
-      grip.setPointerCapture(event.pointerId);
-      dragged = false;
-      const startX = event.clientX;
-      const left = el.getBoundingClientRect().left;
-      const move = (e) => {
-        // 작은 떨림은 누름이다. 문턱을 넘은 움직임만 끌기이고 끌기는 누름이 되지 않는다.
-        if (!dragged && Math.abs(e.clientX - startX) < DRAG_THRESHOLD) return;
-        dragged = true;
-        const width = Math.min(value("sidebarMaxWidth"), Math.max(value("sidebarMinWidth"), e.clientX - left));
-        run("core.card.sidebar.size", { card: el.dataset.cardId, width });
-      };
-      const end = () => {
-        grip.removeEventListener("pointermove", move);
-        grip.removeEventListener("pointerup", end);
-        grip.removeEventListener("pointercancel", end);
-      };
-      grip.addEventListener("pointermove", move);
-      grip.addEventListener("pointerup", end);
-      grip.addEventListener("pointercancel", end);
-    });
-    grip.addEventListener("click", (event) => {
-      event.stopPropagation();
-      if (dragged) return;
-      run("core.card.sidebar.toggle", { card: el.dataset.cardId });
-    });
-  }
-  mark(grip, "core.card.sidebar.size", { card: card.id });
-  grip.title = state.collapsed ? "눌러 사이드바 펼치기" : "끌어 폭 바꾸기 · 눌러 접기";
-  el.dataset.side = state.collapsed ? "folded" : "open";
-  // 접은 사이드바는 내용 없이 경계선만 남는다. 경계선 폭은 손잡이 폭이어서 접은 뒤에도 누를 수 있다.
-  el.style.setProperty("--side-w", state.collapsed ? "var(--divider)" : `${state.width}px`);
-  const set = linkedSet("card-left", activeTab(card).plugin);
-  drawSet(side.querySelector(".set"), card.id, set, { card: card.id, surface: activeTab(card).id });
 }
 
 /* ── 레일. 카드이므로 이동에 move() 를 사용한다 ───────────────────────── */

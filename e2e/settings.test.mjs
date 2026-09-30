@@ -208,10 +208,10 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     await keepCommonSettings(s);
     await s.run("core.settings.set", { patch: { cardSidebar: "inset", sidebarWidth: 150, sidebarMinWidth: 140 }, scope: "common" });
-    const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebar?.width === 150),
+    const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left?.size === 150),
       "an inset sidebar did not open at sidebarWidth");
-    const card = grid.cards.find((item) => item.sidebar);
-    await assert.rejects(s.run("core.card.sidebar.size", { card: card.id, width: 130 }), /140 to 480/);
+    const card = grid.cards.find((item) => item.sidebars?.left);
+    await assert.rejects(s.run("core.card.sidebar.size", { card: card.id, side: "left", size: 130 }), /140 to 480/);
     await assert.rejects(s.run("core.settings.set", { patch: { sidebarMinWidth: 200 }, scope: "common" }),
       /sidebarMinWidth .*sidebarWidth .*sidebarMaxWidth/);
   });
@@ -275,7 +275,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     await keepCommonSettings(s);
     assert.equal(await settingsValue(s, "cardSidebar"), "inset");
-    const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebar),
+    const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left),
       "no card holds an inset sidebar in a fresh configuration");
     assert.equal(grid.cards.some((card) => card.id.startsWith("rail-")), false, "a rail column stands in a fresh configuration");
     await s.run("core.settings.open");
@@ -335,9 +335,10 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
-    const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebar),
+    const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left),
       "no card holds an inset sidebar");
-    const card = grid.cards.find((item) => item.sidebar);
-    assert.deepEqual(card.sidebar, { width: 190, collapsed: false });
+    const card = grid.cards.find((item) => item.sidebars?.left);
+    assert.equal(card.sidebars.left.size, 190);
+    assert.equal(card.sidebars.left.collapsed, false);
   });
 }

@@ -216,7 +216,7 @@
       },
       {
         "name": "core.grid",
-        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label and its notice), tool buttons (enabled, hidden, title), header fit, and inset sidebar {width, collapsed} or null.",
+        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label and its notice), tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, and collapsed state.",
         "schema": {
           "type": [
             "object",
@@ -1861,34 +1861,82 @@
         }
       },
       {
+        "name": "core.card.sidebar.set",
+        "description": "Assigns a set, disables the side with off, or restores the plugin default with inherit.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "side": {
+              "type": "string",
+              "enum": [
+                "top",
+                "bottom",
+                "left",
+                "right"
+              ]
+            },
+            "set": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.card.sidebar.toggle",
-        "description": "Folds a card's inset sidebar to a strip or unfolds it, without changing the card's size.",
-        "params": { "type": "object", "properties": { "card": { "type": "string" } } },
-        "result": { "type": "null" }
+        "description": "Folds or unfolds one card sidebar without changing the card size.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "side": {
+              "type": "string",
+              "enum": [
+                "top",
+                "bottom",
+                "left",
+                "right"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
       },
       {
         "name": "core.card.sidebar.size",
-        "description": "Sets the width of a card's inset sidebar, 120 to 480 points, without changing the card's size.",
-        "params": { "type": "object", "properties": { "card": { "type": "string" }, "width": { "type": "number" } } },
-        "result": { "type": "null" }
-      },
-      {
-        "name": "core.card.panel.set",
-        "description": "Assigns a set to a panel on one side of the card (top, bottom, left, right; one per side) or removes it with off; the assignment stays regardless of the active tab.",
-        "params": { "type": "object", "properties": { "card": { "type": "string" }, "side": { "type": "string" }, "set": { "type": "string" } } },
-        "result": { "type": "null" }
-      },
-      {
-        "name": "core.card.panel.toggle",
-        "description": "Folds a card's panel on one side to a strip or unfolds it, without changing the card's size.",
-        "params": { "type": "object", "properties": { "card": { "type": "string" }, "side": { "type": "string" } } },
-        "result": { "type": "null" }
-      },
-      {
-        "name": "core.card.panel.size",
-        "description": "Sets the size of a card's panel on one side — width for left and right, height for top and bottom — 120 to 480 points, without changing the card's size.",
-        "params": { "type": "object", "properties": { "card": { "type": "string" }, "side": { "type": "string" }, "size": { "type": "number" } } },
-        "result": { "type": "null" }
+        "description": "Sets one card sidebar width or height within the configured bounds.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "side": {
+              "type": "string",
+              "enum": [
+                "top",
+                "bottom",
+                "left",
+                "right"
+              ]
+            },
+            "size": {
+              "type": "number"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
       },
       {
         "name": "core.sidebar.section.select",
@@ -2410,12 +2458,7 @@
       },
       {
         "name": "core.card.sidebar.grip",
-        "description": "The dividers of inset sidebars in document order: a drag sets the width and a click folds or unfolds at once.",
-        "many": true
-      },
-      {
-        "name": "core.card.panel.grip",
-        "description": "The dividers of card panels in document order: a drag sets the panel's size and a click folds or unfolds it.",
+        "description": "The dividers of card sidebars in document order; dragging sizes a side and clicking folds or unfolds it.",
         "many": true
       },
       {
