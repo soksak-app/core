@@ -2,7 +2,7 @@
 
 [한국어](external-sidebars.ko.md)
 
-The fixed-edge override contract replaces the defective per-plugin columns and persistent owners from V5-117-1-3-3. Correction and recorded application acceptance remain pending under V5-117-1-3-4-7 in [features](../features.md).
+The fixed-edge override contract replaces the defective per-plugin columns and persistent owners from V5-117-1-3-3. Correction and related rebuilt-host checks are complete under V5-117-1-3-4-7 in [features](../features.md). Broader recorded acceptance remains pending under V5-117-1-3-4, and existing user-release validation/application remains V5-117-1-3-4-7-1.
 
 ## Declaration and choices
 
