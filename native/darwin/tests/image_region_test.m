@@ -140,7 +140,15 @@ int main(int argc, char **argv) { @autoreleasepool {
             @selector(addObserver:selector:name:object:));
         originalAddObserverImplementation = method_getImplementation(addObserverMethod);
         method_setImplementation(addObserverMethod, (IMP)countSurfaceObserverRegistration);
+        // 등록부는 생성 호출의 autorelease pool보다 오래 살아야 한다(V5-116-4-1).
+        void *bootstrapRegion = NULL;
+        @autoreleasepool {
+            bootstrapRegion = sp_region_create(surface, "pool-lifetime", testEvent, NULL);
+            check(bootstrapRegion != NULL, @"region registry initializes inside a short-lived autorelease pool");
+        }
         void *region1 = sp_region_create(surface, "test1", testEvent, NULL);
+        check(region1 != NULL, @"region registry survives the first creation autorelease pool drain");
+        sp_region_close(bootstrapRegion);
         check(region1 != NULL, @"TEST 1: region created");
 
         countedSurfaceObserverRegistrations = 0;

@@ -170,7 +170,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 - (id)initWithFrame:(NSRect)frame {
     self = [super initWithFrame:frame];
     if (!self) return nil;
-    if (!spLiveRegions) spLiveRegions = [NSHashTable weakObjectsHashTable];
+    if (!spLiveRegions) spLiveRegions = [[NSHashTable alloc] initWithOptions:NSPointerFunctionsWeakMemory capacity:0];
     [spLiveRegions addObject:self];
     self.drawsBackground = NO;
     self.textColor = NSColor.clearColor;
