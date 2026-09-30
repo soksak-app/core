@@ -39,6 +39,8 @@ Before waiting for image presentation, the host reads every visible image region
 
 Applying an outer-surface rectangle starts required image configurations before returning the preparation to the page. Image rendering can proceed alongside DOM drawing and presentation. The final presentation check rereads native raster geometry after DOM presentation, because the document may have changed its anchor insets; parallel preparation never permits a stale raster to commit.
 
+The page awaits the native preparation response before drawing the matching DOM. Starting an asynchronous preparation request does not establish that the native transaction has begun. Rejected preparation leaves that DOM unchanged and propagates the error. If the page layout epoch changes while preparation is pending, its old DOM draw is cancelled.
+
 An older confirmation must not commit a newer preparation. Main-document navigation cancels that window's active and queued preparations. Native calls execute on the UI thread without blocking it while waiting for WebKit.
 
 While a window's transaction is open, none of that window's changes reach the screen, and a newer preparation of the same window extends the open transaction. A wait for the window's presented state (`host.window.presented`) therefore ends only after a presentation update that follows the commit of every open or queued preparation of the window, and reports the target time of the screen's next refresh after that update.

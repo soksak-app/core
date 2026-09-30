@@ -277,20 +277,14 @@ onLayout((made, draw, seated) => {
   const epoch = layoutEpoch;
   drawing = layouts.run(async () => {
     if (epoch !== layoutEpoch) return;
-    // Native preparation is held inside the host transaction until the next
-    // presentation. Start it before drawing the page so WebKit layout and the
-    // native sync can progress in parallel; waiting here serialized two frame
-    // clocks and added one refresh to divider gestures.
-    const preparation = publishAhead(made, seated);
+    // 준비 응답이 네이티브 트랜잭션의 시작과 적용을 확인한 뒤 DOM을 그린다.
+    // 요청 시작만으로 준비를 확정하면 새 DOM이 이전 네이티브 영역 아래에 먼저 표시된다.
+    await publishAhead(made, seated);
     if (epoch !== layoutEpoch) return;
     draw();
-    // `draw()` schedules the DOM commit; it does not synchronously run the
-    // render subscriber that publishes the matching surface snapshot. Keep the
-    // layout queue open through that render and its host presentation so a
-    // newer divider step cannot replace the DOM while this native transaction
-    // is still waiting to commit.
+    // draw가 예약한 렌더와 해당 호스트 표시까지 대기열을 유지하여 다음 배치가 DOM을
+    // 먼저 교체하지 못하게 한다.
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    await preparation;
     await presented;
   });
 });
