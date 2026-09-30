@@ -47,6 +47,7 @@ test("command timing names endpoint and UI commands at the registry boundary", a
   const names = [];
   t.mock.module("../performance.js", { exports: {
     timed: async (name, answer) => { names.push(name); return answer(); },
+    trace: () => {},
   } });
   const { createRegistry: createTimedRegistry } = await import("../exposure.js?command-timing");
   const made = createTimedRegistry();
@@ -57,6 +58,36 @@ test("command timing names endpoint and UI commands at the registry boundary", a
   } }), { result: 3 });
   assert.equal(await made.run("core.fixture.add", { n: 3 }), 4);
   assert.deepEqual(names, ["core.fixture.add", "core.fixture.add"]);
+});
+
+test("registration tracing attributes core loss to its document and live request callback", async (t) => {
+  const records = [];
+  t.mock.module("../performance.js", { exports: {
+    timed: async (_name, answer) => answer(),
+    trace: (event, fields) => { records.push({ event, ...fields }); },
+  } });
+  const { createRegistry: createObservedRegistry, registerSurfacePort: registerObservedPort } = await import("../exposure.js?registration-timeline");
+  const made = createObservedRegistry();
+  made.declare("core", coreExposes());
+  made.declare("probe", probeExposes());
+  made.configure({ surfacePlugin: () => "probe" });
+  const surface = "registration-timeline-surface";
+  const remove = registerObservedPort(surface, async () => {});
+  try {
+    made.registered({ surface, kind: "status", name: "core.surface.fixture" });
+    made.registered({ surface, closed: true });
+    made.registered({ surface, kind: "status", name: "probe.lines" });
+    assert.deepEqual(records.map((record) => record.phase), ["registered", "closed", "registered"]);
+    assert.equal(records[1].event, "surface.registration");
+    assert.equal(records[1].hasPort, true, "the close lost its live callback attribution");
+    assert.equal(records[1].timeOrigin, performance.timeOrigin);
+    assert.deepEqual(records[1].names, ["status core.surface.fixture"], "the close lost the removed core names");
+    made.unregisterSurface(surface);
+    assert.equal(records.at(-1).phase, "disposed");
+    assert.deepEqual(records.at(-1).names, ["status probe.lines"]);
+  } finally {
+    remove();
+  }
 });
 const probeExposes = () => ({
   status: [{ name: "probe.lines", description: "Lines.", schema: { type: "array" } }],

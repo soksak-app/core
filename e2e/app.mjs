@@ -464,7 +464,7 @@ async function place(s) {
   await s.until("host.window", (w) => w.frame.x === x && w.frame.y === y, `the window did not move to its check frame ${x},${y}`);
 }
 
-export async function fresh(s) {
+export async function fresh(s, { performanceTrace = false } = {}) {
   for (const window of await s.get("host.windows")) {
     if (window.window !== s.window) await s.on(window.window).close();
   }
@@ -486,7 +486,9 @@ export async function fresh(s) {
   let records;
   try {
     // 창 검사의 터미널은 사용자의 로그인 셸과 무관하게 검사용 셸(check-shell)로 시작한다.
-    await s.request("diagnostics.fixture", { settings: { "terminal.shell": CHECK_SHELL } });
+    await s.request("diagnostics.fixture", { settings: {
+      "terminal.shell": CHECK_SHELL, "diagnostics.performance": performanceTrace,
+    } });
     await s.presented();
     if (presentationErrors.length) {
       throw new Error(`test preparation reported presentation errors before reload: ${JSON.stringify(presentationErrors)}; ` +

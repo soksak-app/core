@@ -8,7 +8,7 @@
 // 호스트가 없는 브라우저 런타임에서도 등록소는 이 문서 안에서 동작한다. 그때는 요청을
 // 받는 경로와 표면이 없다.
 import { host } from "@soksak/runtime";
-import { timed } from "./performance.js";
+import { timed, trace } from "./performance.js";
 import {
   EXPOSE_KINDS, EXPOSURE, EXPOSURE_ERRORS, ExposureError, METHOD_KINDS, SURFACE_CORE, declarationKey, declarationMap,
   exposureEntries, replyPayload, validateExposes, validateExposureFile,
@@ -48,6 +48,11 @@ export function createRegistry({ call = null } = {}) {
   const methods = new Map();
   /* 선언 키마다 그 항목을 등록한 표면. 등록 순서를 유지한다. */
   const surfaces = new Map();
+  const surfaceNames = (surface) => [...surfaces].filter(([, owners]) => owners.has(surface)).map(([key]) => key);
+  const registrationTrace = (phase, surface, fields = {}) => trace("surface.registration", {
+    phase, surface, timeOrigin: performance.timeOrigin, hasPort: surfacePorts.has(surface), ...fields,
+    get names() { return surfaceNames(surface); },
+  });
   /* 소유 플러그인을 아직 모르는 표면의 등록. 표면을 담은 배치를 불러오면 revisit 이 반영한다. */
   const pending = new Map();
   /* 감시 중인 표면 status. 감시 키마다 따라가는 표면, 요청한 표면, 마지막 버전. */
@@ -380,6 +385,7 @@ export function createRegistry({ call = null } = {}) {
      */
     registered({ surface, kind, name, closed }) {
       if (closed) {
+        registrationTrace("closed", surface);
         pending.delete(surface);
         for (const owners of surfaces.values()) owners.delete(surface);
         for (const [watched, watch] of following) if (watch.surface === surface) following.delete(watched);
@@ -395,6 +401,7 @@ export function createRegistry({ call = null } = {}) {
         // 메인 페이지가 다시 읽히면 호스트는 배치를 불러오기 전에 등록을 다시 보낸다.
         if (!pending.has(surface)) pending.set(surface, []);
         pending.get(surface).push({ kind, name });
+        registrationTrace("pending", surface, { kind, name });
         return;
       }
       if (ownerOf(name) !== "core" && plugin !== ownerOf(name)) {
@@ -404,6 +411,7 @@ export function createRegistry({ call = null } = {}) {
       const owners = surfaces.get(key);
       owners.delete(surface);
       owners.set(surface, kind);
+      registrationTrace("registered", surface, { kind, name });
       registrationChanged();
     },
 
@@ -433,6 +441,7 @@ export function createRegistry({ call = null } = {}) {
 
     /** 표면을 닫을 때 등록·보류·감시를 모두 제거한다. */
     unregisterSurface(surface) {
+      registrationTrace("disposed", surface);
       for (const [key, owners] of surfaces) {
         if (!owners.delete(surface)) continue;
         if (owners.size === 0) surfaces.delete(key);
@@ -445,7 +454,7 @@ export function createRegistry({ call = null } = {}) {
     },
 
     /** 표면이 등록한 항목. `<kind> <name>` 형식이다. */
-    namesOf: (surface) => [...surfaces].filter(([, owners]) => owners.has(surface)).map(([key]) => key),
+    namesOf: surfaceNames,
 
     /** 요청 하나에 답한다. 결과는 {result} 또는 {error: {code, message}} 다. */
     handle: ({ method, params }) => replyPayload(async () => {
