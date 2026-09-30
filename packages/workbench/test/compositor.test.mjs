@@ -73,8 +73,8 @@ test("a surface in a hidden fullscreen sibling stays mounted and becomes invisib
   const { registerPlugin } = await import("../registry.js");
   registerPlugin({ id: "fullscreen-probe", surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) });
   const slot = document.querySelector("[data-native-surface]");
-  let width = 100;
-  slot.getBoundingClientRect = () => ({left:0,top:0,width,height:100});
+  let width = 100, height = 100;
+  slot.getBoundingClientRect = () => ({left:0,top:0,width,height});
   const compositor = await import("../compositor.js?fullscreen-sibling");
   let record;
   compositor.onCommit((value) => { record = value; return value.surfaces.map((surface) => ({ id: surface.id, ...surface.applied })); });
@@ -93,5 +93,12 @@ test("a surface in a hidden fullscreen sibling stays mounted and becomes invisib
     width = 100;
     await compositor.publish();
     assert.equal(record.surfaces[0].visible, true, "restoring the slot area did not restore visibility");
+    height = 0;
+    await compositor.publish();
+    assert.equal(record.surfaces[0].visible, false, "a zero-height slot presents its retained native frame");
+    assert.equal(record.surfaces.length, 1, "a zero-height slot disposed its live surface");
+    height = 100;
+    await compositor.publish();
+    assert.equal(record.surfaces[0].visible, true, "restoring the slot height did not restore visibility");
   } finally { dom.window.close(); }
 });

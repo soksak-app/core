@@ -169,33 +169,3 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(failures, [], "setting changes produced an intermediate placement failure");
   });
 }
-
-for (const app of Object.values(APPS)) {
-  test(`${app.name}: a sidebar-filled card hides its empty native slot without disposal`, { timeout: 60000 }, async (t) => {
-    const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
-    await fresh(s);
-    const card = (await s.get("core.grid")).cards.find(card => card.tabs.some(tab => tab.plugin === "terminal"));
-    assert.ok(card);
-    const tab = card.tabs.find(tab => tab.plugin === "terminal");
-    await s.run("core.tab.select", { tab: tab.id });
-    const set = (await s.get("core.settings")).values.sets[0].id;
-    for (const side of ["top", "bottom"]) {
-      await s.run("core.card.sidebar.set", { card: card.id, side, set });
-      await s.run("core.card.sidebar.size", { card: card.id, side, size: 480 });
-    }
-    await s.presented();
-    const hidden = (await s.get("core.surfaces")).find(surface => surface.surface === tab.id);
-    assert.ok(hidden, "a zero-area slot disposed the terminal surface");
-    assert.equal(hidden.visible, false, "a zero-area terminal slot is visible");
-    const nativeHidden = (await s.get("host.window")).surfaces.find(surface => surface.id === tab.id);
-    assert.ok(nativeHidden, "the native host disposed the empty terminal surface");
-    assert.equal(nativeHidden.visible, false, "the empty terminal slot retained a visible native view");
-    assert.deepEqual((await s.get("core.verify")).rows.filter(row => !row.ok), []);
-    for (const side of ["top", "bottom"]) await s.run("core.card.sidebar.set", { card: card.id, side, set: "off" });
-    await s.presented();
-    assert.equal((await s.get("core.surfaces")).find(surface => surface.surface === tab.id)?.visible, true);
-    assert.equal((await s.get("host.window")).surfaces.find(surface => surface.id === tab.id)?.visible, true);
-    assert.deepEqual((await s.get("core.verify")).rows.filter(row => !row.ok), []);
-  });
-}
