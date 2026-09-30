@@ -100,6 +100,14 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
     return (SCFrameStatus)value;
 }
 
+// 파일 작업 직후 저장한 원인을 경로와 함께 보고한다. 후속 정리 오류도 추가한다.
+static void reportCaptureFileFailure(int number, NSString *operation, NSString *path, int error) {
+    NSString *message = [NSString stringWithFormat:@"frame %d was not written: %@ %@: %s",
+        number, operation, path, strerror(error)];
+    setCaptureError(message);
+    fprintf(stderr, "observe: %s\n", message.UTF8String);
+}
+
 @implementation SPCapture
 
 - (void)stream:(SCStream*)stream
@@ -207,21 +215,27 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
             return;
         }
         NSString* pending = [path stringByAppendingString:@".partial"];
-        FILE* file = fopen(pending.UTF8String, "wb");
-        // 파일이 프레임 전체를 담았을 때만 센다. 그래야 개수와 디렉터리가 어긋나지 않는다.
-        // 쓰기에 실패한 파일은 남기지 않는다.
-        bool whole = file != NULL && fwrite(encoded, 80 + compressed, 1, file) == 1;
-        bool closed = file != NULL && fclose(file) == 0;
-        if (!whole || !closed) {
-            setCaptureError([NSString stringWithFormat:@"frame %d was not written: %s", number, strerror(errno)]);
-            fprintf(stderr, "observe: frame %d was not written, %s\n", number, strerror(errno));
-            unlink(pending.UTF8String);
-        } else if (rename(pending.UTF8String, path.UTF8String) == 0) {
-            self.written++;
-            if (self.written == captureBefore + 1) dispatch_semaphore_signal(captureFirstFrame);
+        FILE *file = fopen(pending.UTF8String, "wb");
+        if (file == NULL) {
+            // 열지 못한 경로는 이 쓰기가 소유하지 않으므로 삭제하지 않는다.
+            reportCaptureFileFailure(number, @"open", pending, errno);
         } else {
-            setCaptureError([NSString stringWithFormat:@"frame %d could not be committed: %s", number, strerror(errno)]);
-            unlink(pending.UTF8String);
+            bool whole = fwrite(encoded, 80 + compressed, 1, file) == 1;
+            if (!whole) reportCaptureFileFailure(number, @"write", pending, errno);
+            // 쓰기 실패 뒤에도 닫는다. 두 실패는 각각 원래 시스템 오류를 보존한다.
+            bool closed = fclose(file) == 0;
+            if (!closed) reportCaptureFileFailure(number, @"close", pending, errno);
+            bool committed = false;
+            if (whole && closed) {
+                committed = rename(pending.UTF8String, path.UTF8String) == 0;
+                if (!committed) reportCaptureFileFailure(number, @"commit", path, errno);
+            }
+            if (committed) {
+                self.written++;
+                if (self.written == captureBefore + 1) dispatch_semaphore_signal(captureFirstFrame);
+            } else if (unlink(pending.UTF8String) != 0) {
+                reportCaptureFileFailure(number, @"remove", pending, errno);
+            }
         }
         free(encoded);
         self.slowestWrite = MAX(self.slowestWrite, CACurrentMediaTime() - began);

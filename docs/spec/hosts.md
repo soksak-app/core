@@ -113,6 +113,8 @@ Recording target preparation and start reject an already active recording before
 
 Target preparation publishes a filter and configuration only when its own query completes successfully within the 10000ms limit. A timed-out query retains only its own callback state; a late failure is reported and a late success cannot overwrite a later target. Preparation releases obsolete inactive target/configuration ownership instead of retaining unused objects. Preparation errors are returned through its per-call output and do not change recording errors. If a recording becomes active before successful preparation is published, the call rejects that publication and preserves the active recording.
 
+Each failed frame-file open, write, close or commit reports its own operation, frame path and captured system error. A failed partial-file removal reports an additional recording error without replacing the original failure. Close is still attempted after a write failure, and its failure is reported separately. Removal is attempted only for a file successfully opened by the writer; an open failure cannot delete a pre-existing path. A failed frame never increments the written count or signals first-frame readiness.
+
 The webview operation attaches the DOM plane to a `SurfaceHost`, not directly to the window's shared surface container. Document and image operations create descendants of that host's native plane. The platform interface does not expose an operation that can place a region as a sibling of its `SurfaceHost`. Both language hosts validate the [surface composition](surface-composition.md) before calling platform code.
 
 ### Window buttons
