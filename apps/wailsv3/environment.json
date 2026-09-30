@@ -140,7 +140,7 @@
         "set": "set-install"
       },
       {
-        "place": "rail",
+        "place": "card-left",
         "plugin": "shell",
         "set": "set-shell"
       },
