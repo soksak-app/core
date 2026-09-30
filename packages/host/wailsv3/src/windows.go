@@ -271,6 +271,10 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		h.mu.Lock()
 		s.ready = false
 		h.mu.Unlock()
+		// 페이지가 다시 뜬다 — 이 실행의 WebKit 자식 기록을 갱신한다(V5-113).
+		if h.workspace != nil {
+			RefreshWebKitChildren(h.workspace.Directory())
+		}
 		// 이전 페이지에 보낸 요청은 답을 받지 못한다.
 		h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
 		go h.windowsChanged()

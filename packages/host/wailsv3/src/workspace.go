@@ -95,6 +95,11 @@ func writeJSON(path string, value any) error {
 }
 
 // Apply 는 작업 req 를 수행하고 그 결과를 반환한다.
+// Directory 는 이 저장소의 설정 디렉터리를 반환한다.
+func (w *Workspace) Directory() string {
+	return w.directory
+}
+
 func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()

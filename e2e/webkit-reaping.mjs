@@ -12,11 +12,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect } from "@soksak/client";
 
-const binary = fileURLToPath(new URL("../target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2", import.meta.url));
-if (!existsSync(binary)) {
-  console.log("SKIP webkit-reaping: the debug application is not built");
-  process.exit(0);
-}
+const BINARIES = {
+  tauriv2: fileURLToPath(new URL("../target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2", import.meta.url)),
+  wailsv3: fileURLToPath(new URL("../target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3", import.meta.url)),
+};
+const selected = process.env.SOKSAK_APP ? [process.env.SOKSAK_APP] : Object.keys(BINARIES);
 const STARTUP_LIMIT = 20_000;
 const WAIT_LIMIT = 15_000;
 
@@ -38,12 +38,12 @@ async function waitUntil(predicate, what, limit = WAIT_LIMIT) {
   const started = Date.now();
   while (Date.now() - started < limit) {
     if (predicate()) return Date.now() - started;
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => setImmediate(resolve));
   }
   throw new Error(`${what} did not happen within ${limit}ms`);
 }
 
-async function startApp(configDir) {
+async function startApp(binary, configDir) {
   rmSync(join(configDir, "endpoint.json"), { force: true });
   const child = spawn(binary, ["--config-dir", configDir], { stdio: ["ignore", "pipe", "pipe"] });
   child.log = "";
@@ -70,23 +70,31 @@ const check = (ok, what) => {
   if (!ok) failures++;
 };
 
+async function runCaseMatrix(appName, binary) {
+  const failuresBefore = failures;
 const configDir = mkdtempSync(join(tmpdir(), "soksak-reaping-"));
 
 // 외부 더미: 다른 번들의 저장소 파일을 연 채 사는 미기록 WebKit 흉내(불가침 증명).
 const foreignStore = join(configDir, "foreign-store", "com.example.foreigner", "WebsiteData", "ResourceLoadStatistics", "observations.db");
 mkdirSync(dirname(foreignStore), { recursive: true });
 writeFileSync(foreignStore, "");
+// 더미는 표준 입력이 닫히지 않는 한 산다(반복 타이머 금지 규칙을 지킨다).
 const decoyScript = join(configDir, "decoy.mjs");
 writeFileSync(decoyScript, `
-import { openSync } from "node:fs";
-openSync(${JSON.stringify(foreignStore)}, "r");
-setInterval(() => {}, 60000);
+import { open, readFileSync } from "node:fs";
+open(${JSON.stringify(foreignStore)}, "r");
+const stdin = await new Promise((resolve) => process.stdin.on("readable", resolve));
+await new Promise((resolve, reject) => {
+  process.stdin.on("end", resolve);
+  process.stdin.on("error", reject);
+  void stdin;
+});
 `);
-const decoy = spawn(process.execPath, [decoyScript], { argv0: "com.apple.WebKit.WebContent", stdio: "ignore" });
+const decoy = spawn(process.execPath, [decoyScript], { argv0: "com.apple.WebKit.WebContent", stdio: ["pipe", "ignore", "ignore"] });
 // 희생제: 죽은 실행의 기록에 주입할 미기록 WebKit 흉내(수확 경로의 결정적 증명).
 const victimScript = join(configDir, "victim.mjs");
-writeFileSync(victimScript, "setInterval(() => {}, 60000);\n");
-const victim = spawn(process.execPath, [victimScript], { argv0: "com.apple.WebKit.GPU", stdio: "ignore" });
+writeFileSync(victimScript, "process.stdin.on('end', () => process.exit(0));\nvoid readFileSync(0);\n");
+const victim = spawn(process.execPath, [victimScript], { argv0: "com.apple.WebKit.GPU", stdio: ["pipe", "ignore", "ignore"] });
 
 let app = null;
 try {
@@ -95,7 +103,7 @@ try {
     && pid !== decoy.pid && pid !== victim.pid));
 
   // ── 케이스 1: 호스트 생존 중 자식(WebContent) 하나를 외부 킬 → 교체 스폰 → 기록 갱신.
-  app = await startApp(configDir);
+  app = await startApp(binary, configDir);
   await waitUntil(() => oursNow().size >= 1, "the first run created WebKit children");
   const firstOurs = oursNow();
   const firstRecord = readRecords(configDir);
@@ -136,12 +144,14 @@ try {
     const preKilled = record.children[0].pid;
     if (alive(preKilled)) process.kill(preKilled, "SIGKILL");
     check(!alive(preKilled), "case 2: one recorded child is dead before the restart (the mixed state)");
-    record.children.push({ pid: victim.pid, command: "com.apple.WebKit.GPU" });
+    // 실제 기록 스키마(pid, kind, lstart) 그대로 — lstart 는 희생제의 실제 시작 시각.
+    const victimLstart = execFileSync("ps", ["-o", "lstart=", "-p", String(victim.pid)], { encoding: "utf8" }).trim();
+    record.children.push({ pid: victim.pid, kind: "GPU", lstart: victimLstart });
     writeFileSync(recordsFile(configDir), JSON.stringify(record));
     const realLeftovers = [...beforeCrash].filter(([pid]) => alive(pid));
     console.log(`INFO webkit-reaping the crash left ${realLeftovers.length} real WebKit leftovers this run`);
-    app = await startApp(configDir);
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    app = await startApp(binary, configDir);
+    await waitUntil(() => webkitProcesses().size >= 1, 'the restarted application settled', 3000).catch(() => {});
     const survivors = realLeftovers.filter(([pid]) => alive(pid));
     check(survivors.length === 0, `case 2: the restart reaped the recorded real leftovers (survivors: ${JSON.stringify(survivors)})`);
     check(!alive(victim.pid), "case 4: the restart killed the recorded WebKit-named victim (the reap path works)");
@@ -171,5 +181,16 @@ try {
   rmSync(configDir, { recursive: true, force: true });
 }
 
-console.log(failures === 0 ? "PASS webkit-reaping" : `FAIL webkit-reaping (${failures} failures)`);
+
+  if (failures === failuresBefore) console.log(`PASS webkit-reaping ${appName}`);
+}
+
+for (const appName of selected) {
+  const binary = BINARIES[appName];
+  if (!existsSync(binary)) {
+    console.log(`SKIP webkit-reaping ${appName}: the debug application is not built`);
+    continue;
+  }
+  await runCaseMatrix(appName, binary);
+}
 process.exit(failures === 0 ? 0 : 1);

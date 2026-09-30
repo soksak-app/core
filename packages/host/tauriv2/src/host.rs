@@ -40,6 +40,7 @@ pub mod surfaces;
 pub use surfaces::surface_owner_id;
 pub mod termination;
 mod theme;
+pub mod webkit_children;
 mod windows;
 pub mod workspace;
 
@@ -140,6 +141,20 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 std::process::exit(0);
             }))?;
             let directory = config_directory(app)?;
+            // 지난 실행이 남긴 WebKit 자식을 기록으로 수확하고, 남의 것을 덮지 않게 지금
+            // 떠 있는 WebKit 을 기준선으로 찍는다(V5-113). 아직 창이 없으므로 이 실행의
+            // WebKit 은 하나도 없다.
+            crate::webkit_children::reap_recorded(&directory);
+            crate::webkit_children::snapshot_baseline();
+            let foreign = std::process::Command::new("sh")
+                .arg("-c")
+                .arg("ps -axo command= | grep -c 'com.apple.WebKit.' || true")
+                .output()
+                .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+                // 기본값: 기준선 개수 보고의 ps 가 실패해도 시작은 멈추지 않는다 — 이 보고는
+                // 관측일 뿐 수확 판정에 쓰이지 않는다.
+                .unwrap_or_else(|_| "unknown".into());
+            eprintln!("webkit children: baseline {foreign} foreign WebKit processes");
             exposure::start(app, &directory)?;
             Ok(())
         })
@@ -161,6 +176,12 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
             if view.label() == window.label() {
                 context.ready.store(false, Ordering::Relaxed);
                 exposure::page_reloaded(&window);
+                if let Some(workspace) = window
+                    .app_handle()
+                    .try_state::<crate::workspace::Workspace>()
+                {
+                    crate::webkit_children::refresh(workspace.directory());
+                }
                 log_error(windows::reload_surface_documents(&window));
                 log_error(context.overlay.discard());
             }
