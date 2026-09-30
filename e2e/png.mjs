@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 
-/** 파일 하나를 { width, height, pixel(x, y) } 로 읽는다. pixel 은 [r, g, b] 다. */
+/** 파일 하나를 { width, height, pixel(x, y), alpha(x, y) } 로 읽는다. pixel 은 [r, g, b] 다. */
 export function readPng(path) {
   const file = readFileSync(path);
   if (file.readUInt32BE(0) !== 0x89504e47) throw new Error(`${path} is not a PNG`);
@@ -28,6 +28,8 @@ export function readPng(path) {
   }
   const raw = inflateSync(Buffer.concat(data));
   const stride = width * channels;
+  const expected = (stride + 1) * height;
+  if (raw.length !== expected) throw new Error(`${path}: ${raw.length} decoded bytes, expected ${expected}`);
   const pixels = Buffer.alloc(stride * height);
   for (let y = 0; y < height; y++) {
     const filter = raw[y * (stride + 1)];
@@ -48,11 +50,20 @@ export function readPng(path) {
       pixels[y * stride + x] = value & 0xff;
     }
   }
+  function offset(x, y) {
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || x >= width || y < 0 || y >= height)
+      throw new RangeError(`${path}: invalid pixel coordinates ${x},${y} for ${width}x${height}`);
+    return y * stride + x * channels;
+  }
   return {
     width, height,
     pixel(x, y) {
-      const at = y * stride + x * channels;
+      const at = offset(x, y);
       return [pixels[at], pixels[at + 1], pixels[at + 2]];
+    },
+    alpha(x, y) {
+      const at = offset(x, y);
+      return channels === 4 ? pixels[at + 3] : 255;
     },
   };
 }
