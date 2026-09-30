@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use tauri::Webview;
+use tauri::{Manager, Webview};
 
 use crate::exposure::{self, on_main};
 use crate::log_error;
@@ -716,6 +716,25 @@ fn create(
                 let event: serde_json::Value = serde_json::from_str(&json).map_err(|error| {
                     format!("image event {event_surface}/{event_name}: {error}")
                 })?;
+                // 포커스 전이는 성능 트레이스의 타임라인에도 남는다(V5-114, performance-trace
+                // 스펙이 약속한 창 이벤트 줄). 트레이스가 꺼져 있으면 line 이 아무 것도 쓰지
+                // 않는다.
+                if event.get("type").and_then(|value| value.as_str()) == Some("focus") {
+                    if let Some(workspace) = host.try_state::<crate::workspace::Workspace>() {
+                        if crate::performance::enabled(workspace.directory()) {
+                            crate::performance::line(
+                                &crate::performance::target(workspace.directory()),
+                                "host",
+                                serde_json::json!({
+                                    "event": "focus",
+                                    "surface": event_surface,
+                                    "name": event_name,
+                                    "focused": event.get("focused"),
+                                }),
+                            );
+                        }
+                    }
+                }
                 let report_surface = event_surface.clone();
                 let report_name = event_name.clone();
                 let payload = serde_json::json!({

@@ -6,6 +6,7 @@
 // 변경, 모달과 라이브러리의 그리기 뒤에 호출하고, 등록소는 감시 중인 값 중 달라진
 // 것만 호스트에 보낸다.
 import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
+import { report } from "./host.js";
 import { trace } from "./performance.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
@@ -355,7 +356,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.settings-modal.edit", ({ set: id = null }) => { editSet(id); });
   registry.command("core.settings-modal.move", ({ dx, dy }) => { moveSettings(dx, dy); });
 
-  registry.command("core.card.focus", ({ card }) => { focusCard(card); });
+  registry.command("core.card.focus", ({ card }) => { trace("action", { kind: "card.focus", card }); focusCard(card); });
   registry.command("core.card.sidebar.toggle", ({ card }) => { toggleSidebar(card); });
   registry.command("core.card.sidebar.size", ({ card, width }) => { sizeSidebar(card, width); });
   registry.command("core.sidebar.section.select", ({ sidebar, section }) => { selectSection(sidebar, section); });
@@ -416,4 +417,25 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
 // 창 크기 변화의 행위 마커(V5-104). 로그의 닻 — 무엇을 했을 때 무엇이 일어났나.
 addEventListener("resize", () => {
   trace("action", { kind: "resize", width: innerWidth, height: innerHeight });
+
+  // 문서 포커스 전이 관측(V5-114). 터미널 영역은 클릭 투명이라 누르면 문서가 포커스를
+  // 되찾고, activeElement 로 남아 있던 주소창이 그 순간 포커스를 받아 보인다. 전이마다
+  // 한 줄을 성능 트레이스와 진단 로그 양쪽에 남긴다.
+  // 기본값: 포커스 대상이 Element 가 아니거나 이름 요소가 없으면 unknown — 관측 줄의
+  // 식별자일 뿐 판정에 쓰이지 않는다.
+  const focusName = (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    // 기본값: 이름 요소가 없으면 unknown — 관측 식별자일 뿐 판정에 쓰이지 않는다.
+    if (target?.dataset.expose) return target.dataset.expose;
+    // 기본값: 태그 이름도 없으면 unknown — 같은 이유다.
+    return target?.tagName ?? "unknown";
+  };
+  document.addEventListener("focusin", (event) => {
+    trace("focus", { phase: "in", element: focusName(event) });
+    report(`focus in ${focusName(event)}`);
+  }, true);
+  document.addEventListener("focusout", (event) => {
+    trace("focus", { phase: "out", element: focusName(event) });
+    report(`focus out ${focusName(event)}`);
+  }, true);
 });

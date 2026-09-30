@@ -105,8 +105,12 @@ pub fn relay(target: &Path, mut record: Value) {
 }
 
 fn append(target: &Path, record: &Value) {
+    // 한 줄을 한 번의 write_all 로 쓴다. writeln! 은 형식 조각마다 write 를 하므로 동시
+    // 덧붙임이 한 줄 안에서 겹친다(실측: 페이지 줄과 호스트 줄이 섞여 기록됨).
+    let mut line = record.to_string();
+    line.push('\n');
     if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(target) {
-        if let Err(error) = writeln!(file, "{record}") {
+        if let Err(error) = file.write_all(line.as_bytes()) {
             eprintln!("performance: append line: {error}");
         }
     }
