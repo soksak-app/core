@@ -88,6 +88,12 @@ int main(void) { @autoreleasepool {
             && dimensions[1] == (uint32_t)(100 * scale),
             [NSString stringWithFormat:@"the recording has the window's device-pixel size (got %ux%u, expected %.0fx%.0f at scale %.1f)",
                 dimensions[0], dimensions[1], 200 * scale, 100 * scale, scale]);
+        uint64_t header = sizeof(dimensions) + 7 * sizeof(double);
+        uint64_t payload = (uint64_t)dimensions[2] * dimensions[1];
+        check(dimensions[0] > 0 && dimensions[1] > 0 && dimensions[2] >= (uint64_t)dimensions[0] * 4
+            && recorded.length >= header && recorded.length == header + payload,
+            [NSString stringWithFormat:@"the recording contains complete metadata and BGRA bytes (got %lu, expected %llu)",
+                (unsigned long)recorded.length, (unsigned long long)(header + payload)]);
     }
     check(!NSApp.isActive, @"recording an unchanged window does not activate the application");
     [window close];
