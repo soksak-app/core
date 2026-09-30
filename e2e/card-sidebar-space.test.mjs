@@ -34,6 +34,7 @@ for(const app of Object.values(APPS))test(`${app.name}: card sidebar space condi
  await s.run('core.settings.set',{patch:{sets},scope:'common'});
  const choices=Object.fromEntries(sides.map(side=>[side,{set:side==='right'?'space-tabs':'space-list',size:120,collapsed:false}]));
  for(const side of sides){await s.run('core.card.sidebar.set',{card:card.id,side,set:choices[side].set});await s.run('core.card.sidebar.size',{card:card.id,side,size:120});}
+ const windowCards=(await s.get('core.grid')).cards.filter(item=>item.tabs.length===0).map(item=>item.id).sort();
  // 최대 검사 크기에서 시작하되 프레임의 실제 버퍼 원점과 배율을 따른다.
  await s.run('host.window.resize',{width:1200,height:880});
  await s.until('host.window',window=>window.content.height===880,'recording window did not grow');
@@ -45,6 +46,8 @@ for(const app of Object.values(APPS))test(`${app.name}: card sidebar space condi
   ({displayed}=await s.presented());
   const host=await s.get('host.window');assert.equal(host.active,false);assert.equal(host.occluded,false);
   const grid=await s.get('core.grid');const current=grid.cards.find(item=>item.id===card.id);
+  assert.deepEqual(grid.cards.filter(item=>item.tabs.length===0).map(item=>item.id).sort(),windowCards,`${label}: configured external columns changed`);
+  t.diagnostic(`${label}: window ${host.content.width}x${host.content.height}, card ${current.w}x${current.h}, saved requests ${JSON.stringify(choices)}, presentation ${JSON.stringify(current.sidebars)}`);
   const layout=await s.get('core.layout');const saved=layout.state.cards.find(item=>item.id===card.id).data.sidebars;
   const bars=await s.until('core.sidebars',all=>sides.every(side=>{
    const bar=all.find(item=>item.sidebar===`${card.id}:${side}`);
@@ -104,14 +107,18 @@ for(const app of Object.values(APPS))test(`${app.name}: card sidebar space condi
   await s.run('core.card.fullscreen',{card:card.id});await check('wide sidebars restored',{horizontal:true});
   recording=await s.request('diagnostics.capture.start',{});recordingStopped=false;
   await s.run('core.card.sidebar.toggle',{card:card.id,side:'left'});choices.left.collapsed=true;
-  await check('manual left fold');
+  await check('manual left fold',{horizontal:true});
+  recording=await s.request('diagnostics.capture.start',{});recordingStopped=false;
+  await s.run('host.window.resize',{width:1220,height:880});
+  await s.until('host.window',window=>window.content.width===1220,'window did not reach wider width');
+  await check('manual fold wider normal');
   recording=await s.request('diagnostics.capture.start',{});recordingStopped=false;
   await s.run('core.card.fullscreen',{card:card.id});await check('manual fold fullscreen');
   recording=await s.request('diagnostics.capture.start',{});recordingStopped=false;
   await s.run('core.card.fullscreen',{card:card.id});
   await s.run('host.window.resize',{width:1200,height:754});
   await s.until('host.window',window=>window.content.height===754,'window did not restore height');
-  await check('manual fold short restore',{vertical:true});
+  await check('manual fold short restore',{horizontal:true,vertical:true});
  }catch(error){errors.push(error);}finally{
   if(recording){
    try{if(!recordingStopped)await s.request('diagnostics.capture.stop',{after:displayed===undefined?0:displayed+100});}catch(error){errors.push(error);}
