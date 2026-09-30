@@ -111,7 +111,7 @@ const slots = () =>
 let paintClip = null;
 
 /** 앱 배경에서 표시 중인 네이티브 표면 사각형만 실제 픽셀 구멍으로 제외한다. */
-function syncNativePaintClip() {
+function syncNativePaintClip(rects) {
   if (!native) {
     paintClip?.remove();
     paintClip = null;
@@ -122,12 +122,8 @@ function syncNativePaintClip() {
   // 구멍은 바깥 사각형과 반대 방향으로 감아 기본 nonzero 규칙이 그것을 빼게 한다.
   // evenodd 키워드 형식은 엔진마다 지원이 다르지만 감기 방향은 path() 를 아는 모든
   // 엔진이 같게 해석한다.
-  const holes = [...slots()]
-    .filter((slot) => effectiveVisible(slot) && app.kinds.includes(slot.dataset.nativePlugin))
-    .map((slot) => {
-      const rect = slot.getBoundingClientRect();
-      return `M${rect.left},${rect.top}v${rect.height}h${rect.width}v${-rect.height}Z`;
-    }).join("");
+  const holes = rects.map((rect) =>
+    `M${rect.x},${rect.y}v${rect.h}h${rect.w}v${-rect.h}Z`).join("");
   // 커밋마다 새 data URL 을 만들면 웹 프로세스가 URL 마다 디코드한 이미지를 남겨 창 크기
   // 조절만으로 메모리가 쌓인다(V5-96-14-6-4-7). 경로는 이미지 리소스를 만들지 않으므로
   // 커밋마다 다시 써도 남는 것이 없다. 경로 좌표는 요소의 테두리 상자를 기준으로 하고
@@ -275,14 +271,16 @@ function commit(mine, snapshot, final) {
   if (answered && typeof answered.then === "function") {
     return answered.then((placed) => {
       seat(record, placed);
-      // Keep the previous clip until the native views have accepted this
-      // placement AND the next frame begins. Applying a new hole at the answer
-      // runs ahead of the screen: the host applies some placements inside a
-      // window layer transaction that the display has not shown yet, so for
-      // one compositor frame the hole exposes the page background where the
-      // native view is still at its old rectangle. The next animation frame
-      // starts after that transaction has reached the display.
-      requestAnimationFrame(syncNativePaintClip);
+      // 준비 응답은 표시 확인이 아니다. 완료된 표시의 적용 좌표만 다음 프레임에 반영한다.
+      // 콜백 시점의 DOM은 다음 배치를 이미 그렸을 수 있으므로 여기서 좌표를 보존한다.
+      if (record.drawn) {
+        const origin = plane.getBoundingClientRect();
+        const rects = record.surfaces.filter((surface) =>
+          surface.visible && app.kinds.includes(surface.plugin)).map(({ applied }) => ({
+            x: origin.left + applied.x, y: origin.top + applied.y, w: applied.w, h: applied.h,
+          }));
+        requestAnimationFrame(() => syncNativePaintClip(rects));
+      }
       return placed;
     });
   }
@@ -303,6 +301,13 @@ function seat(record, placed) {
   const at = new Map(placed.map((p) => [p.id, p]));
   for (const s of record.surfaces) {
     const now = at.get(s.id);
+    if (native && app.kinds.includes(s.plugin)) {
+      if (!now) throw new Error(`missing native placement ${s.id}`);
+      if (typeof now.visible !== "boolean") throw new Error(`invalid native placement visibility ${s.id}`);
+      if (![now.x, now.y, now.w, now.h].every(Number.isFinite) || now.w < 0 || now.h < 0)
+        throw new Error(`invalid native placement geometry ${s.id}`);
+      s.visible = now.visible;
+    }
     if (now) s.applied = { x: now.x, y: now.y, w: now.w, h: now.h };
   }
   if (!seatedRecord || record.seq >= seatedRecord.seq) seatedRecord = record;

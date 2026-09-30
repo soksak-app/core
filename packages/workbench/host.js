@@ -421,7 +421,7 @@ export const surfaces = native ? {
       // 동기화와 표시 호출을 함께 처리한다.
       const result = layoutResult;
       return result.then((placed) =>
-        placed.map((p) => ({ id: p.id, ...toPlane(p) }))).catch((error) => {
+        placed.map((p) => ({ id: p.id, visible: p.visible, ...toPlane(p) }))).catch((error) => {
           if (result === layoutResult) { last = ""; layoutPresented = false; }
           throw error;
         });

@@ -43,6 +43,9 @@ An older confirmation must not commit a newer preparation. Main-document navigat
 
 While a window's transaction is open, none of that window's changes reach the screen, and a newer preparation of the same window extends the open transaction. A wait for the window's presented state (`host.window.presented`) therefore ends only after a presentation update that follows the commit of every open or queued preparation of the window, and reports the target time of the screen's next refresh after that update.
 
+The app background paint holes change only after the host acknowledges presentation of the matching drawn layout. A preparation response does not acknowledge presentation. Keep the existing one-animation-frame delay after that acknowledgement, and use that presentation snapshot’s native applied rectangles and visibility in viewport coordinates. A newer pending DOM layout must not replace these holes before its own presentation is acknowledged. Placement conversion retains native visibility. An acknowledgement missing a requested native surface, a boolean visibility value or finite geometry with nonnegative dimensions is an explicit error; it cannot schedule a paint-hole update.
+
+
 A surface keeps the frame the host applied. Only the main document web view enables the Web Inspector; attaching it resizes that web view and does not move a surface, so the host holds no surface frame against outside changes.
 
 Native layer transactions are shared by the UI thread. Preparations from different project windows are queued until the current window commits or cancels. A window's reload or closure cancels only that window's active and queued preparations. Waiting requests do not block the UI thread.

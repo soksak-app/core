@@ -38,7 +38,9 @@ test("native preparation cannot present before DOM drawing and presents each tic
     }],
     settled: false, drawn: false,
   };
-  await surfaces.place(record);
+  const preparation = await surfaces.place(record);
+  assert.equal(preparation[0].visible, true, "placement conversion must retain native visibility");
+  assert.equal(preparation[1].visible, false, "placement conversion must retain native hiding");
   assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces"]);
   assert.deepEqual(prepared, [["surface", "hidden"]],
     "native surface authorization must follow completed preparation");
