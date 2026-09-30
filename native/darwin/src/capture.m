@@ -12,6 +12,8 @@
 #import "capture.h"
 #import <ImageIO/ImageIO.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
+#include <compression.h>
+#include <zlib.h>
 
 static void setCaptureError(NSString* message);
 static bool hasCaptureError(void);
@@ -182,11 +184,33 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
     NSString* path = [self.directory stringByAppendingPathComponent:[NSString stringWithFormat:@"frame-%04d.bgra", number]];
     dispatch_async(captureWriter, ^{
         CFTimeInterval began = CACurrentMediaTime();
+        // 헤더를 보존하고 모든 픽셀과 행 패딩을 무손실로 압축한다.
+        size_t pixels = stride * height;
+        size_t capacity = pixels + pixels / 255 + 16;
+        uint8_t *encoded = capacity <= UINT32_MAX ? malloc(80 + capacity) : NULL;
+        size_t compressed = 0;
+        if (encoded != NULL) {
+            memcpy(encoded, copy, sizeof(head) + sizeof(info));
+            memcpy(encoded + 68, "LZ4B", 4);
+            compressed = compression_encode_buffer(encoded + 80, capacity,
+                copy + sizeof(head) + sizeof(info), pixels, NULL, COMPRESSION_LZ4_RAW);
+            uint32_t count = (uint32_t)compressed;
+            uint32_t checksum = (uint32_t)crc32(0, copy + sizeof(head) + sizeof(info), (uInt)pixels);
+            memcpy(encoded + 72, &count, sizeof count);
+            memcpy(encoded + 76, &checksum, sizeof checksum);
+        }
+        free(copy);
+        if (encoded == NULL || compressed == 0) {
+            setCaptureError([NSString stringWithFormat:@"frame %d could not be losslessly compressed (capacity %zu)", number, capacity]);
+            free(encoded);
+            dispatch_semaphore_signal(capturePending);
+            return;
+        }
         NSString* pending = [path stringByAppendingString:@".partial"];
         FILE* file = fopen(pending.UTF8String, "wb");
         // 파일이 프레임 전체를 담았을 때만 센다. 그래야 개수와 디렉터리가 어긋나지 않는다.
         // 쓰기에 실패한 파일은 남기지 않는다.
-        bool whole = file != NULL && fwrite(copy, size, 1, file) == 1;
+        bool whole = file != NULL && fwrite(encoded, 80 + compressed, 1, file) == 1;
         bool closed = file != NULL && fclose(file) == 0;
         if (!whole || !closed) {
             setCaptureError([NSString stringWithFormat:@"frame %d was not written: %s", number, strerror(errno)]);
@@ -199,7 +223,7 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
             setCaptureError([NSString stringWithFormat:@"frame %d could not be committed: %s", number, strerror(errno)]);
             unlink(pending.UTF8String);
         }
-        free(copy);
+        free(encoded);
         self.slowestWrite = MAX(self.slowestWrite, CACurrentMediaTime() - began);
         dispatch_semaphore_signal(capturePending);
     });

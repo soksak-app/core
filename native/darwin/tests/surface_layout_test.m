@@ -5,6 +5,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
 #import "capture.h"
+#import "support/capture_frame.m"
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "private/webkit.h"
@@ -193,7 +194,7 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
         for (int index = 1; index <= count; index++) {
             NSString *path = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:
                 [NSString stringWithFormat:@"frame-%04d.bgra", index]];
-            NSData *data = [NSData dataWithContentsOfFile:path];
+            NSData *data = readCaptureFrame([NSData dataWithContentsOfFile:path]);
             uint32_t head[3] = {0}; double info[7] = {0};
             BOOL valid = data.length >= sizeof(head) + sizeof(info);
             if (valid) {

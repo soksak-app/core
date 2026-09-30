@@ -94,6 +94,9 @@ For direct capture.start/stop recordings, layouts is an array of `{ticket, begun
 
 Recording callbacks never wait for pending disk writes. Exhausting the 64-frame pending-write capacity rejects the recording with an explicit error; it is not a successful partial capture. Stop preserves recording errors and appends any stop error. The 600-frame burst cap remains a reported bounded result.
 
+Recording frame files `frame-NNNN.bgra` use one lossless LZ4 block format. The little-endian header contains three uint32 values (width, height, BGRA row stride), seven float64 values (content x/y/width/height, content scale, backing scale, display time in milliseconds), the four ASCII bytes `LZ4B`, a uint32 compressed-block byte count and a uint32 CRC-32 of every decoded pixel byte. The header is 80 bytes; exactly the declared compressed bytes follow it. The LZ4 block restores exactly stride × height bytes, including row padding, without downsampling or color conversion. Reject wrong markers, incomplete or extra bytes, invalid blocks, decoded-size mismatches and checksum errors; do not interpret old raw files as this format. Compression failure fails the recording explicitly. The producer and readers implement this format; owning and rebuilt-host acceptance is recorded under V5-117-1-3-4-5-2.
+
+
 Layout timeline replies have a capacity of 4096 transactions. When the actual record count exceeds capacity, the host returns an error and removes the recording directory that the requester cannot receive. A truncated timeline is never a successful reply.
 
 The host writes large data, such as captures, to files under the configuration directory, and the reply contains the file paths. The requester removes the capture files after measurement.

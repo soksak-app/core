@@ -1,12 +1,12 @@
 // 캡처가 기록한 프레임 하나를 읽는다.
 //
-// 프레임은 원시 BGRA 다. 앞에 너비, 높이, 한 줄의 바이트 수(uint32)와 창이 그려진 사각형,
-// 콘텐츠 배율, 배율, 표시 시각(float64)이 기록되어 있다. 형식과 인코딩하지 않는 이유는
-// native/darwin/src/capture.h 와 capture.m 에 적혀 있다.
+// 프레임은 메타데이터와 체크섬이 있는 LZ4 블록으로 모든 BGRA 바이트를 복원한다.
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { crc32 } from "node:zlib";
+import { decodeLz4 } from "./lz4.mjs";
 
-const HEAD = 12 + 7 * 8;
+const HEAD = 80;
 
 /**
  * 파일 하나를 { width, height, stride, content, contentScale, scale, time, data } 로 읽는다.
@@ -18,14 +18,20 @@ const HEAD = 12 + 7 * 8;
  */
 export function readFrame(path) {
   const file = readFileSync(path);
+  if (file.length < HEAD || !file.subarray(68, 72).equals(Buffer.from("LZ4B"))) {
+    throw new Error(`${path} has no complete LZ4 frame header`);
+  }
   const width = file.readUInt32LE(0);
   const height = file.readUInt32LE(4);
   const stride = file.readUInt32LE(8);
   const info = [0, 1, 2, 3, 4, 5, 6].map((i) => file.readDoubleLE(12 + i * 8));
-  const data = file.subarray(HEAD);
-  if (data.length < stride * height) {
-    throw new Error(`${path} holds ${data.length} bytes, ${stride * height} expected`);
+  if (width === 0 || height === 0 || stride < width * 4 || !Number.isSafeInteger(stride * height)) {
+    throw new Error(`${path} has invalid pixel dimensions or row stride`);
   }
+  const encoded = file.readUInt32LE(72);
+  if (encoded === 0 || file.length !== HEAD + encoded) throw new Error(`${path} has an incomplete or extra compressed block`);
+  const data = decodeLz4(file.subarray(HEAD), stride * height);
+  if (crc32(data) !== file.readUInt32LE(76)) throw new Error(`${path} has an invalid pixel checksum`);
   const [x, y, w, h, contentScale, scale, time] = info;
   return { width, height, stride, content: { x, y, width: w, height: h }, contentScale, scale, time, data };
 }
