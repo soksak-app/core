@@ -531,18 +531,20 @@ function validatePluginSidebarDefaults(manifest) {
   const where = `plugin ${manifest.id}`;
   const sidebars = manifest.sidebars;
   if (!isObject(sidebars)) throw new Error(`${where}: sidebars must be an object`);
-  only(`${where} sidebars`, sidebars, ["sets", "card"]);
+  only(`${where} sidebars`, sidebars, ["sets", "card", "window"]);
   validateSidebars({ sets: sidebars.sets, links: [] }, where);
   for (const set of sidebars.sets) {
     if (!ID.test(set.id)) throw new Error(`${where}: invalid local set id ${set.id}`);
   }
-  if (sidebars.card !== undefined) {
-    if (!manifest.surface) throw new Error(`${where}: card defaults require a surface`);
-    if (!isObject(sidebars.card)) throw new Error(`${where}: sidebar card defaults must be an object`);
-    only(`${where} sidebar card`, sidebars.card, ["top", "bottom", "left", "right"]);
-    const ids = new Set(sidebars.sets.map((set) => set.id));
-    for (const [side, set] of Object.entries(sidebars.card)) {
-      if (!ids.has(set)) throw new Error(`${where}: card ${side} names unknown set ${String(set)}`);
+  const ids = new Set(sidebars.sets.map((set) => set.id));
+  for (const [kind, sides] of [["card", ["top", "bottom", "left", "right"]], ["window", ["left", "right"]]]) {
+    const mapping = sidebars[kind];
+    if (mapping === undefined) continue;
+    if (kind === "card" && !manifest.surface) throw new Error(`${where}: card defaults require a surface`);
+    if (!isObject(mapping)) throw new Error(`${where}: sidebar ${kind} defaults must be an object`);
+    only(`${where} sidebar ${kind}`, mapping, sides);
+    for (const [side, set] of Object.entries(mapping)) {
+      if (!ids.has(set)) throw new Error(`${where}: ${kind} ${side} names unknown set ${String(set)}`);
     }
   }
 }
@@ -556,8 +558,11 @@ export function normalizeSidebarDefaults(environment, manifests) {
     for (const set of manifest.sidebars.sets) {
       defaults.sets.push({ ...set, id: `${manifest.id}.${set.id}`, sections: [...set.sections] });
     }
-    for (const [side, set] of Object.entries(manifest.sidebars.card ?? {})) {
-      defaults.links.push({ place: `card-${side}`, plugin: manifest.id, set: `${manifest.id}.${set}` });
+    for (const kind of ["card", "window"]) {
+      // 선언에서 생략한 배치 종류에는 기본 연결이 없다.
+      for (const [side, set] of Object.entries(manifest.sidebars[kind] ?? {})) {
+        defaults.links.push({ place: `${kind}-${side}`, plugin: manifest.id, set: `${manifest.id}.${set}` });
+      }
     }
   }
   validateSidebars(defaults, "plugin defaults");
@@ -600,13 +605,15 @@ export function validateSidebars(sidebars, where) {
   // 플러그인을 가리키는 left, right 연결은 그 플러그인의 선택(set null 은 사용 안 함), card-left 연결은 플러그인의 카드 왼쪽 사이드바이다.
   const seen = new Set();
   for (const link of sidebars.links) {
-    if (!isObject(link) || !["left", "right", "card-left", "card-right", "card-top", "card-bottom"].includes(link.place)) {
-      throw new Error(`${where}: every link requires a place (left, right, card-left, card-right, card-top, card-bottom) and a known set`);
+    if (!isObject(link) || !["left", "right", "window-left", "window-right", "card-left", "card-right", "card-top", "card-bottom"].includes(link.place)) {
+      throw new Error(`${where}: every link requires a place (left, right, window-left, window-right, card-left, card-right, card-top, card-bottom) and a known set`);
     }
     only(`${where} link`, link, ["place", "plugin", "set"]);
     if (link.plugin !== null && !isText(link.plugin)) throw new Error(`${where}: a link plugin is null or a plugin id`);
     const isCardSide = link.place.startsWith("card-");
-    if (isCardSide && link.plugin === null) throw new Error(`${where}: a ${link.place} link names a plugin`);
+    const isWindowSide = link.place.startsWith("window-");
+    if ((isCardSide || isWindowSide) && link.plugin === null) throw new Error(`${where}: a ${link.place} link names a plugin`);
+    if (isWindowSide && !setIds.has(link.set)) throw new Error(`${where}: a ${link.place} link requires a known set`);
     if (link.set === null) {
       if (isCardSide || link.plugin === null) {
         throw new Error(`${where}: set null requires a left or right link that names a plugin`);
@@ -625,6 +632,7 @@ export function validateSidebars(sidebars, where) {
 /** 세트의 섹션 id 와 연결의 플러그인 id 가 불러온 manifest 에 있는지 검사한다. 없으면 예외를 던진다. */
 export function checkSidebarReferences(sidebars, manifests, where) {
   const cards = new Set(manifests.filter((m) => m.surface).map((m) => m.id));
+  const plugins = new Set(manifests.map((m) => m.id));
   // 기본값: sections 는 plugin.json 의 선택 필드이며, 없는 플러그인은 섹션이 없다.
   const sections = new Set(manifests.flatMap((m) => (m.sections ?? []).map((s) => s.id)));
   for (const set of sidebars.sets) {
@@ -633,7 +641,10 @@ export function checkSidebarReferences(sidebars, manifests, where) {
     }
   }
   for (const link of sidebars.links) {
-    if (link.plugin !== null && !cards.has(link.plugin)) {
+    if (link.plugin === null) continue;
+    if (link.place.startsWith("window-")) {
+      if (!plugins.has(link.plugin)) throw new Error(`${where}: link names unknown plugin ${link.plugin}`);
+    } else if (!cards.has(link.plugin)) {
       throw new Error(`${where}: link names plugin ${link.plugin} without a surface`);
     }
   }

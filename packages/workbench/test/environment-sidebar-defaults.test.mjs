@@ -10,9 +10,11 @@ const files = {
   "/modules/@fixture/card/plugin.json": { id: "fixture", name: "Fixture", description: "Fixture card.",
     mark: "f", icon: "<path/>", surface: { module: "ui/card.js", composition: { kind: "dom" } },
     sidebars: { sets: [{ id: "main", title: "Main", sections: ["sections.tree"], layout: "list" }],
-      card: { left: "main", top: "main" } } },
+      card: { left: "main", top: "main" }, window: { right: "main" } } },
   "/modules/@fixture/sections/plugin.json": { id: "sections", name: "Sections", description: "Fixture sections.",
-    sections: [{ id: "sections.tree", name: "Tree", module: {horizontal:"ui/tree-horizontal.js",vertical:"ui/tree-vertical.js"} }] },
+    sections: [{ id: "sections.tree", name: "Tree", module: {horizontal:"ui/tree-horizontal.js",vertical:"ui/tree-vertical.js"} }],
+    sidebars: { sets: [{ id: "tree", title: "Tree", sections: ["sections.tree"], layout: "tabs" }],
+      window: { left: "tree" } } },
   "/diagnostic-plugins.json": {},
 };
 
@@ -26,9 +28,14 @@ test("an environment without sidebar overrides supplies normalized plugin defaul
   await loadEnvironment();
   const {section}=await import("../registry.js");
   assert.deepEqual(section("sections.tree").module,{horizontal:"/modules/@fixture/sections/ui/tree-horizontal.js",vertical:"/modules/@fixture/sections/ui/tree-vertical.js"});
-  assert.deepEqual(defaults.sets, [{ id: "fixture.main", title: "Main", sections: ["sections.tree"], layout: "list" }]);
+  assert.deepEqual(defaults.sets, [
+    { id: "fixture.main", title: "Main", sections: ["sections.tree"], layout: "list" },
+    { id: "sections.tree", title: "Tree", sections: ["sections.tree"], layout: "tabs" },
+  ]);
   assert.deepEqual(defaults.links, [
     { place: "card-left", plugin: "fixture", set: "fixture.main" },
     { place: "card-top", plugin: "fixture", set: "fixture.main" },
+    { place: "window-right", plugin: "fixture", set: "fixture.main" },
+    { place: "window-left", plugin: "sections", set: "sections.tree" },
   ]);
 });

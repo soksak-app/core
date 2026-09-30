@@ -2,6 +2,8 @@
 
 [한국어](external-sidebars.ko.md)
 
+Window declaration validation and normalization are implemented under V5-117-1-3-2-1. Window links require registered plugins but not surfaces; card links still require surfaces. Workbench rendering and commands remain unimplemented. Old plugin left/right inputs remain accepted until V5-117-1-3-2-2 removes them together with the existing application callers; this is an unresolved replacement, not a compatibility alias.
+
 This contract replaces focus-dependent window sidebar selection and sidebar entities named rail. Implementation and application acceptance remain pending under V5-117-1-3 in [features](../features.md). The current implementation still contains the old selection and positioning paths.
 
 ## Declaration and choices
