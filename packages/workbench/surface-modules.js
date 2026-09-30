@@ -179,19 +179,21 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
           onSettingsChange(() => listener(pluginSettings(surface.pluginId))) },
       },
     });
-    const exposure = registerSurfaceExposure({ root: shadow, expose: context.exposure, view,
-      declarations: registry.surfaceDeclarations() });
     const state = context.status.subscribe(onState);
     onState(context.status.read());
-    entry = { slot, host, shadow, context, state, exposure, composition: compositionReady.promise,
+    entry = { slot, host, shadow, context, state, exposure: null, composition: compositionReady.promise,
       mounted: null, ready: null, authorized: false, disposed: false, surfaceId: surface.surfaceId,
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
-    entry.mounted = Promise.all([exposure.ready, native ? authorizationFor(surface.surfaceId) : Promise.resolve()])
-      .then(() => {
+    entry.mounted = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())
+      .then(async () => {
+        // 승인 대기 중 제거된 표면의 등록과 모듈을 시작하지 않는다.
+        if (entry.disposed) return null;
         entry.authorized = true;
-        // A tab can be removed while its first native authorization is pending. Do not
-        // start a module for a surface that the current page no longer owns.
+        // 코어와 플러그인의 등록을 같은 네이티브 승인 뒤에 시작한다.
+        entry.exposure = registerSurfaceExposure({ root: shadow, expose: context.exposure, view,
+          declarations: registry.surfaceDeclarations() });
+        await entry.exposure.ready;
         if (entry.disposed) return null;
         return import(surface.module);
       }).then((module) => {
@@ -268,7 +270,7 @@ export async function disposeSurface(surfaceId) {
     // commit alive merely because its module has never been allowed to mount.
     if (entry.module) await entry.module.dispose();
     else if (entry.authorized) await entry.ready;
-    entry.exposure.dispose();
+    if (entry.exposure) entry.exposure.dispose();
     await entry.context.exposure.dispose();
     entry.state();
     entry.host.removeAttribute("data-surface-suspended");
