@@ -128,3 +128,16 @@ test("a state module missing from files is rejected", (t) => {
   assert.throws(() => execFileSync(process.execPath, [STAGE, "out"], { cwd: missing, stdio: "pipe" }),
     /side state module ui\/state\.js must be listed in files/);
 });
+
+test('both section orientation modules are staged and each must be published', (t) => {
+  const sections = [{id:'side.list',name:'List',module:{horizontal:'ui/horizontal.js',vertical:'ui/vertical.js'}}];
+  const app = sectionApp(t,['plugin.json','ui/horizontal.js','ui/vertical.js'],{sections});
+  const plugin = join(app,'node_modules/@fixture/side');
+  for(const mode of ['horizontal','vertical']) writeFileSync(join(plugin,`ui/${mode}.js`),`export function mount() {}\n`);
+  stage(app);
+  for(const mode of ['horizontal','vertical']) assert.equal(existsSync(join(app,`out/modules/@fixture/side/ui/${mode}.js`)),true);
+  for(const missing of ['horizontal','vertical']) {
+    writeFileSync(join(plugin,'package.json'),JSON.stringify({name:'@fixture/side',files:['plugin.json',`ui/${missing==='horizontal'?'vertical':'horizontal'}.js`]}));
+    assert.throws(()=>stage(app),new RegExp(`section side.list module ui/${missing}\\.js must be listed in files`));
+  }
+});

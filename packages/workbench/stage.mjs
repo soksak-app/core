@@ -106,8 +106,11 @@ for (const name of environment.plugins) {
   const published = readJson(join(dir, "package.json")).files;
   // 기본값: sections 는 plugin.json 의 선택 필드다(docs/spec/plugins.md).
   for (const section of manifest.sections ?? []) {
-    if (!published.some((file) => section.module === file || section.module.startsWith(`${file}/`))) {
-      throw new Error(`${name}: section ${section.id} module ${section.module} must be listed in files`);
+    const modules = typeof section.module === "string" ? [section.module] : [section.module.horizontal, section.module.vertical];
+    for (const module of modules) {
+      if (!published.some((file) => module === file || module.startsWith(`${file}/`))) {
+        throw new Error(`${name}: section ${section.id} module ${module} must be listed in files`);
+      }
     }
   }
   const state = manifest.state?.module;

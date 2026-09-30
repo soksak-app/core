@@ -333,9 +333,16 @@ export function validateManifest(manifest) {
       if (seen.has(section.id)) throw new Error(`${where}: duplicate section ${section.id}`);
       seen.add(section.id);
       if (!isText(section.name)) throw new Error(`${where}: section ${section.id} requires a name`);
-      if (!isText(section.module)) throw new Error(`${where}: section ${section.id} requires a module`);
-      if (section.module.startsWith("/") || section.module.split("/").includes("..") || !section.module.endsWith(".js")) {
-        throw new Error(`${where}: section ${section.id} module must be a JavaScript path inside the package`);
+      const module = section.module;
+      if (!isObject(module) && !isText(module)) throw new Error(`${where}: section ${section.id} requires a module`);
+      if (isObject(module)) {
+        only(`${where} section ${section.id} module`, module, ["horizontal", "vertical"]);
+      }
+      const paths = isObject(module) ? [module.horizontal, module.vertical] : [module];
+      for (const path of paths) {
+        if (!isText(path) || path.startsWith("/") || path.split("/").includes("..") || !path.endsWith(".js")) {
+          throw new Error(`${where}: section ${section.id} module must be a JavaScript path inside the package`);
+        }
       }
       // fill 은 list 레이아웃에서 남은 높이를 받는 섹션이다(docs/spec/plugins.md#sections).
       if (section.fill !== undefined && typeof section.fill !== "boolean") {
