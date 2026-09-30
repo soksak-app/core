@@ -25,8 +25,21 @@ static void check(BOOL condition, NSString *message) {
 
 // 이벤트를 JSON 형태로 모은다
 static NSMutableArray *collectedEvents = nil;
+// 두 영역의 초점 전환을 가릴 때 쓰는 별도 수집기들(V5-114 의 A->B 검사).
+static NSMutableArray *eventsA16 = nil;
+static NSMutableArray *eventsB16 = nil;
 
 static void testEvent(void *context, const char *json) {
+    if (context == (void *)1) {
+        if (!eventsA16) eventsA16 = [NSMutableArray new];
+        [eventsA16 addObject:[NSString stringWithUTF8String:json]];
+        return;
+    }
+    if (context == (void *)2) {
+        if (!eventsB16) eventsB16 = [NSMutableArray new];
+        [eventsB16 addObject:[NSString stringWithUTF8String:json]];
+        return;
+    }
     if (!collectedEvents) collectedEvents = [NSMutableArray new];
     [collectedEvents addObject:[NSString stringWithUTF8String:json]];
 }
@@ -1270,7 +1283,89 @@ int main(int argc, char **argv) { @autoreleasepool {
         }
         check(reportedOutsideLoss15,
             @"press focus: a pointer press outside the region frame still reports the focus loss");
+
         sp_region_close(region15);
+    }
+
+    // 영역 A에 초점이 있는 상태에서 다른 영역 B의 프레임 안을 누르면, 눌림은 B 를 뚫고 페이지
+    // 웹뷰로 가며 NSWindow 가 웹뷰를 첫 응답자로 만든다. 이 창 동안 페이지가 키보드 초점을
+    // 얻어 activeElement 인 브라우저 주소창에 focus 가 재발화된다(V5-114 의 도약). 올바른
+    // 동작: A 는 초점 상실을 보고하고(실제 전이다) 응답자는 B 로 곧바로 옮겨간다 — 페이지
+    // 웹뷰가 응답자를 가진 창이 없어야 한다.
+    if (activation) {
+        // 앞 구간의 마지막 mouse-up 이 대기열에 남아 이 구간 도중에 처리되면 응답자 전환이
+        // 눌림이 아닌 뗌 중에 일어난다. 눌림 중의 전환만 재기 위해 대기열을 먼저 비운다.
+        while (YES) {
+            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
+                untilDate:[NSDate dateWithTimeIntervalSinceNow:0.1] inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (!pending) break;
+            [NSApp sendEvent:pending];
+        }
+        void *regionA16 = sp_region_create(surface, "testA16", testEvent, (void *)1);
+        void *regionB16 = sp_region_create(surface, "testB16", testEvent, (void *)2);
+        // 배치 인자는 인셋(left, top, right, bottom)이다. B 는 test15 와 같은 자리(눌림 라우팅이
+        // 검증된 좌표), A 는 아래쪽 띠로 겹치지 않게 나눈다.
+        sp_region_place(regionA16, 100, 20, 100, 340, true);
+        sp_region_place(regionB16, 100, 150, 100, 50, true);
+        // 활성화·선행 창을 먼저 마친 뒤 A 에 초점을 둔다 — 활성화가 응답자를 다시 정하면
+        // A 의 resign 이 눌림이 아닌 곳에서 일어나 재현이 흐트러진다.
+        [NSApp activateIgnoringOtherApps:YES];
+        [window makeKeyAndOrderFront:nil];
+        NSDate *settleB16 = [NSDate dateWithTimeIntervalSinceNow:0.3];
+        while ([settleB16 timeIntervalSinceNow] > 0) {
+            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
+                untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05] inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (pending) [NSApp sendEvent:pending];
+        }
+        sp_region_focus(regionA16);
+        check(window.firstResponder == (NSResponder *)regionA16,
+            @"press focus A->B: region A starts as the window first responder");
+        [collectedEvents removeAllObjects];
+
+        NSView *regionViewB16 = (NSView *)regionB16;
+        NSRect frameB16 = [regionViewB16 convertRect:regionViewB16.bounds toView:nil];
+        NSPoint insideB16 = NSMakePoint(NSMidX(frameB16), NSMidY(frameB16));
+        NSEvent *downB16 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:insideB16
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:3 clickCount:1 pressure:1];
+        NSEvent *upB16 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:insideB16
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:3 clickCount:1 pressure:0];
+        [NSApp postEvent:downB16 atStart:NO];
+        [NSApp postEvent:upB16 atStart:NO];
+        NSDate *drainB16 = [NSDate dateWithTimeIntervalSinceNow:2.0];
+        while ([drainB16 timeIntervalSinceNow] > 0) {
+            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]
+                inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (pending) [NSApp sendEvent:pending];
+        }
+        // 비동기 반환(makeFirstResponder) 이 흐르도록 대기열을 한 번 더 돈다.
+        NSDate *drainB16b = [NSDate dateWithTimeIntervalSinceNow:0.3];
+        while ([drainB16b timeIntervalSinceNow] > 0) {
+            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]
+                inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (pending) [NSApp sendEvent:pending];
+        }
+
+        BOOL reportedA16Loss = NO;
+        BOOL reportedB16Gain = NO;
+        for (NSString *eventStr in eventsA16) {
+            if ([eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) reportedA16Loss = YES;
+        }
+        for (NSString *eventStr in eventsB16) {
+            if ([eventStr rangeOfString:@"\"focused\":true"].location != NSNotFound) reportedB16Gain = YES;
+        }
+        check(reportedA16Loss,
+            [NSString stringWithFormat:@"press focus A->B: region A reports its focus loss (A events %@ B events %@)", eventsA16, eventsB16]);
+        NSString *who = window.firstResponder == (NSResponder *)regionA16 ? @"A"
+            : (window.firstResponder == (NSResponder *)regionB16 ? @"B" : @"other");
+        check(window.firstResponder == (NSResponder *)regionB16,
+            [NSString stringWithFormat:@"press focus A->B: the responder moves to the pressed region B, not the page webview (responder %@ at point %@)",
+                who, NSStringFromPoint(insideB16)]);
+        check(reportedB16Gain,
+            [NSString stringWithFormat:@"press focus A->B: region B reports its focus gain (events %@)", collectedEvents]);
+        sp_region_close(regionA16);
+        sp_region_close(regionB16);
     }
 
     [window close];
