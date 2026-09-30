@@ -1,8 +1,9 @@
 # macOS 공용 네이티브 라이브러리.
 #
 # src/ 의 공용 소스를 정적 라이브러리 하나로 빌드하고, 사용하는 애플리케이션이 pkg-config 로
-# 헤더와 라이브러리 위치를 찾도록 soksak-darwin.pc 를 생성한다. 위치는 .pc 파일의 디렉터리(pcfiledir)에
-# 대한 상대 경로이므로 작업 공간을 옮겨도 다시 생성하지 않고 현재 위치를 가리킨다.
+# 헤더와 라이브러리 위치를 찾도록 soksak-darwin.pc 를 생성한다. 위치는 빌드 디렉터리의 절대 경로다. 빌드마다
+# 내용을 다시 만들고 내용이 바뀔 때만 파일을 다시 쓰므로, 작업 공간을 옮기면 새 위치를 가리키고 옮기지
+# 않으면 파일이 그대로 남는다.
 #
 #   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
 #   make test             입력 주입, 창 상태, 창 단추 배치, 표시 대기, 웹뷰 초점, 문서 영역, 그림 영역 검사를 실행한다. 애플리케이션을 활성화하지 않는다
@@ -27,7 +28,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test test-activation repeat repeat-suite clean
+.PHONY: all test test-activation repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -38,13 +39,15 @@ $(LIBRARY): $(OBJECTS)
 	@rm -f $@
 	@ar rcs $@ $^
 
-$(PKGCONFIG): Makefile | $(BUILD)
+# 파일 내용은 현재 위치에서 결정되므로 매 빌드 비교한다. pkgconfig-current 는 이 비교를 요구하는 표지다.
+$(PKGCONFIG): pkgconfig-current | $(BUILD)
 	@printf '%s\n' \
 	  'Name: soksak-darwin' \
 	  'Description: Shared macOS window, webview, and surface layout code' \
 	  'Version: 0.0.1' \
-	  'Cflags: -I$${pcfiledir}/../src $(MINIMUM)' \
-	  'Libs: -L$${pcfiledir} -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM)' > $@
+	  'Cflags: -I$(CURDIR)/src $(MINIMUM)' \
+	  'Libs: -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM)' > $@.next
+	@if cmp -s $@.next $@; then rm $@.next; else mv $@.next $@; fi
 
 $(BUILD):
 	@mkdir -p $@

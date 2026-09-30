@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-10-1: generate the native pkg-config file with build-declared absolute paths instead of paths relative to `${pcfiledir}`. Every native build regenerates the content from the build directory and replaces the file only when the content differs, so a moved workspace gets current paths and an unchanged workspace keeps the file untouched. Red: the relocation test received a relative include path; Green: absolute current paths and an unchanged modification time on rebuild.
+
 - V5-117-1-3-4-7-1-2: make release verification inspect only the selected bundles. The checker read the frontend and the sidecar list from the shared staging directory, so a later staging changed the result for an unchanged bundle. It now scans every executable in `Contents/MacOS`, resolves the workbench and plugins through the application's dependencies, requires every published workbench file and the release page module verbatim in the application executable, and rejects plugin diagnostic entries and modules there. Tauri no longer compresses embedded assets, so both applications expose their frontend to this check. The release page module is a workbench file that staging copies.
 
 - G1.4-10: make the generated native pkg-config file follow a relocated workspace. `native/darwin/build/soksak-darwin.pc` stored absolute include and library paths and is regenerated only when its Makefile changes, so after the workspace moved the Wails release link searched the previous location. Write both paths relative to `${pcfiledir}`. Red: the new relocation test receives the previous paths from the unchanged Makefile; Green: the same test resolves both paths under the moved workspace.
