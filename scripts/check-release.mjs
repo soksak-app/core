@@ -5,9 +5,9 @@
 // release 실행 파일을 읽는다.
 // `make release-check` 가 release 빌드를 먼저 실행한다.
 //
-//   node scripts/check-release.mjs
+//   node scripts/check-release.mjs --wailsv3-bundle PATH --tauriv2-bundle PATH
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 
@@ -98,6 +98,18 @@ function pluginDiagnostics(app) {
 
 // CLI 로 직접 실행될 때만 검사를 수행한다.
 if (import.meta.main) {
+  const bundles = new Map();
+  const args = process.argv.slice(2);
+  for (let index = 0; index < args.length; index += 2) {
+    const option = args[index];
+    const app = APPS.find((app) => option === `--${app}-bundle`);
+    if (!app) throw new Error(`unknown release option: ${option}`);
+    if (bundles.has(app)) throw new Error(`duplicate release option: ${option}`);
+    const path = args[index + 1];
+    if (!path || path.startsWith("--")) throw new Error(`${option} requires a bundle path`);
+    bundles.set(app, resolve(path));
+  }
+  if (bundles.size !== APPS.length) throw new Error("required release bundle options: --wailsv3-bundle PATH --tauriv2-bundle PATH");
   const errors = [];
 
   for (const app of APPS) {
@@ -110,10 +122,10 @@ if (import.meta.main) {
       errors.push(...auditPluginDiagnostics(frontend, pluginDiagnostics(app)).map((error) => error.replace(ROOT, "")));
     }
     // 애플리케이션과 사이드카는 번들의 Contents/MacOS 에 있다(docs/spec/hosts.md).
-    const executables = join(ROOT, "target", "release", `soksak-${app}.app`, "Contents", "MacOS");
+    const executables = join(bundles.get(app), "Contents", "MacOS");
     const executable = join(executables, `soksak-${app}`);
     if (!existsSync(executable)) {
-      errors.push(`${relative(ROOT, executable)}: missing; run the release build first`);
+      errors.push(`${executable}: missing; run the release build first`);
       continue;
     }
     // 실행 파일은 바이트로 읽는다. 표지는 ASCII 이므로 latin1 로 해석해도 위치가 바뀌지 않는다.

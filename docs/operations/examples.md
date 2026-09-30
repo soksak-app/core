@@ -44,6 +44,8 @@ Run the four-language adapter gate with `make language-test`. It emits case-leve
 
 `make node-repeat FILE=<test> NAME=<pattern> COUNT=<n>` reports the run number and streams child test stdout/stderr while executing, stopping on the first failure. Output forwarding must preserve the child failure status, and a run without a matching passed test fails.
 
+Release verification requires the exact bundle paths: `node scripts/check-release.mjs --wailsv3-bundle PATH --tauriv2-bundle PATH`. Both options are required; unknown options, duplicate options and missing values fail before inspecting files. `make release-check` supplies `WAILS_RELEASE_BUNDLE` and `TAURI_RELEASE_BUNDLE` to this command. Override those build variables to prepare separate bundles without modifying a running bundle; the checker must inspect the same specified paths.
+
 ## Window checks
 
 The fixed-sidebar window checks restore temporary explicit card-sidebar selections before disconnecting, including after preparation fails. An explicit card `off` takes precedence over plugin defaults; use the declared `core.card.sidebar.set` command with `set: "inherit"` to clear that selection while retaining size and fold choices. To observe an existing normal window without replacing its project or settings, run `SOKSAK_APP=tauriv2 SOKSAK_CONFIG_DIR=<config-dir> pnpm -F @soksak/e2e verify:terminal-sidebar-current`. This check requires an active terminal card and a saved terminal `card-right` assignment, records normal/fullscreen/restored presentation, and retains the original tabs and settings. It does not create a fixture or repair a disabled selection.

@@ -7,7 +7,7 @@ docs-check:
 
 # release 빌드를 만들고, 스테이징된 프런트엔드와 release 실행 파일에 진단 코드가 없는지 검사한다.
 release-check: wailsv3-build-release tauriv2-build-release
-	@node scripts/check-release.mjs
+	@node scripts/check-release.mjs --wailsv3-bundle "$(WAILS_RELEASE_BUNDLE)" --tauriv2-bundle "$(TAURI_RELEASE_BUNDLE)"
 
 # 코어, 플러그인, 사이드카가 서로의 이름을 코드에 적지 않았는지 검사한다.
 boundaries:

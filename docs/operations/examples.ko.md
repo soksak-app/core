@@ -44,6 +44,8 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 
 `make node-repeat FILE=<test> NAME=<pattern> COUNT=<n>`은 회차 번호와 자식 검사의 stdout/stderr를 실행 중 출력하고 첫 실패에서 중단한다. 출력 전달은 자식의 실패 종료 상태를 보존해야 하며 일치하는 성공 검사가 없는 실행도 실패한다.
 
+release 검증은 정확한 번들 경로를 요구한다: `node scripts/check-release.mjs --wailsv3-bundle PATH --tauriv2-bundle PATH`. 두 옵션이 모두 필요하며 알 수 없는 옵션·중복 옵션·빠진 값은 파일 검사 전에 실패한다. `make release-check`는 `WAILS_RELEASE_BUNDLE`과 `TAURI_RELEASE_BUNDLE`을 이 명령에 전달한다. 해당 빌드 변수를 지정하면 실행 중인 번들을 변경하지 않고 별도 번들을 준비하며 검사기는 동일하게 지정한 경로를 검사해야 한다.
+
 ## 창 검사
 
 고정 사이드바 창 검사는 준비 중 실패한 경우를 포함해 연결 종료 전에 임시 카드 사이드바 명시 선택을 복원한다. 카드의 명시적 `off`는 플러그인 기본값보다 우선한다. 선언된 `core.card.sidebar.set` 명령에 `set: "inherit"`를 보내면 크기와 접힘 선택을 보존하며 명시 선택을 해제한다. 기존 일반 창의 프로젝트·설정을 교체하지 않고 관측하려면 `SOKSAK_APP=tauriv2 SOKSAK_CONFIG_DIR=<config-dir> pnpm -F @soksak/e2e verify:terminal-sidebar-current`를 실행한다. 활성 터미널 카드와 저장된 터미널 `card-right` 할당이 필요하며 일반·전체화면·복귀 표시를 녹화하고 기존 탭과 설정을 보존한다. 이 검사는 fixture를 만들거나 비활성 선택을 복구하지 않는다.
