@@ -28,7 +28,7 @@ const TITLE_INK = 1;
 const ROW_INK = 5.5;
 const STYLE = `
 .set__section[data-section="files.tree"] > .set__body{padding:0;overflow:hidden}
-.files-tree{display:flex;flex-direction:column;height:100%;min-width:0}
+.files-tree{display:flex;flex-direction:column;height:100%;min-width:0;min-height:48px}
 .files-tree__head{display:flex;align-items:center;gap:1px;flex:0 0 auto;height:28px;padding:0 ${GUTTER - 4}px 0 ${GUTTER + CHEVRON_INK - TITLE_INK}px}
 .files-tree__title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
 .files-tree__button{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--r-xs);
@@ -36,7 +36,7 @@ const STYLE = `
 .files-tree__button svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
 .files-tree__button:hover:not(:disabled){background:var(--inset);color:var(--fg)}
 .files-tree__button:disabled{opacity:.4;cursor:default}
-.files-tree__holder{flex:1 1 auto;min-height:0}
+.files-tree__holder{flex:1 1 auto;min-height:20px}
 .files-tree__message{padding:0 ${GUTTER + CHEVRON_INK - TITLE_INK}px;color:var(--muted)}
 `;
 

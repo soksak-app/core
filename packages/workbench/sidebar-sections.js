@@ -1,7 +1,7 @@
 // 사이드바가 보이는 세트의 섹션을 그린다(docs/spec/plugins.md#sections).
 //
-// 사이드바는 그것을 담은 카드의 id 로 식별한다. 레일, left, right 카드와 inset 사이드바를 가진 카드다.
-// 세트의 layout 이 list 이면 모든 섹션을 머리와 함께 쌓고, tabs 이면 고른 탭의 섹션 하나만 마운트한다.
+// 사이드바의 id마다 섹션 선택과 접힘을 유지한다.
+// list 는 방향에 따라 모든 섹션을 배치하고 tabs 는 고른 섹션 하나만 마운트한다.
 // 탭 선택과 섹션 접힘은 사이드바마다 이 모듈이 보관한다.
 import { bind } from "./commands.js";
 import { icon } from "./icons.js";
@@ -56,6 +56,7 @@ function sectionContext(entry, context) {
   return {
     card: context.card,
     surface: context.surface,
+    orientation: context.orientation,
     // 코어 아이콘. 표면 문맥의 icon 과 같다(docs/spec/plugins.md#icons).
     icon,
     status(name, fn) {
@@ -78,7 +79,8 @@ function sectionContext(entry, context) {
 
 function mount(entry, context) {
   if (entry.mount) return;
-  const mountOnce = entry.mount = import(entry.section.module).then(async (module) => {
+  const path = typeof entry.section.module === "string" ? entry.section.module : entry.section.module[context.orientation];
+  const mountOnce = entry.mount = import(path).then(async (module) => {
     if (typeof module.mount !== "function") throw new TypeError(`section ${entry.section.id} module has no mount()`);
     const result = await module.mount(entry.body, sectionContext(entry, context));
     if (!result || typeof result.dispose !== "function") {
@@ -108,6 +110,8 @@ export function clearSet(container) {
   drawn.delete(container);
   container.replaceChildren();
   delete container.dataset.sidebar;
+  delete container.dataset.orientation;
+  delete container.dataset.layout;
   delete container.dataset.expose;
   notify();
 }
@@ -142,19 +146,22 @@ function apply(record) {
  * 세트, 레이아웃, 섹션 목록, 문맥이 같으면 요소와 마운트를 유지한다.
  */
 export function drawSet(container, sidebar, set, context) {
+  if (context.orientation !== "horizontal" && context.orientation !== "vertical") throw new Error("section orientation must be horizontal or vertical");
   sweep();
   if (set.layout !== "list" && set.layout !== "tabs") throw new Error(`set ${set.id} layout must be list or tabs`);
   const sections = set.sections.map(section);
   const choice = choiceOf(sidebar);
   // 기본값: 섹션이 없는 세트에는 고를 탭이 없다(null).
   if (set.layout === "tabs" && !sections.some((s) => s.id === choice.tab)) choice.tab = sections[0]?.id ?? null;
-  const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.surface]);
+  const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.surface, context.orientation]);
   let record = drawn.get(container);
   if (record?.key !== key) {
     if (record) clearSet(container);
     record = { sidebar, key, set: set.id, layout: set.layout, context, entries: [] };
     drawn.set(container, record);
     container.dataset.sidebar = sidebar;
+    container.dataset.orientation = context.orientation;
+    container.dataset.layout = set.layout;
     container.dataset.expose = "core.sidebar";
     delete container.dataset.html;
     // 세트 제목 줄은 없다. 섹션이 사이드바 맨 위에서 시작한다.
@@ -268,7 +275,7 @@ export function sidebarsState() {
     .map((record) => {
       const choice = choiceOf(record.sidebar);
       return {
-        sidebar: record.sidebar, set: record.set, layout: record.layout,
+        sidebar: record.sidebar, set: record.set, layout: record.layout, orientation: record.context.orientation,
         tab: record.layout === "tabs" ? choice.tab : null,
         card: record.context.card, surface: record.context.surface,
         sections: record.entries.map((entry) => ({

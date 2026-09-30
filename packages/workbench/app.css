@@ -548,5 +548,10 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set__body li button:hover{color:var(--fg);text-decoration:underline}
 .set__section{flex:0 0 auto}
 /* fill 섹션은 다른 섹션이 쓰고 남은 높이를 나눠 갖고 본문을 그 안에서 스크롤한다. 접히면 머리만 남는다. */
-.set__section[data-fill=true]:not([data-folded=true]):not([hidden]){flex:1 1 0;min-height:0;display:flex;flex-direction:column}
-.set__section[data-fill=true]:not([data-folded=true]) > .set__body{flex:1 1 auto;min-height:0;overflow:auto}
+.set__section[data-fill=true]:not([data-folded=true]):not([hidden]){flex:1 1 0;min-height:min-content;display:flex;flex-direction:column}
+.set__section[data-fill=true]:not([data-folded=true]) > .set__body{flex:1 1 auto;min-height:min-content;overflow:auto}
+/* 가로 목록은 같은 높이 안에서 섹션 폭을 나누고 각 본문을 스크롤한다. */
+.set[data-orientation=horizontal][data-layout=list]{flex-direction:row;min-width:0}
+.set[data-orientation=horizontal][data-layout=list] > .set__section:not([data-folded=true]){flex:1 1 0;min-width:0;min-height:0;display:flex;flex-direction:column}
+.set[data-orientation=horizontal][data-layout=list] > .set__section > .set__body{flex:1 1 auto;min-height:0;overflow:auto}
+.set[data-orientation=horizontal][data-layout=list] > .set__section + .set__section{border-left:var(--bw) solid var(--edge)}

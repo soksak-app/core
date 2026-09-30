@@ -68,3 +68,22 @@ export function sizeSidebar(card, side, size, defaults, linked) {
   }
   store(card, side, { ...state(card, side), size });
 }
+
+// 저장된 펼침 선택을 현재 카드 공간에 적용한다. 부족한 축의 요청만 자동으로 접는다.
+export function presentSidebars(requested, rect, metrics) {
+  const values=[rect.w,rect.h,metrics.header,metrics.footer,metrics.border,metrics.divider,metrics.minimum];
+  if(values.some(value=>!Number.isFinite(value)||value<0)||metrics.minimum===0) throw new Error('invalid sidebar presentation geometry');
+  const extent=side=>requested[side]?(requested[side].collapsed?metrics.divider:requested[side].size):0;
+  const insufficient={
+    width:rect.w-2*metrics.border-extent('left')-extent('right')<metrics.minimum,
+    height:rect.h-2*metrics.border-metrics.header-metrics.footer-extent('top')-extent('bottom')<metrics.minimum,
+  };
+  return Object.fromEntries(Object.entries(requested).map(([side,state])=>{
+    assertSide(side);
+    if(!state||!Number.isFinite(state.size)||state.size<0||typeof state.collapsed!=='boolean') throw new Error('invalid sidebar presentation state');
+    const axis=side==='left'||side==='right'?'width':'height';
+    const autoCollapsed=!state.collapsed&&insufficient[axis];
+    return [side,{...state,requestedCollapsed:state.collapsed,collapsed:state.collapsed||autoCollapsed,
+      autoCollapsed,collapseReason:autoCollapsed?`insufficient-${axis}`:null}];
+  }));
+}

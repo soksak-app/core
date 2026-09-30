@@ -138,7 +138,7 @@
       },
       {
         "name": "core.sidebars",
-        "description": "The drawn sidebars in document order: the sidebar (the id of the card that holds it), its set, layout, selected tab or null, the card and active tab its sections receive, and each section's id, name, fold state, whether its module is mounted, its mount error or null, the text content the module drew, the number of its core.sidebar.section.control elements, and whether its tab text is clipped (always false in list layout).",
+        "description": "The drawn sidebars in document order: the sidebar (the id of the card that holds it), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive, and each section's id, name, fold state, whether its module is mounted, its mount error or null, the text content the module drew, the number of its core.sidebar.section.control elements, and whether its tab text is clipped (always false in list layout).",
         "schema": {
           "type": "array",
           "items": {
@@ -157,6 +157,7 @@
                   "tabs"
                 ]
               },
+              "orientation": { "type": "string", "enum": ["horizontal", "vertical"] },
               "tab": {
                 "type": [
                   "string",
@@ -216,7 +217,7 @@
       },
       {
         "name": "core.grid",
-        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label and its notice), tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, and collapsed state; fullscreen is the presented card ID or null, and card rectangles describe current presentation.",
+        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label and its notice), tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation.",
         "schema": {
           "type": [
             "object",

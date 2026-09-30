@@ -132,7 +132,9 @@ for (const name of readdirSync(PLUGINS)) {
   const diagnostics = existsSync(diagnosticsPath) ? readJson(diagnosticsPath).exposes : {};
   const exposes = Object.fromEntries(["status", "commands", "dom"].map((key) =>
     [key, [...(manifest.exposes?.[key] ?? []), ...(diagnostics[key] ?? [])]]));
-  const sections = new Set((manifest.sections ?? []).map((section) => join(PLUGINS, name, section.module)));
+  const sections = new Set((manifest.sections ?? []).flatMap((section) =>
+    (typeof section.module === "string" ? [section.module] : [section.module.horizontal, section.module.vertical])
+      .map((module) => join(PLUGINS, name, module))));
   check({ owner: manifest.id, exposes, sources, registrations: [], sections, core: coreDeclared });
 }
 

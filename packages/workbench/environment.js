@@ -70,7 +70,11 @@ export async function loadEnvironment() {
     }
     // 섹션 모듈은 표면 모듈처럼 그 패키지 경로에서 불러온다.
     // 기본값: sections 는 plugin.json 의 선택 필드이며 없으면 섹션이 없다.
-    for (const section of manifest.sections ?? []) registerSection({ ...section, module: `/${modulePath(name, section.module)}` });
+    for (const section of manifest.sections ?? []) {
+      const module = typeof section.module === "string" ? `/${modulePath(name, section.module)}`
+        : Object.fromEntries(Object.entries(section.module).map(([mode, path]) => [mode, `/${modulePath(name, path)}`]));
+      registerSection({ ...section, module });
+    }
     if (exposes) exposure.declare(manifest.id, exposes);
     if (manifest.state) {
       registerState({ plugin: manifest.id, module: `/${modulePath(name, manifest.state.module)}`,

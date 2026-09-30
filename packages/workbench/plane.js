@@ -12,7 +12,7 @@ import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./side
 import { bindSidebarGrip } from "./sidebar-grip.js";
 import { targetCardInsets } from "./card-insets.js";
 import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.js";
-import { SIDEBAR_SIDES, effectiveSidebar, resolveSidebarSet, setSidebar, sizeSidebar, toggleSidebar } from "./card-sidebars.js";
+import { SIDEBAR_SIDES, presentSidebars, effectiveSidebar, resolveSidebarSet, setSidebar, sizeSidebar, toggleSidebar } from "./card-sidebars.js";
 import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
@@ -212,7 +212,7 @@ function createCard(card) {
 const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
 const setHTML = (el, html) => { if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; } };
 
-function updateCard(el, card) {
+function updateCard(el, card, rect) {
   const place = isPlace(card.id) ? card.id : null;
   // 카드 내용의 실제 글자 배율(프레임 배율 × 카드 배율). 배율이 1 이면 zoom 을 선언하지 않는다. 값이 1 인
   // zoom 선언만으로도 WebKit 이 표면 내용을 다시 그리는 비용이 커져 끌기 중 표시가 줄었다.
@@ -245,7 +245,7 @@ function updateCard(el, card) {
       // 좌측 사이드바는 카드에 속하지 않는다. 다른 사이드바는 포커스한 카드와 그 활성 탭을 섹션에 넘긴다.
       const owner = place === "left" ? null : grid.card(focusedId);
       // 기본값: 좌측 사이드바는 카드에 속하지 않으므로 카드와 표면이 없다(null).
-      drawSet(holder, card.id, set, { card: owner?.id ?? null, surface: activeTab(owner)?.id ?? null });
+      drawSet(holder, card.id, set, { card: owner?.id ?? null, surface: activeTab(owner)?.id ?? null, orientation: "vertical" });
     } else {
       clearSet(holder);
       setHTML(holder, '<p class="set__empty">포커스된 플러그인 없음</p>');
@@ -259,7 +259,7 @@ function updateCard(el, card) {
     return;
   }
 
-  drawCardSidebars(el, card);
+  drawCardSidebars(el, card, rect);
   const tabs = tabsOf(card);
   const key = tabs.map((t) => `${t.id}\u0000${tabName(t)}`).join("\u0001");
   let ham = chrome.querySelector(".chrome__ham");
@@ -812,14 +812,18 @@ function linkedCardSet(card, side) {
   const kind = activeTab(card)?.plugin;
   return kind ? linkedSet(`card-${side}`, kind) : null;
 }
-export function cardSidebars(card) {
+export function cardSidebars(card, rect) {
   if (!card.data) return {};
   const report = {};
   for (const side of SIDEBAR_SIDES) {
     const current = effectiveSidebar(card, side, sidebarDefaults(), linkedCardSet(card, side));
     if (current !== null) report[side] = current;
   }
-  return report;
+  const el = cardElement(card.id);
+  if (!el || !rect) throw new Error(`card ${card.id} has no sidebar presentation geometry`);
+  const style = getComputedStyle(el);
+  return presentSidebars(report, rect, { header: HEADER, footer: FOOTER, border: parseFloat(style.getPropertyValue("--bw")),
+    divider: parseFloat(style.getPropertyValue("--divider")), minimum: grid.minSize });
 }
 export function assignSidebar(id, side, set) {
   setSidebar(sidebarCard(id), side, set, sidebarSets());
@@ -837,13 +841,14 @@ export function resizeSidebar(id, side, size) {
 }
 
 /** 카드의 사방 사이드바를 그린다. 없는 변은 공간을 차지하지 않는다. */
-function drawCardSidebars(el, card) {
+function drawCardSidebars(el, card, rect) {
   if (!card.data) return;
   const defaults = sidebarDefaults();
   const sets = sidebarSets();
+  const presentation = cardSidebars(card, rect);
   for (const side of SIDEBAR_SIDES) {
     const existing = el.querySelector(`:scope > .card-sidebar[data-side-of="${side}"]`);
-    const state = effectiveSidebar(card, side, defaults, linkedCardSet(card, side));
+    const state = presentation[side] ?? null;
     const set = resolveSidebarSet(card, side, sets, defaults, linkedCardSet(card, side));
     if (state === null || set === null) {
       if (existing) clearSet(existing.querySelector(".set"));
@@ -871,12 +876,12 @@ function drawCardSidebars(el, card) {
     }
     const handle = body.querySelector(".card-sidebar__grip");
     mark(handle, "core.card.sidebar.size", { card: card.id, side });
-    handle.title = state.collapsed ? `눌러 ${side} 사이드바 펼치기` : `끌어 크기 바꾸기 · 눌러 ${side} 사이드바 접기`;
+    handle.title = state.autoCollapsed ? `공간 부족으로 ${side} 사이드바 자동 접힘` : state.collapsed ? `눌러 ${side} 사이드바 펼치기` : `끌어 크기 바꾸기 · 눌러 ${side} 사이드바 접기`;
     el.dataset[`sidebar${side[0].toUpperCase()}${side.slice(1)}`] = state.collapsed ? "folded" : "open";
     el.style.setProperty(`--p${side[0]}`, state.collapsed ? "var(--divider)" : `${state.size}px`);
     // 기본값: 탭 없는 카드의 사이드바 섹션에는 표면 문맥이 없다(null) — 좌측 창 사이드바와 같은 문맥이다.
     const surface = activeTab(card) === null || activeTab(card) === undefined ? null : activeTab(card).id;
-    drawSet(body.querySelector(".set"), `${card.id}:${side}`, set, { card: card.id, surface });
+    drawSet(body.querySelector(".set"), `${card.id}:${side}`, set, { card: card.id, surface, orientation: side === "top" || side === "bottom" ? "horizontal" : "vertical" });
   }
 }
 
@@ -1278,7 +1283,7 @@ export function onLayout(fn) {
  * 앉히라고 호스트에 알리게 된다. 흐림도 같은 이유로 여기서 전달한다. 포커스는 그리기
  * 전에 이미 이동했으므로, DOM 에서 읽으면 지난 포커스의 흐림을 게시한다.
  */
-function seats() {
+function seats(rects) {
   const out = new Map();
   for (const card of grid.cards) {
     if (isPlace(card.id)) continue;
@@ -1288,7 +1293,7 @@ function seats() {
     if (slot) {
       const folded = parseFloat(getComputedStyle(el).getPropertyValue("--divider"));
       if (!Number.isFinite(folded) || folded < 0) throw new Error("invalid sidebar divider width");
-      const effective = cardSidebars(card);
+      const effective = cardSidebars(card, rects.get(card.id));
       const bands = Object.fromEntries(SIDEBAR_SIDES.map(side => {
         const state = effective[side];
         return [side, state ? (state.collapsed ? folded : state.size) : 0];
@@ -1318,7 +1323,7 @@ function build(kept) {
     // 판은 stage 안쪽으로 이 값만큼 들어와 있다. 호스트만 아는 값이므로 뷰에 전달해야
     // 판 가장자리에 닿는 선이 stage 경계까지 이어진다.
     bleed: stagePad(),
-    commit: (made, draw) => layouter ? layouter(made, draw, seats()) : draw(),
+    commit: (made, draw) => layouter ? layouter(made, draw, seats(made)) : draw(),
     // 판의 렌더는 뷰가 그리는 것과 이 문서가 그리는 것으로 이루어진다. onChange 는
     // 뷰가 그린 직후에 발생하므로, 나머지를 여기서 그리고 그 뒤에 수신자를 호출한다.
     onChange: (reason) => {

@@ -93,3 +93,31 @@ test("an open sidebar keeps its whole divider input area inside the sidebar", as
     } finally {dom.window.close();}
   }
 });
+
+test('presentation folds an insufficient axis and restores expansion without changing saved choices',()=>{
+ const requested=Object.fromEntries(['top','bottom','left','right'].map(side=>[side,{set:'first',size:120,collapsed:false}]));
+ const before=structuredClone(requested);
+ const metrics={header:32,footer:22,border:1,divider:6,minimum:96};
+ const narrow=model.presentSidebars(requested,{w:984,h:343.5},metrics);
+ for(const side of ['top','bottom']) {
+  assert.equal(narrow[side].collapsed,true);
+  assert.equal(narrow[side].requestedCollapsed,false);
+  assert.equal(narrow[side].autoCollapsed,true);
+  assert.equal(narrow[side].collapseReason,'insufficient-height');
+ }
+ for(const side of ['left','right'])assert.equal(narrow[side].collapsed,false);
+ const fullscreen=model.presentSidebars(requested,{w:1186,h:670},metrics);
+ for(const side of Object.keys(requested))assert.equal(fullscreen[side].collapsed,false);
+ requested.left.collapsed=true;
+ assert.equal(model.presentSidebars(requested,{w:1186,h:670},metrics).left.requestedCollapsed,true);
+ assert.deepEqual(before.top,requested.top);
+ assert.deepEqual(before.bottom,requested.bottom);
+});
+
+test('presentation uses the inclusive minimum boundary and rejects invalid geometry',()=>{
+ const states={left:{set:'first',size:120,collapsed:false},right:{set:'first',size:120,collapsed:false}};
+ const metrics={header:32,footer:22,border:1,divider:6,minimum:96};
+ assert.equal(model.presentSidebars(states,{w:338,h:400},metrics).left.collapsed,false);
+ assert.equal(model.presentSidebars(states,{w:337.5,h:400},metrics).left.collapseReason,'insufficient-width');
+ for(const rect of [{w:NaN,h:400},{w:-1,h:400},{w:400,h:Infinity}])assert.throws(()=>model.presentSidebars(states,rect,metrics),/invalid sidebar presentation/);
+});

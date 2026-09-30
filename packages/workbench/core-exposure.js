@@ -156,7 +156,7 @@ function gridState() {
       tabs: tabs.map(({ id, plugin, title }) => ({ id, plugin, title, label: tabLabel(id), notice: tabNotice(id) })),
       active: tabs.length ? activeTab(card).id : null,
       acts: cardActs(card.id),
-      sidebars: cardSidebars(card),
+      sidebars: cardSidebars(card, presentedCardRect(card.id)),
     };
   }).filter(Boolean);
   const lines = (axis) => grid.lines(axis).map((_, k) => grid.boundaryPos(axis, k));

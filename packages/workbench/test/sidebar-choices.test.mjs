@@ -25,7 +25,7 @@ test("the selected tab and folded sections are reported for saving and restored 
   tabs.className = "set";
   list.className = "set";
   document.body.append(tabs, list);
-  const context = { card: null, surface: null };
+  const context = { orientation: "vertical", card: null, surface: null };
   sections.drawSet(tabs, "rail-probe", { id: "set-t", title: "T", sections: ["probe.one", "probe.two"], layout: "tabs" }, context);
   sections.drawSet(list, "left", { id: "set-l", title: "L", sections: ["probe.one", "probe.two"], layout: "list" }, context);
   let saved = 0;

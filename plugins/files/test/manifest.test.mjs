@@ -31,22 +31,22 @@ const element = (tag) => ({ tag, children: [], dataset: {}, className: "", style
   replaceChildren(...items) { this.children = []; this._text = ""; this.append(...items); },
   remove() { this.parent.children.splice(this.parent.children.indexOf(this), 1); } });
 
-async function mountSection(id) {
+async function mountSection(id, orientation = "vertical") {
   const section = manifest.sections.find((item) => item.id === id);
   globalThis.document = { createElement: element };
   const root = element("div");
   const observers = new Map();
   const bound = [];
-  const context = { card: null, surface: null,
+  const context = { card: null, surface: null, orientation,
     status(name, fn) { observers.set(name, fn); return () => observers.delete(name); },
     bind(el, name, params) { bound.push({ el, name, params }); return el; } };
-  const mounted = await (await import(`../${section.module}`)).mount(root, context);
+  const mounted = await (await import(`../${typeof section.module === "string" ? section.module : section.module[orientation]}`)).mount(root, context);
   const send = (name, value, source = "state") => { bound.length = 0; observers.get(name)(value, source); };
   return { root, observers, bound, send, dispose: () => { mounted.dispose(); delete globalThis.document; } };
 }
 
 test("every section and the state module are published", () => {
-  for (const module of [...manifest.sections.map((section) => section.module), manifest.state.module]) {
+  for (const module of [...manifest.sections.flatMap((section) => typeof section.module === "string" ? [section.module] : Object.values(section.module)), manifest.state.module]) {
     assert.ok(existsSync(new URL(`../${module}`, import.meta.url)), module);
     assert.ok(pkg.files.some((entry) => module === entry || module.startsWith(`${entry}/`)), module);
   }
@@ -67,4 +67,59 @@ test("the bookmarks section lists files.bookmarks with remove controls", async (
   assert.deepEqual(s.bound.map(({ name, params }) => [name, params]), [["files.bookmarks.remove", { path: "a.txt" }]]);
   s.dispose();
   assert.equal(s.observers.size, 0);
+});
+
+test('file sections declare separate horizontal and vertical implementations',()=>{
+ for(const id of ['files.tree','files.bookmarks']) {
+  const section=manifest.sections.find(item=>item.id===id);
+  assert.equal(typeof section.module,'object',`${id} needs two implementations`);
+  assert.notEqual(section.module.horizontal,section.module.vertical);
+ }
+});
+
+test('horizontal file output exposes every path and directory/select commands and cleans up',async()=>{
+ const s=await mountSection('files.tree','horizontal');
+ try {
+  s.send('files.tree',{root:'/project',error:null,entries:[{path:'src',name:'src',directory:true,expanded:false,depth:0},{path:'readme.md',name:'readme.md',directory:false,expanded:false,depth:0}]});
+  assert.ok(s.root.textContent.includes('src'));
+  assert.ok(s.root.textContent.includes('readme.md'));
+  assert.ok(s.bound.some(item=>item.name==='files.tree.toggle'&&item.params.path==='src'));
+  assert.ok(s.bound.some(item=>item.name==='files.select'&&item.params.path==='readme.md'));
+  s.send('files.tree',{root:'/project',error:'listing failed',entries:[]});
+  assert.ok(s.root.textContent.includes('listing failed'));
+ } finally {s.dispose();}
+ assert.equal(s.observers.size,0);
+});
+
+test('horizontal bookmarks retain all paths and declared removal commands',async()=>{
+ const s=await mountSection('files.bookmarks','horizontal');
+ try {
+  s.send('files.bookmarks',['a.txt','b.txt']);
+  assert.ok(s.root.textContent.includes('a.txt'));assert.ok(s.root.textContent.includes('b.txt'));
+  assert.deepEqual(s.bound.map(({name,params})=>[name,params]),[['files.bookmarks.remove',{path:'a.txt'}],['files.bookmarks.remove',{path:'b.txt'}]]);
+  s.send('files.bookmarks',[]);assert.equal(s.root.textContent,'북마크 없음');
+ } finally {s.dispose();}
+ assert.equal(s.observers.size,0);
+});
+
+test('the horizontal project label stays compact and preserves its full path as a title',async()=>{
+ const s=await mountSection('files.tree','horizontal');
+ try {
+  s.send('files.tree',{root:'/a/long/project/path/project',error:null,entries:[]});
+  const header=s.root.children[0].children[0];
+  assert.equal(header.children[0].textContent,'project');
+  assert.equal(header.children[0].title,'/a/long/project/path/project');
+ } finally {s.dispose();}
+});
+
+test('the virtual file tree reserves its toolbar and one visible row',()=>{
+ const source=readFileSync(new URL('../ui/sections/tree.js',import.meta.url),'utf8');
+ const minimum=selector=>{
+  const rule=source.slice(source.indexOf(`${selector}{`)).split('}')[0];
+  const match=rule.match(/min-height:(\d+)px/);
+  assert.ok(match,`${selector} must declare its minimum visible height`);
+  return Number(match[1]);
+ };
+ assert.ok(minimum('.files-tree')>=48,'tree must retain its toolbar plus a row');
+ assert.ok(minimum('.files-tree__holder')>=20,'virtual list must retain one visible row');
 });
