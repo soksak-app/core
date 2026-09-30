@@ -81,6 +81,8 @@ Window-sidebar persistence checks record independent window/card link changes, c
 
 The card-sidebar gesture checker rejects every frame without its expected border. Its error includes frame index/count, capture geometry/scales/time, sampled colors, matching border positions along the full axis and the initial/drag/release presented pose timeline, and layout-transaction start/DOM-presentation/native-commit times returned by recording start/stop. These diagnostics locate a failing frame; they do not replace complete-gesture acceptance.
 
+The native capture acceptance requires both a positive recorded-frame count and no stop error. The owning checker fault test executes the actual acceptance body with a positive count and a controlled stop error; it must reject that result. A recorded frame does not prove that capture completed successfully.
+
 The native `surface_layout_test` also records a controlled static composition: an app DOM border, a native surface container and a delayed transparent-background clip change while a layout transaction stays open. It checks complete pixel buffers, the initial border before commit and the final moved border, and removes recordings after measurement. ScreenCaptureKit can return only the two changed frames while the held composition remains idle; this control case does not apply the complete-gesture frame-gap criterion or accept an application gesture. A passing control case does not resolve a missing border reproduced by the application checker. The frame `displayTime` is the window-server display time ([Apple documentation](https://developer.apple.com/documentation/screencapturekit/scstreamframeinfo/displaytime)); compare it with the transaction timeline without treating correlation as a cause.
 
 

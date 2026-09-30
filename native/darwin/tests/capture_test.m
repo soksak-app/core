@@ -1,4 +1,5 @@
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #import "capture.h"
 
 static int failures;
@@ -8,6 +9,8 @@ static void check(BOOL condition, NSString *message) {
 }
 
 int main(void) { @autoreleasepool {
+    CFTimeInterval began = CACurrentMediaTime();
+    fprintf(stderr, "START: native capture acceptance\n");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
@@ -72,6 +75,9 @@ int main(void) { @autoreleasepool {
         check(firstFrame == 1, [NSString stringWithFormat:@"an unchanged inactive window produces a first frame (%@)",
             [NSString stringWithUTF8String:sp_capture_error()]]);
         int frames = sp_capture_stop(0);
+        const char *stopError = sp_capture_error();
+        check(stopError != NULL && strlen(stopError) == 0,
+            [NSString stringWithFormat:@"recording stops without error (%s)", stopError]);
         check(frames > 0, [NSString stringWithFormat:@"recording writes a complete frame (got %d)", frames]);
         // 정지 이미지와 녹화 모두 창의 장치 픽셀 크기를 보존한다.
         NSString *first = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"frame-0001.bgra"];
@@ -87,5 +93,7 @@ int main(void) { @autoreleasepool {
     [window close];
     [window release];
     [[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:NULL];
+    fprintf(stderr, "%s: native capture acceptance (%.1fms)\n", failures ? "FAIL" : "PASS",
+        (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;
 }}
