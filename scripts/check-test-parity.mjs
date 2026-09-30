@@ -1,7 +1,7 @@
 // 구현·테스트 파일 소유를 검사한다. 이 구조 검사는 동작 검증을 대신하지 않는다.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { extname } from "node:path";
+import { basename, extname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
@@ -13,6 +13,8 @@ const languages = {
   "objective-c": new Set([".m"]),
   "native-interface": new Set([".h"]),
   declaration: new Set([".json"]),
+  // 빌드 선언은 확장자가 없는 Makefile 이다.
+  build: new Set(["Makefile"]),
 };
 
 const lane = (capability, language, implementation, tests, options = {}) => ({
@@ -27,7 +29,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 
 // 기존 구성요소 연결도 파일 목록으로 유지한다. 동작 증거로 해석하지 않는다.
 const MATRIX = [
-  lane("Node repeat target", "declaration", ["Makefile"], ["scripts/test/node-repeat.test.mjs"], { testLanguage: "js-ts" }),
+  lane("Node repeat target", "build", ["Makefile"], ["scripts/test/node-repeat.test.mjs"], { testLanguage: "js-ts" }),
   lane("test inventory", "js-ts", ["scripts/check-test-parity.mjs"], ["scripts/test/test-parity.test.mjs"]),
   lane("host contract audit", "js-ts", ["scripts/check-host-contract.mjs"], ["scripts/test/check-host-contract.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
@@ -1719,7 +1721,7 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
     return matches.get(pattern);
   };
   const unique = (patterns) => [...new Set(patterns.flatMap(expand))].sort();
-  const extensionOf = (file) => extname(file);
+  const extensionOf = (file) => extname(file) || basename(file);
   const errors = [];
   const warnings = [];
   const implementationOwners = new Map();

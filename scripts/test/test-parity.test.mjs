@@ -34,6 +34,14 @@ test("inventory rejects an empty test lane", { timeout: 1000 }, () => {
   assert.ok(result.errors.some((error) => error.includes("no test files")));
 });
 
+test("inventory accepts Makefile build declarations and rejects other build files", { timeout: 1000 }, () => {
+  const lane = (implementation) => [{ capability: "build", language: "build", implementation: [implementation], tests: ["unit.test.mjs"], testLanguage: "js-ts" }];
+  const invalid = (result) => result.errors.filter((error) => error.includes("implementation extension is not valid"));
+  assert.deepEqual(invalid(auditInventory(["native/Makefile", "unit.test.mjs"], lane("native/Makefile"))), []);
+  assert.equal(invalid(auditInventory(["build.js", "unit.test.mjs"], lane("build.js"))).length, 1);
+  assert.deepEqual(invalid(auditInventory(files)), []);
+});
+
 test("boundary audit rejects a duplicate implementation and test owner", { timeout: 1000 }, () => {
   const result = auditInventory(["unit.js", "unit.test.mjs"], [
     { capability: "first", language: "js-ts", implementation: ["unit.js"], tests: ["unit.test.mjs"] },
