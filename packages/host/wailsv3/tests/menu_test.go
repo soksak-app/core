@@ -44,18 +44,24 @@ func TestApplicationMenuViewHasFullScreenAndTextSize(t *testing.T) {
 	if view == nil {
 		t.Fatalf("the application menu has no View menu: %v", labels(menu))
 	}
-	// 전체 화면 항목은 앱 시작을 마칠 때 시스템이 View 메뉴에 스스로 놓는다(계약표의 system 행).
-	// 빌더가 만드는 View 항목은 글자 크기 셋뿐이고 실창 검사가 시스템 항목까지 확인한다.
+	// 전체 화면 항목은 시스템이 넣어 주지 않음을 실측해(V5-112) 빌더가 만든다. 제목과
+	// 단축키는 프레임워크가 정하므로 넷째 항목은 존재와 빈 제목 아님만 검사한다.
 	want := []string{"Bigger Text", "Smaller Text", "Default Text Size"}
-	if got := labels(view); !slices.Equal(got, want) {
-		t.Fatalf("View menu items = %v, want %v", got, want)
+	if got := labels(view)[:3]; !slices.Equal(got, want) {
+		t.Fatalf("View menu text items = %v, want %v", got, want)
+	}
+	if count := len(labels(view)); count != 4 {
+		t.Fatalf("View menu items = %d, want 4 (text size and full screen)", count)
+	}
+	if labels(view)[3] == "" {
+		t.Fatal("the full screen item has an empty title")
 	}
 	accelerators := []string{}
 	for index := 0; view.ItemAt(index) != nil; index++ {
 		accelerators = append(accelerators, view.ItemAt(index).GetAccelerator())
 	}
-	if !slices.Equal(accelerators, []string{"Cmd+=", "Cmd+-", "Cmd+0"}) {
-		t.Fatalf("text size accelerators = %v", accelerators)
+	if !slices.Equal(accelerators[:3], []string{"Cmd+=", "Cmd+-", "Cmd+0"}) {
+		t.Fatalf("text size accelerators = %v", accelerators[:3])
 	}
 	for _, label := range labels(menu) {
 		switch label {
@@ -76,10 +82,10 @@ func TestApplicationMenuLanguages(t *testing.T) {
 	}{
 		{"ko", "파일", []string{"윈도우 닫기"}},
 		{"ko", "편집", []string{"실행 취소", "다시 실행", "잘라내기", "복사", "붙여넣기", "모두 선택"}},
-		{"ko", "보기", []string{"글자 크게", "글자 작게", "글자 기본 크기"}},
+		{"ko", "보기", []string{"글자 크게", "글자 작게", "글자 기본 크기", "Fullscreen"}},
 		{"en", "File", []string{"Close Window"}},
 		{"en", "Edit", []string{"Undo", "Redo", "Cut", "Copy", "Paste", "Select All"}},
-		{"en", "View", []string{"Bigger Text", "Smaller Text", "Default Text Size"}},
+		{"en", "View", []string{"Bigger Text", "Smaller Text", "Default Text Size", "Fullscreen"}},
 	}
 	menus := map[string]*application.Menu{}
 	for _, language := range []string{"ko", "en"} {

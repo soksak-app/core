@@ -25,7 +25,9 @@ fn titled_item_titles(menu_id: &str, language: &str) -> Vec<String> {
 
 /// 메뉴의 항목 id 를 표 순서로.
 /// 시스템이 앱 시작을 마칠 때 스스로 놓는 표의 행. 빌더는 만들지 않는다.
-const OS_INSERTED: [&str; 2] = ["close-all", "fullscreen"];
+// close-all 은 시스템이 제공한다. fullscreen 은 시스템이 넣어 주지 않음을 실측해(V5-112)
+// 빌더가 만든다.
+const OS_INSERTED: [&str; 1] = ["close-all"];
 
 fn item_ids(menu_id: &str) -> Vec<&'static str> {
     menu::ITEMS
@@ -38,11 +40,11 @@ fn item_ids(menu_id: &str) -> Vec<&'static str> {
 // contract: menu.application.view-has-full-screen-and-text-size
 #[test]
 fn view_menu_has_full_screen_and_text_size() {
-    // 보기 메뉴의 빌더 항목은 글자 크기 셋뿐이다. 전체 화면 항목은 앱 시작을 마칠 때
-    // 시스템이 View 메뉴에 스스로 먼저 놓는다(계약표의 system 행, 실창 검사가 확인한다).
+    // 보기 메뉴의 빌더 항목은 글자 크기 셋과 전체 화면이다. 전체 화면은 시스템이 넣어
+    // 주지 않음을 실측해 빌더가 만든다(V5-112).
     assert_eq!(
         item_ids("view"),
-        ["text-larger", "text-smaller", "text-default"]
+        ["text-larger", "text-smaller", "text-default", "fullscreen"]
     );
     // 글자 크기 항목은 페이지 명령 id 를 메뉴 항목 id 로 쓴다.
     assert!(menu::text_command("core.text.larger"));
@@ -125,7 +127,7 @@ fn table_titles_serve_both_languages() {
     assert_eq!(item_ids("file"), ["close-window"]);
     assert_eq!(
         item_ids("view"),
-        ["text-larger", "text-smaller", "text-default"]
+        ["text-larger", "text-smaller", "text-default", "fullscreen"]
     );
     assert_eq!(item_ids("window"), ["new-window", "bring-all-to-front"]);
     assert_eq!(item_ids("help"), Vec::<&str>::new());
