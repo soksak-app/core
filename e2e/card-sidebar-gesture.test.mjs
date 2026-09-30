@@ -109,13 +109,14 @@ for(const app of Object.values(APPS)) {
           assert.ok(captured.length>4,`${side}: incomplete gesture recording`);
           assert.equal(stopped.limited,false,'recording exhausted its buffer');
           assert.ok(stopped.longestGap<=100,`${side}: missing frames, gap ${stopped.longestGap}ms`);
-          const measured=recordedEdges(captured,side,initial,cross,poses);
+          assert.ok(Array.isArray(stopped.layouts)&&stopped.layouts.length>0,`${side}: missing layout transaction timeline`);
+          const measured=recordedEdges(captured,side,initial,cross,poses,stopped.layouts);
           assert.ok(measured[0].some(at=>Math.abs(at-initial)<=1),`${side}: initial border not recorded`);
           const final=initial+sign(side)*40;
           assert.ok(measured.some(matches=>matches.some(at=>Math.abs(at-final)<=1)),`${side}: far border not recorded`);
           assert.ok(measured.at(-1).some(at=>Math.abs(at-initial)<=1),`${side}: restored border not recorded`);
           assert.ok(measured.some(matches=>matches.some(at=>Math.abs(at-initial)>=8&&Math.abs(at-final)>=8)),`${side}: no intermediate movement frame`);
-          t.diagnostic(`${side}: 120 -> 160 -> 120 points, ${captured.length} frames at ${captured[0].width}x${captured[0].height}, gap ${stopped.longestGap}ms, input/presentation steps ${elapsed.join(',')}ms`);
+          t.diagnostic(`${side}: 120 -> 160 -> 120 points, ${captured.length} frames at ${captured[0].width}x${captured[0].height}, ${stopped.layouts.length} layout transactions, gap ${stopped.longestGap}ms, input/presentation steps ${elapsed.join(',')}ms`);
           console.info(`PASS ${app.name}: ${side} sidebar gesture (${Math.round(performance.now()-began)}ms)`);
         } finally {
           try {rmSync(directory,{recursive:true,force:true});} catch(error) {failures.push(error);}

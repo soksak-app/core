@@ -81,14 +81,16 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 | --- | --- | --- |
 | `diagnostics.fixture` | `{window, settings?}` | 빈 폴더 설정을 가진 `<config-dir>/test-project`를 만들고, 다른 프로젝트를 제거하고, 공통 설정을 초기화하고, 기본값 위에 `settings` 객체를 적용하고, 창에서 그 프로젝트를 연 뒤 `{root}`를 반환한다. 객체가 아닌 `settings`는 거부한다 |
 | `diagnostics.drag` | `{window, axis, line, dx, dy, ms, times, capture?}` | `axis`의 경계 `line`을 `ms` 동안 `dx, dy`만큼 끌었다가 되돌리는 왕복을 `times`번 실행한다. 단계 시각은 호스트가 정한다. 동작이 화면에 표시된 뒤 페이지의 끌기 결과 `{from, steps, took, asked, late, deepest}`를 반환한다. 페이지 결과에는 끌기 전과 각 단계 뒤의 경계 위치 `boundary`와 페이지가 각 단계를 적용하는 데 쓴 밀리초 `handled`도 있다. `capture: true`이면 호스트가 창도 기록하고 프레임 폴더 `frames`, 각 단계의 시각 `ticks`, 네이티브 배치 트랜잭션마다 시작 시각, 앱 DOM이 표시를 확인한 시각, 커밋 시각을 담은 `{ticket, begun, presented, committed}`의 목록 `layouts`를 더한다. 일어나지 않은 단계는 `null`이다. 모든 시각은 기록 프레임과 같은 시계의 밀리초다. 끌기가 실패하면 호스트가 기록을 멈추고 폴더를 지운다 |
-| `diagnostics.capture.start` | `{window}` | 창의 backing 배율에 맞는 장치 픽셀 해상도로 녹화를 시작하고 첫 프레임이 기록된 뒤 프레임 폴더 `{frames}`를 반환한다 |
-| `diagnostics.capture.stop` | `{window, after?}` | `after`(`host.window.presented`의 `displayed`)와 요청 시각 중 늦은 시각 이후에 표시된 화면을 스트림이 전달한 뒤 캡처를 중지하고 `{frames, count, limited, longestGap}`를 반환한다. `limited`가 true이면 녹화기가 프레임 상한에 도달한 정상적인 제한 결과이며 캡처 오류가 아니다. `longestGap`은 연속한 기록 프레임 사이의 가장 긴 표시 간격(ms)이다. 앱이 커밋한 상태는 요청보다 늦게 화면에 나올 수 있으므로, 그 상태로 끝나야 하는 녹화는 그 표시 시각을 넘긴다 |
+| `diagnostics.capture.start` | `{window}` | 창의 backing 배율에 맞는 장치 픽셀 해상도로 녹화를 시작하고 첫 프레임이 기록된 뒤 배치 추적을 시작하여 프레임 폴더 `{frames}`를 반환한다 |
+| `diagnostics.capture.stop` | `{window, after?}` | `after`(`host.window.presented`의 `displayed`)와 요청 시각 중 늦은 시각 이후에 표시된 화면을 스트림이 전달한 뒤 캡처를 중지하고 `{frames, count, limited, longestGap, layouts}`를 반환한다. `limited`가 true이면 녹화기가 프레임 상한에 도달한 정상적인 제한 결과이며 캡처 오류가 아니다. `longestGap`은 연속한 기록 프레임 사이의 가장 긴 표시 간격(ms)이다. 앱이 커밋한 상태는 요청보다 늦게 화면에 나올 수 있으므로, 그 상태로 끝나야 하는 녹화는 그 표시 시각을 넘긴다 |
 | `diagnostics.modal.hold` | `{window, on}` | `on`이면 창의 모달 내용 요청에 대한 호스트 응답을 붙잡고, 아니면 붙잡은 응답을 보내고 붙잡기를 멈춘다 |
 | `diagnostics.modal.held` | `{window}` | 창이 모달 내용 응답을 붙잡거나 붙잡기를 멈추면 답한다. 창이 응답을 붙잡고 있지 않으면 실패한다 |
 | `diagnostics.transcript` | `{window, on}` | 호스트 요청, 응답, 페이지 검증 줄에 대한 `diagnostics.log` 알림 `{window, line}`을 시작하거나 중지한다 |
 | `diagnostics.notifications` | `{}` | 운영체제의 알림 센터가 아직 보이는 이 애플리케이션의 알림을 `[{identifier, title, body}]`로 반환한다. `identifier`는 `[window, surface]`의 JSON 문자열이다 |
 | `diagnostics.capture.still` | `{window}` | 창에 포커스를 주지 않고 장치 픽셀 해상도의 정지 PNG를 쓰고, 비공개 `<config-dir>/captures/still-*` 디렉터리 안의 `{path}`를 반환한다. 개발 중 관측 자료이며 측정에는 `diagnostics.capture.start`/`stop` 프레임을 쓴다. 요청자는 확인한 뒤 그 디렉터리를 지운다 |
 | `diagnostics.input.source` | `{window, select?}` | `select`가 있으면 켜진 키보드 입력 소스 가운데 그것을 선택하고, 선택된 입력 소스 식별자 `{current}`를 반환한다. 키보드 입력 소스가 없는 플랫폼은 오류를 반환한다. 활성화 등급 창 검사가 사용자의 입력 소스 순서를 재현할 때 쓴다 |
+
+직접 capture.start/stop 녹화의 layouts는 시작 이후의 트랜잭션별 `{ticket, begun, presented, committed}` 배열이며 시각은 프레임과 같은 ms 시계다. 일어나지 않은 단계는 null이며 트랜잭션이 없으면 빈 배열이다. diagnostics.drag는 기존 응답에 자신의 타임라인을 반환한다. 추적 종료 오류가 발생하면 요청자가 받지 못하는 프레임 폴더를 정리하고 오류를 보존한다.
 
 배치 타임라인 응답의 상한은 트랜잭션 4096개다. 실제 기록이 상한을 넘으면 호스트는 오류를 반환하고 요청자가 받지 못하는 녹화 디렉터리를 정리한다. 잘린 타임라인을 성공 응답으로 반환하지 않는다.
 

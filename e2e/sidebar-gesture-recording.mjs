@@ -12,8 +12,9 @@ function border(frame,side,at,cross) {
     return rgb.every((value,index)=>Math.abs(value-[43,46,61][index])<=3);
   });
 }
-export function recordedEdges(captured,side,initial,cross,poses) {
+export function recordedEdges(captured,side,initial,cross,poses,layouts) {
   assert.ok(Array.isArray(poses),'gesture recording requires a pose timeline');
+  assert.ok(Array.isArray(layouts),'gesture recording requires a layout timeline');
   return captured.map((frame,frameIndex)=>{
     const matches=[];
     for(let step=-2;step<=42;step+=0.5){
@@ -32,7 +33,7 @@ export function recordedEdges(captured,side,initial,cross,poses) {
       const axisBorders=[];
       const extent=(vertical?frame.width:frame.height)/ratio;
       for(let at=0;at<extent;at+=0.5)if(border(frame,side,at,cross))axisBorders.push(at);
-      assert.fail(`${side}: frame has no measured sidebar border ${JSON.stringify({frameIndex,frameCount:captured.length,time:frame.time,width:frame.width,height:frame.height,content:frame.content,scale:frame.scale,contentScale:frame.contentScale,initial,cross,poses,axisBorders,samples})}`);
+      assert.fail(`${side}: frame has no measured sidebar border ${JSON.stringify({frameIndex,frameCount:captured.length,time:frame.time,width:frame.width,height:frame.height,content:frame.content,scale:frame.scale,contentScale:frame.contentScale,initial,cross,poses,layouts,axisBorders,samples})}`);
     }
     return matches;
   });

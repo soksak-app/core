@@ -20,7 +20,7 @@ use tauri::{Emitter, EventTarget, Manager, Window};
 use crate::endpoint::Failure;
 use crate::exposure::{self, on_main, Host, TIMEOUT};
 use crate::platform;
-use crate::recording::{Capture, Recording, Target};
+use crate::recording::{layout_trace, Capture, Recording, Target};
 use crate::workspace::Workspace;
 
 /// 끌기 한 단계의 간격. 페이지도 같은 값으로 단계 수를 계산한다.
@@ -75,6 +75,21 @@ pub(crate) fn call(
                 Some(_) => return Err(Failure::params("display must be a boolean")),
             };
             let frames = capture_start(window, display)?;
+            let traced = (|| -> Result<(), Failure> {
+                let platform = platform::current().map_err(internal)?;
+                on_main(window, move || platform.layout_trace_start()).map_err(internal)
+            })();
+            if let Err(error) = traced {
+                if let Err(cleanup) =
+                    recorder().and_then(|capture| RECORDING.abort(&capture).map_err(internal))
+                {
+                    return Err(internal(format!(
+                        "{}; abort capture: {}",
+                        error.message, cleanup.message
+                    )));
+                }
+                return Err(error);
+            }
             Ok(json!({"frames": frames.to_string_lossy()}))
         }
         "diagnostics.capture.stop" => {
@@ -85,7 +100,7 @@ pub(crate) fn call(
                     .filter(|after| *after >= 0.0)
                     .ok_or_else(|| Failure::params("after must be a non-negative number"))?,
             };
-            capture_stop(after)
+            capture_stop(window, after)
         }
         "diagnostics.transcript" => host.page(window, method, params, TIMEOUT),
         "diagnostics.modal.hold" => {
@@ -323,30 +338,6 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     finished
 }
 
-/// 배치 트랜잭션 기록을 {ticket, begun, presented, committed} 로 바꾼다. 일어나지 않은 단계는 null 이다.
-fn layout_trace(records: &[[f64; 4]]) -> Value {
-    let stage = |value: f64| {
-        if value.is_nan() {
-            Value::Null
-        } else {
-            serde_json::json!(value)
-        }
-    };
-    Value::Array(
-        records
-            .iter()
-            .map(|record| {
-                serde_json::json!({
-                    "ticket": record[0] as u64,
-                    "begun": stage(record[1]),
-                    "presented": stage(record[2]),
-                    "committed": stage(record[3]),
-                })
-            })
-            .collect(),
-    )
-}
-
 /// 페이지에 끌기 단계 시각을 steps 번 보낸다. 각 단계는 시작 시각 기준의 예정 시각에 보낸다.
 /// 한 단계씩 잠들면 각 단계의 실행 시간이 이후 단계에 누적된다.
 fn tick(
@@ -414,14 +405,28 @@ fn capture_start(window: &Window, display: bool) -> Result<PathBuf, Failure> {
 }
 
 /// after 의 표시 시각까지 기록한 뒤 진행 중인 기록을 끝내고 디렉터리와 프레임 수를 반환한다.
-fn capture_stop(after: f64) -> Result<Value, Failure> {
+fn capture_stop(window: &Window, after: f64) -> Result<Value, Failure> {
     let recorder = PlatformCapture(recorder()?.0, after);
     let (directory, count) = RECORDING.finish(&recorder).map_err(internal)?;
-    let limited = recorder.0.capture_limited().map_err(internal)?;
-    let gap = recorder.0.capture_longest_gap().map_err(internal)?;
-    Ok(crate::recording::stop_payload(
-        &directory, count, limited, gap,
-    ))
+    let finished = (|| -> Result<Value, Failure> {
+        let platform = recorder.0;
+        let layouts = on_main(window, move || platform.layout_trace_stop()).map_err(internal)?;
+        let limited = recorder.0.capture_limited().map_err(internal)?;
+        let gap = recorder.0.capture_longest_gap().map_err(internal)?;
+        Ok(crate::recording::stop_payload(
+            &directory, count, limited, gap, &layouts,
+        ))
+    })();
+    if let Err(error) = finished {
+        if let Err(cleanup) = std::fs::remove_dir_all(&directory) {
+            return Err(internal(format!(
+                "{}; capture directory cleanup: {cleanup}",
+                error.message
+            )));
+        }
+        return Err(error);
+    }
+    finished
 }
 
 /// 한 창에서 붙잡은 모달 내용 응답.

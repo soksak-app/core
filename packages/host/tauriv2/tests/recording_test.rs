@@ -206,16 +206,40 @@ fn a_different_target_is_prepared_again() {
 // contract: diagnostics.capture-stop.payload-reports-frame-limit
 #[test]
 fn the_stop_payload_reports_a_normal_frame_limit() {
-    let payload = stop_payload(Path::new("/tmp/frames"), 600, true, 42.5);
+    let payload = stop_payload(Path::new("/tmp/frames"), 600, true, 42.5, &[]);
     assert_eq!(
         payload,
-        serde_json::json!({"frames": "/tmp/frames", "count": 600, "limited": true, "longestGap": 42.5})
+        serde_json::json!({"frames": "/tmp/frames", "count": 600, "limited": true, "longestGap": 42.5, "layouts": []})
     );
 }
 
 // contract: diagnostics.capture-stop.payload-reports-unbounded
 #[test]
 fn the_stop_payload_reports_an_unbounded_recording() {
-    let payload = stop_payload(Path::new("/tmp/frames"), 3, false, 0.0);
+    let payload = stop_payload(Path::new("/tmp/frames"), 3, false, 0.0, &[]);
     assert_eq!(payload["limited"], false);
+}
+
+#[test]
+fn the_stop_payload_requires_a_layout_timeline() {
+    let payload = stop_payload(Path::new("/tmp/frames"), 3, false, 0.0, &[]);
+    assert!(
+        payload["layouts"].is_array(),
+        "capture stop omitted layouts: {payload}"
+    );
+}
+
+#[test]
+fn the_stop_payload_preserves_layout_stages() {
+    let payload = stop_payload(
+        Path::new("/tmp/frames"),
+        3,
+        false,
+        0.0,
+        &[[7.0, 10.0, 20.0, 30.0]],
+    );
+    assert_eq!(
+        payload["layouts"],
+        serde_json::json!([{"ticket":7,"begun":10.0,"presented":20.0,"committed":30.0}])
+    );
 }

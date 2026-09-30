@@ -10,8 +10,38 @@ use std::sync::Mutex;
 use serde_json::{json, Value};
 
 /// 녹화를 끝낸 요청의 응답이다. 프레임 폴더와 수, 녹화가 상한에 도달했는지, 프레임 사이 가장 긴 간격을 담는다.
-pub fn stop_payload(directory: &Path, count: i32, limited: bool, longest_gap: f64) -> Value {
-    json!({"frames": directory.to_string_lossy(), "count": count, "limited": limited, "longestGap": longest_gap})
+pub fn stop_payload(
+    directory: &Path,
+    count: i32,
+    limited: bool,
+    longest_gap: f64,
+    layouts: &[[f64; 4]],
+) -> Value {
+    json!({"frames": directory.to_string_lossy(), "count": count, "limited": limited, "longestGap": longest_gap, "layouts": layout_trace(layouts)})
+}
+
+/// 배치 트랜잭션 기록을 {ticket, begun, presented, committed} 로 바꾼다. 일어나지 않은 단계는 null 이다.
+pub fn layout_trace(records: &[[f64; 4]]) -> Value {
+    let stage = |value: f64| {
+        if value.is_nan() {
+            Value::Null
+        } else {
+            serde_json::json!(value)
+        }
+    };
+    Value::Array(
+        records
+            .iter()
+            .map(|record| {
+                serde_json::json!({
+                    "ticket": record[0] as u64,
+                    "begun": stage(record[1]),
+                    "presented": stage(record[2]),
+                    "committed": stage(record[3]),
+                })
+            })
+            .collect(),
+    )
 }
 
 /// 녹화 대상. display 이면 창이 있는 디스플레이에서 이 앱의 창을 녹화한다. 창 녹화는 창이 다른

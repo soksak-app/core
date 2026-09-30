@@ -156,12 +156,13 @@ type captureStatus interface {
 	LongestGap() float64
 }
 
-func captureStopPayload(c captureStatus, directory string, count int) map[string]any {
+func captureStopPayload(c captureStatus, directory string, count int, records [][4]float64) map[string]any {
 	return map[string]any{
 		"frames":     directory,
 		"count":      count,
 		"limited":    c.Limited(),
 		"longestGap": c.LongestGap(),
+		"layouts":    layoutTrace(records),
 	}
 }
 
@@ -380,10 +381,15 @@ func diagnosticCaptureStart(e *Endpoint, _ *endpointConn, params json.RawMessage
 	if err := decode(params, &p); err != nil {
 		return nil, err
 	}
+	capture, err := recorder()
+	if err != nil {
+		return nil, err
+	}
 	directory, err := startCapture(h, s, p.Display)
 	if err != nil {
 		return nil, err
 	}
+	application.InvokeSync(capture.LayoutTraceStart)
 	return map[string]any{"frames": directory}, nil
 }
 
@@ -413,7 +419,12 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage)
 	if err != nil {
 		return nil, err
 	}
-	return captureStopPayload(captureStatusAdapter{capture}, directory, count), nil
+	var records [][4]float64
+	application.InvokeSync(func() { records, err = capture.LayoutTraceStop() })
+	if err != nil {
+		return nil, errors.Join(err, os.RemoveAll(directory))
+	}
+	return captureStopPayload(captureStatusAdapter{capture}, directory, count, records), nil
 }
 
 type captureStatusAdapter struct{ platformCapture }
