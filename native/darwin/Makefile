@@ -1,7 +1,8 @@
 # macOS 공용 네이티브 라이브러리.
 #
 # src/ 의 공용 소스를 정적 라이브러리 하나로 빌드하고, 사용하는 애플리케이션이 pkg-config 로
-# 헤더와 라이브러리 위치를 찾도록 soksak-darwin.pc 를 생성한다.
+# 헤더와 라이브러리 위치를 찾도록 soksak-darwin.pc 를 생성한다. 위치는 .pc 파일의 디렉터리(pcfiledir)에
+# 대한 상대 경로이므로 작업 공간을 옮겨도 다시 생성하지 않고 현재 위치를 가리킨다.
 #
 #   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
 #   make test             입력 주입, 창 상태, 창 단추 배치, 표시 대기, 웹뷰 초점, 문서 영역, 그림 영역 검사를 실행한다. 애플리케이션을 활성화하지 않는다
@@ -42,8 +43,8 @@ $(PKGCONFIG): Makefile | $(BUILD)
 	  'Name: soksak-darwin' \
 	  'Description: Shared macOS window, webview, and surface layout code' \
 	  'Version: 0.0.1' \
-	  'Cflags: -I$(CURDIR)/src $(MINIMUM)' \
-	  'Libs: -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM)' > $@
+	  'Cflags: -I$${pcfiledir}/../src $(MINIMUM)' \
+	  'Libs: -L$${pcfiledir} -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM)' > $@
 
 $(BUILD):
 	@mkdir -p $@
