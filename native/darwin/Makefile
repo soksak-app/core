@@ -64,11 +64,13 @@ $(BUILD)/capture_checker_test: tests/capture_test.m
 
 $(BUILD)/capture_lifecycle_test: tests/capture_test.m src/capture.m
 
+$(BUILD)/capture_preparation_test: src/capture.m
+
 $(BUILD)/capture_pressure_test: src/capture.m
 
 $(BUILD)/capture_storage_test: src/capture.m
 
-test: $(BUILD)/capture_lifecycle_test $(BUILD)/capture_frame_test $(BUILD)/capture_storage_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_checker_test $(BUILD)/capture_pressure_test $(BUILD)/webview_input_receipts_test $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/webview_process_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/link_test $(BUILD)/capture_test $(BUILD)/dock_menu_test $(BUILD)/appearance_test
+test: $(BUILD)/capture_preparation_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_frame_test $(BUILD)/capture_storage_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_checker_test $(BUILD)/capture_pressure_test $(BUILD)/webview_input_receipts_test $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/webview_process_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/link_test $(BUILD)/capture_test $(BUILD)/dock_menu_test $(BUILD)/appearance_test
 	@$(BUILD)/surface_host_test
 	@$(BUILD)/ui_queue_test
 	@$(BUILD)/window_motion_test
@@ -88,6 +90,7 @@ test: $(BUILD)/capture_lifecycle_test $(BUILD)/capture_frame_test $(BUILD)/captu
 	@$(BUILD)/capture_checker_test
 	@$(BUILD)/capture_file_checker_test
 	@$(BUILD)/capture_lifecycle_test
+	@$(BUILD)/capture_preparation_test
 	@$(BUILD)/capture_pressure_test
 	@$(BUILD)/capture_storage_test
 	@$(BUILD)/capture_frame_test

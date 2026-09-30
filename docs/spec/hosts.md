@@ -111,6 +111,8 @@ Still capture returns its own caller-owned error string, freed with free(), sepa
 
 Recording target preparation and start reject an already active recording before changing target, frame counters or recording errors. Each open/start call returns a separate caller-owned UTF-8 error through a mandatory output pointer (NULL on success; free() on failure). Rejected overlapping operations cannot invalidate healthy recording readiness or erase an earlier recording failure.
 
+Target preparation publishes a filter and configuration only when its own query completes successfully within the 10000ms limit. A timed-out query retains only its own callback state; a late failure is reported and a late success cannot overwrite a later target. Preparation releases obsolete inactive target/configuration ownership instead of retaining unused objects. Preparation errors are returned through its per-call output and do not change recording errors. If a recording becomes active before successful preparation is published, the call rejects that publication and preserves the active recording.
+
 The webview operation attaches the DOM plane to a `SurfaceHost`, not directly to the window's shared surface container. Document and image operations create descendants of that host's native plane. The platform interface does not expose an operation that can place a region as a sibling of its `SurfaceHost`. Both language hosts validate the [surface composition](surface-composition.md) before calling platform code.
 
 ### Window buttons

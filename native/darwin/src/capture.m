@@ -282,10 +282,36 @@ static bool captureOperationFailure(char **errorOut, NSString *message) {
 }
 
 
-// sp_capture_open 은 창을 조회해 캡처에 필요한 값을 보관한다.
-//
-// 조회는 비동기이므로 답을 기다린다. 기다리지 않으면 그 사이에 시작한 캡처가 조용히
-// 아무 일도 하지 않고, 프레임이 0 장인 이유가 어디에도 남지 않는다.
+// 비동기 준비 결과는 해당 조회의 콜백만 소유한다. 전역 대상은 대기한 호출자가 게시한다.
+@interface SPCapturePreparation : NSObject
+@property (nonatomic, retain) SCContentFilter *filter;
+@property (nonatomic, retain) SCStreamConfiguration *configuration;
+@property (nonatomic, copy) NSString *error;
+@property (nonatomic, assign) dispatch_semaphore_t answered;
+- (void)completeWithFilter:(SCContentFilter *)filter
+    configuration:(SCStreamConfiguration *)configuration error:(NSString *)error;
+@end
+@implementation SPCapturePreparation
+- (instancetype)init {
+    self = [super init];
+    if (self) _answered = dispatch_semaphore_create(0);
+    return self;
+}
+- (void)completeWithFilter:(SCContentFilter *)filter
+    configuration:(SCStreamConfiguration *)configuration error:(NSString *)error {
+    self.filter = filter;
+    self.configuration = configuration;
+    self.error = error;
+    if (error != nil) fprintf(stderr, "capture preparation callback failed: %s\n", error.UTF8String);
+    dispatch_semaphore_signal(self.answered);
+}
+- (void)dealloc {
+    [_filter release]; [_configuration release]; [_error release];
+    dispatch_release(_answered);
+    [super dealloc];
+}
+@end
+
 bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
     if (errorOut == NULL) {
         fprintf(stderr, "capture open needs an error output\n");
@@ -293,79 +319,77 @@ bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
     }
     *errorOut = NULL;
     if (captureStream != nil) return captureOperationFailure(errorOut, @"capture is already running");
-    clearCaptureError();
-    // 이전 대상을 지운다. 조회에 실패하면 이전 대상을 녹화하지 않고 녹화가 시작되지 않는다.
-    captureFilter = nil;
-    dispatch_semaphore_t answered = dispatch_semaphore_create(0);
-    // The diagnostic target is owned by this process. Asking for all shareable
-    // content unnecessarily enters the Screen Recording permission path and
-    // makes an app-owned capture depend on TCC. The current-process query is
-    // the compositor capture API for this exact case and still includes the
-    // window's child webviews in the resulting composite.
+    // 조회 실패 뒤 이전 대상으로 녹화하지 않도록 비활성 준비 소유를 해제한다.
+    [captureFilter release]; captureFilter = nil;
+    [captureConfig release]; captureConfig = nil;
+    SPCapturePreparation *result = [[SPCapturePreparation alloc] init];
+    // 이 프로세스의 창만 조회하여 다른 앱의 화면 녹화 권한 경로에 의존하지 않는다.
     [SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:
-        ^(SCShareableContent* content, NSError* error) {
+        ^(SCShareableContent *content, NSError *error) {
         if (error != nil) {
-            setCaptureError([NSString stringWithFormat:@"current-process capture unavailable: %@", error.localizedDescription]);
-            fprintf(stderr, "observe: current-process capture unavailable, %s\n",
-                error.localizedDescription.UTF8String);
-            dispatch_semaphore_signal(answered);
+            [result completeWithFilter:nil configuration:nil error:
+                [NSString stringWithFormat:@"current-process capture unavailable: %@", error.localizedDescription]];
             return;
         }
-        for (SCWindow* window in content.windows) {
+        for (SCWindow *window in content.windows) {
             if ((long)window.windowID != windowNumber) continue;
-            SCContentFilter* filter = nil;
+            SCContentFilter *filter = nil;
             if (display) {
-                // 창의 중심이 있는 디스플레이에서 이 앱의 창만 담는다. 다른 앱의 창은 기록하지 않는다.
+                // 창의 중심이 있는 디스플레이에서 이 앱의 창만 담는다.
                 CGPoint centre = CGPointMake(CGRectGetMidX(window.frame), CGRectGetMidY(window.frame));
-                for (SCDisplay* candidate in content.displays) {
+                for (SCDisplay *candidate in content.displays) {
                     if (!CGRectContainsPoint(candidate.frame, centre)) continue;
-                    NSMutableArray* own = [NSMutableArray array];
+                    NSMutableArray *own = [NSMutableArray array];
                     if (window.owningApplication != nil) [own addObject:window.owningApplication];
-                    filter = [[SCContentFilter alloc] initWithDisplay:candidate includingApplications:own exceptingWindows:@[]];
+                    filter = [[[SCContentFilter alloc] initWithDisplay:candidate
+                        includingApplications:own exceptingWindows:@[]] autorelease];
                     break;
                 }
                 if (filter == nil) {
-                    setCaptureError([NSString stringWithFormat:@"window %ld is on no display", windowNumber]);
-                    fprintf(stderr, "observe: window %ld is on no display\n", windowNumber);
-                    dispatch_semaphore_signal(answered);
+                    [result completeWithFilter:nil configuration:nil error:
+                        [NSString stringWithFormat:@"window %ld is on no display", windowNumber]];
                     return;
                 }
             } else {
-                filter = [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
+                filter = [[[SCContentFilter alloc] initWithDesktopIndependentWindow:window] autorelease];
             }
-            SCStreamConfiguration* config = [[SCStreamConfiguration alloc] init];
-            // 장치 픽셀을 유지하여 가는 선의 색상이 축소 과정에서 혼합되지 않도록 한다.
+            SCStreamConfiguration *config = [[[SCStreamConfiguration alloc] init] autorelease];
+            // 장치 픽셀과 sRGB를 유지하여 얇은 선의 좌표·색을 그대로 측정한다.
             config.width = (size_t)(filter.contentRect.size.width * filter.pointPixelScale);
             config.height = (size_t)(filter.contentRect.size.height * filter.pointPixelScale);
             config.pixelFormat = kCVPixelFormatType_32BGRA;
-            // 페이지는 sRGB 로 색을 지정한다. 디스플레이 색공간으로 받으면 연결된 디스플레이마다
-            // 픽셀 값이 달라지므로, 측정하는 쪽과 같은 sRGB 로 받는다.
             config.colorSpaceName = kCGColorSpaceSRGB;
             config.showsCursor = NO;
             config.captureResolution = SCCaptureResolutionBest;
-            // 화면이 갱신되는 만큼 받는다. 변경이 없으면 프레임도 오지 않는다.
             config.minimumFrameInterval = CMTimeMake(1, 120);
             config.queueDepth = 8;
-            captureConfig = config;
-            // 필터를 마지막에 둔다. sp_capture_start 가 필터로 준비 여부를 판단하므로,
-            // 먼저 두면 설정이 없는 채로 스트림을 만들 수 있다.
-            captureFilter = filter;
-            dispatch_semaphore_signal(answered);
+            [result completeWithFilter:filter configuration:config error:nil];
             return;
         }
-        setCaptureError([NSString stringWithFormat:@"window %ld not found", windowNumber]);
-        fprintf(stderr, "observe: window %ld not found\n", windowNumber);
-        dispatch_semaphore_signal(answered);
+        [result completeWithFilter:nil configuration:nil error:
+            [NSString stringWithFormat:@"window %ld not found", windowNumber]];
     }];
-    long wait = dispatch_semaphore_wait(answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
-    dispatch_release(answered);
+    long wait = dispatch_semaphore_wait(result.answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
     if (wait != 0) {
-        setCaptureError(@"shareable content query timed out after 10000ms");
+        [result release];
         return captureOperationFailure(errorOut, @"shareable content query timed out after 10000ms");
     }
-    if (captureFilter == nil) {
-        @synchronized([SPCapture class]) { return captureOperationFailure(errorOut, captureError); }
+    if (result.error != nil) {
+        captureOperationFailure(errorOut, result.error);
+        [result release];
+        return false;
     }
+    if (result.filter == nil || result.configuration == nil) {
+        [result release];
+        return captureOperationFailure(errorOut, @"capture preparation completed without filter or configuration");
+    }
+    if (captureStream != nil) {
+        [result release];
+        return captureOperationFailure(errorOut, @"capture became active during preparation");
+    }
+    captureConfig = [result.configuration retain];
+    captureFilter = [result.filter retain];
+    [result release];
     return true;
 }
 
