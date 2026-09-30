@@ -209,8 +209,8 @@ for (const app of Object.values(APPS)) {
       `linked ${side} panel did not appear`);
       // 한 명령의 실패로 다른 명령의 관측을 생략하지 않는다. 오류는 모두 보고하고 끝에서 실패한다.
       for (const [command, extra, expected] of [
-        ["core.card.sidebar.toggle", {}, { collapsed: true }],
-        ["core.card.sidebar.size", { size: 260 }, { size: 260 }],
+        ["core.card.sidebar.toggle", {}, { collapsed: true, requestedCollapsed: true, autoCollapsed: false, collapseReason: null }],
+        ["core.card.sidebar.size", { size: 260 }, { size: 260, collapsed: true, requestedCollapsed: true, autoCollapsed: false, collapseReason: null }],
       ]) {
         const start = performance.now();
         t.diagnostic(`start ${app.name}/${side}/${command}`);
@@ -220,6 +220,12 @@ for (const app of Object.values(APPS)) {
             const panel = value.cards.find((item) => item.id === card.id)?.sidebars?.[side];
             return panel?.set === set.id && Object.entries(expected).every(([key, val]) => panel[key] === val);
           }, `linked ${side} panel did not apply ${command}`);
+          const layout=await s.get('core.layout');
+          const saved=layout.state.cards.find(item=>item.id===card.id).data.sidebars[side];
+          assert.equal(Object.hasOwn(saved,'set'),false,`${command} made the ${side} derived set explicit`);
+          assert.equal(saved.collapsed,true,`${command} did not retain the saved ${side} manual fold`);
+          if(command==='core.card.sidebar.size')assert.equal(saved.size,260,`${side} resized presentation was not saved`);
+          t.diagnostic(`saved ${app.name}/${side}/${command}: ${JSON.stringify(saved)}`);
           t.diagnostic(`pass ${app.name}/${side}/${command} ${Math.round(performance.now() - start)}ms`);
         } catch (error) {
           const failure = `${app.name}/${side}/${command}: ${error.message}`;
