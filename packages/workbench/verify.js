@@ -8,7 +8,8 @@ import { Soksak } from "soksak";
 
 import { ahead, latest, placementPending, seated } from "./compositor.js";
 import { currentGrid, dropBands, plane, railOutline, tabsOf } from "./plane.js";
-import { isPlace, railKind } from "./registry.js";
+import { isPlace } from "./registry.js";
+import { windowSidebar } from "./window-sidebars.js";
 import { cardRadius } from "./settings.js";
 
 /** 두 사각형의 최대 차이를 반환한다. 하나라도 없으면 비교하지 않는다. */
@@ -37,26 +38,28 @@ export function verify(controls = null) {
   const cards = [...grid.cards];
   const box = grid.rects();                 // 한 번 재고 id 로 찾는다
   const rects = cards.map((c) => box.get(c.id));
-  const { shape, rects: railRects } = railOutline();
-
-  // 외곽선은 두 사각형을 통로의 절반만큼 키워 합치므로, 통로 하나를 사이에 둔 둘은
-  // 통로 가운데에서 만나 한 루프가 된다. 붙었는지를 같은 기준으로 판정한다. 판이
-  // 작아 한쪽이 크기 없이 그려지면 두 사각형이 맞닿기만 하는데, 키우면 그때도
-  // 만나므로 겹침을 요구하면 붙은 것을 떨어졌다고 읽는다.
-  const adjacent = railRects.length === 2 && (() => {
-    const [a, b] = railRects;
-    const dx = Math.max(b.x - (a.x + a.w), a.x - (b.x + b.w));
-    const dy = Math.max(b.y - (a.y + a.h), a.y - (b.y + b.h));
-    return dx <= grid.gap + .5 && dy <= grid.gap + .5;
-  })();
-  // 외곽선은 카드와 동심이므로 카드가 각지면 외곽선도 각지다. 꼭짓점은 전부 라운드
-  // 이거나 전부 각지고, 섞이면 한 모서리만 다른 모양이라는 뜻이다.
+  const { shape, rects: railRects, groups } = railOutline();
+  let expectedLoops = 0;
+  for (const group of groups) {
+    const pending = new Set(group.rects.map((_,index) => index));
+    while (pending.size) {
+      expectedLoops++;
+      const work = [pending.values().next().value];
+      pending.delete(work[0]);
+      while (work.length) {
+        const a = group.rects[work.pop()];
+        for (const index of [...pending]) {
+          const b = group.rects[index];
+          const dx = Math.max(b.x-(a.x+a.w),a.x-(b.x+b.w));
+          const dy = Math.max(b.y-(a.y+a.h),a.y-(b.y+b.h));
+          if (dx <= grid.gap+.5 && dy <= grid.gap+.5) { pending.delete(index); work.push(index); }
+        }
+      }
+    }
+  }
   const square = cardRadius() === 0;
-  add("V0 레일 외곽선",
-      shape.sharp === (square ? shape.corners : 0) &&
-      shape.loops.length === (adjacent ? 1 : railRects.length),
-      `${shape.loops.length}개 루프 · ${shape.corners}꼭짓점 중 ${shape.sharp} 각짐 · ` +
-      `카드 ${square ? "각짐" : "라운드"} · ${adjacent ? "인접" : "떨어짐"}`);
+  add("V0 레일 외곽선", shape.sharp === (square ? shape.corners : 0) && shape.loops.length === expectedLoops,
+      `${shape.loops.length}/${expectedLoops}개 루프 · ${groups.length}개 연결 묶음 · ${railRects.length}개 사각형`);
 
   // V1 — 같은 선을 읽는 카드의 경계가 정확히 같다 (허용오차 없음)
   let drift = 0;
@@ -311,32 +314,20 @@ export function verify(controls = null) {
   const empty = cards.filter((c) => !isPlace(c.id) && tabsOf(c).length === 0);
   add("T5 빈 카드 0", empty.length === 0, `${cards.length - empty.length}/${cards.length} 카드가 내용을 가짐`);
 
-  // 세 자리가 각자의 규칙대로 배치되었는지 검사한다. 선언값이 아니라 그려진 폭을
+  // 모든 창 사이드바가 각자의 규칙대로 배치되었는지 검사한다. 선언값이 아니라 그려진 폭을
   // 측정한다. 선언값은 요청이고 검증 대상은 결과다.
-  const left = grid.card("left"), right = grid.card("right");
-  const rail = grid.cards.find((c) => railKind(c.id));
-  const drawn = (c) => (c ? grid.rect(c.id).w : null);
-  const asked = (c) => (c && c.width !== undefined ? c.width : null);
-  // 선언한 px 는 요청이다. 판에 자리가 있으면 그대로 그려지고, 없으면 나머지가 남은
-  // 것을 나눠 가지므로 그보다 좁게 그려진다. 넓게 그려지는 것만 규칙 위반이다.
-  const kept = (c) => c === undefined || asked(c) === null
-    || drawn(c) <= asked(c) + 0.5;
-  const say = (c, where) => {
-    if (!c) return "없음";
-    const w = drawn(c).toFixed(0);
-    const a = asked(c);
-    return a !== null && Math.abs(drawn(c) - a) >= 0.5
-      ? `${w}px ${where} (${a.toFixed(0)} 요청)`
-      : `${w}px ${where}`;
-  };
-  // 표시하지 않는 자리는 검사 대상이 아니다.
-  const placeOk = (!left || left.c0 === 0)
-    && (!right || right.c1 === grid.lines("x").length - 1)
-    && [left, right, rail].every(kept);
-  add("P 자리는 카드다", placeOk,
-      `좌 ${say(left, "첫 열")} · ` +
-      `레일 ${rail ? say(rail, "열 " + rail.c0) : "없음"} · ` +
-      `우 ${say(right, "마지막 열")}`);
+  // 창 사이드바의 배치와 폭을 검증한다.
+  const places = grid.cards.filter(card => isPlace(card.id));
+  const extent = card => card.width === undefined || grid.rect(card.id).w <= card.width + .5;
+  const fullHeight = card => card.fixed && card.r0 === 0 && card.r1 === grid.lines("y").length-1;
+  let placeOk = places.every(card => extent(card) && fullHeight(card));
+  for (const side of ["left", "right"]) {
+    const cardsOnSide = places.filter(card => windowSidebar(card.id).side === side).sort((a,b) => a.c0-b.c0);
+    if (!cardsOnSide.length) continue;
+    placeOk &&= side === "left" ? cardsOnSide[0].c0 === 0 : cardsOnSide.at(-1).c1 === grid.lines("x").length-1;
+    placeOk &&= cardsOnSide.every((card,index) => index === 0 || cardsOnSide[index-1].c1 === card.c0);
+  }
+  add("P 자리는 카드다", placeOk, `${places.length}개 창 사이드바 · 가장자리 연속 열 · 저장 폭 상한 · 전체 높이`);
 
   // W — 창이 그리는 단추는 첫 행의 상하 가운데에 위치한다. 단추는 OS 가 그리고
   // 페이지는 그 영역을 읽을 수 없으므로, 호스트가 반환한 영역을 첫 행과 비교한다.

@@ -596,13 +596,13 @@ export function validateSidebars(sidebars, where) {
     }
     // 세트는 섹션을 모두 쌓아 보이거나(list) 하나씩 탭으로 보인다(tabs).
     if (!["list", "tabs"].includes(set.layout)) throw new Error(`${where}: set ${set.id} layout must be list or tabs`);
-    // 설정 창의 선택 상자가 off 와 inherit 을 세트가 아닌 선택으로 쓴다.
+    // 설정 선택의 off 와 카드 개별 선택의 inherit 은 세트 ID로 사용할 수 없다.
     if (RESERVED_SET_IDS.includes(set.id)) throw new Error(`${where}: set id ${set.id} is reserved`);
     if (setIds.has(set.id)) throw new Error(`${where}: duplicate set ${set.id}`);
     setIds.add(set.id);
   }
   // 연결의 뜻은 docs/spec/settings.md 의 사이드바 선택이다. plugin 이 null 인 left, right 연결은 일반 선택,
-  // 플러그인을 가리키는 left, right 연결은 그 플러그인의 선택(set null 은 사용 안 함), card-left 연결은 플러그인의 카드 왼쪽 사이드바이다.
+  // 플러그인의 창(window-*)과 카드(card-*) 연결은 서로 독립적이며 알려진 세트를 요구한다.
   const seen = new Set();
   for (const link of sidebars.links) {
     if (!isObject(link) || !["left", "right", "window-left", "window-right", "card-left", "card-right", "card-top", "card-bottom"].includes(link.place)) {
@@ -610,17 +610,10 @@ export function validateSidebars(sidebars, where) {
     }
     only(`${where} link`, link, ["place", "plugin", "set"]);
     if (link.plugin !== null && !isText(link.plugin)) throw new Error(`${where}: a link plugin is null or a plugin id`);
-    const isCardSide = link.place.startsWith("card-");
-    const isWindowSide = link.place.startsWith("window-");
-    if ((isCardSide || isWindowSide) && link.plugin === null) throw new Error(`${where}: a ${link.place} link names a plugin`);
-    if (isWindowSide && !setIds.has(link.set)) throw new Error(`${where}: a ${link.place} link requires a known set`);
-    if (link.set === null) {
-      if (isCardSide || link.plugin === null) {
-        throw new Error(`${where}: set null requires a left or right link that names a plugin`);
-      }
-    } else if (!setIds.has(link.set)) {
-      throw new Error(`${where}: every link requires a place (left, right, rail) and a known set`);
-    }
+    const general = link.place === "left" || link.place === "right";
+    if (general && link.plugin !== null) throw new Error(`${where}: a general window link requires plugin null`);
+    if (!general && link.plugin === null) throw new Error(`${where}: a ${link.place} link names a plugin`);
+    if (!setIds.has(link.set)) throw new Error(`${where}: a ${link.place} link requires a known set`);
     // 기본값: plugin 이 없는 연결은 일반 사이드바 연결이며, 겹침 검사 키에서 general 로 적는다.
     const key = `${link.place} ${link.plugin ?? "general"}`;
     if (seen.has(key)) throw new Error(`${where}: link ${key} appears twice`);

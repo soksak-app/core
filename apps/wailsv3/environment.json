@@ -145,12 +145,12 @@
         "set": "set-shell"
       },
       {
-        "place": "right",
+        "place": "window-right",
         "plugin": "shell",
         "set": "set-process"
       },
       {
-        "place": "right",
+        "place": "window-right",
         "plugin": "browser",
         "set": "set-browser"
       }

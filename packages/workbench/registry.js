@@ -60,21 +60,8 @@ export function plugin(id) {
 /** 등록된 플러그인인지 반환한다. 저장된 배치는 다른 환경에서 만들어졌을 수 있다. */
 export const hasPlugin = (id) => registeredPlugins.some((p) => p.id === id);
 
-/** 해당 플러그인의 레일 카드 id 를 반환한다. 레일은 플러그인마다 하나다. */
-export const railId = (id) => `rail-${id}`;
-
-/** 레일 카드 id 의 플러그인 종류를 반환한다. 레일이 아니면 null. */
-export const railKind = (place) => {
-  const found = registeredPlugins.find((p) => railId(p.id) === place);
-  return found ? found.id : null;
-};
-
-/** 레일 카드 id 형식인지 반환한다. 종류가 등록되지 않은 레일도 참이다. */
-export const isRailId = (id) => id.startsWith(railId(""));
-
-/** 고정 자리(좌·우·레일)인지 반환한다. 나머지 카드는 탭을 담는다. */
-export const isPlace = (id) =>
-  id === "left" || id === "right" || railKind(id) !== null;
+/** 고정 창 사이드바 카드인지 판정한다. 등록 검증은 환경과 저장 경계에서 수행한다. */
+export const isPlace = (id) => id === "left" || id === "right" || /^window:[a-z][a-z0-9-]*:(left|right)$/.test(id);
 
 /** id 로 조회한다. 등록되지 않은 id 면 예외를 던진다. */
 export function section(id) {

@@ -2,7 +2,7 @@
 
 [한국어](settings.ko.md)
 
-The replacement window declaration, placement, association and rail-border contract is [external window sidebars](external-sidebars.md); implementation remains pending under V5-117-1-3. It does not change the implemented internal card-side contract.
+The independent window declaration, placement, association and rail-border contract is [external window sidebars](external-sidebars.md). Implementation and full recorded application acceptance are tracked separately under V5-117-1-3. The internal card-side contract remains independent.
 
 This specification defines the sections of the settings window, the settings they show, and the stored form of sidebar sets. [Projects](projects.md#settings) defines scopes and storage files, [native modals](native-modals.md) defines how the window is drawn, and [plugins](plugins.md) defines plugin declarations. [Features](../features.md) records implementation and validation.
 
@@ -28,13 +28,14 @@ The left navigation lists three sections in this order. Every section shows the 
 | 테마 | theme swatches `theme`, 모드 `mode` |
 | 형태 | 통로 `gap`, 모서리 `radius`, 폰트 `font`, 글자 크기 `size` |
 | 위치 | 프로젝트 탭 위치 `projectTabs` |
-| 사이드바 | 사이드바 위치 `cardSidebar`, 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 왼쪽 사이드바 세트 and 오른쪽 사이드바 세트 (each a select of all sets and 사용 안 함, `core.settings.link {place, plugin: null, set}`) |
+| 사이드바 | 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 왼쪽 사이드바 세트 and 오른쪽 사이드바 세트 (each a select of all sets and 사용 안 함, `core.settings.link {place, plugin: null, set}`) |
 | 사이드바 크기 | the width settings of [layout values](#layout-values) |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
 | 진단 | 성능 트레이스 `diagnostics.performance` |
 
-사이드바 위치 is one setting for every plugin; its default is `inset`, and its control lists 카드 안 first. `flow` shows the card sidebar beside the focused card, `pin` keeps it where it stood, `inset` shows it inside every card, and `off` hides it ([example model](example-model.md)). No plugin setting appears in 일반.
+Window choices are independent general and plugin columns. Visibility switches affect every column on the corresponding edge. Card sidebars remain inside their cards; the obsolete `cardSidebar` positioning setting is rejected. No plugin setting appears in 일반.
+
 ### 진단
 
 `diagnostics.performance` is the permanent performance trace ([performance trace](performance-trace.md)). It is a boolean, default false, set through the settings file rather than a settings-window control. While it is false no layer performs any performance logging work — no file is created, no formatting runs. Setting it true makes every layer append events to `logs/performance.ndjson` under the configuration directory, and setting it back false stops the logging at the next event boundary; the file and its rotation belong to the trace, not to the setting, so an old log survives a restart with the flag off.
@@ -53,7 +54,7 @@ The page of a plugin replaces the search field and the list. It shows:
 - The plugin name and description.
 - 설정: one row per setting the manifest declares, in manifest order, named with its `label` and followed by its `description` when it has one. An `enum` is a choice row, an `integer` a slider between its bounds, and a `string` a text field. A plugin without settings shows "이 플러그인에는 설정이 없습니다."
 - 섹션: the names of the sections the plugin declares, as one line of text.
-- 사이드바, for a plugin with a surface: 왼쪽 사이드바 and 오른쪽 사이드바, each a select of 일반 따름, 사용 안 함, and all sets, and 레일 사이드바, a select of 사용 안 함 and all sets. Each runs `core.settings.link {place, plugin, set}`.
+- 사이드바: every plugin has window-left/window-right selectors. A plugin with a surface also has four internal card-side selectors. Every selector offers 사용 안 함 and all sets, and runs `core.settings.link {place, plugin, set}`.
 
 ### 사이드바
 
@@ -89,40 +90,23 @@ A set is `{id, title, sections, layout}`:
 - `sections`: section ids without repetition.
 - `layout`: `list` or `tabs` ([plugins](plugins.md#sections)).
 
-A link is `{place, plugin, set}` with the rules of `environment.json` `sidebars.links`. The effective `sets` and `links` are validated with the plugin-api functions `validateSidebars` and `checkSidebarReferences`, which also validate `environment.json` `sidebars`. The check runs when settings load and before a change is stored. A set that names a section the environment does not register, or a link that names a plugin without a surface or a missing set, fails: a load reports the error and replaces nothing, and a change fails with -32602 (invalid params) and changes nothing.
+A link is `{place, plugin, set}` with the rules of `environment.json` `sidebars.links`. The effective `sets` and `links` are validated with the plugin-api functions `validateSidebars` and `checkSidebarReferences`, which also validate `environment.json` `sidebars`. The check runs when settings load and before a change is stored. A set that names a section the environment does not register, or a card-side link naming a plugin without a surface, a window link naming an unregistered plugin, or a link naming a missing set, fails: a load reports the error and replaces nothing, and a change fails with -32602 (invalid params) and changes nothing.
 
 Deleting a set writes the remaining sets and the links without the ones to it to the same scope in one change.
 
 ## Sidebar choices
 
-Sidebar selectors explicitly select `off` when a card-side link is absent. Every rendered selector rejects a current value outside its offered choices; it must not let the browser select the first option in place of an invalid value.
-
-`links` holds the sidebar choices:
+An absent link explicitly selects `off`. Every selector rejects a current value outside its offered choices instead of allowing the browser to select the first option.
 
 | Link | Meaning |
 |---|---|
-| `{place: "left" or "right", plugin: null, set: "<set id>"}` | The general choice of that sidebar. Without it the general choice is 사용 안 함 |
-| `{place: "left" or "right", plugin: "<plugin id>", set: "<set id>"}` | The plugin shows that set in that sidebar |
-| `{place: "left" or "right", plugin: "<plugin id>", set: null}` | The plugin hides that sidebar (사용 안 함). Without a link for the plugin, the plugin follows the general choice (일반 따름) |
-| `{place: "card-left", "card-right", "card-top", or "card-bottom", plugin: "<plugin id>", set: "<set id>"}` | That side of the plugin card shows the set. Without the link the side has no default set |
+| `{place: "left" or "right", plugin: null, set}` | Independent general window column |
+| `{place: "window-left" or "window-right", plugin, set}` | Independent plugin window column |
+| `{place: "card-top", "card-bottom", "card-left", or "card-right", plugin, set}` | Default set for that internal side of the plugin's cards |
 
-`place` and `plugin` together appear at most once. `set: null` is allowed only on a left or right link that names a plugin. A set id cannot be `off` or `inherit`, because the selects use those two values.
+Every `set` is a known set ID. Each place/plugin pair appears at most once. Reject plugin left/right links, null sets and rail links. Set IDs `off` and `inherit` are reserved. Window columns and stable owners follow [external window sidebars](external-sidebars.md); focus never selects their sets. The `left`/`right` switch hides all window columns on that edge without changing their choices.
 
-The left or right sidebar of a window is resolved from the plugin of the focused card's active tab:
-
-1. If `links` has a link for that place and that plugin, its `set` applies: a set is shown, and `null` hides the sidebar.
-2. Otherwise the general link of that place applies: its set is shown, and without it the sidebar is hidden.
-3. The sidebar stands only while the switch `left` or `right` is on; the switch hides the resolved set without changing any choice.
-
-So both levels can hide a sidebar: with the general choice 사용 안 함, a plugin that chose a set shows it while its card is focused; with a general set, a plugin that chose 사용 안 함 hides the sidebar while its card is focused.
-
-`core.settings.link {place, plugin, set, scope}` changes one choice. `set` is a set id, `off`, or `inherit`:
-
-| Place and plugin | `set` id | `off` | `inherit` |
-|---|---|---|---|
-| left or right, `plugin: null` | Stores the general link | Removes the general link (사용 안 함) | Fails with -32602 |
-| left or right, a plugin | Stores the plugin link | Stores the plugin link with `set: null` | Removes the plugin link (일반 따름) |
-| card-left, a plugin | Stores the card-left link | Removes the card-left link | Fails with -32602 |
+`core.settings.link {place, plugin, set, scope}` accepts a set ID to store a link, or `off` to remove it. `inherit` fails with -32602 for every default link. The separate `core.card.sidebar.set` command still accepts `inherit` to remove a particular card's explicit override ([example model](example-model.md)).
 
 ## Layout values
 
@@ -130,9 +114,9 @@ The following values were constants in `plane.js` and `app.css`. They are core s
 
 | Key | Label | Default | Range | Use |
 |---|---|---|---|---|
-| `sidebarMinWidth` | 최소 폭 | 120 | 60–800 | Smallest width of an inset sidebar |
-| `sidebarMaxWidth` | 최대 폭 | 480 | 60–800 | Largest width of an inset sidebar |
-| `sidebarWidth` | 처음 폭 | 190 | 60–800 | Width of an inset sidebar that has no stored width, and of a card sidebar column that its plugin has not resized in the space |
+| `sidebarMinWidth` | 최소 폭 | 120 | 60–800 | Smallest width of an internal card sidebar |
+| `sidebarMaxWidth` | 최대 폭 | 480 | 60–800 | Largest width of an internal card sidebar |
+| `sidebarWidth` | 처음 폭 | 190 | 60–800 | Initial internal card-sidebar size and width of a new window sidebar without a saved width |
 
 The three values share one range, 60 to 800 points, and their sliders use that range, so equal values sit at equal slider positions. The rows are named 최소 폭, 최대 폭, and 처음 폭 on one line under the group 사이드바 크기.
 
@@ -159,9 +143,9 @@ The following layout constants remain in code because they are tied to the docum
 
 ## Acceptance
 
-- 일반 holds the sidebar appearance controls (`cardSidebar`, `left`, `right`, the left link, the widths) and no plugin setting.
+- 일반 holds the sidebar appearance controls (`left`, `right`, both general links, the widths) and no plugin setting.
 - 사이드바 holds only the set list, 새 세트, and the editor. The editor has no control per registered section: its section controls are one select box and ▲ ▼ − per row, and one +.
 - The section rows choose, move, remove, and add sections through `core.settings.sets.row`; a repeated section is rejected.
 - 플러그인 shows a filtered list; a row opens the plugin page with its settings, sections, and sidebar choices, and 목록 returns to the list.
-- The sidebar resolution holds: general 사용 안 함 with a plugin set shows the set while that plugin's card is focused; a general set with plugin 사용 안 함 hides the sidebar; plugin 일반 따름 shows the general set.
-- The layout values change the inset sidebar limits, default width, folded width, and new card sidebar width.
+- General, plugin-window and internal card choices remain independent through focus and tab changes. A disabled window column does not replace another plugin column.
+- The layout values change internal sidebar limits and initial size and new window-sidebar width.

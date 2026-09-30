@@ -258,9 +258,7 @@ function drawGeneral() {
     row("프로젝트 탭 위치", segment("projectTabs", [["top", "위"], ["left", "왼쪽"]], value("projectTabs"))),
   ]));
 
-  body.append(group("사이드바", "사이드바 위치는 모든 플러그인에 적용된다. 플러그인 페이지에서 고른 왼쪽·오른쪽 사이드바가 이 선택보다 앞선다.", [
-    row("카드 사이드바 위치", segment("cardSidebar",
-      [["inset", "카드 안"], ["flow", "포커스 카드 옆"], ["pin", "고정"], ["off", "없음"]], value("cardSidebar"))),
+  body.append(group("사이드바", "표시 스위치는 해당 변의 모든 창 사이드바에 적용된다. 일반 세트와 플러그인 창 세트는 각각 독립된 열에 표시된다.", [
     row("왼쪽 사이드바 보이기", toggle("left", value("left"))),
     row("오른쪽 사이드바 보이기", toggle("right", value("right"))),
     row("왼쪽 사이드바 세트", choose("link:left:", generalOptions(), choiceOf("left", null))),
@@ -268,7 +266,7 @@ function drawGeneral() {
     ...(scope === "project" && overridden("links") ? [row("", press("reset:links", "전역 연결 사용"))] : []),
   ]));
 
-  body.append(group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 새 카드 사이드바 열이 여는 폭이며 최소 폭과 최대 폭 사이여야 한다.",
+  body.append(group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 새 창 사이드바 열이 여는 폭이며 최소 폭과 최대 폭 사이여야 한다.",
     Object.entries(LAYOUT_RANGES).map(([key, [min, max]]) => row(SIZE_LABELS[key], slide(key, min, max, value(key), "pt")))));
 
   body.append(group("표시", "배치는 그대로 두고 보이는 모습만 바꾼다.", [
@@ -301,12 +299,10 @@ function button(key, name, label, command, params, on = null) {
 const setItems = () => value("sets").map((s) => [s.id, `${s.title} — ${sectionNames(s.sections).join(" · ") || "섹션 없음"}`]);
 /** 일반 선택의 항목: 사용 안 함과 모든 세트. */
 const generalOptions = () => [["off", "사용 안 함"], ...setItems()];
-/** 선택 상자에 보일 현재 선택. 세트 id, off, 또는 inherit(플러그인의 일반 따름)이다. */
+/** 선택 상자에 보일 현재 선택. 세트 id 또는 off 다. */
 function choiceOf(place, plugin) {
   const found = value("links").find((l) => l.place === place && l.plugin === plugin);
-  if (!found) return plugin === null || place.startsWith("card-") ? "off" : "inherit";
-  // 창 좌우의 플러그인 연결만 null을 사용 안 함으로 선언한다.
-  if (found.set === null && plugin !== null && ["left", "right"].includes(place)) return "off";
+  if (!found) return "off";
   return found.set;
 }
 
@@ -383,17 +379,14 @@ function drawPluginPage(unit) {
   names.textContent = unit.sections.length ? sectionNames(unit.sections).join(", ") : "이 플러그인에는 섹션이 없습니다.";
   body.append(group("섹션", "이 플러그인이 사이드바에 제공하는 섹션.", [names]));
 
-  if (unit.surface) {
-    const own = [["inherit", "일반 따름"], ["off", "사용 안 함"], ...setItems()];
-    body.append(group("사이드바", "이 플러그인의 카드가 쓰는 사이드바. 창 좌우는 포커스된 동안, 카드 사방은 그 플러그인 카드의 기본 패널이다.", [
-      row("왼쪽 사이드바", choose(`link:left:${unit.id}`, own, choiceOf("left", unit.id))),
-      row("오른쪽 사이드바", choose(`link:right:${unit.id}`, own, choiceOf("right", unit.id))),
-      row("카드 왼쪽 사이드바", choose(`link:card-left:${unit.id}`, generalOptions(), choiceOf("card-left", unit.id))),
-      row("카드 오른쪽 사이드바", choose(`link:card-right:${unit.id}`, generalOptions(), choiceOf("card-right", unit.id))),
-      row("카드 상단 사이드바", choose(`link:card-top:${unit.id}`, generalOptions(), choiceOf("card-top", unit.id))),
-      row("카드 하단 사이드바", choose(`link:card-bottom:${unit.id}`, generalOptions(), choiceOf("card-bottom", unit.id))),
-    ]));
-  }
+  body.append(group("창 사이드바", "포커스와 무관하게 창 가장자리에 표시한다.", [
+    row("창 왼쪽 사이드바", choose(`link:window-left:${unit.id}`, generalOptions(), choiceOf("window-left", unit.id))),
+    row("창 오른쪽 사이드바", choose(`link:window-right:${unit.id}`, generalOptions(), choiceOf("window-right", unit.id))),
+  ]));
+  if (unit.surface) body.append(group("카드 사이드바", "카드 내부의 네 변에 표시한다.", [
+    ...[["left", "왼쪽"], ["right", "오른쪽"], ["top", "상단"], ["bottom", "하단"]].map(([side,label]) =>
+      row(`카드 ${label} 사이드바`, choose(`link:card-${side}:${unit.id}`, generalOptions(), choiceOf(`card-${side}`,unit.id)))),
+  ]));
 }
 
 function drawPlugins() {

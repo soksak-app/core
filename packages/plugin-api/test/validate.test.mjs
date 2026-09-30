@@ -26,7 +26,7 @@ const environment = () => ({
   },
   sidebars: {
     sets: [{ id: "set-side", title: "Side", sections: ["side.list"], layout: "list" }],
-    links: [{ place: "left", plugin: null, set: "set-side" }, { place: "right", plugin: "probe", set: "set-side" }],
+    links: [{ place: "left", plugin: null, set: "set-side" }, { place: "window-right", plugin: "probe", set: "set-side" }],
   },
   settings: { probe: { "cursor.shape": "block" } },
 });
@@ -135,7 +135,7 @@ test("an environment is rejected for each invalid field", () => {
     [(e) => { e.workspace.focus = "left"; }, /focus must name a card with tabs/],
     [(e) => { e.workspace.grid.cards[1].tabs = []; }, /non-empty array/],
     [(e) => { e.sidebars.links[0].set = "missing"; }, /known set/],
-    [(e) => { e.sidebars.links[0].set = null; }, /set null requires a left or right link that names a plugin/],
+    [(e) => { e.sidebars.links[0].set = null; }, /known set/],
     [(e) => { e.sidebars.sets.push(e.sidebars.sets[0]); }, /duplicate set/],
     [(e) => { delete e.sidebars.sets[0].layout; }, /set set-side layout must be list or tabs/],
     [(e) => { e.sidebars.sets[0].layout = "grid"; }, /set set-side layout must be list or tabs/],
@@ -157,7 +157,7 @@ test("references to missing plugins and sections are rejected", () => {
   const cases = [
     [(e) => { e.workspace.grid.cards[1].tabs[0].plugin = "side"; }, /tab plugin side has no surface/],
     [(e) => { e.sidebars.sets[0].sections.push("side.missing"); }, /unknown section side.missing/],
-    [(e) => { e.sidebars.links[1].plugin = "side"; }, /link names plugin side/],
+    [(e) => { e.sidebars.links[1].plugin = "missing"; }, /unknown plugin missing/],
   ];
   for (const [change, message] of cases) {
     const value = environment();
@@ -292,22 +292,22 @@ test("a plugin manifest requires a description of 1 to 200 characters", () => {
   assert.equal(validateManifest({ ...card, description: "검사용 표면." }).description, "검사용 표면.");
 });
 
-test("sidebar links allow a plugin choice with a set or null and reject repeats and reserved set ids", () => {
+test("sidebar links allow independent window and card choices and reject repeats and reserved set ids", () => {
   const base = () => ({
     sets: [{ id: "set-1", title: "묶음", sections: [], layout: "list" }],
     links: [
       { place: "left", plugin: null, set: "set-1" },
       { place: "right", plugin: null, set: "set-1" },
-      { place: "right", plugin: "side", set: null },
-      { place: "left", plugin: "side", set: "set-1" },
+      { place: "window-right", plugin: "side", set: "set-1" },
+      { place: "window-left", plugin: "side", set: "set-1" },
       { place: "card-left", plugin: "side", set: "set-1" },
     ],
   });
   validateSidebars(base(), "settings");
   for (const [change, error] of [
-    [(s) => { s.links.push({ place: "right", plugin: "side", set: "set-1" }); }, /settings: link right side appears twice/],
-    [(s) => { s.links[0].set = null; }, /set null requires a left or right link that names a plugin/],
-    [(s) => { s.links[4].set = null; }, /set null requires a left or right link that names a plugin/],
+    [(s) => { s.links.push({ place: "window-right", plugin: "side", set: "set-1" }); }, /settings: link window-right side appears twice/],
+    [(s) => { s.links[0].set = null; }, /known set/],
+    [(s) => { s.links[4].set = null; }, /known set/],
     [(s) => { s.links[4].plugin = null; }, /a card-left link names a plugin/],
     [(s) => { s.sets[0].id = "off"; s.links = []; }, /set id off is reserved/],
     [(s) => { s.sets[0].id = "inherit"; s.links = []; }, /set id inherit is reserved/],

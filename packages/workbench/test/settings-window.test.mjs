@@ -158,34 +158,26 @@ test("a stored set or link that breaks the sidebars rules is rejected before any
   assert.throws(() => set({ sets: stored((v) => { v[0].title = ""; }) }, "common"), /title must be 1 to 40/);
   assert.throws(() => set({ links: [{ place: "left", plugin: null, set: "set-9" }] }, "common"), /known set/);
   // 이름 바꿈(V5-116-1): 낡은 rail 자리는 알 수 없는 자리로 거부된다.
-  assert.throws(() => set({ links: [{ place: "rail", plugin: "alpha", set: "set-1" }] }, "common"), /left, right, card-left/);
+  assert.throws(() => set({ links: [{ place: "rail", plugin: "alpha", set: "set-1" }] }, "common"), /requires a place/);
   assert.throws(() => set({ links: [{ place: "card-left", plugin: "beta", set: "set-1" }] }, "common"), /plugin beta without a surface/);
 });
 
-test("a plugin's left or right choice takes precedence over the general choice", () => {
-  const two = [{ id: "set-a", title: "A", sections: [], layout: "list" }, { id: "set-b", title: "B", sections: [], layout: "list" }];
-  const shown = (links, plugin) => resolveSidebar(links, two, "right", plugin)?.id ?? null;
-  // 일반 사용 안 함 + 플러그인 세트 → 보인다.
-  let links = chooseLink([], "right", "alpha", "set-b");
-  assert.equal(shown(links, "alpha"), "set-b");
-  assert.equal(shown(links, "beta"), null);
-  // 일반 세트 + 플러그인 사용 안 함 → 숨는다.
-  links = chooseLink(chooseLink([], "right", null, "set-a"), "right", "alpha", "off");
-  assert.deepEqual(links.find((l) => l.plugin === "alpha"), { place: "right", plugin: "alpha", set: null });
-  assert.equal(shown(links, "alpha"), null);
-  assert.equal(shown(links, "beta"), "set-a");
-  // 플러그인 일반 따름 → 일반 세트.
-  links = chooseLink(links, "right", "alpha", "inherit");
-  assert.equal(links.some((l) => l.plugin === "alpha"), false);
-  assert.equal(shown(links, "alpha"), "set-a");
-  // 일반 사용 안 함은 일반 연결을 뺀다.
-  assert.deepEqual(chooseLink(links, "right", null, "off"), []);
-  assert.throws(() => chooseLink([], "left", null, "inherit"), /inherit/);
-  assert.throws(() => chooseLink([], "card-left", "alpha", "inherit"), /inherit/);
-  assert.deepEqual(chooseLink(chooseLink([], "card-left", "alpha", "set-a"), "card-left", "alpha", "off"), []);
-  assert.equal(resolveSidebar([{ place: "card-left", plugin: "alpha", set: "set-a" }], two, "card-left", "alpha").id, "set-a");
+test("window and card choices are independent without inherited focus selection", () => {
+  const sets = [{ id: "set-a", title: "A", sections: [], layout: "list" }];
+  let links = chooseLink([], "right", null, "set-a");
+  links = chooseLink(links,"window-right","alpha","set-a");
+  assert.equal(resolveSidebar(links,sets,"right",null).id,"set-a");
+  assert.equal(resolveSidebar(links,sets,"window-right","alpha").id,"set-a");
+  assert.equal(resolveSidebar(links,sets,"window-right","beta"),null);
+  links = chooseLink(links,"window-right","alpha","off");
+  assert.equal(resolveSidebar(links,sets,"right",null).id,"set-a");
+  assert.equal(resolveSidebar(links,sets,"window-right","alpha"),null);
+  assert.throws(()=>chooseLink(links,"right","alpha","set-a"),/invalid plugin/);
+  assert.throws(()=>chooseLink(links,"window-right","alpha","inherit"),/inherit/);
+  assert.deepEqual(chooseLink(chooseLink([],"card-left","alpha","set-a"),"card-left","alpha","off"),[]);
 });
 
-test("the sidebar position defaults to the inset sidebar", () => {
-  assert.equal(defaults.cardSidebar, "inset");
+test("the obsolete sidebar positioning setting is absent and rejected",()=>{
+  assert.equal(Object.hasOwn(defaults,"cardSidebar"),false);
+  assert.throws(()=>set({cardSidebar:"inset"},"common"),/Unknown setting: cardSidebar/);
 });

@@ -158,6 +158,11 @@
                 ]
               },
               "orientation": { "type": "string", "enum": ["horizontal", "vertical"] },
+              "placement": { "enum": ["window", "card"] },
+              "plugin": { "type": ["string", "null"] },
+              "side": { "type": ["string", "null"] },
+              "unavailable": { "type": "boolean" },
+              "rect": { "type": "object" },
               "tab": {
                 "type": [
                   "string",
@@ -1158,6 +1163,7 @@
             "path": {
               "type": "string"
             },
+            "groups": { "type": "array", "items": { "type": "object" } },
             "focusMark": {
               "type": [
                 "object",
@@ -1573,7 +1579,7 @@
       },
       {
         "name": "core.settings.link",
-        "description": "Changes one sidebar choice (docs/spec/settings.md#sidebar-choices): set is a set id, off, or inherit. A plugin null left or right choice is the general choice; inherit applies only to a plugin's left or right choice. A rejected choice fails with invalid params.",
+        "description": "Changes a general window, plugin window, or card-side choice. A set ID selects a set; off removes the link. Window choices have no inheritance.",
         "params": {
           "type": "object",
           "properties": {
@@ -1581,6 +1587,8 @@
               "enum": [
                 "left",
                 "right",
+                "window-left",
+                "window-right",
                 "card-left",
                 "card-right",
                 "card-top",

@@ -151,10 +151,8 @@ export const defaults = {
      모든 빌드에 상시 있는 장치다(docs/spec/settings.md). */
   "diagnostics.performance": false,
 
-  /* 프로젝트 탭의 위치. top = 크롬 행, left = 왼쪽 세로 레일. */
+  /* 프로젝트 탭의 위치. top = 크롬 행, left = 왼쪽 세로 목록. */
   projectTabs: "top",
-  /* 카드 사이드바 위치. inset = 카드 안(기본값), flow = 포커스 카드 옆 열, pin = 고정 열, off = 표시하지 않음. */
-  cardSidebar: "inset",
   /* 좌·우 영역의 표시 여부. 무엇을 표시할지는 links 가 정한다. */
   left: true,
   right: true,
@@ -184,7 +182,7 @@ export const defaults = {
   sets: [],
   links: [],
 
-  /* 배치 값(pt). 카드 안 사이드바의 최소·최대 폭, 그리고 카드 안 사이드바와 새 레일 열의 처음 폭이다(docs/spec/settings.md). */
+  /* 배치 값(pt). 카드 사이드바의 최소·최대 폭과 새 사이드바의 초기 폭이다(docs/spec/settings.md). */
   sidebarMinWidth: 120,
   sidebarMaxWidth: 480,
   sidebarWidth: 190,

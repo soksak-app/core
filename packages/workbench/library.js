@@ -3,7 +3,7 @@ import * as projects from "./projects.js";
 import { fresh } from "./plane.js";
 import { windows } from "@soksak/runtime";
 import { icon } from "./icons.js";
-import { hasPlugin, isPlace, isRailId, plugin } from "./registry.js";
+import { hasPlugin, isPlace, plugin } from "./registry.js";
 import { delegate, mark } from "./commands.js";
 
 const TINTS = ["#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"];
@@ -190,8 +190,8 @@ export function createLibrary(root, rendered = () => {}) {
   return {render, state, actions};
 }
 
-// 등록되지 않은 종류의 레일도 자리다. 판이 열면서 치운다.
-const aside=(id)=>isPlace(id)||isRailId(id);
+// 미리보기의 창 사이드바 열은 내용 카드와 구분한다.
+const aside=(id)=>isPlace(id);
 
 function preview(project) {
   const el=element('div','library-preview'); el.setAttribute('aria-hidden','true');

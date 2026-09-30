@@ -7,13 +7,14 @@
 import { Soksak, SoksakView, outline } from "soksak";
 import { cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
 import { nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
-import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind } from "./registry.js";
+import { isPlace, plugin, plugins } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
 import { bindSidebarGrip } from "./sidebar-grip.js";
 import { targetCardInsets } from "./card-insets.js";
 import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.js";
 import { SIDEBAR_SIDES, presentSidebars, effectiveSidebar, resolveSidebarSet, setSidebar, sizeSidebar, toggleSidebar } from "./card-sidebars.js";
-import { environment } from "./environment.js";
+import { restoreWindowSidebars, reconcileWindowSidebars, windowSidebar, windowSidebarCards, windowOwner } from "./window-sidebars.js";
+import { environment, pluginUnits } from "./environment.js";
 import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
 import { issueId } from "./ids.js";
@@ -99,22 +100,8 @@ const railPath = document.getElementById("railPath");
 const dropEl = document.getElementById("drop");
 const pickerEl = document.getElementById("picker");
 
-// 레일을 닫으면 카드와 함께 폭도 사라진다. 사용자가 드래그로 지정한 폭을 플러그인
-// 종류별로 보관했다가 다시 열 때 그 폭으로 복원한다. 설정이 아니라 스페이스의 값이다.
-// 폭을 바꾼 적이 없는 종류는 설정 sidebarWidth 로 연다.
-// 등록이 끝난 뒤에 채운다. 모듈 평가 시점에 읽으면 등록 순서에 따라 결과가 달라진다.
-let railWidth = {};
-let edgeWidth = {};
-
-/* ── 자리 ─────────────────────────────────────────────────────────────────
-   어디 서는가          무엇이 서는가
-   left   첫 열, 고정폭      포커스와 무관하게 걸린 세트
-   right  마지막 열, 고정폭   포커스된 플러그인에 걸린 세트
-   rail   가운데 열, 고정폭   포커스된 플러그인에 걸린 세트 · 포커스를 따라 이동
-   셋 다 카드다. 자리 사이에 모드 전환은 없다 — 자리가 곧 규칙이다.
-
-   무엇이 서는지는 여기서 정하지 않는다. 사람이 섹션을 골라 세트로 묶고,
-   설정에서 그 세트를 자리에 건다. 걸지 않으면 그 사이드바는 없다.        */
+// 창 사이드바의 폭과 소유 탭을 공간에 보관하고 숨김·재표시 후에도 유지한다.
+let windowSidebars = {};
 
 let grid, view, focusedId;
 // 탭 제목의 번호. 식별자가 아니라 표시용 이름이므로 카운터로 만든다.
@@ -150,12 +137,9 @@ function newTab(kind) {
  * 연결된 세트가 없으면 null 을 반환하고 사이드바를 표시하지 않는다.
  */
 function standingSet(place) {
-  // 레일은 자신의 플러그인 종류에 해당하는 세트를 표시한다. 포커스가 다른 종류로
-  // 이동해도 레일의 종류는 바뀌지 않는다.
-  const kind = railKind(place);
-  // 좌·우는 포커스 카드 플러그인의 선택이 일반 선택보다 앞선다(docs/spec/settings.md 의 사이드바 선택).
-  const set = kind ? linkedSet("card-left", kind) : linkedSet(place, focusedPlugin());
-  return set;
+  const descriptor = windowSidebar(place);
+  if (!descriptor) throw new Error(`unknown window sidebar ${place}`);
+  return linkedSet(descriptor.plugin === null ? descriptor.side : `window-${descriptor.side}`, descriptor.plugin);
 }
 
 /** environment.json 의 workspace.grid 로 새 스페이스의 배치를 만든다. 탭 id 는 새로 발급한다. */
@@ -236,26 +220,20 @@ function updateCard(el, card, rect) {
   }
 
   if (place) {
-    const kind = railKind(place);
+    const { plugin: kind, side } = windowSidebar(place);
     // 사이드바 카드는 머리 줄을 보이지 않는다. 섹션이 맨 위에서 시작하고 자리 설명은 상태 줄이 한다.
     el.dataset.place = place;
     const set = standingSet(place);
     const holder = el.querySelector(".set");
     if (set) {
-      // 좌측 사이드바는 카드에 속하지 않는다. 다른 사이드바는 포커스한 카드와 그 활성 탭을 섹션에 넘긴다.
-      const owner = place === "left" ? null : grid.card(focusedId);
-      // 기본값: 좌측 사이드바는 카드에 속하지 않으므로 카드와 표면이 없다(null).
-      drawSet(holder, card.id, set, { card: owner?.id ?? null, surface: activeTab(owner)?.id ?? null, orientation: "vertical" });
+      // 창 사이드바는 저장 소유 탭을 넘기며 포커스와 활성 탭 변경으로 대상을 바꾸지 않는다.
+      const owner = windowOwner(windowSidebars, place, grid.cards);
+      // 일반 사이드바나 연결 없는 플러그인 사이드바는 카드와 표면이 없다(null).
+      drawSet(holder, card.id, set, { ...owner, orientation: "vertical", window: true, plugin: kind, side });
     } else {
-      clearSet(holder);
-      setHTML(holder, '<p class="set__empty">포커스된 플러그인 없음</p>');
+      throw new Error(`window sidebar ${place} has no set`);
     }
-    setText(status, place === "left"
-      ? `열 ${card.c0}–${card.c1} · 설치 전체가 한 세트`
-      : kind
-        ? `열 ${card.c0}–${card.c1} · ${kind}${focusedPlugin() === kind ? " · 포커스" : ""}`
-        // 기본값: 포커스된 플러그인이 없으면 진단 제목에 없음을 적는다.
-        : `열 ${card.c0}–${card.c1} · 포커스: ${focusedPlugin() ?? "없음"}`);
+    setText(status, `${side === "left" ? "왼쪽" : "오른쪽"} 창 사이드바${kind ? ` · ${kind}` : ""}`);
     return;
   }
 
@@ -381,27 +359,6 @@ async function closeTab(cardId, tabId) {
   // 기본값: 자리 카드만 남으면 포커스할 카드가 없다(null).
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   settle();
-}
-
-/* 등록되지 않은 플러그인의 탭과 레일을 치운다. 저장된 배치는 다른 환경에서
-   만들어졌을 수 있다. 탭이 모두 없어진 카드는 탭을 닫을 때와 같이 닫거나, 닫을 수
-   없으면 새 탭 하나를 받는다. */
-function forgetUnknown() {
-  for (const { id } of [...grid.cards]) {
-    const card = grid.card(id);
-    if (!card) continue;
-    if (isRailId(id) && !isPlace(id)) { dismiss(id); continue; }
-    const tabs = tabsOf(card);
-    if (tabs.every((t) => hasPlugin(t.plugin))) continue;
-    card.data.tabs = tabs.filter((t) => hasPlugin(t.plugin));
-    if (card.data.tabs.length === 0) {
-      if (grid.canClose(id)) { grid.close(id); continue; }
-      const kind = focusedPlugin();
-      card.data.tabs = [newTab(hasPlugin(kind) ? kind : plugins()[0].id)];
-    }
-    if (!tabsOf(card).some((t) => t.id === card.data.activeId)) card.data.activeId = card.data.tabs[0].id;
-  }
-  for (const kind of Object.keys(railWidth)) if (!hasPlugin(kind)) delete railWidth[kind];
 }
 
 /* ── 탭 드래그 — T3/T4/T5 ─────────────────────────────────────────────── */
@@ -885,90 +842,19 @@ function drawCardSidebars(el, card, rect) {
   }
 }
 
-/* ── 레일. 카드이므로 이동에 move() 를 사용한다 ───────────────────────── */
-
-/**
- * 레일은 판을 가로지르는 카드다.
- *
- * 카드 하나를 분할해서 만들 수 없다. 분할하면 그 카드의 행 범위만 차지한다. 어떤
- * 카드도 걸치지 않는 경계에 열로 삽입하고, 이동은 그 열을 빼서 다른 경계에 넣는다.
- * 닫고 다시 여는 것이 아니므로 다른 카드의 행 경계가 움직이지 않는다.
- */
-function standRail(kind) {
-  const id = railId(kind);
-  const has = !!grid.card(id);
-  // 레일은 포커스한 카드 옆에 표시한다. 자기 플러그인 종류가 포커스를 잃으면
-  // 닫는다. 그 종류의 레일을 연결하지 않았으면 아무 레일도 표시하지 않는다.
-  // inset 은 사이드바를 카드 안에 두므로 열을 세우지 않는다.
-  if (!linkedSet("card-left", kind) || value("cardSidebar") === "off" || value("cardSidebar") === "inset" || focusedPlugin() !== kind) {
-    if (has) {
-      // 기본값: 경계를 끌어 px 폭을 정하지 않은 카드에는 width 가 없으므로 보관한 폭을 유지한다.
-      railWidth[kind] = grid.card(id).width ?? railWidth[kind];
-      dismiss(id);
-    }
-    return;
-  }
-  if (!has) {
-    const line = railTarget(id, kind);
-    if (line === null) return;
-    // 기본값: 한 번도 선 적이 없는 레일 열은 sidebarWidth 폭으로 선다(docs/spec/example-model.md).
-    grid.insertAt("x", line, { id, data: null, size: railWidth[kind] ?? value("sidebarWidth") });
-    grid.setFixed(id, true);
-    return;
-  }
-  // 표시 중에 사용자가 드래그로 바꾼 폭을 보관한다. 닫을 때만 읽으면 그 사이의
-  // 변경을 놓친다.
-  // 기본값: 경계를 끌어 px 폭을 정하지 않은 카드에는 width 가 없으므로 보관한 폭을 유지한다.
-  railWidth[kind] = grid.card(id).width ?? railWidth[kind];
-  if (value("cardSidebar") !== "flow") return;                  // PIN — 자리를 지킨다
-  const line = railTarget(id, kind);
-  if (line !== null) grid.moveTo(id, "x", line);
-}
-
-/**
- * 레일을 배치할 경계를 반환한다.
- *
- * 레일이 차지한 열은 다른 카드의 위치를 190px 이동시킨다. 그 위치를 기준으로 고르면
- * 결과가 레일 자신에 의존하므로, `standings` 에 레일을 제외하도록 요청해 레일이 없는
- * 배치에서 측정한다.
- */
-function railTarget(id, kind) {
-  // 레일 자신의 경계도 후보에 포함한다. 이미 올바른 자리면 그 자리를 반환하고
-  // moveTo 는 제자리 이동을 성공으로 처리한다.
-  //
-  // 판의 왼쪽 테두리는 어떤 카드도 가로지르지 않으므로 언제나 후보이고, 그 자리는
-  // 0 이다. 그래서 후보가 없는 경우도, 기준 카드의 왼쪽에 후보가 없는 경우도 없다.
-  const stands = grid.standings("x", id);
-
-  // 자기 종류를 표시하는 카드 옆에 배치한다. 포커스가 그 종류면 그 카드, 아니면 그
-  // 종류를 가진 가장 왼쪽 카드를 기준으로 한다. 없으면 배치하지 않는다.
-  const beside = focusedPlugin() === kind
-    ? grid.card(focusedId)
-    : grid.cards
-        .filter((c) => !isPlace(c.id) && activeTab(c)?.plugin === kind)
-        .sort((a, b) => grid.rect(a.id).x - grid.rect(b.id).x)[0];
-  if (!beside) return null;
-  const want = grid.rect(beside.id).x;
-
-  // P3 — 기준 카드의 왼쪽에 배치한다. 바로 왼쪽에 자리가 없으면 더 왼쪽으로 이동한다.
-  // 오른쪽으로는 이동하지 않는다.
-  const onLeft = stands.filter((k) => grid.boundaryPos("x", k) <= want + 0.5);
-  return onLeft.reduce((a, k) => (grid.boundaryPos("x", k) > grid.boundaryPos("x", a) ? k : a));
-}
-
 /**
  * 고정 자리를 제거한다.
  *
  * `fixed` 는 레이아웃이 그 카드를 이동하거나 닫지 않는다는 뜻이므로 제거 전에 해제한다.
- * `canClose` 는 `fixed` 카드에 항상 false 를 반환한다. 레일과 좌·우가 같은 함수를 쓴다.
+ * `canClose` 는 `fixed` 카드에 항상 false 를 반환한다.
  */
 function dismiss(id) {
   if (!grid.card(id)) return;
   grid.setFixed(id, false);
-  if (!grid.close(id)) { grid.setFixed(id, true); return; }   // 치우지 못했으면 역할도 그대로
+  if (!grid.close(id)) { grid.setFixed(id, true); throw new Error(`cannot remove window sidebar ${id}`); }   // 치우지 못했으면 역할도 그대로
   // 카드를 닫으면 그 카드가 참조하던 선을 아무도 참조하지 않는다. 라이브러리는 그런
   // 선을 남기고 제거 시점을 호스트에 맡긴다. 남겨 두면 확장된 카드가 그 선을 가로질러
-  // `standings` 가 후보로 반환하지 않고, 레일이 다시 열릴 때 새 선이 추가되어 같은
+  // `standings` 가 후보로 반환하지 않고, 사이드바가 다시 열릴 때 새 선이 추가되어 같은
   // 자리에 선이 누적된다.
   grid.tidy();
 }
@@ -980,33 +866,36 @@ function dismiss(id) {
  * `splitToward` 가 아니라 `insertAt` 을 사용한다. 분할하면 분할된 카드의 행 범위를
  * 상속해 한 행만 차지하지만, 사이드바는 판을 가로질러야 한다.
  */
-function standEdge(id, on, side) {
-  const has = !!grid.card(id);
-  // 기본값: 경계를 끌어 px 폭을 정하지 않은 카드에는 width 가 없으므로 보관한 폭을 유지한다.
-  if (has) edgeWidth[id] = grid.card(id).width ?? edgeWidth[id];
-  const size = edgeWidth[id];
-  if (on && !has) {
-    const line = side === "left" ? 0 : grid.lines("x").length - 1;
-    if (grid.canInsertAt("x", line)) {
-      grid.insertAt("x", line, { id, data: null, size });
-      grid.setFixed(id, true);
-    }
-  } else if (!on && has) {
-    dismiss(id);
-  }
-}
-
-/* ── 렌더링 ───────────────────────────────────────────────────────────── */
-
 function settle() {
   if (!grid) return;
   closePicker();
-  // 자리가 켜져 있고 그 자리에 세트가 걸려 있을 때만 선다. 걸지 않은 사이드바는
-  // 표시할 것이 없다.
-  standEdge("left", value("left") && !!standingSet("left"), "left");
-  standEdge("right", value("right") && !!standingSet("right"), "right");
-  for (const p of plugins()) standRail(p.id);
-  // 기본값: 자리 카드만 남으면 포커스할 카드가 없다(null).
+  const descriptors = windowSidebarCards(pluginUnits(), value("links"));
+  reconcileWindowSidebars(windowSidebars, [...descriptors, ...grid.cards.filter(card => isPlace(card.id)).map(card => ({ id: card.id, ...windowSidebar(card.id) }))], grid.cards, value("sidebarWidth"));
+  for (const card of [...grid.cards].filter(card => isPlace(card.id))) {
+    if (card.width !== undefined) windowSidebars[card.id].width = card.width;
+    if (!descriptors.some(item => item.id === card.id && value(item.side))) dismiss(card.id);
+  }
+  for (const side of ["left", "right"]) {
+    const desired = descriptors.filter(item => item.side === side && value(side));
+    for (const item of desired) {
+      if (!grid.card(item.id)) {
+        const line = side === "left" ? 0 : grid.lines("x").length - 1;
+        if (!grid.canInsertAt("x", line)) throw new Error(`cannot place window sidebar ${item.id}`);
+        grid.insertAt("x", line, { id: item.id, data: null, size: windowSidebars[item.id].width });
+        grid.setFixed(item.id, true);
+      }
+    }
+    const actual = grid.cards.filter(card => isPlace(card.id) && windowSidebar(card.id).side === side).sort((a,b) => a.c0-b.c0).map(card => card.id);
+    const expected = (side === "left" ? desired : [...desired].reverse()).map(item => item.id);
+    if (JSON.stringify(actual) === JSON.stringify(expected)) continue;
+    // 순서가 달라진 경우에만 열을 이동한다. 포커스 변경은 열을 이동하지 않는다.
+    for (const item of [...desired].reverse()) {
+      const card = grid.card(item.id);
+      if ((side === "left" && card.c0 !== 0) || (side === "right" && card.c1 !== grid.lines("x").length - 1)) {
+        if (!grid.moveTo(item.id, "x", side === "left" ? 0 : grid.lines("x").length - 1)) throw new Error(`cannot order window sidebar ${item.id}`);
+      }
+    }
+  }
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   view.render();
   syncBackgroundSessions();
@@ -1221,35 +1110,31 @@ function markFocus() {
 }
 
 /* 마지막으로 그린 레일 외곽선. 검증기가 읽는다. */
-let railShape = { shape: { path: "", loops: [], corners: 0, sharp: 0 }, rects: [] };
+let railShape = { shape: { path: "", loops: [], corners: 0, sharp: 0 }, rects: [], groups: [] };
 
 /** 마지막으로 그린 레일 외곽선과 그 대상 사각형. */
 export const railOutline = () => railShape;
 
 function drawRail() {
-  const pad = grid.gap / 2;
-  // 포커스 카드와 묶는 대상은 그 카드의 종류를 담당하는 레일뿐이다. 레일이 없으면
-  // 외곽선을 그리지 않는다. `filter(Boolean)` 만 두면 포커스 카드 하나만 감싼
-  // 외곽선을 레일 외곽선으로 그리게 된다.
-  // 격자는 준비 중인 다음 배치를 이미 담을 수 있다. 카드 요소는 그린 배치에 있으므로
-  // 외곽선도 그린 사각형으로 그려야 카드와 같은 자리에 선다.
-  const kind = focusedPlugin();
-  const rail = kind ? view.painted(railId(kind)) : null;
-  const focused = view.painted(focusedId);
-  // 변 없이 그려진 카드는 감쌀 것이 없다. 획은 카드에서 통로의 절반만큼 떨어져
-  // 지나므로, 두께 없는 카드를 감싸면 그 획이 이웃 카드의 안쪽을 가로지른다.
-  const drawable = (r) => r !== undefined && r.w > 0 && r.h > 0;
-  const rects = drawable(rail) && drawable(focused) ? [rail, focused] : [];
-  // 획은 카드에서 pad 만큼 떨어진 경로를 그린다. 카드 모서리와 동심이려면 반경도
-  // 그만큼 커야 하고, 그 값은 방향과 무관하게 하나다. 각진 카드의 동심 외곽선은
-  // 각지다. pad 를 더하면 반경이 0 보다 커져 모서리가 깎이고, 그 경사 때문에 가로
-  // 변의 두 끝이 서로 다른 줄에 놓인다.
-  const corner = cardRadius();
-  const shape = outline(rects, { pad, radius: corner === 0 ? 0 : corner + pad });
-  // viewBox 를 두면 판이 커질 때 요소가 먼저 늘어나면서 이전 경로가 함께 늘어나, 레일이 카드보다
-  // 먼저 움직이는 것으로 보인다. 좌표계를 CSS 픽셀로 두면 다시 그릴 때까지 카드처럼 제자리에 있다.
+  const byCard = new Map();
+  for (const card of grid.cards.filter(card => isPlace(card.id))) {
+    const owner = windowOwner(windowSidebars, card.id, grid.cards);
+    if (!owner.card) continue;
+    const ids = byCard.get(owner.card) ?? [];
+    ids.push(card.id); byCard.set(owner.card, ids);
+  }
+  const pad = grid.gap / 2, corner = cardRadius();
+  const groups = [];
+  for (const [card, sidebars] of byCard) {
+    const rects = [card, ...sidebars].map(id => view.painted(id)).filter(rect => rect && rect.w > 0 && rect.h > 0);
+    if (rects.length !== sidebars.length + 1) continue;
+    const shape = outline(rects, { pad, radius: corner === 0 ? 0 : corner + pad });
+    groups.push({ card, sidebars, ...shape, rects });
+  }
+  const shape = { path: groups.map(group => group.path).join(" "), loops: groups.flatMap(group => group.loops),
+    corners: groups.reduce((n,group) => n + group.corners,0), sharp: groups.reduce((n,group) => n + group.sharp,0) };
   railPath.setAttribute("d", shape.path);
-  return { shape, rects };
+  return { shape, rects: groups.flatMap(group => group.rects), groups };
 }
 
 
@@ -1305,19 +1190,38 @@ function seats(rects) {
   return out;
 }
 
+function restoreWindowState(kept) {
+  if (Object.hasOwn(kept, "railWidth") || Object.hasOwn(kept, "edgeWidth")) throw new Error("obsolete window sidebar state");
+  const units = pluginUnits();
+  for (const card of kept.state.cards) {
+    if (card.id.startsWith("rail-")) throw new Error(`obsolete stored rail card ${card.id}`);
+    const descriptor = windowSidebar(card.id);
+    if (descriptor) {
+      if (descriptor.plugin !== null && !units.some(unit => unit.id === descriptor.plugin)) throw new Error(`unknown stored window sidebar ${card.id}`);
+      if (card.data !== null && card.data !== undefined) throw new Error(`invalid stored window sidebar data ${card.id}`);
+    } else {
+      const tabs = card.data?.tabs;
+      if (!Array.isArray(tabs) || !tabs.length) throw new Error(`invalid stored content card ${card.id}`);
+      for (const tab of tabs) if (!units.some(unit => unit.id === tab.plugin && unit.surface)) throw new Error(`unknown stored tab plugin ${tab.plugin}`);
+      if (!tabs.some(tab => tab.id === card.data.activeId)) throw new Error(`invalid stored active tab ${card.id}`);
+    }
+  }
+  for (const id of Object.keys(kept.sidebars ?? {})) if (id.startsWith("rail-")) throw new Error(`obsolete stored sidebar ${id}`);
+  return restoreWindowSidebars(kept.windowSidebars ?? {}, units, kept.state.cards);
+}
+
 /** 판을 처음부터 다시 만든다. */
 function build(kept) {
+  const restored = restoreWindowState(kept);
   view?.destroy();
   named = kept.named;
   // 사이드바마다 고른 탭과 접은 섹션. sidebars 가 없는 배치에는 저장된 선택이 없다(docs/spec/projects.md#persistence).
   // 기본값: sidebars 가 없는 저장 배치에는 저장된 선택이 없다(docs/spec/projects.md#persistence).
   restoreSidebarChoices(kept.sidebars ?? {});
-  railWidth = { ...kept.railWidth };
-  edgeWidth = { ...kept.edgeWidth };
+  windowSidebars = restored;
   const half = halfGap();
   grid = new Soksak(kept.state, { gap: half * 2 });
   focusedId = kept.focusedId;
-  forgetUnknown();
   view = new SoksakView(plane, grid, {
     createCard, updateCard,
     // 판은 stage 안쪽으로 이 값만큼 들어와 있다. 호스트만 아는 값이므로 뷰에 전달해야
@@ -1411,29 +1315,30 @@ export function setGap(half) {
 /**
  * 현재 판의 상태를 한 벌로 반환한다. 스페이스가 이 값을 보관한다.
  *
- * 배치, 포커스, 닫힌 레일의 복원 폭. 셋 다 스페이스의 값이고 판의 값이 아니다.
+ * 배치, 포커스, 창 사이드바 폭과 연결 대상은 공간의 값이다.
  * 판은 한 번에 스페이스 하나를 그린다.
  */
-export const capture = () => ({
-  state: grid.toJSON(),
-  focusedId,
-  railWidth: { ...railWidth },
-  edgeWidth: { ...edgeWidth },
-  named,
-  sidebars: sidebarChoices(),
-});
+export const capture = () => {
+  for (const card of grid.cards.filter(card => isPlace(card.id))) {
+    if (card.width !== undefined) windowSidebars[card.id].width = card.width;
+  }
+  return {
+    state: grid.toJSON(), focusedId,
+    windowSidebars: structuredClone(windowSidebars),
+    named, sidebars: sidebarChoices(),
+  };
+};
 
 /** 보관해 둔 상태 한 벌을 판에 적용한다. */
 export function adopt(kept) {
   if (!grid) return build(kept);
+  const restored = restoreWindowState(kept);
   grid.replace(kept.state);
   focusedId = kept.focusedId;
-  railWidth = { ...kept.railWidth };
-  edgeWidth = { ...kept.edgeWidth };
+  windowSidebars = restored;
   named = kept.named;
   // 기본값: sidebars 가 없는 저장 배치에는 저장된 선택이 없다(docs/spec/projects.md#persistence).
   restoreSidebarChoices(kept.sidebars ?? {});
-  forgetUnknown();
   settle();
 }
 
@@ -1441,10 +1346,9 @@ export function adopt(kept) {
 export const fresh = () => ({
   state: initial(),
   focusedId: environment().workspace.focus,
-  railWidth: {},
-  // 좌·우 사이드바를 다시 열 때의 폭. 처음 값은 environment.json 의 left, right 카드 폭이다.
-  edgeWidth: Object.fromEntries(environment().workspace.grid.cards
-    .filter((card) => card.id === "left" || card.id === "right").map((card) => [card.id, card.width])),
+  windowSidebars: Object.fromEntries(environment().workspace.grid.cards
+    .filter(card => card.id === "left" || card.id === "right")
+    .map(card => [card.id, { width: card.width ?? value("sidebarWidth"), owner: null }])),
   named: 0,
   sidebars: {},
 });
@@ -1609,6 +1513,7 @@ export function railState() {
   const mark = document.getElementById("focusMark");
   return {
     path: railShape.shape.path,
+    groups: railShape.groups,
     focusMark: mark.hidden ? null : {
       x: parseFloat(mark.style.left), y: parseFloat(mark.style.top),
       w: parseFloat(mark.style.width), h: parseFloat(mark.style.height),

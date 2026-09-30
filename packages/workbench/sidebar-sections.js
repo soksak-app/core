@@ -61,7 +61,7 @@ function sectionContext(entry, context) {
     icon,
     status(name, fn) {
       own(name);
-      const stop = name.startsWith("core.") ? registry.observeCore(name, fn) : registry.observe(name, context.surface, fn);
+      const stop = name.startsWith("core.") ? registry.observeCore(name, fn) : registry.observe(name, context.surface, fn, { exact: context.window === true });
       entry.observing.push(stop);
       return () => {
         const at = entry.observing.indexOf(stop);
@@ -153,11 +153,11 @@ export function drawSet(container, sidebar, set, context) {
   const choice = choiceOf(sidebar);
   // 기본값: 섹션이 없는 세트에는 고를 탭이 없다(null).
   if (set.layout === "tabs" && !sections.some((s) => s.id === choice.tab)) choice.tab = sections[0]?.id ?? null;
-  const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.surface, context.orientation]);
+  const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.surface, context.orientation, context.window === true]);
   let record = drawn.get(container);
   if (record?.key !== key) {
     if (record) clearSet(container);
-    record = { sidebar, key, set: set.id, layout: set.layout, context, entries: [] };
+    record = { container, sidebar, key, set: set.id, layout: set.layout, context, entries: [] };
     drawn.set(container, record);
     container.dataset.sidebar = sidebar;
     container.dataset.orientation = context.orientation;
@@ -185,6 +185,7 @@ export function drawSet(container, sidebar, set, context) {
         mount: null, mounted: false, error: null, observing: [] };
       entry.body.className = "set__body";
       if (context.surface) entry.body.dataset.surface = context.surface;
+      if (context.window) entry.body.dataset.windowSidebar = "";
       // 섹션이 그린 내용은 core.sidebars 의 text 로 드러나므로, 내용이 바뀌면 알린다.
       entry.watcher = typeof MutationObserver === "function" ? new MutationObserver(notify) : null;
       entry.watcher?.observe(entry.body, { subtree: true, childList: true, characterData: true });
@@ -214,6 +215,7 @@ export function drawSet(container, sidebar, set, context) {
     }
     notify();
   }
+  record.context = context;
   apply(record);
 }
 
@@ -278,6 +280,11 @@ export function sidebarsState() {
         sidebar: record.sidebar, set: record.set, layout: record.layout, orientation: record.context.orientation,
         tab: record.layout === "tabs" ? choice.tab : null,
         card: record.context.card, surface: record.context.surface,
+        placement: record.context.window ? "window" : "card",
+        plugin: record.context.plugin ?? null,
+        side: record.context.side ?? null,
+        rect: (() => { const {x,y,width:w,height:h} = record.container.getBoundingClientRect(); return {x,y,w,h}; })(),
+        unavailable: Boolean(record.context.window && !record.context.available),
         sections: record.entries.map((entry) => ({
           id: entry.section.id, name: entry.section.name,
           folded: record.layout === "list" && choice.folded.has(entry.section.id),

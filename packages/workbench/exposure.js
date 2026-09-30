@@ -196,11 +196,12 @@ export function createRegistry({ call = null } = {}) {
   }
 
   /** 이름을 등록한 표면 중 이 문서의 요청이 쓸 표면. wanted 가 등록했으면 그 표면이고, 없으면 null 이다. */
-  function target(kind, name, wanted) {
+  function target(kind, name, wanted, exact = false) {
     if (pageOf(kind, name)) return null;
     const owners = surfaces.get(declarationKey(kind, name));
     if (!owners?.size) return null;
     if (wanted && owners.has(wanted)) return wanted;
+    if (exact) return null;
     // 기본값: 선호하는 표면이 등록하지 않았으면 마지막에 등록한 표면이 답한다.
     return options.preferred().find((surface) => owners.has(surface)) ?? [...owners.keys()].at(-1);
   }
@@ -241,7 +242,7 @@ export function createRegistry({ call = null } = {}) {
       }, observeFailed(observer.name, "state"));
       return;
     }
-    const surface = target("status", observer.name, observer.wanted);
+    const surface = target("status", observer.name, observer.wanted, observer.exact);
     const live = observer.watch && following.get(watchKey(observer.name, surface)) === observer.watch;
     if (observer.surface === surface && (surface === null || live)) return;
     detach(observer);
@@ -320,7 +321,14 @@ export function createRegistry({ call = null } = {}) {
      * 호출된다. surface 가 그 이름을 등록했으면 그 표면을, 아니면 요청의 기본 선택을 따라가고,
      * 등록한 표면이 없으면 fn(null, null) 이다. 등록이 바뀌면 표면을 다시 고른다. 해제 함수를 반환한다.
      */
-    chosen: (kind, name, wanted) => target(kind, name, wanted),
+    chosen: (kind, name, wanted, exact = false) => target(kind, name, wanted, exact),
+
+    runOwned(name, params, owner) {
+      if (pageOf("command", name)) return answer("command.run", { name, params });
+      const surface = target("command", name, owner, true);
+      if (surface === null) return Promise.reject(new ExposureError(EXPOSURE_ERRORS.unregistered, `owner ${owner ?? "none"} has not registered command ${name}`));
+      return answer("command.run", { name, params, surface });
+    },
 
     /**
      * 플러그인 owner 의 상태 모듈이 이 문서에 항목을 등록하는 표를 만든다. 플러그인마다 하나이며,
@@ -357,9 +365,9 @@ export function createRegistry({ call = null } = {}) {
     /** 코어 status 하나를 이 문서 안에서 따라간다. fn(value, "core") 이며 해제 함수를 반환한다. */
     observeCore: (name, fn) => core.follow(name, (value) => fn(value, "core")),
 
-    observe(name, surface, fn) {
+    observe(name, surface, fn, { exact = false } = {}) {
       // 기본값: 표면을 지정하지 않은 관찰은 원하는 표면이 null 이다.
-      const observer = { name, wanted: surface ?? null, fn, surface: undefined, watch: null, listener: null,
+      const observer = { name, wanted: surface ?? null, exact, fn, surface: undefined, watch: null, listener: null,
         pageEntry: null, stopPage: null };
       observer.listener = (value, from) => fn(value, from);
       observers.add(observer);

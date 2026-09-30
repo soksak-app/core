@@ -18,6 +18,7 @@
     "card-tools.js",
     "card-insets.js",
     "sidebar-grip.js",
+    "window-sidebars.js",
     "sidebar-sections.js",
     "commands.js",
     "compositor.js",

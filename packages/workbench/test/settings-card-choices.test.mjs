@@ -40,10 +40,11 @@ test("missing card sidebar links display off without an inherit option", async (
       links = [{ place: "card-right", plugin: "fixture", set }];
       assert.throws(() => ui.drawSettings(), /unknown settings choice/, `invalid card set ${String(set)} was coerced to off`);
     }
-    links = [{ place: "right", plugin: "fixture", set: null }];
+    links = [];
     ui.drawSettings();
-    assert.equal(document.querySelector('[data-set="link:right:fixture"]').value, "off",
-      "a declared window-sidebar off choice must remain valid");
+    assert.equal(document.querySelector('[data-set="link:window-right:fixture"]').value, "off");
+    links = [{ place: "window-right", plugin: "fixture", set: null }];
+    assert.throws(() => ui.drawSettings(), /unknown settings choice/);
   } finally {
     ui.closeSettings();
     dom.window.close();
