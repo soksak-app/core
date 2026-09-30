@@ -62,6 +62,15 @@ impl OutputSink {
     async fn replace_sender(&self, sender: Option<mpsc::Sender<String>>) {
         *self.sender.lock().await = sender;
     }
+
+    async fn detach_sender(&self, previous: &Option<mpsc::Sender<String>>) {
+        let mut current = self.sender.lock().await;
+        if let (Some(sender), Some(previous)) = (current.as_ref(), previous.as_ref()) {
+            if sender.same_channel(previous) {
+                *current = None;
+            }
+        }
+    }
 }
 
 struct PersistentEntry {
@@ -2899,6 +2908,7 @@ where
     let mut surface_epochs: HashMap<String, u64> = HashMap::new();
     let mut tasks = tokio::task::JoinSet::new();
     let mut line = String::new();
+    let connection_sender = output_tx.sender().await;
 
     loop {
         line.clear();
@@ -2913,7 +2923,7 @@ where
                     }
                 }
             } else {
-                output_tx.replace_sender(None).await;
+                output_tx.detach_sender(&connection_sender).await;
             }
             break;
         }
@@ -4244,6 +4254,40 @@ mod tests {
     fn test_base64_decode() {
         assert_eq!(base64_decode("aGk=").unwrap(), b"hi");
         assert_eq!(base64_decode("aGVsbG8=").unwrap(), b"hello");
+    }
+
+    #[tokio::test]
+    async fn previous_client_eof_preserves_new_attachment_output() {
+        let (previous_sender, _previous_receiver) = mpsc::channel(4);
+        let output = OutputSink::detachable(previous_sender);
+        let (client, reader) = tokio::io::duplex(64);
+        let input = run_input_loop(
+            BufReader::new(reader),
+            Arc::new(|| Box::new(FakeEngine::new())),
+            Arc::new(|| Arc::new(FakeSessionPort::new())),
+            output.clone(),
+            None,
+            Some(PersistentRegistry::new()),
+            "test-owner".to_string(),
+            crate::performance::PerformanceTrace::disabled(),
+        );
+        tokio::pin!(input);
+        // 이전 연결을 읽기 대기까지 진행한 뒤 새 부착과 EOF 순서를 제어한다.
+        tokio::select! {
+            biased;
+            result = &mut input => panic!("previous input ended before EOF: {result:?}"),
+            _ = std::future::ready(()) => {}
+        }
+        let (new_sender, mut new_receiver) = mpsc::channel(4);
+        output.replace_sender(Some(new_sender.clone())).await;
+        drop(client);
+        tokio::time::timeout(Duration::from_secs(2), input)
+            .await.expect("previous EOF did not complete").expect("previous input failed");
+        assert!(output.sender().await.is_some_and(|sender| sender.same_channel(&new_sender)),
+            "previous client EOF removed the new attachment output sender");
+        output.send("new attachment screen".to_string()).await.expect("new output failed");
+        assert_eq!(tokio::time::timeout(Duration::from_secs(2), new_receiver.recv()).await
+            .expect("new attachment output timed out").as_deref(), Some("new attachment screen"));
     }
 
     #[tokio::test]

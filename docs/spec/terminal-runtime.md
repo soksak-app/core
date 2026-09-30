@@ -1,5 +1,8 @@
 # Terminal runtime
 
+When a newer connection attaches a persistent surface, EOF from the previous connection detaches only that previous connection's output sender. It must not clear the newer attachment's sender or close its output stream.
+
+
 [한국어](terminal-runtime.ko.md)
 
 This contract defines the approved terminal runtime. Implementation and verification are tracked in [features](../features.md); approval of this contract does not establish implementation.
