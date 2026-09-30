@@ -29,6 +29,8 @@ The command supervisor takes an explicit identifier, executable/arguments, worki
 
 ## Application acceptance
 
+An acceptance condition without observation at its required verification level remains unresolved. Unit passes, successful command replies, and inferred behavior do not establish application acceptance.
+
 During stabilization, each change runs its local tests plus terminal, shell, browser, and modal basic behavior tests on the tested build. Verify declared input, resulting state, actual output, isolation, and cleanup, not only dispatch success. Window tests attach to disposable running instances and preserve reported failed windows. They do not start applications or compensate for incorrect state to obtain a pass.
 
 Input-method behavior is verified only by activation-tier checks run with the user's approval, because the OS input method serves only the key window of the active application. Each such run also sends the same keys to an AppKit text view in the same window; the result counts as evidence only when that control produces the expected document.

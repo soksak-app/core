@@ -50,6 +50,7 @@ This workspace contains the headless layout library `soksak`, the workbench fron
 
 ## Verification
 
+- An acceptance condition that has not been observed remains unresolved. Unit passes, command replies, and inferred behavior do not substitute for observation at the required verification level.
 - Run `make docs-check` for every change and review the documents against the code; structural checks do not verify meaning.
 - Run `pnpm test`, `make boundaries`, and `make exposure-check` for every code change; each package runs its own tests. Run `make native-test` for native code changes. Run `make verify` for library changes. Commit generated `dist/` changes together with their source; the final check requires no difference between source output and committed files.
 - While an item is in development, run only the owning tests of what changed; run the full suites exactly once, when every item of the active checklist is complete — never after each correction or each item. A check that can run for minutes must report each test it starts, its result, and its elapsed time — a run that shows only a start and an end is not acceptable, and each test carries its own timeout instead of one global bound. A long operation is observed with detailed step logs and verified by its errors and results; a timer is never the judge of success.

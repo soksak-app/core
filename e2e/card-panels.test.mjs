@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a card carries assigned panels on all four sides regardless of the active tab`, async (t) => {
@@ -91,5 +91,89 @@ for (const app of Object.values(APPS)) {
         assert.equal(rest[side].collapsed, false, `side ${side} kept an explicit fold — it must be a fresh default`);
       }
     }
+  });
+}
+
+// 새 카드 위치는 공개된 연결 명령의 입력 계약에서도 허용되어야 한다(V5-116-4).
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: sidebar link commands accept all four card places`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is missing; sidebar link behavior was not observed`);
+    t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
+    await fresh(s);
+    await keepCommonSettings(s);
+    const { values } = await s.get("core.settings");
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs?.some((tab) => tab.id === item.active && tab.plugin));
+    assert.ok(card, "no card with a declared active plugin");
+    const plugin = card.tabs.find((tab) => tab.id === card.active).plugin;
+    const set = values.sets[0]?.id;
+    assert.ok(set, "no sidebar set in the fixture");
+    const failures = [];
+    for (const place of ["card-left", "card-right", "card-top", "card-bottom"]) {
+      const start = performance.now();
+      t.diagnostic(`start ${app.name}/${place}/core.settings.link`);
+      try {
+        await s.run("core.settings.link", { place, plugin, set, scope: "common" });
+        await s.until("core.settings", (value) => !value.saving && value.values.links.some((link) =>
+          link.place === place && link.plugin === plugin && link.set === set), `link ${place} was not saved`);
+        t.diagnostic(`pass ${app.name}/${place}/core.settings.link ${Math.round(performance.now() - start)}ms`);
+      } catch (error) {
+        const failure = `${app.name}/${place}/core.settings.link: ${error.message}`;
+        failures.push(failure);
+        t.diagnostic(`fail ${failure} ${Math.round(performance.now() - start)}ms`);
+      }
+    }
+    assert.deepEqual(failures, [], "the public link command must accept all four declared card places");
+  });
+}
+
+// 연결 기본 패널도 같은 접기·크기 명령을 받는다(V5-116-4).
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: linked card panels accept fold and size without an explicit assignment`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is missing; linked-panel behavior was not observed`);
+    t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
+    await fresh(s);
+    await keepCommonSettings(s);
+    const settings = await s.get("core.settings");
+    const set = settings.values.sets[0];
+    assert.ok(set, "no sidebar set in the fixture");
+    const grid = await s.get("core.grid");
+    const card = grid.cards.find((item) => item.tabs?.some((tab) => tab.id === item.active && tab.plugin));
+    assert.ok(card, "no card with a declared active plugin");
+    const plugin = card.tabs.find((tab) => tab.id === card.active).plugin;
+    const failures = [];
+    for (const side of ["top", "bottom", "right"]) {
+      await s.run("core.card.panel.set", { card: card.id, side, set: "off" });
+      // 전체 설정 쓰기는 파일에 저장한 연결과 같은 독립된 공개 입력 경로다.
+      const links = (await s.get("core.settings")).values.links.filter((link) =>
+        !(link.place === `card-${side}` && link.plugin === plugin));
+      links.push({ place: `card-${side}`, plugin, set: set.id });
+      await s.run("core.settings.set", { patch: { links }, scope: "common" });
+      await s.until("core.grid", (value) =>
+        value.cards.find((item) => item.id === card.id)?.panels?.[side]?.set === set.id,
+      `linked ${side} panel did not appear`);
+      // 한 명령의 실패로 다른 명령의 관측을 생략하지 않는다. 오류는 모두 보고하고 끝에서 실패한다.
+      for (const [command, extra, expected] of [
+        ["core.card.panel.toggle", {}, { collapsed: true }],
+        ["core.card.panel.size", { size: 260 }, { size: 260 }],
+      ]) {
+        const start = performance.now();
+        t.diagnostic(`start ${app.name}/${side}/${command}`);
+        try {
+          await s.run(command, { card: card.id, side, ...extra });
+          await s.until("core.grid", (value) => {
+            const panel = value.cards.find((item) => item.id === card.id)?.panels?.[side];
+            return panel?.set === set.id && Object.entries(expected).every(([key, val]) => panel[key] === val);
+          }, `linked ${side} panel did not apply ${command}`);
+          t.diagnostic(`pass ${app.name}/${side}/${command} ${Math.round(performance.now() - start)}ms`);
+        } catch (error) {
+          const failure = `${app.name}/${side}/${command}: ${error.message}`;
+          failures.push(failure);
+          t.diagnostic(`fail ${failure} ${Math.round(performance.now() - start)}ms`);
+        }
+      }
+    }
+    assert.deepEqual(failures, [], "linked panels must accept fold and size without an explicit assignment");
   });
 }
