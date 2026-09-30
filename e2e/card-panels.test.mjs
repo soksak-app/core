@@ -1,9 +1,9 @@
-// 카드 사방 패널 검사(V5-115): 지정한 세트가 사방에 서고, 활성 탭을 바꿔도 유지되며,
-// 상하 패널은 카드 전체 폭을 가지고, 연동 사이드바와 공존한다(docs/spec/example-model.md).
+// 카드 사방 지정 검사: 저장 세트와 공간에 따른 표시를 구분하고 탭 전환 뒤에도 유지한다.
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
+const geometry=grid=>grid.cards.map(({id,x,y,w,h})=>({id,x,y,w,h})).sort((a,b)=>a.id.localeCompare(b.id));
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: assigned left and right panels reduce the actual native surface width`, { timeout: 60000 }, async (t) => {
@@ -48,16 +48,17 @@ for (const app of Object.values(APPS)) {
       `folded sidebars must reserve only two 6-point dividers: ${JSON.stringify(foldedSurface)}`);
   });
 
-  test(`${app.name}: a card carries assigned panels on all four sides regardless of the active tab`, async (t) => {
+  test(`${app.name}: a card carries assigned panels on all four sides regardless of the active tab`, {timeout:60000}, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
+    assert.ok(s, `${app.binary} is not built; four-side assignment was not observed`);
+    t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
     await fresh(s);
     const settings = await s.get("core.settings");
     const set = settings.values.sets[0];
     assert.ok(set, "the fixture has no set to assign");
 
     const grid0 = await s.get("core.grid");
-    let card0 = grid0.cards.find((item) => !item.id.startsWith("rail") && item.tabs?.length);
+    let card0 = grid0.cards.find((item) => item.tabs.length);
     assert.ok(card0, "no content card to hold panels");
     const original = card0.tabs.find((tab) => tab.id === card0.active);
     let other = card0.tabs.find((tab) => tab.plugin !== original.plugin);
@@ -78,19 +79,28 @@ for (const app of Object.values(APPS)) {
         && Object.keys(value.cards.find((item) => item.id === card0.id).sidebars).length === 4,
       "the four panels did not appear in core.grid");
     const panels = grid.cards.find((item) => item.id === card0.id).sidebars;
+    const assigned=grid.cards.find(item=>item.id===card0.id);
+    assert.ok(assigned.h-56-380<96,'the normal fixture must have insufficient height for two 190-point sides');
+    assert.ok(assigned.w-2-380>=96,'the normal fixture must retain sufficient width for two 190-point sides');
+    const saved=(await s.get('core.layout')).state.cards.find(item=>item.id===card0.id).data.sidebars;
     for (const side of ["top", "bottom", "left", "right"]) {
-      assert.deepEqual(panels[side], { set: set.id, size: 190, collapsed: false },
+      const autoCollapsed=side==='top'||side==='bottom';
+      assert.deepEqual(panels[side], { set: set.id, size: 190, collapsed: autoCollapsed,
+        requestedCollapsed:false,autoCollapsed,collapseReason:autoCollapsed?'insufficient-height':null },
         `side ${side} did not take the assignment with the default size`);
+      assert.equal(saved[side].set,set.id,`${side} assignment was not saved`);
+      assert.equal(Object.hasOwn(saved[side],'autoCollapsed'),false,'automatic presentation was saved');
     }
 
     // 연동 차단: 활성 탭을 다른 플러그인으로 바꿔도 지정 세트는 그대로다.
     await s.run("core.tab.select", { tab: other.id });
     await s.until("core.grid", (value) => value.cards.find((item) => item.id === card0.id)?.active === other.id,
       "the tab did not switch");
-    const after = (await s.get("core.grid")).cards.find((item) => item.id === card0.id).sidebars;
-    for (const side of ["top", "bottom", "left", "right"]) {
-      assert.equal(after[side].set, set.id, `side ${side} followed the active plugin`);
-    }
+    const afterGrid=await s.get('core.grid');
+    assert.deepEqual(geometry(afterGrid),geometry(grid),'tab selection changed internal or external card geometry');
+    assert.deepEqual(afterGrid.cards.find(item=>item.id===card0.id).sidebars,panels,'tab selection changed assigned sets or presentation');
+    assert.deepEqual((await s.get('core.layout')).state.cards.find(item=>item.id===card0.id).data.sidebars,saved,'tab selection changed saved assignments');
+    t.diagnostic(`normal card ${assigned.w}x${assigned.h}; top/bottom auto-fold, left/right open; different-plugin tabs ${original.plugin}/${other.plugin} preserve all geometry`);
 
     // 패널은 core.sidebars 에 카드:변 아이디로 보고된다(스펙: 사이드바 식별).
     const drawn = await s.until("core.sidebars",
@@ -99,21 +109,23 @@ for (const app of Object.values(APPS)) {
       "the drawn panels did not appear in core.sidebars");
     assert.ok(drawn.length >= 4, "core.sidebars reports the four panels");
 
-    // 탭 전환은 아직 외부 사이드바 기하를 바꾼다(V5-117-1-3). 접기·크기의 기준은 전환 후다.
+    // 이미 자동으로 접힌 상단도 명시적 수동 선택을 따로 저장해야 한다.
     const beforeLayout = (await s.get("core.grid")).cards.find((item) => item.id === card0.id);
     await s.run("core.card.sidebar.toggle", { card: card0.id, side: "top" });
     const folded = await s.until("core.grid",
-      (value) => value.cards.find((item) => item.id === card0.id)?.sidebars?.top?.collapsed === true,
+      (value) => value.cards.find((item) => item.id === card0.id)?.sidebars?.top?.requestedCollapsed === true,
       "the top panel did not fold");
     assert.equal(folded.cards.find((item) => item.id === card0.id).sidebars.top.size, 190,
       "folding keeps the stored size");
+    assert.equal(folded.cards.find(item=>item.id===card0.id).sidebars.top.autoCollapsed,false,'manual fold remained classified as automatic');
+    assert.equal((await s.get('core.layout')).state.cards.find(item=>item.id===card0.id).data.sidebars.top.collapsed,true,'manual fold was not saved');
     await s.run("core.card.sidebar.size", { card: card0.id, side: "right", size: 260 });
     const resized = await s.until("core.grid",
       (value) => value.cards.find((item) => item.id === card0.id)?.sidebars?.right?.size === 260,
       "the right panel did not take the new size");
     assert.deepEqual(
-      ["x", "w", "h"].map((key) => resized.cards.find((item) => item.id === card0.id)[key]),
-      ["x", "w", "h"].map((key) => beforeLayout[key]),
+      ["x", "y", "w", "h"].map((key) => resized.cards.find((item) => item.id === card0.id)[key]),
+      ["x", "y", "w", "h"].map((key) => beforeLayout[key]),
       "panels changed the card itself — panels live inside the card");
     await assert.rejects(s.run("core.card.sidebar.size", { card: card0.id, side: "right", size: 60 }), /120 to 480/);
     await assert.rejects(s.run("core.card.sidebar.set", { card: card0.id, side: "middle", set: set.id }), /invalid params/);
@@ -126,8 +138,7 @@ for (const app of Object.values(APPS)) {
       "the turned-off panel did not disappear");
     assert.ok("right" in cleared.cards.find((item) => item.id === card0.id).sidebars,
       "turning off one side removed another");
-    // 정리: 사방 모두 해지. 해지는 명시 지정을 지운다 — 그 변에 플러그인 연결 기본이
-    // 있으면 기본이 다시 선다(V5-116-2). 남은 것은 기본뿐임을 확인한다.
+    // off는 기본 세트를 따르지 않고 해당 변을 명시적으로 끈다.
     for (const side of ["bottom", "left", "right"]) {
       await s.run("core.card.sidebar.set", { card: card0.id, side, set: "off" });
     }
