@@ -9,7 +9,7 @@
 //      각 패키지의 files 배열로 관리하고, stage.mjs 가 그것을 복사할 뿐이다.
 export const STAGED = Object.freeze({
   always: Object.freeze([
-    "diagnostics.js", // --diagnostics면 observe.js 복사본, 아니면 빈 모듈
+    "diagnostics.js", // --diagnostics면 observe.js 복사본, 아니면 release-diagnostics.js 복사본
     "environment.json", // 애플리케이션 설정
     "diagnostic-plugins.json", // --diagnostics면 플러그인 진단 선언, 아니면 {}
   ]),

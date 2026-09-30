@@ -1,13 +1,17 @@
-// release 산출물에 진단 코드가 없는지 검사한다.
+// release 번들에 진단 코드가 없는지 검사한다.
 //
 // 진단 코드(호스트의 진단 메서드, 창 녹화, 페이지 진단 모듈, 플러그인의 diagnostics.json 선언과
-// 모듈)는 진단 빌드에만 들어간다. 이 검사는 release 빌드 직후, 스테이징된 프런트엔드와 두
-// release 실행 파일을 읽는다.
+// 모듈)는 진단 빌드에만 들어간다. 이 검사는 지정한 번들의 Contents/MacOS 에 있는 모든 실행 파일을
+// 읽는다. 두 애플리케이션은 프런트엔드를 압축 없이 실행 파일에 넣으므로, 워크벤치가 배포하는 모든
+// 파일과 release 페이지 진단 모듈이 실행 파일에 원문 그대로 있어야 프런트엔드를 검사할 수 있다.
+// 하나라도 없으면 프런트엔드를 읽을 수 없다는 오류를 낸다. 워크벤치와 플러그인은 애플리케이션
+// package.json 의 의존성으로 찾는다.
 // `make release-check` 가 release 빌드를 먼저 실행한다.
 //
 //   node scripts/check-release.mjs --wailsv3-bundle PATH --tauriv2-bundle PATH
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, join, relative, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 
@@ -22,27 +26,6 @@ const MARKS = [
   { what: "sidecar diagnostic symbol", pattern: /sp_diag_/ },
 ];
 
-function* files(dir) {
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) yield* files(path);
-    else if (/\.(js|mjs|html|json)$/.test(name)) yield path;
-  }
-}
-
-/**
- * 스테이징된 sidecar.json 이 선언한 실행 파일과 헬퍼 실행 파일의 basename. 파일을 JSON 으로
- * 읽을 수 없거나 실행 파일 경로가 문자열이 아니면 그 파일 경로와 오류로 예외를 던진다.
- */
-export function executableBasenames(sidecarJsonPath) {
-  try {
-    const content = JSON.parse(readFileSync(sidecarJsonPath, "utf8"));
-    return [content.executable, ...(content.helpers ?? []).map((helper) => helper.executable)].map((path) => basename(path));
-  } catch (error) {
-    throw new Error(`${sidecarJsonPath}: ${error.message}`);
-  }
-}
-
 // 텍스트에서 진단 표지를 찾는다. 발견하면 errors 배열에 추가한다.
 export const find = (errors, label, text) => {
   for (const mark of MARKS) {
@@ -50,50 +33,60 @@ export const find = (errors, label, text) => {
   }
 };
 
+const latin1 = (bytes) => Buffer.from(bytes).toString("latin1");
+
 /**
- * 스테이징된 release 프런트엔드에 플러그인 진단 선언과 모듈이 없는지 검사한다. sources 는
- * 플러그인 패키지마다 {package, diagnostics} 이며 diagnostics 는 원본 diagnostics.json 내용이다.
- * diagnostic-plugins.json 은 {} 이어야 하고, 진단 모듈 파일은 없어야 하며, 어떤 스테이징 파일도
- * 진단 항목 이름을 따옴표 안에 적지 않아야 한다.
+ * 애플리케이션 실행 파일에 포함된 프런트엔드를 검사한다. text 는 실행 파일을 latin1 로 읽은 내용이다.
+ * published 는 워크벤치가 배포하는 파일 {path, bytes}, releaseModule 은 release 페이지 진단 모듈의
+ * 바이트, plugins 는 {package, entries, module} 이다. entries 는 진단 항목 이름, module 은 진단 모듈
+ * 원본 바이트다. 배포 파일이나 release 모듈이 원문으로 없으면 프런트엔드를 읽을 수 없으므로 그 오류만 낸다.
  */
-export function auditPluginDiagnostics(frontend, sources) {
-  const errors = [];
-  const index = join(frontend, "diagnostic-plugins.json");
-  if (!existsSync(index)) {
-    errors.push(`${index}: missing; run the release build first`);
-  } else if (readFileSync(index, "utf8").trim() !== "{}") {
-    errors.push(`${index}: must be {} in a release build`);
+export function auditFrontend(errors, label, text, { published, releaseModule, plugins }) {
+  const missing = published.filter((file) => !text.includes(latin1(file.bytes))).map((file) => file.path);
+  if (!text.includes(latin1(releaseModule))) missing.push("release page diagnostics module");
+  if (missing.length) {
+    errors.push(`${label}: does not embed a readable frontend; missing ${missing.join(", ")}`);
+    return;
   }
-  const names = new Set();
-  for (const { package: name, diagnostics } of sources) {
-    const module = join(frontend, "modules", name, diagnostics.module);
-    if (existsSync(module)) errors.push(`${module}: diagnostic module of ${name} is staged`);
-    for (const entries of Object.values(diagnostics.exposes)) for (const entry of entries) names.add(entry.name);
-  }
-  for (const path of files(frontend)) {
-    if (path === index) continue;
-    const text = readFileSync(path, "utf8");
-    for (const name of names) {
-      if (text.includes(`"${name}"`)) errors.push(`${path}: contains the diagnostic entry ${name}`);
+  for (const plugin of plugins) {
+    for (const entry of plugin.entries) {
+      if (text.includes(`"${entry}"`)) errors.push(`${label}: contains the diagnostic entry ${entry}`);
     }
+    if (text.includes(latin1(plugin.module))) errors.push(`${label}: contains the diagnostic module of ${plugin.package}`);
   }
-  return errors;
 }
 
-/** environment.json 의 플러그인 가운데 diagnostics.json 이 있는 패키지와 그 내용. */
-function pluginDiagnostics(app) {
-  const packages = new Map();
-  for (const dir of readdirSync(join(ROOT, "plugins"))) {
-    const manifest = join(ROOT, "plugins", dir, "package.json");
-    if (existsSync(manifest)) packages.set(JSON.parse(readFileSync(manifest, "utf8")).name, join(ROOT, "plugins", dir));
-  }
-  const environment = JSON.parse(readFileSync(join(ROOT, "apps", app, "environment.json"), "utf8"));
-  return environment.plugins.flatMap((name) => {
-    const dir = packages.get(name);
-    if (!dir) throw new Error(`apps/${app}/environment.json: ${name} is not a package under plugins/`);
+/** from 패키지의 의존성으로 name 패키지의 디렉터리를 찾는다. */
+function packageDir(from, name) {
+  return dirname(createRequire(join(from, "package.json")).resolve(`${name}/package.json`));
+}
+
+/** 디렉터리 항목은 그 아래 파일로 펼친다. */
+function* expand(dir, path) {
+  const full = join(dir, path);
+  if (!statSync(full).isDirectory()) yield path;
+  else for (const name of readdirSync(full)) yield* expand(dir, join(path, name));
+}
+
+/** 애플리케이션의 워크벤치 배포 파일, release 페이지 진단 모듈, 진단 선언을 가진 플러그인. */
+function applicationSources(app) {
+  const appDir = join(ROOT, "apps", app);
+  const workbench = packageDir(appDir, "@soksak/workbench");
+  const { files } = JSON.parse(readFileSync(join(workbench, "package.json"), "utf8"));
+  const published = files.flatMap((file) => [...expand(workbench, file)]).map((path) => ({ path, bytes: readFileSync(join(workbench, path)) }));
+  const environment = JSON.parse(readFileSync(join(appDir, "environment.json"), "utf8"));
+  const plugins = environment.plugins.flatMap((name) => {
+    const dir = packageDir(appDir, name);
     const path = join(dir, "diagnostics.json");
-    return existsSync(path) ? [{ package: name, diagnostics: JSON.parse(readFileSync(path, "utf8")) }] : [];
+    if (!existsSync(path)) return [];
+    const diagnostics = JSON.parse(readFileSync(path, "utf8"));
+    return [{
+      package: name,
+      entries: Object.values(diagnostics.exposes).flat().map((entry) => entry.name),
+      module: readFileSync(join(dir, diagnostics.module)),
+    }];
   });
+  return { published, releaseModule: readFileSync(join(workbench, "release-diagnostics.js")), plugins };
 }
 
 // CLI 로 직접 실행될 때만 검사를 수행한다.
@@ -113,14 +106,6 @@ if (import.meta.main) {
   const errors = [];
 
   for (const app of APPS) {
-    const frontend = join(ROOT, "apps", app, "src", "frontend");
-    const module = join(frontend, "diagnostics.js");
-    if (!existsSync(module)) {
-      errors.push(`${relative(ROOT, frontend)}: no staged diagnostics module; run the release build first`);
-    } else {
-      for (const path of files(frontend)) find(errors, relative(ROOT, path), readFileSync(path, "utf8"));
-      errors.push(...auditPluginDiagnostics(frontend, pluginDiagnostics(app)).map((error) => error.replace(ROOT, "")));
-    }
     // 애플리케이션과 사이드카는 번들의 Contents/MacOS 에 있다(docs/spec/hosts.md).
     const executables = join(bundles.get(app), "Contents", "MacOS");
     const executable = join(executables, `soksak-${app}`);
@@ -129,30 +114,11 @@ if (import.meta.main) {
       continue;
     }
     // 실행 파일은 바이트로 읽는다. 표지는 ASCII 이므로 latin1 로 해석해도 위치가 바뀌지 않는다.
-    find(errors, relative(ROOT, executable), readFileSync(executable).toString("latin1"));
-
-    // 스테이징된 사이드카 JSON 에서 실행 파일 basename 을 추출해 검사한다.
-    const modulesDir = join(frontend, "modules");
-    if (existsSync(modulesDir)) {
-      for (const sidecarPath of files(modulesDir)) {
-        if (!sidecarPath.endsWith("sidecar.json")) continue;
-        let names;
-        try {
-          names = executableBasenames(sidecarPath);
-        } catch (error) {
-          errors.push(error.message.replace(ROOT, ""));
-          continue;
-        }
-        for (const execName of names) {
-          const sidecarExe = join(executables, execName);
-          if (!existsSync(sidecarExe)) {
-            errors.push(`${relative(ROOT, sidecarExe)}: missing; run the release build first`);
-            continue;
-          }
-          // 사이드카 실행 파일도 진단 코드를 검사한다.
-          find(errors, relative(ROOT, sidecarExe), readFileSync(sidecarExe).toString("latin1"));
-        }
-      }
+    for (const name of readdirSync(executables)) {
+      const path = join(executables, name);
+      const text = latin1(readFileSync(path));
+      find(errors, path, text);
+      if (path === executable) auditFrontend(errors, path, text, applicationSources(app));
     }
   }
 

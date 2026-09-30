@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
-import { auditPluginDiagnostics, executableBasenames, find as findReleaseMarkers } from "../check-release.mjs";
+import { find as findReleaseMarkers } from "../check-release.mjs";
 import { auditHostPairs } from "../check-hosts.mjs";
 import { auditE2ESource } from "../check-e2e.mjs";
 import { auditTerminalProtocolInventory } from "../check-terminal-protocol-inventory.mjs";
@@ -262,46 +262,6 @@ test("release marker scanner finds capture code in an executable without symbols
   findReleaseMarkers(errors, "stripped", "\u0000SPCapture\u0000frame-%04d.bgra\u0000");
   assert.equal(errors.length, 1, errors.join("\n"));
   assert.match(errors[0], /window capture/);
-});
-
-test("release plugin diagnostics audit rejects every staged diagnostic declaration and module", { timeout: 2000 }, async (t) => {
-  const frontend = await mkdtemp(join(tmpdir(), "soksak-release-"));
-  t.after(() => rm(frontend, { recursive: true, force: true }));
-  const plugin = join(frontend, "modules/@fixture/plugin");
-  await mkdir(join(plugin, "ui"), { recursive: true });
-  const sources = [{ package: "@fixture/plugin", diagnostics: {
-    module: "ui/fixture-diagnostics.js",
-    exposes: { commands: [{ name: "fixture.inject" }], status: [{ name: "fixture.trace" }] },
-  } }];
-  const manifest = (names) => JSON.stringify({ id: "fixture", exposes: { commands: names.map((name) => ({ name })) } });
-
-  await writeFile(join(frontend, "diagnostic-plugins.json"), "{}\n");
-  await writeFile(join(plugin, "plugin.json"), manifest(["fixture.run"]));
-  assert.deepEqual(auditPluginDiagnostics(frontend, sources), []);
-
-  await writeFile(join(plugin, "plugin.json"), manifest(["fixture.run", "fixture.inject"]));
-  assert.match(auditPluginDiagnostics(frontend, sources).join("\n"), /plugin\.json: contains the diagnostic entry fixture\.inject/);
-  await writeFile(join(plugin, "plugin.json"), manifest(["fixture.run"]));
-
-  await writeFile(join(plugin, "ui/fixture-diagnostics.js"), "export function attach() {}\n");
-  assert.match(auditPluginDiagnostics(frontend, sources).join("\n"), /fixture-diagnostics\.js: diagnostic module of @fixture\/plugin is staged/);
-  await rm(join(plugin, "ui/fixture-diagnostics.js"));
-
-  await writeFile(join(frontend, "diagnostic-plugins.json"), JSON.stringify({ "@fixture/plugin": sources[0].diagnostics }));
-  assert.match(auditPluginDiagnostics(frontend, sources).join("\n"), /diagnostic-plugins\.json: must be \{\} in a release build/);
-
-  await rm(join(frontend, "diagnostic-plugins.json"));
-  assert.match(auditPluginDiagnostics(frontend, sources).join("\n"), /diagnostic-plugins\.json: missing/);
-});
-
-test("release check reports a malformed staged sidecar declaration", { timeout: 2000 }, async (t) => {
-  const dir = await mkdtemp(join(tmpdir(), "soksak-sidecar-"));
-  t.after(() => rm(dir, { recursive: true, force: true }));
-  const path = join(dir, "sidecar.json");
-  await writeFile(path, JSON.stringify({ executable: "build/echo", helpers: [{ package: "@fixture/helper", executable: "build/helper" }] }));
-  assert.deepEqual(executableBasenames(path), ["echo", "helper"]);
-  await writeFile(path, "{broken");
-  assert.throws(() => executableBasenames(path), (error) => error.message.startsWith(`${path}: `) && /JSON/.test(error.message));
 });
 
 test("platform audit accepts only declared platform boundaries", { timeout: 5000 }, async () => {

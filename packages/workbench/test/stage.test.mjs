@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const STAGE = fileURLToPath(new URL("../stage.mjs", import.meta.url));
 const OBSERVE = fileURLToPath(new URL("../observe.js", import.meta.url));
+const RELEASE_DIAGNOSTICS = fileURLToPath(new URL("../release-diagnostics.js", import.meta.url));
 
 /** 플러그인이 없는 가짜 애플리케이션. */
 function fixtureApp(t) {
@@ -32,6 +33,7 @@ test("a staged frontend without --diagnostics has an empty diagnostics module an
   const app = fixtureApp(t);
   stage(app);
   const module = readFileSync(join(app, "out/diagnostics.js"), "utf8");
+  assert.equal(module, readFileSync(RELEASE_DIAGNOSTICS, "utf8"));
   assert.doesNotMatch(module, /diagnostics\.\w+|registry|import/);
   assert.equal(existsSync(join(app, "out/observe.js")), false);
   assert.equal(existsSync(join(app, "out/transcript.js")), false);

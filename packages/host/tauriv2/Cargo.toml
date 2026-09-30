@@ -15,7 +15,8 @@ diagnostics = []
 pkg-config = "0.3"
 
 [dependencies]
-tauri = { version = "2", features = ["unstable"] }
+# compression 은 애플리케이션 크레이트가 끈다. 기본 기능을 켜면 기능 통합으로 다시 켜지므로 끈다.
+tauri = { version = "2", default-features = false, features = ["wry", "common-controls-v6", "dynamic-acl", "x11", "dbus", "unstable"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 tauri-plugin-dialog = "2"

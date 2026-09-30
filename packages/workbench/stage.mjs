@@ -16,7 +16,8 @@
 // 네이티브 호스트는 자기 실행 파일과 같은 디렉터리에서 사이드카 실행 파일을 찾는다.
 //
 //   <출력>/diagnostics.js           --diagnostics 이면 워크벤치의 observe.js(페이지 진단 메서드),
-//                                  아니면 빈 모듈. 진단 코드는 진단 빌드에만 들어간다
+//                                  아니면 release-diagnostics.js(빈 모듈). 진단 코드는 진단 빌드에만
+//                                  들어간다
 //   <출력>/transcript.js            --diagnostics 이면 진단 모듈이 쓰는 호출 기록기
 //   <출력>/diagnostic-plugins.json  --diagnostics 이면 플러그인 패키지 이름에서 그 diagnostics.json
 //                                  내용으로의 객체, 아니면 {}
@@ -151,11 +152,8 @@ for (const name of environment.plugins) {
   }
 }
 cpSync(runtime, join(target, RUNTIME), { recursive: true });
-if (diagnostics) {
-  copyFileSync(join(workbench, "observe.js"), join(target, "diagnostics.js"));
-  copyFileSync(join(workbench, "transcript.js"), join(target, "transcript.js"));
-}
-else writeFileSync(join(target, "diagnostics.js"), "// 진단 빌드가 아니다. 진단 메서드가 없다.\nexport {};\n");
+copyFileSync(join(workbench, diagnostics ? "observe.js" : "release-diagnostics.js"), join(target, "diagnostics.js"));
+if (diagnostics) copyFileSync(join(workbench, "transcript.js"), join(target, "transcript.js"));
 
 writeFileSync(join(target, ENVIRONMENT), `${JSON.stringify(environment, null, 2)}\n`);
 writeFileSync(join(target, DIAGNOSTIC_PLUGINS), `${JSON.stringify(diagnosticPlugins, null, 2)}\n`);

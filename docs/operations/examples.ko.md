@@ -44,7 +44,7 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 
 `make node-repeat FILE=<test> NAME=<pattern> COUNT=<n>`은 회차 번호와 자식 검사의 stdout/stderr를 실행 중 출력하고 첫 실패에서 중단한다. 출력 전달은 자식의 실패 종료 상태를 보존해야 하며 일치하는 성공 검사가 없는 실행도 실패한다.
 
-release 검증은 정확한 번들 경로를 요구한다: `node scripts/check-release.mjs --wailsv3-bundle PATH --tauriv2-bundle PATH`. 두 옵션이 모두 필요하며 알 수 없는 옵션·중복 옵션·빠진 값은 파일 검사 전에 실패한다. `make release-check`는 `WAILS_RELEASE_BUNDLE`과 `TAURI_RELEASE_BUNDLE`을 이 명령에 전달한다. 해당 빌드 변수를 지정하면 실행 중인 번들을 변경하지 않고 별도 번들을 준비하며 검사기는 동일하게 지정한 경로를 검사해야 한다.
+release 검증은 정확한 번들 경로를 요구한다: `node scripts/check-release.mjs --wailsv3-bundle PATH --tauriv2-bundle PATH`. 두 옵션이 모두 필요하며 알 수 없는 옵션·중복 옵션·빠진 값은 파일 검사 전에 실패한다. `make release-check`는 `WAILS_RELEASE_BUNDLE`과 `TAURI_RELEASE_BUNDLE`을 이 명령에 전달한다. 해당 빌드 변수를 지정하면 실행 중인 번들을 변경하지 않고 별도 번들을 준비하며 검사기는 동일하게 지정한 경로를 검사해야 한다. 검사기는 각 번들의 `Contents/MacOS`에 있는 모든 실행 파일을 읽고 스테이징된 프런트엔드는 읽지 않는다. 두 애플리케이션은 프런트엔드를 압축 없이 넣으므로(Wails `go:embed`, `compression` 기능을 끈 Tauri) 애플리케이션 실행 파일에 워크벤치가 배포하는 모든 파일과 `release-diagnostics.js`가 원문 그대로 있어야 하며, 없으면 검사기는 프런트엔드를 읽을 수 없다고 보고한다. 그다음 실행 파일에서 발견한 플러그인 진단 항목 이름과 진단 모듈 원본을 거부한다. 워크벤치와 플러그인은 애플리케이션 `package.json`의 의존성으로 찾는다.
 
 ## 창 검사
 

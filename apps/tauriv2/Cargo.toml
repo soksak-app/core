@@ -15,4 +15,6 @@ tauri-build = { version = "2", features = [] }
 soksak-host-tauriv2 = { path = "../../packages/host/tauriv2" }
 # custom-protocol 은 Tauri 의 배포 설정이다. 이것이 없으면 Tauri 는 개발 실행으로 보고 시작할 때
 # icons/icon.png 로 Dock 아이콘을 덮어쓰므로, 번들의 AppIcon.icns 를 쓰는 Wails 와 Dock 아이콘이 달라진다.
-tauri = { version = "2", features = ["unstable", "custom-protocol"] }
+# compression 기능을 끈다. 프런트엔드를 Wails 처럼 압축 없이 실행 파일에 넣어야 release 검사가 번들 안의
+# 프런트엔드를 읽을 수 있다(scripts/check-release.mjs). 나머지는 tauri 의 기본 기능이다.
+tauri = { version = "2", default-features = false, features = ["wry", "common-controls-v6", "dynamic-acl", "x11", "dbus", "unstable", "custom-protocol"] }

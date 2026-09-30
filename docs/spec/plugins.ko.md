@@ -157,7 +157,7 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 | `/runtime/` | 애플리케이션의 `runtime` 디렉터리 |
 | `/environment.json` | 애플리케이션의 `environment.json` |
 | `/modules/<사이드카>/sidecar.json` | 플러그인의 `sidecars`에 나열된 각 사이드카 패키지의 `sidecar.json` |
-| `/diagnostics.js` | `--diagnostics`이면 워크벤치의 `observe.js`(페이지 진단 메서드), 아니면 빈 모듈 |
+| `/diagnostics.js` | `--diagnostics`이면 워크벤치의 `observe.js`(페이지 진단 메서드), 아니면 워크벤치의 빈 모듈 `release-diagnostics.js` |
 | `/transcript.js` | `--diagnostics`이면 워크벤치의 `transcript.js`(진단 모듈이 쓰는 호출 기록기), 아니면 없음 |
 | `/diagnostic-plugins.json` | `--diagnostics`이면 `diagnostics.json`이 있는 나열된 플러그인 패키지마다 그 파일 내용을 담은 객체, 아니면 `{}` |
 | `/modules/<패키지>/<모듈>` | `--diagnostics`이면 플러그인의 `diagnostics.json`이 지정한 `module` 파일, 아니면 없음 |

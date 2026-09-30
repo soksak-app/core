@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-3-4-7-1-2: make release verification inspect only the selected bundles. The checker read the frontend and the sidecar list from the shared staging directory, so a later staging changed the result for an unchanged bundle. It now scans every executable in `Contents/MacOS`, resolves the workbench and plugins through the application's dependencies, requires every published workbench file and the release page module verbatim in the application executable, and rejects plugin diagnostic entries and modules there. Tauri no longer compresses embedded assets, so both applications expose their frontend to this check. The release page module is a workbench file that staging copies.
+
 - G1.4-10: make the generated native pkg-config file follow a relocated workspace. `native/darwin/build/soksak-darwin.pc` stored absolute include and library paths and is regenerated only when its Makefile changes, so after the workspace moved the Wails release link searched the previous location. Write both paths relative to `${pcfiledir}`. Red: the new relocation test receives the previous paths from the unchanged Makefile; Green: the same test resolves both paths under the moved workspace.
 
 - G1.4-5-1: recognize Makefile build declarations in the test inventory audit. The Node repeat lane declared its Makefile as a JSON `declaration`, so the audit reported an invalid implementation extension. Add a `build` language for extensionless Makefiles, reject other files declared as `build`, and declare the lane with it. Red: the new owning case fails on the unchanged audit (0 of 1 expected extension errors); Green: the case passes and the Makefile error is gone, while the existing G1.4-5 feature-link and count failures remain.

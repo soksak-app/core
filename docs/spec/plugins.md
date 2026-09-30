@@ -157,7 +157,7 @@ The workbench loads `environment.json` and every listed `plugin.json` before it 
 | `/runtime/` | The application's `runtime` directory |
 | `/environment.json` | The application's `environment.json` |
 | `/modules/<sidecar>/sidecar.json` | `sidecar.json` of each sidecar package listed in a plugin's `sidecars` |
-| `/diagnostics.js` | With `--diagnostics`, the workbench's `observe.js` (the page diagnostic methods); otherwise an empty module |
+| `/diagnostics.js` | With `--diagnostics`, the workbench's `observe.js` (the page diagnostic methods); otherwise the workbench's empty module `release-diagnostics.js` |
 | `/transcript.js` | With `--diagnostics`, the workbench's `transcript.js` (the call recorder of the diagnostic module); otherwise absent |
 | `/diagnostic-plugins.json` | With `--diagnostics`, an object that maps each listed plugin package with a `diagnostics.json` to that file's content; otherwise `{}` |
 | `/modules/<package>/<module>` | With `--diagnostics`, the `module` file named by the plugin's `diagnostics.json`; otherwise absent |
