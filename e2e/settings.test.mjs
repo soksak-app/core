@@ -34,6 +34,35 @@ async function section(s, id) {
 const settingsValue = async (s, key) => (await s.get("core.settings")).values[key];
 
 for (const app of Object.values(APPS)) {
+  test(`${app.name}: terminal card sidebar choices persist through declared controls and reload`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    await keepCommonSettings(s);
+    await s.run("core.settings.open");
+    s.cleanup(() => s.run("core.settings.close"));
+    await section(s, "plugins");
+    await press(s, "core.settings-modal.plugin", "plugin:terminal");
+    const set = (await settingsValue(s, "sets"))[0].id;
+    const places = ["card-left", "card-right", "card-top", "card-bottom"];
+    for (const place of places) {
+      await press(s, "core.settings-modal.set", `link:${place}:terminal`, set, "set");
+      await s.until("core.settings", (state) => !state.saving && state.values.links.some((link) =>
+        link.place === place && link.plugin === "terminal" && link.set === set), `${place} was not saved`);
+    }
+    const persisted = JSON.parse(readFileSync(join(app.configDir, "settings.json"), "utf8"));
+    assert.deepEqual(persisted.links.filter((link) => link.plugin === "terminal" && places.includes(link.place))
+      .map((link) => [link.place, link.set]), places.map((place) => [place, set]));
+    await s.run("core.settings.close");
+    const before = (await s.get("core.window.document")).timeOrigin;
+    await s.run("host.window.reload");
+    await s.until("core.window.document", (state) => state.timeOrigin !== before && state.readyState === "complete",
+      "the main document did not reload");
+    const restored = await s.until("core.settings", (state) => places.every((place) => state.values.links.some((link) =>
+      link.place === place && link.plugin === "terminal" && link.set === set)), "reload lost terminal card sidebar choices");
+    assert.equal(restored.saving, false);
+  });
+
   test(`${app.name}: settings keep sidebar appearance in general and list plugins with search and pages`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

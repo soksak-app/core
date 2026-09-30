@@ -100,7 +100,7 @@ Deleting a set writes the remaining sets and the links without the ones to it to
 | `{place: "left" or "right", plugin: null, set: "<set id>"}` | The general choice of that sidebar. Without it the general choice is 사용 안 함 |
 | `{place: "left" or "right", plugin: "<plugin id>", set: "<set id>"}` | The plugin shows that set in that sidebar |
 | `{place: "left" or "right", plugin: "<plugin id>", set: null}` | The plugin hides that sidebar (사용 안 함). Without a link for the plugin, the plugin follows the general choice (일반 따름) |
-| `{place: "card-left", plugin: "<plugin id>", set: "<set id>"}` | The card-left sidebar of that plugin shows the set. Without it the plugin has no card-left sidebar |
+| `{place: "card-left", "card-right", "card-top", or "card-bottom", plugin: "<plugin id>", set: "<set id>"}` | That side of the plugin card shows the set. Without the link the side has no default set |
 
 `place` and `plugin` together appear at most once. `set: null` is allowed only on a left or right link that names a plugin. A set id cannot be `off` or `inherit`, because the selects use those two values.
 

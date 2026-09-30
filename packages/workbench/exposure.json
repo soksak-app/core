@@ -1578,7 +1578,10 @@
               "enum": [
                 "left",
                 "right",
-                "rail"
+                "card-left",
+                "card-right",
+                "card-top",
+                "card-bottom"
               ]
             },
             "plugin": {

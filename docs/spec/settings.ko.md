@@ -100,7 +100,7 @@
 | `{place: "left" 또는 "right", plugin: null, set: "<세트 id>"}` | 그 사이드바의 일반 선택. 없으면 일반 선택은 사용 안 함이다 |
 | `{place: "left" 또는 "right", plugin: "<플러그인 id>", set: "<세트 id>"}` | 플러그인이 그 사이드바에 그 세트를 보인다 |
 | `{place: "left" 또는 "right", plugin: "<플러그인 id>", set: null}` | 플러그인이 그 사이드바를 숨긴다(사용 안 함). 플러그인의 연결이 없으면 플러그인은 일반 선택을 따른다(일반 따름) |
-| `{place: "rail", plugin: "<플러그인 id>", set: "<세트 id>"}` | 그 플러그인의 레일이 그 세트를 보인다. 없으면 레일이 없다 |
+| `{place: "card-left", "card-right", "card-top" 또는 "card-bottom", plugin: "<플러그인 id>", set: "<세트 id>"}` | 플러그인 카드의 해당 변에 세트를 보인다. 연결이 없으면 그 변의 기본 세트가 없다 |
 
 `place`와 `plugin`의 조합은 한 번만 나온다. `set: null`은 플러그인을 가리키는 왼쪽이나 오른쪽 연결에만 허용한다. 선택 상자가 `off`와 `inherit`을 쓰므로 세트 id는 그 둘일 수 없다.
 
