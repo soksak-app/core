@@ -115,6 +115,8 @@ Target preparation publishes a filter and configuration only when its own query 
 
 Each failed frame-file open, write, close or commit reports its own operation, frame path and captured system error. A failed partial-file removal reports an additional recording error without replacing the original failure. Close is still attempted after a write failure, and its failure is reported separately. Removal is attempted only for a file successfully opened by the writer; an open failure cannot delete a pre-existing path. A failed frame never increments the written count or signals first-frame readiness.
 
+An asynchronous start or delegate-stop failure changes recording errors only when it identifies the current stream. A delayed failure from an earlier stream is reported with its stream identity and cannot change later recording errors or first-frame readiness. Start completion retains its original stream identity through delivery; it must not read the identity of a replacement stream as its own.
+
 The webview operation attaches the DOM plane to a `SurfaceHost`, not directly to the window's shared surface container. Document and image operations create descendants of that host's native plane. The platform interface does not expose an operation that can place a region as a sibling of its `SurfaceHost`. Both language hosts validate the [surface composition](surface-composition.md) before calling platform code.
 
 ### Window buttons

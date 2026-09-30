@@ -17,6 +17,7 @@
 
 static void setCaptureError(NSString* message);
 static bool hasCaptureError(void);
+static void reportCaptureStreamFailure(SCStream *stream, NSString *message);
 
 static dispatch_semaphore_t captureFirstFrame;
 // 종료 요청 시각(mach 절대 시각)과, 그 이후에 표시된 프레임이 도착했음을 알리는 신호.
@@ -245,9 +246,11 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
 
 - (void)stream:(SCStream*)stream didStopWithError:(NSError*)error {
     if (error != nil) {
-        setCaptureError([NSString stringWithFormat:@"capture stopped with error: %@", error.localizedDescription]);
+        reportCaptureStreamFailure(stream,
+            [NSString stringWithFormat:@"capture stopped with error: %@", error.localizedDescription]);
+    } else {
+        fprintf(stderr, "observe: capture stopped without a delegate error (stream=%p)\n", stream);
     }
-    fprintf(stderr, "observe: capture stopped, %s\n", error.localizedDescription.UTF8String);
 }
 
 @end
@@ -273,6 +276,15 @@ static void setCaptureError(NSString* message) {
             : [[captureError stringByAppendingFormat:@"; %@", message] copy];
         [captureError release];
         captureError = combined;
+    }
+}
+
+// 이전 스트림의 오류도 보고하되 현재 녹화의 결과를 변경하지 않는다.
+static void reportCaptureStreamFailure(SCStream *stream, NSString *message) {
+    @synchronized([SPCapture class]) {
+        bool current = stream != nil && stream == captureStream;
+        if (current) setCaptureError(message);
+        fprintf(stderr, "observe: %s (stream=%p current=%d)\n", message.UTF8String, stream, current);
     }
 }
 
@@ -451,12 +463,13 @@ bool sp_capture_start(const char* directory, char **errorOut) {
         setCaptureError(@"capture directory is not valid UTF-8");
         return captureOperationFailure(errorOut, @"capture directory is not valid UTF-8");
     }
-    captureStream = [[SCStream alloc] initWithFilter:captureFilter
+    SCStream *stream = [[SCStream alloc] initWithFilter:captureFilter
                                        configuration:captureConfig
                                             delegate:captureSink];
+    @synchronized([SPCapture class]) { captureStream = stream; }
     NSError* error = nil;
     captureQueue = dispatch_queue_create("sp.capture", NULL);
-    [captureStream addStreamOutput:captureSink
+    [stream addStreamOutput:captureSink
                               type:SCStreamOutputTypeScreen
                 sampleHandlerQueue:captureQueue
                              error:&error];
@@ -464,16 +477,16 @@ bool sp_capture_start(const char* directory, char **errorOut) {
         setCaptureError([NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription]);
         fprintf(stderr, "observe: capture output not added, %s\n",
             error.localizedDescription.UTF8String);
-        [captureStream release];
-        captureStream = nil;
+        @synchronized([SPCapture class]) { captureStream = nil; }
+        [stream release];
         return captureOperationFailure(errorOut,
             [NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription]);
     }
-    [captureStream startCaptureWithCompletionHandler:^(NSError* failed) {
+    // 복사된 완료 블록은 원래 스트림을 보유하여 교체 뒤에도 동일성을 유지한다.
+    [stream startCaptureWithCompletionHandler:^(NSError* failed) {
         if (failed != nil) {
-            setCaptureError([NSString stringWithFormat:@"capture did not start: %@", failed.localizedDescription]);
-            fprintf(stderr, "observe: capture not started, %s\n",
-                failed.localizedDescription.UTF8String);
+            reportCaptureStreamFailure(stream,
+                [NSString stringWithFormat:@"capture did not start: %@", failed.localizedDescription]);
         }
     }];
     return true;
@@ -540,7 +553,7 @@ int sp_capture_stop(double after) {
     dispatch_sync(captureQueue, ^{});
     // 복사해 둔 프레임을 모두 쓴 뒤 센다.
     dispatch_sync(captureWriter, ^{});
-    captureStream = nil;
+    @synchronized([SPCapture class]) { captureStream = nil; }
     dispatch_release(captureQueue);
     dispatch_release(stopped);
     [stream release];
