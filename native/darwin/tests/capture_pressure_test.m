@@ -83,6 +83,36 @@ int main(void) { @autoreleasepool {
     check(strlen(sp_capture_error()) == 0 && captureSink.queued == 1 && captureSink.written == 1,
         @"available writer capacity preserves a complete frame");
 
+    captureStream = (SCStream *)[NSObject new];
+    check(sp_capture_wait() == 1,
+        @"a written first frame without recording errors is ready");
+    [captureStream release]; captureStream = nil;
+
+    reset(directory, 1);
+    [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
+    captureStream = (SCStream *)[NSObject new];
+    [captureSink stream:captureStream didStopWithError:
+        [NSError errorWithDomain:@"capture.test" code:2
+            userInfo:@{NSLocalizedDescriptionKey: @"fixture ready stream failure"}]];
+    check(captureSink.written == 1,
+        @"the stream-error readiness fixture retains a complete first frame");
+    check(sp_capture_wait() == 0,
+        @"a known stream failure rejects a written first frame readiness");
+    check(strstr(sp_capture_error(), "fixture ready stream failure") != NULL,
+        @"first-frame readiness preserves the original stream failure");
+    [captureStream release]; captureStream = nil;
+
+    reset(directory, 1);
+    [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
+    captureStream = (SCStream *)[NSObject new];
+    // 비동기 시작 완료가 기록하는 동일한 오류 경계를 첫 프레임 뒤에 주입한다.
+    setCaptureError(@"capture did not start: fixture asynchronous start failure");
+    check(sp_capture_wait() == 0,
+        @"a known asynchronous start failure rejects written first frame readiness");
+    check(strstr(sp_capture_error(), "fixture asynchronous start failure") != NULL,
+        @"first-frame readiness preserves the asynchronous start failure");
+    [captureStream release]; captureStream = nil;
+
     reset([directory stringByAppendingPathComponent:@"missing"], 1);
     [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
     check(strstr(sp_capture_error(), "not written") != NULL,

@@ -105,6 +105,8 @@ The shell sidecar uses the same Go mechanism in `sidecars/shell/src/platform/`.
 | Identity | Directory identity |
 | Endpoint | [Local endpoint](endpoint.md) transport: Unix socket on macOS; not implemented on Windows |
 
+Capture first-frame readiness succeeds only after a complete frame is written and no recording error is known at the readiness check. A known asynchronous start or stream failure rejects readiness even when that frame exists; the original error remains available to the caller.
+
 The webview operation attaches the DOM plane to a `SurfaceHost`, not directly to the window's shared surface container. Document and image operations create descendants of that host's native plane. The platform interface does not expose an operation that can place a region as a sibling of its `SurfaceHost`. Both language hosts validate the [surface composition](surface-composition.md) before calling platform code.
 
 ### Window buttons

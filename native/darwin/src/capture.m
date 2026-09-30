@@ -429,7 +429,7 @@ int sp_capture_wait(void) {
         setCaptureError(@"no capture frame arrived within 10000ms");
         return 0;
     }
-    return 1;
+    return hasCaptureError() ? 0 : 1;
 }
 
 // Stops the stream and reports how many frames reached disk.
