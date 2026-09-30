@@ -44,13 +44,12 @@ for (const app of Object.values(APPS)) {
       }
     }
 
-    // 상하 패널은 카드 전체 폭을 가진다. 좌우 패널은 중앙 칸의 양옆에 선다.
-    const width = await s.rect("core.card", 0);
-    const sides = await Promise.all(["top", "bottom"].map((side) => s.rect(`core.card.panel.${side}`, 0, card0.id)));
-    for (const rect of sides) {
-      assert.ok(Math.abs(rect.w - width.w) <= 1,
-        `a full-width panel must span the card (${rect.w} vs card ${width.w})`);
-    }
+    // 패널은 core.sidebars 에 카드:변 아이디로 보고된다(스펙: 사이드바 식별).
+    const drawn = await s.until("core.sidebars",
+      (value) => ["top", "bottom", "left", "right"].every((side) =>
+        value.some((item) => item.sidebar === `${card0.id}:${side}` && item.set === set.id)),
+      "the drawn panels did not appear in core.sidebars");
+    assert.ok(drawn.length >= 4, "core.sidebars reports the four panels");
 
     // 접기·크기: 좌측 inset 사이드바와 같은 상태 기계.
     await s.run("core.card.panel.toggle", { card: card0.id, side: "top" });

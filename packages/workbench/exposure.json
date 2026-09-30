@@ -1870,6 +1870,24 @@
         "result": { "type": "null" }
       },
       {
+        "name": "core.card.panel.set",
+        "description": "Assigns a set to a panel on one side of the card (top, bottom, left, right; one per side) or removes it with off; the assignment stays regardless of the active tab.",
+        "params": { "type": "object", "properties": { "card": { "type": "string" }, "side": { "type": "string" }, "set": { "type": "string" } } },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "core.card.panel.toggle",
+        "description": "Folds a card's panel on one side to a strip or unfolds it, without changing the card's size.",
+        "params": { "type": "object", "properties": { "card": { "type": "string" }, "side": { "type": "string" } } },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "core.card.panel.size",
+        "description": "Sets the size of a card's panel on one side — width for left and right, height for top and bottom — 120 to 480 points, without changing the card's size.",
+        "params": { "type": "object", "properties": { "card": { "type": "string" }, "side": { "type": "string" }, "size": { "type": "number" } } },
+        "result": { "type": "null" }
+      },
+      {
         "name": "core.sidebar.section.select",
         "description": "Shows one section of a sidebar whose set uses the tabs layout; the selection is kept for that sidebar.",
         "params": {
@@ -2390,6 +2408,11 @@
       {
         "name": "core.card.sidebar.grip",
         "description": "The dividers of inset sidebars in document order: a drag sets the width and a click folds or unfolds at once.",
+        "many": true
+      },
+      {
+        "name": "core.card.panel.grip",
+        "description": "The dividers of card panels in document order: a drag sets the panel's size and a click folds or unfolds it.",
         "many": true
       },
       {

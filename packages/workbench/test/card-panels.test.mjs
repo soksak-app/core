@@ -17,8 +17,10 @@ const SETS = {
   "set-a": { id: "set-a", title: "A", sections: [], layout: "list" },
   "set-b": { id: "set-b", title: "B", sections: [], layout: "list" },
 };
+// 플러그인 id 를 이름하지 않는다(경계 계약) — 패널 상태는 활성 탭의 정체와 무관하므로
+// 검사 카드의 탭은 종류를 문자열 표시로만 구분한다.
 const card = () => ({ id: "tab-1", data: { activeId: "tab-1" }, tabs: [
-  { id: "tab-1", plugin: "terminal" }, { id: "tab-2", plugin: "browser" },
+  { id: "tab-1", plugin: "first" }, { id: "tab-2", plugin: "second" },
 ] });
 
 test("a side accepts at most one panel and rejects unknown sides", () => {

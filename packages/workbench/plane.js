@@ -9,6 +9,7 @@ import { cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stag
 import { nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
+import { PANEL_SIDES, panelState, panelsReport, resolvePanelSet, setPanel, sizePanel, togglePanel } from "./card-panels.js";
 import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
@@ -256,6 +257,7 @@ function updateCard(el, card) {
   }
 
   drawSidebar(el, card);
+  drawPanels(el, card);
   const tabs = tabsOf(card);
   const key = tabs.map((t) => `${t.id}\u0000${tabName(t)}`).join("\u0001");
   let ham = chrome.querySelector(".chrome__ham");
@@ -864,8 +866,138 @@ export function sizeSidebar(id, width) {
   settle();
 }
 
+/* ── 카드 사방 패널(V5-115) ──────────────────────────────────────────────
+   지정은 카드 데이터다(card-panels.js). 활성 탭에서 다시 계산하지 않는다 — 연동 좌측
+   사이드바와의 차이다. 상하 패널은 카드 전체 폭을, 좌우 패널은 중앙 칸의 양옆에 선다. */
+
+/** 패널이 쓰는 공용 크기 값: 기본·최소·최대. 사방 모두 같다(같은 취급). */
+const panelDefaults = () => ({ size: value("sidebarWidth"), min: value("sidebarMinWidth"), max: value("sidebarMaxWidth") });
+
+/** 패널이 그릴 수 있는 세트 목록(설정의 sets). */
+const panelSets = () => Object.fromEntries(value("sets").map((set) => [set.id, set]));
+
+function panelCard(id, side) {
+  const card = grid?.card(id);
+  if (!card) throw new Error(`card ${String(id)} does not exist`);
+  if (panelState(card, side, panelDefaults()) === null) {
+    throw new Error(`card ${String(id)} has no ${String(side)} panel`);
+  }
+  return card;
+}
+
+/** core.grid 보고용: 카드의 패널 상태. 지정된 변만 담는다. */
+export function cardPanels(card) {
+  return panelsReport(card, panelSets(), panelDefaults());
+}
+
+/** 카드의 변에 세트를 지정하거나 해지한다. */
+export function assignPanel(id, side, set) {
+  const card = grid?.card(id);
+  if (!card) throw new Error(`card ${String(id)} does not exist`);
+  setPanel(card, side, set, panelSets());
+  settle();
+}
+
+/** 카드 패널을 접거나 편다. */
+export function foldPanel(id, side) {
+  const card = panelCard(id, side);
+  togglePanel(card, side, panelDefaults());
+  settle();
+}
+
+/** 카드 패널의 크기를 정한다. 좌우는 폭, 상하는 높이다. */
+export function resizePanel(id, side, size) {
+  const card = panelCard(id, side);
+  sizePanel(card, side, size, panelDefaults());
+  settle();
+}
+
 /* 경계선에서 누름과 끌기를 가르는 움직임(pt). */
 const DRAG_THRESHOLD = 3;
+
+/** 카드의 사방 패널을 그린다. 지정 없는 변은 요소와 변수를 치운다(drawSidebar 와 같은 길). */
+function drawPanels(el, card) {
+  const defaults = panelDefaults();
+  const sets = panelSets();
+  for (const side of PANEL_SIDES) {
+    const panel = el.querySelector(`:scope > .panel[data-side-of="${side}"]`);
+    const state = panelState(card, side, defaults);
+    const set = state === null ? null : resolvePanelSet(card, side, sets);
+    if (state === null || set === null) {
+      if (panel) clearSet(panel.querySelector(".set"));
+      panel?.remove();
+      delete el.dataset[`panel${side[0].toUpperCase()}${side.slice(1)}`];
+      el.style.removeProperty(`--p${side[0]}`);
+      continue;
+    }
+    let body = panel;
+    if (!body) {
+      body = document.createElement("aside");
+      body.className = "panel";
+      body.dataset.sideOf = side;
+      body.innerHTML = '<div class="set"></div>';
+      const handle = document.createElement("div");
+      handle.className = "panel__grip";
+      handle.dataset.sideOf = side;
+      handle.dataset.expose = "core.card.panel.grip";
+      body.appendChild(handle);
+      // 그림 영역 뒤는 표면이 아니라 패널 프레임이므로 .slot 뒤가 아니라 카드 끝에 둔다.
+      el.querySelector(".status")?.before(body);
+      // 경계선은 끌기와 누름을 가른다(inset 사이드바와 같은 문턱과 제스처).
+      let dragged = false;
+      handle.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+        handle.setPointerCapture(event.pointerId);
+        dragged = false;
+        const startX = event.clientX, startY = event.clientY;
+        const rect = el.getBoundingClientRect();
+        const move = (e) => {
+          if (!dragged && Math.hypot(e.clientX - startX, e.clientY - startY) < DRAG_THRESHOLD) return;
+          dragged = true;
+          const clamp = (raw) => Math.min(defaults.max, Math.max(defaults.min, raw));
+          // 안쪽으로 끌수록 커진다. 카드에서 반대편 패널과 표면이 차지한 만큼을 뺀다.
+          const track = (name) => {
+            const raw = parseFloat(el.style.getPropertyValue(name));
+            // 기본값: 반대편 패널이 없으면 그 칸은 0 이다(문자열 변수는 남지 않는다).
+            return Number.isFinite(raw) ? raw : 0;
+          };
+          const used = {
+            left: track("--pr"),
+            right: track("--pl"),
+            top: track("--pb"),
+            bottom: track("--pt"),
+          };
+          const size = side === "right" ? clamp(rect.right - e.clientX - used.right)
+            : side === "left" ? clamp(e.clientX - rect.left - used.left)
+            : side === "top" ? clamp(rect.bottom - e.clientY - used.top)
+            : clamp(e.clientY - rect.top - used.bottom);
+          run("core.card.panel.size", { card: el.dataset.cardId, side, size });
+        };
+        const end = () => {
+          handle.removeEventListener("pointermove", move);
+          handle.removeEventListener("pointerup", end);
+          handle.removeEventListener("pointercancel", end);
+        };
+        handle.addEventListener("pointermove", move);
+        handle.addEventListener("pointerup", end);
+        handle.addEventListener("pointercancel", end);
+      });
+      handle.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (dragged) return;
+        run("core.card.panel.toggle", { card: el.dataset.cardId, side });
+      });
+    }
+    const handle = body.querySelector(".panel__grip");
+    mark(handle, "core.card.panel.size", { card: card.id, side });
+    handle.title = state.collapsed ? `눌러 ${side} 패널 펼치기` : `끌어 크기 바꾸기 · 눌러 ${side} 패널 접기`;
+    el.dataset[`panel${side[0].toUpperCase()}${side.slice(1)}`] = state.collapsed ? "folded" : "open";
+    el.style.setProperty(`--p${side[0]}`, state.collapsed ? "var(--divider)" : `${state.size}px`);
+    // 기본값: 탭 없는 카드의 패널 섹션에는 표면 문맥이 없다(null) — 좌측 창 사이드바와 같은 문맥이다.
+    const surface = activeTab(card) === null || activeTab(card) === undefined ? null : activeTab(card).id;
+    drawSet(body.querySelector(".set"), `${card.id}:${side}`, set, { card: card.id, surface });
+  }
+}
 
 function drawSidebar(el, card) {
   const state = cardSidebar(card);

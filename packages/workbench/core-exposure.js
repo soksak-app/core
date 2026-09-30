@@ -11,10 +11,10 @@ import { trace } from "./performance.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
 import {
-  activeTab, addTabTo, capture, cardActs, cardSidebar, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
-  currentGrid, currentTextScope, dragState, focusCard,
+  activeTab, addTabTo, assignPanel, capture, cardActs, cardSidebar, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
+  currentGrid, currentTextScope, dragState, focusCard, foldPanel,
   focused, fresh, moveTab, onPicker, onSurfaceState, openCardMenu, openCardTabs, pickItem, pickerState, plane, railState, selectTab,
-  settle, sizeSidebar, splitCard, surfaceState, tabsOf, toggleSidebar,
+  cardPanels, resizePanel, settle, sizeSidebar, splitCard, surfaceState, tabsOf, toggleSidebar,
 } from "./plane.js";
 import {
   applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, settingProject, value,
@@ -155,6 +155,7 @@ function gridState() {
       active: tabs.length ? activeTab(card).id : null,
       acts: cardActs(card.id),
       sidebar: cardSidebar(card),
+      panels: cardPanels(card),
     };
   }).filter(Boolean);
   const lines = (axis) => grid.lines(axis).map((_, k) => grid.boundaryPos(axis, k));
@@ -359,6 +360,9 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.card.focus", ({ card }) => { trace("action", { kind: "card.focus", card }); focusCard(card); });
   registry.command("core.card.sidebar.toggle", ({ card }) => { toggleSidebar(card); });
   registry.command("core.card.sidebar.size", ({ card, width }) => { sizeSidebar(card, width); });
+  registry.command("core.card.panel.set", ({ card, side, set }) => { assignPanel(card, side, set); });
+  registry.command("core.card.panel.toggle", ({ card, side }) => { foldPanel(card, side); });
+  registry.command("core.card.panel.size", ({ card, side, size }) => { resizePanel(card, side, size); });
   registry.command("core.sidebar.section.select", ({ sidebar, section }) => { selectSection(sidebar, section); });
   registry.command("core.sidebar.section.fold", ({ sidebar, section }) => { foldSection(sidebar, section); });
   registry.command("core.text.larger", async () => { await changeTextSize(1); });
