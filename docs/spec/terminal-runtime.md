@@ -1,5 +1,8 @@
 # Terminal runtime
 
+Owner cleanup and retain attempt closure and await termination for every selected surface actor even when one actor has already ended or fails. They report every failed surface explicitly instead of abandoning the remaining actors. A reported failure is not a successful cleanup.
+
+
 When a newer connection attaches a persistent surface, EOF from the previous connection detaches only that previous connection's output sender. It must not clear the newer attachment's sender or close its output stream.
 
 

@@ -1,3 +1,6 @@
+#[path = "support/session_port_test.rs"]
+mod tracked_session_port;
+
 use async_trait::async_trait;
 /// Integration tests for serve contract with fake daemon
 use soksak_sidecar_vt_core::protocol::{
@@ -1591,8 +1594,7 @@ async fn test_a5_screen_read_returns_current_screen() {
     let mut writer = Vec::new();
 
     let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
-    let session_port: Arc<dyn SessionPort> =
-        Arc::new(soksak_sidecar_vt_core::protocol::FakeSessionPort::new());
+    let session_port: Arc<dyn SessionPort> = Arc::new(tracked_session_port::FakeSessionPort::new());
     let session_port_for_factory = session_port.clone();
     let factory = Arc::new(move || session_port_for_factory.clone());
 
@@ -1635,8 +1637,7 @@ async fn test_a6_unknown_op_returns_error() {
     let mut writer = Vec::new();
 
     let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
-    let session_port: Arc<dyn SessionPort> =
-        Arc::new(soksak_sidecar_vt_core::protocol::FakeSessionPort::new());
+    let session_port: Arc<dyn SessionPort> = Arc::new(tracked_session_port::FakeSessionPort::new());
     let session_port_for_factory = session_port.clone();
     let factory = Arc::new(move || session_port_for_factory.clone());
 
@@ -1665,8 +1666,7 @@ async fn test_theme_rejects_unknown_mode_without_fallback() {
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
     let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
-    let session_port: Arc<dyn SessionPort> =
-        Arc::new(soksak_sidecar_vt_core::protocol::FakeSessionPort::new());
+    let session_port: Arc<dyn SessionPort> = Arc::new(tracked_session_port::FakeSessionPort::new());
     let session_port_for_factory = session_port.clone();
     let factory = Arc::new(move || session_port_for_factory.clone());
 
@@ -1710,8 +1710,7 @@ async fn test_cursor_policy_rejects_invalid_values_without_fallback() {
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
     let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
-    let session_port: Arc<dyn SessionPort> =
-        Arc::new(soksak_sidecar_vt_core::protocol::FakeSessionPort::new());
+    let session_port: Arc<dyn SessionPort> = Arc::new(tracked_session_port::FakeSessionPort::new());
     let session_port_for_factory = session_port.clone();
     let factory = Arc::new(move || session_port_for_factory.clone());
 
@@ -3843,8 +3842,7 @@ async fn test_font_applies_the_first_installed_family_of_a_list() {
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
     let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
-    let session_port: Arc<dyn SessionPort> =
-        Arc::new(soksak_sidecar_vt_core::protocol::FakeSessionPort::new());
+    let session_port: Arc<dyn SessionPort> = Arc::new(tracked_session_port::FakeSessionPort::new());
     let session_port_for_factory = session_port.clone();
     let factory = Arc::new(move || session_port_for_factory.clone());
 
