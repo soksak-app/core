@@ -1,34 +1,40 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {windowSidebar, windowSidebarCards, restoreWindowSidebars, reconcileWindowSidebars} from "../window-sidebars.js";
 
 const units = [{id:"pane"},{id:"tree"}];
-const cards = () => [{id:"a",data:{tabs:[{id:"p1",plugin:"pane"},{id:"t1",plugin:"tree"}],activeId:"p1"}},
- {id:"b",data:{tabs:[{id:"p2",plugin:"pane"}],activeId:"p2"}}];
-const api = () => import("../window-sidebars.js");
-
-test("window sidebar descriptors retain multiple owners and deterministic edge order", async () => {
- const {windowSidebarCards} = await api();
- const links=[{place:"window-left",plugin:"tree",set:"tree"},{place:"window-left",plugin:"pane",set:"pane"},{place:"left",plugin:null,set:"general"}];
- assert.deepEqual(windowSidebarCards(units,links).map(x=>x.id),["left","window:pane:left","window:tree:left"]);
+for (const side of ["left", "right"]) {
+ test(`${side} edge has one fixed sidebar for multiple plugin overrides`, () => {
+  const links = units.map(unit => ({place:`window-${side}`,plugin:unit.id,set:`${unit.id}-set`}));
+  const descriptors = windowSidebarCards(units, links, "pane");
+  assert.equal(descriptors.length, 1, `${side} edge creates ${descriptors.length} external sidebar cards`);
+  assert.equal(descriptors[0].id, side);
+  assert.equal(descriptors[0].set, "pane-set");
+ });
+}
+test("focus changes override content without changing sidebar identity or column count", () => {
+ const links = [{place:"right",plugin:null,set:"general"},
+  {place:"window-right",plugin:"pane",set:"pane-set"},
+  {place:"window-right",plugin:"tree",set:"tree-set"}];
+ for (const [focus, expectedPlugin, expectedSet] of [["pane","pane","pane-set"],["tree","tree","tree-set"],[null,null,"general"]]) {
+  assert.deepEqual(windowSidebarCards(units,links,focus), [{id:"right",side:"right",plugin:expectedPlugin,set:expectedSet}]);
+ }
 });
-test("saved window owners stay stable across active-tab changes and move with their tab", async () => {
- const {restoreWindowSidebars,reconcileWindowSidebars,windowOwner} = await api();
- const initial=cards();
- const records=restoreWindowSidebars({"window:pane:left":{width:190,owner:"p1"}},units,initial);
- initial[0].data.activeId="t1";
- reconcileWindowSidebars(records,[{id:"window:pane:left",plugin:"pane"}],initial,190);
- assert.equal(windowOwner(records,"window:pane:left",initial).card,"a");
- assert.equal(windowOwner(records,"window:pane:left",initial).available,false);
- initial[1].data.tabs.push(initial[0].data.tabs.shift());
- assert.equal(windowOwner(records,"window:pane:left",initial).card,"b");
- initial[1].data.tabs=initial[1].data.tabs.filter(t=>t.id!=="p1");
- reconcileWindowSidebars(records,[{id:"window:pane:left",plugin:"pane"}],initial,190);
- assert.equal(records["window:pane:left"].owner,"p2");
- assert.equal(records["window:pane:left"].width,190);
+test("a configured fixed sidebar remains empty when no general set or matching override exists", () => {
+ const links = [{place:"window-right",plugin:"pane",set:"pane-set"}];
+ assert.deepEqual(windowSidebarCards(units,links,"tree"), [{id:"right",side:"right",plugin:null,set:null}]);
 });
-test("invalid saved window data is rejected instead of choosing a replacement owner", async () => {
- const {restoreWindowSidebars}=await api();
- for(const saved of [null,[],{"window:missing:left":{width:190,owner:null}},{left:{width:NaN,owner:null}},
-  {left:{width:190,owner:"p1"}},{"window:pane:left":{width:190,owner:"missing"}},{"window:pane:left":{width:190,owner:"t1"}},
-  {"window:pane:left":{width:190,owner:"p1",extra:true}}]) assert.throws(()=>restoreWindowSidebars(saved,units,cards()),/window sidebar/);
+test("saved sidebar widths contain no persistent plugin owner", () => {
+ const records = restoreWindowSidebars({left:{width:190},right:{width:210}});
+ reconcileWindowSidebars(records,[{id:"left"},{id:"right"}],240);
+ assert.deepEqual(records,{left:{width:190},right:{width:210}});
+ reconcileWindowSidebars(records,[{id:"left"}],300);
+ assert.deepEqual(records,{left:{width:190},right:{width:210}});
+});
+test("retired plugin sidebar IDs and saved owners are rejected without migration", () => {
+ assert.equal(windowSidebar("window:pane:right"), null);
+ for (const saved of [null,[],{"window:pane:right":{width:190,owner:null}},
+  {left:{width:190,owner:null}}, {right:{width:0}}, {left:{width:NaN}}, {left:{width:190,extra:true}}]) {
+  assert.throws(()=>restoreWindowSidebars(saved),/window sidebar/);
+ }
 });

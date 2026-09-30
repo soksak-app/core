@@ -43,7 +43,6 @@ for(const app of Object.values(APPS))test(`${app.name}: independent window and c
  const terminal=target.tabs.find(tab=>tab.plugin==='terminal');
  const windowBar=(await s.get('core.sidebars')).find(bar=>bar.placement==='window'&&bar.card===target.id);
  assert.ok(windowBar,'associated external sidebar absent');
- const initialOwners=(await s.get('core.layout')).windowSidebars;
  for(const side of ['left','right','top','bottom'])await s.run('core.card.sidebar.set',{card:target.id,side,set:'off'});
  await s.run('core.tab.select',{tab:terminal.id});
  const settings=(await s.get('core.settings')).values;
@@ -56,10 +55,10 @@ for(const app of Object.values(APPS))test(`${app.name}: independent window and c
   await s.presented();
   const grid=await s.get('core.grid'),layout=await s.get('core.layout');
   const current=grid.cards.find(card=>card.id===target.id);assert.ok(current,`${label}: content card absent`);
-  const expectedIDs=configured.filter(id=>!hidden||!(id==='right'||id.endsWith(':right'))).sort();
+  const expectedIDs=configured.filter(id=>!hidden||id!=='right').sort();
   const columns=grid.cards.filter(card=>card.tabs.length===0);
   assert.deepEqual(columns.map(card=>card.id).sort(),expectedIDs,`${label}: configured window columns changed`);
-  assert.deepEqual(layout.windowSidebars,savedRecords,`${label}: saved owner/width changed`);
+  assert.deepEqual(layout.windowSidebars,savedRecords,`${label}: saved edge width changed`);
   assert.deepEqual((await s.get('core.settings')).values,savedSettings,`${label}: links or settings changed`);
   assert.deepEqual(layout.state.cards.find(card=>card.id===target.id).data.sidebars,savedSides,`${label}: card choices changed`);
   const bars=await s.until('core.sidebars',all=>all.some(bar=>bar.sidebar===`${target.id}:left`&&bar.set===cardSet.id)&&
@@ -79,7 +78,7 @@ for(const app of Object.values(APPS))test(`${app.name}: independent window and c
    assert.equal(bar.set,link.set,`${label}: window assignment`);
    assert.deepEqual(bar.sections.map(section=>section.id),savedSettings.sets.find(set=>set.id===link.set).sections,`${label}: window section output was dropped`);
    assert.ok(bar.sections.filter(section=>section.mounted).every(section=>section.text.length>0),`${label}: ${column.id} output empty`);
-   if(column.id===windowBar.sidebar){assert.equal(bar.surface,savedRecords[column.id].owner);assert.equal(bar.card,target.id);assert.equal(bar.unavailable,true);}
+   if(column.id===windowBar.sidebar){assert.equal(bar.surface,terminal.id);assert.equal(bar.card,target.id);assert.equal(bar.unavailable,false);}
    for(const [key,value]of Object.entries({x:grid.plane.x+column.x+1,y:grid.plane.y+column.y+1,w:column.w-2,h:column.h-24}))near(bar.rect[key],value,`${label}: ${column.id} DOM ${key}`);
   }
   const surface=(await s.surfaces()).find(item=>item.surface===terminal.id);assert.ok(surface?.applied,`${label}: native surface absent`);
@@ -118,7 +117,7 @@ for(const app of Object.values(APPS))test(`${app.name}: independent window and c
  }
  const assigned=await phase('independent settings and widths',async()=>{
   await s.run('core.settings.set',{patch:{sets:[...settings.sets,cardSet]},scope:'common'});
-  await s.run('core.settings.link',{place:`window-${windowBar.side}`,plugin:windowBar.plugin,set:source.id,scope:'common'});
+  await s.run('core.settings.link',{place:`window-${windowBar.side}`,plugin:terminal.plugin,set:source.id,scope:'common'});
   await s.run('core.settings.link',{place:'card-left',plugin:terminal.plugin,set:cardSet.id,scope:'common'});
   await s.run('core.card.sidebar.set',{card:target.id,side:'left',set:'inherit'});
   await s.run('core.card.sidebar.size',{card:target.id,side:'left',size:144});
@@ -126,7 +125,8 @@ for(const app of Object.values(APPS))test(`${app.name}: independent window and c
   await s.run('core.grid.size',{card:'left',axis:'x',size:207});
   await s.presented();
   savedRecords=(await s.get('core.layout')).windowSidebars;
-  for(const [id,record]of Object.entries(savedRecords))assert.equal(record.owner,initialOwners[id].owner,'settings retargeted owner');
+  assert.deepEqual(Object.keys(savedRecords).sort(),['left','right'],'only fixed edge widths are stored');
+  for(const record of Object.values(savedRecords))assert.deepEqual(Object.keys(record),['width'],'a plugin owner was persisted');
   assert.equal(savedRecords[windowBar.sidebar].width,215);assert.equal(savedRecords.left.width,207);
   savedSettings=(await s.get('core.settings')).values;
   savedSides=(await s.get('core.layout')).state.cards.find(card=>card.id===target.id).data.sidebars;

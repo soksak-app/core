@@ -8,7 +8,7 @@ const end=source.indexOf('/** 보관해 둔 상태',start);
 const block=source.slice(start,end).replace('export const','const');
 test("space capture records a resized window sidebar even without another settle",()=>{
  const f={grid:{cards:[{id:"left",width:230}],toJSON:()=>({cards:[]})},focusedId:"main",named:0,
-  windowSidebars:{left:{width:190,owner:null}},sidebarChoices:()=>({}),structuredClone,isPlace:id=>id==="left"};
+  windowSidebars:{left:{width:190}},sidebarChoices:()=>({}),structuredClone,isPlace:id=>id==="left"};
  runInNewContext(block+'\nglobalThis.take = capture;',f);
  assert.equal(f.take().windowSidebars.left.width,230);
 });

@@ -324,6 +324,7 @@ export function verify(controls = null) {
   for (const side of ["left", "right"]) {
     const cardsOnSide = places.filter(card => windowSidebar(card.id).side === side).sort((a,b) => a.c0-b.c0);
     if (!cardsOnSide.length) continue;
+    placeOk &&= cardsOnSide.length === 1;
     placeOk &&= side === "left" ? cardsOnSide[0].c0 === 0 : cardsOnSide.at(-1).c1 === grid.lines("x").length-1;
     placeOk &&= cardsOnSide.every((card,index) => index === 0 || cardsOnSide[index-1].c1 === card.c0);
   }

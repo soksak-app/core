@@ -34,7 +34,7 @@
 | 언어 | 언어 `language` |
 | 진단 | 성능 트레이스 `diagnostics.performance` |
 
-창 선택은 일반과 플러그인의 독립된 열이다. 표시 스위치는 해당 가장자리의 모든 열에 적용한다. 카드 사이드바는 카드 내부에 있으며 기존 `cardSidebar` 위치 설정은 거부한다. 일반에는 플러그인 설정이 없다.
+창 선택은 고정 왼쪽 사이드바 하나와 고정 오른쪽 사이드바 하나의 내용을 선택한다. 포커스 활성 플러그인은 추가 열 없이 일반 변 선택을 오버라이드한다. 표시 스위치는 고정 변에 적용한다. 카드 사이드바는 카드 내부에 있으며 기존 `cardSidebar` 위치 설정은 거부한다. 일반에는 플러그인 설정이 없다.
 
 ### 진단
 
@@ -100,11 +100,11 @@
 
 | 연결 | 뜻 |
 |---|---|
-| `{place: "left" 또는 "right", plugin: null, set}` | 독립된 일반 창 열 |
-| `{place: "window-left" 또는 "window-right", plugin, set}` | 독립된 플러그인 창 열 |
+| `{place: "left" 또는 "right", plugin: null, set}` | 고정 창 사이드바의 일반 내용 |
+| `{place: "window-left" 또는 "window-right", plugin, set}` | 고정 창 사이드바 내용의 플러그인 오버라이드 |
 | `{place: "card-top", "card-bottom", "card-left" 또는 "card-right", plugin, set}` | 플러그인 카드의 해당 내부 변 기본 세트 |
 
-모든 `set`은 알려진 세트 ID다. 위치/플러그인 조합은 한 번만 나온다. 플러그인 left/right 연결, null 세트, 레일 연결을 거부한다. 세트 ID `off`와 `inherit`는 예약 값이다. 창 열과 안정적인 소유자는 [외부 창 사이드바](external-sidebars.ko.md)를 따른다. 포커스는 창 세트를 선택하지 않는다. `left`/`right` 스위치는 선택을 바꾸지 않고 해당 가장자리의 모든 창 열을 숨긴다.
+모든 `set`은 알려진 세트 ID다. 위치/플러그인 조합은 한 번만 나온다. 플러그인 left/right 연결, null 세트, 레일 연결을 거부한다. 세트 ID `off`와 `inherit`는 예약 값이다. 고정 사이드바 선택과 오버라이드 레일 보더는 [외부 창 사이드바](external-sidebars.ko.md)를 따른다. `left`/`right` 스위치는 선택을 바꾸지 않고 해당 고정 사이드바를 숨긴다.
 
 `core.settings.link {place, plugin, set, scope}`는 연결을 저장하는 세트 ID 또는 연결을 제거하는 `off`를 받는다. 모든 기본 링크에서 `inherit`는 -32602로 실패한다. 별도 명령 `core.card.sidebar.set`는 개별 카드의 명시적 덮어쓰기를 제거하는 `inherit`를 유지한다([예제 모델](example-model.ko.md)).
 

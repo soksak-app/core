@@ -34,7 +34,7 @@ The left navigation lists three sections in this order. Every section shows the 
 | 언어 | 언어 `language` |
 | 진단 | 성능 트레이스 `diagnostics.performance` |
 
-Window choices are independent general and plugin columns. Visibility switches affect every column on the corresponding edge. Card sidebars remain inside their cards; the obsolete `cardSidebar` positioning setting is rejected. No plugin setting appears in 일반.
+Window choices select content for one fixed left sidebar and one fixed right sidebar. The focused active plugin overrides the general side choice without adding a column. Visibility switches affect the fixed side. Card sidebars remain inside their cards; the obsolete `cardSidebar` positioning setting is rejected. No plugin setting appears in 일반.
 
 ### 진단
 
@@ -100,11 +100,11 @@ An absent link explicitly selects `off`. Every selector rejects a current value 
 
 | Link | Meaning |
 |---|---|
-| `{place: "left" or "right", plugin: null, set}` | Independent general window column |
-| `{place: "window-left" or "window-right", plugin, set}` | Independent plugin window column |
+| `{place: "left" or "right", plugin: null, set}` | General content of the fixed window sidebar |
+| `{place: "window-left" or "window-right", plugin, set}` | Plugin content override of the fixed window sidebar |
 | `{place: "card-top", "card-bottom", "card-left", or "card-right", plugin, set}` | Default set for that internal side of the plugin's cards |
 
-Every `set` is a known set ID. Each place/plugin pair appears at most once. Reject plugin left/right links, null sets and rail links. Set IDs `off` and `inherit` are reserved. Window columns and stable owners follow [external window sidebars](external-sidebars.md); focus never selects their sets. The `left`/`right` switch hides all window columns on that edge without changing their choices.
+Every `set` is a known set ID. Each place/plugin pair appears at most once. Reject plugin left/right links, null sets and rail links. Set IDs `off` and `inherit` are reserved. Fixed sidebar selection and override rail borders follow [external window sidebars](external-sidebars.md). The `left`/`right` switch hides its fixed sidebar without changing choices.
 
 `core.settings.link {place, plugin, set, scope}` accepts a set ID to store a link, or `off` to remove it. `inherit` fails with -32602 for every default link. The separate `core.card.sidebar.set` command still accepts `inherit` to remove a particular card's explicit override ([example model](example-model.md)).
 

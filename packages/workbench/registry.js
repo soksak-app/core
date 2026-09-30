@@ -61,7 +61,7 @@ export function plugin(id) {
 export const hasPlugin = (id) => registeredPlugins.some((p) => p.id === id);
 
 /** 고정 창 사이드바 카드인지 판정한다. 등록 검증은 환경과 저장 경계에서 수행한다. */
-export const isPlace = (id) => id === "left" || id === "right" || /^window:[a-z][a-z0-9-]*:(left|right)$/.test(id);
+export const isPlace = (id) => id === "left" || id === "right";
 
 /** id 로 조회한다. 등록되지 않은 id 면 예외를 던진다. */
 export function section(id) {

@@ -20,3 +20,8 @@ test("saved window state rejects obsolete and unknown cards before replacing the
 test("saved obsolete width fields fail even when empty",()=>{
  for(const field of ["railWidth","edgeWidth"]) assert.throws(()=>restore({state:{cards:[]},[field]:{}}),/obsolete/);
 });
+
+for(const field of ['windowSidebars','sidebars'])test(`explicit null ${field} records are rejected instead of becoming empty records`,()=>{
+ const base={state:{cards:[]},windowSidebars:{},sidebars:{}};
+ assert.throws(()=>restore({...base,[field]:null}),/sidebar/);
+});
