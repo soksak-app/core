@@ -93,6 +93,8 @@ Deleting a set writes the remaining sets and the links without the ones to it to
 
 ## Sidebar choices
 
+Sidebar selectors explicitly select `off` when a card-side link is absent. Every rendered selector rejects a current value outside its offered choices; it must not let the browser select the first option in place of an invalid value.
+
 `links` holds the sidebar choices:
 
 | Link | Meaning |

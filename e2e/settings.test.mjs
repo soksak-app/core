@@ -120,6 +120,10 @@ for (const app of Object.values(APPS)) {
       description: "block은 칸 전체, underline은 밑줄, beam은 세로 막대로 그린다. 프로그램이 모양을 정하면 그 모양을 쓴다.",
     });
     await control(s, "core.settings-modal.set", "link:right:terminal");
+    for (const side of ["left", "right", "top", "bottom"]) {
+      assert.equal((await control(s, "core.settings-modal.set", `link:card-${side}:terminal`)).value, "off",
+        `the missing card-${side} link did not display off`);
+    }
     await press(s, "core.settings-modal.pick", "pick:terminal.cursor.shape:beam");
     await s.until("core.settings", (value) => value.values["terminal.cursor.shape"] === "beam" && !value.saving,
       "the plugin page did not change terminal.cursor.shape");

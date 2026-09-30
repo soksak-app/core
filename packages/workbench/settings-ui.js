@@ -101,6 +101,7 @@ function valueCommand(el, key) {
 
 /** select 를 만든다. 선택한 값이 key 와 함께 반환된다. */
 function choose(key, options, now) {
+  if (!options.some(([value]) => value === now)) throw new Error(`unknown settings choice ${String(now)} for ${key}`);
   const wrap = document.createElement("span");
   wrap.className = "select-field";
   const el = document.createElement("select");
@@ -303,9 +304,10 @@ const generalOptions = () => [["off", "사용 안 함"], ...setItems()];
 /** 선택 상자에 보일 현재 선택. 세트 id, off, 또는 inherit(플러그인의 일반 따름)이다. */
 function choiceOf(place, plugin) {
   const found = value("links").find((l) => l.place === place && l.plugin === plugin);
-  if (!found) return plugin === null || place === "card-left" ? "off" : "inherit";
-  // 기본값: set 이 null 인 플러그인 연결은 사용 안 함이다(docs/spec/settings.md).
-  return found.set ?? "off";
+  if (!found) return plugin === null || place.startsWith("card-") ? "off" : "inherit";
+  // 창 좌우의 플러그인 연결만 null을 사용 안 함으로 선언한다.
+  if (found.set === null && plugin !== null && ["left", "right"].includes(place)) return "off";
+  return found.set;
 }
 
 /** 설정 한 행. 선언된 형식에 따라 선택, 슬라이더, 글자 입력이다. */
