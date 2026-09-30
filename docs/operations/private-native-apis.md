@@ -97,7 +97,7 @@ The operation is deliberately limited to the declared main-page reload command. 
 
 ### Mouse-processing completion
 
-The runtime and standalone checks use `_doAfterProcessingAllPendingMouseEvents:` because native mouse handling is asynchronous. The runtime drains pending work before sending a press or release and after its receipt. It waits on the document that owns the gesture, including a release over another native view. The previous inventory incorrectly described this API as checks-only. The current runtime still bypasses the drain when the selector is absent; explicit rejection of that missing capability remains tracked as V5-115-1-2.
+The runtime and standalone checks use `_doAfterProcessingAllPendingMouseEvents:` because native mouse handling is asynchronous. The runtime drains pending work before sending a press or release and after its receipt. It waits on the document that owns the gesture, including a release over another native view. The previous inventory incorrectly described this API as checks-only. Registration now rejects a missing selector. Registered delivery reports the unavailable selector and fails without sending when it is absent before delivery, or fails completion when it is absent after receipt. The owning capability-loss fixture is `webview_input_receipts_test`; actual trusted-event ordering remains covered by `input_inject_test`. V5-115-1-2 removes both runtime bypasses.
 
 Review the declaration in [`WKWebViewPrivateForTesting.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivateForTesting.h) and run both standalone variants when updating this API or the input module.
 

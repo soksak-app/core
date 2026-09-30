@@ -56,6 +56,12 @@ static NSString *const kReceiptScript =
 
 static NSMapTable<WKWebView *, SPInputReceipts *> *receipts;
 
+static BOOL hasPendingMouseDrain(WKWebView *view) {
+    if ([view respondsToSelector:@selector(_doAfterProcessingAllPendingMouseEvents:)]) return YES;
+    fprintf(stderr, "webview input: _doAfterProcessingAllPendingMouseEvents: is unavailable\n");
+    return NO;
+}
+
 static void installReceipts(WKWebView *view) {
     if (!receipts) receipts = [[NSMapTable weakToStrongObjectsMapTable] retain];
     if ([receipts objectForKey:view]) return;
@@ -95,11 +101,12 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
         done(send());
         return;
     }
+    if (!hasPendingMouseDrain(view)) { done(NO); return; }
     SPInputWait *wait = [[SPInputWait new] autorelease];
     wait.type = type;
     wait.done = ^(BOOL received) {
-        if (!received || ![view respondsToSelector:@selector(_doAfterProcessingAllPendingMouseEvents:)]) {
-            done(received);
+        if (!received || !hasPendingMouseDrain(view)) {
+            done(NO);
             return;
         }
         [view _doAfterProcessingAllPendingMouseEvents:^{ done(YES); }];
@@ -128,11 +135,7 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
             wait.done(NO);
         }
     };
-    if ([view respondsToSelector:@selector(_doAfterProcessingAllPendingMouseEvents:)]) {
-        [view _doAfterProcessingAllPendingMouseEvents:sendAfterDrain];
-    } else {
-        sendAfterDrain();
-    }
+    [view _doAfterProcessingAllPendingMouseEvents:sendAfterDrain];
 }
 
 static NSEvent *routePointer(NSEvent *event) {
@@ -161,6 +164,7 @@ static NSEvent *routePointer(NSEvent *event) {
 BOOL webviewInputRegister(WKWebView *view) {
     NSCAssert(NSThread.isMainThread, @"Webview input registration requires the main thread");
     if (![view respondsToSelector:@selector(_setIgnoresMouseMoveEvents:)]) return NO;
+    if (!hasPendingMouseDrain(view)) return NO;
     if (!inputViews) {
         inputViews = [[NSHashTable weakObjectsHashTable] retain];
         lastPointerTargets = [[NSMapTable weakToWeakObjectsMapTable] retain];

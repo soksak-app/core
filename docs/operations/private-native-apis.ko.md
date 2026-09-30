@@ -97,7 +97,7 @@ Tauri 이벤트 전달 콜백은 Tao의 이벤트 처리 잠금을 가진다. �
 
 ### 마우스 처리 완료
 
-네이티브 마우스 처리가 비동기이므로 런타임과 독립 검사는 `_doAfterProcessingAllPendingMouseEvents:`를 사용한다. 런타임은 누름·뗌 전송 전과 수신 후 대기 중인 작업을 완료한다. 다른 네이티브 뷰 위에서 놓더라도 제스처를 소유한 문서를 기다린다. 기존 목록의 검사 전용 설명은 잘못됐다. 현재 런타임은 선택자가 없으면 완료 대기를 우회하며, 이 기능 부재의 명시적 거부는 V5-115-1-2에서 추적한다.
+네이티브 마우스 처리가 비동기이므로 런타임과 독립 검사는 `_doAfterProcessingAllPendingMouseEvents:`를 사용한다. 런타임은 누름·뗌 전송 전과 수신 후 대기 중인 작업을 완료한다. 다른 네이티브 뷰 위에서 놓더라도 제스처를 소유한 문서를 기다린다. 기존 목록의 검사 전용 설명은 잘못됐다. 등록 시 선택자가 없으면 거부한다. 등록한 뷰의 전송 전에 선택자가 없으면 해당 오류를 보고하고 이벤트를 보내지 않으며, 수신 후 부재도 완료를 실패시킨다. 기능 부재의 소유 픽스처는 `webview_input_receipts_test`이고 실제 신뢰 이벤트 순서는 `input_inject_test`가 검증한다. V5-115-1-2에서 두 런타임 우회를 제거한다.
 
 [`WKWebViewPrivateForTesting.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivateForTesting.h)의 선언을 검토하고, 이 API나 입력 모듈을 업데이트하면 독립 검사 두 실행을 수행한다.
 
