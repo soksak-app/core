@@ -1,6 +1,6 @@
 // 설정 창의 절(일반, 플러그인, 사이드바), 세트 만들기·편집·삭제, 배치 값 설정을 검사한다(docs/spec/settings.md).
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -251,6 +251,35 @@ for (const app of Object.values(APPS)) {
     await control(s, "core.settings-modal.pick", "pick:cardSidebar:inset");
     const keys = (await controls(s)).filter((c) => c.key?.startsWith("pick:cardSidebar:")).map((c) => c.key);
     assert.deepEqual(keys, ["pick:cardSidebar:inset", "pick:cardSidebar:flow", "pick:cardSidebar:pin", "pick:cardSidebar:off"]);
+  });
+
+  test(`${app.name}: performance tracing records enabled card focus and stops while disabled`, { timeout: 30000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    await keepCommonSettings(s);
+    const file = join(app.configDir, "logs", "performance.ndjson");
+    const read = () => existsSync(file) ? readFileSync(file, "utf8") : "";
+    const change = (enabled) => s.run("core.settings.set", {
+      scope: "common", patch: { "diagnostics.performance": enabled },
+    });
+    await change(false);
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.length).id;
+    const before = read();
+    await s.run("core.card.focus", { card });
+    assert.equal(read(), before, "disabled focus changed the trace output");
+    await change(true);
+    await s.run("core.card.focus", { card });
+    await change(false);
+    assert.ok(existsSync(file), "enabled tracing did not create its declared output");
+    const after = read();
+    const events = after.slice(before.length).trim().split("\n").filter(Boolean).map(JSON.parse);
+    assert.ok(events.some((line) => line.layer === "page" && line.event === "action"
+      && line.kind === "card.focus" && line.card === card), "enabled focus action was not recorded");
+    assert.ok(events.some((line) => line.layer === "page" && line.event === "command"
+      && line.name === "core.card.focus" && line.ok === true), "enabled focus command was not recorded");
+    await s.run("core.card.focus", { card });
+    assert.equal(read(), after, "focus after disable changed the trace output");
   });
 
   test(`${app.name}: a new inset sidebar opens at 190 points`, { timeout: 60000 }, async (t) => {

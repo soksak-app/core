@@ -4,6 +4,8 @@
 
 The performance trace is a permanent instrument, present in every build, that records what the application spends time and memory on. It is not a diagnostics-build feature and is never removed after use. The switch is the declared setting `diagnostics.performance` ([settings](settings.md)); while it is false no layer does any logging work — no file is created and no formatting runs.
 
+The page does not format or relay events while disabled or awaiting enable acknowledgment. Switch requests and event relays preserve their order: disabling stops new events immediately and waits behind already accepted relays. Switch failures reject the settings operation; relay failures are reported explicitly and do not replace the result of the measured command.
+
 ## Output
 
 Events append to `logs/performance.ndjson` under the configuration directory. Every line is one event object with at least `ts` (ISO-8601 with milliseconds), `pid` (the writing process), `layer` (`page`, `host`, `vt-core`, `files`, `shell`, `sampler`), and `event`; further fields depend on the event. One file carries every layer, so one timeline reads the whole application. The file rotates at 10 MB to `performance.ndjson.1`, keeping one previous generation; rotation and the file itself belong to the trace, so an old log survives a restart with the flag off. A `session_start` event marks each process start and carries the role of the writer.

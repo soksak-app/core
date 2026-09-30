@@ -30,6 +30,7 @@ import { checkSidebarReferences, isSettingAddress, validateSidebars } from "@sok
 import { effectiveSettings } from "./settings-scope.js";
 import { chooseLink, resolveSidebar } from "./sidebar-sets.js";
 import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
+import { setTraceEnabled } from "./performance.js";
 
 /* 고를 수 있는 폰트. 테마가 이 중 하나를 기본으로 지정하고 설정에서 바꾼다.
    설치되지 않은 이름은 목록의 다음 이름으로 넘어간다. */
@@ -318,13 +319,8 @@ export function setSidebarDefaults(sidebars) {
 
 export async function connectSettings(storage) {
   store = storage;
-  store.onChange(() => { if (!changes) refresh().catch((e) => dispatchEvent(new ErrorEvent("error", { message: e.message }))); });
+  store.onChange(() => { if (!changes) return refresh().catch((e) => dispatchEvent(new ErrorEvent("error", { message: e.message }))); });
   await refresh();
-  // 저장된 성능 트레이스 스위치를 시작부터 반영한다(V5-104). 호스트가 없는 문서
-  // (검사 문맥)에서는 호출하지 않는다.
-  if (bridge && common["diagnostics.performance"] === true) {
-    bridge.call("performance", { action: "on" }).then(undefined, () => {});
-  }
 }
 
 async function refresh() {
@@ -336,10 +332,12 @@ async function refresh() {
   validateValues(snapshot.common, "common settings");
   validateValues(nextOverrides, "project settings");
   checkValues(effectiveSettings(defaults, snapshot.common, nextOverrides));
-  if (JSON.stringify(common) === JSON.stringify(snapshot.common) && JSON.stringify(overrides) === JSON.stringify(nextOverrides)) return;
-  common = snapshot.common;
-  overrides = nextOverrides;
-  apply();
+  if (JSON.stringify(common) !== JSON.stringify(snapshot.common) || JSON.stringify(overrides) !== JSON.stringify(nextOverrides)) {
+    common = snapshot.common;
+    overrides = nextOverrides;
+    apply();
+  }
+  await setTraceEnabled(settings["diagnostics.performance"]);
 }
 
 function apply() {
@@ -451,14 +449,9 @@ export function set(patch, scope = projectId ? "project" : "common") {
   changes++;
   revision++;
   apply();
-  if (Object.hasOwn(patch, "diagnostics.performance")) {
-    // 성능 트레이스의 스위치는 페이지가 호스트에게 전한다(V5-104). 호스트가 자기
-    // 줄과 사이드카 플래그를 책임진다. 전파 실패는 설정 변경을 되돌리지 않고
-    // 그대로 드러난다 — 하지만 저장보다 먼저 기다린다.
-    const on = patch["diagnostics.performance"] === true;
-    if (bridge) bridge.call("performance", { action: on ? "on" : "off" }).then(undefined, () => {});
-  }
-  const saved = writing.then(() => store.settings(id, patch));
+  const propagation = Object.hasOwn(patch, "diagnostics.performance")
+    ? setTraceEnabled(settings["diagnostics.performance"]) : Promise.resolve();
+  const saved = Promise.all([writing, propagation]).then(() => store.settings(id, patch));
   writing = saved.finally(async () => {
     changes--;
     if (changes) return;

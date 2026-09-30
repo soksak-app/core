@@ -34,3 +34,27 @@ test('the performance trace flag is a declared boolean defaulting to false', asy
     globalThis.document = realDocument;
   }
 });
+
+test('a settings file change propagates the effective performance switch', async (t) => {
+  const calls = [];
+  t.mock.module('../performance.js', { exports: {
+    setTraceEnabled: async (enabled) => { calls.push(enabled); },
+    trace: () => {}, timed: async (_name, answer) => answer(),
+  } });
+  const previous = globalThis.document;
+  globalThis.document = { addEventListener() {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const memory = { common: {}, projects: [] };
+  let changed;
+  const { connectSettings } = await import('../settings.js?test=external-performance');
+  try {
+    await connectSettings({
+      snapshot: async () => structuredClone(memory), settings: async () => {},
+      onChange: (listener) => { changed = listener; },
+    });
+    memory.common['diagnostics.performance'] = true;
+    await changed();
+    assert.deepEqual(calls, [false, true], 'file changes did not propagate the effective switch');
+  } finally {
+    globalThis.document = previous;
+  }
+});

@@ -132,7 +132,12 @@ export function createRegistry({ call = null } = {}) {
     if (!shared) await forward(watch.surface, "status.unwatch", { name });
   }
 
-  async function answer(method, params) {
+  function answer(method, params) {
+    return method === "command.run" && typeof params?.name === "string"
+      ? timed(params.name, () => dispatch(method, params)) : dispatch(method, params);
+  }
+
+  async function dispatch(method, params) {
     // 기본값: 매개변수가 없는 요청은 params 를 생략한다.
     if (methods.has(method)) return methods.get(method)(params ?? {});
     if (method === "exposure.list") return list();
@@ -302,9 +307,8 @@ export function createRegistry({ call = null } = {}) {
      * 이 문서의 코어 명령 하나를 실행한다. 선언의 params 스키마로 검사한다. 문서의 UI 가
      * 조작을 이 경로로 수행하므로, 사람의 조작과 외부 요청이 같은 명령을 거친다.
      */
-    run: (name, params = {}, surface) => (surfaceName(name)
-      ? answer("command.run", surface === undefined ? { name, params } : { name, params, surface })
-      : core.answer("command.run", { name, params })),
+    run: (name, params = {}, surface) => answer("command.run",
+      surface === undefined ? { name, params } : { name, params, surface }),
 
     /**
      * 표면 status 하나를 이 문서 안에서 따라간다. fn(value, surface) 는 현재 값과 그 뒤의 변경마다
@@ -446,7 +450,7 @@ export function createRegistry({ call = null } = {}) {
     /** 요청 하나에 답한다. 결과는 {result} 또는 {error: {code, message}} 다. */
     handle: ({ method, params }) => replyPayload(async () => {
       // 모든 core·플러그인 명령의 시간을 성능 트레이스에 남긴다(V5-104).
-      const result = await timed(method, () => answer(method, params));
+      const result = await answer(method, params);
       // 코어와 마운트된 플러그인은 앱 문서를 공유한다. 별도 문서가 지정한 원점은 유지한다.
       if (method === "dom.rect" && result && result.document === undefined) return { ...result, document: { x: 0, y: 0 } };
       return result;

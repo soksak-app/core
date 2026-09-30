@@ -42,6 +42,22 @@ const coreExposes = () => ({
     { name: "core.fixture.missing", description: "Absent." },
   ],
 });
+
+test("command timing names endpoint and UI commands at the registry boundary", async (t) => {
+  const names = [];
+  t.mock.module("../performance.js", { exports: {
+    timed: async (name, answer) => { names.push(name); return answer(); },
+  } });
+  const { createRegistry: createTimedRegistry } = await import("../exposure.js?command-timing");
+  const made = createTimedRegistry();
+  made.declare("core", coreExposes());
+  made.command("core.fixture.add", ({ n }) => n + 1);
+  assert.deepEqual(await made.handle({ method: "command.run", params: {
+    name: "core.fixture.add", params: { n: 2 },
+  } }), { result: 3 });
+  assert.equal(await made.run("core.fixture.add", { n: 3 }), 4);
+  assert.deepEqual(names, ["core.fixture.add", "core.fixture.add"]);
+});
 const probeExposes = () => ({
   status: [{ name: "probe.lines", description: "Lines.", schema: { type: "array" } }],
   commands: [{ name: "probe.send", description: "Sends.", params: { type: "object" }, result: {} }],
