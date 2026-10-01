@@ -8,6 +8,7 @@
 import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
 import { report } from "./host.js";
 import { trace } from "./performance.js";
+import { focusName, focusState } from "./focus-state.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
 import {
@@ -181,13 +182,6 @@ function surfacesState() {
 const withOpen = (project) => ({ ...project, open: projects.isOpen(project.id) });
 
 /** 키보드 초점이 있는 요소의 공개 이름과 순서. 공개 이름이 없으면 null 이다. */
-function focusState() {
-  const el = document.activeElement?.closest("[data-expose]");
-  if (!el || el === document.body) return null;
-  const name = el.dataset.expose;
-  return { name, index: [...document.querySelectorAll(`[data-expose="${name}"]`)].indexOf(el) };
-}
-
 /** 공개 이름의 요소에 키보드 초점을 준다. */
 function focusElement(name, index = 0) {
   if (!registry.list().dom.some((entry) => entry.name === name)) throw new Error(`unknown dom ${name}`);
@@ -271,7 +265,20 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   status("core.modal", modalState);
   status("core.drag", dragState);
   status("core.rename", renames.state);
-  status("core.focus", focusState);
+  status("core.focus", () => focusState(document));
+  // 문서 포커스 전이 관측(V5-114). 터미널 영역은 클릭 투명이라 누르면 문서가 포커스를 되찾고, activeElement 로
+  // 남아 있던 주소창이 그 순간 포커스를 받아 보일 수 있다. 전이마다 성능 트레이스와 진단 로그에 한 줄을 남기고
+  // core.focus 를 알린다. 표면의 요소는 shadow root 안에 있으므로 사건의 실제 대상에서 이름을 읽는다.
+  document.addEventListener("focusin", (event) => {
+    trace("focus", { phase: "in", element: focusName(event) });
+    report(`focus in ${focusName(event)}`);
+    coreChanged();
+  }, true);
+  document.addEventListener("focusout", (event) => {
+    trace("focus", { phase: "out", element: focusName(event) });
+    report(`focus out ${focusName(event)}`);
+    coreChanged();
+  }, true);
   status("core.text", () => ({ scope: currentTextScope(), frame: value("textSize"), cards: cardTextSizes() }));
   onTextScope(() => coreChanged());
   status("core.chrome", chrome);
@@ -426,25 +433,4 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
 // 창 크기 변화의 행위 마커(V5-104). 로그의 닻 — 무엇을 했을 때 무엇이 일어났나.
 addEventListener("resize", () => {
   trace("action", { kind: "resize", width: innerWidth, height: innerHeight });
-
-  // 문서 포커스 전이 관측(V5-114). 터미널 영역은 클릭 투명이라 누르면 문서가 포커스를
-  // 되찾고, activeElement 로 남아 있던 주소창이 그 순간 포커스를 받아 보인다. 전이마다
-  // 한 줄을 성능 트레이스와 진단 로그 양쪽에 남긴다.
-  // 기본값: 포커스 대상이 Element 가 아니거나 이름 요소가 없으면 unknown — 관측 줄의
-  // 식별자일 뿐 판정에 쓰이지 않는다.
-  const focusName = (event) => {
-    const target = event.target instanceof Element ? event.target : null;
-    // 기본값: 이름 요소가 없으면 unknown — 관측 식별자일 뿐 판정에 쓰이지 않는다.
-    if (target?.dataset.expose) return target.dataset.expose;
-    // 기본값: 태그 이름도 없으면 unknown — 같은 이유다.
-    return target?.tagName ?? "unknown";
-  };
-  document.addEventListener("focusin", (event) => {
-    trace("focus", { phase: "in", element: focusName(event) });
-    report(`focus in ${focusName(event)}`);
-  }, true);
-  document.addEventListener("focusout", (event) => {
-    trace("focus", { phase: "out", element: focusName(event) });
-    report(`focus out ${focusName(event)}`);
-  }, true);
 });

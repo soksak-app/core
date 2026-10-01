@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-114-1: `core.focus` reports focus inside surface modules and changes with every focus transition, and a real-input check verifies that pressing terminal cards never moves focus to the browser address field.
+
 - G1.4-27: the host stub audit reports a file it cannot read and reads plugin `.js` sources too.
 
 - G1.4-26: drawing a layout prepared before a card closed no longer fails on that card's missing tab, and does not mount its released surface again.

@@ -54,6 +54,7 @@
     "exposure.json",
     "exposure.js",
     "core-exposure.js",
+    "focus-state.js",
     "stage.mjs",
     "staged.js",
     "replace-file.mjs"

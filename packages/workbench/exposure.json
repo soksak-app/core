@@ -1111,7 +1111,7 @@
       },
       {
         "name": "core.focus",
-        "description": "The exposed element that has keyboard focus in the main document, by name and index; null when focus is elsewhere.",
+        "description": "The exposed element that has keyboard focus in the main document, including surface modules mounted in shadow roots: its name, its index within its own document or shadow root, and the surface id (null in the main document); null when focus is elsewhere. Changes with every focus transition.",
         "schema": {
           "type": [
             "object",
@@ -1123,6 +1123,12 @@
             },
             "index": {
               "type": "integer"
+            },
+            "surface": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         }
