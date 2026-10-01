@@ -2771,8 +2771,8 @@
         "description": "The drop preview of the main document."
       },
       {
-        "name": "core.rail.projects",
-        "description": "The left rail that holds the project tabs when they stand on the left."
+        "name": "core.projects.column",
+        "description": "The left column that holds the project tabs when they stand on the left."
       },
       {
         "name": "core.library.empty",

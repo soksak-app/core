@@ -470,23 +470,23 @@ function drawBars() {
   const browsing = projects.inLibrary();
   document.body.dataset.screen = browsing ? "library" : "workspace";
   const toLeft = !browsing && value("projectTabs") === "left";
-  /* 레일은 왼쪽 모드에서만 만든다. 숨기지 않고 제거한다. [hidden] 은 display 를
-     정하는 규칙을 이기지 못하고 .rail-projects 는 display:flex 이므로, 숨기면 빈
+  /* 프로젝트 열은 왼쪽 모드에서만 만든다. 숨기지 않고 제거한다. [hidden] 은 display 를
+     정하는 규칙을 이기지 못하고 .project-column 는 display:flex 이므로, 숨기면 빈
      영역이 남는다. 크롬 행은 반대로 항상 둔다. 비어 있어도 그 행이 버튼들을
      오른쪽으로 밀어낸다. */
-  let rail = workarea.querySelector(".rail-projects");
-  if (toLeft && !rail) {
-    rail = document.createElement("div");
-    rail.className = "rail-projects";
-    rail.dataset.expose = "core.rail.projects";
-    workarea.prepend(rail);
-  } else if (!toLeft && rail) {
-    rail.remove();
-    rail = null;
+  let column = workarea.querySelector(".project-column");
+  if (toLeft && !column) {
+    column = document.createElement("div");
+    column.className = "project-column";
+    column.dataset.expose = "core.projects.column";
+    workarea.prepend(column);
+  } else if (!toLeft && column) {
+    column.remove();
+    column = null;
   }
-  const into = toLeft ? rail : projectBar;
+  const into = toLeft ? column : projectBar;
   projectBar.textContent = "";
-  if (rail) rail.textContent = "";
+  if (column) column.textContent = "";
 
   for (const p of browsing ? [] : projects.all()) {
     const el = tab(p.title, p.id === here?.id, {
@@ -552,7 +552,7 @@ await installCoreExposure({
   },
   chrome: () => ({
     controlsWidth: controlsAt ? controlsAt.x + controlsAt.w : 0,
-    projectTabs: workarea.querySelector(".rail-projects") ? "left" : "top",
+    projectTabs: workarea.querySelector(".project-column") ? "left" : "top",
   }),
 });
 onDrag(coreChanged);

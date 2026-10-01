@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-4: the left project tab column is named `.project-column` and `core.projects.column` instead of `rail-projects`, because rail now means only the border that joins a card and its sidebar.
+
 - V5-117-1-6: the `core.sidebars` and `core.sidebar.status` descriptions name the fixed window sidebars, internal card sidebars and every reported field instead of rail and inset sidebars.
 
 - V5-116-5: correction of the V5-116 completion record. V5-116 was recorded complete before its linked panel commands worked: on 2026-09-30 fold and size of a panel created only by a link failed on both hosts (V5-116-4). The commands, the settings specification and the composition checks are now verified on both hosts.

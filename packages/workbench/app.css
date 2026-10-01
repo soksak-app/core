@@ -145,16 +145,16 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 /* 프로젝트 탭이 왼쪽에 배치될 때. 스페이스 행보다 위에서 시작해 아래까지 이어진다. */
 .workarea{display:flex;flex:1 1 auto;min-height:0}
 .work{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
-.rail-projects{display:flex;flex-direction:column;gap:4px;width:64px;flex:0 0 auto;
+.project-column{display:flex;flex-direction:column;gap:4px;width:64px;flex:0 0 auto;
   padding:5px;background:var(--card);border-right:var(--bw) solid var(--edge)}
-.rail-projects .bar-tab{position:relative;width:100%;height:36px;justify-content:center;padding:0 4px}
-.rail-projects .bar-tab__name{max-width:100%;text-align:center}
+.project-column .bar-tab{position:relative;width:100%;height:36px;justify-content:center;padding:0 4px}
+.project-column .bar-tab__name{max-width:100%;text-align:center}
 /* 세로 레일에서는 이름만 담을 폭이므로 닫기 버튼이 들어가지 않는다. 표시하되
    눌렸을 때만 드러나게 하지 않고, 이름 위에 겹쳐 둔다. */
-.rail-projects .bar-tab__x{position:absolute;top:2px;right:2px;opacity:0}
-.rail-projects .bar-tab:hover .bar-tab__x,
-.rail-projects .bar-tab:focus-within .bar-tab__x{opacity:1}
-.rail-projects .bar-tab--add{width:100%;height:24px;justify-content:center}
+.project-column .bar-tab__x{position:absolute;top:2px;right:2px;opacity:0}
+.project-column .bar-tab:hover .bar-tab__x,
+.project-column .bar-tab:focus-within .bar-tab__x{opacity:1}
+.project-column .bar-tab--add{width:100%;height:24px;justify-content:center}
 
 /* ── 판 ───────────────────────────────────────────────────────────────── */
 .stage{position:relative;flex:1 1 auto;min-height:0;padding:var(--half-gap);

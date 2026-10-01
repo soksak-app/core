@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-117-1-4: 왼쪽 프로젝트 tab 열의 이름을 `rail-projects` 대신 `.project-column`과 `core.projects.column`으로 한다. rail은 이제 카드와 사이드바를 묶는 경계선만 뜻하기 때문이다.
+
 - V5-117-1-6: `core.sidebars`와 `core.sidebar.status` 설명이 rail과 inset 사이드바 대신 고정 창 사이드바, 카드 내부 사이드바, 보고하는 모든 field를 적는다.
 
 - V5-116-5: V5-116 완료 기록의 정정. V5-116은 link 연결 panel 명령이 동작하기 전에 완료로 기록됐다. 2026-09-30에 link로만 만든 panel의 접기와 크기 조절이 두 host에서 실패했다(V5-116-4). 이제 명령, settings 명세, 조합 check를 두 host에서 확인했다.
