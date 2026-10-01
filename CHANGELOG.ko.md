@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F0.5.9-4-1: `host.window.reload` 뒤의 Wails `request has been stopped` log 줄을, debug log와 개수를 맞춰 검증한 대로 종료된 페이지의 `status.next` 전달에 대한 답으로 문서화했다.
+
 - G1.4-20-1: window check는 검사 뒤 검사 대상 host가 맨 앞에 남을 때만 실패한다. 실행 중 사용자가 앞으로 가져온 애플리케이션은 검사를 실패시키지 않고 보고된다.
 
 - V5-117-1-3-4-7-1-7-1: core 명령의 응답 한도가 handler에만 적용되므로, 실패한 표시는 `did not reply` 대신 자기 오류를 보고한다. 페이지는 animation frame이 10초 안에 실행되지 않는 배치를 실패시킨다.
