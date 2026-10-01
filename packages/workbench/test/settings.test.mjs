@@ -62,7 +62,7 @@ test('a settings file change propagates the effective performance switch', async
 test('settings stored under removed keys are deleted once when the settings are connected', async (t) => {
   const reports = [];
   t.mock.module('../host.js', { namedExports: {
-    surfaces: { theme() {}, menuLanguage() {} }, report: (line) => { reports.push(line); },
+    surfaces: { theme() {}, menuLanguage() {} }, log: (line) => { reports.push(line); },
   } });
   const previous = globalThis.document;
   globalThis.document = { addEventListener() {}, documentElement: { dataset: {}, style: { setProperty() {} } } };

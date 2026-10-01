@@ -25,7 +25,7 @@
    스타일시트를 물려받지 못하므로, 호스트가 이 값들을 그대로 실어 보낸다.     */
 
 import { host as bridge } from "@soksak/runtime";
-import { report, surfaces as host } from "./host.js";
+import { log, surfaces as host } from "./host.js";
 import { checkSidebarReferences, isSettingAddress, validateSidebars } from "@soksak/plugin-api";
 import { effectiveSettings } from "./settings-scope.js";
 import { migrateSettings } from "./settings-migration.js";
@@ -326,7 +326,7 @@ async function migrateStoredSettings() {
     const { patch, notes } = migrateSettings(values);
     if (!notes.length) continue;
     await store.settings(id, patch);
-    report(`settings: converted ${where}: ${notes.join("; ")}`);
+    log(`settings: converted ${where}: ${notes.join("; ")}`);
   }
 }
 

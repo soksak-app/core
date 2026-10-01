@@ -298,6 +298,12 @@ export function watchCalls(fn) {
 /** 줄 하나를 애플리케이션 로그로 보낸다. 호스트가 없는 문서(브라우저 예제)의 로그는 콘솔이다. */
 export const report = (line) => (bridge ? bridge.call("report", line) : console.error(line));
 
+/**
+ * 관측 줄 하나를 애플리케이션 로그로 보낸다. 실패가 아닌 기록(포커스 전이, 저장 형식 변환)이다. 호스트가 없는
+ * 문서(브라우저 예제)는 콘솔의 정보 수준에 쓴다. 실패는 report 로 보낸다.
+ */
+export const log = (line) => (bridge ? bridge.call("report", line) : console.info(line));
+
 /* 애플리케이션에는 콘솔이 없다. 여기서 실패를 잡으면 기록되지 않으므로 잡지
    않는다. 문서의 unhandledrejection 이 애플리케이션 로그로 전달한다. */
 const tell = (name, payload) => {

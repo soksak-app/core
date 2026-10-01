@@ -6,7 +6,7 @@
 // 변경, 모달과 라이브러리의 그리기 뒤에 호출하고, 등록소는 감시 중인 값 중 달라진
 // 것만 호스트에 보낸다.
 import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
-import { report } from "./host.js";
+import { log, report } from "./host.js";
 import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";
 import { trackPointer } from "./pointer-state.js";
@@ -287,12 +287,12 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   // core.focus 를 알린다. 표면의 요소는 shadow root 안에 있으므로 사건의 실제 대상에서 이름을 읽는다.
   document.addEventListener("focusin", (event) => {
     trace("focus", { phase: "in", element: focusName(event) });
-    report(`focus in ${focusName(event)}`);
+    log(`focus in ${focusName(event)}`);
     coreChanged();
   }, true);
   document.addEventListener("focusout", (event) => {
     trace("focus", { phase: "out", element: focusName(event) });
-    report(`focus out ${focusName(event)}`);
+    log(`focus out ${focusName(event)}`);
     coreChanged();
   }, true);
   status("core.text", () => ({ scope: currentTextScope(), frame: value("textSize"), cards: cardTextSizes() }));

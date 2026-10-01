@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-44: the workbench writes observations (focus transitions, layout and settings conversions) through `log`, which the browser example writes as information instead of errors; the browser example check passes again.
+
 - R1-3-3: the settings window lists loaded, installed and registry plugins with their states, and a plugin page installs, updates, disables, enables and removes the plugin through the `core.plugins.*` commands; `core.plugins` reports the list and the latest operation.
 
 - R1-3-2: both hosts run plugin operations with the installer library (`pluginsState`, `pluginsRun`, one at a time) and send `plugins-changed` to every window.

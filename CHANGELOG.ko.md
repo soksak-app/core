@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-44: workbench가 관측 줄(focus 전이, layout과 설정 변환)을 `log`로 쓰고, browser 예제는 그것을 오류가 아니라 정보로 쓴다. Browser 예제 check가 다시 통과한다.
+
 - R1-3-3: 설정 창이 불러온 plugin, 설치된 plugin, registry plugin을 상태와 함께 나열하고, plugin page가 `core.plugins.*` 명령으로 plugin을 설치, 업데이트, 끄기, 켜기, 제거한다. `core.plugins`가 목록과 마지막 작업을 보고한다.
 
 - R1-3-2: 두 host가 installer library로 plugin 작업(`pluginsState`, `pluginsRun`, 한 번에 하나)을 실행하고 모든 창에 `plugins-changed`를 보낸다.

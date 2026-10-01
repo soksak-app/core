@@ -77,7 +77,13 @@ test("a project opens in the served browser example without a console error", as
   t.after(() => server.close());
   const profile = mkdtempSync(join(tmpdir(), "soksak-browser-example-"));
   const { chrome, address } = launch(profile);
-  t.after(() => { chrome.kill(); rmSync(profile, { recursive: true, force: true }); });
+  // Chrome 이 끝나야 profile 폴더에 더 쓰지 않으므로, 종료 사건을 받은 뒤 지운다.
+  t.after(async () => {
+    const exited = chrome.exitCode === null ? new Promise((resolve) => chrome.once("exit", resolve)) : null;
+    chrome.kill();
+    await exited;
+    rmSync(profile, { recursive: true, force: true });
+  });
   const cdp = await devtools(await address);
   t.after(() => cdp.close());
 

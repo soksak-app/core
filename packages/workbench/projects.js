@@ -2,7 +2,7 @@
 import { issueId } from "./ids.js";
 import { selectProject, value, flushSettings } from "./settings.js";
 import { windows } from "@soksak/runtime";
-import { report, retainSidecarSessions, windowSidecar } from "./host.js";
+import { log, retainSidecarSessions, windowSidecar } from "./host.js";
 import { migrateStoredLayout } from "./stored-layout-migration.js";
 import { configureStates, showStates } from "./plugin-states.js";
 
@@ -121,7 +121,7 @@ async function migrateProjects(list) {
       });
       if (!notes.length) continue;
       await store.patch(project.id, { spaces });
-      report(`projects: converted the stored layout of ${project.root}: ${notes.join("; ")}`);
+      log(`projects: converted the stored layout of ${project.root}: ${notes.join("; ")}`);
       migrated = true;
     } catch (error) {
       failed(new Error(`projects: the stored layout of ${project.root} cannot be converted: ${error.message}`));
@@ -132,7 +132,7 @@ async function migrateProjects(list) {
 
 async function readProjects() {
   // 바꾼 저장소는 다시 읽어 그 결과를 쓴다. 바꾼 뒤에는 바꿀 것이 없으므로 한 번만 다시 읽는다.
-  if (await migrateProjects((await store.snapshot()).projects)) report("projects: the registry was saved in the current layout format");
+  if (await migrateProjects((await store.snapshot()).projects)) log("projects: the registry was saved in the current layout format");
   const snapshot = await store.snapshot();
   // 기본값: 브라우저 예제의 저장소는 다른 창이 없으므로 open 을 싣지 않는다.
   openProjects = new Set(snapshot.open ?? []);
