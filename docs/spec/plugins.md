@@ -2,7 +2,7 @@
 
 [한국어](plugins.ko.md)
 
-The independent window declaration, placement, association and rail-border contract is [external window sidebars](external-sidebars.md). Implementation and full recorded application acceptance are tracked separately under V5-117-1-3. The internal card-side contract remains independent.
+The independent window declaration, placement, association and rail-border contract is [external window sidebars](external-sidebars.md). The internal card-side contract remains independent.
 
 The workbench does not reference any specific plugin. Each application declares its plugins and defaults in `environment.json`. Each plugin declares itself in `plugin.json`. [`@soksak/plugin-api`](../../packages/plugin-api/index.js) defines both formats, the `sidecar.json` format, the staged file layout, and the page import map. The workbench, plugins, and applications validate their own files with those functions.
 
@@ -55,11 +55,11 @@ A `window` mapping accepts `left` and `right` local set IDs and does not require
 
 Core normalizes each local set ID to `<plugin>.<local>`, each card mapping to `{place: "card-<side>", plugin, set}`, and each window mapping to `{place: "window-<side>", plugin, set}`. An omitted environment `sidebars` uses these normalized defaults. An explicit environment `sidebars` supplies both `sets` and `links` and replaces both lists completely. Stored common and project lists then override each effective list as specified in [settings](settings.md#stored-sets-and-links). Defaults removed by an override are not restored. Plugin declarations are validated even when environment overrides replace their output.
 
-Window declaration validation and normalization are implemented under V5-117-1-3-2-1. Window links require registered plugins but not surfaces; card links still require surfaces. Workbench rendering and commands remain unimplemented. Old plugin left/right inputs remain accepted until V5-117-1-3-2-2 removes them together with the existing application callers; this is an unresolved replacement, not a compatibility alias.
+Window links require registered plugins but not surfaces; card links require surfaces. A `left` or `right` link is the general choice and requires `plugin: null`; a plugin-specific window link uses `window-left` or `window-right`.
 
 ## Sections
 
-A section's `module` is either one JavaScript path used in both orientations or `{horizontal, vertical}` paths. The object requires both keys and rejects other keys. Each value is a relative `.js` path inside the package, and both files must be published. A missing orientation is not replaced by the other implementation. Card layout selects `horizontal` for top/bottom and `vertical` for left/right and external window sidebars. The workbench passes `context.orientation` to the selected implementation's `mount(root, context)` and exposes orientation in `core.sidebars`. An orientation change disposes the old implementation and mounts the new one while preserving section selection and folding. Horizontal `list` places sections left to right; vertical `list` places them top to bottom. Declaration/staging is verified in V5-117-2-1; rendering and application output are verified in V5-117-2-2. Final shared suites and release application remain pending.
+A section's `module` is either one JavaScript path used in both orientations or `{horizontal, vertical}` paths. The object requires both keys and rejects other keys. Each value is a relative `.js` path inside the package, and both files must be published. A missing orientation is not replaced by the other implementation. Card layout selects `horizontal` for top/bottom and `vertical` for left/right and external window sidebars. The workbench passes `context.orientation` to the selected implementation's `mount(root, context)` and exposes orientation in `core.sidebars`. An orientation change disposes the old implementation and mounts the new one while preserving section selection and folding. Horizontal `list` places sections left to right; vertical `list` places them top to bottom. Final shared suites and release application remain pending.
 
 A section is part of a sidebar that a plugin draws. The workbench imports the section's `module` and calls its `mount(root, context)` export in the section's element, as it does for a surface page, and calls the returned dispose function when the section leaves the sidebar. `context.card` is the id of the card the sidebar belongs to and `context.surface` is that card's active tab, or both are `null` for the left sidebar. Sections are drawn in the application document; they have no native surface.
 
@@ -71,7 +71,7 @@ A sidebar shows no set title or place label: its sections start at its top. A wi
 
 The sidebar is identified by the id of the card that holds it: `left`, `right`, or `cardId:side` for an internal card sidebar (`top`, `bottom`, `left`, `right`). Folding a section header runs `core.sidebar.section.fold` and choosing a tab runs `core.sidebar.section.select`, both with `{sidebar, section}`; status `core.sidebars` reports every drawn sidebar with its set, layout, selected tab, and each section's fold and mount state. A section module is a file listed in the package's `files`, so release staging copies it; staging fails when a section module is not listed.
 
-An open fill section in a vertical list retains its intrinsic header and body minimum height. When the sidebar is smaller, the whole set scrolls rather than shrinking a section to zero height. A plugin using a virtual list declares its minimum visible row height. The file tree reserves a 28-point toolbar and at least one 20-point row. This does not increase the card content residual or change saved sidebar sizes; the minimum card-content space contract is verified under V5-115-1-4.
+An open fill section in a vertical list retains its intrinsic header and body minimum height. When the sidebar is smaller, the whole set scrolls rather than shrinking a section to zero height. A plugin using a virtual list declares its minimum visible row height. The file tree reserves a 28-point toolbar and at least one 20-point row. This does not increase the card content residual or change saved sidebar sizes.
 
 ## Plugin state
 

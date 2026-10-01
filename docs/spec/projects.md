@@ -2,7 +2,7 @@
 
 [한국어](projects.ko.md)
 
-The independent window declaration, placement, association and rail-border contract is [external window sidebars](external-sidebars.md). Implementation and full recorded application acceptance are tracked separately under V5-117-1-3. The internal card-side contract remains independent.
+The independent window declaration, placement, association and rail-border contract is [external window sidebars](external-sidebars.md). The internal card-side contract remains independent.
 
 This specification defines the application project registry, persistent settings, and project windows. [Features](../features.md) records implementation and validation separately.
 

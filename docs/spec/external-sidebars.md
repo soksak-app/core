@@ -2,8 +2,6 @@
 
 [한국어](external-sidebars.ko.md)
 
-The fixed-edge override contract replaces the defective per-plugin columns and persistent owners from V5-117-1-3-3. Correction and related rebuilt-host checks are complete under V5-117-1-3-4-7 in [features](../features.md). Broader recorded acceptance remains pending under V5-117-1-3-4, and existing user-release validation/application remains V5-117-1-3-4-7-1.
-
 ## Declaration and choices
 
 A plugin may declare `sidebars.window` as an object mapping `left` and `right` to known local set IDs. Reject unknown sides, non-object mappings and missing sets. Card-side declarations remain independent. Normalize plugin choices to `{place: "window-left" or "window-right", plugin, set}`. General choices are `{place: "left" or "right", plugin: null, set}`. Validate every declaration, including overridden declarations. Explicit environment lists replace defaults; stored lists replace the effective list.

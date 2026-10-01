@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
-import { checkChangelogTranslations, checkChecklistTranslations, checkCompletedItems, retiredChecklistItems } from "./checklist.mjs";
+import { checkChangelogTranslations, checkChecklistTranslations, checkCompletedItems, checkSpecificationIds, retiredChecklistItems } from "./checklist.mjs";
 
 const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { encoding: "utf8" }).split("\0"))].filter((file) => file.endsWith(".md") && existsSync(file));
@@ -23,6 +23,7 @@ for (const file of files) {
   const partner = file.endsWith(".ko.md") ? file.replace(/\.ko\.md$/, ".md") : file.replace(/\.md$/, ".ko.md");
   if (!existsSync(partner)) errors.push(`${file}: missing translation pair ${partner}`);
   const text = withoutCode(readFileSync(file, "utf8"));
+  if (file.startsWith("docs/spec/")) errors.push(...checkSpecificationIds(text, file));
   // 빈 줄로 끊긴 표: 표 행, 빈 줄, 표 행이 이어지면 뒤의 행은 표에 속하지 않는다.
   const lines = text.split("\n");
   lines.forEach((line, index) => {

@@ -5,12 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { checkChangelogTranslations, retiredChecklistItems } from "../checklist.mjs";
+import { checkChangelogTranslations, checkSpecificationIds, retiredChecklistItems } from "../checklist.mjs";
 
 const checker = fileURLToPath(new URL("../check-docs.mjs", import.meta.url));
 const englishTable = "\n| Feature | Implementation | Validation | Release |\n| --- | --- | --- | --- |\n| Test | Source | Unverified | Unreleased |\n";
 const koreanTable = "\n| 기능 | 구현 | 검증 | 배포 |\n| --- | --- | --- | --- |\n| 검사 | 소스 | 미검증 | 미배포 |\n";
-function check(t, english, korean, previous = "", retirement) {
+function check(t, english, korean, previous = "", retirement, files = {}) {
   const root = mkdtempSync(join(tmpdir(), "checklist-audit-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   assert.equal(spawnSync("git", ["init", "-q", root]).status, 0);
@@ -25,6 +25,10 @@ function check(t, english, korean, previous = "", retirement) {
   assert.equal(spawnSync("git", ["-c", "user.name=Checklist fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture baseline"], { cwd: root }).status, 0);
   writeFileSync(join(root, "docs/features.md"), english + englishTable);
   writeFileSync(join(root, "docs/features.ko.md"), korean + koreanTable);
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(join(root, path, ".."), { recursive: true });
+    writeFileSync(join(root, path), text);
+  }
   const result = spawnSync(process.execPath, [checker], { cwd: root, encoding: "utf8", timeout: 2000 });
   assert.equal(result.error, undefined);
   return result;
@@ -117,4 +121,23 @@ test("a missing, reordered, or altered changelog translation fails", () => {
   const noSection = koreanLog.replace("## 2026-09-22\n\n", "");
   assert.match(checkChangelogTranslations(englishLog, noSection).join("\n"), /2 and 1 sections/);
   assert.match(checkChangelogTranslations("# Changelog\n\n- early\n", koreanLog).join("\n"), /entry before the first section heading/);
+});
+
+test("the documentation audit rejects a specification that cites a checklist ID", { timeout: 3000 }, (t) => {
+  const result = check(t, "- [~] G1 — task\n", "- [~] G1 — 작업\n", "", undefined, {
+    "docs/spec/fixture.md": "# Contract\n\n[한국어](fixture.ko.md)\n\nThe service reconnects at once (V5-106).\n",
+    "docs/spec/fixture.ko.md": "# 계약\n\n[English](fixture.md)\n\n서비스는 즉시 다시 연결한다(V5-106).\n",
+  });
+  assert.notEqual(result.status, 0, "documentation audit accepted a checklist ID in a specification");
+  assert.match(result.stderr, /docs\/spec\/fixture\.md:5: specification cites checklist ID V5-106/);
+});
+
+test("a specification that cites a checklist ID is rejected", () => {
+  const text = "# Contract\n\nThe service reconnects at once (V5-106).\nNested work is tracked in V5-117-1-3 and G1.4-14-3.\nA plain contract line.\n";
+  assert.deepEqual(checkSpecificationIds(text, "docs/spec/fixture.md"), [
+    "docs/spec/fixture.md:3: specification cites checklist ID V5-106",
+    "docs/spec/fixture.md:4: specification cites checklist ID V5-117-1-3",
+    "docs/spec/fixture.md:4: specification cites checklist ID G1.4-14-3",
+  ]);
+  assert.deepEqual(checkSpecificationIds("Version 1.2-beta and UTF-8 text.\n", "docs/spec/fixture.md"), []);
 });

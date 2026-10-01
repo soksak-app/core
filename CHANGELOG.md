@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-9: specifications no longer cite checklist IDs or progress, and `make docs-check` rejects a checklist ID in `docs/spec/`. The plugin link paragraph now states the current rule instead of claiming that old plugin left/right inputs were still accepted.
+
 - G1.4-19: window checks read the theme catalog from the new `core.themes` status instead of importing workbench source, and the window-source audit rejects source paths of other repository components.
 
 - V5-117-1-3-4-7-1-3-1: switching to a space, or closing the active space into one, whose saved layout cannot be opened fails before the active space changes. The switch had changed the active space before the layout validation failed.

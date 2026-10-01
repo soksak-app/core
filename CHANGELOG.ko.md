@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-9: 명세가 더 이상 checklist ID나 진행 상태를 인용하지 않고, `make docs-check`가 `docs/spec/`의 checklist ID를 거부한다. plugin link 문단은 옛 plugin left/right 입력이 아직 허용된다는 서술 대신 현재 규칙을 적는다.
+
 - G1.4-19: window check가 workbench source를 import하지 않고 새 `core.themes` status에서 theme catalog를 읽으며, window-source audit가 다른 repository 구성 요소의 source 경로를 거부한다.
 
 - V5-117-1-3-4-7-1-3-1: 저장 layout을 열 수 없는 스페이스로 전환하거나 활성 스페이스를 닫아 그 스페이스로 옮기면, 활성 스페이스가 바뀌기 전에 실패한다. 이전에는 layout 검증이 실패하기 전에 활성 스페이스를 바꿨다.

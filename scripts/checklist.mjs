@@ -105,3 +105,15 @@ export function checkChangelogTranslations(english, korean) {
   });
   return errors;
 }
+
+// 명세는 현재 계약만 적는다. 체크리스트 ID(V5-106, G1.4-14-3 처럼 접두사와 숫자 접미사)는 진행 기록이므로 명세에 쓰지 않는다.
+const CHECKLIST_ID = /\b(?:[A-Z]\d+(?:\.\d+)*)(?:-\d+)+\b/g;
+
+/** 명세 text 에 적힌 체크리스트 ID 마다 오류 하나를 반환한다. */
+export function checkSpecificationIds(text, file) {
+  const errors = [];
+  text.split("\n").forEach((line, index) => {
+    for (const match of line.matchAll(CHECKLIST_ID)) errors.push(`${file}:${index + 1}: specification cites checklist ID ${match[0]}`);
+  });
+  return errors;
+}
