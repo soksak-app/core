@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 워크스페이스 registry. 애플리케이션 environment.json 이 나열한 plugin 을 모두 pack 하고, 그 plugin.json 이 쓰는
+// 워크스페이스 registry. scripts/workspace-registry.json 이 선언한 plugin 을 pack 하고, 그 plugin.json 이 쓰는
 // sidecar 를 현재 플랫폼으로 release 한 뒤, 그 결과로 registry 파일을 쓰고 `sok registry build` 로 index.json 을
 // 만든다(docs/spec/cli.md). build 와 window check 는 이 registry 에서 plugin 을 설치한다.
 //
@@ -11,10 +11,9 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { packageFolders } from "./sidecar-packages.mjs";
+import { packageFolders, workspacePlugins } from "./sidecar-packages.mjs";
 
 const ROOT = new URL("../", import.meta.url);
-const APPS = ["wailsv3", "tauriv2"];
 
 const read = (url) => JSON.parse(readFileSync(url, "utf8"));
 
@@ -49,17 +48,6 @@ export function sidecarEntry(pkg, declaration, release) {
   };
 }
 
-/** 애플리케이션 environment.json 이 나열한 plugin package 이름. 두 애플리케이션의 목록을 순서대로 합친다. */
-export function environmentPlugins(root = ROOT) {
-  const names = [];
-  for (const app of APPS) {
-    for (const name of read(new URL(`apps/${app}/environment.json`, root)).plugins) {
-      if (!names.includes(name)) names.push(name);
-    }
-  }
-  return names;
-}
-
 function sok(binary, args) {
   return JSON.parse(execFileSync(binary, args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }));
 }
@@ -75,7 +63,7 @@ export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
   const releases = join(out, "releases");
   for (const folder of ["plugins", "sidecars", "packs", "releases"]) rmSync(join(out, folder), { recursive: true, force: true });
   const sidecars = new Map();
-  for (const name of environmentPlugins(root)) {
+  for (const name of workspacePlugins(root)) {
     const dir = dirs.get(name);
     if (!dir) throw new Error(`no package named ${name}`);
     const manifest = read(new URL("plugin.json", dir));
@@ -91,7 +79,7 @@ export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
     const file = name.startsWith("@") ? name.slice(1).replace("/", "-") : name;
     write(join(out, "sidecars", `${file}.json`), sidecarEntry(read(new URL("package.json", dir)), read(new URL("sidecar.json", dir)), release));
   }
-  for (const pack of read(new URL("scripts/workspace-packs.json", root))) write(join(out, "packs", `${pack.name}.json`), pack);
+  for (const pack of read(new URL("scripts/workspace-registry.json", root)).packs) write(join(out, "packs", `${pack.name}.json`), pack);
   write(join(out, "revoked.json"), { plugins: [], sidecars: [] });
   return sok(binary, ["registry", "build", out]);
 }

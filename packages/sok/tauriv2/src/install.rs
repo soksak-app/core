@@ -794,19 +794,37 @@ pub fn validate_registry_index(value: &Value) -> Result<Index, String> {
 pub struct InstalledPlugin {
     pub package: String,
     pub version: String,
+    /// 설치가 쓰는 version 을 푼 절대 폴더.
+    pub path: String,
     pub enabled: bool,
     pub sidecars: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous: Option<String>,
 }
 
-/// 설치 상태 파일(`plugins/installed.json`). plugin id 마다 package 이름, 쓰는 version, 켜짐 여부, 그 version 의
-/// sidecar 범위, 되돌릴 이전 version 을 담고, sidecar 마다 모든 plugin 이 함께 쓰는 version 하나를 담는다.
+/// 설치한 sidecar 하나. path 는 설치가 그 플랫폼 asset 을 푼 절대 폴더다.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct InstalledSidecar {
+    pub version: String,
+    pub path: String,
+}
+
+/// 설치 상태 파일(`plugins/installed.json`). plugin id 마다 package 이름, 쓰는 version, 푼 폴더, 켜짐 여부, 그
+/// version 의 sidecar 범위, 되돌릴 이전 version 을 담고, sidecar 마다 모든 plugin 이 함께 쓰는 version 하나와 그
+/// 폴더를 담는다. 폴더는 설치가 기록하며 host 는 기록된 폴더만 읽는다.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct InstalledState {
     pub format: u64,
     pub plugins: BTreeMap<String, InstalledPlugin>,
-    pub sidecars: BTreeMap<String, String>,
+    pub sidecars: BTreeMap<String, InstalledSidecar>,
+}
+
+/// 설치가 기록한 절대 폴더인지 검사한다.
+fn check_folder(at: &str, value: Option<&Value>) -> Result<(), String> {
+    match text(value) {
+        Some(path) if std::path::Path::new(path).is_absolute() => Ok(()),
+        _ => Err(format!("{at}: path must be an absolute folder")),
+    }
 }
 
 impl InstalledState {
@@ -839,7 +857,9 @@ pub fn validate_installed(value: &Value) -> Result<InstalledState, String> {
         only(
             &at,
             item,
-            &["enabled", "package", "previous", "sidecars", "version"],
+            &[
+                "enabled", "package", "path", "previous", "sidecars", "version",
+            ],
         )?;
         if !item.get("enabled").is_some_and(Value::is_boolean) {
             return Err(format!("{at}: enabled must be true or false"));
@@ -848,6 +868,7 @@ pub fn validate_installed(value: &Value) -> Result<InstalledState, String> {
         if !packages.insert(name) {
             return Err(format!("{at}: package {name} is installed twice"));
         }
+        check_folder(&at, item.get("path"))?;
         if let Some(previous) = item.get("previous") {
             check_version(&format!("{at} previous"), Some(previous))?;
         }
@@ -862,7 +883,11 @@ pub fn validate_installed(value: &Value) -> Result<InstalledState, String> {
     }
     let sidecars = object(&format!("{INSTALLED} sidecars"), root.get("sidecars"))?;
     for name in sorted_keys(sidecars) {
-        check_version(&format!("{INSTALLED} sidecar {name}"), sidecars.get(name))?;
+        let at = format!("{INSTALLED} sidecar {name}");
+        let item = object(&at, sidecars.get(name))?;
+        only(&at, item, &["path", "version"])?;
+        check_folder(&at, item.get("path"))?;
+        check_version(&format!("{at} version"), item.get("version"))?;
         if !named.contains(name) {
             return Err(format!(
                 "{INSTALLED}: sidecar {name} is named by no installed plugin"
@@ -872,7 +897,7 @@ pub fn validate_installed(value: &Value) -> Result<InstalledState, String> {
     let state: InstalledState = typed(value)?;
     for (id, item) in &state.plugins {
         for (name, range) in &item.sidecars {
-            let Some(version) = state.sidecars.get(name) else {
+            let Some(version) = state.sidecars.get(name).map(|sidecar| &sidecar.version) else {
                 return Err(format!(
                     "{INSTALLED} {id}: sidecar {name} has no version in use"
                 ));
@@ -962,7 +987,7 @@ pub fn resolve_install<'a>(
             if !item.assets.contains_key(platform) || !fits || revoked {
                 continue;
             }
-            if installed.sidecars.get(name) == Some(&item.version) {
+            if installed.sidecars.get(name).map(|sidecar| &sidecar.version) == Some(&item.version) {
                 kept = Some(item);
             }
             if best.is_none_or(|best| newer(&item.version, &best.version)) {

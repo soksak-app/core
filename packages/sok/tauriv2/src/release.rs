@@ -221,6 +221,40 @@ fn listed_files(pkg: &Map<String, Value>) -> Result<Vec<String>, String> {
 }
 
 /// plugin 폴더를 검사하고 `<id>-<version>.tgz` 를 쓴다.
+/// files 의 경로 하나가 path 이거나 path 를 담은 폴더인지.
+fn covers(listed: &[String], path: &str) -> bool {
+    listed.iter().any(|file| {
+        // 기본값: 끝의 / 는 폴더를 가리키는 표기일 뿐이므로 없으면 경로를 그대로 쓴다.
+        let folder = format!("{}/", file.strip_suffix('/').unwrap_or(file));
+        path == file || path.starts_with(&folder)
+    })
+}
+
+/// plugin.json 이 불러오는 module 과 그 이름: surface, section 마다의 module, state.
+fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
+    let mut modules = vec![];
+    let mut add = |what: String, value: &Value| {
+        if let Some(module) = value.as_str() {
+            modules.push((what, module.to_string()));
+        }
+    };
+    add("surface module".into(), &manifest["surface"]["module"]);
+    for section in manifest["sections"].as_array().into_iter().flatten() {
+        let what = match section["id"].as_str() {
+            Some(id) => format!("section {id} module"),
+            None => "section module".to_string(),
+        };
+        if section["module"].is_object() {
+            add(what.clone(), &section["module"]["horizontal"]);
+            add(what, &section["module"]["vertical"]);
+        } else {
+            add(what, &section["module"]);
+        }
+    }
+    add("state module".into(), &manifest["state"]["module"]);
+    modules
+}
+
 /// plugin 폴더의 diagnostics.json 과 그 module 경로. diagnostics.json 이 없으면 비어 있다. 두 파일은 files 에
 /// 나열하지 않는다(docs/spec/plugins.md).
 fn diagnostic_files(dir: &Path, listed: &[String]) -> Result<Vec<String>, String> {
@@ -238,14 +272,10 @@ fn diagnostic_files(dir: &Path, listed: &[String]) -> Result<Vec<String>, String
         return Err("diagnostics.json: module must be a JavaScript path inside the package".into());
     };
     for path in ["diagnostics.json", module] {
-        for file in listed {
-            // 기본값: 끝의 / 는 폴더를 가리키는 표기일 뿐이므로 없으면 경로를 그대로 쓴다.
-            let folder = format!("{}/", file.strip_suffix('/').unwrap_or(file));
-            if path == file || path.starts_with(&folder) {
-                return Err(format!(
-                    "package.json files: {path} is diagnostic and must not be listed"
-                ));
-            }
+        if covers(listed, path) {
+            return Err(format!(
+                "package.json files: {path} is diagnostic and must not be listed"
+            ));
         }
     }
     Ok(vec!["diagnostics.json".into(), module.to_string()])
@@ -269,6 +299,13 @@ fn run_pack(dir: &str, out: &str, diagnostics: bool, stdout: &mut dyn Write) -> 
     install::check_package_manifest(&pkg, &manifest)?;
     let object = pkg.as_object().ok_or("package.json: expected an object")?;
     let mut listed = listed_files(object)?;
+    for (what, module) in manifest_modules(&manifest) {
+        if !covers(&listed, &module) {
+            return Err(format!(
+                "plugin.json: {what} {module} must be listed in files"
+            ));
+        }
+    }
     let extra = diagnostic_files(dir, &listed)?;
     if diagnostics {
         listed.extend(extra);

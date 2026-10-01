@@ -184,10 +184,12 @@ fn plugin_install_extracts_checked_archives_and_records_the_state() {
     );
     let (code, stdout, stderr) =
         run(&["plugin", "install", "probe", "--config-dir", config.text()]);
+    let plugin_path = config.0.join("plugins/probe/0.2.0").display().to_string();
     let want = r#"{
   "plugin": {
     "package": "@scope/plugin-probe",
     "version": "0.2.0",
+    "path": "PLUGIN_PATH",
     "enabled": true,
     "sidecars": {
       "@scope/sidecar-worker": "^0.1.0"
@@ -197,8 +199,9 @@ fn plugin_install_extracts_checked_archives_and_records_the_state() {
     "@scope/sidecar-worker": "0.1.0"
   }
 }
-"#;
-    assert_eq!((code, stdout.as_str()), (0, want), "{stderr}");
+"#
+    .replace("PLUGIN_PATH", &plugin_path);
+    assert_eq!((code, stdout.as_str()), (0, want.as_str()), "{stderr}");
     assert_eq!(
         read_text(&config.0.join("plugins/probe/0.2.0/ui/b.js")),
         "b 0.2.0"
@@ -213,10 +216,15 @@ fn plugin_install_extracts_checked_archives_and_records_the_state() {
         0o755
     );
     let installed = read_text(&config.0.join("plugins/installed.json"));
-    assert!(
-        installed.contains(r#""@scope/sidecar-worker": "0.1.0""#),
-        "{installed}"
+    let sidecar_path = format!(
+        r#""path": "{}""#,
+        config
+            .0
+            .join("sidecars/scope-sidecar-worker/0.1.0")
+            .join(&platform)
+            .display()
     );
+    assert!(installed.contains(&sidecar_path), "{installed}");
     assert!(installed.contains(r#""version": "0.2.0""#), "{installed}");
     // 같은 version 을 다시 설치하면 아무것도 바꾸지 않는다.
     let (code, again, _) = run(&["plugin", "install", "probe", "--config-dir", config.text()]);

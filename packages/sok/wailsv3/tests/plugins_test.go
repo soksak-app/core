@@ -104,6 +104,7 @@ func TestPluginInstallExtractsCheckedArchivesAndRecordsTheState(t *testing.T) {
   "plugin": {
     "package": "@scope/plugin-probe",
     "version": "0.2.0",
+    "path": "` + filepath.Join(config, "plugins/probe/0.2.0") + `",
     "enabled": true,
     "sidecars": {
       "@scope/sidecar-worker": "^0.1.0"
@@ -125,7 +126,8 @@ func TestPluginInstallExtractsCheckedArchivesAndRecordsTheState(t *testing.T) {
 		t.Fatalf("worker %v %v", info, err)
 	}
 	installed := readText(t, filepath.Join(config, "plugins/installed.json"))
-	if !strings.Contains(installed, `"@scope/sidecar-worker": "0.1.0"`) || !strings.Contains(installed, `"version": "0.2.0"`) {
+	sidecarPath := `"path": "` + filepath.Join(config, "sidecars/scope-sidecar-worker/0.1.0", platform) + `"`
+	if !strings.Contains(installed, sidecarPath) || !strings.Contains(installed, `"version": "0.2.0"`) {
 		t.Fatalf("installed.json %s", installed)
 	}
 	// 같은 version 을 다시 설치하면 아무것도 바꾸지 않는다.

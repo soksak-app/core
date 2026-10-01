@@ -265,28 +265,24 @@ pub struct Sidecars<O: Owner> {
     pub stop_timeout: Duration,
 }
 
+/// 설치된 사이드카 하나. data 는 그 sidecar.json 의 내용이고 folder 는 그것을 담은 폴더다.
+#[derive(Clone, Debug)]
+pub struct SidecarDeclaration {
+    pub name: String,
+    pub folder: PathBuf,
+    pub data: Vec<u8>,
+}
+
 impl<O: Owner> Sidecars<O> {
-    /// 플러그인이 선언한 사이드카로 채널을 생성한다. read 는 프론트엔드 경로의 파일 내용을
-    /// 반환한다. 실행 파일은 directory 에서 basename(executable) 으로 찾는다.
+    /// 선언된 사이드카로 채널을 생성한다. 실행 파일은 각 folder 안의 executable 경로다.
     /// canonical application configuration directory로 sidecar channel을 생성한다.
     pub fn new(
-        read: &dyn Fn(&str) -> Option<Vec<u8>>,
-        directory: PathBuf,
+        declarations: &[SidecarDeclaration],
         config_directory: PathBuf,
     ) -> Result<Self, String> {
         let config_directory = config_directory
             .canonicalize()
             .map_err(|e| format!("config directory: {e}"))?;
-        #[derive(Deserialize)]
-        struct Environment {
-            #[serde(default)]
-            plugins: Vec<String>,
-        }
-        #[derive(Deserialize)]
-        struct Plugin {
-            #[serde(default)]
-            sidecars: Vec<String>,
-        }
         #[derive(Deserialize)]
         struct Sidecar {
             executable: String,
@@ -294,60 +290,48 @@ impl<O: Owner> Sidecars<O> {
             #[serde(default)]
             transport: Option<String>,
         }
-        fn load<T: serde::de::DeserializeOwned>(
-            read: &dyn Fn(&str) -> Option<Vec<u8>>,
-            path: &str,
-        ) -> Result<T, String> {
-            let bytes = read(path).ok_or_else(|| format!("{path} is missing from the frontend"))?;
-            serde_json::from_slice(&bytes).map_err(|e| format!("{path}: {e}"))
-        }
-        let environment: Environment = load(read, "environment.json")?;
         let mut declared = HashMap::new();
         let mut persistent = HashMap::new();
         let mut persistent_basenames: HashMap<String, String> = HashMap::new();
-        for plugin in &environment.plugins {
-            let plugin: Plugin = load(read, &format!("modules/{plugin}/plugin.json"))?;
-            for name in plugin.sidecars {
-                if declared.contains_key(&name) {
-                    continue;
-                }
-                let path = format!("modules/{name}/sidecar.json");
-                let sidecar: Sidecar = load(read, &path)?;
-                if sidecar.protocol != 1 {
+        for item in declarations {
+            let name = item.name.clone();
+            if declared.contains_key(&name) {
+                continue;
+            }
+            let path = item.folder.join("sidecar.json").display().to_string();
+            let sidecar: Sidecar =
+                serde_json::from_slice(&item.data).map_err(|e| format!("{path}: {e}"))?;
+            if sidecar.protocol != 1 {
+                return Err(format!(
+                    "{path}: protocol {} is not supported",
+                    sidecar.protocol
+                ));
+            }
+            let is_persistent = match sidecar.transport.as_deref() {
+                None => false,
+                Some("persistent") => true,
+                Some(value) => return Err(format!("{path}: transport {value} is not supported")),
+            };
+            let executable = Path::new(&sidecar.executable);
+            let inside = executable
+                .components()
+                .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
+            let file = executable.file_name().filter(|_| inside).ok_or_else(|| {
+                format!(
+                    "{path}: executable {} is not a path inside the package",
+                    sidecar.executable
+                )
+            })?;
+            if is_persistent {
+                let basename = file.to_string_lossy().into_owned();
+                if let Some(other) = persistent_basenames.insert(basename.clone(), name.clone()) {
                     return Err(format!(
-                        "{path}: protocol {} is not supported",
-                        sidecar.protocol
+                        "{path}: executable basename {basename} is already used by {other}"
                     ));
                 }
-                let is_persistent = match sidecar.transport.as_deref() {
-                    None => false,
-                    Some("persistent") => true,
-                    Some(value) => {
-                        return Err(format!("{path}: transport {value} is not supported"))
-                    }
-                };
-                let executable = Path::new(&sidecar.executable);
-                let inside = executable
-                    .components()
-                    .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
-                let file = executable.file_name().filter(|_| inside).ok_or_else(|| {
-                    format!(
-                        "{path}: executable {} is not a path inside the package",
-                        sidecar.executable
-                    )
-                })?;
-                if is_persistent {
-                    let basename = file.to_string_lossy().into_owned();
-                    if let Some(other) = persistent_basenames.insert(basename.clone(), name.clone())
-                    {
-                        return Err(format!(
-                            "{path}: executable basename {basename} is already used by {other}"
-                        ));
-                    }
-                }
-                declared.insert(name.clone(), directory.join(file));
-                persistent.insert(name, is_persistent);
             }
+            declared.insert(name.clone(), item.folder.join(executable));
+            persistent.insert(name, is_persistent);
         }
         Ok(Self {
             core: Arc::new(Core {

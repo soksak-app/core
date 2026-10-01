@@ -3,13 +3,13 @@
 //! 이 테스트는 write queue가 가득 찼을 때 buffering 메커니즘이 동작하는지 검증한다.
 //! write thread는 recv()에서 block되기 전에 buffer된 message를 올바르게 flush한다.
 
-use std::collections::HashMap;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 
 use serde_json::value::RawValue;
 use serde_json::Value;
-use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, Sidecars};
+use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
 
 #[derive(Clone)]
 struct FakeOwner {
@@ -50,28 +50,27 @@ fn raw(text: &str) -> Box<RawValue> {
     RawValue::from_string(text.into()).unwrap()
 }
 
-type Files = HashMap<&'static str, String>;
+type Files = Vec<(&'static str, String)>;
 
+/// 사이드카 @fixture/sidecar-echo 하나와 그 sidecar.json 내용.
 fn files(sidecar: &str) -> Files {
-    HashMap::from([
-        (
-            "environment.json",
-            r#"{"plugins":["@fixture/plugin"]}"#.to_string(),
-        ),
-        (
-            "modules/@fixture/plugin/plugin.json",
-            r#"{"sidecars":["@fixture/sidecar-echo"]}"#.to_string(),
-        ),
-        (
-            "modules/@fixture/sidecar-echo/sidecar.json",
-            sidecar.to_string(),
-        ),
-    ])
+    vec![("@fixture/sidecar-echo", sidecar.to_string())]
+}
+
+/// folder 에 설치된 사이드카들의 선언.
+fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
+    files
+        .iter()
+        .map(|(name, data)| SidecarDeclaration {
+            name: name.to_string(),
+            folder: folder.to_path_buf(),
+            data: data.as_bytes().to_vec(),
+        })
+        .collect()
 }
 
 fn create(files: &Files, directory: &std::path::Path) -> Result<Sidecars<FakeOwner>, String> {
-    let read = |path: &str| files.get(path).map(|text| text.as_bytes().to_vec());
-    Sidecars::new(&read, directory.to_path_buf(), directory.to_path_buf())
+    Sidecars::new(&declare(files, directory), directory.to_path_buf())
 }
 
 const ECHO: &str = "@fixture/sidecar-echo";
@@ -103,7 +102,7 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
     std::fs::set_permissions(&echo_program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     let sidecars = create(
-        &files(r#"{"executable":"build/echo","protocol":1}"#),
+        &files(r#"{"executable":"echo","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
@@ -262,7 +261,7 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
     std::fs::set_permissions(&echo_program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     let sidecars = create(
-        &files(r#"{"executable":"build/echo","protocol":1}"#),
+        &files(r#"{"executable":"echo","protocol":1}"#),
         directory.path(),
     )
     .unwrap();

@@ -135,7 +135,7 @@ func readInstalled(configDir string) (*InstalledState, error) {
 	path := filepath.Join(configDir, Installed)
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return &InstalledState{Format: InstallFormat, Plugins: map[string]InstalledPlugin{}, Sidecars: map[string]string{}}, nil
+		return &InstalledState{Format: InstallFormat, Plugins: map[string]InstalledPlugin{}, Sidecars: map[string]InstalledSidecar{}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -252,7 +252,7 @@ func pluginResult(state *InstalledState, id string) map[string]any {
 	plugin := state.Plugins[id]
 	sidecars := map[string]string{}
 	for name := range plugin.Sidecars {
-		sidecars[name] = state.Sidecars[name]
+		sidecars[name] = state.Sidecars[name].Version
 	}
 	return map[string]any{"plugin": plugin, "sidecars": sidecars}
 }
@@ -283,26 +283,30 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 	if err != nil {
 		return nil, err
 	}
-	if err := installArchive("plugin "+id+" "+version+" package", selection.Version.Package, filepath.Join(configDir, pluginPath)); err != nil {
+	pluginFolder := filepath.Join(configDir, pluginPath)
+	if err := installArchive("plugin "+id+" "+version+" package", selection.Version.Package, pluginFolder); err != nil {
 		return nil, err
 	}
+	sidecarFolders := map[string]string{}
 	for _, sidecar := range selection.Sidecars {
 		path, err := SidecarInstallPath(sidecar.Name, sidecar.Version, platform)
 		if err != nil {
 			return nil, err
 		}
-		if err := installArchive("sidecar "+sidecar.Name+" "+sidecar.Version+" "+platform, sidecar.Asset, filepath.Join(configDir, path)); err != nil {
+		folder := filepath.Join(configDir, path)
+		if err := installArchive("sidecar "+sidecar.Name+" "+sidecar.Version+" "+platform, sidecar.Asset, folder); err != nil {
 			return nil, err
 		}
+		sidecarFolders[sidecar.Name] = folder
 	}
-	entry := InstalledPlugin{Package: selection.Plugin.Package, Version: version, Enabled: true, Sidecars: maps.Clone(selection.Version.Sidecars)}
+	entry := InstalledPlugin{Package: selection.Plugin.Package, Version: version, Path: pluginFolder, Enabled: true, Sidecars: maps.Clone(selection.Version.Sidecars)}
 	if installed {
 		entry.Enabled = current.Enabled
 		entry.Previous = current.Version
 	}
 	state.Plugins[id] = entry
 	for _, sidecar := range selection.Sidecars {
-		state.Sidecars[sidecar.Name] = sidecar.Version
+		state.Sidecars[sidecar.Name] = InstalledSidecar{Version: sidecar.Version, Path: sidecarFolders[sidecar.Name]}
 	}
 	dropUnnamedSidecars(state)
 	value, err := stateValue(state)
@@ -379,12 +383,12 @@ func pruneFolders(configDir string, state *InstalledState) error {
 		}
 	}
 	kept := map[string]string{}
-	for name, version := range state.Sidecars {
+	for name, sidecar := range state.Sidecars {
 		file, err := SidecarFileName(name)
 		if err != nil {
 			return err
 		}
-		kept[file] = version
+		kept[file] = sidecar.Version
 	}
 	sidecars := filepath.Join(configDir, "sidecars")
 	files, err := os.ReadDir(sidecars)
@@ -445,6 +449,10 @@ func ChangePlugin(configDir, id, action string) (any, error) {
 func runPlugins(a arguments, stdout io.Writer, options Options) error {
 	configDir, err := configDirOf(a.values, options.Identifier)
 	if err != nil {
+		return err
+	}
+	// 설치 상태는 절대 폴더를 기록하므로 설정 폴더도 절대 경로로 쓴다.
+	if configDir, err = filepath.Abs(configDir); err != nil {
 		return err
 	}
 	command := a.positionals[0] + " " + a.positionals[1]

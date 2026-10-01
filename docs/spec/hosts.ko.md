@@ -191,14 +191,14 @@ packages/sok/wailsv3/          packages/sok/tauriv2/
 
 `soksak-stage`는 프런트엔드를 `apps/<app>/src/frontend/`에 배치하며, 각 애플리케이션의 `.gitignore`가 이 디렉터리를 제외한다. `go:embed`는 포함하는 패키지 디렉터리 아래의 파일만 포함할 수 있으므로 Wails는 `src/main.go`의 `//go:embed all:frontend`로 이 디렉터리를 포함한다. `host.Run`은 `frontend/`를 자산 루트로 사용한다. Tauri는 `tauri.conf.json`의 `"frontendDist": "src/frontend"`로 이 디렉터리를 읽고, `src/main.rs`는 `frontend/background.js`를 포함한다.
 
-macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된다. 운영체제의 알림 센터가 번들에서 실행된 프로세스만 받기 때문이다([플러그인](plugins.ko.md#탭-알림)). 디버그 실행 파일은 `target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3`와 `target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2`이며, 릴리스 번들은 `target/release/`에 있다. 빌드는 각 번들의 `Contents/Info.plist`를 실행 파일과 번들 식별자(`com.soksak.wails`, `com.soksak.tauri`)를 적은 `apps/<app>/platform/darwin/Info.plist`에서 쓰고, Dock이 보이는 soksak 아이콘 `apps/<app>/platform/darwin/AppIcon.icns`를 `Contents/Resources/`에 복사하며, 번들에 ad hoc 서명을 하고 LaunchServices에 다시 등록한다. Dock은 등록된 번들의 아이콘을 보이며, 번들 안의 파일만 바뀌면 LaunchServices는 번들을 다시 읽지 않는다. 스테이징은 사이드카 실행 파일을 번들의 `Contents/MacOS/`에 복사하고, 호스트는 실행 중인 실행 파일의 디렉터리에서 사이드카를 시작한다.
+macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된다. 운영체제의 알림 센터가 번들에서 실행된 프로세스만 받기 때문이다([플러그인](plugins.ko.md#탭-알림)). 디버그 실행 파일은 `target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3`와 `target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2`이며, 릴리스 번들은 `target/release/`에 있다. 빌드는 각 번들의 `Contents/Info.plist`를 실행 파일과 번들 식별자(`com.soksak.wails`, `com.soksak.tauri`)를 적은 `apps/<app>/platform/darwin/Info.plist`에서 쓰고, Dock이 보이는 soksak 아이콘 `apps/<app>/platform/darwin/AppIcon.icns`를 `Contents/Resources/`에 복사하며, 번들에 ad hoc 서명을 하고 LaunchServices에 다시 등록한다. Dock은 등록된 번들의 아이콘을 보이며, 번들 안의 파일만 바뀌면 LaunchServices는 번들을 다시 읽지 않는다. 번들에는 플러그인도 사이드카도 없다. 호스트는 설정 디렉터리에 설치된 플러그인을 제공하고 사이드카를 시작하며, `plugins/installed.json`이 기록한 폴더를 쓴다([설치](installation.ko.md#설치된-plugin-제공)).
 
 ## 워크스페이스 파일
 
 | 파일 | 내용 |
 | --- | --- |
-| `go.work` | `apps/wailsv3`, `packages/host/wailsv3`, `sidecars/files`, `sidecars/shell`을 사용하고, 호스트 모듈 `v0.0.0`을 `./packages/host/wailsv3`로 대체한다 |
-| `Cargo.toml` | 멤버 `apps/tauriv2`와 `packages/host/tauriv2`, Tauri 크레이트에 대한 공용 `[patch.crates-io]`, `dev` 프로필을 가진 워크스페이스 |
+| `go.work` | `apps/wailsv3`, `packages/host/wailsv3`, `packages/sok/wailsv3`, `sidecars/files`, `sidecars/shell`을 사용하고, 호스트 모듈과 command line 모듈 `v0.0.0`을 `./packages/host/wailsv3`와 `./packages/sok/wailsv3`로 대체한다 |
+| `Cargo.toml` | 멤버 `apps/tauriv2`, `packages/host/tauriv2`, `packages/sok/tauriv2`, Tauri 크레이트에 대한 공용 `[patch.crates-io]`, `dev` 프로필을 가진 워크스페이스 |
 | `Cargo.lock` | 두 크레이트가 공유하는 하나의 잠금 파일 |
 | `target/` | Cargo 출력과 두 애플리케이션 실행 파일. `.gitignore`가 제외한다 |
 
@@ -206,10 +206,11 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 
 | 명령 | 동작 |
 | --- | --- |
-| `make wailsv3-build`, `make tauriv2-build` | `native/darwin`, 프런트엔드, 사이드카를 빌드하고 스테이징한 뒤 디버그 실행 파일을 빌드한다 |
+| `make wailsv3-build`, `make tauriv2-build` | `native/darwin`과 프런트엔드를 빌드하고 스테이징한 뒤 디버그 실행 파일을 빌드한다 |
 | `make wailsv3-build-release`, `make tauriv2-build-release` | 릴리스 실행 파일을 빌드한다 |
 | `make wailsv3`, `make tauriv2` | 디버그 실행 파일을 빌드하고 실행한다 |
-| `make sidecars-debug`, `make sidecars-release` | 애플리케이션이 선언한 사이드카와 그 헬퍼를 해당 프로필로 빌드한다. 빌드 목록은 디렉터리 글로브가 아니라 `scripts/sidecar-packages.mjs` 가 선언에서 유도한다 |
+| `make sidecars-debug`, `make sidecars-release` | `scripts/workspace-registry.json`의 플러그인이 선언한 사이드카와 그 헬퍼를 해당 프로필로 빌드한다. 빌드 목록은 디렉터리 글로브가 아니라 `scripts/sidecar-packages.mjs` 가 선언에서 유도한다 |
+| `make registry`, `make install-plugins CONFIG=DIR` | `target/registry`에 workspace registry를 만들고, 그 플러그인을 설정 디렉터리에 설치한다 |
 | `make native-test` | `make -C native/darwin test`, `packages/host/wailsv3`, `sidecars/files`, `sidecars/shell`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다 |
 | `make platforms` | `scripts/check-platforms.mjs`를 실행한다 |
 | `make hosts-check` | `scripts/check-hosts.mjs`를 실행한다 |

@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-// 빌드할 사이드카 패키지 목록. 애플리케이션의 environment.json 이 플러그인을 정하고, 각
-// plugin.json 이 그 플러그인이 쓰는 사이드카를 정하며, 각 sidecar.json 의 helpers 가 그
-// 사이드카가 실행 파일 옆에 두어야 하는 다른 패키지의 실행 파일을 정한다. 목록을 손으로 적으면
-// 선언과 빌드가 갈라지므로 선언에서 유도한다.
+// 빌드할 사이드카 패키지 목록. scripts/workspace-registry.json 이 workspace registry 에 넣을 플러그인을 선언하고,
+// 각 plugin.json 이 그 플러그인이 쓰는 사이드카를 정하며, 각 sidecar.json 의 helpers 가 그 사이드카가 실행 파일 옆에
+// 두어야 하는 다른 패키지의 실행 파일을 정한다. 목록을 손으로 적으면 선언과 빌드가 갈라지므로 선언에서 유도한다.
 //
 // 인자 없이 실행하면 pnpm 필터(`-F <이름> …`)를 stdout 에 쓴다. Makefile 이 그대로 쓴다.
 import { readFileSync, readdirSync } from "node:fs";
 
-const APPS = ["wailsv3", "tauriv2"];
 const PLACES = ["plugins", "sidecars"];
 
 const read = (url) => JSON.parse(readFileSync(url, "utf8"));
@@ -36,21 +34,19 @@ export function packageFolders(root) {
   return found;
 }
 
-/** 애플리케이션들이 선언한 플러그인이 선언한 사이드카 이름. */
+/** scripts/workspace-registry.json 이 선언한 플러그인 패키지 이름. */
+export function workspacePlugins(root = new URL("../", import.meta.url)) {
+  return read(new URL("scripts/workspace-registry.json", root)).plugins;
+}
+
+/** 워크스페이스의 플러그인이 선언한 사이드카 이름. */
 function declaredSidecars(root, dirs) {
   const names = [];
-  for (const app of APPS) {
-    let environment;
-    try {
-      environment = read(new URL(`apps/${app}/environment.json`, root));
-    } catch {
-      continue;
-    }
-    for (const plugin of environment.plugins ?? []) {
-      const dir = dirs.get(plugin);
-      if (!dir) throw new Error(`${app}: no package named ${plugin}`);
-      for (const sidecar of read(new URL("plugin.json", dir)).sidecars ?? []) names.push(sidecar);
-    }
+  for (const plugin of workspacePlugins(root)) {
+    const dir = dirs.get(plugin);
+    if (!dir) throw new Error(`scripts/workspace-registry.json: no package named ${plugin}`);
+    // 기본값: sidecars 는 plugin.json 의 선택 필드이며 사이드카를 쓰지 않는 플러그인에는 없다.
+    for (const sidecar of read(new URL("plugin.json", dir)).sidecars ?? []) names.push(sidecar);
   }
   return names;
 }

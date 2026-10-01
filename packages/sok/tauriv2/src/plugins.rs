@@ -9,7 +9,8 @@ use std::path::{Path, PathBuf};
 use serde_json::{json, Value};
 
 use crate::install::{
-    self, Archive, Index, InstalledPlugin, InstalledState, INSTALLED, INSTALL_FORMAT,
+    self, Archive, Index, InstalledPlugin, InstalledSidecar, InstalledState, INSTALLED,
+    INSTALL_FORMAT,
 };
 use crate::platform;
 use crate::registry::read_archive;
@@ -216,7 +217,7 @@ fn plugin_result(state: &InstalledState, id: &str) -> PluginResult {
             state
                 .sidecars
                 .get(name)
-                .map(|version| (name.clone(), version.clone()))
+                .map(|sidecar| (name.clone(), sidecar.version.clone()))
         })
         .collect();
     PluginResult { plugin, sidecars }
@@ -244,32 +245,40 @@ pub fn install_plugin(
     {
         return Ok(plugin_result(&state, id));
     }
-    let plugin_path = install::plugin_install_path(id, &version)?;
+    let plugin_folder = config_dir.join(install::plugin_install_path(id, &version)?);
     install_archive(
         &format!("plugin {id} {version} package"),
         &selection.version.package,
-        &config_dir.join(plugin_path),
+        &plugin_folder,
     )?;
+    let mut chosen = vec![];
     for sidecar in &selection.sidecars {
-        let path = install::sidecar_install_path(&sidecar.name, &sidecar.version, platform)?;
+        let folder = config_dir.join(install::sidecar_install_path(
+            &sidecar.name,
+            &sidecar.version,
+            platform,
+        )?);
         install_archive(
             &format!("sidecar {} {} {platform}", sidecar.name, sidecar.version),
             &sidecar.asset,
-            &config_dir.join(path),
+            &folder,
         )?;
+        chosen.push((
+            sidecar.name.clone(),
+            InstalledSidecar {
+                version: sidecar.version.clone(),
+                path: folder.display().to_string(),
+            },
+        ));
     }
     let entry = InstalledPlugin {
         package: selection.plugin.package.clone(),
         version: version.clone(),
+        path: plugin_folder.display().to_string(),
         enabled: current.as_ref().is_none_or(|plugin| plugin.enabled),
         sidecars: selection.version.sidecars.clone(),
         previous: current.map(|plugin| plugin.version),
     };
-    let chosen: Vec<(String, String)> = selection
-        .sidecars
-        .iter()
-        .map(|sidecar| (sidecar.name.clone(), sidecar.version.clone()))
-        .collect();
     state.plugins.insert(id.to_string(), entry);
     state.sidecars.extend(chosen);
     drop_unnamed_sidecars(&mut state);
@@ -339,8 +348,8 @@ fn prune_folders(config_dir: &Path, state: &InstalledState) -> Result<(), String
         }
     }
     let mut kept = HashMap::new();
-    for (name, version) in &state.sidecars {
-        kept.insert(install::sidecar_file_name(name)?, version);
+    for (name, sidecar) in &state.sidecars {
+        kept.insert(install::sidecar_file_name(name)?, &sidecar.version);
     }
     let sidecars = config_dir.join("sidecars");
     for (name, _) in folder_names(&sidecars)? {
@@ -392,7 +401,9 @@ pub(crate) fn run_plugins(
     stdout: &mut dyn Write,
     options: &Options,
 ) -> Result<(), Error> {
-    let config_dir = config_dir_of(values, options.identifier)?;
+    // 설치 상태는 절대 폴더를 기록하므로 설정 폴더도 절대 경로로 쓴다.
+    let config_dir = std::path::absolute(config_dir_of(values, options.identifier)?)
+        .map_err(|error| format!("configuration directory: {error}"))?;
     let command = format!("{} {}", positionals[0], positionals[1]);
     let want = if command == "plugin list" { 2 } else { 3 };
     if positionals.len() < want {

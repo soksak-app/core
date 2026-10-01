@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { environmentPlugins, pluginEntry, repositoryText, sidecarEntry } from "../workspace-registry.mjs";
+import { workspacePlugins } from "../sidecar-packages.mjs";
+import { pluginEntry, repositoryText, sidecarEntry } from "../workspace-registry.mjs";
 
 const SHA = "a".repeat(64);
 
@@ -26,8 +27,8 @@ test("registry entries carry the package declarations and the file URL and hash 
   assert.throws(() => repositoryText({ type: "git" }), /package.json repository has no url/);
 });
 
-test("the workspace registry lists every plugin that an application environment names once", { timeout: 1000 }, () => {
-  const plugins = environmentPlugins();
+test("the workspace registry packs the plugins that scripts/workspace-registry.json declares, each once", { timeout: 1000 }, () => {
+  const plugins = workspacePlugins();
   assert.ok(plugins.length > 0);
   assert.equal(new Set(plugins).size, plugins.length);
 });

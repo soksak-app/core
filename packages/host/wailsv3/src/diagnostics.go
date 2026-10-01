@@ -26,6 +26,7 @@ import (
 )
 
 func init() {
+	diagnosticPlugins = true
 	diagnosticMethods["diagnostics.fixture"] = diagnosticFixture
 	diagnosticMethods["diagnostics.drag"] = diagnosticDrag
 	diagnosticMethods["diagnostics.capture.start"] = diagnosticCaptureStart

@@ -25,7 +25,6 @@ const bytes = (text) => Buffer.from(text, "utf8");
 const sources = {
   published: [{ path: "index.html", bytes: bytes("<main>작업</main>") }, { path: "card.js", bytes: bytes("export const card = 1;") }],
   releaseModule: bytes("// 진단 빌드가 아니다.\nexport {};\n"),
-  plugins: [{ package: "@fixture/probe", entries: ["probe.trace"], module: bytes("export function attachProbe() {}\n") }],
 };
 const [page, card, release] = ["<main>작업</main>", "export const card = 1;", "// 진단 빌드가 아니다.\nexport {};\n"];
 
@@ -60,13 +59,6 @@ test("frontend audit accepts an executable that embeds every published file and 
 test("frontend audit rejects an executable whose frontend is not readable", () => {
   assert.deepEqual(audit(executable(release, "<compressed>")), ["app: does not embed a readable frontend; missing index.html, card.js"]);
   assert.deepEqual(audit(executable(page, card)), ["app: does not embed a readable frontend; missing release page diagnostics module"]);
-});
-
-test("frontend audit rejects plugin diagnostic entries and modules", () => {
-  assert.deepEqual(audit(executable(page, card, release, '"probe.trace"', "export function attachProbe() {}\n")), [
-    "app: contains the diagnostic entry probe.trace",
-    "app: contains the diagnostic module of @fixture/probe",
-  ]);
 });
 
 test("release CLI inspects the supplied bundles instead of default release paths", { timeout: 5000 }, (t) => {

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
 	"net"
 	"os"
@@ -119,25 +118,16 @@ type Sidecars struct {
 	nextRequest     uint64
 }
 
-// NewSidecars 는 스테이징된 프런트엔드 frontend 의 설정 파일로 사이드카를 찾아 채널을 생성한다.
-// 실행 파일은 directory 에서 찾는다. 설정 파일이 없거나 형식이 틀리면 실패한다.
-func NewSidecars(frontend fs.FS, directory, configDirectory string) (*Sidecars, error) {
-	read := func(name string, into any) error {
-		data, err := fs.ReadFile(frontend, name)
-		if err != nil {
-			return fmt.Errorf("%s: %w", name, err)
-		}
-		if err := json.Unmarshal(data, into); err != nil {
-			return fmt.Errorf("%s: %w", name, err)
-		}
-		return nil
-	}
-	var environment struct {
-		Plugins []string `json:"plugins"`
-	}
-	if err := read("environment.json", &environment); err != nil {
-		return nil, err
-	}
+// SidecarDeclaration 은 설치된 sidecar 하나다. Data 는 그 sidecar.json 의 내용이고 Folder 는 그것을 담은 폴더다.
+type SidecarDeclaration struct {
+	Name   string
+	Folder string
+	Data   []byte
+}
+
+// NewSidecars 는 선언된 sidecar 로 채널을 생성한다. 실행 파일은 각 Folder 안의 executable 경로다. 선언의 형식이
+// 틀리면 실패한다.
+func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Sidecars, error) {
 	c := &Sidecars{
 		declared:        map[string]string{},
 		persistent:      map[string]bool{},
@@ -160,50 +150,43 @@ func NewSidecars(frontend fs.FS, directory, configDirectory string) (*Sidecars, 
 		c.configDir = config
 	}
 	basenames := map[string]string{}
-	for _, plugin := range environment.Plugins {
-		var manifest struct {
-			Sidecars []string `json:"sidecars"`
+	for _, item := range declarations {
+		name := item.Name
+		if _, known := c.declared[name]; known {
+			continue
 		}
-		if err := read(path.Join("modules", plugin, "plugin.json"), &manifest); err != nil {
-			return nil, err
+		file := filepath.Join(item.Folder, "sidecar.json")
+		var declared struct {
+			Executable string `json:"executable"`
+			Protocol   int    `json:"protocol"`
+			Transport  string `json:"transport"`
 		}
-		for _, name := range manifest.Sidecars {
-			if _, known := c.declared[name]; known {
-				continue
+		if err := json.Unmarshal(item.Data, &declared); err != nil {
+			return nil, fmt.Errorf("%s: %w", file, err)
+		}
+		if declared.Executable == "" || path.IsAbs(declared.Executable) ||
+			strings.Contains("/"+declared.Executable+"/", "/../") {
+			return nil, fmt.Errorf("%s: executable must be a path inside the package", file)
+		}
+		if declared.Protocol != 1 {
+			return nil, fmt.Errorf("%s: protocol must be 1", file)
+		}
+		if declared.Transport != "" && declared.Transport != "persistent" {
+			return nil, fmt.Errorf("%s: transport %s is not supported", file, declared.Transport)
+		}
+		if declared.Transport == "persistent" && !configDirectoryProvided {
+			return nil, fmt.Errorf("%s: persistent transport requires a config directory", file)
+		}
+		if declared.Transport == "persistent" {
+			base := path.Base(declared.Executable)
+			if other, exists := basenames[base]; exists {
+				return nil, fmt.Errorf("%s: executable basename %s is already used by %s", file, base, other)
 			}
-			file := path.Join("modules", name, "sidecar.json")
-			var declared struct {
-				Executable string `json:"executable"`
-				Protocol   int    `json:"protocol"`
-				Transport  string `json:"transport"`
-			}
-			if err := read(file, &declared); err != nil {
-				return nil, err
-			}
-			if declared.Executable == "" || path.IsAbs(declared.Executable) ||
-				strings.Contains("/"+declared.Executable+"/", "/../") {
-				return nil, fmt.Errorf("%s: executable must be a path inside the package", file)
-			}
-			if declared.Protocol != 1 {
-				return nil, fmt.Errorf("%s: protocol must be 1", file)
-			}
-			if declared.Transport != "" && declared.Transport != "persistent" {
-				return nil, fmt.Errorf("%s: transport %s is not supported", file, declared.Transport)
-			}
-			if declared.Transport == "persistent" && !configDirectoryProvided {
-				return nil, fmt.Errorf("%s: persistent transport requires a config directory", file)
-			}
-			if declared.Transport == "persistent" {
-				base := path.Base(declared.Executable)
-				if other, exists := basenames[base]; exists {
-					return nil, fmt.Errorf("%s: executable basename %s is already used by %s", file, base, other)
-				}
-				basenames[base] = name
-			}
-			c.declared[name] = filepath.Join(directory, path.Base(declared.Executable))
-			if declared.Transport == "persistent" {
-				c.persistent[name] = true
-			}
+			basenames[base] = name
+		}
+		c.declared[name] = filepath.Join(item.Folder, filepath.FromSlash(declared.Executable))
+		if declared.Transport == "persistent" {
+			c.persistent[name] = true
 		}
 	}
 	return c, nil

@@ -1,13 +1,12 @@
 //! 사이드카 채널 테스트. 가짜 창과 셸 스크립트 사이드카를 사용한다.
 
-use std::collections::HashMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Duration;
 
 use serde_json::value::RawValue;
-use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, Sidecars};
+use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
 
 #[derive(Clone)]
 struct FakeOwner {
@@ -70,28 +69,27 @@ fn raw(text: &str) -> Box<RawValue> {
     RawValue::from_string(text.into()).unwrap()
 }
 
-type Files = HashMap<&'static str, String>;
+type Files = Vec<(&'static str, String)>;
 
+/// 사이드카 @fixture/sidecar-echo 하나와 그 sidecar.json 내용.
 fn files(sidecar: &str) -> Files {
-    HashMap::from([
-        (
-            "environment.json",
-            r#"{"plugins":["@fixture/plugin"]}"#.to_string(),
-        ),
-        (
-            "modules/@fixture/plugin/plugin.json",
-            r#"{"sidecars":["@fixture/sidecar-echo"]}"#.to_string(),
-        ),
-        (
-            "modules/@fixture/sidecar-echo/sidecar.json",
-            sidecar.to_string(),
-        ),
-    ])
+    vec![("@fixture/sidecar-echo", sidecar.to_string())]
+}
+
+/// folder 에 설치된 사이드카들의 선언.
+fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
+    files
+        .iter()
+        .map(|(name, data)| SidecarDeclaration {
+            name: name.to_string(),
+            folder: folder.to_path_buf(),
+            data: data.as_bytes().to_vec(),
+        })
+        .collect()
 }
 
 fn create(files: &Files, directory: &Path) -> Result<Sidecars<FakeOwner>, String> {
-    let read = |path: &str| files.get(path).map(|text| text.as_bytes().to_vec());
-    Sidecars::new(&read, directory.to_path_buf(), directory.to_path_buf())
+    Sidecars::new(&declare(files, directory), directory.to_path_buf())
 }
 
 const ECHO: &str = "@fixture/sidecar-echo";
@@ -104,7 +102,7 @@ fn echo_sidecars() -> (Sidecars<FakeOwner>, tempfile::TempDir) {
     std::fs::write(&program, format!("#!/bin/sh\ntee {}\n", record.display())).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let sidecars = create(
-        &files(r#"{"executable":"build/echo","protocol":1}"#),
+        &files(r#"{"executable":"echo","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
@@ -248,29 +246,13 @@ fn undeclared_and_stopped_sidecars_are_rejected() {
 fn a_missing_executable_fails() {
     let directory = tempfile::tempdir().unwrap();
     let sidecars = create(
-        &files(r#"{"executable":"build/echo","protocol":1}"#),
+        &files(r#"{"executable":"echo","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
     let (window, _events) = owner("a", "/");
     let error = sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err();
     assert!(error.contains(&format!("sidecar {ECHO}")), "{error}");
-}
-
-// contract: sidecars.declaration.fails-on-missing-sidecar-json
-#[test]
-fn a_sidecar_without_sidecar_json_fails() {
-    let directory = tempfile::tempdir().unwrap();
-    let mut files = files(r#"{"executable":"build/echo","protocol":1}"#);
-    files.insert(
-        "modules/@fixture/plugin/plugin.json",
-        r#"{"sidecars":["@fixture/sidecar-missing"]}"#.into(),
-    );
-    let error = create(&files, directory.path()).err().unwrap();
-    assert!(
-        error.contains("modules/@fixture/sidecar-missing/sidecar.json"),
-        "{error}"
-    );
 }
 
 // contract: sidecars.declaration.rejects-executable-escaping-package
@@ -284,7 +266,7 @@ fn an_executable_outside_the_package_fails() {
     .err()
     .unwrap();
     assert!(
-        error.contains("modules/@fixture/sidecar-echo/sidecar.json"),
+        error.contains(&directory.path().join("sidecar.json").display().to_string()),
         "{error}"
     );
 }
@@ -309,10 +291,9 @@ fn an_absolute_executable_fails() {
 #[test]
 fn persistent_transport_requires_a_config_directory() {
     let directory = tempfile::tempdir().unwrap();
-    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let error = Sidecars::<FakeOwner>::new(
-        &|path| fixture.get(path).map(|value| value.as_bytes().to_vec()),
-        directory.path().to_path_buf(),
+        &declare(&fixture, directory.path()),
         std::path::PathBuf::new(),
     )
     .err()
@@ -320,26 +301,18 @@ fn persistent_transport_requires_a_config_directory() {
     assert!(error.contains("config directory"), "{error}");
 }
 
-// contract: sidecars.declaration.fails-on-missing-environment
-#[test]
-fn a_frontend_without_environment_json_fails() {
-    let directory = tempfile::tempdir().unwrap();
-    let error = create(&Files::new(), directory.path()).err().unwrap();
-    assert!(error.contains("environment.json"), "{error}");
-}
-
 // contract: sidecars.declaration.rejects-unsupported-protocol
 #[test]
 fn an_unsupported_protocol_fails() {
     let directory = tempfile::tempdir().unwrap();
     let error = create(
-        &files(r#"{"executable":"build/echo","protocol":2}"#),
+        &files(r#"{"executable":"echo","protocol":2}"#),
         directory.path(),
     )
     .err()
     .unwrap();
     assert!(
-        error.contains("modules/@fixture/sidecar-echo/sidecar.json"),
+        error.contains(&directory.path().join("sidecar.json").display().to_string()),
         "{error}"
     );
 }
@@ -349,7 +322,7 @@ fn an_unsupported_protocol_fails() {
 fn persistent_transport_rejects_unknown_transport() {
     let directory = tempfile::tempdir().unwrap();
     let error = create(
-        &files(r#"{"executable":"build/echo","protocol":1,"transport":"ptyd"}"#),
+        &files(r#"{"executable":"echo","protocol":1,"transport":"ptyd"}"#),
         directory.path(),
     )
     .err()
@@ -362,10 +335,9 @@ fn persistent_transport_rejects_unknown_transport() {
 fn persistent_transport_accepts_a_non_canonical_config_directory() {
     let executable_directory = tempfile::tempdir().unwrap();
     let config_directory = tempfile::tempdir().unwrap();
-    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
-        &|path| fixture.get(path).map(|value| value.as_bytes().to_vec()),
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().join("."),
     )
     .unwrap();
@@ -387,10 +359,7 @@ fn persistent_transport_accepts_a_non_canonical_config_directory() {
 #[test]
 fn plugins_without_sidecars_declare_none() {
     let directory = tempfile::tempdir().unwrap();
-    let mut files = files("");
-    files.insert("modules/@fixture/plugin/plugin.json", "{}".into());
-    files.remove("modules/@fixture/sidecar-echo/sidecar.json");
-    let sidecars = create(&files, directory.path()).unwrap();
+    let sidecars = create(&Files::new(), directory.path()).unwrap();
     let (window, _events) = owner("a", "/");
     let error = sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err();
     assert!(error.contains("is not declared by any plugin"), "{error}");
@@ -418,24 +387,16 @@ fn slow_sidecar_does_not_block_other_sends() {
     std::fs::set_permissions(&fast_program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     // 두 사이드카를 선언한 프런트엔드
-    let mut files = HashMap::new();
-    files.insert(
-        "environment.json",
-        r#"{"plugins":["@fixture/plugin"]}"#.to_string(),
-    );
-    files.insert(
-        "modules/@fixture/plugin/plugin.json",
-        r#"{"sidecars":["@fixture/sidecar-slow","@fixture/sidecar-fast"]}"#.to_string(),
-    );
-    files.insert(
-        "modules/@fixture/sidecar-slow/sidecar.json",
-        r#"{"executable":"build/slow","protocol":1}"#.to_string(),
-    );
-    files.insert(
-        "modules/@fixture/sidecar-fast/sidecar.json",
-        r#"{"executable":"build/fast","protocol":1}"#.to_string(),
-    );
-
+    let files: Files = vec![
+        (
+            "@fixture/sidecar-slow",
+            r#"{"executable":"slow","protocol":1}"#.to_string(),
+        ),
+        (
+            "@fixture/sidecar-fast",
+            r#"{"executable":"fast","protocol":1}"#.to_string(),
+        ),
+    ];
     let mut sidecars = create(&files, directory.path()).unwrap();
     // 테스트를 위해 기한을 100ms로 설정한다.
     sidecars.stop_timeout = Duration::from_millis(100);
@@ -515,20 +476,10 @@ fn stop_graceful_shutdown() {
     .unwrap();
     std::fs::set_permissions(&graceful_program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-    let files = HashMap::from([
-        (
-            "environment.json",
-            r#"{"plugins":["@fixture/plugin"]}"#.to_string(),
-        ),
-        (
-            "modules/@fixture/plugin/plugin.json",
-            r#"{"sidecars":["@fixture/sidecar-graceful"]}"#.to_string(),
-        ),
-        (
-            "modules/@fixture/sidecar-graceful/sidecar.json",
-            r#"{"executable":"build/graceful","protocol":1}"#.to_string(),
-        ),
-    ]);
+    let files: Files = vec![(
+        "@fixture/sidecar-graceful",
+        r#"{"executable":"graceful","protocol":1}"#.to_string(),
+    )];
 
     let mut sidecars = create(&files, directory.path()).unwrap();
     // stop() 은 기한이 지나야만 강제로 끝낸다. 기한보다 먼저 돌아오면 사이드카가 stdin EOF 로 스스로 끝난 것이다.
@@ -581,20 +532,10 @@ fn stop_forced_kill() {
     std::fs::write(&stubborn_program, "#!/bin/sh\ncat >/dev/null &\nwait\n").unwrap();
     std::fs::set_permissions(&stubborn_program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-    let files = HashMap::from([
-        (
-            "environment.json",
-            r#"{"plugins":["@fixture/plugin"]}"#.to_string(),
-        ),
-        (
-            "modules/@fixture/plugin/plugin.json",
-            r#"{"sidecars":["@fixture/sidecar-stubborn"]}"#.to_string(),
-        ),
-        (
-            "modules/@fixture/sidecar-stubborn/sidecar.json",
-            r#"{"executable":"build/stubborn","protocol":1}"#.to_string(),
-        ),
-    ]);
+    let files: Files = vec![(
+        "@fixture/sidecar-stubborn",
+        r#"{"executable":"stubborn","protocol":1}"#.to_string(),
+    )];
 
     let mut sidecars = create(&files, directory.path()).unwrap();
     // 테스트를 위해 기한을 100ms로 설정한다.
@@ -655,7 +596,7 @@ fn script_sidecars(script: &str) -> (Stopping, tempfile::TempDir) {
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let sidecars = create(
-        &files(r#"{"executable":"build/fake","protocol":1}"#),
+        &files(r#"{"executable":"fake","protocol":1}"#),
         directory.path(),
     )
     .unwrap();

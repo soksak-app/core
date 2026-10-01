@@ -2,7 +2,7 @@
 
 [English](installation.md)
 
-Plugin 설치가 쓰는 형식이다. [Command line `sok`](cli.ko.md)의 두 구현이 이 형식을 검증하며, host contract case `install.*`가 규칙마다 정한다([host contract](host-contract.ko.md)). 모든 검사는 알 수 없는 필드를 거부하고 틀린 필드를 밝힌다. 필드는 정해진 순서로 검사하므로 오류가 여럿인 파일도 두 구현이 같은 오류를 보고한다. Version의 각 자리는 4294967295 이하다. Host와 workbench가 plugin을 설치하고 불러오는 방식은 [설치형 plugin](../plans/plugin-installation.ko.md)에서 대기 중이다.
+Plugin 설치가 쓰는 형식이다. [Command line `sok`](cli.ko.md)의 두 구현이 이 형식을 검증하며, host contract case `install.*`가 규칙마다 정한다([host contract](host-contract.ko.md)). 모든 검사는 알 수 없는 필드를 거부하고 틀린 필드를 밝힌다. 필드는 정해진 순서로 검사하므로 오류가 여럿인 파일도 두 구현이 같은 오류를 보고한다. Version의 각 자리는 4294967295 이하다. Host와 workbench가 plugin을 불러오는 방식은 [설치된 plugin 제공](#설치된-plugin-제공)이 정한다.
 
 ## Version과 범위
 
@@ -54,4 +54,17 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 
 ## 설치 배치
 
-설정 폴더 안에서 `<id>`의 plugin version `<version>`은 `plugins/<id>/<version>`에, sidecar version의 플랫폼 asset은 `sidecars/<file name>/<version>/<platform>`에 푼다. `plugins/installed.json`은 `format` 1, `plugins`, `sidecars`를 가진다. `plugins`는 plugin id마다 `{ package, version, enabled, sidecars, previous? }`를 정한다. 각각 package 이름, 쓰는 version, 불러올지 여부, 그 version의 sidecar 범위, 되돌리기가 복원할 version이다. 한 package는 한 번만 나온다. `sidecars`는 설치된 plugin이 지정한 sidecar마다 쓰는 version을 정하며, 그 version은 그 sidecar를 지정한 모든 설치된 plugin의 범위를 채운다. 어느 설치된 plugin도 지정하지 않은 sidecar는 나오지 않는다.
+설정 폴더 안에서 `<id>`의 plugin version `<version>`은 `plugins/<id>/<version>`에, sidecar version의 플랫폼 asset은 `sidecars/<file name>/<version>/<platform>`에 푼다. `plugins/installed.json`은 `format` 1, `plugins`, `sidecars`를 가진다. `plugins`는 plugin id마다 `{ package, version, path, enabled, sidecars, previous? }`를 정한다. 각각 package 이름, 쓰는 version, 설치가 그 version을 푼 절대 폴더, 불러올지 여부, 그 version의 sidecar 범위, 되돌리기가 복원할 version이다. 한 package는 한 번만 나온다. `sidecars`는 설치된 plugin이 지정한 sidecar마다 `{ version, path }`를 정한다. 쓰는 version은 그 sidecar를 지정한 모든 설치된 plugin의 범위를 채우며, `path`는 설치가 그 플랫폼 asset을 푼 절대 폴더다. 어느 설치된 plugin도 지정하지 않은 sidecar는 나오지 않는다. 설치는 archive를 풀 때 각 `path`를 기록하고, host는 기록된 경로에서만 파일을 읽는다.
+
+## 설치된 plugin 제공
+
+두 host는 설정 폴더에서 다음 경로를 제공하며, 요청마다 `plugins/installed.json`을 읽으므로 변경 뒤에 불러온 page는 그 변경을 본다.
+
+| 경로 | 내용 |
+| --- | --- |
+| `/installed-plugins.json` | `{ "plugins": [{ id, package, version, diagnostics? }] }`: `installed.json`의 켜진 plugin을 id 순서로 담는다. 진단 build에서 `diagnostics`는 설치된 package가 `diagnostics.json`을 담을 때 그 내용이며, release build는 보내지 않는다. `installed.json`이 없으면 `{ "plugins": [] }`다. `installed.json`이나 `diagnostics.json`을 읽거나 검사할 수 없으면 문서는 `{ "error": "<message>" }`다 |
+| `/modules/<package>/<path>` | 켜진 설치 plugin의 package는 그 plugin의 기록된 `path` 안의 `<path>` 파일이다. 빈 segment, `.`, `..`가 있는 경로나 없는 파일은 찾을 수 없다. 다른 package는 애플리케이션 frontend에서 온다 |
+
+Workbench는 plugin 목록을 `/installed-plugins.json`에서 읽고, 문서에 `error`가 있으면 그 텍스트로 불러오기를 실패한다.
+
+Host는 시작할 때 켜진 설치 plugin의 `plugin.json`이 지정한 sidecar를 읽는다. Sidecar는 `installed.json`이 그것에 기록한 `path`에서 실행되며, 실행 파일은 그 폴더의 `sidecar.json`의 `executable` 경로다. 애플리케이션 실행 중에 설치하거나 켠 plugin은 변경 뒤에 불러온 page에 제공되고, 그 sidecar는 애플리케이션을 다시 시작한 뒤 시작된다.

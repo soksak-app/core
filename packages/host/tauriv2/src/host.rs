@@ -22,6 +22,7 @@ pub mod documents;
 pub mod endpoint;
 pub mod exposure;
 pub mod images;
+pub mod installed;
 pub mod link;
 pub mod menu;
 mod modals;
@@ -106,7 +107,15 @@ fn run_menu_command(app: &tauri::AppHandle, command: &str) -> Result<(), String>
 /// context 는 애플리케이션의 `tauri::generate_context!()` 이다. background 는 표면 웹뷰가
 /// 문서보다 먼저 실행하는 스크립트이며, 애플리케이션이 프론트엔드의 `background.js` 를
 /// 포함해 전달한다.
-pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
+pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
+    // 설치된 plugin 은 설정 폴더에서 제공한다(docs/spec/installation.md). 설정 폴더는 setup 이 정한다.
+    let installed_directory = std::sync::Arc::new(std::sync::OnceLock::new());
+    let frontend = context.set_assets(Box::new(installed::NoAssets));
+    context.set_assets(Box::new(installed::InstalledAssets {
+        frontend,
+        config_dir: installed_directory.clone(),
+        diagnostics: cfg!(feature = "diagnostics"),
+    }));
     // 창 확대 애니메이션은 창 프레임만 움직이고 웹 문서는 그 뒤에 따라온다. AppKit 이 기본값을
     // 읽기 전에 그 길이를 줄인다.
     if let Ok(platform) = platform::current() {
@@ -189,7 +198,7 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 started();
             }
         })
-        .setup(|app| {
+        .setup(move |app| {
             // 알림 센터를 쓸 수 없으면 애플리케이션을 시작하지 않는다(docs/spec/hosts.md).
             notifications::start(app.handle())?;
             let dock = app.handle().clone();
@@ -205,16 +214,14 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
             app.manage(menu::MenuLanguage(std::sync::Mutex::new(language)));
             app.set_menu(menu)?;
             let directory = config_directory(app.handle())?;
+            installed_directory
+                .set(directory.clone())
+                .map_err(|_| "the configuration directory of installed plugins is already set")?;
             crate::performance::disable(&directory)?;
             app.manage(workspace::Workspace::new(directory.clone()));
-            let executable = std::env::current_exe()?;
-            let sidecar_directory = executable
-                .parent()
-                .ok_or("executable has no directory")?
-                .to_path_buf();
-            let resolver = app.asset_resolver();
-            let read = |path: &str| resolver.get(path.into()).map(|asset| asset.bytes);
-            let sidecars = WindowSidecars::new(&read, sidecar_directory, directory)?;
+            let declarations = installed::installed_sidecars(&directory)
+                .map_err(|error| format!("installed plugins: {error}"))?;
+            let sidecars = WindowSidecars::new(&declarations, directory)?;
             app.manage(sidecars);
             let main = app
                 .get_webview_window("main")

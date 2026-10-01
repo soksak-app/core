@@ -190,14 +190,14 @@ The pair follows the same file-name rule and structure check as the host package
 
 `soksak-stage` places the frontend in `apps/<app>/src/frontend/`, which each application's `.gitignore` excludes. Wails embeds it with `//go:embed all:frontend` in `src/main.go` because `go:embed` reaches only files below the embedding package's directory; `host.Run` uses `frontend/` as the asset root. Tauri reads it through `"frontendDist": "src/frontend"` in `tauri.conf.json`, and `src/main.rs` includes `frontend/background.js`.
 
-On macOS each application runs from an application bundle, because the operating system's notification center serves only bundled processes ([plugins](plugins.md#tab-reports)). The debug executables are `target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3` and `target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2`; release bundles are in `target/release/`. The build writes each bundle's `Contents/Info.plist` from `apps/<app>/platform/darwin/Info.plist`, which names the executable and the bundle identifier (`com.soksak.wails`, `com.soksak.tauri`), copies `apps/<app>/platform/darwin/AppIcon.icns`, the soksak icon that the Dock shows, to `Contents/Resources/`, signs the bundle with an ad hoc signature, and registers it again with LaunchServices, because the Dock shows the icon of the registered bundle and LaunchServices does not reread a bundle when only files inside it change. Staging copies sidecar executables into the bundle's `Contents/MacOS/`, and the hosts start sidecars from the directory of the running executable.
+On macOS each application runs from an application bundle, because the operating system's notification center serves only bundled processes ([plugins](plugins.md#tab-reports)). The debug executables are `target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3` and `target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2`; release bundles are in `target/release/`. The build writes each bundle's `Contents/Info.plist` from `apps/<app>/platform/darwin/Info.plist`, which names the executable and the bundle identifier (`com.soksak.wails`, `com.soksak.tauri`), copies `apps/<app>/platform/darwin/AppIcon.icns`, the soksak icon that the Dock shows, to `Contents/Resources/`, signs the bundle with an ad hoc signature, and registers it again with LaunchServices, because the Dock shows the icon of the registered bundle and LaunchServices does not reread a bundle when only files inside it change. The bundle holds no plugin and no sidecar; the hosts serve the plugins and start the sidecars that are installed in the configuration directory, from the folders that `plugins/installed.json` records ([installation](installation.md#serving-installed-plugins)).
 
 ## Workspace files
 
 | File | Contents |
 | --- | --- |
-| `go.work` | Uses `apps/wailsv3`, `packages/host/wailsv3`, `sidecars/files`, and `sidecars/shell`; replaces the host module `v0.0.0` with `./packages/host/wailsv3` |
-| `Cargo.toml` | Workspace with members `apps/tauriv2` and `packages/host/tauriv2`, the shared `[patch.crates-io]` for the Tauri crates, and the `dev` profile |
+| `go.work` | Uses `apps/wailsv3`, `packages/host/wailsv3`, `packages/sok/wailsv3`, `sidecars/files`, and `sidecars/shell`; replaces the host module and the command-line module `v0.0.0` with `./packages/host/wailsv3` and `./packages/sok/wailsv3` |
+| `Cargo.toml` | Workspace with members `apps/tauriv2`, `packages/host/tauriv2` and `packages/sok/tauriv2`, the shared `[patch.crates-io]` for the Tauri crates, and the `dev` profile |
 | `Cargo.lock` | The single lock file for both crates |
 | `target/` | Cargo output and both application executables; excluded by `.gitignore` |
 
@@ -205,10 +205,11 @@ On macOS each application runs from an application bundle, because the operating
 
 | Command | Action |
 | --- | --- |
-| `make wailsv3-build`, `make tauriv2-build` | Build `native/darwin`, the frontend, and the sidecars, stage them, and build the debug executable |
+| `make wailsv3-build`, `make tauriv2-build` | Build `native/darwin` and the frontend, stage it, and build the debug executable |
 | `make wailsv3-build-release`, `make tauriv2-build-release` | Build the release executable |
 | `make wailsv3`, `make tauriv2` | Build and run the debug executable |
-| `make sidecars-debug`, `make sidecars-release` | Build the sidecar packages the applications declare, and their helpers, in that profile. The build list comes from `scripts/sidecar-packages.mjs`, not from a directory glob |
+| `make sidecars-debug`, `make sidecars-release` | Build the sidecar packages that the plugins of `scripts/workspace-registry.json` declare, and their helpers, in that profile. The build list comes from `scripts/sidecar-packages.mjs`, not from a directory glob |
+| `make registry`, `make install-plugins CONFIG=DIR` | Build the workspace registry in `target/registry`, and install its plugins into a configuration directory |
 | `make native-test` | Run `make -C native/darwin test`, `go test` for `packages/host/wailsv3`, `sidecars/files`, and `sidecars/shell`, and `cargo test -p soksak-host-tauriv2`, the host tests with and without diagnostics |
 | `make platforms` | Run `scripts/check-platforms.mjs` |
 | `make hosts-check` | Run `scripts/check-hosts.mjs` |

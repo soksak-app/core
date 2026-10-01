@@ -273,13 +273,12 @@ fn invalid_json_closes_connection() {
 | `sidecars.send.rejects-after-stop` | 사이드카가 멈춘 뒤 보내면 "stopped"로 실패한다. | both |
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | 선언된 사이드카가 없으면 생성은 성공하고 모든 보내기는 "not declared by any plugin"으로 실패한다. | both |
 | `sidecars.start.fails-on-missing-executable` | 디스크에 없는 선언된 실행 파일은 첫 보내기를 사이드카 이름과 함께 실패시킨다. | both |
-| `sidecars.declaration.fails-on-missing-sidecar-json` | sidecar.json이 없는 사이드카 패키지는 그 경로와 함께 생성을 실패시킨다. | both |
+| `sidecars.declaration.fails-on-missing-sidecar-json` | sidecar.json이 없는 설치 sidecar 폴더는 그 경로와 함께 설치 sidecar 찾기를 실패시킨다. | both |
 | `sidecars.declaration.rejects-executable-escaping-package` | 패키지 밖의 실행 파일 경로는 생성을 실패시킨다. | both |
 | `sidecars.declaration.rejects-absolute-executable` | 절대 실행 파일 경로는 생성을 실패시킨다. | both |
 | `sidecars.declaration.rejects-unsupported-protocol` | 지원하지 않는 프로토콜 버전은 생성을 실패시킨다. | both |
 | `sidecars.declaration.rejects-unknown-transport` | 알 수 없는 전송 방식은 "is not supported"로 생성을 실패시킨다. | both |
 | `sidecars.declaration.persistent-requires-config-directory` | 설정 디렉터리가 없는 지속 전송은 생성을 실패시킨다. | both |
-| `sidecars.declaration.fails-on-missing-environment` | environment.json이 없는 프런트엔드는 "environment.json"과 함께 생성을 실패시킨다. | both |
 | `sidecars.persistent.accepts-non-canonical-config-directory` | 지속 전송은 정규화되지 않은 설정 디렉터리 경로를 받아들인다. | both |
 | `sidecars.send.fails-fast-when-sidecar-not-keeping-up` | 읽지 않는 사이드카로의 큰 보내기는 "is not keeping up"으로 끝난다. | both |
 | `sidecars.send.slow-sidecar-does-not-block-others` | 한 사이드카 대기열이 가득 찬 동안 다른 사이드카로의 보내기는 50ms 안에 반환된다. | both |
@@ -347,10 +346,11 @@ fn invalid_json_closes_connection() {
 | `cli.pack.writes-sorted-plugin-archive` | `sok plugin pack`은 `package.json`과 나열한 파일을 경로 순서, mode 0644나 0755, 시각 0, 소유자 0으로 담은 `<id>-<version>.tgz`를 쓰고, `archive`, `id`, `sha256`, `version`을 출력하며, 되풀이하면 같은 byte를 쓴다. | both |
 | `cli.pack.rejects-links-and-manifest-mismatch` | 나열한 폴더 안의 symbolic link, id 없는 `plugin.json`, `plugin.json`과 다른 `soksak.sidecars`는 종료 상태 1로 실패하고 출력 폴더를 비워 둔다. | both |
 | `cli.pack.diagnostics-only-with-flag` | `sok plugin pack`은 `diagnostics.json`과 그 module을 빼고, `--diagnostics`는 둘을 더하며, `files`가 둘 중 하나를 나열하면 pack이 실패하고, `plugin pack` 밖의 `--diagnostics`는 종료 상태 2다. | both |
+| `cli.pack.rejects-unlisted-modules` | `plugin.json`의 surface module, 방향과 상관없는 section module, state module이 `files`가 나열한 경로 밖에 있으면 `sok plugin pack`은 종료 상태 1로 실패하고 그 module을 밝힌다. | both |
 | `cli.release.writes-asset-and-sums` | `sok sidecar release`는 `<file name>-<version>-<platform>.tar.gz`를 쓰고 archive마다 `SHA256SUMS` 한 줄을 이름 순서로 유지하며, 같은 이름은 바꾼다. 알 수 없는 `--platform`은 종료 상태 2, 나열하지 않은 실행 파일은 1, 형식이 틀린 `SHA256SUMS`는 archive를 쓰지 않고 1이다. | both |
 | `cli.registry.writes-checked-index` | `sok registry build`는 registry 파일을 읽고 모든 archive hash와 plugin archive의 `package.json`, `plugin.json`을 검사한 뒤, 선언한 필드 순서와 두 칸 들여쓰기로 `index.json`을 쓰고 `index`, `packs`, `plugins`, `sidecars`를 출력한다. 두 구현은 같은 텍스트를 쓴다. | both |
 | `cli.registry.rejects-without-writing` | 형식이 틀린 hash, hash가 다른 archive, 항목과 다른 `package.json`, 항목과 다른 파일 이름, 없는 `revoked.json`, 알 수 없는 plugin을 지정한 pack은 종료 상태 1이며 `index.json`을 남기지 않는다. | both |
-| `cli.plugin.install-extracts-and-records` | `sok registry use`는 검사한 index를 `file:` URL로 기록한다. `sok plugin install`은 plugin과 그 sidecar version을 mode와 함께 풀고, `installed.json`을 쓰고, plugin 항목과 sidecar version을 출력하며, 되풀이하면 아무것도 바꾸지 않는다. | both |
+| `cli.plugin.install-extracts-and-records` | `sok registry use`는 검사한 index를 `file:` URL로 기록한다. `sok plugin install`은 plugin과 그 sidecar version을 mode와 함께 풀고, 푼 폴더마다 절대 `path`를 담아 `installed.json`을 쓰고, plugin 항목과 sidecar version을 출력하며, 되풀이하면 아무것도 바꾸지 않는다. | both |
 | `cli.plugin.install-failure-keeps-state` | `plugins/registry.json`이 없거나, hash가 index와 다른 archive이거나, 폴더 밖 항목을 담은 archive이면 `sok plugin install`은 종료 상태 1이며 `installed.json`, version 폴더, 푼 파일을 남기지 않는다. | both |
 | `cli.plugin.update-remove-enable-list` | `sok plugin update`는 설치되지 않은 plugin이면 실패하고, `enabled`를 유지하며 `previous`를 기록해 가장 새 version을 설치하고, 쓰는 version과 `previous`만 남긴다. `disable`과 `enable`은 `enabled`를 정하고, `list`는 `installed.json`을 출력하며, `remove`는 `null`을 출력하고 plugin과 sidecar 폴더를 지우며 되풀이하면 실패한다. | both |
 | `install.version.ranges-and-order` | 범위 `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z <a.b.c`는 선언한 경계를 가진다. Version은 숫자로 비교한다. 다른 형식, 앞자리 0, 빈 범위, 4294967295를 넘는 자리는 `invalid version`으로 거부한다. | both |
@@ -360,4 +360,8 @@ fn invalid_json_closes_connection() {
 | `install.select.newest-usable` | 선택은 core version에 맞고 revoked가 아닌 가장 새 plugin version과, 범위 안에 있고 플랫폼 asset이 있는 가장 새 sidecar version을 고른다. 맞는 것이 없으면 plugin, core version, sidecar, 플랫폼을 밝힌다. | both |
 | `install.select.shared-sidecar` | 선택은 쓰고 있는 sidecar version이 다른 모든 설치된 plugin의 범위를 채우면 그대로 두고, 아니면 모든 범위를 채우는 가장 새 version을 고른다. 설치하는 plugin의 이전 범위는 무시하며, 충돌하면 각 plugin과 범위를 밝힌다. | both |
 | `install.names.archives-and-paths` | Archive 이름은 `<id>-<version>.tgz`와 `<file name>-<version>-<platform>.tar.gz`, 설치 경로는 `plugins/<id>/<version>`와 `sidecars/<file name>/<version>/<platform>`이며, `@scope/name`은 `scope-name`이 된다. 알 수 없는 플랫폼이나 잘못된 plugin id는 거부한다. | both |
-| `install.installed.consistency` | `plugins/installed.json`은 `enabled` 누락, 두 번 설치한 package, 없는 `sidecars` 객체, 쓰는 version이 없는 sidecar, plugin 범위 밖의 쓰는 version, 어느 plugin도 지정하지 않은 sidecar를 거부한다. | both |
+| `install.installed.consistency` | `plugins/installed.json`은 `enabled` 누락, 두 번 설치한 package, 절대 폴더가 아닌 plugin이나 sidecar의 `path`, `{ version, path }`가 아닌 sidecar 항목, 없는 `sidecars` 객체, 쓰는 version이 없는 sidecar, plugin 범위 밖의 쓰는 version, 어느 plugin도 지정하지 않은 sidecar를 거부한다. | both |
+| `installed.document.lists-enabled-plugins` | `/installed-plugins.json`은 켜진 설치 plugin을 id 순서로 `id`, `package`, `version`과 함께 나열하고, 진단 build에서만 `diagnostics.json`의 compact 내용을 더하며, `installed.json`이 없으면 `{"plugins":[]}`다. | both |
+| `installed.document.reports-errors` | 잘못된 `diagnostics.json`이나 `installed.json`이면 `/installed-plugins.json`은 파일과 이유를 담은 `{"error":...}`다. | both |
+| `installed.modules.serve-installed-files` | 켜진 설치 plugin의 `/modules/<package>/<path>`는 기록된 `path` 안의 파일을 제공한다. 없는 파일이나 빈 segment, `.`, `..`가 있는 경로는 찾을 수 없다. 꺼진 plugin이나 다른 package는 애플리케이션 frontend가 제공한다. | both |
+| `installed.sidecars.resolve-installed-folders` | Host의 sidecar는 켜진 설치 plugin의 `plugin.json`이 지정한 것이며, 각각 sidecar 폴더의 기록된 `path`와 거기의 `sidecar.json`을 가진다. 설치 version이 없는 sidecar는 실패하고, 빈 설정에는 sidecar가 없다. | both |

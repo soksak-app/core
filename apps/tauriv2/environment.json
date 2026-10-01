@@ -1,11 +1,5 @@
 {
   "runtime": "runtime",
-  "plugins": [
-    "@soksak/plugin-shell",
-    "@soksak/plugin-browser",
-    "@soksak/plugin-files",
-    "@soksak/plugin-terminal"
-  ],
   "settings": {
     "terminal": {
       "cursor.shape": "block",

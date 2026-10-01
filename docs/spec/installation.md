@@ -2,7 +2,7 @@
 
 [한국어](installation.ko.md)
 
-These are the formats that plugin installation uses. The [command line `sok`](cli.md) validates them in both implementations, and the host contract cases `install.*` state each rule ([host contract](host-contract.md)). Every check rejects an unknown field and names the field that is wrong; fields are checked in a fixed order, so a file with several errors reports the same one in both implementations. A version part is at most 4294967295. How the hosts and the workbench install and load plugins is pending under [installable plugins](../plans/plugin-installation.md).
+These are the formats that plugin installation uses. The [command line `sok`](cli.md) validates them in both implementations, and the host contract cases `install.*` state each rule ([host contract](host-contract.md)). Every check rejects an unknown field and names the field that is wrong; fields are checked in a fixed order, so a file with several errors reports the same one in both implementations. A version part is at most 4294967295. [Serving installed plugins](#serving-installed-plugins) states how the hosts and the workbench load them.
 
 ## Versions and ranges
 
@@ -54,4 +54,17 @@ Installing a plugin for a core version and platform selects the newest plugin ve
 
 ## Installation layout
 
-Inside the configuration directory, plugin version `<version>` of `<id>` is extracted into `plugins/<id>/<version>`, and the platform asset of a sidecar version into `sidecars/<file name>/<version>/<platform>`. `plugins/installed.json` has `format` 1, `plugins` and `sidecars`. `plugins` maps each plugin id to `{ package, version, enabled, sidecars, previous? }`: the package name, the version in use, whether the plugin loads, the sidecar ranges of that version, and the version that rollback restores. A package appears once. `sidecars` maps each sidecar that an installed plugin names to the version in use, which satisfies the range of every installed plugin that names it; a sidecar that no installed plugin names is not listed.
+Inside the configuration directory, plugin version `<version>` of `<id>` is extracted into `plugins/<id>/<version>`, and the platform asset of a sidecar version into `sidecars/<file name>/<version>/<platform>`. `plugins/installed.json` has `format` 1, `plugins` and `sidecars`. `plugins` maps each plugin id to `{ package, version, path, enabled, sidecars, previous? }`: the package name, the version in use, the absolute folder that installation extracted that version into, whether the plugin loads, the sidecar ranges of that version, and the version that rollback restores. A package appears once. `sidecars` maps each sidecar that an installed plugin names to `{ version, path }`: the version in use, which satisfies the range of every installed plugin that names it, and the absolute folder that installation extracted its platform asset into; a sidecar that no installed plugin names is not listed. Installation records each `path` when it extracts the archive, and the hosts read files only from recorded paths.
+
+## Serving installed plugins
+
+Both hosts serve these paths from the configuration directory and read `plugins/installed.json` for each request, so a page that loads after a change sees it:
+
+| Path | Content |
+| --- | --- |
+| `/installed-plugins.json` | `{ "plugins": [{ id, package, version, diagnostics? }] }`: each enabled plugin of `installed.json`, sorted by id. In a diagnostic build `diagnostics` is the content of the plugin's `diagnostics.json` when its installed package holds one; a release build never sends it. A missing `installed.json` gives `{ "plugins": [] }`. When `installed.json` or a `diagnostics.json` cannot be read or checked, the document is `{ "error": "<message>" }` |
+| `/modules/<package>/<path>` | For the package of an enabled installed plugin, the file `<path>` inside the plugin's recorded `path`; a path with an empty, `.` or `..` segment, or a missing file, is not found. Other packages come from the application frontend |
+
+The workbench reads its plugin list from `/installed-plugins.json` and fails the load with the `error` text when the document has one.
+
+When a host starts, it reads the sidecars that the `plugin.json` of each enabled installed plugin names. A sidecar runs from the `path` that `installed.json` records for it, and its executable is the `executable` path of the `sidecar.json` in that folder. A plugin installed or enabled while the application runs is served to pages that load after the change, and its sidecars start after the application restarts.

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-2-3-3: 애플리케이션은 plugin과 sidecar를 담지 않는다. 두 host가 설정 폴더에 설치된 plugin을 `plugins/installed.json`이 기록한 폴더에서 제공하고 그 sidecar를 실행하며, workbench는 `/installed-plugins.json`을 읽고, `environment.json`은 plugin을 나열하지 않으며, `make install-plugins`가 check 설정을 준비한다.
+
 - R1-2-3-2: `sok plugin pack --diagnostics`가 진단 package를 쓰고, `make registry`가 build와 window check용으로 그것을 쓴다.
 
 - R1-2-3-1: Workspace plugin과 sidecar가 설치 필드를 선언하고, `make registry`가 `sok`으로 `target/registry`에 workspace registry를 만든다.

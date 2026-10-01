@@ -74,10 +74,6 @@ func Run(assets fs.FS, options Options) error {
 		return err
 	}
 	backgroundScript = string(background)
-	executable, err := os.Executable()
-	if err != nil {
-		return err
-	}
 	configDirectory := options.ConfigDir
 	if configDirectory == "" {
 		config, err := os.UserConfigDir()
@@ -97,7 +93,11 @@ func Run(assets fs.FS, options Options) error {
 	// WebKit 을 기준선으로 찍는다(V5-113). 아직 창이 없으므로 이 실행의 WebKit 은 없다.
 	ReapRecordedWebKit(configDirectory)
 	SnapshotBaseline()
-	sidecars, err := NewSidecars(frontend, filepath.Dir(executable), configDirectory)
+	declarations, err := InstalledSidecars(configDirectory)
+	if err != nil {
+		return fmt.Errorf("installed plugins: %w", err)
+	}
+	sidecars, err := NewSidecars(declarations, configDirectory)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func Run(assets fs.FS, options Options) error {
 	defer host.endpoint.Close()
 	app := application.New(application.Options{
 		Name: "soksak", Description: "soksak layout running in Wails v3",
-		Assets:     application.AssetOptions{Handler: application.BundledAssetFileServer(assets)},
+		Assets:     application.AssetOptions{Handler: application.BundledAssetFileServer(assets), Middleware: InstalledAssets(configDirectory)},
 		Services:   []application.Service{application.NewService(host)},
 		ShouldQuit: host.shouldQuit,
 		// Wails 의 기본 신호 처리기는 만들어지기만 하고 시작되지 않는다(v3.0.0-beta.16).

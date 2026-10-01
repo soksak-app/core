@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   EXPOSURE_ERRORS, actOn, createExpose, declarationMap, exposureEntries, matchesSchema, pagePackage,
-  mergeExposes, replyPayload, validateDiagnosticPlugins, validateDiagnostics, validateExposes, validateExposureFile,
+  mergeExposes, replyPayload, validateInstalledPlugins, validateDiagnostics, validateExposes, validateExposureFile,
   validateManifest,
 } from "../index.js";
 
@@ -276,9 +276,20 @@ test("diagnostic declarations extend a surface plugin once and are rejected othe
   assert.throws(() => validateDiagnostics(manifest, { module: "ui/probe-diagnostics.js", exposes: { commands: [{ ...inject, name: "other.inject" }] } }),
     /must be probe\.<name>/);
 
-  const manifests = new Map([["@fixture/probe", manifest]]);
-  assert.deepEqual(validateDiagnosticPlugins({}, manifests), {});
-  assert.deepEqual(validateDiagnosticPlugins({ "@fixture/probe": diagnostics }, manifests), { "@fixture/probe": diagnostics });
-  assert.throws(() => validateDiagnosticPlugins({ "@fixture/other": diagnostics }, manifests), /not a plugin of the environment/);
-  assert.throws(() => validateDiagnosticPlugins([], manifests), /expected an object/);
+});
+
+test("the installed plugin document lists plugins with their diagnostics and reports the host's error", () => {
+  const plugins = [
+    { id: "alpha", package: "plugin-alpha", version: "1.0.0" },
+    { id: "probe", package: "@fixture/probe", version: "0.1.0", diagnostics: { module: "ui/d.js", exposes: {} } },
+  ];
+  assert.equal(validateInstalledPlugins({ plugins }), plugins);
+  assert.deepEqual(validateInstalledPlugins({ plugins: [] }), []);
+  assert.throws(() => validateInstalledPlugins({ error: "plugins/installed.json: format must be 1" }),
+    /^Error: installed plugins: plugins\/installed.json: format must be 1$/);
+  assert.throws(() => validateInstalledPlugins({ plugins: [plugins[0], plugins[0]] }), /plugin alpha appears twice/);
+  assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[0], package: "Bad" }] }), /package must be a package name/);
+  assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[0], extra: 1 }] }), /unknown field extra/);
+  assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[1], diagnostics: [] }] }), /diagnostics must be an object/);
+  assert.throws(() => validateInstalledPlugins([]), /expected an object/);
 });

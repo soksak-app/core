@@ -13,7 +13,7 @@
     "fuzz": "pnpm -F soksak fuzz",
     "mutate": "pnpm -F soksak mutate",
     "breaks": "pnpm -F soksak breaks",
-    "example": "pnpm -F @soksak/browser dev"
+    "example": "make browser-example"
   },
   "license": "MIT",
   "author": "min-median-max",

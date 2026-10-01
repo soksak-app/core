@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"testing/fstest"
 	"time"
 	"unsafe"
 
@@ -43,13 +42,9 @@ func configuredEnvelope(t *testing.T, configuration *host.ImageConfigure, sequen
 	return body
 }
 
-// frontendForImages 는 플러그인 하나와 그 플러그인이 의존하는 사이드카 하나를 선언한 스테이징 결과다.
-func frontendForImages(sidecar string) fstest.MapFS {
-	return fstest.MapFS{
-		"environment.json":                          {Data: []byte(`{"plugins":["@fixture/plugin"]}`)},
-		"modules/@fixture/plugin/plugin.json":       {Data: []byte(`{"id":"plugin","sidecars":["` + imageSidecar + `"]}`)},
-		"modules/" + imageSidecar + "/sidecar.json": {Data: []byte(sidecar)},
-	}
+// declareImages 는 directory 에 설치된 사이드카 하나의 선언이다.
+func declareImages(directory, sidecar string) []host.SidecarDeclaration {
+	return []host.SidecarDeclaration{{Name: imageSidecar, Folder: directory, Data: []byte(sidecar)}}
 }
 
 // fakeImageOwner 는 받은 사이드카 이벤트를 기록하는 창이다.
@@ -97,7 +92,7 @@ func echoSidecarsForImages(t *testing.T) (*host.Sidecars, string) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(frontendForImages(`{"executable":"build/echo","protocol":1}`), directory, directory)
+	sidecars, err := host.NewSidecars(declareImages(directory, `{"executable":"echo","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}

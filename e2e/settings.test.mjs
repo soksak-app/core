@@ -97,7 +97,7 @@ for (const app of Object.values(APPS)) {
     await section(s, "plugins");
     const list = await s.until("core.settings-modal", (modal) => modal.plugin === null && modal.listed.length > 0,
       "the plugin list did not show");
-    assert.deepEqual(list.listed, ["shell", "browser", "files", "terminal"]);
+    assert.deepEqual(list.listed, ["browser", "files", "shell", "terminal"]);
     assert.equal(list.query, "");
     const rows = list.controls.filter((c) => c.name === "core.settings-modal.plugin");
     assert.deepEqual(rows.map((c) => c.key), list.listed.map((id) => `plugin:${id}`));
@@ -175,7 +175,7 @@ for (const app of Object.values(APPS)) {
     ]);
     const select = editor.controls.find((c) => c.key === `row:${made.id}:0`);
     assert.equal(select.value, three[0]);
-    assert.deepEqual(select.groups.map((g) => g.label), ["셸", "브라우저", "파일"]);
+    assert.deepEqual(select.groups.map((g) => g.label), ["브라우저", "파일", "셸"]);
     assert.equal(select.groups.flatMap((g) => g.values).length, 9);
 
     await press(s, "core.settings-modal.row-act", `down:${made.id}:0`);

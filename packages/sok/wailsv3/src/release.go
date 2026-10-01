@@ -175,6 +175,48 @@ func outputPath(dir, name string) (string, error) {
 	return filepath.Join(absolute, name), nil
 }
 
+// covers 는 files 의 경로 하나가 path 이거나 path 를 담은 폴더인지 알려 준다.
+func covers(listed []string, path string) bool {
+	return slices.ContainsFunc(listed, func(file string) bool {
+		return path == file || strings.HasPrefix(path, strings.TrimSuffix(file, "/")+"/")
+	})
+}
+
+// manifestModules 는 plugin.json 이 불러오는 module 과 그 이름이다: surface, section 마다의 module, state.
+func manifestModules(manifest map[string]any) [][2]string {
+	var modules [][2]string
+	add := func(what string, value any) {
+		if module, ok := value.(string); ok {
+			modules = append(modules, [2]string{what, module})
+		}
+	}
+	if surface, ok := manifest["surface"].(map[string]any); ok {
+		add("surface module", surface["module"])
+	}
+	if sections, ok := manifest["sections"].([]any); ok {
+		for _, raw := range sections {
+			section, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			what := "section module"
+			if id, ok := section["id"].(string); ok {
+				what = "section " + id + " module"
+			}
+			if orientations, ok := section["module"].(map[string]any); ok {
+				add(what, orientations["horizontal"])
+				add(what, orientations["vertical"])
+			} else {
+				add(what, section["module"])
+			}
+		}
+	}
+	if state, ok := manifest["state"].(map[string]any); ok {
+		add("state module", state["module"])
+	}
+	return modules
+}
+
 // diagnosticFiles 는 plugin 폴더의 diagnostics.json 과 그 module 경로다. diagnostics.json 이 없으면 비어 있다.
 // 두 파일은 files 에 나열하지 않는다(docs/spec/plugins.md).
 func diagnosticFiles(dir string, listed []string) ([]string, error) {
@@ -194,10 +236,8 @@ func diagnosticFiles(dir string, listed []string) ([]string, error) {
 		return nil, fmt.Errorf("diagnostics.json: module must be a JavaScript path inside the package")
 	}
 	for _, path := range []string{"diagnostics.json", module} {
-		for _, file := range listed {
-			if path == file || strings.HasPrefix(path, strings.TrimSuffix(file, "/")+"/") {
-				return nil, fmt.Errorf("package.json files: %s is diagnostic and must not be listed", path)
-			}
+		if covers(listed, path) {
+			return nil, fmt.Errorf("package.json files: %s is diagnostic and must not be listed", path)
 		}
 	}
 	return []string{"diagnostics.json", module}, nil
@@ -229,6 +269,11 @@ func runPack(dir, out string, diagnostics bool, stdout io.Writer) error {
 		return err
 	}
 	listed := listedFiles(pkg)
+	for _, module := range manifestModules(manifest) {
+		if !covers(listed, module[1]) {
+			return fmt.Errorf("plugin.json: %s %s must be listed in files", module[0], module[1])
+		}
+	}
 	extra, err := diagnosticFiles(dir, listed)
 	if err != nil {
 		return err

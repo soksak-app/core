@@ -18,11 +18,11 @@ make wailsv3-build tauriv2-build
 
 `native/darwin`은 `native/darwin/build/`에 `libsoksak-darwin.a`와 `soksak-darwin.pc`를 생성한다. Makefile은 이 디렉터리를 `PKG_CONFIG_PATH`에 추가하고, Wails와 Tauri는 pkg-config로 헤더와 링크 옵션을 찾는다. 캡처 코드가 macOS 14.0에서 추가된 ScreenCaptureKit API를 사용하므로 두 네이티브 애플리케이션의 최소 버전은 macOS 14.0이다. Makefile은 이 값을 Go에는 `CGO_CFLAGS`와 `-extldflags`로, Rust에는 `MACOSX_DEPLOYMENT_TARGET`으로 전달한다.
 
-`make registry`는 `target/registry`에 workspace registry를 만든다. Sidecar를 build하고, `apps/wailsv3/environment.json`이나 `apps/tauriv2/environment.json`이 나열한 plugin을 모두 진단 package(`--diagnostics`)로 pack하고, 그 `plugin.json`이 지정한 sidecar를 현재 플랫폼으로 release한 뒤, `scripts/workspace-packs.json`의 pack과 함께 registry 파일을 쓰고 `sok registry build`를 실행한다. 그다음 `sok registry use target/registry/index.json --config-dir DIR`와 `sok plugin install <id> --config-dir DIR`로 거기서 설치한다([command line](../spec/cli.ko.md#plugin-설치)).
+`make registry`는 `target/registry`에 workspace registry를 만든다. Sidecar를 build하고, `scripts/workspace-registry.json`이 선언한 plugin을 모두 진단 package(`--diagnostics`)로 pack하고, 그 `plugin.json`이 지정한 sidecar를 현재 플랫폼으로 release한 뒤, 그 선언의 pack과 함께 registry 파일을 쓰고 `sok registry build`를 실행한다. `make install-plugins CONFIG=DIR`은 그 registry를 만들고, `DIR`에 설치된 plugin을 지운 뒤 registry의 plugin을 모두 거기에 설치한다. Workspace plugin은 바뀌는 동안 version을 유지하므로, 같은 version을 다시 설치하면 이전 파일이 남기 때문이다. 그다음 `sok registry use target/registry/index.json --config-dir DIR`와 `sok plugin install <id> --config-dir DIR`로 거기서 설치한다([command line](../spec/cli.ko.md#plugin-설치)).
 
 브라우저 애플리케이션은 `pnpm example`로 실행하고 `http://localhost:8749/index.html`을 연다. 모든 패키지 테스트는 `pnpm test`로 실행한다.
 
-빌드 대상은 `native/darwin`, 워크벤치, 사이드카를 빌드한 뒤 각 애플리케이션에서 `soksak-stage src/frontend --executables <실행 파일 디렉터리>`를 실행한다. 이 도구는 워크벤치, 배치 라이브러리, 플러그인 API, `environment.json`에 적힌 플러그인, 애플리케이션의 `runtime/` 디렉터리를 생성된 `apps/<app>/src/frontend/`에 배치하고, 사이드카 실행 파일을 실행 파일 디렉터리에 복사한다. 디버그 대상은 `--diagnostics`를 더해 페이지 진단 모듈(`diagnostics.js`)을 배치하고, 릴리스 대상은 빈 모듈을 배치한다. 두 실행 파일 모두 빌드 시 프런트엔드를 포함한다. 실행 중인 프로세스에는 새 프런트엔드가 적용되지 않으므로 빌드 후 해당 앱을 다시 실행한다.
+빌드 대상은 `native/darwin`과 워크벤치를 빌드한 뒤 각 애플리케이션에서 `soksak-stage src/frontend`를 실행한다. 이 도구는 워크벤치, 배치 라이브러리, 플러그인 API, 애플리케이션의 `runtime/` 디렉터리를 생성된 `apps/<app>/src/frontend/`에 배치한다. Bundle에는 플러그인도 사이드카도 없다. 호스트가 설정 디렉터리에 설치된 플러그인을 제공한다([설치](../spec/installation.ko.md#설치된-plugin-제공)). 디버그 대상은 `--diagnostics`를 더해 페이지 진단 모듈(`diagnostics.js`)을 배치하고, 릴리스 대상은 빈 모듈을 배치한다. 두 실행 파일 모두 빌드 시 프런트엔드를 포함한다. 실행 중인 프로세스에는 새 프런트엔드가 적용되지 않으므로 빌드 후 해당 앱을 다시 실행한다.
 
 디버그 실행 파일은 `target/debug/soksak-wailsv3.app`와 `target/debug/soksak-tauriv2.app`다. 릴리스 빌드는 `make wailsv3-build-release tauriv2-build-release`를 사용하며 `target/release/soksak-wailsv3`와 `target/release/soksak-tauriv2`를 만든다. 두 release 실행 파일에는 기호 테이블이 없다. Wails 빌드는 `-s -w`로 링크하고, 루트 `Cargo.toml`의 release 프로필은 `strip = true`다. 그래서 `make release-check`는 기호를 벗겨도 남는 문자열(진단 메서드 이름과 녹화 클래스 이름 `SPCapture`)로 진단 코드를 찾는다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
 
@@ -30,7 +30,7 @@ make wailsv3-build tauriv2-build
 
 `make parity-check`로 구조 목록 게이트를 실행한다. 언어별 고정 루트 없이 Git에 보이는 JS/TS·Rust·Go·Objective-C·네이티브 헤더·HTML/CSS·셸 스크립트·계약 선언·빌드 매니페스트를 발견한다. 생성된 라이브러리 출력·Tauri 스키마는 명시적 제외 사유를 갖고 소스/출력 일치는 별도 빌드 검사로 유지한다. 연결 없는 구현·테스트, 빈 패턴, 중복 소유는 실패한다. 테스트 공유를 이유로 구현 중복 소유를 허용하지 않는다.
 
-`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`와 `make go-format-check`를 실행한다. `make go-format-check`는 `gofmt`가 바꿀 추적 Go file을 모두 나열하고 실패한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 68개, 구현 파일 370개, 테스트 파일 355개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
+`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`와 `make go-format-check`를 실행한다. `make go-format-check`는 `gofmt`가 바꿀 추적 Go file을 모두 나열하고 실패한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 68개, 구현 파일 372개, 테스트 파일 357개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
 
 `pnpm test`는 패키지 검사 전에 감사·체크리스트·명령 감독 자체 검사를 실행한다. Rust 터미널 패키지 두 개는 실제 Cargo 검사를 호출한다. 패키지 명령 검사는 Cargo를 실패 fixture로 교체해 호출·실패 전달을 검증하며 엔진 동작 검사로 세지 않는다.
 
@@ -52,9 +52,11 @@ release 검증은 정확한 번들 경로를 요구한다: `node scripts/check-r
 
 고정 사이드바 창 검사는 준비 중 실패한 경우를 포함해 연결 종료 전에 임시 카드 사이드바 명시 선택을 복원한다. 카드의 명시적 `off`는 플러그인 기본값보다 우선한다. 선언된 `core.card.sidebar.set` 명령에 `set: "inherit"`를 보내면 크기와 접힘 선택을 보존하며 명시 선택을 해제한다. 기존 일반 창의 프로젝트·설정을 교체하지 않고 관측하려면 `SOKSAK_APP=tauriv2 SOKSAK_CONFIG_DIR=<config-dir> pnpm -F @soksak/e2e verify:terminal-sidebar-current`를 실행한다. 활성 터미널 카드와 저장된 터미널 `card-right` 할당이 필요하며 일반·전체화면·복귀 표시를 녹화하고 기존 탭과 설정을 보존한다. 이 검사는 fixture를 만들거나 비활성 선택을 복구하지 않는다.
 
-각각 다른 터미널에서, 하네스가 읽는 설정 디렉터리(Node.js의 `os.tmpdir()`, macOS에서는 `$TMPDIR`)로 앱을 한 번씩 실행한다.
+하네스가 읽는 설정 디렉터리(Node.js의 `os.tmpdir()`, macOS에서는 `$TMPDIR`)에 workspace 플러그인을 설치한 뒤, 각각 다른 터미널에서 그 디렉터리로 앱을 한 번씩 실행한다.
 
 ```sh
+make install-plugins CONFIG="$TMPDIR/soksak-check-wailsv3"
+make install-plugins CONFIG="$TMPDIR/soksak-check-tauriv2"
 ./target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3 --config-dir "$TMPDIR/soksak-check-wailsv3"
 ./target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2 --config-dir "$TMPDIR/soksak-check-tauriv2"
 ```
@@ -120,7 +122,7 @@ pnpm -F @soksak/e2e run verify
 
 실패한 앱을 보존하면서 새 빌드를 검사할 때는 별도의 임시 설정 폴더를 사용한다. ScreenCaptureKit은 실행 경로로 Tauri 캡처 클라이언트를 식별할 수 있다. 같은 경로의 여러 프로세스가 동시에 캡처하면 replayd가 연결을 취소하는 현상이 관측되었다. 바이트가 동일한 실행 파일과 사이드카를 별도 검사 디렉터리에 복사하고 해시를 확인한 뒤, 하네스 연결 전에 `APPS.tauriv2.binary`를 해당 경로로 명시한다. 실행 파일 검사를 끄거나 보존 중인 앱을 재시작하지 않는다. 각 검사가 끝나면 검사 녹화를 제거한다.
 
-매 빌드 후 앱과 스테이징한 환경에 선언된 모든 사이드카를 복사하고 해시를 대조한다. 앱만 교체하면 같은 폴더의 사이드카 실행 파일은 이전 빌드로 남는다. 실행 중인 영속 서비스도 검사할 구현과 일치해야 하며, 명시적인 재연결·업데이트 검사에서만 이전 서비스를 유지한다. 빌드가 섞인 실행은 현재 구현을 검증할 수 없는 실행으로 기록하며 현재 코드의 통과나 실패로 판정하지 않는다.
+매 빌드 후 앱을 복사하고 해시를 대조하며, 복사본이 쓰는 설정 디렉터리에 `make install-plugins`로 플러그인을 다시 설치한다. 이전 플러그인과 사이드카 파일을 가진 설정은 현재 구현을 검사하지 못한다. 실행 중인 영속 서비스도 검사할 구현과 일치해야 하며, 명시적인 재연결·업데이트 검사에서만 이전 서비스를 유지한다. 빌드가 섞인 실행은 현재 구현을 검증할 수 없는 실행으로 기록하며 현재 코드의 통과나 실패로 판정하지 않는다.
 
 터미널 3개 숨김 검사는 먼저 네이티브 스냅샷 3개의 표시를 기다린 다음 라이브러리 진입 후 각 네이티브 프레임과 스냅샷을 비교한다. 숨겨진 표면은 둘 다 유지해야 한다. 프로젝트 복귀 검사는 복귀 명령 직후 현재 래스터 3개를 모두 검사한다. 추가 표시 대기로 불완전한 복귀를 감추면 안 된다.
 
@@ -171,7 +173,7 @@ make -C native/darwin test-activation
 
 `host.window.reload`는 페이지를 다시 읽기 전에 메인 WebContent process를 종료한다. 종료된 process가 남긴 페이지 호출은 host에서 계속 끝나고, 새 페이지가 `pageStarted`를 부르면 host는 이전 페이지가 전달한 `status.next` 요청을 끝낸다. Wails v3는 binding call을 요청 취소와 분리해(`context.WithoutCancel`) 실행하므로, 전달할 수 없는 답마다 `Unable to write json payload. Please report this to the Wails team! error=request has been stopped`를 한 줄씩 기록한다. window check에서는 reload마다 대체된 페이지의 `status.next` 전달 하나에 한 줄씩 세 줄이 나온다. 이 줄은 더 이상 없는 페이지에 대한 답이며, 잃어버린 답이 아니다.
 
-`soksak capture --window main --config-dir DIR`은 실행 중인 진단 빌드의 창을 포커스 없이 정지 PNG로 쓰고 경로를 출력한다. 개발 중 결과를 눈으로 확인할 때 쓴다. 확인한 뒤 출력된 `still-*` 디렉터리를 지우며, 수치 검사는 녹화 프레임을 쓴다.
+`sok capture --window main --config-dir DIR`은 실행 중인 진단 빌드의 창을 포커스 없이 정지 PNG로 쓰고 경로를 담은 결과를 출력한다. 개발 중 결과를 눈으로 확인할 때 쓴다. 확인한 뒤 출력된 `still-*` 디렉터리를 지우며, 수치 검사는 녹화 프레임을 쓴다.
 
 추적 `capture-still.test.mjs`는 정지 파일의 장치 픽셀 크기·투명도와 선언된 네이티브 좌표의 경계 픽셀을 확인한다. `png.test.mjs`는 PNG 투명도와 잘못된 좌표·디코딩 길이 검사를 소유한다. 이는 출력 무결성 검증이며 제스처 완전성·표시 시간은 계속 녹화 프레임으로 검증한다.
 

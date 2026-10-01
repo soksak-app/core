@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -896,22 +897,37 @@ func sortedNames(m map[string]string) []string {
 	return names
 }
 
-// InstalledPlugin 은 설치한 plugin 하나다.
+// InstalledPlugin 은 설치한 plugin 하나다. Path 는 설치가 쓰는 version 을 푼 절대 폴더다.
 type InstalledPlugin struct {
 	Package  string            `json:"package"`
 	Version  string            `json:"version"`
+	Path     string            `json:"path"`
 	Enabled  bool              `json:"enabled"`
 	Sidecars map[string]string `json:"sidecars"`
 	Previous string            `json:"previous,omitempty"`
 }
 
-// InstalledState 는 설치 상태 파일(`plugins/installed.json`)이다. plugin id 마다 package 이름, 쓰는 version, 켜짐
-// 여부, 그 version 의 sidecar 범위, 되돌릴 이전 version 을 담고, sidecar 마다 모든 plugin 이 함께 쓰는 version
-// 하나를 담는다.
+// InstalledSidecar 는 설치한 sidecar 하나다. Path 는 설치가 그 플랫폼 asset 을 푼 절대 폴더다.
+type InstalledSidecar struct {
+	Version string `json:"version"`
+	Path    string `json:"path"`
+}
+
+// InstalledState 는 설치 상태 파일(`plugins/installed.json`)이다. plugin id 마다 package 이름, 쓰는 version, 푼
+// 폴더, 켜짐 여부, 그 version 의 sidecar 범위, 되돌릴 이전 version 을 담고, sidecar 마다 모든 plugin 이 함께 쓰는
+// version 하나와 그 폴더를 담는다. 폴더는 설치가 기록하며 host 는 기록된 폴더만 읽는다.
 type InstalledState struct {
-	Format   int                        `json:"format"`
-	Plugins  map[string]InstalledPlugin `json:"plugins"`
-	Sidecars map[string]string          `json:"sidecars"`
+	Format   int                         `json:"format"`
+	Plugins  map[string]InstalledPlugin  `json:"plugins"`
+	Sidecars map[string]InstalledSidecar `json:"sidecars"`
+}
+
+// checkFolder 는 설치가 기록한 절대 폴더인지 검사한다.
+func checkFolder(where string, value any) error {
+	if path, ok := text(value); !ok || !filepath.IsAbs(path) {
+		return fmt.Errorf("%s: path must be an absolute folder", where)
+	}
+	return nil
 }
 
 // ValidateInstalled 는 설치 상태 파일을 검사한다.
@@ -940,7 +956,7 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := only(where, item, "enabled", "package", "previous", "sidecars", "version"); err != nil {
+		if err := only(where, item, "enabled", "package", "path", "previous", "sidecars", "version"); err != nil {
 			return nil, err
 		}
 		if _, ok := item["enabled"].(bool); !ok {
@@ -954,6 +970,9 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 			return nil, fmt.Errorf("%s: package %s is installed twice", where, name)
 		}
 		packages[name] = true
+		if err := checkFolder(where, item["path"]); err != nil {
+			return nil, err
+		}
 		if previous, ok := item["previous"]; ok {
 			if err := checkVersion(where+" previous", previous); err != nil {
 				return nil, err
@@ -978,7 +997,18 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 		}
 	}
 	for _, name := range sortedKeys(sidecars) {
-		if err := checkVersion(Installed+" sidecar "+name, sidecars[name]); err != nil {
+		where := Installed + " sidecar " + name
+		item, err := object(where, sidecars[name])
+		if err != nil {
+			return nil, err
+		}
+		if err := only(where, item, "path", "version"); err != nil {
+			return nil, err
+		}
+		if err := checkFolder(where, item["path"]); err != nil {
+			return nil, err
+		}
+		if err := checkVersion(where+" version", item["version"]); err != nil {
 			return nil, err
 		}
 		if !named[name] {
@@ -991,7 +1021,8 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 	for _, id := range sortedKeys(plugins) {
 		item := state.Plugins[id]
 		for _, name := range sortedNames(item.Sidecars) {
-			version, ok := state.Sidecars[name]
+			sidecar, ok := state.Sidecars[name]
+			version := sidecar.Version
 			if !ok {
 				return nil, fmt.Errorf("%s %s: sidecar %s has no version in use", Installed, id, name)
 			}
@@ -1085,7 +1116,7 @@ func ResolveInstall(index *Index, id, core, platform string, installed *Installe
 			if !hasAsset || !fits || revokedSidecar(index, name, item.Version) {
 				continue
 			}
-			if item.Version == installed.Sidecars[name] {
+			if item.Version == installed.Sidecars[name].Version {
 				kept = item
 			}
 			if best == nil || newer(item.Version, best.Version) {

@@ -1,4 +1,4 @@
-// 스테이징이 진단 모듈을 진단 빌드에만 넣는지 검사한다.
+// 스테이징이 진단 모듈을 진단 빌드에만 넣고, host 가 없는 애플리케이션에는 설치된 플러그인을 host 처럼 쓰는지 검사한다.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -20,7 +20,6 @@ function fixtureApp(t) {
   writeFileSync(join(app, "package.json"), JSON.stringify({ name: "fixture-app", private: true }));
   writeFileSync(join(app, "environment.json"), JSON.stringify({
     runtime: "runtime",
-    plugins: [],
     workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "x", title: "x" }] }] } },
     sidebars: { sets: [], links: [] },
   }));
@@ -52,24 +51,26 @@ test("unknown staging arguments are rejected", (t) => {
   assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--release"], { cwd: app, stdio: "pipe" }), /usage/);
 });
 
-/** diagnostics.json 을 가진 플러그인 하나를 둔 가짜 애플리케이션. files 는 플러그인이 배포하는 목록이다. */
-function diagnosticApp(t, files = ["plugin.json", "ui/probe.js"]) {
-  const app = fixtureApp(t);
-  const plugin = join(app, "node_modules/@fixture/probe");
-  mkdirSync(join(plugin, "ui"), { recursive: true });
-  writeFileSync(join(plugin, "package.json"), JSON.stringify({ name: "@fixture/probe", files }));
-  writeFileSync(join(plugin, "plugin.json"), JSON.stringify({
-    id: "probe", name: "Probe", description: "검사용 표면.", mark: "p", icon: "<path/>",
-    surface: { module: "ui/probe.js", composition: { kind: "dom" } },
-  }));
-  writeFileSync(join(plugin, "ui/probe.js"), "export function mount() {}\n");
-  writeFileSync(join(plugin, "diagnostics.json"), JSON.stringify(DIAGNOSTICS));
-  writeFileSync(join(plugin, "ui/probe-diagnostics.js"), "export function attach() {}\n");
-  const environment = JSON.parse(readFileSync(join(app, "environment.json"), "utf8"));
-  environment.plugins = ["@fixture/probe"];
-  environment.workspace.grid.cards[0].tabs = [{ plugin: "probe", title: "p" }];
-  writeFileSync(join(app, "environment.json"), JSON.stringify(environment));
-  return app;
+/** 켜진 플러그인 둘과 꺼진 플러그인 하나를 설치한 설정 디렉터리. probe 는 진단 선언을 담는다. */
+function installedConfiguration(t) {
+  const configuration = mkdtempSync(join(tmpdir(), "soksak-installed-"));
+  t.after(() => rmSync(configuration, { recursive: true, force: true }));
+  const write = (path, text) => {
+    mkdirSync(join(configuration, path, ".."), { recursive: true });
+    writeFileSync(join(configuration, path), text);
+  };
+  const folder = (id, version) => join(configuration, "plugins", id, version);
+  write("plugins/installed.json", JSON.stringify({ format: 1, plugins: {
+    probe: { package: "@fixture/probe", version: "0.1.0", path: folder("probe", "0.1.0"), enabled: true, sidecars: {} },
+    alpha: { package: "plugin-alpha", version: "1.0.0", path: folder("alpha", "1.0.0"), enabled: true, sidecars: {} },
+    off: { package: "plugin-off", version: "1.0.0", path: folder("off", "1.0.0"), enabled: false, sidecars: {} },
+  }, sidecars: {} }));
+  write("plugins/probe/0.1.0/plugin.json", "{}");
+  write("plugins/probe/0.1.0/ui/probe.js", "export function mount() {}\n");
+  write("plugins/probe/0.1.0/diagnostics.json", JSON.stringify(DIAGNOSTICS));
+  write("plugins/alpha/1.0.0/plugin.json", "{}");
+  write("plugins/off/1.0.0/plugin.json", "{}");
+  return configuration;
 }
 
 const DIAGNOSTICS = {
@@ -79,67 +80,26 @@ const DIAGNOSTICS = {
   }] },
 };
 
-test("plugin diagnostics are staged only with --diagnostics", (t) => {
-  const app = diagnosticApp(t);
-  stage(app);
-  assert.deepEqual(JSON.parse(readFileSync(join(app, "out/diagnostic-plugins.json"), "utf8")), {});
-  assert.equal(existsSync(join(app, "out/modules/@fixture/probe/ui/probe-diagnostics.js")), false);
-  assert.equal(existsSync(join(app, "out/modules/@fixture/probe/diagnostics.json")), false);
-  assert.equal(existsSync(join(app, "out/modules/@fixture/probe/ui/probe.js")), true);
-
-  stage(app, "--diagnostics");
-  assert.deepEqual(JSON.parse(readFileSync(join(app, "out/diagnostic-plugins.json"), "utf8")), { "@fixture/probe": DIAGNOSTICS });
-  assert.equal(existsSync(join(app, "out/modules/@fixture/probe/ui/probe-diagnostics.js")), true);
-});
-
-test("a plugin that publishes its diagnostic declarations or module is rejected", (t) => {
-  for (const listed of ["diagnostics.json", "ui"]) {
-    const app = diagnosticApp(t, ["plugin.json", "ui/probe.js", listed]);
-    assert.throws(() => execFileSync(process.execPath, [STAGE, "out"], { cwd: app, stdio: "pipe" }),
-      /is diagnostic and must not be listed in files/);
-  }
-});
-
-/** 섹션 하나를 가진 플러그인을 둔 가짜 애플리케이션. files 는 플러그인이 배포하는 목록이다. */
-function sectionApp(t, files, extra = {}) {
+test("an application without a host stages the enabled installed plugins as a host would serve them", (t) => {
   const app = fixtureApp(t);
-  const plugin = join(app, "node_modules/@fixture/side");
-  mkdirSync(join(plugin, "ui"), { recursive: true });
-  writeFileSync(join(plugin, "package.json"), JSON.stringify({ name: "@fixture/side", files }));
-  writeFileSync(join(plugin, "plugin.json"), JSON.stringify({
-    id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }], ...extra,
-  }));
-  writeFileSync(join(plugin, "ui/list.js"), "export function mount() {}\n");
-  const environment = JSON.parse(readFileSync(join(app, "environment.json"), "utf8"));
-  environment.plugins = ["@fixture/side"];
-  writeFileSync(join(app, "environment.json"), JSON.stringify(environment));
-  return app;
-}
-
-test("a section module is staged and a section module missing from files is rejected", (t) => {
-  const app = sectionApp(t, ["plugin.json", "ui"]);
-  stage(app);
-  assert.equal(existsSync(join(app, "out/modules/@fixture/side/ui/list.js")), true);
-  const missing = sectionApp(t, ["plugin.json"]);
-  assert.throws(() => execFileSync(process.execPath, [STAGE, "out"], { cwd: missing, stdio: "pipe" }),
-    /side\.list module ui\/list\.js must be listed in files/);
+  const configuration = installedConfiguration(t);
+  stage(app, "--installed", configuration);
+  assert.deepEqual(JSON.parse(readFileSync(join(app, "out/installed-plugins.json"), "utf8")), { plugins: [
+    { id: "alpha", package: "plugin-alpha", version: "1.0.0" },
+    { id: "probe", package: "@fixture/probe", version: "0.1.0" },
+  ] });
+  assert.equal(readFileSync(join(app, "out/modules/@fixture/probe/ui/probe.js"), "utf8"), "export function mount() {}\n");
+  assert.equal(existsSync(join(app, "out/modules/plugin-off")), false);
+  stage(app, "--installed", configuration, "--diagnostics");
+  assert.deepEqual(JSON.parse(readFileSync(join(app, "out/installed-plugins.json"), "utf8")).plugins[1].diagnostics, DIAGNOSTICS);
+  assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--installed", join(configuration, "missing")], { cwd: app, stdio: "pipe" }),
+    /installed\.json does not exist; install plugins with sok first/);
 });
 
-test("a state module missing from files is rejected", (t) => {
-  const missing = sectionApp(t, ["plugin.json", "ui/list.js"], { state: { module: "ui/state.js" } });
-  assert.throws(() => execFileSync(process.execPath, [STAGE, "out"], { cwd: missing, stdio: "pipe" }),
-    /side state module ui\/state\.js must be listed in files/);
-});
-
-test('both section orientation modules are staged and each must be published', (t) => {
-  const sections = [{id:'side.list',name:'List',module:{horizontal:'ui/horizontal.js',vertical:'ui/vertical.js'}}];
-  const app = sectionApp(t,['plugin.json','ui/horizontal.js','ui/vertical.js'],{sections});
-  const plugin = join(app,'node_modules/@fixture/side');
-  for(const mode of ['horizontal','vertical']) writeFileSync(join(plugin,`ui/${mode}.js`),`export function mount() {}\n`);
-  stage(app);
-  for(const mode of ['horizontal','vertical']) assert.equal(existsSync(join(app,`out/modules/@fixture/side/ui/${mode}.js`)),true);
-  for(const missing of ['horizontal','vertical']) {
-    writeFileSync(join(plugin,'package.json'),JSON.stringify({name:'@fixture/side',files:['plugin.json',`ui/${missing==='horizontal'?'vertical':'horizontal'}.js`]}));
-    assert.throws(()=>stage(app),new RegExp(`section side.list module ui/${missing}\\.js must be listed in files`));
-  }
+test("a native application stages no plugin and no installed plugin document", (t) => {
+  const app = fixtureApp(t);
+  stage(app, "--diagnostics");
+  assert.equal(existsSync(join(app, "out/installed-plugins.json")), false);
+  assert.equal(existsSync(join(app, "out/diagnostic-plugins.json")), false);
+  assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--executables", "bin"], { cwd: app, stdio: "pipe" }), /usage/);
 });

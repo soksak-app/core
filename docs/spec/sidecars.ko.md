@@ -16,15 +16,15 @@
 | `protocol` | 메시지 형식 버전. 현재 버전은 `1` |
 | `helpers` | 선택 필드. 헬퍼 패키지 목록. 각 항목은 `package`(패키지 이름)와 `executable`(그 패키지 안의 경로)을 가진다 |
 
-플러그인은 페이지가 사용하는 사이드카 패키지 이름을 `plugin.json`에 나열하고 각각을 자기 `package.json`의 의존성으로 선언한다([플러그인](plugins.ko.md)). `soksak-stage --executables <디렉터리>`는 각 `sidecar.json`을 스테이징된 프런트엔드에, 빌드된 각 실행 파일을 `<디렉터리>`에 복사한다.
+플러그인은 페이지가 사용하는 사이드카 패키지 이름을 `plugin.json`에 나열하고, 각각에 자기 `package.json` `soksak.sidecars`의 version 범위를 준다([설치](installation.ko.md#plugin-package)). 설치는 각 사이드카의 release asset을 설정 디렉터리에 푼다.
 
-호스트는 스테이징된 프런트엔드만 읽어 사이드카를 찾는다.
+호스트는 설치된 플러그인에서 사이드카를 찾는다([설치된 plugin 제공](installation.ko.md#설치된-plugin-제공)).
 
-1. `environment.json`이 플러그인 패키지를 나열한다.
-2. `modules/<플러그인>/plugin.json`이 각 플러그인의 사이드카 패키지를 나열한다.
-3. `modules/<사이드카>/sidecar.json`이 각 사이드카의 `executable` 경로와 `protocol`을 지정한다.
+1. `plugins/installed.json`이 켜진 플러그인과 그 기록된 폴더, 각 사이드카와 그 기록된 폴더를 나열한다.
+2. 각 플러그인 폴더의 `plugin.json`이 그 사이드카 패키지를 나열한다.
+3. 각 사이드카 폴더의 `sidecar.json`이 그 사이드카의 `executable` 경로와 `protocol`을 지정한다.
 
-호스트는 `<애플리케이션 실행 파일 디렉터리>/<executable의 파일 이름>`을 실행한다. `sidecar.json`이 없거나, `executable`이 패키지 안의 경로가 아니거나, `protocol`이 `1`이 아니면 시작 시 실패한다. 페이지가 사이드카에 처음 요청을 보내면 사이드카를 시작한다. 어떤 플러그인도 선언하지 않은 사이드카에 대한 요청은 `sidecar <name> is not declared by any plugin`으로 실패하고, 호스트가 사이드카를 종료한 뒤의 요청도 실패한다.
+호스트는 그 폴더 안의 `executable`을 실행한다. `installed.json`이나 `sidecar.json`이 없거나 틀렸거나, `executable`이 패키지 안의 경로가 아니거나, `protocol`이 `1`이 아니면 시작 시 실패한다. 페이지가 사이드카에 처음 요청을 보내면 사이드카를 시작한다. 어떤 플러그인도 선언하지 않은 사이드카에 대한 요청은 `sidecar <name> is not declared by any plugin`으로 실패하고, 호스트가 사이드카를 종료한 뒤의 요청도 실패한다.
 
 사이드카가 남기는 자식 프로세스는 호스트의 파이프와 프로세스 그룹을 상속하지 않는다. 호스트가 사이드카의 표준 입력을 닫으면 사이드카는 2초 안에 끝나야 한다. 그렇지 않으면 호스트는 최대 5초까지 기다린 뒤 강제 종료 신호를 보낸다.
 

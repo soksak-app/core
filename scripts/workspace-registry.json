@@ -1,7 +1,10 @@
-[
-  {
-    "name": "starter",
-    "description": "Plugins that the first run installs: browser, terminal and files.",
-    "plugins": ["browser", "terminal", "files"]
-  }
-]
+{
+  "plugins": ["@soksak/plugin-browser", "@soksak/plugin-files", "@soksak/plugin-shell", "@soksak/plugin-terminal"],
+  "packs": [
+    {
+      "name": "starter",
+      "description": "Plugins that the first run installs: browser, terminal and files.",
+      "plugins": ["browser", "terminal", "files"]
+    }
+  ]
+}

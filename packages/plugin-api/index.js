@@ -29,7 +29,8 @@ export const EXPOSURE = "exposure.json";
 /** 플러그인 패키지 루트의 진단 선언 파일. 진단 빌드에만 스테이징된다. */
 export const DIAGNOSTICS = "diagnostics.json";
 /** 스테이징 루트의 플러그인 진단 선언 목록. 진단 빌드가 아니면 {} 다. */
-export const DIAGNOSTIC_PLUGINS = "diagnostic-plugins.json";
+/** host 가 설정 폴더의 설치된 plugin 목록을 제공하는 문서(docs/spec/installation.md 의 설치된 plugin 제공). */
+export const INSTALLED_PLUGINS = "installed-plugins.json";
 
 /** 표면 문서가 등록하는 코어 항목의 이름 접두사. 다른 코어 항목은 메인 문서가 등록한다. */
 export const SURFACE_CORE = "core.surface.";
@@ -428,26 +429,20 @@ export function validateSidecar(sidecar) {
  * environment.json 하나를 검사한다. 형식이 틀리면 예외를 던지고, 맞으면 받은 값을 반환한다.
  *
  *   runtime    런타임 모듈 디렉터리. 애플리케이션 디렉터리 기준 경로이고 index.js 를 포함한다
- *   plugins    불러올 플러그인 패키지 이름. 순서가 `+` 메뉴 순서다
  *   workspace  새 스페이스의 배치. focus 는 포커스할 카드 id, grid 는 선과 카드
  *   sidebars   사이드바 세트(sets)와 자리 연결(links)의 기본값
  *
- * 플러그인 id 와 섹션 id 의 참조는 manifest 를 불러온 뒤 checkReferences 로 검사한다.
+ * 플러그인은 environment.json 이 아니라 설정 폴더에 설치된 목록에서 온다(validateInstalledPlugins). 플러그인 id 와
+ * 섹션 id 의 참조는 manifest 를 불러온 뒤 checkReferences 로 검사한다.
  */
 export function validateEnvironment(environment) {
   if (!isObject(environment)) throw new Error("environment.json: expected an object");
-  only("environment.json", environment, ["runtime", "plugins", "workspace", "sidebars", "settings", "sidecars"]);
+  only("environment.json", environment, ["runtime", "workspace", "sidebars", "settings", "sidecars"]);
   if (environment.sidecars !== undefined && typeof environment.sidecars !== "boolean") {
     throw new Error("environment.json: sidecars must be true or false");
   }
   if (!isText(environment.runtime) || environment.runtime.startsWith("/") || environment.runtime.split("/").includes("..")) {
     throw new Error("environment.json: runtime must be a directory inside the application");
-  }
-  if (!Array.isArray(environment.plugins) || environment.plugins.some((name) => typeof name !== "string" || !PACKAGE.test(name))) {
-    throw new Error("environment.json: plugins must be package names");
-  }
-  if (new Set(environment.plugins).size !== environment.plugins.length) {
-    throw new Error("environment.json: duplicate plugin package");
   }
   if (environment.settings !== undefined && !isObject(environment.settings)) {
     throw new Error("environment.json: settings must be an object");
@@ -795,17 +790,37 @@ export function mergeExposes(first, second) {
 }
 
 /**
- * 스테이징된 diagnostic-plugins.json 을 검사한다. 키는 environment 의 플러그인 패키지 이름이고
- * 값은 그 플러그인의 diagnostics.json 내용이다. manifests 는 패키지 이름에서 manifest 로의 Map 이다.
+ * host 가 제공한 /installed-plugins.json 을 검사하고 plugin 목록을 반환한다. 항목은 { id, package, version,
+ * diagnostics? } 이며 diagnostics 는 진단 build 에서만 온다. host 가 설치 상태를 읽지 못하면 문서는 { error } 이고,
+ * 그 텍스트로 예외를 던진다.
  */
-export function validateDiagnosticPlugins(file, manifests) {
-  if (!isObject(file)) throw new Error(`${DIAGNOSTIC_PLUGINS}: expected an object`);
-  for (const [name, diagnostics] of Object.entries(file)) {
-    const manifest = manifests.get(name);
-    if (!manifest) throw new Error(`${DIAGNOSTIC_PLUGINS}: ${name} is not a plugin of the environment`);
-    validateDiagnostics(manifest, diagnostics);
+export function validateInstalledPlugins(document) {
+  if (!isObject(document)) throw new Error(`${INSTALLED_PLUGINS}: expected an object`);
+  if (document.error !== undefined) {
+    if (!isText(document.error)) throw new Error(`${INSTALLED_PLUGINS}: error must be text`);
+    throw new Error(`installed plugins: ${document.error}`);
   }
-  return file;
+  only(INSTALLED_PLUGINS, document, ["plugins"]);
+  if (!Array.isArray(document.plugins)) throw new Error(`${INSTALLED_PLUGINS}: plugins must be an array`);
+  const ids = new Set();
+  const packages = new Set();
+  for (const plugin of document.plugins) {
+    if (!isObject(plugin)) throw new Error(`${INSTALLED_PLUGINS}: every plugin must be an object`);
+    only(`${INSTALLED_PLUGINS} plugin ${plugin.id}`, plugin, ["id", "package", "version", "diagnostics"]);
+    if (!isText(plugin.id) || !ID.test(plugin.id)) throw new Error(`${INSTALLED_PLUGINS}: plugin id ${plugin.id} is invalid`);
+    if (!isText(plugin.package) || !PACKAGE.test(plugin.package)) {
+      throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} package must be a package name`);
+    }
+    if (!isText(plugin.version)) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} version is required`);
+    if (plugin.diagnostics !== undefined && !isObject(plugin.diagnostics)) {
+      throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} diagnostics must be an object`);
+    }
+    if (ids.has(plugin.id)) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} appears twice`);
+    if (packages.has(plugin.package)) throw new Error(`${INSTALLED_PLUGINS}: package ${plugin.package} appears twice`);
+    ids.add(plugin.id);
+    packages.add(plugin.package);
+  }
+  return document.plugins;
 }
 
 /** 코어 선언 파일(exposure.json) 하나를 검사한다. 이름의 owner 는 core 다. */

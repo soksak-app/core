@@ -36,7 +36,7 @@ Common functionality belongs to the workbench or the native host so plugins do n
 | `sections` | no | Sidebar sections `{ "id": "<plugin id>.<name>", "name", "module" }`; `module` is a JavaScript path inside the package that draws the section, and the optional `fill: true` gives it the remaining sidebar height ([sections](#sections)) |
 | `sidebars` | no | Local default sets and optional four-side `card` assignments ([default sidebar sets](#default-sidebar-sets)) |
 | `preview` | no | `{ "ink": "--<token>" }`: the theme token name that colors the plugin's cards in library previews; requires `surface` |
-| `sidecars` | no | Package names of the [sidecars](sidecars.md) the page surface or the state module uses; requires `surface` or `state`. Each must be a dependency in the plugin's `package.json` |
+| `sidecars` | no | Package names of the [sidecars](sidecars.md) the page surface or the state module uses; requires `surface` or `state`. Each has a version range in the plugin's `package.json` `soksak.sidecars` |
 | `state` | no | `{ "module": "ui/state.js" }`: the [plugin state](#plugin-state) module that holds state outside a surface; requires `sections` |
 | `data` | no | `{ "<key>": { "schema": <schema>, "default": <value> } }`: [project data](#project-data) the state module stores for each project; requires `state` |
 | `background` | no | `{ "sidecar": "<declared sidecar>", "operation": "<operation name>", "settings"?: { "<request field>": "<declared setting>" } }`: keeps one declared sidecar session for each non-active tab without creating a native surface; the workbench puts the current value of each mapped plugin setting into the request field, and `settings` cannot name `operation` or an undeclared setting; requires `surface` and `sidecars` |
@@ -69,7 +69,7 @@ A set combines sections of any plugins in order and has a `layout` chosen when t
 
 A sidebar shows no set title or place label: its sections start at its top. A window sidebar ends in a status line that states its place; an internal card sidebar has no status line, and its sections fill down to its card footer. A folded section keeps only its header. A section takes the height of its content, except that open sections declared with `fill: true` share the sidebar height left after the other sections and scroll their content inside it; a folded fill section gives that room to the other fill sections. The height is declared because a virtual list, such as the file tree, has no content height from which the workbench could tell that it needs room, while a short list that stretched would show empty space. Section headers have the height of a card header and the status line has the height of a card footer, so their rules line up with those of the neighbouring cards. A section states an empty list in words, such as 기록 없음.
 
-The sidebar is identified by the id of the card that holds it: `left`, `right`, or `cardId:side` for an internal card sidebar (`top`, `bottom`, `left`, `right`). Folding a section header runs `core.sidebar.section.fold` and choosing a tab runs `core.sidebar.section.select`, both with `{sidebar, section}`; status `core.sidebars` reports every drawn sidebar with its set, layout, selected tab, and each section's fold and mount state. A section module is a file listed in the package's `files`, so release staging copies it; staging fails when a section module is not listed.
+The sidebar is identified by the id of the card that holds it: `left`, `right`, or `cardId:side` for an internal card sidebar (`top`, `bottom`, `left`, `right`). Folding a section header runs `core.sidebar.section.fold` and choosing a tab runs `core.sidebar.section.select`, both with `{sidebar, section}`; status `core.sidebars` reports every drawn sidebar with its set, layout, selected tab, and each section's fold and mount state. A section module is a file listed in the package's `files`, so the plugin package holds it; `sok plugin pack` fails when a section module is not listed.
 
 An open fill section in a vertical list retains its intrinsic header and body minimum height. When the sidebar is smaller, the whole set scrolls rather than shrinking a section to zero height. A plugin using a virtual list declares its minimum visible row height. The file tree reserves a 28-point toolbar and at least one 20-point row. This does not increase the card content residual or change saved sidebar sizes.
 
@@ -82,7 +82,7 @@ A plugin without a surface, or with state that no single tab owns, declares a `s
 - `sidecar`: `{send(body), on(fn), onFailure(fn)}` for the plugin's only declared sidecar; `onFailure` receives the reason of each [sidecar failure](sidecars.md#failure) of the session. The session identifier is `state:<plugin id>:<project id>`, so the host gives the sidecar the project directory as `root` ([sidecars](sidecars.md#messages)).
 - `data.get(key)` and `data.set(key, value)`: the plugin's [project data](#project-data).
 
-The state module is a file listed in the package's `files`; staging fails when it is not listed. A mount or dispose failure is reported as a page error.
+The state module is a file listed in the package's `files`; `sok plugin pack` fails when it is not listed. A mount or dispose failure is reported as a page error.
 
 ## Project data
 
@@ -137,34 +137,32 @@ The browser back, forward, and reload buttons draw `chevron-left`, `chevron-righ
 | Field | Meaning |
 | --- | --- |
 | `runtime` | Directory inside the application that contains the runtime module `index.js` |
-| `plugins` | Plugin package names. Each must be a dependency of the application package. The order is the add-menu order |
 | `workspace.grid` | Grid lines and cards of a new space. A card with `tabs` lists `{ plugin, title }` entries. An optional card `width` is a finite positive number of points; the left and right fixed sidebar cards start at that width and use `sidebarWidth` when it is omitted |
 | `workspace.focus` | Card focused in a new space; it must have tabs |
 | `sidebars.sets` | Optional explicit override of plugin defaults: section sets `{id, title, sections, layout}`; `layout` is `list` or `tabs` |
-| `sidecars` | Optional. `false` states that the runtime cannot run [sidecars](sidecars.md), as in the browser example; such an environment cannot list a plugin whose `state` module uses sidecars. The default is `true` |
+| `sidecars` | Optional. `false` states that the runtime cannot run [sidecars](sidecars.md), as in the browser example; the load fails when an installed plugin's `state` module uses sidecars in such an environment. The default is `true` |
 | `sidebars.links` | Default sidebar choices: general left/right links, four card-side links, and window-left/window-right links. Plugin left/right forms, null sets and rail links are rejected. |
 
-The workbench loads `environment.json` and every listed `plugin.json` before it reads settings or builds a space. A tab or card-side link that names a plugin without a surface, a window link that names an unregistered plugin, a set that names an unknown section, or a plugin whose state module uses sidecars in an environment with `sidecars: false`, fails the load before any registration. A plugin surface that declares sidecars may be listed there, because the workbench does not mount such a surface without a host ([runtime module](#runtime-module)). Saved spaces are not environment files; opening rejects unknown plugin tabs and invalid or obsolete window sidebar state ([projects](projects.md#persistence)). Stored sidebar sets and links are settings and pass the same sidebars validation as `environment.json`; a stored set that names an unregistered section, or a card-side link that names a plugin without a surface or a window link that names an unregistered plugin, fails the settings load with an error ([settings window](settings.md#stored-sets-and-links)).
+The workbench loads `environment.json`, the [installed plugins](installation.md#serving-installed-plugins) in the order of their ids, which is the add-menu order, and each of their `plugin.json` files before it reads settings or builds a space. A tab or card-side link that names a plugin without a surface, a window link that names an unregistered plugin, a set that names an unknown section, or a plugin whose state module uses sidecars in an environment with `sidecars: false`, fails the load before any registration. A plugin surface that declares sidecars may be listed there, because the workbench does not mount such a surface without a host ([runtime module](#runtime-module)). Saved spaces are not environment files; opening rejects unknown plugin tabs and invalid or obsolete window sidebar state ([projects](projects.md#persistence)). Stored sidebar sets and links are settings and pass the same sidebars validation as `environment.json`; a stored set that names an unregistered section, or a card-side link that names a plugin without a surface or a window link that names an unregistered plugin, fails the settings load with an error ([settings window](settings.md#stored-sets-and-links)).
 
 ## Staged layout
 
-`soksak-stage <output> [--executables <dir>] [--diagnostics]` runs in an application directory and resolves packages through Node module resolution. It copies files without changing them:
+`soksak-stage <output> [--diagnostics] [--installed <configuration directory>]` runs in an application directory and resolves packages through Node module resolution. It copies files without changing them:
 
 | Path | Source |
 | --- | --- |
 | `/` | `files` of `@soksak/workbench` |
-| `/modules/<package>/` | `files` of `soksak`, `@soksak/plugin-api`, and each listed plugin |
+| `/modules/<package>/` | `files` of `soksak` and `@soksak/plugin-api` |
 | `/runtime/` | The application's `runtime` directory |
 | `/environment.json` | The application's `environment.json` |
-| `/modules/<sidecar>/sidecar.json` | `sidecar.json` of each sidecar package listed in a plugin's `sidecars` |
 | `/diagnostics.js` | With `--diagnostics`, the workbench's `observe.js` (the page diagnostic methods); otherwise the workbench's empty module `release-diagnostics.js` |
 | `/transcript.js` | With `--diagnostics`, the workbench's `transcript.js` (the call recorder of the diagnostic module); otherwise absent |
-| `/diagnostic-plugins.json` | With `--diagnostics`, an object that maps each listed plugin package with a `diagnostics.json` to that file's content; otherwise `{}` |
-| `/modules/<package>/<module>` | With `--diagnostics`, the `module` file named by the plugin's `diagnostics.json`; otherwise absent |
+
+An application has no plugins in its bundle: the host serves the plugins installed in the configuration directory ([serving installed plugins](installation.md#serving-installed-plugins)). An application without a host, the browser example, passes `--installed <configuration directory>`, and the tool then writes the documents a host would serve from that directory: `/installed-plugins.json` and the files of each enabled installed plugin at `/modules/<package>/`, with `diagnostics` only under `--diagnostics`.
 
 Every file imported by published files must be listed in the package's `files` array; this is validated by `packages/workbench/test/published-imports.test.mjs`.
 
-With `--executables <dir>`, the tool also copies each sidecar's built `executable` file into `<dir>` under its file name and fails when the file is not built. The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` run `sidecars-debug` and the release build targets run `sidecars-release`; those targets build the sidecar packages the applications declare and the helpers those sidecars declare, in that profile. They then stage into `apps/<app>/src/frontend` with `--executables` set to the directory of the application executable (`target/debug` or `target/release`). The debug targets add `--diagnostics`; release builds contain no page or plugin diagnostic code. `make release-check` fails when a staged release frontend has a non-empty `/diagnostic-plugins.json`, contains a plugin diagnostic module, or contains a name declared in a plugin's `diagnostics.json`.
+The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` add `--diagnostics`; release builds contain no page diagnostic code, and plugin diagnostic code reaches only configurations that install [diagnostic packages](cli.md#packages-releases-and-the-registry). `make release-check` fails when a staged release frontend contains `/transcript.js` or a page diagnostic module.
 
 Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/runtime`, and `@soksak/workbench/`.
 

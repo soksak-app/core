@@ -16,15 +16,15 @@ A sidecar is a package in `sidecars/<name>` with a `sidecar.json` file. The side
 | `protocol` | Message format version. The current version is `1` |
 | `helpers` | Optional array of helper packages. Each item has `package` (package name) and `executable` (path inside that package) |
 
-A plugin lists the sidecar package names its page uses in `plugin.json` and declares each one as a dependency in its `package.json` ([plugins](plugins.md)). `soksak-stage --executables <dir>` copies each `sidecar.json` into the staged frontend and each built executable into `<dir>`.
+A plugin lists the sidecar package names its page uses in `plugin.json` and gives each one a version range in its `package.json` `soksak.sidecars` ([installation](installation.md#plugin-package)). Installation extracts each sidecar's release asset into the configuration directory.
 
-The host reads only the staged frontend to resolve sidecars:
+The host resolves sidecars from the installed plugins ([serving installed plugins](installation.md#serving-installed-plugins)):
 
-1. `environment.json` lists the plugin packages.
-2. `modules/<plugin>/plugin.json` lists the sidecar packages of each plugin.
-3. `modules/<sidecar>/sidecar.json` gives the `executable` path and `protocol` of each sidecar.
+1. `plugins/installed.json` lists the enabled plugins with their recorded folders and each sidecar with its recorded folder.
+2. The `plugin.json` in each plugin folder lists its sidecar packages.
+3. The `sidecar.json` in each sidecar folder gives the `executable` path and `protocol` of the sidecar.
 
-The host runs `<application executable directory>/<file name of executable>`. It fails at startup when a `sidecar.json` is missing, its `executable` is not a path inside the package, or its `protocol` is not `1`. It starts a sidecar when a page first sends to it. A request for a sidecar that no plugin declares fails with `sidecar <name> is not declared by any plugin`; a request after the host stops its sidecars also fails.
+The host runs the `executable` inside that folder. It fails at startup when `installed.json` or a `sidecar.json` is missing or invalid, its `executable` is not a path inside the package, or its `protocol` is not `1`. It starts a sidecar when a page first sends to it. A request for a sidecar that no plugin declares fails with `sidecar <name> is not declared by any plugin`; a request after the host stops its sidecars also fails.
 
 Child processes spawned by a sidecar do not inherit the host's pipes or process group. When the host closes the sidecar's standard input, the sidecar must end within 2 seconds; if it does not, the host waits up to 5 seconds total before sending a force-kill signal.
 

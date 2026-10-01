@@ -8,11 +8,7 @@
     "test": "node --test test/"
   },
   "dependencies": {
-    "@soksak/workbench": "workspace:*",
-    "@soksak/plugin-browser": "workspace:*",
-    "@soksak/plugin-files": "workspace:*",
-    "@soksak/plugin-shell": "workspace:*",
-    "@soksak/plugin-terminal": "workspace:*"
+    "@soksak/workbench": "workspace:*"
   },
   "devDependencies": {
     "@soksak/plugin-api": "workspace:*"

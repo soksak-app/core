@@ -1,11 +1,10 @@
 // release 번들에 진단 코드가 없는지 검사한다.
 //
-// 진단 코드(호스트의 진단 메서드, 창 녹화, 페이지 진단 모듈, 플러그인의 diagnostics.json 선언과
-// 모듈)는 진단 빌드에만 들어간다. 이 검사는 지정한 번들의 Contents/MacOS 에 있는 모든 실행 파일을
-// 읽는다. 두 애플리케이션은 프런트엔드를 압축 없이 실행 파일에 넣으므로, 워크벤치가 배포하는 모든
-// 파일과 release 페이지 진단 모듈이 실행 파일에 원문 그대로 있어야 프런트엔드를 검사할 수 있다.
-// 하나라도 없으면 프런트엔드를 읽을 수 없다는 오류를 낸다. 워크벤치와 플러그인은 애플리케이션
-// package.json 의 의존성으로 찾는다.
+// 진단 코드(호스트의 진단 메서드, 창 녹화, 페이지 진단 모듈)는 진단 빌드에만 들어간다. 이 검사는 지정한
+// 번들의 Contents/MacOS 에 있는 모든 실행 파일을 읽는다. 두 애플리케이션은 프런트엔드를 압축 없이 실행 파일에
+// 넣으므로, 워크벤치가 배포하는 모든 파일과 release 페이지 진단 모듈이 실행 파일에 원문 그대로 있어야
+// 프런트엔드를 검사할 수 있다. 하나라도 없으면 프런트엔드를 읽을 수 없다는 오류를 낸다. 워크벤치는 애플리케이션
+// package.json 의 의존성으로 찾는다. 플러그인과 사이드카는 번들에 없고 설정 폴더에 설치된다(docs/spec/installation.md).
 // `make release-check` 가 release 빌드를 먼저 실행한다.
 //
 //   node scripts/check-release.mjs --wailsv3-bundle PATH --tauriv2-bundle PATH
@@ -38,22 +37,12 @@ const latin1 = (bytes) => Buffer.from(bytes).toString("latin1");
 /**
  * 애플리케이션 실행 파일에 포함된 프런트엔드를 검사한다. text 는 실행 파일을 latin1 로 읽은 내용이다.
  * published 는 워크벤치가 배포하는 파일 {path, bytes}, releaseModule 은 release 페이지 진단 모듈의
- * 바이트, plugins 는 {package, entries, module} 이다. entries 는 진단 항목 이름, module 은 진단 모듈
- * 원본 바이트다. 배포 파일이나 release 모듈이 원문으로 없으면 프런트엔드를 읽을 수 없으므로 그 오류만 낸다.
+ * 바이트다. 배포 파일이나 release 모듈이 원문으로 없으면 프런트엔드를 읽을 수 없다는 오류를 낸다.
  */
-export function auditFrontend(errors, label, text, { published, releaseModule, plugins }) {
+export function auditFrontend(errors, label, text, { published, releaseModule }) {
   const missing = published.filter((file) => !text.includes(latin1(file.bytes))).map((file) => file.path);
   if (!text.includes(latin1(releaseModule))) missing.push("release page diagnostics module");
-  if (missing.length) {
-    errors.push(`${label}: does not embed a readable frontend; missing ${missing.join(", ")}`);
-    return;
-  }
-  for (const plugin of plugins) {
-    for (const entry of plugin.entries) {
-      if (text.includes(`"${entry}"`)) errors.push(`${label}: contains the diagnostic entry ${entry}`);
-    }
-    if (text.includes(latin1(plugin.module))) errors.push(`${label}: contains the diagnostic module of ${plugin.package}`);
-  }
+  if (missing.length) errors.push(`${label}: does not embed a readable frontend; missing ${missing.join(", ")}`);
 }
 
 /** from 패키지의 의존성으로 name 패키지의 디렉터리를 찾는다. */
@@ -68,25 +57,13 @@ function* expand(dir, path) {
   else for (const name of readdirSync(full)) yield* expand(dir, join(path, name));
 }
 
-/** 애플리케이션의 워크벤치 배포 파일, release 페이지 진단 모듈, 진단 선언을 가진 플러그인. */
+/** 애플리케이션의 워크벤치 배포 파일과 release 페이지 진단 모듈. */
 function applicationSources(app) {
   const appDir = join(ROOT, "apps", app);
   const workbench = packageDir(appDir, "@soksak/workbench");
   const { files } = JSON.parse(readFileSync(join(workbench, "package.json"), "utf8"));
   const published = files.flatMap((file) => [...expand(workbench, file)]).map((path) => ({ path, bytes: readFileSync(join(workbench, path)) }));
-  const environment = JSON.parse(readFileSync(join(appDir, "environment.json"), "utf8"));
-  const plugins = environment.plugins.flatMap((name) => {
-    const dir = packageDir(appDir, name);
-    const path = join(dir, "diagnostics.json");
-    if (!existsSync(path)) return [];
-    const diagnostics = JSON.parse(readFileSync(path, "utf8"));
-    return [{
-      package: name,
-      entries: Object.values(diagnostics.exposes).flat().map((entry) => entry.name),
-      module: readFileSync(join(dir, diagnostics.module)),
-    }];
-  });
-  return { published, releaseModule: readFileSync(join(workbench, "release-diagnostics.js")), plugins };
+  return { published, releaseModule: readFileSync(join(workbench, "release-diagnostics.js")) };
 }
 
 // CLI 로 직접 실행될 때만 검사를 수행한다.
@@ -106,7 +83,7 @@ if (import.meta.main) {
   const errors = [];
 
   for (const app of APPS) {
-    // 애플리케이션과 사이드카는 번들의 Contents/MacOS 에 있다(docs/spec/hosts.md).
+    // 애플리케이션과 command line sok 은 번들의 Contents/MacOS 에 있다(docs/spec/hosts.md).
     const executables = join(bundles.get(app), "Contents", "MacOS");
     const executable = join(executables, `soksak-${app}`);
     if (!existsSync(executable)) {

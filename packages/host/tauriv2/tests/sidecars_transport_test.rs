@@ -1,7 +1,7 @@
 //! 사이드카 지속 전송 테스트. 가짜 창과 서비스 엔드포인트 하네스를 사용한다.
 
-use std::collections::HashMap;
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
@@ -12,7 +12,7 @@ use std::os::unix::net::UnixListener;
 use std::process::Command;
 
 use serde_json::value::RawValue;
-use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, Sidecars};
+use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
 
 #[derive(Clone)]
 struct FakeOwner {
@@ -53,23 +53,23 @@ fn raw(text: &str) -> Box<RawValue> {
     RawValue::from_string(text.into()).unwrap()
 }
 
-type Files = HashMap<&'static str, String>;
+type Files = Vec<(&'static str, String)>;
 
+/// 사이드카 @fixture/sidecar-echo 하나와 그 sidecar.json 내용.
 fn files(sidecar: &str) -> Files {
-    HashMap::from([
-        (
-            "environment.json",
-            r#"{"plugins":["@fixture/plugin"]}"#.to_string(),
-        ),
-        (
-            "modules/@fixture/plugin/plugin.json",
-            r#"{"sidecars":["@fixture/sidecar-echo"]}"#.to_string(),
-        ),
-        (
-            "modules/@fixture/sidecar-echo/sidecar.json",
-            sidecar.to_string(),
-        ),
-    ])
+    vec![("@fixture/sidecar-echo", sidecar.to_string())]
+}
+
+/// folder 에 설치된 사이드카들의 선언.
+fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
+    files
+        .iter()
+        .map(|(name, data)| SidecarDeclaration {
+            name: name.to_string(),
+            folder: folder.to_path_buf(),
+            data: data.as_bytes().to_vec(),
+        })
+        .collect()
 }
 
 const ECHO: &str = "@fixture/sidecar-echo";
@@ -134,17 +134,14 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
         }
     });
 
-    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
-    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let first = Sidecars::new(
-        &read,
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();
     let second = Sidecars::new(
-        &read,
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();
@@ -252,17 +249,14 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
         }
     });
 
-    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
-    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let first = Sidecars::new(
-        &read,
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();
     let second = Sidecars::new(
-        &read,
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();
@@ -393,11 +387,9 @@ fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_end
         .unwrap();
     });
 
-    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
-    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
-        &read,
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();
@@ -446,11 +438,9 @@ fn persistent_transport_rejects_a_failed_hello() {
         .unwrap();
     });
 
-    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
-    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
-        &read,
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();
@@ -504,11 +494,9 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     )
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
-    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
-        &read,
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();
@@ -577,11 +565,9 @@ fn persistent_transport_reports_live_but_unreachable_endpoint_without_replacemen
     )
     .unwrap();
     let original = std::fs::read(&endpoint_path).unwrap();
-    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
-    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
-        &read,
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();
@@ -661,11 +647,9 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
         writeln!(stream, "{}", shutdown_reply).unwrap();
     });
 
-    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
-    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
-        &read,
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();
@@ -736,11 +720,9 @@ fn persistent_retain_sends_layout_and_known_surfaces() {
         }
     });
 
-    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
-    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
-        &read,
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();
@@ -780,11 +762,9 @@ fn persistent_retain_sends_layout_and_known_surfaces() {
 fn persistent_retain_skips_a_service_without_endpoint() {
     let executable_directory = tempfile::tempdir().unwrap();
     let config_directory = tempfile::tempdir().unwrap();
-    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
-    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::<FakeOwner>::new(
-        &read,
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();
@@ -855,11 +835,9 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
         }
     });
 
-    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
-    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
-        &read,
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();
@@ -933,11 +911,9 @@ fn persistent_transport_reports_a_failed_revive_to_the_owner() {
         drop(listener);
     });
 
-    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
-    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
-        &read,
-        executable_directory.path().to_path_buf(),
+        &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();

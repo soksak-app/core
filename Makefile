@@ -15,9 +15,22 @@ boundaries:
 
 # 창 검사가 엔드포인트의 선언된 항목과 네이티브 입력만 쓰는지 검사한다.
 # 스테이징한 브라우저 예제에서 프로젝트를 열고 페이지 오류가 없는지 headless Chrome 으로 검사한다.
-browser-example-check:
-	@pnpm -F @soksak/browser frontend
+browser-example-check: browser-frontend
 	@pnpm -F @soksak/browser check
+
+# 브라우저 예제는 host 가 없으므로 BROWSER_CONFIG 에 BROWSER_PLUGINS 를 설치하고, 스테이징이 그 설치를 host 처럼
+# 제공한다(docs/spec/plugins.md 의 스테이징 배치).
+BROWSER_CONFIG = target/browser-config
+BROWSER_PLUGINS = shell browser
+
+browser-frontend: registry
+	@rm -rf $(BROWSER_CONFIG)
+	@target/debug/sok registry use $(REGISTRY)/index.json --config-dir $(BROWSER_CONFIG)
+	@for id in $(BROWSER_PLUGINS); do target/debug/sok plugin install $$id --config-dir $(BROWSER_CONFIG) || exit 1; done
+	@pnpm -F @soksak/browser exec soksak-stage build --installed $(CURDIR)/$(BROWSER_CONFIG)
+
+browser-example: browser-frontend
+	@python3 -m http.server 8749 -d apps/browser/build
 
 e2e-check:
 	@node scripts/check-e2e.mjs
@@ -138,7 +151,7 @@ verify: prepare docs-check exposure-check parity-check host-parity-check termina
 # 각 앱은 debug 와 release 두 프로필로 빌드한다. release 는 각 도구의 표준 축소
 # 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다. debug 는 진단 빌드(Go 태그·cargo
 # 기능 diagnostics)이고 release 는 진단 메서드를 포함하지 않는다.
-.PHONY: native-darwin sidecars-debug sidecars-release registry frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check go-format-check \
+.PHONY: native-darwin sidecars-debug sidecars-release registry install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check go-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         examples-verify examples-size
@@ -173,7 +186,9 @@ WAILS_RELEASE = $(WAILS_RELEASE_BUNDLE)/Contents/MacOS/soksak-wailsv3
 # 번들의 Info.plist 와 Dock 아이콘을 쓴다. 첫 인자는 번들, 둘째 인자는 애플리케이션이다. 앱 이름은
 # Info.plist 의 CFBundleDisplayName 이 정한다(지원 언어는 같은 plist 의 CFBundleLocalizations 선언).
 # 이름을 언어마다 다르게 주게 되는 날에는 그 언어의 .lproj/InfoPlist.strings 를 그때 다시 둔다.
-bundle-info = mkdir -p $(1)/Contents/MacOS $(1)/Contents/Resources \
+# 번들의 Contents 는 build 마다 새로 만든다. 이전 build 가 넣은 파일(bundle 에 더 이상 넣지 않는 sidecar 등)이
+# 남으면 bundle 이 지금의 build 와 달라지기 때문이다.
+bundle-info = rm -rf $(1)/Contents && mkdir -p $(1)/Contents/MacOS $(1)/Contents/Resources \
 	&& cp apps/$(2)/platform/darwin/Info.plist $(1)/Contents/Info.plist \
 	&& cp apps/$(2)/platform/darwin/AppIcon.icns $(1)/Contents/Resources/AppIcon.icns
 # 번들 안의 실행 파일과 Info.plist 를 ad hoc 서명으로 봉인하고 LaunchServices 에 다시 등록한다. Dock 은
@@ -202,7 +217,7 @@ sidecars-release:
 	@$(GO_ENV) SOKSAK_PROFILE=release SOKSAK_GO_FLAGS="-trimpath -ldflags=-s -ldflags=-w" \
 		SOKSAK_CARGO_FLAGS=--release pnpm $(SIDECAR_PACKAGES) run build
 
-# 워크스페이스 registry. environment.json 의 plugin 을 진단 package 로 pack 하고 그 sidecar 를 현재 플랫폼으로
+# 워크스페이스 registry. 워크스페이스의 plugin 을 진단 package 로 pack 하고 그 sidecar 를 현재 플랫폼으로
 # release 해 target/registry 에 index.json 을 만든다(docs/operations/examples.md). 진단 build 와 window check 가
 # 여기서 설치한다.
 REGISTRY = target/registry
@@ -211,19 +226,30 @@ registry: sidecars-debug
 	@cargo build -p soksak-sok-tauriv2
 	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY) --diagnostics
 
-# 프런트엔드와 사이드카 실행 파일을 배치한다. 첫 인자는 실행 파일 디렉터리(앱 디렉터리
-# 기준), 둘째 인자는 추가 플래그다. debug 는 페이지 진단 모듈을 넣고(--diagnostics),
-# release 는 넣지 않는다.
-stage-wailsv3 = pnpm -F @soksak/wailsv3 exec soksak-stage src/frontend --executables $(1) $(2)
-stage-tauriv2 = pnpm -F @soksak/tauriv2 exec soksak-stage src/frontend --executables $(1) $(2)
+# CONFIG 설정 폴더에 workspace registry 의 plugin 을 모두 설치한다. 애플리케이션은 bundle 에 plugin 을 담지 않으므로
+# window check 와 개발 실행은 애플리케이션을 시작하기 전에 이것으로 설치한다. 워크스페이스 plugin 은 version 을 바꾸지
+# 않고 고치므로, 같은 version 이 이미 설치되어 있으면 설치가 아무것도 바꾸지 않는다. 그래서 설치된 plugin 을 먼저
+# 지우고 다시 설치한다.
+install-plugins: registry
+	@test -n "$(CONFIG)" || { echo "make install-plugins CONFIG=<configuration directory>" >&2; exit 2; }
+	@target/debug/sok registry use $(REGISTRY)/index.json --config-dir "$(CONFIG)"
+	@for id in $$(node -e 'const f = "$(CONFIG)/plugins/installed.json"; const fs = require("fs"); console.log(fs.existsSync(f) ? Object.keys(JSON.parse(fs.readFileSync(f, "utf8")).plugins).join(" ") : "")'); do \
+		target/debug/sok plugin remove $$id --config-dir "$(CONFIG)" || exit 1; done
+	@for id in $$(node -e 'console.log(JSON.parse(require("fs").readFileSync("$(REGISTRY)/index.json", "utf8")).plugins.map((p) => p.id).join(" "))'); do \
+		target/debug/sok plugin install $$id --config-dir "$(CONFIG)" || exit 1; done
 
-frontend-wailsv3: build sidecars-debug
+# 프런트엔드를 배치한다. 인자는 추가 플래그다. debug 는 페이지 진단 모듈을 넣고(--diagnostics), release 는 넣지
+# 않는다. plugin 과 sidecar 는 bundle 에 넣지 않으며 설정 폴더에 설치한다(make install-plugins).
+stage-wailsv3 = pnpm -F @soksak/wailsv3 exec soksak-stage src/frontend $(1)
+stage-tauriv2 = pnpm -F @soksak/tauriv2 exec soksak-stage src/frontend $(1)
+
+frontend-wailsv3: build
 	@$(call bundle-info,$(WAILS_DEBUG_BUNDLE),wailsv3)
-	@$(call stage-wailsv3,../../$(WAILS_DEBUG_BUNDLE)/Contents/MacOS,--diagnostics)
+	@$(call stage-wailsv3,--diagnostics)
 
-frontend-tauriv2: build sidecars-debug
+frontend-tauriv2: build
 	@$(call bundle-info,$(TAURI_DEBUG_BUNDLE),tauriv2)
-	@$(call stage-tauriv2,../../$(TAURI_DEBUG_BUNDLE)/Contents/MacOS,--diagnostics)
+	@$(call stage-tauriv2,--diagnostics)
 
 # generate_context! 가 프런트엔드를 포함하므로 크레이트를 다시 빌드하게 한다.
 tauriv2-build: native-darwin frontend-tauriv2
@@ -233,9 +259,9 @@ tauriv2-build: native-darwin frontend-tauriv2
 	@$(call sok-tauriv2,$(TAURI_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(TAURI_DEBUG_BUNDLE))
 
-tauriv2-build-release: native-darwin build sidecars-release
+tauriv2-build-release: native-darwin build
 	@$(call bundle-info,$(TAURI_RELEASE_BUNDLE),tauriv2)
-	@$(call stage-tauriv2,../../$(TAURI_RELEASE_BUNDLE)/Contents/MacOS)
+	@$(call stage-tauriv2)
 	@touch apps/tauriv2/src/main.rs
 	@$(CARGO_ENV) cargo build --release -p soksak-tauriv2
 	@cp target/release/soksak-tauriv2 $(TAURI_RELEASE)
@@ -247,9 +273,9 @@ wailsv3-build: native-darwin frontend-wailsv3
 	@$(call sok-wailsv3,$(WAILS_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(WAILS_DEBUG_BUNDLE))
 
-wailsv3-build-release: native-darwin build sidecars-release
+wailsv3-build-release: native-darwin build
 	@$(call bundle-info,$(WAILS_RELEASE_BUNDLE),wailsv3)
-	@$(call stage-wailsv3,../../$(WAILS_RELEASE_BUNDLE)/Contents/MacOS)
+	@$(call stage-wailsv3)
 	@$(GO_ENV) go build -C apps/wailsv3 -trimpath -ldflags "-s -w $(GO_LINK)" -o ../../$(WAILS_RELEASE) ./src
 	@$(call sok-wailsv3,$(WAILS_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(WAILS_RELEASE_BUNDLE))
@@ -267,7 +293,7 @@ wailsv3-release: wailsv3-build-release
 	@./$(WAILS_RELEASE)
 
 # 네이티브 코드의 단위 검사. 공용 입력 검사, 사이드카 검사, 두 호스트의 테스트를 실행하는 호스트 계약 검사를 실행한다.
-native-test: native-darwin frontend-wailsv3 frontend-tauriv2
+native-test: native-darwin sidecars-debug frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) rust-format-check
 	@$(MAKE) go-format-check
 	@$(MAKE) -C native/darwin test

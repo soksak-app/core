@@ -246,3 +246,24 @@ func TestPluginPackAddsDiagnosticDeclarationsOnlyWithTheFlag(t *testing.T) {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 }
+
+// contract: cli.pack.rejects-unlisted-modules
+func TestPluginPackRejectsAModuleThatFilesDoesNotList(t *testing.T) {
+	for _, c := range []struct{ manifest, want string }{
+		{`{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "surface": {"module": "page/probe.js"}}`, "plugin.json: surface module page/probe.js must be listed in files"},
+		{`{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}`, "plugin.json: section probe.list module side/v.js must be listed in files"},
+		{`{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "state": {"module": "state.js"}}`, "plugin.json: state module state.js must be listed in files"},
+	} {
+		dir := pluginTree(t)
+		writeTree(t, dir, map[string]string{"plugin.json": c.manifest})
+		code, _, stderr := run("plugin", "pack", dir, t.TempDir())
+		if code != 1 || stderr != "sok: "+c.want+"\n" {
+			t.Fatalf("code %d stderr %q, want %q", code, stderr, c.want)
+		}
+	}
+	dir := pluginTree(t)
+	writeTree(t, dir, map[string]string{"plugin.json": `{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "surface": {"module": "ui/b.js"}, "sections": [{"id": "probe.list", "module": "ui/a/run.sh"}]}`})
+	if code, _, stderr := run("plugin", "pack", dir, t.TempDir()); code != 0 {
+		t.Fatalf("listed modules: code %d stderr %q", code, stderr)
+	}
+}

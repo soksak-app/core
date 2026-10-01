@@ -13,7 +13,6 @@ const card = {
 const side = { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] };
 const environment = () => ({
   runtime: "runtime",
-  plugins: ["@scope/plugin-probe", "plugin-side"],
   workspace: {
     focus: "main",
     grid: {
@@ -130,8 +129,7 @@ test("an environment is accepted and its references are checked against manifest
 test("an environment is rejected for each invalid field", () => {
   const cases = [
     [(e) => { e.runtime = "../runtime"; }, /runtime must be a directory/],
-    [(e) => { e.plugins.push("plugin-side"); }, /duplicate plugin package/],
-    [(e) => { e.plugins = ["Bad Name"]; }, /package names/],
+    [(e) => { e.plugins = ["@scope/plugin-probe"]; }, /unknown field plugins/],
     [(e) => { e.workspace.focus = "left"; }, /focus must name a card with tabs/],
     [(e) => { e.workspace.grid.cards[1].tabs = []; }, /non-empty array/],
     [(e) => { e.sidebars.links[0].set = "missing"; }, /known set/],

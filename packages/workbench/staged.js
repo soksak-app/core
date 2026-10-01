@@ -11,7 +11,6 @@ export const STAGED = Object.freeze({
   always: Object.freeze([
     "diagnostics.js", // --diagnostics면 observe.js 복사본, 아니면 release-diagnostics.js 복사본
     "environment.json", // 애플리케이션 설정
-    "diagnostic-plugins.json", // --diagnostics면 플러그인 진단 선언, 아니면 {}
   ]),
   diagnostics: Object.freeze([
     "transcript.js", // 진단 모듈이 사용하는 호출 기록기

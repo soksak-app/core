@@ -1,49 +1,43 @@
 #!/usr/bin/env node
-// 애플리케이션의 프런트엔드를 한 디렉터리에 배치한다.
+// 애플리케이션의 프런트엔드를 한 디렉터리에 배치한다(docs/spec/plugins.md 의 스테이징 배치).
 //
-//   soksak-stage <출력 디렉터리> [--executables <디렉터리>] [--diagnostics]
+//   soksak-stage <출력 디렉터리> [--diagnostics] [--installed <설정 디렉터리>]
 //
 // 현재 디렉터리의 애플리케이션 패키지에서 environment.json 을 읽는다. 패키지 위치는
 // Node 모듈 해석으로 찾는다. 파일은 복사만 하고 내용을 바꾸지 않는다.
 //
 //   <출력>/                        워크벤치 패키지의 files
-//   <출력>/modules/<패키지 이름>/   soksak, plugin-api, 각 플러그인 패키지의 files
+//   <출력>/modules/<패키지 이름>/   soksak, plugin-api 패키지의 files
 //   <출력>/runtime/                 environment.json 의 runtime 디렉터리
 //   <출력>/environment.json         애플리케이션의 environment.json
-//   <출력>/modules/<사이드카>/sidecar.json  플러그인이 의존하는 사이드카의 sidecar.json
-//
-// --executables 를 지정하면 사이드카 실행 파일을 그 디렉터리에 파일 이름 그대로 복사한다.
-// 네이티브 호스트는 자기 실행 파일과 같은 디렉터리에서 사이드카 실행 파일을 찾는다.
-//
 //   <출력>/diagnostics.js           --diagnostics 이면 워크벤치의 observe.js(페이지 진단 메서드),
 //                                  아니면 release-diagnostics.js(빈 모듈). 진단 코드는 진단 빌드에만
 //                                  들어간다
 //   <출력>/transcript.js            --diagnostics 이면 진단 모듈이 쓰는 호출 기록기
-//   <출력>/diagnostic-plugins.json  --diagnostics 이면 플러그인 패키지 이름에서 그 diagnostics.json
-//                                  내용으로의 객체, 아니면 {}
-//   <출력>/modules/<플러그인>/<모듈>  --diagnostics 이면 diagnostics.json 의 module 파일
 //
-// diagnostics.json 과 그 모듈은 패키지의 files 에 나열하지 않는다. 나열되어 있으면 release 에
-// 복사되므로 실패한다.
+// 플러그인은 bundle 에 넣지 않는다. 네이티브 host 는 설정 디렉터리에 설치된 플러그인을 제공한다
+// (docs/spec/installation.md). host 가 없는 애플리케이션(브라우저 예제)은 --installed 로 설정 디렉터리를 주며,
+// 그러면 host 가 제공할 문서를 쓴다.
+//
+//   <출력>/installed-plugins.json   켜진 설치 플러그인 목록. diagnostics 는 --diagnostics 일 때만 담는다
+//   <출력>/modules/<플러그인>/       켜진 각 설치 플러그인의 파일
 
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { replaceFile } from "./replace-file.mjs";
 import { STAGED } from "./staged.js";
 import {
-  DIAGNOSTIC_PLUGINS, DIAGNOSTICS, ENVIRONMENT, MANIFEST, RUNTIME, SIDECAR, modulePath, validateDiagnostics,
-  validateEnvironment, validateManifest, validateSidecar,
+  ENVIRONMENT, INSTALLED_PLUGINS, RUNTIME, modulePath, validateEnvironment, validateInstalledPlugins,
 } from "@soksak/plugin-api";
 
-const USAGE = "usage: soksak-stage <output directory> [--executables <directory>] [--diagnostics]";
+const USAGE = "usage: soksak-stage <output directory> [--diagnostics] [--installed <configuration directory>]";
 const args = process.argv.slice(2);
 const [out, ...rest] = args;
-let executables;
+let installedDirectory;
 let diagnostics = false;
 for (let i = 0; i < rest.length; i++) {
-  if (rest[i] === "--executables" && rest[i + 1] && executables === undefined) executables = rest[++i];
+  if (rest[i] === "--installed" && rest[i + 1] && installedDirectory === undefined) installedDirectory = rest[++i];
   else if (rest[i] === "--diagnostics" && !diagnostics) diagnostics = true;
   else { console.error(USAGE); process.exit(2); }
 }
@@ -54,7 +48,6 @@ if (!out || out.startsWith("--")) {
 
 const app = process.cwd();
 const target = resolve(app, out);
-const executableTarget = executables && resolve(app, executables);
 const workbench = dirname(fileURLToPath(import.meta.url));
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 
@@ -70,6 +63,29 @@ function copyPackage(dir, dest) {
   for (const file of files) cpSync(join(dir, file), join(dest, file), { recursive: true });
 }
 
+/**
+ * 설정 디렉터리의 plugins/installed.json 에서 켜진 플러그인을 id 순서로 읽는다. 형식은 command line sok 이 쓰고
+ * 검사한다(docs/spec/installation.md). 여기서는 쓰는 필드가 있는지만 보고, 없으면 실패한다.
+ */
+function enabledInstalledPlugins(configuration) {
+  const file = join(configuration, "plugins", "installed.json");
+  if (!existsSync(file)) throw new Error(`${file} does not exist; install plugins with sok first`);
+  const installed = readJson(file);
+  if (installed?.format !== 1 || typeof installed.plugins !== "object" || installed.plugins === null) {
+    throw new Error(`${file}: expected format 1 with plugins`);
+  }
+  return Object.entries(installed.plugins)
+    .filter(([, plugin]) => plugin.enabled === true)
+    .map(([id, plugin]) => {
+      if (typeof plugin.package !== "string" || typeof plugin.version !== "string" || typeof plugin.path !== "string") {
+        throw new Error(`${file}: plugin ${id} requires package, version and path`);
+      }
+      // 파일은 설치가 기록한 폴더에서만 읽는다(docs/spec/installation.md).
+      return { id, package: plugin.package, version: plugin.version, dir: plugin.path };
+    })
+    .sort((a, b) => (a.id < b.id ? -1 : 1));
+}
+
 const environment = validateEnvironment(readJson(join(app, ENVIRONMENT)));
 const runtime = join(app, environment.runtime);
 if (!existsSync(join(runtime, "index.js"))) throw new Error(`${environment.runtime}/index.js is missing`);
@@ -81,98 +97,36 @@ copyPackage(workbench, target);
 for (const name of ["soksak", "@soksak/plugin-api"]) {
   copyPackage(packageDir(workbench, name), join(target, modulePath(name, "")));
 }
-if (executableTarget) mkdirSync(executableTarget, { recursive: true });
-const sidecars = new Set();
-// 호스트는 실행 파일을 파일 이름으로 찾고 스테이징은 그 이름으로 한 디렉터리에 모은다. 서로 다른
-// 원본이 같은 이름을 요구하면 나중 것이 앞의 것을 조용히 덮으므로 여기서 멈춘다.
-const placed = new Map();
-
-/** 빌드된 실행 파일을 파일 이름 그대로 실행 파일 디렉터리에 둔다. */
-function place(owner, dir, path) {
-  const built = join(dir, path);
-  const file = basename(path);
-  const taken = placed.get(file);
-  if (taken && taken !== built) throw new Error(`${owner}: ${file} is already staged from ${taken}`);
-  placed.set(file, built);
-  if (!existsSync(built)) throw new Error(`${owner}: ${path} is not built`);
-  replaceFile(built, join(executableTarget, file));
-}
-
-const diagnosticPlugins = {};
-for (const name of environment.plugins) {
-  const dir = packageDir(app, name);
-  const manifest = validateManifest(readJson(join(dir, MANIFEST)));
-  copyPackage(dir, join(target, modulePath(name, "")));
-  // 섹션 모듈은 패키지의 files 로만 배포된다. 나열되지 않은 모듈은 release 에서 불러올 수 없다.
-  const published = readJson(join(dir, "package.json")).files;
-  // 기본값: sections 는 plugin.json 의 선택 필드다(docs/spec/plugins.md).
-  for (const section of manifest.sections ?? []) {
-    const modules = typeof section.module === "string" ? [section.module] : [section.module.horizontal, section.module.vertical];
-    for (const module of modules) {
-      if (!published.some((file) => module === file || module.startsWith(`${file}/`))) {
-        throw new Error(`${name}: section ${section.id} module ${module} must be listed in files`);
-      }
-    }
-  }
-  const state = manifest.state?.module;
-  if (state && !published.some((file) => state === file || state.startsWith(`${file}/`))) {
-    throw new Error(`${name}: ${manifest.id} state module ${state} must be listed in files`);
-  }
-  if (existsSync(join(dir, DIAGNOSTICS))) {
-    const declared = validateDiagnostics(manifest, readJson(join(dir, DIAGNOSTICS)));
-    const { files } = readJson(join(dir, "package.json"));
-    for (const path of [DIAGNOSTICS, declared.module]) {
-      if (files.some((file) => path === file || path.startsWith(`${file}/`))) {
-        throw new Error(`${name}: ${path} is diagnostic and must not be listed in files`);
-      }
-    }
-    if (diagnostics) {
-      const module = join(target, modulePath(name, declared.module));
-      mkdirSync(dirname(module), { recursive: true });
-      copyFileSync(join(dir, declared.module), module);
-      diagnosticPlugins[name] = declared;
-    }
-  }
-  // 기본값: sidecars 는 plugin.json 의 선택 필드다(docs/spec/plugins.md).
-  for (const sidecar of manifest.sidecars ?? []) {
-    if (sidecars.has(sidecar)) continue;
-    sidecars.add(sidecar);
-    const sidecarDir = packageDir(dir, sidecar);
-    const declared = validateSidecar(readJson(join(sidecarDir, SIDECAR)));
-    mkdirSync(join(target, modulePath(sidecar, "")), { recursive: true });
-    copyFileSync(join(sidecarDir, SIDECAR), join(target, modulePath(sidecar, SIDECAR)));
-    if (!executableTarget) continue;
-
-    place(sidecar, sidecarDir, declared.executable);
-    // 헬퍼는 그 사이드카의 의존성이므로 사이드카 디렉터리에서 해석한다.
-    // 기본값: helpers 는 sidecar.json 의 선택 필드다(docs/spec/sidecars.md).
-    for (const helper of declared.helpers ?? []) {
-      place(helper.package, packageDir(sidecarDir, helper.package), helper.executable);
-    }
-  }
-}
 cpSync(runtime, join(target, RUNTIME), { recursive: true });
 copyFileSync(join(workbench, diagnostics ? "observe.js" : "release-diagnostics.js"), join(target, "diagnostics.js"));
 if (diagnostics) copyFileSync(join(workbench, "transcript.js"), join(target, "transcript.js"));
-
 writeFileSync(join(target, ENVIRONMENT), `${JSON.stringify(environment, null, 2)}\n`);
-writeFileSync(join(target, DIAGNOSTIC_PLUGINS), `${JSON.stringify(diagnosticPlugins, null, 2)}\n`);
+
+let plugins = [];
+if (installedDirectory) {
+  plugins = enabledInstalledPlugins(resolve(app, installedDirectory));
+  const document = [];
+  for (const plugin of plugins) {
+    cpSync(plugin.dir, join(target, modulePath(plugin.package, "")), { recursive: true });
+    const entry = { id: plugin.id, package: plugin.package, version: plugin.version };
+    const declared = join(plugin.dir, "diagnostics.json");
+    // 기본값: diagnostics.json 이 없는 플러그인은 진단 선언이 없다.
+    if (diagnostics && existsSync(declared)) entry.diagnostics = readJson(declared);
+    document.push(entry);
+  }
+  validateInstalledPlugins({ plugins: document });
+  writeFileSync(join(target, INSTALLED_PLUGINS), `${JSON.stringify({ plugins: document })}\n`);
+}
 
 // STAGED 목록의 파일들이 실제로 만들어졌는지 검증.
 // 선언과 실제가 갈라지지 않도록 한다.
 for (const stagedFile of STAGED.always) {
-  const stagedPath = join(target, stagedFile);
-  if (!existsSync(stagedPath)) {
-    throw new Error(`declared always-staged file not created: ${stagedFile}`);
-  }
+  if (!existsSync(join(target, stagedFile))) throw new Error(`declared always-staged file not created: ${stagedFile}`);
 }
 if (diagnostics) {
   for (const stagedFile of STAGED.diagnostics) {
-    const stagedPath = join(target, stagedFile);
-    if (!existsSync(stagedPath)) {
-      throw new Error(`declared diagnostics-staged file not created: ${stagedFile}`);
-    }
+    if (!existsSync(join(target, stagedFile))) throw new Error(`declared diagnostics-staged file not created: ${stagedFile}`);
   }
 }
-console.log(`staged ${environment.plugins.length} plugins and ${sidecars.size} sidecars into ${target}` +
+console.log(`staged the workbench into ${target}${installedDirectory ? ` with ${plugins.length} installed plugins` : ""}` +
   (diagnostics ? " with diagnostics" : ""));

@@ -8,13 +8,12 @@ globalThis.fetch = async (path) => {
   const files = {
     "/environment.json": {
       runtime: "runtime",
-      plugins: ["@fixture/probe"],
       workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
         { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "probe", title: "p" }] },
       ] } },
       sidebars: { sets: [], links: [] },
     },
-    "/diagnostic-plugins.json": {},
+    "/installed-plugins.json": { plugins: [{ id: "probe", package: "@fixture/probe", version: "0.0.1" }] },
     "/modules/@fixture/probe/plugin.json": {
       id: "probe", name: "Probe", description: "검사용 표면.", mark: "P", icon: "<path d='M0 0h1v1H0z'/>",
       surface: { module: "ui/surface.js", composition: { kind: "dom" } },

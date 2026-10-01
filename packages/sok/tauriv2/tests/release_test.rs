@@ -386,3 +386,39 @@ fn plugin_pack_adds_diagnostic_declarations_only_with_the_flag() {
         "{stderr}"
     );
 }
+
+// contract: cli.pack.rejects-unlisted-modules
+#[test]
+fn plugin_pack_rejects_a_module_that_files_does_not_list() {
+    for (manifest, want) in [
+        (
+            r#"{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "surface": {"module": "page/probe.js"}}"#,
+            "plugin.json: surface module page/probe.js must be listed in files",
+        ),
+        (
+            r#"{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}"#,
+            "plugin.json: section probe.list module side/v.js must be listed in files",
+        ),
+        (
+            r#"{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "state": {"module": "state.js"}}"#,
+            "plugin.json: state module state.js must be listed in files",
+        ),
+    ] {
+        let dir = plugin_tree();
+        write_tree(&dir.0, &[("plugin.json", manifest)]);
+        let out = Dir::new();
+        let (code, _, stderr) = run(&["plugin", "pack", text(&dir.0), text(&out.0)]);
+        assert_eq!((code, stderr), (1, format!("sok: {want}\n")));
+    }
+    let dir = plugin_tree();
+    write_tree(
+        &dir.0,
+        &[(
+            "plugin.json",
+            r#"{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "surface": {"module": "ui/b.js"}, "sections": [{"id": "probe.list", "module": "ui/a/run.sh"}]}"#,
+        )],
+    );
+    let out = Dir::new();
+    let (code, _, stderr) = run(&["plugin", "pack", text(&dir.0), text(&out.0)]);
+    assert_eq!(code, 0, "{stderr}");
+}

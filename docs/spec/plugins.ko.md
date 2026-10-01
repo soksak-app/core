@@ -36,7 +36,7 @@
 | `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name", "module" }`. `module`은 섹션을 그리는 패키지 안의 JavaScript 경로이고, 선택 항목 `fill: true`는 섹션에 남은 사이드바 높이를 준다([섹션](#섹션)) |
 | `sidebars` | 아니오 | 로컬 기본 세트와 선택적인 네 변 `card` 연결([기본 사이드바 세트](#기본-사이드바-세트)) |
 | `preview` | 아니오 | `{ "ink": "--<토큰>" }`: 라이브러리 미리보기에서 플러그인 카드의 색을 정하는 테마 토큰 이름. `surface`가 필요하다 |
-| `sidecars` | 아니오 | 표면 페이지나 상태 모듈이 사용하는 [사이드카](sidecars.ko.md)의 패키지 이름. `surface`나 `state`가 필요하다. 각각 플러그인 `package.json`의 의존성이어야 한다 |
+| `sidecars` | 아니오 | 표면 페이지나 상태 모듈이 사용하는 [사이드카](sidecars.ko.md)의 패키지 이름. `surface`나 `state`가 필요하다. 각각 플러그인 `package.json`의 `soksak.sidecars`에 version 범위가 있다 |
 | `state` | 아니오 | `{ "module": "ui/state.js" }`: 표면 밖의 상태를 갖는 [플러그인 상태](#플러그인-상태) 모듈. `sections`가 필요하다 |
 | `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값> } }`: 상태 모듈이 프로젝트마다 저장하는 [프로젝트 데이터](#프로젝트-데이터). `state`가 필요하다 |
 | `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" } }`: 활성화되지 않은 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣으며, `settings`는 `operation`이나 선언하지 않은 설정을 가리킬 수 없다. `surface`와 `sidecars`가 필요하다 |
@@ -69,7 +69,7 @@
 
 사이드바는 세트 제목이나 자리 이름을 보이지 않는다. 섹션은 사이드바 맨 위에서 시작한다. 창 사이드바는 자리를 말하는 상태 줄로 끝나고, 카드 안 사이드바는 상태 줄 없이 섹션이 카드 발까지 채운다. 접은 섹션은 머리만 남는다. 섹션은 내용의 높이를 가지며, `fill: true`로 선언한 펼친 섹션만 다른 섹션이 쓰고 남은 사이드바 높이를 나눠 갖고 그 안에서 내용을 스크롤한다. 접힌 fill 섹션은 그 자리를 다른 fill 섹션에 준다. 높이를 선언으로 정하는 이유는, 파일 트리 같은 가상 목록은 워크벤치가 자리가 필요함을 알 내용 높이가 없고, 짧은 목록을 늘리면 빈 공간이 보이기 때문이다. 섹션 머리는 카드 머리의 높이, 상태 줄은 카드 발의 높이를 가져 선이 이웃 카드의 선과 한 줄에 놓인다. 섹션은 빈 목록을 기록 없음 같은 말로 알린다.
 
-사이드바는 그것을 담은 카드의 id로 식별한다. `left`, `right`, 또는 카드 내부 사이드바의 `카드id:변`(`top`, `bottom`, `left`, `right`)이다. 섹션 머리를 접고 펴면 `core.sidebar.section.fold`를, 탭을 고르면 `core.sidebar.section.select`를 `{sidebar, section}`으로 실행한다. status `core.sidebars`는 그려진 모든 사이드바의 세트, 레이아웃, 고른 탭, 각 섹션의 접힘과 마운트 상태를 알린다. 섹션 모듈은 패키지의 `files`에 나열한 파일이므로 릴리스 스테이징이 복사한다. 섹션 모듈이 나열되어 있지 않으면 스테이징이 실패한다.
+사이드바는 그것을 담은 카드의 id로 식별한다. `left`, `right`, 또는 카드 내부 사이드바의 `카드id:변`(`top`, `bottom`, `left`, `right`)이다. 섹션 머리를 접고 펴면 `core.sidebar.section.fold`를, 탭을 고르면 `core.sidebar.section.select`를 `{sidebar, section}`으로 실행한다. status `core.sidebars`는 그려진 모든 사이드바의 세트, 레이아웃, 고른 탭, 각 섹션의 접힘과 마운트 상태를 알린다. 섹션 모듈은 패키지의 `files`에 나열한 파일이므로 plugin package가 담는다. 섹션 모듈이 나열되어 있지 않으면 `sok plugin pack`이 실패한다.
 
 세로 목록의 펼친 fill 섹션은 머리와 본문의 고유 최소 높이를 유지한다. 사이드바가 더 작으면 세트 전체를 스크롤하며 섹션을 높이 0으로 줄이지 않는다. 플러그인이 가상 목록을 사용하면 플러그인이 최소 가시 행 높이를 선언한다. 파일 트리는 28포인트 도구 줄과 최소 한 행 20포인트를 확보한다. 이 동작은 카드 콘텐츠의 잔여 높이를 늘리거나 저장한 사이드바 크기를 바꾸지 않는다.
 
@@ -82,7 +82,7 @@
 - `sidecar`: 플러그인이 선언한 유일한 사이드카의 `{send(body), on(fn), onFailure(fn)}`. `onFailure`는 세션의 각 [사이드카 실패](sidecars.ko.md#실패) 이유를 받는다. 세션 식별자는 `state:<플러그인 id>:<프로젝트 id>`이므로 호스트는 사이드카에 프로젝트 디렉터리를 `root`로 준다([사이드카](sidecars.ko.md#메시지)).
 - `data.get(key)`와 `data.set(key, value)`: 플러그인의 [프로젝트 데이터](#프로젝트-데이터).
 
-상태 모듈은 패키지 `files`에 나열한 파일이며, 나열하지 않으면 스테이징이 실패한다. 마운트나 해제의 실패는 페이지 오류로 보고한다.
+상태 모듈은 패키지 `files`에 나열한 파일이며, 나열하지 않으면 `sok plugin pack`이 실패한다. 마운트나 해제의 실패는 페이지 오류로 보고한다.
 
 ## 프로젝트 데이터
 
@@ -137,34 +137,32 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 | 필드 | 의미 |
 | --- | --- |
 | `runtime` | 런타임 모듈 `index.js`를 포함한 애플리케이션 안의 디렉터리 |
-| `plugins` | 플러그인 패키지 이름. 각각 애플리케이션 패키지의 의존성이어야 한다. 순서가 추가 메뉴 순서다 |
 | `workspace.grid` | 새 스페이스의 격자선과 카드. `tabs`가 있는 카드는 `{ plugin, title }` 항목을 나열한다. 선택 필드인 card `width`는 point 단위의 유한한 양수이며, 왼쪽·오른쪽 고정 sidebar card는 그 너비로 시작하고 생략하면 `sidebarWidth`를 쓴다 |
 | `workspace.focus` | 새 스페이스에서 포커스할 카드. 탭이 있어야 한다 |
 | `sidebars.sets` | 플러그인 기본값의 선택적 명시적 덮어쓰기: 섹션 세트 `{id, title, sections, layout}`. `layout`은 `list` 또는 `tabs`다 |
-| `sidecars` | 선택. `false`는 런타임이 [사이드카](sidecars.ko.md)를 실행할 수 없다는 뜻이며 브라우저 예제가 그렇다. 이런 환경은 상태 모듈이 사이드카를 쓰는 플러그인을 나열할 수 없다. 기본값은 `true`다 |
+| `sidecars` | 선택. `false`는 런타임이 [사이드카](sidecars.ko.md)를 실행할 수 없다는 뜻이며 브라우저 예제가 그렇다. 이런 환경에서 설치된 플러그인의 상태 모듈이 사이드카를 쓰면 로드가 실패한다. 기본값은 `true`다 |
 | `sidebars.links` | 기본 사이드바 선택: 일반 left/right 연결, 카드 네 변 연결, window-left/window-right 연결. 플러그인 left/right 형식, null 세트, 레일 연결은 거부한다. |
 
-워크벤치는 설정을 읽거나 스페이스를 만들기 전에 `environment.json`과 나열된 모든 `plugin.json`을 로드한다. 표면이 없는 플러그인을 가리키는 탭이나 카드 변 연결, 등록되지 않은 플러그인을 가리키는 창 연결, 알 수 없는 섹션을 가리키는 세트, `sidecars: false` 환경에서 상태 모듈이 사이드카를 쓰는 플러그인이 있으면 등록 전에 로드가 실패한다. 사이드카를 선언한 플러그인 표면은 그런 환경에도 나열할 수 있다. 호스트가 없으면 워크벤치가 그런 표면을 마운트하지 않기 때문이다([런타임 모듈](#런타임-모듈)). 저장된 스페이스는 환경 파일이 아니며 열 때 알 수 없는 플러그인 탭과 잘못되거나 오래된 창 사이드바 상태를 거부한다([프로젝트](projects.ko.md#저장)). 저장된 사이드바 세트와 연결은 설정이며 `environment.json`과 같은 사이드바 검사를 거친다. 등록되지 않은 섹션을 가리키는 저장된 세트나 표면이 없는 플러그인을 가리키는 카드 변 연결이나 등록되지 않은 플러그인을 가리키는 창 연결은 설정 불러오기를 오류로 실패시킨다([설정 창](settings.ko.md#저장되는-세트와-연결)).
+워크벤치는 설정을 읽거나 스페이스를 만들기 전에 `environment.json`, id 순서(추가 메뉴 순서)의 [설치된 플러그인](installation.ko.md#설치된-plugin-제공), 그 각각의 `plugin.json`을 로드한다. 표면이 없는 플러그인을 가리키는 탭이나 카드 변 연결, 등록되지 않은 플러그인을 가리키는 창 연결, 알 수 없는 섹션을 가리키는 세트, `sidecars: false` 환경에서 상태 모듈이 사이드카를 쓰는 플러그인이 있으면 등록 전에 로드가 실패한다. 사이드카를 선언한 플러그인 표면은 그런 환경에도 나열할 수 있다. 호스트가 없으면 워크벤치가 그런 표면을 마운트하지 않기 때문이다([런타임 모듈](#런타임-모듈)). 저장된 스페이스는 환경 파일이 아니며 열 때 알 수 없는 플러그인 탭과 잘못되거나 오래된 창 사이드바 상태를 거부한다([프로젝트](projects.ko.md#저장)). 저장된 사이드바 세트와 연결은 설정이며 `environment.json`과 같은 사이드바 검사를 거친다. 등록되지 않은 섹션을 가리키는 저장된 세트나 표면이 없는 플러그인을 가리키는 카드 변 연결이나 등록되지 않은 플러그인을 가리키는 창 연결은 설정 불러오기를 오류로 실패시킨다([설정 창](settings.ko.md#저장되는-세트와-연결)).
 
 ## 스테이징 배치
 
-`soksak-stage <출력> [--executables <디렉터리>] [--diagnostics]`는 애플리케이션 디렉터리에서 실행하고 Node 모듈 해석으로 패키지를 찾는다. 파일 내용을 바꾸지 않고 복사한다.
+`soksak-stage <출력> [--diagnostics] [--installed <설정 디렉터리>]`는 애플리케이션 디렉터리에서 실행하고 Node 모듈 해석으로 패키지를 찾는다. 파일 내용을 바꾸지 않고 복사한다.
 
 | 경로 | 원본 |
 | --- | --- |
 | `/` | `@soksak/workbench`의 `files` |
-| `/modules/<패키지>/` | `soksak`, `@soksak/plugin-api`, 나열된 각 플러그인의 `files` |
+| `/modules/<패키지>/` | `soksak`, `@soksak/plugin-api`의 `files` |
 | `/runtime/` | 애플리케이션의 `runtime` 디렉터리 |
 | `/environment.json` | 애플리케이션의 `environment.json` |
-| `/modules/<사이드카>/sidecar.json` | 플러그인의 `sidecars`에 나열된 각 사이드카 패키지의 `sidecar.json` |
 | `/diagnostics.js` | `--diagnostics`이면 워크벤치의 `observe.js`(페이지 진단 메서드), 아니면 워크벤치의 빈 모듈 `release-diagnostics.js` |
 | `/transcript.js` | `--diagnostics`이면 워크벤치의 `transcript.js`(진단 모듈이 쓰는 호출 기록기), 아니면 없음 |
-| `/diagnostic-plugins.json` | `--diagnostics`이면 `diagnostics.json`이 있는 나열된 플러그인 패키지마다 그 파일 내용을 담은 객체, 아니면 `{}` |
-| `/modules/<패키지>/<모듈>` | `--diagnostics`이면 플러그인의 `diagnostics.json`이 지정한 `module` 파일, 아니면 없음 |
 
-배포된 파일이 import 하는 모든 파일은 패키지의 `files` 배열에 나열되어야 한다. 이는 `packages/workbench/test/published-imports.test.mjs`가 검사한다.
+애플리케이션의 bundle에는 플러그인이 없다. 호스트가 설정 디렉터리에 설치된 플러그인을 제공한다([설치된 plugin 제공](installation.ko.md#설치된-plugin-제공)). 호스트가 없는 애플리케이션인 브라우저 예제는 `--installed <설정 디렉터리>`를 주며, 그러면 도구가 그 디렉터리에서 호스트가 제공할 문서를 쓴다. `/installed-plugins.json`과 켜진 각 설치 플러그인의 파일을 `/modules/<패키지>/`에 쓰며, `diagnostics`는 `--diagnostics`일 때만 담는다.
 
-`--executables <디렉터리>`를 지정하면 각 사이드카의 빌드된 `executable` 파일을 파일 이름 그대로 `<디렉터리>`에 복사하고, 파일이 빌드되지 않았으면 실패한다. 디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`는 `sidecars-debug`를, 릴리스 빌드 대상은 `sidecars-release`를 실행한다. 두 대상은 애플리케이션이 선언한 사이드카와 그 사이드카가 선언한 헬퍼를 해당 프로필로 빌드한다. 그 뒤 애플리케이션 실행 파일의 디렉터리(`target/debug` 또는 `target/release`)를 `--executables`로 지정해 `apps/<app>/src/frontend`에 스테이징한다. 디버그 대상은 `--diagnostics`를 더하며, 릴리스 빌드에는 페이지와 플러그인의 진단 코드가 없다. 스테이징된 릴리스 프런트엔드의 `/diagnostic-plugins.json`이 비어 있지 않거나, 플러그인 진단 모듈이 있거나, 플러그인 `diagnostics.json`에 선언한 이름이 들어 있으면 `make release-check`가 실패한다.
+게시된 파일이 import하는 모든 파일은 패키지의 `files` 배열에 나열되어야 하며, `packages/workbench/test/published-imports.test.mjs`가 이를 검증한다.
+
+디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`는 `--diagnostics`를 더한다. 릴리스 빌드에는 페이지 진단 코드가 없고, 플러그인 진단 코드는 [진단 package](cli.ko.md#package-release-registry)를 설치한 설정에만 있다. `make release-check`는 스테이징된 릴리스 프런트엔드에 `/transcript.js`나 페이지 진단 모듈이 있으면 실패한다.
 
 모든 페이지는 `PAGE_IMPORTS`와 같은 import map 하나를 선언한다. 항목은 `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/runtime`, `@soksak/workbench/`다.
 

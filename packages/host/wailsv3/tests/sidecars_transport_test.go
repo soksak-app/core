@@ -12,13 +12,13 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"testing/fstest"
 	"time"
 
 	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
 )
 
 type SidecarMessage = host.SidecarMessage
+type SidecarDeclaration = host.SidecarDeclaration
 
 var NewSidecars = host.NewSidecars
 
@@ -34,12 +34,10 @@ func (o *harnessOwner) Emit(name string, data ...any) {
 	}
 }
 
-func harnessFrontend() fstest.MapFS {
-	return fstest.MapFS{
-		"environment.json":                     {Data: []byte(`{"plugins":["fixture"]}`)},
-		"modules/fixture/plugin.json":          {Data: []byte(`{"sidecars":["fixture-service"]}`)},
-		"modules/fixture-service/sidecar.json": {Data: []byte(`{"executable":"build/service","protocol":1,"transport":"persistent"}`)},
-	}
+// harnessDeclarations 는 folder 에 설치된 영속 사이드카 하나의 선언이다.
+func harnessDeclarations(folder string) []SidecarDeclaration {
+	return []SidecarDeclaration{{Name: "fixture-service", Folder: folder,
+		Data: []byte(`{"executable":"service","protocol":1,"transport":"persistent"}`)}}
 }
 
 func writeHarnessEndpoint(t *testing.T, directory, socket string) {
@@ -152,11 +150,11 @@ func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t 
 	writeHarnessEndpoint(t, root, socket)
 	serverDone := serveHarnessConnections(t, listener, 4, true)
 
-	first, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	first, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	second, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +290,7 @@ func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
 		}
 	}()
 
-	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +331,7 @@ func TestPersistentTransportHarnessAuthFailure(t *testing.T) {
 		_, _ = bufio.NewReader(connection).ReadBytes('\n')
 		_, _ = io.WriteString(connection, `{"operation":"hello","ok":false,"error":"authentication or protocol mismatch"}`+"\n")
 	}()
-	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +378,7 @@ func TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpo
 		serverDone <- writeErr
 	}()
 
-	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -501,7 +499,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 		serverDone <- err
 	}()
 
-	sidecars, err := NewSidecars(harnessFrontend(), executableDir, configDir)
+	sidecars, err := NewSidecars(harnessDeclarations(executableDir), configDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -554,7 +552,7 @@ func TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement(
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -633,7 +631,7 @@ func TestPersistentRetainSendsLayoutAndKnownSurfaces(t *testing.T) {
 		}
 	}()
 
-	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -670,7 +668,7 @@ func TestPersistentRetainSendsLayoutAndKnownSurfaces(t *testing.T) {
 
 // contract: sidecars.retain.skips-service-without-endpoint
 func TestPersistentRetainSkipsAServiceWithoutEndpoint(t *testing.T) {
-	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), t.TempDir())
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -742,7 +740,7 @@ func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
 		}
 	}()
 
-	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -826,7 +824,7 @@ func TestPersistentTransportReportsFailedReviveToOwner(t *testing.T) {
 		<-closed
 	}()
 
-	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}

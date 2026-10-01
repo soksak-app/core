@@ -6,12 +6,12 @@ globalThis.fetch = async (path) => {
   const files = {
     "/environment.json": {
       runtime: "runtime",
-      plugins: ["@fixture/side"],
       workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
         { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "missing", title: "m" }] },
       ] } },
       sidebars: { sets: [], links: [] },
     },
+    "/installed-plugins.json": { plugins: [{ id: "side", package: "@fixture/side", version: "0.0.1" }] },
     "/modules/@fixture/side/plugin.json": { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] },
   };
   const body = files[path];

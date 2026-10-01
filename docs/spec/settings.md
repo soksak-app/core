@@ -15,7 +15,7 @@ The left navigation lists three sections in this order. Every section shows the 
 | Id | Label | Content |
 |---|---|---|
 | `general` | 일반 | Settings that apply to the whole workbench, including the sidebar appearance |
-| `plugins` | 플러그인 | A searchable list of the environment plugins, and the page of the selected plugin |
+| `plugins` | 플러그인 | A searchable list of the installed plugins, and the page of the selected plugin |
 | `sidebars` | 사이드바 | The set list with create, edit, and delete, and the set editor |
 
 `core.settings-modal.nav {section}` shows a section. The window keeps the section, the plugin search, the selected plugin, and the edited set while it is closed and reopened.

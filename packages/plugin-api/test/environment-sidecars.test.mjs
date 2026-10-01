@@ -1,10 +1,10 @@
-// sidecars: false 환경은 상태 모듈이 사이드카를 쓰는 플러그인을 나열할 수 없다.
+// sidecars: false 환경에서 설치된 플러그인의 상태 모듈이 사이드카를 쓰면 로드가 실패한다.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { checkReferences, validateEnvironment } from "../index.js";
 
 const environment = (extra = {}) => ({
-  runtime: "runtime", plugins: ["@scope/plugin-probe"],
+  runtime: "runtime",
   workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "card", title: "c" }] }] } },
   sidebars: { sets: [], links: [] },
   ...extra,

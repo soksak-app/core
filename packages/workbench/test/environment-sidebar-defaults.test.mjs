@@ -3,8 +3,7 @@ import test from "node:test";
 
 // 소비자 픽스처는 패키지 구현 대신 선언된 manifest 경계를 사용한다.
 const files = {
-  "/environment.json": { runtime: "runtime", plugins: ["@fixture/card", "@fixture/sections"],
-    workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
+  "/environment.json": { runtime: "runtime", workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
       { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "fixture", title: "Fixture" }] },
     ] } } },
   "/modules/@fixture/card/plugin.json": { id: "fixture", name: "Fixture", description: "Fixture card.",
@@ -15,7 +14,7 @@ const files = {
     sections: [{ id: "sections.tree", name: "Tree", module: {horizontal:"ui/tree-horizontal.js",vertical:"ui/tree-vertical.js"} }],
     sidebars: { sets: [{ id: "tree", title: "Tree", sections: ["sections.tree"], layout: "tabs" }],
       window: { left: "tree" } } },
-  "/diagnostic-plugins.json": {},
+  "/installed-plugins.json": { plugins: [{ id: "fixture", package: "@fixture/card", version: "0.0.1" }, { id: "sections", package: "@fixture/sections", version: "0.0.1" }] },
 };
 
 test("an environment without sidebar overrides supplies normalized plugin defaults to settings", async (t) => {

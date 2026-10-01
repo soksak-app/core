@@ -1,9 +1,5 @@
 {
   "runtime": "runtime",
-  "plugins": [
-    "@soksak/plugin-shell",
-    "@soksak/plugin-browser"
-  ],
   "sidecars": false,
   "workspace": {
     "focus": "shell",

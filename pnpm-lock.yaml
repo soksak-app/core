@@ -10,12 +10,6 @@ importers:
 
   apps/browser:
     dependencies:
-      '@soksak/plugin-browser':
-        specifier: workspace:*
-        version: link:../../plugins/browser
-      '@soksak/plugin-shell':
-        specifier: workspace:*
-        version: link:../../plugins/shell
       '@soksak/workbench':
         specifier: workspace:*
         version: link:../../packages/workbench
@@ -29,18 +23,6 @@ importers:
 
   apps/tauriv2:
     dependencies:
-      '@soksak/plugin-browser':
-        specifier: workspace:*
-        version: link:../../plugins/browser
-      '@soksak/plugin-files':
-        specifier: workspace:*
-        version: link:../../plugins/files
-      '@soksak/plugin-shell':
-        specifier: workspace:*
-        version: link:../../plugins/shell
-      '@soksak/plugin-terminal':
-        specifier: workspace:*
-        version: link:../../plugins/terminal
       '@soksak/workbench':
         specifier: workspace:*
         version: link:../../packages/workbench
@@ -51,18 +33,6 @@ importers:
 
   apps/wailsv3:
     dependencies:
-      '@soksak/plugin-browser':
-        specifier: workspace:*
-        version: link:../../plugins/browser
-      '@soksak/plugin-files':
-        specifier: workspace:*
-        version: link:../../plugins/files
-      '@soksak/plugin-shell':
-        specifier: workspace:*
-        version: link:../../plugins/shell
-      '@soksak/plugin-terminal':
-        specifier: workspace:*
-        version: link:../../plugins/terminal
       '@soksak/workbench':
         specifier: workspace:*
         version: link:../../packages/workbench
