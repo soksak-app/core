@@ -41,6 +41,11 @@ static bool captureLimitReached;
 // gesture. ScreenCaptureKit may deliver one cached frame when a stream starts;
 // retain only frames whose display time is at or after this boundary.
 static uint64_t captureStartedAt;
+// 완성 프레임의 버퍼가 창의 장치 픽셀 크기와 다르면 true 다. 스트림이 새 출력 크기의 프레임을 보낼 때까지
+// 종료는 기다린다. captureUpdating 은 스트림 설정 변경을 요청하고 완료를 기다리는 동안 true 다.
+static bool captureResizing;
+static bool captureUpdating;
+static void followWindowSize(size_t width, size_t height, size_t needWidth, size_t needHeight);
 
 // 프레임을 받아 파일로 적는다. 프레임이 메시지로 전달되므로 수신 객체가 필요하다.
 @interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
@@ -114,8 +119,9 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
     [self write:sample];
     // 종료 요청 이후에 표시된 프레임은 idle 이어도 그 시각까지의 화면이 모두 전달되었다는 뜻이다.
     // 시각이 없는 완성 프레임은 write: 가 녹화 오류로 남기고, 종료는 그 오류를 보고한다.
+    // 창 크기를 따라가는 중이면 새 크기의 프레임이 올 때까지 종료를 미룬다.
     uint64_t shown = 0;
-    if (captureCaughtUp != NULL && captureStopAfter != 0 && displayTime(sample, &shown)
+    if (captureCaughtUp != NULL && captureStopAfter != 0 && !captureResizing && displayTime(sample, &shown)
         && shown >= captureStopAfter) {
         captureStopAfter = 0;
         dispatch_semaphore_signal(captureCaughtUp);
@@ -163,6 +169,17 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
         setCaptureError([NSString stringWithFormat:@"frame %d has no scale factor", number]);
         return;
     }
+    if (!(contentScale > 0) || !(scaleFactor > 0)) {
+        setCaptureError([NSString stringWithFormat:@"frame %d has content scale %g and scale factor %g",
+            number, contentScale, scaleFactor]);
+        return;
+    }
+    // 스트림 출력 크기는 시작할 때의 창 크기다. 창이 커지면 프레임이 축소되고(content scale < 1) 작아지면
+    // 버퍼가 남는다. 창의 장치 픽셀 크기가 버퍼와 다르면 출력 크기를 바꾼다. 바뀌기 전 프레임도 기록하며
+    // 헤더의 content scale 로 구분된다.
+    followWindowSize(CVPixelBufferGetWidth(buffer), CVPixelBufferGetHeight(buffer),
+        (size_t)llround(rect.size.width / contentScale * scaleFactor),
+        (size_t)llround(rect.size.height / contentScale * scaleFactor));
     if (captureStartedAt != 0 && shown < captureStartedAt) return;
     if (self.queued - captureBefore >= kCaptureMaxFrames) {
         if (!captureLimitReached) {
@@ -364,6 +381,45 @@ static bool captureOperationFailure(char **errorOut, NSString *message) {
 }
 @end
 
+// 녹화 스트림 설정. 장치 픽셀과 sRGB를 유지하여 얇은 선의 좌표·색을 그대로 측정한다.
+static SCStreamConfiguration *recordingConfiguration(size_t width, size_t height) {
+    SCStreamConfiguration *config = [[[SCStreamConfiguration alloc] init] autorelease];
+    config.width = width;
+    config.height = height;
+    config.pixelFormat = kCVPixelFormatType_32BGRA;
+    config.colorSpaceName = kCGColorSpaceSRGB;
+    config.showsCursor = NO;
+    config.captureResolution = SCCaptureResolutionBest;
+    config.minimumFrameInterval = CMTimeMake(1, 120);
+    config.queueDepth = 8;
+    return config;
+}
+
+// 버퍼 크기 width×height 가 창의 장치 픽셀 크기 needWidth×needHeight 와 다르면 현재 스트림의 출력 크기를
+// 바꾼다. 변경을 기다리는 동안 다시 요청하지 않으며, 변경 뒤에도 다르면 다음 프레임이 다시 요청한다.
+static void followWindowSize(size_t width, size_t height, size_t needWidth, size_t needHeight) {
+    @synchronized([SPCapture class]) {
+        if (width == needWidth && height == needHeight) {
+            captureResizing = false;
+            return;
+        }
+        captureResizing = true;
+        if (captureUpdating || captureStream == nil) return;
+        captureUpdating = true;
+        SCStream *stream = captureStream;
+        SCStreamConfiguration *config = recordingConfiguration(needWidth, needHeight);
+        [stream updateConfiguration:config completionHandler:^(NSError *failed) {
+            if (failed != nil) {
+                reportCaptureStreamFailure(stream, [NSString stringWithFormat:
+                    @"capture did not follow the window size %zux%zu: %@", needWidth, needHeight, failed.localizedDescription]);
+            }
+            @synchronized([SPCapture class]) {
+                if (stream == captureStream) captureUpdating = false;
+            }
+        }];
+    }
+}
+
 bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
     if (errorOut == NULL) {
         fprintf(stderr, "capture open needs an error output\n");
@@ -405,16 +461,9 @@ bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
             } else {
                 filter = [[[SCContentFilter alloc] initWithDesktopIndependentWindow:window] autorelease];
             }
-            SCStreamConfiguration *config = [[[SCStreamConfiguration alloc] init] autorelease];
-            // 장치 픽셀과 sRGB를 유지하여 얇은 선의 좌표·색을 그대로 측정한다.
-            config.width = (size_t)(filter.contentRect.size.width * filter.pointPixelScale);
-            config.height = (size_t)(filter.contentRect.size.height * filter.pointPixelScale);
-            config.pixelFormat = kCVPixelFormatType_32BGRA;
-            config.colorSpaceName = kCGColorSpaceSRGB;
-            config.showsCursor = NO;
-            config.captureResolution = SCCaptureResolutionBest;
-            config.minimumFrameInterval = CMTimeMake(1, 120);
-            config.queueDepth = 8;
+            SCStreamConfiguration *config = recordingConfiguration(
+                (size_t)(filter.contentRect.size.width * filter.pointPixelScale),
+                (size_t)(filter.contentRect.size.height * filter.pointPixelScale));
             [result completeWithFilter:filter configuration:config error:nil];
             return;
         }
@@ -464,6 +513,10 @@ bool sp_capture_start(const char* directory, char **errorOut) {
     }
     captureStartedAt = mach_absolute_time();
     captureLimitReached = false;
+    @synchronized([SPCapture class]) {
+        captureResizing = false;
+        captureUpdating = false;
+    }
     // 수신 객체는 한 번만 만든다. 녹화마다 새로 만들면 프레임 번호가 1 부터 다시
     // 시작해 앞선 녹화가 적은 파일을 덮어쓴다.
     if (captureSink == nil) captureSink = [[SPCapture alloc] init];
@@ -579,8 +632,11 @@ int sp_capture_stop(double after) {
         captureStopAfter = until;
     });
     if (dispatch_semaphore_wait(caughtUp, dispatch_time(until, NSEC_PER_SEC)) != 0) {
-        setCaptureError(@"no frame arrived within 1000ms after the requested display time");
-        fprintf(stderr, "observe: no frame displayed within 1 second after the requested display time\n");
+        NSString *message = captureResizing
+            ? @"no frame at the window's device-pixel size arrived within 1000ms after the requested display time"
+            : @"no frame arrived within 1000ms after the requested display time";
+        setCaptureError(message);
+        fprintf(stderr, "observe: %s\n", message.UTF8String);
     }
     dispatch_sync(captureQueue, ^{
         captureCaughtUp = NULL;

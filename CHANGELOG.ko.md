@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-14-4-1: 창 크기가 바뀌면 녹화가 커진 창을 시작 출력 크기로 축소하지 않고 창의 장치 픽셀 크기를 따라간다.
+
 - G1.4-14-5-1: Tauri host가 창이 닫히는 동안 `failed to receive message from webview`로 실패하지 않고, 닫히는 창을 빼고 `host.windows`에 답한다. window check는 실패한 감시의 status 이름을 보고한다.
 
 - G1.4-14-5: covered window check가 검사한 창이 드러나면 두 창의 frame, 가림, 활성 상태와 맨 앞 애플리케이션을 보고한다.

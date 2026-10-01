@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-4-1: a recording follows the window's device-pixel size when the window is resized, instead of scaling a grown window into the starting output size.
+
 - G1.4-14-5-1: the Tauri host answers `host.windows` while a window closes by leaving out the closing window, instead of failing with `failed to receive message from webview`; window checks name the status of a failed watch.
 
 - G1.4-14-5: the covered window check reports the frame, occlusion and activity of both windows and the frontmost application when the checked window becomes uncovered.
