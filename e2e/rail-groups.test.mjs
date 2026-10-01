@@ -49,7 +49,7 @@ for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adj
 
   // 기본 배치에서 셸 카드는 오른쪽 고정 사이드바와 맞닿고, 셸 플러그인의 오른쪽 오버라이드가 그 사이드바를 묶는다.
   await record("adjacent", () => s.run("core.card.focus", { card: "shell" }), 1);
-  const { tab } = await s.run("core.card.split", { card: "shell", axis: "x", plugin: "shell" });
+  const { tab } = await s.run("core.card.split", { card: "shell", side: "right", plugin: "shell" });
   const split = (await s.get("core.grid")).cards.find((card) => card.tabs.some((item) => item.id === tab));
   assert.ok(split, "the split card is missing");
   s.cleanup(async () => {

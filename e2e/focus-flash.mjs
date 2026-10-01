@@ -43,7 +43,7 @@ await until(async () => (await status("core.surfaces")).some((item) => item.visi
   "terminal surface visible");
 await client.request("command.run", {
   window: "main", name: "core.card.split",
-  params: { card: g.cards.find((card) => card.tabs.some((tab) => tab.id === terminalTab.id)).id, axis: "x", plugin: "browser" },
+  params: { card: g.cards.find((card) => card.tabs.some((tab) => tab.id === terminalTab.id)).id, side: "right", plugin: "browser" },
 });
 await until(async () => (await status("core.surfaces")).some((item) => item.visible && item.plugin === "browser"),
   "browser surface visible");

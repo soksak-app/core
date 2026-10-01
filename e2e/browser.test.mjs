@@ -202,7 +202,7 @@ for (const app of Object.values(APPS)) {
 
     // 다른 브라우저 표면은 이 표면의 문서 상태를 받지 않는다.
     const { tab } = await s.run("core.card.split", { card: grid.cards.find((c) => c.tabs.some((x) => x.id === surface)).id,
-      axis: "x", plugin: "browser" });
+      side: "right", plugin: "browser" });
     await s.until("core.surfaces", (list) => list.some((x) => x.surface === tab && x.exposes.includes("status browser.location")),
       "the second browser surface did not register");
     const other = await s.get("browser.location", tab);
@@ -377,7 +377,7 @@ for (const app of Object.values(APPS)) {
     const [browser] = await browsers(s);
     const card = (await s.get("core.grid")).cards.find((c) => c.tabs.some((x) => x.id === browser.surface)).id;
     const split = async () => {
-      const { tab } = await s.run("core.card.split", { card, axis: "x", plugin: "browser" });
+      const { tab } = await s.run("core.card.split", { card, side: "right", plugin: "browser" });
       await s.until("core.surfaces", (list) => list.some((x) => x.surface === tab && x.exposes.includes("status browser.location")),
         "the new browser surface did not register");
       return tab;
@@ -457,7 +457,7 @@ for (const app of Object.values(APPS)) {
     await s.until("browser.location", (value) => value.scroll.y >= 120,
       "scroll did not reach the focused browser document", { surface });
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface));
-    const { tab: other } = await s.run("core.card.split", { card: card.id, axis: "x", plugin: "browser" });
+    const { tab: other } = await s.run("core.card.split", { card: card.id, side: "right", plugin: "browser" });
     await s.until("core.surfaces", (list) => list.some((item) => item.surface === other &&
       item.exposes.includes("status browser.location")), "the second browser surface did not register");
     await s.run("browser.navigate", { url: at("other") }, other);
@@ -504,7 +504,7 @@ for (const app of Object.values(APPS)) {
 
     const grid = await s.get("core.grid");
     const card = grid.cards.find((item) => item.tabs.some((tab) => tab.id === surface));
-    const { tab: added } = await s.run("core.card.split", { card: card.id, axis: "x", plugin: "browser" });
+    const { tab: added } = await s.run("core.card.split", { card: card.id, side: "right", plugin: "browser" });
     await s.until("core.surfaces", (list) => list.some((item) => item.surface === added && item.visible &&
       item.exposes.includes("status browser.location")), "new browser document did not register");
     await s.run("browser.navigate", { url: at("theme-new") }, added);

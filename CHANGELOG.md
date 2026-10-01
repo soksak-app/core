@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-9: `core.card.split` takes the side of the new card (`left`, `right`, `top`, `bottom`) instead of an axis.
+
 - R1-3-5: project data is stored as `{format, value}`; values in an earlier form or format are converted once through the state module's `convertData` before it mounts, saved and logged.
 
 - R1-3-4: tabs of plugins that are not loaded open as placeholder cards that name the plugin and offer installation or enabling; environment entries, stored settings, sets, links and project data that name such a plugin are kept instead of failing the load.

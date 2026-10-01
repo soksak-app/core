@@ -43,7 +43,7 @@ export async function ensureTerminals(session, count) {
     const [card] = grid.cards.filter((item) => item.active && item.tabs.some((tab) => tab.plugin === "terminal"))
       .sort((a, b) => b.w * b.h - a.w * a.h);
     assert.ok(card, "a visible terminal card was not found for splitting");
-    await session.run("core.card.split", { card: card.id, axis: card.w >= card.h ? "x" : "y", plugin: "terminal" });
+    await session.run("core.card.split", { card: card.id, side: card.w >= card.h ? "right" : "bottom", plugin: "terminal" });
     await session.until(
       "core.surfaces",
       (surfaces) => surfaces.filter((item) => item.visible && item.plugin === "terminal").length >= terminals + 1,

@@ -63,7 +63,7 @@ for (const app of Object.values(APPS)) {
       await session.run("core.card.focus", { card: source.id });
       await session.until("core.grid", (grid) => grid.cards.find((card) => card.id === source.id)?.focused === true,
         `stress source card ${source.id} did not focus`);
-      const result = await session.run("core.card.split", { card: source.id, axis: "x", plugin: "browser" });
+      const result = await session.run("core.card.split", { card: source.id, side: "right", plugin: "browser" });
       const made = [result.card];
       created.push(result.card);
       await session.until("core.grid", (grid) => grid.cards.some((card) => card.id === result.card),

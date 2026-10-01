@@ -576,7 +576,7 @@ const onPickerKey = (e) => {
 function openPicker(anchor, what, cardId) {
   openLayer(anchor, PICKER_ASK[what],
     plugins().map((p) => ({ key: p.id, name: p.name, mark: p.mark, svg: p.svg })),
-    (k) => (what === "add" ? addTab(cardId, k) : splitWith(cardId, what, k)));
+    (k) => (what === "add" ? addTab(cardId, k) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k)));
 }
 
 /** 활성화할 탭을 선택받는다. 헤더가 접혔을 때 탭 목록을 표시한다. */
@@ -698,15 +698,19 @@ function addTab(cardId, plugin) {
 }
 
 /** 쪼개기 버튼의 후속 처리. 새 카드를 만들고 선택한 종류의 탭을 그 카드에 추가한다. */
-function splitWith(cardId, axis, plugin) {
+/** 새 카드를 놓는 변. 카드 도구의 세로선 분할은 오른쪽, 가로선 분할은 아래에 새 카드를 둔다. */
+const SPLIT_SIDES = ["left", "right", "top", "bottom"];
+const TOOL_SPLIT_SIDE = { x: "right", y: "bottom" };
+
+function splitWith(cardId, side, plugin) {
   restoreFullscreen();
   const card = grid.card(cardId);
   if (!card?.data) return;
   const t = newTab(plugin);
   recordOrigin(t.id, activeTab(card)?.id);
-  // 공간이 없으면 split 이 null 을 반환한다. 원본 카드에서 제거한 탭이 없으므로
+  // 공간이 없으면 splitToward 가 null 을 반환한다. 원본 카드에서 제거한 탭이 없으므로
   // 복구할 상태가 없다.
-  const born = grid.split(cardId, axis, { data: { tabs: [t], activeId: t.id } });
+  const born = grid.splitToward(cardId, side, { data: { tabs: [t], activeId: t.id } });
   if (born) focusedId = born;
   settle();
   return born ? { card: born, tab: t.id } : null;
@@ -1462,12 +1466,12 @@ export function addTabTo(id, kind) {
   return addTab(id, kind);
 }
 
-export function splitCard(id, axis, kind) {
+export function splitCard(id, side, kind) {
   paneCard(id);
   knownPlugin(kind);
-  if (axis !== "x" && axis !== "y") throw new Error(`unknown axis ${axis}`);
-  const made = splitWith(id, axis, kind);
-  if (!made) throw new Error(`card ${id} cannot split on ${axis}`);
+  if (!SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
+  const made = splitWith(id, side, kind);
+  if (!made) throw new Error(`card ${id} cannot split toward ${side}`);
   return made;
 }
 

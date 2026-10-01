@@ -19,7 +19,7 @@ A new shell then finds `sok`, and that `sok` talks to that application and uses 
 ```sh
 sok windows                                   # windows of the running application
 sok commands --project ~/work                 # commands that core and the plugins declare
-sok core.card.split --project ~/work --card shell --axis x --plugin terminal
+sok core.card.split --project ~/work --card shell --side right --plugin terminal
 sok terminal.input --project ~/work --surface <tab> --bytes 'npm test\r'
 sok status core.screen --watch                # the value, then one line per change
 ```

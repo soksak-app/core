@@ -19,7 +19,7 @@ sudo /Applications/<application>.app/Contents/MacOS/sok path install
 ```sh
 sok windows                                   # 실행 중인 애플리케이션의 창
 sok commands --project ~/work                 # core와 plugin이 선언한 command
-sok core.card.split --project ~/work --card shell --axis x --plugin terminal
+sok core.card.split --project ~/work --card shell --side right --plugin terminal
 sok terminal.input --project ~/work --surface <tab> --bytes 'npm test\r'
 sok status core.screen --watch                # 값, 그다음 변경마다 한 줄
 ```

@@ -67,7 +67,7 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
     // 살아 있는 카드의 그리기는 그 탭의 표면을 마운트한다.
     const mainTab = plane.currentGrid().card("main").data.activeId;
     assert.ok(mounts.includes(mainTab), `the first draw did not mount the main tab ${mainTab}`);
-    const { card, tab } = plane.splitCard("main", "x", pluginId);
+    const { card, tab } = plane.splitCard("main", "right", pluginId);
     assert.ok(plane.currentGrid().card(card), "the split made no card");
     const stale = held;
     assert.ok(stale.made.has(card), "the held layout does not contain the split card");

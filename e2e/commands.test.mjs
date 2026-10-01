@@ -74,11 +74,21 @@ for (const app of Object.values(APPS)) {
     await s.run("core.card.close", { card: made.id });
     await s.until("core.grid", (grid) => panes(grid).length === panes(start).length, "core.card.close did not close the card");
 
-    const result = await s.run("core.card.split", { card: "shell", axis: "x", plugin: "browser" });
-    const wide = await s.until("core.grid", (grid) => cardOf(grid, result.card), "core.card.split did not add a card");
-    assert.equal(cardOf(wide, result.card).tabs[0].plugin, "browser");
-    await s.run("core.card.close", { card: result.card });
-    await s.until("core.grid", (grid) => !cardOf(grid, result.card), "the split card did not close");
+    // 분할은 새 카드를 정한 변에 둔다. 왼쪽과 위는 새 카드가 원래 카드보다 앞이고, 오른쪽과 아래는 뒤다.
+    const beside = {
+      left: (born, base) => born.x + born.w <= base.x, right: (born, base) => born.x >= base.x + base.w,
+      top: (born, base) => born.y + born.h <= base.y, bottom: (born, base) => born.y >= base.y + base.h,
+    };
+    for (const side of ["left", "right", "top", "bottom"]) {
+      const result = await s.run("core.card.split", { card: "shell", side, plugin: "browser" });
+      const split = await s.until("core.grid", (grid) => cardOf(grid, result.card), `core.card.split ${side} did not add a card`);
+      const born = cardOf(split, result.card);
+      assert.equal(born.tabs[0].plugin, "browser");
+      assert.ok(beside[side](born, cardOf(split, "shell")), `the ${side} split put the new card at ${JSON.stringify(born)}`);
+      await s.run("core.card.close", { card: result.card });
+      await s.until("core.grid", (grid) => ids(grid).join() === ids(start).join(), `closing the ${side} split did not restore the layout`);
+    }
+    await assert.rejects(s.run("core.card.split", { card: "shell", axis: "x", plugin: "browser" }), /unknown side undefined/);
 
     await s.run("core.card.tab-list", { card: "shell" });
     const list = await s.until("core.picker", (picker) => picker.open, "core.card.tab-list did not open the tab list");
@@ -86,7 +96,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.picker.close");
     await s.until("core.picker", (picker) => !picker.open, "the tab list did not close");
 
-    const second = await s.run("core.card.split", { card: "shell", axis: "y", plugin: "browser" });
+    const second = await s.run("core.card.split", { card: "shell", side: "bottom", plugin: "browser" });
     await s.until("core.grid", (grid) => panes(grid).length === panes(start).length + 1, "the second split did not add a card");
     await s.run("core.card.close", { card: second.card });
     await s.until("core.grid", (grid) => ids(grid).join() === ids(start).join(), "closing the second split did not restore the layout");

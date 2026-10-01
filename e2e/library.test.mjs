@@ -163,7 +163,7 @@ for (const app of Object.values(APPS)) {
     if (terminalCount === 0) {
       const source = grid.cards.find((card) => card.id === "shell" && card.tabs.length > 0);
       if (!source) return t.skip("terminal source card not found");
-      await s.run("core.card.split", { card: source.id, axis: "x", plugin: "terminal" });
+      await s.run("core.card.split", { card: source.id, side: "right", plugin: "terminal" });
       await s.until("core.surfaces", (surfaces) => surfaces.filter((surface) =>
         surface.visible && surface.plugin === "terminal").length > terminalCount,
       "the first terminal card did not render");
@@ -175,7 +175,7 @@ for (const app of Object.values(APPS)) {
       const [largest] = (await s.get("core.grid")).cards.filter((card) => !card.fixed)
         .sort((a, b) => b.w * b.h - a.w * a.h);
       assert.ok(largest, "no content card can be split");
-      await s.run("core.card.split", { card: largest.id, axis: largest.w >= largest.h ? "x" : "y", plugin: "terminal" });
+      await s.run("core.card.split", { card: largest.id, side: largest.w >= largest.h ? "right" : "bottom", plugin: "terminal" });
       const next = await s.until("core.surfaces", (surfaces) => surfaces.filter((surface) =>
         surface.visible && surface.plugin === "terminal").length > terminalCount,
       "a terminal card split did not produce another visible terminal");

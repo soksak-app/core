@@ -235,7 +235,7 @@ for (const app of Object.values(APPS)) {
     const browser = (await s.get("core.grid")).cards.find((card) =>
       card.tabs.find((tab) => tab.id === card.active)?.plugin === "browser");
     assert.ok(browser, "the fixture must contain a visible browser card");
-    await s.run("core.card.split", { card: browser.id, axis: "x", plugin: "browser" });
+    await s.run("core.card.split", { card: browser.id, side: "right", plugin: "browser" });
     await s.until("core.surfaces", (surfaces) => surfaces.filter((item) =>
       item.visible && item.plugin === "browser").length === 2, "two browsers did not become visible");
     for (const terminal of terminals) {
@@ -623,7 +623,7 @@ for (const app of Object.values(APPS)) {
     let stopped = true;
     t.after(() => { if (stopped) process.kill(service, "SIGCONT"); });
     const card = (await s.get("core.grid")).cards.find((item) => item.active === terminal.surface);
-    const { tab } = await s.run("core.card.split", { card: card.id, axis: "x", plugin: "terminal" });
+    const { tab } = await s.run("core.card.split", { card: card.id, side: "right", plugin: "terminal" });
     await s.until("core.page.error", (error) => /did not present/.test(error ?? ""),
       "the presentation did not fail while the terminal service was stopped");
     // 실패 뒤 새 터미널 페이지가 영역을 배치한다. 배치가 끝나거나 표면이 오류를 보고할 때까지 서비스를 멈춰 둔다.
@@ -669,7 +669,7 @@ for (const app of Object.values(APPS)) {
     await s.until("terminal.session", (session) => session.vendor?.directory?.endsWith(encoded),
       `zsh did not report ${directory}`, { surface: source.surface });
     const card = (await s.get("core.grid")).cards.find((item) => item.active === source.surface);
-    const made = await s.run("core.card.split", { card: card.id, axis: "x", plugin: "terminal" });
+    const made = await s.run("core.card.split", { card: card.id, side: "right", plugin: "terminal" });
     await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === made.tab && item.visible &&
       item.exposes.includes("status terminal.session")), "the split terminal did not register");
     await s.until("terminal.session", (session) => session.vendor?.shell?.marker === "prompt.start",

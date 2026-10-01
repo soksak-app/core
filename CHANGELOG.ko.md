@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-9: `core.card.split`이 축 대신 새 카드의 변(`left`, `right`, `top`, `bottom`)을 받는다.
+
 - R1-3-5: 프로젝트 데이터를 `{format, value}`로 저장한다. 이전 형태나 format의 값은 상태 모듈이 마운트되기 전에 그 `convertData`로 한 번 변환해 저장하고 log에 남긴다.
 
 - R1-3-4: 불러오지 않은 plugin의 탭이 plugin을 알리고 설치나 사용을 제안하는 placeholder 카드로 열린다. 그런 plugin을 가리키는 환경 항목, 저장된 설정, 세트, 연결, 프로젝트 데이터는 불러오기를 실패시키지 않고 유지한다.

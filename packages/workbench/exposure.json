@@ -2281,17 +2281,19 @@
       },
       {
         "name": "core.card.split",
-        "description": "Splits a card on an axis and puts a new tab of a plugin in the new card.",
+        "description": "Splits a card and puts a new tab of a plugin in a new card on the named side of it: left, right, top, or bottom.",
         "params": {
           "type": "object",
           "properties": {
             "card": {
               "type": "string"
             },
-            "axis": {
+            "side": {
               "enum": [
-                "x",
-                "y"
+                "left",
+                "right",
+                "top",
+                "bottom"
               ]
             },
             "plugin": {
