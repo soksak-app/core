@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
-import { coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
+import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
 import { readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
 // 검사하는 애플리케이션 실행 파일. 애플리케이션은 번들에서 실행된다(docs/spec/hosts.md). 작업 디렉터리와
@@ -267,6 +267,9 @@ export class Session {
   }
 
   pointer(x, y, phase, options = {}) {
+    // macOS 의 협조적 활성화는 사용자가 활성화한 적 없는 앱의 자기 활성화 요청을 거절한다. 사용자가 앱을 전환하듯
+    // 검사 프로세스가 먼저 앱을 활성화하고, 호스트는 그 뒤 키 창과 웹뷰의 활성 상태를 기다린다.
+    if (options.activate) activateApp(this.client.endpoint.pid);
     return this.request("input.pointer", { x, y, phase, ...options });
   }
 

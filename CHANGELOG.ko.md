@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-114-1-1: macOS가 백그라운드로 실행된 앱의 자기 활성화를 거절하므로, activation 등급 검사가 host의 활성화 전에 검사 process에서 앱을 활성화한다.
+
 - V5-114-1: `core.focus`가 surface module 안의 focus를 보고하고 focus 전이마다 바뀌며, 실제 입력 check가 터미널 카드를 눌러도 browser 주소창으로 focus가 가지 않는지 검증한다.
 
 - G1.4-27: host stub 감사가 읽지 못한 파일을 보고하고 plugin `.js` 소스도 읽는다.

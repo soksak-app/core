@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-114-1-1: activation-tier checks activate the application from the check process before the host completes activation, because macOS refuses the self-activation of a background-launched application.
+
 - V5-114-1: `core.focus` reports focus inside surface modules and changes with every focus transition, and a real-input check verifies that pressing terminal cards never moves focus to the browser address field.
 
 - G1.4-27: the host stub audit reports a file it cannot read and reads plugin `.js` sources too.
