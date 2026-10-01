@@ -70,6 +70,7 @@ fn call_result(operation: &str, success: bool, error: *mut c_char) -> Result<(),
         let message = unsafe { CStr::from_ptr(error) }
             .to_str()
             .map(|message| format!("{operation}: {message}"))
+            // 기본값: 없음. UTF-8 이 아닌 오류 문장은 그 사실을 담은 오류로 보고한다.
             .unwrap_or_else(|error| format!("{operation}: native error is invalid UTF-8: {error}"));
         unsafe { libc::free(error.cast()) };
         return Err(message);

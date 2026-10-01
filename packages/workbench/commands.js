@@ -17,6 +17,7 @@ const listeners = new Set();
 const runFrom = (name, params = {}, el) => {
   if (!registry.declared("command", name) || name.startsWith("core.")) return registry.run(name, params);
   const windowSection = el?.closest("[data-window-sidebar]");
+  // 기본값: 일반 내용의 창 사이드바 섹션에는 연결된 표면이 없으므로 소유자는 null 이다.
   if (windowSection) return registry.runOwned(name, params, windowSection.dataset.surface ?? null);
   // 기본값: 요소 없이 실행한 명령이나 표면 밖 요소의 명령은 원하는 표면이 없다(null).
   const wanted = el?.closest("[data-surface]")?.dataset.surface ?? null;

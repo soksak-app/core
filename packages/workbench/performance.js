@@ -4,6 +4,7 @@ import { host as bridge } from "@soksak/runtime";
 function reportRelayError(error) {
   console.error("performance trace relay failed:", error);
   if (typeof ErrorEvent === "function") {
+    // 기본값: dispatchEvent 가 없는 실행 환경(Node 단위 검사)에서는 위 console.error 의 보고만 남는다.
     globalThis.dispatchEvent?.(new ErrorEvent("error", { message: error.message, error }));
   }
 }
@@ -53,6 +54,7 @@ export function createTracer(call, report = reportRelayError) {
       return result;
     } catch (error) {
       trace("command", { name, us: Math.round((performance.now() - started) * 1000), ok: false,
+        // 기본값: Error 가 아닌 throw 값은 그 값 자체를 문자열로 기록한다.
         error: String(error?.message ?? error) });
       throw error;
     }

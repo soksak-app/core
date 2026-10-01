@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-11: state the contract reason for 21 product-code defaults that the fallback audit reported without one, and record the missing type check of environment card widths separately.
+
 - G1.4-5: reconcile the test inventory with the feature record. Link the completed V5-118 and V5-118-1 capabilities to their implementation and tests, claim the exposure audit test, and record the current inventory counts.
 
 - G1.4-13: declare the capture stop layout-timeline contract cases and annotate the Wails and Tauri tests that verify them, so the host contract audit accepts both hosts.

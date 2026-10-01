@@ -27,6 +27,7 @@ function state(card, side) {
   return Object.hasOwn(sides, side) ? sides[side] : {};
 }
 function store(card, side, next) {
+  // 기본값: data.sidebars 는 선택 필드이므로 첫 저장에서 빈 기록을 만든다.
   card.data.sidebars ??= {};
   card.data.sidebars[side] = next;
 }
@@ -35,8 +36,10 @@ export function effectiveSidebar(card, side, defaults, linked) {
   if (Object.hasOwn(own, "size") && (own.size < defaults.min || own.size > defaults.max)) {
     throw new Error(`invalid sidebar size outside ${defaults.min} to ${defaults.max} points`);
   }
+  // 기본값: 명시 선택이 없으면 활성 플러그인의 기본 연결을 쓰고, 그것도 없으면 그 면은 꺼진다(docs/spec/example-model.md).
   const set = Object.hasOwn(own, "set") ? own.set : linked?.id ?? null;
   if (set === "off" || set === null) return null;
+  // 기본값: 생략한 size 와 collapsed 는 선언된 기본 크기와 펼친 상태다(docs/spec/example-model.md).
   return { set, size: own.size ?? defaults.size, collapsed: own.collapsed ?? false };
 }
 export function resolveSidebarSet(card, side, sets, defaults, linked) {
@@ -83,6 +86,7 @@ export function presentSidebars(requested, rect, metrics) {
     if(!state||!Number.isFinite(state.size)||state.size<0||typeof state.collapsed!=='boolean') throw new Error('invalid sidebar presentation state');
     const axis=side==='left'||side==='right'?'width':'height';
     const autoCollapsed=!state.collapsed&&insufficient[axis];
+    // 기본값: 없음. 표시 접힘은 요청한 접힘과 공간 부족에 따른 자동 접힘의 합이다.
     return [side,{...state,requestedCollapsed:state.collapsed,collapsed:state.collapsed||autoCollapsed,
       autoCollapsed,collapseReason:autoCollapsed?`insufficient-${axis}`:null}];
   }));

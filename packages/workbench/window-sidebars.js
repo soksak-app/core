@@ -11,7 +11,9 @@ export function windowSidebarCards(units, links, focusedPlugin = null) {
     if (!choices.length) continue;
     const override = focusedPlugin === null ? undefined : choices.find(link => link.place === `window-${side}` && link.plugin === focusedPlugin);
     const general = choices.find(link => link.place === side && link.plugin === null);
+    // 기본값: 초점 플러그인의 오버라이드가 없으면 일반 선택을 쓴다(docs/spec/external-sidebars.md).
     const chosen = override ?? general;
+    // 기본값: 선택이 없으면 그 고정 사이드바의 내용 세트는 없다.
     out.push({ id: side, side, plugin: override ? focusedPlugin : null, set: chosen?.set ?? null });
   }
   return out;
@@ -33,6 +35,7 @@ export function reconcileWindowSidebars(records, descriptors, initialWidth) {
   if (!Number.isFinite(initialWidth) || initialWidth <= 0) throw new Error("invalid initial window sidebar width");
   for (const descriptor of descriptors) {
     if (!windowSidebar(descriptor.id)) throw new Error(`unknown window sidebar ${descriptor.id}`);
+    // 기본값: 너비 기록이 없는 고정 사이드바는 처음 너비로 시작한다.
     records[descriptor.id] ??= { width: initialWidth };
   }
 }

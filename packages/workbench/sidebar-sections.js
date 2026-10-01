@@ -281,7 +281,9 @@ export function sidebarsState() {
         tab: record.layout === "tabs" ? choice.tab : null,
         card: record.context.card, surface: record.context.surface,
         placement: record.context.window ? "window" : "card",
+        // 기본값: 카드 사이드바 문맥에는 창 사이드바의 plugin 과 side 가 없다.
         plugin: record.context.plugin ?? null,
+        // 기본값: 카드 사이드바 문맥에는 창 사이드바의 plugin 과 side 가 없다.
         side: record.context.side ?? null,
         rect: (() => { const {x,y,width:w,height:h} = record.container.getBoundingClientRect(); return {x,y,w,h}; })(),
         unavailable: Boolean(record.context.window && !record.context.available),

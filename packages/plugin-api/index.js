@@ -559,7 +559,7 @@ export function normalizeSidebarDefaults(environment, manifests) {
       defaults.sets.push({ ...set, id: `${manifest.id}.${set.id}`, sections: [...set.sections] });
     }
     for (const kind of ["card", "window"]) {
-      // 선언에서 생략한 배치 종류에는 기본 연결이 없다.
+      // 기본값: 선언에서 생략한 배치 종류에는 기본 연결이 없다.
       for (const [side, set] of Object.entries(manifest.sidebars[kind] ?? {})) {
         defaults.links.push({ place: `${kind}-${side}`, plugin: manifest.id, set: `${manifest.id}.${set}` });
       }

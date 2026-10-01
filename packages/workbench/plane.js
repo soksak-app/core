@@ -115,7 +115,7 @@ let named = 0;
    T4 변에 드롭 = 그쪽에 새 자리가 필요하다
    T5 마지막 탭이 떠나면 그 카드는 사라진다 — 빈 카드는 남지 않는다        */
 const tab = (plugin, title) => ({ id: issueId("tab"), plugin, title });
-// 고정 좌우 사이드바 카드는 data가 null이므로 표면 탭이 없다.
+// 기본값: 고정 좌우 사이드바 카드는 data가 null이므로 표면 탭이 없다.
 const tabsOf = (card) => card?.data?.tabs ?? [];
 const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId);
 // 기본값: 포커스된 카드가 없거나 탭이 없는 자리 카드이면 포커스된 플러그인이 없다(null).
@@ -807,6 +807,7 @@ function drawCardSidebars(el, card, rect) {
   const presentation = cardSidebars(card, rect);
   for (const side of SIDEBAR_SIDES) {
     const existing = el.querySelector(`:scope > .card-sidebar[data-side-of="${side}"]`);
+    // 기본값: 표시 상태가 없는 면에는 사이드바가 없다.
     const state = presentation[side] ?? null;
     const set = resolveSidebarSet(card, side, sets, defaults, linkedCardSet(card, side));
     if (state === null || set === null) {
@@ -898,6 +899,7 @@ function settle() {
       }
     }
   }
+  // 기본값: 자리 카드만 남으면 포커스할 카드가 없다(null).
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   view.render();
   syncBackgroundSessions();
@@ -1207,6 +1209,7 @@ function restoreWindowState(kept) {
       if (!tabs.some(tab => tab.id === card.data.activeId)) throw new Error(`invalid stored active tab ${card.id}`);
     }
   }
+  // 기본값: 저장 레이아웃의 sidebars 는 선택 필드다.
   for (const id of Object.keys(kept.sidebars ?? {})) if (id.startsWith("rail-") || id.startsWith("window:")) throw new Error(`obsolete stored sidebar ${id}`);
   return restoreWindowSidebars(Object.hasOwn(kept, "windowSidebars") ? kept.windowSidebars : {});
 }
@@ -1349,6 +1352,7 @@ export const fresh = () => ({
   focusedId: environment().workspace.focus,
   windowSidebars: Object.fromEntries(environment().workspace.grid.cards
     .filter(card => card.id === "left" || card.id === "right")
+    // 기본값: 환경 선언에서 너비를 생략한 고정 사이드바는 sidebarWidth 설정의 너비로 시작한다.
     .map(card => [card.id, { width: card.width ?? value("sidebarWidth") }])),
   named: 0,
   sidebars: {},
@@ -1386,6 +1390,7 @@ function knownPlugin(id) {
 /** 카드의 요소. 도구 버튼과 탭 목록 버튼이 그 안에 있다. */
 const cardElement = (id) => plane.querySelector(`.card[data-card-id="${CSS.escape(id)}"]`);
 
+// 기본값: 전체 화면 카드가 없으면 null 이다.
 export const fullscreenCard = () => plane.querySelector('.card[data-fullscreen="true"]')?.dataset.cardId ?? null;
 export const presentedCardRect = (id) => view?.painted(id);
 

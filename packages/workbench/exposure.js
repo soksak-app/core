@@ -326,6 +326,7 @@ export function createRegistry({ call = null } = {}) {
     runOwned(name, params, owner) {
       if (pageOf("command", name)) return answer("command.run", { name, params });
       const surface = target("command", name, owner, true);
+      // 기본값: 오류 문장에서 소유자 없음(null)을 none 으로 적는다.
       if (surface === null) return Promise.reject(new ExposureError(EXPOSURE_ERRORS.unregistered, `owner ${owner ?? "none"} has not registered command ${name}`));
       return answer("command.run", { name, params, surface });
     },

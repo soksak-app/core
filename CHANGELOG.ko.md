@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-11: fallback audit가 이유 없이 보고한 product code 기본값 21곳에 계약상 이유를 적고, environment card width의 type 검사 누락은 따로 기록한다.
+
 - G1.4-5: test inventory와 기능 기록을 맞춘다. 완료된 V5-118과 V5-118-1을 구현과 test에 연결하고 exposure audit test를 등록하며 현재 inventory 개수를 기록한다.
 
 - G1.4-13: capture stop layout-timeline contract case를 선언하고 이를 검증하는 Wails·Tauri test에 표기하여 host contract audit가 두 host를 받아들이게 한다.
