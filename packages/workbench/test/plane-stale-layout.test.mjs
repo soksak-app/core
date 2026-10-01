@@ -38,7 +38,7 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
   const mounts = [];
   t.mock.module("../surface-modules.js", { exports: {
     mountSurface: (slot, surface) => { mounts.push(surface.surfaceId); return Promise.resolve(); },
-    disposeSurface: () => Promise.resolve(), focusSurface: () => true,
+    disposeSurface: () => Promise.resolve(), focusSurface: () => true, placePluginPlaceholder: () => {},
   } });
   // 새 스페이스의 배치: 닫을 수 없는 카드 하나.
   t.mock.module("../environment.js", { exports: {

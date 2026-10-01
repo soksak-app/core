@@ -6,7 +6,7 @@
 import { bind } from "./commands.js";
 import { icon } from "./icons.js";
 import { registry } from "./exposure.js";
-import { section } from "./registry.js";
+import { hasSection, section } from "./registry.js";
 
 /* 사이드바 id 마다 고른 탭과 접힌 섹션. */
 const choices = new Map();
@@ -149,7 +149,8 @@ export function drawSet(container, sidebar, set, context) {
   if (context.orientation !== "horizontal" && context.orientation !== "vertical") throw new Error("section orientation must be horizontal or vertical");
   sweep();
   if (set.layout !== "list" && set.layout !== "tabs") throw new Error(`set ${set.id} layout must be list or tabs`);
-  const sections = set.sections.map(section);
+  // 불러오지 않은 플러그인의 섹션은 세트에 남지만 그리지 않는다(docs/spec/plugins.md).
+  const sections = set.sections.filter(hasSection).map(section);
   const choice = choiceOf(sidebar);
   // 기본값: 섹션이 없는 세트에는 고를 탭이 없다(null).
   if (set.layout === "tabs" && !sections.some((s) => s.id === choice.tab)) choice.tab = sections[0]?.id ?? null;

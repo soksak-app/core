@@ -261,12 +261,18 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     await keepCommonSettings(s);
     const sets = await settingsValue(s, "sets");
-    const broken = sets.map((item, index) => (index === 0 ? { ...item, sections: [...item.sections, "gone.section"] } : item));
+    // 불러온 files 플러그인이 선언하지 않은 섹션은 거부한다.
+    const broken = sets.map((item, index) => (index === 0 ? { ...item, sections: [...item.sections, "files.gone"] } : item));
     await assert.rejects(s.run("core.settings.set", { patch: { sets: broken }, scope: "common" }),
-      /names unknown section gone.section/);
+      /names unknown section files.gone/);
     await assert.rejects(s.run("core.settings.set", { patch: { links: [{ place: "left", plugin: null, set: "set-none" }] }, scope: "common" }),
       /known set/);
     assert.deepEqual(await settingsValue(s, "sets"), sets, "a rejected change altered the sets");
+    // 불러오지 않은 플러그인의 섹션은 세트에 남는다(docs/spec/plugins.md).
+    const kept = sets.map((item, index) => (index === 0 ? { ...item, sections: [...item.sections, "gone.section"] } : item));
+    await s.run("core.settings.set", { patch: { sets: kept }, scope: "common" });
+    assert.deepEqual(await settingsValue(s, "sets"), kept, "a set naming a section of a plugin that is not loaded was not kept");
+    await s.run("core.settings.set", { patch: { sets }, scope: "common" });
 
     // 프로젝트 설정 파일에 등록되지 않은 섹션을 담은 세트가 있으면 그 프로젝트를 불러올 때 오류가 보인다.
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-sets-")));
@@ -280,7 +286,7 @@ for (const app of Object.values(APPS)) {
         if (item.root === root) await s.run("core.project.close", { id: item.id });
       }
     });
-    await s.until("core.page.error", (text) => /settings: set .* names unknown section gone\.section/.test(text ?? ""),
+    await s.until("core.page.error", (text) => /settings: set .* names unknown section files\.gone/.test(text ?? ""),
       "loading a project with an invalid stored set showed no error");
     await opened;
   });

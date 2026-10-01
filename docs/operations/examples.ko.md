@@ -132,7 +132,7 @@ pnpm -F @soksak/e2e run verify
 
 ## 브라우저 예제 검사
 
-`make browser-example-check`는 스테이징된 브라우저 예제로 `apps/browser/check/served.test.mjs`를 실행한다. 검사는 자기 루프백 HTTP 서버로 `apps/browser/build`를 제공하고, 설치된 Google Chrome을 일회용 프로필로 headless 실행하며(`CHROME`이 다른 실행 파일을 지정한다), Node 내장 `WebSocket`으로 Chrome DevTools 프로토콜을 통해 조작하므로 브라우저 자동화 패키지를 의존성으로 두지 않는다. 사람이 그 애플리케이션에서 하듯 프로젝트를 연다. `core.library.add`를 누르고 `core.library.form.parent`에 폴더 경로를 입력한 뒤 `core.library.form.submit`을 누른다. 브라우저 예제는 입력한 경로를 등록하므로 폴더 선택기가 필요 없다([프로젝트](../spec/projects.ko.md)). 페이지가 작업 화면을 보이고 모든 사이드바 섹션이 마운트될 때까지 기다리며, 처리되지 않은 예외, `console.error`, 수준 `error`의 브라우저 로그가 하나라도 있으면 각각을 보고하며 실패한다. Chrome이 없으면 건너뛰지 않고 실패한다. 검사는 끝날 때 프로필을 지우고 Chrome과 서버를 멈춘다.
+`make browser-example-check`는 스테이징된 브라우저 예제로 `apps/browser/check/served.test.mjs`를 실행한다. 검사는 자기 루프백 HTTP 서버로 `apps/browser/build`를 제공하고, 설치된 Google Chrome을 일회용 프로필로 headless 실행하며(`CHROME`이 다른 실행 파일을 지정한다), Node 내장 `WebSocket`으로 Chrome DevTools 프로토콜을 통해 조작하므로 브라우저 자동화 패키지를 의존성으로 두지 않는다. 사람이 그 애플리케이션에서 하듯 프로젝트를 연다. `core.library.add`를 누르고 `core.library.form.parent`에 폴더 경로를 입력한 뒤 `core.library.form.submit`을 누른다. 브라우저 예제는 입력한 경로를 등록하므로 폴더 선택기가 필요 없다([프로젝트](../spec/projects.ko.md)). 페이지가 작업 화면을 보이고 모든 사이드바 섹션이 마운트될 때까지 기다리며, 처리되지 않은 예외, `console.error`, 수준 `error`의 브라우저 로그가 하나라도 있으면 각각을 보고하며 실패한다. 두 번째 case는 스테이징된 `installed-plugins.json` 대신 `shell`이 없는 플러그인 목록을 제공하고 같은 방식으로 프로젝트를 연 뒤, 환경의 `shell` 탭이 `core.surfaces`에서 이유 `host`와 자리 표시 글을 가진 placeholder 카드로 오류 없이 열리는지 확인한다([불러오지 않은 플러그인](../spec/plugins.ko.md#불러오지-않은-플러그인)). Chrome이 없으면 건너뛰지 않고 실패한다. 검사는 끝날 때 Chrome을 멈추고 끝나기를 기다린 뒤 프로필을 지우고 서버를 멈춘다.
 
 ## 수동 인수
 

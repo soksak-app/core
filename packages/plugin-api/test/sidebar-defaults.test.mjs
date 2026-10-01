@@ -37,8 +37,15 @@ test("an explicit environment list replaces defaults including empty lists", () 
 
 test("invalid plugin defaults fail even when an environment override removes them", () => {
   const all = manifests();
-  all[0].sidebars.sets[0].sections.push("missing.tree");
-  assert.throws(() => api.normalizeSidebarDefaults({ sidebars: { sets: [], links: [] } }, all), /unknown section missing.tree/);
+  all[0].sidebars.sets[0].sections.push("other.missing");
+  assert.throws(() => api.normalizeSidebarDefaults({ sidebars: { sets: [], links: [] } }, all), /unknown section other.missing/);
+});
+
+test("plugin defaults keep sections of plugins that are not loaded", () => {
+  const all = manifests();
+  all[0].sidebars.sets[0].sections.push("absent.tree");
+  const normalized = api.normalizeSidebarDefaults({}, all);
+  assert.ok(normalized.sets.find((set) => set.id === "card.main").sections.includes("absent.tree"));
 });
 
 test("plugin defaults reject malformed IDs, fields, layouts, and side references", () => {

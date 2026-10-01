@@ -265,9 +265,24 @@ function validatePluginValue(key, value) {
   }
 }
 
+/**
+ * 불러오지 않은 플러그인의 저장된 설정인가. 그런 key 는 첫 `.` 앞이 불러온 플러그인이 아닌 플러그인 id 이며,
+ * 파일에 그대로 두고 검사하지도 적용하지도 않는다(docs/spec/plugins.md).
+ */
+function keptSetting(key) {
+  const dot = key.indexOf(".");
+  return !Object.hasOwn(defaults, key) && dot > 0 && !manifestList.some((manifest) => manifest.id === key.slice(0, dot));
+}
+
+/** 적용할 설정만 남긴다. 불러오지 않은 플러그인의 설정은 저장소에만 있다. */
+function applied(values) {
+  return Object.fromEntries(Object.entries(values).filter(([key]) => !keptSetting(key)));
+}
+
 function validateValues(values, where) {
   if (!values || typeof values !== "object") throw new Error(`${where} are not an object`);
   for (const [key, value] of Object.entries(values)) {
+    if (keptSetting(key)) continue;
     if (!Object.hasOwn(defaults, key)) throw new Error(`${where}: unknown setting ${key}`);
     validatePluginValue(key, value);
   }
@@ -345,7 +360,7 @@ async function refresh() {
   const nextOverrides = snapshot.projects.find((p) => p.id === projectId)?.settings ?? {};
   validateValues(snapshot.common, "common settings");
   validateValues(nextOverrides, "project settings");
-  checkValues(effectiveSettings(defaults, snapshot.common, nextOverrides));
+  checkValues(effectiveSettings(defaults, applied(snapshot.common), applied(nextOverrides)));
   if (JSON.stringify(common) !== JSON.stringify(snapshot.common) || JSON.stringify(overrides) !== JSON.stringify(nextOverrides)) {
     common = snapshot.common;
     overrides = nextOverrides;
@@ -355,7 +370,7 @@ async function refresh() {
 }
 
 function apply() {
-  settings = effectiveSettings(defaults, common, overrides);
+  settings = effectiveSettings(defaults, applied(common), applied(overrides));
   install();
   announce();
 }
@@ -455,7 +470,7 @@ export function set(patch, scope = projectId ? "project" : "common") {
     if (val === undefined) delete patched[key];
     else patched[key] = val;
   }
-  checkValues(id ? effectiveSettings(defaults, common, patched) : effectiveSettings(defaults, patched, overrides));
+  checkValues(id ? effectiveSettings(defaults, applied(common), applied(patched)) : effectiveSettings(defaults, applied(patched), applied(overrides)));
   for (const [key, val] of Object.entries(patch)) {
     if (val === undefined) delete target[key];
     else target[key] = val;

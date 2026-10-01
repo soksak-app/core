@@ -181,14 +181,18 @@ function gridState() {
 }
 
 function surfacesState() {
+  // 불러오지 않은 플러그인의 탭은 표면 대신 자리 표시가 보이며, placeholder 에 그 이유를 보고한다(docs/spec/plugins.md).
+  const placeholders = [...document.querySelectorAll("[data-plugin-placeholder]")].map((el) => ({
+    surface: el.dataset.surfaceId, plugin: el.dataset.plugin, visible: true, placeholder: el.dataset.pluginPlaceholder,
+  }));
   const record = seated();
-  if (!record) return [];
+  if (!record) return placeholders;
   const at = planeOrigin();
-  return record.surfaces.map((s) => ({
+  return [...record.surfaces.map((s) => ({
     surface: s.id, plugin: s.plugin, visible: s.visible, dim: s.dim,
     declared: shift(s.declared, at), applied: shift(s.applied, at),
-    exposes: registry.namesOf(s.id), status: surfaceState(s.id),
-  }));
+    exposes: registry.namesOf(s.id), status: surfaceState(s.id), placeholder: null,
+  })), ...placeholders];
 }
 
 const withOpen = (project) => ({ ...project, open: projects.isOpen(project.id) });

@@ -97,3 +97,31 @@ test('settings stored under removed keys are deleted once when the settings are 
     globalThis.document = previous;
   }
 });
+
+test('stored settings of a plugin that is not loaded are kept and not applied', async () => {
+  const previous = globalThis.document;
+  globalThis.document = { addEventListener() {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const memory = { common: { gap: 8, 'absent.option': 3 }, projects: [{ id: 'prj-a', settings: { 'absent.option': 4 } }] };
+  const { connectSettings, set: change, value } = await import('../settings.js?test=absent-plugin');
+  try {
+    await connectSettings({
+      snapshot: async () => structuredClone(memory),
+      settings: async (id, values) => {
+        const target = id === null ? memory.common : memory.projects.find((p) => p.id === id).settings;
+        for (const [key, val] of Object.entries(values)) {
+          if (val === undefined) delete target[key];
+          else target[key] = val;
+        }
+      },
+      onChange: () => () => {},
+    });
+    assert.equal(value('gap'), 8);
+    assert.equal(value('absent.option'), undefined, 'a setting of a plugin that is not loaded was applied');
+    await change({ gap: 9 }, 'common');
+    assert.deepEqual(memory.common, { gap: 9, 'absent.option': 3 });
+    assert.deepEqual(memory.projects[0].settings, { 'absent.option': 4 });
+    assert.throws(() => change({ 'absent.option': 5 }, 'common'), /Unknown setting: absent.option/);
+  } finally {
+    globalThis.document = previous;
+  }
+});

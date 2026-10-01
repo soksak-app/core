@@ -77,8 +77,38 @@ function pageRuntime(surface, scoped, compositionReady) {
   };
 }
 
+/**
+ * 불러오지 않은 플러그인 탭의 자리 표시를 slot 에 둔다(docs/spec/plugins.md). 같은 slot 의 마운트된 표면은
+ * 다른 표면을 마운트할 때처럼 보관 자리로 옮긴다. 자리 표시는 탭이 닫히면 disposeSurface 가 지운다.
+ */
+export function placePluginPlaceholder(slot, surfaceId, element) {
+  for (const other of mounted.values()) {
+    if (other.slot === slot) {
+      other.host.dataset.surfaceSuspended = "true";
+      parking.append(other.host);
+    }
+  }
+  clearSlotPlaceholders(slot, surfaceId);
+  placeholders.get(surfaceId)?.remove();
+  element.classList.add("surface-placeholder");
+  element.dataset.surfaceId = surfaceId;
+  slot.append(element);
+  placeholders.set(surfaceId, element);
+}
+
+/** slot 에 남은 다른 탭의 자리 표시를 지운다. 같은 카드의 다른 탭이 보이면 그 탭의 자리 표시는 남지 않는다. */
+function clearSlotPlaceholders(slot, surfaceId) {
+  for (const [id, element] of placeholders) {
+    if (id !== surfaceId && element.parentNode === slot) {
+      element.remove();
+      placeholders.delete(id);
+    }
+  }
+}
+
 export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   if (!slot || !surface?.module) throw new TypeError("surface module mount requires a slot and module");
+  clearSlotPlaceholders(slot, surface.surfaceId);
   // 호스트가 없으면 사이드카와 네이티브 영역이 없다. 그것이 필요한 표면은 마운트하지 않고 자리 표시를 그린다
   // (docs/spec/plugins.md#runtime-module).
   if (!native && (surface.sidecars.length > 0 || surface.composition?.kind === "hybrid")) {

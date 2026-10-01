@@ -16,10 +16,14 @@ const STEP = 20000;
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json",
   ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".txt": "text/plain" };
 
-/** build 디렉터리를 제공하는 루프백 서버. */
-function serve() {
+/** build 디렉터리를 제공하는 루프백 서버. replaced 는 경로마다 build 파일 대신 보낼 JSON 이다. */
+function serve(replaced = {}) {
   const server = createServer((request, response) => {
     const path = normalize(decodeURIComponent(new URL(request.url, "http://x").pathname)).replace(/^\/+/, "");
+    if (Object.hasOwn(replaced, path)) {
+      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(replaced[path]));
+      return;
+    }
     let file = join(BUILD, path);
     if (existsSync(file) && statSync(file).isDirectory()) file = join(file, "index.html");
     if (!file.startsWith(BUILD) || !existsSync(file)) { response.writeHead(404).end(); return; }
@@ -70,10 +74,20 @@ async function devtools(url) {
   return { send, on: (fn) => listeners.add(fn), close: () => socket.close() };
 }
 
-test("a project opens in the served browser example without a console error", async (t) => {
+/**
+ * 제공한 브라우저 예제에서 라이브러리 폼으로 프로젝트를 열고 사이드바 섹션이 마운트되기를 기다린다. 페이지에서
+ * 식을 계산하는 evaluate 와 모은 오류를 돌려준다.
+ */
+async function openProject(t, replaced, opened = `async () => {
+    if (document.body.dataset.screen !== "workspace") return false;
+    const { registry } = await import("/exposure.js");
+    const reply = await registry.handle({ method: "status.get", params: { name: "core.sidebars" } });
+    const sections = reply.result.flatMap((sidebar) => sidebar.sections);
+    return sections.length > 0 && sections.every((section) => section.mounted || section.error);
+  }`) {
   assert.ok(existsSync(join(BUILD, "index.html")), `${BUILD} is not staged; run pnpm -F @soksak/browser frontend`);
   assert.ok(existsSync(CHROME), `Chrome is not installed at ${CHROME}; set CHROME`);
-  const server = await serve();
+  const server = await serve(replaced);
   t.after(() => server.close());
   const profile = mkdtempSync(join(tmpdir(), "soksak-browser-example-"));
   const { chrome, address } = launch(profile);
@@ -131,21 +145,38 @@ test("a project opens in the served browser example without a console error", as
   await evaluate(`(() => { const input = document.querySelector('[data-expose="core.library.form.parent"]');
     input.value = "/work/browser-example"; input.dispatchEvent(new Event("input", { bubbles: true })); })()`);
   await evaluate(`document.querySelector('[data-expose="core.library.form.submit"]').click()`);
-  await until(`async () => {
-    if (document.body.dataset.screen !== "workspace") return false;
-    const { registry } = await import("/exposure.js");
-    const reply = await registry.handle({ method: "status.get", params: { name: "core.sidebars" } });
-    const sections = reply.result.flatMap((sidebar) => sidebar.sections);
-    return sections.length > 0 && sections.every((section) => section.mounted || section.error);
-  }`, "the project did not open with its sidebar sections").catch(async (error) => {
+  await until(opened, "the project did not open with its sidebar sections").catch(async (error) => {
     const state = await evaluate(`(async () => { const { registry } = await import("/exposure.js");
       return { screen: document.body.dataset.screen,
-        sidebars: (await registry.handle({ method: "status.get", params: { name: "core.sidebars" } })) }; })()`);
+        sidebars: (await registry.handle({ method: "status.get", params: { name: "core.sidebars" } })),
+        slots: [...document.querySelectorAll(".slot")].map((el) => ({ ...el.dataset, children: [...el.children].map((child) => child.className) })) }; })()`);
     throw new Error(`${error.message}; page state ${JSON.stringify(state)}; errors ${JSON.stringify(errors)}`);
   });
   const sections = await evaluate(`(async () => { const { registry } = await import("/exposure.js");
     return (await registry.handle({ method: "status.get", params: { name: "core.sidebars" } })).result
       .flatMap((sidebar) => sidebar.sections.map((section) => [section.id, section.error])); })()`);
   assert.deepEqual(sections.filter(([, error]) => error), [], "a section failed to mount");
+  return { evaluate, errors };
+}
+
+test("a project opens in the served browser example without a console error", async (t) => {
+  const { errors } = await openProject(t);
+  assert.deepEqual(errors, [], `the page reported errors: ${errors.join("; ")}`);
+});
+
+test("a tab of a plugin that is not loaded opens as a placeholder card without an error", async (t) => {
+  // 환경의 workspace 가 shell 탭을 두므로, shell 을 뺀 플러그인 목록에서는 그 탭이 placeholder 다(docs/spec/plugins.md).
+  const installed = JSON.parse(readFileSync(join(BUILD, "installed-plugins.json"), "utf8"));
+  assert.ok(installed.plugins.some((plugin) => plugin.id === "shell"), "the staged plugin list has no shell plugin");
+  // shell 이 없으면 사이드바 세트의 shell 섹션도 그려지지 않으므로, 열림은 자리 표시가 보이는 것으로 판정한다.
+  const { evaluate, errors } = await openProject(t, {
+    "installed-plugins.json": { plugins: installed.plugins.filter((plugin) => plugin.id !== "shell") },
+  }, `() => document.body.dataset.screen === "workspace" && document.querySelector("[data-plugin-placeholder]")`);
+  const surfaces = await evaluate(`(async () => { const { registry } = await import("/exposure.js");
+    return (await registry.handle({ method: "status.get", params: { name: "core.surfaces" } })).result
+      .filter((surface) => surface.placeholder !== null).map((surface) => [surface.plugin, surface.placeholder]); })()`);
+  assert.ok(surfaces.length > 0 && surfaces.every(([plugin, reason]) => plugin === "shell" && reason === "host"), JSON.stringify(surfaces));
+  const lines = await evaluate(`[...document.querySelectorAll('[data-plugin-placeholder]')].map((el) => el.textContent)`);
+  assert.ok(lines.length > 0 && lines.every((line) => line === "shell 플러그인은 네이티브 호스트가 있어야 설치됩니다."), JSON.stringify(lines));
   assert.deepEqual(errors, [], `the page reported errors: ${errors.join("; ")}`);
 });

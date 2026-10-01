@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-3-4: tabs of plugins that are not loaded open as placeholder cards that name the plugin and offer installation or enabling; environment entries, stored settings, sets, links and project data that name such a plugin are kept instead of failing the load.
+
 - G1.4-44: the workbench writes observations (focus transitions, layout and settings conversions) through `log`, which the browser example writes as information instead of errors; the browser example check passes again.
 
 - R1-3-3: the settings window lists loaded, installed and registry plugins with their states, and a plugin page installs, updates, disables, enables and removes the plugin through the `core.plugins.*` commands; `core.plugins` reports the list and the latest operation.

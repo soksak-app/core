@@ -3,8 +3,10 @@ export function windowSidebar(id) {
   return id === "left" || id === "right" ? { side: id, plugin: null } : null;
 }
 
-export function windowSidebarCards(units, links, focusedPlugin = null) {
-  if (focusedPlugin !== null && !units.some(unit => unit.id === focusedPlugin)) throw new Error(`unknown window sidebar plugin ${focusedPlugin}`);
+export function windowSidebarCards(units, links, focused = null) {
+  // 불러오지 않은 플러그인의 탭에 초점이 있으면 그 플러그인의 연결은 내용을 고르지 않고 일반 선택이 보인다
+  // (docs/spec/plugins.md).
+  const focusedPlugin = focused !== null && units.some(unit => unit.id === focused) ? focused : null;
   const out = [];
   for (const side of ["left", "right"]) {
     const choices = links.filter(link => link.place === side || link.place === `window-${side}`);

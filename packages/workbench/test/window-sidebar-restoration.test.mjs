@@ -28,11 +28,12 @@ const { restoreWindowSidebars } = await import("../window-sidebars.js");
 
 test("saved window state rejects obsolete and unknown cards before replacing the displayed layout", () => {
   for (const card of [{ id: "rail-pane" }, { id: "window:missing:left" },
-    { id: "a", data: { tabs: [{ id: "t", plugin: "missing" }], activeId: "t" } },
     { id: "a", data: { tabs: [{ id: "t", plugin: "pane" }], activeId: "missing" } }]) {
     assert.throws(() => checkStoredLayout({ state: { cards: [card] }, windowSidebars: {} }), /stored|obsolete|unknown/);
   }
   checkStoredLayout({ state: { cards: [{ id: "a", data: { tabs: [{ id: "t", plugin: "pane" }], activeId: "t" } }] }, windowSidebars: {} });
+  // 불러오지 않은 플러그인의 탭은 placeholder 로 열린다(docs/spec/plugins.md).
+  checkStoredLayout({ state: { cards: [{ id: "a", data: { tabs: [{ id: "t", plugin: "missing" }], activeId: "t" } }] }, windowSidebars: {} });
 });
 
 test("saved obsolete width fields fail even when empty", () => {

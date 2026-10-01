@@ -71,4 +71,8 @@ export function section(id) {
 }
 
 /** 섹션 id 목록의 이름을 순서대로 반환한다. 등록되지 않은 id 면 예외를 던진다. 저장된 세트는 불러올 때 검사된다. */
-export const sectionNames = (ids) => ids.map((id) => section(id).name);
+/** 등록된 섹션인가. 불러오지 않은 플러그인의 섹션은 세트에 남지만 등록되지 않는다(docs/spec/plugins.md). */
+export const hasSection = (id) => registeredSections.some((s) => s.id === id);
+
+/** 섹션 이름. 불러오지 않은 플러그인의 섹션은 id 와 "(불러오지 않음)" 이다. */
+export const sectionNames = (ids) => ids.map((id) => (hasSection(id) ? section(id).name : `${id} (불러오지 않음)`));

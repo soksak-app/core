@@ -443,7 +443,7 @@
       },
       {
         "name": "core.surfaces",
-        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message.",
+        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message. A tab of a plugin that is not loaded is reported with its plugin, visible true and placeholder set to the reason (missing, disabled, restart, host or unread); a mounted surface reports placeholder null.",
         "schema": {
           "type": "array",
           "items": {
@@ -494,6 +494,20 @@
                     "type": "number"
                   }
                 }
+              },
+              "placeholder": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "missing",
+                  "disabled",
+                  "restart",
+                  "host",
+                  "unread",
+                  null
+                ]
               },
               "exposes": {
                 "type": "array",
@@ -2940,6 +2954,10 @@
       {
         "name": "core.settings-modal.search",
         "description": "The plugin search field."
+      },
+      {
+        "name": "core.card.placeholder-action",
+        "description": "The 설치 or 사용 button of a placeholder card for a tab of a plugin that is not loaded, bound to core.plugins.install or core.plugins.enable."
       },
       {
         "name": "core.settings-modal.back",

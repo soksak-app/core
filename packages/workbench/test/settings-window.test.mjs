@@ -149,7 +149,8 @@ test("deleting a set removes its links in the same change", () => {
 });
 
 test("a stored set or link that breaks the sidebars rules is rejected before anything changes", () => {
-  setPluginSettings([{ id: "alpha", surface: {}, sections: [{ id: "alpha.one", name: "하나", module: "ui/one.js" }] }]);
+  setPluginSettings([{ id: "alpha", surface: {}, sections: [{ id: "alpha.one", name: "하나", module: "ui/one.js" }] },
+    { id: "gamma", sections: [{ id: "gamma.one", name: "감마", module: "ui/one.js" }] }]);
   setSidebarDefaults({ sets: [{ id: "set-1", title: "묶음", sections: ["alpha.one"], layout: "list" }], links: [] });
   const stored = (change) => { const value = structuredClone(defaults.sets); change(value); return value; };
   assert.throws(() => set({ sets: stored((v) => { v[0].sections = ["alpha.gone"]; }) }, "common"),
@@ -159,7 +160,7 @@ test("a stored set or link that breaks the sidebars rules is rejected before any
   assert.throws(() => set({ links: [{ place: "left", plugin: null, set: "set-9" }] }, "common"), /known set/);
   // 이름 바꿈(V5-116-1): 낡은 rail 자리는 알 수 없는 자리로 거부된다.
   assert.throws(() => set({ links: [{ place: "rail", plugin: "alpha", set: "set-1" }] }, "common"), /requires a place/);
-  assert.throws(() => set({ links: [{ place: "card-left", plugin: "beta", set: "set-1" }] }, "common"), /plugin beta without a surface/);
+  assert.throws(() => set({ links: [{ place: "card-left", plugin: "gamma", set: "set-1" }] }, "common"), /plugin gamma without a surface/);
 });
 
 test("window and card choices are independent without inherited focus selection", () => {

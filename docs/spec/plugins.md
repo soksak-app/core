@@ -159,10 +159,12 @@ A plugin is loaded when the window loaded its manifest at startup. Installation 
 | `disabled` | <plugin> 플러그인을 사용하지 않습니다. | 사용, `core.plugins.enable {plugin}` |
 | `restart` | 애플리케이션을 다시 시작하면 <plugin> 플러그인이 열립니다. | none |
 | `host` | <plugin> 플러그인은 네이티브 호스트가 있어야 설치됩니다. | none; the application has no host |
+| `unread` | <plugin> 플러그인의 설치 상태를 읽지 못했습니다. | none; the plugin state cannot be read |
 
-  The reason is `disabled` when `installed.json` lists the plugin disabled, `restart` when it lists the plugin enabled, `missing` when it does not list it, and `host` without a host. The card updates its reason after each `plugins-changed` event.
+  The reason is `disabled` when `installed.json` lists the plugin disabled, `restart` when it lists the plugin enabled, `missing` when it does not list it, `host` without a host, and `unread` when the [plugin state](installation.md#plugin-operations-in-the-application) cannot be read. The workbench reads the plugin state before it opens the first space. The card updates its reason after each `plugins-changed` event.
 - A sidebar link that names such a plugin is kept and selects no content. A set section whose plugin, the id before the first `.`, is not loaded is kept in the set and not shown; the set editor shows its row as "<section id> (불러오지 않음)" with ▲, ▼ and −.
 - Project data under `plugins.<plugin id>` of such a plugin is kept unchanged.
+- `environment.json` entries that name such a plugin are kept: its `settings` are neither checked nor applied, and its `workspace` tabs open as placeholder cards. An application whose environment names a plugin therefore still starts after that plugin is disabled or removed.
 
 A plugin that becomes loaded after a restart uses the kept tabs, links, sections and data again.
 

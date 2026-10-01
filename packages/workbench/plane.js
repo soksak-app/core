@@ -7,7 +7,7 @@
 import { Soksak, SoksakView, outline } from "soksak";
 import { borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
 import { nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
-import { isPlace, plugin, plugins } from "./registry.js";
+import { hasPlugin, isPlace, plugin, plugins } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
 import { bindSidebarGrip } from "./sidebar-grip.js";
 import { targetCardInsets } from "./card-insets.js";
@@ -20,7 +20,8 @@ import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run } from "./commands.js";
-import { disposeSurface, focusSurface, mountSurface } from "./surface-modules.js";
+import { disposeSurface, focusSurface, mountSurface, placePluginPlaceholder } from "./surface-modules.js";
+import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
 import { clearVisibleNotices, onTabReports, recordOrigin, setVisibleTab, tabLabel, tabNotice } from "./tab-reports.js";
 import { configureSystemNotifications, systemNotifications } from "./system-notifications.js";
@@ -313,6 +314,17 @@ function updateCard(el, card, rect) {
   // 쓰고, 카드 id 는 스페이스마다 같은 값이라 스페이스가 달라도 같은 표면이 된다.
   const slot = el.querySelector(".slot");
   const shown = activeTab(card);
+  if (!hasPlugin(shown.plugin)) {
+    // 불러오지 않은 플러그인의 탭은 표면이 아니라 자리 표시다. 컴포지터가 표면으로 보지 않도록 표면 표시를 지운다.
+    for (const key of ["nativeSurface", "nativeSurfaceId", "nativeLayer", "nativePlugin", "nativeTitle", "nativeDim"]) delete slot.dataset[key];
+    placePluginPlaceholder(slot, shown.id, pluginPlaceholder(shown));
+    slot.dataset.surfaceStatus = "ready";
+    setSurfaceStatus(status, { phase: "ready" });
+    surfaceStates.set(shown.id, { phase: "ready", error: null });
+    surfaceStateChanged();
+    setText(statusText, `열 ${card.c0}–${card.c1} · 행 ${card.r0}–${card.r1} · 탭 ${tabs.length}`);
+    return;
+  }
   slot.dataset.nativeSurface = "stub";
   slot.dataset.nativeSurfaceId = shown.id;
   slot.dataset.nativeLayer = "10";
@@ -335,6 +347,55 @@ function updateCard(el, card, rect) {
   });
   setText(statusText, `열 ${card.c0}–${card.c1} · 행 ${card.r0}–${card.r1} · 탭 ${tabs.length}`);
 }
+
+/* ── 불러오지 않은 플러그인의 탭(docs/spec/plugins.md) ───────────────── */
+
+/** 이유마다 자리 표시의 글. */
+const PLACEHOLDER_LINES = {
+  missing: (id) => `${id} 플러그인이 설치되어 있지 않습니다.`,
+  disabled: (id) => `${id} 플러그인을 사용하지 않습니다.`,
+  restart: (id) => `애플리케이션을 다시 시작하면 ${id} 플러그인이 열립니다.`,
+  host: (id) => `${id} 플러그인은 네이티브 호스트가 있어야 설치됩니다.`,
+  unread: (id) => `${id} 플러그인의 설치 상태를 읽지 못했습니다.`,
+};
+
+/** 불러오지 않은 플러그인 탭의 이유. 워크벤치는 첫 스페이스를 열기 전에 플러그인 상태를 읽는다. */
+function placeholderReason(id) {
+  if (!pluginOperations.hosted) return "host";
+  if (pluginOperations.failure()?.kind === "state") return "unread";
+  const row = pluginOperations.status().plugins.find((entry) => entry.id === id);
+  if (!row?.installed) return "missing";
+  return row.installed.enabled ? "restart" : "disabled";
+}
+
+/** 자리 표시 요소. 이유에 따라 설치나 사용 버튼이 있다. */
+function pluginPlaceholder(tab) {
+  const reason = placeholderReason(tab.plugin);
+  const el = document.createElement("div");
+  el.dataset.pluginPlaceholder = reason;
+  el.dataset.plugin = tab.plugin;
+  el.style.cssText = "position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:10px;color:var(--muted)";
+  const line = document.createElement("p");
+  line.textContent = PLACEHOLDER_LINES[reason](tab.plugin);
+  el.append(line);
+  const row = pluginOperations.status().plugins.find((entry) => entry.id === tab.plugin);
+  const action = reason === "missing" && row?.latest ? ["install", "설치"] : reason === "disabled" ? ["enable", "사용"] : null;
+  if (action) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ui-button";
+    button.dataset.expose = "core.card.placeholder-action";
+    button.textContent = action[1];
+    bind(button, `core.plugins.${action[0]}`, { plugin: tab.plugin });
+    el.append(button);
+  }
+  return el;
+}
+
+// 플러그인 상태가 바뀌면 자리 표시의 이유와 버튼을 다시 정한다.
+onPluginOperations(() => {
+  if (grid && grid.cards.some((card) => tabsOf(card).some((tab) => !hasPlugin(tab.plugin)))) settle();
+});
 
 /* ── T5 — 마지막 탭이 이동하면 카드를 닫는다 ─────────────────────────── */
 
@@ -523,7 +584,9 @@ function openTabList(anchor, cardId) {
   const card = grid.card(cardId);
   if (!card?.data) return;
   openLayer(anchor, `탭 ${tabsOf(card).length}개`, tabsOf(card).map((t) => ({
-    key: t.id, name: tabName(t), mark: plugin(t.plugin).mark, svg: plugin(t.plugin).svg, notice: tabNotice(t.id),
+    // 불러오지 않은 플러그인의 탭은 표시 없이 이름만 보인다.
+    key: t.id, name: tabName(t), mark: hasPlugin(t.plugin) ? plugin(t.plugin).mark : "?", svg: hasPlugin(t.plugin) ? plugin(t.plugin).svg : "",
+    notice: tabNotice(t.id),
     active: t.id === card.data.activeId,
   })), (id) => {
     const c = grid.card(cardId);
@@ -913,7 +976,8 @@ function syncBackgroundSessions() {
   const tabs = new Map();
   for (const card of grid.cards) for (const tab of tabsOf(card)) tabs.set(tab.id, tab);
   for (const tab of tabs.values()) {
-    const descriptor = plugin(tab.plugin).background;
+    // 불러오지 않은 플러그인의 탭에는 배경 세션이 없다.
+    const descriptor = hasPlugin(tab.plugin) ? plugin(tab.plugin).background : null;
     if (!descriptor || tabs.get(tab.id) !== tab) continue;
     const owner = grid.cards.find((card) => tabsOf(card).some((item) => item.id === tab.id));
     if (owner?.data?.activeId === tab.id || backgroundSessions.has(tab.id)) continue;

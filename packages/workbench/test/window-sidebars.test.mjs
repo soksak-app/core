@@ -38,3 +38,9 @@ test("retired plugin sidebar IDs and saved owners are rejected without migration
   assert.throws(()=>restoreWindowSidebars(saved),/window sidebar/);
  }
 });
+
+test("a focused tab of a plugin that is not loaded shows the general window sidebar choice", () => {
+  // 불러오지 않은 플러그인의 연결은 내용을 고르지 않는다(docs/spec/plugins.md).
+  const links = [{ place: "left", plugin: null, set: "general" }, { place: "window-left", plugin: "absent", set: "kept" }];
+  assert.deepEqual(windowSidebarCards([{ id: "probe" }], links, "absent"), [{ id: "left", side: "left", plugin: null, set: "general" }]);
+});

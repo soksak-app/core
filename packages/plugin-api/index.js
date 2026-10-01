@@ -492,7 +492,8 @@ export function checkReferences(environment, manifests) {
   // 기본값: settings 는 environment.json 의 선택 필드이며, 없으면 플러그인 설정 기본값을 바꾸지 않는다.
   for (const [pluginId, values] of Object.entries(environment.settings ?? {})) {
     const manifest = byId.get(pluginId);
-    if (!manifest) throw new Error(`environment.json: settings names unknown plugin ${pluginId}`);
+    // 불러오지 않은 플러그인의 설정은 검사하지도 적용하지도 않고 유지한다(docs/spec/plugins.md).
+    if (!manifest) continue;
     if (!isObject(values)) throw new Error(`environment.json: settings for ${pluginId} must be an object`);
     // 기본값: settings 는 plugin.json 의 선택 필드이며, 없는 플러그인은 설정이 없다.
     const declarations = manifest.settings ?? {};
@@ -505,7 +506,8 @@ export function checkReferences(environment, manifests) {
   for (const card of environment.workspace.grid.cards) {
     // 기본값: tabs 는 environment.json 카드의 선택 필드이며, 없는 카드는 빈 자리다.
     for (const tab of card.tabs ?? []) {
-      if (!cards.has(tab.plugin)) throw new Error(`environment.json: tab plugin ${tab.plugin} has no surface`);
+      // 불러오지 않은 플러그인의 탭은 placeholder 카드로 열린다(docs/spec/plugins.md).
+      if (byId.has(tab.plugin) && !cards.has(tab.plugin)) throw new Error(`environment.json: tab plugin ${tab.plugin} has no surface`);
     }
   }
   normalizeSidebarDefaults(environment, manifests);
@@ -620,7 +622,14 @@ export function validateSidebars(sidebars, where) {
   return sidebars;
 }
 
-/** 세트의 섹션 id 와 연결의 플러그인 id 가 불러온 manifest 에 있는지 검사한다. 없으면 예외를 던진다. */
+/** 섹션 id 의 플러그인 id. 섹션 id 는 `<plugin id>.<name>` 이다. */
+export const sectionPlugin = (id) => id.slice(0, id.indexOf("."));
+
+/**
+ * 세트의 섹션 id 와 연결의 플러그인 id 를 불러온 manifest 로 검사한다. 불러온 플러그인이 선언하지 않은 섹션과
+ * 표면이 없는 불러온 플러그인의 카드 변 연결은 예외를 던진다. 불러오지 않은 플러그인을 가리키는 것은 유지한다
+ * (docs/spec/plugins.md).
+ */
 export function checkSidebarReferences(sidebars, manifests, where) {
   const cards = new Set(manifests.filter((m) => m.surface).map((m) => m.id));
   const plugins = new Set(manifests.map((m) => m.id));
@@ -628,14 +637,12 @@ export function checkSidebarReferences(sidebars, manifests, where) {
   const sections = new Set(manifests.flatMap((m) => (m.sections ?? []).map((s) => s.id)));
   for (const set of sidebars.sets) {
     for (const id of set.sections) {
-      if (!sections.has(id)) throw new Error(`${where}: set ${set.id} names unknown section ${id}`);
+      if (plugins.has(sectionPlugin(id)) && !sections.has(id)) throw new Error(`${where}: set ${set.id} names unknown section ${id}`);
     }
   }
   for (const link of sidebars.links) {
-    if (link.plugin === null) continue;
-    if (link.place.startsWith("window-")) {
-      if (!plugins.has(link.plugin)) throw new Error(`${where}: link names unknown plugin ${link.plugin}`);
-    } else if (!cards.has(link.plugin)) {
+    if (link.plugin === null || !plugins.has(link.plugin)) continue;
+    if (!link.place.startsWith("window-") && !cards.has(link.plugin)) {
       throw new Error(`${where}: link names plugin ${link.plugin} without a surface`);
     }
   }

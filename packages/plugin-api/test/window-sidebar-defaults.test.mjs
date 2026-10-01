@@ -59,13 +59,13 @@ test("window default mappings reject invalid shapes, unknown sides, and missing 
   }
 });
 
-test("replaced window declarations still reject invalid local sets and uninstalled sections", () => {
+test("replaced window declarations still reject invalid local sets and undeclared sections", () => {
   const all = manifests();
   all[0].sidebars.window.left = "missing";
   assert.throws(() => normalizeSidebarDefaults({ sidebars: { sets: [], links: [] } }, all), /window left names unknown set missing/);
   all[0].sidebars.window.left = "info";
-  all[1].sidebars.sets[0].sections.push("missing.section");
-  assert.throws(() => normalizeSidebarDefaults({ sidebars: { sets: [], links: [] } }, all), /unknown section missing.section/);
+  all[1].sidebars.sets[0].sections.push("tree.missing");
+  assert.throws(() => normalizeSidebarDefaults({ sidebars: { sets: [], links: [] } }, all), /unknown section tree.missing/);
 });
 
 test("new window links require a plugin and a known set and reject duplicate choices", () => {
@@ -85,5 +85,6 @@ test("window references accept section-only plugins but card references still re
   const links = sidebars([{ place: "window-right", plugin: "tree", set: "set-1" }]);
   assert.doesNotThrow(() => checkSidebarReferences(links, all, "settings"));
   assert.throws(() => checkSidebarReferences(sidebars([{ place: "card-left", plugin: "tree", set: "set-1" }]), all, "settings"), /plugin tree without a surface/);
-  assert.throws(() => checkSidebarReferences(sidebars([{ place: "window-left", plugin: "missing", set: "set-1" }]), all, "settings"), /unknown plugin missing/);
+  // 불러오지 않은 플러그인의 연결은 유지한다(docs/spec/plugins.md).
+  assert.doesNotThrow(() => checkSidebarReferences(sidebars([{ place: "window-left", plugin: "absent", set: "set-1" }]), all, "settings"));
 });

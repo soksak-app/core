@@ -7,7 +7,7 @@ globalThis.fetch = async (path) => {
     "/environment.json": {
       runtime: "runtime",
       workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
-        { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "missing", title: "m" }] },
+        { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "side", title: "m" }] },
       ] } },
       sidebars: { sets: [], links: [] },
     },
@@ -21,7 +21,9 @@ globalThis.fetch = async (path) => {
 const { loadEnvironment } = await import("../environment.js");
 const registry = await import("../registry.js");
 
-test("an environment naming a missing plugin fails before registration", async () => {
-  await assert.rejects(loadEnvironment(), /tab plugin missing has no surface/);
+// 불러오지 않은 플러그인의 탭은 placeholder 로 열리므로 실패하지 않는다(docs/spec/plugins.md). 불러온 플러그인이
+// 표면 없이 탭에 쓰이면 실패한다.
+test("an environment naming a loaded plugin without a surface as a tab fails before registration", async () => {
+  await assert.rejects(loadEnvironment(), /tab plugin side has no surface/);
   assert.throws(() => registry.section("side.list"), /unknown section/);
 });

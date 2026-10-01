@@ -155,11 +155,10 @@ test("environment setting values are checked against the owning manifest", () =>
   assert.throws(() => checkReferences(value, [card, side]), /not declared/);
 });
 
-test("references to missing plugins and sections are rejected", () => {
+test("references to missing sections, surfaceless tabs and repeated ids are rejected", () => {
   const cases = [
     [(e) => { e.workspace.grid.cards[1].tabs[0].plugin = "side"; }, /tab plugin side has no surface/],
     [(e) => { e.sidebars.sets[0].sections.push("side.missing"); }, /unknown section side.missing/],
-    [(e) => { e.sidebars.links[1].plugin = "missing"; }, /unknown plugin missing/],
   ];
   for (const [change, message] of cases) {
     const value = environment();
@@ -167,7 +166,6 @@ test("references to missing plugins and sections are rejected", () => {
     assert.throws(() => checkReferences(value, [card, side]), message);
   }
   assert.throws(() => checkReferences(environment(), [card, side, { ...side }]), /same id/);
-  assert.throws(() => checkReferences({ ...environment(), settings: { missing: {} } }, [card, side]), /unknown plugin/);
 });
 
 test("an environment does not list sidecars; plugins declare them", () => {
@@ -318,4 +316,25 @@ test("sidebar links allow independent window and card choices and reject repeats
     change(value);
     assert.throws(() => validateSidebars(value, "settings"), error);
   }
+});
+
+test("references to plugins that are not loaded are kept without failing the load", () => {
+  // probe 를 끄거나 제거하면 환경과 저장된 사이드바가 여전히 그것을 가리킨다(docs/spec/plugins.md).
+  const value = environment();
+  value.sidebars.sets[0].sections.push("probe.tree");
+  value.sidebars.links.push({ place: "card-left", plugin: "probe", set: "set-side" });
+  checkReferences(value, [side]);
+  checkSidebarReferences(value.sidebars, [side], "settings");
+});
+
+test("references to a loaded plugin still name its declared sections and surface", () => {
+  const unknown = environment();
+  unknown.sidebars.sets[0].sections.push("side.missing");
+  assert.throws(() => checkReferences(unknown, [card, side]), /unknown section side.missing/);
+  const surfaceless = environment();
+  surfaceless.sidebars.links.push({ place: "card-left", plugin: "side", set: "set-side" });
+  assert.throws(() => checkSidebarReferences(surfaceless.sidebars, [card, side], "settings"), /plugin side without a surface/);
+  const tab = environment();
+  tab.workspace.grid.cards[1].tabs[0].plugin = "side";
+  assert.throws(() => checkReferences(tab, [card, side]), /tab plugin side has no surface/);
 });

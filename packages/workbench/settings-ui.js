@@ -21,7 +21,7 @@ import { commandOf, delegate, mark, run } from "./commands.js";
 import { pluginUnits } from "./environment.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { matchPlugins } from "./plugin-search.js";
-import { section, sectionNames } from "./registry.js";
+import { hasSection, section, sectionNames } from "./registry.js";
 import {
   FONTS, LAYOUT_RANGES, MENU_LANGUAGES, MODES, THEMES, scopedValue, settingProject, overridden,
   settingDefinitions,
@@ -484,6 +484,18 @@ function sectionSelect(s, index, now) {
       optgroup.append(o);
     }
     el.append(optgroup);
+  }
+  // 불러오지 않은 플러그인의 섹션은 선택지에 없으므로 현재 값으로만 보인다. 선택 상자가 다른 섹션을 고른 것처럼
+  // 보이지 않도록 그 값을 따로 둔다(docs/spec/plugins.md).
+  if (!hasSection(now)) {
+    const kept = document.createElement("optgroup");
+    kept.label = "불러오지 않음";
+    const o = document.createElement("option");
+    o.value = now;
+    [o.textContent] = sectionNames([now]);
+    o.setAttribute("selected", "");
+    kept.append(o);
+    el.append(kept);
   }
   wrap.append(el);
   return wrap;

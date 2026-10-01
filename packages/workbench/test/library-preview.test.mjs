@@ -40,9 +40,9 @@ test("a library preview draws a saved layout of registered plugins", () => {
   assert.deepEqual([...el.querySelectorAll(".library-preview__pane")].map((pane) => pane.dataset.plugin), ["probe"]);
 });
 
-test("a library preview reports a saved layout naming an unregistered plugin instead of drawing it", () => {
+test("a library preview draws a tab of a plugin that is not loaded as a placeholder pane", () => {
   const el = preview(project("gone"));
-  assert.match(el.dataset.error ?? "", /unknown stored tab plugin gone/);
-  assert.equal(el.querySelectorAll(".library-preview__pane").length, 0, "the preview drew a layout that opening rejects");
-  assert.match(el.querySelector(".library-preview__error")?.textContent ?? "", /unknown stored tab plugin gone/);
+  assert.equal(el.dataset.error, undefined, el.dataset.error);
+  const panes = [...el.querySelectorAll(".library-preview__pane")];
+  assert.deepEqual(panes.map((pane) => [pane.dataset.plugin, pane.dataset.placeholder]), [["gone", "true"]]);
 });

@@ -325,7 +325,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a saved layout naming an unregistered plugin fails in the library and when opened`, async (t) => {
+  test(`${app.name}: a saved layout naming a plugin that is not loaded opens with a placeholder card`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -358,43 +358,25 @@ for (const app of Object.values(APPS)) {
     write(join(config, "projects.json"), records);
     const stored = readFileSync(join(config, "projects.json"), "utf8");
 
-    // 라이브러리는 그 프로젝트의 미리보기 대신 여는 것과 같은 검증 오류를 보인다.
+    // 라이브러리는 그 탭을 자리 표시 칸으로 그린다(docs/spec/plugins.md).
     await s.run("core.projects.browse");
-    const library = await s.until("core.library", (value) => value.previewErrors?.[saved.id], "the library did not report the invalid saved layout");
-    assert.match(library.previewErrors[saved.id], /unknown stored tab plugin gone/);
-    assert.deepEqual(library.previews[saved.id], [], "the library drew a layout that opening rejects");
-    // 같은 창에서 열면 실패한 열기가 명령의 오류로 돌아온다. 열기도 같은 오류로 실패하고 저장 기록은 바뀌지 않는다.
+    const library = await s.until("core.library", (value) => value.previews?.[saved.id]?.length > 0, "the library did not draw the saved layout");
+    assert.equal(library.previewErrors?.[saved.id], undefined, "the library reported the layout of a plugin that is not loaded as an error");
+    // 열면 그 탭은 설치되지 않은 이유의 자리 표시이며 다른 탭은 그대로 열린다.
     await settings(s, { projectOpening: "tabs" }, "common");
-    await assert.rejects(s.run("core.project.activate", { id: saved.id }), /unknown stored tab plugin gone/);
-    // 실패한 전환은 문서 오류로도 보고된다.
-    await s.until("core.page.error", (text) => /unknown stored tab plugin gone/.test(text ?? ""), "the rejected open was not reported in the document");
-    assert.equal(await s.get("core.project"), null, "the rejected open left the library");
-    const after = read(join(config, "projects.json")).find((p) => p.id === saved.id);
-    assert.deepEqual(after, JSON.parse(stored).find((p) => p.id === saved.id), "the rejected open changed the saved record");
-
-    // 열 수 있는 활성 스페이스 뒤에 같은 잘못된 스페이스를 둔다. 그 스페이스로 전환하거나, 활성 스페이스를 닫아 그
-    // 스페이스로 옮기는 명령도 같은 오류로 실패하고 활성 스페이스는 그대로다.
-    await s.run("core.project.activate", { id: first.id });
-    const spaced = read(join(config, "projects.json"));
-    const target = spaced.find((p) => p.id === saved.id);
-    const bad = target.spaces.find((x) => x.id === target.activeSpaceId);
-    const good = structuredClone(bad);
-    good.id = `${bad.id}-good`;
-    good.layout.state.cards.find((c) => c.id === "shell").data.tabs[0].plugin = "shell";
-    target.spaces = [good, bad];
-    target.activeSpaceId = good.id;
-    write(join(config, "projects.json"), spaced);
-    // 작업 화면에서 라이브러리로 가면 창이 저장된 프로젝트 목록을 다시 읽는다.
-    await s.run("core.projects.browse");
-    await s.until("core.library", (value) => value.previewErrors?.[saved.id] === undefined && value.previews?.[saved.id]?.length > 0,
-      "the library did not read the edited project record");
     await s.run("core.project.activate", { id: saved.id });
-    await s.until("core.project", (value) => value?.id === saved.id, "the project with a valid active space did not open");
-    await assert.rejects(s.run("core.space.activate", { id: bad.id }), /unknown stored tab plugin gone/);
-    await assert.rejects(s.run("core.space.close", { id: good.id }), /unknown stored tab plugin gone/);
-    const shown = await s.get("core.project");
-    assert.equal(shown.activeSpaceId, good.id, "a rejected space command changed the active space");
-    assert.deepEqual(shown.spaces.map((x) => x.id), [good.id, bad.id], "a rejected space close removed a space");
+    await s.until("core.project", (value) => value?.id === saved.id, "the project did not open");
+    const surfaces = await s.until("core.surfaces", (value) => value.some((surface) => surface.plugin === "gone"),
+      "the tab of the plugin that is not loaded was not reported");
+    assert.deepEqual(surfaces.filter((surface) => surface.placeholder !== null).map((surface) => [surface.plugin, surface.placeholder]),
+      [["gone", "missing"]]);
+    assert.equal(await s.get("core.page.error"), null, "opening the layout reported an error");
+    // 저장해도 그 탭은 바뀌지 않는다.
+    await s.run("core.projects.flush");
+    const after = read(join(config, "projects.json")).find((p) => p.id === saved.id);
+    const kept = after.spaces.find((x) => x.id === after.activeSpaceId).layout.state.cards.find((c) => c.id === "shell");
+    assert.equal(kept.data.tabs[0].plugin, "gone", "saving changed the tab of the plugin that is not loaded");
+    assert.ok(stored.length > 0);
     await s.run("core.project.activate", { id: first.id });
   });
 }

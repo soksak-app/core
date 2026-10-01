@@ -1,5 +1,5 @@
 // 라이브러리의 프로젝트 미리보기. 활성 스페이스의 저장 배치를 카드 격자로 그린다.
-import { isPlace, plugin } from "./registry.js";
+import { hasPlugin, isPlace, plugin } from "./registry.js";
 import { checkStoredLayout } from "./stored-layout.js";
 
 /** className 을 가진 요소를 만든다. */
@@ -40,7 +40,9 @@ export function preview(project) {
     // 검사를 통과한 내용 카드에는 등록된 플러그인의 활성 탭이 있다. 자리 카드에는 탭이 없다.
     const active=tabs.find(t=>t.id===card.data?.activeId);
     pane.dataset.plugin=aside(card.id)?'sidebar':active.plugin;
-    if(active) {
+    // 불러오지 않은 플러그인의 탭은 표시 없이 placeholder 자리로 그린다(docs/spec/plugins.md).
+    if(active&&!hasPlugin(active.plugin)) pane.dataset.placeholder='true';
+    else if(active) {
       const {ink}=plugin(active.plugin);
       if(ink) pane.style.setProperty('--preview-ink',`var(${ink})`);
       const mark=part('span','library-preview__mark');

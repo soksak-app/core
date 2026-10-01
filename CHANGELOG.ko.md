@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-3-4: 불러오지 않은 plugin의 탭이 plugin을 알리고 설치나 사용을 제안하는 placeholder 카드로 열린다. 그런 plugin을 가리키는 환경 항목, 저장된 설정, 세트, 연결, 프로젝트 데이터는 불러오기를 실패시키지 않고 유지한다.
+
 - G1.4-44: workbench가 관측 줄(focus 전이, layout과 설정 변환)을 `log`로 쓰고, browser 예제는 그것을 오류가 아니라 정보로 쓴다. Browser 예제 check가 다시 통과한다.
 
 - R1-3-3: 설정 창이 불러온 plugin, 설치된 plugin, registry plugin을 상태와 함께 나열하고, plugin page가 `core.plugins.*` 명령으로 plugin을 설치, 업데이트, 끄기, 켜기, 제거한다. `core.plugins`가 목록과 마지막 작업을 보고한다.
