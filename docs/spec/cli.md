@@ -38,6 +38,18 @@ The flags of a declared command come from the parameter schema that `exposure.li
 
 A command writes its result as JSON on standard output; a command without a result writes `null`. An error is written to standard error as `sok: <message>`, with the endpoint error code in parentheses when there is one. The exit status is 0 on success, 1 on a failed command, and 2 on a usage error, which also prints the usage.
 
+## Packages, releases and the registry
+
+These commands write files and do not need a running application.
+
+`sok plugin pack <directory> <output directory>` reads `package.json` and `plugin.json` of a plugin directory, checks the [plugin package](installation.md#plugin-package) and that `soksak.sidecars` names exactly the `sidecars` of `plugin.json`, and writes `<id>-<version>.tgz`, where `<id>` is the `id` of `plugin.json`. It prints `{ id, version, archive, sha256 }` with the absolute archive path.
+
+`sok sidecar release <directory> <output directory> [--platform <platform>]` reads `package.json` and `sidecar.json` of a sidecar directory, checks that `package.json` has a package `name`, a `version` and `files` that list `sidecar.json` and the `executable` of `sidecar.json`, and writes the [release asset](installation.md#sidecar-release-asset) `<file name>-<version>-<platform>.tar.gz`. The platform is the platform that `sok` runs on unless `--platform` names another; `sok` does not inspect the files, so another platform labels files that were built for it. It then writes `SHA256SUMS` in the output directory with one line `<sha256>  <archive name>` per archive, sorted by archive name, and replaces the line of an archive with the same name. It prints `{ name, version, platform, archive, sha256 }`.
+
+Both archives are gzip-compressed tar files. They hold `package.json` and every path of `files`, a directory with the files under it, at their paths relative to the directory. Entries are sorted by path and have modification time 0, owner 0 and mode 0644, or 0755 for a file that has an executable bit. A listed path that does not exist, leaves the directory, or is or contains a symbolic link or a file that is neither regular nor a directory fails the command, which then writes nothing.
+
+`sok registry build <directory>` reads `plugins/<id>.json`, `sidecars/<file name>.json`, `packs/<name>.json` and `revoked.json` (`{ plugins, sidecars }`) of a registry directory. Each file holds one entry of the [registry index](installation.md#registry-index) and its name matches the entry. The command checks the entries as one index, reads every archive and compares its `sha256`, and checks that a plugin archive holds `plugin.json` with the plugin id and a `package.json` with the entry's package name, version, `engines.soksak` and sidecar ranges. Only when every check passes does it write `index.json` with each list sorted by id or name; it replaces the file in one step. It prints `{ index, plugins, sidecars, packs }` with the path and the number of entries.
+
 ## Installation and a running application
 
 The plugin and sidecar commands change the files of the configuration directory directly and do not need a running application. The running application observes `plugins/installed.json` and loads the change.

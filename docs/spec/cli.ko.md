@@ -38,6 +38,18 @@
 
 명령은 결과를 표준 출력에 JSON으로 쓰며, 결과가 없는 명령은 `null`을 쓴다. 오류는 표준 오류에 `sok: <message>`로 쓰고, endpoint 오류 코드가 있으면 괄호 안에 함께 쓴다. 종료 상태는 성공 0, 실패한 명령 1, 사용법 오류 2이며, 사용법 오류는 사용법도 출력한다.
 
+## Package, release, registry
+
+이 명령들은 파일을 쓰며 실행 중인 애플리케이션이 필요 없다.
+
+`sok plugin pack <directory> <output directory>`는 plugin 폴더의 `package.json`과 `plugin.json`을 읽고, [plugin package](installation.ko.md#plugin-package)와 `soksak.sidecars`가 `plugin.json`의 `sidecars`를 정확히 지정하는지 검사한 뒤 `<id>-<version>.tgz`를 쓴다. `<id>`는 `plugin.json`의 `id`다. 출력은 절대 archive 경로를 담은 `{ id, version, archive, sha256 }`이다.
+
+`sok sidecar release <directory> <output directory> [--platform <platform>]`는 sidecar 폴더의 `package.json`과 `sidecar.json`을 읽고, `package.json`에 package `name`, `version`, 그리고 `sidecar.json`과 `sidecar.json`의 `executable`을 나열한 `files`가 있는지 검사한 뒤 [release asset](installation.ko.md#sidecar-release-asset) `<file name>-<version>-<platform>.tar.gz`를 쓴다. `--platform`이 다른 플랫폼을 지정하지 않으면 플랫폼은 `sok`이 실행되는 플랫폼이다. `sok`은 파일 내용을 보지 않으므로, 다른 플랫폼을 지정하면 그 플랫폼용으로 build한 파일에 이름을 붙이는 것이다. 그다음 출력 폴더에 `SHA256SUMS`를 쓴다. Archive마다 `<sha256>  <archive name>` 한 줄이며 archive 이름 순서이고, 같은 이름의 archive 줄은 바꾼다. 출력은 `{ name, version, platform, archive, sha256 }`이다.
+
+두 archive는 gzip으로 압축한 tar 파일이다. `package.json`과 `files`의 모든 경로를 폴더 기준 상대 경로로 담으며, 폴더는 그 아래 파일까지 담는다. 항목은 경로 순서이고, 수정 시각 0, 소유자 0, mode 0644를 가지며 실행 bit가 있는 파일은 0755다. 나열한 경로가 없거나, 폴더 밖으로 나가거나, symbolic link이거나 그것을 담거나, 일반 파일도 폴더도 아닌 파일이면 명령은 실패하고 아무것도 쓰지 않는다.
+
+`sok registry build <directory>`는 registry 폴더의 `plugins/<id>.json`, `sidecars/<file name>.json`, `packs/<name>.json`, `revoked.json`(`{ plugins, sidecars }`)을 읽는다. 각 파일은 [registry index](installation.ko.md#registry-index)의 항목 하나를 담고, 파일 이름은 항목과 맞는다. 명령은 항목을 하나의 index로 검사하고, 모든 archive를 읽어 `sha256`을 비교하며, plugin archive가 plugin id를 가진 `plugin.json`과 항목의 package 이름, version, `engines.soksak`, sidecar 범위를 가진 `package.json`을 담는지 검사한다. 모든 검사를 통과할 때만 각 목록을 id나 이름 순서로 정렬한 `index.json`을 쓰며, 파일은 한 번에 바꾼다. 출력은 경로와 항목 수를 담은 `{ index, plugins, sidecars, packs }`이다.
+
 ## 설치와 실행 중인 애플리케이션
 
 Plugin과 sidecar 명령은 설정 폴더의 파일을 직접 바꾸므로 실행 중인 애플리케이션이 필요 없다. 실행 중인 애플리케이션은 `plugins/installed.json`을 관찰하고 바뀐 내용을 불러온다.
