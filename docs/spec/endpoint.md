@@ -71,7 +71,7 @@ An HTTP request line is read as a length prefix larger than the maximum or as in
 
 The host creates the endpoint before it shows windows. If the host cannot create the endpoint, the application exits with an error.
 
-Registered WebView pointer receipt completion requires pending mouse processing to drain before sending and after receipt. Registration rejects an unavailable drain API. Capability loss before sending rejects delivery without sending the event; loss after receipt must fail completion and report the unavailable API. Native non-WebView targets and deliberately unregistered WebViews retain their declared delivery-only contract.
+Registered WebView pointer receipt completion requires pending mouse processing to drain before sending and after receipt. Registration rejects an unavailable drain API. Capability loss before sending rejects delivery without sending the event; loss after receipt must fail completion and report the unavailable API. A wait that ends by timeout or unregistration before the pre-send drain finishes completes once and cancels that drain, so the event is not sent afterwards. Native non-WebView targets and deliberately unregistered WebViews retain their declared delivery-only contract.
 
 ## Diagnostic builds
 

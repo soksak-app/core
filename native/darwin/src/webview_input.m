@@ -128,9 +128,12 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
     BOOL targetOwnsResponder = first == view ||
         ([first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:view]);
     if (window && !targetOwnsResponder) [window makeFirstResponder:view];
+    // 시간 초과나 등록 해제가 drain 전에 대기를 끝냈으면 이미 완료를 보고했으므로 보내지 않는다.
     void (^sendAfterDrain)(void) = ^{
+        if (![handler.waits containsObject:wait]) return;
         BOOL sent = send();
-        if (!sent) {
+        if (!sent && [handler.waits containsObject:wait]) {
+            [[wait retain] autorelease];
             [handler.waits removeObject:wait];
             wait.done(NO);
         }

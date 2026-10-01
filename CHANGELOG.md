@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-115-1-2-1: a pointer receipt wait that ends by timeout or unregistration cancels its pending pre-send drain, so the event is not sent afterwards and the caller is completed once.
+
 - V5-115-1-5-2-2-2: a recording rejects a frame without a status and a complete frame without its image, display time, content rectangle or scales, with an error naming the frame and the field, instead of recording zeros or dropping the frame.
 
 - G1.4-8: twelve e2e files written in a compressed single-quote style use the formatting of their neighbours; behavior is unchanged.

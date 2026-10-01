@@ -18,13 +18,20 @@ static void until(BOOL (^condition)(void)) {
 @interface SPReceiptView : WKWebView
 @property(nonatomic) BOOL missingDrain;
 @property(nonatomic) NSUInteger drains;
+// hold 이면 drain 콜백을 바로 실행하지 않고 held 에 보관한다. 시험이 원하는 시점에 실행한다.
+@property(nonatomic) BOOL hold;
+@property(nonatomic, copy) void (^held)(void);
 @end
 @implementation SPReceiptView
 - (BOOL)respondsToSelector:(SEL)selector {
     if (selector == @selector(_doAfterProcessingAllPendingMouseEvents:) && self.missingDrain) return NO;
     return [super respondsToSelector:selector];
 }
-- (void)_doAfterProcessingAllPendingMouseEvents:(void (^)(void))done { self.drains++; done(); }
+- (void)_doAfterProcessingAllPendingMouseEvents:(void (^)(void))done {
+    self.drains++;
+    if (self.hold) self.held = done;
+    else done();
+}
 @end
 
 // 별도 content world에서 수신 메시지를 주입한다. 실제 신뢰 입력 순서는 input_inject_test가 검증한다.
@@ -75,7 +82,27 @@ int main(void) { @autoreleasepool {
     }, ^(BOOL value) { received=value; completed++; });
     until(^BOOL { return completed > 0; });
     check(received && completed == 1 && view.drains == 2, @"successful receipt completes after the second drain");
+    // 전송 전 drain 이 끝나기 전에 대기가 시간 초과로 끝나면 늦은 drain 은 보내지 않고 다시 완료하지 않는다.
+    view.hold=YES; view.held=nil; completed=0; received=YES; sent=0;
+    webviewInputSendThen(view, @"pointerdown", 0.05, ^BOOL { sent++; return NO; },
+        ^(BOOL value) { received=value; completed++; });
+    until(^BOOL { return completed > 0; });
+    check(view.held != nil, @"the pre-send drain is held");
+    if (view.held) view.held();
+    check(sent == 0 && completed == 1 && !received,
+        [NSString stringWithFormat:@"a timed-out wait cancels its held pre-send drain (sent %lu, completed %lu)",
+            (unsigned long)sent, (unsigned long)completed]);
+    // 등록 해제가 대기를 끝내면 늦은 drain 도 보내지 않고 다시 완료하지 않는다.
+    view.held=nil; completed=0; received=YES; sent=0;
+    webviewInputSendThen(view, @"pointerdown", 10, ^BOOL { sent++; return NO; },
+        ^(BOOL value) { received=value; completed++; });
     webviewInputUnregister(view);
+    check(view.held != nil && completed == 1 && !received, @"unregistration completes the pending wait once");
+    if (view.held) view.held();
+    check(sent == 0 && completed == 1,
+        [NSString stringWithFormat:@"unregistration cancels its held pre-send drain (sent %lu, completed %lu)",
+            (unsigned long)sent, (unsigned long)completed]);
+    view.hold=NO; view.held=nil;
     check(!NSApp.isActive, @"receipt capability checks remain inactive");
     return failures ? 1 : 0;
 }}
