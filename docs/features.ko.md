@@ -715,6 +715,9 @@
   - [ ] R1-5 — P1: `browser`, `terminal`, `files`, `shell`을 `../plugins/<id>`로, sidecar를 `../sidecars/<name>`으로 분리하고, 각각 자기 test, checklist, core git tag 의존을 둔다. `shell`과 `@soksak/sidecar-shell`은 옮기되 registry에는 올리지 않으며(사용자, 2026-10-01), 새 space 배치는 shell card 자리에 terminal card를 쓴다. Core window check는 local registry fixture에서 설치한다.
   - [ ] R1-6 — P1: 스타터팩을 담은 local registry를 `~/Projects/soksak/registry`에 만들고 첫 실행에서 스타터팩을 설치한다.
   - [~] R1-8 — P0: 각 host package에서 `sok`을 build하고(Tauri는 Rust, Wails는 Go) 한 계약과 공통 contract case를 두며, 각 애플리케이션 bundle의 실행 파일 옆에 담고, symbolic link 대신 `/etc/paths.d` 항목으로 닿게 하며, 선언된 모든 애플리케이션 명령과 `packages/cli`의 endpoint 명령을 이것으로 공개하고, `packages/cli`를 삭제한다. 계약은 [command line `sok`](spec/cli.ko.md)이다. 모든 core와 plugin command는 선언된 schema에서 나온 매개변수 flag, 이름이나 project 폴더로 고른 창, 다음 호출이 쓸 수 있는 JSON 출력과 함께 `sok <command>`로 실행되므로, command line에서 창의 card를 나누고 새 card에서 프로그램을 시작할 수 있다(사용자, 2026-10-01). `sok commands`가 이를 나열한다.
+    - [~] R1-8-1 — P0: Go(Wails host package)와 Rust(Tauri host package)로 `sok`을 build한다. Endpoint client, `windows`, `exposures`, `status`(`--watch` 포함), `dom`, `input`, `capture` 명령, `--window`나 `--project`로 하는 창 선택, 출력과 종료 상태 규칙, 두 구현이 통과하는 contract case를 둔다.
+    - [ ] R1-8-2 — P0: 선언된 command를 schema에서 나온 매개변수 flag와 `--params`로 `sok <command>`로 실행하고, `sok commands`로 나열한다.
+    - [ ] R1-8-3 — P1: 각 애플리케이션 bundle의 실행 파일 옆에 `sok`을 두고, `/etc/paths.d/<application identifier>`로 닿게 하며, `packages/cli`를 부르는 모든 곳을 `sok`으로 옮기고 `packages/cli`를 삭제한다.
   - [ ] R1-9 — P1: `core.card.split`이 `axis` 대신 새 card의 쪽(`left`, `right`, `top`, `bottom`)을 받게 해, plugin을 설치하고 창에 배치하는 일이 `sok plugin install` 한 번과 `sok core.card.split` 한 번이 되게 한다(사용자, 2026-10-01). `axis`를 남기지 않고 호출하는 곳과 window check를 고친다.
   - [ ] R1-7 — P1: 모든 core package를 0.0.2로 바꾸고, `scripts/check-versions.mjs`를 core package로 한정하며, 0.0.2 release를 local에서 build하고 검증한다.
 
