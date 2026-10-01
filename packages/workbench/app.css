@@ -272,6 +272,8 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .chrome__act .half{fill:currentColor;stroke:none;opacity:.28}
 .chrome__act:hover:not(:disabled){background:var(--inset);color:var(--fg)}
 .chrome__act:disabled{opacity:.25;cursor:not-allowed}
+/* 눌린 토글(전체 화면)은 창 머리의 토글(.act[data-on=true])처럼 초점 색으로 그린다. */
+.chrome__act[aria-pressed=true],.chrome__act[aria-pressed=true]:hover{color:var(--focus)}
 /* `[hidden]` 은 display:grid 를 이기지 못하므로 여기서 명시한다. */
 .chrome__act[hidden]{display:none}
 .slot{position:relative}

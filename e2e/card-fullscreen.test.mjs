@@ -2,6 +2,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
+import { dirname } from "node:path";
+import { readPng } from "./png.mjs";
 import { frames, readFrame, pixel } from "./frame.mjs";
 import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
 
@@ -77,6 +79,23 @@ for (const app of Object.values(APPS)) {
     const icon = await s.rect("core.card.fullscreen", shown.pane);
     const close = await s.rect("core.card.close", shown.pane);
     assert.ok(icon.x + icon.width <= close.x && icon.y === close.y, "fullscreen icon does not precede close X");
+    // 눌린 토글은 창 머리의 토글처럼 초점 색(--focus)으로 그린다. 옆의 닫기 아이콘은 그 색이 아니다.
+    const still = (await s.request("diagnostics.capture.still", {})).path;
+    const image = readPng(still);
+    rmSync(dirname(still), { recursive: true, force: true });
+    const ratio = image.width / (await s.get("host.window")).content.width;
+    const focus = [255, 179, 107];
+    const focusInk = (rect) => {
+      let count = 0;
+      for (let x = Math.ceil(rect.x * ratio); x < Math.floor((rect.x + rect.width) * ratio); x++) {
+        for (let y = Math.ceil(rect.y * ratio); y < Math.floor((rect.y + rect.height) * ratio); y++) {
+          if (image.pixel(x, y).slice(0, 3).every((value, index) => Math.abs(value - focus[index]) <= 40)) count++;
+        }
+      }
+      return count;
+    };
+    assert.ok(focusInk(icon) > 0 && focusInk(close) === 0,
+      `the pressed fullscreen toggle is not drawn in the focus color: icon ${focusInk(icon)} px, close ${focusInk(close)} px`);
     assert.deepEqual((await s.get("core.page.audit")).unbound, []);
     assert.deepEqual((await s.get("host.window")).frame, windowBefore.frame, "card fullscreen changed the OS window");
     await assert.rejects(s.run("core.card.fullscreen", { card: "missing-card" }), /no card/);
