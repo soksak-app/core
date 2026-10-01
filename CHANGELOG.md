@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-28: projects stored in the earlier sidebar format are converted to the current format once when the registry is read, saved and reported, so they can be opened again.
+
 - G1.4-14: the full suites pass at `cfc8826e`: `pnpm test`, structural checks, `make verify`, `make native-test`, 300 of 300 window checks on both hosts and the release check.
 
 - V5-115-1: card panel window checks require a different-plugin tab switch, full-width top and bottom panels and every displayed drag state in the recording, with unit-tested judgments.

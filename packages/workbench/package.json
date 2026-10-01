@@ -36,6 +36,7 @@
     "library.js",
     "library-preview.js",
     "stored-layout.js",
+    "stored-layout-migration.js",
     "layout-queue.js",
     "plane.js",
     "projects.js",

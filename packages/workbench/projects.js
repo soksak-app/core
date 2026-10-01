@@ -2,7 +2,8 @@
 import { issueId } from "./ids.js";
 import { selectProject, value, flushSettings } from "./settings.js";
 import { windows } from "@soksak/runtime";
-import { retainSidecarSessions, windowSidecar } from "./host.js";
+import { report, retainSidecarSessions, windowSidecar } from "./host.js";
+import { migrateStoredLayout } from "./stored-layout-migration.js";
 import { configureStates, showStates } from "./plugin-states.js";
 
 let store;
@@ -104,7 +105,34 @@ function refresh() {
   return refreshing;
 }
 
+/**
+ * 이전 형식으로 저장한 공간 배치를 현재 형식으로 바꿔 저장하고 바꾼 내용을 application log 에 남긴다. 바꿀 수 없는
+ * 프로젝트는 오류를 알리고 그대로 둔다. 미리보기와 열기가 그 이유를 보여 준다(docs/spec/projects.md).
+ */
+async function migrateProjects(list) {
+  let migrated = false;
+  for (const project of list) {
+    try {
+      const notes = [];
+      const spaces = project.spaces.map((space) => {
+        const { layout, changes } = migrateStoredLayout(space.layout);
+        for (const change of changes) notes.push(`space ${space.id}: ${change}`);
+        return changes.length ? { ...space, layout } : space;
+      });
+      if (!notes.length) continue;
+      await store.patch(project.id, { spaces });
+      report(`projects: converted the stored layout of ${project.root}: ${notes.join("; ")}`);
+      migrated = true;
+    } catch (error) {
+      failed(new Error(`projects: the stored layout of ${project.root} cannot be converted: ${error.message}`));
+    }
+  }
+  return migrated;
+}
+
 async function readProjects() {
+  // 바꾼 저장소는 다시 읽어 그 결과를 쓴다. 바꾼 뒤에는 바꿀 것이 없으므로 한 번만 다시 읽는다.
+  if (await migrateProjects((await store.snapshot()).projects)) report("projects: the registry was saved in the current layout format");
   const snapshot = await store.snapshot();
   // 기본값: 브라우저 예제의 저장소는 다른 창이 없으므로 open 을 싣지 않는다.
   openProjects = new Set(snapshot.open ?? []);

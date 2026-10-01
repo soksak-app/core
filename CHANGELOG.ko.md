@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-28: 이전 sidebar 형식으로 저장한 프로젝트는 registry를 읽을 때 현재 형식으로 한 번 변환하고 저장하며 보고하므로 다시 열 수 있다.
+
 - G1.4-14: `cfc8826e`에서 전체 suite가 통과한다. `pnpm test`, 구조 검사, `make verify`, `make native-test`, 두 host의 window check 300개 중 300개, release 검사다.
 
 - V5-115-1: 카드 패널 window check가 다른 plugin 탭으로의 전환, 전체 폭 top·bottom 패널, 녹화 안의 모든 표시 끌기 상태를 요구하며, 판정은 단위 test로 검사한다.

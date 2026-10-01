@@ -27,6 +27,7 @@ mock.module("@soksak/runtime", {
 const retained = [];
 mock.module("../host.js", {
   namedExports: {
+    report: () => {},
     retainSidecarSessions: async (surfaces) => { retained.push(surfaces); return { closed: 0 }; },
     windowSidecar: () => null,
   },
