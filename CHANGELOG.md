@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-3-4-7-1-6: plugin surface documents stay visible and keep running animation frames while their window is covered, as the app document already did.
+
 - V5-115-1-2-1: a pointer receipt wait that ends by timeout or unregistration cancels its pending pre-send drain, so the event is not sent afterwards and the caller is completed once.
 
 - V5-115-1-5-2-2-2: a recording rejects a frame without a status and a complete frame without its image, display time, content rectangle or scales, with an error naming the frame and the field, instead of recording zeros or dropping the frame.

@@ -415,6 +415,9 @@ void webviewAttachSurface(void *handle, void *mainHandle) {
     // 로컬 좌표 한 단위를 실제 장치 픽셀 하나로 렌더링한다. CSS 크기는 유지한다.
     view.pageZoom = 1;
     [view _setOverrideDeviceScaleFactor:container.scale];
+    // 주 웹뷰처럼 창이 가려져도 문서를 숨기지 않는다. 가려진 창에서도 표면의 캡처와 그림 확인이 끝나야 한다.
+    // 이 선택자가 없으면 주 웹뷰 등록(sp_window_set_main_webview)이 이미 실패하므로 여기서는 있다.
+    view._windowOcclusionDetectionEnabled = NO;
     [view release];
 }
 
