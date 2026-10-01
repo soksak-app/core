@@ -20,8 +20,13 @@ registry.declare("probe", {
 
 const sent = [];
 const stored = new Map();
+const failureHandlers = [];
 configureStates({
-  sidecar: (name) => ({ send: async (surface, body) => { sent.push([name, surface, body]); }, on: async () => {} }),
+  sidecar: (name) => ({
+    send: async (surface, body) => { sent.push([name, surface, body]); },
+    on: async () => {},
+    onFailure: async (surface, fn) => { failureHandlers.push([name, surface, fn]); return () => {}; },
+  }),
   data: {
     get: (id, plugin) => stored.get(`${id}/${plugin}`) ?? {},
     set: async (id, plugin, key, value) => { stored.set(`${id}/${plugin}`, { ...stored.get(`${id}/${plugin}`), [key]: value }); },
@@ -37,6 +42,7 @@ const source = `export function mount(context) {
     for (const fn of listeners) fn(context.data.get("marks"));
     return context.project.root;
   });
+  context.sidecar.onFailure((reason) => { globalThis.stateFailures = [...(globalThis.stateFailures ?? []), reason]; });
   globalThis.mounted = (globalThis.mounted ?? 0) + 1;
   return { dispose() { globalThis.mounted -= 1; } };
 }`;
@@ -70,5 +76,14 @@ test("project data rejects an undeclared key or a value that does not match, and
   await showStates(null);
   await showStates({ id: "p3", root: "/work/p3" });
   await assert.rejects(registry.run("probe.mark", { path: 5 }), /probe data marks does not match its schema/);
+  await showStates(null);
+});
+
+test("a state module observes the failures of its sidecar session", async () => {
+  await showStates({ id: "p4", root: "/work/p4" });
+  const handler = failureHandlers.find(([name, surface]) => name === "@scope/sidecar-probe" && surface === "state:probe:p4");
+  assert.ok(handler, "the state module subscribed to its session's failures");
+  handler[2]("output closed: exit status 3");
+  assert.deepEqual(globalThis.stateFailures, ["output closed: exit status 3"]);
   await showStates(null);
 });

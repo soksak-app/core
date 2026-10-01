@@ -16,7 +16,7 @@ const failed = (plugin) => (error) =>
 
 /**
  * 상태 모듈이 쓰는 호스트 기능을 정한다.
- *   sidecar(name)                      {send(surface, body), on(surface, fn)}
+ *   sidecar(name)                      {send(surface, body), on(surface, fn), onFailure(surface, fn)}
  *   data.get(project, plugin)          저장된 플러그인 데이터 객체
  *   data.set(project, plugin, key, v)  값 하나를 저장하는 promise
  */
@@ -50,6 +50,10 @@ function contextOf(state, project, table) {
       on(fn) {
         if (!port) throw new Error(`plugin ${state.plugin} state requires exactly one declared sidecar`);
         return port.on(session, fn);
+      },
+      onFailure(fn) {
+        if (!port) throw new Error(`plugin ${state.plugin} state requires exactly one declared sidecar`);
+        return port.onFailure(session, fn);
       },
     },
     data: {

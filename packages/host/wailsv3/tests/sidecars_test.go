@@ -2,10 +2,14 @@ package host_test
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -24,21 +28,26 @@ func frontend(sidecar string) fstest.MapFS {
 	}
 }
 
-// fakeOwner 는 받은 사이드카 이벤트를 기록하는 창이다.
+// fakeOwner 는 받은 사이드카 이벤트와 실패 이벤트를 기록하는 창이다.
 type fakeOwner struct {
-	root   string
-	mu     sync.Mutex
-	events []host.SidecarMessage
-	seen   chan struct{}
+	root     string
+	mu       sync.Mutex
+	events   []host.SidecarMessage
+	seen     chan struct{}
+	failures chan any
 }
 
 func newFakeOwner(root string) *fakeOwner {
-	return &fakeOwner{root: root, seen: make(chan struct{}, 16)}
+	return &fakeOwner{root: root, seen: make(chan struct{}, 16), failures: make(chan any, 16)}
 }
 
 func (o *fakeOwner) ProjectRoot() string { return o.root }
 
 func (o *fakeOwner) Emit(name string, data ...any) {
+	if name == "sidecar-failure" && len(data) == 1 {
+		o.failures <- data[0]
+		return
+	}
 	if name != "sidecar-message" || len(data) != 1 {
 		return
 	}
@@ -58,6 +67,171 @@ func (o *fakeOwner) next(t *testing.T) host.SidecarMessage {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	return o.events[len(o.events)-1]
+}
+
+// sidecarFailure 는 sidecar-failure 이벤트 값의 JSON 형태다(docs/spec/sidecars.md#failure).
+type sidecarFailure struct {
+	Sidecar string `json:"sidecar"`
+	Surface string `json:"surface"`
+	Reason  string `json:"reason"`
+}
+
+// failure 는 다음 실패 이벤트를 기다려 JSON 형태로 반환한다.
+func (o *fakeOwner) failure(t *testing.T) sidecarFailure {
+	t.Helper()
+	var value any
+	select {
+	case value = <-o.failures:
+	case <-time.After(10 * time.Second):
+		t.Fatal("no sidecar failure within 10s")
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var failure sidecarFailure
+	if err := json.Unmarshal(data, &failure); err != nil {
+		t.Fatal(err)
+	}
+	return failure
+}
+
+// messageLimit 은 사이드카 메시지 한 줄의 줄바꿈 앞 최대 크기다(docs/spec/sidecars.md#messages).
+const messageLimit = 64 << 20
+
+// scriptSidecars 는 script 를 실행하는 fake 사이드카를 선언한 채널과 그 디렉터리를 만든다.
+// script 안의 DIR 은 그 디렉터리로 바뀐다.
+func scriptSidecars(t *testing.T, script string) (*host.Sidecars, string) {
+	t.Helper()
+	directory := t.TempDir()
+	script = strings.ReplaceAll(script, "DIR", directory)
+	if err := os.WriteFile(filepath.Join(directory, "fake"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sidecars, err := host.NewSidecars(frontend(`{"executable":"build/fake","protocol":1}`), directory, directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 검사가 실패해도 fake 사이드카 프로세스를 남기지 않는다.
+	t.Cleanup(sidecars.Stop)
+	return sidecars, directory
+}
+
+// paddedMessageScript 는 요청 하나를 읽은 뒤 줄바꿈 앞이 size byte 인 s1 메시지를 보내고 then 을 실행하는 스크립트다.
+// 본문은 문자열 하나이고 셸 파이프라인이 쓰므로 스크립트 프로세스는 쓰기가 끝날 때까지 기다린다.
+func paddedMessageScript(size int, then string) (string, int) {
+	prefix, suffix := `{"surface":"s1","body":"`, `"}`
+	padding := size - len(prefix) - len(suffix)
+	return fmt.Sprintf("#!/bin/sh\necho $$ > DIR/pid\nread request\nprintf '%%s' '%s'\nhead -c %d /dev/zero | tr '\\0' x\nprintf '%%s\\n' '%s'\n%s\n",
+		prefix, padding, suffix, then), padding
+}
+
+// processID 는 fake 사이드카가 기록한 프로세스 id 다.
+func processID(t *testing.T, directory string) int {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(directory, "pid"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pid
+}
+
+// requireEnded 는 프로세스 pid 가 끝나고 회수되었는지 검사한다.
+func requireEnded(t *testing.T, pid int) {
+	t.Helper()
+	if err := syscall.Kill(pid, 0); !errors.Is(err, syscall.ESRCH) {
+		t.Fatalf("sidecar process %d still exists after its failure: kill(0) = %v", pid, err)
+	}
+}
+
+// contract: sidecars.protocol.message-at-limit-is-delivered
+func TestSidecarMessageAtTheLimitIsDelivered(t *testing.T) {
+	script, padding := paddedMessageScript(messageLimit, "exec cat")
+	sidecars, _ := scriptSidecars(t, script)
+	owner := newFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	event := owner.next(t)
+	body := string(event.Body)
+	if event.Surface != "s1" || len(body) != padding+2 || strings.Trim(body[1:len(body)-1], "x") != "" || body[0] != '"' || body[len(body)-1] != '"' {
+		t.Fatalf("message at the limit: surface %q, body length %d, want %d", event.Surface, len(body), padding+2)
+	}
+	select {
+	case value := <-owner.failures:
+		t.Fatalf("message at the limit produced a failure: %+v", value)
+	default:
+	}
+}
+
+// contract: sidecars.failure.oversize-message-terminates-and-notifies
+func TestOversizeSidecarMessageTerminatesAndNotifies(t *testing.T) {
+	script, _ := paddedMessageScript(messageLimit+1, "exec sleep 600")
+	sidecars, directory := scriptSidecars(t, script)
+	owner := newFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	failure := owner.failure(t)
+	if failure.Sidecar != echoSidecar || failure.Surface != "s1" || !strings.Contains(failure.Reason, "exceeds 67108864 bytes") {
+		t.Fatalf("oversize failure = %+v", failure)
+	}
+	requireEnded(t, processID(t, directory))
+}
+
+// contract: sidecars.failure.invalid-message-terminates-and-notifies
+func TestInvalidSidecarMessageTerminatesAndNotifies(t *testing.T) {
+	for _, line := range []string{`not json`, `{"surface":"s1"}`} {
+		sidecars, directory := scriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nread request\nprintf '%s\\n' '"+line+"'\nexec sleep 600\n")
+		owner := newFakeOwner("/projects/a")
+		if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+			t.Fatal(err)
+		}
+		failure := owner.failure(t)
+		if failure.Sidecar != echoSidecar || failure.Surface != "s1" || !strings.Contains(failure.Reason, "invalid message") {
+			t.Fatalf("%s: failure = %+v", line, failure)
+		}
+		requireEnded(t, processID(t, directory))
+	}
+}
+
+// contract: sidecars.failure.output-close-notifies-each-surface
+func TestSidecarOutputCloseNotifiesEachSurface(t *testing.T) {
+	sidecars, directory := scriptSidecars(t, "#!/bin/sh\necho $$ >> DIR/pids\nread first\nread second\nexit 3\n")
+	first, second := newFakeOwner("/projects/a"), newFakeOwner("/projects/b")
+	if err := sidecars.Send(first, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := sidecars.Send(second, echoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	for surface, owner := range map[string]*fakeOwner{"s1": first, "s2": second} {
+		failure := owner.failure(t)
+		if failure.Sidecar != echoSidecar || failure.Surface != surface || !strings.Contains(failure.Reason, "output closed") {
+			t.Fatalf("%s: failure = %+v", surface, failure)
+		}
+	}
+	// 실패 뒤의 전송은 새 프로세스를 시작한다.
+	if err := sidecars.Send(first, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatalf("send after failure: %v", err)
+	}
+	sidecars.Stop()
+	select {
+	case value := <-first.failures:
+		t.Fatalf("output end while stopping produced a failure: %+v", value)
+	default:
+	}
+	data, err := os.ReadFile(filepath.Join(directory, "pids"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pids := strings.Fields(string(data)); len(pids) != 2 || pids[0] == pids[1] {
+		t.Fatalf("sidecar processes = %q, want two distinct processes", pids)
+	}
 }
 
 // echoSidecars 는 받은 줄을 그대로 출력하는 fake 사이드카를 선언한 채널을 만든다.

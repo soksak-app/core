@@ -19,5 +19,6 @@ export function orderedSidecar(port) {
       return sent;
     },
     on: (surface, fn) => port.on(surface, fn),
+    onFailure: (surface, fn) => port.onFailure(surface, fn),
   };
 }

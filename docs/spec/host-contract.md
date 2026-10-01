@@ -276,6 +276,10 @@ Items:
 | `sidecars.stop.honors-stop-timeout` | Stop returns within twice the stop timeout for a sidecar that does not drain its input. | both |
 | `sidecars.stop.graceful-on-stdin-eof` | A sidecar that exits on end of input stops without waiting for the timeout. | both |
 | `sidecars.stop.kills-after-timeout` | A sidecar that ignores end of input is killed after the stop timeout. | both |
+| `sidecars.protocol.message-at-limit-is-delivered` | A sidecar message of exactly 67108864 bytes before its newline reaches the owning window intact. | both |
+| `sidecars.failure.oversize-message-terminates-and-notifies` | A line longer than 67108864 bytes ends the sidecar process and delivers `sidecar-failure` with "exceeds" to the owning window without waiting for the line to end. | both |
+| `sidecars.failure.invalid-message-terminates-and-notifies` | A line that is not JSON, or a JSON object without `body`, ends the sidecar process and delivers `sidecar-failure` with "invalid message". | both |
+| `sidecars.failure.output-close-notifies-each-surface` | A sidecar whose output ends while the host is not stopping delivers `sidecar-failure` with "output closed" to the owning window of each surface that sent to it, and the next send starts a new process. | both |
 | `sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service` | Two hosts authenticate to one service endpoint with its token and each receive their own events. | both |
 | `sidecars-transport.hello.declares-protocol-one` | The hello request declares protocol 1. | both |
 | `sidecars-transport.reconnect.after-connection-loss-preserves-owner` | After the service drops the connection, the next send reconnects and events still reach the owner and surface. | both |

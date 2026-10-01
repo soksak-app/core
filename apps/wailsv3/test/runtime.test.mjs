@@ -37,3 +37,28 @@ test("the performance trace command carries the page request to the host", async
     delete globalThis.location;
   }
 });
+
+test("a page sidecar failure reaches only the listener of that sidecar and surface", async () => {
+  const listeners = [];
+  globalThis.window = { __soksakNative: {
+    call: async () => null,
+    on: (event, fn) => { listeners.push([event, fn]); return () => {}; },
+  } };
+  globalThis.location = { search: "?id=s1" };
+  try {
+    // 이 검사만 별도의 모듈 사본을 쓴다 — 런타임은 첫 불러오기에 window 를 붙잡는다.
+    const { page } = await import("../runtime/index.js?test=sidecar-failure");
+    const reasons = [];
+    const off = await page.sidecar("@x/side").onFailure("s1", (reason) => reasons.push(reason));
+    assert.equal(typeof off, "function");
+    const [event, deliver] = listeners.at(-1);
+    assert.equal(event, "sidecar-failure");
+    deliver({ sidecar: "@x/side", surface: "s2", reason: "another surface" });
+    deliver({ sidecar: "@x/other", surface: "s1", reason: "another sidecar" });
+    deliver({ sidecar: "@x/side", surface: "s1", reason: "output closed: exit status 3" });
+    assert.deepEqual(reasons, ["output closed: exit status 3"]);
+  } finally {
+    delete globalThis.window;
+    delete globalThis.location;
+  }
+});

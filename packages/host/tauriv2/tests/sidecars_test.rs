@@ -7,13 +7,15 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Duration;
 
 use serde_json::value::RawValue;
-use soksak_host_tauriv2::sidecars::{Message, Owner, Sidecars};
+use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, Sidecars};
 
 #[derive(Clone)]
 struct FakeOwner {
     key: String,
     root: String,
     sent: Sender<Message>,
+    // 실패를 단언하는 검사만 실패 채널을 가진다.
+    failed: Option<Sender<Failure>>,
 }
 
 impl Owner for FakeOwner {
@@ -26,6 +28,13 @@ impl Owner for FakeOwner {
     fn deliver(&self, message: Message) {
         let _ = self.sent.send(message);
     }
+    fn deliver_failure(&self, failure: Failure) {
+        match &self.failed {
+            Some(failed) => failed.send(failure).expect("failure receiver"),
+            // 실패를 단언하지 않는 검사의 실패는 검사 출력에 남긴다.
+            None => eprintln!("sidecar failure: {failure:?}"),
+        }
+    }
 }
 
 fn owner(key: &str, root: &str) -> (FakeOwner, Receiver<Message>) {
@@ -35,8 +44,25 @@ fn owner(key: &str, root: &str) -> (FakeOwner, Receiver<Message>) {
             key: key.into(),
             root: root.into(),
             sent,
+            failed: None,
         },
         received,
+    )
+}
+
+/// 실패 이벤트도 받는 창.
+fn failing_owner(key: &str, root: &str) -> (FakeOwner, Receiver<Message>, Receiver<Failure>) {
+    let (sent, received) = channel();
+    let (failed, failures) = channel();
+    (
+        FakeOwner {
+            key: key.into(),
+            root: root.into(),
+            sent,
+            failed: Some(failed),
+        },
+        received,
+        failures,
     )
 }
 
@@ -555,5 +581,196 @@ fn stop_forced_kill() {
         elapsed >= Duration::from_millis(80) && elapsed <= Duration::from_millis(150),
         "forced kill stop took {:?}, want ~100ms",
         elapsed
+    );
+}
+
+/// 사이드카 메시지 한 줄의 줄바꿈 앞 최대 크기(docs/spec/sidecars.md#messages).
+const MESSAGE_LIMIT: usize = 64 << 20;
+
+/// 검사가 끝나거나 실패해도 fake 사이드카 프로세스를 남기지 않도록 drop 에서 사이드카를 종료한다.
+struct Stopping(Sidecars<FakeOwner>);
+
+impl std::ops::Deref for Stopping {
+    type Target = Sidecars<FakeOwner>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Drop for Stopping {
+    fn drop(&mut self) {
+        self.0.stop();
+    }
+}
+
+/// script 를 실행하는 fake 사이드카를 선언한 채널과 그 디렉터리를 만든다. script 안의 DIR 은 그 디렉터리로 바뀐다.
+fn script_sidecars(script: &str) -> (Stopping, tempfile::TempDir) {
+    let directory = tempfile::tempdir().unwrap();
+    let program = directory.path().join("fake");
+    std::fs::write(
+        &program,
+        script.replace("DIR", &directory.path().display().to_string()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let sidecars = create(
+        &files(r#"{"executable":"build/fake","protocol":1}"#),
+        directory.path(),
+    )
+    .unwrap();
+    (Stopping(sidecars), directory)
+}
+
+/// 요청 하나를 읽은 뒤 줄바꿈 앞이 size byte 인 s1 메시지를 보내고 then 을 실행하는 스크립트와 본문 문자 수.
+/// 본문은 문자열 하나이고 셸 파이프라인이 쓰므로 스크립트 프로세스는 쓰기가 끝날 때까지 기다린다.
+fn padded_message_script(size: usize, then: &str) -> (String, usize) {
+    let (prefix, suffix) = (r#"{"surface":"s1","body":""#, r#""}"#);
+    let padding = size - prefix.len() - suffix.len();
+    (
+        format!(
+            "#!/bin/sh\necho $$ > DIR/pid\nread request\nprintf '%s' '{prefix}'\nhead -c {padding} /dev/zero | tr '\\0' x\nprintf '%s\\n' '{suffix}'\n{then}\n"
+        ),
+        padding,
+    )
+}
+
+/// fake 사이드카가 기록한 프로세스 id.
+fn process_id(directory: &Path) -> i32 {
+    std::fs::read_to_string(directory.join("pid"))
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap()
+}
+
+/// 프로세스 pid 가 끝나고 회수되었는지 검사한다.
+fn assert_ended(pid: i32) {
+    // SAFETY: 신호 0 은 프로세스 존재만 검사하고 아무 신호도 보내지 않는다.
+    let result = unsafe { libc::kill(pid, 0) };
+    let error = std::io::Error::last_os_error();
+    assert!(
+        result == -1 && error.raw_os_error() == Some(libc::ESRCH),
+        "sidecar process {pid} still exists after its failure: kill(0) = {result}, {error}"
+    );
+}
+
+const DEADLINE: Duration = Duration::from_secs(10);
+
+// contract: sidecars.protocol.message-at-limit-is-delivered
+#[test]
+fn a_message_at_the_limit_is_delivered() {
+    let (script, padding) = padded_message_script(MESSAGE_LIMIT, "exec cat");
+    let (sidecars, _directory) = script_sidecars(&script);
+    let (window, events, failures) = failing_owner("a", "/projects/a");
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    let event = events
+        .recv_timeout(DEADLINE)
+        .expect("no sidecar event within 10s");
+    let body = event.body.get();
+    assert_eq!(event.surface, "s1");
+    assert_eq!(body.len(), padding + 2, "body length");
+    assert!(
+        body.starts_with('"')
+            && body.ends_with('"')
+            && body[1..body.len() - 1].bytes().all(|b| b == b'x'),
+        "message at the limit was changed"
+    );
+    assert!(
+        failures.try_recv().is_err(),
+        "message at the limit produced a failure"
+    );
+}
+
+// contract: sidecars.failure.oversize-message-terminates-and-notifies
+#[test]
+fn an_oversize_message_terminates_and_notifies() {
+    let (script, _) = padded_message_script(MESSAGE_LIMIT + 1, "exec sleep 600");
+    let (sidecars, directory) = script_sidecars(&script);
+    let (window, _events, failures) = failing_owner("a", "/projects/a");
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    let failure = failures
+        .recv_timeout(DEADLINE)
+        .expect("no sidecar failure within 10s");
+    assert_eq!(
+        (failure.sidecar.as_str(), failure.surface.as_str()),
+        (ECHO, "s1")
+    );
+    assert!(
+        failure.reason.contains("exceeds 67108864 bytes"),
+        "{failure:?}"
+    );
+    assert_ended(process_id(directory.path()));
+}
+
+// contract: sidecars.failure.invalid-message-terminates-and-notifies
+#[test]
+fn an_invalid_message_terminates_and_notifies() {
+    for line in ["not json", r#"{"surface":"s1"}"#] {
+        let (sidecars, directory) = script_sidecars(&format!(
+            "#!/bin/sh\necho $$ > DIR/pid\nread request\nprintf '%s\\n' '{line}'\nexec sleep 600\n"
+        ));
+        let (window, _events, failures) = failing_owner("a", "/projects/a");
+        sidecars
+            .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+        let failure = failures
+            .recv_timeout(DEADLINE)
+            .unwrap_or_else(|_| panic!("{line}: no sidecar failure within 10s"));
+        assert_eq!(
+            (failure.sidecar.as_str(), failure.surface.as_str()),
+            (ECHO, "s1")
+        );
+        assert!(
+            failure.reason.contains("invalid message"),
+            "{line}: {failure:?}"
+        );
+        assert_ended(process_id(directory.path()));
+    }
+}
+
+// contract: sidecars.failure.output-close-notifies-each-surface
+#[test]
+fn an_output_close_notifies_each_surface() {
+    let (sidecars, directory) =
+        script_sidecars("#!/bin/sh\necho $$ >> DIR/pids\nread first\nread second\nexit 3\n");
+    let (first, _first_events, first_failures) = failing_owner("a", "/projects/a");
+    let (second, _second_events, second_failures) = failing_owner("b", "/projects/b");
+    sidecars
+        .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    sidecars
+        .send(&second, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    for (surface, failures) in [("s1", &first_failures), ("s2", &second_failures)] {
+        let failure = failures
+            .recv_timeout(DEADLINE)
+            .unwrap_or_else(|_| panic!("{surface}: no sidecar failure within 10s"));
+        assert_eq!(
+            (failure.sidecar.as_str(), failure.surface.as_str()),
+            (ECHO, surface)
+        );
+        assert!(
+            failure.reason.contains("output closed"),
+            "{surface}: {failure:?}"
+        );
+    }
+    // 실패 뒤의 전송은 새 프로세스를 시작한다.
+    sidecars
+        .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    sidecars.stop();
+    assert!(
+        first_failures.try_recv().is_err(),
+        "output end while stopping produced a failure"
+    );
+    let pids = std::fs::read_to_string(directory.path().join("pids")).unwrap();
+    let pids: Vec<&str> = pids.split_whitespace().collect();
+    assert!(
+        pids.len() == 2 && pids[0] != pids[1],
+        "sidecar processes = {pids:?}, want two distinct processes"
     );
 }

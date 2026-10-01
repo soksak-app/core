@@ -79,7 +79,7 @@ A plugin without a surface, or with state that no single tab owns, declares a `s
 
 - `project`: `{id, root}`, the shown project and its canonical directory ([projects](projects.md)).
 - `exposure.status(name, read, subscribe)` and `exposure.command(name, run)`: register the plugin's declared statuses and commands in the application document's registry. `subscribe(fn)` may be called more than once and returns a function that stops that subscription. These entries answer requests without `surface` before any surface registration of the same name ([choosing a surface](exposure.md#choosing-a-surface)), and dispose removes them.
-- `sidecar`: `{send(body), on(fn)}` for the plugin's only declared sidecar. The session identifier is `state:<plugin id>:<project id>`, so the host gives the sidecar the project directory as `root` ([sidecars](sidecars.md#messages)).
+- `sidecar`: `{send(body), on(fn), onFailure(fn)}` for the plugin's only declared sidecar; `onFailure` receives the reason of each [sidecar failure](sidecars.md#failure) of the session. The session identifier is `state:<plugin id>:<project id>`, so the host gives the sidecar the project directory as `root` ([sidecars](sidecars.md#messages)).
 - `data.get(key)` and `data.set(key, value)`: the plugin's [project data](#project-data).
 
 The state module is a file listed in the package's `files`; staging fails when it is not listed. A mount or dispose failure is reported as a page error.
@@ -100,7 +100,7 @@ In a diagnostic build the workbench adds the declarations to the plugin's surfac
 
 ## Surface module ownership
 
-Each OS window has one app DOM WebView. The workbench owns the surface element and its Shadow Root; a plugin owns the DOM it mounts inside that root. Shadow DOM isolates styles, not security privileges. The context exposes surface-scoped commands, statuses, DOM bindings, sidecar messages, and the declared composition controller. The host validates the window, surface, and declaration again. Sidecar messages sent through the context reach the sidecar in send order: the workbench starts a send only after the previous send to the same sidecar finished, and every surface and background session of that sidecar shares one order. A send whose surface is not the context's surface is rejected. Plugins do not create internal WebViews or iframes.
+Each OS window has one app DOM WebView. The workbench owns the surface element and its Shadow Root; a plugin owns the DOM it mounts inside that root. Shadow DOM isolates styles, not security privileges. The context exposes surface-scoped commands, statuses, DOM bindings, sidecar messages and [sidecar failures](sidecars.md#failure), and the declared composition controller. The host validates the window, surface, and declaration again. Sidecar messages sent through the context reach the sidecar in send order: the workbench starts a send only after the previous send to the same sidecar finished, and every surface and background session of that sidecar shares one order. A send whose surface is not the context's surface is rejected. Plugins do not create internal WebViews or iframes.
 
 `mount(root, context)` may be asynchronous and returns `{ dispose() }`. Native surface registration completes before mounting can attach a region. Mounting failure is a visible error; it cannot become a successful empty surface. Native readiness requires the first presented region, not merely a completed module import. The workbench distinguishes loading, ready, and error.
 

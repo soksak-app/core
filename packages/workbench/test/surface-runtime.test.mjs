@@ -6,6 +6,10 @@ const calls = [];
 let registerEventListener;
 /* 호출 하나의 완료를 검사가 정할 때 쓴다. 없으면 호출은 바로 끝난다. */
 let answerCall;
+/* 설치된 모든 네이티브 listener. 모듈 상태의 listener 는 앞선 검사에서 설치될 수 있다. */
+const nativeListeners = [];
+/* listener 설치의 완료를 검사가 정할 때 쓴다. 없으면 설치는 바로 끝난다. */
+let installListener;
 mock.module("@soksak/runtime", {
   namedExports: {
     host: {
@@ -14,12 +18,32 @@ mock.module("@soksak/runtime", {
         return answerCall ? answerCall(name, payload) : null;
       },
       on: (name, callback) => {
+        nativeListeners.push([name, callback]);
         registerEventListener?.(name, callback);
-        return Promise.resolve(() => {});
+        return installListener ? installListener(name) : Promise.resolve(() => {});
       },
     },
   },
 });
+
+/* 창에 보낸 error 이벤트의 message 를 기록한다. */
+function windowErrors() {
+  const dom = new JSDOM("<body></body>", { url: "http://localhost/" });
+  const messages = [];
+  globalThis.dispatchEvent = (event) => {
+    messages.push(event.message);
+    return true;
+  };
+  globalThis.ErrorEvent = dom.window.ErrorEvent;
+  return { messages, close: () => { delete globalThis.dispatchEvent; delete globalThis.ErrorEvent; dom.window.close(); } };
+}
+
+/* 설치된 sidecar-failure listener 로 실패 하나를 보낸다. */
+function deliverFailure(failure) {
+  const installed = nativeListeners.filter(([name]) => name === "sidecar-failure");
+  assert.equal(installed.length, 1, "one sidecar-failure listener is installed");
+  installed[0][1](failure);
+}
 
 test("surface event subscription resolves only after the native listener is installed", async () => {
   const dom = new JSDOM("<body></body>", { url: "http://localhost/" });
@@ -161,4 +185,58 @@ test("a surface runtime without a surface id is rejected instead of using anothe
   const { surfaceContextRuntime } = await import("../host.js");
   assert.throws(() => surfaceContextRuntime({ id: "old-shape" }), /surface\.surfaceId/);
   dom.window.close();
+});
+
+test("a surface sidecar failure reaches the surface's failure handler and no page error is raised", async () => {
+  const errors = windowErrors();
+  try {
+    const { surfaceContextRuntime } = await import("../host.js");
+    const port = surfaceContextRuntime({ surfaceId: "failing-surface", sidecars: ["@fixture/failing"] }).sidecar();
+    const reasons = [];
+    const off = await port.onFailure("failing-surface", (reason) => reasons.push(reason));
+    assert.equal(typeof off, "function");
+    await assert.rejects(port.onFailure("other-surface", () => {}), /failing-surface cannot observe sidecar surface other-surface/);
+    deliverFailure({ sidecar: "@fixture/failing", surface: "failing-surface", reason: "message exceeds 67108864 bytes" });
+    assert.deepEqual(reasons, ["message exceeds 67108864 bytes"]);
+    assert.deepEqual(errors.messages, []);
+    off();
+    deliverFailure({ sidecar: "@fixture/failing", surface: "failing-surface", reason: "output closed: exit status 3" });
+    assert.deepEqual(reasons, ["message exceeds 67108864 bytes"], "a removed handler is not called");
+    assert.deepEqual(errors.messages, ["sidecar @fixture/failing failed for surface failing-surface: output closed: exit status 3"]);
+  } finally {
+    errors.close();
+  }
+});
+
+test("a sidecar failure without a handler becomes a page error", async () => {
+  const errors = windowErrors();
+  try {
+    const { windowSidecar } = await import("../host.js");
+    await windowSidecar("@fixture/background").send("background-tab", { operation: "open" });
+    deliverFailure({ sidecar: "@fixture/background", surface: "background-tab", reason: "invalid message: body is missing" });
+    assert.deepEqual(errors.messages, ["sidecar @fixture/background failed for surface background-tab: invalid message: body is missing"]);
+  } finally {
+    errors.close();
+  }
+});
+
+test("the first sidecar request waits until the failure listener is installed", async () => {
+  let install;
+  installListener = (name) => name === "sidecar-failure"
+    ? new Promise((resolve) => { install = () => resolve(() => {}); })
+    : Promise.resolve(() => {});
+  try {
+    // 이 검사만 별도의 모듈 사본을 쓴다 — 실패 listener 는 모듈마다 한 번 설치된다.
+    const { windowSidecar } = await import("../host.js?test=failure-listener-order");
+    calls.length = 0;
+    const sent = windowSidecar("@fixture/ordered-failure").send("first-tab", { operation: "open" });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(calls.filter(([name]) => name === "sidecarSend"), [], "no request before the failure listener is installed");
+    assert.equal(typeof install, "function", "the failure listener installation started");
+    install();
+    await sent;
+    assert.deepEqual(calls.filter(([name]) => name === "sidecarSend").map(([, payload]) => payload.surface), ["first-tab"]);
+  } finally {
+    installListener = undefined;
+  }
 });
