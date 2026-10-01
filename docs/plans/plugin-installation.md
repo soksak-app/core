@@ -51,7 +51,14 @@ Every command that core or a plugin declares runs through `sok`, so a person or 
 - `sok <command> [--window <name> | --project <directory>] [--surface <id>] [--<parameter> <value>]...` runs a declared command in the running application. The parameter flags come from the command's declared parameter schema; the result is printed as JSON so that a following call can use it.
 - `sok commands [--window <name> | --project <directory>]` lists the declared core and plugin commands with their parameters.
 
-For example, `sok core.card.split --project ~/work --card shell --axis y --plugin terminal` splits a card of the window that shows `~/work` and prints the new tab, and `sok terminal.input --project ~/work --surface <tab> --bytes 'npm test\r'` runs a command in that terminal.
+For example, `sok core.card.split --project ~/work --card shell --axis y --plugin terminal` splits a card of the window that shows `~/work` and prints the new tab, and `sok terminal.input --project ~/work --surface <tab> --bytes 'npm test\r'` runs a command in that terminal. Installing a plugin and placing it are the same kind of call:
+
+```sh
+sok plugin install db-studio
+sok core.card.split --project ~/work --card shell --side left --plugin db-studio
+```
+
+`core.card.split` takes the side of the new card (`left`, `right`, `top` or `bottom`) instead of an axis, so one call places the new card.
 
 ## Sidecar release
 

@@ -51,7 +51,14 @@ Core나 plugin이 선언한 모든 command는 `sok`으로 실행되므로, 사�
 - `sok <command> [--window <name> | --project <directory>] [--surface <id>] [--<parameter> <value>]...`는 실행 중인 애플리케이션에서 선언된 command를 실행한다. 매개변수 flag는 command의 선언된 매개변수 schema에서 나오며, 결과는 다음 호출이 쓸 수 있도록 JSON으로 출력한다.
 - `sok commands [--window <name> | --project <directory>]`는 선언된 core와 plugin command를 매개변수와 함께 나열한다.
 
-예를 들어 `sok core.card.split --project ~/work --card shell --axis y --plugin terminal`은 `~/work`를 보이는 창의 card를 나누고 새 tab을 출력하며, `sok terminal.input --project ~/work --surface <tab> --bytes 'npm test\r'`는 그 terminal에서 명령을 실행한다.
+예를 들어 `sok core.card.split --project ~/work --card shell --axis y --plugin terminal`은 `~/work`를 보이는 창의 card를 나누고 새 tab을 출력하며, `sok terminal.input --project ~/work --surface <tab> --bytes 'npm test\r'`는 그 terminal에서 명령을 실행한다. Plugin을 설치하고 배치하는 것도 같은 종류의 호출이다.
+
+```sh
+sok plugin install db-studio
+sok core.card.split --project ~/work --card shell --side left --plugin db-studio
+```
+
+`core.card.split`은 축 대신 새 card의 쪽(`left`, `right`, `top`, `bottom`)을 받으므로, 호출 하나로 새 card를 배치한다.
 
 ## Sidecar release
 
