@@ -5,7 +5,7 @@
       "id": "js-command-supervisor",
       "language": "js-ts",
       "command": "node",
-      "args": ["--test", "scripts/test/test-command.test.mjs"],
+      "args": ["--test", "--test-reporter=tap", "scripts/test/test-command.test.mjs"],
       "expectedTests": 16,
       "implementationFiles": ["scripts/test-command.mjs"],
       "testFiles": ["scripts/test/test-command.test.mjs"],

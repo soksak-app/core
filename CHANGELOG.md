@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-24: the language test runs its node case with the TAP reporter, so colored output no longer reports zero tests.
+
 - G1.4-23: the card fullscreen toggle is drawn in the focus color while its card is fullscreen, like the pressed toggles of the window header.
 
 - V5-117-1-3-4-7-1-9: closing the last project of a window clears its `host.windows` project and returns its title to the library title; both had kept the closed project.

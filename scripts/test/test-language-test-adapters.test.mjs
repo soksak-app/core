@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULT_TIMEOUT_MS, discoverLanguageCases, parseLanguageResult, runLanguageCases } from '../language-test-adapters.mjs';
+import { DEFAULT_TIMEOUT_MS, discoverLanguageCases, parseLanguageResult, readLanguageCaseManifest, runLanguageCases } from '../language-test-adapters.mjs';
 
 const command = (source) => ({ command: process.execPath, args: ['-e', source] });
 
@@ -55,4 +55,23 @@ test('reports expected and actual test counts without hiding mismatch', async ()
   assert.equal(result.status, 'fail');
   assert.deepEqual(result.cases[0].expected, { status: 'pass', tests: 2 });
   assert.match(result.cases[0].errors.join(' '), /expected 2 tests, observed 1/);
+});
+
+test('the node case counts its tests when the reporter writes colors', { timeout: 30_000 }, async () => {
+  // 이 검사의 node:test 실행 문맥(NODE_TEST_CONTEXT)은 자식 검사에 넘기지 않는다.
+  const saved = { color: process.env.FORCE_COLOR, context: process.env.NODE_TEST_CONTEXT };
+  process.env.FORCE_COLOR = '3';
+  delete process.env.NODE_TEST_CONTEXT;
+  try {
+    const manifest = await readLanguageCaseManifest(new URL('../language-test-cases.json', import.meta.url));
+    const cases = manifest.filter(({ language }) => language === 'js-ts');
+    const result = await runLanguageCases(cases);
+    for (const item of result.cases) {
+      assert.equal(item.status, 'pass', JSON.stringify(item));
+      assert.equal(item.actual.tests, item.expected.tests, JSON.stringify(item.actual));
+    }
+  } finally {
+    if (saved.color === undefined) delete process.env.FORCE_COLOR; else process.env.FORCE_COLOR = saved.color;
+    if (saved.context !== undefined) process.env.NODE_TEST_CONTEXT = saved.context;
+  }
 });
