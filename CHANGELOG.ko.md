@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F0.4-1-1-1: 닫힌 surface에 대한 stdio sidecar 메시지는 버리고, host가 그 프로세스에 보낸 적 없는 surface의 메시지는 `unknown surface <surface>`로 sidecar를 실패시킨다.
+
 - F0.4-1-1-2: 두 host가 지속 service 연결을 64 MiB 메시지 한도로 읽고, 한도를 넘거나 잘못된 줄이면 한도 없이 읽거나 곧바로 다시 연결하지 않고 `sidecar-failure`로 연결을 끝낸다.
 
 - R1-9: `core.card.split`이 축 대신 새 카드의 변(`left`, `right`, `top`, `bottom`)을 받는다.

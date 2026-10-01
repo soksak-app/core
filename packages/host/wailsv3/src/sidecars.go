@@ -919,8 +919,13 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 		event := sidecarEvent{Surface: *output.Surface, Body: output.Body}
 		c.mu.Lock()
 		owner := c.owners[event.Surface]
+		addressed := process.surfaces[event.Surface]
 		c.mu.Unlock()
-		// 소유 창이 없는 표면의 메시지는 버린다. 표면이 닫힌 뒤 사이드카가 보낸 메시지다(docs/spec/sidecars.md#messages).
+		// 이 프로세스에 보낸 적 없는 표면의 메시지는 프로토콜 위반이다. 보낸 적이 있고 소유 창이 없으면 표면이
+		// 닫힌 뒤 사이드카가 보낸 메시지이므로 버린다(docs/spec/sidecars.md#messages).
+		if !addressed {
+			return "unknown surface " + event.Surface
+		}
 		if owner != nil {
 			// 이미지 봉투 여부 확인
 			if c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) {

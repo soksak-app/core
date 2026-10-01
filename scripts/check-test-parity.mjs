@@ -687,6 +687,18 @@ const FEATURE_LINKS = [
     expected: "An oversize, invalid or unreadable sidecar output, or an output end outside stop, terminates the sidecar process and delivers sidecar-failure to each owning window on both hosts.",
     levels: ["native"],
   },  {
+    id: "F0.4-1-1-1",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "addressed := process.surfaces[event.Surface]" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "unknown surface {}" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "closed_surface_messages_are_discarded_and_unknown_ones_fail" },
+    ],
+    expected: "A stdio sidecar message for a surface the host closed is discarded, and a message for a surface the host never sent to that process fails the sidecar with unknown surface on both hosts.",
+    levels: ["native"],
+  },  {
     id: "F0.4-1-1-2",
     implementation: [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) readPersistentLines(" },

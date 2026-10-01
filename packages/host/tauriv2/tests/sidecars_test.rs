@@ -756,3 +756,41 @@ fn an_output_close_notifies_each_surface() {
         "sidecar processes = {pids:?}, want two distinct processes"
     );
 }
+
+// contract: sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail
+#[test]
+fn closed_surface_messages_are_discarded_and_unknown_ones_fail() {
+    let (sidecars, directory) = script_sidecars(
+        "#!/bin/sh\necho $$ > DIR/pid\nread open1\nread open2\nread closed2\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s1\",\"body\":\"after\"}' '{\"surface\":\"ghost\",\"body\":\"x\"}'\nexec sleep 600\n",
+    );
+    let (window, events, failures) = failing_owner("a", "/projects/a");
+    for surface in ["s1", "s2"] {
+        sidecars
+            .send(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+    }
+    // 표면 동기화가 제거된 s2 를 닫는다.
+    sidecars
+        .retain(&window, &|surface| surface != "s2")
+        .unwrap();
+    // s2 의 늦은 메시지는 버려지고, 그 뒤의 s1 메시지가 첫 이벤트다.
+    let event = events
+        .recv_timeout(STALL)
+        .expect("no sidecar event; the test stalled");
+    assert_eq!(
+        (event.surface.as_str(), event.body.get()),
+        ("s1", r#""after""#)
+    );
+    let failure = failures
+        .recv_timeout(STALL)
+        .expect("no sidecar failure; the test stalled");
+    assert_eq!(
+        (
+            failure.sidecar.as_str(),
+            failure.surface.as_str(),
+            failure.reason.as_str()
+        ),
+        (ECHO, "s1", "unknown surface ghost")
+    );
+    assert_ended(process_id(directory.path()));
+}

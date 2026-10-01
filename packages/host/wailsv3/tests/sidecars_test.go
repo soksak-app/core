@@ -602,3 +602,25 @@ func TestClosingASurfaceKeepsOtherSessions(t *testing.T) {
 		t.Fatalf("requests =\n%s\nwant\n%s", requests, want)
 	}
 }
+
+// contract: sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail
+func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
+	sidecars, directory := scriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nread open1\nread open2\nread closed2\n"+
+		"printf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s1\",\"body\":\"after\"}' '{\"surface\":\"ghost\",\"body\":\"x\"}'\nexec sleep 600\n")
+	owner := newFakeOwner("/projects/a")
+	for _, surface := range []string{"s1", "s2"} {
+		if err := sidecars.Send(owner, echoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sidecars.Close("s2")
+	// s2 의 늦은 메시지는 버려지고, 그 뒤의 s1 메시지가 첫 이벤트다.
+	if event := owner.next(t); event.Surface != "s1" || string(event.Body) != `"after"` {
+		t.Fatalf("first event = %+v", event)
+	}
+	failure := owner.failure(t)
+	if failure.Sidecar != echoSidecar || failure.Surface != "s1" || failure.Reason != "unknown surface ghost" {
+		t.Fatalf("failure = %+v", failure)
+	}
+	requireEnded(t, processID(t, directory))
+}

@@ -1487,11 +1487,19 @@ fn relay<O: Owner>(
             Err(error) => return Some(format!("invalid message: {error}")),
         };
         // state lock은 절대 poison 되면 안 된다. 다른 스레드의 panic은 치명적.
-        let owner = {
+        let (owner, addressed) = {
             let state = state.lock().expect("sidecar state");
-            state.owners.get(&event.surface).cloned()
+            let addressed = state
+                .running
+                .get(sidecar)
+                .is_some_and(|process| process.surfaces.contains(&event.surface));
+            (state.owners.get(&event.surface).cloned(), addressed)
         };
-        // 소유 창이 없는 표면의 메시지는 버린다. 표면이 닫힌 뒤 사이드카가 보낸 메시지다(docs/spec/sidecars.md#messages).
+        // 이 프로세스에 보낸 적 없는 표면의 메시지는 프로토콜 위반이다. 보낸 적이 있고 소유 창이 없으면 표면이
+        // 닫힌 뒤 사이드카가 보낸 메시지이므로 버린다(docs/spec/sidecars.md#messages).
+        if !addressed {
+            return Some(format!("unknown surface {}", event.surface));
+        }
         let Some(owner) = owner else {
             continue;
         };

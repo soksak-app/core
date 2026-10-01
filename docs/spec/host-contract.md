@@ -270,6 +270,7 @@ Items:
 | `sidecars.retain.skips-service-without-endpoint` | Retaining without a running service or its endpoint file starts no service and closes nothing. | both |
 | `menu.application.view-has-full-screen-and-text-size` | The application menu's View menu has full screen and the [text size](text-size.md) items with Command `=`, `-`, and `0`; no menu item zooms or reloads the whole webview. | both |
 | `sidecars.protocol.surface-keeps-its-first-root` | After the owning window changes project, requests and the closed notice of an open surface carry the root of its first request. | both |
+| `sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail` | A stdio sidecar message for a surface that the host closed is discarded, while a message for a surface that the host never sent to that process fails the sidecar with `unknown surface <surface>` delivered to the surfaces that sent. | both |
 | `sidecars.send.rejects-undeclared-sidecar` | Sending to a sidecar that no plugin declares fails with "not declared". | both |
 | `sidecars.send.rejects-after-stop` | Sending after the sidecars stop fails with "stopped". | both |
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | Without declared sidecars, construction succeeds and every send fails with "not declared by any plugin". | both |
