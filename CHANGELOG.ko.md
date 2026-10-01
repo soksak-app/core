@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-117-1-3-4-7-1-7: 메인 페이지가 스스로 답하는 명령은 응답 없이 호출자를 기다리게 하지 않고, 선언된 timeout이나 10초 뒤에 실패한다.
+
 - V5-117-1-3-4-2: `core.sidebars`가 영구 사이드바 소유자에서 남은, 항상 거짓인 `unavailable` field를 더 이상 보고하지 않고, 새 window check가 탭 이동과 제거 중의 고정 사이드바 문맥을 기록한다.
 
 - V5-117-1-3-4-3: 새 window check가 사이드바에 맞닿은 카드의 rail을 loop 하나, 떨어진 카드를 loop 둘, 카드 전체 화면에서 rail 없음, 복원 뒤 loop 둘로 기록하며, 두 host에서 완전한 recording과 rail pixel을 확인한다.

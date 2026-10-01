@@ -37,7 +37,7 @@ A name has the form `<owner>.<name>`. `owner` is `core`, `host`, or a plugin id.
 | command | `description` | One-sentence description |
 | command | `params` | Parameter schema |
 | command | `result` | Result schema |
-| command | `timeout` | Optional. How long the host waits for a surface page's reply, in milliseconds from 1 to 600000; the default is 10 seconds |
+| command | `timeout` | Optional. How long a command may take to reply, in milliseconds from 1 to 600000; the default is 10 seconds. The host applies it to a command forwarded to a surface page, and the main page applies it to a command it answers itself, which then fails with -32000 and `command <name> did not reply within <ms>ms` |
 | dom | `name` | Entry name |
 | dom | `description` | One-sentence description |
 | dom | `many` | Optional. `true` when several elements share the name; requests address one element with `index` |
@@ -158,7 +158,7 @@ The host and the pages exchange these messages. They are internal to core and no
 
 | Direction | Message | Content |
 | --- | --- | --- |
-| host → main page | event `exposure-request` | `{id, method, params}` for `exposure.list`, `status.*`, `command.run`, `dom.*` of core and plugin names. The host waits 10 seconds for the answer, except for `command.run`, which the main page answers within the timeout of a forwarded command; a main page that is not ready returns 1003, and requests to a main page that reloads or closes end with 1003 |
+| host → main page | event `exposure-request` | `{id, method, params}` for `exposure.list`, `status.*`, `command.run`, `dom.*` of core and plugin names. The host waits 10 seconds for the answer, except for `command.run`, which the main page answers within the command's timeout, whether it forwards the command or answers it itself; a main page that is not ready returns 1003, and requests to a main page that reloads or closes end with 1003 |
 | main page → host | call `exposureReply` | `{id, result}` or `{id, error: {code, message}}` |
 | main page → host | call `exposureChanged` | `{name, surface?, value}` for a watched status; `surface` is present when the watch named one |
 | surface page → host | call `exposureRegister` | `{surface, kind, name}` |

@@ -41,6 +41,9 @@ const surfacePorts = new Map();
  *   preferred()             이름을 등록한 표면이 여럿일 때 고를 순서. 표면 id 배열
  *   registrationChanged()   표면의 등록이 바뀐 뒤 호출된다
  */
+/** 이 문서가 답하는 명령이 timeout 을 선언하지 않았을 때 답을 기다리는 시간(ms). */
+const REPLY_TIMEOUT = 10_000;
+
 export function createRegistry({ call = null } = {}) {
   const declared = new Map();
   const coreDeclared = new Map();
@@ -137,6 +140,21 @@ export function createRegistry({ call = null } = {}) {
     if (!shared) await forward(watch.surface, "status.unwatch", { name });
   }
 
+  /**
+   * 이 문서가 답하는 명령은 선언의 timeout(없으면 10초) 안에 답하지 않으면 실패로 끝낸다. 표면으로 전달하는 명령은
+   * 호스트가 같은 시간을 적용한다. 답이 없는 명령이 호출자를 끝없이 기다리게 하지 않는다.
+   */
+  function bounded(method, name, entry, run) {
+    if (method !== "command.run") return run();
+    // 기본값: timeout 을 선언하지 않은 명령은 10초 안에 답한다(docs/spec/exposure.md).
+    const limit = entry?.declaration.timeout ?? REPLY_TIMEOUT;
+    let timer;
+    const expired = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new ExposureError(EXPOSURE_ERRORS.failed, `command ${name} did not reply within ${limit}ms`)), limit);
+    });
+    return Promise.race([run(), expired]).finally(() => clearTimeout(timer));
+  }
+
   function answer(method, params) {
     return method === "command.run" && typeof params?.name === "string"
       ? timed(params.name, () => dispatch(method, params)) : dispatch(method, params);
@@ -151,8 +169,10 @@ export function createRegistry({ call = null } = {}) {
     const found = kind && typeof name === "string" ? declared.get(declarationKey(kind, name)) : undefined;
     // 상태 모듈이 등록한 이름은 표면을 지정하지 않은 요청에 이 문서가 답한다(docs/spec/exposure.md#choosing-a-surface).
     const page = found && params.surface === undefined ? pageOf(kind, name) : null;
-    if (page) return page.entries.answer(method, params, changed);
-    if (!found || !surfaceName(name)) return core.answer(method, params, changed);
+    if (page) return bounded(method, name, found, () => page.entries.answer(method, params, changed));
+    if (!found || !surfaceName(name)) {
+      return bounded(method, name, coreDeclared.get(declarationKey(kind, name)), () => core.answer(method, params, changed));
+    }
     const requested = params.surface;
     const key = watchKey(name, requested);
     if (method === "status.unwatch") {
