@@ -408,3 +408,80 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
         (1, "sok: plugin probe is not installed\n")
     );
 }
+
+/// read_plugins_state 의 결과를 JSON 문장으로 만든다.
+fn state_json(config: &Dir) -> String {
+    let state = soksak_sok::plugins::read_plugins_state(&config.0).expect("plugins state");
+    serde_json::to_string(&state).expect("state JSON")
+}
+
+// contract: cli.plugin.state-reads-registry-and-installed
+#[test]
+fn plugins_state_reports_the_registry_and_the_installation() {
+    let config = Dir::new();
+    assert_eq!(
+        state_json(&config),
+        r#"{"registry":null,"index":null,"installed":{"format":1,"plugins":{},"sidecars":{}}}"#
+    );
+    let registry = plugin_versions(&["0.2.0"]);
+    run_json(&[
+        "registry",
+        "use",
+        &registry.index(),
+        "--config-dir",
+        config.text(),
+    ]);
+    let platform = soksak_sok::current_platform().expect("platform");
+    soksak_sok::plugins::run_plugin_action(&config.0, "install", "probe", "0.0.2", &platform)
+        .expect("install");
+    let state: Value = serde_json::from_str(&state_json(&config)).unwrap();
+    assert_eq!(state["registry"], format!("file://{}", registry.index()));
+    assert_eq!(state["index"]["plugins"][0]["id"], "probe");
+    assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.2.0");
+    assert_eq!(state["installed"]["plugins"]["probe"]["enabled"], true);
+    // 읽지 못한 index 는 오류를 index 자리에 담고, 설치 상태는 그대로 보고한다.
+    std::fs::remove_file(registry.index()).unwrap();
+    let state: Value = serde_json::from_str(&state_json(&config)).unwrap();
+    let error = state["index"]["error"].as_str().expect("index error");
+    assert!(error.contains(&registry.index()), "{error}");
+    assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.2.0");
+    std::fs::write(config.0.join("plugins/installed.json"), "{").unwrap();
+    let error = soksak_sok::plugins::read_plugins_state(&config.0)
+        .err()
+        .expect("invalid installed.json fails");
+    assert!(
+        error.contains("installed.json is not valid JSON"),
+        "{error}"
+    );
+}
+
+// contract: cli.plugin.action-runs-the-command
+#[test]
+fn run_plugin_action_matches_the_plugin_commands() {
+    let config = Dir::new();
+    let registry = plugin_versions(&["0.2.0"]);
+    run_json(&[
+        "registry",
+        "use",
+        &registry.index(),
+        "--config-dir",
+        config.text(),
+    ]);
+    let platform = soksak_sok::current_platform().expect("platform");
+    soksak_sok::plugins::run_plugin_action(&config.0, "install", "probe", "0.0.2", &platform)
+        .expect("install");
+    let disabled =
+        soksak_sok::plugins::run_plugin_action(&config.0, "disable", "probe", "0.0.2", "")
+            .expect("disable");
+    assert_eq!(serde_json::to_value(&disabled).unwrap()["enabled"], false);
+    let (_, stdout, _) = run(&["plugin", "list", "--config-dir", config.text()]);
+    assert!(stdout.contains(r#""enabled": false"#), "{stdout}");
+    let error = soksak_sok::plugins::run_plugin_action(&config.0, "rename", "probe", "0.0.2", "")
+        .err()
+        .expect("unknown action fails");
+    assert_eq!(error, r#"unknown plugin action "rename""#);
+    let removed = soksak_sok::plugins::run_plugin_action(&config.0, "remove", "probe", "0.0.2", "")
+        .expect("remove");
+    assert_eq!(serde_json::to_string(&removed).unwrap(), "null");
+    assert!(!config.0.join("plugins/probe").exists());
+}

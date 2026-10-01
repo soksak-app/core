@@ -97,37 +97,93 @@ func UseRegistry(configDir, location string) (string, error) {
 
 // readRegistry 는 plugins/registry.json 이 지정한 index 를 읽는다.
 func readRegistry(configDir string) (*Index, error) {
-	path := filepath.Join(configDir, RegistryFile)
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return nil, fmt.Errorf("%s does not exist; run sok registry use <index.json>", path)
-	}
+	url, exists, err := readRegistryURL(configDir)
 	if err != nil {
 		return nil, err
 	}
-	value, err := DecodeJSON(data)
-	if err != nil {
-		return nil, fmt.Errorf("%s is not valid JSON: %w", path, err)
-	}
-	m, err := object(RegistryFile, value)
-	if err != nil {
-		return nil, err
-	}
-	if err := only(RegistryFile, m, "format", "index"); err != nil {
-		return nil, err
-	}
-	if !isOne(m["format"]) {
-		return nil, fmt.Errorf("%s: format must be %d", RegistryFile, InstallFormat)
-	}
-	url, ok := m["index"].(string)
-	if !ok {
-		return nil, fmt.Errorf("%s: index must be an absolute file: URL", RegistryFile)
-	}
-	if _, err := FilePath(url); err != nil {
-		return nil, fmt.Errorf("%s: %w", RegistryFile, err)
+	if !exists {
+		return nil, fmt.Errorf("%s does not exist; run sok registry use <index.json>", filepath.Join(configDir, RegistryFile))
 	}
 	index, _, err := readIndexAt(url)
 	return index, err
+}
+
+// readRegistryURL 은 plugins/registry.json 의 index 주소를 읽는다. 파일이 없으면 exists 가 false 다.
+func readRegistryURL(configDir string) (url string, exists bool, err error) {
+	path := filepath.Join(configDir, RegistryFile)
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", true, err
+	}
+	value, err := DecodeJSON(data)
+	if err != nil {
+		return "", true, fmt.Errorf("%s is not valid JSON: %w", path, err)
+	}
+	m, err := object(RegistryFile, value)
+	if err != nil {
+		return "", true, err
+	}
+	if err := only(RegistryFile, m, "format", "index"); err != nil {
+		return "", true, err
+	}
+	if !isOne(m["format"]) {
+		return "", true, fmt.Errorf("%s: format must be %d", RegistryFile, InstallFormat)
+	}
+	url, ok := m["index"].(string)
+	if !ok {
+		return "", true, fmt.Errorf("%s: index must be an absolute file: URL", RegistryFile)
+	}
+	if _, err := FilePath(url); err != nil {
+		return "", true, fmt.Errorf("%s: %w", RegistryFile, err)
+	}
+	return url, true, nil
+}
+
+// PluginsState 는 애플리케이션이 plugin 목록에 쓰는 registry 와 설치 상태다
+// (docs/spec/installation.md#plugin-operations-in-the-application).
+type PluginsState struct {
+	Registry  *string         `json:"registry"`
+	Index     any             `json:"index"`
+	Installed *InstalledState `json:"installed"`
+}
+
+// ReadPluginsState 는 registry 주소, 검사한 index, 설치 상태를 읽는다. index 를 읽지 못하면
+// 그 오류를 index 자리에 담고, 설치 상태를 읽지 못하면 실패한다.
+func ReadPluginsState(configDir string) (*PluginsState, error) {
+	installed, err := readInstalled(configDir)
+	if err != nil {
+		return nil, err
+	}
+	state := &PluginsState{Installed: installed}
+	url, exists, err := readRegistryURL(configDir)
+	switch {
+	case err != nil:
+		state.Index = map[string]string{"error": err.Error()}
+	case exists:
+		state.Registry = &url
+		if index, _, err := readIndexAt(url); err != nil {
+			state.Index = map[string]string{"error": err.Error()}
+		} else {
+			state.Index = index
+		}
+	}
+	return state, nil
+}
+
+// RunPluginAction 은 sok plugin <action> <id> 와 같은 작업을 실행하고 그 출력을 돌려준다.
+// action 은 install, update, remove, enable, disable 중 하나다.
+func RunPluginAction(configDir, action, id, core, platform string) (any, error) {
+	switch action {
+	case "install", "update":
+		return InstallPlugin(configDir, id, core, platform, action == "update")
+	case "remove", "enable", "disable":
+		return ChangePlugin(configDir, id, action)
+	default:
+		return nil, fmt.Errorf("unknown plugin action %q", action)
+	}
 }
 
 // readInstalled 는 plugins/installed.json 을 읽는다. 파일이 없으면 아무것도 설치하지 않은 상태다.
@@ -480,16 +536,15 @@ func runPlugins(a arguments, stdout io.Writer, options Options) error {
 			return err
 		}
 		result = state
-	case "plugin install", "plugin update":
-		platform, err := CurrentPlatform()
-		if err != nil {
-			return err
+	case "plugin install", "plugin update", "plugin remove", "plugin enable", "plugin disable":
+		// platform 은 버전을 고르는 install 과 update 에만 필요하다.
+		platform := ""
+		if action := a.positionals[1]; action == "install" || action == "update" {
+			if platform, err = CurrentPlatform(); err != nil {
+				return err
+			}
 		}
-		if result, err = InstallPlugin(configDir, a.positionals[2], options.CoreVersion, platform, command == "plugin update"); err != nil {
-			return err
-		}
-	case "plugin remove", "plugin enable", "plugin disable":
-		if result, err = ChangePlugin(configDir, a.positionals[2], a.positionals[1]); err != nil {
+		if result, err = RunPluginAction(configDir, a.positionals[1], a.positionals[2], options.CoreVersion, platform); err != nil {
 			return err
 		}
 	default:

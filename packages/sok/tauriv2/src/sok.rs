@@ -14,7 +14,7 @@ pub mod install;
 mod path;
 #[path = "platform/platform.rs"]
 pub mod platform;
-mod plugins;
+pub mod plugins;
 mod registry;
 mod release;
 pub mod version;

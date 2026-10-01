@@ -269,3 +269,94 @@ func TestPluginUpdateKeepsPreviousAndRemoveDeletesTheFolders(t *testing.T) {
 		t.Fatalf("second remove %d %q", code, stderr)
 	}
 }
+
+// stateJSON 은 ReadPluginsState 의 결과를 JSON 문장으로 만든다.
+func stateJSON(t *testing.T, config string) string {
+	t.Helper()
+	state, err := sok.ReadPluginsState(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+// contract: cli.plugin.state-reads-registry-and-installed
+func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
+	config := t.TempDir()
+	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":1,"plugins":{},"sidecars":{}}}` {
+		t.Fatalf("state without a registry = %s", text)
+	}
+	index := pluginVersions(t, "0.2.0")
+	runJSON(t, "registry", "use", index, "--config-dir", config)
+	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t)); err != nil {
+		t.Fatal(err)
+	}
+	state, err := sok.ReadPluginsState(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Registry == nil || *state.Registry != "file://"+index {
+		t.Fatalf("registry = %v", state.Registry)
+	}
+	if checked, ok := state.Index.(*sok.Index); !ok || len(checked.Plugins) != 1 || checked.Plugins[0].ID != "probe" {
+		t.Fatalf("index = %#v", state.Index)
+	}
+	if plugin := state.Installed.Plugins["probe"]; plugin.Version != "0.2.0" || !plugin.Enabled {
+		t.Fatalf("installed = %#v", state.Installed)
+	}
+	// 읽지 못한 index 는 오류를 index 자리에 담고, 설치 상태는 그대로 보고한다.
+	if err := os.Remove(index); err != nil {
+		t.Fatal(err)
+	}
+	if text := stateJSON(t, config); !strings.Contains(text, `"index":{"error":"open `+index+`: no such file or directory"}`) || !strings.Contains(text, `"probe":{`) {
+		t.Fatalf("state with a missing index = %s", text)
+	}
+	if err := os.WriteFile(filepath.Join(config, "plugins/installed.json"), []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sok.ReadPluginsState(config); err == nil || !strings.Contains(err.Error(), "installed.json is not valid JSON") {
+		t.Fatalf("state with an invalid installed.json: %v", err)
+	}
+}
+
+// contract: cli.plugin.action-runs-the-command
+func TestRunPluginActionMatchesThePluginCommands(t *testing.T) {
+	config := t.TempDir()
+	runJSON(t, "registry", "use", pluginVersions(t, "0.2.0"), "--config-dir", config)
+	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t)); err != nil {
+		t.Fatal(err)
+	}
+	disabled, err := sok.RunPluginAction(config, "disable", "probe", "0.0.2", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plugin, ok := disabled.(sok.InstalledPlugin); !ok || plugin.Enabled {
+		t.Fatalf("disable = %#v", disabled)
+	}
+	_, stdout, _ := run("plugin", "list", "--config-dir", config)
+	if !strings.Contains(stdout, `"enabled": false`) {
+		t.Fatalf("plugin list after disable %s", stdout)
+	}
+	if _, err := sok.RunPluginAction(config, "rename", "probe", "0.0.2", ""); err == nil || err.Error() != `unknown plugin action "rename"` {
+		t.Fatalf("unknown action: %v", err)
+	}
+	if removed, err := sok.RunPluginAction(config, "remove", "probe", "0.0.2", ""); err != nil || removed != nil {
+		t.Fatalf("remove = %v, %v", removed, err)
+	}
+	if exists(filepath.Join(config, "plugins/probe")) {
+		t.Fatal("remove kept the plugin folder")
+	}
+}
+
+func mustPlatform(t *testing.T) string {
+	t.Helper()
+	platform, err := sok.CurrentPlatform()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return platform
+}

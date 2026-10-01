@@ -30,6 +30,7 @@ pub mod notifications;
 pub mod performance;
 #[path = "platform/platform.rs"]
 pub mod platform;
+pub mod plugins;
 pub mod projects;
 #[cfg(feature = "diagnostics")]
 pub mod recording;
@@ -219,6 +220,11 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 .map_err(|_| "the configuration directory of installed plugins is already set")?;
             crate::performance::disable(&directory)?;
             app.manage(workspace::Workspace::new(directory.clone()));
+            let handle = app.handle().clone();
+            app.manage(plugins::Plugins::new(
+                directory.clone(),
+                Box::new(move |change| windows::notify_plugins(&handle, change)),
+            )?);
             let declarations = installed::installed_sidecars(&directory)
                 .map_err(|error| format!("installed plugins: {error}"))?;
             let sidecars = WindowSidecars::new(&declarations, directory)?;

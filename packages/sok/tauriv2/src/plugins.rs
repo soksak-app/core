@@ -72,15 +72,21 @@ fn create_parent(path: &Path) -> Result<(), String> {
 
 /// plugins/registry.json 이 지정한 index 를 읽는다.
 fn read_registry(config_dir: &Path) -> Result<Index, String> {
+    let Some(url) = read_registry_url(config_dir)? else {
+        return Err(format!(
+            "{} does not exist; run sok registry use <index.json>",
+            config_dir.join(REGISTRY_FILE).display()
+        ));
+    };
+    Ok(read_index_at(&url)?.0)
+}
+
+/// plugins/registry.json 의 index 주소를 읽는다. 파일이 없으면 None 이다.
+fn read_registry_url(config_dir: &Path) -> Result<Option<String>, String> {
     let path = config_dir.join(REGISTRY_FILE);
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Err(format!(
-                "{} does not exist; run sok registry use <index.json>",
-                path.display()
-            ))
-        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(format!("{}: {error}", path.display())),
     };
     let value: Value = serde_json::from_str(&text)
@@ -102,7 +108,79 @@ fn read_registry(config_dir: &Path) -> Result<Index, String> {
         "{REGISTRY_FILE}: index must be an absolute file: URL"
     ))?;
     install::file_path(url).map_err(|error| format!("{REGISTRY_FILE}: {error}"))?;
-    Ok(read_index_at(url)?.0)
+    Ok(Some(url.to_string()))
+}
+
+/// 애플리케이션이 plugin 목록에 쓰는 registry 와 설치 상태
+/// (docs/spec/installation.md#plugin-operations-in-the-application). 구조체 그대로 쓰므로 key 는 선언 순서다.
+#[derive(serde::Serialize)]
+pub struct PluginsState {
+    pub registry: Option<String>,
+    pub index: IndexState,
+    pub installed: InstalledState,
+}
+
+/// registry 가 없으면 Missing, 읽고 검사했으면 Checked, 읽거나 검사하지 못했으면 그 오류다.
+#[derive(serde::Serialize)]
+#[serde(untagged)]
+pub enum IndexState {
+    Missing,
+    Checked(Index),
+    Failed { error: String },
+}
+
+/// registry 주소, 검사한 index, 설치 상태를 읽는다. index 를 읽지 못하면 그 오류를 index 자리에
+/// 담고, 설치 상태를 읽지 못하면 실패한다.
+pub fn read_plugins_state(config_dir: &Path) -> Result<PluginsState, String> {
+    let installed = read_installed(config_dir)?;
+    let (registry, index) = match read_registry_url(config_dir) {
+        Err(error) => (None, IndexState::Failed { error }),
+        Ok(None) => (None, IndexState::Missing),
+        Ok(Some(url)) => {
+            let index = match read_index_at(&url) {
+                Ok((index, _)) => IndexState::Checked(index),
+                Err(error) => IndexState::Failed { error },
+            };
+            (Some(url), index)
+        }
+    };
+    Ok(PluginsState {
+        registry,
+        index,
+        installed,
+    })
+}
+
+/// sok plugin <action> <id> 의 출력. install 과 update 는 설치 결과, 나머지는 plugin 항목이나 null 이다.
+#[derive(serde::Serialize)]
+#[serde(untagged)]
+pub enum PluginActionResult {
+    Installed(PluginResult),
+    Changed(Option<InstalledPlugin>),
+}
+
+/// sok plugin <action> <id> 와 같은 작업을 실행하고 그 출력을 돌려준다.
+/// action 은 install, update, remove, enable, disable 중 하나다.
+pub fn run_plugin_action(
+    config_dir: &Path,
+    action: &str,
+    id: &str,
+    core: &str,
+    platform: &str,
+) -> Result<PluginActionResult, String> {
+    match action {
+        "install" | "update" => Ok(PluginActionResult::Installed(install_plugin(
+            config_dir,
+            id,
+            core,
+            platform,
+            action == "update",
+        )?)),
+        "remove" | "enable" | "disable" => Ok(PluginActionResult::Changed(change_plugin(
+            config_dir, id, action,
+        )?)),
+        _ => Err(format!("unknown plugin action {action:?}")),
+    }
 }
 
 /// plugins/installed.json 을 읽는다. 파일이 없으면 아무것도 설치하지 않은 상태다.
@@ -418,18 +496,22 @@ pub(crate) fn run_plugins(
             Ok(print_json(stdout, &json!({"index": index}))?)
         }
         "plugin list" => Ok(print_json(stdout, &read_installed(&config_dir)?)?),
-        "plugin install" | "plugin update" => {
-            let result = install_plugin(
+        "plugin install" | "plugin update" | "plugin remove" | "plugin enable"
+        | "plugin disable" => {
+            let action = positionals[1].as_str();
+            // platform 은 버전을 고르는 install 과 update 에만 필요하다.
+            let platform = if action == "install" || action == "update" {
+                current_platform()?
+            } else {
+                String::new()
+            };
+            let result = run_plugin_action(
                 &config_dir,
+                action,
                 &positionals[2],
                 options.core_version,
-                &current_platform()?,
-                command == "plugin update",
+                &platform,
             )?;
-            Ok(print_json(stdout, &result)?)
-        }
-        "plugin remove" | "plugin enable" | "plugin disable" => {
-            let result = change_plugin(&config_dir, &positionals[2], &positionals[1])?;
             Ok(print_json(stdout, &result)?)
         }
         _ => Err(Error::Usage(format!("unknown command: {command}"))),

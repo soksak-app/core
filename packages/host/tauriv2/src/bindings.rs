@@ -79,7 +79,9 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         link_open,
         notify,
         notification_remove,
-        notification_state
+        notification_state,
+        plugins_state,
+        plugins_run
     ]
 }
 
@@ -442,6 +444,23 @@ fn clipboard_read(
 #[tauri::command(async)]
 fn link_open(window: Window, request: link::OpenRequest) -> Result<(), String> {
     link::open(&window, request)
+}
+
+/// registry 주소, 검사한 index, 설치 상태를 돌려준다.
+#[tauri::command(async)]
+fn plugins_state(
+    plugins: tauri::State<'_, crate::plugins::Plugins>,
+) -> Result<soksak_sok::plugins::PluginsState, String> {
+    plugins.state()
+}
+
+/// sok plugin <action> <plugin> 과 같은 plugin 작업을 실행한다.
+#[tauri::command(async)]
+fn plugins_run(
+    plugins: tauri::State<'_, crate::plugins::Plugins>,
+    request: crate::plugins::RunRequest,
+) -> Result<soksak_sok::plugins::PluginActionResult, String> {
+    plugins.run(request)
 }
 
 /// 호출한 창의 탭 알림을 시스템 알림으로 게시한다.

@@ -172,6 +172,15 @@ pub(crate) fn notify_workspace(app: &AppHandle) {
     }
 }
 
+/// 모든 창에 plugins-changed 를 보낸다.
+pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
+    for window in app.windows().values() {
+        if let Err(error) = emit_window(window, "plugins-changed", change.clone()) {
+            eprintln!("{error}");
+        }
+    }
+}
+
 /// 등록된 창 중 label 의 창을 반환한다.
 pub(crate) fn find(app: &AppHandle, label: &str) -> Option<Window> {
     let registered = app

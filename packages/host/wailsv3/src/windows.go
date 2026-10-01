@@ -49,6 +49,7 @@ type Host struct {
 	windows    map[uint]*Surfaces
 	owners     map[string]*Surfaces
 	sidecars   *Sidecars
+	plugins    *Plugins
 	configDir  string
 	// endpoint 는 로컬 엔드포인트이고 relay 는 페이지에 보낸 노출 요청이다.
 	endpoint *Endpoint
@@ -70,8 +71,14 @@ func newHost(sidecars *Sidecars, configDir string) (*Host, error) {
 		}
 		directory = filepath.Join(config, ApplicationIdentifier)
 	}
-	return &Host{workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: sidecars,
-		relay: NewRelay[relayTarget]()}, nil
+	h := &Host{workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: sidecars,
+		relay: NewRelay[relayTarget]()}
+	plugins, err := NewPlugins(directory, h.notifyPlugins)
+	if err != nil {
+		return nil, err
+	}
+	h.plugins = plugins
+	return h, nil
 }
 
 func (h *Host) surface(ctx context.Context) (*Surfaces, error) {

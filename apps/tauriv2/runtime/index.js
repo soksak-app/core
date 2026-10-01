@@ -50,6 +50,8 @@ const COMMAND = {
   notificationState: "notification_state",
   clipboardWriteText: "clipboard_write_text",
   clipboardPersistPNG: "clipboard_persist_png",
+  pluginsState: "plugins_state",
+  pluginsRun: "plugins_run",
 };
 
 // 커맨드마다 인자의 이름이 다르다. 이름은 Rust 쪽 서명이 정한다.
@@ -105,6 +107,8 @@ const ARG = {
   notificationState: () => ({}),
   clipboardWriteText: (text) => ({ text }),
   clipboardPersistPNG: (request) => ({ request }),
+  pluginsState: () => ({}),
+  pluginsRun: (request) => ({ request }),
 };
 
 /**

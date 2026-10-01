@@ -23,6 +23,9 @@ import (
 	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
 	_ "github.com/min-median-max/soksak/packages/host/wailsv3/src/platform/darwin"
 	_ "github.com/min-median-max/soksak/packages/host/wailsv3/src/platform/windows"
+	// plugin 작업(plugins.go)은 command line 의 installer library 를 쓰므로 그 platform 구현도 등록한다.
+	_ "github.com/min-median-max/soksak/packages/sok/wailsv3/src/platform/darwin"
+	_ "github.com/min-median-max/soksak/packages/sok/wailsv3/src/platform/windows"
 )
 
 // ApplicationIdentifier 는 애플리케이션 번들 식별자이며 기본 설정 디렉터리의 이름이다(docs/spec/projects.md). 번들의

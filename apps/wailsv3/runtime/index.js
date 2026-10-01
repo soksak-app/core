@@ -80,6 +80,8 @@ const METHOD = {
   notificationState: "NotificationState",
   clipboardWriteText: "ClipboardWriteText",
   clipboardPersistPNG: "ClipboardPersistPNG",
+  pluginsState: "PluginsState",
+  pluginsRun: "PluginsRun",
 };
 
 export const host = {
