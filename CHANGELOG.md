@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-116-4-9: a sampler reading that fails records `error` instead of a resident size of 0, and the Tauri trace reports a clock before the Unix epoch instead of writing the epoch.
+
 - G1.4-14-4: on Tauri, `host.window` reports a closing modal without its view instead of failing with `receiving on a closed channel` when the closing webview drops the view query.
 
 - G1.4-14-8: `outline` takes an `inset` that moves the joined loops inward after the union, and the rail uses half the border width, so a 1x display draws the rail in whole pixels while the card and its sidebar stay one outline.

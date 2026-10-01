@@ -200,3 +200,41 @@ fn relayed_page_lines_require_an_object_with_an_event() {
     assert_eq!(record["kind"], "resize");
     directory.close().unwrap();
 }
+
+// contract: performance.sampler.failed-reading-is-explicit
+#[test]
+fn sampler_reports_a_failed_reading() {
+    // 존재하지 않는 pid 의 상주 크기는 읽을 수 없다. 0 으로 바꾸지 않고 오류로 기록한다.
+    let record = performance::memory_record(1 << 30);
+    assert!(
+        record.get("rss_host_kb").is_none(),
+        "a failed reading was recorded as a size: {record}"
+    );
+    assert!(
+        record["error"]
+            .as_str()
+            .is_some_and(|text| !text.is_empty()),
+        "a failed reading has no error: {record}"
+    );
+    let own = performance::memory_record(std::process::id());
+    assert!(
+        own["rss_host_kb"].as_u64().is_some_and(|size| size > 0),
+        "the current process has no resident size: {own}"
+    );
+}
+
+// contract: performance.clock.before-epoch-is-explicit
+#[test]
+fn a_clock_before_the_epoch_is_reported() {
+    let before = std::time::UNIX_EPOCH - std::time::Duration::from_secs(1);
+    assert!(
+        performance::timestamp(before).is_err(),
+        "a time before the epoch was written as the epoch"
+    );
+    assert_eq!(
+        performance::timestamp(
+            std::time::UNIX_EPOCH + std::time::Duration::from_millis(1_790_000_000_123)
+        ),
+        Ok("2026-09-21T14:13:20.123Z".to_string())
+    );
+}

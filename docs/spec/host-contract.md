@@ -202,6 +202,8 @@ Items:
 | `performance.trace.relay-requires-object-with-event` | A relayed page line must be an object with an event; rejected lines append nothing. | both |
 | `performance.trace.enable-without-services` | The enabled host accepts page events before any service exists. | both |
 | `performance.trace.already-off-writes-nothing` | Disabling an already disabled trace does not create or append output. | both |
+| `performance.sampler.failed-reading-is-explicit` | A sampler reading that cannot obtain a resident size records `error` instead of `rss_host_kb`. | both |
+| `performance.clock.before-epoch-is-explicit` | A trace timestamp before the Unix epoch is an error, not the epoch. | tauriv2 only: the Rust host formats timestamps from a duration since the epoch, which fails before it, while Go formats any time |
 | `performance.trace.switch-and-relay-report-filesystem-errors` | Switch and relay requests return directory, flag, and output failures. | both |
 | `performance.trace.invalid-switch-and-cleanup-errors` | Invalid switch reads and invalid flag directories are errors; cleanup preserves the invalid directory. | both |
 | `performance.trace.derive-service-flags-and-reset` | New services receive the host switch; reset and disabled reattachment remove stale flags, and disabled observation does not format events. | both |

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-116-4-9: 실패한 sampler 읽기는 상주 크기 0 대신 `error`를 기록하고, Tauri trace는 유닉스 epoch 이전 시계를 epoch로 적지 않고 오류로 보고한다.
+
 - G1.4-14-4: Tauri에서 닫히는 웹뷰가 view 조회를 버리면 `host.window`가 `receiving on a closed channel`로 실패하지 않고 닫히는 modal을 view 없이 보고한다.
 
 - G1.4-14-8: `outline`이 union 뒤 합친 loop를 안쪽으로 옮기는 `inset`을 받고 rail이 선 굵기의 절반을 쓴다. 그래서 1배율 display에서도 rail을 온전한 pixel로 그리면서 카드와 사이드바는 하나의 윤곽으로 유지된다.

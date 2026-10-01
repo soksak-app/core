@@ -251,3 +251,19 @@ func TestDeriveServiceFlagsAndReset(t *testing.T) {
 		t.Fatalf("disabled reattachment retained stale flag: %v", err)
 	}
 }
+
+// contract: performance.sampler.failed-reading-is-explicit
+func TestSamplerReportsAFailedReading(t *testing.T) {
+	// 존재하지 않는 pid 의 상주 크기는 읽을 수 없다. 0 으로 바꾸지 않고 오류로 기록한다.
+	record := host.PerformanceMemory(1 << 30)
+	if _, ok := record["rss_host_kb"]; ok {
+		t.Fatalf("a failed reading was recorded as a size: %v", record)
+	}
+	if text, _ := record["error"].(string); text == "" {
+		t.Fatalf("a failed reading has no error: %v", record)
+	}
+	own := host.PerformanceMemory(os.Getpid())
+	if size, _ := own["rss_host_kb"].(uint64); size == 0 {
+		t.Fatalf("the current process has no resident size: %v", own)
+	}
+}

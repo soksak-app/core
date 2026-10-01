@@ -187,7 +187,7 @@ pub fn line(target: &Path, layer: &str, fields: Value) -> Result<(), String> {
         .and_then(Value::as_str)
         .ok_or("event must be a string")?;
     let mut record = Map::new();
-    record.insert("ts".into(), json!(now_iso8601_ms()));
+    record.insert("ts".into(), json!(now_iso8601_ms()?));
     record.insert("pid".into(), json!(std::process::id()));
     record.insert("layer".into(), json!(layer));
     record.insert("event".into(), json!(event));
@@ -280,21 +280,26 @@ pub fn command(config: &Path, request: Value) -> Result<Value, String> {
 }
 
 /// 유닉스 시각(밀리초)을 ISO-8601 로 바꾼다(종속성을 더하지 않는다).
-fn now_iso8601_ms() -> String {
-    let since = SystemTime::now()
+fn now_iso8601_ms() -> Result<String, String> {
+    timestamp(SystemTime::now())
+}
+
+/// at 을 ISO-8601(밀리초)로 바꾼다. 에포크 이전 시각은 이 형식으로 적을 수 없으므로 오류다.
+pub fn timestamp(at: SystemTime) -> Result<String, String> {
+    let since = at
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_default(); // 기본값: 시계는 에포크 이전을 돌려주지 않는다
+        .map_err(|error| format!("clock is before the Unix epoch: {error}"))?;
     let millis_total = since.as_millis();
     let days = (millis_total / 86_400_000) as i64;
     let millis_day = (millis_total % 86_400_000) as u32;
     let (year, month, day) = civil_from_days(days);
-    format!(
+    Ok(format!(
         "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{:03}Z",
         millis_day / 3_600_000,
         (millis_day % 3_600_000) / 60_000,
         (millis_day % 60_000) / 1_000,
         millis_day % 1_000
-    )
+    ))
 }
 
 /// 날수를 역·월·일로 바꾼다(Howard Hinnant 의 civil_from_days).
@@ -321,25 +326,33 @@ pub fn spawn_sampler(config: &Path) {
     }
     let config = config.to_path_buf();
     std::thread::spawn(move || loop {
-        observe(
-            &config,
-            "sampler",
-            || json!({"event":"memory", "rss_host_kb":resident_kb(std::process::id())}),
-        );
+        observe(&config, "sampler", || memory_record(std::process::id()));
         std::thread::sleep(std::time::Duration::from_secs(5));
     });
 }
 
-/// pid 의 상주 크기(KB). 실패는 0 — 프로세스가 끝났을 수 있다.
-fn resident_kb(pid: u32) -> u64 {
+/// sampler 가 기록하는 pid 의 메모리 사건.
+/// 읽기에 실패하면 크기 대신 그 오류를 기록한다.
+pub fn memory_record(pid: u32) -> Value {
+    match resident_kb(pid) {
+        Ok(size) => json!({"event":"memory", "rss_host_kb":size}),
+        Err(error) => json!({"event":"memory", "error":error}),
+    }
+}
+
+/// pid 의 상주 크기(KB). ps 를 실행하지 못하거나 크기를 돌려주지 않으면(프로세스가 끝났으면) 오류다.
+fn resident_kb(pid: u32) -> Result<u64, String> {
     let output = std::process::Command::new("ps")
         .args(["-o", "rss=", "-p", &pid.to_string()])
-        .output();
-    match output {
-        Ok(out) => String::from_utf8_lossy(&out.stdout)
-            .trim()
-            .parse()
-            .unwrap_or(0), // 기본값: ps 출력이 비었으면 프로세스가 끝났다
-        Err(_) => 0,
-    }
+        .output()
+        .map_err(|error| format!("ps for pid {pid}: {error}"))?;
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse()
+        .map_err(|_| {
+            format!(
+                "ps reported no resident size for pid {pid} (status {})",
+                output.status
+            )
+        })
 }

@@ -253,9 +253,7 @@ func performanceSampler(config string) {
 	}
 	go func() {
 		for {
-			PerformanceObserve(config, "sampler", func() map[string]any {
-				return map[string]any{"event": "memory", "rss_host_kb": residentKB(os.Getpid())}
-			})
+			PerformanceObserve(config, "sampler", func() map[string]any { return PerformanceMemory(os.Getpid()) })
 			time.Sleep(5 * time.Second)
 		}
 	}()
@@ -263,17 +261,27 @@ func performanceSampler(config string) {
 
 var performanceSamplerOnce atomic.Bool
 
-// residentKB 는 pid 의 상주 크기(KB). 실패는 0 — 프로세스가 끝났을 수 있다.
-func residentKB(pid int) uint64 {
+// PerformanceMemory 는 sampler 가 기록하는 pid 의 메모리 사건이다.
+// 읽기에 실패하면 크기 대신 그 오류를 기록한다.
+func PerformanceMemory(pid int) map[string]any {
+	size, err := residentKB(pid)
+	if err != nil {
+		return map[string]any{"event": "memory", "error": err.Error()}
+	}
+	return map[string]any{"event": "memory", "rss_host_kb": size}
+}
+
+// residentKB 는 pid 의 상주 크기(KB)다. ps 를 실행하지 못하거나 크기를 돌려주지 않으면(프로세스가 끝났으면) 오류다.
+func residentKB(pid int) (uint64, error) {
 	out, err := exec.Command("ps", "-o", "rss=", "-p", strconv.Itoa(pid)).Output()
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("ps for pid %d: %w", pid, err)
 	}
 	value, err := strconv.ParseUint(strings.TrimSpace(string(out)), 10, 64)
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("ps reported no resident size for pid %d: %w", pid, err)
 	}
-	return value
+	return value, nil
 }
 
 func performanceNow() string { return time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00") }
