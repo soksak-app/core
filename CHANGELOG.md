@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-3-4-7-1-7-2: waiting for a native surface's composition ends with the mount error when its module fails to mount, so core commands no longer wait for it indefinitely.
+
 - F0.5.9-2-1: Tauri logs a refused image frame with the current frame state and distinguishes a native raster size mismatch (`staleRaster`) from a superseded frame.
 
 - F0.5.9-4-1: the Wails `request has been stopped` log lines after `host.window.reload` are documented as replies to the terminated page's `status.next` forwards, verified by count against a debug log.

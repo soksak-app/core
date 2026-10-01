@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-117-1-3-4-7-1-7-2: module 마운트가 실패하면 native surface의 composition 기다림이 마운트 오류로 끝나므로, core 명령이 이를 끝없이 기다리지 않는다.
+
 - F0.5.9-2-1: Tauri가 거부한 image frame을 현재 frame 상태와 함께 기록하고, native raster 크기 불일치(`staleRaster`)를 대체된 frame과 구분한다.
 
 - F0.5.9-4-1: `host.window.reload` 뒤의 Wails `request has been stopped` log 줄을, debug log와 개수를 맞춰 검증한 대로 종료된 페이지의 `status.next` 전달에 대한 답으로 문서화했다.

@@ -233,12 +233,15 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   return entry.ready;
 }
 
-/** Wait until a native surface has declared its composition. */
+/**
+ * Wait until a native surface has declared its composition. A module that fails
+ * to mount never declares one, so the wait also ends with that mount error.
+ */
 export async function waitSurfaceCompositionDeclared(surfaceId) {
   if (placeholders.has(surfaceId)) return;
   const entry = mounted.get(surfaceId);
   if (!entry) throw new Error(`surface ${surfaceId} is not mounted`);
-  await entry.composition;
+  await Promise.race([entry.composition, entry.ready.then(() => entry.composition)]);
 }
 
 /** Give a mounted surface's native input owner focus after its card has settled. */
