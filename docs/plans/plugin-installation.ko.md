@@ -44,7 +44,7 @@ Plugin repository는 core git tag(예: `v0.0.2`)의 `@soksak/plugin-api`에 의�
 
 ## Command line
 
-`sok`은 애플리케이션의 command line이며 모든 명령을 이것으로 공개한다. Plugin 설치, 업데이트, 제거, pack, sidecar release, registry index, 그리고 실행 중인 애플리케이션이 선언한 모든 명령(지금은 Node command line `packages/cli`가 공개한다)이다. `packages/sok/tauriv2`가 Tauri 애플리케이션용 `sok`을 Rust로, `packages/sok/wailsv3`가 Wails 애플리케이션용 `sok`을 Go로 build하며, 두 구현은 host처럼 한 계약을 따르고 애플리케이션 framework를 link하지 않는다. 각 애플리케이션 bundle은 실행 파일 옆에 자기 `sok`을 담고, `PATH`가 닿는 `sok`이 어느 구현이 실행될지와 어느 설정 폴더를 쓸지를 정한다. `PATH`는 symbolic link가 아니라 경로 항목(`/etc/paths.d`)으로 bundle에 닿는다. `sok`이 그 명령을 모두 담으면 `packages/cli`는 삭제한다.
+`sok`은 애플리케이션의 command line이며 모든 명령을 이것으로 공개한다. Plugin 설치, 업데이트, 제거, pack, sidecar release, registry index, 그리고 실행 중인 애플리케이션이 선언한 모든 명령이며, Node command line `packages/cli`를 대신한다. `packages/sok/tauriv2`가 Tauri 애플리케이션용 `sok`을 Rust로, `packages/sok/wailsv3`가 Wails 애플리케이션용 `sok`을 Go로 build하며, 두 구현은 host처럼 한 계약을 따르고 애플리케이션 framework를 link하지 않는다. 각 애플리케이션 bundle은 실행 파일 옆에 자기 `sok`을 담고, `PATH`가 닿는 `sok`이 어느 구현이 실행될지와 어느 설정 폴더를 쓸지를 정한다. `PATH`는 symbolic link가 아니라 경로 항목(`/etc/paths.d`)으로 bundle에 닿는다.
 
 Core나 plugin이 선언한 모든 command는 `sok`으로 실행되므로, 사람이나 프로그램이 command line에서 창을 다룰 수 있다.
 

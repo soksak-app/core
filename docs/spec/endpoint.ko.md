@@ -109,7 +109,7 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 | 패키지 | 역할 |
 | --- | --- |
 | `packages/client` | `endpoint.json`을 읽고 연결해 요청을 보내는 라이브러리 |
-| `packages/cli` | 하위 명령 `windows`, `list`, `status`(`--watch`는 변경마다 출력), `run`, `dom`, `input`, `capture`(진단 빌드, 관측용 창 정지 이미지)를 가진 `soksak` 명령. 모든 하위 명령에 `--config-dir`가 필요하다 |
+| `packages/sok/<name>` | 각 애플리케이션의 command line `sok`. Wails는 Go, Tauri는 Rust다([command line](cli.ko.md)). 자기 애플리케이션 설정 폴더나 `--config-dir`의 `endpoint.json`을 읽고, 모든 endpoint method와 선언된 command를 실행한다 |
 | `packages/mcp` | stdio MCP 서버. `exposure.list`로 도구를 생성하며 네트워크 포트를 열지 않는다 |
 
 창 검사는 `packages/client`를 사용한다.

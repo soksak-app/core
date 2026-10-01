@@ -77,7 +77,6 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
     "packages/client/testing/**/*.js",
     "packages/client/bench/**/*.mjs",
   ], ["packages/client/test/**/*.mjs"]),
-  lane("CLI", "js-ts", ["packages/cli/**/*.js"], ["packages/cli/test/**/*.mjs"]),
   lane("MCP client", "js-ts", ["packages/mcp/**/*.js"], ["packages/mcp/test/**/*.mjs"]),
   lane("browser plugin", "js-ts", ["plugins/browser/ui/**/*.js"], ["plugins/browser/test/**/*.mjs"], { sharedTests: true }),
   lane("files plugin", "js-ts", ["plugins/files/ui/**/*.js", "plugins/files/scripts/**/*.mjs", "plugins/files/vendor/**/*.js"], ["plugins/files/test/**/*.mjs"], { sharedTests: true }),
@@ -94,6 +93,8 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("VT Alacritty sidecar", "rust", ["sidecars/vt-alacritty/src/**/*.rs"], ["sidecars/vt-alacritty/tests/**/*.rs"]),
 
   lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/src/diagnostics_test.go"], { sharedTests: true }),
+  lane("Wails command line", "go", ["packages/sok/wailsv3/src/**/*.go"], ["packages/sok/wailsv3/tests/**/*.go"]),
+  lane("Tauri command line", "rust", ["packages/sok/tauriv2/src/**/*.rs"], ["packages/sok/tauriv2/tests/**/*.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("files sidecar", "go", ["sidecars/files/src/**/*.go"], ["sidecars/files/tests/**/*.go", "sidecars/files/tests/**/*.mjs"], {
     testLanguage: "mixed",
@@ -691,6 +692,7 @@ const FEATURE_LINKS = [
     expected: "Every completed checklist capability, the merged sidecar failure delivery included, has a feature link to its implementation and tests.",
     levels: ["unit"],
   },
+
 
   {
     id: "F2.1-1",

@@ -77,12 +77,6 @@ importers:
         specifier: workspace:*
         version: link:../packages/client
 
-  packages/cli:
-    dependencies:
-      '@soksak/client':
-        specifier: workspace:*
-        version: link:../client
-
   packages/client: {}
 
   packages/host/tauriv2: {}

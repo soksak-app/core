@@ -122,9 +122,12 @@ func (f *fakeEndpoint) last() map[string]any {
 	return params
 }
 
+// pathsDir 는 경로 항목 검사가 바꾸는 paths.d 자리다.
+var pathsDir = "/nonexistent/paths.d"
+
 func run(args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
-	code := sok.Run(args, &stdout, &stderr, "com.soksak.test")
+	code := sok.Run(args, &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", PathsDir: pathsDir})
 	return code, stdout.String(), stderr.String()
 }
 
@@ -351,5 +354,43 @@ func TestCommandsListsTheDeclaredCommandsInOrder(t *testing.T) {
 	}
 	if len(commands) != 2 || commands[0]["name"] != "fixture.do" || commands[1]["name"] != "fixture.none" {
 		t.Fatalf("commands %v", commands)
+	}
+}
+
+// contract: cli.path.writes-and-removes-the-entry
+func TestPathInstallWritesTheExecutableDirectoryAndRemoveDeletesIt(t *testing.T) {
+	pathsDir = t.TempDir()
+	t.Cleanup(func() { pathsDir = "/nonexistent/paths.d" })
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	executable, err = filepath.EvalSymlinks(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := filepath.Join(pathsDir, "com.soksak.test")
+	for range 2 {
+		code, stdout, stderr := run("path", "install")
+		want := fmt.Sprintf("{\n  \"directory\": %q,\n  \"path\": %q\n}\n", filepath.Dir(executable), entry)
+		if code != 0 || stdout != want {
+			t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
+		}
+		if data, err := os.ReadFile(entry); err != nil || string(data) != filepath.Dir(executable)+"\n" {
+			t.Fatalf("entry %q %v", data, err)
+		}
+	}
+	for range 2 {
+		if code, stdout, stderr := run("path", "remove"); code != 0 || stdout != "null\n" {
+			t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
+		}
+	}
+	if _, err := os.Stat(entry); !os.IsNotExist(err) {
+		t.Fatalf("the entry remains: %v", err)
+	}
+	pathsDir = filepath.Join(t.TempDir(), "missing")
+	code, _, stderr := run("path", "install")
+	if code != 1 || !strings.HasPrefix(stderr, "sok: cannot write "+filepath.Join(pathsDir, "com.soksak.test")+": ") || !strings.HasSuffix(stderr, "; run sudo sok path install\n") {
+		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 }

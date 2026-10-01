@@ -181,6 +181,10 @@ bundle-info = mkdir -p $(1)/Contents/MacOS $(1)/Contents/Resources \
 LSREGISTER = /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
 
+# command line sok(docs/spec/cli.md)을 build 해 번들의 실행 파일 옆에 둔다. 첫 인자는 번들, 둘째 인자는 profile 이다.
+sok-wailsv3 = go build -C packages/sok/wailsv3 $(if $(filter release,$(2)),-trimpath -ldflags "-s -w") -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
+sok-tauriv2 = cargo build -p soksak-sok-tauriv2 $(if $(filter release,$(2)),--release) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
+
 native-darwin:
 	@$(MAKE) -C native/darwin
 
@@ -217,6 +221,7 @@ tauriv2-build: native-darwin frontend-tauriv2
 	@touch apps/tauriv2/src/main.rs
 	@$(CARGO_ENV) cargo build -p soksak-tauriv2 --features diagnostics
 	@cp target/debug/soksak-tauriv2 $(TAURI_DEBUG)
+	@$(call sok-tauriv2,$(TAURI_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(TAURI_DEBUG_BUNDLE))
 
 tauriv2-build-release: native-darwin build sidecars-release
@@ -225,16 +230,19 @@ tauriv2-build-release: native-darwin build sidecars-release
 	@touch apps/tauriv2/src/main.rs
 	@$(CARGO_ENV) cargo build --release -p soksak-tauriv2
 	@cp target/release/soksak-tauriv2 $(TAURI_RELEASE)
+	@$(call sok-tauriv2,$(TAURI_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(TAURI_RELEASE_BUNDLE))
 
 wailsv3-build: native-darwin frontend-wailsv3
 	@$(GO_ENV) go build -C apps/wailsv3 -tags diagnostics -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
+	@$(call sok-wailsv3,$(WAILS_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(WAILS_DEBUG_BUNDLE))
 
 wailsv3-build-release: native-darwin build sidecars-release
 	@$(call bundle-info,$(WAILS_RELEASE_BUNDLE),wailsv3)
 	@$(call stage-wailsv3,../../$(WAILS_RELEASE_BUNDLE)/Contents/MacOS)
 	@$(GO_ENV) go build -C apps/wailsv3 -trimpath -ldflags "-s -w $(GO_LINK)" -o ../../$(WAILS_RELEASE) ./src
+	@$(call sok-wailsv3,$(WAILS_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(WAILS_RELEASE_BUNDLE))
 
 tauriv2: tauriv2-build

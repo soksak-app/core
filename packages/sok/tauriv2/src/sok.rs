@@ -10,6 +10,7 @@ use serde_json::{Map, Value};
 
 mod command;
 pub mod endpoint;
+mod path;
 #[path = "platform/platform.rs"]
 pub mod platform;
 
@@ -28,6 +29,7 @@ commands:
   input pointer [window] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--activate]
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
+  path install|remove       writes or deletes the PATH entry of this application (needs sudo)
 
 window:
   --window NAME | --project DIRECTORY   without either, the only window of the application
@@ -528,21 +530,13 @@ fn watch(
     stdout: &mut dyn Write,
 ) -> Result<(), Error> {
     let stopped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    #[cfg(unix)]
     {
         let close = client.closer()?;
         let flag = stopped.clone();
-        let mut signals = signal_hook::iterator::Signals::new([
-            signal_hook::consts::SIGINT,
-            signal_hook::consts::SIGTERM,
-        ])
-        .map_err(|error| format!("cannot watch signals: {error}"))?;
-        std::thread::spawn(move || {
-            if signals.forever().next().is_some() {
-                flag.store(true, std::sync::atomic::Ordering::SeqCst);
-                close();
-            }
-        });
+        platform::current()?.on_interrupt(Box::new(move || {
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+            close();
+        }))?;
     }
     let finish = |error: Error| -> Result<(), Error> {
         if stopped.load(std::sync::atomic::Ordering::SeqCst) {
@@ -602,38 +596,22 @@ fn watch(
     finish(Error::Failed(reason))
 }
 
-/// Go 의 os.UserConfigDir 와 같은 사용자 설정 폴더.
-fn user_config_dir() -> Result<PathBuf, String> {
-    let env = |name: &str| {
-        std::env::var_os(name)
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-    };
-    if cfg!(target_os = "macos") {
-        return env("HOME")
-            .map(|home| home.join("Library/Application Support"))
-            .ok_or_else(|| "$HOME is not defined".into());
-    }
-    if cfg!(windows) {
-        return env("AppData").ok_or_else(|| "%AppData% is not defined".into());
-    }
-    if let Some(config) = env("XDG_CONFIG_HOME") {
-        return Ok(config);
-    }
-    env("HOME")
-        .map(|home| home.join(".config"))
-        .ok_or_else(|| "neither $XDG_CONFIG_HOME nor $HOME are defined".into())
+/// command line 이 속한 애플리케이션과 운영체제 자리.
+pub struct Options<'a> {
+    /// 애플리케이션의 식별자이며 --config-dir 이 없을 때 설정 폴더 이름이고 경로 항목의 파일 이름이다.
+    pub identifier: &'a str,
+    /// 경로 항목을 두는 폴더(macOS 는 /etc/paths.d).
+    pub paths_dir: &'a Path,
 }
 
-/// 명령 하나를 실행하고 종료 상태를 돌려준다. identifier 는 이 command line 이 속한 애플리케이션의 식별자이며
-/// --config-dir 이 없을 때 설정 폴더 이름이다.
+/// 명령 하나를 실행하고 종료 상태를 돌려준다.
 pub fn run(
     args: &[String],
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
-    identifier: &str,
+    options: &Options,
 ) -> i32 {
-    let result = execute(args, stdout, identifier);
+    let result = execute(args, stdout, options);
     // 표준 오류에 쓰지 못하면 알릴 곳이 없으므로 종료 상태로만 실패를 알린다.
     match result {
         Ok(()) => 0,
@@ -654,7 +632,8 @@ pub fn run(
 fn connect_to(values: &HashMap<String, String>, identifier: &str) -> Result<Client, Error> {
     let config_dir = match values.get("config-dir") {
         Some(dir) => PathBuf::from(dir),
-        None => user_config_dir()
+        None => platform::current()?
+            .config_dir()
             .map_err(|error| format!("the default configuration directory is unknown: {error}"))?
             .join(identifier),
     };
@@ -662,7 +641,8 @@ fn connect_to(values: &HashMap<String, String>, identifier: &str) -> Result<Clie
     Ok(Client::dial(&endpoint)?)
 }
 
-fn execute(args: &[String], stdout: &mut dyn Write, identifier: &str) -> Result<(), Error> {
+fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result<(), Error> {
+    let identifier = options.identifier;
     // 점이 있는 명령 단어는 선언된 command 다(docs/spec/cli.md).
     if command::command_word(args).is_some_and(|word| word.contains('.')) {
         return command::run_command(args, stdout, identifier);
@@ -671,6 +651,10 @@ fn execute(args: &[String], stdout: &mut dyn Write, identifier: &str) -> Result<
     if a.flag("help") {
         writeln!(stdout, "{USAGE}").map_err(|error| error.to_string())?;
         return Ok(());
+    }
+    if a.positionals.first().map(String::as_str) == Some("path") {
+        let action = a.positional(1, "path action")?;
+        return path::run_path(&action, stdout, options);
     }
     let mut client: Option<Client> = None;
     let connect = |client: &mut Option<Client>| -> Result<(), Error> {

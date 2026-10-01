@@ -86,8 +86,7 @@ pub fn read_endpoint(config_dir: &Path) -> Result<Endpoint, String> {
 
 /// 엔드포인트 연결 하나. 요청은 차례로 보내고 응답을 기다리며, 그 사이에 온 알림은 notify 로 넘긴다.
 pub struct Client {
-    #[cfg(unix)]
-    stream: std::os::unix::net::UnixStream,
+    stream: Box<dyn platform::Connection>,
     next_id: u64,
 }
 
@@ -101,33 +100,17 @@ struct Message {
 }
 
 impl Client {
-    /// 엔드포인트의 socket 에 연결한다.
-    #[cfg(unix)]
+    /// 엔드포인트의 주소에 연결한다.
     pub fn dial(endpoint: &Endpoint) -> Result<Client, String> {
-        let stream = std::os::unix::net::UnixStream::connect(&endpoint.address)
-            .map_err(|error| format!("cannot connect to {}: {error}", endpoint.address))?;
+        let stream = platform::current()?.connect(&endpoint.address)?;
         Ok(Client { stream, next_id: 1 })
     }
 
-    #[cfg(not(unix))]
-    pub fn dial(_endpoint: &Endpoint) -> Result<Client, String> {
-        Err("not implemented on this operating system".into())
-    }
-
     /// 연결을 닫는 함수를 돌려준다. 다른 thread 가 읽기를 끝내게 할 때 쓴다.
-    #[cfg(unix)]
-    pub fn closer(&self) -> Result<impl Fn() + Send + 'static, String> {
-        let stream = self
-            .stream
-            .try_clone()
-            .map_err(|error| format!("endpoint connection: {error}"))?;
-        Ok(move || {
-            // 기본값: 이미 닫힌 연결을 다시 닫으면 오류지만, 닫는 목적은 이미 이루어졌으므로 결과를 쓰지 않는다.
-            let _ = stream.shutdown(std::net::Shutdown::Both);
-        })
+    pub fn closer(&self) -> Result<Box<dyn Fn() + Send>, String> {
+        self.stream.closer()
     }
 
-    #[cfg(unix)]
     fn write(&mut self, message: &Value) -> Result<(), String> {
         let body = serde_json::to_vec(message).map_err(|error| error.to_string())?;
         if body.len() > MAX_FRAME_LENGTH {
@@ -143,7 +126,6 @@ impl Client {
             .map_err(|error| format!("endpoint connection failed: {error}"))
     }
 
-    #[cfg(unix)]
     fn read(&mut self) -> Result<Message, String> {
         let mut header = [0u8; 4];
         if let Err(error) = self.stream.read_exact(&mut header) {
@@ -197,16 +179,6 @@ impl Client {
             result: raw.remove("result"),
             error,
         })
-    }
-
-    #[cfg(not(unix))]
-    fn write(&mut self, _message: &Value) -> Result<(), String> {
-        Err("not implemented on this operating system".into())
-    }
-
-    #[cfg(not(unix))]
-    fn read(&mut self) -> Result<Message, String> {
-        Err("not implemented on this operating system".into())
     }
 
     /// method 를 보내고 결과를 원래 JSON 그대로 돌려준다. 결과가 없으면 null 이다.

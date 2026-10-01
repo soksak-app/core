@@ -1,4 +1,6 @@
-use super::super::Platform;
+use std::path::PathBuf;
+
+use super::super::{Connection, Platform};
 use super::Darwin;
 
 impl Platform for Darwin {
@@ -13,5 +15,17 @@ impl Platform for Darwin {
             return Ok(());
         }
         Err(format!("process {pid} is not running: {error}"))
+    }
+
+    fn connect(&self, address: &str) -> Result<Box<dyn Connection>, String> {
+        Darwin::connect(address)
+    }
+
+    fn on_interrupt(&self, interrupted: Box<dyn FnOnce() + Send>) -> Result<(), String> {
+        Darwin::on_interrupt(interrupted)
+    }
+
+    fn config_dir(&self) -> Result<PathBuf, String> {
+        Darwin::config_dir()
     }
 }

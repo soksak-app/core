@@ -109,7 +109,7 @@ The host writes large data, such as captures, to files under the configuration d
 | Package | Role |
 | --- | --- |
 | `packages/client` | Library that reads `endpoint.json`, connects, and sends requests |
-| `packages/cli` | `soksak` command with the subcommands `windows`, `list`, `status` (`--watch` prints each change), `run`, `dom`, `input`, and `capture` (diagnostic builds; a still window image for observation). Every subcommand requires `--config-dir` |
+| `packages/sok/<name>` | Command line `sok` of each application, in Go for Wails and Rust for Tauri ([command line](cli.md)). It reads `endpoint.json` of its application's configuration directory or of `--config-dir`, and runs every endpoint method and declared command |
 | `packages/mcp` | stdio MCP server. It generates its tools from `exposure.list` and opens no network port |
 
 Window checks use `packages/client`.

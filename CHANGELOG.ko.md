@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-8-3: 각 애플리케이션 bundle이 자기 `sok`을 담고, `sok path install`이 `/etc/paths.d`로 그것을 `PATH`에 올리며, Node command line `packages/cli`를 삭제했고, `docs/operations/sok.md`가 사용법을 설명한다.
+
 - F0.4-1-1-4: parity inventory가 merge한 sidecar 실패 전달을 구현과 test에 연결한다.
 
 - R1-8-2: `sok <command>`가 core나 plugin이 선언한 모든 command를 선언된 schema로 바꾼 매개변수 flag와 함께 실행하며, `sok commands`가 이를 나열한다.

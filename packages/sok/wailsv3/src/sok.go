@@ -31,6 +31,7 @@ commands:
   input pointer [window] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--activate]
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
+  path install|remove       writes or deletes the PATH entry of this application (needs sudo)
 
 window:
   --window NAME | --project DIRECTORY   without either, the only window of the application
@@ -446,10 +447,17 @@ func watch(client *Client, params map[string]any, stdout io.Writer) error {
 	return finish(client.Listen())
 }
 
-// Run 은 명령 하나를 실행하고 종료 상태를 돌려준다. identifier 는 이 command line 이 속한 애플리케이션의 식별자이며
-// --config-dir 이 없을 때 설정 폴더 이름이다.
-func Run(args []string, stdout, stderr io.Writer, identifier string) int {
-	err := run(args, stdout, identifier)
+// Options 는 command line 이 속한 애플리케이션과 운영체제 자리다.
+type Options struct {
+	// Identifier 는 애플리케이션의 식별자이며 --config-dir 이 없을 때 설정 폴더 이름이고 경로 항목의 파일 이름이다.
+	Identifier string
+	// PathsDir 는 경로 항목을 두는 폴더다(macOS 는 /etc/paths.d).
+	PathsDir string
+}
+
+// Run 은 명령 하나를 실행하고 종료 상태를 돌려준다.
+func Run(args []string, stdout, stderr io.Writer, options Options) int {
+	err := run(args, stdout, options)
 	if err == nil {
 		return 0
 	}
@@ -479,7 +487,8 @@ func connectTo(values map[string]string, identifier string) (*Client, error) {
 	return Dial(endpoint)
 }
 
-func run(args []string, stdout io.Writer, identifier string) error {
+func run(args []string, stdout io.Writer, options Options) error {
+	identifier := options.Identifier
 	// 점이 있는 명령 단어는 선언된 command 다(docs/spec/cli.md).
 	if strings.Contains(commandWord(args), ".") {
 		return runCommand(args, stdout, identifier)
@@ -491,6 +500,13 @@ func run(args []string, stdout io.Writer, identifier string) error {
 	if a.flags["help"] {
 		_, err := fmt.Fprintln(stdout, Usage)
 		return err
+	}
+	if len(a.positionals) > 0 && a.positionals[0] == "path" {
+		action, err := a.positional(1, "path action")
+		if err != nil {
+			return err
+		}
+		return runPath(action, stdout, options)
 	}
 	var client *Client
 	connect := func() (*Client, error) {

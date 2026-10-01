@@ -162,10 +162,18 @@ impl Fake {
     }
 }
 
+/// 경로 항목 검사가 바꾸는 paths.d 자리.
+static PATHS: Mutex<PathBuf> = Mutex::new(PathBuf::new());
+
 fn run(args: &[&str]) -> (i32, String, String) {
     let args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    let code = soksak_sok::run(&args, &mut stdout, &mut stderr, "com.soksak.test");
+    let paths = PATHS.lock().expect("paths").clone();
+    let options = soksak_sok::Options {
+        identifier: "com.soksak.test",
+        paths_dir: &paths,
+    };
+    let code = soksak_sok::run(&args, &mut stdout, &mut stderr, &options);
     (
         code,
         String::from_utf8(stdout).expect("stdout"),
@@ -419,11 +427,10 @@ fn the_default_configuration_directory_is_the_applications() {
     // 이 테스트만 HOME 을 바꾼다. 다른 테스트는 --config-dir 을 주므로 HOME 을 읽지 않는다.
     std::env::set_var("HOME", home.path());
     std::env::remove_var("XDG_CONFIG_HOME");
-    let base = if cfg!(target_os = "macos") {
-        home.path().join("Library/Application Support")
-    } else {
-        home.path().join(".config")
-    };
+    let base = soksak_sok::platform::current()
+        .expect("platform")
+        .config_dir()
+        .expect("configuration directory");
     let (code, _, stderr) = run(&["windows"]);
     assert_eq!(code, 1);
     assert_eq!(
@@ -546,4 +553,54 @@ fn commands_lists_the_declared_commands_in_order() {
         .map(|command| command["name"].as_str().expect("name"))
         .collect();
     assert_eq!(names, ["fixture.do", "fixture.none"]);
+}
+
+// contract: cli.path.writes-and-removes-the-entry
+#[test]
+fn path_install_writes_the_executable_directory_and_remove_deletes_it() {
+    let paths = tempfile_dir::Dir::new(&std::env::temp_dir());
+    *PATHS.lock().expect("paths") = paths.path().to_path_buf();
+    let directory = std::env::current_exe()
+        .expect("exe")
+        .canonicalize()
+        .expect("canonical")
+        .parent()
+        .expect("dir")
+        .display()
+        .to_string();
+    let entry = paths.path().join("com.soksak.test");
+    for _ in 0..2 {
+        let (code, stdout, stderr) = run(&["path", "install"]);
+        let want = format!(
+            "{{\n  \"directory\": {:?},\n  \"path\": {:?}\n}}\n",
+            directory,
+            entry.display().to_string()
+        );
+        assert_eq!((code, stdout.as_str()), (0, want.as_str()), "{stderr}");
+        assert_eq!(
+            std::fs::read_to_string(&entry).expect("entry"),
+            format!("{directory}\n")
+        );
+    }
+    for _ in 0..2 {
+        let (code, stdout, stderr) = run(&["path", "remove"]);
+        assert_eq!((code, stdout.as_str()), (0, "null\n"), "{stderr}");
+    }
+    assert!(!entry.exists(), "the entry remains");
+    let missing = paths.path().join("missing");
+    *PATHS.lock().expect("paths") = missing.clone();
+    let (code, _, stderr) = run(&["path", "install"]);
+    assert_eq!(code, 1);
+    assert!(
+        stderr.starts_with(&format!(
+            "sok: cannot write {}: ",
+            missing.join("com.soksak.test").display()
+        )),
+        "{stderr}"
+    );
+    assert!(
+        stderr.ends_with("; run sudo sok path install\n"),
+        "{stderr}"
+    );
+    *PATHS.lock().expect("paths") = PathBuf::new();
 }

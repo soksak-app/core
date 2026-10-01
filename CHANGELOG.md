@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-8-3: each application bundle holds its `sok`, `sok path install` puts it on `PATH` through `/etc/paths.d`, the Node command line `packages/cli` is removed, and `docs/operations/sok.md` explains the use.
+
 - F0.4-1-1-4: the parity inventory links the merged sidecar failure delivery to its implementation and tests.
 
 - R1-8-2: `sok <command>` runs any command that core or a plugin declares, with parameter flags converted by the declared schema, and `sok commands` lists them.
