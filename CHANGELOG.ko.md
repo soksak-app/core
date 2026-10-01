@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-37: published imports test가 package나 파일을 건너뛰지 않고 모든 읽기, 해석 오류를 경로와 함께 보고한다.
+
 - G1.4-40: vt-core PTY test가 2초 timer로 판정하지 않고 event를 기다린다.
 
 - G1.4-39: Tauri host가 page 응답과 status 값을 page가 보낸 텍스트 그대로 중계하므로, Wails host처럼 key 순서가 유지된다.

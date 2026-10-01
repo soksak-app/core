@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-37: the published imports test reports every read and parse error with its path instead of skipping the package or file.
+
 - G1.4-40: the vt-core PTY tests wait for events instead of judging by a 2 s timer.
 
 - G1.4-39: the Tauri host relays page replies and status values as the text the page sent, so their keys keep their order as on the Wails host.

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { chmodSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import test from "node:test";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,30 +12,51 @@ const workbenchDir = dirname(testDir);
 const packagesDir = dirname(workbenchDir);
 const root = dirname(packagesDir);
 
+/** 파일이 없을 때만 null 을 돌려준다. 다른 오류는 경로를 붙여 던진다. */
+function statOrNull(path) {
+  try {
+    return statSync(path);
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw new Error(`${path}: ${error.message}`, { cause: error });
+  }
+}
+
+/** 파일을 읽는다. 실패하면 경로를 붙여 던진다. */
+function readText(path) {
+  try {
+    return readFileSync(path, "utf8");
+  } catch (error) {
+    throw new Error(`${path}: ${error.message}`, { cause: error });
+  }
+}
+
+/** JSON 파일을 읽는다. 읽거나 해석하지 못하면 경로를 붙여 던진다. */
+function readJson(path) {
+  const text = readText(path);
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${path}: ${error.message}`, { cause: error });
+  }
+}
+
 /** 패키지 폴더 맵 (패키지 이름 → 디렉터리 경로). */
-function getPackageFolders() {
+function getPackageFolders(base = root) {
   const packages = new Map();
   const places = ["packages", "plugins"];
 
   for (const place of places) {
-    const placeDir = join(root, place);
-    let dirs = [];
-    try {
-      dirs = readdirSync(placeDir, { withFileTypes: true })
-        .filter((e) => e.isDirectory())
-        .map((e) => e.name);
-    } catch {
-      continue;
-    }
+    const placeDir = join(base, place);
+    const dirs = readdirSync(placeDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
 
     for (const dir of dirs) {
       const packageJsonPath = join(placeDir, dir, "package.json");
-      try {
-        const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"));
-        packages.set(pkg.name, join(placeDir, dir));
-      } catch {
-        // package.json이 없으면 패키지가 아니다
-      }
+      // package.json 이 없는 폴더는 패키지가 아니다. 있는데 읽지 못하면 실패한다.
+      if (!statOrNull(packageJsonPath)) continue;
+      packages.set(readJson(packageJsonPath).name, join(placeDir, dir));
     }
   }
 
@@ -47,17 +68,9 @@ function isInPublishedFiles(publishedPath, filesArray, packageDir) {
   for (const fileEntry of filesArray) {
     const fullPath = join(packageDir, fileEntry);
 
-    // 디렉터리인지 확인
-    try {
-      const stat = statSync(fullPath);
-      if (stat.isDirectory()) {
-        // 디렉터리면 그 아래의 모든 파일이 포함된다
-        if (publishedPath.startsWith(fileEntry + "/")) {
-          return true;
-        }
-      }
-    } catch {
-      // 디렉터리가 아님
+    // 디렉터리면 그 아래의 모든 파일이 포함된다. 없는 항목은 디렉터리가 아니다.
+    if (statOrNull(fullPath)?.isDirectory() && publishedPath.startsWith(fileEntry + "/")) {
+      return true;
     }
 
     // 정확히 일치하는 파일
@@ -120,15 +133,10 @@ function resolveImportPath(importPath, fromDir) {
 
   // 확장자가 없으면 .js 추가 시도
   if (!resolvedPath.endsWith(".js") && !resolvedPath.endsWith(".json")) {
-    try {
-      const stat = statSync(resolvedPath);
-      if (stat.isDirectory()) {
-        resolvedPath = join(resolvedPath, "index.js");
-      }
-    } catch {
-      // 파일이 없으면 .js 추가
-      resolvedPath = resolvedPath + ".js";
-    }
+    const stat = statOrNull(resolvedPath);
+    // 없는 경로는 확장자를 뺀 import 이므로 .js 를 붙인다.
+    if (!stat) resolvedPath = resolvedPath + ".js";
+    else if (stat.isDirectory()) resolvedPath = join(resolvedPath, "index.js");
   }
 
   return resolvedPath;
@@ -143,12 +151,7 @@ function makeRelativePath(absolutePath, packageDir) {
 
 /** 패키지의 build 스크립트가 있는지 확인 */
 function hasBuildScript(packageDir) {
-  try {
-    const pkg = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8"));
-    return Boolean(pkg.scripts?.build);
-  } catch {
-    return false;
-  }
+  return Boolean(readJson(join(packageDir, "package.json")).scripts?.build);
 }
 
 /** 빌드 산출 디렉터리 목록 구성. package.json의 files와 빌드 스크립트 기반. */
@@ -163,17 +166,12 @@ function getBuildOutputDirs(packageDir, filesArray) {
   for (const fileEntry of filesArray) {
     const fullPath = join(packageDir, fileEntry);
 
-    try {
-      const stat = statSync(fullPath);
-      if (stat.isDirectory()) {
-        buildDirs.add(fileEntry);
-      }
-    } catch {
-      // 존재하지 않는 디렉터리는 아직 빌드되지 않은 산출물일 수 있다
-      // 경로가 /로 끝나거나 files에 명시적으로 디렉터리로 보인다면 산출 디렉터리로 표시
-      if (fileEntry.endsWith("/") || !fileEntry.includes(".")) {
-        buildDirs.add(fileEntry);
-      }
+    const stat = statOrNull(fullPath);
+    if (stat?.isDirectory()) {
+      buildDirs.add(fileEntry);
+    } else if (!stat && (fileEntry.endsWith("/") || !fileEntry.includes("."))) {
+      // 없는 디렉터리는 아직 빌드되지 않은 산출물이다. 경로가 /로 끝나거나 확장자가 없으면 산출 디렉터리다.
+      buildDirs.add(fileEntry);
     }
   }
 
@@ -202,140 +200,65 @@ function collectPublishedImports(packageName, packageDir, filesArray) {
   function processFile(filePath) {
     if (checkedFiles.has(filePath)) return;
     checkedFiles.add(filePath);
+    const isHtml = filePath.endsWith(".html");
+    if (!isHtml && !filePath.endsWith(".js")) return;
+    const content = readText(filePath);
+    const imports = isHtml ? extractHtmlImports(content) : extractJsImports(content);
+    const fromDir = dirname(filePath);
+    const file = makeRelativePath(filePath, packageDir);
 
-    try {
-      const content = readFileSync(filePath, "utf8");
-      const isHtml = filePath.endsWith(".html");
-      const isJs = filePath.endsWith(".js");
-
-      if (!isHtml && !isJs) return;
-
-      const imports = isHtml ? extractHtmlImports(content) : extractJsImports(content);
-      const fromDir = dirname(filePath);
-
-      for (const importPath of imports) {
-        try {
-          const resolvedPath = resolveImportPath(importPath, fromDir);
-          const relativePath = makeRelativePath(resolvedPath, packageDir);
-
-          // 파일이 존재하는지 확인
-          let fileExists = false;
-          try {
-            statSync(join(packageDir, relativePath));
-            fileExists = true;
-          } catch {
-            fileExists = false;
-          }
-
-          // 파일이 없으면 여러 가지 경우를 확인
-          if (!fileExists) {
-            // 1. 워크벤치의 경우 스테이징이 만드는 파일인지 확인
-            if (isWorkbench) {
-              if (STAGED.always.includes(relativePath)) {
-                // 모든 빌드에서 생성되므로 안전함
-                results.push({
-                  file: makeRelativePath(filePath, packageDir),
-                  importPath,
-                  resolvedPath: relativePath,
-                  inPublished: true, // 스테이징 후에 만들어질 것임
-                  isStaged: true, // 스테이징에서 만드는 파일임을 표시
-                  stagedType: "always",
-                });
-                continue;
-              }
-
-              if (STAGED.diagnostics.includes(relativePath)) {
-                // 진단 빌드에서만 생성되므로 릴리스 빌드에서 깨짐
-                results.push({
-                  file: makeRelativePath(filePath, packageDir),
-                  importPath,
-                  resolvedPath: relativePath,
-                  inPublished: false,
-                  missing: true, // 무조건 import하면 릴리스에서 없음
-                  isDiagnosticsOnly: true, // 진단 전용 파일 표시
-                });
-                continue;
-              }
-            }
-
-            // 2. 빌드 산출 디렉터리인지 확인
-            if (isInBuildOutputDir(relativePath, packageDir, buildOutputDirs)) {
-              // 빌드 산출물이므로 test 시간에 없어도 괜찮음
-              results.push({
-                file: makeRelativePath(filePath, packageDir),
-                importPath,
-                resolvedPath: relativePath,
-                inPublished: true, // 빌드 후에 files에 포함될 것임
-                isBuildOutput: true, // 빌드 산출물임을 표시
-              });
-              continue;
-            }
-
-            // 3. 둘 다 아니면 실제 누락된 파일
-            results.push({
-              file: makeRelativePath(filePath, packageDir),
-              importPath,
-              resolvedPath: relativePath,
-              inPublished: false,
-              missing: true, // 존재하지 않는 파일을 명시적으로 표시
-            });
-            continue;
-          }
-
-          const inPublished = isInPublishedFiles(relativePath, filesArray, packageDir);
-
-          results.push({
-            file: makeRelativePath(filePath, packageDir),
-            importPath,
-            resolvedPath: relativePath,
-            inPublished,
-          });
-        } catch (e) {
-          // import 해석 실패는 무시
-        }
+    for (const importPath of imports) {
+      const relativePath = makeRelativePath(resolveImportPath(importPath, fromDir), packageDir);
+      if (statOrNull(join(packageDir, relativePath))) {
+        results.push({ file, importPath, resolvedPath: relativePath, inPublished: isInPublishedFiles(relativePath, filesArray, packageDir) });
+        continue;
       }
-    } catch (e) {
-      // 파일 읽기 실패는 무시
+      // 워크벤치는 스테이징이 모든 빌드에서 만드는 파일을 import 할 수 있다.
+      if (isWorkbench && STAGED.always.includes(relativePath)) {
+        results.push({ file, importPath, resolvedPath: relativePath, inPublished: true, isStaged: true, stagedType: "always" });
+        continue;
+      }
+      // 진단 빌드에서만 만드는 파일을 무조건 import 하면 릴리스에서 없다.
+      if (isWorkbench && STAGED.diagnostics.includes(relativePath)) {
+        results.push({ file, importPath, resolvedPath: relativePath, inPublished: false, missing: true, isDiagnosticsOnly: true });
+        continue;
+      }
+      // 빌드 산출물은 검사 때 아직 없을 수 있다.
+      if (isInBuildOutputDir(relativePath, packageDir, buildOutputDirs)) {
+        results.push({ file, importPath, resolvedPath: relativePath, inPublished: true, isBuildOutput: true });
+        continue;
+      }
+      results.push({ file, importPath, resolvedPath: relativePath, inPublished: false, missing: true });
     }
   }
 
-  // 모든 published 파일 처리
+  /** 디렉터리 안의 모든 JS/HTML 파일을 처리한다. */
+  function walkDir(dir) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullEntry = join(dir, entry.name);
+      if (entry.isDirectory()) walkDir(fullEntry);
+      else if (entry.name.endsWith(".js") || entry.name.endsWith(".html")) processFile(fullEntry);
+    }
+  }
+
+  // 모든 published 파일 처리. 없는 항목은 빌드 산출물일 때만 허용하고, 아니면 누락으로 보고한다.
   for (const fileEntry of filesArray) {
     const fullPath = join(packageDir, fileEntry);
-
-    try {
-      const stat = statSync(fullPath);
-
-      if (stat.isDirectory()) {
-        // 디렉터리면 안의 모든 JS/HTML 파일 처리
-        function walkDir(dir) {
-          try {
-            const entries = readdirSync(dir, { withFileTypes: true });
-            for (const entry of entries) {
-              const fullEntry = join(dir, entry.name);
-              if (entry.isDirectory()) {
-                walkDir(fullEntry);
-              } else if (entry.name.endsWith(".js") || entry.name.endsWith(".html")) {
-                processFile(fullEntry);
-              }
-            }
-          } catch {
-            // 디렉터리 읽기 실패
-          }
-        }
-        walkDir(fullPath);
-      } else if (fileEntry.endsWith(".js") || fileEntry.endsWith(".html")) {
-        processFile(fullPath);
+    const stat = statOrNull(fullPath);
+    if (!stat) {
+      if (!isInBuildOutputDir(fileEntry, packageDir, buildOutputDirs)) {
+        results.push({ file: "package.json", importPath: fileEntry, resolvedPath: fileEntry, inPublished: false, missing: true });
       }
-    } catch {
-      // 파일이 없음
+      continue;
     }
+    if (stat.isDirectory()) walkDir(fullPath);
+    else if (fileEntry.endsWith(".js") || fileEntry.endsWith(".html")) processFile(fullPath);
   }
 
   return results;
 }
 
-test("모든 배포 파일의 import은 files에 포함되어야 한다", () => {
+test("every import of a published file is listed in its package files", () => {
   const packages = getPackageFolders();
   const errors = [];
   const allowed = []; // 스테이징이나 빌드로 생성되는 파일들
@@ -343,8 +266,8 @@ test("모든 배포 파일의 import은 files에 포함되어야 한다", () => 
   for (const [packageName, packageDir] of packages) {
     const packageJsonPath = join(packageDir, "package.json");
 
-    try {
-      const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+    {
+      const pkg = readJson(packageJsonPath);
 
       if (!Array.isArray(pkg.files)) {
         // files가 없으면 이 패키지는 배포하지 않음
@@ -377,8 +300,6 @@ test("모든 배포 파일의 import은 files에 포함되어야 한다", () => 
           errors.push(`패키지 ${packageName}의 ${imp.file}이 import 하는 ${imp.resolvedPath}이 files에 없다`);
         }
       }
-    } catch (e) {
-      // 패키지 읽기 실패
     }
   }
 
@@ -395,7 +316,7 @@ test("모든 배포 파일의 import은 files에 포함되어야 한다", () => 
   }
 });
 
-test("누락된 파일 import을 실패로 감지한다", () => {
+test("an import of a missing file is reported as missing", () => {
   // 임시 픽스처 패키지 생성
   const tmpDir = join(tmpdir(), `fixture-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(tmpDir, { recursive: true });
@@ -434,77 +355,7 @@ test("누락된 파일 import을 실패로 감지한다", () => {
   }
 });
 
-test("픽스처: 예전 로직은 누락된 파일을 통과시켰을 것이다", () => {
-  // 임시 픽스처 패키지 생성
-  const tmpDir = join(tmpdir(), `fixture-legacy-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  mkdirSync(tmpDir, { recursive: true });
-
-  try {
-    writeFileSync(join(tmpDir, "package.json"), JSON.stringify({
-      name: "test-fixture-legacy",
-      files: ["app.js"]
-    }, null, 2));
-
-    writeFileSync(join(tmpDir, "app.js"), `import "./missing-dependency.js";\n`);
-
-    // 예전 로직: 파일이 없으면 continue (건너뜀)
-    // 이 로직을 시뮬레이션하면 결과가 비어 있어야 함
-    const results = [];
-    const checkedFiles = new Set();
-
-    function processFileLegacy(filePath) {
-      if (checkedFiles.has(filePath)) return;
-      checkedFiles.add(filePath);
-
-      try {
-        const content = readFileSync(filePath, "utf8");
-        const isJs = filePath.endsWith(".js");
-        if (!isJs) return;
-
-        const imports = []; // 간단히 "./missing-dependency.js" 하나
-        const match = content.match(/from\s+["'](\.[^"']*?)["']/);
-        if (match) imports.push(match[1]);
-
-        const fromDir = dirname(filePath);
-
-        for (const importPath of imports) {
-          const resolvedPath = resolve(fromDir, importPath);
-          if (!resolvedPath.endsWith(".js")) {
-            // missing-dependency.js 파일 확인
-          }
-          const relativePath = relative(tmpDir, resolvedPath);
-
-          // 예전 로직: 파일이 없으면 continue
-          try {
-            statSync(join(tmpDir, relativePath));
-          } catch {
-            continue; // 이렇게 건너뜀
-          }
-
-          results.push({
-            file: relative(tmpDir, filePath),
-            importPath,
-            resolvedPath: relativePath,
-          });
-        }
-      } catch (e) {
-        // 무시
-      }
-    }
-
-    processFileLegacy(join(tmpDir, "app.js"));
-
-    // 예전 로직에서는 결과가 비어 있음 (누락된 파일이 건너뜬 것)
-    assert.equal(results.length, 0, "예전 로직은 누락된 파일을 건너뜨렸을 것");
-
-    // 이는 테스트가 거짓 통과했다는 증거
-    console.log("ℹ 예전 로직이 누락된 import을 건너뜬 증거를 보임");
-  } finally {
-    rmSync(tmpDir, { recursive: true, force: true });
-  }
-});
-
-test("진단 전용 파일을 무조건 import하면 실패로 잡는다", () => {
+test("an unconditional import of a diagnostics-only file is reported", () => {
   // transcript.js는 진단 빌드에서만 생기므로, 이를 import하는 것을 검증
   // 임시 워크벤치 픽스처 생성
   const tmpDir = join(tmpdir(), `fixture-diag-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -548,5 +399,31 @@ import "./transcript.js";
     assert.ok(errors.length > 0, "진단 전용 파일의 무조건 import은 오류를 생성해야 함");
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("an unreadable listed file fails the published import check with its path", () => {
+  const dir = join(tmpdir(), `fixture-unreadable-${process.pid}-${Date.now()}`);
+  mkdirSync(dir, { recursive: true });
+  try {
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "test-fixture-unreadable", files: ["app.js"] }));
+    writeFileSync(join(dir, "app.js"), "export const app = 1;\n");
+    chmodSync(join(dir, "app.js"), 0o000);
+    assert.throws(() => collectPublishedImports("test-fixture-unreadable", dir, ["app.js"]), /EACCES.*app\.js/);
+  } finally {
+    chmodSync(join(dir, "app.js"), 0o644);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("an unparsable package.json fails the package discovery with its path", () => {
+  const base = join(tmpdir(), `fixture-packages-${process.pid}-${Date.now()}`);
+  mkdirSync(join(base, "packages", "broken"), { recursive: true });
+  mkdirSync(join(base, "plugins"), { recursive: true });
+  try {
+    writeFileSync(join(base, "packages", "broken", "package.json"), "{");
+    assert.throws(() => getPackageFolders(base), /packages\/broken\/package\.json/);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
   }
 });
