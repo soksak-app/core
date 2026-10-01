@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-5-1-1: the Tauri window list cases live in the paired `exposure_test`, so the paired host structure holds.
+
 - G1.4-25: comments outside `packages/soksak` are Korean, and `pnpm test` enforces it with `scripts/check-comment-language.mjs`.
 
 - V5-117-1-3-4-7-1-7-3: a tab whose plugin module failed to mount can be closed; disposal no longer rethrows the mount error and removes the surface.

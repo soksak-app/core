@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-14-5-1-1: Tauri 창 목록 case가 짝을 이루는 `exposure_test`에 있으므로 짝 host 구조가 유지된다.
+
 - G1.4-25: `packages/soksak` 밖의 주석이 한국어이며, `pnpm test`가 `scripts/check-comment-language.mjs`로 이를 강제한다.
 
 - V5-117-1-3-4-7-1-7-3: plugin module 마운트에 실패한 탭을 닫을 수 있다. 해제가 마운트 오류를 다시 던지지 않고 surface를 지운다.
