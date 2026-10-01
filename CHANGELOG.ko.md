@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-115-1-3: 소수 크기의 카드 패널을 장치 pixel 격자에 그리고 준비하므로 native 표면이 선언 사각형과 같다.
+
 - V5-116-4-11-2: window check가 shell 카드의 left, right, top 패널을 native 표면, grip, DOM geometry와 비교해 잰다.
 
 - G1.4-14-4-2: 끌기 정렬 check가 카드 지연을 화면 frame 수(최대 4, 중앙값 2.5, 90번째 백분위수 3)로 제한하고, 페이지가 배치마다 단계를 기록한다.

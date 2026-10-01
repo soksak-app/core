@@ -121,3 +121,11 @@ test('presentation uses the inclusive minimum boundary and rejects invalid geome
  assert.equal(model.presentSidebars(states,{w:337.5,h:400},metrics).left.collapseReason,'insufficient-width');
  for(const rect of [{w:NaN,h:400},{w:-1,h:400},{w:400,h:Infinity}])assert.throws(()=>model.presentSidebars(states,rect,metrics),/invalid sidebar presentation/);
 });
+
+test("a stored panel size is drawn on the device-pixel grid without changing the stored size", () => {
+  assert.equal(model.deviceGridSize(120.5, 1), 121);
+  assert.equal(model.deviceGridSize(130.25, 2), 130.5);
+  assert.equal(model.deviceGridSize(140.75, 2), 141);
+  assert.equal(model.deviceGridSize(120.5, 2), 120.5);
+  assert.throws(() => model.deviceGridSize(120, 0), /invalid sidebar size or device pixel ratio/);
+});

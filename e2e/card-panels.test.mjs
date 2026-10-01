@@ -91,6 +91,36 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`shell panels ${JSON.stringify({ expected, applied: surface.applied })}`);
   });
 
+  // 끌기는 소수 크기를 넘긴다. 카드 테두리, divider, 준비한 표면 사각형은 장치 pixel 격자를 쓴다
+  // (docs/spec/native-surfaces.md). 격자 밖의 크기도 표시는 격자 위에 있고, 선언과 적용이 같아야 한다(V5-115-1-3).
+  test(`${app.name}: fractional panel sizes place the native surface on the device-pixel grid`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    const card = (await s.get("core.grid")).cards.find((item) => item.id === "shell");
+    assert.ok(card, "the fixture has no shell card");
+    const set = (await s.get("core.settings")).values.sets[0];
+    const scale = (await s.get("host.window")).scale;
+    const sizes = { left: 120.5, top: 130.25, right: 140.75 };
+    for (const [side, size] of Object.entries(sizes)) {
+      await s.run("core.card.sidebar.set", { card: card.id, side, set: set.id });
+      await s.run("core.card.sidebar.size", { card: card.id, side, size });
+    }
+    await s.presented();
+    const measured = (await s.get("core.grid")).cards.find((item) => item.id === card.id);
+    for (const [side, size] of Object.entries(sizes)) assert.equal(measured.sidebars[side].size, size, `${side} size was not kept`);
+    const surface = (await s.surfaces()).find((item) => item.surface === measured.active);
+    assert.ok(surface?.applied, "the shell surface is not presented");
+    const onGrid = (value) => Math.abs(value * scale - Math.round(value * scale)) < 1e-6;
+    const edges = { left: surface.applied.x, top: surface.applied.y, right: surface.applied.x + surface.applied.w,
+      bottom: surface.applied.y + surface.applied.h };
+    assert.deepEqual(Object.entries(edges).filter(([, value]) => !onGrid(value)).map(([key]) => key), [],
+      `native surface edges are off the ${scale}x device-pixel grid: ${JSON.stringify(surface)}`);
+    const failed = (await s.get("core.verify")).rows.filter((row) => !row.ok);
+    assert.deepEqual(failed, [], `DOM and native geometry disagree at ${scale}x with fractional panel sizes`);
+    t.diagnostic(`fractional panels at ${scale}x ${JSON.stringify({ declared: surface.declared, applied: surface.applied })}`);
+  });
+
   test(`${app.name}: a card carries assigned panels on all four sides regardless of the active tab`, {timeout:60000}, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built; four-side assignment was not observed`);

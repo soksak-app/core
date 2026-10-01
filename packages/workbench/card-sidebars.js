@@ -72,6 +72,15 @@ export function sizeSidebar(card, side, size, defaults, linked) {
   store(card, side, { ...state(card, side), size });
 }
 
+/**
+ * 저장된 패널 크기를 화면의 장치 pixel 격자에 맞춘 표시 크기. 카드 테두리, divider, 준비한 표면 사각형은 같은 격자를
+ * 쓰므로(docs/spec/native-surfaces.md) 격자 밖의 크기도 격자 위에 그린다. 저장된 크기는 바꾸지 않는다.
+ */
+export function deviceGridSize(size, ratio) {
+  if (!Number.isFinite(size) || !Number.isFinite(ratio) || ratio <= 0) throw new Error("invalid sidebar size or device pixel ratio");
+  return Math.round(size * ratio) / ratio;
+}
+
 // 저장된 펼침 선택을 현재 카드 공간에 적용한다. 부족한 축의 요청만 자동으로 접는다.
 export function presentSidebars(requested, rect, metrics) {
   const values=[rect.w,rect.h,metrics.header,metrics.footer,metrics.border,metrics.divider,metrics.minimum];

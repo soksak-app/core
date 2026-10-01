@@ -12,7 +12,7 @@ import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./side
 import { bindSidebarGrip } from "./sidebar-grip.js";
 import { targetCardInsets } from "./card-insets.js";
 import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.js";
-import { SIDEBAR_SIDES, presentSidebars, effectiveSidebar, resolveSidebarSet, setSidebar, sizeSidebar, toggleSidebar } from "./card-sidebars.js";
+import { SIDEBAR_SIDES, deviceGridSize, presentSidebars, effectiveSidebar, resolveSidebarSet, setSidebar, sizeSidebar, toggleSidebar } from "./card-sidebars.js";
 import { arrangeWindowSidebars, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, standingLink, windowSidebarCards } from "./window-sidebars.js";
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout } from "./stored-layout.js";
@@ -840,7 +840,7 @@ function drawCardSidebars(el, card, rect) {
     mark(handle, "core.card.sidebar.size", { card: card.id, side });
     handle.title = state.autoCollapsed ? `공간 부족으로 ${side} 사이드바 자동 접힘` : state.collapsed ? `눌러 ${side} 사이드바 펼치기` : `끌어 크기 바꾸기 · 눌러 ${side} 사이드바 접기`;
     el.dataset[`sidebar${side[0].toUpperCase()}${side.slice(1)}`] = state.collapsed ? "folded" : "open";
-    el.style.setProperty(`--p${side[0]}`, state.collapsed ? "var(--divider)" : `${state.size}px`);
+    el.style.setProperty(`--p${side[0]}`, state.collapsed ? "var(--divider)" : `${deviceGridSize(state.size, devicePixelRatio)}px`);
     // 기본값: 탭 없는 카드의 사이드바 섹션에는 표면 문맥이 없다(null) — 좌측 창 사이드바와 같은 문맥이다.
     const surface = activeTab(card) === null || activeTab(card) === undefined ? null : activeTab(card).id;
     drawSet(body.querySelector(".set"), `${card.id}:${side}`, set, { card: card.id, surface, orientation: side === "top" || side === "bottom" ? "horizontal" : "vertical" });
@@ -1159,7 +1159,7 @@ function seats(rects) {
       const effective = cardSidebars(card, rects.get(card.id));
       const bands = Object.fromEntries(SIDEBAR_SIDES.map(side => {
         const state = effective[side];
-        return [side, state ? (state.collapsed ? folded : state.size) : 0];
+        return [side, state ? (state.collapsed ? folded : deviceGridSize(state.size, devicePixelRatio)) : 0];
       }));
       inset = targetCardInsets(el, slot, bands);
     }
