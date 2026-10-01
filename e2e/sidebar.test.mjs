@@ -304,7 +304,9 @@ const rects = async (s, name) => {
   for (;;) {
     try {
       out.push(await s.rect(name, out.length));
-    } catch {
+    } catch (error) {
+      // 마지막 요소 다음 index 에서 멈춘다. 다른 오류는 보고한다.
+      if (!/has no element at index/.test(error.message)) throw error;
       return out;
     }
   }

@@ -921,11 +921,7 @@ for (const app of Object.values(APPS)) {
 
     s.cleanup(async () => {
       await closeTerminalTabs(s);
-      try {
-        rmSync(frameDir, { recursive: true, force: true });
-      } catch {
-        // ignore
-      }
+      rmSync(frameDir, { recursive: true, force: true });
     });
 
     const frameFiles = frames(frameDir);
@@ -942,10 +938,11 @@ for (const app of Object.values(APPS)) {
     const BRIGHT_TEXT_MIN = 20;
     const BG_SAMPLE_RATIO_MIN = 0.5;
 
-    const termX = Math.round(terminalRect.x);
-    const termY = Math.round(terminalRect.y);
-    const termWidth = Math.round(terminalRect.width);
-    const termHeight = Math.round(terminalRect.height);
+    // 창 좌표는 point 이고 frame 은 device pixel 이므로 frame 배율을 곱한다.
+    const termX = Math.round(terminalRect.x * frame.scale);
+    const termY = Math.round(terminalRect.y * frame.scale);
+    const termWidth = Math.round(terminalRect.width * frame.scale);
+    const termHeight = Math.round(terminalRect.height * frame.scale);
 
     let bgPixelCount = 0;
     let totalSampleCount = 0;
@@ -1755,11 +1752,7 @@ for (const app of Object.values(APPS)) {
 
     s.cleanup(async () => {
       await closeTerminalTabs(s);
-      try {
-        rmSync(frameDir, { recursive: true, force: true });
-      } catch {
-        // ignore
-      }
+      rmSync(frameDir, { recursive: true, force: true });
     });
 
     const frameFiles = frames(frameDir);
@@ -1771,10 +1764,11 @@ for (const app of Object.values(APPS)) {
     const BRIGHT_TEXT_THRESHOLD = 160;
     const BG_SAMPLE_RATIO_MIN = 0.5;
 
-    const termX = Math.round(terminalRect.x);
-    const termY = Math.round(terminalRect.y);
-    const termWidth = Math.round(terminalRect.width);
-    const termHeight = Math.round(terminalRect.height);
+    // 창 좌표는 point 이고 frame 은 device pixel 이므로 frame 배율을 곱한다.
+    const termX = Math.round(terminalRect.x * frame.scale);
+    const termY = Math.round(terminalRect.y * frame.scale);
+    const termWidth = Math.round(terminalRect.width * frame.scale);
+    const termHeight = Math.round(terminalRect.height * frame.scale);
 
     let bgPixelCount = 0;
     let totalSampleCount = 0;

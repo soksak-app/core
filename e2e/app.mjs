@@ -102,8 +102,9 @@ function lock() {
       process.once("exit", () => {
         try {
           if (readFileSync(LOCK, "utf8") === String(process.pid)) unlinkSync(LOCK);
-        } catch {
-          // 다른 실행이 이미 교체했다.
+        } catch (error) {
+          // 잠금 파일이 없으면 다른 실행이 이미 지웠다. 다른 오류는 보고한다.
+          if (error.code !== "ENOENT") throw error;
         }
       });
       return;
