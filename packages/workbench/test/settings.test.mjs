@@ -58,3 +58,42 @@ test('a settings file change propagates the effective performance switch', async
     globalThis.document = previous;
   }
 });
+
+test('settings stored under removed keys are deleted once when the settings are connected', async (t) => {
+  const reports = [];
+  t.mock.module('../host.js', { namedExports: {
+    surfaces: { theme() {}, menuLanguage() {} }, report: (line) => { reports.push(line); },
+  } });
+  const previous = globalThis.document;
+  globalThis.document = { addEventListener() {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const memory = {
+    common: { gap: 8, cardSidebar: 'inset', railWidth: 190 },
+    projects: [{ id: 'prj-a', settings: { rail: 'flow', mode: 'light' } }, { id: 'prj-b' }],
+  };
+  const writes = [];
+  const { connectSettings, value } = await import('../settings.js?test=removed-keys');
+  try {
+    await connectSettings({
+      snapshot: async () => structuredClone(memory),
+      settings: async (id, values) => {
+        writes.push([id, values]);
+        const target = id === null ? memory.common : memory.projects.find((p) => p.id === id).settings;
+        for (const [key, val] of Object.entries(values)) {
+          if (val === undefined) delete target[key];
+          else target[key] = val;
+        }
+      },
+      onChange: () => () => {},
+    });
+    assert.deepEqual(memory.common, { gap: 8 });
+    assert.deepEqual(memory.projects[0].settings, { mode: 'light' });
+    assert.deepEqual(writes.map(([id, values]) => [id, Object.keys(values)]), [[null, ['cardSidebar', 'railWidth']], ['prj-a', ['rail']]]);
+    assert.deepEqual(reports, [
+      'settings: converted the common settings: removed cardSidebar, railWidth because they are no longer settings',
+      'settings: converted the project prj-a settings: removed rail because they are no longer settings',
+    ]);
+    assert.equal(value('gap'), 8);
+  } finally {
+    globalThis.document = previous;
+  }
+});

@@ -79,6 +79,16 @@
 
 세트에 같은 섹션이 두 번 들어가게 하는 변경은 -32602(invalid params)와 오류 "section <id> is already in set <id>"로 실패하고 아무것도 바꾸지 않는다. 세트가 이미 등록된 모든 섹션을 담고 있을 때의 +도 "set <id> already contains every registered section"으로 같게 실패한다. 모든 변경은 보이는 범위에 바로 저장된다.
 
+## 이전 형식
+
+설정 파일은 선언한 설정만 현재 형식으로 담는다. 설정을 연결할 때 page는 공통 설정과 모든 프로젝트 설정을 한 번 변환하고, 결과를 저장하며, 변환마다 애플리케이션 log에 보고한다.
+
+- 이전 설정의 키(`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`)를 지운다.
+- `rail` 연결은 같은 플러그인과 세트의 `card-left` 연결이 된다.
+- 플러그인을 가리키는 `left`, `right` 연결은 `window-left`, `window-right` 연결이 된다. 세트가 없는 그런 연결은 그 플러그인에 내용을 보이지 않도록 고른 것이었다. 현재 형식으로는 나타낼 수 없으므로 지우며, 일반 내용이 보인다.
+
+그 밖의 알 수 없는 키나 잘못된 값은 그 이름과 함께 설정 검사에서 실패한다.
+
 ## 저장되는 세트와 연결
 
 `sets`와 `links`는 설정이다. 기본값은 플러그인 사이드바 선언을 정규화한 값이며 명시적 `environment.json`의 `sidebars`가 있으면 그것으로 교체한다. 변경은 다른 설정처럼 목록 전체를 보이는 범위에 쓴다. 프로젝트의 `sets`나 `links` 재정의는 전역 목록을 대신한다.

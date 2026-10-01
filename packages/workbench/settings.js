@@ -25,9 +25,10 @@
    스타일시트를 물려받지 못하므로, 호스트가 이 값들을 그대로 실어 보낸다.     */
 
 import { host as bridge } from "@soksak/runtime";
-import { surfaces as host } from "./host.js";
+import { report, surfaces as host } from "./host.js";
 import { checkSidebarReferences, isSettingAddress, validateSidebars } from "@soksak/plugin-api";
 import { effectiveSettings } from "./settings-scope.js";
+import { migrateSettings } from "./settings-migration.js";
 import { chooseLink, resolveSidebar } from "./sidebar-sets.js";
 import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
 import { setTraceEnabled } from "./performance.js";
@@ -315,8 +316,23 @@ export function setSidebarDefaults(sidebars) {
   settings = structuredClone(defaults);
 }
 
+/** 공통 설정과 각 프로젝트 설정을 현재 형식으로 한 번 바꿔 저장하고 그 결과를 보고한다(docs/spec/settings.md). */
+async function migrateStoredSettings() {
+  const snapshot = await store.snapshot();
+  const scopes = [[null, "the common settings", snapshot.common],
+    // 기본값: 설정을 덮어쓰지 않은 프로젝트에는 settings 가 없다.
+    ...snapshot.projects.map((project) => [project.id, `the project ${project.id} settings`, project.settings ?? {}])];
+  for (const [id, where, values] of scopes) {
+    const { patch, notes } = migrateSettings(values);
+    if (!notes.length) continue;
+    await store.settings(id, patch);
+    report(`settings: converted ${where}: ${notes.join("; ")}`);
+  }
+}
+
 export async function connectSettings(storage) {
   store = storage;
+  await migrateStoredSettings();
   store.onChange(() => { if (!changes) return refresh().catch((e) => dispatchEvent(new ErrorEvent("error", { message: e.message }))); });
   await refresh();
 }

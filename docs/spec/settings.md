@@ -79,6 +79,16 @@ Every section row control runs `core.settings.sets.row {id, action, index, secti
 
 A change that would repeat a section in the set fails with -32602 (invalid params) and the error "section <id> is already in set <id>", and changes nothing; so does + when the set already contains every registered section, with "set <id> already contains every registered section". Every change is saved immediately to the scope shown.
 
+## Earlier formats
+
+The settings files keep only declared settings in the current format. When the settings are connected, the page converts the common settings and every project's settings once, saves the result and reports each conversion in the application log:
+
+- The keys of earlier settings (`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`) are deleted.
+- A `rail` link becomes a `card-left` link of the same plugin and set.
+- A `left` or `right` link that names a plugin becomes a `window-left` or `window-right` link. Such a link without a set selected no content for that plugin; the current format cannot express it, so it is deleted and the general content shows.
+
+Any other unknown key or invalid value fails the settings check with its name.
+
 ## Stored sets and links
 
 `sets` and `links` are settings. Their default values come from normalized plugin sidebar declarations, replaced by explicit `environment.json` `sidebars` when present. A change writes the whole list to the shown scope, like any other setting; a project override of `sets` or `links` replaces the common list.
