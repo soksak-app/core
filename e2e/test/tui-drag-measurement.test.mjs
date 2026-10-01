@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertTuiGesture, assertTuiCycle } from "../tui-drag-measurement.mjs";
+import { assertTuiGesture, assertTuiCycle, gestureDom } from "../tui-drag-measurement.mjs";
 
 function complete() {
   const expected = ["down", "move", "up"].map((phase, index) => ({ inputId: `new-${index}`, phase }));
@@ -89,4 +89,16 @@ test("an early pointer-up or absent pointer-down fails even if the final PTY rep
     change(attempt);
     assert.throws(() => assertTuiGesture(attempt), /pointer/);
   }
+});
+
+test("the pointer up of an earlier click before the gesture's down is not part of the gesture", () => {
+  const attempt = complete();
+  const earlier = [{ type: "pointerup", x: 354, y: 364, buttons: 0 }, { type: "lostpointercapture", x: 0, y: 0, buttons: 0 }];
+  attempt.dom = gestureDom([...earlier, ...attempt.dom].map((entry) => ({ kind: "pointer-dom", ...entry }))
+    .concat({ kind: "pointer-sent", body: {} }));
+  assert.doesNotThrow(() => assertTuiGesture(attempt));
+  const repeated = complete();
+  repeated.dom = gestureDom([...repeated.dom, { type: "pointerup", x: 30, y: 12, buttons: 0 }]
+    .map((entry) => ({ kind: "pointer-dom", ...entry })));
+  assert.throws(() => assertTuiGesture(repeated), /up count/, "a second up after the gesture's down passed");
 });

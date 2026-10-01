@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-35: 실제 입력 TUI check는 mouse 보고를 켜고 자기 선택을 그리는 자체 fixture TUI를 실행하며, drag check는 3주기를 실행한다.
+
 - G1.4-36: window check는 녹화 frame을 frame 번호 순서로 정렬하므로, frame 9999 뒤의 녹화도 마지막 frame으로 판정한다.
 
 - G1.4-34: Tauri host는 surface를 동기화할 때 plugin 상태 sidecar session을 열어 두므로, files plugin이 watch를 유지하고 더는 `watch requires a root`를 보고하지 않는다.

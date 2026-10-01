@@ -1,4 +1,4 @@
-// 실제 TUI에서 제3지점 뒤 즉시 재시도한다. 실패한 뒤의 회복은 통과로 바꾸지 않는다.
+// 마우스 보고를 켠 fixture TUI 에서 제3지점 뒤 즉시 재시도한다. 실패한 뒤의 회복은 통과로 바꾸지 않는다.
 import assert from "node:assert/strict";
 import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -6,9 +6,10 @@ import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 import { APPS, open, fresh } from "../app.mjs";
-import { ensureTerminals, readScreenUntil, textLines } from "../terminal-screen.mjs";
+import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 import { frames, pixel, readFrame } from "../frame.mjs";
-import { assertTuiGesture } from "../tui-drag-measurement.mjs";
+import { assertTuiGesture, gestureDom } from "../tui-drag-measurement.mjs";
+import { HEADER_WORD, LAUNCH, PROMPT } from "../fixture-tui.mjs";
 import { bringFront, click, post, requireTrusted, screenCenter } from "./hid.mjs";
 
 const COLORS_DIFFER = (a, b) => a.some((channel, index) => Math.abs(channel - b[index]) > 16);
@@ -19,10 +20,10 @@ const cellsIn = (frame, region, session, row, count) => Array.from({ length: cou
     Math.round((region.frame.y + (row + 0.12) * session.cellHeight) * frame.scale)));
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: actual TUI drag survives third-point clicks for 60 uninterrupted cycles`, { timeout: 900000 }, async (t) => {
+  test(`${app.name}: a fixture TUI drag survives third-point clicks in three cycles`, { timeout: 180000 }, async (t) => {
     requireTrusted();
     assert.ok([realpathSync(tmpdir()), realpathSync("/tmp")].includes(realpathSync(dirname(app.configDir))) &&
-      basename(app.configDir).startsWith("soksak-check-"), "TUI fixture requires a disposable config directory");
+      basename(app.configDir).startsWith("soksak-check-"), "the fixture TUI check requires a disposable config directory");
     const s = await open(t, app);
     assert.ok(s, "the matching host bundle must be running");
     await fresh(s);
@@ -32,25 +33,13 @@ for (const app of Object.values(APPS)) {
     const center = await bringFront(s, app, view);
     const origin = { x: center.x - view.width / 2, y: center.y - view.height / 2 };
     const point = (col, line) => ({ x: origin.x + col * session.cellWidth, y: origin.y + (line + 0.5) * session.cellHeight });
-    await s.run("terminal.input", { bytes: "tui-program\r" }, surface);
-    const lines = await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("Ask TUI")), "TUI prompt did not appear");
-    // TUI 는 사용 중 버전보다 새 릴리스가 있으면 시작할 때 갱신 모달을 프롬프트 뒤에 비동기로
-    // 띄운다. 모달이 입력을 소유하는 동안 transcript 포인터 제스처가 설계상 죽으므로, 모달이
-    // 안내하는 esc 로 닫고 닫힘을 확인한다. 유한 시간 안에 모달이 오지 않으면 그대로 진행한다.
-    try {
-      await s.until("terminal.screen", (rows) => textLines({ lines: rows }).some((line) => line.includes("Update available")),
-        "no TUI update notice appeared", { surface, timeout: 4000 });
-      await s.run("terminal.input", { bytes: "\x1b" }, surface);
-      await readScreenUntil(s, surface, (rows) => !rows.some((line) => line.includes("Update available")),
-        "TUI update notice did not close");
-    } catch (error) {
-      if (!String(error).includes("no TUI update notice appeared")) throw error;
-    }
-    const row = lines.findIndex((line) => line.includes("TUI header"));
-    assert.ok(row >= 0, "TUI output header is missing");
-    const text = "header";
+    await s.run("terminal.input", { bytes: LAUNCH }, surface);
+    const lines = await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes(PROMPT)), "the fixture TUI prompt did not appear");
+    const row = lines.findIndex((line) => line.includes(HEADER_WORD));
+    assert.ok(row >= 0, "the fixture TUI header is missing");
+    const text = HEADER_WORD;
     const column = lines[row].indexOf(text);
-    const promptRow = lines.findIndex((line) => line.includes("Ask TUI"));
+    const promptRow = lines.findIndex((line) => line.includes(PROMPT));
     const from = point(column + 0.2, row);
     const to = point(column + text.length + 0.2, row);
     const thirds = [point(18, promptRow), point(column + text.length + 5, row), point(35, Math.floor((row + promptRow) / 2))];
@@ -62,7 +51,7 @@ for (const app of Object.values(APPS)) {
     const region = (await s.get("host.window")).regions.find((entry) => entry.surface === surface && entry.name === "view");
     assert.ok(region, "terminal native region is missing");
     const evidence = { app: app.name, binarySha256: createHash("sha256").update(readFileSync(app.binary)).digest("hex"),
-      endpoint: JSON.parse(readFileSync(join(app.configDir, "endpoint.json"), "utf8")), tui: lines[row], surface, cycles: [] };
+      endpoint: JSON.parse(readFileSync(join(app.configDir, "endpoint.json"), "utf8")), header: lines[row], surface, cycles: [] };
     delete evidence.endpoint.token;
     const evidencePath = join(tmpdir(), `soksak-tui-drag-${app.name}.json`);
     t.after(() => { writeFileSync(evidencePath, JSON.stringify(evidence, null, 2)); t.diagnostic(`evidence: ${evidencePath}`); });
@@ -116,7 +105,7 @@ for (const app of Object.values(APPS)) {
           const selectionWaitStarted = performance.now();
           try {
             await s.until("terminal.screen", (lines) => textCells.every((col) => lines[row]?.[col]?.inverse === true),
-              `TUI selection was not presented within ${SELECTION_SETTLE_MS}ms of the PTY mouse-up`,
+              `the fixture TUI selection was not presented within ${SELECTION_SETTLE_MS}ms of the PTY mouse-up`,
               { surface, timeout: SELECTION_SETTLE_MS });
           } catch (error) {
             const detail = error.message?.split(" (status ")[0] ?? String(error);
@@ -149,7 +138,7 @@ for (const app of Object.values(APPS)) {
         const selectedCells = textCells.flatMap((col) => screen[row]?.[col]?.inverse === true ? [`${row}:${col}`] : []);
         const selectionByFrame = samples.map((sample) => ({ time: sample.time,
           selectedCells: textCells.flatMap((col) => COLORS_DIFFER(sample.colors[col], baseline[col]) ? [col] : []) }));
-        const dom = trace.entries.filter((entry) => entry.kind === "pointer-dom");
+        const dom = gestureDom(trace.entries);
         const pointerStart = { x: region.frame.x + from.x - origin.x, y: region.frame.y + from.y - origin.y };
         const pointerEnd = { x: region.frame.x + to.x - origin.x, y: region.frame.y + to.y - origin.y };
         return {
@@ -173,9 +162,9 @@ for (const app of Object.values(APPS)) {
     };
 
     const failures = [];
-    const stepCounts = DIAGNOSE_THIRD_POINTS ? [30] : [30, 90];
-    const repeats = DIAGNOSE_THIRD_POINTS ? 1 : 10;
-    for (const steps of stepCounts) for (let third = 0; third < thirds.length; third++) for (let repeat = 0; repeat < repeats; repeat++) {
+    // 제3지점 세 영역을 한 번씩 거치고 가운데 주기는 느린 drag 로 한다. 간헐 실패의 반복은 repeat target 으로 한다.
+    const plan = [{ third: 0, steps: 30 }, { third: 1, steps: 90 }, { third: 2, steps: 30 }];
+    for (const [repeat, { third, steps }] of plan.entries()) {
       const cycle = { steps, third, repeat, first: await measure(steps, { waitForSelection: true }) };
       click(thirds[third].x, thirds[third].y);
       cycle.screenAfterThird = await screenRow();
@@ -214,7 +203,7 @@ for (const app of Object.values(APPS)) {
         if (!DIAGNOSE_THIRD_POINTS) throw failure;
         t.diagnostic(`${app.name} diagnostic third=${third} failed ${cycle.failedPhases.join("+")}; focus=${cycle.focusSettledState ? "settled" : "unsettled"}; recovery=${cycle.recovered}`);
       }
-      if (!DIAGNOSE_THIRD_POINTS) t.diagnostic(`${app.name} cycle ${evidence.cycles.length}/60 passed`);
+      if (!DIAGNOSE_THIRD_POINTS) t.diagnostic(`${app.name} cycle ${evidence.cycles.length}/${plan.length} passed`);
     }
     if (failures.length) assert.equal(failures.length, 0,
       `${failures.length}/${evidence.cycles.length} diagnostic cycles failed; each failure phase and complete evidence are retained`);

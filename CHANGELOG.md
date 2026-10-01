@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-35: real-input TUI checks run an owned fixture TUI that enables mouse reporting and draws its own selection, and the drag check runs three cycles.
+
 - G1.4-36: window checks order recorded frames by frame number, so recordings after frame 9999 are judged on their last frame.
 
 - G1.4-34: the Tauri host keeps plugin state sidecar sessions open when it syncs surfaces, so the files plugin keeps its watch and no longer reports `watch requires a root`.

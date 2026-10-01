@@ -60,3 +60,14 @@ export function assertTuiCycle({ first, direct }) {
   assertTuiGesture(first);
   assertTuiGesture(direct);
 }
+
+/**
+ * 기록 항목 중 이 제스처의 DOM 포인터 사건. 검사는 앞 클릭을 보낸 직후 기록을 시작하므로, 그 클릭의 pointerup 이 기록
+ * 앞부분에 들어올 수 있다. 제스처는 첫 pointerdown 에서 시작하므로 그 앞 사건은 앞 입력의 것이다. pointerdown 이 없으면
+ * 모든 사건을 돌려주어 판정이 빠진 down 을 보고하게 한다.
+ */
+export function gestureDom(entries) {
+  const dom = entries.filter((entry) => entry.kind === "pointer-dom");
+  const down = dom.findIndex((entry) => entry.type === "pointerdown");
+  return down < 0 ? dom : dom.slice(down);
+}

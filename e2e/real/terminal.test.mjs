@@ -10,6 +10,7 @@ import { APPS, fresh, open } from "../app.mjs";
 import { frames, pixel, readFrame } from "../frame.mjs";
 import { cellBackgrounds, ensureTerminals, isColor, readScreenUntil, selectionBackground } from "../terminal-screen.mjs";
 import { pasteboardText, writePasteboard } from "../pasteboard.mjs";
+import { LAUNCH, PROMPT } from "../fixture-tui.mjs";
 import { activateFinder, appPid, bringFront, click, closeFinderWindow, dragPath, finderItemCenter, frontWindowAt, key, KEYS,
   dragPasteboard, openFinderWindow, post, postWithCursorSamples, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
 
@@ -747,7 +748,7 @@ for (const app of Object.values(APPS)) {
       const lines = await readScreenUntil(s, surface, (screen) => screen.some((line) => line.startsWith(`R${id}:`)), `${id} did not finish`);
       return Buffer.from(lines.find((line) => line.startsWith(`R${id}:`)).slice(`R${id}:`.length).trim(), "hex").toString("latin1");
     };
-    // TUI는 ?1003을 사용한다: Shift를 누르면 motion 보고는 활성 상태로 남지만 텍스트 선택은 Shift가 소유한다.
+    // 전체 화면 TUI 는 흔히 ?1003 을 쓴다: Shift를 누르면 motion 보고는 활성 상태로 남지만 텍스트 선택은 Shift가 소유한다.
     await read("SHIFT1003", "\\033[?1003h\\033[?1006h", 1, "\\033[?1003l\\033[?1006l");
     const before = (await s.get("terminal.session", surface)).selectionReleases;
     const start = cellPoint(origin, session, 0, row);
@@ -800,11 +801,11 @@ for (const app of Object.values(APPS)) {
     await s.run("terminal.input", { bytes: "\x1b[?1003l\x1b[?1006l" }, surface);
   });
 
-  test(`${app.name}: rebuilt TUI plain drag reaches the PTY`, { timeout: 90000 }, async (t) => {
+  test(`${app.name}: a fixture TUI plain drag reaches the PTY`, { timeout: 90000 }, async (t) => {
     const { s, surface } = await prepare(t, app, "TUI");
-    await s.run("terminal.input", { bytes: "tui-program\r" }, surface);
-    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("Ask TUI")),
-      "the rebuilt TUI prompt did not appear");
+    await s.run("terminal.input", { bytes: LAUNCH }, surface);
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes(PROMPT)),
+      "the fixture TUI prompt did not appear");
     const session = await s.get("terminal.session", surface);
     const view = await s.rect("terminal.view", undefined, surface);
     const center = await bringFront(s, app, view);
@@ -814,27 +815,27 @@ for (const app of Object.values(APPS)) {
     const to = { x: origin.x + session.cellWidth * 5, y: from.y };
     dragPath(from, to, 8);
     await s.until("terminal.session", (value) => value.mouse.phase === "up",
-      "the TUI drag did not reach the terminal release", { surface });
+      "the fixture TUI drag did not reach the terminal release", { surface });
     const result = await s.get("terminal.session", surface);
     const window = await s.get("host.window");
     assert.equal(window.active, true);
     assert.equal(window.key, true);
-    assert.equal(result.mouse.reported, true, "TUI did not report the plain drag");
-    assert.equal(result.mouse.written, true, "TUI did not write the plain drag to the PTY");
-    assert.match(result.mouse.bytes ?? "", /^[A-Za-z0-9+/]+=*$/, "TUI PTY bytes were not recorded");
+    assert.equal(result.mouse.reported, true, "the fixture TUI did not report the plain drag");
+    assert.equal(result.mouse.written, true, "the fixture TUI did not write the plain drag to the PTY");
+    assert.match(result.mouse.bytes ?? "", /^[A-Za-z0-9+/]+=*$/, "the fixture TUI PTY bytes were not recorded");
     assert.equal(result.error, undefined);
   });
 
-  test(`${app.name}: rebuilt TUI Shift drag selects visible prompt text`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: a fixture TUI Shift drag selects visible prompt text`, { timeout: 120000 }, async (t) => {
     const { s, surface } = await prepare(t, app, "TUISHIFT");
-    await s.run("terminal.input", { bytes: "tui-program\r" }, surface);
-    const lines = await readScreenUntil(s, surface, (value) => value.some((line) => line.includes("Ask TUI")),
-      "the rebuilt TUI prompt did not appear for Shift selection");
-    const row = lines.findIndex((line) => line.includes("Ask TUI"));
+    await s.run("terminal.input", { bytes: LAUNCH }, surface);
+    const lines = await readScreenUntil(s, surface, (value) => value.some((line) => line.includes(PROMPT)),
+      "the fixture TUI prompt did not appear for Shift selection");
+    const row = lines.findIndex((line) => line.includes(PROMPT));
     const line = lines[row];
-    const startColumn = line.indexOf("Ask TUI");
-    assert.ok(startColumn >= 0, `TUI prompt text was not found in ${JSON.stringify(line)}`);
-    const endColumn = startColumn + "Ask TUI".length - 1;
+    const startColumn = line.indexOf(PROMPT);
+    assert.ok(startColumn >= 0, `the fixture TUI prompt text was not found in ${JSON.stringify(line)}`);
+    const endColumn = startColumn + PROMPT.length - 1;
     const session = await s.get("terminal.session", surface);
     const view = await s.rect("terminal.view", undefined, surface);
     const center = await bringFront(s, app, view);
@@ -855,19 +856,19 @@ for (const app of Object.values(APPS)) {
       { type: "up", ...endPoint, modifiers: ["shift"] },
     ]);
     await s.until("terminal.session", (value) => value.selectionReleases === before + 1,
-      "the TUI Shift drag did not release a selection", { surface });
+      "the fixture TUI Shift drag did not release a selection", { surface });
     await s.until("terminal.session", (value) => value.error === undefined,
-      "the TUI Shift drag reported a terminal error", { surface });
-    assert.equal(pasteboardText(), "Ask TUI", `the TUI Shift drag copied ${JSON.stringify(pasteboardText())}`);
+      "the fixture TUI Shift drag reported a terminal error", { surface });
+    assert.equal(pasteboardText(), PROMPT, `the fixture TUI Shift drag copied ${JSON.stringify(pasteboardText())}`);
   });
 
-  test(`${app.name}: TUI drag repeats after a third point and card focus round trip`, { timeout: 180000 }, async (t) => {
+  test(`${app.name}: a fixture TUI drag repeats after a third point and card focus round trip`, { timeout: 180000 }, async (t) => {
     const { s, surface } = await prepare(t, app, "TUIROUNDTRIP");
-    await s.run("terminal.input", { bytes: "tui-program\r" }, surface);
-    const lines = await readScreenUntil(s, surface, (value) => value.some((line) => line.includes("Ask TUI")),
-      "the rebuilt TUI prompt did not appear for the round-trip drag");
-    const row = lines.findIndex((line) => line.includes("Ask TUI"));
-    const startColumn = lines[row].indexOf("Ask TUI");
+    await s.run("terminal.input", { bytes: LAUNCH }, surface);
+    const lines = await readScreenUntil(s, surface, (value) => value.some((line) => line.includes(PROMPT)),
+      "the fixture TUI prompt did not appear for the round-trip drag");
+    const row = lines.findIndex((line) => line.includes(PROMPT));
+    const startColumn = lines[row].indexOf(PROMPT);
     const session = await s.get("terminal.session", surface);
     const view = await s.rect("terminal.view", undefined, surface);
     const center = await bringFront(s, app, view);
@@ -904,10 +905,10 @@ for (const app of Object.values(APPS)) {
           `round-trip ${attempt + 1}: other card did not focus`);
         await s.run("core.card.focus", { card: owner.id });
         await s.until("core.grid", (value) => value.cards.some((item) => item.id === owner.id && item.focused),
-          `round-trip ${attempt + 1}: TUI card did not refocus`);
+          `round-trip ${attempt + 1}: the fixture TUI card did not refocus`);
         click(from.x, from.y);
         await s.until("host.window", (value) => value.regions.some((region) => region.surface === surface && region.focused),
-          `round-trip ${attempt + 1}: TUI input did not regain native focus`);
+          `round-trip ${attempt + 1}: the fixture TUI input did not regain native focus`);
         dragPath(from, to, 12);
         await s.until("terminal.session", (value) => value.mouse.phase === "up" || value.error !== undefined,
           `round-trip ${attempt + 1}: card retry did not finish`, { surface });

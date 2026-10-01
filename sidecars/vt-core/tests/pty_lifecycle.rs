@@ -169,7 +169,7 @@ async fn three_real_sessions_reconnect_with_same_pid_and_retained_output() {
 }
 
 // 마스터가 쓴 바이트 중 자식이 아직 읽지 않은 양의 계약. 읽지 않는 자식에서는 쓴 만큼 남는다.
-// 측정 대상 프로그램(TUI)처럼 자식이 raw 모드를 켠 뒤에 쓴다. canonical 모드에서는 줄이
+// 마우스 보고를 쓰는 전체 화면 프로그램처럼 자식이 raw 모드를 켠 뒤에 쓴다. canonical 모드에서는 줄이
 // 완성되기 전 바이트가 줄 조립 버퍼에 남아 큐에 반영되지 않는다.
 #[tokio::test]
 async fn pty_measurement_counts_master_written_bytes_a_non_reading_child_has_not_read() {
@@ -412,7 +412,7 @@ async fn child_reads_exact_bytes_written_through_the_production_path() {
         ready.is_ok(),
         "the receiving child never reported READY; output so far: {seen:?}"
     );
-    // 실제 TUI 드래그 보고와 같은 SGR 바이트 형태를 쓴다. 행 끝 newline 이 cat 의 읽기를 끝낸다.
+    // ?1003 프로그램이 받는 드래그 보고와 같은 SGR 바이트 형태를 쓴다. 행 끝 newline 이 cat 의 읽기를 끝낸다.
     let bytes = b"\x1b[<0;5;2M\x1b[<32;6;2m\x1b[<35;7;2m\x1b[<0;7;2m\n";
     service
         .write(&session, bytes)
