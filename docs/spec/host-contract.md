@@ -340,3 +340,6 @@ Items:
 | `cli.error.reports-endpoint-code` | An endpoint error exits with status 1 and prints `sok: <message> (<code>)`. | both |
 | `cli.status.watch-prints-value-and-changes` | `status --watch` prints the current value and then each change of the same status as one compact JSON line, and ignores changes of other statuses. | both |
 | `cli.config-dir.default-uses-application-identifier` | Without `--config-dir` the command uses `<user configuration directory>/<application identifier>`. | both |
+| `cli.command.flags-from-schema` | A declared command runs through `command.run` with the window, the surface and parameters converted from its flags by the declared schema: text, numbers, integers, booleans, enum values, `null` for a nullable type, JSON objects and arrays, and a value after `=` that starts with `--`; `--params` gives the whole object. | both |
+| `cli.command.rejects-undeclared-or-invalid-values` | An undeclared flag, a value that does not match its schema, a flag without its value, a boolean followed by a value, `--params` with parameter flags, and an undeclared command exit with status 2 before `command.run` is sent. | both |
+| `cli.commands.lists-declared-commands` | `sok commands` prints the `commands` list of `exposure.list` in the order the application declares them. | both |

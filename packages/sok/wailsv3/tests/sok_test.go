@@ -272,3 +272,84 @@ func TestTheDefaultConfigurationDirectoryIsTheApplications(t *testing.T) {
 		t.Fatalf("code %d stderr %q want %q", code, stderr, want)
 	}
 }
+
+// declared 는 선언된 command 하나를 보고하는 가짜 엔드포인트다. exposure.list 는 그 command 를, command.run 은 받은
+// 매개변수를 돌려준다.
+func declared(t *testing.T) *fakeEndpoint {
+	exposures := `{"status":[],"commands":[{"name":"fixture.do","description":"d","params":{"type":"object","properties":{` +
+		`"text":{"type":"string"},"count":{"type":"number"},"whole":{"type":"integer"},"flag":{"type":"boolean"},` +
+		`"choice":{"enum":["one","two"]},"maybe":{"type":["string","null"]},"object":{"type":"object"},"list":{"type":"array"}}},` +
+		`"result":{"type":"object"}},{"name":"fixture.none","description":"n","params":{"type":"object","properties":{}}}],"dom":[]}`
+	return startEndpoint(t, func(method string, params map[string]any) answer {
+		switch method {
+		case "windows.list":
+			return answer{result: oneWindow}
+		case "exposure.list":
+			return answer{result: exposures}
+		case "command.run":
+			out, _ := json.Marshal(params)
+			return answer{result: string(out)}
+		}
+		return answer{code: -32601, message: "unexpected " + method}
+	})
+}
+
+// contract: cli.command.flags-from-schema
+func TestDeclaredCommandFlagsFollowTheSchema(t *testing.T) {
+	fake := declared(t)
+	code, stdout, stderr := run("fixture.do", "--text=--x", "--count=1.5", "--whole", "3", "--flag", "--choice", "two",
+		"--maybe", "null", "--object", `{"a":1}`, "--list", "[1]", "--surface", "tab-1", "--config-dir", fake.configDir)
+	if code != 0 {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	sent, _ := json.Marshal(fake.last())
+	want := `{"name":"fixture.do","params":{"choice":"two","count":1.5,"flag":true,"list":[1],"maybe":null,"object":{"a":1},"text":"--x","whole":3},"surface":"tab-1","window":"main"}`
+	if string(sent) != want || !strings.HasPrefix(stdout, "{\n  \"name\": \"fixture.do\"") {
+		t.Fatalf("sent %s stdout %q", sent, stdout)
+	}
+	code, _, stderr = run("fixture.do", "--params", `{"text":"x"}`, "--config-dir", fake.configDir)
+	sent, _ = json.Marshal(fake.last())
+	if code != 0 || string(sent) != `{"name":"fixture.do","params":{"text":"x"},"window":"main"}` {
+		t.Fatalf("code %d stderr %q sent %s", code, stderr, sent)
+	}
+}
+
+// contract: cli.command.rejects-undeclared-or-invalid-values
+func TestDeclaredCommandRejectsBadFlagsBeforeSending(t *testing.T) {
+	fake := declared(t)
+	cases := map[string][]string{
+		"sok: --nope is not a parameter of fixture.do; its parameters are choice, count, flag, list, maybe, object, text, whole\n": {"fixture.do", "--nope", "1"},
+		"sok: --choice must be one of one, two\n": {"fixture.do", "--choice", "three"},
+		"sok: --whole must be integer\n":          {"fixture.do", "--whole", "1.5"},
+		"sok: --count must be number\n":           {"fixture.do", "--count", "x"},
+		"sok: --object must be object\n":          {"fixture.do", "--object", "[1]"},
+		"sok: unexpected argument yes\n":          {"fixture.do", "--flag", "yes"},
+		"sok: --text needs a value\n":             {"fixture.do", "--text"},
+		"sok: --params gives the whole parameter object and cannot be combined with parameter flags\n": {"fixture.do", "--params", "{}", "--text", "x"},
+		"sok: fixture.gone is not a declared command of window main; sok commands lists them\n":        {"fixture.gone"},
+	}
+	for want, args := range cases {
+		code, stdout, stderr := run(append(args, "--config-dir", fake.configDir)...)
+		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, want) {
+			t.Fatalf("%v: code %d stdout %q stderr %q", args, code, stdout, stderr)
+		}
+	}
+	for _, method := range fake.methods() {
+		if method == "command.run" {
+			t.Fatalf("a rejected command was sent: %v", fake.methods())
+		}
+	}
+}
+
+// contract: cli.commands.lists-declared-commands
+func TestCommandsListsTheDeclaredCommandsInOrder(t *testing.T) {
+	fake := declared(t)
+	code, stdout, stderr := run("commands", "--config-dir", fake.configDir)
+	var commands []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &commands); err != nil || code != 0 {
+		t.Fatalf("code %d stderr %q stdout %q", code, stderr, stdout)
+	}
+	if len(commands) != 2 || commands[0]["name"] != "fixture.do" || commands[1]["name"] != "fixture.none" {
+		t.Fatalf("commands %v", commands)
+	}
+}

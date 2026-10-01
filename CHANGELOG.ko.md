@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-8-2: `sok <command>`가 core나 plugin이 선언한 모든 command를 선언된 schema로 바꾼 매개변수 flag와 함께 실행하며, `sok commands`가 이를 나열한다.
+
 - R1-8-1: Native command line `sok`이 Go(`packages/sok/wailsv3`)와 Rust(`packages/sok/tauriv2`)로 한 계약에 따라 endpoint 명령 `windows`, `exposures`, `status`, `dom`, `input`, `capture`를 실행한다.
 
 - R1-8: Command line `sok`의 계약을 정했다. 명령, 창 선택, 선언된 schema에서 나온 매개변수 flag, 출력, 각 bundle의 Rust와 Go 구현이다.

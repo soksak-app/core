@@ -22,6 +22,8 @@ import (
 const Usage = `usage: sok <command> [options]
 
 commands:
+  <declared command> [window] [--surface S] [--<parameter> VALUE]... [--params JSON]
+  commands [window]
   windows
   exposures [window]
   status NAME [window] [--surface S] [--watch]
@@ -149,6 +151,8 @@ type request struct {
 	method string
 	params map[string]any
 	watch  bool
+	// field 는 결과 객체에서 출력할 필드다. 비어 있으면 결과 전체를 출력한다.
+	field string
 }
 
 func plan(a arguments, window func() (string, error)) (request, error) {
@@ -166,6 +170,10 @@ func plan(a arguments, window func() (string, error)) (request, error) {
 	switch command {
 	case "windows":
 		return request{method: "windows.list"}, nil
+	case "commands":
+		return withWindow(func(w string) (request, error) {
+			return request{method: "exposure.list", params: compact("window", w), field: "commands"}, nil
+		})
 	case "exposures":
 		return withWindow(func(w string) (request, error) {
 			return request{method: "exposure.list", params: compact("window", w)}, nil
@@ -454,7 +462,28 @@ func Run(args []string, stdout, stderr io.Writer, identifier string) int {
 	return 1
 }
 
+// connectTo 는 --config-dir 이나 이 애플리케이션의 설정 폴더에서 엔드포인트를 찾아 연결한다.
+func connectTo(values map[string]string, identifier string) (*Client, error) {
+	configDir, ok := values["config-dir"]
+	if !ok {
+		base, err := os.UserConfigDir()
+		if err != nil {
+			return nil, fmt.Errorf("the default configuration directory is unknown: %w", err)
+		}
+		configDir = filepath.Join(base, identifier)
+	}
+	endpoint, err := ReadEndpoint(configDir)
+	if err != nil {
+		return nil, err
+	}
+	return Dial(endpoint)
+}
+
 func run(args []string, stdout io.Writer, identifier string) error {
+	// 점이 있는 명령 단어는 선언된 command 다(docs/spec/cli.md).
+	if strings.Contains(commandWord(args), ".") {
+		return runCommand(args, stdout, identifier)
+	}
 	a, err := parse(args)
 	if err != nil {
 		return err
@@ -463,24 +492,13 @@ func run(args []string, stdout io.Writer, identifier string) error {
 		_, err := fmt.Fprintln(stdout, Usage)
 		return err
 	}
-	configDir, ok := a.values["config-dir"]
-	if !ok {
-		base, err := os.UserConfigDir()
-		if err != nil {
-			return fmt.Errorf("the default configuration directory is unknown: %w", err)
-		}
-		configDir = filepath.Join(base, identifier)
-	}
 	var client *Client
 	connect := func() (*Client, error) {
 		if client != nil {
 			return client, nil
 		}
-		endpoint, err := ReadEndpoint(configDir)
-		if err != nil {
-			return nil, err
-		}
-		client, err = Dial(endpoint)
+		var err error
+		client, err = connectTo(a.values, identifier)
 		return client, err
 	}
 	defer func() {
@@ -512,6 +530,13 @@ func run(args []string, stdout io.Writer, identifier string) error {
 	result, err := c.Request(req.method, params)
 	if err != nil {
 		return err
+	}
+	if req.field != "" {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(result, &fields); err != nil || fields[req.field] == nil {
+			return fmt.Errorf("%s returned no %s", req.method, req.field)
+		}
+		result = fields[req.field]
 	}
 	out, err := indent(result)
 	if err != nil {

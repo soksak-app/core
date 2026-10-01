@@ -9,7 +9,7 @@
 | 명령 | 동작 |
 | --- | --- |
 | `sok <command> [window] [--surface <id>] [--<parameter> <value>]... [--params <json>]` | 실행 중인 애플리케이션에서 core나 plugin이 선언한 command를 [endpoint](endpoint.ko.md) method `command.run`으로 실행한다 |
-| `sok commands [window]` | 선언된 command를 매개변수 schema와 함께 나열한다 |
+| `sok commands [window]` | `exposure.list`의 `commands` 목록을 출력한다. 선언된 command마다 설명, 매개변수 schema, 결과 schema다 |
 | `sok windows` | 실행 중인 애플리케이션의 창을 나열한다 |
 | `sok exposures [window]` | 선언된 모든 status, command, DOM 항목을 나열한다 |
 | `sok status <name> [window] [--surface <id>] [--watch]` | Status 값을 출력한다. `--watch`는 값과 이후 바뀔 때마다 JSON 한 줄씩 출력한다 |
@@ -31,7 +31,7 @@
 
 ## 매개변수
 
-선언된 command의 flag는 선언된 매개변수 schema에서 나온다. 문자열 매개변수는 텍스트를, 숫자 매개변수는 유한한 숫자를, enum 매개변수는 그 값 중 하나를 받으며, boolean 매개변수는 참이면 `--<name>`, 거짓이면 `--<name>=false`다. 객체나 배열 매개변수는 JSON 텍스트를 받는다. `--params <json>`은 매개변수 객체 전체를 주며 매개변수 flag와 함께 쓸 수 없다. Schema가 선언하지 않은 flag나 schema와 맞지 않는 값은 command를 보내기 전에 실패한다.
+선언된 command의 flag는 고른 창에 대해 `exposure.list`가 보고하는 매개변수 schema에서 나온다. Surface가 등록하는 command는 `--surface`도 필요하다. 문자열 매개변수는 텍스트를, 숫자 매개변수는 유한한 숫자를, 정수 매개변수는 정수를, enum 매개변수는 그 값 중 하나를 받으며, boolean 매개변수는 참이면 `--<name>`, 거짓이면 `--<name>=false`다. 객체나 배열 매개변수는 JSON 텍스트를 받는다. Type이 목록인 매개변수는 나열된 type 중 하나를 받으며, 목록에 `null`이 있으면 텍스트 `null`은 null이다. Flag는 값을 `=` 뒤나 다음 인자로 받으므로, `--`로 시작하는 값은 `=` 뒤에 준다. `--params <json>`은 매개변수 객체 전체를 주며 매개변수 flag와 함께 쓸 수 없다. Schema가 선언하지 않은 flag나 schema와 맞지 않는 값은 command를 보내기 전에 실패한다.
 
 ## 출력과 종료 상태
 

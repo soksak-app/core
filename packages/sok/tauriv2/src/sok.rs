@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use serde_json::value::RawValue;
 use serde_json::{Map, Value};
 
+mod command;
 pub mod endpoint;
 #[path = "platform/platform.rs"]
 pub mod platform;
@@ -18,6 +19,8 @@ use endpoint::{Client, Failure};
 pub const USAGE: &str = "usage: sok <command> [options]
 
 commands:
+  <declared command> [window] [--surface S] [--<parameter> VALUE]... [--params JSON]
+  commands [window]
   windows
   exposures [window]
   status NAME [window] [--surface S] [--watch]
@@ -190,6 +193,8 @@ struct Request {
     method: &'static str,
     params: Option<Map<String, Value>>,
     watch: bool,
+    /// 결과 객체에서 출력할 필드. None 이면 결과 전체를 출력한다.
+    field: Option<&'static str>,
 }
 
 fn plan(
@@ -203,16 +208,25 @@ fn plan(
             method: "windows.list",
             params: None,
             watch: false,
+            field: None,
+        }),
+        "commands" => Ok(Request {
+            method: "exposure.list",
+            params: Some(compact(vec![("window", text(window()?))])),
+            watch: false,
+            field: Some("commands"),
         }),
         "exposures" => Ok(Request {
             method: "exposure.list",
             params: Some(compact(vec![("window", text(window()?))])),
             watch: false,
+            field: None,
         }),
         "capture" => Ok(Request {
             method: "diagnostics.capture.still",
             params: Some(compact(vec![("window", text(window()?))])),
             watch: false,
+            field: None,
         }),
         "status" => {
             let name = a.positional(1, "NAME")?;
@@ -226,6 +240,7 @@ fn plan(
                     ("surface", a.optional("surface")),
                 ])),
                 watch,
+                field: None,
             })
         }
         "dom" => {
@@ -244,6 +259,7 @@ fn plan(
                     method: "dom.rect",
                     params: Some(compact(base)),
                     watch: false,
+                    field: None,
                 }),
                 "click" => {
                     base.push(("action", text("click".into())));
@@ -251,6 +267,7 @@ fn plan(
                         method: "dom.act",
                         params: Some(compact(base)),
                         watch: false,
+                        field: None,
                     })
                 }
                 "input" => {
@@ -261,6 +278,7 @@ fn plan(
                         method: "dom.act",
                         params: Some(compact(base)),
                         watch: false,
+                        field: None,
                     })
                 }
                 "dispatch" => {
@@ -276,6 +294,7 @@ fn plan(
                         method: "dom.act",
                         params: Some(compact(base)),
                         watch: false,
+                        field: None,
                     })
                 }
                 _ => Err(usage!("unknown dom action: {action}")),
@@ -313,6 +332,7 @@ fn plan(
                             ("activate", activate),
                         ])),
                         watch: false,
+                        field: None,
                     })
                 }
                 "key" => {
@@ -337,6 +357,7 @@ fn plan(
                             ("modifiers", modifiers),
                         ])),
                         watch: false,
+                        field: None,
                     })
                 }
                 _ => Err(usage!("unknown input kind: {kind}")),
@@ -629,23 +650,32 @@ pub fn run(
     }
 }
 
-fn execute(args: &[String], stdout: &mut dyn Write, identifier: &str) -> Result<(), Error> {
-    let a = parse(args)?;
-    if a.flag("help") {
-        writeln!(stdout, "{USAGE}").map_err(|error| error.to_string())?;
-        return Ok(());
-    }
-    let config_dir = match a.values.get("config-dir") {
+/// --config-dir 이나 이 애플리케이션의 설정 폴더에서 엔드포인트를 찾아 연결한다.
+fn connect_to(values: &HashMap<String, String>, identifier: &str) -> Result<Client, Error> {
+    let config_dir = match values.get("config-dir") {
         Some(dir) => PathBuf::from(dir),
         None => user_config_dir()
             .map_err(|error| format!("the default configuration directory is unknown: {error}"))?
             .join(identifier),
     };
+    let endpoint = endpoint::read_endpoint(Path::new(&config_dir))?;
+    Ok(Client::dial(&endpoint)?)
+}
+
+fn execute(args: &[String], stdout: &mut dyn Write, identifier: &str) -> Result<(), Error> {
+    // 점이 있는 명령 단어는 선언된 command 다(docs/spec/cli.md).
+    if command::command_word(args).is_some_and(|word| word.contains('.')) {
+        return command::run_command(args, stdout, identifier);
+    }
+    let a = parse(args)?;
+    if a.flag("help") {
+        writeln!(stdout, "{USAGE}").map_err(|error| error.to_string())?;
+        return Ok(());
+    }
     let mut client: Option<Client> = None;
     let connect = |client: &mut Option<Client>| -> Result<(), Error> {
         if client.is_none() {
-            let endpoint = endpoint::read_endpoint(Path::new(&config_dir))?;
-            *client = Some(Client::dial(&endpoint)?);
+            *client = Some(connect_to(&a.values, identifier)?);
         }
         Ok(())
     };
@@ -661,11 +691,19 @@ fn execute(args: &[String], stdout: &mut dyn Write, identifier: &str) -> Result<
     if request.watch {
         return watch(client, request.params.expect("status has params"), stdout);
     }
-    let result = client.request(
+    let mut result = client.request(
         request.method,
         request.params.map(Value::Object),
         &mut no_notify,
     )?;
+    if let Some(field) = request.field {
+        let fields: HashMap<String, Box<RawValue>> = serde_json::from_str(&result)
+            .map_err(|_| format!("{} returned no {field}", request.method))?;
+        result = fields
+            .get(field)
+            .map(|value| value.get().to_string())
+            .ok_or_else(|| format!("{} returned no {field}", request.method))?;
+    }
     let out = indent(&result)?;
     stdout
         .write_all(out.as_bytes())

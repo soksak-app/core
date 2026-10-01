@@ -434,3 +434,116 @@ fn the_default_configuration_directory_is_the_applications() {
         )
     );
 }
+
+/// 선언된 command 하나를 보고하는 가짜 엔드포인트. exposure.list 는 그 command 를, command.run 은 받은 매개변수를
+/// 돌려준다.
+fn declared() -> Fake {
+    let exposures = concat!(
+        r#"{"status":[],"commands":[{"name":"fixture.do","description":"d","params":{"type":"object","properties":{"#,
+        r#""text":{"type":"string"},"count":{"type":"number"},"whole":{"type":"integer"},"flag":{"type":"boolean"},"#,
+        r#""choice":{"enum":["one","two"]},"maybe":{"type":["string","null"]},"object":{"type":"object"},"list":{"type":"array"}}},"#,
+        r#""result":{"type":"object"}},{"name":"fixture.none","description":"n","params":{"type":"object","properties":{}}}],"dom":[]}"#
+    );
+    start(move |method, params| match method {
+        "windows.list" => result(ONE_WINDOW),
+        "exposure.list" => result(exposures),
+        "command.run" => result(&params.to_string()),
+        _ => Answer {
+            code: -32601,
+            message: format!("unexpected {method}"),
+            ..Answer::default()
+        },
+    })
+}
+
+// contract: cli.command.flags-from-schema
+#[test]
+fn declared_command_flags_follow_the_schema() {
+    let fake = declared();
+    let dir = fake.dir();
+    let (code, stdout, stderr) = run(&[
+        "fixture.do",
+        "--text=--x",
+        "--count=1.5",
+        "--whole",
+        "3",
+        "--flag",
+        "--choice",
+        "two",
+        "--maybe",
+        "null",
+        "--object",
+        r#"{"a":1}"#,
+        "--list",
+        "[1]",
+        "--surface",
+        "tab-1",
+        "--config-dir",
+        &dir,
+    ]);
+    assert_eq!(code, 0, "{stderr}");
+    assert_eq!(
+        fake.last().to_string(),
+        r#"{"name":"fixture.do","params":{"choice":"two","count":1.5,"flag":true,"list":[1],"maybe":null,"object":{"a":1},"text":"--x","whole":3},"surface":"tab-1","window":"main"}"#
+    );
+    assert!(
+        stdout.starts_with("{\n  \"name\": \"fixture.do\""),
+        "{stdout}"
+    );
+    let (code, _, stderr) = run(&[
+        "fixture.do",
+        "--params",
+        r#"{"text":"x"}"#,
+        "--config-dir",
+        &dir,
+    ]);
+    assert_eq!(code, 0, "{stderr}");
+    assert_eq!(
+        fake.last().to_string(),
+        r#"{"name":"fixture.do","params":{"text":"x"},"window":"main"}"#
+    );
+}
+
+// contract: cli.command.rejects-undeclared-or-invalid-values
+#[test]
+fn declared_command_rejects_bad_flags_before_sending() {
+    let fake = declared();
+    let dir = fake.dir();
+    let cases: [(&str, &[&str]); 9] = [
+        ("sok: --nope is not a parameter of fixture.do; its parameters are choice, count, flag, list, maybe, object, text, whole\n", &["fixture.do", "--nope", "1"]),
+        ("sok: --choice must be one of one, two\n", &["fixture.do", "--choice", "three"]),
+        ("sok: --whole must be integer\n", &["fixture.do", "--whole", "1.5"]),
+        ("sok: --count must be number\n", &["fixture.do", "--count", "x"]),
+        ("sok: --object must be object\n", &["fixture.do", "--object", "[1]"]),
+        ("sok: unexpected argument yes\n", &["fixture.do", "--flag", "yes"]),
+        ("sok: --text needs a value\n", &["fixture.do", "--text"]),
+        ("sok: --params gives the whole parameter object and cannot be combined with parameter flags\n", &["fixture.do", "--params", "{}", "--text", "x"]),
+        ("sok: fixture.gone is not a declared command of window main; sok commands lists them\n", &["fixture.gone"]),
+    ];
+    for (want, args) in cases {
+        let mut all = args.to_vec();
+        all.extend(["--config-dir", &dir]);
+        let (code, stdout, stderr) = run(&all);
+        assert_eq!((code, stdout.as_str()), (2, ""), "{args:?}: {stderr}");
+        assert!(stderr.starts_with(want), "{args:?}: {stderr}");
+    }
+    assert!(
+        !fake.methods().iter().any(|method| method == "command.run"),
+        "a rejected command was sent: {:?}",
+        fake.methods()
+    );
+}
+
+// contract: cli.commands.lists-declared-commands
+#[test]
+fn commands_lists_the_declared_commands_in_order() {
+    let fake = declared();
+    let (code, stdout, stderr) = run(&["commands", "--config-dir", &fake.dir()]);
+    assert_eq!(code, 0, "{stderr}");
+    let commands: Vec<Value> = serde_json::from_str(&stdout).expect("a JSON list");
+    let names: Vec<&str> = commands
+        .iter()
+        .map(|command| command["name"].as_str().expect("name"))
+        .collect();
+    assert_eq!(names, ["fixture.do", "fixture.none"]);
+}

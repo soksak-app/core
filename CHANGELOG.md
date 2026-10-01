@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-8-2: `sok <command>` runs any command that core or a plugin declares, with parameter flags converted by the declared schema, and `sok commands` lists them.
+
 - R1-8-1: `sok`, the native command line, runs the endpoint commands `windows`, `exposures`, `status`, `dom`, `input` and `capture` in Go (`packages/sok/wailsv3`) and Rust (`packages/sok/tauriv2`) with one contract.
 
 - R1-8: the command line `sok` is specified: commands, window selection, parameter flags from declared schemas, output, and the Rust and Go implementations in each bundle.

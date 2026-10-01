@@ -9,7 +9,7 @@
 | Command | Action |
 | --- | --- |
 | `sok <command> [window] [--surface <id>] [--<parameter> <value>]... [--params <json>]` | Runs a command that core or a plugin declares in the running application, through the [endpoint](endpoint.md) method `command.run` |
-| `sok commands [window]` | Lists the declared commands with their parameter schemas |
+| `sok commands [window]` | Prints the `commands` list of `exposure.list`: each declared command with its description, parameter and result schemas |
 | `sok windows` | Lists the windows of the running application |
 | `sok exposures [window]` | Lists every declared status, command and DOM entry |
 | `sok status <name> [window] [--surface <id>] [--watch]` | Prints a status value; `--watch` prints the value and then each change, one JSON line each |
@@ -31,7 +31,7 @@ A declared command name contains a dot (`core.card.split`, `terminal.input`), so
 
 ## Parameters
 
-The flags of a declared command come from its declared parameter schema. A string parameter takes the text, a number parameter a finite number, an enum parameter one of its values, and a boolean parameter `--<name>` for true or `--<name>=false`. An object or array parameter takes JSON text. `--params <json>` gives the whole parameter object and cannot be combined with parameter flags. A flag that the schema does not declare, or a value that does not match it, fails before the command is sent.
+The flags of a declared command come from the parameter schema that `exposure.list` reports for the selected window; a command that a surface registers also needs `--surface`. A string parameter takes the text, a number parameter a finite number, an integer parameter a whole number, an enum parameter one of its values, and a boolean parameter `--<name>` for true or `--<name>=false`. An object or array parameter takes JSON text. A parameter whose type is a list accepts any of the listed types; the text `null` gives null when the list includes `null`. A flag takes its value after `=` or as the next argument, so a value that starts with `--` is given after `=`. `--params <json>` gives the whole parameter object and cannot be combined with parameter flags. A flag that the schema does not declare, or a value that does not match it, fails before the command is sent.
 
 ## Output and exit status
 
