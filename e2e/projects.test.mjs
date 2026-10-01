@@ -388,3 +388,62 @@ for (const app of Object.values(APPS)) {
     t.diagnostic("verified that unknown tabs and rails are dropped from a saved layout and its library preview");
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the first project opened from the library replies and replaces the library in the same window`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    for (const project of await s.get("core.projects")) await s.run("core.project.close", { id: project.id });
+    assert.equal(await s.get("core.project"), null, "the check did not start from the library");
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-first-open-")));
+    s.cleanup(() => rmSync(root, { recursive: true, force: true }));
+    s.cleanup(async () => {
+      for (const project of await s.get("core.projects")) {
+        if (project.root === root) await s.run("core.project.close", { id: project.id });
+      }
+      await s.run("core.projects.flush");
+    });
+
+    const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
+    assert.equal(opened.root, root);
+    await s.windows(1, "the first project opened another window instead of replacing the library");
+    await s.until("core.project", (project) => project?.id === opened.id, "the library window did not show the project");
+  });
+
+  test(`${app.name}: a covered window keeps its document visible and completes presentation commands`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    for (const project of await s.get("core.projects")) await s.run("core.project.close", { id: project.id });
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-covered-")));
+    s.cleanup(() => rmSync(root, { recursive: true, force: true }));
+    s.cleanup(async () => {
+      for (const project of await s.get("core.projects")) {
+        if (project.root === root) await s.run("core.project.close", { id: project.id });
+      }
+      await s.run("core.projects.flush");
+    });
+    const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
+
+    // 같은 애플리케이션의 새 창으로 검사 창을 덮는다. 사용자 창이 다른 창 뒤에 있을 때와 같은 가림 상태다.
+    // core.card.sidebar.set 은 초점과 창 순서를 바꾸지 않고 판의 표시를 기다린 뒤 답한다.
+    const covered = (await s.get("host.window")).frame;
+    await s.run("core.window.new");
+    const windows = await s.windows(2, "the covering window did not open");
+    const cover = s.on(windows.find((w) => w.window !== s.window).window);
+    s.cleanup(async () => {
+      await cover.close();
+      await s.windows(1, "the covering window did not close");
+    });
+    await cover.run("host.window.resize", { width: covered.width + 200, height: covered.height + 100 });
+    await cover.run("host.window.move", { x: covered.x - 100, y: covered.y });
+    await s.until("host.window", (w) => w.occluded === true, "the covered window was not reported occluded");
+    const card = (await s.get("core.grid")).cards.find((candidate) => !candidate.fixed);
+    await s.run("core.card.sidebar.set", { card: card.id, side: "top", set: "off" });
+    const shown = (await s.get("core.grid")).cards.find((candidate) => candidate.id === card.id);
+    assert.equal(shown.sidebars.top?.set ?? "off", "off", `the top sidebar of ${card.id} in ${opened.id} was not turned off`);
+    assert.equal((await s.get("host.window")).occluded, true, "the window became uncovered during the check");
+    assert.equal((await s.get("core.window.document")).visibility, "visible", "the covered window hid its document");
+  });
+}

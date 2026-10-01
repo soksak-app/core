@@ -4,6 +4,7 @@
 #import <objc/runtime.h>
 #import "window_facts.h"
 #import "webview_geometry.h"
+#import "private/webkit.h"
 #import "surface_layout.h"
 
 static const char mainWebviewKey;
@@ -17,6 +18,10 @@ bool sp_window_set_main_webview(void *handle, void *mainHandle) {
     if (registered && registered.nonretainedObjectValue != main) return false;
     // 배치 표시는 이 웹뷰의 다음 표시를 기다리므로 이 웹뷰는 화면 갱신 주기로 렌더링해야 한다.
     if (!registered && !surfaceLayoutRenderAtDisplayRate(main)) return false;
+    // 같은 이유로 창이 가려져도 문서를 숨기지 않는다. WebKit 은 가려진 창의 문서를 숨기고 animation frame 을
+    // 멈추므로, 가려진 창의 배치 표시와 그 표시를 기다리는 명령이 끝나지 않는다.
+    if (![main respondsToSelector:@selector(_setWindowOcclusionDetectionEnabled:)]) return false;
+    main._windowOcclusionDetectionEnabled = NO;
     objc_setAssociatedObject(window, &mainWebviewKey, [NSValue valueWithNonretainedObject:main], OBJC_ASSOCIATION_RETAIN);
     return true;
 }

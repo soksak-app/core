@@ -225,6 +225,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   status("core.window.document", () => ({
     timeOrigin: performance.timeOrigin,
     readyState: document.readyState,
+    visibility: document.visibilityState,
     scheme: document.documentElement.style.colorScheme,
     background: window.__soksakBackground === true,
     scale: devicePixelRatio,
@@ -236,6 +237,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
     modal: settingsModalState().open ? "settings" : pickerState().open ? "picker" : null,
   }));
   status("core.page.audit", () => ({ unbound: audit(document.body) }));
+  // WebKit 이 문서를 숨기면 animation frame 이 멈추므로 표시 상태의 변화를 알린다.
+  document.addEventListener("visibilitychange", coreChanged);
   onBinding(coreChanged);
   // 기본값: 오류를 보이지 않는 문서의 core.page.error 는 null 이다(exposure.json).
   status("core.page.error", () => document.getElementById("applicationError")?.textContent ?? null);

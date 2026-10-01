@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-117-1-3-4-7-1-5: window가 가려져도 app DOM 문서를 visible로 유지한다. WebKit은 다른 window에 가려진 window의 문서를 숨기고 animation frame을 멈췄으므로, release window가 다른 application 뒤에 있는 동안 layout queue가 present하지 못했고 `core.project.open`이 reply하지 않았다. main webview 등록이 WebKit window occlusion detection을 끄고 selector가 없으면 명시적으로 실패한다. `core.window.document`는 `visibility`를 보고한다. Red: 새 native occlusion test가 hidden 문서와 animation frame 없음을 보고한다. Green: test가 10/10 통과하고 두 host가 가려진 상태에서 project를 열고 presentation command를 완료한다.
+
 - G1.4-10-1: 네이티브 pkg-config 파일을 `${pcfiledir}` 기준 상대 경로 대신 빌드가 선언한 절대 경로로 생성한다. 네이티브 빌드마다 빌드 디렉터리로 내용을 다시 만들고 내용이 다를 때만 파일을 교체하므로, 옮긴 작업 공간은 현재 경로를 받고 바뀌지 않은 작업 공간은 파일을 그대로 유지한다. Red: 위치 이동 테스트가 상대 헤더 경로를 받았다. Green: 현재 절대 경로와 재빌드 뒤 바뀌지 않은 수정 시각.
 
 - V5-117-1-3-4-7-1-2: release 검증이 선택한 번들만 검사하게 한다. 검사기가 프런트엔드와 사이드카 목록을 공유 스테이징 디렉터리에서 읽었으므로 이후 스테이징이 바뀌지 않은 번들의 결과를 바꿨다. 이제 `Contents/MacOS`의 모든 실행 파일을 검사하고, 워크벤치와 플러그인을 애플리케이션 의존성으로 찾으며, 워크벤치가 배포하는 모든 파일과 release 페이지 모듈이 애플리케이션 실행 파일에 원문으로 있어야 하고, 그 안의 플러그인 진단 항목과 모듈을 거부한다. Tauri가 포함 자산을 더 이상 압축하지 않으므로 두 애플리케이션 모두 이 검사에 프런트엔드를 드러낸다. release 페이지 모듈은 스테이징이 복사하는 워크벤치 파일이다.

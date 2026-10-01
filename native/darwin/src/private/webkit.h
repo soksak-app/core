@@ -34,6 +34,7 @@
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))completion;
 // WKWebViewPrivate.h (mac)
 - (void)_setIgnoresMouseMoveEvents:(BOOL)ignore;
+@property (nonatomic, setter=_setWindowOcclusionDetectionEnabled:) BOOL _windowOcclusionDetectionEnabled;
 - (void)_setShouldSuppressFirstResponderChanges:(BOOL)suppress;
 // WKWebViewPrivate.h: 인스펙터 검사 전용
 @property (nonatomic, readonly) id<SPInspector> _inspector;

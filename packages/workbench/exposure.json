@@ -3,7 +3,7 @@
     "status": [
       {
         "name": "core.window.document",
-        "description": "The main document's time origin, ready state, applied color scheme, background blur, device pixel ratio, and viewport size.",
+        "description": "The main document's time origin, ready state, visibility, applied color scheme, background blur, device pixel ratio, and viewport size.",
         "schema": {
           "type": "object",
           "properties": {
@@ -15,6 +15,12 @@
                 "loading",
                 "interactive",
                 "complete"
+              ]
+            },
+            "visibility": {
+              "enum": [
+                "visible",
+                "hidden"
               ]
             },
             "scheme": {
