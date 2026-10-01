@@ -59,49 +59,42 @@ static uint64_t captureStartedAt;
 @property (nonatomic) uint64_t longestGap;
 @end
 
-// displayTime 은 프레임이 화면에 표시된 mach 절대 시각을 읽는다. 없으면 0 이다.
-static uint64_t displayTime(CMSampleBufferRef sample) {
+// frameInfo 는 프레임에 붙은 정보 사전에서 key 의 값을 읽는다. 사전이나 값이 없으면 NULL 이다.
+static CFTypeRef frameInfo(CMSampleBufferRef sample, SCStreamFrameInfo key) {
     CFArrayRef list = CMSampleBufferGetSampleAttachmentsArray(sample, false);
-    if (list == NULL || CFArrayGetCount(list) == 0) return 0;
-    CFDictionaryRef attached = CFArrayGetValueAtIndex(list, 0);
-    CFNumberRef time = CFDictionaryGetValue(attached, (__bridge CFStringRef)SCStreamFrameInfoDisplayTime);
-    uint64_t value = 0;
-    if (time != NULL) CFNumberGetValue(time, kCFNumberSInt64Type, &value);
-    return value;
+    if (list == NULL || CFArrayGetCount(list) == 0) return NULL;
+    return CFDictionaryGetValue(CFArrayGetValueAtIndex(list, 0), (__bridge CFStringRef)key);
 }
 
-// frameNumber 는 프레임에 붙은 숫자 정보를 읽는다. 없으면 0 이다.
-static double frameNumber(CMSampleBufferRef sample, SCStreamFrameInfo key) {
-    CFArrayRef list = CMSampleBufferGetSampleAttachmentsArray(sample, false);
-    if (list == NULL || CFArrayGetCount(list) == 0) return 0;
-    CFNumberRef value = CFDictionaryGetValue(CFArrayGetValueAtIndex(list, 0), (__bridge CFStringRef)key);
-    double number = 0;
-    if (value != NULL) CFNumberGetValue(value, kCFNumberDoubleType, &number);
-    return number;
+// displayTime 은 프레임이 화면에 표시된 mach 절대 시각을 읽는다. 시각이 없으면 NO 를 돌려준다.
+static BOOL displayTime(CMSampleBufferRef sample, uint64_t *value) {
+    CFTypeRef time = frameInfo(sample, SCStreamFrameInfoDisplayTime);
+    return time != NULL && CFGetTypeID(time) == CFNumberGetTypeID()
+        && CFNumberGetValue(time, kCFNumberSInt64Type, value);
 }
 
-// contentRect 는 버퍼 안에서 창이 그려진 사각형(버퍼 포인트 단위)을 읽는다.
-static CGRect contentRect(CMSampleBufferRef sample) {
-    CFArrayRef list = CMSampleBufferGetSampleAttachmentsArray(sample, false);
-    CGRect rect = CGRectZero;
-    if (list == NULL || CFArrayGetCount(list) == 0) return rect;
-    CFDictionaryRef value = CFDictionaryGetValue(CFArrayGetValueAtIndex(list, 0),
-        (__bridge CFStringRef)SCStreamFrameInfoContentRect);
-    if (value != NULL) CGRectMakeWithDictionaryRepresentation(value, &rect);
-    return rect;
+// frameNumber 는 프레임에 붙은 숫자 정보를 읽는다. 값이 없으면 NO 를 돌려준다.
+static BOOL frameNumber(CMSampleBufferRef sample, SCStreamFrameInfo key, double *number) {
+    CFTypeRef value = frameInfo(sample, key);
+    return value != NULL && CFGetTypeID(value) == CFNumberGetTypeID()
+        && CFNumberGetValue(value, kCFNumberDoubleType, number);
 }
 
-// frameStatus 는 프레임에 붙은 상태를 읽는다. 상태가 없으면 완성된 프레임으로 본다.
-static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
-    CFArrayRef list = CMSampleBufferGetSampleAttachmentsArray(sample, false);
-    if (list == NULL || CFArrayGetCount(list) == 0) return SCFrameStatusComplete;
-    CFDictionaryRef attached = CFArrayGetValueAtIndex(list, 0);
-    CFNumberRef status =
-        CFDictionaryGetValue(attached, (__bridge CFStringRef)SCStreamFrameInfoStatus);
-    if (status == NULL) return SCFrameStatusComplete;
-    int value = SCFrameStatusComplete;
-    CFNumberGetValue(status, kCFNumberIntType, &value);
-    return (SCFrameStatus)value;
+// contentRect 는 버퍼 안에서 창이 그려진 사각형(버퍼 포인트 단위)을 읽는다. 사각형이 없으면 NO 를 돌려준다.
+static BOOL contentRect(CMSampleBufferRef sample, CGRect *rect) {
+    CFTypeRef value = frameInfo(sample, SCStreamFrameInfoContentRect);
+    return value != NULL && CFGetTypeID(value) == CFDictionaryGetTypeID()
+        && CGRectMakeWithDictionaryRepresentation(value, rect);
+}
+
+// frameStatus 는 프레임에 붙은 상태를 읽는다. 상태가 없으면 NO 를 돌려준다.
+static BOOL frameStatus(CMSampleBufferRef sample, SCFrameStatus *status) {
+    CFTypeRef value = frameInfo(sample, SCStreamFrameInfoStatus);
+    int number = 0;
+    if (value == NULL || CFGetTypeID(value) != CFNumberGetTypeID()
+        || !CFNumberGetValue(value, kCFNumberIntType, &number)) return NO;
+    *status = (SCFrameStatus)number;
+    return YES;
 }
 
 // 파일 작업 직후 저장한 원인을 경로와 함께 보고한다. 후속 정리 오류도 추가한다.
@@ -120,7 +113,10 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
     if (type != SCStreamOutputTypeScreen) return;
     [self write:sample];
     // 종료 요청 이후에 표시된 프레임은 idle 이어도 그 시각까지의 화면이 모두 전달되었다는 뜻이다.
-    if (captureCaughtUp != NULL && captureStopAfter != 0 && displayTime(sample) >= captureStopAfter) {
+    // 시각이 없는 완성 프레임은 write: 가 녹화 오류로 남기고, 종료는 그 오류를 보고한다.
+    uint64_t shown = 0;
+    if (captureCaughtUp != NULL && captureStopAfter != 0 && displayTime(sample, &shown)
+        && shown >= captureStopAfter) {
         captureStopAfter = 0;
         dispatch_semaphore_signal(captureCaughtUp);
     }
@@ -129,17 +125,45 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
 - (void)write:(CMSampleBufferRef)sample {
     // 창이 다시 그려지지 않으면 프레임은 정해진 간격으로 계속 오되 모두 idle 로
     // 표시되고 이미지가 없다. 이것을 세어 두면 0 장인 이유를 말할 수 있다.
-    SCFrameStatus status = frameStatus(sample);
+    // 상태가 없는 프레임은 완성 여부를 알 수 없으므로 녹화를 실패시킨다.
+    SCFrameStatus status = SCFrameStatusComplete;
+    if (!frameStatus(sample, &status)) {
+        if (!hasCaptureError()) setCaptureError([NSString stringWithFormat:@"frame %d has no status", self.queued + 1]);
+        return;
+    }
     if (status != SCFrameStatusComplete) {
         if (status == SCFrameStatusIdle) self.idle++;
         if ((int)status >= 0 && (int)status < 6) self.statuses[status]++;
         return;
     }
     if (hasCaptureError()) return;
+    // 완성 프레임의 이미지, 표시 시각, 창 사각형, 배율은 프레임을 재는 데 필요하므로 하나라도 없으면 녹화를 실패시킨다.
+    int number = self.queued + 1;
     CVImageBufferRef buffer = CMSampleBufferGetImageBuffer(sample);
-    if (buffer == NULL) return;
-    uint64_t shown = displayTime(sample);
-    if (captureStartedAt != 0 && shown != 0 && shown < captureStartedAt) return;
+    if (buffer == NULL) {
+        setCaptureError([NSString stringWithFormat:@"frame %d has no image buffer", number]);
+        return;
+    }
+    uint64_t shown = 0;
+    if (!displayTime(sample, &shown)) {
+        setCaptureError([NSString stringWithFormat:@"frame %d has no display time", number]);
+        return;
+    }
+    CGRect rect = CGRectZero;
+    if (!contentRect(sample, &rect)) {
+        setCaptureError([NSString stringWithFormat:@"frame %d has no content rectangle", number]);
+        return;
+    }
+    double contentScale = 0, scaleFactor = 0;
+    if (!frameNumber(sample, SCStreamFrameInfoContentScale, &contentScale)) {
+        setCaptureError([NSString stringWithFormat:@"frame %d has no content scale", number]);
+        return;
+    }
+    if (!frameNumber(sample, SCStreamFrameInfoScaleFactor, &scaleFactor)) {
+        setCaptureError([NSString stringWithFormat:@"frame %d has no scale factor", number]);
+        return;
+    }
+    if (captureStartedAt != 0 && shown < captureStartedAt) return;
     if (self.queued - captureBefore >= kCaptureMaxFrames) {
         if (!captureLimitReached) {
             captureLimitReached = true;
@@ -171,12 +195,11 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
         return;
     }
     // 크기가 바뀌는 창을 재려면 프레임마다 창이 그려진 영역과 배율, 표시 시각이 필요하다.
-    CGRect rect = contentRect(sample);
     mach_timebase_info_data_t timebase;
     mach_timebase_info(&timebase);
     uint32_t head[3] = { (uint32_t)width, (uint32_t)height, (uint32_t)stride };
     double info[7] = { rect.origin.x, rect.origin.y, rect.size.width, rect.size.height,
-        frameNumber(sample, SCStreamFrameInfoContentScale), frameNumber(sample, SCStreamFrameInfoScaleFactor),
+        contentScale, scaleFactor,
         (double)shown * timebase.numer / timebase.denom / 1e6 };
     size_t size = sizeof(head) + sizeof(info) + stride * height;
     uint8_t *copy = malloc(size);
@@ -192,7 +215,7 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
         dispatch_semaphore_signal(capturePending);
         return;
     }
-    int number = ++self.queued;
+    self.queued = number;
     NSString* path = [self.directory stringByAppendingPathComponent:[NSString stringWithFormat:@"frame-%04d.bgra", number]];
     dispatch_async(captureWriter, ^{
         CFTimeInterval began = CACurrentMediaTime();

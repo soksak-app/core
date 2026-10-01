@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-115-1-5-2-2-2: a recording rejects a frame without a status and a complete frame without its image, display time, content rectangle or scales, with an error naming the frame and the field, instead of recording zeros or dropping the frame.
+
 - G1.4-8: twelve e2e files written in a compressed single-quote style use the formatting of their neighbours; behavior is unchanged.
 
 - V5-116-4-7: the Tauri endpoint treats closing an already disconnected connection as success instead of logging `Socket is not connected (os error 57)`, and reports other shutdown errors.

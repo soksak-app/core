@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-115-1-5-2-2-2: 녹화가 상태가 없는 frame과, 이미지·표시 시각·content rectangle·배율이 없는 완성 frame을 0으로 기록하거나 버리지 않고, frame과 필드를 밝힌 오류로 거부한다.
+
 - G1.4-8: 압축된 작은따옴표 형식으로 쓴 e2e file 12개가 주변 file의 형식을 쓴다. 동작은 바뀌지 않는다.
 
 - V5-116-4-7: Tauri endpoint가 이미 끊긴 연결을 닫는 것을 `Socket is not connected (os error 57)`로 기록하지 않고 성공으로 처리하며, 다른 shutdown 오류는 보고한다.
