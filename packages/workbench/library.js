@@ -3,7 +3,7 @@ import * as projects from "./projects.js";
 import { fresh } from "./plane.js";
 import { windows } from "@soksak/runtime";
 import { icon } from "./icons.js";
-import { hasPlugin, isPlace, plugin } from "./registry.js";
+import { preview } from "./library-preview.js";
 import { delegate, mark } from "./commands.js";
 
 const TINTS = ["#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"];
@@ -153,8 +153,10 @@ export function createLibrary(root, rendered = () => {}) {
   }
   /** 화면의 상태. 미리보기 사각형은 뷰포트 기준이다. */
   function state() {
-    const previews={};
+    const previews={}, previewErrors={};
     for(const card of grid.querySelectorAll('.library-project')) {
+      const failed=card.querySelector('.library-preview')?.dataset.error;
+      if(failed!==undefined) previewErrors[card.dataset.projectId]=failed;
       previews[card.dataset.projectId]=[...card.querySelectorAll('.library-preview__pane')].map(pane=>{
         const r=pane.getBoundingClientRect();return {card:pane.dataset.cardId,x:r.x,y:r.y,w:r.width,h:r.height};
       });
@@ -169,7 +171,7 @@ export function createLibrary(root, rendered = () => {}) {
       formState:form.hidden?null:{mode:formMode,name:input('name'),parent:input('parent')},
       returnVisible:!back.hidden, pending, empty:!root.querySelector('.library-empty').hidden,
       noResults:Boolean(grid.querySelector('.library-no-results')),
-      error:error.hidden?null:error.textContent, previews,
+      error:error.hidden?null:error.textContent, previews, previewErrors,
     };
   }
   const SORTS=['saved','name','recent','open'];
@@ -190,36 +192,3 @@ export function createLibrary(root, rendered = () => {}) {
   return {render, state, actions};
 }
 
-// 미리보기의 창 사이드바 열은 내용 카드와 구분한다.
-const aside=(id)=>isPlace(id);
-
-function preview(project) {
-  const el=element('div','library-preview'); el.setAttribute('aria-hidden','true');
-  const layout=project.spaces.find(s=>s.id===project.activeSpaceId)?.layout;
-  if (!layout) return el;
-  const {cards,xs,ys}=layout.state;
-  // 분할 위치는 격자 인덱스로 유지하고, 표시 비율은 미리보기에서 정한다.
-  el.style.gridTemplateColumns=xs.slice(1).map((_,column)=>
-    cards.some(c=>!aside(c.id)&&c.c0<=column&&column<c.c1)?'minmax(0,1fr)':'minmax(0,.22fr)').join(' ');
-  el.style.gridTemplateRows=`repeat(${ys.length-1},minmax(0,1fr))`;
-  for(const card of cards) {
-    const pane=element('div','library-preview__pane');
-    pane.dataset.cardId=card.id;
-    pane.style.gridArea=`${card.r0+1} / ${card.c0+1} / ${card.r1+1} / ${card.c1+1}`;
-    // 기본값: 자리 카드는 data 가 null 이므로 탭이 없다.
-    const tabs=(card.data?.tabs ?? []).filter(t=>hasPlugin(t.plugin));
-    // 기본값: 활성 탭의 플러그인이 설치되지 않아 걸러졌으면 남은 첫 탭을 미리 본다.
-    const active=tabs.find(t=>t.id===card.data?.activeId) ?? tabs[0];
-    // 기본값: 설치된 플러그인의 탭이 없는 카드는 플러그인이 없다(빈 문자열).
-    pane.dataset.plugin=aside(card.id)?'sidebar':active?.plugin ?? '';
-    if(active) {
-      const {ink}=plugin(active.plugin);
-      if(ink) pane.style.setProperty('--preview-ink',`var(${ink})`);
-      const mark=element('span','library-preview__mark');
-      mark.innerHTML=`<svg viewBox="0 0 16 16">${plugin(active.plugin).svg}</svg>`;
-      pane.append(mark);
-    }
-    el.append(pane);
-  }
-  return el;
-}

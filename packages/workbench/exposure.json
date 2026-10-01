@@ -730,7 +730,7 @@
       },
       {
         "name": "core.library",
-        "description": "The library screen: shown and pinned projects, count, search, sort, form state and field values, return button visibility, pending work, empty and no-result notes, error, and preview rectangles.",
+        "description": "The library screen: shown and pinned projects, count, search, sort, form state and field values, return button visibility, pending work, empty and no-result notes, error, preview rectangles, and the validation error of each project whose saved layout cannot be opened.",
         "schema": {
           "type": "object",
           "properties": {
@@ -759,6 +759,9 @@
               ]
             },
             "previews": {
+              "type": "object"
+            },
+            "previewErrors": {
               "type": "object"
             },
             "pinned": {

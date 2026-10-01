@@ -1,27 +1,51 @@
 import assert from "node:assert/strict";
-import {readFileSync} from "node:fs";
-import {runInNewContext} from "node:vm";
 import test from "node:test";
-import {restoreWindowSidebars,windowSidebar} from "../window-sidebars.js";
-const source=readFileSync(new URL("../plane.js",import.meta.url),"utf8");
-const start=source.indexOf('function restoreWindowState(kept) {');
-const end=source.indexOf('\n}',start)+2;
-function restore(kept){
- const f={restoreWindowSidebars,windowSidebar,pluginUnits:()=>[{id:"pane",surface:true}],SIDEBAR_SIDES:["left","right","top","bottom"]};
- runInNewContext(source.slice(start,end),f);
- return f.restoreWindowState(kept);
-}
-test("saved window state rejects obsolete and unknown cards before replacing the displayed layout",()=>{
- for(const card of [{id:"rail-pane"},{id:"window:missing:left"},
-  {id:"a",data:{tabs:[{id:"t",plugin:"missing"}],activeId:"t"}},
-  {id:"a",data:{tabs:[{id:"t",plugin:"pane"}],activeId:"missing"}}])
-  assert.throws(()=>restore({state:{cards:[card]},windowSidebars:{}}),/stored|obsolete|unknown/);
-});
-test("saved obsolete width fields fail even when empty",()=>{
- for(const field of ["railWidth","edgeWidth"]) assert.throws(()=>restore({state:{cards:[]},[field]:{}}),/obsolete/);
+
+// 저장 배치 검사와 창 사이드바 기록 복원은 각 모듈의 내보낸 함수로 검사한다.
+globalThis.fetch = async (path) => {
+  const files = {
+    "/environment.json": {
+      runtime: "runtime",
+      plugins: ["@fixture/pane"],
+      workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
+        { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "pane", title: "p" }] },
+      ] } },
+      sidebars: { sets: [], links: [] },
+    },
+    "/diagnostic-plugins.json": {},
+    "/modules/@fixture/pane/plugin.json": {
+      id: "pane", name: "Pane", description: "검사용 표면.", mark: "P", icon: "<path d='M0 0h1v1H0z'/>",
+      surface: { module: "ui/surface.js", composition: { kind: "dom" } },
+    },
+  };
+  const body = files[path];
+  return body ? { ok: true, json: async () => structuredClone(body) } : { ok: false, status: 404 };
+};
+
+const { loadEnvironment } = await import("../environment.js");
+await loadEnvironment();
+const { checkStoredLayout } = await import("../stored-layout.js");
+const { restoreWindowSidebars } = await import("../window-sidebars.js");
+
+test("saved window state rejects obsolete and unknown cards before replacing the displayed layout", () => {
+  for (const card of [{ id: "rail-pane" }, { id: "window:missing:left" },
+    { id: "a", data: { tabs: [{ id: "t", plugin: "missing" }], activeId: "t" } },
+    { id: "a", data: { tabs: [{ id: "t", plugin: "pane" }], activeId: "missing" } }]) {
+    assert.throws(() => checkStoredLayout({ state: { cards: [card] }, windowSidebars: {} }), /stored|obsolete|unknown/);
+  }
+  checkStoredLayout({ state: { cards: [{ id: "a", data: { tabs: [{ id: "t", plugin: "pane" }], activeId: "t" } }] }, windowSidebars: {} });
 });
 
-for(const field of ['windowSidebars','sidebars'])test(`explicit null ${field} records are rejected instead of becoming empty records`,()=>{
- const base={state:{cards:[]},windowSidebars:{},sidebars:{}};
- assert.throws(()=>restore({...base,[field]:null}),/sidebar/);
+test("saved obsolete width fields fail even when empty", () => {
+  for (const field of ["railWidth", "edgeWidth"]) {
+    assert.throws(() => checkStoredLayout({ state: { cards: [] }, [field]: {} }), /obsolete/);
+  }
+});
+
+test("explicit null sidebars records are rejected instead of becoming empty records", () => {
+  assert.throws(() => checkStoredLayout({ state: { cards: [] }, windowSidebars: {}, sidebars: null }), /sidebar/);
+});
+
+test("explicit null windowSidebars records are rejected instead of becoming empty records", () => {
+  assert.throws(() => restoreWindowSidebars(null), /sidebar/);
 });

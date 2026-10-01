@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-5: a library preview applies the saved-layout validation that opening uses. It filtered tabs of unregistered plugins and drew a substitute active tab for a layout that opening rejects; it now shows the validation error, and `core.library` reports it in `previewErrors`.
+
 - V5-117-1-3-4-5-4-3: the native capture acceptance rejects a recording directory that cannot be listed and reports a failed cleanup, and checkers that include the acceptance body rebuild when it changes.
 
 - V5-117-1-3-4-5-3-7: a stop completion that arrives after the 5000ms deadline no longer signals a released semaphore or changes a later recording's error; it reports its error only to the diagnostic output.

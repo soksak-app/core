@@ -34,6 +34,8 @@
     "icons.js",
     "ids.js",
     "library.js",
+    "library-preview.js",
+    "stored-layout.js",
     "layout-queue.js",
     "plane.js",
     "projects.js",
