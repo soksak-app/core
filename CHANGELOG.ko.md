@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-117-1-3-4-7-1-9: 창의 마지막 프로젝트를 닫으면 `host.windows`의 project를 비우고 제목을 라이브러리 제목으로 되돌린다. 이전에는 둘 다 닫은 프로젝트를 유지했다.
+
 - G1.4-22: `make go-format-check`가 `gofmt`가 바꿀 추적 Go file이 있으면 실패하며 `make native-test`에서 실행된다. `sidecars.go`를 다시 정렬한다.
 
 - G1.4-14-4: `host.window`가 창이 놓인 screen의 최대 재생률인 `refreshRate`를 보고하고, terminal divider check는 약 120 Hz를 가정하는 대신 이 값에서 최소 frame 수를 정한다.

@@ -140,11 +140,20 @@ func validProjectID(id string) bool {
 
 func (h *Host) ProjectRelease(id string) {
 	h.mu.Lock()
-	if owner := h.owners[id]; owner != nil {
+	owner := h.owners[id]
+	if owner != nil {
 		delete(owner.projects, id)
 	}
 	delete(h.owners, id)
+	empty := owner != nil && len(owner.projects) == 0
 	h.mu.Unlock()
+	// 프로젝트가 남지 않은 창은 라이브러리를 보이므로 프로젝트 root 와 제목을 비운다.
+	if empty {
+		owner.mu.Lock()
+		owner.root = ""
+		owner.mu.Unlock()
+		owner.setTitle(windowTitle)
+	}
 	h.notifyWorkspace()
 }
 

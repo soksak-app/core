@@ -126,7 +126,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 | 메서드 | 매개변수 | 결과 |
 | --- | --- | --- |
-| `windows.list` | 없음 | `[{window, title, project, key, ready}]`. `project`는 창에 마지막으로 열린 프로젝트의 루트 디렉터리이며 없으면 `null`이다. `ready`는 창의 메인 페이지가 준비를 알린 뒤 참이고 로드하는 동안 거짓이다. 페이지가 로드 중인 창에 대한 요청은 1003으로 실패한다 |
+| `windows.list` | 없음 | `[{window, title, project, key, ready}]`. `project`는 창에 마지막으로 열린 프로젝트의 루트 디렉터리이며, 창에 열린 프로젝트가 없으면 `null`이다. 창의 마지막 프로젝트를 해제하면 창 제목도 라이브러리 제목으로 돌아간다. `ready`는 창의 메인 페이지가 준비를 알린 뒤 참이고 로드하는 동안 거짓이다. 페이지가 로드 중인 창에 대한 요청은 1003으로 실패한다 |
 | `exposure.list` | `{window}` | `{status, commands, dom}`: 코어, 호스트, 로드된 플러그인의 선언 항목을 선언 형식으로 반환한다. 각 항목에 `registered`가 있다 |
 | `status.get` | `{window, name, surface?}` | 현재 값 |
 | `status.watch` | `{window, name, surface?}` | `null`. 이후 `status.unwatch`를 받거나 연결이 닫힐 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, surface?, value}`를 보낸다. `surface` 값이 다른 감시는 서로 별개다 |

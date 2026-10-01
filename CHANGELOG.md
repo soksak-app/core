@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-3-4-7-1-9: closing the last project of a window clears its `host.windows` project and returns its title to the library title; both had kept the closed project.
+
 - G1.4-22: `make go-format-check` fails on any tracked Go file that `gofmt` would change and runs in `make native-test`; `sidecars.go` is reformatted.
 
 - G1.4-14-4: `host.window` reports `refreshRate`, the maximum refresh rate of the window's screen, and the terminal divider check derives its minimum frame count from it instead of assuming about 120 Hz.

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import test from "node:test";
 
 import { APPS, failure, fresh, keepCommonSettings, open } from "./app.mjs";
@@ -417,6 +417,34 @@ for (const app of Object.values(APPS)) {
     assert.equal(opened.root, root);
     await s.windows(1, "the first project opened another window instead of replacing the library");
     await s.until("core.project", (project) => project?.id === opened.id, "the library window did not show the project");
+  });
+
+  test(`${app.name}: a window that holds no open project reports no project`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-window-project-")));
+    s.cleanup(() => rmSync(root, { recursive: true, force: true }));
+    s.cleanup(async () => {
+      for (const project of await s.get("core.projects")) {
+        if (project.root === root) await s.run("core.project.close", { id: project.id });
+      }
+      await s.run("core.projects.flush");
+    });
+    const project = async () => (await s.get("host.windows")).find((item) => item.window === s.window).project;
+    for (const item of await s.get("core.projects")) await s.run("core.project.close", { id: item.id });
+    assert.equal(await s.get("core.project"), null, "the check did not start from the library");
+    await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === null,
+      `the library window still reports project ${await project()}`);
+    const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
+    await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === root,
+      "the window did not report the opened project");
+    await s.run("core.project.close", { id: opened.id });
+    await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === null,
+      `the window still reports the closed project ${await project()}`);
+    // 라이브러리를 보이는 창의 제목에는 닫은 프로젝트의 이름이 없다.
+    const { title } = (await s.get("host.windows")).find((item) => item.window === s.window);
+    assert.ok(!title.includes(basename(root)), `the window title still names the closed project: ${title}`);
   });
 
   test(`${app.name}: a covered window keeps its document visible and completes presentation commands`, { timeout: 60000 }, async (t) => {

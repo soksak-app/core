@@ -229,6 +229,9 @@ pub(crate) fn opened(app: &AppHandle) -> Result<Vec<String>, String> {
         .collect())
 }
 
+/// 프로젝트를 열지 않은 창의 제목. 첫 창의 제목은 tauri.conf.json 이 같은 값으로 선언한다.
+const WINDOW_TITLE: &str = "soksak / Tauri v2";
+
 fn new_window(app: &AppHandle, label: &str, url: &str, title: &str) -> Result<Window, String> {
     let created = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
         .title(title)
@@ -257,7 +260,7 @@ pub(crate) fn window_new_on_main(app: AppHandle) -> Result<(), String> {
         &app,
         &format!("project-window-{id}"),
         "index.html",
-        "soksak / Tauri v2",
+        WINDOW_TITLE,
     )?;
     Ok(())
 }
@@ -471,14 +474,27 @@ fn project_open_on_main(
     Ok(serde_json::json!({"local": owner.label() == window.label()}))
 }
 
-/// 프로젝트 id 와 창의 연결을 해제한다.
+/// 프로젝트 id 와 창의 연결을 해제한다. 프로젝트가 남지 않은 창은 라이브러리를 보이므로 프로젝트 root 와 제목을 비운다.
 pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String> {
-    window
-        .state::<Windows>()
-        .owners
-        .lock()
-        .map_err(|e| e.to_string())?
-        .remove(&id);
+    let registry = window.state::<Windows>();
+    let mut owners = registry.owners.lock().map_err(|e| e.to_string())?;
+    let released = owners.remove(&id);
+    let empty = released
+        .as_ref()
+        .is_some_and(|label| !owners.values().any(|other| other == label));
+    drop(owners);
+    if let (Some(label), true) = (released, empty) {
+        // 창이 이미 닫혔으면 비울 상태가 없다.
+        if let Some(owner) = window.app_handle().get_window(&label) {
+            window_data(&owner)?
+                .root
+                .lock()
+                .map_err(|e| e.to_string())?
+                .clear();
+            owner.set_title(WINDOW_TITLE).map_err(|e| e.to_string())?;
+            crate::exposure::windows_changed(window.app_handle());
+        }
+    }
     notify_workspace(window.app_handle());
     Ok(())
 }
