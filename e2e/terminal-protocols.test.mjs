@@ -44,8 +44,13 @@ async function report(s, surface, on, count, off, act) {
   await s.run("terminal.input", { bytes: `clear; m '${on}' ${count} ${id} '${off}'\r` }, surface);
   await readScreenUntil(s, surface, (lines) => lines.some((line) => line.startsWith(`W${id}`)), `${JSON.stringify(on)} did not start reading`);
   await act();
+  // 응답이 오지 않으면 실패 위치를 가리도록 sidecar 가 마지막으로 잰 마우스 입력과 표면 상태를 함께 보고한다.
   const lines = await readScreenUntil(s, surface, (screen) => screen.some((line) => line.startsWith(`R${id}:`)),
-    `${JSON.stringify(on)} did not receive ${count} bytes`);
+    `${JSON.stringify(on)} did not receive ${count} bytes`).catch(async (error) => {
+    const { mouse, cols, rows } = await s.get("terminal.session", surface);
+    const status = (await s.get("core.surfaces")).find((item) => item.surface === surface)?.status;
+    throw new Error(`${error.message}; terminal ${cols}x${rows}, last mouse ${JSON.stringify(mouse)}, surface ${JSON.stringify(status)}`, { cause: error });
+  });
   const hex = lines.find((line) => line.startsWith(`R${id}:`)).slice(`R${id}:`.length).trim();
   return Buffer.from(hex, "hex").toString("latin1");
 }
@@ -297,16 +302,19 @@ for (const app of Object.values(APPS)) {
       await s.pointer(to.x, to.y, "drag");
       await s.pointer(to.x, to.y, "up");
     }), dragged, "?1002 button motion report");
-    // ?1000 과 ?1006 에서 휠은 줄마다 휠 단추를 알린다. 31 픽셀은 두 줄이다.
+    // ?1000 과 ?1006 에서 휠은 줄마다 휠 단추를 알린다. 페이지가 받는 이동량은 주입한 픽셀 이동량에 화면 배율을 곱한
+    // 값이며(1배율에서 31 은 한 줄, 2배율에서 두 줄이었다), 페이지는 칸 높이마다 한 줄을 보낸다. 2.5 줄의 이동량은 두 줄이다.
+    const { scale } = await s.get("host.window");
+    const wheelDelta = Math.round(2.5 * cellHeight / scale);
     const wheel = await report(s, surface, "\\033[?1000h\\033[?1006h", "\x1b[<64;10;5M".length * 2, "\\033[?1000l\\033[?1006l",
-      () => s.pointer(click.x, click.y, "scroll", { deltaY: 31 }));
+      () => s.pointer(click.x, click.y, "scroll", { deltaY: wheelDelta }));
     assert.match(wheel, /^(\x1b\[<6[45];10;5M){2}$/, `?1000 wheel report: ${JSON.stringify(wheel)}`);
     // ?1007: 대체 화면에서 휠은 방향키가 된다. ?1 이 켜지면 방향키는 응용 커서 키(ESC O)다.
     const arrows = await report(s, surface, "\\033[?1049h\\033[?1007h", 6, "\\033[?1007l\\033[?1049l",
-      () => s.pointer(click.x, click.y, "scroll", { deltaY: 31 }));
+      () => s.pointer(click.x, click.y, "scroll", { deltaY: wheelDelta }));
     assert.match(arrows, /^(\x1b\[[AB]){2}$/, `?1007 alternate scroll: ${JSON.stringify(arrows)}`);
     const application = await report(s, surface, "\\033[?1h\\033[?1049h\\033[?1007h", 6, "\\033[?1007l\\033[?1049l\\033[?1l",
-      () => s.pointer(click.x, click.y, "scroll", { deltaY: 31 }));
+      () => s.pointer(click.x, click.y, "scroll", { deltaY: wheelDelta }));
     assert.match(application, /^(\x1bO[AB]){2}$/, `?1 application cursor keys: ${JSON.stringify(application)}`);
     // ?2004: 붙여넣기를 괄호로 감싼다.
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("PASTE").toString("base64") }]);

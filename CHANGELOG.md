@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-4: the wheel cases of the terminal mouse check inject 2.5 cell heights divided by the display scale instead of a fixed 31 pixels, and a report timeout names the last mouse measurement and the surface status.
+
 - G1.4-14-4: the `14t` check uses the window scale instead of a fixed factor of 2, and the `?1005` check widens the window so that the terminal has the 100 columns it clicks.
 
 - G1.4-18: tests no longer run sliced source text of other files. The tested logic moves into exported functions that the workbench and the window checks call, and the tests call those exports with the same assertions.

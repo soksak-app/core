@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-14-4: terminal mouse check의 wheel case가 고정 31 pixel 대신 cell 높이의 2.5배를 display 배율로 나눈 값을 주입하고, report timeout이 마지막 mouse 측정과 surface 상태를 알린다.
+
 - G1.4-14-4: `14t` check가 고정값 2 대신 창 배율을 쓰고, `?1005` check가 click하는 100열을 확보하도록 창을 넓힌다.
 
 - G1.4-18: test가 더 이상 다른 file의 source 조각을 실행하지 않는다. test 대상 logic을 workbench와 window check가 호출하는 export 함수로 옮기고, test는 같은 단언으로 그 export를 호출한다.
