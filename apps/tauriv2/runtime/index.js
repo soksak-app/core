@@ -78,8 +78,10 @@ const ARG = {
   overlayUpdate: (v) => ({ request: v }),
   overlayHide: (v) => ({ id: v }),
   windowControls: () => ({}),
-  exposureReply: (request) => ({ request }),
-  exposureChanged: (request) => ({ request }),
+  // 응답과 상태 값은 JSON 텍스트로 보낸다. Tauri 는 command 인자를 키 순서를 바꾸는 값으로 읽으므로, 텍스트로
+  // 보내야 host 가 페이지 값의 키 순서를 그대로 중계한다(docs/spec/exposure.md).
+  exposureReply: (request) => ({ request: JSON.stringify(request) }),
+  exposureChanged: (request) => ({ request: { ...request, value: JSON.stringify(request.value) } }),
   exposureForward: (request) => ({ request }),
   imageAttach: (request) => ({ request }),
   compositionDeclare: (request) => ({ request }),
@@ -167,7 +169,7 @@ export const page = (() => {
       onRequest: (fn) => listen("exposure-request", (e) => {
         if (e.payload.surface === undefined || e.payload.surface === surface) fn(e.payload);
       }),
-      reply: (id, payload) => invoke("exposure_reply", { request: { id, ...payload, ...(surface ? { surface } : {}) } }),
+      reply: (id, payload) => invoke("exposure_reply", { request: JSON.stringify({ id, ...payload, ...(surface ? { surface } : {}) }) }),
     },
     // 이 표면의 문서 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 상태를 이 표면에만 보낸다.
     document: {

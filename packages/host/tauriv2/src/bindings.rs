@@ -321,7 +321,7 @@ fn report(window: Window, line: String) {
 
 /// 호스트가 보낸 요청에 대한 문서의 응답을 받는다.
 #[tauri::command]
-fn exposure_reply(webview: Webview, request: serde_json::Value) -> Result<(), String> {
+fn exposure_reply(webview: Webview, request: String) -> Result<(), String> {
     exposure::reply(&webview, request)
 }
 
@@ -333,7 +333,10 @@ fn exposure_changed(webview: Webview, request: Changed) -> Result<(), String> {
 
 /// 메인 페이지의 요청을 표면 페이지에 보내고 응답을 반환한다.
 #[tauri::command(async)]
-fn exposure_forward(webview: Webview, request: Forward) -> Result<serde_json::Value, String> {
+fn exposure_forward(
+    webview: Webview,
+    request: Forward,
+) -> Result<Box<serde_json::value::RawValue>, String> {
     exposure::forward(&webview, request)
 }
 

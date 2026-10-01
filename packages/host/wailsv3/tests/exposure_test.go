@@ -164,6 +164,18 @@ func TestRelayReplyFromTheTargetDocumentResolvesTheRequest(t *testing.T) {
 	}
 }
 
+// contract: exposure.relay.keeps-value-text
+func TestRelayReplyKeepsTheTextAndKeyOrderOfThePageValue(t *testing.T) {
+	relay := host.NewRelay[string]()
+	value := `{"zeta":1,"alpha":{"b":2,"a":1}}`
+	got := relay.Request("main", relayWait, func(id uint64) error {
+		return relay.Resolve(id, "main", host.ExposureResult{Result: json.RawMessage(value)})
+	})
+	if got.Error != nil || string(got.Result) != value {
+		t.Fatalf("reply %+v, want %s", got, value)
+	}
+}
+
 // contract: exposure.relay.missing-result-is-null
 func TestRelayReplyWithoutResultIsNull(t *testing.T) {
 	relay := host.NewRelay[string]()

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-39: the Tauri host relays page replies and status values as the text the page sent, so their keys keep their order as on the Wails host.
+
 - R1-2-3-3: the applications ship no plugin or sidecar; both hosts serve the plugins installed in the configuration directory from the folders that `plugins/installed.json` records and run their sidecars, the workbench reads `/installed-plugins.json`, `environment.json` no longer lists plugins, and `make install-plugins` prepares check configurations.
 
 - R1-2-3-2: `sok plugin pack --diagnostics` writes diagnostic packages, and `make registry` uses them for builds and window checks.

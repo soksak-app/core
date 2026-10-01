@@ -1,10 +1,16 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use serde_json::value::RawValue;
 use serde_json::{json, Value};
 use soksak_host_tauriv2::exposure::{reply_target, Relay};
 
 const WAIT: Duration = Duration::from_secs(5);
+
+/// 문서가 보내는 응답 텍스트.
+fn raw(value: &Value) -> Box<RawValue> {
+    serde_json::value::to_raw_value(value).unwrap()
+}
 
 // contract: exposure-reply.target.main-and-surface-distinct
 #[test]
@@ -46,12 +52,12 @@ fn main_and_scoped_reply_payloads_reach_their_requests() {
         assert_eq!(payload.get("surface"), None);
         let target = reply_target("main", &payload).unwrap();
         assert!(
-            replying.reply(&target, &payload),
+            replying.reply(&target, &raw(&payload)),
             "main reply went to {target}"
         );
         Ok(())
     });
-    assert_eq!(main.unwrap(), Value::Null);
+    assert_eq!(main.unwrap().get(), "null");
 
     let replying = relay.clone();
     let scoped = relay.request("surface-main-tab-1", Some(WAIT), move |id| {
@@ -59,10 +65,10 @@ fn main_and_scoped_reply_payloads_reach_their_requests() {
         assert_eq!(payload["surface"], "tab-1");
         let target = reply_target("main", &payload).unwrap();
         assert!(
-            replying.reply(&target, &payload),
+            replying.reply(&target, &raw(&payload)),
             "scoped reply went to {target}"
         );
         Ok(())
     });
-    assert_eq!(scoped.unwrap(), json!({"ok": true}));
+    assert_eq!(scoped.unwrap().get(), r#"{"ok":true}"#);
 }

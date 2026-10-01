@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use serde_json::{json, Map, Value};
 
 use crate::platform::{self, Listener};
@@ -101,6 +102,11 @@ impl Failure {
     }
 }
 
+/// host 가 만든 값을 응답 텍스트로 쓴다. 페이지가 보낸 값은 받은 텍스트 그대로 중계한다.
+pub fn raw(value: &Value) -> Result<Box<RawValue>, Failure> {
+    serde_json::value::to_raw_value(value).map_err(|error| Failure::new(-32603, error.to_string()))
+}
+
 /// 엔드포인트 요청을 창과 페이지에서 실행한다.
 pub trait Service: Send + Sync + 'static {
     /// `windows.list` 의 결과를 반환한다.
@@ -108,13 +114,13 @@ pub trait Service: Send + Sync + 'static {
     /// 창 식별자 window 의 창이 있는지 반환한다.
     fn exists(&self, window: &str) -> bool;
     /// 창 window 에서 method 를 실행한다. params 에는 `window` 가 없다. 호출은 응답이 준비될
-    /// 때까지 기다린다.
+    /// 때까지 기다린다. 결과는 응답에 쓸 JSON 텍스트이며, 페이지가 보낸 값은 받은 텍스트 그대로다.
     fn call(
         &self,
         window: &str,
         method: &str,
         params: Map<String, Value>,
-    ) -> Result<Value, Failure>;
+    ) -> Result<Box<RawValue>, Failure>;
 }
 
 /// 감시 하나. surface 는 감시가 지정한 표면이며, 지정한 감시와 지정하지 않은 감시는 서로 다르다.
@@ -214,18 +220,37 @@ struct Answer {
     id: Option<Value>,
 }
 
+/// 성공 응답. result 는 받은 텍스트 그대로 쓴다.
+#[derive(Serialize)]
+struct Success<'a> {
+    jsonrpc: &'static str,
+    id: &'a Value,
+    result: &'a RawValue,
+}
+
 impl Answer {
-    fn send(self, outcome: Result<Value, Failure>) {
+    fn send(self, outcome: Result<Box<RawValue>, Failure>) {
         let Some(id) = self.id else { return };
-        let reply = match outcome {
-            Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
-            Err(failure) => json!({"jsonrpc": "2.0", "id": id,
-                "error": {"code": failure.code, "message": failure.message}}),
+        let written = match self.writer.lock() {
+            Ok(mut writer) => match outcome {
+                Ok(result) => write_frame(
+                    &mut *writer,
+                    &Success {
+                        jsonrpc: "2.0",
+                        id: &id,
+                        result: &result,
+                    },
+                ),
+                Err(failure) => write_frame(
+                    &mut *writer,
+                    &json!({"jsonrpc": "2.0", "id": id,
+                        "error": {"code": failure.code, "message": failure.message}}),
+                ),
+            },
+            Err(error) => Err(error.to_string()),
         };
-        if let Ok(mut writer) = self.writer.lock() {
-            if let Err(error) = write_frame(&mut *writer, &reply) {
-                eprintln!("endpoint answer failed: {error}");
-            }
+        if let Err(error) = written {
+            eprintln!("endpoint answer failed: {error}");
         }
     }
 }
@@ -295,17 +320,37 @@ impl Notifier {
     }
 
     /// 창 window 의 name 을 감시하는 연결에 `status.changed` 를 보낸다. surface 는 감시가 지정한 표면이다.
-    pub fn changed(&self, window: &str, name: &str, surface: Option<&str>, value: Value) {
+    /// value 는 받은 텍스트 그대로 보내므로 페이지 값의 키 순서가 바뀌지 않는다.
+    pub fn changed(&self, window: &str, name: &str, surface: Option<&str>, value: &RawValue) {
+        #[derive(Serialize)]
+        struct Params<'a> {
+            window: &'a str,
+            name: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            surface: Option<&'a str>,
+            value: &'a RawValue,
+        }
+        #[derive(Serialize)]
+        struct Notification<'a> {
+            jsonrpc: &'static str,
+            method: &'static str,
+            params: Params<'a>,
+        }
         let key = Watch {
             window: window.into(),
             name: name.into(),
             surface: surface.map(str::to_string),
         };
-        let mut params = json!({"window": window, "name": name, "value": value});
-        if let Some(surface) = surface {
-            params["surface"] = Value::String(surface.to_string());
-        }
-        let message = json!({"jsonrpc": "2.0", "method": "status.changed", "params": params});
+        let message = Notification {
+            jsonrpc: "2.0",
+            method: "status.changed",
+            params: Params {
+                window,
+                name,
+                surface,
+                value,
+            },
+        };
         self.send(|peer| peer.watches.contains(&key), &message);
     }
 
@@ -317,7 +362,7 @@ impl Notifier {
         self.send(|peer| peer.transcript.contains(window), &message);
     }
 
-    fn send(&self, wanted: impl Fn(&Peer) -> bool, message: &Value) {
+    fn send<T: Serialize + ?Sized>(&self, wanted: impl Fn(&Peer) -> bool, message: &T) {
         let writers: Vec<_> = match self.0.peers.lock() {
             Ok(peers) => peers
                 .values()
@@ -565,7 +610,10 @@ pub fn connect(address: &str) -> Result<Box<dyn Connection>, String> {
 }
 
 /// 메시지 하나를 길이와 함께 쓴다.
-pub fn write_frame<W: Write + ?Sized>(writer: &mut W, message: &Value) -> Result<(), String> {
+pub fn write_frame<W: Write + ?Sized, T: Serialize + ?Sized>(
+    writer: &mut W,
+    message: &T,
+) -> Result<(), String> {
     let body = serde_json::to_vec(message).map_err(|e| e.to_string())?;
     if body.len() > MAX_FRAME {
         return Err(format!(
@@ -857,7 +905,7 @@ fn drain(shared: &Shared, topic: Topic) {
             // 페이지가 종료 요청에 실패해도 이후 시작 요청은 페이지에 다시 보낸다.
             (shared.service.call(topic.window(), method, params), false)
         } else {
-            (Ok(Value::Null), page)
+            (raw(&Value::Null), page)
         };
         if let Ok(mut lines) = shared.lines.lock() {
             if let Some(line) = lines.get_mut(&topic) {
@@ -871,9 +919,9 @@ fn drain(shared: &Shared, topic: Topic) {
 }
 
 /// 구독 변경이 아닌 요청 하나를 실행한다.
-fn run(shared: &Shared, method: &str, params: Option<Value>) -> Result<Value, Failure> {
+fn run(shared: &Shared, method: &str, params: Option<Value>) -> Result<Box<RawValue>, Failure> {
     if method == "windows.list" {
-        return shared.service.windows();
+        return shared.service.windows().and_then(|list| raw(&list));
     }
     let (window, params) = target(shared, method, params)?;
     shared.service.call(&window, method, params)

@@ -6,8 +6,9 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use serde_json::value::RawValue;
 use serde_json::{json, Map, Value};
-use soksak_host_tauriv2::endpoint::{self, Connection, Endpoint, Failure, Service, Watch};
+use soksak_host_tauriv2::endpoint::{self, raw, Connection, Endpoint, Failure, Service, Watch};
 
 /// 요청을 기록하고 창 w1 만 가진 서비스.
 struct Fake {
@@ -50,7 +51,7 @@ impl Service for Fake {
         window: &str,
         method: &str,
         params: Map<String, Value>,
-    ) -> Result<Value, Failure> {
+    ) -> Result<Box<RawValue>, Failure> {
         let call = (
             window.to_string(),
             method.to_string(),
@@ -59,8 +60,8 @@ impl Service for Fake {
         self.calls.lock().unwrap().push(call.clone());
         let _ = self.seen.lock().unwrap().send(call);
         match method {
-            "status.get" => Ok(json!(7)),
-            _ => Ok(Value::Null),
+            "status.get" => raw(&json!(7)),
+            _ => raw(&Value::Null),
         }
     }
 }
@@ -434,7 +435,7 @@ fn watchers_belong_to_their_connection() {
     );
 
     // 두 번째 연결은 감시하지 않았으므로 알림 대신 자신의 응답을 먼저 받는다.
-    notifier.changed("w1", "core.layout", None, json!(1));
+    notifier.changed("w1", "core.layout", None, &raw(&json!(1)).unwrap());
     assert_eq!(
         receive(&mut first),
         Some(json!({"jsonrpc": "2.0", "method": "status.changed",
@@ -463,7 +464,7 @@ fn watchers_belong_to_their_connection() {
         "status.unwatch",
         json!({"window": "w1", "name": "core.layout"}),
     );
-    notifier.changed("w1", "core.layout", None, json!(2));
+    notifier.changed("w1", "core.layout", None, &raw(&json!(2)).unwrap());
     assert_eq!(receive(&mut first).unwrap()["params"]["value"], 2);
     // 페이지는 두 연결의 감시 가운데 첫 감시만 받는다.
     let page_watches = fake
@@ -532,13 +533,18 @@ fn surface_watches_are_separate() {
     );
     assert_eq!(notifier.watches("w1").len(), 2);
 
-    notifier.changed("w1", "probe.lines", Some("tab-a"), json!(["a"]));
+    notifier.changed(
+        "w1",
+        "probe.lines",
+        Some("tab-a"),
+        &raw(&json!(["a"])).unwrap(),
+    );
     assert_eq!(
         receive(&mut connection),
         Some(json!({"jsonrpc": "2.0", "method": "status.changed",
         "params": {"window": "w1", "name": "probe.lines", "surface": "tab-a", "value": ["a"]}}))
     );
-    notifier.changed("w1", "probe.lines", None, json!(["b"]));
+    notifier.changed("w1", "probe.lines", None, &raw(&json!(["b"])).unwrap());
     assert_eq!(
         receive(&mut connection),
         Some(json!({"jsonrpc": "2.0", "method": "status.changed",
@@ -606,7 +612,7 @@ impl Service for GatedPage {
         _window: &str,
         method: &str,
         _params: Map<String, Value>,
-    ) -> Result<Value, Failure> {
+    ) -> Result<Box<RawValue>, Failure> {
         let _ = self.entered.lock().unwrap().send(method.to_string());
         if method == "status.unwatch" {
             let gate = self.gate.lock().unwrap().take();
@@ -617,7 +623,7 @@ impl Service for GatedPage {
         if method.starts_with("status.") && method != "status.get" {
             self.order.lock().unwrap().push(method.to_string());
         }
-        Ok(if method == "status.get" {
+        raw(&if method == "status.get" {
             json!(0)
         } else {
             Value::Null
@@ -680,7 +686,7 @@ fn subscription_changes_reach_the_page_in_arrival_order() {
         ["status.watch", "status.unwatch", "status.watch"]
     );
     assert!(notifier.watched("w1", "core.layout"));
-    notifier.changed("w1", "core.layout", None, json!(5));
+    notifier.changed("w1", "core.layout", None, &raw(&json!(5)).unwrap());
     assert_eq!(receive(&mut connection).unwrap()["params"]["value"], 5);
     endpoint.stop();
 }
@@ -697,8 +703,8 @@ impl Service for Late {
         window == "main" && self.0.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    fn call(&self, _: &str, _: &str, _: Map<String, Value>) -> Result<Value, Failure> {
-        Ok(json!("answered"))
+    fn call(&self, _: &str, _: &str, _: Map<String, Value>) -> Result<Box<RawValue>, Failure> {
+        raw(&json!("answered"))
     }
 }
 

@@ -102,7 +102,7 @@ pub(crate) fn call(
             };
             capture_stop(window, after)
         }
-        "diagnostics.transcript" => host.page(window, method, params, TIMEOUT),
+        "diagnostics.transcript" => exposure::parsed(&host.page(window, method, params, TIMEOUT)?),
         "diagnostics.modal.hold" => {
             let Some(on) = params.get("on").and_then(Value::as_bool) else {
                 return Err(Failure::params("on must be a boolean"));
@@ -203,7 +203,7 @@ fn fixture(host: &Host, window: &Window, request: Map<String, Value>) -> Result<
         }
         params.insert("settings".into(), settings.clone());
     }
-    host.page(window, "diagnostics.fixture", params, TIMEOUT)
+    exposure::parsed(&host.page(window, "diagnostics.fixture", params, TIMEOUT)?)
 }
 
 /// 경계선 하나의 왕복 끌기를 페이지에 요청하고 단계 시각을 보낸다. 끌기가 끝나고 창이 그 결과를
@@ -307,7 +307,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
             ));
         }
         exposure::log(window, "diagnostics: drag presented");
-        let mut merged = match result {
+        let mut merged = match exposure::parsed(&result)? {
             Value::Object(fields) => fields,
             Value::Null => Map::new(),
             _ => return Err(internal("the page drag result is not an object")),

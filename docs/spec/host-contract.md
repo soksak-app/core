@@ -184,6 +184,7 @@ Items:
 | `exposure.timeout.invalid-timeout-rejected` | A command.run timeout of 0, above 600000, fractional, a string, or negative returns -32602. | both |
 | `exposure.timeout.status-next-timeout-rejected` | status.next with any timeout returns -32602. | both |
 | `exposure.relay.reply-resolves-request` | A reply from the target document with a matching id resolves the request with its result. | both |
+| `exposure.relay.keeps-value-text` | A page reply is relayed as the text the page sent, so the keys of a value keep their order (`{"zeta":1,"alpha":{"b":2,"a":1}}` stays as sent). | both |
 | `exposure.relay.missing-result-is-null` | A reply without a result resolves to null. | both |
 | `exposure.relay.error-reply-keeps-code-and-message` | An error reply fails the request with the same code and message. | both |
 | `exposure.relay.foreign-document-reply-ignored-timeout-1005` | A reply from another document is ignored, the request times out with 1005, and a late reply is not accepted. | both |

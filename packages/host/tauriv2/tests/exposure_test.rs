@@ -3,11 +3,27 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use serde_json::value::RawValue;
 use serde_json::{json, Value};
 use soksak_host_tauriv2::exposure::{self, Relay};
 use soksak_host_tauriv2::windows::window_entry;
 
 const WAIT: Duration = Duration::from_secs(5);
+
+/// 문서가 보내는 응답 텍스트.
+fn text(value: Value) -> Box<RawValue> {
+    serde_json::value::to_raw_value(&value).unwrap()
+}
+
+/// 받은 그대로의 응답 텍스트.
+fn text_of(body: &str) -> Box<RawValue> {
+    RawValue::from_string(body.to_string()).unwrap()
+}
+
+/// 중계한 결과 텍스트를 값으로 읽는다.
+fn value(text: &RawValue) -> Value {
+    serde_json::from_str(text.get()).unwrap()
+}
 
 // contract: exposure.relay.reply-resolves-request
 #[test]
@@ -16,11 +32,26 @@ fn reply_from_target_document_resolves_request() {
     let replying = relay.clone();
     let result = relay.request("main", Some(WAIT), move |id| {
         std::thread::spawn(move || {
-            assert!(replying.reply("main", &json!({"id": id, "result": {"ok": true}})));
+            assert!(replying.reply("main", &text(json!({"id": id, "result": {"ok": true}}))));
         });
         Ok(())
     });
-    assert_eq!(result.unwrap(), json!({"ok": true}));
+    assert_eq!(value(&result.unwrap()), json!({"ok": true}));
+}
+
+// contract: exposure.relay.keeps-value-text
+#[test]
+fn reply_keeps_the_text_and_key_order_of_the_page_value() {
+    // 페이지는 응답을 JSON 텍스트로 보낸다. 중계는 그 값의 키 순서를 바꾸지 않는다.
+    let relay = Arc::new(Relay::default());
+    let replying = relay.clone();
+    let result = relay.request("main", Some(WAIT), move |id| {
+        let body = format!(r#"{{"id":{id},"result":{{"zeta":1,"alpha":{{"b":2,"a":1}}}}}}"#);
+        let payload = RawValue::from_string(body).unwrap();
+        assert!(replying.reply("main", &payload));
+        Ok(())
+    });
+    assert_eq!(result.unwrap().get(), r#"{"zeta":1,"alpha":{"b":2,"a":1}}"#);
 }
 
 // contract: exposure.relay.missing-result-is-null
@@ -29,10 +60,10 @@ fn missing_result_is_null() {
     let relay = Arc::new(Relay::default());
     let replying = relay.clone();
     let result = relay.request("main", Some(WAIT), move |id| {
-        assert!(replying.reply("main", &json!({"id": id})));
+        assert!(replying.reply("main", &text(json!({"id": id}))));
         Ok(())
     });
-    assert_eq!(result.unwrap(), Value::Null);
+    assert_eq!(value(&result.unwrap()), Value::Null);
 }
 
 // contract: exposure.relay.error-reply-keeps-code-and-message
@@ -44,7 +75,7 @@ fn error_reply_keeps_code_and_message() {
         .request("main", Some(WAIT), move |id| {
             replying.reply(
                 "main",
-                &json!({"id": id, "error": {"code": 1002, "message": "not registered"}}),
+                &text(json!({"id": id, "error": {"code": 1002, "message": "not registered"}})),
             );
             Ok(())
         })
@@ -62,12 +93,12 @@ fn reply_from_another_document_is_ignored_and_request_times_out() {
     let replying = relay.clone();
     let failure = relay
         .request("main", Some(Duration::from_millis(50)), move |id| {
-            assert!(!replying.reply("surface-main-a", &json!({"id": id, "result": 1})));
+            assert!(!replying.reply("surface-main-a", &text(json!({"id": id, "result": 1}))));
             Ok(())
         })
         .unwrap_err();
     assert_eq!(failure.code, 1005);
-    assert!(!relay.reply("main", &json!({"id": 1, "result": 1})));
+    assert!(!relay.reply("main", &text(json!({"id": 1, "result": 1}))));
 }
 
 // contract: exposure.relay.send-failure-1003
@@ -112,12 +143,14 @@ fn request_without_timeout_waits_until_the_document_closes() {
 // contract: exposure.list.appends-host-entries-registered, exposure.list.host-entries-exact-sorted-set, exposure.list.host-entries-described, exposure.list.host-quit-result-null, exposure.list.non-object-list-rejected
 #[test]
 fn host_entries_are_appended_as_registered() {
-    let listed = exposure::with_host_entries(json!({
-        "status": [{"name": "core.layout", "description": "Layout.", "schema": {}, "registered": true}],
-        "commands": [],
-        "dom": [],
-    }))
-    .unwrap();
+    let listed = value(
+        &exposure::with_host_entries(&text(json!({
+            "status": [{"name": "core.layout", "description": "Layout.", "schema": {}, "registered": true}],
+            "commands": [],
+            "dom": [],
+        })))
+        .unwrap(),
+    );
     let status: Vec<&str> = listed["status"]
         .as_array()
         .unwrap()
@@ -173,7 +206,15 @@ fn host_entries_are_appended_as_registered() {
         .find(|entry| entry["name"] == "host.quit")
         .unwrap();
     assert_eq!(quit["result"], json!({"type": "null"}));
-    assert!(exposure::with_host_entries(json!([])).is_err());
+    assert!(exposure::with_host_entries(&text(json!([]))).is_err());
+    // 페이지 항목은 받은 텍스트 그대로 남는다.
+    let kept = exposure::with_host_entries(&text_of(r#"{"dom":[],"commands":[],"status":[{"name":"core.layout","schema":{},"description":"Layout."}]}"#)).unwrap();
+    assert!(
+        kept.get()
+            .contains(r#"{"name":"core.layout","schema":{},"description":"Layout."}"#),
+        "{}",
+        kept.get()
+    );
 }
 
 // contract: endpoint.input.pointer-invalid-phase, endpoint.input.pointer-missing-coordinate, endpoint.input.pointer-numeric-button-rejected, endpoint.input.pointer-middle-button-rejected, endpoint.input.pointer-activate-only-on-move, endpoint.input.pointer-activate-must-be-bool, endpoint.input.pointer-defaults, endpoint.input.pointer-right-button-accepted, endpoint.input.pointer-phase-and-scroll-decoding, endpoint.input.key-unknown-modifier-rejected, endpoint.input.key-shift-command-mask, endpoint.input.key-control-option-and-text, endpoint.input.key-invalid-phase-or-modifier-type

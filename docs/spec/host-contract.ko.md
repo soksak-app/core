@@ -184,6 +184,7 @@ fn invalid_json_closes_connection() {
 | `exposure.timeout.invalid-timeout-rejected` | 0, 600000 초과, 소수, 문자열, 음수인 command.run timeout은 -32602를 반환한다. | both |
 | `exposure.timeout.status-next-timeout-rejected` | timeout이 있는 status.next는 -32602를 반환한다. | both |
 | `exposure.relay.reply-resolves-request` | 대상 문서에서 온 같은 id의 응답은 그 결과로 요청을 완료한다. | both |
+| `exposure.relay.keeps-value-text` | Page 응답은 page가 보낸 텍스트 그대로 중계되므로 값의 key 순서가 유지된다(`{"zeta":1,"alpha":{"b":2,"a":1}}`는 보낸 그대로다). | both |
 | `exposure.relay.missing-result-is-null` | result가 없는 응답은 null로 완료된다. | both |
 | `exposure.relay.error-reply-keeps-code-and-message` | 오류 응답은 같은 코드와 메시지로 요청을 실패시킨다. | both |
 | `exposure.relay.foreign-document-reply-ignored-timeout-1005` | 다른 문서의 응답은 무시되고, 요청은 1005로 시간 초과되며, 늦은 응답도 받지 않는다. | both |

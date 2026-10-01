@@ -5,13 +5,14 @@
 //! 응답을 받는다. 메인 페이지가 표면 페이지의 이름을 요청하면 `exposure_forward` 명령으로 표면
 //! 페이지에 전달한다. 호출한 문서는 명령의 웹뷰로 구분한다. 형식은 docs/spec/exposure.md 에 정의한다.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
+use serde_json::value::RawValue;
 use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, Window};
 
@@ -171,38 +172,33 @@ pub fn check_host_name(method: &str, name: &str) -> Result<(), Failure> {
     }
 }
 
-pub fn with_host_entries(listed: Value) -> Result<Value, Failure> {
-    let Value::Object(mut listed) = listed else {
+/// 페이지가 보낸 exposure.list 에 host 항목을 더한다. 페이지 항목은 받은 텍스트 그대로 두고, 종류는 이름
+/// 순서로 쓴다(Wails host 와 같다).
+pub fn with_host_entries(listed: &RawValue) -> Result<Box<RawValue>, Failure> {
+    let Ok(mut lists) = serde_json::from_str::<BTreeMap<String, Vec<Box<RawValue>>>>(listed.get())
+    else {
         return Err(Failure::new(
             -32603,
-            "the page returned an exposure list that is not an object",
+            "the page returned an exposure list that is not an object of arrays",
         ));
     };
     let Value::Object(declared) = host_declarations() else {
         unreachable!("host declarations are an object")
     };
     for (kind, entries) in declared {
-        let target = listed
-            .entry(kind.clone())
-            .or_insert_with(|| Value::Array(Vec::new()));
-        let Value::Array(target) = target else {
-            return Err(Failure::new(
-                -32603,
-                format!("the page returned {kind} that is not an array"),
-            ));
-        };
         let Some(entries) = entries.as_array().cloned() else {
             return Err(Failure::new(
                 -32603,
                 format!("the host declarations of {kind} are not an array"),
             ));
         };
+        let target = lists.entry(kind).or_default();
         for mut entry in entries {
             entry["registered"] = Value::Bool(true);
-            target.push(entry);
+            target.push(raw(&entry)?);
         }
     }
-    Ok(Value::Object(listed))
+    serde_json::value::to_raw_value(&lists).map_err(|error| Failure::new(-32603, error.to_string()))
 }
 
 fn number(params: &Map<String, Value>, name: &str) -> Result<f64, Failure> {
@@ -302,7 +298,24 @@ pub fn key(params: &Map<String, Value>) -> Result<Key, Failure> {
     })
 }
 
-type Waiting = (String, Sender<Result<Value, Failure>>);
+type Waiting = (String, Sender<Result<Box<RawValue>, Failure>>);
+
+pub use crate::endpoint::raw;
+
+/// 응답 텍스트를 host 가 읽는 값으로 바꾼다.
+pub fn parsed(text: &RawValue) -> Result<Value, Failure> {
+    serde_json::from_str(text.get()).map_err(|error| Failure::new(-32603, error.to_string()))
+}
+
+/// 페이지가 보낸 응답 `{id, result}` 또는 `{id, error}`. result 는 받은 텍스트 그대로 둔다.
+#[derive(Deserialize)]
+struct Answer {
+    id: Option<u64>,
+    #[serde(default)]
+    result: Option<Box<RawValue>>,
+    #[serde(default)]
+    error: Option<Value>,
+}
 
 /// 문서에 보낸 요청과 그 응답의 대응.
 #[derive(Default)]
@@ -319,7 +332,7 @@ impl Relay {
         target: &str,
         timeout: Option<Duration>,
         send: impl FnOnce(u64) -> Result<(), String>,
-    ) -> Result<Value, Failure> {
+    ) -> Result<Box<RawValue>, Failure> {
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
         let (tx, rx) = mpsc::channel();
         self.pending
@@ -349,9 +362,15 @@ impl Relay {
     }
 
     /// 문서 from 의 응답 `{id, result}` 또는 `{id, error}` 를 기다리는 요청에 전달한다. 전달했으면
-    /// true 이다. 다른 문서에 보낸 요청의 id 는 전달하지 않는다.
-    pub fn reply(&self, from: &str, payload: &Value) -> bool {
-        let Some(id) = payload.get("id").and_then(Value::as_u64) else {
+    /// true 이다. 다른 문서에 보낸 요청의 id 는 전달하지 않는다. result 는 받은 텍스트 그대로 전달하므로
+    /// 페이지 값의 키 순서가 바뀌지 않는다.
+    pub fn reply(&self, from: &str, payload: &RawValue) -> bool {
+        let Ok(Answer {
+            id: Some(id),
+            result,
+            error,
+        }) = serde_json::from_str::<Answer>(payload.get())
+        else {
             return false;
         };
         let waiting = {
@@ -364,7 +383,7 @@ impl Relay {
             pending.remove(&id)
         };
         let Some((_, tx)) = waiting else { return false };
-        let outcome = match payload.get("error") {
+        let outcome = match error {
             Some(error) if !error.is_null() => Err(Failure::new(
                 // 기본값: 코드가 없는 페이지 오류는 JSON-RPC 내부 오류(-32603)로 알린다.
                 error.get("code").and_then(Value::as_i64).unwrap_or(-32603),
@@ -375,7 +394,7 @@ impl Relay {
                     .unwrap_or("the document failed"),
             )),
             // 기본값: 값을 돌려주지 않은 명령의 답에는 result 가 없고, 그 결과는 null 이다.
-            _ => Ok(payload.get("result").cloned().unwrap_or(Value::Null)),
+            _ => result.map_or_else(|| raw(&Value::Null), Ok),
         };
         tx.send(outcome).is_ok()
     }
@@ -502,13 +521,18 @@ pub fn reply_target(window: &str, request: &Value) -> Result<String, String> {
     }
 }
 
-pub(crate) fn reply(webview: &Webview, request: Value) -> Result<(), String> {
+/// 문서의 응답 텍스트를 기다리는 요청에 전달한다. 텍스트는 받은 그대로 중계하고, 응답을 보낸 문서를 고르는
+/// 데만 읽는다.
+pub(crate) fn reply(webview: &Webview, request: String) -> Result<(), String> {
     let window = main_page(webview)?;
-    let target = reply_target(window.label(), &request)?;
-    if let Some(surface) = request.get("surface").and_then(Value::as_str) {
+    let text = RawValue::from_string(request)
+        .map_err(|error| format!("exposure reply is not JSON: {error}"))?;
+    let routing: Value = serde_json::from_str(text.get()).map_err(|error| error.to_string())?;
+    let target = reply_target(window.label(), &routing)?;
+    if let Some(surface) = routing.get("surface").and_then(Value::as_str) {
         crate::surfaces::surface_handle(&window, surface)?;
     }
-    if !webview.state::<Exposure>().relay.reply(&target, &request) {
+    if !webview.state::<Exposure>().relay.reply(&target, &text) {
         return Err("exposure reply does not match a pending request".into());
     }
     Ok(())
@@ -519,18 +543,21 @@ pub(crate) struct Changed {
     name: String,
     #[serde(default)]
     surface: Option<String>,
-    value: Value,
+    /// 페이지가 보낸 값의 JSON 텍스트. 키 순서를 바꾸지 않고 연결에 보낸다.
+    value: String,
 }
 
 /// 메인 페이지가 보낸 상태 변경을 감시하는 연결에 보낸다.
 pub(crate) fn changed(webview: &Webview, request: Changed) -> Result<(), String> {
     let window = main_page(webview)?;
+    let value = RawValue::from_string(request.value)
+        .map_err(|error| format!("status {} value is not JSON: {error}", request.name))?;
     if let Some(endpoint) = window.state::<Exposure>().endpoint.get() {
         endpoint.notifier().changed(
             window.label(),
             &request.name,
             request.surface.as_deref(),
-            request.value,
+            &value,
         );
     }
     Ok(())
@@ -570,8 +597,9 @@ pub fn forward_timeout(method: &str, timeout: &Value) -> Result<Option<Duration>
     Ok(Some(Duration::from_millis(ms as u64)))
 }
 
-/// 메인 페이지의 요청을 표면 페이지에 보내고 그 응답을 `{result}` 또는 `{error}` 로 반환한다.
-pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Value, String> {
+/// 메인 페이지의 요청을 표면 페이지에 보내고 그 응답을 `{result}` 또는 `{error}` 로 반환한다. result 는
+/// 표면 페이지가 보낸 텍스트 그대로다.
+pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValue>, String> {
     let window = main_page(webview)?;
     let label = label_for(&window, &request.surface);
     let app = window.app_handle().clone();
@@ -595,10 +623,11 @@ pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Value, Stri
 				)
 			}),
     };
-    Ok(match outcome {
-        Ok(result) => json!({"result": result}),
-        Err(error) => json!({"error": error}),
-    })
+    let text = match outcome {
+        Ok(result) => format!(r#"{{"result":{}}}"#, result.get()),
+        Err(error) => json!({"error": error}).to_string(),
+    };
+    RawValue::from_string(text).map_err(|error| error.to_string())
 }
 
 #[derive(Deserialize)]
@@ -776,7 +805,10 @@ pub(crate) fn windows_changed(app: &AppHandle) {
                 continue;
             };
             if notifier.watched(window, "host.windows") {
-                notifier.changed(window, "host.windows", None, list.clone());
+                match raw(&list) {
+                    Ok(text) => notifier.changed(window, "host.windows", None, &text),
+                    Err(error) => eprintln!("host.windows change: {}", error.message),
+                }
             }
         }
     });
@@ -813,9 +845,12 @@ pub(crate) fn window_changed(window: &Window) {
             reported.insert(window.label().to_string(), value.clone());
         }
         if let Some(endpoint) = state.endpoint.get() {
-            endpoint
-                .notifier()
-                .changed(window.label(), "host.window", None, value);
+            match raw(&value) {
+                Ok(text) => endpoint
+                    .notifier()
+                    .changed(window.label(), "host.window", None, &text),
+                Err(error) => eprintln!("host.window change: {}", error.message),
+            }
         }
     });
 }
@@ -1260,7 +1295,7 @@ impl Host {
         method: &str,
         params: Map<String, Value>,
         timeout: Duration,
-    ) -> Result<Value, Failure> {
+    ) -> Result<Box<RawValue>, Failure> {
         self.page_then(window, method, params, Some(timeout), || {})
     }
 
@@ -1274,7 +1309,7 @@ impl Host {
         params: Map<String, Value>,
         timeout: Option<Duration>,
         sent: impl FnOnce(),
-    ) -> Result<Value, Failure> {
+    ) -> Result<Box<RawValue>, Failure> {
         let label = window.label().to_string();
         root_view_on_main(window).map_err(|error| Failure::new(MISSING_DOCUMENT, error))?;
         let data = window_data(window).map_err(|e| Failure::new(MISSING_DOCUMENT, e))?;
@@ -1528,7 +1563,7 @@ impl Service for Host {
         window: &str,
         method: &str,
         params: Map<String, Value>,
-    ) -> Result<Value, Failure> {
+    ) -> Result<Box<RawValue>, Failure> {
         let window = windows::find(&self.0, window).ok_or_else(|| {
             Failure::new(MISSING_DOCUMENT, format!("window {window} does not exist"))
         })?;
@@ -1564,14 +1599,14 @@ impl Host {
         window: &tauri::Window,
         method: &str,
         params: Map<String, Value>,
-    ) -> Result<Value, Failure> {
+    ) -> Result<Box<RawValue>, Failure> {
         match method {
-            "input.pointer" => self.input_pointer(&window, pointer(&params)?),
-            "input.key" => self.input_key(&window, key(&params)?),
-            "exposure.list" => with_host_entries(self.page(&window, method, params, TIMEOUT)?),
+            "input.pointer" => raw(&self.input_pointer(&window, pointer(&params)?)?),
+            "input.key" => raw(&self.input_key(&window, key(&params)?)?),
+            "exposure.list" => with_host_entries(&self.page(&window, method, params, TIMEOUT)?),
             #[cfg(feature = "diagnostics")]
             _ if method.starts_with("diagnostics.") => {
-                crate::diagnostics::call(self, &window, method, params)
+                raw(&crate::diagnostics::call(self, &window, method, params)?)
             }
             _ => {
                 let name = params
@@ -1581,7 +1616,7 @@ impl Host {
                     .unwrap_or_default()
                     .to_string();
                 if name == "host" || name.starts_with("host.") {
-                    return self.host_entry(&window, method, &name, &params);
+                    return raw(&self.host_entry(&window, method, &name, &params)?);
                 }
                 // 메인 페이지는 표면에 전달한 명령을 선언의 제한 시간 안에 끝내므로 command.run 에는 제한을 두지 않는다.
                 let timeout = if method == "command.run" {
