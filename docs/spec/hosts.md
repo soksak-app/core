@@ -140,6 +140,7 @@ On Windows both hosts implement only directory identity (`platform/windows/ident
 | A2 | none | `build.rs` | Tauri requires `tauri_build::build()` |
 | A3 | none | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri configuration |
 | A4 | `go.mod`, `go.sum` | `Cargo.toml` | Each language has its own manifest; the host packages have the same difference |
+| C1 | `src/cmd/sok/main.go` | `src/main.rs` | A Go command needs its own `main` package directory; a Rust binary target is `src/main.rs` beside the library root |
 
 ## Process lifecycle
 
@@ -171,6 +172,19 @@ apps/wailsv3/                  apps/tauriv2/
 `apps/wailsv3/go.mod` requires the host module. `apps/tauriv2/Cargo.toml` depends on `soksak-host-tauriv2` by path and on `tauri`. `apps/tauriv2/build.rs` calls only `tauri_build::build()`.
 
 The Wails binding service name is `github.com/min-median-max/soksak/packages/host/wailsv3/src.Host`. Wails derives it from the Go package path and type name, and `apps/wailsv3/runtime/index.js` uses it.
+
+## Command line tree
+
+```
+packages/sok/wailsv3/          packages/sok/tauriv2/
+  src/sok.go  (package sok)      src/sok.rs  (library root)
+  src/<role>.go                  src/<role>.rs
+  src/cmd/sok/main.go            src/main.rs           difference C1
+  tests/<role>_test.go           tests/<role>_test.rs
+  go.mod, go.sum                 Cargo.toml            difference A4
+```
+
+The pair follows the same file-name rule and structure check as the host packages. Its contract cases are listed in [host contract](host-contract.md) under `cli.`.
 
 ## Frontend and executables
 

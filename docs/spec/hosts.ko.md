@@ -141,6 +141,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | A2 | 없음 | `build.rs` | Tauri는 `tauri_build::build()`를 요구한다 |
 | A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri 설정 |
 | A4 | `go.mod`, `go.sum` | `Cargo.toml` | 언어마다 매니페스트가 다르며, 호스트 패키지에도 같은 차이가 있다 |
+| C1 | `src/cmd/sok/main.go` | `src/main.rs` | Go 명령은 자기 `main` package 폴더가 필요하고, Rust binary target은 library root 옆의 `src/main.rs`다 |
 
 ## 프로세스 생명주기
 
@@ -172,6 +173,19 @@ apps/wailsv3/                  apps/tauriv2/
 `apps/wailsv3/go.mod`는 호스트 모듈을 요구한다. `apps/tauriv2/Cargo.toml`은 경로로 지정한 `soksak-host-tauriv2`와 `tauri`에 의존한다. `apps/tauriv2/build.rs`는 `tauri_build::build()`만 호출한다.
 
 Wails 바인딩 서비스 이름은 `github.com/min-median-max/soksak/packages/host/wailsv3/src.Host`다. Wails가 Go 패키지 경로와 타입 이름으로 이 이름을 만들고, `apps/wailsv3/runtime/index.js`가 이를 사용한다.
+
+## Command line 트리
+
+```
+packages/sok/wailsv3/          packages/sok/tauriv2/
+  src/sok.go  (package sok)      src/sok.rs  (library root)
+  src/<role>.go                  src/<role>.rs
+  src/cmd/sok/main.go            src/main.rs           차이 C1
+  tests/<role>_test.go           tests/<role>_test.rs
+  go.mod, go.sum                 Cargo.toml            차이 A4
+```
+
+이 쌍은 호스트 패키지와 같은 파일 이름 규칙과 구조 검사를 따른다. 그 contract case는 [호스트 계약](host-contract.ko.md)에 `cli.`로 나열한다.
 
 ## 프런트엔드와 실행 파일
 
