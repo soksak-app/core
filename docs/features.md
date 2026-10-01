@@ -708,8 +708,8 @@ Previous completed component work remains evidence, not completion of these wide
   - [ ] R1-2 — P0: Serve installed plugins and run installed sidecars on both hosts: `/modules/<package>/` from `<config-dir>/plugins`, sidecar executables from `<config-dir>/sidecars` after hash verification, with host contract cases.
   - [ ] R1-3 — P0: Load the installed plugin list in the workbench, add the plugin commands and status (`core.plugins.*`) and the settings plugin page, open spaces with a placeholder card for a plugin that is not installed, and declare the state-module data conversion.
   - [ ] R1-4 — P1: Provide the local release tools: `soksak-plugin pack`, the sidecar release archive and `SHA256SUMS`, and the registry check that validates entries and writes `index.json`.
-  - [ ] R1-5 — P1: Split `browser`, `terminal`, `files` and `shell` into `../plugins/<id>` and the sidecars into `../sidecars/<name>`, each with its own tests, checklist and core git tag dependency; core window checks install from a local registry fixture.
-  - [ ] R1-6 — P1: Create the local registry with the starter pack and install the starter pack on the first run.
+  - [ ] R1-5 — P1: Remove the `shell` plugin and `@soksak/sidecar-shell`, which the user does not publish (2026-10-01), and use a terminal card in the new-space layout. Split `browser`, `terminal` and `files` into `../plugins/<id>` and the sidecars into `../sidecars/<name>`, each with its own tests, checklist and core git tag dependency; core window checks install from a local registry fixture.
+  - [ ] R1-6 — P1: Create the local registry at `~/Projects/soksak/registry` with the starter pack and install the starter pack on the first run.
   - [ ] R1-7 — P1: Set every core package to 0.0.2, limit `scripts/check-versions.mjs` to core packages, and build and verify the 0.0.2 release locally.
 
 ## Tauri/Wails parity audit (2026-09-21)
