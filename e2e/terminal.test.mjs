@@ -1500,10 +1500,12 @@ for (const app of Object.values(APPS)) {
 
     const after = await terminalFrame(s);
     let changed = 0;
-    const x0 = Math.max(0, Math.round(viewX + col * metrics.cellWidth));
-    const x1 = Math.min(after.width, Math.round(viewX + (col + marker.length) * metrics.cellWidth));
-    const y0 = Math.max(0, Math.round(viewY + row * metrics.cellHeight));
-    const y1 = Math.min(after.height, Math.round(viewY + (row + 1) * metrics.cellHeight));
+    // 창 좌표는 point 이고 frame 은 device pixel 이므로 frame 배율을 곱한다.
+    const scale = after.scale;
+    const x0 = Math.max(0, Math.round((viewX + col * metrics.cellWidth) * scale));
+    const x1 = Math.min(after.width, Math.round((viewX + (col + marker.length) * metrics.cellWidth) * scale));
+    const y0 = Math.max(0, Math.round((viewY + row * metrics.cellHeight) * scale));
+    const y1 = Math.min(after.height, Math.round((viewY + (row + 1) * metrics.cellHeight) * scale));
     for (let y = y0; y < y1; y++) {
       for (let x = x0; x < x1; x++) {
         const oldPixel = pixel(before, x, y);

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-45: the terminal selection window check measures the selected cells in frame pixels, so it passes on a 2x display.
+
 - F0.4-1-1-1: a stdio sidecar message for a closed surface is discarded, and a message for a surface the host never sent to that process fails the sidecar with `unknown surface <surface>`.
 
 - F0.4-1-1-2: both hosts read the persistent service connection with the 64 MiB message limit and end it with `sidecar-failure` on an oversize or invalid line instead of reading without a bound or reconnecting at once.
