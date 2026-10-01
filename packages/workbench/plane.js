@@ -197,6 +197,9 @@ const setText = (el, text) => { if (el.textContent !== text) el.textContent = te
 const setHTML = (el, html) => { if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; } };
 
 function updateCard(el, card, rect) {
+  // 네이티브 준비를 기다리던 이전 배치는 그 사이 닫힌 카드를 담을 수 있다. 닫힌 카드는 탭이 없고 그 표면은 이미
+  // 해제되었으므로 내용을 고치거나 표면을 다시 마운트하지 않는다. 다음 배치가 그 카드를 지운다.
+  if (!grid.card(card.id)) return;
   const place = isPlace(card.id) ? card.id : null;
   // 카드 내용의 실제 글자 배율(프레임 배율 × 카드 배율). 배율이 1 이면 zoom 을 선언하지 않는다. 값이 1 인
   // zoom 선언만으로도 WebKit 이 표면 내용을 다시 그리는 비용이 커져 끌기 중 표시가 줄었다.

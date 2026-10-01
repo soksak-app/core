@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-26: drawing a layout prepared before a card closed no longer fails on that card's missing tab, and does not mount its released surface again.
+
 - G1.4-25-1: the comment language check reads the working tree, including new files and excluding deleted ones.
 
 - G1.4-14-5-1-1: the Tauri window list cases live in the paired `exposure_test`, so the paired host structure holds.
