@@ -350,9 +350,9 @@ pub struct Endpoint {
     stopped: Arc<AtomicBool>,
 }
 
-/// One application process owns one configuration directory. The file handle
-/// remains open for the lifetime of the endpoint; the file itself also records
-/// the owner PID so a force-terminated process can be replaced explicitly.
+/// 하나의 application process가 하나의 configuration directory를 소유한다. file handle은
+/// endpoint가 존재하는 동안 열린 상태로 유지된다. file 자체도 owner PID를 기록하므로
+/// 강제 종료된 process를 명시적으로 교체할 수 있다.
 struct ProcessLock {
     path: PathBuf,
     _file: File,

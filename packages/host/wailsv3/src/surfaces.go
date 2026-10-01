@@ -379,9 +379,9 @@ func (s *Surfaces) pressAt(x, y float64) error {
 	return nil
 }
 
-// SurfaceOwnerID resolves the logical surface whose native view received input.
-// The map is populated when a logical surface is created and removed with it;
-// an unknown native view must never activate a card.
+// SurfaceOwnerID 는 입력을 받은 native view 가 속한 논리 surface 를 찾는다.
+// map 항목은 논리 surface 를 생성할 때 추가되고 surface 와 함께 제거된다.
+// 알 수 없는 native view 는 card 를 활성화해서는 안 된다.
 func SurfaceOwnerID(named map[uintptr]string, view uintptr) (string, bool) {
 	id, ok := named[view]
 	return id, ok && id != ""
@@ -421,7 +421,7 @@ func max1(v float64) float64 {
 	return v
 }
 
-// ValidateRect rejects geometry that must never reach a native view.
+// ValidateRect 는 native view 에 전달되어서는 안 되는 geometry 를 거부한다.
 func ValidateRect(name string, x, y, width, height float64) error {
 	if math.IsNaN(x) || math.IsNaN(y) || math.IsNaN(width) || math.IsNaN(height) ||
 		math.IsInf(x, 0) || math.IsInf(y, 0) || math.IsInf(width, 0) || math.IsInf(height, 0) {
@@ -535,9 +535,9 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 		s.sidecars.Close(id)
 	}
 	s.surfacesClosed(gone)
-	// Continuous frames update native positions only. Reconfiguring image rasters
-	// for every divider step serializes sidecar work behind the display queue;
-	// the settled frame below performs the authoritative raster refresh.
+	// 연속 frame 은 native 위치만 갱신한다. divider 단계마다 image raster 를 다시
+	// 구성하면 sidecar 작업이 display queue 뒤에 직렬화된다. 아래의 settled frame 이
+	// 기준이 되는 raster 갱신을 수행한다.
 	if req.Settled {
 		if err := s.refreshImageRasters(); err != nil {
 			if cancel := system.EnqueueUI(func() {
@@ -593,9 +593,9 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 		err    error
 	}
 	done := make(chan result, 1)
-	// Settled frames confirm the DOM document and image raster. Continuous frames
-	// commit after native preparation so the next display cycle is not serialized
-	// behind a document or raster callback; the frame checks cover the transition.
+	// settled frame 은 DOM document 와 image raster 를 확인한다. 연속 frame 은 다음
+	// display cycle 이 document 나 raster callback 뒤에 직렬화되지 않도록 native 준비
+	// 뒤에 commit 한다. 이 전환은 frame 검사가 다룬다.
 	go func() {
 		var waiting error
 		if req.Settled || req.WaitForPresentation {
@@ -613,11 +613,10 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 				timer.Stop()
 			}
 		}
-		// During a continuous divider gesture the native surface frame and the
-		// DOM are committed every display cycle. Reconfiguring every image raster
-		// here serializes the next frame behind sidecar raster work and makes the
-		// native layer fall behind the DOM. The settled frame is authoritative and
-		// must complete the raster transaction.
+		// 연속 divider gesture 중에는 native surface frame 과 DOM 을 display cycle
+		// 마다 commit 한다. 여기서 모든 image raster 를 다시 구성하면 다음 frame 이
+		// sidecar raster 작업 뒤에 직렬화되고 native layer 가 DOM 보다 늦어진다.
+		// settled frame 이 기준이며, raster transaction 을 완료해야 한다.
 		if waiting == nil && req.Settled {
 			waiting = s.refreshImageRasters()
 		}
@@ -675,8 +674,8 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 	return placed, nil
 }
 
-// CreateLogicalSurfaceHandle preserves native creation failures and rejects a nil handle.
-// The callback is isolated so the failure contract can be tested without creating a window.
+// CreateLogicalSurfaceHandle 은 native 생성 실패를 그대로 전달하고 nil handle 을 거부한다.
+// 창을 만들지 않고 실패 contract 를 테스트할 수 있도록 callback 을 분리한다.
 func CreateLogicalSurfaceHandle(create func() (unsafe.Pointer, error), id string) (unsafe.Pointer, error) {
 	handle, err := create()
 	if err != nil {
@@ -764,8 +763,8 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		s.compositions[item.id] = item.decl.Composition
 		s.mu.Unlock()
 		s.images.SetSurfaceVisible(item.id, item.visible)
-		// Keep the native view hidden until PresentSurfaces confirms that the
-		// corresponding application DOM frame has been displayed.
+		// PresentSurfaces 가 대응하는 애플리케이션 DOM frame 이 표시되었음을
+		// 확인할 때까지 native view 를 숨긴 상태로 둔다.
 		item.view.SetHidden(true)
 		system.SetSurfaceAlphaHandle(item.view.NativeView(), alphaFor(item.decl.Dim))
 		if item.visible {

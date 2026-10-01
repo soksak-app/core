@@ -339,11 +339,10 @@ async function closeTab(cardId, tabId) {
   const card = grid.card(cardId);
   if (!card) return;
   if (!tabsOf(card).some((t) => t.id === tabId)) return;
-  // A tab close is complete only after the module has released its native
-  // composition and sidecar session. The command registry waits for this
-  // promise before running its settled barrier; otherwise the barrier can
-  // race the asynchronous disposal and time out while the tab is still
-  // visible to the host.
+  // 탭 닫기는 모듈이 native composition과 sidecar 세션을 해제한 뒤에야
+  // 완료된다. command registry는 settled barrier를 실행하기 전에 이 promise를
+  // 기다린다. 그렇지 않으면 barrier가 비동기 dispose와 경쟁하여, 탭이 아직
+  // 호스트에 보이는 동안 시간 초과될 수 있다.
   await disposeSurface(tabId);
   card.data.tabs = tabsOf(card).filter((t) => t.id !== tabId);
   if (card.data.tabs.length === 0) {
@@ -597,9 +596,9 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   }
   document.addEventListener("pointerdown", onPickerOutside, true);
   document.addEventListener("keydown", onPickerKey, true);
-  // A native picker has its own WebView and receives focus when it reports ready.
-  // Focusing the now-hidden DOM item here would return the first responder to the
-  // main WebView and drop Escape before the native picker can close.
+  // native picker는 자체 WebView를 가지며 ready를 보고할 때 focus를 받는다.
+  // 여기서 이제 숨겨진 DOM 항목에 focus를 주면 first responder가 main WebView로
+  // 돌아가고, native picker가 닫히기 전에 Escape를 잃는다.
   if (!native) {
     // 기본값: 고른 항목이 없는 선택기는 첫 항목에 포커스한다.
     (pickerEl.querySelector('.picker__item[data-active=true]') ??
@@ -883,8 +882,8 @@ function settle() {
 /* 진행 중인 scrollend 대기. 다음 요청이 이전 대기를 취소한다. */
 const landing = new WeakMap();
 
-// A card focus can replace the native surface at the same position. The native
-// input owner must receive focus after that presentation, not before it.
+// 카드 focus는 같은 위치의 native surface를 교체할 수 있다. native 입력 소유자는
+// 그 표시 전이 아니라 표시 뒤에 focus를 받아야 한다.
 let pendingSurfaceFocus = null;
 
 export function requestSurfaceFocus(surfaceId) {

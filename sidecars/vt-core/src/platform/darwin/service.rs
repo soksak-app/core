@@ -1,4 +1,4 @@
-//! Persistent protocol-1 transport for the in-process terminal service.
+//! in-process terminal service를 위한 persistent protocol-1 transport이다.
 
 use crate::protocol::{serve_with_registry, LocalSessionPort, PersistentRegistry};
 use nix::errno::Errno;
@@ -124,7 +124,7 @@ fn read_endpoint(service_dir: &Path) -> Result<Endpoint, String> {
 }
 
 fn socket_path() -> Result<(PathBuf, PathBuf), String> {
-    // Keep the absolute socket path below macOS's 104-byte Unix socket limit.
+    // 절대 socket 경로를 macOS의 104-byte Unix socket 한도 미만으로 유지한다.
     let directory = PathBuf::from("/tmp").join(format!("spv-{}", Uuid::new_v4()));
     fs::create_dir(&directory).map_err(|e| format!("create socket directory: {e}"))?;
     fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))
@@ -187,8 +187,8 @@ async fn authenticate(
     Ok((reader, write_half, hello.client))
 }
 
-/// Runs the persistent service.  The PTY service is shared by every accepted
-/// connection; a transport disconnect therefore does not stop its sessions.
+/// persistent service를 실행한다.  PTY service는 수락된 모든 connection이
+/// 공유하므로, transport 연결이 끊겨도 그 session은 멈추지 않는다.
 pub async fn serve_persistent(
     service_dir: &Path,
     engine_factory: Arc<dyn Fn() -> Box<dyn crate::protocol::Engine> + Send + Sync>,

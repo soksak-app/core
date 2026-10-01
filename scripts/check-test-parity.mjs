@@ -39,6 +39,7 @@ lane("language test adapter manifest", "declaration", ["scripts/language-test-ca
 lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/test-evidence.test.mjs"]),
   lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scripts/test/versions.test.mjs"]),
   lane("fallback and discarded error audit", "js-ts", ["scripts/check-fallbacks.mjs"], ["scripts/test/fallbacks.test.mjs"]),
+  lane("comment language audit", "js-ts", ["scripts/check-comment-language.mjs"], ["scripts/test/comment-language.test.mjs"]),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
   lane("Rust package test commands", "declaration", ["sidecars/vt-core/package.json", "sidecars/vt-alacritty/package.json"], ["scripts/test/package-test-command.test.mjs"], { testLanguage: "js-ts" }),
   lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
@@ -156,9 +157,9 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("Workbench documents", "document", ["packages/workbench/index.html", "packages/workbench/overlay.html"], ["packages/workbench/test/published-imports.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
 ];
 
-// A feature link is stronger than a file owner: it names the implementation,
-// behavior test, expected result, and verification levels for one capability.
-// The inventory remains structural; behavior is proved by the referenced tests.
+// feature 링크는 파일 소유자보다 강하다: 한 기능의 구현, behavior 테스트,
+// 기대 결과, 검증 수준을 지명한다.
+// inventory는 구조적으로 남고, behavior는 참조된 테스트가 증명한다.
 const FEATURE_LINKS = [
   {
     id: "V5-118",
@@ -575,7 +576,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/src/platform/darwin/input.go", symbol: "pointerSequence" },
     ],
     tests: [
-      { file: "native/darwin/tests/input_inject_test.m", id: "A focused input can leave WebKit work queued" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "a click after keyboard input synthesizes one DOM click" },
       { file: "e2e/shell.test.mjs", id: "shell commands run, report the directory, interrupt, and clear" },
     ],
     expected: "A shell command returns its exact output and exit status on both macOS hosts after native pointer input.",

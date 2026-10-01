@@ -438,8 +438,8 @@ async fn child_reads_exact_bytes_written_through_the_production_path() {
     service.close(&session).expect("close failed");
 }
 
-/// macOS answers EPERM to a signal for a process group whose members are all zombies.
-/// Such a group has nothing left to terminate, so closing it succeeds.
+/// macOS는 member가 모두 zombie인 process group에 대한 signal에 EPERM으로 응답한다.
+/// 그런 group에는 종료할 대상이 남아 있지 않으므로 close는 성공한다.
 #[test]
 fn a_process_group_of_only_zombies_is_already_terminated() {
     use std::os::unix::process::CommandExt;

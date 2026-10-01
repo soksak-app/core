@@ -62,8 +62,8 @@ type modal struct {
 	// 웹뷰를 표시하고 키보드 초점을 넘겼는지 나타낸다. host.window 가 이 값을 보고한다.
 	visible bool
 	radius  float64
-	// view is the child WebView for this instance. It is created hidden and is
-	// closed when this instance is replaced or dismissed.
+	// view 는 이 인스턴스의 child WebView 이다. 숨긴 상태로 생성되고,
+	// 이 인스턴스가 교체되거나 닫힐 때 닫힌다.
 	view *nativeWebview
 }
 
@@ -260,8 +260,8 @@ func (s *Surfaces) OverlayUpdate(req UpdateRequest) error {
 	return nil
 }
 
-// emitModalEvent delivers an update through the child WebView bridge. Wails window events are
-// scoped to the application WebView, so they cannot update a native child document reliably.
+// emitModalEvent 는 child WebView bridge 로 갱신을 전달한다. Wails window event 는
+// 애플리케이션 WebView 범위에 한정되므로 native child document 를 안정적으로 갱신할 수 없다.
 func emitModalEvent(view *nativeWebview, event string, data any) error {
 	if view == nil {
 		return fmt.Errorf("modal event %s has no native webview", event)

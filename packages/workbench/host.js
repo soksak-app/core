@@ -234,8 +234,8 @@ export function surfaceContextRuntime(surface, declarations = {}) {
         dom: [...core.dom, ...(declarations.dom ?? [])],
       };
     }),
-    // Clipboard bridge payloads already follow the typed host contract. In particular,
-    // writeText carries a string rather than a surface-scoped object.
+    // 클립보드 bridge payload는 이미 타입 있는 호스트 계약을 따른다. 특히
+    // writeText는 surface 범위 객체가 아니라 문자열을 담는다.
     clipboard: createClipboardBridge((name, payload) => bridge.call(name, payload), { allowPersist: true }),
     // 링크 열기는 다른 호스트 요청처럼 호출 관찰자(watchCalls)에게 알린다.
     links: createLinkBridge((name, payload) => tell(name, payload)),
@@ -303,7 +303,7 @@ let layoutPresented = false;
 const surfacePreparedListeners = new Set();
 let lastPreparedSurfaces = [];
 
-/** Registers a workbench lifecycle listener for prepared native surfaces. */
+/** 준비된 native surface를 위한 workbench lifecycle listener를 등록한다. */
 /** 창에 놓인 파일 {urls, x, y}(페이지 좌표) 를 받는다. 애플리케이션이 없으면 놓인 파일도 없다. */
 export function onFilesDropped(listener) {
   if (native) bridge.on("files-dropped", listener);
@@ -381,8 +381,8 @@ export const surfaces = native ? {
         // 마지막 갱신인지, 갱신이 이어지는 중인지. 이어지는 동안 뷰가 커지면
         // 아직 렌더링되지 않은 영역이 흰색으로 보인다.
         settled: record.settled !== false,
-        // Terminal rasters must commit after the page's DOM frame; other
-        // surfaces can commit the continuous frame immediately.
+        // terminal raster는 페이지의 DOM frame 뒤에 commit해야 한다. 다른
+        // surface는 연속 frame을 즉시 commit할 수 있다.
         waitForPresentation: record.surfaces.some(({ surface, visible }) =>
           visible === true && surface?.composition?.kind === "hybrid" &&
           surface.composition.regions?.some(({ kind }) => kind === "image") === true),
@@ -392,9 +392,9 @@ export const surfaces = native ? {
       const key = JSON.stringify(request);
       if (key !== last) {
         last = key;
-        // layoutTurn is the transaction ordering for surface preparation and
-        // presentation. Do not also wait on the global command turn: unrelated
-        // host calls can otherwise add a frame before every divider step.
+        // layoutTurn은 surface 준비와 표시의 transaction 순서다.
+        // 전역 command turn도 함께 기다리지 않는다: 그렇게 하면 관련 없는
+        // 호스트 호출이 divider 단계마다 frame 하나를 더할 수 있다.
         const scheduled = layoutTurn.then(() => tell("syncSurfaces", request));
         layoutFrame = scheduled;
         layoutResult = scheduled.then((frame) => {

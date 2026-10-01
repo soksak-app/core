@@ -1,4 +1,4 @@
-// DOM surface module contract. Workbench owns the host element and lifecycle.
+// DOM surface 모듈 계약. Workbench가 host 요소와 lifecycle을 소유한다.
 
 const callable = (value, name) => {
   if (typeof value !== "function") throw new TypeError(`surface module must export ${name}()`);

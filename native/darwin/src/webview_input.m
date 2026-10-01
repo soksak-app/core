@@ -1,7 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import "webview_input.h"
-// _setIgnoresMouseMoveEvents: gates pointer tracking without disabling keyboard,
-// clicks or drags. AppKit's hit test selects the webview that receives it.
+// _setIgnoresMouseMoveEvents: 는 키보드, 클릭, 드래그를 끄지 않고 pointer tracking 만
+// 제어한다. 그 이벤트를 받는 webview 는 AppKit 의 hit test 가 선택한다.
 #import "private/webkit.h"
 #import "webview_geometry.h"
 
@@ -205,9 +205,9 @@ void webviewInputUnregister(WKWebView *view) {
 
 BOOL webviewIgnorePageFocus(WKWebView *view) {
     NSCAssert(NSThread.isMainThread, @"webview focus belongs to the main thread");
-    // WebKit moves the first responder to the web view when its page focuses an
-    // element (PageClientImpl::makeFirstResponder). A surface that finishes
-    // loading would take the keys from an open menu or the page being typed in.
+    // 페이지가 요소에 focus 를 주면 WebKit 은 first responder 를 web view 로 옮긴다
+    // (PageClientImpl::makeFirstResponder). 로드를 마친 표면이 열린 메뉴나 입력 중인
+    // 페이지에서 키 입력을 가져가게 된다.
     if (![view respondsToSelector:@selector(_setShouldSuppressFirstResponderChanges:)]) return NO;
     [view _setShouldSuppressFirstResponderChanges:YES];
     return YES;

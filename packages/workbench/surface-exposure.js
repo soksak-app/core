@@ -1,5 +1,5 @@
-// Always-on core exposure for a mounted surface. Diagnostic fixture/drag/transcript code is
-// staged separately through diagnostics.js and is not part of this module.
+// mount된 surface를 위한 항상 켜진 core exposure. 진단 fixture/drag/transcript 코드는
+// diagnostics.js를 통해 따로 staging되며 이 모듈에 속하지 않는다.
 const INPUT_TYPES = ["pointerdown", "pointerup", "pointermove", "click", "wheel", "keydown"];
 const INPUT_KEPT = 32;
 // 이벤트가 담은 수정 키. 네이티브 이벤트의 플래그가 그대로 드러난다.

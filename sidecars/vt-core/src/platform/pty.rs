@@ -8,7 +8,7 @@ use nix::sys::signal::{kill, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
 
-/// Returns the process-group leader supplied by the active PTY platform.
+/// 활성 PTY platform이 제공하는 process-group leader를 반환한다.
 pub fn process_group_leader(
     #[cfg(unix)] master: &dyn MasterPty,
     #[cfg(not(unix))] _master: &dyn MasterPty,
@@ -52,7 +52,7 @@ pub fn pending_input(
     }
 }
 
-/// Terminates the PTY process group when the platform exposes one.
+/// platform이 PTY process group을 노출하면 그 group을 종료한다.
 pub fn kill_process_group(
     #[cfg(unix)] group: Option<i32>,
     #[cfg(not(unix))] _group: Option<i32>,
@@ -87,7 +87,7 @@ pub fn kill_process_group(
     }
 }
 
-/// Serializes real PTY tests within and across Rust test processes.
+/// Rust test process 내부와 process 사이에서 실제 PTY test를 직렬화한다.
 #[cfg(test)]
 pub(crate) fn native_pty_test_lock() -> NativePtyTestLock {
     static LOCAL: OnceLock<Mutex<()>> = OnceLock::new();

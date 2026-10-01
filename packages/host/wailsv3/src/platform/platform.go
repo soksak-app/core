@@ -25,13 +25,13 @@ type DOMOverlay struct {
 	Visible                  bool
 }
 
-// WindowOverlay is a main-DOM region that must participate in native hit ownership.
+// WindowOverlay 는 native hit 소유 판정에 참여해야 하는 메인 DOM 영역이다.
 type WindowOverlay struct {
 	X, Y, W, H float64
 	Visible    bool
 }
 
-// ClipboardValue distinguishes an empty clipboard from an operation error.
+// ClipboardValue 는 빈 clipboard 와 작업 오류를 구분한다.
 type ClipboardValue struct {
 	Present bool
 	Type    string
@@ -101,7 +101,7 @@ type Capturer interface {
 	// CaptureStop 은 녹화를 끝내고 기록한 프레임 수를 반환한다.
 	// after 는 녹화에 포함할 마지막 표시 시각(ms, 표시 시각과 같은 시계)이고, 0 이면 호출 시각이다.
 	CaptureStop(after float64) (int, error)
-	// CaptureLimited reports whether the last recording reached the frame cap.
+	// CaptureLimited 는 마지막 녹화가 frame 상한에 도달했는지 알린다.
 	CaptureLimited() bool
 	// CaptureLongestGap 은 마지막으로 멈춘 녹화에서 연속한 프레임 사이의 가장 긴 표시 간격(ms)이다.
 	CaptureLongestGap() float64
@@ -183,7 +183,7 @@ type Platform interface {
 	CloseWebview(view unsafe.Pointer)
 	// WebviewFrame 은 뷰의 현재 영역을 페이지 좌표로 반환한다.
 	WebviewFrame(view unsafe.Pointer) Rect
-	// CreateSurface creates a logical SurfaceHost below the main DOM webview.
+	// CreateSurface 는 메인 DOM webview 아래에 논리 SurfaceHost 를 만든다.
 	CreateSurface(main unsafe.Pointer) (unsafe.Pointer, error)
 	CloseSurface(surface unsafe.Pointer)
 	SetSurfaceBounds(surface unsafe.Pointer, x, y, width, height float64)
@@ -262,7 +262,7 @@ type Platform interface {
 	// AfterSettled 는 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 웹뷰와 보이는 앱 문서가 화면을
 	// 표시한 뒤 done 을 UI 스레드에서 호출한다. displayed 는 그 화면이 표시되는 시각(ms, mach 절대 시각)이다.
 	AfterSettled(window unsafe.Pointer, done func(displayed float64, err error)) error
-	// InjectSettledFailure makes the next settled wait fail in a diagnostics build.
+	// InjectSettledFailure 는 진단 빌드에서 다음 settled 대기를 실패하게 한다.
 	InjectSettledFailure(window unsafe.Pointer) error
 
 	// CreateShape 는 표면 위에 그리는 도형 뷰를 만든다. 창에 콘텐츠 뷰가 없으면 nil 핸들을 반환한다.
@@ -296,8 +296,8 @@ type Platform interface {
 	// 한다. application 은 주소 이름에 들어간다.
 	// 리스너를 닫으면 주소도 제거된다.
 	Listen(directory, application string) (net.Listener, Endpoint, error)
-	// ServiceProcessExists checks whether a persisted sidecar service process is
-	// still alive before its endpoint is reused after an application restart.
+	// ServiceProcessExists 는 애플리케이션 재시작 뒤 endpoint 를 재사용하기 전에
+	// 보존된 sidecar service 프로세스가 아직 살아 있는지 확인한다.
 	ServiceProcessExists(pid int) bool
 
 	// OnTermination 은 종료 신호(SIGTERM, SIGINT, SIGHUP)를 처음 받으면 quit 를 호출하게 한다. 그

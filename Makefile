@@ -38,7 +38,7 @@ host-parity-check:
 terminal-protocols-check:
 	@node scripts/check-terminal-protocol-inventory.mjs
 
-# JS/TS, Rust, Go, Objective-C, and shell test cases use the same observable case contract.
+# JS/TS, Rust, Go, Objective-C, shell 테스트 케이스는 같은 관측 가능한 케이스 계약을 사용한다.
 language-test: native-darwin
 	@$(MAKE) -C native/darwin $(CURDIR)/native/darwin/build/appearance_test
 	@node scripts/language-test-adapters.mjs scripts/language-test-cases.json

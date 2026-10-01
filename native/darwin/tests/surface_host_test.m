@@ -25,8 +25,8 @@ int main(void) { @autoreleasepool {
     host.autoresizesSubviews = YES;
     [window.contentView addSubview:host];
     WKWebView *main = [[WKWebView alloc] initWithFrame:host.bounds];
-    // TaoView owns WKWebView resizing directly. Its webview may therefore
-    // begin with no autoresizing mask when the shared compositor wraps it.
+    // TaoView 는 WKWebView 의 크기를 직접 조정한다. 따라서 공유 compositor 가 그
+    // webview 를 감쌀 때 webview 에 autoresizing mask 가 없을 수 있다.
     main.autoresizingMask = NSViewNotSizable;
     [host addSubview:main];
     check(sp_window_set_main_webview(window, main), "the window registers its app DOM identity");

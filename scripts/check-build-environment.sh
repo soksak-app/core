@@ -3,10 +3,10 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 [ "$#" -eq 0 ] || { echo 'BUILD_DECLARATION_INVALID: usage: check-build-environment.sh' >&2; exit 78; }
-# Each fact has one owner. .node-version holds the exact Node version, the
-# packageManager field the exact pnpm version, and pnpm-lock.yaml the
-# dependencies. package.json's engines.node states the range a consumer must
-# satisfy, which is a different fact and is enforced by pnpm at install time.
+# 사실 하나에는 소유자가 하나다. .node-version은 정확한 Node 버전을,
+# packageManager 필드는 정확한 pnpm 버전을, pnpm-lock.yaml은
+# 의존성을 담는다. package.json의 engines.node는 소비자가 만족해야 하는 범위를 정하며,
+# 이는 다른 사실이고 pnpm이 설치 시점에 강제한다.
 node_expected=$(awk 'NF { value=$0; count++ } END { if (count == 1) print value; else exit 1 }' "$root/.node-version" 2>/dev/null || true)
 package_manager=$(node -e 'const v=require(process.argv[1]);process.stdout.write(v.packageManager??"")' "$root/package.json" 2>/dev/null || true)
 case "$package_manager" in pnpm@*) pnpm_expected=${package_manager#pnpm@} ;; *) pnpm_expected= ;; esac

@@ -73,7 +73,7 @@ export function auditHostPairs(tracked, pairs = PAIRS) {
   return errors;
 }
 
-// Check for stub implementations (anti-regression check)
+// stub 구현을 검사한다(회귀 방지 검사)
 const { readFileSync } = await import("node:fs");
 const STUB_PATTERNS = [
   /TODO:\s*Implement/,
@@ -97,7 +97,7 @@ function findStubs(dir) {
       { cwd: ROOT, encoding: "utf8" }).trim().split("\n").filter(f => f);
 
     for (const file of files) {
-      // Skip test files and unsupported files
+      // 테스트 파일과 unsupported 파일은 건너뛴다
       if (EXCLUDE.some(ex => file.includes(ex))) continue;
 
       try {
@@ -113,11 +113,11 @@ function findStubs(dir) {
           }
         }
       } catch (e) {
-        // Ignore files we can't read
+        // 읽을 수 없는 파일은 무시한다
       }
     }
   } catch (e) {
-    // Ignore find errors
+    // find 오류는 무시한다
   }
   return stubs;
 }

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-25: comments outside `packages/soksak` are Korean, and `pnpm test` enforces it with `scripts/check-comment-language.mjs`.
+
 - V5-117-1-3-4-7-1-7-3: a tab whose plugin module failed to mount can be closed; disposal no longer rethrows the mount error and removes the surface.
 
 - V5-117-1-3-4-7-1-7-2: waiting for a native surface's composition ends with the mount error when its module fails to mount, so core commands no longer wait for it indefinitely.

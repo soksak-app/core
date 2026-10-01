@@ -105,8 +105,8 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 					return
 				}
 				_, _ = connection.Write(line)
-				// The first two connections model a runtime disconnect. Reconnect
-				// must use the endpoint and preserve the host's declared identity.
+				// 처음 두 연결은 실행 중 연결 끊김을 재현한다. 재연결은
+				// endpoint 를 사용하고 host 가 선언한 identity 를 유지해야 한다.
 				if connectionIndex < 2 {
 					return
 				}
@@ -194,7 +194,7 @@ func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t 
 	}
 	time.Sleep(20 * time.Millisecond)
 
-	// Both initial sockets disconnect. The next send exercises endpoint reuse and reconnect.
+	// 처음 두 socket 이 모두 끊긴다. 다음 send 는 endpoint 재사용과 재연결을 검증한다.
 	if err := first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"reconnect"}`)); err != nil {
 		t.Fatal(err)
 	}

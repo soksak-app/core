@@ -60,13 +60,13 @@ pub struct CInlineImageRaster {
     pub visible: u8,
 }
 
-// Opaque frame type
+// 불투명 frame type
 #[repr(C)]
 pub struct CFrame {
     _private: [u8; 0],
 }
 
-// IOSurface is thread-safe, so it's safe to send Frame across threads
+// IOSurface는 thread-safe이므로 Frame을 thread 사이에 보내도 안전하다
 unsafe impl Send for CFrame {}
 unsafe impl Sync for CFrame {}
 
@@ -175,7 +175,7 @@ impl Default for CursorRender {
     }
 }
 
-// Frame is Send/Sync because CFrame (IOSurface) is thread-safe
+// CFrame(IOSurface)이 thread-safe이므로 Frame은 Send/Sync이다
 unsafe impl Send for Frame {}
 unsafe impl Sync for Frame {}
 

@@ -27,7 +27,7 @@
 
 @interface WKWebView (SPPrivate)
 @property(nonatomic, readonly) pid_t _webProcessIdentifier;
-// WKWebViewPrivate.h: terminate the current WebContent process so a reload can start a fresh process.
+// WKWebViewPrivate.h: 현재 WebContent 프로세스를 종료해 reload 가 새 프로세스를 시작하게 한다.
 - (void)_killWebContentProcessAndResetState;
 // WKWebViewPrivate.h
 - (void)_setOverrideDeviceScaleFactor:(double)scale;

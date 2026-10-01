@@ -110,8 +110,8 @@ static void checkFailures(void) {
     check(state.result == SP_ACTIVATE_PENDING,
         [NSString stringWithFormat:@"a webview that does not apply the active state reports pending (%d)", state.result]);
 
-    // Hidden document views are not input targets. They must not hold an explicit
-    // activation request while a visible window is becoming active.
+    // 숨겨진 문서 뷰는 입력 대상이 아니다. 보이는 창이 활성화되는 동안 명시적
+    // 활성화 요청을 가지고 있으면 안 된다.
     SPStalledWebView *hiddenStalled = [[[SPStalledWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
     hiddenStalled.hidden = YES;
     NSWindow *hiddenWindow = makeWindow(NSWindow.class, hiddenStalled);

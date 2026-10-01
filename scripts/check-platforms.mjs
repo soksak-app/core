@@ -19,8 +19,8 @@ const SOURCE = /\.(js|mjs|go|rs|m|h|sh)$/;
 const SKIPPED = [
   /^native\/[^/]+\//,
   /^scripts\/check-build-environment\.sh$/,
-  // This file checks whether the command supervisor supports the current host;
-  // it is an execution-environment contract, not an OS implementation.
+  // 이 파일은 command supervisor가 현재 호스트를 지원하는지 확인한다.
+  // 이는 실행 환경 계약이며 OS 구현이 아니다.
   /^scripts\/test-command\.mjs$/,
   /(^|\/)platform\/platform\.(go|rs|js)$/,
   /^scripts\/check-platforms\.mjs$/,
@@ -32,8 +32,8 @@ const RULES = [
   { what: "Node process.platform", pattern: /\bprocess\.platform\b/ },
 ];
 
-// Platform adapters may also be grouped below a domain directory (for example
-// platform/pty.rs); the owning platform root is still explicit.
+// platform adapter는 domain 디렉터리 아래에 묶일 수도 있다(예:
+// platform/pty.rs). 소유 platform root는 여전히 명시적이다.
 const inPlatform = (path) => /(^|\/)platform\//.test(path);
 const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { cwd: ROOT, encoding: "utf8" }).split("\0").filter((path) => path && existsSync(`${ROOT}${path}`));

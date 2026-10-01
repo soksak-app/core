@@ -326,8 +326,8 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
             &raw(r#"{"operation":"reconnect"}"#),
         )
         .unwrap();
-    // The package suite runs multiple test binaries concurrently. Keep a bounded case timeout,
-    // but do not make the reconnect contract depend on a one-second scheduler slice.
+    // package suite는 여러 test binary를 동시에 실행한다. case timeout은 제한된 값으로 유지하되,
+    // reconnect contract가 1초 scheduler slice에 의존하게 만들지 않는다.
     let reconnect_timeout = Duration::from_secs(10);
     assert_eq!(
         first_events

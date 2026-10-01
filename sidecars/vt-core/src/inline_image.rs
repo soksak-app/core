@@ -1,4 +1,4 @@
-//! Strict parsing for the OSC 1337 image transfer forms.
+//! OSC 1337 image 전송 형식의 엄격한 parsing이다.
 
 use base64::Engine as _;
 use std::collections::BTreeMap;

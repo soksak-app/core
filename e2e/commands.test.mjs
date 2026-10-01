@@ -165,8 +165,8 @@ for (const app of Object.values(APPS)) {
         y: (rect.document?.y ?? 0) + rect.y + rect.height / 2,
       };
       const owner = await s.run("host.hit", point);
-      // Send the native click even when hit testing reports another owner. The hit
-      // result and the command effect are recorded independently for a useful Red.
+      // hit testing이 다른 소유자를 보고해도 native 클릭을 보낸다. 쓸모 있는 Red를 위해
+      // hit 결과와 명령의 효과를 따로 기록한다.
       await s.click(point.x, point.y);
       const inMainWebview = point.x >= main.frame.x && point.x < main.frame.x + main.frame.width &&
         point.y >= main.frame.y && point.y < main.frame.y + main.frame.height;
@@ -177,9 +177,9 @@ for (const app of Object.values(APPS)) {
         active: geometry.active, key: geometry.key };
     };
 
-    // Measure from half the available screen width to the largest content width
-    // that fits inside the visible frame. The steps are in points, independent of
-    // backing scale, and include the reported 2048 physical-pixel viewport.
+    // 사용 가능한 화면 폭의 절반부터 보이는 frame 안에 들어가는 가장 큰 content 폭까지
+    // 측정한다. 단계는 point 단위이므로 backing scale과 무관하며, 보고된 2048 physical-pixel
+    // viewport를 포함한다.
     const center = {
       x: initialWindow.frame.x + initialWindow.frame.width / 2,
       y: initialWindow.frame.y + initialWindow.frame.height / 2,

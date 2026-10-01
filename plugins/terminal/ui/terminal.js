@@ -486,9 +486,9 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
 
   const scheduleInput = (entry) => {
     const request = inputChain.then(() => sendEntry(entry));
-    // The recovered tail only permits the next request to run. The original
-    // request remains rejected for its caller; native callbacks observe that
-    // rejection through observeInput and publish the error in session status.
+    // 복구된 tail은 다음 요청의 실행만 허용한다. 원래 요청은 호출자에게
+    // 거절된 상태로 남는다. native callback은 observeInput으로 그 거절을
+    // 관측하고 오류를 세션 status에 발행한다.
     inputChain = request.catch(recoverInputTail);
     return request;
   };
@@ -707,8 +707,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     }
     try {
       const point = selectionPoint(event);
-      // Pointer capture is the ownership boundary. Do not publish a selecting
-      // state or enqueue a mouse down until the browser confirms the capture.
+      // pointer capture가 소유권 경계다. 브라우저가 capture를 확인하기 전에는
+      // selecting 상태를 발행하거나 mouse down을 대기열에 넣지 않는다.
       view.setPointerCapture(event.pointerId);
       sendMouse("down", point, event, true);
       selectionPointerId = event.pointerId;
@@ -749,9 +749,9 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     try {
       view.releasePointerCapture(event.pointerId);
     } catch (error) {
-      // The browser may have already released capture before this boundary.
-      // Keep the failure observable, but do not abandon the terminal release
-      // sequence or leave the next gesture dependent on this call.
+      // 브라우저가 이 경계 전에 이미 capture를 해제했을 수 있다.
+      // 실패는 관측 가능하게 두지만, terminal 해제 순서를 포기하거나
+      // 다음 gesture가 이 호출에 의존하게 두지 않는다.
       reportInputError(error);
     }
     event.preventDefault();

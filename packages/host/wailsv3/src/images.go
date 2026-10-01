@@ -397,7 +397,7 @@ func (i *Images) MarkPresented(key ImageKey, generation, raster uint64, sequence
 	}
 }
 
-// MarkPresentationFailed records the native presentation failure for the current raster.
+// MarkPresentationFailed 는 현재 raster 의 native presentation 실패를 기록한다.
 func (i *Images) MarkPresentationFailed(key ImageKey, generation, raster uint64, sequence int, reason string) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -434,7 +434,7 @@ func (i *Images) WaitCurrent(timeout time.Duration) bool {
 	return i.WaitCurrentError(timeout) == nil
 }
 
-// WaitCurrentError waits for the current raster or returns its exact failure.
+// WaitCurrentError 는 현재 raster 를 기다리거나 그 정확한 실패를 반환한다.
 func (i *Images) WaitCurrentError(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {

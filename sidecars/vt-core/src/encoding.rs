@@ -857,7 +857,7 @@ mod tests {
             b"\x1b[6~".to_vec()
         );
 
-        // With modifiers
+        // modifier 포함
         assert_eq!(
             encode_key(Key::Delete, 2, &modes).unwrap(),
             b"\x1b[3;3~".to_vec() // alt (2+1=3)
@@ -908,7 +908,7 @@ mod tests {
             b"\x1b[24~".to_vec()
         );
 
-        // F5 with Shift (modifier 1)
+        // Shift를 누른 F5 (modifier 1)
         assert_eq!(
             encode_key(Key::F5, 1, &modes).unwrap(),
             b"\x1b[15;2~".to_vec()
@@ -940,14 +940,14 @@ mod tests {
 
     #[test]
     fn test_encode_ctrl_char() {
-        // Ctrl+A through Ctrl+Z
+        // Ctrl+A부터 Ctrl+Z까지
         assert_eq!(encode_ctrl_char('a').unwrap(), vec![0x01]);
         assert_eq!(encode_ctrl_char('u').unwrap(), vec![0x15]);
         assert_eq!(encode_ctrl_char('z').unwrap(), vec![0x1a]);
         assert_eq!(encode_ctrl_char('A').unwrap(), vec![0x01]);
         assert_eq!(encode_ctrl_char('Z').unwrap(), vec![0x1a]);
 
-        // Special ctrl codes
+        // 특수 ctrl code
         assert_eq!(encode_ctrl_char('[').unwrap(), vec![0x1b]);
         assert_eq!(encode_ctrl_char('\\').unwrap(), vec![0x1c]);
         assert_eq!(encode_ctrl_char(']').unwrap(), vec![0x1d]);
@@ -979,11 +979,11 @@ mod tests {
         };
         let modes_normal = Modes::default();
 
-        // Bracketed paste mode ON
+        // bracketed paste mode 켜짐
         let result = encode_paste("hello", &modes_bracketed).unwrap();
         assert_eq!(result, b"\x1b[200~hello\x1b[201~".to_vec());
 
-        // Bracketed paste mode OFF
+        // bracketed paste mode 꺼짐
         let result = encode_paste("hello", &modes_normal).unwrap();
         assert_eq!(result, b"hello".to_vec());
     }
@@ -1018,11 +1018,11 @@ mod tests {
     fn test_composition_state_not_composing() {
         let mut composer = CompositionState::new();
 
-        // Before confirmation, no bytes
+        // 확정 전에는 byte가 없다
         assert_eq!(composer.add_char('あ'), None);
         assert!(composer.is_composing());
 
-        // Confirm and get bytes
+        // 확정하고 byte를 얻는다
         let confirmed = composer.confirm();
         assert_eq!(confirmed, Some("あ".as_bytes().to_vec()));
         assert!(!composer.is_composing());
@@ -1053,7 +1053,7 @@ mod tests {
         assert_eq!(confirmed, Some(b"abc".to_vec()));
         assert!(!composer.is_composing());
 
-        // Next composition starts fresh
+        // 다음 조합은 새로 시작한다
         composer.add_char('x');
         let confirmed2 = composer.confirm();
         assert_eq!(confirmed2, Some(b"x".to_vec()));

@@ -411,17 +411,17 @@ pub(crate) fn hide(window: &Window, id: String) -> Result<(), String> {
         }
         *held = None;
     }
-    // `discard` also clears the open record. Do not call it while holding the
-    // same mutex: the main thread would wait for its own lock and stop serving
-    // every endpoint request.
+    // `discard`는 open 기록도 지운다. 같은 mutex를 잡은 상태에서 호출하지 않는다.
+    // 그렇게 하면 main thread가 자신의 lock을 기다리며 모든 endpoint request의 처리를
+    // 멈춘다.
     state.discard()?;
     exposure::window_changed(window);
-    // The terminal image region reports `resignFirstResponder` synchronously. Calling
-    // `set_focus` here would re-enter the main WebView while the current Tauri invoke
-    // still owns its WebKit dispatch lock, so the focus callback can deadlock the event
-    // loop. Return from the hide command first, then restore focus in the next AppKit turn.
-    // A replacement modal may have opened before that turn. In that case the old
-    // restoration must not steal focus from the replacement child WebView.
+    // terminal image region은 `resignFirstResponder`를 동기적으로 보고한다. 여기서 `set_focus`를
+    // 호출하면 현재 Tauri invoke가 아직 WebKit dispatch lock을 소유한 상태에서 main WebView에
+    // 다시 진입하므로, focus callback이 event loop를 deadlock시킬 수 있다.
+    // 먼저 hide command에서 반환한 뒤 다음 AppKit turn에서 focus를 복원한다.
+    // 그 turn 전에 교체 modal이 열렸을 수 있다. 그 경우 이전 복원은
+    // 교체 child WebView의 focus를 가져가지 않아야 한다.
     let host = window.clone();
     platform::current()?
         .enqueue_ui(Box::new(move || {

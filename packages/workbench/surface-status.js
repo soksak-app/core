@@ -1,4 +1,4 @@
-// Keeps the native surface lifecycle visible in the card status row.
+// native surface lifecycle을 카드 상태 행에 계속 보이게 한다.
 /** 오류 상태의 설명. 오류 상태는 오류를 가져야 한다. */
 export function surfaceErrorText(state) {
   if (state.error === null || state.error === undefined) throw new Error("a surface error state carries no error");

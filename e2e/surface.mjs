@@ -57,9 +57,9 @@ export function bare(frame) {
 export function cardSize(frame, { x, y }) {
   const cx = Math.round(x * frame.scale), cy = Math.round(y * frame.scale);
   const plane = (px, py) => near(pixel(frame, px, py), PLANE);
-  // A compositor edge can cover the declared probe while the card is still
-  // present nearby. Try nearby device pixels; a card that is actually absent
-  // remains unmeasurable.
+  // 카드가 근처에 아직 있어도 compositor 가장자리가 선언된 probe를 덮을 수 있다.
+  // 근처의 device pixel을 시도한다. 실제로 없는 카드는
+  // 측정할 수 없는 상태로 남는다.
   const candidates = [cx, cx - 1, cx + 1, cx - 2, cx + 2, cx - 8, cx + 8, cx - 16, cx + 16]
     .filter((probe) => probe >= 0 && probe < frame.width && !plane(probe, cy));
   let best = null;

@@ -249,7 +249,7 @@ pub struct Sidecars<O: Owner> {
 impl<O: Owner> Sidecars<O> {
     /// 플러그인이 선언한 사이드카로 채널을 생성한다. read 는 프론트엔드 경로의 파일 내용을
     /// 반환한다. 실행 파일은 directory 에서 basename(executable) 으로 찾는다.
-    /// Creates a sidecar channel with the canonical application configuration directory.
+    /// canonical application configuration directory로 sidecar channel을 생성한다.
     pub fn new(
         read: &dyn Fn(&str) -> Option<Vec<u8>>,
         directory: PathBuf,
@@ -950,8 +950,8 @@ impl<O: Owner> Core<O> {
                 if !current()?.service_process_exists(endpoint.pid)? {
                     std::fs::remove_file(&endpoint_path)
                         .map_err(|e| format!("sidecar {name}: remove stale endpoint: {e}"))?;
-                    // Re-enter the one creation path. A stale endpoint is an
-                    // explicit crash-recovery case, not a fallback transport.
+                    // 하나뿐인 생성 경로에 다시 진입한다. stale endpoint는
+                    // 명시적인 crash 복구 경우이며 fallback transport가 아니다.
                     return Self::start_persistent(core, name, program);
                 }
                 endpoint
@@ -1317,7 +1317,7 @@ impl<O: Owner> Core<O> {
                 revive_persistent(&reader_core, &sidecar);
             }
         });
-        // The bootstrap child must not be waited on or killed by application shutdown.
+        // application 종료는 bootstrap child를 기다리거나 kill하지 않아야 한다.
         drop(child);
         Ok(Process {
             child: None,

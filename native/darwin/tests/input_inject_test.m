@@ -316,8 +316,8 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"keys reach the focused field in a window that is not key: %@", keysSeen]);
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], @"text input reaches the field");
 
-    // A focused input can leave WebKit work queued. The next native click must
-    // still deliver down before up and synthesize exactly one DOM click.
+    // focus 된 입력은 WebKit 작업을 queue 에 남길 수 있다. 다음 네이티브 클릭은
+    // 여전히 down 을 up 보다 먼저 전달하고 DOM click 을 정확히 하나 합성해야 한다.
     SPReceipt buttonDown = pointerThen(window, view, 50, 50, 1, 5);
     SPReceipt buttonUp = pointerThen(window, view, 50, 50, 3, 5);
     check(buttonDown.result == SP_INPUT_DELIVERED && buttonUp.result == SP_INPUT_DELIVERED,

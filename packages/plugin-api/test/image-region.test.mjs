@@ -209,7 +209,7 @@ test("events without type field are warned about", async () => {
   console.warn = (...args) => warnings.push(args);
 
   try {
-    p.send("preview", { data: "test" }); // no type field
+    p.send("preview", { data: "test" }); // type 필드가 없다
     await settle();
 
     assert(warnings.length > 0, "console.warn called for event without type");

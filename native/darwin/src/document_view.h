@@ -43,7 +43,7 @@ bool sp_document_zoom(void *document, double zoom);
 // 대화 상자가 열린 동안 문서를 흐리게 표시한다.
 void sp_document_background(void *document, bool enabled);
 
-// Sets the native appearance used by the document webview and its web content.
+// 문서 webview 와 그 웹 콘텐츠가 사용하는 네이티브 appearance 를 설정한다.
 void sp_document_appearance(void *document, bool dark);
 
 // 웹뷰를 제거하고 해제한다. 이후 changed 는 호출되지 않는다.

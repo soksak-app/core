@@ -21,9 +21,9 @@ export async function readScreenUntil(session, surface, predicate, message) {
 }
 
 export async function ensureTerminals(session, count) {
-  // The fixture starts with the shell tab active. Select the declared terminal
-  // before measuring visible native terminal surfaces; waiting for an inactive
-  // tab would turn a test setup mistake into a false runtime failure.
+  // fixture는 shell 탭이 활성인 상태로 시작한다. 보이는 native terminal surface를 측정하기
+  // 전에 선언된 terminal을 선택한다. 비활성 탭을 기다리면 테스트 준비 실수가
+  // 거짓 런타임 실패로 바뀐다.
   const initialGrid = await session.get("core.grid");
   const terminalTab = initialGrid.cards.flatMap((card) => card.tabs)
     .find((tab) => tab.plugin === "terminal");

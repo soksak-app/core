@@ -68,7 +68,7 @@ struct Shared {
 struct Inner {
     handles: HashMap<Key, Handle>,
     owners: HashMap<Key, String>,
-    sidecars: HashMap<Key, String>, // sidecar name for each image
+    sidecars: HashMap<Key, String>, // image별 sidecar 이름
     states: HashMap<Key, RasterState>,
     generations: HashMap<String, u64>,
     surface_visibility: HashMap<String, bool>,
@@ -170,10 +170,10 @@ impl Images {
         if visible {
             for (key, state) in inner.states.iter_mut() {
                 if key.0 == surface {
-                    // Hiding a surface releases its native pixels. The same
-                    // raster must be configured again when the surface returns.
-                    // Advance the revision so frames from the hidden generation
-                    // cannot be accepted after the surface is shown.
+                    // surface를 숨기면 native pixel이 해제된다. surface가 돌아오면
+                    // 같은 raster를 다시 configure해야 한다.
+                    // 숨겨진 generation의 frame이 surface 표시 후에 수락되지 않도록
+                    // revision을 증가시킨다.
                     state.raster += 1;
                     state.configured = false;
                     state.last_sequence = 0;
@@ -1139,9 +1139,9 @@ where
     )
 }
 
-/// Handle an image envelope and optionally request a fresh raster after a transient native
-/// presentation failure. The recovery callback is deliberately separate from the response so the
-/// caller can reconfigure the sidecar through its own transport without hiding the original error.
+/// image envelope를 처리하고, 일시적인 native presentation 실패 후 필요하면 새 raster를 요청한다.
+/// recovery callback은 의도적으로 response와 분리되어 있다. 따라서 caller는 원래 error를 숨기지 않고
+/// 자신의 transport로 sidecar를 다시 configure할 수 있다.
 pub fn handle_envelope_with_recovery<OnMain, SendResponse, Recover>(
     body_str: &str,
     sender: &str,
@@ -1227,9 +1227,9 @@ where
                             let reason = match e.as_str() {
                                 "stale" => "stale",
                                 e if e.starts_with("staleRaster") => "stale",
-                                // The image registry can be detached after decide() but before
-                                // this main-thread closure runs. That is an invalidated frame,
-                                // not a failed presentation of the current surface.
+                                // image registry는 decide() 이후, 이 main-thread closure가 실행되기 전에
+                                // 분리될 수 있다. 이 경우는 무효화된 frame이며,
+                                // 현재 surface의 presentation 실패가 아니다.
                                 "notAttached" => "stale",
                                 "notFound" => "notFound",
                                 "forbidden" => "forbidden",

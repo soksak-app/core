@@ -52,9 +52,9 @@ pub(crate) struct WindowData {
 
 /// 앱 DOM 재로드는 모든 플러그인 문서를 교체하지만 터미널 세션은 종료하지 않는다.
 ///
-/// Tauri invokes this from the main-webview `PageLoadEvent::Started` callback. Cleanup is
-/// intentionally synchronous here: the replacement page must not attach a new native image
-/// while the previous image handles are still queued for removal on the same AppKit run loop.
+/// Tauri는 main-webview `PageLoadEvent::Started` callback에서 이것을 호출한다. 여기서 cleanup은
+/// 의도적으로 동기적이다. 이전 image handle이 같은 AppKit run loop에서 제거 대기 중인 동안
+/// 교체 page가 새 native image를 붙이면 안 되기 때문이다.
 pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     let owner = native_owner(window)?;
@@ -139,7 +139,7 @@ pub(crate) fn native_owner(window: &Window) -> Result<Handle, String> {
     platform::current()?.window_handle(window)
 }
 
-/// Returns the native window handle from the AppKit main thread.
+/// AppKit main thread에서 native window handle을 반환한다.
 pub(crate) fn native_owner_on_main(window: &Window) -> Result<Handle, String> {
     let target = window.clone();
     crate::exposure::on_main(window, move || native_owner(&target))
@@ -287,7 +287,7 @@ pub(crate) fn window_new_on_main(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Schedule creation on the AppKit event-loop thread without blocking that thread.
+/// AppKit event-loop thread를 막지 않고 그 thread에 생성을 예약한다.
 pub(crate) fn window_new(app: AppHandle) -> Result<(), String> {
     let task = app.clone();
     let (tx, rx) = mpsc::channel();

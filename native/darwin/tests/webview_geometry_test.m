@@ -96,10 +96,10 @@ static void load(WKWebView *view, NSString *html) {
 // 문서가 새 크기와 배율로 다시 배치될 때까지 기다린다. 끝내 맞지 않으면 마지막 값을 보고한다.
 static NSDictionary *documentState(WKWebView *view, CGFloat scale, double width, double height) {
     currentStep = __func__;
-    // WebKit exposes the CSS viewport on whole CSS pixels. A 200.5pt AppKit
-    // frame therefore reports 200 CSS px even though its native backing is
-    // 401px at 2x. Native geometry and the final backing row are checked
-    // separately and remain exact.
+    // WebKit 은 CSS viewport 를 정수 CSS pixel 로 노출한다. 따라서 200.5pt AppKit
+    // frame 은 2x 에서 네이티브 backing 이 401px 이어도 200 CSS px 로
+    // 보고된다. 네이티브 geometry 와 마지막 backing 행은 따로 검사하며
+    // 정확히 일치한다.
     double cssHeight = floor(height);
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     NSDictionary *state = nil;

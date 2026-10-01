@@ -181,9 +181,8 @@ type Endpoint struct {
 	queues  map[topic][]func()
 }
 
-// processLock gives one application process exclusive ownership of a
-// configuration directory while retaining the PID needed to replace a stale
-// lock after an unclean termination.
+// processLock 은 애플리케이션 프로세스 하나에 configuration 디렉터리의 배타적 소유권을
+// 주고, 비정상 종료 뒤 오래된 lock 을 교체하는 데 필요한 PID 를 보관한다.
 type processLock struct {
 	path string
 	file *os.File

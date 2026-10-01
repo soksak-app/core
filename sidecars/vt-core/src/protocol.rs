@@ -279,14 +279,14 @@ pub trait Engine: Send + 'static {
     fn drain_events(&mut self) -> Vec<EngineEvent>;
     fn resolve_clipboard(&mut self, request_id: u64, text: &str) -> Result<(), String>;
     fn reject_clipboard(&mut self, request_id: u64, reason: &str) -> Result<(), String>;
-    /// Starts a selection at a cell edge. `edge` is 0 to the column count: edge `c` is the left
-    /// edge of column `c`, and the column count is the right edge of the last column.
+    /// cell 경계에서 selection을 시작한다. `edge`는 0부터 column 수까지이다. edge `c`는 column `c`의
+    /// 왼쪽 경계이고, column 수는 마지막 column의 오른쪽 경계이다.
     fn selection_start(&mut self, edge: u16, row: u16) -> Result<(), String>;
-    /// Moves the selection end to a cell edge. The selection covers the cells between the start
-    /// and end edges; equal edges select nothing.
+    /// selection 끝을 cell 경계로 옮긴다. selection은 시작 경계와 끝 경계 사이의 cell을
+    /// 포함한다. 두 경계가 같으면 아무것도 선택하지 않는다.
     fn selection_update(&mut self, edge: u16, row: u16) -> Result<(), String>;
-    /// Ends the selection and returns its text. A selection that covers no text is cleared
-    /// and returns `None`; that is a normal gesture, not an error.
+    /// selection을 끝내고 그 text를 반환한다. text를 포함하지 않는 selection은 지워지고
+    /// `None`을 반환한다. 이것은 정상 gesture이며 error가 아니다.
     fn selection_end(&mut self) -> Result<Option<String>, String>;
     /// 이전 선택을 복사하지 않고 지운다. 픽셀이 바뀌었는지 돌려준다.
     fn selection_clear(&mut self) -> bool;
@@ -652,7 +652,7 @@ pub trait SessionPort: Send + Sync {
     async fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), String>;
     async fn detach(&self, session_id: &str) -> Result<(), String>;
     async fn close(&self, session_id: &str) -> Result<(), String>;
-    /// Attach a new view to an existing session and replay retained output.
+    /// 기존 session에 새 view를 붙이고 보존된 output을 재생한다.
     async fn attach(&self, _session_id: &str, _from: i64) -> Result<String, String> {
         Err("session attach is not supported".to_string())
     }
@@ -907,7 +907,7 @@ fn set_engine_metrics(engine: &mut Box<dyn Engine>, state: &ImageState) -> Resul
     engine.set_cell_metrics(width, height)
 }
 
-/// Validate and calculate terminal size. Returns error if width/height invalid or result is 0.
+/// terminal 크기를 검증하고 계산한다. width/height가 유효하지 않거나 결과가 0이면 error를 반환한다.
 fn calculate_terminal_size(
     width: u32,
     height: u32,
@@ -1767,14 +1767,14 @@ async fn surface_task(
     let mut focused = false;
     // 마우스 보고로 시작한 누름. 뗄 때까지 선택 연산은 선택하지 않는다.
     let mut mouse_gesture = false;
-    // Motion ownership is fixed at button-down.  A terminal can change its
-    // mouse mode while a drag is in progress; re-reading the mode on every
-    // move would split one gesture between the TUI and page selection.
+    // motion 소유권은 button-down 시점에 고정된다.  terminal은 drag 진행 중에
+    // mouse mode를 바꿀 수 있다. move마다 mode를 다시 읽으면
+    // 하나의 gesture가 TUI와 page selection으로 나뉜다.
     let mut mouse_gesture_motion = false;
     let mut mouse_cell: Option<(u16, u16)> = None;
-    // A selection release describes the raster produced immediately before it.
-    // Hold the event until that raster is consumed so a client cannot observe
-    // the copy acknowledgement while the old selection is still on screen.
+    // selection release는 그 직전에 생성된 raster를 기술한다.
+    // 그 raster가 consume될 때까지 event를 보류하여, 이전 selection이 화면에 남아 있는 동안
+    // client가 copy acknowledgement를 관찰하지 못하게 한다.
     let mut pending_selection_event: Option<String> = None;
     let mut preedit: Option<Preedit> = None;
     let mut current_theme = crate::palette::TerminalTheme::dark();
@@ -1844,10 +1844,10 @@ async fn surface_task(
                         }
                     }
                     SurfaceCommand::Reconnect => {
-                        // PTY and VT state belong to the persistent session;
-                        // the IOSurface belongs to the application instance.
-                        // Discard only the old native image so the reconnecting
-                        // client must provide a fresh Configure message.
+                        // PTY와 VT 상태는 persistent session에 속하고,
+                        // IOSurface는 application instance에 속한다.
+                        // 이전 native image만 폐기하여 재연결하는
+                        // client가 새 Configure message를 제공하게 한다.
                         if let Some(previous_state) = image_state.take() {
                             preserved_inline_images = previous_state.inline_images;
                         }
@@ -2106,9 +2106,9 @@ async fn surface_task(
                                 }
                             }
                         } else {
-                            // Emit a measurement for every pointer phase, including phases that the
-                            // current mouse modes intentionally route to text selection. This keeps
-                            // ownership observable instead of making an unreported phase disappear.
+                            // 현재 mouse mode가 의도적으로 text selection으로 보내는 phase를 포함하여
+                            // 모든 pointer phase에 대해 측정값을 내보낸다. 이렇게 하면 보고되지 않은 phase가
+                            // 사라지지 않고 소유권을 관찰할 수 있다.
                             let phase_name = match phase {
                                 MousePhase::Down => "down",
                                 MousePhase::Move => "move",
@@ -2207,7 +2207,7 @@ async fn surface_task(
                                     pending_selection_event = Some(json!({"surface": surface_id, "body": body}).to_string());
                                     continue;
                                 }
-                                // A selection without text copies nothing and reports the release.
+                                // text가 없는 selection은 아무것도 copy하지 않고 release를 보고한다.
                                 let body = match text {
                                     Some(text) => json!({"event": "selection.copy", "text": text, "userInitiated": true}),
                                     None => json!({"event": "selection.end", "copied": false}),
@@ -2621,14 +2621,14 @@ async fn surface_task(
                             .and_then(|o| o.get("name"))
                             .and_then(|v| v.as_str())
                             .or_else(|| consumed.and_then(|r| r.get("name")).and_then(|v| v.as_str()));
-                        // An image transfer is serialized: pending_draw means exactly one
-                        // envelope is awaiting a host response. During a layout replacement
-                        // the host can reject that envelope after its generation/raster has
-                        // already moved on, so exact metadata matching would leave the
-                        // sidecar permanently blocked with pending_draw=true. A response for
-                        // the current image name releases that one in-flight transfer; the
-                        // response error remains observable through the host log and the
-                        // pending configuration or dirty frame is rendered below.
+                        // image 전송은 직렬화된다. pending_draw는 정확히 하나의
+                        // envelope가 host response를 기다린다는 뜻이다. layout 교체 중에는
+                        // 그 envelope의 generation/raster가 이미 바뀐 뒤에 host가 envelope를
+                        // 거부할 수 있으므로, metadata를 정확히 일치시키면
+                        // sidecar가 pending_draw=true로 영구히 막힌다. 현재 image 이름에 대한
+                        // response는 진행 중인 그 전송 하나를 해제한다. response error는
+                        // host log로 계속 관찰할 수 있고, 대기 중인 configuration 또는 dirty frame은
+                        // 아래에서 render된다.
                         let releases_pending = image_state.as_ref().is_some_and(|state|
                             state.pending_draw
                                 && Some(state.name.as_str()) == name
@@ -2742,7 +2742,7 @@ async fn surface_task(
                                     "body": {"event": "exit"}
                                 });
                                 if let Err(_) = output_tx.send(response.to_string()).await {
-                                    // Output channel closed, exit anyway
+                                    // output channel이 닫혔으므로 그대로 종료한다
                                 }
                                 break;
                             }
@@ -2924,7 +2924,7 @@ where
             if registry.is_none() {
                 for (_, tx) in surface_txs.iter() {
                     if tx.send(SurfaceCommand::SessionDetach).await.is_err() {
-                        // The actor already terminated; its monitor has emitted the actor error.
+                        // actor가 이미 종료되었다. 그 monitor가 actor error를 내보냈다.
                         continue;
                     }
                 }
@@ -3047,7 +3047,7 @@ where
                     }
                     let response = json!({"surface": surface_id, "body": {}});
                     if let Err(_) = output_tx.send(response.to_string()).await {
-                        // Output channel closed; end serve
+                        // output channel이 닫혔으므로 serve를 끝낸다
                         break;
                     }
                 } else if let Some(body) = env.body {
@@ -3095,10 +3095,10 @@ where
                                     continue;
                                 }
 
-                                // A persistent service must create a new actor for a
-                                // genuinely new surface. Only an existing registry
-                                // entry may be reattached; no error is converted into
-                                // an implicit replacement of an existing session.
+                                // persistent service는 실제로 새로운 surface에 대해
+                                // 새 actor를 만들어야 한다. 기존 registry entry만
+                                // 다시 attach할 수 있다. 어떤 error도 기존 session의
+                                // 암묵적 교체로 변환하지 않는다.
                                 let (cmd_tx, cmd_rx) = mpsc::channel(10);
                                 let session_port = session_port_factory();
                                 let factory = engine_factory.clone();
@@ -3150,19 +3150,19 @@ where
                         let sid_for_monitor = sid.clone();
                         let task_trace = performance.clone();
 
-                        // Spawn the actual surface task in a separate handle
+                        // 실제 surface task를 별도 handle로 spawn한다
                         let surface_handle = tokio::spawn(async move {
                             surface_task(sid, task_trace, factory, session_port, cmd_rx, out_tx)
                                 .await;
                         });
 
-                        // Spawn a monitor task to watch for panics
+                        // panic을 감시하는 monitor task를 spawn한다
                         let out_tx_monitor = output_tx.clone();
                         tasks.spawn(async move {
                             match surface_handle.await {
                                 Ok(_) => {},
                                 Err(join_err) if join_err.is_panic() => {
-                                    // Task panicked; send error event
+                                    // task가 panic했으므로 error event를 보낸다
                                     let panic_msg = if let Ok(panic_obj) = join_err.try_into_panic() {
                                         if let Some(s) = panic_obj.downcast_ref::<String>() {
                                             s.clone()
@@ -3193,7 +3193,7 @@ where
                     };
                     surface_txs.insert(registry_key.clone(), tx.clone());
 
-                    // Check for operation field first (it is a request).
+                    // operation field를 먼저 확인한다(request이다).
                     if let Some(operation) = body.get("operation").and_then(|v| v.as_str()) {
                         match operation {
                             "reconnect" => {
@@ -3318,7 +3318,7 @@ where
                                         }
                                     }
                                 }
-                                // Bytes and keys remain optional when compose/focus/command is present.
+                                // compose/focus/command가 있으면 bytes와 keys는 계속 선택 사항이다.
                                 let has_bytes = body.get("bytes").is_some();
                                 let has_keys = body.get("keys").is_some();
                                 let has_native_input = body.get("compose").is_some()
@@ -3334,7 +3334,7 @@ where
                                         break;
                                     }
                                 } else {
-                                    // Process bytes first (if present)
+                                    // bytes를 먼저 처리한다(있는 경우)
                                     if let Some(bytes_b64) =
                                         body.get("bytes").and_then(|v| v.as_str())
                                     {
@@ -3359,7 +3359,7 @@ where
                                             }
                                         }
                                     } else if has_bytes {
-                                        // bytes field present but not a string
+                                        // bytes field가 있지만 string이 아니다
                                         let response = json!({
                                             "surface": surface_id,
                                             "body": {"error": "invalidParams", "reason": "bytes must be a string"}
@@ -3369,7 +3369,7 @@ where
                                         }
                                     }
 
-                                    // Then process keys (if present)
+                                    // 그다음 keys를 처리한다(있는 경우)
                                     if let Some(keys_arr) =
                                         body.get("keys").and_then(|v| v.as_array())
                                     {
@@ -3397,7 +3397,7 @@ where
                                             }
                                         }
                                     } else if has_keys {
-                                        // keys field present but not an array
+                                        // keys field가 있지만 array가 아니다
                                         let response = json!({
                                             "surface": surface_id,
                                             "body": {"error": "invalidParams", "reason": "keys must be an array"}
@@ -3825,7 +3825,7 @@ where
                             break;
                         }
                     } else {
-                        // No operation and no image object means an unknown message.
+                        // operation도 image object도 없으면 알 수 없는 message이다.
                         let response = json!({
                             "surface": surface_id,
                             "body": {"error": "unknown operation"}
@@ -3842,17 +3842,17 @@ where
                     "body": {"error": format!("Parse error: {}", e)}
                 });
                 if let Err(_) = output_tx.send(response.to_string()).await {
-                    // Output channel closed; end serve
+                    // output channel이 닫혔으므로 serve를 끝낸다
                     break;
                 }
             }
         }
     }
 
-    // A persistent transport keeps its surface actors and PTY sessions across
-    // an unexpected client disconnect. Normal application shutdown sends the
-    // explicit close-owner operation and closes them there. Non-persistent
-    // transports have no recovery owner, so their surfaces must be closed now.
+    // persistent transport는 예기치 않은 client 연결 끊김 동안 surface actor와 PTY session을
+    // 유지한다. 정상적인 application 종료는 명시적인 close-owner operation을 보내고
+    // 그곳에서 그것들을 닫는다. persistent가 아닌 transport에는 복구 owner가 없으므로
+    // 그 surface를 지금 닫아야 한다.
     if registry.is_none() {
         for (_, tx) in surface_txs.iter() {
             tx.send(SurfaceCommand::SessionClose)
@@ -3866,7 +3866,7 @@ where
         }
     }
 
-    // Wait for all monitor tasks to complete
+    // 모든 monitor task가 완료될 때까지 기다린다
     while tasks.join_next().await.is_some() {}
     Ok(())
 }
@@ -3899,8 +3899,8 @@ pub fn make_default_session_port_factory() -> Arc<dyn Fn() -> Arc<dyn SessionPor
     Arc::new(move || Arc::new(LocalSessionPort::new(service.clone())) as Arc<dyn SessionPort>)
 }
 
-/// In-process PTY session port.  The service is shared by all surface ports;
-/// each call to `open` still creates one independent PTY session.
+/// in-process PTY session port이다.  service는 모든 surface port가 공유한다.
+/// `open` 호출마다 여전히 독립된 PTY session 하나를 생성한다.
 pub struct LocalSessionPort {
     service: Arc<crate::pty::PtyService>,
     owner: String,

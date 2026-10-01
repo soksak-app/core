@@ -15,7 +15,7 @@ fn main() {
             .include("src/platform/darwin")
             .compile("frame");
 
-        // Link frameworks and objc
+        // framework와 objc를 link한다
         println!("cargo:rustc-link-lib=objc");
         println!("cargo:rustc-link-lib=framework=IOSurface");
         println!("cargo:rustc-link-lib=framework=CoreGraphics");

@@ -58,8 +58,8 @@
 - (void)observeSurface:(NSView *)surface;
 @end
 
-// Logical-surface geometry is owned by the surface host. Weak imports keep
-// legacy WKWebView test surfaces usable while that owner is linked in.
+// 논리 표면 geometry 는 surface host 가 소유한다. Weak import 는 그 소유자가
+// 링크된 동안에도 기존 WKWebView 테스트 표면을 사용할 수 있게 한다.
 extern double sp_surface_scale(void *surface) __attribute__((weak_import));
 extern void *sp_surface_main_webview(void *surface) __attribute__((weak_import));
 extern void *sp_surface_native_plane(void *surface) __attribute__((weak_import));
@@ -307,8 +307,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     NSRect surfaceBounds = nativePlane.bounds;
     NSEdgeInsets insets = self.insets;
 
-    // Surface geometry is expressed in AppKit points. Backing scale belongs
-    // to the image layer and raster dimensions, not to region frame or inset
+    // 표면 geometry 는 AppKit point 로 표현한다. Backing scale 은 image layer 와
+    // raster 크기에 속하며, 영역 frame 이나 inset 좌표에는 속하지 않는다.
     // coordinates.
     CGFloat width = NSWidth(surfaceBounds) - (insets.left + insets.right);
     CGFloat height = NSHeight(surfaceBounds) - (insets.top + insets.bottom);
@@ -494,7 +494,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     BOOL isSpecialKey = NO;
     NSString *keyName = nil;
 
-    // Function keys
+    // 기능 키
     if (ch == NSUpArrowFunctionKey) {
         isSpecialKey = YES;
         keyName = @"Up";
@@ -629,8 +629,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     // AppKit의 표준 키 바인딩은 아무 동작도 하지 않는 입력에 noop:을 보낸다.
     // 이를 사이드카에 전달하면 키 입력이 아닌 selector가 터미널 오류가 된다.
     if (selector == @selector(noop:)) return;
-    // NSTextInputClient commands are part of the input stream. Dropping them
-    // loses IME actions such as cancel, delete, and accept.
+    // NSTextInputClient 명령은 입력 스트림의 일부다. 이를 버리면 cancel, delete,
+    // accept 같은 IME 동작이 사라진다.
     [self commitPending];
     NSString *name = NSStringFromSelector(selector);
     NSString *json = [NSString stringWithFormat:@"{\"type\":\"command\",\"selector\":\"%@\"}",

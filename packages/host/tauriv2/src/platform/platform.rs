@@ -13,7 +13,7 @@ use serde_json::Value;
 use tauri::webview::PlatformWebview;
 use tauri::{AppHandle, WebviewWindowBuilder, Window, Wry};
 
-/// Authenticated persistent sidecar stream supplied by the active platform.
+/// 활성 platform이 제공하는 인증된 persistent sidecar stream이다.
 pub trait PersistentStream: Read + Write + Send {
     fn try_clone(&self) -> Result<Box<dyn PersistentStream>, String>;
     fn shutdown(&self) -> Result<(), String>;
@@ -143,7 +143,7 @@ pub struct WindowOverlay {
     pub visible: bool,
 }
 
-/// A value read from the user's system clipboard. `Absent` is not an error.
+/// 사용자의 system clipboard에서 읽은 값이다. `Absent`는 error가 아니다.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClipboardValue {
     Absent,
@@ -277,7 +277,7 @@ pub trait Platform: Send + Sync {
         -> Result<(), String>;
     /// 대화 상자가 열린 동안 문서를 흐리게 표시한다. 메인 스레드에서 호출한다.
     fn set_document_background(&self, document: Handle, enabled: bool) -> Result<(), String>;
-    /// Sets the native document webview appearance to the current host scheme.
+    /// native document webview appearance를 현재 host scheme으로 설정한다.
     fn set_document_appearance(&self, document: Handle, dark: bool) -> Result<(), String>;
     /// 문서 웹뷰를 제거한다. 이후 changed 는 호출되지 않는다. 메인 스레드에서 호출한다.
     fn close_document(&self, document: Handle) -> Result<(), String>;

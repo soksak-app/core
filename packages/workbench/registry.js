@@ -21,8 +21,8 @@ const registeredSections = [];
  * @param {string|null} plugin.ink 라이브러리 미리보기 색의 테마 토큰 이름. 없으면 기본 색
  * @param {object|null} plugin.background 영속 background 세션 선언
  * @param {object|null} plugin.diagnostics 진단 빌드에서 불러온 플러그인 진단 모듈. release 빌드에서는 null
- * @param {(tabId: string) => {module: string, composition: object}} plugin.surface
- *        표면이 표시할 문서와 검증된 합성 권한 선언. 표면 하나는 탭 하나이므로
+ * @param {(tabId: string) => {module: string, composition: object}} plugin.surface 표면이 표시할
+ *        문서와 검증된 합성 권한 선언. 표면 하나는 탭 하나이므로
  *        인자는 탭의 id 다
  */
 export function registerPlugin(plugin) {

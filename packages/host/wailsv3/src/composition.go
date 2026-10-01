@@ -144,8 +144,8 @@ func exactPlacements(values []CompositionPlacement, names []string, what string)
 	return got, nil
 }
 
-// declareComposition registers the immutable composition contract before a
-// surface places its first frame.
+// declareComposition 은 surface 가 첫 frame 을 배치하기 전에 변경할 수 없는
+// composition contract 를 등록한다.
 func (s *Surfaces) declareComposition(viewID uint64, request CompositionDeclareRequest) error {
 	if request.Surface == "" {
 		return fmt.Errorf("composition declaration requires a surface")

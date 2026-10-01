@@ -61,9 +61,9 @@ static id observer(WKWebView *view) {
     return nil;
 }
 
-// AppKit also delivers a posted movement to the tracking areas the real pointer is in.
-// The window is placed away from the pointer, and a movement is valid only while the
-// pointer stays outside it.
+// AppKit 은 게시된 이동 이벤트를 실제 pointer 가 있는 tracking area 에도 전달한다.
+// 창은 pointer 에서 떨어진 곳에 두며, 이동 이벤트는 pointer 가 창 밖에 있는 동안에만
+// 유효하다.
 static void pointerOutside(NSWindow *window) {
     require(!NSPointInRect(NSEvent.mouseLocation, window.frame),
         @"the pointer is over the test window, so AppKit delivers movements to its tracking areas too; "
@@ -76,10 +76,10 @@ static void deliver(NSWindow *window, NSArray *views, NSPoint point, BOOL baseli
     NSEvent *event = [NSEvent mouseEventWithType:NSEventTypeMouseMoved location:point
         modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime
         windowNumber:window.windowNumber context:nil eventNumber:1 clickCount:0 pressure:0];
-    // -[NSApplication sendEvent:] runs the local monitors that route the pointer.
-    // AppKit then delivers the movement to the topmost registered WebKit observer at
-    // the point. Delivering to every observer would bypass native z-order and
-    // double-count an overlapping page.
+    // -[NSApplication sendEvent:] 는 pointer 를 라우팅하는 local monitor 를 실행한다.
+    // 그다음 AppKit 은 이동 이벤트를 그 지점의 최상위 등록 WebKit observer 에 전달한다.
+    // 모든 observer 에 전달하면 네이티브 z-order 를 우회하고 겹친 페이지를
+    // 중복 집계한다.
     [NSApp postEvent:event atStart:NO];
     NSEvent *posted = [NSApp nextEventMatchingMask:NSEventMaskMouseMoved untilDate:[NSDate dateWithTimeIntervalSinceNow:1]
         inMode:NSDefaultRunLoopMode dequeue:YES];
@@ -91,8 +91,8 @@ static void deliver(NSWindow *window, NSArray *views, NSPoint point, BOOL baseli
         [observer(manualTarget) mouseMoved:event];
     } else if ([views.lastObject isHidden] ||
                [window.contentView.subviews indexOfObject:views.firstObject] > [window.contentView.subviews indexOfObject:views.lastObject]) {
-        // AppKit does not re-enter the newly exposed tracking area when the
-        // covering view is hidden without a native enter/exit transition.
+        // 덮고 있던 뷰가 네이티브 enter/exit 전환 없이 숨겨지면 AppKit 은 새로 드러난
+        // tracking area 에 다시 진입하지 않는다.
         [observer(views.firstObject) mouseMoved:event];
     }
     pointerOutside(window);
@@ -204,7 +204,7 @@ int main(int argc, const char **argv) { @autoreleasepool {
         [cover removeFromSuperview];
         [cover release];
 
-        // Pointer ownership must not steal keyboard focus.
+        // pointer 소유권이 키보드 focus 를 가져가면 안 된다.
         [window makeFirstResponder:top];
         evaluate(top, @"document.getElementById('field').focus()");
         move(window, views, NSMakePoint(400,150), baseline, nil);

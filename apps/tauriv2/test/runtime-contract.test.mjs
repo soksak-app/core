@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 test("Tauri page regions expose operations but only composition places geometry", async () => {
-  // Record all calls made through the mocked Tauri invoke
+  // mock한 Tauri invoke를 거친 모든 호출을 기록한다
   const recorded = [];
   const eventListeners = {};
 
-  // Mock the Tauri runtime interface
+  // Tauri 런타임 인터페이스를 mock한다
   globalThis.window = {
     __TAURI__: {
       core: {
@@ -18,13 +18,13 @@ test("Tauri page regions expose operations but only composition places geometry"
       },
       event: {
         listen(event, fn, _options) {
-          // Register event listeners
+          // 이벤트 listener를 등록한다
           if (!eventListeners[event]) {
             eventListeners[event] = [];
           }
           eventListeners[event].push(fn);
 
-          // Simulate event delivery: send image-event twice, once for s1 and once for s2
+          // 이벤트 전달을 흉내 낸다: image-event를 s1에 한 번, s2에 한 번, 모두 두 번 보낸다
           if (event === "image-event") {
             setTimeout(() => {
               const s1Event = {
@@ -58,12 +58,12 @@ test("Tauri page regions expose operations but only composition places geometry"
     },
   };
 
-  // Mock location with surface id
+  // surface id가 있는 location을 mock한다
   globalThis.location = {
     search: "?id=s1",
   };
 
-  // Mock URLSearchParams
+  // URLSearchParams를 mock한다
   globalThis.URLSearchParams = class {
     constructor(search) {
       this.search = search;
@@ -74,10 +74,10 @@ test("Tauri page regions expose operations but only composition places geometry"
     }
   };
 
-  // Import the runtime module (this is the IIFE that captures the globals)
+  // 런타임 모듈을 import한다(전역 값을 붙잡는 IIFE다)
   const { host, page } = await import("../runtime/index.js");
 
-  // Clear recorded calls before testing (module import might have made some calls)
+  // 테스트 전에 기록된 호출을 지운다(모듈 import가 호출을 만들었을 수 있다)
   recorded.length = 0;
 
   await page.document.attach("doc");
@@ -96,7 +96,7 @@ test("Tauri page regions expose operations but only composition places geometry"
   await host.call("imageText", { surface: "s1", name: "img", text: "accessible" });
   assert.deepEqual(recorded.at(-1), ["image_text", { request: { surface: "s1", name: "img" }, text: "accessible" }]);
 
-  // Test: image.attach should invoke image_attach with { request: { surface, name, sidecar } }
+  // 테스트: image.attach는 image_attach를 { request: { surface, name, sidecar } }로 invoke해야 한다
   await page.image.attach("v", "@x/side");
   assert.deepEqual(
     recorded[recorded.length - 1],
@@ -121,7 +121,7 @@ test("Tauri page regions expose operations but only composition places geometry"
     "composition.place: invokes composition_place with a complete request"
   );
 
-  // Test: image.focus should invoke image_focus with { request: { surface, name } }
+  // 테스트: image.focus는 image_focus를 { request: { surface, name } }로 invoke해야 한다
   await page.image.focus("v");
   assert.deepEqual(
     recorded[recorded.length - 1],
@@ -129,7 +129,7 @@ test("Tauri page regions expose operations but only composition places geometry"
     "image.focus: invokes image_focus with request object"
   );
 
-  // Test: image.caret should invoke image_caret with { request, x, y, w, h } as separate named args
+  // 테스트: image.caret은 image_caret을 { request, x, y, w, h }의 개별 이름 있는 인자로 invoke해야 한다
   await page.image.caret("v", 1, 2, 3, 4);
   assert.deepEqual(
     recorded[recorded.length - 1],
@@ -146,7 +146,7 @@ test("Tauri page regions expose operations but only composition places geometry"
     "image.caret: invokes image_caret with [request, x, y, w, h] as separate named args"
   );
 
-  // Test: image.text should invoke image_text with { request, text } as separate named args
+  // 테스트: image.text는 image_text를 { request, text }의 개별 이름 있는 인자로 invoke해야 한다
   await page.image.text("v", "hello");
   assert.deepEqual(
     recorded[recorded.length - 1],
@@ -160,7 +160,7 @@ test("Tauri page regions expose operations but only composition places geometry"
     "image.text: invokes image_text with [request, text] as separate named args"
   );
 
-  // Test: image.detach should invoke image_detach with { request: { surface, name } }
+  // 테스트: image.detach는 image_detach를 { request: { surface, name } }로 invoke해야 한다
   await page.image.detach("v");
   assert.deepEqual(
     recorded[recorded.length - 1],
@@ -168,16 +168,16 @@ test("Tauri page regions expose operations but only composition places geometry"
     "image.detach: invokes image_detach with request object"
   );
 
-  // Test: image.on should filter events by surface
+  // 테스트: image.on은 surface로 이벤트를 걸러야 한다
   let receivedEvents = [];
   await page.image.on((name, event) => {
     receivedEvents.push({ name, event });
   });
 
-  // Wait for events to be processed
+  // 이벤트가 처리되기를 기다린다
   await new Promise((resolve) => setTimeout(resolve, 50));
 
-  // Should only receive events for s1, not s2
+  // s2가 아닌 s1의 이벤트만 받아야 한다
   assert.equal(receivedEvents.length, 1, "image.on: receives exactly 1 event");
   assert.deepEqual(
     receivedEvents[0],

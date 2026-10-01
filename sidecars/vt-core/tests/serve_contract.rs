@@ -2,7 +2,7 @@
 mod tracked_session_port;
 
 use async_trait::async_trait;
-/// Integration tests for serve contract with fake daemon
+/// fake daemon을 사용하는 serve contract 통합 테스트
 use soksak_sidecar_vt_core::protocol::{
     serve, Cell, Cursor, CursorShape, DaemonEvent, Engine, EngineEvent, Modes, Screen, SessionPort,
     ShellRequest,
@@ -419,7 +419,7 @@ async fn test_a3_input_calls_write() {
 
     let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
 
-    // Verify that write was called with the right data
+    // write가 올바른 data로 호출되었는지 검증한다
     let calls_lock = calls.lock().unwrap();
     assert!(!calls_lock.writes.is_empty(), "write not called");
     assert_eq!(
@@ -975,8 +975,8 @@ async fn test_selection_release_emits_one_user_copy_event() {
     assert!(!output.contains("Unknown operation: selection.end"));
 }
 
-/// A point in the region past the last full row or column selects to the last row and the right edge of the last
-/// column; a point outside the region is an error.
+/// region에서 마지막 완전한 row 또는 column을 지난 point는 마지막 row와 마지막 column의 오른쪽 경계까지
+/// 선택한다. region 밖의 point는 error이다.
 #[tokio::test]
 async fn test_selection_in_the_region_padding_selects_to_the_last_edge() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -1035,7 +1035,7 @@ async fn test_selection_in_the_region_padding_selects_to_the_last_edge() {
     );
 }
 
-/// A release over blank cells reports the end of the gesture without an error or a copy.
+/// 빈 cell 위의 release는 error나 copy 없이 gesture 끝을 보고한다.
 #[tokio::test]
 async fn test_blank_selection_release_reports_end_without_copy() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -1080,7 +1080,7 @@ async fn test_blank_selection_release_reports_end_without_copy() {
     );
 }
 
-/// Test A-7: close op ends the session (calls close, not detach)
+/// Test A-7: close op는 session을 끝낸다(detach가 아니라 close를 호출한다)
 #[tokio::test]
 async fn test_a7_close_op_ends_the_session() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -1121,7 +1121,7 @@ async fn test_a7_close_op_ends_the_session() {
         .iter()
         .all(|message| message["surface"] == "s1"));
 
-    // Verify that close was called and detach was NOT called
+    // close가 호출되었고 detach는 호출되지 않았는지 검증한다
     let calls_lock = calls.lock().unwrap();
     assert_eq!(calls_lock.closes.len(), 1, "close not called exactly once");
     assert_eq!(
@@ -1134,7 +1134,7 @@ async fn test_a7_close_op_ends_the_session() {
     );
 }
 
-/// Test A-8: closed:true flag closes the terminal session
+/// Test A-8: closed:true flag는 terminal session을 닫는다
 #[tokio::test]
 async fn test_a8_closed_surface_closes_session() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -1159,7 +1159,7 @@ async fn test_a8_closed_surface_closes_session() {
 
     let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
 
-    // Verify that close was called and detach was NOT called
+    // close가 호출되었고 detach는 호출되지 않았는지 검증한다
     let calls_lock = calls.lock().unwrap();
     assert_eq!(calls_lock.closes.len(), 1, "close not called exactly once");
     assert_eq!(
@@ -1355,7 +1355,7 @@ async fn test_wide_chars() {
     assert_eq!(screen.lines[0][0].width, 2);
 }
 
-/// Test A-2: Pushed output reaches screen
+/// Test A-2: push된 output이 screen에 도달한다
 #[tokio::test]
 async fn test_a2_pushed_output_reaches_screen() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -1372,19 +1372,19 @@ async fn test_a2_pushed_output_reaches_screen() {
     let port_for_factory = port.clone();
     let factory = Arc::new(move || port_for_factory.clone() as Arc<dyn SessionPort>);
 
-    // Use tokio::io::duplex for stdin/stdout
+    // stdin/stdout에 tokio::io::duplex를 사용한다
     let (mut to_serve, serve_in) = tokio::io::duplex(64 * 1024);
     let (serve_out, from_serve) = tokio::io::duplex(64 * 1024);
 
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    // Send open command
+    // open command를 보낸다
     to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
-    // Wait for state response (should contain sessionId)
+    // state response를 기다린다(sessionId를 포함해야 한다)
     let state_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
         .await
         .expect("timeout waiting for state")
@@ -1398,7 +1398,7 @@ async fn test_a2_pushed_output_reaches_screen() {
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
 "#).await.unwrap();
 
-    // Push output event with "hi\r\n"
+    // "hi\r\n"으로 output event를 push한다
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"hi\r\n".to_vec(),
@@ -1406,7 +1406,7 @@ async fn test_a2_pushed_output_reaches_screen() {
         truncated: false,
     });
 
-    // Wait for screen event (should contain "hi")
+    // screen event를 기다린다("hi"를 포함해야 한다)
     let mut found_hi = false;
     let mut observed = vec![state_line];
     let mut last_consumed = 1;
@@ -1447,7 +1447,7 @@ async fn test_a2_pushed_output_reaches_screen() {
 
         if let Some(event) = screen_json.get("body").and_then(|b| b.get("event")) {
             if event == "screen" {
-                // Found screen event, check if any line contains "hi"
+                // screen event를 찾았으므로 어떤 line이 "hi"를 포함하는지 확인한다
                 if let Some(lines_arr) = screen_json.get("body").and_then(|b| b.get("lines")) {
                     if let Some(lines_vec) = lines_arr.as_array() {
                         for line in lines_vec {
@@ -1476,7 +1476,7 @@ async fn test_a2_pushed_output_reaches_screen() {
 
     assert!(found_hi, "Output 'hi' did not appear in screen event");
 
-    // Close stdin to terminate serve
+    // stdin을 닫아 serve를 종료한다
     drop(to_serve);
     task.await.unwrap().unwrap();
 }
@@ -1604,12 +1604,12 @@ async fn test_a5_screen_read_returns_current_screen() {
     let output = String::from_utf8(writer).unwrap();
     let lines: Vec<&str> = output.lines().collect();
 
-    // Should have: open response, input ack, screen.read screen response
-    // First line is open response
+    // open response, input ack, screen.read screen response가 있어야 한다
+    // 첫 line은 open response이다
     let open_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
     assert_eq!(open_json["body"]["event"], "state");
 
-    // Find screen event with "hi" (from screen.read)
+    // "hi"를 포함한 screen event를 찾는다(screen.read에서 온다)
     let mut found_screen_read = false;
     for line in lines.iter().skip(1) {
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
@@ -1733,7 +1733,7 @@ async fn test_cursor_policy_rejects_invalid_values_without_fallback() {
     }));
 }
 
-/// Test K1: Keys encoded without app_cursor mode
+/// Test K1: app_cursor mode 없이 key를 encode한다
 #[tokio::test]
 async fn test_k1_keys_up_without_app_cursor() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -1766,7 +1766,7 @@ async fn test_k1_keys_up_without_app_cursor() {
     );
 }
 
-/// Test K2: Keys encoded with app_cursor mode
+/// Test K2: app_cursor mode로 key를 encode한다
 #[tokio::test]
 async fn test_k2_keys_up_with_app_cursor() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -1804,7 +1804,7 @@ async fn test_k2_keys_up_with_app_cursor() {
     );
 }
 
-/// Test K3: Char key encoding with ctrl and UTF-8
+/// Test K3: ctrl과 UTF-8을 포함한 char key encoding
 #[tokio::test]
 async fn test_k3_char_key_encoding() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -1876,7 +1876,7 @@ async fn test_k3_char_key_encoding() {
     );
 }
 
-/// Test K4: Unknown key returns error, no write
+/// Test K4: 알 수 없는 key는 error를 반환하고 write하지 않는다
 #[tokio::test]
 async fn test_k4_unknown_key_returns_error() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -1925,7 +1925,7 @@ async fn test_k4_unknown_key_returns_error() {
     assert!(found_error, "should return error for unknown key");
 }
 
-/// Open is inert until the host supplies an exact native raster configuration.
+/// open은 host가 정확한 native raster configuration을 제공할 때까지 동작하지 않는다.
 #[tokio::test]
 async fn test_open_waits_for_host_raster_configuration() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -2055,7 +2055,7 @@ async fn test_legacy_op_field_is_rejected_without_fallback() {
     task.await.unwrap().unwrap();
 }
 
-/// Test I1: Image envelope sent after output when open has image field
+/// Test I1: open에 image field가 있으면 output 뒤에 image envelope를 보낸다
 #[tokio::test]
 async fn test_i1_image_envelope_on_output() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -2078,12 +2078,12 @@ async fn test_i1_image_envelope_on_output() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    // Open WITH image field
+    // image field를 포함하여 open한다
     to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
-    // Wait for state response
+    // state response를 기다린다
     let state_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
         .await
         .expect("timeout waiting for state")
@@ -2094,7 +2094,7 @@ async fn test_i1_image_envelope_on_output() {
         serde_json::from_str(&state_line).expect("failed to parse state JSON");
     assert_eq!(state_json["body"]["event"], "state", "expected state event");
 
-    // Push output event
+    // output event를 push한다
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"hi\r\n".to_vec(),
@@ -2102,7 +2102,7 @@ async fn test_i1_image_envelope_on_output() {
         truncated: false,
     });
 
-    // Wait for image envelope
+    // image envelope를 기다린다
     let image_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
         .await
         .expect("timeout waiting for image envelope")
@@ -2112,7 +2112,7 @@ async fn test_i1_image_envelope_on_output() {
     let image_json: serde_json::Value =
         serde_json::from_str(&image_line).expect("failed to parse image JSON");
 
-    // Verify image envelope structure
+    // image envelope 구조를 검증한다
     let image_obj = image_json
         .get("body")
         .and_then(|b| b.get("image"))
@@ -2145,7 +2145,7 @@ async fn test_i1_image_envelope_on_output() {
     task.await.unwrap().unwrap();
 }
 
-/// Test I2: No second image envelope until the host responds, including a stale response
+/// Test I2: host가 응답할 때까지 두 번째 image envelope가 없다. stale response도 포함한다
 #[tokio::test]
 async fn test_i2_no_image_envelope_until_consumed() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -2168,7 +2168,7 @@ async fn test_i2_no_image_envelope_until_consumed() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    // Open WITH image field
+    // image field를 포함하여 open한다
     to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
@@ -2180,7 +2180,7 @@ async fn test_i2_no_image_envelope_until_consumed() {
             .unwrap()
             .unwrap();
 
-    // Push first output
+    // 첫 output을 push한다
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"test1\r\n".to_vec(),
@@ -2188,7 +2188,7 @@ async fn test_i2_no_image_envelope_until_consumed() {
         truncated: false,
     });
 
-    // Wait for first image envelope
+    // 첫 image envelope를 기다린다
     let _image_line1 =
         tokio::time::timeout(std::time::Duration::from_millis(500), lines.next_line())
             .await
@@ -2196,7 +2196,7 @@ async fn test_i2_no_image_envelope_until_consumed() {
             .expect("failed to read first image line")
             .expect("first image line is empty");
 
-    // Push second output WITHOUT release
+    // release 없이 두 번째 output을 push한다
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"test2\r\n".to_vec(),
@@ -2204,26 +2204,26 @@ async fn test_i2_no_image_envelope_until_consumed() {
         truncated: false,
     });
 
-    // Wait for screen event instead (should NOT get image envelope within 300ms)
+    // 대신 screen event를 기다린다(300ms 안에 image envelope를 받지 않아야 한다)
     let result =
         tokio::time::timeout(std::time::Duration::from_millis(300), lines.next_line()).await;
 
-    // Should timeout or get a screen event, NOT an image envelope
+    // image envelope가 아니라 timeout 또는 screen event가 와야 한다
     if let Ok(Ok(Some(line))) = result {
         let json: serde_json::Value = serde_json::from_str(&line).expect("failed to parse JSON");
-        // If we got an image envelope, that's wrong
+        // image envelope를 받았다면 잘못된 것이다
         assert!(
             json.get("body").and_then(|b| b.get("image")).is_none(),
             "should NOT have image envelope before release"
         );
     }
 
-    // A layout replacement can make the in-flight response stale before the sidecar sees it.
-    // It must still release the serialized transfer so the dirty screen can be sent.
+    // layout 교체는 sidecar가 보기 전에 진행 중인 response를 stale로 만들 수 있다.
+    // 그래도 그 response는 직렬화된 전송을 해제하여 dirty screen을 보낼 수 있게 해야 한다.
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"error":"stale","name":"view","generation":2,"raster":9,"sequence":7}}}
 "#).await.unwrap();
 
-    // Wait for second image envelope (sequence 2) within 2 seconds
+    // 2초 안에 두 번째 image envelope(sequence 2)를 기다린다
     let mut found_sequence_2 = false;
     for _ in 0..20 {
         if let Ok(Ok(Some(line))) =
@@ -2249,7 +2249,7 @@ async fn test_i2_no_image_envelope_until_consumed() {
     task.await.unwrap().unwrap();
 }
 
-/// Test I3: Host image response (consumed/error) is handled, no error returned
+/// Test I3: host image response(consumed/error)를 처리하고 error를 반환하지 않는다
 #[tokio::test]
 async fn test_i3_image_response_no_error() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -2272,7 +2272,7 @@ async fn test_i3_image_response_no_error() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    // Open WITH image field
+    // image field를 포함하여 open한다
     to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
@@ -2284,7 +2284,7 @@ async fn test_i3_image_response_no_error() {
             .unwrap()
             .unwrap();
 
-    // Push output
+    // output을 push한다
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"test\r\n".to_vec(),
@@ -2292,7 +2292,7 @@ async fn test_i3_image_response_no_error() {
         truncated: false,
     });
 
-    // Wait for image envelope
+    // image envelope를 기다린다
     let _image_line =
         tokio::time::timeout(std::time::Duration::from_millis(500), lines.next_line())
             .await
@@ -2300,11 +2300,11 @@ async fn test_i3_image_response_no_error() {
             .unwrap()
             .unwrap();
 
-    // Test 1: Send consumed response (no "error")
+    // Test 1: consumed response를 보낸다("error" 없음)
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
 "#).await.unwrap();
 
-    // Should NOT get error response, just screen or image envelope
+    // error response가 아니라 screen 또는 image envelope만 받아야 한다
     let mut found_error_response = false;
     for _ in 0..10 {
         if let Ok(Ok(Some(line))) =
@@ -2329,11 +2329,11 @@ async fn test_i3_image_response_no_error() {
         "should NOT return 'unknown operation' error for consumed response"
     );
 
-    // Test 2: Send error response
+    // Test 2: error response를 보낸다
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"error":"forbidden","name":"view","generation":1,"raster":1,"sequence":1}}}
 "#).await.unwrap();
 
-    // Should NOT get error response about unknown operation
+    // 알 수 없는 operation에 대한 error response를 받지 않아야 한다
     found_error_response = false;
     for _ in 0..10 {
         if let Ok(Ok(Some(line))) =
@@ -2362,7 +2362,7 @@ async fn test_i3_image_response_no_error() {
     task.await.unwrap().unwrap();
 }
 
-/// Test: open with image field is a request, not a host response
+/// Test: image field가 있는 open은 host response가 아니라 request이다
 #[tokio::test]
 async fn test_open_with_image_is_a_request() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -2397,7 +2397,7 @@ async fn test_open_with_image_is_a_request() {
     let lines: Vec<&str> = output.lines().collect();
     assert!(!lines.is_empty(), "should have output");
 
-    // Check that we got a state response (not an error)
+    // error가 아니라 state response를 받았는지 확인한다
     let first_json: serde_json::Value =
         serde_json::from_str(lines[0]).expect("failed to parse first output as JSON");
     assert_eq!(
@@ -2411,7 +2411,7 @@ fn base64_decode_test(s: &str) -> Result<Vec<u8>, String> {
     base64_decode(s)
 }
 
-/// A host raster configuration with a non-numeric width is rejected.
+/// width가 숫자가 아닌 host raster configuration은 거부된다.
 #[tokio::test]
 async fn test_configure_with_invalid_width_type() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -2450,7 +2450,7 @@ async fn test_configure_with_invalid_width_type() {
     );
     assert_eq!(reason, "invalid image configure");
 
-    // Crucially, daemon should NOT have been called
+    // 핵심은 daemon이 호출되지 않았어야 한다는 것이다
     let calls_lock = calls.lock().unwrap();
     assert_eq!(
         calls_lock.opens.len(),
@@ -2463,7 +2463,7 @@ async fn test_configure_with_invalid_width_type() {
     task.await.unwrap().unwrap();
 }
 
-/// Test: input without bytes or keys is rejected
+/// Test: bytes나 keys가 없는 input은 거부된다
 #[tokio::test]
 async fn test_input_without_bytes_or_keys_rejected() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -2486,7 +2486,7 @@ async fn test_input_without_bytes_or_keys_rejected() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    // Open first
+    // 먼저 open한다
     to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
@@ -2499,7 +2499,7 @@ async fn test_input_without_bytes_or_keys_rejected() {
             .unwrap();
     let _initial_image = next_image_envelope(&mut lines).await;
 
-    // Send input with neither bytes nor keys
+    // bytes도 keys도 없는 input을 보낸다
     to_serve
         .write_all(
             br#"{"surface":"s1","body":{"operation":"input"}}
@@ -2513,7 +2513,7 @@ async fn test_input_without_bytes_or_keys_rejected() {
     let error_json: serde_json::Value =
         serde_json::from_str(&error_line).expect("failed to parse error JSON");
 
-    // Should get error about missing field
+    // 누락된 field에 대한 error를 받아야 한다
     let reason = error_json["body"]["reason"].as_str().unwrap_or("");
     let error_code = error_json["body"]["error"].as_str().unwrap_or("");
     assert!(
@@ -2527,7 +2527,7 @@ async fn test_input_without_bytes_or_keys_rejected() {
     task.await.unwrap().unwrap();
 }
 
-/// Test: input with non-string bytes is rejected
+/// Test: string이 아닌 bytes를 가진 input은 거부된다
 #[tokio::test]
 async fn test_input_with_non_string_bytes_rejected() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -2550,7 +2550,7 @@ async fn test_input_with_non_string_bytes_rejected() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    // Open first
+    // 먼저 open한다
     to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
@@ -2563,7 +2563,7 @@ async fn test_input_with_non_string_bytes_rejected() {
             .unwrap();
     let _initial_image = next_image_envelope(&mut lines).await;
 
-    // Send input with bytes as number instead of string
+    // bytes를 string 대신 number로 하여 input을 보낸다
     to_serve
         .write_all(
             br#"{"surface":"s1","body":{"operation":"input","bytes":123}}
@@ -2577,7 +2577,7 @@ async fn test_input_with_non_string_bytes_rejected() {
     let error_json: serde_json::Value =
         serde_json::from_str(&error_line).expect("failed to parse error JSON");
 
-    // Should get error about bytes type
+    // bytes type에 대한 error를 받아야 한다
     let reason = error_json["body"]["reason"].as_str().unwrap_or("");
     let error_code = error_json["body"]["error"].as_str().unwrap_or("");
     assert!(
@@ -2591,7 +2591,7 @@ async fn test_input_with_non_string_bytes_rejected() {
     task.await.unwrap().unwrap();
 }
 
-/// Test: input with non-array keys is rejected
+/// Test: array가 아닌 keys를 가진 input은 거부된다
 #[tokio::test]
 async fn test_input_with_non_array_keys_rejected() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -2614,7 +2614,7 @@ async fn test_input_with_non_array_keys_rejected() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    // Open first
+    // 먼저 open한다
     to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
@@ -2627,7 +2627,7 @@ async fn test_input_with_non_array_keys_rejected() {
             .unwrap();
     let _initial_image = next_image_envelope(&mut lines).await;
 
-    // Send input with keys as object instead of array
+    // keys를 array 대신 object로 하여 input을 보낸다
     to_serve
         .write_all(
             br#"{"surface":"s1","body":{"operation":"input","keys":{"key":"Up"}}}
@@ -2641,7 +2641,7 @@ async fn test_input_with_non_array_keys_rejected() {
     let error_json: serde_json::Value =
         serde_json::from_str(&error_line).expect("failed to parse error JSON");
 
-    // Should get error about keys type
+    // keys type에 대한 error를 받아야 한다
     let reason = error_json["body"]["reason"].as_str().unwrap_or("");
     let error_code = error_json["body"]["error"].as_str().unwrap_or("");
     assert!(
@@ -2655,7 +2655,7 @@ async fn test_input_with_non_array_keys_rejected() {
     task.await.unwrap().unwrap();
 }
 
-/// A replacement raster with a missing height is rejected.
+/// height가 없는 교체 raster는 거부된다.
 #[tokio::test]
 async fn test_replacement_raster_with_missing_height_is_rejected() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -2678,7 +2678,7 @@ async fn test_replacement_raster_with_missing_height_is_rejected() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    // Open first
+    // 먼저 open한다
     to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
@@ -2692,7 +2692,7 @@ async fn test_replacement_raster_with_missing_height_is_rejected() {
 
     let _initial_image = next_image_envelope(&mut lines).await;
 
-    // Send a new raster without height.
+    // height 없는 새 raster를 보낸다.
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":2,"width":1024,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2707,7 +2707,7 @@ async fn test_replacement_raster_with_missing_height_is_rejected() {
     );
     assert_eq!(error_json["body"]["reason"], "invalid image configure");
 
-    // Verify daemon resize was NOT called
+    // daemon resize가 호출되지 않았는지 검증한다
     let calls_lock = calls.lock().unwrap();
     assert_eq!(
         calls_lock.resizes.len(),
@@ -2720,12 +2720,12 @@ async fn test_replacement_raster_with_missing_height_is_rejected() {
     task.await.unwrap().unwrap();
 }
 
-/// Test: cellWidth/cellHeight are calculated from metrics, not hardcoded
+/// Test: cellWidth/cellHeight는 고정값이 아니라 metrics에서 계산된다
 #[tokio::test]
 async fn test_cell_dimensions_from_metrics() {
     use soksak_sidecar_vt_core::platform::metrics;
 
-    // Test with scale=2.0
+    // scale=2.0으로 테스트한다
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session-metrics".to_string();
 
@@ -2763,10 +2763,10 @@ async fn test_cell_dimensions_from_metrics() {
     let state_json: serde_json::Value =
         serde_json::from_str(&state_line).expect("failed to parse state JSON");
 
-    // Get actual metrics from platform
+    // platform에서 실제 metrics를 얻는다
     let m = metrics(13.0, scale);
 
-    // cellWidth and cellHeight should be CSS pixels = device_pixels / scale
+    // cellWidth와 cellHeight는 CSS pixel = device_pixels / scale 이어야 한다
     let expected_cell_width = m.cell_width as f64 / scale as f64;
     let expected_cell_height = m.cell_height as f64 / scale as f64;
 
@@ -2777,7 +2777,7 @@ async fn test_cell_dimensions_from_metrics() {
         .as_f64()
         .expect("cellHeight should be present and numeric");
 
-    // Must match metrics exactly (within floating point tolerance)
+    // metrics와 정확히 일치해야 한다(부동소수점 허용 오차 이내)
     assert!(
         (cell_width - expected_cell_width).abs() < 0.1,
         "cellWidth at scale 2.0: expected {}, got {}",
@@ -2791,8 +2791,8 @@ async fn test_cell_dimensions_from_metrics() {
         cell_height
     );
 
-    // Verify cols/rows calculation: cols = width_px / cell_width
-    // (both width_px and cell_width are in device pixels, scale already accounted for in metrics)
+    // cols/rows 계산을 검증한다: cols = width_px / cell_width
+    // (width_px와 cell_width는 모두 device pixel이며, scale은 이미 metrics에 반영되어 있다)
     let cols = state_json["body"]["cols"]
         .as_u64()
         .expect("cols should be present") as u16;
@@ -2817,7 +2817,7 @@ async fn test_cell_dimensions_from_metrics() {
     drop(to_serve);
     task.await.unwrap().unwrap();
 
-    // Test with scale=1.0 to verify it works at different scales
+    // 다른 scale에서도 동작하는지 검증하도록 scale=1.0으로 테스트한다
     let calls2 = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id2 = "test-session-metrics-scale1".to_string();
 
@@ -2881,7 +2881,7 @@ async fn test_cell_dimensions_from_metrics() {
     task2.await.unwrap().unwrap();
 }
 
-/// A zero-sized host raster is rejected and a later valid raster opens the session.
+/// 크기가 0인 host raster는 거부되고, 이후의 유효한 raster가 session을 연다.
 #[tokio::test]
 async fn test_zero_sized_configuration_is_rejected() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -2908,7 +2908,7 @@ async fn test_zero_sized_configuration_is_rejected() {
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":0,"height":0,"scale":1.0}}}}
 "#).await.unwrap();
 
-    // Should receive error response
+    // error response를 받아야 한다
     let error_line = next_line_except_screen(&mut lines).await;
 
     let error_json: serde_json::Value =
@@ -2920,7 +2920,7 @@ async fn test_zero_sized_configuration_is_rejected() {
     );
     assert_eq!(error_json["body"]["reason"], "invalid image configure");
 
-    // Verify daemon was NOT called
+    // daemon이 호출되지 않았는지 검증한다
     let calls_lock = calls.lock().unwrap();
     assert_eq!(
         calls_lock.opens.len(),
@@ -2929,7 +2929,7 @@ async fn test_zero_sized_configuration_is_rejected() {
     );
     drop(calls_lock);
 
-    // The original open request remains pending until a valid host raster arrives.
+    // 원래 open request는 유효한 host raster가 도착할 때까지 대기 상태로 남는다.
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":2,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2959,7 +2959,7 @@ async fn test_zero_sized_configuration_is_rejected() {
     task.await.unwrap().unwrap();
 }
 
-/// A zero-sized replacement raster is rejected.
+/// 크기가 0인 교체 raster는 거부된다.
 #[tokio::test]
 async fn test_replacement_raster_with_zero_size_is_rejected() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -2982,12 +2982,12 @@ async fn test_replacement_raster_with_zero_size_is_rejected() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    // Send open with normal size
+    // 보통 크기로 open을 보낸다
     to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
-    // Read state response
+    // state response를 읽는다
     let _state_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
         .await
         .unwrap()
@@ -2998,7 +2998,7 @@ async fn test_replacement_raster_with_zero_size_is_rejected() {
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":2,"width":0,"height":0,"scale":1.0}}}}
 "#).await.unwrap();
 
-    // Read response - should be error
+    // response를 읽는다 - error여야 한다
     let error_line = next_line_except_screen(&mut lines).await;
 
     let error_json: serde_json::Value =
@@ -3009,7 +3009,7 @@ async fn test_replacement_raster_with_zero_size_is_rejected() {
         "zero raster should return invalidParams"
     );
 
-    // Verify daemon resize was NOT called
+    // daemon resize가 호출되지 않았는지 검증한다
     let calls_lock = calls.lock().unwrap();
     assert_eq!(
         calls_lock.resizes.len(),
@@ -3018,7 +3018,7 @@ async fn test_replacement_raster_with_zero_size_is_rejected() {
     );
     drop(calls_lock);
 
-    // Send screen.read to verify task is still alive
+    // task가 아직 살아 있는지 검증하도록 screen.read를 보낸다
     to_serve
         .write_all(
             br#"{"surface":"s1","body":{"operation":"screen.read"}}
@@ -3045,11 +3045,11 @@ async fn test_replacement_raster_with_zero_size_is_rejected() {
     task.await.unwrap().unwrap();
 }
 
-/// Test: a raster too small for one cell holds the session closed without an
-/// error; the next valid raster opens it. A drag through the collapse
-/// transient sends these rasters every frame, and an error there would both
-/// surface a bogus surface error and leave the host presentation barrier
-/// waiting for a frame that never comes (V5-96-14-6-4-8).
+/// Test: cell 하나보다 작은 raster는 error 없이 session을 닫힌 상태로
+/// 유지하고, 다음 유효한 raster가 session을 연다. collapse 구간을 지나는 drag는
+/// frame마다 이런 raster를 보내며, 그때 error를 내면 잘못된 surface error를
+/// 표시하고 host presentation barrier가 오지 않는 frame을
+/// 계속 기다리게 된다(V5-96-14-6-4-8).
 #[tokio::test]
 async fn test_too_small_raster_holds_the_open() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -3072,14 +3072,14 @@ async fn test_too_small_raster_holds_the_open() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    // This raster is positive but too small to contain one terminal cell.
+    // 이 raster는 양수 크기이지만 terminal cell 하나를 담기에는 너무 작다.
     to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":3,"height":3,"scale":1.0}}}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":2,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
-    // The sub-cell raster must not answer with an error, so the first line
-    // back is the state event of the valid raster's open.
+    // sub-cell raster는 error로 응답하지 않아야 하므로, 처음 돌아오는 line은
+    // 유효한 raster의 open에 대한 state event이다.
     let state_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
         .await
         .expect("timeout waiting for state")
@@ -3106,9 +3106,9 @@ async fn test_too_small_raster_holds_the_open() {
     task.await.unwrap().unwrap();
 }
 
-/// Test: a sub-cell replacement raster keeps the current grid and still
-/// presents a frame, so the host presentation barrier completes. The PTY is
-/// resized to the unchanged grid, which sends no SIGWINCH.
+/// Test: sub-cell 교체 raster는 현재 grid를 유지하면서도
+/// frame을 present하므로 host presentation barrier가 완료된다. PTY는
+/// 변하지 않은 grid로 resize되므로 SIGWINCH를 보내지 않는다.
 #[tokio::test]
 async fn test_sub_cell_replacement_holds_the_grid() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -3156,13 +3156,13 @@ async fn test_sub_cell_replacement_holds_the_grid() {
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":2,"width":3,"height":3,"scale":1.0}}}}
 "#).await.unwrap();
 
-    // The sub-cell raster presents: a state event (same grid) and an image
-    // envelope arrive instead of an error. The frame's screen event comes with
-    // the image, so screen lines are skipped while waiting for the state.
-    // The sub-cell raster still presents: after the transfer is acknowledged
-    // the pending configuration applies, sends a state event with the
-    // unchanged grid, and draws the frame for the 3x3 raster. Intermediate
-    // envelopes of the old raster are acknowledged like the host does.
+    // sub-cell raster는 present한다: error 대신 state event(같은 grid)와 image
+    // envelope가 도착한다. frame의 screen event는 image와 함께 오므로
+    // state를 기다리는 동안 screen line은 건너뛴다.
+    // sub-cell raster는 여전히 present한다: 전송이 acknowledge된 뒤
+    // 대기 중인 configuration이 적용되어 변하지 않은 grid로 state event를 보내고,
+    // 3x3 raster에 대한 frame을 그린다. 이전 raster의 중간
+    // envelope는 host와 같은 방식으로 acknowledge한다.
     let mut held_state = None;
     let mut held_image = None;
     for _ in 0..30 {
@@ -3226,7 +3226,7 @@ async fn test_sub_cell_replacement_holds_the_grid() {
     task.await.unwrap().unwrap();
 }
 
-/// Test: panicking engine reports error through surface event
+/// Test: panic하는 engine은 surface event로 error를 보고한다
 #[tokio::test]
 async fn test_panicking_surface_reports_error() {
     struct PanicEngine {
@@ -3378,15 +3378,15 @@ async fn test_panicking_surface_reports_error() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    // Enable panic in engine
+    // engine에서 panic을 활성화한다
     panic_engine_flag.store(true, std::sync::atomic::Ordering::Relaxed);
 
-    // Send open - this should trigger panic in resize
+    // open을 보낸다 - resize에서 panic을 일으켜야 한다
     to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
-    // Wait for error event
+    // error event를 기다린다
     let mut found_error = false;
     for _ in 0..10 {
         match tokio::time::timeout(std::time::Duration::from_millis(500), lines.next_line()).await {
@@ -3471,7 +3471,7 @@ async fn next_image_of_raster(
     panic!("no image envelope for raster {raster} arrived");
 }
 
-/// A replacement raster is not used until the prior transfer is acknowledged.
+/// 교체 raster는 이전 전송이 acknowledge될 때까지 사용되지 않는다.
 #[tokio::test]
 async fn test_replacement_raster_waits_for_prior_transfer() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -3494,7 +3494,7 @@ async fn test_replacement_raster_waits_for_prior_transfer() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    // Open with image at 800x384
+    // 800x384 image로 open한다
     to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
@@ -3520,7 +3520,7 @@ async fn test_replacement_raster_waits_for_prior_transfer() {
         "first image height should be 384"
     );
 
-    // The host acknowledges the immutable snapshot before replacing its raster.
+    // host는 raster를 교체하기 전에 불변 snapshot을 acknowledge한다.
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
 "#).await.unwrap();
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":2,"width":1600,"height":768,"scale":1.0}}}}
@@ -3553,7 +3553,7 @@ async fn test_replacement_raster_waits_for_prior_transfer() {
     task.await.unwrap().unwrap();
 }
 
-/// Test: after a release cycle, output while an image is outstanding does not present again
+/// Test: release cycle 뒤, image가 미해결인 동안의 output은 다시 present하지 않는다
 #[tokio::test]
 async fn test_no_image_envelope_while_outstanding_after_release() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -3586,7 +3586,7 @@ async fn test_no_image_envelope_while_outstanding_after_release() {
         .unwrap()
         .unwrap();
 
-    // First image
+    // 첫 image
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"one\r\n".to_vec(),
@@ -3600,11 +3600,11 @@ async fn test_no_image_envelope_while_outstanding_after_release() {
         "first image envelope sequence"
     );
 
-    // Release sequence 1
+    // sequence 1을 release한다
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
 "#).await.unwrap();
 
-    // Second image after the release (frame was free again)
+    // release 뒤의 두 번째 image (frame이 다시 비어 있었다)
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"two\r\n".to_vec(),
@@ -3618,7 +3618,7 @@ async fn test_no_image_envelope_while_outstanding_after_release() {
         "second image envelope sequence"
     );
 
-    // Output while sequence 2 is outstanding must not present again before its release
+    // sequence 2가 미해결인 동안의 output은 그 release 전에 다시 present하면 안 된다
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"three\r\n".to_vec(),
@@ -3637,7 +3637,7 @@ async fn test_no_image_envelope_while_outstanding_after_release() {
         );
     }
 
-    // Releasing sequence 2 presents the content that arrived meanwhile
+    // sequence 2를 release하면 그사이 도착한 내용을 present한다
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":2}}}}
 "#).await.unwrap();
 
@@ -3663,7 +3663,7 @@ async fn test_no_image_envelope_while_outstanding_after_release() {
     task.await.unwrap().unwrap();
 }
 
-/// Test: an error response re-enables drawing on the next output
+/// Test: error response는 다음 output에서 그리기를 다시 활성화한다
 #[tokio::test]
 async fn test_image_error_response_reenables_drawing() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -3709,11 +3709,11 @@ async fn test_image_error_response_reenables_drawing() {
         "first image envelope sequence"
     );
 
-    // Host rejects the image
+    // host가 image를 거부한다
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"error":"scale","name":"view","generation":1,"raster":1,"sequence":1}}}
 "#).await.unwrap();
 
-    // The next output must draw again
+    // 다음 output은 다시 그려야 한다
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"two\r\n".to_vec(),
@@ -3743,7 +3743,7 @@ async fn test_image_error_response_reenables_drawing() {
     task.await.unwrap().unwrap();
 }
 
-/// The state event after a replacement raster carries the full session fields.
+/// 교체 raster 뒤의 state event는 전체 session field를 담는다.
 #[tokio::test]
 async fn test_replacement_raster_state_has_cell_dimensions() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -4518,7 +4518,7 @@ async fn an_inline_image_event_follows_the_presentation_that_draws_the_image() {
     task.abort();
 }
 
-/// A selection point goes to the nearest cell edge, so a cell is selected once the pointer passes its midpoint.
+/// selection point는 가장 가까운 cell 경계로 가므로, pointer가 cell의 중간점을 지나면 그 cell이 선택된다.
 #[tokio::test]
 async fn test_selection_points_go_to_the_nearest_cell_edge() {
     let calls = Arc::new(Mutex::new(Calls::default()));

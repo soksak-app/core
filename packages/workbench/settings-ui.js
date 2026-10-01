@@ -745,6 +745,6 @@ export function closeSettings() {
   body = null;
 }
 
-// A settings card that was dragged to an edge must remain inside a resized
-// parent window. Its native webview follows the same clamped DOM rectangle.
+// 가장자리로 drag된 settings 카드는 크기가 바뀐 부모 창 안에 남아야 한다.
+// 그 native webview는 같은 clamp된 DOM 사각형을 따른다.
 addEventListener("resize", () => { if (card) moveBy(0, 0); });

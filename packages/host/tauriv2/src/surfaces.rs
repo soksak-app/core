@@ -159,7 +159,7 @@ pub(crate) fn require_region(
     Ok(())
 }
 
-/// Registers the immutable composition contract before a surface places its first frame.
+/// surface가 첫 frame을 배치하기 전에 불변 composition contract를 등록한다.
 pub(crate) fn declare(webview: &Webview, request: CompositionDeclareRequest) -> Result<(), String> {
     if request.surface.is_empty() {
         return Err("composition declaration requires a surface".into());
@@ -190,8 +190,8 @@ pub(crate) fn surface_handle(window: &Window, surface: &str) -> Result<Handle, S
         .ok_or_else(|| format!("surface {surface:?} is not attached"))
 }
 
-/// Resolves the logical surface for a native view that received a press.
-/// Unknown views never activate a workbench card.
+/// press를 받은 native view에 해당하는 logical surface를 찾는다.
+/// 알 수 없는 view는 workbench card를 활성화하지 않는다.
 pub fn surface_owner_id(named: &HashMap<Handle, String>, view: Handle) -> Option<&str> {
     named
         .get(&view)
@@ -705,10 +705,10 @@ pub(crate) async fn present(
     let placements = request.placements;
     let presentation_settled = request.settled;
     let wait_for_presentation = presentation_settled || request.wait_for_presentation;
-    // During a continuous divider gesture the native surface frame and the DOM
-    // are committed every display cycle. Waiting for an application presentation
-    // on every frame serializes the next transaction behind WebKit refreshes.
-    // Settled frames retain the DOM and raster barrier.
+    // 연속 divider gesture 동안 native surface frame과 DOM은
+    // display cycle마다 commit된다. frame마다 application presentation을 기다리면
+    // 다음 transaction이 WebKit refresh 뒤로 직렬화된다.
+    // 정착된 frame은 DOM 및 raster barrier를 유지한다.
     let ready = if wait_for_presentation {
         let (dom_tx, dom_rx) = mpsc::channel();
         main.with_webview(move |view| {
@@ -758,9 +758,9 @@ pub(crate) async fn present(
         None
     };
     if let Some(Err(error)) = ready {
-        // A presentation failure occurs after sync has opened the native
-        // transaction. Release that transaction before returning so the
-        // next split cannot wait forever behind a failed owner.
+        // presentation 실패는 sync가 native transaction을 연 뒤에 발생한다.
+        // 반환하기 전에 그 transaction을 해제하여
+        // 다음 split이 실패한 owner 뒤에서 무한히 기다리지 않게 한다.
         let cancel_error = platform::current()?.enqueue_ui(Box::new(move || {
             if let Err(cancel) = platform::current().and_then(|p| p.cancel_layout(owner)) {
                 eprintln!("surface presentation failure could not cancel layout: {cancel}");

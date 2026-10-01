@@ -178,7 +178,7 @@ test("visibility: ancestor with display:none hides element", () => {
 
 test("visibility: normal element is visible", () => {
   const f = fixture();
-  // element has width and height from mock getBoundingClientRect
+  // 요소는 mock getBoundingClientRect에서 받은 width와 height를 가진다
   const insets = regionInsets(f.element, f.window);
   assert.equal(insets.visible, true, "normal element with size is visible");
 });
@@ -191,17 +191,17 @@ test("visibility: propagates through attachRegion place", async () => {
   const region = attachRegion(p, f.element, "page", f.window);
   await settle();
 
-  // Check initial place call has visible=true
+  // 첫 place 호출이 visible=true인지 확인한다
   const placeCallsBefore = p.calls.filter(([kind]) => kind === "place");
   assert.equal(placeCallsBefore.length, 1, "initial place call");
   assert.equal(placeCallsBefore[0][3], true, "initial visible is true");
 
-  // Hide the element
+  // 요소를 숨긴다
   f.element.style.display = "none";
   f.resize({ left: 10, top: 40, right: 510, bottom: 440, width: 500, height: 400 });
   await settle();
 
-  // Check that new place call has visible=false
+  // 새 place 호출이 visible=false인지 확인한다
   const placeCallsAfter = p.calls.filter(([kind]) => kind === "place");
   assert.equal(placeCallsAfter.length, 2, "place called again on visibility change");
   assert.equal(placeCallsAfter[1][3], false, "visible is false when display:none");

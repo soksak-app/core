@@ -58,9 +58,9 @@ pub struct OscSelectorEvidence {
     pub test: &'static str,
 }
 
-/// Selector-level scope used by the protocol audit. Parser acceptance is not
-/// used to derive this inventory; every row names an observable test or an
-/// explicit separate vendor contract.
+/// protocol audit가 사용하는 selector 수준 범위이다. 이 inventory는 parser 수락 여부에서
+/// 도출하지 않는다. 각 행은 관찰 가능한 test 또는 명시적인 별도 vendor contract를
+/// 지정한다.
 pub const OSC_SELECTOR_INVENTORY: &[OscSelectorEvidence] = &[
     OscSelectorEvidence {
         selector: "0,2",
@@ -329,9 +329,9 @@ pub struct CsiSelectorEvidence {
     pub test: &'static str,
 }
 
-/// Selector-level evidence for CSI behavior that this sidecar currently exposes.
-/// This is deliberately a partial inventory until the remaining XTerm categories
-/// have executable behavior and rejection contracts.
+/// 이 sidecar가 현재 노출하는 CSI 동작에 대한 selector 수준 근거이다.
+/// 나머지 XTerm category가 실행 가능한 동작 및 거부 contract를 갖출 때까지
+/// 이 inventory는 의도적으로 부분적이다.
 pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
     CsiSelectorEvidence {
         selector: "A/B/C/D/G/H/f/s/u",

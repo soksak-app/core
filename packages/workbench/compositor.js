@@ -63,7 +63,7 @@ let seatedRecord = null;
 /** 실제 위치까지 채워진 마지막 레코드. 없으면 null. */
 export const seated = () => seatedRecord;
 
-/** Whether the latest DOM commit is waiting for the host's native placement answer. */
+/** 최신 DOM commit이 호스트의 native 배치 답을 기다리는 중인지 여부. */
 export const placementPending = () => Boolean(
   latestRecord && (!seatedRecord || latestRecord.seq > seatedRecord.seq),
 );

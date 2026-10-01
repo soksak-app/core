@@ -30,9 +30,9 @@ export function authorizeSurface(id) {
   else authorization.set(id, { promise: Promise.resolve(), resolve() {} });
 }
 
-// Start a native surface module only after the host creates its native handle.
-// This preparation callback is the production authorization path; without it,
-// native mounting waits indefinitely before it can report an attributable error.
+// 호스트가 native handle을 만든 뒤에만 native surface 모듈을 시작한다.
+// 이 준비 callback이 production 승인 경로다. 이것이 없으면 native mount는
+// 원인을 밝힐 수 있는 오류를 보고하기 전에 무기한 기다린다.
 if (native) {
   onSurfacePrepared((placements) => {
     for (const placement of placements) authorizeSurface(placement.id);
@@ -207,10 +207,10 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
           return null;
         }
         entry.module = mountedModule;
-        // A newly created native surface must declare and place its image before
-        // the first presentation can wait for that image raster. Waiting here
-        // creates a cycle: presentation waits for the module, while the module's
-        // composition is the operation that configures the raster.
+        // 새로 만든 native surface는 첫 표시가 그 image raster를 기다릴 수 있기 전에
+        // image를 선언하고 배치해야 한다. 여기서 기다리면
+        // 순환이 생긴다: 표시는 모듈을 기다리고, 모듈의
+        // composition은 raster를 구성하는 작업이다.
         releaseSurfaceReady(context);
         return mountedModule;
       }).catch((error) => {
@@ -241,7 +241,7 @@ export async function waitSurfaceCompositionDeclared(surfaceId) {
   await Promise.race([entry.composition, entry.ready.then(() => entry.composition)]);
 }
 
-/** Give a mounted surface's native input owner focus after its card has settled. */
+/** mount된 surface의 카드가 settled된 뒤 그 native 입력 소유자에게 focus를 준다. */
 export async function focusSurface(surfaceId) {
   if (placeholders.has(surfaceId)) return false;
   const entry = mounted.get(surfaceId);
@@ -266,8 +266,8 @@ export async function disposeSurface(surfaceId) {
   if (entry.disposing) return entry.disposing;
   entry.disposed = true;
   entry.disposing = (async () => {
-    // Do not wait for authorization here. A removed tab must not keep a layout
-    // commit alive merely because its module has never been allowed to mount.
+    // 여기서 승인을 기다리지 않는다. 제거된 탭은 모듈이 mount를 허가받은 적이 없다는
+    // 이유만으로 layout commit을 살려 두면 안 된다.
     if (entry.module) await entry.module.dispose();
     // 실패한 마운트는 오류를 표면 상태와 mountSurface 호출자에게 이미 보고했다. 해제는 마운트가 끝나기만 기다린다.
     else if (entry.authorized) await Promise.allSettled([entry.ready]);
@@ -286,7 +286,7 @@ export async function disposeSurface(surfaceId) {
 // 기본값: 마운트되지 않은 표면은 null 이다.
 export const mountedSurface = (surfaceId) => mounted.get(surfaceId) ?? null;
 
-/** Dispose modules whose tabs are no longer declared by the current workspace. */
+/** 현재 workspace가 더 이상 선언하지 않는 탭의 모듈을 dispose한다. */
 export async function disposeSurfacesExcept(surfaceIds) {
   for (const [id, placeholder] of placeholders) {
     if (surfaceIds.has(id)) continue;

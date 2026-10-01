@@ -24,7 +24,7 @@ if (!appNames.every((name) => ["wailsv3", "tauriv2"].includes(name))) {
 export const APPS = Object.fromEntries(appNames.map((name) => [name, {
   name,
   binary: built(`soksak-${name}`),
-  // default: window checks use disposable temporary endpoint directories unless a run supplies an explicit config directory or isolated root.
+  // default: 실행이 명시적인 config 디렉터리나 격리된 root를 주지 않으면 창 검사는 일회용 임시 endpoint 디렉터리를 사용한다.
   configDir: process.env.SOKSAK_CONFIG_DIR ?? join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), `soksak-check-${name}`),
 }]));
 
@@ -555,9 +555,9 @@ export async function shellReady(s) {
       x.exposes.includes("status shell.output") &&
       x.exposes.includes("dom shell.input")),
     "no visible shell surface registered its document, output, and input");
-  // The notification that satisfies the predicate can describe the surface
-  // immediately before a reload replaces it. Read the current registry before
-  // returning an id; never continue with a stale surface id.
+  // predicate를 만족하는 알림은 reload가 surface를 교체하기 바로 전의 surface를
+  // 설명할 수 있다. id를 반환하기 전에 현재 registry를 읽는다. 오래된 surface id로
+  // 진행하지 않는다.
   const active = new Set((await s.get("core.grid")).cards
     .map((card) => card.active)
     .filter(Boolean));

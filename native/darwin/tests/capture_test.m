@@ -70,7 +70,7 @@ int main(void) { @autoreleasepool {
     check(centre.redComponent > 0.9 && centre.greenComponent < 0.3 && centre.blueComponent < 0.1,
         [NSString stringWithFormat:@"the still image shows the window content (centre %@)", centre]);
     check(!NSApp.isActive, @"the still capture does not activate the application");
-    // The recording target stays unchanged long enough for its initial compositor frame to become idle.
+    // 녹화 대상은 초기 compositor 프레임이 idle 상태가 될 만큼 오래 바뀌지 않는다.
     NSDate *settled = [NSDate dateWithTimeIntervalSinceNow:3];
     while (settled.timeIntervalSinceNow > 0) {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:

@@ -445,9 +445,8 @@ func (s *Surfaces) surfaceOf(viewID uint64) string {
 	return id
 }
 
-// AuthorizeSurfaceCaller accepts either the owning surface view or the one explicit
-// main-page identity. An unknown view must not be treated as the main page.
-// AuthorizeSurfaceCaller validates a surface request against its explicit caller identity.
+// AuthorizeSurfaceCaller 는 surface 요청을 명시된 호출자 identity 와 대조해 검증한다. 소유한 surface
+// view 또는 명시된 메인 페이지 identity 하나만 허용하며, 알 수 없는 view 를 메인 페이지로 취급하지 않는다.
 func AuthorizeSurfaceCaller(caller, requested string, callerID, mainID uint64) error {
 	if caller != "" {
 		if caller != requested {

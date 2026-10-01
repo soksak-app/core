@@ -41,7 +41,7 @@ const SIZE = { width: 1000, height: 620 };
 const settledX = (lines) => (transcript(lines).get("syncSurfaces") ?? [])
   .filter((call) => /"settled":true/.test(call.request)).map((call) => JSON.parse(call.request).surfaces[0]?.x);
 
-/** Every visible settled surface frame in the last layout request. */
+/** 마지막 layout 요청에서 보이고 settled 상태인 모든 surface frame. */
 const settledFrames = (lines) => {
   const call = [...(transcript(lines).get("syncSurfaces") ?? [])].reverse()
     .find((entry) => /"settled":true/.test(entry.request));

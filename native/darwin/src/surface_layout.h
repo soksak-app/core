@@ -23,6 +23,6 @@ void surfaceLayoutAfterPresentation(void *mainWebview, void (^done)(void));
 // done 을 메인 스레드에서 호출한다. displayed 는 그 표시가 화면에 나오는 시각(ms, mach 절대
 // 시각)이다. 창이 화면에 없으면 호출 시각이다.
 void surfaceLayoutAfterSettled(void *mainWebview, void (^done)(double displayed, const char *error));
-// Diagnostics-only failure injection for the next settled-presentation request.
+// 다음 settled-presentation 요청에 실패를 주입한다. 진단 빌드 전용이다.
 void surfaceLayoutInjectSettledFailure(void);
 #endif

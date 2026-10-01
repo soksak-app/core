@@ -63,7 +63,7 @@ static CGGlyph single_glyph(CTFontRef font, const uint8_t *bytes, uint32_t lengt
     return glyphs[0];
 }
 
-// Create a frame with given pixel dimensions
+// 주어진 pixel 크기로 frame 을 만든다
 Frame* frame_new(uint32_t width_px, uint32_t height_px) {
     Frame *frame = malloc(sizeof(Frame));
     if (!frame) return NULL;
@@ -71,14 +71,14 @@ Frame* frame_new(uint32_t width_px, uint32_t height_px) {
     frame->width = width_px;
     frame->height = height_px;
 
-    // Create global IOSurface
-    // BGRA format code: 0x42475241
+    // 전역 IOSurface 를 만든다
+    // BGRA 형식 코드: 0x42475241
     NSDictionary *properties = @{
         (id)kIOSurfaceWidth: @(width_px),
         (id)kIOSurfaceHeight: @(height_px),
         (id)kIOSurfacePixelFormat: @(0x42475241),  // 'BGRA'
         (id)kIOSurfaceBytesPerElement: @4,
-// kIOSurfaceIsGlobal is deprecated but required by design
+// kIOSurfaceIsGlobal 은 deprecated 이지만 설계상 필요하다
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
         (id)kIOSurfaceIsGlobal: @YES,
@@ -93,7 +93,7 @@ Frame* frame_new(uint32_t width_px, uint32_t height_px) {
 
     frame->surface_id = IOSurfaceGetID(frame->surface);
 
-    // Attach sRGB color space to surface
+    // surface 에 sRGB 색 공간을 붙인다
     CGColorSpaceRef srgb_space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
     if (srgb_space) {
         CFPropertyListRef color_space_plist = CGColorSpaceCopyPropertyList(srgb_space);
@@ -104,10 +104,10 @@ Frame* frame_new(uint32_t width_px, uint32_t height_px) {
         CGColorSpaceRelease(srgb_space);
     }
 
-    // Generate 16-byte nonce
+    // 16바이트 nonce 를 생성한다
     arc4random_buf(frame->nonce, 16);
 
-    // Set nonce as property on surface
+    // nonce 를 surface 의 property 로 설정한다
     NSData *nonce_data = [NSData dataWithBytes:frame->nonce length:16];
     IOSurfaceSetValue(frame->surface, CFSTR("soksak.frame"), (CFDataRef)nonce_data);
 
@@ -133,10 +133,10 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
                                   InlineImageRaster *images, uint32_t image_count) {
     if (!frame || !screen || !metrics) return -1;
 
-    // Lock the surface
+    // surface 를 잠근다
     IOSurfaceLock(frame->surface, 0, NULL);
 
-    // Get the surface data
+    // surface 데이터를 가져온다
     void *base_address = IOSurfaceGetBaseAddress(frame->surface);
     if (!base_address) {
         IOSurfaceUnlock(frame->surface, 0, NULL);
@@ -145,23 +145,23 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
 
     size_t bytes_per_row = IOSurfaceGetBytesPerRow(frame->surface);
 
-    // Create sRGB color space
+    // sRGB 색 공간을 만든다
     CGColorSpaceRef color_space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
     if (!color_space) {
         IOSurfaceUnlock(frame->surface, 0, NULL);
         return -1;
     }
 
-    // Create bitmap context for BGRA8 with sRGB
+    // sRGB 를 사용하는 BGRA8 bitmap context 를 만든다
     CGContextRef ctx = CGBitmapContextCreateWithData(
         base_address,
         frame->width, frame->height,
-        8,  // bits per component
+        8,  // 성분당 비트 수
         bytes_per_row,
         color_space,
         kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little,
-        NULL,  // release callback
-        NULL   // release callback info
+        NULL,  // release 콜백
+        NULL   // release 콜백 정보
     );
     CGColorSpaceRelease(color_space);
 
@@ -170,7 +170,7 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
         return -1;
     }
 
-    // Set up font with the same size used in frame_metrics
+    // frame_metrics 에서 사용하는 것과 같은 크기로 글꼴을 설정한다
     CTFontRef font = metrics->font ? CTFontCreateWithFontDescriptor(metrics->font->descriptor, metrics->font_size, NULL) : NULL;
     if (!font) {
         CGContextRelease(ctx);
@@ -190,14 +190,14 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
         screen->default_background[2] / 255.0,
         1.0);
 
-    // Fill entire background with CGContextFillRect
+    // CGContextFillRect 로 배경 전체를 채운다
     CGContextSetFillColorWithColor(ctx, default_bg_color);
     CGContextFillRect(ctx, CGRectMake(0, 0, (CGFloat)frame->width, (CGFloat)frame->height));
 
     ColorCache fg_cache = {0};
     ColorCache bg_cache = {0};
     CGFloat descent = CTFontGetDescent(font);
-    // Draw cells
+    // 셀을 그린다
     for (uint32_t i = 0; i < screen->cell_count; i++) {
         Cell *cell = &screen->cells[i];
 
@@ -211,7 +211,7 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
         if (!bg_color) bg_color = default_bg_color;
         if (!fg_color) fg_color = default_fg_color;
 
-        // Handle inverse video
+        // 반전 표시(inverse video)를 처리한다
         if (cell->inverse) {
             CGColorRef tmp = bg_color;
             bg_color = fg_color;
@@ -264,7 +264,7 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
             {
                 CFStringRef cf_str = (__bridge CFStringRef)ch;
 
-                // Create attributes dictionary with font and foreground color
+                // 글꼴과 전경색으로 attributes dictionary 를 만든다
                 CGFloat descent = CTFontGetDescent(font);
                 NSDictionary *attrs = @{
                     (id)kCTFontAttributeName: (__bridge id)font,
@@ -487,13 +487,13 @@ Metrics frame_metrics(const FrameFont *frame_font, double font_size, double scal
     CTFontGetAdvancesForGlyphs(font, kCTFontOrientationHorizontal, &glyph_m, &advances, 1);
     metrics.cell_width = (uint32_t)ceil(advances.width);
 
-    // Measure height from ascent + descent + leading
+    // ascent + descent + leading 으로 높이를 측정한다
     CGFloat ascent = CTFontGetAscent(font);
     CGFloat descent = CTFontGetDescent(font);
     CGFloat leading = CTFontGetLeading(font);
     metrics.cell_height = (uint32_t)ceil(ascent + descent + leading);
 
-    // Store the scaled font size for use in frame_draw
+    // frame_draw 에서 사용할 scale 적용 글꼴 크기를 저장한다
     metrics.font_size = scaled_font_size;
     metrics.font = frame_font;
 
@@ -502,8 +502,8 @@ Metrics frame_metrics(const FrameFont *frame_font, double font_size, double scal
     return metrics;
 }
 
-// Read a pixel at (x, y) from the IOSurface and store BGRA values in out
-// out must be at least 4 bytes
+// IOSurface 에서 (x, y) 의 pixel 을 읽어 BGRA 값을 out 에 저장한다
+// out 은 최소 4바이트여야 한다
 // Returns 0 on success, -1 on failure
 int frame_pixel(Frame *frame, uint32_t x, uint32_t y, uint8_t *out) {
     if (!frame || !frame->surface || !out) return -1;
@@ -520,7 +520,7 @@ int frame_pixel(Frame *frame, uint32_t x, uint32_t y, uint8_t *out) {
     size_t bytes_per_row = IOSurfaceGetBytesPerRow(frame->surface);
     uint8_t *pixel_ptr = (uint8_t *)base_address + (y * bytes_per_row) + (x * 4);
 
-    // BGRA format: B, G, R, A
+    // BGRA 형식: B, G, R, A
     out[0] = pixel_ptr[0];  // B
     out[1] = pixel_ptr[1];  // G
     out[2] = pixel_ptr[2];  // R

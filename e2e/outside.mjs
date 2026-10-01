@@ -187,9 +187,9 @@ export function surfaceBoxes(f, colour, { expectedRow, rowTolerance = 40 } = {})
     if (boxes.some((b) => r.l < b.r && r.r > b.l && r.t < b.b && r.b > b.t)) continue;
     const row = headRow(f, { ...r, y: r.t });
     if (row === null) throw new Error(`content at ${r.l},${r.t} has no DOM header`);
-    // Text can cover the first rows of a terminal, so the first uninterrupted
-    // background row is not the terminal's top. Filter against the measured
-    // card header that is stable across the whole surface instead.
+    // 텍스트가 터미널의 첫 행들을 덮을 수 있으므로, 처음으로 끊김 없는 배경 행이
+    // 터미널의 위쪽 끝이 아니다. 대신 surface 전체에서 안정적인, 측정한 카드 header를
+    // 기준으로 거른다.
     if (expectedRow !== undefined && Math.abs(row / f.scale - expectedRow) > rowTolerance) continue;
     const card = span(f, row, Math.floor((r.l + r.r) / 2));
     if (!card) throw new Error(`content at ${r.l},${r.t} has no DOM card`);

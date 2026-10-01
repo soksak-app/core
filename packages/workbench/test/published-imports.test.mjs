@@ -81,7 +81,7 @@ function extractJsImports(content) {
     imports.push(importPath);
   }
 
-  // import "./x" (side-effect import)
+  // import "./x" 형식의 부수 효과 import
   const importSideEffectRegex = /import\s+["'](\.[^"']*?)["']/g;
   while ((match = importSideEffectRegex.exec(content)) !== null) {
     const importPath = match[1];

@@ -994,9 +994,9 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
             );
         } else if modal.is_object() && modal_view == Some(address) {
             modal["frame"] = rect(view);
-            // Native surface order is reported from a separate compositor plane, so its
-            // indices are not comparable with the webview subtree indices. A modal is
-            // attached above that entire plane and therefore owns the next order.
+            // native surface 순서는 별도의 compositor plane에서 보고되므로 그 index는
+            // webview subtree index와 비교할 수 없다. modal은 그 plane 전체 위에
+            // 붙으므로 다음 순서를 갖는다.
             modal["order"] = json!(native_surfaces.len());
             modal["background"] = json!({"draws": view["draws"], "alpha": view["alpha"]});
         }

@@ -51,13 +51,13 @@ const REASON = /(기본값|default): \S.{9,}/;
 const COMMENT = /^\s*(\/\/|\*|\/\*)/;
 const OR_OPERATOR = /\|\|(?![=])/g;
 
-/** Logical OR used as a value fallback; boolean conditions remain ordinary logic. */
+/** 값 fallback으로 쓰인 논리 OR. boolean 조건은 평범한 논리로 남는다. */
 function hasOrDefault(line) {
   for (const match of line.matchAll(OR_OPERATOR)) {
     const before = line.slice(0, match.index);
     const after = line.slice(match.index + match[0].length).trimStart();
-    // `||` in a condition or a boolean-producing expression is not a fallback.
-    // This audit intentionally targets value positions rather than every logical OR.
+    // 조건이나 boolean을 만드는 식 안의 `||`는 fallback이 아니다.
+    // 이 감사는 모든 논리 OR가 아니라 값 위치를 의도적으로 대상으로 삼는다.
     if (/\b(?:if|while|for)\s*\(/.test(before)) continue;
     if (/(?:===|!==|==|!=|<=|>=|(?<![=!<>])<(?![=])|(?<![=!<>])>(?![=]))/.test(line)) continue;
     if (/\bBoolean\s*\([^)]*$/.test(before) || /\breturn\s+!!/.test(before)) continue;

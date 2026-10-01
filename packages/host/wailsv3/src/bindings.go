@@ -91,7 +91,7 @@ func (h *Host) SetTheme(ctx context.Context, theme Theme) error {
 	return s.SetTheme(theme)
 }
 
-// Theme returns the effective appearance for a page that is subscribing to surface theme updates.
+// Theme 은 surface theme 갱신을 구독하는 페이지의 실제 appearance 를 반환한다.
 func (h *Host) Theme(ctx context.Context) (Theme, error) {
 	s, err := h.surface(ctx)
 	if err != nil {
@@ -132,8 +132,8 @@ func (h *Host) OverlayUpdate(ctx context.Context, req UpdateRequest) error {
 	return s.OverlayUpdate(req)
 }
 
-// Main-page document, image, and composition calls use the registered window ID
-// as the only authenticated main caller identity.
+// 메인 페이지의 document, image, composition 호출은 등록된 window ID 를
+// 인증된 유일한 메인 호출자 identity 로 사용한다.
 func (h *Host) CompositionDeclare(ctx context.Context, req CompositionDeclareRequest) error {
 	s, err := h.surface(ctx)
 	if err != nil {

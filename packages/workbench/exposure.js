@@ -549,10 +549,10 @@ export async function loadExposure() {
 export async function connectExposure(values) {
   registry.configure({
     ...values,
-    // default: the workbench owns reporting when a caller does not provide a failure hook.
+    // default: 호출자가 실패 hook을 주지 않으면 workbench가 보고를 맡는다.
     failed: values.failed ?? ((error) => {
       if (!host) return false;
-      // default: a non-Error rejection carries its value as the diagnostic reason.
+      // default: Error가 아닌 거절은 그 값을 진단 이유로 담는다.
       host.call("report", `exposure settled failed: ${String(error?.message ?? error)}`);
       return true;
     }),

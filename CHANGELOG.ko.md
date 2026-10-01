@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-25: `packages/soksak` 밖의 주석이 한국어이며, `pnpm test`가 `scripts/check-comment-language.mjs`로 이를 강제한다.
+
 - V5-117-1-3-4-7-1-7-3: plugin module 마운트에 실패한 탭을 닫을 수 있다. 해제가 마운트 오류를 다시 던지지 않고 surface를 지운다.
 
 - V5-117-1-3-4-7-1-7-2: module 마운트가 실패하면 native surface의 composition 기다림이 마운트 오류로 끝나므로, core 명령이 이를 끝없이 기다리지 않는다.

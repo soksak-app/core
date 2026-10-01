@@ -2440,7 +2440,7 @@ test("input send failures remain observable and later queued input still sends",
   assert.equal(Buffer.from(fakeSidecar.getMessages().at(-1).body.bytes, "base64").toString(), "b");
 });
 
-// Vendor events have typed consumers; unrelated events remain observable as unsupported.
+// vendor 이벤트에는 타입 있는 소비자가 있다. 관련 없는 이벤트는 unsupported로 관측 가능하게 남는다.
 test("vendor_events_update_the_session_and_unrelated_events_remain_unsupported", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();

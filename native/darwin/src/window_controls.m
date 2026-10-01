@@ -22,7 +22,7 @@ double windowUnifiedTitlebar(void *handle) {
     return window.frame.size.height - window.contentLayoutRect.size.height;
 }
 
-// Reading a position must not repair it: callers need the actual geometry.
+// 위치를 읽을 때 위치를 고치지 않는다. 호출자는 실제 geometry 가 필요하다.
 void windowControls(void *handle, double *out) {
     NSCAssert(NSThread.isMainThread, @"Window controls belong to the main thread");
     NSWindow *window = (NSWindow *)handle;

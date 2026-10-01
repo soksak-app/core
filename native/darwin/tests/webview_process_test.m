@@ -1,4 +1,4 @@
-// WebContent process termination must be an explicit, usable operation before a page reload.
+// 페이지 reload 전에 WebContent 프로세스 종료는 명시적이고 사용 가능한 동작이어야 한다.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"

@@ -24,7 +24,7 @@ import {
   cellBackgrounds, ensureTerminals, isColor, MEASURED_BACKGROUND, readScreenUntil, selectionBackground, setMeasuredBackground,
 } from "./terminal-screen.mjs";
 
-// 1x1 RGBA PNG.
+// 1x1 RGBA PNG 이미지.
 const PNG = Buffer.from("89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000A49444154789C63000100000500010D0A2DB40000000049454E44AE426082", "hex");
 
 
@@ -839,8 +839,8 @@ for (const app of Object.values(APPS)) {
         throw new Error(`project return set ${set}: ${error.message}; ${JSON.stringify(await s.get("host.window"))}`,
           { cause: error });
       }
-      // Surface modules release ready only after the host has presented the current
-      // transaction. Preserve that lifecycle boundary before reading native facts.
+      // surface 모듈은 호스트가 현재 transaction을 표시한 뒤에만 ready를 해제한다.
+      // native 사실을 읽기 전에 그 lifecycle 경계를 지킨다.
       const displayed = await s.presented();
       assert.equal(typeof displayed.displayed, "number", `project return set ${set} did not report a displayed frame`);
       const state = await s.get("host.window");

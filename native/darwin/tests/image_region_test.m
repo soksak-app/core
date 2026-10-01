@@ -356,7 +356,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         CFRelease(testSurface5aNew);
     }
 
-    // TEST 6: pointer input remains owned by the DOM anchor.
+    // TEST 6: pointer 입력은 계속 DOM anchor 가 소유한다.
     {
         [collectedEvents removeAllObjects];
 
@@ -398,10 +398,10 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region7);
     }
 
-    // TEST 8: synthetic NSTextInputClient calls. This does not exercise the active input
-    // source. Whether inserted text is committed at once or kept as editable preedit depends
-    // on the selected input source, so each case commits through a focus change and then
-    // checks the committed text, which is the same for every input source.
+    // TEST 8: 합성 NSTextInputClient 호출. 이 테스트는 활성 입력 소스를 거치지 않는다.
+    // 삽입한 텍스트가 즉시 커밋되는지 편집 가능한 preedit 로 남는지는 선택된 입력 소스에
+    // 따라 다르므로, 각 경우는 focus 변경으로 커밋한 뒤 모든 입력 소스에서 같은
+    // 커밋된 텍스트를 확인한다.
     {
         void *region8 = sp_region_create(surface, "test8", testEvent, NULL);
         sp_region_place(region8, 10, 10, 10, 10, true);
@@ -467,8 +467,8 @@ int main(int argc, char **argv) { @autoreleasepool {
                 && [[collectedEvents lastObject] rangeOfString:@"insertNewline:"].location != NSNotFound,
                 [NSString stringWithFormat:@"TEST 8: a command commits the remaining preedit before it is reported (got %@)", collectedEvents]);
 
-            // F8-16-1: the Korean input method composes only Hangul. The text it inserts after it confirms a syllable
-            // (Space or a digit) is committed with the syllable at once; a new jamo stays preedit.
+            // F8-16-1: 한국어 입력기는 Hangul 만 조합한다. 입력기가 음절을 확정한 뒤 삽입하는 텍스트
+            // (Space 또는 숫자)는 그 음절과 함께 즉시 커밋된다. 새 자모는 preedit 로 남는다.
             if ([regionView.inputContext.selectedKeyboardInputSource hasPrefix:@"com.apple.inputmethod.Korean."]) {
                 NSUInteger beforeSpace = [collectedEvents count];
                 NSUInteger base = regionView.textStorage.length;
@@ -799,7 +799,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region13a);
     }
 
-    // TEST 13b: unsupported physical Ctrl key reports the native key and received scalar
+    // TEST 13b: 지원하지 않는 물리 Ctrl 키는 네이티브 키와 수신한 scalar 를 보고한다
     {
         [collectedEvents removeAllObjects];
 

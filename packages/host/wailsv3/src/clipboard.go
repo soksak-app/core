@@ -118,7 +118,7 @@ func (h *Host) ClipboardPersistPNG(ctx context.Context, request ClipboardPersist
 
 var pngSignature = []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
 
-// PersistClipboardPNG writes an owned PNG below the supplied config directory.
+// PersistClipboardPNG 는 소유한 PNG 를 주어진 config 디렉터리 아래에 기록한다.
 func PersistClipboardPNG(root string, bytes []byte) (string, error) {
 	if len(bytes) == 0 || len(bytes) > clipboardMaxBytes {
 		return "", fmt.Errorf("clipboard PNG size is invalid")

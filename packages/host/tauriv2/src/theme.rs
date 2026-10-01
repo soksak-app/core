@@ -29,7 +29,7 @@ pub(crate) fn get(window: &Window) -> Result<Theme, String> {
     Ok(theme)
 }
 
-/// Returns whether the window's current theme uses the dark scheme.
+/// window의 현재 theme이 dark scheme을 사용하는지 반환한다.
 pub(crate) fn is_dark(window: &Window) -> Result<bool, String> {
     Ok(get(window)?.scheme == "dark")
 }

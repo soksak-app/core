@@ -1,8 +1,8 @@
-//! In-process PTY sessions used by the terminal service.
+//! terminal service가 사용하는 in-process PTY session이다.
 //!
-//! The service owns one PTY and one VT stream per session.  Attachments are
-//! deliberately not represented by PTY handles: dropping an attachment only
-//! stops delivery to that client, while an explicit close owns session exit.
+//! service는 session마다 하나의 PTY와 하나의 VT stream을 소유한다.  attachment는
+//! 의도적으로 PTY handle로 표현하지 않는다. attachment를 drop하면 그 client로의
+//! 전달만 멈추고, session 종료는 명시적인 close가 담당한다.
 
 use crate::platform::pty::{kill_process_group, pending_input, process_group_leader};
 use crate::protocol::DaemonEvent;
@@ -195,9 +195,9 @@ impl PtyService {
             .unwrap()
             .insert(session_id.clone(), session.clone());
         let reader_handle = thread::spawn(move || read_output(session, reader));
-        // The handles are installed after the session is published. Close detaches
-        // their joins from the request path so a stuck PTY reader cannot block a
-        // later session open.
+        // handle은 session이 게시된 뒤에 설치된다. close는 그 join을
+        // request 경로에서 분리하므로 멈춘 PTY reader가 이후의 session open을
+        // 막을 수 없다.
         let session = self
             .sessions
             .lock()
@@ -455,9 +455,9 @@ fn read_output(session: Arc<Session>, mut reader: Box<dyn Read + Send>) {
 
 fn reap_child(session: Arc<Session>) {
     if let Err(error) = session.child.lock().unwrap().wait() {
-        // An explicit close may have reaped the child with try_wait before this
-        // thread acquired the child lock. That is an intentional close result,
-        // not a failure to reap the child.
+        // 이 thread가 child lock을 얻기 전에 명시적인 close가 try_wait로 child를
+        // 회수했을 수 있다. 그것은 의도된 close 결과이며,
+        // child 회수 실패가 아니다.
         if !*session.closed.lock().unwrap() {
             broadcast(
                 &session,

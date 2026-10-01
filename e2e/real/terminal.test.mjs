@@ -747,7 +747,7 @@ for (const app of Object.values(APPS)) {
       const lines = await readScreenUntil(s, surface, (screen) => screen.some((line) => line.startsWith(`R${id}:`)), `${id} did not finish`);
       return Buffer.from(lines.find((line) => line.startsWith(`R${id}:`)).slice(`R${id}:`.length).trim(), "hex").toString("latin1");
     };
-    // TUI uses ?1003: Shift keeps motion reporting active but owns text selection.
+    // TUI는 ?1003을 사용한다: Shift를 누르면 motion 보고는 활성 상태로 남지만 텍스트 선택은 Shift가 소유한다.
     await read("SHIFT1003", "\\033[?1003h\\033[?1006h", 1, "\\033[?1003l\\033[?1006l");
     const before = (await s.get("terminal.session", surface)).selectionReleases;
     const start = cellPoint(origin, session, 0, row);
@@ -891,14 +891,14 @@ for (const app of Object.values(APPS)) {
       assert.equal(first.mouse.reported, true,
         `round-trip ${attempt + 1}: first drag was not reported; before=${JSON.stringify(before)} window=${JSON.stringify(firstWindow)}`);
 
-      // A successful drag is followed by a third-point click and an immediate retry.
+      // 성공한 drag 다음에 세 번째 지점 클릭과 즉시 재시도가 이어진다.
       click(third.x, third.y);
       dragPath(from, to, 12);
       await s.until("terminal.session", (value) => value.mouse.phase === "up" || value.error !== undefined,
         `round-trip ${attempt + 1}: third-point retry did not finish`, { surface });
       const repeated = await s.get("terminal.session", surface);
       if (repeated.error !== undefined || repeated.mouse.reported !== true || repeated.mouse.written !== true) {
-        // Only after the direct retry fails, round-trip through another card and retry again.
+        // 직접 재시도가 실패한 뒤에만 다른 카드를 거쳐 돌아와 다시 재시도한다.
         await s.run("core.card.focus", { card: other.id });
         await s.until("core.grid", (value) => value.cards.some((item) => item.id === other.id && item.focused),
           `round-trip ${attempt + 1}: other card did not focus`);
@@ -1001,8 +1001,8 @@ for (const app of Object.values(APPS)) {
     t.after(() => closeFinderWindow(finder));
     // 끌기는 Finder 창에서 시작한다. Finder 를 앞으로 가져오되 놓는 점은 앱 창이어야 한다.
     activateFinder();
-    // Other Finder windows may remain open on the desktop. Choose an exposed point
-    // in this terminal view instead of assuming its center is uncovered.
+    // 다른 Finder 창이 데스크톱에 열려 있을 수 있다. 이 터미널 view의 가운데가 가려지지
+    // 않았다고 가정하지 않고 노출된 지점을 고른다.
     const pid = appPid(app);
     const candidates = [];
     for (let row = 1; row < 8; row++) {

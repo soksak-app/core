@@ -58,28 +58,28 @@ typedef struct {
     uint8_t visible;
 } InlineImageRaster;
 
-// Opaque Frame type - defined in implementation
+// 불투명 Frame 타입. 구현 파일에서 정의한다
 struct Frame;
 typedef struct Frame Frame;
 
-// Create a frame with given pixel dimensions
-// Returns NULL on failure
+// 주어진 pixel 크기로 frame 을 만든다
+// 실패하면 NULL 을 반환한다
 Frame* frame_new(uint32_t width_px, uint32_t height_px);
 
-// Get the IOSurface ID (u32)
+// IOSurface ID (u32) 를 가져온다
 uint32_t frame_id(Frame *frame);
 
-// Get the 16-byte nonce
-// buf must be at least 16 bytes
+// 16바이트 nonce 를 가져온다
+// buf 는 최소 16바이트여야 한다
 void frame_nonce(Frame *frame, uint8_t *buf);
 
-// Draw the screen to the frame's IOSurface
+// 화면을 frame 의 IOSurface 에 그린다
 // Returns 0 on success, -1 on failure
 int frame_draw(Frame *frame, Screen *screen, Metrics *metrics);
 int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics,
                                   InlineImageRaster *images, uint32_t image_count);
 
-// Free the frame and release IOSurface
+// frame 을 해제하고 IOSurface 를 release 한다
 void frame_drop(Frame *frame);
 
 // 사용자의 시스템 고정폭 글꼴을 만든다. 만들지 못하면 NULL 을 반환한다.
@@ -93,8 +93,8 @@ char *frame_font_family(const FrameFont *font);
 // font 의 font_size(pt) 와 scale 로 셀 메트릭을 계산한다. 셀 폭은 'M' 의 advance 다.
 Metrics frame_metrics(const FrameFont *font, double font_size, double scale);
 
-// Read a pixel at (x, y) and return BGRA values
-// out must be at least 4 bytes
+// (x, y) 의 pixel 을 읽어 BGRA 값을 반환한다
+// out 은 최소 4바이트여야 한다
 // Returns 0 on success, -1 on failure
 int frame_pixel(Frame *frame, uint32_t x, uint32_t y, uint8_t *out);
 

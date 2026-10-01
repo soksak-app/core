@@ -349,7 +349,7 @@ fn document_attach(webview: Webview, request: documents::Request) -> Result<(), 
     documents::attach(&webview, request)
 }
 
-/// Registers a surface's immutable composition declaration before native placement.
+/// native 배치 전에 surface의 불변 composition 선언을 등록한다.
 #[tauri::command(async)]
 fn composition_declare(
     webview: Webview,

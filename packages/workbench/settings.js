@@ -272,7 +272,7 @@ function validateValues(values, where) {
   }
 }
 
-/** Register validated plugin settings before persistent settings are loaded. */
+/** 영속 설정을 불러오기 전에 검증된 플러그인 설정을 등록한다. */
 export function setPluginSettings(manifests, applicationValues = {}) {
   if (store) throw new Error("plugin settings must be set before settings are connected");
   manifestList = manifests;

@@ -107,7 +107,7 @@ func echoSidecarsForImages(t *testing.T) (*host.Sidecars, string) {
 // contract: images.envelope.rejects-unattached-image, images.envelope.refusal-echoes-name-and-sequence
 func TestUnattachedImageIsRefused(t *testing.T) {
 	images := host.NewImages()
-	nonce := "AAAAAAAAAAAAAAAAAAAAAA==" // 16 zero bytes
+	nonce := "AAAAAAAAAAAAAAAAAAAAAA==" // 0 바이트 16개
 	body := map[string]any{
 		"image": map[string]any{
 			"name": "view",
@@ -615,7 +615,7 @@ func TestNonImageBodyIsNotHandled(t *testing.T) {
 // contract: images.envelope.refusal-preserves-quoted-name
 func TestReplyEscapesNames(t *testing.T) {
 	images := host.NewImages()
-	nonce := "AAAAAAAAAAAAAAAAAAAAAA==" // 16 zero bytes
+	nonce := "AAAAAAAAAAAAAAAAAAAAAA==" // 0 바이트 16개
 	body := map[string]any{
 		"image": map[string]any{
 			"name": "a\"b",

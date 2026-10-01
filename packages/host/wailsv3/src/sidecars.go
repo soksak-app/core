@@ -65,7 +65,7 @@ type sidecar struct {
 	outbox        chan []byte
 	exited        chan struct{}
 	muClosed      sync.Mutex
-	pendingCloses [][]byte // queued closed messages, in send order
+	pendingCloses [][]byte // 대기 중인 closed 메시지이며, 전송 순서를 따른다
 	// pendingReplies 는 채널이 가득 찬 경우 immutable image ack를 버퍼링한다.
 	// 각 항목을 보존하여 sequence가 다른 응답을 덮어쓰지 않는다.
 	pendingReplies [][]byte
@@ -601,9 +601,9 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		}
 	} else if errors.Is(err, os.ErrNotExist) {
 		cmd = exec.Command(program, "--service-dir", serviceDir)
-		// A persistent service belongs to the configuration directory, not to
-		// the lifetime of this application process. Start a new session so an
-		// application crash cannot take the recovery service down with it.
+		// 영구 service 는 이 애플리케이션 프로세스의 수명이 아니라 configuration
+		// 디렉터리에 속한다. 애플리케이션이 비정상 종료해도 복구 service 가 함께
+		// 종료되지 않도록 새 session 을 시작한다.
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 		cmd.Stdin = nil
 		cmd.Stderr = os.Stderr
@@ -650,8 +650,8 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		if err := os.Remove(endpointPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("sidecar %s: remove stale endpoint: %w", name, err)
 		}
-		// The endpoint was left by a crashed service. Remove only this proven
-		// stale record, then enter the normal single creation path.
+		// 이 endpoint 는 비정상 종료한 service 가 남긴 것이다. 오래된 것으로 확인된 이
+		// 기록만 제거하고, 일반적인 단일 생성 경로로 들어간다.
 		return c.processPersistent(name)
 	}
 	if endpoint.Protocol != 1 {

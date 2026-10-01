@@ -32,14 +32,14 @@ static int captureBefore;
 static dispatch_queue_t captureWriter;
 static dispatch_semaphore_t capturePending;
 static const long kCapturePending = 64;
-// A diagnostic recording is a bounded burst, not an unbounded video sink.
-// Reaching the bound is reported as an incomplete recording; frames are never
-// silently discarded and accepted as a pass.
+// 진단 녹화는 상한이 있는 짧은 연속 기록이며, 상한 없는 비디오 출력이 아니다.
+// 상한에 도달하면 불완전한 녹화로 보고한다. 프레임을 알리지 않고 버린 뒤
+// 통과로 받아들이지 않는다.
 static const int kCaptureMaxFrames = 600;
 static bool captureLimitReached;
-// Frames displayed before the capture request are not part of the measured
-// gesture. ScreenCaptureKit may deliver one cached frame when a stream starts;
-// retain only frames whose display time is at or after this boundary.
+// 캡처 요청 전에 표시된 프레임은 측정 대상 제스처에 속하지 않는다.
+// ScreenCaptureKit 은 stream 이 시작될 때 캐시된 프레임 하나를 전달할 수 있다.
+// 표시 시각이 이 경계 시각 이후(같은 시각 포함)인 프레임만 보존한다.
 static uint64_t captureStartedAt;
 // 완성 프레임의 버퍼가 창의 장치 픽셀 크기와 다르면 true 다. 스트림이 새 출력 크기의 프레임을 보낼 때까지
 // 종료는 기다린다. captureUpdating 은 스트림 설정 변경을 요청하고 완료를 기다리는 동안 true 다.
@@ -612,11 +612,11 @@ int sp_capture_wait(void) {
     return hasCaptureError() ? 0 : 1;
 }
 
-// Stops the stream and reports how many frames reached disk.
+// stream 을 멈추고 디스크에 기록된 프레임 수를 보고한다.
 //
-// The stop is answered on another queue, and frames already handed over are
-// written while it runs. Reading the count before that would under-report, and
-// the process exiting then would leave the last file short.
+// 멈춤 응답은 다른 queue 에서 오며, 이미 넘겨진 프레임은 그동안 기록된다.
+// 그 전에 개수를 읽으면 실제보다 적게 보고하고, 그때 프로세스가 종료되면
+// 마지막 파일이 잘린 채 남는다.
 int sp_capture_stop(double after) {
     if (captureStream == nil) {
         setCaptureError(@"capture is not running");

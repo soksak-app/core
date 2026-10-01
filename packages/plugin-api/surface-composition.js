@@ -81,8 +81,8 @@ function installHybridPaintBoundary(regionElements, overlayElements, view, viewp
   if (viewport) {
     for (let node = viewport; node; node = node.parentElement) {
       ancestors.add(node);
-      // The plane is the explicit app-DOM paint boundary. Its ancestors paint
-      // the window background and must not be made transparent globally.
+      // plane은 명시적인 app-DOM paint 경계다. 그 조상들은 창 배경을 칠하므로
+      // 전역으로 투명하게 만들면 안 된다.
       if (node.classList?.contains("plane")) break;
     }
   }
@@ -160,11 +160,11 @@ export async function createSurfaceCompositionController(
     inThisDocument(element, name, view);
   }
 
-  // A DOM surface has no native plane to declare or place. Calling the host
-  // composition API here creates a lifecycle race: the DOM module can be
-  // mounted before the first native surface sync and can continue publishing
-  // frames after its surface is removed. Hybrid surfaces use the controller
-  // below; DOM surfaces only need a lifecycle handle for their module.
+  // DOM surface에는 선언하거나 배치할 native plane이 없다. 여기서 호스트 composition API를
+  // 호출하면 lifecycle 경쟁이 생긴다: DOM 모듈은 첫 native surface sync 전에
+  // mount될 수 있고, surface가 제거된 뒤에도 frame을 계속 발행할 수 있다.
+  // hybrid surface는 아래 controller를 사용하고, DOM surface는 모듈을 위한
+  // lifecycle handle만 필요하다.
   if (declaration.kind === "dom") {
     let active = true;
     return Object.freeze({

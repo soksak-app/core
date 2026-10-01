@@ -104,8 +104,8 @@ export function createBinder(run, { check, changed = () => {} }) {
   function connected(el) {
     if (bound.has(el)) return true;
     if (!el.dataset.command) return false;
-    // parentElement stops at a ShadowRoot. Surface modules are mounted in
-    // shadow trees, so follow parentNode to reach the delegated root.
+    // parentElement는 ShadowRoot에서 멈춘다. surface 모듈은 shadow tree 안에 mount되므로
+    // 위임된 root에 닿으려면 parentNode를 따라간다.
     for (let at = el; at; at = at.parentNode) if (roots.has(at)) return true;
     return false;
   }

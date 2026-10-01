@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { appendEvidenceAttempt, collectEvidence, evidenceDrift, persistEvidence, validateEvidence } from '../test-evidence.mjs';
 
 test('evidence records content hashes, dirty state, expected/actual result, and retry history', async (t) => {
-  // Use the real repository for git metadata while keeping the test file set explicit.
+  // 테스트 파일 집합은 명시적으로 유지하면서 git metadata에는 실제 저장소를 사용한다.
   const repo = process.cwd();
   const record = await collectEvidence({
     root: repo,

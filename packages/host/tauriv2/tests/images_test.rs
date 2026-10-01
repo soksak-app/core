@@ -54,7 +54,7 @@ fn reserve_rejects_empty_sidecar() {
 #[test]
 fn unattached_image_is_refused() {
     let images = Images::default();
-    let nonce_b64 = "AAAAAAAAAAAAAAAAAAAAAA=="; // 16 zero bytes
+    let nonce_b64 = "AAAAAAAAAAAAAAAAAAAAAA=="; // 0 byte 16개
     let body = json!({
         "image": {
             "name": "view",

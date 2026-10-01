@@ -12,8 +12,8 @@ import (
 	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
 )
 
-// TestEveryPendingReplyIsFlushedAfterTheQueueDrains verifies that when the write queue fills up,
-// all buffered replies and closes are written after the queue is drained, in the correct order.
+// TestEveryPendingReplyIsFlushedAfterTheQueueDrains 는 쓰기 queue 가 가득 찼을 때 버퍼링된
+// 모든 reply 와 close 가 queue 를 비운 뒤 올바른 순서로 기록되는지 검증한다.
 // contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain, flush.buffer.consumed-acks-not-coalesced, flush.buffer.delivered-after-queued-bodies
 func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	directory := t.TempDir()
@@ -119,8 +119,8 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	}
 }
 
-// TestOrderIsCorrectWhenStopFlushesBufferedMessages verifies that Stop() writes all
-// buffered messages before closing stdin, ensuring messages aren't lost.
+// TestOrderIsCorrectWhenStopFlushesBufferedMessages 는 Stop() 이 stdin 을 닫기 전에
+// 버퍼링된 모든 메시지를 기록하여 메시지를 잃지 않는지 검증한다.
 // contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain
 func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	directory := t.TempDir()
@@ -137,7 +137,7 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = 10 * time.Second // Ensure Stop() waits long enough for cat to receive 5MB
+	sidecars.StopTimeout = 10 * time.Second // Stop() 이 cat 이 5MB 를 받을 만큼 충분히 기다리게 한다
 	owner := newFakeOwner("/p")
 
 	// 표면 등록

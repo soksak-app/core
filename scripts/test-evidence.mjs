@@ -204,7 +204,7 @@ export function validateEvidence(record) {
       resultShape(attempt);
     });
     if (JSON.stringify(record.result) !== JSON.stringify(record.attempts.at(-1))) {
-      // The result is the latest result without the attempt number; compare its fields explicitly.
+      // 결과는 시도 번호를 뺀 최신 결과다. 그 필드를 명시적으로 비교한다.
       const latest = record.attempts.at(-1);
       if (record.result.status !== latest.status || record.result.elapsedMs !== latest.elapsedMs || JSON.stringify(record.result.expected) !== JSON.stringify(latest.expected) || JSON.stringify(record.result.actual) !== JSON.stringify(latest.actual)) throw invalid('latest result does not match the attempt history');
     }

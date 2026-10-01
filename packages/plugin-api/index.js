@@ -1114,8 +1114,8 @@ export function createExpose(port, load) {
   const ready = () => {
     // 기본값: 동시 요청은 같은 manifest 로딩 Promise 를 공유한다.
     entries ??= Promise.resolve().then(load).then(async (declarations) => {
-      // Manifest files carry grouped arrays; the request path needs the canonical
-      // declaration map used by the registry and exposureEntries.
+      // manifest 파일은 묶음 배열을 담는다. 요청 경로에는 registry와 exposureEntries가 쓰는
+      // 정규 선언 map이 필요하다.
       const declared = declarations instanceof Map ? declarations : declarationMap(declarations);
       const made = exposureEntries(declared);
       loaded = made;
@@ -1124,11 +1124,11 @@ export function createExpose(port, load) {
           try {
             await port.reply(id, payload);
           } catch (error) {
-            // The host may have abandoned the request while the page was answering. Report
-            // that rejected reply through the host diagnostic channel instead of creating an
-            // unhandled promise; the host still owns the request/response decision.
+            // 페이지가 답하는 동안 호스트가 요청을 포기했을 수 있다. 처리되지 않은 promise를
+            // 만들지 않고, 거절된 답을 호스트 진단 채널로 보고한다. 요청/응답 결정은
+            // 여전히 호스트가 소유한다.
             if (typeof port.report !== "function") throw error;
-            // default: a non-Error rejection carries its value as the diagnostic reason.
+            // default: Error가 아닌 거절은 그 값을 진단 이유로 담는다.
             await port.report(`exposure reply ${id}: ${String(error?.message ?? error)}`);
           }
         });
