@@ -12,13 +12,13 @@ test("focus inside a surface's shadow root is reported by its exposed name and s
   const { document } = dom.window;
   const host = document.querySelector(".surface-module-host");
   const shadow = host.attachShadow({ mode: "open" });
-  shadow.innerHTML = '<div id="bar"><input data-expose="browser.address"></div>';
+  shadow.innerHTML = '<div id="bar"><input data-expose="fixture.address"></div>';
   const input = shadow.querySelector("input");
   let seen = null;
   document.addEventListener("focusin", (event) => { seen = focusName(event); }, true);
   input.focus();
-  assert.deepEqual(focusState(document), { name: "browser.address", index: 0, surface: "tab-1" });
-  assert.equal(seen, "browser.address");
+  assert.deepEqual(focusState(document), { name: "fixture.address", index: 0, surface: "tab-1" });
+  assert.equal(seen, "fixture.address");
   document.querySelector("button").focus();
   assert.deepEqual(focusState(document), { name: "core.chrome.projects", index: 0, surface: null });
   assert.equal(seen, "core.chrome.projects");
