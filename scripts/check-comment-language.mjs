@@ -154,8 +154,18 @@ export function findEnglishComments(files, read) {
   return found;
 }
 
+/**
+ * 검사할 작업 트리 파일. 추적 파일과 무시되지 않은 새 파일을 읽고, 작업 트리에서 지운 파일은 뺀다.
+ * list(...args) 는 `git ls-files args` 의 결과 줄을 돌려준다.
+ */
+export function workingTreeFiles(list) {
+  const deleted = new Set(list("--deleted"));
+  return list("--cached", "--others", "--exclude-standard").filter((file) => !deleted.has(file));
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const files = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" }).trim().split("\n");
+  const files = workingTreeFiles((...args) =>
+    execFileSync("git", ["ls-files", ...args], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean));
   const found = findEnglishComments(files, (file) => readFileSync(join(ROOT, file), "utf8"));
   for (const item of found) console.error(`- ${item.file}:${item.line} ${item.text}`);
   if (found.length > 0) {

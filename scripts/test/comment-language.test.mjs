@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { comments, findEnglishComments } from "../check-comment-language.mjs";
+import { comments, findEnglishComments, workingTreeFiles } from "../check-comment-language.mjs";
 
 const scan = (files) => findEnglishComments(Object.keys(files), (file) => files[file])
   .map((item) => `${item.file}:${item.line}`);
@@ -53,4 +53,9 @@ test("the repository has no English comment outside packages/soksak", () => {
   const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
   const result = spawnSync(process.execPath, ["scripts/check-comment-language.mjs"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
+});
+
+test("the check reads the working tree: new files are read and deleted files are not", () => {
+  const listed = { "--deleted": ["a/removed.rs"], "--cached --others --exclude-standard": ["a/kept.go", "a/removed.rs", "a/new.js"] };
+  assert.deepEqual(workingTreeFiles((...args) => listed[args.join(" ")]), ["a/kept.go", "a/new.js"]);
 });

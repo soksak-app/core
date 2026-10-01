@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-25-1: the comment language check reads the working tree, including new files and excluding deleted ones.
+
 - G1.4-14-5-1-1: the Tauri window list cases live in the paired `exposure_test`, so the paired host structure holds.
 
 - G1.4-25: comments outside `packages/soksak` are Korean, and `pnpm test` enforces it with `scripts/check-comment-language.mjs`.

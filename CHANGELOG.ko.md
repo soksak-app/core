@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-25-1: 주석 언어 검사가 새 파일을 포함하고 지운 파일을 뺀 작업 트리를 읽는다.
+
 - G1.4-14-5-1-1: Tauri 창 목록 case가 짝을 이루는 `exposure_test`에 있으므로 짝 host 구조가 유지된다.
 
 - G1.4-25: `packages/soksak` 밖의 주석이 한국어이며, `pnpm test`가 `scripts/check-comment-language.mjs`로 이를 강제한다.
