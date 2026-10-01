@@ -127,7 +127,8 @@ install();
 addEventListener("error", (e) =>
   host.report(`error: ${e.message} @ ${e.filename}:${e.lineno}`));
 addEventListener("unhandledrejection", (e) => {
-  host.report(`rejected: ${e.reason}`);
+  // 오류의 위치를 찾을 수 있도록 stack 이 있으면 함께 보낸다.
+  host.report(`rejected: ${e.reason?.stack ?? e.reason}`);
   showError(e.reason);
 });
 addEventListener("error", (e) => showError(e.message));
