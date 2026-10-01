@@ -38,9 +38,16 @@ export function readFrame(path) {
 
 /** 한 폴더의 프레임을 적힌 순서대로. */
 export function frames(directory) {
+  // 한 process 의 녹화는 frame 번호를 이어서 매기므로 번호가 9999 를 넘으면 이름의 문자열 순서가 frame 순서와 다르다.
+  // 이름의 번호로 정렬한다(docs/spec/endpoint.md).
+  const number = (name) => {
+    const match = /^frame-(\d+)\.bgra$/.exec(name);
+    if (!match) throw new Error(`recording ${directory} has an unexpected frame file ${name}`);
+    return Number(match[1]);
+  };
   return readdirSync(directory)
     .filter((name) => name.endsWith(".bgra"))
-    .sort()
+    .sort((a, b) => number(a) - number(b))
     .map((name) => join(directory, name));
 }
 

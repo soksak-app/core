@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-36: window check는 녹화 frame을 frame 번호 순서로 정렬하므로, frame 9999 뒤의 녹화도 마지막 frame으로 판정한다.
+
 - G1.4-34: Tauri host는 surface를 동기화할 때 plugin 상태 sidecar session을 열어 두므로, files plugin이 watch를 유지하고 더는 `watch requires a root`를 보고하지 않는다.
 
 - G1.4-33: 첫 열기 window check는 응답 시간, trace 단계, load average, CPU 사용이 큰 process를 보고하며, window check 반복 target은 실행마다 진단을 출력한다.

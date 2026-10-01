@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32 } from "node:zlib";
-import { readFrame } from "../frame.mjs";
+import { frames, readFrame } from "../frame.mjs";
 
 function fixture(block = Buffer.concat([Buffer.from([0xf0, 17]), Buffer.from(Array.from({ length: 32 }, (_, i) => i))])) {
   const header = Buffer.alloc(80);
@@ -48,3 +48,13 @@ for (const [label, corrupt] of [
   ["match before output", () => fixture(Buffer.from([0x10, 1, 2, 0, 0x50, 0, 0, 0, 0, 0]))],
   ["missing length extension", () => fixture(Buffer.from([0xf0, 255]))],
 ]) test(`frame reader rejects ${label}`, () => assert.throws(() => read(corrupt(fixture()))));
+
+test("frames are listed in frame number order after the number passes four digits", (t) => {
+  // 한 process 의 녹화는 frame 번호를 이어서 매기므로 오래 실행한 뒤의 녹화는 9999 를 넘는다.
+  const directory = mkdtempSync(join(tmpdir(), "soksak-frame-order-"));
+  t.after(() => rmSync(directory, { recursive: true }));
+  for (const number of [9998, 9999, 10000, 10001]) writeFileSync(join(directory, `frame-${String(number).padStart(4, "0")}.bgra`), "");
+  writeFileSync(join(directory, "frame-10002.bgra.partial"), "");
+  assert.deepEqual(frames(directory).map((path) => path.split("/").at(-1)),
+    ["frame-9998.bgra", "frame-9999.bgra", "frame-10000.bgra", "frame-10001.bgra"]);
+});
