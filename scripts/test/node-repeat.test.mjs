@@ -8,7 +8,7 @@ import {spawnSync} from 'node:child_process';
 function repeat(t,mode){
  const directory=mkdtempSync(join(tmpdir(),'soksak-repeat-target-'));
  t.after(()=>rmSync(directory,{recursive:true}));
- writeFileSync(join(directory,'node'),`#!${process.execPath}\nconsole.log('START fixture: owning case');\nconsole.log('fixture elapsed=1ms');\nconsole.log(${JSON.stringify(mode==='success'?'ℹ pass 1':mode==='empty'?'ℹ pass 0':'ℹ fail 1')});\nconsole.log('END fixture: owning case');\nprocess.exit(${mode==='failure'?17:0});\n`,{mode:0o755});
+ writeFileSync(join(directory,'node'),`#!${process.execPath}\nconsole.log('START fixture: owning case');\nconsole.log('fixture elapsed=1ms');\nconsole.log(${JSON.stringify(mode==='success'?'ok 1 - owning case':mode==='empty'?'ok 1 - fixture.test.mjs':'not ok 1 - owning case')});\nconsole.log('END fixture: owning case');\nprocess.exit(${mode==='failure'?17:0});\n`,{mode:0o755});
  return spawnSync('make',['node-repeat','FILE=fixture.test.mjs','NAME=owning case','COUNT=2'],{
   cwd:resolve(import.meta.dirname,'../..'),env:{...process.env,PATH:directory+':'+process.env.PATH},encoding:'utf8',timeout:10000});
 }
@@ -25,4 +25,25 @@ test('node repeat preserves child failure and stops before another run',{timeout
 });
 test('node repeat rejects a run without a matching passed case',{timeout:15000},t=>{
  const result=repeat(t,'empty');assert.notEqual(result.status,0);assert.match(result.stderr,/no test .* matched/);
+});
+
+// 실제 node 실행기의 출력으로 센다. 이 검사의 node:test 실행 문맥(NODE_TEST_CONTEXT)은 넘기지 않는다.
+const {NODE_TEST_CONTEXT,...environment}=process.env;
+function repeatReal(t,name,color){
+ const directory=mkdtempSync(join(tmpdir(),'soksak-repeat-real-'));
+ t.after(()=>rmSync(directory,{recursive:true}));
+ const file=join(directory,'probe.test.mjs');
+ writeFileSync(file,'import test from "node:test";\ntest("probe passes", () => {});\n');
+ return spawnSync('make',['node-repeat',`FILE=${file}`,`NAME=${name}`,'COUNT=2'],{
+  cwd:resolve(import.meta.dirname,'../..'),env:{...environment,FORCE_COLOR:color},encoding:'utf8',timeout:20000});
+}
+test('node repeat counts passing runs when the reporter writes colors',{timeout:30000},t=>{
+ const result=repeatReal(t,'probe passes','3');
+ assert.equal(result.status,0,result.stdout+result.stderr);
+ assert.match(result.stdout,/2 of 2 runs pass/);
+});
+for(const color of ['3','0'])test(`node repeat rejects a name pattern that runs no test with FORCE_COLOR=${color}`,{timeout:30000},t=>{
+ const result=repeatReal(t,'missing probe',color);
+ assert.notEqual(result.status,0,result.stdout+result.stderr);
+ assert.match(result.stderr,/no test .* matched/);
 });

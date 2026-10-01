@@ -90,6 +90,8 @@ go-repeat:
 
 # 저장소 루트에서 Node 테스트 파일의 이름 패턴에 맞는 테스트를 COUNT 번 차례로 실행한다.
 # 간헐 실패를 재현하고 수용하는 대상이다. 첫 실패에서 실행 번호, 시스템 부하, 그 실행의 출력을 보고한다.
+# 실행한 테스트는 기계 형식인 TAP 결과에서 센다. 사람이 읽는 출력은 환경에 따라 색 코드가 붙고, 이름이 맞는 테스트가
+# 없으면 파일 자체가 통과 결과 하나로 보고되므로 제목이 이름 패턴에 맞고 건너뛰지 않은 결과만 센다.
 node-repeat: SHELL := /bin/bash -o pipefail
 node-repeat:
 	@case "$(FILE)" in '') echo "node-repeat requires FILE=<test file> NAME=<test name pattern> COUNT=<n>" >&2; exit 2;; esac
@@ -97,9 +99,10 @@ node-repeat:
 	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
 	  run=1; while [ $$run -le $(COUNT) ]; do \
 	    echo "START: $(FILE) $(NAME) run $$run of $(COUNT)"; \
-	    node --test --experimental-test-module-mocks --test-name-pattern='$(NAME)' $(FILE) 2>&1 | tee "$$output" \
+	    node --test --experimental-test-module-mocks --test-reporter=tap --test-name-pattern='$(NAME)' $(FILE) 2>&1 | tee "$$output" \
 	      || { echo "FAIL: $(FILE) $(NAME) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
-	    grep -q "^ℹ pass [1-9]" "$$output" || { cat "$$output"; echo "FAIL: no test in $(FILE) matched $(NAME)" >&2; exit 1; }; \
+	    sed -nE 's/^[[:space:]]*ok [0-9]+ - //p' "$$output" | grep -v '# SKIP' | grep -qE -- '$(NAME)' \
+	      || { echo "FAIL: no test in $(FILE) matched $(NAME)" >&2; exit 1; }; \
 	    run=$$((run + 1)); \
 	  done; \
 	  echo "$(FILE) $(NAME): $(COUNT) of $(COUNT) runs pass"

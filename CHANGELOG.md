@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-16: count the tests that `make node-repeat` actually ran. It read a colored human reporter line and also counted a test file without matching tests as a pass; it now reads TAP results whose titles match the name pattern.
+
 - G1.4-14-3: window checks no longer set the retired `rail` and `cardSidebar` settings and measure the fixed sidebar cards and internal card sidebars instead; the saved-layout check expects the validation error, and the files label check measures the whole label with a device-pixel tolerance.
 
 - V5-117-1-5-1: record the parity inventory of 65 lanes, 333 implementation files and 321 test files after the library preview validation added two modules and one test.

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-16: `make node-repeat`가 실제로 실행한 test를 센다. 색이 붙는 사람용 reporter 줄을 읽었고, 일치하는 test가 없는 file도 통과로 셌다. 이제 제목이 이름 pattern과 일치하는 TAP 결과를 읽는다.
+
 - G1.4-14-3: window check가 폐기된 `rail`, `cardSidebar` 설정을 더 이상 쓰지 않고 고정 사이드바 카드와 카드 내부 사이드바를 잰다. 저장 layout check는 검증 오류를 기대하고, files label check는 device pixel 허용 폭으로 label 전체를 잰다.
 
 - V5-117-1-5-1: 라이브러리 미리보기 검증이 module 2개와 test 1개를 추가한 뒤의 parity 목록(lane 65개, 구현 파일 333개, 테스트 파일 321개)을 기록한다.
