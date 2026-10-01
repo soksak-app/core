@@ -463,6 +463,9 @@ export function validateEnvironment(environment) {
   for (const card of grid.cards) {
     if (!isObject(card) || !isText(card.id)) throw new Error("environment.json: every card requires an id");
     only(`environment.json card ${card.id}`, card, ["id", "c0", "c1", "r0", "r1", "width", "fixed", "tabs"]);
+    if (card.width !== undefined && !(Number.isFinite(card.width) && card.width > 0)) {
+      throw new Error(`environment.json: card ${card.id} width must be a finite positive number`);
+    }
     if (card.tabs !== undefined) {
       if (!Array.isArray(card.tabs) || card.tabs.length === 0) {
         throw new Error(`environment.json: card ${card.id} tabs must be a non-empty array`);

@@ -138,7 +138,7 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 | --- | --- |
 | `runtime` | 런타임 모듈 `index.js`를 포함한 애플리케이션 안의 디렉터리 |
 | `plugins` | 플러그인 패키지 이름. 각각 애플리케이션 패키지의 의존성이어야 한다. 순서가 추가 메뉴 순서다 |
-| `workspace.grid` | 새 스페이스의 격자선과 카드. `tabs`가 있는 카드는 `{ plugin, title }` 항목을 나열한다 |
+| `workspace.grid` | 새 스페이스의 격자선과 카드. `tabs`가 있는 카드는 `{ plugin, title }` 항목을 나열한다. 선택 필드인 card `width`는 point 단위의 유한한 양수이며, 왼쪽·오른쪽 고정 sidebar card는 그 너비로 시작하고 생략하면 `sidebarWidth`를 쓴다 |
 | `workspace.focus` | 새 스페이스에서 포커스할 카드. 탭이 있어야 한다 |
 | `sidebars.sets` | 플러그인 기본값의 선택적 명시적 덮어쓰기: 섹션 세트 `{id, title, sections, layout}`. `layout`은 `list` 또는 `tabs`다 |
 | `sidecars` | 선택. `false`는 런타임이 [사이드카](sidecars.ko.md)를 실행할 수 없다는 뜻이며 브라우저 예제가 그렇다. 이런 환경은 상태 모듈이 사이드카를 쓰는 플러그인을 나열할 수 없다. 기본값은 `true`다 |

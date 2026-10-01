@@ -139,6 +139,10 @@ test("an environment is rejected for each invalid field", () => {
     [(e) => { e.sidebars.sets.push(e.sidebars.sets[0]); }, /duplicate set/],
     [(e) => { delete e.sidebars.sets[0].layout; }, /set set-side layout must be list or tabs/],
     [(e) => { e.sidebars.sets[0].layout = "grid"; }, /set set-side layout must be list or tabs/],
+    [(e) => { e.workspace.grid.cards[0].width = "190"; }, /width must be a finite positive number/],
+    [(e) => { e.workspace.grid.cards[0].width = 0; }, /width must be a finite positive number/],
+    [(e) => { e.workspace.grid.cards[0].width = -190; }, /width must be a finite positive number/],
+    [(e) => { e.workspace.grid.cards[0].width = Infinity; }, /width must be a finite positive number/],
   ];
   for (const [change, message] of cases) {
     const value = environment();

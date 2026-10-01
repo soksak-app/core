@@ -138,7 +138,7 @@ The browser back, forward, and reload buttons draw `chevron-left`, `chevron-righ
 | --- | --- |
 | `runtime` | Directory inside the application that contains the runtime module `index.js` |
 | `plugins` | Plugin package names. Each must be a dependency of the application package. The order is the add-menu order |
-| `workspace.grid` | Grid lines and cards of a new space. A card with `tabs` lists `{ plugin, title }` entries |
+| `workspace.grid` | Grid lines and cards of a new space. A card with `tabs` lists `{ plugin, title }` entries. An optional card `width` is a finite positive number of points; the left and right fixed sidebar cards start at that width and use `sidebarWidth` when it is omitted |
 | `workspace.focus` | Card focused in a new space; it must have tabs |
 | `sidebars.sets` | Optional explicit override of plugin defaults: section sets `{id, title, sections, layout}`; `layout` is `list` or `tabs` |
 | `sidecars` | Optional. `false` states that the runtime cannot run [sidecars](sidecars.md), as in the browser example; such an environment cannot list a plugin whose `state` module uses sidecars. The default is `true` |
