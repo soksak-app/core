@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-22: `make go-format-check`가 `gofmt`가 바꿀 추적 Go file이 있으면 실패하며 `make native-test`에서 실행된다. `sidecars.go`를 다시 정렬한다.
+
 - G1.4-14-4: `host.window`가 창이 놓인 screen의 최대 재생률인 `refreshRate`를 보고하고, terminal divider check는 약 120 Hz를 가정하는 대신 이 값에서 최소 frame 수를 정한다.
 
 - G1.4-14-4: rail 윤곽을 반 통로에서 선 굵기의 절반만큼 안쪽에 그려, 1배율 display에서 rail이 흐린 두 pixel이 아니라 온전한 pixel로 그려진다. `ensureTerminals`는 가장 큰 terminal 카드를 긴 쪽으로 나눈다.

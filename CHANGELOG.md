@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-22: `make go-format-check` fails on any tracked Go file that `gofmt` would change and runs in `make native-test`; `sidecars.go` is reformatted.
+
 - G1.4-14-4: `host.window` reports `refreshRate`, the maximum refresh rate of the window's screen, and the terminal divider check derives its minimum frame count from it instead of assuming about 120 Hz.
 
 - G1.4-14-4: the rail outline is drawn half a border width inside the half gap, so a 1x display draws the rail in whole pixels instead of two dim pixels; `ensureTerminals` splits the largest terminal card on its long side.

@@ -89,8 +89,8 @@ type Sidecars struct {
 	owners     map[string]SidecarOwner
 	// roots 는 표면을 처음 보낼 때의 프로젝트 디렉터리다. 사이드카는 root 와 표면으로 세션을 찾으므로,
 	// 창의 프로젝트가 바뀐 뒤에도 이미 열린 표면의 요청과 닫힘은 이 root 로 보낸다.
-	roots       map[string]string
-	stopped     bool
+	roots   map[string]string
+	stopped bool
 	// unannouncedLoss 는 연결이 끊겼고 아직 소유 표면에 알리지 않은 영속 사이드카다(V5-106).
 	// 끊김을 알린 시작이 이 기록을 소진한다 — 첫 시작은 알림이 없다.
 	unannouncedLoss map[string]bool

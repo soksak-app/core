@@ -138,7 +138,7 @@ verify: prepare docs-check exposure-check parity-check host-parity-check termina
 # 각 앱은 debug 와 release 두 프로필로 빌드한다. release 는 각 도구의 표준 축소
 # 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다. debug 는 진단 빌드(Go 태그·cargo
 # 기능 diagnostics)이고 release 는 진단 메서드를 포함하지 않는다.
-.PHONY: native-darwin sidecars-debug sidecars-release frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check \
+.PHONY: native-darwin sidecars-debug sidecars-release frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check go-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         examples-verify examples-size
@@ -252,11 +252,19 @@ wailsv3-release: wailsv3-build-release
 # 네이티브 코드의 단위 검사. 공용 입력 검사, 사이드카 검사, 두 호스트의 테스트를 실행하는 호스트 계약 검사를 실행한다.
 native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) rust-format-check
+	@$(MAKE) go-format-check
 	@$(MAKE) -C native/darwin test
 	@node scripts/verify-vt-recovery.mjs sidecars/vt-alacritty/build/soksak-vt-alacritty
 	@$(GO_ENV) go test -ldflags "$(GO_LINK)" ./sidecars/files/... ./sidecars/shell/...
 	@$(CARGO_ENV) cargo test --manifest-path sidecars/Cargo.toml --workspace
 	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags "$(GO_LINK)"
+
+# 저장소가 추적하는 모든 Go 파일이 gofmt 형식인지 검사한다. 형식이 다른 파일을 모두 보고하고 실패한다.
+go-format-check:
+	@files=$$(git ls-files '*.go'); \
+	  unformatted=$$(gofmt -l $$files) || exit 1; \
+	  if [ -n "$$unformatted" ]; then echo "Go files not in gofmt format:" >&2; echo "$$unformatted" >&2; exit 1; fi; \
+	  echo "Go format check passed: $$(echo $$files | wc -w | tr -d ' ') files"
 
 # 두 Rust 워크스페이스(루트와 sidecars)의 모든 패키지가 rustfmt 형식인지 검사한다.
 rust-format-check:
