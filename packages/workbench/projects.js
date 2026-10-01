@@ -210,7 +210,12 @@ async function activateInTurn(id) {
   checkProject(project);
   await keep();
   await saveGeometry();
-  const folder = await windows.folder(project.root);
+  let folder;
+  try {
+    folder = await windows.folder(project.root);
+  } catch (error) {
+    throw new Error(`the project folder ${project.root} cannot be opened: ${error.message}`, { cause: error });
+  }
   if (folder.identity !== project.identity) throw new Error(`Project directory has changed: ${project.root}`);
   const result = await windows.openProject({
     // 기본값: 창을 한 번도 닫지 않은 프로젝트는 저장된 창 자리가 없다(null).

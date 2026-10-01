@@ -610,7 +610,7 @@ addEventListener("focusout", coreChanged);
 
 const storage = await openStore();
 await connectSettings(storage);
-projects.onChange(() => { drawBars(); drawSettings(); library.render(); coreChanged(); });
+projects.onChange(() => { drawBars(); drawSettings(); library.refreshFolders(); library.render(); coreChanged(); });
 await projects.initialise(storage);
 drawBars();
 // 앱이 다시 시작하거나 페이지가 실패한 뒤, 어떤 레이아웃에도 없는 표면의 사이드카 세션을 닫는다.

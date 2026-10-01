@@ -1,6 +1,6 @@
 // 라이브러리 시작, 기존 OS 창 재사용, 폴더 생성과 작업 화면 복원을 검사한다.
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -311,5 +311,45 @@ for (const app of Object.values(APPS)) {
     assert.equal(existsSync(join(temporary, "created")), true);
     assert.equal((await third.get("core.screen")).screen, "library");
     t.diagnostic("same OS window reused for creation and saved projects; Dock menu creates an unassigned library window");
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the library names a missing project folder and removes the project`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const first = await s.get("core.project");
+    const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-missing-")));
+    s.cleanup(() => rmSync(temporary, { recursive: true, force: true }));
+    s.cleanup(async () => {
+      for (const item of await s.get("core.projects")) {
+        if (item.root.startsWith(temporary)) await s.run("core.project.close", { id: item.id });
+      }
+      await s.run("core.project.activate", { id: first.id });
+      await s.run("core.projects.flush");
+    });
+    const folder = join(temporary, "gone");
+    mkdirSync(folder);
+    const missing = await s.run("core.project.open", { root: folder });
+    await s.run("core.projects.flush");
+    rmSync(folder, { recursive: true });
+
+    await s.run("core.projects.browse");
+    const library = await s.until("core.library", (state) => state.folderErrors?.[missing.id] !== undefined,
+      "the library did not report the missing project folder");
+    assert.deepEqual(Object.keys(library.folderErrors), [missing.id], "only the missing folder is reported");
+    assert.equal(library.previewErrors[missing.id], undefined, "the stored layout of the missing project is valid");
+    // 라이브러리 명령의 실패는 라이브러리 오류 줄에 보인다.
+    await s.run("core.library.open", { id: missing.id });
+    const failed = await s.until("core.library", (state) => state.error !== null, "opening the missing project showed no error");
+    assert.ok(failed.error.startsWith(`the project folder ${folder} cannot be opened: `), `the open error does not name the folder: ${failed.error}`);
+    assert.equal((await s.get("core.screen")).screen, "library", "the failed open left the library");
+
+    await s.run("core.library.remove", { id: missing.id });
+    await s.until("core.library", (state) => !state.shown.includes(missing.id), "the removed project is still shown");
+    assert.equal((await s.get("core.projects")).some((item) => item.id === missing.id), false, "the removed project is still stored");
+    assert.equal((await s.get("core.library")).shown.includes(first.id), true, "removing a project removed another project");
+    t.diagnostic(`missing folder reason: ${library.folderErrors[missing.id]}`);
   });
 }

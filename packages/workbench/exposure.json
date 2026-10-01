@@ -776,6 +776,9 @@
             "previews": {
               "type": "object"
             },
+            "folderErrors": {
+              "type": "object"
+            },
             "previewErrors": {
               "type": "object"
             },
@@ -2281,6 +2284,21 @@
         }
       },
       {
+        "name": "core.library.remove",
+        "description": "Removes a project and its spaces from the library. The project folder is not changed.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.library.window",
         "description": "Opens a new window from the library.",
         "params": {
@@ -2627,6 +2645,11 @@
       {
         "name": "core.library.pin",
         "description": "The pin buttons of the shown projects in order.",
+        "many": true
+      },
+      {
+        "name": "core.library.remove",
+        "description": "The remove buttons of the shown projects in order.",
         "many": true
       },
       {

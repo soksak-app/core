@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-30: the library shows a project whose folder cannot be read with the folder and the reason, opening it names both, and a project can be removed from its library card.
+
 - G1.4-29: the applications use the identifiers `com.soksak.wails` and `com.soksak.tauri` for their bundles and default configuration directories.
 
 - G1.4-28: projects stored in the earlier sidebar format are converted to the current format once when the registry is read, saved and reported, so they can be opened again.

@@ -12,7 +12,10 @@ const openRequests = [];
 mock.module("@soksak/runtime", {
   namedExports: {
     windows: {
-      folder: async (root) => ({ root, identity: PROJECT.identity }),
+      folder: async (root) => {
+        if (root === "/work/missing") throw new Error("lstat /work/missing: no such file or directory");
+        return { root, identity: PROJECT.identity };
+      },
       openProject: async (request) => { openRequests.push(request.id); return { local: true }; },
       releaseProject: async () => {},
       state: async () => null,
@@ -174,6 +177,16 @@ test("a saved layout that fails the plane check rejects the open before any proj
   assert.deepEqual(reported, ["fixture layout cannot be opened"], "the rejected open was not reported as a window error");
   plane.rejected = null;
   await projects.flush();
+});
+
+test("opening a project whose folder cannot be read names the folder and the host's reason", async () => {
+  const missing = { ...structuredClone(PROJECT), id: "prj-missing", root: "/work/missing" };
+  await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: [structuredClone(PROJECT), structuredClone(missing)], open: [] }),
+    patch: async () => {} });
+  openRequests.length = 0;
+  await assert.rejects(projects.activate("prj-missing"),
+    /the project folder \/work\/missing cannot be opened: lstat \/work\/missing: no such file or directory/);
+  assert.deepEqual(openRequests, [], "the failed open asked the host for a window");
 });
 
 test("switching to or closing into a space that fails the plane check changes neither the active space nor the plane", async () => {

@@ -48,3 +48,20 @@ test("the performance trace command carries the page request to the host", async
     delete globalThis.location;
   }
 });
+
+test("a failed host call rejects with an Error that carries the host's message", async () => {
+  globalThis.window = { __TAURI__: {
+    core: { invoke: async () => { throw "lstat /missing: no such file or directory"; } },
+    event: { listen: async () => () => {} },
+    webview: { getCurrentWebview: () => ({ label: "main" }) },
+  } };
+  globalThis.location = { search: "" };
+  try {
+    const { host } = await import("../runtime/index.js?string-error");
+    await assert.rejects(host.call("projectFolder", "/missing"),
+      (error) => error instanceof Error && error.message === "lstat /missing: no such file or directory");
+  } finally {
+    delete globalThis.window;
+    delete globalThis.location;
+  }
+});

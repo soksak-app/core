@@ -22,6 +22,7 @@ body[data-screen=library] #chromeActs .act[title="우측 사이드바 위치"]{d
 .library-preview__pane{--preview-ink:var(--muted);min-width:0;min-height:0;overflow:hidden;padding:var(--space-2);border:var(--bw) solid color-mix(in srgb,var(--preview-ink) 24%,var(--card));border-radius:var(--r-xs);background:color-mix(in srgb,var(--preview-ink) 10%,var(--card));color:color-mix(in srgb,var(--preview-ink) 65%,var(--card))}
 .library-preview__mark{display:block;width:14px;height:14px;max-width:100%}
 .library-preview__error{grid-column:1/-1;align-self:center;margin:0;color:var(--no);font-size:var(--text-caption);white-space:pre-wrap;overflow-wrap:anywhere}
+.library-project__missing{margin:0;color:var(--no);font-size:var(--text-caption);overflow-wrap:anywhere}
 .library-preview__mark svg{display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round}
 .library-preview__pane::after{content:"";display:block;width:60%;height:3px;margin-top:var(--space-2);border-radius:var(--r-xs);background:currentColor;box-shadow:0 7px 0 currentColor;opacity:.35}
 .library-preview__pane[data-plugin=sidebar]{padding:var(--space-1)}
@@ -31,7 +32,8 @@ body[data-screen=library] #chromeActs .act[title="우측 사이드바 위치"]{d
 .library-project__path{font-size:var(--text-small);color:var(--muted);margin:0 0 var(--space-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .library-project__meta{display:flex;flex-wrap:wrap;gap:var(--space-2);color:var(--muted);font-size:var(--text-caption);margin:0}
 .library-open{color:var(--rail)}
-.library-project__pin{position:absolute;right:var(--space-2);top:var(--space-2);background:var(--card)}
+.library-project__actions{position:absolute;right:var(--space-2);top:var(--space-2);display:flex;gap:var(--space-1)}
+.library-project__actions .act{background:var(--card)}
 .library-project__pin[aria-pressed=true]{color:var(--focus)}
 .library-add{min-height:220px;border:var(--bw) dashed var(--edge);border-radius:var(--r);background:transparent;color:var(--muted);padding:var(--space-3)}
 .library-empty{text-align:center;padding:var(--space-4) 0;color:var(--muted)}

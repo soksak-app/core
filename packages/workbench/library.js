@@ -110,9 +110,29 @@ export function createLibrary(root, rendered = () => {}) {
   }
   delegate(root);
 
+  /* 프로젝트 폴더를 읽을 수 있는지. 경로마다 호스트에 한 번 묻고, 프로젝트 목록이 바뀌면 다시 묻는다. 읽을 수 없으면
+     호스트가 알린 이유를 담는다(docs/spec/projects.md). */
+  const folders=new Map();
+  let foldersFor=null;
+  function checkFolders(all) {
+    const roots=all.map(p=>p.root).join('\n');
+    if(foldersFor!==roots) { folders.clear(); foldersFor=roots; }
+    for(const project of all) {
+      if(folders.has(project.root)) continue;
+      folders.set(project.root, {pending:true});
+      windows.folder(project.root).then(
+        ()=>{ folders.set(project.root,{error:null}); },
+        (reason)=>{ folders.set(project.root,{error:String(reason.message)}); },
+      ).then(()=>{ if(foldersFor===roots) render(); });
+    }
+  }
+  /** 프로젝트 목록이 바뀌었다. 폴더를 다시 확인한다. */
+  function refreshFolders() { foldersFor=null; }
+
   function render() {
     if (!projects.inLibrary()) return;
     const all=projects.all(), open=all.filter(p=>projects.isOpen(p.id));
+    checkFolders(all);
     root.querySelector('.library-count').textContent=`프로젝트 ${all.length} · 열림 ${open.length}`;
     back.hidden=!projects.active();
     const query=search.value.trim().toLocaleLowerCase();
@@ -137,11 +157,22 @@ export function createLibrary(root, rendered = () => {}) {
         const time=element('time','',new Intl.DateTimeFormat('ko',{month:'short',day:'numeric'}).format(project.lastOpened));
         time.dateTime=new Date(project.lastOpened).toISOString(); time.title=new Date(project.lastOpened).toLocaleString('ko'); meta.append(time);
       }
-      text.append(meta); choose.append(text);
+      text.append(meta);
+      // 폴더를 읽을 수 없는 프로젝트는 열기 전에 그 까닭을 보인다.
+      const folder=folders.get(project.root);
+      if(folder?.error) {
+        card.dataset.folderError=folder.error;
+        text.append(element('p','library-project__missing',`폴더를 열 수 없습니다: ${project.root} — ${folder.error}`));
+      }
+      choose.append(text);
       const pin=element('button','act library-project__pin');pin.type='button';pin.dataset.expose='core.library.pin';pin.innerHTML=icon('star');
       pin.title=project.pinned?'고정 해제':'프로젝트 고정';pin.setAttribute('aria-pressed',String(Boolean(project.pinned)));
       mark(pin,'core.library.pin',{id:project.id,pinned:!project.pinned});
-      card.append(choose,pin); grid.append(card);
+      const remove=element('button','act library-project__remove');remove.type='button';remove.dataset.expose='core.library.remove';remove.innerHTML=icon('close');
+      remove.title='라이브러리에서 제거';remove.setAttribute('aria-label',`${project.title} 라이브러리에서 제거`);
+      mark(remove,'core.library.remove',{id:project.id});
+      const actions=element('div','library-project__actions'); actions.append(remove,pin);
+      card.append(choose,actions); grid.append(card);
     }
     const add=element('button','library-add','＋ 프로젝트 만들기');add.type='button';add.dataset.action='create';add.dataset.expose='core.library.add';
     mark(add,'core.library.form.open');grid.append(add);
@@ -153,10 +184,11 @@ export function createLibrary(root, rendered = () => {}) {
   }
   /** 화면의 상태. 미리보기 사각형은 뷰포트 기준이다. */
   function state() {
-    const previews={}, previewErrors={};
+    const previews={}, previewErrors={}, folderErrors={};
     for(const card of grid.querySelectorAll('.library-project')) {
       const failed=card.querySelector('.library-preview')?.dataset.error;
       if(failed!==undefined) previewErrors[card.dataset.projectId]=failed;
+      if(card.dataset.folderError!==undefined) folderErrors[card.dataset.projectId]=card.dataset.folderError;
       previews[card.dataset.projectId]=[...card.querySelectorAll('.library-preview__pane')].map(pane=>{
         const r=pane.getBoundingClientRect();return {card:pane.dataset.cardId,x:r.x,y:r.y,w:r.width,h:r.height};
       });
@@ -171,7 +203,7 @@ export function createLibrary(root, rendered = () => {}) {
       formState:form.hidden?null:{mode:formMode,name:input('name'),parent:input('parent')},
       returnVisible:!back.hidden, pending, empty:!root.querySelector('.library-empty').hidden,
       noResults:Boolean(grid.querySelector('.library-no-results')),
-      error:error.hidden?null:error.textContent, previews, previewErrors,
+      error:error.hidden?null:error.textContent, previews, previewErrors, folderErrors,
     };
   }
   const SORTS=['saved','name','recent','open'];
@@ -181,6 +213,8 @@ export function createLibrary(root, rendered = () => {}) {
     sort(order){ if(!SORTS.includes(order)) throw new Error(`unknown sort ${order}`); sort.value=order; render(); },
     open:(id)=>perform(()=>projects.activate(id)),
     pin:(id,pinned)=>perform(()=>projects.pin(id,pinned)),
+    // 프로젝트 탭의 닫기와 같은 연산이다. 기록과 스페이스만 지우고 폴더는 건드리지 않는다.
+    remove:(id)=>perform(()=>projects.close(id)),
     newWindow:()=>perform(()=>projects.newWindow()),
     back(){ if(back.hidden) throw new Error('there is no workspace to return to'); return perform(()=>projects.activate(projects.active().id)); },
     openForm:(mode)=>showForm(mode),
@@ -189,6 +223,6 @@ export function createLibrary(root, rendered = () => {}) {
     chooseFolder(){ formField('parent'); return perform(async()=>{ const path=await windows.chooseFolder(); if(path) formField('parent').value=path; }); },
     submitForm,
   };
-  return {render, state, actions};
+  return {render, refreshFolders, state, actions};
 }
 

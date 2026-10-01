@@ -105,8 +105,20 @@ const ARG = {
   clipboardPersistPNG: (request) => ({ request }),
 };
 
-export const host = (() => {
+/**
+ * Tauri 의 invoke. 호스트 명령이 실패하면 Tauri 는 호스트의 오류 값(대개 문자열)을 그대로 reject 하므로, 페이지가
+ * error.message 로 읽을 수 있도록 그 값을 담은 Error 로 바꾼다.
+ */
+function hostInvoke() {
   const { invoke } = window.__TAURI__.core;
+  return (command, args) => invoke(command, args).catch((reason) => {
+    if (reason instanceof Error) throw reason;
+    throw new Error(typeof reason === "string" ? reason : JSON.stringify(reason));
+  });
+}
+
+export const host = (() => {
+  const invoke = hostInvoke();
   const listen = createLifecycleListener((event, fn) => window.__TAURI__.event.listen(event, fn,
     { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } }));
   return {
@@ -128,7 +140,7 @@ export const host = (() => {
 export const clipboard = createClipboardBridge((name, payload) => host.call(name, payload), { allowPersist: true });
 
 export const page = (() => {
-  const { invoke } = window.__TAURI__.core;
+  const invoke = hostInvoke();
   const listen = createLifecycleListener((event, fn) => window.__TAURI__.event.listen(event, fn,
     { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } }));
   // 표면 id 는 문서 주소의 id 다. 워크벤치가 표면을 그 탭 id 로 연다.

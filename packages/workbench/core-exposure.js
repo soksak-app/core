@@ -397,6 +397,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.library.sort", ({ order }) => { library.actions.sort(order); });
   registry.command("core.library.open", async ({ id }) => { await library.actions.open(id); });
   registry.command("core.library.pin", async ({ id, pinned }) => { await library.actions.pin(id, pinned); });
+  registry.command("core.library.remove", async ({ id }) => {
+    need(projects.all().find((p) => p.id === id), id);
+    await library.actions.remove(id);
+  });
   registry.command("core.library.window", async () => { await library.actions.newWindow(); });
   registry.command("core.library.return", async () => { await library.actions.back(); });
   registry.command("core.library.form.open", ({ mode }) => { library.actions.openForm(mode); });
