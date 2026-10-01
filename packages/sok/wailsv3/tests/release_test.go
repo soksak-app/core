@@ -206,3 +206,43 @@ func TestSidecarReleaseWritesTheAssetAndKeepsSHA256SUMSSorted(t *testing.T) {
 		t.Fatalf("a failed release left its archive: %v", err)
 	}
 }
+
+// contract: cli.pack.diagnostics-only-with-flag
+func TestPluginPackAddsDiagnosticDeclarationsOnlyWithTheFlag(t *testing.T) {
+	dir := pluginTree(t)
+	writeTree(t, dir, map[string]string{
+		"diagnostics.json":     `{"module": "probe-diagnostics.js", "exposes": {}}`,
+		"probe-diagnostics.js": "export const probe = true;",
+	})
+	for _, c := range []struct {
+		flags []string
+		want  string
+	}{
+		{nil, "package.json, plugin.json, ui/a/run.sh, ui/b.js"},
+		{[]string{"--diagnostics"}, "diagnostics.json, package.json, plugin.json, probe-diagnostics.js, ui/a/run.sh, ui/b.js"},
+	} {
+		out := t.TempDir()
+		code, _, stderr := run(append([]string{"plugin", "pack", dir, out}, c.flags...)...)
+		if code != 0 {
+			t.Fatalf("%v: code %d stderr %q", c.flags, code, stderr)
+		}
+		entries, _ := readArchive(t, filepath.Join(out, "probe-0.2.0.tgz"))
+		var names []string
+		for _, entry := range entries {
+			names = append(names, entry.name)
+		}
+		if got := strings.Join(names, ", "); got != c.want {
+			t.Fatalf("%v: entries %s", c.flags, got)
+		}
+	}
+	writeTree(t, dir, map[string]string{"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
+		"soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui", "probe-diagnostics.js"]}`})
+	code, _, stderr := run("plugin", "pack", dir, t.TempDir())
+	if code != 1 || stderr != "sok: package.json files: probe-diagnostics.js is diagnostic and must not be listed\n" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	code, _, stderr = run("sidecar", "release", sidecarTree(t, "0.1.0"), t.TempDir(), "--diagnostics")
+	if code != 2 || !strings.HasPrefix(stderr, "sok: --diagnostics belongs to plugin pack\n") {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+}

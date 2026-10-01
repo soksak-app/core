@@ -18,7 +18,7 @@ make wailsv3-build tauriv2-build
 
 `native/darwin`은 `native/darwin/build/`에 `libsoksak-darwin.a`와 `soksak-darwin.pc`를 생성한다. Makefile은 이 디렉터리를 `PKG_CONFIG_PATH`에 추가하고, Wails와 Tauri는 pkg-config로 헤더와 링크 옵션을 찾는다. 캡처 코드가 macOS 14.0에서 추가된 ScreenCaptureKit API를 사용하므로 두 네이티브 애플리케이션의 최소 버전은 macOS 14.0이다. Makefile은 이 값을 Go에는 `CGO_CFLAGS`와 `-extldflags`로, Rust에는 `MACOSX_DEPLOYMENT_TARGET`으로 전달한다.
 
-`make registry`는 `target/registry`에 workspace registry를 만든다. Sidecar를 build하고, `apps/wailsv3/environment.json`이나 `apps/tauriv2/environment.json`이 나열한 plugin을 모두 pack하고, 그 `plugin.json`이 지정한 sidecar를 현재 플랫폼으로 release한 뒤, `scripts/workspace-packs.json`의 pack과 함께 registry 파일을 쓰고 `sok registry build`를 실행한다. 그다음 `sok registry use target/registry/index.json --config-dir DIR`와 `sok plugin install <id> --config-dir DIR`로 거기서 설치한다([command line](../spec/cli.ko.md#plugin-설치)).
+`make registry`는 `target/registry`에 workspace registry를 만든다. Sidecar를 build하고, `apps/wailsv3/environment.json`이나 `apps/tauriv2/environment.json`이 나열한 plugin을 모두 진단 package(`--diagnostics`)로 pack하고, 그 `plugin.json`이 지정한 sidecar를 현재 플랫폼으로 release한 뒤, `scripts/workspace-packs.json`의 pack과 함께 registry 파일을 쓰고 `sok registry build`를 실행한다. 그다음 `sok registry use target/registry/index.json --config-dir DIR`와 `sok plugin install <id> --config-dir DIR`로 거기서 설치한다([command line](../spec/cli.ko.md#plugin-설치)).
 
 브라우저 애플리케이션은 `pnpm example`로 실행하고 `http://localhost:8749/index.html`을 연다. 모든 패키지 테스트는 `pnpm test`로 실행한다.
 

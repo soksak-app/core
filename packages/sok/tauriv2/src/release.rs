@@ -221,7 +221,38 @@ fn listed_files(pkg: &Map<String, Value>) -> Result<Vec<String>, String> {
 }
 
 /// plugin 폴더를 검사하고 `<id>-<version>.tgz` 를 쓴다.
-fn run_pack(dir: &str, out: &str, stdout: &mut dyn Write) -> Result<(), String> {
+/// plugin 폴더의 diagnostics.json 과 그 module 경로. diagnostics.json 이 없으면 비어 있다. 두 파일은 files 에
+/// 나열하지 않는다(docs/spec/plugins.md).
+fn diagnostic_files(dir: &Path, listed: &[String]) -> Result<Vec<String>, String> {
+    if !dir.join("diagnostics.json").exists() {
+        return Ok(vec![]);
+    }
+    let declared = read_json_file(dir, "diagnostics.json")?;
+    if !declared.is_object() {
+        return Err("diagnostics.json: expected an object".into());
+    }
+    let Some(module) = declared["module"]
+        .as_str()
+        .filter(|module| !leaves(module) && module.ends_with(".js"))
+    else {
+        return Err("diagnostics.json: module must be a JavaScript path inside the package".into());
+    };
+    for path in ["diagnostics.json", module] {
+        for file in listed {
+            // 기본값: 끝의 / 는 폴더를 가리키는 표기일 뿐이므로 없으면 경로를 그대로 쓴다.
+            let folder = format!("{}/", file.strip_suffix('/').unwrap_or(file));
+            if path == file || path.starts_with(&folder) {
+                return Err(format!(
+                    "package.json files: {path} is diagnostic and must not be listed"
+                ));
+            }
+        }
+    }
+    Ok(vec!["diagnostics.json".into(), module.to_string()])
+}
+
+/// plugin 폴더를 검사하고 `<id>-<version>.tgz` 를 쓴다. diagnostics 가 참이면 진단 선언도 담는다.
+fn run_pack(dir: &str, out: &str, diagnostics: bool, stdout: &mut dyn Write) -> Result<(), String> {
     let dir = Path::new(dir);
     let pkg = read_json_file(dir, "package.json")?;
     install::validate_plugin_package(&pkg)?;
@@ -237,7 +268,12 @@ fn run_pack(dir: &str, out: &str, stdout: &mut dyn Write) -> Result<(), String> 
     };
     install::check_package_manifest(&pkg, &manifest)?;
     let object = pkg.as_object().ok_or("package.json: expected an object")?;
-    let entries = collect(dir, &listed_files(object)?)?;
+    let mut listed = listed_files(object)?;
+    let extra = diagnostic_files(dir, &listed)?;
+    if diagnostics {
+        listed.extend(extra);
+    }
+    let entries = collect(dir, &listed)?;
     let version = pkg["version"]
         .as_str()
         .ok_or("package.json version: expected x.y.z")?;
@@ -332,6 +368,7 @@ pub(crate) fn run_files(
     positionals: &[String],
     values: &std::collections::HashMap<String, String>,
     stdout: &mut dyn Write,
+    diagnostics: bool,
 ) -> Result<(), Error> {
     let kind = &positionals[0];
     let action = positionals
@@ -351,7 +388,10 @@ pub(crate) fn run_files(
         return Err(Error::Usage(format!("unexpected argument {extra}")));
     }
     if command == "plugin pack" {
-        return Ok(run_pack(dir, out, stdout)?);
+        return Ok(run_pack(dir, out, diagnostics, stdout)?);
+    }
+    if diagnostics {
+        return Err(Error::Usage("--diagnostics belongs to plugin pack".into()));
     }
     let platform = match values.get("platform") {
         Some(platform) => {

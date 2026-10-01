@@ -3,7 +3,9 @@
 // sidecar 를 현재 플랫폼으로 release 한 뒤, 그 결과로 registry 파일을 쓰고 `sok registry build` 로 index.json 을
 // 만든다(docs/spec/cli.md). build 와 window check 는 이 registry 에서 plugin 을 설치한다.
 //
-//   node scripts/workspace-registry.mjs --sok <sok 실행 파일> --out <registry 폴더>
+//   node scripts/workspace-registry.mjs --sok <sok 실행 파일> --out <registry 폴더> [--diagnostics]
+//
+// --diagnostics 는 plugin 을 진단 package 로 pack 한다. 진단 build 와 window check 가 이 registry 에서 설치한다.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -68,7 +70,7 @@ function write(path, value) {
 }
 
 /** registry 폴더를 새로 쓰고 index.json 을 만든다. 출력 폴더의 이전 항목은 지운다. */
-export function buildWorkspaceRegistry(binary, out, root = ROOT) {
+export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
   const dirs = packageFolders(root);
   const releases = join(out, "releases");
   for (const folder of ["plugins", "sidecars", "packs", "releases"]) rmSync(join(out, folder), { recursive: true, force: true });
@@ -78,7 +80,7 @@ export function buildWorkspaceRegistry(binary, out, root = ROOT) {
     if (!dir) throw new Error(`no package named ${name}`);
     const manifest = read(new URL("plugin.json", dir));
     const pkg = read(new URL("package.json", dir));
-    const pack = sok(binary, ["plugin", "pack", fileURLToPath(dir), releases]);
+    const pack = sok(binary, ["plugin", "pack", fileURLToPath(dir), releases, ...(diagnostics ? ["--diagnostics"] : [])]);
     write(join(out, "plugins", `${manifest.id}.json`), pluginEntry(manifest, pkg, pack));
     // 기본값: sidecar 를 쓰지 않는 plugin 의 plugin.json 에는 sidecars 가 없다.
     for (const sidecar of manifest.sidecars ?? []) sidecars.set(sidecar, dirs.get(sidecar));
@@ -101,6 +103,6 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     if (index < 0 || index + 1 >= args.length) throw new Error(`${flag} is required`);
     return args[index + 1];
   };
-  const result = buildWorkspaceRegistry(value("--sok"), value("--out"));
+  const result = buildWorkspaceRegistry(value("--sok"), value("--out"), args.includes("--diagnostics"));
   console.log(`Workspace registry: ${result.index} (${result.plugins} plugins, ${result.sidecars} sidecars, ${result.packs} packs)`);
 }

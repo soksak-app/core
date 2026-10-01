@@ -202,13 +202,14 @@ sidecars-release:
 	@$(GO_ENV) SOKSAK_PROFILE=release SOKSAK_GO_FLAGS="-trimpath -ldflags=-s -ldflags=-w" \
 		SOKSAK_CARGO_FLAGS=--release pnpm $(SIDECAR_PACKAGES) run build
 
-# 워크스페이스 registry. environment.json 의 plugin 을 pack 하고 그 sidecar 를 현재 플랫폼으로 release 해
-# target/registry 에 index.json 을 만든다(docs/operations/examples.md). build 와 window check 가 여기서 설치한다.
+# 워크스페이스 registry. environment.json 의 plugin 을 진단 package 로 pack 하고 그 sidecar 를 현재 플랫폼으로
+# release 해 target/registry 에 index.json 을 만든다(docs/operations/examples.md). 진단 build 와 window check 가
+# 여기서 설치한다.
 REGISTRY = target/registry
 
 registry: sidecars-debug
 	@cargo build -p soksak-sok-tauriv2
-	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY)
+	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY) --diagnostics
 
 # 프런트엔드와 사이드카 실행 파일을 배치한다. 첫 인자는 실행 파일 디렉터리(앱 디렉터리
 # 기준), 둘째 인자는 추가 플래그다. debug 는 페이지 진단 모듈을 넣고(--diagnostics),

@@ -36,8 +36,8 @@ commands:
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
-  plugin pack DIRECTORY OUTPUT
-                            writes the plugin package archive into OUTPUT
+  plugin pack DIRECTORY OUTPUT [--diagnostics]
+                            writes the plugin package archive into OUTPUT; --diagnostics adds diagnostics.json
   sidecar release DIRECTORY OUTPUT [--platform P]
                             writes the sidecar release asset into OUTPUT and updates SHA256SUMS
   registry build DIRECTORY  checks a registry and writes its index.json
@@ -74,7 +74,7 @@ macro_rules! usage {
     ($($arg:tt)*) => { Error::Usage(format!($($arg)*)) };
 }
 
-const BOOLEANS: &[&str] = &["watch", "activate", "help"];
+const BOOLEANS: &[&str] = &["watch", "activate", "help", "diagnostics"];
 const OPTIONS: &[&str] = &[
     "config-dir",
     "window",
@@ -694,7 +694,7 @@ fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result
         a.positionals.first().map(String::as_str),
         Some("plugin" | "sidecar")
     ) {
-        return release::run_files(&a.positionals, &a.values, stdout);
+        return release::run_files(&a.positionals, &a.values, stdout, a.flag("diagnostics"));
     }
     if a.positionals.first().map(String::as_str) == Some("path") {
         let action = a.positional(1, "path action")?;

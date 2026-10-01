@@ -324,3 +324,65 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
         "a failed release left its archive"
     );
 }
+
+// contract: cli.pack.diagnostics-only-with-flag
+#[test]
+fn plugin_pack_adds_diagnostic_declarations_only_with_the_flag() {
+    let dir = plugin_tree();
+    write_tree(
+        &dir.0,
+        &[
+            (
+                "diagnostics.json",
+                r#"{"module": "probe-diagnostics.js", "exposes": {}}"#,
+            ),
+            ("probe-diagnostics.js", "export const probe = true;"),
+        ],
+    );
+    for (flags, want) in [
+        (vec![], "package.json, plugin.json, ui/a/run.sh, ui/b.js"),
+        (
+            vec!["--diagnostics"],
+            "diagnostics.json, package.json, plugin.json, probe-diagnostics.js, ui/a/run.sh, ui/b.js",
+        ),
+    ] {
+        let out = Dir::new();
+        let mut args = vec!["plugin", "pack", text(&dir.0), text(&out.0)];
+        args.extend(flags.iter().copied());
+        let (code, _, stderr) = run(&args);
+        assert_eq!(code, 0, "{flags:?}: {stderr}");
+        let (entries, _) = read_archive(&out.0.join("probe-0.2.0.tgz"));
+        let names: Vec<&str> = entries.iter().map(|entry| entry.name.as_str()).collect();
+        assert_eq!(names.join(", "), want, "{flags:?}");
+    }
+    write_tree(
+        &dir.0,
+        &[(
+            "package.json",
+            r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
+            "soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui", "probe-diagnostics.js"]}"#,
+        )],
+    );
+    let out = Dir::new();
+    let (code, _, stderr) = run(&["plugin", "pack", text(&dir.0), text(&out.0)]);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: package.json files: probe-diagnostics.js is diagnostic and must not be listed\n"
+        )
+    );
+    let tree = sidecar_tree("0.1.0");
+    let (code, _, stderr) = run(&[
+        "sidecar",
+        "release",
+        text(&tree.0),
+        text(&out.0),
+        "--diagnostics",
+    ]);
+    assert_eq!(code, 2);
+    assert!(
+        stderr.starts_with("sok: --diagnostics belongs to plugin pack\n"),
+        "{stderr}"
+    );
+}

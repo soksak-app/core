@@ -21,7 +21,7 @@
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | 설치된 plugin을 바꾼다([설치](installation.ko.md)) |
 | `sok plugin list` | 설치된 plugin을 나열한다 |
 | `sok registry use <index>` | 설치가 읽는 registry index를 정한다 |
-| `sok plugin pack <directory> <output directory>` | Plugin package archive를 쓴다 |
+| `sok plugin pack <directory> <output directory> [--diagnostics]` | Plugin package archive를 쓴다. `--diagnostics`는 plugin의 진단 선언을 더한다 |
 | `sok sidecar release <directory> <output directory> [--platform <platform>]` | Sidecar release archive를 쓰고 `SHA256SUMS`를 갱신한다 |
 | `sok registry build <directory>` | Registry를 검증하고 그 `index.json`을 쓴다 |
 
@@ -43,7 +43,7 @@
 
 이 명령들은 파일을 쓰며 실행 중인 애플리케이션이 필요 없다.
 
-`sok plugin pack <directory> <output directory>`는 plugin 폴더의 `package.json`과 `plugin.json`을 읽고, [plugin package](installation.ko.md#plugin-package)와 `soksak.sidecars`가 `plugin.json`의 `sidecars`를 정확히 지정하는지 검사한 뒤 `<id>-<version>.tgz`를 쓴다. `<id>`는 `plugin.json`의 `id`다. 출력은 절대 archive 경로를 담은 `{ id, version, archive, sha256 }`이다.
+`sok plugin pack <directory> <output directory>`는 plugin 폴더의 `package.json`과 `plugin.json`을 읽고, [plugin package](installation.ko.md#plugin-package)와 `soksak.sidecars`가 `plugin.json`의 `sidecars`를 정확히 지정하는지 검사한 뒤 `<id>-<version>.tgz`를 쓴다. `<id>`는 `plugin.json`의 `id`다. `files`가 `diagnostics.json`이나 `diagnostics.json`이 지정한 `module`을 나열하면 실패한다([진단 선언](plugins.ko.md#진단-선언)). `--diagnostics`를 주고 `diagnostics.json`이 폴더 안의 존재하는 JavaScript module을 지정하면, archive는 `diagnostics.json`과 그 module도 담는다. 이 진단 package는 진단 build와 window check용이다. 출력은 절대 archive 경로를 담은 `{ id, version, archive, sha256 }`이다.
 
 `sok sidecar release <directory> <output directory> [--platform <platform>]`는 sidecar 폴더의 `package.json`과 `sidecar.json`을 읽고, `package.json`에 package `name`, `version`, 그리고 `sidecar.json`과 `sidecar.json`의 `executable`을 나열한 `files`가 있는지 검사한 뒤 [release asset](installation.ko.md#sidecar-release-asset) `<file name>-<version>-<platform>.tar.gz`를 쓴다. `--platform`이 다른 플랫폼을 지정하지 않으면 플랫폼은 `sok`이 실행되는 플랫폼이다. `sok`은 파일 내용을 보지 않으므로, 다른 플랫폼을 지정하면 그 플랫폼용으로 build한 파일에 이름을 붙이는 것이다. 그다음 출력 폴더에 `SHA256SUMS`를 쓴다. Archive마다 `<sha256>  <archive name>` 한 줄이며 archive 이름 순서이고, 같은 이름의 archive 줄은 바꾼다. Archive를 쓰기 전에 `SHA256SUMS`를 읽으므로, 형식이 틀린 파일이면 아무것도 쓰지 않고 실패한다. 출력은 `{ name, version, platform, archive, sha256 }`이다.
 

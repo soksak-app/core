@@ -94,7 +94,7 @@
 
 ## 진단 선언
 
-표면이 있는 플러그인은 검사에만 쓰는 status와 명령 항목을 패키지 루트의 `diagnostics.json` 파일에 둘 수 있다: `{ "module": "ui/<파일>.js", "exposes": { ... } }`. `module`은 패키지 안의 파일이며, `exposes`는 `plugin.json` `exposes`의 형식과 소유자 규칙을 따른다. 한 이름은 `plugin.json`과 `diagnostics.json` 중 한 곳에만 선언한다. `diagnostics.json`과 그 모듈은 패키지의 `files`에 나열하지 않으므로 릴리스 스테이징은 이를 복사하지 않는다. 둘 중 하나가 나열되어 있으면 스테이징이 실패한다. 사용자 입력이나 OS가 만드는 상태를 주입하거나 검사를 위해 내부 이벤트를 기록하는 항목은 `diagnostics.json`에 속하고, 보이는 상태를 보고하거나 사용자 조작을 수행하는 항목은 `plugin.json`에 속한다.
+표면이 있는 플러그인은 검사에만 쓰는 status와 명령 항목을 패키지 루트의 `diagnostics.json` 파일에 둘 수 있다: `{ "module": "ui/<파일>.js", "exposes": { ... } }`. `module`은 패키지 안의 파일이며, `exposes`는 `plugin.json` `exposes`의 형식과 소유자 규칙을 따른다. 한 이름은 `plugin.json`과 `diagnostics.json` 중 한 곳에만 선언한다. `diagnostics.json`과 그 모듈은 패키지의 `files`에 나열하지 않으므로, plugin package는 `sok plugin pack --diagnostics`가 쓸 때만 이를 담는다([command line](cli.ko.md#package-release-registry)). 둘 중 하나가 나열되어 있으면 스테이징과 pack이 실패한다. 사용자 입력이나 OS가 만드는 상태를 주입하거나 검사를 위해 내부 이벤트를 기록하는 항목은 `diagnostics.json`에 속하고, 보이는 상태를 보고하거나 사용자 조작을 수행하는 항목은 `plugin.json`에 속한다.
 
 진단 빌드에서 워크벤치는 이 선언을 플러그인의 표면 선언에 더하고, 표면을 마운트하기 전에 모듈을 import한다. 표면 context는 그 모듈을 `diagnostics`로 전달하며, 릴리스 빌드에서 `diagnostics`는 `null`이다. 표면 모듈은 이를 구현에 넘기고, 구현은 진단 항목이 쓰는 내부 연산을 모듈에 넘겨 호출한다.
 

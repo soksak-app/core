@@ -175,8 +175,36 @@ func outputPath(dir, name string) (string, error) {
 	return filepath.Join(absolute, name), nil
 }
 
-// runPack 은 plugin 폴더를 검사하고 `<id>-<version>.tgz` 를 쓴다.
-func runPack(dir, out string, stdout io.Writer) error {
+// diagnosticFiles 는 plugin 폴더의 diagnostics.json 과 그 module 경로다. diagnostics.json 이 없으면 비어 있다.
+// 두 파일은 files 에 나열하지 않는다(docs/spec/plugins.md).
+func diagnosticFiles(dir string, listed []string) ([]string, error) {
+	value, err := readJSONFile(dir, "diagnostics.json")
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	declared, err := object("diagnostics.json", value)
+	if err != nil {
+		return nil, err
+	}
+	module, ok := text(declared["module"])
+	if !ok || strings.HasPrefix(module, "/") || slices.Contains(strings.Split(module, "/"), "..") || !strings.HasSuffix(module, ".js") {
+		return nil, fmt.Errorf("diagnostics.json: module must be a JavaScript path inside the package")
+	}
+	for _, path := range []string{"diagnostics.json", module} {
+		for _, file := range listed {
+			if path == file || strings.HasPrefix(path, strings.TrimSuffix(file, "/")+"/") {
+				return nil, fmt.Errorf("package.json files: %s is diagnostic and must not be listed", path)
+			}
+		}
+	}
+	return []string{"diagnostics.json", module}, nil
+}
+
+// runPack 은 plugin 폴더를 검사하고 `<id>-<version>.tgz` 를 쓴다. diagnostics 가 참이면 진단 선언도 담는다.
+func runPack(dir, out string, diagnostics bool, stdout io.Writer) error {
 	value, err := readJSONFile(dir, "package.json")
 	if err != nil {
 		return err
@@ -200,7 +228,15 @@ func runPack(dir, out string, stdout io.Writer) error {
 	if err := CheckPackageManifest(pkg, manifest); err != nil {
 		return err
 	}
-	entries, err := collect(dir, listedFiles(pkg))
+	listed := listedFiles(pkg)
+	extra, err := diagnosticFiles(dir, listed)
+	if err != nil {
+		return err
+	}
+	if diagnostics {
+		listed = append(listed, extra...)
+	}
+	entries, err := collect(dir, listed)
 	if err != nil {
 		return err
 	}

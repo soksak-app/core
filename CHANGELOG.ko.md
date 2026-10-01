@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-2-3-2: `sok plugin pack --diagnostics`가 진단 package를 쓰고, `make registry`가 build와 window check용으로 그것을 쓴다.
+
 - R1-2-3-1: Workspace plugin과 sidecar가 설치 필드를 선언하고, `make registry`가 `sok`으로 `target/registry`에 workspace registry를 만든다.
 
 - R1-2-2: `sok registry use`가 registry index를 정하고, `sok plugin install|update|remove|enable|disable|list`가 두 구현에서 hash를 검사하고 `installed.json`을 한 번에 쓰며 plugin과 sidecar를 설정 폴더에 설치한다.

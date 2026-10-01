@@ -32,8 +32,8 @@ commands:
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
-  plugin pack DIRECTORY OUTPUT
-                            writes the plugin package archive into OUTPUT
+  plugin pack DIRECTORY OUTPUT [--diagnostics]
+                            writes the plugin package archive into OUTPUT; --diagnostics adds diagnostics.json
   sidecar release DIRECTORY OUTPUT [--platform P]
                             writes the sidecar release asset into OUTPUT and updates SHA256SUMS
   registry build DIRECTORY  checks a registry and writes its index.json
@@ -56,7 +56,7 @@ func (e UsageError) Error() string { return e.message }
 func usage(format string, args ...any) error { return UsageError{fmt.Sprintf(format, args...)} }
 
 // booleans 는 값을 받지 않는 flag 다.
-var booleans = map[string]bool{"watch": true, "activate": true, "help": true}
+var booleans = map[string]bool{"watch": true, "activate": true, "help": true, "diagnostics": true}
 
 // options 는 값을 받는 flag 다.
 var options = map[string]bool{
@@ -600,7 +600,10 @@ func runFiles(a arguments, stdout io.Writer) error {
 		return usage("unexpected argument %s", a.positionals[4])
 	}
 	if command == "plugin pack" {
-		return runPack(dir, out, stdout)
+		return runPack(dir, out, a.flags["diagnostics"], stdout)
+	}
+	if a.flags["diagnostics"] {
+		return usage("--diagnostics belongs to plugin pack")
 	}
 	platform, given := a.values["platform"]
 	if !given {
