@@ -710,9 +710,10 @@
     - [ ] R1-2-2 — P0: 두 host에서 설치한다. `file:` 또는 `https:` archive를 읽고, `sha256`을 검증하며, 대상 폴더를 벗어나지 않고 link 없이 풀고, `plugins/installed.json`을 원자적으로 쓴다. 실패한 단계는 이전 설치를 그대로 두고 그 단계를 보고한다. R1-4에 의존한다.
     - [ ] R1-2-3 — P0: 설치된 plugin의 `/modules/<package>/`를 설정 폴더에서 제공하고(Wails asset middleware, Tauri `Context::set_assets`), plugin 목록을 `environment.json` 대신 `plugins/installed.json`에서 읽으며, sidecar 실행 파일을 `sidecars/<file name>/<version>/<platform>`에서 찾는다. Debug build와 window check는 workspace registry에서 설치하므로 build 시점의 plugin 경로는 남지 않는다.
   - [ ] R1-3 — P0: Workbench가 설치된 plugin 목록을 읽고, plugin command와 status(`core.plugins.*`)와 설정 plugin page를 추가하며, 설치되지 않은 plugin의 tab은 대체 card로 열고, state module의 데이터 변환을 선언한다.
-  - [ ] R1-4 — P1: Local release 도구를 제공한다. `soksak-plugin pack`, sidecar release archive와 `SHA256SUMS`, 항목을 검증하고 `index.json`을 만드는 registry check다.
+  - [ ] R1-4 — P1: 두 구현의 `sok`에 release 명령을 둔다. `sok plugin pack`, `SHA256SUMS`를 쓰는 `sok sidecar release`, 항목과 archive를 검증하고 `index.json`을 쓰는 `sok registry build`다. 사용자는 2026-10-01에 애플리케이션의 모든 명령을 native command line `sok`(Tauri는 Rust, Wails는 Go)으로 공개하기로 정했으며, 먼저 만든 Node release 도구는 버렸다.
   - [ ] R1-5 — P1: `browser`, `terminal`, `files`, `shell`을 `../plugins/<id>`로, sidecar를 `../sidecars/<name>`으로 분리하고, 각각 자기 test, checklist, core git tag 의존을 둔다. `shell`과 `@soksak/sidecar-shell`은 옮기되 registry에는 올리지 않으며(사용자, 2026-10-01), 새 space 배치는 shell card 자리에 terminal card를 쓴다. Core window check는 local registry fixture에서 설치한다.
   - [ ] R1-6 — P1: 스타터팩을 담은 local registry를 `~/Projects/soksak/registry`에 만들고 첫 실행에서 스타터팩을 설치한다.
+  - [ ] R1-8 — P0: 각 host package에서 `sok`을 build하고(Tauri는 Rust, Wails는 Go) 한 계약과 공통 contract case를 두며, 각 애플리케이션 bundle의 실행 파일 옆에 담고, symbolic link 대신 `/etc/paths.d` 항목으로 닿게 하며, 선언된 모든 애플리케이션 명령과 `packages/cli`의 endpoint 명령을 이것으로 공개하고, `packages/cli`를 삭제한다.
   - [ ] R1-7 — P1: 모든 core package를 0.0.2로 바꾸고, `scripts/check-versions.mjs`를 core package로 한정하며, 0.0.2 release를 local에서 build하고 검증한다.
 
 ## Tauri/Wails 대칭 감사 (2026-09-21)

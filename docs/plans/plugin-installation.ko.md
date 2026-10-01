@@ -28,7 +28,7 @@ Registry는 plugin마다, pack마다 파일 하나를 두는 repository다.
 | `packs/<name>.json` | `name`, `description`, `plugins`: 함께 설치하는 plugin id |
 | `revoked.json` | 설치하거나 실행하면 안 되는 plugin과 sidecar version |
 
-Registry repository의 check는 모든 pull request에서 항목 형식, id 중복, 내려받은 package의 `sha256`, `@soksak/plugin-api`로 package의 `plugin.json`, 각 sidecar version을 검증한다. Reviewer가 pull request를 병합한다. 그 뒤 check가 애플리케이션이 읽는 파일 하나인 `index.json`을 만든다. 0.0.2에서 registry는 local repository이고 `url`은 local release archive의 `file:` URL이며, 같은 check를 local에서 실행한다.
+Registry repository의 check는 모든 pull request에서 항목 형식, id 중복, 내려받은 package의 `sha256`, `@soksak/plugin-api`로 package의 `plugin.json`, 각 sidecar version을 검증한다. Reviewer가 pull request를 병합한다. 그 뒤 check가 애플리케이션이 읽는 파일 하나인 `index.json`을 만든다. 0.0.2에서 registry는 local repository이고 `url`은 local release archive의 `file:` URL이며, `sok registry build`가 같은 check를 local에서 실행한다.
 
 스타터팩은 plugin `browser`, `terminal`, `files`를 담은 `packs/starter.json`이다.
 
@@ -38,13 +38,17 @@ Plugin package는 `package.json`, `plugin.json`, `package.json` `files`에 적�
 
 - `package.json` `version`은 plugin version이고, `engines.soksak`은 plugin이 지원하는 core API 범위이며, `soksak.sidecars`는 sidecar package 이름마다 version 범위를 정한다.
 - Page module은 `PAGE_IMPORTS` 이름과 상대 경로만 import한다. 제3자 library는 지금처럼 고정 version으로 `ui/vendor`에 묶으며, 실행 중 npm에서 설치하는 것은 없다.
-- `@soksak/plugin-api`의 도구 `soksak-plugin pack`이 manifest, published import, import 규칙을 검증하고 archive와 그 `sha256`을 만든다.
+- `sok plugin pack`이 manifest, published import, import 규칙을 검증하고 archive와 그 `sha256`을 만든다.
 
 Plugin repository는 core git tag(예: `v0.0.2`)의 `@soksak/plugin-api`에 의존하므로, plugin은 고정된 core API로 build하고 test한다. 도구는 tag에서 package를 찾으며, 작업 중인 checkout은 의존 대상이 아니다.
 
+## Command line
+
+`sok`은 애플리케이션의 command line이며 모든 명령을 이것으로 공개한다. Plugin 설치, 업데이트, 제거, pack, sidecar release, registry index, 그리고 실행 중인 애플리케이션이 선언한 모든 명령(지금은 Node command line `packages/cli`가 공개한다)이다. Tauri 애플리케이션은 자기 host package에서 Rust로, Wails 애플리케이션은 자기 host package에서 Go로 `sok`을 build하며, 두 구현은 host처럼 한 계약을 따른다. 각 애플리케이션 bundle은 실행 파일 옆에 자기 `sok`을 담고, `PATH`가 닿는 `sok`이 어느 구현이 실행될지와 어느 설정 폴더를 쓸지를 정한다. `PATH`는 symbolic link가 아니라 경로 항목(`/etc/paths.d`)으로 bundle에 닿는다. `sok`이 그 명령을 모두 담으면 `packages/cli`는 삭제한다.
+
 ## Sidecar release
 
-Sidecar release는 플랫폼마다 archive `<name>-<version>-<os>-<arch>.tar.gz` 하나(실행 파일, `sidecar.json`, helper)와 `SHA256SUMS` 파일을 담는다. 0.0.2에서는 현재 macOS 아키텍처용으로 local에서 build하며, 이름 규칙은 이미 다른 플랫폼도 담는다. Host는 archive를 풀어 실행하기 전에 `sha256`을 검증한다. 0.0.2는 hash만 확인하며, 제3자 sidecar의 서명과 신뢰 정책은 나중에 정한다.
+`sok sidecar release`는 플랫폼마다 archive `<name>-<version>-<os>-<arch>.tar.gz` 하나(실행 파일, `sidecar.json`, helper)와 `SHA256SUMS` 파일을 담는다. 0.0.2에서는 현재 macOS 아키텍처용으로 local에서 build하며, 이름 규칙은 이미 다른 플랫폼도 담는다. Host는 archive를 풀어 실행하기 전에 `sha256`을 검증한다. 0.0.2는 hash만 확인하며, 제3자 sidecar의 서명과 신뢰 정책은 나중에 정한다.
 
 ## 설치
 

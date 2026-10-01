@@ -28,7 +28,7 @@ The registry is a repository with one file per plugin and one file per pack:
 | `packs/<name>.json` | `name`, `description`, and `plugins`: plugin ids installed together |
 | `revoked.json` | Plugin and sidecar versions that must not be installed or run |
 
-A check in the registry repository validates every pull request: the entry format, unique ids, the downloaded package against its `sha256`, the package's `plugin.json` with `@soksak/plugin-api`, and each named sidecar version. A reviewer merges the pull request. The check then writes `index.json`, the single file the application reads. In 0.0.2 the registry is a local repository, `url` values are `file:` URLs of local release archives, and the same check runs locally.
+A check in the registry repository validates every pull request: the entry format, unique ids, the downloaded package against its `sha256`, the package's `plugin.json` with `@soksak/plugin-api`, and each named sidecar version. A reviewer merges the pull request. The check then writes `index.json`, the single file the application reads. In 0.0.2 the registry is a local repository, `url` values are `file:` URLs of local release archives, and `sok registry build` runs the same check locally.
 
 The starter pack is `packs/starter.json` with the plugins `browser`, `terminal` and `files`.
 
@@ -38,13 +38,17 @@ A plugin package is one archive `<id>-<version>.tgz` that holds `package.json`, 
 
 - `package.json` `version` is the plugin version; `engines.soksak` is the core API range the plugin supports; `soksak.sidecars` maps each sidecar package name to a version range.
 - Page modules import only `PAGE_IMPORTS` names and relative paths. Third-party libraries are bundled under `ui/vendor` from pinned versions, as now; nothing is installed from npm at run time.
-- `soksak-plugin pack`, a tool of `@soksak/plugin-api`, validates the manifest, the published imports and the import rule, and writes the archive and its `sha256`.
+- `sok plugin pack` validates the manifest, the published imports and the import rule, and writes the archive and its `sha256`.
 
 A plugin repository depends on `@soksak/plugin-api` at a core git tag, for example `v0.0.2`, so a plugin is built and tested against a fixed core API. The tool resolves the package from the tag; a working checkout is not a dependency.
 
+## Command line
+
+`sok` is the command line of the application, and every command is public through it: plugin installation, update and removal, packing, sidecar releases, the registry index, and every command that the running application declares, which the Node command line `packages/cli` exposes today. The Tauri application builds `sok` in Rust from its host package and the Wails application builds it in Go from its host package; the two follow one contract like the hosts. Each application bundle holds its `sok` next to its executable, and the `sok` that `PATH` reaches decides which implementation runs and which configuration directory it uses. `PATH` reaches the bundle through a path entry (`/etc/paths.d`), not a symbolic link. `packages/cli` is removed once `sok` covers its commands.
+
 ## Sidecar release
 
-A sidecar release holds one archive per platform, `<name>-<version>-<os>-<arch>.tar.gz`, with the executable, `sidecar.json` and its helpers, and a `SHA256SUMS` file. In 0.0.2 the release is built locally for the current macOS architecture; the naming already covers other platforms. The host verifies the archive's `sha256` before it extracts and runs it. Version 0.0.2 checks only the hash; signing and a trust policy for third-party sidecars come later.
+`sok sidecar release` writes one archive per platform, `<name>-<version>-<os>-<arch>.tar.gz`, with the executable, `sidecar.json` and its helpers, and a `SHA256SUMS` file. In 0.0.2 the release is built locally for the current macOS architecture; the naming already covers other platforms. The host verifies the archive's `sha256` before it extracts and runs it. Version 0.0.2 checks only the hash; signing and a trust policy for third-party sidecars come later.
 
 ## Installation
 
