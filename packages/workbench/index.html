@@ -87,6 +87,7 @@ import {
    알지 않는다. */
 import { verify } from "./verify.js";
 import { animationFrame, createLayoutQueue, drawPrepared } from "./layout-queue.js";
+import { trace } from "./performance.js";
 
 /* 애플리케이션 인터페이스. 없으면 아무 일도 하지 않는 구현이 온다. */
 import { chrome, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
@@ -277,11 +278,20 @@ const layouts = createLayoutQueue({
   },
 });
 let layoutEpoch = 0;
+/* 성능 기록의 배치 번호. 기록이 켜져 있으면 배치마다 대기, 준비 응답, DOM 그리기 전후, animation frame, 표시의
+   시각(performance.now, ms)을 남겨 배치가 화면에 늦게 나오는 단계를 가린다. */
+let layoutTraceId = 0;
 onLayout((made, draw, seated) => {
   const epoch = layoutEpoch;
+  const id = ++layoutTraceId;
+  const mark = (phase) => trace("layout", { phase, id, t: performance.now() });
+  mark("queued");
   drawing = layouts.run(() => drawPrepared({
-    epoch, current: () => layoutEpoch, prepare: () => publishAhead(made, seated), draw,
-    frame: () => animationFrame(), presented: () => presented,
+    epoch, current: () => layoutEpoch,
+    prepare: async () => { mark("prepare"); const result = await publishAhead(made, seated); mark("prepared"); return result; },
+    draw: () => { mark("draw"); draw(); mark("drawn"); },
+    frame: async () => { await animationFrame(); mark("frame"); },
+    presented: async () => { await presented; mark("presented"); },
   }));
 });
 

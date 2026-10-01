@@ -14,10 +14,12 @@ const PLAN = { axis: "x", line: 1, dx: 250, dy: 0, ms: 400, times: 2 };
 
 const READ = 0.5;
 
-// 격자가 한 배치를 떠난 뒤 그 배치가 화면에 남아 있어도 되는 시간(ms). 60Hz 화면의 두 프레임이다.
-const LAG = 34;
+// 격자가 한 배치를 떠난 뒤 그 배치가 화면에 남아 있어도 되는 시간. 화면 갱신 주기의 프레임 수다
+// (docs/spec/native-surfaces.md). 표시는 입력 도착, 이전 배치의 프레임, WebKit 렌더링 갱신, 화면 vsync 의 경계를
+// 지나므로 최대는 4 프레임이고, 평소 지연은 중앙값 2.5 프레임과 p90 3 프레임 안에 있다.
+const LAG_FRAMES = { median: 2.5, p90: 3, worst: 4 };
 
-function assertAligned(run, marks) {
+function assertAligned(run, marks, refreshRate) {
   const files = frames(run.frames);
   assert.ok(files.length > 30, `only ${files.length} frames were recorded`);
 
@@ -52,9 +54,14 @@ function assertAligned(run, marks) {
 
   const lag = pointerLag(samples, run.ticks, run.boundary);
   lag.stages = lagStages(lag, run.ticks, run.layouts);
-  assert.ok(lag.lag <= LAG,
-    `the card showed a layout ${lag.lag.toFixed(1)}ms after the grid left it (limit ${LAG}ms): ` +
-      `offset ${lag.shown?.toFixed(1)}pt at ${lag.time?.toFixed(1)}ms matches step ${lag.step} while step ${lag.sent} was sent; median ${lag.median.toFixed(1)}ms; ` +
+  assert.ok(Number.isFinite(refreshRate) && refreshRate > 0, `the display refresh rate is unknown (${refreshRate})`);
+  const frame = 1000 / refreshRate;
+  const over = Object.entries(LAG_FRAMES).filter(([key, frames]) => (key === "worst" ? lag.lag : lag[key]) > frames * frame);
+  assert.deepEqual(over.map(([key]) => key), [],
+    `the card showed a layout ${lag.lag.toFixed(1)}ms after the grid left it (limits at ${refreshRate}Hz: median ` +
+      `${(LAG_FRAMES.median * frame).toFixed(1)}ms, p90 ${(LAG_FRAMES.p90 * frame).toFixed(1)}ms, worst ${(LAG_FRAMES.worst * frame).toFixed(1)}ms): ` +
+      `offset ${lag.shown?.toFixed(1)}pt at ${lag.time?.toFixed(1)}ms matches step ${lag.step} while step ${lag.sent} was sent; ` +
+      `median ${lag.median.toFixed(1)}ms, p90 ${lag.p90.toFixed(1)}ms; ` +
       `transactions ${lag.stages}; ` +
       // 표시 지연은 다른 프로세스의 CPU 사용에 따라 달라지므로 측정 때의 시스템 부하를 함께 적는다.
       `load average ${loadavg().map((value) => value.toFixed(1)).join(" ")} on ${availableParallelism()} processors`);
@@ -107,8 +114,8 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const marks = await shellMarks(s);
     const run = await drag(t, s, PLAN, { capture: true });
-    const lag = assertAligned(run, marks);
-    t.diagnostic(`pointer lag: worst ${lag.lag.toFixed(1)}ms, median ${lag.median.toFixed(1)}ms; transactions ${lag.stages}`);
+    const lag = assertAligned(run, marks, (await s.get("host.window")).refreshRate);
+    t.diagnostic(`pointer lag: worst ${lag.lag.toFixed(1)}ms, p90 ${lag.p90.toFixed(1)}ms, median ${lag.median.toFixed(1)}ms; transactions ${lag.stages}`);
     t.diagnostic(`page handling per step (ms), first 12: ${JSON.stringify(run.handled?.slice(0, 12))}, steps 40-51: ${JSON.stringify(run.handled?.slice(40, 52))}`);
   });
 

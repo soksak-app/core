@@ -65,7 +65,9 @@ export function pointerLag(samples, ticks, boundary) {
     if (lag > worst.lag) worst = { lag, time, shown, step: k, sent };
   }
   lags.sort((a, b) => a - b);
-  return { ...worst, median: lags[Math.floor(lags.length / 2)] ?? 0 };
+  // 기본값: 측정한 프레임이 없으면 지연도 없다(0).
+  const at = (fraction) => lags[Math.min(lags.length - 1, Math.floor(lags.length * fraction))] ?? 0;
+  return { ...worst, median: at(0.5), p90: at(0.9) };
 }
 
 /**
