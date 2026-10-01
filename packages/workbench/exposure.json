@@ -144,7 +144,7 @@
       },
       {
         "name": "core.sidebars",
-        "description": "The drawn sidebars in document order: the sidebar (the id of the card that holds it), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive, and each section's id, name, fold state, whether its module is mounted, its mount error or null, the text content the module drew, the number of its core.sidebar.section.control elements, and whether its tab text is clipped (always false in list layout).",
+        "description": "The drawn sidebars in document order: the sidebar (`left` or `right` for a fixed window sidebar, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, whether its sections have no surface to receive, its rectangle, and each section's id, name, fold state, whether its module is mounted, its mount error or null, the text content the module drew, the number of its core.sidebar.section.control elements, and whether its tab text is clipped (always false in list layout).",
         "schema": {
           "type": "array",
           "items": {
@@ -2529,7 +2529,7 @@
       },
       {
         "name": "core.sidebar.status",
-        "description": "The status lines that end the left, right, and rail sidebars in document order; an inset sidebar ends at its card footer.",
+        "description": "The status lines that end the fixed left and right window sidebars in document order; an internal card sidebar ends at its card footer.",
         "many": true
       },
       {

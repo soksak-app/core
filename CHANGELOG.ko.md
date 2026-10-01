@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-117-1-6: `core.sidebars`와 `core.sidebar.status` 설명이 rail과 inset 사이드바 대신 고정 창 사이드바, 카드 내부 사이드바, 보고하는 모든 field를 적는다.
+
 - V5-116-5: V5-116 완료 기록의 정정. V5-116은 link 연결 panel 명령이 동작하기 전에 완료로 기록됐다. 2026-09-30에 link로만 만든 panel의 접기와 크기 조절이 두 host에서 실패했다(V5-116-4). 이제 명령, settings 명세, 조합 check를 두 host에서 확인했다.
 
 - V5-116-4-9: 실패한 sampler 읽기는 상주 크기 0 대신 `error`를 기록하고, Tauri trace는 유닉스 epoch 이전 시계를 epoch로 적지 않고 오류로 보고한다.
