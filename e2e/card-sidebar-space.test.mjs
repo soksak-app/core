@@ -81,9 +81,7 @@ for (const app of Object.values(APPS))
         .filter((item) => item.tabs.length === 0)
         .map((item) => item.id)
         .sort();
-      // 최대 검사 크기에서 시작하되 프레임의 실제 버퍼 원점과 배율을 따른다.
-      await s.run("host.window.resize", { width: 1200, height: 880 });
-      await s.until("host.window", (window) => window.content.height === 880, "recording window did not grow");
+      // 녹화는 창의 장치 픽셀 크기를 따라가므로 현재 크기에서 시작한다(docs/spec/endpoint.md).
       await s.presented();
       let recordingStopped = false;
       let recording = await s.request("diagnostics.capture.start", {});
@@ -214,13 +212,9 @@ for (const app of Object.values(APPS))
         await s.run("host.window.resize", { width: 1200, height: 754 });
         await s.until("host.window", (window) => window.content.height === 754, "window did not reach short height");
         await check("short normal", { vertical: true });
-        // 다음 녹화도 최대 크기에서 시작하고 실제 작은 창→큰 창 전환을 기록한다.
-        await s.run("host.window.resize", { width: 1200, height: 880 });
-        await s.presented();
+        // 작은 창에서 녹화를 시작하고 큰 창으로 바뀌는 전환을 기록한다.
         recording = await s.request("diagnostics.capture.start", {});
         recordingStopped = false;
-        await s.run("host.window.resize", { width: 1200, height: 754 });
-        await s.presented();
         await s.run("host.window.resize", { width: 1200, height: 880 });
         await s.until("host.window", (window) => window.content.height === 880, "window did not grow");
         await check("tall normal");
