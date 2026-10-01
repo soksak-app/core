@@ -464,6 +464,11 @@ bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
             SCStreamConfiguration *config = recordingConfiguration(
                 (size_t)(filter.contentRect.size.width * filter.pointPixelScale),
                 (size_t)(filter.contentRect.size.height * filter.pointPixelScale));
+            // 녹화 크기가 창과 다를 때 원인을 가릴 수 있도록 읽은 창 frame 과 준비한 출력 크기를 남긴다.
+            fprintf(stderr, "observe: capture prepared window %ld frame %s filter %s scale %g output %zux%zu\n",
+                windowNumber, NSStringFromRect(NSRectFromCGRect(window.frame)).UTF8String,
+                NSStringFromRect(NSRectFromCGRect(filter.contentRect)).UTF8String, filter.pointPixelScale,
+                config.width, config.height);
             [result completeWithFilter:filter configuration:config error:nil];
             return;
         }

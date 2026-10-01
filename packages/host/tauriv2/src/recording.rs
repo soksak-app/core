@@ -66,10 +66,9 @@ pub trait Capture {
 
 struct State {
     directory: Option<PathBuf>,
-    opened: Option<Target>,
 }
 
-/// 진행 중인 녹화의 폴더와 녹화 대상으로 준비한 대상.
+/// 진행 중인 녹화의 폴더.
 pub struct Recording {
     state: Mutex<State>,
 }
@@ -83,10 +82,7 @@ impl Default for Recording {
 impl Recording {
     pub const fn new() -> Recording {
         Recording {
-            state: Mutex::new(State {
-                directory: None,
-                opened: None,
-            }),
+            state: Mutex::new(State { directory: None }),
         }
     }
 
@@ -105,12 +101,8 @@ impl Recording {
         }
         make(directory)?;
         let started = (|| -> Result<(), String> {
-            // 녹화 대상 준비는 창 서버 목록을 조회하므로 대상이 바뀔 때만 실행한다.
-            if state.opened != Some(target) {
-                state.opened = None;
-                capture.open(target)?;
-                state.opened = Some(target);
-            }
+            // 준비는 그때의 창 크기로 출력 크기를 정하므로 같은 대상도 녹화마다 다시 준비한다.
+            capture.open(target)?;
             capture.start(directory)?;
             match capture.wait() {
                 Ok(true) => Ok(()),

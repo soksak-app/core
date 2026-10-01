@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-4-4: every recording prepares its window again, so a recording after a window resize starts at the window's current size instead of the size of an earlier recording.
+
 - G1.4-14-4-1: a recording follows the window's device-pixel size when the window is resized, instead of scaling a grown window into the starting output size.
 
 - G1.4-14-5-1: the Tauri host answers `host.windows` while a window closes by leaving out the closing window, instead of failing with `failed to receive message from webview`; window checks name the status of a failed watch.

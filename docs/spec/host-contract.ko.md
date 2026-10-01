@@ -256,7 +256,7 @@ fn invalid_json_closes_connection() {
 | `recording.start.no-first-frame-stops-and-removes` | 첫 프레임이 없는 녹화는 중지되고 폴더가 제거된다. | both |
 | `recording.start.rejects-while-running` | 녹화 중에 녹화를 시작하면 실패하고 폴더를 만들지 않는다. | both |
 | `recording.abort.stops-removes-and-allows-next` | 녹화를 중단하면 중지하고 폴더를 제거하며 다음 녹화를 허용한다. | both |
-| `recording.target.same-target-not-reopened` | 같은 대상을 다시 녹화하면 대상을 다시 준비하지 않는다. | both |
+| `recording.target.prepared-each-recording` | 준비가 그때의 창 크기로 stream 출력 크기를 정하므로, 녹화마다 같은 대상도 다시 준비한다. | both |
 | `recording.target.different-target-reopened` | 다른 대상을 녹화하면 대상을 다시 준비한다. | both |
 | `recording.abort.reports-stop-failure-and-removes-folder` | 중지에 실패한 중단은 중지 오류를 보고하고 폴더는 그래도 제거한다. | both |
 | `sidecars.send.delivers-only-to-owning-window` | 각 창의 사이드카 메시지는 사이드카, 표면, 본문이 그대로인 이벤트로 그 창에만 돌아온다. | both |

@@ -34,12 +34,10 @@ type Capture interface {
 	Stop() (int, error)
 }
 
-// Recording 은 진행 중인 녹화의 폴더와 녹화 대상으로 준비한 대상이다. 영값을 사용한다.
+// Recording 은 진행 중인 녹화의 폴더다. 영값을 사용한다.
 type Recording struct {
 	mu        sync.Mutex
 	directory string
-	opened    CaptureTarget
-	hasOpened bool
 }
 
 // Start 는 directory 를 만들고 target 을 그 폴더에 녹화하기 시작한다. 첫 프레임이 기록된 뒤
@@ -64,13 +62,9 @@ func (r *Recording) Start(capture Capture, target CaptureTarget, directory strin
 }
 
 func (r *Recording) begin(capture Capture, target CaptureTarget, directory string) error {
-	// 녹화 대상 준비는 윈도 서버 목록을 조회하므로 대상이 바뀔 때만 실행한다.
-	if !r.hasOpened || r.opened != target {
-		r.hasOpened = false
-		if err := capture.Open(target); err != nil {
-			return err
-		}
-		r.opened, r.hasOpened = target, true
+	// 준비는 그때의 창 크기로 출력 크기를 정하므로 같은 대상도 녹화마다 다시 준비한다.
+	if err := capture.Open(target); err != nil {
+		return err
 	}
 	if err := capture.Start(directory); err != nil {
 		return err

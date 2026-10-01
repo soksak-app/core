@@ -123,7 +123,7 @@ func TestRecordingWithoutAFirstFrameIsStoppedAndRemoved(t *testing.T) {
 	expectCalls(t, fake, "open 7", "start", "wait", "stop")
 }
 
-// contract: recording.start.rejects-while-running, recording.abort.stops-removes-and-allows-next, recording.target.same-target-not-reopened
+// contract: recording.start.rejects-while-running, recording.abort.stops-removes-and-allows-next, recording.target.prepared-each-recording
 func TestAbortedRecordingIsStoppedAndRemovedAndAllowsTheNext(t *testing.T) {
 	parent := t.TempDir()
 	first, second := filepath.Join(parent, "first"), filepath.Join(parent, "second")
@@ -142,8 +142,8 @@ func TestAbortedRecordingIsStoppedAndRemovedAndAllowsTheNext(t *testing.T) {
 	if err := recording.Start(fake, window, second); err != nil {
 		t.Fatal(err)
 	}
-	// 같은 창이면 녹화 대상을 다시 준비하지 않는다.
-	expectCalls(t, fake, "open 7", "start", "wait", "stop", "start", "wait")
+	// 준비는 그때의 창 크기로 출력 크기를 정하므로 같은 창도 녹화마다 다시 준비한다.
+	expectCalls(t, fake, "open 7", "start", "wait", "stop", "open 7", "start", "wait")
 }
 
 // contract: recording.abort.reports-stop-failure-and-removes-folder

@@ -131,7 +131,7 @@ fn a_recording_without_a_first_frame_is_stopped_and_removed() {
     assert_eq!(recording.running(), None);
 }
 
-// contract: recording.start.rejects-while-running, recording.abort.stops-removes-and-allows-next, recording.target.same-target-not-reopened
+// contract: recording.start.rejects-while-running, recording.abort.stops-removes-and-allows-next, recording.target.prepared-each-recording
 #[test]
 fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
     let parent = tempfile::tempdir().unwrap();
@@ -146,10 +146,10 @@ fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
     recording.abort(&fake).unwrap();
     assert!(!first.exists());
     recording.start(&fake, WINDOW, &second, &make).unwrap();
-    // 같은 창이면 녹화 대상을 다시 준비하지 않는다.
+    // 준비는 그때의 창 크기로 출력 크기를 정하므로 같은 창도 녹화마다 다시 준비한다.
     assert_eq!(
         calls(&fake),
-        ["open 7", "start", "wait", "stop", "start", "wait"]
+        ["open 7", "start", "wait", "stop", "open 7", "start", "wait"]
     );
 }
 

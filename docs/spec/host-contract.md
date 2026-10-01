@@ -256,7 +256,7 @@ Items:
 | `recording.start.no-first-frame-stops-and-removes` | A recording without a first frame is stopped and its folder removed. | both |
 | `recording.start.rejects-while-running` | Starting a recording while one is running fails and creates no folder. | both |
 | `recording.abort.stops-removes-and-allows-next` | Aborting a recording stops it, removes its folder, and allows the next recording. | both |
-| `recording.target.same-target-not-reopened` | Recording the same target again does not prepare it again. | both |
+| `recording.target.prepared-each-recording` | Every recording prepares its target again, including the same target, because the preparation fixes the stream output size at the window's current size. | both |
 | `recording.target.different-target-reopened` | Recording a different target prepares it again. | both |
 | `recording.abort.reports-stop-failure-and-removes-folder` | An abort whose stop fails reports the stop error and still removes the folder. | both |
 | `sidecars.send.delivers-only-to-owning-window` | Each window's sidecar message returns as an event only to that window with the sidecar, surface, and body unchanged. | both |

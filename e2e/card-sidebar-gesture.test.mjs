@@ -166,18 +166,21 @@ for (const app of Object.values(APPS)) {
             if (gestureErrors.length)
               throw new AggregateError(gestureErrors, `${side}: pointer input or capture failed`);
             const captured = frames(directory).map(readFrame);
-            for (const frame of captured) {
+            captured.forEach((frame, index) => {
+              // 실패하면 그 프레임의 버퍼 크기, 창 사각형, 배율을 적는다.
+              const measuredFrame = `frame ${index + 1} of ${captured.length}: buffer ${frame.width}x${frame.height}, ` +
+                `content ${JSON.stringify(frame.content)} at content scale ${frame.contentScale}, scale ${frame.scale}`;
               assert.equal(
                 frame.width,
                 recordingWindow.content.width * recordingWindow.scale,
-                "recording device-pixel width",
+                `recording device-pixel width; ${measuredFrame}`,
               );
               assert.equal(
                 frame.height,
                 recordingWindow.content.height * recordingWindow.scale,
-                "recording device-pixel height",
+                `recording device-pixel height; ${measuredFrame}`,
               );
-            }
+            });
             assert.ok(captured.length > 4, `${side}: incomplete gesture recording`);
             assert.equal(stopped.limited, false, "recording exhausted its buffer");
             assert.ok(stopped.longestGap <= 100, `${side}: missing frames, gap ${stopped.longestGap}ms`);
