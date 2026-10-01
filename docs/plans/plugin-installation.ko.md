@@ -61,11 +61,11 @@ Sidecar release는 플랫폼마다 archive `<name>-<version>-<os>-<arch>.tar.gz`
 | 폴더 | Repository |
 | --- | --- |
 | `core` | Core: library, workbench, plugin-api, host, 애플리케이션, spec, window check |
-| `../plugins/<id>` | Plugin 하나: `browser`, `terminal`, `files`, 이후 `db-studio` 같은 다른 plugin |
-| `../sidecars/<name>` | Sidecar 하나: `vt`(지금의 `vt-core`와 `vt-alacritty`), `files` |
+| `../plugins/<id>` | Plugin 하나: `browser`, `terminal`, `files`, `shell`, 이후 `db-studio` 같은 다른 plugin |
+| `../sidecars/<name>` | Sidecar 하나: `vt`(지금의 `vt-core`와 `vt-alacritty`), `files`, `shell` |
 | `../registry` | Registry(`~/Projects/soksak/registry`) |
 
-Terminal plugin이 그 용도를 담당하므로 `shell` plugin과 그 sidecar `@soksak/sidecar-shell`은 삭제하고 게시하지 않으며, 새 space 배치는 그 자리에 terminal card를 쓴다. 각 repository는 자기 checklist와 test를 둔다. Core의 window check는 local archive를 담은 registry fixture에서 plugin을 설치하며 network를 쓰지 않는다.
+`shell` plugin과 그 sidecar `@soksak/sidecar-shell`은 자기 repository로 옮기지만 registry에는 올리지 않으며, 새 space 배치는 shell card 자리에 terminal card를 쓴다. 각 repository는 자기 checklist와 test를 둔다. Core의 window check는 local archive를 담은 registry fixture에서 plugin을 설치하며 network를 쓰지 않는다.
 
 ## Version
 

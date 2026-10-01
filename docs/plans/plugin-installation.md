@@ -61,11 +61,11 @@ A sidecar release holds one archive per platform, `<name>-<version>-<os>-<arch>.
 | Directory | Repository |
 | --- | --- |
 | `core` | Core: library, workbench, plugin-api, hosts, applications, specifications, window checks |
-| `../plugins/<id>` | One plugin: `browser`, `terminal`, `files`, and later others such as `db-studio` |
-| `../sidecars/<name>` | One sidecar: `vt` (the current `vt-core` and `vt-alacritty`), `files` |
+| `../plugins/<id>` | One plugin: `browser`, `terminal`, `files`, `shell`, and later others such as `db-studio` |
+| `../sidecars/<name>` | One sidecar: `vt` (the current `vt-core` and `vt-alacritty`), `files`, `shell` |
 | `../registry` | The registry (`~/Projects/soksak/registry`) |
 
-The `shell` plugin and its sidecar `@soksak/sidecar-shell` are removed and not published, because the terminal plugin covers their use; the new-space layout uses a terminal card in their place. Each repository keeps its own checklist and tests. Window checks in core install plugins from a registry fixture with local archives and never use the network.
+The `shell` plugin and its sidecar `@soksak/sidecar-shell` move to their own repositories but are not listed in the registry; the new-space layout uses a terminal card where it used a shell card. Each repository keeps its own checklist and tests. Window checks in core install plugins from a registry fixture with local archives and never use the network.
 
 ## Versions
 

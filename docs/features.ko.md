@@ -708,7 +708,7 @@
   - [ ] R1-2 — P0: 두 host가 설치된 plugin을 제공하고 설치된 sidecar를 실행한다. `<config-dir>/plugins`에서 `/modules/<package>/`를 제공하고, hash를 검증한 뒤 `<config-dir>/sidecars`의 sidecar 실행 파일을 실행하며, host contract case를 둔다.
   - [ ] R1-3 — P0: Workbench가 설치된 plugin 목록을 읽고, plugin command와 status(`core.plugins.*`)와 설정 plugin page를 추가하며, 설치되지 않은 plugin의 tab은 대체 card로 열고, state module의 데이터 변환을 선언한다.
   - [ ] R1-4 — P1: Local release 도구를 제공한다. `soksak-plugin pack`, sidecar release archive와 `SHA256SUMS`, 항목을 검증하고 `index.json`을 만드는 registry check다.
-  - [ ] R1-5 — P1: 사용자가 게시하지 않기로 한(2026-10-01) `shell` plugin과 `@soksak/sidecar-shell`을 삭제하고 새 space 배치에 terminal card를 쓴다. `browser`, `terminal`, `files`를 `../plugins/<id>`로, sidecar를 `../sidecars/<name>`으로 분리하고, 각각 자기 test, checklist, core git tag 의존을 둔다. Core window check는 local registry fixture에서 설치한다.
+  - [ ] R1-5 — P1: `browser`, `terminal`, `files`, `shell`을 `../plugins/<id>`로, sidecar를 `../sidecars/<name>`으로 분리하고, 각각 자기 test, checklist, core git tag 의존을 둔다. `shell`과 `@soksak/sidecar-shell`은 옮기되 registry에는 올리지 않으며(사용자, 2026-10-01), 새 space 배치는 shell card 자리에 terminal card를 쓴다. Core window check는 local registry fixture에서 설치한다.
   - [ ] R1-6 — P1: 스타터팩을 담은 local registry를 `~/Projects/soksak/registry`에 만들고 첫 실행에서 스타터팩을 설치한다.
   - [ ] R1-7 — P1: 모든 core package를 0.0.2로 바꾸고, `scripts/check-versions.mjs`를 core package로 한정하며, 0.0.2 release를 local에서 build하고 검증한다.
 
