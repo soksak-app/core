@@ -6,6 +6,7 @@ import { basename, dirname, join } from "node:path";
 import test from "node:test";
 
 import { APPS, failure, fresh, keepCommonSettings, open } from "./app.mjs";
+import { frontmostApp } from "./frontmost.mjs";
 
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 
@@ -479,7 +480,13 @@ for (const app of Object.values(APPS)) {
     await s.run("core.card.sidebar.set", { card: card.id, side: "top", set: "off" });
     const shown = (await s.get("core.grid")).cards.find((candidate) => candidate.id === card.id);
     assert.equal(shown.sidebars.top?.set ?? "off", "off", `the top sidebar of ${card.id} in ${opened.id} was not turned off`);
-    assert.equal((await s.get("host.window")).occluded, true, "the window became uncovered during the check");
+    // 가림이 풀리면 두 창의 위치와 상태, 맨 앞 애플리케이션을 적어 창 순서가 바뀐 원인을 분류한다.
+    const after = await s.get("host.window");
+    if (after.occluded !== true) {
+      const state = ({ frame, occluded, active }) => JSON.stringify({ frame, occluded, active });
+      assert.fail(`the window became uncovered during the check: window ${state(after)}, ` +
+        `cover ${state(await cover.get("host.window"))}, frontmost application ${frontmostApp()}, host ${s.client.endpoint.pid}`);
+    }
     assert.equal((await s.get("core.window.document")).visibility, "visible", "the covered window hid its document");
   });
 }

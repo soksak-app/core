@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-5: the covered window check reports the frame, occlusion and activity of both windows and the frontmost application when the checked window becomes uncovered.
+
 - G1.4-21: the host parity check reports both hosts' requests and answers when a method differs.
 
 - G1.4-20: a window check fails when the frontmost application captured at the start of its test file is not frontmost again after the check, and reports the frontmost application before the check, after it and after restoring.

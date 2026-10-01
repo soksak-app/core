@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-14-5: covered window check가 검사한 창이 드러나면 두 창의 frame, 가림, 활성 상태와 맨 앞 애플리케이션을 보고한다.
+
 - G1.4-21: host parity check가 method가 다를 때 두 host의 요청과 응답을 보고한다.
 
 - G1.4-20: test file 시작에 기록한 맨 앞 애플리케이션이 검사 뒤 다시 맨 앞이 아니면 window check가 실패하고, 검사 전, 검사 후, 복원 후의 맨 앞 애플리케이션을 보고한다.
