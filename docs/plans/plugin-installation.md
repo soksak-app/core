@@ -2,7 +2,7 @@
 
 [한국어](plugin-installation.ko.md)
 
-Status: proposal for version 0.0.2; implementation is pending. The canonical task checklist is [features](../features.md) item R1. Approved content moves into the specifications and this proposal is then removed.
+Status: proposal for version 0.0.2; implementation is pending. The canonical task checklist is [features](../features.md) item R1. Approved content moves into the specifications and this proposal is then removed. The formats are now specified in [plugin installation formats](../spec/installation.md); the sections below that describe them remain here only as the plan's overview.
 
 ## Goal
 

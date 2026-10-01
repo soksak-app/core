@@ -2,7 +2,7 @@
 
 [English](plugin-installation.md)
 
-상태: version 0.0.2 제안이며 구현은 대기 중이다. 정식 작업 checklist는 [features](../features.ko.md)의 R1 항목이다. 승인된 내용은 spec으로 옮기고 이 제안은 삭제한다.
+상태: version 0.0.2 제안이며 구현은 대기 중이다. 정식 작업 checklist는 [features](../features.ko.md)의 R1 항목이다. 승인된 내용은 spec으로 옮기고 이 제안은 삭제한다. 형식은 이제 [plugin 설치 형식](../spec/installation.ko.md)에 정의되어 있으며, 아래에서 형식을 설명하는 절은 계획의 개요로만 남는다.
 
 ## 목표
 

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-1: `@soksak/plugin-api/install`이 plugin 설치 형식(version 범위, plugin package, registry index, sidecar release asset, 설치 배치)을 정의하고 검증한다.
+
 - R1: 0.0.2 설치형 plugin 제안이 registry, plugin package, sidecar release, 설치, repository 분리를 설명한다.
 
 - G1.4-35: 실제 입력 TUI check는 mouse 보고를 켜고 자기 선택을 그리는 자체 fixture TUI를 실행하며, drag check는 3주기를 실행한다.
