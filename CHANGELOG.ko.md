@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-5: test inventory와 기능 기록을 맞춘다. 완료된 V5-118과 V5-118-1을 구현과 test에 연결하고 exposure audit test를 등록하며 현재 inventory 개수를 기록한다.
+
 - G1.4-13: capture stop layout-timeline contract case를 선언하고 이를 검증하는 Wails·Tauri test에 표기하여 host contract audit가 두 host를 받아들이게 한다.
 
 - G1.4-12: PNG와 sidebar-gesture helper unit test를 `e2e/test/`로 옮긴다. 최상위에서는 application parity audit가 `APPS` 없는 app behavior test로 거부했고 e2e package test 명령이 실행하지 않았다.

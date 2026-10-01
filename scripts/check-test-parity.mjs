@@ -56,7 +56,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
     "scripts/check-host-parity.mjs",
     "scripts/check-terminal-protocol-inventory.mjs",
     "scripts/sidecar-packages.mjs",
-  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs", "scripts/test/check-host-parity.test.mjs"], { sharedTests: true }),
+  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs", "scripts/test/check-host-parity.test.mjs", "scripts/test/check-exposure.test.mjs"], { sharedTests: true }),
   lane("build environment audit", "shell", ["scripts/check-build-environment.sh"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-build-environment.sh"], {
     testLanguage: "js-ts", testExtensions: new Set([".mjs", ".sh"]), sharedTests: true,
   }),
@@ -160,6 +160,23 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
 // behavior test, expected result, and verification levels for one capability.
 // The inventory remains structural; behavior is proved by the referenced tests.
 const FEATURE_LINKS = [
+  {
+    id: "V5-118",
+    implementation: [{ file: "packages/workbench/plane.js", symbol: "export function toggleCardFullscreen" }],
+    tests: [
+      { file: "packages/workbench/test/card-fullscreen.test.mjs", id: "the header fullscreen control precedes close and runs its declared command" },
+      { file: "e2e/card-fullscreen.test.mjs", id: "card fullscreen fills the work area and restores live surfaces" },
+    ],
+    expected: "The fullscreen control before close fills the work area with the selected content card through its declared command and restores the arrangement and live sibling surfaces without OS fullscreen or saved-layout changes.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "V5-118-1",
+    implementation: [{ file: "packages/workbench/plane.js", symbol: "export const presentedCardRect" }],
+    tests: [{ file: "e2e/card-fullscreen.test.mjs", id: "sidebar settings apply to fullscreen and restored cards" }],
+    expected: "Saved sidebar settings of a fullscreen card produce the same selected sets, section DOM and native content rectangle in fullscreen and after restoration.",
+    levels: ["application"],
+  },
   {
     id: "F0.4-1",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditFailureMatrix" }],

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-5: reconcile the test inventory with the feature record. Link the completed V5-118 and V5-118-1 capabilities to their implementation and tests, claim the exposure audit test, and record the current inventory counts.
+
 - G1.4-13: declare the capture stop layout-timeline contract cases and annotate the Wails and Tauri tests that verify them, so the host contract audit accepts both hosts.
 
 - G1.4-12: move the PNG and sidebar-gesture helper unit tests to `e2e/test/`. At the top level the application parity audit rejected them as app behavior tests without `APPS`, and the e2e package test command never ran them.
