@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-117-1-3-4-5-4-3: native capture acceptance가 나열할 수 없는 녹화 directory를 거부하고 실패한 정리를 보고하며, acceptance 본문을 포함하는 checker는 그 본문이 바뀌면 다시 build한다.
+
 - V5-117-1-3-4-5-3-7: 5000ms 제한 뒤에 도착한 stop 완료가 더 이상 해제된 semaphore에 신호를 보내거나 다음 녹화의 오류를 바꾸지 않고, 그 오류를 진단 출력으로만 보고한다.
 
 - V5-117-1-3-4-5-4-2: stream 시작이 완료된 뒤에만 녹화를 멈춘다. ScreenCaptureKit은 시작 완료 전에 첫 frame을 전달할 수 있고, 그 사이에 멈추면 `SCStreamErrorDomain -3808`로 실패했다. 이제 녹화 준비에는 시작 완료가 필요하고, 멈춤은 그 완료를 기다리며, 시작 요청이 없으면 명시적 오류다. 새 native test가 한 process의 연속 녹화로 실패를 재현한다.

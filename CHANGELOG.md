@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-3-4-5-4-3: the native capture acceptance rejects a recording directory that cannot be listed and reports a failed cleanup, and checkers that include the acceptance body rebuild when it changes.
+
 - V5-117-1-3-4-5-3-7: a stop completion that arrives after the 5000ms deadline no longer signals a released semaphore or changes a later recording's error; it reports its error only to the diagnostic output.
 
 - V5-117-1-3-4-5-4-2: stop a recording only after its stream start has completed. ScreenCaptureKit can deliver the first frame before the start completes, and stopping in that interval failed with `SCStreamErrorDomain -3808`; recording readiness now requires the start completion, the stop waits for it, and a missing start request is an explicit error. A new native test reproduces the failure through consecutive recordings in one process.

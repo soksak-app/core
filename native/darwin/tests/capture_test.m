@@ -26,9 +26,12 @@ int main(void) { @autoreleasepool {
     free(operationError); operationError = NULL;
     check(sp_capture_wait() == 0, @"an invalid window cannot produce a capture frame");
     check(sp_capture_stop(0) == 0, @"stopping an invalid capture reports no written frames");
+    NSError *listError = nil;
     NSArray *files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:
-        [NSString stringWithUTF8String:directory] error:NULL];
-    check(files.count == 0, @"an invalid capture leaves no frame files");
+        [NSString stringWithUTF8String:directory] error:&listError];
+    // 나열에 실패한 폴더를 빈 폴더로 받아들이지 않는다.
+    check(files != nil && files.count == 0,
+        [NSString stringWithFormat:@"an invalid capture leaves no frame files (listing error %@)", listError]);
     // 정지 캡처: 활성화하지 않은 창을 PNG 로 찍는다. 관측 자료이며 크기와 색으로 내용을 확인한다.
     NSString *still = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"still.png"];
     char *stillError = NULL;
@@ -108,7 +111,9 @@ int main(void) { @autoreleasepool {
     check(!NSApp.isActive, @"recording an unchanged window does not activate the application");
     [window close];
     [window release];
-    [[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:NULL];
+    NSError *removeError = nil;
+    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:&removeError],
+        [NSString stringWithFormat:@"the capture directory and its recordings are removed (%@)", removeError]);
     fprintf(stderr, "%s: native capture acceptance (%.1fms)\n", failures ? "FAIL" : "PASS",
         (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;
