@@ -14,14 +14,29 @@
 | `packages/workbench` | 워크벤치 프런트엔드(코어): 프로젝트, 스페이스, 카드, 탭, 사이드바, 설정, 플러그인 로드, `soksak-stage` |
 | `packages/plugin-api` | 선언 형식, 스테이징 배치, 페이지 import map, 플러그인 페이지 도구 |
 | `packages/client` | 로컬 엔드포인트 클라이언트와 지연 시간 벤치마크 |
-| `plugins/<id>` | 플러그인 하나: `plugin.json`, 페이지, 테스트 |
 | `packages/host/<name>` | [네이티브 호스트](hosts.ko.md) 라이브러리(코어): Go의 `wailsv3`와 Rust의 `tauriv2` |
 | `apps/<name>` | 애플리케이션 하나: `environment.json`, `runtime/`, 네이티브 진입점과 프레임워크 설정, 테스트 |
-| `sidecars/<name>` | [사이드카](sidecars.ko.md) 하나: `sidecar.json`, 플러그인이 호스트를 통해 사용하는 네이티브 프로세스, 테스트 |
 | `native/darwin` | 네이티브 호스트가 사용하는 macOS 공용 라이브러리 |
 | `e2e` | 실행 중인 네이티브 애플리케이션의 창 검사 |
 
+Plugin과 sidecar는 자기 repository에 있다([Repository](#repository)).
+
 공통 기능은 워크벤치나 네이티브 호스트에 두어 플러그인이 다시 구현하지 않게 한다. 플러그인 기능은 워크벤치로 옮기지 않는다. 사이드카는 한 영역의 네이티브 기능을 담고 여러 플러그인에 제공할 수 있다. 메시지 전달 같은 일반 기능은 호스트에 둔다.
+
+## Repository
+
+Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별도 git repository다. 각각 자기 test, 자기 `docs/features.md` checklist, 자기 build를 가지며, 어느 것도 다른 repository의 파일을 읽지 않는다.
+
+| 폴더 | Repository |
+| --- | --- |
+| `core` | Layout library, workbench, plugin-api, client, command line, host, 애플리케이션, spec, window check |
+| `../plugins/<id>` | Plugin 하나: `plugin.json`, page, `engines.soksak`과 `soksak.sidecars`를 가진 `package.json`, test. Plugin은 `browser`, `terminal`, `files`, `shell`이다 |
+| `../sidecars/vt` | Terminal engine: crate `vt-core`, `vt-alacritty`, 그리고 `vt-alacritty`의 sidecar `@soksak/sidecar-vt-alacritty` |
+| `../sidecars/files`, `../sidecars/shell` | Sidecar `@soksak/sidecar-files`, `@soksak/sidecar-shell` |
+
+Plugin repository는 test를 위해 `@soksak/plugin-api`에 git 의존을 둔다. 그 `engines.soksak`이 가리키는 core version의 core tag `v<version>`과 `path:/packages/plugin-api`를 쓴다. Registry가 local인 동안 이 의존은 `git+file:` URL로 core checkout을 가리킨다. Plugin repository는 sidecar package에 의존하지 않고, 그 `soksak.sidecars` 범위가 설치할 sidecar를 가리킨다. `make test`는 plugin repository의 test를 실행하고, `make pack OUT=<folder>`는 `sok plugin pack`으로 package를 쓴다. Sidecar repository에는 `make test`, `sidecar.json`이 가리키는 실행 파일을 쓰는 `make build`, 현재 platform으로 `sok sidecar release`를 실행하는 `make release OUT=<folder>`가 있다.
+
+Core window check는 registry fixture에서 plugin을 설치한다. `scripts/workspace-registry.json`은 core checkout 기준 상대 폴더로 plugin repository, sidecar 폴더(`sidecar.json`을 가진 폴더), pack을 선언한다. `make registry`는 선언된 각 sidecar를 build하고 release하며, 선언된 각 plugin을 pack하고, `target/registry`에 index를 만든다. Network는 쓰지 않는다. `shell` plugin과 `@soksak/sidecar-shell`은 repository가 있지만 선언하지 않으므로, 두 애플리케이션의 새 space layout은 shell card 자리에 terminal card를 둔다.
 
 ## plugin.json
 

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-5-1: the plugin specification defines the separate plugin and sidecar repositories, their dependency on a core tag, and the registry fixture that core builds from them.
+
 - G1.4-47: the terminal frame checks sample the terminal in frame pixels, and the window checks report cleanup and lookup errors they discarded.
 
 - G1.4-41: the browser theme window checks sample the document in frame pixels, so they pass on a 2x display; the system appearance was not the cause.

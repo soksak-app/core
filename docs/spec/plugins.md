@@ -14,14 +14,29 @@ The workbench does not reference any specific plugin. Each application declares 
 | `packages/workbench` | Workbench frontend (core): projects, spaces, cards, tabs, sidebars, settings, plugin loading, and `soksak-stage` |
 | `packages/plugin-api` | Declaration formats, staged layout, page import map, and helpers for plugin pages |
 | `packages/client` | Client for the local endpoint and its latency benchmark |
-| `plugins/<id>` | One plugin: `plugin.json`, its pages, and its tests |
 | `packages/host/<name>` | [Native host](hosts.md) libraries (core): `wailsv3` in Go and `tauriv2` in Rust |
 | `apps/<name>` | One application: `environment.json`, `runtime/`, the native entry point and framework configuration, and its tests |
-| `sidecars/<name>` | One [sidecar](sidecars.md): `sidecar.json`, a native process that plugins use through the host, and its tests |
 | `native/darwin` | Shared macOS library used by the native hosts |
 | `e2e` | Window checks for running native applications |
 
+Plugins and sidecars live in their own repositories ([repositories](#repositories)).
+
 Common functionality belongs to the workbench or the native host so plugins do not reimplement it. Plugin functionality does not move into the workbench. A sidecar holds native functionality for one domain and can serve several plugins; general functionality such as the message relay belongs to the host.
+
+## Repositories
+
+Core, each plugin and each sidecar are separate git repositories in sibling folders of the core checkout. Each keeps its own tests, its own `docs/features.md` checklist and its own build; none reads the files of another.
+
+| Folder | Repository |
+| --- | --- |
+| `core` | The layout library, workbench, plugin-api, client, command line, hosts, applications, specifications and window checks |
+| `../plugins/<id>` | One plugin: `plugin.json`, its pages, its `package.json` with `engines.soksak` and `soksak.sidecars`, and its tests. The plugins are `browser`, `terminal`, `files` and `shell` |
+| `../sidecars/vt` | The terminal engine: the crates `vt-core` and `vt-alacritty`, and the sidecar `@soksak/sidecar-vt-alacritty` in `vt-alacritty` |
+| `../sidecars/files`, `../sidecars/shell` | The sidecars `@soksak/sidecar-files` and `@soksak/sidecar-shell` |
+
+A plugin repository depends on `@soksak/plugin-api` for its tests through a git dependency on the core tag `v<version>` of the core version its `engines.soksak` names, with `path:/packages/plugin-api`. While the registry is local, the dependency names the core checkout with a `git+file:` URL. A plugin repository does not depend on sidecar packages; its `soksak.sidecars` ranges name them for installation. `make test` runs the tests of a plugin repository and `make pack OUT=<folder>` writes its package with `sok plugin pack`. A sidecar repository has `make test`, `make build`, which writes the executable that its `sidecar.json` names, and `make release OUT=<folder>`, which runs `sok sidecar release` for the current platform.
+
+Core window checks install plugins from a registry fixture. `scripts/workspace-registry.json` declares, by folder relative to the core checkout, the plugin repositories and the sidecar folders (the folder that holds `sidecar.json`), and the packs. `make registry` builds each declared sidecar, releases it, packs each declared plugin, and builds the index in `target/registry`; it uses no network. The `shell` plugin and `@soksak/sidecar-shell` have repositories but are not declared, so the new-space layout of both applications has a terminal card where it had a shell card.
 
 ## plugin.json
 

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-5-1: plugin spec이 별도 plugin·sidecar repository, core tag에 대한 의존, core가 그것들로 build하는 registry fixture를 정한다.
+
 - G1.4-47: terminal frame check가 terminal을 frame pixel 단위로 표본 추출하고, window check가 버리던 정리·조회 오류를 보고한다.
 
 - G1.4-41: browser theme window check가 문서를 frame pixel 단위로 표본 추출하므로 2배 화면에서도 통과한다. 시스템 appearance는 원인이 아니었다.
