@@ -224,3 +224,20 @@ test("two cards whose facing edges round either side of one hundredth still merg
   assert.equal(loops.length, 1, "the two grow into one shape");
   assert.equal(path.match(/M/g).length, 1, "drawn as one loop");
 });
+
+test("an inset moves the joined outline inward without splitting it", () => {
+  // 간격 12 로 떨어진 두 사각형을 반 간격 6 으로 합친 L 자를 0.5 안쪽으로 줄인다.
+  const rects = [{ x: 0, y: 0, w: 100, h: 100 }, { x: 112, y: 0, w: 50, h: 200 }];
+  const joined = outline(rects, { pad: 6, radius: 0 });
+  const inset = outline(rects, { pad: 6, radius: 0, inset: 0.5 });
+  assert.equal(joined.loops.length, 1);
+  assert.equal(inset.loops.length, 1, "the inset outline stays one loop");
+  const box = (loop) => ({
+    x0: Math.min(...loop.map((p) => p.x)), x1: Math.max(...loop.map((p) => p.x)),
+    y0: Math.min(...loop.map((p) => p.y)), y1: Math.max(...loop.map((p) => p.y)),
+  });
+  assert.deepEqual(box(joined.loops[0]), { x0: -6, x1: 168, y0: -6, y1: 206 });
+  assert.deepEqual(box(inset.loops[0]), { x0: -5.5, x1: 167.5, y0: -5.5, y1: 205.5 });
+  // 안쪽 모서리(오목한 꼭짓점)도 같은 거리만큼 안쪽으로 옮긴다.
+  assert.ok(inset.loops[0].some((p) => p.x === 106.5 && p.y === 105.5), JSON.stringify(inset.loops[0]));
+});

@@ -26,6 +26,16 @@ export interface OutlineOptions {
    * For a stroke that stays `pad` outside cards of radius `r`, this is `r + pad`.
    */
   radius?: number;
+  /**
+   * How far the joined loops move inward after the union. Default 0.
+   *
+   * A stroke is centered on its path, so a path at the half corridor puts half
+   * the stroke past it. Insetting by half the stroke width keeps the stroke
+   * inside the half corridor, on whole device pixels when the half corridor
+   * lies on a pixel boundary. The join is decided by `pad` first, so an inset
+   * never splits a joined outline.
+   */
+  inset?: number;
 }
 
 export interface Outline {
@@ -131,6 +141,26 @@ export function unionLoops(rects: readonly Rect[]): Point[][] {
   return loops;
 }
 
+/**
+ * Moves every edge of a rectilinear loop `distance` to its right.
+ *
+ * `unionLoops` emits outer loops clockwise and holes counterclockwise, so the
+ * right of every edge is the inside of the region. Each vertex joins two
+ * perpendicular edges and moves by the sum of their unit normals.
+ */
+function insetLoop(loop: readonly Point[], distance: number): Point[] {
+  const n = loop.length;
+  const normal = (a: Point, b: Point): Point => {
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    return { x: -(b.y - a.y) / length, y: (b.x - a.x) / length };
+  };
+  return loop.map((p, i) => {
+    const before = normal(loop[(i - 1 + n) % n], p);
+    const after = normal(p, loop[(i + 1) % n]);
+    return { x: p.x + (before.x + after.x) * distance, y: p.y + (before.y + after.y) * distance };
+  });
+}
+
 function dropCollinear(pts: Point[]): Point[] {
   const out: Point[] = [];
   for (let i = 0; i < pts.length; i++) {
@@ -193,7 +223,9 @@ export function outline(rects: readonly Rect[], options: OutlineOptions = {}): O
   // default: `radius` is optional and documented as `pad`.
   const radius = options.radius ?? pad;
   const grown = rects.map((r) => ({ x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 }));
-  const loops = unionLoops(grown);
+  // default: `inset` is optional and documented as 0.
+  const inset = options.inset ?? 0;
+  const loops = unionLoops(grown).map((loop) => (inset === 0 ? loop : insetLoop(loop, inset)));
   const parts = loops.map((l) => roundedPath(l, radius));
   return {
     path: parts.map((p) => p.d).join(' '),

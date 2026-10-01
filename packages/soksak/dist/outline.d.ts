@@ -23,6 +23,16 @@ export interface OutlineOptions {
      * For a stroke that stays `pad` outside cards of radius `r`, this is `r + pad`.
      */
     radius?: number;
+    /**
+     * How far the joined loops move inward after the union. Default 0.
+     *
+     * A stroke is centered on its path, so a path at the half corridor puts half
+     * the stroke past it. Insetting by half the stroke width keeps the stroke
+     * inside the half corridor, on whole device pixels when the half corridor
+     * lies on a pixel boundary. The join is decided by `pad` first, so an inset
+     * never splits a joined outline.
+     */
+    inset?: number;
 }
 export interface Outline {
     /** SVG path data for every loop, usable for both `fill` (evenodd) and `stroke`. */
