@@ -286,6 +286,10 @@ fn invalid_json_closes_connection() {
 | `sidecars.stop.honors-stop-timeout` | 입력을 비우지 않는 사이드카의 중지는 중지 제한 시간의 두 배 안에 반환된다. | both |
 | `sidecars.stop.graceful-on-stdin-eof` | 입력 끝에서 종료하는 사이드카는 제한 시간을 기다리지 않고 멈춘다. | both |
 | `sidecars.stop.kills-after-timeout` | 입력 끝을 무시하는 사이드카는 중지 제한 시간 뒤에 강제 종료된다. | both |
+| `sidecars.protocol.message-at-limit-is-delivered` | 줄바꿈 앞이 정확히 67108864 byte인 사이드카 메시지가 손상 없이 소유 창에 도착한다. | both |
+| `sidecars.failure.oversize-message-terminates-and-notifies` | 67108864 byte보다 긴 줄은 줄이 끝나기를 기다리지 않고 사이드카 프로세스를 끝내고 "exceeds"를 담은 `sidecar-failure`를 소유 창에 전달한다. | both |
+| `sidecars.failure.invalid-message-terminates-and-notifies` | JSON이 아닌 줄이나 `body`가 없는 JSON 객체는 사이드카 프로세스를 끝내고 "invalid message"를 담은 `sidecar-failure`를 전달한다. | both |
+| `sidecars.failure.output-close-notifies-each-surface` | 호스트가 종료 중이 아닐 때 출력이 끝난 사이드카는 그 사이드카에 보낸 각 표면의 소유 창에 "output closed"를 담은 `sidecar-failure`를 전달하고, 다음 전송은 새 프로세스를 시작한다. | both |
 | `sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service` | 두 호스트가 토큰으로 한 서비스 엔드포인트에 인증하고 각자의 이벤트를 받는다. | both |
 | `sidecars-transport.hello.declares-protocol-one` | hello 요청은 프로토콜 1을 선언한다. | both |
 | `sidecars-transport.reconnect.after-connection-loss-preserves-owner` | 서비스가 연결을 끊으면 다음 보내기가 다시 연결하고 이벤트는 계속 소유자와 표면에 도착한다. | both |

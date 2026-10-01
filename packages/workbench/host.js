@@ -116,10 +116,48 @@ const orderedSidecars = new Map();
 function orderedSidecarPort(name) {
   if (!orderedSidecars.has(name)) {
     orderedSidecars.set(name, orderedSidecar({
-      send: (surface, body) => bridge.call("sidecarSend", { sidecar: name, surface, body }),
+      // 실패 listener 가 설치된 뒤에 요청을 보내야 그 요청이 부른 실패를 놓치지 않는다.
+      send: (surface, body) => listenSidecarFailures()
+        .then(() => bridge.call("sidecarSend", { sidecar: name, surface, body })),
     }));
   }
   return orderedSidecars.get(name);
+}
+
+/*
+ * 사이드카 실패 handler. 키는 사이드카 이름과 표면이다. 문서마다 sidecar-failure listener 하나가
+ * handler 를 부르고, handler 가 없는 실패는 페이지 오류로 보고한다(docs/spec/sidecars.md#page-interface).
+ */
+const failureHandlers = new Map();
+const failureKey = (name, surface) => JSON.stringify([name, surface]);
+let failureListener = null;
+function listenSidecarFailures() {
+  // 기본값: 문서의 첫 요청이나 구독이 listener 를 설치하고, 이후에는 같은 설치를 기다린다.
+  failureListener ??= Promise.resolve(bridge.on("sidecar-failure", (failure) => {
+    // 기본값: 등록한 handler 가 없는 표면은 받을 곳이 없으므로 페이지 오류로 보고한다.
+    const handlers = [...(failureHandlers.get(failureKey(failure.sidecar, failure.surface)) ?? [])];
+    if (handlers.length === 0) {
+      dispatchEvent(new ErrorEvent("error", {
+        message: `sidecar ${failure.sidecar} failed for surface ${failure.surface}: ${failure.reason}`,
+      }));
+      return;
+    }
+    for (const handler of handlers) handler(failure.reason);
+  }));
+  return failureListener;
+}
+
+/** 사이드카 name 의 표면 surface 에 대한 실패를 fn(reason) 으로 받는다. 등록 후 해제 함수로 완료된다. */
+function onSidecarFailure(name, surface, fn) {
+  if (typeof fn !== "function") return Promise.reject(new TypeError("sidecar onFailure requires a listener"));
+  const key = failureKey(name, surface);
+  let handlers = failureHandlers.get(key);
+  if (!handlers) failureHandlers.set(key, handlers = new Set());
+  handlers.add(fn);
+  return listenSidecarFailures().then(() => () => {
+    handlers.delete(fn);
+    if (handlers.size === 0 && failureHandlers.get(key) === handlers) failureHandlers.delete(key);
+  });
 }
 
 /**
@@ -134,6 +172,7 @@ export function windowSidecar(name) {
     on: (surface, listener) => Promise.resolve(bridge.on("sidecar-message", (event) => {
       if (event?.sidecar === name && event?.surface === surface) listener(event.body);
     })),
+    onFailure: (surface, listener) => onSidecarFailure(name, surface, listener),
   };
 }
 
@@ -221,6 +260,9 @@ export function surfaceContextRuntime(surface, declarations = {}) {
         on: (id, fn) => on("sidecar-message", (event) => {
           if (event.sidecar === sidecarName && event.surface === id) fn(event.body);
         }),
+        onFailure: (id, fn) => id === surfaceId
+          ? onSidecarFailure(sidecarName, surfaceId, fn)
+          : Promise.reject(new Error(`surface ${surfaceId} cannot observe sidecar surface ${id}`)),
       };
     },
     exposure: createExpose(port, async () => {

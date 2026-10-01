@@ -9,8 +9,8 @@
 //! 선언된 사이드카를 처음 사용할 때 실행하고, 표면 페이지와 사이드카 사이에서 한 줄 JSON
 //! 메시지를 전달한다. 메시지 본문은 해석하지 않는다. 형식은 docs/spec/sidecars.md 에 정의한다.
 
-use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::collections::{HashMap, HashSet};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -38,6 +38,17 @@ pub struct Message {
     pub body: Box<RawValue>,
 }
 
+/// 사이드카 실패를 페이지에 알리는 이벤트 값(docs/spec/sidecars.md#failure).
+#[derive(Clone, Debug, Serialize)]
+pub struct Failure {
+    /// 실패한 사이드카 패키지 이름.
+    pub sidecar: String,
+    /// 실패한 프로세스에 요청을 보낸 표면 id.
+    pub surface: String,
+    /// 실패 원인.
+    pub reason: String,
+}
+
 /// 사이드카 outbox 채널의 메시지 유형.
 enum Outgoing {
     /// 사이드카로 전송할 한 줄.
@@ -60,6 +71,8 @@ pub trait Owner: Clone + Send + 'static {
     fn root(&self) -> Result<String, String>;
     /// 사이드카가 보낸 메시지를 창의 페이지에 전달한다.
     fn deliver(&self, message: Message);
+    /// 사이드카 실패를 창의 페이지에 전달한다.
+    fn deliver_failure(&self, failure: Failure);
     /// 이미지 봉투를 결정하여 처리한다. 기본 구현은 없음.
     /// 반환값: 이미지 봉투를 처리했는지 여부.
     fn decide_image_envelope(
@@ -197,10 +210,16 @@ fn write_pending<O: Owner>(state: &Mutex<State<O>>, name: &str, stdin: &mut Chil
 const RETAIN_TIMEOUT: Duration = Duration::from_secs(10);
 static RETAIN_REQUESTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
+/// 사이드카 메시지 한 줄의 줄바꿈 앞 최대 byte 수(docs/spec/sidecars.md#messages). 수 MB 의
+/// schema snapshot 을 열 배 이상의 여유로 담고, 메시지 하나에 잡는 메모리를 이 크기로 제한한다.
+const MESSAGE_LIMIT: usize = 64 << 20;
+
 struct Process {
     child: Option<Child>,
     outbox: SyncSender<Outgoing>, // 용량 256인 채널
     persistent: Option<PersistentConnection>,
+    /// 이 프로세스에 요청을 보낸 표면. 실패를 알릴 표면이다.
+    surfaces: HashSet<String>,
 }
 
 type RetainWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<usize, String>>>>>;
@@ -410,7 +429,8 @@ impl<O: Owner> Sidecars<O> {
             .roots
             .entry(surface.to_string())
             .or_insert_with(|| root.clone());
-        let process = state.running.get(name).expect("started above");
+        let process = state.running.get_mut(name).expect("started above");
+        process.surfaces.insert(surface.to_string());
 
         // 논블로킹으로 채널에 전송한다. 채널이 가득 차면 "is not keeping up" 오류를 반환한다.
         let delivered = process
@@ -847,73 +867,24 @@ impl<O: Owner> Core<O> {
             }
         });
 
-        // 읽기 스레드: stdout에서 읽어 이벤트를 전달한다
+        // 읽기 스레드: stdout에서 읽어 이벤트를 전달하고, 출력이 끝나거나 프로토콜을 어기면 실패를 처리한다
         let state = Arc::clone(&core.state);
         let sidecar = name.to_string();
         let tx_clone = tx.clone();
         thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
-            let mut line = Vec::new();
-            loop {
-                line.clear();
-                match reader.read_until(b'\n', &mut line) {
-                    Ok(0) => break,
-                    Ok(_) => {}
-                    Err(error) => {
-                        eprintln!("sidecar {sidecar}: {error}");
-                        break;
-                    }
-                }
-                let event: Event = match serde_json::from_slice(&line) {
-                    Ok(event) => event,
-                    Err(error) => {
-                        eprintln!("sidecar {sidecar}: invalid event: {error}");
-                        continue;
-                    }
-                };
-                // state lock은 절대 poison 되면 안 된다. 다른 스레드의 panic은 치명적.
-                let owner = {
-                    let state = state.lock().expect("sidecar state");
-                    state.owners.get(&event.surface).cloned()
-                };
-                if let Some(owner) = owner {
-                    let response_sender = ReadThreadResponseSender {
-                        sidecar_name: sidecar.clone(),
-                        tx: tx_clone.clone(),
-                        state: Arc::clone(&state),
-                    };
-                    // 이미지 봉투 여부 확인 및 처리
-                    if try_handle_image_envelope(
-                        &owner,
-                        &sidecar,
-                        &event.surface,
-                        &event.body,
-                        &response_sender,
-                    ) {
-                        continue;
-                    }
-                    owner.deliver(Message {
-                        sidecar: sidecar.clone(),
-                        surface: event.surface,
-                        body: event.body,
-                    });
-                }
-            }
-            if let Ok(mut state) = state.lock() {
-                if !state.stopped {
-                    eprintln!("sidecar {sidecar} closed its output");
-                    if let Some(process) = state.running.remove(&sidecar) {
-                        // process를 drop 하지만 child 를 wait 하지는 않는다
-                        drop(process);
-                    }
-                }
-            }
+            let violation = relay(&mut reader, &state, &sidecar, &tx_clone);
+            // 읽기 끝을 닫아 아직 쓰는 프로세스가 쓰기에서 막히지 않게 한다.
+            drop(reader);
+            drop(tx_clone);
+            fail(&state, &sidecar, violation);
         });
 
         Ok(Process {
             child: Some(child),
             outbox: tx,
             persistent: None,
+            surfaces: HashSet::new(),
         })
     }
 
@@ -1322,6 +1293,7 @@ impl<O: Owner> Core<O> {
         Ok(Process {
             child: None,
             outbox: tx,
+            surfaces: HashSet::new(),
             persistent: Some(PersistentConnection {
                 close_waiters,
                 retain_waiters,
@@ -1431,6 +1403,128 @@ fn notify_connection<O: Owner>(core: &Arc<Core<O>>, name: &str, outcome: Result<
     }
 }
 
+/// 표준 출력의 메시지를 소유 창에 전달한다. 출력이 끝나면 None 을, 프로토콜을 어기거나 읽기가
+/// 실패하면 그 까닭을 반환한다. 한 줄은 줄바꿈 앞이 MESSAGE_LIMIT byte 를 넘으면 그 이상 버퍼링하지
+/// 않고 실패한다(docs/spec/sidecars.md#failure).
+fn relay<O: Owner>(
+    reader: &mut impl BufRead,
+    state: &Arc<Mutex<State<O>>>,
+    sidecar: &str,
+    tx: &SyncSender<Outgoing>,
+) -> Option<String> {
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        // 한도와 줄바꿈 하나까지만 읽는다.
+        let read = match reader
+            .by_ref()
+            .take(MESSAGE_LIMIT as u64 + 1)
+            .read_until(b'\n', &mut line)
+        {
+            Ok(read) => read,
+            Err(error) => return Some(format!("read: {error}")),
+        };
+        if read == 0 {
+            return None;
+        }
+        if line.last() != Some(&b'\n') && read > MESSAGE_LIMIT {
+            return Some(format!("message exceeds {MESSAGE_LIMIT} bytes"));
+        }
+        let event: Event = match serde_json::from_slice(&line) {
+            Ok(event) => event,
+            Err(error) => return Some(format!("invalid message: {error}")),
+        };
+        // state lock은 절대 poison 되면 안 된다. 다른 스레드의 panic은 치명적.
+        let owner = {
+            let state = state.lock().expect("sidecar state");
+            state.owners.get(&event.surface).cloned()
+        };
+        // 소유 창이 없는 표면의 메시지는 버린다. 표면이 닫힌 뒤 사이드카가 보낸 메시지다(docs/spec/sidecars.md#messages).
+        let Some(owner) = owner else {
+            continue;
+        };
+        let response_sender = ReadThreadResponseSender {
+            sidecar_name: sidecar.to_string(),
+            tx: tx.clone(),
+            state: Arc::clone(state),
+        };
+        // 이미지 봉투 여부 확인 및 처리
+        if try_handle_image_envelope(
+            &owner,
+            sidecar,
+            &event.surface,
+            &event.body,
+            &response_sender,
+        ) {
+            continue;
+        }
+        owner.deliver(Message {
+            sidecar: sidecar.to_string(),
+            surface: event.surface,
+            body: event.body,
+        });
+    }
+}
+
+/// 출력이 끝났거나 프로토콜을 어긴 표준 입출력 사이드카를 처리한다. 종료 중이면 stop 이 프로세스를
+/// 기다린다. 아니면 프로세스를 실행 중인 사이드카에서 빼고 끝낸 뒤, 그 프로세스에 보낸 표면의 소유
+/// 창마다 실패를 알린다. 실패 뒤의 프로토콜 상태는 정의되지 않으므로 프로세스를 끝낸다.
+fn fail<O: Owner>(state: &Arc<Mutex<State<O>>>, sidecar: &str, violation: Option<String>) {
+    let (process, owned) = {
+        let mut state = state.lock().expect("sidecar state");
+        if state.stopped {
+            return;
+        }
+        // 표준 입출력 사이드카는 읽기 스레드가 끝나기 전에는 다시 시작되지 않으므로 이 이름의 프로세스가 이 프로세스다.
+        let Some(process) = state.running.remove(sidecar) else {
+            return;
+        };
+        let owned: Vec<(String, O)> = process
+            .surfaces
+            .iter()
+            .filter_map(|surface| {
+                state
+                    .owners
+                    .get(surface)
+                    .map(|owner| (surface.clone(), owner.clone()))
+            })
+            .collect();
+        (process, owned)
+    };
+    let Process { child, outbox, .. } = process;
+    let mut failures = Vec::new();
+    let exit = match child {
+        Some(mut child) => {
+            if let Err(error) = child.kill() {
+                failures.push(format!("kill: {error}"));
+            }
+            match child.wait() {
+                Ok(status) => status.to_string(),
+                Err(error) => {
+                    failures.push(format!("wait: {error}"));
+                    "unknown exit status".to_string()
+                }
+            }
+        }
+        None => "no child process".to_string(),
+    };
+    // 쓰기 스레드는 모든 송신자가 사라지면 보관분을 쓰고 끝난다.
+    drop(outbox);
+    // 기본값: 프로토콜 위반이 없으면 출력이 끝난 것이 실패 원인이다(docs/spec/sidecars.md#failure).
+    let mut reason = violation.unwrap_or_else(|| format!("output closed: {exit}"));
+    for failure in failures {
+        reason = format!("{reason}; {failure}");
+    }
+    eprintln!("sidecar {sidecar} failed: {reason}");
+    for (surface, owner) in owned {
+        owner.deliver_failure(Failure {
+            sidecar: sidecar.to_string(),
+            surface,
+            reason: reason.clone(),
+        });
+    }
+}
+
 /// 이벤트가 이미지 봉투인지 확인하고 처리한다. 봉투면 true 를 반환한다.
 fn try_handle_image_envelope<O: Owner>(
     owner: &O,
@@ -1463,6 +1557,11 @@ impl Owner for Window {
     fn deliver(&self, message: Message) {
         if let Err(error) = emit_window(self, "sidecar-message", message) {
             eprintln!("sidecar message: {error}");
+        }
+    }
+    fn deliver_failure(&self, failure: Failure) {
+        if let Err(error) = emit_window(self, "sidecar-failure", failure) {
+            eprintln!("sidecar failure: {error}");
         }
     }
     fn decide_image_envelope(

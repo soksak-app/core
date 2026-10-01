@@ -32,7 +32,7 @@ Only a package in `sidecars/` that has a `sidecar.json` is a sidecar the host ru
 
 ## Messages
 
-Each message is one JSON object on one line.
+Each message is one JSON object on one line. A sidecar message on standard output ends with a newline and has at most 67108864 bytes (64 MiB) before the newline; both hosts use this limit. The limit holds a multi-megabyte message, such as a database schema snapshot, with more than ten times headroom, and it bounds the memory that the host holds for one message. The host enforces the limit while it reads: it does not buffer more than the limit and the newline of one message.
 
 | Direction | Message |
 | --- | --- |
@@ -42,11 +42,30 @@ Each message is one JSON object on one line.
 
 The host records the window that first sends for a surface and delivers each sidecar message only to that window, as the `sidecar-message` event `{sidecar, surface, body}`, where `sidecar` is the package name. A request from another window for the same surface fails. When the application exits, the host closes each sidecar's standard input and waits for the process to end.
 
+The host discards a sidecar message whose surface has no owning window. This happens when a sidecar sends for a surface after the host removed the surface and sent `closed`; the host does not yet distinguish such a message from a message for a surface that never had an owner.
+
 The operation selector in a sidecar request body is an existing transport detail. A plugin manifest does not copy that wire spelling: it declares the readable `background.operation` name, and the workbench sends the corresponding sidecar request at one transport boundary. Missing operations and sidecar errors are failures; they are not replaced or discarded.
+
+## Failure
+
+A sidecar that uses standard input and output fails when:
+
+- it sends a line longer than the message limit;
+- it sends a line that is not a JSON object with a string `surface` and a `body`;
+- reading its standard output fails;
+- its standard output ends, including when the process exits, while the host is not stopping its sidecars.
+
+The protocol state after a failure is undefined, so the host reads no further messages from that process. The host removes the process from its running sidecars, sends it the force-kill signal, and waits for it to end. It then writes the failure to its log and delivers the `sidecar-failure` event `{sidecar, surface, reason}` to the owning window of each surface that sent a request to that process and still has an owner. `reason` is text that names the cause: `message exceeds 67108864 bytes`, `invalid message: <parser error>`, `read: <error>`, or `output closed: <exit status>`. A request that the failed process did not answer gets no reply; the page observes the failure instead.
+
+A send after a failure follows the start rule: the next request to that sidecar starts a new process. The new process has none of the sessions of the failed process, so a page that keeps a session opens it again. Each surface keeps its owning window and its first root.
+
+While the host stops its sidecars, the end of output is not a failure and the host sends no failure event; the stop rules in [declaration and startup](#declaration-and-startup) apply. These failure rules apply to the standard input and output transport; the persistent transport reports connection loss as [terminal runtime](terminal-runtime.md) defines.
 
 ## Page interface
 
-`page.sidecar(name)` takes a sidecar package name and returns `send(surface, body)` and `on(surface, fn)`. `on` returns a promise that resolves after the subscription is registered; a page subscribes before its first request.
+`page.sidecar(name)` takes a sidecar package name and returns `send(surface, body)`, `on(surface, fn)`, and `onFailure(surface, fn)`. `on` calls `fn(body)` for each `sidecar-message` event of that sidecar and surface, and `onFailure` calls `fn(reason)` for each `sidecar-failure` event of that sidecar and surface. Both return a promise that resolves after the subscription is registered; a page subscribes before its first request.
+
+In the application document, the workbench installs one `sidecar-failure` listener before it sends the first sidecar request. It calls the failure handlers that surface modules, state modules, and background sessions registered through the workbench for that sidecar and surface. When no handler is registered, the workbench reports the failure as a page error: it dispatches an `error` event to the window, which writes the failure to the application log and shows it in the application error alert.
 
 ## Image envelope
 
@@ -156,4 +175,4 @@ The sidecar sends `{event: "screen", ...}` whenever the terminal screen changes,
 
 ## Tests
 
-Each sidecar runs its tests in its own directory. `shell` tests its protocol, output order, directory reports, command input, `run` results, and interrupts with `go test ./...` and validates its `sidecar.json` with `node --test tests/`. `files` tests listing, ordering, watching, git status, and the rejection of paths outside `root` with `go test ./...` and validates its `sidecar.json` the same way. Each host tests its relay in `tests/sidecars_test.*` and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.
+Each sidecar runs its tests in its own directory. `shell` tests its protocol, output order, directory reports, command input, `run` results, and interrupts with `go test ./...` and validates its `sidecar.json` with `node --test tests/`. `files` tests listing, ordering, watching, git status, and the rejection of paths outside `root` with `go test ./...` and validates its `sidecar.json` the same way. Each host tests its relay, the message limit, and failure delivery in `tests/sidecars_test.*` and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.

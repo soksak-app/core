@@ -123,6 +123,10 @@ export const page = (() => {
       on: (surface, fn) => listen("sidecar-message", (message) => {
         if (message.sidecar === name && message.surface === surface) fn(message.body);
       }),
+      // 사이드카 실패도 창의 모든 페이지가 받는다(docs/spec/sidecars.md#failure).
+      onFailure: (surface, fn) => listen("sidecar-failure", (failure) => {
+        if (failure.sidecar === name && failure.surface === surface) fn(failure.reason);
+      }),
     }),
     // 공개 항목의 등록과 요청. 요청 이벤트에 surface 가 있으면 이 표면의 것만 처리한다.
     exposure: {

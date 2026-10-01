@@ -136,6 +136,8 @@
 
 - V5-117-1-3-4-7-1-3-1: 저장 layout을 열 수 없는 스페이스로 전환하거나 활성 스페이스를 닫아 그 스페이스로 옮기면, 활성 스페이스가 바뀌기 전에 실패한다. 이전에는 layout 검증이 실패하기 전에 활성 스페이스를 바꿨다.
 
+- F0.4-1-1: 사이드카 출력 실패를 페이지에 알린다. 두 호스트가 stdio 사이드카 메시지를 읽는 동안 줄바꿈 앞 64 MiB로 제한한다. 한도 초과 줄, 잘못된 메시지, 읽기 오류, 종료 중이 아닐 때의 출력 끝은 프로세스를 끝내고 그 프로세스에 보낸 표면의 각 소유 창에 `sidecar-failure` `{sidecar, surface, reason}`을 전달하며, 다음 전송은 새 프로세스를 시작한다. 페이지 port와 상태 context에 `onFailure`가 생기고, 워크벤치는 handler가 없는 실패를 페이지 오류로 보고한다. 새 Wails·Tauri 호스트 test, 호스트 계약 사례 4개(두 호스트에서 240개 중 240개 통과), plugin-api·runtime·workbench test로 검증했다.
+
 - G1.4-16: `make node-repeat`가 실제로 실행한 test를 센다. 색이 붙는 사람용 reporter 줄을 읽었고, 일치하는 test가 없는 file도 통과로 셌다. 이제 제목이 이름 pattern과 일치하는 TAP 결과를 읽는다.
 
 - G1.4-14-3: window check가 폐기된 `rail`, `cardSidebar` 설정을 더 이상 쓰지 않고 고정 사이드바 카드와 카드 내부 사이드바를 잰다. 저장 layout check는 검증 오류를 기대하고, files label check는 device pixel 허용 폭으로 label 전체를 잰다.

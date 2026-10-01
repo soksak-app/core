@@ -44,6 +44,18 @@ type SidecarMessage struct {
 	Body    json.RawMessage `json:"body"`
 }
 
+// SidecarFailure 는 사이드카 실패를 그 사이드카에 보낸 표면의 페이지에 알리는 이벤트 값이다
+// (docs/spec/sidecars.md#failure).
+type SidecarFailure struct {
+	Sidecar string `json:"sidecar"`
+	Surface string `json:"surface"`
+	Reason  string `json:"reason"`
+}
+
+// sidecarMessageLimit 는 사이드카 메시지 한 줄의 줄바꿈 앞 최대 byte 수다(docs/spec/sidecars.md#messages).
+// 수 MB 의 schema snapshot 을 열 배 이상의 여유로 담고, 메시지 하나에 잡는 메모리를 이 크기로 제한한다.
+const sidecarMessageLimit = 64 << 20
+
 type sidecarRequest struct {
 	Surface string          `json:"surface"`
 	Root    string          `json:"root,omitempty"`
@@ -53,6 +65,12 @@ type sidecarRequest struct {
 
 type sidecarEvent struct {
 	Surface string          `json:"surface"`
+	Body    json.RawMessage `json:"body"`
+}
+
+// sidecarOutput 은 표준 출력 메시지의 선언된 형태다. 빠진 surface 를 빈 문자열과 구별한다.
+type sidecarOutput struct {
+	Surface *string         `json:"surface"`
 	Body    json.RawMessage `json:"body"`
 }
 
@@ -72,6 +90,8 @@ type sidecar struct {
 	closeWaiters   map[string]chan error
 	// retained 는 retain 요청마다 서비스가 닫은 세션 수다.
 	retained map[string]int
+	// surfaces 는 이 프로세스에 요청을 보낸 표면이다. 실패를 알릴 표면이다. c.mu 로 보호한다.
+	surfaces map[string]bool
 }
 
 // SidecarOwner 는 표면을 소유한 창이다. 사이드카 메시지의 root 를 제공하고 이벤트를 받는다.
@@ -232,6 +252,7 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 		delete(c.unannouncedLoss, name)
 	}
 	process := c.running[name]
+	process.surfaces[surface] = true
 	c.owners[surface] = owner
 	if _, ok := c.roots[surface]; !ok {
 		c.roots[surface] = root
@@ -566,6 +587,7 @@ func (c *Sidecars) process(name string) (*sidecar, error) {
 		pendingCloses:  make([][]byte, 0),
 		pendingReplies: make([][]byte, 0),
 		closeWaiters:   make(map[string]chan error),
+		surfaces:       make(map[string]bool),
 	}
 	c.running[name] = process
 	go c.write(process)        // 쓰기 고루틴: outbox 채널에서 읽어 stdin 에 쓴다.
@@ -705,7 +727,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		name: name, cmd: cmd, conn: conn, persistent: true,
 		outbox: make(chan []byte, 256), exited: make(chan struct{}),
 		pendingCloses: make([][]byte, 0), pendingReplies: make([][]byte, 0),
-		closeWaiters: make(map[string]chan error),
+		closeWaiters: make(map[string]chan error), surfaces: make(map[string]bool),
 	}
 	c.running[name] = process
 	go c.writePersistent(process)
@@ -841,19 +863,79 @@ func (c *Sidecars) writePending(process *sidecar) bool {
 	return true
 }
 
-// read 는 사이드카의 출력을 표면 소유 창에 전달하고, 출력이 끝나면 프로세스를 정리한다.
+// read 는 사이드카의 출력을 표면 소유 창에 전달한다. 출력이 끝나거나 프로토콜을 어기면, 종료 중이
+// 아닐 때 그 프로세스를 끝내고 그 프로세스에 보낸 표면마다 실패를 알린다(docs/spec/sidecars.md#failure).
 func (c *Sidecars) read(process *sidecar, stdout io.Reader) {
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
-	for scanner.Scan() {
-		var event sidecarEvent
-		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
-			log.Printf("sidecar %s: invalid event: %v", process.name, err)
-			continue
+	violation := c.relay(process, stdout)
+	type ownedSurface struct {
+		surface string
+		owner   SidecarOwner
+	}
+	c.mu.Lock()
+	failed := !c.stopped && c.running[process.name] == process
+	owned := make([]ownedSurface, 0, len(process.surfaces))
+	if c.running[process.name] == process {
+		delete(c.running, process.name)
+	}
+	if failed {
+		// 종료 중이면 Stop 이 outbox 를 닫는다. 아니면 쓰기 고루틴을 끝내도록 여기서 닫는다.
+		// outbox 로의 모든 전송은 c.mu 안에서 running 에 있는 프로세스에만 일어난다.
+		close(process.outbox)
+		for surface := range process.surfaces {
+			if owner := c.owners[surface]; owner != nil {
+				owned = append(owned, ownedSurface{surface, owner})
+			}
 		}
+	}
+	c.mu.Unlock()
+	if !failed {
+		if err := process.cmd.Wait(); err != nil {
+			log.Printf("sidecar %s exited while stopping: %v", process.name, err)
+		}
+		close(process.exited)
+		return
+	}
+	// 실패 뒤의 프로토콜 상태는 정의되지 않으므로 프로세스를 끝낸다.
+	reason := violation
+	if err := process.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		reason = fmt.Sprintf("%s; kill: %v", reason, err)
+	}
+	exit := "exit status 0"
+	if err := process.cmd.Wait(); err != nil {
+		exit = err.Error()
+	}
+	if violation == "" {
+		reason = "output closed: " + exit
+	}
+	close(process.exited)
+	log.Printf("sidecar %s failed: %s", process.name, reason)
+	for _, item := range owned {
+		item.owner.Emit("sidecar-failure", SidecarFailure{Sidecar: process.name, Surface: item.surface, Reason: reason})
+	}
+}
+
+// relay 는 출력의 메시지를 소유 창에 전달한다. 출력이 끝나면 빈 문자열을, 프로토콜을 어기거나 읽기가
+// 실패하면 그 까닭을 반환한다. 한 줄은 줄바꿈 앞이 sidecarMessageLimit byte 를 넘으면 그 이상 버퍼링하지 않고 실패한다.
+func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
+	scanner := bufio.NewScanner(stdout)
+	// 버퍼는 한도와 줄바꿈 하나를 담는다. 더 긴 줄은 bufio.ErrTooLong 이다.
+	scanner.Buffer(make([]byte, 0, 64*1024), sidecarMessageLimit+1)
+	for scanner.Scan() {
+		var output sidecarOutput
+		if err := json.Unmarshal(scanner.Bytes(), &output); err != nil {
+			return fmt.Sprintf("invalid message: %v", err)
+		}
+		if output.Surface == nil {
+			return "invalid message: surface is missing"
+		}
+		if output.Body == nil {
+			return "invalid message: body is missing"
+		}
+		event := sidecarEvent{Surface: *output.Surface, Body: output.Body}
 		c.mu.Lock()
 		owner := c.owners[event.Surface]
 		c.mu.Unlock()
+		// 소유 창이 없는 표면의 메시지는 버린다. 표면이 닫힌 뒤 사이드카가 보낸 메시지다(docs/spec/sidecars.md#messages).
 		if owner != nil {
 			// 이미지 봉투 여부 확인
 			if c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) {
@@ -862,17 +944,12 @@ func (c *Sidecars) read(process *sidecar, stdout io.Reader) {
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		}
 	}
-	err := process.cmd.Wait()
-	c.mu.Lock()
-	if c.running[process.name] == process {
-		delete(c.running, process.name)
+	if err := scanner.Err(); errors.Is(err, bufio.ErrTooLong) {
+		return fmt.Sprintf("message exceeds %d bytes", sidecarMessageLimit)
+	} else if err != nil {
+		return fmt.Sprintf("read: %v", err)
 	}
-	stopped := c.stopped
-	c.mu.Unlock()
-	if !stopped {
-		log.Printf("sidecar %s exited: %v", process.name, err)
-	}
-	close(process.exited)
+	return ""
 }
 
 func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {

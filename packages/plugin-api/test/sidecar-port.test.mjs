@@ -48,3 +48,9 @@ test("listening goes to the runtime port", () => {
   const fn = () => {};
   assert.deepEqual(orderedSidecar(port).on("tab", fn), { surface: "tab", fn });
 });
+
+test("failure listening goes to the runtime port", () => {
+  const port = { ...slowPort({}), onFailure: (surface, fn) => ({ failure: surface, fn }) };
+  const fn = () => {};
+  assert.deepEqual(orderedSidecar(port).onFailure("tab", fn), { failure: "tab", fn });
+});

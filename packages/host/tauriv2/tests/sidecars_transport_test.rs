@@ -12,7 +12,7 @@ use std::os::unix::net::UnixListener;
 use std::process::Command;
 
 use serde_json::value::RawValue;
-use soksak_host_tauriv2::sidecars::{Message, Owner, Sidecars};
+use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, Sidecars};
 
 #[derive(Clone)]
 struct FakeOwner {
@@ -30,6 +30,10 @@ impl Owner for FakeOwner {
     }
     fn deliver(&self, message: Message) {
         let _ = self.sent.send(message);
+    }
+    fn deliver_failure(&self, failure: Failure) {
+        // 이 검사들은 실패를 단언하지 않으므로 실패는 검사 출력에 남긴다.
+        eprintln!("sidecar failure: {failure:?}");
     }
 }
 
