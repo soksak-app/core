@@ -238,3 +238,44 @@ fn a_clock_before_the_epoch_is_reported() {
         Ok("2026-09-21T14:13:20.123Z".to_string())
     );
 }
+
+// contract: performance.trace.relay-records-writer-pid
+#[test]
+fn relayed_page_line_carries_the_writer_pid() {
+    let directory = tempfile::tempdir().unwrap();
+    let target = directory.path().join("performance.ndjson");
+    performance::relay(
+        &target,
+        json!({"ts":"2026-10-01T00:00:00.000Z","event":"focus"}),
+    )
+    .unwrap();
+    let record: serde_json::Value =
+        serde_json::from_str(std::fs::read_to_string(&target).unwrap().trim()).unwrap();
+    assert_eq!(
+        record["pid"].as_u64(),
+        Some(std::process::id() as u64),
+        "a relayed page line does not name the writing process: {record}"
+    );
+}
+
+// contract: performance.trace.rotates-at-10mb
+#[test]
+fn trace_rotates_at_ten_megabytes() {
+    let directory = tempfile::tempdir().unwrap();
+    let target = directory.path().join("performance.ndjson");
+    let full = format!("{}\n", "x".repeat(10 * 1024 * 1024 - 1));
+    std::fs::write(&target, &full).unwrap();
+    performance::line(&target, "host", json!({"event":"after"})).unwrap();
+    let previous =
+        std::fs::read_to_string(directory.path().join("performance.ndjson.1")).unwrap_or_default();
+    assert!(
+        previous == full,
+        "the full output was not kept as the previous generation ({} bytes)",
+        previous.len()
+    );
+    let current = std::fs::read_to_string(&target).unwrap();
+    assert!(
+        current.lines().count() == 1 && current.contains("\"event\":\"after\""),
+        "the new line did not start a new output: {current:?}"
+    );
+}

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-116-4-10: both hosts rotate the performance output to `performance.ndjson.1` at 10 MB and record their `pid` on relayed page lines, as the trace specification requires.
+
 - V5-117-1-3-4-7-1-7: a command that the main page answers itself fails after its declared timeout or 10 seconds instead of keeping its caller waiting without a reply.
 
 - V5-117-1-3-4-2: `core.sidebars` no longer reports the always-false `unavailable` field left from persistent sidebar owners, and a new window check records the fixed sidebar context through tab moves and removal.

@@ -202,6 +202,8 @@ Items:
 | `performance.trace.relay-requires-object-with-event` | A relayed page line must be an object with an event; rejected lines append nothing. | both |
 | `performance.trace.enable-without-services` | The enabled host accepts page events before any service exists. | both |
 | `performance.trace.already-off-writes-nothing` | Disabling an already disabled trace does not create or append output. | both |
+| `performance.trace.relay-records-writer-pid` | A relayed page line records the host process that writes it as `pid`. | both |
+| `performance.trace.rotates-at-10mb` | A host line appended to an output of 10 MB or more first moves that output to `performance.ndjson.1` and starts a new one. | both |
 | `performance.sampler.failed-reading-is-explicit` | A sampler reading that cannot obtain a resident size records `error` instead of `rss_host_kb`. | both |
 | `performance.clock.before-epoch-is-explicit` | A trace timestamp before the Unix epoch is an error, not the epoch. | tauriv2 only: the Rust host formats timestamps from a duration since the epoch, which fails before it, while Go formats any time |
 | `performance.trace.switch-and-relay-report-filesystem-errors` | Switch and relay requests return directory, flag, and output failures. | both |

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-116-4-10: 두 host가 trace 명세대로 10 MB에서 성능 출력을 `performance.ndjson.1`로 rotation하고, 중계한 page 줄에 자기 `pid`를 기록한다.
+
 - V5-117-1-3-4-7-1-7: 메인 페이지가 스스로 답하는 명령은 응답 없이 호출자를 기다리게 하지 않고, 선언된 timeout이나 10초 뒤에 실패한다.
 
 - V5-117-1-3-4-2: `core.sidebars`가 영구 사이드바 소유자에서 남은, 항상 거짓인 `unavailable` field를 더 이상 보고하지 않고, 새 window check가 탭 이동과 제거 중의 고정 사이드바 문맥을 기록한다.

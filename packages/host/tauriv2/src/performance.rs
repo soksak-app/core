@@ -210,13 +210,36 @@ pub fn relay(target: &Path, mut record: Value) -> Result<(), String> {
         return Err("event must be a string".into());
     }
     object.insert("layer".into(), json!("page"));
+    // 이 줄을 파일에 쓰는 프로세스는 호스트다.
+    object.insert("pid".into(), json!(std::process::id()));
     append(target, &record)
 }
+
+/// 출력이 이전 세대로 넘어가는 크기(docs/spec/performance-trace.md).
+const ROTATE_BYTES: u64 = 10 * 1024 * 1024;
 
 fn append(target: &Path, record: &Value) -> Result<(), String> {
     let mut line =
         serde_json::to_vec(record).map_err(|error| format!("encode performance event: {error}"))?;
     line.push(b'\n');
+    // 10 MB 에 이른 출력은 이전 세대(.1) 하나로 남기고 새 파일에 쓴다.
+    match std::fs::metadata(target) {
+        Ok(meta) if meta.len() >= ROTATE_BYTES => {
+            let mut previous = target.as_os_str().to_owned();
+            previous.push(".1");
+            std::fs::rename(target, &previous).map_err(|error| {
+                format!("rotate performance output {}: {error}", target.display())
+            })?;
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(format!(
+                "inspect performance output {}: {error}",
+                target.display()
+            ))
+        }
+    }
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)

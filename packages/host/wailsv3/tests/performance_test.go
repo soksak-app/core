@@ -267,3 +267,42 @@ func TestSamplerReportsAFailedReading(t *testing.T) {
 		t.Fatalf("the current process has no resident size: %v", own)
 	}
 }
+
+// contract: performance.trace.relay-records-writer-pid
+func TestRelayedPageLineCarriesTheWriterPid(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "performance.ndjson")
+	if err := host.PerformanceRelay(target, map[string]any{"ts": "2026-10-01T00:00:00.000Z", "event": "focus"}); err != nil {
+		t.Fatal(err)
+	}
+	text, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record map[string]any
+	if err := json.Unmarshal(text, &record); err != nil {
+		t.Fatal(err)
+	}
+	if pid, _ := record["pid"].(float64); int(pid) != os.Getpid() {
+		t.Fatalf("a relayed page line does not name the writing process: %v", record)
+	}
+}
+
+// contract: performance.trace.rotates-at-10mb
+func TestTraceRotatesAtTenMegabytes(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "performance.ndjson")
+	full := strings.Repeat("x", 10*1024*1024-1) + "\n"
+	if err := os.WriteFile(target, []byte(full), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := host.PerformanceLine(target, "host", map[string]any{"event": "after"}); err != nil {
+		t.Fatal(err)
+	}
+	previous, err := os.ReadFile(target + ".1")
+	if err != nil || string(previous) != full {
+		t.Fatalf("the full output was not kept as the previous generation: %v (%d bytes)", err, len(previous))
+	}
+	current, err := os.ReadFile(target)
+	if err != nil || strings.Count(string(current), "\n") != 1 || !strings.Contains(string(current), `"event":"after"`) {
+		t.Fatalf("the new line did not start a new output: %v %q", err, current)
+	}
+}

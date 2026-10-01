@@ -149,6 +149,8 @@ func PerformanceRelay(target string, record map[string]any) error {
 		return fmt.Errorf("event must be a string")
 	}
 	record["layer"] = "page"
+	// 이 줄을 파일에 쓰는 프로세스는 호스트다.
+	record["pid"] = os.Getpid()
 	return performanceAppend(target, record)
 }
 
@@ -229,10 +231,21 @@ func performanceWriteFlags(config, target string) error {
 	return errors.Join(failures...)
 }
 
+// performanceRotateBytes 는 출력이 이전 세대로 넘어가는 크기다(docs/spec/performance-trace.md).
+const performanceRotateBytes = 10 * 1024 * 1024
+
 func performanceAppend(target string, record map[string]any) error {
 	encoded, err := json.Marshal(record)
 	if err != nil {
 		return fmt.Errorf("encode performance event: %w", err)
+	}
+	// 10 MB 에 이른 출력은 이전 세대(.1) 하나로 남기고 새 파일에 쓴다.
+	if info, err := os.Stat(target); err == nil && info.Size() >= performanceRotateBytes {
+		if err := os.Rename(target, target+".1"); err != nil {
+			return fmt.Errorf("rotate performance output %s: %w", target, err)
+		}
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect performance output %s: %w", target, err)
 	}
 	file, err := os.OpenFile(target, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {

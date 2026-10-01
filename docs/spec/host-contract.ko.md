@@ -202,6 +202,8 @@ fn invalid_json_closes_connection() {
 | `performance.trace.relay-requires-object-with-event` | 중계하는 페이지 줄은 event 를 담은 객체여야 한다. 거부된 줄은 아무 것도 덧붙이지 않는다. | both |
 | `performance.trace.enable-without-services` | 서비스가 생기기 전에도 활성 호스트는 페이지 이벤트를 받는다. | both |
 | `performance.trace.already-off-writes-nothing` | 이미 비활성인 추적을 끄면 출력을 만들거나 덧붙이지 않는다. | both |
+| `performance.trace.relay-records-writer-pid` | 중계한 page 줄은 그 줄을 쓰는 host process를 `pid`로 기록한다. | both |
+| `performance.trace.rotates-at-10mb` | 10 MB 이상인 출력에 host 줄을 덧붙이면 먼저 그 출력을 `performance.ndjson.1`로 옮기고 새 출력을 시작한다. | both |
 | `performance.sampler.failed-reading-is-explicit` | 상주 크기를 얻지 못한 sampler 읽기는 `rss_host_kb` 대신 `error`를 기록한다. | both |
 | `performance.clock.before-epoch-is-explicit` | 유닉스 epoch 이전의 trace 시각은 epoch가 아니라 오류다. | tauriv2 only: Rust host는 epoch부터의 기간으로 시각을 적으므로 그 이전에서 실패하고, Go는 모든 시각을 적는다 |
 | `performance.trace.switch-and-relay-report-filesystem-errors` | 스위치와 중계 요청은 디렉터리·플래그·출력 실패를 반환한다. | both |
