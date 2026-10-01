@@ -1,7 +1,7 @@
 // 제어된 프레임으로 경계 거부와 진단 출처를 검증한다. 실제 렌더링 실패 원인을 대신하지 않는다.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {recordedEdges} from './sidebar-gesture-recording.mjs';
+import {recordedEdges} from '../sidebar-gesture-recording.mjs';
 function frame(time,border){
  const data=Buffer.alloc(100*100*4);
  for(let y=0;y<100;y++)for(let x=0;x<100;x++){

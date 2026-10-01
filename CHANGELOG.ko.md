@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-12: PNG와 sidebar-gesture helper unit test를 `e2e/test/`로 옮긴다. 최상위에서는 application parity audit가 `APPS` 없는 app behavior test로 거부했고 e2e package test 명령이 실행하지 않았다.
+
 - G1.4-7: `make rust-format-check`가 두 Rust workspace에서 통과하도록 vt-core test support의 import를 서식화한다.
 
 - V5-117-1-3-4-7-1-5: window가 가려져도 app DOM 문서를 visible로 유지한다. WebKit은 다른 window에 가려진 window의 문서를 숨기고 animation frame을 멈췄으므로, release window가 다른 application 뒤에 있는 동안 layout queue가 present하지 못했고 `core.project.open`이 reply하지 않았다. main webview 등록이 WebKit window occlusion detection을 끄고 selector가 없으면 명시적으로 실패한다. `core.window.document`는 `visibility`를 보고한다. Red: 새 native occlusion test가 hidden 문서와 animation frame 없음을 보고한다. Green: test가 10/10 통과하고 두 host가 가려진 상태에서 project를 열고 presentation command를 완료한다.
