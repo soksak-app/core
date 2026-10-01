@@ -2,6 +2,7 @@ package host_test
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -884,4 +885,103 @@ func receiveSidecarMessage(t *testing.T, seen <-chan SidecarMessage) SidecarMess
 		t.Fatalf("no sidecar message arrived within %v; the test stalled", stall)
 		return SidecarMessage{}
 	}
+}
+
+// failureOwner 는 사이드카 메시지와 실패를 따로 모으는 창이다.
+type failureOwner struct {
+	root     string
+	seen     chan SidecarMessage
+	failures chan host.SidecarFailure
+}
+
+func (o *failureOwner) ProjectRoot() string { return o.root }
+func (o *failureOwner) Emit(name string, data ...any) {
+	switch name {
+	case "sidecar-message":
+		o.seen <- data[0].(SidecarMessage)
+	case "sidecar-failure":
+		o.failures <- data[0].(host.SidecarFailure)
+	}
+}
+
+// serveOneBadLine 은 연결 하나에 hello 로 답하고 요청 한 줄을 받은 뒤 payload 를 쓴다. host 가 연결을 닫으면
+// closed 를 닫는다. payload 를 다 쓰기 전에 host 가 닫으면 쓰기 오류는 기대한 결과다.
+func serveOneBadLine(t *testing.T, payload []byte) (root string, closed <-chan struct{}) {
+	t.Helper()
+	root = t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-bad-line")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(socketDirectory) })
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { listener.Close() })
+	writeHarnessEndpoint(t, root, socket)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		if _, err := reader.ReadBytes('\n'); err != nil {
+			return
+		}
+		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+			return
+		}
+		if _, err := reader.ReadBytes('\n'); err != nil {
+			return
+		}
+		go connection.Write(payload)
+		// host 가 연결을 닫으면 읽기가 EOF 로 끝난다.
+		io.Copy(io.Discard, reader)
+	}()
+	return root, done
+}
+
+func expectConnectionFailure(t *testing.T, payload []byte, reason string) {
+	t.Helper()
+	root, closed := serveOneBadLine(t, payload)
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
+	owner := &failureOwner{root: "/only", seen: make(chan SidecarMessage, 8), failures: make(chan host.SidecarFailure, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case failure := <-owner.failures:
+		if failure.Sidecar != "fixture-service" || failure.Surface != "surface-1" || !strings.HasPrefix(failure.Reason, reason) {
+			t.Fatalf("failure = %+v, want reason %q", failure, reason)
+		}
+	case message := <-owner.seen:
+		t.Fatalf("the bad line was delivered as a message: %+v", message)
+	case <-time.After(stall):
+		t.Fatal("no sidecar failure; the test stalled")
+	}
+	select {
+	case <-closed:
+	case <-time.After(stall):
+		t.Fatal("the host kept the connection open; the test stalled")
+	}
+}
+
+// contract: sidecars-transport.persistent.invalid-event-fails-the-connection
+func TestPersistentTransportFailsTheConnectionOnAnInvalidEvent(t *testing.T) {
+	expectConnectionFailure(t, []byte(`{"surface":5,"body":{}}`+"\n"), "invalid message: ")
+	expectConnectionFailure(t, []byte("not json\n"), "invalid message: ")
+}
+
+// contract: sidecars-transport.persistent.oversize-line-fails-the-connection
+func TestPersistentTransportFailsTheConnectionOnAnOversizeLine(t *testing.T) {
+	expectConnectionFailure(t, bytes.Repeat([]byte("x"), messageLimit+2), fmt.Sprintf("message exceeds %d bytes", messageLimit))
 }

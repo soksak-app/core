@@ -898,3 +898,109 @@ fn persistent_transport_reports_a_failed_revive_to_the_owner() {
     );
     sidecars.stop();
 }
+
+/// 사이드카 메시지와 실패를 따로 받는 창.
+#[derive(Clone)]
+struct FailureOwner {
+    sent: Sender<Message>,
+    failed: Sender<Failure>,
+}
+
+impl Owner for FailureOwner {
+    fn key(&self) -> String {
+        "only".into()
+    }
+    fn root(&self) -> Result<String, String> {
+        Ok("/projects/only".into())
+    }
+    fn deliver(&self, message: Message) {
+        let _ = self.sent.send(message);
+    }
+    fn deliver_failure(&self, failure: Failure) {
+        let _ = self.failed.send(failure);
+    }
+}
+
+/// 연결 하나에 hello 로 답하고 요청 한 줄을 받은 뒤 payload 를 쓰는 서비스. host 가 연결을 닫으면 끝난다.
+/// payload 를 다 쓰기 전에 host 가 닫으면 쓰기 오류는 기대한 결과다.
+fn expect_connection_failure(payload: Vec<u8>, reason: &str) {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("bad-line.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1, "pid": std::process::id(), "socket": socket_path, "token": "bad-line-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let service = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        stream
+            .write_all(b"{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}\n")
+            .unwrap();
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        let mut writer = stream.try_clone().unwrap();
+        thread::spawn(move || {
+            let _ = writer.write_all(&payload);
+        });
+        // host 가 연결을 닫으면 읽기가 EOF 로 끝난다.
+        std::io::copy(&mut reader, &mut std::io::sink()).unwrap();
+    });
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (sent, messages) = channel();
+    let (failed, failures) = channel();
+    let owner = FailureOwner { sent, failed };
+    sidecars
+        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    let failure = failures
+        .recv_timeout(STALL)
+        .expect("no sidecar failure; the test stalled");
+    assert_eq!(
+        (failure.sidecar.as_str(), failure.surface.as_str()),
+        (ECHO, "s1")
+    );
+    assert!(
+        failure.reason.starts_with(reason),
+        "{failure:?}, want {reason}"
+    );
+    assert!(
+        messages.try_recv().is_err(),
+        "the bad line was delivered as a message"
+    );
+    service.join().unwrap();
+    sidecars.stop();
+}
+
+// contract: sidecars-transport.persistent.invalid-event-fails-the-connection
+#[test]
+fn persistent_transport_fails_the_connection_on_an_invalid_event() {
+    expect_connection_failure(
+        b"{\"surface\":5,\"body\":{}}\n".to_vec(),
+        "invalid message: ",
+    );
+    expect_connection_failure(b"not json\n".to_vec(), "invalid message: ");
+}
+
+// contract: sidecars-transport.persistent.oversize-line-fails-the-connection
+#[test]
+fn persistent_transport_fails_the_connection_on_an_oversize_line() {
+    expect_connection_failure(
+        vec![b'x'; (64 << 20) + 2],
+        &format!("message exceeds {} bytes", 64 << 20),
+    );
+}

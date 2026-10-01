@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F0.4-1-1-2: both hosts read the persistent service connection with the 64 MiB message limit and end it with `sidecar-failure` on an oversize or invalid line instead of reading without a bound or reconnecting at once.
+
 - R1-9: `core.card.split` takes the side of the new card (`left`, `right`, `top`, `bottom`) instead of an axis.
 
 - R1-3-5: project data is stored as `{format, value}`; values in an earlier form or format are converted once through the state module's `convertData` before it mounts, saved and logged.

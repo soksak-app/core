@@ -687,6 +687,20 @@ const FEATURE_LINKS = [
     expected: "An oversize, invalid or unreadable sidecar output, or an output end outside stop, terminates the sidecar process and delivers sidecar-failure to each owning window on both hosts.",
     levels: ["native"],
   },  {
+    id: "F0.4-1-1-2",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) readPersistentLines(" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn reply_of(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportFailsTheConnectionOnAnInvalidEvent" },
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportFailsTheConnectionOnAnOversizeLine" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_fails_the_connection_on_an_invalid_event" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_fails_the_connection_on_an_oversize_line" },
+    ],
+    expected: "Both hosts read the persistent service connection with the 64 MiB message limit and end it with sidecar-failure to each surface that has sent on an oversize or invalid line, without reconnecting at once.",
+    levels: ["native"],
+  },  {
     id: "F0.4-1-1-3",
     implementation: [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "const sidecarMessageLimit = 64 << 20" },

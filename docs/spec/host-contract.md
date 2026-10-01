@@ -302,6 +302,8 @@ Items:
 | `sidecars-transport.persistent.revives-a-lost-connection` | When the service drops the connection, the host restarts it without a send and the owning surface receives the connection event. | both |
 | `sidecars-transport.endpoint.zombie-service-does-not-exist` | A zombie service pid does not count as an existing service, so its stale endpoint is replaced. | both |
 | `sidecars-transport.persistent.revive-failure-is-reported` | A failed restart reports the disconnection and its reason to the owning surface. | both |
+| `sidecars-transport.persistent.oversize-line-fails-the-connection` | A service line longer than the 64 MiB message limit closes the connection and delivers `sidecar-failure` with `message exceeds 67108864 bytes` to the surface that sent, without reading the rest of the line. | both |
+| `sidecars-transport.persistent.invalid-event-fails-the-connection` | A service line that is not a JSON object or a surface event without a string `surface` closes the connection and delivers `sidecar-failure` with `invalid message: ...` to the surface that sent; the next send reconnects. | both |
 | `webkit-children.reap.requires-alive-webkit-same-start` | A recorded WebKit child is killed only when it is alive, still a WebKit process, and its start time matches the record. | both |
 | `surface-activation.owner.resolves-registered-view` | A registered native view resolves to its surface id. | both |
 | `surface-activation.owner.ignores-unknown-view` | An unregistered native view resolves to no surface. | both |

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F0.4-1-1-2: 두 host가 지속 service 연결을 64 MiB 메시지 한도로 읽고, 한도를 넘거나 잘못된 줄이면 한도 없이 읽거나 곧바로 다시 연결하지 않고 `sidecar-failure`로 연결을 끝낸다.
+
 - R1-9: `core.card.split`이 축 대신 새 카드의 변(`left`, `right`, `top`, `bottom`)을 받는다.
 
 - R1-3-5: 프로젝트 데이터를 `{format, value}`로 저장한다. 이전 형태나 format의 값은 상태 모듈이 마운트되기 전에 그 `convertData`로 한 번 변환해 저장하고 log에 남긴다.

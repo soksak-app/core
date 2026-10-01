@@ -848,12 +848,14 @@ func (c *Sidecars) writePending(process *sidecar) bool {
 
 // read 는 사이드카의 출력을 표면 소유 창에 전달한다. 출력이 끝나거나 프로토콜을 어기면, 종료 중이
 // 아닐 때 그 프로세스를 끝내고 그 프로세스에 보낸 표면마다 실패를 알린다(docs/spec/sidecars.md#failure).
+// ownedSurface 는 실패를 알릴 표면과 그 소유 창이다.
+type ownedSurface struct {
+	surface string
+	owner   SidecarOwner
+}
+
 func (c *Sidecars) read(process *sidecar, stdout io.Reader) {
 	violation := c.relay(process, stdout)
-	type ownedSurface struct {
-		surface string
-		owner   SidecarOwner
-	}
 	c.mu.Lock()
 	failed := !c.stopped && c.running[process.name] == process
 	owned := make([]ownedSurface, 0, len(process.surfaces))
@@ -936,46 +938,87 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 }
 
 func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
-	for {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			break
+	violation := c.readPersistentLines(process, reader)
+	process.conn.Close()
+	wasCurrent := false
+	var owned []ownedSurface
+	c.mu.Lock()
+	waiters := make([]chan error, 0, len(process.closeWaiters))
+	for request, waiter := range process.closeWaiters {
+		delete(process.closeWaiters, request)
+		waiters = append(waiters, waiter)
+	}
+	if c.running[process.name] == process {
+		delete(c.running, process.name)
+		c.unannouncedLoss[process.name] = true
+		wasCurrent = true
+		if violation != "" {
+			for surface := range process.surfaces {
+				if owner := c.owners[surface]; owner != nil {
+					owned = append(owned, ownedSurface{surface, owner})
+				}
+			}
 		}
+	}
+	c.mu.Unlock()
+	for _, waiter := range waiters {
+		waiter <- errors.New("persistent service disconnected before close-owner ack")
+	}
+	close(process.exited)
+	if violation != "" {
+		// 서비스가 프로토콜을 어겼다. 같은 메시지가 다음 연결도 끝내므로 곧바로 다시 맺지 않고, 다음 전송이
+		// 생성 경로로 다시 맺는다(docs/spec/terminal-runtime.md#service-transport).
+		log.Printf("sidecar %s failed: %s", process.name, violation)
+		for _, item := range owned {
+			item.owner.Emit("sidecar-failure", SidecarFailure{Sidecar: process.name, Surface: item.surface, Reason: violation})
+		}
+		return
+	}
+	// 연결이 끊겼다. 다음 전송을 기다리지 않고 즉시 다시 맺는다 — 서비스가 살아 있으면
+	// 다시 붙고, 죽었으면 processPersistent 의 낡은 endpoint 정리가 재스폰한다(V5-106).
+	if wasCurrent {
+		c.revivePersistent(process.name)
+	}
+}
+
+// readPersistentLines 는 영속 연결의 줄을 읽어 답과 이벤트를 전달한다. 연결이 끝나면 빈 문자열을, 프로토콜을
+// 어기면 그 까닭을 반환한다. 한 줄은 줄바꿈 앞이 sidecarMessageLimit byte 를 넘으면 그 이상 버퍼링하지 않고
+// 실패한다(docs/spec/terminal-runtime.md#service-transport).
+func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) string {
+	scanner := bufio.NewScanner(reader)
+	// 버퍼는 한도와 줄바꿈 하나를 담는다. 더 긴 줄은 bufio.ErrTooLong 이다.
+	scanner.Buffer(make([]byte, 0, 64*1024), sidecarMessageLimit+1)
+	for scanner.Scan() {
+		line := scanner.Bytes()
 		var value map[string]json.RawMessage
 		if err := json.Unmarshal(line, &value); err != nil {
-			log.Printf("sidecar %s: invalid persistent event: %v", process.name, err)
-			break
+			return fmt.Sprintf("invalid message: %v", err)
 		}
 		var operation string
 		if raw, present := value["operation"]; present {
 			if err := json.Unmarshal(raw, &operation); err != nil {
-				log.Printf("sidecar %s: invalid persistent operation: %v", process.name, err)
-				break
+				return fmt.Sprintf("invalid message: operation: %v", err)
 			}
 		}
 		if operation == "closed-owner" || operation == "shutdown" || operation == "retained" {
 			var request string
 			if err := json.Unmarshal(value["request"], &request); err != nil || request == "" {
-				log.Printf("sidecar %s: invalid close-owner request: %v", process.name, err)
-				break
+				return fmt.Sprintf("invalid message: %s request is not a non-empty string", operation)
 			}
 			var ok bool
 			if err := json.Unmarshal(value["ok"], &ok); err != nil {
-				log.Printf("sidecar %s: invalid close-owner status: %v", process.name, err)
-				break
+				return fmt.Sprintf("invalid message: %s ok: %v", operation, err)
 			}
 			var reason string
 			if raw, present := value["error"]; present {
 				if err := json.Unmarshal(raw, &reason); err != nil {
-					log.Printf("sidecar %s: invalid close-owner error: %v", process.name, err)
-					break
+					return fmt.Sprintf("invalid message: %s error: %v", operation, err)
 				}
 			}
 			var closed int
 			if operation == "retained" && ok {
 				if err := json.Unmarshal(value["closed"], &closed); err != nil {
-					log.Printf("sidecar %s: invalid retain count: %v", process.name, err)
-					break
+					return fmt.Sprintf("invalid message: retained closed: %v", err)
 				}
 			}
 			c.mu.Lock()
@@ -999,11 +1042,17 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 			}
 			continue
 		}
-		var event sidecarEvent
-		if err := json.Unmarshal(line, &event); err != nil {
-			log.Printf("sidecar %s: invalid persistent event: %v", process.name, err)
-			continue
+		var output sidecarOutput
+		if err := json.Unmarshal(line, &output); err != nil {
+			return fmt.Sprintf("invalid message: %v", err)
 		}
+		if output.Surface == nil {
+			return "invalid message: surface is missing"
+		}
+		if output.Body == nil {
+			return "invalid message: body is missing"
+		}
+		event := sidecarEvent{Surface: *output.Surface, Body: output.Body}
 		c.mu.Lock()
 		owner := c.owners[event.Surface]
 		c.mu.Unlock()
@@ -1014,29 +1063,12 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		}
 	}
-	process.conn.Close()
-	wasCurrent := false
-	c.mu.Lock()
-	waiters := make([]chan error, 0, len(process.closeWaiters))
-	for request, waiter := range process.closeWaiters {
-		delete(process.closeWaiters, request)
-		waiters = append(waiters, waiter)
+	if err := scanner.Err(); errors.Is(err, bufio.ErrTooLong) {
+		return fmt.Sprintf("message exceeds %d bytes", sidecarMessageLimit)
+	} else if err != nil {
+		log.Printf("sidecar %s: persistent read: %v", process.name, err)
 	}
-	if c.running[process.name] == process {
-		delete(c.running, process.name)
-		c.unannouncedLoss[process.name] = true
-		wasCurrent = true
-	}
-	c.mu.Unlock()
-	for _, waiter := range waiters {
-		waiter <- errors.New("persistent service disconnected before close-owner ack")
-	}
-	close(process.exited)
-	// 연결이 끊겼다. 다음 전송을 기다리지 않고 즉시 다시 맺는다 — 서비스가 살아 있으면
-	// 다시 붙고, 죽었으면 processPersistent 의 낡은 endpoint 정리가 재스폰한다(V5-106).
-	if wasCurrent {
-		c.revivePersistent(process.name)
-	}
+	return ""
 }
 
 // revivePersistent 는 끊긴 영속 연결을 다시 맺고 결과를 소유 표면에 알린다(V5-106). 이미

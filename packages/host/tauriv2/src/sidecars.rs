@@ -1105,145 +1105,123 @@ impl<O: Owner> Core<O> {
             }
             let _connection_guard = ConnectionGuard(Arc::clone(&reader_connected));
             let mut reader = BufReader::new(reader_stream);
-            let mut line = String::new();
-            loop {
-                let read = match reader.read_line(&mut line) {
-                    Ok(read) => read,
-                    Err(error) => {
-                        if error.kind() == std::io::ErrorKind::WouldBlock {
-                            eprintln!("sidecar: response read would block; retrying");
-                            line.clear();
-                            continue;
-                        }
-                        eprintln!("sidecar: read response failed: {error}");
-                        break;
-                    }
-                };
-                if read == 0 {
-                    break;
-                }
-                let value: serde_json::Value = match serde_json::from_str(&line) {
-                    Ok(v) => v,
-                    Err(error) => {
-                        eprintln!("sidecar: invalid response JSON: {error}");
-                        break;
-                    }
-                };
-                if value.get("operation").and_then(|v| v.as_str()) == Some("retained") {
-                    if let Some(request) = value.get("request").and_then(|v| v.as_str()) {
-                        if let Some(sender) = retain_waiters_for_reader
-                            .lock()
-                            .expect("retain waiters")
-                            .remove(request)
-                        {
-                            let result = if value.get("ok").and_then(|v| v.as_bool()) == Some(true)
-                            {
-                                value
-                                    .get("closed")
-                                    .and_then(|v| v.as_u64())
-                                    .map(|closed| closed as usize)
-                                    .ok_or_else(|| "retain reply has no closed count".to_string())
-                            } else {
-                                Err(value
-                                    .get("error")
-                                    .and_then(|v| v.as_str())
-                                    // 기본값: 사이드카 오류에 문장이 없으면 일반 문장으로 같은 실패를 알린다.
-                                    .unwrap_or("retain failed")
-                                    .to_string())
-                            };
-                            if sender.send(result).is_err() {
-                                eprintln!("sidecar: retain response had no waiter");
-                            }
-                        }
-                    }
+            // 연결이 끝나면 None, 서비스가 프로토콜을 어기면 그 까닭이다
+            // (docs/spec/terminal-runtime.md#service-transport).
+            let violation = (|| -> Option<String> {
+                let mut line = Vec::new();
+                loop {
                     line.clear();
-                    continue;
-                }
-                if value.get("operation").and_then(|v| v.as_str()) == Some("closed-owner") {
-                    if let Some(request) = value.get("request").and_then(|v| v.as_str()) {
-                        if let Some(sender) = waiters.lock().expect("close waiters").remove(request)
-                        {
-                            let result = if value.get("ok").and_then(|v| v.as_bool()) == Some(true)
-                            {
-                                Ok(())
-                            } else {
-                                Err(value
-                                    .get("error")
-                                    .and_then(|v| v.as_str())
-                                    // 기본값: 사이드카 오류에 문장이 없으면 일반 문장으로 같은 실패를 알린다.
-                                    .unwrap_or("close-owner failed")
-                                    .to_string())
-                            };
-                            if sender.send(result).is_err() {
-                                eprintln!("sidecar: close-owner response had no waiter");
-                            }
+                    // 한도와 줄바꿈 하나까지만 읽는다.
+                    let read = match reader
+                        .by_ref()
+                        .take(MESSAGE_LIMIT as u64 + 1)
+                        .read_until(b'\n', &mut line)
+                    {
+                        Ok(read) => read,
+                        Err(error) => {
+                            eprintln!("sidecar {sidecar}: persistent read: {error}");
+                            return None;
                         }
-                    }
-                    line.clear();
-                    continue;
-                }
-                if value.get("operation").and_then(|v| v.as_str()) == Some("shutdown") {
-                    if let Some(request) = value.get("request").and_then(|v| v.as_str()) {
-                        if let Some(sender) = shutdown_waiters_for_reader
-                            .lock()
-                            .expect("shutdown waiters")
-                            .remove(request)
-                        {
-                            let result = if value.get("ok").and_then(|v| v.as_bool()) == Some(true)
-                            {
-                                Ok(())
-                            } else {
-                                Err(value
-                                    .get("error")
-                                    .and_then(|v| v.as_str())
-                                    // 기본값: 사이드카 오류에 문장이 없으면 일반 문장으로 같은 실패를 알린다.
-                                    .unwrap_or("shutdown failed")
-                                    .to_string())
-                            };
-                            if sender.send(result).is_err() {
-                                eprintln!("sidecar: shutdown response had no waiter");
-                            }
-                        }
-                    }
-                    line.clear();
-                    continue;
-                }
-                let event: Event = match serde_json::from_value(value) {
-                    Ok(event) => event,
-                    Err(error) => {
-                        eprintln!("sidecar: invalid event response: {error}");
-                        break;
-                    }
-                };
-                let owner = state
-                    .lock()
-                    .ok()
-                    .and_then(|state| state.owners.get(&event.surface).cloned());
-                if let Some(owner) = owner {
-                    let response_sender = ReadThreadResponseSender {
-                        sidecar_name: sidecar.clone(),
-                        tx: tx_clone.clone(),
-                        state: Arc::clone(&state),
                     };
-                    if try_handle_image_envelope(
-                        &owner,
-                        &sidecar,
-                        &event.surface,
-                        &event.body,
-                        &response_sender,
-                    ) {
-                        line.clear();
+                    if read == 0 {
+                        return None;
+                    }
+                    if line.last() != Some(&b'\n') && read > MESSAGE_LIMIT {
+                        return Some(format!("message exceeds {MESSAGE_LIMIT} bytes"));
+                    }
+                    let value: serde_json::Value = match serde_json::from_slice(&line) {
+                        Ok(value) => value,
+                        Err(error) => return Some(format!("invalid message: {error}")),
+                    };
+                    let Some(object) = value.as_object() else {
+                        return Some("invalid message: not a JSON object".to_string());
+                    };
+                    let operation = match object.get("operation") {
+                        None => None,
+                        Some(serde_json::Value::String(operation)) => Some(operation.as_str()),
+                        Some(_) => {
+                            return Some("invalid message: operation: not a string".to_string())
+                        }
+                    };
+                    if let Some(operation @ ("retained" | "closed-owner" | "shutdown")) = operation
+                    {
+                        let reply = match reply_of(operation, object) {
+                            Ok(reply) => reply,
+                            Err(reason) => return Some(reason),
+                        };
+                        let request = reply.request;
+                        match operation {
+                            "retained" => {
+                                if let Some(sender) = retain_waiters_for_reader
+                                    .lock()
+                                    .expect("retain waiters")
+                                    .remove(&request)
+                                {
+                                    let result = match reply.result {
+                                        Ok(()) => Ok(reply.closed),
+                                        Err(error) => Err(error),
+                                    };
+                                    if sender.send(result).is_err() {
+                                        eprintln!("sidecar: retain response had no waiter");
+                                    }
+                                }
+                            }
+                            "closed-owner" => {
+                                if let Some(sender) =
+                                    waiters.lock().expect("close waiters").remove(&request)
+                                {
+                                    if sender.send(reply.result).is_err() {
+                                        eprintln!("sidecar: close-owner response had no waiter");
+                                    }
+                                }
+                            }
+                            _ => {
+                                if let Some(sender) = shutdown_waiters_for_reader
+                                    .lock()
+                                    .expect("shutdown waiters")
+                                    .remove(&request)
+                                {
+                                    if sender.send(reply.result).is_err() {
+                                        eprintln!("sidecar: shutdown response had no waiter");
+                                    }
+                                }
+                            }
+                        }
                         continue;
                     }
-                    owner.deliver(Message {
-                        sidecar: sidecar.clone(),
-                        surface: event.surface,
-                        body: event.body,
-                    });
+                    let event: Event = match serde_json::from_slice(&line) {
+                        Ok(event) => event,
+                        Err(error) => return Some(format!("invalid message: {error}")),
+                    };
+                    let owner = state
+                        .lock()
+                        .ok()
+                        .and_then(|state| state.owners.get(&event.surface).cloned());
+                    if let Some(owner) = owner {
+                        let response_sender = ReadThreadResponseSender {
+                            sidecar_name: sidecar.clone(),
+                            tx: tx_clone.clone(),
+                            state: Arc::clone(&state),
+                        };
+                        if try_handle_image_envelope(
+                            &owner,
+                            &sidecar,
+                            &event.surface,
+                            &event.body,
+                            &response_sender,
+                        ) {
+                            continue;
+                        }
+                        owner.deliver(Message {
+                            sidecar: sidecar.clone(),
+                            surface: event.surface,
+                            body: event.body,
+                        });
+                    }
                 }
-                line.clear();
-            }
+            })();
             let mut was_current = false;
+            let mut owned = Vec::new();
             if let Ok(mut state) = state.lock() {
                 let is_current = state
                     .running
@@ -1253,7 +1231,20 @@ impl<O: Owner> Core<O> {
                         Arc::ptr_eq(&connection.connected, &reader_connected)
                     });
                 if is_current {
-                    state.running.remove(&sidecar);
+                    if let Some(process) = state.running.remove(&sidecar) {
+                        if violation.is_some() {
+                            owned = process
+                                .surfaces
+                                .iter()
+                                .filter_map(|surface| {
+                                    state
+                                        .owners
+                                        .get(surface)
+                                        .map(|owner| (surface.clone(), owner.clone()))
+                                })
+                                .collect();
+                        }
+                    }
                     state.unannounced_loss.insert(sidecar.clone());
                     was_current = true;
                 }
@@ -1274,6 +1265,19 @@ impl<O: Owner> Core<O> {
                 if sender.send(error.clone()).is_err() {
                     eprintln!("sidecar {sidecar}: shutdown waiter disconnected");
                 }
+            }
+            if let Some(reason) = violation {
+                // 서비스가 프로토콜을 어겼다. 같은 메시지가 다음 연결도 끝내므로 곧바로 다시 맺지 않고, 다음
+                // 전송이 생성 경로로 다시 맺는다(docs/spec/terminal-runtime.md#service-transport).
+                eprintln!("sidecar {sidecar} failed: {reason}");
+                for (surface, owner) in owned {
+                    owner.deliver_failure(Failure {
+                        sidecar: sidecar.clone(),
+                        surface,
+                        reason: reason.clone(),
+                    });
+                }
+                return;
             }
             // 연결이 끊겼다. 다음 전송을 기다리지 않고 즉시 다시 맺는다 — 서비스가 살아 있으면
             // 다시 붙고, 죽었으면 start_persistent 의 낡은 endpoint 정리가 재스폰한다(V5-106).
@@ -1394,6 +1398,61 @@ fn notify_connection<O: Owner>(core: &Arc<Core<O>>, name: &str, outcome: Result<
             body: body.clone(),
         });
     }
+}
+
+/// 영속 연결의 답 하나(closed-owner, shutdown, retained).
+struct Reply {
+    request: String,
+    result: Result<(), String>,
+    closed: usize,
+}
+
+/// 답의 field 형을 검사한다. 형이 틀리면 연결을 끝낼 까닭을 돌려준다
+/// (docs/spec/terminal-runtime.md#service-transport).
+fn reply_of(
+    operation: &str,
+    object: &serde_json::Map<String, serde_json::Value>,
+) -> Result<Reply, String> {
+    let request = match object.get("request") {
+        Some(serde_json::Value::String(request)) if !request.is_empty() => request.clone(),
+        _ => {
+            return Err(format!(
+                "invalid message: {operation} request is not a non-empty string"
+            ))
+        }
+    };
+    let ok = match object.get("ok") {
+        Some(serde_json::Value::Bool(ok)) => *ok,
+        _ => return Err(format!("invalid message: {operation} ok is not a boolean")),
+    };
+    let reason = match object.get("error") {
+        None => None,
+        Some(serde_json::Value::String(reason)) => Some(reason.clone()),
+        Some(_) => {
+            return Err(format!(
+                "invalid message: {operation} error is not a string"
+            ))
+        }
+    };
+    let closed = if operation == "retained" && ok {
+        match object.get("closed").and_then(serde_json::Value::as_u64) {
+            Some(closed) => closed as usize,
+            None => return Err("invalid message: retained closed is not a count".to_string()),
+        }
+    } else {
+        0
+    };
+    let result = if ok {
+        Ok(())
+    } else {
+        // 기본값: 서비스 오류에 문장이 없으면 작업 이름으로 같은 실패를 알린다.
+        Err(reason.unwrap_or_else(|| format!("{operation} failed")))
+    };
+    Ok(Reply {
+        request,
+        result,
+        closed,
+    })
 }
 
 /// 표준 출력의 메시지를 소유 창에 전달한다. 출력이 끝나면 None 을, 프로토콜을 어기거나 읽기가
