@@ -1,0 +1,20 @@
+[package]
+name = "soksak-sok-tauriv2"
+version = "0.0.1"
+edition = "2021"
+description = "Command line sok of the Tauri application"
+
+[lib]
+name = "soksak_sok"
+path = "src/sok.rs"
+
+[[bin]]
+name = "sok"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = { version = "1", features = ["raw_value"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+signal-hook = "0.3"

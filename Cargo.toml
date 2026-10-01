@@ -1,7 +1,7 @@
 # Rust 워크스페이스. 두 크레이트가 하나의 Cargo.lock, target/, patch 를 공유한다.
 [workspace]
 resolver = "2"
-members = ["apps/tauriv2", "packages/host/tauriv2"]
+members = ["apps/tauriv2", "packages/host/tauriv2", "packages/sok/tauriv2"]
 
 [profile.dev]
 incremental = true

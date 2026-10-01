@@ -2896,6 +2896,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "soksak-sok-tauriv2"
+version = "0.0.1"
+dependencies = [
+ "libc",
+ "serde_json",
+ "signal-hook",
+]
+
+[[package]]
 name = "soksak-tauriv2"
 version = "0.0.1"
 dependencies = [

@@ -166,8 +166,8 @@ function sources(directory, extension) {
 }
 
 const HOST_SOURCES = {
-  wailsv3: { language: 'go', files: () => [...sources('packages/host/wailsv3/tests', '_test.go'), ...sources('packages/host/wailsv3/src', '_test.go')] },
-  tauriv2: { language: 'rust', files: () => [...sources('packages/host/tauriv2/tests', '.rs'), ...sources('packages/host/tauriv2/src', '.rs')] },
+  wailsv3: { language: 'go', files: () => [...sources('packages/host/wailsv3/tests', '_test.go'), ...sources('packages/host/wailsv3/src', '_test.go'), ...sources('packages/sok/wailsv3/tests', '_test.go')] },
+  tauriv2: { language: 'rust', files: () => [...sources('packages/host/tauriv2/tests', '.rs'), ...sources('packages/host/tauriv2/src', '.rs'), ...sources('packages/sok/tauriv2/tests', '.rs')] },
 };
 
 function hostRuns(goLinkFlags) {
@@ -175,10 +175,12 @@ function hostRuns(goLinkFlags) {
     wailsv3: [
       { id: 'wailsv3-tests', command: 'go', args: ['test', '-count=1', '-json', '-ldflags', goLinkFlags, './packages/host/wailsv3/...'] },
       { id: 'wailsv3-diagnostics-tests', command: 'go', args: ['test', '-count=1', '-json', '-tags', 'diagnostics', '-ldflags', goLinkFlags, './packages/host/wailsv3/...'] },
+      { id: 'wailsv3-sok-tests', command: 'go', args: ['test', '-count=1', '-json', './packages/sok/wailsv3/...'] },
     ],
     tauriv2: [
       { id: 'tauriv2-tests', command: 'cargo', args: ['test', '-p', 'soksak-host-tauriv2'] },
       { id: 'tauriv2-diagnostics-tests', command: 'cargo', args: ['test', '-p', 'soksak-host-tauriv2', '--features', 'diagnostics'] },
+      { id: 'tauriv2-sok-tests', command: 'cargo', args: ['test', '-p', 'soksak-sok-tauriv2'] },
     ],
   };
 }

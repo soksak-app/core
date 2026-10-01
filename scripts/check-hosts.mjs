@@ -29,6 +29,14 @@ const PAIRS = [
     },
   },
   {
+    left: "packages/sok/wailsv3",
+    right: "packages/sok/tauriv2",
+    only: {
+      left: { "go.mod": "A4", "src/cmd/": "C1" },
+      right: { "Cargo.toml": "A4", "src/main": "C1" },
+    },
+  },
+  {
     left: "apps/wailsv3",
     right: "apps/tauriv2",
     only: {

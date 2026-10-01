@@ -330,3 +330,13 @@ fn invalid_json_closes_connection() {
 | `workspace.folder.aliases-share-identity` | 디렉터리와 그 심볼릭 링크는 같은 프로젝트 폴더로 해석된다. | both |
 | `workspace.folder.rejects-file` | 일반 파일은 프로젝트 폴더로 거부된다. | both |
 | `workspace.folder.messages` | 폴더 확인은 요청한 경로를 한 번 담은 문구 하나로 실패한다. 경로나 상위 폴더가 없으면 `project directory does not exist: <path>`, 접근이 거부되면 `project directory is not readable: <path>`, 파일이면 `not a project directory: <resolved path>`, 그 밖의 system 오류는 `project directory cannot be resolved: <path> (errno <n>)`이다. | both |
+| `cli.usage.unknown-command-exits-2` | 알 수 없는 명령은 종료 상태 2로 끝나며 표준 오류에 `sok: unknown command: <word>`와 사용법을 출력한다. | both |
+| `cli.endpoint.missing-file-reports-not-running` | `endpoint.json`이 없으면 명령은 종료 상태 1로 끝나며, 그 파일이 없고 애플리케이션이 실행 중이 아니라고 보고한다. | both |
+| `cli.output.indents-result-keeping-key-order` | 결과는 endpoint가 보낸 key 순서대로 두 칸 들여쓰기로 출력하며, 빈 container는 `{}`와 `[]`다. | both |
+| `cli.window.single-window-is-default` | `--window`나 `--project`가 없으면 명령은 애플리케이션의 하나뿐인 창을 쓴다. | both |
+| `cli.window.several-windows-need-selection` | 창이 여럿인데 선택이 없거나 `--window`와 `--project`를 함께 주면, 명령은 종료 상태 2로 끝나며 창 목록이나 충돌을 밝힌다. | both |
+| `cli.window.project-selects-by-canonical-folder` | `--project`는 둘을 canonical 경로로 바꾼 뒤 열린 project 폴더가 주어진 폴더와 같은 창을 고른다. | both |
+| `cli.requests.carry-command-parameters` | `status`, `exposures`, `capture`, `dom`, `input`은 spec이 정한 endpoint method와 매개변수를 보내며, 숫자는 JSON 숫자로, 주지 않은 option은 빼고 보낸다. | both |
+| `cli.error.reports-endpoint-code` | Endpoint 오류는 종료 상태 1로 끝나며 `sok: <message> (<code>)`를 출력한다. | both |
+| `cli.status.watch-prints-value-and-changes` | `status --watch`는 현재 값과 그 뒤 같은 status의 각 변경을 compact JSON 한 줄씩 출력하고, 다른 status의 변경은 무시한다. | both |
+| `cli.config-dir.default-uses-application-identifier` | `--config-dir`이 없으면 명령은 `<사용자 설정 폴더>/<application identifier>`를 쓴다. | both |

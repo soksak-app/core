@@ -1,0 +1,522 @@
+// Package sok 은 soksak 애플리케이션의 command line(docs/spec/cli.md)이다. 실행 중인 애플리케이션의 엔드포인트에
+// 요청을 보내고 결과를 JSON 으로 출력한다.
+package sok
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"math"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"syscall"
+)
+
+// Usage 는 사용법이다.
+const Usage = `usage: sok <command> [options]
+
+commands:
+  windows
+  exposures [window]
+  status NAME [window] [--surface S] [--watch]
+  dom rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
+  input pointer [window] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--activate]
+  input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
+  capture [window]          (diagnostic builds) writes a still image of the window without focusing it
+
+window:
+  --window NAME | --project DIRECTORY   without either, the only window of the application
+
+common options:
+  --config-dir DIR          configuration directory of the running application (default: this application's)`
+
+// UsageError 는 잘못 쓴 명령이다. 종료 상태 2 와 사용법으로 보고한다.
+type UsageError struct{ message string }
+
+func (e UsageError) Error() string { return e.message }
+
+func usage(format string, args ...any) error { return UsageError{fmt.Sprintf(format, args...)} }
+
+// booleans 는 값을 받지 않는 flag 다.
+var booleans = map[string]bool{"watch": true, "activate": true, "help": true}
+
+// options 는 값을 받는 flag 다.
+var options = map[string]bool{
+	"config-dir": true, "window": true, "project": true, "surface": true, "index": true, "value": true, "event": true,
+	"x": true, "y": true, "phase": true, "button": true, "delta-x": true, "delta-y": true, "key": true, "text": true, "modifiers": true,
+}
+
+type arguments struct {
+	positionals []string
+	values      map[string]string
+	flags       map[string]bool
+}
+
+func parse(args []string) (arguments, error) {
+	parsed := arguments{values: map[string]string{}, flags: map[string]bool{}}
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if !strings.HasPrefix(arg, "--") {
+			parsed.positionals = append(parsed.positionals, arg)
+			continue
+		}
+		name, value, inline := strings.Cut(arg[2:], "=")
+		switch {
+		case booleans[name]:
+			if inline {
+				return parsed, usage("--%s takes no value", name)
+			}
+			parsed.flags[name] = true
+		case options[name]:
+			if _, seen := parsed.values[name]; seen {
+				return parsed, usage("--%s is given twice", name)
+			}
+			if !inline {
+				if i+1 >= len(args) {
+					return parsed, usage("--%s needs a value", name)
+				}
+				i++
+				value = args[i]
+			}
+			parsed.values[name] = value
+		default:
+			return parsed, usage("unknown option --%s", name)
+		}
+	}
+	return parsed, nil
+}
+
+func (a arguments) required(name string) (string, error) {
+	value, ok := a.values[name]
+	if !ok {
+		return "", usage("--%s is required", name)
+	}
+	return value, nil
+}
+
+func (a arguments) positional(index int, what string) (string, error) {
+	if index >= len(a.positionals) {
+		return "", usage("%s is required", what)
+	}
+	return a.positionals[index], nil
+}
+
+func (a arguments) number(name string) (any, error) {
+	text, ok := a.values[name]
+	if !ok {
+		return nil, nil
+	}
+	value, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+	if strings.TrimSpace(text) == "" || err != nil || math.IsInf(value, 0) || math.IsNaN(value) {
+		return nil, usage("--%s must be a number", name)
+	}
+	return value, nil
+}
+
+func (a arguments) requiredNumber(name string) (any, error) {
+	if _, err := a.required(name); err != nil {
+		return nil, err
+	}
+	return a.number(name)
+}
+
+// compact 는 nil 인 필드를 뺀 요청 매개변수다.
+func compact(fields ...any) map[string]any {
+	params := map[string]any{}
+	for i := 0; i+1 < len(fields); i += 2 {
+		if value := fields[i+1]; value != nil {
+			params[fields[i].(string)] = value
+		}
+	}
+	return params
+}
+
+func optional(a arguments, name string) any {
+	if value, ok := a.values[name]; ok {
+		return value
+	}
+	return nil
+}
+
+// plan 은 명령을 엔드포인트 요청으로 바꾼다. window 는 창을 고르는 함수다.
+type request struct {
+	method string
+	params map[string]any
+	watch  bool
+}
+
+func plan(a arguments, window func() (string, error)) (request, error) {
+	command, err := a.positional(0, "command")
+	if err != nil {
+		return request{}, err
+	}
+	withWindow := func(build func(string) (request, error)) (request, error) {
+		name, err := window()
+		if err != nil {
+			return request{}, err
+		}
+		return build(name)
+	}
+	switch command {
+	case "windows":
+		return request{method: "windows.list"}, nil
+	case "exposures":
+		return withWindow(func(w string) (request, error) {
+			return request{method: "exposure.list", params: compact("window", w)}, nil
+		})
+	case "capture":
+		return withWindow(func(w string) (request, error) {
+			return request{method: "diagnostics.capture.still", params: compact("window", w)}, nil
+		})
+	case "status":
+		name, err := a.positional(1, "NAME")
+		if err != nil {
+			return request{}, err
+		}
+		return withWindow(func(w string) (request, error) {
+			method := "status.get"
+			if a.flags["watch"] {
+				method = "status.watch"
+			}
+			return request{method: method, params: compact("window", w, "name", name, "surface", optional(a, "surface")), watch: a.flags["watch"]}, nil
+		})
+	case "dom":
+		action, err := a.positional(1, "dom action")
+		if err != nil {
+			return request{}, err
+		}
+		name, err := a.positional(2, "NAME")
+		if err != nil {
+			return request{}, err
+		}
+		index, err := a.number("index")
+		if err != nil {
+			return request{}, err
+		}
+		return withWindow(func(w string) (request, error) {
+			base := []any{"window", w, "name", name, "surface", optional(a, "surface"), "index", index}
+			switch action {
+			case "rect":
+				return request{method: "dom.rect", params: compact(base...)}, nil
+			case "click":
+				return request{method: "dom.act", params: compact(append(base, "action", "click")...)}, nil
+			case "input":
+				value, err := a.required("value")
+				if err != nil {
+					return request{}, err
+				}
+				return request{method: "dom.act", params: compact(append(base, "action", "input", "value", value)...)}, nil
+			case "dispatch":
+				text, err := a.required("event")
+				if err != nil {
+					return request{}, err
+				}
+				var event map[string]any
+				if err := json.Unmarshal([]byte(text), &event); err != nil || event == nil {
+					return request{}, usage("--event must be a JSON object with a type")
+				}
+				if _, ok := event["type"].(string); !ok {
+					return request{}, usage("--event must be a JSON object with a type")
+				}
+				return request{method: "dom.act", params: compact(append(base, "action", "dispatch", "event", event)...)}, nil
+			}
+			return request{}, usage("unknown dom action: %s", action)
+		})
+	case "input":
+		kind, err := a.positional(1, "input kind")
+		if err != nil {
+			return request{}, err
+		}
+		switch kind {
+		case "pointer":
+			phase, err := a.required("phase")
+			if err != nil {
+				return request{}, err
+			}
+			if button, ok := a.values["button"]; ok && button != "left" && button != "right" {
+				return request{}, usage("--button must be left or right")
+			}
+			if a.flags["activate"] && phase != "move" {
+				return request{}, usage("--activate applies to --phase move")
+			}
+			x, err := a.requiredNumber("x")
+			if err != nil {
+				return request{}, err
+			}
+			y, err := a.requiredNumber("y")
+			if err != nil {
+				return request{}, err
+			}
+			deltaX, err := a.number("delta-x")
+			if err != nil {
+				return request{}, err
+			}
+			deltaY, err := a.number("delta-y")
+			if err != nil {
+				return request{}, err
+			}
+			var activate any
+			if a.flags["activate"] {
+				activate = true
+			}
+			return withWindow(func(w string) (request, error) {
+				return request{method: "input.pointer", params: compact("window", w, "x", x, "y", y, "phase", phase,
+					"button", optional(a, "button"), "deltaX", deltaX, "deltaY", deltaY, "activate", activate)}, nil
+			})
+		case "key":
+			key, err := a.required("key")
+			if err != nil {
+				return request{}, err
+			}
+			phase, err := a.required("phase")
+			if err != nil {
+				return request{}, err
+			}
+			var modifiers any
+			if text, ok := a.values["modifiers"]; ok {
+				list := []string{}
+				for _, item := range strings.Split(text, ",") {
+					if item != "" {
+						list = append(list, item)
+					}
+				}
+				modifiers = list
+			}
+			return withWindow(func(w string) (request, error) {
+				return request{method: "input.key", params: compact("window", w, "key", key, "phase", phase,
+					"text", optional(a, "text"), "modifiers", modifiers)}, nil
+			})
+		}
+		return request{}, usage("unknown input kind: %s", kind)
+	}
+	return request{}, usage("unknown command: %s", command)
+}
+
+// windowEntry 는 windows.list 결과의 창 하나다.
+type windowEntry struct {
+	Window  string  `json:"window"`
+	Project *string `json:"project"`
+}
+
+// selectWindow 는 --window, --project 또는 하나뿐인 창으로 요청할 창을 고른다.
+func selectWindow(a arguments, client *Client) (string, error) {
+	name, byName := a.values["window"]
+	project, byProject := a.values["project"]
+	if byName && byProject {
+		return "", usage("--window and --project select the window in two ways; give one")
+	}
+	if byName {
+		return name, nil
+	}
+	result, err := client.Request("windows.list", nil)
+	if err != nil {
+		return "", err
+	}
+	var windows []windowEntry
+	if err := json.Unmarshal(result, &windows); err != nil {
+		return "", fmt.Errorf("windows.list returned an unexpected value: %w", err)
+	}
+	names := make([]string, 0, len(windows))
+	for _, entry := range windows {
+		names = append(names, entry.Window)
+	}
+	sort.Strings(names)
+	if byProject {
+		target, err := filepath.EvalSymlinks(project)
+		if err != nil {
+			return "", fmt.Errorf("project directory %s: %w", project, err)
+		}
+		for _, entry := range windows {
+			if entry.Project == nil {
+				continue
+			}
+			if open, err := filepath.EvalSymlinks(*entry.Project); err == nil && open == target {
+				return entry.Window, nil
+			}
+		}
+		return "", fmt.Errorf("no window shows the project %s; windows: %s", target, strings.Join(names, ", "))
+	}
+	if len(windows) != 1 {
+		return "", usage("the application has %d windows (%s); select one with --window or --project", len(windows), strings.Join(names, ", "))
+	}
+	return windows[0].Window, nil
+}
+
+// indent 는 JSON 을 키 순서를 그대로 두고 두 칸으로 들여 쓴다.
+func indent(raw json.RawMessage) ([]byte, error) {
+	var out bytes.Buffer
+	if err := json.Indent(&out, raw, "", "  "); err != nil {
+		return nil, fmt.Errorf("endpoint returned invalid JSON: %w", err)
+	}
+	out.WriteByte('\n')
+	return out.Bytes(), nil
+}
+
+func compactLine(raw json.RawMessage) ([]byte, error) {
+	var out bytes.Buffer
+	if err := json.Compact(&out, raw); err != nil {
+		return nil, fmt.Errorf("endpoint returned invalid JSON: %w", err)
+	}
+	out.WriteByte('\n')
+	return out.Bytes(), nil
+}
+
+// watch 는 status 값과 그 뒤의 변경을 한 줄씩 출력한다. SIGINT 나 SIGTERM 이 오면 연결을 닫고 성공으로 끝난다.
+func watch(client *Client, params map[string]any, stdout io.Writer) error {
+	stopped := make(chan struct{})
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(signals)
+	go func() {
+		if _, ok := <-signals; ok {
+			close(stopped)
+			client.Close()
+		}
+	}()
+	matches := func(raw json.RawMessage) (json.RawMessage, bool, error) {
+		var changed struct {
+			Window  string          `json:"window"`
+			Name    string          `json:"name"`
+			Surface *string         `json:"surface"`
+			Value   json.RawMessage `json:"value"`
+		}
+		if err := json.Unmarshal(raw, &changed); err != nil {
+			return nil, false, fmt.Errorf("status.changed has unexpected params: %w", err)
+		}
+		// 기본값: surface 가 없는 감시는 페이지 status 이며 surface 는 빈 문자열이고, 아래 비교는 nil 로 가린다.
+		surface, _ := params["surface"].(string)
+		same := changed.Window == params["window"] && changed.Name == params["name"] &&
+			((changed.Surface == nil && params["surface"] == nil) || (changed.Surface != nil && *changed.Surface == surface))
+		return changed.Value, same, nil
+	}
+	print := func(raw json.RawMessage) error {
+		line, err := compactLine(raw)
+		if err != nil {
+			return err
+		}
+		_, err = stdout.Write(line)
+		return err
+	}
+	client.Notify = func(method string, raw json.RawMessage) error {
+		if method != "status.changed" {
+			return nil
+		}
+		value, same, err := matches(raw)
+		if err != nil || !same {
+			return err
+		}
+		return print(value)
+	}
+	finish := func(err error) error {
+		select {
+		case <-stopped:
+			return nil
+		default:
+			return err
+		}
+	}
+	if _, err := client.Request("status.watch", params); err != nil {
+		return finish(err)
+	}
+	target := map[string]any{"window": params["window"], "name": params["name"]}
+	if surface, ok := params["surface"]; ok {
+		target["surface"] = surface
+	}
+	value, err := client.Request("status.get", target)
+	if err != nil {
+		return finish(err)
+	}
+	if err := print(value); err != nil {
+		return err
+	}
+	return finish(client.Listen())
+}
+
+// Run 은 명령 하나를 실행하고 종료 상태를 돌려준다. identifier 는 이 command line 이 속한 애플리케이션의 식별자이며
+// --config-dir 이 없을 때 설정 폴더 이름이다.
+func Run(args []string, stdout, stderr io.Writer, identifier string) int {
+	err := run(args, stdout, identifier)
+	if err == nil {
+		return 0
+	}
+	fmt.Fprintf(stderr, "sok: %s\n", err)
+	var invalid UsageError
+	if errors.As(err, &invalid) {
+		fmt.Fprintln(stderr, Usage)
+		return 2
+	}
+	return 1
+}
+
+func run(args []string, stdout io.Writer, identifier string) error {
+	a, err := parse(args)
+	if err != nil {
+		return err
+	}
+	if a.flags["help"] {
+		_, err := fmt.Fprintln(stdout, Usage)
+		return err
+	}
+	configDir, ok := a.values["config-dir"]
+	if !ok {
+		base, err := os.UserConfigDir()
+		if err != nil {
+			return fmt.Errorf("the default configuration directory is unknown: %w", err)
+		}
+		configDir = filepath.Join(base, identifier)
+	}
+	var client *Client
+	connect := func() (*Client, error) {
+		if client != nil {
+			return client, nil
+		}
+		endpoint, err := ReadEndpoint(configDir)
+		if err != nil {
+			return nil, err
+		}
+		client, err = Dial(endpoint)
+		return client, err
+	}
+	defer func() {
+		if client != nil {
+			client.Close()
+		}
+	}()
+	req, err := plan(a, func() (string, error) {
+		c, err := connect()
+		if err != nil {
+			return "", err
+		}
+		return selectWindow(a, c)
+	})
+	if err != nil {
+		return err
+	}
+	c, err := connect()
+	if err != nil {
+		return err
+	}
+	if req.watch {
+		return watch(c, req.params, stdout)
+	}
+	var params any
+	if req.params != nil {
+		params = req.params
+	}
+	result, err := c.Request(req.method, params)
+	if err != nil {
+		return err
+	}
+	out, err := indent(result)
+	if err != nil {
+		return err
+	}
+	_, err = stdout.Write(out)
+	return err
+}

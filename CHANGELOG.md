@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-8-1: `sok`, the native command line, runs the endpoint commands `windows`, `exposures`, `status`, `dom`, `input` and `capture` in Go (`packages/sok/wailsv3`) and Rust (`packages/sok/tauriv2`) with one contract.
+
 - R1-8: the command line `sok` is specified: commands, window selection, parameter flags from declared schemas, output, and the Rust and Go implementations in each bundle.
 
 - R1-1: `@soksak/plugin-api/install` defines and validates the plugin installation formats: version ranges, plugin packages, the registry index, sidecar release assets and the installation layout.
