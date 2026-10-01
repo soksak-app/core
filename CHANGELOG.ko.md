@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-14: `cfc8826e`에서 전체 suite가 통과한다. `pnpm test`, 구조 검사, `make verify`, `make native-test`, 두 host의 window check 300개 중 300개, release 검사다.
+
 - V5-115-1: 카드 패널 window check가 다른 plugin 탭으로의 전환, 전체 폭 top·bottom 패널, 녹화 안의 모든 표시 끌기 상태를 요구하며, 판정은 단위 test로 검사한다.
 
 - V5-115-1-3: 소수 크기의 카드 패널을 장치 pixel 격자에 그리고 준비하므로 native 표면이 선언 사각형과 같다.

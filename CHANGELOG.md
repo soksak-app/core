@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14: the full suites pass at `cfc8826e`: `pnpm test`, structural checks, `make verify`, `make native-test`, 300 of 300 window checks on both hosts and the release check.
+
 - V5-115-1: card panel window checks require a different-plugin tab switch, full-width top and bottom panels and every displayed drag state in the recording, with unit-tested judgments.
 
 - V5-115-1-3: card panels with fractional sizes are drawn and prepared on the device-pixel grid, so native surfaces match their declared rectangles.
