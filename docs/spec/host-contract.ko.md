@@ -189,6 +189,7 @@ fn invalid_json_closes_connection() {
 | `exposure.relay.send-failure-1003` | 문서로 보내기가 실패하면 요청은 즉시 1003으로 실패한다. | both |
 | `exposure.relay.closed-document-fails-pending-1003` | 문서를 닫으면 대기 중인 요청은 1003으로 실패한다. | both |
 | `exposure.relay.no-timeout-waits-until-close` | timeout이 없는 요청은 문서가 닫힐 때까지 기다린 뒤 1003으로 실패한다. | both |
+| `exposure.window.dropped-view-work-reports-no-view` | 실행되기 전에 파괴된 웹뷰로 보낸 작업은 수신 오류 대신 결과 없음이 되어, `host.window`가 닫히는 모달을 뷰 없이 보고한다. 실행되어 실패한 작업은 그 오류를 유지한다. | tauriv2 only: Tauri는 웹뷰 작업을 dispatch로 실행하며 웹뷰가 파괴되면 작업을 버리고, Wails는 모달 뷰를 자기 기록에서 읽는다 |
 | `flush.queue.rejects-send-when-full` | 사이드카가 읽지 않아 쓰기 대기열이 가득 차면 보내기가 실패한다. | both |
 | `flush.queue.full-error-says-not-keeping-up` | 대기열이 가득 찬 오류는 "is not keeping up"을 적는다. | both |
 | `flush.buffer.replies-delivered-after-drain` | 대기열이 가득 찬 동안 버퍼에 넣은 응답은 사이드카가 다시 읽은 뒤 도착한다. | both |

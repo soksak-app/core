@@ -189,6 +189,7 @@ Items:
 | `exposure.relay.send-failure-1003` | A failed send to the document fails the request at once with 1003. | both |
 | `exposure.relay.closed-document-fails-pending-1003` | Closing a document fails its pending requests with 1003. | both |
 | `exposure.relay.no-timeout-waits-until-close` | A request without a timeout waits until the document closes and then fails with 1003. | both |
+| `exposure.window.dropped-view-work-reports-no-view` | Work sent to a webview that is destroyed before it runs yields no result instead of a receive error, so `host.window` reports a closing modal without its view; work that runs and fails keeps its error. | tauriv2 only: Tauri runs webview work through a dispatch that drops the work when the webview is destroyed, while Wails reads the modal view from its own record |
 | `flush.queue.rejects-send-when-full` | A send fails when the write queue is full because the sidecar does not read. | both |
 | `flush.queue.full-error-says-not-keeping-up` | The full-queue error says "is not keeping up". | both |
 | `flush.buffer.replies-delivered-after-drain` | Replies buffered while the queue is full reach the sidecar after it reads again. | both |

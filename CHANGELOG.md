@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-4: on Tauri, `host.window` reports a closing modal without its view instead of failing with `receiving on a closed channel` when the closing webview drops the view query.
+
 - G1.4-14-8: `outline` takes an `inset` that moves the joined loops inward after the union, and the rail uses half the border width, so a 1x display draws the rail in whole pixels while the card and its sidebar stay one outline.
 
 - G1.4-24: the language test runs its node case with the TAP reporter, so colored output no longer reports zero tests.

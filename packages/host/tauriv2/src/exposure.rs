@@ -852,6 +852,31 @@ pub(crate) fn root_view_on_main(window: &Window) -> Result<Webview, String> {
     })
 }
 
+/// 웹뷰 작업의 결과를 받는다. 웹뷰가 파괴되어 작업을 실행하지 않고 버리면 송신자가 결과 없이 사라지므로 None 이다.
+/// 작업이 보낸 오류는 그대로 반환한다.
+pub fn received<T>(rx: &mpsc::Receiver<Result<T, String>>) -> Result<Option<T>, String> {
+    match rx.recv() {
+        Ok(result) => result.map(Some),
+        Err(_) => Ok(None),
+    }
+}
+
+/// 웹뷰의 네이티브 뷰로 work 를 실행한다. 닫히는 웹뷰가 작업을 실행하지 않으면 None 이다.
+fn with_view_if_present<T: Send + 'static>(
+    webview: &Webview,
+    work: impl FnOnce(&tauri::webview::PlatformWebview) -> Result<T, String> + Send + 'static,
+) -> Result<Option<T>, String> {
+    let (tx, rx) = mpsc::channel();
+    webview
+        .with_webview(move |view| {
+            if tx.send(work(&view)).is_err() {
+                eprintln!("webview result had no pending receiver");
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    received(&rx)
+}
+
 /// 웹뷰의 네이티브 뷰로 work 를 실행하고 결과를 기다린다.
 pub(crate) fn with_view<T: Send + 'static>(
     webview: &Webview,
@@ -911,9 +936,13 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     // 모달 웹뷰 잠금은 메인 스레드 작업을 기다리기 전에 푼다. 메인 스레드의 모달 배치가 같은 잠금을
     // 기다리므로, 잠금을 쥔 채 with_view 를 기다리면 두 스레드가 서로를 기다린다.
     let modal_webview = overlay.view.lock().map_err(internal)?.clone();
+    // 닫히는 모달 웹뷰는 작업을 실행하지 않고 버린다. 그 모달은 그릴 뷰가 없으므로 frame 없이 보고한다.
     let modal_view = modal_webview
-        .map(|view| with_view(&view, move |view| platform.view_id(view)).map_err(internal))
-        .transpose()?;
+        .map(|view| {
+            with_view_if_present(&view, move |view| platform.view_id(view)).map_err(internal)
+        })
+        .transpose()?
+        .flatten();
     let mut modal = match overlay.open_state() {
         Some((id, mode, shown)) => json!({"id": id, "mode": mode, "shown": shown,
             "frame": null, "order": null, "background": null}),

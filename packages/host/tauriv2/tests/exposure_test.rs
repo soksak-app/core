@@ -353,3 +353,17 @@ fn undeclared_host_names_are_unknown() {
         );
     }
 }
+
+// contract: exposure.window.dropped-view-work-reports-no-view
+#[test]
+fn view_work_dropped_by_a_closing_webview_reports_no_result() {
+    let (tx, rx) = std::sync::mpsc::channel::<Result<u64, String>>();
+    drop(tx);
+    assert_eq!(exposure::received(&rx), Ok(None));
+    let (tx, rx) = std::sync::mpsc::channel::<Result<u64, String>>();
+    tx.send(Ok(7)).unwrap();
+    assert_eq!(exposure::received(&rx), Ok(Some(7)));
+    let (tx, rx) = std::sync::mpsc::channel::<Result<u64, String>>();
+    tx.send(Err("view failed".into())).unwrap();
+    assert_eq!(exposure::received(&rx), Err("view failed".into()));
+}

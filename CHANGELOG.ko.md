@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-14-4: Tauri에서 닫히는 웹뷰가 view 조회를 버리면 `host.window`가 `receiving on a closed channel`로 실패하지 않고 닫히는 modal을 view 없이 보고한다.
+
 - G1.4-14-8: `outline`이 union 뒤 합친 loop를 안쪽으로 옮기는 `inset`을 받고 rail이 선 굵기의 절반을 쓴다. 그래서 1배율 display에서도 rail을 온전한 pixel로 그리면서 카드와 사이드바는 하나의 윤곽으로 유지된다.
 
 - G1.4-24: language test가 node case를 TAP reporter로 실행해, 색이 붙은 출력에서도 test 수를 0으로 보고하지 않는다.
