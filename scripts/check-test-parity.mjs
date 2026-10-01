@@ -670,7 +670,28 @@ const FEATURE_LINKS = [
     ],
     expected: "The JS/TS, Rust, Go, and Objective-C failure lanes run as one machine-audited matrix; each lane rejects ignored outcomes, and Wails capture, recording cleanup, and shell close failures remain attributable.",
     levels: ["unit", "native"],
+  },  {
+    id: "F0.4-1-1",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: 'Emit("sidecar-failure"' },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn fail<O: Owner>" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestOversizeSidecarMessageTerminatesAndNotifies" },
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestSidecarOutputCloseNotifiesEachSurface" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "an_oversize_message_terminates_and_notifies" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "an_output_close_notifies_each_surface" },
+    ],
+    expected: "An oversize, invalid or unreadable sidecar output, or an output end outside stop, terminates the sidecar process and delivers sidecar-failure to each owning window on both hosts.",
+    levels: ["native"],
+  },  {
+    id: "F0.4-1-1-4",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "export function auditCompletedFeatureLinks" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" }],
+    expected: "Every completed checklist capability, the merged sidecar failure delivery included, has a feature link to its implementation and tests.",
+    levels: ["unit"],
   },
+
   {
     id: "F2.1-1",
     implementation: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", symbol: "lifecycle_test_lock" }],
