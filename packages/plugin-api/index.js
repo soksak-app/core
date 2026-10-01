@@ -287,8 +287,11 @@ export function validateManifest(manifest) {
       if (!isObject(entry) || !isObject(entry.schema) || !Object.hasOwn(entry, "default")) {
         throw new Error(`${where}: data ${key} requires schema and default`);
       }
-      only(`${where} data ${key}`, entry, ["schema", "default"]);
+      only(`${where} data ${key}`, entry, ["schema", "default", "format"]);
       if (!matchesSchema(entry.schema, entry.default)) throw new Error(`${where}: data ${key} default does not match its schema`);
+      if (Object.hasOwn(entry, "format") && !(Number.isInteger(entry.format) && entry.format > 0)) {
+        throw new Error(`${where}: data ${key} format must be a positive integer`);
+      }
     }
   }
   if (manifest.sidecars !== undefined) {

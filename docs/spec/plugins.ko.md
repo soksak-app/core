@@ -88,7 +88,7 @@
 
 `data`는 상태 모듈이 프로젝트마다 저장하는 키를 선언한다. `schema`는 공개 선언의 스키마 부분 집합(`type`, `enum`, `properties`, `items`)을 쓰고 `default`는 그 스키마에 맞아야 한다. 선택 항목 `format`은 양의 정수이며 없으면 1이다. 플러그인은 키의 저장 형태를 바꿀 때 이 값을 올린다. 워크벤치는 각 값을 `projects.json`에서 그 프로젝트의 `plugins.<플러그인 id>.<키>` 항목에 `{ "format": <format>, "value": <value> }`로 저장한다([저장](projects.ko.md#저장)). `data.get`은 저장된 값이나 기본값을 반환하고, 저장된 값이 스키마에 맞지 않으면 실패한다. `data.set`은 값이 맞지 않거나 선언하지 않은 키이면 쓰지 않고 실패하며, 선언한 format으로 저장하고, 저장소가 쓰기를 받아들인 뒤 끝난다.
 
-`data.get`이 선언보다 낮은 format으로 저장된 값을 읽으면 워크벤치는 상태 모듈의 `convertData({ key, format, value })` export를 부른다. 이 함수는 선언한 format의 값을 돌려준다. 워크벤치는 결과를 스키마로 검사하고 선언한 format으로 저장한 뒤, 프로젝트, 플러그인, 키, 두 format을 적은 줄을 애플리케이션 log에 쓴다. 선언보다 높은 format으로 저장된 값, 없는 `convertData` export, 실패한 변환, 스키마에 맞지 않는 결과는 프로젝트, 플러그인, 키, format을 적은 message로 `data.get`을 실패시키고 저장된 값을 바꾸지 않는다. format 없이 저장된 값, 즉 format이 생기기 전의 형태는 format 1이다. 처음 읽을 때 `{ "format": 1, "value": <value> }`로 저장하고 변환을 log에 남긴다.
+저장된 항목은 정확히 양의 정수 `format`과 `value`만 가진 객체일 때 현재 형태다. 워크벤치는 프로젝트의 상태 모듈을 마운트하기 전에, 이전 형태나 format으로 저장된 선언 키를 한 번 변환한다. format 없이 저장된 값, 즉 format이 생기기 전의 형태는 format 1이다. 선언보다 낮은 format의 값은 상태 모듈의 `convertData({ key, format, value })` export에 넘기고, 이 함수는 선언한 format의 값을 돌려준다. 워크벤치는 값을 스키마로 검사하고 선언한 format으로 저장한 뒤, 프로젝트, 플러그인, 키, 두 format을 적은 줄을 애플리케이션 log에 쓴다. 선언보다 높은 format으로 저장된 값, 없는 `convertData` export, 실패한 변환, 스키마에 맞지 않는 값은 바꾸지 않고 두며, 그 키의 `data.get`은 프로젝트, 플러그인, 키, format이나 스키마 불일치를 적은 message로 실패한다.
 
 ## 외부 라이브러리
 

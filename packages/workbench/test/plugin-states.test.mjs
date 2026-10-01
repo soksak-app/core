@@ -53,7 +53,7 @@ test("a state module is mounted for the shown project, answers its commands, sto
   await showStates({ id: "p1", root: "/work/p1" });
   assert.equal(globalThis.mounted, 1);
   assert.equal(await registry.run("probe.mark", { path: "a.txt" }), "/work/p1");
-  assert.deepEqual(stored.get("p1/probe"), { marks: ["a.txt"] });
+  assert.deepEqual(stored.get("p1/probe"), { marks: { format: 1, value: ["a.txt"] } });
   assert.deepEqual(sent, [["@scope/sidecar-probe", "state:probe:p1", { operation: "list", path: "a.txt" }]]);
   assert.deepEqual((await registry.handle({ method: "status.get", params: { name: "probe.marks" } })).result, ["a.txt"]);
   await showStates({ id: "p2", root: "/work/p2" });
@@ -86,4 +86,51 @@ test("a state module observes the failures of its sidecar session", async () => 
   handler[2]("output closed: exit status 3");
   assert.deepEqual(globalThis.stateFailures, ["output closed: exit status 3"]);
   await showStates(null);
+});
+
+test("project data stored in an earlier form or format is converted once before the module mounts", async () => {
+  registry.declare("conv", { status: [], commands: [], dom: [] });
+  registry.declare("bare", { status: [], commands: [], dom: [] });
+  const convert = `export function convertData({ key, format, value }) {
+    if (key !== "names" || format !== 1) throw new Error("unexpected " + key + " " + format);
+    return value.map((name) => ({ name }));
+  }
+  export function mount(context) {
+    globalThis.converted = context.data.get("names");
+    try { context.data.get("later"); } catch (error) { globalThis.laterError = error.message; }
+    return { dispose() {} };
+  }`;
+  const bare = `export function mount(context) {
+    try { context.data.get("names"); } catch (error) { globalThis.bareError = error.message; }
+    globalThis.bareLegacy = context.data.get("legacy");
+    return { dispose() {} };
+  }`;
+  const names = { schema: { type: "array", items: { type: "object", properties: { name: { type: "string" } } } }, default: [], format: 2 };
+  registerState({ plugin: "conv", module: `data:text/javascript,${encodeURIComponent(convert)}`, sidecars: [],
+    data: { names, later: { schema: { type: "string" }, default: "", format: 1 } } });
+  registerState({ plugin: "bare", module: `data:text/javascript,${encodeURIComponent(bare)}`, sidecars: [],
+    data: { names, legacy: { schema: { type: "array", items: { type: "string" } }, default: [] } } });
+  stored.set("p9/conv", { names: { format: 1, value: ["a", "b"] }, later: { format: 3, value: "x" } });
+  stored.set("p9/bare", { names: { format: 1, value: ["c"] }, legacy: ["d"] });
+  const lines = [];
+  const original = console.info;
+  console.info = (line) => lines.push(line);
+  try {
+    await showStates({ id: "p9", root: "/work/p9" });
+  } finally {
+    console.info = original;
+    await showStates(null);
+  }
+  assert.deepEqual(globalThis.converted, [{ name: "a" }, { name: "b" }]);
+  assert.deepEqual(stored.get("p9/conv").names, { format: 2, value: [{ name: "a" }, { name: "b" }] });
+  assert.deepEqual(stored.get("p9/conv").later, { format: 3, value: "x" }, "a newer format was changed");
+  assert.equal(globalThis.laterError, "project p9 plugin conv data later: stored format 3 is newer than declared format 1");
+  assert.equal(globalThis.bareError, "project p9 plugin bare data names: stored format 1 needs convertData to reach format 2");
+  assert.deepEqual(stored.get("p9/bare").names, { format: 1, value: ["c"] }, "an unconverted value was changed");
+  assert.deepEqual(globalThis.bareLegacy, ["d"]);
+  assert.deepEqual(stored.get("p9/bare").legacy, { format: 1, value: ["d"] });
+  assert.deepEqual(lines.sort(), [
+    "plugin data: converted project p9 plugin bare data legacy from no format to format 1",
+    "plugin data: converted project p9 plugin conv data names from format 1 to format 2",
+  ]);
 });

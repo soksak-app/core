@@ -3,6 +3,7 @@
 // 창이 다른 프로젝트나 라이브러리를 보이면 먼저 모든 상태 모듈을 해제하고 그 등록을 지운다.
 import { checkProjectData } from "@soksak/plugin-api";
 import { registry } from "./exposure.js";
+import { log } from "./host.js";
 
 const states = [];
 let options = null;
@@ -29,14 +30,66 @@ export function registerState(state) {
   states.push(state);
 }
 
-function contextOf(state, project, table) {
+// 기본값: format 은 plugin.json data 키의 선택 필드이며 없으면 1 이다(docs/spec/plugins.md#project-data).
+const formatOf = (entry) => entry.format ?? 1;
+
+/** 현재 형태의 저장 항목인가. 정확히 양의 정수 format 과 value 만 가진 객체다. */
+const isEntry = (stored) => stored !== null && typeof stored === "object" && !Array.isArray(stored)
+  && Object.keys(stored).sort().join() === "format,value" && Number.isInteger(stored.format) && stored.format > 0;
+
+/**
+ * 이전 형태나 format 으로 저장된 선언 키를 한 번 변환해 저장한다. 변환하지 못한 키는 저장 값을 두고, 그 키를
+ * 읽을 때 낼 오류를 돌려준다(docs/spec/plugins.md#project-data).
+ */
+async function convertData(state, project, module, declared) {
+  const failures = new Map();
+  const stored = options.data.get(project.id, state.plugin);
+  const where = (key) => `project ${project.id} plugin ${state.plugin} data ${key}`;
+  for (const [key, entry] of Object.entries(declared)) {
+    if (!Object.hasOwn(stored, key)) continue;
+    const want = formatOf(entry);
+    const current = isEntry(stored[key]);
+    const format = current ? stored[key].format : 1;
+    if (current && format === want) continue;
+    if (format > want) {
+      failures.set(key, `${where(key)}: stored format ${format} is newer than declared format ${want}`);
+      continue;
+    }
+    let value = current ? stored[key].value : stored[key];
+    if (format < want) {
+      if (typeof module.convertData !== "function") {
+        failures.set(key, `${where(key)}: stored format ${format} needs convertData to reach format ${want}`);
+        continue;
+      }
+      try {
+        value = await module.convertData({ key, format, value: structuredClone(value) });
+      } catch (error) {
+        failures.set(key, `${where(key)}: converting format ${format} to ${want} failed: ${error.message}`);
+        continue;
+      }
+    }
+    try {
+      checkProjectData(state.plugin, declared, key, value);
+    } catch (error) {
+      failures.set(key, error.message);
+      continue;
+    }
+    await options.data.set(project.id, state.plugin, key, { format: want, value });
+    log(`plugin data: converted ${where(key)} from ${current ? `format ${format}` : "no format"} to format ${want}`);
+  }
+  return failures;
+}
+
+function contextOf(state, project, table, failures) {
   const session = `state:${state.plugin}:${project.id}`;
   // 기본값: data 는 plugin.json 의 선택 필드이며 없으면 프로젝트 데이터가 없다(docs/spec/plugins.md).
   const declared = state.data ?? {};
   const read = (key) => {
     const stored = options.data.get(project.id, state.plugin);
     if (!Object.hasOwn(declared, key)) throw new Error(`${state.plugin} data ${key} is not declared`);
-    return Object.hasOwn(stored, key) ? checkProjectData(state.plugin, declared, key, stored[key]) : structuredClone(declared[key].default);
+    if (failures.has(key)) throw new Error(failures.get(key));
+    if (!Object.hasOwn(stored, key)) return structuredClone(declared[key].default);
+    return checkProjectData(state.plugin, declared, key, stored[key].value);
   };
   const port = state.sidecars?.length === 1 ? options.sidecar(state.sidecars[0]) : null;
   return {
@@ -60,7 +113,8 @@ function contextOf(state, project, table) {
       get: read,
       set: async (key, value) => {
         checkProjectData(state.plugin, declared, key, value);
-        await options.data.set(project.id, state.plugin, key, value);
+        await options.data.set(project.id, state.plugin, key, { format: formatOf(declared[key]), value });
+        failures.delete(key);
       },
     },
   };
@@ -86,7 +140,10 @@ async function show(project) {
     const table = registry.plugin(state.plugin);
     const done = import(state.module).then(async (module) => {
       if (typeof module.mount !== "function") throw new TypeError(`state module of ${state.plugin} has no mount()`);
-      const result = await module.mount(contextOf(state, project, table));
+      // 기본값: data 는 plugin.json 의 선택 필드이며 없으면 프로젝트 데이터가 없다(docs/spec/plugins.md).
+      const declared = state.data ?? {};
+      const failures = await convertData(state, project, module, declared);
+      const result = await module.mount(contextOf(state, project, table, failures));
       if (!result || typeof result.dispose !== "function") throw new TypeError(`state module of ${state.plugin} must return { dispose() }`);
       return result;
     });

@@ -40,3 +40,11 @@ test("checkProjectData accepts declared values and rejects undeclared keys and m
   assert.throws(() => checkProjectData("probe", data, "other", []), /probe data other is not declared/);
   assert.throws(() => checkProjectData("probe", data, "marks", [1]), /probe data marks does not match its schema/);
 });
+
+test("a data key declares an optional positive integer format", () => {
+  const withFormat = (format) => ({ ...base(), data: { marks: { ...base().data.marks, format } } });
+  assert.equal(validateManifest(withFormat(2)).data.marks.format, 2);
+  for (const format of [0, 1.5, "2", null]) {
+    assert.throws(() => validateManifest(withFormat(format)), /data marks format must be a positive integer/);
+  }
+});

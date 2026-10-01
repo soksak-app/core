@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-3-5: project data is stored as `{format, value}`; values in an earlier form or format are converted once through the state module's `convertData` before it mounts, saved and logged.
+
 - R1-3-4: tabs of plugins that are not loaded open as placeholder cards that name the plugin and offer installation or enabling; environment entries, stored settings, sets, links and project data that name such a plugin are kept instead of failing the load.
 
 - G1.4-44: the workbench writes observations (focus transitions, layout and settings conversions) through `log`, which the browser example writes as information instead of errors; the browser example check passes again.
