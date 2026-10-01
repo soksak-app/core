@@ -46,6 +46,13 @@ Plugin repository는 core git tag(예: `v0.0.2`)의 `@soksak/plugin-api`에 의�
 
 `sok`은 애플리케이션의 command line이며 모든 명령을 이것으로 공개한다. Plugin 설치, 업데이트, 제거, pack, sidecar release, registry index, 그리고 실행 중인 애플리케이션이 선언한 모든 명령(지금은 Node command line `packages/cli`가 공개한다)이다. Tauri 애플리케이션은 자기 host package에서 Rust로, Wails 애플리케이션은 자기 host package에서 Go로 `sok`을 build하며, 두 구현은 host처럼 한 계약을 따른다. 각 애플리케이션 bundle은 실행 파일 옆에 자기 `sok`을 담고, `PATH`가 닿는 `sok`이 어느 구현이 실행될지와 어느 설정 폴더를 쓸지를 정한다. `PATH`는 symbolic link가 아니라 경로 항목(`/etc/paths.d`)으로 bundle에 닿는다. `sok`이 그 명령을 모두 담으면 `packages/cli`는 삭제한다.
 
+Core나 plugin이 선언한 모든 command는 `sok`으로 실행되므로, 사람이나 프로그램이 command line에서 창을 다룰 수 있다.
+
+- `sok <command> [--window <name> | --project <directory>] [--surface <id>] [--<parameter> <value>]...`는 실행 중인 애플리케이션에서 선언된 command를 실행한다. 매개변수 flag는 command의 선언된 매개변수 schema에서 나오며, 결과는 다음 호출이 쓸 수 있도록 JSON으로 출력한다.
+- `sok commands [--window <name> | --project <directory>]`는 선언된 core와 plugin command를 매개변수와 함께 나열한다.
+
+예를 들어 `sok core.card.split --project ~/work --card shell --axis y --plugin terminal`은 `~/work`를 보이는 창의 card를 나누고 새 tab을 출력하며, `sok terminal.input --project ~/work --surface <tab> --bytes 'npm test\r'`는 그 terminal에서 명령을 실행한다.
+
 ## Sidecar release
 
 `sok sidecar release`는 플랫폼마다 archive `<name>-<version>-<os>-<arch>.tar.gz` 하나(실행 파일, `sidecar.json`, helper)와 `SHA256SUMS` 파일을 담는다. 0.0.2에서는 현재 macOS 아키텍처용으로 local에서 build하며, 이름 규칙은 이미 다른 플랫폼도 담는다. Host는 archive를 풀어 실행하기 전에 `sha256`을 검증한다. 0.0.2는 hash만 확인하며, 제3자 sidecar의 서명과 신뢰 정책은 나중에 정한다.

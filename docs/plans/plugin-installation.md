@@ -46,6 +46,13 @@ A plugin repository depends on `@soksak/plugin-api` at a core git tag, for examp
 
 `sok` is the command line of the application, and every command is public through it: plugin installation, update and removal, packing, sidecar releases, the registry index, and every command that the running application declares, which the Node command line `packages/cli` exposes today. The Tauri application builds `sok` in Rust from its host package and the Wails application builds it in Go from its host package; the two follow one contract like the hosts. Each application bundle holds its `sok` next to its executable, and the `sok` that `PATH` reaches decides which implementation runs and which configuration directory it uses. `PATH` reaches the bundle through a path entry (`/etc/paths.d`), not a symbolic link. `packages/cli` is removed once `sok` covers its commands.
 
+Every command that core or a plugin declares runs through `sok`, so a person or a program can drive a window from the command line:
+
+- `sok <command> [--window <name> | --project <directory>] [--surface <id>] [--<parameter> <value>]...` runs a declared command in the running application. The parameter flags come from the command's declared parameter schema; the result is printed as JSON so that a following call can use it.
+- `sok commands [--window <name> | --project <directory>]` lists the declared core and plugin commands with their parameters.
+
+For example, `sok core.card.split --project ~/work --card shell --axis y --plugin terminal` splits a card of the window that shows `~/work` and prints the new tab, and `sok terminal.input --project ~/work --surface <tab> --bytes 'npm test\r'` runs a command in that terminal.
+
 ## Sidecar release
 
 `sok sidecar release` writes one archive per platform, `<name>-<version>-<os>-<arch>.tar.gz`, with the executable, `sidecar.json` and its helpers, and a `SHA256SUMS` file. In 0.0.2 the release is built locally for the current macOS architecture; the naming already covers other platforms. The host verifies the archive's `sha256` before it extracts and runs it. Version 0.0.2 checks only the hash; signing and a trust policy for third-party sidecars come later.

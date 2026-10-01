@@ -713,7 +713,7 @@
   - [ ] R1-4 — P1: 두 구현의 `sok`에 release 명령을 둔다. `sok plugin pack`, `SHA256SUMS`를 쓰는 `sok sidecar release`, 항목과 archive를 검증하고 `index.json`을 쓰는 `sok registry build`다. 사용자는 2026-10-01에 애플리케이션의 모든 명령을 native command line `sok`(Tauri는 Rust, Wails는 Go)으로 공개하기로 정했으며, 먼저 만든 Node release 도구는 버렸다.
   - [ ] R1-5 — P1: `browser`, `terminal`, `files`, `shell`을 `../plugins/<id>`로, sidecar를 `../sidecars/<name>`으로 분리하고, 각각 자기 test, checklist, core git tag 의존을 둔다. `shell`과 `@soksak/sidecar-shell`은 옮기되 registry에는 올리지 않으며(사용자, 2026-10-01), 새 space 배치는 shell card 자리에 terminal card를 쓴다. Core window check는 local registry fixture에서 설치한다.
   - [ ] R1-6 — P1: 스타터팩을 담은 local registry를 `~/Projects/soksak/registry`에 만들고 첫 실행에서 스타터팩을 설치한다.
-  - [ ] R1-8 — P0: 각 host package에서 `sok`을 build하고(Tauri는 Rust, Wails는 Go) 한 계약과 공통 contract case를 두며, 각 애플리케이션 bundle의 실행 파일 옆에 담고, symbolic link 대신 `/etc/paths.d` 항목으로 닿게 하며, 선언된 모든 애플리케이션 명령과 `packages/cli`의 endpoint 명령을 이것으로 공개하고, `packages/cli`를 삭제한다.
+  - [ ] R1-8 — P0: 각 host package에서 `sok`을 build하고(Tauri는 Rust, Wails는 Go) 한 계약과 공통 contract case를 두며, 각 애플리케이션 bundle의 실행 파일 옆에 담고, symbolic link 대신 `/etc/paths.d` 항목으로 닿게 하며, 선언된 모든 애플리케이션 명령과 `packages/cli`의 endpoint 명령을 이것으로 공개하고, `packages/cli`를 삭제한다. 모든 core와 plugin command는 선언된 schema에서 나온 매개변수 flag, 이름이나 project 폴더로 고른 창, 다음 호출이 쓸 수 있는 JSON 출력과 함께 `sok <command>`로 실행되므로, command line에서 창의 card를 나누고 새 card에서 프로그램을 시작할 수 있다(사용자, 2026-10-01). `sok commands`가 이를 나열한다.
   - [ ] R1-7 — P1: 모든 core package를 0.0.2로 바꾸고, `scripts/check-versions.mjs`를 core package로 한정하며, 0.0.2 release를 local에서 build하고 검증한다.
 
 ## Tauri/Wails 대칭 감사 (2026-09-21)
