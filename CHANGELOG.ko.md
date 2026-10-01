@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1: 0.0.2 설치형 plugin 제안이 registry, plugin package, sidecar release, 설치, repository 분리를 설명한다.
+
 - G1.4-35: 실제 입력 TUI check는 mouse 보고를 켜고 자기 선택을 그리는 자체 fixture TUI를 실행하며, drag check는 3주기를 실행한다.
 
 - G1.4-36: window check는 녹화 frame을 frame 번호 순서로 정렬하므로, frame 9999 뒤의 녹화도 마지막 frame으로 판정한다.

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1: the proposal for installable plugins in 0.0.2 describes the registry, plugin packages, sidecar releases, installation and repository split.
+
 - G1.4-35: real-input TUI checks run an owned fixture TUI that enables mouse reporting and draws its own selection, and the drag check runs three cycles.
 
 - G1.4-36: window checks order recorded frames by frame number, so recordings after frame 9999 are judged on their last frame.
