@@ -89,7 +89,7 @@ export function createPluginOperations({ host, loaded, changed }) {
     }
   }
 
-  /** core.plugins status. */
+  /** core.plugins status 의 값. */
   function status() {
     const rows = host && !state ? [] : pluginRows(loaded(), state);
     return {
