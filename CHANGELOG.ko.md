@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-115-1-5: border 누락 recording 진단을 닫는다. 네 변 gesture recording 반복이 `8259059f`에서 빌드한 host마다 20/20 통과하며, 준비 순서 수정 직후의 결과와 같다. 수정 전에는 20회 중 4회 실패했다.
+
 - G1.4-9: 명세가 더 이상 checklist ID나 진행 상태를 인용하지 않고, `make docs-check`가 `docs/spec/`의 checklist ID를 거부한다. plugin link 문단은 옛 plugin left/right 입력이 아직 허용된다는 서술 대신 현재 규칙을 적는다.
 
 - G1.4-19: window check가 workbench source를 import하지 않고 새 `core.themes` status에서 theme catalog를 읽으며, window-source audit가 다른 repository 구성 요소의 source 경로를 거부한다.

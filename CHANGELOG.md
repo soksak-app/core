@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-115-1-5: close the missing-border recording diagnosis. The four-side gesture recording repeat passes 20/20 on each host built from `8259059f`, as it did after the preparation-order correction, against failures on 4 of 20 runs before it.
+
 - G1.4-9: specifications no longer cite checklist IDs or progress, and `make docs-check` rejects a checklist ID in `docs/spec/`. The plugin link paragraph now states the current rule instead of claiming that old plugin left/right inputs were still accepted.
 
 - G1.4-19: window checks read the theme catalog from the new `core.themes` status instead of importing workbench source, and the window-source audit rejects source paths of other repository components.
