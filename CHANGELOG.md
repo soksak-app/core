@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F0.5.9-2-1: Tauri logs a refused image frame with the current frame state and distinguishes a native raster size mismatch (`staleRaster`) from a superseded frame.
+
 - F0.5.9-4-1: the Wails `request has been stopped` log lines after `host.window.reload` are documented as replies to the terminated page's `status.next` forwards, verified by count against a debug log.
 
 - G1.4-20-1: a window check fails only when a tested host stays frontmost after it; an application the user brings forward during a run is reported instead of failing the check.

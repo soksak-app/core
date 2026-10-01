@@ -554,6 +554,26 @@ impl Images {
         Ok(())
     }
 
+    /// 거부한 프레임과 비교할 수 있도록 영역의 현재 프레임 상태를 글로 돌려준다.
+    fn frame_state(&self, key: &Key) -> String {
+        let inner = self.lock();
+        match inner.states.get(key) {
+            Some(state) => format!(
+                "generation={} raster={} sequence={} configured={} size={}x{}@{} presented raster={} sequence={}",
+                state.generation,
+                state.raster,
+                state.last_sequence,
+                state.configured,
+                state.width,
+                state.height,
+                state.scale,
+                state.presented_raster,
+                state.presented_sequence
+            ),
+            None => "none".into(),
+        }
+    }
+
     /// 현재 래스터의 프레임이 네이티브 표시 저장소에 복사되었음을 기록한다.
     fn mark_presented(&self, key: &Key, generation: u64, raster: u64, sequence: i32) {
         let mut inner = self.lock();
@@ -1167,14 +1187,19 @@ where
                             .frame_status(&current_key, generation, raster, sequence)
                             .map_err(str::to_string)?;
                         let platform = platform::current()?;
+                        // 네이티브 래스터가 프레임과 다르면 그 프레임은 이전 래스터의 것이다. 기록에는 네이티브
+                        // 래스터를 남기고 보낸 쪽에는 stale 로 답한다.
                         let actual = platform
                             .image_raster(handle)?
-                            .ok_or_else(|| "stale".to_string())?;
+                            .ok_or_else(|| "staleRaster native=none".to_string())?;
                         if actual.width != width
                             || actual.height != height
                             || (actual.scale - scale).abs() > 0.000001
                         {
-                            return Err("stale".to_string());
+                            return Err(format!(
+                                "staleRaster native={}x{}@{} frame={}x{}@{}",
+                                actual.width, actual.height, actual.scale, width, height, scale
+                            ));
                         }
                         platform
                             .present_image(handle, id, nonce, width as f64, height as f64, scale)
@@ -1193,13 +1218,15 @@ where
                                     key.0, name, generation, raster, sequence, id
                                 );
                             } else {
+                                // 거부한 프레임이 대체된 것인지 가릴 수 있도록 현재 프레임 상태를 함께 남긴다.
                                 eprintln!(
-                                    "image present on main thread error: surface={} name={} generation={} raster={} sequence={} token={} reason={}",
-                                    key.0, name, generation, raster, sequence, id, e
+                                    "image present on main thread error: surface={} name={} generation={} raster={} sequence={} token={} reason={} current {}",
+                                    key.0, name, generation, raster, sequence, id, e, images.frame_state(&key)
                                 );
                             }
                             let reason = match e.as_str() {
                                 "stale" => "stale",
+                                e if e.starts_with("staleRaster") => "stale",
                                 // The image registry can be detached after decide() but before
                                 // this main-thread closure runs. That is an invalidated frame,
                                 // not a failed presentation of the current surface.
