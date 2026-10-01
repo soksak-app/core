@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, failure, fresh, keepCommonSettings, open } from "./app.mjs";
+import { APPS, failure, fresh, open } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 import { terminalProcessSnapshot } from "./terminal-processes.mjs";
 
@@ -104,9 +104,6 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    await keepCommonSettings(s);
-    // 이 검사는 사이드바 위치 flow 의 레일 카드를 쓴다. 기본값은 inset 이다.
-    await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
     const verification = await s.collect("core.verify");
     s.cleanup(async () => {
       const failed = (await verification.stop()).filter((value) => value?.rows?.some((row) =>
@@ -147,12 +144,11 @@ for (const app of Object.values(APPS)) {
         if (a.y + a.h <= b.y) assert.ok(pa.y + pa.h < pb.y, `${a.id} must remain above ${b.id}`);
       }
     }
-    const [left, rail, shell, browser, right] = ["left", "rail-shell", "shell", "browser", "right"]
+    const [left, shell, browser, right] = ["left", "shell", "browser", "right"]
       .map((id) => preview.find((c) => c.id === id));
     assert.ok(Math.abs(left.w - right.w) <= 1 / 64, "sidebar widths must be uniform");
     assert.ok(Math.abs(shell.h - browser.h) <= 1 / 64, "split rows must have equal heights");
-    const gaps = [rail.x - left.x - left.w, shell.x - rail.x - rail.w, right.x - shell.x - shell.w,
-      browser.y - shell.y - shell.h];
+    const gaps = [shell.x - left.x - left.w, right.x - shell.x - shell.w, browser.y - shell.y - shell.h];
     assert.ok(gaps.every((gap) => gap > 0 && Math.abs(gap - gaps[0]) <= 1 / 64), "pane gaps must be uniform on both axes");
     const saved = await project(s, first.id);
     const space = saved.spaces.find((x) => x.id === saved.activeSpaceId);
@@ -174,11 +170,12 @@ for (const app of Object.values(APPS)) {
       terminalCount = 1;
     }
     while (terminalCount < 3) {
-      const current = await s.get("core.grid");
-      const terminalCard = current.cards.find((card) =>
-        card.active && card.tabs.find((tab) => tab.id === card.active)?.plugin === "terminal");
-      assert.ok(terminalCard, "a visible terminal card was not found");
-      await s.run("core.card.split", { card: terminalCard.id, axis: "x", plugin: "terminal" });
+      // 가장 큰 내용 카드를 긴 쪽으로 나눈다. 고정 사이드바와 안쪽 사이드바가 공간을 차지하므로 작은 카드는
+      // 최소 크기 규칙으로 더 나눌 수 없다.
+      const [largest] = (await s.get("core.grid")).cards.filter((card) => !card.fixed)
+        .sort((a, b) => b.w * b.h - a.w * a.h);
+      assert.ok(largest, "no content card can be split");
+      await s.run("core.card.split", { card: largest.id, axis: largest.w >= largest.h ? "x" : "y", plugin: "terminal" });
       const next = await s.until("core.surfaces", (surfaces) => surfaces.filter((surface) =>
         surface.visible && surface.plugin === "terminal").length > terminalCount,
       "a terminal card split did not produce another visible terminal");

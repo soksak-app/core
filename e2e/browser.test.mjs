@@ -14,7 +14,7 @@ const MENU_TITLES = {
 const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language] ?? MENU_TITLES.en;
 
 
-import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
+import { APPS, fresh, open } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 
 /** block 문서의 왼쪽 위에 놓는 CSS 크기 120×60 의 빨간 블록. 페이지 확대만큼 픽셀이 커진다. */
@@ -397,33 +397,30 @@ for (const app of Object.values(APPS)) {
     assert.ok(shown.width > 0 && shown.height > 0, `the new browser card does not show the empty state: ${JSON.stringify(shown)}`);
   });
 
-  test(`${app.name}: a card focus keeps a shown document visible while its placement is prepared`, async (t) => {
+  test(`${app.name}: a placement that keeps a shown document in place does not hide it`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    // 카드 포커스가 배치를 바꾸는 경우를 잰다. flow 레일은 포커스 카드 옆으로 옮겨 가므로 포커스마다 배치 요청이 생긴다.
-    await keepCommonSettings(s);
-    await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
     const base = await serve(t);
     const [browser] = await browsers(s);
     const surface = browser.surface;
     await s.run("browser.navigate", { url: `${base}/focus` }, surface);
     await loaded(s, surface, `${base}/focus`);
     await placed(s, surface, "focus document");
-    await s.run("core.card.focus", { card: "shell" });
-    await s.presented();
+    s.cleanup(() => s.run("core.card.sidebar.set", { card: "shell", side: "left", set: "inherit" }));
 
     // 준비 요청은 창의 레이어 트랜잭션 안에서 적용되어 커밋 전에는 화면에 나오지 않는다. 그동안 화면에 보이는
-    // 표면이 숨으면 그 자리의 누름은 표면 대신 페이지로 간다. 위치가 그대로인 카드 포커스는 표면을 숨기지 않는다.
+    // 표면이 숨으면 그 자리의 누름은 표면 대신 페이지로 간다. 셸 카드의 안쪽 사이드바를 끄고 켜면 셸 표면만
+    // 움직이고 브라우저 표면은 제자리에 있으므로, 배치 요청은 브라우저 표면을 숨기지 않아야 한다.
     const log = await s.transcript();
-    for (const card of ["browser", "shell", "browser"]) {
-      await s.run("core.card.focus", { card });
+    for (const set of ["off", "inherit", "off"]) {
+      await s.run("core.card.sidebar.set", { card: "shell", side: "left", set });
       await s.presented();
     }
     const lines = await log.stop();
     const requests = lines.map((line) => /^host syncSurfaces (\{.*\}) ->/.exec(line)).filter(Boolean)
       .map((found) => JSON.parse(found[1]));
-    assert.ok(requests.length >= 3, `the card focus changes made ${requests.length} placement requests`);
+    assert.ok(requests.length >= 3, `the shell sidebar changes made ${requests.length} placement requests`);
     const hiding = requests.filter((request) => request.surfaces.some((item) => item.id === surface && item.visible === false));
     assert.equal(hiding.length, 0, `a placement request hid the shown browser surface: ${JSON.stringify(hiding[0])}`);
   });

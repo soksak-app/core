@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-3: window checks no longer set the retired `rail` and `cardSidebar` settings and measure the fixed sidebar cards and internal card sidebars instead; the saved-layout check expects the validation error, and the files label check measures the whole label with a device-pixel tolerance.
+
 - V5-117-1-5-1: record the parity inventory of 65 lanes, 333 implementation files and 321 test files after the library preview validation added two modules and one test.
 
 - V5-117-1-3-4-7-1-3: opening a project whose saved layout names an unregistered plugin fails before anything changes. The open had made the project active, marked it open and patched `lastOpened` before the layout validation failed, which left an empty grid; the project spec no longer says such a space opens without those entries.

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-14-3: window check가 폐기된 `rail`, `cardSidebar` 설정을 더 이상 쓰지 않고 고정 사이드바 카드와 카드 내부 사이드바를 잰다. 저장 layout check는 검증 오류를 기대하고, files label check는 device pixel 허용 폭으로 label 전체를 잰다.
+
 - V5-117-1-5-1: 라이브러리 미리보기 검증이 module 2개와 test 1개를 추가한 뒤의 parity 목록(lane 65개, 구현 파일 333개, 테스트 파일 321개)을 기록한다.
 
 - V5-117-1-3-4-7-1-3: 저장 layout이 등록되지 않은 플러그인을 가리키는 프로젝트 열기가 아무것도 바꾸기 전에 실패한다. 이전에는 layout 검증이 실패하기 전에 프로젝트를 active로 만들고 open으로 표시하며 `lastOpened`를 patch해 빈 grid를 남겼다. 프로젝트 spec도 그런 스페이스가 그 항목만 빼고 열린다고 하지 않는다.

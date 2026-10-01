@@ -124,8 +124,6 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
-    // 이 검사는 사이드바 위치 flow 의 레일 카드를 쓴다. 기본값은 inset 이다.
-    await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
     const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-projects-")));
     const secondRoot = join(temporary, "second"); mkdirSync(secondRoot);
     const thirdRoot = join(temporary, "third"); mkdirSync(thirdRoot);
@@ -270,7 +268,7 @@ for (const app of Object.values(APPS)) {
     assert.equal((await child.get("core.project")).id, second.id);
     const space = await child.run("core.space.add");
     await child.run("core.space.rename", { id: space.id, title: "Saved space" });
-    await child.run("core.grid.size", { card: "rail-shell", axis: "x", size: 213 });
+    await child.run("core.grid.size", { card: "right", axis: "x", size: 213 });
     await child.run("core.grid.size", { card: "left", axis: "x", size: 215 });
     await settings(child, { left: false }, "project");
     await child.run("core.projects.flush");
@@ -282,7 +280,7 @@ for (const app of Object.values(APPS)) {
     await s.windows(1, "native close did not complete");
     const saved = read(join(config, "projects.json")).find((p) => p.id === second.id);
     assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).title, "Saved space");
-    assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).layout.railWidth.shell, 213);
+    assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).layout.windowSidebars.right.width, 213);
     // 저장한 위치와 크기는 호스트가 보고하는 창 좌표와 같은 단위여야 한다. 화면 배율이 2 인 곳에서
     // 물리 픽셀로 저장하면 같은 파일이 다른 자리를 가리키고, 창은 화면 밖으로 밀려난다.
     assert.deepEqual(saved.geometry, { x: beforeClose.x + 30, y: beforeClose.y + 20,
@@ -295,7 +293,7 @@ for (const app of Object.values(APPS)) {
     child = s.on(added(await s.windows(2, "saved project did not reopen"), [s.window]));
     await child.until("core.grid", (grid) => grid?.cards.length > 0, "saved project did not render");
     assert.equal((await child.get("core.project")).activeSpaceId, saved.activeSpaceId);
-    assert.equal((await child.get("core.layout")).railWidth.shell, 213);
+    assert.equal((await child.get("core.layout")).windowSidebars.right.width, 213);
     await settings(child, { left: true }, "project");
     const shownLeft = await child.until("core.grid", (grid) => grid?.cards.some((c) => c.id === "left"),
       "the left sidebar did not return");
@@ -325,7 +323,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: saved layouts drop plugins that the environment does not register`, async (t) => {
+  test(`${app.name}: a saved layout naming an unregistered plugin fails in the library and when opened`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -338,54 +336,40 @@ for (const app of Object.values(APPS)) {
         if (item.root === root) await s.run("core.project.close", { id: item.id });
       }
       await s.run("core.projects.flush");
-      assert.equal(await s.get("core.page.error") ?? "", "");
     });
     const first = await s.get("core.project");
     const config = dirname(first.root);
-    // 레일 카드(flow)의 저장과 제거를 검사한다. 기본값은 inset 이다.
-    await settings(s, { projectOpening: "windows", rail: "flow" }, "common");
+    // 저장한 프로젝트를 다른 창에서 열고 닫아, 열리지 않은 저장 기록으로 둔다.
+    await settings(s, { projectOpening: "windows" }, "common");
     const saved = await s.run("core.project.open", { root, color: "#7fe3b0" });
     const child = s.on(added(await s.windows(2, "project window was not created"), [s.window]));
-    await child.until("core.grid", (grid) => grid?.cards.some((c) => c.id === "rail-shell"), "the shell rail did not stand");
+    await child.until("core.grid", (grid) => grid?.cards.length > 0, "the saved project did not render");
     await child.run("core.projects.flush");
     await child.close();
     await s.windows(1, "project window did not close");
 
-    // 다른 환경에서 저장된 배치: 셸 카드의 첫 탭, 문서 카드의 모든 탭, 셸 레일이
-    // 이 환경에 없는 플러그인 gone 의 것이다.
+    // 다른 환경에서 저장된 배치: 셸 카드의 첫 탭이 이 환경에 없는 플러그인 gone 의 것이다.
     const records = read(join(config, "projects.json"));
     const record = records.find((p) => p.id === saved.id);
-    const layout = record.spaces.find((x) => x.id === record.activeSpaceId).layout;
-    const { cards, paidBy } = layout.state;
-    const shell = cards.find((c) => c.id === "shell");
-    // 셸 카드의 첫 탭을 없는 플러그인의 것으로 바꾼다. 나머지 탭은 이 환경에 등록된 플러그인의 것이다.
-    const [gone, kept] = shell.data.tabs;
-    const remaining = shell.data.tabs.slice(1).map((tab) => tab.id);
-    gone.plugin = "gone";
-    shell.data.activeId = gone.id;
-    for (const tab of cards.find((c) => c.id === "browser").data.tabs) tab.plugin = "gone";
-    cards.find((c) => c.id === "rail-shell").id = "rail-gone";
-    paidBy["rail-gone"] = paidBy["rail-shell"];
-    delete paidBy["rail-shell"];
-    layout.railWidth.gone = layout.railWidth.shell;
+    const shell = record.spaces.find((x) => x.id === record.activeSpaceId).layout.state.cards.find((c) => c.id === "shell");
+    shell.data.tabs[0].plugin = "gone";
     write(join(config, "projects.json"), records);
+    const stored = readFileSync(join(config, "projects.json"), "utf8");
 
+    // 라이브러리는 그 프로젝트의 미리보기 대신 여는 것과 같은 검증 오류를 보인다.
     await s.run("core.projects.browse");
-    const library = await s.until("core.library", (value) => value.previews[saved.id], "the library did not show the project");
-    assert.ok(library.previews[saved.id].some((pane) => pane.card === "rail-gone"));
-    assert.equal(await s.get("core.page.error") ?? "", "");
+    const library = await s.until("core.library", (value) => value.previewErrors?.[saved.id], "the library did not report the invalid saved layout");
+    assert.match(library.previewErrors[saved.id], /unknown stored tab plugin gone/);
+    assert.deepEqual(library.previews[saved.id], [], "the library drew a layout that opening rejects");
+    // 같은 창에서 열면 실패한 열기가 명령의 오류로 돌아온다. 열기도 같은 오류로 실패하고 저장 기록은 바뀌지 않는다.
+    await settings(s, { projectOpening: "tabs" }, "common");
+    await assert.rejects(s.run("core.project.activate", { id: saved.id }), /unknown stored tab plugin gone/);
+    // 실패한 전환은 문서 오류로도 보고된다.
+    await s.until("core.page.error", (text) => /unknown stored tab plugin gone/.test(text ?? ""), "the rejected open was not reported in the document");
+    assert.equal(await s.get("core.project"), null, "the rejected open left the library");
+    const after = read(join(config, "projects.json")).find((p) => p.id === saved.id);
+    assert.deepEqual(after, JSON.parse(stored).find((p) => p.id === saved.id), "the rejected open changed the saved record");
     await s.run("core.project.activate", { id: first.id });
-    await s.run("core.project.activate", { id: saved.id });
-    const reopened = s.on(added(await s.windows(2, "saved project did not reopen"), [s.window]));
-    const grid = await reopened.until("core.grid", (value) => value?.cards.length > 0, "saved project did not render");
-    assert.equal(await reopened.get("core.page.error") ?? "", "");
-    assert.deepEqual(grid.cards.find((c) => c.id === "shell").tabs.map((tab) => tab.id), remaining);
-    assert.equal(grid.cards.find((c) => c.id === "shell").active, kept.id);
-    assert.equal(grid.cards.some((c) => c.id === "browser" || c.id === "rail-gone"), false);
-    assert.equal(grid.cards.flatMap((c) => c.tabs).some((tab) => tab.plugin === "gone"), false);
-    assert.equal(Object.hasOwn((await reopened.get("core.layout")).railWidth, "gone"), false);
-    await reopened.close();
-    t.diagnostic("verified that unknown tabs and rails are dropped from a saved layout and its library preview");
   });
 }
 

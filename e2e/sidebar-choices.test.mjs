@@ -15,17 +15,17 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
-    // 셸 레일은 tabs 세트, 왼쪽 사이드바는 list 세트로 둔다.
+    // 셸 카드의 안쪽 왼쪽 사이드바는 tabs 세트, 왼쪽 고정 사이드바는 list 세트로 둔다.
     const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { cardSidebar: "flow",
+    await s.run("core.settings.set", { patch: {
       sets: sets.map((set) => (set.id === "set-shell" ? { ...set, layout: "tabs" } : set)) }, scope: "common" });
     const of = (bars, id) => bars.find((bar) => bar.sidebar === id);
-    await s.until("core.sidebars", (bars) => of(bars, "rail-shell")?.layout === "tabs" && of(bars, "left")?.layout === "list",
-      "the shell rail and the left sidebar did not draw");
+    await s.until("core.sidebars", (bars) => of(bars, "shell:left")?.layout === "tabs" && of(bars, "left")?.layout === "list",
+      "the shell card sidebar and the left sidebar did not draw");
 
-    await s.run("core.sidebar.section.select", { sidebar: "rail-shell", section: "shell.cwd" });
+    await s.run("core.sidebar.section.select", { sidebar: "shell:left", section: "shell.cwd" });
     await s.run("core.sidebar.section.fold", { sidebar: "left", section: "files.bookmarks" });
-    const chosen = (bars) => of(bars, "rail-shell")?.tab === "shell.cwd"
+    const chosen = (bars) => of(bars, "shell:left")?.tab === "shell.cwd"
       && of(bars, "left")?.sections.find((item) => item.id === "files.bookmarks")?.folded === true;
     await s.until("core.sidebars", chosen, "the tab and the fold were not applied");
     await s.run("core.projects.flush");
@@ -34,7 +34,7 @@ for (const app of Object.values(APPS)) {
     const project = await s.get("core.project");
     const record = read(join(dirname(project.root), "projects.json")).find((item) => item.id === project.id);
     const layout = record.spaces.find((space) => space.id === record.activeSpaceId).layout;
-    assert.deepEqual(layout.sidebars["rail-shell"], { tab: "shell.cwd", folded: [] });
+    assert.deepEqual(layout.sidebars["shell:left"], { tab: "shell.cwd", folded: [] });
     assert.deepEqual(layout.sidebars.left.folded, ["files.bookmarks"]);
 
     // 문서를 다시 불러오면 저장된 스페이스에서 같은 선택이 보인다.

@@ -152,7 +152,9 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const project = await s.get("core.project");
-    const name = `grid-${process.pid}.txt`;
+    // 이름 전체가 잉크 덩어리 하나로 측정되도록 마침표를 쓰지 않는다. 마침표 앞뒤의 빈칸은 덩어리를 나누고, 나뉜 위치는
+    // 서브픽셀 위치에 따라 행마다 달라진다.
+    const name = `grid-${process.pid}`;
     writeFileSync(join(project.root, name), "grid\n");
     s.cleanup(() => rmSync(join(project.root, name), { force: true }));
     await s.run("files.refresh");
@@ -188,17 +190,21 @@ for (const app of Object.values(APPS)) {
     }
     assert.ok(holder.x <= header.x + 0.5 && holder.width >= header.width - 1, `the section body pads the tree: holder ${JSON.stringify(holder)}, header ${JSON.stringify(header)}`);
 
-    // 글자 크기: 같은 이름을 12pt 사이드바 글자로 그린 북마크 행과 트리 행의 잉크 폭이 같다.
+    // 글자 크기: 같은 이름을 12pt 사이드바 글자로 그린 북마크 행과 트리 행의 잉크 폭이 같다. 각 행의 마지막 덩어리가 이름 전체다.
+    // 1배율 캡처에서 12pt 글자 사이의 빈칸은 3px 까지 생기고, 아이콘과 이름 사이의 빈칸은 8pt 이므로 4pt 이하의 빈칸을 잇는다.
+    const WORD_GAP = 4;
     const at = tree.entries.findIndex((entry) => entry.path === name);
-    const treeRuns = inkRuns(image, scale, { x: holder.x, y: holder.y + at * ROW, width: holder.width, height: ROW }, 5 * scale / 2);
+    const treeRuns = inkRuns(image, scale, { x: holder.x, y: holder.y + at * ROW, width: holder.width, height: ROW }, WORD_GAP * scale);
     const bookmarks = await s.get("files.bookmarks");
     const remove = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.bookmarks", bookmarks.indexOf(name)));
-    const bookmarkRuns = inkRuns(image, scale, { x: header.x, y: remove.y, width: remove.x - header.x - 2, height: remove.height }, 5 * scale / 2);
+    const bookmarkRuns = inkRuns(image, scale, { x: header.x, y: remove.y, width: remove.x - header.x - 2, height: remove.height }, WORD_GAP * scale);
     const width = ([start, end]) => (end - start + 1) / scale;
     const treeLabel = width(treeRuns.at(-1));
     const bookmarkLabel = width(bookmarkRuns.at(-1));
-    assert.ok(Math.abs(treeLabel - bookmarkLabel) <= 1,
-      `the tree row label is ${treeLabel} pt wide and the 12-point bookmark label ${bookmarkLabel} pt: tree runs ${JSON.stringify(treeRuns)}, bookmark runs ${JSON.stringify(bookmarkRuns)}`);
+    // 이름의 양 끝은 안티에일리어싱으로 각각 1 장치 픽셀까지 달라진다. 허용 폭은 2 장치 픽셀(2배율에서 1pt)이며,
+    // 1pt 큰 글자는 이 이름에서 약 6pt 넓으므로 구분된다.
+    assert.ok(Math.abs(treeLabel - bookmarkLabel) <= 2 / scale,
+      `the tree row label is ${treeLabel} pt wide and the 12-point bookmark label ${bookmarkLabel} pt (scale ${scale}): tree runs ${JSON.stringify(treeRuns)}, bookmark runs ${JSON.stringify(bookmarkRuns)}`);
 
     // 트리는 사이드바가 준 높이를 채운다.
     const section = await s.rect("core.sidebar.section", headerIndex);
@@ -224,12 +230,10 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
-    s.cleanup(() => s.run("core.settings.reset", { key: "cardSidebar" }));
-    // 셸 카드의 inset 사이드바에도 파일 트리를 둔다. 좌측 사이드바의 트리와 함께 둘이 마운트된다.
+    // 셸 카드의 안쪽 왼쪽 사이드바에도 파일 트리를 둔다. 좌측 고정 사이드바의 트리와 함께 둘이 마운트된다.
     const sets = (await s.get("core.settings")).values.sets;
     await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-shell" ? { ...set, sections: ["files.tree"] } : set) },
       scope: "common" });
-    await s.run("core.settings.change", { key: "cardSidebar", value: "inset", scope: "common" });
     const project = await s.get("core.project");
     const folder = `pair-${process.pid}`;
     const directory = join(project.root, folder);

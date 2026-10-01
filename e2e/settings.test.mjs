@@ -76,7 +76,6 @@ for (const app of Object.values(APPS)) {
 
     // 일반: 사이드바 모양이 여기 있고 플러그인 설정은 없다.
     await section(s, "general");
-    await control(s, "core.settings-modal.pick", "pick:cardSidebar:inset");
     await control(s, "core.settings-modal.set", "left");
     await control(s, "core.settings-modal.set", "right");
     await control(s, "core.settings-modal.set", "link:left:");
@@ -119,7 +118,7 @@ for (const app of Object.values(APPS)) {
       key: "terminal.cursor.shape", name: "커서 모양",
       description: "block은 칸 전체, underline은 밑줄, beam은 세로 막대로 그린다. 프로그램이 모양을 정하면 그 모양을 쓴다.",
     });
-    await control(s, "core.settings-modal.set", "link:right:terminal");
+    await control(s, "core.settings-modal.set", "link:window-right:terminal");
     for (const side of ["left", "right", "top", "bottom"]) {
       assert.equal((await control(s, "core.settings-modal.set", `link:card-${side}:terminal`)).value, "off",
         `the missing card-${side} link did not display off`);
@@ -207,9 +206,9 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
-    await s.run("core.settings.set", { patch: { cardSidebar: "inset", sidebarWidth: 150, sidebarMinWidth: 140 }, scope: "common" });
+    await s.run("core.settings.set", { patch: { sidebarWidth: 150, sidebarMinWidth: 140 }, scope: "common" });
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left?.size === 150),
-      "an inset sidebar did not open at sidebarWidth");
+      "an internal card sidebar did not open at sidebarWidth");
     const card = grid.cards.find((item) => item.sidebars?.left);
     await assert.rejects(s.run("core.card.sidebar.size", { card: card.id, side: "left", size: 130 }), /140 to 480/);
     await assert.rejects(s.run("core.settings.set", { patch: { sidebarMinWidth: 200 }, scope: "common" }),
@@ -255,35 +254,37 @@ for (const app of Object.values(APPS)) {
       await s.run("core.card.focus", { card });
       await s.until("core.sidebars", (bars) => (bars.find((bar) => bar.sidebar === "right")?.set ?? null) === want, message);
     };
-    const choose = (plugin, set) => s.run("core.settings.link", { place: "right", plugin, set, scope: "common" });
-    // 일반 사용 안 함 + 플러그인 세트 → 보인다. 기본값에서 셸은 set-process 를 고르고 일반 선택은 없다.
-    await right("shell", "set-process", "a plugin set did not show while the general choice is off");
-    // 일반 세트 + 플러그인 사용 안 함 → 숨는다.
-    await choose(null, "set-page");
-    await choose("shell", "off");
-    await right("shell", null, "plugin 사용 안 함 did not hide the right sidebar");
-    // 플러그인 일반 따름 → 일반 세트.
-    await choose("shell", "inherit");
-    await right("shell", "set-page", "plugin 일반 따름 did not show the general set");
-    await right("browser", "set-browser", "the browser set did not take precedence over the general set");
-    await assert.rejects(s.run("core.settings.link", { place: "right", plugin: null, set: "inherit", scope: "common" }), /inherit/);
+    // 일반 선택은 place right, 플러그인 오버라이드는 place window-right 이다. off 는 그 연결을 없앤다.
+    const general = (set) => s.run("core.settings.link", { place: "right", plugin: null, set, scope: "common" });
+    const override = (plugin, set) => s.run("core.settings.link", { place: "window-right", plugin, set, scope: "common" });
+    // 기본값에서 셸은 오버라이드 set-process 를 고르고 일반 선택은 없다.
+    await right("shell", "set-process", "the shell override did not show while no general choice exists");
+    // 일반 세트가 있어도 초점 플러그인의 오버라이드가 앞선다.
+    await general("set-page");
+    await right("shell", "set-process", "the general set replaced the shell override");
+    // 오버라이드를 없애면 일반 세트가 드러난다.
+    await override("shell", "off");
+    await right("shell", "set-page", "removing the shell override did not show the general set");
+    await right("browser", "set-browser", "the browser override did not take precedence over the general set");
+    await assert.rejects(general("inherit"), /inherit/);
+    await assert.rejects(override("browser", "inherit"), /inherit/);
   });
 
-  test(`${app.name}: a fresh configuration starts with inset sidebars and lists 카드 안 first`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: a fresh configuration starts with internal card sidebars and no rail column`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
-    assert.equal(await settingsValue(s, "cardSidebar"), "inset");
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left),
-      "no card holds an inset sidebar in a fresh configuration");
+      "no card holds an internal sidebar in a fresh configuration");
     assert.equal(grid.cards.some((card) => card.id.startsWith("rail-")), false, "a rail column stands in a fresh configuration");
+    // 카드 사이드바의 위치 설정은 없다. 고정 창 사이드바와 카드 안쪽 사이드바만 있다.
+    assert.equal(Object.hasOwn((await s.get("core.settings")).values, "cardSidebar"), false);
+    await assert.rejects(s.run("core.settings.set", { patch: { cardSidebar: "inset" }, scope: "common" }), /Unknown setting: cardSidebar/);
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
     await section(s, "general");
-    await control(s, "core.settings-modal.pick", "pick:cardSidebar:inset");
-    const keys = (await controls(s)).filter((c) => c.key?.startsWith("pick:cardSidebar:")).map((c) => c.key);
-    assert.deepEqual(keys, ["pick:cardSidebar:inset", "pick:cardSidebar:flow", "pick:cardSidebar:pin", "pick:cardSidebar:off"]);
+    assert.deepEqual((await controls(s)).filter((c) => c.key?.startsWith("pick:cardSidebar:")), [], "일반 shows a card sidebar position");
   });
 
   test(`${app.name}: performance tracing records enabled card focus and stops while disabled`, { timeout: 30000 }, async (t) => {

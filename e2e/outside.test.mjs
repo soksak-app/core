@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import { availableParallelism, loadavg } from "node:os";
 import test from "node:test";
 
-import { APPS, drag, fresh, keepCommonSettings, open } from "./app.mjs";
+import { APPS, drag, fresh, open } from "./app.mjs";
 import { frames, readFrame } from "./frame.mjs";
 import { outside, shellMarks, whitePixels } from "./outside.mjs";
 import { alignment } from "./alignment.mjs";
 import { assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag } from "./drag-measurement.mjs";
 
-const PLAN = { axis: "x", line: 2, dx: -250, dy: 0, ms: 400, times: 2 };
+// 1번 세로 선은 왼쪽 고정 사이드바와 셸 카드 사이 경계다. 끌면 셸 카드의 왼쪽 가장자리가 움직인다.
+const PLAN = { axis: "x", line: 1, dx: 250, dy: 0, ms: 400, times: 2 };
 
 const READ = 0.5;
 
@@ -104,9 +105,6 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    await keepCommonSettings(s);
-    // 이 검사는 사이드바 위치 flow 의 레일 카드를 쓴다. 기본값은 inset 이다.
-    await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
     const marks = await shellMarks(s);
     const run = await drag(t, s, PLAN, { capture: true });
     const lag = assertAligned(run, marks);
@@ -118,15 +116,13 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    await keepCommonSettings(s);
-    // 이 검사는 사이드바 위치 flow 의 레일 카드와 셸 카드 사이 경계를 끈다. 기본값은 inset 이다.
-    await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
+    // 왼쪽 고정 사이드바와 셸 카드 사이 경계를 끈다.
     const marks = await shellMarks(s);
     const narrow = await drag(t, s,
-      { axis: "x", line: 2, dx: -500, dy: 0, ms: 96, times: 4 }, { capture: true });
+      { axis: "x", line: 1, dx: 290, dy: 0, ms: 96, times: 4 }, { capture: true });
     assertNoWhiteSurfaceBleed(narrow, "shell divider drag to narrow", marks);
     const wide = await drag(t, s,
-      { axis: "x", line: 2, dx: 500, dy: 0, ms: 96, times: 4 }, { capture: true });
+      { axis: "x", line: 1, dx: -70, dy: 0, ms: 96, times: 4 }, { capture: true });
     assertNoWhiteSurfaceBleed(wide, "shell divider drag back to wide", marks);
   });
 }
@@ -149,11 +145,9 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    await keepCommonSettings(s);
-    await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
     const surface = (await s.get("core.grid")).cards.find((card) => card.id === "shell").active;
     await assertDocumentFillsFrame(s, surface, "at rest");
-    await drag(t, s, { axis: "x", line: 2, dx: -250, dy: 0, ms: 96, times: 1 });
+    await drag(t, s, { axis: "x", line: 1, dx: 250, dy: 0, ms: 96, times: 1 });
     await assertDocumentFillsFrame(s, surface, "after the drag");
   });
 }

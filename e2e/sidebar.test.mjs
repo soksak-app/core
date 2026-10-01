@@ -17,9 +17,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    s.cleanup(() => s.run("core.settings.reset", { key: "cardSidebar" }));
-    const railed = (grid) => grid.cards.filter((card) => card.id.startsWith("rail"));
-    await s.run("core.settings.change", { key: "cardSidebar", value: "inset", scope: "common" });
+    const railed = (grid) => grid.cards.filter((card) => card.id.startsWith("rail-"));
     const grid = await s.until("core.grid", (value) => railed(value).length === 0 && value.cards.some((card) => card.sidebars?.left),
       "no card holds an inset sidebar");
     const card = grid.cards.find((item) => item.sidebars?.left);
@@ -102,53 +100,40 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    // 기본 사이드바 위치는 inset 이다. 레일 사이드바를 보려면 flow 로 둔다.
-    s.cleanup(() => s.run("core.settings.reset", { key: "cardSidebar" }));
-    await s.run("core.settings.change", { key: "cardSidebar", value: "flow", scope: "common" });
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
-    s.cleanup(() => s.run("core.settings.reset", { key: "cardSidebar" }));
-    const rail = "rail-shell";
+    const shellSidebar = "shell:left";
     const of = (sidebars, id) => sidebars.find((item) => item.sidebar === id);
     const mounted = (item, ids) => item && ids.every((id) => item.sections.find((value) => value.id === id)?.mounted);
 
     // list: 셸 레일의 세트는 두 섹션을 모두 마운트한다.
-    let sidebars = await s.until("core.sidebars", (value) => mounted(of(value, rail), ["shell.history", "shell.cwd"]),
-      "the shell rail did not mount both sections");
-    const listed = of(sidebars, rail);
+    let sidebars = await s.until("core.sidebars", (value) => mounted(of(value, shellSidebar), ["shell.history", "shell.cwd"]),
+      "the shell card sidebar did not mount both sections");
+    const listed = of(sidebars, shellSidebar);
     assert.equal(listed.layout, "list");
     assert.deepEqual(listed.sections.map((item) => [item.id, item.folded, item.error]),
       [["shell.history", false, null], ["shell.cwd", false, null]]);
     const shellCard = (await s.get("core.grid")).cards.find((card) => card.id === "shell");
     assert.deepEqual([listed.card, listed.surface], ["shell", shellCard.active], "the sections received the focused card and tab");
     // 네이티브 클릭으로 머리를 누르면 그 섹션이 접힌다.
-    await press(s, "core.sidebar.section.header", indexOf(sidebars, "list", rail, "shell.cwd"));
-    sidebars = await s.until("core.sidebars", (value) => of(value, rail)?.sections[1].folded === true,
+    await press(s, "core.sidebar.section.header", indexOf(sidebars, "list", shellSidebar, "shell.cwd"));
+    sidebars = await s.until("core.sidebars", (value) => of(value, shellSidebar)?.sections[1].folded === true,
       "a click on the header did not fold the section");
-    assert.equal(of(sidebars, rail).sections[0].folded, false);
+    assert.equal(of(sidebars, shellSidebar).sections[0].folded, false);
 
     // tabs: 같은 세트를 tabs 로 바꾸면 고른 섹션 하나만 마운트한다.
     const sets = (await s.get("core.settings")).values.sets;
     await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-shell" ? { ...set, layout: "tabs" } : set) },
       scope: "common" });
-    sidebars = await s.until("core.sidebars", (value) => of(value, rail)?.layout === "tabs" && mounted(of(value, rail), ["shell.history"]),
+    sidebars = await s.until("core.sidebars", (value) => of(value, shellSidebar)?.layout === "tabs" && mounted(of(value, shellSidebar), ["shell.history"]),
       "the tabs layout did not mount the first section");
-    assert.equal(of(sidebars, rail).tab, "shell.history");
-    assert.equal(of(sidebars, rail).sections[1].mounted, false, "a section of an unselected tab is mounted");
-    await press(s, "core.sidebar.section.tab", indexOf(sidebars, "tabs", rail, "shell.cwd"));
-    sidebars = await s.until("core.sidebars", (value) => of(value, rail)?.tab === "shell.cwd" && mounted(of(value, rail), ["shell.cwd"]),
+    assert.equal(of(sidebars, shellSidebar).tab, "shell.history");
+    assert.equal(of(sidebars, shellSidebar).sections[1].mounted, false, "a section of an unselected tab is mounted");
+    await press(s, "core.sidebar.section.tab", indexOf(sidebars, "tabs", shellSidebar, "shell.cwd"));
+    sidebars = await s.until("core.sidebars", (value) => of(value, shellSidebar)?.tab === "shell.cwd" && mounted(of(value, shellSidebar), ["shell.cwd"]),
       "a click on the tab did not show its section");
-    assert.equal(of(sidebars, rail).sections[0].mounted, false, "the previous tab's section stayed mounted");
+    assert.equal(of(sidebars, shellSidebar).sections[0].mounted, false, "the previous tab's section stayed mounted");
 
-    // 선택은 사이드바마다 유지된다. inset 사이드바는 자기 선택으로 시작하고, 레일로 돌아오면 레일의 선택이 남아 있다.
-    await s.run("core.settings.change", { key: "cardSidebar", value: "inset", scope: "common" });
-    sidebars = await s.until("core.sidebars", (value) => !of(value, rail) && mounted(of(value, "shell:left"), ["shell.history"]),
-      "the inset sidebar did not mount its first tab");
-    assert.equal(of(sidebars, "shell:left").tab, "shell.history");
-    await s.run("core.sidebar.section.select", { sidebar: "shell:left", section: "shell.history" });
-    await s.run("core.settings.change", { key: "cardSidebar", value: "flow", scope: "common" });
-    sidebars = await s.until("core.sidebars", (value) => of(value, rail)?.tab === "shell.cwd" && mounted(of(value, rail), ["shell.cwd"]),
-      "the rail did not keep its selection");
-    await assert.rejects(s.run("core.sidebar.section.fold", { sidebar: rail, section: "shell.cwd" }), /does not use the list layout/);
+    await assert.rejects(s.run("core.sidebar.section.fold", { sidebar: shellSidebar, section: "shell.cwd" }), /does not use the list layout/);
   });
 }
 
@@ -172,21 +157,18 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    // 기본 사이드바 위치는 inset 이다. 레일 사이드바를 보려면 flow 로 둔다.
-    s.cleanup(() => s.run("core.settings.reset", { key: "cardSidebar" }));
-    await s.run("core.settings.change", { key: "cardSidebar", value: "flow", scope: "common" });
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
-    const rail = "rail-shell";
+    const shellSidebar = "shell:left";
     const sections = ["shell.history", "shell.cwd", "shell.jobs"];
     const sets = (await s.get("core.settings")).values.sets;
     await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-shell" ? { ...set, sections } : set) },
       scope: "common" });
-    const of = (sidebars) => sidebars.find((item) => item.sidebar === rail);
+    const of = (sidebars) => sidebars.find((item) => item.sidebar === shellSidebar);
     const text = (sidebars, id) => of(sidebars)?.sections.find((item) => item.id === id)?.text;
     let sidebars = await s.until("core.sidebars", (value) => sections.every((id) => text(value, id) !== undefined
-      && of(value).sections.find((item) => item.id === id).mounted), "the shell rail did not mount the three sections");
+      && of(value).sections.find((item) => item.id === id).mounted), "the shell card sidebar did not mount the three sections");
     const surface = of(sidebars).surface;
-    assert.ok(surface, "the rail sections received the shell tab");
+    assert.ok(surface, "the shell card sidebar sections received the shell tab");
 
     // cwd: 섹션은 shell.cwd 가 보고한 디렉터리를 보인다.
     await s.run("shell.write", { data: "cd /\n" }, surface);
@@ -199,7 +181,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(history.at(-1), "cd /");
     sidebars = await s.until("core.sidebars", (value) => text(value, "shell.history") === history.join(""),
       "the run history section did not show shell.history");
-    await press(s, "core.sidebar.section.control", controlIndex(sidebars, rail, "shell.history", history.length - 1));
+    await press(s, "core.sidebar.section.control", controlIndex(sidebars, shellSidebar, "shell.history", history.length - 1));
     await s.until("shell.history", (value) => value.length === history.length + 1 && value.at(-1) === "cd /",
       "a click on a history entry did not write the line again", { surface });
 
@@ -210,7 +192,7 @@ for (const app of Object.values(APPS)) {
     sidebars = await s.until("core.sidebars", (value) => text(value, "shell.jobs") === "sleep 30중단",
       "the jobs section did not show the pending run");
     const entries = (await s.get("shell.history", surface)).length;
-    await press(s, "core.sidebar.section.control", controlIndex(sidebars, rail, "shell.jobs", 0));
+    await press(s, "core.sidebar.section.control", controlIndex(sidebars, shellSidebar, "shell.jobs", 0));
     await s.until("shell.jobs", (value) => value.length === 0, "the interrupt control did not end the run", { surface });
     assert.equal((await s.get("shell.history", surface)).length, entries, "the press wrote a history line instead");
     const ended = await running;
@@ -333,10 +315,6 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    // 기본 사이드바 위치는 inset 이다. 레일 사이드바를 보려면 flow 로 둔다.
-    s.cleanup(() => s.run("core.settings.reset", { key: "cardSidebar" }));
-    await s.run("core.settings.change", { key: "cardSidebar", value: "flow", scope: "common" });
-    s.cleanup(() => s.run("core.settings.reset", { key: "cardSidebar" }));
     const locate = async (sidebar) => {
       const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === sidebar)?.sections.every((item) => item.mounted),
         `sidebar ${sidebar} did not mount its sections`);
@@ -358,7 +336,8 @@ for (const app of Object.values(APPS)) {
     const top = cardHeaders.reduce((a, b) => (b.y < a.y ? b : a));
     const cardFooters = await rects(s, "core.card.status");
     const bottom = cardFooters.reduce((a, b) => (b.y + b.height > a.y + a.height ? b : a));
-    for (const sidebar of ["left", "right", "rail-shell"]) {
+    // 창 사이드바는 이웃 카드의 머리와 발 줄에 맞춘다. 카드 안쪽 사이드바는 아래에서 카드 머리 기준으로 잰다.
+    for (const sidebar of ["left", "right"]) {
       const { header, line } = await locate(sidebar);
       assert.ok(near(header.y + header.height, top.y + top.height),
         `${sidebar}: the first header rule is at ${header.y + header.height}, the card header rule at ${top.y + top.height}`);
@@ -367,8 +346,7 @@ for (const app of Object.values(APPS)) {
     // 머리의 아래 선은 머리 배경과 디자인만큼 구별된다(디자인: #20232d 머리 위 #2a2d3a 선).
     const ratio = await headerRuleContrast(s, (await locate("left")).header);
     assert.ok(ratio >= DESIGN_RULE_CONTRAST, `the header rule contrast ${ratio.toFixed(3)} is below the design's ${DESIGN_RULE_CONTRAST.toFixed(3)}`);
-    // inset 사이드바는 카드 머리 줄을 함께 쓰므로 첫 섹션이 그 머리 바로 아래에서 시작한다.
-    await s.run("core.settings.change", { key: "cardSidebar", value: "inset", scope: "common" });
+    // 카드 안쪽 사이드바는 카드 머리 줄을 함께 쓰므로 첫 섹션이 그 머리 바로 아래에서 시작한다.
     await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "shell:left"), "the inset sidebar was not drawn");
     const shellHeader = (await rects(s, "core.card.header")).reduce((a, b) => (b.y < a.y ? b : a));
     const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === "shell:left")?.sections.every((item) => item.mounted),
@@ -448,9 +426,6 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    // 기본 사이드바 위치는 inset 이다. 레일 사이드바를 보려면 flow 로 둔다.
-    s.cleanup(() => s.run("core.settings.reset", { key: "cardSidebar" }));
-    await s.run("core.settings.change", { key: "cardSidebar", value: "flow", scope: "common" });
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
     const sets = (await s.get("core.settings")).values.sets;
     await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-shell" ? { ...set, layout: "tabs" } : set) },
@@ -470,7 +445,7 @@ for (const app of Object.values(APPS)) {
         assert.ok(near(tab.height, strip.height), `${sidebar}: tab ${item.sections[index].id} is ${tab.height} pt high in a ${strip.height} pt strip`);
       }
     };
-    await check("rail-shell");
+    await check("shell:left");
     // 우측 사이드바는 브라우저 카드에 포커스하면 tabs 레이아웃의 브라우저 세트를 보인다.
     await s.run("core.card.focus", { card: "browser" });
     await check("right");
@@ -482,10 +457,6 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    // 기본 사이드바 위치는 inset 이다. 레일 사이드바를 보려면 flow 로 둔다.
-    s.cleanup(() => s.run("core.settings.reset", { key: "cardSidebar" }));
-    await s.run("core.settings.change", { key: "cardSidebar", value: "flow", scope: "common" });
-    s.cleanup(() => s.run("core.settings.reset", { key: "cardSidebar" }));
     // 좌측 세트(파일 트리, 북마크)는 문서에서 첫 list 사이드바다.
     const sidebars = await s.until("core.sidebars", (value) => value[0]?.sidebar === "left" && value[0].layout === "list"
       && value[0].sections.length >= 2, "the left sidebar did not draw two list sections");
