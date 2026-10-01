@@ -354,33 +354,42 @@ const newest = (items) => items.reduce((best, item) => (compareVersions(item.ver
 
 /**
  * 설치할 plugin version 과 그 sidecar version 을 고른다. Plugin 은 engines.soksak 이 core 를 포함하고 revoked 가
- * 아닌 가장 새 version 이고, sidecar 는 그 범위를 채우고 platform asset 이 있으며 revoked 가 아닌 가장 새 version
- * 이다. 고를 수 없으면 이유를 담은 예외를 던진다. 반환값은 { plugin, version, sidecars: [{ name, version, asset }] } 다.
+ * 아닌 가장 새 version 이다. Sidecar 는 한 설치에 version 하나이므로, 그 version 의 범위와 installed 의 다른
+ * plugin 이 지정한 범위를 모두 채워야 한다. 쓰고 있는 version 이 범위를 모두 채우고 revoked 가 아니며 platform
+ * asset 이 있으면 그대로 두고, 아니면 그런 version 중 가장 새 것을 고른다. 고를 수 없으면 이유를 담은 예외를
+ * 던진다. 반환값은 { plugin, version, sidecars: [{ name, version, asset }] } 다.
  */
-export function resolveInstall(index, id, core, platform) {
+export function resolveInstall(index, id, core, platform, installed = { format: INSTALL_FORMAT, plugins: {}, sidecars: {} }) {
   const plugin = index.plugins.find((entry) => entry.id === id);
   if (!plugin) throw new Error(`plugin ${id} is not in the registry`);
   const usable = plugin.versions.filter((item) => satisfies(core, item.engines.soksak) && !revokedPlugin(index, id, item.version));
   if (usable.length === 0) throw new Error(`plugin ${id} has no version for core ${core}`);
   const chosen = newest(usable);
   const sidecars = Object.entries(chosen.sidecars).map(([name, range]) => {
+    const ranges = [[`${id} ${chosen.version}`, range]];
+    for (const [other, item] of Object.entries(installed.plugins)) {
+      if (other !== id && Object.hasOwn(item.sidecars, name)) ranges.push([`${other} ${item.version}`, item.sidecars[name]]);
+    }
     const entry = index.sidecars.find((item) => item.name === name);
-    const candidates = entry.versions.filter((item) => satisfies(item.version, range) && !revokedSidecar(index, name, item.version)
-      && Object.hasOwn(item.assets, platform));
-    if (candidates.length === 0) throw new Error(`plugin ${id} ${chosen.version} needs ${name} ${range}, which has no version for ${platform}`);
-    const version = newest(candidates);
+    const candidates = entry.versions.filter((item) => ranges.every(([, wanted]) => satisfies(item.version, wanted))
+      && !revokedSidecar(index, name, item.version) && Object.hasOwn(item.assets, platform));
+    if (candidates.length === 0) {
+      const needs = ranges.map(([who, wanted]) => `${who} needs ${wanted}`).join(", ");
+      throw new Error(`sidecar ${name} has no version for ${platform} that satisfies every installed plugin: ${needs}`);
+    }
+    const version = candidates.find((item) => item.version === installed.sidecars[name]) ?? newest(candidates);
     return { name, version: version.version, asset: version.assets[platform] };
   });
   return { plugin, version: chosen, sidecars };
 }
 
 /**
- * 설치 상태 파일(`plugins/installed.json`). plugin id 마다 package 이름, 쓰는 version, 켜짐 여부, 되돌릴 이전
- * version 을 담는다.
+ * 설치 상태 파일(`plugins/installed.json`). plugin id 마다 package 이름, 쓰는 version, 켜짐 여부, 그 version 의
+ * sidecar 범위, 되돌릴 이전 version 을 담고, sidecar 마다 모든 plugin 이 함께 쓰는 version 하나를 담는다.
  */
 export function validateInstalled(installed) {
   object(INSTALLED, installed);
-  only(INSTALLED, installed, ["format", "plugins"]);
+  only(INSTALLED, installed, ["format", "plugins", "sidecars"]);
   if (installed.format !== INSTALL_FORMAT) throw new Error(`${INSTALLED}: format must be ${INSTALL_FORMAT}`);
   object(`${INSTALLED} plugins`, installed.plugins);
   const packages = new Set();
@@ -388,13 +397,27 @@ export function validateInstalled(installed) {
     const where = `${INSTALLED} ${id}`;
     if (!ID.test(id)) throw new Error(`${where}: id must be a lowercase identifier`);
     object(where, item);
-    only(where, item, ["package", "version", "enabled", "previous"]);
+    only(where, item, ["package", "version", "enabled", "sidecars", "previous"]);
     checkPackageName(`${where} package`, item.package);
     if (packages.has(item.package)) throw new Error(`${where}: package ${item.package} is installed twice`);
     packages.add(item.package);
     checkVersion(`${where} version`, item.version);
     if (typeof item.enabled !== "boolean") throw new Error(`${where}: enabled must be true or false`);
     if (item.previous !== undefined) checkVersion(`${where} previous`, item.previous);
+    checkSidecarRanges(`${where} sidecars`, item.sidecars);
+  }
+  object(`${INSTALLED} sidecars`, installed.sidecars);
+  const named = new Set(Object.values(installed.plugins).flatMap((item) => Object.keys(item.sidecars)));
+  for (const [name, version] of Object.entries(installed.sidecars)) {
+    checkVersion(`${INSTALLED} sidecar ${name}`, version);
+    if (!named.has(name)) throw new Error(`${INSTALLED}: sidecar ${name} is named by no installed plugin`);
+  }
+  for (const [id, item] of Object.entries(installed.plugins)) {
+    for (const [name, range] of Object.entries(item.sidecars)) {
+      const version = installed.sidecars[name];
+      if (version === undefined) throw new Error(`${INSTALLED} ${id}: sidecar ${name} has no version in use`);
+      if (!satisfies(version, range)) throw new Error(`${INSTALLED} ${id}: sidecar ${name} ${version} does not satisfy ${range}`);
+    }
   }
   return installed;
 }

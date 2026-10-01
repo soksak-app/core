@@ -50,8 +50,8 @@ Registry index `index.json`은 `format` 1과 다음 목록을 가진다.
 
 ## Version 선택
 
-Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 core version을 포함하고 revoked가 아닌 가장 새 plugin version을 고른다. 그 version의 sidecar마다 범위 안에 있고 revoked가 아니며 그 플랫폼 asset이 있는 가장 새 sidecar version을 고른다. 어느 쪽이든 고를 것이 없으면 설치는 plugin, version이나 범위, core version이나 플랫폼을 밝혀 실패한다.
+Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 core version을 포함하고 revoked가 아닌 가장 새 plugin version을 고른다. 한 설치에서 sidecar는 version 하나이며, 그 sidecar를 지정한 설치된 plugin이 모두 함께 쓴다. 고른 plugin version의 sidecar마다, 범위는 그 version의 범위와 그 sidecar를 지정한 다른 설치된 plugin의 범위다. 쓰고 있는 version이 모든 범위를 채우고 revoked가 아니며 그 플랫폼 asset이 있으면 그대로 두고, 아니면 모든 범위를 채우고 revoked가 아니며 그 플랫폼 asset이 있는 가장 새 sidecar version을 고른다. 고를 것이 없으면 설치는 plugin, version이나 범위, core version이나 플랫폼을 밝혀 실패하며, sidecar의 경우 각 plugin과 범위를 밝힌다.
 
 ## 설치 배치
 
-설정 폴더 안에서 `<id>`의 plugin version `<version>`은 `plugins/<id>/<version>`에, sidecar version의 플랫폼 asset은 `sidecars/<file name>/<version>/<platform>`에 푼다. `plugins/installed.json`은 `format` 1과 `plugins`를 가지며, `plugins`는 plugin id마다 `{ package, version, enabled, previous? }`를 정한다. 각각 package 이름, 쓰는 version, 불러올지 여부, 되돌리기가 복원할 version이다. 한 package는 한 번만 나온다.
+설정 폴더 안에서 `<id>`의 plugin version `<version>`은 `plugins/<id>/<version>`에, sidecar version의 플랫폼 asset은 `sidecars/<file name>/<version>/<platform>`에 푼다. `plugins/installed.json`은 `format` 1, `plugins`, `sidecars`를 가진다. `plugins`는 plugin id마다 `{ package, version, enabled, sidecars, previous? }`를 정한다. 각각 package 이름, 쓰는 version, 불러올지 여부, 그 version의 sidecar 범위, 되돌리기가 복원할 version이다. 한 package는 한 번만 나온다. `sidecars`는 설치된 plugin이 지정한 sidecar마다 쓰는 version을 정하며, 그 version은 그 sidecar를 지정한 모든 설치된 plugin의 범위를 채운다. 어느 설치된 plugin도 지정하지 않은 sidecar는 나오지 않는다.

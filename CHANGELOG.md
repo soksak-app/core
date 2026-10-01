@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-2-1: `plugins/installed.json` records the sidecar version in use and each plugin's sidecar ranges, and installation keeps one sidecar version that satisfies every installed plugin.
+
 - R1-8-3: each application bundle holds its `sok`, `sok path install` puts it on `PATH` through `/etc/paths.d`, the Node command line `packages/cli` is removed, and `docs/operations/sok.md` explains the use.
 
 - F0.4-1-1-4: the parity inventory links the merged sidecar failure delivery to its implementation and tests.

@@ -113,6 +113,24 @@ test("installation resolves the newest usable plugin and sidecar versions for th
   assert.throws(() => resolveInstall(registry, "gone", "0.0.2", "darwin-arm64"), /plugin gone is not in the registry/);
 });
 
+test("installation keeps one sidecar version that satisfies every installed plugin", () => {
+  const registry = validateRegistryIndex(index());
+  const other = (range, version) => ({ format: 1,
+    plugins: { other: { package: "plugin-other", version: "1.0.0", enabled: true, sidecars: { "@scope/sidecar-worker": range } } },
+    sidecars: { "@scope/sidecar-worker": version } });
+  // 다른 plugin 이 0.1.0 을 쓰고 있고 그 version 이 두 범위를 채우므로 더 새 0.1.1 대신 0.1.0 을 그대로 둔다.
+  assert.deepEqual(resolveInstall(registry, "probe", "0.0.2", "darwin-arm64", other("^0.1.0", "0.1.0")).sidecars.map(({ version }) => version), ["0.1.0"]);
+  // 다른 plugin 의 범위가 0.1.0 만 허용하면 쓰던 version 이 없어도 두 범위를 채우는 0.1.0 을 고른다.
+  assert.deepEqual(resolveInstall(registry, "probe", "0.0.2", "darwin-arm64", other("0.1.0", "0.1.0")).sidecars.map(({ version }) => version), ["0.1.0"]);
+  // 범위를 함께 채우는 version 이 없으면 각 plugin 과 범위를 밝혀 실패한다.
+  assert.throws(() => resolveInstall(registry, "probe", "0.0.2", "darwin-arm64", other("^0.2.0", "0.2.0")),
+    /sidecar @scope\/sidecar-worker has no version for darwin-arm64 that satisfies every installed plugin: probe 0.2.0 needs \^0.1.0, other 1.0.0 needs \^0.2.0/);
+  // 같은 plugin 의 이전 version 범위는 새 version 을 막지 않는다.
+  const self = { format: 1, plugins: { probe: { package: "@scope/plugin-probe", version: "0.1.0", enabled: true, sidecars: { "@scope/sidecar-worker": "0.1.0" } } },
+    sidecars: { "@scope/sidecar-worker": "0.1.0" } };
+  assert.deepEqual(resolveInstall(registry, "probe", "0.0.2", "darwin-arm64", self).sidecars.map(({ version }) => version), ["0.1.0"]);
+});
+
 test("archives and installation paths follow the declared names", () => {
   assert.equal(pluginArchiveName("probe", "0.2.0"), "probe-0.2.0.tgz");
   assert.equal(sidecarAssetName("@scope/sidecar-worker", "0.1.1", "darwin-arm64"), "scope-sidecar-worker-0.1.1-darwin-arm64.tar.gz");
@@ -123,15 +141,20 @@ test("archives and installation paths follow the declared names", () => {
   assert.ok(PLATFORMS.every((platform) => /^(darwin|linux|windows)-(arm64|x64)$/.test(platform)));
 });
 
-test("the installed state names one version of each plugin and rejects a package installed twice", () => {
+test("the installed state names one version of each plugin and sidecar and rejects inconsistent entries", () => {
   const installed = { format: 1, plugins: {
-    probe: { package: "@scope/plugin-probe", version: "0.2.0", enabled: true, previous: "0.1.0" },
-    side: { package: "plugin-side", version: "1.0.0", enabled: false },
-  } };
+    probe: { package: "@scope/plugin-probe", version: "0.2.0", enabled: true, previous: "0.1.0", sidecars: { "@scope/sidecar-worker": "^0.1.0" } },
+    side: { package: "plugin-side", version: "1.0.0", enabled: false, sidecars: {} },
+  }, sidecars: { "@scope/sidecar-worker": "0.1.1" } };
   assert.equal(validateInstalled(installed), installed);
-  assert.throws(() => validateInstalled({ format: 1, plugins: { probe: { package: "@scope/plugin-probe", version: "0.2.0" } } }),
-    /enabled must be true or false/);
-  assert.throws(() => validateInstalled({ format: 1, plugins: {
-    a: { package: "p", version: "1.0.0", enabled: true }, b: { package: "p", version: "1.0.0", enabled: true },
-  } }), /package p is installed twice/);
+  const changed = (change) => { const copy = structuredClone(installed); change(copy); return copy; };
+  assert.throws(() => validateInstalled(changed((copy) => { delete copy.plugins.probe.enabled; })), /enabled must be true or false/);
+  assert.throws(() => validateInstalled(changed((copy) => { copy.plugins.side.package = "@scope/plugin-probe"; })),
+    /package @scope\/plugin-probe is installed twice/);
+  assert.throws(() => validateInstalled(changed((copy) => { delete copy.sidecars; })), /installed.json sidecars: expected an object/);
+  assert.throws(() => validateInstalled(changed((copy) => { delete copy.plugins.side.sidecars; })), /side sidecars: expected an object/);
+  assert.throws(() => validateInstalled(changed((copy) => { copy.sidecars = {}; })), /probe: sidecar @scope\/sidecar-worker has no version in use/);
+  assert.throws(() => validateInstalled(changed((copy) => { copy.sidecars["@scope/sidecar-worker"] = "0.2.0"; })),
+    /probe: sidecar @scope\/sidecar-worker 0.2.0 does not satisfy \^0.1.0/);
+  assert.throws(() => validateInstalled(changed((copy) => { copy.sidecars.unused = "1.0.0"; })), /sidecar unused is named by no installed plugin/);
 });

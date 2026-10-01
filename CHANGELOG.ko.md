@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-2-1: `plugins/installed.json`이 쓰는 sidecar version과 plugin마다의 sidecar 범위를 기록하고, 설치는 모든 설치된 plugin을 채우는 sidecar version 하나를 유지한다.
+
 - R1-8-3: 각 애플리케이션 bundle이 자기 `sok`을 담고, `sok path install`이 `/etc/paths.d`로 그것을 `PATH`에 올리며, Node command line `packages/cli`를 삭제했고, `docs/operations/sok.md`가 사용법을 설명한다.
 
 - F0.4-1-1-4: parity inventory가 merge한 sidecar 실패 전달을 구현과 test에 연결한다.
