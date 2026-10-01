@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-117-1-3-4-3: 새 window check가 사이드바에 맞닿은 카드의 rail을 loop 하나, 떨어진 카드를 loop 둘, 카드 전체 화면에서 rail 없음, 복원 뒤 loop 둘로 기록하며, 두 host에서 완전한 recording과 rail pixel을 확인한다.
+
 - F2.2-2: 두 앱을 실행하고 강제 종료해 terminal service를 남기던 낡은 `e2e/webkit-reaping.mjs`를 제거한다. 정상 종료는 service를 끝낸다.
 
 - G1.4-17: files 북마크 행이 긴 경로를 말줄임으로 끝내고, 삭제 버튼을 경로 바로 뒤가 아니라 그 오른쪽 8 point에 둔다.

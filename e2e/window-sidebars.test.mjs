@@ -5,6 +5,7 @@ import {rmSync} from "node:fs";
 import {APPS,fresh,open} from "./app.mjs";
 import {turnOffCardSidebars} from "./card-sidebar-choices.mjs";
 import {frames,readFrame,pixel} from "./frame.mjs";
+import {railPixels} from "./rail.mjs";
 const geometry=grid=>grid.cards.map(({id,x,y,w,h})=>({id,x,y,w,h})).sort((a,b)=>a.id.localeCompare(b.id));
 function borders(frame,grid,cards){
  const scale=frame.scale*frame.contentScale;
@@ -15,20 +16,6 @@ function borders(frame,grid,cards){
    const y=Math.floor(frame.content.y*frame.scale+(grid.plane.y+card.y+card.h/2+delta)*scale);
    return pixel(frame,x,y).every((value,index)=>Math.abs(value-[43,46,61][index])<=3);
   })),`window sidebar ${card.id} lost its ${edge===card.x?'left':'right'} border at ${frame.time}ms`);
- }
-}
-function railPixels(frame,grid,rail){
- const scale=frame.scale*frame.contentScale;
- for(const group of rail.groups)for(const loop of group.loops){
-  const pair=loop.map((a,index)=>[a,loop[(index+1)%loop.length]])
-   .find(([a,b])=>a.x===b.x&&Math.abs(a.y-b.y)>64);
-  assert.ok(pair,'rail outline has no measurable vertical segment');
-  const [a,b]=pair;
-  assert.ok([-1,-0.5,0,0.5,1].some(offset=>{
-   const x=Math.floor(frame.content.x*frame.scale+(grid.plane.x+a.x+offset)*scale);
-   const y=Math.floor(frame.content.y*frame.scale+(grid.plane.y+(a.y+b.y)/2)*scale);
-   return pixel(frame,x,y).every((value,index)=>Math.abs(value-[114,121,255][index])<=5);
-  }),`rail border for ${group.card} is absent at ${frame.time}ms`);
  }
 }
 for(const app of Object.values(APPS))test(`${app.name}: fixed sidebars apply plugin overrides without extra columns`,{timeout:90000},async t=>{

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-3-4-3: a new window check records the rail as one loop for a card next to its sidebar, two loops for a detached card, no rail in card fullscreen and two loops after restoration, with complete recordings and rail pixels on both hosts.
+
 - F2.2-2: the obsolete `e2e/webkit-reaping.mjs`, which launched and killed both applications and left their terminal services running, is removed; a normal quit ends the services.
 
 - G1.4-17: the files bookmark rows end a long path with an ellipsis and place the remove button 8 points to its right instead of directly after the path.
