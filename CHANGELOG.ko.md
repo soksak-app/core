@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-8: 압축된 작은따옴표 형식으로 쓴 e2e file 12개가 주변 file의 형식을 쓴다. 동작은 바뀌지 않는다.
+
 - V5-116-4-7: Tauri endpoint가 이미 끊긴 연결을 닫는 것을 `Socket is not connected (os error 57)`로 기록하지 않고 성공으로 처리하며, 다른 shutdown 오류는 보고한다.
 
 - V5-116-4-10: 두 host가 trace 명세대로 10 MB에서 성능 출력을 `performance.ndjson.1`로 rotation하고, 중계한 page 줄에 자기 `pid`를 기록한다.

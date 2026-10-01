@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-8: twelve e2e files written in a compressed single-quote style use the formatting of their neighbours; behavior is unchanged.
+
 - V5-116-4-7: the Tauri endpoint treats closing an already disconnected connection as success instead of logging `Socket is not connected (os error 57)`, and reports other shutdown errors.
 
 - V5-116-4-10: both hosts rotate the performance output to `performance.ndjson.1` at 10 MB and record their `pid` on relayed page lines, as the trace specification requires.
