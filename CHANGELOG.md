@@ -12,6 +12,8 @@
 
 - V5-117-1-3-4-7-1-3-1: switching to a space, or closing the active space into one, whose saved layout cannot be opened fails before the active space changes. The switch had changed the active space before the layout validation failed.
 
+- F0.4-1-1: report sidecar output failures to pages. Both hosts bound a stdio sidecar message at 64 MiB before its newline while reading; an oversize line, an invalid message, a read error, or an output end outside stop terminates the process and delivers `sidecar-failure` `{sidecar, surface, reason}` to each owning window of a surface that sent to it, and the next send starts a new process. The page port and the state context gain `onFailure`, and the workbench reports a failure without a handler as a page error. Validated with new Wails and Tauri host tests, four host contract cases (240 of 240 pass in both hosts), and plugin-api, runtime, and workbench tests.
+
 - G1.4-16: count the tests that `make node-repeat` actually ran. It read a colored human reporter line and also counted a test file without matching tests as a pass; it now reads TAP results whose titles match the name pattern.
 
 - G1.4-14-3: window checks no longer set the retired `rail` and `cardSidebar` settings and measure the fixed sidebar cards and internal card sidebars instead; the saved-layout check expects the validation error, and the files label check measures the whole label with a device-pixel tolerance.
