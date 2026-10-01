@@ -34,6 +34,8 @@ pub(crate) struct WindowData {
     pub running: Running,
     pub root: Mutex<String>,
     pub ready: AtomicBool,
+    /// 막지 않은 닫기 요청을 받은 창. 이 창은 Destroyed 전에 runtime 에서 사라지므로 목록에 넣지 않는다.
+    pub closing: AtomicBool,
     /// 다음 페이지 준비를 기다리는 요청.
     pub readied: Mutex<Vec<std::sync::mpsc::Sender<()>>>,
     /// 표면 페이지가 등록한 항목 (표면, 종류, 이름). 메인 페이지가 다시 읽히면 새 페이지에 다시 알린다.
@@ -185,36 +187,56 @@ pub(crate) fn find(app: &AppHandle, label: &str) -> Option<Window> {
 
 /// 등록된 창의 식별자, 제목, 소유 프로젝트 id, 키 창 여부를 창 식별자 순서로 반환한다.
 pub(crate) fn list(app: &AppHandle) -> Result<serde_json::Value, String> {
-    let registry = app.state::<Windows>();
-    let mut labels: Vec<String> = registry
+    // 식별자와 상태를 한 번에 읽는다. 따로 읽으면 그 사이에 Destroyed 가 등록을 지울 수 있다.
+    let mut registered: Vec<(String, Arc<WindowData>)> = app
+        .state::<Windows>()
         .windows
         .lock()
         .map_err(|e| e.to_string())?
-        .keys()
-        .cloned()
+        .iter()
+        .map(|(label, data)| (label.clone(), data.clone()))
         .collect();
-    labels.sort();
+    registered.sort_by(|a, b| a.0.cmp(&b.0));
     let mut listed = Vec::new();
-    for label in labels {
+    for (label, data) in registered {
         let Some(window) = app.get_window(&label) else {
             continue;
         };
-        let root = window_data(&window)?
-            .root
-            .lock()
-            .map_err(|e| e.to_string())?
-            .clone();
-        let project = if root.is_empty() { None } else { Some(root) };
-        let ready = window_data(&window)?.ready.load(Ordering::Relaxed);
-        listed.push(serde_json::json!({
-            "ready": ready,
-            "window": label,
-            "title": window.title().map_err(|e| e.to_string())?,
-            "project": project,
-            "key": window.is_focused().map_err(|e| e.to_string())?,
-        }));
+        let root = data.root.lock().map_err(|e| e.to_string())?.clone();
+        let entry = window_entry(
+            &label,
+            data.closing.load(Ordering::Relaxed),
+            data.ready.load(Ordering::Relaxed),
+            root,
+            || window.title().map_err(|e| e.to_string()),
+            || window.is_focused().map_err(|e| e.to_string()),
+        )?;
+        listed.extend(entry);
     }
     Ok(serde_json::Value::Array(listed))
+}
+
+/// host.windows 의 창 하나. 닫기가 받아들여진 창은 조회하지 않고 None 이다. 그 창은 Destroyed 전에
+/// runtime 에서 사라져 제목과 초점 조회가 실패하기 때문이다. 다른 창의 조회 실패는 오류로 반환한다.
+pub fn window_entry(
+    label: &str,
+    closing: bool,
+    ready: bool,
+    root: String,
+    title: impl FnOnce() -> Result<String, String>,
+    key: impl FnOnce() -> Result<bool, String>,
+) -> Result<Option<serde_json::Value>, String> {
+    if closing {
+        return Ok(None);
+    }
+    let project = if root.is_empty() { None } else { Some(root) };
+    Ok(Some(serde_json::json!({
+        "ready": ready,
+        "window": label,
+        "title": title()?,
+        "project": project,
+        "key": key()?,
+    })))
 }
 
 /// 창에 열린 프로젝트 id 목록을 반환한다.
@@ -318,6 +340,10 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             if let Err(error) = emit_window(&host, "project-close-request", ()) {
                 eprintln!("{error}");
             }
+        }
+        tauri::WindowEvent::CloseRequested { .. } => {
+            // 막지 않은 닫기 요청이다. 창은 곧 runtime 에서 사라지므로 목록에서 뺀다.
+            context.closing.store(true, Ordering::Relaxed);
         }
         tauri::WindowEvent::Destroyed => {
             crate::exposure::window_closed(&host);

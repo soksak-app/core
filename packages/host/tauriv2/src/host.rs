@@ -39,7 +39,7 @@ pub use surfaces::surface_owner_id;
 pub mod termination;
 mod theme;
 pub mod webkit_children;
-mod windows;
+pub mod windows;
 pub mod workspace;
 
 use sidecars::WindowSidecars;

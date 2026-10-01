@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-5-1: the Tauri host answers `host.windows` while a window closes by leaving out the closing window, instead of failing with `failed to receive message from webview`; window checks name the status of a failed watch.
+
 - G1.4-14-5: the covered window check reports the frame, occlusion and activity of both windows and the frontmost application when the checked window becomes uncovered.
 
 - G1.4-21: the host parity check reports both hosts' requests and answers when a method differs.

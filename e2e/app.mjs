@@ -327,6 +327,8 @@ export class Session {
   until(name, predicate, message, { surface, timeout = REQUEST } = {}) {
     return this.client.watch(this.window, name, predicate, { surface, timeout }).catch((error) => {
       if (error.code === "ETIMEDOUT") error.message = `${this.app.name}: ${message} (${error.message})`;
+      // 감시나 첫 값 요청이 실패하면 어느 상태였는지 오류에 남긴다. code 는 그대로 둔다.
+      else if (error instanceof EndpointError) error.message = `${this.app.name} status ${name}: ${error.message}`;
       throw error;
     });
   }
