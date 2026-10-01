@@ -243,7 +243,9 @@ for (const app of Object.values(APPS))
         recordingStopped = false;
         await s.run("core.card.sidebar.toggle", { card: card.id, side: "left" });
         choices.left.collapsed = true;
-        await check("manual left fold", { horizontal: true });
+        // 접은 왼쪽은 divider 폭(6)만 쓰므로 762pt 카드에서 내용 폭은 762 - 2(경계) - 6 - 480 = 274pt 로 최소
+        // 96pt 보다 크다. 오른쪽 요청은 공간이 충분하여 자동으로 접히지 않는다(docs/spec/example-model.md).
+        await check("manual left fold");
         recording = await s.request("diagnostics.capture.start", {});
         recordingStopped = false;
         await s.run("host.window.resize", { width: 1220, height: 880 });
@@ -258,7 +260,8 @@ for (const app of Object.values(APPS))
         await s.run("core.card.fullscreen", { card: card.id });
         await s.run("host.window.resize", { width: 1200, height: 754 });
         await s.until("host.window", (window) => window.content.height === 754, "window did not restore height");
-        await check("manual fold short restore", { horizontal: true, vertical: true });
+        // 폭은 manual left fold 와 같으므로 오른쪽은 펼쳐지고, 높이만 부족하다.
+        await check("manual fold short restore", { vertical: true });
       } catch (error) {
         errors.push(error);
       } finally {

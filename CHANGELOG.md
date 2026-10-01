@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-4-5: the card sidebar space check expects the right sidebar to expand after the user folds the left one when the card has room for it, as the sidebar presentation rule requires.
+
 - G1.4-14-4-4: every recording prepares its window again, so a recording after a window resize starts at the window's current size instead of the size of an earlier recording.
 
 - G1.4-14-4-1: a recording follows the window's device-pixel size when the window is resized, instead of scaling a grown window into the starting output size.
