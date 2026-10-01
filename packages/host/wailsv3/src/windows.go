@@ -68,7 +68,7 @@ func newHost(sidecars *Sidecars, configDir string) (*Host, error) {
 		if err != nil {
 			return nil, err
 		}
-		directory = filepath.Join(config, "com.soksak.wailsv3")
+		directory = filepath.Join(config, ApplicationIdentifier)
 	}
 	return &Host{workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: sidecars,
 		relay: NewRelay[relayTarget]()}, nil

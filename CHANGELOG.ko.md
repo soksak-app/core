@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-29: 애플리케이션은 bundle과 기본 설정 디렉터리에 식별자 `com.soksak.wails`와 `com.soksak.tauri`를 쓴다.
+
 - G1.4-28: 이전 sidebar 형식으로 저장한 프로젝트는 registry를 읽을 때 현재 형식으로 한 번 변환하고 저장하며 보고하므로 다시 열 수 있다.
 
 - G1.4-14: `cfc8826e`에서 전체 suite가 통과한다. `pnpm test`, 구조 검사, `make verify`, `make native-test`, 두 host의 window check 300개 중 300개, release 검사다.

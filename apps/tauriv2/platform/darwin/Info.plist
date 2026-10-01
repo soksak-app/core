@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>com.soksak.tauriv2</string>
+	<string>com.soksak.tauri</string>
 	<key>CFBundleExecutable</key>
 	<string>soksak-tauriv2</string>
 	<key>CFBundleIconFile</key>

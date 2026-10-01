@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-29: the applications use the identifiers `com.soksak.wails` and `com.soksak.tauri` for their bundles and default configuration directories.
+
 - G1.4-28: projects stored in the earlier sidebar format are converted to the current format once when the registry is read, saved and reported, so they can be opened again.
 
 - G1.4-14: the full suites pass at `cfc8826e`: `pnpm test`, structural checks, `make verify`, `make native-test`, 300 of 300 window checks on both hosts and the release check.

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>com.soksak.wailsv3</string>
+	<string>com.soksak.wails</string>
 	<key>CFBundleExecutable</key>
 	<string>soksak-wailsv3</string>
 	<key>CFBundleIconFile</key>

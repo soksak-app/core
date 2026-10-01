@@ -20,3 +20,12 @@ test("every plugin is a declared dependency and every reference resolves", () =>
   });
   checkReferences(environment, manifests);
 });
+
+test("the bundle identifier and the Tauri identifier are the application identifier of docs/spec/hosts.md", () => {
+  // Tauri 는 identifier 로 기본 설정 디렉터리를 정하고, macOS 는 번들 식별자로 알림 권한을 구분한다. 둘이 다르면 같은 앱의 데이터와 권한이 갈라진다.
+  const conf = JSON.parse(readFileSync(new URL("../tauri.conf.json", import.meta.url), "utf8"));
+  const plist = readFileSync(new URL("../platform/darwin/Info.plist", import.meta.url), "utf8");
+  const bundle = plist.match(/<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
+  assert.equal(conf.identifier, "com.soksak.tauri");
+  assert.equal(bundle, "com.soksak.tauri");
+});

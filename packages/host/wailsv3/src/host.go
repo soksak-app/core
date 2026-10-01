@@ -25,9 +25,13 @@ import (
 	_ "github.com/min-median-max/soksak/packages/host/wailsv3/src/platform/windows"
 )
 
+// ApplicationIdentifier 는 애플리케이션 번들 식별자이며 기본 설정 디렉터리의 이름이다(docs/spec/projects.md). 번들의
+// Info.plist 와 같은 값이다.
+const ApplicationIdentifier = "com.soksak.wails"
+
 // Options 는 애플리케이션이 명령행에서 읽어 전달하는 값이다.
 type Options struct {
-	// ConfigDir 은 설정 디렉터리다. 비어 있으면 사용자 설정 디렉터리의 com.soksak.wailsv3 을 사용한다.
+	// ConfigDir 은 설정 디렉터리다. 비어 있으면 사용자 설정 디렉터리의 ApplicationIdentifier 디렉터리를 사용한다.
 	ConfigDir string
 }
 
@@ -80,7 +84,7 @@ func Run(assets fs.FS, options Options) error {
 		if err != nil {
 			return err
 		}
-		configDirectory = filepath.Join(config, "com.soksak.wailsv3")
+		configDirectory = filepath.Join(config, ApplicationIdentifier)
 	}
 	configDirectory, err = PrepareConfigDirectory(configDirectory)
 	if err != nil {

@@ -48,8 +48,8 @@
 
 | 호스트 | macOS | Windows | Linux |
 | --- | --- | --- | --- |
-| Wails | `~/Library/Application Support/com.soksak.wailsv3` | `%AppData%/com.soksak.wailsv3` | `$XDG_CONFIG_HOME/com.soksak.wailsv3`, 미설정 시 `~/.config/com.soksak.wailsv3` |
-| Tauri | `~/Library/Application Support/dev.soksak.example` | `%AppData%/dev.soksak.example` | `$XDG_CONFIG_HOME/dev.soksak.example`, 미설정 시 `~/.config/dev.soksak.example` |
+| Wails | `~/Library/Application Support/com.soksak.wails` | `%AppData%/com.soksak.wails` | `$XDG_CONFIG_HOME/com.soksak.wails`, 미설정 시 `~/.config/com.soksak.wails` |
+| Tauri | `~/Library/Application Support/com.soksak.tauri` | `%AppData%/com.soksak.tauri` | `$XDG_CONFIG_HOME/com.soksak.tauri`, 미설정 시 `~/.config/com.soksak.tauri` |
 
 `--config-dir PATH`로 앱 설정 디렉터리를 변경한다. 호스트는 빈 경로를 거부하고, 경로에서 없는 디렉터리를 권한 0700(소유자 전용)으로 만들며, 이미 있는 디렉터리의 권한은 유지하고, 정규 경로를 쓴다. 프로젝트 덮어쓰기 경로는 각 프로젝트 내부를 유지한다. 전역 편집은 공통 설정 파일을, 프로젝트 편집은 선택한 프로젝트의 설정 파일을 변경한다. **전역값 사용**으로 개별 덮어쓰기를 제거한다. 프로젝트 탭을 드래그해 순서를 변경하며 이 순서를 라이브러리의 기본 순서로 사용한다. 탭의 ×는 등록 목록에서 프로젝트를 제거하고 폴더와 설정 파일은 유지한다. OS 창의 닫기 버튼은 등록된 프로젝트를 유지한다.
 

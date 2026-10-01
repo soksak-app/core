@@ -20,3 +20,9 @@ test("every plugin is a declared dependency and every reference resolves", () =>
   });
   checkReferences(environment, manifests);
 });
+
+test("the bundle identifier is the application identifier of docs/spec/hosts.md", () => {
+  // 호스트는 같은 식별자(ApplicationIdentifier)로 기본 설정 디렉터리를 정한다.
+  const plist = readFileSync(new URL("../platform/darwin/Info.plist", import.meta.url), "utf8");
+  assert.equal(plist.match(/<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/)?.[1], "com.soksak.wails");
+});

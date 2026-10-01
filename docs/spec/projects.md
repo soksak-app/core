@@ -48,8 +48,8 @@ The default configuration directories are:
 
 | Host | macOS | Windows | Linux |
 | --- | --- | --- | --- |
-| Wails | `~/Library/Application Support/com.soksak.wailsv3` | `%AppData%/com.soksak.wailsv3` | `$XDG_CONFIG_HOME/com.soksak.wailsv3`, or `~/.config/com.soksak.wailsv3` when unset |
-| Tauri | `~/Library/Application Support/dev.soksak.example` | `%AppData%/dev.soksak.example` | `$XDG_CONFIG_HOME/dev.soksak.example`, or `~/.config/dev.soksak.example` when unset |
+| Wails | `~/Library/Application Support/com.soksak.wails` | `%AppData%/com.soksak.wails` | `$XDG_CONFIG_HOME/com.soksak.wails`, or `~/.config/com.soksak.wails` when unset |
+| Tauri | `~/Library/Application Support/com.soksak.tauri` | `%AppData%/com.soksak.tauri` | `$XDG_CONFIG_HOME/com.soksak.tauri`, or `~/.config/com.soksak.tauri` when unset |
 
 `--config-dir PATH` selects another application configuration directory. The host rejects an empty path, creates missing directories of the path with mode 0700 (owner only), keeps the mode of an existing directory, and uses the canonical path. Project override paths remain inside their projects. Global edits update the common settings file; Project edits update the selected project's settings file. **Use global value** removes an individual override. Project tabs can be reordered by dragging; their order determines the default library order. A tab's × removes the project from the registry and preserves its folder and settings file. The OS window's close button preserves the project in the registry.
 
