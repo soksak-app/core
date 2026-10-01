@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-4-2: 두 구현에서 `sok plugin pack`이 plugin package archive를, `sok sidecar release`가 sidecar release asset과 `SHA256SUMS`를 쓴다.
+
 - R1-4-1: `sok`의 두 구현이 `install.*` contract case에 따라 설치 형식을 검증하고 version을 고른다. `@soksak/plugin-api/install`을 삭제했으며, 0.0.2 archive는 `file:` URL만 쓴다.
 
 - R1-2-1: `plugins/installed.json`이 쓰는 sidecar version과 plugin마다의 sidecar 범위를 기록하고, 설치는 모든 설치된 plugin을 채우는 sidecar version 하나를 유지한다.

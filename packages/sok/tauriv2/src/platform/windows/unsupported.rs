@@ -19,4 +19,12 @@ impl Platform for Windows {
     fn config_dir(&self) -> Result<PathBuf, String> {
         Err("not implemented on windows".into())
     }
+
+    fn executable(&self, _metadata: &std::fs::Metadata) -> bool {
+        false
+    }
+
+    fn key(&self) -> Result<String, String> {
+        Err("not implemented on windows".into())
+    }
 }

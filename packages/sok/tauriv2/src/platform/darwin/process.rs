@@ -28,4 +28,17 @@ impl Platform for Darwin {
     fn config_dir(&self) -> Result<PathBuf, String> {
         Darwin::config_dir()
     }
+
+    fn executable(&self, metadata: &std::fs::Metadata) -> bool {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+
+    fn key(&self) -> Result<String, String> {
+        match std::env::consts::ARCH {
+            "aarch64" => Ok("darwin-arm64".into()),
+            "x86_64" => Ok("darwin-x64".into()),
+            other => Err(format!("darwin/{other} has no platform key")),
+        }
+    }
 }

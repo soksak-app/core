@@ -131,7 +131,7 @@ fn is_lower_word(text: &str) -> bool {
 }
 
 /// 소문자로 시작하고 소문자, 숫자, - 만 쓰는 이름인지.
-fn is_identifier(text: &str) -> bool {
+pub(crate) fn is_identifier(text: &str) -> bool {
     text.as_bytes().first().is_some_and(u8::is_ascii_lowercase) && is_lower_word(text)
 }
 
@@ -145,7 +145,7 @@ fn is_package_name(text: &str) -> bool {
     }
 }
 
-fn is_sha256(text: &str) -> bool {
+pub(crate) fn is_sha256(text: &str) -> bool {
     text.len() == 64
         && text
             .bytes()
@@ -197,7 +197,7 @@ fn shown(value: Option<&Value>) -> String {
 }
 
 /// version 을 검사하고 그 텍스트를 돌려준다.
-fn check_version<'a>(at: &str, value: Option<&'a Value>) -> Result<&'a str, String> {
+pub(crate) fn check_version<'a>(at: &str, value: Option<&'a Value>) -> Result<&'a str, String> {
     let Some(text) = value.and_then(Value::as_str) else {
         return Err(format!(
             "{at}: invalid version {}: expected x.y.z",
@@ -219,7 +219,10 @@ fn check_range(at: &str, value: Option<&Value>) -> Result<(), String> {
 }
 
 /// package 이름을 검사하고 그 텍스트를 돌려준다.
-fn check_package_name<'a>(at: &str, value: Option<&'a Value>) -> Result<&'a str, String> {
+pub(crate) fn check_package_name<'a>(
+    at: &str,
+    value: Option<&'a Value>,
+) -> Result<&'a str, String> {
     match text(value) {
         Some(name) if is_package_name(name) => Ok(name),
         _ => Err(format!("{at}: expected a package name")),
@@ -379,7 +382,7 @@ pub fn sidecar_file_name(name: &str) -> Result<String, String> {
     })
 }
 
-fn check_platform(platform: &str) -> Result<(), String> {
+pub(crate) fn check_platform(platform: &str) -> Result<(), String> {
     if PLATFORMS.contains(&platform) {
         Ok(())
     } else {

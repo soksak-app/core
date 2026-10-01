@@ -5,6 +5,7 @@ package darwin
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"syscall"
 
 	"github.com/min-median-max/soksak/packages/sok/wailsv3/src/platform"
@@ -20,4 +21,15 @@ func (darwin) ProcessRunning(pid int) error {
 		return fmt.Errorf("process %d is not running: %w", pid, err)
 	}
 	return nil
+}
+
+// Key 는 macOS 의 release asset key 다.
+func (darwin) Key() (string, error) {
+	switch runtime.GOARCH {
+	case "arm64":
+		return "darwin-arm64", nil
+	case "amd64":
+		return "darwin-x64", nil
+	}
+	return "", fmt.Errorf("darwin/%s has no platform key", runtime.GOARCH)
 }

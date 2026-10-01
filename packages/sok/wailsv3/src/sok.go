@@ -32,6 +32,10 @@ commands:
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
+  plugin pack DIRECTORY OUTPUT
+                            writes the plugin package archive into OUTPUT
+  sidecar release DIRECTORY OUTPUT [--platform P]
+                            writes the sidecar release asset into OUTPUT and updates SHA256SUMS
 
 window:
   --window NAME | --project DIRECTORY   without either, the only window of the application
@@ -52,7 +56,7 @@ var booleans = map[string]bool{"watch": true, "activate": true, "help": true}
 // options 는 값을 받는 flag 다.
 var options = map[string]bool{
 	"config-dir": true, "window": true, "project": true, "surface": true, "index": true, "value": true, "event": true,
-	"x": true, "y": true, "phase": true, "button": true, "delta-x": true, "delta-y": true, "key": true, "text": true, "modifiers": true,
+	"x": true, "y": true, "phase": true, "platform": true, "button": true, "delta-x": true, "delta-y": true, "key": true, "text": true, "modifiers": true,
 }
 
 type arguments struct {
@@ -501,6 +505,9 @@ func run(args []string, stdout io.Writer, options Options) error {
 		_, err := fmt.Fprintln(stdout, Usage)
 		return err
 	}
+	if len(a.positionals) > 0 && (a.positionals[0] == "plugin" || a.positionals[0] == "sidecar") {
+		return runFiles(a, stdout)
+	}
 	if len(a.positionals) > 0 && a.positionals[0] == "path" {
 		action, err := a.positional(1, "path action")
 		if err != nil {
@@ -560,4 +567,39 @@ func run(args []string, stdout io.Writer, options Options) error {
 	}
 	_, err = stdout.Write(out)
 	return err
+}
+
+// runFiles 는 실행 중인 애플리케이션 없이 파일을 쓰는 plugin, sidecar 명령을 실행한다.
+func runFiles(a arguments, stdout io.Writer) error {
+	action, err := a.positional(1, a.positionals[0]+" action")
+	if err != nil {
+		return err
+	}
+	command := a.positionals[0] + " " + action
+	if command != "plugin pack" && command != "sidecar release" {
+		return usage("unknown command: %s", command)
+	}
+	dir, err := a.positional(2, "directory")
+	if err != nil {
+		return err
+	}
+	out, err := a.positional(3, "output directory")
+	if err != nil {
+		return err
+	}
+	if len(a.positionals) > 4 {
+		return usage("unexpected argument %s", a.positionals[4])
+	}
+	if command == "plugin pack" {
+		return runPack(dir, out, stdout)
+	}
+	platform, given := a.values["platform"]
+	if !given {
+		if platform, err = CurrentPlatform(); err != nil {
+			return err
+		}
+	} else if err := checkPlatform(platform); err != nil {
+		return usage("--platform: %s", err)
+	}
+	return runRelease(dir, out, platform, stdout)
 }

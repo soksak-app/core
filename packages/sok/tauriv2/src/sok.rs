@@ -14,6 +14,7 @@ pub mod install;
 mod path;
 #[path = "platform/platform.rs"]
 pub mod platform;
+mod release;
 
 use endpoint::{Client, Failure};
 
@@ -31,6 +32,10 @@ commands:
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
+  plugin pack DIRECTORY OUTPUT
+                            writes the plugin package archive into OUTPUT
+  sidecar release DIRECTORY OUTPUT [--platform P]
+                            writes the sidecar release asset into OUTPUT and updates SHA256SUMS
 
 window:
   --window NAME | --project DIRECTORY   without either, the only window of the application
@@ -72,6 +77,7 @@ const OPTIONS: &[&str] = &[
     "x",
     "y",
     "phase",
+    "platform",
     "button",
     "delta-x",
     "delta-y",
@@ -652,6 +658,12 @@ fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result
     if a.flag("help") {
         writeln!(stdout, "{USAGE}").map_err(|error| error.to_string())?;
         return Ok(());
+    }
+    if matches!(
+        a.positionals.first().map(String::as_str),
+        Some("plugin" | "sidecar")
+    ) {
+        return release::run_files(&a.positionals, &a.values, stdout);
     }
     if a.positionals.first().map(String::as_str) == Some("path") {
         let action = a.positional(1, "path action")?;
