@@ -14,6 +14,7 @@ pub mod install;
 mod path;
 #[path = "platform/platform.rs"]
 pub mod platform;
+mod registry;
 mod release;
 
 use endpoint::{Client, Failure};
@@ -36,6 +37,7 @@ commands:
                             writes the plugin package archive into OUTPUT
   sidecar release DIRECTORY OUTPUT [--platform P]
                             writes the sidecar release asset into OUTPUT and updates SHA256SUMS
+  registry build DIRECTORY  checks a registry and writes its index.json
 
 window:
   --window NAME | --project DIRECTORY   without either, the only window of the application
@@ -658,6 +660,9 @@ fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result
     if a.flag("help") {
         writeln!(stdout, "{USAGE}").map_err(|error| error.to_string())?;
         return Ok(());
+    }
+    if a.positionals.first().map(String::as_str) == Some("registry") {
+        return registry::run_registry(&a.positionals, stdout);
     }
     if matches!(
         a.positionals.first().map(String::as_str),

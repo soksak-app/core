@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-4-3: `sok registry build` checks a registry folder and every archive and writes the same `index.json` in both implementations.
+
 - R1-4-2: `sok plugin pack` writes a plugin package archive and `sok sidecar release` writes a sidecar release asset and `SHA256SUMS`, in both implementations.
 
 - R1-4-1: `sok` validates the installation formats and selects versions in both implementations under the `install.*` contract cases; `@soksak/plugin-api/install` is removed, and 0.0.2 archives use `file:` URLs only.

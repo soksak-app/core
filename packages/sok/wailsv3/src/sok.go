@@ -36,6 +36,7 @@ commands:
                             writes the plugin package archive into OUTPUT
   sidecar release DIRECTORY OUTPUT [--platform P]
                             writes the sidecar release asset into OUTPUT and updates SHA256SUMS
+  registry build DIRECTORY  checks a registry and writes its index.json
 
 window:
   --window NAME | --project DIRECTORY   without either, the only window of the application
@@ -504,6 +505,9 @@ func run(args []string, stdout io.Writer, options Options) error {
 	if a.flags["help"] {
 		_, err := fmt.Fprintln(stdout, Usage)
 		return err
+	}
+	if len(a.positionals) > 0 && a.positionals[0] == "registry" {
+		return runRegistry(a, stdout)
 	}
 	if len(a.positionals) > 0 && (a.positionals[0] == "plugin" || a.positionals[0] == "sidecar") {
 		return runFiles(a, stdout)

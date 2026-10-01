@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-4-3: `sok registry build`가 registry 폴더와 모든 archive를 검사하고, 두 구현에서 같은 `index.json`을 쓴다.
+
 - R1-4-2: 두 구현에서 `sok plugin pack`이 plugin package archive를, `sok sidecar release`가 sidecar release asset과 `SHA256SUMS`를 쓴다.
 
 - R1-4-1: `sok`의 두 구현이 `install.*` contract case에 따라 설치 형식을 검증하고 version을 고른다. `@soksak/plugin-api/install`을 삭제했으며, 0.0.2 archive는 `file:` URL만 쓴다.

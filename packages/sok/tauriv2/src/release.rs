@@ -115,6 +115,13 @@ fn replace_with(
     result
 }
 
+/// data 로 path 를 한 번에 바꾼다.
+pub fn replace_file(path: &Path, data: &[u8]) -> Result<(), String> {
+    replace_with(path, |file| {
+        file.write_all(data).map_err(|error| error.to_string())
+    })
+}
+
 /// 항목을 output 에 쓰고 그 sha256 을 돌려준다.
 fn write_archive(entries: &[ArchiveEntry], output: &Path) -> Result<String, String> {
     let mut sum = String::new();
@@ -182,7 +189,10 @@ pub fn read_json_file(dir: &Path, name: &str) -> Result<Value, String> {
 }
 
 /// 결과를 두 칸 들여쓰기로 쓴다.
-pub fn print_json(stdout: &mut dyn Write, value: &Value) -> Result<(), String> {
+pub fn print_json<T: serde::Serialize + ?Sized>(
+    stdout: &mut dyn Write,
+    value: &T,
+) -> Result<(), String> {
     let text = serde_json::to_string_pretty(value).map_err(|error| error.to_string())?;
     writeln!(stdout, "{text}").map_err(|error| error.to_string())
 }
