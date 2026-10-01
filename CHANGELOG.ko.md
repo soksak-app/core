@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-14-4: `14t` check가 고정값 2 대신 창 배율을 쓰고, `?1005` check가 click하는 100열을 확보하도록 창을 넓힌다.
+
 - G1.4-18: test가 더 이상 다른 file의 source 조각을 실행하지 않는다. test 대상 logic을 workbench와 window check가 호출하는 export 함수로 옮기고, test는 같은 단언으로 그 export를 호출한다.
 
 - V5-115-1-5: border 누락 recording 진단을 닫는다. 네 변 gesture recording 반복이 `8259059f`에서 빌드한 host마다 20/20 통과하며, 준비 순서 수정 직후의 결과와 같다. 수정 전에는 20회 중 4회 실패했다.

@@ -135,7 +135,9 @@ for (const app of Object.values(APPS)) {
     assert.match(await reply(s, surface, "\\033[>c", "c"), /^\x1b\[>0;\d+;1$/);
     const session = await s.get("terminal.session", surface);
     const size = await reply(s, surface, "\\033[14t", "t");
-    assert.equal(size, `\x1b[4;${Math.round(session.rows * session.cellHeight * 2)};${Math.round(session.cols * session.cellWidth * 2)}`,
+    // 장치 픽셀은 창이 놓인 화면의 배율을 따른다.
+    const { scale } = await s.get("host.window");
+    assert.equal(size, `\x1b[4;${Math.round(session.rows * session.cellHeight * scale)};${Math.round(session.cols * session.cellWidth * scale)}`,
       `14t did not report the text area in device pixels: ${JSON.stringify(size)}`);
 
     // 지원하지 않는 CSI 는 명시적인 오류로 남는다.
@@ -264,7 +266,14 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => closeTerminalTabs(s));
     const surface = terminal.surface;
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
+    // ?1005 는 96 열 이상의 좌표에서만 UTF-8 두 바이트를 쓴다. 기본 창 폭에서는 고정 사이드바 때문에 터미널이 그보다
+    // 좁으므로 창을 잠시 넓히고 검사 뒤 되돌린다.
+    const { content } = await s.get("host.window");
+    s.cleanup(() => s.run("host.window.resize", { width: content.width, height: content.height }));
+    await s.run("host.window.resize", { width: content.width + 160, height: content.height });
+    await s.until("terminal.session", (session) => session?.cols >= 100, "the widened terminal did not reach 100 columns", { surface });
     await s.run("terminal.input", { bytes: SETUP }, surface);
+    await s.presented();
     const view = await s.rect("terminal.view", undefined, surface);
     const { cellWidth, cellHeight } = await s.get("terminal.session", surface);
     // 1부터 센 칸 (col, row) 의 가운데.

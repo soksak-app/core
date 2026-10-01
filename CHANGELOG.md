@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-4: the `14t` check uses the window scale instead of a fixed factor of 2, and the `?1005` check widens the window so that the terminal has the 100 columns it clicks.
+
 - G1.4-18: tests no longer run sliced source text of other files. The tested logic moves into exported functions that the workbench and the window checks call, and the tests call those exports with the same assertions.
 
 - V5-115-1-5: close the missing-border recording diagnosis. The four-side gesture recording repeat passes 20/20 on each host built from `8259059f`, as it did after the preparation-order correction, against failures on 4 of 20 runs before it.
