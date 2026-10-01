@@ -198,6 +198,14 @@ for (const app of Object.values(APPS)) {
     const bookmarks = await s.get("files.bookmarks");
     const remove = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.bookmarks", bookmarks.indexOf(name)));
     const bookmarkRuns = inkRuns(image, scale, { x: header.x, y: remove.y, width: remove.x - header.x - 2, height: remove.height }, WORD_GAP * scale);
+    // 북마크의 삭제 단추는 경로와 떨어져 있다. 행 전체에서 단추 왼쪽 경계 앞의 마지막 잉크 열과 경계부터의 첫 잉크 열
+    // 사이를 잰다. 경계를 넘는 덩어리는 경계에서 나눈다.
+    const rowRuns = inkRuns(image, scale, { x: header.x, y: remove.y, width: remove.x + remove.width - header.x, height: remove.height }, 0);
+    const boundary = Math.round(remove.x * scale);
+    const pathEnd = Math.max(...rowRuns.filter(([start]) => start < boundary).map(([, end]) => Math.min(end, boundary - 1)));
+    const removeStart = Math.min(...rowRuns.filter(([, end]) => end >= boundary).map(([start]) => Math.max(start, boundary)));
+    const separation = (removeStart - pathEnd - 1) / scale;
+    assert.ok(separation >= 6, `the bookmark remove button is ${separation} pt from its path: runs ${JSON.stringify(rowRuns)}, remove ${JSON.stringify(remove)}`);
     const width = ([start, end]) => (end - start + 1) / scale;
     const treeLabel = width(treeRuns.at(-1));
     const bookmarkLabel = width(bookmarkRuns.at(-1));

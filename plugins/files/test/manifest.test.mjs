@@ -33,7 +33,9 @@ const element = (tag) => ({ tag, children: [], dataset: {}, className: "", style
 
 async function mountSection(id, orientation = "vertical") {
   const section = manifest.sections.find((item) => item.id === id);
-  globalThis.document = { createElement: element };
+  // 섹션이 문서에 더하는 stylesheet 를 기록한다.
+  globalThis.CSSStyleSheet = class { replaceSync(text) { this.text = text; } };
+  globalThis.document = { createElement: element, adoptedStyleSheets: [] };
   const root = element("div");
   const observers = new Map();
   const bound = [];
@@ -42,7 +44,8 @@ async function mountSection(id, orientation = "vertical") {
     bind(el, name, params) { bound.push({ el, name, params }); return el; } };
   const mounted = await (await import(`../${typeof section.module === "string" ? section.module : section.module[orientation]}`)).mount(root, context);
   const send = (name, value, source = "state") => { bound.length = 0; observers.get(name)(value, source); };
-  return { root, observers, bound, send, dispose: () => { mounted.dispose(); delete globalThis.document; } };
+  const sheets = () => globalThis.document.adoptedStyleSheets;
+  return { root, observers, bound, send, sheets, dispose: () => { mounted.dispose(); delete globalThis.document; delete globalThis.CSSStyleSheet; } };
 }
 
 test("every section and the state module are published", () => {
@@ -65,7 +68,14 @@ test("the bookmarks section lists files.bookmarks with remove controls", async (
   s.send("files.bookmarks", ["a.txt"]);
   assert.equal(s.root.textContent, "a.txt삭제");
   assert.deepEqual(s.bound.map(({ name, params }) => [name, params]), [["files.bookmarks.remove", { path: "a.txt" }]]);
+  // 경로와 삭제 단추는 각자의 class 로 행 안에 떨어져 놓인다.
+  const row = s.root.children[0].children[0];
+  assert.deepEqual([row.className, ...row.children.map((child) => child.className)],
+    ["files-bookmarks__row", "files-bookmarks__path", "files-bookmarks__remove"]);
+  assert.equal(s.sheets().length, 1, "the bookmarks section did not install its style");
+  const document = globalThis.document;
   s.dispose();
+  assert.equal(document.adoptedStyleSheets.length, 0, "the bookmarks section left its style after dispose");
   assert.equal(s.observers.size, 0);
 });
 

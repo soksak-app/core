@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-17: the files bookmark rows end a long path with an ellipsis and place the remove button 8 points to its right instead of directly after the path.
+
 - V5-117-1-4: the left project tab column is named `.project-column` and `core.projects.column` instead of `rail-projects`, because rail now means only the border that joins a card and its sidebar.
 
 - V5-117-1-6: the `core.sidebars` and `core.sidebar.status` descriptions name the fixed window sidebars, internal card sidebars and every reported field instead of rail and inset sidebars.

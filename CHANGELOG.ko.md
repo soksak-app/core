@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-17: files 북마크 행이 긴 경로를 말줄임으로 끝내고, 삭제 버튼을 경로 바로 뒤가 아니라 그 오른쪽 8 point에 둔다.
+
 - V5-117-1-4: 왼쪽 프로젝트 tab 열의 이름을 `rail-projects` 대신 `.project-column`과 `core.projects.column`으로 한다. rail은 이제 카드와 사이드바를 묶는 경계선만 뜻하기 때문이다.
 
 - V5-117-1-6: `core.sidebars`와 `core.sidebar.status` 설명이 rail과 inset 사이드바 대신 고정 창 사이드바, 카드 내부 사이드바, 보고하는 모든 field를 적는다.
