@@ -464,7 +464,21 @@ async function place(s) {
   await s.until("host.window", (w) => w.frame.x === x && w.frame.y === y, `the window did not move to its check frame ${x},${y}`);
 }
 
-export async function fresh(s, { performanceTrace = false } = {}) {
+// SOKSAK_PERFORMANCE_TRACE=1 은 모든 검사 준비에서 성능 기록을 켜서 등록 손실의 순서를 남긴다. 다른 값은 거부한다.
+const TRACE = { undefined: false, "1": true }[process.env.SOKSAK_PERFORMANCE_TRACE];
+if (TRACE === undefined) throw new Error(`SOKSAK_PERFORMANCE_TRACE must be unset or 1, not ${process.env.SOKSAK_PERFORMANCE_TRACE}`);
+
+/** 기록 파일의 offset 뒤에 쓰인 표면 등록 기록. */
+function registrationTimeline(s, offset) {
+  const file = join(s.app.configDir, "logs", "performance.ndjson");
+  if (!existsSync(file)) return [];
+  return readFileSync(file, "utf8").slice(offset).trim().split("\n").filter(Boolean)
+    .map((line) => JSON.parse(line)).filter((row) => row.event === "surface.registration");
+}
+
+export async function fresh(s, { performanceTrace = TRACE } = {}) {
+  const traceFile = join(s.app.configDir, "logs", "performance.ndjson");
+  const traceOffset = existsSync(traceFile) ? readFileSync(traceFile, "utf8").length : 0;
   for (const window of await s.get("host.windows")) {
     if (window.window !== s.window) await s.on(window.window).close();
   }
@@ -506,7 +520,13 @@ export async function fresh(s, { performanceTrace = false } = {}) {
     .filter((row) => row.name === "Surface presentation" && !row.ok);
   if (failed.length) throw new Error(`test preparation reported presentation errors: ${JSON.stringify(failed)}`);
   if (presentationErrors.length) throw new Error(`test preparation reported presentation errors: ${JSON.stringify(presentationErrors)}`);
-  const [shell] = await shellReady(s);
+  let shell;
+  try {
+    [shell] = await shellReady(s);
+  } catch (error) {
+    if (!performanceTrace) throw error;
+    throw new Error(`${error.message}; registration timeline: ${JSON.stringify(registrationTimeline(s, traceOffset))}`, { cause: error });
+  }
   await s.presented();
   try {
     await s.get("shell.output", shell.surface);

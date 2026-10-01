@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-1: perform the main-page reload work when the replacement page starts. Wails ran its navigation commit listener asynchronously, so a late listener marked the new page not ready, abandoned its requests and removed its surface registrations and documents, which produced shell-readiness timeouts and the `already attached` cascade in the full window suite. The page now calls `pageStarted` before it registers or mounts anything; both hosts clean up there and their navigation callbacks only refresh the WebKit child record. The diagnostic `diagnostics.navigation.delay` delays those callbacks for the owning check.
+
 - G1.4-11-1: reject an environment card `width` that is not a finite positive number. The validator accepted any value for the key, and the workbench used it as the initial fixed sidebar width.
 
 - G1.4-11: state the contract reason for 21 product-code defaults that the fallback audit reported without one, and record the missing type check of environment card widths separately.

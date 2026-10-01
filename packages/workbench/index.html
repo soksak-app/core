@@ -63,7 +63,7 @@
    함수 호출 시점에 읽는다. */
 import { loadEnvironment } from "./environment.js";
 import { loadExposure } from "./exposure.js";
-import { openStore } from "@soksak/runtime";
+import { openStore, windows } from "@soksak/runtime";
 
 import { installTheme } from "soksak";
 
@@ -111,6 +111,8 @@ import { onChoicesChange } from "./sidebar-sections.js";
 
 import { createLibrary } from "./library.js";
 
+// 호스트가 이전 페이지의 상태를 정리한 뒤에 등록하고 표면을 올린다(docs/spec/native-host.md).
+await windows.started();
 await Promise.all([loadExposure(), loadEnvironment()]);
 
 // 선과 divider 의 모양은 이 시트가 정의한다. 이 문서는 색만 지정하고 아래 :root 가

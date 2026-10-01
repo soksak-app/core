@@ -114,6 +114,15 @@ pub(crate) fn call(
         "diagnostics.input.source" => input_source(window, params),
         "diagnostics.capture.still" => capture_still(window),
         "diagnostics.notifications" => delivered_notifications(window),
+        "diagnostics.navigation.delay" => {
+            let ms = params
+                .get("ms")
+                .and_then(Value::as_u64)
+                .filter(|ms| *ms <= 10_000)
+                .ok_or_else(|| Failure::params("ms must be an integer from 0 to 10000"))?;
+            navigation_delay(window.label(), ms);
+            Ok(Value::Null)
+        }
         "diagnostics.presentation.failure" => {
             exposure::inject_presentation_failure(window)?;
             Ok(Value::Null)
@@ -435,6 +444,37 @@ struct ModalHold {
     /// (놓았는지, 붙잡은 응답 수)
     state: Mutex<(bool, u32)>,
     changed: Condvar,
+}
+
+/// 창 이름별로 main webview navigation callback 처리를 늦출 밀리초.
+static NAVIGATION_DELAYS: Mutex<Option<HashMap<String, u64>>> = Mutex::new(None);
+
+/// 창의 이후 navigation callback 처리를 ms 밀리초 늦춘다. 0 은 지연을 없앤다.
+fn navigation_delay(window: &str, ms: u64) {
+    let mut delays = NAVIGATION_DELAYS.lock().expect("navigation delays");
+    let delays = delays.get_or_insert_with(HashMap::new);
+    if ms == 0 {
+        delays.remove(window);
+    } else {
+        delays.insert(window.to_string(), ms);
+    }
+}
+
+/// 창의 지연만큼 기다린 뒤 navigation callback 처리를 실행하고, 끝났음을 진단 기록에 남긴다.
+pub(crate) fn handle_navigation(window: &Window, handle: impl FnOnce()) {
+    let delay = NAVIGATION_DELAYS
+        .lock()
+        .expect("navigation delays")
+        .as_ref()
+        .and_then(|delays| delays.get(window.label()).copied())
+        // 기본값: 지연을 지정하지 않은 창은 기다리지 않는다.
+        .unwrap_or(0);
+    std::thread::sleep(std::time::Duration::from_millis(delay));
+    handle();
+    exposure::log(
+        window,
+        &format!("navigation callback handled after {delay} ms"),
+    );
 }
 
 /// 창 이름별로 모달 내용 응답을 붙잡는다. 검사는 모달 문서가 처음 내용을 이후 이벤트보다 늦게

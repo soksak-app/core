@@ -32,3 +32,27 @@ for (const app of Object.values(APPS)) {
     }
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a late main-page navigation callback keeps the replacement page's registrations and documents`, { timeout: 90000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    const log = await s.transcript();
+    s.cleanup(() => log.stop());
+    // 호스트가 다시 읽힌 메인 페이지의 navigation callback 을 새 페이지가 시작한 뒤에 처리하게 한다.
+    await s.request("diagnostics.navigation.delay", { ms: 1500 });
+    s.cleanup(() => s.request("diagnostics.navigation.delay", { ms: 0 }));
+    const shell = await fresh(s);
+    await log.until((lines) => lines.some((line) => line.startsWith("navigation callback handled")),
+      "the delayed navigation callback did not finish");
+    const window = (await s.get("host.windows")).find((entry) => entry.window === s.window);
+    assert.equal(window.ready, true, "the late navigation callback marked the replacement page not ready");
+    for (const surface of (await s.get("core.surfaces")).filter((entry) => entry.visible)) {
+      assert.ok(surface.exposes.includes("status core.surface.document"),
+        `the late navigation callback removed the core registration of ${surface.surface}: ${JSON.stringify(surface)}`);
+      assert.equal(surface.status.error, null, `the late navigation callback broke ${surface.surface}: ${JSON.stringify(surface)}`);
+    }
+    await s.get("core.surface.document", shell.surface);
+  });
+}

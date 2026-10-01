@@ -88,6 +88,7 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 | `diagnostics.transcript` | `{window, on}` | 호스트 요청, 응답, 페이지 검증 줄에 대한 `diagnostics.log` 알림 `{window, line}`을 시작하거나 중지한다 |
 | `diagnostics.notifications` | `{}` | 운영체제의 알림 센터가 아직 보이는 이 애플리케이션의 알림을 `[{identifier, title, body}]`로 반환한다. `identifier`는 `[window, surface]`의 JSON 문자열이다 |
 | `diagnostics.capture.still` | `{window}` | 창에 포커스를 주지 않고 장치 픽셀 해상도의 정지 PNG를 쓰고, 비공개 `<config-dir>/captures/still-*` 디렉터리 안의 `{path}`를 반환한다. 개발 중 관측 자료이며 측정에는 `diagnostics.capture.start`/`stop` 프레임을 쓴다. 요청자는 확인한 뒤 그 디렉터리를 지운다 |
+| `diagnostics.navigation.delay` | `{window, ms}` | window의 main webview가 이후 받는 navigation callback마다 host 처리를 `ms` 밀리초 늦추고(정수 0–10000, 0이면 지연 제거) `null`을 반환한다. window check가 새 page가 시작된 뒤에 navigation callback을 전달할 때 쓴다 |
 | `diagnostics.input.source` | `{window, select?}` | `select`가 있으면 켜진 키보드 입력 소스 가운데 그것을 선택하고, 선택된 입력 소스 식별자 `{current}`를 반환한다. 키보드 입력 소스가 없는 플랫폼은 오류를 반환한다. 활성화 등급 창 검사가 사용자의 입력 소스 순서를 재현할 때 쓴다 |
 
 직접 capture.start/stop 녹화의 layouts는 시작 이후의 트랜잭션별 `{ticket, begun, presented, committed}` 배열이며 시각은 프레임과 같은 ms 시계다. 일어나지 않은 단계는 null이며 트랜잭션이 없으면 빈 배열이다. diagnostics.drag는 기존 응답에 자신의 타임라인을 반환한다. 추적 종료 오류가 발생하면 요청자가 받지 못하는 프레임 폴더를 정리하고 오류를 보존한다.

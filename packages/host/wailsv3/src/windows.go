@@ -124,6 +124,23 @@ func (h *Host) WindowState(ctx context.Context) (*WindowGeometry, error) {
 	return &WindowGeometry{X: x, Y: y, Width: width, Height: height}, nil
 }
 
+// PageStarted 는 메인 페이지가 등록하거나 표면을 올리기 전에 부른다. 답하기 전에 창을 준비되지 않은
+// 상태로 두고, 이전 페이지에 보낸 요청을 끝내고, 이전 페이지의 표면 문서와 그림 영역과 모달을 정리한다.
+func (h *Host) PageStarted(ctx context.Context) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	h.mu.Lock()
+	s.ready = false
+	h.mu.Unlock()
+	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
+	go h.windowsChanged()
+	application.InvokeSync(s.reloadSurfaceDocuments)
+	s.discardOverlay()
+	return nil
+}
+
 func (h *Host) WindowReady(ctx context.Context) error {
 	s, err := h.surface(ctx)
 	if err != nil {
@@ -183,6 +200,10 @@ func cancelLayout(win *application.WebviewWindow) {
 		log.Printf("surface layout: %v", err)
 	}
 }
+
+// handleNavigation 은 진단 빌드에서 main webview navigation callback 의 처리를 감싼다. 검사가 처리를 늦추고
+// 끝났음을 기록에서 확인한다. 다른 빌드에서는 nil 이다.
+var handleNavigation func(s *Surfaces, handle func())
 
 // 앱 DOM 재로드는 모든 플러그인 문서를 교체하지만 터미널 세션은 종료하지 않는다.
 func (s *Surfaces) reloadSurfaceDocuments() {
@@ -268,21 +289,18 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		win.OnWindowEvent(event, changed)
 	}
 	win.OnWindowEvent(events.Mac.WebViewDidCommitNavigation, func(*application.WindowEvent) {
-		h.mu.Lock()
-		s.ready = false
-		h.mu.Unlock()
-		// 페이지가 다시 뜬다 — 이 실행의 WebKit 자식 기록을 갱신한다(V5-113).
-		if h.workspace != nil {
-			RefreshWebKitChildren(h.workspace.Directory())
+		// 이 callback 은 별도 goroutine 에서 새 페이지의 호출보다 늦게 실행될 수 있다. 이전 페이지의 정리는
+		// 새 페이지가 부르는 PageStarted 가 하고, 여기서는 이 실행의 WebKit 자식 기록만 갱신한다(V5-113).
+		committed := func() {
+			if h.workspace != nil {
+				RefreshWebKitChildren(h.workspace.Directory())
+			}
 		}
-		// 이전 페이지에 보낸 요청은 답을 받지 못한다.
-		h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
-		go h.windowsChanged()
-		// Finish the old surface cleanup before the replacement document can attach
-		// its images. Queueing this after the framework callback lets the new page
-		// publish a composition while the old generation is still being removed.
-		application.InvokeSync(s.reloadSurfaceDocuments)
-		s.discardOverlay()
+		if handleNavigation != nil {
+			handleNavigation(s, committed)
+		} else {
+			committed()
+		}
 	})
 	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		h.mu.Lock()

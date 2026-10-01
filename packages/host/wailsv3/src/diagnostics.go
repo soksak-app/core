@@ -37,6 +37,8 @@ func init() {
 	diagnosticMethods["diagnostics.capture.still"] = diagnosticCaptureStill
 	diagnosticMethods["diagnostics.notifications"] = diagnosticNotifications
 	holdModalContent = modalHolds.wait
+	diagnosticMethods["diagnostics.navigation.delay"] = diagnosticNavigationDelay
+	handleNavigation = navigationDelays.handle
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
 	diagnosticTopics[logTopic] = func(on bool) (string, any) {
 		return "diagnostics.transcript", map[string]bool{"on": on}
@@ -584,4 +586,47 @@ func diagnosticModalHeld(e *Endpoint, _ *endpointConn, params json.RawMessage) (
 	case <-hold.release:
 	}
 	return nil, nil
+}
+
+// navigationDelaySet 은 창마다 main webview navigation callback 처리를 늦출 시간이다.
+type navigationDelaySet struct {
+	mu      sync.Mutex
+	windows map[*Surfaces]time.Duration
+}
+
+var navigationDelays = navigationDelaySet{windows: map[*Surfaces]time.Duration{}}
+
+// diagnosticNavigationDelay 는 창의 이후 navigation callback 처리를 ms 밀리초 늦춘다. 0 은 지연을 없앤다.
+func diagnosticNavigationDelay(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	var p struct {
+		Ms *float64 `json:"ms"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	if p.Ms == nil || *p.Ms != math.Trunc(*p.Ms) || *p.Ms < 0 || *p.Ms > 10000 {
+		return nil, rpcError(codeInvalidParams, "ms must be an integer from 0 to 10000")
+	}
+	navigationDelays.mu.Lock()
+	defer navigationDelays.mu.Unlock()
+	if *p.Ms == 0 {
+		delete(navigationDelays.windows, s)
+	} else {
+		navigationDelays.windows[s] = time.Duration(*p.Ms) * time.Millisecond
+	}
+	return nil, nil
+}
+
+// handle 은 창의 지연만큼 기다린 뒤 callback 처리를 실행하고, 끝났음을 진단 기록에 남긴다.
+func (d *navigationDelaySet) handle(s *Surfaces, handle func()) {
+	d.mu.Lock()
+	delay := d.windows[s]
+	d.mu.Unlock()
+	time.Sleep(delay)
+	handle()
+	s.log(fmt.Sprintf("navigation callback handled after %d ms", delay.Milliseconds()))
 }

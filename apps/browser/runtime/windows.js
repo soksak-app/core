@@ -11,6 +11,7 @@ export const windows = {
   },
   onActivate: async () => {},
   onCloseRequest: async () => {},
+  started: async () => {},
   ready: async () => {},
   close: async () => {},
   state: async () => null,

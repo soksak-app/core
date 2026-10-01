@@ -511,6 +511,16 @@ pub(crate) fn window_state(window: &Window) -> Result<Option<Geometry>, String> 
 }
 
 /// 페이지가 창 닫기 요청을 처리할 준비가 되었음을 기록한다.
+/// 메인 페이지가 시작했음을 기록한다. 답하기 전에 창을 준비되지 않은 상태로 두고, 이전 페이지에 보낸
+/// 요청을 끝내고, 이전 페이지의 표면 문서와 그림 영역과 모달을 정리한다.
+pub(crate) fn page_started(window: &Window) -> Result<(), String> {
+    let data = window_data(window)?;
+    data.ready.store(false, Ordering::Relaxed);
+    crate::exposure::page_reloaded(window);
+    reload_surface_documents(window)?;
+    data.overlay.discard()
+}
+
 pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
     // 창을 등록할 때 AppKit 이 아직 단추를 만들지 않았을 수 있다. 페이지가 준비되면 창이
     // 표시된 상태이므로 여기서도 제목줄을 만든다.

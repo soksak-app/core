@@ -11,8 +11,6 @@
 // host.window 스키마 같은 큰 json! 표현은 serde_json 매크로의 기본 재귀 한도(128)를 넘는다.
 #![recursion_limit = "256"]
 
-use std::sync::atomic::Ordering;
-
 use tauri::Manager;
 
 mod bindings;
@@ -170,20 +168,25 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 return;
             }
             let window = view.window();
-            let Ok(context) = windows::window_data(&window) else {
+            // 애플리케이션이 등록한 창의 메인 웹뷰만 처리한다.
+            if windows::window_data(&window).is_err() {
                 return;
-            };
+            }
             if view.label() == window.label() {
-                context.ready.store(false, Ordering::Relaxed);
-                exposure::page_reloaded(&window);
-                if let Some(workspace) = window
-                    .app_handle()
-                    .try_state::<crate::workspace::Workspace>()
-                {
-                    crate::webkit_children::refresh(workspace.directory());
-                }
-                log_error(windows::reload_surface_documents(&window));
-                log_error(context.overlay.discard());
+                // 이전 페이지의 정리는 새 페이지가 부르는 page_started 가 한다. 여기서는 이 실행의
+                // WebKit 자식 기록만 갱신한다(V5-113).
+                let started = || {
+                    if let Some(workspace) = window
+                        .app_handle()
+                        .try_state::<crate::workspace::Workspace>()
+                    {
+                        crate::webkit_children::refresh(workspace.directory());
+                    }
+                };
+                #[cfg(feature = "diagnostics")]
+                crate::diagnostics::handle_navigation(&window, started);
+                #[cfg(not(feature = "diagnostics"))]
+                started();
             }
         })
         .setup(|app| {
