@@ -150,6 +150,7 @@ async function showProject(id) {
   await refresh();
   const project = projects.find((p) => p.id === id);
   if (!project) throw new Error(`Unknown project: ${id}`);
+  checkProject(project);
   await selectProject(id);
   owned.add(id);
   activeProjectId = id;
@@ -170,9 +171,15 @@ export function activate(id) {
   return inTurn(() => activateInTurn(id));
 }
 
+/** 프로젝트의 활성 스페이스 배치를 판이 열 수 있는지 검사한다. 실패하면 프로젝트·창·저장 기록을 바꾸기 전에 그 오류를 던진다. */
+function checkProject(project) {
+  listener.check(project.spaces.find((s) => s.id === project.activeSpaceId).layout);
+}
+
 async function activateInTurn(id) {
   const project = projects.find((p) => p.id === id);
   if (!project) throw new Error(`Unknown project: ${id}`);
+  checkProject(project);
   await keep();
   await saveGeometry();
   const folder = await windows.folder(project.root);

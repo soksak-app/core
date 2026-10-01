@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-3-4-7-1-3: opening a project whose saved layout names an unregistered plugin fails before anything changes. The open had made the project active, marked it open and patched `lastOpened` before the layout validation failed, which left an empty grid; the project spec no longer says such a space opens without those entries.
+
 - V5-117-1-5: a library preview applies the saved-layout validation that opening uses. It filtered tabs of unregistered plugins and drew a substitute active tab for a layout that opening rejects; it now shows the validation error, and `core.library` reports it in `previewErrors`.
 
 - V5-117-1-3-4-5-4-3: the native capture acceptance rejects a recording directory that cannot be listed and reports a failed cleanup, and checkers that include the acceptance body rebuild when it changes.

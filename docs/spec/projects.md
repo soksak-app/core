@@ -69,6 +69,6 @@ The browser example uses browser windows and IndexedDB storage; it does not writ
 - Common settings and explicit folder overrides survive reload and restart. Resetting an override restores inheritance. The opening mode is absent from project-folder settings.
 - Startup and New Window show the library without native content surfaces or shells. First-project creation/opening reuses that OS window in both opening modes. Selecting another project from an occupied window follows the common opening mode. Reopening an already open project selects its existing window.
 - Layout, tabs, sidebar widths, theme settings, and normal window geometry restore for the selected project. Closing a window keeps its saved data.
-- A saved space or library preview that names unregistered plugins opens without an error and without those entries.
+- A saved space that names unregistered plugins fails to open with the validation error, and its library preview shows the same error; the saved record is not changed.
 - Two windows can render and receive input independently. Settings effects, native surfaces, shells, and cleanup remain limited to their owning window.
 - Existing surface placement, fractional rendering, and modal checks continue to pass in both native hosts. Native behavior on each operating system is recorded separately.

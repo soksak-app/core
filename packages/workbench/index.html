@@ -107,6 +107,7 @@ import { drawSettings } from "./settings-ui.js";
 import { bind, run } from "./commands.js";
 import { icon } from "./icons.js";
 import { adopt, capture, fresh, clear, onDrag } from "./plane.js";
+import { checkStoredLayout } from "./stored-layout.js";
 import { onChoicesChange } from "./sidebar-sections.js";
 
 import { createLibrary } from "./library.js";
@@ -296,7 +297,7 @@ onChoicesChange(() => projects.keep());
 
 /* 스페이스가 바뀌면 현재 판을 저장하고 다른 상태를 적용한다. 프로젝트 전환도 같은
    동작이다. */
-projects.onSwitch({ save: capture, load: adopt, update: settle, async presented() {
+projects.onSwitch({ check: checkStoredLayout, save: capture, load: adopt, update: settle, async presented() {
   await drawing;
   // `draw()`는 onRender 커밋이 끝나기 전에 반환한다. 최신 네이티브 배치가
   // 대기 중이면 프로젝트 명령은 완료되지 않은 상태다.

@@ -7,11 +7,13 @@ const PROJECT = {
   activeSpaceId: "spc-one", spaces: [{ id: "spc-one", title: "SPACE1", layout: { state: "one" } }], settings: {},
 };
 
+// 창 열기 요청을 받은 프로젝트.
+const openRequests = [];
 mock.module("@soksak/runtime", {
   namedExports: {
     windows: {
       folder: async (root) => ({ root, identity: PROJECT.identity }),
-      openProject: async () => ({ local: true }),
+      openProject: async (request) => { openRequests.push(request.id); return { local: true }; },
       releaseProject: async () => {},
       state: async () => null,
       close: async () => {},
@@ -46,18 +48,21 @@ mock.module("../settings.js", {
   },
 });
 
-// 프로젝트 모듈이 쓰는 문서 전역.
+// 프로젝트 모듈이 쓰는 문서 전역. 창 오류 이벤트로 보고한 실패를 기록한다.
+const reported = [];
+globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
 globalThis.location = new URL("http://soksak.test/index.html");
 globalThis.history = { replaceState: (state, title, url) => { globalThis.location = new URL(url, globalThis.location); } };
 
 const projects = await import("../projects.js");
 
-/** 판의 역할을 하는 기록기. hold() 뒤의 비우기는 release() 할 때까지 끝나지 않는다. */
-const plane = { layout: null, events: [], gate: Promise.resolve() };
+/** 판의 역할을 하는 기록기. hold() 뒤의 비우기는 release() 할 때까지 끝나지 않는다. rejected 배치는 검사에서 거부한다. */
+const plane = { layout: null, events: [], gate: Promise.resolve(), rejected: null };
 plane.hold = () => {
   plane.gate = new Promise((resolve) => { plane.release = resolve; });
 };
 projects.onSwitch({
+  check: (layout) => { if (layout === plane.rejected) throw new Error("fixture layout cannot be opened"); },
   save: () => {
     if (plane.layout === null) throw new Error("the plane has no layout to save");
     return plane.layout;
@@ -143,4 +148,29 @@ test("the surfaces of every layout are listed with their project root, and remov
   await projects.close("prj-two");
   assert.deepEqual(retained, [[{ surface: "tab-one", root: "/work/one" }]],
     "removing a project retains only the surfaces of the remaining layouts");
+});
+
+test("a saved layout that fails the plane check rejects the open before any project or window change", async () => {
+  const patches = [];
+  const other = { ...structuredClone(PROJECT), id: "prj-bad", root: "/work/bad",
+    spaces: [{ id: "spc-bad", title: "SPACE1", layout: { state: "bad" } }], activeSpaceId: "spc-bad" };
+  const listed = [structuredClone(PROJECT), other];
+  await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: listed.map((item) => structuredClone(item)), open: [] }),
+    patch: async (id, patch) => { patches.push([id, patch]); } });
+  await projects.activate(PROJECT.id);
+  const shown = plane.layout;
+  plane.rejected = projects.all().find((item) => item.id === "prj-bad").spaces[0].layout;
+  patches.length = 0;
+  openRequests.length = 0;
+  plane.events.length = 0;
+  await assert.rejects(projects.activate("prj-bad"), /fixture layout cannot be opened/);
+  assert.equal(projects.active().id, PROJECT.id, "the rejected open replaced the active project");
+  assert.deepEqual(openRequests, [], "the rejected open asked the host for a window");
+  assert.deepEqual(patches.filter(([id]) => id === "prj-bad"), [], "the rejected open changed the saved record");
+  assert.deepEqual(plane.events, [], "the rejected open replaced the plane");
+  assert.equal(plane.layout, shown);
+  await projects.flush();
+  assert.deepEqual(reported, ["fixture layout cannot be opened"], "the rejected open was not reported as a window error");
+  plane.rejected = null;
+  await projects.flush();
 });

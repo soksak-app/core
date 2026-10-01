@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-117-1-3-4-7-1-3: 저장 layout이 등록되지 않은 플러그인을 가리키는 프로젝트 열기가 아무것도 바꾸기 전에 실패한다. 이전에는 layout 검증이 실패하기 전에 프로젝트를 active로 만들고 open으로 표시하며 `lastOpened`를 patch해 빈 grid를 남겼다. 프로젝트 spec도 그런 스페이스가 그 항목만 빼고 열린다고 하지 않는다.
+
 - V5-117-1-5: 라이브러리 미리보기가 열기와 같은 저장 layout 검증을 적용한다. 열기가 거부하는 layout에서 미등록 플러그인의 탭을 걸러 대체 활성 탭을 그렸으나, 이제 검증 오류를 보이고 `core.library`가 그 오류를 `previewErrors`로 보고한다.
 
 - V5-117-1-3-4-5-4-3: native capture acceptance가 나열할 수 없는 녹화 directory를 거부하고 실패한 정리를 보고하며, acceptance 본문을 포함하는 checker는 그 본문이 바뀌면 다시 build한다.
