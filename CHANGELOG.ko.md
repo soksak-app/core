@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-3-1: spec이 애플리케이션 안의 plugin 작업, `core.plugins` 명령과 status, 불러오지 않은 plugin의 placeholder 카드, 프로젝트 데이터 format을 정한다. Command line spec은 더 이상 실행 중인 애플리케이션이 `installed.json`을 관찰한다고 말하지 않는다.
+
 - G1.4-38: Tauri host가 멈추는 sidecar를 stop 기한보다 최대 1 ms 먼저 kill하지 않는다. Host sidecar test는 1–10초 timer로 판정하지 않고 event와 process 종료를 기다린다.
 
 - G1.4-37: published imports test가 package나 파일을 건너뛰지 않고 모든 읽기, 해석 오류를 경로와 함께 보고한다.

@@ -38,7 +38,7 @@ Common functionality belongs to the workbench or the native host so plugins do n
 | `preview` | no | `{ "ink": "--<token>" }`: the theme token name that colors the plugin's cards in library previews; requires `surface` |
 | `sidecars` | no | Package names of the [sidecars](sidecars.md) the page surface or the state module uses; requires `surface` or `state`. Each has a version range in the plugin's `package.json` `soksak.sidecars` |
 | `state` | no | `{ "module": "ui/state.js" }`: the [plugin state](#plugin-state) module that holds state outside a surface; requires `sections` |
-| `data` | no | `{ "<key>": { "schema": <schema>, "default": <value> } }`: [project data](#project-data) the state module stores for each project; requires `state` |
+| `data` | no | `{ "<key>": { "schema": <schema>, "default": <value>, "format"?: <positive integer> } }`: [project data](#project-data) the state module stores for each project; requires `state` |
 | `background` | no | `{ "sidecar": "<declared sidecar>", "operation": "<operation name>", "settings"?: { "<request field>": "<declared setting>" } }`: keeps one declared sidecar session for each non-active tab without creating a native surface; the workbench puts the current value of each mapped plugin setting into the request field, and `settings` cannot name `operation` or an undeclared setting; requires `surface` and `sidecars` |
 
 A plugin requires `surface`, `sections`, or both. Only plugins with a surface appear in the add menu and own a card-left sidebar. The workbench imports `modules/<package name>/<module>` and calls its `mount(root, context)` export. The surface identifier is an explicit context member, not a URL query. The old `page` declaration is rejected; it does not select an alternate implementation. Unknown fields are rejected.
@@ -86,7 +86,9 @@ The state module is a file listed in the package's `files`; `sok plugin pack` fa
 
 ## Project data
 
-`data` declares keys that the state module stores for each project. `schema` uses the schema subset of exposure declarations (`type`, `enum`, `properties`, `items`), and `default` must match it. The workbench stores the values in the project's `plugins.<plugin id>.<key>` entry of `projects.json` ([persistence](projects.md#persistence)). `data.get` returns the stored value or the default and fails when a stored value does not match the schema; `data.set` fails without writing when the value does not match or the key is not declared, and resolves after the store accepted the write.
+`data` declares keys that the state module stores for each project. `schema` uses the schema subset of exposure declarations (`type`, `enum`, `properties`, `items`), and `default` must match it. The optional `format` is a positive integer, 1 when omitted, that the plugin increases when it changes the stored form of the key. The workbench stores each value as `{ "format": <format>, "value": <value> }` in the project's `plugins.<plugin id>.<key>` entry of `projects.json` ([persistence](projects.md#persistence)). `data.get` returns the stored value or the default and fails when a stored value does not match the schema; `data.set` fails without writing when the value does not match or the key is not declared, stores the declared format, and resolves after the store accepted the write.
+
+When `data.get` reads a value stored with a lower format than the declaration, the workbench calls the state module's `convertData({ key, format, value })` export, which returns the value in the declared format. The workbench checks the result against the schema, stores it with the declared format, and writes a line that names the project, plugin, key and both formats to the application log. A value stored with a higher format than the declaration, a missing `convertData` export, a failing conversion or a result that does not match the schema fails `data.get` with a message that names the project, plugin, key and formats, and leaves the stored value unchanged. A value stored without a format, the form before formats existed, is format 1: the first read stores it as `{ "format": 1, "value": <value> }` and logs the conversion.
 
 ## Third-party libraries
 
@@ -143,7 +145,26 @@ The browser back, forward, and reload buttons draw `chevron-left`, `chevron-righ
 | `sidecars` | Optional. `false` states that the runtime cannot run [sidecars](sidecars.md), as in the browser example; the load fails when an installed plugin's `state` module uses sidecars in such an environment. The default is `true` |
 | `sidebars.links` | Default sidebar choices: general left/right links, four card-side links, and window-left/window-right links. Plugin left/right forms, null sets and rail links are rejected. |
 
-The workbench loads `environment.json`, the [installed plugins](installation.md#serving-installed-plugins) in the order of their ids, which is the add-menu order, and each of their `plugin.json` files before it reads settings or builds a space. A tab or card-side link that names a plugin without a surface, a window link that names an unregistered plugin, a set that names an unknown section, or a plugin whose state module uses sidecars in an environment with `sidecars: false`, fails the load before any registration. A plugin surface that declares sidecars may be listed there, because the workbench does not mount such a surface without a host ([runtime module](#runtime-module)). Saved spaces are not environment files; opening rejects unknown plugin tabs and invalid or obsolete window sidebar state ([projects](projects.md#persistence)). Stored sidebar sets and links are settings and pass the same sidebars validation as `environment.json`; a stored set that names an unregistered section, or a card-side link that names a plugin without a surface or a window link that names an unregistered plugin, fails the settings load with an error ([settings window](settings.md#stored-sets-and-links)).
+The workbench loads `environment.json`, the [installed plugins](installation.md#serving-installed-plugins) in the order of their ids, which is the add-menu order, and each of their `plugin.json` files before it reads settings or builds a space. A tab or card-side link that names a loaded plugin without a surface, a set that names a section that its loaded plugin does not declare, or a plugin whose state module uses sidecars in an environment with `sidecars: false`, fails the load before any registration. References to plugins that are not loaded follow [plugins that are not loaded](#plugins-that-are-not-loaded). A plugin surface that declares sidecars may be listed there, because the workbench does not mount such a surface without a host ([runtime module](#runtime-module)). Saved spaces are not environment files; opening rejects invalid or obsolete window sidebar state ([projects](projects.md#persistence)). Stored sidebar sets and links are settings and pass the same sidebars validation as `environment.json`; a stored set that names a section its loaded plugin does not declare, or a card-side link that names a loaded plugin without a surface, fails the settings load with an error ([settings window](settings.md#stored-sets-and-links)).
+
+## Plugins that are not loaded
+
+A plugin is loaded when the window loaded its manifest at startup. Installation can remove or disable a plugin that saved spaces, settings and project data still name, so a reference to a plugin that is not loaded is kept unchanged and does not fail a load:
+
+- A content tab of such a plugin opens as a placeholder card. The card shows the plugin id and one line by the reason, and the tab keeps its id, title and stored state in the saved space; closing the tab removes it as for any tab. `core.surfaces` reports the tab with `placeholder` set to the reason; a mounted surface reports `placeholder: null`.
+
+| Reason | Line | Action |
+| --- | --- | --- |
+| `missing` | <plugin> 플러그인이 설치되어 있지 않습니다. | 설치, `core.plugins.install {plugin}`, when the registry index lists the plugin |
+| `disabled` | <plugin> 플러그인을 사용하지 않습니다. | 사용, `core.plugins.enable {plugin}` |
+| `restart` | 애플리케이션을 다시 시작하면 <plugin> 플러그인이 열립니다. | none |
+| `host` | <plugin> 플러그인은 네이티브 호스트가 있어야 설치됩니다. | none; the application has no host |
+
+  The reason is `disabled` when `installed.json` lists the plugin disabled, `restart` when it lists the plugin enabled, `missing` when it does not list it, and `host` without a host. The card updates its reason after each `plugins-changed` event.
+- A sidebar link that names such a plugin is kept and selects no content. A set section whose plugin, the id before the first `.`, is not loaded is kept in the set and not shown; the set editor shows its row as "<section id> (불러오지 않음)" with ▲, ▼ and −.
+- Project data under `plugins.<plugin id>` of such a plugin is kept unchanged.
+
+A plugin that becomes loaded after a restart uses the kept tabs, links, sections and data again.
 
 ## Staged layout
 

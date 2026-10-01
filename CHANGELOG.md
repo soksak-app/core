@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-3-1: the specifications define plugin operations in the application, the `core.plugins` commands and status, placeholder cards for plugins that are not loaded, and project data formats; the command-line specification no longer claims that a running application observes `installed.json`.
+
 - G1.4-38: the Tauri host no longer kills a stopping sidecar up to 1 ms before the stop deadline; the host sidecar tests wait for events and process ends instead of judging by 1–10 s timers.
 
 - G1.4-37: the published imports test reports every read and parse error with its path instead of skipping the package or file.

@@ -69,4 +69,4 @@ A plugin already installed at the selected version is left unchanged. A failure 
 
 ## Installation and a running application
 
-The plugin and sidecar commands change the files of the configuration directory directly and do not need a running application. The running application observes `plugins/installed.json` and loads the change.
+The plugin and sidecar commands change the files of the configuration directory directly and do not need a running application. A running application does not observe the change: pages that load after it read the new plugin list, and the change takes effect when the application restarts ([plugin operations in the application](installation.md#plugin-operations-in-the-application)).
