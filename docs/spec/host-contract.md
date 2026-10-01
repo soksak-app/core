@@ -263,6 +263,7 @@ Items:
 | `sidecars.send.rejects-surface-owned-by-another-window` | Sending to a surface that another window owns fails with "another window". | both |
 | `sidecars.protocol.request-lines-carry-surface-root-body` | The sidecar receives surface, root, and body request lines in send order. | both |
 | `sidecars.close-owner.sends-closed-per-surface` | Closing a window's ownership sends a closed notice for each of its surfaces. | both |
+| `sidecars.close.keeps-other-sessions` | Closing a removed surface sends a closed notice for that surface only; the window's other sessions, including plugin state sessions that are not surfaces, stay open and keep the root of their first request after the window's project is released. | both |
 | `sidecars.retain.sends-layout-and-known-surfaces` | Retaining sends each running or published persistent service one `retain` request whose surfaces are the given layout surfaces and every surface this process has sent, an empty array when there are none, and returns the service's closed count. | both |
 | `sidecars.retain.reports-service-failure` | A `retained` reply with `ok: false` is returned as an error that carries the service's reason. | both |
 | `sidecars.retain.skips-service-without-endpoint` | Retaining without a running service or its endpoint file starts no service and closes nothing. | both |

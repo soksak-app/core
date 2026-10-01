@@ -160,6 +160,47 @@ fn a_surface_keeps_the_root_it_was_opened_with() {
     );
 }
 
+// contract: sidecars.close.keeps-other-sessions
+#[test]
+fn closing_a_surface_keeps_other_sessions() {
+    let (sidecars, directory) = echo_sidecars();
+    let (window, _events) = owner("a", "/projects/a");
+    for surface in ["s1", "state:files:p1"] {
+        sidecars
+            .send(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+    }
+    // 표면 동기화는 제거된 표면만 닫는다.
+    sidecars
+        .retain(&window, &|surface| surface != "s1")
+        .unwrap();
+    // 창의 프로젝트가 빠진 뒤에도 닫히지 않은 세션은 처음 root 로 보낸다.
+    let (released, _released_events) = owner("a", "");
+    sidecars
+        .send(
+            &released,
+            ECHO,
+            "state:files:p1",
+            &raw(r#"{"operation":"watch"}"#),
+        )
+        .unwrap();
+    sidecars.stop();
+    let requests = std::fs::read_to_string(directory.path().join("requests")).unwrap();
+    assert_eq!(
+        requests,
+        concat!(
+            r#"{"surface":"s1","root":"/projects/a","body":{"operation":"open"}}"#,
+            "\n",
+            r#"{"surface":"state:files:p1","root":"/projects/a","body":{"operation":"open"}}"#,
+            "\n",
+            r#"{"surface":"s1","root":"/projects/a","closed":true}"#,
+            "\n",
+            r#"{"surface":"state:files:p1","root":"/projects/a","body":{"operation":"watch"}}"#,
+            "\n",
+        )
+    );
+}
+
 // contract: sidecars.send.rejects-undeclared-sidecar, sidecars.send.rejects-after-stop
 #[test]
 fn undeclared_and_stopped_sidecars_are_rejected() {

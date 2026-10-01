@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-34: the Tauri host keeps plugin state sidecar sessions open when it syncs surfaces, so the files plugin keeps its watch and no longer reports `watch requires a root`.
+
 - G1.4-33: the first-open window check reports the reply time, trace stages, load average and top CPU processes, and the window check repeat target prints each run's diagnostics.
 
 - G1.4-32: both hosts report a project folder failure with the same message, and the library card of such a project shows the reason without repeating the path and cannot be pressed.

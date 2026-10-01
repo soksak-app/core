@@ -430,6 +430,8 @@ for (const app of Object.values(APPS)) {
     assert.equal(opened.root, root);
     await s.windows(1, "the first project opened another window instead of replacing the library");
     await s.until("core.project", (project) => project?.id === opened.id, "the library window did not show the project");
+    // 프로젝트를 닫고 연 과정에서 페이지 오류가 나면 검사는 실패한다. 오류는 화면에만 보이고 명령은 성공한다.
+    assert.equal(await s.get("core.page.error"), null, "closing and opening projects reported a page error");
   });
 
   test(`${app.name}: a window that holds no open project reports no project`, { timeout: 60000 }, async (t) => {

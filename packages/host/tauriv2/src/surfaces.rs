@@ -600,6 +600,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             .filter(|(id, _)| !alive.contains(*id))
             .map(|(id, handle)| (id.clone(), *handle))
             .collect();
+        let removed_ids: HashSet<String> = removed.iter().map(|(id, _)| id.clone()).collect();
         for (id, handle) in removed {
             // 표면 생명주기의 계기(V5-104): 목록에서 사라진 표면은 이 자리에서 파괴된다.
             {
@@ -633,11 +634,11 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 .remove(&id);
             exposure::surface_closed(window, &id);
         }
-        // 제거된 표면을 사이드카에 알린다.
-        let alive: Vec<String> = request.surfaces.iter().map(|s| s.id.clone()).collect();
+        // 제거된 표면만 사이드카에 알린다. 표면이 아닌 사이드카 세션(플러그인 상태 모듈의 세션)은 표면 목록에 없으므로,
+        // 목록에 없다는 이유로 닫으면 그 세션의 root 와 감시가 사라진다.
         window
             .state::<WindowSidecars>()
-            .retain(window, &|id: &str| alive.iter().any(|s| s == id))?;
+            .retain(window, &|id: &str| !removed_ids.contains(id))?;
 
         // 각 표면의 실제 위치를 반환한다. 호스트는 페이지가 선언한 사각형을 디스플레이 픽셀에
         // 맞추므로 두 값의 차이를 페이지에 알린다.

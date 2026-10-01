@@ -413,3 +413,33 @@ func TestStopForcedKill(t *testing.T) {
 		t.Errorf("forced kill stop took %v, want ~100ms", elapsed)
 	}
 }
+
+// contract: sidecars.close.keeps-other-sessions
+func TestClosingASurfaceKeepsOtherSessions(t *testing.T) {
+	sidecars, record := echoSidecars(t)
+	owner := newFakeOwner("/projects/a")
+	for _, surface := range []string{"s1", "state:files:p1"} {
+		if err := sidecars.Send(owner, echoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sidecars.Close("s1")
+	// 창의 프로젝트가 빠진 뒤에도 닫히지 않은 세션은 처음 root 로 보낸다.
+	owner.root = ""
+	if err := sidecars.Send(owner, echoSidecar, "state:files:p1", json.RawMessage(`{"operation":"watch"}`)); err != nil {
+		t.Fatal(err)
+	}
+	sidecars.Stop()
+	requests, err := os.ReadFile(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"surface":"s1","root":"/projects/a","body":{"operation":"open"}}
+{"surface":"state:files:p1","root":"/projects/a","body":{"operation":"open"}}
+{"surface":"s1","root":"/projects/a","closed":true}
+{"surface":"state:files:p1","root":"/projects/a","body":{"operation":"watch"}}
+`
+	if string(requests) != want {
+		t.Fatalf("requests =\n%s\nwant\n%s", requests, want)
+	}
+}
