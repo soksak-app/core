@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-4: `host.window` reports `refreshRate`, the maximum refresh rate of the window's screen, and the terminal divider check derives its minimum frame count from it instead of assuming about 120 Hz.
+
 - G1.4-14-4: the rail outline is drawn half a border width inside the half gap, so a 1x display draws the rail in whole pixels instead of two dim pixels; `ensureTerminals` splits the largest terminal card on its long side.
 
 - G1.4-14-4: the wheel cases of the terminal mouse check inject 2.5 cell heights divided by the display scale instead of a fixed 31 pixels, and a report timeout names the last mouse measurement and the surface status.

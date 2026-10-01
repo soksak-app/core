@@ -87,6 +87,10 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the frame is reported at the moved top-left screen point: %@", facts[@"frame"]]);
     check(NSMaxY(window.frame) == primary - 80, @"the move places the frame top 80 points below the primary display top");
     check([facts[@"content"][@"width"] doubleValue] == 400 && [facts[@"content"][@"height"] doubleValue] == 300, @"content size");
+    // 재생률은 창이 놓인 화면의 최대 프레임 수다. 녹화 검사는 프레임 수 기준을 이 값에서 정한다.
+    check(window.screen != nil && [facts[@"refreshRate"] isKindOfClass:NSNumber.class]
+        && [facts[@"refreshRate"] integerValue] == window.screen.maximumFramesPerSecond && [facts[@"refreshRate"] integerValue] > 0,
+        [NSString stringWithFormat:@"the refresh rate of the window's screen is reported: %@", facts[@"refreshRate"]]);
     check(![facts[@"active"] boolValue] && ![facts[@"key"] boolValue], @"an inactive window is reported as not key and not active");
     check([facts[@"children"] integerValue] == 0, @"no child windows");
     check([facts[@"controls"] count] == 3, @"three window buttons are reported");

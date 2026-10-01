@@ -72,12 +72,13 @@ fn host_declarations() -> Value {
                 "scale": {"type": "number"}}}},
         }, {
             "name": "host.window",
-            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, maximized, key and application active state, whether other windows cover the whole window, child window count, window buttons, webview frames, native surfaces, image regions, and the open native modal.",
+            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, window buttons, webview frames, native surfaces, image regions, and the open native modal.",
             "schema": {"type": "object", "properties": {
                 "frame": rect,
                 "pointer": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
                 "content": rect,
                 "scale": {"type": "number"},
+                "refreshRate": {"type": ["integer", "null"]},
                 "maximized": {"type": "boolean"},
                 "key": {"type": "boolean"},
                 "active": {"type": "boolean"},
@@ -1012,6 +1013,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "pointer": facts["pointer"],
         "content": {"x": 0.0, "y": 0.0, "width": facts["content"]["width"], "height": facts["content"]["height"]},
         "scale": facts["scale"],
+        "refreshRate": facts["refreshRate"],
         "maximized": facts["zoomed"],
         "key": facts["key"],
         "active": facts["active"],

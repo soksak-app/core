@@ -146,6 +146,8 @@ char *sp_window_facts(void *handle) {
         @"pointer": @{ @"x": @(NSEvent.mouseLocation.x), @"y": @(primaryTop() - NSEvent.mouseLocation.y) },
         @"content": @{ @"width": @(content.bounds.size.width), @"height": @(content.bounds.size.height) },
         @"scale": @(window.backingScaleFactor),
+        // 창이 어느 화면에도 놓이지 않으면 재생률을 정할 수 없으므로 null 이다.
+        @"refreshRate": window.screen ? (id)@(window.screen.maximumFramesPerSecond) : (id)NSNull.null,
         @"key": @(window.isKeyWindow),
         @"zoomed": @(window.isZoomed),
         @"active": @(NSApp.isActive),

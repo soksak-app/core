@@ -1834,7 +1834,13 @@ for (const app of Object.values(APPS)) {
       .sort((a, b) => a.x - b.x)[0];
     assert.ok(terminalCard, "terminal card is missing");
     const result = await drag(t, s, { axis: "x", line: terminalCard.c1, dx: 500, dy: 0, ms: 96, times: 1 }, { capture: true });
-    assert.ok(result.count > 20, `divider recording contained too few frames: ${result.count}`);
+    // 녹화는 바뀐 프레임만 담으므로 프레임 수는 화면 재생률을 따른다. 끌기 시간 동안 화면이 그릴 수 있는 프레임의
+    // 7/8 이상을 요구한다. 120Hz 에서 192ms 끌기는 이전 기준과 같은 21 프레임이다.
+    const { refreshRate } = await s.get("host.window");
+    assert.ok(refreshRate > 0, `the window reports no refresh rate: ${refreshRate}`);
+    const minimum = Math.ceil(result.asked * refreshRate / 1000 * 7 / 8);
+    assert.ok(result.count >= minimum,
+      `divider recording contained too few frames: ${result.count} of at least ${minimum} for ${result.asked}ms at ${refreshRate}Hz`);
     assert.ok(result.longestGap <= 100, `divider recording dropped a gesture interval: ${result.longestGap}ms`);
     assert.equal(result.late, 0, `divider input arrived late: ${result.late} steps`);
     assert.equal(result.deepest, 0, `divider input queue accumulated ${result.deepest} steps`);
