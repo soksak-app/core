@@ -28,6 +28,7 @@ func TestCaptureStopPayloadReportsUnboundedRecording(t *testing.T) {
 	}
 }
 
+// contract: diagnostics.capture-stop.payload-reports-layout-timeline
 func TestCaptureStopPayloadRequiresLayoutTimeline(t *testing.T) {
 	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil)
 	if _, ok := payload["layouts"]; !ok {
@@ -35,6 +36,7 @@ func TestCaptureStopPayloadRequiresLayoutTimeline(t *testing.T) {
 	}
 }
 
+// contract: diagnostics.capture-stop.payload-preserves-layout-stages
 func TestCaptureStopPayloadPreservesLayoutStages(t *testing.T) {
 	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, [][4]float64{{7, 10, 20, 30}})
 	layouts := payload["layouts"].([]map[string]any)

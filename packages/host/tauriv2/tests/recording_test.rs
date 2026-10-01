@@ -220,6 +220,7 @@ fn the_stop_payload_reports_an_unbounded_recording() {
     assert_eq!(payload["limited"], false);
 }
 
+// contract: diagnostics.capture-stop.payload-reports-layout-timeline
 #[test]
 fn the_stop_payload_requires_a_layout_timeline() {
     let payload = stop_payload(Path::new("/tmp/frames"), 3, false, 0.0, &[]);
@@ -229,6 +230,7 @@ fn the_stop_payload_requires_a_layout_timeline() {
     );
 }
 
+// contract: diagnostics.capture-stop.payload-preserves-layout-stages
 #[test]
 fn the_stop_payload_preserves_layout_stages() {
     let payload = stop_payload(

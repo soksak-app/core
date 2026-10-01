@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-13: declare the capture stop layout-timeline contract cases and annotate the Wails and Tauri tests that verify them, so the host contract audit accepts both hosts.
+
 - G1.4-12: move the PNG and sidebar-gesture helper unit tests to `e2e/test/`. At the top level the application parity audit rejected them as app behavior tests without `APPS`, and the e2e package test command never ran them.
 
 - G1.4-7: format the vt-core test support imports so `make rust-format-check` passes both Rust workspaces.

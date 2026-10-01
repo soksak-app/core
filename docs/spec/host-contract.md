@@ -100,6 +100,8 @@ Items:
 | `notifications.request.rejects-invalid-fields` | An empty, too long, or control-character surface, title, or body is rejected with an error that names the field. | both |
 | `diagnostics.capture-stop.payload-reports-frame-limit` | The capture stop payload of a limited capture reports frames, count, limited true, and the longest gap. | both |
 | `diagnostics.capture-stop.payload-reports-unbounded` | The capture stop payload of a capture below its limit reports limited false. | both |
+| `diagnostics.capture-stop.payload-reports-layout-timeline` | The capture stop payload always reports a `layouts` array, also when no layout transaction was recorded. | both |
+| `diagnostics.capture-stop.payload-preserves-layout-stages` | Each `layouts` entry keeps the recorded ticket, begun, presented and committed values. | both |
 | `documents.request.accepts-own-surface` | A document request for the caller's own surface is accepted and returns the surface and name key. | both |
 | `documents.request.rejects-foreign-or-missing-caller` | A document request from no caller surface or from another surface fails with "not surface". | both |
 | `documents.request.rejects-invalid-names` | Empty, capitalized, hyphen-first, slash-containing, and 65-character document names are rejected. | both |
