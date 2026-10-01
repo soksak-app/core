@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-115-1: card panel window checks require a different-plugin tab switch, full-width top and bottom panels and every displayed drag state in the recording, with unit-tested judgments.
+
 - V5-115-1-3: card panels with fractional sizes are drawn and prepared on the device-pixel grid, so native surfaces match their declared rectangles.
 
 - V5-116-4-11-2: a window check measures left, right and top panels on the shell card against the native surface, grips and DOM geometry.

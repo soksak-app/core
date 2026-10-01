@@ -5,6 +5,7 @@ import { rmSync } from "node:fs";
 import { APPS, fresh, open } from "./app.mjs";
 import { frames, readFrame } from "./frame.mjs";
 import { recordedEdges } from "./sidebar-gesture-recording.mjs";
+import { missingPoses } from "./card-panel-checks.mjs";
 
 const sides = ["top", "bottom", "left", "right"];
 const sign = (side) => (side === "top" || side === "left" ? 1 : -1);
@@ -208,6 +209,13 @@ for (const app of Object.values(APPS)) {
               ),
               `${side}: no intermediate movement frame`,
             );
+            // 표시된 모든 상태는 표시 뒤 화면 두 프레임 안의 녹화 프레임에 그 경계로 남아야 한다.
+            const missing = missingPoses(
+              captured.map((frame, frameIndex) => ({ time: frame.time, edges: measured[frameIndex] })),
+              poses.map((pose) => ({ phase: pose.phase, displayed: pose.displayed, at: initial + sign(side) * (pose.size - 120) })),
+              recordingWindow.refreshRate,
+            );
+            assert.deepEqual(missing, [], `${side}: displayed states missing from the recording at ${recordingWindow.refreshRate}Hz`);
             t.diagnostic(
               `${side}: 120 -> 160 -> 120 points, ${captured.length} frames at ${captured[0].width}x${captured[0].height}, ${stopped.layouts.length} layout transactions, gap ${stopped.longestGap}ms, input/presentation steps ${elapsed.join(",")}ms`,
             );

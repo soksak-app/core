@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
 import { APPS, fresh, open } from "./app.mjs";
+import { requireFullWidth } from "./card-panel-checks.mjs";
 import { frames, readFrame, pixel } from "./frame.mjs";
 const sides = ["top", "bottom", "left", "right"];
 const near = (a, b, label) => assert.ok(Math.abs(a - b) <= 1, `${label}: actual ${a}, expected ${b}`);
@@ -128,12 +129,16 @@ for (const app of Object.values(APPS))
         );
         const bands = {};
         let sectionIndex = 0;
-        for (const bar of bars) {
+        for (const [barIndex, bar] of bars.entries()) {
           const offset = sectionIndex;
           sectionIndex += bar.sections.length;
           if (!bar.sidebar.startsWith(`${card.id}:`)) continue;
           const side = bar.sidebar.slice(card.id.length + 1),
             state = current.sidebars[side];
+          // 펼친 top 과 bottom 패널은 카드의 안쪽 폭 전체를 차지한다.
+          if ((side === "top" || side === "bottom") && !state.collapsed) {
+            requireFullWidth(await s.rect("core.sidebar", barIndex), current, 1, `${label}: ${side}`);
+          }
           const autoCollapsed =
             !choices[side].collapsed && (side === "left" || side === "right" ? horizontal : vertical);
           assert.deepEqual(

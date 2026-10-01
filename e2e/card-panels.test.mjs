@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
 import { checkLinkedPanels } from "./linked-panels.mjs";
+import { requireCleared, tabSwitchPair } from "./card-panel-checks.mjs";
 const geometry=grid=>grid.cards.map(({id,x,y,w,h})=>({id,x,y,w,h})).sort((a,b)=>a.id.localeCompare(b.id));
 
 for (const app of Object.values(APPS)) {
@@ -133,14 +134,9 @@ for (const app of Object.values(APPS)) {
     const grid0 = await s.get("core.grid");
     let card0 = grid0.cards.find((item) => item.tabs.length);
     assert.ok(card0, "no content card to hold panels");
-    const original = card0.tabs.find((tab) => tab.id === card0.active);
-    let other = card0.tabs.find((tab) => tab.plugin !== original.plugin);
-    if (!other) {
-      const source = grid0.cards.find((item) => item.tabs.some((tab) => tab.plugin !== original.plugin));
-      assert.ok(source, "no different plugin exists for the required tab-switch fixture");
-      other = source.tabs.find((tab) => tab.plugin !== original.plugin);
-      await s.run("core.tab.move", { tab: other.id, card: card0.id, zone: "centre" });
-    }
+    // 탭 전환 검사는 항상 다른 플러그인의 탭으로 한다. 없으면 검사할 수 없으므로 실패한다.
+    const { original, other, from } = tabSwitchPair(card0, grid0.cards);
+    if (from !== card0.id) await s.run("core.tab.move", { tab: other.id, card: card0.id, zone: "centre" });
     card0 = (await s.get("core.grid")).cards.find((item) => item.id === card0.id);
 
     // 사방 지정 — 카드 데이터이므로 어떤 카드든 받는다.
@@ -173,6 +169,9 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(geometry(afterGrid),geometry(grid),'tab selection changed internal or external card geometry');
     assert.deepEqual(afterGrid.cards.find(item=>item.id===card0.id).sidebars,panels,'tab selection changed assigned sets or presentation');
     assert.deepEqual((await s.get('core.layout')).state.cards.find(item=>item.id===card0.id).data.sidebars,saved,'tab selection changed saved assignments');
+    // 전환한 탭의 native 표면도 같은 자리에 앉는다(V7a/V7b/V7c).
+    await s.presented();
+    assert.deepEqual((await s.get("core.verify")).rows.filter((row) => !row.ok), [], "tab selection left DOM and native geometry apart");
     t.diagnostic(`normal card ${assigned.w}x${assigned.h}; top/bottom auto-fold, left/right open; different-plugin tabs ${original.plugin}/${other.plugin} preserve all geometry`);
 
     // 패널은 core.sidebars 에 카드:변 아이디로 보고된다(스펙: 사이드바 식별).
@@ -215,9 +214,12 @@ for (const app of Object.values(APPS)) {
     for (const side of ["bottom", "left", "right"]) {
       await s.run("core.card.sidebar.set", { card: card0.id, side, set: "off" });
     }
-    await s.until("core.grid",
-      (value) => Object.keys(value.cards.find((item) => item.id === card0.id)?.sidebars ?? {}).length === 0,
-      "the card sidebars did not clear");
+    // 카드가 남아 있고 패널이 하나도 없어야 한다. 카드가 사라진 것은 정리가 아니다.
+    const clearedAll = await s.until("core.grid", (value) => {
+      const item = value.cards.find((candidate) => candidate.id === card0.id);
+      return Boolean(item) && Object.keys(item.sidebars).length === 0;
+    }, "the card sidebars did not clear");
+    requireCleared(clearedAll.cards.find((item) => item.id === card0.id).sidebars);
   });
 }
 

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-115-1: 카드 패널 window check가 다른 plugin 탭으로의 전환, 전체 폭 top·bottom 패널, 녹화 안의 모든 표시 끌기 상태를 요구하며, 판정은 단위 test로 검사한다.
+
 - V5-115-1-3: 소수 크기의 카드 패널을 장치 pixel 격자에 그리고 준비하므로 native 표면이 선언 사각형과 같다.
 
 - V5-116-4-11-2: window check가 shell 카드의 left, right, top 패널을 native 표면, grip, DOM geometry와 비교해 잰다.
