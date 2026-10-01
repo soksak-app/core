@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-27: the host stub audit reports a file it cannot read and reads plugin `.js` sources too.
+
 - G1.4-26: drawing a layout prepared before a card closed no longer fails on that card's missing tab, and does not mount its released surface again.
 
 - G1.4-25-1: the comment language check reads the working tree, including new files and excluding deleted ones.

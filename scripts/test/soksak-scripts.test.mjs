@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
 import { find as findReleaseMarkers } from "../check-release.mjs";
-import { auditHostPairs } from "../check-hosts.mjs";
+import { auditHostPairs, findStubs } from "../check-hosts.mjs";
 import { auditE2ESource } from "../check-e2e.mjs";
 import { auditTerminalProtocolInventory } from "../check-terminal-protocol-inventory.mjs";
 
@@ -117,6 +117,18 @@ test("host structure audit rejects a missing host and a missing counterpart", { 
   const pairs = [{ left: "hosts/wails", right: "hosts/tauri", only: { left: {}, right: {} } }];
   assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go"], pairs), ["hosts/tauri: no files", "hosts/wails/src/host: no counterpart in hosts/tauri"]);
   assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go", "hosts/tauri/src/host.rs", "hosts/tauri/src/extra.rs"], pairs), ["hosts/tauri/src/extra: no counterpart in hosts/wails"]);
+});
+
+test("stub audit reads every product source file and reports a file it cannot read", { timeout: 1000 }, () => {
+  const files = {
+    "plugins/a/ui/a.js": "// TODO: Implement the panel\n",
+    "packages/host/wailsv3/src/a.go": "func f() {}\n",
+    "packages/host/wailsv3/tests/a_test.go": "// TODO: Implement later\n",
+    "packages/host/wailsv3/src/platform/windows/unsupported.go": "// not yet implemented\n",
+  };
+  assert.deepEqual(findStubs(Object.keys(files), (file) => files[file]), ["plugins/a/ui/a.js:1: TODO:\\s*Implement"]);
+  assert.throws(() => findStubs(["native/darwin/src/a.m"], () => { throw new Error("EACCES: permission denied"); }),
+    /native\/darwin\/src\/a\.m: EACCES: permission denied/);
 });
 
 test("window-source audit rejects forbidden control paths", { timeout: 5000 }, async () => {

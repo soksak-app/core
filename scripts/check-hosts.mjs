@@ -88,36 +88,27 @@ const PRODUCT_DIRS = [
   "sidecars/vt-core/src",
   "plugins",
 ];
-const EXCLUDE = ["test", "tests", "windows"];
+/** 검사하지 않는 경로. 테스트와 Windows unsupported 구현은 stub 문구를 정당하게 담는다. */
+const EXCLUDE = /(^|\/)(test|tests|windows)(\/|$)/;
+const STUB_SOURCE = /\.(go|rs|m|js|mjs)$/;
 
-function findStubs(dir) {
+/**
+ * 제품 소스의 stub 구현 줄을 돌려준다. files 는 저장소 상대 경로, read(file) 은 그 원문이다. 읽지 못한 파일은
+ * 검사하지 못한 것이므로 경로를 담은 오류로 실패한다.
+ */
+export function findStubs(files, read) {
   const stubs = [];
-  try {
-    const files = execFileSync("find", [dir, "-type", "f", "(", "-name", "*.go", "-o", "-name", "*.rs", "-o", "-name", "*.m", "-o", "-name", "*.mjs", ")", "-not", "-path", "*/target/*", "-not", "-path", "*/.git/*"],
-      { cwd: ROOT, encoding: "utf8" }).trim().split("\n").filter(f => f);
-
-    for (const file of files) {
-      // 테스트 파일과 unsupported 파일은 건너뛴다
-      if (EXCLUDE.some(ex => file.includes(ex))) continue;
-
-      try {
-        const content = readFileSync(`${ROOT}${file}`, "utf8");
-        for (const pattern of STUB_PATTERNS) {
-          if (pattern.test(content)) {
-            const lines = content.split("\n");
-            for (let i = 0; i < lines.length; i++) {
-              if (pattern.test(lines[i])) {
-                stubs.push(`${file}:${i + 1}: ${pattern.source}`);
-              }
-            }
-          }
-        }
-      } catch (e) {
-        // 읽을 수 없는 파일은 무시한다
-      }
+  for (const file of files) {
+    if (!PRODUCT_DIRS.some((dir) => file.startsWith(`${dir}/`)) || !STUB_SOURCE.test(file) || EXCLUDE.test(file)) continue;
+    let content;
+    try {
+      content = read(file);
+    } catch (error) {
+      throw new Error(`${file}: ${error.message}`, { cause: error });
     }
-  } catch (e) {
-    // find 오류는 무시한다
+    content.split("\n").forEach((line, index) => {
+      for (const pattern of STUB_PATTERNS) if (pattern.test(line)) stubs.push(`${file}:${index + 1}: ${pattern.source}`);
+    });
   }
   return stubs;
 }
@@ -126,7 +117,7 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   const tracked = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
     { cwd: ROOT, encoding: "utf8" }).split("\0").filter((path) => path && existsSync(`${ROOT}${path}`));
   const errors = auditHostPairs(tracked);
-  const stubErrors = PAIRS.length === 0 ? [] : PRODUCT_DIRS.flatMap((dir) => findStubs(dir));
+  const stubErrors = findStubs(tracked, (file) => readFileSync(`${ROOT}${file}`, "utf8"));
   if (stubErrors.length) {
     console.error("Stub implementations found (anti-regression check failed):");
     console.error(stubErrors.join("\n"));
