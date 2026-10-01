@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-116-4-7: Tauri endpoint가 이미 끊긴 연결을 닫는 것을 `Socket is not connected (os error 57)`로 기록하지 않고 성공으로 처리하며, 다른 shutdown 오류는 보고한다.
+
 - V5-116-4-10: 두 host가 trace 명세대로 10 MB에서 성능 출력을 `performance.ndjson.1`로 rotation하고, 중계한 page 줄에 자기 `pid`를 기록한다.
 
 - V5-117-1-3-4-7-1-7: 메인 페이지가 스스로 답하는 명령은 응답 없이 호출자를 기다리게 하지 않고, 선언된 timeout이나 10초 뒤에 실패한다.

@@ -120,6 +120,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.process.one-owner-per-config-dir` | 같은 설정 디렉터리의 두 번째 엔드포인트는 "already owned by process"로 거부되고, 첫 엔드포인트는 닫을 때까지 잠금을 유지한다. | both |
 | `endpoint.transport.http-request-line-closes` | HTTP 요청 줄은 응답이나 메서드 호출 없이 연결을 닫는다. | both |
 | `endpoint.transport.invalid-json-closes` | 본문이 JSON이 아닌 프레임은 응답 없이 연결을 닫는다. | both |
+| `endpoint.transport.closing-a-disconnected-connection-succeeds` | socket이 이미 끊긴 연결을 닫으면 성공한다. 다른 shutdown 오류는 보고한다. | tauriv2 only: Rust host는 socket을 명시적으로 shutdown하며 끊긴 socket을 보고하고, Go는 shutdown 없이 연결을 닫는다 |
 | `endpoint.transport.non-jsonrpc-object-closes` | JSON-RPC 2.0 요청이 아닌 JSON 프레임은 응답 없이 연결을 닫는다. | both |
 | `endpoint.transport.undeclared-method-closes` | 선언되지 않은 메서드는 응답 없이 연결을 닫고 페이지에 아무것도 전달하지 않는다. | both |
 | `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | 릴리스 빌드에서 diagnostics.transcript는 연결을 닫고 페이지에 닿지 않으며, 진단 빌드에서는 응답된다. | both |

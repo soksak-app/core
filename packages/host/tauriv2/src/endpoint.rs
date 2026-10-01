@@ -536,7 +536,9 @@ impl Endpoint {
         if let Ok(peers) = self.shared.peers.lock() {
             for peer in peers.values() {
                 if let Ok(writer) = peer.writer.lock() {
-                    writer.close();
+                    if let Err(error) = writer.close() {
+                        eprintln!("endpoint shutdown failed: {error}");
+                    }
                 }
             }
         }
@@ -718,7 +720,9 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         let shared = shared.clone();
         std::thread::spawn(move || answer.send(run(&shared, &request.method, request.params)));
     }
-    connection.close();
+    if let Err(error) = connection.close() {
+        eprintln!("endpoint shutdown failed: {error}");
+    }
     forget(&shared, peer);
 }
 

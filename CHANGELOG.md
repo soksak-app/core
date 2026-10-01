@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-116-4-7: the Tauri endpoint treats closing an already disconnected connection as success instead of logging `Socket is not connected (os error 57)`, and reports other shutdown errors.
+
 - V5-116-4-10: both hosts rotate the performance output to `performance.ndjson.1` at 10 MB and record their `pid` on relayed page lines, as the trace specification requires.
 
 - V5-117-1-3-4-7-1-7: a command that the main page answers itself fails after its declared timeout or 10 seconds instead of keeping its caller waiting without a reply.

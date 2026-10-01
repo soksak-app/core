@@ -168,9 +168,11 @@ impl Connection for Stream {
         self.0.set_read_timeout(timeout).map_err(|e| e.to_string())
     }
 
-    fn close(&self) {
-        if let Err(error) = self.0.shutdown(Shutdown::Both) {
-            eprintln!("endpoint shutdown failed: {error}");
+    fn close(&self) -> Result<(), String> {
+        match self.0.shutdown(Shutdown::Both) {
+            // 상대가 먼저 끊었거나 이미 닫은 연결은 닫힌 상태이므로 실패가 아니다.
+            Err(error) if error.kind() == std::io::ErrorKind::NotConnected => Ok(()),
+            result => result.map_err(|error| error.to_string()),
         }
     }
 }

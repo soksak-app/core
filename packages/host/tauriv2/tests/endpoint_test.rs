@@ -739,3 +739,19 @@ fn endpoint_file_is_written_only_after_the_first_window_exists() {
     endpoint.stop();
     assert!(!file.exists());
 }
+
+// contract: endpoint.transport.closing-a-disconnected-connection-succeeds
+#[test]
+fn closing_an_already_disconnected_connection_succeeds() {
+    let config = tempfile::tempdir().unwrap();
+    let (service, _) = Fake::new();
+    let endpoint = start(config.path(), "test-close", service);
+    let connection = open(&endpoint);
+    assert_eq!(connection.close(), Ok(()));
+    // 이미 끊긴 연결을 다시 닫는 것은 실패가 아니다. 셧다운이 끝난 소켓은 ENOTCONN 을 돌려준다.
+    assert_eq!(
+        connection.close(),
+        Ok(()),
+        "closing a disconnected connection reported an error"
+    );
+}

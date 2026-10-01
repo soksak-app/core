@@ -47,7 +47,7 @@ pub trait Connection: Read + Write + Send {
     /// 읽기 대기 시간을 설정한다. None 은 제한하지 않는다.
     fn set_read_timeout(&self, timeout: Option<Duration>) -> Result<(), String>;
     /// 연결의 읽기와 쓰기를 모두 닫는다.
-    fn close(&self);
+    fn close(&self) -> Result<(), String>;
 }
 
 /// 로컬 엔드포인트의 수신 주소.

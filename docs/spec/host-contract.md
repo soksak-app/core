@@ -120,6 +120,7 @@ Items:
 | `endpoint.process.one-owner-per-config-dir` | A second endpoint on the same configuration directory is refused with "already owned by process", and the first keeps its lock until it closes. | both |
 | `endpoint.transport.http-request-line-closes` | An HTTP request line closes the connection without a reply or a method call. | both |
 | `endpoint.transport.invalid-json-closes` | A frame whose body is not JSON closes the connection without a reply. | both |
+| `endpoint.transport.closing-a-disconnected-connection-succeeds` | Closing a connection whose socket is already disconnected succeeds; other shutdown errors are reported. | tauriv2 only: the Rust host shuts the socket down explicitly, which reports a disconnected socket, while Go closes the connection without a shutdown |
 | `endpoint.transport.non-jsonrpc-object-closes` | A JSON frame that is not a JSON-RPC 2.0 request closes the connection without a reply. | both |
 | `endpoint.transport.undeclared-method-closes` | An undeclared method closes the connection without a reply, and nothing reaches the page. | both |
 | `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | In a release build diagnostics.transcript closes the connection and reaches no page; in a diagnostic build it is answered. | both |
