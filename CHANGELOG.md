@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-20-1: a window check fails only when a tested host stays frontmost after it; an application the user brings forward during a run is reported instead of failing the check.
+
 - V5-117-1-3-4-7-1-7-1: a core command's reply limit covers its handler only, so a failed presentation reports its own error instead of `did not reply`; the page fails a layout whose animation frame does not run within 10 seconds.
 
 - G1.4-14-4-6: the card sidebar space check starts its recordings at the current window size, because recordings follow the window size.

@@ -33,18 +33,19 @@ export function activateApp(pid) {
 
 /**
  * 검사가 끝난 뒤 활성 애플리케이션을 세션의 기준 baseline 으로 되돌리고 확인한다. 검사한 호스트 host 가 활성이면
- * 기준을 다시 활성화하고 호스트가 비활성이 되기를 기다린다. 다른 애플리케이션은 활성화하지 않는다. 그 뒤에도 기준이
- * 활성이 아니면 실패한다. 반환값은 복원 전후의 활성 애플리케이션이다.
+ * 기준을 다시 활성화하고 호스트가 비활성이 되기를 기다린다. 그 뒤 세션이 연 호스트(hosts) 중 하나가 활성이면
+ * 실패한다. 검사는 다른 애플리케이션을 활성화하지 않으므로, 다른 애플리케이션이 활성이면 사용자가 바꾼 것이며
+ * 그 애플리케이션을 빼앗지 않는다. 반환값은 복원 전후의 활성 애플리케이션이다.
  */
-export async function restoreFrontmost({ name, baseline, host, read = frontmostApp, activate = activateApp, inactive }) {
+export async function restoreFrontmost({ name, baseline, host, hosts, read = frontmostApp, activate = activateApp, inactive }) {
   const before = read();
   if (before === host) {
     activate(baseline);
     await inactive();
   }
   const after = read();
-  if (after !== baseline) {
-    throw new Error(`${name}: application ${after} is frontmost after the check instead of the baseline ${baseline} ` +
+  if (hosts.includes(after)) {
+    throw new Error(`${name}: tested host ${after} is frontmost after the check instead of the baseline ${baseline} ` +
       `(frontmost before restoring: ${before})`);
   }
   return { before, after };
