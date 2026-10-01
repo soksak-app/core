@@ -125,6 +125,19 @@ test("window-source audit rejects forbidden control paths", { timeout: 5000 }, a
   assert.match(result.stdout, /Window check sources use only the endpoint/);
 });
 
+test("window-source audit rejects a source path of another repository component", { timeout: 1000 }, () => {
+  for (const line of [
+    'import { THEMES } from "../packages/workbench/settings.js";',
+    'const { THEMES } = await import("../packages/workbench/settings.js");',
+    'readFileSync(join(root, "plugins/files/plugin.json"));',
+  ]) {
+    const errors = auditE2ESource(line, "e2e/fixture.test.mjs");
+    assert.equal(errors.length, 1, `${line}: ${JSON.stringify(errors)}`);
+    assert.match(errors[0], /source path of another repository component/);
+  }
+  assert.deepEqual(auditE2ESource('import { APPS } from "./app.mjs";', "e2e/fixture.test.mjs"), []);
+});
+
 test("window-source audit rejects native input that activates the application", { timeout: 1000 }, () => {
   const errors = auditE2ESource(
     'await session.pointer(x, y, "move", { activate: true });',

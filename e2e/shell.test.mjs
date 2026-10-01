@@ -150,7 +150,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     const shell = await fresh(s);
     s.cleanup(() => s.run("core.settings.theme", { name: "midnight", mode: "dark", scope: "common" }));
-    const { THEMES } = await import("../packages/workbench/settings.js");
+    const THEMES = await s.get("core.themes");
     const { frames, pixel, readFrame } = await import("./frame.mjs");
     const { rmSync: remove } = await import("node:fs");
     for (const { name } of THEMES) {

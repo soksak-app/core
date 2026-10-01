@@ -572,6 +572,22 @@
         }
       },
       {
+        "name": "core.themes",
+        "description": "The theme catalog in order: each theme's name, shape values, and the color tokens of its dark and light modes.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "shape": { "type": "object" },
+              "dark": { "type": "object" },
+              "light": { "type": "object" }
+            }
+          }
+        }
+      },
+      {
         "name": "core.settings-modal",
         "description": "The settings modal: whether it is open, its section, scope, the plugin search text, the plugin ids listed, the plugin whose page is shown or null, the edited set or null, the rows of declared plugin settings with their label and description, card rectangle in window coordinates, and its controls with the command each control runs.",
         "schema": {

@@ -17,7 +17,7 @@ import {
   cardSidebars, resizeSidebar, settle, splitCard, surfaceState, tabsOf,
 } from "./plane.js";
 import {
-  applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, settingProject, value,
+  applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, settingProject, THEMES, value,
 } from "./settings.js";
 import {
   closeSettings, editSet, moveSettings, onSettingsDrawn, openSettings, settingsModalState, searchPlugins, showPlugin, showScope, showSection,
@@ -263,6 +263,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
     overridden: Object.keys(defaults).filter(overridden),
     saving: saving(),
   }));
+  status("core.themes", () => THEMES);
   status("core.settings-modal", settingsModalState);
   status("core.picker", pickerState);
   status("core.library", () => library.state());

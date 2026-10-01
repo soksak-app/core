@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 
 import { frames, pixel, readFrame } from "./frame.mjs";
-import { THEMES } from "../packages/workbench/settings.js";
 
 export function textLines(screen) {
   assert.ok(screen && Array.isArray(screen.lines), `invalid terminal screen: ${JSON.stringify(screen)}`);
@@ -103,6 +102,7 @@ export async function cellBackgrounds(session, surface, cells) {
 /** 강조 색이 없을 때 선택한 칸의 배경. 현재 테마의 --rail 다(docs/spec/terminal-runtime.md). */
 export async function selectionBackground(session) {
   const { values } = await session.get("core.settings");
+  const THEMES = await session.get("core.themes");
   return THEMES.find((item) => item.name === values.theme)[values.mode].rail;
 }
 

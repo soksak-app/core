@@ -22,6 +22,8 @@ const RULES = [
   { what: "a repeating timer", pattern: /\bsetInterval\s*\(/ },
   { what: "a fixed sleep", pattern: /\b(sleep|delay|pause)\s*\(|timers\/promises/, inputPacing: true },
   { what: "application activation that takes user focus", pattern: /\bactivate\s*:\s*true\b/, activationTier: true },
+  // 창 검사는 다른 구성 요소의 소스 경로를 읽지 않고 선언된 status 로 값을 받는다.
+  { what: "a source path of another repository component", pattern: /(["'`/]|\.\.\/)(packages|plugins|sidecars|native|apps)\// },
 ];
 
 // e2e/activation 과 e2e/real 의 검사는 사용자가 승인한 실행에서만 돌며 앱을 활성화할 수 있다.

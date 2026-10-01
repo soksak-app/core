@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-19: window check가 workbench source를 import하지 않고 새 `core.themes` status에서 theme catalog를 읽으며, window-source audit가 다른 repository 구성 요소의 source 경로를 거부한다.
+
 - V5-117-1-3-4-7-1-3-1: 저장 layout을 열 수 없는 스페이스로 전환하거나 활성 스페이스를 닫아 그 스페이스로 옮기면, 활성 스페이스가 바뀌기 전에 실패한다. 이전에는 layout 검증이 실패하기 전에 활성 스페이스를 바꿨다.
 
 - G1.4-16: `make node-repeat`가 실제로 실행한 test를 센다. 색이 붙는 사람용 reporter 줄을 읽었고, 일치하는 test가 없는 file도 통과로 셌다. 이제 제목이 이름 pattern과 일치하는 TAP 결과를 읽는다.

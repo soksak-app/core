@@ -1049,8 +1049,8 @@ for (const app of Object.values(APPS)) {
     await s.until("terminal.session", (state) => Boolean(state?.sessionId && state.theme),
       "terminal session did not report its effective theme", { surface: terminal.surface });
     const rect = await s.rect("terminal.view", undefined, terminal.surface);
-    // 테마 값은 워크벤치의 테마 목록 그대로다.
-    const { THEMES } = await import("../packages/workbench/settings.js");
+    // 테마 값은 워크벤치가 보고하는 테마 목록 그대로다.
+    const THEMES = await s.get("core.themes");
     for (const { name: theme } of THEMES) {
       for (const mode of ["dark", "light"]) {
         await s.run("core.settings.theme", { name: theme, mode, scope: "common" });

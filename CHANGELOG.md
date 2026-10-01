@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-19: window checks read the theme catalog from the new `core.themes` status instead of importing workbench source, and the window-source audit rejects source paths of other repository components.
+
 - V5-117-1-3-4-7-1-3-1: switching to a space, or closing the active space into one, whose saved layout cannot be opened fails before the active space changes. The switch had changed the active space before the layout validation failed.
 
 - G1.4-16: count the tests that `make node-repeat` actually ran. It read a colored human reporter line and also counted a test file without matching tests as a pass; it now reads TAP results whose titles match the name pattern.

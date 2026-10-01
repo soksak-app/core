@@ -139,7 +139,7 @@ The following layout constants remain in code because they are tied to the docum
 | `rows` | Each declared plugin setting row on a plugin page as `{key, name, description}` |
 | `controls` | Every control with its dom name, key, and command |
 
-`core.settings` reports every effective value, including `sets`, `links`, and the layout values.
+`core.settings` reports every effective value, including `sets`, `links`, and the layout values. `core.themes` reports the theme catalog in order: each theme's `name`, `shape` values, and the color tokens of its `dark` and `light` modes.
 
 ## Acceptance
 

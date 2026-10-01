@@ -139,7 +139,7 @@
 | `rows` | 플러그인 페이지의 선언된 설정 행마다 `{key, name, description}` |
 | `controls` | 모든 컨트롤과 그 dom 이름, 키, 명령 |
 
-`core.settings`는 `sets`, `links`, 배치 값을 포함한 모든 유효 값을 보고한다.
+`core.settings`는 `sets`, `links`, 배치 값을 포함한 모든 유효 값을 보고한다. `core.themes`는 theme catalog를 순서대로 보고한다. 각 theme의 `name`, `shape` 값, `dark`와 `light` mode의 color token이다.
 
 ## 완료 기준
 
