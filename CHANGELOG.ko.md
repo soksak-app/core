@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-15: window check 반복 도구가 실제로 실행한 test를 센다. 색상이 붙는 사람용 reporter 줄을 읽었고, 일치하는 test가 없는 파일도 통과로 셌다. 이제 제목이 이름 pattern과 일치하는 TAP 결과를 읽는다.
+
 - G1.4-14-1: main page reload 작업을 새 page가 시작할 때 한다. Wails는 navigation commit listener를 비동기로 실행했으므로, 늦은 listener가 새 page를 not ready로 표시하고 그 요청을 버리고 surface 등록과 document를 지워 full window suite에서 shell readiness timeout과 `already attached` 연쇄를 만들었다. 이제 page는 무엇이든 등록하거나 mount하기 전에 `pageStarted`를 호출하고, 두 host는 거기서 정리하며 navigation callback은 WebKit 자식 기록만 갱신한다. diagnostic `diagnostics.navigation.delay`가 owning check를 위해 그 callback을 늦춘다.
 
 - G1.4-11-1: 유한한 양수가 아닌 environment card `width`를 거부한다. validator는 이 key에 어떤 값이든 받아들였고 workbench는 그 값을 고정 sidebar의 처음 너비로 썼다.
