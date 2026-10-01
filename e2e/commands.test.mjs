@@ -266,7 +266,11 @@ for (const app of Object.values(APPS)) {
         : {};
       projects.after = (await s.get("core.screen")).screen;
       projects.effect = projects.after === "library";
-      if (projectResult.error) projects.waitError = projectResult.error;
+      if (projectResult.error) {
+        projects.waitError = projectResult.error;
+        // 페이지가 받은 pointer 순서. 누른 요소가 뗄 때 교체되었으면 click 이 없다.
+        projects.pointer = await s.get("core.pointer");
+      }
       outcomes.push(projects);
       if (projects.effect) {
         await s.run("core.library.return");

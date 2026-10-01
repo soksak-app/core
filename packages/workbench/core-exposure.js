@@ -9,6 +9,7 @@ import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
 import { report } from "./host.js";
 import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";
+import { trackPointer } from "./pointer-state.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
 import {
@@ -266,6 +267,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   status("core.drag", dragState);
   status("core.rename", renames.state);
   status("core.focus", () => focusState(document));
+  status("core.pointer", trackPointer(document, coreChanged));
   // 문서 포커스 전이 관측(V5-114). 터미널 영역은 클릭 투명이라 누르면 문서가 포커스를 되찾고, activeElement 로
   // 남아 있던 주소창이 그 순간 포커스를 받아 보일 수 있다. 전이마다 성능 트레이스와 진단 로그에 한 줄을 남기고
   // core.focus 를 알린다. 표면의 요소는 shadow root 안에 있으므로 사건의 실제 대상에서 이름을 읽는다.

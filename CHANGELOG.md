@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-4-3: chrome buttons are kept across redraws, so a redraw between a press and its release no longer loses the click; `core.pointer` reports the last pointer sequence of the main document.
+
 - V5-114-1-1: activation-tier checks activate the application from the check process before the host completes activation, because macOS refuses the self-activation of a background-launched application.
 
 - V5-114-1: `core.focus` reports focus inside surface modules and changes with every focus transition, and a real-input check verifies that pressing terminal cards never moves focus to the browser address field.

@@ -526,20 +526,35 @@ function drawBars() {
   }
   if (here) spaceBar.appendChild(addTabButton("+", "core.space.add", "core.space-tab.add"));
 
-  chromeActs.textContent = "";
-  if (!browsing) chromeActs.append(act("projects", "프로젝트 목록", false, "core.projects.browse", {}, "core.chrome.projects"));
-  chromeActs.append(
-    act("panel-left", "좌측 사이드바 위치", value("left"), "core.settings.set", { patch: { left: !value("left") } }, "core.chrome.left"),
-    act("panel-right", "우측 사이드바 위치", value("right"), "core.settings.set", { patch: { right: !value("right") } }, "core.chrome.right"),
-    // 모달의 모드 세그먼트와 같은 경로다. 테마 명령은 테마의 형태 값까지 다시
-    // 적용하므로, 그것을 부르면 사용자가 정한 통로와 모서리가 되돌아간다.
-    act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,
-        "core.settings.set", { patch: { mode: modeName() === "dark" ? "light" : "dark" } }, "core.chrome.mode"),
-    // 모달이 열린 동안에는 오버레이가 이 버튼을 덮으므로 다시 눌리지 않는다. 켜짐
-    // 상태도 표시하지 않는다. 구 프로젝트의 settings-toggle 과 같다.
-    act("settings", "설정", false, "core.settings.open", {}, "core.chrome.settings"),
-  );
+  // 크롬 단추는 한 번 만든 요소를 유지하고 바뀐 속성만 고친다. 다시 만들면 누름과 뗌 사이에 누른 단추가 교체되어
+  // 브라우저가 click 을 만들지 않는다(G1.4-14-4-3).
+  const wanted = browsing ? chromeButtons.slice(1) : chromeButtons;
+  if (wanted.length !== chromeActs.children.length || wanted.some((button, index) => chromeActs.children[index] !== button)) {
+    chromeActs.replaceChildren(...wanted);
+  }
+  chromeButtons[1].dataset.on = String(value("left"));
+  chromeButtons[2].dataset.on = String(value("right"));
+  const mode = modeName() === "dark" ? "sun" : "moon";
+  if (chromeButtons[3].dataset.icon !== mode) {
+    chromeButtons[3].innerHTML = icon(mode);
+    chromeButtons[3].dataset.icon = mode;
+  }
 }
+
+/* 크롬 단추: 프로젝트 목록, 좌측과 우측 사이드바 위치, 밝게/어둡게, 설정. 명령 인자는 누른 때의 값으로 계산한다. */
+const chromeButtons = [
+  act("projects", "프로젝트 목록", false, "core.projects.browse", {}, "core.chrome.projects"),
+  act("panel-left", "좌측 사이드바 위치", value("left"), "core.settings.set", () => ({ patch: { left: !value("left") } }), "core.chrome.left"),
+  act("panel-right", "우측 사이드바 위치", value("right"), "core.settings.set", () => ({ patch: { right: !value("right") } }), "core.chrome.right"),
+  // 모달의 모드 세그먼트와 같은 경로다. 테마 명령은 테마의 형태 값까지 다시
+  // 적용하므로, 그것을 부르면 사용자가 정한 통로와 모서리가 되돌아간다.
+  act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,
+      "core.settings.set", () => ({ patch: { mode: modeName() === "dark" ? "light" : "dark" } }), "core.chrome.mode"),
+  // 모달이 열린 동안에는 오버레이가 이 버튼을 덮으므로 다시 눌리지 않는다. 켜짐
+  // 상태도 표시하지 않는다. 구 프로젝트의 settings-toggle 과 같다.
+  act("settings", "설정", false, "core.settings.open", {}, "core.chrome.settings"),
+];
+chromeButtons[3].dataset.icon = modeName() === "dark" ? "sun" : "moon";
 
 const library = createLibrary(document.getElementById("library"), coreChanged);
 await installCoreExposure({

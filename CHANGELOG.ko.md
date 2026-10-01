@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-14-4-3: chrome 단추를 다시 그려도 유지하므로, 누름과 뗌 사이의 다시 그리기가 click을 잃게 하지 않는다. `core.pointer`가 메인 문서의 마지막 pointer 순서를 보고한다.
+
 - V5-114-1-1: macOS가 백그라운드로 실행된 앱의 자기 활성화를 거절하므로, activation 등급 검사가 host의 활성화 전에 검사 process에서 앱을 활성화한다.
 
 - V5-114-1: `core.focus`가 surface module 안의 focus를 보고하고 focus 전이마다 바뀌며, 실제 입력 check가 터미널 카드를 눌러도 browser 주소창으로 focus가 가지 않는지 검증한다.

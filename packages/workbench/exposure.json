@@ -1110,6 +1110,20 @@
         }
       },
       {
+        "name": "core.pointer",
+        "description": "The last pointer sequence that the main document received: a press increments sequence, and down, up and click name the exposed element (or tag) that received pointerdown, pointerup and click; pressedConnected tells whether the pressed element was still in the document at pointerup. A click is missing when the pressed element was replaced before the release.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "sequence": { "type": "integer" },
+            "down": { "type": ["string", "null"] },
+            "up": { "type": ["string", "null"] },
+            "pressedConnected": { "type": ["boolean", "null"] },
+            "click": { "type": ["string", "null"] }
+          }
+        }
+      },
+      {
         "name": "core.focus",
         "description": "The exposed element that has keyboard focus in the main document, including surface modules mounted in shadow roots: its name, its index within its own document or shadow root, and the surface id (null in the main document); null when focus is elsewhere. Changes with every focus transition.",
         "schema": {
