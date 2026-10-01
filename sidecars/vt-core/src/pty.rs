@@ -487,7 +487,29 @@ fn broadcast(session: &Session, event: DaemonEvent) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::sync::mpsc::UnboundedReceiver;
     use tokio::time::{timeout, Duration};
+
+    /// 멈춘 검사를 끝내는 상한. 성공은 기다린 event 로 판정하며 이 시간으로 판정하지 않는다. 부하가 큰 기계에서도
+    /// PTY event 는 이 안에 온다.
+    const STALL: Duration = Duration::from_secs(60);
+
+    /// 다음 daemon event. 채널이 닫히거나 STALL 안에 event 가 없으면 실패한다.
+    async fn next_event(rx: &mut UnboundedReceiver<DaemonEvent>) -> DaemonEvent {
+        timeout(STALL, rx.recv())
+            .await
+            .expect("no daemon event arrived; the PTY test stalled")
+            .expect("the daemon event channel closed before the expected event")
+    }
+
+    /// 다음 출력 data.
+    async fn next_output(rx: &mut UnboundedReceiver<DaemonEvent>) -> Vec<u8> {
+        loop {
+            if let DaemonEvent::Output { data, .. } = next_event(rx).await {
+                return data;
+            }
+        }
+    }
 
     #[tokio::test]
     async fn independent_sessions_have_independent_output() {
@@ -517,24 +539,8 @@ mod tests {
             .expect("PTY setup failed; environmental PTY errors must fail this test");
         assert_ne!(session_a, session_b);
 
-        let output_a = timeout(Duration::from_secs(2), async {
-            loop {
-                if let Some(DaemonEvent::Output { data, .. }) = rx_a.recv().await {
-                    break data;
-                }
-            }
-        })
-        .await
-        .unwrap();
-        let output_b = timeout(Duration::from_secs(2), async {
-            loop {
-                if let Some(DaemonEvent::Output { data, .. }) = rx_b.recv().await {
-                    break data;
-                }
-            }
-        })
-        .await
-        .unwrap();
+        let output_a = next_output(&mut rx_a).await;
+        let output_b = next_output(&mut rx_b).await;
         assert!(String::from_utf8_lossy(&output_a).contains('A'));
         assert!(String::from_utf8_lossy(&output_b).contains('B'));
     }
@@ -570,15 +576,8 @@ mod tests {
             "close operation exceeded its two-second limit: {:?}",
             started.elapsed()
         );
-        let exit = timeout(Duration::from_secs(2), async {
-            loop {
-                if let Some(event @ DaemonEvent::Exit { .. }) = rx.recv().await {
-                    break event;
-                }
-            }
-        })
-        .await;
-        assert!(exit.is_ok(), "close did not produce a drained exit event");
+        // close 가 돌아온 뒤 exit event 가 남아 있어야 한다.
+        while !matches!(next_event(&mut rx).await, DaemonEvent::Exit { .. }) {}
     }
 
     #[tokio::test]
@@ -596,18 +595,11 @@ mod tests {
                 tx_a,
             )
             .expect("PTY setup failed; environmental PTY errors must fail this test");
-        while let Some(event) = timeout(Duration::from_secs(2), rx_a.recv()).await.unwrap() {
-            if matches!(event, DaemonEvent::Exit { .. }) {
-                break;
-            }
-        }
+        while !matches!(next_event(&mut rx_a).await, DaemonEvent::Exit { .. }) {}
         let (tx_b, mut rx_b) = tokio::sync::mpsc::unbounded_channel();
         let attachment_id = service.attach(&session_id, 0, tx_b).unwrap();
         assert!(!attachment_id.is_empty());
-        let event = timeout(Duration::from_secs(2), rx_b.recv())
-            .await
-            .unwrap()
-            .unwrap();
+        let event = next_event(&mut rx_b).await;
         match event {
             DaemonEvent::Output {
                 session_id: replayed,
