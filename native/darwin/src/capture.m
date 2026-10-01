@@ -567,13 +567,16 @@ int sp_capture_stop(double after) {
     // 시작이 끝나기 전의 종료 요청은 거부되므로 시작 완료 뒤에 멈춘다.
     waitCaptureStart(5000);
     dispatch_semaphore_t stopped = dispatch_semaphore_create(0);
+    // 완료 블록은 제한 시간이 지난 뒤에도 올 수 있다. 블록이 신호의 참조 하나를 소유하고, 오류는 그 스트림이
+    // 아직 현재 녹화일 때만 녹화 오류가 된다. 복사된 블록이 스트림을 보유하므로 주소가 재사용되지 않는다.
+    dispatch_retain(stopped);
     [stream stopCaptureWithCompletionHandler:^(NSError* failed) {
         if (failed != nil) {
-            setCaptureError([NSString stringWithFormat:@"capture did not stop: %@", failed.localizedDescription]);
-            fprintf(stderr, "observe: capture not stopped, %s\n",
-                failed.localizedDescription.UTF8String);
+            reportCaptureStreamFailure(stream,
+                [NSString stringWithFormat:@"capture did not stop: %@", failed.localizedDescription]);
         }
         dispatch_semaphore_signal(stopped);
+        dispatch_release(stopped);
     }];
     if (dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0) {
         setCaptureError(@"capture stop did not complete within 5000ms");
