@@ -9,7 +9,7 @@ import { Soksak } from "soksak";
 import { ahead, latest, placementPending, seated } from "./compositor.js";
 import { currentGrid, dropBands, plane, railOutline, tabsOf } from "./plane.js";
 import { isPlace } from "./registry.js";
-import { windowSidebar } from "./window-sidebars.js";
+import { expectedRailLoops, windowSidebarsPlaced } from "./verify-checks.js";
 import { cardRadius } from "./settings.js";
 
 /** 두 사각형의 최대 차이를 반환한다. 하나라도 없으면 비교하지 않는다. */
@@ -39,24 +39,7 @@ export function verify(controls = null) {
   const box = grid.rects();                 // 한 번 재고 id 로 찾는다
   const rects = cards.map((c) => box.get(c.id));
   const { shape, rects: railRects, groups } = railOutline();
-  let expectedLoops = 0;
-  for (const group of groups) {
-    const pending = new Set(group.rects.map((_,index) => index));
-    while (pending.size) {
-      expectedLoops++;
-      const work = [pending.values().next().value];
-      pending.delete(work[0]);
-      while (work.length) {
-        const a = group.rects[work.pop()];
-        for (const index of [...pending]) {
-          const b = group.rects[index];
-          const dx = Math.max(b.x-(a.x+a.w),a.x-(b.x+b.w));
-          const dy = Math.max(b.y-(a.y+a.h),a.y-(b.y+b.h));
-          if (dx <= grid.gap+.5 && dy <= grid.gap+.5) { pending.delete(index); work.push(index); }
-        }
-      }
-    }
-  }
+  const expectedLoops = expectedRailLoops(groups, grid.gap);
   const square = cardRadius() === 0;
   add("V0 레일 외곽선", shape.sharp === (square ? shape.corners : 0) && shape.loops.length === expectedLoops,
       `${shape.loops.length}/${expectedLoops}개 루프 · ${groups.length}개 연결 묶음 · ${railRects.length}개 사각형`);
@@ -316,19 +299,8 @@ export function verify(controls = null) {
 
   // 모든 창 사이드바가 각자의 규칙대로 배치되었는지 검사한다. 선언값이 아니라 그려진 폭을
   // 측정한다. 선언값은 요청이고 검증 대상은 결과다.
-  // 창 사이드바의 배치와 폭을 검증한다.
   const places = grid.cards.filter(card => isPlace(card.id));
-  const extent = card => card.width === undefined || grid.rect(card.id).w <= card.width + .5;
-  const fullHeight = card => card.fixed && card.r0 === 0 && card.r1 === grid.lines("y").length-1;
-  let placeOk = places.every(card => extent(card) && fullHeight(card));
-  for (const side of ["left", "right"]) {
-    const cardsOnSide = places.filter(card => windowSidebar(card.id).side === side).sort((a,b) => a.c0-b.c0);
-    if (!cardsOnSide.length) continue;
-    placeOk &&= cardsOnSide.length === 1;
-    placeOk &&= side === "left" ? cardsOnSide[0].c0 === 0 : cardsOnSide.at(-1).c1 === grid.lines("x").length-1;
-    placeOk &&= cardsOnSide.every((card,index) => index === 0 || cardsOnSide[index-1].c1 === card.c0);
-  }
-  add("P 자리는 카드다", placeOk, `${places.length}개 창 사이드바 · 가장자리 연속 열 · 저장 폭 상한 · 전체 높이`);
+  add("P 자리는 카드다", windowSidebarsPlaced(grid), `${places.length}개 창 사이드바 · 가장자리 연속 열 · 저장 폭 상한 · 전체 높이`);
 
   // W — 창이 그리는 단추는 첫 행의 상하 가운데에 위치한다. 단추는 OS 가 그리고
   // 페이지는 그 영역을 읽을 수 없으므로, 호스트가 반환한 영역을 첫 행과 비교한다.

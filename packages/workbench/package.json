@@ -50,6 +50,7 @@
     "tab-reports.js",
     "text-size.js",
     "verify.js",
+    "verify-checks.js",
     "exposure.json",
     "exposure.js",
     "core-exposure.js",

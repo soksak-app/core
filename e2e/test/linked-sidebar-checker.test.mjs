@@ -1,14 +1,8 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {runInNewContext} from 'node:vm';
 import test from 'node:test';
+import {checkLinkedPanels} from '../linked-panels.mjs';
 
-// 실제 창 검사 콜백을 실행하고 선언된 상태·명령 경계에 잘못된 결과를 주입한다.
-const source=readFileSync(new URL('../card-panels.test.mjs',import.meta.url),'utf8');
-const start=source.indexOf('  test(`${app.name}: linked card panels');
-const end=source.indexOf('\n  });\n}',start);
-assert.ok(start>=0&&end>start,'linked window checker callback is absent');
-const block=source.slice(start,end)+'\n  });';
+// 연결 사이드바 검사기에 선언된 상태·명령 경계의 잘못된 결과를 주입한다.
 async function check(fault){
  const sides=['top','bottom','left','right'];
  const card={id:'card',active:'tab',tabs:[{id:'tab',plugin:'fixture'}],sidebars:{}};
@@ -32,10 +26,7 @@ async function check(fault){
    if(fault==='unsaved-fold')delete own.collapsed;
   },
   until:async(name,predicate,message)=>{const value=await s.get(name);if(!predicate(value))throw new Error(message);return value;}};
- let result;
- runInNewContext(block,{assert,app:{name:'fixture',binary:'fixture'},open:async()=>s,fresh:async()=>{},keepCommonSettings:async()=>{},
-  performance,test:(_,options,callback)=>{result=callback({diagnostic:()=>{}});}});
- await result;
+ await checkLinkedPanels(s,{diagnostic:()=>{}},'fixture');
 }
 for(const fault of ['noop-fold','explicit-set','unsaved-fold','unsaved-size'])test(`linked window checker rejects ${fault}`,async()=>{
  await assert.rejects(check(fault),/linked panels must accept/);

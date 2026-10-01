@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {rmSync} from "node:fs";
 import {APPS,fresh,open} from "./app.mjs";
+import {turnOffCardSidebars} from "./card-sidebar-choices.mjs";
 import {frames,readFrame,pixel} from "./frame.mjs";
 const geometry=grid=>grid.cards.map(({id,x,y,w,h})=>({id,x,y,w,h})).sort((a,b)=>a.id.localeCompare(b.id));
 function borders(frame,grid,cards){
@@ -37,12 +38,7 @@ for(const app of Object.values(APPS))test(`${app.name}: fixed sidebars apply plu
  await fresh(s);await s.run('core.settings.theme',{name:'midnight',mode:'dark'});
  const initial=await s.get('core.grid');
  const target=initial.cards.find(card=>new Set(card.tabs.map(tab=>tab.plugin)).size>1);assert.ok(target,'different-plugin tabs are required');
- const choices=(await s.get('core.layout')).state.cards.find(card=>card.id===target.id).data.sidebars;
- s.cleanup(async()=>{
-  for(const side of ['left','right','top','bottom'])await s.run('core.card.sidebar.set',{card:target.id,side,set:choices?.[side]?.set??'inherit'});
-  await s.presented();
- });
- for(const side of ['left','right','top','bottom'])await s.run('core.card.sidebar.set',{card:target.id,side,set:'off'});
+ await turnOffCardSidebars(s,target.id);
  await s.presented();
  const baseline=await s.get('core.grid');
  const windows=baseline.cards.filter(card=>card.tabs.length===0);

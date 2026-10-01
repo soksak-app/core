@@ -1,16 +1,11 @@
 import assert from "node:assert/strict";
-import {readFileSync} from "node:fs";
-import {runInNewContext} from "node:vm";
 import test from "node:test";
-const source=readFileSync(new URL("../verify.js",import.meta.url),"utf8");
-const begin=source.indexOf('  const { shape, rects: railRects');
-const end=source.indexOf('  // V1',begin);
-const block=source.slice(begin,end);
-test("rail verification counts connected outlines per associated group",()=>{
- const rect=(x)=>({x,y:0,w:100,h:100});
- const groups=[{rects:[rect(0),rect(108)],loops:[[]]},{rects:[rect(250),rect(500)],loops:[[],[]]}];
- const rows=[];
- runInNewContext(block,{railOutline:()=>({shape:{loops:[[],[],[]],corners:12,sharp:0},rects:groups.flatMap(g=>g.rects),groups}),
-  grid:{gap:8},cardRadius:()=>8,add:(...row)=>rows.push(row)});
- assert.equal(rows[0][1],true,JSON.stringify(rows));
+import { expectedRailLoops } from "../verify-checks.js";
+
+test("rail verification counts connected outlines per associated group", () => {
+  const rect = (x) => ({ x, y: 0, w: 100, h: 100 });
+  // 첫 묶음의 두 사각형은 간격 8 안에서 이어지고, 둘째 묶음의 두 사각형은 떨어져 있다.
+  const groups = [{ rects: [rect(0), rect(108)] }, { rects: [rect(250), rect(500)] }];
+  assert.equal(expectedRailLoops(groups, 8), 3);
+  assert.equal(expectedRailLoops([{ rects: [rect(0), rect(109)] }], 8), 2, "a gap wider than the card gap separates the outlines");
 });

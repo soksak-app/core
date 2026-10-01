@@ -1,17 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
-import { runInNewContext } from "node:vm";
-import { createLayoutQueue } from "../layout-queue.js";
+import { createLayoutQueue, drawPrepared } from "../layout-queue.js";
 
-// 실제 문서가 등록하는 배치 핸들러를 실행한다. 추출 문자열은 검사 결과의 판정 기준이 아니다.
-const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-const start = page.indexOf("onLayout((made, draw, seated) => {");
-assert.ok(start >= 0, "the page must register its layout handler");
-const end = page.indexOf("\n});", start);
-assert.ok(end >= 0, "the registered layout handler must be complete");
-const handler = page.slice(start, end + "\n});".length);
-
+// 문서가 배치마다 대기열에 넣는 그리기 순서를 가짜 준비·그리기·표시로 실행한다.
 function fixture() {
   const calls = [];
   const errors = [];
@@ -19,16 +10,18 @@ function fixture() {
   const prepared = Promise.withResolvers();
   const presented = Promise.withResolvers();
   const drawn = Promise.withResolvers();
-  let layout;
-  const context = {
-    layoutEpoch: 0, drawing: Promise.resolve(), presented: presented.promise,
-    layouts: createLayoutQueue({ failed: error => errors.push(error), superseded: assert.fail }),
-    onLayout: callback => { layout = callback; },
-    publishAhead: () => { calls.push("prepare"); return prepared.promise; },
-    requestAnimationFrame: callback => frames.push(callback),
+  const context = { layoutEpoch: 0 };
+  const layouts = createLayoutQueue({ failed: error => errors.push(error), superseded: assert.fail });
+  const run = () => {
+    const epoch = context.layoutEpoch;
+    return layouts.run(() => drawPrepared({
+      epoch, current: () => context.layoutEpoch,
+      prepare: () => { calls.push("prepare"); return prepared.promise; },
+      draw: () => { calls.push("draw"); drawn.resolve(); },
+      frame: () => new Promise((resolve) => frames.push(resolve)),
+      presented: () => presented.promise,
+    }));
   };
-  runInNewContext(handler, context, { filename: "index.html:onLayout" });
-  const run = () => { layout(new Map(), () => { calls.push("draw"); drawn.resolve(); }, new Map()); return context.drawing; };
   const frame = () => { for (const callback of frames.splice(0)) callback(); };
   return { calls, errors, prepared, presented, drawn, context, run, frame };
 }

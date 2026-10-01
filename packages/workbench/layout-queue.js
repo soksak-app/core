@@ -47,3 +47,18 @@ export function createLayoutQueue({ failed, superseded }) {
     wait: () => latest,
   };
 }
+
+/**
+ * 배치 하나를 그린다. 네이티브 준비 응답(prepare)이 트랜잭션의 시작과 적용을 확인한 뒤 DOM 을 그린다(draw). 요청
+ * 시작만으로 준비를 확정하면 새 DOM 이 이전 네이티브 영역 아래에 먼저 표시된다. 그린 뒤에는 draw 가 예약한 렌더(frame)와
+ * 해당 호스트 표시(presented)까지 기다려, 다음 배치가 DOM 을 먼저 교체하지 못하게 한다. 준비하는 동안 current() 가
+ * epoch 와 달라지면 그리지 않는다.
+ */
+export async function drawPrepared({ epoch, current, prepare, draw, frame, presented }) {
+  if (epoch !== current()) return;
+  await prepare();
+  if (epoch !== current()) return;
+  draw();
+  await frame();
+  await presented();
+}

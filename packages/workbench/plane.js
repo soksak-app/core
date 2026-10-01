@@ -13,7 +13,7 @@ import { bindSidebarGrip } from "./sidebar-grip.js";
 import { targetCardInsets } from "./card-insets.js";
 import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.js";
 import { SIDEBAR_SIDES, presentSidebars, effectiveSidebar, resolveSidebarSet, setSidebar, sizeSidebar, toggleSidebar } from "./card-sidebars.js";
-import { restoreWindowSidebars, reconcileWindowSidebars, windowSidebar, windowSidebarCards } from "./window-sidebars.js";
+import { arrangeWindowSidebars, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, standingLink, windowSidebarCards } from "./window-sidebars.js";
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout } from "./stored-layout.js";
 import { standIn } from "./compositor.js";
@@ -138,9 +138,8 @@ function newTab(kind) {
  * 연결된 세트가 없으면 null 을 반환하고 사이드바를 표시하지 않는다.
  */
 function standingSet(place) {
-  const descriptor = windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()).find(item => item.id === place);
-  if (!descriptor) throw new Error(`unknown window sidebar ${place}`);
-  return descriptor.set === null ? null : linkedSet(descriptor.plugin === null ? descriptor.side : `window-${descriptor.side}`, descriptor.plugin);
+  const link = standingLink(place, windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()));
+  return link === null ? null : linkedSet(link.place, link.plugin);
 }
 
 /** environment.json 의 workspace.grid 로 새 스페이스의 배치를 만든다. 탭 id 는 새로 발급한다. */
@@ -873,33 +872,8 @@ function dismiss(id) {
 function settle() {
   if (!grid) return;
   closePicker();
-  const descriptors = windowSidebarCards(pluginUnits(), value("links"), focusedPlugin());
-  reconcileWindowSidebars(windowSidebars, [...descriptors, ...grid.cards.filter(card => isPlace(card.id)).map(card => ({ id: card.id, ...windowSidebar(card.id) }))], value("sidebarWidth"));
-  for (const card of [...grid.cards].filter(card => isPlace(card.id))) {
-    if (card.width !== undefined) windowSidebars[card.id].width = card.width;
-    if (!descriptors.some(item => item.id === card.id && value(item.side))) dismiss(card.id);
-  }
-  for (const side of ["left", "right"]) {
-    const desired = descriptors.filter(item => item.side === side && value(side));
-    for (const item of desired) {
-      if (!grid.card(item.id)) {
-        const line = side === "left" ? 0 : grid.lines("x").length - 1;
-        if (!grid.canInsertAt("x", line)) throw new Error(`cannot place window sidebar ${item.id}`);
-        grid.insertAt("x", line, { id: item.id, data: null, size: windowSidebars[item.id].width });
-        grid.setFixed(item.id, true);
-      }
-    }
-    const actual = grid.cards.filter(card => isPlace(card.id) && windowSidebar(card.id).side === side).sort((a,b) => a.c0-b.c0).map(card => card.id);
-    const expected = (side === "left" ? desired : [...desired].reverse()).map(item => item.id);
-    if (JSON.stringify(actual) === JSON.stringify(expected)) continue;
-    // 순서가 달라진 경우에만 열을 이동한다. 포커스 변경은 열을 이동하지 않는다.
-    for (const item of [...desired].reverse()) {
-      const card = grid.card(item.id);
-      if ((side === "left" && card.c0 !== 0) || (side === "right" && card.c1 !== grid.lines("x").length - 1)) {
-        if (!grid.moveTo(item.id, "x", side === "left" ? 0 : grid.lines("x").length - 1)) throw new Error(`cannot order window sidebar ${item.id}`);
-      }
-    }
-  }
+  arrangeWindowSidebars(grid, windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()), windowSidebars,
+    value("sidebarWidth"), side => value(side), dismiss);
   // 기본값: 자리 카드만 남으면 포커스할 카드가 없다(null).
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   view.render();
@@ -1121,8 +1095,7 @@ let railShape = { shape: { path: "", loops: [], corners: 0, sharp: 0 }, rects: [
 export const railOutline = () => railShape;
 
 function drawRail() {
-  const sidebars = windowSidebarCards(pluginUnits(), value("links"), focusedPlugin())
-    .filter(item => item.plugin !== null && grid.card(item.id)).map(item => item.id);
+  const sidebars = railSidebars(windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()), id => grid.card(id));
   const pad = grid.gap / 2, corner = cardRadius();
   const groups = [];
   if (sidebars.length) {
@@ -1306,9 +1279,7 @@ export function setGap(half) {
  * 판은 한 번에 스페이스 하나를 그린다.
  */
 export const capture = () => {
-  for (const card of grid.cards.filter(card => isPlace(card.id))) {
-    if (card.width !== undefined) windowSidebars[card.id].width = card.width;
-  }
+  keepWindowSidebarWidths(grid.cards, windowSidebars);
   return {
     state: grid.toJSON(), focusedId,
     windowSidebars: structuredClone(windowSidebars),
