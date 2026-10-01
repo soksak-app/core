@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-8: the command line `sok` is specified: commands, window selection, parameter flags from declared schemas, output, and the Rust and Go implementations in each bundle.
+
 - R1-1: `@soksak/plugin-api/install` defines and validates the plugin installation formats: version ranges, plugin packages, the registry index, sidecar release assets and the installation layout.
 
 - R1: the proposal for installable plugins in 0.0.2 describes the registry, plugin packages, sidecar releases, installation and repository split.

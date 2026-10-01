@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-8: Command line `sok`의 계약을 정했다. 명령, 창 선택, 선언된 schema에서 나온 매개변수 flag, 출력, 각 bundle의 Rust와 Go 구현이다.
+
 - R1-1: `@soksak/plugin-api/install`이 plugin 설치 형식(version 범위, plugin package, registry index, sidecar release asset, 설치 배치)을 정의하고 검증한다.
 
 - R1: 0.0.2 설치형 plugin 제안이 registry, plugin package, sidecar release, 설치, repository 분리를 설명한다.
