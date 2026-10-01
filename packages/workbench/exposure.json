@@ -587,6 +587,111 @@
         }
       },
       {
+        "name": "core.plugins",
+        "description": "The plugin list of the settings window: the registry index URL or null, the registry index or plugin state error or null, one entry per loaded, installed or registry plugin sorted by id with its name, description, state (loaded, disabled, available or restart), installed version and enabled value or null, and newest registry version or null, the latest plugin operation with its state (running, done or failed) and error, or null, and whether a plugin waits for a restart.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "registry": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "plugins": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "loaded",
+                      "disabled",
+                      "available",
+                      "restart"
+                    ]
+                  },
+                  "installed": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string"
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "latest": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            },
+            "operation": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "install",
+                    "update",
+                    "remove",
+                    "enable",
+                    "disable"
+                  ]
+                },
+                "plugin": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "running",
+                    "done",
+                    "failed"
+                  ]
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "restart": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      {
         "name": "core.settings-modal",
         "description": "The settings modal: whether it is open, its section, scope, the plugin search text, the plugin ids listed, the plugin whose page is shown or null, the edited set or null, the rows of declared plugin settings with their label and description, card rectangle in window coordinates, and its controls with the command each control runs.",
         "schema": {
@@ -1805,6 +1910,81 @@
         }
       },
       {
+        "name": "core.plugins.install",
+        "description": "Installs a plugin from the registry index through the host, as sok plugin install does; the change takes effect after an application restart.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.plugins.update",
+        "description": "Installs the selected version of an installed plugin through the host, as sok plugin update does; the change takes effect after an application restart.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.plugins.remove",
+        "description": "Removes an installed plugin through the host, as sok plugin remove does; the change takes effect after an application restart.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.plugins.enable",
+        "description": "Enables an installed plugin through the host, as sok plugin enable does; the change takes effect after an application restart.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.plugins.disable",
+        "description": "Disables an installed plugin through the host, as sok plugin disable does; the change takes effect after an application restart.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.settings-modal.plugin",
         "description": "Opens the page of a plugin in the plugins section of the open settings modal; a null plugin returns to the list.",
         "params": {
@@ -2764,6 +2944,11 @@
       {
         "name": "core.settings-modal.back",
         "description": "The 목록 button of a plugin page, which returns to the plugin list."
+      },
+      {
+        "name": "core.settings-modal.plugin-action",
+        "description": "The action buttons of a plugin page: 설치, 업데이트, 사용 or 사용 안 함, and 제거, each bound to its core.plugins command.",
+        "many": true
       },
       {
         "name": "core.settings-modal.row",

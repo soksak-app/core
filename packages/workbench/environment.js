@@ -36,10 +36,10 @@ export async function loadEnvironment() {
   if (loaded) throw new Error("environment is already loaded");
   const environment = validateEnvironment(await readJson(ENVIRONMENT));
   const installed = validateInstalledPlugins(await readJson(INSTALLED_PLUGINS));
-  const manifests = await Promise.all(installed.map(async ({ id, package: name }) => {
+  const manifests = await Promise.all(installed.map(async ({ id, package: name, version }) => {
     const manifest = validateManifest(await readJson(modulePath(name, MANIFEST)));
     if (manifest.id !== id) throw new Error(`${INSTALLED_PLUGINS}: plugin ${id} has a plugin.json with id ${manifest.id}`);
-    return { name, manifest };
+    return { name, manifest, version };
   }));
   checkReferences(environment, manifests.map((m) => m.manifest));
   const diagnosticPlugins = Object.fromEntries(installed.filter((plugin) => plugin.diagnostics)
@@ -88,8 +88,8 @@ export async function loadEnvironment() {
     }
   }
   setSidebarDefaults(normalizeSidebarDefaults(environment, manifests.map(({ manifest }) => manifest)));
-  units = manifests.map(({ manifest }) => ({
-    id: manifest.id, name: manifest.name, description: manifest.description, surface: Boolean(manifest.surface),
+  units = manifests.map(({ manifest, version }) => ({
+    id: manifest.id, name: manifest.name, description: manifest.description, version, surface: Boolean(manifest.surface),
     // 기본값: sections 는 plugin.json 의 선택 필드이며 없으면 섹션이 없다.
     sections: (manifest.sections ?? []).map((s) => s.id),
   }));
@@ -98,7 +98,7 @@ export async function loadEnvironment() {
 
 /**
  * 설치된 플러그인을 id 순서로 반환한다. 설정 창의 플러그인 목록이 쓴다.
- * 표면이 없는 플러그인도 포함한다. 항목은 {id, name, description, surface, sections} 다.
+ * 표면이 없는 플러그인도 포함한다. 항목은 {id, name, description, version, surface, sections} 다.
  */
 export const pluginUnits = () => units;
 

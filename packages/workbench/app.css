@@ -424,6 +424,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set-group:last-child{margin-bottom:0}
 .set-group__name{margin:0 0 var(--space-1);font-size:var(--text-caption);letter-spacing:var(--section-tracking);color:var(--rail)}
 .set-caption{margin:0 0 10px;font-size:var(--text-small);line-height:var(--line-height);color:var(--muted)}
+.set-actions{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
 .set-row{display:grid;grid-template-columns:124px 1fr;align-items:center;gap:12px;
   min-height:30px}
 .set-row__name{font-size:var(--text-control);color:var(--muted)}

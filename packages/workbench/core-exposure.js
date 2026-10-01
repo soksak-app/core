@@ -35,6 +35,7 @@ import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
 import { foldSection, onSectionsChange, selectSection, sidebarsState } from "./sidebar-sections.js";
 import { onTabReports, tabLabel, tabNotice } from "./tab-reports.js";
+import { followPluginChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 
 /* 감시 중인 코어 status 의 수신자. */
 const watchers = new Set();
@@ -82,6 +83,16 @@ async function dropFiles(payload) {
     record.error = error.message;
   }
   lastDrop = record;
+}
+
+/** core.plugins.<action> 명령의 처리기. plugin 은 비어 있지 않은 문자열이다(docs/spec/settings.md). */
+function pluginCommand(action) {
+  return async ({ plugin }) => {
+    if (typeof plugin !== "string" || plugin === "") {
+      throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "plugin must be a non-empty string");
+    }
+    await pluginOperations.run(action, plugin);
+  };
 }
 
 /** 코어 status 하나를 등록한다. 값은 coreChanged 가 호출될 때 다시 읽는다. */
@@ -246,6 +257,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   status("core.grid", gridState);
   status("core.sidebars", sidebarsState);
   onSectionsChange(coreChanged);
+  onPluginOperations(coreChanged);
+  followPluginChanges();
   onTabReports(coreChanged);
   status("core.surfaces", surfacesState);
   status("core.drop", () => lastDrop);
@@ -260,6 +273,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   }));
   status("core.themes", () => THEMES);
   status("core.settings-modal", settingsModalState);
+  status("core.plugins", () => pluginOperations.status());
   status("core.picker", pickerState);
   status("core.library", () => library.state());
   status("core.verify", () => verified);
@@ -369,6 +383,11 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.settings-modal.scope", ({ scope }) => { showScope(scope); });
   registry.command("core.settings-modal.plugin", ({ plugin: id = null }) => { showPlugin(id); });
   registry.command("core.settings-modal.search", ({ query }) => { searchPlugins(query); });
+  registry.command("core.plugins.install", pluginCommand("install"));
+  registry.command("core.plugins.update", pluginCommand("update"));
+  registry.command("core.plugins.remove", pluginCommand("remove"));
+  registry.command("core.plugins.enable", pluginCommand("enable"));
+  registry.command("core.plugins.disable", pluginCommand("disable"));
   registry.command("core.settings-modal.edit", ({ set: id = null }) => { editSet(id); });
   registry.command("core.settings-modal.move", ({ dx, dy }) => { moveSettings(dx, dy); });
 

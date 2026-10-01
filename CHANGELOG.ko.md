@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-3-3: 설정 창이 불러온 plugin, 설치된 plugin, registry plugin을 상태와 함께 나열하고, plugin page가 `core.plugins.*` 명령으로 plugin을 설치, 업데이트, 끄기, 켜기, 제거한다. `core.plugins`가 목록과 마지막 작업을 보고한다.
+
 - R1-3-2: 두 host가 installer library로 plugin 작업(`pluginsState`, `pluginsRun`, 한 번에 하나)을 실행하고 모든 창에 `plugins-changed`를 보낸다.
 
 - R1-3-1: spec이 애플리케이션 안의 plugin 작업, `core.plugins` 명령과 status, 불러오지 않은 plugin의 placeholder 카드, 프로젝트 데이터 format을 정한다. Command line spec은 더 이상 실행 중인 애플리케이션이 `installed.json`을 관찰한다고 말하지 않는다.

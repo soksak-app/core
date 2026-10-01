@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-3-3: the settings window lists loaded, installed and registry plugins with their states, and a plugin page installs, updates, disables, enables and removes the plugin through the `core.plugins.*` commands; `core.plugins` reports the list and the latest operation.
+
 - R1-3-2: both hosts run plugin operations with the installer library (`pluginsState`, `pluginsRun`, one at a time) and send `plugins-changed` to every window.
 
 - R1-3-1: the specifications define plugin operations in the application, the `core.plugins` commands and status, placeholder cards for plugins that are not loaded, and project data formats; the command-line specification no longer claims that a running application observes `installed.json`.

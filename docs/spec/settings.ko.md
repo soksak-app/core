@@ -52,7 +52,7 @@
 | `available` | 설치 안 됨 | Registry index만 플러그인을 나열한다 |
 | `restart` | 다시 시작하면 적용 | `installed.json`이 창이 불러온 것과 다르다. 창을 불러온 뒤에 플러그인을 설치, 제거, 업데이트, 켜기, 끄기 했다 |
 
-이 절은 보일 때와 `plugins-changed` event를 받을 때마다 host의 [plugin 상태](installation.ko.md#애플리케이션-안의-plugin-작업)를 읽는다. Registry index를 읽지 못하면 목록 위에 "레지스트리를 읽지 못했습니다: <message>"를 보여 주고, 목록은 불러온 플러그인과 설치된 플러그인을 유지한다. Browser 애플리케이션처럼 host가 없으면 목록에는 불러온 플러그인만 모두 `loaded`로 있고, 페이지에는 동작이 없다.
+이 절은 보일 때와 `plugins-changed` event를 받을 때마다 host의 [plugin 상태](installation.ko.md#애플리케이션-안의-plugin-작업)를 읽는다. Registry index를 읽지 못하면 목록 위에 "레지스트리를 읽지 못했습니다: <message>"를 보여 주고, 목록은 불러온 플러그인과 설치된 플러그인을 유지한다. 잘못된 `installed.json`처럼 plugin 상태를 읽지 못하면 "플러그인 상태를 읽지 못했습니다: <message>"를 보여 주고 행은 없다. Browser 애플리케이션처럼 host가 없으면 목록에는 불러온 플러그인만 모두 `loaded`로 있고, 페이지에는 동작이 없다.
 
 - 검색 칸은 입력한 글자로 `core.settings-modal.search {query}`를 실행한다. 목록은 id, 이름, 설명에 검색어가 들어 있는 플러그인을 대소문자 구분 없이 보여 주며, 빈 검색어는 모든 플러그인을 보여 준다. 맞는 플러그인이 없으면 "찾는 플러그인이 없습니다."를 보여 준다.
 - 행은 `core.settings-modal.plugin {plugin}`을 실행해 그 플러그인의 페이지를 연다.
@@ -168,7 +168,7 @@
 | 필드 | 값 |
 |---|---|
 | `registry` | Registry index URL 또는 `null` |
-| `error` | Registry index 오류 또는 `null` |
+| `error` | Registry index 오류 또는 plugin 상태 오류, 또는 `null` |
 | `plugins` | 목록 행마다 id 순서로 `{id, name, description, state, installed, latest}`. `installed`는 `{version, enabled}` 또는 `null`이고, `latest`는 registry index가 나열한 가장 새 버전 또는 `null`이다 |
 | `operation` | 첫 작업 전에는 `null`, 그 뒤에는 마지막 작업의 `{action, plugin, state, error}`. `state`는 `running`, `done`, `failed`이고, `error`는 실패한 작업의 message 또는 `null`이다 |
 | `restart` | 상태가 `restart`인 플러그인이 있으면 `true` |

@@ -52,7 +52,7 @@ Without a selected plugin the section shows a search field and a list. A plugin 
 | `available` | 설치 안 됨 | Only the registry index lists the plugin |
 | `restart` | 다시 시작하면 적용 | `installed.json` differs from what the window loaded: the plugin was installed, removed, updated, enabled or disabled after the window loaded |
 
-The section reads the [plugin state](installation.md#plugin-operations-in-the-application) of the host when it is shown and after each `plugins-changed` event. A registry index that cannot be read shows "레지스트리를 읽지 못했습니다: <message>" above the list, and the list keeps the loaded and installed plugins. Without a host, as in the browser application, the list has only the loaded plugins, each `loaded`, and the page has no action.
+The section reads the [plugin state](installation.md#plugin-operations-in-the-application) of the host when it is shown and after each `plugins-changed` event. A registry index that cannot be read shows "레지스트리를 읽지 못했습니다: <message>" above the list, and the list keeps the loaded and installed plugins. A plugin state that cannot be read, such as an invalid `installed.json`, shows "플러그인 상태를 읽지 못했습니다: <message>" and no rows. Without a host, as in the browser application, the list has only the loaded plugins, each `loaded`, and the page has no action.
 
 - The search field runs `core.settings-modal.search {query}` with its text. The list shows the plugins whose id, name, or description contains the query, ignoring letter case; an empty query shows every plugin. A query that matches no plugin shows "찾는 플러그인이 없습니다."
 - A row runs `core.settings-modal.plugin {plugin}`, which opens that plugin's page.
@@ -168,7 +168,7 @@ The following layout constants remain in code because they are tied to the docum
 | Field | Value |
 |---|---|
 | `registry` | The registry index URL, or `null` |
-| `error` | The registry index error, or `null` |
+| `error` | The registry index error or the plugin state error, or `null` |
 | `plugins` | One entry per list row, sorted by id: `{id, name, description, state, installed, latest}`; `installed` is `{version, enabled}` or `null`, and `latest` is the newest version that the registry index lists, or `null` |
 | `operation` | `null` before the first operation, then `{action, plugin, state, error}` of the latest one: `state` is `running`, `done` or `failed`, and `error` is the message of a failed operation or `null` |
 | `restart` | `true` when a plugin has the state `restart` |
