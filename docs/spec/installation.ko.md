@@ -2,7 +2,7 @@
 
 [English](installation.md)
 
-Plugin 설치가 쓰는 형식이다. [`@soksak/plugin-api/install`](../../packages/plugin-api/install.js)이 이 형식을 정의하고 검증한다. 모든 검증은 알 수 없는 필드를 거부하고 틀린 필드를 밝힌다. Host와 workbench가 plugin을 설치하고 불러오는 방식은 [설치형 plugin](../plans/plugin-installation.ko.md)에서 대기 중이다.
+Plugin 설치가 쓰는 형식이다. [Command line `sok`](cli.ko.md)의 두 구현이 이 형식을 검증하며, host contract case `install.*`가 규칙마다 정한다([host contract](host-contract.ko.md)). 모든 검사는 알 수 없는 필드를 거부하고 틀린 필드를 밝힌다. 필드는 정해진 순서로 검사하므로 오류가 여럿인 파일도 두 구현이 같은 오류를 보고한다. Version의 각 자리는 4294967295 이하다. Host와 workbench가 plugin을 설치하고 불러오는 방식은 [설치형 plugin](../plans/plugin-installation.ko.md)에서 대기 중이다.
 
 ## Version과 범위
 
@@ -46,7 +46,7 @@ Registry index `index.json`은 `format` 1과 다음 목록을 가진다.
 | `packs` | `{ name, description, plugins }`: 함께 설치하는 plugin id |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }] }` |
 
-`url`은 `file:` 또는 `https:` URL이고, `sha256`은 소문자 16진수 64자리다. 설명은 1자에서 200자다. Index 검사는 이 밖에도 plugin id, package, sidecar, pack, version의 중복, 알 수 없는 plugin을 가리키는 pack, 알 수 없는 sidecar나 어떤 sidecar version도 채우지 않는 범위가 필요한 plugin version, 목록에 없는 revoked version을 거부한다.
+Version 0.0.2는 local registry에서만 설치하므로 `url`은 local release archive의 절대 `file:` URL이고, `sha256`은 소문자 16진수 64자리다. 설명은 1자에서 200자(Unicode code point)다. Index 검사는 이 밖에도 plugin id, package, sidecar, pack, version의 중복, 알 수 없는 plugin을 가리키는 pack, 알 수 없는 sidecar나 어떤 sidecar version도 채우지 않는 범위가 필요한 plugin version, 목록에 없는 revoked version을 거부한다.
 
 ## Version 선택
 

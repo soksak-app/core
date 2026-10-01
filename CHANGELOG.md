@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-4-1: `sok` validates the installation formats and selects versions in both implementations under the `install.*` contract cases; `@soksak/plugin-api/install` is removed, and 0.0.2 archives use `file:` URLs only.
+
 - R1-2-1: `plugins/installed.json` records the sidecar version in use and each plugin's sidecar ranges, and installation keeps one sidecar version that satisfies every installed plugin.
 
 - R1-8-3: each application bundle holds its `sok`, `sok path install` puts it on `PATH` through `/etc/paths.d`, the Node command line `packages/cli` is removed, and `docs/operations/sok.md` explains the use.

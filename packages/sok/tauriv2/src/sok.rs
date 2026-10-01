@@ -10,6 +10,7 @@ use serde_json::{Map, Value};
 
 mod command;
 pub mod endpoint;
+pub mod install;
 mod path;
 #[path = "platform/platform.rs"]
 pub mod platform;

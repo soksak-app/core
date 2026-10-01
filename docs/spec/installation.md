@@ -2,7 +2,7 @@
 
 [한국어](installation.ko.md)
 
-These are the formats that plugin installation uses. [`@soksak/plugin-api/install`](../../packages/plugin-api/install.js) defines and validates them; every validator rejects an unknown field and names the field that is wrong. How the hosts and the workbench install and load plugins is pending under [installable plugins](../plans/plugin-installation.md).
+These are the formats that plugin installation uses. The [command line `sok`](cli.md) validates them in both implementations, and the host contract cases `install.*` state each rule ([host contract](host-contract.md)). Every check rejects an unknown field and names the field that is wrong; fields are checked in a fixed order, so a file with several errors reports the same one in both implementations. A version part is at most 4294967295. How the hosts and the workbench install and load plugins is pending under [installable plugins](../plans/plugin-installation.md).
 
 ## Versions and ranges
 
@@ -46,7 +46,7 @@ The registry index `index.json` has `format` 1 and these lists:
 | `packs` | `{ name, description, plugins }`: plugin ids installed together |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }] }` |
 
-`url` is a `file:` or `https:` URL and `sha256` is 64 lowercase hexadecimal digits. A description has 1 to 200 characters. The index check also rejects a repeated plugin id, package, sidecar, pack or version; a pack that names an unknown plugin; a plugin version that needs an unknown sidecar or a range that no listed sidecar version satisfies; and a revoked version that is not listed.
+`url` is an absolute `file:` URL of a local release archive, because version 0.0.2 installs only from a local registry; `sha256` is 64 lowercase hexadecimal digits. A description has 1 to 200 characters (Unicode code points). The index check also rejects a repeated plugin id, package, sidecar, pack or version; a pack that names an unknown plugin; a plugin version that needs an unknown sidecar or a range that no listed sidecar version satisfies; and a revoked version that is not listed.
 
 ## Version selection
 

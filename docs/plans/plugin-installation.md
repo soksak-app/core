@@ -28,7 +28,7 @@ The registry is a repository with one file per plugin and one file per pack:
 | `packs/<name>.json` | `name`, `description`, and `plugins`: plugin ids installed together |
 | `revoked.json` | Plugin and sidecar versions that must not be installed or run |
 
-A check in the registry repository validates every pull request: the entry format, unique ids, the downloaded package against its `sha256`, the package's `plugin.json` with `@soksak/plugin-api`, and each named sidecar version. A reviewer merges the pull request. The check then writes `index.json`, the single file the application reads. In 0.0.2 the registry is a local repository, `url` values are `file:` URLs of local release archives, and `sok registry build` runs the same check locally.
+A check in the registry repository validates every pull request: the entry format, unique ids, the downloaded package against its `sha256`, the package's `plugin.json` and `package.json` against the entry, and each named sidecar version. A reviewer merges the pull request. The check then writes `index.json`, the single file the application reads. In 0.0.2 the registry is a local repository, `url` values are `file:` URLs of local release archives, and `sok registry build` is the check; it runs locally.
 
 The starter pack is `packs/starter.json` with the plugins `browser`, `terminal` and `files`.
 

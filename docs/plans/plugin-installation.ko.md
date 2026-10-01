@@ -28,7 +28,7 @@ Registry는 plugin마다, pack마다 파일 하나를 두는 repository다.
 | `packs/<name>.json` | `name`, `description`, `plugins`: 함께 설치하는 plugin id |
 | `revoked.json` | 설치하거나 실행하면 안 되는 plugin과 sidecar version |
 
-Registry repository의 check는 모든 pull request에서 항목 형식, id 중복, 내려받은 package의 `sha256`, `@soksak/plugin-api`로 package의 `plugin.json`, 각 sidecar version을 검증한다. Reviewer가 pull request를 병합한다. 그 뒤 check가 애플리케이션이 읽는 파일 하나인 `index.json`을 만든다. 0.0.2에서 registry는 local repository이고 `url`은 local release archive의 `file:` URL이며, `sok registry build`가 같은 check를 local에서 실행한다.
+Registry repository의 check는 모든 pull request에서 항목 형식, id 중복, 내려받은 package의 `sha256`, 항목과 package의 `plugin.json`, `package.json`의 일치, 각 sidecar version을 검증한다. Reviewer가 pull request를 병합한다. 그 뒤 check가 애플리케이션이 읽는 파일 하나인 `index.json`을 만든다. 0.0.2에서 registry는 local repository이고 `url`은 local release archive의 `file:` URL이며, `sok registry build`가 그 check이며 local에서 실행한다.
 
 스타터팩은 plugin `browser`, `terminal`, `files`를 담은 `packs/starter.json`이다.
 
