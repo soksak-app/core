@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-3-4-7-1-7-1: a core command's reply limit covers its handler only, so a failed presentation reports its own error instead of `did not reply`; the page fails a layout whose animation frame does not run within 10 seconds.
+
 - G1.4-14-4-6: the card sidebar space check starts its recordings at the current window size, because recordings follow the window size.
 
 - G1.4-14-4-5: the card sidebar space check expects the right sidebar to expand after the user folds the left one when the card has room for it, as the sidebar presentation rule requires.

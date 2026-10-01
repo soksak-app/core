@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-117-1-3-4-7-1-7-1: core 명령의 응답 한도가 handler에만 적용되므로, 실패한 표시는 `did not reply` 대신 자기 오류를 보고한다. 페이지는 animation frame이 10초 안에 실행되지 않는 배치를 실패시킨다.
+
 - G1.4-14-4-6: 녹화가 창 크기를 따라가므로 card sidebar space check가 녹화를 현재 창 크기에서 시작한다.
 
 - G1.4-14-4-5: card sidebar space check가 sidebar 표시 규칙대로, card에 공간이 있으면 사용자가 왼쪽을 접은 뒤 오른쪽 sidebar가 펼쳐지기를 기대한다.

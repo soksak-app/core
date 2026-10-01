@@ -62,3 +62,21 @@ export async function drawPrepared({ epoch, current, prepare, draw, frame, prese
   await frame();
   await presented();
 }
+
+/** 문서가 animation frame 하나를 실행하기를 기다리는 시간(ms). 호스트의 표시 한도와 같다(docs/spec/native-surfaces.md). */
+const FRAME_TIMEOUT = 10_000;
+
+/**
+ * 다음 animation frame 을 기다린다. 문서가 frame 을 실행하지 않으면(WebKit 이 렌더링을 멈춘 경우) 이 기다림의
+ * 오류로 실패하여, 배치와 그 배치를 기다리는 명령이 끝없이 기다리지 않게 한다.
+ */
+export function animationFrame(request = requestAnimationFrame) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`the main document ran no animation frame within ${FRAME_TIMEOUT}ms`)), FRAME_TIMEOUT);
+    request((time) => {
+      clearTimeout(timer);
+      resolve(time);
+    });
+  });
+}

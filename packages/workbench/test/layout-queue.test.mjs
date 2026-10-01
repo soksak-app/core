@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import test from "node:test";
-import { createLayoutQueue } from "../layout-queue.js";
+import test, { mock } from "node:test";
+import { animationFrame, createLayoutQueue } from "../layout-queue.js";
 
 test("a failed presentation rejects its request, reports failure, and permits the next drag", async () => {
   const reported = [];
@@ -53,4 +53,25 @@ test("a newer waiting layout replaces the older waiting layout and reports it", 
   assert.equal(await newest, "new");
   assert.deepEqual(calls, ["first", "new"]);
   assert.deepEqual(superseded, [old]);
+});
+
+test("an animation frame wait fails with its own error when the document runs no frame", { timeout: 5000 }, async (t) => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  t.after(() => mock.timers.reset());
+  let settled = null;
+  const waiting = animationFrame(() => {}).then(() => { settled = "frame"; }, (error) => { settled = error; });
+  mock.timers.tick(9999);
+  await Promise.resolve();
+  assert.equal(settled, null, "the frame wait failed before 10 seconds");
+  mock.timers.tick(1);
+  await waiting;
+  assert.ok(settled instanceof Error && /the main document ran no animation frame within 10000ms/.test(settled.message),
+    String(settled));
+});
+
+test("an animation frame wait resolves on the next frame", { timeout: 5000 }, async () => {
+  let frame;
+  const waiting = animationFrame((callback) => { frame = callback; });
+  frame(16.7);
+  await waiting;
 });

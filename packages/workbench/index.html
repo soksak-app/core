@@ -86,7 +86,7 @@ import {
 /* 판과 컴포지터를 읽어 검증한다. 아무것도 변경하지 않으므로 그 둘은 이 모듈을
    알지 않는다. */
 import { verify } from "./verify.js";
-import { createLayoutQueue, drawPrepared } from "./layout-queue.js";
+import { animationFrame, createLayoutQueue, drawPrepared } from "./layout-queue.js";
 
 /* 애플리케이션 인터페이스. 없으면 아무 일도 하지 않는 구현이 온다. */
 import { chrome, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
@@ -280,7 +280,7 @@ onLayout((made, draw, seated) => {
   const epoch = layoutEpoch;
   drawing = layouts.run(() => drawPrepared({
     epoch, current: () => layoutEpoch, prepare: () => publishAhead(made, seated), draw,
-    frame: () => new Promise((resolve) => requestAnimationFrame(resolve)), presented: () => presented,
+    frame: () => animationFrame(), presented: () => presented,
   }));
 });
 

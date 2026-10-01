@@ -141,12 +141,12 @@ export function createRegistry({ call = null } = {}) {
   }
 
   /**
-   * 이 문서가 답하는 명령은 선언의 timeout(없으면 10초) 안에 답하지 않으면 실패로 끝낸다. 표면으로 전달하는 명령은
-   * 호스트가 같은 시간을 적용한다. 답이 없는 명령이 호출자를 끝없이 기다리게 하지 않는다.
+   * 이 문서가 실행하는 명령은 선언의 timeout(없으면 10초) 안에 끝나지 않으면 실패로 끝낸다. 표면으로 전달하는 명령은
+   * 호스트가 같은 시간을 적용한다. 코어 명령에서는 handler 실행에만 적용한다. 그 뒤의 배치 표시는 표시 경로의 각
+   * 기다림이 자기 한도로 실패하므로, 이 한도가 그 구체적인 실패를 가로채지 않는다.
    */
-  function bounded(method, name, entry, run) {
-    if (method !== "command.run") return run();
-    // 기본값: timeout 을 선언하지 않은 명령은 10초 안에 답한다(docs/spec/exposure.md).
+  function bounded(name, entry, run) {
+    // 기본값: timeout 을 선언하지 않은 명령은 10초 안에 끝난다(docs/spec/exposure.md).
     const limit = entry?.declaration.timeout ?? REPLY_TIMEOUT;
     let timer;
     const expired = new Promise((_, reject) => {
@@ -169,10 +169,11 @@ export function createRegistry({ call = null } = {}) {
     const found = kind && typeof name === "string" ? declared.get(declarationKey(kind, name)) : undefined;
     // 상태 모듈이 등록한 이름은 표면을 지정하지 않은 요청에 이 문서가 답한다(docs/spec/exposure.md#choosing-a-surface).
     const page = found && params.surface === undefined ? pageOf(kind, name) : null;
-    if (page) return bounded(method, name, found, () => page.entries.answer(method, params, changed));
-    if (!found || !surfaceName(name)) {
-      return bounded(method, name, coreDeclared.get(declarationKey(kind, name)), () => core.answer(method, params, changed));
+    if (page) {
+      const answering = () => page.entries.answer(method, params, changed);
+      return method === "command.run" ? bounded(name, found, answering) : answering();
     }
+    if (!found || !surfaceName(name)) return core.answer(method, params, changed);
     const requested = params.surface;
     const key = watchKey(name, requested);
     if (method === "status.unwatch") {
@@ -318,7 +319,7 @@ export function createRegistry({ call = null } = {}) {
     /** 코어 status 를 등록한다. subscribe(fn) 은 해제 함수를 반환한다. */
     status: (name, read, subscribe) => core.status(name, read, subscribe),
     command: (name, run) => core.command(name, async (params) => {
-      const result = await run(params);
+      const result = await bounded(name, coreDeclared.get(declarationKey("command", name)), () => run(params));
       try {
         await options.settled();
       } catch (error) {

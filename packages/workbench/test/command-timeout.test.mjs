@@ -50,3 +50,17 @@ test("a main-page command without a declared timeout fails after 10 seconds", { 
   await running;
   assert.ok(settled instanceof Error && /core\.fixture\.hang did not reply within 10000ms/.test(settled.message), String(settled));
 });
+
+test("a command bound covers its handler and not the presentation it waits for afterwards", { timeout: 5000 }, async () => {
+  const made = registry();
+  // 표시는 명령의 handler 예산(50ms)보다 오래 걸린다. 표시의 한도는 표시를 기다리는 쪽이 정한다.
+  made.configure({ settled: () => new Promise((resolve) => setTimeout(resolve, 150)) });
+  made.declare("core", {
+    status: [],
+    commands: [{ name: "core.fixture.drawn", description: "Replies after its layout presents.", params: { type: "object" },
+      result: { type: "integer" }, timeout: 50 }],
+    dom: [],
+  });
+  made.command("core.fixture.drawn", () => 9);
+  assert.equal(await made.run("core.fixture.drawn", {}), 9);
+});

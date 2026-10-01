@@ -37,7 +37,7 @@
 | command | `description` | 한 문장 설명 |
 | command | `params` | 매개변수 스키마 |
 | command | `result` | 결과 스키마 |
-| command | `timeout` | 선택. 명령이 답하는 데 걸릴 수 있는 시간(ms, 1–600000). 없으면 10초다. 호스트는 표면 페이지로 전달한 명령에, 메인 페이지는 스스로 답하는 명령에 이를 적용하며, 넘으면 -32000과 `command <name> did not reply within <ms>ms`로 실패한다 |
+| command | `timeout` | 선택. 명령이 답하는 데 걸릴 수 있는 시간(ms, 1–600000). 없으면 10초다. 호스트는 표면 페이지로 전달한 명령에, 메인 페이지는 스스로 실행하는 명령의 handler에 이를 적용하며, 넘으면 -32000과 `command <name> did not reply within <ms>ms`로 실패한다. core 명령은 그 뒤 배치 표시를 기다린다. 이 기다림은 timeout에 포함하지 않는다. 표시 경로의 각 단계가 자기 한도 안에 자기 오류로 실패하기 때문이다([네이티브 호스트](native-host.ko.md)) |
 | dom | `name` | 항목 이름 |
 | dom | `description` | 한 문장 설명 |
 | dom | `many` | 선택. 여러 요소가 같은 이름을 쓰면 `true`이며, 요청은 `index`로 요소 하나를 지정한다 |
