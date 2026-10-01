@@ -233,10 +233,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   return entry.ready;
 }
 
-/**
- * Wait until a native surface has declared its composition. A module that fails
- * to mount never declares one, so the wait also ends with that mount error.
- */
+/** 네이티브 표면이 composition 을 선언할 때까지 기다린다. 마운트에 실패한 모듈은 선언하지 않으므로 그 마운트 오류로도 끝난다. */
 export async function waitSurfaceCompositionDeclared(surfaceId) {
   if (placeholders.has(surfaceId)) return;
   const entry = mounted.get(surfaceId);
@@ -272,7 +269,8 @@ export async function disposeSurface(surfaceId) {
     // Do not wait for authorization here. A removed tab must not keep a layout
     // commit alive merely because its module has never been allowed to mount.
     if (entry.module) await entry.module.dispose();
-    else if (entry.authorized) await entry.ready;
+    // 실패한 마운트는 오류를 표면 상태와 mountSurface 호출자에게 이미 보고했다. 해제는 마운트가 끝나기만 기다린다.
+    else if (entry.authorized) await Promise.allSettled([entry.ready]);
     if (entry.exposure) entry.exposure.dispose();
     await entry.context.exposure.dispose();
     entry.state();
