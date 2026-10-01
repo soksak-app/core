@@ -36,3 +36,13 @@ for (const color of ["3", "0"]) {
     assert.match(result.stderr, /no test ran for "missing probe"/);
   });
 }
+
+test("repeat prints the diagnostics of each passing run", { timeout: 30000 }, (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "soksak-repeat-"));
+  t.after(() => rmSync(dir, { recursive: true }));
+  const file = join(dir, "probe.test.mjs");
+  writeFileSync(file, 'import test from "node:test";\ntest("probe measures", (t) => { t.diagnostic("measured 5ms"); });\n');
+  const result = run(file, "probe measures");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /PASS run 1 of 2: 1 tests\n {2}measured 5ms\nPASS run 2 of 2: 1 tests\n {2}measured 5ms\n/);
+});

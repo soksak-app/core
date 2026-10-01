@@ -7,6 +7,7 @@ import test from "node:test";
 
 import { APPS, failure, fresh, keepCommonSettings, open } from "./app.mjs";
 import { frontmostApp } from "./frontmost.mjs";
+import { openStages, systemState, traceLength } from "./open-report.mjs";
 
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 
@@ -402,7 +403,8 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: the first project opened from the library replies and replaces the library in the same window`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
-    await fresh(s);
+    // 늦은 응답의 단계를 보고하도록 성능 기록을 켠다.
+    await fresh(s, { performanceTrace: true });
     for (const project of await s.get("core.projects")) await s.run("core.project.close", { id: project.id });
     assert.equal(await s.get("core.project"), null, "the check did not start from the library");
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-first-open-")));
@@ -414,7 +416,17 @@ for (const app of Object.values(APPS)) {
       await s.run("core.projects.flush");
     });
 
-    const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
+    const trace = join(app.configDir, "logs", "performance.ndjson");
+    const offset = traceLength(trace);
+    const started = performance.now();
+    let opened;
+    try {
+      opened = await s.run("core.project.open", { root, color: "#7db4ff" });
+    } catch (error) {
+      throw new Error(`core.project.open failed after ${(performance.now() - started).toFixed(0)}ms: ${error.message}; ` +
+        `stages: ${openStages(trace, offset)}; ${systemState()}`, { cause: error });
+    }
+    t.diagnostic(`core.project.open replied in ${(performance.now() - started).toFixed(0)}ms; ${systemState()}`);
     assert.equal(opened.root, root);
     await s.windows(1, "the first project opened another window instead of replacing the library");
     await s.until("core.project", (project) => project?.id === opened.id, "the library window did not show the project");

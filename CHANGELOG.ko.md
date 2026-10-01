@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-33: 첫 열기 window check는 응답 시간, trace 단계, load average, CPU 사용이 큰 process를 보고하며, window check 반복 target은 실행마다 진단을 출력한다.
+
 - G1.4-32: 두 host는 프로젝트 폴더 실패를 같은 문구로 보고하며, 그런 프로젝트의 library card는 경로를 되풀이하지 않고 이유를 보이고 누를 수 없다.
 
 - G1.4-31: 이전 형식으로 저장한 설정은 설정을 연결할 때 한 번 변환하며, 애플리케이션 log는 처리되지 않은 모든 거부의 message를 보인다.

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-33: the first-open window check reports the reply time, trace stages, load average and top CPU processes, and the window check repeat target prints each run's diagnostics.
+
 - G1.4-32: both hosts report a project folder failure with the same message, and the library card of such a project shows the reason without repeating the path and cannot be pressed.
 
 - G1.4-31: settings stored in earlier formats are converted once when the settings connect, and the application log shows the message of every unhandled rejection.

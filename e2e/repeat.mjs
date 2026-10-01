@@ -47,5 +47,12 @@ for (let run = 1; run <= count; run++) {
     process.exit(1);
   }
   console.log(`PASS run ${run} of ${count}: ${passed} tests`);
+  // 검사가 t.diagnostic 으로 남긴 측정값을 실행마다 출력한다. TAP 에서 진단은 최상위 plan 줄(`1..N`) 앞의 `#` 줄이고,
+  // plan 줄 뒤의 `#` 줄은 실행 요약이다.
+  for (const line of result.stdout.split("\n")) {
+    if (/^1\.\.\d+$/.test(line)) break;
+    const diagnostic = /^\s*# (.*)$/.exec(line)?.[1];
+    if (diagnostic !== undefined && !/^Subtest: /.test(diagnostic)) console.log(`  ${diagnostic}`);
+  }
 }
 console.log(`PASS ${count} runs: ${options.file} "${options.name}"`);
