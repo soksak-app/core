@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-21: host parity check가 method가 다를 때 두 host의 요청과 응답을 보고한다.
+
 - G1.4-20: test file 시작에 기록한 맨 앞 애플리케이션이 검사 뒤 다시 맨 앞이 아니면 window check가 실패하고, 검사 전, 검사 후, 복원 후의 맨 앞 애플리케이션을 보고한다.
 
 - V5-117-1-3-4-7-1-6: 앱 문서와 마찬가지로 plugin surface 문서도 창이 가려진 동안 visible을 유지하고 animation frame을 계속 실행한다.

@@ -159,8 +159,10 @@ test("both hosts answer the same page the same way", async (t) => {
     if (name === "syncSurfaces" || name === "presentSurfaces") continue;
     const mine = wails.get(name).at(-1);
     const theirs = tauri.get(name).at(-1);
-    assert.equal(theirs.request, mine.request, `${name} was asked differently`);
-    assert.equal(theirs.answer, mine.answer, `${name} was answered differently`);
+    // 간헐적인 차이를 분류할 수 있도록 실패 메시지에 두 호스트의 요청과 응답을 모두 적는다.
+    const answers = `\nWails ${mine.request} -> ${mine.answer}\nTauri ${theirs.request} -> ${theirs.answer}`;
+    assert.equal(theirs.request, mine.request, `${name} was asked differently:${answers}`);
+    assert.equal(theirs.answer, mine.answer, `${name} was answered differently:${answers}`);
   }
 });
 
