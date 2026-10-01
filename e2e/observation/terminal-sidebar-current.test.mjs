@@ -20,7 +20,7 @@ for(const app of Object.values(APPS))test(`${app.name}: current terminal right s
  const recording=await s.request('diagnostics.capture.start',{});
  let stop,displayed=0;
  async function measure(mode){
-  const bars=await s.until('core.sidebars',bars=>bars.some(bar=>bar.sidebar===`${target.id}:right`&&bar.set===link.set&&!bar.unavailable&&bar.sections.some(section=>section.mounted&&section.text.length>0)&&bar.sections.every(section=>section.error===null)),`${mode}: right section output absent`);
+  const bars=await s.until('core.sidebars',bars=>bars.some(bar=>bar.sidebar===`${target.id}:right`&&bar.set===link.set&&bar.sections.some(section=>section.mounted&&section.text.length>0)&&bar.sections.every(section=>section.error===null)),`${mode}: right section output absent`);
   const grid=await s.get('core.grid'),card=grid.cards.find(card=>card.id===target.id);
   assert.equal(card.sidebars.right.set,link.set);
   const bar=bars.find(bar=>bar.sidebar===`${target.id}:right`);

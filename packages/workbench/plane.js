@@ -227,8 +227,8 @@ function updateCard(el, card, rect) {
     const holder = el.querySelector(".set");
     if (set) {
       // 플러그인 오버라이드는 포커스 카드의 활성 표면을 사용한다.
-      const owner = kind === null ? { card: null, surface: null, available: true }
-        : { card: focusedId, surface: activeTab(grid.card(focusedId)).id, available: true };
+      const owner = kind === null ? { card: null, surface: null }
+        : { card: focusedId, surface: activeTab(grid.card(focusedId)).id };
       // 일반 사이드바 내용은 카드·표면 연결과 레일이 없다.
       drawSet(holder, card.id, set, { ...owner, orientation: "vertical", window: true, plugin: kind, side });
     } else {

@@ -286,7 +286,6 @@ export function sidebarsState() {
         // 기본값: 카드 사이드바 문맥에는 창 사이드바의 plugin 과 side 가 없다.
         side: record.context.side ?? null,
         rect: (() => { const {x,y,width:w,height:h} = record.container.getBoundingClientRect(); return {x,y,w,h}; })(),
-        unavailable: Boolean(record.context.window && !record.context.available),
         sections: record.entries.map((entry) => ({
           id: entry.section.id, name: entry.section.name,
           folded: record.layout === "list" && choice.folded.has(entry.section.id),

@@ -54,7 +54,6 @@ for(const app of Object.values(APPS))test(`${app.name}: fixed sidebars apply plu
    assert.equal(bar.plugin,override?tab.plugin:null);
    assert.equal(bar.card,override?card.id:null);
    assert.equal(bar.surface,override?tab.id:null);
-   assert.equal(bar.unavailable,false);
    const set=settings.sets.find(set=>set.id===selected.set);
    assert.equal(bar.layout,set.layout);
    assert.deepEqual(bar.sections.map(section=>section.id),set.sections);
@@ -85,4 +84,47 @@ for(const app of Object.values(APPS))test(`${app.name}: fixed sidebars apply plu
   assert.ok(observations.some(item=>item.plugin==='browser'&&item.rail.groups.length===1),'browser override was not measured');
   t.diagnostic(`fixed windows=${windows.map(card=>card.id)}; selections=${observations.map(item=>`${item.plugin}:${item.rail.groups.length}`)}; frames=${captured.length}; gap=${stop.longestGap}ms`);
  } finally {rmSync(recording.frames,{recursive:true,force:true});}
+});
+
+// 탭을 옮기거나 닫아도 고정 사이드바는 초점 카드의 활성 탭으로 문맥을 정하고, 자기 열을 옮기지 않는다.
+for(const app of Object.values(APPS))test(`${app.name}: fixed sidebar context follows tab moves and removal without moving its column`,{timeout:60000},async t=>{
+ const s=await open(t,app);assert.ok(s,'required host is not built');
+ await fresh(s);
+ const links=(await s.get('core.settings')).values.links;
+ const columns=async()=>(await s.get('core.grid')).cards.filter(card=>card.tabs.length===0).map(({id,x,w})=>({id,x,w})).sort((a,b)=>a.id.localeCompare(b.id));
+ const baseline=await columns();
+ async function expectContext(label){
+  await s.presented();
+  const grid=await s.get('core.grid');
+  const focused=grid.cards.find(card=>card.focused);assert.ok(focused,`${label}: no focused card`);
+  const tab=focused.tabs.find(item=>item.id===focused.active);
+  for(const side of ['left','right']){
+   const override=links.find(link=>link.place===`window-${side}`&&link.plugin===tab.plugin);
+   const general=links.find(link=>link.place===side&&link.plugin===null);
+   if(!override&&!general)continue;
+   const bar=await s.until('core.sidebars',bars=>{const found=bars.find(item=>item.sidebar===side);
+    return found&&found.plugin===(override?tab.plugin:null)&&found.card===(override?focused.id:null)&&found.surface===(override?tab.id:null)
+     &&(found.layout!=='tabs'||found.sections.some(section=>section.id===found.tab&&section.mounted));},
+    `${label}: ${side} sidebar context did not follow ${focused.id}/${tab.id} (${tab.plugin})`);
+   const shown=bar.find(item=>item.sidebar===side);
+   assert.equal(shown.set,(override??general).set,`${label}: ${side} sidebar shows the wrong set`);
+   // 목록 배치는 모든 섹션을, 탭 배치는 고른 탭의 섹션만 그린다(docs/spec/plugins.md).
+   const drawn=shown.layout==='tabs'?shown.sections.filter(section=>section.id===shown.tab):shown.sections;
+   assert.ok(drawn.length>0&&drawn.every(section=>section.mounted&&section.error===null),`${label}: ${side} sidebar sections did not mount: ${JSON.stringify(shown.sections)}`);
+  }
+  assert.deepEqual(await columns(),baseline,`${label}: a tab change moved or resized a fixed sidebar column`);
+  t.diagnostic(`${label}: ${focused.id}/${tab.plugin}`);
+ }
+ await s.run('core.card.focus',{card:'shell'});
+ await expectContext('shell focus');
+ const shell=(await s.get('core.grid')).cards.find(card=>card.id==='shell');
+ const moved=shell.tabs.find(item=>item.id===shell.active);
+ await s.run('core.tab.move',{tab:moved.id,card:'browser',zone:'centre'});
+ await expectContext('tab moved into the browser card');
+ await s.run('core.card.focus',{card:'shell'});
+ await expectContext('shell after the move');
+ await s.run('core.tab.close',{tab:moved.id});
+ await expectContext('moved tab closed');
+ await s.run('core.card.focus',{card:'browser'});
+ await expectContext('browser focus');
 });

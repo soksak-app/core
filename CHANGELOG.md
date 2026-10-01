@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-3-4-2: `core.sidebars` no longer reports the always-false `unavailable` field left from persistent sidebar owners, and a new window check records the fixed sidebar context through tab moves and removal.
+
 - V5-117-1-3-4-3: a new window check records the rail as one loop for a card next to its sidebar, two loops for a detached card, no rail in card fullscreen and two loops after restoration, with complete recordings and rail pixels on both hosts.
 
 - F2.2-2: the obsolete `e2e/webkit-reaping.mjs`, which launched and killed both applications and left their terminal services running, is removed; a normal quit ends the services.

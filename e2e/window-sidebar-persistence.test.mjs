@@ -79,7 +79,7 @@ for(const app of Object.values(APPS))test(`${app.name}: independent window and c
    assert.equal(bar.set,link.set,`${label}: window assignment`);
    assert.deepEqual(bar.sections.map(section=>section.id),savedSettings.sets.find(set=>set.id===link.set).sections,`${label}: window section output was dropped`);
    assert.ok(bar.sections.filter(section=>section.mounted).every(section=>section.text.length>0),`${label}: ${column.id} output empty`);
-   if(column.id===windowBar.sidebar){assert.equal(bar.surface,terminal.id);assert.equal(bar.card,target.id);assert.equal(bar.unavailable,false);}
+   if(column.id===windowBar.sidebar){assert.equal(bar.surface,terminal.id);assert.equal(bar.card,target.id);}
    for(const [key,value]of Object.entries({x:grid.plane.x+column.x+1,y:grid.plane.y+column.y+1,w:column.w-2,h:column.h-24}))near(bar.rect[key],value,`${label}: ${column.id} DOM ${key}`);
   }
   const surface=(await s.surfaces()).find(item=>item.surface===terminal.id);assert.ok(surface?.applied,`${label}: native surface absent`);
