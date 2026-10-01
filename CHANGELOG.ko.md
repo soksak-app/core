@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-116-4-11-2: window check가 shell 카드의 left, right, top 패널을 native 표면, grip, DOM geometry와 비교해 잰다.
+
 - G1.4-14-4-2: 끌기 정렬 check가 카드 지연을 화면 frame 수(최대 4, 중앙값 2.5, 90번째 백분위수 3)로 제한하고, 페이지가 배치마다 단계를 기록한다.
 
 - G1.4-14-4-3: chrome 단추를 다시 그려도 유지하므로, 누름과 뗌 사이의 다시 그리기가 click을 잃게 하지 않는다. `core.pointer`가 메인 문서의 마지막 pointer 순서를 보고한다.

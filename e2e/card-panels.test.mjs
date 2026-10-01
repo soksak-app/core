@@ -49,6 +49,48 @@ for (const app of Object.values(APPS)) {
       `folded sidebars must reserve only two 6-point dividers: ${JSON.stringify(foldedSurface)}`);
   });
 
+  // 사용자 release 에서 shell 카드에 left/right/top 을 190 포인트씩 지정했는데 native 표면이 카드 폭과 거의 같았다
+  // (V5-116-4-11-2). 같은 지정에서 native 사각형, grip 등록, DOM 과 native 의 일치를 함께 잰다.
+  test(`${app.name}: left, right and top panels on the shell card reserve their space in the native surface`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    const card = (await s.get("core.grid")).cards.find((item) => item.id === "shell");
+    assert.ok(card, "the fixture has no shell card");
+    const set = (await s.get("core.settings")).values.sets[0];
+    for (const side of ["left", "right", "top"]) {
+      await s.run("core.card.sidebar.set", { card: card.id, side, set: set.id });
+      await s.run("core.card.sidebar.size", { card: card.id, side, size: 190 });
+    }
+    await s.presented();
+    const grid = await s.get("core.grid");
+    const measured = grid.cards.find((item) => item.id === card.id);
+    const surface = (await s.surfaces()).find((item) => item.surface === measured.active);
+    assert.ok(surface?.applied, `no applied native surface for ${JSON.stringify(measured)}`);
+    const band = (side) => (measured.sidebars[side] ? (measured.sidebars[side].collapsed ? 6 : measured.sidebars[side].size) : 0);
+    const expected = {
+      x: grid.plane.x + measured.x + 1 + band("left"),
+      y: grid.plane.y + measured.y + 1 + 32 + band("top"),
+      w: measured.w - 2 - band("left") - band("right"),
+      h: measured.h - 2 - 32 - 22 - band("top") - band("bottom"),
+    };
+    const off = Object.keys(expected).filter((key) => Math.abs(surface.applied[key] - expected[key]) > 1);
+    assert.deepEqual(off, [], `the native surface does not leave the panel space: ${JSON.stringify({ expected,
+      applied: surface.applied, card: measured, sidebars: measured.sidebars })}`);
+    const drawn = (await s.get("core.sidebars")).filter((item) => item.sidebar.startsWith(`${card.id}:`));
+    assert.deepEqual(drawn.map((item) => item.sidebar).sort(), ["shell:left", "shell:right", "shell:top"],
+      "the shell card does not draw exactly its three assigned panels");
+    // 카드 패널마다 grip 하나가 입력 영역을 가진다.
+    const panels = (await s.get("core.sidebars")).filter((item) => /:(left|right|top|bottom)$/.test(item.sidebar));
+    for (let index = 0; index < panels.length; index++) {
+      const grip = await s.rect("core.card.sidebar.grip", index);
+      assert.ok(grip.width > 0 && grip.height > 0, `grip ${index} of ${panels.length} has no input area: ${JSON.stringify(grip)}`);
+    }
+    const failed = (await s.get("core.verify")).rows.filter((row) => !row.ok);
+    assert.deepEqual(failed, [], "DOM and native geometry disagree");
+    t.diagnostic(`shell panels ${JSON.stringify({ expected, applied: surface.applied })}`);
+  });
+
   test(`${app.name}: a card carries assigned panels on all four sides regardless of the active tab`, {timeout:60000}, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built; four-side assignment was not observed`);

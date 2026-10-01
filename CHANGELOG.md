@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-116-4-11-2: a window check measures left, right and top panels on the shell card against the native surface, grips and DOM geometry.
+
 - G1.4-14-4-2: the drag alignment check limits the card delay in display frames (worst 4, median 2.5, 90th percentile 3), and the page traces each layout's stages.
 
 - G1.4-14-4-3: chrome buttons are kept across redraws, so a redraw between a press and its release no longer loses the click; `core.pointer` reports the last pointer sequence of the main document.
