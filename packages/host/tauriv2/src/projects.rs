@@ -33,10 +33,11 @@ pub fn folder(root: &str, home: &Path) -> Result<Folder, String> {
     } else {
         PathBuf::from(root)
     };
-    let path = path
+    let requested = std::path::absolute(&path).map_err(|e| folder_error(&path, e))?;
+    let path = requested
         .canonicalize()
-        .map_err(|e| format!("{}: {e}", path.display()))?;
-    let metadata = path.metadata().map_err(|e| e.to_string())?;
+        .map_err(|e| folder_error(&requested, e))?;
+    let metadata = path.metadata().map_err(|e| folder_error(&requested, e))?;
     if !metadata.is_dir() {
         return Err(format!("not a project directory: {}", path.display()));
     }
@@ -45,6 +46,29 @@ pub fn folder(root: &str, home: &Path) -> Result<Folder, String> {
         root: path.to_str().ok_or("project path is not UTF-8")?.into(),
         identity,
     })
+}
+
+/// 폴더를 확인하지 못한 오류를 요청한 경로 하나를 담은 계약 문구로 바꾼다. 두 호스트가 같은 문구를 낸다
+/// (docs/spec/host-contract.md 의 workspace.folder.messages).
+fn folder_error(path: &Path, error: std::io::Error) -> String {
+    match error.kind() {
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory => {
+            format!("project directory does not exist: {}", path.display())
+        }
+        std::io::ErrorKind::PermissionDenied => {
+            format!("project directory is not readable: {}", path.display())
+        }
+        _ => match error.raw_os_error() {
+            Some(errno) => format!(
+                "project directory cannot be resolved: {} (errno {errno})",
+                path.display()
+            ),
+            None => format!(
+                "project directory cannot be resolved: {}: {error}",
+                path.display()
+            ),
+        },
+    }
 }
 
 /// 사용자 홈 디렉터리 기준으로 root 를 프로젝트 디렉터리로 확인한다.

@@ -4,10 +4,13 @@ package host
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -41,13 +44,14 @@ func ResolveProjectFolder(root string) (ProjectFolder, error) {
 	if err != nil {
 		return ProjectFolder{}, err
 	}
+	requested := path
 	path, err = filepath.EvalSymlinks(path)
 	if err != nil {
-		return ProjectFolder{}, err
+		return ProjectFolder{}, folderError(requested, err)
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return ProjectFolder{}, err
+		return ProjectFolder{}, folderError(requested, err)
 	}
 	if !info.IsDir() {
 		return ProjectFolder{}, fmt.Errorf("not a project directory: %s", path)
@@ -58,6 +62,22 @@ func ResolveProjectFolder(root string) (ProjectFolder, error) {
 	}
 	identity, err := current.DirectoryIdentity(path, info)
 	return ProjectFolder{Root: path, Identity: identity}, err
+}
+
+// folderError 는 폴더를 확인하지 못한 오류를 요청한 경로 하나를 담은 계약 문구로 바꾼다. 두 호스트가 같은 문구를
+// 낸다(docs/spec/host-contract.md 의 workspace.folder.messages).
+func folderError(path string, err error) error {
+	switch {
+	case errors.Is(err, fs.ErrNotExist), errors.Is(err, syscall.ENOTDIR):
+		return fmt.Errorf("project directory does not exist: %s", path)
+	case errors.Is(err, fs.ErrPermission):
+		return fmt.Errorf("project directory is not readable: %s", path)
+	}
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		return fmt.Errorf("project directory cannot be resolved: %s (errno %d)", path, int(errno))
+	}
+	return fmt.Errorf("project directory cannot be resolved: %s: %w", path, err)
 }
 
 type ProjectOpen struct {

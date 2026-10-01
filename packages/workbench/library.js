@@ -18,6 +18,20 @@ const element = (tag, cls, text) => {
  * 라이브러리 화면을 만든다. rendered 는 화면을 다시 그리거나 양식을 열고 닫을 때
  * 호출된다.
  */
+/* 호스트의 폴더 오류 문구(docs/spec/host-contract.md 의 workspace.folder.messages)와 카드에 보일 이유. 카드는 경로를
+   바로 위 줄에 보이므로 이유에는 경로를 넣지 않는다. */
+const FOLDER_REASONS = [
+  ['project directory does not exist: ', '폴더가 없습니다.'],
+  ['project directory is not readable: ', '폴더를 읽을 권한이 없습니다.'],
+  ['not a project directory: ', '폴더가 아니라 파일입니다.'],
+];
+
+/** 폴더 오류 문구를 카드의 이유로 바꾼다. 계약에 없는 문구는 그대로 보인다. */
+function folderReason(message) {
+  const known = FOLDER_REASONS.find(([prefix]) => message.startsWith(prefix));
+  return known ? known[1] : `폴더를 확인할 수 없습니다: ${message}`;
+}
+
 export function createLibrary(root, rendered = () => {}) {
   root.innerHTML = `
     <main class="library-main">
@@ -161,8 +175,10 @@ export function createLibrary(root, rendered = () => {}) {
       // 폴더를 읽을 수 없는 프로젝트는 열기 전에 그 까닭을 보인다.
       const folder=folders.get(project.root);
       if(folder?.error) {
+        // 열 수 없는 폴더의 카드는 누를 수 없다. 이유는 카드에 보이고, 기록은 제거 버튼으로 지운다.
+        choose.disabled=true;
         card.dataset.folderError=folder.error;
-        text.append(element('p','library-project__missing',`폴더를 열 수 없습니다: ${project.root} — ${folder.error}`));
+        text.append(element('p','library-project__missing',folderReason(folder.error)));
       }
       choose.append(text);
       const pin=element('button','act library-project__pin');pin.type='button';pin.dataset.expose='core.library.pin';pin.innerHTML=icon('star');

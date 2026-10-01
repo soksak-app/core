@@ -196,3 +196,34 @@ fn a_project_patch_stores_plugin_data_and_rejects_unknown_fields() {
         )
         .is_err());
 }
+
+// contract: workspace.folder.messages
+#[test]
+fn folder_errors_name_the_folder_once() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let missing = root.path().join("gone").join("child");
+    assert_eq!(
+        folder(missing.to_str().unwrap(), root.path()).unwrap_err(),
+        format!("project directory does not exist: {}", missing.display())
+    );
+    let file = root.path().join("file");
+    fs::write(&file, "x").unwrap();
+    assert_eq!(
+        folder(file.to_str().unwrap(), root.path()).unwrap_err(),
+        format!(
+            "not a project directory: {}",
+            fs::canonicalize(&file).unwrap().display()
+        )
+    );
+    let closed = root.path().join("closed");
+    fs::create_dir(&closed).unwrap();
+    fs::set_permissions(&closed, fs::Permissions::from_mode(0)).unwrap();
+    let inside = closed.join("child");
+    let result = folder(inside.to_str().unwrap(), root.path());
+    fs::set_permissions(&closed, fs::Permissions::from_mode(0o700)).unwrap();
+    assert_eq!(
+        result.unwrap_err(),
+        format!("project directory is not readable: {}", inside.display())
+    );
+}

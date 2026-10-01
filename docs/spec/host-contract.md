@@ -324,3 +324,4 @@ Items:
 | `workspace.projects.remove-keeps-remaining-order` | Removing a project keeps the order of the remaining projects. | both |
 | `workspace.folder.aliases-share-identity` | A directory and a symbolic link to it resolve to the same project folder. | both |
 | `workspace.folder.rejects-file` | A regular file is rejected as a project folder. | both |
+| `workspace.folder.messages` | A folder check fails with one message that names the requested path once: `project directory does not exist: <path>` for a missing path or a missing ancestor, `project directory is not readable: <path>` when access is denied, `not a project directory: <resolved path>` for a file, and `project directory cannot be resolved: <path> (errno <n>)` for another system error. | both |

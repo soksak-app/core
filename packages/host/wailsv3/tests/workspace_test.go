@@ -229,3 +229,39 @@ func TestAProjectPatchStoresPluginDataAndRejectsUnknownFields(t *testing.T) {
 		t.Fatal("an unknown project field was accepted")
 	}
 }
+
+// contract: workspace.folder.messages
+func TestFolderMessages(t *testing.T) {
+	root := t.TempDir()
+	missing := filepath.Join(root, "gone", "child")
+	if _, err := host.ResolveProjectFolder(missing); err == nil || err.Error() != "project directory does not exist: "+missing {
+		t.Fatalf("missing directory error: %v", err)
+	}
+	file := filepath.Join(root, "file")
+	if err := os.WriteFile(file, []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := filepath.EvalSymlinks(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.ResolveProjectFolder(file); err == nil || err.Error() != "not a project directory: "+resolved {
+		t.Fatalf("file error: %v", err)
+	}
+	closed := filepath.Join(root, "closed")
+	if err := os.Mkdir(closed, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(closed, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(closed, 0700); err != nil {
+			t.Error(err)
+		}
+	})
+	inside := filepath.Join(closed, "child")
+	if _, err := host.ResolveProjectFolder(inside); err == nil || err.Error() != "project directory is not readable: "+inside {
+		t.Fatalf("unreadable directory error: %v", err)
+	}
+}

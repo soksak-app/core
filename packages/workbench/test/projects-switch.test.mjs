@@ -13,7 +13,7 @@ mock.module("@soksak/runtime", {
   namedExports: {
     windows: {
       folder: async (root) => {
-        if (root === "/work/missing") throw new Error("lstat /work/missing: no such file or directory");
+        if (root === "/work/missing") throw new Error("project directory does not exist: /work/missing");
         return { root, identity: PROJECT.identity };
       },
       openProject: async (request) => { openRequests.push(request.id); return { local: true }; },
@@ -179,13 +179,13 @@ test("a saved layout that fails the plane check rejects the open before any proj
   await projects.flush();
 });
 
-test("opening a project whose folder cannot be read names the folder and the host's reason", async () => {
+test("opening a project whose folder cannot be read rejects with the host's message", async () => {
   const missing = { ...structuredClone(PROJECT), id: "prj-missing", root: "/work/missing" };
   await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: [structuredClone(PROJECT), structuredClone(missing)], open: [] }),
     patch: async () => {} });
   openRequests.length = 0;
   await assert.rejects(projects.activate("prj-missing"),
-    /the project folder \/work\/missing cannot be opened: lstat \/work\/missing: no such file or directory/);
+    { message: "project directory does not exist: /work/missing" });
   assert.deepEqual(openRequests, [], "the failed open asked the host for a window");
 });
 

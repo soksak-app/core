@@ -338,12 +338,13 @@ for (const app of Object.values(APPS)) {
     await s.run("core.projects.browse");
     const library = await s.until("core.library", (state) => state.folderErrors?.[missing.id] !== undefined,
       "the library did not report the missing project folder");
-    assert.deepEqual(Object.keys(library.folderErrors), [missing.id], "only the missing folder is reported");
+    assert.deepEqual(library.folderErrors, { [missing.id]: `project directory does not exist: ${folder}` },
+      "both hosts report the contract message for the missing folder only");
     assert.equal(library.previewErrors[missing.id], undefined, "the stored layout of the missing project is valid");
     // 라이브러리 명령의 실패는 라이브러리 오류 줄에 보인다.
     await s.run("core.library.open", { id: missing.id });
     const failed = await s.until("core.library", (state) => state.error !== null, "opening the missing project showed no error");
-    assert.ok(failed.error.startsWith(`the project folder ${folder} cannot be opened: `), `the open error does not name the folder: ${failed.error}`);
+    assert.equal(failed.error, `project directory does not exist: ${folder}`);
     assert.equal((await s.get("core.screen")).screen, "library", "the failed open left the library");
 
     await s.run("core.library.remove", { id: missing.id });

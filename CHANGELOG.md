@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-32: both hosts report a project folder failure with the same message, and the library card of such a project shows the reason without repeating the path and cannot be pressed.
+
 - G1.4-31: settings stored in earlier formats are converted once when the settings connect, and the application log shows the message of every unhandled rejection.
 
 - G1.4-30: the library shows a project whose folder cannot be read with the folder and the reason, opening it names both, and a project can be removed from its library card.

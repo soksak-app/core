@@ -16,7 +16,7 @@ test("a project whose folder cannot be read shows the reason in the library and 
   t.mock.module("../plane.js", { namedExports: { fresh: () => ({}) } });
   t.mock.module("@soksak/runtime", { namedExports: { windows: { createsFolders: false,
     folder: async (root) => {
-      if (root === "/work/missing") throw new Error("lstat /work/missing: no such file or directory");
+      if (root === "/work/missing") throw new Error("project directory does not exist: /work/missing");
       return { root, identity: "id" };
     } } } });
   t.mock.module("../library-preview.js", { namedExports: { preview: () => {
@@ -31,11 +31,13 @@ test("a project whose folder cannot be read shows the reason in the library and 
   library.render();
   await new Promise((resolve) => setImmediate(resolve));
   const state = library.state();
-  assert.deepEqual(state.folderErrors, { "prj-a": "lstat /work/missing: no such file or directory" });
+  assert.deepEqual(state.folderErrors, { "prj-a": "project directory does not exist: /work/missing" });
   const card = document.querySelector('[data-project-id="prj-a"]');
-  assert.match(card.querySelector(".library-project__missing")?.textContent ?? "",
-    /폴더를 열 수 없습니다: \/work\/missing — lstat \/work\/missing: no such file or directory/);
+  // 경로는 카드의 경로 줄에 한 번만 보인다.
+  assert.equal(card.querySelector(".library-project__missing")?.textContent, "폴더가 없습니다.");
   assert.equal(document.querySelector('[data-project-id="prj-b"] .library-project__missing'), null);
+  assert.equal(card.querySelector('[data-expose="core.library.open"]').disabled, true, "the card of a missing folder can still be pressed");
+  assert.equal(document.querySelector('[data-project-id="prj-b"] [data-expose="core.library.open"]').disabled, false);
   const remove = card.querySelector('[data-expose="core.library.remove"]');
   assert.deepEqual([remove?.dataset.command, remove?.dataset.params], ["core.library.remove", JSON.stringify({ id: "prj-a" })],
     "the library card has no remove control bound to core.library.remove");
