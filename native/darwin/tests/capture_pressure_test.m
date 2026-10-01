@@ -58,6 +58,9 @@ static void reset(NSString *directory, long capacity) {
     capturePending = dispatch_semaphore_create(capacity);
     if (captureFirstFrame) dispatch_release(captureFirstFrame);
     captureFirstFrame = dispatch_semaphore_create(0);
+    // 고정 장치의 녹화는 시작 요청이 완료된 상태다.
+    if (captureStartDone) dispatch_release(captureStartDone);
+    captureStartDone = dispatch_semaphore_create(1);
 }
 
 int main(void) { @autoreleasepool {

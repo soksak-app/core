@@ -20,6 +20,9 @@ static bool hasCaptureError(void);
 static void reportCaptureStreamFailure(SCStream *stream, NSString *message);
 
 static dispatch_semaphore_t captureFirstFrame;
+// 스트림 시작 요청의 완료. ScreenCaptureKit 은 시작 완료 전에 첫 프레임을 전달할 수 있고, 시작이 끝나기 전의
+// 종료 요청은 이미 멈춘 스트림으로 거부된다(SCStreamErrorDomain -3808).
+static dispatch_semaphore_t captureStartDone;
 // 종료 요청 시각(mach 절대 시각)과, 그 이후에 표시된 프레임이 도착했음을 알리는 신호.
 static uint64_t captureStopAfter;
 static dispatch_semaphore_t captureCaughtUp;
@@ -483,12 +486,33 @@ bool sp_capture_start(const char* directory, char **errorOut) {
             [NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription]);
     }
     // 복사된 완료 블록은 원래 스트림을 보유하여 교체 뒤에도 동일성을 유지한다.
+    if (captureStartDone) dispatch_release(captureStartDone);
+    captureStartDone = dispatch_semaphore_create(0);
+    dispatch_semaphore_t startDone = captureStartDone;
+    dispatch_retain(startDone);
     [stream startCaptureWithCompletionHandler:^(NSError* failed) {
         if (failed != nil) {
             reportCaptureStreamFailure(stream,
                 [NSString stringWithFormat:@"capture did not start: %@", failed.localizedDescription]);
         }
+        dispatch_semaphore_signal(startDone);
+        dispatch_release(startDone);
     }];
+    return true;
+}
+
+// 스트림 시작 요청이 완료될 때까지 기다린다. 기다린 신호는 다시 올려 이후 호출도 통과하게 한다.
+static bool waitCaptureStart(int64_t milliseconds) {
+    if (captureStartDone == NULL) {
+        setCaptureError(@"capture start was not requested");
+        return false;
+    }
+    if (dispatch_semaphore_wait(captureStartDone,
+        dispatch_time(DISPATCH_TIME_NOW, milliseconds * NSEC_PER_MSEC)) != 0) {
+        setCaptureError([NSString stringWithFormat:@"capture start did not complete within %lldms", milliseconds]);
+        return false;
+    }
+    dispatch_semaphore_signal(captureStartDone);
     return true;
 }
 
@@ -502,6 +526,8 @@ int sp_capture_wait(void) {
         setCaptureError(@"no capture frame arrived within 10000ms");
         return 0;
     }
+    // 첫 프레임은 시작 완료보다 먼저 올 수 있다. 시작이 끝나야 녹화가 시작된 것이다.
+    if (!waitCaptureStart(10000)) return 0;
     return hasCaptureError() ? 0 : 1;
 }
 
@@ -538,6 +564,8 @@ int sp_capture_stop(double after) {
         captureStopAfter = 0;
     });
     dispatch_release(caughtUp);
+    // 시작이 끝나기 전의 종료 요청은 거부되므로 시작 완료 뒤에 멈춘다.
+    waitCaptureStart(5000);
     dispatch_semaphore_t stopped = dispatch_semaphore_create(0);
     [stream stopCaptureWithCompletionHandler:^(NSError* failed) {
         if (failed != nil) {

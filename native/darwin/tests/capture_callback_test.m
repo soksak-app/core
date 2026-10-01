@@ -76,6 +76,8 @@ int main(void) { @autoreleasepool {
                 check(strcmp(sp_capture_error(), failed ? "fixture current recording error" : "") == 0,
                     @"late start preserves the exact current recording error");
                 if (!failed) {
+                    // 붙잡은 현재 시작 대신 고정 장치가 현재 시작 완료를 알린다.
+                    dispatch_semaphore_signal(captureStartDone);
                     dispatch_semaphore_signal(captureFirstFrame);
                     check(sp_capture_wait() == 1, @"late start cannot invalidate healthy first-frame readiness");
                 }

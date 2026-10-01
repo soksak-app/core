@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-3-4-5-4-2: stop a recording only after its stream start has completed. ScreenCaptureKit can deliver the first frame before the start completes, and stopping in that interval failed with `SCStreamErrorDomain -3808`; recording readiness now requires the start completion, the stop waits for it, and a missing start request is an explicit error. A new native test reproduces the failure through consecutive recordings in one process.
+
 - G1.4-15: count the tests that the window-check repeat tool actually ran. It read a colored human reporter line and also counted a test file without matching tests as a pass; it now reads TAP results whose titles match the name pattern.
 
 - G1.4-14-1: perform the main-page reload work when the replacement page starts. Wails ran its navigation commit listener asynchronously, so a late listener marked the new page not ready, abandoned its requests and removed its surface registrations and documents, which produced shell-readiness timeouts and the `already attached` cascade in the full window suite. The page now calls `pageStarted` before it registers or mounts anything; both hosts clean up there and their navigation callbacks only refresh the WebKit child record. The diagnostic `diagnostics.navigation.delay` delays those callbacks for the owning check.

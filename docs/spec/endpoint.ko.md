@@ -81,7 +81,7 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 | --- | --- | --- |
 | `diagnostics.fixture` | `{window, settings?}` | 빈 폴더 설정을 가진 `<config-dir>/test-project`를 만들고, 다른 프로젝트를 제거하고, 공통 설정을 초기화하고, 기본값 위에 `settings` 객체를 적용하고, 창에서 그 프로젝트를 연 뒤 `{root}`를 반환한다. 객체가 아닌 `settings`는 거부한다 |
 | `diagnostics.drag` | `{window, axis, line, dx, dy, ms, times, capture?}` | `axis`의 경계 `line`을 `ms` 동안 `dx, dy`만큼 끌었다가 되돌리는 왕복을 `times`번 실행한다. 단계 시각은 호스트가 정한다. 동작이 화면에 표시된 뒤 페이지의 끌기 결과 `{from, steps, took, asked, late, deepest}`를 반환한다. 페이지 결과에는 끌기 전과 각 단계 뒤의 경계 위치 `boundary`와 페이지가 각 단계를 적용하는 데 쓴 밀리초 `handled`도 있다. `capture: true`이면 호스트가 창도 기록하고 프레임 폴더 `frames`, 각 단계의 시각 `ticks`, 네이티브 배치 트랜잭션마다 시작 시각, 앱 DOM이 표시를 확인한 시각, 커밋 시각을 담은 `{ticket, begun, presented, committed}`의 목록 `layouts`를 더한다. 일어나지 않은 단계는 `null`이다. 모든 시각은 기록 프레임과 같은 시계의 밀리초다. 끌기가 실패하면 호스트가 기록을 멈추고 폴더를 지운다 |
-| `diagnostics.capture.start` | `{window}` | 창의 backing 배율에 맞는 장치 픽셀 해상도로 녹화를 시작하고 첫 프레임이 기록된 뒤 배치 추적을 시작하여 프레임 폴더 `{frames}`를 반환한다 |
+| `diagnostics.capture.start` | `{window}` | 창의 backing 배율에 맞는 장치 픽셀 해상도로 녹화를 시작하고 첫 프레임이 기록되고 stream 시작이 완료된 뒤(그 완료 전의 중지는 system이 거부한다) 배치 추적을 시작하여 프레임 폴더 `{frames}`를 반환한다 |
 | `diagnostics.capture.stop` | `{window, after?}` | `after`(`host.window.presented`의 `displayed`)와 요청 시각 중 늦은 시각 이후에 표시된 화면을 스트림이 전달한 뒤 캡처를 중지하고 `{frames, count, limited, longestGap, layouts}`를 반환한다. `limited`가 true이면 녹화기가 프레임 상한에 도달한 정상적인 제한 결과이며 캡처 오류가 아니다. `longestGap`은 연속한 기록 프레임 사이의 가장 긴 표시 간격(ms)이다. 앱이 커밋한 상태는 요청보다 늦게 화면에 나올 수 있으므로, 그 상태로 끝나야 하는 녹화는 그 표시 시각을 넘긴다 |
 | `diagnostics.modal.hold` | `{window, on}` | `on`이면 창의 모달 내용 요청에 대한 호스트 응답을 붙잡고, 아니면 붙잡은 응답을 보내고 붙잡기를 멈춘다 |
 | `diagnostics.modal.held` | `{window}` | 창이 모달 내용 응답을 붙잡거나 붙잡기를 멈추면 답한다. 창이 응답을 붙잡고 있지 않으면 실패한다 |
