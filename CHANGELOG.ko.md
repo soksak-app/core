@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F2.2-2: 두 앱을 실행하고 강제 종료해 terminal service를 남기던 낡은 `e2e/webkit-reaping.mjs`를 제거한다. 정상 종료는 service를 끝낸다.
+
 - G1.4-17: files 북마크 행이 긴 경로를 말줄임으로 끝내고, 삭제 버튼을 경로 바로 뒤가 아니라 그 오른쪽 8 point에 둔다.
 
 - V5-117-1-4: 왼쪽 프로젝트 tab 열의 이름을 `rail-projects` 대신 `.project-column`과 `core.projects.column`으로 한다. rail은 이제 카드와 사이드바를 묶는 경계선만 뜻하기 때문이다.

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F2.2-2: the obsolete `e2e/webkit-reaping.mjs`, which launched and killed both applications and left their terminal services running, is removed; a normal quit ends the services.
+
 - G1.4-17: the files bookmark rows end a long path with an ellipsis and place the remove button 8 points to its right instead of directly after the path.
 
 - V5-117-1-4: the left project tab column is named `.project-column` and `core.projects.column` instead of `rail-projects`, because rail now means only the border that joins a card and its sidebar.
