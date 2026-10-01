@@ -1,7 +1,7 @@
 // 작업공간 manifest 가 선언한 버전이 현재 릴리스 버전과 같은지 검사한다.
 //
 // Git 이 추적하는 package.json, plugin.json, sidecar.json, tauri.conf.json 의 최상위 "version" 과
-// Cargo.toml 의 [package] version 을 읽는다. 버전을 선언하지 않은 작업공간 파일(루트 package.json,
+// Cargo.toml 의 [package] version, manifest 가 없는 Go 패키지의 version.go 가 선언한 `const CoreVersion` 을 읽는다. 버전을 선언하지 않은 작업공간 파일(루트 package.json,
 // Cargo 작업공간)은 검사 대상이 아니다.
 //
 //   node scripts/check-versions.mjs
@@ -29,6 +29,11 @@ export function cargoPackageVersion(text) {
   return undefined;
 }
 
+/** Go version.go 가 선언한 CoreVersion. 없으면 undefined. */
+export function goCoreVersion(text) {
+  return text.match(/^const CoreVersion = "([^"]*)"$/m)?.[1];
+}
+
 /** files 는 { path, text } 목록이다. 선언된 버전이 release 와 다른 파일마다 오류 하나를 반환한다. */
 export function auditVersions(files, release = RELEASE) {
   const errors = [];
@@ -46,6 +51,9 @@ export function auditVersions(files, release = RELEASE) {
       version = value?.version;
     } else if (name === "Cargo.toml") {
       version = cargoPackageVersion(text);
+    } else if (name === "version.go") {
+      version = goCoreVersion(text);
+      if (version === undefined) errors.push(`${path}: const CoreVersion is not declared`);
     } else {
       continue;
     }
@@ -57,10 +65,10 @@ export function auditVersions(files, release = RELEASE) {
 }
 
 export function workspaceManifests(root = ROOT) {
-  const names = [...JSON_MANIFESTS, "Cargo.toml"].map((name) => `*${name}`);
+  const names = [...JSON_MANIFESTS, "Cargo.toml", "version.go"].map((name) => `*${name}`);
   return execFileSync("git", ["ls-files", "--", ...names], { cwd: root, encoding: "utf8" })
     .split("\n")
-    .filter((path) => path && (JSON_MANIFESTS.has(basename(path)) || basename(path) === "Cargo.toml"))
+    .filter((path) => path && (JSON_MANIFESTS.has(basename(path)) || ["Cargo.toml", "version.go"].includes(basename(path))))
     .map((path) => ({ path, text: readFileSync(join(root, path), "utf8") }));
 }
 

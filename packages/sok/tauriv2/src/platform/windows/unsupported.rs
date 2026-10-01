@@ -24,6 +24,10 @@ impl Platform for Windows {
         false
     }
 
+    fn set_executable(&self, _path: &std::path::Path, _executable: bool) -> Result<(), String> {
+        Err("not implemented on windows".into())
+    }
+
     fn key(&self) -> Result<String, String> {
         Err("not implemented on windows".into())
     }

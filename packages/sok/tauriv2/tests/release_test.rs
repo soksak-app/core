@@ -38,6 +38,7 @@ fn run(args: &[&str]) -> (i32, String, String) {
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
         paths_dir: Path::new("/nonexistent/paths.d"),
+        core_version: "0.0.2",
     };
     let code = soksak_sok::run(&args, &mut stdout, &mut stderr, &options);
     (

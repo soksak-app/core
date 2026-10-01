@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-2-2: `sok registry use` sets the registry index, and `sok plugin install|update|remove|enable|disable|list` installs plugins and their sidecars into the configuration directory with hash checks and one-step `installed.json` writes, in both implementations.
+
 - R1-4-3: `sok registry build` checks a registry folder and every archive and writes the same `index.json` in both implementations.
 
 - R1-4-2: `sok plugin pack` writes a plugin package archive and `sok sidecar release` writes a sidecar release asset and `SHA256SUMS`, in both implementations.

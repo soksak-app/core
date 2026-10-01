@@ -37,6 +37,10 @@ commands:
   sidecar release DIRECTORY OUTPUT [--platform P]
                             writes the sidecar release asset into OUTPUT and updates SHA256SUMS
   registry build DIRECTORY  checks a registry and writes its index.json
+  registry use INDEX        sets the registry index that installation reads
+  plugin install|update|remove|enable|disable ID
+                            changes the installed plugins of the configuration directory
+  plugin list               prints plugins/installed.json
 
 window:
   --window NAME | --project DIRECTORY   without either, the only window of the application
@@ -458,6 +462,8 @@ type Options struct {
 	Identifier string
 	// PathsDir 는 경로 항목을 두는 폴더다(macOS 는 /etc/paths.d).
 	PathsDir string
+	// CoreVersion 은 plugin 을 고를 때 쓰는 core version 이다. 실행 파일은 이 package 의 CoreVersion 을 준다.
+	CoreVersion string
 }
 
 // Run 은 명령 하나를 실행하고 종료 상태를 돌려준다.
@@ -477,13 +483,9 @@ func Run(args []string, stdout, stderr io.Writer, options Options) int {
 
 // connectTo 는 --config-dir 이나 이 애플리케이션의 설정 폴더에서 엔드포인트를 찾아 연결한다.
 func connectTo(values map[string]string, identifier string) (*Client, error) {
-	configDir, ok := values["config-dir"]
-	if !ok {
-		base, err := os.UserConfigDir()
-		if err != nil {
-			return nil, fmt.Errorf("the default configuration directory is unknown: %w", err)
-		}
-		configDir = filepath.Join(base, identifier)
+	configDir, err := configDirOf(values, identifier)
+	if err != nil {
+		return nil, err
 	}
 	endpoint, err := ReadEndpoint(configDir)
 	if err != nil {
@@ -505,6 +507,9 @@ func run(args []string, stdout io.Writer, options Options) error {
 	if a.flags["help"] {
 		_, err := fmt.Fprintln(stdout, Usage)
 		return err
+	}
+	if len(a.positionals) > 1 && (a.positionals[0] == "plugin" && a.positionals[1] != "pack" || a.positionals[0] == "registry" && a.positionals[1] == "use") {
+		return runPlugins(a, stdout, options)
 	}
 	if len(a.positionals) > 0 && a.positionals[0] == "registry" {
 		return runRegistry(a, stdout)

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-2-2: `sok registry use`가 registry index를 정하고, `sok plugin install|update|remove|enable|disable|list`가 두 구현에서 hash를 검사하고 `installed.json`을 한 번에 쓰며 plugin과 sidecar를 설정 폴더에 설치한다.
+
 - R1-4-3: `sok registry build`가 registry 폴더와 모든 archive를 검사하고, 두 구현에서 같은 `index.json`을 쓴다.
 
 - R1-4-2: 두 구현에서 `sok plugin pack`이 plugin package archive를, `sok sidecar release`가 sidecar release asset과 `SHA256SUMS`를 쓴다.

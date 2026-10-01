@@ -40,6 +40,7 @@ fn run(args: &[&str]) -> (i32, String, String) {
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
         paths_dir: Path::new("/nonexistent/paths.d"),
+        core_version: "0.0.2",
     };
     let code = soksak_sok::run(&args, &mut stdout, &mut stderr, &options);
     (
@@ -73,6 +74,7 @@ struct Registry {
 
 /// pack 과 release 로 archive 를 만들고 그 주소와 hash 를 담은 registry 폴더를 쓴다.
 fn registry_tree() -> Registry {
+    let platform = soksak_sok::current_platform().expect("platform");
     let releases = Dir::new();
     let plugin = Dir::new();
     write_tree(
@@ -114,7 +116,7 @@ fn registry_tree() -> Registry {
             sidecar.text(),
             releases.text(),
             "--platform",
-            "darwin-arm64",
+            &platform,
         ],
     ] {
         let (code, stdout, stderr) = run(&args);
@@ -136,7 +138,7 @@ fn registry_tree() -> Registry {
     );
     let sidecar_entry = format!(
         r#"{{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
-        "versions": [{{"version": "0.1.0", "protocol": 1, "assets": {{"darwin-arm64":
+        "versions": [{{"version": "0.1.0", "protocol": 1, "assets": {{"{platform}":
         {{"url": "file://{}", "sha256": "{}"}}}}}}]}}"#,
         sidecar.0, sidecar.1
     );
@@ -164,6 +166,7 @@ fn registry_tree() -> Registry {
 #[test]
 fn registry_build_writes_the_index_after_checking_every_archive() {
     let registry = registry_tree();
+    let platform = soksak_sok::current_platform().expect("platform");
     let (code, stdout, stderr) = run(&["registry", "build", registry.dir.text()]);
     assert_eq!(code, 0, "{stderr}");
     let index = registry.dir.0.join("index.json");
@@ -209,7 +212,7 @@ fn registry_build_writes_the_index_after_checking_every_archive() {
           "version": "0.1.0",
           "protocol": 1,
           "assets": {{
-            "darwin-arm64": {{
+            "{platform}": {{
               "url": "file://{}",
               "sha256": "{}"
             }}
@@ -233,7 +236,11 @@ fn registry_build_writes_the_index_after_checking_every_archive() {
   }}
 }}
 "#,
-        registry.plugin.0, registry.plugin.1, registry.sidecar.0, registry.sidecar.1
+        registry.plugin.0,
+        registry.plugin.1,
+        registry.sidecar.0,
+        registry.sidecar.1,
+        platform = platform
     );
     assert_eq!(std::fs::read_to_string(&index).unwrap(), want);
 }

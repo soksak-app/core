@@ -24,6 +24,8 @@ pub trait Platform {
     fn executable(&self, metadata: &std::fs::Metadata) -> bool;
     /// 이 플랫폼의 release asset key(`<os>-<arch>`). 이 architecture 의 key 가 없으면 오류다.
     fn key(&self) -> Result<String, String>;
+    /// 푼 파일의 mode 를 실행 파일이면 0755, 아니면 0644 로 정한다.
+    fn set_executable(&self, path: &std::path::Path, executable: bool) -> Result<(), String>;
 }
 
 #[cfg(target_os = "macos")]

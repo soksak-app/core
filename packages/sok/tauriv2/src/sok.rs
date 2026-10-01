@@ -14,8 +14,11 @@ pub mod install;
 mod path;
 #[path = "platform/platform.rs"]
 pub mod platform;
+mod plugins;
 mod registry;
 mod release;
+pub mod version;
+pub use release::current_platform;
 
 use endpoint::{Client, Failure};
 
@@ -38,6 +41,10 @@ commands:
   sidecar release DIRECTORY OUTPUT [--platform P]
                             writes the sidecar release asset into OUTPUT and updates SHA256SUMS
   registry build DIRECTORY  checks a registry and writes its index.json
+  registry use INDEX        sets the registry index that installation reads
+  plugin install|update|remove|enable|disable ID
+                            changes the installed plugins of the configuration directory
+  plugin list               prints plugins/installed.json
 
 window:
   --window NAME | --project DIRECTORY   without either, the only window of the application
@@ -611,6 +618,8 @@ pub struct Options<'a> {
     pub identifier: &'a str,
     /// 경로 항목을 두는 폴더(macOS 는 /etc/paths.d).
     pub paths_dir: &'a Path,
+    /// plugin 을 고를 때 쓰는 core version. 실행 파일은 이 crate 의 version 을 준다.
+    pub core_version: &'a str,
 }
 
 /// 명령 하나를 실행하고 종료 상태를 돌려준다.
@@ -638,14 +647,22 @@ pub fn run(
 }
 
 /// --config-dir 이나 이 애플리케이션의 설정 폴더에서 엔드포인트를 찾아 연결한다.
-fn connect_to(values: &HashMap<String, String>, identifier: &str) -> Result<Client, Error> {
-    let config_dir = match values.get("config-dir") {
+/// --config-dir 이나 이 애플리케이션의 설정 폴더.
+pub(crate) fn config_dir_of(
+    values: &HashMap<String, String>,
+    identifier: &str,
+) -> Result<PathBuf, Error> {
+    Ok(match values.get("config-dir") {
         Some(dir) => PathBuf::from(dir),
         None => platform::current()?
             .config_dir()
             .map_err(|error| format!("the default configuration directory is unknown: {error}"))?
             .join(identifier),
-    };
+    })
+}
+
+fn connect_to(values: &HashMap<String, String>, identifier: &str) -> Result<Client, Error> {
+    let config_dir = config_dir_of(values, identifier)?;
     let endpoint = endpoint::read_endpoint(Path::new(&config_dir))?;
     Ok(Client::dial(&endpoint)?)
 }
@@ -660,6 +677,15 @@ fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result
     if a.flag("help") {
         writeln!(stdout, "{USAGE}").map_err(|error| error.to_string())?;
         return Ok(());
+    }
+    let first_two = (
+        a.positionals.first().map(String::as_str),
+        a.positionals.get(1).map(String::as_str),
+    );
+    if matches!(first_two, (Some("plugin"), Some(action)) if action != "pack")
+        || first_two == (Some("registry"), Some("use"))
+    {
+        return plugins::run_plugins(&a.positionals, &a.values, stdout, options);
     }
     if a.positionals.first().map(String::as_str) == Some("registry") {
         return registry::run_registry(&a.positionals, stdout);

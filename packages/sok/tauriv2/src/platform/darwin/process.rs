@@ -34,6 +34,13 @@ impl Platform for Darwin {
         metadata.permissions().mode() & 0o111 != 0
     }
 
+    fn set_executable(&self, path: &std::path::Path, executable: bool) -> Result<(), String> {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = if executable { 0o755 } else { 0o644 };
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+            .map_err(|error| format!("{}: {error}", path.display()))
+    }
+
     fn key(&self) -> Result<String, String> {
         match std::env::consts::ARCH {
             "aarch64" => Ok("darwin-arm64".into()),

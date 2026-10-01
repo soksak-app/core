@@ -8,6 +8,7 @@ fn main() {
     let options = soksak_sok::Options {
         identifier: IDENTIFIER,
         paths_dir: std::path::Path::new("/etc/paths.d"),
+        core_version: soksak_sok::version::CORE_VERSION,
     };
     let code = soksak_sok::run(
         &args,

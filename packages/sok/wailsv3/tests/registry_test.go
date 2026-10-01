@@ -8,16 +8,22 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/min-median-max/soksak/packages/sok/wailsv3/src"
 )
 
 // registryTree 는 pack 과 release 로 archive 를 만들고 그 주소와 hash 를 담은 registry 폴더를 쓴다.
 func registryTree(t *testing.T) (dir, pluginSum, sidecarSum string) {
 	t.Helper()
+	platform, err := sok.CurrentPlatform()
+	if err != nil {
+		t.Fatal(err)
+	}
 	releases := t.TempDir()
 	results := map[string]map[string]string{}
 	for name, args := range map[string][]string{
 		"plugin":  {"plugin", "pack", pluginTree(t), releases},
-		"sidecar": {"sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", "darwin-arm64"},
+		"sidecar": {"sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", platform},
 	} {
 		code, stdout, stderr := run(args...)
 		if code != 0 {
@@ -36,7 +42,7 @@ func registryTree(t *testing.T) (dir, pluginSum, sidecarSum string) {
 			"package": {"url": "file://` + results["plugin"]["archive"] + `", "sha256": "` + results["plugin"]["sha256"] + `"},
 			"engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]}`,
 		"sidecars/scope-sidecar-worker.json": `{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
-			"versions": [{"version": "0.1.0", "protocol": 1, "assets": {"darwin-arm64":
+			"versions": [{"version": "0.1.0", "protocol": 1, "assets": {"` + platform + `":
 			{"url": "file://` + results["sidecar"]["archive"] + `", "sha256": "` + results["sidecar"]["sha256"] + `"}}}]}`,
 		"packs/starter.json": `{"name": "starter", "description": "처음 설치하는 plugin.", "plugins": ["probe"]}`,
 		"revoked.json":       `{"plugins": [], "sidecars": []}`,
@@ -47,6 +53,10 @@ func registryTree(t *testing.T) (dir, pluginSum, sidecarSum string) {
 // contract: cli.registry.writes-checked-index
 func TestRegistryBuildWritesTheIndexAfterCheckingEveryArchive(t *testing.T) {
 	dir, plugin, sidecar := registryTree(t)
+	platform, err := sok.CurrentPlatform()
+	if err != nil {
+		t.Fatal(err)
+	}
 	code, stdout, stderr := run("registry", "build", dir)
 	if code != 0 {
 		t.Fatalf("code %d stderr %q", code, stderr)
@@ -93,7 +103,7 @@ func TestRegistryBuildWritesTheIndexAfterCheckingEveryArchive(t *testing.T) {
           "version": "0.1.0",
           "protocol": 1,
           "assets": {
-            "darwin-arm64": {
+            "` + platform + `": {
               "url": "file://` + sidecarArchive + `",
               "sha256": "` + sidecarHash + `"
             }

@@ -13,5 +13,5 @@ import (
 const identifier = "com.soksak.wails"
 
 func main() {
-	os.Exit(sok.Run(os.Args[1:], os.Stdout, os.Stderr, sok.Options{Identifier: identifier, PathsDir: "/etc/paths.d"}))
+	os.Exit(sok.Run(os.Args[1:], os.Stdout, os.Stderr, sok.Options{Identifier: identifier, PathsDir: "/etc/paths.d", CoreVersion: sok.CoreVersion}))
 }

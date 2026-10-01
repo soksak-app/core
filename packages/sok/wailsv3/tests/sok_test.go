@@ -127,7 +127,7 @@ var pathsDir = "/nonexistent/paths.d"
 
 func run(args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
-	code := sok.Run(args, &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", PathsDir: pathsDir})
+	code := sok.Run(args, &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", PathsDir: pathsDir, CoreVersion: "0.0.2"})
 	return code, stdout.String(), stderr.String()
 }
 

@@ -20,6 +20,7 @@
 | `sok path install\|remove` | Writes or deletes the path entry of this application; `install` prints the file and the directory it holds |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | Changes the installed plugins ([installation](installation.md)) |
 | `sok plugin list` | Lists the installed plugins |
+| `sok registry use <index>` | Sets the registry index that installation reads |
 | `sok plugin pack <directory> <output directory>` | Writes a plugin package archive |
 | `sok sidecar release <directory> <output directory> [--platform <platform>]` | Writes a sidecar release archive and updates `SHA256SUMS` |
 | `sok registry build <directory>` | Validates a registry and writes its `index.json` |
@@ -49,6 +50,22 @@ These commands write files and do not need a running application.
 Both archives are gzip-compressed tar files. They hold `package.json` and every path of `files`, a directory with the files under it, at their paths relative to the directory. Entries are sorted by path and have modification time 0, owner 0 and mode 0644, or 0755 for a file that has an executable bit. A listed path that does not exist, leaves the directory, or is or contains a symbolic link or a file that is neither regular nor a directory fails the command, which then writes nothing. The two implementations write the same entries, but their gzip streams differ, so the `sha256` of an archive is the value printed by the `sok` that wrote it.
 
 `sok registry build <directory>` reads `plugins/<id>.json`, `sidecars/<file name>.json`, `packs/<name>.json` and `revoked.json` (`{ plugins, sidecars }`) of a registry directory. Each file holds one entry of the [registry index](installation.md#registry-index) and its name matches the entry. The command checks the entries as one index, reads every archive and compares its `sha256`, and checks that a plugin archive holds `plugin.json` with the plugin id and a `package.json` with the entry's package name, version, `engines.soksak` and sidecar ranges. Only when every check passes does it write `index.json` with each list sorted by id or name, two-space indentation and the field order of the [registry index](installation.md#registry-index) table, so both implementations write the same bytes; it replaces the file in one step. A missing `plugins`, `sidecars` or `packs` folder holds no entries; a missing `revoked.json` fails the build. It prints `{ index, plugins, sidecars, packs }` with the path and the number of entries.
+
+## Installing plugins
+
+These commands change the files of the [installation layout](installation.md#installation-layout) in the configuration directory. A configuration directory has one installation, so two commands must not change it at the same time.
+
+`sok registry use <index>` reads the registry index at a path or an absolute `file:` URL, checks it, and writes `plugins/registry.json` (`{ "format": 1, "index": "<file: URL>" }`). It prints `{ index }`. The registry of version 0.0.2 is a local folder whose path differs per computer, so the location is set here instead of in the application.
+
+`sok plugin install <id>` reads the index that `plugins/registry.json` names and `plugins/installed.json` (none means nothing is installed), selects the versions for the core version of this `sok` and the platform it runs on ([version selection](installation.md#version-selection)), and then:
+
+1. reads each selected archive that is not installed yet, compares its `sha256`, and extracts it into a temporary folder beside its install path that it renames into place;
+2. writes `plugins/installed.json` in one step: the plugin with its package, version, `enabled: true`, the sidecar ranges of that version and, when it replaces another version, `previous`; the selected sidecar versions; and no sidecar that no plugin names;
+3. deletes every plugin folder and version folder other than the version in use and `previous` of an installed plugin, and every sidecar folder and version folder that `installed.json` does not name.
+
+A plugin already installed at the selected version is left unchanged. A failure in step 1 or 2 leaves `installed.json` unchanged and reports the step; a failure in step 3 reports the folder it could not delete. Extraction accepts only regular files and folders at relative paths without `..`, and keeps mode 0755 for a file with an executable bit and 0644 otherwise. The command prints `{ plugin, sidecars }`: the entry of the plugin in `installed.json` and the sidecar versions it uses.
+
+`sok plugin update <id>` installs the selected version of an installed plugin and fails for a plugin that is not installed. `sok plugin remove <id>` deletes the plugin from `installed.json` and then deletes `plugins/<id>` and the sidecar version folders that `installed.json` no longer names. `sok plugin enable <id>` and `sok plugin disable <id>` set `enabled`. These three print the plugin entry, or `null` after removal. `sok plugin list` prints `installed.json`.
 
 ## Installation and a running application
 

@@ -20,6 +20,7 @@
 | `sok path install\|remove` | 이 애플리케이션의 경로 항목을 쓰거나 지운다. `install`은 파일과 그 안의 폴더를 출력한다 |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | 설치된 plugin을 바꾼다([설치](installation.ko.md)) |
 | `sok plugin list` | 설치된 plugin을 나열한다 |
+| `sok registry use <index>` | 설치가 읽는 registry index를 정한다 |
 | `sok plugin pack <directory> <output directory>` | Plugin package archive를 쓴다 |
 | `sok sidecar release <directory> <output directory> [--platform <platform>]` | Sidecar release archive를 쓰고 `SHA256SUMS`를 갱신한다 |
 | `sok registry build <directory>` | Registry를 검증하고 그 `index.json`을 쓴다 |
@@ -49,6 +50,22 @@
 두 archive는 gzip으로 압축한 tar 파일이다. `package.json`과 `files`의 모든 경로를 폴더 기준 상대 경로로 담으며, 폴더는 그 아래 파일까지 담는다. 항목은 경로 순서이고, 수정 시각 0, 소유자 0, mode 0644를 가지며 실행 bit가 있는 파일은 0755다. 나열한 경로가 없거나, 폴더 밖으로 나가거나, symbolic link이거나 그것을 담거나, 일반 파일도 폴더도 아닌 파일이면 명령은 실패하고 아무것도 쓰지 않는다. 두 구현은 같은 항목을 쓰지만 gzip stream이 다르므로, archive의 `sha256`은 그것을 쓴 `sok`이 출력한 값이다.
 
 `sok registry build <directory>`는 registry 폴더의 `plugins/<id>.json`, `sidecars/<file name>.json`, `packs/<name>.json`, `revoked.json`(`{ plugins, sidecars }`)을 읽는다. 각 파일은 [registry index](installation.ko.md#registry-index)의 항목 하나를 담고, 파일 이름은 항목과 맞는다. 명령은 항목을 하나의 index로 검사하고, 모든 archive를 읽어 `sha256`을 비교하며, plugin archive가 plugin id를 가진 `plugin.json`과 항목의 package 이름, version, `engines.soksak`, sidecar 범위를 가진 `package.json`을 담는지 검사한다. 모든 검사를 통과할 때만 각 목록을 id나 이름 순서로 정렬하고 두 칸 들여쓰기와 [registry index](installation.ko.md#registry-index) 표의 필드 순서로 `index.json`을 쓰므로 두 구현이 같은 byte를 쓰며, 파일은 한 번에 바꾼다. `plugins`, `sidecars`, `packs` 폴더가 없으면 항목이 없는 것이고, `revoked.json`이 없으면 build는 실패한다. 출력은 경로와 항목 수를 담은 `{ index, plugins, sidecars, packs }`이다.
+
+## Plugin 설치
+
+이 명령들은 설정 폴더의 [설치 배치](installation.ko.md#설치-배치) 파일을 바꾼다. 설정 폴더 하나에는 설치가 하나이므로, 두 명령이 동시에 그것을 바꾸면 안 된다.
+
+`sok registry use <index>`는 경로나 절대 `file:` URL의 registry index를 읽어 검사하고 `plugins/registry.json`(`{ "format": 1, "index": "<file: URL>" }`)을 쓴다. 출력은 `{ index }`다. Version 0.0.2의 registry는 컴퓨터마다 경로가 다른 local 폴더이므로, 위치를 애플리케이션이 아니라 여기서 정한다.
+
+`sok plugin install <id>`는 `plugins/registry.json`이 지정한 index와 `plugins/installed.json`(없으면 설치된 것이 없다)을 읽고, 이 `sok`의 core version과 실행 중인 플랫폼에 맞는 version을 고른 뒤([version 선택](installation.ko.md#version-선택)) 다음을 한다.
+
+1. 아직 설치되지 않은 고른 archive마다 읽어 `sha256`을 비교하고, 설치 경로 옆 임시 폴더에 푼 뒤 이름을 바꿔 제자리에 둔다.
+2. `plugins/installed.json`을 한 번에 쓴다. Plugin은 package, version, `enabled: true`, 그 version의 sidecar 범위, 다른 version을 바꿀 때의 `previous`를 가진다. 고른 sidecar version을 담고, 어느 plugin도 지정하지 않은 sidecar는 담지 않는다.
+3. 설치된 plugin의 쓰는 version과 `previous`가 아닌 모든 plugin 폴더와 version 폴더, `installed.json`이 지정하지 않은 모든 sidecar 폴더와 version 폴더를 지운다.
+
+이미 고른 version으로 설치된 plugin은 바꾸지 않는다. 1단계나 2단계가 실패하면 `installed.json`은 그대로이고 그 단계를 보고한다. 3단계가 실패하면 지우지 못한 폴더를 보고한다. 풀기는 `..` 없는 상대 경로의 일반 파일과 폴더만 받고, 실행 bit가 있는 파일은 mode 0755, 그 밖에는 0644로 둔다. 출력은 `{ plugin, sidecars }`이며, `installed.json`의 plugin 항목과 그것이 쓰는 sidecar version이다.
+
+`sok plugin update <id>`는 설치된 plugin의 고른 version을 설치하며, 설치되지 않은 plugin이면 실패한다. `sok plugin remove <id>`는 `installed.json`에서 plugin을 지운 뒤 `plugins/<id>`와 `installed.json`이 더 이상 지정하지 않는 sidecar version 폴더를 지운다. `sok plugin enable <id>`와 `sok plugin disable <id>`는 `enabled`를 정한다. 이 셋은 plugin 항목을 출력하고, 제거 뒤에는 `null`을 출력한다. `sok plugin list`는 `installed.json`을 출력한다.
 
 ## 설치와 실행 중인 애플리케이션
 

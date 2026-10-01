@@ -82,7 +82,7 @@ fn archive_files(data: &[u8], names: &[&str]) -> Result<BTreeMap<String, Vec<u8>
 }
 
 /// archive 주소의 파일을 읽고 sha256 을 비교한다.
-fn read_archive(at: &str, archive: &Archive) -> Result<Vec<u8>, String> {
+pub(crate) fn read_archive(at: &str, archive: &Archive) -> Result<Vec<u8>, String> {
     let path = install::file_path(&archive.url).map_err(|error| format!("{at}: {error}"))?;
     let data = std::fs::read(&path).map_err(|error| format!("{at}: {error}"))?;
     let got = hex(&Sha256::digest(&data));

@@ -7,17 +7,21 @@ test("every declared workspace version is the release version", { timeout: 10000
   assert.deepEqual(auditVersions(workspaceManifests()), []);
 });
 
-test("version audit rejects a JSON manifest and a Cargo package with another version", { timeout: 1000 }, () => {
+test("version audit rejects a JSON manifest, a Cargo package and a Go core version with another version", { timeout: 1000 }, () => {
   const errors = auditVersions([
     { path: "plugins/a/package.json", text: JSON.stringify({ name: "a", version: "0.0.0" }) },
     { path: "sidecars/b/Cargo.toml", text: '[package]\nname = "b"\nversion = "0.0.0"\n\n[dependencies]\nx = { version = "1" }\n' },
     { path: "package.json", text: JSON.stringify({ name: "workspace", private: true }) },
     { path: "Cargo.toml", text: '[workspace]\nmembers = ["a"]\n' },
     { path: "plugins/c/plugin.json", text: JSON.stringify({ version: RELEASE }) },
+    { path: "packages/d/src/version.go", text: 'package d\n\nconst CoreVersion = "0.0.0"\n' },
+    { path: "packages/e/src/version.go", text: "package e\n" },
   ]);
   assert.deepEqual(errors, [
     `plugins/a/package.json: version "0.0.0" must be ${RELEASE}`,
     `sidecars/b/Cargo.toml: version "0.0.0" must be ${RELEASE}`,
+    `packages/d/src/version.go: version "0.0.0" must be ${RELEASE}`,
+    "packages/e/src/version.go: const CoreVersion is not declared",
   ]);
 });
 
