@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-14-4: rail 윤곽을 반 통로에서 선 굵기의 절반만큼 안쪽에 그려, 1배율 display에서 rail이 흐린 두 pixel이 아니라 온전한 pixel로 그려진다. `ensureTerminals`는 가장 큰 terminal 카드를 긴 쪽으로 나눈다.
+
 - G1.4-14-4: terminal mouse check의 wheel case가 고정 31 pixel 대신 cell 높이의 2.5배를 display 배율로 나눈 값을 주입하고, report timeout이 마지막 mouse 측정과 surface 상태를 알린다.
 
 - G1.4-14-4: `14t` check가 고정값 2 대신 창 배율을 쓰고, `?1005` check가 click하는 100열을 확보하도록 창을 넓힌다.

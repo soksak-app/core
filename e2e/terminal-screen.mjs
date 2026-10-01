@@ -37,11 +37,13 @@ export async function ensureTerminals(session, count) {
   );
   let terminals = (await session.surfaces("terminal")).length;
   while (terminals < count) {
+    // 가장 큰 터미널 카드를 긴 쪽으로 나눈다. 고정 사이드바와 카드 사이드바가 공간을 차지하므로 한 방향으로만 나누면
+    // 최소 크기 규칙에 걸린다.
     const grid = await session.get("core.grid");
-    const card = grid.cards.find((item) =>
-      item.active && item.tabs.some((tab) => tab.plugin === "terminal"));
+    const [card] = grid.cards.filter((item) => item.active && item.tabs.some((tab) => tab.plugin === "terminal"))
+      .sort((a, b) => b.w * b.h - a.w * a.h);
     assert.ok(card, "a visible terminal card was not found for splitting");
-    await session.run("core.card.split", { card: card.id, axis: "x", plugin: "terminal" });
+    await session.run("core.card.split", { card: card.id, axis: card.w >= card.h ? "x" : "y", plugin: "terminal" });
     await session.until(
       "core.surfaces",
       (surfaces) => surfaces.filter((item) => item.visible && item.plugin === "terminal").length >= terminals + 1,

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-14-4: the rail outline is drawn half a border width inside the half gap, so a 1x display draws the rail in whole pixels instead of two dim pixels; `ensureTerminals` splits the largest terminal card on its long side.
+
 - G1.4-14-4: the wheel cases of the terminal mouse check inject 2.5 cell heights divided by the display scale instead of a fixed 31 pixels, and a report timeout names the last mouse measurement and the surface status.
 
 - G1.4-14-4: the `14t` check uses the window scale instead of a fixed factor of 2, and the `?1005` check widens the window so that the terminal has the 100 columns it clicks.

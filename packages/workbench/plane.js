@@ -5,7 +5,7 @@
 //
 // 검증의 존재를 알지 않는다. 렌더링 완료만 통지하고 이후 처리는 문서가 정한다.
 import { Soksak, SoksakView, outline } from "soksak";
-import { cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
+import { borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
 import { nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { isPlace, plugin, plugins } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
@@ -13,7 +13,7 @@ import { bindSidebarGrip } from "./sidebar-grip.js";
 import { targetCardInsets } from "./card-insets.js";
 import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.js";
 import { SIDEBAR_SIDES, presentSidebars, effectiveSidebar, resolveSidebarSet, setSidebar, sizeSidebar, toggleSidebar } from "./card-sidebars.js";
-import { arrangeWindowSidebars, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, standingLink, windowSidebarCards } from "./window-sidebars.js";
+import { arrangeWindowSidebars, keepWindowSidebarWidths, railOutlineOptions, railSidebars, restoreWindowSidebars, standingLink, windowSidebarCards } from "./window-sidebars.js";
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout } from "./stored-layout.js";
 import { standIn } from "./compositor.js";
@@ -1096,13 +1096,12 @@ export const railOutline = () => railShape;
 
 function drawRail() {
   const sidebars = railSidebars(windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()), id => grid.card(id));
-  const pad = grid.gap / 2, corner = cardRadius();
   const groups = [];
   if (sidebars.length) {
     const card = focusedId;
     const rects = [card, ...sidebars].map(id => view.painted(id)).filter(rect => rect && rect.w > 0 && rect.h > 0);
     if (rects.length === sidebars.length + 1) {
-      const shape = outline(rects, { pad, radius: corner === 0 ? 0 : corner + pad });
+      const shape = outline(rects, railOutlineOptions(grid.gap, cardRadius(), borderWidth()));
       groups.push({ card, sidebars, ...shape, rects });
     }
   }
