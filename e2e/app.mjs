@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
-import { activateApp, coveringWindows, frontmostApp } from "./frontmost.mjs";
+import { coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
 import { readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
 // 검사하는 애플리케이션 실행 파일. 애플리케이션은 번들에서 실행된다(docs/spec/hosts.md). 작업 디렉터리와
@@ -157,9 +157,13 @@ export async function open(t, app) {
   }
   if (baselineFrontmost !== null && baselineFrontmost !== client.endpoint.pid) {
     session.cleanup(async () => {
-      if (frontmostApp() !== client.endpoint.pid) return;
-      activateApp(baselineFrontmost);
-      await session.until("host.window", (w) => w.active === false, "the application stayed active after the check");
+      const { before, after } = await restoreFrontmost({
+        name: app.name,
+        baseline: baselineFrontmost,
+        host: client.endpoint.pid,
+        inactive: () => session.until("host.window", (w) => w.active === false, "the application stayed active after the check"),
+      });
+      t.diagnostic(`frontmost before the check ${previous}, after the check ${before}, after restoring ${after}`);
     });
   }
   session.cleanup(() => {

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-20: a window check fails when the frontmost application captured at the start of its test file is not frontmost again after the check, and reports the frontmost application before the check, after it and after restoring.
+
 - V5-117-1-3-4-7-1-6: plugin surface documents stay visible and keep running animation frames while their window is covered, as the app document already did.
 
 - V5-115-1-2-1: a pointer receipt wait that ends by timeout or unregistration cancels its pending pre-send drain, so the event is not sent afterwards and the caller is completed once.
