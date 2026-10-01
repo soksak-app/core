@@ -4,6 +4,20 @@
   "private": true,
   "type": "module",
   "description": "Shell plugin: a console surface connected to a shell session.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/min-median-max/soksak.git",
+    "directory": "plugins/shell"
+  },
+  "engines": {
+    "soksak": "^0.0.1"
+  },
+  "soksak": {
+    "sidecars": {
+      "@soksak/sidecar-shell": "^0.0.1"
+    }
+  },
   "files": [
     "plugin.json",
     "ui/shell.js",

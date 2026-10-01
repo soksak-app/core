@@ -1,0 +1,7 @@
+[
+  {
+    "name": "starter",
+    "description": "Plugins that the first run installs: browser, terminal and files.",
+    "plugins": ["browser", "terminal", "files"]
+  }
+]

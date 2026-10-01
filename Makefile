@@ -138,7 +138,7 @@ verify: prepare docs-check exposure-check parity-check host-parity-check termina
 # 각 앱은 debug 와 release 두 프로필로 빌드한다. release 는 각 도구의 표준 축소
 # 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다. debug 는 진단 빌드(Go 태그·cargo
 # 기능 diagnostics)이고 release 는 진단 메서드를 포함하지 않는다.
-.PHONY: native-darwin sidecars-debug sidecars-release frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check go-format-check \
+.PHONY: native-darwin sidecars-debug sidecars-release registry frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check go-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         examples-verify examples-size
@@ -201,6 +201,14 @@ sidecars-debug:
 sidecars-release:
 	@$(GO_ENV) SOKSAK_PROFILE=release SOKSAK_GO_FLAGS="-trimpath -ldflags=-s -ldflags=-w" \
 		SOKSAK_CARGO_FLAGS=--release pnpm $(SIDECAR_PACKAGES) run build
+
+# 워크스페이스 registry. environment.json 의 plugin 을 pack 하고 그 sidecar 를 현재 플랫폼으로 release 해
+# target/registry 에 index.json 을 만든다(docs/operations/examples.md). build 와 window check 가 여기서 설치한다.
+REGISTRY = target/registry
+
+registry: sidecars-debug
+	@cargo build -p soksak-sok-tauriv2
+	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY)
 
 # 프런트엔드와 사이드카 실행 파일을 배치한다. 첫 인자는 실행 파일 디렉터리(앱 디렉터리
 # 기준), 둘째 인자는 추가 플래그다. debug 는 페이지 진단 모듈을 넣고(--diagnostics),

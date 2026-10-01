@@ -4,6 +4,20 @@
   "private": true,
   "type": "module",
   "description": "Files plugin: sidebar sections for the project directory.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/min-median-max/soksak.git",
+    "directory": "plugins/files"
+  },
+  "engines": {
+    "soksak": "^0.0.1"
+  },
+  "soksak": {
+    "sidecars": {
+      "@soksak/sidecar-files": "^0.0.1"
+    }
+  },
   "files": [
     "plugin.json",
     "ui"

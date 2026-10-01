@@ -18,6 +18,8 @@ make wailsv3-build tauriv2-build
 
 `native/darwin`은 `native/darwin/build/`에 `libsoksak-darwin.a`와 `soksak-darwin.pc`를 생성한다. Makefile은 이 디렉터리를 `PKG_CONFIG_PATH`에 추가하고, Wails와 Tauri는 pkg-config로 헤더와 링크 옵션을 찾는다. 캡처 코드가 macOS 14.0에서 추가된 ScreenCaptureKit API를 사용하므로 두 네이티브 애플리케이션의 최소 버전은 macOS 14.0이다. Makefile은 이 값을 Go에는 `CGO_CFLAGS`와 `-extldflags`로, Rust에는 `MACOSX_DEPLOYMENT_TARGET`으로 전달한다.
 
+`make registry`는 `target/registry`에 workspace registry를 만든다. Sidecar를 build하고, `apps/wailsv3/environment.json`이나 `apps/tauriv2/environment.json`이 나열한 plugin을 모두 pack하고, 그 `plugin.json`이 지정한 sidecar를 현재 플랫폼으로 release한 뒤, `scripts/workspace-packs.json`의 pack과 함께 registry 파일을 쓰고 `sok registry build`를 실행한다. 그다음 `sok registry use target/registry/index.json --config-dir DIR`와 `sok plugin install <id> --config-dir DIR`로 거기서 설치한다([command line](../spec/cli.ko.md#plugin-설치)).
+
 브라우저 애플리케이션은 `pnpm example`로 실행하고 `http://localhost:8749/index.html`을 연다. 모든 패키지 테스트는 `pnpm test`로 실행한다.
 
 빌드 대상은 `native/darwin`, 워크벤치, 사이드카를 빌드한 뒤 각 애플리케이션에서 `soksak-stage src/frontend --executables <실행 파일 디렉터리>`를 실행한다. 이 도구는 워크벤치, 배치 라이브러리, 플러그인 API, `environment.json`에 적힌 플러그인, 애플리케이션의 `runtime/` 디렉터리를 생성된 `apps/<app>/src/frontend/`에 배치하고, 사이드카 실행 파일을 실행 파일 디렉터리에 복사한다. 디버그 대상은 `--diagnostics`를 더해 페이지 진단 모듈(`diagnostics.js`)을 배치하고, 릴리스 대상은 빈 모듈을 배치한다. 두 실행 파일 모두 빌드 시 프런트엔드를 포함한다. 실행 중인 프로세스에는 새 프런트엔드가 적용되지 않으므로 빌드 후 해당 앱을 다시 실행한다.
@@ -28,7 +30,7 @@ make wailsv3-build tauriv2-build
 
 `make parity-check`로 구조 목록 게이트를 실행한다. 언어별 고정 루트 없이 Git에 보이는 JS/TS·Rust·Go·Objective-C·네이티브 헤더·HTML/CSS·셸 스크립트·계약 선언·빌드 매니페스트를 발견한다. 생성된 라이브러리 출력·Tauri 스키마는 명시적 제외 사유를 갖고 소스/출력 일치는 별도 빌드 검사로 유지한다. 연결 없는 구현·테스트, 빈 패턴, 중복 소유는 실패한다. 테스트 공유를 이유로 구현 중복 소유를 허용하지 않는다.
 
-`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`와 `make go-format-check`를 실행한다. `make go-format-check`는 `gofmt`가 바꿀 추적 Go file을 모두 나열하고 실패한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 67개, 구현 파일 369개, 테스트 파일 354개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
+`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`와 `make go-format-check`를 실행한다. `make go-format-check`는 `gofmt`가 바꿀 추적 Go file을 모두 나열하고 실패한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 68개, 구현 파일 370개, 테스트 파일 355개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
 
 `pnpm test`는 패키지 검사 전에 감사·체크리스트·명령 감독 자체 검사를 실행한다. Rust 터미널 패키지 두 개는 실제 Cargo 검사를 호출한다. 패키지 명령 검사는 Cargo를 실패 fixture로 교체해 호출·실패 전달을 검증하며 엔진 동작 검사로 세지 않는다.
 

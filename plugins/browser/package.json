@@ -4,6 +4,15 @@
   "private": true,
   "type": "module",
   "description": "Browser plugin: an address bar and a document region that shows web pages.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/min-median-max/soksak.git",
+    "directory": "plugins/browser"
+  },
+  "engines": {
+    "soksak": "^0.0.1"
+  },
   "files": [
     "plugin.json",
     "ui/browser.js",
