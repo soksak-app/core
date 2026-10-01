@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-116-5: V5-116 완료 기록의 정정. V5-116은 link 연결 panel 명령이 동작하기 전에 완료로 기록됐다. 2026-09-30에 link로만 만든 panel의 접기와 크기 조절이 두 host에서 실패했다(V5-116-4). 이제 명령, settings 명세, 조합 check를 두 host에서 확인했다.
+
 - V5-116-4-9: 실패한 sampler 읽기는 상주 크기 0 대신 `error`를 기록하고, Tauri trace는 유닉스 epoch 이전 시계를 epoch로 적지 않고 오류로 보고한다.
 
 - G1.4-14-4: Tauri에서 닫히는 웹뷰가 view 조회를 버리면 `host.window`가 `receiving on a closed channel`로 실패하지 않고 닫히는 modal을 view 없이 보고한다.

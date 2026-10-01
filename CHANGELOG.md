@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-116-5: correction of the V5-116 completion record. V5-116 was recorded complete before its linked panel commands worked: on 2026-09-30 fold and size of a panel created only by a link failed on both hosts (V5-116-4). The commands, the settings specification and the composition checks are now verified on both hosts.
+
 - V5-116-4-9: a sampler reading that fails records `error` instead of a resident size of 0, and the Tauri trace reports a clock before the Unix epoch instead of writing the epoch.
 
 - G1.4-14-4: on Tauri, `host.window` reports a closing modal without its view instead of failing with `receiving on a closed channel` when the closing webview drops the view query.
