@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use super::{DaemonEvent, SessionPort, ShellRequest};
+use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 

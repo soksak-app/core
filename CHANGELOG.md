@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-7: format the vt-core test support imports so `make rust-format-check` passes both Rust workspaces.
+
 - V5-117-1-3-4-7-1-5: keep the app DOM document visible while its window is occluded. WebKit hid the document of a window covered by another window and stopped animation frames, so the layout queue never presented and `core.project.open` never replied while the release window stayed behind other applications. The main webview registration disables WebKit window occlusion detection and fails explicitly when the selector is missing; `core.window.document` reports `visibility`. Red: the new native occlusion test reports a hidden document and no animation frame; Green: the test passes 10/10, and both hosts open projects and complete presentation commands while covered.
 
 - G1.4-10-1: generate the native pkg-config file with build-declared absolute paths instead of paths relative to `${pcfiledir}`. Every native build regenerates the content from the build directory and replaces the file only when the content differs, so a moved workspace gets current paths and an unchanged workspace keeps the file untouched. Red: the relocation test received a relative include path; Green: absolute current paths and an unchanged modification time on rebuild.
