@@ -687,6 +687,18 @@ const FEATURE_LINKS = [
     expected: "An oversize, invalid or unreadable sidecar output, or an output end outside stop, terminates the sidecar process and delivers sidecar-failure to each owning window on both hosts.",
     levels: ["native"],
   },  {
+    id: "F0.4-1-1-3",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "const sidecarMessageLimit = 64 << 20" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "const MESSAGE_LIMIT: usize = 64 << 20;" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestSidecarMessageAtTheLimitIsDelivered" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "a_message_at_the_limit_is_delivered" },
+    ],
+    expected: "A sidecar message at the 64 MiB limit reaches the owning window on both hosts at any load; the tests wait for the event, and the 6-19 s delivery at load average 31-33 is not judged by a timer.",
+    levels: ["native"],
+  },  {
     id: "F0.4-1-1-4",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "export function auditCompletedFeatureLinks" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" }],
