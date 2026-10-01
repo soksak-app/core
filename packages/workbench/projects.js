@@ -245,7 +245,10 @@ export function addSpace(layout) {
 export function activateSpace(id) {
   const project = active();
   if (id === project.activeSpaceId) return;
-  if (!project.spaces.some((s) => s.id === id)) throw new Error(`Unknown space: ${id}`);
+  const space = project.spaces.find((s) => s.id === id);
+  if (!space) throw new Error(`Unknown space: ${id}`);
+  // 판이 열 수 없는 배치면 활성 스페이스를 바꾸기 전에 실패한다.
+  listener.check(space.layout);
   keep();
   project.activeSpaceId = id;
   restore();
@@ -256,9 +259,13 @@ export function closeSpace(id) {
   if (project.spaces.length === 1) return;
   const at = project.spaces.findIndex((s) => s.id === id);
   if (at < 0) throw new Error(`Unknown space: ${id}`);
+  // 활성 스페이스를 닫으면 다음 스페이스를 연다. 판이 그 배치를 열 수 없으면 아무것도 지우기 전에 실패한다.
+  const rest = project.spaces.filter((s) => s.id !== id);
+  const next = id === project.activeSpaceId ? rest[Math.min(at, rest.length - 1)] : null;
+  if (next) listener.check(next.layout);
   keep();
   project.spaces.splice(at, 1);
-  if (id === project.activeSpaceId) project.activeSpaceId = project.spaces[Math.min(at, project.spaces.length - 1)].id;
+  if (next) project.activeSpaceId = next.id;
   restore();
   // 닫은 공간의 탭은 어떤 레이아웃에도 없으므로 그 사이드카 세션을 끝낸다.
   retainSidecarSessions(layoutSurfaces()).catch(failed);

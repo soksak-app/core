@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- V5-117-1-3-4-7-1-3-1: 저장 layout을 열 수 없는 스페이스로 전환하거나 활성 스페이스를 닫아 그 스페이스로 옮기면, 활성 스페이스가 바뀌기 전에 실패한다. 이전에는 layout 검증이 실패하기 전에 활성 스페이스를 바꿨다.
+
 - G1.4-16: `make node-repeat`가 실제로 실행한 test를 센다. 색이 붙는 사람용 reporter 줄을 읽었고, 일치하는 test가 없는 file도 통과로 셌다. 이제 제목이 이름 pattern과 일치하는 TAP 결과를 읽는다.
 
 - G1.4-14-3: window check가 폐기된 `rail`, `cardSidebar` 설정을 더 이상 쓰지 않고 고정 사이드바 카드와 카드 내부 사이드바를 잰다. 저장 layout check는 검증 오류를 기대하고, files label check는 device pixel 허용 폭으로 label 전체를 잰다.

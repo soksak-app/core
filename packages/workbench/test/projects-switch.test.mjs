@@ -174,3 +174,24 @@ test("a saved layout that fails the plane check rejects the open before any proj
   plane.rejected = null;
   await projects.flush();
 });
+
+test("switching to or closing into a space that fails the plane check changes neither the active space nor the plane", async () => {
+  // 이 창이 소유한 프로젝트는 메모리의 스페이스를 유지하므로 앞선 검사와 다른 프로젝트를 쓴다.
+  const project = { ...structuredClone(PROJECT), id: "prj-spaces", root: "/work/spaces", spaces: [
+    { id: "spc-one", title: "SPACE1", layout: { state: "one" } },
+    { id: "spc-bad", title: "SPACE2", layout: { state: "bad" } },
+  ] };
+  await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: [structuredClone(project)], open: [] }) });
+  await projects.activate(project.id);
+  plane.rejected = projects.active().spaces[1].layout;
+  plane.events.length = 0;
+  assert.throws(() => projects.activateSpace("spc-bad"), /fixture layout cannot be opened/);
+  assert.equal(projects.active().activeSpaceId, "spc-one", "the rejected switch changed the active space");
+  // 활성 스페이스를 닫으면 다음 스페이스로 이동한다. 그 스페이스가 검사에서 실패하면 닫기도 실패한다.
+  assert.throws(() => projects.closeSpace("spc-one"), /fixture layout cannot be opened/);
+  assert.deepEqual(projects.active().spaces.map((space) => space.id), ["spc-one", "spc-bad"], "the rejected close removed a space");
+  assert.equal(projects.active().activeSpaceId, "spc-one");
+  assert.deepEqual(plane.events, [], "the rejected switch replaced the plane");
+  plane.rejected = null;
+  await projects.flush();
+});

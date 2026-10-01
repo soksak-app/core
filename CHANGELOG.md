@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-3-4-7-1-3-1: switching to a space, or closing the active space into one, whose saved layout cannot be opened fails before the active space changes. The switch had changed the active space before the layout validation failed.
+
 - G1.4-16: count the tests that `make node-repeat` actually ran. It read a colored human reporter line and also counted a test file without matching tests as a pass; it now reads TAP results whose titles match the name pattern.
 
 - G1.4-14-3: window checks no longer set the retired `rail` and `cardSidebar` settings and measure the fixed sidebar cards and internal card sidebars instead; the saved-layout check expects the validation error, and the files label check measures the whole label with a device-pixel tolerance.

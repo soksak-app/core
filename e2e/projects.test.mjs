@@ -369,6 +369,30 @@ for (const app of Object.values(APPS)) {
     assert.equal(await s.get("core.project"), null, "the rejected open left the library");
     const after = read(join(config, "projects.json")).find((p) => p.id === saved.id);
     assert.deepEqual(after, JSON.parse(stored).find((p) => p.id === saved.id), "the rejected open changed the saved record");
+
+    // 열 수 있는 활성 스페이스 뒤에 같은 잘못된 스페이스를 둔다. 그 스페이스로 전환하거나, 활성 스페이스를 닫아 그
+    // 스페이스로 옮기는 명령도 같은 오류로 실패하고 활성 스페이스는 그대로다.
+    await s.run("core.project.activate", { id: first.id });
+    const spaced = read(join(config, "projects.json"));
+    const target = spaced.find((p) => p.id === saved.id);
+    const bad = target.spaces.find((x) => x.id === target.activeSpaceId);
+    const good = structuredClone(bad);
+    good.id = `${bad.id}-good`;
+    good.layout.state.cards.find((c) => c.id === "shell").data.tabs[0].plugin = "shell";
+    target.spaces = [good, bad];
+    target.activeSpaceId = good.id;
+    write(join(config, "projects.json"), spaced);
+    // 작업 화면에서 라이브러리로 가면 창이 저장된 프로젝트 목록을 다시 읽는다.
+    await s.run("core.projects.browse");
+    await s.until("core.library", (value) => value.previewErrors?.[saved.id] === undefined && value.previews?.[saved.id]?.length > 0,
+      "the library did not read the edited project record");
+    await s.run("core.project.activate", { id: saved.id });
+    await s.until("core.project", (value) => value?.id === saved.id, "the project with a valid active space did not open");
+    await assert.rejects(s.run("core.space.activate", { id: bad.id }), /unknown stored tab plugin gone/);
+    await assert.rejects(s.run("core.space.close", { id: good.id }), /unknown stored tab plugin gone/);
+    const shown = await s.get("core.project");
+    assert.equal(shown.activeSpaceId, good.id, "a rejected space command changed the active space");
+    assert.deepEqual(shown.spaces.map((x) => x.id), [good.id, bad.id], "a rejected space close removed a space");
     await s.run("core.project.activate", { id: first.id });
   });
 }
