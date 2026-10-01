@@ -546,9 +546,6 @@ export function halfGap() {
   return parseFloat(themeOf(settings.theme).shape.bw) / 2;
 }
 
-/** 현재 테마의 선 굵기(px). 카드 보더와 레일이 이 굵기로 그려진다. */
-export const borderWidth = () => parseFloat(themeOf(settings.theme).shape.bw);
-
 /**
  * 판이 stage 안으로 들어와 있는 거리(px). 뷰의 bleed 가 이 값이다.
  *

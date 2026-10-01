@@ -94,13 +94,3 @@ export function arrangeWindowSidebars(grid, descriptors, records, initialWidth, 
     }
   }
 }
-
-/**
- * 레일 윤곽의 바깥 여백과 모서리 반지름. 선은 경로를 중심으로 그려지므로 경로를 반 통로에서 선 굵기의 절반만큼 안쪽에
- * 둔다. 그러면 선이 반 통로 안쪽을 채우고 바깥 가장자리가 반 통로에 놓여, 1배율 화면에서도 선이 두 픽셀에 나뉘어
- * 흐려지지 않는다.
- */
-export function railOutlineOptions(gap, radius, borderWidth) {
-  const pad = gap / 2 - borderWidth / 2;
-  return { pad, radius: radius === 0 ? 0 : radius + pad };
-}
