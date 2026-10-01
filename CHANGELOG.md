@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-117-1-5-1: record the parity inventory of 65 lanes, 333 implementation files and 321 test files after the library preview validation added two modules and one test.
+
 - V5-117-1-3-4-7-1-3: opening a project whose saved layout names an unregistered plugin fails before anything changes. The open had made the project active, marked it open and patched `lastOpened` before the layout validation failed, which left an empty grid; the project spec no longer says such a space opens without those entries.
 
 - V5-117-1-5: a library preview applies the saved-layout validation that opening uses. It filtered tabs of unregistered plugins and drew a substitute active tab for a layout that opening rejects; it now shows the validation error, and `core.library` reports it in `previewErrors`.
