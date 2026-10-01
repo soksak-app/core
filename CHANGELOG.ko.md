@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-38: Tauri host가 멈추는 sidecar를 stop 기한보다 최대 1 ms 먼저 kill하지 않는다. Host sidecar test는 1–10초 timer로 판정하지 않고 event와 process 종료를 기다린다.
+
 - G1.4-37: published imports test가 package나 파일을 건너뛰지 않고 모든 읽기, 해석 오류를 경로와 함께 보고한다.
 
 - G1.4-40: vt-core PTY test가 2초 timer로 판정하지 않고 event를 기다린다.

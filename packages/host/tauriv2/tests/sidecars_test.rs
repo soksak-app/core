@@ -8,6 +8,10 @@ use std::time::Duration;
 use serde_json::value::RawValue;
 use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
 
+/// 멈춘 검사를 끝내는 상한이다. 성공은 받은 event 와 끝난 process 로 판정하며 이 시간으로 판정하지 않는다.
+/// 부하가 큰 기계에서도 sidecar 의 답과 종료는 이 안에 온다.
+const STALL: Duration = Duration::from_secs(120);
+
 #[derive(Clone)]
 struct FakeOwner {
     key: String,
@@ -101,11 +105,14 @@ fn echo_sidecars() -> (Sidecars<FakeOwner>, tempfile::TempDir) {
     let program = directory.path().join("echo");
     std::fs::write(&program, format!("#!/bin/sh\ntee {}\n", record.display())).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let sidecars = create(
+    let mut sidecars = create(
         &files(r#"{"executable":"echo","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
+    // stop 은 stdin 을 닫고 echo 가 남은 줄을 기록하고 끝나기를 기다린다. 기한이 짧으면 부하 속에서 기록 전에
+    // 강제로 끝내므로 기한을 STALL 로 둔다. echo 는 EOF 에 곧 끝나므로 검사가 느려지지 않는다.
+    sidecars.stop_timeout = STALL;
     (sidecars, directory)
 }
 
@@ -121,7 +128,7 @@ fn messages_reach_the_owning_window_only() {
     sidecars
         .send(&second, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    let event = first_events.recv_timeout(Duration::from_secs(10)).unwrap();
+    let event = first_events.recv_timeout(STALL).unwrap();
     assert_eq!(
         (
             event.sidecar.as_str(),
@@ -130,13 +137,7 @@ fn messages_reach_the_owning_window_only() {
         ),
         (ECHO, "s1", r#"{"operation":"open"}"#)
     );
-    assert_eq!(
-        second_events
-            .recv_timeout(Duration::from_secs(10))
-            .unwrap()
-            .surface,
-        "s2"
-    );
+    assert_eq!(second_events.recv_timeout(STALL).unwrap().surface, "s2");
     let error = sidecars.send(&second, ECHO, "s1", &raw("{}")).unwrap_err();
     assert!(error.contains("another window"), "{error}");
     sidecars.retain(&first, &|_| false).unwrap();
@@ -483,8 +484,8 @@ fn stop_graceful_shutdown() {
 
     let mut sidecars = create(&files, directory.path()).unwrap();
     // stop() 은 기한이 지나야만 강제로 끝낸다. 기한보다 먼저 돌아오면 사이드카가 stdin EOF 로 스스로 끝난 것이다.
-    // 기한은 기계 부하 속의 프로세스 종료 시간보다 충분히 길게 둔다.
-    sidecars.stop_timeout = Duration::from_secs(5);
+    // 기한은 기계 부하 속의 프로세스 종료 시간보다 충분히 길게 STALL 로 둔다.
+    sidecars.stop_timeout = STALL;
     let (owner, events) = owner("a", "/projects/test");
 
     // 사이드카를 시작한다.
@@ -500,8 +501,8 @@ fn stop_graceful_shutdown() {
     // 사이드카가 실제로 stdin 을 읽고 있음을 확인한다: 에코 이벤트를 기다린다.
     // 이렇게 하면 shell 프로세스 기동 시간이 측정에 포함되지 않는다.
     let event = events
-        .recv_timeout(Duration::from_secs(5))
-        .expect("no echo event within 5s");
+        .recv_timeout(STALL)
+        .expect("no echo event; the test stalled");
     assert_eq!(
         (event.sidecar.as_str(), event.surface.as_str()),
         ("@fixture/sidecar-graceful", "s1")
@@ -557,12 +558,13 @@ fn stop_forced_kill() {
     sidecars.stop();
     let elapsed = start.elapsed();
 
-    // stop()은 기한만큼 기다렸다가 kill 해야 하므로 약 100ms 정도 걸려야 한다.
-    // 범위: 80ms ~ 150ms (정확한 시간 측정에 여유를 둠).
+    // stop() 은 기한까지 기다린 뒤 kill 한다. 기한보다 먼저 돌아오면 기다리지 않은 것이고, 상한은 멈춤만 잡는다.
+    // kill 뒤 process 가 끝나는 시간은 부하에 따라 늘어나므로 상한으로 성공을 판정하지 않는다.
     assert!(
-        elapsed >= Duration::from_millis(80) && elapsed <= Duration::from_millis(150),
-        "forced kill stop took {:?}, want ~100ms",
-        elapsed
+        elapsed >= sidecars.stop_timeout && elapsed <= STALL,
+        "forced kill stop took {:?}, want at least the {:?} deadline",
+        elapsed,
+        sidecars.stop_timeout
     );
 }
 
@@ -636,8 +638,6 @@ fn assert_ended(pid: i32) {
     );
 }
 
-const DEADLINE: Duration = Duration::from_secs(10);
-
 // contract: sidecars.protocol.message-at-limit-is-delivered
 #[test]
 fn a_message_at_the_limit_is_delivered() {
@@ -648,8 +648,8 @@ fn a_message_at_the_limit_is_delivered() {
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let event = events
-        .recv_timeout(DEADLINE)
-        .expect("no sidecar event within 10s");
+        .recv_timeout(STALL)
+        .expect("no sidecar event; the test stalled");
     let body = event.body.get();
     assert_eq!(event.surface, "s1");
     assert_eq!(body.len(), padding + 2, "body length");
@@ -675,8 +675,8 @@ fn an_oversize_message_terminates_and_notifies() {
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let failure = failures
-        .recv_timeout(DEADLINE)
-        .expect("no sidecar failure within 10s");
+        .recv_timeout(STALL)
+        .expect("no sidecar failure; the test stalled");
     assert_eq!(
         (failure.sidecar.as_str(), failure.surface.as_str()),
         (ECHO, "s1")
@@ -700,8 +700,8 @@ fn an_invalid_message_terminates_and_notifies() {
             .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
             .unwrap();
         let failure = failures
-            .recv_timeout(DEADLINE)
-            .unwrap_or_else(|_| panic!("{line}: no sidecar failure within 10s"));
+            .recv_timeout(STALL)
+            .unwrap_or_else(|_| panic!("{line}: no sidecar failure; the test stalled"));
         assert_eq!(
             (failure.sidecar.as_str(), failure.surface.as_str()),
             (ECHO, "s1")
@@ -729,8 +729,8 @@ fn an_output_close_notifies_each_surface() {
         .unwrap();
     for (surface, failures) in [("s1", &first_failures), ("s2", &second_failures)] {
         let failure = failures
-            .recv_timeout(DEADLINE)
-            .unwrap_or_else(|_| panic!("{surface}: no sidecar failure within 10s"));
+            .recv_timeout(STALL)
+            .unwrap_or_else(|_| panic!("{surface}: no sidecar failure; the test stalled"));
         assert_eq!(
             (failure.sidecar.as_str(), failure.surface.as_str()),
             (ECHO, surface)

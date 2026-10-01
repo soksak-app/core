@@ -753,8 +753,17 @@ impl<O: Owner> Sidecars<O> {
                     return;
                 };
 
-                // wait-timeout 크레이트를 사용하여 SIGCHLD 기반 대기 (폴링 없음)
-                match child.wait_timeout(remaining) {
+                // wait-timeout 크레이트를 사용하여 SIGCHLD 기반 대기 (폴링 없음).
+                // 크레이트는 남은 시간을 ms 로 내려 poll 에 넘기므로 기한보다 1ms 안쪽 먼저 돌아올 수 있다.
+                // 기한에 닿을 때까지 남은 시간만큼 다시 기다려 기한 전에 kill 하지 않는다.
+                let waited = loop {
+                    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                    match child.wait_timeout(remaining) {
+                        Ok(None) if !remaining.is_zero() => continue,
+                        other => break other,
+                    }
+                };
+                match waited {
                     Ok(Some(_status)) => {
                         // 정상 종료됨.
                     }

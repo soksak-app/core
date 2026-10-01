@@ -74,6 +74,9 @@ fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
 
 const ECHO: &str = "@fixture/sidecar-echo";
 
+/// 멈춘 검사를 끝내는 상한이다. 성공은 받은 event 로 판정하며 이 시간으로 판정하지 않는다.
+const STALL: Duration = Duration::from_secs(120);
+
 // contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one
 #[test]
 fn concurrent_hosts_share_an_authenticated_service_endpoint() {
@@ -153,20 +156,8 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     second
         .send(&second_owner, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(
-        first_events
-            .recv_timeout(Duration::from_secs(1))
-            .unwrap()
-            .surface,
-        "s1"
-    );
-    assert_eq!(
-        second_events
-            .recv_timeout(Duration::from_secs(1))
-            .unwrap()
-            .surface,
-        "s2"
-    );
+    assert_eq!(first_events.recv_timeout(STALL).unwrap().surface, "s1");
+    assert_eq!(second_events.recv_timeout(STALL).unwrap().surface, "s2");
     service.join().unwrap();
 }
 
@@ -269,20 +260,8 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     second
         .send(&second_owner, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(
-        first_events
-            .recv_timeout(Duration::from_secs(1))
-            .unwrap()
-            .surface,
-        "s1"
-    );
-    assert_eq!(
-        second_events
-            .recv_timeout(Duration::from_secs(1))
-            .unwrap()
-            .surface,
-        "s2"
-    );
+    assert_eq!(first_events.recv_timeout(STALL).unwrap().surface, "s1");
+    assert_eq!(second_events.recv_timeout(STALL).unwrap().surface, "s2");
     // 서비스가 두 연결을 끊게 한다. 끊김은 연결 이벤트로 기다린다(V5-106). 자동 재시작은
     // EOF 에만 반응하므로, 각 인스턴스의 연결 이벤트가 도착했다는 것이 서비스가 그 연결을
     // 끊었다는 증거다.
@@ -294,7 +273,7 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
         .unwrap();
     let await_revived = |label: &str, events: &Receiver<Message>| loop {
         let message = events
-            .recv_timeout(Duration::from_secs(10))
+            .recv_timeout(STALL)
             .unwrap_or_else(|error| panic!("{label} connection event: {error}"));
         let body = message.body.get();
         if body.contains(r#""event":"connection""#) {
@@ -324,32 +303,19 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
             &raw(r#"{"operation":"reconnect"}"#),
         )
         .unwrap();
-    // package suite는 여러 test binary를 동시에 실행한다. case timeout은 제한된 값으로 유지하되,
-    // reconnect contract가 1초 scheduler slice에 의존하게 만들지 않는다.
-    let reconnect_timeout = Duration::from_secs(10);
-    assert_eq!(
-        first_events
-            .recv_timeout(reconnect_timeout)
-            .unwrap()
-            .surface,
-        "s1"
-    );
-    assert_eq!(
-        second_events
-            .recv_timeout(reconnect_timeout)
-            .unwrap()
-            .surface,
-        "s2"
-    );
+    assert_eq!(first_events.recv_timeout(STALL).unwrap().surface, "s1");
+    assert_eq!(second_events.recv_timeout(STALL).unwrap().surface, "s2");
 
     // 서비스는 close-owner 에 실패로 답한다. 종료는 제한 시간까지 기다리지 않고 바로 끝난다.
     let stopping = std::time::Instant::now();
     first.stop();
     second.stop();
     let elapsed = stopping.elapsed();
+    // 실패한 close-owner 답은 stop 의 기한을 기다리지 않고 끝난다. 기한까지 걸렸으면 답을 기다리지 않은 것이다.
     assert!(
-        elapsed <= Duration::from_secs(1),
-        "close-owner failure was not reported promptly: {elapsed:?}"
+        elapsed < first.stop_timeout,
+        "close-owner failure was not reported before the {:?} stop deadline: {elapsed:?}",
+        first.stop_timeout
     );
     service.join().unwrap();
 }
@@ -532,10 +498,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     sidecars
         .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(
-        events.recv_timeout(Duration::from_secs(1)).unwrap().surface,
-        "surface"
-    );
+    assert_eq!(events.recv_timeout(STALL).unwrap().surface, "surface");
     assert!(
         !service_directory.join("endpoint.json").exists(),
         "stale endpoint was not removed before the replacement path"
@@ -732,7 +695,7 @@ fn persistent_retain_sends_layout_and_known_surfaces() {
         2,
         "the service's closed count"
     );
-    let empty = received.recv_timeout(Duration::from_secs(5)).unwrap();
+    let empty = received.recv_timeout(STALL).unwrap();
     assert_eq!(empty["surfaces"], serde_json::json!([]), "no kept surface");
     let (owner, _events) = owner("retain", "/live");
     sidecars
@@ -742,7 +705,7 @@ fn persistent_retain_sends_layout_and_known_surfaces() {
         .retain_sessions(&[("listed".to_string(), "/project".to_string())])
         .unwrap();
     assert_eq!(closed, 2, "the service's closed count");
-    let request = received.recv_timeout(Duration::from_secs(5)).unwrap();
+    let request = received.recv_timeout(STALL).unwrap();
     assert_eq!(
         request["surfaces"],
         serde_json::json!([
@@ -845,13 +808,10 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
     sidecars
         .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(
-        events.recv_timeout(Duration::from_secs(1)).unwrap().surface,
-        "s1"
-    );
+    assert_eq!(events.recv_timeout(STALL).unwrap().surface, "s1");
 
     // 연결이 끊기면 전송 없이 다시 맞아야 한다 — 연결 이벤트가 그 증거다(V5-106).
-    let revived = events.recv_timeout(Duration::from_secs(10)).unwrap();
+    let revived = events.recv_timeout(STALL).unwrap();
     assert_eq!(revived.surface, "s1");
     let notice: serde_json::Value = serde_json::from_str(revived.body.get()).unwrap();
     assert_eq!(notice["event"], "connection");
@@ -861,7 +821,7 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
     sidecars
         .send(&owner, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
-    let echoed = events.recv_timeout(Duration::from_secs(10)).unwrap();
+    let echoed = events.recv_timeout(STALL).unwrap();
     assert_eq!(echoed.surface, "s1");
     assert!(echoed.body.get().contains(r#""operation":"input""#));
 
@@ -921,14 +881,11 @@ fn persistent_transport_reports_a_failed_revive_to_the_owner() {
     sidecars
         .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(
-        events.recv_timeout(Duration::from_secs(1)).unwrap().surface,
-        "s1"
-    );
+    assert_eq!(events.recv_timeout(STALL).unwrap().surface, "s1");
     service.join().unwrap();
 
     // 재시작이 실패하면 연결 끊김과 그 까닭이 표면에 알려진다(V5-106).
-    let failure = events.recv_timeout(Duration::from_secs(10)).unwrap();
+    let failure = events.recv_timeout(STALL).unwrap();
     assert_eq!(failure.surface, "s1");
     let notice: serde_json::Value = serde_json::from_str(failure.body.get()).unwrap();
     assert_eq!(notice["event"], "connection");

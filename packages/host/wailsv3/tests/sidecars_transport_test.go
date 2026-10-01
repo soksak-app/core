@@ -186,13 +186,22 @@ func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t 
 	for _, owner := range []*harnessOwner{firstOwner, secondOwner} {
 		select {
 		case <-owner.seen:
-		case <-time.After(time.Second):
-			t.Fatal("no initial event")
+		case <-time.After(stall):
+			t.Fatal("no initial event; the test stalled")
 		}
 	}
-	time.Sleep(20 * time.Millisecond)
-
-	// 처음 두 socket 이 모두 끊긴다. 다음 send 는 endpoint 재사용과 재연결을 검증한다.
+	// 처음 두 socket 이 모두 끊긴다. host 는 곧바로 다시 맺고 연결 이벤트를 보낸다. 그 이벤트를 받은 뒤의
+	// send 는 다시 맺은 연결로 가므로 endpoint 재사용과 재연결을 검증한다.
+	for _, owner := range []*harnessOwner{firstOwner, secondOwner} {
+		select {
+		case event := <-owner.seen:
+			if string(event.Body) != `{"connected":true,"event":"connection"}` {
+				t.Fatalf("event after the connection loss = %s, want the connection event", event.Body)
+			}
+		case <-time.After(stall):
+			t.Fatal("no connection event; the test stalled")
+		}
+	}
 	if err := first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"reconnect"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -201,17 +210,21 @@ func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t 
 	}
 	for _, owner := range []*harnessOwner{firstOwner, secondOwner} {
 		select {
-		case <-owner.seen:
-		case <-time.After(time.Second):
-			t.Fatal("no reconnect event")
+		case event := <-owner.seen:
+			if string(event.Body) != `{"operation":"reconnect"}` {
+				t.Fatalf("reconnect event = %s", event.Body)
+			}
+		case <-time.After(stall):
+			t.Fatal("no reconnect event; the test stalled")
 		}
 	}
 
 	startStop := time.Now()
 	first.Stop()
 	second.Stop()
-	if elapsed := time.Since(startStop); elapsed > time.Second {
-		t.Fatalf("close-owner failure was not reported promptly: %s", elapsed)
+	// 실패한 close-owner 답은 Stop 의 기한을 기다리지 않고 끝난다. 기한까지 걸렸으면 답을 기다리지 않은 것이다.
+	if elapsed := time.Since(startStop); elapsed >= first.StopTimeout {
+		t.Fatalf("close-owner failure was not reported before the %s stop deadline: %s", first.StopTimeout, elapsed)
 	}
 	if err := <-serverDone; err != nil {
 		t.Fatal(err)
@@ -244,7 +257,7 @@ func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
 			return
 		}
 		defer connection.Close()
-		if err := connection.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		if err := connection.SetReadDeadline(time.Now().Add(stall)); err != nil {
 			serverDone <- err
 			return
 		}
@@ -512,8 +525,8 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 		if event.Surface != "surface" {
 			t.Fatalf("unexpected surface: %s", event.Surface)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("no replacement event")
+	case <-time.After(stall):
+		t.Fatal("no replacement event; the test stalled")
 	}
 	if _, err := os.Stat(filepath.Join(serviceDir, "endpoint.json")); !os.IsNotExist(err) {
 		t.Fatalf("stale endpoint was not removed: %v", err)
@@ -867,8 +880,8 @@ func receiveSidecarMessage(t *testing.T, seen <-chan SidecarMessage) SidecarMess
 	select {
 	case message := <-seen:
 		return message
-	case <-time.After(10 * time.Second):
-		t.Fatal("no sidecar message arrived within 10s")
+	case <-time.After(stall):
+		t.Fatalf("no sidecar message arrived within %v; the test stalled", stall)
 		return SidecarMessage{}
 	}
 }

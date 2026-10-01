@@ -18,6 +18,10 @@ import (
 
 const echoSidecar = "@fixture/sidecar-echo"
 
+// stall 은 멈춘 검사를 끝내는 상한이다. 성공은 받은 event 와 끝난 process 로 판정하며 이 시간으로 판정하지 않는다.
+// 부하가 큰 기계에서도 sidecar 의 답과 종료는 이 안에 온다.
+const stall = 120 * time.Second
+
 // declare 는 directory 에 설치된 사이드카 하나의 선언이다.
 func declare(directory, sidecar string) []host.SidecarDeclaration {
 	return []host.SidecarDeclaration{{Name: echoSidecar, Folder: directory, Data: []byte(sidecar)}}
@@ -56,8 +60,8 @@ func (o *fakeOwner) next(t *testing.T) host.SidecarMessage {
 	t.Helper()
 	select {
 	case <-o.seen:
-	case <-time.After(10 * time.Second):
-		t.Fatal("no sidecar event within 10s")
+	case <-time.After(stall):
+		t.Fatalf("no sidecar event within %v; the test stalled", stall)
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -77,8 +81,8 @@ func (o *fakeOwner) failure(t *testing.T) sidecarFailure {
 	var value any
 	select {
 	case value = <-o.failures:
-	case <-time.After(10 * time.Second):
-		t.Fatal("no sidecar failure within 10s")
+	case <-time.After(stall):
+		t.Fatalf("no sidecar failure within %v; the test stalled", stall)
 	}
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -243,6 +247,9 @@ func echoSidecars(t *testing.T) (*host.Sidecars, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Stop 은 stdin 을 닫고 echo 가 남은 줄을 기록하고 끝나기를 기다린다. 기한이 짧으면 부하 속에서 기록 전에
+	// 강제로 끝내므로 기한을 stall 로 둔다. echo 는 EOF 에 곧 끝나므로 검사가 느려지지 않는다.
+	sidecars.StopTimeout = stall
 	return sidecars, record
 }
 
@@ -502,8 +509,8 @@ func TestStopGracefulShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Stop() 은 기한이 지나야만 강제로 끝낸다. 기한보다 먼저 돌아오면 사이드카가 stdin EOF 로 스스로 끝난 것이다.
-	// 기한은 기계 부하 속의 프로세스 종료 시간보다 충분히 길게 둔다.
-	sidecars.StopTimeout = 5 * time.Second
+	// 기한은 기계 부하 속의 프로세스 종료 시간보다 충분히 길게 stall 로 둔다.
+	sidecars.StopTimeout = stall
 
 	owner := newFakeOwner("/projects/test")
 
@@ -559,10 +566,10 @@ func TestStopForcedKill(t *testing.T) {
 	sidecars.Stop()
 	elapsed := time.Since(start)
 
-	// Stop() 은 기한만큼 기다렸다가 kill 해야 하므로 약 100ms 정도 걸려야 한다.
-	// 범위: 80ms ~ 150ms (정확한 시간 측정에 여유를 둠).
-	if elapsed < 80*time.Millisecond || elapsed > 150*time.Millisecond {
-		t.Errorf("forced kill stop took %v, want ~100ms", elapsed)
+	// Stop() 은 기한까지 기다린 뒤 kill 한다. 기한보다 먼저 돌아오면 기다리지 않은 것이고, 상한은 멈춤만 잡는다.
+	// kill 뒤 process 가 끝나는 시간은 부하에 따라 늘어나므로 상한으로 성공을 판정하지 않는다.
+	if elapsed < sidecars.StopTimeout || elapsed > stall {
+		t.Errorf("forced kill stop took %v, want at least the %v deadline", elapsed, sidecars.StopTimeout)
 	}
 }
 

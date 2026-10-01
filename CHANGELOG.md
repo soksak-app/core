@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-38: the Tauri host no longer kills a stopping sidecar up to 1 ms before the stop deadline; the host sidecar tests wait for events and process ends instead of judging by 1–10 s timers.
+
 - G1.4-37: the published imports test reports every read and parse error with its path instead of skipping the package or file.
 
 - G1.4-40: the vt-core PTY tests wait for events instead of judging by a 2 s timer.

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-	"time"
 
 	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
 )
@@ -137,7 +136,7 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = 10 * time.Second // Stop() 이 cat 이 5MB 를 받을 만큼 충분히 기다리게 한다
+	sidecars.StopTimeout = stall // Stop() 이 cat 이 5MB 를 받고 끝날 때까지 기다리게 한다. 기한은 멈춤만 잡는다
 	owner := newFakeOwner("/p")
 
 	// 표면 등록

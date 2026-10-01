@@ -75,8 +75,8 @@ func (o *fakeImageOwner) next(t *testing.T) host.SidecarMessage {
 	t.Helper()
 	select {
 	case <-o.seen:
-	case <-time.After(10 * time.Second):
-		t.Fatal("no sidecar event within 10s")
+	case <-time.After(stall):
+		t.Fatalf("no sidecar event within %v; the test stalled", stall)
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
