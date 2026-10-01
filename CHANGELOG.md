@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-41: the browser theme window checks sample the document in frame pixels, so they pass on a 2x display; the system appearance was not the cause.
+
 - G1.4-45: the terminal selection window check measures the selected cells in frame pixels, so it passes on a 2x display.
 
 - F0.4-1-1-1: a stdio sidecar message for a closed surface is discarded, and a message for a surface the host never sent to that process fails the sidecar with `unknown surface <surface>`.

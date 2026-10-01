@@ -95,9 +95,10 @@ async function documentPixel(t, s, surface, at = (rect) => ({ x: rect.x + rect.w
   const files = frames(result.frames);
   assert.ok(files.length > 0, "document pixel capture produced no frames");
   const frame = readFrame(files.at(-1));
+  // 창 좌표는 point 이고 frame 은 device pixel 이므로 frame 배율을 곱한다.
   const point = at(rect);
-  const x = Math.floor(point.x);
-  const y = Math.floor(point.y);
+  const x = Math.floor(point.x * frame.scale);
+  const y = Math.floor(point.y * frame.scale);
   assert.ok(x >= 0 && y >= 0 && x < frame.width && y < frame.height,
     `document sample ${x},${y} is outside ${frame.width}×${frame.height}`);
   const value = pixel(frame, x, y);
