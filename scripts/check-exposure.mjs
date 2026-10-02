@@ -6,119 +6,48 @@
 //   2. 선언한 status 와 명령은 등록되고, 선언한 dom 이름은 요소에 붙는 값으로 적혀 있다.
 // 조작 요소가 명령과 dom 이름을 갖는지는 실행 중인 문서의 audit(core.page.audit,
 // core.surface.document 의 unbound)가 판단한다. 소스 모양으로 추측하지 않는다.
-// 워크벤치(코어)를 검사한다. 플러그인 페이지는 각 플러그인 repository 가 검사한다.
+// 워크벤치(코어)를 검사한다. 검사 규칙은 plugin-api 의 exposure-check.js 에 있고, 플러그인 페이지는 각 플러그인
+// repository 가 그 모듈로 검사한다. --write 는 plugin-api 의 core-exposure.json 을 워크벤치 선언으로 다시 쓴다.
 //
-//   node scripts/check-exposure.mjs
-import { readFileSync, readdirSync, statSync } from "node:fs";
+//   node scripts/check-exposure.mjs [--write]
+import { readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { auditExposure, sourceFiles } from "../packages/plugin-api/exposure-check.js";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 const WORKBENCH = join(ROOT, "packages/workbench");
-
-/* 공개 이름이 아닌 따옴표 안의 점 이름. 파일 이름이다. */
-const FILE = /\.(html|js|mjs|json|css)$/;
+// plugin repository 는 코어 선언의 이름을 plugin-api 의 이 파일에서 읽는다. 워크벤치 선언에서 만든다.
+const CORE_EXPOSURE = join(ROOT, "packages/plugin-api/core-exposure.json");
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 
-function* files(dir, test) {
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) {
-      if (!["node_modules", "test", "dist", "build"].includes(name)) yield* files(path, test);
-    } else if (test(name)) {
-      yield path;
-    }
-  }
-}
-
-const errors = [];
-const report = (path, index, text) => errors.push(`${relative(ROOT, path)}:${index + 1}: ${text}`);
-
-/** 한 구성 요소(코어 또는 플러그인 하나)를 검사한다. */
-function check({ owner, exposes, sources, registrations, sections = new Set(), core = null }) {
-  const declared = {
-    status: new Set((exposes.status ?? []).map((e) => e.name)),
-    command: new Set((exposes.commands ?? []).map((e) => e.name)),
-    dom: new Set((exposes.dom ?? []).map((e) => e.name)),
+/** 워크벤치 선언의 status 와 명령 이름. plugin-api 의 core-exposure.json 의 내용이다. */
+export function coreExposureNames(exposes) {
+  return {
+    status: (exposes.status ?? []).map((e) => e.name),
+    commands: (exposes.commands ?? []).map((e) => e.name),
   };
-  const any = (name) => declared.status.has(name) || declared.command.has(name) || declared.dom.has(name);
-  const quoted = new RegExp(`["'\`](${owner}\\.[a-z0-9-]+(?:\\.[a-z0-9-]+)*)["'\`]`, "g");
-  const shown = new Set();
-  const texts = [];
-
-  for (const path of sources) {
-    const text = readFileSync(path, "utf8");
-    texts.push(text);
-    const lines = text.split("\n");
-    lines.forEach((line, index) => {
-      // 1. 이름
-      if (sections.has(path)) {
-        for (const [, name] of line.matchAll(/["'`](core\.[a-z0-9-]+(?:\.[a-z0-9-]+)*)["'`]/g)) {
-          if (!core.status.has(name) && !core.command.has(name)) report(path, index, `${name} is not a declared core status or command`);
-        }
-      }
-      for (const [, name] of line.matchAll(quoted)) {
-        if (!FILE.test(name) && !any(name)) report(path, index, `${name} is not declared`);
-      }
-      for (const [, name] of line.matchAll(/data-command=["']([^"']+)["']/g)) {
-        if (!declared.command.has(name)) report(path, index, `data-command ${name} is not a declared command`);
-      }
-      for (const [, name] of line.matchAll(/\b(?:mark|bind)\(\s*\w+(?:\.\w+|\([^)]*\))*\s*,\s*["']([^"']+)["']/g)) {
-        // 섹션 모듈은 코어 명령도 연결할 수 있다(docs/spec/plugins.md#sections).
-        const coreCommand = sections.has(path) && core?.command.has(name);
-        if (!declared.command.has(name) && !coreCommand) report(path, index, `${name} is bound to an element but is not a declared command`);
-      }
-      for (const [, name] of line.matchAll(/\b(?:run|command)\(\s*["']([^"']+)["']/g)) {
-        if (!declared.command.has(name)) report(path, index, `${name} is run but is not a declared command`);
-      }
-      const domNames = [
-        ...[...line.matchAll(/data-expose=["']([^"']+)["']/g)].map((m) => m[1]),
-        ...[...line.matchAll(/[Ee]xpose\s*[:=]\s*["']([^"']+)["']/g)].map((m) => m[1]),
-        ...(line.includes("dataset.expose") ? [...line.matchAll(quoted)].map((m) => m[1]) : []),
-        ...[...line.matchAll(/(?:expose|context\.exposure)\.dom\(\s*["']([^"']+)["']/g)].map((m) => m[1]),
-      ];
-      // 이름을 인자로 받아 요소에 붙이는 함수(act, field 등)도 있으므로, 선언된 dom
-      // 이름이 따옴표로 적힌 곳은 표시한 곳으로 센다.
-      for (const [, name] of line.matchAll(quoted)) if (declared.dom.has(name)) shown.add(name);
-      for (const name of domNames) {
-        if (name.includes("${")) continue;
-        shown.add(name);
-        if (!declared.dom.has(name)) report(path, index, `data-expose ${name} is not a declared dom entry`);
-      }
-    });
-  }
-
-  // 2. 등록과 표시
-  const all = texts.join("\n") + registrations.map((path) => readFileSync(path, "utf8")).join("\n");
-  const where = owner === "core" ? "packages/workbench" : `plugins (${owner})`;
-  for (const name of declared.status) {
-    const pattern = owner === "core" ? `status\\(\\s*"${name}"` : `(?:expose|context\\.exposure)\\.status\\(\\s*["']${name}["']`;
-    if (!new RegExp(pattern).test(all)) errors.push(`${where}: status ${name} is declared but not registered`);
-  }
-  for (const name of declared.command) {
-    const pattern = owner === "core" ? `(?:registry|expose)\\.command\\(\\s*"${name}"` : `(?:expose|context\\.exposure)\\.command\\(\\s*["']${name}["']`;
-    if (!new RegExp(pattern).test(all)) errors.push(`${where}: command ${name} is declared but not registered`);
-  }
-  for (const name of declared.dom) {
-    if (!shown.has(name)) errors.push(`${where}: dom ${name} is declared but no element carries it`);
-  }
 }
 
-const workbenchSources = [...files(WORKBENCH, (name) => /\.(js|html)$/.test(name) && !name.endsWith(".mjs"))];
 const coreExposes = readJson(join(WORKBENCH, "exposure.json")).exposes;
-const coreDeclared = {
-  status: new Set((coreExposes.status ?? []).map((e) => e.name)),
-  command: new Set((coreExposes.commands ?? []).map((e) => e.name)),
-};
-check({
+const names = `${JSON.stringify(coreExposureNames(coreExposes), null, 2)}\n`;
+const errors = [];
+if (process.argv.includes("--write")) writeFileSync(CORE_EXPOSURE, names);
+if (readFileSync(CORE_EXPOSURE, "utf8") !== names) {
+  errors.push("packages/plugin-api/core-exposure.json differs from packages/workbench/exposure.json; run node scripts/check-exposure.mjs --write");
+}
+const sources = [...sourceFiles(WORKBENCH, (name) => /\.(js|html)$/.test(name) && !name.endsWith(".mjs"))]
+  .map((path) => ({ path: relative(ROOT, path), text: readFileSync(path, "utf8") }));
+errors.push(...auditExposure({
   owner: "core",
+  where: "packages/workbench",
   exposes: coreExposes,
-  sources: workbenchSources,
+  sources,
   // 코어 표면 항목(core.surface.*)은 플러그인 페이지 인터페이스가 등록한다.
-  registrations: [join(ROOT, "packages/plugin-api/page.js")],
-});
+  registrations: [readFileSync(join(ROOT, "packages/plugin-api/page.js"), "utf8")],
+}));
 
-// plugin 의 선언은 각 plugin repository 가 검사한다(docs/spec/plugins.md#repositories).
+// plugin 의 선언은 각 plugin repository 가 plugin-api 의 soksak-exposure 로 검사한다(docs/spec/plugins.md#repositories).
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exitCode = 1;
