@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-59: the empty-state check waits for the address field focus before it types.
 - G1.4-58: a folded card sidebar opens by click or drag whenever it fits; sides that do not fit together are shown smaller, and the card status line names a side folded for lack of space.
 - G1.4-56: a folded card sidebar shows a short grip in the divider grip colours instead of a line along the side or a tick across it.
 - G1.4-57: the placement check links a terminal card sidebar before it toggles it, because the default layout has none.

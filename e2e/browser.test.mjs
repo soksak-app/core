@@ -244,6 +244,10 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(await s.run("host.hit", point), { kind: "page" },
       "the empty state point does not belong to the page");
     await s.click(point.x, point.y);
+    // 빈 상태의 누름은 browser.address.select 명령을 거쳐 주소창에 초점을 준다. 그 명령은 누름 뒤에 비동기로
+    // 실행되므로, 초점이 옮겨진 것을 core.focus 로 확인한 뒤 입력한다.
+    await s.until("core.focus", (focus) => focus?.name === "browser.address" && focus.surface === surface,
+      "a click on the empty state did not focus the address field");
     await s.press("a", { text: `${base}/empty` });
     await s.press("Enter");
     await loaded(s, surface, `${base}/empty`);
