@@ -58,10 +58,12 @@ export function setSidebar(card, side, choice, sets) {
   else next.set = choice;
   store(card, side, next);
 }
-export function toggleSidebar(card, side, defaults, linked) {
+/** 클릭은 보이는 상태를 뒤집는다: 접혀 보이는 면(shownCollapsed)은 열고, 열려 보이는 면은 접는다. */
+export function toggleSidebar(card, side, defaults, linked, shownCollapsed) {
   const current = effectiveSidebar(card, side, defaults, linked);
   if (current === null) throw new Error(`card ${String(card.id)} has no ${String(side)} sidebar`);
-  store(card, side, { ...state(card, side), collapsed: !current.collapsed });
+  if (typeof shownCollapsed !== "boolean") throw new Error(`card ${String(card.id)} has no shown ${String(side)} sidebar state`);
+  store(card, side, { ...state(card, side), collapsed: !shownCollapsed });
 }
 export function sizeSidebar(card, side, size, defaults, linked) {
   const current = effectiveSidebar(card, side, defaults, linked);
@@ -69,7 +71,8 @@ export function sizeSidebar(card, side, size, defaults, linked) {
   if (!Number.isFinite(size) || size < defaults.min || size > defaults.max) {
     throw new Error(`sidebar size must be ${defaults.min} to ${defaults.max} points`);
   }
-  store(card, side, { ...state(card, side), size });
+  // 끌기는 면을 연다.
+  store(card, side, { ...state(card, side), collapsed: false, size });
 }
 
 /**
@@ -81,22 +84,64 @@ export function deviceGridSize(size, ratio) {
   return Math.round(size * ratio) / ratio;
 }
 
-// 저장된 펼침 선택을 현재 카드 공간에 적용한다. 부족한 축의 요청만 자동으로 접는다.
-export function presentSidebars(requested, rect, metrics) {
-  const values=[rect.w,rect.h,metrics.header,metrics.footer,metrics.border,metrics.divider,metrics.minimum];
+// 저장된 펼침 선택을 현재 카드 공간에 적용한다(docs/spec/example-model.md). 저장된 크기와 선택은 바꾸지 않고, 보이는
+// 크기(shownSize)와 공간 부족에 따른 자동 접힘만 정한다. prefer 는 축마다 마지막으로 조작한 면이다.
+export function presentSidebars(requested, rect, metrics, prefer = {}) {
+  const values=[rect.w,rect.h,metrics.header,metrics.footer,metrics.border,metrics.divider,metrics.minimum,metrics.sidebarMinimum];
   if(values.some(value=>!Number.isFinite(value)||value<0)||metrics.minimum===0) throw new Error('invalid sidebar presentation geometry');
-  const extent=side=>requested[side]?(requested[side].collapsed?metrics.divider:requested[side].size):0;
-  const insufficient={
-    width:rect.w-2*metrics.border-extent('left')-extent('right')<metrics.minimum,
-    height:rect.h-2*metrics.border-metrics.header-metrics.footer-extent('top')-extent('bottom')<metrics.minimum,
-  };
-  return Object.fromEntries(Object.entries(requested).map(([side,state])=>{
+  for(const [side,state] of Object.entries(requested)){
     assertSide(side);
     if(!state||!Number.isFinite(state.size)||state.size<0||typeof state.collapsed!=='boolean') throw new Error('invalid sidebar presentation state');
-    const axis=side==='left'||side==='right'?'width':'height';
-    const autoCollapsed=!state.collapsed&&insufficient[axis];
-    // 기본값: 없음. 표시 접힘은 요청한 접힘과 공간 부족에 따른 자동 접힘의 합이다.
-    return [side,{...state,requestedCollapsed:state.collapsed,collapsed:state.collapsed||autoCollapsed,
-      autoCollapsed,collapseReason:autoCollapsed?`insufficient-${axis}`:null}];
-  }));
+  }
+  const result={};
+  const axes={width:['left','right'],height:['top','bottom']};
+  for(const [axis,sides] of Object.entries(axes)){
+    const present=sides.filter(side=>requested[side]);
+    const chosenFolded=present.filter(side=>requested[side].collapsed);
+    const open=present.filter(side=>!requested[side].collapsed);
+    const extent=axis==='width'?rect.w-2*metrics.border:rect.h-2*metrics.border-metrics.header-metrics.footer;
+    const room=extent-metrics.minimum-chosenFolded.length*metrics.divider;
+    const shown={};
+    const total=open.reduce((sum,side)=>sum+requested[side].size,0);
+    if(total<=room){
+      for(const side of open) shown[side]=requested[side].size;
+    }else{
+      const scaled=Object.fromEntries(open.map(side=>[side,requested[side].size*room/total]));
+      if(open.every(side=>scaled[side]>=metrics.sidebarMinimum)){
+        Object.assign(shown,scaled);
+      }else{
+        // 기본값: 조작 전에는 위나 왼쪽을 먼저 연다.
+        const first=open.includes(prefer[axis])?prefer[axis]:open[0];
+        const alone=Math.min(requested[first].size,room-(open.length-1)*metrics.divider);
+        if(alone>=metrics.sidebarMinimum) shown[first]=alone;
+      }
+    }
+    for(const side of present){
+      const state=requested[side];
+      const autoCollapsed=!state.collapsed&&!Object.hasOwn(shown,side);
+      result[side]={...state,requestedCollapsed:state.collapsed,collapsed:state.collapsed||autoCollapsed,
+        autoCollapsed,collapseReason:autoCollapsed?`insufficient-${axis}`:null,
+        // 기본값: 접힌 면은 손잡이 폭만 차지하므로 보이는 크기가 없다(null).
+        shownSize:Object.hasOwn(shown,side)?shown[side]:null};
+    }
+  }
+  return result;
+}
+
+const SIDE_NAMES = { top: "위", bottom: "아래", left: "왼쪽", right: "오른쪽" };
+
+/** 카드 사이드바 면의 한국어 이름. */
+export function sideName(side) {
+  const name = SIDE_NAMES[side];
+  if (name === undefined) throw new Error(`unknown sidebar side ${side}`);
+  return name;
+}
+
+/**
+ * 사용자가 펼쳤지만 공간이 부족해 접혀 있는 면을 알리는 상태 줄 문구. 그런 면이 없으면 null 이다. 손잡이를 눌러도
+ * 공간이 생기기 전에는 펼쳐지지 않으므로 상태 줄이 그 이유를 보인다.
+ */
+export function spaceFoldText(presentation) {
+  const sides = SIDEBAR_SIDES.filter((side) => presentation[side]?.autoCollapsed && !presentation[side].requestedCollapsed);
+  return sides.length === 0 ? null : `${sides.map(sideName).join("·")} 사이드바: 공간 부족으로 접힘`;
 }

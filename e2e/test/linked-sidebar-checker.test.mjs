@@ -40,17 +40,17 @@ async function check(fault) {
       const panel = card.sidebars[params.side],
         own = saved[params.side];
       if (name === "core.card.sidebar.toggle") {
+        // 클릭은 보이는 상태를 뒤집어 저장한다. 공간 부족으로 접혀 보이는 면은 펼침을 저장한다.
         if (fault !== "noop-fold") {
-          Object.assign(panel, {
-            collapsed: true,
-            requestedCollapsed: true,
-            autoCollapsed: false,
-            collapseReason: null,
-          });
-          own.collapsed = true;
+          const stored = !panel.collapsed;
+          Object.assign(panel, { requestedCollapsed: stored, collapsed: stored || panel.autoCollapsed });
+          own.collapsed = stored;
         }
       } else if (name === "core.card.sidebar.size") {
+        // 끌기는 크기와 펼침을 저장한다.
         panel.size = params.size;
+        Object.assign(panel, { requestedCollapsed: false, collapsed: panel.autoCollapsed });
+        own.collapsed = false;
         if (fault !== "unsaved-size") own.size = params.size;
       } else throw new Error("unexpected command " + name);
       if (fault === "explicit-set") own.set = panel.set;

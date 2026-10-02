@@ -137,6 +137,58 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`fractional panels at ${scale}x ${JSON.stringify({ declared: surface.declared, applied: surface.applied })}`);
   });
 
+  // 보고된 상태: 높이 342pt 카드의 위·아래 패널. 공간 부족으로 접힌 면은 클릭으로 열리고, 접힌 면을 끌면 포인터가
+  // 최소 크기에 닿을 때 그 자리에서 열린다(docs/spec/example-model.md).
+  test(`${app.name}: a click opens a side folded for lack of space and a drag opens a folded side under the pointer`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    await keepCommonSettings(s);
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs?.some((tab) => tab.plugin === "terminal"));
+    assert.ok(card, "no terminal card");
+    const set = (await s.get("core.settings")).values.sets[0];
+    for (const side of ["top", "bottom"]) await s.run("core.card.sidebar.set", { card: card.id, side, set: set.id });
+    const panelsOf = (grid) => grid.cards.find((item) => item.id === card.id).sidebars;
+    let grid = await s.until("core.grid", (value) => panelsOf(value).bottom?.autoCollapsed === true,
+      "the bottom panel did not fold for lack of space");
+    const room = grid.cards.find((item) => item.id === card.id).h - 2 - 54 - 96;
+    assert.ok(room < 380 && room - 6 >= 120, `the fixture card must fit one 190-point side but not two: room ${room}`);
+    assert.equal(panelsOf(grid).top.collapsed, false, "the top panel must open while the bottom folds");
+    await s.presented();
+    // core.card.sidebar.grip 은 그린 순서(위, 아래)의 손잡이다.
+    const gripOf = async (side) => {
+      const grips = [];
+      for (let index = 0; index < 2; index++) grips.push(await s.rect("core.card.sidebar.grip", index));
+      grips.sort((a, b) => a.y - b.y);
+      return side === "top" ? grips[0] : grips[1];
+    };
+    const bottom = await gripOf("bottom");
+    await s.click(bottom.x + bottom.width / 2, bottom.y + bottom.height / 2);
+    grid = await s.until("core.grid", (value) => panelsOf(value).bottom.collapsed === false,
+      "a click on the bottom panel folded for lack of space did not open it");
+    const opened = panelsOf(grid);
+    assert.ok(Math.abs(opened.bottom.shownSize - Math.min(190, room - 6)) <= 1.5, `bottom shown size ${opened.bottom.shownSize}`);
+    assert.equal(opened.top.autoCollapsed, true, "the top panel must fold when the clicked bottom panel opens");
+    assert.equal(opened.top.size, 190, "the stored size changed");
+    await s.presented();
+    // 접힌 위를 30pt 끌면 최소 크기에 닿지 않으므로 접힌 채 있고, 150pt 끌면 6 + 150 = 156pt 로 열린다.
+    const top = await gripOf("top");
+    const x = top.x + top.width / 2, y = top.y + top.height / 2;
+    await s.pointer(x, y, "down");
+    for (const dy of [10, 20, 30]) await s.pointer(x, y + dy, "drag");
+    await s.presented();
+    assert.equal(panelsOf(await s.get("core.grid")).top.collapsed, true, "a drag shorter than the minimum opened the top panel");
+    for (const dy of [60, 90, 120, 150]) await s.pointer(x, y + dy, "drag");
+    await s.pointer(x, y + 150, "up");
+    // 끌기는 여러 크기 명령을 차례로 보내므로 마지막 포인터 위치의 크기까지 기다린다.
+    grid = await s.until("core.grid", (value) => panelsOf(value).top.collapsed === false && Math.abs(panelsOf(value).top.size - 156) <= 1,
+      "a drag past the minimum did not open the top panel at the pointer");
+    const dragged = panelsOf(grid);
+    assert.ok(Math.abs(dragged.top.size - 156) <= 1 && Math.abs(dragged.top.shownSize - 156) <= 1,
+      `the top edge must follow the pointer at 156 points: ${JSON.stringify(dragged.top)}`);
+    t.diagnostic(`room ${room}; click: ${JSON.stringify(opened)}; drag: ${JSON.stringify(dragged)}`);
+  });
+
   test(`${app.name}: a card carries assigned panels on all four sides regardless of the active tab`, {timeout:60000}, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built; four-side assignment was not observed`);
@@ -172,11 +224,18 @@ for (const app of Object.values(APPS)) {
     assert.ok(assigned.h-56-380<96,'the normal fixture must have insufficient height for two 190-point sides');
     assert.ok(assigned.w-2-380>=96,'the normal fixture must retain sufficient width for two 190-point sides');
     const saved=(await s.get('core.layout')).state.cards.find(item=>item.id===card0.id).data.sidebars;
+    // 높이에는 190 두 개가 최소 크기로도 들어가지 않으므로, 조작 전 우선인 위가 들어가는 크기로 열리고 아래만 접힌다
+    // (docs/spec/example-model.md). 높이 공간은 카드 높이에서 테두리 2, 머리와 발 54, 내용 최소 96 을 뺀 값이다.
+    const room=assigned.h-2-54-96;
     for (const side of ["top", "bottom", "left", "right"]) {
-      const autoCollapsed=side==='top'||side==='bottom';
-      assert.deepEqual(panels[side], { set: set.id, size: 190, collapsed: autoCollapsed,
+      const autoCollapsed=side==='bottom';
+      const shownSize=side==='top'?Math.min(190,room-6):side==='bottom'?null:190;
+      // 그린 카드 높이는 장치 픽셀 격자에 놓이므로 보이는 크기는 1pt 안에서 비교한다.
+      const { shownSize: shown, ...panel } = panels[side];
+      assert.deepEqual(panel, { set: set.id, size: 190, collapsed: autoCollapsed,
         requestedCollapsed:false,autoCollapsed,collapseReason:autoCollapsed?'insufficient-height':null },
         `side ${side} did not take the assignment with the default size`);
+      assert.ok(shownSize===null?shown===null:Math.abs(shown-shownSize)<=1, `side ${side} shown size ${shown}, expected ${shownSize}`);
       assert.equal(saved[side].set,set.id,`${side} assignment was not saved`);
       assert.equal(Object.hasOwn(saved[side],'autoCollapsed'),false,'automatic presentation was saved');
     }
@@ -192,7 +251,7 @@ for (const app of Object.values(APPS)) {
     // 전환한 탭의 native 표면도 같은 자리에 앉는다(V7a/V7b/V7c).
     await s.presented();
     assert.deepEqual((await s.get("core.verify")).rows.filter((row) => !row.ok), [], "tab selection left DOM and native geometry apart");
-    t.diagnostic(`normal card ${assigned.w}x${assigned.h}; top/bottom auto-fold, left/right open; different-plugin tabs ${original.plugin}/${other.plugin} preserve all geometry`);
+    t.diagnostic(`normal card ${assigned.w}x${assigned.h}; top opens at the room, bottom auto-folds, left/right open; different-plugin tabs ${original.plugin}/${other.plugin} preserve all geometry`);
 
     // 패널은 core.sidebars 에 카드:변 아이디로 보고된다(스펙: 사이드바 식별).
     const drawn = await s.until("core.sidebars",
@@ -201,7 +260,7 @@ for (const app of Object.values(APPS)) {
       "the drawn panels did not appear in core.sidebars");
     assert.ok(drawn.length >= 4, "core.sidebars reports the four panels");
 
-    // 이미 자동으로 접힌 상단도 명시적 수동 선택을 따로 저장해야 한다.
+    // 열려 보이는 위를 누르면 접힘을 저장한다.
     const beforeLayout = (await s.get("core.grid")).cards.find((item) => item.id === card0.id);
     await s.run("core.card.sidebar.toggle", { card: card0.id, side: "top" });
     const folded = await s.until("core.grid",

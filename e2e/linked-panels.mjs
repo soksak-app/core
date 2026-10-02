@@ -23,22 +23,23 @@ export async function checkLinkedPanels(s, t, name) {
       value.cards.find((item) => item.id === card.id)?.sidebars?.[side]?.set === set.id,
     `linked ${side} panel did not appear`);
     // 한 명령의 실패로 다른 명령의 관측을 생략하지 않는다. 오류는 모두 보고하고 끝에서 실패한다.
-    for (const [command, extra, expected] of [
-      ["core.card.sidebar.toggle", {}, { collapsed: true, requestedCollapsed: true, autoCollapsed: false, collapseReason: null }],
-      ["core.card.sidebar.size", { size: 260 }, { size: 260, collapsed: true, requestedCollapsed: true, autoCollapsed: false, collapseReason: null }],
-    ]) {
+    // 클릭(toggle)은 보이는 상태를 뒤집어 저장하고, 끌기(size)는 크기와 펼침을 저장한다(docs/spec/example-model.md).
+    const shownCollapsed = async () => (await s.get("core.grid")).cards.find((item) => item.id === card.id).sidebars[side].collapsed;
+    for (const [command, extra] of [["core.card.sidebar.toggle", {}], ["core.card.sidebar.size", { size: 260 }]]) {
       const start = performance.now();
       t.diagnostic(`start ${name}/${side}/${command}`);
       try {
+        const before = await shownCollapsed();
+        const stored = command === "core.card.sidebar.toggle" ? !before : false;
         await s.run(command, { card: card.id, side, ...extra });
         await s.until("core.grid", (value) => {
           const panel = value.cards.find((item) => item.id === card.id)?.sidebars?.[side];
-          return panel?.set === set.id && Object.entries(expected).every(([key, val]) => panel[key] === val);
+          return panel?.set === set.id && panel.requestedCollapsed === stored && (command !== "core.card.sidebar.size" || panel.size === 260);
         }, `linked ${side} panel did not apply ${command}`);
         const layout=await s.get('core.layout');
         const saved=layout.state.cards.find(item=>item.id===card.id).data.sidebars[side];
         assert.equal(Object.hasOwn(saved,'set'),false,`${command} made the ${side} derived set explicit`);
-        assert.equal(saved.collapsed,true,`${command} did not retain the saved ${side} manual fold`);
+        assert.equal(saved.collapsed,stored,`${command} did not save the ${side} fold choice ${stored}`);
         if(command==='core.card.sidebar.size')assert.equal(saved.size,260,`${side} resized presentation was not saved`);
         t.diagnostic(`saved ${name}/${side}/${command}: ${JSON.stringify(saved)}`);
         t.diagnostic(`pass ${name}/${side}/${command} ${Math.round(performance.now() - start)}ms`);

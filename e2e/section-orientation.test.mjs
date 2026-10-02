@@ -70,7 +70,9 @@ for (const app of Object.values(APPS))
               boxes.push(await s.rect("core.sidebar.section", offset + i));
             const presentation = current.sidebars[side];
             assert.equal(presentation.requestedCollapsed, false, "automatic folding changed the user choice");
-            const autoCollapsed = !fullscreen && (side === "top" || side === "bottom");
+            // 일반 카드 높이에는 위와 아래가 함께 들어가지 않으므로, 조작 전 우선인 위가 들어가는 크기로 열리고 아래만
+            // 접힌다(docs/spec/example-model.md).
+            const autoCollapsed = !fullscreen && side === "bottom";
             assert.equal(presentation.autoCollapsed, autoCollapsed);
             assert.equal(presentation.collapsed, autoCollapsed);
             assert.equal(presentation.collapseReason, autoCollapsed ? "insufficient-height" : null);

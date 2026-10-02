@@ -11,6 +11,8 @@ export function bindSidebarGrip(el, handle, side, defaults, run) {
     const rect = handle.parentElement.getBoundingClientRect();
     const initialSize = side === "left" || side === "right" ? rect.width : rect.height;
     if (!Number.isFinite(initialSize) || initialSize < 0) throw new Error("invalid sidebar drag extent");
+    // 접힌 면은 포인터가 최소 크기에 닿을 때 연다. 그 전에 최소 크기로 열면 경계가 포인터보다 앞선다.
+    const folded = el.dataset[`sidebar${side[0].toUpperCase()}${side.slice(1)}`] === "folded";
     const move = (e) => {
       if (!dragged && Math.hypot(e.clientX - startX, e.clientY - startY) < DRAG_THRESHOLD) return;
       dragged = true;
@@ -21,6 +23,7 @@ export function bindSidebarGrip(el, handle, side, defaults, run) {
         : side === "top" ? e.clientY - startY
         : startY - e.clientY;
       if (!Number.isFinite(delta)) throw new Error("invalid sidebar pointer displacement");
+      if (folded && initialSize + delta < defaults.min) return;
       const size = clamp(initialSize + delta);
       run("core.card.sidebar.size", { card: el.dataset.cardId, side, size });
     };

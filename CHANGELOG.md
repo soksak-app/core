@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-58: a folded card sidebar opens by click or drag whenever it fits; sides that do not fit together are shown smaller, and the card status line names a side folded for lack of space.
 - G1.4-56: a folded card sidebar shows a short grip in the divider grip colours instead of a line along the side or a tick across it.
 - G1.4-57: the placement check links a terminal card sidebar before it toggles it, because the default layout has none.
 - G1.4-54: the gesture check looks for a state from the display of the previous state, because the reported display time can follow the first display, and its failure message lists the frame times around a missed state.
