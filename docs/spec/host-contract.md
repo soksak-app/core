@@ -285,6 +285,7 @@ Items:
 | `sidecars.persistent.accepts-non-canonical-config-directory` | A persistent transport accepts a configuration directory path that is not canonical. | both |
 | `sidecars.send.fails-fast-when-sidecar-not-keeping-up` | Large sends to a sidecar that does not read end with "is not keeping up". | both |
 | `sidecars.send.slow-sidecar-does-not-block-others` | While one sidecar queue is full, a send to another sidecar returns within 50 ms. | both |
+| `sidecars.send.start-does-not-block-other-sidecars` | While a persistent service delays its hello reply, a send to another running sidecar returns within 50 ms. | both |
 | `sidecars.stop.honors-stop-timeout` | Stop returns within twice the stop timeout for a sidecar that does not drain its input. | both |
 | `sidecars.stop.graceful-on-stdin-eof` | A sidecar that exits on end of input stops without waiting for the timeout. | both |
 | `sidecars.stop.kills-after-timeout` | A sidecar that ignores end of input is killed after the stop timeout. | both |

@@ -91,6 +91,8 @@ type sidecar struct {
 	retained map[string]int
 	// surfaces 는 이 프로세스에 요청을 보낸 표면이다. 실패를 알릴 표면이다. c.mu 로 보호한다.
 	surfaces map[string]bool
+	// begin 은 등록된 프로세스의 쓰기와 읽기 고루틴을 시작한다.
+	begin func()
 }
 
 // SidecarOwner 는 표면을 소유한 창이다. 사이드카 메시지의 root 를 제공하고 이벤트를 받는다.
@@ -105,7 +107,9 @@ type Sidecars struct {
 	declared   map[string]string
 	persistent map[string]bool
 	running    map[string]*sidecar
-	owners     map[string]SidecarOwner
+	// starting 은 시작 중인 사이드카다. 시작은 잠금 밖에서 하며, 끝나면 그 채널을 닫는다.
+	starting map[string]chan struct{}
+	owners   map[string]SidecarOwner
 	// roots 는 표면을 처음 보낼 때의 프로젝트 디렉터리다. 사이드카는 root 와 표면으로 세션을 찾으므로,
 	// 창의 프로젝트가 바뀐 뒤에도 이미 열린 표면의 요청과 닫힘은 이 root 로 보낸다.
 	roots   map[string]string
@@ -132,6 +136,7 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		declared:        map[string]string{},
 		persistent:      map[string]bool{},
 		running:         map[string]*sidecar{},
+		starting:        map[string]chan struct{}{},
 		owners:          map[string]SidecarOwner{},
 		roots:           map[string]string{},
 		unannouncedLoss: map[string]bool{},
@@ -227,14 +232,18 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 	if other, ok := c.owners[surface]; ok && other != owner {
 		return fmt.Errorf("surface %s belongs to another window", surface)
 	}
-	if _, running := c.running[name]; !running {
-		if _, err := c.process(name); err != nil {
-			return err
-		}
+	process, started, err := c.process(name)
+	if err != nil {
+		return err
+	}
+	if started {
 		reconnected = c.unannouncedLoss[name]
 		delete(c.unannouncedLoss, name)
 	}
-	process := c.running[name]
+	// 시작하는 동안 잠금을 놓았으므로 표면의 소유자를 다시 확인한다.
+	if other, ok := c.owners[surface]; ok && other != owner {
+		return fmt.Errorf("surface %s belongs to another window", surface)
+	}
 	process.surfaces[surface] = true
 	c.owners[surface] = owner
 	if _, ok := c.roots[surface]; !ok {
@@ -345,6 +354,17 @@ func (c *Sidecars) CloseOwner(owner SidecarOwner) {
 func (c *Sidecars) Stop() {
 	c.mu.Lock()
 	c.stopped = true
+	// 시작 중인 사이드카는 끝나면 등록되므로, 그 시작을 기다린 뒤 실행 중인 목록을 읽는다.
+	for len(c.starting) > 0 {
+		var wait chan struct{}
+		for _, starting := range c.starting {
+			wait = starting
+			break
+		}
+		c.mu.Unlock()
+		<-wait
+		c.mu.Lock()
+	}
 	processes := make([]*sidecar, 0, len(c.running))
 	for _, process := range c.running {
 		processes = append(processes, process)
@@ -449,7 +469,7 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 				return total, fmt.Errorf("sidecar %s: read endpoint: %w", name, err)
 			}
 		}
-		process, err := c.process(name)
+		process, _, err := c.process(name)
 		if err != nil {
 			c.mu.Unlock()
 			return total, err
@@ -540,10 +560,46 @@ func (c *Sidecars) closePersistentOwner(process *sidecar, ctx context.Context) e
 }
 
 // process 는 실행 중인 사이드카를 반환하고, 없으면 실행한다. c.mu 를 잡은 상태로 호출한다.
-func (c *Sidecars) process(name string) (*sidecar, error) {
-	if process, ok := c.running[name]; ok {
-		return process, nil
+// process 는 실행 중인 사이드카를 돌려주고, 없으면 시작해서 등록한다. c.mu 를 쥔 채 부르고 쥔 채 돌아온다. 시작은
+// 프로세스 기동과 영속 service 의 연결과 인증을 기다리므로 잠금을 놓은 채 한다. 그동안 다른 사이드카의 요청은
+// 기다리지 않고, 같은 사이드카의 요청은 그 시작이 끝나기를 기다린다. started 는 이 호출이 시작했는지다.
+func (c *Sidecars) process(name string) (process *sidecar, started bool, err error) {
+	for {
+		if process, ok := c.running[name]; ok {
+			return process, false, nil
+		}
+		if c.stopped {
+			return nil, false, errors.New("sidecars are stopped")
+		}
+		wait, ok := c.starting[name]
+		if !ok {
+			break
+		}
+		c.mu.Unlock()
+		<-wait
+		c.mu.Lock()
 	}
+	done := make(chan struct{})
+	c.starting[name] = done
+	c.mu.Unlock()
+	process, err = c.launch(name)
+	c.mu.Lock()
+	delete(c.starting, name)
+	close(done)
+	if err != nil {
+		return nil, false, err
+	}
+	// Stop 은 시작이 끝나기를 기다린 뒤 실행 중인 목록을 읽으므로, 멈추는 중에 끝난 시작도 등록해 Stop 이 정리한다.
+	c.running[name] = process
+	process.begin()
+	if c.stopped {
+		return nil, false, errors.New("sidecars are stopped")
+	}
+	return process, true, nil
+}
+
+// launch 는 사이드카 name 을 시작한다. 잠금 없이 부르며 등록하지 않는다.
+func (c *Sidecars) launch(name string) (*sidecar, error) {
 	if c.persistent[name] {
 		return c.processPersistent(name)
 	}
@@ -572,9 +628,10 @@ func (c *Sidecars) process(name string) (*sidecar, error) {
 		closeWaiters:   make(map[string]chan error),
 		surfaces:       make(map[string]bool),
 	}
-	c.running[name] = process
-	go c.write(process)        // 쓰기 고루틴: outbox 채널에서 읽어 stdin 에 쓴다.
-	go c.read(process, stdout) // 읽기 고루틴: stdout 에서 읽어 이벤트를 전달한다.
+	process.begin = func() {
+		go c.write(process)        // 쓰기 고루틴: outbox 채널에서 읽어 stdin 에 쓴다.
+		go c.read(process, stdout) // 읽기 고루틴: stdout 에서 읽어 이벤트를 전달한다.
+	}
 	return process, nil
 }
 
@@ -712,9 +769,10 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		pendingCloses: make([][]byte, 0), pendingReplies: make([][]byte, 0),
 		closeWaiters: make(map[string]chan error), surfaces: make(map[string]bool),
 	}
-	c.running[name] = process
-	go c.writePersistent(process)
-	go c.readPersistent(process, reader)
+	process.begin = func() {
+		go c.writePersistent(process)
+		go c.readPersistent(process, reader)
+	}
 	return process, nil
 }
 
@@ -1117,8 +1175,12 @@ func (c *Sidecars) reviveAttempt(name string) (announced bool, failure error) {
 	if _, running := c.running[name]; running {
 		return false, nil
 	}
-	if _, err := c.process(name); err != nil {
+	_, started, err := c.process(name)
+	if err != nil {
 		return false, err
+	}
+	if !started {
+		return false, nil
 	}
 	announced = c.unannouncedLoss[name]
 	delete(c.unannouncedLoss, name)

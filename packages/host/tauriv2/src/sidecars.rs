@@ -15,7 +15,7 @@ use std::path::{Component, Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{sync_channel, RecvError, SyncSender, TryRecvError, TrySendError};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
 
@@ -214,6 +214,15 @@ static RETAIN_REQUESTS: std::sync::atomic::AtomicU64 = std::sync::atomic::Atomic
 /// schema snapshot 을 열 배 이상의 여유로 담고, 메시지 하나에 잡는 메모리를 이 크기로 제한한다.
 const MESSAGE_LIMIT: usize = 64 << 20;
 
+/// 등록한 뒤에 띄울 쓰기 또는 읽기 스레드.
+type Thread = Box<dyn FnOnce() + Send>;
+
+/// 시작한 사이드카와 그 스레드.
+struct Started {
+    process: Process,
+    threads: Vec<Thread>,
+}
+
 struct Process {
     child: Option<Child>,
     outbox: SyncSender<Outgoing>, // 용량 256인 채널
@@ -236,6 +245,8 @@ struct PersistentConnection {
 
 struct State<O> {
     running: HashMap<String, Process>,
+    /// 시작 중인 사이드카. 시작은 잠금 밖에서 하며, 끝나면 Core::started 로 알린다.
+    starting: HashSet<String>,
     owners: HashMap<String, O>,
     // 표면을 처음 보낼 때의 프로젝트 디렉터리. 사이드카는 root 와 표면으로 세션을 찾으므로, 창의
     // 프로젝트가 바뀐 뒤에도 이미 열린 표면의 요청과 닫힘은 이 root 로 보낸다.
@@ -258,6 +269,8 @@ struct Core<O> {
     persistent: HashMap<String, bool>,
     config_directory: PathBuf,
     state: Arc<Mutex<State<O>>>,
+    /// 시작이 끝날 때마다 알린다. 같은 사이드카의 요청과 stop 이 기다린다.
+    started: Condvar,
 }
 
 /// 애플리케이션 하나의 사이드카 프로세스와 표면 소유 창을 관리한다.
@@ -342,6 +355,7 @@ impl<O: Owner> Sidecars<O> {
                 config_directory,
                 state: Arc::new(Mutex::new(State {
                     running: HashMap::new(),
+                    starting: HashSet::new(),
                     owners: HashMap::new(),
                     roots: HashMap::new(),
                     stopped: false,
@@ -349,6 +363,7 @@ impl<O: Owner> Sidecars<O> {
                     pending_closes: HashMap::new(),
                     unannounced_loss: std::collections::HashSet::new(),
                 })),
+                started: Condvar::new(),
             }),
             stop_timeout: Duration::from_secs(5),
         })
@@ -404,11 +419,13 @@ impl<O: Owner> Sidecars<O> {
         // 끊김을 알린 적 없는 첫 시작은 알림이 없다. 시작이 앞선 연결 끊김의 기록을
         // 소진하면 이 호출이 연결 알림을 보낸다(V5-106). 시작에 실패하면 이 전송의
         // 오류가 그 실패를 호출자에게 전한다.
-        let mut restarted = false;
-        if !state.running.contains_key(name) {
-            let process = Core::start(&self.core, name)?;
-            state.running.insert(name.to_string(), process);
-            restarted = state.unannounced_loss.remove(name);
+        let (mut state, started) = Core::ensure(&self.core, state, name)?;
+        let restarted = started && state.unannounced_loss.remove(name);
+        // 시작하는 동안 잠금을 놓았으므로 표면의 소유자를 다시 확인한다.
+        if let Some(other) = state.owners.get(surface) {
+            if other.key() != owner.key() {
+                return Err(format!("surface {surface} belongs to another window"));
+            }
         }
         state.owners.insert(surface.to_string(), owner.clone());
         state
@@ -565,8 +582,7 @@ impl<O: Owner> Sidecars<O> {
                             return Err(format!("sidecar {name}: read endpoint: {error}"))
                         }
                     }
-                    let process = Core::start(&self.core, &name)?;
-                    state.running.insert(name.clone(), process);
+                    state = Core::ensure(&self.core, state, &name)?.0;
                 }
                 let process = state.running.get(&name).expect("started above");
                 let connection = process
@@ -655,6 +671,10 @@ impl<O: Owner> Sidecars<O> {
         let processes: Vec<(String, Process)> = {
             let mut state = self.core.state.lock().expect("sidecar state");
             state.stopped = true;
+            // 시작 중인 사이드카는 끝나면 등록되므로, 그 시작을 기다린 뒤 실행 중인 목록을 비운다.
+            while !state.starting.is_empty() {
+                state = self.core.started.wait(state).expect("sidecar state");
+            }
             state.running.drain().collect()
         };
 
@@ -797,8 +817,47 @@ impl<O: Owner> Sidecars<O> {
 }
 
 impl<O: Owner> Core<O> {
-    /// 사이드카를 시작한다. 영속 선언이면 서비스에 붙고, 아니면 창의 자식 프로세스로 띄운다.
-    fn start(core: &Arc<Self>, name: &str) -> Result<Process, String> {
+    /// 실행 중인 사이드카를 확인하고, 없으면 시작해 등록한다. state 를 쥔 채 부르고 쥔 채 돌려받는다. 시작은
+    /// 프로세스 기동과 영속 service 의 연결과 인증을 기다리므로 잠금을 놓은 채 한다. 그동안 다른 사이드카의 요청은
+    /// 기다리지 않고, 같은 사이드카의 요청은 그 시작이 끝나기를 기다린다. 두 번째 값은 이 호출이 시작했는지다.
+    fn ensure<'a>(
+        core: &'a Arc<Self>,
+        mut state: MutexGuard<'a, State<O>>,
+        name: &str,
+    ) -> Result<(MutexGuard<'a, State<O>>, bool), String> {
+        loop {
+            if state.running.contains_key(name) {
+                return Ok((state, false));
+            }
+            if state.stopped {
+                return Err("sidecars are stopped".into());
+            }
+            if !state.starting.contains(name) {
+                break;
+            }
+            state = core.started.wait(state).map_err(|e| e.to_string())?;
+        }
+        state.starting.insert(name.to_string());
+        drop(state);
+        let started = Self::start(core, name);
+        let mut state = core.state.lock().map_err(|e| e.to_string())?;
+        state.starting.remove(name);
+        core.started.notify_all();
+        let Started { process, threads } = started?;
+        // stop 은 시작이 끝나기를 기다린 뒤 실행 중인 목록을 비우므로, 멈추는 중에 끝난 시작도 등록해 stop 이 정리한다.
+        state.running.insert(name.to_string(), process);
+        for thread in threads {
+            thread::spawn(thread);
+        }
+        if state.stopped {
+            return Err("sidecars are stopped".into());
+        }
+        Ok((state, true))
+    }
+
+    /// 사이드카를 시작한다. 영속 선언이면 서비스에 붙고, 아니면 창의 자식 프로세스로 띄운다. 쓰기와 읽기 스레드는
+    /// 등록한 뒤에 띄우도록 돌려준다.
+    fn start(core: &Arc<Self>, name: &str) -> Result<Started, String> {
         let program = core
             .declared
             .get(name)
@@ -807,6 +866,7 @@ impl<O: Owner> Core<O> {
         if *core.persistent.get(name).unwrap_or(&false) {
             return Self::start_persistent(core, name, program);
         }
+        let mut threads: Vec<Thread> = Vec::new();
         let mut child = Command::new(program)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -831,7 +891,7 @@ impl<O: Owner> Core<O> {
         let write_name = name.to_string();
         let state_clone = Arc::clone(&core.state);
 
-        thread::spawn(move || loop {
+        threads.push(Box::new(move || loop {
             loop {
                 match rx.try_recv() {
                     Ok(Outgoing::Line(line)) => {
@@ -860,30 +920,33 @@ impl<O: Owner> Core<O> {
                     return;
                 }
             }
-        });
+        }));
 
         // 읽기 스레드: stdout에서 읽어 이벤트를 전달하고, 출력이 끝나거나 프로토콜을 어기면 실패를 처리한다
         let state = Arc::clone(&core.state);
         let sidecar = name.to_string();
         let tx_clone = tx.clone();
-        thread::spawn(move || {
+        threads.push(Box::new(move || {
             let mut reader = BufReader::new(stdout);
             let violation = relay(&mut reader, &state, &sidecar, &tx_clone);
             // 읽기 끝을 닫아 아직 쓰는 프로세스가 쓰기에서 막히지 않게 한다.
             drop(reader);
             drop(tx_clone);
             fail(&state, &sidecar, violation);
-        });
+        }));
 
-        Ok(Process {
-            child: Some(child),
-            outbox: tx,
-            persistent: None,
-            surfaces: HashSet::new(),
+        Ok(Started {
+            process: Process {
+                child: Some(child),
+                outbox: tx,
+                persistent: None,
+                surfaces: HashSet::new(),
+            },
+            threads,
         })
     }
 
-    fn start_persistent(core: &Arc<Self>, name: &str, program: &Path) -> Result<Process, String> {
+    fn start_persistent(core: &Arc<Self>, name: &str, program: &Path) -> Result<Started, String> {
         #[derive(Deserialize)]
         struct Endpoint {
             protocol: u64,
@@ -966,8 +1029,8 @@ impl<O: Owner> Core<O> {
         let mut stream = current()?
             .connect_service(&endpoint.socket)
             .map_err(|e| format!("sidecar {name}: connect authenticated service: {e}"))?;
-        // 인사 왕복에만 읽기 기한을 둔다(V5-106). 이 시작은 상태 잠금 안에서 일어나므로,
-        // 소켓을 받아 놓고 답하지 않는 서비스가 모든 전송을 멈추게 해서는 안 된다. 기한이
+        // 인사 왕복에만 읽기 기한을 둔다(V5-106). 같은 사이드카의 요청과 stop 은 이 시작을 기다리므로,
+        // 소켓을 받아 놓고 답하지 않는 서비스가 그 요청을 멈추게 해서는 안 된다. 기한이
         // 지나면 연결은 실패이고, 끊김 기록이 다음 시작에게 같은 경로를 다시 시도하게 한다.
         // 왕복이 끝나면 이어지는 읽기 스레드를 위해 무한 대기로 돌린다.
         const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
@@ -1029,6 +1092,7 @@ impl<O: Owner> Core<O> {
 
         let reader_stream = response_reader.into_inner();
         let (tx, rx) = sync_channel::<Outgoing>(256);
+        let mut threads: Vec<Thread> = Vec::new();
         let close_waiters: ReplyWaiters = Arc::new(Mutex::new(HashMap::new()));
         let shutdown_waiters: ReplyWaiters = Arc::new(Mutex::new(HashMap::new()));
         let retain_waiters: RetainWaiters = Arc::new(Mutex::new(HashMap::new()));
@@ -1037,7 +1101,7 @@ impl<O: Owner> Core<O> {
         let write_state = Arc::clone(&core.state);
         let writer = stream;
         let writer_connected = Arc::clone(&connected);
-        thread::spawn(move || {
+        threads.push(Box::new(move || {
             struct ConnectionGuard(Arc<AtomicBool>);
             impl Drop for ConnectionGuard {
                 fn drop(&mut self) {
@@ -1086,7 +1150,7 @@ impl<O: Owner> Core<O> {
                     }
                 }
             }
-        });
+        }));
 
         let state = Arc::clone(&core.state);
         let reader_core = Arc::clone(core);
@@ -1096,7 +1160,7 @@ impl<O: Owner> Core<O> {
         let retain_waiters_for_reader = Arc::clone(&retain_waiters);
         let tx_clone = tx.clone();
         let reader_connected = Arc::clone(&connected);
-        thread::spawn(move || {
+        threads.push(Box::new(move || {
             struct ConnectionGuard(Arc<AtomicBool>);
             impl Drop for ConnectionGuard {
                 fn drop(&mut self) {
@@ -1284,19 +1348,22 @@ impl<O: Owner> Core<O> {
             if was_current {
                 revive_persistent(&reader_core, &sidecar);
             }
-        });
+        }));
         // application 종료는 bootstrap child를 기다리거나 kill하지 않아야 한다.
         drop(child);
-        Ok(Process {
-            child: None,
-            outbox: tx,
-            surfaces: HashSet::new(),
-            persistent: Some(PersistentConnection {
-                close_waiters,
-                retain_waiters,
-                shutdown_waiters,
-                connected,
-            }),
+        Ok(Started {
+            process: Process {
+                child: None,
+                outbox: tx,
+                surfaces: HashSet::new(),
+                persistent: Some(PersistentConnection {
+                    close_waiters,
+                    retain_waiters,
+                    shutdown_waiters,
+                    connected,
+                }),
+            },
+            threads,
         })
     }
 }
@@ -1346,13 +1413,12 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
 
 /// 재시작 한 번. 이미 다른 경로가 다시 시작했으면 Ok(false), 시작에 실패하면 Err.
 fn revive_attempt<O: Owner>(core: &Arc<Core<O>>, name: &str) -> Result<bool, String> {
-    let mut state = core.state.lock().expect("sidecar state");
+    let state = core.state.lock().expect("sidecar state");
     if state.stopped || state.running.contains_key(name) {
         return Ok(false);
     }
-    let process = Core::start(core, name)?;
-    state.running.insert(name.to_string(), process);
-    Ok(state.unannounced_loss.remove(name))
+    let (mut state, started) = Core::ensure(core, state, name)?;
+    Ok(started && state.unannounced_loss.remove(name))
 }
 
 /// start_persistent 의 연결 실패 문장인가. 문장은 이 파일의 connect_service 오류에서

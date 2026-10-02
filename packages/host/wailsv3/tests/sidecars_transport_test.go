@@ -985,3 +985,69 @@ func TestPersistentTransportFailsTheConnectionOnAnInvalidEvent(t *testing.T) {
 func TestPersistentTransportFailsTheConnectionOnAnOversizeLine(t *testing.T) {
 	expectConnectionFailure(t, bytes.Repeat([]byte("x"), messageLimit+2), fmt.Sprintf("message exceeds %d bytes", messageLimit))
 }
+
+// 영속 사이드카의 시작(service 연결과 hello)은 다른 사이드카로의 전송을 기다리게 하지 않는다. service 는 hello 에
+// 500 ms 늦게 답하고, 그동안 이미 실행 중인 다른 사이드카로 보낸다.
+// contract: sidecars.send.start-does-not-block-other-sidecars
+func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDirectory)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+	helloSeen := make(chan struct{})
+	go func() {
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		if _, err := reader.ReadBytes('\n'); err != nil {
+			return
+		}
+		close(helloSeen)
+		time.Sleep(500 * time.Millisecond)
+		_, _ = io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
+		_, _ = io.Copy(io.Discard, reader)
+	}()
+	folder := t.TempDir()
+	if err := os.WriteFile(filepath.Join(folder, "fast"), []byte("#!/bin/sh\ntee /dev/null\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	declarations := append(harnessDeclarations(folder), SidecarDeclaration{Name: "fixture-fast", Folder: folder,
+		Data: []byte(`{"executable":"fast","protocol":1}`)})
+	sidecars, err := NewSidecars(declarations, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sidecars.Stop()
+	owner := &harnessOwner{root: "/start", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-fast", "fast-surface", json.RawMessage(`{"data":"start"}`)); err != nil {
+		t.Fatalf("fast start: %v", err)
+	}
+	started := make(chan error, 1)
+	go func() {
+		started <- sidecars.Send(owner, "fixture-service", "service-surface", json.RawMessage(`{"operation":"open"}`))
+	}()
+	<-helloSeen
+	begin := time.Now()
+	if err := sidecars.Send(owner, "fixture-fast", "fast-surface", json.RawMessage(`{"data":"during"}`)); err != nil {
+		t.Fatalf("fast send during the service start: %v", err)
+	}
+	waited := time.Since(begin)
+	if err := <-started; err != nil {
+		t.Fatalf("service start: %v", err)
+	}
+	if waited > 50*time.Millisecond {
+		t.Fatalf("a send to another sidecar waited %v for the service start, want < 50ms", waited)
+	}
+}

@@ -1002,3 +1002,104 @@ fn persistent_transport_fails_the_connection_on_an_oversize_line() {
         &format!("message exceeds {} bytes", 64 << 20),
     );
 }
+
+// 영속 사이드카의 시작(service 연결과 hello)은 다른 사이드카로의 전송을 기다리게 하지 않는다. service 는 hello 에
+// 500 ms 늦게 답하고, 그동안 이미 실행 중인 다른 사이드카로 보낸다.
+// contract: sidecars.send.start-does-not-block-other-sidecars
+#[test]
+fn persistent_start_does_not_delay_other_sidecars() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let fast = executable_directory.path().join("fast");
+    std::fs::write(&fast, "#!/bin/sh\ntee /dev/null\n").unwrap();
+    std::fs::set_permissions(&fast, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("start.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "start-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let (hello_seen, hello_received) = channel();
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut hello = String::new();
+        reader.read_line(&mut hello).unwrap();
+        hello_seen.send(()).unwrap();
+        thread::sleep(Duration::from_millis(500));
+        writeln!(
+            stream,
+            "{{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}}"
+        )
+        .unwrap();
+        // 연결이 끝날 때까지 받은 줄을 버린다.
+        let mut line = String::new();
+        while reader.read_line(&mut line).unwrap_or(0) > 0 {
+            line.clear();
+        }
+    });
+
+    let fixture: Files = vec![
+        (
+            ECHO,
+            r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#.to_string(),
+        ),
+        (
+            "@fixture/sidecar-fast",
+            r#"{"executable":"fast","protocol":1}"#.to_string(),
+        ),
+    ];
+    let mut sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    sidecars.stop_timeout = Duration::from_millis(100);
+    let (window, _events) = owner("start", "/projects/start");
+    sidecars
+        .send(
+            &window,
+            "@fixture/sidecar-fast",
+            "fast-surface",
+            &raw(r#"{"data":"start"}"#),
+        )
+        .unwrap();
+    let waited = thread::scope(|scope| {
+        let service = scope.spawn(|| {
+            sidecars.send(
+                &window,
+                ECHO,
+                "service-surface",
+                &raw(r#"{"operation":"open"}"#),
+            )
+        });
+        hello_received.recv_timeout(STALL).unwrap();
+        let begin = std::time::Instant::now();
+        sidecars
+            .send(
+                &window,
+                "@fixture/sidecar-fast",
+                "fast-surface",
+                &raw(r#"{"data":"during"}"#),
+            )
+            .unwrap();
+        let waited = begin.elapsed();
+        service.join().unwrap().unwrap();
+        waited
+    });
+    assert!(
+        waited < Duration::from_millis(50),
+        "a send to another sidecar waited {waited:?} for the service start, want < 50ms"
+    );
+    sidecars.stop();
+    server.join().unwrap();
+}
