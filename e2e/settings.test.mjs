@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
+import { APPS, fresh, keepCommonSettings, open, terminalCardSidebar } from "./app.mjs";
 
 /** 설정 창의 현재 컨트롤. */
 const controls = async (s) => (await s.get("core.settings-modal")).controls;
@@ -97,7 +97,7 @@ for (const app of Object.values(APPS)) {
     await section(s, "plugins");
     const list = await s.until("core.settings-modal", (modal) => modal.plugin === null && modal.listed.length > 0,
       "the plugin list did not show");
-    assert.deepEqual(list.listed, ["browser", "files", "shell", "terminal"]);
+    assert.deepEqual(list.listed, ["browser", "files", "terminal"]);
     assert.equal(list.query, "");
     const rows = list.controls.filter((c) => c.name === "core.settings-modal.plugin");
     assert.deepEqual(rows.map((c) => c.key), list.listed.map((id) => `plugin:${id}`));
@@ -108,7 +108,7 @@ for (const app of Object.values(APPS)) {
     await press(s, "core.settings-modal.search", "plugin-search", "없는플러그인", "query");
     await s.until("core.settings-modal", (modal) => modal.listed.length === 0, "a query without a match still lists plugins");
     await press(s, "core.settings-modal.search", "plugin-search", "", "query");
-    await s.until("core.settings-modal", (modal) => modal.listed.length === 4, "an empty query did not list every plugin");
+    await s.until("core.settings-modal", (modal) => modal.listed.join() === list.listed.join(), "an empty query did not list every plugin");
 
     await press(s, "core.settings-modal.plugin", "plugin:terminal");
     const terminal = await s.until("core.settings-modal", (modal) => modal.plugin === "terminal", "terminal page did not open");
@@ -127,7 +127,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.settings", (value) => value.values["terminal.cursor.shape"] === "beam" && !value.saving,
       "the plugin page did not change terminal.cursor.shape");
     await press(s, "core.settings-modal.back", "plugins:list");
-    await s.until("core.settings-modal", (modal) => modal.plugin === null && modal.listed.length === 4, "목록 did not return to the list");
+    await s.until("core.settings-modal", (modal) => modal.plugin === null && modal.listed.join() === list.listed.join(), "목록 did not return to the list");
   });
 
   test(`${app.name}: a plugin page disables and enables an installed plugin through its commands`, { timeout: 60000 }, async (t) => {
@@ -215,8 +215,8 @@ for (const app of Object.values(APPS)) {
     ]);
     const select = editor.controls.find((c) => c.key === `row:${made.id}:0`);
     assert.equal(select.value, three[0]);
-    assert.deepEqual(select.groups.map((g) => g.label), ["브라우저", "파일", "셸"]);
-    assert.equal(select.groups.flatMap((g) => g.values).length, 9);
+    assert.deepEqual(select.groups.map((g) => g.label), ["브라우저", "파일"]);
+    assert.equal(select.groups.flatMap((g) => g.values).length, 6);
 
     await press(s, "core.settings-modal.row-act", `down:${made.id}:0`);
     await saved([three[1], three[0], three[2]], "▼ did not move row 0 down");
@@ -245,7 +245,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    await keepCommonSettings(s);
+    await terminalCardSidebar(s);
     await s.run("core.settings.set", { patch: { sidebarWidth: 150, sidebarMinWidth: 140 }, scope: "common" });
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left?.size === 150),
       "an internal card sidebar did not open at sidebarWidth");
@@ -303,26 +303,27 @@ for (const app of Object.values(APPS)) {
     // 일반 선택은 place right, 플러그인 오버라이드는 place window-right 이다. off 는 그 연결을 없앤다.
     const general = (set) => s.run("core.settings.link", { place: "right", plugin: null, set, scope: "common" });
     const override = (plugin, set) => s.run("core.settings.link", { place: "window-right", plugin, set, scope: "common" });
-    // 기본값에서 셸은 오버라이드 set-process 를 고르고 일반 선택은 없다.
-    await right("shell", "set-process", "the shell override did not show while no general choice exists");
+    // 기본값에는 일반 선택이 없다. 터미널에 오버라이드 set-install 을 둔다.
+    await override("terminal", "set-install");
+    await right("terminal", "set-install", "the terminal override did not show while no general choice exists");
     // 일반 세트가 있어도 초점 플러그인의 오버라이드가 앞선다.
     await general("set-page");
-    await right("shell", "set-process", "the general set replaced the shell override");
+    await right("terminal", "set-install", "the general set replaced the terminal override");
     // 오버라이드를 없애면 일반 세트가 드러난다.
-    await override("shell", "off");
-    await right("shell", "set-page", "removing the shell override did not show the general set");
+    await override("terminal", "off");
+    await right("terminal", "set-page", "removing the terminal override did not show the general set");
     await right("browser", "set-browser", "the browser override did not take precedence over the general set");
     await assert.rejects(general("inherit"), /inherit/);
     await assert.rejects(override("browser", "inherit"), /inherit/);
   });
 
-  test(`${app.name}: a fresh configuration starts with internal card sidebars and no rail column`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: a card-left link draws an internal card sidebar and no rail column`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    await keepCommonSettings(s);
+    await terminalCardSidebar(s);
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left),
-      "no card holds an internal sidebar in a fresh configuration");
+      "no card holds an internal sidebar after a card-left link");
     assert.equal(grid.cards.some((card) => card.id.startsWith("rail-")), false, "a rail column stands in a fresh configuration");
     // 카드 사이드바의 위치 설정은 없다. 고정 창 사이드바와 카드 안쪽 사이드바만 있다.
     assert.equal(Object.hasOwn((await s.get("core.settings")).values, "cardSidebar"), false);
@@ -381,7 +382,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    await keepCommonSettings(s);
+    await terminalCardSidebar(s);
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left),
       "no card holds an inset sidebar");
     const card = grid.cards.find((item) => item.sidebars?.left);

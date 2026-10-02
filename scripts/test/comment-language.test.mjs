@@ -30,11 +30,10 @@ test("Korean comments, directives, identifiers and other places are not reported
     "packages/a/a.js": "// 배치를 기다린다(core.grid).\n// eslint-disable-next-line no-console\nconst url = \"http://a.b/c\"; // core.grid\n",
     "packages/host/x/src/a.go": "//go:build diagnostics\n//export sp_window_ready\n// contract: endpoint.transport.invalid-json-closes\n",
     "packages/soksak/src/a.ts": "// Comments in the library are English.\n",
-    "plugins/files/ui/vendor/trees.js": "// third party code here\n",
     "packages/a/b.js": "const text = \"see // not a comment here\";\nconst more = `multi\n// still a string here\n`;\n",
     "scripts/run.sh": "#!/bin/sh\necho \"# not a comment here\"\n",
     "native/darwin/src/a.h": "// {frame, content, scale: {x, y}}\n// `status.next` `core.grid`\n// <script src=\"./x\">\n",
-    "sidecars/a/src/a.rs": "/// 사용법:\n/// ```\n/// let mut composer = State::new();\n/// ```\n",
+    "packages/host/a/src/a.rs": "/// 사용법:\n/// ```\n/// let mut composer = State::new();\n/// ```\n",
     "scripts/check-a.mjs": "// 경계를 검사한다. 다음처럼 실행한다.\n//   node scripts/check-a.mjs\n//   status  {name, description}\n",
   }), []);
 });

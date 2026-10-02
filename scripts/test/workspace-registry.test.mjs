@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { workspacePlugins } from "../sidecar-packages.mjs";
-import { pluginEntry, repositoryText, sidecarEntry } from "../workspace-registry.mjs";
+import { readFileSync } from "node:fs";
+
+import { checkDeclaration, pluginEntry, repositoryText, sidecarEntry } from "../workspace-registry.mjs";
 
 const SHA = "a".repeat(64);
 
@@ -27,8 +28,16 @@ test("registry entries carry the package declarations and the file URL and hash 
   assert.throws(() => repositoryText({ type: "git" }), /package.json repository has no url/);
 });
 
-test("the workspace registry packs the plugins that scripts/workspace-registry.json declares, each once", { timeout: 1000 }, () => {
-  const plugins = workspacePlugins();
-  assert.ok(plugins.length > 0);
-  assert.equal(new Set(plugins).size, plugins.length);
+test("the workspace registry declaration names sibling folders and is checked before anything is built", { timeout: 1000 }, () => {
+  const declaration = checkDeclaration(JSON.parse(readFileSync(new URL("../workspace-registry.json", import.meta.url), "utf8")));
+  assert.ok(declaration.plugins.length > 0);
+  const base = { plugins: ["../plugins/a"], sidecars: [{ repository: "../sidecars/a", folder: "." }], packs: [] };
+  assert.deepEqual(checkDeclaration(base), base);
+  for (const [change, message] of [
+    [{ plugins: ["/abs/a"] }, /plugins must be relative folders/],
+    [{ plugins: ["../plugins/a", "../plugins/a"] }, /a plugin folder is repeated/],
+    [{ sidecars: [{ repository: "../sidecars/a" }] }, /sidecars must be \{ repository, folder \}/],
+    [{ packs: {} }, /packs must be a list/],
+    [{ extra: 1 }, /expected the keys packs, plugins and sidecars/],
+  ]) assert.throws(() => checkDeclaration({ ...base, ...change }), message);
 });

@@ -31,6 +31,13 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 const MATRIX = [
   lane("Node repeat target", "build", ["Makefile"], ["scripts/test/node-repeat.test.mjs"], { testLanguage: "js-ts" }),
   lane("native library pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs"], { testLanguage: "js-ts" }),
+  lane("workspace audit scripts", "js-ts", [
+    "scripts/check-boundaries.mjs",
+    "scripts/check-e2e.mjs",
+    "scripts/check-e2e-host-parity.mjs",
+    "scripts/check-exposure.mjs",
+    "scripts/check-host-parity.mjs",
+  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs", "scripts/test/check-host-parity.test.mjs", "scripts/test/check-exposure.test.mjs"], { sharedTests: true }),
   lane("test inventory", "js-ts", ["scripts/check-test-parity.mjs"], ["scripts/test/test-parity.test.mjs"]),
   lane("host contract audit", "js-ts", ["scripts/check-host-contract.mjs"], ["scripts/test/check-host-contract.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
@@ -41,7 +48,6 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("fallback and discarded error audit", "js-ts", ["scripts/check-fallbacks.mjs"], ["scripts/test/fallbacks.test.mjs"]),
   lane("comment language audit", "js-ts", ["scripts/check-comment-language.mjs"], ["scripts/test/comment-language.test.mjs"]),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
-  lane("Rust package test commands", "declaration", ["sidecars/vt-core/package.json", "sidecars/vt-alacritty/package.json"], ["scripts/test/package-test-command.test.mjs"], { testLanguage: "js-ts" }),
   lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
   lane("soksak utility scripts", "js-ts", [
     "packages/soksak/scripts/bounded.mjs",
@@ -49,15 +55,6 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
     "packages/soksak/scripts/emit-dom-reference.mjs",
     "packages/soksak/scripts/fuzz.mjs",
   ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
-  lane("workspace audit scripts", "js-ts", [
-    "scripts/check-boundaries.mjs",
-    "scripts/check-e2e.mjs",
-    "scripts/check-e2e-host-parity.mjs",
-    "scripts/check-exposure.mjs",
-    "scripts/check-host-parity.mjs",
-    "scripts/check-terminal-protocol-inventory.mjs",
-    "scripts/sidecar-packages.mjs",
-  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs", "scripts/test/check-host-parity.test.mjs", "scripts/test/check-exposure.test.mjs"], { sharedTests: true }),
   lane("build environment audit", "shell", ["scripts/check-build-environment.sh"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-build-environment.sh"], {
     testLanguage: "js-ts", testExtensions: new Set([".mjs", ".sh"]), sharedTests: true,
   }),
@@ -67,7 +64,6 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("host structure audit", "js-ts", ["scripts/check-hosts.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("release diagnostic audit", "js-ts", ["scripts/check-release.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-release-paths.test.mjs"], { sharedTests: true }),
-  lane("VT recovery verifier", "js-ts", ["scripts/verify-vt-recovery.mjs"], ["scripts/test/vt-recovery.test.mjs"]),
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platforms.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs"]),
@@ -79,34 +75,17 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
     "packages/client/bench/**/*.mjs",
   ], ["packages/client/test/**/*.mjs"]),
   lane("MCP client", "js-ts", ["packages/mcp/**/*.js"], ["packages/mcp/test/**/*.mjs"]),
-  lane("browser plugin", "js-ts", ["plugins/browser/ui/**/*.js"], ["plugins/browser/test/**/*.mjs"], { sharedTests: true }),
-  lane("files plugin", "js-ts", ["plugins/files/ui/**/*.js", "plugins/files/scripts/**/*.mjs", "plugins/files/vendor/**/*.js"], ["plugins/files/test/**/*.mjs"], { sharedTests: true }),
-  lane("shell plugin", "js-ts", ["plugins/shell/ui/**/*.js"], ["plugins/shell/test/**/*.mjs"], { sharedTests: true }),
-  lane("terminal plugin", "js-ts", ["plugins/terminal/ui/**/*.js"], ["plugins/terminal/test/**/*.mjs"], { sharedTests: true }),
   lane("browser runtime", "js-ts", ["apps/browser/runtime/**/*.js"], ["apps/browser/test/**/*.mjs", "apps/browser/check/**/*.mjs"], { sharedTests: true }),
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
-  lane("files plugin declaration", "declaration", ["plugins/files/plugin.json"], ["plugins/files/test/manifest.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
 
   lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json"], { testExtensions: new Set([".rs", ".json"]) }),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("VT core", "rust", ["sidecars/vt-core/src/**/*.rs", "sidecars/vt-core/build.rs"], ["sidecars/vt-core/tests/**/*.rs"], { sharedTests: true }),
-  lane("VT Alacritty sidecar", "rust", ["sidecars/vt-alacritty/src/**/*.rs"], ["sidecars/vt-alacritty/tests/**/*.rs"]),
 
   lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/diagnostics_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails command line", "go", ["packages/sok/wailsv3/src/**/*.go"], ["packages/sok/wailsv3/tests/**/*.go"]),
   lane("Tauri command line", "rust", ["packages/sok/tauriv2/src/**/*.rs"], ["packages/sok/tauriv2/tests/**/*.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("files sidecar", "go", ["sidecars/files/src/**/*.go"], ["sidecars/files/tests/**/*.go", "sidecars/files/tests/**/*.mjs"], {
-    testLanguage: "mixed",
-    testExtensions: new Set([".go", ".mjs"]),
-    sharedTests: true,
-  }),
-  lane("shell sidecar", "go", ["sidecars/shell/src/**/*.go"], ["sidecars/shell/tests/**/*.go", "sidecars/shell/tests/**/*.mjs"], {
-    testLanguage: "mixed",
-    testExtensions: new Set([".go", ".mjs"]),
-    sharedTests: true,
-  }),
 
   lane("Darwin clipboard", "objective-c", ["native/darwin/src/clipboard.m"], ["native/darwin/tests/clipboard_test.m"], { sharedTests: true }),
   lane("Darwin link open", "objective-c", ["native/darwin/src/link.m"], ["native/darwin/tests/link_test.m"], { sharedTests: true }),
@@ -141,17 +120,9 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("Darwin dock menu", "objective-c", ["native/darwin/src/dock_menu.m"], ["native/darwin/tests/dock_menu_test.m"], { sharedTests: true }),
   lane("Darwin appearance", "objective-c", ["native/darwin/src/appearance.m"], ["native/darwin/tests/appearance_test.m"], { sharedTests: true }),
   lane("Darwin native interfaces", "native-interface", ["native/darwin/src/**/*.h"], ["native/darwin/tests/**/*.m"], { testLanguage: "objective-c", sharedTests: true }),
-  lane("VT Darwin frame interface", "native-interface", ["sidecars/vt-core/src/platform/darwin/frame.h"], ["sidecars/vt-core/tests/frame_test.rs"], { testLanguage: "rust", sharedTests: true }),
-  lane("VT Darwin frame implementation", "objective-c", ["sidecars/vt-core/src/platform/darwin/frame.m"], ["sidecars/vt-core/tests/frame_test.rs"], { testLanguage: "rust", sharedTests: true }),
   lane("browser environment declaration", "declaration", ["apps/browser/environment.json"], ["apps/browser/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Tauri environment declaration", "declaration", ["apps/tauriv2/environment.json"], ["apps/tauriv2/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Wails environment declaration", "declaration", ["apps/wailsv3/environment.json"], ["apps/wailsv3/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("Plugin declarations", "declaration", ["plugins/browser/plugin.json", "plugins/shell/plugin.json", "plugins/terminal/plugin.json"], [
-    "plugins/browser/test/manifest.test.mjs", "plugins/shell/test/manifest.test.mjs", "plugins/terminal/test/manifest.test.mjs",
-  ], { testLanguage: "js-ts", sharedTests: true }),
-  lane("Sidecar declarations", "declaration", ["sidecars/files/sidecar.json", "sidecars/shell/sidecar.json", "sidecars/vt-alacritty/sidecar.json"], [
-    "sidecars/files/tests/sidecar_test.mjs", "sidecars/shell/tests/sidecar_test.mjs", "packages/workbench/test/sidecar-packages.test.mjs",
-  ], { testLanguage: "js-ts", sharedTests: true }),
   lane("Wails bridge", "js-ts", ["packages/host/wailsv3/src/bridge.js"], ["apps/wailsv3/test/runtime-contract.test.mjs"], { sharedTests: true }),
   lane("Wails native webview bridge", "objective-c", ["packages/host/wailsv3/src/platform/darwin/webview.m"], ["packages/host/wailsv3/tests/documents_test.go"], { testLanguage: "go", sharedTests: true }),
   lane("Workbench styles", "stylesheet", ["packages/workbench/app.css", "packages/workbench/library.css"], ["packages/workbench/test/background.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
@@ -309,21 +280,13 @@ const FEATURE_LINKS = [
     expected: "Every completed capability checklist entry has a linked implementation, named behavior test, expected result, and verification level, while aggregate review records are explicitly excluded.",
     levels: ["unit"],
   },
-  {
-    id: "F2",
-    implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
-    tests: [{ file: "e2e/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
-    expected: "The shared terminal service, per-session PTYs, normal shutdown, and application-process recovery preserve declared ownership and session identity.",
-    levels: ["native", "application"],
-  },
+  
   {
     id: "F2.12",
     implementation: [
-      { file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" },
       { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "service_process_exists" },
     ],
     tests: [
-      { file: "scripts/verify-vt-recovery.mjs", id: "application_process_restarted" },
       { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_replaces_endpoint_left_by_a_dead_service" },
     ],
     expected: "Application-process loss reconnects to a surviving service, while service failure remains an explicit failure or declared replacement and never becomes a new shell.",
@@ -344,16 +307,7 @@ const FEATURE_LINKS = [
     expected: "Prepared native surfaces authorize their modules after host creation, including late registration replay, and rebuilt Tauri/Wails split-terminal checks reach a presented raster without an authorization or presentation timeout.",
     levels: ["unit", "application"],
   },
-  {
-    id: "F3",
-    implementation: [{ file: "plugins/browser/ui/browser.js", symbol: "mount" }],
-    tests: [
-      { file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" },
-      { file: "e2e/browser.test.mjs", id: "Google site appearance remains independent of host theme" },
-    ],
-    expected: "Restored and new browser documents follow the host appearance contract while explicit Google site preferences remain isolated from host theme changes.",
-    levels: ["native", "application"],
-  },
+  
   {
     id: "F0.5.6",
     implementation: [
@@ -480,7 +434,6 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
       { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
-      { file: "e2e/shell.test.mjs", id: "shell input returns shell output through the shell sidecar" },
       { file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" },
       { file: "e2e/activation/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
       { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
@@ -521,11 +474,9 @@ const FEATURE_LINKS = [
   {
     id: "F0.1.2",
     implementation: [
-      { file: "plugins/terminal/ui/terminal.js", symbol: "terminal.focus" },
       { file: "native/darwin/src/webview_input.m", symbol: "webviewInputSendThen" },
     ],
     tests: [
-      { file: "plugins/terminal/test/terminal.test.mjs", id: "pointerdown prevents DOM focus" },
       { file: "native/darwin/tests/input_inject_test.m", id: "a click focuses the field" },
     ],
     expected: "The first native click focuses a terminal and the next character is accepted without a second click.",
@@ -534,11 +485,9 @@ const FEATURE_LINKS = [
   {
     id: "F0.1.3",
     implementation: [
-      { file: "plugins/browser/ui/browser.js", symbol: "browser.address.select" },
       { file: "native/darwin/src/input_inject.m", symbol: "sp_input_key" },
     ],
     tests: [
-      { file: "plugins/browser/test/address-input.test.mjs", id: "initial address focus selects all" },
       { file: "e2e/browser.test.mjs", id: "browser document region navigates" },
     ],
     expected: "The first address entry replaces the selected URL instead of appending to it, while later clicks retain caret editing.",
@@ -557,19 +506,7 @@ const FEATURE_LINKS = [
     expected: "Dark and light appearance assignment uses the compiled native helper and rejects a null view explicitly.",
     levels: ["unit", "native", "application"],
   },
-  {
-    id: "F0.3",
-    implementation: [
-      { file: "sidecars/shell/src/shell/shell.go", symbol: "handle" },
-      { file: "sidecars/shell/src/platform/platform.go", symbol: "DirectoryMarker" },
-    ],
-    tests: [
-      { file: "sidecars/shell/tests/serve_test.go", id: "TestReopenReportsTheLiveDirectoryToARemountedSurface" },
-      { file: "e2e/shell.test.mjs", id: "remounted shell surface replays its live directory" },
-    ],
-    expected: "Reopening a mounted shell reports the live session directory without inventing a default directory or duplicating output.",
-    levels: ["unit", "application"],
-  },
+  
   {
     id: "F0.4",
     implementation: [
@@ -579,9 +516,9 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "native/darwin/tests/input_inject_test.m", id: "a click after keyboard input synthesizes one DOM click" },
-      { file: "e2e/shell.test.mjs", id: "shell commands run, report the directory, interrupt, and clear" },
+      { file: "e2e/sidebar.test.mjs", id: "a combined set mounts every section in list layout and switches sections in tabs layout" },
     ],
-    expected: "A shell command returns its exact output and exit status on both macOS hosts after native pointer input.",
+    expected: "A native pointer click reaches the DOM control under it on both macOS hosts: a header click folds its section and a tab click shows its section.",
     levels: ["unit", "native", "application"],
   },
   {
@@ -604,13 +541,9 @@ const FEATURE_LINKS = [
   {
     id: "F0.4-1.3.1",
     implementation: [
-      { file: "sidecars/vt-core/src/protocol.rs", symbol: "serve_with_options" },
-      { file: "sidecars/vt-core/src/platform/pty.rs", symbol: "kill_process_group" },
-      { file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_with_registry" },
       { file: "scripts/check-test-parity.mjs", symbol: "auditRustFailurePropagation" },
     ],
     tests: [
-      { file: "sidecars/vt-core/tests/serve_contract.rs", id: "test_panicking_surface_reports_error" },
       { file: "scripts/test/test-parity.test.mjs", id: "Rust failure audit rejects ignored outcomes in the scoped production lane" },
     ],
     expected: "The VT sidecar does not discard production Result or task outcomes; actor, session, monitor, and shutdown failures remain observable through returned errors or explicit reports.",
@@ -664,7 +597,6 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "scripts/check-test-parity.mjs", symbol: "auditFailureMatrix" },
       { file: "packages/host/wailsv3/src/recording.go", symbol: "func (r *Recording) Abort" },
-      { file: "sidecars/shell/src/shell/shells.go", symbol: "func (s *Shells) Close" },
     ],
     tests: [
       { file: "scripts/test/test-parity.test.mjs", id: "Go failure audit rejects ignored results in every Go production lane" },
@@ -733,23 +665,8 @@ const FEATURE_LINKS = [
   },
 
 
-  {
-    id: "F2.1-1",
-    implementation: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", symbol: "lifecycle_test_lock" }],
-    tests: [
-      { file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "real_sessions_are_independent_and_close_removes_session" },
-      { file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "three_real_sessions_reconnect_with_same_pid_and_retained_output" },
-    ],
-    expected: "Real PTY lifecycle cases do not run their macOS process-group cleanup concurrently; the default vt-core package test command passes without changing production PTY behavior.",
-    levels: ["native"],
-  },
-  {
-    id: "F2.1",
-    implementation: [{ file: "sidecars/vt-core/src/pty.rs", symbol: "pub fn close" }],
-    tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "real_sessions_are_independent_and_close_removes_session" }],
-    expected: "Closing a PTY terminates its child process group and drains the reader without retaining the session.",
-    levels: ["unit", "native"],
-  },
+  
+  
   {
     id: "F2.2",
     implementation: [
@@ -763,37 +680,15 @@ const FEATURE_LINKS = [
   {
     id: "F2.3",
     implementation: [
-      { file: "sidecars/vt-core/src/pty.rs", symbol: "close_owner" },
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "Close" },
     ],
     tests: [{ file: "e2e/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
     expected: "Closing terminal tabs reaps their PTY children while retaining the shared terminal service.",
     levels: ["native", "application"],
   },
-  {
-    id: "F2.4",
-    implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
-    tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" },
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck" },
-    ],
-    expected: "A client connection loss reconnects to the persistent service while preserving the owning surface identity.",
-    levels: ["native"],
-  },
-  {
-    id: "F2.4-1",
-    implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
-    tests: [{ file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" }],
-    expected: "The reconnect case has its own five-second bound and reports timeout as failure under concurrent test load.",
-    levels: ["native"],
-  },
-  {
-    id: "F2.5",
-    implementation: [{ file: "sidecars/vt-core/src/protocol.rs", symbol: "close_owner" }],
-    tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "three_real_sessions_reconnect_with_same_pid_and_retained_output" }],
-    expected: "Closing one owner's sessions leaves another owner's session addressable until that owner closes it.",
-    levels: ["unit", "native"],
-  },
+  
+  
+  
   {
     id: "F2.6",
     implementation: [
@@ -820,27 +715,9 @@ const FEATURE_LINKS = [
     expected: "A live but unreachable endpoint returns an explicit connection error and its endpoint record remains byte-for-byte unchanged.",
     levels: ["native"],
   },
-  {
-    id: "F2.8",
-    implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
-    tests: [{ file: "scripts/verify-vt-recovery.mjs", id: "retained_screen_contains_RECOVERY" }],
-    expected: "The rebuilt persistent service survives transport loss, reattaches the same session, and retains output.",
-    levels: ["native"],
-  },
-  {
-    id: "F2.9",
-    implementation: [{ file: "scripts/verify-vt-recovery.mjs", symbol: "recovery_check_duration_ms" }],
-    tests: [{ file: "scripts/verify-vt-recovery.mjs", id: "recovery_check_duration_ms" }],
-    expected: "Recovery reports per-step results, duration, and explicit service cleanup within bounded execution.",
-    levels: ["native"],
-  },
-  {
-    id: "F2.10",
-    implementation: [{ file: "scripts/verify-vt-recovery.mjs", symbol: "application_process_restarted" }],
-    tests: [{ file: "scripts/verify-vt-recovery.mjs", id: "application_process_restarted" }],
-    expected: "A client process that exits without close-owner can be replaced and reconnect to the same retained session.",
-    levels: ["native"],
-  },
+  
+  
+  
   {
     id: "F2.11",
     implementation: [
@@ -969,7 +846,6 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/workbench/text-size.js", symbol: "nextTextSize" },
       { file: "packages/workbench/plane.js", symbol: "changeTextSize" },
-      { file: "plugins/terminal/ui/terminal.js", symbol: "setTextSize" },
       { file: "native/darwin/src/document_view.m", symbol: "sp_document_zoom" },
     ],
     tests: [
@@ -1007,49 +883,10 @@ const FEATURE_LINKS = [
     expected: "Rebuilt Tauri and Wails repeat independent project creation, visible-surface use, close, registry removal, and recreation in one application instance without manual state compensation.",
     levels: ["application"],
   },
-  {
-    id: "F7.14",
-    implementation: [{ file: "sidecars/vt-alacritty/src/engine.rs", symbol: "alternate screen mode {}{}" }],
-    tests: [
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "csi_cursor_next_and_previous_line_are_observable" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "alternate_screen_is_separate_from_primary_scrollback" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "unsupported_csi_alternate_modes_are_explicit_errors" },
-    ],
-    expected: "The CSI inventory distinguishes implemented E/F and 1049 behavior from explicitly rejected 47, 1047, and 1048 modes, with observable cursor/grid or error evidence.",
-    levels: ["unit", "native"],
-  },
-  {
-    id: "F7.15",
-    implementation: [
-      { file: "sidecars/vt-core/src/protocol.rs", symbol: "pub focus_in_out: bool" },
-      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "TermMode::FOCUS_IN_OUT" },
-    ],
-    tests: [{ file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "csi_private_modes_export_keyboard_paste_and_mouse_state" }],
-    expected: "The public terminal mode contract exposes and resets focus, UTF-8 mouse, SGR mouse, alternate-scroll, keyboard, mouse, and bracketed-paste states with mutually exclusive mouse encoding transitions.",
-    levels: ["unit", "native"],
-  },
-  {
-    id: "F7.16",
-    implementation: [{ file: "sidecars/vt-alacritty/src/engine.rs", symbol: "device_status" }],
-    tests: [
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "csi_device_status_reports_are_observable" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "unsupported_csi_window_report_is_an_explicit_error" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "unsupported_csi_rectangle_protected_and_palette_reports_are_explicit_errors" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "csi_fragmentation_and_malformed_input_preserve_engine_state" },
-    ],
-    expected: "CSI status, device-attribute, text-area, unsupported-window, intermediate, fragmented, and malformed-input paths have named observable response or rejection evidence.",
-    levels: ["unit", "native"],
-  },
-  {
-    id: "F7.17",
-    implementation: [{ file: "scripts/check-terminal-protocol-inventory.mjs", symbol: "auditTerminalProtocolInventory" }],
-    tests: [
-      { file: "scripts/test/soksak-scripts.test.mjs", id: "terminal protocol inventory rejects missing, duplicate, or unlinked CSI rows" },
-      { file: "scripts/test/soksak-scripts.test.mjs", id: "terminal protocol inventory reproduces missing and duplicate CSI rows as Red" },
-    ],
-    expected: "The pinned XTerm patch-411 CSI audit mechanically rejects missing required rows, duplicate selectors, missing named tests, and incomplete specification anchors.",
-    levels: ["unit"],
-  },
+  
+  
+  
+  
   {
     id: "F9",
     implementation: [{ file: "e2e/library.test.mjs", symbol: "restoration connection" }],
@@ -1061,12 +898,10 @@ const FEATURE_LINKS = [
     id: "F1",
     implementation: [
       { file: "e2e/terminal.test.mjs", symbol: "three terminals survive repeated divider drags and project returns" },
-      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "resize" },
     ],
     tests: [
       { file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" },
       { file: "e2e/terminal.test.mjs", id: "terminal image follows a window resize" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "soft_wraps_rejoin_but_explicit_newlines_remain_after_resize" },
     ],
     expected: "Current rebuilt Tauri and Wails windows preserve DOM/native containment and shell pixels through divider drags, while terminal resize preserves text, fixed cell metrics, and raster geometry.",
     levels: ["unit", "application"],
@@ -1078,23 +913,7 @@ const FEATURE_LINKS = [
     expected: "Three visible terminals complete six narrow-to-wide-and-back divider round trips in each of three project-return sets, with complete captures, no border intrusion, no white pixels, and no composition failure.",
     levels: ["application"],
   },
-  {
-    id: "F1.4",
-    implementation: [
-      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "resize" },
-      { file: "plugins/terminal/ui/terminal.js", symbol: "terminal.session" },
-    ],
-    tests: [
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "soft_wraps_rejoin_but_explicit_newlines_remain_after_resize" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "wide_cells_keep_their_width_and_text_through_reflow" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "cell_metrics_are_fixed_renderer_values_across_grid_resize" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "scrollback_keeps_recent_visible_lines_after_overflow_and_resize" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "alternate_screen_is_separate_from_primary_scrollback" },
-      { file: "e2e/terminal.test.mjs", id: "terminal image follows a window resize" },
-    ],
-    expected: "A narrow-to-wide resize preserves the complete logical text and explicit newlines, keeps wide-cell widths and renderer metrics fixed, retains scrollback semantics and primary/alternate isolation, and keeps the PTY, DOM plane, and native raster dimensions consistent in both hosts.",
-    levels: ["unit", "application"],
-  },
+  
   {
     id: "G1.1",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "discoverInventory" }],
@@ -1102,16 +921,7 @@ const FEATURE_LINKS = [
     expected: "The inventory discovers nested implementation and test languages without fixed package roots and reports omissions.",
     levels: ["unit"],
   },
-  {
-    id: "G1.2",
-    implementation: [
-      { file: "sidecars/vt-core/package.json", symbol: "cargo test" },
-      { file: "sidecars/vt-alacritty/package.json", symbol: "cargo test" },
-    ],
-    tests: [{ file: "scripts/test/package-test-command.test.mjs", id: "package test executes Rust tests" }],
-    expected: "Each terminal sidecar invokes its Rust test command and propagates a failing command result.",
-    levels: ["unit", "native"],
-  },
+  
   {
     id: "G1.2-1",
     implementation: [{ file: "scripts/test-command.mjs", symbol: "timeoutMs" }],
@@ -1189,7 +999,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
-      { file: "e2e/outside.test.mjs", id: "shell divider drag does not leave a white surface frame" },
+      { file: "e2e/outside.test.mjs", id: "terminal divider drag does not leave a white surface frame" },
     ],
     expected: "A complete divider recording keeps native content inside its card, keeps card and rail geometry aligned, contains no white surface frame, and returns to its initial position.",
     levels: ["native", "application"],
@@ -1197,7 +1007,6 @@ const FEATURE_LINKS = [
   {
     id: "F3.3",
     implementation: [
-      { file: "plugins/browser/ui/browser.js", symbol: "surfaceId" },
       { file: "packages/host/tauriv2/src/documents.rs", symbol: "set_document_appearance" },
       { file: "packages/host/wailsv3/src/documents.go", symbol: "SetDocumentAppearance" },
     ],
@@ -1267,8 +1076,6 @@ const FEATURE_LINKS = [
   {
     id: "F5",
     implementation: [
-      { file: "plugins/terminal/ui/terminal.js", symbol: "startTerminal" },
-      { file: "sidecars/vt-core/src/protocol.rs", symbol: "send_state" },
       { file: "packages/workbench/core-exposure.js", symbol: "registry.command" },
     ],
     tests: [
@@ -1281,12 +1088,9 @@ const FEATURE_LINKS = [
   {
     id: "F6",
     implementation: [
-      { file: "plugins/terminal/ui/terminal.js", symbol: "startTerminal" },
-      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "fn feed_with_inline_images" },
       { file: "e2e/terminal.test.mjs", symbol: "terminal file drop pastes quoted paths without executing" },
     ],
     tests: [
-      { file: "plugins/terminal/test/module.test.mjs", id: "terminal module waits for composition presentation, publishes state, and disposes the controller" },
       { file: "e2e/terminal.test.mjs", id: "native terminal selection renders and copies through one explicit paste" },
       { file: "e2e/terminal.test.mjs", id: "terminal file drop pastes quoted paths without executing" },
       { file: "e2e/terminal.test.mjs", id: "inline image pixels follow scroll, resize, replacement, deletion, and cleanup" },
@@ -1297,13 +1101,10 @@ const FEATURE_LINKS = [
   {
     id: "F6.4",
     implementation: [
-      { file: "plugins/terminal/ui/terminal.js", symbol: "pasteText" },
       { file: "packages/host/tauriv2/src/clipboard.rs", symbol: "pub(crate) fn read" },
       { file: "packages/host/wailsv3/src/clipboard.go", symbol: "func (h *Host) ClipboardRead" },
     ],
     tests: [
-      { file: "plugins/terminal/test/terminal.test.mjs", id: "terminal.paste quotes file URLs without adding an executable newline" },
-      { file: "plugins/terminal/test/terminal.test.mjs", id: "terminal.paste persists a PNG and sends its owned shell path once" },
       { file: "e2e/terminal.test.mjs", id: "native terminal selection renders and copies through one explicit paste" },
     ],
     expected: "Explicit terminal paste preserves text, inserts validated quoted file paths and owned PNG paths exactly once without a newline or automatic execution, and both native hosts preserve typed absent clipboard responses.",
@@ -1353,44 +1154,8 @@ const FEATURE_LINKS = [
     expected: "A missing IOSurface requests a fresh raster configuration, a detached frame is reported as explicit stale invalidation, and a rebuilt single-process Tauri host passes new, four, repeated, and failure-recovery split cases without a presentation error.",
     levels: ["unit", "application"],
   },
-  {
-    id: "F6.3-10",
-    implementation: [
-      { file: "plugins/terminal/ui/terminal-module.js", symbol: "mount" },
-      { file: "packages/workbench/surface-modules.js", symbol: "mountSurface" },
-    ],
-    tests: [
-      { file: "plugins/terminal/test/module.test.mjs", id: "terminal module disposes its native composition when sidecar open fails" },
-    ],
-    expected: "A terminal sidecar startup failure releases its declared native composition so the failed surface reports its error without blocking the window presentation wait.",
-    levels: ["unit"],
-  },
-  {
-    id: "F7",
-    implementation: [
-      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "OSC_SELECTOR_INVENTORY" },
-      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "impl AlacrittyEngine" },
-      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "fn osc_outcome" },
-      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "CSI_SELECTOR_INVENTORY" },
-    ],
-    tests: [
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc_selector_inventory_records_unsupported_operations" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "csi_inventory_links_only_executed_behavior_cases" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "csi_cursor_movement_and_save_restore_are_observable" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "every_unsupported_osc_inventory_selector_emits_an_explicit_error" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "unsupported_osc_selector_is_an_explicit_error_after_fragmented_bel" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "unsupported_osc_selector_is_an_explicit_error_after_st" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "vendor_osc_contracts_are_separate" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc50_cursor_shape_changes_program_cursor" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc104_resets_indexed_colors" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc_dynamic_color_resets_restore_defaults" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc_default_color_queries_match_renderer_defaults" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc_title_supports_bel_st_and_fragmentation" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc104_without_parameters_resets_all_indexed_colors" },
-    ],
-    expected: "The pinned OSC selector inventory records implemented, unsupported, and separate vendor selectors with named engine evidence; supported behaviors have executable cases and every unsupported selector emits an explicit rejection event, including fragmented BEL/ST input.",
-    levels: ["unit"],
-  },
+  
+  
   {
     id: "F8",
     implementation: [
@@ -1411,12 +1176,8 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "native/darwin/src/webview_geometry.m", symbol: "SPFileDropView" },
       { file: "packages/workbench/core-exposure.js", symbol: "dropFiles" },
-      { file: "plugins/terminal/ui/terminal.js", symbol: "dropFiles" },
-      { file: "plugins/terminal/plugin.json", symbol: "terminal.drop" },
     ],
     tests: [
-      { file: "plugins/terminal/test/terminal.test.mjs", id: "terminal file drop quotes local URLs and sends one non-executing paste" },
-      { file: "plugins/terminal/test/terminal.test.mjs", id: "terminal file drop rejects unsupported or malformed payloads without input" },
       { file: "packages/plugin-api/test/exposure.test.mjs", id: "a surface drop names a command declared in the manifest's exposes" },
       { file: "e2e/terminal.test.mjs", id: "terminal file drop pastes quoted paths without executing" },
       { file: "e2e/real/terminal.test.mjs", id: "a real Finder drag of a file and of an image pastes their quoted paths without executing" },
@@ -1424,36 +1185,8 @@ const FEATURE_LINKS = [
     expected: "A file dropped on a window reaches the native file drop view, which sends path URLs and the drop point; the page runs the drop command that the plugin of the surface under the point declares, and the terminal validates local URLs, shell-quotes all paths, and sends one non-executing paste; unsupported and malformed drops remain explicit errors on both rebuilt hosts.",
     levels: ["unit", "application"],
   },
-  {
-    id: "F6.6-1",
-    implementation: [{ file: "sidecars/vt-core/src/inline_image.rs", symbol: "pub fn parse" }],
-    tests: [
-      { file: "sidecars/vt-core/tests/inline_image_test.rs", id: "file_payload_becomes_a_bounded_inline_image_with_typed_dimensions" },
-      { file: "sidecars/vt-core/tests/inline_image_test.rs", id: "malformed_size_base64_and_dimensions_are_rejected" },
-      { file: "sidecars/vt-core/tests/inline_image_test.rs", id: "multipart_records_are_typed_and_do_not_become_a_display_by_fallback" },
-      { file: "sidecars/vt-core/tests/inline_image_test.rs", id: "oversized_encoded_payload_is_rejected_before_decoding" },
-    ],
-    expected: "OSC 1337 image records produce bounded typed outcomes, reject malformed or oversized values, and preserve explicit transfer and multipart states without fallback or silent discard.",
-    levels: ["unit", "native"],
-  },
-  {
-    id: "F6.6-2",
-    implementation: [
-      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "fn feed_with_inline_images" },
-      { file: "sidecars/vt-core/src/protocol.rs", symbol: "EngineEvent::InlineImage" },
-      { file: "sidecars/vt-core/src/platform/darwin/frame.rs", symbol: "draw_with_theme_and_inline_images" },
-    ],
-    tests: [
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "scroll_generation_advances_when_output_scrolls_the_primary_grid" },
-      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "malformed_osc1337_is_an_explicit_engine_error" },
-      { file: "sidecars/vt-core/tests/serve_contract.rs", id: "test_inline_image_event_is_explicit_and_base64_encoded" },
-      { file: "sidecars/vt-core/tests/serve_contract.rs", id: "test_inline_image_delete_is_explicit_for_unowned_names" },
-      { file: "sidecars/vt-core/tests/frame_test.rs", id: "inline_image_raster_is_composited_without_erasing_terminal_background" },
-    ],
-    expected: "Complete OSC 1337 records, including records split across PTY output chunks, become ordered typed sidecar events with base64 image bytes; malformed records remain explicit engine errors and do not get silently dropped.",
-    levels: ["unit", "native"],
-  },
+  
+  
   {
     id: "F10",
     implementation: [
@@ -1633,7 +1366,7 @@ export function auditJsFailurePropagation(files, readSource = (file) => readFile
 }
 
 /** Reject explicit Result/JoinHandle discards in the scoped Rust production lane. */
-export function auditRustFailurePropagation(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8"), scope = "sidecars/vt-core/src/") {
+export function auditRustFailurePropagation(files, readSource, scope) {
   const errors = [];
   for (const file of [...new Set(files)].sort()) {
     if (!file.startsWith(scope) || !file.endsWith(".rs") || /(^|\/)(test|tests)\//.test(file)) continue;
@@ -1711,8 +1444,6 @@ export function auditFailureMatrix(files, readSource = (file) => readFileSync(`$
   const lanes = [
     ["js-ts", auditJsFailurePropagation(files, readSource)],
     ["rust", [
-      "sidecars/vt-core/src/",
-      "sidecars/vt-alacritty/src/",
       "packages/host/tauriv2/src/",
       "apps/tauriv2/src/",
     ].flatMap((scope) => auditRustFailurePropagation(files, readSource, scope))],
@@ -1939,11 +1670,16 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // behavior link. Every completed capability must have one otherwise.
 const NON_CAPABILITY_COMPLETIONS = new Set(["F13", "G1.4-2", "V3"]);
 
+// Completed capabilities whose implementation and tests moved to a plugin or sidecar repository
+// (R1-5, docs/spec/plugins.md#repositories). Core cannot read those repositories, so their links
+// were removed here and each repository checks its own evidence.
+const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2"]);
+
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));
   const completed = [...checklistSource.matchAll(/^- \[o\] ([A-Z][A-Z0-9.-]*) —/gm)].map((match) => match[1]);
   return completed
-    .filter((id) => !NON_CAPABILITY_COMPLETIONS.has(id) && !linked.has(id))
+    .filter((id) => !NON_CAPABILITY_COMPLETIONS.has(id) && !MOVED_COMPLETIONS.has(id) && !linked.has(id))
     .map((id) => `${id}: completed capability has no feature link`);
 }
 

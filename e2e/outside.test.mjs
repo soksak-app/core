@@ -3,13 +3,13 @@ import assert from "node:assert/strict";
 import { availableParallelism, loadavg } from "node:os";
 import test from "node:test";
 
-import { APPS, drag, fresh, open } from "./app.mjs";
+import { APPS, drag, fresh, keepCommonSettings, open } from "./app.mjs";
 import { frames, readFrame } from "./frame.mjs";
-import { outside, shellMarks, whitePixels } from "./outside.mjs";
+import { outside, terminalMarks, whitePixels } from "./outside.mjs";
 import { alignment } from "./alignment.mjs";
 import { assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag } from "./drag-measurement.mjs";
 
-// 1번 세로 선은 왼쪽 고정 사이드바와 셸 카드 사이 경계다. 끌면 셸 카드의 왼쪽 가장자리가 움직인다.
+// 1번 세로 선은 왼쪽 고정 사이드바와 터미널 카드 사이 경계다. 끌면 터미널 카드의 왼쪽 가장자리가 움직인다.
 const PLAN = { axis: "x", line: 1, dx: 250, dy: 0, ms: 400, times: 2 };
 
 const READ = 0.5;
@@ -88,7 +88,7 @@ function assertNoWhiteSurfaceBleed(run, message, marks) {
   for (const [frameIndex, path] of files.entries()) {
     const frame = readFrame(path);
     const measured = outside(frame, marks);
-    assert.ok(measured, `${message}: shell/card geometry could not be measured in frame ${frameIndex}`);
+    assert.ok(measured, `${message}: terminal/card geometry could not be measured in frame ${frameIndex}`);
     const { l, r } = measured.card;
     samples.push({ time: frame.time, position: l / measured.scale });
     // 가로 끌기 동안 표면의 위아래는 움직이지 않는다. 카드 테두리 사이, 표면의 위부터 아래까지를 잰다.
@@ -112,47 +112,51 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    const marks = await shellMarks(s);
+    // 터미널의 오른쪽 오버라이드가 고정 사이드바와 레일을 터미널 카드에 묶는다.
+    await keepCommonSettings(s);
+    await s.run("core.settings.link", { place: "window-right", plugin: "terminal", set: "set-install", scope: "common" });
+    await s.until("core.rail", (rail) => rail.groups.length === 1, "the terminal override drew no rail");
+    const marks = await terminalMarks(s, { measured: true });
     const run = await drag(t, s, PLAN, { capture: true });
     const lag = assertAligned(run, marks, (await s.get("host.window")).refreshRate);
     t.diagnostic(`pointer lag: worst ${lag.lag.toFixed(1)}ms, p90 ${lag.p90.toFixed(1)}ms, median ${lag.median.toFixed(1)}ms; transactions ${lag.stages}`);
     t.diagnostic(`page handling per step (ms), first 12: ${JSON.stringify(run.handled?.slice(0, 12))}, steps 40-51: ${JSON.stringify(run.handled?.slice(40, 52))}`);
   });
 
-  test(`${app.name}: shell divider drag does not leave a white surface frame`, async (t) => {
+  test(`${app.name}: terminal divider drag does not leave a white surface frame`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    // 왼쪽 고정 사이드바와 셸 카드 사이 경계를 끈다.
-    const marks = await shellMarks(s);
+    // 왼쪽 고정 사이드바와 터미널 카드 사이 경계를 끈다.
+    const marks = await terminalMarks(s, { measured: true });
     const narrow = await drag(t, s,
       { axis: "x", line: 1, dx: 290, dy: 0, ms: 96, times: 4 }, { capture: true });
-    assertNoWhiteSurfaceBleed(narrow, "shell divider drag to narrow", marks);
+    assertNoWhiteSurfaceBleed(narrow, "terminal divider drag to narrow", marks);
     const wide = await drag(t, s,
       { axis: "x", line: 1, dx: -70, dy: 0, ms: 96, times: 4 }, { capture: true });
-    assertNoWhiteSurfaceBleed(wide, "shell divider drag back to wide", marks);
+    assertNoWhiteSurfaceBleed(wide, "terminal divider drag back to wide", marks);
   });
 }
 
-// 셸 표면은 카드와 같은 색이므로 픽셀로는 네이티브 자리와 문서의 폭을 가를 수 없다. 표면 문서가 알리는 크기
+// 터미널 표면은 카드와 같은 색이므로 픽셀로는 네이티브 자리와 문서의 폭을 가를 수 없다. 표면 문서가 알리는 크기
 // (core.surface.document)와 호스트가 앉힌 네이티브 자리(host.window)를 비교한다.
 async function assertDocumentFillsFrame(s, surface, label) {
   await s.presented();
   const frame = (await s.get("host.window")).surfaces.find((item) => item.id === surface)?.frame;
-  assert.ok(frame?.width > 0, `${label}: the shell surface ${surface} has no native frame`);
+  assert.ok(frame?.width > 0, `${label}: the terminal surface ${surface} has no native frame`);
   const { body, viewport } = await s.get("core.surface.document", surface);
   for (const [name, size] of [["body", body], ["viewport", viewport]]) {
     assert.ok(Math.abs(size.width - frame.width) <= 0.5 && Math.abs(size.height - frame.height) <= 0.5,
-      `${label}: the shell document ${name} is ${size.width}×${size.height} in a native frame of ${frame.width}×${frame.height}`);
+      `${label}: the terminal document ${name} is ${size.width}×${size.height} in a native frame of ${frame.width}×${frame.height}`);
   }
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the shell document fills its native frame before and after a divider drag`, async (t) => {
+  test(`${app.name}: the terminal document fills its native frame before and after a divider drag`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    const surface = (await s.get("core.grid")).cards.find((card) => card.id === "shell").active;
+    const surface = (await s.get("core.grid")).cards.find((card) => card.id === "terminal").active;
     await assertDocumentFillsFrame(s, surface, "at rest");
     await drag(t, s, { axis: "x", line: 1, dx: 250, dy: 0, ms: 96, times: 1 });
     await assertDocumentFillsFrame(s, surface, "after the drag");

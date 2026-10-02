@@ -11,7 +11,7 @@
     }
   },
   "workspace": {
-    "focus": "shell",
+    "focus": "terminal",
     "grid": {
       "xs": [
         0,
@@ -35,20 +35,12 @@
           "fixed": true
         },
         {
-          "id": "shell",
+          "id": "terminal",
           "c0": 1,
           "c1": 2,
           "r0": 0,
           "r1": 1,
           "tabs": [
-            {
-              "plugin": "shell",
-              "title": ">_ 셸"
-            },
-            {
-              "plugin": "shell",
-              "title": ">_ 빌드"
-            },
             {
               "plugin": "terminal",
               "title": "터미널"
@@ -92,23 +84,6 @@
         "layout": "list"
       },
       {
-        "id": "set-shell",
-        "title": "셸",
-        "sections": [
-          "shell.history",
-          "shell.cwd"
-        ],
-        "layout": "list"
-      },
-      {
-        "id": "set-process",
-        "title": "프로세스",
-        "sections": [
-          "shell.jobs"
-        ],
-        "layout": "list"
-      },
-      {
         "id": "set-page",
         "title": "페이지",
         "sections": [
@@ -132,16 +107,6 @@
         "place": "left",
         "plugin": null,
         "set": "set-install"
-      },
-      {
-        "place": "card-left",
-        "plugin": "shell",
-        "set": "set-shell"
-      },
-      {
-        "place": "window-right",
-        "plugin": "shell",
-        "set": "set-process"
       },
       {
         "place": "window-right",

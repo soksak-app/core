@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { glyphShape, outside, shellLine, surfaceBoxes, whitePixels } from "./outside.mjs";
+import { glyphShape, outside, rasterRow, surfaceBoxes, whitePixels } from "./outside.mjs";
 import { bare, cardSize } from "./surface.mjs";
 import { assertHeldStatesShown, assertRoundTrips } from "./drag-measurement.mjs";
 
@@ -94,8 +94,10 @@ test("glyph measurement distinguishes translation from stretching and missing te
   assert.throws(() => glyphShape(frame, area), /no glyph/);
 });
 
-// 셸 표면은 카드 색이다. 카드(테두리 10..110, 머리 행 20)와 그 안의 셸 입력 구분선(행 100)만 있는 프레임.
-function shellFixture() {
+// 터미널의 기본 배경은 카드 색이다. 카드(테두리 10..110, 머리 행 20)와 그 안에서 측정용 배경으로 칠한 터미널
+// 래스터(행 100..120)만 있는 프레임.
+const MEASURED = [30, 30, 30];
+function terminalFixture() {
   const frame = { width: 200, height: 160, stride: 800, scale: 1, data: Buffer.alloc(800 * 160) };
   const paint = (l, t, r, b, rgb) => {
     for (let y = t; y < b; y++) for (let x = l; x < r; x++) {
@@ -105,32 +107,34 @@ function shellFixture() {
   paint(0, 0, 200, 160, [16, 17, 23]);
   paint(10, 10, 111, 150, [43, 46, 61]);
   paint(11, 11, 110, 149, [25, 27, 36]);
-  paint(11, 100, 110, 101, [43, 46, 61]);
-  return { frame, paint, marks: { head: 20, top: 30, bottom: 130, cx: 85 } };
+  paint(11, 100, 110, 120, MEASURED);
+  return { frame, paint, marks: { head: 20, top: 30, bottom: 130, cx: 85, colour: MEASURED } };
 }
 
-test("the shell line locates a card-colored surface and its overflow past the card", () => {
-  const { frame, paint, marks } = shellFixture();
+test("the raster row locates the measured terminal background and its overflow past the card", () => {
+  const { frame, paint, marks } = terminalFixture();
   const inside = outside(frame, marks);
-  // 포커스 없는 카드의 테두리는 구분선과 같은 --edge 이므로 구간이 테두리까지 이어진다.
   assert.deepEqual({ out: inside.out, card: inside.card, surface: inside.surface },
-    { out: 0, card: { l: 10, r: 110 }, surface: { l: 10, r: 110 } });
-  // 표면이 카드보다 3px 오른쪽으로 나가 통로에 그려진 프레임.
-  paint(110, 100, 114, 101, [43, 46, 61]);
+    { out: 0, card: { l: 10, r: 110 }, surface: { l: 11, r: 109 } });
+  // 래스터가 카드보다 3px 오른쪽으로 나가 테두리와 통로에 그려진 프레임.
+  paint(109, 100, 114, 120, MEASURED);
   assert.equal(outside(frame, marks).out, 3);
 });
 
-test("the shell line ignores glyph edges and half-covered rows are still the line", () => {
-  const { frame, paint } = shellFixture();
-  // 글자 가장자리처럼 흐린 픽셀 몇 개는 선이 아니다.
-  paint(80, 60, 86, 61, [34, 37, 48]);
-  // 1pt 선이 두 장치 픽셀에 반씩 걸친 경우.
-  paint(11, 100, 110, 102, [34, 37, 48]);
-  assert.deepEqual(shellLine(frame, { cx: 85, top: 31, bottom: 130 }), { y: 100, l: 10, r: 110 });
+test("the raster row reads the longest measured run from the empty rows at the bottom", () => {
+  const { frame, paint } = terminalFixture();
+  assert.deepEqual(rasterRow(frame, MEASURED, { from: 149, to: 30 }), { y: 119, l: 11, r: 109 });
+  // 크기가 바뀌는 동안 이전 크기의 래스터가 왼쪽에 붙고 오른쪽은 카드 색으로 남는다.
+  paint(90, 100, 110, 120, [25, 27, 36]);
+  assert.deepEqual(rasterRow(frame, MEASURED, { from: 149, to: 30 }), { y: 119, l: 11, r: 89 });
+  // 글자 획이 배경을 LINE 보다 짧게 나눈 행은 건너뛴다.
+  for (let x = 30; x < 90; x += 30) paint(x, 119, x + 1, 120, [204, 204, 204]);
+  assert.deepEqual(rasterRow(frame, MEASURED, { from: 149, to: 30 }), { y: 118, l: 11, r: 89 });
+  assert.equal(rasterRow(frame, MEASURED, { from: 99, to: 30 }), null);
 });
 
 test("an unrendered white area next to the card color is found and card text is not", () => {
-  const { frame, paint } = shellFixture();
+  const { frame, paint } = terminalFixture();
   assert.equal(bare(frame), 0);
   paint(40, 40, 70, 48, [236, 236, 245]);
   assert.equal(bare(frame), 0, "--fg text is not an unrendered area");
@@ -139,7 +143,7 @@ test("an unrendered white area next to the card color is found and card text is 
 });
 
 test("the card size follows the card borders from a point in its header", () => {
-  const { frame, paint } = shellFixture();
+  const { frame, paint } = terminalFixture();
   assert.deepEqual(cardSize(frame, { x: 85, y: 20 }), { width: 101, height: 130 });
   paint(10, 10, 60, 150, [16, 17, 23]);
   paint(60, 10, 61, 150, [43, 46, 61]);
@@ -147,7 +151,7 @@ test("the card size follows the card borders from a point in its header", () => 
 });
 
 test("the card size rejects a missing card but tolerates one covered probe pixel", () => {
-  const { frame, paint } = shellFixture();
+  const { frame, paint } = terminalFixture();
   paint(84, 20, 87, 21, [16, 17, 23]);
   assert.deepEqual(cardSize(frame, { x: 85, y: 20 }), { width: 101, height: 130 });
   paint(10, 10, 111, 151, [16, 17, 23]);

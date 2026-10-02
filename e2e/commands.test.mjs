@@ -25,16 +25,16 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const start = await s.get("core.grid");
-    const shell = cardOf(start, "shell");
+    const terminal = cardOf(start, "terminal");
     const browser = cardOf(start, "browser");
-    assert.ok(shell && browser, `the start layout must have shell and browser cards: ${ids(start)}`);
-    assert.equal(shell.acts.add.enabled, true, "the shell card must be able to add a tab");
+    assert.ok(terminal && browser, `the start layout must have terminal and browser cards: ${ids(start)}`);
+    assert.equal(terminal.acts.add.enabled, true, "the terminal card must be able to add a tab");
 
     await s.run("core.card.focus", { card: "browser" });
     await s.until("core.grid", (grid) => cardOf(grid, "browser").focused, "core.card.focus did not focus the card");
 
     // 추가 메뉴를 열고 닫은 뒤, 다시 열어 항목을 고른다.
-    await s.run("core.card.menu", { card: "shell", menu: "add" });
+    await s.run("core.card.menu", { card: "terminal", menu: "add" });
     const menu = await s.until("core.picker", (picker) => picker.open && picker.items.length > 0,
       "core.card.menu did not open the add menu");
     await s.until("core.modal", (modal) => modal?.id === "picker", "the add menu did not show its modal");
@@ -42,26 +42,26 @@ for (const app of Object.values(APPS)) {
     await s.until("core.picker", (picker) => !picker.open, "core.picker.close did not close the menu");
     const browserItem = menu.items.findIndex((item) => item.key === "browser");
     assert.ok(browserItem >= 0, `the add menu must list the browser: ${JSON.stringify(menu.items)}`);
-    await s.run("core.card.menu", { card: "shell", menu: "add" });
+    await s.run("core.card.menu", { card: "terminal", menu: "add" });
     await s.until("core.picker", (picker) => picker.open, "the add menu did not open again");
     await s.run("core.picker.pick", { index: browserItem });
-    const picked = await s.until("core.grid", (grid) => cardOf(grid, "shell").tabs.length === shell.tabs.length + 1,
+    const picked = await s.until("core.grid", (grid) => cardOf(grid, "terminal").tabs.length === terminal.tabs.length + 1,
       "core.picker.pick did not add a tab");
     assert.equal((await s.get("core.picker")).open, false, "picking must close the menu");
-    const added = cardOf(picked, "shell");
+    const added = cardOf(picked, "terminal");
     assert.equal(added.tabs.at(-1).plugin, "browser");
     assert.equal(added.active, added.tabs.at(-1).id, "the added tab must be active");
 
-    await s.run("core.tab.select", { tab: shell.tabs[0].id });
-    await s.until("core.grid", (grid) => cardOf(grid, "shell").active === shell.tabs[0].id,
+    await s.run("core.tab.select", { tab: terminal.tabs[0].id });
+    await s.until("core.grid", (grid) => cardOf(grid, "terminal").active === terminal.tabs[0].id,
       "core.tab.select did not activate the tab");
     await s.run("core.tab.close", { tab: added.tabs.at(-1).id });
-    await s.until("core.grid", (grid) => cardOf(grid, "shell").tabs.length === shell.tabs.length,
+    await s.until("core.grid", (grid) => cardOf(grid, "terminal").tabs.length === terminal.tabs.length,
       "core.tab.close did not close the tab");
 
     // 탭을 다른 카드의 가운데로, 그다음 변으로 옮긴다.
-    const { tab } = await s.run("core.card.add-tab", { card: "shell", plugin: "browser" });
-    await s.until("core.grid", (grid) => holder(grid, tab)?.id === "shell", "core.card.add-tab did not add the tab");
+    const { tab } = await s.run("core.card.add-tab", { card: "terminal", plugin: "browser" });
+    await s.until("core.grid", (grid) => holder(grid, tab)?.id === "terminal", "core.card.add-tab did not add the tab");
     await s.run("core.tab.move", { tab, card: "browser", zone: "centre" });
     await s.until("core.grid", (grid) => holder(grid, tab)?.id === "browser", "core.tab.move did not move the tab to the centre");
     await s.run("core.tab.move", { tab, card: "browser", zone: "right" });
@@ -80,23 +80,23 @@ for (const app of Object.values(APPS)) {
       top: (born, base) => born.y + born.h <= base.y, bottom: (born, base) => born.y >= base.y + base.h,
     };
     for (const side of ["left", "right", "top", "bottom"]) {
-      const result = await s.run("core.card.split", { card: "shell", side, plugin: "browser" });
+      const result = await s.run("core.card.split", { card: "terminal", side, plugin: "browser" });
       const split = await s.until("core.grid", (grid) => cardOf(grid, result.card), `core.card.split ${side} did not add a card`);
       const born = cardOf(split, result.card);
       assert.equal(born.tabs[0].plugin, "browser");
-      assert.ok(beside[side](born, cardOf(split, "shell")), `the ${side} split put the new card at ${JSON.stringify(born)}`);
+      assert.ok(beside[side](born, cardOf(split, "terminal")), `the ${side} split put the new card at ${JSON.stringify(born)}`);
       await s.run("core.card.close", { card: result.card });
       await s.until("core.grid", (grid) => ids(grid).join() === ids(start).join(), `closing the ${side} split did not restore the layout`);
     }
-    await assert.rejects(s.run("core.card.split", { card: "shell", axis: "x", plugin: "browser" }), /unknown side undefined/);
+    await assert.rejects(s.run("core.card.split", { card: "terminal", axis: "x", plugin: "browser" }), /unknown side undefined/);
 
-    await s.run("core.card.tab-list", { card: "shell" });
+    await s.run("core.card.tab-list", { card: "terminal" });
     const list = await s.until("core.picker", (picker) => picker.open, "core.card.tab-list did not open the tab list");
-    assert.equal(list.items.length, shell.tabs.length);
+    assert.equal(list.items.length, terminal.tabs.length);
     await s.run("core.picker.close");
     await s.until("core.picker", (picker) => !picker.open, "the tab list did not close");
 
-    const second = await s.run("core.card.split", { card: "shell", side: "bottom", plugin: "browser" });
+    const second = await s.run("core.card.split", { card: "terminal", side: "bottom", plugin: "browser" });
     await s.until("core.grid", (grid) => panes(grid).length === panes(start).length + 1, "the second split did not add a card");
     await s.run("core.card.close", { card: second.card });
     await s.until("core.grid", (grid) => ids(grid).join() === ids(start).join(), "closing the second split did not restore the layout");

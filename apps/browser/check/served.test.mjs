@@ -82,7 +82,9 @@ async function openProject(t, replaced, opened = `async () => {
     if (document.body.dataset.screen !== "workspace") return false;
     const { registry } = await import("/exposure.js");
     const reply = await registry.handle({ method: "status.get", params: { name: "core.sidebars" } });
-    const sections = reply.result.flatMap((sidebar) => sidebar.sections);
+    // 목록 배치는 모든 섹션을, 탭 배치는 고른 탭의 섹션만 그린다(docs/spec/plugins.md).
+    const sections = reply.result.flatMap((sidebar) => sidebar.layout === "tabs"
+      ? sidebar.sections.filter((section) => section.id === sidebar.tab) : sidebar.sections);
     return sections.length > 0 && sections.every((section) => section.mounted || section.error);
   }`) {
   assert.ok(existsSync(join(BUILD, "index.html")), `${BUILD} is not staged; run pnpm -F @soksak/browser frontend`);
@@ -165,18 +167,18 @@ test("a project opens in the served browser example without a console error", as
 });
 
 test("a tab of a plugin that is not loaded opens as a placeholder card without an error", async (t) => {
-  // 환경의 workspace 가 shell 탭을 두므로, shell 을 뺀 플러그인 목록에서는 그 탭이 placeholder 다(docs/spec/plugins.md).
+  // 환경의 workspace 가 terminal 탭을 두므로, terminal 을 뺀 플러그인 목록에서는 그 탭이 placeholder 다(docs/spec/plugins.md).
   const installed = JSON.parse(readFileSync(join(BUILD, "installed-plugins.json"), "utf8"));
-  assert.ok(installed.plugins.some((plugin) => plugin.id === "shell"), "the staged plugin list has no shell plugin");
-  // shell 이 없으면 사이드바 세트의 shell 섹션도 그려지지 않으므로, 열림은 자리 표시가 보이는 것으로 판정한다.
+  assert.ok(installed.plugins.some((plugin) => plugin.id === "terminal"), "the staged plugin list has no terminal plugin");
+  // 열림은 자리 표시가 보이는 것으로 판정한다.
   const { evaluate, errors } = await openProject(t, {
-    "installed-plugins.json": { plugins: installed.plugins.filter((plugin) => plugin.id !== "shell") },
+    "installed-plugins.json": { plugins: installed.plugins.filter((plugin) => plugin.id !== "terminal") },
   }, `() => document.body.dataset.screen === "workspace" && document.querySelector("[data-plugin-placeholder]")`);
   const surfaces = await evaluate(`(async () => { const { registry } = await import("/exposure.js");
     return (await registry.handle({ method: "status.get", params: { name: "core.surfaces" } })).result
       .filter((surface) => surface.placeholder !== null).map((surface) => [surface.plugin, surface.placeholder]); })()`);
-  assert.ok(surfaces.length > 0 && surfaces.every(([plugin, reason]) => plugin === "shell" && reason === "host"), JSON.stringify(surfaces));
+  assert.ok(surfaces.length > 0 && surfaces.every(([plugin, reason]) => plugin === "terminal" && reason === "host"), JSON.stringify(surfaces));
   const lines = await evaluate(`[...document.querySelectorAll('[data-plugin-placeholder]')].map((el) => el.textContent)`);
-  assert.ok(lines.length > 0 && lines.every((line) => line === "shell 플러그인은 네이티브 호스트가 있어야 설치됩니다."), JSON.stringify(lines));
+  assert.ok(lines.length > 0 && lines.every((line) => line === "terminal 플러그인은 네이티브 호스트가 있어야 설치됩니다."), JSON.stringify(lines));
   assert.deepEqual(errors, [], `the page reported errors: ${errors.join("; ")}`);
 });

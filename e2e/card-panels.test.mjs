@@ -50,14 +50,14 @@ for (const app of Object.values(APPS)) {
       `folded sidebars must reserve only two 6-point dividers: ${JSON.stringify(foldedSurface)}`);
   });
 
-  // 사용자 release 에서 shell 카드에 left/right/top 을 190 포인트씩 지정했는데 native 표면이 카드 폭과 거의 같았다
+  // 사용자 release 에서 셸 카드에 left/right/top 을 190 포인트씩 지정했는데 native 표면이 카드 폭과 거의 같았다
   // (V5-116-4-11-2). 같은 지정에서 native 사각형, grip 등록, DOM 과 native 의 일치를 함께 잰다.
-  test(`${app.name}: left, right and top panels on the shell card reserve their space in the native surface`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: left, right and top panels on the terminal card reserve their space in the native surface`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
-    const card = (await s.get("core.grid")).cards.find((item) => item.id === "shell");
-    assert.ok(card, "the fixture has no shell card");
+    const card = (await s.get("core.grid")).cards.find((item) => item.id === "terminal");
+    assert.ok(card, "the fixture has no terminal card");
     const set = (await s.get("core.settings")).values.sets[0];
     for (const side of ["left", "right", "top"]) {
       await s.run("core.card.sidebar.set", { card: card.id, side, set: set.id });
@@ -79,8 +79,8 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(off, [], `the native surface does not leave the panel space: ${JSON.stringify({ expected,
       applied: surface.applied, card: measured, sidebars: measured.sidebars })}`);
     const drawn = (await s.get("core.sidebars")).filter((item) => item.sidebar.startsWith(`${card.id}:`));
-    assert.deepEqual(drawn.map((item) => item.sidebar).sort(), ["shell:left", "shell:right", "shell:top"],
-      "the shell card does not draw exactly its three assigned panels");
+    assert.deepEqual(drawn.map((item) => item.sidebar).sort(), ["terminal:left", "terminal:right", "terminal:top"],
+      "the terminal card does not draw exactly its three assigned panels");
     // 카드 패널마다 grip 하나가 입력 영역을 가진다.
     const panels = (await s.get("core.sidebars")).filter((item) => /:(left|right|top|bottom)$/.test(item.sidebar));
     for (let index = 0; index < panels.length; index++) {
@@ -89,7 +89,7 @@ for (const app of Object.values(APPS)) {
     }
     const failed = (await s.get("core.verify")).rows.filter((row) => !row.ok);
     assert.deepEqual(failed, [], "DOM and native geometry disagree");
-    t.diagnostic(`shell panels ${JSON.stringify({ expected, applied: surface.applied })}`);
+    t.diagnostic(`terminal panels ${JSON.stringify({ expected, applied: surface.applied })}`);
   });
 
   // 끌기는 소수 크기를 넘긴다. 카드 테두리, divider, 준비한 표면 사각형은 장치 pixel 격자를 쓴다
@@ -98,8 +98,8 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
-    const card = (await s.get("core.grid")).cards.find((item) => item.id === "shell");
-    assert.ok(card, "the fixture has no shell card");
+    const card = (await s.get("core.grid")).cards.find((item) => item.id === "terminal");
+    assert.ok(card, "the fixture has no terminal card");
     const set = (await s.get("core.settings")).values.sets[0];
     const scale = (await s.get("host.window")).scale;
     const sizes = { left: 120.5, top: 130.25, right: 140.75 };
@@ -111,7 +111,7 @@ for (const app of Object.values(APPS)) {
     const measured = (await s.get("core.grid")).cards.find((item) => item.id === card.id);
     for (const [side, size] of Object.entries(sizes)) assert.equal(measured.sidebars[side].size, size, `${side} size was not kept`);
     const surface = (await s.surfaces()).find((item) => item.surface === measured.active);
-    assert.ok(surface?.applied, "the shell surface is not presented");
+    assert.ok(surface?.applied, "the terminal surface is not presented");
     const onGrid = (value) => Math.abs(value * scale - Math.round(value * scale)) < 1e-6;
     const edges = { left: surface.applied.x, top: surface.applied.y, right: surface.applied.x + surface.applied.w,
       bottom: surface.applied.y + surface.applied.h };
@@ -134,10 +134,15 @@ for (const app of Object.values(APPS)) {
     const grid0 = await s.get("core.grid");
     let card0 = grid0.cards.find((item) => item.tabs.length);
     assert.ok(card0, "no content card to hold panels");
-    // 탭 전환 검사는 항상 다른 플러그인의 탭으로 한다. 없으면 검사할 수 없으므로 실패한다.
-    const { original, other, from } = tabSwitchPair(card0, grid0.cards);
-    if (from !== card0.id) await s.run("core.tab.move", { tab: other.id, card: card0.id, zone: "centre" });
+    // 탭 전환 검사는 항상 다른 플러그인의 탭으로 한다. 카드에 없으면 다른 카드의 탭을 옮기지 않고 브라우저 탭을
+    // 더한다. 옮기면 그 카드가 비어 사라지고 배치가 바뀐다.
+    if (!card0.tabs.some((tab) => tab.plugin !== card0.tabs.find((item) => item.id === card0.active).plugin)) {
+      const { tab } = await s.run("core.card.add-tab", { card: card0.id, plugin: "browser" });
+      s.cleanup(() => s.run("core.tab.close", { tab }));
+      await s.run("core.tab.select", { tab: card0.active });
+    }
     card0 = (await s.get("core.grid")).cards.find((item) => item.id === card0.id);
+    const { original, other } = tabSwitchPair(card0, [card0]);
 
     // 사방 지정 — 카드 데이터이므로 어떤 카드든 받는다.
     for (const side of ["top", "bottom", "left", "right"]) {

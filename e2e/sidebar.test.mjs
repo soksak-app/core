@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, fresh, open, terminalCardSidebar } from "./app.mjs";
 import { rmSync } from "node:fs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 
@@ -17,6 +17,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await terminalCardSidebar(s);
     const railed = (grid) => grid.cards.filter((card) => card.id.startsWith("rail-"));
     const grid = await s.until("core.grid", (value) => railed(value).length === 0 && value.cards.some((card) => card.sidebars?.left),
       "no card holds an inset sidebar");
@@ -100,40 +101,40 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
-    const shellSidebar = "shell:left";
+    await terminalCardSidebar(s);
+    const cardSidebar = "terminal:left";
     const of = (sidebars, id) => sidebars.find((item) => item.sidebar === id);
     const mounted = (item, ids) => item && ids.every((id) => item.sections.find((value) => value.id === id)?.mounted);
 
-    // list: 셸 레일의 세트는 두 섹션을 모두 마운트한다.
-    let sidebars = await s.until("core.sidebars", (value) => mounted(of(value, shellSidebar), ["shell.history", "shell.cwd"]),
-      "the shell card sidebar did not mount both sections");
-    const listed = of(sidebars, shellSidebar);
+    // list: 터미널 카드 사이드바의 세트는 두 섹션을 모두 마운트한다.
+    let sidebars = await s.until("core.sidebars", (value) => mounted(of(value, cardSidebar), ["files.tree", "files.bookmarks"]),
+      "the terminal card sidebar did not mount both sections");
+    const listed = of(sidebars, cardSidebar);
     assert.equal(listed.layout, "list");
     assert.deepEqual(listed.sections.map((item) => [item.id, item.folded, item.error]),
-      [["shell.history", false, null], ["shell.cwd", false, null]]);
-    const shellCard = (await s.get("core.grid")).cards.find((card) => card.id === "shell");
-    assert.deepEqual([listed.card, listed.surface], ["shell", shellCard.active], "the sections received the focused card and tab");
+      [["files.tree", false, null], ["files.bookmarks", false, null]]);
+    const terminalCard = (await s.get("core.grid")).cards.find((card) => card.id === "terminal");
+    assert.deepEqual([listed.card, listed.surface], ["terminal", terminalCard.active], "the sections received the focused card and tab");
     // 네이티브 클릭으로 머리를 누르면 그 섹션이 접힌다.
-    await press(s, "core.sidebar.section.header", indexOf(sidebars, "list", shellSidebar, "shell.cwd"));
-    sidebars = await s.until("core.sidebars", (value) => of(value, shellSidebar)?.sections[1].folded === true,
+    await press(s, "core.sidebar.section.header", indexOf(sidebars, "list", cardSidebar, "files.bookmarks"));
+    sidebars = await s.until("core.sidebars", (value) => of(value, cardSidebar)?.sections[1].folded === true,
       "a click on the header did not fold the section");
-    assert.equal(of(sidebars, shellSidebar).sections[0].folded, false);
+    assert.equal(of(sidebars, cardSidebar).sections[0].folded, false);
 
     // tabs: 같은 세트를 tabs 로 바꾸면 고른 섹션 하나만 마운트한다.
     const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-shell" ? { ...set, layout: "tabs" } : set) },
+    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-files" ? { ...set, layout: "tabs" } : set) },
       scope: "common" });
-    sidebars = await s.until("core.sidebars", (value) => of(value, shellSidebar)?.layout === "tabs" && mounted(of(value, shellSidebar), ["shell.history"]),
+    sidebars = await s.until("core.sidebars", (value) => of(value, cardSidebar)?.layout === "tabs" && mounted(of(value, cardSidebar), ["files.tree"]),
       "the tabs layout did not mount the first section");
-    assert.equal(of(sidebars, shellSidebar).tab, "shell.history");
-    assert.equal(of(sidebars, shellSidebar).sections[1].mounted, false, "a section of an unselected tab is mounted");
-    await press(s, "core.sidebar.section.tab", indexOf(sidebars, "tabs", shellSidebar, "shell.cwd"));
-    sidebars = await s.until("core.sidebars", (value) => of(value, shellSidebar)?.tab === "shell.cwd" && mounted(of(value, shellSidebar), ["shell.cwd"]),
+    assert.equal(of(sidebars, cardSidebar).tab, "files.tree");
+    assert.equal(of(sidebars, cardSidebar).sections[1].mounted, false, "a section of an unselected tab is mounted");
+    await press(s, "core.sidebar.section.tab", indexOf(sidebars, "tabs", cardSidebar, "files.bookmarks"));
+    sidebars = await s.until("core.sidebars", (value) => of(value, cardSidebar)?.tab === "files.bookmarks" && mounted(of(value, cardSidebar), ["files.bookmarks"]),
       "a click on the tab did not show its section");
-    assert.equal(of(sidebars, shellSidebar).sections[0].mounted, false, "the previous tab's section stayed mounted");
+    assert.equal(of(sidebars, cardSidebar).sections[0].mounted, false, "the previous tab's section stayed mounted");
 
-    await assert.rejects(s.run("core.sidebar.section.fold", { sidebar: shellSidebar, section: "shell.cwd" }), /does not use the list layout/);
+    await assert.rejects(s.run("core.sidebar.section.fold", { sidebar: cardSidebar, section: "files.bookmarks" }), /does not use the list layout/);
   });
 }
 
@@ -151,56 +152,6 @@ const controlIndex = (sidebars, sidebar, section, at) => {
   }
   throw new Error(`no section ${section} in ${sidebar}`);
 };
-
-for (const app of Object.values(APPS)) {
-  test(`${app.name}: the shell sections show the shell's directory, written lines, and pending runs`, async (t) => {
-    const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
-    await fresh(s);
-    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
-    const shellSidebar = "shell:left";
-    const sections = ["shell.history", "shell.cwd", "shell.jobs"];
-    const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-shell" ? { ...set, sections } : set) },
-      scope: "common" });
-    const of = (sidebars) => sidebars.find((item) => item.sidebar === shellSidebar);
-    const text = (sidebars, id) => of(sidebars)?.sections.find((item) => item.id === id)?.text;
-    let sidebars = await s.until("core.sidebars", (value) => sections.every((id) => text(value, id) !== undefined
-      && of(value).sections.find((item) => item.id === id).mounted), "the shell card sidebar did not mount the three sections");
-    const surface = of(sidebars).surface;
-    assert.ok(surface, "the shell card sidebar sections received the shell tab");
-
-    // cwd: 섹션은 shell.cwd 가 보고한 디렉터리를 보인다.
-    await s.run("shell.write", { data: "cd /\n" }, surface);
-    await s.until("shell.cwd", (cwd) => cwd === "/", "the shell did not report /", { surface });
-    sidebars = await s.until("core.sidebars", (value) => text(value, "shell.cwd") === "/",
-      "the cwd section did not show the reported directory");
-
-    // 실행 기록: 쓴 줄이 항목이 되고, 항목을 네이티브 클릭으로 누르면 같은 줄을 다시 쓴다.
-    const history = await s.get("shell.history", surface);
-    assert.equal(history.at(-1), "cd /");
-    sidebars = await s.until("core.sidebars", (value) => text(value, "shell.history") === history.join(""),
-      "the run history section did not show shell.history");
-    await press(s, "core.sidebar.section.control", controlIndex(sidebars, shellSidebar, "shell.history", history.length - 1));
-    await s.until("shell.history", (value) => value.length === history.length + 1 && value.at(-1) === "cd /",
-      "a click on a history entry did not write the line again", { surface });
-
-    // 작업: 끝나지 않은 shell.run 이 보이고, 중단 단추가 그 실행을 끝낸다.
-    const running = s.run("shell.run", { command: "sleep 30" }, surface).catch((error) => error);
-    await s.until("shell.jobs", (value) => value.length === 1 && value[0].command === "sleep 30",
-      "shell.jobs did not report the run", { surface });
-    sidebars = await s.until("core.sidebars", (value) => text(value, "shell.jobs") === "sleep 30중단",
-      "the jobs section did not show the pending run");
-    const entries = (await s.get("shell.history", surface)).length;
-    await press(s, "core.sidebar.section.control", controlIndex(sidebars, shellSidebar, "shell.jobs", 0));
-    await s.until("shell.jobs", (value) => value.length === 0, "the interrupt control did not end the run", { surface });
-    assert.equal((await s.get("shell.history", surface)).length, entries, "the press wrote a history line instead");
-    const ended = await running;
-    assert.notEqual(ended?.exit, 0, `the interrupted run did not report a failure: ${JSON.stringify(ended)}`);
-    await s.until("core.sidebars", (value) => text(value, "shell.jobs") === "실행 중인 작업 없음",
-      "the jobs section did not show that no run is pending");
-  });
-}
 
 /** 경로 이름을 제목으로 갖는 문서를 주는 루프백 서버. 검사가 끝나면 닫는다. */
 async function serveTitles(t) {
@@ -317,6 +268,9 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    // 오른쪽 사이드바는 초점 카드인 터미널의 오른쪽 오버라이드로 보인다.
+    await terminalCardSidebar(s);
+    await s.run("core.settings.link", { place: "window-right", plugin: "terminal", set: "set-install", scope: "common" });
     const locate = async (sidebar) => {
       const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === sidebar)?.sections.every((item) => item.mounted),
         `sidebar ${sidebar} did not mount its sections`);
@@ -349,18 +303,18 @@ for (const app of Object.values(APPS)) {
     const ratio = await headerRuleContrast(s, (await locate("left")).header);
     assert.ok(ratio >= DESIGN_RULE_CONTRAST, `the header rule contrast ${ratio.toFixed(3)} is below the design's ${DESIGN_RULE_CONTRAST.toFixed(3)}`);
     // 카드 안쪽 사이드바는 카드 머리 줄을 함께 쓰므로 첫 섹션이 그 머리 바로 아래에서 시작한다.
-    await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "shell:left"), "the inset sidebar was not drawn");
-    const shellHeader = (await rects(s, "core.card.header")).reduce((a, b) => (b.y < a.y ? b : a));
-    const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === "shell:left")?.sections.every((item) => item.mounted),
+    await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "terminal:left"), "the inset sidebar was not drawn");
+    const cardHeader = (await rects(s, "core.card.header")).reduce((a, b) => (b.y < a.y ? b : a));
+    const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === "terminal:left")?.sections.every((item) => item.mounted),
       "the inset sidebar did not mount its sections");
-    const box = await s.rect("core.sidebar", sidebars.findIndex((item) => item.sidebar === "shell:left"));
-    assert.ok(near(box.y, shellHeader.y + shellHeader.height), `shell: the inset sections start at ${box.y}, the card header ends at ${shellHeader.y + shellHeader.height}`);
+    const box = await s.rect("core.sidebar", sidebars.findIndex((item) => item.sidebar === "terminal:left"));
+    assert.ok(near(box.y, cardHeader.y + cardHeader.height), `terminal: the inset sections start at ${box.y}, the card header ends at ${cardHeader.y + cardHeader.height}`);
     // 카드 안 사이드바는 상태 줄이 없고 섹션이 카드 발의 위 선까지 채운다.
     const inside = (rect) => rect.x + rect.width / 2 > box.x && rect.x + rect.width / 2 < box.x + box.width;
     assert.deepEqual((await rects(s, "core.sidebar.status")).filter(inside), [], "the inset sidebar has a status line");
     const footer = (await rects(s, "core.card.status")).find((rect) => rect.x <= box.x + 0.5 && rect.x + rect.width >= box.x + box.width - 0.5
       && rect.y >= box.y);
-    assert.ok(footer && near(box.y + box.height, footer.y), `shell: the inset sections end at ${box.y + box.height}, the card footer starts at ${footer?.y}`);
+    assert.ok(footer && near(box.y + box.height, footer.y), `terminal: the inset sections end at ${box.y + box.height}, the card footer starts at ${footer?.y}`);
   });
 }
 
@@ -428,9 +382,9 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
+    await terminalCardSidebar(s);
     const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-shell" ? { ...set, layout: "tabs" } : set) },
+    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-files" ? { ...set, layout: "tabs" } : set) },
       scope: "common" });
     const check = async (sidebar) => {
       const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === sidebar)?.layout === "tabs",
@@ -447,7 +401,7 @@ for (const app of Object.values(APPS)) {
         assert.ok(near(tab.height, strip.height), `${sidebar}: tab ${item.sections[index].id} is ${tab.height} pt high in a ${strip.height} pt strip`);
       }
     };
-    await check("shell:left");
+    await check("terminal:left");
     // 우측 사이드바는 브라우저 카드에 포커스하면 tabs 레이아웃의 브라우저 세트를 보인다.
     await s.run("core.card.focus", { card: "browser" });
     await check("right");

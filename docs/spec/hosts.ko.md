@@ -84,7 +84,7 @@ Go: 각 `src/platform/<os>/` 디렉터리는 Go 패키지다. 대표 파일(`dar
 
 Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os = "macos")]` 또는 `#[cfg(windows)]`와 `#[path = "<os>/<os>.rs"]`로 선언한다. `platform::current()`는 대상 운영체제의 구현을 반환하고, 다른 대상에서는 오류를 반환한다. 각 운영체제 모듈은 자신의 파일을 `#[path]`로 선언한다.
 
-셸 사이드카는 `sidecars/shell/src/platform/`에서 같은 Go 방식을 사용한다.
+셸 사이드카 repository는 자기 `src/platform/`에서 같은 Go 방식을 사용한다([Repository](plugins.ko.md#repository)).
 
 ## 플랫폼 인터페이스
 
@@ -197,7 +197,7 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 
 | 파일 | 내용 |
 | --- | --- |
-| `go.work` | `apps/wailsv3`, `packages/host/wailsv3`, `packages/sok/wailsv3`, `sidecars/files`, `sidecars/shell`을 사용하고, 호스트 모듈과 command line 모듈 `v0.0.0`을 `./packages/host/wailsv3`와 `./packages/sok/wailsv3`로 대체한다 |
+| `go.work` | `apps/wailsv3`, `packages/host/wailsv3`, `packages/sok/wailsv3`을 사용하고, 호스트 모듈과 command line 모듈 `v0.0.0`을 `./packages/host/wailsv3`와 `./packages/sok/wailsv3`로 대체한다 |
 | `Cargo.toml` | 멤버 `apps/tauriv2`, `packages/host/tauriv2`, `packages/sok/tauriv2`, Tauri 크레이트에 대한 공용 `[patch.crates-io]`, `dev` 프로필을 가진 워크스페이스 |
 | `Cargo.lock` | 두 크레이트가 공유하는 하나의 잠금 파일 |
 | `target/` | Cargo 출력과 두 애플리케이션 실행 파일. `.gitignore`가 제외한다 |
@@ -209,9 +209,8 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 | `make wailsv3-build`, `make tauriv2-build` | `native/darwin`과 프런트엔드를 빌드하고 스테이징한 뒤 디버그 실행 파일을 빌드한다 |
 | `make wailsv3-build-release`, `make tauriv2-build-release` | 릴리스 실행 파일을 빌드한다 |
 | `make wailsv3`, `make tauriv2` | 디버그 실행 파일을 빌드하고 실행한다 |
-| `make sidecars-debug`, `make sidecars-release` | `scripts/workspace-registry.json`의 플러그인이 선언한 사이드카와 그 헬퍼를 해당 프로필로 빌드한다. 빌드 목록은 디렉터리 글로브가 아니라 `scripts/sidecar-packages.mjs` 가 선언에서 유도한다 |
-| `make registry`, `make install-plugins CONFIG=DIR` | `target/registry`에 workspace registry를 만들고, 그 플러그인을 설정 디렉터리에 설치한다 |
-| `make native-test` | `make -C native/darwin test`, `packages/host/wailsv3`, `sidecars/files`, `sidecars/shell`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다 |
+| `make registry`, `make install-plugins CONFIG=DIR` | `scripts/workspace-registry.json`이 선언한 plugin·sidecar repository로 `target/registry`에 workspace registry를 만들고([Repository](plugins.ko.md#repository)), 그 플러그인을 설정 디렉터리에 설치한다 |
+| `make native-test` | `make -C native/darwin test`, `packages/host/wailsv3`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다. 각 sidecar repository는 자기 test를 실행한다 |
 | `make platforms` | `scripts/check-platforms.mjs`를 실행한다 |
 | `make hosts-check` | `scripts/check-hosts.mjs`를 실행한다 |
 

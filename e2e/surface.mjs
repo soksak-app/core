@@ -1,10 +1,10 @@
-// 프레임 안에서 렌더링되지 않은 표면 영역과 셸 카드의 크기를 잰다.
+// 프레임 안에서 렌더링되지 않은 표면 영역과 터미널 카드의 크기를 잰다.
 //
-// 셸 표면은 카드와 같은 색(--card)으로 그린다(plugins/shell/ui/shell.js). midnight 테마에서 창의 어느 것도
+// 터미널 표면의 기본 배경은 카드와 같은 색(--card)이다(terminal.test.mjs 의 배경 검사). midnight 테마에서 창의 어느 것도
 // 흰색이 아니므로, 카드 색에 맞붙은 흰 픽셀은 웹뷰가 아직 렌더링하지 않은 자리다.
 import { pixel } from "./frame.mjs";
 
-/** 카드와 셸 표면의 배경. midnight 테마의 --card(#191b24)다. */
+/** 카드와 터미널 표면의 기본 배경. midnight 테마의 --card(#191b24)다. */
 const CARD = [25, 27, 36];
 
 /** 판의 배경. 카드 사이의 통로가 이 색이다. midnight 테마의 --bg(#101117). */
@@ -51,8 +51,8 @@ export function bare(frame) {
 }
 
 /**
- * 셸 카드의 폭과 높이(점). 카드 머리의 한 점(점 단위의 x, y)에서 좌우와 아래로 통로가 나올 때까지 걷는다.
- * 셸 카드의 왼쪽이나 아래 경계를 끄는 동안 그 점은 카드 안에 있다. 잴 수 없으면 null 이다.
+ * 터미널 카드의 폭과 높이(점). 카드 머리의 한 점(점 단위의 x, y)에서 좌우와 아래로 통로가 나올 때까지 걷는다.
+ * 터미널 카드의 왼쪽이나 아래 경계를 끄는 동안 그 점은 카드 안에 있다. 잴 수 없으면 null 이다.
  */
 export function cardSize(frame, { x, y }) {
   const cx = Math.round(x * frame.scale), cy = Math.round(y * frame.scale);

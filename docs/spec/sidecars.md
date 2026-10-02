@@ -8,7 +8,7 @@ The approved persistent terminal service is defined by [terminal runtime](termin
 
 ## Declaration and startup
 
-A sidecar is a package in `sidecars/<name>` with a `sidecar.json` file. The sidecar identity is its package name, for example `@soksak/sidecar-shell`. [`validateSidecar`](../../packages/plugin-api/index.js) checks the file:
+A sidecar is a package in its own repository with a `sidecar.json` file ([repositories](plugins.md#repositories)). The sidecar identity is its package name, for example `@soksak/sidecar-shell`. [`validateSidecar`](../../packages/plugin-api/index.js) checks the file:
 
 | Field | Meaning |
 | --- | --- |
@@ -28,7 +28,7 @@ The host runs the `executable` inside that folder. It fails at startup when `ins
 
 Child processes spawned by a sidecar do not inherit the host's pipes or process group. When the host closes the sidecar's standard input, the sidecar must end within 2 seconds; if it does not, the host waits up to 5 seconds total before sending a force-kill signal.
 
-Only a package in `sidecars/` that has a `sidecar.json` is a sidecar the host runs. The others are libraries and helper executables that sidecars share.
+Only a package that has a `sidecar.json` is a sidecar the host runs. Other packages of a sidecar repository are libraries and helper executables that its sidecars share.
 
 ## Messages
 
@@ -113,7 +113,7 @@ The host sends the authorized supplier a `configure` body containing the region 
 
 ## shell
 
-`sidecars/shell` (`@soksak/sidecar-shell`) builds `build/soksak-shell` with `pnpm run build` and runs one shell session per surface. `open` may carry `directory`, an absolute path of an existing directory, in which the session starts; another value is an explicit error. Without it the session starts in the surface's project directory (`root`). The shell page sends its surface's `origin.directory` when it is not `null` and reports each directory event with `tab.directory` ([tab reports](plugins.md#tab-reports)), so a shell split from a shell starts where that shell was. It is a line console, not a terminal emulator. Its code is in `src/`: the entry point `src/main.go`, the protocol in the package `src/shell`, and the OS operations in `src/platform/{darwin,linux,windows}/`, which register through `src/platform/platform.go` ([platform selection](hosts.md#platform-selection)). Its tests are in `tests/`.
+`@soksak/sidecar-shell` (repository `../sidecars/shell`) builds `build/soksak-shell` with `make build` and runs one shell session per surface. `open` may carry `directory`, an absolute path of an existing directory, in which the session starts; another value is an explicit error. Without it the session starts in the surface's project directory (`root`). The shell page sends its surface's `origin.directory` when it is not `null` and reports each directory event with `tab.directory` ([tab reports](plugins.md#tab-reports)), so a shell split from a shell starts where that shell was. It is a line console, not a terminal emulator. Its code is in `src/`: the entry point `src/main.go`, the protocol in the package `src/shell`, and the OS operations in `src/platform/{darwin,linux,windows}/`, which register through `src/platform/platform.go` ([platform selection](hosts.md#platform-selection)). Its tests are in `tests/`.
 
 The session shell is `$SHELL` when it is a POSIX shell (`sh`, `bash`, `zsh`, `ksh`, `dash`) and `/bin/sh` otherwise, because the session script uses POSIX syntax. It runs in its own process group without a terminal and executes a script that:
 
@@ -148,7 +148,7 @@ Public symbols in sidecars and their helpers that are diagnostic-only start with
 
 ## files
 
-`sidecars/files` (`@soksak/sidecar-files`) builds `build/soksak-files` with `pnpm run build` and lists and watches directories inside the session's `root`. Its code is in `src/`: the entry point `src/main.go`, the protocol in the package `src/files`, and directory watching in `src/platform/{darwin,linux,windows}/`, registered through `src/platform/platform.go`. macOS watches a directory with a kqueue `EVFILT_VNODE` filter on the directory; Linux and Windows return `watching directories is not implemented on <os>`. A session keeps only its watched directories.
+`@soksak/sidecar-files` (repository `../sidecars/files`) builds `build/soksak-files` with `make build` and lists and watches directories inside the session's `root`. Its code is in `src/`: the entry point `src/main.go`, the protocol in the package `src/files`, and directory watching in `src/platform/{darwin,linux,windows}/`, registered through `src/platform/platform.go`. macOS watches a directory with a kqueue `EVFILT_VNODE` filter on the directory; Linux and Windows return `watching directories is not implemented on <os>`. A session keeps only its watched directories.
 
 | Request body | Reply body |
 | --- | --- |

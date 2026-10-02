@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** 검사하는 파일. packages/soksak 과 제삼자 코드, 생성물은 뺀다. */
+/** 검사하는 파일. packages/soksak 과 생성물은 뺀다. */
 const SOURCE = /\.(js|mjs|cjs|ts|html|css|go|rs|m|h|sh)$|(^|\/)Makefile$/;
-const EXCLUDED = /^packages\/soksak\/|(^|\/)(vendor|dist|node_modules|target)\//;
+const EXCLUDED = /^packages\/soksak\/|(^|\/)(dist|node_modules|target)\//;
 
 /** 도구가 읽는 지시문. 주석 내용의 처음에 온다. */
 const DIRECTIVE = /^(contract:|go:|export \w+$|#cgo|eslint|@ts-|SPDX|nolint|rustfmt::|clippy::|swiftlint|MARK:)/;

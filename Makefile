@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify browser-example-check docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check host-parity-check terminal-protocols-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat
+.PHONY: preflight prepare build verify browser-example-check docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -21,7 +21,7 @@ browser-example-check: browser-frontend
 # 브라우저 예제는 host 가 없으므로 BROWSER_CONFIG 에 BROWSER_PLUGINS 를 설치하고, 스테이징이 그 설치를 host 처럼
 # 제공한다(docs/spec/plugins.md 의 스테이징 배치).
 BROWSER_CONFIG = target/browser-config
-BROWSER_PLUGINS = shell browser
+BROWSER_PLUGINS = terminal browser
 
 browser-frontend: registry
 	@rm -rf $(BROWSER_CONFIG)
@@ -47,10 +47,6 @@ parity-check:
 host-parity-check:
 	@node scripts/check-host-parity.mjs
 
-# 고정한 XTerm reference와 CSI/OSC selector inventory의 중복·누락·검사 연결을 기계적으로 감사한다.
-terminal-protocols-check:
-	@node scripts/check-terminal-protocol-inventory.mjs
-
 # JS/TS, Rust, Go, Objective-C, shell 테스트 케이스는 같은 관측 가능한 케이스 계약을 사용한다.
 language-test: native-darwin
 	@$(MAKE) -C native/darwin $(CURDIR)/native/darwin/build/appearance_test
@@ -58,7 +54,7 @@ language-test: native-darwin
 
 # Rust 패키지의 각 테스트를 새 프로세스에서 혼자 실행한다. 다른 테스트가 만든 상태나 시간 순서에 기대는 테스트를 찾는다.
 # 첫 실패에서 테스트 이름을 보고한다. MANIFEST 는 패키지가 속한 작업 공간의 Cargo.toml 이다.
-MANIFEST ?= sidecars/Cargo.toml
+MANIFEST ?= Cargo.toml
 rust-tests-alone:
 	@case "$(PACKAGE)" in '') echo "rust-tests-alone requires PACKAGE=<cargo package> [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
 	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) --no-run
@@ -137,7 +133,7 @@ prepare: preflight
 build: prepare
 	@pnpm build
 
-verify: prepare docs-check exposure-check parity-check host-parity-check terminal-protocols-check
+verify: prepare docs-check exposure-check parity-check host-parity-check
 	@pnpm test
 	@$(MAKE) language-test
 	@pnpm breaks
@@ -151,7 +147,7 @@ verify: prepare docs-check exposure-check parity-check host-parity-check termina
 # 각 앱은 debug 와 release 두 프로필로 빌드한다. release 는 각 도구의 표준 축소
 # 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다. debug 는 진단 빌드(Go 태그·cargo
 # 기능 diagnostics)이고 release 는 진단 메서드를 포함하지 않는다.
-.PHONY: native-darwin sidecars-debug sidecars-release registry install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check go-format-check \
+.PHONY: native-darwin registry install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check go-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         examples-verify examples-size
@@ -203,26 +199,13 @@ sok-tauriv2 = cargo build -p soksak-sok-tauriv2 $(if $(filter release,$(2)),--re
 native-darwin:
 	@$(MAKE) -C native/darwin
 
-# 사이드카. 빌드할 패키지는 선언에서 나온다(environment.json 의 플러그인 → plugin.json 의
-# 사이드카 → sidecar.json 의 helpers). 각 패키지의 build 스크립트는 SOKSAK_PROFILE 을 읽고,
-# 스테이징이 그 실행 파일을 애플리케이션 실행 파일 옆에 복사한다.
-SIDECAR_PACKAGES = $(shell node scripts/sidecar-packages.mjs)
-
-sidecars-debug:
-	@$(GO_ENV) SOKSAK_PROFILE=debug pnpm $(SIDECAR_PACKAGES) run build
-
-# 릴리스는 기호와 빌드 경로를 빼고 재현 가능한 산출물을 만든다. 각 패키지의 build 스크립트가
-# 자기 언어의 플래그 변수를 읽는다.
-sidecars-release:
-	@$(GO_ENV) SOKSAK_PROFILE=release SOKSAK_GO_FLAGS="-trimpath -ldflags=-s -ldflags=-w" \
-		SOKSAK_CARGO_FLAGS=--release pnpm $(SIDECAR_PACKAGES) run build
-
-# 워크스페이스 registry. 워크스페이스의 plugin 을 진단 package 로 pack 하고 그 sidecar 를 현재 플랫폼으로
-# release 해 target/registry 에 index.json 을 만든다(docs/operations/examples.md). 진단 build 와 window check 가
-# 여기서 설치한다.
+# 워크스페이스 registry. scripts/workspace-registry.json 이 선언한 sibling plugin repository 를 진단 package 로 pack
+# 하고, 그 plugin 이 쓰는 sidecar 를 선언된 sidecar repository 에서 build 해 현재 플랫폼으로 release 한 뒤
+# target/registry 에 index.json 을 만든다(docs/spec/plugins.md#repositories). 진단 build 와 window check 가 여기서
+# 설치한다.
 REGISTRY = target/registry
 
-registry: sidecars-debug
+registry:
 	@cargo build -p soksak-sok-tauriv2
 	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY) --diagnostics
 
@@ -292,14 +275,12 @@ wailsv3: wailsv3-build
 wailsv3-release: wailsv3-build-release
 	@./$(WAILS_RELEASE)
 
-# 네이티브 코드의 단위 검사. 공용 입력 검사, 사이드카 검사, 두 호스트의 테스트를 실행하는 호스트 계약 검사를 실행한다.
-native-test: native-darwin sidecars-debug frontend-wailsv3 frontend-tauriv2
+# 네이티브 코드의 단위 검사. 공용 입력 검사와 두 호스트의 테스트를 실행하는 호스트 계약 검사를 실행한다.
+# sidecar 의 검사는 각 sidecar repository 가 실행한다.
+native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) rust-format-check
 	@$(MAKE) go-format-check
 	@$(MAKE) -C native/darwin test
-	@node scripts/verify-vt-recovery.mjs sidecars/vt-alacritty/build/soksak-vt-alacritty
-	@$(GO_ENV) go test -ldflags "$(GO_LINK)" ./sidecars/files/... ./sidecars/shell/...
-	@$(CARGO_ENV) cargo test --manifest-path sidecars/Cargo.toml --workspace
 	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags "$(GO_LINK)"
 
 # 저장소가 추적하는 모든 Go 파일이 gofmt 형식인지 검사한다. 형식이 다른 파일을 모두 보고하고 실패한다.
@@ -309,11 +290,10 @@ go-format-check:
 	  if [ -n "$$unformatted" ]; then echo "Go files not in gofmt format:" >&2; echo "$$unformatted" >&2; exit 1; fi; \
 	  echo "Go format check passed: $$(echo $$files | wc -w | tr -d ' ') files"
 
-# 두 Rust 워크스페이스(루트와 sidecars)의 모든 패키지가 rustfmt 형식인지 검사한다.
+# Rust 워크스페이스의 모든 패키지가 rustfmt 형식인지 검사한다.
 rust-format-check:
 	@cargo fmt --all --check
-	@cargo fmt --all --check --manifest-path sidecars/Cargo.toml
-	@echo "Rust format check passed: 2 workspaces"
+	@echo "Rust format check passed: 1 workspace"
 
 # 두 호스트의 테스트를 기본 구성과 진단 구성으로 실행하고, 호스트 계약 사례(docs/spec/host-contract.md)를
 # 같은 수준으로 실행하는지 결과로 검사한다.

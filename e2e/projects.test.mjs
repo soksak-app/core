@@ -91,12 +91,12 @@ for (const app of Object.values(APPS)) {
         `${label}: project did not become active`);
       await child.until("core.grid", (grid) => grid?.cards?.length > 0,
         `${label}: project grid did not render`);
-      const shellSurfaces = await child.until("core.surfaces", (surfaces) =>
-        surfaces.filter((surface) => surface.visible && surface.plugin === "shell" &&
-          surface.exposes.includes("status shell.output")),
-        `${label}: shell surface did not become usable`);
-      assert.ok(shellSurfaces.length > 0);
-      await child.get("shell.output", shellSurfaces[0].surface);
+      const terminalSurfaces = await child.until("core.surfaces", (surfaces) => {
+        const usable = surfaces.filter((surface) => surface.visible && surface.plugin === "terminal" &&
+          surface.exposes.includes("status terminal.session"));
+        return usable.length > 0 ? usable : null;
+      }, `${label}: terminal surface did not become usable`);
+      await child.get("terminal.session", terminalSurfaces[0].surface);
       await child.run("core.space.add");
       await child.run("core.projects.flush");
       return { id: opened.id, child };
@@ -288,8 +288,8 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(saved.geometry, { x: beforeClose.x + 30, y: beforeClose.y + 20,
       width: beforeClose.width, height: beforeClose.height },
       `the saved geometry is not in window points (${JSON.stringify(beforeClose)})`);
-    await s.until("core.surfaces", (list) => list.some((x) => x.visible && x.plugin === "shell"),
-      "the main window must keep its shell surface");
+    await s.until("core.surfaces", (list) => list.some((x) => x.visible && x.plugin === "terminal"),
+      "the main window must keep its terminal surface");
     await settings(s, { projectOpening: "windows" }, "common");
     await s.run("core.project.activate", { id: second.id });
     child = s.on(added(await s.windows(2, "saved project did not reopen"), [s.window]));
@@ -353,7 +353,7 @@ for (const app of Object.values(APPS)) {
     // 다른 환경에서 저장된 배치: 셸 카드의 첫 탭이 이 환경에 없는 플러그인 gone 의 것이다.
     const records = read(join(config, "projects.json"));
     const record = records.find((p) => p.id === saved.id);
-    const shell = record.spaces.find((x) => x.id === record.activeSpaceId).layout.state.cards.find((c) => c.id === "shell");
+    const shell = record.spaces.find((x) => x.id === record.activeSpaceId).layout.state.cards.find((c) => c.id === "terminal");
     shell.data.tabs[0].plugin = "gone";
     write(join(config, "projects.json"), records);
     const stored = readFileSync(join(config, "projects.json"), "utf8");
@@ -374,7 +374,7 @@ for (const app of Object.values(APPS)) {
     // 저장해도 그 탭은 바뀌지 않는다.
     await s.run("core.projects.flush");
     const after = read(join(config, "projects.json")).find((p) => p.id === saved.id);
-    const kept = after.spaces.find((x) => x.id === after.activeSpaceId).layout.state.cards.find((c) => c.id === "shell");
+    const kept = after.spaces.find((x) => x.id === after.activeSpaceId).layout.state.cards.find((c) => c.id === "terminal");
     assert.equal(kept.data.tabs[0].plugin, "gone", "saving changed the tab of the plugin that is not loaded");
     assert.ok(stored.length > 0);
     await s.run("core.project.activate", { id: first.id });

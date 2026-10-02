@@ -13,26 +13,26 @@
       "buildFlags": ["node>=20", "node --test"]
     },
     {
-      "id": "rust-vt-encoding",
+      "id": "rust-sok-registry",
       "language": "rust",
       "command": "cargo",
-      "args": ["test", "--manifest-path", "sidecars/Cargo.toml", "-p", "soksak-sidecar-vt-core", "--test", "encoding_validation_test"],
+      "args": ["test", "-p", "soksak-sok-tauriv2", "--test", "registry_test"],
       "expectedTests": 2,
-      "implementationFiles": ["sidecars/vt-core/src/vt-core.rs", "sidecars/vt-core/src/encoding.rs"],
-      "testFiles": ["sidecars/vt-core/tests/encoding_validation_test.rs"],
-      "dependencyFiles": ["sidecars/Cargo.toml", "sidecars/Cargo.lock"],
+      "implementationFiles": ["packages/sok/tauriv2/src/registry.rs"],
+      "testFiles": ["packages/sok/tauriv2/tests/registry_test.rs"],
+      "dependencyFiles": ["Cargo.toml", "Cargo.lock"],
       "buildFlags": ["MACOSX_DEPLOYMENT_TARGET=14.4", "cargo test"]
     },
     {
-      "id": "go-shell-tests",
+      "id": "go-sok-registry",
       "language": "go",
       "command": "go",
-      "args": ["test", "-json", "./sidecars/shell/tests"],
-      "expectedTests": 15,
-      "implementationFiles": ["sidecars/shell/src/shell/shell.go"],
-      "testFiles": ["sidecars/shell/tests/serve_test.go", "sidecars/shell/tests/platform_test.go"],
-      "dependencyFiles": ["sidecars/shell/go.mod"],
-      "buildFlags": ["CGO_ENABLED=1", "go test -json"]
+      "args": ["test", "-json", "-run", "^TestRegistryBuild", "./packages/sok/wailsv3/tests"],
+      "expectedTests": 2,
+      "implementationFiles": ["packages/sok/wailsv3/src/registry.go"],
+      "testFiles": ["packages/sok/wailsv3/tests/registry_test.go"],
+      "dependencyFiles": ["packages/sok/wailsv3/go.mod", "go.work"],
+      "buildFlags": ["go test -json"]
     },
     {
       "id": "objc-appearance",

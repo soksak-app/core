@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** 제품 코드. 테스트, 검사 도구, 벤치, 벤더, 생성물은 뺀다. */
-const PRODUCT = /^(packages|plugins|sidecars|native|apps)\//;
-const EXCLUDED = /(^|\/)(test|tests|testing|bench|vendor|dist|build|scripts|node_modules)\/|\.test\.|_test\.(go|rs|m)$|\.d\.(ts|mts|cts)$/;
+/** 제품 코드. 테스트, 검사 도구, 벤치, 생성물은 뺀다. */
+const PRODUCT = /^(packages|native|apps)\//;
+const EXCLUDED = /(^|\/)(test|tests|testing|bench|dist|build|scripts|node_modules)\/|\.test\.|_test\.(go|rs|m)$|\.d\.(ts|mts|cts)$/;
 
 /** 언어별 형태. 한 줄에서 찾는다. */
 const PATTERNS = {

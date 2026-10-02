@@ -165,7 +165,8 @@ for (const app of Object.values(APPS)) {
               }
             }
             if (gestureErrors.length)
-              throw new AggregateError(gestureErrors, `${side}: pointer input or capture failed`);
+              throw new AggregateError(gestureErrors,
+                `${side}: pointer input or capture failed: ${gestureErrors.map((error) => error.message).join("; ")}`);
             const captured = frames(directory).map(readFrame);
             captured.forEach((frame, index) => {
               // 실패하면 그 프레임의 버퍼 크기, 창 사각형, 배율을 적는다.
@@ -247,7 +248,10 @@ for (const app of Object.values(APPS)) {
           failures.push(error);
         }
       }
-      if (failures.length) throw new AggregateError(failures, "sidebar gesture measurement failed");
+      if (failures.length) {
+        throw new AggregateError(failures,
+          `sidebar gesture measurement failed: ${failures.map((error) => error.message).join("; ")}`);
+      }
     },
   );
 }

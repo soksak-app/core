@@ -125,7 +125,7 @@ for (const app of Object.values(APPS)) {
     const before = await s.get("host.window");
     settingsAboveSurfaces(before);
     const old = new Set(before.surfaces.map((x) => x.id));
-    await s.run("core.card.split", { card: "shell", side: "right", plugin: "browser" });
+    await s.run("core.card.split", { card: "terminal", side: "right", plugin: "browser" });
     const after = await s.until("host.window",
       (state) => state.surfaces.some((x) => x.visible && !old.has(x.id)) && state.modal?.shown,
       "the split did not display a new native surface");

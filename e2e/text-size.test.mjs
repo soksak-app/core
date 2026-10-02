@@ -35,17 +35,16 @@ for (const app of Object.values(APPS)) {
       await s.run("core.settings.set", { patch: { textSize: 1 }, scope: "common" });
     });
     const grid = await s.get("core.grid");
-    const shellTab = grid.cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "shell");
-    assert.ok(shellTab, "the fixture has no shell tab");
-    await s.run("core.tab.select", { tab: shellTab.id });
-    await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === shellTab.id &&
-      item.exposes.includes("dom shell.input")), "the shell surface did not register");
-    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === shellTab.id));
+    const terminalTab = grid.cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
+    assert.ok(terminalTab, "the fixture has no terminal tab");
+    await s.run("core.tab.select", { tab: terminalTab.id });
+    const session = await s.until("terminal.session", (value) => value?.sessionId && value.cellHeight > 0 ? value : null,
+      "the terminal session did not start", { surface: terminalTab.id });
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === terminalTab.id));
     await s.presented();
 
     // 카드를 누르면 그 카드가 범위이고, 메뉴 항목은 그 카드의 배율만 바꾼다.
-    const before = await s.rect("shell.input", undefined, shellTab.id);
-    await press(s, before);
+    await press(s, await s.rect("terminal.view", undefined, terminalTab.id));
     await s.until("core.text", (value) => value.scope.kind === "card" && value.scope.card === card.id,
       "pressing the card did not make it the text size scope");
     const titles = await menuTitles(s);
@@ -54,9 +53,11 @@ for (const app of Object.values(APPS)) {
       "the menu item did not enlarge the pressed card");
     assert.equal(cardText.frame, 1, "enlarging a card must not change the frame factor");
     await s.presented();
-    const after = await s.rect("shell.input", undefined, shellTab.id);
-    assert.ok(grew(before.height, after.height, 1.1),
-      `the shell input height must grow by the card factor: ${before.height} → ${after.height}`);
+    // 터미널은 13pt 에 배율을 곱한 글자 크기로 칸을 다시 잰다(docs/spec/text-size.md).
+    const after = await s.until("terminal.session", (value) => value.cellHeight !== session.cellHeight ? value : null,
+      "the terminal cell height did not change with the card factor", { surface: terminalTab.id });
+    assert.ok(grew(session.cellHeight, after.cellHeight, 1.1),
+      `the terminal cell height must grow by the card factor: ${session.cellHeight} → ${after.cellHeight}`);
 
     // 카드 배율은 레이아웃과 함께 저장되어 다시 읽은 뒤에도 남는다.
     const documentBefore = (await s.get("core.window.document")).timeOrigin;

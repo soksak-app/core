@@ -462,6 +462,21 @@ export async function keepCommonSettings(s) {
 }
 
 /**
+ * 터미널 카드에 안쪽 왼쪽 사이드바를 둔다. 기본 배치에는 카드 사이드바가 없으므로, 카드 사이드바를 검사하는 검사는
+ * 세트 set-files(files.tree, files.bookmarks, list)와 터미널의 card-left 연결을 공통 설정에 더한다. 검사가 끝나면
+ * keepCommonSettings 가 세트와 연결을 함께 되돌리므로 호출자는 sets 를 따로 초기화하지 않는다.
+ */
+export async function terminalCardSidebar(s) {
+  await keepCommonSettings(s);
+  const sets = (await s.get("core.settings")).values.sets;
+  await s.run("core.settings.set", { patch: { sets: [...sets,
+    { id: "set-files", title: "파일", sections: ["files.tree", "files.bookmarks"], layout: "list" }] }, scope: "common" });
+  await s.run("core.settings.link", { place: "card-left", plugin: "terminal", set: "set-files", scope: "common" });
+  await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "terminal:left"),
+    "the terminal card sidebar did not appear");
+}
+
+/**
  * 검사 앱마다 정해진 창 자리. 첫 앱은 주 화면 작업 영역의 왼쪽 위, 둘째 앱은 오른쪽 위에 둔다. 검사마다 창의
  * 자리가 앞선 검사가 옮긴 자리에 따라 달라지지 않는다. 작업 영역이 두 창 폭의 합보다 좁으면 가운데가 겹친다.
  * 같은 자리의 두 창도 서로를 완전히 가리지 않으며(창의 그림자가 보인다, V5-86), 다른 애플리케이션의 창은 이
@@ -534,46 +549,46 @@ export async function fresh(s, { performanceTrace = TRACE } = {}) {
     .filter((row) => row.name === "Surface presentation" && !row.ok);
   if (failed.length) throw new Error(`test preparation reported presentation errors: ${JSON.stringify(failed)}`);
   if (presentationErrors.length) throw new Error(`test preparation reported presentation errors: ${JSON.stringify(presentationErrors)}`);
-  let shell;
+  let terminal;
   try {
-    [shell] = await shellReady(s);
+    [terminal] = await terminalReady(s);
   } catch (error) {
     if (!performanceTrace) throw error;
     throw new Error(`${error.message}; registration timeline: ${JSON.stringify(registrationTimeline(s, traceOffset))}`, { cause: error });
   }
   await s.presented();
   try {
-    await s.get("shell.output", shell.surface);
+    await s.get("terminal.session", terminal.surface);
   } catch (error) {
-    throw new Error(`shell readiness returned stale surface ${shell.surface}: ${error.message}; ` +
+    throw new Error(`terminal readiness returned stale surface ${terminal.surface}: ${error.message}; ` +
       `current surfaces: ${JSON.stringify(await s.get("core.surfaces"))}`);
   }
-  return shell;
+  return terminal;
 }
 
-/** 보이는 셸 표면들이 등록되고 테마를 적용할 때까지 기다린 뒤 그 표면들을 반환한다. */
-export async function shellReady(s) {
+/** 보이는 터미널 표면들이 등록되고 테마를 적용할 때까지 기다린 뒤 그 표면들을 반환한다. */
+export async function terminalReady(s) {
   await s.until("core.surfaces",
-    (all) => all.some((x) => x.visible && x.plugin === "shell" &&
+    (all) => all.some((x) => x.visible && x.plugin === "terminal" &&
       x.exposes.includes("status core.surface.document") &&
-      x.exposes.includes("status shell.output") &&
-      x.exposes.includes("dom shell.input")),
-    "no visible shell surface registered its document, output, and input");
+      x.exposes.includes("status terminal.session") &&
+      x.exposes.includes("dom terminal.view")),
+    "no visible terminal surface registered its document, session, and view");
   // predicate를 만족하는 알림은 reload가 surface를 교체하기 바로 전의 surface를
   // 설명할 수 있다. id를 반환하기 전에 현재 registry를 읽는다. 오래된 surface id로
   // 진행하지 않는다.
   const active = new Set((await s.get("core.grid")).cards
     .map((card) => card.active)
     .filter(Boolean));
-  const shells = (await s.surfaces("shell")).filter((x) => active.has(x.surface) &&
+  const terminals = (await s.surfaces("terminal")).filter((x) => active.has(x.surface) &&
     x.exposes.includes("status core.surface.document") &&
-    x.exposes.includes("status shell.output") &&
-    x.exposes.includes("dom shell.input"));
-  for (const shell of shells) {
+    x.exposes.includes("status terminal.session") &&
+    x.exposes.includes("dom terminal.view"));
+  for (const terminal of terminals) {
     await s.until("core.surface.document", (doc) => doc !== null && doc.readyState === "complete" && doc.themed,
-      `shell ${shell.surface} did not apply its theme`, { surface: shell.surface });
+      `terminal ${terminal.surface} did not apply its theme`, { surface: terminal.surface });
   }
-  return shells;
+  return terminals;
 }
 
 /**

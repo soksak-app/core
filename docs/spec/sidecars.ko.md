@@ -8,7 +8,7 @@
 
 ## 선언과 시작
 
-사이드카는 `sidecars/<name>`에 있고 `sidecar.json` 파일을 가진 패키지다. 사이드카 식별자는 패키지 이름이다(예: `@soksak/sidecar-shell`). [`validateSidecar`](../../packages/plugin-api/index.js)가 이 파일을 검사한다.
+사이드카는 자기 repository에 있고 `sidecar.json` 파일을 가진 패키지다([Repository](plugins.ko.md#repository)). 사이드카 식별자는 패키지 이름이다(예: `@soksak/sidecar-shell`). [`validateSidecar`](../../packages/plugin-api/index.js)가 이 파일을 검사한다.
 
 | 필드 | 의미 |
 | --- | --- |
@@ -28,7 +28,7 @@
 
 사이드카가 남기는 자식 프로세스는 호스트의 파이프와 프로세스 그룹을 상속하지 않는다. 호스트가 사이드카의 표준 입력을 닫으면 사이드카는 2초 안에 끝나야 한다. 그렇지 않으면 호스트는 최대 5초까지 기다린 뒤 강제 종료 신호를 보낸다.
 
-`sidecars/` 디렉터리의 패키지 중 `sidecar.json` 파일을 가진 것만 실행 가능한 사이드카이고, 나머지는 다른 사이드카가 사용하는 공유 라이브러리와 헬퍼다.
+`sidecar.json` 파일을 가진 패키지만 실행 가능한 사이드카이고, 사이드카 repository의 다른 패키지는 그 사이드카가 사용하는 공유 라이브러리와 헬퍼다.
 
 ## 메시지
 
@@ -113,7 +113,7 @@
 
 ## shell
 
-`sidecars/shell`(`@soksak/sidecar-shell`)은 `pnpm run build`로 `build/soksak-shell`을 빌드하고, 표면마다 셸 세션 하나를 실행한다. `open`은 세션이 시작할 디렉터리로, 있는 디렉터리의 절대 경로인 `directory`를 가질 수 있고, 다른 값은 명시적 오류다. 없으면 세션은 표면의 프로젝트 디렉터리(`root`)에서 시작한다. 셸 페이지는 표면의 `origin.directory`가 `null`이 아니면 그것을 보내고 디렉터리 이벤트마다 `tab.directory`로 알리므로([탭 알림](plugins.ko.md#탭-알림)), 셸에서 쪼갠 셸은 그 셸이 있던 곳에서 시작한다. 터미널 에뮬레이터가 아닌 줄 단위 콘솔이다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/shell`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 운영체제별 동작([플랫폼 선택](hosts.ko.md#플랫폼-선택)). 테스트는 `tests/`에 있다.
+`@soksak/sidecar-shell`(repository `../sidecars/shell`)은 `make build`로 `build/soksak-shell`을 빌드하고, 표면마다 셸 세션 하나를 실행한다. `open`은 세션이 시작할 디렉터리로, 있는 디렉터리의 절대 경로인 `directory`를 가질 수 있고, 다른 값은 명시적 오류다. 없으면 세션은 표면의 프로젝트 디렉터리(`root`)에서 시작한다. 셸 페이지는 표면의 `origin.directory`가 `null`이 아니면 그것을 보내고 디렉터리 이벤트마다 `tab.directory`로 알리므로([탭 알림](plugins.ko.md#탭-알림)), 셸에서 쪼갠 셸은 그 셸이 있던 곳에서 시작한다. 터미널 에뮬레이터가 아닌 줄 단위 콘솔이다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/shell`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 운영체제별 동작([플랫폼 선택](hosts.ko.md#플랫폼-선택)). 테스트는 `tests/`에 있다.
 
 세션 셸은 `$SHELL`이 POSIX 셸(`sh`, `bash`, `zsh`, `ksh`, `dash`)이면 그것이고 아니면 `/bin/sh`다. 세션 스크립트가 POSIX 문법을 쓰기 때문이다. 셸은 터미널 없이 자기 프로세스 그룹에서 실행되며 다음 스크립트를 실행한다.
 
@@ -148,7 +148,7 @@
 
 ## files
 
-`sidecars/files`(`@soksak/sidecar-files`)는 `pnpm run build`로 `build/soksak-files`를 빌드하고 세션의 `root` 안의 디렉터리를 나열하고 감시한다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/files`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 디렉터리 감시. macOS는 디렉터리에 kqueue `EVFILT_VNODE` 필터를 걸어 감시하고, Linux와 Windows는 `watching directories is not implemented on <os>`를 반환한다. 세션은 감시하는 디렉터리만 상태로 갖는다.
+`@soksak/sidecar-files`(repository `../sidecars/files`)는 `make build`로 `build/soksak-files`를 빌드하고 세션의 `root` 안의 디렉터리를 나열하고 감시한다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/files`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 디렉터리 감시. macOS는 디렉터리에 kqueue `EVFILT_VNODE` 필터를 걸어 감시하고, Linux와 Windows는 `watching directories is not implemented on <os>`를 반환한다. 세션은 감시하는 디렉터리만 상태로 갖는다.
 
 | 요청 본문 | 답 본문 |
 | --- | --- |

@@ -16,7 +16,6 @@ import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
 import { find as findReleaseMarkers } from "../check-release.mjs";
 import { auditHostPairs, findStubs } from "../check-hosts.mjs";
 import { auditE2ESource } from "../check-e2e.mjs";
-import { auditTerminalProtocolInventory } from "../check-terminal-protocol-inventory.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const packageRoot = join(root, "packages/soksak");
@@ -107,6 +106,35 @@ test("boundary audit reports a clean component graph", { timeout: 5000 }, async 
   assert.match(result.stdout, /Boundary checks passed:/);
 });
 
+test("boundary audit reports core sources that name a declared plugin id or sidecar package", { timeout: 5000 }, async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "soksak-boundaries-"));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+  const core = join(fixture, "core");
+  const write = async (path, text) => {
+    await mkdir(join(path, ".."), { recursive: true });
+    await writeFile(path, text);
+  };
+  await write(join(core, "packages/a/package.json"), JSON.stringify({ name: "@soksak/a" }));
+  await write(join(core, "packages/a/index.js"), 'export const id = "probe";\nimport "@soksak/sidecar-probe";\n');
+  await write(join(core, "scripts/workspace-registry.json"), JSON.stringify({
+    plugins: ["../plugins/probe"], sidecars: [{ repository: "../sidecars/probe", folder: "." }], packs: [],
+  }));
+  await write(join(fixture, "plugins/probe/package.json"), JSON.stringify({ name: "@soksak/plugin-probe" }));
+  await write(join(fixture, "plugins/probe/plugin.json"), JSON.stringify({ id: "probe" }));
+  await write(join(fixture, "sidecars/probe/package.json"), JSON.stringify({ name: "@soksak/sidecar-probe" }));
+  const script = join(root, "scripts/check-boundaries.mjs");
+  const named = await run(node, [script, core]);
+  assert.equal(named.code, 1, `${named.stdout}\n${named.stderr}`);
+  assert.deepEqual(named.stderr.trim().split("\n"), [
+    "packages/a/index.js:1: core @soksak/a names plugin id probe",
+    "packages/a/index.js:2: core @soksak/a names package @soksak/sidecar-probe",
+  ]);
+  await rm(join(fixture, "sidecars/probe"), { recursive: true });
+  const missing = await run(node, [script, core]);
+  assert.equal(missing.code, 1, missing.stdout);
+  assert.match(missing.stderr, /sidecars\/probe\/package\.json/);
+});
+
 test("host structure audit reports a clean paired-host graph", { timeout: 5000 }, async () => {
   const result = await run(node, [join(root, "scripts/check-hosts.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
@@ -121,12 +149,12 @@ test("host structure audit rejects a missing host and a missing counterpart", { 
 
 test("stub audit reads every product source file and reports a file it cannot read", { timeout: 1000 }, () => {
   const files = {
-    "plugins/a/ui/a.js": "// TODO: Implement the panel\n",
+    "native/darwin/src/a.m": "// TODO: Implement the panel\n",
     "packages/host/wailsv3/src/a.go": "func f() {}\n",
     "packages/host/wailsv3/tests/a_test.go": "// TODO: Implement later\n",
     "packages/host/wailsv3/src/platform/windows/unsupported.go": "// not yet implemented\n",
   };
-  assert.deepEqual(findStubs(Object.keys(files), (file) => files[file]), ["plugins/a/ui/a.js:1: TODO:\\s*Implement"]);
+  assert.deepEqual(findStubs(Object.keys(files), (file) => files[file]), ["native/darwin/src/a.m:1: TODO:\\s*Implement"]);
   assert.throws(() => findStubs(["native/darwin/src/a.m"], () => { throw new Error("EACCES: permission denied"); }),
     /native\/darwin\/src\/a\.m: EACCES: permission denied/);
 });
@@ -177,59 +205,10 @@ test("window-source audit allows activation in the real-input tier and input pac
   assert.deepEqual(auditE2ESource(pacing, "e2e/terminal.test.mjs"), ["e2e/terminal.test.mjs:1: uses a fixed sleep"]);
 });
 
-test("terminal protocol inventory rejects missing, duplicate, or unlinked CSI rows", { timeout: 5000 }, async () => {
-  const result = await run(node, [join(root, "scripts/check-terminal-protocol-inventory.mjs")]);
-  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stdout, /PASS terminal protocol inventory: \d+ unique CSI rows and \d+ unique OSC rows with named tests/);
-});
-
-test("terminal protocol inventory reproduces missing and duplicate CSI rows as Red", { timeout: 1000 }, async () => {
-  const source = await readFile(join(root, "sidecars/vt-alacritty/src/engine.rs"), "utf8");
-  const tests = await readFile(join(root, "sidecars/vt-alacritty/tests/engine_test.rs"), "utf8");
-  const broken = auditTerminalProtocolInventory({
-    engineSource: source.replace('selector: "E/F"', 'selector: "A/B/C/D/G/H/f/s/u"'),
-    testSource: tests,
-  });
-  assert.ok(broken.errors.some((error) => error.includes("duplicate CSI selector row: A/B/C/D/G/H/f/s/u")));
-  assert.ok(broken.errors.some((error) => error.includes("required CSI inventory row is missing: E/F")));
-  const brokenOsc = auditTerminalProtocolInventory({
-    engineSource: source.replace('selector: "0,2"', 'selector: "4"'),
-    testSource: tests,
-  });
-  assert.ok(brokenOsc.errors.some((error) => error.includes("duplicate OSC selector row: 4")));
-  assert.ok(brokenOsc.errors.some((error) => error.includes("required OSC inventory row is missing: 0,2")));
-});
-
-test("the OSC report in the specification matches the engine inventory selector by selector", { timeout: 5000 }, async () => {
-  const specification = await readFile(join(root, "docs/spec/terminal-protocols.md"), "utf8");
-  assert.deepEqual(auditTerminalProtocolInventory().errors, []);
-  const missing = auditTerminalProtocolInventory({
-    specSource: specification.replace(/^\| `46` \|.*\n/m, ""),
-  });
-  assert.ok(missing.errors.includes("OSC selector 46 has no row in the specification report"), missing.errors.join("\n"));
-  const outcome = auditTerminalProtocolInventory({
-    specSource: specification.replace("| `4` | Indexed color set/query | `implemented`", "| `4` | Indexed color set/query | `unsupported`"),
-  });
-  assert.ok(outcome.errors.includes("OSC selector 4 is implemented in the engine but unsupported in the specification report"),
-    outcome.errors.join("\n"));
-  const evidence = auditTerminalProtocolInventory({
-    specSource: specification.replace("`osc104_resets_indexed_colors`", "`osc104_test_that_does_not_exist`"),
-  });
-  assert.ok(evidence.errors.includes("OSC selector 104 names a test that does not exist: osc104_test_that_does_not_exist"),
-    evidence.errors.join("\n"));
-});
-
-test("exposure audit verifies every declared core and plugin entry", { timeout: 5000 }, async () => {
+test("exposure audit verifies every declared core entry", { timeout: 5000 }, async () => {
   const result = await run(node, [join(root, "scripts/check-exposure.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stdout, /Exposure checks passed: core and \d+ plugins/);
-});
-
-test("sidecar package discovery follows declared helper edges", { timeout: 5000 }, async () => {
-  const result = await run(node, [join(root, "scripts/sidecar-packages.mjs")]);
-  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stdout, /-F @soksak\/sidecar-vt-alacritty/);
-  assert.match(result.stdout, /-F @soksak\/sidecar-shell/);
+  assert.match(result.stdout, /Exposure checks passed: core/);
 });
 
 test("build environment audit reports the measured toolchain", { timeout: 5000 }, async () => {

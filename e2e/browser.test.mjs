@@ -408,20 +408,20 @@ for (const app of Object.values(APPS)) {
     await s.run("browser.navigate", { url: `${base}/focus` }, surface);
     await loaded(s, surface, `${base}/focus`);
     await placed(s, surface, "focus document");
-    s.cleanup(() => s.run("core.card.sidebar.set", { card: "shell", side: "left", set: "inherit" }));
+    s.cleanup(() => s.run("core.card.sidebar.set", { card: "terminal", side: "left", set: "inherit" }));
 
     // 준비 요청은 창의 레이어 트랜잭션 안에서 적용되어 커밋 전에는 화면에 나오지 않는다. 그동안 화면에 보이는
-    // 표면이 숨으면 그 자리의 누름은 표면 대신 페이지로 간다. 셸 카드의 안쪽 사이드바를 끄고 켜면 셸 표면만
+    // 표면이 숨으면 그 자리의 누름은 표면 대신 페이지로 간다. 터미널 카드의 안쪽 사이드바를 끄고 켜면 터미널 표면만
     // 움직이고 브라우저 표면은 제자리에 있으므로, 배치 요청은 브라우저 표면을 숨기지 않아야 한다.
     const log = await s.transcript();
     for (const set of ["off", "inherit", "off"]) {
-      await s.run("core.card.sidebar.set", { card: "shell", side: "left", set });
+      await s.run("core.card.sidebar.set", { card: "terminal", side: "left", set });
       await s.presented();
     }
     const lines = await log.stop();
     const requests = lines.map((line) => /^host syncSurfaces (\{.*\}) ->/.exec(line)).filter(Boolean)
       .map((found) => JSON.parse(found[1]));
-    assert.ok(requests.length >= 3, `the shell sidebar changes made ${requests.length} placement requests`);
+    assert.ok(requests.length >= 3, `the terminal sidebar changes made ${requests.length} placement requests`);
     const hiding = requests.filter((request) => request.surfaces.some((item) => item.id === surface && item.visible === false));
     assert.equal(hiding.length, 0, `a placement request hid the shown browser surface: ${JSON.stringify(hiding[0])}`);
   });

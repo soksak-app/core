@@ -93,8 +93,6 @@ const PRODUCT_DIRS = [
   "packages/host/wailsv3/src",
   "packages/host/tauriv2/src",
   "native/darwin/src",
-  "sidecars/vt-core/src",
-  "plugins",
 ];
 /** 검사하지 않는 경로. 테스트와 Windows unsupported 구현은 stub 문구를 정당하게 담는다. */
 const EXCLUDE = /(^|\/)(test|tests|windows)(\/|$)/;

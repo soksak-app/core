@@ -18,8 +18,8 @@ test("defaults and discarded errors without a stated reason are found in product
     "packages/a/module.mjs": "callback?.();",
     "packages/a/module.mts": "const value = input ?? 0;",
     "packages/a/module.cts": "const value = input ?? 0;",
-    "sidecars/b/src/b.rs": "let _ = send();\nlet v = x.unwrap_or(0);\nx.ok();\n",
-    "sidecars/c/src/c.go": "_ = file.Close()\nv, _ := strconv.Atoi(s)\nfunc closeIt() { _ = err }\n",
+    "packages/host/b/src/b.rs": "let _ = send();\nlet v = x.unwrap_or(0);\nx.ok();\n",
+    "packages/host/c/src/c.go": "_ = file.Close()\nv, _ := strconv.Atoi(s)\nfunc closeIt() { _ = err }\n",
     "native/darwin/src/d.m": "@try { f(); } @catch (NSException *e) {}\n",
   });
   assert.deepEqual(found.map((item) => `${item.file}:${item.line} ${item.pattern}`), [
@@ -29,8 +29,8 @@ test("defaults and discarded errors without a stated reason are found in product
     "packages/a/component.tsx:1 nullish default", "packages/a/component.jsx:1 nullish default",
     "packages/a/module.cjs:1 optional call", "packages/a/module.mjs:1 optional call",
     "packages/a/module.mts:1 nullish default", "packages/a/module.cts:1 nullish default",
-    "sidecars/b/src/b.rs:1 discarded result", "sidecars/b/src/b.rs:2 defaulting unwrap", "sidecars/b/src/b.rs:3 discarded error",
-    "sidecars/c/src/c.go:1 discarded error", "sidecars/c/src/c.go:2 ignored second result", "sidecars/c/src/c.go:3 discarded error",
+    "packages/host/b/src/b.rs:1 discarded result", "packages/host/b/src/b.rs:2 defaulting unwrap", "packages/host/b/src/b.rs:3 discarded error",
+    "packages/host/c/src/c.go:1 discarded error", "packages/host/c/src/c.go:2 ignored second result", "packages/host/c/src/c.go:3 discarded error",
     "native/darwin/src/d.m:1 caught exception",
   ]);
 });
@@ -112,16 +112,15 @@ test("variable defaults and multiline empty catches are audited", () => {
   assert.deepEqual(found.map((item) => `${item.line} ${item.pattern}`), ["1 or default", "2 empty catch"]);
 });
 
-test("tests, tools, vendored code, and generated output are excluded while product frontend is scanned", () => {
+test("tests, tools, and generated output are excluded while product frontend is scanned", () => {
   assert.deepEqual(scan({
     "packages/a/test/a.test.mjs": "const x = y ?? 0;",
-    "plugins/files/ui/vendor/trees.js": "const x = y ?? 0;",
     "packages/soksak/dist/index.js": "const x = y ?? 0;",
     "scripts/check.mjs": "const x = y ?? 0;",
     "packages/a/frontend/module.ts": "const x = y ?? 0;",
     "packages/a/types.d.mts": "const x = y ?? 0;",
     "e2e/app.mjs": "const x = y ?? 0;",
-    "sidecars/b/tests/b_test.rs": "let _ = f();",
+    "packages/host/b/tests/b_test.rs": "let _ = f();",
   }).map(({ file, line, pattern }) => `${file}:${line} ${pattern}`), ["packages/a/frontend/module.ts:1 nullish default"]);
 });
 
@@ -133,7 +132,7 @@ test("the repository states a reason for every default and discarded error in pr
 test("the command lists repository candidates with locations and contract reasons", () => {
   const output = spawnSync(process.execPath, [join(ROOT, "scripts/check-fallbacks.mjs"), "--list"], { encoding: "utf8" });
   assert.equal(output.status, 0, output.stderr);
-  assert.match(output.stdout, /plugins\/browser\/ui\/browser\.js:\d+: or default \[reason=기본값:/);
+  assert.match(output.stdout, /packages\/host\/tauriv2\/src\/exposure\.rs:\d+: defaulting unwrap \[reason=기본값:/);
   assert.match(output.stdout, /Fallback checks passed: \d+ occurrences listed; \d+ have a stated contract reason\./);
 
   const invalid = spawnSync(process.execPath, [join(ROOT, "scripts/check-fallbacks.mjs"), "--unknown"], { encoding: "utf8" });

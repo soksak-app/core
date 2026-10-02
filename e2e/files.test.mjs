@@ -7,7 +7,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { APPS, coveredBy, fresh, open } from "./app.mjs";
+import { APPS, coveredBy, fresh, open, terminalCardSidebar } from "./app.mjs";
 import { distance, readPng } from "./png.mjs";
 
 /** 요소의 가운데를 네이티브 입력으로 누른다. */
@@ -36,7 +36,7 @@ const controlIndex = (sidebars, sidebar, section, at) => {
 const STAR = 1;
 const REFRESH = 2;
 const HOLDER = 3;
-/* 트리 행의 높이(pt). 사이드바 목록의 행 높이다(plugins/files/ui/sections/tree.js). */
+/* 트리 행의 높이(pt). 사이드바 목록의 행 높이다(files plugin repository 의 ui/sections/tree.js). */
 const ROW = 20;
 
 for (const app of Object.values(APPS)) {
@@ -237,10 +237,10 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
-    // 셸 카드의 안쪽 왼쪽 사이드바에도 파일 트리를 둔다. 좌측 고정 사이드바의 트리와 함께 둘이 마운트된다.
+    await terminalCardSidebar(s);
+    // 터미널 카드의 안쪽 왼쪽 사이드바에 파일 트리만 둔다. 좌측 고정 사이드바의 트리와 함께 둘이 마운트된다.
     const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-shell" ? { ...set, sections: ["files.tree"] } : set) },
+    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-files" ? { ...set, sections: ["files.tree"] } : set) },
       scope: "common" });
     const project = await s.get("core.project");
     const folder = `pair-${process.pid}`;
@@ -251,16 +251,16 @@ for (const app of Object.values(APPS)) {
     await s.run("files.refresh");
     let tree = await s.until("files.tree", (value) => value?.entries.some((entry) => entry.path === folder),
       "files.tree did not list the folder");
-    const mountedTrees = (value) => ["left", "shell:left"].every((id) => value.find((item) => item.sidebar === id)
+    const mountedTrees = (value) => ["left", "terminal:left"].every((id) => value.find((item) => item.sidebar === id)
       ?.sections.find((item) => item.id === "files.tree")?.mounted);
     // 트리는 files.tree 값을 받은 콜백에서 머리 제목을 적고 같은 콜백에서 행을 바꾼다. 두 트리의 제목이 보이면
     // 두 트리가 값을 받은 것이다.
-    const titled = (value) => mountedTrees(value) && ["left", "shell:left"].every((id) => value.find((item) => item.sidebar === id)
+    const titled = (value) => mountedTrees(value) && ["left", "terminal:left"].every((id) => value.find((item) => item.sidebar === id)
       ?.sections.find((item) => item.id === "files.tree")?.text.includes(project.root.split("/").at(-1)));
     let sidebars = await s.until("core.sidebars", titled, "the left and inset trees did not receive files.tree");
     const holders = async () => {
       const value = await s.get("core.sidebars");
-      return Promise.all(["left", "shell:left"].map((id) =>
+      return Promise.all(["left", "terminal:left"].map((id) =>
         s.rect("core.sidebar.section.control", controlIndex(value, id, "files.tree", HOLDER))));
     };
     /** 두 트리가 그린 행의 수. 캡처는 검사가 끝나기 전에 지운다. */

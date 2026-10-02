@@ -6,15 +6,14 @@
 //   2. 선언한 status 와 명령은 등록되고, 선언한 dom 이름은 요소에 붙는 값으로 적혀 있다.
 // 조작 요소가 명령과 dom 이름을 갖는지는 실행 중인 문서의 audit(core.page.audit,
 // core.surface.document 의 unbound)가 판단한다. 소스 모양으로 추측하지 않는다.
-// 워크벤치(코어)와 플러그인 페이지(plugins/*/ui)를 같은 규칙으로 검사한다.
+// 워크벤치(코어)를 검사한다. 플러그인 페이지는 각 플러그인 repository 가 검사한다.
 //
 //   node scripts/check-exposure.mjs
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 const WORKBENCH = join(ROOT, "packages/workbench");
-const PLUGINS = join(ROOT, "plugins");
 
 /* 공개 이름이 아닌 따옴표 안의 점 이름. 파일 이름이다. */
 const FILE = /\.(html|js|mjs|json|css)$/;
@@ -119,28 +118,10 @@ check({
   registrations: [join(ROOT, "packages/plugin-api/page.js")],
 });
 
-let plugins = 0;
-for (const name of readdirSync(PLUGINS)) {
-  const manifestPath = join(PLUGINS, name, "plugin.json");
-  if (!existsSync(manifestPath)) continue;
-  const manifest = readJson(manifestPath);
-  const ui = join(PLUGINS, name, "ui");
-  const sources = existsSync(ui) ? [...files(ui, (file) => /\.(js|html)$/.test(file))] : [];
-  plugins++;
-  // 진단 빌드에만 있는 선언(diagnostics.json)도 같은 규칙으로 검사한다.
-  const diagnosticsPath = join(PLUGINS, name, "diagnostics.json");
-  const diagnostics = existsSync(diagnosticsPath) ? readJson(diagnosticsPath).exposes : {};
-  const exposes = Object.fromEntries(["status", "commands", "dom"].map((key) =>
-    [key, [...(manifest.exposes?.[key] ?? []), ...(diagnostics[key] ?? [])]]));
-  const sections = new Set((manifest.sections ?? []).flatMap((section) =>
-    (typeof section.module === "string" ? [section.module] : [section.module.horizontal, section.module.vertical])
-      .map((module) => join(PLUGINS, name, module))));
-  check({ owner: manifest.id, exposes, sources, registrations: [], sections, core: coreDeclared });
-}
-
+// plugin 의 선언은 각 plugin repository 가 검사한다(docs/spec/plugins.md#repositories).
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exitCode = 1;
 } else {
-  console.log(`Exposure checks passed: core and ${plugins} plugins`);
+  console.log("Exposure checks passed: core");
 }

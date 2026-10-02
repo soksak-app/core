@@ -83,7 +83,7 @@ Go: each `src/platform/<os>/` directory is a Go package. Its primary file (`darw
 
 Rust: `src/platform/platform.rs` declares each OS module with `#[cfg(target_os = "macos")]` or `#[cfg(windows)]` and `#[path = "<os>/<os>.rs"]`. `platform::current()` returns the implementation for the target OS and returns an error on other targets. Each OS module declares its own files with `#[path]`.
 
-The shell sidecar uses the same Go mechanism in `sidecars/shell/src/platform/`.
+The shell sidecar repository uses the same Go mechanism in its `src/platform/` ([repositories](plugins.md#repositories)).
 
 ## Platform interface
 
@@ -196,7 +196,7 @@ On macOS each application runs from an application bundle, because the operating
 
 | File | Contents |
 | --- | --- |
-| `go.work` | Uses `apps/wailsv3`, `packages/host/wailsv3`, `packages/sok/wailsv3`, `sidecars/files`, and `sidecars/shell`; replaces the host module and the command-line module `v0.0.0` with `./packages/host/wailsv3` and `./packages/sok/wailsv3` |
+| `go.work` | Uses `apps/wailsv3`, `packages/host/wailsv3` and `packages/sok/wailsv3`; replaces the host module and the command-line module `v0.0.0` with `./packages/host/wailsv3` and `./packages/sok/wailsv3` |
 | `Cargo.toml` | Workspace with members `apps/tauriv2`, `packages/host/tauriv2` and `packages/sok/tauriv2`, the shared `[patch.crates-io]` for the Tauri crates, and the `dev` profile |
 | `Cargo.lock` | The single lock file for both crates |
 | `target/` | Cargo output and both application executables; excluded by `.gitignore` |
@@ -208,9 +208,8 @@ On macOS each application runs from an application bundle, because the operating
 | `make wailsv3-build`, `make tauriv2-build` | Build `native/darwin` and the frontend, stage it, and build the debug executable |
 | `make wailsv3-build-release`, `make tauriv2-build-release` | Build the release executable |
 | `make wailsv3`, `make tauriv2` | Build and run the debug executable |
-| `make sidecars-debug`, `make sidecars-release` | Build the sidecar packages that the plugins of `scripts/workspace-registry.json` declare, and their helpers, in that profile. The build list comes from `scripts/sidecar-packages.mjs`, not from a directory glob |
-| `make registry`, `make install-plugins CONFIG=DIR` | Build the workspace registry in `target/registry`, and install its plugins into a configuration directory |
-| `make native-test` | Run `make -C native/darwin test`, `go test` for `packages/host/wailsv3`, `sidecars/files`, and `sidecars/shell`, and `cargo test -p soksak-host-tauriv2`, the host tests with and without diagnostics |
+| `make registry`, `make install-plugins CONFIG=DIR` | Build the workspace registry in `target/registry` from the plugin and sidecar repositories that `scripts/workspace-registry.json` declares ([repositories](plugins.md#repositories)), and install its plugins into a configuration directory |
+| `make native-test` | Run `make -C native/darwin test`, `go test` for `packages/host/wailsv3`, and `cargo test -p soksak-host-tauriv2`, the host tests with and without diagnostics; each sidecar repository runs its own tests |
 | `make platforms` | Run `scripts/check-platforms.mjs` |
 | `make hosts-check` | Run `scripts/check-hosts.mjs` |
 

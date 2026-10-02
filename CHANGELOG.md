@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-5-4: core no longer holds the plugins and sidecars. The window-check registry is built from the declared sibling repositories, the default layout uses one terminal card without a card sidebar, and `make boundaries` checks core sources against the declared plugin ids and sidecar package names.
+
 - R1-5-1: the plugin specification defines the separate plugin and sidecar repositories, their dependency on a core tag, and the registry fixture that core builds from them.
 
 - G1.4-47: the terminal frame checks sample the terminal in frame pixels, and the window checks report cleanup and lookup errors they discarded.

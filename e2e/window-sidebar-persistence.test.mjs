@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 import { frames, readFrame, pixel } from "./frame.mjs";
 
@@ -79,7 +79,11 @@ for (const app of Object.values(APPS))
       const target = initial.cards.find((card) => card.tabs.some((tab) => tab.plugin === "terminal"));
       assert.ok(target, "terminal fixture absent");
       const terminal = target.tabs.find((tab) => tab.plugin === "terminal");
-      const windowBar = (await s.get("core.sidebars")).find(
+      // 터미널의 오른쪽 오버라이드가 고정 사이드바를 터미널 카드에 묶는다.
+      await keepCommonSettings(s);
+      await s.run("core.settings.link", { place: "window-right", plugin: "terminal", set: "set-install", scope: "common" });
+      const windowBar = (await s.until("core.sidebars", (bars) => bars.some(
+        (bar) => bar.placement === "window" && bar.card === target.id), "associated external sidebar absent")).find(
         (bar) => bar.placement === "window" && bar.card === target.id,
       );
       assert.ok(windowBar, "associated external sidebar absent");

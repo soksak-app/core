@@ -1,8 +1,6 @@
 packages:
   - packages/*
   - packages/host/*
-  - plugins/*
-  - sidecars/*
   - apps/*
   - e2e
 allowBuilds:

@@ -44,7 +44,8 @@ function readJson(path) {
 /** 패키지 폴더 맵 (패키지 이름 → 디렉터리 경로). */
 function getPackageFolders(base = root) {
   const packages = new Map();
-  const places = ["packages", "plugins"];
+  // plugin 은 자기 repository 에 있다(docs/spec/plugins.md#repositories).
+  const places = ["packages"];
 
   for (const place of places) {
     const placeDir = join(base, place);

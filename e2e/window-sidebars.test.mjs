@@ -33,6 +33,9 @@ for (const app of Object.values(APPS))
     t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
     await fresh(s);
     await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
+    // 터미널 카드에 브라우저 탭을 더해 한 카드에 다른 플러그인의 탭을 둔다.
+    const { tab: added } = await s.run("core.card.add-tab", { card: "terminal", plugin: "browser" });
+    s.cleanup(() => s.run("core.tab.close", { tab: added }));
     const initial = await s.get("core.grid");
     const target = initial.cards.find((card) => new Set(card.tabs.map((tab) => tab.plugin)).size > 1);
     assert.ok(target, "different-plugin tabs are required");
@@ -197,14 +200,19 @@ for (const app of Object.values(APPS))
         assert.deepEqual(await columns(), baseline, `${label}: a tab change moved or resized a fixed sidebar column`);
         t.diagnostic(`${label}: ${focused.id}/${tab.plugin}`);
       }
-      await s.run("core.card.focus", { card: "shell" });
-      await expectContext("shell focus");
-      const shell = (await s.get("core.grid")).cards.find((card) => card.id === "shell");
-      const moved = shell.tabs.find((item) => item.id === shell.active);
+      // 터미널 카드에 탭 하나를 더 둔다. 활성 탭을 옮겨도 카드가 남아 다른 플러그인의 탭이 문맥이 된다.
+      const before = (await s.get("core.grid")).cards.find((card) => card.id === "terminal");
+      const { tab: kept } = await s.run("core.card.add-tab", { card: "terminal", plugin: "browser" });
+      s.cleanup(() => s.run("core.tab.close", { tab: kept }));
+      await s.run("core.tab.select", { tab: before.active });
+      await s.run("core.card.focus", { card: "terminal" });
+      await expectContext("terminal focus");
+      const terminal = (await s.get("core.grid")).cards.find((card) => card.id === "terminal");
+      const moved = terminal.tabs.find((item) => item.id === terminal.active);
       await s.run("core.tab.move", { tab: moved.id, card: "browser", zone: "centre" });
       await expectContext("tab moved into the browser card");
-      await s.run("core.card.focus", { card: "shell" });
-      await expectContext("shell after the move");
+      await s.run("core.card.focus", { card: "terminal" });
+      await expectContext("terminal after the move");
       await s.run("core.tab.close", { tab: moved.id });
       await expectContext("moved tab closed");
       await s.run("core.card.focus", { card: "browser" });

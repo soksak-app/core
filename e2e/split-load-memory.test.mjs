@@ -58,7 +58,7 @@ for (const app of Object.values(APPS)) {
 
     for (let round = 0; round < 32; round++) {
       const before = await session.get("core.grid");
-      const source = gridCards(before).find((card) => card.id === "shell") ?? gridCards(before)[0];
+      const source = gridCards(before).find((card) => card.id === "terminal") ?? gridCards(before)[0];
       assert.ok(source, "stress layout has no source card");
       await session.run("core.card.focus", { card: source.id });
       await session.until("core.grid", (grid) => grid.cards.find((card) => card.id === source.id)?.focused === true,

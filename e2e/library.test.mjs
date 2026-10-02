@@ -30,7 +30,9 @@ async function returnProject(s, id, phase) {
     await s.run("core.library.open", { id });
   } catch (error) {
     const window = await s.get("host.window");
-    throw new Error(`${phase}: ${error.message}; native state: ${JSON.stringify(window)}`, { cause: error });
+    const page = { screen: await s.get("core.screen"), surfaces: await s.get("core.surfaces") };
+    throw new Error(`${phase}: ${error.message}; page state: ${JSON.stringify(page)}; native state: ${JSON.stringify(window)}`,
+      { cause: error });
   }
 }
 
@@ -132,7 +134,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
     await s.run("core.projects.browse");
     assert.equal((await s.get("core.screen")).screen, "library");
-    assert.equal((await s.surfaces("shell")).length, 0);
+    assert.equal((await s.surfaces("terminal")).length, 0);
     assert.equal((await s.get("host.window")).surfaces.some((x) => x.visible), false, "the library shows no native surface");
     const library = await shown(s, 1, "the library did not list the project");
     const preview = library.previews[first.id].map(({ card, x, y, w, h }) => ({ id: card, x, y, w, h }));
@@ -144,11 +146,11 @@ for (const app of Object.values(APPS)) {
         if (a.y + a.h <= b.y) assert.ok(pa.y + pa.h < pb.y, `${a.id} must remain above ${b.id}`);
       }
     }
-    const [left, shell, browser, right] = ["left", "shell", "browser", "right"]
+    const [left, terminal, browser, right] = ["left", "terminal", "browser", "right"]
       .map((id) => preview.find((c) => c.id === id));
     assert.ok(Math.abs(left.w - right.w) <= 1 / 64, "sidebar widths must be uniform");
-    assert.ok(Math.abs(shell.h - browser.h) <= 1 / 64, "split rows must have equal heights");
-    const gaps = [shell.x - left.x - left.w, right.x - shell.x - shell.w, browser.y - shell.y - shell.h];
+    assert.ok(Math.abs(terminal.h - browser.h) <= 1 / 64, "split rows must have equal heights");
+    const gaps = [terminal.x - left.x - left.w, right.x - terminal.x - terminal.w, browser.y - terminal.y - terminal.h];
     assert.ok(gaps.every((gap) => gap > 0 && Math.abs(gap - gaps[0]) <= 1 / 64), "pane gaps must be uniform on both axes");
     const saved = await project(s, first.id);
     const space = saved.spaces.find((x) => x.id === saved.activeSpaceId);
@@ -161,7 +163,7 @@ for (const app of Object.values(APPS)) {
     // 복귀 명령이 DOM만 복원하고 native image raster를 늦게 표시하면 이 검사가 실패한다.
     let terminalCount = (await s.surfaces("terminal")).filter((surface) => surface.visible).length;
     if (terminalCount === 0) {
-      const source = grid.cards.find((card) => card.id === "shell" && card.tabs.length > 0);
+      const source = grid.cards.find((card) => card.id === "terminal" && card.tabs.length > 0);
       if (!source) return t.skip("terminal source card not found");
       await s.run("core.card.split", { card: source.id, side: "right", plugin: "terminal" });
       await s.until("core.surfaces", (surfaces) => surfaces.filter((surface) =>
@@ -213,19 +215,22 @@ for (const app of Object.values(APPS)) {
       return duration;
     };
     t.diagnostic(`${app.name}: START restoration connection`);
-    const restoredShells = await s.until("core.surfaces", (surfaces) => surfaces.filter((surface) =>
-      surface.visible && surface.plugin === "shell" && surface.exposes.includes("shell.output") &&
-      surface.exposes.includes("core.surface.document")),
-    "restoration connection did not register shell surfaces");
-    for (const shell of restoredShells.filter((surface) => surface.visible && surface.plugin === "shell")) {
-      await s.until("shell.output", (output) => Array.isArray(output),
-        "restored shell output did not connect", { surface: shell.surface });
+    const restored = (surfaces) => surfaces.filter((surface) => surface.visible && surface.plugin === "terminal" &&
+      surface.exposes.includes("status terminal.session") && surface.exposes.includes("status core.surface.document"));
+    await s.until("core.surfaces", (surfaces) => restored(surfaces).length > 0,
+      "restoration connection did not register terminal surfaces");
+    // 조건을 만족한 알림은 복귀가 표면을 바꾸기 전의 표면을 설명할 수 있으므로 현재 registry 를 다시 읽는다.
+    const restoredTerminals = restored(await s.get("core.surfaces"));
+    assert.ok(restoredTerminals.length > 0, "the current registry has no restored terminal surface");
+    for (const terminal of restoredTerminals) {
+      await s.until("terminal.session", (session) => Boolean(session?.sessionId),
+        "restored terminal session did not connect", { surface: terminal.surface });
     }
     phase("connection");
     t.diagnostic(`${app.name}: START restoration document`);
-    for (const shell of restoredShells.filter((surface) => surface.visible && surface.plugin === "shell")) {
+    for (const terminal of restoredTerminals) {
       await s.until("core.surface.document", (document) => document?.readyState === "complete" && document.themed,
-        "restored shell document did not become ready", { surface: shell.surface });
+        "restored terminal document did not become ready", { surface: terminal.surface });
     }
     phase("document");
     t.diagnostic(`${app.name}: START restoration raster`);
@@ -291,7 +296,7 @@ for (const app of Object.values(APPS)) {
     child = s.on(added(await s.windows(2, "second library window did not open"), [s.window]));
     const libraryOrder = (await shown(child, 2, "saved library did not render")).shown;
     assert.ok(libraryOrder.includes(created.id), "the library must list the saved project");
-    await child.run("core.library.open", { id: created.id });
+    await returnProject(child, created.id, "saved project in a new window");
     await child.until("core.screen", (screen) => screen.screen === "workspace", "saved project did not reuse the new window");
     assert.equal((await s.get("host.windows")).length, 2);
 
