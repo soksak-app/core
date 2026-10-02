@@ -69,3 +69,4 @@
 - 실패한 실행의 check 출력과 host log는 모든 실패를 분류하고 기록할 때까지 보존한다. 먼저 지우면 간헐 실패의 유일한 증거를 잃는다.
 - 검증한 구현과 플랫폼을 기록한다. 이전 결과로 이후 코드를 검증하거나 테스트 통과를 배포로 기록하지 않는다.
 - 간헐 실패는 추적되는 반복 대상으로 재현하고 수용한다(네이티브 테스트 하나는 `make -C native/darwin repeat TEST=<name>_test COUNT=<n>`, 기본 스위트는 `make -C native/darwin repeat-suite COUNT=<n>`, Rust 패키지는 테스트를 반복하는 `make rust-repeat PACKAGE=<package> COUNT=<n> [TEST=<name>]`과, Go 패키지는 `make go-repeat PACKAGE=<path> COUNT=<n> [TEST=<regexp>]`, 창 검사 밖의 Node 테스트는 `make node-repeat FILE=<file> NAME=<pattern> COUNT=<n>`, 그리고 테스트 순서 의존을 찾도록 각 테스트를 혼자 실행하는 `make rust-tests-alone PACKAGE=<package>`). 실패한 검사는 원인을 찾는 데 필요한 측정 상태를 보고한다. 셸 세션에서 입력한 명령, 임시 스크립트, 임시 폴더는 재현이나 수용 근거가 아니며, 필요한 검사는 추적되는 테스트나 대상으로 만든다.
+- 부하가 걸린 기계에서 check가 예상 시간의 100배보다 적게 시간 상한을 넘긴 것은 결함이 아니다. 부하와 측정 시간을 기록하고 그 실패를 부하로 분류한 뒤 항목을 완료한다. 성능은 개발이 끝난 뒤 별도 benchmark로 재고 개선한다. 부하에 따른 시간 때문에 항목을 열어 두지 않는다.
