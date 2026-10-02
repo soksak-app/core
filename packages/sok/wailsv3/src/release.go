@@ -89,17 +89,20 @@ func collect(dir string, listed []string) ([]archiveEntry, error) {
 
 // writeArchive 는 항목을 output 에 쓰고 그 sha256 을 돌려준다. 같은 폴더의 임시 파일에 쓴 뒤 이름을 바꾸므로
 // 실패하면 output 은 바뀌지 않는다.
-func writeArchive(entries []archiveEntry, output string) (string, error) {
+func writeArchive(entries []archiveEntry, output string) (sum string, err error) {
 	temp, err := os.CreateTemp(filepath.Dir(output), "."+filepath.Base(output)+".*")
 	if err != nil {
 		return "", fileError(output, err)
 	}
-	written := false
 	defer func() {
-		if !written {
-			// 기본값: 실패한 쓰기의 임시 파일은 이미 실패를 보고했으므로 지우기 결과는 보고하지 않는다.
-			os.Remove(temp.Name())
+		if err == nil {
+			return
 		}
+		// 실패한 쓰기는 임시 파일을 닫고 지운다. 이미 닫힌 파일은 닫기 오류가 아니다.
+		if closeErr := temp.Close(); closeErr != nil && !errors.Is(closeErr, os.ErrClosed) {
+			err = fmt.Errorf("%w; close %w", err, fileError(temp.Name(), closeErr))
+		}
+		err = withCleanup(err, temp.Name(), os.Remove)
 	}()
 	hash := sha256.New()
 	zipped := gzip.NewWriter(io.MultiWriter(temp, hash))
@@ -107,7 +110,6 @@ func writeArchive(entries []archiveEntry, output string) (string, error) {
 	for _, entry := range entries {
 		data, err := os.ReadFile(entry.source)
 		if err != nil {
-			temp.Close()
 			return "", fileError(entry.path, err)
 		}
 		mode := int64(0o644)
@@ -116,11 +118,9 @@ func writeArchive(entries []archiveEntry, output string) (string, error) {
 		}
 		header := &tar.Header{Typeflag: tar.TypeReg, Name: entry.path, Mode: mode, Size: int64(len(data)), ModTime: time.Unix(0, 0)}
 		if err := archive.WriteHeader(header); err != nil {
-			temp.Close()
 			return "", err
 		}
 		if _, err := archive.Write(data); err != nil {
-			temp.Close()
 			return "", err
 		}
 	}
@@ -132,7 +132,6 @@ func writeArchive(entries []archiveEntry, output string) (string, error) {
 	if err := os.Rename(temp.Name(), output); err != nil {
 		return "", fileError(output, err)
 	}
-	written = true
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
@@ -422,11 +421,7 @@ func replaceFile(path string, data []byte) error {
 		err = os.Rename(temp.Name(), path)
 	}
 	if err != nil {
-		err = fileError(path, err)
+		return withCleanup(fileError(path, err), temp.Name(), os.Remove)
 	}
-	if err != nil {
-		// 기본값: 실패한 쓰기의 임시 파일은 이미 실패를 보고했으므로 지우기 결과는 보고하지 않는다.
-		os.Remove(temp.Name())
-	}
-	return err
+	return nil
 }

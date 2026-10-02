@@ -28,6 +28,10 @@ impl Platform for Windows {
         Err("not implemented on windows".into())
     }
 
+    fn close_file(&self, _file: std::fs::File, _path: &std::path::Path) -> Result<(), String> {
+        Err("not implemented on windows".into())
+    }
+
     fn key(&self) -> Result<String, String> {
         Err("not implemented on windows".into())
     }

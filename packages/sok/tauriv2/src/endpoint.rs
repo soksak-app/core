@@ -107,8 +107,13 @@ impl Client {
     }
 
     /// 연결을 닫는 함수를 돌려준다. 다른 thread 가 읽기를 끝내게 할 때 쓴다.
-    pub fn closer(&self) -> Result<Box<dyn Fn() + Send>, String> {
+    pub fn closer(&self) -> Result<Box<dyn Fn() -> Result<(), String> + Send>, String> {
         self.stream.closer()
+    }
+
+    /// 연결을 닫고 그 결과를 돌려준다.
+    pub fn close(self) -> Result<(), String> {
+        self.stream.close()
     }
 
     fn write(&mut self, message: &Value) -> Result<(), String> {

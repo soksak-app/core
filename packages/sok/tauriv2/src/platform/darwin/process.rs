@@ -38,7 +38,18 @@ impl Platform for Darwin {
         use std::os::unix::fs::PermissionsExt;
         let mode = if executable { 0o755 } else { 0o644 };
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
-            .map_err(|error| format!("{}: {error}", path.display()))
+            .map_err(|error| crate::files::file_error(path.display(), &error))
+    }
+
+    fn close_file(&self, file: std::fs::File, path: &std::path::Path) -> Result<(), String> {
+        use std::os::unix::io::IntoRawFd;
+        let fd = file.into_raw_fd();
+        if unsafe { libc::close(fd) } == 0 {
+            Ok(())
+        } else {
+            let error = std::io::Error::last_os_error();
+            Err(crate::files::file_error(path.display(), &error))
+        }
     }
 
     fn key(&self) -> Result<String, String> {

@@ -258,12 +258,14 @@ test("Rust failure audit rejects ignored outcomes in the scoped production lane"
 test("Rust failure audit covers every production lane", { timeout: 1000 }, () => {
   const files = [
     "packages/host/tauriv2/src/host.rs",
+    "packages/sok/tauriv2/src/sok.rs",
     "apps/tauriv2/src/main.rs",
     "packages/other/src/other.rs",
   ];
   const rust = auditFailureMatrix(files, () => "let _ = host();").lanes.find((lane) => lane.language === "rust");
   assert.deepEqual(rust.errors, [
     "packages/host/tauriv2/src/host.rs:1: ignored Rust result or task outcome",
+    "packages/sok/tauriv2/src/sok.rs:1: ignored Rust result or task outcome",
     "apps/tauriv2/src/main.rs:1: ignored Rust result or task outcome",
   ]);
 });

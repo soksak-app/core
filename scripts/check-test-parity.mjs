@@ -1445,6 +1445,7 @@ export function auditFailureMatrix(files, readSource = (file) => readFileSync(`$
     ["js-ts", auditJsFailurePropagation(files, readSource)],
     ["rust", [
       "packages/host/tauriv2/src/",
+      "packages/sok/tauriv2/src/",
       "apps/tauriv2/src/",
     ].flatMap((scope) => auditRustFailurePropagation(files, readSource, scope))],
     ["go", auditGoFailurePropagation(files, readSource)],

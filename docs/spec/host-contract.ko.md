@@ -341,6 +341,7 @@ fn invalid_json_closes_connection() {
 | `cli.window.project-selects-by-canonical-folder` | `--project`는 둘을 canonical 경로로 바꾼 뒤 열린 project 폴더가 주어진 폴더와 같은 창을 고른다. | both |
 | `cli.requests.carry-command-parameters` | `status`, `exposures`, `capture`, `dom`, `input`은 spec이 정한 endpoint method와 매개변수를 보내며, 숫자는 JSON 숫자로, 주지 않은 option은 빼고 보낸다. | both |
 | `cli.error.reports-endpoint-code` | Endpoint 오류는 종료 상태 1로 끝나며 `sok: <message> (<code>)`를 출력한다. | both |
+| `cli.error.unwritable-stderr-exits-3` | sok이 오류를 표준 오류에 쓰지 못하면 1이나 2 대신 종료 상태 3으로 끝난다. | both |
 | `cli.status.watch-prints-value-and-changes` | `status --watch`는 현재 값과 그 뒤 같은 status의 각 변경을 compact JSON 한 줄씩 출력하고, 다른 status의 변경은 무시한다. | both |
 | `cli.config-dir.default-uses-application-identifier` | `--config-dir`이 없으면 명령은 `<사용자 설정 폴더>/<application identifier>`를 쓴다. | both |
 | `cli.command.flags-from-schema` | 선언된 command는 창, surface, 그리고 선언된 schema로 flag에서 바꾼 매개변수와 함께 `command.run`으로 실행된다. 텍스트, 숫자, 정수, boolean, enum 값, nullable type의 `null`, JSON 객체와 배열, `--`로 시작하며 `=` 뒤에 준 값이며, `--params`는 객체 전체를 준다. | both |

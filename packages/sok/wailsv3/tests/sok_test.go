@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -138,6 +139,20 @@ func TestUnknownCommandExitsWithUsage(t *testing.T) {
 	code, stdout, stderr := run("nothing", "--config-dir", t.TempDir())
 	if code != 2 || stdout != "" || !strings.HasPrefix(stderr, "sok: unknown command: nothing\nusage: sok <command>") {
 		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+}
+
+// unwritable 은 쓰기를 언제나 거부하는 표준 오류다.
+type unwritable struct{}
+
+func (unwritable) Write([]byte) (int, error) { return 0, errors.New("standard error is closed") }
+
+// contract: cli.error.unwritable-stderr-exits-3
+func TestAnErrorThatCannotBeWrittenExitsWithStatus3(t *testing.T) {
+	var stdout bytes.Buffer
+	code := sok.Run([]string{"nothing", "--config-dir", t.TempDir()}, &stdout, unwritable{}, sok.Options{Identifier: "com.soksak.test", PathsDir: pathsDir, CoreVersion: "0.0.2"})
+	if code != 3 {
+		t.Fatalf("code %d", code)
 	}
 }
 

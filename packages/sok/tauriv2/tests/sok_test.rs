@@ -198,6 +198,40 @@ fn unknown_command_exits_with_usage() {
     );
 }
 
+/// 쓰기를 언제나 거부하는 표준 오류.
+struct Unwritable;
+
+impl std::io::Write for Unwritable {
+    fn write(&mut self, _bytes: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("standard error is closed"))
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+// contract: cli.error.unwritable-stderr-exits-3
+#[test]
+fn an_error_that_cannot_be_written_exits_with_status_3() {
+    let dir = tempfile_dir::Dir::new(&std::env::temp_dir());
+    let args: Vec<String> = ["nothing", "--config-dir", &dir.path().display().to_string()]
+        .iter()
+        .map(|arg| arg.to_string())
+        .collect();
+    let paths = PATHS.lock().expect("paths").clone();
+    let options = soksak_sok::Options {
+        identifier: "com.soksak.test",
+        paths_dir: &paths,
+        core_version: "0.0.2",
+    };
+    let mut stdout = Vec::new();
+    assert_eq!(
+        soksak_sok::run(&args, &mut stdout, &mut Unwritable, &options),
+        3
+    );
+}
+
 // contract: cli.endpoint.missing-file-reports-not-running
 #[test]
 fn missing_endpoint_reports_the_application_is_not_running() {

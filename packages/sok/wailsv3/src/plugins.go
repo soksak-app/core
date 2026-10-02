@@ -219,7 +219,7 @@ func writeInstalled(configDir string, state *InstalledState) error {
 
 // extract 는 tar.gz archive 를 target 옆 임시 폴더에 푼 뒤 이름을 바꿔 target 에 둔다. 일반 파일과 폴더만 받고,
 // 절대 경로와 `..` 는 거부한다.
-func extract(data []byte, target string) error {
+func extract(data []byte, target string) (err error) {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return fileError(filepath.Dir(target), err)
 	}
@@ -227,11 +227,9 @@ func extract(data []byte, target string) error {
 	if err != nil {
 		return fileError(filepath.Dir(target), err)
 	}
-	done := false
 	defer func() {
-		if !done {
-			// 기본값: 실패한 풀기의 임시 폴더는 이미 실패를 보고했으므로 지우기 결과는 보고하지 않는다.
-			os.RemoveAll(temp)
+		if err != nil {
+			err = withCleanup(err, temp, os.RemoveAll)
 		}
 	}()
 	zipped, err := gzip.NewReader(bytes.NewReader(data))
@@ -283,7 +281,6 @@ func extract(data []byte, target string) error {
 	if err := os.Rename(temp, target); err != nil {
 		return fileError(target, err)
 	}
-	done = true
 	return nil
 }
 

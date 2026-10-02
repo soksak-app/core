@@ -341,6 +341,7 @@ Items:
 | `cli.window.project-selects-by-canonical-folder` | `--project` selects the window whose open project folder equals the given directory after both are resolved to canonical paths. | both |
 | `cli.requests.carry-command-parameters` | `status`, `exposures`, `capture`, `dom` and `input` send the endpoint method and parameters that the specification names, with numbers as JSON numbers and omitted options left out. | both |
 | `cli.error.reports-endpoint-code` | An endpoint error exits with status 1 and prints `sok: <message> (<code>)`. | both |
+| `cli.error.unwritable-stderr-exits-3` | When sok cannot write its error to standard error, it exits with status 3 instead of 1 or 2. | both |
 | `cli.status.watch-prints-value-and-changes` | `status --watch` prints the current value and then each change of the same status as one compact JSON line, and ignores changes of other statuses. | both |
 | `cli.config-dir.default-uses-application-identifier` | Without `--config-dir` the command uses `<user configuration directory>/<application identifier>`. | both |
 | `cli.command.flags-from-schema` | A declared command runs through `command.run` with the window, the surface and parameters converted from its flags by the declared schema: text, numbers, integers, booleans, enum values, `null` for a nullable type, JSON objects and arrays, and a value after `=` that starts with `--`; `--params` gives the whole object. | both |

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-48: `sok`은 실패한 연결 닫기, 임시 파일 정리 실패, 임시 파일 닫기 실패를 보고하고, 오류를 쓰지 못하면 종료 상태 3으로 끝난다.
+
 - G1.4-43: 두 `sok` 구현은 실패한 파일 작업을 같은 문구 `<path>: <reason>`로 보고한다.
 
 - G1.4-42: core Rust workspace에 clippy 경고가 없고, `make native-test`가 경고를 오류로 다루는 `make rust-clippy-check`를 실행한다.

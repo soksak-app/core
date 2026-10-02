@@ -547,19 +547,30 @@ fn watch(
     stdout: &mut dyn Write,
 ) -> Result<(), Error> {
     let stopped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    // 중단 신호를 받은 thread 는 연결을 닫은 결과를 보낸다. 닫기에 실패하면 watch 는 그 오류로 끝난다.
+    let (closed_tx, closed_rx) = std::sync::mpsc::sync_channel::<Result<(), String>>(1);
     {
         let close = client.closer()?;
         let flag = stopped.clone();
         platform::current()?.on_interrupt(Box::new(move || {
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
-            close();
+            if let Err(unsent) = closed_tx.send(close()) {
+                // watch 가 이미 끝나 결과를 받을 곳이 없으면 닫기 실패를 표준 오류에 쓴다.
+                if let Err(error) = unsent.0 {
+                    eprintln!("sok: {error}");
+                }
+            }
         }))?;
     }
     let finish = |error: Error| -> Result<(), Error> {
-        if stopped.load(std::sync::atomic::Ordering::SeqCst) {
-            Ok(())
-        } else {
-            Err(error)
+        if !stopped.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(error);
+        }
+        match closed_rx.recv() {
+            Ok(closed) => closed.map_err(Error::Failed),
+            Err(_) => Err(Error::Failed(
+                "the interrupt handler ended before it closed the connection".into(),
+            )),
         }
     };
     let surface = params.get("surface").cloned();
@@ -631,19 +642,15 @@ pub fn run(
     options: &Options,
 ) -> i32 {
     let result = execute(args, stdout, options);
-    // 표준 오류에 쓰지 못하면 알릴 곳이 없으므로 종료 상태로만 실패를 알린다.
-    match result {
-        Ok(()) => 0,
-        Err(Error::Usage(message)) => {
-            // 기본값: 표준 오류 쓰기 실패는 종료 상태 2 로만 알린다.
-            let _ = writeln!(stderr, "sok: {message}\n{USAGE}");
-            2
-        }
-        Err(Error::Failed(message)) => {
-            // 기본값: 표준 오류 쓰기 실패는 종료 상태 1 로만 알린다.
-            let _ = writeln!(stderr, "sok: {message}");
-            1
-        }
+    // 표준 오류에 오류를 쓰지 못하면 알릴 곳이 없으므로 종료 상태 3 으로 알린다(docs/spec/cli.md).
+    let (written, status) = match result {
+        Ok(()) => return 0,
+        Err(Error::Usage(message)) => (writeln!(stderr, "sok: {message}\n{USAGE}"), 2),
+        Err(Error::Failed(message)) => (writeln!(stderr, "sok: {message}"), 1),
+    };
+    match written {
+        Ok(()) => status,
+        Err(_) => 3,
     }
 }
 
@@ -716,7 +723,16 @@ fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result
         plan(&a, &mut choose)?
     };
     connect(&mut client)?;
-    let client = client.as_mut().expect("connected above");
+    let mut client = client.expect("connected above");
+    let outcome = send(&mut client, request, stdout);
+    // 명령이 성공했으면 연결을 닫은 결과도 보고한다. 실패했으면 그 실패가 결과다.
+    let closed = client.close();
+    outcome?;
+    closed.map_err(Error::Failed)
+}
+
+/// 계획한 요청을 보내고 결과를 출력한다.
+fn send(client: &mut Client, request: Request, stdout: &mut dyn Write) -> Result<(), Error> {
     if request.watch {
         return watch(client, request.params.expect("status has params"), stdout);
     }

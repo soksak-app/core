@@ -37,7 +37,7 @@ The flags of a declared command come from the parameter schema that `exposure.li
 
 ## Output and exit status
 
-A command writes its result as JSON on standard output; a command without a result writes `null`. An error is written to standard error as `sok: <message>`, with the endpoint error code in parentheses when there is one. A failed file operation names the file and the operating system reason in lower case, `<path>: <reason>`, with the same text in both implementations. The exit status is 0 on success, 1 on a failed command, and 2 on a usage error, which also prints the usage.
+A command writes its result as JSON on standard output; a command without a result writes `null`. An error is written to standard error as `sok: <message>`, with the endpoint error code in parentheses when there is one. A failed file operation names the file and the operating system reason in lower case, `<path>: <reason>`, with the same text in both implementations. The exit status is 0 on success, 1 on a failed command, and 2 on a usage error, which also prints the usage; it is 3 when sok cannot write its error to standard error. A cleanup that fails after a failed write or extraction is appended to the error as `; cleanup <path>: <reason>`, and a temporary file that cannot be closed as `; close <path>: <reason>`. A connection to the application that cannot be closed reports `endpoint connection: <reason>`.
 
 ## Packages, releases and the registry
 

@@ -104,18 +104,24 @@ fn replace_with(
     let result = std::fs::File::create(&temp)
         .map_err(|error| crate::files::file_error(temp.display(), &error))
         .and_then(|mut file| {
-            write(&mut file)?;
-            file.sync_all().map_err(|error| error.to_string())
+            let written = write(&mut file).and_then(|()| {
+                file.sync_all()
+                    .map_err(|error| crate::files::file_error(temp.display(), &error))
+            });
+            let closed = crate::platform::current()?.close_file(file, &temp);
+            match (written, closed) {
+                (Err(error), Err(close)) => Err(format!("{error}; close {close}")),
+                (Err(error), Ok(())) => Err(error),
+                (Ok(()), closed) => closed,
+            }
         })
         .and_then(|()| {
             std::fs::rename(&temp, path)
                 .map_err(|error| crate::files::file_error(path.display(), &error))
         });
-    if result.is_err() {
-        // 기본값: 실패한 쓰기의 임시 파일은 이미 실패를 보고했으므로 지우기 결과는 보고하지 않는다.
-        let _ = std::fs::remove_file(&temp);
-    }
-    result
+    result.map_err(|error| {
+        crate::files::with_cleanup(error, &temp, |path| std::fs::remove_file(path))
+    })
 }
 
 /// data 로 path 를 한 번에 바꾼다.

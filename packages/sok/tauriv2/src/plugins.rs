@@ -221,11 +221,9 @@ fn extract(data: &[u8], target: &Path) -> Result<(), String> {
         std::fs::rename(&temp, target)
             .map_err(|error| crate::files::file_error(target.display(), &error))
     });
-    if result.is_err() {
-        // 기본값: 실패한 풀기의 임시 폴더는 이미 실패를 보고했으므로 지우기 결과는 보고하지 않는다.
-        let _ = std::fs::remove_dir_all(&temp);
-    }
-    result
+    result.map_err(|error| {
+        crate::files::with_cleanup(error, &temp, |path| std::fs::remove_dir_all(path))
+    })
 }
 
 fn extract_into(data: &[u8], temp: &Path) -> Result<(), String> {

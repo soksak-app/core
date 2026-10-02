@@ -1,5 +1,6 @@
 //! macOS 의 command line 동작. 엔드포인트는 Unix domain socket 이다.
 
+use std::os::unix::io::IntoRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
@@ -12,14 +13,29 @@ mod process;
 pub struct Darwin;
 
 impl Connection for UnixStream {
-    fn closer(&self) -> Result<Box<dyn Fn() + Send>, String> {
+    fn closer(&self) -> Result<Box<dyn Fn() -> Result<(), String> + Send>, String> {
         let stream = self
             .try_clone()
-            .map_err(|error| format!("endpoint connection: {error}"))?;
+            .map_err(|error| format!("endpoint connection: {}", crate::files::os_reason(&error)))?;
         Ok(Box::new(move || {
-            // 기본값: 이미 닫힌 연결을 다시 닫으면 오류지만, 닫는 목적은 이미 이루어졌으므로 결과를 쓰지 않는다.
-            let _ = stream.shutdown(std::net::Shutdown::Both);
+            stream.shutdown(std::net::Shutdown::Both).map_err(|error| {
+                format!("endpoint connection: {}", crate::files::os_reason(&error))
+            })
         }))
+    }
+
+    fn close(self: Box<Self>) -> Result<(), String> {
+        // 표준 라이브러리의 drop 은 close 의 결과를 버리므로 파일 기술자를 직접 닫는다.
+        let fd = (*self).into_raw_fd();
+        if unsafe { libc::close(fd) } == 0 {
+            Ok(())
+        } else {
+            let error = std::io::Error::last_os_error();
+            Err(format!(
+                "endpoint connection: {}",
+                crate::files::os_reason(&error)
+            ))
+        }
     }
 }
 

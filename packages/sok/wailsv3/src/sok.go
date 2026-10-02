@@ -391,10 +391,12 @@ func watch(client *Client, params map[string]any, stdout io.Writer) error {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(signals)
+	// 중단 신호를 받은 goroutine 은 연결을 닫은 결과를 보낸다. 닫기에 실패하면 watch 는 그 오류로 끝난다.
+	closed := make(chan error, 1)
 	go func() {
 		if _, ok := <-signals; ok {
 			close(stopped)
-			client.Close()
+			closed <- client.Close()
 		}
 	}()
 	matches := func(raw json.RawMessage) (json.RawMessage, bool, error) {
@@ -434,7 +436,7 @@ func watch(client *Client, params map[string]any, stdout io.Writer) error {
 	finish := func(err error) error {
 		select {
 		case <-stopped:
-			return nil
+			return <-closed
 		default:
 			return err
 		}
@@ -472,11 +474,16 @@ func Run(args []string, stdout, stderr io.Writer, options Options) int {
 	if err == nil {
 		return 0
 	}
-	fmt.Fprintf(stderr, "sok: %s\n", err)
+	// 표준 오류에 오류를 쓰지 못하면 알릴 곳이 없으므로 종료 상태 3 으로 알린다(docs/spec/cli.md).
 	var invalid UsageError
 	if errors.As(err, &invalid) {
-		fmt.Fprintln(stderr, Usage)
+		if _, writeErr := fmt.Fprintf(stderr, "sok: %s\n%s\n", err, Usage); writeErr != nil {
+			return 3
+		}
 		return 2
+	}
+	if _, writeErr := fmt.Fprintf(stderr, "sok: %s\n", err); writeErr != nil {
+		return 3
 	}
 	return 1
 }
@@ -494,7 +501,7 @@ func connectTo(values map[string]string, identifier string) (*Client, error) {
 	return Dial(endpoint)
 }
 
-func run(args []string, stdout io.Writer, options Options) error {
+func run(args []string, stdout io.Writer, options Options) (err error) {
 	identifier := options.Identifier
 	// 점이 있는 명령 단어는 선언된 command 다(docs/spec/cli.md).
 	if strings.Contains(commandWord(args), ".") {
@@ -533,9 +540,12 @@ func run(args []string, stdout io.Writer, options Options) error {
 		client, err = connectTo(a.values, identifier)
 		return client, err
 	}
+	// 명령이 성공했으면 연결을 닫은 결과도 보고한다. 실패했으면 그 실패가 결과다.
 	defer func() {
 		if client != nil {
-			client.Close()
+			if closeErr := client.Close(); closeErr != nil && err == nil {
+				err = closeErr
+			}
 		}
 	}()
 	req, err := plan(a, func() (string, error) {

@@ -7,7 +7,9 @@ use std::path::PathBuf;
 /// 엔드포인트 연결 하나.
 pub trait Connection: Read + Write + Send {
     /// 다른 thread 에서 이 연결을 닫는 함수. 읽기를 기다리는 thread 는 연결이 닫혔다는 오류를 받는다.
-    fn closer(&self) -> Result<Box<dyn Fn() + Send>, String>;
+    fn closer(&self) -> Result<Box<dyn Fn() -> Result<(), String> + Send>, String>;
+    /// 연결을 닫고 그 결과를 돌려준다.
+    fn close(self: Box<Self>) -> Result<(), String>;
 }
 
 /// 운영체제별 동작.
@@ -26,6 +28,8 @@ pub trait Platform {
     fn key(&self) -> Result<String, String>;
     /// 푼 파일의 mode 를 실행 파일이면 0755, 아니면 0644 로 정한다.
     fn set_executable(&self, path: &std::path::Path, executable: bool) -> Result<(), String>;
+    /// path 의 파일을 닫고 그 결과를 돌려준다. 표준 라이브러리의 drop 은 닫기 결과를 버린다.
+    fn close_file(&self, file: std::fs::File, path: &std::path::Path) -> Result<(), String>;
 }
 
 #[cfg(target_os = "macos")]

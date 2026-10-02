@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/min-median-max/soksak/packages/sok/wailsv3/src/platform"
 )
@@ -66,8 +67,10 @@ func ReadEndpoint(configDir string) (Endpoint, error) {
 
 // Client 는 엔드포인트 연결 하나다. 요청은 차례로 보내고 응답을 기다리며, 그 사이에 온 알림은 Notify 로 넘긴다.
 type Client struct {
-	conn   net.Conn
-	nextID int
+	conn      net.Conn
+	nextID    int
+	closeOnce sync.Once
+	closeErr  error
 	// Notify 는 응답을 기다리는 동안 도착한 알림을 받는다.
 	Notify func(method string, params json.RawMessage) error
 }
@@ -82,7 +85,15 @@ func Dial(endpoint Endpoint) (*Client, error) {
 }
 
 // Close 는 연결을 닫는다.
-func (c *Client) Close() error { return c.conn.Close() }
+// Close 는 연결을 닫고 그 결과를 돌려준다. 두 번째부터는 첫 닫기의 결과를 돌려준다.
+func (c *Client) Close() error {
+	c.closeOnce.Do(func() {
+		if err := c.conn.Close(); err != nil {
+			c.closeErr = fmt.Errorf("endpoint connection: %s", osReason(err))
+		}
+	})
+	return c.closeErr
+}
 
 func (c *Client) write(message any) error {
 	body, err := json.Marshal(message)

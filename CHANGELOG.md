@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-48: `sok` reports a failed connection close, a failed cleanup of temporary files and a failed close of a temporary file, and exits with status 3 when it cannot write its error.
+
 - G1.4-43: both `sok` implementations report a failed file operation with the same text, `<path>: <reason>`.
 
 - G1.4-42: the core Rust workspace has no clippy warning, and `make native-test` runs `make rust-clippy-check` with warnings denied.
