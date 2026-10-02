@@ -47,13 +47,14 @@ var presentedSchema = map[string]any{"type": "object", "properties": map[string]
 
 var hostStatus = map[string]hostEntry{
 	"host.window": {
-		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, window buttons, webview frames, native surfaces, document regions, image regions, and the open native modal.",
+		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), window buttons, webview frames, native surfaces, document regions, image regions, and the open native modal.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"frame":       rectSchema,
 			"pointer":     map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
 			"content":     rectSchema,
 			"scale":       map[string]any{"type": "number"},
 			"refreshRate": map[string]any{"type": []string{"integer", "null"}},
+			"pageProcess": map[string]any{"type": "integer"},
 			"maximized":   map[string]any{"type": "boolean"},
 			"key":         map[string]any{"type": "boolean"},
 			"active":      map[string]any{"type": "boolean"},
@@ -893,6 +894,7 @@ type windowFacts struct {
 	Active      bool            `json:"active"`
 	Occluded    bool            `json:"occluded"`
 	Children    int             `json:"children"`
+	PageProcess int             `json:"pageProcess"`
 	Controls    []WindowControl `json:"controls"`
 	Webviews    []struct {
 		frame
@@ -1005,6 +1007,7 @@ type WindowStatus struct {
 	Active           bool             `json:"active"`
 	Occluded         bool             `json:"occluded"`
 	Children         int              `json:"children"`
+	PageProcess      int              `json:"pageProcess"`
 	AppDomWebviews   int              `json:"appDomWebviews"`
 	DocumentWebviews int              `json:"documentWebviews"`
 	Controls         []WindowControl  `json:"controls"`
@@ -1056,6 +1059,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	out := WindowStatus{
 		Frame: facts.Frame, Pointer: facts.Pointer, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
 		Scale: facts.Scale, RefreshRate: facts.RefreshRate, Maximized: facts.Zoomed, Key: facts.Key, Active: facts.Active, Occluded: facts.Occluded, Children: facts.Children,
+		PageProcess: facts.PageProcess,
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
 		Webviews: []WindowWebview{},
 	}

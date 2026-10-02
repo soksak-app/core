@@ -154,6 +154,9 @@ char *sp_window_facts(void *handle) {
         // 다른 창에 완전히 가려진 창은 WebKit 이 그리기를 늦추므로 표시 측정의 조건이다.
         @"occluded": @((BOOL)((window.occlusionState & NSWindowOcclusionStateVisible) == 0)),
         @"children": @(window.childWindows.count),
+        // 앱 페이지를 그리는 WebContent 프로세스. 페이지 프로세스가 아직 없으면 0 이다(WKWebView 비공개 속성,
+        // docs/operations/private-native-apis.md).
+        @"pageProcess": @(mainWebview(window) ? mainWebview(window)._webProcessIdentifier : 0),
         @"controls": controls,
         @"webviews": webviews,
         @"nativeSurfaces": surfaces,

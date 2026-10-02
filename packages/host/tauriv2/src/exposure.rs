@@ -73,13 +73,14 @@ fn host_declarations() -> Value {
                 "scale": {"type": "number"}}}},
         }, {
             "name": "host.window",
-            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, window buttons, webview frames, native surfaces, image regions, and the open native modal.",
+            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), window buttons, webview frames, native surfaces, document regions, image regions, and the open native modal.",
             "schema": {"type": "object", "properties": {
                 "frame": rect,
                 "pointer": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
                 "content": rect,
                 "scale": {"type": "number"},
                 "refreshRate": {"type": ["integer", "null"]},
+                "pageProcess": {"type": "integer"},
                 "maximized": {"type": "boolean"},
                 "key": {"type": "boolean"},
                 "active": {"type": "boolean"},
@@ -1083,6 +1084,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "active": facts["active"],
         "occluded": facts["occluded"],
         "children": facts["children"],
+        "pageProcess": facts["pageProcess"],
         "appDomWebviews": app_dom_webviews,
         "documentWebviews": document_webviews,
         "controls": facts["controls"],

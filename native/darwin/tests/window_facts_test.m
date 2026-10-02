@@ -91,6 +91,18 @@ int main(void) { @autoreleasepool {
     check(window.screen != nil && [facts[@"refreshRate"] isKindOfClass:NSNumber.class]
         && [facts[@"refreshRate"] integerValue] == window.screen.maximumFramesPerSecond && [facts[@"refreshRate"] integerValue] > 0,
         [NSString stringWithFormat:@"the refresh rate of the window's screen is reported: %@", facts[@"refreshRate"]]);
+    // 앱 페이지가 그려지는 WebContent 프로세스. 메모리 검사가 이 프로세스만 잰다. 페이지를 읽기 전에는 프로세스가
+    // 없을 수 있으므로 페이지를 읽은 뒤 잰다.
+    __block BOOL pageLoaded = NO;
+    [main loadHTMLString:@"<p>page</p>" baseURL:nil];
+    [main evaluateJavaScript:@"1" completionHandler:^(id result, NSError *error) { (void)result; (void)error; pageLoaded = YES; }];
+    NSDate *loadDeadline = [NSDate dateWithTimeIntervalSinceNow:10];
+    while (!pageLoaded && loadDeadline.timeIntervalSinceNow > 0)
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    NSDictionary *pageFacts = parse(sp_window_facts(window));
+    pid_t pageProcess = [[main valueForKey:@"_webProcessIdentifier"] intValue];
+    check(pageProcess > 0 && [pageFacts[@"pageProcess"] intValue] == pageProcess,
+        [NSString stringWithFormat:@"the app page's WebContent process is reported: %@ for %d", pageFacts[@"pageProcess"], pageProcess]);
     check(![facts[@"active"] boolValue] && ![facts[@"key"] boolValue], @"an inactive window is reported as not key and not active");
     check([facts[@"children"] integerValue] == 0, @"no child windows");
     check([facts[@"controls"] count] == 3, @"three window buttons are reported");
