@@ -529,6 +529,30 @@ for (const app of Object.values(APPS)) {
       `reloaded document did not retain the dark host theme: ${JSON.stringify(restoredPixel)}`);
   });
 
+  test(`${app.name}: the address bar paints the card colour in light and dark modes`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    // 막대의 안쪽 여백(주소 칸 바로 위)과 주소가 없을 때의 빈 화면은 모두 카드 색(--card)으로 칠한다.
+    const sample = async (mode) => {
+      await s.run("core.settings.set", { patch: { mode } });
+      await s.until("core.settings", (value) => value.values.mode === mode && !value.saving, `host did not settle ${mode} theme`);
+      const address = await s.rect("browser.address", undefined, surface);
+      const empty = await s.rect("browser.empty", undefined, surface);
+      const bar = await documentPixel(t, s, surface, () => ({
+        x: address.document.x + address.x + address.width / 2, y: address.document.y + address.y - 2,
+      }));
+      const card = await documentPixel(t, s, surface, () => ({
+        x: empty.document.x + empty.x + 8, y: empty.document.y + empty.y + 8,
+      }));
+      assert.ok(nearColour(bar, card), `${mode}: the address bar is ${JSON.stringify(bar)}, the card colour ${JSON.stringify(card)}`);
+    };
+    await sample("light");
+    await sample("dark");
+  });
+
   test(`${app.name}: Google site appearance remains independent of host theme`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

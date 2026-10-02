@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-52: a window check compares the browser address bar with the card colour in light and dark modes; the browser plugin paints the bar in that colour.
+
 - G1.4-48: `sok` reports a failed connection close, a failed cleanup of temporary files and a failed close of a temporary file, and exits with status 3 when it cannot write its error.
 
 - G1.4-43: both `sok` implementations report a failed file operation with the same text, `<path>: <reason>`.
