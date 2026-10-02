@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-46: 터미널 크기 변경이 자기 줄을 끝내는 zsh 프롬프트 위의 출력을 유지한다. terminal runtime 명세가 `redraw=1`과 `redraw=last`의 다시 그리는 영역을 정한다.
 - G1.4-51: 정렬과 gesture 검사는 카드 안쪽에서 늦는 터미널 image나 녹화 시작 전에 표시된 상태를 실패로 세지 않는다.
 
 - G1.4-53: Tauri의 timeout 오류 네 개가 Wails처럼 `within 10s`를 적는다.
