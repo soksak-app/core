@@ -13,6 +13,12 @@ import {
 
 let loaded = null;
 let units = [];
+let starter = null;
+
+/** 첫 실행이 설치하는 starter pack 의 이름. environment.json 에 없으면 null 이다(docs/spec/installation.md). */
+export function starterPack() {
+  return starter;
+}
 
 async function readJson(path) {
   const response = await fetch(`/${path}`);
@@ -35,6 +41,8 @@ function surfaceOf(name, pluginId, surface) {
 export async function loadEnvironment() {
   if (loaded) throw new Error("environment is already loaded");
   const environment = validateEnvironment(await readJson(ENVIRONMENT));
+  // 기본값: starter 는 environment.json 의 선택 필드이며 없으면 첫 실행이 아무것도 설치하지 않는다.
+  starter = environment.starter ?? null;
   const installed = validateInstalledPlugins(await readJson(INSTALLED_PLUGINS));
   const manifests = await Promise.all(installed.map(async ({ id, package: name, version }) => {
     const manifest = validateManifest(await readJson(modulePath(name, MANIFEST)));

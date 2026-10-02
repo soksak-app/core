@@ -1,4 +1,5 @@
 {
+  "starter": "starter",
   "runtime": "runtime",
   "settings": {
     "terminal": {

@@ -287,7 +287,7 @@ func stateJSON(t *testing.T, config string) string {
 // contract: cli.plugin.state-reads-registry-and-installed
 func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	config := t.TempDir()
-	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":1,"plugins":{},"sidecars":{}}}` {
+	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":1,"plugins":{},"sidecars":{}},"firstRun":true}` {
 		t.Fatalf("state without a registry = %s", text)
 	}
 	index := pluginVersions(t, "0.2.0")
@@ -307,6 +307,9 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	}
 	if plugin := state.Installed.Plugins["probe"]; plugin.Version != "0.2.0" || !plugin.Enabled {
 		t.Fatalf("installed = %#v", state.Installed)
+	}
+	if state.FirstRun {
+		t.Fatal("the state after an install reports a first run")
 	}
 	// 읽지 못한 index 는 오류를 index 자리에 담고, 설치 상태는 그대로 보고한다.
 	if err := os.Remove(index); err != nil {

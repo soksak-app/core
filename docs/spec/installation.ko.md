@@ -75,9 +75,13 @@ Host는 시작할 때 켜진 설치 plugin의 `plugin.json`이 지정한 sidecar
 
 | Host 호출 또는 event | 의미 |
 | --- | --- |
-| `pluginsState()` | `{ registry, index, installed }`를 돌려준다. `registry`는 `plugins/registry.json`의 `index` URL이고 없으면 `null`이다. `index`는 검사한 registry index이고, registry가 없으면 `null`, 읽거나 검사하지 못하면 `{ "error": "<message>" }`다. `installed`는 `plugins/installed.json`의 내용이고, 없으면 `{ "format": 1, "plugins": {}, "sidecars": {} }`다. `installed.json`을 읽지 못하면 그 message로 호출을 거부한다 |
+| `pluginsState()` | `{ registry, index, installed, firstRun }`을 돌려준다. `registry`는 `plugins/registry.json`의 `index` URL이고 없으면 `null`이다. `index`는 검사한 registry index이고, registry가 없으면 `null`, 읽거나 검사하지 못하면 `{ "error": "<message>" }`다. `installed`는 `plugins/installed.json`의 내용이고, 없으면 `{ "format": 1, "plugins": {}, "sidecars": {} }`다. `firstRun`은 `plugins/installed.json`이 없는 동안 `true`다. `installed.json`을 읽지 못하면 그 message로 호출을 거부한다 |
 | `pluginsRun({ action, plugin })` | Plugin id에 대해 `install`, `update`, `remove`, `enable`, `disable`을 애플리케이션의 core version과 platform으로 실행하고, 같은 `sok plugin` 명령의 출력을 돌려준다. 다른 `action`이나 비어 있지 않은 문자열이 아닌 plugin id는 아무것도 바꾸지 않고 호출을 거부한다. 실패한 작업은 같은 명령의 message로 호출을 거부하고, `installed.json`은 그 명령이 정한 대로 남는다 |
 | `plugins-changed` | `pluginsRun`이 `installed.json`을 바꾼 뒤 모든 창에 `{ action, plugin }`과 함께 보낸다 |
 
 Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중일 때 `pluginsRun`을 호출하면 `another plugin operation is running`으로 거부한다. Host는 `sok` process가 만든 변경을 관찰하지 않는다. 다음 `pluginsState` 호출과 나중에 불러온 page가 그 변경을 읽는다. 변경은 애플리케이션을 다시 시작할 때 적용된다. 열려 있는 창은 이미 불러온 plugin을 유지하고, sidecar는 시작할 때만 시작한다. Browser 애플리케이션은 host가 없으므로 plugin 작업이 없다.
+
+## 첫 실행
+
+`environment.json`의 `starter`가 starter pack을 정한다. 창이 시작할 때 `pluginsState`가 `firstRun`을 보고하면, workbench는 space를 만들기 전에 registry index에서 그 pack의 모든 plugin을 pack의 순서대로 `pluginsRun`으로 설치하고, 설치한 plugin을 불러오도록 page를 다시 불러온다. 첫 설치가 `installed.json`을 쓰므로, 이후의 시작은 모든 plugin을 지운 뒤라도 아무것도 설치하지 않는다. Registry가 없으면 창은 plugin 없이 시작하고 `first run: no registry is set; the starter pack <name> was not installed`를 기록한다. 읽지 못한 registry index나 그 pack이 없는 index는 그 오류로 시작을 실패시킨다. `starter`가 없는 environment나 host가 없는 환경은 아무것도 설치하지 않는다.
 

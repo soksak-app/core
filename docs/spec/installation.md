@@ -75,9 +75,13 @@ Both hosts run plugin operations with the installer library of their command lin
 
 | Host call or event | Meaning |
 | --- | --- |
-| `pluginsState()` | Returns `{ registry, index, installed }`: `registry` is the `index` URL of `plugins/registry.json` or `null` without one; `index` is the checked registry index, `null` without a registry, or `{ "error": "<message>" }` when it cannot be read or checked; `installed` is the content of `plugins/installed.json`, or `{ "format": 1, "plugins": {}, "sidecars": {} }` without one. A failure to read `installed.json` rejects the call with its message |
+| `pluginsState()` | Returns `{ registry, index, installed, firstRun }`: `registry` is the `index` URL of `plugins/registry.json` or `null` without one; `index` is the checked registry index, `null` without a registry, or `{ "error": "<message>" }` when it cannot be read or checked; `installed` is the content of `plugins/installed.json`, or `{ "format": 1, "plugins": {}, "sidecars": {} }` without one; `firstRun` is `true` while `plugins/installed.json` does not exist. A failure to read `installed.json` rejects the call with its message |
 | `pluginsRun({ action, plugin })` | Runs `install`, `update`, `remove`, `enable` or `disable` for the plugin id with the core version and platform of the application, and returns the output of the matching `sok plugin` command. Any other `action` or a plugin id that is not a non-empty string rejects the call without a change. An operation that fails rejects the call with the message of the matching command and leaves `installed.json` as that command defines |
 | `plugins-changed` | Sent to every window after `pluginsRun` changed `installed.json`, with `{ action, plugin }` |
 
 A host runs one operation at a time: a `pluginsRun` call while another runs rejects with `another plugin operation is running`. A host does not observe changes that a `sok` process makes; the next `pluginsState` call and pages that load later read them. A change takes effect when the application restarts: the windows that are open keep the plugins they loaded, and sidecars start only at startup. The browser application has no host, so it has no plugin operations.
+
+## First run
+
+`environment.json` names the starter pack in `starter`. When a window starts and `pluginsState` reports `firstRun`, the workbench installs every plugin of that pack from the registry index with `pluginsRun`, in the pack's order, before it builds a space, and then reloads the page so that the installed plugins load. The first installation writes `installed.json`, so a later start, also after every plugin was removed, installs nothing. Without a registry the window starts with no plugin and logs `first run: no registry is set; the starter pack <name> was not installed`; a registry index that cannot be read, or one without the pack, fails the start with its error. An environment without `starter`, or without a host, installs nothing.
 

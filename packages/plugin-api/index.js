@@ -440,9 +440,12 @@ export function validateSidecar(sidecar) {
  */
 export function validateEnvironment(environment) {
   if (!isObject(environment)) throw new Error("environment.json: expected an object");
-  only("environment.json", environment, ["runtime", "workspace", "sidebars", "settings", "sidecars"]);
+  only("environment.json", environment, ["runtime", "workspace", "sidebars", "settings", "sidecars", "starter"]);
   if (environment.sidecars !== undefined && typeof environment.sidecars !== "boolean") {
     throw new Error("environment.json: sidecars must be true or false");
+  }
+  if (environment.starter !== undefined && !isText(environment.starter)) {
+    throw new Error("environment.json: starter must be a pack name");
   }
   if (!isText(environment.runtime) || environment.runtime.startsWith("/") || environment.runtime.split("/").includes("..")) {
     throw new Error("environment.json: runtime must be a directory inside the application");

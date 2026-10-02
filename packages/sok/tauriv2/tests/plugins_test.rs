@@ -421,7 +421,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let config = Dir::new();
     assert_eq!(
         state_json(&config),
-        r#"{"registry":null,"index":null,"installed":{"format":1,"plugins":{},"sidecars":{}}}"#
+        r#"{"registry":null,"index":null,"installed":{"format":1,"plugins":{},"sidecars":{}},"firstRun":true}"#
     );
     let registry = plugin_versions(&["0.2.0"]);
     run_json(&[
@@ -439,6 +439,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     assert_eq!(state["index"]["plugins"][0]["id"], "probe");
     assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.2.0");
     assert_eq!(state["installed"]["plugins"]["probe"]["enabled"], true);
+    assert_eq!(state["firstRun"], false);
     // 읽지 못한 index 는 오류를 index 자리에 담고, 설치 상태는 그대로 보고한다.
     std::fs::remove_file(registry.index()).unwrap();
     let state: Value = serde_json::from_str(&state_json(&config)).unwrap();

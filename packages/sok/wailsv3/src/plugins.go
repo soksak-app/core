@@ -149,6 +149,8 @@ type PluginsState struct {
 	Registry  *string         `json:"registry"`
 	Index     any             `json:"index"`
 	Installed *InstalledState `json:"installed"`
+	// FirstRun 은 plugins/installed.json 이 없으면 true 다. 애플리케이션은 이때 starter pack 을 설치한다.
+	FirstRun bool `json:"firstRun"`
 }
 
 // ReadPluginsState 는 registry 주소, 검사한 index, 설치 상태를 읽는다. index 를 읽지 못하면
@@ -158,7 +160,12 @@ func ReadPluginsState(configDir string) (*PluginsState, error) {
 	if err != nil {
 		return nil, err
 	}
-	state := &PluginsState{Installed: installed}
+	path := filepath.Join(configDir, Installed)
+	_, statErr := os.Stat(path)
+	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
+		return nil, fileError(path, statErr)
+	}
+	state := &PluginsState{Installed: installed, FirstRun: statErr != nil}
 	url, exists, err := readRegistryURL(configDir)
 	switch {
 	case err != nil:

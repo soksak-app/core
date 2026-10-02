@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-6: 로컬 registry repository가 starter pack을 build하고, 애플리케이션의 첫 실행이 첫 space 전에 그것을 설치한다.
+
 - G1.4-52: window check가 light와 dark mode에서 브라우저 주소 막대를 카드 색과 비교하고, browser plugin이 막대를 그 색으로 칠한다.
 
 - G1.4-48: `sok`은 실패한 연결 닫기, 임시 파일 정리 실패, 임시 파일 닫기 실패를 보고하고, 오류를 쓰지 못하면 종료 상태 3으로 끝난다.

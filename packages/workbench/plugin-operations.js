@@ -73,7 +73,7 @@ export function createPluginOperations({ host, loaded, changed }) {
   }
 
   /** 작업 하나를 실행한다. 실행 전에 running 으로, 끝난 뒤 done 이나 failed 로 기록한다. */
-  async function run(action, plugin) {
+  async function runAction(action, plugin) {
     if (!PLUGIN_ACTIONS.includes(action)) throw new Error(`unknown plugin action ${action}`);
     if (!host) throw new Error("plugin operations need a native host");
     operation = { action, plugin, state: "running", error: null };
@@ -103,5 +103,22 @@ export function createPluginOperations({ host, loaded, changed }) {
     };
   }
 
-  return { refresh, run, status, failure: () => failure, hosted: Boolean(host) };
+  /**
+   * 첫 실행이면 starter pack 의 plugin 을 pack 의 순서대로 설치하고 true 를 돌려준다(docs/spec/installation.md 의 첫
+   * 실행). 호출자는 설치한 plugin 을 불러오도록 page 를 다시 불러온다. registry 가 없으면 기록만 하고 false 다.
+   */
+  async function installStarter(pack, log) {
+    if (!host || pack === null || !state?.firstRun) return false;
+    if (state.registry === null) {
+      log(`first run: no registry is set; the starter pack ${pack} was not installed`);
+      return false;
+    }
+    if (typeof state.index?.error === "string") throw new Error(`first run: ${state.index.error}`);
+    const entry = state.index.packs.find((item) => item.name === pack);
+    if (!entry) throw new Error(`first run: the registry has no pack ${pack}`);
+    for (const id of entry.plugins) await runAction("install", id);
+    return true;
+  }
+
+  return { refresh, run: runAction, status, installStarter, failure: () => failure, hosted: Boolean(host) };
 }

@@ -98,3 +98,54 @@ test("an unreadable registry index keeps the installed rows and an unreadable st
   assert.deepEqual(operations.status().plugins, []);
   await assert.rejects(operations.run("rename", "db"), /unknown plugin action rename/);
 });
+
+/** pluginsState 와 pluginsRun 을 흉내 내는 host. installed 가 비어 있으면 installed.json 이 없는 첫 실행이다. */
+function starterHost({ registry = "file:///registry/index.json", index, firstRun = true }) {
+  const calls = [];
+  let first = firstRun;
+  return {
+    calls,
+    async call(method, params) {
+      calls.push([method, params ?? null]);
+      if (method === "pluginsRun") { first = false; return null; }
+      return { registry, index, installed: { format: 1, plugins: {}, sidecars: {} }, firstRun: first };
+    },
+  };
+}
+
+const starterIndex = { plugins: [], packs: [{ name: "starter", description: "Starter.", plugins: ["alpha", "beta"] }] };
+
+test("the first run installs the starter pack in its order and asks for a reload", async () => {
+  const host = starterHost({ index: starterIndex });
+  const operations = createPluginOperations({ host, loaded: () => [], changed: () => {} });
+  await operations.refresh();
+  assert.equal(await operations.installStarter("starter", () => assert.fail("nothing to log")), true);
+  assert.deepEqual(host.calls.filter(([method]) => method === "pluginsRun").map(([, params]) => params),
+    [{ action: "install", plugin: "alpha" }, { action: "install", plugin: "beta" }]);
+  // installed.json 이 생긴 뒤에는 다시 설치하지 않는다.
+  assert.equal(await operations.installStarter("starter", () => {}), false);
+});
+
+test("the first run installs nothing without a pack, a host state or a first run", async () => {
+  const later = starterHost({ index: starterIndex, firstRun: false });
+  const operations = createPluginOperations({ host: later, loaded: () => [], changed: () => {} });
+  await operations.refresh();
+  assert.equal(await operations.installStarter("starter", () => {}), false);
+  assert.equal(await operations.installStarter(null, () => {}), false);
+  const hostless = createPluginOperations({ host: null, loaded: () => [], changed: () => {} });
+  assert.equal(await hostless.installStarter("starter", () => {}), false);
+});
+
+test("the first run without a registry logs and a missing pack or unreadable index fails", async () => {
+  const lines = [];
+  const unset = createPluginOperations({ host: starterHost({ registry: null, index: null }), loaded: () => [], changed: () => {} });
+  await unset.refresh();
+  assert.equal(await unset.installStarter("starter", (line) => lines.push(line)), false);
+  assert.deepEqual(lines, ["first run: no registry is set; the starter pack starter was not installed"]);
+  const missing = createPluginOperations({ host: starterHost({ index: { plugins: [], packs: [] } }), loaded: () => [], changed: () => {} });
+  await missing.refresh();
+  await assert.rejects(missing.installStarter("starter", () => {}), /first run: the registry has no pack starter/);
+  const unread = createPluginOperations({ host: starterHost({ index: { error: "index.json: no such file or directory" } }), loaded: () => [], changed: () => {} });
+  await unread.refresh();
+  await assert.rejects(unread.installStarter("starter", () => {}), /first run: index.json: no such file or directory/);
+});

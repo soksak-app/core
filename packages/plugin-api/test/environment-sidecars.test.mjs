@@ -19,6 +19,8 @@ delete plain.sidecars;
 test("sidecars must be a boolean", () => {
   assert.equal(validateEnvironment(environment({ sidecars: false })).sidecars, false);
   assert.throws(() => validateEnvironment(environment({ sidecars: "no" })), /sidecars must be true or false/);
+  assert.equal(validateEnvironment(environment({ starter: "starter" })).starter, "starter");
+  assert.throws(() => validateEnvironment(environment({ starter: "" })), /starter must be a pack name/);
 });
 
 test("an environment without sidecars rejects a state module that uses sidecars and accepts surfaces with sidecars", () => {

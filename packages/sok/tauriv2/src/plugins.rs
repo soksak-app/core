@@ -119,6 +119,9 @@ pub struct PluginsState {
     pub registry: Option<String>,
     pub index: IndexState,
     pub installed: InstalledState,
+    /// plugins/installed.json 이 없으면 true 다. 애플리케이션은 이때 starter pack 을 설치한다.
+    #[serde(rename = "firstRun")]
+    pub first_run: bool,
 }
 
 /// registry 가 없으면 Missing, 읽고 검사했으면 Checked, 읽거나 검사하지 못했으면 그 오류다.
@@ -134,6 +137,10 @@ pub enum IndexState {
 /// 담고, 설치 상태를 읽지 못하면 실패한다.
 pub fn read_plugins_state(config_dir: &Path) -> Result<PluginsState, String> {
     let installed = read_installed(config_dir)?;
+    let first_run = !config_dir
+        .join(INSTALLED)
+        .try_exists()
+        .map_err(|error| crate::files::file_error(config_dir.join(INSTALLED).display(), &error))?;
     let (registry, index) = match read_registry_url(config_dir) {
         Err(error) => (None, IndexState::Failed { error }),
         Ok(None) => (None, IndexState::Missing),
@@ -149,6 +156,7 @@ pub fn read_plugins_state(config_dir: &Path) -> Result<PluginsState, String> {
         registry,
         index,
         installed,
+        first_run,
     })
 }
 
