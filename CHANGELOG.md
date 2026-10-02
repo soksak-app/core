@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-61: a main-page reload hides the native surfaces before the page disappears on both hosts.
 - G1.4-62: the page paint clip keeps the holes of the newest placement when an older placement answer arrives later.
 - G1.4-58-1: the orientation check reads which of top and bottom opened.
 - G1.4-59: the empty-state check waits for the address field focus before it types.

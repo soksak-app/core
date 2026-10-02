@@ -520,6 +520,9 @@ func (s *Surfaces) reloadPage() error {
 			reloadErr = err
 			return
 		}
+		// WebContent 프로세스를 끝내면 페이지가 바로 사라진다. 그 전에 표면을 숨겨 페이지 없이 native 표면만
+		// 보이는 프레임이 없게 한다(docs/spec/surface-composition.md). 새 페이지의 PageStarted 가 다시 정리한다.
+		s.reloadSurfaceDocuments()
 		reloadErr = system.KillWebContentProcess(main)
 	})
 	if reloadErr != nil {
