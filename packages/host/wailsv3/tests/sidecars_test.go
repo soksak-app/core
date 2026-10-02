@@ -435,6 +435,13 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 
 	owner := newFakeOwner("/projects/test")
 
+	// 빠른 사이드카의 첫 Send 는 그 프로세스를 띄운다. 기동 시간은 성질 1 과 무관하므로 먼저 띄우고 기록만 한다.
+	started := time.Now()
+	if err := sidecars.Send(owner, "@fixture/sidecar-fast", "s2", json.RawMessage(`{"data":"start"}`)); err != nil {
+		t.Fatalf("fast start: %v", err)
+	}
+	t.Logf("the first fast send, which starts the process, took %v", time.Since(started))
+
 	// 느린 사이드카에 채널이 가득 찰 때까지 보낸다.
 	// 파이프 버퍼(64KB)를 빠르게 채우기 위해 각 메시지를 크게 만든다.
 	largeBody := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
@@ -460,9 +467,7 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 	err = lastErr
 
 	// 성질 1: 느린 사이드카 채널이 가득 찼을 때도 빠른 사이드카 Send() 는 블로킹되지 않는다.
-	// Send() 는 채널에 넣고 즉시 돌아올 뿐이므로 50ms 미만이어야 한다.
-	// (첫 Send 는 프로세스 기동을 포함할 수 있으므로, 미리 한 번 보내 프로세스를 띄운 후,
-	// 두 번째 Send 를 시간 측정한다.)
+	// Send() 는 이미 띄운 프로세스의 채널에 넣고 즉시 돌아올 뿐이므로 50ms 미만이어야 한다.
 	start := time.Now()
 
 	// 빠른 사이드카로 보낸다 (이것이 일반적인 경우다).

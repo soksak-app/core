@@ -403,6 +403,21 @@ fn slow_sidecar_does_not_block_other_sends() {
     sidecars.stop_timeout = Duration::from_millis(100);
     let (owner, _events) = owner("a", "/projects/test");
 
+    // 빠른 사이드카의 첫 send 는 그 프로세스를 띄운다. 기동 시간은 성질 1 과 무관하므로 먼저 띄우고 기록만 한다.
+    let started = std::time::Instant::now();
+    sidecars
+        .send(
+            &owner,
+            "@fixture/sidecar-fast",
+            "s2",
+            &raw(r#"{"data":"start"}"#),
+        )
+        .unwrap();
+    println!(
+        "the first fast send, which starts the process, took {:?}",
+        started.elapsed()
+    );
+
     // 느린 사이드카에 채널이 가득 찰 때까지 보낸다.
     let large_body = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
     let mut last_err = None;
@@ -424,9 +439,7 @@ fn slow_sidecar_does_not_block_other_sends() {
     );
 
     // 성질 1: 느린 사이드카 채널이 가득 찼을 때도 빠른 사이드카 send() 는 블로킹되지 않는다.
-    // send() 는 채널에 넣고 즉시 돌아올 뿐이므로 50ms 미만이어야 한다.
-    // (첫 send 는 프로세스 기동을 포함할 수 있으므로, 미리 한 번 보내 프로세스를 띄운 후,
-    // 두 번째 send 를 시간 측정한다.)
+    // send() 는 이미 띄운 프로세스의 채널에 넣고 즉시 돌아올 뿐이므로 50ms 미만이어야 한다.
     let start = std::time::Instant::now();
     sidecars
         .send(
