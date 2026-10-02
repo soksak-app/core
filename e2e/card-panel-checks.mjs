@@ -17,7 +17,11 @@ export function missingPoses(frames, poses, refreshRate) {
     const replaced = next !== undefined && next.displayed < first;
     return pose.displayed < first && !replaced ? first : pose.displayed;
   };
-  return poses.filter((pose, index) => !frames.some((frame) => frame.time >= start(pose, index) - 1 &&
+  // 보고된 표시 시각은 상태가 화면에 처음 나타난 refresh 보다 늦을 수 있다(host.window.presented 는 응답 뒤의
+  // refresh 다). 그래서 이전 상태가 표시된 뒤부터 이 상태의 표시 뒤 두 화면 프레임까지의 프레임을 본다. 이전 상태가
+  // 표시되기 전의 프레임은 더 이른 상태의 기록이다.
+  const after = (index) => (index === 0 ? -Infinity : poses[index - 1].displayed - 1);
+  return poses.filter((pose, index) => !frames.some((frame) => frame.time >= after(index) &&
     frame.time <= start(pose, index) + window && frame.edges.some((edge) => Math.abs(edge - pose.at) <= 1)));
 }
 

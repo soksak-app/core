@@ -18,6 +18,19 @@ test("a pose displayed before the recording started counts from the first record
   assert.deepEqual(missingPoses(frames, [{ displayed: 100, at: 30 }, { displayed: 150, at: 10 }], 60), [{ displayed: 100, at: 30 }]);
 });
 
+test("a pose shown before its reported display time and after the previous pose counts as recorded", () => {
+  // 측정 예: 상태는 보고된 표시 시각보다 45, 29, 12ms 앞선 프레임에 있고, 21ms 뒤에는 다음 상태다.
+  const frames = [
+    { time: -62, edges: [235] }, { time: -45, edges: [245] }, { time: -29, edges: [245] },
+    { time: -12, edges: [245] }, { time: 21, edges: [255] },
+  ];
+  const poses = [{ displayed: -100, at: 235 }, { displayed: 0, at: 245 }, { displayed: 60, at: 255 }];
+  assert.deepEqual(missingPoses(frames, poses, 60), []);
+  // 이전 상태가 표시되기 전의 프레임은 이 상태의 기록이 아니다.
+  const stale = [{ time: -150, edges: [245] }, { time: -95, edges: [235] }, { time: 21, edges: [255] }];
+  assert.deepEqual(missingPoses(stale, poses, 60), [{ displayed: 0, at: 245 }]);
+});
+
 test("panels left after clearing are rejected, including default ones", () => {
   assert.doesNotThrow(() => requireCleared({}));
   assert.throws(() => requireCleared({ top: { set: "space-list", collapsed: false } }), /panels remained after clearing: top/);

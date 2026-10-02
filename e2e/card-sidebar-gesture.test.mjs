@@ -211,12 +211,21 @@ for (const app of Object.values(APPS)) {
               `${side}: no intermediate movement frame`,
             );
             // 표시된 모든 상태는 표시 뒤 화면 두 프레임 안의 녹화 프레임에 그 경계로 남아야 한다.
+            const recorded = captured.map((frame, frameIndex) => ({ time: frame.time, edges: measured[frameIndex] }));
             const missing = missingPoses(
-              captured.map((frame, frameIndex) => ({ time: frame.time, edges: measured[frameIndex] })),
+              recorded,
               poses.map((pose) => ({ phase: pose.phase, displayed: pose.displayed, at: initial + sign(side) * (pose.size - 120) })),
               recordingWindow.refreshRate,
             );
-            assert.deepEqual(missing, [], `${side}: displayed states missing from the recording at ${recordingWindow.refreshRate}Hz`);
+            // 놓친 상태마다 그 경계를 보인 프레임과 표시 시각 전후 프레임의 시각(표시 시각 기준 ms)을 보고한다.
+            const around = missing.map((pose) => ({
+              ...pose,
+              shown: recorded.filter((frame) => frame.edges.some((edge) => Math.abs(edge - pose.at) <= 1))
+                .map((frame) => +(frame.time - pose.displayed).toFixed(1)),
+              frames: recorded.filter((frame) => Math.abs(frame.time - pose.displayed) <= 70)
+                .map((frame) => `${(frame.time - pose.displayed).toFixed(1)}:${frame.edges.join("/")}`),
+            }));
+            assert.deepEqual(missing, [], `${side}: displayed states missing from the recording at ${recordingWindow.refreshRate}Hz: ${JSON.stringify(around)}`);
             t.diagnostic(
               `${side}: 120 -> 160 -> 120 points, ${captured.length} frames at ${captured[0].width}x${captured[0].height}, ${stopped.layouts.length} layout transactions, gap ${stopped.longestGap}ms, input/presentation steps ${elapsed.join(",")}ms`,
             );
