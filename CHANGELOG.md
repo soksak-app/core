@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-62-1: a drawn commit that repeats the prepared placement writes the paint clip of that placement.
 - G1.4-61: a main-page reload hides the native surfaces before the page disappears on both hosts.
 - G1.4-62: the page paint clip keeps the holes of the newest placement when an older placement answer arrives later.
 - G1.4-58-1: the orientation check reads which of top and bottom opened.

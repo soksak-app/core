@@ -111,6 +111,20 @@ const slots = () =>
 let paintClip = null;
 /** 페인트 클립에 마지막으로 쓴 배치 레코드의 순번. */
 let clippedSeq = 0;
+/** 호스트에 마지막으로 보낸 배치 요청: 답의 구멍(rects, 답 전에는 null)과 그것을 그린 커밋의 순번(drawnSeq). */
+let sentPlacement = null;
+
+/**
+ * 다음 프레임에 seq 커밋의 구멍을 클립에 쓴다. 답은 요청 순서와 다르게 올 수 있다. 부하에서 끌기 중의 앞 배치 답이
+ * 뒤 배치 답보다 늦게 오면 앞 배치의 구멍이 뒤 배치의 구멍을 덮으므로, 이미 쓴 것보다 새 커밋의 구멍만 쓴다.
+ */
+function clipNextFrame(seq, rects) {
+  requestAnimationFrame(() => {
+    if (seq < clippedSeq) return;
+    clippedSeq = seq;
+    syncNativePaintClip(rects);
+  });
+}
 
 /** 앱 배경에서 표시 중인 네이티브 표면 사각형만 실제 픽셀 구멍으로 제외한다. */
 function syncNativePaintClip(rects) {
@@ -271,26 +285,27 @@ function commit(mine, snapshot, final) {
   // 기본값: 커밋 수신자를 등록하기 전의 커밋은 알릴 곳이 없다.
   const answered = listener?.(record);
   if (answered && typeof answered.then === "function") {
+    // 준비 응답은 표시 확인이 아니다. 이 요청의 배치를 그린 커밋이 있을 때만 그 구멍을 클립에 쓴다. 그린 커밋이
+    // 이 요청과 같아 보내지 않은 경우에도 그 커밋이 drawnSeq 를 남긴다.
+    const entry = { rects: null, drawnSeq: record.drawn ? record.seq : 0 };
+    sentPlacement = entry;
     return answered.then((placed) => {
       seat(record, placed);
-      // 준비 응답은 표시 확인이 아니다. 완료된 표시의 적용 좌표만 다음 프레임에 반영한다.
       // 콜백 시점의 DOM은 다음 배치를 이미 그렸을 수 있으므로 여기서 좌표를 보존한다.
-      if (record.drawn) {
-        const origin = plane.getBoundingClientRect();
-        const rects = record.surfaces.filter((surface) =>
-          surface.visible && app.kinds.includes(surface.plugin)).map(({ applied }) => ({
-            x: origin.left + applied.x, y: origin.top + applied.y, w: applied.w, h: applied.h,
-          }));
-        // 답은 요청 순서와 다르게 올 수 있다. 부하에서 끌기 중의 앞 배치 답이 뒤 배치 답보다 늦게 오면 앞 배치의 구멍이
-        // 뒤 배치의 구멍을 덮으므로, 이미 그린 것보다 새 배치의 구멍만 쓴다.
-        requestAnimationFrame(() => {
-          if (record.seq < clippedSeq) return;
-          clippedSeq = record.seq;
-          syncNativePaintClip(rects);
-        });
-      }
+      const origin = plane.getBoundingClientRect();
+      entry.rects = record.surfaces.filter((surface) =>
+        surface.visible && app.kinds.includes(surface.plugin)).map(({ applied }) => ({
+          x: origin.left + applied.x, y: origin.top + applied.y, w: applied.w, h: applied.h,
+        }));
+      if (entry.drawnSeq) clipNextFrame(entry.drawnSeq, entry.rects);
       return placed;
     });
+  }
+  // 그린 커밋이 직전에 보낸 요청과 같아 보내지 않았으면 화면에는 그 요청의 배치가 보인다. 그 답의 구멍을 쓰고,
+  // 답이 아직 오지 않았으면 답이 올 때 쓴다.
+  if (native && record.drawn && !answered && sentPlacement) {
+    sentPlacement.drawnSeq = record.seq;
+    if (sentPlacement.rects) clipNextFrame(record.seq, sentPlacement.rects);
   }
   // 호스트가 없으면 이 모듈이 앉힌 자리가 곧 실제 자리다. 호스트가 있는데 답이
   // 없으면 직전과 같은 요청이라 전송되지 않은 것이고, 마지막으로 답한 자리가 그대로

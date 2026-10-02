@@ -22,7 +22,12 @@ async function fixture(name) {
   slot.getBoundingClientRect = () => ({ left: 20, top: 25, width, height: 100 });
   const compositor = await import(`../compositor.js?paint-clip-${name}`);
   const requests = [];
-  compositor.onCommit((record) => new Promise(resolve => requests.push({ record, resolve })));
+  // unsent 가 참이면 다음 커밋은 직전 요청과 같아 호스트에 보내지 않은 것처럼 답이 없다(host.js 와 같다).
+  const state = { unsent: false };
+  compositor.onCommit((record) => {
+    if (state.unsent) { state.unsent = false; return undefined; }
+    return new Promise(resolve => requests.push({ record, resolve }));
+  });
   const answer = (placement = {}) => {
     const request = requests.shift();
     assert.ok(request, "no pending host placement");
@@ -30,7 +35,7 @@ async function fixture(name) {
   };
   const frame = () => { for (const callback of callbacks.splice(0)) callback(); };
   const clip = () => document.head.querySelector("style")?.textContent ?? null;
-  return { dom, compositor, requests, callbacks, answer, frame, clip, resize: next => { width = next; } };
+  return { dom, compositor, requests, callbacks, answer, frame, clip, state, resize: next => { width = next; } };
 }
 
 test("native preparation does not change the presented background holes", async () => {
@@ -112,3 +117,26 @@ test("a placement answer that arrives after a newer one does not replace the new
     assert.equal(f.clip(), latest, "an older placement answer replaced the background holes of the newer placement");
   } finally { f.dom.window.close(); }
 });
+
+test("a drawn commit equal to the prepared placement writes the holes of that placement", async () => {
+  const f = await fixture("unsent");
+  try {
+    // 끌기 중의 그린 배치(폭 160)가 클립을 쓴다.
+    f.resize(160);
+    const dragged = f.compositor.publish();
+    f.answer(); await dragged; f.frame();
+    const during = f.clip();
+    // 끌기 뒤의 준비 배치(폭 200)는 그리기 전이라 클립을 쓰지 않는다.
+    const prepared = f.compositor.publishAhead(new Map([["card", { x: 10, y: 20, w: 200, h: 100 }]]),
+      new Map([["card", { id: "surface", dim: false, inset: { left: 0, top: 0, width: 0, height: 0 } }]]));
+    f.answer(); await prepared; f.frame();
+    // 그린 뒤의 커밋은 준비 요청과 같아 보내지 않는다. 화면에는 준비한 배치가 보이므로 클립도 그 배치를 따라야 한다.
+    f.resize(200);
+    f.state.unsent = true;
+    f.compositor.publish();
+    f.frame();
+    assert.notEqual(f.clip(), during, "the clip kept the holes of the drag placement after the prepared placement was drawn");
+    assert.match(f.clip(), /h200/, `the clip does not cut the drawn 200-point surface: ${f.clip()}`);
+  } finally { f.dom.window.close(); }
+});
+
