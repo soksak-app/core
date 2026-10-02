@@ -23,7 +23,7 @@ import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { matchPlugins } from "./plugin-search.js";
 import { hasSection, section, sectionNames } from "./registry.js";
 import {
-  FONTS, LAYOUT_RANGES, MENU_LANGUAGES, MODES, THEMES, scopedValue, settingProject, overridden,
+  CHOICES, FONTS, LAYOUT_RANGES, MENU_LANGUAGES, SHAPE_RANGES, THEMES, scopedValue, settingProject, overridden,
   settingDefinitions,
 } from "./settings.js";
 
@@ -126,6 +126,14 @@ function choose(key, options, now) {
  * 버튼이므로 select 와 달리 change 가 아니라 click 으로 도착한다. key 에 값을 함께
  * 실어 보낸다.
  */
+/** 설정의 선택지에 이름을 붙인다. 선택지와 순서는 settings.js 의 CHOICES 가 정한다. */
+function named(key, labels) {
+  return CHOICES[key].map((choice) => {
+    if (!Object.hasOwn(labels, choice)) throw new Error(`settings choice ${choice} of ${key} has no label`);
+    return [choice, labels[choice]];
+  });
+}
+
 function segment(key, options, now) {
   const el = document.createElement("span");
   el.className = "set-seg";
@@ -240,23 +248,23 @@ function drawGeneral() {
   for (const t of THEMES) grid.appendChild(swatch(t));
 
   if (scope === "common") body.append(group("프로젝트", "프로젝트를 여는 방식은 모든 프로젝트에 적용됩니다. 이미 열린 창은 유지됩니다.", [
-    row("열기 방식", segment("projectOpening", [["tabs", "현재 창"], ["windows", "별도 창"]], value("projectOpening"))),
+    row("열기 방식", segment("projectOpening", named("projectOpening", { tabs: "현재 창", windows: "별도 창" }), value("projectOpening"))),
   ]));
   if (scope === "project" && overridden("theme")) grid.append(press("reset:theme", "전역 테마 사용"));
   body.append(group("테마", "테마가 색과 형태의 기본값을 정하고, 모드는 그 테마의 밝은 쪽과 어두운 쪽을 고른다.", [
     grid,
-    row("모드", segment("mode", MODES.map((m) => [m, m === "dark" ? "어두움" : "밝음"]), modeName())),
+    row("모드", segment("mode", named("mode", { dark: "어두움", light: "밝음" }), modeName())),
   ]));
 
   body.append(group("형태", "테마가 준 값에서 시작한다. 통로를 0 으로 내리면 카드가 선 하나를 공유한다.", [
-    row("통로", slide("gap", 0, 24, gapSetting(), "px")),
-    row("모서리", slide("radius", 0, 24, value("radius"), "px")),
+    row("통로", slide("gap", ...SHAPE_RANGES.gap, gapSetting(), "px")),
+    row("모서리", slide("radius", ...SHAPE_RANGES.radius, value("radius"), "px")),
     row("폰트", choose("font", FONTS.map((f) => [f.id, f.name]), value("font"))),
-    row("글자 크기", slide("size", 10, 18, value("size"), "px")),
+    row("글자 크기", slide("size", ...SHAPE_RANGES.size, value("size"), "px")),
   ]));
 
   body.append(group("위치", "프로젝트 탭이 놓이는 위치. 바꾸면 카드 배치도 함께 바뀐다.", [
-    row("프로젝트 탭 위치", segment("projectTabs", [["top", "위"], ["left", "왼쪽"]], value("projectTabs"))),
+    row("프로젝트 탭 위치", segment("projectTabs", named("projectTabs", { top: "위", left: "왼쪽" }), value("projectTabs"))),
   ]));
 
   body.append(group("사이드바", "표시 스위치는 해당 변의 모든 창 사이드바에 적용된다. 일반 세트와 플러그인 창 세트는 각각 독립된 열에 표시된다.", [
@@ -271,8 +279,8 @@ function drawGeneral() {
     Object.entries(LAYOUT_RANGES).map(([key, [min, max]]) => row(SIZE_LABELS[key], slide(key, min, max, value(key), "pt")))));
 
   body.append(group("표시", "배치는 그대로 두고 보이는 모습만 바꾼다.", [
-    row("포커스 표시", segment("focusInd", [["border", "테두리"], ["corner", "꺽쇠"]], value("focusInd"))),
-    row("경계선", segment("fullRule", [["under", "가림"], ["over", "보임"], ["none", "숨김"]], value("fullRule"))),
+    row("포커스 표시", segment("focusInd", named("focusInd", { border: "테두리", corner: "꺽쇠" }), value("focusInd"))),
+    row("경계선", segment("fullRule", named("fullRule", { under: "가림", over: "보임", none: "숨김" }), value("fullRule"))),
     row("포커스 밖 흐리게", toggle("dim", value("dim"))),
   ]));
 

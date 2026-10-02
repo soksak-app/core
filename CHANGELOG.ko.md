@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-66: 설정 파일 읽기와 모든 변경이 core 설정 값을 설정 명세가 나열한 선언된 형식으로 검사하고, 일반의 컨트롤이 같은 선언에서 선택지와 범위를 가져온다.
 - G1.4-65: `host.window.reload`는 다시 읽기 전에 준비된 page에 대기 중인 저장(`core.projects.flush`)을 끝내도록 요청한다. 두 host에서 카드와 탭 변경이 다시 읽기 뒤에도 남는다.
 - G1.4-64-1-3: main page는 render-blocking head module에서 첫 await 전에 시작 문서로 첫 화면을 그리고, `host.window.reload`는 두 host에서 WebContent process를 유지한다. 다시 읽기 메모리 검사는 연결한 host process와 WebKit 메모리 해제 뒤 page footprint를 잰다.
 - G1.4-64-1-2: main page는 작업 공간 스냅샷과 window 단추를 담은 시작 문서(Wails는 `/start.json`, Tauri는 `soksak://localhost/start.json`)로 시작한다. host는 그 요청에 답하며 page 시작 정리를 하고 `pageStarted` 호출을 대신하며, 각 runtime은 `runtime/start.js`를 제공한다.

@@ -93,6 +93,29 @@ Every section row control runs `core.settings.sets.row {id, action, index, secti
 
 A change that would repeat a section in the set fails with -32602 (invalid params) and the error "section <id> is already in set <id>", and changes nothing; so does + when the set already contains every registered section, with "set <id> already contains every registered section". Every change is saved immediately to the scope shown.
 
+## Values
+
+Each core setting accepts one form. Reading the settings files and every change check each value against it; a value of another form fails with `Invalid setting <key>: <value>` and the reason. A load reports the error and replaces nothing, and a change fails with -32602 (invalid params) and changes nothing. The controls of 일반 offer the same choices and ranges.
+
+| Key | Form |
+|---|---|
+| `projectOpening` | `tabs` or `windows` |
+| `theme` | `midnight`, `nord`, `solar`, `forest`, `ember`, `slate`, `mist`, `grape`, `sand` or `paper` |
+| `mode` | `dark` or `light` |
+| `font` | `mono-system`, `mono-sf`, `mono-jet`, `sans-system` or `sans-inter` |
+| `gap`, `radius` | An integer from 0 to 24 (px) |
+| `size` | An integer from 10 to 18 (px) |
+| `textSize` | A [text size step](text-size.md) |
+| `projectTabs` | `top` or `left` |
+| `left`, `right`, `dim`, `diagnostics.performance` | A boolean |
+| `focusInd` | `border` or `corner` |
+| `fullRule` | `under`, `over` or `none` |
+| `language` | `auto` or a language of the application menu (`ko`, `en`) |
+| `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth` | [Layout values](#layout-values) |
+| `sets`, `links` | [Stored sets and links](#stored-sets-and-links) |
+
+Plugin settings take the form of their declaration ([plugins](plugins.md)).
+
 ## Earlier formats
 
 The settings files keep only declared settings in the current format. When the settings are connected, the page converts the common settings and every project's settings once, saves the result and reports each conversion in the application log:

@@ -93,6 +93,29 @@
 
 세트에 같은 섹션이 두 번 들어가게 하는 변경은 -32602(invalid params)와 오류 "section <id> is already in set <id>"로 실패하고 아무것도 바꾸지 않는다. 세트가 이미 등록된 모든 섹션을 담고 있을 때의 +도 "set <id> already contains every registered section"으로 같게 실패한다. 모든 변경은 보이는 범위에 바로 저장된다.
 
+## 값
+
+core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와 모든 변경이 값을 그 형식으로 검사하고, 다른 형식의 값은 `Invalid setting <key>: <value>`와 그 이유로 실패한다. 읽기는 오류를 보고하고 아무것도 바꾸지 않으며, 변경은 -32602(invalid params)로 실패하고 아무것도 바꾸지 않는다. 일반의 컨트롤은 같은 선택지와 범위를 보인다.
+
+| 키 | 형식 |
+|---|---|
+| `projectOpening` | `tabs` 또는 `windows` |
+| `theme` | `midnight`, `nord`, `solar`, `forest`, `ember`, `slate`, `mist`, `grape`, `sand`, `paper` 중 하나 |
+| `mode` | `dark` 또는 `light` |
+| `font` | `mono-system`, `mono-sf`, `mono-jet`, `sans-system`, `sans-inter` 중 하나 |
+| `gap`, `radius` | 0에서 24까지의 정수(px) |
+| `size` | 10에서 18까지의 정수(px) |
+| `textSize` | [글자 크기 단계](text-size.ko.md) 하나 |
+| `projectTabs` | `top` 또는 `left` |
+| `left`, `right`, `dim`, `diagnostics.performance` | boolean |
+| `focusInd` | `border` 또는 `corner` |
+| `fullRule` | `under`, `over`, `none` 중 하나 |
+| `language` | `auto` 또는 애플리케이션 메뉴의 언어(`ko`, `en`) |
+| `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth` | [배치 값](#배치-값) |
+| `sets`, `links` | [저장되는 세트와 연결](#저장되는-세트와-연결) |
+
+플러그인 설정은 그 선언의 형식을 따른다([플러그인](plugins.ko.md)).
+
 ## 이전 형식
 
 설정 파일은 선언한 설정만 현재 형식으로 담는다. 설정을 연결할 때 page는 공통 설정과 모든 프로젝트 설정을 한 번 변환하고, 결과를 저장하며, 변환마다 애플리케이션 log에 보고한다.

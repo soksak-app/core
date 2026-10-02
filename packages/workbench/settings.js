@@ -205,6 +205,29 @@ export const MENU_LANGUAGES = [
 /* 시스템 언어가 표에 없을 때 쓰는 기본 언어. */
 const DEFAULT_LANGUAGE = "en";
 
+/* 형태 값의 범위(px). 정수만 받고 설정 창의 슬라이더도 이 범위를 쓴다. */
+export const SHAPE_RANGES = {
+  gap: [0, 24],
+  radius: [0, 24],
+  size: [10, 18],
+};
+
+/* 선택지 하나를 받는 core 설정. 설정 창의 선택 컨트롤은 이 순서로 선택지를 보인다(docs/spec/settings.md#values). */
+export const CHOICES = {
+  projectOpening: ["tabs", "windows"],
+  theme: THEMES.map((theme) => theme.name),
+  mode: MODES,
+  font: FONTS.map((font) => font.id),
+  textSize: TEXT_STEPS,
+  projectTabs: ["top", "left"],
+  focusInd: ["border", "corner"],
+  fullRule: ["under", "over", "none"],
+  language: ["auto", ...MENU_LANGUAGES.map((language) => language.id)],
+};
+
+/* boolean 을 받는 core 설정. */
+const SWITCHES = ["left", "right", "dim", "diagnostics.performance"];
+
 /** 유효 설정을 검사한다. 사이드바 세트와 연결, 그리고 카드 안 사이드바의 처음 폭이 최소와 최대 사이에 있는지. */
 function checkValues(values) {
   checkSidebars(values);
@@ -233,17 +256,16 @@ let writing = Promise.resolve();
 let changes = 0;
 let revision = 0;
 
-function validatePluginValue(key, value) {
-  if (key === "textSize" && !TEXT_STEPS.includes(value)) {
-    throw new Error(`Invalid setting textSize: ${JSON.stringify(value)} is not a text size step`);
+/** 값 하나를 그 설정의 선언된 형식으로 검사한다. sets 와 links 는 checkSidebars 가 유효 설정 전체로 검사한다. */
+function validateValue(key, value) {
+  const choices = CHOICES[key];
+  if (choices && !choices.includes(value)) {
+    throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not one of ${choices.map((choice) => JSON.stringify(choice)).join(", ")}`);
   }
-  if (key === "language" && value !== "auto" && !MENU_LANGUAGES.some((language) => language.id === value)) {
-    throw new Error(`Invalid setting language: ${JSON.stringify(value)}`);
+  if (SWITCHES.includes(key) && typeof value !== "boolean") {
+    throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not a boolean`);
   }
-  if (key === "diagnostics.performance" && typeof value !== "boolean") {
-    throw new Error(`Invalid setting diagnostics.performance: ${JSON.stringify(value)} is not a boolean`);
-  }
-  const range = LAYOUT_RANGES[key];
+  const range = LAYOUT_RANGES[key] ?? SHAPE_RANGES[key];
   if (range && (!Number.isInteger(value) || value < range[0] || value > range[1])) {
     throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not an integer from ${range[0]} to ${range[1]}`);
   }
@@ -284,7 +306,7 @@ function validateValues(values, where) {
   for (const [key, value] of Object.entries(values)) {
     if (keptSetting(key)) continue;
     if (!Object.hasOwn(defaults, key)) throw new Error(`${where}: unknown setting ${key}`);
-    validatePluginValue(key, value);
+    validateValue(key, value);
   }
 }
 
@@ -303,7 +325,7 @@ export function setPluginSettings(manifests, applicationValues = {}) {
       defaults[key] = definition.default;
       // 기본값: environment.json 이 초기 값을 주지 않은 플러그인은 초기 값이 없다.
       if (Object.hasOwn(applicationValues[manifest.id] ?? {}, local)) {
-        validatePluginValue(key, applicationValues[manifest.id][local]);
+        validateValue(key, applicationValues[manifest.id][local]);
         defaults[key] = applicationValues[manifest.id][local];
       }
     }
@@ -489,7 +511,7 @@ export function set(patch, scope = projectId ? "project" : "common") {
   if (id && Object.hasOwn(patch, "projectOpening")) throw new Error("Project opening mode is common-only");
   for (const [key, val] of Object.entries(patch)) {
     if (!Object.hasOwn(defaults, key)) throw new Error(`Unknown setting: ${key}`);
-    if (val !== undefined) validatePluginValue(key, val);
+    if (val !== undefined) validateValue(key, val);
   }
   const target = id ? overrides : common;
   const patched = { ...target };

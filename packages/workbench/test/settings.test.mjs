@@ -140,3 +140,36 @@ test('the start document applies the common and project settings in the current 
     globalThis.document = realDocument;
   }
 });
+
+test('stored and changed core setting values must have their declared form', async () => {
+  const realDocument = globalThis.document;
+  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const { beginSettings, connectSettings, set: change } = await import('../settings.js?test=core-values');
+  try {
+    const invalid = [
+      ['gap', 'wide'], ['gap', 25], ['radius', 1.5], ['size', 9], ['font', 'serif'], ['theme', 'neon'], ['mode', 'dim'],
+      ['projectOpening', 'tab'], ['projectTabs', 'right'], ['focusInd', 'glow'], ['fullRule', 'both'],
+      ['left', 'yes'], ['right', 1], ['dim', null],
+    ];
+    for (const [key, stored] of invalid) {
+      const pattern = new RegExp(`Invalid setting ${key}: ${JSON.stringify(stored)}`);
+      assert.throws(() => beginSettings({ common: { [key]: stored }, projects: [] }, null), pattern,
+        `reading ${key} ${JSON.stringify(stored)} was accepted`);
+    }
+    await assert.rejects(connectSettings({
+      snapshot: async () => ({ common: { gap: 'wide' }, projects: [] }), settings: async () => {}, onChange: () => () => {},
+    }), /Invalid setting gap: "wide"/);
+    await connectSettings({
+      snapshot: async () => ({ common: {}, projects: [] }), settings: async () => {}, onChange: () => () => {},
+    });
+    for (const [key, value] of invalid) {
+      assert.throws(() => change({ [key]: value }, 'common'), new RegExp(`Invalid setting ${key}`),
+        `changing ${key} to ${JSON.stringify(value)} was accepted`);
+    }
+    beginSettings({ common: { gap: 0, radius: 24, size: 10, font: 'mono-jet', theme: 'slate', mode: 'light',
+      projectOpening: 'tabs', projectTabs: 'left', focusInd: 'corner', fullRule: 'none', left: false, right: true, dim: true },
+    projects: [] }, null);
+  } finally {
+    globalThis.document = realDocument;
+  }
+});
