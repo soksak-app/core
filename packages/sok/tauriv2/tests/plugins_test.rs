@@ -485,3 +485,25 @@ fn run_plugin_action_matches_the_plugin_commands() {
     assert_eq!(serde_json::to_string(&removed).unwrap(), "null");
     assert!(!config.0.join("plugins/probe").exists());
 }
+
+// contract: cli.file.errors-name-the-path-and-the-reason
+#[test]
+fn file_errors_name_the_path_and_the_reason() {
+    let config = Dir::new();
+    let missing = config.0.join("missing.json");
+    let error =
+        soksak_sok::plugins::use_registry(&config.0, missing.to_str().unwrap()).unwrap_err();
+    assert_eq!(
+        error,
+        format!("{}: no such file or directory", missing.display())
+    );
+    let installed = config.0.join("plugins/installed.json");
+    std::fs::create_dir_all(installed.parent().unwrap()).unwrap();
+    std::fs::write(&installed, "{}").unwrap();
+    std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o0)).unwrap();
+    let error = soksak_sok::plugins::read_plugins_state(&config.0)
+        .err()
+        .expect("an unreadable installed state is an error");
+    std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(error, format!("{}: permission denied", installed.display()));
+}

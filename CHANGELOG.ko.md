@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-43: 두 `sok` 구현은 실패한 파일 작업을 같은 문구 `<path>: <reason>`로 보고한다.
+
 - G1.4-42: core Rust workspace에 clippy 경고가 없고, `make native-test`가 경고를 오류로 다루는 `make rust-clippy-check`를 실행한다.
 
 - G1.4-49: `make native-test`와 `make host-contract-check`는 더 이상 debug 애플리케이션 bundle을 지우지 않는다. bundle은 build target만 다시 만든다.

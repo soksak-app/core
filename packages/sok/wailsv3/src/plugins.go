@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -62,7 +63,7 @@ func readIndexAt(location string) (*Index, string, error) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, "", err
+		return nil, "", fileError(path, err)
 	}
 	value, err := DecodeJSON(data)
 	if err != nil {
@@ -87,7 +88,7 @@ func UseRegistry(configDir, location string) (string, error) {
 	}
 	path := filepath.Join(configDir, RegistryFile)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return "", err
+		return "", fileError(filepath.Dir(path), err)
 	}
 	if err := replaceFile(path, append(data, '\n')); err != nil {
 		return "", err
@@ -112,11 +113,11 @@ func readRegistry(configDir string) (*Index, error) {
 func readRegistryURL(configDir string) (url string, exists bool, err error) {
 	path := filepath.Join(configDir, RegistryFile)
 	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return "", false, nil
 	}
 	if err != nil {
-		return "", true, err
+		return "", true, fileError(path, err)
 	}
 	value, err := DecodeJSON(data)
 	if err != nil {
@@ -190,11 +191,11 @@ func RunPluginAction(configDir, action, id, core, platform string) (any, error) 
 func readInstalled(configDir string) (*InstalledState, error) {
 	path := filepath.Join(configDir, Installed)
 	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return &InstalledState{Format: InstallFormat, Plugins: map[string]InstalledPlugin{}, Sidecars: map[string]InstalledSidecar{}}, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fileError(path, err)
 	}
 	value, err := DecodeJSON(data)
 	if err != nil {
@@ -211,7 +212,7 @@ func writeInstalled(configDir string, state *InstalledState) error {
 	}
 	path := filepath.Join(configDir, Installed)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+		return fileError(filepath.Dir(path), err)
 	}
 	return replaceFile(path, out.Bytes())
 }
@@ -220,11 +221,11 @@ func writeInstalled(configDir string, state *InstalledState) error {
 // 절대 경로와 `..` 는 거부한다.
 func extract(data []byte, target string) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return err
+		return fileError(filepath.Dir(target), err)
 	}
 	temp, err := os.MkdirTemp(filepath.Dir(target), "."+filepath.Base(target)+".*")
 	if err != nil {
-		return err
+		return fileError(filepath.Dir(target), err)
 	}
 	done := false
 	defer func() {
@@ -254,7 +255,7 @@ func extract(data []byte, target string) error {
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(path, 0o755); err != nil {
-				return err
+				return fileError(path, err)
 			}
 		case tar.TypeReg:
 			mode := os.FileMode(0o644)
@@ -262,25 +263,25 @@ func extract(data []byte, target string) error {
 				mode = 0o755
 			}
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-				return err
+				return fileError(filepath.Dir(path), err)
 			}
 			file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 			if err != nil {
-				return err
+				return fileError(path, err)
 			}
 			_, err = io.Copy(file, reader)
 			if closeErr := file.Close(); err == nil {
 				err = closeErr
 			}
 			if err != nil {
-				return err
+				return fileError(path, err)
 			}
 		default:
 			return fmt.Errorf("archive entry %s is neither a regular file nor a folder", header.Name)
 		}
 	}
 	if err := os.Rename(temp, target); err != nil {
-		return err
+		return fileError(target, err)
 	}
 	done = true
 	return nil
@@ -290,8 +291,8 @@ func extract(data []byte, target string) error {
 func installArchive(where string, archive Archive, target string) error {
 	if _, err := os.Stat(target); err == nil {
 		return nil
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("%s: %w", where, err)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fileError(where, err)
 	}
 	data, err := readArchive(where, archive)
 	if err != nil {
@@ -415,8 +416,8 @@ func pruneFolders(configDir string, state *InstalledState) error {
 	}
 	plugins := filepath.Join(configDir, "plugins")
 	ids, err := os.ReadDir(plugins)
-	if err != nil && !os.IsNotExist(err) {
-		return err
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fileError(plugins, err)
 	}
 	for _, folder := range ids {
 		if !folder.IsDir() {
@@ -429,7 +430,7 @@ func pruneFolders(configDir string, state *InstalledState) error {
 		}
 		versions, err := os.ReadDir(filepath.Join(plugins, folder.Name()))
 		if err != nil {
-			failures = append(failures, err)
+			failures = append(failures, fileError(filepath.Join(plugins, folder.Name()), err))
 			continue
 		}
 		for _, version := range versions {
@@ -448,8 +449,8 @@ func pruneFolders(configDir string, state *InstalledState) error {
 	}
 	sidecars := filepath.Join(configDir, "sidecars")
 	files, err := os.ReadDir(sidecars)
-	if err != nil && !os.IsNotExist(err) {
-		return err
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fileError(sidecars, err)
 	}
 	for _, folder := range files {
 		version, used := kept[folder.Name()]
@@ -459,7 +460,7 @@ func pruneFolders(configDir string, state *InstalledState) error {
 		}
 		versions, err := os.ReadDir(filepath.Join(sidecars, folder.Name()))
 		if err != nil {
-			failures = append(failures, err)
+			failures = append(failures, fileError(filepath.Join(sidecars, folder.Name()), err))
 			continue
 		}
 		for _, item := range versions {

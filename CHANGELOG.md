@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-43: both `sok` implementations report a failed file operation with the same text, `<path>: <reason>`.
+
 - G1.4-42: the core Rust workspace has no clippy warning, and `make native-test` runs `make rust-clippy-check` with warnings denied.
 
 - G1.4-49: `make native-test` and `make host-contract-check` no longer delete the debug application bundles; only the build targets reset them.

@@ -42,7 +42,7 @@ func ReadEndpoint(configDir string) (Endpoint, error) {
 		return Endpoint{}, fmt.Errorf("%s does not exist; the application is not running", file)
 	}
 	if err != nil {
-		return Endpoint{}, err
+		return Endpoint{}, fileError(file, err)
 	}
 	var endpoint Endpoint
 	if err := json.Unmarshal(data, &endpoint); err != nil {

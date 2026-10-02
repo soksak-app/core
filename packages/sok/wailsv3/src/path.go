@@ -26,7 +26,7 @@ func runPath(action string, stdout io.Writer, options Options) error {
 		}
 		directory := filepath.Dir(executable)
 		if err := os.WriteFile(file, []byte(directory+"\n"), 0o644); err != nil {
-			return fmt.Errorf("cannot write %s: %w; run sudo sok path install", file, err)
+			return fmt.Errorf("cannot write %w; run sudo sok path install", fileError(file, err))
 		}
 		// 경로의 &, <, > 를 그대로 쓰도록 HTML escape 를 끈다. Rust 구현과 같은 출력이다.
 		encoder := json.NewEncoder(stdout)
@@ -35,7 +35,7 @@ func runPath(action string, stdout io.Writer, options Options) error {
 		return encoder.Encode(map[string]string{"path": file, "directory": directory})
 	case "remove":
 		if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("cannot remove %s: %w; run sudo sok path remove", file, err)
+			return fmt.Errorf("cannot remove %w; run sudo sok path remove", fileError(file, err))
 		}
 		_, err := fmt.Fprintln(stdout, "null")
 		return err

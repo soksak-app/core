@@ -312,7 +312,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	if err := os.Remove(index); err != nil {
 		t.Fatal(err)
 	}
-	if text := stateJSON(t, config); !strings.Contains(text, `"index":{"error":"open `+index+`: no such file or directory"}`) || !strings.Contains(text, `"probe":{`) {
+	if text := stateJSON(t, config); !strings.Contains(text, `"index":{"error":"`+index+`: no such file or directory"}`) || !strings.Contains(text, `"probe":{`) {
 		t.Fatalf("state with a missing index = %s", text)
 	}
 	if err := os.WriteFile(filepath.Join(config, "plugins/installed.json"), []byte("{"), 0o644); err != nil {
@@ -359,4 +359,27 @@ func mustPlatform(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return platform
+}
+
+// contract: cli.file.errors-name-the-path-and-the-reason
+func TestFileErrorsNameThePathAndTheReason(t *testing.T) {
+	config := t.TempDir()
+	missing := filepath.Join(config, "missing.json")
+	if _, err := sok.UseRegistry(config, missing); err == nil || err.Error() != missing+": no such file or directory" {
+		t.Fatalf("missing index error = %v", err)
+	}
+	installed := filepath.Join(config, "plugins", "installed.json")
+	if err := os.MkdirAll(filepath.Dir(installed), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(installed, []byte("{}"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	_, err := sok.ReadPluginsState(config)
+	if chmodErr := os.Chmod(installed, 0o644); chmodErr != nil {
+		t.Fatal(chmodErr)
+	}
+	if err == nil || err.Error() != installed+": permission denied" {
+		t.Fatalf("unreadable installed state error = %v", err)
+	}
 }

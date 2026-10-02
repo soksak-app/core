@@ -25,8 +25,8 @@ pub(crate) fn run_path(
                 .to_string();
             std::fs::write(&file, format!("{directory}\n")).map_err(|error| {
                 format!(
-                    "cannot write {}: {error}; run sudo sok path install",
-                    file.display()
+                    "cannot write {}; run sudo sok path install",
+                    crate::files::file_error(file.display(), &error)
                 )
             })?;
             let out = serde_json::to_string_pretty(
@@ -42,8 +42,8 @@ pub(crate) fn run_path(
                 Err(error) if error.kind() == ErrorKind::NotFound => {}
                 Err(error) => {
                     return Err(Error::Failed(format!(
-                        "cannot remove {}: {error}; run sudo sok path remove",
-                        file.display()
+                        "cannot remove {}; run sudo sok path remove",
+                        crate::files::file_error(file.display(), &error)
                     )))
                 }
             }

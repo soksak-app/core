@@ -86,7 +86,7 @@ func readArchive(where string, archive Archive) ([]byte, error) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", where, err)
+		return nil, fileError(where, err)
 	}
 	sum := sha256.Sum256(data)
 	if got := hex.EncodeToString(sum[:]); got != archive.SHA256 {

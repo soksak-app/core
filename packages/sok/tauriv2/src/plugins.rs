@@ -44,8 +44,8 @@ fn read_index_at(location: &str) -> Result<(Index, String), String> {
         PathBuf::from(location)
     };
     let path = std::path::absolute(&path).map_err(|error| format!("{location}: {error}"))?;
-    let text =
-        std::fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let text = std::fs::read_to_string(&path)
+        .map_err(|error| crate::files::file_error(path.display(), &error))?;
     let value: Value = serde_json::from_str(&text)
         .map_err(|error| format!("{} is not valid JSON: {error}", path.display()))?;
     let index = install::validate_registry_index(&value)
@@ -67,7 +67,8 @@ fn create_parent(path: &Path) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| format!("{} has no folder", path.display()))?;
-    std::fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))
+    std::fs::create_dir_all(parent)
+        .map_err(|error| crate::files::file_error(parent.display(), &error))
 }
 
 /// plugins/registry.json 이 지정한 index 를 읽는다.
@@ -87,7 +88,7 @@ fn read_registry_url(config_dir: &Path) -> Result<Option<String>, String> {
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(format!("{}: {error}", path.display())),
+        Err(error) => return Err(crate::files::file_error(path.display(), &error)),
     };
     let value: Value = serde_json::from_str(&text)
         .map_err(|error| format!("{} is not valid JSON: {error}", path.display()))?;
@@ -191,7 +192,7 @@ fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Ok(InstalledState::empty())
         }
-        Err(error) => return Err(format!("{}: {error}", path.display())),
+        Err(error) => return Err(crate::files::file_error(path.display(), &error)),
     };
     let value: Value = serde_json::from_str(&text)
         .map_err(|error| format!("{} is not valid JSON: {error}", path.display()))?;
@@ -217,7 +218,8 @@ fn extract(data: &[u8], target: &Path) -> Result<(), String> {
         .ok_or_else(|| format!("{} has no name", target.display()))?;
     let temp = target.with_file_name(format!(".{name}.{}", std::process::id()));
     let result = extract_into(data, &temp).and_then(|()| {
-        std::fs::rename(&temp, target).map_err(|error| format!("{}: {error}", target.display()))
+        std::fs::rename(&temp, target)
+            .map_err(|error| crate::files::file_error(target.display(), &error))
     });
     if result.is_err() {
         // 기본값: 실패한 풀기의 임시 폴더는 이미 실패를 보고했으므로 지우기 결과는 보고하지 않는다.
@@ -227,7 +229,8 @@ fn extract(data: &[u8], target: &Path) -> Result<(), String> {
 }
 
 fn extract_into(data: &[u8], temp: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(temp).map_err(|error| format!("{}: {error}", temp.display()))?;
+    std::fs::create_dir_all(temp)
+        .map_err(|error| crate::files::file_error(temp.display(), &error))?;
     let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(data));
     for entry in archive.entries().map_err(|error| error.to_string())? {
         let mut entry = entry.map_err(|error| error.to_string())?;
@@ -242,7 +245,7 @@ fn extract_into(data: &[u8], temp: &Path) -> Result<(), String> {
         let kind = entry.header().entry_type();
         if kind.is_dir() {
             std::fs::create_dir_all(&path)
-                .map_err(|error| format!("{}: {error}", path.display()))?;
+                .map_err(|error| crate::files::file_error(path.display(), &error))?;
             continue;
         }
         if !kind.is_file() {
@@ -260,9 +263,9 @@ fn extract_into(data: &[u8], temp: &Path) -> Result<(), String> {
             .write(true)
             .create_new(true)
             .open(&path)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
+            .map_err(|error| crate::files::file_error(path.display(), &error))?;
         file.write_all(&content)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
+            .map_err(|error| crate::files::file_error(path.display(), &error))?;
         platform::current()?.set_executable(&path, mode & 0o111 != 0)?;
     }
     Ok(())
@@ -273,7 +276,7 @@ fn install_archive(at: &str, archive: &Archive, target: &Path) -> Result<(), Str
     match std::fs::metadata(target) {
         Ok(_) => return Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(format!("{at}: {error}")),
+        Err(error) => return Err(crate::files::file_error(at, &error)),
     }
     let data = read_archive(at, archive)?;
     extract(&data, target).map_err(|error| format!("{at}: {error}"))
@@ -382,11 +385,11 @@ fn folder_names(path: &Path) -> Result<Vec<(String, bool)>, String> {
         Ok(listing) => listing,
         // 기본값: 아직 아무것도 설치하지 않은 설정 폴더에는 이 폴더가 없다.
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
-        Err(error) => return Err(format!("{}: {error}", path.display())),
+        Err(error) => return Err(crate::files::file_error(path.display(), &error)),
     };
     let mut names = vec![];
     for item in listing {
-        let item = item.map_err(|error| format!("{}: {error}", path.display()))?;
+        let item = item.map_err(|error| crate::files::file_error(path.display(), &error))?;
         let is_dir = item
             .file_type()
             .map_err(|error| error.to_string())?

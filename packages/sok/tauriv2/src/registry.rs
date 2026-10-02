@@ -27,11 +27,11 @@ fn read_entries(
         Ok(listing) => listing,
         // 기본값: 폴더가 없는 registry 는 그 종류의 항목이 없다.
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
-        Err(error) => return Err(format!("{}: {error}", folder.display())),
+        Err(error) => return Err(crate::files::file_error(folder.display(), &error)),
     };
     let mut names = vec![];
     for item in listing {
-        let item = item.map_err(|error| format!("{}: {error}", folder.display()))?;
+        let item = item.map_err(|error| crate::files::file_error(folder.display(), &error))?;
         if let Some(name) = item
             .file_name()
             .to_str()
@@ -84,7 +84,7 @@ fn archive_files(data: &[u8], names: &[&str]) -> Result<BTreeMap<String, Vec<u8>
 /// archive 주소의 파일을 읽고 sha256 을 비교한다.
 pub(crate) fn read_archive(at: &str, archive: &Archive) -> Result<Vec<u8>, String> {
     let path = install::file_path(&archive.url).map_err(|error| format!("{at}: {error}"))?;
-    let data = std::fs::read(&path).map_err(|error| format!("{at}: {error}"))?;
+    let data = std::fs::read(&path).map_err(|error| crate::files::file_error(at, &error))?;
     let got = hex(&Sha256::digest(&data));
     if got != archive.sha256 {
         return Err(format!(

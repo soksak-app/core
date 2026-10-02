@@ -51,7 +51,7 @@ pub fn read_endpoint(config_dir: &Path) -> Result<Endpoint, String> {
                 file.display()
             ))
         }
-        Err(error) => return Err(format!("{}: {error}", file.display())),
+        Err(error) => return Err(crate::files::file_error(file.display(), &error)),
     };
     let value: Value = serde_json::from_str(&text)
         .map_err(|error| format!("{} is not valid JSON: {error}", file.display()))?;

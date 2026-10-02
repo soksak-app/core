@@ -9,8 +9,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -50,7 +52,7 @@ func collect(dir string, listed []string) ([]archiveEntry, error) {
 		source := filepath.Join(dir, filepath.FromSlash(path))
 		info, err := os.Lstat(source)
 		if err != nil {
-			return fmt.Errorf("%s: %w", path, err)
+			return fileError(path, err)
 		}
 		switch {
 		case info.Mode()&os.ModeSymlink != 0:
@@ -58,7 +60,7 @@ func collect(dir string, listed []string) ([]archiveEntry, error) {
 		case info.IsDir():
 			children, err := os.ReadDir(source)
 			if err != nil {
-				return fmt.Errorf("%s: %w", path, err)
+				return fileError(path, err)
 			}
 			for _, child := range children {
 				if err := add(path + "/" + child.Name()); err != nil {
@@ -90,7 +92,7 @@ func collect(dir string, listed []string) ([]archiveEntry, error) {
 func writeArchive(entries []archiveEntry, output string) (string, error) {
 	temp, err := os.CreateTemp(filepath.Dir(output), "."+filepath.Base(output)+".*")
 	if err != nil {
-		return "", err
+		return "", fileError(output, err)
 	}
 	written := false
 	defer func() {
@@ -106,7 +108,7 @@ func writeArchive(entries []archiveEntry, output string) (string, error) {
 		data, err := os.ReadFile(entry.source)
 		if err != nil {
 			temp.Close()
-			return "", fmt.Errorf("%s: %w", entry.path, err)
+			return "", fileError(entry.path, err)
 		}
 		mode := int64(0o644)
 		if entry.executable {
@@ -128,7 +130,7 @@ func writeArchive(entries []archiveEntry, output string) (string, error) {
 		}
 	}
 	if err := os.Rename(temp.Name(), output); err != nil {
-		return "", err
+		return "", fileError(output, err)
 	}
 	written = true
 	return hex.EncodeToString(hash.Sum(nil)), nil
@@ -138,7 +140,7 @@ func writeArchive(entries []archiveEntry, output string) (string, error) {
 func readJSONFile(dir, name string) (any, error) {
 	data, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil {
-		return nil, err
+		return nil, fileError(filepath.Join(dir, name), err)
 	}
 	value, err := DecodeJSON(data)
 	if err != nil {
@@ -170,7 +172,7 @@ func outputPath(dir, name string) (string, error) {
 		return "", err
 	}
 	if err := os.MkdirAll(absolute, 0o755); err != nil {
-		return "", err
+		return "", fileError(absolute, err)
 	}
 	return filepath.Join(absolute, name), nil
 }
@@ -221,7 +223,7 @@ func manifestModules(manifest map[string]any) [][2]string {
 // 두 파일은 files 에 나열하지 않는다(docs/spec/plugins.md).
 func diagnosticFiles(dir string, listed []string) ([]string, error) {
 	value, err := readJSONFile(dir, "diagnostics.json")
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
@@ -376,11 +378,11 @@ func runRelease(dir, out, platform string, stdout io.Writer) error {
 func readSums(path string) (map[string]string, error) {
 	sums := map[string]string{}
 	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return sums, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fileError(path, err)
 	}
 	for i, line := range strings.Split(strings.TrimSuffix(string(data), "\n"), "\n") {
 		hash, name, found := strings.Cut(line, "  ")
@@ -410,7 +412,7 @@ func writeSums(path string, sums map[string]string) error {
 func replaceFile(path string, data []byte) error {
 	temp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
 	if err != nil {
-		return err
+		return fileError(path, err)
 	}
 	_, err = temp.Write(data)
 	if closeErr := temp.Close(); err == nil {
@@ -418,6 +420,9 @@ func replaceFile(path string, data []byte) error {
 	}
 	if err == nil {
 		err = os.Rename(temp.Name(), path)
+	}
+	if err != nil {
+		err = fileError(path, err)
 	}
 	if err != nil {
 		// 기본값: 실패한 쓰기의 임시 파일은 이미 실패를 보고했으므로 지우기 결과는 보고하지 않는다.

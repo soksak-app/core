@@ -39,8 +39,8 @@ fn collect(dir: &Path, listed: &[String]) -> Result<Vec<ArchiveEntry>, String> {
             return Ok(());
         }
         let source = dir.join(&path);
-        let info =
-            std::fs::symlink_metadata(&source).map_err(|error| format!("{path}: {error}"))?;
+        let info = std::fs::symlink_metadata(&source)
+            .map_err(|error| crate::files::file_error(&path, &error))?;
         let kind = info.file_type();
         if kind.is_symlink() {
             return Err(format!(
@@ -49,8 +49,10 @@ fn collect(dir: &Path, listed: &[String]) -> Result<Vec<ArchiveEntry>, String> {
         }
         if kind.is_dir() {
             let mut children = vec![];
-            for child in std::fs::read_dir(&source).map_err(|error| format!("{path}: {error}"))? {
-                let child = child.map_err(|error| format!("{path}: {error}"))?;
+            for child in std::fs::read_dir(&source)
+                .map_err(|error| crate::files::file_error(&path, &error))?
+            {
+                let child = child.map_err(|error| crate::files::file_error(&path, &error))?;
                 let name = child
                     .file_name()
                     .into_string()
@@ -100,13 +102,14 @@ fn replace_with(
         .ok_or_else(|| format!("{} has no file name", path.display()))?;
     let temp = path.with_file_name(format!(".{file_name}.{}", std::process::id()));
     let result = std::fs::File::create(&temp)
-        .map_err(|error| format!("{}: {error}", temp.display()))
+        .map_err(|error| crate::files::file_error(temp.display(), &error))
         .and_then(|mut file| {
             write(&mut file)?;
             file.sync_all().map_err(|error| error.to_string())
         })
         .and_then(|()| {
-            std::fs::rename(&temp, path).map_err(|error| format!("{}: {error}", path.display()))
+            std::fs::rename(&temp, path)
+                .map_err(|error| crate::files::file_error(path.display(), &error))
         });
     if result.is_err() {
         // 기본값: 실패한 쓰기의 임시 파일은 이미 실패를 보고했으므로 지우기 결과는 보고하지 않는다.
@@ -135,8 +138,8 @@ fn write_archive(entries: &[ArchiveEntry], output: &Path) -> Result<String, Stri
             .write(hashing, flate2::Compression::default());
         let mut archive = tar::Builder::new(zipped);
         for entry in entries {
-            let data =
-                std::fs::read(&entry.source).map_err(|error| format!("{}: {error}", entry.path))?;
+            let data = std::fs::read(&entry.source)
+                .map_err(|error| crate::files::file_error(&entry.path, &error))?;
             let mut header = tar::Header::new_ustar();
             header.set_entry_type(tar::EntryType::Regular);
             header.set_size(data.len() as u64);
@@ -146,7 +149,7 @@ fn write_archive(entries: &[ArchiveEntry], output: &Path) -> Result<String, Stri
             header.set_gid(0);
             archive
                 .append_data(&mut header, &entry.path, data.as_slice())
-                .map_err(|error| format!("{}: {error}", entry.path))?;
+                .map_err(|error| crate::files::file_error(&entry.path, &error))?;
         }
         let zipped = archive.into_inner().map_err(|error| error.to_string())?;
         let hashing = zipped.finish().map_err(|error| error.to_string())?;
@@ -182,8 +185,8 @@ pub fn hex(bytes: &[u8]) -> String {
 /// 폴더의 JSON 파일 하나를 읽는다.
 pub fn read_json_file(dir: &Path, name: &str) -> Result<Value, String> {
     let path = dir.join(name);
-    let text =
-        std::fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let text = std::fs::read_to_string(&path)
+        .map_err(|error| crate::files::file_error(path.display(), &error))?;
     serde_json::from_str(&text)
         .map_err(|error| format!("{} is not valid JSON: {error}", path.display()))
 }
@@ -201,7 +204,7 @@ pub fn print_json<T: serde::Serialize + ?Sized>(
 fn output_path(dir: &str, name: &str) -> Result<PathBuf, String> {
     let absolute = std::path::absolute(dir).map_err(|error| format!("{dir}: {error}"))?;
     std::fs::create_dir_all(&absolute)
-        .map_err(|error| format!("{}: {error}", absolute.display()))?;
+        .map_err(|error| crate::files::file_error(absolute.display(), &error))?;
     Ok(absolute.join(name))
 }
 
@@ -327,7 +330,7 @@ fn read_sums(path: &Path) -> Result<BTreeMap<String, String>, String> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
-        Err(error) => return Err(format!("{}: {error}", path.display())),
+        Err(error) => return Err(crate::files::file_error(path.display(), &error)),
     };
     let mut sums = BTreeMap::new();
     // 기본값: 마지막 줄 끝의 줄바꿈은 선택이므로 없으면 텍스트를 그대로 나눈다.
