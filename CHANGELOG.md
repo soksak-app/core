@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-64: a window check measures that a library visit shows no empty frame; the surface composition specification states that a reload shows the window background until the new page draws.
 - G1.4-62-1: a drawn commit that repeats the prepared placement writes the paint clip of that placement.
 - G1.4-61: a main-page reload hides the native surfaces before the page disappears on both hosts.
 - G1.4-62: the page paint clip keeps the holes of the newest placement when an older placement answer arrives later.
