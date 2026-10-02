@@ -299,6 +299,9 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.stop.close-owner-failure-returns-promptly` | close-owner 실패 응답은 중지를 1초 넘게 늦추지 않는다. | both |
 | `sidecars-transport.hello.rejects-auth-failure` | 실패한 hello 응답은 보내기를 "authentication handshake failed"로 실패시킨다. | both |
 | `sidecars-transport.hello.rejects-unsupported-protocol-without-replacing-endpoint` | 다른 프로토콜의 hello 응답은 보내기를 실패시키고 endpoint.json을 바꾸지 않는다. | both |
+| `sidecars-transport.hello.times-out` | hello를 받고 답하지 않는 service는 5초 뒤 "the service did not answer hello within 5s"로 보내기를 실패시킨다. | both |
+| `sidecars-transport.startup.times-out` | 준비 상한 안에 endpoint를 출력하지 않는 시작한 service는 "the service did not print its endpoint within <bound>"로 보내기를 실패시키고, host는 그 service를 끝내고 회수한다. | both |
+| `sidecars-transport.startup.exits-before-endpoint` | endpoint 전에 끝난 시작한 service는 "service exited before endpoint"로 보내기를 실패시킨다. | both |
 | `sidecars-transport.endpoint.replaces-dead-service-endpoint` | 죽은 서비스가 남긴 엔드포인트는 새 서비스 엔드포인트로 바뀐다. | both |
 | `sidecars-transport.endpoint.live-unreachable-reported-without-replacement` | 살아 있지만 연결할 수 없는 서비스의 엔드포인트는 보내기를 실패시키고 바뀌지 않는다. | both |
 | `sidecars-transport.stop.close-owner-then-shutdown` | 중지는 close-owner를 보내고 성공 응답 뒤에 shutdown을 보낸다. | both |

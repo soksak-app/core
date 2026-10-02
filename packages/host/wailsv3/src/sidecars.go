@@ -118,6 +118,8 @@ type Sidecars struct {
 	// 끊김을 알린 시작이 이 기록을 소진한다 — 첫 시작은 알림이 없다.
 	unannouncedLoss map[string]bool
 	StopTimeout     time.Duration // 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
+	// ReadyTimeout 은 새로 시작한 영속 service 가 endpoint 를 출력하기까지의 상한이다. 기본값 30초. 테스트가 주입한다.
+	ReadyTimeout time.Duration
 	configDir       string
 	nextRequest     uint64
 }
@@ -141,6 +143,7 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		roots:           map[string]string{},
 		unannouncedLoss: map[string]bool{},
 		StopTimeout:     5 * time.Second,
+		ReadyTimeout:    30 * time.Second,
 	}
 	configDirectoryProvided := strings.TrimSpace(configDirectory) != ""
 	if configDirectoryProvided {
@@ -642,6 +645,40 @@ type persistentEndpoint struct {
 	Token    string `json:"token"`
 }
 
+// helloTimeout 은 service 가 hello 에 답하기까지의 상한이다(docs/spec/terminal-runtime.md).
+const helloTimeout = 5 * time.Second
+
+// serviceEndpointLine 은 새로 시작한 service 가 stdout 에 출력하는 첫 줄을 읽는다. limit 안에 줄이
+// 오지 않으면 그 service 를 끝내고 회수한 뒤 timedOut 을 true 로 반환하고, 그 정리의 실패를 err 로 반환한다.
+func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, limit time.Duration) (line []byte, timedOut bool, err error) {
+	type result struct {
+		line []byte
+		err  error
+	}
+	read := make(chan result, 1)
+	go func() {
+		line, err := bufio.NewReader(stdout).ReadBytes('\n')
+		read <- result{line, err}
+	}()
+	timer := time.NewTimer(limit)
+	defer timer.Stop()
+	select {
+	case got := <-read:
+		return got.line, false, got.err
+	case <-timer.C:
+	}
+	// service 가 끝나면 stdout 이 닫혀 읽기 고루틴도 끝난다.
+	if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return nil, true, fmt.Errorf("ending the service failed: %w", err)
+	}
+	<-read
+	var exit *exec.ExitError
+	if err := cmd.Wait(); err != nil && !errors.As(err, &exit) {
+		return nil, true, fmt.Errorf("reaping the service failed: %w", err)
+	}
+	return nil, true, nil
+}
+
 func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 	program := c.declared[name]
 	serviceDir := filepath.Join(c.configDir, "services", filepath.Base(program))
@@ -683,7 +720,18 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 				"pid": cmd.Process.Pid,
 			}
 		})
-		line, err := bufio.NewReader(stdout).ReadBytes('\n')
+		line, timedOut, err := serviceEndpointLine(cmd, stdout, c.ReadyTimeout)
+		if timedOut {
+			message := fmt.Sprintf("sidecar %s: the service did not print its endpoint within %v", name, c.ReadyTimeout)
+			if err != nil {
+				return nil, fmt.Errorf("%s; %w", message, err)
+			}
+			return nil, errors.New(message)
+		}
+		// 줄 없이 stdout 이 닫히면 service 가 endpoint 를 출력하기 전에 끝난 것이다.
+		if errors.Is(err, io.EOF) && len(line) == 0 {
+			return nil, fmt.Errorf("sidecar %s: service exited before endpoint", name)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("sidecar %s: service startup: %w", name, err)
 		}
@@ -737,10 +785,23 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		conn.Close()
 		return nil, fmt.Errorf("sidecar %s: hello: %w", name, err)
 	}
+	// 답하지 않는 service 가 이 사이드카의 요청과 Stop 을 계속 기다리게 하지 않도록 hello 응답에 기한을 둔다.
+	if err := conn.SetReadDeadline(time.Now().Add(helloTimeout)); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: hello deadline: %w", name, err)
+	}
 	responseLine, err := reader.ReadBytes('\n')
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: the service did not answer hello within %v", name, helloTimeout)
+	}
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("sidecar %s: hello response: %w", name, err)
+	}
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: hello deadline: %w", name, err)
 	}
 	var response struct {
 		Operation string  `json:"operation"`

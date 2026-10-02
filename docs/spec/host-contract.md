@@ -299,6 +299,9 @@ Items:
 | `sidecars-transport.stop.close-owner-failure-returns-promptly` | A close-owner failure reply does not delay stop beyond 1 s. | both |
 | `sidecars-transport.hello.rejects-auth-failure` | A failed hello reply makes the send fail with "authentication handshake failed". | both |
 | `sidecars-transport.hello.rejects-unsupported-protocol-without-replacing-endpoint` | A hello reply with another protocol fails the send and leaves endpoint.json unchanged. | both |
+| `sidecars-transport.hello.times-out` | A service that receives the hello and does not answer fails the send after 5 s with "the service did not answer hello within 5s". | both |
+| `sidecars-transport.startup.times-out` | A started service that prints no endpoint within the ready bound fails the send with "the service did not print its endpoint within <bound>", and the host ends and reaps it. | both |
+| `sidecars-transport.startup.exits-before-endpoint` | A started service that ends before its endpoint fails the send with "service exited before endpoint". | both |
 | `sidecars-transport.endpoint.replaces-dead-service-endpoint` | An endpoint left by a dead service is replaced by the new service endpoint. | both |
 | `sidecars-transport.endpoint.live-unreachable-reported-without-replacement` | An endpoint of a live but unreachable service fails the send and is not replaced. | both |
 | `sidecars-transport.stop.close-owner-then-shutdown` | Stop sends close-owner and, after a successful reply, shutdown. | both |

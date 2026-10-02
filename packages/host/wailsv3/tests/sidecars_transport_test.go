@@ -1051,3 +1051,110 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 		t.Fatalf("a send to another sidecar waited %v for the service start, want < 50ms", waited)
 	}
 }
+
+// hello 를 받고 답하지 않는 service 로의 시작은 5초 뒤 정해진 문장으로 실패한다.
+// contract: sidecars-transport.hello.times-out
+func TestPersistentStartFailsWhenHelloIsNotAnswered(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDirectory)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+	release := make(chan struct{})
+	defer close(release)
+	go func() {
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		_, _ = bufio.NewReader(connection).ReadBytes('\n')
+		<-release
+	}()
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/hello", seen: make(chan SidecarMessage, 1)}
+	begin := time.Now()
+	err = sendWithin(t, sidecars, owner, 30*time.Second)
+	if want := "sidecar fixture-service: the service did not answer hello within 5s"; err == nil || err.Error() != want {
+		t.Fatalf("unanswered hello = %v after %v, want %q", err, time.Since(begin), want)
+	}
+}
+
+// 새로 시작한 service 가 endpoint 를 출력하지 않으면 시작은 ReadyTimeout 뒤 정해진 문장으로 실패하고, 호스트는 그
+// service 를 끝내고 회수한다. 검사는 기본 30초 대신 1초를 준다.
+// contract: sidecars-transport.startup.times-out
+func TestPersistentStartFailsWhenTheServicePrintsNoEndpoint(t *testing.T) {
+	folder := t.TempDir()
+	script := "#!/bin/sh\necho $$ > \"$2/pid\"\nexec sleep 60\n"
+	if err := os.WriteFile(filepath.Join(folder, "service"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	sidecars, err := NewSidecars(harnessDeclarations(folder), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecars.ReadyTimeout = time.Second
+	owner := &harnessOwner{root: "/startup", seen: make(chan SidecarMessage, 1)}
+	begin := time.Now()
+	err = sendWithin(t, sidecars, owner, 30*time.Second)
+	if want := "sidecar fixture-service: the service did not print its endpoint within 1s"; err == nil || err.Error() != want {
+		t.Fatalf("silent service = %v after %v, want %q", err, time.Since(begin), want)
+	}
+	text, err := os.ReadFile(filepath.Join(root, "services", "service", "pid"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pid int
+	if _, err := fmt.Sscanf(string(text), "%d", &pid); err != nil {
+		t.Fatalf("service pid %q: %v", text, err)
+	}
+	if exists, err := exec.Command("kill", "-0", fmt.Sprint(pid)).CombinedOutput(); err == nil {
+		t.Fatalf("the silent service %d still runs: %s", pid, exists)
+	}
+}
+
+// sendWithin 은 fixture-service 로 보내고 그 결과를 limit 안에 돌려준다. 돌아오지 않으면 검사가 실패한다.
+func sendWithin(t *testing.T, sidecars *host.Sidecars, owner *harnessOwner, limit time.Duration) error {
+	t.Helper()
+	result := make(chan error, 1)
+	go func() {
+		result <- sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+	}()
+	select {
+	case err := <-result:
+		return err
+	case <-time.After(limit):
+		t.Fatalf("the send did not return within %v", limit)
+		return nil
+	}
+}
+
+// 새로 시작한 service 가 endpoint 를 출력하기 전에 끝나면 시작은 정해진 문장으로 실패한다.
+// contract: sidecars-transport.startup.exits-before-endpoint
+func TestPersistentStartFailsWhenTheServiceExitsBeforeItsEndpoint(t *testing.T) {
+	folder := t.TempDir()
+	if err := os.WriteFile(filepath.Join(folder, "service"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sidecars, err := NewSidecars(harnessDeclarations(folder), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/exit", seen: make(chan SidecarMessage, 1)}
+	err = sendWithin(t, sidecars, owner, 30*time.Second)
+	if want := "sidecar fixture-service: service exited before endpoint"; err == nil || err.Error() != want {
+		t.Fatalf("exited service = %v, want %q", err, want)
+	}
+}

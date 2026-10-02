@@ -1103,3 +1103,122 @@ fn persistent_start_does_not_delay_other_sidecars() {
     sidecars.stop();
     server.join().unwrap();
 }
+
+/// sidecar 로 보내고 그 결과를 limit 안에 돌려준다. 돌아오지 않으면 검사가 실패한다.
+fn send_within(
+    sidecars: Sidecars<FakeOwner>,
+    window: FakeOwner,
+    limit: Duration,
+) -> Result<(), String> {
+    let (result, answer) = channel();
+    thread::spawn(move || {
+        let sent = sidecars.send(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#));
+        let _ = result.send(sent);
+    });
+    answer
+        .recv_timeout(limit)
+        .unwrap_or_else(|_| panic!("the send did not return within {limit:?}"))
+}
+
+// hello 를 받고 답하지 않는 service 로의 시작은 5초 뒤 정해진 문장으로 실패한다.
+// contract: sidecars-transport.hello.times-out
+#[test]
+fn persistent_start_fails_when_hello_is_not_answered() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("hello.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "hello-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let (release, released) = channel::<()>();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream);
+        let mut hello = String::new();
+        reader.read_line(&mut hello).unwrap();
+        let _ = released.recv();
+    });
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (window, _events) = owner("hello", "/projects/hello");
+    let error = send_within(sidecars, window, Duration::from_secs(30)).unwrap_err();
+    assert_eq!(
+        error,
+        "sidecar @fixture/sidecar-echo: the service did not answer hello within 5s"
+    );
+    release.send(()).unwrap();
+    server.join().unwrap();
+}
+
+// 새로 시작한 service 가 endpoint 를 출력하지 않으면 시작은 ready 상한 뒤 정해진 문장으로 실패하고, 호스트는 그
+// service 를 끝내고 회수한다. 검사는 기본 30초 대신 1초를 준다.
+// contract: sidecars-transport.startup.times-out
+#[test]
+fn persistent_start_fails_when_the_service_prints_no_endpoint() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let service = executable_directory.path().join("echo");
+    std::fs::write(&service, "#!/bin/sh\necho $$ > \"$2/pid\"\nexec sleep 60\n").unwrap();
+    std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap()
+    .with_ready_timeout(Duration::from_secs(1));
+    let (window, _events) = owner("startup", "/projects/startup");
+    let error = send_within(sidecars, window, Duration::from_secs(30)).unwrap_err();
+    assert_eq!(
+        error,
+        "sidecar @fixture/sidecar-echo: the service did not print its endpoint within 1s"
+    );
+    let pid = std::fs::read_to_string(config_directory.path().join("services/echo/pid")).unwrap();
+    let alive = Command::new("kill")
+        .args(["-0", pid.trim()])
+        .status()
+        .unwrap();
+    assert!(
+        !alive.success(),
+        "the silent service {} still runs",
+        pid.trim()
+    );
+}
+
+// 새로 시작한 service 가 endpoint 를 출력하기 전에 끝나면 시작은 정해진 문장으로 실패한다.
+// contract: sidecars-transport.startup.exits-before-endpoint
+#[test]
+fn persistent_start_fails_when_the_service_exits_before_its_endpoint() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let service = executable_directory.path().join("echo");
+    std::fs::write(&service, "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (window, _events) = owner("exit", "/projects/exit");
+    let error = send_within(sidecars, window, Duration::from_secs(30)).unwrap_err();
+    assert_eq!(
+        error,
+        "sidecar @fixture/sidecar-echo: service exited before endpoint"
+    );
+}

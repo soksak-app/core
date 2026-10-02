@@ -271,6 +271,8 @@ struct Core<O> {
     state: Arc<Mutex<State<O>>>,
     /// 시작이 끝날 때마다 알린다. 같은 사이드카의 요청과 stop 이 기다린다.
     started: Condvar,
+    /// 새로 시작한 영속 service 가 endpoint 를 출력하기까지의 상한.
+    ready_timeout: Duration,
 }
 
 /// 애플리케이션 하나의 사이드카 프로세스와 표면 소유 창을 관리한다.
@@ -364,9 +366,19 @@ impl<O: Owner> Sidecars<O> {
                     unannounced_loss: std::collections::HashSet::new(),
                 })),
                 started: Condvar::new(),
+                ready_timeout: READY_TIMEOUT,
             }),
             stop_timeout: Duration::from_secs(5),
         })
+    }
+
+    /// 새로 시작한 영속 service 가 endpoint 를 출력하기까지의 상한을 바꾼다. 검사가 기본 30초 대신 짧은 상한을 준다.
+    /// 다른 참조가 생기기 전, 만든 직후에만 부른다.
+    pub fn with_ready_timeout(mut self, limit: Duration) -> Self {
+        Arc::get_mut(&mut self.core)
+            .expect("the ready timeout is set before the sidecars are shared")
+            .ready_timeout = limit;
+        self
     }
 
     /// owner 창의 표면 surface 에서 온 body 를 사이드카 name 에 전달한다.
@@ -816,6 +828,49 @@ impl<O: Owner> Sidecars<O> {
     }
 }
 
+/// service 가 hello 에 답하기까지의 상한(docs/spec/terminal-runtime.md).
+const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// 새로 시작한 영속 service 가 endpoint 를 출력하기까지의 기본 상한(docs/spec/terminal-runtime.md).
+const READY_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// 새로 시작한 service 가 stdout 에 출력하는 첫 줄을 읽는다. limit 안에 줄이 오지 않으면 그 service 를
+/// 끝내고 회수한 뒤 실패하고, 그 정리의 실패를 오류 뒤에 붙인다.
+fn service_endpoint_line(
+    name: &str,
+    child: &mut Child,
+    stdout: std::process::ChildStdout,
+    limit: Duration,
+) -> Result<String, String> {
+    let (sender, receiver) = sync_channel(1);
+    let reader_name = name.to_string();
+    thread::spawn(move || {
+        let mut line = String::new();
+        let read = BufReader::new(stdout).read_line(&mut line).map(|_| line);
+        // 받는 쪽은 상한이 지나면 끝나고, 그 시간 초과는 시작의 오류로 보고된다.
+        if sender.send(read).is_err() {
+            eprintln!("sidecar {reader_name}: the service output ended after the ready bound");
+        }
+    });
+    match receiver.recv_timeout(limit) {
+        Ok(read) => read.map_err(|e| format!("sidecar {name}: service startup: {e}")),
+        Err(_) => {
+            let message = format!(
+                "sidecar {name}: the service did not print its endpoint within {}s",
+                limit.as_secs()
+            );
+            // service 가 끝나면 stdout 이 닫혀 읽기 스레드도 끝난다.
+            if let Err(error) = child.kill() {
+                return Err(format!("{message}; ending the service failed: {error}"));
+            }
+            if let Err(error) = child.wait() {
+                return Err(format!("{message}; reaping the service failed: {error}"));
+            }
+            Err(message)
+        }
+    }
+}
+
 impl<O: Owner> Core<O> {
     /// 실행 중인 사이드카를 확인하고, 없으면 시작해 등록한다. state 를 쥔 채 부르고 쥔 채 돌려받는다. 시작은
     /// 프로세스 기동과 영속 service 의 연결과 인증을 기다리므로 잠금을 놓은 채 한다. 그동안 다른 사이드카의 요청은
@@ -1000,11 +1055,7 @@ impl<O: Owner> Core<O> {
                     .stdout
                     .take()
                     .ok_or("persistent service stdout is missing")?;
-                let mut reader = BufReader::new(stdout);
-                let mut line = String::new();
-                reader
-                    .read_line(&mut line)
-                    .map_err(|e| format!("sidecar {name}: service startup: {e}"))?;
+                let line = service_endpoint_line(name, &mut spawned, stdout, core.ready_timeout)?;
                 if line.is_empty() {
                     return Err(format!("sidecar {name}: service exited before endpoint"));
                 }
@@ -1033,7 +1084,6 @@ impl<O: Owner> Core<O> {
         // 소켓을 받아 놓고 답하지 않는 서비스가 그 요청을 멈추게 해서는 안 된다. 기한이
         // 지나면 연결은 실패이고, 끊김 기록이 다음 시작에게 같은 경로를 다시 시도하게 한다.
         // 왕복이 끝나면 이어지는 읽기 스레드를 위해 무한 대기로 돌린다.
-        const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
         // macOS 는 SO_RCVTIMEO 에 0(해제)을 EINVAL 로 거부하므로, 해제는 하루 기한으로
         // 대신한다. 이어지는 읽기 스레드는 하루에 한 번 WouldBlock 으로 깨어나 다시
         // 기다린다.
@@ -1060,7 +1110,13 @@ impl<O: Owner> Core<O> {
         let mut response_reader = BufReader::new(response_stream);
         response_reader
             .read_line(&mut response)
-            .map_err(|e| format!("sidecar {name}: hello response: {e}"))?;
+            .map_err(|e| match e.kind() {
+                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut => format!(
+                    "sidecar {name}: the service did not answer hello within {}s",
+                    HELLO_TIMEOUT.as_secs()
+                ),
+                _ => format!("sidecar {name}: hello response: {e}"),
+            })?;
         let response: serde_json::Value = serde_json::from_str(&response)
             .map_err(|e| format!("sidecar {name}: hello response: {e}"))?;
         if response.get("operation").and_then(|v| v.as_str()) != Some("hello") {

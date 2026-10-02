@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-70: both hosts wait at most 30 s for a new persistent service's ready line and 5 s for its hello reply, end and reap a service that never becomes ready, and report the same error texts.
 - G1.4-68: both hosts start a sidecar with the registry lock released, so a persistent service start no longer delays sends to other sidecars; stop waits for starts in progress.
 - G1.4-63: the PTY reap check waits up to 10 s for the shells to end after the terminal surfaces close and reports the close and end times, instead of reading the process list once.
 - G1.4-60: `input_inject_test` waits until the second window has handled its Escape before it compares the keys, and reports the keys of both windows.
