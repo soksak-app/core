@@ -38,6 +38,9 @@ impl Platform for Windows {
     fn set_main_webview(&self, window: Handle, main: Handle) -> Result<(), String> {
         unsupported::set_main_webview(window, main)
     }
+    fn reveal_after_load(&self, window: Handle) -> Result<(), String> {
+        unsupported::reveal_after_load(window)
+    }
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
         unsupported::set_main_appearance(view, dark)
     }

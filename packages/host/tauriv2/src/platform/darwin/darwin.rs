@@ -109,6 +109,9 @@ impl Platform for Darwin {
     fn set_main_webview(&self, window: Handle, main: Handle) -> Result<(), String> {
         window::set_main_webview(window, main)
     }
+    fn reveal_after_load(&self, window: Handle) -> Result<(), String> {
+        window::reveal_after_load(window)
+    }
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
         webview::set_main_appearance(view, dark)
     }

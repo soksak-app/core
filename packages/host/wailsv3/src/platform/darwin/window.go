@@ -11,6 +11,7 @@ package darwin
 #include "window_facts.h"
 #include "window_fullscreen.h"
 #include "window_motion.h"
+#include "window_reveal.h"
 
 bool nativeWindowFullscreen(void *window, bool on, uintptr_t callback);
 #import <Cocoa/Cocoa.h>
@@ -99,5 +100,14 @@ func (implementation) Screens() (string, error) {
 
 func (implementation) InstantWindowResize() error {
 	C.windowResizeInstant()
+	return nil
+}
+
+func (implementation) RevealAfterLoad(window unsafe.Pointer) error {
+	var failure *C.char
+	if !bool(C.sp_window_reveal_after_load(window, &failure)) {
+		defer C.free(unsafe.Pointer(failure))
+		return errors.New(C.GoString(failure))
+	}
 	return nil
 }

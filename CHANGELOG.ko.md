@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-64-1-5: 두 host가 창을 숨긴 채 만들고 main webview의 첫 읽기와 다음 presentation이 끝날 때까지 투명하게 보이므로, 새 창과 시작할 때의 첫 창이 빈 창 대신 첫 화면으로 열린다. endpoint 명세가 `diagnostics.capture.start`의 `display` 선택을 적는다.
 - G1.4-66: 설정 파일 읽기와 모든 변경이 core 설정 값을 설정 명세가 나열한 선언된 형식으로 검사하고, 일반의 컨트롤이 같은 선언에서 선택지와 범위를 가져온다.
 - G1.4-65: `host.window.reload`는 다시 읽기 전에 준비된 page에 대기 중인 저장(`core.projects.flush`)을 끝내도록 요청한다. 두 host에서 카드와 탭 변경이 다시 읽기 뒤에도 남는다.
 - G1.4-64-1-3: main page는 render-blocking head module에서 첫 await 전에 시작 문서로 첫 화면을 그리고, `host.window.reload`는 두 host에서 WebContent process를 유지한다. 다시 읽기 메모리 검사는 연결한 host process와 WebKit 메모리 해제 뒤 page footprint를 잰다.

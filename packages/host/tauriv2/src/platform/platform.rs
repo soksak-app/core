@@ -179,6 +179,9 @@ pub trait Platform: Send + Sync {
     /// 창의 네이티브 주소를 반환한다.
     fn window_handle(&self, window: &Window) -> Result<Handle, String>;
     fn set_main_webview(&self, window: Handle, main: Handle) -> Result<(), String>;
+    /// 창을 투명하게 두고, 메인 웹뷰의 첫 읽기가 끝난 뒤 다음 표시가 끝나면 불투명하게 한다. 창을 화면에 올리는
+    /// 일은 호출자가 이 호출 뒤에 한다(native/darwin/src/window_reveal.h). UI 스레드에서 호출한다.
+    fn reveal_after_load(&self, window: Handle) -> Result<(), String>;
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String>;
     /// 창을 전체 화면으로 바꾸거나 되돌리고, 전환이 끝나면 done 을 호출한다. 전환 중에 온 요청은
     /// 그 전환이 끝난 뒤에 처리한다.

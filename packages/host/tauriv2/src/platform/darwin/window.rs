@@ -41,6 +41,22 @@ pub fn set_main_webview(window: Handle, main: Handle) -> Result<(), String> {
     }
 }
 
+pub fn reveal_after_load(window: Handle) -> Result<(), String> {
+    extern "C" {
+        fn sp_window_reveal_after_load(window: *mut c_void, error: *mut *mut c_char) -> bool;
+        fn free(pointer: *mut c_void);
+    }
+    let mut error = std::ptr::null_mut();
+    if unsafe { sp_window_reveal_after_load(window as *mut c_void, &mut error) } {
+        return Ok(());
+    }
+    let message = unsafe { CStr::from_ptr(error) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe { free(error as *mut c_void) };
+    Err(message)
+}
+
 /// 창 버튼의 현재 영역을 배치를 바꾸지 않고 읽는다.
 pub fn controls(window: Handle) -> Frame {
     let mut rect = [0.0; 4];

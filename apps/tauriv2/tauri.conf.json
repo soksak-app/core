@@ -16,6 +16,7 @@
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "backgroundColor": "#101117",
+        "visible": false,
         "acceptFirstMouse": true,
         "dragDropEnabled": false,
         "url": "index.html"

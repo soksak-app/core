@@ -142,6 +142,9 @@ type Platform interface {
 	// native/darwin/src/window_facts.h 의 sp_window_facts 와 같다. UI 스레드에서 호출한다.
 	WindowFacts(window unsafe.Pointer) (string, error)
 	SetMainWebview(window unsafe.Pointer) error
+	// RevealAfterLoad 는 창을 투명하게 두고, 메인 웹뷰의 첫 읽기가 끝난 뒤 다음 표시가 끝나면 불투명하게 한다.
+	// 창을 화면에 올리는 일은 호출자가 이 호출 뒤에 한다(native/darwin/src/window_reveal.h). UI 스레드에서 호출한다.
+	RevealAfterLoad(window unsafe.Pointer) error
 	// FileDrop 은 main 웹뷰의 창에 놓인 파일을 dropped 로 받는다. json 은 {"urls":[...],"x":..,"y":..}
 	// (페이지 좌표) 다. UI 스레드에서 호출한다.
 	FileDrop(main unsafe.Pointer, dropped func(json string)) error

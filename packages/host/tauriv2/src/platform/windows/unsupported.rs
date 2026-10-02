@@ -23,6 +23,9 @@ pub fn prepare_window<'a>(_builder: WindowBuilder<'a>) -> Result<WindowBuilder<'
 pub fn window_handle(_window: &Window) -> Result<Handle, String> {
     missing("native window handle")
 }
+pub fn reveal_after_load(_window: Handle) -> Result<(), String> {
+    missing("window reveal")
+}
 pub fn set_main_webview(_window: Handle, _main: Handle) -> Result<(), String> {
     missing("main webview identity")
 }

@@ -50,6 +50,9 @@ func (implementation) WindowFacts(unsafe.Pointer) (string, error) {
 	return "", unsupported("window state")
 }
 func (implementation) ConfigureMainWindow(unsafe.Pointer, bool) {}
+func (implementation) RevealAfterLoad(unsafe.Pointer) error {
+	return unsupported("window reveal")
+}
 func (implementation) SetMainWebview(unsafe.Pointer) error {
 	return unsupported("main webview identity")
 }

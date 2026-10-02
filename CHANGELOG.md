@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-64-1-5: both hosts create windows hidden and show them transparent until the main webview's first load has ended and the next presentation has completed, so a new window and the first window at startup open with their first screen instead of an empty window; the endpoint specification lists the `display` option of `diagnostics.capture.start`.
 - G1.4-66: reading the settings files and every change check each core setting value against its declared form, which the settings specification lists; the 일반 controls take their choices and ranges from the same declaration.
 - G1.4-65: `host.window.reload` asks a ready page to complete its pending saves (`core.projects.flush`) before it reloads, so card and tab changes survive a reload on both hosts.
 - G1.4-64-1-3: the main page draws its first screen from the start document in a render-blocking head module before its first await, and `host.window.reload` keeps the WebContent process on both hosts; the reload memory check measures the connected host process and the page footprint after WebKit's memory release.

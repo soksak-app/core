@@ -221,7 +221,8 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	win := application.Get().Window.NewWithOptions(application.WebviewWindowOptions{
 		Name: name, Title: windowTitle, Width: startWidth, Height: startHeight,
 		Mac: application.MacWindow{TitleBar: application.MacTitleBarHidden},
-		URL: url, DevToolsEnabled: true, BackgroundColour: application.NewRGB(16, 17, 23),
+		// 창은 첫 화면이 표시된 뒤에 보인다(docs/spec/native-host.md#page-start). 준비가 끝나면 reveal 이 보인다.
+		URL: url, DevToolsEnabled: true, BackgroundColour: application.NewRGB(16, 17, 23), Hidden: true,
 	})
 	s := NewSurfaces(win, h.sidecars)
 	s.host, s.name, s.title = h, name, windowTitle
@@ -264,7 +265,19 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	// WindowShow 는 창의 가림 상태가 보임으로 바뀔 때 온다. 다른 애플리케이션의 창에 완전히 가려진 채 열린
 	// 창에는 오지 않으므로, 네이티브 창이 있으면 만든 직후에 준비한다. 애플리케이션이 실행되기 전에 만든
 	// 첫 창은 애플리케이션이 시작하면 준비한다.
-	s.prepareNative = func() { place(nil) }
+	// 창을 투명하게 화면에 올리고 첫 화면이 표시되면 불투명하게 한다. Show 는 UI 스레드 밖에서 부른다.
+	var revealed sync.Once
+	s.prepareNative = func() {
+		place(nil)
+		revealed.Do(func() {
+			var failed error
+			application.InvokeSync(func() { failed = system.RevealAfterLoad(win.NativeWindow()) })
+			if failed != nil {
+				log.Fatalf("window reveal: %v", failed)
+			}
+			win.Show()
+		})
+	}
 	if win.NativeWindow() != nil {
 		s.prepareNative()
 	}

@@ -269,7 +269,9 @@ fn new_window(app: &AppHandle, label: &str, url: &str, title: &str) -> Result<Wi
         .inner_size(1200.0, 760.0)
         // 놓인 파일은 창의 파일 놓기 뷰가 받는다(docs/spec/native-surfaces.md).
         .disable_drag_drop_handler()
-        .background_color(Color(16, 17, 23, 255));
+        .background_color(Color(16, 17, 23, 255))
+        // 창은 register 가 첫 화면 표시를 준비한 뒤에 보인다.
+        .visible(false);
     let created = platform::current()?.prepare_window(created)?;
     let window = created
         .build()
@@ -323,6 +325,10 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     let main = root_view(&window).ok_or("the main webview is gone")?;
     let main = crate::exposure::with_view(&main, move |view| platform.view_id(view))?;
     platform.set_main_webview(owner, main)?;
+    // 창은 첫 화면이 표시된 뒤에 보인다(docs/spec/native-host.md#page-start). 창은 숨긴 채 만들어지고, 투명하게
+    // 화면에 올라간 뒤 첫 화면이 표시되면 불투명해진다.
+    platform.reveal_after_load(owner)?;
+    window.show().map_err(|e| e.to_string())?;
     // 네이티브 뷰는 DOM 위에 놓였으므로 놓인 파일은 페이지가 그 점의 DOM 요소를 기준으로 처리한다.
     let dropped = window.clone();
     // 내용의 해석과 오류 보고는 페이지가 한다(core.drop).
