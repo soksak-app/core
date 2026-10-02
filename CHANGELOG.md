@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-42: the core Rust workspace has no clippy warning, and `make native-test` runs `make rust-clippy-check` with warnings denied.
+
 - G1.4-49: `make native-test` and `make host-contract-check` no longer delete the debug application bundles; only the build targets reset them.
 
 - R1-5-4: core no longer holds the plugins and sidecars. The window-check registry is built from the declared sibling repositories, the default layout uses one terminal card without a card sidebar, and `make boundaries` checks core sources against the declared plugin ids and sidecar package names.

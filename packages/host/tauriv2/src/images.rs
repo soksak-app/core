@@ -65,6 +65,7 @@ struct Shared {
     changed: Condvar,
 }
 
+#[derive(Default)]
 struct Inner {
     handles: HashMap<Key, Handle>,
     owners: HashMap<Key, String>,
@@ -90,6 +91,17 @@ struct RasterState {
     presentation_error: Option<String>,
 }
 
+/// 공급자가 보낸 프레임이 속한 래스터와 그 크기, 순번.
+#[derive(Clone, Copy, Debug)]
+struct FrameIdentity {
+    generation: u64,
+    raster: u64,
+    width: u32,
+    height: u32,
+    scale: f64,
+    sequence: i32,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct Configure {
     pub name: String,
@@ -100,20 +112,6 @@ pub struct Configure {
     pub scale: f64,
     #[serde(skip)]
     pub sidecar: String,
-}
-
-impl Default for Inner {
-    fn default() -> Self {
-        Self {
-            handles: HashMap::new(),
-            owners: HashMap::new(),
-            sidecars: HashMap::new(),
-            states: HashMap::new(),
-            generations: HashMap::new(),
-            surface_visibility: HashMap::new(),
-            next_generation: 0,
-        }
-    }
 }
 
 impl Images {
@@ -497,13 +495,16 @@ impl Images {
         &self,
         key: &Key,
         sender: &str,
-        generation: u64,
-        raster: u64,
-        width: u32,
-        height: u32,
-        scale: f64,
-        sequence: i32,
+        frame: FrameIdentity,
     ) -> Result<(), &'static str> {
+        let FrameIdentity {
+            generation,
+            raster,
+            width,
+            height,
+            scale,
+            sequence,
+        } = frame;
         let mut inner = self.lock();
         // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
         let attached = inner.handles.get(key).copied().unwrap_or_default() != 0;
@@ -1057,16 +1058,15 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
     nonce.copy_from_slice(&decoded_nonce[..16]);
 
     let key = (surface.to_string(), envelope.name.clone());
-    if let Err(reason) = images.authorize_frame(
-        &key,
-        sender,
-        envelope.generation,
-        envelope.raster,
-        envelope.width,
-        envelope.height,
-        envelope.scale,
-        envelope.sequence,
-    ) {
+    let frame = FrameIdentity {
+        generation: envelope.generation,
+        raster: envelope.raster,
+        width: envelope.width,
+        height: envelope.height,
+        scale: envelope.scale,
+        sequence: envelope.sequence,
+    };
+    if let Err(reason) = images.authorize_frame(&key, sender, frame) {
         return image_reply(
             reason,
             &envelope.name,
@@ -1243,7 +1243,7 @@ where
                         }
                     };
 
-                    if let Some(reason) = reason.as_deref().filter(|reason| *reason != "stale") {
+                    if let Some(reason) = reason.filter(|reason| *reason != "stale") {
                         images.mark_presentation_failed(&key, generation, raster, sequence, reason);
                         if reason == "notFound" {
                             if let Err(error) = recover(reason) {

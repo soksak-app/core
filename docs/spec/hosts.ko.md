@@ -210,6 +210,7 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 | `make wailsv3-build-release`, `make tauriv2-build-release` | 릴리스 실행 파일을 빌드한다 |
 | `make wailsv3`, `make tauriv2` | 디버그 실행 파일을 빌드하고 실행한다 |
 | `make registry`, `make install-plugins CONFIG=DIR` | `scripts/workspace-registry.json`이 선언한 plugin·sidecar repository로 `target/registry`에 workspace registry를 만들고([Repository](plugins.ko.md#repository)), 그 플러그인을 설정 디렉터리에 설치한다 |
+| `make rust-clippy-check` | Rust workspace의 모든 package와 test를 진단 feature가 있을 때와 없을 때 `-D warnings`로 clippy 검사한다. `make native-test`가 실행한다 |
 | `make native-test` | `make -C native/darwin test`, `packages/host/wailsv3`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다. 각 sidecar repository는 자기 test를 실행한다 |
 | `make platforms` | `scripts/check-platforms.mjs`를 실행한다 |
 | `make hosts-check` | `scripts/check-hosts.mjs`를 실행한다 |

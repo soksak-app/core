@@ -407,15 +407,12 @@ fn slow_sidecar_does_not_block_other_sends() {
     let large_body = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
     let mut last_err = None;
     for i in 0..500 {
-        match sidecars.send(&owner, "@fixture/sidecar-slow", "s1", &large_body) {
-            Err(e) => {
-                last_err = Some(e.clone());
-                if e.contains("is not keeping up") {
-                    break; // 채널이 가득 찬 것을 확인했다
-                }
-                panic!("send {}: unexpected error: {}", i, e);
+        if let Err(e) = sidecars.send(&owner, "@fixture/sidecar-slow", "s1", &large_body) {
+            last_err = Some(e.clone());
+            if e.contains("is not keeping up") {
+                break; // 채널이 가득 찬 것을 확인했다
             }
-            Ok(()) => {}
+            panic!("send {}: unexpected error: {}", i, e);
         }
     }
 

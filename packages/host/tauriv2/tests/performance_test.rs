@@ -144,7 +144,7 @@ fn temp_config(name: &str) -> tempfile::TempDir {
 fn enable_writes_the_log_and_the_sidecar_flags() {
     let directory = temp_config("enable");
     let config = directory.path();
-    let target = performance::enable(&config).unwrap();
+    let target = performance::enable(config).unwrap();
     assert_eq!(target, config.join("logs").join("performance.ndjson"));
 
     let flag = std::fs::read_to_string(
@@ -169,9 +169,9 @@ fn enable_writes_the_log_and_the_sidecar_flags() {
 fn disable_removes_the_sidecar_flags_but_keeps_the_log() {
     let directory = temp_config("disable");
     let config = directory.path();
-    let target = performance::enable(&config).unwrap();
+    let target = performance::enable(config).unwrap();
     performance::line(&target, "host", json!({"event": "trace_on"})).unwrap();
-    performance::disable(&config).unwrap();
+    performance::disable(config).unwrap();
     assert!(!config
         .join("services")
         .join("fixture-service")
@@ -189,7 +189,7 @@ fn disable_removes_the_sidecar_flags_but_keeps_the_log() {
 fn relayed_page_lines_require_an_object_with_an_event() {
     let directory = temp_config("relay");
     let config = directory.path();
-    let target = performance::enable(&config).unwrap();
+    let target = performance::enable(config).unwrap();
     performance::relay(&target, json!({"event": "action", "kind": "resize"})).unwrap();
     assert!(performance::relay(&target, json!({"kind": "resize"})).is_err());
     assert!(performance::relay(&target, json!("action")).is_err());

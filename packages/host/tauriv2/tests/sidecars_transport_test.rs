@@ -347,8 +347,7 @@ fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_end
         assert_eq!(hello["operation"], "hello");
         writeln!(
             stream,
-            "{}",
-            r#"{"operation":"hello","protocol":2,"ok":true}"#
+            "{{\"operation\":\"hello\",\"protocol\":2,\"ok\":true}}"
         )
         .unwrap();
     });
@@ -398,8 +397,7 @@ fn persistent_transport_rejects_a_failed_hello() {
         reader.read_line(&mut hello).unwrap();
         writeln!(
             stream,
-            "{}",
-            r#"{"operation":"hello","ok":false,"error":"authentication or protocol mismatch"}"#
+            "{{\"operation\":\"hello\",\"ok\":false,\"error\":\"authentication or protocol mismatch\"}}"
         )
         .unwrap();
     });

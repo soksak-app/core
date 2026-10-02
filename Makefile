@@ -147,7 +147,7 @@ verify: prepare docs-check exposure-check parity-check host-parity-check
 # 각 앱은 debug 와 release 두 프로필로 빌드한다. release 는 각 도구의 표준 축소
 # 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다. debug 는 진단 빌드(Go 태그·cargo
 # 기능 diagnostics)이고 release 는 진단 메서드를 포함하지 않는다.
-.PHONY: native-darwin registry install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check go-format-check \
+.PHONY: native-darwin registry install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check rust-clippy-check go-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         examples-verify examples-size
@@ -281,6 +281,7 @@ wailsv3-release: wailsv3-build-release
 # sidecar 의 검사는 각 sidecar repository 가 실행한다.
 native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) rust-format-check
+	@$(MAKE) rust-clippy-check
 	@$(MAKE) go-format-check
 	@$(MAKE) -C native/darwin test
 	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags "$(GO_LINK)"
@@ -291,6 +292,12 @@ go-format-check:
 	  unformatted=$$(gofmt -l $$files) || exit 1; \
 	  if [ -n "$$unformatted" ]; then echo "Go files not in gofmt format:" >&2; echo "$$unformatted" >&2; exit 1; fi; \
 	  echo "Go format check passed: $$(echo $$files | wc -w | tr -d ' ') files"
+
+# Rust 워크스페이스의 모든 패키지와 test 를 진단 build 와 일반 build 에서 clippy 경고 없이 검사한다.
+rust-clippy-check: native-darwin
+	@$(CARGO_ENV) cargo clippy --workspace --tests --features soksak-host-tauriv2/diagnostics -- -D warnings
+	@$(CARGO_ENV) cargo clippy --workspace --tests -- -D warnings
+	@echo "Rust clippy check passed: 1 workspace, diagnostics and default builds"
 
 # Rust 워크스페이스의 모든 패키지가 rustfmt 형식인지 검사한다.
 rust-format-check:

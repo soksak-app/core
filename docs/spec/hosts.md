@@ -209,6 +209,7 @@ On macOS each application runs from an application bundle, because the operating
 | `make wailsv3-build-release`, `make tauriv2-build-release` | Build the release executable |
 | `make wailsv3`, `make tauriv2` | Build and run the debug executable |
 | `make registry`, `make install-plugins CONFIG=DIR` | Build the workspace registry in `target/registry` from the plugin and sidecar repositories that `scripts/workspace-registry.json` declares ([repositories](plugins.md#repositories)), and install its plugins into a configuration directory |
+| `make rust-clippy-check` | Run clippy with `-D warnings` on every package and test of the Rust workspace, with and without the diagnostics feature; `make native-test` runs it |
 | `make native-test` | Run `make -C native/darwin test`, `go test` for `packages/host/wailsv3`, and `cargo test -p soksak-host-tauriv2`, the host tests with and without diagnostics; each sidecar repository runs its own tests |
 | `make platforms` | Run `scripts/check-platforms.mjs` |
 | `make hosts-check` | Run `scripts/check-hosts.mjs` |

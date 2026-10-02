@@ -137,7 +137,7 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
                 state
                     .pending_replies
                     .entry(self.sidecar_name.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(line);
                 eprintln!(
                     "sidecar {} response queue full: buffering {}",
@@ -223,12 +223,14 @@ struct Process {
 }
 
 type RetainWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<usize, String>>>>>;
+/// close 와 shutdown 요청마다 서비스의 결과를 받는다.
+type ReplyWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>;
 
 struct PersistentConnection {
-    close_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>,
+    close_waiters: ReplyWaiters,
     /// retain 요청마다 서비스가 닫은 세션 수나 오류를 받는다.
     retain_waiters: RetainWaiters,
-    shutdown_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>,
+    shutdown_waiters: ReplyWaiters,
     connected: Arc<AtomicBool>,
 }
 
@@ -492,7 +494,7 @@ impl<O: Owner> Sidecars<O> {
                         state
                             .pending_closes
                             .entry(name.clone())
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(line.clone());
                         eprintln!("sidecar {name}: close {surface}: outbox full, buffered");
                     } else {
@@ -636,7 +638,7 @@ impl<O: Owner> Sidecars<O> {
                 state
                     .pending_replies
                     .entry(name.to_string())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(line);
                 eprintln!("sidecar {name}: response queue full, buffering {key}");
                 Ok(())
@@ -1027,10 +1029,8 @@ impl<O: Owner> Core<O> {
 
         let reader_stream = response_reader.into_inner();
         let (tx, rx) = sync_channel::<Outgoing>(256);
-        let close_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>> =
-            Arc::new(Mutex::new(HashMap::new()));
-        let shutdown_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>> =
-            Arc::new(Mutex::new(HashMap::new()));
+        let close_waiters: ReplyWaiters = Arc::new(Mutex::new(HashMap::new()));
+        let shutdown_waiters: ReplyWaiters = Arc::new(Mutex::new(HashMap::new()));
         let retain_waiters: RetainWaiters = Arc::new(Mutex::new(HashMap::new()));
         let connected = Arc::new(AtomicBool::new(true));
         let write_name = name.to_string();
@@ -1645,7 +1645,7 @@ impl Owner for Window {
             surface,
             &data.images,
             |work: Box<dyn Fn() -> Result<(), String> + Send>| {
-                crate::exposure::on_main(&window, move || work())
+                crate::exposure::on_main(&window, work)
             },
             |image, response| {
                 let text = serde_json::to_string(&response).map_err(|e| e.to_string())?;

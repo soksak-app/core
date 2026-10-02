@@ -1601,12 +1601,12 @@ impl Host {
         params: Map<String, Value>,
     ) -> Result<Box<RawValue>, Failure> {
         match method {
-            "input.pointer" => raw(&self.input_pointer(&window, pointer(&params)?)?),
-            "input.key" => raw(&self.input_key(&window, key(&params)?)?),
-            "exposure.list" => with_host_entries(&self.page(&window, method, params, TIMEOUT)?),
+            "input.pointer" => raw(&self.input_pointer(window, pointer(&params)?)?),
+            "input.key" => raw(&self.input_key(window, key(&params)?)?),
+            "exposure.list" => with_host_entries(&self.page(window, method, params, TIMEOUT)?),
             #[cfg(feature = "diagnostics")]
             _ if method.starts_with("diagnostics.") => {
-                raw(&crate::diagnostics::call(self, &window, method, params)?)
+                raw(&crate::diagnostics::call(self, window, method, params)?)
             }
             _ => {
                 let name = params
@@ -1616,7 +1616,7 @@ impl Host {
                     .unwrap_or_default()
                     .to_string();
                 if name == "host" || name.starts_with("host.") {
-                    return raw(&self.host_entry(&window, method, &name, &params)?);
+                    return raw(&self.host_entry(window, method, &name, &params)?);
                 }
                 // 메인 페이지는 표면에 전달한 명령을 선언의 제한 시간 안에 끝내므로 command.run 에는 제한을 두지 않는다.
                 let timeout = if method == "command.run" {
@@ -1624,7 +1624,7 @@ impl Host {
                 } else {
                     Some(TIMEOUT)
                 };
-                self.page_then(&window, method, params, timeout, || {})
+                self.page_then(window, method, params, timeout, || {})
             }
         }
     }

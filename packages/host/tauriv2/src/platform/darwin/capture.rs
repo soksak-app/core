@@ -52,7 +52,9 @@ pub fn layout_trace_stop() -> Result<Vec<[f64; 4]>, String> {
         ));
     }
     Ok(values
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .take(count)
         .map(|record| [record[0], record[1], record[2], record[3]])
         .collect())

@@ -174,7 +174,7 @@ pub(crate) fn persist_png(app: &AppHandle, data: String) -> Result<String, Strin
 }
 
 fn persist_png_at(root: &Path, bytes: &[u8]) -> Result<String, String> {
-    validate_png_payload(&bytes)?;
+    validate_png_payload(bytes)?;
     let directory = root.join("clipboard");
     fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
     // tempfile 은 이름이 겹치지 않는 새 파일을 소유자만 읽고 쓰는 권한(0600)으로 만든다.

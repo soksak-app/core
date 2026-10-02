@@ -218,7 +218,7 @@ fn folder_errors_name_the_folder_once() {
     );
     let closed = root.path().join("closed");
     fs::create_dir(&closed).unwrap();
-    fs::set_permissions(&closed, fs::Permissions::from_mode(0)).unwrap();
+    fs::set_permissions(&closed, fs::Permissions::from_mode(0o0)).unwrap();
     let inside = closed.join("child");
     let result = folder(inside.to_str().unwrap(), root.path());
     fs::set_permissions(&closed, fs::Permissions::from_mode(0o700)).unwrap();

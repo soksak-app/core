@@ -69,7 +69,7 @@ pub fn set_surface_alpha_handle(surface: Handle, alpha: f64) {
 }
 
 pub fn set_main_appearance(view: &PlatformWebview, dark: bool) -> Result<(), String> {
-    let view = view.inner() as *mut c_void;
+    let view = view.inner();
     if !unsafe { sp_webview_set_appearance(view, dark) } {
         return Err("requested app appearance is unavailable".into());
     }
@@ -77,7 +77,7 @@ pub fn set_main_appearance(view: &PlatformWebview, dark: bool) -> Result<(), Str
 }
 
 pub fn kill_content_process(view: &PlatformWebview) -> Result<(), String> {
-    if unsafe { sp_webview_kill_content_process(view.inner() as *mut c_void) } {
+    if unsafe { sp_webview_kill_content_process(view.inner()) } {
         Ok(())
     } else {
         Err("the WebContent process cannot be terminated".into())
