@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-64-1-3: main page는 render-blocking head module에서 첫 await 전에 시작 문서로 첫 화면을 그리고, `host.window.reload`는 두 host에서 WebContent process를 유지한다. 다시 읽기 메모리 검사는 연결한 host process와 WebKit 메모리 해제 뒤 page footprint를 잰다.
 - G1.4-64-1-2: main page는 작업 공간 스냅샷과 window 단추를 담은 시작 문서(Wails는 `/start.json`, Tauri는 `soksak://localhost/start.json`)로 시작한다. host는 그 요청에 답하며 page 시작 정리를 하고 `pageStarted` 호출을 대신하며, 각 runtime은 `runtime/start.js`를 제공한다.
 - G1.4-64-1-2: 두 host가 `/installed-plugins.json`에 켜진 plugin마다 manifest를 담고, workbench는 `plugin.json`을 따로 요청하지 않고 `exposure.json`, `environment.json`, 설치된 plugin을 JSON module에서 등록한다.
 - G1.4-64-1-4: `webview_process_test`가 WebKit의 `querySelectorAll` 결과 캐시가 다시 읽은 뒤 이전 document를 붙잡는 것을 재현한다. 두 host가 `diagnostics.page.collect`를 더하고, private native API 목록이 원인과 수집 요청을 기록한다.

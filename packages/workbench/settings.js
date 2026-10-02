@@ -345,6 +345,33 @@ async function migrateStoredSettings() {
   }
 }
 
+/** 저장된 값을 현재 형식으로 바꾼 값. 바꾼 값의 저장과 보고는 migrateStoredSettings 가 한다. */
+function migrated(values) {
+  const next = { ...values };
+  for (const [key, value] of Object.entries(migrateSettings(values).patch)) {
+    if (value === undefined) delete next[key];
+    else next[key] = value;
+  }
+  return next;
+}
+
+/**
+ * 시작 문서의 스냅샷으로 첫 화면의 설정을 적용한다(docs/spec/native-host.md#page-start). id 는 창이 여는 프로젝트이고
+ * 라이브러리면 null 이다. 저장소 연결과 이후의 변경은 connectSettings 가 맡는다.
+ */
+export function beginSettings(snapshot, id) {
+  const nextCommon = migrated(snapshot.common);
+  // 기본값: 설정을 덮어쓰지 않은 프로젝트에는 settings 가 없다.
+  const nextOverrides = migrated(snapshot.projects.find((p) => p.id === id)?.settings ?? {});
+  validateValues(nextCommon, "common settings");
+  validateValues(nextOverrides, "project settings");
+  checkValues(effectiveSettings(defaults, applied(nextCommon), applied(nextOverrides)));
+  projectId = id;
+  common = nextCommon;
+  overrides = nextOverrides;
+  apply();
+}
+
 export async function connectSettings(storage) {
   store = storage;
   await migrateStoredSettings();

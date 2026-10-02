@@ -29,7 +29,7 @@ void webviewSetFrame(void *webview, double x, double y, double width, double hei
 void webviewGetFrame(void *webview, double *rect);
 void webviewSetSurfaceHidden(void *webview, bool hidden);
 void webviewSetSurfaceAlpha(void *webview, double alpha);
-// 현재 WebContent 프로세스를 종료한다. 호출 뒤 호스트가 새 페이지를 읽어야 한다.
+// 현재 WebContent 프로세스를 종료한다. 애플리케이션 종료가 WebKit 자식 프로세스를 남기지 않으려고 부른다.
 bool sp_webview_kill_content_process(void *webview);
 // 진단 build 의 측정용: webview 의 process pool 에 있는 WebContent process 들이 JavaScript 객체의 쓰레기 수집을 하게 한다.
 // WebKit 은 바뀐 이전 페이지를 나중의 수집에서 지우므로, 메모리 검사는 다시 읽은 뒤 이것으로 수집하고 잰다.

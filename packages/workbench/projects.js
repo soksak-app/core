@@ -1,6 +1,6 @@
 // 프로젝트 목록은 공유 저장소에, 활성 프로젝트와 창 소유권은 실행 중인 창에 저장한다.
 import { issueId } from "./ids.js";
-import { selectProject, value, flushSettings } from "./settings.js";
+import { beginSettings, selectProject, value, flushSettings } from "./settings.js";
 import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
 import { migrateStoredLayout } from "./stored-layout-migration.js";
@@ -17,6 +17,8 @@ let changed = () => {};
 let savedLayout = "";
 let writing = Promise.resolve();
 let refreshing = Promise.resolve();
+/* 첫 화면에 그렸고 아직 활성화하지 않은 프로젝트. initialise 의 활성화가 이어받는다. */
+let begun = null;
 
 export const all = () => projects;
 
@@ -78,6 +80,48 @@ async function setPluginData(id, plugin, key, value) {
   project.plugins = plugins;
 }
 
+/**
+ * 시작 문서의 스냅샷으로 첫 화면을 그린다(docs/spec/native-host.md#page-start). 주소의 프로젝트가 있고 판이 그 활성
+ * 공간을 열 수 있으면 그 배치를 판에 그리고, 아니면 라이브러리다. 저장된 이전 형식은 메모리에서 바꾼다. 바꾼 형식의
+ * 저장, 폴더 확인, 창 소유와 그 실패 보고는 initialise 의 활성화가 이어서 한다.
+ */
+export function begin(snapshot) {
+  // 기본값: 브라우저 예제의 저장소는 다른 창이 없으므로 open 을 싣지 않는다.
+  openProjects = new Set(snapshot.open ?? []);
+  projects = snapshot.projects.map((project) => {
+    try {
+      return { ...project, spaces: project.spaces.map((space) => ({ ...space, layout: migrateStoredLayout(space.layout).layout })) };
+    } catch {
+      // 바꿀 수 없는 배치는 그대로 둔다. initialise 의 readProjects 가 그 이유를 보고하고 미리보기와 열기가 보인다.
+      return project;
+    }
+  });
+  const requested = projects.find((p) => p.id === new URL(location.href).searchParams.get("project")) ?? null;
+  const layout = requested?.spaces.find((s) => s.id === requested.activeSpaceId)?.layout;
+  let opened = null;
+  if (layout) {
+    try {
+      listener.check(layout);
+      opened = requested;
+    } catch {
+      // 판이 열 수 없는 배치는 initialise 의 활성화가 그 오류를 보고하고 라이브러리에 남는다.
+    }
+  }
+  beginSettings(snapshot, opened?.id ?? null);
+  if (!opened) {
+    changed();
+    return;
+  }
+  activeProjectId = opened.id;
+  browsing = false;
+  begun = opened.id;
+  // 작업 공간 화면이 판에 크기를 주므로 화면을 먼저 바꾸고 판을 그린다. 크기 없이 그린 판은 다음 frame 에 다시 그려진다.
+  changed();
+  listener.load(layout);
+  opened.spaces.find((s) => s.id === opened.activeSpaceId).layout = listener.save();
+  savedLayout = JSON.stringify({ spaces: opened.spaces, activeSpaceId: opened.activeSpaceId, named: opened.named });
+}
+
 export async function initialise(storage) {
   store = storage;
   configureStates({
@@ -94,11 +138,25 @@ export async function initialise(storage) {
   if (first) {
     try { await activate(first.id); } catch (error) { failed(error); }
   }
+  // 첫 화면에 그린 프로젝트를 활성화하지 못했으면 라이브러리로 돌아간다.
+  if (begun !== null && !owned.has(begun)) await leaveBegun();
+  begun = null;
   await windows.ready();
   changed();
 }
 
 function failed(error) { dispatchEvent(new ErrorEvent("error", { message: error.message })); }
+
+/** 첫 화면에 그렸지만 열지 못한 프로젝트를 닫고 라이브러리를 보인다. */
+async function leaveBegun() {
+  activeProjectId = null;
+  browsing = true;
+  savedLayout = "";
+  history.replaceState(null, "", location.pathname);
+  await selectProject(null);
+  await listener.empty();
+  changed();
+}
 
 function refresh() {
   refreshing = refreshing.then(readProjects, readProjects);
@@ -173,7 +231,7 @@ function activateHere(id) {
 }
 
 async function showProject(id) {
-  if (id === activeProjectId && !browsing) { await selectProject(id); return; }
+  if (id === activeProjectId && !browsing && owned.has(id)) { await selectProject(id); return; }
   await keep();
   await refresh();
   const project = projects.find((p) => p.id === id);
@@ -208,8 +266,10 @@ async function activateInTurn(id) {
   const project = projects.find((p) => p.id === id);
   if (!project) throw new Error(`Unknown project: ${id}`);
   checkProject(project);
+  // 첫 화면에 그린 프로젝트의 활성화는 이전 프로젝트가 없으므로 창 자리를 저장하지 않는다.
+  const resumed = begun === id;
   await keep();
-  await saveGeometry();
+  if (!resumed) await saveGeometry();
   const folder = await windows.folder(project.root);
   if (folder.identity !== project.identity) throw new Error(`Project directory has changed: ${project.root}`);
   const result = await windows.openProject({

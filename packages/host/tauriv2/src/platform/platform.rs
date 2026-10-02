@@ -239,7 +239,7 @@ pub trait Platform: Send + Sync {
     fn set_surface_overlays(&self, surface: Handle, overlays: &[DOMOverlay]) -> Result<(), String>;
     /// 웹뷰의 불투명도를 설정한다.
     fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String>;
-    /// 현재 WebContent 프로세스를 종료한다. 호출자는 종료 뒤 페이지를 다시 읽어야 한다.
+    /// 현재 WebContent 프로세스를 종료한다. 애플리케이션 종료가 WebKit 자식 프로세스를 남기지 않으려고 부른다.
     fn kill_web_content_process(&self, view: &PlatformWebview) -> Result<(), String>;
     /// view 의 WebContent process 들이 JavaScript 객체를 수집하게 한다. 진단 build 의 메모리 측정이 쓴다.
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String>;

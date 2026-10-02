@@ -125,3 +125,18 @@ test('stored settings of a plugin that is not loaded are kept and not applied', 
     globalThis.document = previous;
   }
 });
+
+test('the start document applies the common and project settings in the current format before the store connects', async () => {
+  const realDocument = globalThis.document;
+  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const { beginSettings, value, settingProject } = await import('../settings.js?test=begin');
+  try {
+    beginSettings({ common: { gap: 8, latency: 3 }, projects: [{ id: 'prj-a', settings: { gap: 12 } }, { id: 'prj-b', settings: { gap: 4 } }] }, 'prj-a');
+    assert.equal(value('gap'), 12, 'the project overrides were not applied');
+    assert.equal(value('latency'), undefined, 'a removed key of the stored format was applied');
+    assert.equal(settingProject(), 'prj-a');
+    assert.throws(() => beginSettings({ common: { unknownSetting: 1 }, projects: [] }, null), /unknown setting unknownSetting/);
+  } finally {
+    globalThis.document = realDocument;
+  }
+});

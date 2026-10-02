@@ -44,8 +44,11 @@ mock.module("../plugin-states.js", {
     showStates: async (project) => { shownStates.push(project?.id ?? null); },
   },
 });
+/* 첫 화면이 설정을 고른 프로젝트. */
+const begunSettings = [];
 mock.module("../settings.js", {
   namedExports: {
+    beginSettings: (snapshot, id) => { begunSettings.push(id); },
     selectProject: async () => {},
     value: () => "tabs",
     flushSettings: async () => {},
@@ -208,4 +211,46 @@ test("switching to or closing into a space that fails the plane check changes ne
   assert.deepEqual(plane.events, [], "the rejected switch replaced the plane");
   plane.rejected = null;
   await projects.flush();
+});
+
+test("the start document draws the window's project before the store connects and the activation resumes it", async () => {
+  const { windows } = await import("@soksak/runtime");
+  const state = windows.state;
+  windows.state = async () => ({ x: 1, y: 2, width: 300, height: 200 });
+  const project = { ...structuredClone(PROJECT), id: "prj-begin", root: "/work/begin" };
+  const snapshot = { common: {}, projects: [structuredClone(project)], open: [] };
+  globalThis.location = new URL(`http://soksak.test/index.html?project=${project.id}`);
+  plane.events.length = 0;
+  begunSettings.length = 0;
+  projects.begin(structuredClone(snapshot));
+  assert.equal(projects.active().id, project.id);
+  assert.equal(projects.inLibrary(), false);
+  assert.deepEqual(plane.events, ["load"], "the first screen did not draw the project's space");
+  assert.deepEqual(begunSettings, [project.id], "the first screen did not apply the project's settings");
+  const patches = [];
+  openRequests.length = 0;
+  shownStates.length = 0;
+  await projects.initialise({ ...store, snapshot: async () => structuredClone(snapshot), patch: async (id, patch) => { patches.push([id, Object.keys(patch)]); } });
+  windows.state = state;
+  assert.deepEqual(openRequests, [project.id], "the activation did not open the project's window");
+  assert.deepEqual(shownStates, [project.id]);
+  assert.deepEqual(patches, [[project.id, ["lastOpened"]]], "the activation saved more than the open time");
+  assert.equal(projects.active().id, project.id);
+  await projects.flush();
+});
+
+test("a project that the start document drew falls back to the library when its activation fails", async () => {
+  const missing = { ...structuredClone(PROJECT), id: "prj-gone", root: "/work/missing" };
+  const snapshot = { common: {}, projects: [structuredClone(missing)], open: [] };
+  globalThis.location = new URL(`http://soksak.test/index.html?project=${missing.id}`);
+  projects.begin(structuredClone(snapshot));
+  assert.equal(projects.active().id, missing.id);
+  plane.events.length = 0;
+  reported.length = 0;
+  await projects.initialise({ ...store, snapshot: async () => structuredClone(snapshot), patch: async () => {} });
+  assert.equal(projects.active(), null);
+  assert.equal(projects.inLibrary(), true);
+  assert.deepEqual(plane.events, ["empty started", "emptied"]);
+  assert.equal(globalThis.location.search, "");
+  assert.ok(reported.includes("project directory does not exist: /work/missing"), JSON.stringify(reported));
 });

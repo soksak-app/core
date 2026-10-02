@@ -14,51 +14,11 @@
 }}
 </script>
 <link rel="stylesheet" href="./app.css">
-<link rel="stylesheet" href="./library.css"></head>
-<body data-screen="library">
-<section id="library" aria-label="프로젝트 라이브러리"></section>
-
-
-
-<!-- 창의 크롬. 브랜드, 프로젝트 탭, 그리고 자주 쓰는 스위치.
-     프로젝트 탭은 설정에 따라 여기 서거나 왼쪽 세로 레일로 간다. -->
-<header class="chrome-bar" data-expose="core.chrome.bar">
-  <!-- 창을 끄는 영역. 막대의 빈 곳 전체를 덮고, 단추와 탭은 그 위에 배치된다.
-       막대 자체에 표시하면 그 표시가 자식에게 상속되어 단추를 눌러도 창이
-       이동한다. -->
-  <div class="chrome-bar__drag" id="winDrag"></div>
-  <!-- soksak 로고. 아이콘 타일의 색은 고정이고, 글자는 모드에 따라 app.css 의 .brand 색을 따른다. -->
-  <div class="brand" data-expose="core.brand" role="img" aria-label="soksak">
-    <svg class="brand__logo" viewBox="0 0 323 80" aria-hidden="true">
-      <svg x="0" y="0" width="80" height="80" viewBox="0 0 128 128"><rect x="1" y="1" width="126" height="126" rx="27" fill="#16181D" stroke="#33373F" stroke-width="2"/><path d="M26 37 L56 64 M53 61.3 L26 91" fill="none" stroke="#7FE3B8" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><rect x="70" y="87" width="38" height="10" rx="5" fill="#EDE6D8"/></svg>
-      <svg x="102" y="19.375" width="221.25" height="41.25" viewBox="-1 15 236 44"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path d="M27 25 C24 20.5 19 19 15 19 C8 19 4 22.5 4 27.5 C4 33 10 35 15.5 36 C21.5 37 28 39 28 46 C28 52 22.5 55 16 55 C10.5 55 6 53 3 49"/><circle cx="56" cy="37" r="18"/><path d="M88 19 V55 M108 19 L88 37 M88 37 L110 55"/><path transform="translate(120,0)" d="M27 25 C24 20.5 19 19 15 19 C8 19 4 22.5 4 27.5 C4 33 10 35 15.5 36 C21.5 37 28 39 28 46 C28 52 22.5 55 16 55 C10.5 55 6 53 3 49"/><circle cx="174" cy="37" r="18"/><path d="M192 19 V55"/><path d="M208 19 V55 M228 19 L208 37 M208 37 L230 55"/></g></svg>
-    </svg>
-  </div>
-  <div class="tabs tabs--project" id="projectBar"></div>
-  <div class="chrome-bar__acts" id="chromeActs"></div>
-</header>
-
-<!-- 프로젝트 탭이 왼쪽에 설 때, 레일이 이 안의 첫 자리에 생긴다. 스페이스 줄보다
-     위에서 시작해 아래까지 내려간다 — 프로젝트가 스페이스를 담기 때문이다. -->
-<div class="workarea" id="workarea">
-  <div class="work">
-  <!-- 스페이스 줄. 한 프로젝트 안의 판들. -->
-  <div class="tabs tabs--space" id="spaceBar"></div>
-
-<main class="stage"><div class="plane" id="plane">
-  <svg class="rail" id="rail"><path id="railPath"></path></svg>
-  <div class="drop" id="drop" data-expose="core.drop" hidden></div>
-  <div class="picker" id="picker" data-native-modal="menu" hidden></div>
-  <div class="focus-mark" id="focusMark" hidden></div>
-</div></main>
-  </div>
-</div>
-
-<!-- 애플리케이션마다 같은 문서를 사용한다. 런타임 차이는 @soksak/runtime 이 담당하고,
-     플러그인과 기본값은 environment.json 이 정한다. -->
-<script src="./background.js"></script>
-<script type="module" src="./host.js"></script>
-<script type="module">
+<link rel="stylesheet" href="./library.css">
+<!-- 이 module 은 첫 화면을 첫 await 전에 그린다. head 의 render-blocking script 이므로 그 실행이 끝나기 전에는 문서를 그리지
+     않고, WebKit 은 다시 읽기의 이전 페이지를 화면에 둔다(docs/spec/native-host.md#page-start). module 은 문서를 다 읽은 뒤
+     실행된다. -->
+<script type="module" blocking="render">
 /* environment.json 을 가장 먼저 불러온다. 아래 모듈은 등록된 플러그인과 기본값을
    함수 호출 시점에 읽는다. */
 import { installEnvironment, starterPack } from "./environment.js";
@@ -70,7 +30,7 @@ import environmentFile from "./environment.json" with { type: "json" };
 import installedPlugins from "./installed-plugins.json" with { type: "json" };
 import { openStore, windows } from "@soksak/runtime";
 /* 시작 문서를 가져오는 요청이 이 창의 page 를 시작한다(docs/spec/native-host.md#page-start). */
-import "./runtime/start.js";
+import start from "./runtime/start.js";
 
 import { installTheme } from "soksak";
 
@@ -123,15 +83,6 @@ import { createLibrary } from "./library.js";
 
 installExposure(exposureFile);
 installEnvironment(environmentFile, installedPlugins);
-// 불러오지 않은 플러그인의 탭은 설치 상태에 따라 자리 표시의 이유가 정해지므로 첫 스페이스 전에 읽는다
-// (docs/spec/plugins.md). 읽기 실패는 그 상태의 오류로 남는다.
-await pluginOperations.refresh();
-// 첫 실행이면 starter pack 을 설치하고, 설치한 plugin 을 불러오도록 page 를 다시 불러온다(docs/spec/installation.md).
-// 다시 불러오는 동안 이 page 는 space 를 만들지 않는다.
-if (await pluginOperations.installStarter(starterPack(), log)) {
-  location.reload();
-  await new Promise(() => {});
-}
 
 // 선과 divider 의 모양은 이 시트가 정의한다. 이 문서는 색만 지정하고 아래 :root 가
 // 그 토큰을 이 문서의 색에 연결한다.
@@ -301,20 +252,6 @@ let layoutEpoch = 0;
 /* 성능 기록의 배치 번호. 기록이 켜져 있으면 배치마다 대기, 준비 응답, DOM 그리기 전후, animation frame, 표시의
    시각(performance.now, ms)을 남겨 배치가 화면에 늦게 나오는 단계를 가린다. */
 let layoutTraceId = 0;
-onLayout((made, draw, seated) => {
-  const epoch = layoutEpoch;
-  const id = ++layoutTraceId;
-  const mark = (phase) => trace("layout", { phase, id, t: performance.now() });
-  mark("queued");
-  drawing = layouts.run(() => drawPrepared({
-    epoch, current: () => layoutEpoch,
-    prepare: async () => { mark("prepare"); const result = await publishAhead(made, seated); mark("prepared"); return result; },
-    draw: () => { mark("draw"); draw(); mark("drawn"); },
-    frame: async () => { await animationFrame(); mark("frame"); },
-    presented: async () => { await presented; mark("presented"); },
-  }));
-});
-
 // 사이드바의 탭 선택과 접기는 스페이스에 저장한다(docs/spec/projects.md#persistence).
 onChoicesChange(() => projects.keep());
 
@@ -364,17 +301,23 @@ if (chrome) {
 /** 창이 그리는 단추의 영역과 제목줄 높이를 요청하고, 첫 행의 들여쓰기와 높이를 설정한다. */
 function askControls() {
   chrome.controls().then((answer) => {
-    const at = answer?.controls;
-    if (!at || at.w <= 0) return;
-    controlsAt = at;
-    document.documentElement.style.setProperty("--controls-w", `${at.x + at.w}px`);
-    // 창은 제목줄 높이의 세로 가운데에 단추를 둔다. 전체 화면처럼 제목줄이 없으면 0 이고,
-    // 그때는 쓰던 높이를 지킨다.
-    if (answer.row > 0) document.documentElement.style.setProperty("--chrome-h", `${answer.row}px`);
+    if (!applyControls(answer)) return;
     // 답이 도착해도 렌더는 발생하지 않는다. 네이티브 배치와 DOM을 함께 표시한 뒤
     // 검증해야 이전 프레임을 새 선언과 비교하지 않는다.
     Promise.resolve(presented).then(check);
   });
+}
+
+/** 창 단추 응답으로 첫 행의 들여쓰기와 높이를 설정한다. 단추가 없는 답이면 설정하지 않고 false 다. */
+function applyControls(answer) {
+  const at = answer?.controls;
+  if (!at || at.w <= 0) return false;
+  controlsAt = at;
+  document.documentElement.style.setProperty("--controls-w", `${at.x + at.w}px`);
+  // 창은 제목줄 높이의 세로 가운데에 단추를 둔다. 전체 화면처럼 제목줄이 없으면 0 이고,
+  // 그때는 쓰던 높이를 지킨다.
+  if (answer.row > 0) document.documentElement.style.setProperty("--chrome-h", `${answer.row}px`);
+  return true;
 }
 
 /** 크롬 행의 아이콘 버튼 하나를 만든다. 누르면 command 를 params 로 실행한다. */
@@ -587,6 +530,37 @@ const chromeButtons = [
 chromeButtons[3].dataset.icon = modeName() === "dark" ? "sun" : "moon";
 
 const library = createLibrary(document.getElementById("library"), coreChanged);
+
+/* 첫 화면. 시작 문서로 단추 여백과 설정을 적용하고 창이 여는 프로젝트의 판이나 라이브러리를 첫 await 전에 그린다.
+   WebKit 은 다시 읽기의 이전 페이지를 새 페이지가 보이는 내용을 처음 그릴 때까지 화면에 두므로 첫 프레임이 이
+   화면이다(docs/spec/native-host.md#page-start). 판의 첫 그리기는 네이티브 준비를 기다리지 않도록 배치 대기열을 그
+   뒤에 연결한다. 플러그인 내용과 네이티브 표면은 이어서 채운다. */
+projects.onChange(() => { drawBars(); drawSettings(); library.refreshFolders(); library.render(); coreChanged(); });
+if (chrome) applyControls(start.controls);
+projects.begin(start.workspace);
+onLayout((made, draw, seated) => {
+  const epoch = layoutEpoch;
+  const id = ++layoutTraceId;
+  const mark = (phase) => trace("layout", { phase, id, t: performance.now() });
+  mark("queued");
+  drawing = layouts.run(() => drawPrepared({
+    epoch, current: () => layoutEpoch,
+    prepare: async () => { mark("prepare"); const result = await publishAhead(made, seated); mark("prepared"); return result; },
+    draw: () => { mark("draw"); draw(); mark("drawn"); },
+    frame: async () => { await animationFrame(); mark("frame"); },
+    presented: async () => { await presented; mark("presented"); },
+  }));
+});
+
+// 불러오지 않은 플러그인의 탭은 설치 상태에 따라 자리 표시의 이유가 정해진다(docs/spec/plugins.md). 상태를 읽으면
+// 자리 표시를 다시 그린다. 읽기 실패는 그 상태의 오류로 남는다.
+await pluginOperations.refresh();
+// 첫 실행이면 starter pack 을 설치하고, 설치한 plugin 을 불러오도록 page 를 다시 불러온다(docs/spec/installation.md).
+// 다시 불러오는 동안 이 page 는 space 를 만들지 않는다.
+if (await pluginOperations.installStarter(starterPack(), log)) {
+  location.reload();
+  await new Promise(() => {});
+}
 await installCoreExposure({
   library, renames,
   // 판의 그리기 순서. 배치를 바꾼 코어 명령은 이것을 기다린 뒤 답한다.
@@ -630,7 +604,6 @@ addEventListener("focusout", coreChanged);
 
 const storage = await openStore();
 await connectSettings(storage);
-projects.onChange(() => { drawBars(); drawSettings(); library.refreshFolders(); library.render(); coreChanged(); });
 await projects.initialise(storage);
 drawBars();
 // 앱이 다시 시작하거나 페이지가 실패한 뒤, 어떤 레이아웃에도 없는 표면의 사이드카 세션을 닫는다.
@@ -662,4 +635,49 @@ onSettingsChange(() => {
    배치한다. */
 
 </script>
+</head>
+<body data-screen="library">
+<section id="library" aria-label="프로젝트 라이브러리"></section>
+
+
+
+<!-- 창의 크롬. 브랜드, 프로젝트 탭, 그리고 자주 쓰는 스위치.
+     프로젝트 탭은 설정에 따라 여기 서거나 왼쪽 세로 레일로 간다. -->
+<header class="chrome-bar" data-expose="core.chrome.bar">
+  <!-- 창을 끄는 영역. 막대의 빈 곳 전체를 덮고, 단추와 탭은 그 위에 배치된다.
+       막대 자체에 표시하면 그 표시가 자식에게 상속되어 단추를 눌러도 창이
+       이동한다. -->
+  <div class="chrome-bar__drag" id="winDrag"></div>
+  <!-- soksak 로고. 아이콘 타일의 색은 고정이고, 글자는 모드에 따라 app.css 의 .brand 색을 따른다. -->
+  <div class="brand" data-expose="core.brand" role="img" aria-label="soksak">
+    <svg class="brand__logo" viewBox="0 0 323 80" aria-hidden="true">
+      <svg x="0" y="0" width="80" height="80" viewBox="0 0 128 128"><rect x="1" y="1" width="126" height="126" rx="27" fill="#16181D" stroke="#33373F" stroke-width="2"/><path d="M26 37 L56 64 M53 61.3 L26 91" fill="none" stroke="#7FE3B8" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><rect x="70" y="87" width="38" height="10" rx="5" fill="#EDE6D8"/></svg>
+      <svg x="102" y="19.375" width="221.25" height="41.25" viewBox="-1 15 236 44"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path d="M27 25 C24 20.5 19 19 15 19 C8 19 4 22.5 4 27.5 C4 33 10 35 15.5 36 C21.5 37 28 39 28 46 C28 52 22.5 55 16 55 C10.5 55 6 53 3 49"/><circle cx="56" cy="37" r="18"/><path d="M88 19 V55 M108 19 L88 37 M88 37 L110 55"/><path transform="translate(120,0)" d="M27 25 C24 20.5 19 19 15 19 C8 19 4 22.5 4 27.5 C4 33 10 35 15.5 36 C21.5 37 28 39 28 46 C28 52 22.5 55 16 55 C10.5 55 6 53 3 49"/><circle cx="174" cy="37" r="18"/><path d="M192 19 V55"/><path d="M208 19 V55 M228 19 L208 37 M208 37 L230 55"/></g></svg>
+    </svg>
+  </div>
+  <div class="tabs tabs--project" id="projectBar"></div>
+  <div class="chrome-bar__acts" id="chromeActs"></div>
+</header>
+
+<!-- 프로젝트 탭이 왼쪽에 설 때, 레일이 이 안의 첫 자리에 생긴다. 스페이스 줄보다
+     위에서 시작해 아래까지 내려간다 — 프로젝트가 스페이스를 담기 때문이다. -->
+<div class="workarea" id="workarea">
+  <div class="work">
+  <!-- 스페이스 줄. 한 프로젝트 안의 판들. -->
+  <div class="tabs tabs--space" id="spaceBar"></div>
+
+<main class="stage"><div class="plane" id="plane">
+  <svg class="rail" id="rail"><path id="railPath"></path></svg>
+  <div class="drop" id="drop" data-expose="core.drop" hidden></div>
+  <div class="picker" id="picker" data-native-modal="menu" hidden></div>
+  <div class="focus-mark" id="focusMark" hidden></div>
+</div></main>
+  </div>
+</div>
+
+<!-- 애플리케이션마다 같은 문서를 사용한다. 런타임 차이는 @soksak/runtime 이 담당하고,
+     플러그인과 기본값은 environment.json 이 정한다. -->
+<script src="./background.js"></script>
+<script type="module" src="./host.js"></script>
+
 </body></html>

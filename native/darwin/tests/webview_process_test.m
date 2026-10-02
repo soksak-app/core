@@ -1,4 +1,5 @@
-// 페이지 reload 전에 WebContent 프로세스 종료는 명시적이고 사용 가능한 동작이어야 한다.
+// WebContent 프로세스 종료는 명시적이고 사용 가능한 동작이어야 하고, 같은 프로세스의 다시 읽기는 WebKit 의 결과 캐시가
+// 붙잡는 이전 문서를 남긴다.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <libproc.h>
