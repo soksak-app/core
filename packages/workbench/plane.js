@@ -856,9 +856,11 @@ export function cardSidebars(card, rect) {
   const el = cardElement(card.id);
   if (!el || !rect) throw new Error(`card ${card.id} has no sidebar presentation geometry`);
   const style = getComputedStyle(el);
+  // 기본값: 조작한 면이 없는 카드는 축마다 위나 왼쪽을 먼저 연다(빈 선택, docs/spec/example-model.md).
+  const operated = sidebarOperated.get(card.data) ?? {};
   return presentSidebars(report, rect, { header: HEADER, footer: FOOTER, border: parseFloat(style.getPropertyValue("--bw")),
     divider: parseFloat(style.getPropertyValue("--divider")), minimum: grid.minSize, sidebarMinimum: sidebarDefaults().min },
-    sidebarOperated.get(card.data) ?? {});
+    operated);
 }
 // 카드마다 축별로 마지막으로 클릭하거나 끈 면. 두 면이 함께 들어가지 않을 때 이 면을 연다(docs/spec/example-model.md).
 // 표시 순간의 선택이므로 저장하지 않고 카드의 데이터 객체에 묶는다. 배치를 바꾸거나 복원하면 새 데이터 객체이므로
