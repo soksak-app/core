@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-64-1-2: the main page starts with its start document (`/start.json` on Wails, `soksak://localhost/start.json` on Tauri) that carries the workspace snapshot and the window controls; answering it performs the page-start cleanup and replaces the `pageStarted` call, and each runtime provides `runtime/start.js`.
 - G1.4-64-1-2: both hosts serve each enabled plugin's manifest in `/installed-plugins.json`, and the workbench registers `exposure.json`, `environment.json` and the installed plugins from JSON modules without requesting each `plugin.json`.
 - G1.4-64-1-4: `webview_process_test` reproduces WebKit's `querySelectorAll` result cache keeping a replaced document after reload; both hosts add `diagnostics.page.collect`, and the private native API inventory records the cause and the collection request.
 - G1.4-64-1: the surface composition specification no longer states that a reload shows the window background; an empty window during a reload is a defect.

@@ -11,7 +11,6 @@ export function hostWindows(host) {
     onActivate: (fn) => host.on("project-activate", fn),
     onCloseRequest: (fn) => host.on("project-close-request", fn),
     /** 메인 페이지가 등록하거나 표면을 올리기 전에 부른다. 호스트가 이전 페이지의 상태를 정리한 뒤 돌아온다. */
-    started: () => host.call("pageStarted"),
     ready: () => host.call("windowReady"),
     close: () => host.call("windowClose"),
     /** 창의 현재 크기와 위치. */

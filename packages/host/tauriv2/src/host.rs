@@ -36,6 +36,7 @@ pub mod projects;
 pub mod recording;
 mod shapes;
 pub mod sidecars;
+pub mod start;
 pub mod surfaces;
 pub use surfaces::surface_owner_id;
 pub mod termination;
@@ -173,6 +174,15 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         .manage(exposure::Exposure::default())
         .plugin(endpoint)
         .manage(surfaces::Background)
+        // main page 는 시작 문서를 요청한 webview 를 아는 scheme 으로 가져온다(docs/spec/native-host.md#page-start).
+        .register_uri_scheme_protocol(start::SCHEME, |context, request| {
+            let app = context.app_handle().clone();
+            start::serve(
+                request.uri().path(),
+                context.webview_label(),
+                &mut |webview| start::start_page(&app, webview),
+            )
+        })
         .on_page_load(|view, payload| {
             if payload.event() != tauri::webview::PageLoadEvent::Started {
                 return;
@@ -183,7 +193,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 return;
             }
             if view.label() == window.label() {
-                // 이전 페이지의 정리는 새 페이지가 부르는 page_started 가 한다. 여기서는 이 실행의
+                // 이전 페이지의 정리는 새 페이지의 시작 문서 요청(start_page)이 한다. 여기서는 이 실행의
                 // WebKit 자식 기록만 갱신한다(V5-113).
                 let started = || {
                     if let Some(workspace) = window

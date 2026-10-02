@@ -38,7 +38,6 @@ const METHOD = {
   projectOpen: "ProjectOpen",
   projectRelease: "ProjectRelease",
   windowState: "WindowState",
-  pageStarted: "PageStarted",
   windowReady: "WindowReady",
   windowClose: "WindowClose",
   syncSurfaces: "SyncSurfaces",

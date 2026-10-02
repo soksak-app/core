@@ -69,6 +69,8 @@ import exposureFile from "./exposure.json" with { type: "json" };
 import environmentFile from "./environment.json" with { type: "json" };
 import installedPlugins from "./installed-plugins.json" with { type: "json" };
 import { openStore, windows } from "@soksak/runtime";
+/* 시작 문서를 가져오는 요청이 이 창의 page 를 시작한다(docs/spec/native-host.md#page-start). */
+import "./runtime/start.js";
 
 import { installTheme } from "soksak";
 
@@ -119,8 +121,6 @@ import { onChoicesChange } from "./sidebar-sections.js";
 
 import { createLibrary } from "./library.js";
 
-// 호스트가 이전 페이지의 상태를 정리한 뒤에 등록하고 표면을 올린다(docs/spec/native-host.md).
-await windows.started();
 installExposure(exposureFile);
 installEnvironment(environmentFile, installedPlugins);
 // 불러오지 않은 플러그인의 탭은 설치 상태에 따라 자리 표시의 이유가 정해지므로 첫 스페이스 전에 읽는다

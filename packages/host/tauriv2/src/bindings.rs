@@ -31,7 +31,6 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         project_release,
         window_state,
         performance,
-        page_started,
         window_ready,
         window_close,
         window_new,
@@ -116,12 +115,6 @@ fn performance(window: Window, request: serde_json::Value) -> Result<serde_json:
 #[tauri::command]
 fn window_state(window: Window) -> Result<Option<Geometry>, String> {
     windows::window_state(&window)
-}
-
-/// 메인 페이지가 등록하거나 표면을 올리기 전에 부른다. 답하기 전에 이전 페이지의 상태를 정리한다.
-#[tauri::command]
-fn page_started(window: Window) -> Result<(), String> {
-    windows::page_started(&window)
 }
 
 /// 페이지가 창 닫기 요청을 처리할 준비가 되었음을 기록한다.

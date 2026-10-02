@@ -17,6 +17,7 @@ function fixtureApp(t) {
   t.after(() => rmSync(app, { recursive: true, force: true }));
   mkdirSync(join(app, "runtime"));
   writeFileSync(join(app, "runtime/index.js"), "export const host = null;\n");
+  writeFileSync(join(app, "runtime/start.js"), "export default { workspace: { common: {}, projects: [] }, controls: null };\n");
   writeFileSync(join(app, "package.json"), JSON.stringify({ name: "fixture-app", private: true }));
   writeFileSync(join(app, "environment.json"), JSON.stringify({
     runtime: "runtime",

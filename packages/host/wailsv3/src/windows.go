@@ -131,23 +131,6 @@ func (h *Host) WindowState(ctx context.Context) (*WindowGeometry, error) {
 	return &WindowGeometry{X: x, Y: y, Width: width, Height: height}, nil
 }
 
-// PageStarted 는 메인 페이지가 등록하거나 표면을 올리기 전에 부른다. 답하기 전에 창을 준비되지 않은
-// 상태로 두고, 이전 페이지에 보낸 요청을 끝내고, 이전 페이지의 표면 문서와 그림 영역과 모달을 정리한다.
-func (h *Host) PageStarted(ctx context.Context) error {
-	s, err := h.surface(ctx)
-	if err != nil {
-		return err
-	}
-	h.mu.Lock()
-	s.ready = false
-	h.mu.Unlock()
-	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
-	go h.windowsChanged()
-	application.InvokeSync(s.reloadSurfaceDocuments)
-	s.discardOverlay()
-	return nil
-}
-
 func (h *Host) WindowReady(ctx context.Context) error {
 	s, err := h.surface(ctx)
 	if err != nil {
@@ -297,7 +280,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	}
 	win.OnWindowEvent(events.Mac.WebViewDidCommitNavigation, func(*application.WindowEvent) {
 		// 이 callback 은 별도 goroutine 에서 새 페이지의 호출보다 늦게 실행될 수 있다. 이전 페이지의 정리는
-		// 새 페이지가 부르는 PageStarted 가 하고, 여기서는 이 실행의 WebKit 자식 기록만 갱신한다(V5-113).
+		// 새 페이지의 시작 문서 요청(startPage)이 하고, 여기서는 이 실행의 WebKit 자식 기록만 갱신한다(V5-113).
 		committed := func() {
 			if h.workspace != nil {
 				RefreshWebKitChildren(h.workspace.Directory())

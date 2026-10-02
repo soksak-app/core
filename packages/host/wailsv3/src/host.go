@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -124,7 +125,9 @@ func Run(assets fs.FS, options Options) error {
 	defer host.endpoint.Close()
 	app := application.New(application.Options{
 		Name: "soksak", Description: "soksak layout running in Wails v3",
-		Assets:     application.AssetOptions{Handler: application.BundledAssetFileServer(assets), Middleware: InstalledAssets(configDirectory)},
+		Assets: application.AssetOptions{Handler: application.BundledAssetFileServer(assets), Middleware: func(next http.Handler) http.Handler {
+			return StartAssets(host.startPage)(InstalledAssets(configDirectory)(next))
+		}},
 		Services:   []application.Service{application.NewService(host)},
 		ShouldQuit: host.shouldQuit,
 		// Wails 의 기본 신호 처리기는 만들어지기만 하고 시작되지 않는다(v3.0.0-beta.16).
