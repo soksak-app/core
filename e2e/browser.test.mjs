@@ -14,7 +14,7 @@ const MENU_TITLES = {
 const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language] ?? MENU_TITLES.en;
 
 
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, fresh, open, terminalCardSidebar } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 
 /** block 문서의 왼쪽 위에 놓는 CSS 크기 120×60 의 빨간 블록. 페이지 확대만큼 픽셀이 커진다. */
@@ -408,6 +408,9 @@ for (const app of Object.values(APPS)) {
     await s.run("browser.navigate", { url: `${base}/focus` }, surface);
     await loaded(s, surface, `${base}/focus`);
     await placed(s, surface, "focus document");
+    // 기본 배치에는 카드 사이드바가 없으므로 inherit 가 off 와 같다. 터미널 카드 왼쪽에 공통 세트를 이어 두어
+    // inherit 가 사이드바를 보이게 한다.
+    await terminalCardSidebar(s);
     s.cleanup(() => s.run("core.card.sidebar.set", { card: "terminal", side: "left", set: "inherit" }));
 
     // 준비 요청은 창의 레이어 트랜잭션 안에서 적용되어 커밋 전에는 화면에 나오지 않는다. 그동안 화면에 보이는
