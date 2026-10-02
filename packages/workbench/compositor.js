@@ -109,6 +109,8 @@ const slots = () =>
    없어 문서 안의 스타일 노드에 리터럴 경로를 쓴다. 커스텀 프로퍼티로 전달하면 WebKit 이
    body::before 의 클립을 잘못 그려 문서 전체가 지워진다. */
 let paintClip = null;
+/** 페인트 클립에 마지막으로 쓴 배치 레코드의 순번. */
+let clippedSeq = 0;
 
 /** 앱 배경에서 표시 중인 네이티브 표면 사각형만 실제 픽셀 구멍으로 제외한다. */
 function syncNativePaintClip(rects) {
@@ -279,7 +281,13 @@ function commit(mine, snapshot, final) {
           surface.visible && app.kinds.includes(surface.plugin)).map(({ applied }) => ({
             x: origin.left + applied.x, y: origin.top + applied.y, w: applied.w, h: applied.h,
           }));
-        requestAnimationFrame(() => syncNativePaintClip(rects));
+        // 답은 요청 순서와 다르게 올 수 있다. 부하에서 끌기 중의 앞 배치 답이 뒤 배치 답보다 늦게 오면 앞 배치의 구멍이
+        // 뒤 배치의 구멍을 덮으므로, 이미 그린 것보다 새 배치의 구멍만 쓴다.
+        requestAnimationFrame(() => {
+          if (record.seq < clippedSeq) return;
+          clippedSeq = record.seq;
+          syncNativePaintClip(rects);
+        });
       }
       return placed;
     });

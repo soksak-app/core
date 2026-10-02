@@ -93,3 +93,22 @@ for (const [index, [value, error]] of [
     } finally { f.dom.window.close(); }
   });
 }
+
+test("a placement answer that arrives after a newer one does not replace the newer background holes", async () => {
+  const f = await fixture("order");
+  try {
+    // 끌기 중의 배치(폭 160)와 끌기 뒤의 배치(폭 200)를 보낸다. 부하에서 앞 배치의 답이 뒤 배치의 답보다 늦게 온다.
+    f.resize(160);
+    const older = f.compositor.publish();
+    f.resize(200);
+    const newer = f.compositor.publish();
+    assert.equal(f.requests.length, 2);
+    const [first, second] = f.requests.splice(0);
+    second.resolve(second.record.surfaces.map(surface => ({ id: surface.id, visible: surface.visible, ...surface.applied })));
+    await newer; f.frame();
+    const latest = f.clip();
+    first.resolve(first.record.surfaces.map(surface => ({ id: surface.id, visible: surface.visible, ...surface.applied })));
+    await older; f.frame();
+    assert.equal(f.clip(), latest, "an older placement answer replaced the background holes of the newer placement");
+  } finally { f.dom.window.close(); }
+});
