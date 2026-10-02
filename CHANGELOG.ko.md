@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-49: `make native-test`와 `make host-contract-check`는 더 이상 debug 애플리케이션 bundle을 지우지 않는다. bundle은 build target만 다시 만든다.
+
 - R1-5-4: core는 plugin과 sidecar를 담지 않는다. Window check registry는 선언된 sibling repository로 build하고, 기본 layout은 card sidebar가 없는 terminal card 하나를 쓰며, `make boundaries`는 선언된 plugin id와 sidecar package 이름에 대해 core source를 검사한다.
 
 - R1-5-1: plugin spec이 별도 plugin·sidecar repository, core tag에 대한 의존, core가 그것들로 build하는 registry fixture를 정한다.

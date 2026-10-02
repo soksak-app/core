@@ -135,6 +135,16 @@ test("boundary audit reports core sources that name a declared plugin id or side
   assert.match(missing.stderr, /sidecars\/probe\/package\.json/);
 });
 
+test("native and host contract tests stage the frontend without resetting an application bundle", { timeout: 60000 }, async () => {
+  // window check 가 쓰는 debug 앱의 실행 파일을 test 실행이 지우지 않는다. 계획만 읽고 실행하지 않는다.
+  for (const target of ["native-test", "host-contract-check"]) {
+    const plan = await run("make", ["-n", target], { cwd: root });
+    assert.equal(plan.code, 0, plan.stderr);
+    assert.deepEqual(plan.stdout.split("\n").filter((line) => /rm -rf \S*\.app\/Contents/.test(line)), [],
+      `${target} removes an application bundle`);
+  }
+});
+
 test("host structure audit reports a clean paired-host graph", { timeout: 5000 }, async () => {
   const result = await run(node, [join(root, "scripts/check-hosts.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);

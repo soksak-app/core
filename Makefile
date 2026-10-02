@@ -226,16 +226,17 @@ install-plugins: registry
 stage-wailsv3 = pnpm -F @soksak/wailsv3 exec soksak-stage src/frontend $(1)
 stage-tauriv2 = pnpm -F @soksak/tauriv2 exec soksak-stage src/frontend $(1)
 
+# 배치는 bundle 을 건드리지 않는다. bundle 은 build target 만 다시 만든다. 검사가 쓰는 debug 앱의 실행 파일이
+# native-test 같은 검사 target 의 배치로 지워지지 않게 하기 위해서다.
 frontend-wailsv3: build
-	@$(call bundle-info,$(WAILS_DEBUG_BUNDLE),wailsv3)
 	@$(call stage-wailsv3,--diagnostics)
 
 frontend-tauriv2: build
-	@$(call bundle-info,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@$(call stage-tauriv2,--diagnostics)
 
 # generate_context! 가 프런트엔드를 포함하므로 크레이트를 다시 빌드하게 한다.
 tauriv2-build: native-darwin frontend-tauriv2
+	@$(call bundle-info,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@touch apps/tauriv2/src/main.rs
 	@$(CARGO_ENV) cargo build -p soksak-tauriv2 --features diagnostics
 	@cp target/debug/soksak-tauriv2 $(TAURI_DEBUG)
@@ -252,6 +253,7 @@ tauriv2-build-release: native-darwin build
 	@$(call bundle-sign,$(TAURI_RELEASE_BUNDLE))
 
 wailsv3-build: native-darwin frontend-wailsv3
+	@$(call bundle-info,$(WAILS_DEBUG_BUNDLE),wailsv3)
 	@$(GO_ENV) go build -C apps/wailsv3 -tags diagnostics -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
 	@$(call sok-wailsv3,$(WAILS_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(WAILS_DEBUG_BUNDLE))
