@@ -426,6 +426,21 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "R1",
+    implementation: [
+      { file: "packages/sok/tauriv2/src/plugins.rs", symbol: "pub fn read_plugins_state" },
+      { file: "packages/sok/wailsv3/src/plugins.go", symbol: "func ReadPluginsState" },
+      { file: "packages/workbench/plugin-operations.js", symbol: "async function installStarter" },
+    ],
+    tests: [
+      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugins_state_reports_the_registry_and_the_installation" },
+      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginsStateReportsTheRegistryAndTheInstallation" },
+      { file: "packages/workbench/test/plugin-operations.test.mjs", id: "the first run installs the starter pack in its order and asks for a reload" },
+    ],
+    expected: "A registry index lists plugins, sidecars and the starter pack; the installer library of both command lines reports the registry, the index, the installation and the first run, installs selected versions with their sidecars, and the workbench installs the starter pack on the first run before it builds a space.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F0.5",
     implementation: [
       { file: "packages/workbench/core-exposure.js", symbol: "installCoreExposure" },
