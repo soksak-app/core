@@ -18,43 +18,45 @@ function footprint(pid) {
 }
 
 /**
- * WebKit 의 메모리 압박 해제를 요청하고 page process 의 footprint 가 bound 아래로 내려온 값을 돌려준다. WebKit 은
- * 같은 process 에서 다시 읽은 이전 문서를 querySelectorAll 결과 캐시에 두었다가 이 해제 때 놓는다
- * (docs/operations/private-native-apis.md). 해제 알림은 이 컴퓨터의 모든 WebKit process 가 받고, 해제가 끝났음을
- * 알리는 이벤트가 없으므로 수집 요청과 측정을 상한 횟수까지 되풀이한다.
+ * 창이 가진 웹 문서의 목록. 다시 읽기가 이전 페이지의 표면 문서, 문서 영역, 그림 영역을 남기면 목록이 커진다. 문서 id 는
+ * 다시 읽을 때마다 새로 정해지므로 수만 비교한다.
  */
-async function released(session, pid, bound) {
-  execFileSync("notifyutil", ["-p", "org.WebKit.lowMemory"]);
-  const samples = [];
-  for (let attempt = 0; attempt < 20; attempt++) {
-    await session.request("diagnostics.page.collect", {});
-    samples.push(footprint(pid));
-    if (samples.at(-1) <= bound) return samples;
-  }
-  return samples;
+function inventory(window) {
+  return {
+    webviews: window.webviews.length,
+    surfaces: window.surfaces.map((surface) => surface.id).sort(),
+    documents: window.documents.length,
+    regions: window.regions.length,
+  };
 }
 
 const RELOADS = 20;
 
+// 같은 WebContent process 에서 다시 읽은 이전 문서는 WebKit 이 querySelectorAll 결과 캐시에 두었다가 메모리 압박 때
+// 놓는다(docs/operations/private-native-apis.md). 그 동작은 native/darwin 의 webview_process_test 가 재현하고, 이
+// 검사는 앱이 가진 것만 판정한다. page footprint 는 판정하지 않고 기록한다.
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: repeated reload keeps the host and the released page memory bounded`, { timeout: 300000 }, async (t) => {
+  test(`${app.name}: repeated reload keeps the host memory and the window documents bounded`, { timeout: 300000 }, async (t) => {
     const session = await open(t, app);
     if (!session) return;
     await fresh(session);
     const { pageProcess } = await session.get("host.window");
     assert.ok(Number.isInteger(pageProcess) && pageProcess > 0, `the app page has no WebContent process: ${pageProcess}`);
-    const first = await released(session, pageProcess, Infinity);
+    await session.request("diagnostics.page.collect", {});
+    const footprintBefore = footprint(pageProcess);
+    const before = inventory(await session.get("host.window"));
     // 검사가 연결한 호스트의 process. 같은 이름의 다른 앱이나 번들 안의 사이드카는 재지 않는다.
     const host = session.client.endpoint.pid;
     const hostBefore = resident(host);
     for (let i = 0; i < RELOADS; i++) await session.run("host.window.reload");
+    const expected = JSON.stringify(before);
+    const settled = await session.until("host.window", (window) => JSON.stringify(inventory(window)) === expected,
+      `the window documents differ from ${expected} after ${RELOADS} reloads`);
     const hostAfter = resident(host);
-    assert.equal((await session.get("host.window")).pageProcess, pageProcess, "a reload changed the page process");
-    const bound = first[0] + 32 * 1024 * 1024;
-    const after = await released(session, pageProcess, bound);
-    t.diagnostic(`page footprint ${first[0]} B, after ${RELOADS} reloads and release ${after.join(",")} B; host RSS ${hostBefore} -> ${hostAfter} KB`);
+    assert.equal(settled.pageProcess, pageProcess, "a reload changed the page process");
+    await session.request("diagnostics.page.collect", {});
+    t.diagnostic(`documents ${expected}; page footprint ${footprintBefore} -> ${footprint(pageProcess)} B without memory ` +
+      `pressure; host RSS ${hostBefore} -> ${hostAfter} KB`);
     assert.ok(hostAfter - hostBefore < 64 * 1024, `host RSS grew ${hostAfter - hostBefore} KB over ${RELOADS} reloads`);
-    assert.ok(after.at(-1) <= bound,
-      `the released page footprint grew ${after.at(-1) - first[0]} B over ${RELOADS} reloads: ${after.join(",")}`);
   });
 }
