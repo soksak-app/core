@@ -885,3 +885,30 @@ fn invalidating_a_sidecar_resends_its_configure_and_leaves_other_sidecars() {
         .unwrap()
         .is_none());
 }
+
+// contract: images.visibility.shown-surface-reconfigures-its-raster
+#[test]
+fn shown_surface_reconfigures_its_raster() {
+    let images = Images::default();
+    let key: Key = ("returning".into(), "view".into());
+    images.reserve(&key, "owner", "sidecar-a").unwrap();
+    assert!(images.set(&key, 100));
+    let first = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    // 숨긴 동안 받은 frame 은 native layer 가 해제되어 표시되지 않는다. 다시 보이면 같은 크기라도 새 raster 를
+    // 설정해야 하며, 숨긴 동안의 raster 를 기다리지 않는다.
+    images.set_surface_visible(&key.0, false);
+    images.set_surface_visible(&key.0, true);
+    let shown = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .expect("the shown surface did not configure a raster");
+    assert!(
+        shown.raster > first.raster,
+        "the shown surface reused raster {} after {}",
+        shown.raster,
+        first.raster
+    );
+}

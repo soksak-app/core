@@ -637,6 +637,52 @@ impl Images {
         })
     }
 
+    /// 표시 장벽이 아직 기다리는 그림 영역을 표면과 이름 순서로 적는다. 장벽이 시간을 넘기면 오류에 붙여 어느
+    /// 영역이 표시되지 않았는지 보고한다. 기다리는 영역이 없으면 "none" 이다.
+    pub fn pending_rasters(&self) -> String {
+        let inner = self.lock();
+        let mut pending: Vec<String> = inner
+            .states
+            .iter()
+            .filter_map(|(key, state)| {
+                let known = inner.surface_visibility.get(&key.0).copied();
+                // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
+                let attached = inner.handles.get(key).copied().unwrap_or_default() != 0;
+                let presented = state.last_sequence > 0
+                    && state.presented_raster == state.raster
+                    && state.presented_sequence == state.last_sequence;
+                if !attached
+                    || !state.visible
+                    || known == Some(false)
+                    || state.raster == 0
+                    || presented
+                {
+                    return None;
+                }
+                let surface = if known.is_some() {
+                    "visible"
+                } else {
+                    "unknown"
+                };
+                Some(format!(
+                    "{}/{} generation {} raster {} sequence {} presented {}/{} surface {surface}",
+                    key.0,
+                    key.1,
+                    state.generation,
+                    state.raster,
+                    state.last_sequence,
+                    state.presented_raster,
+                    state.presented_sequence
+                ))
+            })
+            .collect();
+        if pending.is_empty() {
+            return "none".into();
+        }
+        pending.sort();
+        pending.join(", ")
+    }
+
     /// 보이는 모든 그림 영역이 현재 래스터를 표시했는지 반환한다.
     pub fn current_presented(&self) -> bool {
         Self::current_presented_locked(&self.lock())

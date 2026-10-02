@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-50: the Wails host configures a new raster when a hidden surface is shown again, so returning a window to its project no longer waits on a hidden terminal image; presentation timeouts name the pending regions.
+
 - R1-5-5: each plugin repository checks the exposure names of its pages and sections with the shared module of `@soksak/plugin-api`.
 
 - R1-7: every core package declares 0.0.2, the Wails host reports 0.0.2 as the version check now reads its application version, and release builds of `sok` contain no diagnostic command.

@@ -742,8 +742,9 @@ pub(crate) async fn present(
                     images.wait_current(exposure::TIMEOUT).map_err(|reason| {
                         if reason == "presentationTimeout" {
                             format!(
-                                "the current image raster did not present within {:?}",
-                                exposure::TIMEOUT
+                                "the current image raster did not present within {:?}; pending {}",
+                                exposure::TIMEOUT,
+                                images.pending_rasters()
                             )
                         } else {
                             format!("the current image raster failed to present: {reason}")

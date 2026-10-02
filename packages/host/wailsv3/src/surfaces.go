@@ -623,7 +623,8 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 		if waiting == nil && req.Settled {
 			if err := s.images.WaitCurrentError(pageTimeout); err != nil {
 				if err.Error() == "presentationTimeout" {
-					waiting = fmt.Errorf("the current image raster did not present within %s", pageTimeout)
+					waiting = fmt.Errorf("the current image raster did not present within %s; pending %s",
+						pageTimeout, s.images.PendingRasters())
 				} else {
 					waiting = fmt.Errorf("the current image raster failed to present: %w", err)
 				}

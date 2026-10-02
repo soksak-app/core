@@ -244,6 +244,7 @@ fn invalid_json_closes_connection() {
 | `images.wait.ended-generation-does-not-block` | 표면 generation을 끝내면 표시 대기가 풀린다. | both |
 | `images.visibility.survives-first-document-navigation` | 첫 문서 이동 전에 숨긴 표면은 이동 뒤에도 숨겨진 상태를 유지한다. | both |
 | `images.visibility.hidden-surface-defers-configuration` | 숨긴 표면의 이미지를 구성하면 표면이 보일 때까지 구성을 반환하지 않는다. | both |
+| `images.visibility.shown-surface-reconfigures-its-raster` | 숨겼다가 다시 보인 표면은 같은 크기라도 새 raster revision을 설정하므로, 표시 장벽은 숨긴 동안의 frame을 기다리지 않는다. | both |
 | `images.visibility.refresh-list-excludes-hidden` | 새로 고침 목록은 숨긴 표면의 이미지와 숨긴 이미지를 뺀다. | both |
 | `images.present.rejects-frame-superseded-during-main-thread` | 주 스레드 표시 전에 raster가 다시 구성된 프레임에 stale로 응답한다. | both |
 | `images.present.rejects-frame-detached-during-main-thread` | 주 스레드 표시 전에 표면 이미지가 제거된 프레임에 stale로 응답한다. | both |

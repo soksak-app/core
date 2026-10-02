@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-50: Wails host는 숨긴 표면을 다시 보이면 새 raster를 설정하므로, 창을 프로젝트로 되돌릴 때 숨은 terminal image를 기다리지 않는다. 표시 timeout은 기다리는 영역을 적는다.
+
 - R1-5-5: 각 plugin repository가 `@soksak/plugin-api`의 공용 module로 페이지와 섹션의 공개 이름을 검사한다.
 
 - R1-7: 모든 core package가 0.0.2를 선언하고, 버전 검사가 Wails host의 애플리케이션 버전을 읽게 되어 그 host가 0.0.2를 보고하며, release build의 `sok`에는 진단 명령이 없다.

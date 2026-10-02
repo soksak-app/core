@@ -1032,3 +1032,26 @@ func TestInvalidatingASidecarResendsItsConfigureAndLeavesOtherSidecars(t *testin
 		t.Fatalf("the other sidecar's same-size reconfigure sent again: %v %v", configuration, err)
 	}
 }
+
+// contract: images.visibility.shown-surface-reconfigures-its-raster
+func TestShownSurfaceReconfiguresItsRaster(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "returning", Name: "view"}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	var handle int
+	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatalf("attach image: %v", err)
+	}
+	first := configureImage(t, images, key, 800, 600, 2)
+	// 숨긴 동안 받은 frame 은 native layer 가 해제되어 표시되지 않는다. 다시 보이면 같은 크기라도 새 raster 를
+	// 설정해야 하며, 숨긴 동안의 raster 를 기다리지 않는다.
+	images.SetSurfaceVisible(key.Surface, false)
+	images.SetSurfaceVisible(key.Surface, true)
+	shown, err := images.ConfigureRaster(key, 800, 600, 2, true)
+	if err != nil || shown == nil {
+		t.Fatalf("the shown surface did not configure a raster: %+v %v", shown, err)
+	}
+	if shown.Raster <= first.Raster {
+		t.Fatalf("the shown surface reused raster %d after %d", shown.Raster, first.Raster)
+	}
+}

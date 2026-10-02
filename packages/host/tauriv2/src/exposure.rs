@@ -1189,14 +1189,14 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
             .ok_or_else(|| {
                 Failure::new(
                     TIMED_OUT,
-                    "the window did not present within the time limit",
+                    format!("the window did not present within {timeout:?}"),
                 )
             })?;
         match rx.recv_timeout(remaining) {
             Ok(outcome) => outcome.map_err(internal),
             Err(_) => Err(Failure::new(
                 TIMED_OUT,
-                "the window did not present within the time limit",
+                format!("the window did not present within {timeout:?}"),
             )),
         }
     };
@@ -1206,7 +1206,10 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
         let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
             return Err(Failure::new(
                 TIMED_OUT,
-                "the current image raster did not present within the time limit",
+                format!(
+                    "the current image raster did not present within {timeout:?}; pending {}",
+                    data.images.pending_rasters()
+                ),
             ));
         };
         // 표시 장벽 대기의 계기(V5-104): 이 대기가 타임아웃에 걸리면 화면이 멈춘다.
@@ -1224,7 +1227,10 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
             if reason == "presentationTimeout" {
                 return Err(Failure::new(
                     TIMED_OUT,
-                    "the current image raster did not present within the time limit",
+                    format!(
+                        "the current image raster did not present within {timeout:?}; pending {}",
+                        data.images.pending_rasters()
+                    ),
                 ));
             }
             return Err(Failure::new(

@@ -16,6 +16,8 @@ import (
 	"log"
 	"math"
 	"regexp"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -166,6 +168,18 @@ func (i *Images) SetSurfaceVisible(surface string, visible bool) {
 		return
 	}
 	i.surfaceVisible[surface] = visible
+	if visible {
+		for key, state := range i.states {
+			if key.Surface != surface {
+				continue
+			}
+			// 표면을 숨기면 native pixel 이 해제되므로 다시 보이면 같은 크기라도 새 raster 를 설정한다. 숨긴 동안의
+			// raster 에 속한 frame 은 그 뒤에 받지 않는다.
+			state.Raster++
+			state.Configured = false
+			state.LastSequence = 0
+		}
+	}
 	i.changedLocked()
 }
 
@@ -420,6 +434,35 @@ func (i *Images) currentPresentedLocked() bool {
 		}
 	}
 	return true
+}
+
+// PendingRasters 는 표시 장벽이 아직 기다리는 그림 영역을 표면과 이름 순서로 적는다. 장벽이 시간을 넘기면 오류에
+// 붙여 어느 영역이 표시되지 않았는지 보고한다. 기다리는 영역이 없으면 "none" 이다.
+func (i *Images) PendingRasters() string {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	var pending []string
+	for key, state := range i.states {
+		surfaceVisible, known := i.surfaceVisible[key.Surface]
+		if i.handles[key] == nil || !state.Visible || (known && !surfaceVisible) || state.Raster == 0 {
+			continue
+		}
+		if state.LastSequence > 0 && state.PresentedRaster == state.Raster && state.PresentedSequence == state.LastSequence {
+			continue
+		}
+		surface := "unknown"
+		if known {
+			surface = "visible"
+		}
+		pending = append(pending, fmt.Sprintf("%s/%s generation %d raster %d sequence %d presented %d/%d surface %s",
+			key.Surface, key.Name, state.Generation, state.Raster, state.LastSequence,
+			state.PresentedRaster, state.PresentedSequence, surface))
+	}
+	if len(pending) == 0 {
+		return "none"
+	}
+	sort.Strings(pending)
+	return strings.Join(pending, ", ")
 }
 
 // CurrentPresented 는 보이는 모든 그림 영역이 현재 래스터를 표시했는지 반환한다.
