@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-63: the PTY reap check waits up to 10 s for the shells to end after the terminal surfaces close and reports the close and end times, instead of reading the process list once.
 - G1.4-60: `input_inject_test` waits until the second window has handled its Escape before it compares the keys, and reports the keys of both windows.
 - G1.4-55: the slow-sidecar send tests of both hosts start the fast sidecar before they time a send to it, so the 50 ms limit no longer includes the process start.
 - G1.4-67: the reload memory check judges the host memory and the window's webviews, surfaces, documents and image regions after 20 reloads, and records the page footprint instead of posting a global WebKit memory warning and judging the released footprint.

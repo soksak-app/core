@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-63: PTY 회수 check가 process 목록을 한 번 읽는 대신, terminal surface가 닫힌 뒤 shell이 끝나기를 최대 10초 기다리고 닫기와 종료 시간을 보고한다.
 - G1.4-60: `input_inject_test`가 둘째 창이 Escape를 처리할 때까지 기다린 뒤 키를 비교하고, 두 창의 키를 보고한다.
 - G1.4-55: 두 host의 느린 사이드카 전송 test가 빠른 사이드카로의 전송을 재기 전에 그 사이드카를 띄우므로, 50 ms 한도에 process 시작이 더는 들어가지 않는다.
 - G1.4-67: 다시 읽기 메모리 검사가 전역 WebKit 메모리 경고를 보내고 해제 뒤 footprint를 판정하는 대신, 20번 다시 읽은 뒤의 host 메모리와 창의 webview, surface, 문서, 그림 영역을 판정하고 page footprint를 기록한다.

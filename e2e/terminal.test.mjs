@@ -293,15 +293,26 @@ for (const app of Object.values(APPS)) {
     const before = terminalProcessSnapshot(app.configDir);
     assert.equal(before.shells.length, 3, "three open terminal sessions must own three PTY children");
 
+    const closing = performance.now();
     await closeTerminalTabs(s);
     await s.until(
       "core.surfaces",
       (surfaces) => surfaces.every((surface) => surface.plugin !== "terminal"),
       "terminal surfaces did not close",
     );
-    const after = terminalProcessSnapshot(app.configDir);
+    const closed = performance.now();
+    // 표면을 닫으면 서비스가 셸을 끝내고 회수한다. 회수의 끝을 알리는 상태나 이벤트가 없고 macOS 에는 다른 process 의
+    // 종료를 기다리는 도구가 없으므로, 상한까지 process 표를 다시 읽어 셸이 끝나기를 기다린다.
+    let after = terminalProcessSnapshot(app.configDir);
+    while (after.shells.length > 0 && performance.now() - closed < 10000) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      after = terminalProcessSnapshot(app.configDir);
+    }
+    const ended = performance.now();
+    t.diagnostic(`surfaces closed ${Math.round(closed - closing)} ms after the close commands; shells ended ` +
+      `${Math.round(ended - closed)} ms later; left ${JSON.stringify(after.shells)}`);
     assert.equal(after.service, before.service, "closing tabs must not recreate the shared terminal service");
-    assert.deepEqual(after.shells, [], "normal terminal close must reap every PTY child");
+    assert.deepEqual(after.shells, [], `normal terminal close must reap every PTY child within 10 s of the surface close`);
   });
 
   test(`${app.name}: removing a project ends the terminal sessions that its layout held`, async (t) => {
