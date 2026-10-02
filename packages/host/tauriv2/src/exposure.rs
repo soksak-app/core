@@ -1096,10 +1096,20 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     }))
 }
 
-/// 메인 페이지를 같은 WebContent 프로세스에서 다시 읽고, 새 페이지가 준비를 알릴 때까지 기다린다. WebKit 은 새
-/// 페이지가 보이는 내용을 처음 그릴 때까지 이전 페이지를 화면에 두고, 이전 페이지의 정리는 새 페이지의 시작 문서
-/// 요청이 한다(docs/spec/native-host.md#page-start).
-fn reload(window: &Window) -> Result<Value, Failure> {
+/// 메인 페이지를 같은 WebContent 프로세스에서 다시 읽고, 새 페이지가 준비를 알릴 때까지 기다린다. 준비된 페이지는
+/// 먼저 대기 중인 저장을 끝낸다(docs/spec/projects.md#persistence). WebKit 은 새 페이지가 보이는 내용을 처음 그릴 때까지
+/// 이전 페이지를 화면에 두고, 이전 페이지의 정리는 새 페이지의 시작 문서 요청이 한다(docs/spec/native-host.md#page-start).
+fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
+    if window_data(window)
+        .map_err(internal)?
+        .ready
+        .load(Ordering::Relaxed)
+    {
+        let mut flush = Map::new();
+        flush.insert("name".into(), Value::from("core.projects.flush"));
+        flush.insert("params".into(), Value::Object(Map::new()));
+        host.page(window, "command.run", flush, TIMEOUT)?;
+    }
     let (tx, rx) = mpsc::channel();
     window_data(window)
         .map_err(internal)?
@@ -1415,7 +1425,7 @@ impl Host {
                 }
                 done(window.set_size(LogicalSize::new(width, height)))
             })(),
-            "host.window.reload" => reload(window),
+            "host.window.reload" => reload(self, window),
             "host.window.presented" => {
                 presented(window, TIMEOUT).map(|displayed| json!({"displayed": displayed}))
             }

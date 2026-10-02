@@ -512,9 +512,19 @@ func (s *Surfaces) replayRegistrations() {
 }
 
 // reloadPage 는 메인 페이지를 같은 WebContent 프로세스에서 다시 읽고, 새 페이지가 준비를 알릴 때까지 기다린다.
-// WebKit 은 새 페이지가 보이는 내용을 처음 그릴 때까지 이전 페이지를 화면에 두고, 이전 페이지의 정리는 새 페이지의
-// 시작 문서 요청이 한다(docs/spec/native-host.md#page-start).
+// 준비된 페이지는 먼저 대기 중인 저장을 끝낸다(docs/spec/projects.md#persistence). WebKit 은 새 페이지가 보이는
+// 내용을 처음 그릴 때까지 이전 페이지를 화면에 두고, 이전 페이지의 정리는 새 페이지의 시작 문서 요청이 한다
+// (docs/spec/native-host.md#page-start).
 func (s *Surfaces) reloadPage() error {
+	s.host.mu.Lock()
+	pageReady := s.ready
+	s.host.mu.Unlock()
+	if pageReady {
+		flush := map[string]any{"name": "core.projects.flush", "params": map[string]any{}}
+		if _, err := s.host.ask(s, "command.run", flush, pageTimeout); err != nil {
+			return err
+		}
+	}
 	ready := make(chan struct{})
 	s.host.mu.Lock()
 	s.readied = append(s.readied, ready)

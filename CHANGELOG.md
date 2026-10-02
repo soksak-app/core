@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-65: `host.window.reload` asks a ready page to complete its pending saves (`core.projects.flush`) before it reloads, so card and tab changes survive a reload on both hosts.
 - G1.4-64-1-3: the main page draws its first screen from the start document in a render-blocking head module before its first await, and `host.window.reload` keeps the WebContent process on both hosts; the reload memory check measures the connected host process and the page footprint after WebKit's memory release.
 - G1.4-64-1-2: the main page starts with its start document (`/start.json` on Wails, `soksak://localhost/start.json` on Tauri) that carries the workspace snapshot and the window controls; answering it performs the page-start cleanup and replaces the `pageStarted` call, and each runtime provides `runtime/start.js`.
 - G1.4-64-1-2: both hosts serve each enabled plugin's manifest in `/installed-plugins.json`, and the workbench registers `exposure.json`, `environment.json` and the installed plugins from JSON modules without requesting each `plugin.json`.
