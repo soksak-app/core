@@ -26,6 +26,17 @@ const settings = (s, patch, scope) => s.run("core.settings.set", { patch, scope 
 const added = (list, known) => list.find((w) => !known.includes(w.window)).window;
 
 /** 설정 모달 컨트롤이 나타날 때까지 기다리고 그 컨트롤을 반환한다. */
+/** 프로젝트를 활성화하고, 실패하면 그 창의 페이지 상태와 네이티브 상태를 보고한다. */
+async function activate(s, id, label) {
+  try {
+    await s.run("core.project.activate", { id });
+  } catch (error) {
+    const page = { screen: await s.get("core.screen"), surfaces: await s.get("core.surfaces") };
+    throw new Error(`${label}: ${error.message}; page state: ${JSON.stringify(page)}; ` +
+      `native state: ${JSON.stringify(await s.get("host.window"))}`, { cause: error });
+  }
+}
+
 async function control(s, name, key, predicate = () => true, message = `settings control ${key} did not appear`) {
   const { controls } = await s.until("core.settings-modal",
     (modal) => modal.controls.some((c) => c.name === name && c.key === key && predicate(c)), message);
@@ -256,7 +267,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.settings", (value) => value.values.mode === "dark", "library appearance action did not update common settings");
     await child.until("core.settings", (value) => !value.saving, "the common setting was not saved");
     assert.deepEqual(read(join(second.root, ".soksak/settings.json")), projectSettings);
-    await child.run("core.project.activate", { id: second.id });
+    await activate(child, second.id, "return from the library window");
     assert.equal(await mode(child), "light", "workspace must restore its project override");
     assert.equal((await child.get("core.window.document")).scheme, "light");
     await openSettings(child);
@@ -291,7 +302,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.surfaces", (list) => list.some((x) => x.visible && x.plugin === "terminal"),
       "the main window must keep its terminal surface");
     await settings(s, { projectOpening: "windows" }, "common");
-    await s.run("core.project.activate", { id: second.id });
+    await activate(s, second.id, "reopen the saved project in its own window");
     child = s.on(added(await s.windows(2, "saved project did not reopen"), [s.window]));
     await child.until("core.grid", (grid) => grid?.cards.length > 0, "saved project did not render");
     assert.equal((await child.get("core.project")).activeSpaceId, saved.activeSpaceId);
@@ -304,7 +315,7 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(afterOpen, { ...beforeClose, x: beforeClose.x + 30, y: beforeClose.y + 20 },
       JSON.stringify({ before: beforeClose, saved: saved.geometry, after: afterOpen }));
     assert.equal(await mode(child), "light");
-    await s.run("core.project.activate", { id: first.id });
+    await activate(s, first.id, "return the main window to the first project");
     const title = `${first.title} / ${app.name === "wailsv3" ? "Wails v3" : "Tauri v2"}`;
     await s.until("host.windows", (list) => list.find((w) => w.window === s.window)?.title === title,
       "the main window title did not follow the project");
