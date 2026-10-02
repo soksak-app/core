@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-60: `input_inject_test`가 둘째 창이 Escape를 처리할 때까지 기다린 뒤 키를 비교하고, 두 창의 키를 보고한다.
 - G1.4-55: 두 host의 느린 사이드카 전송 test가 빠른 사이드카로의 전송을 재기 전에 그 사이드카를 띄우므로, 50 ms 한도에 process 시작이 더는 들어가지 않는다.
 - G1.4-67: 다시 읽기 메모리 검사가 전역 WebKit 메모리 경고를 보내고 해제 뒤 footprint를 판정하는 대신, 20번 다시 읽은 뒤의 host 메모리와 창의 webview, surface, 문서, 그림 영역을 판정하고 page footprint를 기록한다.
 - G1.4-64-1-5: 두 host가 창을 숨긴 채 만들고 main webview의 첫 읽기와 다음 presentation이 끝날 때까지 투명하게 보이므로, 새 창과 시작할 때의 첫 창이 빈 창 대신 첫 화면으로 열린다. endpoint 명세가 `diagnostics.capture.start`의 `display` 선택을 적는다.

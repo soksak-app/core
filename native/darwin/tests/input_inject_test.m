@@ -215,8 +215,12 @@ static void checkIndependentWindowKeys(void) {
     second.contentView = secondView;
     NSString *html = @"<input id='field'><script>window.keys=[];"
         "addEventListener('keydown',e=>keys.push(e.key),true);</script>";
+    // 둘째 창은 받은 키를 200 ms 늦게 기록한다. WebContent 는 전달된 키를 비동기로 처리하므로, 검사는 그 처리를
+    // 기다린 뒤에 판정해야 한다. 이 지연은 부하로 늦어진 처리를 재현한다.
+    NSString *late = @"<input id='field'><script>window.keys=[];"
+        "addEventListener('keydown',e=>{const key=e.key;setTimeout(()=>keys.push(key),200);},true);</script>";
     [firstView loadHTMLString:html baseURL:nil];
-    [secondView loadHTMLString:html baseURL:nil];
+    [secondView loadHTMLString:late baseURL:nil];
     [first orderBack:nil];
     [second orderBack:nil];
     until(^BOOL { return [evaluate(firstView, @"Boolean(window.keys)") boolValue] &&
@@ -237,8 +241,13 @@ static void checkIndependentWindowKeys(void) {
     until(^BOOL { return [[evaluate(firstView, @"document.getElementById('field').value") description] isEqual:@"a"]; });
     check([evaluate(firstView, @"document.getElementById('field').value") isEqual:@"a"],
         @"the first window keeps its input");
-    check([evaluate(secondView, @"keys") isEqual:@[@"Escape"]],
-        @"the second window receives only its own Escape");
+    // 두 창이 키를 처리할 때까지 기다린 뒤 판정하고, 받은 키를 남긴다.
+    until(^BOOL { return [evaluate(secondView, @"keys.length") integerValue] > 0; });
+    NSArray *firstKeys = evaluate(firstView, @"keys");
+    NSArray *secondKeys = evaluate(secondView, @"keys");
+    check([secondKeys isEqual:@[@"Escape"]],
+        [NSString stringWithFormat:@"the second window receives only its own Escape (first %@, second %@)",
+            [firstKeys componentsJoinedByString:@","], [secondKeys componentsJoinedByString:@","]]);
     check([evaluate(firstView, @"keys") isEqual:@[@"a"]],
         @"the first window does not receive the second window's Escape");
     [first close];

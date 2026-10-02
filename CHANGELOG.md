@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-60: `input_inject_test` waits until the second window has handled its Escape before it compares the keys, and reports the keys of both windows.
 - G1.4-55: the slow-sidecar send tests of both hosts start the fast sidecar before they time a send to it, so the 50 ms limit no longer includes the process start.
 - G1.4-67: the reload memory check judges the host memory and the window's webviews, surfaces, documents and image regions after 20 reloads, and records the page footprint instead of posting a global WebKit memory warning and judging the released footprint.
 - G1.4-64-1-5: both hosts create windows hidden and show them transparent until the main webview's first load has ended and the next presentation has completed, so a new window and the first window at startup open with their first screen instead of an empty window; the endpoint specification lists the `display` option of `diagnostics.capture.start`.
