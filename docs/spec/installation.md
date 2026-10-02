@@ -33,7 +33,7 @@ Other `package.json` fields belong to package tools and are not read.
 
 ## Sidecar release asset
 
-A sidecar version is released as one archive per platform, `<file name>-<version>-<platform>.tar.gz`. The file name of a sidecar `@scope/name` is `scope-name`; an unscoped name is used as it is. A platform is one of `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `windows-arm64` and `windows-x64`.
+A sidecar version is released as one archive per platform, `<file name>-<version>-<platform>.tar.gz`. The file name of a sidecar `@scope/name` is `scope-name`; an unscoped name is used as it is. A platform is one of `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `windows-arm64` and `windows-x64`. The installer checks a sidecar archive only against the `sha256` of its registry entry before it extracts and runs it; a sidecar, including one from a third party, is not signed or otherwise reviewed by the application.
 
 ## Registry index
 

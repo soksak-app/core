@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-5-5: each plugin repository checks the exposure names of its pages and sections with the shared module of `@soksak/plugin-api`.
+
 - R1-7: every core package declares 0.0.2, the Wails host reports 0.0.2 as the version check now reads its application version, and release builds of `sok` contain no diagnostic command.
 
 - R1-6: the local registry repository builds the starter pack, and the first run of an application installs it before the first space.

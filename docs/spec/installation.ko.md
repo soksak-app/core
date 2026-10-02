@@ -33,7 +33,7 @@ Plugin package는 plugin 파일의 archive `<id>-<version>.tgz`다. 그 `package
 
 ## Sidecar release asset
 
-Sidecar version은 플랫폼마다 archive 하나 `<file name>-<version>-<platform>.tar.gz`로 release된다. Sidecar `@scope/name`의 file name은 `scope-name`이고, scope가 없는 이름은 그대로 쓴다. 플랫폼은 `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `windows-arm64`, `windows-x64` 중 하나다.
+Sidecar version은 플랫폼마다 archive 하나 `<file name>-<version>-<platform>.tar.gz`로 release된다. Sidecar `@scope/name`의 file name은 `scope-name`이고, scope가 없는 이름은 그대로 쓴다. 플랫폼은 `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `windows-arm64`, `windows-x64` 중 하나다. Installer는 sidecar archive를 풀고 실행하기 전에 registry 항목의 `sha256`으로만 검사한다. 제3자의 것을 포함해 sidecar는 애플리케이션이 서명이나 다른 방법으로 검토하지 않는다.
 
 ## Registry index
 
