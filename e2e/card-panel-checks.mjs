@@ -9,8 +9,16 @@ import assert from "node:assert/strict";
 export function missingPoses(frames, poses, refreshRate) {
   assert.ok(Number.isFinite(refreshRate) && refreshRate > 0, `the display refresh rate is unknown (${refreshRate})`);
   const window = 2000 / refreshRate;
-  return poses.filter((pose) => !frames.some((frame) => frame.time >= pose.displayed - 1 &&
-    frame.time <= pose.displayed + window && frame.edges.some((edge) => Math.abs(edge - pose.at) <= 1)));
+  // 녹화가 시작되기 전의 프레임은 없다. 녹화 시작 전에 표시되어 첫 프레임까지 바뀌지 않은 상태는 첫 프레임부터
+  // 센다. 녹화 시작 전에 다음 상태로 바뀐 상태는 녹화될 수 없으므로 원래 시각으로 센다.
+  const first = Math.min(...frames.map((frame) => frame.time));
+  const start = (pose, index) => {
+    const next = poses[index + 1];
+    const replaced = next !== undefined && next.displayed < first;
+    return pose.displayed < first && !replaced ? first : pose.displayed;
+  };
+  return poses.filter((pose, index) => !frames.some((frame) => frame.time >= start(pose, index) - 1 &&
+    frame.time <= start(pose, index) + window && frame.edges.some((edge) => Math.abs(edge - pose.at) <= 1)));
 }
 
 /** 패널을 모두 끈 뒤 남은 패널이 있으면 실패한다. 남은 기본 패널도 실패다. */

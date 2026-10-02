@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-51: 정렬과 gesture 검사는 카드 안쪽에서 늦는 터미널 image나 녹화 시작 전에 표시된 상태를 실패로 세지 않는다.
+
 - G1.4-53: Tauri의 timeout 오류 네 개가 Wails처럼 `within 10s`를 적는다.
 
 - G1.4-50: Wails host는 숨긴 표면을 다시 보이면 새 raster를 설정하므로, 창을 프로젝트로 되돌릴 때 숨은 terminal image를 기다리지 않는다. 표시 timeout은 기다리는 영역을 적는다.

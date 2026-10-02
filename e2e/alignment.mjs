@@ -32,3 +32,14 @@ export function alignment(frame, at) {
     rail: (at.card.l - rail) / at.scale,
   };
 }
+
+/**
+ * 처음 측정한 배치와 이 프레임의 배치가 다른 가장 큰 거리(점). 터미널은 크기가 바뀌는 동안 이전 크기의 래스터를
+ * 왼쪽에 붙여 보이므로 오른쪽 안쪽 여백(contentRight)은 커질 수 있다. 그 여백은 터미널의 평소 배경인 카드 색이고,
+ * 정렬이 막으려는 것은 내용이 카드 밖으로 나가거나 왼쪽 끝이 움직이는 것이므로 그 여백이 줄어든 만큼만 센다.
+ */
+export function alignmentDelta(initial, geometry) {
+  return Math.max(...Object.keys(initial).map((key) => key === "contentRight"
+    ? Math.max(0, initial[key] - geometry[key])
+    : Math.abs(geometry[key] - initial[key])));
+}

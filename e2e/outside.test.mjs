@@ -6,7 +6,7 @@ import test from "node:test";
 import { APPS, drag, fresh, keepCommonSettings, open } from "./app.mjs";
 import { frames, readFrame } from "./frame.mjs";
 import { outside, terminalMarks, whitePixels } from "./outside.mjs";
-import { alignment } from "./alignment.mjs";
+import { alignment, alignmentDelta } from "./alignment.mjs";
 import { assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag } from "./drag-measurement.mjs";
 
 // 1번 세로 선은 왼쪽 고정 사이드바와 터미널 카드 사이 경계다. 끌면 터미널 카드의 왼쪽 가장자리가 움직인다.
@@ -37,7 +37,7 @@ function assertAligned(run, marks, refreshRate) {
     const geometry = alignment(frame, at);
     assert.equal(geometry.missing, undefined, `frame ${index} of ${files.length}: could not measure the ${geometry.missing}`);
     initial ??= geometry;
-    const delta = Math.max(...Object.keys(initial).map((key) => Math.abs(geometry[key] - initial[key])));
+    const delta = alignmentDelta(initial, geometry);
     if (delta > delayed.delta) delayed = { delta, frame: index, geometry };
     read++;
     positions.push(at.card.l / at.scale);

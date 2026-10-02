@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- G1.4-51: the alignment and gesture checks no longer count a terminal image that lags inside its card, or a state displayed before the recording started, as failures.
+
 - G1.4-53: four Tauri timeout errors state `within 10s` as the Wails errors do.
 
 - G1.4-50: the Wails host configures a new raster when a hidden surface is shown again, so returning a window to its project no longer waits on a hidden terminal image; presentation timeouts name the pending regions.

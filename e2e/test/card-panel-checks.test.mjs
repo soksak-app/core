@@ -10,6 +10,14 @@ test("a pose without a recorded frame within two display frames is missing", () 
   assert.deepEqual(missingPoses(frames, poses.slice(0, 2), 60), []);
 });
 
+test("a pose displayed before the recording started counts from the first recorded frame", () => {
+  const frames = [{ time: 200, edges: [10] }, { time: 216, edges: [20] }];
+  // 녹화는 200 에 시작했고 첫 상태는 그 전에 표시되었다. 첫 프레임이 그 상태를 담으면 녹화된 것이다.
+  assert.deepEqual(missingPoses(frames, [{ displayed: 100, at: 10 }, { displayed: 210, at: 20 }], 60), []);
+  // 녹화 시작 전에 다음 상태로 바뀐 상태는 녹화될 수 없으므로 첫 프레임으로 셀 수 없다.
+  assert.deepEqual(missingPoses(frames, [{ displayed: 100, at: 30 }, { displayed: 150, at: 10 }], 60), [{ displayed: 100, at: 30 }]);
+});
+
 test("panels left after clearing are rejected, including default ones", () => {
   assert.doesNotThrow(() => requireCleared({}));
   assert.throws(() => requireCleared({ top: { set: "space-list", collapsed: false } }), /panels remained after clearing: top/);
