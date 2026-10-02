@@ -1125,7 +1125,7 @@ fn reload(window: &Window) -> Result<Value, Failure> {
         Ok(()) => Ok(Value::Null),
         Err(_) => Err(Failure::new(
             TIMED_OUT,
-            "the reloaded page did not report ready within the time limit",
+            format!("the reloaded page did not report ready within {TIMEOUT:?}"),
         )),
     }
 }
@@ -1153,7 +1153,7 @@ fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
         Ok(()) => Ok(Value::Null),
         Err(_) => Err(Failure::new(
             TIMED_OUT,
-            "the window did not change full screen within the time limit",
+            format!("the window did not change full screen within {TIMEOUT:?}"),
         )),
     }
 }

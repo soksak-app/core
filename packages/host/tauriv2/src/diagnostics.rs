@@ -303,7 +303,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         if settled.recv_timeout(TIMEOUT).is_err() {
             return Err(Failure::new(
                 crate::endpoint::TIMED_OUT,
-                "the drag was not presented within the time limit",
+                format!("the drag was not presented within {TIMEOUT:?}"),
             ));
         }
         exposure::log(window, "diagnostics: drag presented");
@@ -530,7 +530,9 @@ fn delivered_notifications(window: &Window) -> Result<Value, Failure> {
     let list = rx.recv_timeout(TIMEOUT).map_err(|_| {
         Failure::new(
             crate::endpoint::TIMED_OUT,
-            "the notification center did not list delivered notifications within the time limit",
+            format!(
+                "the notification center did not list delivered notifications within {TIMEOUT:?}"
+            ),
         )
     })?;
     serde_json::from_str(&list)
