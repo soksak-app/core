@@ -62,10 +62,10 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 
 | 경로 | 내용 |
 | --- | --- |
-| `/installed-plugins.json` | `{ "plugins": [{ id, package, version, diagnostics? }] }`: `installed.json`의 켜진 plugin을 id 순서로 담는다. 진단 build에서 `diagnostics`는 설치된 package가 `diagnostics.json`을 담을 때 그 내용이며, release build는 보내지 않는다. `installed.json`이 없으면 `{ "plugins": [] }`다. `installed.json`이나 `diagnostics.json`을 읽거나 검사할 수 없으면 문서는 `{ "error": "<message>" }`다 |
+| `/installed-plugins.json` | `{ "plugins": [{ id, package, version, manifest, diagnostics? }] }`: `installed.json`의 켜진 plugin을 id 순서로 담고, `manifest`는 설치된 `plugin.json`의 내용이다. 진단 build에서 `diagnostics`는 설치된 package가 `diagnostics.json`을 담을 때 그 내용이며, release build는 보내지 않는다. `installed.json`이 없으면 `{ "plugins": [] }`다. `installed.json`, `plugin.json`, `diagnostics.json`을 읽거나 검사할 수 없으면 문서는 `{ "error": "<message>" }`다 |
 | `/modules/<package>/<path>` | 켜진 설치 plugin의 package는 그 plugin의 기록된 `path` 안의 `<path>` 파일이다. 빈 segment, `.`, `..`가 있는 경로나 없는 파일은 찾을 수 없다. 다른 package는 애플리케이션 frontend에서 온다 |
 
-Workbench는 plugin 목록을 `/installed-plugins.json`에서 읽고, 문서에 `error`가 있으면 그 텍스트로 불러오기를 실패한다.
+Workbench는 `/installed-plugins.json`을 JSON module로 가져와 각 plugin을 `manifest`로 등록하고, 문서에 `error`가 있으면 그 텍스트로 불러오기를 실패한다.
 
 Host는 시작할 때 켜진 설치 plugin의 `plugin.json`이 지정한 sidecar를 읽는다. Sidecar는 `installed.json`이 그것에 기록한 `path`에서 실행되며, 실행 파일은 그 폴더의 `sidecar.json`의 `executable` 경로다. 애플리케이션 실행 중에 설치하거나 켠 plugin은 변경 뒤에 불러온 page에 제공되고, 그 sidecar는 애플리케이션을 다시 시작한 뒤 시작된다.
 

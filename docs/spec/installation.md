@@ -62,10 +62,10 @@ Both hosts serve these paths from the configuration directory and read `plugins/
 
 | Path | Content |
 | --- | --- |
-| `/installed-plugins.json` | `{ "plugins": [{ id, package, version, diagnostics? }] }`: each enabled plugin of `installed.json`, sorted by id. In a diagnostic build `diagnostics` is the content of the plugin's `diagnostics.json` when its installed package holds one; a release build never sends it. A missing `installed.json` gives `{ "plugins": [] }`. When `installed.json` or a `diagnostics.json` cannot be read or checked, the document is `{ "error": "<message>" }` |
+| `/installed-plugins.json` | `{ "plugins": [{ id, package, version, manifest, diagnostics? }] }`: each enabled plugin of `installed.json`, sorted by id, with `manifest` the content of its installed `plugin.json`. In a diagnostic build `diagnostics` is the content of the plugin's `diagnostics.json` when its installed package holds one; a release build never sends it. A missing `installed.json` gives `{ "plugins": [] }`. When `installed.json`, a `plugin.json` or a `diagnostics.json` cannot be read or checked, the document is `{ "error": "<message>" }` |
 | `/modules/<package>/<path>` | For the package of an enabled installed plugin, the file `<path>` inside the plugin's recorded `path`; a path with an empty, `.` or `..` segment, or a missing file, is not found. Other packages come from the application frontend |
 
-The workbench reads its plugin list from `/installed-plugins.json` and fails the load with the `error` text when the document has one.
+The workbench imports `/installed-plugins.json` as a JSON module, registers each plugin from its `manifest`, and fails the load with the `error` text when the document has one.
 
 When a host starts, it reads the sidecars that the `plugin.json` of each enabled installed plugin names. A sidecar runs from the `path` that `installed.json` records for it, and its executable is the `executable` path of the `sidecar.json` in that folder. A plugin installed or enabled while the application runs is served to pages that load after the change, and its sidecars start after the application restarts.
 
