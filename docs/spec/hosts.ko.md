@@ -142,6 +142,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri 설정 |
 | A4 | `go.mod`, `go.sum` | `Cargo.toml` | 언어마다 매니페스트가 다르며, 호스트 패키지에도 같은 차이가 있다 |
 | C1 | `src/cmd/sok/main.go` | `src/main.rs` | Go 명령은 자기 `main` package 폴더가 필요하고, Rust binary target은 library root 옆의 `src/main.rs`다 |
+| C2 | `src/diagnostics_test.go`, `tests/capture_test.go` | 없음 | Go 파일은 build 제약으로 한 build에만 속하므로, `sok`의 진단 build는 `diagnostics` tag의 단위 test에서 `capture` 요청을, 다른 build는 `!diagnostics` test에서 사용법 오류를 검사한다. Rust는 `tests/sok_test.rs`에서 `cfg(feature = "diagnostics")`로 두 build를 검사한다 |
 
 ## 프로세스 생명주기
 

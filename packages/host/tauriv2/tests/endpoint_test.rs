@@ -279,7 +279,7 @@ fn endpoint_file_is_written_and_removed() {
     assert_eq!(written["address"], endpoint.address());
     assert_eq!(written["pid"], std::process::id());
     assert_eq!(written["application"], "test-file");
-    assert_eq!(written["version"], "0.0.1");
+    assert_eq!(written["version"], "0.0.2");
     let executable = std::fs::canonicalize(std::env::current_exe().unwrap()).unwrap();
     assert_eq!(written["executable"], executable.to_string_lossy().as_ref());
     let started = written["started"].as_str().unwrap();
@@ -301,7 +301,7 @@ fn stop_keeps_an_endpoint_file_that_another_process_wrote() {
     let file = config.path().join("endpoint.json");
     let replacement = json!({
         "transport": "unix", "address": "replacement.sock", "pid": std::process::id() + 1,
-        "application": "test-replacement", "version": "0.0.1", "executable": "/replacement",
+        "application": "test-replacement", "version": "0.0.2", "executable": "/replacement",
         "started": "2026-09-23T00:00:00Z",
     });
     std::fs::write(&file, serde_json::to_vec(&replacement).unwrap()).unwrap();

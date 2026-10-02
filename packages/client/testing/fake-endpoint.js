@@ -62,7 +62,7 @@ export async function startFakeEndpoint(handlers, { pid = process.pid } = {}) {
     });
   });
   await new Promise((resolve) => server.listen(address, resolve));
-  const endpoint = { transport, address, pid, application: "wailsv3", version: "0.0.1", started: new Date().toISOString() };
+  const endpoint = { transport, address, pid, application: "wailsv3", version: "0.0.2", started: new Date().toISOString() };
   writeFileSync(join(configDir, "endpoint.json"), JSON.stringify(endpoint));
   return {
     configDir,

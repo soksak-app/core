@@ -1,6 +1,6 @@
 {
   "name": "plugin-probe",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": { "soksak": ">=0.0.1 <1.0.0" },
   "files": ["plugin.json"]
 }

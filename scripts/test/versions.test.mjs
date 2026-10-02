@@ -25,6 +25,13 @@ test("version audit rejects a JSON manifest, a Cargo package and a Go core versi
   ]);
 });
 
+test("version audit rejects a Go host whose application version is another version", { timeout: 1000 }, () => {
+  assert.deepEqual(auditVersions([
+    { path: "packages/host/a/src/host.go", text: 'package a\n\nvar (\n\tapplicationVersion = "0.0.0"\n)\n' },
+    { path: "packages/host/b/src/host.go", text: `package b\n\nvar applicationVersion = "${RELEASE}"\n` },
+  ]), [`packages/host/a/src/host.go: version "0.0.0" must be ${RELEASE}`]);
+});
+
 test("Cargo version reading ignores dependency versions outside [package]", { timeout: 1000 }, () => {
   assert.equal(cargoPackageVersion('[dependencies]\nversion = "9"\n[package]\nversion = "0.0.1"\n'), "0.0.1");
   assert.equal(cargoPackageVersion('[workspace]\nmembers = []\n'), undefined);

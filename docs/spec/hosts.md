@@ -141,6 +141,7 @@ On Windows both hosts implement only directory identity (`platform/windows/ident
 | A3 | none | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri configuration |
 | A4 | `go.mod`, `go.sum` | `Cargo.toml` | Each language has its own manifest; the host packages have the same difference |
 | C1 | `src/cmd/sok/main.go` | `src/main.rs` | A Go command needs its own `main` package directory; a Rust binary target is `src/main.rs` beside the library root |
+| C2 | `src/diagnostics_test.go`, `tests/capture_test.go` | none | A Go file belongs to one build by its build constraint, so the diagnostic build of `sok` tests its `capture` request in a `diagnostics`-tagged unit test and the other build tests the usage error in a `!diagnostics` test; Rust tests both builds in `tests/sok_test.rs` with `cfg(feature = "diagnostics")` |
 
 ## Process lifecycle
 

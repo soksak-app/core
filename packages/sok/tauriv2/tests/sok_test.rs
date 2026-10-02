@@ -268,18 +268,13 @@ fn the_only_window_is_used_and_parameters_are_sent() {
             result("null")
         }
     });
-    let cases: [(&[&str], &str, &str); 8] = [
+    let cases: [(&[&str], &str, &str); 7] = [
         (
             &["status", "core.screen", "--surface", "tab-1"],
             "status.get",
             r#"{"name":"core.screen","surface":"tab-1","window":"main"}"#,
         ),
         (&["exposures"], "exposure.list", r#"{"window":"main"}"#),
-        (
-            &["capture"],
-            "diagnostics.capture.still",
-            r#"{"window":"main"}"#,
-        ),
         (
             &["dom", "rect", "core.card", "--index", "2"],
             "dom.rect",
@@ -340,6 +335,41 @@ fn the_only_window_is_used_and_parameters_are_sent() {
         assert_eq!(fake.methods().last().expect("a method"), method, "{args:?}");
         assert_eq!(fake.last().to_string(), params, "{args:?}");
     }
+}
+
+// contract: cli.diagnostics.capture-only-in-diagnostic-builds
+#[cfg(feature = "diagnostics")]
+#[test]
+fn capture_requests_a_still_image_in_a_diagnostic_build() {
+    let fake = start(|method, _| {
+        if method == "windows.list" {
+            result(ONE_WINDOW)
+        } else {
+            result("null")
+        }
+    });
+    let dir = fake.dir();
+    let (code, stdout, stderr) = run(&["capture", "--config-dir", &dir]);
+    assert_eq!((code, stdout.as_str()), (0, "null\n"), "{stderr}");
+    assert_eq!(
+        fake.methods().last().expect("a method"),
+        "diagnostics.capture.still"
+    );
+    assert_eq!(fake.last().to_string(), r#"{"window":"main"}"#);
+}
+
+// contract: cli.diagnostics.capture-only-in-diagnostic-builds
+#[cfg(not(feature = "diagnostics"))]
+#[test]
+fn capture_needs_a_diagnostic_build() {
+    let dir = tempfile_dir::Dir::new(&std::env::temp_dir());
+    let (code, stdout, stderr) =
+        run(&["capture", "--config-dir", &dir.path().display().to_string()]);
+    assert_eq!((code, stdout.as_str()), (2, ""));
+    assert!(
+        stderr.starts_with("sok: capture needs a diagnostic build of sok\n"),
+        "{stderr}"
+    );
 }
 
 // contract: cli.window.several-windows-need-selection, cli.window.project-selects-by-canonical-folder

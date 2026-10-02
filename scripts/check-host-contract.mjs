@@ -176,11 +176,13 @@ function hostRuns(goLinkFlags) {
       { id: 'wailsv3-tests', command: 'go', args: ['test', '-count=1', '-json', '-ldflags', goLinkFlags, './packages/host/wailsv3/...'] },
       { id: 'wailsv3-diagnostics-tests', command: 'go', args: ['test', '-count=1', '-json', '-tags', 'diagnostics', '-ldflags', goLinkFlags, './packages/host/wailsv3/...'] },
       { id: 'wailsv3-sok-tests', command: 'go', args: ['test', '-count=1', '-json', './packages/sok/wailsv3/...'] },
+      { id: 'wailsv3-sok-diagnostics-tests', command: 'go', args: ['test', '-count=1', '-json', '-tags', 'diagnostics', './packages/sok/wailsv3/...'] },
     ],
     tauriv2: [
       { id: 'tauriv2-tests', command: 'cargo', args: ['test', '-p', 'soksak-host-tauriv2'] },
       { id: 'tauriv2-diagnostics-tests', command: 'cargo', args: ['test', '-p', 'soksak-host-tauriv2', '--features', 'diagnostics'] },
       { id: 'tauriv2-sok-tests', command: 'cargo', args: ['test', '-p', 'soksak-sok-tauriv2'] },
+      { id: 'tauriv2-sok-diagnostics-tests', command: 'cargo', args: ['test', '-p', 'soksak-sok-tauriv2', '--features', 'diagnostics'] },
     ],
   };
 }

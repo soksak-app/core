@@ -41,7 +41,7 @@ type Options struct {
 // 엔드포인트가 알리는 애플리케이션 이름과 버전.
 const (
 	applicationName    = "wailsv3"
-	applicationVersion = "0.0.1"
+	applicationVersion = "0.0.2"
 )
 
 // system 은 Run 이 선택한 운영체제 구현이다.

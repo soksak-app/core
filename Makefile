@@ -193,8 +193,8 @@ LSREGISTER = /System/Library/Frameworks/CoreServices.framework/Frameworks/Launch
 bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
 
 # command line sok(docs/spec/cli.md)을 build 해 번들의 실행 파일 옆에 둔다. 첫 인자는 번들, 둘째 인자는 profile 이다.
-sok-wailsv3 = go build -C packages/sok/wailsv3 $(if $(filter release,$(2)),-trimpath -ldflags "-s -w") -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
-sok-tauriv2 = cargo build -p soksak-sok-tauriv2 $(if $(filter release,$(2)),--release) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
+sok-wailsv3 = go build -C packages/sok/wailsv3 $(if $(filter release,$(2)),-trimpath -ldflags "-s -w",-tags diagnostics) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
+sok-tauriv2 = cargo build -p soksak-sok-tauriv2 $(if $(filter release,$(2)),--release,--features diagnostics) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
 native-darwin:
 	@$(MAKE) -C native/darwin

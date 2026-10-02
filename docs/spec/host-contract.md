@@ -342,6 +342,7 @@ Items:
 | `cli.requests.carry-command-parameters` | `status`, `exposures`, `capture`, `dom` and `input` send the endpoint method and parameters that the specification names, with numbers as JSON numbers and omitted options left out. | both |
 | `cli.error.reports-endpoint-code` | An endpoint error exits with status 1 and prints `sok: <message> (<code>)`. | both |
 | `cli.error.unwritable-stderr-exits-3` | When sok cannot write its error to standard error, it exits with status 3 instead of 1 or 2. | both |
+| `cli.diagnostics.capture-only-in-diagnostic-builds` | A diagnostic build of sok sends `capture` as `diagnostics.capture.still` with the selected window; any other build rejects `capture` as a usage error, `capture needs a diagnostic build of sok`, and contains no diagnostic method. | both |
 | `cli.status.watch-prints-value-and-changes` | `status --watch` prints the current value and then each change of the same status as one compact JSON line, and ignores changes of other statuses. | both |
 | `cli.config-dir.default-uses-application-identifier` | Without `--config-dir` the command uses `<user configuration directory>/<application identifier>`. | both |
 | `cli.command.flags-from-schema` | A declared command runs through `command.run` with the window, the surface and parameters converted from its flags by the declared schema: text, numbers, integers, booleans, enum values, `null` for a nullable type, JSON objects and arrays, and a value after `=` that starts with `--`; `--params` gives the whole object. | both |

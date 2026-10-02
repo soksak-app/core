@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- R1-7: 모든 core package가 0.0.2를 선언하고, 버전 검사가 Wails host의 애플리케이션 버전을 읽게 되어 그 host가 0.0.2를 보고하며, release build의 `sok`에는 진단 명령이 없다.
+
 - R1-6: 로컬 registry repository가 starter pack을 build하고, 애플리케이션의 첫 실행이 첫 space 전에 그것을 설치한다.
 
 - G1.4-52: window check가 light와 dark mode에서 브라우저 주소 막대를 카드 색과 비교하고, browser plugin이 막대를 그 색으로 칠한다.

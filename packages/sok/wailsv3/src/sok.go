@@ -157,6 +157,9 @@ func optional(a arguments, name string) any {
 }
 
 // plan 은 명령을 엔드포인트 요청으로 바꾼다. window 는 창을 고르는 함수다.
+// captureRequest 는 진단 build 에서 diagnostics.go 가 정하는 capture 요청이다. 일반 build 에서는 nil 이다.
+var captureRequest func(window string) (request, error)
+
 type request struct {
 	method string
 	params map[string]any
@@ -189,9 +192,11 @@ func plan(a arguments, window func() (string, error)) (request, error) {
 			return request{method: "exposure.list", params: compact("window", w)}, nil
 		})
 	case "capture":
-		return withWindow(func(w string) (request, error) {
-			return request{method: "diagnostics.capture.still", params: compact("window", w)}, nil
-		})
+		// 진단 build 만 capture 요청을 둔다(diagnostics.go). 일반 build 의 sok 에는 진단 method 가 없다.
+		if captureRequest == nil {
+			return request{}, usage("capture needs a diagnostic build of sok")
+		}
+		return withWindow(captureRequest)
 	case "status":
 		name, err := a.positional(1, "NAME")
 		if err != nil {

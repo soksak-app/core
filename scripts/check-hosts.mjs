@@ -32,7 +32,7 @@ const PAIRS = [
     left: "packages/sok/wailsv3",
     right: "packages/sok/tauriv2",
     only: {
-      left: { "go.mod": "A4", "src/cmd/": "C1" },
+      left: { "go.mod": "A4", "src/cmd/": "C1", "src/diagnostics_test": "C2", "tests/capture_test": "C2" },
       right: { "Cargo.toml": "A4", "src/main": "C1" },
     },
   },

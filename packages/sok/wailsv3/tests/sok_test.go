@@ -193,7 +193,6 @@ func TestTheOnlyWindowIsUsedAndParametersAreSent(t *testing.T) {
 	}{
 		{[]string{"status", "core.screen", "--surface", "tab-1"}, "status.get", `{"name":"core.screen","surface":"tab-1","window":"main"}`},
 		{[]string{"exposures"}, "exposure.list", `{"window":"main"}`},
-		{[]string{"capture"}, "diagnostics.capture.still", `{"window":"main"}`},
 		{[]string{"dom", "rect", "core.card", "--index", "2"}, "dom.rect", `{"index":2,"name":"core.card","window":"main"}`},
 		{[]string{"dom", "input", "fixture.input", "--value", "ls"}, "dom.act", `{"action":"input","name":"fixture.input","value":"ls","window":"main"}`},
 		{[]string{"dom", "dispatch", "x.y", "--event", `{"type":"keydown","key":"a"}`}, "dom.act", `{"action":"dispatch","event":{"key":"a","type":"keydown"},"name":"x.y","window":"main"}`},

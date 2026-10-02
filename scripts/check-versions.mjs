@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const RELEASE = "0.0.1";
+export const RELEASE = "0.0.2";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const JSON_MANIFESTS = new Set(["package.json", "plugin.json", "sidecar.json", "tauri.conf.json"]);
 
@@ -34,6 +34,11 @@ export function goCoreVersion(text) {
   return text.match(/^const CoreVersion = "([^"]*)"$/m)?.[1];
 }
 
+/** Go host.go 가 선언한 applicationVersion. 엔드포인트에 쓰는 애플리케이션 버전이다. 없으면 undefined. */
+export function goApplicationVersion(text) {
+  return text.match(/^\s*(?:var\s+)?applicationVersion\s*=\s*"([^"]*)"\s*$/m)?.[1];
+}
+
 /** files 는 { path, text } 목록이다. 선언된 버전이 release 와 다른 파일마다 오류 하나를 반환한다. */
 export function auditVersions(files, release = RELEASE) {
   const errors = [];
@@ -51,6 +56,8 @@ export function auditVersions(files, release = RELEASE) {
       version = value?.version;
     } else if (name === "Cargo.toml") {
       version = cargoPackageVersion(text);
+    } else if (name === "host.go") {
+      version = goApplicationVersion(text);
     } else if (name === "version.go") {
       version = goCoreVersion(text);
       if (version === undefined) errors.push(`${path}: const CoreVersion is not declared`);
@@ -65,10 +72,10 @@ export function auditVersions(files, release = RELEASE) {
 }
 
 export function workspaceManifests(root = ROOT) {
-  const names = [...JSON_MANIFESTS, "Cargo.toml", "version.go"].map((name) => `*${name}`);
+  const names = [...JSON_MANIFESTS, "Cargo.toml", "version.go", "host.go"].map((name) => `*${name}`);
   return execFileSync("git", ["ls-files", "--", ...names], { cwd: root, encoding: "utf8" })
     .split("\n")
-    .filter((path) => path && (JSON_MANIFESTS.has(basename(path)) || ["Cargo.toml", "version.go"].includes(basename(path))))
+    .filter((path) => path && (JSON_MANIFESTS.has(basename(path)) || ["Cargo.toml", "version.go", "host.go"].includes(basename(path))))
     .map((path) => ({ path, text: readFileSync(join(root, path), "utf8") }));
 }
 

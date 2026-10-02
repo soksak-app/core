@@ -9,6 +9,8 @@ use serde_json::value::RawValue;
 use serde_json::{Map, Value};
 
 mod command;
+#[cfg(feature = "diagnostics")]
+mod diagnostics;
 pub mod endpoint;
 mod files;
 pub mod install;
@@ -208,7 +210,7 @@ fn compact(fields: Vec<(&str, Option<Value>)>) -> Map<String, Value> {
         .collect()
 }
 
-struct Request {
+pub(crate) struct Request {
     method: &'static str,
     params: Option<Map<String, Value>>,
     watch: bool,
@@ -241,12 +243,13 @@ fn plan(
             watch: false,
             field: None,
         }),
-        "capture" => Ok(Request {
-            method: "diagnostics.capture.still",
-            params: Some(compact(vec![("window", text(window()?))])),
-            watch: false,
-            field: None,
-        }),
+        // 진단 build 만 capture 요청을 둔다(diagnostics.rs). 일반 build 의 sok 에는 진단 method 가 없다.
+        #[cfg(feature = "diagnostics")]
+        "capture" => Ok(diagnostics::capture(window()?)),
+        #[cfg(not(feature = "diagnostics"))]
+        "capture" => Err(Error::Usage(
+            "capture needs a diagnostic build of sok".into(),
+        )),
         "status" => {
             let name = a.positional(1, "NAME")?;
             let watch = a.flag("watch");

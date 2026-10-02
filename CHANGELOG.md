@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- R1-7: every core package declares 0.0.2, the Wails host reports 0.0.2 as the version check now reads its application version, and release builds of `sok` contain no diagnostic command.
+
 - R1-6: the local registry repository builds the starter pack, and the first run of an application installs it before the first space.
 
 - G1.4-52: a window check compares the browser address bar with the card colour in light and dark modes; the browser plugin paints the bar in that colour.
