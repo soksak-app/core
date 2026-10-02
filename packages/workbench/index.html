@@ -61,9 +61,13 @@
 <script type="module">
 /* environment.json 을 가장 먼저 불러온다. 아래 모듈은 등록된 플러그인과 기본값을
    함수 호출 시점에 읽는다. */
-import { loadEnvironment, starterPack } from "./environment.js";
+import { installEnvironment, starterPack } from "./environment.js";
 import { pluginOperations } from "./installed-plugins.js";
-import { loadExposure } from "./exposure.js";
+import { installExposure } from "./exposure.js";
+/* 첫 화면을 첫 await 전에 그리도록 선언 파일과 설치 목록을 module graph 로 가져온다(docs/spec/native-host.md#page-start). */
+import exposureFile from "./exposure.json" with { type: "json" };
+import environmentFile from "./environment.json" with { type: "json" };
+import installedPlugins from "./installed-plugins.json" with { type: "json" };
 import { openStore, windows } from "@soksak/runtime";
 
 import { installTheme } from "soksak";
@@ -117,7 +121,8 @@ import { createLibrary } from "./library.js";
 
 // 호스트가 이전 페이지의 상태를 정리한 뒤에 등록하고 표면을 올린다(docs/spec/native-host.md).
 await windows.started();
-await Promise.all([loadExposure(), loadEnvironment()]);
+installExposure(exposureFile);
+installEnvironment(environmentFile, installedPlugins);
 // 불러오지 않은 플러그인의 탭은 설치 상태에 따라 자리 표시의 이유가 정해지므로 첫 스페이스 전에 읽는다
 // (docs/spec/plugins.md). 읽기 실패는 그 상태의 오류로 남는다.
 await pluginOperations.refresh();

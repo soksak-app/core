@@ -10,7 +10,7 @@
 import { host } from "@soksak/runtime";
 import { timed, trace } from "./performance.js";
 import {
-  EXPOSE_KINDS, EXPOSURE, EXPOSURE_ERRORS, ExposureError, METHOD_KINDS, SURFACE_CORE, declarationKey, declarationMap,
+  EXPOSE_KINDS, EXPOSURE_ERRORS, ExposureError, METHOD_KINDS, SURFACE_CORE, declarationKey, declarationMap,
   exposureEntries, replyPayload, validateExposes, validateExposureFile,
 } from "@soksak/plugin-api";
 
@@ -533,11 +533,9 @@ export function revisitRegistrations() {
   }
 }
 
-/** 코어 선언 파일을 불러와 등록소에 더한다. */
-export async function loadExposure() {
-  const response = await fetch(`/${EXPOSURE}`);
-  if (!response.ok) throw new Error(`failed to load /${EXPOSURE}: ${response.status}`);
-  registry.declare("core", validateExposureFile(await response.json()).exposes);
+/** 코어 선언 파일(exposure.json)의 내용을 검사해 등록소에 더한다. page 는 첫 화면 전에 JSON module 로 가져온다. */
+export function installExposure(document) {
+  registry.declare("core", validateExposureFile(document).exposes);
 }
 
 /**

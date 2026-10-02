@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { mock } from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
 
-// 표면 마운트는 플러그인 등록부에서 진단 모듈을 읽는다. release 빌드처럼 진단 모듈이 없다.
-for (const id of ["fixture", "fixture-integration"]) registerPlugin({ id, diagnostics: null, surface: () => null });
+// 진단 모듈은 environment 가 등록 때 불러오기 시작해 pluginDiagnostics 로 내준다. 소비자 test 는 그 경계를 대신한다.
+const diagnostics = { attach() {} };
+mock.module("../environment.js", { namedExports: {
+  pluginDiagnostics: async (id) => (id === "fixture-diagnostics" ? diagnostics : null),
+} });
+
+// 아래 플러그인은 release 빌드처럼 진단 모듈이 없다.
+for (const id of ["fixture", "fixture-integration"]) registerPlugin({ id, surface: () => null });
 // 앱에서는 판이 표면보다 먼저 시작해 표면의 글자 배율을 계산하는 함수를 정한다. 여기서는 모든 표면이 배율 1 이다.
 const { setSurfaceTextSize } = await import("../text-size.js");
 setSurfaceTextSize(() => 1);
@@ -13,8 +19,7 @@ test("a surface context carries its plugin's diagnostic module", async () => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   const { mountSurface } = await import("../surface-modules.js");
-  const diagnostics = { attach() {} };
-  registerPlugin({ id: "fixture-diagnostics", diagnostics, surface: () => null });
+  registerPlugin({ id: "fixture-diagnostics", surface: () => null });
   const moduleUrl = "data:text/javascript,export function mount(root,c){globalThis.mountedDiagnostics=c.diagnostics;return {dispose(){}}}";
   await mountSurface(document.querySelector("#slot"),
     { module: moduleUrl, surfaceId: "tab-diagnostics", pluginId: "fixture-diagnostics", composition: { kind: "dom" }, declarations: {}, sidecars: [] });

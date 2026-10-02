@@ -71,12 +71,14 @@ func enabledPlugins(configDir string) ([]installedPlugin, *sok.InstalledState, e
 	return plugins, state, nil
 }
 
-// InstalledPluginsDocument 는 /installed-plugins.json 의 내용이다. 설치 상태를 읽을 수 없으면 { "error" } 문서다.
+// InstalledPluginsDocument 는 /installed-plugins.json 의 내용이다. plugin 마다 설치된 plugin.json 을 manifest 로 담아
+// page 가 첫 화면 전에 plugin 을 등록하게 한다. 설치 상태를 읽을 수 없으면 { "error" } 문서다.
 func InstalledPluginsDocument(configDir string, diagnostics bool) []byte {
 	type entry struct {
 		ID          string          `json:"id"`
 		Package     string          `json:"package"`
 		Version     string          `json:"version"`
+		Manifest    json.RawMessage `json:"manifest"`
 		Diagnostics json.RawMessage `json:"diagnostics,omitempty"`
 	}
 	failure := func(err error) []byte {
@@ -92,7 +94,21 @@ func InstalledPluginsDocument(configDir string, diagnostics bool) []byte {
 	}
 	entries := []entry{}
 	for _, plugin := range plugins {
-		item := entry{ID: plugin.id, Package: plugin.pkg, Version: plugin.version}
+		manifestFile := filepath.Join(plugin.dir, "plugin.json")
+		manifest, err := os.ReadFile(manifestFile)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			return failure(fmt.Errorf("%s: the plugin manifest is missing", manifestFile))
+		case err != nil:
+			return failure(err)
+		case !json.Valid(manifest):
+			return failure(fmt.Errorf("%s is not valid JSON", manifestFile))
+		}
+		var compactManifest bytes.Buffer
+		if err := json.Compact(&compactManifest, manifest); err != nil {
+			return failure(err)
+		}
+		item := entry{ID: plugin.id, Package: plugin.pkg, Version: plugin.version, Manifest: compactManifest.Bytes()}
 		if diagnostics {
 			file := filepath.Join(plugin.dir, "diagnostics.json")
 			data, err := os.ReadFile(file)

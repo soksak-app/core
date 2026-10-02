@@ -12,7 +12,7 @@ const dom = new JSDOM(`<body>
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 
-const { createRegistry, loadExposure, registry, registerSurfacePort, dispatchSurfaceRequest } = await import("../exposure.js");
+const { createRegistry, installExposure, registry, registerSurfacePort, dispatchSurfaceRequest } = await import("../exposure.js");
 
 test("mounted surface exposure routes through its registered module and releases ownership", async () => {
   const received = [];
@@ -132,11 +132,9 @@ test("the core declaration file is valid and every main-page entry is registered
   }
 });
 
-test("the registry loads core declarations from the served file", async () => {
+test("the registry registers the core declarations of the exposure file", () => {
   const served = { exposes: coreExposes() };
-  globalThis.fetch = async (path) => (path === "/exposure.json"
-    ? { ok: true, json: async () => structuredClone(served) } : { ok: false, status: 404 });
-  await loadExposure();
+  installExposure(structuredClone(served));
   const listed = registry.list();
   assert.deepEqual(Object.keys(listed), ["status", "commands", "dom"]);
   assert.deepEqual(listed.commands, [{ ...served.exposes.commands[0], registered: false }],

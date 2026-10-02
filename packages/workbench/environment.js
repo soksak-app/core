@@ -1,4 +1,4 @@
-// 애플리케이션의 environment.json 과 설정 폴더에 설치된 플러그인의 manifest 를 불러와 등록한다.
+// 애플리케이션의 environment.json 과 설정 폴더에 설치된 플러그인의 manifest 를 등록한다.
 //
 // 워크벤치는 특정 플러그인을 알지 않는다. 플러그인 목록은 host 가 제공하는 /installed-plugins.json 에서 오고
 // (docs/spec/installation.md), 새 스페이스의 배치와 사이드바 기본값은 environment.json 에서 온다.
@@ -7,8 +7,8 @@ import { registerState } from "./plugin-states.js";
 import { registerPlugin, registerSection } from "./registry.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
 import {
-  ENVIRONMENT, INSTALLED_PLUGINS, MANIFEST, checkReferences, mergeExposes, modulePath, validateDiagnostics,
-  normalizeSidebarDefaults, validateEnvironment, validateInstalledPlugins, validateManifest,
+  checkReferences, mergeExposes, modulePath, validateDiagnostics, normalizeSidebarDefaults, validateEnvironment,
+  validateInstalledPlugins,
 } from "@soksak/plugin-api";
 
 let loaded = null;
@@ -20,12 +20,6 @@ export function starterPack() {
   return starter;
 }
 
-async function readJson(path) {
-  const response = await fetch(`/${path}`);
-  if (!response.ok) throw new Error(`failed to load /${path}: ${response.status}`);
-  return response.json();
-}
-
 /** 표면 선언을 탭 id 로 표면 모듈 대상을 반환하는 함수로 바꾼다. */
 function surfaceOf(name, pluginId, surface) {
   const module = `/${modulePath(name, surface.module)}`;
@@ -33,29 +27,29 @@ function surfaceOf(name, pluginId, surface) {
     pluginId, declarations: surface.declarations, sidecars: surface.sidecars });
 }
 
+/* 진단 빌드에서 플러그인 id 마다 불러온 진단 모듈. 등록이 불러오기를 시작하고 표면을 올릴 때 기다린다. */
+let diagnosticModules = Promise.resolve(new Map());
+
 /**
- * environment.json 과 설치된 플러그인 목록을 불러와 검사하고 플러그인, 섹션, 사이드바 기본값을 등록한다. 진단
- * 빌드의 host 는 플러그인마다 diagnostics.json 의 선언을 보내며, 그 선언을 플러그인의 표면 선언에 더하고 진단
- * 모듈을 불러와 플러그인에 둔다.
+ * environment.json 과 설치된 플러그인 목록(manifest 포함)을 검사하고 플러그인, 섹션, 사이드바 기본값을 등록한다.
+ * 첫 화면을 첫 await 전에 그리도록 동기로 등록한다(docs/spec/native-host.md#page-start). 진단 빌드의 host 는 플러그인마다
+ * diagnostics.json 의 선언을 보내며, 그 선언을 플러그인의 표면 선언에 더하고 진단 모듈은 pluginDiagnostics 로 내준다.
  */
-export async function loadEnvironment() {
+export function installEnvironment(environmentDocument, installedDocument) {
   if (loaded) throw new Error("environment is already loaded");
-  const environment = validateEnvironment(await readJson(ENVIRONMENT));
+  const environment = validateEnvironment(environmentDocument);
   // 기본값: starter 는 environment.json 의 선택 필드이며 없으면 첫 실행이 아무것도 설치하지 않는다.
   starter = environment.starter ?? null;
-  const installed = validateInstalledPlugins(await readJson(INSTALLED_PLUGINS));
-  const manifests = await Promise.all(installed.map(async ({ id, package: name, version }) => {
-    const manifest = validateManifest(await readJson(modulePath(name, MANIFEST)));
-    if (manifest.id !== id) throw new Error(`${INSTALLED_PLUGINS}: plugin ${id} has a plugin.json with id ${manifest.id}`);
-    return { name, manifest, version };
-  }));
+  const installed = validateInstalledPlugins(installedDocument);
+  const manifests = installed.map(({ package: name, version, manifest }) => ({ name, manifest, version }));
   checkReferences(environment, manifests.map((m) => m.manifest));
   const diagnosticPlugins = Object.fromEntries(installed.filter((plugin) => plugin.diagnostics)
-    .map((plugin) => [plugin.package, validateDiagnostics(manifests.find((m) => m.name === plugin.package).manifest, plugin.diagnostics)]));
+    .map((plugin) => [plugin.package, validateDiagnostics(plugin.manifest, plugin.diagnostics)]));
   // 기본값: environment.json 의 settings 는 선택 필드이며 없으면 플러그인 설정을 덮어쓰지 않는다.
   setPluginSettings(manifests.map((m) => m.manifest), environment.settings ?? {});
-  const diagnosticModules = new Map(await Promise.all(Object.entries(diagnosticPlugins).map(async ([name, declared]) =>
-    [name, await import(`/${modulePath(name, declared.module)}`)])));
+  diagnosticModules = Promise.all(installed.filter((plugin) => diagnosticPlugins[plugin.package]).map(async (plugin) =>
+    [plugin.id, await import(`/${modulePath(plugin.package, diagnosticPlugins[plugin.package].module)}`)]))
+    .then((entries) => new Map(entries));
   for (const { name, manifest } of manifests) {
     // 기본값: 진단 모듈은 진단 빌드의 일부 플러그인에만 있으며 없으면 null 이다.
     const diagnostics = diagnosticPlugins[name] ?? null;
@@ -68,8 +62,6 @@ export async function loadEnvironment() {
         ink: manifest.preview?.ink ?? null,
         // 기본값: background 는 plugin.json 의 선택 필드이며 없으면 배경 세션이 없다(null).
         background: manifest.background ?? null,
-        // 기본값: 진단 모듈은 진단 빌드의 일부 플러그인에만 있으며 없으면 null 이다.
-        diagnostics: diagnosticModules.get(name) ?? null,
         // 기본값: surface.drop 은 선택 필드이며 없으면 그 표면은 놓기를 받지 않는다(null).
         drop: manifest.surface?.drop ?? null,
         surface: surfaceOf(name, manifest.id, {
@@ -103,6 +95,9 @@ export async function loadEnvironment() {
   }));
   loaded = environment;
 }
+
+/** 플러그인 id 의 진단 모듈. 진단 빌드의 일부 플러그인에만 있으며 없으면 null 이다. 불러오기 실패는 거절이다. */
+export const pluginDiagnostics = (id) => diagnosticModules.then((modules) => modules.get(id) ?? null);
 
 /**
  * 설치된 플러그인을 id 순서로 반환한다. 설정 창의 플러그인 목록이 쓴다.

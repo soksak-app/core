@@ -278,10 +278,11 @@ test("diagnostic declarations extend a surface plugin once and are rejected othe
 
 });
 
-test("the installed plugin document lists plugins with their diagnostics and reports the host's error", () => {
+test("the installed plugin document lists plugins with their manifests and diagnostics and reports the host's error", () => {
   const plugins = [
-    { id: "alpha", package: "plugin-alpha", version: "1.0.0" },
-    { id: "probe", package: "@fixture/probe", version: "0.1.0", diagnostics: { module: "ui/d.js", exposes: {} } },
+    { id: "alpha", package: "plugin-alpha", version: "1.0.0", manifest: { id: "alpha", name: "Alpha", description: "검사용.", sections: [{ id: "alpha.list", name: "List", module: "ui/list.js" }] } },
+    { id: "probe", package: "@fixture/probe", version: "0.1.0", manifest: { id: "probe", name: "Probe", description: "검사용.", sections: [{ id: "probe.list", name: "List", module: "ui/list.js" }] },
+      diagnostics: { module: "ui/d.js", exposes: {} } },
   ];
   assert.equal(validateInstalledPlugins({ plugins }), plugins);
   assert.deepEqual(validateInstalledPlugins({ plugins: [] }), []);
@@ -292,4 +293,9 @@ test("the installed plugin document lists plugins with their diagnostics and rep
   assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[0], extra: 1 }] }), /unknown field extra/);
   assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[1], diagnostics: [] }] }), /diagnostics must be an object/);
   assert.throws(() => validateInstalledPlugins([]), /expected an object/);
+  const { manifest: _, ...unlisted } = plugins[0];
+  assert.throws(() => validateInstalledPlugins({ plugins: [unlisted] }), /plugin alpha manifest is required/);
+  assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[0], manifest: { ...plugins[0].manifest, id: "beta" } }] }),
+    /plugin alpha has a plugin.json with id beta/);
+  assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[0], manifest: { id: "alpha" } }] }), /name/);
 });

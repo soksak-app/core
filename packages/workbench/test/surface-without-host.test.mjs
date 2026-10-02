@@ -4,7 +4,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
 
-registerPlugin({ id: "fixture-host", name: "Probe", diagnostics: null, surface: () => null });
+registerPlugin({ id: "fixture-host", name: "Probe", surface: () => null });
 const { setSurfaceTextSize } = await import("../text-size.js");
 setSurfaceTextSize(() => 1);
 

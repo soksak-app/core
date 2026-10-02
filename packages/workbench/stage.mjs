@@ -19,7 +19,7 @@
 // (docs/spec/installation.md). host 가 없는 애플리케이션(브라우저 예제)은 --installed 로 설정 디렉터리를 주며,
 // 그러면 host 가 제공할 문서를 쓴다.
 //
-//   <출력>/installed-plugins.json   켜진 설치 플러그인 목록. diagnostics 는 --diagnostics 일 때만 담는다
+//   <출력>/installed-plugins.json   켜진 설치 플러그인 목록과 manifest. diagnostics 는 --diagnostics 일 때만 담는다
 //   <출력>/modules/<플러그인>/       켜진 각 설치 플러그인의 파일
 
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -108,7 +108,7 @@ if (installedDirectory) {
   const document = [];
   for (const plugin of plugins) {
     cpSync(plugin.dir, join(target, modulePath(plugin.package, "")), { recursive: true });
-    const entry = { id: plugin.id, package: plugin.package, version: plugin.version };
+    const entry = { id: plugin.id, package: plugin.package, version: plugin.version, manifest: readJson(join(plugin.dir, "plugin.json")) };
     const declared = join(plugin.dir, "diagnostics.json");
     // 기본값: diagnostics.json 이 없는 플러그인은 진단 선언이 없다.
     if (diagnostics && existsSync(declared)) entry.diagnostics = readJson(declared);

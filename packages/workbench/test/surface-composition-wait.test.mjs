@@ -19,7 +19,7 @@ test("a native surface whose module fails to mount ends its composition wait wit
     await import("../surface-modules.js?composition-wait");
   const pluginId = "fixture-composition-wait";
   const surfaceId = "fixture-composition-wait-surface";
-  registerPlugin({ id: pluginId, diagnostics: null, surface: () => null });
+  registerPlugin({ id: pluginId, surface: () => null });
   const module = `data:text/javascript,${encodeURIComponent(`export async function mount() {
     throw new Error("fixture mount failed");
   }`)}`;

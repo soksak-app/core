@@ -64,12 +64,12 @@ fn text(data: Vec<u8>) -> String {
 #[test]
 fn installed_plugins_document_lists_enabled_plugins_by_id() {
     let config = installed_fixture();
-    let release = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0"},{"id":"term","package":"@scope/plugin-term","version":"0.1.0"}]}"#;
+    let release = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","sidecars":["@scope/sidecar-worker"]}}]}"#;
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), false)),
         release
     );
-    let diagnostic = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0"},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","diagnostics":{"module":"ui/d.js","exposes":{}}}]}"#;
+    let diagnostic = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","sidecars":["@scope/sidecar-worker"]},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}"#;
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), true)),
         diagnostic
@@ -93,6 +93,26 @@ fn installed_plugins_document_reports_an_invalid_state() {
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), true)),
         format!(r#"{{"error":"{} is not valid JSON"}}"#, file.display())
+    );
+    write_installed(
+        config.path(),
+        &[
+            ("plugins/term/0.1.0/diagnostics.json", "{}"),
+            ("plugins/alpha/1.0.0/plugin.json", "{"),
+        ],
+    );
+    let manifest = config.path().join("plugins/alpha/1.0.0/plugin.json");
+    assert_eq!(
+        text(installed::installed_plugins_document(config.path(), false)),
+        format!(r#"{{"error":"{} is not valid JSON"}}"#, manifest.display())
+    );
+    std::fs::remove_file(&manifest).unwrap();
+    assert_eq!(
+        text(installed::installed_plugins_document(config.path(), false)),
+        format!(
+            r#"{{"error":"{}: the plugin manifest is missing"}}"#,
+            manifest.display()
+        )
     );
     write_installed(
         config.path(),

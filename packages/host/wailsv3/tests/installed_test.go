@@ -50,11 +50,11 @@ func installedFixture(t *testing.T) string {
 // contract: installed.document.lists-enabled-plugins
 func TestInstalledPluginsDocumentListsEnabledPluginsById(t *testing.T) {
 	config := installedFixture(t)
-	release := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0"},{"id":"term","package":"@scope/plugin-term","version":"0.1.0"}]}`
+	release := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","sidecars":["@scope/sidecar-worker"]}}]}`
 	if got := string(host.InstalledPluginsDocument(config, false)); got != release {
 		t.Fatalf("release document %s", got)
 	}
-	diagnostic := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0"},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","diagnostics":{"module":"ui/d.js","exposes":{}}}]}`
+	diagnostic := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","sidecars":["@scope/sidecar-worker"]},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}`
 	if got := string(host.InstalledPluginsDocument(config, true)); got != diagnostic {
 		t.Fatalf("diagnostic document %s", got)
 	}
@@ -69,6 +69,16 @@ func TestInstalledPluginsDocumentReportsAnInvalidState(t *testing.T) {
 	writeInstalled(t, config, map[string]string{"plugins/term/0.1.0/diagnostics.json": "{"})
 	if got := string(host.InstalledPluginsDocument(config, true)); got != `{"error":"`+filepath.Join(config, "plugins/term/0.1.0/diagnostics.json")+` is not valid JSON"}` {
 		t.Fatalf("diagnostics error %s", got)
+	}
+	writeInstalled(t, config, map[string]string{"plugins/term/0.1.0/diagnostics.json": "{}", "plugins/alpha/1.0.0/plugin.json": "{"})
+	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"error":"`+filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")+` is not valid JSON"}` {
+		t.Fatalf("manifest error %s", got)
+	}
+	if err := os.Remove(filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"error":"`+filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")+`: the plugin manifest is missing"}` {
+		t.Fatalf("missing manifest %s", got)
 	}
 	writeInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 2, "plugins": {}, "sidecars": {}}`})
 	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"error":"`+filepath.Join(config, "plugins/installed.json")+`: plugins/installed.json: format must be 1"}` {

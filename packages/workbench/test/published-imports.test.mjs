@@ -219,6 +219,11 @@ function collectPublishedImports(packageName, packageDir, filesArray) {
         results.push({ file, importPath, resolvedPath: relativePath, inPublished: true, isStaged: true, stagedType: "always" });
         continue;
       }
+      // host 가 제공하는 문서는 스테이징된 파일이 아니라 host 의 응답이다.
+      if (isWorkbench && STAGED.served.includes(relativePath)) {
+        results.push({ file, importPath, resolvedPath: relativePath, inPublished: true, isStaged: true, stagedType: "served" });
+        continue;
+      }
       // 진단 빌드에서만 만드는 파일을 무조건 import 하면 릴리스에서 없다.
       if (isWorkbench && STAGED.diagnostics.includes(relativePath)) {
         results.push({ file, importPath, resolvedPath: relativePath, inPublished: false, missing: true, isDiagnosticsOnly: true });
@@ -280,7 +285,7 @@ test("every import of a published file is listed in its package files", () => {
       for (const imp of imports) {
         // 스테이징이 만드는 파일은 허용 (배포 때 stage.mjs가 만듦)
         if (imp.isStaged) {
-          allowed.push(`${packageName}: ${imp.file} → ${imp.resolvedPath} (스테이징이 생성)`);
+          allowed.push(`${packageName}: ${imp.file} → ${imp.resolvedPath} (${imp.stagedType === "served" ? "host 가 제공" : "스테이징이 생성"})`);
           continue;
         }
 

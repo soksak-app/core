@@ -819,12 +819,17 @@ export function validateInstalledPlugins(document) {
   const packages = new Set();
   for (const plugin of document.plugins) {
     if (!isObject(plugin)) throw new Error(`${INSTALLED_PLUGINS}: every plugin must be an object`);
-    only(`${INSTALLED_PLUGINS} plugin ${plugin.id}`, plugin, ["id", "package", "version", "diagnostics"]);
+    only(`${INSTALLED_PLUGINS} plugin ${plugin.id}`, plugin, ["id", "package", "version", "manifest", "diagnostics"]);
     if (!isText(plugin.id) || !ID.test(plugin.id)) throw new Error(`${INSTALLED_PLUGINS}: plugin id ${plugin.id} is invalid`);
     if (!isText(plugin.package) || !PACKAGE.test(plugin.package)) {
       throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} package must be a package name`);
     }
     if (!isText(plugin.version)) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} version is required`);
+    if (plugin.manifest === undefined) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} manifest is required`);
+    if (!isObject(plugin.manifest) || plugin.manifest.id !== plugin.id) {
+      throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} has a plugin.json with id ${plugin.manifest?.id}`);
+    }
+    validateManifest(plugin.manifest);
     if (plugin.diagnostics !== undefined && !isObject(plugin.diagnostics)) {
       throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} diagnostics must be an object`);
     }

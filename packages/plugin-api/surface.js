@@ -7,7 +7,7 @@ const callable = (value, name) => {
 const readyReleases = new WeakMap();
 
 export function createSurfaceContext({
-  root, surfaceId, pluginId, declarations = {}, composition = null, diagnostics = null, runtime = {},
+  root, surfaceId, pluginId, declarations = {}, composition = null, diagnostics = () => null, runtime = {},
   tab, origin = { directory: null }, project = null, icon,
 } = {}) {
   if (!root || typeof root.appendChild !== "function") throw new TypeError("surface context requires a root element");
@@ -22,6 +22,7 @@ export function createSurfaceContext({
     throw new TypeError("surface context requires tab.title, tab.directory, and tab.notify");
   }
   if (typeof icon !== "function") throw new TypeError("surface context requires icon(name)");
+  if (typeof diagnostics !== "function") throw new TypeError("surface context requires diagnostics()");
   const listeners = new Set();
   const eventListeners = new Map();
   const state = { phase: "loading", error: null };
@@ -42,8 +43,9 @@ export function createSurfaceContext({
     root, surfaceId, pluginId,
     declarations: Object.freeze(structuredClone(declarations)),
     composition,
-    // 진단 빌드에서는 플러그인의 진단 모듈, release 빌드에서는 null 이다.
-    diagnostics,
+    // 진단 빌드에서는 플러그인의 진단 모듈, release 빌드에서는 null 이다. 진단 모듈은 첫 화면 뒤에 불러오므로 workbench 가
+    // 모듈을 mount 하기 전에 채운 값을 읽는다.
+    get diagnostics() { return diagnostics(); },
     // 탭 알림(docs/spec/plugins.md#tab-reports): 탭에 보일 제목과 작업 디렉터리를 워크벤치에 알린다.
     tab: Object.freeze({ title: tab.title, directory: tab.directory, notify: tab.notify }),
     // 이 탭을 만든 카드의 활성 탭이 그때 기록한 작업 디렉터리.

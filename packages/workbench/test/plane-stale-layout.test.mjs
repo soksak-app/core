@@ -49,7 +49,7 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
     pluginUnits: () => [{ id: pluginId, name: "Fixture", description: "검사용 표면.", surface: true, sections: [] }],
   } });
   registerPlugin({
-    id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, diagnostics: null, drop: null,
+    id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,
     surface: (surfaceId) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId, pluginId,
       declarations: {}, sidecars: [] }),
   });

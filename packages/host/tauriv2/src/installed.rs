@@ -81,13 +81,15 @@ fn compact(text: &str) -> String {
     out
 }
 
-/// /installed-plugins.json 의 내용. 설치 상태를 읽을 수 없으면 { "error" } 문서다.
+/// /installed-plugins.json 의 내용. plugin 마다 설치된 plugin.json 을 manifest 로 담아 page 가 첫 화면 전에 plugin 을
+/// 등록하게 한다. 설치 상태를 읽을 수 없으면 { "error" } 문서다.
 pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u8> {
     #[derive(Serialize)]
     struct Entry {
         id: String,
         package: String,
         version: String,
+        manifest: Box<RawValue>,
         #[serde(skip_serializing_if = "Option::is_none")]
         diagnostics: Option<Box<RawValue>>,
     }
@@ -102,10 +104,25 @@ pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u
     };
     let mut entries = vec![];
     for plugin in plugins {
+        let manifest_file = plugin.dir.join("plugin.json");
+        let manifest = match std::fs::read_to_string(&manifest_file) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return failure(format!(
+                    "{}: the plugin manifest is missing",
+                    manifest_file.display()
+                ));
+            }
+            Err(error) => return failure(format!("{}: {error}", manifest_file.display())),
+            Ok(text) => match RawValue::from_string(compact(&text)) {
+                Ok(raw) if serde_json::from_str::<serde_json::Value>(raw.get()).is_ok() => raw,
+                _ => return failure(format!("{} is not valid JSON", manifest_file.display())),
+            },
+        };
         let mut entry = Entry {
             id: plugin.id,
             package: plugin.package,
             version: plugin.version,
+            manifest,
             diagnostics: None,
         };
         if diagnostics {

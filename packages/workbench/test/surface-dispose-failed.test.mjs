@@ -18,7 +18,7 @@ test("disposing a native surface whose module failed to mount removes it", { tim
     await import("../surface-modules.js?dispose-failed");
   const pluginId = "fixture-dispose-failed";
   const surfaceId = "fixture-dispose-failed-surface";
-  registerPlugin({ id: pluginId, diagnostics: null, surface: () => null });
+  registerPlugin({ id: pluginId, surface: () => null });
   const module = `data:text/javascript,${encodeURIComponent(`export async function mount() {
     throw new Error("fixture mount failed");
   }`)}`;

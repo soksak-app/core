@@ -28,7 +28,7 @@ test("native closure before authorization cannot erase the mounted module's core
   const command = `${pluginId}.ping`;
   const declarations = { status: [], commands: [{ name: command, description: "Pings the fixture.",
     params: { type: "object" }, result: { type: "null" } }], dom: [] };
-  registerPlugin({ id: pluginId, diagnostics: null, surface: () => null });
+  registerPlugin({ id: pluginId, surface: () => null });
   registry.declare(pluginId, declarations);
   registry.configure({ surfacePlugin: (id) => id === surfaceId ? pluginId : null });
   const module = `data:text/javascript,${encodeURIComponent(`export async function mount(root, context) {

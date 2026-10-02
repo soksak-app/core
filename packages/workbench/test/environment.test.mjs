@@ -21,39 +21,33 @@ const files = {
     },
     settings: { card: { "cursor.shape": "beam" } },
   },
-  "/modules/@fixture/card/plugin.json": {
+  card: {
     id: "card", name: "Card", description: "검사용 카드.", mark: "c", icon: "<path/>",
     surface: { module: "ui/card.js", composition: { kind: "dom" } }, sections: [{ id: "card.info", name: "Info", module: "ui/info.js" }],
     preview: { ink: "--fixture-ink" },
     sidebars: { sets: [{ id: "info", title: "Info", sections: ["card.info"], layout: "tabs" }], card: { top: "info" } },
     settings: { "cursor.shape": { label: "커서 모양", type: "enum", default: "block", values: ["block", "beam"] } },
   },
-  "/modules/@fixture/side/plugin.json": { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] },
-  // release 빌드의 스테이징은 진단 선언이 없는 {} 를 둔다.
-  "/installed-plugins.json": { plugins: [{ id: "card", package: "@fixture/card", version: "0.0.1" }, { id: "side", package: "@fixture/side", version: "0.0.1" }] },
+  side: { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] },
 };
-const requested = [];
-globalThis.fetch = async (path) => {
-  requested.push(path);
-  const body = files[path];
-  return body ? { ok: true, json: async () => structuredClone(body) } : { ok: false, status: 404 };
-};
+// release 빌드의 설치 목록에는 진단 선언이 없다.
+const installed = { plugins: [
+  { id: "card", package: "@fixture/card", version: "0.0.1", manifest: files.card },
+  { id: "side", package: "@fixture/side", version: "0.0.1", manifest: files.side },
+] };
 
-const { environment, loadEnvironment } = await import("../environment.js");
+const { environment, installEnvironment, pluginDiagnostics } = await import("../environment.js");
 const registry = await import("../registry.js");
 const settings = await import("../settings.js");
 
-test("the environment registers card plugins, sections, and sidebar defaults", async () => {
+test("the environment registers card plugins, sections, and sidebar defaults from the installed manifests", async () => {
   assert.throws(() => environment(), /not loaded/);
-  await loadEnvironment();
-  assert.deepEqual(requested, [
-    "/environment.json", "/installed-plugins.json", "/modules/@fixture/card/plugin.json", "/modules/@fixture/side/plugin.json",
-  ]);
+  installEnvironment(structuredClone(files["/environment.json"]), structuredClone(installed));
   assert.deepEqual(registry.plugins().map((p) => p.id), ["card"], "a plugin without a surface is not a card plugin");
   assert.deepEqual(registry.plugin("card").surface("tab 1"),
     { module: "/modules/@fixture/card/ui/card.js", composition: { kind: "dom" }, surfaceId: "tab 1", pluginId: "card", declarations: {}, sidecars: [] });
   assert.equal(registry.plugin("card").ink, "--fixture-ink");
-  assert.equal(registry.plugin("card").diagnostics, null, "a release build has no plugin diagnostic module");
+  assert.equal(await pluginDiagnostics("card"), null, "a release build has no plugin diagnostic module");
   assert.equal(registry.section("side.list").name, "List");
   assert.equal(registry.section("card.info").name, "Info");
   assert.equal(registry.section("side.list").module, "/modules/@fixture/side/ui/list.js", "a section module is served from its package");
@@ -62,5 +56,5 @@ test("the environment registers card plugins, sections, and sidebar defaults", a
   assert.equal(settings.value("card.cursor.shape"), "beam");
   assert.equal(settings.settingDefinitions()["card.cursor.shape"].default, "block");
   assert.equal(environment().workspace.focus, "main");
-  await assert.rejects(loadEnvironment(), /already loaded/);
+  assert.throws(() => installEnvironment(files["/environment.json"], installed), /already loaded/);
 });

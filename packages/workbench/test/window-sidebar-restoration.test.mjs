@@ -2,27 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 // 저장 배치 검사와 창 사이드바 기록 복원은 각 모듈의 내보낸 함수로 검사한다.
-globalThis.fetch = async (path) => {
-  const files = {
-    "/environment.json": {
-      runtime: "runtime",
-      workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
-        { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "pane", title: "p" }] },
-      ] } },
-      sidebars: { sets: [], links: [] },
-    },
-    "/installed-plugins.json": { plugins: [{ id: "pane", package: "@fixture/pane", version: "0.0.1" }] },
-    "/modules/@fixture/pane/plugin.json": {
-      id: "pane", name: "Pane", description: "검사용 표면.", mark: "P", icon: "<path d='M0 0h1v1H0z'/>",
-      surface: { module: "ui/surface.js", composition: { kind: "dom" } },
-    },
-  };
-  const body = files[path];
-  return body ? { ok: true, json: async () => structuredClone(body) } : { ok: false, status: 404 };
+const environmentFile = {
+  runtime: "runtime",
+  workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
+    { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "pane", title: "p" }] },
+  ] } },
+  sidebars: { sets: [], links: [] },
+};
+const manifest = {
+  id: "pane", name: "Pane", description: "검사용 표면.", mark: "P", icon: "<path d='M0 0h1v1H0z'/>",
+  surface: { module: "ui/surface.js", composition: { kind: "dom" } },
 };
 
-const { loadEnvironment } = await import("../environment.js");
-await loadEnvironment();
+const { installEnvironment } = await import("../environment.js");
+installEnvironment(environmentFile, { plugins: [{ id: "pane", package: "@fixture/pane", version: "0.0.1", manifest }] });
 const { checkStoredLayout } = await import("../stored-layout.js");
 const { restoreWindowSidebars } = await import("../window-sidebars.js");
 

@@ -2,6 +2,7 @@ import { createSurfaceCompositionController, createSurfaceContext, mountSurfaceM
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { registry } from "./exposure.js";
 import { plugin } from "./registry.js";
+import { pluginDiagnostics } from "./environment.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
@@ -174,9 +175,11 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     // 마운트는 탭이 판에 있을 때 시작한다. 탭이 판에서 빠지면 해제될 때까지 마지막 배율을 유지한다
     // (docs/spec/text-size.md). 마운트 도중 빠져도 모듈은 마운트를 시작한 때의 배율을 읽는다.
     let factor = surfaceTextSize(surface.surfaceId);
+    // 진단 모듈. 모듈을 불러오기 전에 채운다.
+    let diagnostics = null;
     const context = createSurfaceContext({
       root: shadow, surfaceId: surface.surfaceId, pluginId: surface.pluginId,
-      declarations: surface.declarations, composition, diagnostics: plugin(surface.pluginId).diagnostics,
+      declarations: surface.declarations, composition, diagnostics: () => diagnostics,
       tab: { title: (text) => reportTitle(surface.surfaceId, text),
         directory: (path) => reportDirectory(surface.surfaceId, path),
         notify: (text, policy) => reportNotice(surface.surfaceId, text, policy) },
@@ -224,6 +227,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         entry.exposure = registerSurfaceExposure({ root: shadow, expose: context.exposure, view,
           declarations: registry.surfaceDeclarations() });
         await entry.exposure.ready;
+        diagnostics = await pluginDiagnostics(surface.pluginId);
         if (entry.disposed) return null;
         return import(surface.module);
       }).then((module) => {
