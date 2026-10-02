@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-64-1: surface composition 명세는 더 이상 다시 읽기가 창 배경을 보인다고 정하지 않는다. 다시 읽기 중 빈 창은 결함이다.
 - G1.4-64: window check가 라이브러리 방문에 빈 frame이 없음을 잰다. surface composition 명세는 다시 읽기가 새 페이지가 그릴 때까지 창 배경을 보인다고 정한다.
 - G1.4-62-1: 준비한 배치를 되풀이한 그린 커밋은 그 배치의 paint clip을 쓴다.
 - G1.4-61: 두 host에서 main page를 다시 읽을 때 페이지가 사라지기 전에 native 표면을 숨긴다.
