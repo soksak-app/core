@@ -49,3 +49,26 @@ export function requireFullWidth(rect, card, border, side) {
   const inner = card.w - 2 * border;
   assert.ok(Math.abs(rect.width - inner) <= 1, `${side} panel is ${rect.width} wide, not the card's inner width ${inner}`);
 }
+
+/**
+ * 접힌 카드 패널 grip 사각형(CSS 픽셀) 안에서, 긴 축의 가운데 줄을 따라 띠 안 배경과 다른 픽셀이 이어진
+ * 가장 긴 길이와 그 픽셀 수(장치 픽셀). image 는 readPng 의 결과이고 ratio 는 장치 픽셀 / CSS 픽셀이다.
+ */
+export function gripInk(image, rect, ratio, threshold = 16) {
+  const vertical = rect.height > rect.width;
+  const from = Math.ceil((vertical ? rect.y : rect.x) * ratio);
+  const to = Math.floor(((vertical ? rect.y + rect.height : rect.x + rect.width)) * ratio);
+  const middle = Math.floor(((vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2)) * ratio);
+  // 띠의 바깥 끝은 카드 테두리와 겹칠 수 있으므로 가운데에서 2 CSS 픽셀 떨어진 띠 안의 픽셀을 배경으로 쓴다.
+  const edge = middle - Math.round(2 * ratio);
+  let run = 0, longest = 0, total = 0;
+  for (let at = from; at < to; at++) {
+    const [x, y, ex, ey] = vertical ? [middle, at, edge, at] : [at, middle, at, edge];
+    const ink = image.pixel(x, y).some((value, index) => Math.abs(value - image.pixel(ex, ey)[index]) > threshold);
+    run = ink ? run + 1 : 0;
+    longest = Math.max(longest, run);
+    if (ink) total++;
+  }
+  return { longest, total, length: to - from };
+}
+

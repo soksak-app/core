@@ -1,10 +1,13 @@
 // 카드 사방 지정 검사: 저장 세트와 공간에 따른 표시를 구분하고 탭 전환 뒤에도 유지한다.
 import assert from "node:assert/strict";
+import { rmSync } from "node:fs";
+import { dirname } from "node:path";
 import test from "node:test";
 
 import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
 import { checkLinkedPanels } from "./linked-panels.mjs";
-import { requireCleared, tabSwitchPair } from "./card-panel-checks.mjs";
+import { gripInk, requireCleared, tabSwitchPair } from "./card-panel-checks.mjs";
+import { readPng } from "./png.mjs";
 const geometry=grid=>grid.cards.map(({id,x,y,w,h})=>({id,x,y,w,h})).sort((a,b)=>a.id.localeCompare(b.id));
 
 for (const app of Object.values(APPS)) {
@@ -48,6 +51,18 @@ for (const app of Object.values(APPS)) {
     const foldedSurface = (await s.surfaces()).find((item) => item.surface === measuredCard.active);
     assert.ok(Math.abs(foldedSurface.applied.w - (measuredCard.w - 12 - 2)) <= 1,
       `folded sidebars must reserve only two 6-point dividers: ${JSON.stringify(foldedSurface)}`);
+    // 접힌 면은 카드 사이 divider 와 같은 길이(라이브러리 grip 길이 24 CSS 픽셀)의 짧은 grip 만 그린다. 카드 폭이나
+    // 높이 전체의 선은 경계선이 하나 더 있는 것처럼 보인다.
+    const still = (await s.request("diagnostics.capture.still", {})).path;
+    const image = readPng(still);
+    rmSync(dirname(still), { recursive: true, force: true });
+    const ratio = image.width / (await s.get("host.window")).content.width;
+    for (let index = 0; index < 4; index++) {
+      const grip = await s.rect("core.card.sidebar.grip", index);
+      const ink = gripInk(image, grip, ratio);
+      assert.ok(ink.longest > 0 && ink.longest <= 24 * ratio + 2 && ink.total === ink.longest,
+        `folded divider ${index} must show one grip of at most 24 points: ${JSON.stringify({ grip, ink })}`);
+    }
   });
 
   // 사용자 release 에서 셸 카드에 left/right/top 을 190 포인트씩 지정했는데 native 표면이 카드 폭과 거의 같았다

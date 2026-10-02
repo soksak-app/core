@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-56: a folded card sidebar shows a short grip in the divider grip colours instead of a line along the side or a tick across it.
 - G1.4-57: the placement check links a terminal card sidebar before it toggles it, because the default layout has none.
 - G1.4-54: the gesture check looks for a state from the display of the previous state, because the reported display time can follow the first display, and its failure message lists the frame times around a missed state.
 - G1.4-46: a terminal resize keeps the output above a zsh prompt that ends its own line; the terminal runtime specification states the redraw region of `redraw=1` and `redraw=last`.

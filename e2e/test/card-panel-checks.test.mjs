@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { missingPoses, requireCleared, requireFullWidth, tabSwitchPair } from "../card-panel-checks.mjs";
+import { gripInk, missingPoses, requireCleared, requireFullWidth, tabSwitchPair } from "../card-panel-checks.mjs";
 
 test("a pose without a recorded frame within two display frames is missing", () => {
   const frames = [{ time: 100, edges: [10] }, { time: 130, edges: [20] }, { time: 200, edges: [30] }];
@@ -47,3 +47,16 @@ test("a top or bottom panel must span the card's inner width", () => {
   assert.doesNotThrow(() => requireFullWidth({ width: 758 }, { w: 760 }, 1, "top"));
   assert.throws(() => requireFullWidth({ width: 568 }, { w: 760 }, 1, "top"), /top panel is 568 wide, not the card's inner width 758/);
 });
+
+test("grip ink measures the run that differs from the strip background along the middle line", () => {
+  // 세로 grip 6x100(CSS), 배율 2. 가운데 열(x=6)의 y 80..127 만 밝다.
+  const image = { pixel: (x, y) => (x === 6 && y >= 80 && y < 128 ? [150, 150, 150] : [30, 30, 30]) };
+  assert.deepEqual(gripInk(image, { x: 0, y: 0, width: 6, height: 100 }, 2), { longest: 48, total: 48, length: 200 });
+  // 가로 grip 의 전체 길이 선은 길이 전체가 잉크다.
+  const line = { pixel: (x, y) => (y === 3 ? [150, 150, 150] : [30, 30, 30]) };
+  assert.deepEqual(gripInk(line, { x: 10, y: 0, width: 50, height: 6 }, 1), { longest: 50, total: 50, length: 50 });
+  // 띠 바깥 끝의 카드 테두리는 배경이 아니다. 짧은 grip 만 잉크로 센다.
+  const bordered = { pixel: (x, y) => (x === 0 ? [60, 60, 60] : x === 3 && y >= 40 && y < 64 ? [150, 150, 150] : [30, 30, 30]) };
+  assert.deepEqual(gripInk(bordered, { x: 0, y: 0, width: 6, height: 100 }, 1), { longest: 24, total: 24, length: 100 });
+});
+
