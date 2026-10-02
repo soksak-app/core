@@ -63,6 +63,10 @@ func (implementation) KillWebContentProcess(unsafe.Pointer) error {
 	return unsupported("WebContent process termination")
 }
 
+func (implementation) CollectGarbage(unsafe.Pointer) error {
+	return unsupported("JavaScript garbage collection")
+}
+
 func (implementation) ClipboardRead(string) (platform.ClipboardValue, error) {
 	return platform.ClipboardValue{}, unsupported("clipboard read")
 }

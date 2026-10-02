@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -39,6 +40,7 @@ func init() {
 	diagnosticMethods["diagnostics.notifications"] = diagnosticNotifications
 	holdModalContent = modalHolds.wait
 	diagnosticMethods["diagnostics.navigation.delay"] = diagnosticNavigationDelay
+	diagnosticMethods["diagnostics.page.collect"] = diagnosticPageCollect
 	handleNavigation = navigationDelays.handle
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
 	diagnosticTopics[logTopic] = func(on bool) (string, any) {
@@ -596,6 +598,22 @@ type navigationDelaySet struct {
 }
 
 var navigationDelays = navigationDelaySet{windows: map[*Surfaces]time.Duration{}}
+
+// diagnosticPageCollect 는 창의 앱 페이지 WebContent process 가 JavaScript 객체를 수집하게 한다. 메모리 검사가
+// 수집 시점과 관계없이 남은 메모리를 재도록 재기 전에 부른다.
+func diagnosticPageCollect(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	application.InvokeSync(func() {
+		var main unsafe.Pointer
+		if main, err = system.MainWebview(s.window.NativeWindow()); err == nil {
+			err = system.CollectGarbage(main)
+		}
+	})
+	return nil, err
+}
 
 // diagnosticNavigationDelay 는 창의 이후 navigation callback 처리를 ms 밀리초 늦춘다. 0 은 지연을 없앤다.
 func diagnosticNavigationDelay(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {

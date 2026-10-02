@@ -114,6 +114,7 @@ pub(crate) fn call(
         "diagnostics.input.source" => input_source(window, params),
         "diagnostics.capture.still" => capture_still(window),
         "diagnostics.notifications" => delivered_notifications(window),
+        "diagnostics.page.collect" => page_collect(window),
         "diagnostics.navigation.delay" => {
             let ms = params
                 .get("ms")
@@ -132,6 +133,19 @@ pub(crate) fn call(
             format!("{method} is not a diagnostic method"),
         )),
     }
+}
+
+/// 창의 앱 페이지 WebContent process 가 JavaScript 객체를 수집하게 한다. 메모리 검사가 수집 시점과 관계없이 남은
+/// 메모리를 재도록 재기 전에 부른다.
+fn page_collect(window: &Window) -> Result<Value, Failure> {
+    let target = window.clone();
+    on_main(window, move || {
+        let view = crate::windows::root_view(&target)
+            .ok_or_else(|| "the main page is gone".to_string())?;
+        crate::exposure::with_view(&view, |native| platform::current()?.collect_garbage(native))
+    })
+    .map_err(internal)?;
+    Ok(Value::Null)
 }
 
 /// 창을 포커스를 주지 않고 한 장 찍어 `<config-dir>/captures/still-*/window.png` 로 쓰고 경로를 반환한다.

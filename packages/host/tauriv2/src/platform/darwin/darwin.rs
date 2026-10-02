@@ -213,6 +213,10 @@ impl Platform for Darwin {
         webview::kill_content_process(view)
     }
 
+    fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String> {
+        webview::collect_garbage(view)
+    }
+
     fn set_live_resize(&self, view: &PlatformWebview, live: bool) -> Result<(), String> {
         webview::live_resize(view, live);
         Ok(())

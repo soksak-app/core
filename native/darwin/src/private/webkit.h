@@ -25,6 +25,14 @@
 - (void)_setEnabled:(BOOL)value forFeature:(_WKFeature *)feature;
 @end
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+@interface WKProcessPool (SPPrivate)
+// WKProcessPoolPrivate.h: pool 의 WebContent process 들이 JavaScript 객체를 수집하게 한다(시험용).
+- (void)_garbageCollectJavaScriptObjectsForTesting;
+@end
+#pragma clang diagnostic pop
+
 @interface WKWebView (SPPrivate)
 @property(nonatomic, readonly) pid_t _webProcessIdentifier;
 // WKWebViewPrivate.h: 현재 WebContent 프로세스를 종료해 reload 가 새 프로세스를 시작하게 한다.

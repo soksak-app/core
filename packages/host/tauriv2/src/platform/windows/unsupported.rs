@@ -140,6 +140,10 @@ pub fn kill_web_content_process(_view: &PlatformWebview) -> Result<(), String> {
     missing("WebContent process termination")
 }
 
+pub fn collect_garbage(_view: &PlatformWebview) -> Result<(), String> {
+    missing("JavaScript garbage collection")
+}
+
 pub fn set_live_resize(_view: &PlatformWebview, _live: bool) -> Result<(), String> {
     missing("webview live resize")
 }

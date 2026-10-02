@@ -208,6 +208,13 @@ func (implementation) KillWebContentProcess(view unsafe.Pointer) error {
 	return fmt.Errorf("the WebContent process cannot be terminated")
 }
 
+func (implementation) CollectGarbage(view unsafe.Pointer) error {
+	if bool(C.sp_webview_collect_garbage(view)) {
+		return nil
+	}
+	return fmt.Errorf("the JavaScript garbage collection request is unavailable")
+}
+
 // WebviewFrame 은 표면의 현재 영역을 반환한다. 호스트가 선언된 영역을 픽셀에 맞추므로
 // 페이지가 보낸 영역과 다를 수 있고, 페이지는 그 차이를 전달받는다.
 func (implementation) WebviewFrame(view unsafe.Pointer) platform.Rect {

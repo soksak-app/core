@@ -684,6 +684,20 @@ bool sp_webview_kill_content_process(void *handle) {
     return view._webProcessIdentifier == 0;
 }
 
+bool sp_webview_collect_garbage(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"garbage collection requests require the UI thread");
+    WKWebView *view = (WKWebView *)handle;
+    // WKProcessPool 의 폐기 예고는 pool 을 여럿 만드는 것이 효과가 없다는 뜻이다. 시험용 수집은 이 클래스에만 있으므로
+    // webview 가 쓰는 pool 하나에 요청한다.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    WKProcessPool *pool = view.configuration.processPool;
+    if (!view || ![pool respondsToSelector:@selector(_garbageCollectJavaScriptObjectsForTesting)]) return false;
+    [pool _garbageCollectJavaScriptObjectsForTesting];
+#pragma clang diagnostic pop
+    return true;
+}
+
 void webviewSetSurfaceOverlays(void *handle, const double *values, size_t count) {
     NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
     SPSurfaceHost *host = surfaceHost((NSView *)handle);

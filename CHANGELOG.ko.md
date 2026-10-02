@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-64-1-4: `webview_process_test`가 WebKit의 `querySelectorAll` 결과 캐시가 다시 읽은 뒤 이전 document를 붙잡는 것을 재현한다. 두 host가 `diagnostics.page.collect`를 더하고, private native API 목록이 원인과 수집 요청을 기록한다.
 - G1.4-64-1: surface composition 명세는 더 이상 다시 읽기가 창 배경을 보인다고 정하지 않는다. 다시 읽기 중 빈 창은 결함이다.
 - G1.4-64: window check가 라이브러리 방문에 빈 frame이 없음을 잰다. surface composition 명세는 다시 읽기가 새 페이지가 그릴 때까지 창 배경을 보인다고 정한다.
 - G1.4-62-1: 준비한 배치를 되풀이한 그린 커밋은 그 배치의 paint clip을 쓴다.

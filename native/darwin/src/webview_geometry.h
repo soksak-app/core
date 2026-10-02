@@ -31,6 +31,10 @@ void webviewSetSurfaceHidden(void *webview, bool hidden);
 void webviewSetSurfaceAlpha(void *webview, double alpha);
 // 현재 WebContent 프로세스를 종료한다. 호출 뒤 호스트가 새 페이지를 읽어야 한다.
 bool sp_webview_kill_content_process(void *webview);
+// 진단 build 의 측정용: webview 의 process pool 에 있는 WebContent process 들이 JavaScript 객체의 쓰레기 수집을 하게 한다.
+// WebKit 은 바뀐 이전 페이지를 나중의 수집에서 지우므로, 메모리 검사는 다시 읽은 뒤 이것으로 수집하고 잰다.
+// 시험용 수집이 없으면 false 다.
+bool sp_webview_collect_garbage(void *webview);
 // 선언된 DOM 오버레이의 CSS 픽셀 여백과 표시 여부를 설정한다. values 는 항목마다
 // left, top, right, bottom, visible 순서의 다섯 값이다.
 void webviewSetSurfaceOverlays(void *webview, const double *values, size_t count);

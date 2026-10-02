@@ -130,6 +130,9 @@ impl Platform for Windows {
     fn kill_web_content_process(&self, view: &PlatformWebview) -> Result<(), String> {
         unsupported::kill_web_content_process(view)
     }
+    fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String> {
+        unsupported::collect_garbage(view)
+    }
 
     fn set_live_resize(&self, view: &PlatformWebview, live: bool) -> Result<(), String> {
         unsupported::set_live_resize(view, live)

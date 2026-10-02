@@ -22,6 +22,7 @@ extern "C" {
     ) -> bool;
     fn sp_webview_set_appearance(view: *mut c_void, dark: bool) -> bool;
     fn sp_webview_kill_content_process(view: *mut c_void) -> bool;
+    fn sp_webview_collect_garbage(view: *mut c_void) -> bool;
     fn sp_surface_create(main_webview: *mut c_void) -> *mut c_void;
     fn sp_surface_close(surface: *mut c_void);
     fn webviewSetFrame(view: *mut c_void, x: f64, y: f64, width: f64, height: f64);
@@ -81,6 +82,14 @@ pub fn kill_content_process(view: &PlatformWebview) -> Result<(), String> {
         Ok(())
     } else {
         Err("the WebContent process cannot be terminated".into())
+    }
+}
+
+pub fn collect_garbage(view: &PlatformWebview) -> Result<(), String> {
+    if unsafe { sp_webview_collect_garbage(view.inner()) } {
+        Ok(())
+    } else {
+        Err("the JavaScript garbage collection request is unavailable".into())
     }
 }
 

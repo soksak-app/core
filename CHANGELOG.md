@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-64-1-4: `webview_process_test` reproduces WebKit's `querySelectorAll` result cache keeping a replaced document after reload; both hosts add `diagnostics.page.collect`, and the private native API inventory records the cause and the collection request.
 - G1.4-64-1: the surface composition specification no longer states that a reload shows the window background; an empty window during a reload is a defect.
 - G1.4-64: a window check measures that a library visit shows no empty frame; the surface composition specification states that a reload shows the window background until the new page draws.
 - G1.4-62-1: a drawn commit that repeats the prepared placement writes the paint clip of that placement.
