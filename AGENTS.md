@@ -21,7 +21,8 @@ This workspace contains the headless layout library `soksak`, the workbench fron
 - Keep a standard once it is set. When code does not meet a check's criterion, fix the code; change the criterion only when it is itself wrong, and state why in the same change.
 - Treat an unexpected finding in existing code as a defect to report and resolve: fix it, or record the verification that shows it is correct, and add a rule when the finding shows one is missing. Existing code is not a reason by itself.
 - For every reported or hypothesized behavior defect, add a tracked test at the owning module that reproduces the failure before changing production code. Run it against the unchanged implementation and record the failing assertion as Red; after the correction, run the same test and record Green. If ordinary inputs cannot reproduce the failure deterministically, use an explicit test-controlled fault injection that exercises the same contract. A diagnosis, temporary script, or test written only after the correction is not Red evidence. Keep the test and its consumer contract in their respective owning packages.
-- When a request cannot be met the standard way, state which part needs another approach and why before implementing it.
+- When a request cannot be met the standard way, state which part needs another approach and why before implementing it. Workarounds are not accepted: a fix removes the cause, not its symptom, and a problem is not solved by adding another problem.
+- When a judgement or change of yours is wrong, state the cause and your part in it first, plainly and completely. Do not explain it away with surrounding circumstances, do not redefine a contract so that the fault becomes expected behaviour, and do not cover it with another change; concealment hides the real problem and makes the next decision harder.
 
 ## Structure
 
