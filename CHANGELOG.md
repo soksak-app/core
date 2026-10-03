@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-105-1: the Wails host refuses `null` in a numeric field of a host call argument instead of reading it as 0, and refuses a workspace `move` without `delta` with `move delta is missing`, as the Tauri host does.
 - G1.4-105: the main page refuses a host call whose argument contains NaN or Infinity before sending it, with one `TypeError` on both hosts, because JSON would send the number as `null` and the hosts decode `null` differently.
 - G1.4-106: the Tauri host places the window overlays before it begins a surface layout, as the Wails host does, and cancels a begun layout when a later step or the image raster refresh fails, so a failed surface sync no longer leaves the window's layout transaction open.
 - G1.4-101: the window check `window-release.test.mjs` also requires the web content process of each closed project window to exit, waiting through the new diagnostic `diagnostics.process.exit`, which answers when the kernel reports the process's exit.

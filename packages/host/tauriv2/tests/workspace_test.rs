@@ -227,3 +227,24 @@ fn folder_errors_name_the_folder_once() {
         format!("project directory is not readable: {}", inside.display())
     );
 }
+
+// contract: workspace.projects.move-requires-delta
+#[test]
+fn move_without_delta_is_refused() {
+    let config = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let store = Workspace::new(config.path().into());
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"first", "root":root.path(), "identity":"first"}}),
+    );
+    for request in [
+        json!({"kind":"move", "id":"first"}),
+        json!({"kind":"move", "id":"first", "delta":null}),
+    ] {
+        let error = store
+            .apply(serde_json::from_value(request.clone()).unwrap())
+            .unwrap_err();
+        assert_eq!(error.to_string(), "move delta is missing", "{request}");
+    }
+}

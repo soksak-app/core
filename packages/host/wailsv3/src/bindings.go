@@ -200,12 +200,12 @@ func (h *Host) ImageFocus(ctx context.Context, req ImageRequest) error {
 	}
 	return s.focusImage(uint64(s.window.ID()), req)
 }
-func (h *Host) ImageCaret(ctx context.Context, req ImageRequest, x, y, w, hgt float64) error {
+func (h *Host) ImageCaret(ctx context.Context, req ImageRequest, x, y, w, hgt Coordinate) error {
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
 	}
-	return s.caretImage(uint64(s.window.ID()), req, x, y, w, hgt)
+	return s.caretImage(uint64(s.window.ID()), req, float64(x), float64(y), float64(w), float64(hgt))
 }
 func (h *Host) ImageText(ctx context.Context, req ImageRequest, text string) error {
 	s, err := h.surface(ctx)

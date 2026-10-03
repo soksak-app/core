@@ -35,6 +35,8 @@ WebKit은 window가 화면에 있는 동안에만 web view를 그리고, window�
 
 두 애플리케이션에서 main page는 모든 host 호출을 하나의 호출 경로(`packages/workbench/host-calls.js`)로 보낸다. JSON은 NaN, Infinity, -Infinity를 `null`로 쓰고, host는 숫자 field의 `null`을 서로 다르게 해석하므로, page는 인자에 그런 수가 든 호출을 보내기 전에 거부한다. 호출은 `TypeError`로 실패하며 message는 `host call <name>: <path> is <value>, which JSON sends as null`이다. `<path>`는 field를 가리키거나(예: `surfaces[0].y`) 인자 자체가 그 수이면 `the argument`다.
 
+각 host는 호출 인자에서 선택 사항으로 선언하지 않은 숫자 field의 명시적 `null`도 거부한다: 호출은 framework가 인자를 해석하는 동안 실패하고 0으로 host에 닿지 않는다. Wails host는 그런 인자를 field를 밝히는 검사(`<path> must be a number, not null`)로 해석하고, Tauri host의 형식 있는 field는 serde가 해석할 때 `null`을 거부한다.
+
 ## macOS 구현
 
 Wails는 앱이 생성한 추가 `WKWebView`, Tauri는 자식 웹뷰 API를 사용한다. 두 호스트 모두 해당 프로젝트 `NSWindow` 안에 뷰를 배치한다. 설정과 메뉴는 추가 OS 창을 생성하지 않는다. 현재 표면·배경 변경으로 프레임워크 의존성을 변경하지 않았다.

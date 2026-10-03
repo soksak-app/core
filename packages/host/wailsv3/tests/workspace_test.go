@@ -138,7 +138,7 @@ func TestConcurrentSettingsAndProjectOrder(t *testing.T) {
 		}(key)
 	}
 	calls.Wait()
-	if _, err := store.Apply(host.WorkspaceRequest{Kind: "move", ID: "third", Delta: -2}); err != nil {
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "move", ID: "third", Delta: ptr(-2)}); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
@@ -265,3 +265,22 @@ func TestFolderMessages(t *testing.T) {
 		t.Fatalf("unreadable directory error: %v", err)
 	}
 }
+
+// contract: workspace.projects.move-requires-delta
+func TestMoveWithoutDeltaIsRefused(t *testing.T) {
+	store := host.NewWorkspace(t.TempDir())
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "first", "identity": "first", "root": t.TempDir()}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{`{"kind":"move","id":"first"}`, `{"kind":"move","id":"first","delta":null}`} {
+		var request host.WorkspaceRequest
+		if err := json.Unmarshal([]byte(raw), &request); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.Apply(request); err == nil || err.Error() != "move delta is missing" {
+			t.Errorf("%s = %v", raw, err)
+		}
+	}
+}
+
+func ptr(n int) *int { return &n }

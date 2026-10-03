@@ -35,6 +35,8 @@ WebKit draws a web view only while its window is on screen and does not wait for
 
 The main page sends every host call through one call path in both applications (`packages/workbench/host-calls.js`). JSON writes NaN, Infinity, and -Infinity as `null`, and the hosts decode `null` in a numeric field differently, so the page refuses a call whose argument contains such a number before it sends the call. The call fails with a `TypeError` whose message is `host call <name>: <path> is <value>, which JSON sends as null`, where `<path>` names the field (for example `surfaces[0].y`) or is `the argument` when the argument itself is the number.
 
+Each host also refuses an explicit `null` in a numeric field of a call argument that the field does not declare optional: the call fails while the framework decodes the argument and never reaches the host as 0. The Wails host decodes such arguments with a check that names the field (`<path> must be a number, not null`), and the Tauri host's typed fields refuse `null` while serde decodes them.
+
 ## macOS implementation
 
 Wails uses application-owned additional `WKWebView` instances. Tauri uses its child-webview API. Both place those views inside their owning project `NSWindow`; settings and menus create no additional OS window. Framework dependencies are unchanged by the current surface and backdrop changes.

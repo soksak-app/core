@@ -340,6 +340,7 @@ Items:
 | `surfaces-geometry.sync.rejects-surface-rect-before-layout` | The check that runs before the layout transaction begins refuses a sync request whose surface rectangle has a negative size, with `surface "<id>" geometry must not have a negative size`, and accepts a valid request. | both |
 | `surfaces-geometry.sync.rejects-overlay-rect-before-layout` | The check that runs before the layout transaction begins refuses a sync request whose window overlay rectangle has a negative size, with `window overlay geometry must not have a negative size`, and returns the overlays of a valid request with their visibility. | both |
 | `surfaces.sync.failure-leaves-no-begun-layout` | A surface sync places the window overlays before it begins the layout transaction, so a refused overlay begins none, and it cancels the begun transaction when a later step fails; a successful sync does not cancel it. | both |
+| `host-calls.decode.refuses-null-number` | A host call argument with `null` in a numeric field that is not optional fails to decode instead of reaching the host as 0. | both |
 | `termination.signal.first-requests-quit-second-ends-process` | The first termination signal requests quit, and the second ends the process. | both |
 | `window-close.surfaces.closes-regions-then-surface` | Closing a window closes, for each logical surface in id order, its document regions and image regions and then the surface, and removes their names from the window's document and image registries. | both |
 | `window-close.surfaces.reports-every-failure` | A failed native close does not stop the remaining closes, and the window close returns every failure with its surface id and object kind. | both |
@@ -356,6 +357,7 @@ Items:
 | `workspace.settings.invalid-common-file-not-overwritten` | An invalid common settings file makes a settings change fail and stays byte-identical. | both |
 | `workspace.settings.concurrent-patches-preserved` | Concurrent common settings changes of different keys are all kept. | both |
 | `workspace.projects.move-reorders` | Moving a project changes its position in the saved order. | both |
+| `workspace.projects.move-requires-delta` | A `move` request without `delta`, or with `delta` `null`, fails with `move delta is missing` and leaves the order unchanged. | both |
 | `workspace.projects.plugin-data-patched` | A project patch stores its `plugins` object, and a patch of another unknown field is rejected. | both |
 | `workspace.projects.remove-keeps-remaining-order` | Removing a project keeps the order of the remaining projects. | both |
 | `workspace.folder.aliases-share-identity` | A directory and a symbolic link to it resolve to the same project folder. | both |

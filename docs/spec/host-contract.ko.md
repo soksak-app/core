@@ -340,6 +340,7 @@ fn invalid_json_closes_connection() {
 | `surfaces-geometry.sync.rejects-surface-rect-before-layout` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 표면 사각형의 크기가 음수인 동기화 요청을 `surface "<id>" geometry must not have a negative size`로 거부하고, 올바른 요청은 받는다. | both |
 | `surfaces-geometry.sync.rejects-overlay-rect-before-layout` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 창 overlay 사각형의 크기가 음수인 동기화 요청을 `window overlay geometry must not have a negative size`로 거부하고, 올바른 요청의 overlay를 표시 여부와 함께 반환한다. | both |
 | `surfaces.sync.failure-leaves-no-begun-layout` | 표면 동기화는 배치 트랜잭션을 시작하기 전에 창 덮개를 놓으므로 거부된 덮개는 트랜잭션을 시작하지 않고, 뒤 단계가 실패하면 시작한 트랜잭션을 취소한다. 성공한 동기화는 취소하지 않는다. | both |
+| `host-calls.decode.refuses-null-number` | 선택 사항이 아닌 숫자 field에 `null`이 든 host 호출 인자는 0으로 host에 닿지 않고 해석에 실패한다. | both |
 | `termination.signal.first-requests-quit-second-ends-process` | 첫 종료 신호는 종료를 요청하고 두 번째 신호는 프로세스를 끝낸다. | both |
 | `window-close.surfaces.closes-regions-then-surface` | 창을 닫으면 논리 표면마다 id 순서로 그 문서 영역과 그림 영역을 닫은 뒤 표면을 닫고, 그 이름을 창의 문서 영역 목록과 그림 영역 목록에서 지운다. | both |
 | `window-close.surfaces.reports-every-failure` | 네이티브 닫기 하나가 실패해도 나머지를 닫고, 창 닫기는 모든 실패를 표면 id 와 객체 종류와 함께 반환한다. | both |
@@ -356,6 +357,7 @@ fn invalid_json_closes_connection() {
 | `workspace.settings.invalid-common-file-not-overwritten` | 잘못된 공통 설정 파일은 설정 변경을 실패시키고 바이트 단위로 그대로 남는다. | both |
 | `workspace.settings.concurrent-patches-preserved` | 서로 다른 키에 대한 동시 공통 설정 변경이 모두 유지된다. | both |
 | `workspace.projects.move-reorders` | 프로젝트를 옮기면 저장된 순서의 위치가 바뀐다. | both |
+| `workspace.projects.move-requires-delta` | `delta`가 없거나 `null`인 `move` 요청은 `move delta is missing`으로 실패하고 순서를 바꾸지 않는다. | both |
 | `workspace.projects.plugin-data-patched` | 프로젝트 patch는 `plugins` 객체를 저장하고, 알 수 없는 다른 필드의 patch는 거부된다. | both |
 | `workspace.projects.remove-keeps-remaining-order` | 프로젝트를 제거해도 남은 프로젝트의 순서는 유지된다. | both |
 | `workspace.folder.aliases-share-identity` | 디렉터리와 그 심볼릭 링크는 같은 프로젝트 폴더로 해석된다. | both |

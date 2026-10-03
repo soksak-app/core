@@ -79,3 +79,22 @@ fn sync_request_check_rejects_an_invalid_window_overlay_rectangle() {
         "window overlay geometry must not have a negative size"
     );
 }
+
+// contract: host-calls.decode.refuses-null-number
+#[test]
+fn a_sync_request_with_null_in_a_numeric_field_is_refused() {
+    for field in ["x", "y", "w", "h"] {
+        let mut request =
+            serde_json::json!({"settled": true, "surfaces": [surface("tab-1", 10.0)]});
+        request["surfaces"][0][field] = serde_json::Value::Null;
+        let error = serde_json::from_value::<SyncRequest>(request).unwrap_err();
+        assert!(
+            error.to_string().contains("invalid type: null"),
+            "{field}: {error}"
+        );
+    }
+    let overlay = serde_json::json!({
+        "settled": true, "surfaces": [], "overlays": [{"x": null, "y": 0, "w": 1, "h": 1}],
+    });
+    assert!(serde_json::from_value::<SyncRequest>(overlay).is_err());
+}

@@ -5,6 +5,7 @@ package host
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,7 +49,7 @@ type WorkspaceRequest struct {
 	Project Record   `json:"project"`
 	Patch   Record   `json:"patch"`
 	Remove  []string `json:"remove"`
-	Delta   int      `json:"delta"`
+	Delta   *int     `json:"delta"`
 }
 
 func readJSON(path string, into any) error {
@@ -175,8 +176,14 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 		}
 		projects = append(projects[:at], projects[at+1:]...)
 	case "move":
-		to := at + req.Delta
-		if at < 0 || to < 0 || to >= len(projects) {
+		if at < 0 {
+			return nil, nil
+		}
+		if req.Delta == nil {
+			return nil, errors.New("move delta is missing")
+		}
+		to := at + *req.Delta
+		if to < 0 || to >= len(projects) {
 			return nil, nil
 		}
 		project := projects[at]

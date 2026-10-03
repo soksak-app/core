@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-105-1: Wails host는 host 호출 인자의 숫자 field에 든 `null`을 0으로 읽지 않고 거부하며, `delta`가 없는 workspace `move`를 Tauri host처럼 `move delta is missing`으로 거부한다.
 - G1.4-105: main page는 인자에 NaN이나 Infinity가 든 host 호출을 보내기 전에 두 host에서 같은 `TypeError`로 거부한다. JSON은 그 수를 `null`로 보내고 host는 `null`을 서로 다르게 해석하기 때문이다.
 - G1.4-106: Tauri host는 Wails host처럼 표면 배치를 시작하기 전에 창 덮개를 놓고, 뒤 단계나 이미지 raster 갱신이 실패하면 시작한 배치를 취소하므로, 실패한 표면 동기화가 창의 배치 트랜잭션을 열어 두지 않는다.
 - G1.4-101: window check `window-release.test.mjs`는 닫은 project window마다 web content process가 끝나기도 요구하며, kernel이 process의 종료를 알릴 때 응답하는 새 진단 `diagnostics.process.exit`로 기다린다.
