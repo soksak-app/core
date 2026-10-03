@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { gripInk, missingPoses, requireCleared, requireFullWidth, tabSwitchPair } from "../card-panel-checks.mjs";
+import { gripInk, missingPoses, requireCleared, requireContentWidth, tabSwitchPair } from "../card-panel-checks.mjs";
 
 test("a pose without a recorded frame within two display frames is missing", () => {
   const frames = [{ time: 100, edges: [10] }, { time: 130, edges: [20] }, { time: 200, edges: [30] }];
@@ -43,9 +43,12 @@ test("a tab switch fixture requires a tab of a different plugin", () => {
   assert.throws(() => tabSwitchPair(cards[0], [cards[0]]), /no tab of a plugin other than terminal/);
 });
 
-test("a top or bottom panel must span the card's inner width", () => {
-  assert.doesNotThrow(() => requireFullWidth({ width: 758 }, { w: 760 }, 1, "top"));
-  assert.throws(() => requireFullWidth({ width: 568 }, { w: 760 }, 1, "top"), /top panel is 568 wide, not the card's inner width 758/);
+test("a top or bottom panel must span the card's content column", () => {
+  assert.doesNotThrow(() => requireContentWidth({ width: 758 }, { w: 760 }, 1, 6, "top"));
+  const sidebars = { left: { collapsed: false, shownSize: 190 }, right: { collapsed: true, shownSize: null } };
+  assert.doesNotThrow(() => requireContentWidth({ width: 562 }, { w: 760, sidebars }, 1, 6, "bottom"));
+  assert.throws(() => requireContentWidth({ width: 758 }, { w: 760, sidebars }, 1, 6, "bottom"),
+    /bottom panel is 758 wide, not the card's content column width 562/);
 });
 
 test("grip ink measures the run that differs from the strip background along the middle line", () => {

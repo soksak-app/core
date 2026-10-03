@@ -59,7 +59,10 @@ for (const app of Object.values(APPS)) {
     const ratio = image.width / (await s.get("host.window")).content.width;
     for (let index = 0; index < 4; index++) {
       const grip = await s.rect("core.card.sidebar.grip", index);
-      const ink = gripInk(image, grip, ratio);
+      // 세로 띠는 카드 아래 끝까지 이어진다. 맨 아래의 발 높이 구간은 접혀서 빈 상태 줄 자리이며 카드의 둥근 모서리
+      // 테두리가 지나가므로, 두 번째 선을 찾는 측정에서 뺀다.
+      const vertical = grip.height > grip.width;
+      const ink = gripInk(image, vertical ? { ...grip, height: grip.height - 22 } : grip, ratio);
       assert.ok(ink.longest > 0 && ink.longest <= 24 * ratio + 2 && ink.total === ink.longest,
         `folded divider ${index} must show one grip of at most 24 points: ${JSON.stringify({ grip, ink })}`);
     }
@@ -344,5 +347,38 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     await keepCommonSettings(s);
     await checkLinkedPanels(s, t, app.name);
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  // 카드 사이드바는 자기 하단 줄로 끝나고, 카드의 내용 하단 줄은 카드 아래 끝에서 내용 열만 차지한다
+  // (docs/spec/example-model.md).
+  test(`${app.name}: a card sidebar ends in its own status line and the content footer spans only the content`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const set = (await s.get("core.settings")).values.sets[0];
+    await s.run("core.card.sidebar.set", { card: "terminal", side: "left", set: set.id });
+    await s.run("core.card.sidebar.size", { card: "terminal", side: "left", size: 190 });
+    await s.presented();
+    const grid = await s.get("core.grid");
+    const card = grid.cards.find((item) => item.id === "terminal");
+    const box = { x: grid.plane.x + card.x, y: grid.plane.y + card.y, w: card.w, h: card.h };
+    const within = (r) => r.x >= box.x - 0.5 && r.x + r.width <= box.x + box.w + 0.5 && r.y >= box.y - 0.5 && r.y + r.height <= box.y + box.h + 0.5;
+    const footers = [];
+    for (let index = 0; index < grid.cards.filter((item) => item.tabs.length > 0).length; index++) footers.push(await s.rect("core.card.status", index));
+    const footer = footers.find(within);
+    assert.ok(footer, `the terminal card has no content footer: ${JSON.stringify({ box, footers })}`);
+    const content = box.x + 1 + 190;
+    assert.ok(Math.abs(footer.x - content) <= 1 && Math.abs(footer.x + footer.width - (box.x + box.w - 1)) <= 1
+      && Math.abs(footer.y + footer.height - (box.y + box.h - 1)) <= 1,
+      `the content footer does not span only the content column: ${JSON.stringify({ footer, content, box })}`);
+    const status = await s.rect("core.card.sidebar.status", 0);
+    assert.ok(within(status) && Math.abs(status.y + status.height - (box.y + box.h - 1)) <= 1 && status.x + status.width <= content + 0.5,
+      `the left sidebar does not end in its status line at the bottom of the card: ${JSON.stringify({ status, box })}`);
+    assert.ok(Math.abs(status.y - footer.y) <= 0.5 && status.height === footer.height,
+      `the sidebar status line and the content footer are not one row: ${JSON.stringify({ status, footer })}`);
+    const text = (await s.get("core.sidebars")).find((item) => item.sidebar === "terminal:left");
+    assert.ok(text, "the left card sidebar is not drawn");
   });
 }

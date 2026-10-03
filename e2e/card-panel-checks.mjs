@@ -44,10 +44,15 @@ export function tabSwitchPair(card, cards) {
   return { original, other: source.tabs.find((tab) => tab.plugin !== original.plugin), from: source.id };
 }
 
-/** top 이나 bottom 패널의 DOM 폭이 카드 안쪽 폭(카드 폭에서 양쪽 테두리를 뺀 값)과 같아야 한다. */
-export function requireFullWidth(rect, card, border, side) {
-  const inner = card.w - 2 * border;
-  assert.ok(Math.abs(rect.width - inner) <= 1, `${side} panel is ${rect.width} wide, not the card's inner width ${inner}`);
+/**
+ * top 이나 bottom 패널의 DOM 폭이 카드의 내용 열 폭(카드 안쪽 폭에서 좌·우 사이드바가 차지한 폭을 뺀 값)과 같아야
+ * 한다(docs/spec/example-model.md). 접힌 면은 divider 폭을 차지한다.
+ */
+export function requireContentWidth(rect, card, border, divider, side) {
+  // 기본값: 없는 면은 폭을 차지하지 않는다.
+  const extent = (state) => (state ? (state.collapsed ? divider : state.shownSize) : 0);
+  const column = card.w - 2 * border - extent(card.sidebars?.left) - extent(card.sidebars?.right);
+  assert.ok(Math.abs(rect.width - column) <= 1, `${side} panel is ${rect.width} wide, not the card's content column width ${column}`);
 }
 
 /**

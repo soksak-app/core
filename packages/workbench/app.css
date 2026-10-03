@@ -282,21 +282,28 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
   grid-template-columns:var(--pl,0px) minmax(0,1fr) var(--pr,0px);
   grid-template-rows:minmax(0,var(--head)) var(--pt,0px) minmax(0,1fr) var(--pb,0px) minmax(0,var(--foot));
 }
-.card:has(> .card-sidebar) > .chrome,.card:has(> .card-sidebar) > .status{grid-column:1 / -1}
+/* 좌·우 사이드바는 머리 아래에서 카드 아래 끝까지 이어지고, 내용 열은 위 사이드바·내용·아래 사이드바·내용 발이다.
+   카드 아래 끝은 좌·우 사이드바의 상태 줄과 내용 발이 한 줄로 놓인 발 높이의 띠다. */
+.card:has(> .card-sidebar) > .chrome{grid-column:1 / -1}
+.card:has(> .card-sidebar) > .status{grid-column:2}
 .card > .chrome{grid-row:1}
 .card > .status{grid-row:-2 / -1}
 .card:has(> .card-sidebar) > .slot{grid-row:3;grid-column:2}
 /* 사방 사이드바(V5-115). 상하는 카드 전체 폭(1/-1), 좌우는 중앙 칸의 양옆 열에 선다. */
 .card-sidebar{position:relative;min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column;user-select:none;background:var(--card)}
-.card-sidebar[data-side-of=top]{grid-row:2;grid-column:1 / -1;border-bottom:var(--bw) solid var(--edge)}
-.card-sidebar[data-side-of=bottom]{grid-row:4;grid-column:1 / -1;border-top:var(--bw) solid var(--edge)}
-.card-sidebar[data-side-of=left]{grid-row:3;grid-column:1;border-right:var(--bw) solid var(--edge)}
-.card-sidebar[data-side-of=right]{grid-row:3;grid-column:3;border-left:var(--bw) solid var(--edge)}
+.card-sidebar[data-side-of=top]{grid-row:2;grid-column:2;border-bottom:var(--bw) solid var(--edge)}
+.card-sidebar[data-side-of=bottom]{grid-row:4;grid-column:2;border-top:var(--bw) solid var(--edge)}
+.card-sidebar[data-side-of=left]{grid-row:2 / -1;grid-column:1;border-right:var(--bw) solid var(--edge)}
+.card-sidebar[data-side-of=right]{grid-row:2 / -1;grid-column:3;border-left:var(--bw) solid var(--edge)}
 /* 접은 사이드바은 내용을 숨기고 경계선 폭만 남는다. */
 .card[data-sidebar-top=folded] > .card-sidebar[data-side-of=top] > .set,
 .card[data-sidebar-bottom=folded] > .card-sidebar[data-side-of=bottom] > .set,
 .card[data-sidebar-left=folded] > .card-sidebar[data-side-of=left] > .set,
-.card[data-sidebar-right=folded] > .card-sidebar[data-side-of=right] > .set{display:none}
+.card[data-sidebar-right=folded] > .card-sidebar[data-side-of=right] > .set,
+.card[data-sidebar-top=folded] > .card-sidebar[data-side-of=top] > .card-sidebar__status,
+.card[data-sidebar-bottom=folded] > .card-sidebar[data-side-of=bottom] > .card-sidebar__status,
+.card[data-sidebar-left=folded] > .card-sidebar[data-side-of=left] > .card-sidebar__status,
+.card[data-sidebar-right=folded] > .card-sidebar[data-side-of=right] > .card-sidebar__status{display:none}
 /* 경계선은 사이드바의 안쪽 변 위에 절대 위치로 겹친다: 끌기는 크기, 누름은 접기. */
 .card-sidebar__grip{position:absolute;z-index:2;background:transparent}
 .card-sidebar__grip[data-side-of=top],.card-sidebar__grip[data-side-of=bottom]{left:0;right:0;height:var(--divider);cursor:row-resize}
@@ -525,7 +532,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .card[data-place] > .status{grid-row:3}
 .set{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column}
 /* 상태 줄은 카드 발과 같은 높이와 글자여서 사이드바와 이웃 카드의 아래 선이 한 줄에 놓인다. */
-.sidebar-status{display:flex;align-items:center;gap:6px;height:var(--foot);flex:0 0 var(--foot);box-sizing:border-box;
+.sidebar-status,.card-sidebar__status{display:flex;align-items:center;gap:6px;height:var(--foot);flex:0 0 var(--foot);box-sizing:border-box;
   padding:0 var(--space-2);border-top:var(--bw) solid var(--edge);font-size:var(--text-caption);color:var(--muted);
   white-space:nowrap;overflow:hidden}
 /* 머리는 카드 머리 높이여서 사이드바 첫 머리의 아래 선이 이웃 카드 머리의 아래 선과 한 줄에 놓인다. */

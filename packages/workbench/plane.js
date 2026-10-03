@@ -913,7 +913,8 @@ function drawCardSidebars(el, card, rect) {
       body = document.createElement("aside");
       body.className = "card-sidebar";
       body.dataset.sideOf = side;
-      body.innerHTML = '<div class="set"></div>';
+      // 사이드바는 자기 면과 세트를 말하는 상태 줄로 끝난다(docs/spec/example-model.md).
+      body.innerHTML = '<div class="set"></div><footer class="card-sidebar__status" data-expose="core.card.sidebar.status"></footer>';
       const handle = document.createElement("div");
       handle.className = "card-sidebar__grip";
       handle.dataset.sideOf = side;
@@ -928,6 +929,7 @@ function drawCardSidebars(el, card, rect) {
     const handle = body.querySelector(".card-sidebar__grip");
     mark(handle, "core.card.sidebar.size", { card: card.id, side });
     const name = sideName(side);
+    setText(body.querySelector(".card-sidebar__status"), `${name} 사이드바 · ${set.title}`);
     handle.title = state.autoCollapsed ? `공간 부족으로 ${name} 사이드바 자동 접힘` : state.collapsed ? `눌러 ${name} 사이드바 펼치기` : `끌어 크기 바꾸기 · 눌러 ${name} 사이드바 접기`;
     el.dataset[`sidebar${side[0].toUpperCase()}${side.slice(1)}`] = state.collapsed ? "folded" : "open";
     el.style.setProperty(`--p${side[0]}`, state.collapsed ? "var(--divider)" : `${deviceGridSize(state.shownSize, devicePixelRatio)}px`);

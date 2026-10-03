@@ -2760,12 +2760,17 @@
       },
       {
         "name": "core.card.status",
-        "description": "The footers of cards with tabs in document order.",
+        "description": "The content footers of cards with tabs in document order; each spans only its card's content column.",
         "many": true
       },
       {
         "name": "core.sidebar.status",
-        "description": "The status lines that end the fixed left and right window sidebars in document order; an internal card sidebar ends at its card footer.",
+        "description": "The status lines that end the fixed left and right window sidebars in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.sidebar.status",
+        "description": "The status lines that end the open card sidebars in document order; each names its side and its set.",
         "many": true
       },
       {

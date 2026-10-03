@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-80: card sidebars end in their own status line, and the content footer of a card spans only its content column.
 - G1.4-90-7: a window in full screen answers `windowControls` with title bar row 0 instead of an error.
 - G1.4-90-5: both hosts log a replaced image frame as invalidated with the same text and log another presentation failure with the current frame state.
 - G1.4-90-3: a delegated root no longer runs the command of an element connected with `bind` a second time, so Enter in the browser address field navigates once.
