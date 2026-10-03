@@ -314,6 +314,56 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(after.shells, [], "normal terminal close must reap every PTY child before the close answer");
   });
 
+  test(`${app.name}: padding settings inset the terminal grid and show the terminal background`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    await setMeasuredBackground(s, surface);
+    const padding = { top: 6, right: 10, bottom: 14, left: 18 };
+    const set = (side, value) => s.run("core.settings.change", { key: `terminal.padding.${side}`, value, scope: "common" });
+    s.cleanup(async () => {
+      for (const side of Object.keys(padding)) await set(side, 0);
+    });
+    const before = await s.rect("terminal.view", undefined, surface);
+    const { cols, rows } = await s.get("terminal.session", surface);
+    for (const [side, value] of Object.entries(padding)) await set(side, value);
+    // 격자는 padding 안쪽의 그림 영역에 맞춰 다시 정해진다.
+    await s.until("terminal.session", (session) => session.cols < cols && session.rows < rows,
+      "the terminal grid did not shrink inside the padding", { surface });
+    const view = await s.rect("terminal.view", undefined, surface);
+    const inset = { top: view.y - before.y, right: before.x + before.width - (view.x + view.width),
+      bottom: before.y + before.height - (view.y + view.height), left: view.x - before.x };
+    assert.deepEqual(inset, padding, `the view is not inset by the padding: ${JSON.stringify({ before, view })}`);
+    // 네이티브 그림 영역은 안쪽 영역을 따른다.
+    const frame = { x: view.document.x + view.x, y: view.document.y + view.y, width: view.width, height: view.height };
+    await s.until("host.window", (window) => window.regions.some((region) => region.surface === surface &&
+      Object.keys(frame).every((key) => Math.abs(region.frame[key] - frame[key]) <= 1)),
+      `the image region did not follow the padded view ${JSON.stringify(frame)}`);
+    // padding 자리는 터미널의 기본 배경색이다.
+    await s.request("diagnostics.capture.start", {});
+    const { displayed } = await s.presented();
+    const { frames: dir } = await s.request("diagnostics.capture.stop", { after: displayed });
+    try {
+      const files = frames(dir);
+      assert.ok(files.length > 0, "the padding capture produced no frames");
+      const shot = readFrame(files.at(-1));
+      const at = (x, y) => pixel(shot, Math.round(x * shot.scale), Math.round(y * shot.scale));
+      const samples = {
+        left: at(frame.x - padding.left / 2, frame.y + frame.height / 2),
+        top: at(frame.x + frame.width / 2, frame.y - padding.top / 2),
+      };
+      t.diagnostic(`padding samples ${JSON.stringify(samples)}`);
+      for (const [side, sample] of Object.entries(samples)) {
+        assert.ok(sample.every((value, index) => Math.abs(value - MEASURED_BACKGROUND[index]) <= 8),
+          `the ${side} padding does not show the terminal background: ${sample}`);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test(`${app.name}: removing a project ends the terminal sessions that its layout held`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

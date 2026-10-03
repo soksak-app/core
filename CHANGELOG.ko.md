@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-72: terminal runtime 명세가 변마다의 터미널 padding 설정을 정의하고, window check가 안쪽으로 들어간 격자와 padding 색을 잰다.
 - G1.4-63-1: 사이드카가 모든 `closed`에 `{surface, closed: true[, error]}`로 답한다. 두 host는 답하지 않은 닫기를 `host.sidecars` 상태에 두고, 실패한 닫기를 로그에 쓰며, PTY 회수 check는 그 상태를 기다린다.
 - G1.4-70: 두 host가 새 영속 service의 준비 줄을 최대 30초, hello 응답을 최대 5초 기다리고, 준비되지 않는 service를 끝내고 회수하며, 같은 오류 문장을 보고한다.
 - G1.4-68: 두 host가 등록부 잠금을 놓은 채 사이드카를 시작하므로, 영속 service 시작이 다른 사이드카로의 전송을 더는 늦추지 않는다. stop은 진행 중인 시작을 기다린다.

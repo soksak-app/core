@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-72: the terminal runtime specification defines the per-side terminal padding settings, and a window check measures the inset grid and the padding color.
 - G1.4-63-1: sidecars answer every `closed` with `{surface, closed: true[, error]}`; both hosts list unanswered closes in the `host.sidecars` status, log failed closes, and the PTY reap check waits on that status.
 - G1.4-70: both hosts wait at most 30 s for a new persistent service's ready line and 5 s for its hello reply, end and reap a service that never becomes ready, and report the same error texts.
 - G1.4-68: both hosts start a sidecar with the registry lock released, so a persistent service start no longer delays sends to other sidecars; stop waits for starts in progress.
