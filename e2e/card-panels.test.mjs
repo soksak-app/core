@@ -415,3 +415,43 @@ for (const app of Object.values(APPS)) {
       "the header control did not open the folded left sidebar again");
   });
 }
+
+for (const app of Object.values(APPS)) {
+  // 접힌 사이드바 띠와 카드 divider 가 붙어 있을 때, 간격은 divider 가, 카드 안의 띠는 사이드바가 받는다
+  // (docs/spec/example-model.md).
+  test(`${app.name}: a folded sidebar strip next to a card divider keeps each input to its own control`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    // 터미널 카드를 오른쪽으로 쪼개 두 일반 카드가 세로 경계를 나누게 하고, 왼쪽 카드의 오른쪽 사이드바를 접는다.
+    await s.run("core.card.split", { card: "terminal", side: "right", plugin: "terminal" });
+    const set = (await s.get("core.settings")).values.sets[0];
+    await s.run("core.card.sidebar.set", { card: "terminal", side: "right", set: set.id });
+    const fold = async () => {
+      await s.run("core.card.sidebar.toggle", { card: "terminal", side: "right" });
+      await s.until("core.grid", (value) => value.cards.find((item) => item.id === "terminal").sidebars.right.collapsed === true,
+        "the right sidebar did not fold");
+      await s.presented();
+    };
+    await fold();
+    const grid = await s.get("core.grid");
+    const card = grid.cards.find((item) => item.id === "terminal");
+    const edge = grid.plane.x + card.x + card.w;
+    const y = grid.plane.y + card.y + card.h / 2;
+    // 카드 바깥 테두리까지(간격)는 divider 가, 그 안의 접힌 띠는 사이드바 손잡이가 받는다. 띠를 누르면 사이드바가 펼쳐진다.
+    const press = async (x) => {
+      const before = (await s.get("core.pointer")).sequence;
+      await s.click(x, y);
+      const pointer = await s.until("core.pointer", (value) => value.sequence > before && value.up !== null, `the press at ${x} did not arrive`);
+      const open = (await s.get("core.grid")).cards.find((item) => item.id === "terminal").sidebars.right.collapsed === false;
+      if (open) await fold();
+      return [pointer.down, open];
+    };
+    const measured = {};
+    for (const offset of [grid.gap / 2, 1, -0.5, -1.5, -3, -5]) measured[offset] = await press(edge + offset);
+    assert.deepEqual(measured, {
+      [grid.gap / 2]: ["core.divider", false], 1: ["core.divider", false], "-0.5": ["core.divider", false],
+      "-1.5": ["core.card.sidebar.grip", true], "-3": ["core.card.sidebar.grip", true], "-5": ["core.card.sidebar.grip", true],
+    }, `the gap and the folded strip do not keep their own input: ${JSON.stringify({ edge, gap: grid.gap, measured })}`);
+  });
+}

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-85: the specification states which control takes a press where a folded card sidebar strip meets a card divider, and a window check measures it.
 - G1.4-84: a folded card sidebar shows three dots, distinct from the bar grip of a card divider.
 - G1.4-83: the card header has a fold and open control for each sidebar the card shows.
 - G1.4-82: the status line of a window sidebar ends in a fold control that turns the sidebar off.
