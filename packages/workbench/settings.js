@@ -225,6 +225,9 @@ export const CHOICES = {
   language: ["auto", ...MENU_LANGUAGES.map((language) => language.id)],
 };
 
+/* 정수 범위를 받는 core 설정. 배치 값과 형태 값은 키가 겹치지 않는다. */
+const RANGES = { ...LAYOUT_RANGES, ...SHAPE_RANGES };
+
 /* boolean 을 받는 core 설정. */
 const SWITCHES = ["left", "right", "dim", "diagnostics.performance"];
 
@@ -265,7 +268,7 @@ function validateValue(key, value) {
   if (SWITCHES.includes(key) && typeof value !== "boolean") {
     throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not a boolean`);
   }
-  const range = LAYOUT_RANGES[key] ?? SHAPE_RANGES[key];
+  const range = RANGES[key];
   if (range && (!Number.isInteger(value) || value < range[0] || value > range[1])) {
     throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not an integer from ${range[0]} to ${range[1]}`);
   }

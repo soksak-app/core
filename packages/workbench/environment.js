@@ -97,6 +97,7 @@ export function installEnvironment(environmentDocument, installedDocument) {
 }
 
 /** 플러그인 id 의 진단 모듈. 진단 빌드의 일부 플러그인에만 있으며 없으면 null 이다. 불러오기 실패는 거절이다. */
+// 기본값: 진단 모듈을 선언하지 않은 플러그인은 진단이 없다(docs/spec/plugins.md).
 export const pluginDiagnostics = (id) => diagnosticModules.then((modules) => modules.get(id) ?? null);
 
 /**

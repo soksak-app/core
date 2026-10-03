@@ -96,6 +96,7 @@ export function begin(snapshot) {
       return project;
     }
   });
+  // 기본값: project 를 지정하지 않았거나 등록부에 없는 project 를 지정한 창은 라이브러리로 시작한다.
   const requested = projects.find((p) => p.id === new URL(location.href).searchParams.get("project")) ?? null;
   const layout = requested?.spaces.find((s) => s.id === requested.activeSpaceId)?.layout;
   let opened = null;
@@ -107,6 +108,7 @@ export function begin(snapshot) {
       // 판이 열 수 없는 배치는 initialise 의 활성화가 그 오류를 보고하고 라이브러리에 남는다.
     }
   }
+  // 기본값: 연 project 가 없으면 설정에도 project 가 없다.
   beginSettings(snapshot, opened?.id ?? null);
   if (!opened) {
     changed();

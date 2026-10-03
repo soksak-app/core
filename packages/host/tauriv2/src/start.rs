@@ -57,7 +57,11 @@ pub fn serve(
             .header("Cache-Control", "no-store")
             .header("Access-Control-Allow-Origin", PAGE_ORIGIN)
             .body(data)
-            .unwrap_or_else(|error| failure(500, error.to_string())),
+            // 기본값: 응답을 만들지 못한 시작 문서는 그 오류를 기록하고 500 으로 답한다.
+            .unwrap_or_else(|error| {
+                eprintln!("{START_DOCUMENT_PATH}: {error}");
+                failure(500, error.to_string())
+            }),
         Err(error) => {
             eprintln!("{START_DOCUMENT_PATH}: {error}");
             failure(if error == NO_WINDOW { 400 } else { 500 }, error)
