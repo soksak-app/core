@@ -56,7 +56,7 @@ pub(crate) struct SurfaceRegion {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-pub(crate) struct SurfaceComposition {
+pub struct SurfaceComposition {
     pub(crate) kind: String,
     #[serde(default)]
     pub(crate) regions: Vec<SurfaceRegion>,
@@ -219,7 +219,7 @@ pub(crate) fn press_at(window: &Window, x: f64, y: f64) -> Result<(), String> {
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct SyncRequest {
+pub struct SyncRequest {
     /// 연속적인 배치 갱신이 종료되었는지 나타낸다.
     settled: bool,
     #[serde(default)]
@@ -442,6 +442,39 @@ pub(crate) enum PageFocus {
     Ignored,
 }
 
+/// 배치를 시작하기 전에 동기화 요청 전체를 검사한다. `held` 는 창이 이미 받은 표면의
+/// composition 선언이다.
+pub fn check_sync_request(
+    request: &SyncRequest,
+    held: &HashMap<String, SurfaceComposition>,
+) -> Result<(), String> {
+    let mut ids = HashSet::new();
+    for surface in &request.surfaces {
+        if surface.id.is_empty() || !ids.insert(surface.id.clone()) {
+            return Err(format!("invalid or duplicate surface {:?}", surface.id));
+        }
+        validate_rect(
+            &format!("surface {:?}", surface.id),
+            surface.x,
+            surface.y,
+            surface.w,
+            surface.h,
+        )?;
+        validate_composition(&surface.composition)
+            .map_err(|e| format!("surface {:?}: {e}", surface.id))?;
+        if held
+            .get(&surface.id)
+            .is_some_and(|value| value != &surface.composition)
+        {
+            return Err(format!(
+                "surface {:?} changed its composition declaration",
+                surface.id
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// 페이지가 선언한 표면에 창의 자식 웹뷰를 맞추고 표면 배치 트랜잭션을 준비한다.
 pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurfaces, String> {
     let context = window_data(window)?;
@@ -450,33 +483,10 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     let running = &context.running;
     let surface_hosts = &context.surface_hosts;
 
-    let mut ids = HashSet::new();
-    {
-        let held = context.compositions.lock().map_err(|e| e.to_string())?;
-        for surface in &request.surfaces {
-            if surface.id.is_empty() || !ids.insert(surface.id.clone()) {
-                return Err(format!("invalid or duplicate surface {:?}", surface.id));
-            }
-            validate_rect(
-                &format!("surface {:?}", surface.id),
-                surface.x,
-                surface.y,
-                surface.w,
-                surface.h,
-            )?;
-            validate_composition(&surface.composition)
-                .map_err(|e| format!("surface {:?}: {e}", surface.id))?;
-            if held
-                .get(&surface.id)
-                .is_some_and(|value| value != &surface.composition)
-            {
-                return Err(format!(
-                    "surface {:?} changed its composition declaration",
-                    surface.id
-                ));
-            }
-        }
-    }
+    check_sync_request(
+        &request,
+        &*context.compositions.lock().map_err(|e| e.to_string())?,
+    )?;
 
     if !request.settled {
         announce_run(window, running, true)?;

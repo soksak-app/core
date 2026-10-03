@@ -445,6 +445,36 @@ func aligned(win *application.WebviewWindow, at Rect) (Rect, error) {
 	return Rect(got), nil
 }
 
+// CheckSyncRequest 는 배치를 시작하기 전에 동기화 요청 전체를 검사하고 창 오버레이를
+// 반환한다. held 는 창이 이미 받은 표면의 composition 선언이다.
+func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition) ([]platform.WindowOverlay, error) {
+	seen := map[string]bool{}
+	for _, surface := range req.Surfaces {
+		if surface.ID == "" || seen[surface.ID] {
+			return nil, fmt.Errorf("invalid or duplicate surface %q", surface.ID)
+		}
+		seen[surface.ID] = true
+		if err := validateComposition(surface.Composition); err != nil {
+			return nil, fmt.Errorf("surface %q: %w", surface.ID, err)
+		}
+		if declared, exists := held[surface.ID]; exists && !reflect.DeepEqual(declared, surface.Composition) {
+			return nil, fmt.Errorf("surface %q changed its composition declaration", surface.ID)
+		}
+	}
+	windowOverlays := make([]platform.WindowOverlay, 0, len(req.Overlays))
+	for _, overlay := range req.Overlays {
+		if err := ValidateRect("window overlay", overlay.X, overlay.Y, overlay.W, overlay.H); err != nil {
+			return nil, err
+		}
+		visible := true
+		if overlay.Visible != nil {
+			visible = *overlay.Visible
+		}
+		windowOverlays = append(windowOverlays, platform.WindowOverlay{X: overlay.X, Y: overlay.Y, W: overlay.W, H: overlay.H, Visible: visible})
+	}
+	return windowOverlays, nil
+}
+
 // SyncSurfaces 는 표면 뷰를 페이지가 선언한 영역에 맞춘다.
 //
 // AppKit 호출이고 서비스 호출은 자기 고루틴에서 도착하므로 작업은 주 스레드에서 실행한다.
@@ -453,34 +483,11 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	if !ok {
 		return PreparedSurfaces{}, errNoWindow
 	}
-	seen := map[string]bool{}
 	s.mu.Lock()
-	for _, surface := range req.Surfaces {
-		if surface.ID == "" || seen[surface.ID] {
-			s.mu.Unlock()
-			return PreparedSurfaces{}, fmt.Errorf("invalid or duplicate surface %q", surface.ID)
-		}
-		seen[surface.ID] = true
-		if err := validateComposition(surface.Composition); err != nil {
-			s.mu.Unlock()
-			return PreparedSurfaces{}, fmt.Errorf("surface %q: %w", surface.ID, err)
-		}
-		if held, exists := s.compositions[surface.ID]; exists && !reflect.DeepEqual(held, surface.Composition) {
-			s.mu.Unlock()
-			return PreparedSurfaces{}, fmt.Errorf("surface %q changed its composition declaration", surface.ID)
-		}
-	}
+	windowOverlays, err := CheckSyncRequest(req, s.compositions)
 	s.mu.Unlock()
-	windowOverlays := make([]platform.WindowOverlay, 0, len(req.Overlays))
-	for _, overlay := range req.Overlays {
-		if err := ValidateRect("window overlay", overlay.X, overlay.Y, overlay.W, overlay.H); err != nil {
-			return PreparedSurfaces{}, err
-		}
-		visible := true
-		if overlay.Visible != nil {
-			visible = *overlay.Visible
-		}
-		windowOverlays = append(windowOverlays, platform.WindowOverlay{X: overlay.X, Y: overlay.Y, W: overlay.W, H: overlay.H, Visible: visible})
+	if err != nil {
+		return PreparedSurfaces{}, err
 	}
 	// 페이지가 커밋했으므로 창이 화면에 있고 표면이 있다. 애플리케이션이 그려진 뒤에
 	// 한 번 실행할 작업은 여기서 시작한다.
