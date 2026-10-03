@@ -21,6 +21,7 @@ import { commandOf, delegate, mark, run } from "./commands.js";
 import { pluginUnits } from "./environment.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { matchPlugins } from "./plugin-search.js";
+import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 import { hasSection, section, sectionNames } from "./registry.js";
 import {
   CHOICES, FONTS, LAYOUT_RANGES, MENU_LANGUAGES, SHAPE_RANGES, THEMES, scopedValue, settingProject, overridden,
@@ -609,6 +610,12 @@ function makeCard() {
 /* 모달을 그리거나 닫을 때 호출할 함수. 공개 항목이 등록한다. */
 let drawn = () => {};
 
+/* 네이티브 모달이 보고한 보이는 내용의 스크롤 위치(포인트). 이 문서가 그리면 pane 에서 읽는다. */
+let paneScroll = 0;
+
+/** 보이는 내용의 키. 절, 범위, 플러그인 페이지, 편집하는 세트가 같으면 같은 내용이다(docs/spec/settings.md). */
+const scrollKey = () => JSON.stringify([here, scope, here === "plugins" ? chosen : null, here === "sidebars" ? editing : null]);
+
 // 플러그인 절은 보일 때와 plugins-changed 를 받을 때 host 의 상태를 읽고, 상태가 바뀌면 다시 그린다.
 onPluginOperations(() => { if (card && here === "plugins") drawSettings(); });
 
@@ -655,6 +662,7 @@ export function settingsModalState() {
   const r = card.getBoundingClientRect();
   const listed = [...card.querySelectorAll("[data-listed]")].map((el) => el.dataset.listed);
   return { open: true, rows, query, listed, section: here, scope, plugin: here === "plugins" ? chosen : null, editing,
+    scroll: native ? paneScroll : body.scrollTop,
     card: { x: r.left, y: r.top, w: r.width, h: r.height }, controls };
 }
 
@@ -723,7 +731,10 @@ export function drawSettings() {
     b.textContent = name;
     nav.appendChild(b);
   }
+  // 같은 내용을 다시 그리면 그 스크롤 위치를 유지한다. 다른 내용은 data-scroll-key 가 달라 위에서 시작한다.
+  const positions = scrollPositions(card);
   body.textContent = "";
+  body.dataset.scrollKey = scrollKey();
   // 범위 탭은 모든 절의 컨트롤 위에 있다.
   const tabs = segment("scope", [["common", "전역"], ...(settingProject() ? [["project", "프로젝트"]] : [])], scope);
   tabs.className = "set-scope-tabs";
@@ -746,6 +757,7 @@ export function drawSettings() {
   const rect = cardRect();
   if (native) overlay.place(card, rect);
   else standIn(true, rect);
+  restoreScroll(card, positions);
 }
 
 /**
@@ -761,6 +773,14 @@ function answer(key, val) {
   if (key === "move") {
     const [dx, dy] = val.split(",").map(Number);
     return run("core.settings-modal.move", { dx, dy });
+  }
+  // 네이티브 모달이 보이는 내용의 스크롤 위치를 알린다. 위치는 상태로만 쓰며 명령이 아니다.
+  if (key === "scroll") {
+    const top = Number(val);
+    if (!Number.isFinite(top) || top < 0) throw new Error(`settings scroll position is invalid: ${val}`);
+    paneScroll = top;
+    drawn();
+    return;
   }
   const pressed = card.querySelector(`[data-key="${CSS.escape(key)}"]`);
   const field = pressed ? null : card.querySelector(`[data-set="${CSS.escape(key)}"]`);

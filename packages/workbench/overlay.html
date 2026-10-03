@@ -30,6 +30,7 @@
   import { followTheme, page } from "@soksak/plugin-api/page";
   import { onAnswer, onGripDrag, showValue } from "./card.js";
   import { modalOrder } from "./modal-order.js";
+  import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 
   followTheme().then(report);
 
@@ -100,6 +101,8 @@
     root.setAttribute("role", "dialog");
     root.setAttribute("aria-modal", String(mode === "dialog"));
     root.setAttribute("aria-label", title);
+    // 같은 내용을 다시 그리면 그 스크롤 위치를 유지한다. 다른 내용은 data-scroll-key 가 달라 위에서 시작한다.
+    const positions = scrollPositions(root);
     root.innerHTML = html;
     root.style.borderColor = border;
     // 새 위치가 없으면 이미 적용한 위치를 유지한다.
@@ -107,6 +110,9 @@
     pendingCard = null;
     if (at) place(at);
     else report();
+    // 카드 크기를 적용한 뒤 복원해야 스크롤 범위가 이전 크기로 잘리지 않는다.
+    restoreScroll(root, positions);
+    reportScroll();
 
     // 뷰는 메인 페이지가 잰 크기로 만들어졌으므로 여기서 잴 것이 없다. 이 호출은
     // 내용이 렌더링되었다는 것만 보고하며, 그때가 뷰를 표시할 수 있는 시점이다.
@@ -124,6 +130,16 @@
 
   /* 응답은 (key, value) 하나다. 거두는 방법은 메인 문서와 같은 것을 쓴다. */
   const send = (key, value) => page.modal.answer(id, instance, key, value);
+
+  /* 보이는 내용(data-scroll-key)의 스크롤 위치를 내용을 소유한 페이지에 알린다(docs/spec/settings.md). 그 요소가 없는
+     내용(메뉴)은 알리지 않는다. */
+  function reportScroll() {
+    const keyed = root?.querySelector("[data-scroll-key]");
+    if (keyed) send("scroll", String(keyed.scrollTop));
+  }
+  document.addEventListener("scroll", (event) => {
+    if (event.target instanceof Element && event.target.matches("[data-scroll-key]")) reportScroll();
+  }, true);
 
   onAnswer(document, send);
 

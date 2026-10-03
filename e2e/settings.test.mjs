@@ -392,3 +392,32 @@ for (const app of Object.values(APPS)) {
     assert.equal(card.sidebars.left.collapsed, false);
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a settings change keeps the scroll position of the window`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const dim = (await s.get("core.settings")).values.dim;
+    s.cleanup(async () => {
+      await s.run("core.settings.set", { patch: { dim }, scope: "common" });
+      await s.run("core.settings.close");
+    });
+    await s.run("core.settings.open");
+    const { card } = await s.until("core.settings-modal", (modal) => modal.open && modal.scroll === 0,
+      "the settings window did not open at its top");
+    // 휠은 표시된 모달 웹뷰가 받는다. 표시 전의 휠은 메인 페이지로 간다.
+    await s.until("host.window", (w) => w.modal?.id === "settings" && w.modal.shown, "the settings window was not shown");
+    // 일반 절을 아래로 내린다. 위치는 네이티브 창이 보고한다.
+    await s.pointer(card.x + card.w / 2, card.y + card.h / 2, "scroll", { deltaY: 240 });
+    const { scroll } = await s.until("core.settings-modal", (modal) => modal.scroll > 0, "the settings window did not scroll");
+    // 값을 바꾸면 창을 다시 그린다. 다시 그린 뒤에도 같은 내용이므로 위치를 유지한다.
+    const drawn = await s.collect("core.settings-modal");
+    await s.run("core.settings.change", { key: "dim", value: String(!dim), scope: "common" });
+    await s.until("core.settings", (value) => value.values.dim === !dim && !value.saving, "the setting did not change");
+    await s.presented();
+    const seen = (await drawn.stop()).map((modal) => modal.scroll);
+    assert.deepEqual(seen.filter((value) => value !== scroll), [],
+      `the settings window moved from ${scroll} while it redrew: ${JSON.stringify(seen)}`);
+  });
+}

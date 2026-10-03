@@ -26,6 +26,7 @@
     "system-notifications.js",
     "surface-status.js",
     "modal-order.js",
+    "scroll-keep.js",
     "environment.js",
     "installed-plugins.js",
     "surface-exposure.js",

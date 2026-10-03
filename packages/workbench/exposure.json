@@ -707,10 +707,13 @@
       },
       {
         "name": "core.settings-modal",
-        "description": "The settings modal: whether it is open, its section, scope, the plugin search text, the plugin ids listed, the plugin whose page is shown or null, the edited set or null, the rows of declared plugin settings with their label and description, card rectangle in window coordinates, and its controls with the command each control runs.",
+        "description": "The settings modal: whether it is open, its section, scope, the plugin search text, the plugin ids listed, the plugin whose page is shown or null, the edited set or null, the rows of declared plugin settings with their label and description, the scroll position of the shown content in points, card rectangle in window coordinates, and its controls with the command each control runs.",
         "schema": {
           "type": "object",
           "properties": {
+            "scroll": {
+              "type": "number"
+            },
             "open": {
               "type": "boolean"
             },
