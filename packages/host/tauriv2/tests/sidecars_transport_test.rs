@@ -1200,6 +1200,61 @@ fn persistent_start_fails_when_the_service_prints_no_endpoint() {
     );
 }
 
+// 새로 시작한 service 의 표준 오류는 설정 디렉터리의 그 실행 파일 이름 로그에 쌓인다.
+// contract: log.service.standard-error-goes-to-service-log
+#[test]
+fn persistent_service_writes_its_standard_error_to_its_log() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let service = executable_directory.path().join("echo");
+    std::fs::write(&service, "#!/bin/sh\necho service line >&2\nexit 0\n").unwrap();
+    std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (window, _events) = owner("exit", "/projects/exit");
+    send_within(sidecars, window, Duration::from_secs(30)).unwrap_err();
+    assert_eq!(
+        std::fs::read_to_string(config_directory.path().join("logs").join("echo.log")).unwrap(),
+        "service line\n"
+    );
+}
+
+// 서비스 로그를 열 수 없으면 서비스를 시작하지 않고 정해진 문장으로 실패한다.
+// contract: log.service.open-failure-fails-start
+#[test]
+fn persistent_start_fails_when_the_service_log_cannot_open() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let started = executable_directory.path().join("started");
+    let service = executable_directory.path().join("echo");
+    std::fs::write(
+        &service,
+        format!("#!/bin/sh\ntouch {}\n", started.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    // logs 가 파일이면 로그 디렉터리를 만들 수 없다.
+    std::fs::write(config_directory.path().join("logs"), "").unwrap();
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (window, _events) = owner("exit", "/projects/exit");
+    let error = send_within(sidecars, window, Duration::from_secs(30)).unwrap_err();
+    let want = "sidecar @fixture/sidecar-echo: service log: create logs directory: ";
+    assert!(
+        error.starts_with(want),
+        "service log failure = {error}, want prefix {want:?}"
+    );
+    assert!(!started.exists(), "the service started");
+}
+
 // 새로 시작한 service 가 endpoint 를 출력하기 전에 끝나면 시작은 정해진 문장으로 실패한다.
 // contract: sidecars-transport.startup.exits-before-endpoint
 #[test]

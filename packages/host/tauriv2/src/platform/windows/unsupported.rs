@@ -383,6 +383,10 @@ pub fn instant_window_resize() -> Result<(), String> {
     missing("window resize animation")
 }
 
+pub fn replace_standard_error(_file: &std::fs::File) -> Result<(), String> {
+    missing("standard error replacement")
+}
+
 pub fn install_dock_menu(_new_window: Box<dyn Fn()>) -> Result<(), String> {
     missing("Dock menu")
 }

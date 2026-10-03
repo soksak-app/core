@@ -214,6 +214,11 @@ Items:
 | `performance.trace.switch-and-relay-report-filesystem-errors` | Switch and relay requests return directory, flag, and output failures. | both |
 | `performance.trace.invalid-switch-and-cleanup-errors` | Invalid switch reads and invalid flag directories are errors; cleanup preserves the invalid directory. | both |
 | `performance.trace.derive-service-flags-and-reset` | New services receive the host switch; reset and disabled reattachment remove stale flags, and disabled observation does not format events. | both |
+| `log.open.rotates-at-10mb` | Opening a log file of 10 MB or more first moves it to `<name>.1`, replacing the previous generation, and starts a new file. | both |
+| `log.open.appends-below-bound` | Opening a smaller log file appends to it, and a new log file has mode 0600. | both |
+| `log.application.start-replaces-standard-error` | Starting the application log writes the run's start line and makes the file the standard error of the process and of the children it starts. | both |
+| `log.service.standard-error-goes-to-service-log` | A persistent service started by the host writes its standard error to `logs/<executable-name>.log`. | both |
+| `log.service.open-failure-fails-start` | A service log that cannot open fails the start with `sidecar <name>: service log: <error>` and the service does not start. | both |
 | `images.envelope.rejects-unattached-image` | An envelope for an image name that was never attached is answered with notAttached. | both |
 | `images.envelope.refusal-echoes-name-and-sequence` | A refusal carries the name and sequence of the envelope. | both |
 | `images.envelope.refusal-preserves-quoted-name` | A refusal for a name containing a quote is valid JSON and keeps the name. | both |

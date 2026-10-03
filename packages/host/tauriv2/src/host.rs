@@ -13,6 +13,7 @@
 
 use tauri::Manager;
 
+pub mod application_log;
 mod bindings;
 pub mod clipboard;
 mod composition;
@@ -165,6 +166,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 .unwrap_or_else(|_| "unknown".into());
             eprintln!("webkit children: baseline {foreign} foreign WebKit processes");
             exposure::start(app, &directory)?;
+            // 애플리케이션 로그는 엔드포인트가 process lock 을 잡은 뒤에 연다. 그래서 같은 파일에 쓰는
+            // 다른 실행이 없다(docs/spec/hosts.md#application-log).
+            application_log::start_application_log(&directory, &app.config().identifier)?;
             Ok(())
         })
         .build();

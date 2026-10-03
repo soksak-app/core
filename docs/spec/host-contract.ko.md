@@ -214,6 +214,11 @@ fn invalid_json_closes_connection() {
 | `performance.trace.switch-and-relay-report-filesystem-errors` | 스위치와 중계 요청은 디렉터리·플래그·출력 실패를 반환한다. | both |
 | `performance.trace.invalid-switch-and-cleanup-errors` | 잘못된 스위치 읽기와 플래그 디렉터리는 오류이며 정리는 잘못된 디렉터리를 보존한다. | both |
 | `performance.trace.derive-service-flags-and-reset` | 새 서비스는 호스트 스위치를 받는다. 초기화와 비활성 재접속은 잔여 플래그를 제거하고 비활성 계측은 이벤트를 구성하지 않는다. | both |
+| `log.open.rotates-at-10mb` | 10 MB 이상인 로그 파일을 열면 먼저 `<이름>.1`로 옮겨 이전 세대를 대체하고 새 파일을 시작한다. | both |
+| `log.open.appends-below-bound` | 더 작은 로그 파일을 열면 거기에 덧붙이고, 새 로그 파일은 mode 0600이다. | both |
+| `log.application.start-replaces-standard-error` | 애플리케이션 로그를 시작하면 실행의 첫 줄을 쓰고 그 파일을 프로세스와 그 프로세스가 시작하는 자식의 표준 오류로 만든다. | both |
+| `log.service.standard-error-goes-to-service-log` | 호스트가 시작한 영속 서비스는 표준 오류를 `logs/<실행 파일 이름>.log`에 쓴다. | both |
+| `log.service.open-failure-fails-start` | 서비스 로그를 열 수 없으면 `sidecar <name>: service log: <error>`로 시작을 실패시키고 서비스를 시작하지 않는다. | both |
 | `images.envelope.rejects-unattached-image` | 연결된 적 없는 이미지 이름의 봉투에 notAttached로 응답한다. | both |
 | `images.envelope.refusal-echoes-name-and-sequence` | 거부 응답은 봉투의 name과 sequence를 담는다. | both |
 | `images.envelope.refusal-preserves-quoted-name` | 따옴표가 든 이름의 거부 응답은 올바른 JSON이며 이름을 유지한다. | both |

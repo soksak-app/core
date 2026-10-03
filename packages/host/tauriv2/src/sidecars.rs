@@ -1172,13 +1172,19 @@ impl<O: Owner> Core<O> {
                 endpoint
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                // 서비스는 이 호스트보다 오래 살므로 호스트의 표준 오류가 아니라 자기 로그 파일에 쓴다
+                // (docs/spec/hosts.md#application-log). endpoint 가 없으므로 그 파일에 쓰는 서비스가 없다.
+                let service_log = crate::application_log::open_log(
+                    &crate::application_log::service_log_path(config, basename),
+                )
+                .map_err(|error| format!("sidecar {name}: service log: {error}"))?;
                 let mut command = Command::new(program);
                 command
                     .arg("--service-dir")
                     .arg(&service_dir)
                     .stdin(Stdio::null())
                     .stdout(Stdio::piped())
-                    .stderr(Stdio::inherit());
+                    .stderr(Stdio::from(service_log));
                 let mut spawned = command
                     .spawn()
                     .map_err(|e| format!("sidecar {name}: {}: {e}", program.display()))?;

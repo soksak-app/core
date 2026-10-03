@@ -475,6 +475,12 @@ pub trait Platform: Send + Sync {
     /// 창 확대와 애니메이션 크기 변경을 한 화면 갱신 안에 끝나게 한다. 창을 만들기 전에 호출한다.
     fn instant_window_resize(&self) -> Result<(), String>;
 
+    // 표준 오류
+
+    /// 프로세스의 표준 오류를 file 로 바꾼다. 이후 시작하는 자식 프로세스도 그 descriptor 를
+    /// 물려받는다(docs/spec/hosts.md#application-log).
+    fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String>;
+
     // Dock
 
     /// Dock 메뉴에 새 창 항목을 설치한다. 항목을 선택하면 new_window 를 호출한다.

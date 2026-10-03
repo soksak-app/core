@@ -791,12 +791,20 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		// 종료되지 않도록 새 session 을 시작한다.
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 		cmd.Stdin = nil
-		cmd.Stderr = os.Stderr
+		// 서비스는 이 호스트보다 오래 살므로 호스트의 표준 오류가 아니라 자기 로그 파일에 쓴다
+		// (docs/spec/hosts.md#application-log). endpoint 가 없으므로 그 파일에 쓰는 서비스가 없다.
+		serviceLog, err := OpenLog(ServiceLogPath(c.configDir, program))
+		if err != nil {
+			return nil, fmt.Errorf("sidecar %s: service log: %w", name, err)
+		}
+		cmd.Stderr = serviceLog
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
-			return nil, fmt.Errorf("sidecar %s: service stdout: %w", name, err)
+			return nil, errors.Join(fmt.Errorf("sidecar %s: service stdout: %w", name, err), serviceLog.Close())
 		}
-		if err := cmd.Start(); err != nil {
+		startErr := cmd.Start()
+		// 서비스는 복제한 descriptor 를 가지므로 호스트가 연 파일은 닫는다.
+		if err := errors.Join(startErr, serviceLog.Close()); err != nil {
 			return nil, fmt.Errorf("sidecar %s: %w", name, err)
 		}
 		// 프로세스 등록부의 계기(V5-104): 뜨는 사이드카의 pid 와 역할을 남긴다.

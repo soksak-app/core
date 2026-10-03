@@ -123,6 +123,13 @@ func Run(assets fs.FS, options Options) error {
 		return fmt.Errorf("local endpoint: %w", err)
 	}
 	defer host.endpoint.Close()
+	// 애플리케이션 로그는 Serve 가 process lock 을 잡은 뒤에 연다. 그래서 같은 파일에 쓰는 다른
+	// 실행이 없다(docs/spec/hosts.md#application-log).
+	if err := StartApplicationLog(configDirectory, ApplicationIdentifier); err != nil {
+		return err
+	}
+	// 호스트의 줄은 두 호스트가 같은 형식으로 접두사 없이 쓴다. 시각은 실행의 첫 줄이 가진다.
+	log.SetFlags(0)
 	app := application.New(application.Options{
 		Name: "soksak", Description: "soksak layout running in Wails v3",
 		Assets: application.AssetOptions{Handler: application.BundledAssetFileServer(assets), Middleware: func(next http.Handler) http.Handler {

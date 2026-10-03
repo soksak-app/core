@@ -50,6 +50,8 @@ mod link;
 mod notifications;
 #[path = "shapes.rs"]
 mod shapes;
+#[path = "standard_error.rs"]
+mod standard_error;
 #[path = "termination.rs"]
 mod termination;
 #[path = "webview.rs"]
@@ -503,6 +505,9 @@ impl Platform for Darwin {
     fn instant_window_resize(&self) -> Result<(), String> {
         window::instant_resize();
         Ok(())
+    }
+    fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String> {
+        standard_error::replace(file)
     }
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String> {
         dock::install(new_window)

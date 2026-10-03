@@ -389,6 +389,9 @@ impl Platform for Windows {
     fn instant_window_resize(&self) -> Result<(), String> {
         unsupported::instant_window_resize()
     }
+    fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String> {
+        unsupported::replace_standard_error(file)
+    }
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String> {
         unsupported::install_dock_menu(new_window)
     }

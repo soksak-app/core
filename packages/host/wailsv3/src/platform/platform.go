@@ -315,6 +315,10 @@ type Platform interface {
 	// 창을 만들기 전에 호출한다.
 	InstantWindowResize() error
 
+	// ReplaceStandardError 는 프로세스의 표준 오류를 file 로 바꾼다. 이후 시작하는 자식 프로세스도 그
+	// descriptor 를 물려받는다(docs/spec/hosts.md#application-log).
+	ReplaceStandardError(file *os.File) error
+
 	// InstallDock 은 Dock 메뉴를 등록한다. 새 창 항목은 newWindow 를 호출한다.
 	InstallDock(newWindow func()) error
 	// DockItems 는 Dock 메뉴 항목의 제목을 JSON 배열로 반환한다. UI 스레드에서 호출한다.

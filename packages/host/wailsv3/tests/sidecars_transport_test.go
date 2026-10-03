@@ -1141,6 +1141,58 @@ func sendWithin(t *testing.T, sidecars *host.Sidecars, owner *harnessOwner, limi
 	}
 }
 
+// 새로 시작한 service 의 표준 오류는 설정 디렉터리의 그 실행 파일 이름 로그에 쌓인다.
+// contract: log.service.standard-error-goes-to-service-log
+func TestPersistentServiceWritesItsStandardErrorToItsLog(t *testing.T) {
+	folder := t.TempDir()
+	if err := os.WriteFile(filepath.Join(folder, "service"), []byte("#!/bin/sh\necho service line >&2\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	config := t.TempDir()
+	sidecars, err := NewSidecars(harnessDeclarations(folder), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/exit", seen: make(chan SidecarMessage, 1)}
+	if err := sendWithin(t, sidecars, owner, 30*time.Second); err == nil {
+		t.Fatal("the service that exits started")
+	}
+	data, err := os.ReadFile(filepath.Join(config, "logs", "service.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "service line\n" {
+		t.Fatalf("service log %q", data)
+	}
+}
+
+// 서비스 로그를 열 수 없으면 서비스를 시작하지 않고 정해진 문장으로 실패한다.
+// contract: log.service.open-failure-fails-start
+func TestPersistentStartFailsWhenTheServiceLogCannotOpen(t *testing.T) {
+	folder := t.TempDir()
+	started := filepath.Join(folder, "started")
+	if err := os.WriteFile(filepath.Join(folder, "service"), []byte("#!/bin/sh\ntouch "+started+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	config := t.TempDir()
+	// logs 가 파일이면 로그 디렉터리를 만들 수 없다.
+	if err := os.WriteFile(filepath.Join(config, "logs"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sidecars, err := NewSidecars(harnessDeclarations(folder), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/exit", seen: make(chan SidecarMessage, 1)}
+	err = sendWithin(t, sidecars, owner, 30*time.Second)
+	if want := "sidecar fixture-service: service log: create logs directory: "; err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Fatalf("service log failure = %v, want prefix %q", err, want)
+	}
+	if _, err := os.Stat(started); !os.IsNotExist(err) {
+		t.Fatalf("the service started: %v", err)
+	}
+}
+
 // 새로 시작한 service 가 endpoint 를 출력하기 전에 끝나면 시작은 정해진 문장으로 실패한다.
 // contract: sidecars-transport.startup.exits-before-endpoint
 func TestPersistentStartFailsWhenTheServiceExitsBeforeItsEndpoint(t *testing.T) {

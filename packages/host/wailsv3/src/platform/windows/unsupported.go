@@ -5,6 +5,7 @@ package windows
 import (
 	"fmt"
 	"net"
+	"os"
 	"unsafe"
 
 	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
@@ -102,6 +103,10 @@ func (implementation) OnTermination(func()) error {
 
 func (implementation) InstantWindowResize() error {
 	return unsupported("window resize animation")
+}
+
+func (implementation) ReplaceStandardError(*os.File) error {
+	return unsupported("standard error replacement")
 }
 
 func (implementation) DockItems() (string, error) {

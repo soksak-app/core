@@ -101,6 +101,7 @@ The shell sidecar repository uses the same Go mechanism in its `src/platform/` (
 | Document regions | Creation inside a surface webview, navigation, history actions, placement by insets, dialog blur, close |
 | Termination | Termination signals (SIGTERM, SIGINT, SIGHUP): the first one calls the host's quit request; later ones end the process with the default action. The quit request kills every window's web process first — see [Process lifecycle](#process-lifecycle) |
 | Window motion | Shortening the window resize animation before any window exists |
+| Standard error | Replacing the process's standard error with an open file — see [Application log](#application-log); not implemented on Windows |
 | Dock | Dock menu installation |
 | Identity | Directory identity |
 | Endpoint | [Local endpoint](endpoint.md) transport: Unix socket on macOS; not implemented on Windows |
@@ -154,6 +155,16 @@ Crash leftovers are accepted until the operating system reclaims them. A startup
 **Persistent sidecars outlive the application and reconnect.** The terminal service keeps its sessions across application restarts and connection losses; a lost connection is revived at once and a dead service respawned ([terminal runtime](terminal-runtime.md)). The application never kills a persistent service on exit.
 
 **Non-persistent sidecars die with their window.** Removing a surface or closing its window sends the close notice; the process ends with the channel.
+
+## Application log
+
+Each host writes its application log to `logs/application.log` under the configuration directory. Right after the host creates its [endpoint](endpoint.md), which holds the process lock of the configuration directory, it opens that file for appending with mode 0600 and makes the file the standard error of the process through the platform standard-error operation. The file then holds the host's own lines, each page line sent through `report`, the runtime's crash output, and the standard error of every non-persistent sidecar, which inherits the descriptor. A line is in the file when the write that produced it returns. Both hosts write their own lines and the page lines without a prefix; each run starts the log with the line `<ISO-8601 time> application log: <application identifier> pid <pid>`, which carries the time. Output written before the endpoint exists goes to the standard error that the process was started with.
+
+A persistent service outlives the host that started it, so it does not inherit the host's standard error. When a host starts a persistent service, it opens `logs/<executable-name>.log` for appending with mode 0600 and passes that file as the service's standard error.
+
+When a host opens a log file of 10 MB or more, it first renames the file to `<name>.1`, which replaces the previous generation, and starts a new file. A host opens a log file only when no other process writes to it: it opens the application log once per run while it holds the process lock, and a service log only when it starts that service. A run or a service appends without a size limit until the next open, so the next run or service start applies the bound.
+
+A host that cannot open its application log or replace its standard error does not start, and it reports the error on the standard error that it was started with. A host that cannot open a service log does not start that service and fails the start with `sidecar <name>: service log: <error>`.
 
 ## Application tree
 
