@@ -1117,6 +1117,7 @@ func TestReattachingInTheSameGenerationContinuesTheRaster(t *testing.T) {
 
 // 표면 페이지의 ImageCaret 와 ImageText 는 요청 뒤에 좌표와 글을 함께 보낸다. 인자 해석은 그 목록대로 하고,
 // 다음 단계인 호출자 확인에서 실패해야 한다(G1.4-109).
+// contract: host-calls.native.image-argument-lists
 func TestNativeImageCallsDecodeTheirOwnArguments(t *testing.T) {
 	surfaces := host.NewSurfaces(nil, nil)
 	request := json.RawMessage(`{"surface":"tab-1","name":"view"}`)
