@@ -129,9 +129,11 @@ for (const app of Object.values(APPS)) {
 
     const mode = (await s.get("core.settings")).values.mode;
     const other = mode === "dark" ? "light" : "dark";
-    const pick = moved.controls.find((c) => c.key === `pick:mode:${other}`);
+    // 모드는 선택 상자다. 고른 값은 명령의 value 로 간다(docs/spec/settings.md 의 Controls).
+    const pick = moved.controls.find((c) => c.key === "mode");
     assert.ok(pick?.command, "the appearance control must name its command");
-    await s.run(pick.command.name, pick.command.params);
+    assert.ok(pick.options.includes(other), `the mode select box does not offer ${other}`);
+    await s.run(pick.command.name, { ...pick.command.params, value: other });
     await s.until("core.settings", (value) => value.values.mode === other && !value.saving, "the control command did not change the mode");
 
     await s.run("core.settings.close");

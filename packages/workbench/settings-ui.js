@@ -3,9 +3,10 @@
 // 560px 카드. 헤더에 제목과 닫기 버튼, 왼쪽에 절 목록, 오른쪽에 「이름 124px +
 // 컨트롤」 행이 들어간다. 행은 묶음으로 나뉘고 묶음마다 이름과 설명 한 줄을 갖는다.
 //
-// 컨트롤은 브라우저 기본 모양을 쓰지 않는다. 값이 둘이나 셋이면 목록이 아니라 한 줄에
-// 늘어놓고(seg), 켜고 끄는 값은 스위치다. 기본 select 와 checkbox 는 테마의 색을
-// 따르지 않는다.
+// 설정의 형식마다 컨트롤은 하나다(docs/spec/settings.md 의 Controls). 켜고 끄는 값은
+// 스위치, 나열된 값 중 하나는 선택 상자, 테마는 견본 격자, 경계가 있는 정수는 슬라이더,
+// 문자열과 주소는 글자 입력, 세트 참조는 선택 상자다. 기본 select 와 checkbox 는 테마의
+// 색을 따르지 않으므로 컨트롤은 app.css 의 모양을 쓴다.
 //
 // [data-native-modal] 요소다. DOM 은 네이티브 표면 위에 그릴 수 없으므로 호스트가
 // 이 요소를 별도 뷰에 렌더링한다. 그 뷰는 사본이므로 여기서 등록한 리스너가 동작하지
@@ -56,9 +57,9 @@ function row(label, control) {
   name.className = "set-row__name";
   name.textContent = label;
   el.append(name, control);
-  const field = control.matches("[data-set]") ? control : control.querySelector("[data-set], [data-key]");
-  // 기본값: 설정 컨트롤이 없는 행은 키가 없고, data-set 이 없는 선택지는 data-key(pick:키:값)의 둘째 부분이 설정 키다.
-  const key = field?.dataset.set ?? field?.dataset.key?.split(":")[1];
+  const field = control.matches("[data-set]") ? control : control.querySelector("[data-set]");
+  // 기본값: 설정 컨트롤이 없는 행(버튼만 있는 행)은 키가 없다.
+  const key = field?.dataset.set;
   if (scope === "project" && key && overridden(key)) {
     const resetButton = press(`reset:${key}`, "전역값 사용");
     resetButton.classList.add("set-reset");
@@ -100,15 +101,14 @@ function valueCommand(el, key) {
   else mark(el, "core.settings.change", { key, scope });
 }
 
-/** select 를 만든다. 선택한 값이 key 와 함께 반환된다. */
-function choose(key, options, now) {
+/** 선택 상자를 만든다. 명령은 호출자가 연결한다. 현재 값이 선택지에 없으면 예외를 던진다. */
+function selectBox(key, options, now) {
   if (!options.some(([value]) => value === now)) throw new Error(`unknown settings choice ${String(now)} for ${key}`);
   const wrap = document.createElement("span");
   wrap.className = "select-field";
   const el = document.createElement("select");
   el.dataset.set = key;
   el.dataset.expose = "core.settings-modal.set";
-  valueCommand(el, key);
   for (const [v, label] of options) {
     const o = document.createElement("option");
     o.value = v;
@@ -120,12 +120,13 @@ function choose(key, options, now) {
   return wrap;
 }
 
-/**
- * 값을 한 줄에 늘어놓는다. 값이 둘이나 셋일 때 사용한다.
- *
- * 버튼이므로 select 와 달리 change 가 아니라 click 으로 도착한다. key 에 값을 함께
- * 실어 보낸다.
- */
+/** 설정의 선택 상자. 선택한 값이 key 와 함께 core.settings.change 나 core.settings.link 로 간다. */
+function choose(key, options, now) {
+  const wrap = selectBox(key, options, now);
+  valueCommand(wrap.firstChild, key);
+  return wrap;
+}
+
 /** 설정의 선택지에 이름을 붙인다. 선택지와 순서는 settings.js 의 CHOICES 가 정한다. */
 function named(key, labels) {
   return CHOICES[key].map((choice) => {
@@ -134,16 +135,19 @@ function named(key, labels) {
   });
 }
 
-function segment(key, options, now) {
+/**
+ * 범위 탭. 설정이 아니라 보이는 범위를 고르는 버튼을 한 줄에 늘어놓는다. 버튼이므로 select 와 달리 change 가
+ * 아니라 click 으로 도착하고, key 에 값을 함께 실어 보낸다.
+ */
+function scopeTabs(options, now) {
   const el = document.createElement("span");
   el.className = "set-seg";
   for (const [v, label] of options) {
     const b = document.createElement("button");
     b.type = "button";
-    b.dataset.key = `pick:${key}:${v}`;
-    b.dataset.expose = key === "scope" ? "core.settings-modal.scope" : "core.settings-modal.pick";
-    if (key === "scope") mark(b, "core.settings-modal.scope", { scope: v });
-    else mark(b, "core.settings.change", { key, value: v, scope });
+    b.dataset.key = `pick:scope:${v}`;
+    b.dataset.expose = "core.settings-modal.scope";
+    mark(b, "core.settings-modal.scope", { scope: v });
     b.dataset.on = String(v === now);
     b.textContent = label;
     el.appendChild(b);
@@ -248,12 +252,12 @@ function drawGeneral() {
   for (const t of THEMES) grid.appendChild(swatch(t));
 
   if (scope === "common") body.append(group("프로젝트", "프로젝트를 여는 방식은 모든 프로젝트에 적용됩니다. 이미 열린 창은 유지됩니다.", [
-    row("열기 방식", segment("projectOpening", named("projectOpening", { tabs: "현재 창", windows: "별도 창" }), value("projectOpening"))),
+    row("열기 방식", choose("projectOpening", named("projectOpening", { tabs: "현재 창", windows: "별도 창" }), value("projectOpening"))),
   ]));
   if (scope === "project" && overridden("theme")) grid.append(press("reset:theme", "전역 테마 사용"));
   body.append(group("테마", "테마가 색과 형태의 기본값을 정하고, 모드는 그 테마의 밝은 쪽과 어두운 쪽을 고른다.", [
     grid,
-    row("모드", segment("mode", named("mode", { dark: "어두움", light: "밝음" }), modeName())),
+    row("모드", choose("mode", named("mode", { dark: "어두움", light: "밝음" }), modeName())),
   ]));
 
   body.append(group("형태", "테마가 준 값에서 시작한다. 통로를 0 으로 내리면 카드가 선 하나를 공유한다.", [
@@ -264,7 +268,7 @@ function drawGeneral() {
   ]));
 
   body.append(group("위치", "프로젝트 탭이 놓이는 위치. 바꾸면 카드 배치도 함께 바뀐다.", [
-    row("프로젝트 탭 위치", segment("projectTabs", named("projectTabs", { top: "위", left: "왼쪽" }), value("projectTabs"))),
+    row("프로젝트 탭 위치", choose("projectTabs", named("projectTabs", { top: "위", left: "왼쪽" }), value("projectTabs"))),
   ]));
 
   body.append(group("사이드바", "표시 스위치는 해당 변의 모든 창 사이드바에 적용된다. 일반 세트와 플러그인 창 세트는 각각 독립된 열에 표시된다.", [
@@ -279,13 +283,13 @@ function drawGeneral() {
     Object.entries(LAYOUT_RANGES).map(([key, [min, max]]) => row(SIZE_LABELS[key], slide(key, min, max, value(key), "pt")))));
 
   body.append(group("표시", "배치는 그대로 두고 보이는 모습만 바꾼다.", [
-    row("포커스 표시", segment("focusInd", named("focusInd", { border: "테두리", corner: "꺽쇠" }), value("focusInd"))),
-    row("경계선", segment("fullRule", named("fullRule", { under: "가림", over: "보임", none: "숨김" }), value("fullRule"))),
+    row("포커스 표시", choose("focusInd", named("focusInd", { border: "테두리", corner: "꺽쇠" }), value("focusInd"))),
+    row("경계선", choose("fullRule", named("fullRule", { under: "가림", over: "보임", none: "숨김" }), value("fullRule"))),
     row("포커스 밖 흐리게", toggle("dim", value("dim"))),
   ]));
 
   body.append(group("언어", "애플리케이션 메뉴가 이 언어를 따른다. 자동은 시스템 언어이고 목록에 없으면 영어다.", [
-    row("언어", segment("language",
+    row("언어", choose("language",
       [["auto", "자동"], ...MENU_LANGUAGES.map(({ id, label }) => [id, label])], value("language"))),
   ]));
 }
@@ -315,16 +319,18 @@ function choiceOf(place, plugin) {
   return found.set;
 }
 
-/** 설정 한 행. 선언된 형식에 따라 선택, 슬라이더, 글자 입력이다. */
+/** 플러그인 설정 형식의 컨트롤(docs/spec/settings.md 의 Controls). 형식마다 하나다. */
+const DECLARED_CONTROLS = {
+  enum: (key, definition, now) => choose(key, definition.values.map((item) => [item, item]), now),
+  integer: (key, definition, now) => slide(key, definition.minimum, definition.maximum, now, ""),
+  string: (key, definition, now) => text(key, definition.maxLength, now),
+  address: (key, definition, now) => text(key, 2048, now),
+};
+
+/** 설정 한 행. 선언된 형식의 컨트롤이다. */
 function declaredRow(key, definition) {
-  const now = value(key);
-  const control = definition.type === "enum"
-    ? segment(key, definition.values.map((item) => [item, item]), now)
-    : definition.type === "string"
-      ? text(key, definition.maxLength, now)
-      : definition.type === "address"
-        ? text(key, 2048, now)
-      : slide(key, definition.minimum, definition.maximum, now, "");
+  if (!Object.hasOwn(DECLARED_CONTROLS, definition.type)) throw new Error(`setting ${key} has no control for type ${definition.type}`);
+  const control = DECLARED_CONTROLS[definition.type](key, definition, value(key));
   const el = row(definition.label, control);
   el.dataset.row = key;
   if (!definition.description) return [el];
@@ -460,12 +466,8 @@ function setEditor(s) {
   mark(title, "core.settings.sets.update", { id: s.id, scope }, "title");
   title.maxLength = 40;
   title.setAttribute("value", s.title);
-  const layout = document.createElement("span");
-  layout.className = "set-seg";
-  for (const [v, label] of [["list", "목록"], ["tabs", "탭"]]) {
-    layout.append(button(`layout:${s.id}:${v}`, "core.settings-modal.pick", label, "core.settings.sets.update",
-      { id: s.id, layout: v, scope }, s.layout === v));
-  }
+  const layout = selectBox(`layout:${s.id}`, [["list", "목록"], ["tabs", "탭"]], s.layout);
+  mark(layout.firstChild, "core.settings.sets.update", { id: s.id, scope }, "layout");
   const rows = [row("이름", title), row("배치", layout)];
   s.sections.forEach((id, index) => {
     const acts = document.createElement("span");
@@ -583,6 +585,8 @@ export function settingsModalState() {
       on: on === null ? null : on === "true",
       value: "value" in el && el.tagName !== "BUTTON" ? String(el.value) : null,
       command: commandOf(el),
+      // 선택 상자는 고를 수 있는 값을 문서 순서로 보고한다.
+      options: el.tagName === "SELECT" ? [...el.querySelectorAll("option")].map((o) => o.value) : null,
       // 섹션 행의 선택 상자는 플러그인마다 optgroup 으로 묶는다. 묶음의 이름과 값을 보고한다.
       groups: el.tagName === "SELECT" && el.querySelector("optgroup")
         ? [...el.querySelectorAll("optgroup")].map((g) => ({ label: g.label, values: [...g.querySelectorAll("option")].map((o) => o.value) }))
@@ -672,7 +676,7 @@ export function drawSettings() {
   body.textContent = "";
   body.dataset.scrollKey = scrollKey();
   // 범위 탭은 모든 절의 컨트롤 위에 있다.
-  const tabs = segment("scope", [["common", "전역"], ...(settingProject() ? [["project", "프로젝트"]] : [])], scope);
+  const tabs = scopeTabs([["common", "전역"], ...(settingProject() ? [["project", "프로젝트"]] : [])], scope);
   tabs.className = "set-scope-tabs";
   tabs.setAttribute("role", "group");
   tabs.setAttribute("aria-label", "설정 범위");

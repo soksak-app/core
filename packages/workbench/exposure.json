@@ -727,7 +727,7 @@
       },
       {
         "name": "core.settings-modal",
-        "description": "The settings modal: whether it is open, its section, scope, the plugin search text, the loaded plugin ids listed, the plugin whose page is shown or null, the edited set or null, the rows of declared plugin settings with their label and description, the scroll position of the shown content in points, card rectangle in window coordinates, and its controls with the command each control runs.",
+        "description": "The settings modal: whether it is open, its section, scope, the plugin search text, the loaded plugin ids listed, the plugin whose page is shown or null, the edited set or null, the rows of declared plugin settings with their label and description, the scroll position of the shown content in points, card rectangle in window coordinates, and its controls with the command each control runs and the option values of each select box.",
         "schema": {
           "type": "object",
           "properties": {
@@ -782,6 +782,10 @@
                         "type": "object"
                       }
                     }
+                  },
+                  "options": {
+                    "type": ["array", "null"],
+                    "items": { "type": "string" }
                   },
                   "groups": {
                     "type": ["array", "null"],
@@ -3035,18 +3039,13 @@
         "many": true
       },
       {
-        "name": "core.settings-modal.pick",
-        "description": "The settings choice buttons in document order; core.settings-modal lists their keys.",
-        "many": true
-      },
-      {
         "name": "core.settings-modal.theme",
         "description": "The theme swatches in order.",
         "many": true
       },
       {
         "name": "core.settings-modal.set",
-        "description": "The settings value controls in document order; core.settings-modal lists their keys.",
+        "description": "The setting controls in document order (switches, select boxes, sliders and text fields, one control per setting form); core.settings-modal lists their keys.",
         "many": true
       },
       {

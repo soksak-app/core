@@ -57,7 +57,7 @@ The page of a plugin replaces the search field and the list. It shows:
 
 - 목록: a button that runs `core.settings-modal.plugin {plugin: null}` and returns to the list with the same query.
 - The plugin name, with the plugin id as its caption.
-- 설정: one row per setting the manifest declares, in manifest order, named with its `label` and followed by its `description` when it has one. An `enum` is a choice row, an `integer` a slider between its bounds, and a `string` or an `address` a text field. A plugin without settings shows "이 플러그인에는 설정이 없습니다."
+- 설정: one row per setting the manifest declares, in manifest order, named with its `label` and followed by its `description` when it has one. Each row has the [control](#controls) of its form: an `enum` a select box, an `integer` a slider between its bounds, and a `string` or an `address` a text field. A plugin without settings shows "이 플러그인에는 설정이 없습니다."
 - 섹션: the names of the sections the plugin declares, as one line of text.
 - 사이드바: every plugin has window-left/window-right selectors. A plugin with a surface also has four internal card-side selectors. Every selector offers 사용 안 함 and all sets, and runs `core.settings.link {place, plugin, set}`.
 
@@ -68,7 +68,7 @@ The section shows the set list and 새 세트. Each row shows the set title, its
 The editor of a set shows:
 
 - 이름: a text field, `core.settings.sets.update {id, title, scope}`.
-- 배치: 목록 (`list`) or 탭 (`tabs`), `core.settings.sets.update {id, layout, scope}`.
+- 배치: a select box of 목록 (`list`) and 탭 (`tabs`), `core.settings.sets.update {id, layout, scope}`.
 - 섹션: one row per section of the set, in set order. A row is a select box of every registered section with one `optgroup` per plugin, labelled with the plugin name, and the buttons ▲, ▼, and −. Below the rows, + adds a row.
 - 완료: `core.settings-modal.edit {set: null}` closes the editor.
 
@@ -83,6 +83,23 @@ Every section row control runs `core.settings.sets.row {id, action, index, secti
 | + | `add` | Appends the first registered section, in plugin and declaration order, that the set does not contain |
 
 A change that would repeat a section in the set fails with -32602 (invalid params) and the error "section <id> is already in set <id>", and changes nothing; so does + when the set already contains every registered section, with "set <id> already contains every registered section". Every change is saved immediately to the scope shown.
+
+## Controls
+
+The window draws every setting with one control of a fixed set, chosen by the form of the setting ([values](#values) and the plugin declarations of [plugins](plugins.md)). Each form has exactly one control, and no setting has a control of its own.
+
+| Form | Control | Command |
+|---|---|---|
+| A boolean (`left`, `right`, `dim`) | Switch: a checkbox drawn as a switch | `core.settings.change {key, value, scope}` |
+| A choice of listed values (`projectOpening`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `language`, a plugin `enum`) | Select box with one option per value in the declared order | `core.settings.change {key, value, scope}` |
+| A theme of the catalog (`theme`) | Swatch grid with one swatch per theme, drawn with that theme's colors and shape | `core.settings.theme {name, scope}` |
+| A bounded integer (`gap`, `radius`, `size`, the [layout values](#layout-values), a plugin `integer`) | Slider between the bounds, followed by the value and its unit | `core.settings.change {key, value, scope}` |
+| A string or an address (a plugin `string` or `address`) | One-line text field | `core.settings.change {key, value, scope}` |
+| A set reference (a link of [sidebar choices](#sidebar-choices)) | Select box of 사용 안 함 and every set | `core.settings.link {place, plugin, set, scope}` |
+
+The set editor uses the same controls: 이름 is a text field, 배치 a select box and each section row a select box. Buttons run actions (전역값 사용, 편집, 삭제, 새 세트, ▲ ▼ − +, 목록, 플러그인 관리) and are not setting controls; the scope tabs select the shown scope and are not a setting. A setting without a control in this table, such as `textSize`, `sets` and `diagnostics.performance`, is changed by its own command or the settings file.
+
+The workbench defines this control set instead of rendering the window with the form library at `~/Projects/polyspec/crudui`. That library compiles a form template, binds a record that the application submits as a whole, and keeps row identity, an undo history, `name`-based controls and its own event binding (`connectForm`). The settings window applies each change at once through a declared command, every control names its command through the shared binder and carries a dom name ([exposure](exposure.md)), and the host draws a copy of the card in which no listener runs ([native modals](native-modals.md)). The library's markup and binding meet none of these rules without a layer that rewrites its output, while the plugin setting declarations need only the forms of the table above, so adding the dependency is not justified.
 
 ## Values
 
@@ -176,7 +193,7 @@ The following layout constants remain in code because they are tied to the docum
 | `plugin` | The plugin whose page is shown, or `null` |
 | `editing` | The edited set id, or `null` |
 | `rows` | Each declared plugin setting row on a plugin page as `{key, name, description}` |
-| `controls` | Every control with its dom name, key, and command |
+| `controls` | Every control with its dom name, key, command, current value, and the option values of a select box (`options`, otherwise `null`) |
 
 [Plugin screen](installation.md#plugin-screen) defines `core.plugins`.
 
@@ -185,6 +202,7 @@ The following layout constants remain in code because they are tied to the docum
 ## Acceptance
 
 - 일반 holds the sidebar appearance controls (`left`, `right`, both general links, the widths) and no plugin setting.
+- Every setting of 일반, of a plugin page and of the set editor is drawn with the one control of its form in [controls](#controls); no choice is drawn as a row of buttons.
 - 사이드바 holds only the set list, 새 세트, and the editor. The editor has no control per registered section: its section controls are one select box and ▲ ▼ − per row, and one +.
 - The section rows choose, move, remove, and add sections through `core.settings.sets.row`; a repeated section is rejected.
 - 플러그인 shows a filtered list of the loaded plugins by name; a row opens the plugin page with its settings, sections, and sidebar choices, and 목록 returns to the list. The section shows no plugin description, version, sidecar or plugin operation; 플러그인 관리 closes the window and shows the plugin screen.

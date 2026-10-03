@@ -83,7 +83,7 @@ for (const app of Object.values(APPS)) {
       await control(s, "core.settings-modal.set", key);
     }
     const pluginKeys = Object.keys((await s.get("core.settings")).values).filter((key) => key.includes("."));
-    const general = (await controls(s)).map((c) => c.key ?? "").map((key) => key.startsWith("pick:") ? key.split(":")[1] : key);
+    const general = (await controls(s)).map((c) => c.key ?? "");
     assert.deepEqual(general.filter((key) => pluginKeys.includes(key)), [], "일반 shows plugin settings");
 
     // 사이드바: 세트 목록과 새 세트만 있다.
@@ -129,7 +129,10 @@ for (const app of Object.values(APPS)) {
       assert.equal((await control(s, "core.settings-modal.set", `link:card-${side}:terminal`)).value, "off",
         `the missing card-${side} link did not display off`);
     }
-    await press(s, "core.settings-modal.pick", "pick:terminal.cursor.shape:beam");
+    // 선택지는 값 수와 관계없이 선택 상자다(docs/spec/settings.md 의 Controls).
+    const shape = await control(s, "core.settings-modal.set", "terminal.cursor.shape");
+    assert.deepEqual(shape.options, ["block", "underline", "beam"]);
+    await press(s, "core.settings-modal.set", "terminal.cursor.shape", "beam");
     await s.until("core.settings", (value) => value.values["terminal.cursor.shape"] === "beam" && !value.saving,
       "the plugin page did not change terminal.cursor.shape");
     await press(s, "core.settings-modal.back", "plugins:list");
@@ -182,7 +185,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.settings-modal", (modal) => modal.editing === made.id, "the new set is not being edited");
 
     await press(s, "core.settings-modal.set", `title:${made.id}`, "검사 세트", "title");
-    await press(s, "core.settings-modal.pick", `layout:${made.id}:tabs`);
+    await press(s, "core.settings-modal.set", `layout:${made.id}`, "tabs", "layout");
     const sectionsOf = async () => (await settingsValue(s, "sets")).find((item) => item.id === made.id).sections;
     const saved = (want, message) => s.until("core.settings", (value) => !value.saving &&
       value.values.sets.find((item) => item.id === made.id)?.sections.join() === want.join(), message);
@@ -323,7 +326,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
     await section(s, "general");
-    assert.deepEqual((await controls(s)).filter((c) => c.key?.startsWith("pick:cardSidebar:")), [], "일반 shows a card sidebar position");
+    assert.deepEqual((await controls(s)).filter((c) => c.key === "cardSidebar"), [], "일반 shows a card sidebar position");
   });
 
   test(`${app.name}: performance tracing records enabled card focus and stops while disabled`, { timeout: 30000 }, async (t) => {

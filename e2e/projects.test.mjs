@@ -70,7 +70,7 @@ async function scopeTabs(s) {
   return controls.filter((c) => c.name === "core.settings-modal.scope");
 }
 
-const hasKey = async (s, prefix) => (await s.get("core.settings-modal")).controls.some((c) => c.key?.startsWith(prefix));
+const hasKey = async (s, key) => (await s.get("core.settings-modal")).controls.some((c) => c.key === key);
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: two independent project states repeat create-use-close-recreate in one instance`, { timeout: 30000 }, async (t) => {
@@ -210,8 +210,8 @@ for (const app of Object.values(APPS)) {
     assert.ok(globalTab.x < projectTab.x);
     await press(child, "core.settings-modal.scope", "pick:scope:project");
     await control(child, "core.settings-modal.scope", "pick:scope:project", (c) => c.on, "folder settings scope was not selected");
-    assert.equal(await hasKey(child, "pick:projectOpening:"), false);
-    await press(child, "core.settings-modal.pick", "pick:mode:light");
+    assert.equal(await hasKey(child, "projectOpening"), false);
+    await press(child, "core.settings-modal.set", "mode", "light");
     await child.until("core.settings", (value) => value.values.mode === "light", "modal did not update its project");
     await child.until("core.settings", (value) => !value.saving, "the project setting was not saved");
     assert.equal(await mode(s), "dark");
@@ -234,9 +234,9 @@ for (const app of Object.values(APPS)) {
     await control(child, "core.settings-modal.scope", "pick:scope:project", (c) => c.on,
       "General did not retain the selected project tab");
     await press(child, "core.settings-modal.scope", "pick:scope:common");
-    await control(child, "core.settings-modal.pick", "pick:projectOpening:windows", () => true,
+    await control(child, "core.settings-modal.set", "projectOpening", () => true,
       "Global tab did not display the common-only setting");
-    await press(child, "core.settings-modal.pick", "pick:mode:light");
+    await press(child, "core.settings-modal.set", "mode", "light");
     await s.until("core.settings", (value) => value.values.mode === "light", "Global tab did not update the other project");
     await child.until("core.settings", (value) => !value.saving, "the common setting was not saved");
     assert.equal(read(join(config, "settings.json")).mode, "light");
@@ -256,8 +256,8 @@ for (const app of Object.values(APPS)) {
     await openSettings(child);
     const libraryTabs = await scopeTabs(child);
     assert.deepEqual(libraryTabs.map((b) => ({ label: b.label, on: b.on })), [{ label: "전역", on: true }]);
-    assert.equal(await hasKey(child, "pick:projectOpening:"), true);
-    await press(child, "core.settings-modal.pick", "pick:mode:light");
+    assert.equal(await hasKey(child, "projectOpening"), true);
+    await press(child, "core.settings-modal.set", "mode", "light");
     await s.until("core.settings", (value) => value.values.mode === "light", "library settings did not update common settings");
     await child.until("core.settings", (value) => !value.saving, "the common setting was not saved");
     assert.equal(read(join(config, "settings.json")).mode, "light");

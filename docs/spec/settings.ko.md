@@ -57,7 +57,7 @@
 
 - 목록: `core.settings-modal.plugin {plugin: null}`을 실행해 같은 검색어의 목록으로 돌아가는 버튼.
 - 플러그인 이름과, 그 아래 설명 줄의 플러그인 id.
-- 설정: manifest가 선언한 설정마다 한 행을 manifest 순서로 보여 주고, 행 이름은 `label`이며 `description`이 있으면 행 아래에 보인다. `enum`은 선택 행, `integer`는 경계 사이의 슬라이더, `string`과 `address`는 글자 입력이다. 설정이 없는 플러그인은 "이 플러그인에는 설정이 없습니다."를 보여 준다.
+- 설정: manifest가 선언한 설정마다 한 행을 manifest 순서로 보여 주고, 행 이름은 `label`이며 `description`이 있으면 행 아래에 보인다. 각 행은 그 형식의 [컨트롤](#컨트롤)이다. `enum`은 선택 상자, `integer`는 경계 사이의 슬라이더, `string`과 `address`는 글자 입력이다. 설정이 없는 플러그인은 "이 플러그인에는 설정이 없습니다."를 보여 준다.
 - 섹션: 플러그인이 선언한 섹션의 이름을 한 줄 글로 보여 준다.
 - 사이드바: 모든 플러그인은 창 좌우 선택이 있다. 표면이 있는 플러그인은 카드 내부 네 변 선택도 있다. 모든 선택은 사용 안 함과 모든 세트를 제공하고 `core.settings.link {place, plugin, set}`을 실행한다.
 
@@ -68,7 +68,7 @@
 세트 편집은 다음을 보여 준다.
 
 - 이름: 글자 입력, `core.settings.sets.update {id, title, scope}`.
-- 배치: 목록(`list`) 또는 탭(`tabs`), `core.settings.sets.update {id, layout, scope}`.
+- 배치: 목록(`list`)과 탭(`tabs`)의 선택 상자, `core.settings.sets.update {id, layout, scope}`.
 - 섹션: 세트의 섹션마다 세트 순서대로 한 행. 행은 등록된 모든 섹션의 선택 상자(플러그인마다 플러그인 이름을 붙인 `optgroup` 하나)와 버튼 ▲, ▼, −다. 행 아래의 +가 행을 더한다.
 - 완료: `core.settings-modal.edit {set: null}`이 편집을 닫는다.
 
@@ -83,6 +83,23 @@
 | + | `add` | 세트에 없는 등록된 섹션 중 플러그인과 선언 순서로 첫 섹션을 끝에 더한다 |
 
 세트에 같은 섹션이 두 번 들어가게 하는 변경은 -32602(invalid params)와 오류 "section <id> is already in set <id>"로 실패하고 아무것도 바꾸지 않는다. 세트가 이미 등록된 모든 섹션을 담고 있을 때의 +도 "set <id> already contains every registered section"으로 같게 실패한다. 모든 변경은 보이는 범위에 바로 저장된다.
+
+## 컨트롤
+
+창은 모든 설정을 정해진 컨트롤 묶음 중 하나로 그리며, 그 컨트롤은 설정의 형식([값](#값)과 [plugins](plugins.ko.md)의 plugin 설정 선언)으로 정한다. 형식마다 컨트롤은 정확히 하나이고, 어떤 설정도 자기만의 컨트롤을 갖지 않는다.
+
+| 형식 | 컨트롤 | 명령 |
+|---|---|---|
+| Boolean (`left`, `right`, `dim`) | 스위치: 스위치로 그린 체크 상자 | `core.settings.change {key, value, scope}` |
+| 나열된 값 중 하나 (`projectOpening`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `language`, plugin `enum`) | 선언 순서대로 값마다 항목 하나가 있는 선택 상자 | `core.settings.change {key, value, scope}` |
+| Catalog의 theme (`theme`) | Theme마다 그 theme의 색과 형태로 그린 견본 하나가 있는 견본 격자 | `core.settings.theme {name, scope}` |
+| 경계가 있는 정수 (`gap`, `radius`, `size`, [배치 값](#배치-값), plugin `integer`) | 경계 사이의 슬라이더와 그 뒤의 값과 단위 | `core.settings.change {key, value, scope}` |
+| 문자열 또는 주소 (plugin `string` 또는 `address`) | 한 줄 글자 입력 | `core.settings.change {key, value, scope}` |
+| 세트 참조 ([사이드바 선택](#사이드바-선택)의 연결) | 사용 안 함과 모든 세트의 선택 상자 | `core.settings.link {place, plugin, set, scope}` |
+
+세트 편집도 같은 컨트롤을 쓴다. 이름은 글자 입력, 배치는 선택 상자, 섹션 행은 각각 선택 상자다. 버튼(전역값 사용, 편집, 삭제, 새 세트, ▲ ▼ − +, 목록, 플러그인 관리)은 동작을 실행하며 설정 컨트롤이 아니다. 범위 탭은 보이는 범위를 고르며 설정이 아니다. `textSize`, `sets`, `diagnostics.performance`처럼 이 표에 컨트롤이 없는 설정은 자기 명령이나 설정 파일로 바꾼다.
+
+워크벤치는 `~/Projects/polyspec/crudui`의 폼 라이브러리로 창을 그리지 않고 이 컨트롤 묶음을 직접 정한다. 그 라이브러리는 폼 template을 compile하고, 애플리케이션이 한 번에 제출하는 record를 bind하며, 행 identity, undo history, `name` 기반 컨트롤과 자기 event binding(`connectForm`)을 가진다. 설정 창은 바뀐 값을 선언된 명령으로 바로 적용하고, 모든 컨트롤은 공유 binder로 자기 명령을 가리키며 dom 이름을 가지고([exposure](exposure.ko.md)), host는 listener가 동작하지 않는 카드 사본을 그린다([네이티브 모달](native-modals.ko.md)). 그 라이브러리의 markup과 binding은 출력을 다시 쓰는 층 없이는 이 규칙을 하나도 만족하지 않고, plugin 설정 선언에는 위 표의 형식만 필요하므로 의존성을 더할 이유가 없다.
 
 ## 값
 
@@ -176,7 +193,7 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `plugin` | 페이지가 보이는 플러그인 또는 `null` |
 | `editing` | 편집 중인 세트 id 또는 `null` |
 | `rows` | 플러그인 페이지의 선언된 설정 행마다 `{key, name, description}` |
-| `controls` | 모든 컨트롤과 그 dom 이름, 키, 명령 |
+| `controls` | 모든 컨트롤과 그 dom 이름, 키, 명령, 현재 값, 선택 상자의 항목 값(`options`, 다른 컨트롤은 `null`) |
 
 `core.plugins`는 [plugin 화면](installation.ko.md#plugin-화면)이 정한다.
 
@@ -185,6 +202,7 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 ## 완료 기준
 
 - 일반은 사이드바 모양 컨트롤(`left`, `right`, 일반 좌우 연결, 폭)을 담고 플러그인 설정은 담지 않는다.
+- 일반, 플러그인 페이지, 세트 편집의 모든 설정은 [컨트롤](#컨트롤)에서 그 형식에 정한 컨트롤 하나로 그린다. 어떤 선택지도 버튼 줄로 그리지 않는다.
 - 사이드바는 세트 목록, 새 세트, 편집만 담는다. 편집에는 등록된 섹션마다의 컨트롤이 없다. 섹션 컨트롤은 행마다 선택 상자 하나와 ▲ ▼ −, 그리고 + 하나다.
 - 섹션 행은 `core.settings.sets.row`로 섹션을 고르고, 옮기고, 빼고, 더한다. 같은 섹션의 반복은 거부된다.
 - 플러그인은 불러온 플러그인을 이름으로 걸러진 목록에 보여 주고, 행은 설정, 섹션, 사이드바 선택이 있는 플러그인 페이지를 열며, 목록이 목록으로 돌아간다. 이 절은 플러그인 설명, 버전, 사이드카, 플러그인 작업을 보여 주지 않는다. 플러그인 관리는 창을 닫고 plugin 화면을 보여 준다.

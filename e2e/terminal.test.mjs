@@ -1198,19 +1198,18 @@ for (const app of Object.values(APPS)) {
     const page = await modalControl("plugin:terminal");
     await s.run(page.command.name, page.command.params);
     await s.until("core.settings-modal", (modal) => modal.plugin === "terminal", "the terminal settings page did not open");
-    const pick = async (key) => {
-      const control = await modalControl(key);
-      assert.ok(control.command, `settings control ${key} has no command`);
-      await s.run(control.command.name, control.command.params);
-      const setting = key.slice("pick:".length).slice(0, key.slice("pick:".length).lastIndexOf(":"));
-      const expected = key.slice(key.lastIndexOf(":") + 1);
+    // 선택지는 선택 상자다. 고른 값은 그 컨트롤이 가리키는 명령의 value 로 간다(docs/spec/settings.md 의 Controls).
+    const pick = async (setting, expected) => {
+      const control = await modalControl(setting);
+      assert.ok(control.command, `settings control ${setting} has no command`);
+      assert.ok(control.options?.includes(expected), `settings control ${setting} does not offer ${expected}`);
+      await s.run(control.command.name, { ...control.command.params, value: expected });
       await s.until("core.settings", (state) => state.values[setting] === expected && !state.saving,
         `settings command did not apply ${setting}=${expected}`);
     };
-    await modalControl("pick:terminal.cursor.shape:underline");
-    await pick("pick:terminal.cursor.shape:underline");
-    await pick("pick:terminal.cursor.blink:Never");
-    await pick("pick:terminal.cursor.unfocused:beam");
+    await pick("terminal.cursor.shape", "underline");
+    await pick("terminal.cursor.blink", "Never");
+    await pick("terminal.cursor.unfocused", "beam");
     // 숫자 설정은 값 입력 컨트롤이 가리키는 명령으로 바꾼다.
     const enter = async (key, value) => {
       const modal = await s.until("core.settings-modal", (state) =>
