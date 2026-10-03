@@ -85,7 +85,7 @@ async function dropFiles(payload) {
   lastDrop = record;
 }
 
-/** core.plugins.<action> 명령의 처리기. plugin 은 비어 있지 않은 문자열이다(docs/spec/settings.md). */
+/** core.plugins.<action> 명령의 처리기. plugin 은 비어 있지 않은 문자열이다(docs/spec/installation.md 의 Plugin screen). */
 function pluginCommand(action) {
   return async ({ plugin }) => {
     if (typeof plugin !== "string" || plugin === "") {
@@ -355,7 +355,11 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   });
   registry.command("core.settings.open", () => { openSettings(); });
   registry.command("core.settings.close", () => { closeSettings(); });
-  registry.command("core.projects.browse", async () => { await projects.browse(); });
+  // 프로젝트 목록은 라이브러리의 프로젝트 페이지를 보인다.
+  registry.command("core.projects.browse", async () => {
+    await projects.browse();
+    library.actions.page("projects");
+  });
   registry.command("core.projects.flush", async () => { await projects.flush(); });
   registry.command("core.project.open", ({ root, color = "#ffb36b" }) => {
     // 창 크기는 아래 등록된 resize 마커가, 프로젝트 열기는 여기가 담당한다(V5-104).
@@ -394,6 +398,12 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.plugins.remove", pluginCommand("remove"));
   registry.command("core.plugins.enable", pluginCommand("enable"));
   registry.command("core.plugins.disable", pluginCommand("disable"));
+  // 플러그인 관리는 설정 창을 닫고 라이브러리의 플러그인 페이지를 보인다.
+  registry.command("core.plugins.browse", async () => {
+    closeSettings();
+    if (!projects.inLibrary()) await projects.browse();
+    library.actions.page("plugins");
+  });
   registry.command("core.settings-modal.edit", ({ set: id = null }) => { editSet(id); });
   registry.command("core.settings-modal.move", ({ dx, dy }) => { moveSettings(dx, dy); });
 
@@ -418,6 +428,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.picker.pick", ({ index }) => { pickItem(index); });
   registry.command("core.picker.close", () => { closePicker(); });
 
+  registry.command("core.library.page", ({ page }) => { library.actions.page(page); });
+  registry.command("core.library.plugins.search", ({ query }) => { library.actions.searchPlugins(query); });
   registry.command("core.library.search", ({ query }) => { library.actions.search(query); });
   registry.command("core.library.sort", ({ order }) => { library.actions.sort(order); });
   registry.command("core.library.open", async ({ id }) => { await library.actions.open(id); });

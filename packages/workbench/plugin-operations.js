@@ -1,5 +1,5 @@
-// 설치된 플러그인 작업과 core.plugins status(docs/spec/settings.md 의 플러그인 절,
-// docs/spec/installation.md 의 애플리케이션 안의 plugin 작업). host 는 pluginsState 와 pluginsRun 을 제공하며,
+// 설치된 플러그인 작업과 core.plugins status(docs/spec/installation.md 의 Plugin screen 과 애플리케이션 안의 plugin
+// 작업). host 는 pluginsState 와 pluginsRun 을 제공하며,
 // host 가 없으면 창이 불러온 플러그인만 보이고 작업은 없다.
 
 export const PLUGIN_ACTIONS = ["install", "update", "remove", "enable", "disable"];
@@ -15,7 +15,23 @@ function compareVersions(a, b) {
 }
 
 /**
- * 목록 행을 id 순서로 만든다. loaded 는 창이 불러온 플러그인 {id, name, description, version},
+ * 플러그인이 이름을 댄 사이드카를 이름 순서의 {name, range, version} 으로 만든다. 설치된 플러그인은 installed.json
+ * 항목의 범위와 설치된 사이드카 버전을, 아니면 가장 새 registry 버전의 범위를, 아니면 불러온 manifest 의 이름만 쓴다.
+ */
+function sidecarsOf(record, entry, unit, state) {
+  let ranges;
+  if (record) ranges = Object.entries(record.sidecars);
+  else if (entry) ranges = Object.entries(entry.versions.toSorted((a, b) => compareVersions(a.version, b.version)).at(-1).sidecars);
+  else ranges = unit.sidecars.map((name) => [name, null]);
+  return ranges.sort(([a], [b]) => a.localeCompare(b)).map(([name, range]) => ({
+    name, range,
+    // 기본값: host 상태가 없거나 설치되지 않은 사이드카는 버전을 모른다(null).
+    version: state?.installed.sidecars[name]?.version ?? null,
+  }));
+}
+
+/**
+ * 목록 행을 id 순서로 만든다. loaded 는 창이 불러온 플러그인 {id, name, description, version, sidecars},
  * state 는 host 의 pluginsState 결과이며 host 가 없으면 null 이다.
  */
 export function pluginRows(loaded, state) {
@@ -23,6 +39,7 @@ export function pluginRows(loaded, state) {
   if (!state) {
     return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id)).map((unit) => ({
       id: unit.id, name: unit.name, description: unit.description, state: "loaded", installed: null, latest: null,
+      sidecars: sidecarsOf(null, null, unit, null),
     }));
   }
   const installed = state.installed.plugins;
@@ -39,11 +56,13 @@ export function pluginRows(loaded, state) {
     else if (!unit && !record) status = "available";
     else status = "restart";
     const latest = entry ? entry.versions.map((v) => v.version).sort(compareVersions).at(-1) : null;
-    // 기본값: 이름과 설명은 불러온 manifest, registry 항목, plugin id 순서로 정한다(docs/spec/settings.md).
+    // 기본값: 이름과 설명은 불러온 manifest, registry 항목, plugin id 순서로 정한다(docs/spec/installation.md).
     const about = unit ?? entry ?? { name: id, description: "" };
     return {
       id, name: about.name, description: about.description, state: status,
       installed: record ? { version: record.version, enabled: record.enabled } : null, latest,
+      // installed.json 에만 있는 플러그인도 그 항목이 사이드카를 가진다.
+      sidecars: sidecarsOf(record, entry, unit, state),
     };
   });
 }

@@ -15,7 +15,7 @@
 | Id | 이름 | 내용 |
 |---|---|---|
 | `general` | 일반 | 사이드바 모양을 포함해 워크벤치 전체에 적용되는 설정 |
-| `plugins` | 플러그인 | 설치된 플러그인의 검색할 수 있는 목록과 선택한 플러그인의 페이지 |
+| `plugins` | 플러그인 | 불러온 플러그인의 검색할 수 있는 목록과 선택한 플러그인의 설정 페이지 |
 | `sidebars` | 사이드바 | 만들기·편집·삭제가 있는 세트 목록과 세트 편집 |
 
 `core.settings-modal.nav {section}`이 절을 보여 준다. 창은 닫았다 다시 열어도 절, 플러그인 검색어, 선택한 플러그인, 편집 중인 세트를 유지한다.
@@ -45,32 +45,21 @@
 
 ### 플러그인
 
-선택한 플러그인이 없으면 이 절은 검색 칸과 목록을 보여 준다. 플러그인은 표면, 섹션, 설정을 함께 제공하는 한 단위다. 목록은 창이 불러온 플러그인, `installed.json`이 나열한 플러그인, registry index가 나열한 플러그인마다 한 행이며 id 순서로 정렬한다. 행은 불러온 manifest의 이름과 설명을, 없으면 registry 항목의 것을, 둘 다 없으면 플러그인 id만 보여 주고, 상태 하나를 보여 준다:
+이 절은 창이 불러온 플러그인의 설정을 담는다. 플러그인의 설정, 섹션, 사이드바 선택은 불러온 manifest에서 오기 때문이다. 플러그인은 표면, 섹션, 설정을 함께 제공하는 한 단위다. 플러그인의 설치, 업데이트, 제거, 켜기, 끄기와 그 설명, 버전, 사이드카는 메인 창의 [plugin 화면](installation.ko.md#plugin-화면)에 속한다. 설정 창에는 플러그인 설명을 보일 자리가 없기 때문이다.
 
-| 상태 | 글 | 조건 |
-| --- | --- | --- |
-| `loaded` | 사용 중 | 창이 플러그인을 불러왔고, `installed.json`이 같은 버전을 켠 상태로 나열한다 |
-| `disabled` | 사용 안 함 | `installed.json`이 플러그인을 끈 상태로 나열하고, 창이 불러오지 않았다 |
-| `available` | 설치 안 됨 | Registry index만 플러그인을 나열한다 |
-| `restart` | 다시 시작하면 적용 | `installed.json`이 창이 불러온 것과 다르다. 창을 불러온 뒤에 플러그인을 설치, 제거, 업데이트, 켜기, 끄기 했다 |
+선택한 플러그인이 없으면 이 절은 플러그인 관리, 검색 칸, 목록을 보여 준다.
 
-이 절은 보일 때와 `plugins-changed` event를 받을 때마다 host의 [plugin 상태](installation.ko.md#애플리케이션-안의-plugin-작업)를 읽는다. Registry index를 읽지 못하면 목록 위에 "레지스트리를 읽지 못했습니다: <message>"를 보여 주고, 목록은 불러온 플러그인과 설치된 플러그인을 유지한다. 잘못된 `installed.json`처럼 plugin 상태를 읽지 못하면 "플러그인 상태를 읽지 못했습니다: <message>"를 보여 주고 행은 없다. Browser 애플리케이션처럼 host가 없으면 목록에는 불러온 플러그인만 모두 `loaded`로 있고, 페이지에는 동작이 없다.
-
-- 검색 칸은 입력한 글자로 `core.settings-modal.search {query}`를 실행한다. 목록은 id, 이름, 설명에 검색어가 들어 있는 플러그인을 대소문자 구분 없이 보여 주며, 빈 검색어는 모든 플러그인을 보여 준다. 맞는 플러그인이 없으면 "찾는 플러그인이 없습니다."를 보여 준다.
-- 행은 `core.settings-modal.plugin {plugin}`을 실행해 그 플러그인의 페이지를 연다.
+- 플러그인 관리: `core.plugins.browse`를 실행하는 버튼이다. 이 명령은 설정 창을 닫고 plugin 화면을 보여 준다.
+- 검색 칸은 입력한 글자로 `core.settings-modal.search {query}`를 실행한다. 목록은 id, 이름, 설명에 검색어가 들어 있는 불러온 플러그인마다 한 행이며, 대소문자를 구분하지 않고 id 순서로 정렬한다. 빈 검색어는 불러온 플러그인을 모두 보여 준다. 맞는 플러그인이 없거나 창이 불러온 플러그인이 없으면 "찾는 플러그인이 없습니다."를 보여 준다.
+- 행은 플러그인 이름을 보여 주고 `core.settings-modal.plugin {plugin}`을 실행해 그 플러그인의 페이지를 연다. 창이 불러오지 않은 플러그인이면 이 명령은 `unknown plugin <id>`로 실패한다.
 
 플러그인 페이지는 검색 칸과 목록 대신 다음을 보여 준다.
 
 - 목록: `core.settings-modal.plugin {plugin: null}`을 실행해 같은 검색어의 목록으로 돌아가는 버튼.
-- 플러그인 이름과 설명, 그리고 설치된 버전과 registry index가 나열한 가장 새 버전을 있을 때 보여 주는 한 줄.
-- 동작: 각각 자기 명령에 연결된 버튼이다. 설치 `core.plugins.install`은 registry가 플러그인을 나열하고 설치되지 않았을 때, 업데이트 `core.plugins.update`는 설치되었고 registry가 나열할 때, 사용 `core.plugins.enable` 또는 사용 안 함 `core.plugins.disable`은 설치되었을 때 `enabled` 값에 따라, 제거 `core.plugins.remove`는 설치되었을 때 보인다. 작업이 실행되는 동안 모든 동작은 비활성이고 페이지는 "<plugin> <action> 진행 중"을 보여 준다. 작업이 끝나면 페이지는 "애플리케이션을 다시 시작하면 적용됩니다." 또는 실패한 작업의 오류를 보여 준다.
-- 설정: manifest가 선언한 설정마다 한 행을 manifest 순서로 보여 주고, 행 이름은 `label`이며 `description`이 있으면 행 아래에 보인다. `enum`은 선택 행, `integer`는 경계 사이의 슬라이더, `string`은 글자 입력이다. 설정이 없는 플러그인은 "이 플러그인에는 설정이 없습니다."를 보여 준다.
+- 플러그인 이름과, 그 아래 설명 줄의 플러그인 id.
+- 설정: manifest가 선언한 설정마다 한 행을 manifest 순서로 보여 주고, 행 이름은 `label`이며 `description`이 있으면 행 아래에 보인다. `enum`은 선택 행, `integer`는 경계 사이의 슬라이더, `string`과 `address`는 글자 입력이다. 설정이 없는 플러그인은 "이 플러그인에는 설정이 없습니다."를 보여 준다.
 - 섹션: 플러그인이 선언한 섹션의 이름을 한 줄 글로 보여 준다.
 - 사이드바: 모든 플러그인은 창 좌우 선택이 있다. 표면이 있는 플러그인은 카드 내부 네 변 선택도 있다. 모든 선택은 사용 안 함과 모든 세트를 제공하고 `core.settings.link {place, plugin, set}`을 실행한다.
-
-설정, 섹션, 사이드바는 플러그인의 manifest가 필요하므로 페이지는 창이 불러온 플러그인에만 그것들을 보여 준다.
-
-`core.plugins.install`, `core.plugins.update`, `core.plugins.remove`, `core.plugins.enable`, `core.plugins.disable`은 `{plugin}`을 받고 자기 action으로 host 호출 `pluginsRun`을 실행한다. `plugin`이 비어 있지 않은 문자열이 아니면 -32602(invalid params)로, 작업이 실패하거나 다른 작업이 실행 중이면 host 오류로, host가 없으면 "plugin operations need a native host"로 실패한다. 명령은 host를 호출하기 전에 작업을 `core.plugins`에 기록하고, 호출 뒤에 결과를 기록한다.
 
 ### 사이드바
 
@@ -183,21 +172,13 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `section` | 보이는 절 id |
 | `scope` | `common` 또는 `project` |
 | `query` | 플러그인 검색어. 기본값은 빈 문자열 |
-| `listed` | 보이는 목록 행의 플러그인 id를 순서대로. 플러그인 목록 밖에서는 `[]` |
+| `listed` | 보이는 목록 행의 불러온 플러그인 id를 순서대로. 플러그인 목록 밖에서는 `[]` |
 | `plugin` | 페이지가 보이는 플러그인 또는 `null` |
 | `editing` | 편집 중인 세트 id 또는 `null` |
 | `rows` | 플러그인 페이지의 선언된 설정 행마다 `{key, name, description}` |
 | `controls` | 모든 컨트롤과 그 dom 이름, 키, 명령 |
 
-`core.plugins`는 다음을 보고한다:
-
-| 필드 | 값 |
-|---|---|
-| `registry` | Registry index URL 또는 `null` |
-| `error` | Registry index 오류 또는 plugin 상태 오류, 또는 `null` |
-| `plugins` | 목록 행마다 id 순서로 `{id, name, description, state, installed, latest}`. `installed`는 `{version, enabled}` 또는 `null`이고, `latest`는 registry index가 나열한 가장 새 버전 또는 `null`이다 |
-| `operation` | 첫 작업 전에는 `null`, 그 뒤에는 마지막 작업의 `{action, plugin, state, error}`. `state`는 `running`, `done`, `failed`이고, `error`는 실패한 작업의 message 또는 `null`이다 |
-| `restart` | 상태가 `restart`인 플러그인이 있으면 `true` |
+`core.plugins`는 [plugin 화면](installation.ko.md#plugin-화면)이 정한다.
 
 `core.settings`는 `sets`, `links`, 배치 값을 포함한 모든 유효 값을 보고한다. `core.themes`는 theme catalog를 순서대로 보고한다. 각 theme의 `name`, `shape` 값, `dark`와 `light` mode의 color token이다.
 
@@ -206,7 +187,6 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 - 일반은 사이드바 모양 컨트롤(`left`, `right`, 일반 좌우 연결, 폭)을 담고 플러그인 설정은 담지 않는다.
 - 사이드바는 세트 목록, 새 세트, 편집만 담는다. 편집에는 등록된 섹션마다의 컨트롤이 없다. 섹션 컨트롤은 행마다 선택 상자 하나와 ▲ ▼ −, 그리고 + 하나다.
 - 섹션 행은 `core.settings.sets.row`로 섹션을 고르고, 옮기고, 빼고, 더한다. 같은 섹션의 반복은 거부된다.
-- 플러그인은 불러온 플러그인, 설치된 플러그인, registry 플러그인을 상태와 함께 걸러진 목록으로 보여 주고, 행은 동작과, 불러온 플러그인이면 설정, 섹션, 사이드바 선택이 있는 플러그인 페이지를 열며, 목록이 목록으로 돌아간다.
-- 플러그인 페이지에서 설치, 업데이트, 끄기, 켜기, 제거를 하면 같은 `sok plugin` 명령처럼 `installed.json`을 바꾸고, 작업을 `core.plugins`에 보고하며, 애플리케이션을 다시 시작할 때까지 그 플러그인을 `restart`로 표시한다.
+- 플러그인은 불러온 플러그인을 이름으로 걸러진 목록에 보여 주고, 행은 설정, 섹션, 사이드바 선택이 있는 플러그인 페이지를 열며, 목록이 목록으로 돌아간다. 이 절은 플러그인 설명, 버전, 사이드카, 플러그인 작업을 보여 주지 않는다. 플러그인 관리는 창을 닫고 plugin 화면을 보여 준다.
 - 일반·플러그인 창·카드 내부 선택은 포커스와 탭 변경에도 독립적이다. 사용 안 함인 창 열이 다른 플러그인 열을 대체하지 않는다.
 - 배치 값이 카드 내부 사이드바의 한계·초기 크기와 새 창 사이드바 폭을 바꾼다.

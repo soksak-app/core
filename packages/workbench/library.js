@@ -5,6 +5,8 @@ import { windows } from "@soksak/runtime";
 import { icon } from "./icons.js";
 import { preview } from "./library-preview.js";
 import { delegate, mark } from "./commands.js";
+import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
+import { matchPlugins } from "./plugin-search.js";
 
 const TINTS = ["#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"];
 const element = (tag, cls, text) => {
@@ -32,23 +34,49 @@ function folderReason(message) {
   return known ? known[1] : `폴더를 확인할 수 없습니다: ${message}`;
 }
 
+/* 라이브러리의 두 페이지(docs/spec/installation.md 의 Plugin screen). */
+const PAGES = [['projects', '프로젝트'], ['plugins', '플러그인']];
+
+/** 플러그인 카드의 상태 글. */
+const PLUGIN_STATES = { loaded: '사용 중', disabled: '사용 안 함', available: '설치 안 됨', restart: '다시 시작하면 적용' };
+
+/** 사이드카 줄. 설치된 버전이 있으면 그 버전을, 없으면 선언한 범위를 보인다. */
+function sidecarLine(sidecars) {
+  if (!sidecars.length) return '사이드카 없음';
+  // 기본값: 버전도 범위도 모르는 사이드카(host 가 없는 창)는 이름만 보인다.
+  return `사이드카 ${sidecars.map((item) => [item.name, item.version ?? item.range].filter(Boolean).join(' ')).join(', ')}`;
+}
+
 export function createLibrary(root, rendered = () => {}) {
   root.innerHTML = `
     <main class="library-main">
       <header class="library-heading">
-        <h1>프로젝트</h1>
+        <nav class="library-pages" aria-label="라이브러리 페이지"></nav>
         <label class="select-field library-sort"><select aria-label="프로젝트 정렬" data-expose="core.library.sort" data-command="core.library.sort" data-value="order"><option value="saved">저장 순서</option><option value="name">이름</option><option value="recent">최근</option><option value="open">열림</option></select></label>
         <label class="library-search"><span class="sr-only">프로젝트 검색</span><input class="text-field" type="search" data-expose="core.library.search" data-command="core.library.search" data-value="query" data-live placeholder="이름 또는 폴더 검색" autocomplete="off"></label>
+        <label class="library-search library-plugin-search"><span class="sr-only">플러그인 검색</span><input class="text-field" type="search" data-expose="core.library.plugins.search" data-command="core.library.plugins.search" data-value="query" data-live placeholder="이름, id, 설명 검색" autocomplete="off"></label>
       </header>
       <div class="library-error" role="alert" hidden></div>
       <div class="library-form" hidden></div>
       <div class="library-empty" data-expose="core.library.empty" hidden><h2>프로젝트를 시작하세요</h2><p>새 프로젝트를 만들거나 기존 폴더를 여세요.</p></div>
       <div class="library-grid" role="list"></div>
+      <div class="library-plugins" role="list"></div>
     </main>
     <footer class="library-footer"><span class="library-count"></span><button type="button" class="library-return" data-expose="core.library.return" data-command="core.library.return" hidden>작업 화면으로 돌아가기</button><button type="button" data-action="window" data-expose="core.library.window" data-command="core.library.window">＋ 새 창</button></footer>`;
   const grid = root.querySelector('.library-grid');
-  const search = root.querySelector('input[type=search]');
+  const search = root.querySelector('[data-expose="core.library.search"]');
   const sort = root.querySelector('select');
+  const pages = root.querySelector('.library-pages');
+  const pluginSearch = root.querySelector('[data-expose="core.library.plugins.search"]');
+  const pluginList = root.querySelector('.library-plugins');
+  /* 보이는 페이지와 플러그인 검색어. 작업 화면을 보이는 동안에도 유지한다. */
+  let page = 'projects';
+  let pluginQuery = '';
+  for (const [id, label] of PAGES) {
+    const tab = element('button', 'library-page', label); tab.type = 'button'; tab.dataset.expose = 'core.library.page';
+    mark(tab, 'core.library.page', { page: id });
+    pages.append(tab);
+  }
   const form = root.querySelector('.library-form');
   const error = root.querySelector('.library-error');
   const back = root.querySelector('.library-return');
@@ -143,12 +171,90 @@ export function createLibrary(root, rendered = () => {}) {
   /** 프로젝트 목록이 바뀌었다. 폴더를 다시 확인한다. */
   function refreshFolders() { foldersFor=null; }
 
+  /** 보이는 페이지의 탭과 그 페이지의 요소만 보인다. */
+  function showPage() {
+    for (const tab of pages.children) {
+      const on = JSON.parse(tab.dataset.params).page === page;
+      tab.dataset.on = String(on); tab.setAttribute('aria-pressed', String(on));
+    }
+    const plugins = page === 'plugins';
+    for (const el of [sort.parentElement, search.parentElement, grid]) el.hidden = plugins;
+    if (plugins) { error.hidden = true; form.hidden = true; formMode = null; root.querySelector('.library-empty').hidden = true; }
+    pluginSearch.parentElement.hidden = !plugins;
+    pluginList.hidden = !plugins;
+  }
+
+  /** 플러그인 카드 하나. 이름, id, 상태, 설명, 버전, 사이드카, 작업 단추, 그 플러그인의 마지막 작업 글이다. */
+  function pluginCard(row, status) {
+    const card = element('article', 'library-plugin'); card.dataset.pluginId = row.id; card.setAttribute('role', 'listitem');
+    card.dataset.state = row.state;
+    const head = element('div', 'library-plugin__head');
+    head.append(element('h2', '', row.name), element('span', 'library-plugin__state', PLUGIN_STATES[row.state]));
+    card.append(head, element('p', 'library-plugin__id', row.id));
+    if (row.description) card.append(element('p', 'library-plugin__about', row.description));
+    const versions = [
+      row.installed ? `설치된 버전 ${row.installed.version}` : null,
+      row.latest ? `최신 버전 ${row.latest}` : null,
+    ].filter(Boolean).join(' · ');
+    if (versions) card.append(element('p', 'library-plugin__versions', versions));
+    card.append(element('p', 'library-plugin__sidecars', sidecarLine(row.sidecars)));
+    if (pluginOperations.hosted) {
+      const actions = element('div', 'library-plugin__actions');
+      const action = (label, name) => {
+        const button = element('button', 'ui-button', label); button.type = 'button'; button.dataset.expose = 'core.library.plugins.action'; button.dataset.action = name;
+        mark(button, `core.plugins.${name}`, { plugin: row.id });
+        // 작업이 실행되는 동안에는 어느 작업도 시작하지 않는다.
+        button.disabled = status.operation?.state === 'running';
+        actions.append(button);
+      };
+      if (!row.installed && row.latest) action('설치', 'install');
+      if (row.installed && row.latest) action('업데이트', 'update');
+      if (row.installed) action(row.installed.enabled ? '사용 안 함' : '사용', row.installed.enabled ? 'disable' : 'enable');
+      if (row.installed) action('제거', 'remove');
+      if (actions.children.length) card.append(actions);
+    }
+    const operation = status.operation;
+    if (operation && operation.plugin === row.id) {
+      const line = element('p', 'library-plugin__operation', operation.state === 'running' ? `${row.id} ${operation.action} 진행 중`
+        : operation.state === 'done' ? '애플리케이션을 다시 시작하면 적용됩니다.' : operation.error);
+      line.dataset.state = operation.state;
+      card.append(line);
+    }
+    return card;
+  }
+
+  /** 플러그인 페이지. 상태를 읽지 못한 글과 검색어에 맞는 플러그인 카드다. */
+  function renderPlugins() {
+    if (pluginSearch.value !== pluginQuery) pluginSearch.value = pluginQuery;
+    const status = pluginOperations.status();
+    const failure = pluginOperations.failure();
+    pluginList.replaceChildren();
+    if (failure) {
+      const line = element('p', 'library-plugins-error', failure.kind === 'index'
+        ? `레지스트리를 읽지 못했습니다: ${failure.message}` : `플러그인 상태를 읽지 못했습니다: ${failure.message}`);
+      line.dataset.kind = failure.kind; line.setAttribute('role', 'alert');
+      pluginList.append(line);
+    }
+    const rows = matchPlugins(status.plugins, pluginQuery);
+    for (const row of rows) pluginList.append(pluginCard(row, status));
+    // 상태를 읽지 못하면 카드가 없고 그 까닭은 위의 글이 보인다.
+    if (!rows.length && failure?.kind !== 'state') pluginList.append(element('p', 'library-plugins-none', '찾는 플러그인이 없습니다.'));
+  }
+
   function render() {
     if (!projects.inLibrary()) return;
     const all=projects.all(), open=all.filter(p=>projects.isOpen(p.id));
     checkFolders(all);
     root.querySelector('.library-count').textContent=`프로젝트 ${all.length} · 열림 ${open.length}`;
     back.hidden=!projects.active();
+    showPage();
+    if (page === 'plugins') {
+      grid.replaceChildren();
+      renderPlugins();
+      rendered();
+      return;
+    }
+    pluginList.replaceChildren();
     const query=search.value.trim().toLocaleLowerCase();
     const shown=all.filter(p=>`${p.title} ${p.root}`.toLocaleLowerCase().includes(query));
     if(sort.value==='name') shown.sort((a,b)=>a.title.localeCompare(b.title));
@@ -212,6 +318,12 @@ export function createLibrary(root, rendered = () => {}) {
     // 기본값: 폴더 이름 칸은 새 폴더를 만들 때만 있으므로 없는 칸의 값은 null 이다.
     const input=(name)=>form.querySelector(`input[name="${name}"]`)?.value ?? null;
     return {
+      page,
+      plugins:{query:pluginQuery, shown:[...pluginList.querySelectorAll('.library-plugin')].map(card=>card.dataset.pluginId),
+        // core.library.plugins.action 의 순번과 같은 문서 순서다.
+        actions:[...pluginList.querySelectorAll('[data-expose="core.library.plugins.action"]')].map(button=>({
+          plugin:button.closest('.library-plugin').dataset.pluginId, action:button.dataset.action, disabled:button.disabled,
+        }))},
       shown:[...grid.querySelectorAll('.library-project')].map(card=>card.dataset.projectId),
       pinned:[...grid.querySelectorAll('.library-project')].filter(card=>card.querySelector('.library-project__pin').getAttribute('aria-pressed')==='true').map(card=>card.dataset.projectId),
       count:root.querySelector('.library-count').textContent,
@@ -225,6 +337,17 @@ export function createLibrary(root, rendered = () => {}) {
   const SORTS=['saved','name','recent','open'];
   /* 명령이 부르는 연산. */
   const actions={
+    page(next){
+      if(!PAGES.some(([id])=>id===next)) throw new Error(`unknown library page ${next}`);
+      page=next;
+      // 플러그인 페이지는 보일 때 host 의 상태를 읽는다. 읽기 실패는 상태의 error 로 보고된다.
+      if(page==='plugins') pluginOperations.refresh();
+      render();
+    },
+    searchPlugins(query){
+      if(typeof query!=='string') throw new Error('query must be a string');
+      pluginQuery=query; render();
+    },
     search(query){ search.value=query; render(); },
     sort(order){ if(!SORTS.includes(order)) throw new Error(`unknown sort ${order}`); sort.value=order; render(); },
     open:(id)=>perform(()=>projects.activate(id)),
@@ -239,6 +362,8 @@ export function createLibrary(root, rendered = () => {}) {
     chooseFolder(){ formField('parent'); return perform(async()=>{ const path=await windows.chooseFolder(); if(path) formField('parent').value=path; }); },
     submitForm,
   };
+  // 플러그인 페이지는 plugins-changed 와 작업마다 바뀐 상태를 다시 그린다.
+  onPluginOperations(()=>{ if(page==='plugins') render(); });
   return {render, refreshFolders, state, actions};
 }
 

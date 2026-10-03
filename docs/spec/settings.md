@@ -15,7 +15,7 @@ The left navigation lists three sections in this order. Every section shows the 
 | Id | Label | Content |
 |---|---|---|
 | `general` | 일반 | Settings that apply to the whole workbench, including the sidebar appearance |
-| `plugins` | 플러그인 | A searchable list of the installed plugins, and the page of the selected plugin |
+| `plugins` | 플러그인 | A searchable list of the loaded plugins, and the settings page of the selected plugin |
 | `sidebars` | 사이드바 | The set list with create, edit, and delete, and the set editor |
 
 `core.settings-modal.nav {section}` shows a section. The window keeps the section, the plugin search, the selected plugin, and the edited set while it is closed and reopened.
@@ -45,32 +45,21 @@ Window choices select content for one fixed left sidebar and one fixed right sid
 
 ### 플러그인
 
-Without a selected plugin the section shows a search field and a list. A plugin is one unit that contributes its surface, sections, and settings. The list has one row per plugin that the window loaded, that `installed.json` lists, or that the registry index lists, sorted by id. A row shows the name and description of the loaded manifest, else of the registry entry, else the plugin id alone, and one state:
+This section holds the settings of the plugins that the window loaded, because a plugin's settings, sections and sidebar choices come from its loaded manifest. A plugin is one unit that contributes its surface, sections, and settings. Installing, updating, removing, enabling and disabling plugins, and their descriptions, versions and sidecars, belong to the [plugin screen](installation.md#plugin-screen) of the main window, because the settings window has no room for a plugin description.
 
-| State | Text | Condition |
-| --- | --- | --- |
-| `loaded` | 사용 중 | The window loaded the plugin, and `installed.json` lists the same version enabled |
-| `disabled` | 사용 안 함 | `installed.json` lists the plugin disabled, and the window did not load it |
-| `available` | 설치 안 됨 | Only the registry index lists the plugin |
-| `restart` | 다시 시작하면 적용 | `installed.json` differs from what the window loaded: the plugin was installed, removed, updated, enabled or disabled after the window loaded |
+Without a selected plugin the section shows 플러그인 관리, a search field and a list:
 
-The section reads the [plugin state](installation.md#plugin-operations-in-the-application) of the host when it is shown and after each `plugins-changed` event. A registry index that cannot be read shows "레지스트리를 읽지 못했습니다: <message>" above the list, and the list keeps the loaded and installed plugins. A plugin state that cannot be read, such as an invalid `installed.json`, shows "플러그인 상태를 읽지 못했습니다: <message>" and no rows. Without a host, as in the browser application, the list has only the loaded plugins, each `loaded`, and the page has no action.
-
-- The search field runs `core.settings-modal.search {query}` with its text. The list shows the plugins whose id, name, or description contains the query, ignoring letter case; an empty query shows every plugin. A query that matches no plugin shows "찾는 플러그인이 없습니다."
-- A row runs `core.settings-modal.plugin {plugin}`, which opens that plugin's page.
+- 플러그인 관리: a button that runs `core.plugins.browse`, which closes the settings window and shows the plugin screen.
+- The search field runs `core.settings-modal.search {query}` with its text. The list has one row per loaded plugin whose id, name, or description contains the query, ignoring letter case, sorted by id; an empty query shows every loaded plugin. A query that matches no plugin, or a window without a loaded plugin, shows "찾는 플러그인이 없습니다."
+- A row shows the plugin name and runs `core.settings-modal.plugin {plugin}`, which opens that plugin's page. The command fails with `unknown plugin <id>` for a plugin that the window did not load.
 
 The page of a plugin replaces the search field and the list. It shows:
 
 - 목록: a button that runs `core.settings-modal.plugin {plugin: null}` and returns to the list with the same query.
-- The plugin name and description, and a line with the installed version and the newest version that the registry index lists, each when present.
-- Actions, each a button bound to its command: 설치 `core.plugins.install` when the registry lists the plugin and it is not installed; 업데이트 `core.plugins.update` when it is installed and the registry lists it; 사용 `core.plugins.enable` or 사용 안 함 `core.plugins.disable` when it is installed, by its `enabled` value; 제거 `core.plugins.remove` when it is installed. While an operation runs, every action is disabled and the page shows "<plugin> <action> 진행 중". After an operation the page shows "애플리케이션을 다시 시작하면 적용됩니다." or the error of the failed operation.
-- 설정: one row per setting the manifest declares, in manifest order, named with its `label` and followed by its `description` when it has one. An `enum` is a choice row, an `integer` a slider between its bounds, and a `string` a text field. A plugin without settings shows "이 플러그인에는 설정이 없습니다."
+- The plugin name, with the plugin id as its caption.
+- 설정: one row per setting the manifest declares, in manifest order, named with its `label` and followed by its `description` when it has one. An `enum` is a choice row, an `integer` a slider between its bounds, and a `string` or an `address` a text field. A plugin without settings shows "이 플러그인에는 설정이 없습니다."
 - 섹션: the names of the sections the plugin declares, as one line of text.
 - 사이드바: every plugin has window-left/window-right selectors. A plugin with a surface also has four internal card-side selectors. Every selector offers 사용 안 함 and all sets, and runs `core.settings.link {place, plugin, set}`.
-
-설정, 섹션 and 사이드바 need the plugin's manifest, so the page shows them only for a plugin that the window loaded.
-
-`core.plugins.install`, `core.plugins.update`, `core.plugins.remove`, `core.plugins.enable` and `core.plugins.disable` take `{plugin}` and run the host call `pluginsRun` with their action. A command fails with -32602 (invalid params) when `plugin` is not a non-empty string, with the host error when the operation fails or another operation runs, and with "plugin operations need a native host" without a host. A command records its operation in `core.plugins` before it calls the host, and its result after the call.
 
 ### 사이드바
 
@@ -183,21 +172,13 @@ The following layout constants remain in code because they are tied to the docum
 | `section` | The shown section id |
 | `scope` | `common` or `project` |
 | `query` | The plugin search text; empty by default |
-| `listed` | The plugin ids of the list rows shown in order, or `[]` outside the plugin list |
+| `listed` | The loaded plugin ids of the list rows shown in order, or `[]` outside the plugin list |
 | `plugin` | The plugin whose page is shown, or `null` |
 | `editing` | The edited set id, or `null` |
 | `rows` | Each declared plugin setting row on a plugin page as `{key, name, description}` |
 | `controls` | Every control with its dom name, key, and command |
 
-`core.plugins` reports:
-
-| Field | Value |
-|---|---|
-| `registry` | The registry index URL, or `null` |
-| `error` | The registry index error or the plugin state error, or `null` |
-| `plugins` | One entry per list row, sorted by id: `{id, name, description, state, installed, latest}`; `installed` is `{version, enabled}` or `null`, and `latest` is the newest version that the registry index lists, or `null` |
-| `operation` | `null` before the first operation, then `{action, plugin, state, error}` of the latest one: `state` is `running`, `done` or `failed`, and `error` is the message of a failed operation or `null` |
-| `restart` | `true` when a plugin has the state `restart` |
+[Plugin screen](installation.md#plugin-screen) defines `core.plugins`.
 
 `core.settings` reports every effective value, including `sets`, `links`, and the layout values. `core.themes` reports the theme catalog in order: each theme's `name`, `shape` values, and the color tokens of its `dark` and `light` modes.
 
@@ -206,7 +187,6 @@ The following layout constants remain in code because they are tied to the docum
 - 일반 holds the sidebar appearance controls (`left`, `right`, both general links, the widths) and no plugin setting.
 - 사이드바 holds only the set list, 새 세트, and the editor. The editor has no control per registered section: its section controls are one select box and ▲ ▼ − per row, and one +.
 - The section rows choose, move, remove, and add sections through `core.settings.sets.row`; a repeated section is rejected.
-- 플러그인 shows a filtered list of loaded, installed and registry plugins with their states; a row opens the plugin page with its actions and, for a loaded plugin, its settings, sections, and sidebar choices, and 목록 returns to the list.
-- Installing, updating, disabling, enabling and removing a plugin from its page changes `installed.json` as the matching `sok plugin` command does, reports the operation in `core.plugins`, and marks the plugin `restart` until the application restarts.
+- 플러그인 shows a filtered list of the loaded plugins by name; a row opens the plugin page with its settings, sections, and sidebar choices, and 목록 returns to the list. The section shows no plugin description, version, sidecar or plugin operation; 플러그인 관리 closes the window and shows the plugin screen.
 - General, plugin-window and internal card choices remain independent through focus and tab changes. A disabled window column does not replace another plugin column.
 - The layout values change internal sidebar limits and initial size and new window-sidebar width.

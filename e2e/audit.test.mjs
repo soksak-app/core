@@ -87,6 +87,16 @@ for (const app of Object.values(APPS)) {
     await s.until("core.library", (library) => library.noResults, "search did not empty the library");
     await clean(s, "library without results");
     await s.run("core.library.search", { query: "" });
+    // 라이브러리의 플러그인 페이지와 검색 결과가 없는 상태.
+    await s.run("core.library.page", { page: "plugins" });
+    await s.until("core.library", (library) => library.page === "plugins" && library.plugins.shown.length > 0,
+      "the plugin page did not list plugins");
+    await clean(s, "library plugin page");
+    await s.run("core.library.plugins.search", { query: "no such plugin" });
+    await s.until("core.library", (library) => library.plugins.shown.length === 0, "search did not empty the plugin page");
+    await clean(s, "library plugin page without results");
+    await s.run("core.library.plugins.search", { query: "" });
+    await s.run("core.library.page", { page: "projects" });
     await s.run("core.library.return");
     await s.until("core.screen", (screen) => screen.screen === "workspace", "the library did not return to the workspace");
     await clean(s, "workspace after the library");

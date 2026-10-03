@@ -92,6 +92,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
     id: manifest.id, name: manifest.name, description: manifest.description, version, surface: Boolean(manifest.surface),
     // 기본값: sections 는 plugin.json 의 선택 필드이며 없으면 섹션이 없다.
     sections: (manifest.sections ?? []).map((s) => s.id),
+    // 기본값: sidecars 는 plugin.json 의 선택 필드이며 없으면 사이드카가 없다.
+    sidecars: manifest.sidecars ?? [],
   }));
   loaded = environment;
 }
@@ -101,8 +103,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
 export const pluginDiagnostics = (id) => diagnosticModules.then((modules) => modules.get(id) ?? null);
 
 /**
- * 설치된 플러그인을 id 순서로 반환한다. 설정 창의 플러그인 목록이 쓴다.
- * 표면이 없는 플러그인도 포함한다. 항목은 {id, name, description, version, surface, sections} 다.
+ * 설치된 플러그인을 id 순서로 반환한다. 설정 창과 라이브러리의 플러그인 목록이 쓴다.
+ * 표면이 없는 플러그인도 포함한다. 항목은 {id, name, description, version, surface, sections, sidecars} 다.
  */
 export const pluginUnits = () => units;
 

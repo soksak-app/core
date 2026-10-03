@@ -1,15 +1,15 @@
-// 설치된 플러그인 목록과 작업(docs/spec/settings.md 의 플러그인 절).
+// 설치된 플러그인 목록과 작업(docs/spec/installation.md 의 Plugin screen).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createPluginOperations, pluginRows } from "../plugin-operations.js";
 
 const loaded = [
-  { id: "term", name: "터미널", description: "터미널 표면.", version: "0.1.0" },
-  { id: "notes", name: "노트", description: "노트 목록.", version: "1.0.0" },
-  { id: "gone", name: "지운 것", description: "지운 플러그인.", version: "1.0.0" },
+  { id: "term", name: "터미널", description: "터미널 표면.", version: "0.1.0", sidecars: [] },
+  { id: "notes", name: "노트", description: "노트 목록.", version: "1.0.0", sidecars: [] },
+  { id: "gone", name: "지운 것", description: "지운 플러그인.", version: "1.0.0", sidecars: [] },
 ];
 
-const entry = (id, name, versions) => ({ id, package: `plugin-${id}`, name, description: `${name} 설명.`, versions: versions.map((version) => ({ version })) });
+const entry = (id, name, versions) => ({ id, package: `plugin-${id}`, name, description: `${name} 설명.`, versions: versions.map((version) => ({ version, sidecars: {} })) });
 
 const state = {
   registry: "file:///registry/index.json",
@@ -17,10 +17,10 @@ const state = {
   installed: {
     format: 1,
     plugins: {
-      term: { version: "0.1.0", enabled: true },
-      notes: { version: "1.1.0", enabled: true },
-      off: { version: "1.0.0", enabled: false },
-      fresh: { version: "0.1.0", enabled: true },
+      term: { version: "0.1.0", enabled: true, sidecars: {} },
+      notes: { version: "1.1.0", enabled: true, sidecars: {} },
+      off: { version: "1.0.0", enabled: false, sidecars: {} },
+      fresh: { version: "0.1.0", enabled: true, sidecars: {} },
     },
     sidecars: {},
   },
@@ -28,18 +28,41 @@ const state = {
 
 test("plugin rows join loaded, installed and registry plugins by id with their states", () => {
   assert.deepEqual(pluginRows(loaded, state), [
-    { id: "db", name: "DB", description: "DB 설명.", state: "available", installed: null, latest: "2.0.0" },
-    { id: "fresh", name: "fresh", description: "", state: "restart", installed: { version: "0.1.0", enabled: true }, latest: null },
-    { id: "gone", name: "지운 것", description: "지운 플러그인.", state: "restart", installed: null, latest: null },
-    { id: "notes", name: "노트", description: "노트 목록.", state: "restart", installed: { version: "1.1.0", enabled: true }, latest: null },
-    { id: "off", name: "Off", description: "Off 설명.", state: "disabled", installed: { version: "1.0.0", enabled: false }, latest: "1.0.0" },
-    { id: "term", name: "터미널", description: "터미널 표면.", state: "loaded", installed: { version: "0.1.0", enabled: true }, latest: "0.10.0" },
+    { id: "db", name: "DB", description: "DB 설명.", state: "available", installed: null, latest: "2.0.0", sidecars: [] },
+    { id: "fresh", name: "fresh", description: "", state: "restart", installed: { version: "0.1.0", enabled: true }, latest: null, sidecars: [] },
+    { id: "gone", name: "지운 것", description: "지운 플러그인.", state: "restart", installed: null, latest: null, sidecars: [] },
+    { id: "notes", name: "노트", description: "노트 목록.", state: "restart", installed: { version: "1.1.0", enabled: true }, latest: null, sidecars: [] },
+    { id: "off", name: "Off", description: "Off 설명.", state: "disabled", installed: { version: "1.0.0", enabled: false }, latest: "1.0.0", sidecars: [] },
+    { id: "term", name: "터미널", description: "터미널 표면.", state: "loaded", installed: { version: "0.1.0", enabled: true }, latest: "0.10.0", sidecars: [] },
   ]);
 });
 
 test("a loaded plugin that was disabled after the window loaded waits for a restart", () => {
-  const disabled = { ...state, installed: { ...state.installed, plugins: { term: { version: "0.1.0", enabled: false } } } };
+  const disabled = { ...state, installed: { ...state.installed, plugins: { term: { version: "0.1.0", enabled: false, sidecars: {} } } } };
   assert.equal(pluginRows([loaded[0]], disabled).find((row) => row.id === "term").state, "restart");
+});
+
+test("a row names its sidecars from the installed entry, else the newest registry version, else the manifest", () => {
+  const vt = "@soksak/sidecar-vt";
+  const withSidecars = {
+    registry: "file:///registry/index.json",
+    index: { plugins: [{ id: "db", package: "plugin-db", name: "DB", description: "DB 설명.", versions: [
+      { version: "1.0.0", sidecars: { "@x/old": "1.0.0" } },
+      { version: "2.0.0", sidecars: { "@x/db": "^1.0.0", "@a/b": "1.0.0" } },
+    ] }] },
+    installed: {
+      format: 1,
+      plugins: { term: { version: "0.1.0", enabled: true, sidecars: { [vt]: "^0.1.0" } } },
+      sidecars: { [vt]: { version: "0.1.2", path: "/config/sidecars/soksak-sidecar-vt/0.1.2/darwin-arm64" } },
+    },
+  };
+  const term = { ...loaded[0], sidecars: [vt] };
+  const rows = pluginRows([term], withSidecars);
+  assert.deepEqual(rows.find((row) => row.id === "term").sidecars, [{ name: vt, range: "^0.1.0", version: "0.1.2" }]);
+  assert.deepEqual(rows.find((row) => row.id === "db").sidecars,
+    [{ name: "@a/b", range: "1.0.0", version: null }, { name: "@x/db", range: "^1.0.0", version: null }]);
+  // host 가 없으면 불러온 manifest 의 사이드카 이름만 안다.
+  assert.deepEqual(pluginRows([term], null)[0].sidecars, [{ name: vt, range: null, version: null }]);
 });
 
 test("without a host only the loaded plugins are listed, all loaded, and operations fail", async () => {

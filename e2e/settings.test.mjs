@@ -101,7 +101,11 @@ for (const app of Object.values(APPS)) {
     assert.equal(list.query, "");
     const rows = list.controls.filter((c) => c.name === "core.settings-modal.plugin");
     assert.deepEqual(rows.map((c) => c.key), list.listed.map((id) => `plugin:${id}`));
-    assert.ok(rows.every((c) => c.label.includes(" — ")), `a plugin row lacks its description: ${JSON.stringify(rows.map((c) => c.label))}`);
+    // 행은 플러그인 이름만 보인다. 설명과 설치 동작은 라이브러리의 플러그인 페이지에 있다(docs/spec/settings.md).
+    const names = Object.fromEntries((await s.get("core.plugins")).plugins.map((row) => [row.id, row.name]));
+    assert.deepEqual(rows.map((c) => c.label), list.listed.map((id) => names[id]));
+    assert.deepEqual(list.controls.filter((c) => c.name === "core.settings-modal.manage").map((c) => c.command),
+      [{ name: "core.plugins.browse", params: {} }]);
     await press(s, "core.settings-modal.search", "plugin-search", "TERM", "query");
     await s.until("core.settings-modal", (modal) => modal.query === "TERM" && modal.listed.join() === "terminal",
       "the search did not keep only terminal");
@@ -132,44 +136,30 @@ for (const app of Object.values(APPS)) {
     await s.until("core.settings-modal", (modal) => modal.plugin === null && modal.listed.join() === list.listed.join(), "목록 did not return to the list");
   });
 
-  test(`${app.name}: a plugin page disables and enables an installed plugin through its commands`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: the settings plugin page has no plugin operation and 플러그인 관리 shows the plugin screen`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     await s.run("core.settings.open");
-    s.cleanup(() => s.run("core.settings.close"));
-    await section(s, "plugins");
-    const listed = await s.until("core.plugins", (value) => value.plugins.some((row) => row.id === "files"),
-      "core.plugins did not list files");
-    const files = listed.plugins.find((row) => row.id === "files");
-    assert.equal(files.state, "loaded", JSON.stringify(files));
-    assert.equal(listed.restart, false);
-    // 검사가 중간에 실패해도 다음 검사가 같은 설치에서 시작하도록 files 를 다시 켠다.
     s.cleanup(async () => {
-      const now = (await s.get("core.plugins")).plugins.find((row) => row.id === "files");
-      if (!now.installed.enabled) await s.run("core.plugins.enable", { plugin: "files" });
+      if ((await s.get("core.settings-modal")).open) await s.run("core.settings.close");
+      if ((await s.get("core.screen")).screen === "library") {
+        await s.run("core.library.page", { page: "projects" });
+        await s.run("core.library.return");
+      }
     });
-
+    await section(s, "plugins");
     await press(s, "core.settings-modal.plugin", "plugin:files");
     const page = await s.until("core.settings-modal", (modal) => modal.plugin === "files", "files page did not open");
-    assert.deepEqual(page.controls.filter((c) => c.name === "core.settings-modal.plugin-action").map((c) => c.key),
-      ["plugin-action:update", "plugin-action:disable", "plugin-action:remove"]);
-
-    await press(s, "core.settings-modal.plugin-action", "plugin-action:disable");
-    const disabled = await s.until("core.plugins", (value) => value.operation?.state === "done"
-      && value.plugins.find((row) => row.id === "files").state === "restart", "disabling files did not wait for a restart");
-    assert.deepEqual(disabled.operation, { action: "disable", plugin: "files", state: "done", error: null });
-    assert.deepEqual(disabled.plugins.find((row) => row.id === "files").installed.enabled, false);
-    assert.equal(disabled.restart, true);
-    await control(s, "core.settings-modal.plugin-action", "plugin-action:enable");
-
-    await press(s, "core.settings-modal.plugin-action", "plugin-action:enable");
-    const enabled = await s.until("core.plugins", (value) => value.operation?.action === "enable"
-      && value.operation.state === "done" && value.plugins.find((row) => row.id === "files").state === "loaded",
-      "enabling files did not return it to loaded");
-    assert.equal(enabled.restart, false);
-    await assert.rejects(s.run("core.plugins.enable", { plugin: "" }), /plugin must be a non-empty string/);
+    assert.deepEqual(page.controls.filter((c) => c.command?.name.startsWith("core.plugins.")), [],
+      "the settings plugin page still runs plugin operations");
+    await press(s, "core.settings-modal.back", "plugins:list");
+    await press(s, "core.settings-modal.manage", "plugins:manage");
+    await s.until("core.settings-modal", (modal) => !modal.open, "플러그인 관리 did not close the settings window");
+    await s.until("core.screen", (screen) => screen.screen === "library", "플러그인 관리 did not show the library");
+    await s.until("core.library", (library) => library.page === "plugins" && library.plugins.shown.includes("files"),
+      "플러그인 관리 did not show the plugin page");
   });
 
   test(`${app.name}: settings create, edit with section rows, and delete a sidebar set`, { timeout: 60000 }, async (t) => {

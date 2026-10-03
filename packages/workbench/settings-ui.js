@@ -19,7 +19,6 @@ import { icon } from "./icons.js";
 import { onGripDrag, showValue } from "./card.js";
 import { commandOf, delegate, mark, run } from "./commands.js";
 import { pluginUnits } from "./environment.js";
-import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { matchPlugins } from "./plugin-search.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 import { hasSection, section, sectionNames } from "./registry.js";
@@ -341,27 +340,10 @@ function declaredRow(key, definition) {
 // 기본값: 섹션이 없는 세트는 섹션 없음으로 보인다.
 const setLine = (s) => `${s.title} · ${s.layout === "tabs" ? "탭" : "목록"} · ${sectionNames(s.sections).join(", ") || "섹션 없음"}`;
 
-/** 목록 행의 상태 글(docs/spec/settings.md 의 플러그인 절). */
-const PLUGIN_STATES = { loaded: "사용 중", disabled: "사용 안 함", available: "설치 안 됨", restart: "다시 시작하면 적용" };
-
-/** 목록 행 하나의 글. 설명이 없는 행은 이름과 상태만 보인다. */
-const pluginLine = (row) => [row.description ? `${row.name} — ${row.description}` : row.name, PLUGIN_STATES[row.state]].join(" · ");
-
-/** 플러그인 상태를 읽지 못했을 때 목록 위에 보이는 글. */
-function failureLine() {
-  const failure = pluginOperations.failure();
-  if (!failure) return [];
-  const line = document.createElement("p");
-  line.className = "set-caption";
-  line.dataset.pluginError = failure.kind;
-  line.textContent = failure.kind === "index"
-    ? `레지스트리를 읽지 못했습니다: ${failure.message}`
-    : `플러그인 상태를 읽지 못했습니다: ${failure.message}`;
-  return [line];
-}
-
-/** 플러그인 목록. 검색 칸과 검색어에 맞는 행이다. */
+/** 플러그인 목록. 플러그인 관리 단추, 검색 칸, 검색어에 맞는 불러온 플러그인의 행이다. 행은 이름만 보인다. */
 function drawPluginList() {
+  // 설치, 제거, 설명은 라이브러리의 플러그인 페이지가 보인다(docs/spec/installation.md 의 Plugin screen).
+  const manage = button("plugins:manage", "core.settings-modal.manage", "플러그인 관리", "core.plugins.browse", {});
   const search = document.createElement("input");
   search.type = "search";
   search.className = "set-text";
@@ -370,8 +352,9 @@ function drawPluginList() {
   search.dataset.expose = "core.settings-modal.search";
   mark(search, "core.settings-modal.search", {}, "query");
   search.setAttribute("value", query);
-  const rows = matchPlugins(pluginOperations.status().plugins, query).map((row) =>
-    button(`plugin:${row.id}`, "core.settings-modal.plugin", pluginLine(row), "core.settings-modal.plugin", { plugin: row.id }));
+  const units = pluginUnits().toSorted((a, b) => a.id.localeCompare(b.id));
+  const rows = matchPlugins(units, query).map((unit) =>
+    button(`plugin:${unit.id}`, "core.settings-modal.plugin", unit.name, "core.settings-modal.plugin", { plugin: unit.id }));
   for (const el of rows) el.dataset.listed = el.dataset.key.slice("plugin:".length);
   if (!rows.length) {
     const none = document.createElement("p");
@@ -382,60 +365,17 @@ function drawPluginList() {
   const list = document.createElement("div");
   list.className = "set-list";
   list.append(...rows);
-  body.append(group("플러그인", "불러온 플러그인, 설치된 플러그인, 레지스트리의 플러그인. 행을 누르면 그 플러그인의 페이지가 보인다.",
-    [...failureLine(), row("찾기", search), list]));
+  body.append(group("플러그인", "창이 불러온 플러그인의 설정. 설치, 업데이트, 제거와 플러그인 설명은 플러그인 관리에서 본다.",
+    [row("", manage), row("찾기", search), list]));
 }
 
-/** 플러그인 페이지의 작업 버튼. 각 버튼은 자기 core.plugins 명령을 가리킨다. */
-function pluginActions(entry) {
-  const action = (label, name) => button(`plugin-action:${name}`, "core.settings-modal.plugin-action", label, `core.plugins.${name}`, { plugin: entry.id });
-  const actions = [];
-  if (!entry.installed && entry.latest) actions.push(action("설치", "install"));
-  if (entry.installed && entry.latest) actions.push(action("업데이트", "update"));
-  if (entry.installed) actions.push(entry.installed.enabled ? action("사용 안 함", "disable") : action("사용", "enable"));
-  if (entry.installed) actions.push(action("제거", "remove"));
-  const operation = pluginOperations.status().operation;
-  // 작업이 실행되는 동안에는 어느 작업도 시작하지 않는다.
-  if (operation?.state === "running") for (const el of actions) el.disabled = true;
-  return actions;
-}
-
-/** 이 플러그인의 마지막 작업 결과 글. 다른 플러그인의 작업이거나 작업이 없으면 없다. */
-function operationLine(entry) {
-  const operation = pluginOperations.status().operation;
-  if (!operation || operation.plugin !== entry.id) return [];
-  const line = document.createElement("p");
-  line.className = "set-caption";
-  line.dataset.pluginOperation = operation.state;
-  line.textContent = operation.state === "running" ? `${entry.id} ${operation.action} 진행 중`
-    : operation.state === "done" ? "애플리케이션을 다시 시작하면 적용됩니다." : operation.error;
-  return [line];
-}
-
-/**
- * 플러그인 한 개의 페이지. 목록으로 돌아가는 버튼, 버전과 작업이다. 창이 불러온 플러그인이면 설정, 섹션,
- * 사이드바 선택도 보인다. 그것들은 manifest 가 필요하다.
- */
-function drawPluginPage(entry, unit) {
+/** 불러온 플러그인 한 개의 설정 페이지. 목록으로 돌아가는 버튼, 설정, 섹션, 사이드바 선택이다. */
+function drawPluginPage(unit) {
   const back = button("plugins:list", "core.settings-modal.back", "목록", "core.settings-modal.plugin", { plugin: null });
-  const about = document.createElement("p");
-  about.className = "set-caption";
-  about.textContent = entry.description;
-  const versions = document.createElement("p");
-  versions.className = "set-caption";
-  versions.dataset.pluginVersions = entry.id;
-  versions.textContent = [
-    entry.installed ? `설치된 버전 ${entry.installed.version}` : null,
-    entry.latest ? `레지스트리 최신 버전 ${entry.latest}` : null,
-  ].filter(Boolean).join(" · ");
-  // 버튼 여럿은 label 인 행에 넣지 않는다. label 을 누르면 첫 버튼이 눌리기 때문이다.
-  const actions = document.createElement("div");
-  actions.className = "set-actions";
-  if (pluginOperations.hosted) actions.append(...pluginActions(entry));
-  body.append(group(entry.name, entry.id, [row("", back), about, versions, ...(actions.children.length ? [actions] : []), ...operationLine(entry)]));
-  if (!unit) return;
+  body.append(group(unit.name, unit.id, [row("", back)]));
 
-  const declared = Object.entries(settingDefinitions()).filter(([, d]) => d.plugin === unit.id);  if (declared.length) {
+  const declared = Object.entries(settingDefinitions()).filter(([, d]) => d.plugin === unit.id);
+  if (declared.length) {
     body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, declared.flatMap(([key, d]) => declaredRow(key, d))));
   } else {
     const none = document.createElement("p");
@@ -460,8 +400,8 @@ function drawPluginPage(entry, unit) {
 }
 
 function drawPlugins() {
-  const entry = pluginOperations.status().plugins.find((row) => row.id === chosen);
-  if (entry) drawPluginPage(entry, pluginUnits().find((u) => u.id === chosen));
+  const unit = pluginUnits().find((u) => u.id === chosen);
+  if (unit) drawPluginPage(unit);
   else {
     chosen = null;
     drawPluginList();
@@ -616,9 +556,6 @@ let paneScroll = 0;
 /** 보이는 내용의 키. 절, 범위, 플러그인 페이지, 편집하는 세트가 같으면 같은 내용이다(docs/spec/settings.md). */
 const scrollKey = () => JSON.stringify([here, scope, here === "plugins" ? chosen : null, here === "sidebars" ? editing : null]);
 
-// 플러그인 절은 보일 때와 plugins-changed 를 받을 때 host 의 상태를 읽고, 상태가 바뀌면 다시 그린다.
-onPluginOperations(() => { if (card && here === "plugins") drawSettings(); });
-
 /** 모달을 그리거나 닫을 때 호출할 함수를 등록한다. */
 export function onSettingsDrawn(fn) {
   drawn = fn;
@@ -672,13 +609,12 @@ export function showSection(id) {
   if (!SECTIONS.some(([known]) => known === id)) throw new Error(`unknown settings section ${id}`);
   here = id;
   drawSettings();
-  if (id === "plugins") pluginOperations.refresh();
 }
 
-/** 플러그인 절에서 플러그인 하나의 페이지를 연다. null 이면 목록으로 돌아간다. */
+/** 플러그인 절에서 불러온 플러그인 하나의 페이지를 연다. null 이면 목록으로 돌아간다. */
 export function showPlugin(id) {
   if (!card) throw new Error("settings are not open");
-  if (id !== null && !pluginOperations.status().plugins.some((row) => row.id === id)) throw new Error(`unknown plugin ${id}`);
+  if (id !== null && !pluginUnits().some((unit) => unit.id === id)) throw new Error(`unknown plugin ${id}`);
   chosen = id;
   drawSettings();
 }
@@ -825,7 +761,6 @@ export function openSettings() {
   nav = card.querySelector(".set-card__nav");
   body = card.querySelector(".set-card__pane");
   drawSettings();
-  if (here === "plugins") pluginOperations.refresh();
 
   const rect = cardRect();
   if (native) {

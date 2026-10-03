@@ -585,7 +585,8 @@ addEventListener("keydown", (event) => {
   if (!chrome && event.shiftKey && event.key.toLowerCase() === "n") { event.preventDefault(); return run("core.window.new"); }
   if (event.key.toLowerCase() === "k" && projects.inLibrary()) {
     event.preventDefault();
-    return run("core.focus.set", { name: "core.library.search" });
+    // 라이브러리의 보이는 페이지의 검색 칸으로 간다.
+    return run("core.focus.set", { name: library.state().page === "plugins" ? "core.library.plugins.search" : "core.library.search" });
   }
 });
 /* 판 밖의 프레임을 누르면 글자 크기의 범위는 프레임이다(docs/spec/text-size.md). */

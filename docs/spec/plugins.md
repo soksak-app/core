@@ -44,7 +44,7 @@ Core window checks install plugins from a registry fixture. `scripts/workspace-r
 | --- | --- | --- |
 | `id` | yes | Lowercase identifier. Tabs and settings reference it |
 | `name` | yes | Display name |
-| `description` | yes | One or two sentences of 1 to 200 characters that say what the plugin does; the settings window shows and searches it |
+| `description` | yes | One or two sentences of 1 to 200 characters that say what the plugin does; the [plugin screen](installation.md#plugin-screen) shows it, and the plugin screen and the settings window search it |
 | `surface` | no | `{ "module": "ui/page.js", "composition": ... }`: a module inside the package and its required [surface composition](surface-composition.md). The module mounts into the app DOM; external web documents use document regions. A web address is not a surface |
 | `mark` | with `surface` | Short text shown in the add menu and new tab titles |
 | `icon` | with `surface` | SVG elements for a 16×16 view box |

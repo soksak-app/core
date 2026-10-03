@@ -81,6 +81,47 @@ Both hosts run plugin operations with the installer library of their command lin
 
 A host runs one operation at a time: a `pluginsRun` call while another runs rejects with `another plugin operation is running`. A host does not observe changes that a `sok` process makes; the next `pluginsState` call and pages that load later read them. A change takes effect when the application restarts: the windows that are open keep the plugins they loaded, and sidecars start only at startup. The browser application has no host, so it has no plugin operations.
 
+## Plugin screen
+
+The library screen of a window ([projects](projects.md#project-identity)) has two pages, 프로젝트 and 플러그인, selected by the tabs at the start of its heading, which run `core.library.page {page}` with `projects` or `plugins`. 플러그인 is the plugin screen: it lists plugins with their descriptions and runs the plugin operations. The settings window keeps only the settings of loaded plugins ([settings window](settings.md#플러그인)). `core.plugins.browse` closes the settings window when it is open, shows the library when the window shows a workspace, and selects 플러그인. `core.projects.browse` selects 프로젝트. The window keeps the plugin search while it shows a workspace.
+
+The page has a search field and one card per plugin that the window loaded, that `installed.json` lists, or that the registry index lists, sorted by id. The search field runs `core.library.plugins.search {query}`; the page shows the plugins whose id, name, or description contains the query, ignoring letter case, and an empty query shows every plugin. A query that matches no plugin shows "찾는 플러그인이 없습니다."
+
+A card shows:
+
+- The name, the plugin id and one state:
+
+| State | Text | Condition |
+| --- | --- | --- |
+| `loaded` | 사용 중 | The window loaded the plugin, and `installed.json` lists the same version enabled |
+| `disabled` | 사용 안 함 | `installed.json` lists the plugin disabled, and the window did not load it |
+| `available` | 설치 안 됨 | Only the registry index lists the plugin |
+| `restart` | 다시 시작하면 적용 | `installed.json` differs from what the window loaded: the plugin was installed, removed, updated, enabled or disabled after the window loaded |
+
+- The description of the loaded manifest, else of the registry entry ([plugins](plugins.md) and [registry index](#registry-index) require one); a plugin that only `installed.json` lists has no description and shows its id as its name.
+- A version line with 설치된 버전 <version> and 최신 버전 <version>, the newest version that the registry index lists, each when present.
+- A sidecar line, 사이드카 followed by each sidecar that the plugin names, sorted by name: the installed version from `installed.json` `sidecars`, or else the range that the plugin declares. The sidecars and ranges come from the `installed.json` entry of an installed plugin, else from the newest registry version, else from the `sidecars` of the loaded manifest without a range. A plugin without sidecars shows 사이드카 없음.
+- Actions, each a button bound to its command: 설치 `core.plugins.install` when the registry lists the plugin and it is not installed; 업데이트 `core.plugins.update` when it is installed and the registry lists it; 사용 `core.plugins.enable` or 사용 안 함 `core.plugins.disable` when it is installed, by its `enabled` value; 제거 `core.plugins.remove` when it is installed. While an operation runs, every action of every card is disabled and the card of its plugin shows "<plugin> <action> 진행 중". After an operation the card shows "애플리케이션을 다시 시작하면 적용됩니다." or the error of the failed operation.
+
+The page reads the plugin state with `pluginsState` when it is shown and after each `plugins-changed` event. A registry index that cannot be read shows "레지스트리를 읽지 못했습니다: <message>" above the cards, and the page keeps the loaded and installed plugins. A plugin state that cannot be read, such as an invalid `installed.json`, shows "플러그인 상태를 읽지 못했습니다: <message>" and no cards. Without a host, as in the browser application, the page has only the loaded plugins, each `loaded`, and no action.
+
+`core.plugins.install`, `core.plugins.update`, `core.plugins.remove`, `core.plugins.enable` and `core.plugins.disable` take `{plugin}` and run the host call `pluginsRun` with their action. A command fails with -32602 (invalid params) when `plugin` is not a non-empty string, with the host error when the operation fails or another operation runs, and with "plugin operations need a native host" without a host. A command records its operation in `core.plugins` before it calls the host, and its result after the call.
+
+`core.library` reports `page` (`projects` or `plugins`) and `plugins` `{query, shown, actions}`: the plugin search text, the plugin ids of the cards shown in order, and the action buttons of the cards in document order as `{plugin, action, disabled}`, whose position is the index of the dom name `core.library.plugins.action`; `shown` and `actions` are `[]` while the page is not shown. `core.plugins` reports:
+
+| Field | Value |
+|---|---|
+| `registry` | The registry index URL, or `null` |
+| `error` | The registry index error or the plugin state error, or `null` |
+| `plugins` | One entry per card, sorted by id: `{id, name, description, state, installed, latest, sidecars}`; `installed` is `{version, enabled}` or `null`, `latest` is the newest version that the registry index lists, or `null`, and `sidecars` lists `{name, range, version}` sorted by name, where `range` and `version` are `null` when unknown |
+| `operation` | `null` before the first operation, then `{action, plugin, state, error}` of the latest one: `state` is `running`, `done` or `failed`, and `error` is the message of a failed operation or `null` |
+| `restart` | `true` when a plugin has the state `restart` |
+
+Acceptance:
+
+- The plugin page of the library lists loaded, installed and registry plugins with their name, description, state, versions and sidecars, filtered by the search, and `core.plugins.browse` shows it from the workspace and from the settings window.
+- Installing, updating, disabling, enabling and removing a plugin from its card changes `installed.json` as the matching `sok plugin` command does, reports the operation in `core.plugins`, and marks the plugin `restart` until the application restarts.
+
 ## First run
 
 `environment.json` names the starter pack in `starter`. When a window starts and `pluginsState` reports `firstRun`, the workbench installs every plugin of that pack from the registry index with `pluginsRun`, in the pack's order, before it builds a space, and then reloads the page so that the installed plugins load. The first installation writes `installed.json`, so a later start, also after every plugin was removed, installs nothing. Without a registry the window starts with no plugin, logs `first run: no registry is set; the starter pack <name> was not installed`, and shows the application error `플러그인 레지스트리가 없어 시작 플러그인 묶음 <name>을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요.`, so a window without plugins states why; a registry index that cannot be read, or one without the pack, fails the start with its error. An environment without `starter`, or without a host, installs nothing.

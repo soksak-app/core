@@ -20,6 +20,7 @@
 - G1.4-98: a retain of the Wails host that a stop interrupts fails with "sidecars are stopped" instead of sending to a closed channel, and a full outbox fails the retain at once, as in the Tauri host.
 - G1.4-94: a main-page command whose handler throws no longer leaves a reply timer that logs `did not reply within 10000ms` ten seconds later.
 - G1.4-97: the Wails host no longer panics when a window closes while the application stops its sidecars; stopping removes the sidecars from the running set first, as in the Tauri host.
+- G1.4-86: plugins are installed, updated, removed, enabled and disabled on the 플러그인 page of the library, which shows each plugin's description, versions and sidecars; the settings window keeps only the settings of loaded plugins and opens that page with 플러그인 관리.
 - G1.4-96: a window check confirms that the settings modal is on screen at the presented time once the window reports it shown, and the example verification states that wait for modal captures.
 - G1.4-95: a window check prints each failed cleanup step as a diagnostic, so a cleanup failure is visible when the check itself failed.
 - G1.4-93: the test runner leaves a forced kill that macOS refuses with EPERM to its cleanup check instead of failing a timed-out run.
