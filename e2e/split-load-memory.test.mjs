@@ -101,7 +101,11 @@ for (const app of Object.values(APPS)) {
       `the window documents differ from ${before} after the stress`);
     t.diagnostic(`split-load-memory ${JSON.stringify({ app: app.name, samples: samples.length,
       baselineHost: baseline.host, maxHost, hostGrowth: maxHost - baseline.host, documents: before })}`);
-    assert.equal(settled.pageProcess, initialWindow.pageProcess, "the stress changed the page process");
+    // reload 는 새 문서를 새 page process 에서 열고 이전 process 를 끝낸다(docs/spec/native-host.md#page-reload).
+    assert.notEqual(settled.pageProcess, initialWindow.pageProcess, "the reloads kept the page process");
+    await session.request("diagnostics.process.exit", { pid: initialWindow.pageProcess }).catch((error) => {
+      throw new Error(`the reloads left the first page process ${initialWindow.pageProcess} running: ${error.message}`);
+    });
     assert.ok(maxHost - baseline.host < 128 * 1024,
       `host RSS grew ${maxHost - baseline.host} KB during split/WebView stress`);
   });
