@@ -38,8 +38,8 @@ for (const app of Object.values(APPS))
       try {
         for (const fullscreen of [true, false]) {
           const state = await s.get("host.window");
-          assert.equal(state.active, false);
-          assert.equal(state.occluded, false);
+          assert.equal(state.active, false, `the application is active before the fullscreen click: ${JSON.stringify({ active: state.active, key: state.key })}`);
+          assert.equal(state.occluded, false, "the window is occluded before the fullscreen click");
           const button = await s.rect("core.card.fullscreen", initialCard.pane);
           await s.click(button.x + button.width / 2, button.y + button.height / 2);
           ({ displayed } = await s.presented());
@@ -74,8 +74,8 @@ for (const app of Object.values(APPS))
             // 면이 열리는지는 그 카드에서 마지막으로 조작한 면이 정하므로(docs/spec/example-model.md) 열린 면을 표시에서 읽는다.
             const opposite = current.sidebars[side === "top" ? "bottom" : "top"];
             const autoCollapsed = !fullscreen && (side === "top" || side === "bottom") && !opposite.autoCollapsed;
-            assert.equal(presentation.autoCollapsed, autoCollapsed);
-            assert.equal(presentation.collapsed, autoCollapsed);
+            assert.equal(presentation.autoCollapsed, autoCollapsed, `${side} automatic folding: ${JSON.stringify(presentation)}`);
+            assert.equal(presentation.collapsed, autoCollapsed, `${side} folding: ${JSON.stringify(presentation)}`);
             assert.equal(presentation.collapseReason, autoCollapsed ? "insufficient-height" : null);
             if (presentation.collapsed) {
               assert.ok(
