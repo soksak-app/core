@@ -57,8 +57,9 @@ func nativeFullscreenDone(value C.uintptr_t) {
 }
 
 func (implementation) UnifiedTitlebar(window unsafe.Pointer) (float64, error) {
+	// 0 은 제목줄이 없는 창(전체 화면)의 높이이고, 음수는 제목줄을 만들 수 없는 창이다.
 	row := float64(C.windowUnifiedTitlebar(window))
-	if row <= 0 {
+	if row < 0 {
 		return 0, errors.New("the window has no standard buttons or content view for a title bar")
 	}
 	return row, nil

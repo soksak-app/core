@@ -100,8 +100,9 @@ pub fn unified_titlebar(window: Handle) -> Result<f64, String> {
     extern "C" {
         fn windowUnifiedTitlebar(window: *mut c_void) -> f64;
     }
+    // 0 은 제목줄이 없는 창(전체 화면)의 높이이고, 음수는 제목줄을 만들 수 없는 창이다.
     let row = unsafe { windowUnifiedTitlebar(window as *mut c_void) };
-    if row > 0.0 {
+    if row >= 0.0 {
         Ok(row)
     } else {
         Err("the window has no standard buttons or content view for a title bar".into())

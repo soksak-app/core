@@ -8,7 +8,8 @@
 double windowUnifiedTitlebar(void *handle) {
     NSCAssert(NSThread.isMainThread, @"Window controls belong to the main thread");
     NSWindow *window = (NSWindow *)handle;
-    if (![window standardWindowButton:NSWindowCloseButton] || !window.contentView) return 0;
+    // 제목줄을 만들 수 없는 창은 -1 이다. 0 은 제목줄이 없는 창(전체 화면)의 높이다.
+    if (![window standardWindowButton:NSWindowCloseButton] || !window.contentView) return -1;
     if (!window.toolbar) {
         NSToolbar *toolbar = [[[NSToolbar alloc] initWithIdentifier:@"soksak"] autorelease];
         // 항목이 없는 도구막대다. 제목줄 높이만 정하고 아무것도 그리지 않는다.

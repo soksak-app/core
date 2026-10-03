@@ -59,7 +59,8 @@ int main(void) { @autoreleasepool {
     NSWindow *plain = [[[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 200, 100)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO] autorelease];
     [plain setReleasedWhenClosed:NO];
-    check(windowUnifiedTitlebar(plain) == 0, @"a window without standard buttons reports no title bar");
+    // 0 은 제목줄이 없는 창(전체 화면)의 높이이므로, 제목줄을 만들 수 없는 창은 음수로 알린다.
+    check(windowUnifiedTitlebar(plain) < 0, @"a window without standard buttons reports that it cannot have a title bar");
 
     [window close];
     [plain close];
