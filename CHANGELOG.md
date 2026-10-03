@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-90-5: both hosts log a replaced image frame as invalidated with the same text and log another presentation failure with the current frame state.
 - G1.4-90-3: a delegated root no longer runs the command of an element connected with `bind` a second time, so Enter in the browser address field navigates once.
 - G1.4-90-2: a sidebar section that follows a core status mounts after a reload, because the core statuses are registered before the first section mounts.
 - G1.4-90-1: a reload request makes a ready page reload itself after its host calls are answered, so Wails no longer loses a host reply on each reload.

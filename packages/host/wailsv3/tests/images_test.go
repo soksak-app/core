@@ -1055,3 +1055,25 @@ func TestShownSurfaceReconfiguresItsRaster(t *testing.T) {
 		t.Fatalf("the shown surface reused raster %d after %d", shown.Raster, first.Raster)
 	}
 }
+
+// contract: images.present.replaced-frame-is-logged-as-invalidated
+func TestPresentationOutcomeLogsAReplacedFrameAsInvalidated(t *testing.T) {
+	for _, detail := range []string{"stale", "notAttached", "staleRaster native=1520x573@2 frame=760x192@2", "staleRaster native=none"} {
+		reason, invalidated, line := host.PresentationOutcome("s1", "view", 3, 2, 1, 9, detail, "unused")
+		want := "image frame invalidated before native presentation: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason=" + detail
+		if reason != "stale" || !invalidated || line != want {
+			t.Fatalf("%s: reason %q invalidated %v line %q", detail, reason, invalidated, line)
+		}
+	}
+}
+
+// contract: images.present.failure-line-names-the-current-frame
+func TestPresentationOutcomeNamesTheCurrentFrameOfAFailure(t *testing.T) {
+	for detail, want := range map[string]string{"notFound": "notFound", "presentFailed": "presentFailed", "boom": "presentFailed"} {
+		reason, invalidated, line := host.PresentationOutcome("s1", "view", 3, 2, 1, 9, detail, "generation=3 raster=2")
+		wantLine := "image present on main thread error: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason=" + detail + " current generation=3 raster=2"
+		if reason != want || invalidated || line != wantLine {
+			t.Fatalf("%s: reason %q invalidated %v line %q", detail, reason, invalidated, line)
+		}
+	}
+}

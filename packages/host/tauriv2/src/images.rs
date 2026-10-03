@@ -1257,34 +1257,18 @@ where
                     }));
                     let reason = match presentation {
                         Ok(()) => None,
-                        Err(e) => {
-                            if e == "notAttached" {
-                                eprintln!(
-                                    "image frame invalidated before native presentation: surface={} name={} generation={} raster={} sequence={} token={} reason=stale",
-                                    key.0, name, generation, raster, sequence, id
-                                );
-                            } else {
-                                // 거부한 프레임이 대체된 것인지 가릴 수 있도록 현재 프레임 상태를 함께 남긴다.
-                                eprintln!(
-                                    "image present on main thread error: surface={} name={} generation={} raster={} sequence={} token={} reason={} current {}",
-                                    key.0, name, generation, raster, sequence, id, e, images.frame_state(&key)
-                                );
-                            }
-                            let reason = match e.as_str() {
-                                "stale" => "stale",
-                                e if e.starts_with("staleRaster") => "stale",
-                                // image registry는 decide() 이후, 이 main-thread closure가 실행되기 전에
-                                // 분리될 수 있다. 이 경우는 무효화된 frame이며,
-                                // 현재 surface의 presentation 실패가 아니다.
-                                "notAttached" => "stale",
-                                "notFound" => "notFound",
-                                "forbidden" => "forbidden",
-                                "size" => "size",
-                                "scale" => "scale",
-                                "unsupported" => "unsupported",
-                                "presentFailed" => "presentFailed",
-                                _ => "presentFailed",
-                            };
+                        Err(detail) => {
+                            let (reason, _, line) = presentation_outcome(
+                                &key.0,
+                                &name,
+                                generation,
+                                raster,
+                                sequence,
+                                id,
+                                &detail,
+                                &images.frame_state(&key),
+                            );
+                            eprintln!("{line}");
                             Some(reason)
                         }
                     };
@@ -1325,4 +1309,45 @@ where
             true
         }
     }
+}
+
+/// 표시하지 못한 프레임의 상세 detail 을 응답 사유와 로그 줄로 바꾼다. 대체된 프레임(stale, notAttached,
+/// staleRaster ...)은 표시 실패가 아니라 무효화된 프레임이므로 두 번째 값이 참이다. current 는 실패한 영역의 현재
+/// 프레임 상태이며 표시 실패의 줄에만 남긴다.
+#[allow(clippy::too_many_arguments)]
+pub fn presentation_outcome(
+    surface: &str,
+    name: &str,
+    generation: u64,
+    raster: u64,
+    sequence: i32,
+    token: u32,
+    detail: &str,
+    current: &str,
+) -> (&'static str, bool, String) {
+    let frame = format!(
+        "surface={surface} name={name} generation={generation} raster={raster} sequence={sequence} token={token} reason={detail}"
+    );
+    let reason = match detail {
+        "stale" | "notAttached" => "stale",
+        detail if detail.starts_with("staleRaster") => "stale",
+        "notFound" => "notFound",
+        "forbidden" => "forbidden",
+        "size" => "size",
+        "scale" => "scale",
+        "unsupported" => "unsupported",
+        _ => "presentFailed",
+    };
+    if reason == "stale" {
+        return (
+            reason,
+            true,
+            format!("image frame invalidated before native presentation: {frame}"),
+        );
+    }
+    (
+        reason,
+        false,
+        format!("image present on main thread error: {frame} current {current}"),
+    )
 }

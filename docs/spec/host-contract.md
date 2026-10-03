@@ -257,6 +257,8 @@ Items:
 | `images.present.missing-native-surface-requests-reconfiguration` | A presentation that fails with notFound requests a fresh configuration of the same raster. | both |
 | `images.attach.surface-close-removes-only-its-images` | Removing a surface returns its image handles and keeps another surface's images. | both |
 | `images.attach.rejects-reservation-without-sidecar` | An image reservation without its owning sidecar is rejected and registers nothing. | both |
+| `images.present.replaced-frame-is-logged-as-invalidated` | A frame that is no longer current (`stale`, `notAttached`, or `staleRaster native=... frame=...`) answers `stale` and logs `image frame invalidated before native presentation: ... reason=<detail>` without marking a presentation failure. | both |
+| `images.present.failure-line-names-the-current-frame` | Another presentation failure answers its reason (`presentFailed` for an unknown detail) and logs `image present on main thread error: ... reason=<detail> current <frame state>`. | both |
 | `recording.finish.keeps-folder-and-reports-frames` | Finishing a recording keeps its folder, reports its frame count, and a second finish fails. | both |
 | `recording.start.failed-open-removes-folder` | A recording whose capture fails to open removes its folder and leaves nothing running. | both |
 | `recording.start.failed-start-removes-folder` | A recording whose capture fails to start removes its folder and leaves nothing running. | both |

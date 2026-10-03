@@ -912,3 +912,51 @@ fn shown_surface_reconfigures_its_raster() {
         first.raster
     );
 }
+
+// contract: images.present.replaced-frame-is-logged-as-invalidated
+#[test]
+fn presentation_outcome_logs_a_replaced_frame_as_invalidated() {
+    for detail in [
+        "stale",
+        "notAttached",
+        "staleRaster native=1520x573@2 frame=760x192@2",
+        "staleRaster native=none",
+    ] {
+        let (reason, invalidated, line) = soksak_host_tauriv2::images::presentation_outcome(
+            "s1", "view", 3, 2, 1, 9, detail, "unused",
+        );
+        assert_eq!(reason, "stale", "{detail}");
+        assert!(invalidated, "{detail}");
+        assert_eq!(
+            line,
+            format!("image frame invalidated before native presentation: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail}")
+        );
+    }
+}
+
+// contract: images.present.failure-line-names-the-current-frame
+#[test]
+fn presentation_outcome_names_the_current_frame_of_a_failure() {
+    for (detail, want) in [
+        ("notFound", "notFound"),
+        ("presentFailed", "presentFailed"),
+        ("boom", "presentFailed"),
+    ] {
+        let (reason, invalidated, line) = soksak_host_tauriv2::images::presentation_outcome(
+            "s1",
+            "view",
+            3,
+            2,
+            1,
+            9,
+            detail,
+            "generation=3 raster=2",
+        );
+        assert_eq!(reason, want, "{detail}");
+        assert!(!invalidated, "{detail}");
+        assert_eq!(
+            line,
+            format!("image present on main thread error: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail} current generation=3 raster=2")
+        );
+    }
+}
