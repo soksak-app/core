@@ -54,12 +54,15 @@ test("a top or bottom panel must span the card's content column", () => {
 test("grip ink measures the run that differs from the strip background along the middle line", () => {
   // 세로 grip 6x100(CSS), 배율 2. 가운데 열(x=6)의 y 80..127 만 밝다.
   const image = { pixel: (x, y) => (x === 6 && y >= 80 && y < 128 ? [150, 150, 150] : [30, 30, 30]) };
-  assert.deepEqual(gripInk(image, { x: 0, y: 0, width: 6, height: 100 }, 2), { longest: 48, total: 48, length: 200 });
+  assert.deepEqual(gripInk(image, { x: 0, y: 0, width: 6, height: 100 }, 2), { longest: 48, total: 48, runs: 1, span: 48, length: 200 });
   // 가로 grip 의 전체 길이 선은 길이 전체가 잉크다.
   const line = { pixel: (x, y) => (y === 3 ? [150, 150, 150] : [30, 30, 30]) };
-  assert.deepEqual(gripInk(line, { x: 10, y: 0, width: 50, height: 6 }, 1), { longest: 50, total: 50, length: 50 });
+  assert.deepEqual(gripInk(line, { x: 10, y: 0, width: 50, height: 6 }, 1), { longest: 50, total: 50, runs: 1, span: 50, length: 50 });
   // 띠 바깥 끝의 카드 테두리는 배경이 아니다. 짧은 grip 만 잉크로 센다.
   const bordered = { pixel: (x, y) => (x === 0 ? [60, 60, 60] : x === 3 && y >= 40 && y < 64 ? [150, 150, 150] : [30, 30, 30]) };
-  assert.deepEqual(gripInk(bordered, { x: 0, y: 0, width: 6, height: 100 }, 1), { longest: 24, total: 24, length: 100 });
+  assert.deepEqual(gripInk(bordered, { x: 0, y: 0, width: 6, height: 100 }, 1), { longest: 24, total: 24, runs: 1, span: 24, length: 100 });
+  // 점 세 개는 구간 세 개이며, 첫 점에서 마지막 점까지의 길이가 span 이다.
+  const dots = { pixel: (x, y) => (x === 3 && [40, 41, 46, 47, 52, 53].includes(y) ? [150, 150, 150] : [30, 30, 30]) };
+  assert.deepEqual(gripInk(dots, { x: 0, y: 0, width: 6, height: 100 }, 1), { longest: 2, total: 6, runs: 3, span: 14, length: 100 });
 });
 

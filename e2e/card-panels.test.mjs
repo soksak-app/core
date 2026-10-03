@@ -63,8 +63,9 @@ for (const app of Object.values(APPS)) {
       // 테두리가 지나가므로, 두 번째 선을 찾는 측정에서 뺀다.
       const vertical = grip.height > grip.width;
       const ink = gripInk(image, vertical ? { ...grip, height: grip.height - 22 } : grip, ratio);
-      assert.ok(ink.longest > 0 && ink.longest <= 24 * ratio + 2 && ink.total === ink.longest,
-        `folded divider ${index} must show one grip of at most 24 points: ${JSON.stringify({ grip, ink })}`);
+      // 접힌 사이드바의 손잡이는 카드 divider 의 막대와 구별되는 점 세 개다(docs/spec/example-model.md).
+      assert.ok(ink.runs === 3 && ink.span > 0 && ink.span <= 24 * ratio + 2,
+        `folded divider ${index} must show three dots within 24 points: ${JSON.stringify({ grip, ink })}`);
     }
   });
 

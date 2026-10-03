@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-84: a folded card sidebar shows three dots, distinct from the bar grip of a card divider.
 - G1.4-83: the card header has a fold and open control for each sidebar the card shows.
 - G1.4-82: the status line of a window sidebar ends in a fold control that turns the sidebar off.
 - G1.4-81: the content footer of a card shows the footer text that the active tab's plugin reports: the terminal's working directory and the address of the link under the pointer in a browser document.

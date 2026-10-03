@@ -317,17 +317,19 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .card[data-sidebar-bottom=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=bottom],
 .card[data-sidebar-left=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=left],
 .card[data-sidebar-right=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=right]{cursor:pointer}
-/* 접힌 변은 카드 divider 의 grip 과 같은 짧은 grip 만 그린다. 변 전체의 선은 카드 경계가 하나 더 있는 것처럼 보인다. */
+/* 접힌 변은 가운데에 점 세 개만 그린다. 카드 divider 의 막대 grip 과 구별되고, 변 전체의 선은 카드 경계가 하나 더 있는 것처럼
+   보이므로 그리지 않는다. 점은 가운데 원과 그 양옆 그림자이며 모두 currentColor 다. */
 .card[data-sidebar-top=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=top]::after,
 .card[data-sidebar-bottom=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=bottom]::after,
 .card[data-sidebar-left=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=left]::after,
 .card[data-sidebar-right=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=right]::after{content:"";
-  position:absolute;inset:0;margin:auto;border-radius:99px;background:var(--sp-grip);transition:background .12s}
+  position:absolute;inset:0;margin:auto;width:3px;height:3px;border-radius:50%;color:var(--sp-grip);background:currentColor;
+  transition:color .12s}
 .card-sidebar__grip[data-side-of=top]::after,.card-sidebar__grip[data-side-of=bottom]::after{
-  width:var(--sp-grip-length);height:var(--sp-grip-thickness)}
+  box-shadow:-6px 0 currentColor,6px 0 currentColor}
 .card-sidebar__grip[data-side-of=left]::after,.card-sidebar__grip[data-side-of=right]::after{
-  width:var(--sp-grip-thickness);height:var(--sp-grip-length)}
-.card-sidebar__grip:hover::after,.card-sidebar__grip:active::after{background:var(--sp-grip-active)}
+  box-shadow:0 -6px currentColor,0 6px currentColor}
+.card-sidebar__grip:hover::after,.card-sidebar__grip:active::after{color:var(--sp-grip-active)}
 /* 상태줄은 카드가 좁아져도 한 줄을 유지한다. 줄바꿈이 생기면 22px 안에서 잘려
    두 번째 줄이 사라지고 첫 줄의 세로 정렬도 어긋난다. */
 .status{display:flex;align-items:center;padding:0 var(--space-2);font-size:var(--text-caption);
