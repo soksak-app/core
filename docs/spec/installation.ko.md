@@ -83,5 +83,5 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 
 ## 첫 실행
 
-`environment.json`의 `starter`가 starter pack을 정한다. 창이 시작할 때 `pluginsState`가 `firstRun`을 보고하면, workbench는 space를 만들기 전에 registry index에서 그 pack의 모든 plugin을 pack의 순서대로 `pluginsRun`으로 설치하고, 설치한 plugin을 불러오도록 page를 다시 불러온다. 첫 설치가 `installed.json`을 쓰므로, 이후의 시작은 모든 plugin을 지운 뒤라도 아무것도 설치하지 않는다. Registry가 없으면 창은 plugin 없이 시작하고 `first run: no registry is set; the starter pack <name> was not installed`를 기록한다. 읽지 못한 registry index나 그 pack이 없는 index는 그 오류로 시작을 실패시킨다. `starter`가 없는 environment나 host가 없는 환경은 아무것도 설치하지 않는다.
+`environment.json`의 `starter`가 starter pack을 정한다. 창이 시작할 때 `pluginsState`가 `firstRun`을 보고하면, workbench는 space를 만들기 전에 registry index에서 그 pack의 모든 plugin을 pack의 순서대로 `pluginsRun`으로 설치하고, 설치한 plugin을 불러오도록 page를 다시 불러온다. 첫 설치가 `installed.json`을 쓰므로, 이후의 시작은 모든 plugin을 지운 뒤라도 아무것도 설치하지 않는다. Registry가 없으면 창은 plugin 없이 시작하고 `first run: no registry is set; the starter pack <name> was not installed`를 기록하며, plugin이 없는 창이 그 이유를 밝히도록 애플리케이션 오류 `플러그인 레지스트리가 없어 시작 플러그인 묶음 <name>을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요.`를 보인다. 읽지 못한 registry index나 그 pack이 없는 index는 그 오류로 시작을 실패시킨다. `starter`가 없는 environment나 host가 없는 환경은 아무것도 설치하지 않는다.
 

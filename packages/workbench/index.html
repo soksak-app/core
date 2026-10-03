@@ -557,7 +557,7 @@ onLayout((made, draw, seated) => {
 await pluginOperations.refresh();
 // 첫 실행이면 starter pack 을 설치하고, 설치한 plugin 을 불러오도록 page 를 다시 불러온다(docs/spec/installation.md).
 // 다시 불러오는 동안 이 page 는 space 를 만들지 않는다.
-if (await pluginOperations.installStarter(starterPack(), log)) {
+if (await pluginOperations.installStarter(starterPack(), log, showError)) {
   location.reload();
   await new Promise(() => {});
 }

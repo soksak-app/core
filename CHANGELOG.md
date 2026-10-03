@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-74: a first run without a plugin registry shows why no plugin was installed and how to set the registry.
 - G1.4-73: window checks register cleanup with the session, compare settings rows with the declared keys, judge WebView churn by the window documents, measure the wheel factor, and load a local document instead of an external site.
 - G1.4-72: the terminal runtime specification defines the per-side terminal padding settings, and a window check measures the inset grid and the padding color.
 - G1.4-63-1: sidecars answer every `closed` with `{surface, closed: true[, error]}`; both hosts list unanswered closes in the `host.sidecars` status, log failed closes, and the PTY reap check waits on that status.

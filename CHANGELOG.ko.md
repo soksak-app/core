@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-74: plugin registry 없는 첫 실행이 plugin을 설치하지 않은 이유와 registry를 정하는 방법을 보인다.
 - G1.4-73: window check가 정리를 session에 등록하고, 설정 행을 선언된 key와 비교하며, WebView churn을 창의 문서로 판정하고, 휠 배율을 재며, 외부 사이트 대신 로컬 문서를 연다.
 - G1.4-72: terminal runtime 명세가 변마다의 터미널 padding 설정을 정의하고, window check가 안쪽으로 들어간 격자와 padding 색을 잰다.
 - G1.4-63-1: 사이드카가 모든 `closed`에 `{surface, closed: true[, error]}`로 답한다. 두 host는 답하지 않은 닫기를 `host.sidecars` 상태에 두고, 실패한 닫기를 로그에 쓰며, PTY 회수 check는 그 상태를 기다린다.

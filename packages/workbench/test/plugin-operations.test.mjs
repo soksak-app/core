@@ -140,8 +140,11 @@ test("the first run without a registry logs and a missing pack or unreadable ind
   const lines = [];
   const unset = createPluginOperations({ host: starterHost({ registry: null, index: null }), loaded: () => [], changed: () => {} });
   await unset.refresh();
-  assert.equal(await unset.installStarter("starter", (line) => lines.push(line)), false);
+  const shown = [];
+  assert.equal(await unset.installStarter("starter", (line) => lines.push(line), (message) => shown.push(message)), false);
   assert.deepEqual(lines, ["first run: no registry is set; the starter pack starter was not installed"]);
+  // plugin 이 없는 창은 그 이유를 화면에 밝힌다.
+  assert.deepEqual(shown, ["플러그인 레지스트리가 없어 시작 플러그인 묶음 starter을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요."]);
   const missing = createPluginOperations({ host: starterHost({ index: { plugins: [], packs: [] } }), loaded: () => [], changed: () => {} });
   await missing.refresh();
   await assert.rejects(missing.installStarter("starter", () => {}), /first run: the registry has no pack starter/);
