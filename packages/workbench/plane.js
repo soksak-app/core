@@ -18,6 +18,7 @@ import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout } from "./stored-layout.js";
 import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
+import { icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run } from "./commands.js";
 import { disposeSurface, focusSurface, mountSurface, placePluginPlaceholder } from "./surface-modules.js";
@@ -239,7 +240,22 @@ function updateCard(el, card, rect) {
       clearSet(holder);
       holder.replaceChildren();
     }
-    setText(status, `${side === "left" ? "왼쪽" : "오른쪽"} 창 사이드바${kind ? ` · ${kind}` : ""}`);
+    setText(statusText, `${side === "left" ? "왼쪽" : "오른쪽"} 창 사이드바${kind ? ` · ${kind}` : ""}`);
+    // 상태 줄 끝의 접기 단추는 이 사이드바를 끈다. 다시 켜는 단추는 창 머리에 있다(docs/spec/plugins.md#sections).
+    let fold = status.querySelector(".sidebar-status__fold");
+    if (!fold || fold.dataset.side !== side) {
+      fold?.remove();
+      fold = document.createElement("button");
+      fold.type = "button";
+      fold.className = "sidebar-status__fold";
+      fold.dataset.side = side;
+      fold.dataset.expose = "core.sidebar.fold";
+      fold.title = `${side === "left" ? "왼쪽" : "오른쪽"} 창 사이드바 접기`;
+      fold.setAttribute("aria-label", fold.title);
+      fold.innerHTML = icon(side === "left" ? "chevron-left" : "chevron-right");
+      bind(fold, "core.settings.set", { patch: { [side]: false } });
+      status.appendChild(fold);
+    }
     return;
   }
 

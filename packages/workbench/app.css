@@ -532,6 +532,10 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .card[data-place] > .status{grid-row:3}
 .set{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column}
 /* 상태 줄은 카드 발과 같은 높이와 글자여서 사이드바와 이웃 카드의 아래 선이 한 줄에 놓인다. */
+.sidebar-status__fold{display:grid;place-items:center;margin-left:auto;width:18px;height:18px;padding:0;border:0;border-radius:var(--r-xs);
+  background:transparent;color:var(--muted);cursor:pointer}
+.sidebar-status__fold:hover{background:var(--inset);color:var(--fg)}
+.sidebar-status__fold svg{width:14px;height:14px}
 .sidebar-status,.card-sidebar__status{display:flex;align-items:center;gap:6px;height:var(--foot);flex:0 0 var(--foot);box-sizing:border-box;
   padding:0 var(--space-2);border-top:var(--bw) solid var(--edge);font-size:var(--text-caption);color:var(--muted);
   white-space:nowrap;overflow:hidden}

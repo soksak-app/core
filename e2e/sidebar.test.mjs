@@ -506,3 +506,29 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(errors, [], `${file} recorded errors while the reloaded page mounted its sections`);
   });
 }
+
+for (const app of Object.values(APPS)) {
+  // 창 사이드바는 하단 줄 끝의 접기 컨트롤로 꺼지고, 창 머리의 단추로 다시 켜진다(docs/spec/plugins.md#sections).
+  test(`${app.name}: the fold control at the bottom of a window sidebar turns it off and the header turns it on`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const { left } = (await s.get("core.settings")).values;
+    s.cleanup(() => s.run("core.settings.set", { patch: { left }, scope: "common" }));
+    await s.run("core.settings.set", { patch: { left: true }, scope: "common" });
+    await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "left"), "the left window sidebar is not shown");
+    const listed = (await s.request("exposure.list")).dom.find((entry) => entry.name === "core.sidebar.fold");
+    assert.ok(listed?.registered, `the window sidebar fold control is not declared and registered: ${JSON.stringify(listed)}`);
+    await s.presented();
+    const fold = await s.rect("core.sidebar.fold", 0);
+    const status = await s.rect("core.sidebar.status", 0);
+    assert.ok(fold.y >= status.y - 0.5 && fold.y + fold.height <= status.y + status.height + 0.5 && fold.x + fold.width <= status.x + status.width + 0.5,
+      `the fold control is not in the status line: ${JSON.stringify({ fold, status })}`);
+    await s.click(fold.x + fold.width / 2, fold.y + fold.height / 2);
+    await s.until("core.settings", (value) => value.values.left === false && !value.saving, "the fold control did not turn the left sidebar off");
+    await s.until("core.sidebars", (value) => !value.some((item) => item.sidebar === "left"), "the left window sidebar stayed");
+    const header = await s.rect("core.chrome.left", 0);
+    await s.click(header.x + header.width / 2, header.y + header.height / 2);
+    await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "left"), "the header control did not turn the left sidebar on");
+  });
+}

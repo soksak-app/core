@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-82: the status line of a window sidebar ends in a fold control that turns the sidebar off.
 - G1.4-81: the content footer of a card shows the footer text that the active tab's plugin reports: the terminal's working directory and the address of the link under the pointer in a browser document.
 - G1.4-80: card sidebars end in their own status line, and the content footer of a card spans only its content column.
 - G1.4-90-7: a window in full screen answers `windowControls` with title bar row 0 instead of an error.

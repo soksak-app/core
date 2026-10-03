@@ -2778,6 +2778,11 @@
         "many": true
       },
       {
+        "name": "core.sidebar.fold",
+        "description": "The fold controls at the end of the window sidebar status lines in document order; each turns its sidebar off with core.settings.set, and the window header control turns it on again.",
+        "many": true
+      },
+      {
         "name": "core.card.sidebar.status",
         "description": "The status lines that end the open card sidebars in document order; each names its side and its set.",
         "many": true
