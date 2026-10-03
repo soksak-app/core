@@ -31,6 +31,31 @@ mod darwin;
 #[path = "windows/windows.rs"]
 mod windows;
 
+/// 공용 라이브러리가 창과 웹뷰에 붙인 객체 가운데 그 수명이 창과 웹뷰의 해제를 나타내는 객체의 살아 있는 수.
+/// 닫은 창과 그 웹뷰가 해제되면 그 창의 객체 수가 빠진다.
+#[cfg(feature = "diagnostics")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct WindowObjects {
+    /// 창의 콘텐츠 뷰 안에서 메인 웹뷰를 보유하는 합성 뷰의 수.
+    pub window_compositions: i64,
+    /// 논리 표면과 표면에 붙인 웹뷰의 컨테이너 수.
+    pub surface_hosts: i64,
+    /// 입력을 등록한 웹뷰(메인, 모달, 표면 웹뷰)의 등록 수.
+    pub input_registrations: i64,
+}
+
+#[cfg(feature = "diagnostics")]
+impl WindowObjects {
+    /// diagnostics.native.objects 의 응답.
+    pub fn payload(&self) -> Value {
+        serde_json::json!({
+            "windowCompositions": self.window_compositions,
+            "surfaceHosts": self.surface_hosts,
+            "inputRegistrations": self.input_registrations,
+        })
+    }
+}
+
 /// 네이티브 창, 뷰, 입력 감시기를 가리키는 주소.
 pub type Handle = usize;
 
@@ -449,6 +474,13 @@ pub trait Platform: Send + Sync {
     /// 알림 센터가 아직 보이는 이 애플리케이션의 알림을 [{identifier, title, body}] JSON 으로 done 에 준다.
     /// 메인 스레드에서 호출하고 done 도 메인 스레드에서 불린다.
     fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String>;
+    #[cfg(feature = "diagnostics")]
+    /// 애플리케이션이 이벤트 하나를 처리해 그 이벤트 반복의 자동 해제 풀을 비운 뒤 창과 웹뷰에 붙인 라이브러리
+    /// 객체의 수를 done 에 준다. 메인 스레드에서 호출하고 done 도 메인 스레드에서 불린다.
+    fn window_objects_after_event(
+        &self,
+        done: Box<dyn FnOnce(WindowObjects) + Send>,
+    ) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// 배치 트랜잭션마다 시작, 앱 DOM 표시 확인, 커밋 시각의 기록을 시작한다. 메인 스레드에서 호출한다.
     fn layout_trace_start(&self) -> Result<(), String>;

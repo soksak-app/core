@@ -1,0 +1,65 @@
+// 닫은 프로젝트 창이 그 창과 웹뷰, 공용 라이브러리가 창과 웹뷰에 붙인 객체를 남기지 않는지 검사한다.
+//
+// diagnostics.native.objects 는 라이브러리 객체의 살아 있는 수를 애플리케이션이 이벤트 하나를 처리한 뒤에 센다. 닫은
+// 창의 객체는 그 창을 닫은 이벤트 반복의 자동 해제 풀이 비워질 때 해제되고, 풀은 애플리케이션이 이벤트를 처리할 때
+// 비워지므로, 검사는 사용자 입력 없이 그 해제를 잰다. 창을 닫은 뒤 host.windows 알림으로 닫힘을 확인하고 한 번 센다.
+import assert from "node:assert/strict";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+
+import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
+
+const CYCLES = 4;
+
+const counts = (s) => s.request("diagnostics.native.objects");
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: closed project windows release their windows, webviews and attached native objects`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    await keepCommonSettings(s);
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-release-")));
+    s.cleanup(() => rmSync(root, { recursive: true, force: true }));
+    s.cleanup(async () => {
+      for (const window of await s.get("host.windows")) {
+        if (window.window !== s.window) await s.on(window.window).close();
+      }
+      await s.windows(1, "a project window did not close");
+      for (const project of await s.get("core.projects")) {
+        if (project.root === root) await s.run("core.project.close", { id: project.id });
+      }
+    });
+    await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
+
+    const before = await counts(s);
+    const measured = [];
+    for (let cycle = 1; cycle <= CYCLES; cycle++) {
+      const label = `cycle ${cycle}`;
+      const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
+      const windows = await s.windows(2, `${label}: the project window did not open`);
+      const child = s.on(windows.find((w) => w.window !== s.window).window);
+      await child.until("core.project", (project) => project?.id === opened.id, `${label}: the project did not become active`);
+      await child.until("core.surfaces", (surfaces) => surfaces.some((surface) => surface.visible),
+        `${label}: the project window showed no surface`);
+      await child.presented();
+      const showing = await counts(s);
+      measured.push(showing);
+      // 열린 창의 합성 뷰, 표면, 입력 등록이 세어져야 닫은 뒤의 값이 해제를 나타낸다.
+      assert.ok(showing.windowCompositions > before.windowCompositions && showing.surfaceHosts > before.surfaceHosts &&
+        showing.inputRegistrations > before.inputRegistrations,
+        `${label}: the open project window is not counted: before ${JSON.stringify(before)}, open ${JSON.stringify(showing)}`);
+      await child.close();
+      await s.windows(1, `${label}: the project window did not close`);
+      await s.run("core.project.close", { id: opened.id });
+      await s.until("core.projects", (projects) => !projects.some((project) => project.id === opened.id),
+        `${label}: the project did not leave the registry`);
+    }
+    const after = await counts(s);
+    t.diagnostic(`${app.name}: before ${JSON.stringify(before)}, open ${JSON.stringify(measured)}, after ${JSON.stringify(after)}`);
+    assert.deepEqual(after, before, `${app.name}: ${CYCLES} closed project windows left native objects: ` +
+      `before ${JSON.stringify(before)}, after ${JSON.stringify(after)}, while open ${JSON.stringify(measured)}`);
+  });
+}

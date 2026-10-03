@@ -86,6 +86,34 @@ type InputSources interface {
 	SelectInputSource(identifier string) error
 }
 
+// WindowObjects 는 공용 라이브러리가 창과 웹뷰에 붙인 객체 가운데 그 수명이 창과 웹뷰의 해제를 나타내는
+// 객체의 살아 있는 수다. 닫은 창과 그 웹뷰가 해제되면 그 창의 객체 수가 빠진다.
+type WindowObjects struct {
+	// WindowCompositions 는 창의 콘텐츠 뷰 안에서 메인 웹뷰를 보유하는 합성 뷰의 수다.
+	WindowCompositions int64
+	// SurfaceHosts 는 논리 표면과 표면에 붙인 웹뷰의 컨테이너 수다.
+	SurfaceHosts int64
+	// InputRegistrations 는 입력을 등록한 웹뷰(메인, 모달, 표면 웹뷰)의 등록 수다.
+	InputRegistrations int64
+}
+
+// Payload 는 diagnostics.native.objects 의 응답이다.
+func (o WindowObjects) Payload() map[string]int64 {
+	return map[string]int64{
+		"windowCompositions": o.WindowCompositions,
+		"surfaceHosts":       o.SurfaceHosts,
+		"inputRegistrations": o.InputRegistrations,
+	}
+}
+
+// WindowObjectCounter 는 WindowObjects 를 세는 연산이다. 진단 빌드(태그 diagnostics)의 플랫폼 구현만 제공하며,
+// 진단 코드는 Current() 의 값을 이 인터페이스로 확인해 사용한다.
+type WindowObjectCounter interface {
+	// WindowObjectsAfterEvent 는 애플리케이션이 이벤트 하나를 처리해 그 이벤트 반복의 자동 해제 풀을 비운 뒤의 수를
+	// done 에 준다. UI 스레드에서 호출하고 done 도 UI 스레드에서 불린다.
+	WindowObjectsAfterEvent(done func(WindowObjects))
+}
+
 // Capturer 는 창 녹화 연산이다. 진단 빌드(태그 diagnostics)의 플랫폼 구현만 제공하며, 진단
 // 코드는 Current() 의 값을 이 인터페이스로 확인해 사용한다.
 type Capturer interface {

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-101-1: diagnostic builds of both hosts report the live window compositions, surface hosts, and input registrations of the shared macOS library through `diagnostics.native.objects`, counted after the application has handled an event, and the window check `window-release.test.mjs` requires four closed project windows to leave these counts unchanged.
 - G1.4-104: the Wails host refuses a surface sync request with an invalid surface rectangle instead of ending with `fatal error: sync: unlock of unlocked mutex`, and both hosts check every rectangle of the request before the layout begins, so a refused window overlay no longer leaves a begun layout in the Tauri host.
 - G1.4-101-1: the Tauri host uses tao 0.37.1 with the fix of tao PR #1328, so a closed window and its webview are released.
 - G1.4-101: closing a window closes the document regions, image regions, and logical surfaces of the window in both hosts, a webview's input registration ends when the webview is released, and the file drop receiver is freed with its drop view, so a closed window no longer keeps its main webview, document webviews, and their web content processes.

@@ -79,6 +79,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.notifications",
     "diagnostics.navigation.delay",
     "diagnostics.page.collect",
+    "diagnostics.native.objects",
     TRANSCRIPT,
 ];
 #[cfg(not(feature = "diagnostics"))]

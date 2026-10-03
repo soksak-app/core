@@ -356,6 +356,13 @@ pub fn delivered_notifications(_done: Box<dyn FnOnce(String) + Send>) -> Result<
 }
 
 #[cfg(feature = "diagnostics")]
+pub fn window_objects_after_event(
+    _done: Box<dyn FnOnce(super::super::WindowObjects) + Send>,
+) -> Result<(), String> {
+    missing("window object counts")
+}
+
+#[cfg(feature = "diagnostics")]
 pub fn layout_trace_start() -> Result<(), String> {
     missing("surface layout trace")
 }

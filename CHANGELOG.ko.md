@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-101-1: 두 host의 진단 빌드는 공용 macOS library의 살아 있는 window composition, surface host, 입력 등록 수를 애플리케이션이 event 하나를 처리한 뒤 세어 `diagnostics.native.objects`로 보고하고, window check `window-release.test.mjs`는 project window 네 개를 닫은 뒤 이 수가 그대로이기를 요구한다.
 - G1.4-104: Wails host는 표면 사각형이 잘못된 표면 동기화 요청을 `fatal error: sync: unlock of unlocked mutex`로 끝나지 않고 거부하며, 두 host 모두 배치를 시작하기 전에 요청의 모든 사각형을 검사하므로 Tauri host에서 거부된 창 overlay가 시작된 배치를 더 남기지 않는다.
 - G1.4-101-1: Tauri host는 tao PR #1328의 수정을 넣은 tao 0.37.1을 쓰므로 닫힌 창과 그 웹뷰가 해제된다.
 - G1.4-101: 두 host 모두 창을 닫을 때 그 창의 문서 영역, 그림 영역, 논리 표면을 닫고, webview의 입력 등록은 webview가 해제될 때 끝나며, 파일 놓기 수신기는 놓기 view와 함께 해제되므로, 닫힌 창이 main webview, 문서 webview, 그 web content process를 더 남기지 않는다.

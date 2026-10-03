@@ -115,6 +115,7 @@ pub(crate) fn call(
         "diagnostics.capture.still" => capture_still(window),
         "diagnostics.notifications" => delivered_notifications(window),
         "diagnostics.page.collect" => page_collect(window),
+        "diagnostics.native.objects" => native_objects(window),
         "diagnostics.navigation.delay" => {
             let ms = params
                 .get("ms")
@@ -146,6 +147,28 @@ fn page_collect(window: &Window) -> Result<Value, Failure> {
     })
     .map_err(internal)?;
     Ok(Value::Null)
+}
+
+/// 애플리케이션이 이벤트 하나를 처리한 뒤 창과 웹뷰에 붙인 라이브러리 객체의 살아 있는 수를 반환한다. 닫은 창의
+/// 객체는 그 창을 닫은 이벤트 반복의 자동 해제 풀이 비워질 때 해제되고, 풀은 애플리케이션이 이벤트를 처리할 때
+/// 비워진다. 창 검사가 닫은 창의 해제를 사용자 입력 없이 재도록 이벤트 하나를 넣고 그 뒤에 센다.
+fn native_objects(window: &Window) -> Result<Value, Failure> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    on_main(window, move || {
+        platform::current()?.window_objects_after_event(Box::new(move |counts| {
+            if tx.send(counts).is_err() {
+                eprintln!("window object counts had no pending receiver");
+            }
+        }))
+    })
+    .map_err(internal)?;
+    let counts = rx.recv_timeout(TIMEOUT).map_err(|_| {
+        Failure::new(
+            crate::endpoint::TIMED_OUT,
+            format!("the application did not handle an event within {TIMEOUT:?}"),
+        )
+    })?;
+    Ok(counts.payload())
 }
 
 /// 창을 포커스를 주지 않고 한 장 찍어 `<config-dir>/captures/still-*/window.png` 로 쓰고 경로를 반환한다.

@@ -41,6 +41,7 @@ func init() {
 	holdModalContent = modalHolds.wait
 	diagnosticMethods["diagnostics.navigation.delay"] = diagnosticNavigationDelay
 	diagnosticMethods["diagnostics.page.collect"] = diagnosticPageCollect
+	diagnosticMethods["diagnostics.native.objects"] = diagnosticNativeObjects
 	handleNavigation = navigationDelays.handle
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
 	diagnosticTopics[logTopic] = func(on bool) (string, any) {
@@ -613,6 +614,27 @@ func diagnosticPageCollect(e *Endpoint, _ *endpointConn, params json.RawMessage)
 		}
 	})
 	return nil, err
+}
+
+// diagnosticNativeObjects 는 애플리케이션이 이벤트 하나를 처리한 뒤 창과 웹뷰에 붙인 라이브러리 객체의 살아 있는 수를
+// 반환한다. 닫은 창의 객체는 그 창을 닫은 이벤트 반복의 자동 해제 풀이 비워질 때 해제되고, 풀은 애플리케이션이
+// 이벤트를 처리할 때 비워진다. 창 검사가 닫은 창의 해제를 사용자 입력 없이 재도록 이벤트 하나를 넣고 그 뒤에 센다.
+func diagnosticNativeObjects(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	if _, _, err := diagnosticHost(e, params); err != nil {
+		return nil, err
+	}
+	counter, ok := system.(platform.WindowObjectCounter)
+	if !ok {
+		return nil, errors.New("window object counts are not implemented on this platform")
+	}
+	answer := make(chan platform.WindowObjects, 1)
+	application.InvokeSync(func() { counter.WindowObjectsAfterEvent(func(counts platform.WindowObjects) { answer <- counts }) })
+	select {
+	case counts := <-answer:
+		return counts.Payload(), nil
+	case <-time.After(pageTimeout):
+		return nil, rpcError(codeTimeout, "the application did not handle an event within %s", pageTimeout)
+	}
 }
 
 // diagnosticNavigationDelay 는 창의 이후 navigation callback 처리를 ms 밀리초 늦춘다. 0 은 지연을 없앤다.

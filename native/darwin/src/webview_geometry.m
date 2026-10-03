@@ -2,6 +2,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 #import "webview_geometry.h"
+#import "window_objects.h"
 #import "private/webkit.h"
 
 
@@ -124,12 +125,14 @@ static void reconfigureSurfaceWebviews(NSView *root) {
 @implementation SPWindowComposition
 - (id)initWithFrame:(NSRect)frame {
     if (!(self = [super initWithFrame:frame])) return nil;
+    sp_window_object_change(SP_WINDOW_OBJECT_COMPOSITION, 1);
     self.wantsLayer = YES;
     self.layer.opaque = NO;
     self.layer.backgroundColor = NSColor.clearColor.CGColor;
     return self;
 }
 - (void)dealloc {
+    sp_window_object_change(SP_WINDOW_OBJECT_COMPOSITION, -1);
     [_mainWebview release];
     [_overlays release];
     [super dealloc];
@@ -195,6 +198,7 @@ static void notifyScale(NSView *view) {
 @implementation SPSurfaceHost
 - (id)initWithFrame:(NSRect)frame {
     if (!(self = [super initWithFrame:frame])) return nil;
+    sp_window_object_change(SP_WINDOW_OBJECT_SURFACE_HOST, 1);
     self.wantsLayer = YES;
     self.layer.masksToBounds = YES;
     self.nativePlane = [[[SPSurfaceNativePlane alloc] initWithFrame:self.bounds] autorelease];
@@ -204,6 +208,7 @@ static void notifyScale(NSView *view) {
     return self;
 }
 - (void)dealloc {
+    sp_window_object_change(SP_WINDOW_OBJECT_SURFACE_HOST, -1);
     [_mainWebview release];
     [_nativePlane release];
     [_domOverlays release];

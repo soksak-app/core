@@ -58,6 +58,9 @@ mod termination;
 mod webview;
 #[path = "window.rs"]
 mod window;
+#[cfg(feature = "diagnostics")]
+#[path = "window_objects.rs"]
+mod window_objects;
 
 /// AppKit 이 이벤트 위치로 반환하는 점. objc2 가 메시지 반환값의 배치를 알아야 하므로 선언한다.
 #[repr(C)]
@@ -479,6 +482,14 @@ impl Platform for Darwin {
     #[cfg(feature = "diagnostics")]
     fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String> {
         capture::delivered_notifications(done);
+        Ok(())
+    }
+    #[cfg(feature = "diagnostics")]
+    fn window_objects_after_event(
+        &self,
+        done: Box<dyn FnOnce(super::WindowObjects) + Send>,
+    ) -> Result<(), String> {
+        window_objects::after_event(done);
         Ok(())
     }
     #[cfg(feature = "diagnostics")]

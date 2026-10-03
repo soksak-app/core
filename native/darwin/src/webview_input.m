@@ -5,6 +5,7 @@
 // 제어한다. 그 이벤트를 받는 webview 는 AppKit 의 hit test 가 선택한다.
 #import "private/webkit.h"
 #import "webview_geometry.h"
+#import "window_objects.h"
 
 static NSHashTable *inputViews;
 static NSMapTable<NSWindow *, WKWebView *> *lastPointerTargets;
@@ -64,6 +65,11 @@ static NSString *const kReceiptScript =
 - (void)end;
 @end
 @implementation SPInputRegistration
+- (instancetype)init {
+    if (!(self = [super init])) return nil;
+    sp_window_object_change(SP_WINDOW_OBJECT_INPUT_REGISTRATION, 1);
+    return self;
+}
 - (void)end {
     if (!self.controller) return;
     [self.controller removeScriptMessageHandlerForName:kReceiptMessage contentWorld:[WKContentWorld worldWithName:kReceiptWorld]];
@@ -73,6 +79,7 @@ static NSString *const kReceiptScript =
     for (SPInputWait *wait in waits) wait.done(NO);
 }
 - (void)dealloc {
+    sp_window_object_change(SP_WINDOW_OBJECT_INPUT_REGISTRATION, -1);
     [self end];
     [_receipts release];
     [super dealloc];
