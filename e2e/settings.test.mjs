@@ -113,7 +113,9 @@ for (const app of Object.values(APPS)) {
     await press(s, "core.settings-modal.plugin", "plugin:terminal");
     const terminal = await s.until("core.settings-modal", (modal) => modal.plugin === "terminal", "terminal page did not open");
     assert.deepEqual(terminal.listed, [], "the page still shows the plugin list");
-    assert.equal(terminal.rows.length, 14, `terminal rows: ${JSON.stringify(terminal.rows)}`);
+    // 행은 manifest 가 선언한 설정마다 하나이며 선언 순서를 따른다. 플러그인 설정의 기본값은 그 순서로 등록된다.
+    const declared = Object.keys((await s.get("core.settings")).values).filter((key) => key.startsWith("terminal."));
+    assert.deepEqual(terminal.rows.map((row) => row.key), declared, `terminal rows: ${JSON.stringify(terminal.rows)}`);
     assert.deepEqual(terminal.rows.find((row) => row.key === "terminal.cursor.shape"), {
       key: "terminal.cursor.shape", name: "커서 모양",
       description: "block은 칸 전체, underline은 밑줄, beam은 세로 막대로 그린다. 프로그램이 모양을 정하면 그 모양을 쓴다.",
