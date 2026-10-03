@@ -64,3 +64,25 @@ test("a command bound covers its handler and not the presentation it waits for a
   made.command("core.fixture.drawn", () => 9);
   assert.equal(await made.run("core.fixture.drawn", {}), 9);
 });
+
+test("a handler that throws fails its command and leaves no reply timer behind", { timeout: 5000 }, async (t) => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  t.after(() => mock.timers.reset());
+  const unhandled = [];
+  const record = (reason) => unhandled.push(reason);
+  process.on("unhandledRejection", record);
+  t.after(() => process.off("unhandledRejection", record));
+  const made = registry();
+  made.declare("core", {
+    status: [],
+    commands: [{ name: "core.fixture.throws", description: "Throws in its handler.", params: { type: "object" },
+      result: { type: "null" } }],
+    dom: [],
+  });
+  made.command("core.fixture.throws", () => { throw new Error("fixture handler failed"); });
+  await assert.rejects(made.run("core.fixture.throws", {}), /fixture handler failed/);
+  // 처리기가 동기로 던져도 응답 한도의 타이머는 해제되어, 10초 뒤 응답하지 않았다는 거부가 따로 생기지 않는다.
+  mock.timers.tick(10000);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(unhandled.map(String), []);
+});

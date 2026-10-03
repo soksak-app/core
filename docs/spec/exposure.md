@@ -37,7 +37,7 @@ A name has the form `<owner>.<name>`. `owner` is `core`, `host`, or a plugin id.
 | command | `description` | One-sentence description |
 | command | `params` | Parameter schema |
 | command | `result` | Result schema |
-| command | `timeout` | Optional. How long a command may take to reply, in milliseconds from 1 to 600000; the default is 10 seconds. The host applies it to a command forwarded to a surface page, and the main page applies it to the handler of a command it runs itself, which then fails with -32000 and `command <name> did not reply within <ms>ms`. A core command then waits for its layout to present; that wait is not part of the timeout, because each step of the presentation path fails with its own error within its own limit ([native host](native-host.md)) |
+| command | `timeout` | Optional. How long a command may take to reply, in milliseconds from 1 to 600000; the default is 10 seconds. The host applies it to a command forwarded to a surface page, and the main page applies it to the handler of a command it runs itself, which then fails with -32000 and `command <name> did not reply within <ms>ms`. A handler that throws, synchronously or asynchronously, fails the command with its own error, and the timeout ends with it. A core command then waits for its layout to present; that wait is not part of the timeout, because each step of the presentation path fails with its own error within its own limit ([native host](native-host.md)) |
 | dom | `name` | Entry name |
 | dom | `description` | One-sentence description |
 | dom | `many` | Optional. `true` when several elements share the name; requests address one element with `index` |

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-94: a main-page command whose handler throws no longer leaves a reply timer that logs `did not reply within 10000ms` ten seconds later.
 - G1.4-97: the Wails host no longer panics when a window closes while the application stops its sidecars; stopping removes the sidecars from the running set first, as in the Tauri host.
 - G1.4-96: a window check confirms that the settings modal is on screen at the presented time once the window reports it shown, and the example verification states that wait for modal captures.
 - G1.4-95: a window check prints each failed cleanup step as a diagnostic, so a cleanup failure is visible when the check itself failed.

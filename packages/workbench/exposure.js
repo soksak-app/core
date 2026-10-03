@@ -152,7 +152,10 @@ export function createRegistry({ call = null } = {}) {
     const expired = new Promise((_, reject) => {
       timer = setTimeout(() => reject(new ExposureError(EXPOSURE_ERRORS.failed, `command ${name} did not reply within ${limit}ms`)), limit);
     });
-    return Promise.race([run(), expired]).finally(() => clearTimeout(timer));
+    // handler 의 동기 예외도 이 Promise 의 거부가 되어야 경쟁이 끝나고 타이머가 해제된다. 아니면 예외가 먼저 호출자에게
+    // 가고, 남은 타이머가 한도 뒤에 아무도 받지 않는 응답 없음 거부를 만든다.
+    const running = new Promise((resolve) => { resolve(run()); });
+    return Promise.race([running, expired]).finally(() => clearTimeout(timer));
   }
 
   function answer(method, params) {
