@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify browser-example-check docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat
+.PHONY: preflight prepare build verify browser-example-check docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -8,6 +8,13 @@ docs-check:
 # release 빌드를 만들고, 스테이징된 프런트엔드와 release 실행 파일에 진단 코드가 없는지 검사한다.
 release-check: wailsv3-build-release tauriv2-build-release
 	@node scripts/check-release.mjs --wailsv3-bundle "$(WAILS_RELEASE_BUNDLE)" --tauriv2-bundle "$(TAURI_RELEASE_BUNDLE)"
+
+# 실행 중인 애플리케이션의 main page process 메모리를 시작, 유휴, 다시 읽기 뒤에 잰다(docs/operations/examples.md).
+# APP 은 wailsv3 또는 tauriv2, CONFIG 는 그 애플리케이션의 설정 폴더, BUILD 는 release(기본) 또는 debug 다.
+page-memory:
+	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "page-memory requires APP=wailsv3|tauriv2 CONFIG=DIR [BUILD=release|debug] [MINUTES=60] [RELOADS=20]" >&2; exit 2;; esac
+	@case "$(CONFIG)" in '') echo "page-memory requires CONFIG=DIR" >&2; exit 2;; esac
+	@node scripts/measure-page-memory.mjs --sok target/$(or $(BUILD),release)/soksak-$(APP).app/Contents/MacOS/sok --config-dir "$(CONFIG)" --idle-minutes $(or $(MINUTES),60) --reloads $(or $(RELOADS),20)
 
 # 코어, 플러그인, 사이드카가 서로의 이름을 코드에 적지 않았는지 검사한다.
 boundaries:

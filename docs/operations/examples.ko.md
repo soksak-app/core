@@ -30,7 +30,7 @@ make wailsv3-build tauriv2-build
 
 `make parity-check`로 구조 목록 게이트를 실행한다. 언어별 고정 루트 없이 Git에 보이는 JS/TS·Rust·Go·Objective-C·네이티브 헤더·HTML/CSS·셸 스크립트·계약 선언·빌드 매니페스트를 발견한다. 생성된 라이브러리 출력·Tauri 스키마는 명시적 제외 사유를 갖고 소스/출력 일치는 별도 빌드 검사로 유지한다. 연결 없는 구현·테스트, 빈 패턴, 중복 소유는 실패한다. 테스트 공유를 이유로 구현 중복 소유를 허용하지 않는다.
 
-`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`와 `make go-format-check`를 실행한다. `make go-format-check`는 `gofmt`가 바꿀 추적 Go file을 모두 나열하고 실패한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 54개, 구현 파일 325개, 테스트 파일 358개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
+`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`와 `make go-format-check`를 실행한다. `make go-format-check`는 `gofmt`가 바꿀 추적 Go file을 모두 나열하고 실패한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 55개, 구현 파일 326개, 테스트 파일 359개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
 
 `pnpm test`는 패키지 검사 전에 감사·체크리스트·명령 감독 자체 검사를 실행한다. Rust 터미널 패키지 두 개는 실제 Cargo 검사를 호출한다. 패키지 명령 검사는 Cargo를 실패 fixture로 교체해 호출·실패 전달을 검증하며 엔진 동작 검사로 세지 않는다.
 
@@ -131,6 +131,10 @@ pnpm -F @soksak/e2e run verify
 하네스는 메인 문서를 다시 읽기 전에 픽스처의 표시를 확인해야 한다. 시간 초과이면 준비를 실패시키고 그 상태를 유지하며, 재로드로 열린 트랜잭션을 해제해 통과시키지 않는다. 마지막 검증 상태에는 이전 오류가 남지 않을 수 있으므로 하네스는 표시 오류의 로그 알림도 수집한다.
 
 프로젝트 복귀 프로세스 검사는 검사 설정의 터미널 서비스 엔드포인트와 OS 프로세스 목록을 읽는다. 해당 설정의 서비스가 정확히 하나이고 열린 터미널(숨겨진 탭 포함)마다 직접 자식 셸이 하나이며 PTY 헬퍼 자식과 좀비 자식이 없어야 한다. 라이브러리 복귀는 개수뿐 아니라 서비스와 셸 PID 자체를 보존해야 한다. 다른 실행 중인 앱은 설정 식별자로 제외한다. 파서 단위 검사는 서비스 수명주기를 검증하지 않으며 재빌드한 호스트 실행이 필요하다.
+
+## page 메모리
+
+`make page-memory APP=wailsv3|tauriv2 CONFIG=DIR [BUILD=release|debug] [MINUTES=60] [RELOADS=20]`는 실행 중인 애플리케이션(기본은 release 빌드)의 main page process를 잰다: 번들의 `sok`으로 `host.window`에서 window의 `pageProcess`를 읽고, 시작 시점, 입력 없는 `MINUTES`분 뒤, `host.window.reload`를 `RELOADS`번 실행한 뒤에 `footprint`가 보고하는 physical footprint를 기록하며, 각각 JSON 한 줄 `{phase, elapsedMs, pageProcess, footprint}`를 출력한다. 유휴를 알리는 event가 없으므로 유휴 단계는 시간을 기다린다. 측정은 값을 판정하지 않으며, window에 page process가 없거나 다시 읽기가 page process를 바꾸면 실패한다. 측정이 대화형 설정을 쓰지 않도록 애플리케이션을 일회용 설정 폴더로 시작한다(`open -g -n <bundle> --args --config-dir DIR`).
 
 ## 브라우저 예제 검사
 
