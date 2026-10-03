@@ -51,6 +51,7 @@ const SP_INPUT_DELIVERED: i32 = 0;
 const SP_INPUT_INACTIVE: i32 = 2;
 const SP_INPUT_UNRECEIVED: i32 = 3;
 const SP_INPUT_BUTTON_HELD: i32 = 4;
+const SP_INPUT_PRESS_OPEN: i32 = 5;
 
 type Delivered = Box<dyn FnOnce(Delivery) + Send>;
 
@@ -62,6 +63,7 @@ extern "C" fn delivered(context: *mut c_void, result: i32) {
         SP_INPUT_INACTIVE => Delivery::Inactive,
         SP_INPUT_UNRECEIVED => Delivery::Unreceived,
         SP_INPUT_BUTTON_HELD => Delivery::ButtonHeld,
+        SP_INPUT_PRESS_OPEN => Delivery::PressOpen,
         _ => Delivery::Rejected,
     });
 }

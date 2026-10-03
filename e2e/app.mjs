@@ -183,6 +183,8 @@ export async function open(t, app) {
         `${pasteboard.items.map((item) => Object.keys(item).join("+")).join(", ")}`);
     }
   });
+  // 검사가 열어 둔 누름은 검사의 정리 뒤에 뗀다. 정리는 등록의 역순으로 실행한다.
+  session.cleanup(() => session.releasePresses());
   // 검사의 정리는 연결을 닫기 전에 실행한다. node:test 는 after 훅을 등록 순서로 실행한다.
   // 정리 하나가 실패해도(앱이 응답하지 않는 경우 등) 나머지 정리는 실행하고, 실패는 모아서 알린다.
   t.after(async () => {
@@ -217,6 +219,8 @@ export class Session {
     this.client = client;
     this.window = "main";
     this.cleanups = [];
+    // 전달된 down 부터 같은 버튼의 up 이 전달될 때까지 열린 합성 누름. 창과 버튼으로 찾는다(docs/spec/exposure.md).
+    this.presses = new Map();
   }
 
   /** 연결을 닫기 전에 실행할 정리. 등록의 역순으로 실행한다. */
@@ -237,6 +241,7 @@ export class Session {
   on(window) {
     const other = new Session(this.app, this.client);
     other.cleanups = this.cleanups;
+    other.presses = this.presses;
     other.window = window;
     return other;
   }
@@ -267,11 +272,42 @@ export class Session {
     return this.request("dom.act", compact({ name, action, index, value, event, surface }));
   }
 
-  pointer(x, y, phase, options = {}) {
+  async pointer(x, y, phase, options = {}) {
     // macOS 의 협조적 활성화는 사용자가 활성화한 적 없는 앱의 자기 활성화 요청을 거절한다. 사용자가 앱을 전환하듯
     // 검사 프로세스가 먼저 앱을 활성화하고, 호스트는 그 뒤 키 창과 웹뷰의 활성 상태를 기다린다.
     if (options.activate) activateApp(this.client.endpoint.pid);
-    return this.request("input.pointer", { x, y, phase, ...options });
+    const button = options.button ?? "left";
+    const key = JSON.stringify([this.window, button]);
+    const delivered = () => {
+      if (phase === "down") this.presses.set(key, { window: this.window, x, y, button });
+      if (phase === "up") this.presses.delete(key);
+    };
+    try {
+      const result = await this.request("input.pointer", { x, y, phase, ...options });
+      delivered();
+      return result;
+    } catch (error) {
+      // 1005 는 누름이나 뗌을 전달했지만 문서가 받았다는 알림이 늦은 것이다. 창의 누름 상태는 전달대로 바뀌었다.
+      if (error.code === 1005) delivered();
+      throw error;
+    }
+  }
+
+  /**
+   * 세션이 열어 둔 누름마다 그 자리에서 up 을 보낸다. 거부된 뗌은 누름을 열어 두므로, 끝내지 않으면 그 창의 다음
+   * 검사가 누를 수 없다. 끝내지 못한 누름은 모아서 알린다.
+   */
+  async releasePresses() {
+    const failures = [];
+    for (const { window, x, y, button } of [...this.presses.values()]) {
+      try {
+        await this.on(window).pointer(x, y, "up", { button });
+      } catch (error) {
+        failures.push(new Error(`the synthetic ${button} press at ${x},${y} in ${window} stayed open: ${error.message}`));
+      }
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length) throw new AggregateError(failures, `${failures.length} synthetic presses stayed open`);
   }
 
   key(key, phase, options = {}) {

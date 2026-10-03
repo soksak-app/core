@@ -159,6 +159,8 @@ func inputDelivered(context unsafe.Pointer, result C.int) {
 		done(platform.PointerUnreceived)
 	case C.SP_INPUT_BUTTON_HELD:
 		done(platform.PointerButtonHeld)
+	case C.SP_INPUT_PRESS_OPEN:
+		done(platform.PointerPressOpen)
 	default:
 		done(platform.PointerRejected)
 	}

@@ -354,6 +354,8 @@ const (
 	PointerUnreceived
 	// PointerButtonHeld 는 AppKit 이 눌린 마우스 버튼을 보고해 합성 누름이나 뗌을 전달하지 않았다는 뜻이다.
 	PointerButtonHeld
+	// PointerPressOpen 은 그 창에서 그 버튼의 합성 누름이 아직 열려 있어 누름을 전달하지 않았다는 뜻이다.
+	PointerPressOpen
 )
 
 // Endpoint 는 로컬 엔드포인트의 전송과 주소다.

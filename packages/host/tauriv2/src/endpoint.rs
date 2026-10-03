@@ -41,6 +41,8 @@ pub const TIMED_OUT: i64 = 1005;
 pub const NOT_ACTIVE: i64 = 1006;
 /// AppKit이 눌린 마우스 버튼을 보고해 합성 누름이나 뗌을 전달하지 않았다.
 pub const BUTTON_HELD: i64 = 1007;
+/// 그 창에서 그 버튼의 합성 누름이 아직 열려 있어 누름을 전달하지 않았다.
+pub const PRESS_OPEN: i64 = 1008;
 /// 등록된 명령이나 상태 처리 함수가 실패했다.
 pub const HANDLER_FAILED: i64 = -32000;
 

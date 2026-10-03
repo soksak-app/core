@@ -115,7 +115,8 @@ sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, in
     BOOL right = button == 1;
     switch (phase) {
         case 1:
-            if (objc_getAssociatedObject(window, pressedViewKey(button))) return SP_INPUT_REJECTED;
+            // 열린 누름은 전달된 뗌이 끝낸다. 거부된 뗌은 누름을 열어 두므로 다음 누름은 그 사실을 알린다.
+            if (objc_getAssociatedObject(window, pressedViewKey(button))) return SP_INPUT_PRESS_OPEN;
             objc_setAssociatedObject(window, pressedViewKey(button), hit, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             // -[NSWindow sendEvent:] 는 누른 뷰가 받을 수 있으면 첫 응답자로 만든 뒤 누름을 전달한다.
             // 이 경로는 뷰에 직접 전달하므로 같은 순서를 따른다. 호스트의 표면 웹뷰는 누름만으로

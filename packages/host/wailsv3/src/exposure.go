@@ -802,11 +802,13 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	case platform.PointerInactive:
 		return errInactive()
 	case platform.PointerRejected:
-		return rpcError(codeInvalidParams, "the window did not accept the input: the point is outside the content")
+		return rpcError(codeInvalidParams, "the window did not accept the input")
 	case platform.PointerUnreceived:
 		return rpcError(codeTimeout, "the document did not receive the input within %s", receiveTimeout)
 	case platform.PointerButtonHeld:
 		return rpcError(codeButtonHeld, "AppKit reports a nonzero NSEvent.pressedMouseButtons mask; the synthetic press or release was not delivered")
+	case platform.PointerPressOpen:
+		return rpcError(codePressOpen, "a synthetic press of this button is still open in the window; send up before the next down")
 	}
 	if input.Phase == "down" {
 		if err := s.pressAt(input.X, input.Y); err != nil {

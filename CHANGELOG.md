@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-88: a pointer down while a synthetic press of that button is open in the window returns 1008, and a check session releases every press it left open.
 - G1.4-92: the documentation check reads a committed checklist larger than 1 MiB.
 - G1.4-79: the terminal runtime specification states that a narrowing reflow uses the empty rows below the cursor before it moves rows into the history.
 - G1.4-76: both hosts keep the application log in `logs/application.log` under the configuration directory, persistent services write theirs to `logs/<executable-name>.log`, and a log of 10 MB or more moves to `.1` when it is opened.

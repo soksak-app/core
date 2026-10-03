@@ -18,7 +18,7 @@ use tauri::{AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, Wind
 
 use crate::endpoint::{
     Endpoint, Failure, Service, BUTTON_HELD, HANDLER_FAILED, INVALID_PARAMS, MISSING_DOCUMENT,
-    NOT_ACTIVE, NO_INPUT, TIMED_OUT, UNKNOWN_NAME,
+    NOT_ACTIVE, NO_INPUT, PRESS_OPEN, TIMED_OUT, UNKNOWN_NAME,
 };
 use crate::platform;
 use crate::surfaces::label_for;
@@ -1588,6 +1588,10 @@ impl Host {
             Delivery::ButtonHeld => Err(Failure::new(
                 BUTTON_HELD,
                 "AppKit reports a nonzero NSEvent.pressedMouseButtons mask; the synthetic press or release was not delivered",
+            )),
+            Delivery::PressOpen => Err(Failure::new(
+                PRESS_OPEN,
+                "a synthetic press of this button is still open in the window; send up before the next down",
             )),
         }
     }

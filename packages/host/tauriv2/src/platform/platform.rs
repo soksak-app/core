@@ -90,6 +90,8 @@ pub enum Delivery {
     Unreceived,
     /// AppKit이 눌린 마우스 버튼을 보고해 합성 누름이나 뗌을 전달하지 않았다.
     ButtonHeld,
+    /// 그 창에서 그 버튼의 합성 누름이 아직 열려 있어 누름을 전달하지 않았다.
+    PressOpen,
 }
 
 /// 네이티브 입력으로 전달하는 키 동작.

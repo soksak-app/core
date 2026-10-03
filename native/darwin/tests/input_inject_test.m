@@ -185,8 +185,8 @@ static void checkPointerTargetAcrossViews(void) {
         sp_input_pointer(window, 30, 30, 3, 0, 0, 0) == SP_INPUT_REJECTED,
         @"drag and release without a press are rejected");
     check(sp_input_pointer(window, 30, 30, 1, 0, 0, 0) == SP_INPUT_DELIVERED &&
-        sp_input_pointer(window, 150, 30, 1, 0, 0, 0) == SP_INPUT_REJECTED,
-        @"a duplicate press does not replace the gesture target");
+        sp_input_pointer(window, 150, 30, 1, 0, 0, 0) == SP_INPUT_PRESS_OPEN,
+        @"a duplicate press reports the open press and does not replace the gesture target");
     check(sp_input_pointer(window, 150, 30, 1, 1, 0, 0) == SP_INPUT_DELIVERED &&
         sp_input_pointer(window, 30, 30, 2, 1, 0, 0) == SP_INPUT_DELIVERED &&
         sp_input_pointer(window, 30, 30, 3, 1, 0, 0) == SP_INPUT_DELIVERED &&
