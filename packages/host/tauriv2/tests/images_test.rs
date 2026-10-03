@@ -1006,3 +1006,16 @@ fn reattaching_in_the_same_generation_continues_the_raster() {
         after.raster
     );
 }
+
+// 그림 영역 호출의 실패는 호출 이름을 밝힌다(G1.4-112).
+// contract: images.calls.name-the-call
+#[test]
+fn an_image_call_failure_names_the_call() {
+    assert_eq!(
+        soksak_host_tauriv2::images::image_call_error(
+            "imageDetach",
+            "image \"view\" is not attached".to_string()
+        ),
+        "imageDetach: image \"view\" is not attached"
+    );
+}

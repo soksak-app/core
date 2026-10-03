@@ -874,6 +874,11 @@ fn with_image<T: Send + 'static>(
 }
 
 /// 호출한 표면 페이지의 요소에 그림 영역을 붙인다.
+/// 그림 영역 호출 call 의 실패를 돌려준다(docs/spec/native-host.md#host-calls).
+pub fn image_call_error(call: &str, error: String) -> String {
+    format!("{call}: {error}")
+}
+
 pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> {
     let sidecar = request
         .sidecar

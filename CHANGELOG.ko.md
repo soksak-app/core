@@ -5,6 +5,7 @@
 ## 미배포
 
 - G1.4-90-4-2: 두 host에서 같은 generation에서 다시 붙인 image region은 raster revision을 이어 세므로, terminal sidecar가 그 구성을 무시하지 않고 다시 mount한 terminal의 presentation이 10초를 기다리지 않는다. 두 host는 image raster 결정을 trace한다.
+- G1.4-112: 실패한 image 영역 호출은 두 host에서 `<call>: <reason>`으로 호출을 밝힌다. host contract case `images.calls.name-the-call`.
 - G1.4-110: Tauri host도 Wails host처럼 page가 host 상태의 변경을 보내면 `the page cannot change host status <name>`으로 거부한다. host contract case `exposure.status-change.refuses-host-name`.
 - G1.4-113: 실패한 프로젝트 전환은 창 오류로도 보고되는 대신 rejection을 받은 호출자가 한 번 보고한다. Red와 Green은 `packages/workbench/test/projects-switch.test.mjs`에 있고, 다시 빌드한 두 host에서 library와 projects window check가 통과한다.
 - G1.4-111: 메인 페이지가 check가 `expectPageError`로 선언하지 않은 애플리케이션 오류를 보이면 window check가 실패하고, 메인 페이지는 host가 거부한 상태 변경을 상태 이름과 함께 보고한다. Red와 Green은 `e2e/test/session-cleanup.test.mjs`와 `packages/workbench/test/exposure.test.mjs`에 있고, 새 확인이 G1.4-113을 찾았다.

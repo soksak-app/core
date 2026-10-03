@@ -1126,8 +1126,28 @@ func TestNativeImageCallsDecodeTheirOwnArguments(t *testing.T) {
 		"ImageCaret": {request, number("1"), number("2"), number("3"), number("4")},
 		"ImageText":  {request, json.RawMessage(`"text"`)},
 	} {
-		if _, err := host.InvokeNative(surfaces, 7, method, args); err == nil || err.Error() != "window is not available" {
-			t.Errorf("%s: %v, want the caller check to fail with window is not available", method, err)
+		want := map[string]string{"ImageCaret": "imageCaret", "ImageText": "imageText"}[method] + ": window is not available"
+		if _, err := host.InvokeNative(surfaces, 7, method, args); err == nil || err.Error() != want {
+			t.Errorf("%s: %v, want the caller check to fail with %s", method, err, want)
+		}
+	}
+}
+
+// 그림 영역 호출의 실패는 호출 이름을 밝힌다(G1.4-112).
+// contract: images.calls.name-the-call
+func TestImageCallFailuresNameTheCall(t *testing.T) {
+	if err := host.ImageCallError("imageDetach", errors.New(`image "view" is not attached`)); err == nil ||
+		err.Error() != `imageDetach: image "view" is not attached` {
+		t.Fatalf("named error: %v", err)
+	}
+	if err := host.ImageCallError("imageDetach", nil); err != nil {
+		t.Fatalf("a successful call failed: %v", err)
+	}
+	surfaces := host.NewSurfaces(nil, nil)
+	request := json.RawMessage(`{"surface":"tab-1","name":"view","sidecar":"@fixture/sidecar-echo"}`)
+	for method, call := range map[string]string{"ImageAttach": "imageAttach", "ImageFocus": "imageFocus", "ImageDetach": "imageDetach"} {
+		if _, err := host.InvokeNative(surfaces, 7, method, []json.RawMessage{request}); err == nil || err.Error() != call+": window is not available" {
+			t.Errorf("%s: %v, want %s: window is not available", method, err, call)
 		}
 	}
 }

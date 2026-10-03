@@ -459,13 +459,14 @@ fn document_detach(webview: Webview, request: Argument<documents::Request>) -> R
 fn image_attach(webview: Webview, request: Argument<images::Request>) -> Result<(), String> {
     let Argument(request) = request;
     images::attach(&webview, request)
+        .map_err(|error| images::image_call_error("imageAttach", error))
 }
 
 /// 그림 영역을 첫 응답자로 만들고 포커스 이벤트를 보낸다.
 #[tauri::command(async)]
 fn image_focus(webview: Webview, request: Argument<images::Request>) -> Result<(), String> {
     let Argument(request) = request;
-    images::focus(&webview, request)
+    images::focus(&webview, request).map_err(|error| images::image_call_error("imageFocus", error))
 }
 
 /// 캐럿(입력 커서) 위치를 받아 둔다.
@@ -484,6 +485,7 @@ fn image_caret(
     let Argument(w) = w;
     let Argument(h) = h;
     images::caret(&webview, request, x, y, w, h)
+        .map_err(|error| images::image_call_error("imageCaret", error))
 }
 
 /// 접근성 값으로 보일 문자열을 받아 둔다.
@@ -496,6 +498,7 @@ fn image_text(
     let Argument(request) = request;
     let Argument(text) = text;
     images::text(&webview, request, text)
+        .map_err(|error| images::image_call_error("imageText", error))
 }
 
 /// 그림 영역을 닫는다.
@@ -503,6 +506,7 @@ fn image_text(
 fn image_detach(webview: Webview, request: Argument<images::Request>) -> Result<(), String> {
     let Argument(request) = request;
     images::detach(&webview, request)
+        .map_err(|error| images::image_call_error("imageDetach", error))
 }
 
 #[tauri::command(async)]

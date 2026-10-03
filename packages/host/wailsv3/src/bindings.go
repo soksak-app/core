@@ -263,7 +263,7 @@ func (h *Host) ImageAttach(ctx context.Context, reqJSON json.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	return s.attachImage(uint64(s.window.ID()), req)
+	return ImageCallError("imageAttach", s.attachImage(uint64(s.window.ID()), req))
 }
 func (h *Host) ImageFocus(ctx context.Context, reqJSON json.RawMessage) error {
 	req, err := argument[ImageRequest]("request", reqJSON)
@@ -274,7 +274,7 @@ func (h *Host) ImageFocus(ctx context.Context, reqJSON json.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	return s.focusImage(uint64(s.window.ID()), req)
+	return ImageCallError("imageFocus", s.focusImage(uint64(s.window.ID()), req))
 }
 func (h *Host) ImageCaret(ctx context.Context, reqJSON json.RawMessage, xJSON json.RawMessage, yJSON json.RawMessage, wJSON json.RawMessage, hgtJSON json.RawMessage) error {
 	req, err := argument[ImageRequest]("request", reqJSON)
@@ -301,7 +301,7 @@ func (h *Host) ImageCaret(ctx context.Context, reqJSON json.RawMessage, xJSON js
 	if err != nil {
 		return err
 	}
-	return s.caretImage(uint64(s.window.ID()), req, float64(x), float64(y), float64(w), float64(hgt))
+	return ImageCallError("imageCaret", s.caretImage(uint64(s.window.ID()), req, float64(x), float64(y), float64(w), float64(hgt)))
 }
 func (h *Host) ImageText(ctx context.Context, reqJSON json.RawMessage, textJSON json.RawMessage) error {
 	req, err := argument[ImageRequest]("request", reqJSON)
@@ -316,7 +316,7 @@ func (h *Host) ImageText(ctx context.Context, reqJSON json.RawMessage, textJSON 
 	if err != nil {
 		return err
 	}
-	return s.textImage(uint64(s.window.ID()), req, text)
+	return ImageCallError("imageText", s.textImage(uint64(s.window.ID()), req, text))
 }
 func (h *Host) ImageDetach(ctx context.Context, reqJSON json.RawMessage) error {
 	req, err := argument[ImageRequest]("request", reqJSON)
@@ -327,7 +327,7 @@ func (h *Host) ImageDetach(ctx context.Context, reqJSON json.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	return s.detachImage(uint64(s.window.ID()), req)
+	return ImageCallError("imageDetach", s.detachImage(uint64(s.window.ID()), req))
 }
 
 // RetainRequest 는 모든 프로젝트 레이아웃이 가진 표면 목록이다.
@@ -475,11 +475,11 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		}
 		switch call.Method {
 		case "ImageAttach":
-			return nil, s.attachImage(viewID, req)
+			return nil, ImageCallError("imageAttach", s.attachImage(viewID, req))
 		case "ImageFocus":
-			return nil, s.focusImage(viewID, req)
+			return nil, ImageCallError("imageFocus", s.focusImage(viewID, req))
 		default:
-			return nil, s.detachImage(viewID, req)
+			return nil, ImageCallError("imageDetach", s.detachImage(viewID, req))
 		}
 	case "ImageCaret":
 		var req ImageRequest
@@ -487,14 +487,14 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		if err := nativeArgs(call, nativeArg{"request", &req}, nativeArg{"x", &x}, nativeArg{"y", &y}, nativeArg{"w", &w}, nativeArg{"h", &h}); err != nil {
 			return nil, err
 		}
-		return nil, s.caretImage(viewID, req, x, y, w, h)
+		return nil, ImageCallError("imageCaret", s.caretImage(viewID, req, x, y, w, h))
 	case "ImageText":
 		var req ImageRequest
 		var text string
 		if err := nativeArgs(call, nativeArg{"request", &req}, nativeArg{"text", &text}); err != nil {
 			return nil, err
 		}
-		return nil, s.textImage(viewID, req, text)
+		return nil, ImageCallError("imageText", s.textImage(viewID, req, text))
 	case "OverlayPick":
 		if err := nativeArgs(call, nativeArg{"id", &id}, nativeArg{"instance", &instance}, nativeArg{"key", &key}, nativeArg{"value", &value}); err != nil {
 			return nil, err

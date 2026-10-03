@@ -44,6 +44,8 @@ Each host decodes every argument of a host call, and of a call that a surface pa
 
 `<path>` starts with the argument name and adds `.<field>` and `[<index>]`, for example `request.rect.h` and `request.surfaces[0].x`. An argument that the runtime adapter does not send is `null`. Fields that the argument type does not declare are ignored. Two arguments have different types in the two hosts: the Tauri runtime adapter sends the exposure reply and the value of a status change as JSON text so that the host relays the page's key order ([exposure](exposure.md)), and the Tauri host checks that text after it decodes the argument. A status change whose value is missing or `null` changes the status to `null` in both hosts.
 
+A failed image region call names the call: after its arguments decode, a failure of `imageAttach`, `imageFocus`, `imageCaret`, `imageText`, or `imageDetach` is `<call>: <reason>`, for example `imageDetach: image "view" is not attached`, in both hosts and on both the main page and the surface page path.
+
 ## macOS implementation
 
 Wails uses application-owned additional `WKWebView` instances. Tauri uses its child-webview API. Both place those views inside their owning project `NSWindow`; settings and menus create no additional OS window. Framework dependencies are unchanged by the current surface and backdrop changes.

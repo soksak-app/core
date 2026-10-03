@@ -44,6 +44,8 @@ WebKit은 window가 화면에 있는 동안에만 web view를 그리고, window�
 
 `<path>`는 인자 이름으로 시작하고 `.<field>`와 `[<index>]`를 붙인다. 예: `request.rect.h`, `request.surfaces[0].x`. runtime adapter가 보내지 않은 인자는 `null`이다. 인자 형식이 선언하지 않은 field는 무시한다. 두 인자는 두 host에서 형식이 다르다: Tauri runtime adapter는 host가 page의 key 순서를 그대로 중계하도록 exposure 응답과 상태 변경 값을 JSON 텍스트로 보내며([exposure](exposure.ko.md)), Tauri host는 인자를 해석한 뒤 그 텍스트를 검사한다. 값이 빠졌거나 `null`인 상태 변경은 두 host에서 상태를 `null`로 바꾼다.
 
+실패한 image 영역 호출은 호출을 밝힌다: 인자 해석 뒤 `imageAttach`, `imageFocus`, `imageCaret`, `imageText`, `imageDetach`의 실패는 두 host에서, 그리고 main page와 surface page 경로 모두에서 `<call>: <reason>`이다. 예: `imageDetach: image "view" is not attached`.
+
 ## macOS 구현
 
 Wails는 앱이 생성한 추가 `WKWebView`, Tauri는 자식 웹뷰 API를 사용한다. 두 호스트 모두 해당 프로젝트 `NSWindow` 안에 뷰를 배치한다. 설정과 메뉴는 추가 OS 창을 생성하지 않는다. 현재 표면·배경 변경으로 프레임워크 의존성을 변경하지 않았다.

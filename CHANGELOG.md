@@ -5,6 +5,7 @@
 ## Unreleased
 
 - G1.4-90-4-2: an image region attached again in the same generation continues its raster revision in both hosts, so the terminal sidecar no longer ignores its configuration and the presentation no longer waits 10 s for a terminal mounted again; both hosts trace their image raster decisions.
+- G1.4-112: a failed image region call names the call in both hosts, as `<call>: <reason>`; host contract case `images.calls.name-the-call`.
 - G1.4-110: the Tauri host refuses a page's status change of a host status as the Wails host does, with `the page cannot change host status <name>`; host contract case `exposure.status-change.refuses-host-name`.
 - G1.4-113: a failed project switch is reported once, by the caller that receives the rejection, instead of also as a window error. Red and Green in `packages/workbench/test/projects-switch.test.mjs`; the library and projects window checks pass on both rebuilt hosts.
 - G1.4-111: a window check fails when the main page shows an application error that the check did not declare with `expectPageError`, and the main page reports a status change that the host refuses with the status name. Red and Green in `e2e/test/session-cleanup.test.mjs` and `packages/workbench/test/exposure.test.mjs`; the new check found G1.4-113.

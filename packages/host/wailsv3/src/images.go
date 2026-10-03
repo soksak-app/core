@@ -62,6 +62,14 @@ func (s *Surfaces) checkImage(viewID uint64, req ImageRequest) (ImageKey, error)
 	return CheckImage(caller, req)
 }
 
+// ImageCallError 는 그림 영역 호출 call 의 실패를 돌려준다(docs/spec/native-host.md#host-calls).
+func ImageCallError(call string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", call, err)
+}
+
 // ImageOwner 는 그림 영역을 등록한 사이드카와 소유자를 기록한다.
 type ImageOwner struct {
 	SidecarName  string
