@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-96: a window check confirms that the settings modal is on screen at the presented time once the window reports it shown, and the example verification states that wait for modal captures.
 - G1.4-95: a window check prints each failed cleanup step as a diagnostic, so a cleanup failure is visible when the check itself failed.
 - G1.4-93: the test runner leaves a forced kill that macOS refuses with EPERM to its cleanup check instead of failing a timed-out run.
 - G1.4-85: the specification states which control takes a press where a folded card sidebar strip meets a card divider, and a window check measures it.

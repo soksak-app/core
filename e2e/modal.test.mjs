@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import test from "node:test";
 
 import { APPS, fresh, open } from "./app.mjs";
+import { frames, readFrame } from "./frame.mjs";
 
 /** 빈 문서 하나를 주는 루프백 서버의 주소. 검사가 끝나면 닫는다. */
 async function serveDocument(s) {
@@ -79,7 +80,53 @@ async function modalAt(s, card) {
 
 const rectOf = ({ x, y, width, height }) => ({ x, y, width, height });
 
+/** 프레임의 8 픽셀 간격 표본의 평균 밝기(0–255). */
+function brightness(frame) {
+  let sum = 0;
+  let count = 0;
+  for (let y = 0; y < frame.height; y += 8) {
+    for (let x = 0; x < frame.width; x += 8) {
+      const i = y * frame.stride + x * 4;
+      sum += frame.data[i] + frame.data[i + 1] + frame.data[i + 2];
+      count += 3;
+    }
+  }
+  return sum / count;
+}
+
 for (const app of Object.values(APPS)) {
+  test(`${app.name}: the settings modal is on screen at the time presented reports after it is shown`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const { frames: directory } = await s.request("diagnostics.capture.start", {});
+    let displayed = 0;
+    let stopped;
+    try {
+      await s.run("core.settings.open");
+      s.cleanup(() => s.run("core.settings.close"));
+      // core.settings-modal 의 open 은 메인 페이지의 상태다. 모달이 화면에 있는지는 host.window 의 modal.shown 이 알린다.
+      await s.until("host.window", (w) => w.modal?.id === "settings" && w.modal.shown, "settings was not shown");
+      ({ displayed } = await s.presented());
+    } finally {
+      stopped = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 });
+    }
+    assert.equal(stopped.limited, false, "the recording reached its bounded buffer");
+    assert.ok(stopped.longestGap <= 100, `the recording has a ${stopped.longestGap}ms gap`);
+    const captured = frames(directory).map(readFrame);
+    const first = captured[0];
+    const after = captured.filter((frame) => frame.time >= displayed);
+    assert.ok(first.time < displayed && after.length > 0,
+      `the recording does not span the presented time ${displayed}: ${first.time}..${captured.at(-1).time}`);
+    // 대화 상자의 scrim 은 창 전체를 어둡게 한다. 표시 시각 이후의 프레임은 모두 열기 전 프레임보다 어둡다.
+    const before = brightness(first);
+    for (const frame of after) {
+      assert.ok(brightness(frame) < before * 0.9,
+        `the frame at ${(frame.time - displayed).toFixed(1)}ms after the presented time shows no settings scrim: ` +
+        `brightness ${brightness(frame).toFixed(1)} against ${before.toFixed(1)} before opening`);
+    }
+  });
+
   test(`${app.name}: an open modal's document receives the content the page updates`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

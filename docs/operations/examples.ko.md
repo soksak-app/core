@@ -175,7 +175,7 @@ make -C native/darwin test-activation
 
 `sok capture --window main --config-dir DIR`은 실행 중인 진단 빌드의 창을 포커스 없이 정지 PNG로 쓰고 경로를 담은 결과를 출력한다. 개발 중 결과를 눈으로 확인할 때 쓴다. 확인한 뒤 출력된 `still-*` 디렉터리를 지우며, 수치 검사는 녹화 프레임을 쓴다.
 
-추적 `capture-still.test.mjs`는 정지 파일의 장치 픽셀 크기·투명도와 선언된 네이티브 좌표의 경계 픽셀을 확인한다. `png.test.mjs`는 PNG 투명도와 잘못된 좌표·디코딩 길이 검사를 소유한다. 이는 출력 무결성 검증이며 제스처 완전성·표시 시간은 계속 녹화 프레임으로 검증한다.
+추적 `capture-still.test.mjs`는 정지 파일의 장치 픽셀 크기·투명도와 선언된 네이티브 좌표의 경계 픽셀을 확인한다. `png.test.mjs`는 PNG 투명도와 잘못된 좌표·디코딩 길이 검사를 소유한다. 이는 출력 무결성 검증이며 제스처 완전성·표시 시간은 계속 녹화 프레임으로 검증한다. 네이티브 모달의 capture는 `host.window`가 `modal.shown`을 알린 뒤 `host.window.presented`를 기다린다. `core.settings-modal`의 `open` 같은 페이지 상태는 메인 페이지의 상태이고 모달 webview의 첫 렌더보다 앞서므로, 그 뒤에 찍은 still에는 모달이 없는 창이 보일 수 있다. `modal.test.mjs`는 표시 시각 이후 녹화된 모든 프레임에 설정 scrim이 보이는지 확인한다.
 
 `SOKSAK_PERFORMANCE_TRACE=1`은 모든 check 준비(`fresh()`)에서 performance trace를 켜고, terminal readiness가 실패하면 그 준비가 시작된 뒤 기록된 surface 등록 timeline을 보고한다. 다른 값은 거부한다. trace는 timing을 바꾸므로, trace를 켜면 사라지는 실패는 trace 없는 재현이 따로 필요하다.
 
