@@ -960,3 +960,49 @@ fn presentation_outcome_names_the_current_frame_of_a_failure() {
         );
     }
 }
+
+// 같은 표면 문서에서 그림 영역을 떼었다가 다시 붙이면 세대가 그대로이므로, 다시 붙인 영역의 래스터는 사이드카가 이미
+// 받은 래스터보다 커야 한다. 사이드카는 (세대, 래스터)가 커지지 않은 구성을 지난 구성으로 보고 무시한다.
+// contract: images.transfer.reattach-continues-raster
+#[test]
+fn reattaching_in_the_same_generation_continues_the_raster() {
+    let images = Images::default();
+    let key: Key = ("tab-1".into(), "view".into());
+    images.begin_generation(&key.0);
+    let attach = |images: &Images| {
+        images.reserve(&key, "owner", "sidecar-a").unwrap();
+        assert!(images.set(&key, 100));
+    };
+    let configure = |images: &Images, width: u32| {
+        images
+            .configure_raster(&key, width, 600, 2.0, true)
+            .unwrap()
+            .expect("a visible attached image is configured")
+    };
+    attach(&images);
+    configure(&images, 800);
+    let before = configure(&images, 900);
+    images.remove(&key).unwrap();
+    attach(&images);
+    let after = configure(&images, 700);
+    assert!(
+        after.generation == before.generation && after.raster > before.raster,
+        "configuration after reattaching is ({}, {}), want generation {} and a raster above {}",
+        after.generation,
+        after.raster,
+        before.generation,
+        before.raster
+    );
+    // 표면의 모든 영역을 뗀 뒤에도 같다.
+    images.remove_surface(&key.0);
+    attach(&images);
+    let again = configure(&images, 800);
+    assert!(
+        again.generation == after.generation && again.raster > after.raster,
+        "configuration after removing the surface regions is ({}, {}), want generation {} and a raster above {}",
+        again.generation,
+        again.raster,
+        after.generation,
+        after.raster
+    );
+}

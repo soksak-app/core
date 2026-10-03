@@ -242,6 +242,7 @@ Items:
 | `images.transfer.configure-stamps-current-generation` | A raster configuration carries the current surface generation. | both |
 | `images.transfer.generation-advances` | A later generation has a larger number. | both |
 | `images.transfer.rejects-old-generation-after-reattach` | After the image is attached again in a new generation, a frame of the old generation is answered with notAttached. | both |
+| `images.transfer.reattach-continues-raster` | An image detached and attached again in the same generation continues its raster revision above the last one it had, so its next configuration is newer than any configuration the sidecar received; a new generation starts the count again. | both |
 | `images.transfer.new-generation-invalidates-queued-old-frame` | Beginning a new generation before the image closes makes a queued old-generation frame answer notAttached. | both |
 | `images.wait.blocks-before-first-frame` | The presentation wait does not pass before the first frame of a visible raster. | both |
 | `images.wait.releases-after-current-frame-presented` | The presentation wait passes once a frame of the current raster is presented. | both |

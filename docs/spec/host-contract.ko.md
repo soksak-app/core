@@ -242,6 +242,7 @@ fn invalid_json_closes_connection() {
 | `images.transfer.configure-stamps-current-generation` | raster 구성은 현재 표면 generation을 담는다. | both |
 | `images.transfer.generation-advances` | 나중 generation의 번호가 더 크다. | both |
 | `images.transfer.rejects-old-generation-after-reattach` | 새 generation에서 이미지를 다시 연결하면 이전 generation의 프레임에 notAttached로 응답한다. | both |
+| `images.transfer.reattach-continues-raster` | 같은 세대에서 떼었다가 다시 붙인 그림은 마지막 래스터 리비전보다 큰 값으로 이어 세므로, 다음 구성이 사이드카가 받은 어떤 구성보다 새롭다. 새 세대는 다시 센다. | both |
 | `images.transfer.new-generation-invalidates-queued-old-frame` | 이미지를 닫기 전에 새 generation을 시작하면 대기 중인 이전 generation 프레임은 notAttached로 응답된다. | both |
 | `images.wait.blocks-before-first-frame` | 표시 대기는 보이는 raster의 첫 프레임 전에는 통과하지 않는다. | both |
 | `images.wait.releases-after-current-frame-presented` | 현재 raster의 프레임이 표시되면 표시 대기가 통과한다. | both |

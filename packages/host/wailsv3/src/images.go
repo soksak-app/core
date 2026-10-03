@@ -76,8 +76,11 @@ type Images struct {
 	states         map[ImageKey]*ImageRasterState
 	generations    map[string]uint64
 	surfaceVisible map[string]bool
-	nextGeneration uint64
-	changed        chan struct{}
+	// 뗀 그림 영역이 마지막으로 쓴 세대와 래스터. 같은 세대에서 다시 붙인 영역은 그 다음 래스터부터 센다. 사이드카는
+	// (세대, 래스터)가 커지지 않은 구성을 지난 구성으로 보고 무시하기 때문이다. 표면의 세대가 바뀌면 지운다.
+	detachedRasters map[ImageKey][2]uint64
+	nextGeneration  uint64
+	changed         chan struct{}
 }
 
 // ImageRasterState 는 호스트가 허용한 현재 전송 세대와 정확한 네이티브 래스터다.
@@ -107,12 +110,13 @@ type ImageConfigure struct {
 
 func NewImages() *Images {
 	return &Images{
-		handles:        map[ImageKey]unsafe.Pointer{},
-		owners:         map[ImageKey]*ImageOwner{},
-		states:         map[ImageKey]*ImageRasterState{},
-		generations:    map[string]uint64{},
-		surfaceVisible: map[string]bool{},
-		changed:        make(chan struct{}),
+		handles:         map[ImageKey]unsafe.Pointer{},
+		owners:          map[ImageKey]*ImageOwner{},
+		states:          map[ImageKey]*ImageRasterState{},
+		generations:     map[string]uint64{},
+		surfaceVisible:  map[string]bool{},
+		detachedRasters: map[ImageKey][2]uint64{},
+		changed:         make(chan struct{}),
 	}
 }
 
@@ -129,6 +133,7 @@ func (i *Images) BeginGeneration(surface string) uint64 {
 	defer i.mu.Unlock()
 	i.nextGeneration++
 	i.generations[surface] = i.nextGeneration
+	i.forgetDetachedRastersLocked(surface)
 	for key, state := range i.states {
 		if key.Surface == surface {
 			state.Generation = i.nextGeneration
@@ -145,6 +150,7 @@ func (i *Images) EndGeneration(surface string) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	delete(i.generations, surface)
+	i.forgetDetachedRastersLocked(surface)
 	hasState := false
 	for key := range i.states {
 		if key.Surface == surface {
@@ -201,9 +207,34 @@ func (i *Images) Reserve(key ImageKey, owner *ImageOwner) error {
 		generation = i.nextGeneration
 		i.generations[key.Surface] = generation
 	}
-	i.states[key] = &ImageRasterState{Generation: generation}
+	state := &ImageRasterState{Generation: generation}
+	if detached, ok := i.detachedRasters[key]; ok && detached[0] == generation {
+		state.Raster = detached[1]
+	}
+	delete(i.detachedRasters, key)
+	i.states[key] = state
 	i.changedLocked()
 	return nil
+}
+
+// forgetDetachedRastersLocked 는 표면에서 뗀 영역의 래스터 기록을 지운다. 표면의 세대가 바뀌면 새 세대가 이전
+// 구성보다 크므로 기록이 필요 없다.
+func (i *Images) forgetDetachedRastersLocked(surface string) {
+	for key := range i.detachedRasters {
+		if key.Surface == surface {
+			delete(i.detachedRasters, key)
+		}
+	}
+}
+
+// detachLocked 는 영역의 이름을 지우고, 같은 세대에서 다시 붙일 때 이어 셀 래스터를 남긴다.
+func (i *Images) detachLocked(key ImageKey) {
+	if state := i.states[key]; state != nil {
+		i.detachedRasters[key] = [2]uint64{state.Generation, state.Raster}
+	}
+	delete(i.handles, key)
+	delete(i.owners, key)
+	delete(i.states, key)
 }
 
 // Set 은 차지한 이름에 만든 그림 영역을 적는다.
@@ -245,9 +276,7 @@ func (i *Images) Remove(key ImageKey) (unsafe.Pointer, error) {
 	if !ok {
 		return nil, fmt.Errorf("image %q is not attached", key.Name)
 	}
-	delete(i.handles, key)
-	delete(i.owners, key)
-	delete(i.states, key)
+	i.detachLocked(key)
 	i.changedLocked()
 	return handle, nil
 }
@@ -261,9 +290,7 @@ func (i *Images) RemoveSurface(surface string) []unsafe.Pointer {
 		if key.Surface != surface {
 			continue
 		}
-		delete(i.handles, key)
-		delete(i.owners, key)
-		delete(i.states, key)
+		i.detachLocked(key)
 		if handle != nil {
 			removed = append(removed, handle)
 		}

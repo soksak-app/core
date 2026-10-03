@@ -36,6 +36,19 @@ fn send_image_configurations(
             release_image_configurations(&data.images, &configurations[index..]);
             return Err(error);
         }
+        if let Some(workspace) = window.try_state::<crate::workspace::Workspace>() {
+            observe_raster(
+                workspace.directory(),
+                key,
+                "sent",
+                "sidecar",
+                Some(&platform::Raster {
+                    width: configuration.width,
+                    height: configuration.height,
+                    scale: configuration.scale,
+                }),
+            );
+        }
     }
     Ok(())
 }
@@ -46,14 +59,39 @@ fn raster_facts(platform: &dyn platform::Platform, handle: platform::Handle) -> 
     platform.image_facts(handle).unwrap_or_else(|error| error)
 }
 
+/// 그림 영역의 래스터 결정을 성능 트레이스에 남긴다. configured 는 사이드카에 보낼 크기를 정한 것이고, deferred 는
+/// 표면이 아직 배치되지 않아 크기를 정하지 못하고 미룬 것이다(docs/spec/performance-trace.md).
+fn observe_raster(
+    directory: &std::path::Path,
+    key: &Key,
+    phase: &str,
+    from: &str,
+    raster: Option<&platform::Raster>,
+) {
+    crate::performance::observe(directory, "host", || {
+        serde_json::json!({
+            "event": "image.raster", "surface": key.0, "name": key.1, "phase": phase, "from": from,
+            // 기본값: 미룬 결정에는 크기가 없으므로 0을 적는다.
+            "width": raster.map_or(0, |raster| raster.width),
+            "height": raster.map_or(0, |raster| raster.height),
+            "scale": raster.map_or(0.0, |raster| raster.scale),
+        })
+    });
+}
+
 /// 보이는 영역의 래스터를 측정해 다시 보낼 configure 를 모은다. selection 이 대상을 고른다.
 fn collect_raster_configurations(
     window: &Window,
+    from: &'static str,
     selection: impl Fn(&crate::images::Images) -> Vec<(crate::images::Key, platform::Handle)>
         + Send
         + 'static,
 ) -> Result<Vec<(crate::images::Key, crate::images::Configure)>, String> {
     let data = window_data(window)?;
+    let directory = window
+        .state::<crate::workspace::Workspace>()
+        .directory()
+        .to_path_buf();
     exposure::on_main(window, move || {
         let platform = platform::current()?;
         let mut configurations = Vec::new();
@@ -61,6 +99,7 @@ fn collect_raster_configurations(
             for (key, handle) in selection(&data.images) {
                 // 아직 배치되지 않은 표면의 영역은 래스터 크기가 없다. 표면을 배치하는 다음 준비에서 갱신한다.
                 if !platform.image_surface_placed(handle)? {
+                    observe_raster(&directory, &key, "deferred", from, None);
                     continue;
                 }
                 let raster = platform.image_raster(handle)?.ok_or_else(|| {
@@ -77,6 +116,7 @@ fn collect_raster_configurations(
                     raster.scale,
                     true,
                 )? {
+                    observe_raster(&directory, &key, "configured", from, Some(&raster));
                     configurations.push((key, configuration));
                 }
             }
@@ -92,7 +132,8 @@ fn collect_raster_configurations(
 
 /// 표면 복귀나 바깥 크기 변경은 DOM 여백이 같아도 실제 네이티브 래스터를 갱신해야 한다.
 pub(crate) fn refresh_image_rasters(window: &Window) -> Result<(), String> {
-    let configurations = collect_raster_configurations(window, |images| images.visible())?;
+    let configurations =
+        collect_raster_configurations(window, "refresh", |images| images.visible())?;
     send_image_configurations(window, configurations)
 }
 
@@ -102,8 +143,9 @@ pub(crate) fn refresh_image_rasters(window: &Window) -> Result<(), String> {
 pub(crate) fn refresh_sidecar_rasters(window: &Window, sidecar: &str) -> Result<(), String> {
     window_data(window)?.images.invalidate_sidecar(sidecar);
     let sidecar = sidecar.to_string();
-    let configurations =
-        collect_raster_configurations(window, move |images| images.visible_for_sidecar(&sidecar))?;
+    let configurations = collect_raster_configurations(window, "reconnect", move |images| {
+        images.visible_for_sidecar(&sidecar)
+    })?;
     send_image_configurations(window, configurations)
 }
 
@@ -204,6 +246,10 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
     let revision = request.revision;
     let host = window.clone();
     let applied_data = data.clone();
+    let directory = window
+        .state::<crate::workspace::Workspace>()
+        .directory()
+        .to_path_buf();
     let configurations = exposure::on_main(&window, move || {
         let mut revisions = applied_data
             .composition_revisions
@@ -242,6 +288,13 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
                                 raster.scale,
                                 placement.visible,
                             )? {
+                                observe_raster(
+                                    &directory,
+                                    &key,
+                                    "configured",
+                                    "composition",
+                                    Some(&raster),
+                                );
                                 configurations.push((key, configuration));
                             }
                         }
@@ -251,6 +304,9 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
                                 region.name,
                                 raster_facts(platform, handle)
                             ));
+                        }
+                        None if placement.visible => {
+                            observe_raster(&directory, &key, "deferred", "composition", None);
                         }
                         None => {}
                     }

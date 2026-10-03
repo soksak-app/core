@@ -57,6 +57,7 @@ func (s *Surfaces) sendImageConfigurations(configurations []pendingConfigure) er
 			s.releaseImageConfigurations(configurations[index:])
 			return err
 		}
+		s.observeRaster(pending.key, "sent", "sidecar", configuration.Width, configuration.Height, configuration.Scale)
 	}
 	return nil
 }
@@ -70,9 +71,18 @@ func rasterFacts(handle unsafe.Pointer) string {
 	return facts
 }
 
+// observeRaster 는 그림 영역의 래스터 결정을 성능 트레이스에 남긴다. configured 는 사이드카에 보낼 크기를 정한 것이고,
+// deferred 는 표면이 아직 배치되지 않아 크기를 정하지 못하고 미룬 것이다(docs/spec/performance-trace.md).
+func (s *Surfaces) observeRaster(key ImageKey, phase, from string, width, height int, scale float64) {
+	PerformanceObserve(s.host.configDir, "host", func() map[string]any {
+		return map[string]any{"event": "image.raster", "surface": key.Surface, "name": key.Name, "phase": phase,
+			"from": from, "width": width, "height": height, "scale": scale}
+	})
+}
+
 // 표면 복귀나 바깥 크기 변경은 DOM 여백이 같아도 실제 네이티브 래스터를 갱신해야 한다.
 func (s *Surfaces) refreshImageRasters() error {
-	return s.refreshRastersWhere(func() map[ImageKey]unsafe.Pointer { return s.images.Visible() })
+	return s.refreshRastersWhere("refresh", func() map[ImageKey]unsafe.Pointer { return s.images.Visible() })
 }
 
 // RefreshSidecarRasters 는 영속 사이드카의 연결이 다시 맺히면 그 사이드카의 그림
@@ -80,18 +90,19 @@ func (s *Surfaces) refreshImageRasters() error {
 // configure 상태는 연결과 함께 죽었으므로(InvalidateSidecar) 같은 크기의 재전송이 일어난다.
 func (s *Surfaces) RefreshSidecarRasters(sidecar string) error {
 	s.images.InvalidateSidecar(sidecar)
-	return s.refreshRastersWhere(func() map[ImageKey]unsafe.Pointer {
+	return s.refreshRastersWhere("reconnect", func() map[ImageKey]unsafe.Pointer {
 		return s.images.VisibleForSidecar(sidecar)
 	})
 }
 
-func (s *Surfaces) refreshRastersWhere(visible func() map[ImageKey]unsafe.Pointer) error {
+func (s *Surfaces) refreshRastersWhere(from string, visible func() map[ImageKey]unsafe.Pointer) error {
 	var configurations []pendingConfigure
 	var failure error
 	application.InvokeSync(func() {
 		for key, handle := range visible() {
 			// 아직 배치되지 않은 표면의 영역은 래스터 크기가 없다. 표면을 배치하는 다음 준비에서 갱신한다.
 			if !system.SurfacePlacedImage(handle) {
+				s.observeRaster(key, "deferred", from, 0, 0, 0)
 				continue
 			}
 			width, height, scale, ok := system.RasterImage(handle)
@@ -105,6 +116,7 @@ func (s *Surfaces) refreshRastersWhere(visible func() map[ImageKey]unsafe.Pointe
 				return
 			}
 			if configuration != nil {
+				s.observeRaster(key, "configured", from, width, height, scale)
 				configurations = append(configurations, pendingConfigure{key, configuration})
 			}
 		}
@@ -238,9 +250,12 @@ func (s *Surfaces) placeComposition(viewID uint64, request CompositionPlaceReque
 					return
 				}
 				width, height, scale, ok := system.RasterImage(region.handle)
-				if !ok && p.Visible && system.SurfacePlacedImage(region.handle) {
-					err = fmt.Errorf("image %q has no raster geometry: %s", region.declaration.Name, rasterFacts(region.handle))
-					return
+				if !ok && p.Visible {
+					if system.SurfacePlacedImage(region.handle) {
+						err = fmt.Errorf("image %q has no raster geometry: %s", region.declaration.Name, rasterFacts(region.handle))
+						return
+					}
+					s.observeRaster(key, "deferred", "composition", 0, 0, 0)
 				}
 				if ok {
 					configuration, configureErr := s.images.ConfigureRaster(
@@ -251,6 +266,7 @@ func (s *Surfaces) placeComposition(viewID uint64, request CompositionPlaceReque
 						return
 					}
 					if configuration != nil {
+						s.observeRaster(key, "configured", "composition", width, height, scale)
 						configurations = append(configurations, pendingConfigure{
 							key:           key,
 							configuration: configuration,

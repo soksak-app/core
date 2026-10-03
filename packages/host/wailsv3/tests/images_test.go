@@ -1077,3 +1077,40 @@ func TestPresentationOutcomeNamesTheCurrentFrameOfAFailure(t *testing.T) {
 		}
 	}
 }
+
+// 같은 표면 문서에서 그림 영역을 떼었다가 다시 붙이면 세대가 그대로이므로, 다시 붙인 영역의 래스터는 사이드카가 이미
+// 받은 래스터보다 커야 한다. 사이드카는 (세대, 래스터)가 커지지 않은 구성을 지난 구성으로 보고 무시한다.
+// contract: images.transfer.reattach-continues-raster
+func TestReattachingInTheSameGenerationContinuesTheRaster(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "tab-1", Name: "view"}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	var handle int
+	images.BeginGeneration(key.Surface)
+	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatalf("attach image: %v", err)
+	}
+	configureImage(t, images, key, 800, 600, 2.0)
+	before := configureImage(t, images, key, 900, 600, 2.0)
+	if _, err := images.Remove(key); err != nil {
+		t.Fatal(err)
+	}
+	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatalf("attach image again: %v", err)
+	}
+	after := configureImage(t, images, key, 700, 600, 2.0)
+	if after.Generation != before.Generation || after.Raster <= before.Raster {
+		t.Fatalf("configuration after reattaching is (%d, %d), want generation %d and a raster above %d",
+			after.Generation, after.Raster, before.Generation, before.Raster)
+	}
+	// 표면의 모든 영역을 뗀 뒤에도 같다.
+	images.RemoveSurface(key.Surface)
+	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatalf("attach image after removing the surface regions: %v", err)
+	}
+	again := configureImage(t, images, key, 800, 600, 2.0)
+	if again.Generation != after.Generation || again.Raster <= after.Raster {
+		t.Fatalf("configuration after removing the surface regions is (%d, %d), want generation %d and a raster above %d",
+			again.Generation, again.Raster, after.Generation, after.Raster)
+	}
+}

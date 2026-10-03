@@ -73,7 +73,29 @@ struct Inner {
     states: HashMap<Key, RasterState>,
     generations: HashMap<String, u64>,
     surface_visibility: HashMap<String, bool>,
+    /// 뗀 그림 영역이 마지막으로 쓴 (세대, 래스터). 같은 세대에서 다시 붙인 영역은 그 다음 래스터부터 센다. 사이드카는
+    /// (세대, 래스터)가 커지지 않은 구성을 지난 구성으로 보고 무시하기 때문이다. 표면의 세대가 바뀌면 지운다.
+    detached_rasters: HashMap<Key, (u64, u64)>,
     next_generation: u64,
+}
+
+impl Inner {
+    /// 표면에서 뗀 영역의 래스터 기록을 지운다. 표면의 세대가 바뀌면 새 세대가 이전 구성보다 크므로 기록이 필요 없다.
+    fn forget_detached_rasters(&mut self, surface: &str) {
+        self.detached_rasters.retain(|key, _| key.0 != surface);
+    }
+
+    /// 영역의 이름을 지우고, 같은 세대에서 다시 붙일 때 이어 셀 래스터를 남긴다.
+    fn detach(&mut self, key: &Key) -> Option<Handle> {
+        let handle = self.handles.remove(key)?;
+        self.owners.remove(key);
+        self.sidecars.remove(key);
+        if let Some(state) = self.states.remove(key) {
+            self.detached_rasters
+                .insert(key.clone(), (state.generation, state.raster));
+        }
+        Some(handle)
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -133,6 +155,7 @@ impl Images {
         inner.next_generation += 1;
         let generation = inner.next_generation;
         inner.generations.insert(surface.to_string(), generation);
+        inner.forget_detached_rasters(surface);
         for (key, state) in &mut inner.states {
             if key.0 == surface {
                 state.generation = generation;
@@ -148,6 +171,7 @@ impl Images {
     pub fn end_generation(&self, surface: &str) {
         let mut inner = self.lock();
         inner.generations.remove(surface);
+        inner.forget_detached_rasters(surface);
         if inner.states.keys().any(|key| key.0 == surface) {
             inner.surface_visibility.insert(surface.to_string(), false);
         } else {
@@ -202,10 +226,15 @@ impl Images {
                 generation
             }
         };
+        let raster = match inner.detached_rasters.remove(key) {
+            Some((detached_generation, raster)) if detached_generation == generation => raster,
+            _ => 0,
+        };
         inner.states.insert(
             key.clone(),
             RasterState {
                 generation,
+                raster,
                 ..RasterState::default()
             },
         );
@@ -265,11 +294,8 @@ impl Images {
     /// 이름을 제거하고 그 그림 영역의 주소를 반환한다.
     pub fn remove(&self, key: &Key) -> Result<Handle, String> {
         let mut inner = self.lock();
-        match inner.handles.remove(key) {
+        match inner.detach(key) {
             Some(handle) => {
-                inner.owners.remove(key);
-                inner.sidecars.remove(key);
-                inner.states.remove(key);
                 self.changed();
                 Ok(handle)
             }
@@ -288,10 +314,7 @@ impl Images {
             .cloned()
             .collect();
         for key in keys {
-            if let Some(handle) = inner.handles.remove(&key) {
-                inner.owners.remove(&key);
-                inner.sidecars.remove(&key);
-                inner.states.remove(&key);
+            if let Some(handle) = inner.detach(&key) {
                 if handle != 0 {
                     removed.push(handle);
                 }
