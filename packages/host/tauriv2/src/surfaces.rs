@@ -23,9 +23,6 @@ pub(crate) struct Background;
 #[derive(Debug, Deserialize)]
 pub(crate) struct Surface {
     id: String,
-    /// 이 애플리케이션이 서비스하는 표면 페이지의 경로.
-    #[serde(rename = "module")]
-    _module: String,
     x: f64,
     y: f64,
     w: f64,

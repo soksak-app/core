@@ -155,7 +155,11 @@ func PerformanceRelay(target string, record map[string]any) error {
 }
 
 // Performance 는 페이지의 성능 요청을 처리한다.
-func (h *Host) Performance(request map[string]any) (any, error) {
+func (h *Host) Performance(requestJSON json.RawMessage) (any, error) {
+	request, err := argument[map[string]any]("request", requestJSON)
+	if err != nil {
+		return nil, err
+	}
 	return PerformanceCommand(h.configDir, request)
 }
 

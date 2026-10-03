@@ -546,18 +546,24 @@ pub(crate) fn reply(webview: &Webview, request: String) -> Result<(), String> {
 }
 
 #[derive(Deserialize)]
-pub(crate) struct Changed {
+pub struct Changed {
     name: String,
     #[serde(default)]
     surface: Option<String>,
-    /// 페이지가 보낸 값의 JSON 텍스트. 키 순서를 바꾸지 않고 연결에 보낸다.
-    value: String,
+    /// 페이지가 보낸 값의 JSON 텍스트. 키 순서를 바꾸지 않고 연결에 보낸다. 값이 없는 변경은 값이 null 인
+    /// 변경이다.
+    #[serde(default)]
+    value: Option<String>,
 }
 
 /// 메인 페이지가 보낸 상태 변경을 감시하는 연결에 보낸다.
 pub(crate) fn changed(webview: &Webview, request: Changed) -> Result<(), String> {
     let window = main_page(webview)?;
-    let value = RawValue::from_string(request.value)
+    let text = match request.value {
+        Some(text) => text,
+        None => "null".to_string(),
+    };
+    let value = RawValue::from_string(text)
         .map_err(|error| format!("status {} value is not JSON: {error}", request.name))?;
     if let Some(endpoint) = window.state::<Exposure>().endpoint.get() {
         endpoint.notifier().changed(

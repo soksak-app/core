@@ -20,7 +20,7 @@ const PAIRS = [
         "src/bridge.js": "H3",
         "src/platform/darwin/webview.m": "H4",
         "src/diagnostics_test": "H5",
-        "src/menu": "H6", "tests/menu_test": "H6", "src/binding_json": "H7", "tests/binding_null_test": "H7",
+        "src/menu": "H6", "tests/menu_test": "H6",
       },
       right: {
         "Cargo.toml": "A4", "Cargo.lock": "A4",
@@ -119,10 +119,47 @@ export function findStubs(files, read) {
   return stubs;
 }
 
+// Tauri 명령의 인자는 framework 객체가 아니면 Argument<T> 다. 그래야 host 의 인자 decoder 가 해석하고 Wails host 와
+// 같은 문장으로 거부한다(docs/spec/native-host.md#host-calls).
+const FRAMEWORK_ARGUMENT = /^(Window|Webview|AppHandle|(tauri::)?State<.*>)$/s;
+const COMMAND = /#\[tauri::command[^\]]*\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\(crate\))?\s+)?(?:async\s+)?fn\s+(\w+)(?:<[^>]*>)?\(([^)]*)\)/g;
+
+/** source 의 Tauri 명령 중 framework 객체도 Argument<T> 도 아닌 인자를 돌려준다. */
+export function findUndecodedCommandArguments(source, file) {
+  const errors = [];
+  for (const [, name, params] of source.matchAll(COMMAND)) {
+    let depth = 0;
+    let current = "";
+    const parts = [];
+    for (const ch of params) {
+      if (ch === "<") depth++;
+      if (ch === ">") depth--;
+      if (ch === "," && depth === 0) {
+        parts.push(current);
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+    parts.push(current);
+    for (const part of parts.map((value) => value.trim()).filter(Boolean)) {
+      const [argument, ...type] = part.split(":");
+      const declared = type.join(":").trim();
+      if (!FRAMEWORK_ARGUMENT.test(declared) && !declared.startsWith("Argument<")) {
+        errors.push(`${file}: command ${name} argument ${argument.trim()} is ${declared}, not Argument<T>`);
+      }
+    }
+  }
+  return errors;
+}
+
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   const tracked = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
     { cwd: ROOT, encoding: "utf8" }).split("\0").filter((path) => path && existsSync(`${ROOT}${path}`));
   const errors = auditHostPairs(tracked);
+  for (const file of tracked.filter((path) => path.startsWith("packages/host/tauriv2/src/") && path.endsWith(".rs"))) {
+    errors.push(...findUndecodedCommandArguments(readFileSync(`${ROOT}${file}`, "utf8"), file));
+  }
   const stubErrors = findStubs(tracked, (file) => readFileSync(`${ROOT}${file}`, "utf8"));
   if (stubErrors.length) {
     console.error("Stub implementations found (anti-regression check failed):");

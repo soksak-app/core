@@ -13,8 +13,8 @@ import (
 // NotificationRequest 는 탭 하나의 시스템 알림이다(docs/spec/plugins.md#tab-reports). 지울 때는 Surface 만 쓴다.
 type NotificationRequest struct {
 	Surface string `json:"surface"`
-	Title   string `json:"title"`
-	Body    string `json:"body"`
+	Title   string `json:"title,omitempty"`
+	Body    string `json:"body,omitempty"`
 }
 
 // NotificationState 는 알림 센터의 권한과 권한 요청, 게시, 제거의 마지막 실패다.
@@ -139,7 +139,11 @@ func (h *Host) NotificationState(ctx context.Context) (NotificationState, error)
 }
 
 // Notify 는 호출한 창의 탭 알림을 시스템 알림으로 게시한다.
-func (h *Host) Notify(ctx context.Context, request NotificationRequest) error {
+func (h *Host) Notify(ctx context.Context, requestJSON json.RawMessage) error {
+	request, err := argument[NotificationRequest]("request", requestJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -154,7 +158,11 @@ func (h *Host) Notify(ctx context.Context, request NotificationRequest) error {
 }
 
 // NotificationRemove 는 호출한 창의 탭 알림을 지운다.
-func (h *Host) NotificationRemove(ctx context.Context, request NotificationRequest) error {
+func (h *Host) NotificationRemove(ctx context.Context, requestJSON json.RawMessage) error {
+	request, err := argument[NotificationRequest]("request", requestJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err

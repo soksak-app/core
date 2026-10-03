@@ -32,7 +32,7 @@ var imageName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 type ImageRequest struct {
 	Surface string `json:"surface"`
 	Name    string `json:"name"`
-	Sidecar string `json:"sidecar"`
+	Sidecar string `json:"sidecar,omitempty"`
 }
 
 // ImageKey 는 표면과 그림 이름의 쌍이다.

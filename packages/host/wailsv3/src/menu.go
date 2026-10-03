@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -297,7 +298,11 @@ func menuAccelerator(key string) (string, error) {
 // SetMenuLanguage 는 애플리케이션 메뉴의 언어를 바꾸고 메뉴를 다시 만들어 설치한다. language 는
 // 계약 표의 언어여야 하고 현재 언어와 같으면 아무것도 하지 않는다. 시작할 때와 같은 구성으로
 // 메인 스레드에서 메뉴를 다시 만들어 Menu.Set 으로 설치한다.
-func (h *Host) SetMenuLanguage(ctx context.Context, language string) error {
+func (h *Host) SetMenuLanguage(ctx context.Context, languageJSON json.RawMessage) error {
+	language, err := argument[string]("language", languageJSON)
+	if err != nil {
+		return err
+	}
 	if !menuLanguageInTable(language) {
 		return fmt.Errorf("menu language %q is not in the menu table", language)
 	}

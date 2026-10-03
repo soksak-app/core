@@ -100,10 +100,10 @@ func (h *Host) surface(ctx context.Context) (*Surfaces, error) {
 }
 
 type WindowGeometry struct {
-	X      int `json:"x"`
-	Y      int `json:"y"`
-	Width  int `json:"width"`
-	Height int `json:"height"`
+	X      int32   `json:"x"`
+	Y      int32   `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
 }
 
 func (h *Host) WindowNew() {
@@ -132,7 +132,7 @@ func (h *Host) WindowState(ctx context.Context) (*WindowGeometry, error) {
 	}
 	x, y := s.window.Position()
 	width, height := s.window.Size()
-	return &WindowGeometry{X: x, Y: y, Width: width, Height: height}, nil
+	return &WindowGeometry{X: int32(x), Y: int32(y), Width: float64(width), Height: float64(height)}, nil
 }
 
 func (h *Host) WindowReady(ctx context.Context) error {

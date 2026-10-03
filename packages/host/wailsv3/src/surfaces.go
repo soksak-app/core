@@ -36,9 +36,7 @@ type Rect struct {
 }
 
 type Surface struct {
-	ID string `json:"id"`
-	// URL 은 이 애플리케이션이 서비스하는 표면 페이지의 경로다.
-	URL     string `json:"url"`
+	ID      string `json:"id"`
 	Visible bool   `json:"visible"`
 	// 페이지가 초점을 잃은 표면을 흐리게 표시하도록 요청했는지 나타낸다.
 	Dim         bool               `json:"dim"`
@@ -136,7 +134,7 @@ type SyncRequest struct {
 	// 연속적인 배치 갱신이 종료되었는지 나타낸다.
 	Settled  bool                   `json:"settled"`
 	Surfaces []Surface              `json:"surfaces"`
-	Overlays []WindowOverlayRequest `json:"overlays"`
+	Overlays []WindowOverlayRequest `json:"overlays,omitempty"`
 }
 
 type WindowOverlayRequest struct {
@@ -615,7 +613,7 @@ type PreparedSurfaces struct {
 type PresentRequest struct {
 	PreparedSurfaces
 	Settled             bool `json:"settled"`
-	WaitForPresentation bool `json:"waitForPresentation"`
+	WaitForPresentation bool `json:"waitForPresentation,omitempty"`
 }
 
 func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {

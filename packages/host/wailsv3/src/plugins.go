@@ -1,6 +1,7 @@
 package host
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -77,7 +78,11 @@ func (h *Host) PluginsState() (*sok.PluginsState, error) {
 }
 
 // PluginsRun 은 page 의 pluginsRun 호출이다.
-func (h *Host) PluginsRun(request PluginsRunRequest) (any, error) {
+func (h *Host) PluginsRun(requestJSON json.RawMessage) (any, error) {
+	request, err := argument[PluginsRunRequest]("request", requestJSON)
+	if err != nil {
+		return nil, err
+	}
 	return h.plugins.Run(request)
 }
 

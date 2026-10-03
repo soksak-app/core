@@ -14,6 +14,7 @@
 use tauri::Manager;
 
 pub mod application_log;
+pub mod arguments;
 mod bindings;
 pub mod clipboard;
 mod composition;

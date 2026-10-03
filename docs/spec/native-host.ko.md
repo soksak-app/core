@@ -33,9 +33,16 @@ WebKit은 window가 화면에 있는 동안에만 web view를 그리고, window�
 
 ## host 호출
 
-두 애플리케이션에서 main page는 모든 host 호출을 하나의 호출 경로(`packages/workbench/host-calls.js`)로 보낸다. JSON은 NaN, Infinity, -Infinity를 `null`로 쓰고, host는 숫자 field의 `null`을 서로 다르게 해석하므로, page는 인자에 그런 수가 든 호출을 보내기 전에 거부한다. 호출은 `TypeError`로 실패하며 message는 `host call <name>: <path> is <value>, which JSON sends as null`이다. `<path>`는 field를 가리키거나(예: `surfaces[0].y`) 인자 자체가 그 수이면 `the argument`다.
+두 애플리케이션에서 main page는 모든 host 호출을 하나의 호출 경로(`packages/workbench/host-calls.js`)로 보낸다. JSON은 NaN, Infinity, -Infinity를 `null`로 쓰고, host는 숫자 field의 `null`을 page가 가졌던 수를 밝히지 않고 거부하므로, page는 인자에 그런 수가 든 호출을 보내기 전에 거부한다. 호출은 `TypeError`로 실패하며 message는 `host call <name>: <path> is <value>, which JSON sends as null`이다. `<path>`는 field를 가리키거나(예: `surfaces[0].y`) 인자 자체가 그 수이면 `the argument`다.
 
-각 host는 호출 인자에서 선택 사항으로 선언하지 않은 숫자 field의 명시적 `null`도 거부한다: 호출은 framework가 인자를 해석하는 동안 실패하고 0으로 host에 닿지 않는다. Wails host는 그런 인자를 field를 밝히는 검사(`<path> must be a number, not null`)로 해석하고, Tauri host의 형식 있는 field는 serde가 해석할 때 `null`을 거부한다.
+각 host는 host 호출과 surface 페이지가 page runtime으로 보내는 호출의 모든 인자를 호출이 실행되기 전에 자기 인자 decoder로 해석한다. framework 자체의 인자 해석은 인자를 raw JSON으로 받아 아무것도 거부하지 않으므로, 두 host는 같은 인자를 같은 문장으로 거부한다. field는 선언이 그렇게 말할 때 선택 사항이다: Tauri host에서는 `Option` field나 `#[serde(default)]` field, Wails host에서는 pointer field나 `json` tag에 `omitempty`가 있는 field다. 값이 `null`인 field는 빠진 field로 보므로, 선택 field는 빠지거나 `null`일 수 있다. decoder는 인자를 `argument <path> <problem>` message로 거부한다:
+
+- `<path> is missing`: 선택 사항이 아닌 field가 빠졌거나 `null`이다.
+- `<path> must be <expected>, not <actual>`: 값이 다른 JSON 형식이다. `<expected>`와 `<actual>`은 `null`, `a boolean`, `a number`, `a string`, `an array`, `an object` 중 하나다.
+- `<path> must be an integer from <min> to <max>`: 정수 field의 수가 그 field 범위의 정수가 아니다.
+- `<path> must be an array of <n> items`: 고정 길이 배열의 길이가 다르다.
+
+`<path>`는 인자 이름으로 시작하고 `.<field>`와 `[<index>]`를 붙인다. 예: `request.rect.h`, `request.surfaces[0].x`. runtime adapter가 보내지 않은 인자는 `null`이다. 인자 형식이 선언하지 않은 field는 무시한다. 두 인자는 두 host에서 형식이 다르다: Tauri runtime adapter는 host가 page의 key 순서를 그대로 중계하도록 exposure 응답과 상태 변경 값을 JSON 텍스트로 보내며([exposure](exposure.ko.md)), Tauri host는 인자를 해석한 뒤 그 텍스트를 검사한다. 값이 빠졌거나 `null`인 상태 변경은 두 host에서 상태를 `null`로 바꾼다.
 
 ## macOS 구현
 

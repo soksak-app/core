@@ -80,7 +80,7 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 	go h.windowsChanged()
 	application.InvokeSync(s.reloadSurfaceDocuments)
 	s.discardOverlay()
-	snapshot, err := h.Workspace(WorkspaceRequest{Kind: "snapshot"})
+	snapshot, err := h.runWorkspace(WorkspaceRequest{Kind: "snapshot"})
 	if err != nil {
 		return nil, err
 	}

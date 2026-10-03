@@ -29,10 +29,10 @@ var documentName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 type DocumentRequest struct {
 	Surface  string   `json:"surface"`
 	Document string   `json:"document"`
-	URL      string   `json:"url"`
-	Action   string   `json:"action"`
+	URL      string   `json:"url,omitempty"`
+	Action   string   `json:"action,omitempty"`
 	Zoom     *float64 `json:"zoom,omitempty"`
-	Offset   *int     `json:"offset,omitempty"`
+	Offset   *int32   `json:"offset,omitempty"`
 }
 
 // ZoomFactor 는 문서의 글자 배율이다(docs/spec/text-size.md). 없거나 유한한 양수가 아니면 오류다.
@@ -185,7 +185,7 @@ func DocumentGoAction(req DocumentRequest) (int, int, error) {
 		if req.Offset == nil || *req.Offset == 0 {
 			return 0, 0, fmt.Errorf("document action entry requires a non-zero offset")
 		}
-		return action, *req.Offset, nil
+		return action, int(*req.Offset), nil
 	}
 	if req.Offset != nil {
 		return 0, 0, fmt.Errorf("document action %q does not take an offset", req.Action)

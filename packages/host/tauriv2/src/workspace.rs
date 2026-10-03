@@ -41,6 +41,7 @@ pub struct Workspace {
 pub struct Request {
     kind: String,
     id: Option<String>,
+    #[serde(default, deserialize_with = "crate::arguments::optional_object")]
     project: Option<Value>,
     patch: Option<Map<String, Value>>,
     remove: Option<Vec<String>>,

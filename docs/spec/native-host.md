@@ -33,9 +33,16 @@ WebKit draws a web view only while its window is on screen and does not wait for
 
 ## Host calls
 
-The main page sends every host call through one call path in both applications (`packages/workbench/host-calls.js`). JSON writes NaN, Infinity, and -Infinity as `null`, and the hosts decode `null` in a numeric field differently, so the page refuses a call whose argument contains such a number before it sends the call. The call fails with a `TypeError` whose message is `host call <name>: <path> is <value>, which JSON sends as null`, where `<path>` names the field (for example `surfaces[0].y`) or is `the argument` when the argument itself is the number.
+The main page sends every host call through one call path in both applications (`packages/workbench/host-calls.js`). JSON writes NaN, Infinity, and -Infinity as `null`, and a host refuses `null` in a numeric field without naming the number the page held, so the page refuses a call whose argument contains such a number before it sends the call. The call fails with a `TypeError` whose message is `host call <name>: <path> is <value>, which JSON sends as null`, where `<path>` names the field (for example `surfaces[0].y`) or is `the argument` when the argument itself is the number.
 
-Each host also refuses an explicit `null` in a numeric field of a call argument that the field does not declare optional: the call fails while the framework decodes the argument and never reaches the host as 0. The Wails host decodes such arguments with a check that names the field (`<path> must be a number, not null`), and the Tauri host's typed fields refuse `null` while serde decodes them.
+Each host decodes every argument of a host call, and of a call that a surface page sends through the page runtime, with its own argument decoder before the call runs; the framework's own argument decoding receives the argument as raw JSON and refuses nothing, so both hosts refuse the same arguments with the same text. A field is optional when its declaration says so: an `Option` field or a field with `#[serde(default)]` in the Tauri host, a pointer field or a field whose `json` tag has `omitempty` in the Wails host. A field whose value is `null` counts as missing, so an optional field may be missing or `null`. The decoder refuses an argument with the message `argument <path> <problem>`:
+
+- `<path> is missing`: a field that is not optional is missing or `null`.
+- `<path> must be <expected>, not <actual>`: the value has another JSON type; `<expected>` and `<actual>` are `null`, `a boolean`, `a number`, `a string`, `an array`, or `an object`.
+- `<path> must be an integer from <min> to <max>`: a number in an integer field is not an integer of the field's range.
+- `<path> must be an array of <n> items`: an array of a fixed length has another length.
+
+`<path>` starts with the argument name and adds `.<field>` and `[<index>]`, for example `request.rect.h` and `request.surfaces[0].x`. An argument that the runtime adapter does not send is `null`. Fields that the argument type does not declare are ignored. Two arguments have different types in the two hosts: the Tauri runtime adapter sends the exposure reply and the value of a status change as JSON text so that the host relays the page's key order ([exposure](exposure.md)), and the Tauri host checks that text after it decodes the argument. A status change whose value is missing or `null` changes the status to `null` in both hosts.
 
 ## macOS implementation
 

@@ -31,7 +31,11 @@ func (h *Host) WindowControls(ctx context.Context) (Chrome, error) {
 	return s.WindowChrome()
 }
 
-func (h *Host) OverlayShow(ctx context.Context, req OverlayRequest) (Rect, error) {
+func (h *Host) OverlayShow(ctx context.Context, reqJSON json.RawMessage) (Rect, error) {
+	req, err := argument[OverlayRequest]("request", reqJSON)
+	if err != nil {
+		return Rect{}, err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return Rect{}, err
@@ -39,7 +43,11 @@ func (h *Host) OverlayShow(ctx context.Context, req OverlayRequest) (Rect, error
 	return s.OverlayShow(req)
 }
 
-func (h *Host) SetShape(ctx context.Context, req ShapeRequest) error {
+func (h *Host) SetShape(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[ShapeRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -47,7 +55,11 @@ func (h *Host) SetShape(ctx context.Context, req ShapeRequest) error {
 	return s.SetShape(req)
 }
 
-func (h *Host) ClearShape(ctx context.Context, id string) error {
+func (h *Host) ClearShape(ctx context.Context, idJSON json.RawMessage) error {
+	id, err := argument[string]("id", idJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -55,7 +67,11 @@ func (h *Host) ClearShape(ctx context.Context, id string) error {
 	return s.ClearShape(id)
 }
 
-func (h *Host) OverlayPlace(ctx context.Context, req PlaceRequest) (Rect, error) {
+func (h *Host) OverlayPlace(ctx context.Context, reqJSON json.RawMessage) (Rect, error) {
+	req, err := argument[PlaceRequest]("request", reqJSON)
+	if err != nil {
+		return Rect{}, err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return Rect{}, err
@@ -63,7 +79,11 @@ func (h *Host) OverlayPlace(ctx context.Context, req PlaceRequest) (Rect, error)
 	return s.OverlayPlace(req)
 }
 
-func (h *Host) OverlayHide(ctx context.Context, id string) error {
+func (h *Host) OverlayHide(ctx context.Context, idJSON json.RawMessage) error {
+	id, err := argument[string]("id", idJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -73,7 +93,11 @@ func (h *Host) OverlayHide(ctx context.Context, id string) error {
 
 // Report 는 페이지 검사의 한 줄을 로그에 적고 이 창의 진단 기록을 켠 연결에 보낸다. 페이지는
 // 파일을 쓸 수 없고, 페이지의 콘솔은 디버거 밖에서 보이지 않는다.
-func (h *Host) Report(ctx context.Context, line string) error {
+func (h *Host) Report(ctx context.Context, lineJSON json.RawMessage) error {
+	line, err := argument[string]("line", lineJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -83,7 +107,11 @@ func (h *Host) Report(ctx context.Context, line string) error {
 	return nil
 }
 
-func (h *Host) SetTheme(ctx context.Context, theme Theme) error {
+func (h *Host) SetTheme(ctx context.Context, themeJSON json.RawMessage) error {
+	theme, err := argument[Theme]("theme", themeJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -100,7 +128,11 @@ func (h *Host) Theme(ctx context.Context) (Theme, error) {
 	return s.Theme(), nil
 }
 
-func (h *Host) SyncSurfaces(ctx context.Context, req SyncRequest) (PreparedSurfaces, error) {
+func (h *Host) SyncSurfaces(ctx context.Context, reqJSON json.RawMessage) (PreparedSurfaces, error) {
+	req, err := argument[SyncRequest]("request", reqJSON)
+	if err != nil {
+		return PreparedSurfaces{}, err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return PreparedSurfaces{}, err
@@ -108,7 +140,11 @@ func (h *Host) SyncSurfaces(ctx context.Context, req SyncRequest) (PreparedSurfa
 	return s.SyncSurfaces(req)
 }
 
-func (h *Host) PresentSurfaces(ctx context.Context, req PresentRequest) ([]Placement, error) {
+func (h *Host) PresentSurfaces(ctx context.Context, reqJSON json.RawMessage) ([]Placement, error) {
+	req, err := argument[PresentRequest]("request", reqJSON)
+	if err != nil {
+		return nil, err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return nil, err
@@ -124,7 +160,11 @@ func (h *Host) WaitPresented(ctx context.Context) (float64, error) {
 	return s.presented()
 }
 
-func (h *Host) OverlayUpdate(ctx context.Context, req UpdateRequest) error {
+func (h *Host) OverlayUpdate(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[UpdateRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -134,7 +174,11 @@ func (h *Host) OverlayUpdate(ctx context.Context, req UpdateRequest) error {
 
 // 메인 페이지의 document, image, composition 호출은 등록된 window ID 를
 // 인증된 유일한 메인 호출자 identity 로 사용한다.
-func (h *Host) CompositionDeclare(ctx context.Context, req CompositionDeclareRequest) error {
+func (h *Host) CompositionDeclare(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[CompositionDeclareRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -142,7 +186,11 @@ func (h *Host) CompositionDeclare(ctx context.Context, req CompositionDeclareReq
 	return s.declareComposition(uint64(s.window.ID()), req)
 }
 
-func (h *Host) CompositionPlace(ctx context.Context, req CompositionPlaceRequest) error {
+func (h *Host) CompositionPlace(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[CompositionPlaceRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -150,35 +198,55 @@ func (h *Host) CompositionPlace(ctx context.Context, req CompositionPlaceRequest
 	return s.placeComposition(uint64(s.window.ID()), req)
 }
 
-func (h *Host) DocumentAttach(ctx context.Context, req DocumentRequest) error {
+func (h *Host) DocumentAttach(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
 	}
 	return s.attachDocument(uint64(s.window.ID()), req)
 }
-func (h *Host) DocumentLoad(ctx context.Context, req DocumentRequest) error {
+func (h *Host) DocumentLoad(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
 	}
 	return s.loadDocument(uint64(s.window.ID()), req)
 }
-func (h *Host) DocumentZoom(ctx context.Context, req DocumentRequest) error {
+func (h *Host) DocumentZoom(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
 	}
 	return s.zoomDocument(uint64(s.window.ID()), req)
 }
-func (h *Host) DocumentGo(ctx context.Context, req DocumentRequest) (bool, error) {
+func (h *Host) DocumentGo(ctx context.Context, reqJSON json.RawMessage) (bool, error) {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return false, err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return false, err
 	}
 	return s.goDocument(uint64(s.window.ID()), req)
 }
-func (h *Host) DocumentDetach(ctx context.Context, req DocumentRequest) error {
+func (h *Host) DocumentDetach(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -186,35 +254,75 @@ func (h *Host) DocumentDetach(ctx context.Context, req DocumentRequest) error {
 	return s.detachDocument(uint64(s.window.ID()), req)
 }
 
-func (h *Host) ImageAttach(ctx context.Context, req ImageRequest) error {
+func (h *Host) ImageAttach(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[ImageRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
 	}
 	return s.attachImage(uint64(s.window.ID()), req)
 }
-func (h *Host) ImageFocus(ctx context.Context, req ImageRequest) error {
+func (h *Host) ImageFocus(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[ImageRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
 	}
 	return s.focusImage(uint64(s.window.ID()), req)
 }
-func (h *Host) ImageCaret(ctx context.Context, req ImageRequest, x, y, w, hgt Coordinate) error {
+func (h *Host) ImageCaret(ctx context.Context, reqJSON json.RawMessage, xJSON json.RawMessage, yJSON json.RawMessage, wJSON json.RawMessage, hgtJSON json.RawMessage) error {
+	req, err := argument[ImageRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	x, err := argument[float64]("x", xJSON)
+	if err != nil {
+		return err
+	}
+	y, err := argument[float64]("y", yJSON)
+	if err != nil {
+		return err
+	}
+	w, err := argument[float64]("w", wJSON)
+	if err != nil {
+		return err
+	}
+	hgt, err := argument[float64]("h", hgtJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
 	}
 	return s.caretImage(uint64(s.window.ID()), req, float64(x), float64(y), float64(w), float64(hgt))
 }
-func (h *Host) ImageText(ctx context.Context, req ImageRequest, text string) error {
+func (h *Host) ImageText(ctx context.Context, reqJSON json.RawMessage, textJSON json.RawMessage) error {
+	req, err := argument[ImageRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	text, err := argument[string]("text", textJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
 	}
 	return s.textImage(uint64(s.window.ID()), req, text)
 }
-func (h *Host) ImageDetach(ctx context.Context, req ImageRequest) error {
+func (h *Host) ImageDetach(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[ImageRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -234,7 +342,11 @@ type RetainResult struct {
 
 // SidecarsRetain 은 영속 사이드카 서비스에서 어떤 레이아웃에도 없는 표면의 세션을 닫는다
 // (docs/spec/terminal-runtime.md).
-func (h *Host) SidecarsRetain(ctx context.Context, req RetainRequest) (RetainResult, error) {
+func (h *Host) SidecarsRetain(ctx context.Context, reqJSON json.RawMessage) (RetainResult, error) {
+	req, err := argument[RetainRequest]("request", reqJSON)
+	if err != nil {
+		return RetainResult{}, err
+	}
 	if _, err := h.surface(ctx); err != nil {
 		return RetainResult{}, err
 	}
@@ -242,7 +354,15 @@ func (h *Host) SidecarsRetain(ctx context.Context, req RetainRequest) (RetainRes
 	return RetainResult{Closed: closed}, err
 }
 
-func (h *Host) SidecarSend(ctx context.Context, name, surface string, body json.RawMessage) error {
+func (h *Host) SidecarSend(ctx context.Context, nameJSON json.RawMessage, surfaceJSON json.RawMessage, body json.RawMessage) error {
+	name, err := argument[string]("sidecar", nameJSON)
+	if err != nil {
+		return err
+	}
+	surface, err := argument[string]("surface", surfaceJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -258,12 +378,24 @@ type nativeCall struct {
 	Args   []json.RawMessage `json:"args"`
 }
 
-func nativeArgs(call nativeCall, into ...any) error {
-	if len(call.Args) != len(into) {
-		return fmt.Errorf("%s expects %d arguments", call.Method, len(into))
+// nativeArg 는 native 호출 인자 하나의 이름과 해석할 자리다.
+type nativeArg struct {
+	name string
+	into any
+}
+
+// nativeArgs 는 call 의 인자를 args 의 순서대로 해석한다. 보내지 않은 인자는 null 이다
+// (docs/spec/native-host.md#host-calls).
+func nativeArgs(call nativeCall, args ...nativeArg) error {
+	if len(call.Args) > len(args) {
+		return fmt.Errorf("%s takes %d arguments, not %d", call.Method, len(args), len(call.Args))
 	}
-	for i, target := range into {
-		if err := json.Unmarshal(call.Args[i], target); err != nil {
+	for i, arg := range args {
+		raw := json.RawMessage("null")
+		if i < len(call.Args) {
+			raw = call.Args[i]
+		}
+		if err := decodeArgument(arg.name, raw, arg.into); err != nil {
 			return err
 		}
 	}
@@ -284,7 +416,7 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 	switch call.Method {
 	case "ExposureRegister":
 		var req SurfaceRegistration
-		if err := nativeArgs(call, &req); err != nil {
+		if err := nativeArgs(call, nativeArg{"request", &req}); err != nil {
 			return nil, err
 		}
 		return nil, s.exposureRegister(viewID, req)
@@ -295,24 +427,24 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		return s.Theme(), nil
 	case "SidecarSend":
 		var body json.RawMessage
-		if err := nativeArgs(call, &key, &id, &body); err != nil {
+		if err := nativeArgs(call, nativeArg{"sidecar", &key}, nativeArg{"surface", &id}, nativeArg{"body", &body}); err != nil {
 			return nil, err
 		}
 		return nil, s.sidecarSendFrom(viewID, key, id, body)
 	case "CompositionDeclare":
 		var req CompositionDeclareRequest
-		if err := nativeArgs(call, &req); err != nil {
+		if err := nativeArgs(call, nativeArg{"request", &req}); err != nil {
 			return nil, err
 		}
 		return nil, s.declareComposition(viewID, req)
 	case "CompositionPlace":
 		var req CompositionPlaceRequest
-		if err := nativeArgs(call, &req); err != nil {
+		if err := nativeArgs(call, nativeArg{"request", &req}); err != nil {
 			return nil, err
 		}
 		return nil, s.placeComposition(viewID, req)
 	case "ModalContent", "ModalReady":
-		if err := nativeArgs(call, &id, &instance); err != nil {
+		if err := nativeArgs(call, nativeArg{"id", &id}, nativeArg{"instance", &instance}); err != nil {
 			return nil, err
 		}
 		if call.Method == "ModalContent" {
@@ -321,7 +453,7 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		return nil, s.ModalReady(id, instance)
 	case "DocumentAttach", "DocumentLoad", "DocumentZoom", "DocumentGo", "DocumentDetach":
 		var req DocumentRequest
-		if err := nativeArgs(call, &req); err != nil {
+		if err := nativeArgs(call, nativeArg{"request", &req}); err != nil {
 			return nil, err
 		}
 		switch call.Method {
@@ -338,7 +470,7 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		}
 	case "ImageAttach", "ImageFocus", "ImageDetach":
 		var req ImageRequest
-		if err := nativeArgs(call, &req); err != nil {
+		if err := nativeArgs(call, nativeArg{"request", &req}); err != nil {
 			return nil, err
 		}
 		switch call.Method {
@@ -352,19 +484,19 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 	case "ImageCaret":
 		var req ImageRequest
 		var x, y, w, h float64
-		if err := nativeArgs(call, &req, &x, &y, &w, &h); err != nil {
+		if err := nativeArgs(call, nativeArg{"request", &req}, nativeArg{"x", &x}, nativeArg{"y", &y}, nativeArg{"w", &w}, nativeArg{"h", &h}); err != nil {
 			return nil, err
 		}
 		return nil, s.caretImage(viewID, req, x, y, w, h)
 	case "ImageText":
 		var req ImageRequest
 		var text string
-		if err := nativeArgs(call, &req, &text); err != nil {
+		if err := nativeArgs(call, nativeArg{"request", &req}, nativeArg{"text", &text}); err != nil {
 			return nil, err
 		}
 		return nil, s.textImage(viewID, req, text)
 	case "OverlayPick":
-		if err := nativeArgs(call, &id, &instance, &key, &value); err != nil {
+		if err := nativeArgs(call, nativeArg{"id", &id}, nativeArg{"instance", &instance}, nativeArg{"key", &key}, nativeArg{"value", &value}); err != nil {
 			return nil, err
 		}
 		return nil, s.OverlayPick(id, instance, key, value)

@@ -189,8 +189,7 @@ pub struct Hit {
 ///
 /// 구현하지 않은 기능은 "not implemented" 오류를 반환한다.
 /// 표면 뷰포트의 CSS 픽셀 여백(왼쪽, 위, 오른쪽, 아래).
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Deserialize)]
-#[serde(default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Insets {
     pub left: f64,
     pub top: f64,

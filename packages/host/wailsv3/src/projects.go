@@ -4,9 +4,11 @@ package host
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +25,11 @@ type ProjectFolder struct {
 }
 
 // ProjectFolder 는 root 의 실제 경로와 디렉터리 식별자를 반환한다.
-func (h *Host) ProjectFolder(root string) (ProjectFolder, error) {
+func (h *Host) ProjectFolder(rootJSON json.RawMessage) (ProjectFolder, error) {
+	root, err := argument[string]("root", rootJSON)
+	if err != nil {
+		return ProjectFolder{}, err
+	}
 	return ResolveProjectFolder(root)
 }
 
@@ -91,7 +97,11 @@ type ProjectOpened struct {
 	Local bool `json:"local"`
 }
 
-func (h *Host) ProjectOpen(ctx context.Context, req ProjectOpen) (ProjectOpened, error) {
+func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (ProjectOpened, error) {
+	req, err := argument[ProjectOpen]("request", reqJSON)
+	if err != nil {
+		return ProjectOpened{}, err
+	}
 	current, err := h.surface(ctx)
 	if err != nil {
 		return ProjectOpened{}, err
@@ -99,7 +109,7 @@ func (h *Host) ProjectOpen(ctx context.Context, req ProjectOpen) (ProjectOpened,
 	if !validProjectID(req.ID) {
 		return ProjectOpened{}, fmt.Errorf("invalid project id")
 	}
-	folder, err := h.ProjectFolder(req.Root)
+	folder, err := ResolveProjectFolder(req.Root)
 	if err != nil {
 		return ProjectOpened{}, err
 	}
@@ -137,8 +147,9 @@ func (h *Host) ProjectOpen(ctx context.Context, req ProjectOpen) (ProjectOpened,
 	owner.setTitle(req.Title + titleSuffix)
 	if req.Geometry != nil && req.Geometry.Width > 0 && req.Geometry.Height > 0 {
 		application.InvokeSync(func() {
-			owner.window.SetSize(req.Geometry.Width, req.Geometry.Height)
-			owner.window.SetPosition(req.Geometry.X, req.Geometry.Y)
+			// Wails 창 크기는 정수 논리 픽셀이므로 저장된 크기를 가장 가까운 정수로 둔다.
+			owner.window.SetSize(int(math.Round(req.Geometry.Width)), int(math.Round(req.Geometry.Height)))
+			owner.window.SetPosition(int(req.Geometry.X), int(req.Geometry.Y))
 			prepareWindow(owner.window)
 		})
 	}
@@ -158,7 +169,11 @@ func validProjectID(id string) bool {
 	return true
 }
 
-func (h *Host) ProjectRelease(id string) {
+func (h *Host) ProjectRelease(idJSON json.RawMessage) error {
+	id, err := argument[string]("id", idJSON)
+	if err != nil {
+		return err
+	}
 	h.mu.Lock()
 	owner := h.owners[id]
 	if owner != nil {
@@ -175,6 +190,7 @@ func (h *Host) ProjectRelease(id string) {
 		owner.setTitle(windowTitle)
 	}
 	h.notifyWorkspace()
+	return nil
 }
 
 func (h *Host) FolderChoose(ctx context.Context) (string, error) {
@@ -191,8 +207,12 @@ type CreateProject struct {
 	Name   string `json:"name"`
 }
 
-func (h *Host) ProjectCreate(req CreateProject) (ProjectFolder, error) {
-	parent, err := h.ProjectFolder(req.Parent)
+func (h *Host) ProjectCreate(reqJSON json.RawMessage) (ProjectFolder, error) {
+	req, err := argument[CreateProject]("request", reqJSON)
+	if err != nil {
+		return ProjectFolder{}, err
+	}
+	parent, err := ResolveProjectFolder(req.Parent)
 	if err != nil {
 		return ProjectFolder{}, err
 	}
@@ -204,5 +224,5 @@ func (h *Host) ProjectCreate(req CreateProject) (ProjectFolder, error) {
 	if err := os.Mkdir(destination, 0755); err != nil {
 		return ProjectFolder{}, err
 	}
-	return h.ProjectFolder(destination)
+	return ResolveProjectFolder(destination)
 }

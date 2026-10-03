@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -49,7 +50,11 @@ func ValidateClipboardRead(kind string, userInitiated bool) error {
 	return nil
 }
 
-func (h *Host) ClipboardRead(ctx context.Context, request ClipboardReadRequest) (ClipboardReadResponse, error) {
+func (h *Host) ClipboardRead(ctx context.Context, requestJSON json.RawMessage) (ClipboardReadResponse, error) {
+	request, err := argument[ClipboardReadRequest]("request", requestJSON)
+	if err != nil {
+		return ClipboardReadResponse{}, err
+	}
 	if _, err := h.surface(ctx); err != nil {
 		return ClipboardReadResponse{}, err
 	}
@@ -82,7 +87,11 @@ func (h *Host) ClipboardRead(ctx context.Context, request ClipboardReadRequest) 
 	return response, nil
 }
 
-func (h *Host) ClipboardWriteText(ctx context.Context, text string) error {
+func (h *Host) ClipboardWriteText(ctx context.Context, textJSON json.RawMessage) error {
+	text, err := argument[string]("text", textJSON)
+	if err != nil {
+		return err
+	}
 	if len(text) > clipboardMaxBytes {
 		return fmt.Errorf("clipboard text exceeds 16 MiB")
 	}
@@ -101,7 +110,11 @@ func (h *Host) ClipboardWriteText(ctx context.Context, text string) error {
 	return callErr
 }
 
-func (h *Host) ClipboardPersistPNG(ctx context.Context, request ClipboardPersistRequest) (map[string]string, error) {
+func (h *Host) ClipboardPersistPNG(ctx context.Context, requestJSON json.RawMessage) (map[string]string, error) {
+	request, err := argument[ClipboardPersistRequest]("request", requestJSON)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := h.surface(ctx); err != nil {
 		return nil, err
 	}

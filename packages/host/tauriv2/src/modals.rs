@@ -37,7 +37,7 @@ pub(crate) struct OverlayRequest {
 }
 
 /// 모달 웹뷰가 로드 후 요청하는 내용.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct OverlayContent {
     mode: String,
@@ -124,11 +124,18 @@ struct ModalPosition {
 }
 
 /// 열린 모달의 새 내용. 페이지가 측정한 요소 내용만 담는다. 열린 모달은 위치와 크기를 유지한다.
+/// 내용의 field 는 id 와 같은 객체에 있다.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct UpdateRequest {
     id: String,
-    #[serde(flatten)]
-    content: OverlayContent,
+    mode: String,
+    card: Rect,
+    title: String,
+    css: String,
+    class_name: String,
+    html: String,
+    border: String,
 }
 
 /// 모달 페이지가 받는 모달 하나의 새 내용.
@@ -473,7 +480,15 @@ pub(crate) fn update(window: &Window, request: UpdateRequest) -> Result<(), Stri
     let context = window_data(window)?;
     let overlay = &context.overlay;
 
-    let content = request.content;
+    let content = OverlayContent {
+        mode: request.mode,
+        card: request.card,
+        title: request.title,
+        css: request.css,
+        class_name: request.class_name,
+        html: request.html,
+        border: request.border,
+    };
     let (instance, revision) = {
         let mut held = overlay.open.lock().map_err(|e| e.to_string())?;
         let Some(modal) = held.as_mut().filter(|m| m.id == request.id) else {

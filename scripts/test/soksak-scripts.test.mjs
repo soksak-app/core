@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
 import { find as findReleaseMarkers } from "../check-release.mjs";
-import { auditHostPairs, findStubs } from "../check-hosts.mjs";
+import { auditHostPairs, findStubs, findUndecodedCommandArguments } from "../check-hosts.mjs";
 import { auditE2ESource } from "../check-e2e.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -155,6 +155,21 @@ test("host structure audit rejects a missing host and a missing counterpart", { 
   const pairs = [{ left: "hosts/wails", right: "hosts/tauri", only: { left: {}, right: {} } }];
   assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go"], pairs), ["hosts/tauri: no files", "hosts/wails/src/host: no counterpart in hosts/tauri"]);
   assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go", "hosts/tauri/src/host.rs", "hosts/tauri/src/extra.rs"], pairs), ["hosts/tauri/src/extra: no counterpart in hosts/wails"]);
+});
+
+test("command argument audit rejects a Tauri command argument that the framework decodes", { timeout: 1000 }, () => {
+  const source = `
+#[tauri::command]
+fn place(window: Window, request: Argument<PlaceRequest>) -> Result<(), String> {}
+
+#[tauri::command(async)]
+fn run(
+    plugins: tauri::State<'_, Plugins>,
+    id: String,
+) -> Result<(), String> {}
+`;
+  assert.deepEqual(findUndecodedCommandArguments(source, "bindings.rs"),
+    ["bindings.rs: command run argument id is String, not Argument<T>"]);
 });
 
 test("stub audit reads every product source file and reports a file it cannot read", { timeout: 1000 }, () => {

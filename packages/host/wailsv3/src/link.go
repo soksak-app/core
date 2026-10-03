@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 
@@ -40,7 +41,11 @@ func ValidateLink(value string) error {
 	return nil
 }
 
-func (h *Host) LinkOpen(ctx context.Context, request LinkOpenRequest) error {
+func (h *Host) LinkOpen(ctx context.Context, requestJSON json.RawMessage) error {
+	request, err := argument[LinkOpenRequest]("request", requestJSON)
+	if err != nil {
+		return err
+	}
 	if _, err := h.surface(ctx); err != nil {
 		return err
 	}

@@ -45,10 +45,10 @@ type Record map[string]any
 // WorkspaceRequest 는 저장소 작업 하나다. Kind 는 snapshot, add, patch, remove, move, settings 중 하나다.
 type WorkspaceRequest struct {
 	Kind    string   `json:"kind"`
-	ID      string   `json:"id"`
-	Project Record   `json:"project"`
-	Patch   Record   `json:"patch"`
-	Remove  []string `json:"remove"`
+	ID      string   `json:"id,omitempty"`
+	Project Record   `json:"project,omitempty"`
+	Patch   Record   `json:"patch,omitempty"`
+	Remove  []string `json:"remove,omitempty"`
 	Delta   *int     `json:"delta"`
 }
 
@@ -221,13 +221,21 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 
 // Workspace 는 저장소 작업을 수행한다. add 는 프로젝트 폴더를 확인해 저장하고, snapshot 은
 // 열린 프로젝트 id 를 함께 반환하고, 나머지 작업은 모든 창에 workspace-changed 를 발행한다.
-func (h *Host) Workspace(req WorkspaceRequest) (any, error) {
+func (h *Host) Workspace(requestJSON json.RawMessage) (any, error) {
+	req, err := argument[WorkspaceRequest]("request", requestJSON)
+	if err != nil {
+		return nil, err
+	}
+	return h.runWorkspace(req)
+}
+
+func (h *Host) runWorkspace(req WorkspaceRequest) (any, error) {
 	if req.Kind == "add" {
 		root, ok := req.Project["root"].(string)
 		if !ok {
 			return nil, fmt.Errorf("invalid project root")
 		}
-		folder, err := h.ProjectFolder(root)
+		folder, err := ResolveProjectFolder(root)
 		if err != nil {
 			return nil, err
 		}

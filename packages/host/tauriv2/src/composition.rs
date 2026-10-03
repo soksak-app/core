@@ -149,12 +149,26 @@ pub(crate) fn refresh_sidecar_rasters(window: &Window, sidecar: &str) -> Result<
     send_image_configurations(window, configurations)
 }
 
+/// 영역이나 덮개 하나의 배치. 여백은 이름과 같은 객체에 있다.
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct CompositionPlacement {
     name: String,
-    #[serde(flatten)]
-    insets: Insets,
+    left: f64,
+    top: f64,
+    right: f64,
+    bottom: f64,
     visible: bool,
+}
+
+impl CompositionPlacement {
+    fn insets(&self) -> Insets {
+        Insets {
+            left: self.left,
+            top: self.top,
+            right: self.right,
+            bottom: self.bottom,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -178,14 +192,9 @@ fn exact_placements(
     let wanted: HashSet<_> = names.iter().cloned().collect();
     let mut got = HashMap::new();
     for value in values {
-        let finite = [
-            value.insets.left,
-            value.insets.top,
-            value.insets.right,
-            value.insets.bottom,
-        ]
-        .iter()
-        .all(|number| number.is_finite());
+        let finite = [value.left, value.top, value.right, value.bottom]
+            .iter()
+            .all(|number| number.is_finite());
         let name = value.name.clone();
         if !wanted.contains(&name) || got.contains_key(&name) || !finite {
             return Err(format!("invalid or duplicate composition {what} {name:?}"));
@@ -274,9 +283,9 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
             for (region, handle) in resolved {
                 let placement = regions.get(&region.name).expect("validated above");
                 if region.kind == "document" {
-                    platform.place_document(handle, placement.insets, placement.visible)?;
+                    platform.place_document(handle, placement.insets(), placement.visible)?;
                 } else {
-                    platform.place_image(handle, placement.insets, placement.visible)?;
+                    platform.place_image(handle, placement.insets(), placement.visible)?;
                     let key = (surface.clone(), region.name.clone());
                     applied_data.images.set_visible(&key, placement.visible)?;
                     match platform.image_raster(handle)? {
@@ -317,7 +326,7 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
                 .map(|name| {
                     let placement = overlays.get(name).expect("validated above");
                     DOMOverlay {
-                        insets: placement.insets,
+                        insets: placement.insets(),
                         visible: placement.visible,
                     }
                 })

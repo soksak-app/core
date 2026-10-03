@@ -309,7 +309,7 @@ func (h *Host) ask(s *Surfaces, method string, params any, timeout time.Duration
 type ExposureReplyRequest struct {
 	ID      uint64          `json:"id"`
 	Surface json.RawMessage `json:"surface,omitempty"`
-	Result  json.RawMessage `json:"result"`
+	Result  json.RawMessage `json:"result,omitempty"`
 	Error   *RPCError       `json:"error"`
 }
 
@@ -327,7 +327,11 @@ func ReplySurface(surface json.RawMessage) (string, error) {
 }
 
 // ExposureReply 는 메인 페이지가 exposure-request 에 보낸 답을 받는다.
-func (h *Host) ExposureReply(ctx context.Context, req ExposureReplyRequest) error {
+func (h *Host) ExposureReply(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[ExposureReplyRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -353,13 +357,18 @@ func (h *Host) ExposureReply(ctx context.Context, req ExposureReplyRequest) erro
 
 // ExposureChange 는 감시 중인 상태의 새 값이다.
 type ExposureChange struct {
-	Name    string          `json:"name"`
-	Surface string          `json:"surface"`
-	Value   json.RawMessage `json:"value"`
+	Name    string `json:"name"`
+	Surface string `json:"surface,omitempty"`
+	// Value 는 상태의 새 값이다. 값이 null 이거나 없는 변경은 값이 null 인 변경이다.
+	Value json.RawMessage `json:"value,omitempty"`
 }
 
 // ExposureChanged 는 메인 페이지가 알린 상태 변경을 그 상태를 감시하는 연결에 전달한다.
-func (h *Host) ExposureChanged(ctx context.Context, change ExposureChange) error {
+func (h *Host) ExposureChanged(ctx context.Context, changeJSON json.RawMessage) error {
+	change, err := argument[ExposureChange]("request", changeJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
@@ -367,16 +376,19 @@ func (h *Host) ExposureChanged(ctx context.Context, change ExposureChange) error
 	if isHostName(change.Name) {
 		return fmt.Errorf("the page cannot change host status %s", change.Name)
 	}
-	h.endpoint.StatusChanged(s.name, change.Name, change.Surface, change.Value)
+	value := change.Value
+	if len(value) == 0 {
+		value = json.RawMessage("null")
+	}
+	h.endpoint.StatusChanged(s.name, change.Name, change.Surface, value)
 	return nil
 }
 
 // ExposureForwardRequest 는 메인 페이지가 표면 페이지에 전달할 요청이다.
 type ExposureForwardRequest struct {
-	ID      json.RawMessage `json:"id"`
 	Surface string          `json:"surface"`
 	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params"`
+	Params  json.RawMessage `json:"params,omitempty"`
 	// Timeout 은 이 요청의 제한 시간(ms)이다. 없으면 10 초다. 선언의 timeout 을 페이지가 전달한다.
 	Timeout json.RawMessage `json:"timeout,omitempty"`
 }
@@ -405,7 +417,11 @@ func ForwardTimeout(method string, timeout json.RawMessage) (time.Duration, *RPC
 
 // ExposureForward 는 요청을 표면 페이지에 전달하고 그 답 {result} 또는 {error} 를 반환한다.
 // 표면이 없거나 답하지 않으면 오류를 담은 답을 반환한다.
-func (h *Host) ExposureForward(ctx context.Context, req ExposureForwardRequest) (ExposureResult, error) {
+func (h *Host) ExposureForward(ctx context.Context, reqJSON json.RawMessage) (ExposureResult, error) {
+	req, err := argument[ExposureForwardRequest]("request", reqJSON)
+	if err != nil {
+		return ExposureResult{}, err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return ExposureResult{}, err
