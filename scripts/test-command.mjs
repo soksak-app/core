@@ -38,7 +38,10 @@ function signalGroup(pid, signal) {
   try {
     process.kill(-pid, signal);
   } catch (error) {
-    if (error.code !== 'ESRCH') throw error;
+    if (error.code === 'ESRCH') return;
+    // 거부된 신호와 그룹을 남겨야 어느 단계의 신호가 실패했는지 알 수 있다. 코드는 그대로 둔다.
+    error.message = `${signal} to process group ${pid}: ${error.message}`;
+    throw error;
   }
 }
 

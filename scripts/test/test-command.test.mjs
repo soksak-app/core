@@ -52,6 +52,24 @@ test('reports an absent executable as fail with an error', { timeout: 2000 }, as
   assert.equal(events.at(-1).error.code, 'ENOENT');
 });
 
+test('a forced kill after the child already ended on SIGTERM still reports timeout', { timeout: 10000 }, async () => {
+  // SIGTERM 으로 끝난 자식의 종료를 루프가 아직 처리하지 않은 동안 100 ms 뒤의 SIGKILL 이 실행되게 한다. 부하로 루프가
+  // 늦을 때와 같은 순서다. 끝난 자식만 남은 프로세스 그룹에 보낸 신호를 macOS 는 EPERM 으로 거부할 수 있다.
+  const [command, args] = task('setTimeout(() => {}, 5000)');
+  let held = false;
+  const result = await runCommand({
+    id: 'late-exit', command, args, timeoutMs: 50, heartbeatMs: 50,
+    onEvent: (event) => {
+      if (event.type !== 'progress' || held) return;
+      held = true;
+      const until = performance.now() + 150;
+      while (performance.now() < until) { /* 루프를 붙잡는다 */ }
+    },
+  });
+  assert.equal(held, true, 'the progress event did not hold the loop');
+  assert.equal(result.status, 'timeout', JSON.stringify({ error: result.error, signal: result.signal }));
+});
+
 test('times out and reports timeout', { timeout: 2000 }, async () => {
   const events = [];
   const [command, args] = task('setTimeout(() => {}, 1000)');
@@ -166,6 +184,8 @@ test('reports process-group signal failure without an unhandled timer error', { 
   const result = await runCommand({ id: 'signal-error', command, args, timeoutMs: 20, onEvent: () => {} });
   assert.equal(result.status, 'fail');
   assert.equal(result.error.code, 'EPERM');
+  // 실패한 신호와 프로세스 그룹을 남긴다. 다음 발생에서 어느 단계의 신호인지 알 수 있다.
+  assert.match(result.error.message, /^SIGTERM to process group \d+: blocked process-group signal$/);
 });
 
 test('forwards CLI SIGTERM to command cancellation and cleanup', { timeout: 3000 }, async (t) => {
