@@ -23,7 +23,7 @@ import { bind, delegate, mark, run } from "./commands.js";
 import { disposeSurface, focusSurface, mountSurface, placePluginPlaceholder } from "./surface-modules.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
-import { clearVisibleNotices, onTabReports, recordOrigin, setVisibleTab, tabLabel, tabNotice } from "./tab-reports.js";
+import { clearVisibleNotices, onTabReports, recordOrigin, setVisibleTab, tabFooter, tabLabel, tabNotice } from "./tab-reports.js";
 import { configureSystemNotifications, systemNotifications } from "./system-notifications.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt",
@@ -322,6 +322,7 @@ function updateCard(el, card, rect) {
     setSurfaceStatus(status, { phase: "ready" });
     surfaceStates.set(shown.id, { phase: "ready", error: null });
     surfaceStateChanged();
+    cardFolds.set(card.id, folded);
     setText(statusText, cardStatusText(card, tabs, folded));
     return;
   }
@@ -345,13 +346,17 @@ function updateCard(el, card, rect) {
   }).catch((error) => {
     report(`surface ${shown.id} mount failed: ${error.message}`);
   });
+  cardFolds.set(card.id, folded);
   setText(statusText, cardStatusText(card, tabs, folded));
 }
 
-/** 내용 카드의 상태 줄: 열·행·탭 수와, 공간이 부족해 접힌 면이 있으면 그 이유. */
+// 카드마다 마지막으로 그린 공간 부족 접힘 문구. 탭이 하단 글을 바꾸면 다시 그리지 않고 발만 고친다.
+const cardFolds = new Map();
+/** 카드 내용 발의 글: 활성 탭의 플러그인이 알린 하단 글과 공간 부족으로 접힌 면(docs/spec/example-model.md). */
 function cardStatusText(card, tabs, folded) {
-  const place = `열 ${card.c0}–${card.c1} · 행 ${card.r0}–${card.r1} · 탭 ${tabs.length}`;
-  return folded === null ? place : `${place} · ${folded}`;
+  // 기본값: 탭이 없거나 하단 글을 알리지 않은 탭의 발은 빈 글이다.
+  const text = tabs.length ? tabFooter(activeTab(card).id) ?? "" : "";
+  return [text, folded].filter((part) => part !== null && part !== "").join(" · ");
 }
 
 /* ── 불러오지 않은 플러그인의 탭(docs/spec/plugins.md) ───────────────── */
@@ -1344,6 +1349,9 @@ const redrawTabReports = () => {
       if (t) name.textContent = tabName(t);
     }
     drawNotices(chrome, tabsOf(card));
+    const statusText = el.querySelector(":scope > .status .status__text");
+    // 기본값: 아직 그리지 않은 카드에는 접힌 면 문구가 없다.
+    if (statusText && !isPlace(card.id)) setText(statusText, cardStatusText(card, tabsOf(card), cardFolds.get(card.id) ?? null));
   }
 };
 onTabReports(redrawTabReports);

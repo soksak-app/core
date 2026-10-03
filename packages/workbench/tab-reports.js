@@ -1,5 +1,6 @@
-// 표면이 알린 탭 제목과 작업 디렉터리(docs/spec/plugins.md#tab-reports). 레이아웃에 저장하지 않는다.
+// 표면이 알린 탭 제목, 하단 글과 작업 디렉터리(docs/spec/plugins.md#tab-reports). 레이아웃에 저장하지 않는다.
 const labels = new Map();
+const footers = new Map();
 const directories = new Map();
 const origins = new Map();
 const notices = new Map();
@@ -62,6 +63,23 @@ export function clearVisibleNotices() {
   if (removed) notify();
 }
 
+/** 탭 id 의 표면이 카드 내용 발에 보일 글을 정하거나(text) 지운다(null). */
+export function reportFooter(tabId, text) {
+  if (text === null) {
+    if (footers.delete(tabId)) notify();
+    return;
+  }
+  if (typeof text !== "string" || text.length === 0 || text.length > 1024 || CONTROL.test(text)) {
+    throw new TypeError("a tab footer must be 1 to 1024 characters without control characters");
+  }
+  if (footers.get(tabId) === text) return;
+  footers.set(tabId, text);
+  notify();
+}
+
+// 기본값: 하단 글을 알리지 않은 탭은 null 이다.
+export const tabFooter = (tabId) => footers.get(tabId) ?? null;
+
 /** 탭 id 의 표면의 작업 디렉터리를 기록하거나(path) 지운다(null). */
 export function reportDirectory(tabId, path) {
   if (path === null) {
@@ -92,7 +110,8 @@ export function forgetTab(tabId) {
   origins.delete(tabId);
   const noticed = notices.delete(tabId);
   noticePolicies.delete(tabId);
-  if (labels.delete(tabId) || noticed) notify();
+  const footed = footers.delete(tabId);
+  if (labels.delete(tabId) || noticed || footed) notify();
 }
 
 export function onTabReports(listener) {

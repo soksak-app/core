@@ -34,7 +34,7 @@ import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
 import { foldSection, onSectionsChange, selectSection, sidebarsState } from "./sidebar-sections.js";
-import { onTabReports, tabLabel, tabNotice } from "./tab-reports.js";
+import { onTabReports, tabFooter, tabLabel, tabNotice } from "./tab-reports.js";
 import { followPluginChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 
 /* 감시 중인 코어 status 의 수신자. */
@@ -166,7 +166,9 @@ function gridState() {
       // 기본값: px 폭을 정하지 않은 카드는 width 가 null 이다.
       fixed: Boolean(card.fixed), width: card.width ?? null, focused: card.id === focused(),
       pane: el.querySelector(".chrome__acts") ? pane++ : null,
-      tabs: tabs.map(({ id, plugin, title }) => ({ id, plugin, title, label: tabLabel(id), notice: tabNotice(id) })),
+      tabs: tabs.map(({ id, plugin, title }) => ({ id, plugin, title, label: tabLabel(id), notice: tabNotice(id), footer: tabFooter(id) })),
+      // 내용 발이 보이는 글(docs/spec/example-model.md). 기본값: 아직 그리지 않은 카드에는 발의 글 요소가 없으므로 빈 글이다.
+      status: el.querySelector(":scope > .status .status__text")?.textContent ?? "",
       active: tabs.length ? activeTab(card).id : null,
       acts: cardActs(card.id),
       sidebars: cardSidebars(card, presentedCardRect(card.id)),

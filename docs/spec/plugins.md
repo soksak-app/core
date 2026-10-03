@@ -127,9 +127,11 @@ A `background` declaration is an explicit session-lifetime contract, not a secon
 
 ## Tab reports
 
-A surface context has `tab.title(text)`, `tab.directory(path)`, and `tab.notify(text, policy)`, a frozen `origin` object, and a frozen `project` object.
+A surface context has `tab.title(text)`, `tab.footer(text)`, `tab.directory(path)`, and `tab.notify(text, policy)`, a frozen `origin` object, and a frozen `project` object.
 
 `tab.title(text)` sets the title that the surface's tab shows in place of its name, and `tab.title(null)` removes it so the tab shows its name again. The text is a string of 1 to 256 characters without control characters (U+0000–U+001F and U+007F–U+009F); any other value throws. The title is not saved with the layout. `core.grid` reports each tab's shown title as `label`, or `null`.
+
+`tab.footer(text)` sets the text that the content footer of the surface's card shows while the surface is the card's active tab, such as the terminal's working directory or the address of the link under the pointer in a browser document, and `tab.footer(null)` removes it. The text is a string of 1 to 1024 characters without control characters; any other value throws. The footer text is not saved with the layout. `core.grid` reports each tab's footer text as `footer`, or `null`, and each card's shown footer as `status`.
 
 `tab.notify(text, policy)` gives the tab a notice when the tab is not the active tab of the focused card; for that tab the call changes nothing, because the surface is in view. `policy` is `tab` or `system`; omitted policy means `tab`. The terminal plugin supplies its `terminal.notifications` setting. The text follows the title rules with up to 1024 characters; another value throws. `tab` shows the dot and tooltip in `core.grid`; `system` sends the notice only to the host notification center and reports `notice: null` in the grid. The notice is removed when the tab becomes the active tab of the focused card or is closed, and a later notice replaces an earlier one. The workbench does not save notices.
 

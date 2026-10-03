@@ -52,6 +52,15 @@ static NSString *const kPageScript = @"(() => {"
     "new PerformanceObserver(requests).observe({ type: 'resource' });"
     "addEventListener('load', requests);"
     "addEventListener('pageshow', () => { elements(); requests(); });"
+    "let link = null;"
+    "const point = (target) => {"
+    "  const anchor = target instanceof Element ? target.closest('a[href]') : null;"
+    "  const next = anchor ? anchor.href : null;"
+    "  if (next !== link) { link = next; post({ link: link ?? '' }); }"
+    "};"
+    "addEventListener('mouseover', (event) => point(event.target), true);"
+    "addEventListener('mouseout', (event) => { if (!event.relatedTarget) point(null); }, true);"
+    "addEventListener('pagehide', () => point(null));"
     "elements(); requests();"
     "})();";
 
@@ -88,6 +97,8 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 // 현재 문서의 요소와 기록된 요청. 이동이 시작되면 비우고 새 문서가 보낸 값으로 바꾼다.
 @property(copy) NSDictionary *elements;
 @property(copy) NSDictionary *requests;
+// 포인터 아래 링크의 주소. 없으면 빈 글이다.
+@property(copy) NSString *link;
 @property NSEdgeInsets insets;
 // 글자 배율(docs/spec/text-size.md). 페이지 확대로 적용한다.
 @property double zoom;
@@ -112,6 +123,7 @@ static CGFloat documentSurfaceScale(NSView *surface) {
     if ([message.name isEqualToString:kPageMessage]) {
         if ([body[@"elements"] isKindOfClass:NSDictionary.class]) view.elements = body[@"elements"];
         if ([body[@"requests"] isKindOfClass:NSDictionary.class]) view.requests = body[@"requests"];
+        if ([body[@"link"] isKindOfClass:NSString.class]) view.link = body[@"link"];
         [view report];
         return;
     }
@@ -130,6 +142,7 @@ static CGFloat documentSurfaceScale(NSView *surface) {
     [_failure release];
     [_elements release];
     [_requests release];
+    [_link release];
     [_navigation release];
     [_eventMonitor release];
     [super dealloc];
@@ -197,6 +210,7 @@ static CGFloat documentSurfaceScale(NSView *surface) {
         @"history": [self history],
         @"elements": self.elements ?: @{ @"nodes": @[], @"truncated": @NO },
         @"requests": self.requests ?: @{ @"entries": @[], @"truncated": @NO },
+        @"link": self.link ?: @"",
     };
     NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     if (!data) return;

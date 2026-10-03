@@ -227,7 +227,7 @@
       },
       {
         "name": "core.grid",
-        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label and its notice), tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation.",
+        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, and the footer text it reported) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation.",
         "schema": {
           "type": [
             "object",
@@ -354,9 +354,18 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "footer": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       }
                     }
+                  },
+                  "status": {
+                    "type": "string"
                   },
                   "active": {
                     "type": [

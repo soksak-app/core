@@ -435,6 +435,18 @@ int main(int argc, char **argv) { @autoreleasepool {
         return [[[state[@"elements"][@"nodes"] lastObject] objectForKey:@"tag"] isEqual:@"section"];
     });
 
+    // 포인터 아래 링크의 주소가 상태의 link 다. 링크 밖으로 나가면 빈 글이다.
+    check([latest[@"link"] isEqual:@""], [NSString stringWithFormat:@"a document without a pointed link reports an empty link: %@", latest[@"link"]]);
+    evaluate(view, @"const a = document.createElement('a'); a.href = '/target'; a.textContent = 'go'; document.body.append(a);"
+        " a.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); null");
+    settle(@"the link under the pointer was not reported", ^BOOL(NSDictionary *state) {
+        return [state[@"link"] isKindOfClass:NSString.class] && [state[@"link"] hasSuffix:@"/target"];
+    });
+    evaluate(view, @"document.querySelector('a').dispatchEvent(new MouseEvent('mouseout', { bubbles: true })); null");
+    settle(@"leaving the link did not clear it", ^BOOL(NSDictionary *state) {
+        return [state[@"link"] isEqual:@""];
+    });
+
     // 같은 디렉터리의 문서는 사이트 데이터를 공유하고, 다른 디렉터리의 문서는 공유하지 않는다.
     void *same = sp_document_create(surface, storeA.fileSystemRepresentation, changed, NULL);
     void *other = sp_document_create(surface, storeB.fileSystemRepresentation, changed, NULL);

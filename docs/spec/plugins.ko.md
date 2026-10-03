@@ -127,9 +127,11 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 
 ## 탭 알림
 
-표면 컨텍스트에는 `tab.title(text)`, `tab.directory(path)`, `tab.notify(text, policy)`, 고정된 `origin` 객체, 고정된 `project` 객체가 있다.
+표면 컨텍스트에는 `tab.title(text)`, `tab.footer(text)`, `tab.directory(path)`, `tab.notify(text, policy)`, 고정된 `origin` 객체, 고정된 `project` 객체가 있다.
 
 `tab.title(text)`는 표면의 탭이 이름 대신 보일 제목을 정하고, `tab.title(null)`은 그 제목을 지워 탭이 다시 이름을 보이게 한다. 텍스트는 제어 문자(U+0000–U+001F, U+007F–U+009F)가 없는 1–256자의 문자열이며, 다른 값은 예외를 던진다. 제목은 레이아웃과 함께 저장하지 않는다. `core.grid`는 각 탭이 보이는 제목을 `label`로, 없으면 `null`로 알린다.
+
+`tab.footer(text)`는 표면이 카드의 활성 탭인 동안 그 카드의 내용 발이 보일 글을 정한다. 터미널의 작업 디렉터리나 브라우저 문서에서 포인터 아래 링크의 주소가 그 예다. `tab.footer(null)`은 그 글을 지운다. 텍스트는 제어 문자가 없는 1–1024자의 문자열이며, 다른 값은 예외를 던진다. 하단 글은 레이아웃과 함께 저장하지 않는다. `core.grid`는 각 탭의 하단 글을 `footer`로, 없으면 `null`로, 각 카드가 보이는 발을 `status`로 알린다.
 
 `tab.notify(text, policy)`는 탭이 포커스된 카드의 활성 탭이 아닐 때 그 탭에 알림을 둔다. `policy`는 `tab`이나 `system`이고 생략하면 `tab`이다. 터미널 플러그인은 `terminal.notifications` 설정값을 전달한다. 그 탭이면 표면이 보이고 있으므로 아무것도 바꾸지 않는다. 텍스트는 제목 규칙을 따르되 최대 1024자이며, 다른 값은 예외를 던진다. `tab`은 `core.grid`에 점과 도움말을 보이고, `system`은 호스트 알림 센터에만 보내며 grid의 `notice`는 `null`이다. 알림은 탭이 포커스된 카드의 활성 탭이 되거나 닫히면 지워지고, 나중 알림이 앞의 알림을 바꾼다. 워크벤치는 알림을 저장하지 않는다.
 

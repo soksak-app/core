@@ -6,7 +6,7 @@ import { pluginDiagnostics } from "./environment.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
-import { forgetTab, reportDirectory, reportNotice, reportTitle, tabOrigin } from "./tab-reports.js";
+import { forgetTab, reportDirectory, reportFooter, reportNotice, reportTitle, tabOrigin } from "./tab-reports.js";
 import { icon } from "./icons.js";
 import { active } from "./projects.js";
 const mounted = new Map();
@@ -181,6 +181,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       root: shadow, surfaceId: surface.surfaceId, pluginId: surface.pluginId,
       declarations: surface.declarations, composition, diagnostics: () => diagnostics,
       tab: { title: (text) => reportTitle(surface.surfaceId, text),
+        footer: (text) => reportFooter(surface.surfaceId, text),
         directory: (path) => reportDirectory(surface.surfaceId, path),
         notify: (text, policy) => reportNotice(surface.surfaceId, text, policy) },
       origin: tabOrigin(surface.surfaceId),

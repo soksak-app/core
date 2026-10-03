@@ -44,3 +44,19 @@ for (const app of Object.values(APPS)) {
       `footer brightness ${worst.brightness} exceeds the dark border in frame ${worst.frame} of ${files.length}`);
   });
 }
+
+for (const app of Object.values(APPS)) {
+  // 카드의 내용 발은 활성 탭의 플러그인이 알린 하단 글을 보인다. 터미널은 작업 디렉터리다(docs/spec/plugins.md#tab-reports).
+  test(`${app.name}: the content footer shows the footer text that the active tab's plugin reports`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const { root } = await s.get("core.project");
+    const grid = await s.until("core.grid", (value) => {
+      const card = value.cards.find((item) => item.id === "terminal");
+      return card?.tabs.find((tab) => tab.id === card.active)?.footer === root;
+    }, "the terminal tab did not report its working directory as its footer");
+    const card = grid.cards.find((item) => item.id === "terminal");
+    assert.equal(card.status, root, `the terminal card footer does not show the working directory: ${JSON.stringify(card)}`);
+  });
+}
