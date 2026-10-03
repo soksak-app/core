@@ -10,3 +10,10 @@ incremental = true
 # 기호가 아니어도 남는 문자열로 한다(scripts/check-release.mjs).
 [profile.release]
 strip = true
+
+# tao 0.37.1 은 macOS 에서 닫힌 창을 해제하지 않는다. 창을 만들 때 한 번 더 retain 하고, TaoView 와 TaoWindowDelegate
+# 의 dealloc 이 [super dealloc] 을 부르지 않는다(https://github.com/tauri-apps/tao/issues/1327). upstream PR
+# https://github.com/tauri-apps/tao/pull/1328 이 두 곳을 고치며 아직 배포되지 않았다. 그 수정 커밋 둘을 태그
+# tao-v0.37.1 위에 얹은 포크 브랜치의 커밋을 쓴다. crates.io 의 tao 배포판이 #1328 을 담으면 이 고정을 없앤다(G1.4-101-1).
+[patch.crates-io]
+tao = { git = "https://github.com/min-median-max/tao", rev = "1a047e239c90ff22563ebcf25acc8a3eb069a6a7" }
