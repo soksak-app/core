@@ -29,7 +29,7 @@ WebKit은 window가 화면에 있는 동안에만 web view를 그리고, window�
 
 ## page 다시 읽기
 
-`host.window.reload`는 window의 main page를 같은 WebContent process에서 다시 읽는다. 준비된 page는 먼저 대기 중인 저장을 끝낸다(`core.projects.flush`). 그다음 host는 web view를 직접 다시 읽지 않고 그 page에 `page-reload` 이벤트를 보낸다. 다시 읽기가 요청을 멈춘 뒤에 쓴 host 응답은 사라지고 Wails가 이를 오류로 기록하기 때문이다. page는 host 호출 보내기를 멈추고, 보낸 호출이 모두 답을 받을 때까지 기다린 뒤 스스로 다시 읽는다. 이벤트 뒤에 page가 하는 호출은 보내지 않으며, 다시 읽기가 멈춘 호출처럼 document와 함께 끝난다. 준비를 알리지 않은 page에는 `page-reload` listener가 없을 수 있으므로 host가 직접 다시 읽는다. 명령은 새 page가 준비를 알린 뒤 끝나고, 10초 안에 알리지 않으면 1005를 돌려준다.
+`host.window.reload`는 window의 main page를 새 WebContent process에서 다시 읽고, 이전 process는 이전 문서와 함께 끝난다([비공개 native API](../operations/private-native-apis.md)). main page의 page 변경도 같다. 준비된 page는 먼저 대기 중인 저장을 끝낸다(`core.projects.flush`). 그다음 host는 web view를 직접 다시 읽지 않고 그 page에 `page-reload` 이벤트를 보낸다. 다시 읽기가 요청을 멈춘 뒤에 쓴 host 응답은 사라지고 Wails가 이를 오류로 기록하기 때문이다. page는 host 호출 보내기를 멈추고, 보낸 호출이 모두 답을 받을 때까지 기다린 뒤 스스로 다시 읽는다. 이벤트 뒤에 page가 하는 호출은 보내지 않으며, 다시 읽기가 멈춘 호출처럼 document와 함께 끝난다. 준비를 알리지 않은 page에는 `page-reload` listener가 없을 수 있으므로 host가 직접 다시 읽는다. 명령은 새 page가 준비를 알린 뒤 끝나고, 10초 안에 알리지 않으면 1005를 돌려준다.
 
 ## host 호출
 

@@ -6,6 +6,7 @@
 #import "webview_geometry.h"
 #import "private/webkit.h"
 #import "surface_layout.h"
+#import "webview_navigation.h"
 
 static const char mainWebviewKey;
 
@@ -22,6 +23,8 @@ bool sp_window_set_main_webview(void *handle, void *mainHandle) {
     // 멈추므로, 가려진 창의 배치 표시와 그 표시를 기다리는 명령이 끝나지 않는다.
     if (![main respondsToSelector:@selector(_setWindowOcclusionDetectionEnabled:)]) return false;
     main._windowOcclusionDetectionEnabled = NO;
+    // 다시 읽기와 page 변경이 이전 문서를 남기지 않도록 main frame 의 새 문서를 새 프로세스에서 연다.
+    if (!sp_webview_replace_documents_in_new_process(main)) return false;
     objc_setAssociatedObject(window, &mainWebviewKey, [NSValue valueWithNonretainedObject:main], OBJC_ASSOCIATION_RETAIN);
     return true;
 }

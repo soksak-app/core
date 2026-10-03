@@ -33,6 +33,9 @@
 @end
 #pragma clang diagnostic pop
 
+// WKNavigationDelegatePrivate.h: navigation 을 새 WebContent 프로세스에서 진행하게 하는 정책.
+static const WKNavigationActionPolicy SPNavigationActionPolicyAllowInNewProcess = (WKNavigationActionPolicy)(WKNavigationActionPolicyAllow + 3);
+
 @interface WKWebView (SPPrivate)
 @property(nonatomic, readonly) pid_t _webProcessIdentifier;
 // WKWebViewPrivate.h: 현재 WebContent 프로세스를 종료해 reload 가 새 프로세스를 시작하게 한다.
@@ -40,6 +43,8 @@
 // WKWebViewPrivate.h
 - (void)_setOverrideDeviceScaleFactor:(double)scale;
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))completion;
+// WKWebViewPrivate.h: 뒤로·앞으로 이동을 위해 멈춰 둔 이전 문서와 그 프로세스를 놓는다.
+- (void)_clearBackForwardCache;
 // WKWebViewPrivate.h (mac)
 - (void)_setIgnoresMouseMoveEvents:(BOOL)ignore;
 @property (nonatomic, setter=_setWindowOcclusionDetectionEnabled:) BOOL _windowOcclusionDetectionEnabled;

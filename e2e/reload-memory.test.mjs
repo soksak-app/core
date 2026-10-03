@@ -32,31 +32,46 @@ function inventory(window) {
 
 const RELOADS = 20;
 
-// 같은 WebContent process 에서 다시 읽은 이전 문서는 WebKit 이 querySelectorAll 결과 캐시에 두었다가 메모리 압박 때
-// 놓는다(docs/operations/private-native-apis.md). 그 동작은 native/darwin 의 webview_process_test 가 재현하고, 이
-// 검사는 앱이 가진 것만 판정한다. page footprint 는 판정하지 않고 기록한다.
+// main page 를 다시 읽으면 host 는 새 문서를 새 WebContent process 에서 열고 이전 process 는 이전 문서와 함께 끝난다
+// (docs/operations/private-native-apis.md). 같은 process 에서 다시 읽으면 WebKit 의 querySelectorAll 결과 캐시가 이전
+// 문서를 메모리 압박 전까지 남긴다. 검사는 다시 읽을 때마다 page process 가 바뀌고 이전 process 가 끝나는지, 다시 읽은
+// 뒤의 page footprint 와 host 메모리, 창의 문서를 판정한다.
+const PAGE_GROWTH = 64 * 1024 * 1024;
+
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: repeated reload keeps the host memory and the window documents bounded`, { timeout: 300000 }, async (t) => {
+  test(`${app.name}: repeated reload keeps the host memory, the page memory and the window documents bounded`, { timeout: 300000 }, async (t) => {
     const session = await open(t, app);
     if (!session) return;
     await fresh(session);
-    const { pageProcess } = await session.get("host.window");
-    assert.ok(Number.isInteger(pageProcess) && pageProcess > 0, `the app page has no WebContent process: ${pageProcess}`);
+    const { pageProcess: first } = await session.get("host.window");
+    assert.ok(Number.isInteger(first) && first > 0, `the app page has no WebContent process: ${first}`);
     await session.request("diagnostics.page.collect", {});
-    const footprintBefore = footprint(pageProcess);
+    const footprintBefore = footprint(first);
     const before = inventory(await session.get("host.window"));
     // 검사가 연결한 호스트의 process. 같은 이름의 다른 앱이나 번들 안의 사이드카는 재지 않는다.
     const host = session.client.endpoint.pid;
     const hostBefore = resident(host);
-    for (let i = 0; i < RELOADS; i++) await session.run("host.window.reload");
+    const processes = [first];
+    for (let i = 0; i < RELOADS; i++) {
+      const previous = processes.at(-1);
+      await session.run("host.window.reload");
+      const { pageProcess } = await session.until("host.window", (window) => window.pageProcess !== previous,
+        `reload ${i + 1} kept the page process ${previous}`);
+      processes.push(pageProcess);
+      await session.request("diagnostics.process.exit", { pid: previous }).catch((error) => {
+        throw new Error(`reload ${i + 1} left the previous page process ${previous} running: ${error.message}`);
+      });
+    }
     const expected = JSON.stringify(before);
-    const settled = await session.until("host.window", (window) => JSON.stringify(inventory(window)) === expected,
+    await session.until("host.window", (window) => JSON.stringify(inventory(window)) === expected,
       `the window documents differ from ${expected} after ${RELOADS} reloads`);
     const hostAfter = resident(host);
-    assert.equal(settled.pageProcess, pageProcess, "a reload changed the page process");
     await session.request("diagnostics.page.collect", {});
-    t.diagnostic(`documents ${expected}; page footprint ${footprintBefore} -> ${footprint(pageProcess)} B without memory ` +
-      `pressure; host RSS ${hostBefore} -> ${hostAfter} KB`);
+    const footprintAfter = footprint(processes.at(-1));
+    t.diagnostic(`documents ${expected}; page processes ${processes.join(" ")}; page footprint ${footprintBefore} -> ` +
+      `${footprintAfter} B; host RSS ${hostBefore} -> ${hostAfter} KB`);
+    assert.ok(footprintAfter - footprintBefore < PAGE_GROWTH,
+      `the page footprint grew ${footprintAfter - footprintBefore} B over ${RELOADS} reloads`);
     assert.ok(hostAfter - hostBefore < 64 * 1024, `host RSS grew ${hostAfter - hostBefore} KB over ${RELOADS} reloads`);
   });
 }
