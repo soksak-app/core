@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-90-4-1: Wails host는 표면 문서의 commit을 새 문서의 메시지보다 먼저 처리하므로, 다시 불러온 표면의 첫 배치가 stale로 거부되지 않고 그 뒤 그림 영역이 닫히지 않는다.
 - G1.4-99: Wails host는 더 읽지 않는 사이드카 출력 파이프를 닫으므로, 멈추는 동안 아직 쓰는 사이드카도 Tauri host처럼 강제 종료 없이 끝난다.
 - G1.4-98: 멈춤이 끼어든 Wails host의 retain은 닫힌 채널에 보내지 않고 "sidecars are stopped"로 실패하며, outbox가 가득 차면 Tauri host처럼 바로 실패한다.
 - G1.4-94: handler가 예외를 던진 메인 페이지 명령은 10초 뒤 `did not reply within 10000ms`를 기록하는 응답 타이머를 남기지 않는다.

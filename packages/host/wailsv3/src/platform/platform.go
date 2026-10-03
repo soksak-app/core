@@ -389,3 +389,111 @@ func Current() (Platform, error) {
 	}
 	return current, nil
 }
+
+// Dispatcher 는 웹뷰가 UI 스레드에서 알린 문서 commit 과 메시지를 UI 스레드 밖의 handler 에 넘긴다. 수신자는 주
+// 스레드를 기다릴 수 있으므로 handler 를 부르기 전에 WebKit 으로 반환한다.
+//
+// WebKit 은 한 웹뷰의 commit 과 그 뒤 문서의 메시지를 받은 순서대로 알린다. handler 는 각자의 고루틴에서 실행되므로,
+// 같은 웹뷰에서는 메시지를 받기 전에 받은 commit 의 처리가 끝난 뒤에 메시지 handler 를 부르고, commit 끼리도 받은
+// 순서대로 처리한다. 새 문서의 첫 요청이 이전 문서의 정리보다 먼저 실행되지 않게 하기 위해서다. 다른 웹뷰는
+// 기다리지 않는다.
+type Dispatcher struct {
+	// Receive 는 웹뷰의 문서가 보낸 메시지를 받는다.
+	Receive func(identifier uint64, body string)
+	// Committed 는 웹뷰가 새 문서를 표시하기 시작했음을 받는다.
+	Committed func(identifier uint64)
+	// Held 는 메시지가 같은 웹뷰의 앞선 commit 처리를 기다리기 시작할 때 웹뷰 번호로 호출된다. 검사가 보류를
+	// 관찰하는 지점이며, nil 이면 호출하지 않는다.
+	Held func(identifier uint64)
+
+	mu sync.Mutex
+	// views 는 처리 중인 commit 이 있는 웹뷰의 순서다. 받은 commit 을 모두 처리하면 지운다.
+	views map[uint64]*documentOrder
+}
+
+// documentOrder 는 웹뷰 하나에서 받은 commit 수와 처리를 마친 commit 수다. changed 는 처리를 마칠 때마다 닫고 새로
+// 만든다.
+type documentOrder struct {
+	received, handled uint64
+	changed           chan struct{}
+}
+
+// wait 은 order 의 처리를 마친 commit 이 count 개가 될 때까지 기다린다.
+func (d *Dispatcher) wait(order *documentOrder, count uint64) {
+	for {
+		d.mu.Lock()
+		if order.handled >= count {
+			d.mu.Unlock()
+			return
+		}
+		changed := order.changed
+		d.mu.Unlock()
+		<-changed
+	}
+}
+
+// Handle 은 수신 함수를 바꾼다. 웹뷰를 만들 때 UI 스레드에서 부르며, 다른 스레드의 Commit 과 Message 가 같은
+// 잠금 안에서 읽는다.
+func (d *Dispatcher) Handle(receive func(identifier uint64, body string), committed func(identifier uint64)) {
+	d.mu.Lock()
+	d.Receive, d.Committed = receive, committed
+	d.mu.Unlock()
+}
+
+// Commit 은 UI 스레드에서 받은 commit 을 handler 에 넘긴다. 같은 웹뷰의 앞선 commit 처리가 끝난 뒤에 부른다.
+func (d *Dispatcher) Commit(identifier uint64) {
+	d.mu.Lock()
+	handler := d.Committed
+	if handler == nil {
+		d.mu.Unlock()
+		return
+	}
+	if d.views == nil {
+		d.views = map[uint64]*documentOrder{}
+	}
+	order := d.views[identifier]
+	if order == nil {
+		order = &documentOrder{changed: make(chan struct{})}
+		d.views[identifier] = order
+	}
+	order.received++
+	count := order.received
+	d.mu.Unlock()
+	go func() {
+		d.wait(order, count-1)
+		handler(identifier)
+		d.mu.Lock()
+		order.handled = count
+		close(order.changed)
+		order.changed = make(chan struct{})
+		if order.handled == order.received && d.views[identifier] == order {
+			delete(d.views, identifier)
+		}
+		d.mu.Unlock()
+	}()
+}
+
+// Message 는 UI 스레드에서 받은 메시지를 handler 에 넘긴다. 그 전에 받은 같은 웹뷰의 commit 처리가 끝난 뒤에 부른다.
+func (d *Dispatcher) Message(identifier uint64, body string) {
+	d.mu.Lock()
+	handler := d.Receive
+	if handler == nil {
+		d.mu.Unlock()
+		return
+	}
+	order := d.views[identifier]
+	var count uint64
+	if order != nil {
+		count = order.received
+	}
+	d.mu.Unlock()
+	go func() {
+		if order != nil {
+			if d.Held != nil {
+				d.Held(identifier)
+			}
+			d.wait(order, count)
+		}
+		handler(identifier, body)
+	}()
+}

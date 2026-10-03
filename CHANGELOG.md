@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-90-4-1: the Wails host handles a surface document's commit before the messages of the new document, so the first layout of a reloaded surface is no longer refused as stale and its image regions are not closed after it.
 - G1.4-99: the Wails host closes a sidecar's output pipe when it stops reading it, so a sidecar that still writes while stopping ends without the force-kill, as in the Tauri host.
 - G1.4-98: a retain of the Wails host that a stop interrupts fails with "sidecars are stopped" instead of sending to a closed channel, and a full outbox fails the retain at once, as in the Tauri host.
 - G1.4-94: a main-page command whose handler throws no longer leaves a reply timer that logs `did not reply within 10000ms` ten seconds later.

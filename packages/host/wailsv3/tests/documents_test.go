@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
 )
 
 // contract: documents.request.accepts-own-surface, documents.request.rejects-foreign-or-missing-caller, documents.request.rejects-invalid-names
@@ -141,5 +142,46 @@ func TestDocumentEntryRequiresANonZeroOffset(t *testing.T) {
 		if err != nil || action != want[0] || offset != want[1] {
 			t.Fatalf("%s: %d %d %v", body, action, offset, err)
 		}
+	}
+}
+
+// TestDispatcherHandlesACommitBeforeTheMessagesAfterIt 는 같은 웹뷰에서 commit 뒤에 받은 메시지가 그 commit 의
+// 처리가 끝난 뒤에 처리되는지 검증한다. 새 문서의 첫 배치 요청이 commit 보다 먼저 처리되면 이전 문서의 리비전에
+// 걸리고, 늦은 commit 이 새 문서의 그림 영역을 닫는다. 다른 웹뷰의 메시지는 기다리지 않는다.
+func TestDispatcherHandlesACommitBeforeTheMessagesAfterIt(t *testing.T) {
+	release := make(chan struct{})
+	events := make(chan string, 4)
+	held := make(chan uint64, 4)
+	dispatcher := &platform.Dispatcher{
+		Committed: func(identifier uint64) {
+			<-release
+			events <- "commit"
+		},
+		Receive: func(identifier uint64, body string) { events <- body },
+		Held:    func(identifier uint64) { held <- identifier },
+	}
+	dispatcher.Commit(7)
+	dispatcher.Message(7, "place")
+	dispatcher.Message(8, "other")
+
+	// 다른 웹뷰의 메시지는 commit 을 기다리지 않는다. 같은 웹뷰의 메시지는 처리되기 전에 보류된다.
+	seen := map[string]bool{}
+	for !seen["other"] || !seen["held"] {
+		select {
+		case event := <-events:
+			if event != "other" {
+				t.Fatalf("%q was handled while the commit of its webview was still being handled", event)
+			}
+			seen["other"] = true
+		case identifier := <-held:
+			if identifier != 7 {
+				t.Fatalf("a message of webview %d was held, want only webview 7", identifier)
+			}
+			seen["held"] = true
+		}
+	}
+	close(release)
+	if first, second := <-events, <-events; first != "commit" || second != "place" {
+		t.Fatalf("handled %q then %q, want the commit then its message", first, second)
 	}
 }
