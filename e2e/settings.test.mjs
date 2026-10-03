@@ -91,7 +91,7 @@ for (const app of Object.values(APPS)) {
     const sidebars = (await controls(s)).filter((c) => !["core.settings-modal.nav", "core.settings-modal.scope",
       "core.settings-modal.grip", "core.settings-modal.close"].includes(c.name)).map((c) => c.name);
     assert.deepEqual([...new Set(sidebars)].sort(),
-      ["core.settings-modal.create", "core.settings-modal.delete", "core.settings-modal.edit"]);
+      ["core.settings-modal.create", "core.settings-modal.delete", "core.settings-modal.edit", "core.settings-modal.set-caption"]);
 
     // 플러그인: 검색 칸과 목록. 검색어가 목록을 거르고, 행이 페이지를 열고, 목록이 돌아온다.
     await section(s, "plugins");
@@ -163,6 +163,26 @@ for (const app of Object.values(APPS)) {
     await s.until("core.screen", (screen) => screen.screen === "library", "플러그인 관리 did not show the library");
     await s.until("core.library", (library) => library.page === "plugins" && library.plugins.shown.includes("files"),
       "플러그인 관리 did not show the plugin page");
+  });
+
+  test(`${app.name}: each sidebar set line fits beside its buttons on one line`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    await keepCommonSettings(s);
+    await s.run("core.settings.open");
+    s.cleanup(() => s.run("core.settings.close"));
+    await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
+    await section(s, "sidebars");
+    const sets = await settingsValue(s, "sets");
+    assert.ok(sets.length > 0, "the check needs a sidebar set");
+    for (const [index, set] of sets.entries()) {
+      // 줄 하나의 높이는 같은 행의 편집 단추보다 낮다. 두 줄 이상으로 접힌 줄은 단추보다 높다.
+      const line = await s.rect("core.settings-modal.set-caption", index);
+      const edit = await s.rect("core.settings-modal.edit", index);
+      assert.ok(line.height <= edit.height,
+        `the line of set ${set.id} wraps: ${line.height}px high, ${line.width}px wide, beside a ${edit.height}px edit button`);
+    }
   });
 
   test(`${app.name}: settings create, edit with section rows, and delete a sidebar set`, { timeout: 60000 }, async (t) => {

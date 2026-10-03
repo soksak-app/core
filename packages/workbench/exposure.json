@@ -3064,6 +3064,11 @@
         "many": true
       },
       {
+        "name": "core.settings-modal.set-caption",
+        "description": "The line of each sidebar set in set order: its title, layout and sections.",
+        "many": true
+      },
+      {
         "name": "core.settings-modal.delete",
         "description": "The set delete buttons in set order.",
         "many": true

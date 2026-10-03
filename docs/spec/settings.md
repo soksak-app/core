@@ -63,7 +63,7 @@ The page of a plugin replaces the search field and the list. It shows:
 
 ### 사이드바
 
-The section shows the set list and 새 세트. Each row shows the set title, its layout (목록 or 탭), its section names, and two buttons: 편집 (`core.settings-modal.edit {set}`) and 삭제 (`core.settings.sets.delete {id, scope}`). 새 세트 runs `core.settings.sets.create {scope}`, which adds a set titled "새 세트" with layout `list` and no sections, and opens it for editing.
+The section shows the set list and 새 세트. Each row shows the set title, its layout (목록 or 탭), its section names, and two buttons: 편집 (`core.settings-modal.edit {set}`) and 삭제 (`core.settings.sets.delete {id, scope}`). The line takes the width of the row that the buttons leave, the buttons stand at the right end of the row, and each line is the dom entry `core.settings-modal.set-caption` in set order. 새 세트 runs `core.settings.sets.create {scope}`, which adds a set titled "새 세트" with layout `list` and no sections, and opens it for editing.
 
 The editor of a set shows:
 
@@ -86,7 +86,7 @@ A change that would repeat a section in the set fails with -32602 (invalid param
 
 ## Controls
 
-The window draws every setting with one control of a fixed set, chosen by the form of the setting ([values](#values) and the plugin declarations of [plugins](plugins.md)). Each form has exactly one control, and no setting has a control of its own.
+The window draws every setting with one control of a fixed set, chosen by the form of the setting ([values](#values) and the plugin declarations of [plugins](plugins.md)). Each form has exactly one control, and no setting has a control of its own. Korean text in the window wraps at spaces, not between syllables.
 
 | Form | Control | Command |
 |---|---|---|

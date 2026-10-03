@@ -60,7 +60,8 @@
    이동하고 네이티브 표면이 그 변화를 받지 못한다. 여기서는 위치가 아니라 크기만
    바뀐다. */
 html,body{height:100%}
-body{margin:0;background:transparent;color:var(--fg);
+/* 한국어 글은 음절이 아니라 띄어쓰기에서 줄을 바꾼다. */
+body{margin:0;background:transparent;color:var(--fg);word-break:keep-all;
   font:var(--size)/var(--line-height) var(--font);letter-spacing:var(--letter-spacing);
   box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;isolation:isolate}
 /* 창 배경은 하나의 페인트 소유자다. compositor.js가 문서에 넣는 스타일 노드가 네이티브
@@ -447,6 +448,9 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set-row{display:grid;grid-template-columns:124px 1fr;align-items:center;gap:12px;
   min-height:30px}
 .set-row__name{font-size:var(--text-control);color:var(--muted)}
+/* 세트 행은 이름 칸 대신 세트 줄이 남은 너비를 쓰고, 단추는 줄 오른쪽에 붙는다. */
+.set-row:has(> .set-caption){grid-template-columns:1fr auto}
+.set-row > .set-caption{margin:0;min-width:0}
 
 /* select. 화살표는 감싼 요소가 그리고 select 자체는 기본 모양을 쓰지 않는다. */
 .select-field{position:relative;display:block}

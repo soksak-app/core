@@ -493,6 +493,7 @@ function drawSidebars() {
   const rows = sets.map((s) => {
     const line = document.createElement("span");
     line.className = "set-caption";
+    line.dataset.expose = "core.settings-modal.set-caption";
     line.textContent = setLine(s);
     const acts = document.createElement("span");
     acts.className = "set-seg";

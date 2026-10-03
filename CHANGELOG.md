@@ -20,6 +20,7 @@
 - G1.4-98: a retain of the Wails host that a stop interrupts fails with "sidecars are stopped" instead of sending to a closed channel, and a full outbox fails the retain at once, as in the Tauri host.
 - G1.4-94: a main-page command whose handler throws no longer leaves a reply timer that logs `did not reply within 10000ms` ten seconds later.
 - G1.4-97: the Wails host no longer panics when a window closes while the application stops its sidecars; stopping removes the sidecars from the running set first, as in the Tauri host.
+- G1.4-87: a sidebar set line uses the width beside its buttons, and Korean text wraps at spaces instead of between syllables.
 - G1.4-87: the settings window draws each setting form with one control: a switch, a select box for every choice, the theme swatches, a slider, or a text field; choices are no longer rows of buttons, and `core.settings-modal` reports the options of each select box.
 - G1.4-86: plugins are installed, updated, removed, enabled and disabled on the 플러그인 page of the library, which shows each plugin's description, versions and sidecars; the settings window keeps only the settings of loaded plugins and opens that page with 플러그인 관리.
 - G1.4-96: a window check confirms that the settings modal is on screen at the presented time once the window reports it shown, and the example verification states that wait for modal captures.
