@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-100: turning the performance trace off stops a persistent sidecar's events on connections accepted while it was on.
 - G1.4-90-4-1: the Wails host handles a webview's document commit before the messages that the webview sent after it.
 - G1.4-99: the Wails host closes a sidecar's output pipe when it stops reading it, so a sidecar that still writes while stopping ends without the force-kill, as in the Tauri host.
 - G1.4-98: a retain of the Wails host that a stop interrupts fails with "sidecars are stopped" instead of sending to a closed channel, and a full outbox fails the retain at once, as in the Tauri host.
