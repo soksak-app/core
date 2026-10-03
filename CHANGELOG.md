@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-102: `make page-memory` measures the main page process of a running application, by default a release build, at start, after an idle time and after reloads; the release measurement shows no idle growth, and after G1.4-107 a reload leaves no previous page process.
 - G1.4-107: a reload or page change of the main page opens the new document in a new WebContent process and ends the previous one, so the main page no longer keeps every replaced document until memory pressure; the page footprint stays flat over 20 reloads.
 - G1.4-90-4-2: the main page numbers every surface composition placement of a document with one increasing revision, so a surface mounted again in the same document is no longer refused with `stale composition revision 1`.
 - G1.4-105-1: the Wails host refuses `null` in a numeric field of a host call argument instead of reading it as 0, and refuses a workspace `move` without `delta` with `move delta is missing`, as the Tauri host does.

@@ -3,13 +3,14 @@ import test from "node:test";
 
 import { measure, parseFootprint, parseOptions } from "../measure-page-memory.mjs";
 
-test("the measurement records start, idle and reloads of one page process", async () => {
+test("the measurement records start, idle and reloads and whether the starting page process remains", async () => {
   const entries = [];
   const calls = [];
   let clock = 0;
   await measure({
-    status: async () => ({ pageProcess: 42 }),
+    status: async () => ({ pageProcess: 42 + calls.filter((call) => call === "reload").length }),
     reload: async () => { calls.push("reload"); },
+    alive: (pid) => { calls.push(`alive ${pid}`); return false; },
     footprint: (pid) => { calls.push(`footprint ${pid}`); return 1000 + calls.length; },
     wait: async (ms) => { calls.push(`wait ${ms}`); clock += ms; },
     idleMs: 60_000,
@@ -17,28 +18,15 @@ test("the measurement records start, idle and reloads of one page process", asyn
     log: (entry) => entries.push(entry),
     now: () => clock,
   });
-  assert.deepEqual(entries.map(({ phase, elapsedMs, pageProcess }) => [phase, elapsedMs, pageProcess]),
-    [["start", 0, 42], ["idle", 60_000, 42], ["reloads", 60_000, 42]]);
-  assert.deepEqual(calls, ["footprint 42", "wait 60000", "footprint 42", "reload", "reload", "footprint 42"]);
-});
-
-test("a reload that changes the page process fails the measurement", async () => {
-  let pid = 1;
-  await assert.rejects(measure({
-    status: async () => ({ pageProcess: pid }),
-    reload: async () => { pid = 2; },
-    footprint: () => 1,
-    wait: async () => {},
-    idleMs: 0,
-    reloads: 1,
-    log: () => {},
-  }), /changed the page process from 1 to 2/);
+  assert.deepEqual(entries.map(({ phase, elapsedMs, pageProcess, startProcessAlive }) => [phase, elapsedMs, pageProcess, startProcessAlive]),
+    [["start", 0, 42, undefined], ["idle", 60_000, 42, undefined], ["reloads", 60_000, 44, false]]);
+  assert.deepEqual(calls, ["footprint 42", "wait 60000", "footprint 42", "reload", "reload", "footprint 44", "alive 42"]);
 });
 
 test("a window without a page process fails the measurement", async () => {
   await assert.rejects(measure({
     status: async () => ({ pageProcess: 0 }),
-    reload: async () => {}, footprint: () => 1, wait: async () => {}, idleMs: 0, reloads: 0, log: () => {},
+    reload: async () => {}, footprint: () => 1, alive: () => true, wait: async () => {}, idleMs: 0, reloads: 0, log: () => {},
   }), /start: the window has no page process \(0\)/);
 });
 

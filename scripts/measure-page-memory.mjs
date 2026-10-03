@@ -2,7 +2,9 @@
 //
 // 애플리케이션 번들의 sok 으로 창의 host.window 상태(pageProcess)를 읽고 host.window.reload 를 실행하므로 release 빌드도
 // 잰다. 메모리는 운영체제의 footprint 가 보고하는 physical footprint 다. 유휴 구간은 아무 사건도 기다리지 않는 시간이므로
-// 시간으로 정한다. 단계마다 {phase, elapsedMs, pageProcess, footprint} 를 JSON 한 줄로 출력하고, 판정하지 않는다.
+// 시간으로 정한다. 단계마다 {phase, elapsedMs, pageProcess, footprint} 를 JSON 한 줄로 출력하고, 판정하지 않는다. 다시
+// 읽기는 새 page process 에서 문서를 열므로(docs/spec/native-host.md), 마지막 단계는 시작 때의 process 가 아직 있는지
+// (startProcessAlive)도 기록한다.
 // `make page-memory` 가 실행한다.
 //
 //   node scripts/measure-page-memory.mjs --sok PATH --config-dir DIR [--idle-minutes N] [--reloads N]
@@ -11,14 +13,14 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 /**
  * 단계를 차례로 잰다. status() 는 host.window 상태, reload() 는 다시 읽기 한 번, footprint(pid) 는 바이트 수, wait(ms) 는
- * 유휴 구간이다. 다시 읽기가 page process 를 바꾸면 오류를 낸다.
+ * 유휴 구간이다. alive(pid) 는 그 process 가 아직 있는지다.
  */
-export async function measure({ status, reload, footprint, wait, idleMs, reloads, log, now = Date.now }) {
+export async function measure({ status, reload, footprint, alive, wait, idleMs, reloads, log, now = Date.now }) {
   const started = now();
-  const record = async (phase) => {
+  const record = async (phase, extra = () => ({})) => {
     const { pageProcess } = await status();
     if (!Number.isInteger(pageProcess) || pageProcess <= 0) throw new Error(`${phase}: the window has no page process (${pageProcess})`);
-    const entry = { phase, elapsedMs: now() - started, pageProcess, footprint: footprint(pageProcess) };
+    const entry = { phase, elapsedMs: now() - started, pageProcess, footprint: footprint(pageProcess), ...extra() };
     log(entry);
     return entry;
   };
@@ -26,10 +28,7 @@ export async function measure({ status, reload, footprint, wait, idleMs, reloads
   await wait(idleMs);
   await record("idle");
   for (let i = 0; i < reloads; i++) await reload();
-  const after = await record("reloads");
-  if (after.pageProcess !== start.pageProcess) {
-    throw new Error(`the reloads changed the page process from ${start.pageProcess} to ${after.pageProcess}`);
-  }
+  await record("reloads", () => ({ startProcessAlive: alive(start.pageProcess) }));
 }
 
 /** footprint 출력의 바이트 수. */
@@ -64,6 +63,15 @@ if (import.meta.main) {
     status: async () => JSON.parse(sok("status", "host.window")),
     reload: async () => { sok("host.window.reload"); },
     footprint: (pid) => parseFootprint(execFileSync("footprint", ["-p", String(pid), "-f", "bytes"], { encoding: "utf8" })),
+    alive: (pid) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch (error) {
+        if (error.code === "ESRCH") return false;
+        throw error;
+      }
+    },
     wait: (ms) => sleep(ms),
     idleMs: options.idleMinutes * 60_000,
     reloads: options.reloads,

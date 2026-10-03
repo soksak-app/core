@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-102: `make page-memory`는 실행 중인 애플리케이션(기본은 release 빌드)의 main page process를 시작, 유휴 뒤, reload 뒤에 잰다. release 측정에서 유휴 중 증가가 없고, G1.4-107 뒤 reload는 이전 page process를 남기지 않는다.
 - G1.4-107: main page의 reload나 page 변경은 새 문서를 새 WebContent process에서 열고 이전 process를 끝내므로, main page가 교체된 문서를 memory pressure까지 모두 남기지 않는다. 20번 reload 동안 page footprint가 늘지 않는다.
 - G1.4-90-4-2: main page는 문서의 모든 표면 합성 배치에 하나의 증가하는 revision을 매기므로, 같은 문서에서 다시 마운트한 표면이 더 이상 `stale composition revision 1`로 거부되지 않는다.
 - G1.4-105-1: Wails host는 host 호출 인자의 숫자 field에 든 `null`을 0으로 읽지 않고 거부하며, `delta`가 없는 workspace `move`를 Tauri host처럼 `move delta is missing`으로 거부한다.

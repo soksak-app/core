@@ -134,7 +134,7 @@ pnpm -F @soksak/e2e run verify
 
 ## page 메모리
 
-`make page-memory APP=wailsv3|tauriv2 CONFIG=DIR [BUILD=release|debug] [MINUTES=60] [RELOADS=20]`는 실행 중인 애플리케이션(기본은 release 빌드)의 main page process를 잰다: 번들의 `sok`으로 `host.window`에서 window의 `pageProcess`를 읽고, 시작 시점, 입력 없는 `MINUTES`분 뒤, `host.window.reload`를 `RELOADS`번 실행한 뒤에 `footprint`가 보고하는 physical footprint를 기록하며, 각각 JSON 한 줄 `{phase, elapsedMs, pageProcess, footprint}`를 출력한다. 유휴를 알리는 event가 없으므로 유휴 단계는 시간을 기다린다. 측정은 값을 판정하지 않으며, window에 page process가 없거나 다시 읽기가 page process를 바꾸면 실패한다. 측정이 대화형 설정을 쓰지 않도록 애플리케이션을 일회용 설정 폴더로 시작한다(`open -g -n <bundle> --args --config-dir DIR`).
+`make page-memory APP=wailsv3|tauriv2 CONFIG=DIR [BUILD=release|debug] [MINUTES=60] [RELOADS=20]`는 실행 중인 애플리케이션(기본은 release 빌드)의 main page process를 잰다: 번들의 `sok`으로 `host.window`에서 window의 `pageProcess`를 읽고, 시작 시점, 입력 없는 `MINUTES`분 뒤, `host.window.reload`를 `RELOADS`번 실행한 뒤에 `footprint`가 보고하는 physical footprint를 기록하며, 각각 JSON 한 줄 `{phase, elapsedMs, pageProcess, footprint}`를 출력한다. 유휴를 알리는 event가 없으므로 유휴 단계는 시간을 기다린다. 다시 읽기는 page를 새 process에서 열므로, 마지막 줄은 시작 때의 page process가 아직 있는지(`startProcessAlive`)도 기록한다. 측정은 값을 판정하지 않으며, window에 page process가 없으면 실패한다. 측정이 대화형 설정을 쓰지 않도록 애플리케이션을 일회용 설정 폴더로 시작한다(`open -g -n <bundle> --args --config-dir DIR`).
 
 ## 브라우저 예제 검사
 
