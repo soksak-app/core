@@ -54,7 +54,7 @@ for (const app of Object.values(APPS)) {
       endpoint: JSON.parse(readFileSync(join(app.configDir, "endpoint.json"), "utf8")), header: lines[row], surface, cycles: [] };
     delete evidence.endpoint.token;
     const evidencePath = join(tmpdir(), `soksak-tui-drag-${app.name}.json`);
-    t.after(() => { writeFileSync(evidencePath, JSON.stringify(evidence, null, 2)); t.diagnostic(`evidence: ${evidencePath}`); });
+    s.cleanup(() => { writeFileSync(evidencePath, JSON.stringify(evidence, null, 2)); t.diagnostic(`evidence: ${evidencePath}`); });
     const screenRow = async () => (await s.get("terminal.screen", surface))[row].map((cell) =>
       ({ ch: cell.ch ?? " ", inverse: cell.inverse === true }));
     await s.request("diagnostics.capture.start", {});

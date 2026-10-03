@@ -154,7 +154,7 @@ const controlIndex = (sidebars, sidebar, section, at) => {
 };
 
 /** 경로 이름을 제목으로 갖는 문서를 주는 루프백 서버. 검사가 끝나면 닫는다. */
-async function serveTitles(t) {
+async function serveTitles(s) {
   const server = createServer((request, response) => {
     const name = new URL(request.url, "http://127.0.0.1").pathname.slice(1);
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
@@ -165,7 +165,7 @@ async function serveTitles(t) {
       : `<!doctype html><title>${name}</title><body>${name}`);
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  t.after(() => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }));
+  s.cleanup(() => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }));
   return `http://127.0.0.1:${server.address().port}`;
 }
 
@@ -175,7 +175,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
-    const base = await serveTitles(t);
+    const base = await serveTitles(s);
     const sidebar = "right";
     const sections = ["browser.tabs", "browser.history"];
     const sets = (await s.get("core.settings")).values.sets;
@@ -324,7 +324,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
-    const base = await serveTitles(t);
+    const base = await serveTitles(s);
     const sidebar = "right";
     const sections = ["browser.dom", "browser.network"];
     const sets = (await s.get("core.settings")).values.sets;
@@ -356,7 +356,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
-    const base = await serveTitles(t);
+    const base = await serveTitles(s);
     const sets = (await s.get("core.settings")).values.sets;
     await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-browser"
       ? { ...set, sections: ["browser.tabs"], layout: "list" } : set) }, scope: "common" });

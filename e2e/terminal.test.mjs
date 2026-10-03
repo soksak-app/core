@@ -681,7 +681,7 @@ for (const app of Object.values(APPS)) {
     const { service } = terminalProcessSnapshot(app.configDir);
     process.kill(service, "SIGSTOP");
     let stopped = true;
-    t.after(() => { if (stopped) process.kill(service, "SIGCONT"); });
+    s.cleanup(() => { if (stopped) process.kill(service, "SIGCONT"); });
     const card = (await s.get("core.grid")).cards.find((item) => item.active === terminal.surface);
     const { tab } = await s.run("core.card.split", { card: card.id, side: "right", plugin: "terminal" });
     await s.until("core.page.error", (error) => /did not present/.test(error ?? ""),
@@ -714,7 +714,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));
     const directory = realpathSync(mkdtempSync(join(tmpdir(), "soksak-origin ")));
-    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    s.cleanup(() => rmSync(directory, { recursive: true, force: true }));
     const existing = await ensureTerminals(s, 1);
     // 셸 통합이 작업 디렉터리를 알리는 셸로 연다.
     await s.run("core.settings.change", { key: "terminal.shell", value: "/bin/zsh", scope: "common" });

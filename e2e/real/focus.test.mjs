@@ -34,7 +34,7 @@ for (const app of Object.values(APPS)) {
 
     const { frames: directory } = await s.request("diagnostics.capture.start", {});
     let stopped = null;
-    t.after(async () => {
+    s.cleanup(async () => {
       if (!stopped) await s.request("diagnostics.capture.stop", { after: 0 });
       rmSync(directory, { recursive: true, force: true });
     });

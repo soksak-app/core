@@ -983,7 +983,7 @@ for (const app of Object.values(APPS)) {
     const surface = terminal.surface;
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
     const directory = realpathSync(mkdtempSync(join(tmpdir(), "soksak-drop ")));
-    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    s.cleanup(() => rmSync(directory, { recursive: true, force: true }));
     writeFileSync(join(directory, "drop me.txt"), "text");
     writeFileSync(join(directory, "drop.png"), PNG);
     const view = await s.rect("terminal.view", undefined, surface);
@@ -999,7 +999,7 @@ for (const app of Object.values(APPS)) {
     const top = Math.round(target.y + view.height / 2 + 30);
     const bounds = { x: Math.round(frame.x + 20), y: top, width: 500, height: Math.min(220, Math.round(frame.y + frame.height) - top) };
     const finder = openFinderWindow(directory, bounds);
-    t.after(() => closeFinderWindow(finder));
+    s.cleanup(() => closeFinderWindow(finder));
     // 끌기는 Finder 창에서 시작한다. Finder 를 앞으로 가져오되 놓는 점은 앱 창이어야 한다.
     activateFinder();
     // 다른 Finder 창이 데스크톱에 열려 있을 수 있다. 이 터미널 view의 가운데가 가려지지

@@ -43,7 +43,7 @@ for (const app of Object.values(APPS)) {
     await bringFront(s, app, view);
     // HID 시스템에 Shift 키 상태를 게시한다. 원본 없는 이벤트는 이 플래그를 물려받는다.
     post([{ type: "key", code: 56, down: true, modifiers: ["shift"] }]);
-    t.after(() => post([{ type: "key", code: 56, down: false }]));
+    s.cleanup(() => post([{ type: "key", code: 56, down: false }]));
     const seen = (await s.get("core.surface.input", surface)).at(-1)?.sequence ?? 0;
     await s.pointer(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2, "scroll", { deltaY: -120 });
     const events = await s.until("core.surface.input", (list) => list.some((event) => event.sequence > seen && event.type === "wheel"),

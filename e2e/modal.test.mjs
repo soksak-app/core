@@ -6,13 +6,13 @@ import test from "node:test";
 import { APPS, fresh, open } from "./app.mjs";
 
 /** 빈 문서 하나를 주는 루프백 서버의 주소. 검사가 끝나면 닫는다. */
-async function serveDocument(t) {
+async function serveDocument(s) {
   const server = createServer((request, response) => {
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
     response.end("<!doctype html><title>modal</title>");
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  t.after(() => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }));
+  s.cleanup(() => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }));
   return `http://127.0.0.1:${server.address().port}/modal`;
 }
 
@@ -157,7 +157,7 @@ for (const app of Object.values(APPS)) {
     const [browser] = await s.surfaces("browser");
     assert.ok(browser, "a browser surface must be visible");
     // 주소가 없는 브라우저는 문서 영역을 숨기므로 주소를 열어 문서 영역을 보이게 한다.
-    const url = await serveDocument(t);
+    const url = await serveDocument(s);
     await s.run("browser.navigate", { url }, browser.surface);
     await s.until("browser.location", (at) => at.url === url && !at.loading, `the browser did not load ${url}`, { surface: browser.surface });
     await s.until("host.window", (w) => w.documents.some((d) => d.surface === browser.surface && d.document === "page" && d.visible),

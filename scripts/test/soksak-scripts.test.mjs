@@ -188,6 +188,17 @@ test("window-source audit rejects a source path of another repository component"
   assert.deepEqual(auditE2ESource('import { APPS } from "./app.mjs";', "e2e/fixture.test.mjs"), []);
 });
 
+test("window-source audit requires window-check cleanup through the session", { timeout: 1000 }, () => {
+  const line = "t.after(() => server.close());";
+  assert.deepEqual(auditE2ESource(line, "e2e/fixture.test.mjs"), [
+    "e2e/fixture.test.mjs:1: uses t.after for cleanup; register it with session.cleanup",
+  ]);
+  assert.deepEqual(auditE2ESource(line, "e2e/real/fixture.test.mjs").length, 1);
+  assert.deepEqual(auditE2ESource(line, "e2e/app.mjs"), []);
+  assert.deepEqual(auditE2ESource(line, "e2e/test/fixture.test.mjs"), []);
+  assert.deepEqual(auditE2ESource("s.cleanup(() => server.close());", "e2e/fixture.test.mjs"), []);
+});
+
 test("window-source audit rejects native input that activates the application", { timeout: 1000 }, () => {
   const errors = auditE2ESource(
     'await session.pointer(x, y, "move", { activate: true });',

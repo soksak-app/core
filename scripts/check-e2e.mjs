@@ -22,6 +22,9 @@ const RULES = [
   { what: "a repeating timer", pattern: /\bsetInterval\s*\(/ },
   { what: "a fixed sleep", pattern: /\b(sleep|delay|pause)\s*\(|timers\/promises/, inputPacing: true },
   { what: "application activation that takes user focus", pattern: /\bactivate\s*:\s*true\b/, activationTier: true },
+  // 창 검사의 정리는 session.cleanup 에 둔다. open 의 정리가 실패하면 그 뒤에 등록한 t.after 는 실행되지 않으므로,
+  // 서버나 process 가 남아 검사 process 가 끝나지 않는다. 세션의 정리는 하나가 실패해도 모두 실행한다.
+  { what: "t.after for cleanup; register it with session.cleanup", pattern: /\bt\.after\s*\(/, sessionCleanup: true },
   // 창 검사는 다른 구성 요소의 소스 경로를 읽지 않고 선언된 status 로 값을 받는다.
   { what: "a source path of another repository component", pattern: /(["'`/]|\.\.\/)(packages|plugins|sidecars|native|apps)\// },
 ];
@@ -31,6 +34,8 @@ const ACTIVATION_DIRS = ["e2e/activation/", "e2e/real/"];
 // 실제 입력 도구는 사람이 움직이는 속도로 HID 이벤트 사이에 간격을 둔다. 상태를 기다리는 대기가 아니며,
 // 간격 없이 보낸 끌기 이벤트는 창 서버가 합친다. 이 파일 밖에서는 고정 대기를 쓸 수 없다.
 const INPUT_PACING_FILE = "e2e/real/hid.mjs";
+// 세션을 만드는 app.mjs 와, 창 검사가 아닌 e2e/test 의 단위 검사는 t.after 를 쓴다.
+const SESSION_CLEANUP_EXEMPT = ["e2e/app.mjs", "e2e/test/"];
 
 /* setTimeout 은 콜백이 거절(reject)하는 상한으로만 허용한다. */
 const TIMEOUT = /\bsetTimeout\s*\(/g;
@@ -51,6 +56,7 @@ export function auditE2ESource(text, file) {
     for (const rule of RULES) {
       if (rule.activationTier && ACTIVATION_DIRS.some((dir) => file.startsWith(dir))) continue;
       if (rule.inputPacing && file === INPUT_PACING_FILE) continue;
+      if (rule.sessionCleanup && SESSION_CLEANUP_EXEMPT.some((exempt) => file === exempt || file.startsWith(exempt))) continue;
       if (rule.pattern.test(line)) errors.push(`${file}:${index + 1}: uses ${rule.what}`);
     }
   });

@@ -48,13 +48,19 @@ async function blockSize(s, surface) {
 }
 
 /** 경로 이름을 제목으로 갖는 긴 문서를 주는 루프백 서버. 검사가 끝나면 닫는다. */
-async function serve(t) {
+async function serve(s) {
   const server = createServer((request, response) => {
     const name = new URL(request.url, "http://127.0.0.1").pathname.slice(1) || "index";
     const url = new URL(request.url, "http://127.0.0.1");
     // set-cookie 는 질의의 값을 쿠키 run 으로 저장하고, cookie 는 문서의 쿠키를 제목으로 보인다.
     const headers = { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" };
     if (name === "set-cookie") headers["set-cookie"] = `run=${url.searchParams.get("run")}; Path=/; Max-Age=3600`;
+    // fixed 는 색 구성표와 무관하게 스스로 정한 모양을 보이는 문서다.
+    if (name === "fixed") {
+      response.writeHead(200, headers);
+      response.end("<!doctype html><title>fixed</title><style>:root, body { width:100%; height:100%; margin:0; background:rgb(120,60,30); }</style>");
+      return;
+    }
     if (name === "cookie") {
       response.writeHead(200, headers);
       response.end("<!doctype html><title>cookie</title><script>document.title = 'cookie:' + document.cookie</script>");
@@ -70,7 +76,7 @@ async function serve(t) {
     </style>${name === "scheme" ? "<script>document.title = matchMedia('(prefers-color-scheme: dark)').matches ? 'scheme-dark' : 'scheme-light'</script>" : ""}<body>${name === "block" ? BLOCK : ""}<div style="height:6000px">${name}</div>`);
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  t.after(() => new Promise((resolve) => {
+  s.cleanup(() => new Promise((resolve) => {
     server.closeAllConnections();
     server.close(resolve);
   }));
@@ -81,11 +87,11 @@ const LIGHT_DOCUMENT = [231, 233, 238];
 const DARK_DOCUMENT = [21, 28, 42];
 
 /** 현재 문서 영역 중앙의 실제 창 픽셀을 캡처해 읽는다. */
-async function documentPixel(t, s, surface, at = (rect) => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 })) {
+async function documentPixel(s, surface, at = (rect) => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 })) {
   const rect = await regionRect(s, surface);
   const capture = await s.request("diagnostics.capture.start", {});
   let stopped = false;
-  t.after(async () => {
+  s.cleanup(async () => {
     if (!stopped) await s.request("diagnostics.capture.stop", { after: 0 });
     rmSync(capture.frames, { recursive: true, force: true });
   });
@@ -154,7 +160,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    const base = await serve(t);
+    const base = await serve(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
     const at = (path) => `${base}/${path}`;
@@ -225,7 +231,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    const base = await serve(t);
+    const base = await serve(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
     assert.equal((await s.get("browser.location", surface)).url, "", "the fresh browser surface already has an address");
@@ -260,7 +266,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    const base = await serve(t);
+    const base = await serve(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
     const at = (path) => `${base}/${path}`;
@@ -339,7 +345,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    const base = await serve(t);
+    const base = await serve(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
     const run = `${process.pid}-${Date.now()}`;
@@ -361,7 +367,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    const base = await serve(t);
+    const base = await serve(s);
     const home = `${base}/home`;
 
     // 홈 주소는 설정 창의 브라우저 플러그인 페이지에 라벨과 함께 보인다.
@@ -406,7 +412,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    const base = await serve(t);
+    const base = await serve(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
     await s.run("browser.navigate", { url: `${base}/focus` }, surface);
@@ -437,7 +443,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    const base = await serve(t);
+    const base = await serve(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
     const at = (path) => `${base}/${path}`;
@@ -484,7 +490,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    const base = await serve(t);
+    const base = await serve(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
     const at = (path) => `${base}/${path}`;
@@ -495,19 +501,19 @@ for (const app of Object.values(APPS)) {
     await s.run("core.settings.set", { patch: { mode: "light" } });
     await s.until("core.settings", (value) => value.values.mode === "light" && !value.saving,
       "host did not settle light theme");
-    assert.ok(nearColour(await documentPixel(t, s, surface), LIGHT_DOCUMENT),
+    assert.ok(nearColour(await documentPixel(s, surface), LIGHT_DOCUMENT),
       "existing document did not render the light host theme");
 
     await s.run("core.settings.set", { patch: { mode: "dark" } });
     await s.until("core.settings", (value) => value.values.mode === "dark" && !value.saving,
       "host did not settle dark theme");
-    assert.ok(nearColour(await documentPixel(t, s, surface), DARK_DOCUMENT),
+    assert.ok(nearColour(await documentPixel(s, surface), DARK_DOCUMENT),
       "existing document did not render the dark host theme");
 
     await s.run("core.settings.set", { patch: { mode: "light" } });
     await s.until("core.settings", (value) => value.values.mode === "light" && !value.saving,
       "host did not settle light theme again");
-    assert.ok(nearColour(await documentPixel(t, s, surface), LIGHT_DOCUMENT),
+    assert.ok(nearColour(await documentPixel(s, surface), LIGHT_DOCUMENT),
       "existing document did not return to the light host theme");
 
     const grid = await s.get("core.grid");
@@ -518,7 +524,7 @@ for (const app of Object.values(APPS)) {
     await s.run("browser.navigate", { url: at("theme-new") }, added);
     await loaded(s, added, at("theme-new"));
     await placed(s, added, "new themed document");
-    assert.ok(nearColour(await documentPixel(t, s, added), LIGHT_DOCUMENT),
+    assert.ok(nearColour(await documentPixel(s, added), LIGHT_DOCUMENT),
       "new document did not inherit the light host theme");
 
     await s.run("core.settings.set", { patch: { mode: "dark" } });
@@ -531,7 +537,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(restoredSurface, "reloaded browser document did not restore");
     await loaded(s, restoredSurface, at("theme-existing"));
     await placed(s, restoredSurface, "reloaded themed document");
-    const restoredPixel = await documentPixel(t, s, restoredSurface);
+    const restoredPixel = await documentPixel(s, restoredSurface);
     assert.ok(nearColour(restoredPixel, DARK_DOCUMENT),
       `reloaded document did not retain the dark host theme: ${JSON.stringify(restoredPixel)}`);
   });
@@ -548,10 +554,10 @@ for (const app of Object.values(APPS)) {
       await s.until("core.settings", (value) => value.values.mode === mode && !value.saving, `host did not settle ${mode} theme`);
       const address = await s.rect("browser.address", undefined, surface);
       const empty = await s.rect("browser.empty", undefined, surface);
-      const bar = await documentPixel(t, s, surface, () => ({
+      const bar = await documentPixel(s, surface, () => ({
         x: address.document.x + address.x + address.width / 2, y: address.document.y + address.y - 2,
       }));
-      const card = await documentPixel(t, s, surface, () => ({
+      const card = await documentPixel(s, surface, () => ({
         x: empty.document.x + empty.x + 8, y: empty.document.y + empty.y + 8,
       }));
       assert.ok(nearColour(bar, card), `${mode}: the address bar is ${JSON.stringify(bar)}, the card colour ${JSON.stringify(card)}`);
@@ -560,7 +566,7 @@ for (const app of Object.values(APPS)) {
     await sample("dark");
   });
 
-  test(`${app.name}: Google site appearance remains independent of host theme`, async (t) => {
+  test(`${app.name}: a site's appearance remains independent of the host theme`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -569,40 +575,39 @@ for (const app of Object.values(APPS)) {
     // 앱 밝은 모드에서 문서 영역이 받는 prefers-color-scheme 을 로컬 문서의 제목으로 잰다.
     await s.run("core.settings.set", { patch: { mode: "light" } });
     await s.until("core.settings", (value) => value.values.mode === "light" && !value.saving, "host did not settle light theme");
-    const base = await serve(t);
+    const base = await serve(s);
     await s.run("browser.navigate", { url: `${base}/scheme` }, surface);
     const scheme = (await s.until("browser.location", (value) => value.url === `${base}/scheme` && !value.loading &&
       /^scheme-(dark|light)$/.test(value.title), "the scheme document did not report its color scheme", { surface })).title;
-    const google = "https://www.google.com/";
-    await s.run("browser.navigate", { url: google }, surface);
+    const site = `${base}/fixed`;
+    await s.run("browser.navigate", { url: site }, surface);
     const location = await s.until("browser.location", (value) =>
-      /^https:\/\/(www\.)?google\.[^/]+\//i.test(value.url) && !value.loading && value.error === null && value.title !== "",
-    "Google did not load a successful document", { surface });
-    assert.match(location.url, /^https:\/\/(www\.)?google\.[^/]+\//i);
-    await placed(s, surface, "Google document");
+      value.url === site && !value.loading && value.error === null && value.title === "fixed",
+    "the fixed document did not load", { surface });
+    await placed(s, surface, "fixed document");
     await s.run("core.settings.set", { patch: { mode: "light" } });
     await s.until("core.settings", (value) => value.values.mode === "light" && !value.saving,
-      "host did not settle light theme for Google");
-    const light = await documentPixel(t, s, surface);
+      "host did not settle light theme for the fixed document");
+    const light = await documentPixel(s, surface);
     // 실패하면 표본 점과 모서리의 픽셀, 점의 소유자, 문서 영역, 앱 모드와 문서 상태를 함께 알린다.
     const rect = await regionRect(s, surface);
     const sample = { x: Math.floor(rect.x + rect.width / 2), y: Math.floor(rect.y + rect.height / 2) };
     const measuredLight = { light, scheme, sample, hit: await s.run("host.hit", sample),
-      corner: await documentPixel(t, s, surface, (r) => ({ x: r.x + 4, y: r.y + 4 })),
+      corner: await documentPixel(s, surface, (r) => ({ x: r.x + 4, y: r.y + 4 })),
       region: (await s.get("host.window")).documents.find((d) => d.surface === surface),
       mode: (await s.get("core.settings")).values.mode,
       location: await s.get("browser.location", surface) };
     await s.run("core.settings.set", { patch: { mode: "dark" } });
     await s.until("core.settings", (value) => value.values.mode === "dark" && !value.saving,
-      "host did not settle dark theme for Google");
-    const dark = await documentPixel(t, s, surface);
-    // 문서 저장소는 검사 설정 폴더와 달리 실행 사이에 남으므로 Google 이 기억한 자기 모양은 실행마다 다를 수 있다.
-    // 계약은 앱 모드가 그 모양을 바꾸지 않는 것이고, 문서 영역의 prefers-color-scheme 은 앱 모드를 따른다.
+      "host did not settle dark theme for the fixed document");
+    const dark = await documentPixel(s, surface);
+    // 계약은 앱 모드가 사이트가 스스로 정한 모양을 바꾸지 않는 것이고, 문서 영역의 prefers-color-scheme 은 앱 모드를 따른다.
     assert.equal(scheme, "scheme-light", `the region did not receive the light color scheme: ${JSON.stringify(measuredLight)}`);
+    assert.ok(nearColour(light, [120, 60, 30]), `the fixed document did not show its own colour: ${JSON.stringify(measuredLight)}`);
     assert.deepEqual(dark, light,
-      `Google's site preference was overwritten by the host theme: ${JSON.stringify({ ...measuredLight, dark })}`);
+      `the site's own appearance was overwritten by the host theme: ${JSON.stringify({ ...measuredLight, dark })}`);
     assert.equal((await s.get("browser.location", surface)).url, location.url,
-      "host theme change must not change Google's site location");
+      "host theme change must not change the site location");
   });
 }
 
@@ -611,7 +616,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    const base = await serve(t);
+    const base = await serve(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
     const url = `${base}/block`;
