@@ -186,30 +186,39 @@ export async function open(t, app) {
   // 검사가 열어 둔 누름은 검사의 정리 뒤에 뗀다. 정리는 등록의 역순으로 실행한다.
   session.cleanup(() => session.releasePresses());
   // 검사의 정리는 연결을 닫기 전에 실행한다. node:test 는 after 훅을 등록 순서로 실행한다.
-  // 정리 하나가 실패해도(앱이 응답하지 않는 경우 등) 나머지 정리는 실행하고, 실패는 모아서 알린다.
-  t.after(async () => {
-    const failures = [];
-    try {
-      for (const clean of session.cleanups.reverse()) {
-        try {
-          await clean();
-        } catch (error) {
-          failures.push(error);
-        }
-      }
-    } finally {
-      client.close();
-      releaseSlot();
-    }
-    if (failures.length === 1) throw failures[0];
-    if (failures.length) throw new AggregateError(failures, `${failures.length} cleanup steps failed`);
-  });
+  t.after(() => finishSession(t, session, () => {
+    client.close();
+    releaseSlot();
+  }));
   const { endpoint } = client;
   if (endpoint.application !== app.name) {
     throw new Error(`${app.configDir}/endpoint.json belongs to ${endpoint.application}, not ${app.name}`);
   }
   assertEndpointUsesCurrentBuild(endpoint, realpathSync(app.binary), statSync(app.binary).mtimeMs);
   return session;
+}
+
+/**
+ * 세션의 정리를 등록의 역순으로 모두 실행한 뒤 close 를 부른다. 정리 하나가 실패해도(앱이 응답하지 않는 경우 등)
+ * 나머지 정리는 실행하고, 실패는 모아서 알린다. node:test 는 본문이 이미 실패한 검사의 after 훅이 던진 오류를
+ * 출력하지 않으므로, 실패마다 진단으로도 알린다.
+ */
+export async function finishSession(t, session, close) {
+  const failures = [];
+  try {
+    for (const clean of session.cleanups.reverse()) {
+      try {
+        await clean();
+      } catch (error) {
+        failures.push(error);
+        t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
+      }
+    }
+  } finally {
+    close();
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length) throw new AggregateError(failures, `${failures.length} cleanup steps failed`);
 }
 
 /** 한 앱과의 연결. 요청은 창 하나를 대상으로 한다. */
