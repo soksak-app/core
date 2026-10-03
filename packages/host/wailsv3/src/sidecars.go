@@ -454,11 +454,21 @@ func (c *Sidecars) Stop() {
 		<-wait
 		c.mu.Lock()
 	}
+	// outbox 로의 전송은 잠금 안에서 실행 목록에 있는 사이드카에만 일어난다. 채널을 닫기 전에 목록에서 빼므로,
+	// 종료 중에 닫히는 창의 표면 닫기는 아무것도 보내지 않는다. 멈춘 사이드카는 닫기에 답하지 않는다.
 	processes := make([]*sidecar, 0, len(c.running))
-	for _, process := range c.running {
+	for name, process := range c.running {
 		processes = append(processes, process)
+		delete(c.running, name)
+	}
+	forgot := false
+	for name := range c.closing {
+		forgot = c.forgetClosing(name) || forgot
 	}
 	c.mu.Unlock()
+	if forgot {
+		c.closingChanged()
+	}
 
 	// 모든 사이드카에 대해 채널을 닫아 EOF 신호를 보낸다.
 	// 쓰기 고루틴이 채널 닫힘을 감지하고 stdin을 닫는다.

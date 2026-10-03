@@ -1,6 +1,7 @@
 package host_test
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -538,6 +539,89 @@ func TestStopGracefulShutdown(t *testing.T) {
 
 	if elapsed >= sidecars.StopTimeout {
 		t.Errorf("graceful stop took %v, which reached the %v deadline", elapsed, sidecars.StopTimeout)
+	}
+}
+
+// TestCloseDuringStopSendsNothing 은 Stop 이 입력을 끝낸 뒤 프로세스가 끝나기 전의 표면 닫기와 창 닫기가 아무것도
+// 보내지 않는지 검증한다. 애플리케이션이 끝날 때 Stop 과 함께 창이 닫히며 CloseOwner 를 부른다.
+// contract: sidecars.stop.forgets-running-sidecars
+func TestCloseDuringStopSendsNothing(t *testing.T) {
+	directory := t.TempDir()
+	// 사이드카: 시작할 때 ended 와 release 를 읽고 쓰기로 열어 둔다. 받은 줄을 에코하고, 입력이 끝나면 ended 에 한 줄을
+	// 쓰고 release 에 한 줄이 올 때까지 살아 있다. 사이드카가 두 파이프를 열어 두므로 쓴 줄은 버려지지 않고 여는 쪽은
+	// 막히지 않는다.
+	ended := filepath.Join(directory, "ended")
+	release := filepath.Join(directory, "release")
+	for _, fifo := range []string{ended, release} {
+		if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	script := "#!/bin/sh\nexec 3<>" + release + " 4<>" + ended + "\nwhile read line; do echo \"$line\"; done\n" +
+		"echo ended >&4\nread -r released <&3\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(directory, "lingering"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// 검사가 도중에 끝나도 사이드카가 남지 않게 release 에 한 줄을 쓴다.
+	var released sync.Once
+	releaseSidecar := func() {
+		released.Do(func() {
+			fifo, err := os.OpenFile(release, os.O_RDWR, 0)
+			if err != nil {
+				t.Errorf("open release: %v", err)
+				return
+			}
+			if _, err := fifo.Write([]byte("x\n")); err != nil {
+				t.Errorf("write release: %v", err)
+			}
+			if err := fifo.Close(); err != nil {
+				t.Errorf("close release: %v", err)
+			}
+		})
+	}
+	t.Cleanup(releaseSidecar)
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"lingering","protocol":1}`), directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecars.StopTimeout = stall
+	owner := newFakeOwner("/projects/test")
+	for _, surface := range []string{"s1", "s2"} {
+		if err := sidecars.Send(owner, echoSidecar, surface, json.RawMessage(`{"test":"data"}`)); err != nil {
+			t.Fatalf("send %s: %v", surface, err)
+		}
+		if event := owner.next(t); event.Surface != surface {
+			t.Fatalf("echo event = %+v", event)
+		}
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		sidecars.Stop()
+		close(stopped)
+	}()
+	// 사이드카가 ended 에 쓰면 Stop 은 입력을 끝냈고 프로세스는 아직 실행 중이다.
+	signal, err := os.Open(ended)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, err := bufio.NewReader(signal).ReadString('\n')
+	if closeErr := signal.Close(); closeErr != nil {
+		t.Errorf("close ended: %v", closeErr)
+	}
+	if err != nil || line != "ended\n" {
+		t.Fatalf("end of input signal = %q, %v", line, err)
+	}
+	sidecars.Close("s1")
+	sidecars.CloseOwner(owner)
+	if closing := sidecars.Closing(); len(closing) != 0 {
+		t.Fatalf("closing during stop = %+v, want none", closing)
+	}
+	releaseSidecar()
+	select {
+	case <-stopped:
+	case <-time.After(stall):
+		t.Fatal("stop did not return after the sidecar ended")
 	}
 }
 

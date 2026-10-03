@@ -533,6 +533,94 @@ fn stop_graceful_shutdown() {
     );
 }
 
+// contract: sidecars.stop.forgets-running-sidecars
+#[test]
+fn close_during_stop_sends_nothing() {
+    // stop 이 입력을 끝낸 뒤 프로세스가 끝나기 전의 표면 닫기와 창 닫기가 아무것도 보내지 않는지 검증한다.
+    // 애플리케이션이 끝날 때 stop 과 함께 창이 닫히며 표면을 닫는다.
+    use std::io::{BufRead, Write};
+    let directory = tempfile::tempdir().unwrap();
+    // 사이드카: 시작할 때 ended 와 release 를 읽고 쓰기로 열어 둔다. 받은 줄을 에코하고, 입력이 끝나면 ended 에 한 줄을
+    // 쓰고 release 에 한 줄이 올 때까지 살아 있다. 사이드카가 두 파이프를 열어 두므로 쓴 줄은 버려지지 않고 여는
+    // 쪽은 막히지 않는다.
+    let ended = directory.path().join("ended");
+    let release = directory.path().join("release");
+    for fifo in [&ended, &release] {
+        let path = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+        assert_eq!(
+            unsafe { libc::mkfifo(path.as_ptr(), 0o600) },
+            0,
+            "mkfifo {}",
+            fifo.display()
+        );
+    }
+    let program = directory.path().join("lingering");
+    std::fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\nexec 3<>{} 4<>{}\nwhile read line; do echo \"$line\"; done\n\
+             echo ended >&4\nread -r released <&3\nexit 0\n",
+            release.display(),
+            ended.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    // 검사가 도중에 끝나도 사이드카가 남지 않게 release 에 한 줄을 쓴다.
+    struct Release(std::path::PathBuf);
+    impl Drop for Release {
+        fn drop(&mut self) {
+            let mut fifo = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&self.0)
+                .expect("open release");
+            fifo.write_all(b"x\n").expect("write release");
+        }
+    }
+    let release = Release(release);
+    let files: Files = vec![(
+        "@fixture/sidecar-lingering",
+        r#"{"executable":"lingering","protocol":1}"#.to_string(),
+    )];
+    let mut sidecars = create(&files, directory.path()).unwrap();
+    sidecars.stop_timeout = STALL;
+    let (owner, events) = owner("a", "/projects/test");
+    for surface in ["s1", "s2"] {
+        sidecars
+            .send(
+                &owner,
+                "@fixture/sidecar-lingering",
+                surface,
+                &raw(r#"{"test":"data"}"#),
+            )
+            .unwrap();
+        let event = events
+            .recv_timeout(STALL)
+            .expect("no echo event; the test stalled");
+        assert_eq!(event.surface, surface);
+    }
+
+    std::thread::scope(|scope| {
+        let stopping = scope.spawn(|| sidecars.stop());
+        // 사이드카가 ended 에 쓰면 stop 은 입력을 끝냈고 프로세스는 아직 실행 중이다.
+        let mut line = String::new();
+        std::io::BufReader::new(std::fs::File::open(&ended).expect("open ended"))
+            .read_line(&mut line)
+            .expect("read ended");
+        assert_eq!(line, "ended\n");
+        sidecars.retain(&owner, &|surface| surface != "s1").unwrap();
+        sidecars.retain(&owner, &|_| false).unwrap();
+        assert_eq!(
+            sidecars.closing(),
+            Vec::<ClosingSurface>::new(),
+            "closing during stop"
+        );
+        drop(release);
+        stopping.join().expect("stop thread");
+    });
+}
+
 // contract: sidecars.stop.kills-after-timeout
 #[test]
 fn stop_forced_kill() {

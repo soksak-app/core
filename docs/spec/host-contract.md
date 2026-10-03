@@ -300,6 +300,7 @@ Items:
 | `sidecars.stop.honors-stop-timeout` | Stop returns within twice the stop timeout for a sidecar that does not drain its input. | both |
 | `sidecars.stop.graceful-on-stdin-eof` | A sidecar that exits on end of input stops without waiting for the timeout. | both |
 | `sidecars.stop.kills-after-timeout` | A sidecar that ignores end of input is killed after the stop timeout. | both |
+| `sidecars.stop.forgets-running-sidecars` | Stop removes every sidecar from the running set and clears unanswered closes before it ends their input, so closing a surface or an owner window afterwards sends nothing and reports no closing surface. | both |
 | `sidecars.protocol.message-at-limit-is-delivered` | A sidecar message of exactly 67108864 bytes before its newline reaches the owning window intact. | both |
 | `sidecars.failure.oversize-message-terminates-and-notifies` | A line longer than 67108864 bytes ends the sidecar process and delivers `sidecar-failure` with "exceeds" to the owning window without waiting for the line to end. | both |
 | `sidecars.failure.invalid-message-terminates-and-notifies` | A line that is not JSON, or a JSON object without `body`, ends the sidecar process and delivers `sidecar-failure` with "invalid message". | both |
