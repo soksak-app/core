@@ -70,6 +70,26 @@ test('a forced kill after the child already ended on SIGTERM still reports timeo
   assert.equal(result.status, 'timeout', JSON.stringify({ error: result.error, signal: result.signal }));
 });
 
+test('a refused forced kill of a group that ended on SIGTERM still reports timeout', { timeout: 10000 }, async (t) => {
+  // SIGTERM 으로 끝난 그룹에 100 ms 뒤 보내는 SIGKILL 을 macOS 가 EPERM 으로 거부한 경우를 주입한다. 그룹이 사라졌는지는
+  // 정리 단계가 확인하므로, 거부된 강제 종료만으로 실패하지 않는다.
+  const originalKill = process.kill;
+  t.after(() => { process.kill = originalKill; });
+  process.kill = (pid, signal) => {
+    if (pid < 0 && signal === 'SIGKILL') {
+      const error = new Error('kill EPERM');
+      error.code = 'EPERM';
+      throw error;
+    }
+    return originalKill(pid, signal);
+  };
+  // 자식은 SIGTERM 을 받고 120 ms 뒤에 끝난다. 그래서 100 ms 뒤의 강제 종료가 먼저 실행되어 주입된 거부를 받는다. 300 ms
+  // 한도는 자식이 처리기를 둔 뒤에 SIGTERM 이 가게 한다.
+  const [command, args] = task("process.on('SIGTERM', () => setTimeout(() => process.exit(0), 120)); setTimeout(() => {}, 5000)");
+  const result = await runCommand({ id: 'refused-kill', command, args, timeoutMs: 300, onEvent: () => {} });
+  assert.equal(result.status, 'timeout', JSON.stringify({ error: result.error }));
+});
+
 test('times out and reports timeout', { timeout: 2000 }, async () => {
   const events = [];
   const [command, args] = task('setTimeout(() => {}, 1000)');

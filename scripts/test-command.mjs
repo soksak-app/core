@@ -192,7 +192,10 @@ export function runCommand(options) {
             try {
               signalGroup(child.pid, 'SIGKILL');
             } catch (error) {
-              reportSignalError(error);
+              // SIGTERM 으로 끝나는 중인 그룹에 보낸 강제 종료를 macOS 는 EPERM 으로 거부할 수 있다. 그룹이 남았는지는
+              // 정리 단계가 확인하고, 남았으면 그때 실패한다. 다른 거부는 신호 실패다.
+              if (error.code !== 'EPERM') reportSignalError(error);
+              else process.stderr.write(`command process-group signal refused: ${error.message}; cleanup verifies the group\n`);
             }
           }
         }, 100);
