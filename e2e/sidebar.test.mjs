@@ -4,7 +4,8 @@ import { createServer } from "node:http";
 import test from "node:test";
 
 import { APPS, fresh, open, terminalCardSidebar } from "./app.mjs";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { frames, pixel, readFrame } from "./frame.mjs";
 
 /** 손잡이는 사이드바 테두리 위에 겹치므로 표면은 사이드바 바로 뒤에서 시작한다. */
@@ -477,5 +478,29 @@ for (const app of Object.values(APPS)) {
     assert.ok(Math.abs(treeFolded.marks.height - open1.marks.height) <= 0.5,
       `the bookmarks changed from ${open1.marks.height} to ${treeFolded.marks.height} pt when the tree folded`);
     await s.run("core.sidebar.section.fold", { sidebar: "left", section: "files.tree" });
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: sections that follow a core status mount without an error after a reload`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
+    const sidebar = "right";
+    const sets = (await s.get("core.settings")).values.sets;
+    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-browser" ? { ...set, sections: ["browser.tabs"], layout: "list" } : set) },
+      scope: "common" });
+    await s.run("core.card.focus", { card: "browser" });
+    const mounted = (value) => value.find((item) => item.sidebar === sidebar)?.sections.find((item) => item.id === "browser.tabs")?.mounted;
+    await s.until("core.sidebars", mounted, "the right sidebar did not mount browser.tabs");
+    const file = join(s.app.configDir, "logs", "application.log");
+    const offset = readFileSync(file).length;
+    // 섹션은 첫 화면 뒤에 비동기로 마운트된다. 그때 따르는 core 상태는 이미 등록되어 있어야 한다(docs/spec/plugins.md#sections).
+    await s.run("host.window.reload");
+    await s.until("core.sidebars", mounted, "the right sidebar did not mount browser.tabs after the reload");
+    await s.presented();
+    const errors = readFileSync(file).subarray(offset).toString("utf8").split("\n").filter((line) => line.includes("is not registered"));
+    assert.deepEqual(errors, [], `${file} recorded errors while the reloaded page mounted its sections`);
   });
 }

@@ -552,16 +552,9 @@ onLayout((made, draw, seated) => {
   }));
 });
 
-// 불러오지 않은 플러그인의 탭은 설치 상태에 따라 자리 표시의 이유가 정해진다(docs/spec/plugins.md). 상태를 읽으면
-// 자리 표시를 다시 그린다. 읽기 실패는 그 상태의 오류로 남는다.
-await pluginOperations.refresh();
-// 첫 실행이면 starter pack 을 설치하고, 설치한 plugin 을 불러오도록 page 를 다시 불러온다(docs/spec/installation.md).
-// 다시 불러오는 동안 이 page 는 space 를 만들지 않는다.
-if (await pluginOperations.installStarter(starterPack(), log, showError)) {
-  location.reload();
-  await new Promise(() => {});
-}
-await installCoreExposure({
+// 코어 공개 항목은 첫 await 전에 등록한다. 첫 화면의 사이드바 섹션은 그 뒤에 비동기로 마운트되며 코어 상태를 따를 수
+// 있다(docs/spec/plugins.md#sections). 호스트와의 연결은 아래에서 기다린다.
+const coreExposure = installCoreExposure({
   library, renames,
   // 판의 그리기 순서. 배치를 바꾼 코어 명령은 이것을 기다린 뒤 답한다.
   drawn: async () => {
@@ -575,6 +568,16 @@ await installCoreExposure({
     projectTabs: workarea.querySelector(".project-column") ? "left" : "top",
   }),
 });
+// 불러오지 않은 플러그인의 탭은 설치 상태에 따라 자리 표시의 이유가 정해진다(docs/spec/plugins.md). 상태를 읽으면
+// 자리 표시를 다시 그린다. 읽기 실패는 그 상태의 오류로 남는다.
+await pluginOperations.refresh();
+// 첫 실행이면 starter pack 을 설치하고, 설치한 plugin 을 불러오도록 page 를 다시 불러온다(docs/spec/installation.md).
+// 다시 불러오는 동안 이 page 는 space 를 만들지 않는다.
+if (await pluginOperations.installStarter(starterPack(), log, showError)) {
+  location.reload();
+  await new Promise(() => {});
+}
+await coreExposure;
 onDrag(coreChanged);
 /* 키보드 단축키도 명령을 실행한다. */
 addEventListener("keydown", (event) => {

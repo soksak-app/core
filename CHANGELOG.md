@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-90-2: a sidebar section that follows a core status mounts after a reload, because the core statuses are registered before the first section mounts.
 - G1.4-90-1: a reload request makes a ready page reload itself after its host calls are answered, so Wails no longer loses a host reply on each reload.
 - G1.4-88: a pointer down while a synthetic press of that button is open in the window returns 1008, and a check session releases every press it left open.
 - G1.4-92: the documentation check reads a committed checklist larger than 1 MiB.
