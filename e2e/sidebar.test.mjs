@@ -310,12 +310,14 @@ for (const app of Object.values(APPS)) {
       "the inset sidebar did not mount its sections");
     const box = await s.rect("core.sidebar", sidebars.findIndex((item) => item.sidebar === "terminal:left"));
     assert.ok(near(box.y, cardHeader.y + cardHeader.height), `terminal: the inset sections start at ${box.y}, the card header ends at ${cardHeader.y + cardHeader.height}`);
-    // 카드 안 사이드바는 상태 줄이 없고 섹션이 카드 발의 위 선까지 채운다.
+    // 카드 안 사이드바는 창 사이드바의 상태 줄이 아니라 자기 상태 줄로 끝나고, 그 줄은 카드 내용 발과 한 줄에 놓인다
+    // (docs/spec/example-model.md).
     const inside = (rect) => rect.x + rect.width / 2 > box.x && rect.x + rect.width / 2 < box.x + box.width;
-    assert.deepEqual((await rects(s, "core.sidebar.status")).filter(inside), [], "the inset sidebar has a status line");
-    const footer = (await rects(s, "core.card.status")).find((rect) => rect.x <= box.x + 0.5 && rect.x + rect.width >= box.x + box.width - 0.5
-      && rect.y >= box.y);
-    assert.ok(footer && near(box.y + box.height, footer.y), `terminal: the inset sections end at ${box.y + box.height}, the card footer starts at ${footer?.y}`);
+    assert.deepEqual((await rects(s, "core.sidebar.status")).filter(inside), [], "the inset sidebar has a window sidebar status line");
+    const own = (await rects(s, "core.card.sidebar.status")).find(inside);
+    assert.ok(own && near(box.y + box.height, own.y), `terminal: the inset sections end at ${box.y + box.height}, its status line starts at ${own?.y}`);
+    const footer = (await rects(s, "core.card.status")).find((rect) => rect.x >= box.x + box.width - 0.5 && rect.y >= box.y && near(rect.y, own.y));
+    assert.ok(footer, `terminal: the inset status line at ${own.y} is not in one row with the content footer`);
   });
 }
 
