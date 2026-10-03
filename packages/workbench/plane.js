@@ -323,6 +323,7 @@ function updateCard(el, card, rect) {
     canSplitY: grid.canSplit(card.id, "y"),
     fullscreen: el.dataset.fullscreen === "true",
   });
+  drawSideToggles(acts, el, card.id);
 
   // 표면의 슬롯. 컴포지터는 판의 구조를 알지 않으므로 필요한 값을 여기에 기록한다.
   //
@@ -1576,12 +1577,42 @@ export function pickItem(index) {
 
 export { closePicker };
 
+/**
+ * 카드 머리의 사이드바 단추. 카드가 보이는 면마다 하나를 도구 앞에 위·아래·왼쪽·오른쪽 순으로 둔다. 단추는 그 면을
+ * 접거나 펼치고, 면이 펼쳐져 있는 동안 눌린 상태다. 접힌 면도 머리에 남으므로 다시 펼칠 수 있다(docs/spec/example-model.md).
+ */
+function drawSideToggles(acts, el, cardId) {
+  const tools = acts.querySelector(".chrome__act[data-do]");
+  for (const side of SIDEBAR_SIDES) {
+    const shown = el.dataset[`sidebar${side[0].toUpperCase()}${side.slice(1)}`];
+    let button = acts.querySelector(`.chrome__side[data-side="${side}"]`);
+    if (shown === undefined) {
+      button?.remove();
+      continue;
+    }
+    if (!button) {
+      button = document.createElement("button");
+      button.type = "button";
+      button.className = "chrome__act chrome__side";
+      button.dataset.side = side;
+      button.dataset.expose = "core.card.sidebar.fold";
+      button.innerHTML = icon(`panel-${side}`);
+      bind(button, "core.card.sidebar.toggle", { card: cardId, side });
+    }
+    // 순서를 지키도록 매번 도구 앞으로 옮긴다. 이미 그 자리면 DOM 은 바뀌지 않는다.
+    if (button.nextElementSibling !== tools) acts.insertBefore(button, tools);
+    button.setAttribute("aria-pressed", String(shown === "open"));
+    button.title = `${sideName(side)} 사이드바 ${shown === "open" ? "접기" : "펼치기"}`;
+    button.setAttribute("aria-label", button.title);
+  }
+}
+
 /** 카드 도구 버튼의 상태. 비활성, 숨김, 머리의 접힘 단계. */
 export function cardActs(id) {
   const chrome = cardElement(id)?.querySelector(".chrome");
   const acts = chrome?.querySelector(".chrome__acts");
   if (!acts) return null;
-  const buttons = Object.fromEntries([...acts.querySelectorAll(".chrome__act")].map((b) => [
+  const buttons = Object.fromEntries([...acts.querySelectorAll(".chrome__act[data-do]")].map((b) => [
     ["close", "fullscreen"].includes(b.dataset.do) ? b.dataset.do : MENU_OF[b.dataset.do],
     { enabled: !b.disabled, hidden: b.hidden, title: b.title },
   ]));

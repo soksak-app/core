@@ -382,3 +382,35 @@ for (const app of Object.values(APPS)) {
     assert.ok(text, "the left card sidebar is not drawn");
   });
 }
+
+for (const app of Object.values(APPS)) {
+  // 카드 머리는 카드가 보이는 면마다 접기·펼치기 단추를 둔다. 접힌 면도 머리의 단추로 다시 연다(docs/spec/example-model.md).
+  test(`${app.name}: the card header has a fold control for each sidebar the card shows`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const listed = (await s.request("exposure.list")).dom.find((entry) => entry.name === "core.card.sidebar.fold");
+    assert.ok(listed, "the card header fold control is not declared");
+    const set = (await s.get("core.settings")).values.sets[0];
+    for (const side of ["top", "left"]) await s.run("core.card.sidebar.set", { card: "terminal", side, set: set.id });
+    await s.presented();
+    const grid = await s.get("core.grid");
+    const card = grid.cards.find((item) => item.id === "terminal");
+    const header = { x: grid.plane.x + card.x, y: grid.plane.y + card.y, w: card.w, h: 32 };
+    const controls = [];
+    // 머리의 단추 수는 모든 카드가 보이는 면의 수다.
+    const shown = grid.cards.reduce((sum, item) => sum + Object.keys(item.sidebars).length, 0);
+    for (let index = 0; index < shown; index++) {
+      const rect = await s.rect("core.card.sidebar.fold", index);
+      if (rect.x >= header.x && rect.x + rect.width <= header.x + header.w && rect.y >= header.y && rect.y + rect.height <= header.y + header.h) controls.push(rect);
+    }
+    assert.equal(controls.length, 2, `the terminal card header shows ${controls.length} fold controls for two sides`);
+    const left = controls[1];
+    await s.click(left.x + left.width / 2, left.y + left.height / 2);
+    await s.until("core.grid", (value) => value.cards.find((item) => item.id === "terminal")?.sidebars.left?.collapsed === true,
+      "the header control did not fold the left sidebar");
+    await s.click(left.x + left.width / 2, left.y + left.height / 2);
+    await s.until("core.grid", (value) => value.cards.find((item) => item.id === "terminal")?.sidebars.left?.collapsed === false,
+      "the header control did not open the folded left sidebar again");
+  });
+}

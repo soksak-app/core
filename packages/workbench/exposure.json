@@ -2783,6 +2783,11 @@
         "many": true
       },
       {
+        "name": "core.card.sidebar.fold",
+        "description": "The sidebar controls of the card headers in document order: one for each side a card shows, before the card tools in the order top, bottom, left, right; each runs core.card.sidebar.toggle for its side and is pressed while the side is open.",
+        "many": true
+      },
+      {
         "name": "core.card.sidebar.status",
         "description": "The status lines that end the open card sidebars in document order; each names its side and its set.",
         "many": true
