@@ -148,6 +148,7 @@ func TestDocumentEntryRequiresANonZeroOffset(t *testing.T) {
 // TestDispatcherHandlesACommitBeforeTheMessagesAfterIt 는 같은 웹뷰에서 commit 뒤에 받은 메시지가 그 commit 의
 // 처리가 끝난 뒤에 처리되는지 검증한다. 새 문서의 첫 배치 요청이 commit 보다 먼저 처리되면 이전 문서의 리비전에
 // 걸리고, 늦은 commit 이 새 문서의 그림 영역을 닫는다. 다른 웹뷰의 메시지는 기다리지 않는다.
+// contract: documents.commit.precedes-messages
 func TestDispatcherHandlesACommitBeforeTheMessagesAfterIt(t *testing.T) {
 	release := make(chan struct{})
 	events := make(chan string, 4)

@@ -107,6 +107,7 @@ fn invalid_json_closes_connection() {
 | `documents.request.rejects-invalid-names` | 빈 이름, 대문자, 하이픈으로 시작, 슬래시 포함, 65자 문서 이름을 거부한다. | both |
 | `documents.request.zoom-must-be-finite-positive` | 확대 값이 없거나 0 또는 음수인 문서 확대 요청은 거부하고, 유한한 양수는 배율이다. | both |
 | `documents.request.entry-requires-offset` | `entry` 문서 `go` 요청은 0이 아닌 정수 `offset`이 필요하고, `offset`이 있는 다른 동작은 거부한다. | both |
+| `documents.commit.precedes-messages` | 웹뷰가 문서 commit 뒤에 보낸 메시지는 그 commit 처리 뒤에 처리되고, 한 웹뷰의 commit은 순서대로 처리되며, 다른 웹뷰의 메시지는 기다리지 않는다. | wailsv3 only: Wails는 WebKit의 commit과 script message를 메인 스레드에서 받아 handler마다 고루틴을 따로 실행하지만, Tauri는 commit에서 표면의 문서 상태를 초기화하지 않는다 |
 | `documents.request.ignores-placement-fields` | 문서 요청을 해석하면 표면과 문서만 남기고 배치 필드를 버린다. | both |
 | `documents.request.url-and-action-default-empty` | url과 action이 없는 문서 요청을 해석하면 둘 다 비어 있다. | both |
 | `documents.registry.rejects-duplicate-reservation` | 같은 문서 키를 두 번 예약하면 "already attached"로 실패한다. | both |

@@ -107,6 +107,7 @@ Items:
 | `documents.request.rejects-invalid-names` | Empty, capitalized, hyphen-first, slash-containing, and 65-character document names are rejected. | both |
 | `documents.request.zoom-must-be-finite-positive` | A document zoom request without a zoom, or with zero or a negative zoom, is rejected; a finite positive zoom is the factor. | both |
 | `documents.request.entry-requires-offset` | A document `go` request with `entry` requires a non-zero integer `offset`, and another action with an `offset` is rejected. | both |
+| `documents.commit.precedes-messages` | A message that a webview sends after its document commits is handled after the commit, commits of one webview are handled in order, and another webview's messages do not wait. | wailsv3 only: Wails receives WebKit's commit and script messages on the main thread and runs each handler in its own goroutine, while Tauri does not reset the document state of a surface on a commit |
 | `documents.request.ignores-placement-fields` | Parsing a document request keeps only the surface and document and drops placement fields. | both |
 | `documents.request.url-and-action-default-empty` | A parsed document request without url or action has both empty. | both |
 | `documents.registry.rejects-duplicate-reservation` | Reserving a document key twice fails with "already attached". | both |
