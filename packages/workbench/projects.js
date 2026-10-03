@@ -48,10 +48,9 @@ export const isOpen = (id) => openProjects.has(id) || owned.has(id);
 let switching = Promise.resolve();
 function inTurn(run) {
   const done = switching.then(run);
-  switching = done.then(undefined, (error) => {
-    failed(error);
-    return undefined;
-  });
+  // 실패는 done 을 받은 호출자가 보고한다(명령, 라이브러리, 창 활성화, 시작 문서). 다음 전환은 앞의 실패와
+  // 상관없이 실행한다.
+  switching = done.then(undefined, () => undefined);
   return done;
 }
 

@@ -5,6 +5,7 @@
 ## 미배포
 
 - G1.4-90-4-2: 두 host에서 같은 generation에서 다시 붙인 image region은 raster revision을 이어 세므로, terminal sidecar가 그 구성을 무시하지 않고 다시 mount한 terminal의 presentation이 10초를 기다리지 않는다. 두 host는 image raster 결정을 trace한다.
+- G1.4-113: 실패한 프로젝트 전환은 창 오류로도 보고되는 대신 rejection을 받은 호출자가 한 번 보고한다. Red와 Green은 `packages/workbench/test/projects-switch.test.mjs`에 있고, 다시 빌드한 두 host에서 library와 projects window check가 통과한다.
 - G1.4-111: 메인 페이지가 check가 `expectPageError`로 선언하지 않은 애플리케이션 오류를 보이면 window check가 실패하고, 메인 페이지는 host가 거부한 상태 변경을 상태 이름과 함께 보고한다. Red와 Green은 `e2e/test/session-cleanup.test.mjs`와 `packages/workbench/test/exposure.test.mjs`에 있고, 새 확인이 G1.4-113을 찾았다.
 - G1.4-105-2, G1.4-105-3: 두 host는 모든 host 호출 인자를 자기 decoder로 해석하고, 빠졌거나 `null`인 필수 field, 다른 JSON 형식의 값, 정수 field 범위 밖의 수, 길이가 다른 고정 길이 배열을 같은 문장 `argument <path> <problem>`으로 거부한다. Wails host는 더 이상 빠진 field를 zero value로 바꾸지 않으며, 두 host의 인자 형식을 field마다 맞췄다. Red는 변경 뒤에 `a2b2b37b`에서 각 framework의 해석 경로로 기록했고, Green은 Go와 Rust host 테스트, host contract check, 다시 빌드한 두 host의 window check 119개다.
 - G1.4-109: Wails host는 surface 페이지가 native bridge로 보낸 `ImageCaret`과 `ImageText`를 각자의 인자 목록으로 실행한다. 이전에는 둘 다 `<call> expects 1 arguments`로 실패했다. `TestNativeImageCallsDecodeTheirOwnArguments`는 변경 전에 실패하고 변경 뒤에 통과한다.

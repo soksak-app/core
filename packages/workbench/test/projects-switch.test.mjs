@@ -177,7 +177,8 @@ test("a saved layout that fails the plane check rejects the open before any proj
   assert.deepEqual(plane.events, [], "the rejected open replaced the plane");
   assert.equal(plane.layout, shown);
   await projects.flush();
-  assert.deepEqual(reported, ["fixture layout cannot be opened"], "the rejected open was not reported as a window error");
+  // 거부된 열기는 거절을 받은 이 호출자가 보고한다. 전환 순서는 같은 실패를 창 오류로 다시 보고하지 않는다(G1.4-113).
+  assert.deepEqual(reported, [], "the rejected open was reported again as a window error");
   plane.rejected = null;
   await projects.flush();
 });
@@ -187,9 +188,13 @@ test("opening a project whose folder cannot be read rejects with the host's mess
   await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: [structuredClone(PROJECT), structuredClone(missing)], open: [] }),
     patch: async () => {} });
   openRequests.length = 0;
+  reported.length = 0;
   await assert.rejects(projects.activate("prj-missing"),
     { message: "project directory does not exist: /work/missing" });
   assert.deepEqual(openRequests, [], "the failed open asked the host for a window");
+  // 실패는 거절을 받은 호출자가 한 번 보고한다. 전환 순서는 같은 실패를 창 오류로 다시 보고하지 않는다(G1.4-113).
+  await projects.flush();
+  assert.deepEqual(reported, [], "the failed switch was reported again as a window error");
 });
 
 test("switching to or closing into a space that fails the plane check changes neither the active space nor the plane", async () => {
@@ -252,5 +257,5 @@ test("a project that the start document drew falls back to the library when its 
   assert.equal(projects.inLibrary(), true);
   assert.deepEqual(plane.events, ["empty started", "emptied"]);
   assert.equal(globalThis.location.search, "");
-  assert.ok(reported.includes("project directory does not exist: /work/missing"), JSON.stringify(reported));
+  assert.deepEqual(reported, ["project directory does not exist: /work/missing"], "the failed start activation was not reported once");
 });
