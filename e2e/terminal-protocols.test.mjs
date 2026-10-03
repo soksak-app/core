@@ -302,10 +302,22 @@ for (const app of Object.values(APPS)) {
       await s.pointer(to.x, to.y, "drag");
       await s.pointer(to.x, to.y, "up");
     }), dragged, "?1002 button motion report");
-    // ?1000 과 ?1006 에서 휠은 줄마다 휠 단추를 알린다. 페이지가 받는 이동량은 주입한 픽셀 이동량에 화면 배율을 곱한
-    // 값이며(1배율에서 31 은 한 줄, 2배율에서 두 줄이었다), 페이지는 칸 높이마다 한 줄을 보낸다. 2.5 줄의 이동량은 두 줄이다.
-    const { scale } = await s.get("host.window");
-    const wheelDelta = Math.round(2.5 * cellHeight / scale);
+    // ?1000 과 ?1006 에서 휠은 줄마다 휠 단추를 알린다. 페이지는 받은 이동량의 칸 높이마다 한 줄을 보낸다. 주입한 픽셀
+    // 이동량이 페이지에 몇 배로 도착하는지는 WebKit 이 정하므로, 마우스 보고 없이 기록을 스크롤해 그 배율을 잰다.
+    await s.run("terminal.input", { bytes: "clear; i=0; while [ $i -lt 40 ]; do echo H$i; i=$((i+1)); done\r" }, surface);
+    await s.until("terminal.session", (value) => value.scrollback?.history >= 6, "the output did not exceed the screen", { surface });
+    const calibration = Math.round(3 * cellHeight);
+    const offset = (await s.get("terminal.session", surface)).scrollback.offset;
+    await s.pointer(click.x, click.y, "scroll", { deltaY: -calibration });
+    const moved = (await s.until("terminal.session", (value) => value.scrollback.offset !== offset,
+      "the calibration wheel did not scroll the history", { surface })).scrollback.offset - offset;
+    const factor = Math.round(moved * cellHeight / calibration);
+    assert.ok(factor >= 1, `the calibration wheel moved ${moved} lines for ${calibration} points`);
+    await s.pointer(click.x, click.y, "scroll", { deltaY: calibration });
+    await s.until("terminal.session", (value) => value.scrollback.offset === offset, "the calibration wheel did not scroll back", { surface });
+    t.diagnostic(`a wheel of ${calibration} points moved ${moved} lines: the page receives ${factor} times the injected delta`);
+    // 2.5 줄의 이동량은 두 줄이다.
+    const wheelDelta = Math.round(2.5 * cellHeight / factor);
     const wheel = await report(s, surface, "\\033[?1000h\\033[?1006h", "\x1b[<64;10;5M".length * 2, "\\033[?1000l\\033[?1006l",
       () => s.pointer(click.x, click.y, "scroll", { deltaY: wheelDelta }));
     assert.match(wheel, /^(\x1b\[<6[45];10;5M){2}$/, `?1000 wheel report: ${JSON.stringify(wheel)}`);
