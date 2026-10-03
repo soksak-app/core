@@ -11,7 +11,7 @@ test("earlier links become card-left and window links, and a plugin link without
     { place: "left", plugin: "plugin-b", set: null },
     { place: "card-top", plugin: "plugin-a", set: "set-b" },
   ] };
-  const { patch, notes } = migrateSettings(values);
+  const { patch, notes } = migrateSettings(values, new Set(["set-a", "set-b", "set-c"]));
   assert.deepEqual(Object.keys(patch), ["cardSidebar", "links"]);
   assert.equal(patch.cardSidebar, undefined);
   assert.deepEqual(patch.links, [
@@ -30,6 +30,15 @@ test("earlier links become card-left and window links, and a plugin link without
 });
 
 test("current settings produce no change", () => {
-  assert.deepEqual(migrateSettings({ gap: 8, links: [{ place: "window-left", plugin: "plugin-a", set: "set-a" }] }),
+  assert.deepEqual(migrateSettings({ gap: 8, links: [{ place: "window-left", plugin: "plugin-a", set: "set-a" }] }, new Set(["set-a"])),
     { patch: {}, notes: [] });
+});
+
+test("a link to a set that is not known is dropped", () => {
+  const { patch, notes } = migrateSettings({ links: [
+    { place: "card-left", plugin: "plugin-a", set: "set-a" },
+    { place: "card-right", plugin: "plugin-a", set: "set-gone" },
+  ] }, new Set(["set-a"]));
+  assert.deepEqual(patch.links, [{ place: "card-left", plugin: "plugin-a", set: "set-a" }]);
+  assert.deepEqual(notes, ["the card-right link of plugin-a was dropped because its set set-gone no longer exists"]);
 });

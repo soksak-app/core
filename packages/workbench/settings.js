@@ -363,17 +363,27 @@ async function migrateStoredSettings() {
     // 기본값: 설정을 덮어쓰지 않은 프로젝트에는 settings 가 없다.
     ...snapshot.projects.map((project) => [project.id, `the project ${project.id} settings`, project.settings ?? {}])];
   for (const [id, where, values] of scopes) {
-    const { patch, notes } = migrateSettings(values);
+    const { patch, notes } = migrateSettings(values, knownSets(values, id === null ? null : snapshot.common));
     if (!notes.length) continue;
     await store.settings(id, patch);
     log(`settings: converted ${where}: ${notes.join("; ")}`);
   }
 }
 
+/**
+ * values 의 연결이 가리킬 수 있는 세트 id. 세트는 그 범위에 저장된 것이고, 없으면 공통 설정(common 이 주어지면)의
+ * 것이며, 그것도 없으면 환경의 기본 세트다.
+ */
+function knownSets(values, common) {
+  // 기본값: 세트를 저장하지 않은 범위는 아래 범위의 세트를 쓴다.
+  const sets = values.sets ?? common?.sets ?? defaults.sets;
+  return new Set(sets.map((set) => set.id));
+}
+
 /** 저장된 값을 현재 형식으로 바꾼 값. 바꾼 값의 저장과 보고는 migrateStoredSettings 가 한다. */
-function migrated(values) {
+function migrated(values, common) {
   const next = { ...values };
-  for (const [key, value] of Object.entries(migrateSettings(values).patch)) {
+  for (const [key, value] of Object.entries(migrateSettings(values, knownSets(values, common)).patch)) {
     if (value === undefined) delete next[key];
     else next[key] = value;
   }
@@ -385,9 +395,9 @@ function migrated(values) {
  * 라이브러리면 null 이다. 저장소 연결과 이후의 변경은 connectSettings 가 맡는다.
  */
 export function beginSettings(snapshot, id) {
-  const nextCommon = migrated(snapshot.common);
+  const nextCommon = migrated(snapshot.common, null);
   // 기본값: 설정을 덮어쓰지 않은 프로젝트에는 settings 가 없다.
-  const nextOverrides = migrated(snapshot.projects.find((p) => p.id === id)?.settings ?? {});
+  const nextOverrides = migrated(snapshot.projects.find((p) => p.id === id)?.settings ?? {}, nextCommon);
   validateValues(nextCommon, "common settings");
   validateValues(nextOverrides, "project settings");
   checkValues(effectiveSettings(defaults, applied(nextCommon), applied(nextOverrides)));

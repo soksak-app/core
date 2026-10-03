@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-75: reading the settings deletes a stored link to a set that no longer exists, saves the result and logs it, instead of failing to load the settings.
 - G1.4-74: a first run without a plugin registry shows why no plugin was installed and how to set the registry.
 - G1.4-73: window checks register cleanup with the session, compare settings rows with the declared keys, judge WebView churn by the window documents, measure the wheel factor, and load a local document instead of an external site.
 - G1.4-72: the terminal runtime specification defines the per-side terminal padding settings, and a window check measures the inset grid and the padding color.

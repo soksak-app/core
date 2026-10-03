@@ -123,6 +123,7 @@ The settings files keep only declared settings in the current format. When the s
 - The keys of earlier settings (`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`) are deleted.
 - A `rail` link becomes a `card-left` link of the same plugin and set.
 - A `left` or `right` link that names a plugin becomes a `window-left` or `window-right` link. Such a link without a set selected no content for that plugin; the current format cannot express it, so it is deleted and the general content shows.
+- A link to a set that the scope does not hold is deleted, because the set it chose was removed with an earlier declaration. The sets of a scope are its stored sets; without them the project scope uses the common sets, and the common scope uses the sets that the environment declares.
 
 Any other unknown key or invalid value fails the settings check with its name.
 

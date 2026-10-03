@@ -23,10 +23,11 @@ function migrateLink(link) {
 }
 
 /**
- * 저장된 설정 값 하나(공통 설정 또는 프로젝트 설정)를 바꾼다. 반환값은 { patch, notes } 이다. patch 는 저장소의
- * settings(id, patch) 에 넘길 변경이며 지울 키의 값은 undefined 다. 바꿀 것이 없으면 patch 는 비어 있다.
+ * 저장된 설정 값 하나(공통 설정 또는 프로젝트 설정)를 바꾼다. known 은 그 범위의 연결이 가리킬 수 있는 세트 id 다.
+ * 그 밖의 세트를 가리키는 연결은 이전 선언과 함께 사라진 세트를 고르므로 지운다. 반환값은 { patch, notes } 이다. patch
+ * 는 저장소의 settings(id, patch) 에 넘길 변경이며 지울 키의 값은 undefined 다. 바꿀 것이 없으면 patch 는 비어 있다.
  */
-export function migrateSettings(values) {
+export function migrateSettings(values, known) {
   const patch = {}, notes = [];
   const removed = REMOVED_KEYS.filter((key) => Object.hasOwn(values, key));
   for (const key of removed) patch[key] = undefined;
@@ -35,8 +36,13 @@ export function migrateSettings(values) {
     const links = [], linkNotes = [];
     for (const stored of values.links) {
       const { link, note } = migrateLink(stored);
-      if (link) links.push(link);
       if (note) linkNotes.push(note);
+      if (!link) continue;
+      if (link.set !== null && !known.has(link.set)) {
+        linkNotes.push(`the ${link.place} link${link.plugin === null ? "" : ` of ${link.plugin}`} was dropped because its set ${link.set} no longer exists`);
+        continue;
+      }
+      links.push(link);
     }
     if (linkNotes.length) { patch.links = links; notes.push(...linkNotes); }
   }

@@ -173,3 +173,41 @@ test('stored and changed core setting values must have their declared form', asy
     globalThis.document = realDocument;
   }
 });
+
+test('a stored link to a set that no longer exists is deleted once and reported', async (t) => {
+  const reports = [];
+  t.mock.module('../host.js', { namedExports: {
+    surfaces: { theme() {}, menuLanguage() {} }, log: (line) => { reports.push(line); },
+  } });
+  const previous = globalThis.document;
+  globalThis.document = { addEventListener() {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const kept = { id: 'set-kept', title: '남은 세트', sections: [], layout: 'list' };
+  const memory = {
+    common: { sets: [kept], links: [{ place: 'left', plugin: null, set: 'set-kept' }, { place: 'right', plugin: null, set: 'set-gone' }] },
+    // 프로젝트 설정의 연결은 세트를 덮어쓰지 않으면 공통 세트를 가리킨다.
+    projects: [{ id: 'prj-a', settings: { links: [{ place: 'left', plugin: null, set: 'set-kept' }, { place: 'right', plugin: null, set: 'set-old' }] } }],
+  };
+  const { connectSettings, value } = await import('../settings.js?test=gone-sets');
+  try {
+    await connectSettings({
+      snapshot: async () => structuredClone(memory),
+      settings: async (id, values) => {
+        const target = id === null ? memory.common : memory.projects.find((p) => p.id === id).settings;
+        for (const [key, val] of Object.entries(values)) {
+          if (val === undefined) delete target[key];
+          else target[key] = val;
+        }
+      },
+      onChange: () => () => {},
+    });
+    assert.deepEqual(memory.common.links, [{ place: 'left', plugin: null, set: 'set-kept' }]);
+    assert.deepEqual(memory.projects[0].settings.links, [{ place: 'left', plugin: null, set: 'set-kept' }]);
+    assert.deepEqual(reports, [
+      'settings: converted the common settings: the right link was dropped because its set set-gone no longer exists',
+      'settings: converted the project prj-a settings: the right link was dropped because its set set-old no longer exists',
+    ]);
+    assert.deepEqual(value('links'), [{ place: 'left', plugin: null, set: 'set-kept' }]);
+  } finally {
+    globalThis.document = previous;
+  }
+});
