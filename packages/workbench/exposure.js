@@ -34,6 +34,7 @@ const surfacePorts = new Map();
  *
  *   call(name, arg)  호스트 호출. exposureChanged 와 exposureForward 에 사용한다.
  *                    호스트가 없으면 null 이다
+ *   report(error)    host 가 거부한 상태 변경의 오류를 보고한다. call 이 있으면 필요하다
  *
  * 연결 후 configure 로 문서가 아는 값을 받는다.
  *
@@ -44,7 +45,8 @@ const surfacePorts = new Map();
 /** 이 문서가 답하는 명령이 timeout 을 선언하지 않았을 때 답을 기다리는 시간(ms). */
 const REPLY_TIMEOUT = 10_000;
 
-export function createRegistry({ call = null } = {}) {
+export function createRegistry({ call = null, report = null } = {}) {
+  if (call && typeof report !== "function") throw new TypeError("a registry with a host call needs report(error)");
   const declared = new Map();
   const coreDeclared = new Map();
   const core = exposureEntries(coreDeclared);
@@ -79,7 +81,10 @@ export function createRegistry({ call = null } = {}) {
   };
 
   const changed = (name, value, surface) => {
-    if (call) call("exposureChanged", surface === undefined ? { name, value } : { name, surface, value });
+    if (!call) return;
+    call("exposureChanged", surface === undefined ? { name, value } : { name, surface, value }).then(undefined, (error) =>
+      // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
+      report(new Error(`status ${name} change was refused: ${error?.message ?? error}`, { cause: error })));
   };
 
   /**
@@ -511,8 +516,11 @@ export function createRegistry({ call = null } = {}) {
   };
 }
 
-/** 이 문서의 등록소. */
-export const registry = createRegistry({ call: host ? (name, arg) => host.call(name, arg) : null });
+/** 이 문서의 등록소. 거부된 상태 변경은 page 의 처리되지 않은 rejection 처리기가 애플리케이션 log 와
+ * applicationError 에 보고한다. */
+export const registry = createRegistry(host
+  ? { call: (name, arg) => host.call(name, arg), report: (error) => Promise.reject(error) }
+  : {});
 
 export function registerSurfacePort(surface, port) {
   if (surfacePorts.has(surface)) throw new Error(`surface ${surface} already has an exposure port`);

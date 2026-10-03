@@ -683,6 +683,7 @@ for (const app of Object.values(APPS)) {
     let stopped = true;
     s.cleanup(() => { if (stopped) process.kill(service, "SIGCONT"); });
     const card = (await s.get("core.grid")).cards.find((item) => item.active === terminal.surface);
+    s.expectPageError(/did not present/);
     const { tab } = await s.run("core.card.split", { card: card.id, side: "right", plugin: "terminal" });
     await s.until("core.page.error", (error) => /did not present/.test(error ?? ""),
       "the presentation did not fail while the terminal service was stopped");

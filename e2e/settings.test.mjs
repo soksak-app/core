@@ -294,6 +294,7 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
     mkdirSync(join(root, ".soksak"), { recursive: true });
     writeFileSync(join(root, ".soksak/settings.json"), JSON.stringify({ sets: broken }));
+    s.expectPageError(/settings: set .* names unknown section files\.gone/);
     await s.run("core.settings.set", { patch: { projectOpening: "tabs" }, scope: "common" });
     const opened = s.run("core.project.open", { root, color: "#7fe3b0" }).catch((error) => error);
     s.cleanup(async () => {

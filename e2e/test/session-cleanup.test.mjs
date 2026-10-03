@@ -17,7 +17,13 @@ function run(t) {
   writeFileSync(file, `import test from "node:test";
 import { finishSession } from ${JSON.stringify(app)};
 test("probe body fails", async (t) => {
-  const session = { cleanups: [async () => { throw new Error("probe press stayed open"); }, async () => {}] };
+  const session = {
+    app: { name: "probe" },
+    cleanups: [async () => { throw new Error("probe press stayed open"); }, async () => {}],
+    pageErrorStart: null,
+    expectedPageErrors: [],
+    get: async () => null,
+  };
   t.after(() => finishSession(t, session, () => {}));
   throw new Error("probe body failed");
 });
@@ -32,4 +38,39 @@ test("a cleanup failure is reported when the check body already failed", { timeo
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /probe body failed/);
   assert.match(result.stdout, /# cleanup failed: Error: probe press stayed open/);
+});
+
+// 본문이 통과해도 검사 동안 page 가 새로 보인 애플리케이션 오류는 검사의 실패다. 검사가 선언한 오류는 실패가
+// 아니다(G1.4-111).
+function runPageError(t, expected) {
+  const dir = mkdtempSync(join(tmpdir(), "soksak-session-page-error-"));
+  t.after(() => rmSync(dir, { recursive: true }));
+  const file = join(dir, "probe.test.mjs");
+  writeFileSync(file, `import test from "node:test";
+import { finishSession } from ${JSON.stringify(app)};
+test("probe body passes", async (t) => {
+  const session = {
+    app: { name: "probe" },
+    cleanups: [],
+    pageErrorStart: null,
+    expectedPageErrors: ${expected},
+    get: async (name) => name === "core.page.error" ? "rejected: argument request.value is missing" : null,
+  };
+  t.after(() => finishSession(t, session, () => {}));
+});
+`);
+  const { NODE_TEST_CONTEXT, ...environment } = process.env;
+  return spawnSync(process.execPath, ["--test", "--test-reporter=tap", file],
+    { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
+}
+
+test("a page error that the check does not declare fails the check", { timeout: 30000 }, (t) => {
+  const result = runPageError(t, "[]");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /probe: the page showed an application error that the check did not declare: rejected: argument request\.value is missing/);
+});
+
+test("a page error that the check declares does not fail the check", { timeout: 30000 }, (t) => {
+  const result = runPageError(t, "[/argument request\\.value is missing/]");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
 });

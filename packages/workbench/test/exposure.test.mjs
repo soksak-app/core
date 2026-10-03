@@ -107,8 +107,8 @@ function fakeHost(answer = () => ({ result: null })) {
   };
 }
 
-function coreRegistry(host) {
-  const made = createRegistry({ call: host?.call ?? null });
+function coreRegistry(host, report = (error) => { throw error; }) {
+  const made = createRegistry(host ? { call: host.call, report } : {});
   made.declare("core", coreExposes());
   made.declare("probe", probeExposes());
   return made;
@@ -314,7 +314,7 @@ test("requests for surface names are forwarded to the preferred surface in the a
 
 test("a forwarded command carries the timeout its declaration gives, and other requests carry none", async () => {
   const host = fakeHost(() => ({ result: null }));
-  const made = createRegistry({ call: host.call });
+  const made = createRegistry({ call: host.call, report: (error) => { throw error; } });
   made.declare("core", coreExposes());
   const slow = probeExposes();
   slow.commands.push({ name: "probe.wait", description: "Waits.", params: { type: "object" }, result: {}, timeout: 120000 });
@@ -365,6 +365,28 @@ test("a watched surface status follows status.next replies until unwatch", async
   release({ result: { version: 3, value: ["c"] } });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(changes().length, 2, "a value after unwatch is not sent");
+});
+
+test("a status change that the host refuses is reported with the status name", async () => {
+  const reported = [];
+  const host = fakeHost(({ method, params }) => {
+    if (method !== "status.next") return { result: null };
+    if (params.version === 0) return { result: { version: 1, value: null } };
+    return new Promise(() => {});
+  });
+  const refusing = {
+    calls: host.calls,
+    call: (name, arg) => name === "exposureChanged"
+      ? Promise.reject(new Error("argument request.value is missing"))
+      : host.call(name, arg),
+  };
+  const made = coreRegistry(refusing, (error) => reported.push(error.message));
+  made.configure({ surfacePlugin: () => "probe" });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  assert.deepEqual(await made.handle({ method: "status.watch", params: { name: "probe.lines" } }), { result: null });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(reported, ["status probe.lines change was refused: argument request.value is missing"]);
+  assert.throws(() => createRegistry({ call: refusing.call }), /a registry with a host call needs report\(error\)/);
 });
 
 test("without a host the registry answers in the page and cannot forward", async () => {
