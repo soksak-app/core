@@ -363,6 +363,14 @@ type ExposureChange struct {
 	Value json.RawMessage `json:"value,omitempty"`
 }
 
+// CheckPageStatusChange 는 페이지가 이름 name 의 상태 변경을 보낼 수 있는지 확인한다. host 상태는 host 만 바꾼다.
+func CheckPageStatusChange(name string) error {
+	if isHostName(name) {
+		return fmt.Errorf("the page cannot change host status %s", name)
+	}
+	return nil
+}
+
 // ExposureChanged 는 메인 페이지가 알린 상태 변경을 그 상태를 감시하는 연결에 전달한다.
 func (h *Host) ExposureChanged(ctx context.Context, changeJSON json.RawMessage) error {
 	change, err := argument[ExposureChange]("request", changeJSON)
@@ -373,8 +381,8 @@ func (h *Host) ExposureChanged(ctx context.Context, changeJSON json.RawMessage) 
 	if err != nil {
 		return err
 	}
-	if isHostName(change.Name) {
-		return fmt.Errorf("the page cannot change host status %s", change.Name)
+	if err := CheckPageStatusChange(change.Name); err != nil {
+		return err
 	}
 	value := change.Value
 	if len(value) == 0 {

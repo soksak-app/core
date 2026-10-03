@@ -162,7 +162,7 @@ The host and the pages exchange these messages. They are internal to core and no
 | --- | --- | --- |
 | host → main page | event `exposure-request` | `{id, method, params}` for `exposure.list`, `status.*`, `command.run`, `dom.*` of core and plugin names. The host waits 10 seconds for the answer, except for `command.run`, which the main page answers within the command's timeout, whether it forwards the command or answers it itself; a main page that is not ready returns 1003, and requests to a main page that reloads or closes end with 1003 |
 | main page → host | call `exposureReply` | `{id, result}` or `{id, error: {code, message}}` |
-| main page → host | call `exposureChanged` | `{name, surface?, value}` for a watched status; `surface` is present when the watch named one |
+| main page → host | call `exposureChanged` | `{name, surface?, value}` for a watched status; `surface` is present when the watch named one. The host refuses a name that starts with `host.` with `the page cannot change host status <name>`; only the host changes a host status |
 | surface page → host | call `exposureRegister` | `{surface, kind, name}` |
 | host → main page | event `exposure-registered` | `{surface, kind, name}`; `{surface, closed: true}` when the surface is removed. Surfaces outlive a reload of the main page, so after the main page reports ready the host sends every live registration again |
 | main page → host | call `exposureForward` | `{id, surface, method, params, timeout?}` for a name that a surface page registered. `timeout` is an integer from 1 to 600000 milliseconds, taken from the command declaration; without it the host waits 10 seconds. `status.next` takes no `timeout`. An invalid `timeout` returns -32602 |

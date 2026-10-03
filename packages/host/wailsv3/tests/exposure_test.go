@@ -254,3 +254,13 @@ func TestRelayRequestWithoutTimeoutWaitsUntilTheDocumentCloses(t *testing.T) {
 		t.Fatalf("reply %+v, want 1003", got)
 	}
 }
+
+// contract: exposure.status-change.refuses-host-name
+func TestPageStatusChangeRefusesHostName(t *testing.T) {
+	if err := host.CheckPageStatusChange("host.window"); err == nil || err.Error() != "the page cannot change host status host.window" {
+		t.Fatalf("host.window: %v", err)
+	}
+	if err := host.CheckPageStatusChange("core.grid"); err != nil {
+		t.Fatalf("core.grid: %v", err)
+	}
+}

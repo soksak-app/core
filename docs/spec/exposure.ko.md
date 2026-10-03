@@ -162,7 +162,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | --- | --- | --- |
 | 호스트 → 메인 페이지 | 이벤트 `exposure-request` | 코어와 플러그인 이름에 대한 `exposure.list`, `status.*`, `command.run`, `dom.*`의 `{id, method, params}`. 호스트는 답을 10초 기다린다. `command.run`은 예외이며, 메인 페이지는 명령을 전달하든 스스로 답하든 그 명령의 제한 시간 안에 답한다. 준비되지 않은 메인 페이지는 1003을 반환하고, 다시 읽히거나 닫히는 메인 페이지에 보낸 요청은 1003으로 끝난다 |
 | 메인 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error: {code, message}}` |
-| 메인 페이지 → 호스트 | 호출 `exposureChanged` | 감시 중인 상태의 `{name, surface?, value}`. 감시가 표면을 지정했으면 `surface`가 있다 |
+| 메인 페이지 → 호스트 | 호출 `exposureChanged` | 감시 중인 상태의 `{name, surface?, value}`. 감시가 표면을 지정했으면 `surface`가 있다. 호스트는 `host.`로 시작하는 이름을 `the page cannot change host status <name>`으로 거부한다. host 상태는 호스트만 바꾼다 |
 | 표면 페이지 → 호스트 | 호출 `exposureRegister` | `{surface, kind, name}` |
 | 호스트 → 메인 페이지 | 이벤트 `exposure-registered` | `{surface, kind, name}`. 표면이 제거되면 `{surface, closed: true}`. 표면은 메인 페이지를 다시 읽어도 남으므로 메인 페이지가 준비를 알린 뒤 호스트가 살아 있는 등록을 모두 다시 보낸다 |
 | 메인 페이지 → 호스트 | 호출 `exposureForward` | 표면 페이지가 등록한 이름에 대한 `{id, surface, method, params, timeout?}`. `timeout`은 명령 선언에서 가져온 1 이상 600000 이하의 정수 밀리초이며, 없으면 호스트는 10초를 기다린다. `status.next`는 `timeout`을 받지 않는다. 올바르지 않은 `timeout`은 -32602를 반환한다 |

@@ -462,3 +462,16 @@ fn an_open_window_lists_its_title_project_and_key_state() {
         })))
     );
 }
+
+// contract: exposure.status-change.refuses-host-name
+#[test]
+fn a_page_status_change_of_a_host_status_is_refused() {
+    assert_eq!(
+        soksak_host_tauriv2::exposure::check_page_status_change("host.window"),
+        Err("the page cannot change host status host.window".to_string())
+    );
+    assert_eq!(
+        soksak_host_tauriv2::exposure::check_page_status_change("core.grid"),
+        Ok(())
+    );
+}

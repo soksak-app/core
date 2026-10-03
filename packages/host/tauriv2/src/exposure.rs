@@ -556,9 +556,18 @@ pub struct Changed {
     value: Option<String>,
 }
 
+/// 페이지가 이름 name 의 상태 변경을 보낼 수 있는지 확인한다. host 상태는 host 만 바꾼다.
+pub fn check_page_status_change(name: &str) -> Result<(), String> {
+    if name.starts_with("host.") {
+        return Err(format!("the page cannot change host status {name}"));
+    }
+    Ok(())
+}
+
 /// 메인 페이지가 보낸 상태 변경을 감시하는 연결에 보낸다.
 pub(crate) fn changed(webview: &Webview, request: Changed) -> Result<(), String> {
     let window = main_page(webview)?;
+    check_page_status_change(&request.name)?;
     let text = match request.value {
         Some(text) => text,
         None => "null".to_string(),
