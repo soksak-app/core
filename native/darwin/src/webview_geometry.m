@@ -61,11 +61,27 @@ static void reconfigureSurfaceWebviews(NSView *root) {
 // 뷰로 간다.
 @interface SPFileDropView : NSView
 @property(nonatomic, assign) sp_file_drop_event event;
+@property(nonatomic, assign) sp_file_drop_release releaseContext;
 @property(nonatomic, assign) void *context;
+- (void)receive:(sp_file_drop_event)event release:(sp_file_drop_release)release context:(void *)context;
 @end
 
 @implementation SPFileDropView
 - (BOOL)isFlipped { return YES; }
+// 호스트의 수신기는 이 뷰가 쓰는 동안 살아 있어야 하고, 다 쓴 뒤에는 호스트가 해제해야 한다. 바뀐 수신기와 뷰와 함께
+// 끝나는 수신기를 release 로 돌려준다.
+- (void)receive:(sp_file_drop_event)event release:(sp_file_drop_release)release context:(void *)context {
+    sp_file_drop_release previous = self.releaseContext;
+    void *previousContext = self.context;
+    self.event = event;
+    self.releaseContext = release;
+    self.context = context;
+    if (previous) previous(previousContext);
+}
+- (void)dealloc {
+    if (_releaseContext) _releaseContext(_context);
+    [super dealloc];
+}
 - (NSView *)hitTest:(NSPoint)point { return nil; }
 - (NSArray<NSURL *> *)fileURLs:(id<NSDraggingInfo>)sender {
     return [sender.draggingPasteboard readObjectsForClasses:@[NSURL.class]
@@ -461,7 +477,7 @@ static SPWindowComposition *windowComposition(WKWebView *main) {
     return composition;
 }
 
-bool sp_window_file_drop(void *mainHandle, sp_file_drop_event event, void *context) {
+bool sp_window_file_drop(void *mainHandle, sp_file_drop_event event, sp_file_drop_release release, void *context) {
     NSCAssert(NSThread.isMainThread, @"file drop requires the UI thread");
     SPWindowComposition *composition = windowComposition((WKWebView *)mainHandle);
     if (!composition || !event) return false;
@@ -473,8 +489,7 @@ bool sp_window_file_drop(void *mainHandle, sp_file_drop_event event, void *conte
         [composition addSubview:view positioned:NSWindowAbove relativeTo:nil];
         composition.fileDrop = view;
     }
-    view.event = event;
-    view.context = context;
+    [view receive:event release:release context:context];
     return true;
 }
 

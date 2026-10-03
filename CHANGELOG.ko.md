@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-101: 두 host 모두 창을 닫을 때 그 창의 문서 영역, 그림 영역, 논리 표면을 닫고, webview의 입력 등록은 webview가 해제될 때 끝나며, 파일 놓기 수신기는 놓기 view와 함께 해제되므로, 닫힌 창이 main webview, 문서 webview, 그 web content process를 더 남기지 않는다.
 - G1.4-103: Wails는 v3.0.0-beta.27이고, Tauri는 git 고정 없이 crates.io에서 배포된 2.12.1과 wry 0.57.0, tao 0.37.1이다. Wails 빌드는 Web Inspector를 창 안이 아니라 Safari를 통해 제공한다.
 - G1.4-100: 성능 기록을 끄면 켜진 동안 받은 연결의 영속 사이드카 이벤트도 멈춘다.
 - G1.4-90-4-1: Wails host는 웹뷰의 문서 commit을 그 웹뷰가 그 뒤에 보낸 메시지보다 먼저 처리한다.

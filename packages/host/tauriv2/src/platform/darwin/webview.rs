@@ -13,11 +13,13 @@ use tauri::webview::PlatformWebview;
 use super::super::{visible_window_overlay_rects, DOMOverlay, Handle, WindowOverlay};
 
 type FileDropEvent = extern "C" fn(*mut c_void, *const c_char);
+type FileDropRelease = extern "C" fn(*mut c_void);
 
 extern "C" {
     fn sp_window_file_drop(
         main_webview: *mut c_void,
         event: FileDropEvent,
+        release: FileDropRelease,
         context: *mut c_void,
     ) -> bool;
     fn sp_webview_set_appearance(view: *mut c_void, dark: bool) -> bool;
@@ -93,8 +95,13 @@ pub fn collect_garbage(view: &PlatformWebview) -> Result<(), String> {
     }
 }
 
-/// 창의 파일 놓기 뷰에 놓인 파일을 받는 함수. 창이 살아 있는 동안 네이티브 뷰가 가리킨다.
+/// 창의 파일 놓기 뷰에 놓인 파일을 받는 함수. 네이티브 뷰가 쓰는 동안 살아 있고, 뷰가 file_drop_release 로
+/// 돌려줄 때 해제한다.
 struct FileDropReceiver(Box<dyn Fn(String)>);
+
+extern "C" fn file_drop_release(context: *mut c_void) {
+    drop(unsafe { Box::from_raw(context as *mut FileDropReceiver) });
+}
 
 extern "C" fn file_drop_callback(context: *mut c_void, json: *const c_char) {
     let receiver = unsafe { &*(context as *const FileDropReceiver) };
@@ -111,6 +118,7 @@ pub fn file_drop(main: Handle, receive: Box<dyn Fn(String)>) -> Result<(), Strin
         sp_window_file_drop(
             main as *mut c_void,
             file_drop_callback,
+            file_drop_release,
             receiver as *mut c_void,
         )
     } {

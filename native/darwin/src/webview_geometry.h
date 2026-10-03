@@ -4,8 +4,11 @@
 // 앱 DOM은 창에 하나만 두며 논리 표면은 웹뷰 없는 클리핑 컨테이너다.
 void *sp_surface_create(void *mainWebview);
 // 창에 놓인 파일을 받는다. event 는 {"urls":[파일 URL...],"x":..,"y":..}(페이지 좌표) 를 받는다.
+// release 가 NULL 이 아니면 놓기 뷰가 context 를 더 쓰지 않게 될 때(다음 등록이 수신기를 바꾸거나 창과 함께 뷰가
+// 해제될 때) 메인 스레드에서 한 번 호출된다. false 를 반환하면 release 를 호출하지 않으며 context 는 호출자의 것이다.
 typedef void (*sp_file_drop_event)(void *context, const char *json);
-bool sp_window_file_drop(void *mainWebview, sp_file_drop_event event, void *context);
+typedef void (*sp_file_drop_release)(void *context);
+bool sp_window_file_drop(void *mainWebview, sp_file_drop_event event, sp_file_drop_release release, void *context);
 void sp_surface_close(void *surface);
 void *sp_surface_native_plane(void *surface);
 void *sp_surface_main_webview(void *surface);

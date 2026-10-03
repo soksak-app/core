@@ -26,13 +26,18 @@ void nativeWindowConfigureMain(void *window, bool dark);
 bool nativeWindowSetMainWebview(void *window);
 
 extern void fileDropped(void *context, char *json);
+extern void fileDropReleased(void *context);
 
 static void fileDroppedBridge(void *context, const char *json) {
     fileDropped(context, (char *)json);
 }
 
+static void fileDropReleasedBridge(void *context) {
+    fileDropReleased(context);
+}
+
 static bool windowFileDrop(void *main, uintptr_t context) {
-    return sp_window_file_drop(main, fileDroppedBridge, (void *)context);
+    return sp_window_file_drop(main, fileDroppedBridge, fileDropReleasedBridge, (void *)context);
 }
 
 // 연속적인 표면 크기 변경의 시작과 종료를 웹뷰에 전달한다.
@@ -163,6 +168,13 @@ func (implementation) ConfigureMainWindow(window unsafe.Pointer, dark bool) {
 func fileDropped(context unsafe.Pointer, json *C.char) {
 	dropped := cgo.Handle(uintptr(context)).Value().(func(string))
 	dropped(C.GoString(json))
+}
+
+// 놓기 뷰가 수신기를 더 쓰지 않게 되면 그 핸들을 지운다.
+//
+//export fileDropReleased
+func fileDropReleased(context unsafe.Pointer) {
+	cgo.Handle(uintptr(context)).Delete()
 }
 
 func (implementation) FileDrop(main unsafe.Pointer, dropped func(json string)) error {

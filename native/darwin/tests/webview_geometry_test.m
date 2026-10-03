@@ -422,7 +422,7 @@ int main(void) { @autoreleasepool {
     [NSFileManager.defaultManager removeItemAtPath:store error:NULL];
 
     // 창의 파일 놓기 뷰: 파일 URL 만 받는 유일한 네이티브 끌기 대상이며 적중 검사는 아래 뷰로 간다.
-    check(sp_window_file_drop(main, droppedFiles, NULL), @"file drop: the window composition accepts a drop handler");
+    check(sp_window_file_drop(main, droppedFiles, NULL, NULL), @"file drop: the window composition accepts a drop handler");
     NSView *composition = main.superview;
     NSView *drop = composition.subviews.lastObject;
     check([drop.registeredDraggedTypes isEqualToArray:@[NSPasteboardTypeFileURL]],
@@ -434,7 +434,7 @@ int main(void) { @autoreleasepool {
     [composition addSubview:later];
     check(composition.subviews.lastObject == drop, @"file drop: the drop view stays above a view added later");
     [later removeFromSuperview];
-    check(sp_window_file_drop(main, droppedFiles, NULL) &&
+    check(sp_window_file_drop(main, droppedFiles, NULL, NULL) &&
         [composition.subviews filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(id view, NSDictionary *bindings) {
             return [view registeredDraggedTypes].count > 0 && view != main;
         }]].count == 1, @"file drop: registering again keeps one drop view");
@@ -452,7 +452,7 @@ int main(void) { @autoreleasepool {
     info.draggingPasteboard = board;
     info.draggingLocation = [drop convertPoint:NSMakePoint(30, 40) toView:nil];
     NSMutableArray<NSString *> *drops = [NSMutableArray array];
-    sp_window_file_drop(main, droppedFiles, drops);
+    sp_window_file_drop(main, droppedFiles, NULL, drops);
     BOOL performed = [(id)drop performDragOperation:(id<NSDraggingInfo>)info];
     NSDictionary *dropped = drops.count == 1 ? [NSJSONSerialization JSONObjectWithData:[drops[0] dataUsingEncoding:NSUTF8StringEncoding]
         options:0 error:NULL] : nil;

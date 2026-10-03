@@ -335,6 +335,8 @@ fn invalid_json_closes_connection() {
 | `surfaces-geometry.rect.rejects-negative-size` | 크기가 음수인 사각형은 잘라 맞추지 않고 거부한다. | both |
 | `surfaces-geometry.rect.rejects-non-finite` | 크기가 유한하지 않은 사각형을 거부한다. | both |
 | `termination.signal.first-requests-quit-second-ends-process` | 첫 종료 신호는 종료를 요청하고 두 번째 신호는 프로세스를 끝낸다. | both |
+| `window-close.surfaces.closes-regions-then-surface` | 창을 닫으면 논리 표면마다 id 순서로 그 문서 영역과 그림 영역을 닫은 뒤 표면을 닫고, 그 이름을 창의 문서 영역 목록과 그림 영역 목록에서 지운다. | both |
+| `window-close.surfaces.reports-every-failure` | 네이티브 닫기 하나가 실패해도 나머지를 닫고, 창 닫기는 모든 실패를 표면 id 와 객체 종류와 함께 반환한다. | both |
 | `window-overlay.rects.packs-four-values-per-rect` | 보이는 오버레이는 입력 순서대로 x, y, width, height 값으로 묶인다. | both |
 | `window-overlay.rects.filters-hidden` | 숨긴 오버레이는 묶은 목록에서 빠진다. | both |
 | `workspace.config-dir.creates-requested-path` | 없는 설정 디렉터리를 준비하면 만들고 정규 경로를 반환한다. | both |

@@ -872,3 +872,55 @@ pub fn create_logical_surface_handle(
     }
     Ok(handle)
 }
+
+/// 창이 닫힐 때 닫는 네이티브 객체.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowNative {
+    Document(Handle),
+    Image(Handle),
+    Surface(Handle),
+}
+
+/// 닫히는 창의 논리 표면마다 문서 영역과 그림 영역을 닫은 뒤 표면을 닫는다. 표면은 id 순서로 닫는다.
+///
+/// 논리 표면은 메인 웹뷰를 보유하고 문서 영역은 자기 웹 콘텐츠 프로세스를 가지므로, 닫지 않은 표면과 영역은 창이
+/// 닫힌 뒤에도 웹뷰와 그 웹 콘텐츠 프로세스를 남긴다. 한 객체를 닫지 못해도 나머지를 닫고 모든 실패를 반환한다.
+/// close 는 네이티브 객체 하나를 닫으며 메인 스레드에서 호출된다.
+pub fn close_window_surfaces(
+    surfaces: HashMap<String, Handle>,
+    documents: &documents::Documents,
+    images: &images::Images,
+    close: &mut dyn FnMut(WindowNative) -> Result<(), String>,
+) -> Result<(), String> {
+    let mut surfaces: Vec<_> = surfaces.into_iter().collect();
+    surfaces.sort();
+    let mut failures = Vec::new();
+    for (surface, handle) in surfaces {
+        let natives = documents
+            .remove_surface(&surface)
+            .into_iter()
+            .map(WindowNative::Document)
+            .chain(
+                images
+                    .remove_surface(&surface)
+                    .into_iter()
+                    .map(WindowNative::Image),
+            )
+            .chain(std::iter::once(WindowNative::Surface(handle)));
+        for native in natives {
+            if let Err(error) = close(native) {
+                let kind = match native {
+                    WindowNative::Document(_) => "document region",
+                    WindowNative::Image(_) => "image region",
+                    WindowNative::Surface(_) => "surface",
+                };
+                failures.push(format!("surface {surface:?}: closing the {kind}: {error}"));
+            }
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("; "))
+    }
+}

@@ -362,8 +362,33 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         }
         tauri::WindowEvent::Destroyed => {
             crate::exposure::window_closed(&host);
+            let natives = context.clone();
             log_error(platform.enqueue_ui(Box::new(move || {
                 log_error(platform.cancel_layout(owner));
+                // 논리 표면은 메인 웹뷰를 보유하므로 닫지 않으면 메인 웹뷰와 그 웹 콘텐츠 프로세스가 남는다.
+                let surfaces = match natives.surface_hosts.lock() {
+                    Ok(mut surfaces) => std::mem::take(&mut *surfaces),
+                    Err(error) => {
+                        log_error(Err(error.to_string()));
+                        return;
+                    }
+                };
+                log_error(crate::surfaces::close_window_surfaces(
+                    surfaces,
+                    &natives.documents,
+                    &natives.images,
+                    &mut |native| match native {
+                        crate::surfaces::WindowNative::Document(handle) => {
+                            platform.close_document(handle)
+                        }
+                        crate::surfaces::WindowNative::Image(handle) => {
+                            platform.close_image(handle)
+                        }
+                        crate::surfaces::WindowNative::Surface(handle) => {
+                            platform.close_surface(handle)
+                        }
+                    },
+                ));
             })));
             if let Ok(mut monitor) = context.watching.0.lock() {
                 if let Some(monitor) = monitor.take() {

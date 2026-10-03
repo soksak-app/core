@@ -335,6 +335,8 @@ Items:
 | `surfaces-geometry.rect.rejects-negative-size` | A rectangle with a negative size is rejected, not clamped. | both |
 | `surfaces-geometry.rect.rejects-non-finite` | A rectangle with a non-finite size is rejected. | both |
 | `termination.signal.first-requests-quit-second-ends-process` | The first termination signal requests quit, and the second ends the process. | both |
+| `window-close.surfaces.closes-regions-then-surface` | Closing a window closes, for each logical surface in id order, its document regions and image regions and then the surface, and removes their names from the window's document and image registries. | both |
+| `window-close.surfaces.reports-every-failure` | A failed native close does not stop the remaining closes, and the window close returns every failure with its surface id and object kind. | both |
 | `window-overlay.rects.packs-four-values-per-rect` | Visible overlays pack into x, y, width, height values in input order. | both |
 | `window-overlay.rects.filters-hidden` | Hidden overlays are left out of the packed list. | both |
 | `workspace.config-dir.creates-requested-path` | Preparing a missing configuration directory creates it and returns its canonical path. | both |

@@ -1,4 +1,5 @@
 #import <Cocoa/Cocoa.h>
+#import <objc/runtime.h>
 #import "webview_input.h"
 // _setIgnoresMouseMoveEvents: 는 키보드, 클릭, 드래그를 끄지 않고 pointer tracking 만
 // 제어한다. 그 이벤트를 받는 webview 는 AppKit 의 hit test 가 선택한다.
@@ -54,7 +55,36 @@ static NSString *const kReceiptScript =
 }
 @end
 
-static NSMapTable<WKWebView *, SPInputReceipts *> *receipts;
+// 한 웹뷰의 입력 등록. 웹뷰의 연결 객체이므로 웹뷰와 함께 해제된다. WebKit 의 사용자 콘텐츠 컨트롤러는 메시지
+// 처리기를 등록한 동안 자기 자신을 보유하므로, 처리기를 제거하지 않으면 웹뷰가 해제된 뒤에도 컨트롤러와 그
+// 컨트롤러에 등록된 다른 처리기가 남는다. 이 객체는 등록 해제나 웹뷰 해제 때 처리기를 제거한다.
+@interface SPInputRegistration : NSObject
+@property(nonatomic, retain) WKUserContentController *controller;
+@property(nonatomic, retain) SPInputReceipts *receipts;
+- (void)end;
+@end
+@implementation SPInputRegistration
+- (void)end {
+    if (!self.controller) return;
+    [self.controller removeScriptMessageHandlerForName:kReceiptMessage contentWorld:[WKContentWorld worldWithName:kReceiptWorld]];
+    self.controller = nil;
+    NSArray *waits = [[self.receipts.waits copy] autorelease];
+    [self.receipts.waits removeAllObjects];
+    for (SPInputWait *wait in waits) wait.done(NO);
+}
+- (void)dealloc {
+    [self end];
+    [_receipts release];
+    [super dealloc];
+}
+@end
+
+static const char registrationKey;
+
+static SPInputReceipts *receiptsFor(WKWebView *view) {
+    SPInputRegistration *registration = objc_getAssociatedObject(view, &registrationKey);
+    return registration.receipts;
+}
 
 static BOOL hasPendingMouseDrain(WKWebView *view) {
     if ([view respondsToSelector:@selector(_doAfterProcessingAllPendingMouseEvents:)]) return YES;
@@ -63,8 +93,7 @@ static BOOL hasPendingMouseDrain(WKWebView *view) {
 }
 
 static void installReceipts(WKWebView *view) {
-    if (!receipts) receipts = [[NSMapTable weakToStrongObjectsMapTable] retain];
-    if ([receipts objectForKey:view]) return;
+    if (objc_getAssociatedObject(view, &registrationKey)) return;
     SPInputReceipts *handler = [[SPInputReceipts new] autorelease];
     handler.waits = [NSMutableArray array];
     WKContentWorld *world = [WKContentWorld worldWithName:kReceiptWorld];
@@ -74,12 +103,15 @@ static void installReceipts(WKWebView *view) {
         injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES inContentWorld:world] autorelease]];
     // 이미 읽은 문서에는 사용자 스크립트가 적용되지 않으므로 같은 world 에서 한 번 실행한다.
     if (view.URL) [view evaluateJavaScript:kReceiptScript inFrame:nil inContentWorld:world completionHandler:nil];
-    [receipts setObject:handler forKey:view];
+    SPInputRegistration *registration = [[SPInputRegistration new] autorelease];
+    registration.controller = controller;
+    registration.receipts = handler;
+    objc_setAssociatedObject(view, &registrationKey, registration, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 void webviewInputReceive(WKWebView *view, NSString *type, NSTimeInterval timeout, void (^done)(BOOL received)) {
     NSCAssert(NSThread.isMainThread, @"Webview input receipts require the main thread");
-    SPInputReceipts *handler = [receipts objectForKey:view];
+    SPInputReceipts *handler = receiptsFor(view);
     if (!handler) { done(YES); return; }
     SPInputWait *wait = [[SPInputWait new] autorelease];
     wait.type = type;
@@ -96,7 +128,7 @@ void webviewInputReceive(WKWebView *view, NSString *type, NSTimeInterval timeout
 void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeout,
     BOOL (^send)(void), void (^done)(BOOL received)) {
     NSCAssert(NSThread.isMainThread, @"Webview input receipts require the main thread");
-    SPInputReceipts *handler = [receipts objectForKey:view];
+    SPInputReceipts *handler = receiptsFor(view);
     if (!handler) {
         done(send());
         return;
@@ -192,15 +224,9 @@ void webviewInputUnregister(WKWebView *view) {
     NSCAssert(NSThread.isMainThread, @"Webview input removal requires the main thread");
     [view _setIgnoresMouseMoveEvents:NO];
     [inputViews removeObject:view];
-    SPInputReceipts *handler = [receipts objectForKey:view];
-    if (handler) {
-        [view.configuration.userContentController removeScriptMessageHandlerForName:kReceiptMessage
-            contentWorld:[WKContentWorld worldWithName:kReceiptWorld]];
-        NSArray *waits = [[handler.waits copy] autorelease];
-        [handler.waits removeAllObjects];
-        for (SPInputWait *wait in waits) wait.done(NO);
-        [receipts removeObjectForKey:view];
-    }
+    SPInputRegistration *registration = objc_getAssociatedObject(view, &registrationKey);
+    [registration end];
+    objc_setAssociatedObject(view, &registrationKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 BOOL webviewIgnorePageFocus(WKWebView *view) {

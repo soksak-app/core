@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -417,6 +418,30 @@ func (s *Surfaces) close() {
 				view.Close()
 			}
 		}
+		// 논리 표면은 nativeViews 가 아니라 s.views 에 있다. 표면은 메인 웹뷰를 보유하므로 닫지 않으면 메인
+		// 웹뷰와 그 웹 콘텐츠 프로세스가 남는다.
+		handles := make(map[string]unsafe.Pointer, len(s.views))
+		views := make(map[unsafe.Pointer]*nativeWebview, len(s.views))
+		for id, view := range s.views {
+			handles[id] = view.handle
+			views[view.handle] = view
+		}
+		err := CloseWindowSurfaces(handles, s.documents, s.images, func(native WindowNative) error {
+			switch native.Kind {
+			case WindowNativeDocument:
+				system.CloseDocument(native.Handle)
+			case WindowNativeImage:
+				system.CloseImage(native.Handle)
+			default:
+				views[native.Handle].Close()
+			}
+			return nil
+		})
+		if err != nil {
+			log.Printf("window close: %v", err)
+		}
+		clear(s.views)
+		clear(s.named)
 		for _, shape := range s.shapes {
 			shape.destroy()
 		}

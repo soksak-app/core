@@ -8,10 +8,13 @@ package host
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
 	"reflect"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -686,6 +689,66 @@ func CreateLogicalSurfaceHandle(create func() (unsafe.Pointer, error), id string
 		return nil, fmt.Errorf("surface %s: create returned a nil handle", id)
 	}
 	return handle, nil
+}
+
+// WindowNativeKind 는 창이 닫힐 때 닫는 네이티브 객체의 종류다.
+type WindowNativeKind int
+
+const (
+	WindowNativeDocument WindowNativeKind = iota
+	WindowNativeImage
+	WindowNativeSurface
+)
+
+// WindowNative 는 창이 닫힐 때 닫는 네이티브 객체다.
+type WindowNative struct {
+	Kind   WindowNativeKind
+	Handle unsafe.Pointer
+}
+
+func (kind WindowNativeKind) String() string {
+	switch kind {
+	case WindowNativeDocument:
+		return "document region"
+	case WindowNativeImage:
+		return "image region"
+	default:
+		return "surface"
+	}
+}
+
+// CloseWindowSurfaces 는 닫히는 창의 논리 표면마다 문서 영역과 그림 영역을 닫은 뒤 표면을 닫는다. 표면은 id
+// 순서로 닫는다.
+//
+// 논리 표면은 메인 웹뷰를 보유하고 문서 영역은 자기 웹 콘텐츠 프로세스를 가지므로, 닫지 않은 표면과 영역은 창이
+// 닫힌 뒤에도 웹뷰와 그 웹 콘텐츠 프로세스를 남긴다. 한 객체를 닫지 못해도 나머지를 닫고 모든 실패를 반환한다.
+// close 는 네이티브 객체 하나를 닫으며 UI 스레드에서 호출된다.
+func CloseWindowSurfaces(surfaces map[string]unsafe.Pointer, documents *Documents, images *Images, close func(WindowNative) error) error {
+	ids := make([]string, 0, len(surfaces))
+	for id := range surfaces {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	var failures []string
+	for _, id := range ids {
+		var natives []WindowNative
+		for _, handle := range documents.RemoveSurface(id) {
+			natives = append(natives, WindowNative{Kind: WindowNativeDocument, Handle: handle})
+		}
+		for _, handle := range images.RemoveSurface(id) {
+			natives = append(natives, WindowNative{Kind: WindowNativeImage, Handle: handle})
+		}
+		natives = append(natives, WindowNative{Kind: WindowNativeSurface, Handle: surfaces[id]})
+		for _, native := range natives {
+			if err := close(native); err != nil {
+				failures = append(failures, fmt.Sprintf("surface %q: closing the %s: %v", id, native.Kind, err))
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return errors.New(strings.Join(failures, "; "))
+	}
+	return nil
 }
 
 func createLogicalSurface(create func() (unsafe.Pointer, error), owner *Surfaces, id string) (*nativeWebview, error) {

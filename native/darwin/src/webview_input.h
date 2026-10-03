@@ -1,6 +1,8 @@
 #import <WebKit/WebKit.h>
 
 // 메인 스레드 전용이다. pointer tracking 이나 pending-mouse 처리를 사용할 수 없으면 NO 를 반환한다.
+// 등록은 webviewInputUnregister 를 호출하거나 웹뷰가 해제될 때 끝난다. 끝날 때 웹뷰의 사용자 콘텐츠
+// 컨트롤러에서 수신 메시지 처리기를 제거하므로 컨트롤러가 웹뷰보다 오래 남지 않는다.
 BOOL webviewInputRegister(WKWebView *view);
 void webviewInputUnregister(WKWebView *view);
 

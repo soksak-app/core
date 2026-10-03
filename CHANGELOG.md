@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-101: closing a window closes the document regions, image regions, and logical surfaces of the window in both hosts, a webview's input registration ends when the webview is released, and the file drop receiver is freed with its drop view, so a closed window no longer keeps its main webview, document webviews, and their web content processes.
 - G1.4-103: Wails is v3.0.0-beta.27 and Tauri is the released 2.12.1 with wry 0.57.0 and tao 0.37.1 from crates.io, without the git pin; the Wails builds offer the Web Inspector through Safari instead of inside the window.
 - G1.4-100: turning the performance trace off stops a persistent sidecar's events on connections accepted while it was on.
 - G1.4-90-4-1: the Wails host handles a webview's document commit before the messages that the webview sent after it.

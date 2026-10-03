@@ -6,7 +6,7 @@
 # 않으면 파일이 그대로 남는다.
 #
 #   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
-#   make test             입력 주입, 창 상태, 창 단추 배치, 표시 대기, 웹뷰 초점, 문서 영역, 그림 영역 검사를 실행한다. 애플리케이션을 활성화하지 않는다
+#   make test             입력 주입, 창 상태, 창 단추 배치, 표시 대기, 웹뷰 초점, 문서 영역, 그림 영역, 닫은 창의 해제 검사를 실행한다. 애플리케이션을 활성화하지 않는다
 #   make test-activation  창 활성화 후 호버 검사, 겹친 웹뷰 입력 검사(기준 실행·등록 실행), 웹 인스펙터 검사, 문서 영역의 OS 이벤트 대기열 클릭·키 검사, 그림 영역의 한국어 입력기 조합 검사를
 #                         실행한다. 애플리케이션을 활성화해 포커스를 가져간다
 #   make repeat TEST=<name>_test COUNT=<n>
@@ -85,7 +85,7 @@ $(BUILD)/capture_metadata_test: src/capture.m
 
 $(BUILD)/capture_resize_test: src/capture.m
 
-test: $(BUILD)/capture_callback_test $(BUILD)/capture_cleanup_test $(BUILD)/capture_preparation_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_cycles_test $(BUILD)/capture_stop_late_test $(BUILD)/capture_directory_checker_test $(BUILD)/capture_frame_test $(BUILD)/capture_storage_test $(BUILD)/capture_metadata_test $(BUILD)/capture_resize_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_checker_test $(BUILD)/capture_pressure_test $(BUILD)/webview_input_receipts_test $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/webview_process_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/link_test $(BUILD)/capture_test $(BUILD)/dock_menu_test $(BUILD)/appearance_test $(BUILD)/window_occlusion_test $(BUILD)/window_reveal_test
+test: $(BUILD)/capture_callback_test $(BUILD)/capture_cleanup_test $(BUILD)/capture_preparation_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_cycles_test $(BUILD)/capture_stop_late_test $(BUILD)/capture_directory_checker_test $(BUILD)/capture_frame_test $(BUILD)/capture_storage_test $(BUILD)/capture_metadata_test $(BUILD)/capture_resize_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_checker_test $(BUILD)/capture_pressure_test $(BUILD)/webview_input_receipts_test $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/webview_process_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/link_test $(BUILD)/capture_test $(BUILD)/dock_menu_test $(BUILD)/appearance_test $(BUILD)/window_occlusion_test $(BUILD)/window_reveal_test $(BUILD)/window_release_test
 	@$(BUILD)/surface_host_test
 	@$(BUILD)/ui_queue_test
 	@$(BUILD)/window_motion_test
@@ -94,6 +94,7 @@ test: $(BUILD)/capture_callback_test $(BUILD)/capture_cleanup_test $(BUILD)/capt
 	@$(BUILD)/window_facts_test
 	@$(BUILD)/window_occlusion_test
 	@$(BUILD)/window_reveal_test
+	@$(BUILD)/window_release_test
 	@$(BUILD)/window_controls_test
 	@$(BUILD)/surface_layout_test
 	@$(BUILD)/webview_focus_test
