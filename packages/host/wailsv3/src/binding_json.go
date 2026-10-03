@@ -78,6 +78,7 @@ func nullNumber(raw any, t reflect.Type, path string) error {
 			if !field.IsExported() {
 				continue
 			}
+			// 기본값: 쉼표가 없는 태그는 태그 전체가 이름이므로 Cut 의 found 를 쓰지 않는다.
 			name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 			if name == "-" {
 				continue
