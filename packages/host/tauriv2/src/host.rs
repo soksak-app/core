@@ -238,6 +238,8 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             let declarations = installed::installed_sidecars(&directory)
                 .map_err(|error| format!("installed plugins: {error}"))?;
             let sidecars = WindowSidecars::new(&declarations, directory)?;
+            let changed = app.handle().clone();
+            sidecars.on_closing_changed(move || crate::exposure::sidecars_changed(&changed));
             app.manage(sidecars);
             let main = app
                 .get_webview_window("main")

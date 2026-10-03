@@ -293,26 +293,25 @@ for (const app of Object.values(APPS)) {
     const before = terminalProcessSnapshot(app.configDir);
     assert.equal(before.shells.length, 3, "three open terminal sessions must own three PTY children");
 
-    const closing = performance.now();
+    const surfaces = terminals.map((terminal) => terminal.surface);
+    const closing = await s.collect("host.sidecars");
     await closeTerminalTabs(s);
     await s.until(
       "core.surfaces",
-      (surfaces) => surfaces.every((surface) => surface.plugin !== "terminal"),
+      (current) => current.every((surface) => surface.plugin !== "terminal"),
       "terminal surfaces did not close",
     );
-    const closed = performance.now();
-    // 표면을 닫으면 서비스가 셸을 끝내고 회수한다. 회수의 끝을 알리는 상태나 이벤트가 없고 macOS 에는 다른 process 의
-    // 종료를 기다리는 도구가 없으므로, 상한까지 process 표를 다시 읽어 셸이 끝나기를 기다린다.
-    let after = terminalProcessSnapshot(app.configDir);
-    while (after.shells.length > 0 && performance.now() - closed < 10000) {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      after = terminalProcessSnapshot(app.configDir);
-    }
-    const ended = performance.now();
-    t.diagnostic(`surfaces closed ${Math.round(closed - closing)} ms after the close commands; shells ended ` +
-      `${Math.round(ended - closed)} ms later; left ${JSON.stringify(after.shells)}`);
+    // 서비스는 셸을 회수한 뒤에야 closed 에 답하고, 호스트는 답을 받을 때까지 그 표면을 host.sidecars 에 둔다
+    // (docs/spec/sidecars.md#messages).
+    await s.until("host.sidecars", (state) => !state.closing.some((entry) => surfaces.includes(entry.surface)),
+      "the terminal service did not answer the closes");
+    // 대기가 실제로 닫기 답을 기다렸음을 보인다. 각 터미널 표면은 닫는 동안 host.sidecars 에 있었다.
+    const listed = new Set((await closing.stop()).flatMap((state) => state.closing.map((entry) => entry.surface)));
+    assert.deepEqual(surfaces.filter((surface) => !listed.has(surface)), [],
+      `terminal surfaces never awaited a close answer: ${JSON.stringify([...listed])}`);
+    const after = terminalProcessSnapshot(app.configDir);
     assert.equal(after.service, before.service, "closing tabs must not recreate the shared terminal service");
-    assert.deepEqual(after.shells, [], `normal terminal close must reap every PTY child within 10 s of the surface close`);
+    assert.deepEqual(after.shells, [], "normal terminal close must reap every PTY child before the close answer");
   });
 
   test(`${app.name}: removing a project ends the terminal sessions that its layout held`, async (t) => {

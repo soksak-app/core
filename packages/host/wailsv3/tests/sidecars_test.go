@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -629,3 +630,125 @@ func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 	}
 	requireEnded(t, processID(t, directory))
 }
+
+// closingSnapshots 는 closing 이 바뀔 때마다 그 값을 받는 채널이다.
+func closingSnapshots(sidecars *host.Sidecars) chan []host.ClosingSurface {
+	snapshots := make(chan []host.ClosingSurface, 64)
+	sidecars.ClosingChanged = func() { snapshots <- sidecars.Closing() }
+	return snapshots
+}
+
+// nextClosing 은 다음 closing 값을 받는다. 오지 않으면 검사가 실패한다.
+func nextClosing(t *testing.T, snapshots chan []host.ClosingSurface) []host.ClosingSurface {
+	t.Helper()
+	select {
+	case value := <-snapshots:
+		return value
+	case <-time.After(stall):
+		t.Fatal("closing did not change")
+		return nil
+	}
+}
+
+// closingScript 는 sidecar 실행 파일을 directory 에 쓰고 그 선언을 만든다.
+func closingSidecars(t *testing.T, script string) *host.Sidecars {
+	t.Helper()
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "closing"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"closing","protocol":1}`), directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
+	return sidecars
+}
+
+// contract: sidecars.close.answer-ends-closing
+func TestClosedSurfaceStaysClosingUntilTheSidecarAnswers(t *testing.T) {
+	// 받은 줄을 그대로 돌려준다. closed 줄을 돌려주면 그것이 closed 의 답이다.
+	sidecars := closingSidecars(t, "#!/bin/sh\ntee /dev/null\n")
+	snapshots := closingSnapshots(sidecars)
+	owner := newFakeOwner("/projects/closing")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	sidecars.Close("s1")
+	want := []host.ClosingSurface{{Sidecar: echoSidecar, Surface: "s1"}}
+	if got := nextClosing(t, snapshots); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("closing after close = %v, want %v", got, want)
+	}
+	if got := nextClosing(t, snapshots); len(got) != 0 {
+		t.Fatalf("closing after the answer = %v, want none", got)
+	}
+}
+
+// contract: sidecars.close.failed-answer-is-logged
+func TestFailedCloseAnswerIsLogged(t *testing.T) {
+	script := "#!/bin/sh\nwhile read line; do case \"$line\" in *closed*) printf '{\"surface\":\"s1\",\"closed\":true,\"error\":\"busy\"}\\n';; *) echo \"$line\";; esac; done\n"
+	sidecars := closingSidecars(t, script)
+	snapshots := closingSnapshots(sidecars)
+	var written strings.Builder
+	var mu sync.Mutex
+	log.SetOutput(writerFunc(func(p []byte) (int, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		return written.Write(p)
+	}))
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	owner := newFakeOwner("/projects/closing")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	sidecars.Close("s1")
+	nextClosing(t, snapshots)
+	if got := nextClosing(t, snapshots); len(got) != 0 {
+		t.Fatalf("closing after the failed answer = %v, want none", got)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if want := "sidecar @fixture/sidecar-echo: close s1: busy"; !strings.Contains(written.String(), want) {
+		t.Fatalf("log %q does not contain %q", written.String(), want)
+	}
+}
+
+// contract: sidecars.close.unexpected-answer-fails
+func TestCloseAnswerForAnOpenSurfaceFailsTheSidecar(t *testing.T) {
+	sidecars := closingSidecars(t, "#!/bin/sh\nread line\nprintf '{\"surface\":\"s1\",\"closed\":true}\\n'\nexec cat >/dev/null\n")
+	owner := newFakeOwner("/projects/closing")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case failure := <-owner.failures:
+		if got := failure.(host.SidecarFailure).Reason; got != "unexpected close answer for s1" {
+			t.Fatalf("failure reason = %q", got)
+		}
+	case <-time.After(stall):
+		t.Fatal("the unexpected close answer did not fail the sidecar")
+	}
+}
+
+// contract: sidecars.close.process-end-clears-closing
+func TestEndedSidecarLeavesNoClosingSurface(t *testing.T) {
+	// 첫 요청에 답하고, closed 를 받으면 답하지 않고 끝난다.
+	sidecars := closingSidecars(t, "#!/bin/sh\nread line\necho \"$line\"\nread line\nexit 0\n")
+	snapshots := closingSnapshots(sidecars)
+	owner := newFakeOwner("/projects/closing")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	sidecars.Close("s1")
+	if got := nextClosing(t, snapshots); len(got) != 1 {
+		t.Fatalf("closing after close = %v, want s1", got)
+	}
+	if got := nextClosing(t, snapshots); len(got) != 0 {
+		t.Fatalf("closing after the sidecar ended = %v, want none", got)
+	}
+}
+
+// writerFunc 는 함수를 io.Writer 로 쓴다.
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) { return f(p) }

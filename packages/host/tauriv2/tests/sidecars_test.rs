@@ -6,7 +6,9 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Duration;
 
 use serde_json::value::RawValue;
-use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
+use soksak_host_tauriv2::sidecars::{
+    ClosingSurface, Failure, Message, Owner, SidecarDeclaration, Sidecars,
+};
 
 /// 멈춘 검사를 끝내는 상한이다. 성공은 받은 event 와 끝난 process 로 판정하며 이 시간으로 판정하지 않는다.
 /// 부하가 큰 기계에서도 sidecar 의 답과 종료는 이 안에 온다.
@@ -803,4 +805,111 @@ fn closed_surface_messages_are_discarded_and_unknown_ones_fail() {
         (ECHO, "s1", "unknown surface ghost")
     );
     assert_ended(process_id(directory.path()));
+}
+
+/// script 를 실행하는 사이드카 @fixture/sidecar-echo 와, closing 이 바뀔 때마다 그 값을 받는 채널.
+fn closing_sidecars(
+    script: &str,
+) -> (
+    std::sync::Arc<Sidecars<FakeOwner>>,
+    Receiver<Vec<ClosingSurface>>,
+    tempfile::TempDir,
+) {
+    let directory = tempfile::tempdir().unwrap();
+    let program = directory.path().join("closing");
+    std::fs::write(&program, script).unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let files: Files = vec![(ECHO, r#"{"executable":"closing","protocol":1}"#.to_string())];
+    let sidecars = std::sync::Arc::new(create(&files, directory.path()).unwrap());
+    let (snapshot, snapshots) = channel();
+    let observed = std::sync::Arc::downgrade(&sidecars);
+    sidecars.on_closing_changed(move || {
+        if let Some(sidecars) = observed.upgrade() {
+            let _ = snapshot.send(sidecars.closing());
+        }
+    });
+    (sidecars, snapshots, directory)
+}
+
+fn closing_of(surface: &str) -> Vec<ClosingSurface> {
+    vec![ClosingSurface {
+        sidecar: ECHO.to_string(),
+        surface: surface.to_string(),
+    }]
+}
+
+// contract: sidecars.close.answer-ends-closing
+#[test]
+fn closed_surface_stays_closing_until_the_sidecar_answers() {
+    // 받은 줄을 그대로 돌려준다. closed 줄을 돌려주면 그것이 closed 의 답이다.
+    let (sidecars, snapshots, _directory) = closing_sidecars("#!/bin/sh\ntee /dev/null\n");
+    let (window, _events) = owner("a", "/projects/closing");
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+        .unwrap();
+    sidecars.retain(&window, &|_| false).unwrap();
+    assert_eq!(snapshots.recv_timeout(STALL).unwrap(), closing_of("s1"));
+    assert_eq!(snapshots.recv_timeout(STALL).unwrap(), vec![]);
+    sidecars.stop();
+}
+
+// contract: sidecars.close.failed-answer-is-logged
+#[test]
+fn failed_close_answer_is_logged() {
+    // 로그는 표준 오류이므로 같은 검사를 자식 process 로 실행해 그 출력을 읽는다.
+    if std::env::var_os("SOKSAK_CLOSE_LOG_CHILD").is_some() {
+        let script = "#!/bin/sh\nwhile read line; do case \"$line\" in *closed*) printf '{\"surface\":\"s1\",\"closed\":true,\"error\":\"busy\"}\\n';; *) echo \"$line\";; esac; done\n";
+        let (sidecars, snapshots, _directory) = closing_sidecars(script);
+        let (window, _events) = owner("a", "/projects/closing");
+        sidecars
+            .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+            .unwrap();
+        sidecars.retain(&window, &|_| false).unwrap();
+        assert_eq!(snapshots.recv_timeout(STALL).unwrap(), closing_of("s1"));
+        assert_eq!(snapshots.recv_timeout(STALL).unwrap(), vec![]);
+        sidecars.stop();
+        return;
+    }
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "failed_close_answer_is_logged", "--nocapture"])
+        .env("SOKSAK_CLOSE_LOG_CHILD", "1")
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "the child check failed: {stderr}");
+    assert!(
+        stderr.contains("sidecar @fixture/sidecar-echo: close s1: busy"),
+        "the failed close was not logged: {stderr}"
+    );
+}
+
+// contract: sidecars.close.unexpected-answer-fails
+#[test]
+fn close_answer_for_an_open_surface_fails_the_sidecar() {
+    let (sidecars, _snapshots, _directory) = closing_sidecars(
+        "#!/bin/sh\nread line\nprintf '{\"surface\":\"s1\",\"closed\":true}\\n'\nexec cat >/dev/null\n",
+    );
+    let (window, _events, failures) = failing_owner("a", "/projects/closing");
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+        .unwrap();
+    let failure = failures.recv_timeout(STALL).unwrap();
+    assert_eq!(failure.reason, "unexpected close answer for s1");
+    sidecars.stop();
+}
+
+// contract: sidecars.close.process-end-clears-closing
+#[test]
+fn ended_sidecar_leaves_no_closing_surface() {
+    // 첫 요청에 답하고, closed 를 받으면 답하지 않고 끝난다.
+    let (sidecars, snapshots, _directory) =
+        closing_sidecars("#!/bin/sh\nread line\necho \"$line\"\nread line\nexit 0\n");
+    let (window, _events) = owner("a", "/projects/closing");
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+        .unwrap();
+    sidecars.retain(&window, &|_| false).unwrap();
+    assert_eq!(snapshots.recv_timeout(STALL).unwrap(), closing_of("s1"));
+    assert_eq!(snapshots.recv_timeout(STALL).unwrap(), vec![]);
+    sidecars.stop();
 }

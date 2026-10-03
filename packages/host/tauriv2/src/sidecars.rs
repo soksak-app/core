@@ -107,6 +107,82 @@ struct Event {
     body: Box<RawValue>,
 }
 
+/// closed 를 담았는지 먼저 본다. closed 가 있으면 그 줄은 closed 에 대한 답이다(docs/spec/sidecars.md#messages).
+#[derive(Deserialize)]
+struct CloseProbe {
+    closed: Option<bool>,
+}
+
+/// closed 에 대한 사이드카의 답. error 는 닫지 못한 까닭이다.
+#[derive(Deserialize)]
+struct CloseAnswer {
+    surface: String,
+    closed: bool,
+    error: Option<String>,
+}
+
+/// 호스트가 closed 를 보냈고 사이드카가 아직 답하지 않은 표면(host.sidecars).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ClosingSurface {
+    /// closed 를 받은 사이드카 패키지 이름.
+    pub sidecar: String,
+    /// 닫힌 표면 id.
+    pub surface: String,
+}
+
+/// closing 이 바뀐 뒤 잠금 밖에서 부르는 알림.
+type ClosingChanged = Arc<dyn Fn() + Send + Sync>;
+
+/// line 이 closed 에 대한 답이면 처리한다. 답이 아니면 Ok(false), 처리했으면 Ok(true), 프로토콜을 어겼으면 그
+/// 까닭을 반환한다. 닫지 못한 까닭은 로그에 쓴다.
+fn close_answer<O: Owner>(
+    state: &Arc<Mutex<State<O>>>,
+    sidecar: &str,
+    line: &[u8],
+) -> Result<bool, String> {
+    let probe: CloseProbe =
+        serde_json::from_slice(line).map_err(|error| format!("invalid message: {error}"))?;
+    if probe.closed.is_none() {
+        return Ok(false);
+    }
+    let answer: CloseAnswer =
+        serde_json::from_slice(line).map_err(|error| format!("invalid message: {error}"))?;
+    if !answer.closed {
+        return Err("invalid message: closed is not true".to_string());
+    }
+    let (pending, changed) = {
+        let mut state = state.lock().expect("sidecar state");
+        let pending = state
+            .closing
+            .get_mut(sidecar)
+            .is_some_and(|surfaces| surfaces.remove(&answer.surface));
+        if state
+            .closing
+            .get(sidecar)
+            .is_some_and(|surfaces| surfaces.is_empty())
+        {
+            state.closing.remove(sidecar);
+        }
+        (pending, state.closing_changed.clone())
+    };
+    if !pending {
+        return Err(format!("unexpected close answer for {}", answer.surface));
+    }
+    if let Some(error) = answer.error {
+        eprintln!("sidecar {sidecar}: close {}: {error}", answer.surface);
+    }
+    if let Some(changed) = changed {
+        changed();
+    }
+    Ok(true)
+}
+
+/// 끝난 프로세스나 끊긴 연결의 사이드카가 답하지 않은 닫기를 지운다. 지웠으면 알림을 돌려준다.
+fn forget_closing<O>(state: &mut State<O>, sidecar: &str) -> Option<ClosingChanged> {
+    state.closing.remove(sidecar)?;
+    state.closing_changed.clone()
+}
+
 /// 읽기 스레드의 응답 전송기. 사이드카 outbox 채널로 응답을 전송한다.
 /// 채널이 가득 차면 응답을 State.pending_replies 에 버퍼링한다.
 struct ReadThreadResponseSender<O: Owner> {
@@ -247,6 +323,10 @@ struct State<O> {
     running: HashMap<String, Process>,
     /// 시작 중인 사이드카. 시작은 잠금 밖에서 하며, 끝나면 Core::started 로 알린다.
     starting: HashSet<String>,
+    /// 사이드카마다 closed 를 보냈고 답을 받지 않은 표면.
+    closing: std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+    /// closing 이 바뀐 뒤 잠금 밖에서 부르는 알림. 호스트가 host.sidecars 를 알린다.
+    closing_changed: Option<ClosingChanged>,
     owners: HashMap<String, O>,
     // 표면을 처음 보낼 때의 프로젝트 디렉터리. 사이드카는 root 와 표면으로 세션을 찾으므로, 창의
     // 프로젝트가 바뀐 뒤에도 이미 열린 표면의 요청과 닫힘은 이 root 로 보낸다.
@@ -358,6 +438,8 @@ impl<O: Owner> Sidecars<O> {
                 state: Arc::new(Mutex::new(State {
                     running: HashMap::new(),
                     starting: HashSet::new(),
+                    closing: std::collections::BTreeMap::new(),
+                    closing_changed: None,
                     owners: HashMap::new(),
                     roots: HashMap::new(),
                     stopped: false,
@@ -493,6 +575,7 @@ impl<O: Owner> Sidecars<O> {
             .map(|(surface, _)| surface.clone())
             .collect();
 
+        let mut closed_any = false;
         for surface in gone {
             state.owners.remove(&surface);
             let root = state.roots.remove(&surface);
@@ -506,6 +589,15 @@ impl<O: Owner> Sidecars<O> {
             .map_err(|e| e.to_string())?;
             line.push(b'\n');
 
+            let names: Vec<String> = state.running.keys().cloned().collect();
+            for name in names {
+                state
+                    .closing
+                    .entry(name)
+                    .or_default()
+                    .insert(surface.clone());
+                closed_any = true;
+            }
             // 채널 전송을 시도할 프로세스들을 먼저 수집한다 (borrow 충돌 방지).
             let processes: Vec<(String, Result<(), TrySendError<Outgoing>>)> = state
                 .running
@@ -532,7 +624,36 @@ impl<O: Owner> Sidecars<O> {
                 }
             }
         }
+        let changed = state.closing_changed.clone();
+        drop(state);
+        if let (true, Some(changed)) = (closed_any, changed) {
+            changed();
+        }
         Ok(())
+    }
+
+    /// closed 를 보냈고 답을 받지 않은 표면을 사이드카와 표면 순으로 반환한다(host.sidecars).
+    pub fn closing(&self) -> Vec<ClosingSurface> {
+        let state = self.core.state.lock().expect("sidecar state");
+        state
+            .closing
+            .iter()
+            .flat_map(|(sidecar, surfaces)| {
+                surfaces.iter().map(move |surface| ClosingSurface {
+                    sidecar: sidecar.clone(),
+                    surface: surface.clone(),
+                })
+            })
+            .collect()
+    }
+
+    /// closing 이 바뀔 때 잠금 밖에서 부를 알림을 정한다.
+    pub fn on_closing_changed(&self, changed: impl Fn() + Send + Sync + 'static) {
+        self.core
+            .state
+            .lock()
+            .expect("sidecar state")
+            .closing_changed = Some(Arc::new(changed));
     }
 
     /// 각 영속 서비스에서 surfaces(표면, 루트) 에 없는 이 애플리케이션의 세션을 닫고 닫은 세션 수를
@@ -680,15 +801,25 @@ impl<O: Owner> Sidecars<O> {
     /// 모든 사이드카를 종료한다. 채널에 Close 신호를 보내 쓰기 스레드를 종료하고 stdin을 닫은 후
     /// 프로세스 종료를 대기하고, 기한 초과 시 강제 종료한다.
     pub fn stop(&self) {
-        let processes: Vec<(String, Process)> = {
+        let (processes, changed): (Vec<(String, Process)>, Option<ClosingChanged>) = {
             let mut state = self.core.state.lock().expect("sidecar state");
             state.stopped = true;
             // 시작 중인 사이드카는 끝나면 등록되므로, 그 시작을 기다린 뒤 실행 중인 목록을 비운다.
             while !state.starting.is_empty() {
                 state = self.core.started.wait(state).expect("sidecar state");
             }
-            state.running.drain().collect()
+            // 멈춘 사이드카는 답하지 않는다.
+            let changed = if state.closing.is_empty() {
+                None
+            } else {
+                state.closing.clear();
+                state.closing_changed.clone()
+            };
+            (state.running.drain().collect(), changed)
         };
+        if let Some(changed) = changed {
+            changed();
+        }
 
         // 모든 프로세스를 병렬로 기다린다.
         let deadline = std::time::Instant::now() + self.stop_timeout;
@@ -1309,6 +1440,11 @@ impl<O: Owner> Core<O> {
                         }
                         continue;
                     }
+                    match close_answer(&state, &sidecar, &line) {
+                        Ok(true) => continue,
+                        Ok(false) => {}
+                        Err(violation) => return Some(violation),
+                    }
                     let event: Event = match serde_json::from_slice(&line) {
                         Ok(event) => event,
                         Err(error) => return Some(format!("invalid message: {error}")),
@@ -1342,6 +1478,7 @@ impl<O: Owner> Core<O> {
             })();
             let mut was_current = false;
             let mut owned = Vec::new();
+            let mut changed = None;
             if let Ok(mut state) = state.lock() {
                 let is_current = state
                     .running
@@ -1366,8 +1503,12 @@ impl<O: Owner> Core<O> {
                         }
                     }
                     state.unannounced_loss.insert(sidecar.clone());
+                    changed = forget_closing(&mut state, &sidecar);
                     was_current = true;
                 }
+            }
+            if let Some(changed) = changed {
+                changed();
             }
             let close_error =
                 Err("persistent service disconnected before close-owner ack".to_string());
@@ -1604,6 +1745,11 @@ fn relay<O: Owner>(
         if line.last() != Some(&b'\n') && read > MESSAGE_LIMIT {
             return Some(format!("message exceeds {MESSAGE_LIMIT} bytes"));
         }
+        match close_answer(state, sidecar, &line) {
+            Ok(true) => continue,
+            Ok(false) => {}
+            Err(violation) => return Some(violation),
+        }
         let event: Event = match serde_json::from_slice(&line) {
             Ok(event) => event,
             Err(error) => return Some(format!("invalid message: {error}")),
@@ -1652,7 +1798,7 @@ fn relay<O: Owner>(
 /// 기다린다. 아니면 프로세스를 실행 중인 사이드카에서 빼고 끝낸 뒤, 그 프로세스에 보낸 표면의 소유
 /// 창마다 실패를 알린다. 실패 뒤의 프로토콜 상태는 정의되지 않으므로 프로세스를 끝낸다.
 fn fail<O: Owner>(state: &Arc<Mutex<State<O>>>, sidecar: &str, violation: Option<String>) {
-    let (process, owned) = {
+    let (process, owned, changed) = {
         let mut state = state.lock().expect("sidecar state");
         if state.stopped {
             return;
@@ -1661,6 +1807,7 @@ fn fail<O: Owner>(state: &Arc<Mutex<State<O>>>, sidecar: &str, violation: Option
         let Some(process) = state.running.remove(sidecar) else {
             return;
         };
+        let changed = forget_closing(&mut state, sidecar);
         let owned: Vec<(String, O)> = process
             .surfaces
             .iter()
@@ -1671,8 +1818,11 @@ fn fail<O: Owner>(state: &Arc<Mutex<State<O>>>, sidecar: &str, violation: Option
                     .map(|owner| (surface.clone(), owner.clone()))
             })
             .collect();
-        (process, owned)
+        (process, owned, changed)
     };
+    if let Some(changed) = changed {
+        changed();
+    }
     let Process { child, outbox, .. } = process;
     let mut failures = Vec::new();
     let exit = match child {

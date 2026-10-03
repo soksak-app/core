@@ -286,6 +286,10 @@ Items:
 | `sidecars.send.fails-fast-when-sidecar-not-keeping-up` | Large sends to a sidecar that does not read end with "is not keeping up". | both |
 | `sidecars.send.slow-sidecar-does-not-block-others` | While one sidecar queue is full, a send to another sidecar returns within 50 ms. | both |
 | `sidecars.send.start-does-not-block-other-sidecars` | While a persistent service delays its hello reply, a send to another running sidecar returns within 50 ms. | both |
+| `sidecars.close.answer-ends-closing` | After `closed` is sent, `host.sidecars` lists the surface until the sidecar answers, then the list is empty. | both |
+| `sidecars.close.failed-answer-is-logged` | A close answer with `error` writes "sidecar <name>: close <surface>: <error>" to the host log and ends the closing entry. | both |
+| `sidecars.close.unexpected-answer-fails` | A close answer for a surface that the host is not closing fails the sidecar with "unexpected close answer for <surface>". | both |
+| `sidecars.close.process-end-clears-closing` | When a sidecar process ends without answering, its surfaces leave `host.sidecars`. | both |
 | `sidecars.stop.honors-stop-timeout` | Stop returns within twice the stop timeout for a sidecar that does not drain its input. | both |
 | `sidecars.stop.graceful-on-stdin-eof` | A sidecar that exits on end of input stops without waiting for the timeout. | both |
 | `sidecars.stop.kills-after-timeout` | A sidecar that ignores end of input is killed after the stop timeout. | both |

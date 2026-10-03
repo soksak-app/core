@@ -73,6 +73,9 @@ func newHost(sidecars *Sidecars, configDir string) (*Host, error) {
 	}
 	h := &Host{workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: sidecars,
 		relay: NewRelay[relayTarget]()}
+	if sidecars != nil {
+		sidecars.ClosingChanged = h.sidecarsChanged
+	}
 	plugins, err := NewPlugins(directory, h.notifyPlugins)
 	if err != nil {
 		return nil, err

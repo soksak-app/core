@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-63-1: 사이드카가 모든 `closed`에 `{surface, closed: true[, error]}`로 답한다. 두 host는 답하지 않은 닫기를 `host.sidecars` 상태에 두고, 실패한 닫기를 로그에 쓰며, PTY 회수 check는 그 상태를 기다린다.
 - G1.4-70: 두 host가 새 영속 service의 준비 줄을 최대 30초, hello 응답을 최대 5초 기다리고, 준비되지 않는 service를 끝내고 회수하며, 같은 오류 문장을 보고한다.
 - G1.4-68: 두 host가 등록부 잠금을 놓은 채 사이드카를 시작하므로, 영속 service 시작이 다른 사이드카로의 전송을 더는 늦추지 않는다. stop은 진행 중인 시작을 기다린다.
 - G1.4-63: PTY 회수 check가 process 목록을 한 번 읽는 대신, terminal surface가 닫힌 뒤 shell이 끝나기를 최대 10초 기다리고 닫기와 종료 시간을 보고한다.

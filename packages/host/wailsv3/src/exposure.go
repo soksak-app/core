@@ -108,6 +108,14 @@ var hostStatus = map[string]hostEntry{
 			"ready": map[string]any{"type": "boolean"},
 		}}},
 	},
+	"host.sidecars": {
+		Description: "The surfaces whose closed the host has sent and the sidecar has not answered: {closing: [{sidecar, surface}]}, sorted by sidecar and surface.",
+		Schema: map[string]any{"type": "object", "properties": map[string]any{
+			"closing": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
+				"sidecar": map[string]any{"type": "string"}, "surface": map[string]any{"type": "string"},
+			}}},
+		}},
+	},
 	"host.menu": {
 		Description: "The application menu with the active menu language: {language, menus}. Each submenu's title and its items' titles and key equivalents, without separators.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
@@ -635,6 +643,8 @@ func (b hostBackend) HostStatus(window, name string) (any, error) {
 		return menuItems()
 	case "host.windows":
 		return b.Windows(), nil
+	case "host.sidecars":
+		return b.sidecarsState(), nil
 	}
 	return s.windowState()
 }
@@ -1291,6 +1301,29 @@ func (s *Surfaces) presented() (float64, error) {
 
 // windowsChanged 는 host.windows 를 감시하는 연결에 창 목록을 보낸다. 값은 windows.list 의 결과이고,
 // 창이 열리거나 닫히거나 제목, 프로젝트, 키 상태가 바뀔 때 호출한다.
+// sidecarsState 는 host.sidecars 의 현재 값이다.
+func (b hostBackend) sidecarsState() map[string]any {
+	closing := []ClosingSurface{}
+	if b.h.sidecars != nil {
+		closing = b.h.sidecars.Closing()
+	}
+	return map[string]any{"closing": closing}
+}
+
+// sidecarsChanged 는 host.sidecars 를 감시하는 연결에 새 값을 보낸다.
+func (h *Host) sidecarsChanged() {
+	if h.endpoint == nil {
+		return
+	}
+	backend := hostBackend{h}
+	value := backend.sidecarsState()
+	for _, entry := range backend.Windows() {
+		if h.endpoint.Watching(entry.Window, "host.sidecars") {
+			h.endpoint.StatusChanged(entry.Window, "host.sidecars", "", value)
+		}
+	}
+}
+
 func (h *Host) windowsChanged() {
 	if h.endpoint == nil {
 		return

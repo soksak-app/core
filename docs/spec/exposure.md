@@ -107,6 +107,7 @@ Screen coordinates are points with the origin at the top-left corner of the prim
 | status | `host.windows` | The `windows.list` result. It changes when a window opens or closes and when a window title, project, key state, or page readiness changes |
 | status | `host.screens` | `[{x, y, width, height, scale, visible}]`: the displays in screen coordinates with their backing scale, and `visible`, the area not covered by the menu bar and Dock, which is the maximized window frame |
 | status | `host.dock` | The titles of the application's Dock menu items in order |
+| status | `host.sidecars` | `{closing: [{sidecar, surface}]}`: the surfaces whose `closed` the host has sent and the sidecar has not answered ([sidecars](sidecars.md#messages)) |
 | command | `host.menu.select` | Performs the application menu item `{menu, title}`: the item with `title` in the submenu with the title `menu` |
 | status | `host.menu` | The application menu: `[{title, items: [{title, key}]}]` for each submenu without separators, where `key` is the key equivalent written as the modifiers `ctrl`, `opt`, `shift`, `cmd` in that order joined by `+` before the key, or empty |
 | command | `host.window.close` | Closes the window through its normal close action |

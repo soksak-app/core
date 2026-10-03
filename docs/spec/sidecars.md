@@ -39,10 +39,13 @@ Each message is one JSON object on one line. A sidecar message on standard outpu
 | Host → sidecar | `{"surface": id, "root": path, "body": value}` for a page request. `root` is the project directory of the owning window when the host first sends for the surface; later requests for the surface keep that root after the window changes project, because a sidecar may identify a session by root and surface |
 | Host → sidecar | `{"surface": id, "root": path, "closed": true}` when the surface is removed or its window closes, with the surface's root |
 | Sidecar → host | `{"surface": id, "body": value}` |
+| Sidecar → host | `{"surface": id, "closed": true}` once the sidecar has released the resources of a closed surface, such as its sessions, processes and watches, or `{"surface": id, "closed": true, "error": text}` when it could not release them |
 
 The host records the window that first sends for a surface and delivers each sidecar message only to that window, as the `sidecar-message` event `{sidecar, surface, body}`, where `sidecar` is the package name. A request from another window for the same surface fails. When the application exits, the host closes each sidecar's standard input and waits for the process to end.
 
-The host remembers, for each sidecar process, every surface it has sent a request to, until the process ends. A message for such a surface that no longer has an owning window is discarded: the sidecar sent it after the host removed the surface and sent `closed`, and because the protocol has no acknowledgement of `closed`, such a message can arrive until the process ends. A message for a surface that the host never sent to that process is a [failure](#failure). The persistent transport keeps sessions across application processes, so a service may send for a surface that this application process has not sent to yet; it discards a message for a surface without an owning window.
+The host remembers, for each sidecar process, every surface it has sent a request to, until the process ends. A message for such a surface that no longer has an owning window is discarded: the sidecar sent it after the host removed the surface and sent `closed`, before its answer to `closed`.
+
+A sidecar answers every `closed` it receives. From sending `closed` until the answer, the host lists the surface in the application status `host.sidecars` as `{closing: [{sidecar, surface}]}`, sorted by sidecar and surface, and notifies the connections that watch it when the list changes. An answer with `error` is written to the host log as `sidecar <name>: close <surface>: <error>`; the surface has no owning window that could receive it. When a sidecar process ends or a persistent connection is lost, the host removes that sidecar's surfaces from the list, because their sessions ended with the process or the service completes the recorded close on its own. A message for a surface that the host never sent to that process is a [failure](#failure). The persistent transport keeps sessions across application processes, so a service may send for a surface that this application process has not sent to yet; it discards a message for a surface without an owning window.
 
 The operation selector in a sidecar request body is an existing transport detail. A plugin manifest does not copy that wire spelling: it declares the readable `background.operation` name, and the workbench sends the corresponding sidecar request at one transport boundary. Missing operations and sidecar errors are failures; they are not replaced or discarded.
 
@@ -51,12 +54,13 @@ The operation selector in a sidecar request body is an existing transport detail
 A sidecar that uses standard input and output fails when:
 
 - it sends a line longer than the message limit;
-- it sends a line that is not a JSON object with a string `surface` and a `body`;
+- it sends a line that is not a JSON object with a string `surface` and either a `body` or `closed` true;
+- it answers `closed` for a surface that the host is not closing;
 - it sends a message for a surface that the host never sent to that process;
 - reading its standard output fails;
 - its standard output ends, including when the process exits, while the host is not stopping its sidecars.
 
-The protocol state after a failure is undefined, so the host reads no further messages from that process. The host removes the process from its running sidecars, sends it the force-kill signal, and waits for it to end. It then writes the failure to its log and delivers the `sidecar-failure` event `{sidecar, surface, reason}` to the owning window of each surface that sent a request to that process and still has an owner. `reason` is text that names the cause: `message exceeds 67108864 bytes`, `invalid message: <parser error>`, `unknown surface <surface>`, `read: <error>`, or `output closed: <exit status>`. A request that the failed process did not answer gets no reply; the page observes the failure instead.
+The protocol state after a failure is undefined, so the host reads no further messages from that process. The host removes the process from its running sidecars, sends it the force-kill signal, and waits for it to end. It then writes the failure to its log and delivers the `sidecar-failure` event `{sidecar, surface, reason}` to the owning window of each surface that sent a request to that process and still has an owner. `reason` is text that names the cause: `message exceeds 67108864 bytes`, `invalid message: <parser error>`, `unknown surface <surface>`, `unexpected close answer for <surface>`, `read: <error>`, or `output closed: <exit status>`. A request that the failed process did not answer gets no reply; the page observes the failure instead.
 
 A send after a failure follows the start rule: the next request to that sidecar starts a new process. The new process has none of the sessions of the failed process, so a page that keeps a session opens it again. Each surface keeps its owning window and its first root.
 

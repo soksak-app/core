@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -67,10 +68,19 @@ type sidecarEvent struct {
 	Body    json.RawMessage `json:"body"`
 }
 
-// sidecarOutput 은 표준 출력 메시지의 선언된 형태다. 빠진 surface 를 빈 문자열과 구별한다.
+// sidecarOutput 은 표준 출력 메시지의 선언된 형태다. 빠진 surface 를 빈 문자열과 구별한다. closed 가 있으면
+// closed 에 대한 응답이고 error 는 닫지 못한 까닭이다(docs/spec/sidecars.md#messages).
 type sidecarOutput struct {
 	Surface *string         `json:"surface"`
 	Body    json.RawMessage `json:"body"`
+	Closed  *bool           `json:"closed"`
+	Error   *string         `json:"error"`
+}
+
+// ClosingSurface 는 호스트가 closed 를 보냈고 사이드카가 아직 답하지 않은 표면이다(host.sidecars).
+type ClosingSurface struct {
+	Sidecar string `json:"sidecar"`
+	Surface string `json:"surface"`
 }
 
 type sidecar struct {
@@ -109,7 +119,11 @@ type Sidecars struct {
 	running    map[string]*sidecar
 	// starting 은 시작 중인 사이드카다. 시작은 잠금 밖에서 하며, 끝나면 그 채널을 닫는다.
 	starting map[string]chan struct{}
-	owners   map[string]SidecarOwner
+	// closing 은 사이드카마다 closed 를 보냈고 답을 받지 않은 표면이다.
+	closing map[string]map[string]bool
+	// ClosingChanged 는 closing 이 바뀐 뒤 잠금 밖에서 호출된다. 호스트가 host.sidecars 를 알린다.
+	ClosingChanged func()
+	owners         map[string]SidecarOwner
 	// roots 는 표면을 처음 보낼 때의 프로젝트 디렉터리다. 사이드카는 root 와 표면으로 세션을 찾으므로,
 	// 창의 프로젝트가 바뀐 뒤에도 이미 열린 표면의 요청과 닫힘은 이 root 로 보낸다.
 	roots   map[string]string
@@ -120,8 +134,8 @@ type Sidecars struct {
 	StopTimeout     time.Duration // 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
 	// ReadyTimeout 은 새로 시작한 영속 service 가 endpoint 를 출력하기까지의 상한이다. 기본값 30초. 테스트가 주입한다.
 	ReadyTimeout time.Duration
-	configDir       string
-	nextRequest     uint64
+	configDir    string
+	nextRequest  uint64
 }
 
 // SidecarDeclaration 은 설치된 sidecar 하나다. Data 는 그 sidecar.json 의 내용이고 Folder 는 그것을 담은 폴더다.
@@ -139,6 +153,7 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		persistent:      map[string]bool{},
 		running:         map[string]*sidecar{},
 		starting:        map[string]chan struct{}{},
+		closing:         map[string]map[string]bool{},
 		owners:          map[string]SidecarOwner{},
 		roots:           map[string]string{},
 		unannouncedLoss: map[string]bool{},
@@ -308,10 +323,17 @@ func (c *Sidecars) SendResponse(name, surface, image string, body json.RawMessag
 
 // Close 는 제거된 표면을 실행 중인 모든 사이드카에 알린다.
 func (c *Sidecars) Close(surface string) {
+	if c.closeSurface(surface) {
+		c.closingChanged()
+	}
+}
+
+// closeSurface 는 surface 의 closed 를 실행 중인 사이드카에 보내고, 응답을 기다리는 표면을 기록했으면 true 를 반환한다.
+func (c *Sidecars) closeSurface(surface string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, ok := c.owners[surface]; !ok {
-		return
+		return false
 	}
 	delete(c.owners, surface)
 	root := c.roots[surface]
@@ -320,11 +342,15 @@ func (c *Sidecars) Close(surface string) {
 	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Closed: true})
 	if err != nil {
 		log.Printf("sidecar close %s: marshal: %v", surface, err)
-		return
+		return false
 	}
 	line = append(line, '\n')
 
 	for _, process := range c.running {
+		if c.closing[process.name] == nil {
+			c.closing[process.name] = map[string]bool{}
+		}
+		c.closing[process.name][surface] = true
 		// 논블로킹으로 채널에 전송한다. 채널이 가득 차면 pendingCloses에 저장한다.
 		select {
 		case process.outbox <- line:
@@ -335,6 +361,66 @@ func (c *Sidecars) Close(surface string) {
 			process.muClosed.Unlock()
 		}
 	}
+	return len(c.running) > 0
+}
+
+// Closing 은 closed 를 보냈고 답을 받지 않은 표면을 사이드카와 표면 순으로 반환한다(host.sidecars).
+func (c *Sidecars) Closing() []ClosingSurface {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	list := []ClosingSurface{}
+	for sidecar, surfaces := range c.closing {
+		for surface := range surfaces {
+			list = append(list, ClosingSurface{Sidecar: sidecar, Surface: surface})
+		}
+	}
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].Sidecar != list[j].Sidecar {
+			return list[i].Sidecar < list[j].Sidecar
+		}
+		return list[i].Surface < list[j].Surface
+	})
+	return list
+}
+
+// closingChanged 는 closing 이 바뀐 것을 알린다. 잠금 밖에서 호출한다.
+func (c *Sidecars) closingChanged() {
+	if c.ClosingChanged != nil {
+		c.ClosingChanged()
+	}
+}
+
+// closeAnswered 는 사이드카 name 이 surface 의 closed 에 답한 것을 기록한다. 그 표면을 닫고 있지 않았으면
+// 프로토콜 위반의 까닭을 반환한다. 닫지 못한 까닭은 로그에 쓴다. 잠금 밖에서 호출한다.
+func (c *Sidecars) closeAnswered(name, surface string, closed bool, failure *string) string {
+	if !closed {
+		return "invalid message: closed is not true"
+	}
+	c.mu.Lock()
+	pending := c.closing[name][surface]
+	delete(c.closing[name], surface)
+	if len(c.closing[name]) == 0 {
+		delete(c.closing, name)
+	}
+	c.mu.Unlock()
+	if !pending {
+		return "unexpected close answer for " + surface
+	}
+	if failure != nil {
+		log.Printf("sidecar %s: close %s: %s", name, surface, *failure)
+	}
+	c.closingChanged()
+	return ""
+}
+
+// forgetClosing 는 끝난 프로세스나 끊긴 연결의 사이드카 name 이 답하지 않은 닫기를 지운다. c.mu 를 쥔 채 호출하며,
+// 지웠으면 true 를 반환한다.
+func (c *Sidecars) forgetClosing(name string) bool {
+	if len(c.closing[name]) == 0 {
+		return false
+	}
+	delete(c.closing, name)
+	return true
 }
 
 // CloseOwner 는 owner 창의 모든 표면을 사이드카에 알린다. 창이 닫힐 때 호출한다.
@@ -978,8 +1064,10 @@ func (c *Sidecars) read(process *sidecar, stdout io.Reader) {
 	c.mu.Lock()
 	failed := !c.stopped && c.running[process.name] == process
 	owned := make([]ownedSurface, 0, len(process.surfaces))
+	forgot := false
 	if c.running[process.name] == process {
 		delete(c.running, process.name)
+		forgot = c.forgetClosing(process.name)
 	}
 	if failed {
 		// 종료 중이면 Stop 이 outbox 를 닫는다. 아니면 쓰기 고루틴을 끝내도록 여기서 닫는다.
@@ -992,6 +1080,9 @@ func (c *Sidecars) read(process *sidecar, stdout io.Reader) {
 		}
 	}
 	c.mu.Unlock()
+	if forgot {
+		c.closingChanged()
+	}
 	if !failed {
 		if err := process.cmd.Wait(); err != nil {
 			log.Printf("sidecar %s exited while stopping: %v", process.name, err)
@@ -1031,6 +1122,12 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 		}
 		if output.Surface == nil {
 			return "invalid message: surface is missing"
+		}
+		if output.Closed != nil {
+			if violation := c.closeAnswered(process.name, *output.Surface, *output.Closed, output.Error); violation != "" {
+				return violation
+			}
+			continue
 		}
 		if output.Body == nil {
 			return "invalid message: body is missing"
@@ -1072,10 +1169,12 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		delete(process.closeWaiters, request)
 		waiters = append(waiters, waiter)
 	}
+	forgot := false
 	if c.running[process.name] == process {
 		delete(c.running, process.name)
 		c.unannouncedLoss[process.name] = true
 		wasCurrent = true
+		forgot = c.forgetClosing(process.name)
 		if violation != "" {
 			for surface := range process.surfaces {
 				if owner := c.owners[surface]; owner != nil {
@@ -1085,6 +1184,9 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		}
 	}
 	c.mu.Unlock()
+	if forgot {
+		c.closingChanged()
+	}
 	for _, waiter := range waiters {
 		waiter <- errors.New("persistent service disconnected before close-owner ack")
 	}
@@ -1172,6 +1274,12 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 		}
 		if output.Surface == nil {
 			return "invalid message: surface is missing"
+		}
+		if output.Closed != nil {
+			if violation := c.closeAnswered(process.name, *output.Surface, *output.Closed, output.Error); violation != "" {
+				return violation
+			}
+			continue
 		}
 		if output.Body == nil {
 			return "invalid message: body is missing"

@@ -164,6 +164,7 @@ fn host_entries_are_appended_as_registered() {
             "host.dock",
             "host.menu",
             "host.screens",
+            "host.sidecars",
             "host.window",
             "host.windows"
         ]
