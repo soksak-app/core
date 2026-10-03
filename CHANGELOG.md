@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-90-4-2: the main page numbers every surface composition placement of a document with one increasing revision, so a surface mounted again in the same document is no longer refused with `stale composition revision 1`.
 - G1.4-105-1: the Wails host refuses `null` in a numeric field of a host call argument instead of reading it as 0, and refuses a workspace `move` without `delta` with `move delta is missing`, as the Tauri host does.
 - G1.4-105: the main page refuses a host call whose argument contains NaN or Infinity before sending it, with one `TypeError` on both hosts, because JSON would send the number as `null` and the hosts decode `null` differently.
 - G1.4-106: the Tauri host places the window overlays before it begins a surface layout, as the Wails host does, and cancels a begun layout when a later step or the image raster refresh fails, so a failed surface sync no longer leaves the window's layout transaction open.

@@ -40,6 +40,11 @@ if (native) {
   });
 }
 
+// 이 문서가 호스트에 보낸 마지막 composition revision. 호스트는 표면마다 revision 이 커지기를 요구하고, 표면이 파괴되거나
+// 문서가 바뀔 때만 그 값을 지운다. 같은 문서에서 다시 마운트한 표면의 새 composition 은 1부터 세므로, 문서의 모든 배치를
+// 하나의 증가하는 번호로 보낸다(docs/spec/surface-composition.md).
+let compositionRevision = 0;
+
 function pageRuntime(surface, scoped, compositionReady) {
   const invoke = (name, payload) => scoped.native.call(name, payload);
   return {
@@ -72,7 +77,11 @@ function pageRuntime(surface, scoped, compositionReady) {
           throw error;
         }
       },
-      place: (revision, regions, overlays) => invoke("compositionPlace", { revision, regions, overlays }),
+      // composition 안의 순서는 호출 순서와 같으므로 composition 의 revision 대신 문서의 다음 번호를 보낸다.
+      place: (_revision, regions, overlays) => {
+        const revision = ++compositionRevision;
+        return invoke("compositionPlace", { revision, regions, overlays });
+      },
     },
     sidecar: scoped.sidecar,
   };
