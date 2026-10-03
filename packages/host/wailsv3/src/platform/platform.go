@@ -7,7 +7,10 @@
 package platform
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -106,12 +109,57 @@ func (o WindowObjects) Payload() map[string]int64 {
 	}
 }
 
+// String 은 오류 메시지에 쓰는 수의 표기다.
+func (o WindowObjects) String() string {
+	return fmt.Sprintf("windowCompositions %d, surfaceHosts %d, inputRegistrations %d",
+		o.WindowCompositions, o.SurfaceHosts, o.InputRegistrations)
+}
+
+// ErrWindowObjectsEqual 은 diagnostics.native.objects 의 equal 이 잘못되었을 때의 오류다.
+var ErrWindowObjectsEqual = errors.New("equal must be an object of windowCompositions, surfaceHosts and inputRegistrations, each a non-negative integer")
+
+// ParseWindowObjects 는 diagnostics.native.objects 의 equal 을 읽는다. 세 이름 외의 이름, 빠진 이름, 정수가 아니거나
+// 음수인 값은 ErrWindowObjectsEqual 로 거부한다.
+func ParseWindowObjects(raw json.RawMessage) (WindowObjects, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil || len(fields) != 3 {
+		return WindowObjects{}, ErrWindowObjectsEqual
+	}
+	read := func(name string) (int64, bool) {
+		value, ok := fields[name]
+		if !ok {
+			return 0, false
+		}
+		// json.Number 는 따옴표 안의 숫자도 받으므로 any 로 읽어 JSON 숫자인지 확인한다.
+		decoder := json.NewDecoder(bytes.NewReader(value))
+		decoder.UseNumber()
+		var decoded any
+		if decoder.Decode(&decoded) != nil {
+			return 0, false
+		}
+		number, isNumber := decoded.(json.Number)
+		if !isNumber {
+			return 0, false
+		}
+		n, err := number.Int64()
+		return n, err == nil && n >= 0
+	}
+	compositions, ok1 := read("windowCompositions")
+	hosts, ok2 := read("surfaceHosts")
+	registrations, ok3 := read("inputRegistrations")
+	if !ok1 || !ok2 || !ok3 {
+		return WindowObjects{}, ErrWindowObjectsEqual
+	}
+	return WindowObjects{WindowCompositions: compositions, SurfaceHosts: hosts, InputRegistrations: registrations}, nil
+}
+
 // WindowObjectCounter 는 WindowObjects 를 세는 연산이다. 진단 빌드(태그 diagnostics)의 플랫폼 구현만 제공하며,
 // 진단 코드는 Current() 의 값을 이 인터페이스로 확인해 사용한다.
 type WindowObjectCounter interface {
-	// WindowObjectsAfterEvent 는 애플리케이션이 이벤트 하나를 처리해 그 이벤트 반복의 자동 해제 풀을 비운 뒤의 수를
-	// done 에 준다. UI 스레드에서 호출하고 done 도 UI 스레드에서 불린다.
-	WindowObjectsAfterEvent(done func(WindowObjects))
+	// WindowObjectsWhen 은 애플리케이션이 이벤트 하나를 처리해 그 이벤트 반복의 자동 해제 풀을 비운 뒤, 수가 expected
+	// 와 같아질 때 그 수와 true 를 done 에 준다. seconds 안에 같아지지 않으면 그때의 수와 false 를 준다. expected 가
+	// nil 이면 이벤트 뒤의 수와 true 를 준다. UI 스레드에서 호출하고 done 도 UI 스레드에서 불린다.
+	WindowObjectsWhen(expected *WindowObjects, seconds float64, done func(counts WindowObjects, reached bool))
 }
 
 // Capturer 는 창 녹화 연산이다. 진단 빌드(태그 diagnostics)의 플랫폼 구현만 제공하며, 진단

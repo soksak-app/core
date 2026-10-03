@@ -485,11 +485,13 @@ impl Platform for Darwin {
         Ok(())
     }
     #[cfg(feature = "diagnostics")]
-    fn window_objects_after_event(
+    fn window_objects_when(
         &self,
-        done: Box<dyn FnOnce(super::WindowObjects) + Send>,
+        expected: Option<super::WindowObjects>,
+        seconds: f64,
+        done: Box<dyn FnOnce(super::WindowObjects, bool) + Send>,
     ) -> Result<(), String> {
-        window_objects::after_event(done);
+        window_objects::when(expected, seconds, done);
         Ok(())
     }
     #[cfg(feature = "diagnostics")]

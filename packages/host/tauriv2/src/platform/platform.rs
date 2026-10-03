@@ -54,6 +54,40 @@ impl WindowObjects {
             "inputRegistrations": self.input_registrations,
         })
     }
+
+    /// diagnostics.native.objects 의 equal 을 읽는다. 세 이름 외의 이름, 빠진 이름, 정수가 아니거나 음수인 값은
+    /// 거부한다.
+    pub fn from_equal(value: &Value) -> Result<Self, String> {
+        const INVALID: &str = "equal must be an object of windowCompositions, surfaceHosts and inputRegistrations, each a non-negative integer";
+        let fields = value
+            .as_object()
+            .filter(|fields| fields.len() == 3)
+            .ok_or(INVALID)?;
+        let read = |name: &str| {
+            fields
+                .get(name)
+                .and_then(Value::as_i64)
+                .filter(|n| *n >= 0)
+                .ok_or_else(|| INVALID.to_string())
+        };
+        Ok(Self {
+            window_compositions: read("windowCompositions")?,
+            surface_hosts: read("surfaceHosts")?,
+            input_registrations: read("inputRegistrations")?,
+        })
+    }
+}
+
+/// 오류 메시지에 쓰는 수의 표기.
+#[cfg(feature = "diagnostics")]
+impl std::fmt::Display for WindowObjects {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "windowCompositions {}, surfaceHosts {}, inputRegistrations {}",
+            self.window_compositions, self.surface_hosts, self.input_registrations
+        )
+    }
 }
 
 /// 네이티브 창, 뷰, 입력 감시기를 가리키는 주소.
@@ -475,11 +509,15 @@ pub trait Platform: Send + Sync {
     /// 메인 스레드에서 호출하고 done 도 메인 스레드에서 불린다.
     fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// 애플리케이션이 이벤트 하나를 처리해 그 이벤트 반복의 자동 해제 풀을 비운 뒤 창과 웹뷰에 붙인 라이브러리
-    /// 객체의 수를 done 에 준다. 메인 스레드에서 호출하고 done 도 메인 스레드에서 불린다.
-    fn window_objects_after_event(
+    /// 애플리케이션이 이벤트 하나를 처리해 그 이벤트 반복의 자동 해제 풀을 비운 뒤, 창과 웹뷰에 붙인 라이브러리
+    /// 객체의 수가 expected 와 같아질 때 그 수와 true 를 done 에 준다. seconds 안에 같아지지 않으면 그때의 수와
+    /// false 를 준다. expected 가 None 이면 이벤트 뒤의 수와 true 를 준다. 메인 스레드에서 호출하고 done 도 메인
+    /// 스레드에서 불린다.
+    fn window_objects_when(
         &self,
-        done: Box<dyn FnOnce(WindowObjects) + Send>,
+        expected: Option<WindowObjects>,
+        seconds: f64,
+        done: Box<dyn FnOnce(WindowObjects, bool) + Send>,
     ) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// 배치 트랜잭션마다 시작, 앱 DOM 표시 확인, 커밋 시각의 기록을 시작한다. 메인 스레드에서 호출한다.

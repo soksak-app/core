@@ -2,7 +2,9 @@
 //
 // diagnostics.native.objects 는 라이브러리 객체의 살아 있는 수를 애플리케이션이 이벤트 하나를 처리한 뒤에 센다. 닫은
 // 창의 객체는 그 창을 닫은 이벤트 반복의 자동 해제 풀이 비워질 때 해제되고, 풀은 애플리케이션이 이벤트를 처리할 때
-// 비워지므로, 검사는 사용자 입력 없이 그 해제를 잰다. 창을 닫은 뒤 host.windows 알림으로 닫힘을 확인하고 한 번 센다.
+// 비워지므로, 검사는 사용자 입력 없이 그 해제를 잰다. AppKit 은 화면에 있던 창을 닫기 애니메이션이 끝날 때까지
+// 유지하고 풀을 비우는 동안 자동 해제된 객체를 다음 비우기에서 해제하므로, 마지막 창을 닫은 뒤에는 처음 수를 equal
+// 로 주고, 라이브러리가 이벤트를 넣어 풀을 비울 때마다 비교한 결과를 받는다.
 import assert from "node:assert/strict";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,7 +15,7 @@ import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
 
 const CYCLES = 4;
 
-const counts = (s) => s.request("diagnostics.native.objects");
+const counts = (s, equal) => s.request("diagnostics.native.objects", equal ? { equal } : {});
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: closed project windows release their windows, webviews and attached native objects`, { timeout: 120000 }, async (t) => {
@@ -57,9 +59,12 @@ for (const app of Object.values(APPS)) {
       await s.until("core.projects", (projects) => !projects.some((project) => project.id === opened.id),
         `${label}: the project did not leave the registry`);
     }
-    const after = await counts(s);
+    // 수가 10초 안에 before 로 돌아오지 않으면 요청이 그때의 수를 담은 오류로 실패한다.
+    const after = await counts(s, before).catch((error) => {
+      throw new Error(`${app.name}: ${CYCLES} closed project windows left native objects: ${error.message}; ` +
+        `before ${JSON.stringify(before)}, while open ${JSON.stringify(measured)}`);
+    });
     t.diagnostic(`${app.name}: before ${JSON.stringify(before)}, open ${JSON.stringify(measured)}, after ${JSON.stringify(after)}`);
-    assert.deepEqual(after, before, `${app.name}: ${CYCLES} closed project windows left native objects: ` +
-      `before ${JSON.stringify(before)}, after ${JSON.stringify(after)}, while open ${JSON.stringify(measured)}`);
+    assert.deepEqual(after, before);
   });
 }

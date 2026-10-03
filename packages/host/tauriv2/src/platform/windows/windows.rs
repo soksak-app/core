@@ -367,11 +367,13 @@ impl Platform for Windows {
         unsupported::delivered_notifications(done)
     }
     #[cfg(feature = "diagnostics")]
-    fn window_objects_after_event(
+    fn window_objects_when(
         &self,
-        done: Box<dyn FnOnce(super::WindowObjects) + Send>,
+        expected: Option<super::WindowObjects>,
+        seconds: f64,
+        done: Box<dyn FnOnce(super::WindowObjects, bool) + Send>,
     ) -> Result<(), String> {
-        unsupported::window_objects_after_event(done)
+        unsupported::window_objects_when(expected, seconds, done)
     }
     #[cfg(feature = "diagnostics")]
     fn layout_trace_start(&self) -> Result<(), String> {

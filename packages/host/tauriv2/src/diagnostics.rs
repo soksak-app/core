@@ -115,7 +115,7 @@ pub(crate) fn call(
         "diagnostics.capture.still" => capture_still(window),
         "diagnostics.notifications" => delivered_notifications(window),
         "diagnostics.page.collect" => page_collect(window),
-        "diagnostics.native.objects" => native_objects(window),
+        "diagnostics.native.objects" => native_objects(window, &params),
         "diagnostics.navigation.delay" => {
             let ms = params
                 .get("ms")
@@ -151,23 +151,41 @@ fn page_collect(window: &Window) -> Result<Value, Failure> {
 
 /// 애플리케이션이 이벤트 하나를 처리한 뒤 창과 웹뷰에 붙인 라이브러리 객체의 살아 있는 수를 반환한다. 닫은 창의
 /// 객체는 그 창을 닫은 이벤트 반복의 자동 해제 풀이 비워질 때 해제되고, 풀은 애플리케이션이 이벤트를 처리할 때
-/// 비워진다. 창 검사가 닫은 창의 해제를 사용자 입력 없이 재도록 이벤트 하나를 넣고 그 뒤에 센다.
-fn native_objects(window: &Window) -> Result<Value, Failure> {
+/// 비워진다. 창 검사가 닫은 창의 해제를 사용자 입력 없이 재도록 이벤트 하나를 넣고 그 뒤에 센다. AppKit 은 화면에
+/// 있던 창을 닫기 애니메이션이 끝날 때까지 유지하므로, equal 을 주면 수가 equal 과 같아질 때 응답한다.
+fn native_objects(window: &Window, params: &Map<String, Value>) -> Result<Value, Failure> {
+    let expected = params
+        .get("equal")
+        .map(platform::WindowObjects::from_equal)
+        .transpose()
+        .map_err(Failure::params)?;
     let (tx, rx) = std::sync::mpsc::channel();
     on_main(window, move || {
-        platform::current()?.window_objects_after_event(Box::new(move |counts| {
-            if tx.send(counts).is_err() {
-                eprintln!("window object counts had no pending receiver");
-            }
-        }))
+        platform::current()?.window_objects_when(
+            expected,
+            TIMEOUT.as_secs_f64(),
+            Box::new(move |counts, reached| {
+                if tx.send((counts, reached)).is_err() {
+                    eprintln!("window object counts had no pending receiver");
+                }
+            }),
+        )
     })
     .map_err(internal)?;
-    let counts = rx.recv_timeout(TIMEOUT).map_err(|_| {
+    // 라이브러리는 이벤트를 처리한 뒤 TIMEOUT 안에 답하므로, 이벤트 처리 시간까지 두 배를 기다린다.
+    let (counts, reached) = rx.recv_timeout(2 * TIMEOUT).map_err(|_| {
         Failure::new(
             crate::endpoint::TIMED_OUT,
             format!("the application did not handle an event within {TIMEOUT:?}"),
         )
     })?;
+    if !reached {
+        let expected = expected.expect("only expected counts can be unreached");
+        return Err(Failure::new(
+            crate::endpoint::TIMED_OUT,
+            format!("window object counts did not reach {expected} within {TIMEOUT:?}; they are {counts}"),
+        ));
+    }
     Ok(counts.payload())
 }
 

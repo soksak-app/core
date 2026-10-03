@@ -619,20 +619,47 @@ func diagnosticPageCollect(e *Endpoint, _ *endpointConn, params json.RawMessage)
 // diagnosticNativeObjects 는 애플리케이션이 이벤트 하나를 처리한 뒤 창과 웹뷰에 붙인 라이브러리 객체의 살아 있는 수를
 // 반환한다. 닫은 창의 객체는 그 창을 닫은 이벤트 반복의 자동 해제 풀이 비워질 때 해제되고, 풀은 애플리케이션이
 // 이벤트를 처리할 때 비워진다. 창 검사가 닫은 창의 해제를 사용자 입력 없이 재도록 이벤트 하나를 넣고 그 뒤에 센다.
+// AppKit 은 화면에 있던 창을 닫기 애니메이션이 끝날 때까지 유지하므로, equal 을 주면 수가 equal 과 같아질 때 응답한다.
 func diagnosticNativeObjects(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	if _, _, err := diagnosticHost(e, params); err != nil {
 		return nil, err
+	}
+	var p struct {
+		Equal json.RawMessage `json:"equal"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	var expected *platform.WindowObjects
+	if p.Equal != nil {
+		equal, err := platform.ParseWindowObjects(p.Equal)
+		if err != nil {
+			return nil, rpcError(codeInvalidParams, "%s", err)
+		}
+		expected = &equal
 	}
 	counter, ok := system.(platform.WindowObjectCounter)
 	if !ok {
 		return nil, errors.New("window object counts are not implemented on this platform")
 	}
-	answer := make(chan platform.WindowObjects, 1)
-	application.InvokeSync(func() { counter.WindowObjectsAfterEvent(func(counts platform.WindowObjects) { answer <- counts }) })
+	type answer struct {
+		counts  platform.WindowObjects
+		reached bool
+	}
+	answers := make(chan answer, 1)
+	application.InvokeSync(func() {
+		counter.WindowObjectsWhen(expected, pageTimeout.Seconds(), func(counts platform.WindowObjects, reached bool) {
+			answers <- answer{counts, reached}
+		})
+	})
+	// 라이브러리는 이벤트를 처리한 뒤 pageTimeout 안에 답하므로, 이벤트 처리 시간까지 두 배를 기다린다.
 	select {
-	case counts := <-answer:
-		return counts.Payload(), nil
-	case <-time.After(pageTimeout):
+	case a := <-answers:
+		if !a.reached {
+			return nil, rpcError(codeTimeout, "window object counts did not reach %s within %s; they are %s", expected, pageTimeout, a.counts)
+		}
+		return a.counts.Payload(), nil
+	case <-time.After(2 * pageTimeout):
 		return nil, rpcError(codeTimeout, "the application did not handle an event within %s", pageTimeout)
 	}
 }

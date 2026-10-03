@@ -16,3 +16,30 @@ func TestWindowObjectsPayloadNamesTheCounts(t *testing.T) {
 		t.Fatalf("payload = %#v, want %#v", payload, want)
 	}
 }
+
+// contract: diagnostics.native-objects.equal-validates
+func TestWindowObjectsEqualValidates(t *testing.T) {
+	equal, err := platform.ParseWindowObjects([]byte(`{"windowCompositions":1,"surfaceHosts":2,"inputRegistrations":0}`))
+	want := platform.WindowObjects{WindowCompositions: 1, SurfaceHosts: 2}
+	if err != nil || equal != want {
+		t.Fatalf("ParseWindowObjects = %#v, %v, want %#v", equal, err, want)
+	}
+	for _, raw := range []string{
+		`null`, `[]`, `1`, `{}`,
+		`{"windowCompositions":1,"surfaceHosts":2}`,
+		`{"windowCompositions":1,"surfaceHosts":2,"inputRegistrations":-1}`,
+		`{"windowCompositions":1.5,"surfaceHosts":2,"inputRegistrations":0}`,
+		`{"windowCompositions":"1","surfaceHosts":2,"inputRegistrations":0}`,
+		`{"windowCompositions":1,"surfaceHosts":2,"inputRegistrations":0,"other":0}`,
+		`{"windowCompositions":1,"surfaceHosts":2,"other":0}`,
+	} {
+		if _, err := platform.ParseWindowObjects([]byte(raw)); err == nil ||
+			err.Error() != "equal must be an object of windowCompositions, surfaceHosts and inputRegistrations, each a non-negative integer" {
+			t.Errorf("ParseWindowObjects(%s) error = %v", raw, err)
+		}
+	}
+	counts := platform.WindowObjects{WindowCompositions: 2, SurfaceHosts: 2, InputRegistrations: 1}.String()
+	if counts != "windowCompositions 2, surfaceHosts 2, inputRegistrations 1" {
+		t.Fatalf("String = %q", counts)
+	}
+}

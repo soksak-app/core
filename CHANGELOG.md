@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-101-1: `diagnostics.native.objects` accepts `equal` and replies when the counts reach it, draining the autorelease pool with a posted event each time the main run loop is about to wait, because AppKit keeps a closed window until its close animation ends and releases an object autoreleased during a pool drain at the next drain; `window-release.test.mjs` waits this way and passes on both hosts with the tao pin.
 - G1.4-101-1: diagnostic builds of both hosts report the live window compositions, surface hosts, and input registrations of the shared macOS library through `diagnostics.native.objects`, counted after the application has handled an event, and the window check `window-release.test.mjs` requires four closed project windows to leave these counts unchanged.
 - G1.4-104: the Wails host refuses a surface sync request with an invalid surface rectangle instead of ending with `fatal error: sync: unlock of unlocked mutex`, and both hosts check every rectangle of the request before the layout begins, so a refused window overlay no longer leaves a begun layout in the Tauri host.
 - G1.4-101-1: the Tauri host uses tao 0.37.1 with the fix of tao PR #1328, so a closed window and its webview are released.
