@@ -1097,8 +1097,12 @@ type ownedSurface struct {
 	owner   SidecarOwner
 }
 
-func (c *Sidecars) read(process *sidecar, stdout io.Reader) {
+func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 	violation := c.relay(process, stdout)
+	// 읽기 끝을 닫아 아직 쓰는 프로세스가 쓰기에서 막히지 않게 한다. 막히면 Stop 의 기한 뒤 강제 종료까지 끝나지 않는다.
+	if err := stdout.Close(); err != nil {
+		log.Printf("sidecar %s: close output: %v", process.name, err)
+	}
 	c.mu.Lock()
 	failed := !c.stopped && c.running[process.name] == process
 	owned := make([]ownedSurface, 0, len(process.surfaces))

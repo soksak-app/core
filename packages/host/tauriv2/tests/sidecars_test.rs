@@ -533,6 +533,50 @@ fn stop_graceful_shutdown() {
     );
 }
 
+// contract: sidecars.stop.closes-unread-output
+#[test]
+fn stop_closes_unread_output() {
+    // 멈추는 동안 호스트가 더 읽지 않는 출력의 읽기 끝을 닫아, 끝나면서 파이프가 담는 것보다 많이 쓰는 사이드카도
+    // 강제 종료 없이 끝나는지 검증한다. 출력은 호스트가 기다리지 않는 닫기 응답이다.
+    let directory = tempfile::tempdir().unwrap();
+    let program = directory.path().join("talkative");
+    std::fs::write(
+        &program,
+        "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n\
+         i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"closed\":true}'; i=$((i+1)); done\nexit 0\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let files: Files = vec![(
+        "@fixture/sidecar-talkative",
+        r#"{"executable":"talkative","protocol":1}"#.to_string(),
+    )];
+    let mut sidecars = create(&files, directory.path()).unwrap();
+    // stop() 은 기한이 지나야만 강제로 끝낸다. 기한보다 먼저 돌아오면 사이드카가 출력을 다 쓰고 스스로 끝난 것이다.
+    sidecars.stop_timeout = STALL;
+    let (owner, events) = owner("a", "/projects/test");
+    sidecars
+        .send(
+            &owner,
+            "@fixture/sidecar-talkative",
+            "s1",
+            &raw(r#"{"test":"data"}"#),
+        )
+        .unwrap();
+    let event = events
+        .recv_timeout(STALL)
+        .expect("no echo event; the test stalled");
+    assert_eq!(event.surface, "s1");
+    let start = std::time::Instant::now();
+    sidecars.stop();
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed < sidecars.stop_timeout,
+        "stop took {elapsed:?} and reached the {:?} deadline: the host left the unread output open",
+        sidecars.stop_timeout
+    );
+}
+
 // contract: sidecars.stop.forgets-running-sidecars
 #[test]
 fn close_during_stop_sends_nothing() {

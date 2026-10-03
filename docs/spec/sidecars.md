@@ -64,7 +64,7 @@ The protocol state after a failure is undefined, so the host reads no further me
 
 A send after a failure follows the start rule: the next request to that sidecar starts a new process. The new process has none of the sessions of the failed process, so a page that keeps a session opens it again. Each surface keeps its owning window and its first root.
 
-While the host stops its sidecars, the end of output is not a failure and the host sends no failure event; the stop rules in [declaration and startup](#declaration-and-startup) apply. These failure rules apply to the standard input and output transport; the persistent transport reports connection loss as [terminal runtime](terminal-runtime.md) defines.
+While the host stops its sidecars, the end of output is not a failure and the host sends no failure event; when the host stops reading a sidecar's output, during a stop or after a failure, it closes its end of the pipe, so the sidecar's later writes fail instead of blocking; the stop rules in [declaration and startup](#declaration-and-startup) apply. These failure rules apply to the standard input and output transport; the persistent transport reports connection loss as [terminal runtime](terminal-runtime.md) defines.
 
 ## Page interface
 

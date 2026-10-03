@@ -625,6 +625,36 @@ func TestCloseDuringStopSendsNothing(t *testing.T) {
 	}
 }
 
+// TestStopClosesUnreadOutput 은 멈추는 동안 호스트가 더 읽지 않는 출력의 읽기 끝을 닫아, 끝나면서 파이프가 담는
+// 것보다 많이 쓰는 사이드카도 강제 종료 없이 끝나는지 검증한다. 출력은 호스트가 기다리지 않는 닫기 응답이다.
+// contract: sidecars.stop.closes-unread-output
+func TestStopClosesUnreadOutput(t *testing.T) {
+	directory := t.TempDir()
+	script := "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n" +
+		"i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"closed\":true}'; i=$((i+1)); done\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(directory, "talkative"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"talkative","protocol":1}`), directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Stop 은 기한이 지나야만 강제로 끝낸다. 기한보다 먼저 돌아오면 사이드카가 출력을 다 쓰고 스스로 끝난 것이다.
+	sidecars.StopTimeout = stall
+	owner := newFakeOwner("/projects/test")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	if event := owner.next(t); event.Surface != "s1" {
+		t.Fatalf("echo event = %+v", event)
+	}
+	start := time.Now()
+	sidecars.Stop()
+	if elapsed := time.Since(start); elapsed >= sidecars.StopTimeout {
+		t.Errorf("stop took %v and reached the %v deadline: the host left the unread output open", elapsed, sidecars.StopTimeout)
+	}
+}
+
 // TestStopForcedKill 은 기한을 초과해도 종료하지 않는 사이드카를 kill 하는지 검증한다.
 // contract: sidecars.stop.kills-after-timeout
 func TestStopForcedKill(t *testing.T) {

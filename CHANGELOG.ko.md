@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-99: Wails host는 더 읽지 않는 사이드카 출력 파이프를 닫으므로, 멈추는 동안 아직 쓰는 사이드카도 Tauri host처럼 강제 종료 없이 끝난다.
 - G1.4-98: 멈춤이 끼어든 Wails host의 retain은 닫힌 채널에 보내지 않고 "sidecars are stopped"로 실패하며, outbox가 가득 차면 Tauri host처럼 바로 실패한다.
 - G1.4-94: handler가 예외를 던진 메인 페이지 명령은 10초 뒤 `did not reply within 10000ms`를 기록하는 응답 타이머를 남기지 않는다.
 - G1.4-97: 애플리케이션이 사이드카를 멈추는 동안 창이 닫혀도 Wails host가 panic하지 않는다. Tauri host처럼 멈추기 전에 사이드카를 실행 목록에서 뺀다.
