@@ -39,6 +39,14 @@ test("checklist permits translated text and linked follow-up identifiers", { tim
   assert.equal(result.status, 0, result.stderr);
 });
 
+test("the audit reads a committed checklist larger than one mebibyte", { timeout: 3000 }, (t) => {
+  // execFileSync 의 기본 출력 한도는 1 MiB 이므로 그보다 큰 체크리스트로 확인한다.
+  const english = `- [o] G1 — ${"x".repeat(1100000)}\n`;
+  const korean = `- [o] G1 — ${"가".repeat(400000)}\n`;
+  const result = check(t, english, korean, english);
+  assert.equal(result.status, 0, result.stderr);
+});
+
 test("checklist permits retiring a completed entry when paired changelogs record why it was misclassified", { timeout: 3000 }, (t) => {
   const retirement = {
     english: "- Retired checklist entry `G1`: it recorded an agent work rule, not project work.",

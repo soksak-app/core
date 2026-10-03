@@ -53,7 +53,9 @@ const retired = retiredChecklistItems(changelogEnglish, changelogKorean);
 errors.push(...retired.errors);
 errors.push(...checkChecklistTranslations(...statusFiles.map((file) => readFileSync(file, "utf8"))));
 for (const file of statusFiles) {
-  const previous = execFileSync("git", ["show", `HEAD:${file}`], { encoding: "utf8" });
+  // execFileSync 의 기본 출력 한도(1 MiB)는 체크리스트보다 작으므로 커밋된 파일의 크기를 한도로 쓴다.
+  const size = Number(execFileSync("git", ["cat-file", "-s", `HEAD:${file}`], { encoding: "utf8" }));
+  const previous = execFileSync("git", ["show", `HEAD:${file}`], { encoding: "utf8", maxBuffer: size + 1 });
   errors.push(...checkCompletedItems(previous, readFileSync(file, "utf8"), file, retired.ids));
 }
 const counts = statusFiles.map((file, language) => {
