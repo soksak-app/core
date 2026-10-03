@@ -78,7 +78,7 @@ Tauri 이벤트 전달 콜백은 Tao의 이벤트 처리 잠금을 가진다. �
 
 합성 검사, [`modal.test.mjs`](../../e2e/modal.test.mjs), [수동 인수](examples.ko.md#수동-인수)로 DOM 평면 아래의 혼합 네이티브 콘텐츠, 앵커 투명도, 오버레이 쌓임, 모달 초기 투명도, 캡처된 반투명 배경·블러, 설정 탐색 후 선명한 콘텐츠, 배경 효과 없는 메뉴, 닫기·다시 로드 후 정리를 검증한다. 투명도는 소수점 좌표를 수정하지 않는다. 표면 크기는 푸터 검사를 별도로 통과해야 한다.
 
-뷰와 구성의 선언은 [`WKWebViewPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h)와 [`WKWebViewConfigurationPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewConfigurationPrivate.h)에 있다. 현재 프레임워크 생성 경로는 [Wry 0.56.1 `wkwebview/mod.rs`](https://github.com/tauri-apps/wry/blob/wry-v0.56.1/src/wkwebview/mod.rs)에 있다.
+뷰와 구성의 선언은 [`WKWebViewPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h)와 [`WKWebViewConfigurationPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewConfigurationPrivate.h)에 있다. 현재 프레임워크 생성 경로는 [Wry 0.57.0 `wkwebview/mod.rs`](https://github.com/tauri-apps/wry/blob/wry-v0.57.0/src/wkwebview/mod.rs)에 있다.
 
 ### 표면과 모달 웹뷰의 페이지 초점
 
@@ -110,12 +110,12 @@ Tauri 이벤트 전달 콜백은 Tao의 이벤트 처리 잠금을 가진다. �
 
 | API 또는 키 | 현재 사용과 필요성 | 업데이트 후 검토 |
 | --- | --- | --- |
-| `WKPreferences` KVC `developerExtrasEnabled` (`_setDeveloperExtrasEnabled:`) | 내장 개발자 도구. Wails의 현재 빌드 대상은 크기 최적화 대상에서도 `production` 빌드 태그를 설정하지 않아 개발자 도구를 활성화한다. Tauri는 디버그 빌드에서 활성화하며 이 크레이트는 릴리스 `devtools`를 활성화하지 않는다. | 실제 빌드 플래그, 웹뷰 생성, 검사기 사용 가능 여부를 확인한다. 디버깅 의존성이며 렌더링 수정이 아니다. |
-| `WKWebView._inspector`; `_WKInspector.show`, `close`, `isVisible` | 프레임워크 개발자 도구 명령. Wails는 `show`를 사용하고 Wry는 `show`, `close`, `isVisible`을 사용한다. 앱이 이 선택자들을 직접 호출하지 않는다. | 해당 개발자 도구 명령을 포함한 빌드에서 열기·닫기·상태를 확인한다. |
-| `WKPreferences` KVC `allowsPictureInPictureMediaPlayback` (`_setAllowsPictureInPictureMediaPlayback:`) | Wry 0.56.1이 웹뷰 생성 시 조건 없이 설정한다. 앱이 비공개 미디어 수정을 요청하는 것은 아니다. | 웹뷰 생성과 변경된 프레임워크 구현을 확인한다. 현재 네이티브 검사는 화면 속 화면 동작을 포함하지 않는다. |
-| `NSView._wantsKeyDownForEvent:` | Tao 0.37.0이 콘텐츠 뷰에서 이 선택자를 구현하고 Control-Tab·Control-Escape 수신을 위해 `YES`를 반환한다. 앱이 같은 재정의를 추가하지 않는다. | Tao·AppKit 업데이트 후 네이티브 키보드 전달과 응답자 체계를 확인한다. 현재 네이티브 검사는 이 두 단축키를 별도로 검증하지 않는다. |
+| `WKPreferences` KVC `developerExtrasEnabled` (`_setDeveloperExtrasEnabled:`) | 내장 개발자 도구. Wry는 개발자 도구가 켜지면 이 키와 macOS 13.3 이상의 공개 `WKWebView.inspectable`을 설정한다. Tauri는 디버그 빌드에서 개발자 도구를 켜며 이 크레이트는 릴리스 `devtools`를 활성화하지 않는다. Wails v3.0.0-beta.27은 macOS 13.3 이상에서 공개 `inspectable`만 설정하고, 이 키는 그보다 이전 macOS에서 `private_mac_apis` 빌드 태그가 있는 빌드에서만 사용한다. 앱은 이 태그를 설정하지 않으므로 Wails 빌드는 Web Inspector를 창 안이 아니라 Safari를 통해 제공한다. | 실제 빌드 플래그, 웹뷰 생성, 검사기 사용 가능 여부를 확인한다. 디버깅 의존성이며 렌더링 수정이 아니다. |
+| `WKWebView._inspector`; `_WKInspector.show`, `close`, `isVisible` | 프레임워크 개발자 도구 명령. Wry는 `show`, `close`, `isVisible`을 사용한다. Wails v3.0.0-beta.27은 `private_mac_apis` 빌드 태그가 있는 빌드에서만 `show`를 호출한다. 앱이 이 선택자들을 직접 호출하지 않는다. | 해당 개발자 도구 명령을 포함한 빌드에서 열기·닫기·상태를 확인한다. |
+| `WKPreferences` KVC `allowsPictureInPictureMediaPlayback` (`_setAllowsPictureInPictureMediaPlayback:`) | Wry 0.57.0이 웹뷰 생성 시 조건 없이 설정한다. 앱이 비공개 미디어 수정을 요청하는 것은 아니다. | 웹뷰 생성과 변경된 프레임워크 구현을 확인한다. 현재 네이티브 검사는 화면 속 화면 동작을 포함하지 않는다. |
+| `NSView._wantsKeyDownForEvent:` | Tao 0.37.1이 콘텐츠 뷰에서 이 선택자를 구현하고 Control-Tab·Control-Escape 수신을 위해 `YES`를 반환한다. 앱이 같은 재정의를 추가하지 않는다. | Tao·AppKit 업데이트 후 네이티브 키보드 전달과 응답자 체계를 확인한다. 현재 네이티브 검사는 이 두 단축키를 별도로 검증하지 않는다. |
 
-호출은 [Wry `wkwebview/mod.rs`](https://github.com/tauri-apps/wry/blob/wry-v0.56.1/src/wkwebview/mod.rs)와 [Wails `webview_window_darwin_dev.go`](https://github.com/wailsapp/wails/blob/v3.0.0-beta.16/v3/pkg/application/webview_window_darwin_dev.go)에 있다. 키보드 재정의는 [Tao `macos/view.rs`](https://github.com/tauri-apps/tao/blob/tao-v0.37.0/src/platform_impl/macos/view.rs)에 있다. 환경설정 선언은 [`WKPreferencesPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKPreferencesPrivate.h)에 있다.
+호출은 [Wry `wkwebview/mod.rs`](https://github.com/tauri-apps/wry/blob/wry-v0.57.0/src/wkwebview/mod.rs)와, `private_mac_apis` 태그가 있는 빌드에 한해 [Wails `mac_private_api_darwin.go`](https://github.com/wailsapp/wails/blob/v3.0.0-beta.27/v3/pkg/application/mac_private_api_darwin.go)에 있다. 키보드 재정의는 [Tao `macos/view.rs`](https://github.com/tauri-apps/tao/blob/tao-v0.37.1/src/platform_impl/macos/view.rs)에 있다. 환경설정 선언은 [`WKPreferencesPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKPreferencesPrivate.h)에 있다.
 
 목록은 활성 경로와 사용 조건을 명시한 앱 경로를 기록하며 의존성 소스의 모든 비공개 API를 나열하지 않는다. 예를 들어 Wry는 현재 macOS에서 공개 전체화면 환경설정을 사용하므로 이전 OS의 `fullScreenEnabled` 분기는 여기서 실행되지 않는다. 지원 OS 범위, 빌드 플래그, 프레임워크 구성이 바뀌면 소스를 다시 점검한다. 공개 속성에 KVC로 접근하는 것 자체는 비공개 API가 아니다.
 
@@ -149,7 +149,9 @@ Tauri 이벤트 전달 콜백은 Tao의 이벤트 처리 잠금을 가진다. �
 
 ## 검토 기준
 
-소스·필요성 검토일은 2026-09-08이며 프로젝트 창 통합을 포함한다. 환경은 macOS 26.6.2 (25G83), WebKit `21624.5.1.11.3`, SDK 15.2를 보고한다. 의존성은 Wails `v3.0.0-beta.16`, Tauri 리비전 `270c63f117eb1f4ff0a653ca63b2ca61e9175663`, Wry `0.56.1`, Tao `0.37.0`으로 유지하며 [`go.mod`](../../packages/host/wailsv3/go.mod), [`Cargo.toml`](../../Cargo.toml), [`Cargo.lock`](../../Cargo.lock)에 따라 확정한다.
+소스·필요성 검토일은 2026-09-08이며 프로젝트 창 통합을 포함한다. 프레임워크 업데이트 검토일은 2026-10-04이다. 환경은 macOS 26.6.2 (25G83), WebKit `21624.5.1.11.3`, SDK 27.0을 보고한다. 의존성은 Wails `v3.0.0-beta.27`, crates.io의 Tauri `2.12.1`과 `tauri-runtime-wry` `2.12.1`, Wry `0.57.0`, Tao `0.37.1`이며 [`go.mod`](../../packages/host/wailsv3/go.mod), [`Cargo.toml`](../../Cargo.toml), [`Cargo.lock`](../../Cargo.lock)에 따라 확정한다.
+
+Wails v3.0.0-beta.19는 비공개 WebKit 호출(웹뷰 투명화, `backgroundColor` 키, 창 안 검사기)을 `private_mac_apis` 빌드 태그 뒤로 옮겼다. 태그가 없으면 Wails는 창의 배경색을 공개 `underPageBackgroundColor`로 설정하고, 앱의 메인 웹뷰 구성이 이전과 같이 이를 투명색으로 바꾼다. Tauri 2.12.1은 `macos-private-api` 기능 없이 창의 `transparent` 설정을 Wry에 전달한다. 앱은 투명 창을 설정하지 않으며, Wry 0.57.0은 macOS 웹뷰 생성 경로 중 `window.ipc` 스크립트만 바꿨다. 이제 IPC 처리기가 있는 웹뷰에만 이 스크립트를 넣는다. 앱의 수정은 바뀌지 않았다.
 
 프로젝트 창은 비공개 선택자를 추가하지 않는다. 공개 프레임워크 API로 독립 창을 생성하고 호출한 창을 식별한다. 공개 파일시스템 API로 설정을 저장한다. 기존의 비공개 좌표·표시·포인터·투명도 수정은 명시한 목적에 계속 필요하다. 해당 호스트 상태와 수명은 각 프로젝트 창에서 관리한다. 네이티브 마우스 모니터는 창을 닫을 때 제거한다.
 

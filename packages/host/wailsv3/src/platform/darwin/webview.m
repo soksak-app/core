@@ -84,7 +84,7 @@ void nativeWindowPrepare(void *handle) {
     NSWindow *window = (NSWindow *)handle;
     WKWebView *root = sp_window_main_webview(handle);
     if (!root) return;
-    // Wails beta.16 은 콘텐츠 뷰를 WKWebView 보다 1pt 작게 만든다.
+    // Wails v3.0.0-beta.27 은 콘텐츠 뷰를 WKWebView 보다 1pt 작게 만든다.
     // 공개 배치 API 로 자동 크기 조정 여백을 0 으로 만들고 메인 웹뷰를 콘텐츠 bounds에 맞춘다.
     // 창 크기를 웹뷰의 이전 크기로 역전파하지 않으므로 이후 창 크기도 그대로 유지된다.
     if (!NSEqualSizes(root.frame.size, window.contentView.bounds.size)) {

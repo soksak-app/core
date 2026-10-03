@@ -137,8 +137,9 @@ func Run(assets fs.FS, options Options) error {
 		}},
 		Services:   []application.Service{application.NewService(host)},
 		ShouldQuit: host.shouldQuit,
-		// Wails 의 기본 신호 처리기는 만들어지기만 하고 시작되지 않는다(v3.0.0-beta.16).
-		// Run 이 등록한 처리기가 종료 신호를 받는다.
+		// Wails 의 기본 신호 처리기는 SIGHUP 을 받지 않고, 첫 신호 뒤의 신호를 받아 두기만 해서
+		// 기본 동작으로 프로세스를 끝내지 않는다. 호스트 명세의 종료 신호 계약은 Run 이 등록한
+		// 처리기가 지킨다(docs/spec/hosts.md).
 		DisableDefaultSignalHandler: true,
 		OnShutdown: func() {
 			// 종료 전에 모든 창의 웹 프로세스를 죽인다. AppKit 은 XPC 서비스를 클라이언트보다
