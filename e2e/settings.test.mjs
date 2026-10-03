@@ -289,11 +289,13 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(await settingsValue(s, "sets"), kept, "a set naming a section of a plugin that is not loaded was not kept");
     await s.run("core.settings.set", { patch: { sets }, scope: "common" });
 
-    // 프로젝트 설정 파일에 등록되지 않은 섹션을 담은 세트가 있으면 그 프로젝트를 불러올 때 오류가 보인다.
+    // 프로젝트 설정 파일에 등록되지 않은 섹션을 담은 세트가 있으면 그 프로젝트를 여는 명령이 그 오류로 거부된다.
+    // 실패는 거절을 받은 호출자가 한 번 보고한다(docs/spec/settings.md).
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-sets-")));
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
     mkdirSync(join(root, ".soksak"), { recursive: true });
     writeFileSync(join(root, ".soksak/settings.json"), JSON.stringify({ sets: broken }));
+    // 이 검사가 저장한 잘못된 세트는 그 프로젝트의 설정을 다시 불러올 때마다 page 오류로도 보고된다.
     s.expectPageError(/settings: set .* names unknown section files\.gone/);
     await s.run("core.settings.set", { patch: { projectOpening: "tabs" }, scope: "common" });
     const opened = s.run("core.project.open", { root, color: "#7fe3b0" }).catch((error) => error);
@@ -302,9 +304,9 @@ for (const app of Object.values(APPS)) {
         if (item.root === root) await s.run("core.project.close", { id: item.id });
       }
     });
-    await s.until("core.page.error", (text) => /settings: set .* names unknown section files\.gone/.test(text ?? ""),
-      "loading a project with an invalid stored set showed no error");
-    await opened;
+    const refused = await opened;
+    assert.ok(refused instanceof Error, "opening a project with an invalid stored set did not fail");
+    assert.match(refused.message, /settings: set .* names unknown section files\.gone/);
   });
 
   test(`${app.name}: a plugin's right sidebar choice takes precedence over the general choice`, { timeout: 60000 }, async (t) => {
