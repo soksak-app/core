@@ -134,8 +134,11 @@ type Sidecars struct {
 	StopTimeout     time.Duration // 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
 	// ReadyTimeout 은 새로 시작한 영속 service 가 endpoint 를 출력하기까지의 상한이다. 기본값 30초. 테스트가 주입한다.
 	ReadyTimeout time.Duration
-	configDir    string
-	nextRequest  uint64
+	// RetainSending 은 Retain 이 서비스를 준비한 뒤 retain 을 보내기 전에 서비스 이름으로 호출된다. 검사가 그 사이에
+	// 다른 작업을 끼워 넣는 지점이며, nil 이면 호출하지 않는다.
+	RetainSending func(name string)
+	configDir     string
+	nextRequest   uint64
 }
 
 // SidecarDeclaration 은 설치된 sidecar 하나다. Data 는 그 sidecar.json 의 내용이고 Folder 는 그것을 담은 폴더다.
@@ -568,19 +571,36 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 				return total, fmt.Errorf("sidecar %s: read endpoint: %w", name, err)
 			}
 		}
-		process, _, err := c.process(name)
-		if err != nil {
+		if _, _, err := c.process(name); err != nil {
 			c.mu.Unlock()
 			return total, err
 		}
-		process.closeWaiters[request] = waiter
 		c.mu.Unlock()
-		timer := time.NewTimer(retainTimeout)
+		if c.RetainSending != nil {
+			c.RetainSending(name)
+		}
+		// outbox 로의 전송은 잠금 안에서 실행 목록에 있는 사이드카에만 일어난다. 서비스를 준비한 사이 Stop 이 그 outbox 를
+		// 닫았을 수 있으므로 다시 확인하고, 막히지 않게 보낸다.
+		c.mu.Lock()
+		if c.stopped {
+			c.mu.Unlock()
+			return total, errors.New("sidecars are stopped")
+		}
+		process, ok := c.running[name]
+		if !ok {
+			c.mu.Unlock()
+			return total, fmt.Errorf("sidecar %s is not running", name)
+		}
+		process.closeWaiters[request] = waiter
 		select {
 		case process.outbox <- line:
-		case <-timer.C:
-			return total, fmt.Errorf("sidecar %s: retain was not sent within %s", name, retainTimeout)
+		default:
+			delete(process.closeWaiters, request)
+			c.mu.Unlock()
+			return total, fmt.Errorf("sidecar %s is not keeping up", name)
 		}
+		c.mu.Unlock()
+		timer := time.NewTimer(retainTimeout)
 		select {
 		case err := <-waiter:
 			timer.Stop()

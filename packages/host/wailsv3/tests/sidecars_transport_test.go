@@ -680,6 +680,78 @@ func TestPersistentRetainSendsLayoutAndKnownSurfaces(t *testing.T) {
 	}
 }
 
+// TestPersistentRetainInterruptedByStopSendsNothing 은 Retain 이 서비스를 준비한 뒤 보내기 전에 Stop 이 끝나면 retain 을
+// 보내지 않고 멈춤으로 실패하는지 검증한다. 애플리케이션이 끝날 때 창의 retain 과 Stop 이 겹칠 수 있다.
+// contract: sidecars.retain.rejects-after-stop
+func TestPersistentRetainInterruptedByStopSendsNothing(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDirectory)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+
+	retains := make(chan map[string]any, 1)
+	go func() {
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			var request map[string]any
+			if json.Unmarshal(line, &request) != nil {
+				return
+			}
+			var reply map[string]any
+			switch request["operation"] {
+			case "hello":
+				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true}
+			case "close-owner":
+				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
+			case "shutdown":
+				reply = map[string]any{"operation": "shutdown", "request": request["request"], "ok": true}
+			case "retain":
+				retains <- request
+				reply = map[string]any{"operation": "retained", "request": request["request"], "ok": true, "closed": 0}
+			}
+			if reply != nil {
+				encoded, _ := json.Marshal(reply)
+				if _, err := connection.Write(append(encoded, '\n')); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecars.RetainSending = func(string) { sidecars.Stop() }
+	_, err = sidecars.Retain([]host.RetainedSurface{})
+	if err == nil || !strings.Contains(err.Error(), "sidecars are stopped") {
+		t.Fatalf("retain interrupted by stop = %v, want the stopped error", err)
+	}
+	select {
+	case request := <-retains:
+		t.Fatalf("the service received a retain after stop: %v", request)
+	default:
+	}
+}
+
 // contract: sidecars.retain.skips-service-without-endpoint
 func TestPersistentRetainSkipsAServiceWithoutEndpoint(t *testing.T) {
 	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), t.TempDir())

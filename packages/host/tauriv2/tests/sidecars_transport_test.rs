@@ -718,6 +718,46 @@ fn persistent_retain_sends_layout_and_known_surfaces() {
     service.join().unwrap();
 }
 
+// contract: sidecars.retain.rejects-after-stop
+#[test]
+fn persistent_retain_after_stop_sends_nothing() {
+    // 멈춘 뒤의 retain 은 서비스에 붙지 않고 멈춤으로 실패한다. 이 host 는 멈춤 확인과 보내기를 한 잠금 안에서 하므로
+    // 서비스를 준비한 뒤 보내기 전에 끼어드는 stop 은 없다.
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("retain.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "retain-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::<FakeOwner>::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    sidecars.stop();
+    assert_eq!(
+        sidecars.retain_sessions(&[]),
+        Err("sidecars are stopped".to_string())
+    );
+    assert!(
+        matches!(listener.accept(), Err(error) if error.kind() == std::io::ErrorKind::WouldBlock),
+        "the stopped host connected to the service"
+    );
+}
+
 // contract: sidecars.retain.skips-service-without-endpoint
 #[test]
 fn persistent_retain_skips_a_service_without_endpoint() {

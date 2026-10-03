@@ -276,6 +276,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.retain.sends-layout-and-known-surfaces` | retain은 실행 중이거나 엔드포인트가 게시된 영속 서비스마다, 주어진 레이아웃 표면과 이 프로세스가 보낸 모든 표면(없으면 빈 배열)을 담은 `retain` 요청 하나를 보내고 서비스가 닫은 수를 반환한다. | both |
 | `sidecars.retain.reports-service-failure` | `ok: false`인 `retained` 응답은 서비스의 사유를 담은 오류로 반환한다. | both |
 | `sidecars.retain.skips-service-without-endpoint` | 실행 중인 서비스와 그 엔드포인트 파일이 없으면 retain은 서비스를 시작하지 않고 아무것도 닫지 않는다. | both |
+| `sidecars.retain.rejects-after-stop` | 사이드카가 멈춘 뒤 시작한 retain이나 서비스를 준비한 뒤 멈춤이 끼어든 retain은 "sidecars are stopped"로 실패하고 서비스에 retain을 보내지 않는다. | both |
 | `menu.application.view-has-full-screen-and-text-size` | 애플리케이션 메뉴의 View 메뉴에는 전체 화면과 Command `=`, `-`, `0`의 [글자 크기](text-size.ko.md) 항목이 있고, 웹뷰 전체를 확대하거나 다시 읽는 메뉴 항목이 없다. | both |
 | `sidecars.protocol.surface-keeps-its-first-root` | 소유 창의 프로젝트가 바뀐 뒤에도 열린 표면의 요청과 closed 알림은 첫 요청의 root를 가진다. | both |
 | `sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail` | 호스트가 닫은 표면에 대한 stdio sidecar 메시지는 버리고, 호스트가 그 프로세스에 한 번도 보내지 않은 표면의 메시지는 보낸 표면에 `unknown surface <surface>`를 전달하며 sidecar를 실패시킨다. | both |
