@@ -71,7 +71,7 @@ export function createBinder(run, { check, changed = () => {} }) {
 
   /**
    * root 안의 data-command 요소를 위임으로 연결한다. 누름은 click, 값 입력은 change 와
-   * input 으로 실행한다(input 은 data-live 가 있는 요소만).
+   * input 으로 실행한다(input 은 data-live 가 있는 요소만). bind 로 직접 연결한 요소는 실행하지 않는다.
    */
   function delegate(root, { failed } = {}) {
     const go = (found, el) => {
@@ -80,7 +80,8 @@ export function createBinder(run, { check, changed = () => {} }) {
     };
     const click = (e) => {
       const el = e.target.closest("[data-command]");
-      if (!el || !root.contains(el) || el.matches("input, select, textarea")) return;
+      // 직접 연결한 요소는 자기 이벤트로만 실행한다. 위임으로 다시 실행하면 명령이 두 번 돈다.
+      if (!el || !root.contains(el) || bound.has(el) || el.matches("input, select, textarea")) return;
       return go(commandOf(el), el);
     };
     root.addEventListener("click", click);
@@ -88,7 +89,7 @@ export function createBinder(run, { check, changed = () => {} }) {
     for (const type of ["change", "input"]) {
       const listener = (e) => {
         const el = e.target.closest("[data-command]");
-        if (!el || !root.contains(el) || !el.matches("input, select, textarea")) return;
+        if (!el || !root.contains(el) || bound.has(el) || !el.matches("input, select, textarea")) return;
         if (type === "input" && !("live" in el.dataset)) return;
         return go(commandOf(el, valueOf(el)), el);
       };

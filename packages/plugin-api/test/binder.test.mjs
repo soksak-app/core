@@ -94,6 +94,24 @@ test("delegate runs clicks, changes, and live inputs of marked descendants", asy
   ], "an input without data-live runs on change only, and a click on an input runs nothing");
 });
 
+test("delegate leaves an element bound to its own event to that binding", async () => {
+  const b = binder();
+  const root = element("div");
+  // 주소창처럼 Enter 로 실행하는 입력. WebKit 은 텍스트 입력의 Enter 에 change 도 보낸다.
+  const address = b.bind(element("input"), "fixture.put", () => ({ text: address.value }),
+    { event: "keydown", when: (e) => e.key === "Enter" });
+  const button = b.bind(element("button"), "fixture.press", { id: "c" });
+  root.append(address, button);
+  b.delegate(root);
+  address.value = "typed";
+  address.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  address.dispatchEvent(event("change"));
+  button.click();
+  await settle();
+  assert.deepEqual(b.calls, [["fixture.put", { text: "typed" }], ["fixture.press", { id: "c" }]],
+    "a bound element ran its command again through the delegated root");
+});
+
 test("audit recognizes delegated controls inside a shadow root", async () => {
   const b = binder();
   const host = document.createElement("div");
