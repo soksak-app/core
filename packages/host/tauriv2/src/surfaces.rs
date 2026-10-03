@@ -488,6 +488,23 @@ pub fn check_sync_request(
         .collect()
 }
 
+/// 창 덮개를 놓고 표면 배치 트랜잭션을 시작한 뒤 표면을 맞춘다. 창 덮개는 배치를 시작하기 전에 놓으므로 덮개가
+/// 거부되면 시작한 배치가 없고, 표면을 맞추다 실패하면 시작한 배치를 취소한다.
+pub fn run_layout<T>(
+    overlays: impl FnOnce() -> Result<(), String>,
+    begin: impl FnOnce() -> Result<(), String>,
+    steps: impl FnOnce() -> Result<T, String>,
+    cancel: impl FnOnce(),
+) -> Result<T, String> {
+    overlays()?;
+    begin()?;
+    let result = steps();
+    if result.is_err() {
+        cancel();
+    }
+    result
+}
+
 /// 페이지가 선언한 표면에 창의 자식 웹뷰를 맞추고 표면 배치 트랜잭션을 준비한다.
 pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurfaces, String> {
     let context = window_data(window)?;
@@ -522,40 +539,40 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     let main = exposure::root_view_on_main(window)?;
     let ticket = running.prepared.fetch_add(1, Ordering::Relaxed) + 1;
     let owner = native_owner_on_main(window)?;
-    let (tx, rx) = mpsc::channel::<Result<Handle, String>>();
-    main.with_webview(move |webview| {
-        let failed = tx.clone();
-        let begun = platform.view_id(&webview).and_then(|handle| {
+    let main_handle = {
+        let (tx, rx) = mpsc::channel::<Result<Handle, String>>();
+        main.with_webview(move |webview| {
+            if tx.send(platform.view_id(&webview)).is_err() {
+                eprintln!("main webview handle had no pending receiver");
+            }
+        })
+        .map_err(|e| e.to_string())?;
+        rx.recv().map_err(|e| e.to_string())??
+    };
+    let begin = || -> Result<(), String> {
+        let (tx, rx) = mpsc::channel::<bool>();
+        exposure::on_main(window, move || {
             platform.begin_layout(
                 owner,
                 ticket,
                 Box::new(move |allowed| {
-                    if tx
-                        .send(if allowed {
-                            Ok(handle)
-                        } else {
-                            Err("window closed before layout".into())
-                        })
-                        .is_err()
-                    {
+                    if tx.send(allowed).is_err() {
                         eprintln!("surface preparation result had no pending receiver");
                     }
                 }),
             )
-        });
-        if let Err(error) = begun {
-            if failed.send(Err(error)).is_err() {
-                eprintln!("surface preparation failure had no pending receiver");
-            }
+        })?;
+        if !rx.recv().map_err(|e| e.to_string())? {
+            return Err("window closed before layout".into());
         }
-    })
-    .map_err(|e| e.to_string())?;
-    let main_handle = rx.recv().map_err(|e| e.to_string())??;
-    exposure::on_main(window, move || {
-        platform.set_window_overlays(main_handle, &overlays)
-    })?;
-
-    let result = (|| -> Result<PreparedSurfaces, String> {
+        Ok(())
+    };
+    let place_overlays = || {
+        exposure::on_main(window, move || {
+            platform.set_window_overlays(main_handle, &overlays)
+        })
+    };
+    let steps = || -> Result<PreparedSurfaces, String> {
         for s in &request.surfaces {
             context
                 .compositions
@@ -669,16 +686,21 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             ticket,
             placements: placed,
         })
-    })();
-    if result.is_err() {
-        platform.enqueue_ui(Box::new(move || {
+    };
+    let cancel = || {
+        if let Err(error) = platform.enqueue_ui(Box::new(move || {
             log_error(platform.cancel_layout(owner));
-        }))?;
+        })) {
+            log_error(Err(error));
+        }
+    };
+    let prepared = run_layout(place_overlays, begin, steps, cancel)?;
+    // 배치를 맞춘 뒤 이미지 raster 갱신이 실패해도 시작한 배치를 남기지 않는다.
+    if let Err(error) = crate::composition::refresh_image_rasters(window) {
+        cancel();
+        return Err(error);
     }
-    if result.is_ok() {
-        crate::composition::refresh_image_rasters(window)?;
-    }
-    result
+    Ok(prepared)
 }
 
 /// 표면 웹뷰의 현재 위치를 페이지 좌표로 반환한다.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-106: Tauri host는 Wails host처럼 표면 배치를 시작하기 전에 창 덮개를 놓고, 뒤 단계나 이미지 raster 갱신이 실패하면 시작한 배치를 취소하므로, 실패한 표면 동기화가 창의 배치 트랜잭션을 열어 두지 않는다.
 - G1.4-101: window check `window-release.test.mjs`는 닫은 project window마다 web content process가 끝나기도 요구하며, kernel이 process의 종료를 알릴 때 응답하는 새 진단 `diagnostics.process.exit`로 기다린다.
 - G1.4-101-1: `diagnostics.native.objects`는 `equal`을 받아 수가 그 값에 이를 때 응답하며, main run loop가 잠들기 전마다 event를 넣어 autorelease pool을 비운다. AppKit은 닫은 window를 close animation이 끝날 때까지 유지하고, pool을 비우는 동안 autorelease된 객체를 다음 비우기에서 해제하기 때문이다. `window-release.test.mjs`는 이렇게 기다리며 tao 고정과 함께 두 host에서 통과한다.
 - G1.4-101-1: 두 host의 진단 빌드는 공용 macOS library의 살아 있는 window composition, surface host, 입력 등록 수를 애플리케이션이 event 하나를 처리한 뒤 세어 `diagnostics.native.objects`로 보고하고, window check `window-release.test.mjs`는 project window 네 개를 닫은 뒤 이 수가 그대로이기를 요구한다.

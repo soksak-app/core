@@ -509,29 +509,30 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 			began = err
 			return
 		}
-		if err := system.SetWindowOverlays(main, windowOverlays); err != nil {
-			began = err
-			return
-		}
-		s.lastPreparation++
-		prepared.Ticket = s.lastPreparation
-		began = system.BeginLayout(win.NativeWindow(), prepared.Ticket, func(allowed bool) {
-			if !allowed {
-				done <- applyResult{err: errNoWindow}
-				return
-			}
-			gone, placements, err := s.apply(win, req)
-			if err == nil {
-				s.watch.Do(func() { s.watchInput(win) })
-			} else {
-				if cancelErr := system.CancelLayout(win.NativeWindow()); cancelErr != nil {
-					err = fmt.Errorf("%w; cancelling layout: %v", err, cancelErr)
+		began = RunLayout(func() error {
+			return system.SetWindowOverlays(main, windowOverlays)
+		}, func() error {
+			s.lastPreparation++
+			prepared.Ticket = s.lastPreparation
+			return system.BeginLayout(win.NativeWindow(), prepared.Ticket, func(allowed bool) {
+				if !allowed {
+					done <- applyResult{err: errNoWindow}
+					return
 				}
-				if !req.Settled {
+				var gone []string
+				var placements []Placement
+				err := ApplyOrCancel(func() error {
+					var err error
+					gone, placements, err = s.apply(win, req)
+					return err
+				}, func() error { return system.CancelLayout(win.NativeWindow()) })
+				if err == nil {
+					s.watch.Do(func() { s.watchInput(win) })
+				} else if !req.Settled {
 					s.run(false)
 				}
-			}
-			done <- applyResult{gone: gone, placements: placements, err: err}
+				done <- applyResult{gone: gone, placements: placements, err: err}
+			})
 		})
 	})
 	if began != nil {
@@ -564,6 +565,27 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 		}
 	}
 	return prepared, nil
+}
+
+// RunLayout 은 창 덮개를 놓은 뒤 표면 배치 트랜잭션을 시작한다. 덮개를 배치보다 먼저 놓으므로 덮개가 거부되면
+// 시작한 배치가 없다.
+func RunLayout(overlays, begin func() error) error {
+	if err := overlays(); err != nil {
+		return err
+	}
+	return begin()
+}
+
+// ApplyOrCancel 은 시작한 배치의 표면을 맞추고, 실패하면 배치를 취소한다. 취소의 실패는 맞추기의 오류에 덧붙인다.
+func ApplyOrCancel(apply, cancel func() error) error {
+	err := apply()
+	if err == nil {
+		return nil
+	}
+	if cancelErr := cancel(); cancelErr != nil {
+		err = fmt.Errorf("%w; cancelling layout: %v", err, cancelErr)
+	}
+	return err
 }
 
 // watchInput 은 창의 표면 입력을 이 창에 전달한다. UI 스레드에서 호출한다.
