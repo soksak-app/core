@@ -1035,8 +1035,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/theme.rs", symbol: "set" },
       { file: "packages/host/wailsv3/src/theme.go", symbol: "SetTheme" },
     ],
-    tests: [{ file: "e2e/browser.test.mjs", id: "Google site appearance remains independent of host theme" }],
-    expected: "Google's explicit light site preference remains unchanged when the host switches light to dark, and its URL remains unchanged.",
+    tests: [{ file: "e2e/browser.test.mjs", id: "a site's appearance remains independent of the host theme" }],
+    expected: "A local document that fixes its own colour keeps that colour when the host switches light to dark, the region receives the host color scheme, and its URL remains unchanged.",
     levels: ["application"],
   },
   {
