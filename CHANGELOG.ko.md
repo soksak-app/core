@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G1.4-104: Wails host는 표면 사각형이 잘못된 표면 동기화 요청을 `fatal error: sync: unlock of unlocked mutex`로 끝나지 않고 거부하며, 두 host 모두 배치를 시작하기 전에 요청의 모든 사각형을 검사하므로 Tauri host에서 거부된 창 overlay가 시작된 배치를 더 남기지 않는다.
 - G1.4-101-1: Tauri host는 tao PR #1328의 수정을 넣은 tao 0.37.1을 쓰므로 닫힌 창과 그 웹뷰가 해제된다.
 - G1.4-101: 두 host 모두 창을 닫을 때 그 창의 문서 영역, 그림 영역, 논리 표면을 닫고, webview의 입력 등록은 webview가 해제될 때 끝나며, 파일 놓기 수신기는 놓기 view와 함께 해제되므로, 닫힌 창이 main webview, 문서 webview, 그 web content process를 더 남기지 않는다.
 - G1.4-103: Wails는 v3.0.0-beta.27이고, Tauri는 git 고정 없이 crates.io에서 배포된 2.12.1과 wry 0.57.0, tao 0.37.1이다. Wails 빌드는 Web Inspector를 창 안이 아니라 Safari를 통해 제공한다.

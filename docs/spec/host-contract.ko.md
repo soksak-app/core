@@ -334,6 +334,8 @@ fn invalid_json_closes_connection() {
 | `surfaces-geometry.rect.accepts-zero-size` | 크기가 0인 사각형은 올바르다. | both |
 | `surfaces-geometry.rect.rejects-negative-size` | 크기가 음수인 사각형은 잘라 맞추지 않고 거부한다. | both |
 | `surfaces-geometry.rect.rejects-non-finite` | 크기가 유한하지 않은 사각형을 거부한다. | both |
+| `surfaces-geometry.sync.rejects-surface-rect-before-layout` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 표면 사각형의 크기가 음수인 동기화 요청을 `surface "<id>" geometry must not have a negative size`로 거부하고, 올바른 요청은 받는다. | both |
+| `surfaces-geometry.sync.rejects-overlay-rect-before-layout` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 창 overlay 사각형의 크기가 음수인 동기화 요청을 `window overlay geometry must not have a negative size`로 거부하고, 올바른 요청의 overlay를 표시 여부와 함께 반환한다. | both |
 | `termination.signal.first-requests-quit-second-ends-process` | 첫 종료 신호는 종료를 요청하고 두 번째 신호는 프로세스를 끝낸다. | both |
 | `window-close.surfaces.closes-regions-then-surface` | 창을 닫으면 논리 표면마다 id 순서로 그 문서 영역과 그림 영역을 닫은 뒤 표면을 닫고, 그 이름을 창의 문서 영역 목록과 그림 영역 목록에서 지운다. | both |
 | `window-close.surfaces.reports-every-failure` | 네이티브 닫기 하나가 실패해도 나머지를 닫고, 창 닫기는 모든 실패를 표면 id 와 객체 종류와 함께 반환한다. | both |

@@ -334,6 +334,8 @@ Items:
 | `surfaces-geometry.rect.accepts-zero-size` | A rectangle with a zero size is valid. | both |
 | `surfaces-geometry.rect.rejects-negative-size` | A rectangle with a negative size is rejected, not clamped. | both |
 | `surfaces-geometry.rect.rejects-non-finite` | A rectangle with a non-finite size is rejected. | both |
+| `surfaces-geometry.sync.rejects-surface-rect-before-layout` | The check that runs before the layout transaction begins refuses a sync request whose surface rectangle has a negative size, with `surface "<id>" geometry must not have a negative size`, and accepts a valid request. | both |
+| `surfaces-geometry.sync.rejects-overlay-rect-before-layout` | The check that runs before the layout transaction begins refuses a sync request whose window overlay rectangle has a negative size, with `window overlay geometry must not have a negative size`, and returns the overlays of a valid request with their visibility. | both |
 | `termination.signal.first-requests-quit-second-ends-process` | The first termination signal requests quit, and the second ends the process. | both |
 | `window-close.surfaces.closes-regions-then-surface` | Closing a window closes, for each logical surface in id order, its document regions and image regions and then the surface, and removes their names from the window's document and image registries. | both |
 | `window-close.surfaces.reports-every-failure` | A failed native close does not stop the remaining closes, and the window close returns every failure with its surface id and object kind. | both |

@@ -454,6 +454,9 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition) ([]pl
 			return nil, fmt.Errorf("invalid or duplicate surface %q", surface.ID)
 		}
 		seen[surface.ID] = true
+		if err := ValidateRect(fmt.Sprintf("surface %q", surface.ID), surface.X, surface.Y, surface.W, surface.H); err != nil {
+			return nil, err
+		}
 		if err := validateComposition(surface.Composition); err != nil {
 			return nil, fmt.Errorf("surface %q: %w", surface.ID, err)
 		}
@@ -767,7 +770,8 @@ func createLogicalSurface(create func() (unsafe.Pointer, error), owner *Surfaces
 }
 
 // apply 는 표면 뷰를 만들고 옮기고 제거하며, 뷰가 제거된 id 를 반환한다. 그 뒤의 셸은
-// 호출자가 이 스레드 밖에서 종료한다.
+// 호출자가 이 스레드 밖에서 종료한다. 요청은 SyncSurfaces 가 배치를 시작하기 전에
+// CheckSyncRequest 로 검사했다.
 func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]string, []Placement, error) {
 	if !req.Settled {
 		s.run(true)
@@ -793,10 +797,6 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		}
 	}
 	for _, surface := range req.Surfaces {
-		if err := ValidateRect(fmt.Sprintf("surface %q", surface.ID), surface.X, surface.Y, surface.W, surface.H); err != nil {
-			s.mu.Unlock()
-			return nil, nil, err
-		}
 		wanted[surface.ID] = true
 		w, h := max1(surface.W), max1(surface.H)
 		visible := surface.Visible && surface.W >= 1 && surface.H >= 1

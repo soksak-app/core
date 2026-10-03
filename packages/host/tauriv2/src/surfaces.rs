@@ -442,12 +442,12 @@ pub(crate) enum PageFocus {
     Ignored,
 }
 
-/// 배치를 시작하기 전에 동기화 요청 전체를 검사한다. `held` 는 창이 이미 받은 표면의
-/// composition 선언이다.
+/// 배치를 시작하기 전에 동기화 요청 전체를 검사하고 창 오버레이를 반환한다. `held` 는
+/// 창이 이미 받은 표면의 composition 선언이다.
 pub fn check_sync_request(
     request: &SyncRequest,
     held: &HashMap<String, SurfaceComposition>,
-) -> Result<(), String> {
+) -> Result<Vec<platform::WindowOverlay>, String> {
     let mut ids = HashSet::new();
     for surface in &request.surfaces {
         if surface.id.is_empty() || !ids.insert(surface.id.clone()) {
@@ -472,7 +472,20 @@ pub fn check_sync_request(
             ));
         }
     }
-    Ok(())
+    request
+        .overlays
+        .iter()
+        .map(|overlay| {
+            validate_rect("window overlay", overlay.x, overlay.y, overlay.w, overlay.h)?;
+            Ok(platform::WindowOverlay {
+                x: overlay.x,
+                y: overlay.y,
+                w: overlay.w,
+                h: overlay.h,
+                visible: overlay.visible,
+            })
+        })
+        .collect()
 }
 
 /// 페이지가 선언한 표면에 창의 자식 웹뷰를 맞추고 표면 배치 트랜잭션을 준비한다.
@@ -483,7 +496,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     let running = &context.running;
     let surface_hosts = &context.surface_hosts;
 
-    check_sync_request(
+    let overlays = check_sync_request(
         &request,
         &*context.compositions.lock().map_err(|e| e.to_string())?,
     )?;
@@ -538,20 +551,6 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     })
     .map_err(|e| e.to_string())?;
     let main_handle = rx.recv().map_err(|e| e.to_string())??;
-    let overlays = request
-        .overlays
-        .iter()
-        .map(|overlay| {
-            validate_rect("window overlay", overlay.x, overlay.y, overlay.w, overlay.h)?;
-            Ok(platform::WindowOverlay {
-                x: overlay.x,
-                y: overlay.y,
-                w: overlay.w,
-                h: overlay.h,
-                visible: overlay.visible,
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()?;
     exposure::on_main(window, move || {
         platform.set_window_overlays(main_handle, &overlays)
     })?;
