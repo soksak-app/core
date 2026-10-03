@@ -31,6 +31,10 @@ WebKit draws a web view only while its window is on screen and does not wait for
 
 `host.window.reload` reloads the main page of a window in the same WebContent process. A ready page first completes its pending saves (`core.projects.flush`). The host then sends that page the `page-reload` event instead of reloading the web view itself, because a host reply written after the reload has stopped its request is lost and Wails logs it as an error. The page stops sending host calls, waits until every call it has sent is answered, and reloads itself. A call that the page makes after the event is not sent and ends with the document, as a call that a reload stops would. The host reloads a page that has not reported ready itself, because such a page may have no `page-reload` listener. The command resolves after the new page reports ready and returns 1005 when it does not within 10 seconds.
 
+## Host calls
+
+The main page sends every host call through one call path in both applications (`packages/workbench/host-calls.js`). JSON writes NaN, Infinity, and -Infinity as `null`, and the hosts decode `null` in a numeric field differently, so the page refuses a call whose argument contains such a number before it sends the call. The call fails with a `TypeError` whose message is `host call <name>: <path> is <value>, which JSON sends as null`, where `<path>` names the field (for example `surfaces[0].y`) or is `the argument` when the argument itself is the number.
+
 ## macOS implementation
 
 Wails uses application-owned additional `WKWebView` instances. Tauri uses its child-webview API. Both place those views inside their owning project `NSWindow`; settings and menus create no additional OS window. Framework dependencies are unchanged by the current surface and backdrop changes.

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G1.4-105: the main page refuses a host call whose argument contains NaN or Infinity before sending it, with one `TypeError` on both hosts, because JSON would send the number as `null` and the hosts decode `null` differently.
 - G1.4-106: the Tauri host places the window overlays before it begins a surface layout, as the Wails host does, and cancels a begun layout when a later step or the image raster refresh fails, so a failed surface sync no longer leaves the window's layout transaction open.
 - G1.4-101: the window check `window-release.test.mjs` also requires the web content process of each closed project window to exit, waiting through the new diagnostic `diagnostics.process.exit`, which answers when the kernel reports the process's exit.
 - G1.4-101-1: `diagnostics.native.objects` accepts `equal` and replies when the counts reach it, draining the autorelease pool with a posted event each time the main run loop is about to wait, because AppKit keeps a closed window until its close animation ends and releases an object autoreleased during a pool drain at the next drain; `window-release.test.mjs` waits this way and passes on both hosts with the tao pin.

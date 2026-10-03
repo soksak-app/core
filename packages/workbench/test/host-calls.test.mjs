@@ -34,3 +34,20 @@ test("settling without pending calls ends at once", async () => {
   const calls = settlingCalls(() => Promise.resolve(null));
   await calls.settle();
 });
+
+test("a call with a number that JSON cannot carry is refused before it is sent", async () => {
+  const sent = [];
+  const calls = settlingCalls((name, arg) => {
+    sent.push([name, arg]);
+    return Promise.resolve(null);
+  });
+  await assert.rejects(calls.call("syncSurfaces", { surfaces: [{ id: "a", x: 0, y: Number.NaN }] }),
+    { name: "TypeError", message: "host call syncSurfaces: surfaces[0].y is NaN, which JSON sends as null" });
+  await assert.rejects(calls.call("overlayPlace", { rect: { w: Infinity } }),
+    { name: "TypeError", message: "host call overlayPlace: rect.w is Infinity, which JSON sends as null" });
+  await assert.rejects(calls.call("waitPresented", -Infinity),
+    { name: "TypeError", message: "host call waitPresented: the argument is -Infinity, which JSON sends as null" });
+  await calls.call("syncSurfaces", { surfaces: [{ id: "a", x: 0, y: 1.5, hidden: null }] });
+  assert.deepEqual(sent.map(([name]) => name), ["syncSurfaces"], "a call with a non-finite number was sent");
+  await calls.settle();
+});

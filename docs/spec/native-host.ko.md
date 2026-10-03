@@ -31,6 +31,10 @@ WebKit은 window가 화면에 있는 동안에만 web view를 그리고, window�
 
 `host.window.reload`는 window의 main page를 같은 WebContent process에서 다시 읽는다. 준비된 page는 먼저 대기 중인 저장을 끝낸다(`core.projects.flush`). 그다음 host는 web view를 직접 다시 읽지 않고 그 page에 `page-reload` 이벤트를 보낸다. 다시 읽기가 요청을 멈춘 뒤에 쓴 host 응답은 사라지고 Wails가 이를 오류로 기록하기 때문이다. page는 host 호출 보내기를 멈추고, 보낸 호출이 모두 답을 받을 때까지 기다린 뒤 스스로 다시 읽는다. 이벤트 뒤에 page가 하는 호출은 보내지 않으며, 다시 읽기가 멈춘 호출처럼 document와 함께 끝난다. 준비를 알리지 않은 page에는 `page-reload` listener가 없을 수 있으므로 host가 직접 다시 읽는다. 명령은 새 page가 준비를 알린 뒤 끝나고, 10초 안에 알리지 않으면 1005를 돌려준다.
 
+## host 호출
+
+두 애플리케이션에서 main page는 모든 host 호출을 하나의 호출 경로(`packages/workbench/host-calls.js`)로 보낸다. JSON은 NaN, Infinity, -Infinity를 `null`로 쓰고, host는 숫자 field의 `null`을 서로 다르게 해석하므로, page는 인자에 그런 수가 든 호출을 보내기 전에 거부한다. 호출은 `TypeError`로 실패하며 message는 `host call <name>: <path> is <value>, which JSON sends as null`이다. `<path>`는 field를 가리키거나(예: `surfaces[0].y`) 인자 자체가 그 수이면 `the argument`다.
+
 ## macOS 구현
 
 Wails는 앱이 생성한 추가 `WKWebView`, Tauri는 자식 웹뷰 API를 사용한다. 두 호스트 모두 해당 프로젝트 `NSWindow` 안에 뷰를 배치한다. 설정과 메뉴는 추가 OS 창을 생성하지 않는다. 현재 표면·배경 변경으로 프레임워크 의존성을 변경하지 않았다.
