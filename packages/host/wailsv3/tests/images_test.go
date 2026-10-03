@@ -1114,3 +1114,19 @@ func TestReattachingInTheSameGenerationContinuesTheRaster(t *testing.T) {
 			again.Generation, again.Raster, after.Generation, after.Raster)
 	}
 }
+
+// 표면 페이지의 ImageCaret 와 ImageText 는 요청 뒤에 좌표와 글을 함께 보낸다. 인자 해석은 그 목록대로 하고,
+// 다음 단계인 호출자 확인에서 실패해야 한다(G1.4-109).
+func TestNativeImageCallsDecodeTheirOwnArguments(t *testing.T) {
+	surfaces := host.NewSurfaces(nil, nil)
+	request := json.RawMessage(`{"surface":"tab-1","name":"view"}`)
+	number := func(value string) json.RawMessage { return json.RawMessage(value) }
+	for method, args := range map[string][]json.RawMessage{
+		"ImageCaret": {request, number("1"), number("2"), number("3"), number("4")},
+		"ImageText":  {request, json.RawMessage(`"text"`)},
+	} {
+		if _, err := host.InvokeNative(surfaces, 7, method, args); err == nil || err.Error() != "window is not available" {
+			t.Errorf("%s: %v, want the caller check to fail with window is not available", method, err)
+		}
+	}
+}

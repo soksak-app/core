@@ -5,6 +5,7 @@
 ## Unreleased
 
 - G1.4-90-4-2: an image region attached again in the same generation continues its raster revision in both hosts, so the terminal sidecar no longer ignores its configuration and the presentation no longer waits 10 s for a terminal mounted again; both hosts trace their image raster decisions.
+- G1.4-109: the Wails host runs `ImageCaret` and `ImageText` sent from a surface page through the native bridge with their own argument lists; before, both failed with `<call> expects 1 arguments`. `TestNativeImageCallsDecodeTheirOwnArguments` failed before the change and passes after it.
 - G1.4-102: `make page-memory` measures the main page process of a running application, by default a release build, at start, after an idle time and after reloads; the release measurement shows no idle growth, and after G1.4-107 a reload leaves no previous page process.
 - G1.4-107: a reload or page change of the main page opens the new document in a new WebContent process and ends the previous one, so the main page no longer keeps every replaced document until memory pressure; the page footprint stays flat over 20 reloads.
 - G1.4-90-4-2: the main page numbers every surface composition placement of a document with one increasing revision, so a surface mounted again in the same document is no longer refused with `stale composition revision 1`.

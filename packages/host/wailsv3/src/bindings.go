@@ -270,6 +270,12 @@ func nativeArgs(call nativeCall, into ...any) error {
 	return nil
 }
 
+// InvokeNative 는 네이티브 웹뷰 viewID 의 문서가 method 를 args 로 호출한 것처럼 실행한다. 검사가 native 호출의 인자
+// 해석을 이 함수로 확인한다.
+func InvokeNative(s *Surfaces, viewID uint64, method string, args []json.RawMessage) (any, error) {
+	return invokeNative(s, viewID, nativeCall{Method: method, Args: args})
+}
+
 // invokeNative 는 네이티브 웹뷰 viewID 의 문서가 호출한 메서드를 실행한다. 추가 문서의
 // 인터페이스는 Wails 바인딩과 별개다.
 func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
@@ -330,7 +336,7 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		default:
 			return nil, s.detachDocument(viewID, req)
 		}
-	case "ImageAttach", "ImageFocus", "ImageCaret", "ImageText", "ImageDetach":
+	case "ImageAttach", "ImageFocus", "ImageDetach":
 		var req ImageRequest
 		if err := nativeArgs(call, &req); err != nil {
 			return nil, err
@@ -340,21 +346,23 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 			return nil, s.attachImage(viewID, req)
 		case "ImageFocus":
 			return nil, s.focusImage(viewID, req)
-		case "ImageCaret":
-			var x, y, w, h float64
-			if err := nativeArgs(call, &req, &x, &y, &w, &h); err != nil {
-				return nil, err
-			}
-			return nil, s.caretImage(viewID, req, x, y, w, h)
-		case "ImageText":
-			var text string
-			if err := nativeArgs(call, &req, &text); err != nil {
-				return nil, err
-			}
-			return nil, s.textImage(viewID, req, text)
 		default:
 			return nil, s.detachImage(viewID, req)
 		}
+	case "ImageCaret":
+		var req ImageRequest
+		var x, y, w, h float64
+		if err := nativeArgs(call, &req, &x, &y, &w, &h); err != nil {
+			return nil, err
+		}
+		return nil, s.caretImage(viewID, req, x, y, w, h)
+	case "ImageText":
+		var req ImageRequest
+		var text string
+		if err := nativeArgs(call, &req, &text); err != nil {
+			return nil, err
+		}
+		return nil, s.textImage(viewID, req, text)
 	case "OverlayPick":
 		if err := nativeArgs(call, &id, &instance, &key, &value); err != nil {
 			return nil, err
