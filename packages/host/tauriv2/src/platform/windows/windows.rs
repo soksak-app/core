@@ -376,6 +376,15 @@ impl Platform for Windows {
         unsupported::window_objects_when(expected, seconds, done)
     }
     #[cfg(feature = "diagnostics")]
+    fn when_process_exited(
+        &self,
+        pid: i32,
+        seconds: f64,
+        done: Box<dyn FnOnce(bool) + Send>,
+    ) -> Result<(), String> {
+        unsupported::when_process_exited(pid, seconds, done)
+    }
+    #[cfg(feature = "diagnostics")]
     fn layout_trace_start(&self) -> Result<(), String> {
         unsupported::layout_trace_start()
     }

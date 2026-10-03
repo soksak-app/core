@@ -62,3 +62,28 @@ fn the_window_objects_equal_validates() {
         "windowCompositions 2, surfaceHosts 2, inputRegistrations 1"
     );
 }
+
+// contract: diagnostics.process-exit.pid-validates
+#[test]
+fn the_process_exit_pid_validates() {
+    assert_eq!(
+        soksak_host_tauriv2::platform::parse_process_id(Some(&json!(2147483647))),
+        Ok(2147483647)
+    );
+    for raw in [
+        None,
+        Some(json!(null)),
+        Some(json!(0)),
+        Some(json!(-1)),
+        Some(json!(1.5)),
+        Some(json!("12")),
+        Some(json!(2147483648_i64)),
+        Some(json!({})),
+    ] {
+        assert_eq!(
+            soksak_host_tauriv2::platform::parse_process_id(raw.as_ref()),
+            Err("pid must be a positive integer".to_string()),
+            "{raw:?}"
+        );
+    }
+}

@@ -42,6 +42,7 @@ func init() {
 	diagnosticMethods["diagnostics.navigation.delay"] = diagnosticNavigationDelay
 	diagnosticMethods["diagnostics.page.collect"] = diagnosticPageCollect
 	diagnosticMethods["diagnostics.native.objects"] = diagnosticNativeObjects
+	diagnosticMethods["diagnostics.process.exit"] = diagnosticProcessExit
 	handleNavigation = navigationDelays.handle
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
 	diagnosticTopics[logTopic] = func(on bool) (string, any) {
@@ -661,6 +662,42 @@ func diagnosticNativeObjects(e *Endpoint, _ *endpointConn, params json.RawMessag
 		return a.counts.Payload(), nil
 	case <-time.After(2 * pageTimeout):
 		return nil, rpcError(codeTimeout, "the application did not handle an event within %s", pageTimeout)
+	}
+}
+
+// diagnosticProcessExit 는 pid 의 프로세스가 끝나면 응답한다. 창 검사가 닫은 창의 WebContent 프로세스가 끝나는 것을
+// 커널의 종료 알림으로 기다린다.
+func diagnosticProcessExit(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	if _, _, err := diagnosticHost(e, params); err != nil {
+		return nil, err
+	}
+	var p struct {
+		Pid json.RawMessage `json:"pid"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	pid, err := platform.ParseProcessID(p.Pid)
+	if err != nil {
+		return nil, rpcError(codeInvalidParams, "%s", err)
+	}
+	waiter, ok := system.(platform.ProcessExitWaiter)
+	if !ok {
+		return nil, errors.New("process exit waits are not implemented on this platform")
+	}
+	answers := make(chan bool, 1)
+	application.InvokeSync(func() {
+		waiter.WhenProcessExited(pid, pageTimeout.Seconds(), func(exited bool) { answers <- exited })
+	})
+	// 라이브러리는 pageTimeout 안에 답하므로, 메인 스레드가 답을 보낼 시간까지 두 배를 기다린다.
+	select {
+	case exited := <-answers:
+		if !exited {
+			return nil, rpcError(codeTimeout, "process %d did not exit within %s", pid, pageTimeout)
+		}
+		return nil, nil
+	case <-time.After(2 * pageTimeout):
+		return nil, rpcError(codeTimeout, "the application did not answer within %s", 2*pageTimeout)
 	}
 }
 

@@ -43,3 +43,15 @@ func TestWindowObjectsEqualValidates(t *testing.T) {
 		t.Fatalf("String = %q", counts)
 	}
 }
+
+// contract: diagnostics.process-exit.pid-validates
+func TestProcessExitPidValidates(t *testing.T) {
+	if pid, err := platform.ParseProcessID([]byte(`2147483647`)); err != nil || pid != 2147483647 {
+		t.Fatalf("ParseProcessID(2147483647) = %d, %v", pid, err)
+	}
+	for _, raw := range []string{``, `null`, `0`, `-1`, `1.5`, `"12"`, `2147483648`, `{}`} {
+		if _, err := platform.ParseProcessID([]byte(raw)); err == nil || err.Error() != "pid must be a positive integer" {
+			t.Errorf("ParseProcessID(%q) error = %v", raw, err)
+		}
+	}
+}

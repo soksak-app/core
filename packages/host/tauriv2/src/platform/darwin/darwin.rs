@@ -48,6 +48,9 @@ mod layout;
 mod link;
 
 mod notifications;
+#[cfg(feature = "diagnostics")]
+#[path = "process_exit.rs"]
+mod process_exit;
 #[path = "shapes.rs"]
 mod shapes;
 #[path = "standard_error.rs"]
@@ -492,6 +495,16 @@ impl Platform for Darwin {
         done: Box<dyn FnOnce(super::WindowObjects, bool) + Send>,
     ) -> Result<(), String> {
         window_objects::when(expected, seconds, done);
+        Ok(())
+    }
+    #[cfg(feature = "diagnostics")]
+    fn when_process_exited(
+        &self,
+        pid: i32,
+        seconds: f64,
+        done: Box<dyn FnOnce(bool) + Send>,
+    ) -> Result<(), String> {
+        process_exit::when_exited(pid, seconds, done);
         Ok(())
     }
     #[cfg(feature = "diagnostics")]

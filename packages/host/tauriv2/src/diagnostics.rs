@@ -116,6 +116,7 @@ pub(crate) fn call(
         "diagnostics.notifications" => delivered_notifications(window),
         "diagnostics.page.collect" => page_collect(window),
         "diagnostics.native.objects" => native_objects(window, &params),
+        "diagnostics.process.exit" => process_exit(window, &params),
         "diagnostics.navigation.delay" => {
             let ms = params
                 .get("ms")
@@ -187,6 +188,39 @@ fn native_objects(window: &Window, params: &Map<String, Value>) -> Result<Value,
         ));
     }
     Ok(counts.payload())
+}
+
+/// pid 의 프로세스가 끝나면 응답한다. 창 검사가 닫은 창의 WebContent 프로세스가 끝나는 것을 커널의 종료 알림으로
+/// 기다린다.
+fn process_exit(window: &Window, params: &Map<String, Value>) -> Result<Value, Failure> {
+    let pid = platform::parse_process_id(params.get("pid")).map_err(Failure::params)?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    on_main(window, move || {
+        platform::current()?.when_process_exited(
+            pid,
+            TIMEOUT.as_secs_f64(),
+            Box::new(move |exited| {
+                if tx.send(exited).is_err() {
+                    eprintln!("a process exit answer had no pending receiver");
+                }
+            }),
+        )
+    })
+    .map_err(internal)?;
+    // 라이브러리는 TIMEOUT 안에 답하므로, 메인 스레드가 답을 보낼 시간까지 두 배를 기다린다.
+    let exited = rx.recv_timeout(2 * TIMEOUT).map_err(|_| {
+        Failure::new(
+            crate::endpoint::TIMED_OUT,
+            format!("the application did not answer within {:?}", 2 * TIMEOUT),
+        )
+    })?;
+    if !exited {
+        return Err(Failure::new(
+            crate::endpoint::TIMED_OUT,
+            format!("process {pid} did not exit within {TIMEOUT:?}"),
+        ));
+    }
+    Ok(Value::Null)
 }
 
 /// 창을 포커스를 주지 않고 한 장 찍어 `<config-dir>/captures/still-*/window.png` 로 쓰고 경로를 반환한다.

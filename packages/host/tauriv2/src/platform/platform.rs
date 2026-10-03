@@ -78,6 +78,17 @@ impl WindowObjects {
     }
 }
 
+/// diagnostics.process.exit 의 pid 를 읽는다. 없거나, JSON 정수가 아니거나, 1 부터 2147483647 사이가 아니면
+/// 거부한다.
+#[cfg(feature = "diagnostics")]
+pub fn parse_process_id(value: Option<&Value>) -> Result<i32, String> {
+    value
+        .and_then(Value::as_i64)
+        .filter(|pid| (1..=i64::from(i32::MAX)).contains(pid))
+        .map(|pid| pid as i32)
+        .ok_or_else(|| "pid must be a positive integer".to_string())
+}
+
 /// 오류 메시지에 쓰는 수의 표기.
 #[cfg(feature = "diagnostics")]
 impl std::fmt::Display for WindowObjects {
@@ -518,6 +529,15 @@ pub trait Platform: Send + Sync {
         expected: Option<WindowObjects>,
         seconds: f64,
         done: Box<dyn FnOnce(WindowObjects, bool) + Send>,
+    ) -> Result<(), String>;
+    #[cfg(feature = "diagnostics")]
+    /// pid 의 프로세스가 끝나면 true 를, seconds 안에 끝나지 않으면 false 를 done 에 준다. 이미 없는 프로세스는 끝난
+    /// 것이다. 메인 스레드에서 호출하고 done 도 메인 스레드에서 불린다.
+    fn when_process_exited(
+        &self,
+        pid: i32,
+        seconds: f64,
+        done: Box<dyn FnOnce(bool) + Send>,
     ) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// 배치 트랜잭션마다 시작, 앱 DOM 표시 확인, 커밋 시각의 기록을 시작한다. 메인 스레드에서 호출한다.

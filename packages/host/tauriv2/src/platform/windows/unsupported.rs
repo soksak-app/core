@@ -365,6 +365,15 @@ pub fn window_objects_when(
 }
 
 #[cfg(feature = "diagnostics")]
+pub fn when_process_exited(
+    _pid: i32,
+    _seconds: f64,
+    _done: Box<dyn FnOnce(bool) + Send>,
+) -> Result<(), String> {
+    missing("process exit waits")
+}
+
+#[cfg(feature = "diagnostics")]
 pub fn layout_trace_start() -> Result<(), String> {
     missing("surface layout trace")
 }

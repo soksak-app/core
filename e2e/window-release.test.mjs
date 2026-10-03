@@ -1,4 +1,5 @@
-// 닫은 프로젝트 창이 그 창과 웹뷰, 공용 라이브러리가 창과 웹뷰에 붙인 객체를 남기지 않는지 검사한다.
+// 닫은 프로젝트 창이 그 창과 웹뷰, 공용 라이브러리가 창과 웹뷰에 붙인 객체, 페이지의 WebContent 프로세스를 남기지
+// 않는지 검사한다.
 //
 // diagnostics.native.objects 는 라이브러리 객체의 살아 있는 수를 애플리케이션이 이벤트 하나를 처리한 뒤에 센다. 닫은
 // 창의 객체는 그 창을 닫은 이벤트 반복의 자동 해제 풀이 비워질 때 해제되고, 풀은 애플리케이션이 이벤트를 처리할 때
@@ -18,7 +19,7 @@ const CYCLES = 4;
 const counts = (s, equal) => s.request("diagnostics.native.objects", equal ? { equal } : {});
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: closed project windows release their windows, webviews and attached native objects`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: closed project windows release their windows, webviews, attached native objects and page processes`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -38,6 +39,7 @@ for (const app of Object.values(APPS)) {
 
     const before = await counts(s);
     const measured = [];
+    const pageProcesses = [];
     for (let cycle = 1; cycle <= CYCLES; cycle++) {
       const label = `cycle ${cycle}`;
       const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
@@ -47,6 +49,9 @@ for (const app of Object.values(APPS)) {
       await child.until("core.surfaces", (surfaces) => surfaces.some((surface) => surface.visible),
         `${label}: the project window showed no surface`);
       await child.presented();
+      const { pageProcess } = await child.get("host.window");
+      assert.ok(Number.isInteger(pageProcess) && pageProcess > 0, `${label}: the project window has no page process: ${pageProcess}`);
+      pageProcesses.push(pageProcess);
       const showing = await counts(s);
       measured.push(showing);
       // 열린 창의 합성 뷰, 표면, 입력 등록이 세어져야 닫은 뒤의 값이 해제를 나타낸다.
@@ -66,5 +71,13 @@ for (const app of Object.values(APPS)) {
     });
     t.diagnostic(`${app.name}: before ${JSON.stringify(before)}, open ${JSON.stringify(measured)}, after ${JSON.stringify(after)}`);
     assert.deepEqual(after, before);
+    // WebKit 은 페이지가 모두 해제된 WebContent 프로세스를 끝낸다. 프로세스는 수가 돌아온 뒤에 끝날 수 있으므로 종료를
+    // 기다린다.
+    for (const pid of pageProcesses) {
+      await s.request("diagnostics.process.exit", { pid }).catch((error) => {
+        throw new Error(`${app.name}: the page process of a closed project window is still running: ${error.message}; ` +
+          `page processes ${JSON.stringify(pageProcesses)}`);
+      });
+    }
   });
 }

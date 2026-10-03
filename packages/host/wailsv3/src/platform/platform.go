@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"sync"
@@ -151,6 +152,37 @@ func ParseWindowObjects(raw json.RawMessage) (WindowObjects, error) {
 		return WindowObjects{}, ErrWindowObjectsEqual
 	}
 	return WindowObjects{WindowCompositions: compositions, SurfaceHosts: hosts, InputRegistrations: registrations}, nil
+}
+
+// ErrProcessID 는 diagnostics.process.exit 의 pid 가 잘못되었을 때의 오류다.
+var ErrProcessID = errors.New("pid must be a positive integer")
+
+// ParseProcessID 는 diagnostics.process.exit 의 pid 를 읽는다. 없거나, JSON 정수가 아니거나, 1 부터 2147483647 사이가
+// 아니면 ErrProcessID 로 거부한다.
+func ParseProcessID(raw json.RawMessage) (int32, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var decoded any
+	if len(raw) == 0 || decoder.Decode(&decoded) != nil {
+		return 0, ErrProcessID
+	}
+	number, isNumber := decoded.(json.Number)
+	if !isNumber {
+		return 0, ErrProcessID
+	}
+	pid, err := number.Int64()
+	if err != nil || pid < 1 || pid > math.MaxInt32 {
+		return 0, ErrProcessID
+	}
+	return int32(pid), nil
+}
+
+// ProcessExitWaiter 는 프로세스의 종료를 기다리는 연산이다. 진단 빌드(태그 diagnostics)의 플랫폼 구현만 제공하며,
+// 진단 코드는 Current() 의 값을 이 인터페이스로 확인해 사용한다.
+type ProcessExitWaiter interface {
+	// WhenProcessExited 는 pid 의 프로세스가 끝나면 true 를, seconds 안에 끝나지 않으면 false 를 done 에 준다. 이미
+	// 없는 프로세스는 끝난 것이다. UI 스레드에서 호출하고 done 도 UI 스레드에서 불린다.
+	WhenProcessExited(pid int32, seconds float64, done func(exited bool))
 }
 
 // WindowObjectCounter 는 WindowObjects 를 세는 연산이다. 진단 빌드(태그 diagnostics)의 플랫폼 구현만 제공하며,
