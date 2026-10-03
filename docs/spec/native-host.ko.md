@@ -27,6 +27,10 @@ main page의 module script는 `head`의 render-blocking script(`blocking="render
 
 WebKit은 window가 화면에 있는 동안에만 web view를 그리고, window가 화면에 올라갈 때 그 그리기를 기다리지 않는다. 그래서 page가 그리기 전에 보인 window는 열리는 동안 빈 window를 보인다. 두 host는 모든 window를 숨긴 채 만들고, 투명하게 한 뒤 화면에 올리고, main webview의 첫 읽기가 성공이든 실패든 끝나고 그 뒤의 presentation update가 끝나면 불투명하게 한다(`sp_window_reveal_after_load`). 첫 화면은 읽기가 끝나기 전에 그려지므로, 시작할 때의 첫 window를 포함해 새 window의 처음 보이는 frame은 그 완전한 첫 화면이고, 읽지 못한 page도 그 실패와 함께 보인다.
 
+## page 다시 읽기
+
+`host.window.reload`는 window의 main page를 같은 WebContent process에서 다시 읽는다. 준비된 page는 먼저 대기 중인 저장을 끝낸다(`core.projects.flush`). 그다음 host는 web view를 직접 다시 읽지 않고 그 page에 `page-reload` 이벤트를 보낸다. 다시 읽기가 요청을 멈춘 뒤에 쓴 host 응답은 사라지고 Wails가 이를 오류로 기록하기 때문이다. page는 host 호출 보내기를 멈추고, 보낸 호출이 모두 답을 받을 때까지 기다린 뒤 스스로 다시 읽는다. 이벤트 뒤에 page가 하는 호출은 보내지 않으며, 다시 읽기가 멈춘 호출처럼 document와 함께 끝난다. 준비를 알리지 않은 page에는 `page-reload` listener가 없을 수 있으므로 host가 직접 다시 읽는다. 명령은 새 page가 준비를 알린 뒤 끝나고, 10초 안에 알리지 않으면 1005를 돌려준다.
+
 ## macOS 구현
 
 Wails는 앱이 생성한 추가 `WKWebView`, Tauri는 자식 웹뷰 API를 사용한다. 두 호스트 모두 해당 프로젝트 `NSWindow` 안에 뷰를 배치한다. 설정과 메뉴는 추가 OS 창을 생성하지 않는다. 현재 표면·배경 변경으로 프레임워크 의존성을 변경하지 않았다.

@@ -32,6 +32,7 @@
     "surface-exposure.js",
     "host.js",
     "host-store.js",
+    "host-calls.js",
     "host-windows.js",
     "icons.js",
     "ids.js",

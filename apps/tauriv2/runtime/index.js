@@ -4,6 +4,7 @@
 // 주입하므로 대기가 필요 없다. 표면과 모달 페이지도 같은 인터페이스를 사용한다.
 import { HostWorkspaceStore } from "@soksak/workbench/host-store.js";
 import { hostWindows } from "@soksak/workbench/host-windows.js";
+import { settlingCalls } from "@soksak/workbench/host-calls.js";
 import { createClipboardBridge } from "@soksak/plugin-api";
 import { createLifecycleListener } from "./listener-lifecycle.js";
 
@@ -127,12 +128,16 @@ export const host = (() => {
   const invoke = hostInvoke();
   const listen = createLifecycleListener((event, fn) => window.__TAURI__.event.listen(event, fn,
     { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } }));
+  // 메인 페이지의 호출. 페이지가 스스로 다시 읽기 전에 보낸 호출이 모두 답을 받게 센다(docs/spec/native-host.md#page-reload).
+  const mainCalls = settlingCalls((name, arg) => {
+    const command = COMMAND[name];
+    if (!command) return Promise.reject(new Error(`unknown host call: ${name}`));
+    return invoke(command, ARG[name](arg));
+  });
   return {
-    call(name, arg) {
-      const command = COMMAND[name];
-      if (!command) return Promise.reject(new Error(`unknown host call: ${name}`));
-      return invoke(command, ARG[name](arg));
-    },
+    call: (name, arg) => mainCalls.call(name, arg),
+    // 보낸 호출이 모두 답을 받은 뒤 이 페이지를 다시 읽는다. 그 뒤의 호출은 보내지 않는다.
+    reload: () => mainCalls.settle().then(() => location.reload()),
     // Tauri 이벤트는 값을 `payload` 필드에 담는다.
     on: (event, fn) => listen(event, (e) => fn(e.payload)),
     // 제목 표시줄이 투명하고 콘텐츠가 그 아래까지 차지하므로, 끄는 자리를 이

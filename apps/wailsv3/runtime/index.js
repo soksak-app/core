@@ -10,6 +10,7 @@
 // 로드한다. import 는 비동기이므로 아래 두 인터페이스는 완료를 기다린 뒤 호출한다.
 import { HostWorkspaceStore } from "@soksak/workbench/host-store.js";
 import { hostWindows } from "@soksak/workbench/host-windows.js";
+import { settlingCalls } from "@soksak/workbench/host-calls.js";
 import { createClipboardBridge } from "@soksak/plugin-api";
 import { createLifecycleListener } from "./listener-lifecycle.js";
 
@@ -83,21 +84,26 @@ const METHOD = {
   pluginsRun: "PluginsRun",
 };
 
+/* 메인 페이지의 호출. 페이지가 스스로 다시 읽기 전에 보낸 호출이 모두 답을 받게 센다(docs/spec/native-host.md#page-reload). */
+const mainCalls = settlingCalls((name, arg) => {
+  const method = METHOD[name];
+  if (!method) return Promise.reject(new Error(`unknown host call: ${name}`));
+  // 인자가 없는 호출은 인자를 보내지 않는다. undefined 를 하나 보내면 바인딩이
+  // 인자 수가 맞지 않는다고 거절한다.
+  if (name === "sidecarSend") return call(method, arg.sidecar, arg.surface, arg.body);
+  if (name === "report") {
+    if (typeof arg !== "string") return Promise.reject(new TypeError("report requires a string"));
+    return call(method, arg);
+  }
+  if (name === "imageCaret") return call(method, { surface: arg.surface, name: arg.name }, arg.x, arg.y, arg.width, arg.height);
+  if (name === "imageText") return call(method, { surface: arg.surface, name: arg.name }, arg.text);
+  return arg === undefined ? call(method) : call(method, arg);
+});
+
 export const host = {
-  call(name, arg) {
-    const method = METHOD[name];
-    if (!method) return Promise.reject(new Error(`unknown host call: ${name}`));
-    // 인자가 없는 호출은 인자를 보내지 않는다. undefined 를 하나 보내면 바인딩이
-    // 인자 수가 맞지 않는다고 거절한다.
-    if (name === "sidecarSend") return call(method, arg.sidecar, arg.surface, arg.body);
-    if (name === "report") {
-      if (typeof arg !== "string") return Promise.reject(new TypeError("report requires a string"));
-      return call(method, arg);
-    }
-    if (name === "imageCaret") return call(method, { surface: arg.surface, name: arg.name }, arg.x, arg.y, arg.width, arg.height);
-    if (name === "imageText") return call(method, { surface: arg.surface, name: arg.name }, arg.text);
-    return arg === undefined ? call(method) : call(method, arg);
-  },
+  call: (name, arg) => mainCalls.call(name, arg),
+  // 보낸 호출이 모두 답을 받은 뒤 이 페이지를 다시 읽는다. 그 뒤의 호출은 보내지 않는다.
+  reload: () => mainCalls.settle().then(() => location.reload()),
   on: listen,
   // 제목 표시줄이 투명하고 콘텐츠가 그 아래까지 차지하므로, 끄는 자리를 이 문서가
   // 지정한다.

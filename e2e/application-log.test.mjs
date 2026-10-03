@@ -29,3 +29,19 @@ for (const app of Object.values(APPS)) {
     assert.ok(log.includes(line), `${file} does not hold "${line}": ${JSON.stringify(log.slice(-5))}`);
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a page reload loses no host reply`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const file = join(s.app.configDir, "logs", "application.log");
+    const offset = readFileSync(file).length;
+    // 새로고침이 멈춘 요청에 쓴 호스트 응답은 사라지고 Wails 는 그 실패를 기록한다(docs/spec/native-host.md#page-reload).
+    for (let reload = 0; reload < 2; reload++) await s.run("host.window.reload");
+    await s.presented();
+    const lost = readFileSync(file).subarray(offset).toString("utf8").split("\n")
+      .filter((line) => line.includes("Unable to write json payload"));
+    assert.deepEqual(lost, [], `${file} recorded lost host replies during the reloads`);
+  });
+}

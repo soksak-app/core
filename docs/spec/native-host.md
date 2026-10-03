@@ -27,6 +27,10 @@ The main page's module script is a render-blocking script in the `head` (`blocki
 
 WebKit draws a web view only while its window is on screen and does not wait for that drawing when the window is ordered on screen, so a window shown before its page has drawn shows an empty window while it opens. Both hosts therefore create every window hidden, make it transparent, put it on screen, and make it opaque once the main webview's first load has ended, successfully or not, and the presentation update after that has completed (`sp_window_reveal_after_load`). The first screen is drawn before the load ends, so the first visible frame of a new window, including the first window at startup, is that complete first screen, and a page that fails to load still appears with its failure.
 
+## Page reload
+
+`host.window.reload` reloads the main page of a window in the same WebContent process. A ready page first completes its pending saves (`core.projects.flush`). The host then sends that page the `page-reload` event instead of reloading the web view itself, because a host reply written after the reload has stopped its request is lost and Wails logs it as an error. The page stops sending host calls, waits until every call it has sent is answered, and reloads itself. A call that the page makes after the event is not sent and ends with the document, as a call that a reload stops would. The host reloads a page that has not reported ready itself, because such a page may have no `page-reload` listener. The command resolves after the new page reports ready and returns 1005 when it does not within 10 seconds.
+
 ## macOS implementation
 
 Wails uses application-owned additional `WKWebView` instances. Tauri uses its child-webview API. Both place those views inside their owning project `NSWindow`; settings and menus create no additional OS window. Framework dependencies are unchanged by the current surface and backdrop changes.

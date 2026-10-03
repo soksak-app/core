@@ -519,7 +519,7 @@ func (s *Surfaces) replayRegistrations() {
 	}
 }
 
-// reloadPage 는 메인 페이지를 같은 WebContent 프로세스에서 다시 읽고, 새 페이지가 준비를 알릴 때까지 기다린다.
+// reloadPage 는 메인 페이지를 같은 WebContent 프로세스에서 다시 읽게 하고, 새 페이지가 준비를 알릴 때까지 기다린다.
 // 준비된 페이지는 먼저 대기 중인 저장을 끝낸다(docs/spec/projects.md#persistence). WebKit 은 새 페이지가 보이는
 // 내용을 처음 그릴 때까지 이전 페이지를 화면에 두고, 이전 페이지의 정리는 새 페이지의 시작 문서 요청이 한다
 // (docs/spec/native-host.md#page-start).
@@ -537,7 +537,13 @@ func (s *Surfaces) reloadPage() error {
 	s.host.mu.Lock()
 	s.readied = append(s.readied, ready)
 	s.host.mu.Unlock()
-	application.InvokeSync(func() { s.window.Reload() })
+	if pageReady {
+		// 준비된 페이지는 보낸 호출이 모두 답을 받은 뒤 스스로 다시 읽는다. 호스트가 다시 읽으면 그 순간 쓰고 있던
+		// 응답이 사라진다(docs/spec/native-host.md#page-reload).
+		s.window.EmitEvent("page-reload")
+	} else {
+		application.InvokeSync(func() { s.window.Reload() })
+	}
 	select {
 	case <-ready:
 		return nil

@@ -107,6 +107,9 @@ function windowOverlays() {
  */
 export const native = Boolean(bridge);
 
+// 호스트의 다시 읽기 요청. 보낸 호출이 모두 답을 받은 뒤 이 페이지를 다시 읽는다(docs/spec/native-host.md#page-reload).
+if (bridge) bridge.on("page-reload", () => bridge.reload());
+
 /*
  * 사이드카 이름마다 하나의 순서 포트. 호스트는 전송 호출을 동시에 처리할 수 있으므로, 앞선 전송이
  * 끝난 뒤 다음 전송을 호출해야 사이드카가 보낸 순서대로 받는다. 같은 사이드카를 쓰는 모든 표면이

@@ -88,7 +88,8 @@ test("Tauri page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["report", { line: "ready" }]);
   assert.deepEqual(await host.call("waitPresented"), { displayed: 42 });
   assert.deepEqual(recorded.at(-1), ["wait_presented", {}]);
-  assert.throws(() => host.call("report", { line: "ready" }), /report requires a string/);
+  // 잘못된 인자는 Wails 런타임처럼 거부된 약속으로 알린다. 메인 페이지의 호출은 모두 settlingCalls 를 거친다.
+  await assert.rejects(host.call("report", { line: "ready" }), /report requires a string/);
   await host.call("sidecarSend", { sidecar: "x", surface: "s1", body: { value: 1 } });
   assert.deepEqual(recorded.at(-1), ["sidecar_send", { sidecar: "x", surface: "s1", body: { value: 1 } }]);
   await host.call("imageCaret", { surface: "s1", name: "img", x: 1, y: 2, width: 3, height: 4 });

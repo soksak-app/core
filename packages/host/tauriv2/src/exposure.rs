@@ -1150,11 +1150,11 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
 /// 먼저 대기 중인 저장을 끝낸다(docs/spec/projects.md#persistence). WebKit 은 새 페이지가 보이는 내용을 처음 그릴 때까지
 /// 이전 페이지를 화면에 두고, 이전 페이지의 정리는 새 페이지의 시작 문서 요청이 한다(docs/spec/native-host.md#page-start).
 fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
-    if window_data(window)
+    let ready = window_data(window)
         .map_err(internal)?
         .ready
-        .load(Ordering::Relaxed)
-    {
+        .load(Ordering::Relaxed);
+    if ready {
         let mut flush = Map::new();
         flush.insert("name".into(), Value::from("core.projects.flush"));
         flush.insert("params".into(), Value::Object(Map::new()));
@@ -1167,14 +1167,21 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
         .lock()
         .map_err(internal)?
         .push(tx);
-    let target = window.clone();
-    on_main(window, move || {
-        crate::windows::root_view(&target)
-            .ok_or_else(|| "the main page is gone".to_string())?
-            .reload()
-            .map_err(|error| error.to_string())
-    })
-    .map_err(internal)?;
+    if ready {
+        // 준비된 페이지는 보낸 호출이 모두 답을 받은 뒤 스스로 다시 읽는다. 호스트가 다시 읽으면 그 순간 쓰고 있던
+        // 응답이 사라진다(docs/spec/native-host.md#page-reload).
+        crate::windows::emit_window(window, "page-reload", serde_json::json!({}))
+            .map_err(internal)?;
+    } else {
+        let target = window.clone();
+        on_main(window, move || {
+            crate::windows::root_view(&target)
+                .ok_or_else(|| "the main page is gone".to_string())?
+                .reload()
+                .map_err(|error| error.to_string())
+        })
+        .map_err(internal)?;
+    }
     match rx.recv_timeout(TIMEOUT) {
         Ok(()) => Ok(Value::Null),
         Err(_) => Err(Failure::new(
