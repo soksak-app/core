@@ -31,6 +31,18 @@ func (h *Host) WindowControls(ctx context.Context) (Chrome, error) {
 	return s.WindowChrome()
 }
 
+func (h *Host) WindowTitlebar(ctx context.Context, heightJSON json.RawMessage) error {
+	height, err := argument[float64]("height", heightJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.SetTitlebarHeight(height)
+}
+
 func (h *Host) OverlayShow(ctx context.Context, reqJSON json.RawMessage) (Rect, error) {
 	req, err := argument[OverlayRequest]("request", reqJSON)
 	if err != nil {

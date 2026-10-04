@@ -58,7 +58,8 @@ import { trace } from "./performance.js";
 
 /* 애플리케이션 인터페이스. 없으면 아무 일도 하지 않는 구현이 온다. */
 import { chrome, log, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
-import { setTextScope } from "./text-size.js";
+import { onTextSize, setTextScope } from "./text-size.js";
+import { fitTitlebar } from "./titlebar.js";
 
 /* 코어의 공개 항목과 진단 메서드. 등록소가 호스트의 요청에 답한다. */
 import { coreChanged, installCoreExposure, setVerify } from "./core-exposure.js";
@@ -292,17 +293,32 @@ const chromeActs = document.getElementById("chromeActs");
 
    브라우저에는 창이 없다. 그때 chrome 은 null 이고 막대를 들여쓰지 않는다. */
 let controlsAt = null;
+const chromeBar = document.querySelector(".chrome-bar");
+/* 마지막으로 창 제목줄에 맞춘 첫 행의 높이(px). */
+let fittedRow = null;
 
 if (chrome) {
   chrome.draggable(document.getElementById("winDrag"));
   askControls();
-  // 창의 크기가 바뀌면 OS 가 단추를 다시 배치하므로, 그 영역을 다시 요청한다.
+  // 창의 크기가 바뀌면 OS 가 단추를 다시 배치하므로, 그 영역을 다시 요청한다. 전체 화면에서 나온 창도 여기서
+  // 제목줄 높이를 다시 받는다.
   addEventListener("resize", askControls);
+  // 프레임 글자 배율이 바뀌면 첫 행(--chrome-row)의 높이가 바뀐다. 배율 알림은 판을 그릴 때마다 오므로 행 높이가
+  // 마지막으로 맞춘 높이와 다를 때만 요청한다.
+  onTextSize(() => {
+    if (chromeRow() !== fittedRow) askControls();
+  });
 }
 
-/** 창이 그리는 단추의 영역과 제목줄 높이를 요청하고, 첫 행의 들여쓰기와 높이를 설정한다. */
+/** 첫 행의 높이(px). */
+function chromeRow() {
+  return chromeBar.getBoundingClientRect().height;
+}
+
+/** 창 제목줄을 첫 행 높이에 맞추고, 창이 그리는 단추의 영역으로 첫 행의 들여쓰기를 설정한다. */
 function askControls() {
-  chrome.controls().then((answer) => {
+  fittedRow = chromeRow();
+  fitTitlebar(chrome, chromeRow).then((answer) => {
     if (!applyControls(answer)) return;
     // 답이 도착해도 렌더는 발생하지 않는다. 네이티브 배치와 DOM을 함께 표시한 뒤
     // 검증해야 이전 프레임을 새 선언과 비교하지 않는다.
@@ -310,15 +326,13 @@ function askControls() {
   });
 }
 
-/** 창 단추 응답으로 첫 행의 들여쓰기와 높이를 설정한다. 단추가 없는 답이면 설정하지 않고 false 다. */
+/** 창 단추 응답으로 첫 행의 들여쓰기를 설정한다. 단추가 없는 답이면 설정하지 않고 false 다. 행의 높이는
+    페이지가 정하고 창의 답에서 읽지 않는다. 읽으면 배율을 내려도 행이 줄지 않는다. */
 function applyControls(answer) {
   const at = answer?.controls;
   if (!at || at.w <= 0) return false;
   controlsAt = at;
   document.documentElement.style.setProperty("--controls-w", `${at.x + at.w}px`);
-  // 창은 제목줄 높이의 세로 가운데에 단추를 둔다. 전체 화면처럼 제목줄이 없으면 0 이고,
-  // 그때는 쓰던 높이를 지킨다.
-  if (answer.row > 0) document.documentElement.style.setProperty("--chrome-h", `${answer.row}px`);
   return true;
 }
 

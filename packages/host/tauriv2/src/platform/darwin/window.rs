@@ -95,18 +95,39 @@ pub fn observe_occlusion(window: Handle, changed: Box<dyn Fn()>) -> Result<(), S
     }
 }
 
-/// 창의 제목줄을 도구막대 높이로 만들고 그 높이를 반환한다. 만들 수 없으면 오류를 반환한다.
-pub fn unified_titlebar(window: Handle) -> Result<f64, String> {
+/// 창의 제목줄 높이를 반환한다. 제목줄을 가질 수 없는 창이면 오류를 반환한다.
+pub fn titlebar_height(window: Handle) -> Result<f64, String> {
     extern "C" {
-        fn windowUnifiedTitlebar(window: *mut c_void) -> f64;
+        fn windowTitlebarHeight(window: *mut c_void) -> f64;
     }
     // 0 은 제목줄이 없는 창(전체 화면)의 높이이고, 음수는 제목줄을 만들 수 없는 창이다.
-    let row = unsafe { windowUnifiedTitlebar(window as *mut c_void) };
+    let row = unsafe { windowTitlebarHeight(window as *mut c_void) };
     if row >= 0.0 {
         Ok(row)
     } else {
         Err("the window has no standard buttons or content view for a title bar".into())
     }
+}
+
+/// 창의 제목줄을 height(pt)로 만든다. 만들 수 없으면 native 의 실패 문장을 반환한다.
+pub fn set_titlebar_height(window: Handle, height: f64) -> Result<(), String> {
+    extern "C" {
+        fn windowSetTitlebarHeight(
+            window: *mut c_void,
+            height: f64,
+            failure: *mut *mut c_char,
+        ) -> bool;
+        fn free(pointer: *mut c_void);
+    }
+    let mut failure: *mut c_char = std::ptr::null_mut();
+    if unsafe { windowSetTitlebarHeight(window as *mut c_void, height, &mut failure) } {
+        return Ok(());
+    }
+    let message = unsafe { CStr::from_ptr(failure) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe { free(failure as *mut c_void) };
+    Err(message)
 }
 
 #[cfg(feature = "diagnostics")]

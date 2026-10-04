@@ -41,8 +41,12 @@ pub fn observe_occlusion(_window: Handle, _changed: Box<dyn Fn()>) -> Result<(),
     missing("window occlusion")
 }
 
-pub fn unified_titlebar(_window: Handle) -> Result<f64, String> {
-    missing("window button placement")
+pub fn titlebar_height(_window: Handle) -> Result<f64, String> {
+    missing("window title bar")
+}
+
+pub fn set_titlebar_height(_window: Handle, _height: f64) -> Result<(), String> {
+    missing("window title bar")
 }
 
 pub fn window_controls(_window: Handle) -> Result<Frame, String> {

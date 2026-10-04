@@ -11,6 +11,7 @@
 | API 또는 키 | 호출 위치와 범위 | 목적 |
 | --- | --- | --- |
 | `NSWindowResizeTime` 사용자 기본값 | 두 호스트의 [`window_motion.m`](../../native/darwin/src/window_motion.m), `windowResizeInstant`. 첫 창을 만들기 전에 등록 | 창 프레임과 웹 내용이 따로 표시되므로 창 확대·크기 변경 애니메이션을 화면 갱신 한 번으로 줄임 |
+| `NSWindow.setTitlebarHeight:` | 두 호스트의 [`window_controls.m`](../../native/darwin/src/window_controls.m), `windowSetTitlebarHeight`. 창을 만들 때 40pt 로, `windowTitlebar` 호출마다 페이지 첫 행의 높이로 호출 | 제목줄 높이를 페이지 첫 행의 높이로 정해, AppKit 이 모든 프레임 글자 배율에서 창 단추를 그 행의 가운데에 두게 함 |
 | `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewAttachSurface` | 장치 픽셀 컨테이너의 로컬 한 단위를 backing 픽셀 하나로 렌더링 |
 | 문서 웹뷰의 `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewMatchSurface`. [`document_view.m`](../../native/darwin/src/document_view.m)의 `sp_document_create`가 호출 | 장치 픽셀 표면 안의 문서 영역을 표면과 같은 밀도로 렌더링 |
 | `WKWebView._doAfterNextPresentationUpdate:` | 두 호스트의 [`surface_layout.m`](../../native/darwin/src/surface_layout.m), 배치 커밋 전 `surfaceLayoutAfterPresentation`와, 공개 DOM 평가 뒤 display link 전의 `settle`(`host.window.presented`와 명령 정착이 사용); [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer_then`; [`window_reveal.m`](../../native/darwin/src/window_reveal.m), main webview의 첫 읽기가 끝난 뒤 window를 불투명하게 하기 전의 `sp_window_reveal_after_load`; 프로브와 독립 입력 검사에서도 사용한다. DOM 평가는 레이아웃만 끝내고 웹 콘텐츠 프로세스는 그 DOM의 렌더링을 나중에 커밋하므로, 이 호출 없는 정착은 페이지의 마지막 DOM 변경이 그려지기 전의 표시 시각을 보고했다. | 네이티브 좌표 커밋, 새 문서로의 네이티브 스크롤 전달, 새 window 표시, 렌더링 결과 측정 전에 웹뷰 표시 완료 확인 |
@@ -31,7 +32,7 @@
 | `WKWebView._killWebContentProcessAndResetState`, `_webProcessIdentifier` | 두 호스트의 애플리케이션 종료([`host.go`](../../packages/host/wailsv3/src/host.go) `OnShutdown`, [`host.rs`](../../packages/host/tauriv2/src/host.rs) 종료 처리기); [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `sp_webview_kill_content_process` | 애플리케이션이 끝나기 전에 창마다 WebContent 프로세스를 끝내 WebKit 자식 프로세스가 남지 않게 하고, 프로세스 식별자가 0이 될 때까지 기다린다. 두 선택자를 사용할 수 없으면 호출자가 오류를 보고한다 |
 | `_WKNavigationActionPolicyAllowInNewProcess`, `WKWebView._clearBackForwardCache` | 두 host. [`webview_navigation.m`](../../native/darwin/src/webview_navigation.m)의 `sp_webview_replace_documents_in_new_process`, 앱 DOM webview에 대해 `sp_window_set_main_webview`가 설치한다 | 앱 DOM webview의 새 main frame 문서를 새 WebContent process에서 열고 멈춰 둔 이전 page를 놓아, 교체된 문서를 가진 process가 끝나게 한다. `_clearBackForwardCache`가 없으면 등록이 실패한다 |
 
-공용 라이브러리의 비공개 선언은 모두 [`native/darwin/src/private/`](../../native/darwin/src/private/)의 `webkit.h`, `coregraphics.h`에 있다. 소스와 검사는 이 헤더를 포함하며 비공개 API를 직접 선언하지 않는다. 다른 플랫폼은 `native/<os>/src/private/`에 선언을 둔다.
+공용 라이브러리의 비공개 선언은 모두 [`native/darwin/src/private/`](../../native/darwin/src/private/)의 `appkit.h`, `webkit.h`, `coregraphics.h`에 있다. 소스와 검사는 이 헤더를 포함하며 비공개 API를 직접 선언하지 않는다. 다른 플랫폼은 `native/<os>/src/private/`에 선언을 둔다.
 
 두 `drawsBackground` 항목의 대상 객체는 다르다. Wails는 생성된 뷰를 변경하고, Wry는 생성 전 구성을 변경한다. 프레임워크의 공개 Rust·Go 진입점도 비공개 네이티브 의존성을 포함할 수 있다.
 
@@ -104,6 +105,14 @@ Tauri 이벤트 전달 콜백은 Tao의 이벤트 처리 잠금을 가진다. �
 네이티브 마우스 처리가 비동기이므로 런타임과 독립 검사는 `_doAfterProcessingAllPendingMouseEvents:`를 사용한다. 런타임은 누름·뗌 전송 전과 수신 후 대기 중인 작업을 완료한다. 다른 네이티브 뷰 위에서 놓더라도 제스처를 소유한 문서를 기다린다. 기존 목록의 검사 전용 설명은 잘못됐다. 등록 시 선택자가 없으면 거부한다. 등록한 뷰의 전송 전에 선택자가 없으면 해당 오류를 보고하고 이벤트를 보내지 않으며, 수신 후 부재도 완료를 실패시킨다. 기능 부재의 소유 픽스처는 `webview_input_receipts_test`이고 실제 신뢰 이벤트 순서는 `input_inject_test`가 검증한다. V5-115-1-2에서 두 런타임 우회를 제거한다.
 
 [`WKWebViewPrivateForTesting.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivateForTesting.h)의 선언을 검토하고, 이 API나 입력 모듈을 업데이트하면 독립 검사 두 실행을 수행한다.
+
+### 제목줄 높이
+
+이 호출을 유지한다. AppKit 은 창 단추를 제목줄의 세로 가운데에 두고 제목이나 녹화 표시가 바뀔 때마다 단추를 되돌리므로, 호스트는 단추를 옮기지 않고 제목줄 높이를 정한다. 페이지의 첫 행은 프레임 글자 배율과 함께 커지고([글자 크기](../spec/text-size.ko.md)), 공개 API 에는 제목줄 높이가 없다. 항목이 없는 unified compact 도구막대는 제목줄을 40pt 로 고정했고, 프레임 배율 1.5 에서 단추는 54pt 행의 위에서 13pt, 아래에서 27pt 떨어져 있었다. `-[NSWindow setTitlebarHeight:]` 는 이 값을 정하는 AppKit 자신의 setter 이고 SDK 헤더에 없다. 이 메서드는 `-[NSThemeFrame setCustomTitlebarHeight:]` 로 전달하고, 그 메서드는 값이 같으면 아무것도 하지 않는다. AppKit 의 배치는 제목줄 높이(`-[NSThemeFrame _titlebarHeight]`), 콘텐츠 배치 영역, 단추 위치(`_closeButtonOrigin`, 단추를 그 높이의 가운데에 둔다)에 이 사용자 지정 높이를 읽는다. `-[NSThemeFrame _windowWillEnterFullscreen:]` 은 값을 저장하고 지우며, `_windowWillExitFullscreen:` 은 그 값을 되돌린다.
+
+호출 조건: 창에 표준 단추와 content view 가 있고, 전체 화면이 아니며, 높이는 양의 유한수다. `windowSetTitlebarHeight` 는 다른 호출을 오류로 거부하고, 두 호스트는 페이지에서 32 이상 200 이하 point 만 받는다. 0 이하의 값은 사용자 지정 높이를 지우지만 제목줄을 다시 배치하지 않으므로 함수는 그 값을 보내지 않는다. 전체 화면 동안 정한 높이는 창이 전체 화면에서 나올 때 저장된 값으로 바뀌므로, 함수는 그 요청을 거부하고 페이지는 창이 나온 뒤 행 높이를 다시 보낸다. 사용자 지정 높이가 있으면 도구막대가 제목줄 높이를 정하지 않으므로 창에는 도구막대가 없다.
+
+macOS 26.6.2 (arm64) 측정: 40, 45, 54, 63, 72, 90, 108pt 에서, 빈 compact 도구막대가 있든 없든 제목줄은 요청한 높이와 같고, 단추는 0.5pt 안에서 가운데이며, 제목 변경, 크기 변경, 이동 뒤에도 배치가 유지된다. 실패 징후: [`window_controls_test.m`](../../native/darwin/tests/window_controls_test.m) 이 요청과 다른 제목줄 높이, 제목 변경이나 크기 변경 뒤 가운데를 벗어난 단추, 줄어들지 않는 제목줄을 보고하고, 페이지의 검증 W 가 단추 위아래 여백이 달라 실패한다(`W 창 단추는 첫 행 가운데`). OS 업데이트 뒤에는 `-[NSWindow setTitlebarHeight:]` 와 `-[NSThemeFrame setCustomTitlebarHeight:]` 를 역어셈블해 selector, 전달, 전체 화면의 저장과 복원을 검토한다.
 
 ## 프레임워크 내부 의존성
 

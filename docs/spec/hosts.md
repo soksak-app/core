@@ -91,7 +91,7 @@ The shell sidecar repository uses the same Go mechanism in its `src/platform/` (
 
 | Area | Operations |
 | --- | --- |
-| Window | Window preparation, the unified title bar, full screen, the window button area, window server numbers, native inspection requests |
+| Window | Window preparation, the title bar height, full screen, the window button area, window server numbers, native inspection requests |
 | Webview | Creation, placement, frame, visibility, background, opacity, live resize, close (Wails also navigation, script evaluation, modal configuration and focus, pixel alignment; Tauri also ordering, corner radius, view identity) |
 | Surface layout | Transaction begin, commit, cancel, and completion after presentation |
 | Surface composition | `SurfaceHost` creation and closure; complete composition application; native-plane clipping, stacking, visibility, and hit routing; image configuration and immutable snapshot presentation |
@@ -123,7 +123,13 @@ The webview operation attaches the DOM plane to a `SurfaceHost`, not directly to
 
 ### Window buttons
 
-AppKit owns the window's own buttons. Each host gives its window an empty toolbar with the unified compact style (`windowUnifiedTitlebar`), which makes the title bar 40pt tall and has AppKit centre the buttons in it. The page reads the button area (`chrome.controls()`), reserves its width in the first row, and takes the row height from it: the row is twice the distance from the window top to the centre of the buttons (`--chrome-h` in `packages/workbench/app.css`). `host.window` reports the visible area in `controls`. Moving the buttons into the page's own view is what made AppKit take them back on a title or recording-indicator change, which showed one frame with the buttons missing or at the title bar position in about one of 48 window moves and resizes.
+AppKit owns the window's own buttons. The title bar height decides where AppKit places them: AppKit centres the buttons vertically in the title bar and keeps them there after a title change, a resize, and a move. Each host sets the title bar height with AppKit's `-[NSWindow setTitlebarHeight:]` (`windowSetTitlebarHeight`, listed in the [private native API inventory](../operations/private-native-apis.md)); the window has no toolbar. Each host sets the height to 40pt when it creates the window, before the window becomes visible.
+
+The page owns the height of its first row: `--chrome-row` in `packages/workbench/app.css` is `round(max(--chrome-h, 36px × frame factor))`, where `--chrome-h` is the fixed 40px minimum and the frame factor is the [text size](text-size.md) of the frame. The page does not take the row from the window's answer, so a change of the title bar does not change the row. When the row height differs from the title bar, the page requests the row height with the `windowTitlebar` host call and reads `chrome.controls()` again (`packages/workbench/titlebar.js`); because the row does not depend on the answer, the title bar equals the row after one request and the next comparison requests nothing. The page compares on start, on every window resize, and when the frame factor changes. The page reads the button area from the same answer and reserves its width in the first row. `host.window` reports the visible area in `controls`.
+
+`windowTitlebar` takes `height`, a number of points from 32 through 200; both hosts reject another value with `title bar height must be a finite number from 32 through 200 points`. A window without standard buttons or a content view fails with `the window has no standard buttons or content view for a title bar`. A window in full screen shows no title bar: its row is 0, the page sends no height, and a request that arrives during full screen fails with `the window shows no title bar in full screen`, because AppKit saves the height when the window enters full screen and restores it when the window leaves, which would discard a height set in between. Leaving full screen resizes the window, and the page then requests its row again.
+
+Moving the buttons into the page's own view is what made AppKit take them back on a title or recording-indicator change, which showed one frame with the buttons missing or at the title bar position in about one of 48 window moves and resizes. The title bar height does not come from a toolbar: an empty toolbar with the unified compact style fixes the title bar at 40pt, so the buttons would leave the centre of a first row that the frame factor enlarges.
 
 ## Windows state
 

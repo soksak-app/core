@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -132,15 +133,6 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	readied := s.readied
 	s.readied = nil
 	h.mu.Unlock()
-	// 첫 창은 생성과 함께 표시되어 WindowShow 가 오지 않을 수 있다. 페이지가 준비되면 창이
-	// 표시된 상태이므로 여기서도 제목줄을 만든다.
-	var titled error
-	application.InvokeSync(func() {
-		_, titled = system.UnifiedTitlebar(s.window.NativeWindow())
-	})
-	if titled != nil {
-		return fmt.Errorf("window title bar: %w", titled)
-	}
 	s.first.Do(func() { s.Emit("page-ready") })
 	s.replayRegistrations()
 	go h.windowsChanged()
@@ -221,8 +213,6 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	h.windows[win.ID()] = s
 	h.mu.Unlock()
 	go h.windowsChanged()
-	// 페이지가 첫 행의 높이를 제목줄에서 읽으므로 창이 표시될 때 만든다. 애플리케이션이 아직
-	// 실행되기 전에는 메인 스레드 호출을 할 수 없으므로 창 이벤트에서 한다.
 	// 네이티브 뷰는 DOM 위에 놓였으므로 놓인 파일은 페이지가 그 점의 DOM 요소를 기준으로 처리한다.
 	var dropOnce sync.Once
 	place := func(*application.WindowEvent) {
@@ -246,9 +236,6 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 					log.Fatalf("file drop: %v", err)
 				}
 			})
-			if _, err := system.UnifiedTitlebar(win.NativeWindow()); err != nil {
-				log.Printf("window: %v", err)
-			}
 		})
 	}
 	win.OnWindowEvent(events.Common.WindowDidResize, place)
@@ -261,6 +248,12 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	s.prepareNative = func() {
 		place(nil)
 		revealed.Do(func() {
+			// 제목줄은 페이지가 첫 행 높이로 요청할 때까지 처음 높이를 갖는다. 창이 보이기 전에 정한다.
+			var titled error
+			application.InvokeSync(func() { titled = system.SetTitlebarHeight(win.NativeWindow(), initialTitlebarHeight) })
+			if titled != nil {
+				log.Printf("window title bar: %v", titled)
+			}
 			var failed error
 			application.InvokeSync(func() { failed = system.RevealAfterLoad(win.NativeWindow()) })
 			if failed != nil {
@@ -350,14 +343,14 @@ func (h *Host) shouldQuit() bool {
 }
 
 // Chrome 은 페이지가 첫 행을 그리는 데 쓰는 창의 값이다. Controls 는 창 단추가 차지하는 영역이고
-// Row 는 제목줄의 높이(pt)다. 전체 화면처럼 제목줄이 없으면 Row 는 0 이고, 페이지는 쓰던 높이를 지킨다.
+// Row 는 제목줄의 높이(pt)다. 전체 화면처럼 제목줄이 없으면 Row 는 0 이고, 페이지는 제목줄 높이를 요청하지 않는다.
 type Chrome struct {
 	Controls Rect    `json:"controls"`
 	Row      float64 `json:"row"`
 }
 
 // WindowChrome 은 창 단추 영역과 제목줄 높이를 반환한다. 페이지는 첫 행에서 단추만큼을 비우고
-// 행의 높이를 제목줄에 맞춘다.
+// 제목줄이 행과 다르면 행의 높이를 요청한다(SetTitlebarHeight).
 func (s *Surfaces) WindowChrome() (Chrome, error) {
 	controls, err := s.WindowControls()
 	if err != nil {
@@ -369,11 +362,38 @@ func (s *Surfaces) WindowChrome() (Chrome, error) {
 	}
 	var row float64
 	var rowErr error
-	application.InvokeSync(func() { row, rowErr = system.UnifiedTitlebar(win.NativeWindow()) })
+	application.InvokeSync(func() { row, rowErr = system.TitlebarHeight(win.NativeWindow()) })
 	if rowErr != nil {
 		return Chrome{}, rowErr
 	}
 	return Chrome{Controls: controls, Row: row}, nil
+}
+
+// initialTitlebarHeight 는 창을 만들 때 정하는 제목줄 높이(pt)다. 프레임 글자 배율 1 의 첫 행 높이와 같다
+// (packages/workbench/app.css 의 --chrome-h).
+const initialTitlebarHeight = 40
+
+// ValidateTitlebarHeight 는 페이지가 요청한 제목줄 높이(pt)를 검사한다. 첫 행은 40pt 에서 프레임 글자 배율 3 의
+// 108pt 사이다. AppKit 은 0 이하의 값을 사용자 지정 높이가 없다는 뜻으로 쓰므로 그 값도 이 범위 밖이다.
+func ValidateTitlebarHeight(height float64) error {
+	if math.IsNaN(height) || height < 32 || height > 200 {
+		return errors.New("title bar height must be a finite number from 32 through 200 points")
+	}
+	return nil
+}
+
+// SetTitlebarHeight 는 창의 제목줄을 height(pt)로 만든다. 페이지가 첫 행의 높이를 정하고 그 높이를 요청한다.
+func (s *Surfaces) SetTitlebarHeight(height float64) error {
+	if err := ValidateTitlebarHeight(height); err != nil {
+		return err
+	}
+	win, ok := s.window, s.window != nil
+	if !ok {
+		return errNoWindow
+	}
+	var err error
+	application.InvokeSync(func() { err = system.SetTitlebarHeight(win.NativeWindow(), height) })
+	return err
 }
 
 // WindowControls 는 창 단추가 차지하는 영역을 페이지 좌표로 반환한다. 페이지는 첫 행에서

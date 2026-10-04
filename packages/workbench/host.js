@@ -404,6 +404,8 @@ export const chrome = native ? {
   draggable: (el) => bridge.draggable(el),
   /** 창이 그리는 단추가 차지하는 영역. 단추를 그리지 않는 창이면 폭이 0 이다. */
   controls: () => tellInTurn("windowControls"),
+  /** 창 제목줄의 높이(pt)를 정한다. 창은 그 높이의 세로 가운데에 단추를 둔다(docs/spec/hosts.md#window-buttons). */
+  titlebar: (height) => tellInTurn("windowTitlebar", height),
 } : null;
 
 /** 표면 인터페이스. 애플리케이션이 없으면 아무 일도 하지 않는다. */

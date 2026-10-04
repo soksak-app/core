@@ -39,8 +39,12 @@ func (implementation) Fullscreen(unsafe.Pointer, bool, func()) error {
 	return unsupported("full screen")
 }
 
-func (implementation) UnifiedTitlebar(unsafe.Pointer) (float64, error) {
+func (implementation) TitlebarHeight(unsafe.Pointer) (float64, error) {
 	return 0, unsupported("window title bar")
+}
+
+func (implementation) SetTitlebarHeight(unsafe.Pointer, float64) error {
+	return unsupported("window title bar")
 }
 
 func (implementation) WindowControls(unsafe.Pointer) (platform.Rect, error) {

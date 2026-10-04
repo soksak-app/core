@@ -92,7 +92,7 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 
 | 영역 | 연산 |
 | --- | --- |
-| 창 | 창 준비, 통합 제목줄, 전체 화면, 창 단추 영역, 윈도 서버 번호, 네이티브 검사 요청 |
+| 창 | 창 준비, 제목줄 높이, 전체 화면, 창 단추 영역, 윈도 서버 번호, 네이티브 검사 요청 |
 | 웹뷰 | 생성, 배치, 영역, 표시 여부, 배경, 불투명도, 연속 크기 변경, 닫기(Wails는 탐색, 스크립트 실행, 모달 설정과 초점, 픽셀 정렬도 포함하고, Tauri는 순서, 모서리 반경, 뷰 식별도 포함한다) |
 | 표면 배치 | 트랜잭션 시작, 커밋, 취소, 표시 후 완료 |
 | 표면 합성 | `SurfaceHost` 생성과 닫기, 완전한 합성 적용, 네이티브 평면 클리핑·쌓임·표시·히트 분배, 그림 설정과 불변 스냅샷 표시 |
@@ -124,7 +124,13 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 
 ### 창 단추
 
-AppKit 이 창 자신의 단추를 소유한다. 각 호스트는 창에 항목이 없는 도구막대를 unified compact 방식으로 붙여(`windowUnifiedTitlebar`) 제목줄을 40pt 로 만들고, AppKit 이 그 높이의 세로 가운데에 단추를 둔다. 페이지는 단추 영역을 읽어(`chrome.controls()`) 첫 행에서 그 폭을 비우고, 행의 높이를 그 값에서 얻는다. 행의 높이는 창 위에서 단추 중심까지 거리의 두 배다(`packages/workbench/app.css` 의 `--chrome-h`). `host.window` 는 보이는 영역을 `controls` 로 보고한다. 단추를 페이지 쪽 뷰로 옮기면 제목이나 녹화 표시가 바뀔 때 AppKit 이 되찾아 갔고, 창 이동·크기 변경 48회당 한 번꼴로 단추가 사라지거나 제목줄 자리에 있는 프레임이 화면에 나왔다.
+AppKit 이 창 자신의 단추를 소유한다. 제목줄 높이가 AppKit 이 단추를 두는 자리를 정한다. AppKit 은 단추를 제목줄의 세로 가운데에 두고, 제목 변경, 크기 변경, 이동 뒤에도 그 자리를 지킨다. 각 호스트는 AppKit 의 `-[NSWindow setTitlebarHeight:]`(`windowSetTitlebarHeight`, [비공개 네이티브 API 목록](../operations/private-native-apis.ko.md)에 있다)로 제목줄 높이를 정하고, 창에는 도구막대가 없다. 각 호스트는 창을 만들 때, 창이 보이기 전에 높이를 40pt 로 정한다.
+
+페이지가 첫 행의 높이를 소유한다. `packages/workbench/app.css` 의 `--chrome-row` 는 `round(max(--chrome-h, 36px × 프레임 배율))` 이고, `--chrome-h` 는 고정된 40px 최솟값, 프레임 배율은 프레임의 [글자 크기](text-size.ko.md)다. 페이지는 행을 창의 답에서 얻지 않으므로 제목줄이 바뀌어도 행은 바뀌지 않는다. 행 높이가 제목줄과 다르면 페이지는 `windowTitlebar` host 호출로 행 높이를 요청하고 `chrome.controls()` 를 다시 읽는다(`packages/workbench/titlebar.js`). 행이 답에 기대지 않으므로 요청 한 번 뒤에 제목줄은 행과 같고, 다음 비교는 아무것도 요청하지 않는다. 페이지는 시작할 때, 창 크기가 바뀔 때마다, 프레임 배율이 바뀔 때 비교한다. 페이지는 같은 답에서 단추 영역을 읽어 첫 행에서 그 폭을 비운다. `host.window` 는 보이는 영역을 `controls` 로 보고한다.
+
+`windowTitlebar` 는 32 이상 200 이하의 point 수인 `height` 를 받는다. 두 호스트는 다른 값을 `title bar height must be a finite number from 32 through 200 points` 로 거부한다. 표준 단추나 content view 가 없는 창은 `the window has no standard buttons or content view for a title bar` 로 실패한다. 전체 화면인 창은 제목줄을 보이지 않는다. 그 행은 0 이고 페이지는 높이를 보내지 않으며, 전체 화면 동안 도착한 요청은 `the window shows no title bar in full screen` 으로 실패한다. AppKit 은 창이 전체 화면에 들어갈 때 높이를 저장하고 나올 때 되돌리므로 그 사이에 정한 높이는 사라지기 때문이다. 전체 화면에서 나오면 창 크기가 바뀌고 페이지는 그때 행 높이를 다시 요청한다.
+
+단추를 페이지 쪽 뷰로 옮기면 제목이나 녹화 표시가 바뀔 때 AppKit 이 되찾아 갔고, 창 이동·크기 변경 48회당 한 번꼴로 단추가 사라지거나 제목줄 자리에 있는 프레임이 화면에 나왔다. 제목줄 높이는 도구막대에서 오지 않는다. 항목이 없는 unified compact 도구막대는 제목줄을 40pt 로 고정하므로, 프레임 배율이 키운 첫 행에서 단추가 가운데를 벗어난다.
 
 ## Windows 상태
 

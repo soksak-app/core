@@ -346,8 +346,8 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         owner,
         Box::new(move || crate::exposure::window_changed(&occluded)),
     )?;
-    // 페이지가 첫 행의 높이를 제목줄에서 읽으므로 문서를 열기 전에 만든다.
-    unified_titlebar(&window)?;
+    // 제목줄은 페이지가 첫 행 높이로 요청할 때까지 처음 높이를 갖는다. 창이 보이기 전에 정한다.
+    initial_titlebar(&window)?;
     let host = window.clone();
     window.on_window_event(move |event| match event {
         tauri::WindowEvent::CloseRequested { api, .. } if context.ready.load(Ordering::Relaxed) => {
@@ -415,7 +415,6 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             crate::exposure::windows_changed(host.app_handle());
         }
         tauri::WindowEvent::Resized(_) => {
-            log_error(unified_titlebar(&host));
             crate::exposure::window_changed(&host);
         }
         tauri::WindowEvent::Focused(_) => {
@@ -603,9 +602,6 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
 }
 
 pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
-    // 창을 등록할 때 AppKit 이 아직 단추를 만들지 않았을 수 있다. 페이지가 준비되면 창이
-    // 표시된 상태이므로 여기서도 제목줄을 만든다.
-    unified_titlebar(window)?;
     let data = window_data(window)?;
     data.ready.store(true, Ordering::Relaxed);
     crate::exposure::replay_registrations(window);
@@ -653,27 +649,48 @@ pub(crate) fn quit(app: &AppHandle, api: tauri::ExitRequestApi) {
     }
 }
 
-/// 창의 제목줄을 도구막대 높이로 만든다. AppKit 이 그 높이의 세로 가운데에 창 단추를 둔다.
+/// 창을 만들 때 정하는 제목줄 높이(pt)다. 프레임 글자 배율 1 의 첫 행 높이와 같다
+/// (packages/workbench/app.css 의 --chrome-h).
+const INITIAL_TITLEBAR_HEIGHT: f64 = 40.0;
+
+/// 창의 제목줄을 처음 높이로 만든다. AppKit 이 그 높이의 세로 가운데에 창 단추를 둔다.
 ///
-/// AppKit 은 메인 스레드에서 뷰를 배치한다. 창 이벤트는 메인 스레드에서 실행되지만 창 등록은
-/// 다른 스레드에서도 실행되므로 메인 스레드에서 호출한다.
-fn unified_titlebar(window: &Window) -> Result<(), String> {
+/// AppKit 은 메인 스레드에서 뷰를 배치한다. 창 등록은 메인 스레드 밖에서도 실행되고, 메인 스레드에서 답을
+/// 기다리면 그 자리에서 멈추므로 메인 스레드에 예약한다. 창을 만드는 즉시 예약하므로 페이지가 제목줄 높이를
+/// 요청하기 전에 실행된다.
+fn initial_titlebar(window: &Window) -> Result<(), String> {
     let handle = native_owner(window)?;
-    // 창 등록은 메인 스레드 밖에서도 실행되고, 메인 스레드에서 답을 기다리면 그 자리에서 멈춘다.
-    // 창을 만드는 즉시 메인 스레드에 예약하므로 페이지가 첫 행 높이를 읽기 전에 실행된다.
     window
         .run_on_main_thread(move || {
-            if let Err(error) =
-                platform::current().and_then(|platform| platform.unified_titlebar(handle))
+            if let Err(error) = platform::current()
+                .and_then(|platform| platform.set_titlebar_height(handle, INITIAL_TITLEBAR_HEIGHT))
             {
-                eprintln!("{error}");
+                eprintln!("window title bar: {error}");
             }
         })
         .map_err(|e| e.to_string())
 }
 
+/// 페이지가 요청한 제목줄 높이(pt)를 검사한다. 첫 행은 40pt 에서 프레임 글자 배율 3 의 108pt 사이다.
+/// AppKit 은 0 이하의 값을 사용자 지정 높이가 없다는 뜻으로 쓰므로 그 값도 이 범위 밖이다.
+pub fn validate_titlebar_height(height: f64) -> Result<(), String> {
+    if height.is_nan() || !(32.0..=200.0).contains(&height) {
+        return Err("title bar height must be a finite number from 32 through 200 points".into());
+    }
+    Ok(())
+}
+
+/// 창의 제목줄을 height(pt)로 만든다. 페이지가 첫 행의 높이를 정하고 그 높이를 요청한다.
+pub(crate) fn window_titlebar(window: &Window, height: f64) -> Result<(), String> {
+    validate_titlebar_height(height)?;
+    let handle = native_owner(window)?;
+    crate::exposure::on_main(window, move || {
+        platform::current()?.set_titlebar_height(handle, height)
+    })
+}
+
 /// 페이지가 첫 줄을 그리는 데 쓰는 창의 값. controls 는 창 단추 영역이고 row 는 제목줄 높이(pt)다.
-/// 전체 화면처럼 제목줄이 없으면 row 는 0 이고, 페이지는 쓰던 높이를 지킨다.
+/// 전체 화면처럼 제목줄이 없으면 row 는 0 이고, 페이지는 제목줄 높이를 요청하지 않는다.
 #[derive(Serialize)]
 pub(crate) struct Chrome {
     controls: Rect,
@@ -684,9 +701,8 @@ pub(crate) struct Chrome {
 pub(crate) fn window_chrome(window: &Window) -> Result<Chrome, String> {
     let controls = window_controls(window)?;
     let handle = native_owner(window)?;
-    let row = crate::exposure::on_main(window, move || {
-        platform::current()?.unified_titlebar(handle)
-    })?;
+    let row =
+        crate::exposure::on_main(window, move || platform::current()?.titlebar_height(handle))?;
     Ok(Chrome { controls, row })
 }
 

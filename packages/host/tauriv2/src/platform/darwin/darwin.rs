@@ -130,8 +130,11 @@ impl Platform for Darwin {
     fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
         window::fullscreen(window, on, done)
     }
-    fn unified_titlebar(&self, window: Handle) -> Result<f64, String> {
-        window::unified_titlebar(window)
+    fn titlebar_height(&self, window: Handle) -> Result<f64, String> {
+        window::titlebar_height(window)
+    }
+    fn set_titlebar_height(&self, window: Handle, height: f64) -> Result<(), String> {
+        window::set_titlebar_height(window, height)
     }
     fn window_controls(&self, window: Handle) -> Result<Frame, String> {
         Ok(window::controls(window))

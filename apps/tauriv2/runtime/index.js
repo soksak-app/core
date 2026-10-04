@@ -27,6 +27,7 @@ const COMMAND = {
   overlayUpdate: "overlay_update",
   overlayHide: "overlay_hide",
   windowControls: "window_controls",
+  windowTitlebar: "window_titlebar",
   exposureReply: "exposure_reply",
   exposureChanged: "exposure_changed",
   exposureForward: "exposure_forward",
@@ -82,6 +83,7 @@ const ARG = {
   overlayUpdate: (v) => ({ request: v }),
   overlayHide: (v) => ({ id: v }),
   windowControls: () => ({}),
+  windowTitlebar: (height) => ({ height }),
   // 응답과 상태 값은 JSON 텍스트로 보낸다. Tauri 는 command 인자를 키 순서를 바꾸는 값으로 읽으므로, 텍스트로
   // 보내야 host 가 페이지 값의 키 순서를 그대로 중계한다(docs/spec/exposure.md).
   exposureReply: (request) => ({ request: JSON.stringify(request) }),

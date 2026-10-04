@@ -240,10 +240,12 @@ type Platform interface {
 	// 호출한다. 전환 중에 온 요청은 그 전환이 끝난 뒤에 처리한다.
 	Fullscreen(window unsafe.Pointer, on bool, done func()) error
 
-	// UnifiedTitlebar 는 창의 제목줄을 도구막대 높이로 만들고 그 높이(pt)를 반환한다. AppKit 이 그
-	// 높이의 세로 가운데에 창 단추를 두므로 호스트는 단추를 옮기지 않는다. 창에 단추가 없으면
-	// 오류를 반환한다.
-	UnifiedTitlebar(window unsafe.Pointer) (float64, error)
+	// TitlebarHeight 는 창의 제목줄 높이(pt)를 반환한다. 전체 화면처럼 제목줄을 보이지 않는 동안 0 이고,
+	// 창에 단추가 없으면 오류를 반환한다. UI 스레드에서 호출한다.
+	TitlebarHeight(window unsafe.Pointer) (float64, error)
+	// SetTitlebarHeight 는 창의 제목줄을 height(pt)로 만든다. AppKit 이 그 높이의 세로 가운데에 창 단추를
+	// 두므로 호스트는 단추를 옮기지 않는다. 창에 단추가 없거나 전체 화면이면 오류를 반환한다. UI 스레드에서 호출한다.
+	SetTitlebarHeight(window unsafe.Pointer, height float64) error
 	// WindowControls 는 창 단추가 차지하는 영역을 페이지 좌표로 반환한다.
 	WindowControls(window unsafe.Pointer) (Rect, error)
 	// WindowFacts 는 창의 프레임, 활성 상태, 창 단추와 웹뷰를 JSON 으로 반환한다. 형식은
