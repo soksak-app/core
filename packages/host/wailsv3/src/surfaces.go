@@ -646,14 +646,13 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 				timer.Stop()
 			}
 		}
-		// 연속 divider gesture 중에는 native surface frame 과 DOM 을 display cycle
-		// 마다 commit 한다. 여기서 모든 image raster 를 다시 구성하면 다음 frame 이
-		// sidecar raster 작업 뒤에 직렬화되고 native layer 가 DOM 보다 늦어진다.
-		// settled frame 이 기준이며, raster transaction 을 완료해야 한다.
-		if waiting == nil && req.Settled {
+		// 연속 frame 도 commit 전에 보이는 image 영역마다 준비된 크기의 raster 가 표시되기를 기다린다.
+		// 기다리지 않으면 표면 크기 변경이 영역을 넓힌 채 이전 raster 를 보인다
+		// (docs/spec/surface-composition.md).
+		if waiting == nil {
 			waiting = s.refreshImageRasters()
 		}
-		if waiting == nil && req.Settled {
+		if waiting == nil {
 			if err := s.images.WaitCurrentError(pageTimeout); err != nil {
 				if err.Error() == "presentationTimeout" {
 					waiting = fmt.Errorf("the current image raster did not present within %s; pending %s",

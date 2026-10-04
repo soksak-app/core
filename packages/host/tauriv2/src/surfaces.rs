@@ -736,9 +736,10 @@ pub(crate) async fn present(
     let wait_for_presentation = presentation_settled || request.wait_for_presentation;
     // 연속 divider gesture 동안 native surface frame과 DOM은
     // display cycle마다 commit된다. frame마다 application presentation을 기다리면
-    // 다음 transaction이 WebKit refresh 뒤로 직렬화된다.
-    // 정착된 frame은 DOM 및 raster barrier를 유지한다.
-    let ready = if wait_for_presentation {
+    // 다음 transaction이 WebKit refresh 뒤로 직렬화되므로, DOM barrier는 정착된 frame만 유지한다.
+    // raster barrier는 모든 frame이 유지한다. 연속 배치도 새 영역 크기를 이전 raster와 함께 commit하지
+    // 않는다(docs/spec/surface-composition.md).
+    let dom = if wait_for_presentation {
         let (dom_tx, dom_rx) = mpsc::channel();
         main.with_webview(move |view| {
             let outcome = platform::current().and_then(|platform| {
@@ -759,34 +760,35 @@ pub(crate) async fn present(
             }
         })
         .map_err(|error| error.to_string())?;
-        let raster_window = window.clone();
-        Some(
-            tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-                dom_rx
-                    .recv_timeout(exposure::TIMEOUT)
-                    .map_err(|error| format!("application documents did not present: {error}"))??;
-                if presentation_settled {
-                    crate::composition::refresh_image_rasters(&raster_window)?;
-                    images.wait_current(exposure::TIMEOUT).map_err(|reason| {
-                        if reason == "presentationTimeout" {
-                            format!(
-                                "the current image raster did not present within {:?}; pending {}",
-                                exposure::TIMEOUT,
-                                images.pending_rasters()
-                            )
-                        } else {
-                            format!("the current image raster failed to present: {reason}")
-                        }
-                    })?;
-                }
-                Ok(())
-            })
-            .await
-            .map_err(|error| error.to_string())?,
-        )
+        Some(dom_rx)
     } else {
         None
     };
+    let raster_window = window.clone();
+    let ready = Some(
+        tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+            if let Some(dom_rx) = dom {
+                dom_rx
+                    .recv_timeout(exposure::TIMEOUT)
+                    .map_err(|error| format!("application documents did not present: {error}"))??;
+            }
+            crate::composition::refresh_image_rasters(&raster_window)?;
+            images.wait_current(exposure::TIMEOUT).map_err(|reason| {
+                if reason == "presentationTimeout" {
+                    format!(
+                        "the current image raster did not present within {:?}; pending {}",
+                        exposure::TIMEOUT,
+                        images.pending_rasters()
+                    )
+                } else {
+                    format!("the current image raster failed to present: {reason}")
+                }
+            })?;
+            Ok(())
+        })
+        .await
+        .map_err(|error| error.to_string())?,
+    );
     if let Some(Err(error)) = ready {
         // presentation 실패는 sync가 native transaction을 연 뒤에 발생한다.
         // 반환하기 전에 그 transaction을 해제하여

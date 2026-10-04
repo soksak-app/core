@@ -1895,6 +1895,7 @@ for (const app of Object.values(APPS)) {
     const { refreshRate } = await s.get("host.window");
     assert.ok(refreshRate > 0, `the window reports no refresh rate: ${refreshRate}`);
     const minimum = Math.ceil(result.asked * refreshRate / 1000 * 7 / 8);
+    t.diagnostic(`divider recording frames ${result.count} of at least ${minimum} for ${result.asked}ms at ${refreshRate}Hz`);
     assert.ok(result.count >= minimum,
       `divider recording contained too few frames: ${result.count} of at least ${minimum} for ${result.asked}ms at ${refreshRate}Hz`);
     assert.ok(result.longestGap <= 100, `divider recording dropped a gesture interval: ${result.longestGap}ms`);
