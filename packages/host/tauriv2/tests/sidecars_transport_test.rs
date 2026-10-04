@@ -622,6 +622,99 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
     service.join().unwrap();
 }
 
+// contract: sidecars-transport.stop.accepts-close-answers-sent-before-stop
+#[test]
+fn persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("late.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "late-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+
+    // 서비스는 closed 에 바로 답하지 않고 close-owner 를 받은 뒤에 답한다. 그 답은 중지가 시작된 뒤에 온다.
+    let service = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut seen = Vec::new();
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                return seen;
+            }
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let operation = if request["closed"] == true {
+                "closed".to_string()
+            } else if let Some(operation) = request["body"]["operation"].as_str() {
+                operation.to_string()
+            } else {
+                request["operation"].as_str().unwrap_or("").to_string()
+            };
+            seen.push(operation.clone());
+            match operation.as_str() {
+                "hello" => {
+                    writeln!(stream, r#"{{"operation":"hello","protocol":1,"ok":true}}"#).unwrap()
+                }
+                "close-owner" => {
+                    writeln!(stream, r#"{{"surface":"surface","closed":true}}"#).unwrap();
+                    let reply = serde_json::json!({
+                        "operation": "closed-owner",
+                        "request": request["request"],
+                        "ok": true
+                    });
+                    writeln!(stream, "{reply}").unwrap();
+                }
+                "shutdown" => {
+                    let reply = serde_json::json!({
+                        "operation": "shutdown",
+                        "request": request["request"],
+                        "ok": true
+                    });
+                    writeln!(stream, "{reply}").unwrap();
+                    return seen;
+                }
+                _ => {}
+            }
+        }
+    });
+
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, _events) = owner("late", "/projects/late");
+    sidecars
+        .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    sidecars.retain(&owner, &|_| false).unwrap();
+    sidecars.stop();
+    assert_eq!(
+        service.join().unwrap(),
+        ["hello", "open", "closed", "close-owner", "shutdown"]
+    );
+    assert!(
+        sidecars.closing().is_empty(),
+        "{:?}",
+        sidecars.closing().len()
+    );
+}
+
 // contract: sidecars.retain.sends-layout-and-known-surfaces, sidecars.retain.reports-service-failure
 #[test]
 fn persistent_retain_sends_layout_and_known_surfaces() {

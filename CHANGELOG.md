@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F21: both hosts accept a persistent service's answer to a close sent before the quit, so the quit still sends `shutdown` and the terminal service ends with the application.
 - R2-5-1: core has a CI workflow and a release workflow; a tag publishes the two applications as zip files with the installation guide `docs/operations/install.md`.
 - F22: the repeat tool's tests remove `NO_COLOR` from the environment they pass, so an environment with `NO_COLOR` no longer puts a node warning into the output they match.
 - R2-6-2: the command `core.plugins.registry` sets the registry index, and a window check installs over https from a test-owned TLS registry and refuses a wrong hash, a revoked version and an unreachable registry.

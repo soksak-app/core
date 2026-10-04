@@ -901,6 +901,19 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F21",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) Stop()" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn stop(&self)" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop" },
+    ],
+    expected: "A persistent service's answer to a close sent before the stop is accepted, and the stop sends close-owner and then shutdown.",
+    levels: ["unit"],
+  },
+  {
     id: "F22",
     implementation: [
       { file: "e2e/repeat.mjs", symbol: "USAGE" },

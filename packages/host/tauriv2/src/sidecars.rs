@@ -808,13 +808,18 @@ impl<O: Owner> Sidecars<O> {
             while !state.starting.is_empty() {
                 state = self.core.started.wait(state).expect("sidecar state");
             }
-            // 멈춘 사이드카는 답하지 않는다.
-            let changed = if state.closing.is_empty() {
-                None
-            } else {
-                state.closing.clear();
-                state.closing_changed.clone()
-            };
+            // 표준 입출력 사이드카는 끝나므로 닫기에 답하지 않는다. 지속 service 는 중지 전에 보낸 닫기에
+            // close-owner 응답보다 먼저 답하므로 그 표면은 답이나 연결의 끝까지 둔다(docs/spec/sidecars.md#messages).
+            let stdio: Vec<String> = state
+                .running
+                .iter()
+                .filter(|(_, process)| process.persistent.is_none())
+                .map(|(name, _)| name.clone())
+                .collect();
+            let mut changed = None;
+            for name in stdio {
+                changed = forget_closing(&mut state, &name).or(changed);
+            }
             (state.running.drain().collect(), changed)
         };
         if let Some(changed) = changed {
@@ -1511,6 +1516,9 @@ impl<O: Owner> Core<O> {
                     state.unannounced_loss.insert(sidecar.clone());
                     changed = forget_closing(&mut state, &sidecar);
                     was_current = true;
+                } else if state.stopped {
+                    // 중지가 실행 목록에서 뺀 연결이다. 답하지 않은 닫기는 service 가 스스로 마친다.
+                    changed = forget_closing(&mut state, &sidecar);
                 }
             }
             if let Some(changed) = changed {

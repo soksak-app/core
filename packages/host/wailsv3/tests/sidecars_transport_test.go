@@ -321,6 +321,95 @@ func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
 	}
 }
 
+// contract: sidecars-transport.stop.accepts-close-answers-sent-before-stop
+func TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDirectory)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+
+	// 서비스는 closed 에 바로 답하지 않고 close-owner 를 받은 뒤에 답한다. 그 답은 중지가 시작된 뒤에 온다.
+	operations := make(chan []string, 1)
+	go func() {
+		var seen []string
+		defer func() { operations <- seen }()
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		if err := connection.SetReadDeadline(time.Now().Add(stall)); err != nil {
+			return
+		}
+		reader := bufio.NewReader(connection)
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			var request map[string]any
+			if err := json.Unmarshal(line, &request); err != nil {
+				return
+			}
+			operation, _ := request["operation"].(string)
+			if body, ok := request["body"].(map[string]any); ok {
+				operation, _ = body["operation"].(string)
+			}
+			if closed, _ := request["closed"].(bool); closed {
+				operation = "closed"
+			}
+			seen = append(seen, operation)
+			var replies []map[string]any
+			switch operation {
+			case "hello":
+				replies = []map[string]any{{"operation": "hello", "protocol": 1, "ok": true}}
+			case "close-owner":
+				replies = []map[string]any{
+					{"surface": "surface", "closed": true},
+					{"operation": "closed-owner", "request": request["request"], "ok": true},
+				}
+			case "shutdown":
+				replies = []map[string]any{{"operation": "shutdown", "request": request["request"], "ok": true}}
+			}
+			for _, reply := range replies {
+				encoded, _ := json.Marshal(reply)
+				if _, err := connection.Write(append(encoded, '\n')); err != nil {
+					return
+				}
+			}
+			if operation == "shutdown" {
+				return
+			}
+		}
+	}()
+
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/late", seen: make(chan SidecarMessage, 1)}
+	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	sidecars.Close("surface")
+	sidecars.Stop()
+	if got := strings.Join(<-operations, ","); got != "hello,open,closed,close-owner,shutdown" {
+		t.Fatalf("service operations = %s, want hello,open,closed,close-owner,shutdown", got)
+	}
+	if closing := sidecars.Closing(); len(closing) != 0 {
+		t.Fatalf("closing after stop = %v, want none", closing)
+	}
+}
+
 // contract: sidecars-transport.hello.rejects-auth-failure
 func TestPersistentTransportHarnessAuthFailure(t *testing.T) {
 	root := t.TempDir()

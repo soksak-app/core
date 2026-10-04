@@ -458,15 +458,17 @@ func (c *Sidecars) Stop() {
 		c.mu.Lock()
 	}
 	// outbox 로의 전송은 잠금 안에서 실행 목록에 있는 사이드카에만 일어난다. 채널을 닫기 전에 목록에서 빼므로,
-	// 종료 중에 닫히는 창의 표면 닫기는 아무것도 보내지 않는다. 멈춘 사이드카는 닫기에 답하지 않는다.
+	// 종료 중에 닫히는 창의 표면 닫기는 아무것도 보내지 않는다. 표준 입출력 사이드카는 끝나므로 닫기에 답하지
+	// 않는다. 지속 service 는 중지 전에 보낸 닫기에 close-owner 응답보다 먼저 답하므로 그 표면은 답이나 연결의
+	// 끝까지 둔다(docs/spec/sidecars.md#messages).
 	processes := make([]*sidecar, 0, len(c.running))
+	forgot := false
 	for name, process := range c.running {
 		processes = append(processes, process)
 		delete(c.running, name)
-	}
-	forgot := false
-	for name := range c.closing {
-		forgot = c.forgetClosing(name) || forgot
+		if !process.persistent {
+			forgot = c.forgetClosing(name) || forgot
+		}
 	}
 	c.mu.Unlock()
 	if forgot {
@@ -1224,6 +1226,9 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 				}
 			}
 		}
+	} else if c.stopped {
+		// 중지가 실행 목록에서 뺀 연결이다. 답하지 않은 닫기는 service 가 스스로 마친다.
+		forgot = c.forgetClosing(process.name)
 	}
 	c.mu.Unlock()
 	if forgot {

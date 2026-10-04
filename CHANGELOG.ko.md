@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F21: 두 host는 종료 전에 보낸 닫기에 대한 지속 service의 답을 받아들인다. 그래서 종료가 `shutdown`을 보내고 terminal service가 애플리케이션과 함께 끝난다.
 - R2-5-1: core에 CI workflow와 release workflow가 있다. tag는 두 애플리케이션을 zip 파일로 설치 안내 `docs/operations/install.md`와 함께 게시한다.
 - F22: 반복 도구의 테스트는 넘기는 환경에서 `NO_COLOR`를 뺀다. 그래서 `NO_COLOR`가 있는 환경에서도 node 경고가 테스트가 맞춰 보는 출력에 들어가지 않는다.
 - R2-6-2: command `core.plugins.registry`가 registry index를 정하고, window check가 검사 소유 TLS registry에서 https로 설치하며 틀린 hash, revoked version, 닿지 않는 registry를 거부한다.
