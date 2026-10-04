@@ -108,6 +108,13 @@ export function createPluginOperations({ host, loaded, changed }) {
     }
   }
 
+  /** registry index 를 정하고 상태를 다시 읽는다(docs/spec/installation.md). */
+  async function useRegistry(index) {
+    if (!host) throw new Error("plugin operations need a native host");
+    await host.call("pluginsUseRegistry", { index });
+    await refresh();
+  }
+
   /** core.plugins status 의 값. */
   function status() {
     const rows = host && !state ? [] : pluginRows(loaded(), state);
@@ -131,8 +138,7 @@ export function createPluginOperations({ host, loaded, changed }) {
   async function installStarter(pack, defaultRegistry, log, show) {
     if (!host || pack === null || !state?.firstRun) return false;
     if (state.registry === null && defaultRegistry !== null) {
-      await host.call("pluginsUseRegistry", { index: defaultRegistry });
-      await refresh();
+      await useRegistry(defaultRegistry);
       if (state === null) throw new Error(`first run: ${failure.message}`);
     }
     if (state.registry === null) {
@@ -147,5 +153,5 @@ export function createPluginOperations({ host, loaded, changed }) {
     return true;
   }
 
-  return { refresh, run: runAction, status, installStarter, failure: () => failure, hosted: Boolean(host) };
+  return { refresh, run: runAction, useRegistry, status, installStarter, failure: () => failure, hosted: Boolean(host) };
 }

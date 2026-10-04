@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify browser-example-check docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory
+.PHONY: preflight prepare build verify browser-example-check docs-check boundaries platforms hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -20,6 +20,20 @@ page-memory:
 # 코어, 플러그인, 사이드카가 서로의 이름을 코드에 적지 않았는지 검사한다.
 boundaries:
 	@node scripts/check-boundaries.mjs
+
+# registry window check 의 TLS 인증서(docs/operations/examples.md). 검사 소유 인증 기관과 127.0.0.1 의 server 인증서를
+# 만든다. 진단 build 의 check 애플리케이션은 --registry-ca <폴더>/ca.pem 으로 시작한다. 이미 있으면 바꾸지 않는다.
+E2E_REGISTRY_TLS = $(or $(SOKSAK_CONFIG_ROOT),$(TMPDIR))/soksak-check-registry-tls
+e2e-registry-tls:
+	@test -n "$(or $(SOKSAK_CONFIG_ROOT),$(TMPDIR))" || { echo "e2e-registry-tls needs TMPDIR or SOKSAK_CONFIG_ROOT" >&2; exit 2; }
+	@if [ -f "$(E2E_REGISTRY_TLS)/ca.pem" ]; then echo "$(E2E_REGISTRY_TLS)"; exit 0; fi; \
+	  set -e; mkdir -p "$(E2E_REGISTRY_TLS)"; cd "$(E2E_REGISTRY_TLS)"; \
+	  printf 'basicConstraints=CA:FALSE\nsubjectAltName=IP:127.0.0.1\nextendedKeyUsage=serverAuth\n' > server.ext; \
+	  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=soksak check registry authority" \
+	    -keyout ca-key.pem -out ca.pem -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign,cRLSign 2>/dev/null; \
+	  openssl req -newkey rsa:2048 -nodes -subj "/CN=127.0.0.1" -keyout server-key.pem -out server.csr 2>/dev/null; \
+	  openssl x509 -req -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -days 3650 -extfile server.ext -out server.pem 2>/dev/null; \
+	  rm -f server.csr ca.srl server.ext; echo "$(E2E_REGISTRY_TLS)"
 
 # 창 검사가 엔드포인트의 선언된 항목과 네이티브 입력만 쓰는지 검사한다.
 # 스테이징한 브라우저 예제에서 프로젝트를 열고 페이지 오류가 없는지 headless Chrome 으로 검사한다.

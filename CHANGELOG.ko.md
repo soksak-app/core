@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R2-6-2: command `core.plugins.registry`가 registry index를 정하고, window check가 검사 소유 TLS registry에서 https로 설치하며 틀린 hash, revoked version, 닿지 않는 registry를 거부한다.
 - R2-6-1: 진단 build는 `--registry-ca PATH`를 받아 window check가 local TLS registry를 쓸 수 있다. release build는 이 인자를 거부한다.
 - F20: 두 애플리케이션은 선언하지 않은 인자, 값 없는 flag, 두 번 준 flag를 같은 문장과 상태 2로 거부한다. Tauri 애플리케이션은 더는 그것을 무시하지 않는다.
 - F15: 두 host는 잘못된 `process.lock`을 같은 문장 `<path>: invalid process lock`으로 보고한다.

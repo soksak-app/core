@@ -123,7 +123,7 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 
 페이지는 보일 때와 `plugins-changed` event를 받을 때마다 `pluginsState`로 plugin 상태를 읽는다. Registry index를 읽지 못하면 카드 위에 "레지스트리를 읽지 못했습니다: <message>"를 보여 주고, 페이지는 불러온 plugin과 설치된 plugin을 유지한다. 잘못된 `installed.json`처럼 plugin 상태를 읽지 못하면 "플러그인 상태를 읽지 못했습니다: <message>"를 보여 주고 카드는 없다. Browser 애플리케이션처럼 host가 없으면 페이지에는 불러온 plugin만 모두 `loaded`로 있고 동작은 없다.
 
-`core.plugins.install`, `core.plugins.update`, `core.plugins.remove`, `core.plugins.enable`, `core.plugins.disable`은 `{plugin}`을 받고 자기 action으로 host 호출 `pluginsRun`을 실행한다. `plugin`이 비어 있지 않은 문자열이 아니면 -32602(invalid params)로, 작업이 실패하거나 다른 작업이 실행 중이면 host 오류로, host가 없으면 "plugin operations need a native host"로 실패한다. 명령은 host를 호출하기 전에 작업을 `core.plugins`에 기록하고, 호출 뒤에 결과를 기록한다.
+`core.plugins.registry`는 `{index}`를 받아 host 호출 `pluginsUseRegistry`를 실행하고 plugin 상태를 다시 읽는다. `index`가 비어 있지 않은 문자열이 아니면 -32602(invalid params)로, index를 읽거나 검사하지 못하면 host 오류로 실패한다. `core.plugins.install`, `core.plugins.update`, `core.plugins.remove`, `core.plugins.enable`, `core.plugins.disable`은 `{plugin}`을 받고 자기 action으로 host 호출 `pluginsRun`을 실행한다. `plugin`이 비어 있지 않은 문자열이 아니면 -32602(invalid params)로, 작업이 실패하거나 다른 작업이 실행 중이면 host 오류로, host가 없으면 "plugin operations need a native host"로 실패한다. 명령은 host를 호출하기 전에 작업을 `core.plugins`에 기록하고, 호출 뒤에 결과를 기록한다.
 
 `core.library`는 `page`(`projects` 또는 `plugins`)와 `plugins` `{query, shown, actions}`를 보고한다. plugin 검색어, 보이는 카드의 plugin id를 순서대로, 카드의 동작 버튼을 문서 순서의 `{plugin, action, disabled}`로 담으며, 그 위치가 dom 이름 `core.library.plugins.action`의 index다. 페이지가 보이지 않는 동안 `shown`과 `actions`는 `[]`이다. `core.plugins`는 다음을 보고한다:
 

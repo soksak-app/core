@@ -190,3 +190,16 @@ test("the first run sets the default registry of the environment before it insta
     ["pluginsRun", { action: "install", plugin: "beta" }],
   ]);
 });
+
+test("setting the registry runs pluginsUseRegistry and reads the state again", async () => {
+  const host = starterHost({ registry: null, index: starterIndex, firstRun: false });
+  const operations = createPluginOperations({ host, loaded: () => [], changed: () => {} });
+  await operations.refresh();
+  assert.equal(operations.status().registry, null);
+  await operations.useRegistry("https://127.0.0.1:8443/index.json");
+  assert.deepEqual(host.calls.at(-2), ["pluginsUseRegistry", { index: "https://127.0.0.1:8443/index.json" }]);
+  assert.deepEqual(host.calls.at(-1), ["pluginsState", null]);
+  assert.equal(operations.status().registry, "https://127.0.0.1:8443/index.json");
+  const hostless = createPluginOperations({ host: null, loaded: () => [], changed: () => {} });
+  await assert.rejects(hostless.useRegistry("https://127.0.0.1:8443/index.json"), /plugin operations need a native host/);
+});

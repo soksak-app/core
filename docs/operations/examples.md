@@ -30,7 +30,7 @@ Debug executables are `target/debug/soksak-wailsv3.app` and `target/debug/soksak
 
 Run the structural inventory gate with `make parity-check`. It discovers Git-visible JS/TS, Rust, Go, Objective-C, native headers, HTML/CSS, shell scripts, contract declarations, and build manifests without fixed language roots. Generated library output and Tauri schemas have explicit exclusions; source/output equality remains a separate build check. Unclaimed implementation or test files, empty patterns, and duplicate ownership fail. Shared tests do not permit duplicate implementation ownership.
 
-`make host-contract-check` runs the tests of both hosts and compares them with the [host contract cases](../spec/host-contract.md); `make native-test` runs it, and it first runs `make rust-format-check`, which fails when a Rust package of the root or `sidecars` workspace is not formatted by `rustfmt`, and `make go-format-check`, which fails and lists every tracked Go file that `gofmt` would change. The current inventory has 56 lanes, 337 implementation files, and 373 test files. The current mapping is incomplete. A structural pass would not establish behavior parity: named behavior mappings, actual per-language execution, and matching-build evidence remain required by the [verification contract](../spec/verification.md). Do not expand unrelated globs or exclude discovered files to obtain a pass.
+`make host-contract-check` runs the tests of both hosts and compares them with the [host contract cases](../spec/host-contract.md); `make native-test` runs it, and it first runs `make rust-format-check`, which fails when a Rust package of the root or `sidecars` workspace is not formatted by `rustfmt`, and `make go-format-check`, which fails and lists every tracked Go file that `gofmt` would change. The current inventory has 56 lanes, 337 implementation files, and 374 test files. The current mapping is incomplete. A structural pass would not establish behavior parity: named behavior mappings, actual per-language execution, and matching-build evidence remain required by the [verification contract](../spec/verification.md). Do not expand unrelated globs or exclude discovered files to obtain a pass.
 
 `pnpm test` runs the audit/checklist/command-supervision self-tests before package tests. The two Rust terminal packages invoke their actual Cargo tests; package-command tests replace Cargo with a failing fixture to verify invocation and failure propagation, not engine behavior.
 
@@ -57,9 +57,12 @@ Install the workspace plugins into the configuration directories the harness rea
 ```sh
 make install-plugins CONFIG="$TMPDIR/soksak-check-wailsv3"
 make install-plugins CONFIG="$TMPDIR/soksak-check-tauriv2"
-./target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3 --config-dir "$TMPDIR/soksak-check-wailsv3"
-./target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2 --config-dir "$TMPDIR/soksak-check-tauriv2"
+make e2e-registry-tls
+./target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3 --config-dir "$TMPDIR/soksak-check-wailsv3" --registry-ca "$TMPDIR/soksak-check-registry-tls/ca.pem"
+./target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2 --config-dir "$TMPDIR/soksak-check-tauriv2" --registry-ca "$TMPDIR/soksak-check-registry-tls/ca.pem"
 ```
+
+`make e2e-registry-tls` creates a test-owned certificate authority and a server certificate for `127.0.0.1` once; `e2e/registry.test.mjs` serves the workspace registry over https with them, and the diagnostic `--registry-ca` lets the applications trust that authority ([application arguments](../spec/hosts.md#application-arguments)).
 
 Keep the display on and both windows available for rendering. Run:
 

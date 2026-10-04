@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R2-6-2: the command `core.plugins.registry` sets the registry index, and a window check installs over https from a test-owned TLS registry and refuses a wrong hash, a revoked version and an unreachable registry.
 - R2-6-1: a diagnostic build accepts `--registry-ca PATH`, so a window check can serve a local TLS registry; a release build rejects the argument.
 - F20: both applications reject an undeclared argument, a flag without a value and a repeated flag with the same text and status 2; the Tauri application no longer ignores them.
 - F15: both hosts report a malformed `process.lock` with the same text, `<path>: invalid process lock`.

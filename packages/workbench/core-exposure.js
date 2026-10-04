@@ -398,6 +398,12 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.plugins.remove", pluginCommand("remove"));
   registry.command("core.plugins.enable", pluginCommand("enable"));
   registry.command("core.plugins.disable", pluginCommand("disable"));
+  registry.command("core.plugins.registry", async ({ index }) => {
+    if (typeof index !== "string" || index === "") {
+      throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "index must be a non-empty string");
+    }
+    await pluginOperations.useRegistry(index);
+  });
   // 플러그인 관리는 설정 창을 닫고 라이브러리의 플러그인 페이지를 보인다.
   registry.command("core.plugins.browse", async () => {
     closeSettings();

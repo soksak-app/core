@@ -2050,6 +2050,21 @@
         }
       },
       {
+        "name": "core.plugins.registry",
+        "description": "Sets the registry index that plugin operations read, through the host, as sok registry use does, and reads the plugin state again.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "index": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.plugins.browse",
         "description": "Closes the settings modal when it is open, shows the library when the window shows a workspace, and selects its plugin page.",
         "params": {
