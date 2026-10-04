@@ -1077,6 +1077,104 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F35",
+    implementation: [
+      { file: "native/darwin/src/window_controls.m", symbol: "windowSetTitlebarHeight" },
+      { file: "packages/workbench/frame-text.js", symbol: "chromeRow" },
+    ],
+    tests: [
+      { file: "e2e/titlebar-recording.test.mjs", id: "every recorded frame keeps the window buttons centred in the first row while the frame factor steps from 1 to 3 and back" },
+    ],
+    expected: "The window buttons stay centred in the first row at every frame text factor.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F35.1",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutStartPage" },
+      { file: "packages/workbench/frame-text.js", symbol: "frameLayout" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/window_titlebar_test.go", id: "TestStartTitlebarFollowsFrameFactor" },
+      { file: "packages/host/tauriv2/tests/window_titlebar_test.rs", id: "the_start_titlebar_follows_the_frame_factor" },
+      { file: "e2e/titlebar-recording.test.mjs", id: "every recorded frame of a reload after another window changed the frame factor keeps the window buttons centred" },
+    ],
+    expected: "The title bar height is presented in the layout transaction of the frame that draws the first row, at start, on a reload and at every factor step.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F35.2",
+    implementation: [
+      { file: "e2e/titlebar-measurement.mjs", symbol: "measureTitlebar" },
+    ],
+    tests: [
+      { file: "e2e/test/titlebar-measurement.test.mjs", id: "buttons 6px off the first-row centre fail the frame" },
+    ],
+    expected: "A recording fails on any frame whose button centre and first-row centre differ by more than 0.5px.",
+    levels: ["unit"],
+  },
+  {
+    id: "F47",
+    implementation: [
+      { file: "packages/host/wailsv3/src/application_log.go", symbol: "ErrorLine" },
+      { file: "packages/host/tauriv2/src/application_log.rs", symbol: "error_line" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestLogErrorWritesAnErrorLineToTheApplicationLog" },
+      { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "log_error_writes_an_error_line_to_the_application_log" },
+    ],
+    expected: "Every host failure is written to the application log as an error line that window checks read.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F48",
+    implementation: [
+      { file: "packages/host/tauriv2/src/windows.rs", symbol: "list_entries" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/exposure_test.rs", id: "a_close_during_the_list_does_not_fail_the_list" },
+    ],
+    expected: "The Tauri window list reads each window's closing state and queries it in one main-thread step.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F49",
+    implementation: [
+      { file: "packages/workbench/projects.js", symbol: "readProjects" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a project removed from the registry by another window ends in the window that shows it as closing its tab does" },
+      { file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" },
+    ],
+    expected: "Removing a project ends it in every window that shows it as closing its tab does.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F50",
+    implementation: [
+      { file: "packages/workbench/layout-queue.js", symbol: "async wait()" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/tab-close-settled.test.mjs", id: "core.tab.close answers after the tab close and its draw" },
+      { file: "packages/workbench/test/layout-queue.test.mjs", id: "the wait for the drawn layout fails with the failure of the newest layout" },
+    ],
+    expected: "A command answers after its handler's work and the newest draw.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F51",
+    implementation: [
+      { file: "packages/host/tauriv2/src/windows.rs", symbol: "with_native_owner" },
+      { file: "packages/host/wailsv3/src/windows.go", symbol: "UseNativeWindow" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/window_close_test.rs", id: "a_close_after_the_handle_read_does_not_reach_native_code" },
+      { file: "packages/host/wailsv3/tests/window_close_test.go", id: "TestACloseBeforeTheNativeStepDoesNotReachNativeCode" },
+    ],
+    expected: "A native window handle is used only in the main-thread step that reads it.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },
