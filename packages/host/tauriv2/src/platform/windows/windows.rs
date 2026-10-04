@@ -404,6 +404,12 @@ impl Platform for Windows {
     fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {
         unsupported::on_termination(quit)
     }
+    fn on_quit_request(&self, quit: Box<dyn Fn()>) -> Result<(), String> {
+        unsupported::on_quit_request(quit)
+    }
+    fn answer_quit_requests(&self) {
+        unsupported::answer_quit_requests()
+    }
     fn instant_window_resize(&self) -> Result<(), String> {
         unsupported::instant_window_resize()
     }

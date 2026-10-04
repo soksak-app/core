@@ -248,6 +248,10 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         .setup(move |app| {
             // 알림 센터를 쓸 수 없으면 애플리케이션을 시작하지 않는다(docs/spec/hosts.md).
             notifications::start(app.handle())?;
+            // 운영체제의 종료 요청은 host.quit 과 같은 종료를 실행하고, RunEvent::Exit 이 저장을 마친 뒤
+            // 답한다(docs/spec/hosts.md#process-lifecycle).
+            let quit = app.handle().clone();
+            platform::current()?.on_quit_request(Box::new(move || quit.exit(0)))?;
             let dock = app.handle().clone();
             platform::current()?.install_dock_menu(Box::new(move || {
                 if let Err(error) = windows::window_new_on_main(dock.clone()) {
@@ -317,6 +321,11 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             if let tauri::RunEvent::Exit = event {
                 app.state::<WindowSidecars>().stop();
                 exposure::stop(app);
+                // 저장과 정리를 마쳤으므로 받은 운영체제의 종료 요청에 답한다.
+                match platform::current() {
+                    Ok(platform) => platform.answer_quit_requests(),
+                    Err(error) => eprintln!("quit request answer: {error}"),
+                }
             }
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
                 windows::quit(app, api);

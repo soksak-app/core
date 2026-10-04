@@ -560,6 +560,12 @@ pub trait Platform: Send + Sync {
     /// 종료 신호(SIGTERM, SIGINT, SIGHUP)를 처음 받으면 quit 를 호출하게 한다. 그 뒤의 종료
     /// 신호는 기본 동작으로 프로세스를 끝낸다.
     fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String>;
+    /// 운영체제의 종료 요청(Dock 의 종료, 로그아웃, 재시작, 다른 프로그램의 quit Apple event)을 받으면 quit 를
+    /// 호출하게 하고, 그 요청에는 answer_quit_requests 까지 답하지 않는다. 애플리케이션이 시작한 뒤 메인
+    /// 스레드에서 호출한다.
+    fn on_quit_request(&self, quit: Box<dyn Fn()>) -> Result<(), String>;
+    /// 받은 종료 요청에 오류 없이 답한다. 저장을 마치고 끝나기 직전에 메인 스레드에서 호출한다.
+    fn answer_quit_requests(&self);
 
     // 창 동작
 

@@ -418,6 +418,12 @@ type Platform interface {
 	// OnTermination 은 종료 신호(SIGTERM, SIGINT, SIGHUP)를 처음 받으면 quit 를 호출하게 한다. 그
 	// 뒤의 종료 신호는 기본 동작으로 프로세스를 끝낸다.
 	OnTermination(quit func()) error
+	// OnQuitRequest 는 운영체제의 종료 요청(Dock 의 종료, 로그아웃, 재시작, 다른 프로그램의 quit Apple event)을
+	// 받으면 quit 를 호출하게 하고, 그 요청에는 AnswerQuitRequests 까지 답하지 않는다. 애플리케이션이 시작한 뒤
+	// UI 스레드에서 호출한다.
+	OnQuitRequest(quit func()) error
+	// AnswerQuitRequests 는 받은 종료 요청에 오류 없이 답한다. 저장을 마치고 끝나기 직전에 UI 스레드에서 호출한다.
+	AnswerQuitRequests()
 
 	// InstantWindowResize 는 창 확대와 애니메이션 크기 변경을 한 화면 갱신 안에 끝나게 한다.
 	// 창을 만들기 전에 호출한다.

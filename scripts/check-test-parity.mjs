@@ -118,6 +118,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("Darwin window", "objective-c", ["native/darwin/src/window_*.m"], ["native/darwin/tests/window_*_test.m"], { sharedTests: true }),
   lane("Darwin UI queue", "objective-c", ["native/darwin/src/ui_queue.m"], ["native/darwin/tests/ui_queue_test.m"], { sharedTests: true }),
   lane("Darwin process exit", "objective-c", ["native/darwin/src/process_exit.m"], ["native/darwin/tests/process_exit_test.m"], { sharedTests: true }),
+  lane("Darwin quit request", "objective-c", ["native/darwin/src/quit_request.m"], ["native/darwin/tests/quit_request_test.m"], { sharedTests: true }),
   lane("Darwin webview navigation", "objective-c", ["native/darwin/src/webview_navigation.m"], ["native/darwin/tests/webview_navigation_test.m"], { sharedTests: true }),
   lane("Darwin capture", "objective-c", ["native/darwin/src/capture.m"], ["native/darwin/tests/capture_test.m", "native/darwin/tests/capture_pressure_test.m", "native/darwin/tests/capture_metadata_test.m", "native/darwin/tests/capture_resize_test.m", "native/darwin/tests/capture_checker_test.m", "native/darwin/tests/capture_file_checker_test.m", "native/darwin/tests/capture_storage_test.m", "native/darwin/tests/capture_frame_test.m", "native/darwin/tests/capture_lifecycle_test.m", "native/darwin/tests/capture_preparation_test.m", "native/darwin/tests/capture_cleanup_test.m", "native/darwin/tests/capture_callback_test.m"], { sharedTests: true }),
   lane("Darwin dock menu", "objective-c", ["native/darwin/src/dock_menu.m"], ["native/darwin/tests/dock_menu_test.m"], { sharedTests: true }),
@@ -898,6 +899,19 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/tests/command_line_test.rs", id: "application_arguments_are_declared_only" },
     ],
     expected: "Both applications reject an undeclared argument, a flag without a value and a repeated flag with the same text and status 2.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F14",
+    implementation: [
+      { file: "native/darwin/src/quit_request.m", symbol: "sp_quit_request_install" },
+      { file: "packages/host/wailsv3/src/platform/darwin/termination.go", symbol: "OnQuitRequest" },
+      { file: "packages/host/tauriv2/src/platform/darwin/termination.rs", symbol: "on_quit_request" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/quit_request_test.m", id: "the quit event does not reach applicationShouldTerminate:" },
+    ],
+    expected: "The operating system's quit request runs the host's quit and is answered without an error after the saves, in both hosts.",
     levels: ["unit", "application"],
   },
   {

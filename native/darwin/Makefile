@@ -85,7 +85,7 @@ $(BUILD)/capture_metadata_test: src/capture.m
 
 $(BUILD)/capture_resize_test: src/capture.m
 
-test: $(BUILD)/capture_callback_test $(BUILD)/capture_cleanup_test $(BUILD)/capture_preparation_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_cycles_test $(BUILD)/capture_stop_late_test $(BUILD)/capture_directory_checker_test $(BUILD)/capture_frame_test $(BUILD)/capture_storage_test $(BUILD)/capture_metadata_test $(BUILD)/capture_resize_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_checker_test $(BUILD)/capture_pressure_test $(BUILD)/webview_input_receipts_test $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/webview_process_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/link_test $(BUILD)/capture_test $(BUILD)/dock_menu_test $(BUILD)/appearance_test $(BUILD)/window_occlusion_test $(BUILD)/window_reveal_test $(BUILD)/window_release_test $(BUILD)/window_objects_test $(BUILD)/process_exit_test $(BUILD)/webview_navigation_test
+test: $(BUILD)/capture_callback_test $(BUILD)/capture_cleanup_test $(BUILD)/capture_preparation_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_cycles_test $(BUILD)/capture_stop_late_test $(BUILD)/capture_directory_checker_test $(BUILD)/capture_frame_test $(BUILD)/capture_storage_test $(BUILD)/capture_metadata_test $(BUILD)/capture_resize_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_checker_test $(BUILD)/capture_pressure_test $(BUILD)/webview_input_receipts_test $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/webview_process_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/link_test $(BUILD)/capture_test $(BUILD)/dock_menu_test $(BUILD)/appearance_test $(BUILD)/window_occlusion_test $(BUILD)/window_reveal_test $(BUILD)/window_release_test $(BUILD)/window_objects_test $(BUILD)/process_exit_test $(BUILD)/webview_navigation_test $(BUILD)/quit_request_test
 	@$(BUILD)/surface_host_test
 	@$(BUILD)/ui_queue_test
 	@$(BUILD)/window_motion_test
@@ -97,6 +97,7 @@ test: $(BUILD)/capture_callback_test $(BUILD)/capture_cleanup_test $(BUILD)/capt
 	@$(BUILD)/window_release_test
 	@$(BUILD)/window_objects_test
 	@$(BUILD)/process_exit_test
+	@$(BUILD)/quit_request_test
 	@$(BUILD)/webview_navigation_test
 	@$(BUILD)/window_controls_test
 	@$(BUILD)/surface_layout_test

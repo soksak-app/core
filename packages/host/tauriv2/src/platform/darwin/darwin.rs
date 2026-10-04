@@ -528,6 +528,12 @@ impl Platform for Darwin {
     fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {
         termination::on_termination(quit)
     }
+    fn on_quit_request(&self, quit: Box<dyn Fn()>) -> Result<(), String> {
+        termination::on_quit_request(quit)
+    }
+    fn answer_quit_requests(&self) {
+        termination::answer_quit_requests()
+    }
     fn instant_window_resize(&self) -> Result<(), String> {
         window::instant_resize();
         Ok(())

@@ -2,7 +2,18 @@
 
 package darwin
 
+/*
+#include <stdbool.h>
+#include "quit_request.h"
+
+extern void goQuitRequest(void);
+static bool installQuitRequest(void) { return sp_quit_request_install(^{ goQuitRequest(); }); }
+*/
+import "C"
+
 import (
+	"errors"
+
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,3 +33,19 @@ func (implementation) OnTermination(quit func()) error {
 	}()
 	return nil
 }
+
+// quitRequest 는 운영체제의 종료 요청이 호출하는 함수다.
+var quitRequest func()
+
+//export goQuitRequest
+func goQuitRequest() { go quitRequest() }
+
+func (implementation) OnQuitRequest(quit func()) error {
+	quitRequest = quit
+	if !C.installQuitRequest() {
+		return errors.New("failed to register the quit request handler")
+	}
+	return nil
+}
+
+func (implementation) AnswerQuitRequests() { C.sp_quit_request_answer() }

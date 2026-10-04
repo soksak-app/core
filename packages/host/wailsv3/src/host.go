@@ -179,6 +179,8 @@ func Run(assets fs.FS, options Options) error {
 			if err := host.endpoint.Close(); err != nil {
 				log.Printf("local endpoint: %v", err)
 			}
+			// 저장과 정리를 마쳤으므로 받은 운영체제의 종료 요청에 답한다.
+			application.InvokeSync(system.AnswerQuitRequests)
 		},
 	})
 	// 클라이언트는 endpoint.json 을 읽자마자 첫 창에 요청하므로 창을 등록한 뒤 쓴다. 쓰지 못하면
@@ -208,6 +210,7 @@ func Run(assets fs.FS, options Options) error {
 	}
 	app.Menu.Set(menu)
 	setupDockMenu(host)
+	setupQuitRequest()
 	main := host.newWindow("main", "/")
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		main.prepareNative()
@@ -219,6 +222,18 @@ func Run(assets fs.FS, options Options) error {
 	default:
 		return err
 	}
+}
+
+// setupQuitRequest 는 애플리케이션이 시작하면 운영체제의 종료 요청이 host.quit 과 같은 종료를 실행하게 한다.
+// 그 요청에는 OnShutdown 이 저장을 마친 뒤 답한다(docs/spec/hosts.md#process-lifecycle).
+func setupQuitRequest() {
+	application.Get().Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		application.InvokeSync(func() {
+			if err := system.OnQuitRequest(func() { application.Get().Quit() }); err != nil {
+				log.Fatal(err)
+			}
+		})
+	})
 }
 
 // setupDockMenu 는 애플리케이션이 시작하면 Dock 메뉴를 등록한다.

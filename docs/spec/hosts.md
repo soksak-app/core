@@ -100,6 +100,7 @@ The shell sidecar repository uses the same Go mechanism in its `src/platform/` (
 | Capture | Window capture: open, start, wait for the first frame, stop |
 | Document regions | Creation inside a surface webview, navigation, history actions, placement by insets, dialog blur, close |
 | Termination | Termination signals (SIGTERM, SIGINT, SIGHUP): the first one calls the host's quit request; later ones end the process with the default action. The quit request kills every window's web process first — see [Process lifecycle](#process-lifecycle) |
+| Quit request | The operating system's quit request (the `kAEQuitApplication` Apple event of the Dock, a logout, a restart or another program) runs the same quit as `host.quit`, including the saves of ready windows, and the host answers the request without an error just before the process ends, after the saves and the shutdown steps. The application framework's own quit path is not used for it, because the Wails framework answers a quit it delays with a cancellation, which also stops a logout, and the Tauri framework ends without the page-save wait |
 | Window motion | Shortening the window resize animation before any window exists |
 | Standard error | Replacing the process's standard error with an open file — see [Application log](#application-log); not implemented on Windows |
 | Dock | Dock menu installation |

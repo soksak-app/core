@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F14: both applications answer the operating system's quit request (Dock, logout, restart, another program) without an error after their saves; the Wails application answered it with a cancellation, which also stops a logout, and the Tauri application ended without waiting for page saves.
 - F21: both hosts accept a persistent service's answer to a close sent before the quit, so the quit still sends `shutdown` and the terminal service ends with the application.
 - R2-5-1: core has a CI workflow and a release workflow; a tag publishes the two applications as zip files with the installation guide `docs/operations/install.md`.
 - F22: the repeat tool's tests remove `NO_COLOR` from the environment they pass, so an environment with `NO_COLOR` no longer puts a node warning into the output they match.
