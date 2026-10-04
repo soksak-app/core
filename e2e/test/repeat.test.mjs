@@ -18,7 +18,8 @@ function fixture(t) {
 }
 
 // 반복 도구는 최상위 명령으로 실행된다. 이 검사의 node:test 실행 문맥(NODE_TEST_CONTEXT)은 넘기지 않는다.
-const { NODE_TEST_CONTEXT, ...environment } = process.env;
+// 색은 검사가 정한 FORCE_COLOR 만 정한다. NO_COLOR 가 함께 있으면 node 가 경고를 출력에 넣는다.
+const { NODE_TEST_CONTEXT, NO_COLOR, ...environment } = process.env;
 const run = (file, name, color = "3") => spawnSync(process.execPath, [repeat, "--file", file, "--name", name, "--count", "2"],
   { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: color } });
 

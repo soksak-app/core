@@ -901,6 +901,17 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F22",
+    implementation: [
+      { file: "e2e/repeat.mjs", symbol: "USAGE" },
+    ],
+    tests: [
+      { file: "e2e/test/repeat.test.mjs", id: "repeat prints the diagnostics of each passing run" },
+    ],
+    expected: "The repeat tool's tests run the tool under the FORCE_COLOR they set, without an inherited NO_COLOR, so its output holds no node color warning.",
+    levels: ["unit"],
+  },
+  {
     id: "F15",
     implementation: [
       { file: "packages/host/wailsv3/src/endpoint.go", symbol: "invalid process lock" },
