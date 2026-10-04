@@ -115,6 +115,40 @@ test("surface exposure replies retain the logical surface scope", async () => {
   dom.window.close();
 });
 
+test("an installed reply gate decides when a surface exposure reply is sent", async () => {
+  const dom = new JSDOM("<body></body>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  const { gateSurfaceReplies, surfaceContextRuntime } = await import("../host.js");
+  const { dispatchSurfaceRequest, registry } = await import("../exposure.js");
+  const surface = "gated-reply-surface";
+  const plugin = "gated-reply-plugin";
+  const declarations = {
+    status: [],
+    commands: [{ name: `${plugin}.ping`, description: "Replies.", params: { type: "object" }, result: { type: "string" } }],
+    dom: [],
+  };
+  registry.declare(plugin, declarations);
+  registry.configure({ surfacePlugin: (id) => id === surface ? plugin : null });
+  const gated = [];
+  gateSurfaceReplies((id, send) => new Promise((resolve) => gated.push({ id, send: () => resolve(send()) })));
+  try {
+    const runtime = surfaceContextRuntime({ surfaceId: surface }, declarations);
+    await runtime.exposure.command(`${plugin}.ping`, () => "ok");
+    calls.length = 0;
+    await dispatchSurfaceRequest({ surface, id: 18, method: "command.run", params: { name: `${plugin}.ping`, params: {} } });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(calls, [], "the gate did not hold the reply");
+    assert.deepEqual(gated.map((entry) => entry.id), [surface]);
+    gated[0].send();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(calls, [["exposureReply", { id: 18, result: "ok", surface }]]);
+    await runtime.exposure.dispose();
+  } finally {
+    gateSurfaceReplies(null);
+    dom.window.close();
+  }
+});
+
 test("surface sidecar sends reach the host one at a time in send order", async () => {
   const { surfaceContextRuntime } = await import("../host.js");
   calls.length = 0;

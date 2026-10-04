@@ -82,6 +82,8 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.page.collect",
     "diagnostics.native.objects",
     "diagnostics.process.exit",
+    "diagnostics.surface.hold",
+    "diagnostics.surface.held",
     TRANSCRIPT,
 ];
 #[cfg(not(feature = "diagnostics"))]

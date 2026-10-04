@@ -17,6 +17,7 @@ export const STAGED = Object.freeze({
   diagnostics: Object.freeze([
     "transcript.js", // 진단 모듈이 사용하는 호출 기록기
     "resize-loop.js", // 진단 모듈이 사용하는 ResizeObserver 루프 기록기
+    "surface-reply-hold.js", // 진단 모듈이 사용하는 표면 exposure 답 붙잡기
   ]),
   // 네이티브 host 가 요청마다 만들어 제공하는 문서. 호스트가 없는 애플리케이션은 --installed 스테이징이 쓴다.
   served: Object.freeze([

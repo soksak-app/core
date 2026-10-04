@@ -46,11 +46,17 @@ function readFrom(path, offset) {
   }
 }
 
+/** offset 뒤에 쓰인 오류 줄과 새 끝 위치. 읽는 범위는 readLines 와 같다. */
+export function readErrors(configDir, offset) {
+  const { lines, end } = readLines(configDir, offset);
+  return { errors: lines.filter((line) => line.startsWith(ERROR)), end };
+}
+
 /**
- * offset 뒤에 쓰인 오류 줄과 새 끝 위치. 줄이 끝나지 않은 마지막 조각은 읽지 않고 다음에 읽는다. 로그가 offset 보다
+ * offset 뒤에 쓰인 줄과 새 끝 위치. 줄이 끝나지 않은 마지막 조각은 읽지 않고 다음에 읽는다. 로그가 offset 보다
  * 작으면 호스트가 다시 시작하며 이전 세대로 옮긴 것이므로, 이전 세대의 나머지와 새 로그를 처음부터 읽는다.
  */
-export function readErrors(configDir, offset) {
+export function readLines(configDir, offset) {
   const path = applicationLog(configDir);
   if (!existsSync(path)) throw new Error(`${path} does not exist; the application writes its log there (docs/spec/hosts.md#application-log)`);
   let text = "";
@@ -67,6 +73,6 @@ export function readErrors(configDir, offset) {
   text += latest.text;
   const complete = text.lastIndexOf("\n") + 1;
   const unread = Buffer.byteLength(text.slice(complete));
-  const errors = text.slice(0, complete).split("\n").filter((line) => line.startsWith(ERROR));
-  return { errors, end: Math.max(0, current - unread) };
+  const lines = complete === 0 ? [] : text.slice(0, complete - 1).split("\n");
+  return { lines, end: Math.max(0, current - unread) };
 }

@@ -227,7 +227,10 @@ export function surfaceContextRuntime(surface, declarations = {}) {
       removeExposurePort = registerSurfacePort(surfaceId, fn);
       return removeExposurePort;
     },
-    reply: (id, payload) => bridge.call("exposureReply", { id, ...payload, surface: surfaceId }),
+    reply: (id, payload) => {
+      const send = () => bridge.call("exposureReply", { id, ...payload, surface: surfaceId });
+      return replyGate === null ? send() : replyGate(surfaceId, send);
+    },
     report: (message) => bridge.call("report", errorLine(message)),
     unregister: () => {
       if (removeExposurePort === null) return;
@@ -286,6 +289,17 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     // 링크 열기는 다른 호스트 요청처럼 호출 관찰자(watchCalls)에게 알린다.
     links: createLinkBridge((name, payload) => tell(name, payload)),
   };
+}
+
+/* 표면의 exposure 답을 보내는 함수. 진단 빌드의 진단 모듈만 설치해 표면의 답을 붙잡는다. */
+let replyGate = null;
+
+/**
+ * 표면의 exposure 답을 fn(surface, send) 로 보낸다. send() 는 답을 호스트에 보내고 그 응답을 반환하며, fn 은 그 결과를
+ * 반환한다. null 은 설치한 함수를 지운다.
+ */
+export function gateSurfaceReplies(fn) {
+  replyGate = fn;
 }
 
 /* 호출과 그 답을 받는 함수. 진단 빌드의 진단 모듈만 설치한다. */

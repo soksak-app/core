@@ -18,7 +18,7 @@ const APPS = ["wailsv3", "tauriv2"];
 
 /** 진단 코드의 표지. 진단 메서드 이름, 녹화 라이브러리 기호, 사이드카 진단 심볼이다. */
 const MARKS = [
-  { what: "diagnostic method", pattern: /diagnostics\.(fixture|drag|knob|transcript|capture|modal)/ },
+  { what: "diagnostic method", pattern: /diagnostics\.(fixture|drag|knob|transcript|capture|modal|surface)/ },
   { what: "window capture symbol", pattern: /sp_capture_/ },
   // 기호를 벗긴 release 실행 파일에는 sp_capture_ 가 없다. 녹화의 ObjC 클래스 이름은 문자열로 남는다.
   { what: "window capture class", pattern: /SPCapture/ },

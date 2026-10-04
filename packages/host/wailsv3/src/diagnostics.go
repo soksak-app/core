@@ -55,6 +55,8 @@ func init() {
 	diagnosticMethods["diagnostics.page.collect"] = diagnosticPageCollect
 	diagnosticMethods["diagnostics.native.objects"] = diagnosticNativeObjects
 	diagnosticMethods["diagnostics.process.exit"] = diagnosticProcessExit
+	diagnosticMethods["diagnostics.surface.hold"] = diagnosticPageMethod("diagnostics.surface.hold")
+	diagnosticMethods["diagnostics.surface.held"] = diagnosticPageMethod("diagnostics.surface.held")
 	handleNavigation = navigationDelays.handle
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
 	diagnosticTopics[logTopic] = func(on bool) (string, any) {
@@ -87,6 +89,19 @@ func diagnosticHost(e *Endpoint, params json.RawMessage) (*Host, *Surfaces, erro
 		return nil, nil, errMissingWindow(window)
 	}
 	return backend.h, s, nil
+}
+
+// diagnosticPageMethod 는 메인 페이지가 처리하는 진단 메서드를 그 페이지에 보낸다. 표면의 exposure 답은 페이지에서
+// 나가기 전에 붙잡아야 요청이 끝난 뒤에 도착하므로 diagnostics.surface.hold 와 diagnostics.surface.held 는 페이지가
+// 처리한다(docs/spec/endpoint.md).
+func diagnosticPageMethod(method string) endpointMethod {
+	return func(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+		h, s, err := diagnosticHost(e, params)
+		if err != nil {
+			return nil, err
+		}
+		return h.ask(s, method, params, pageTimeout)
+	}
 }
 
 func diagnosticPresentationFailure(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {

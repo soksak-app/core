@@ -103,7 +103,11 @@ pub(crate) fn call(
             };
             capture_stop(window, after)
         }
-        "diagnostics.transcript" => exposure::parsed(&host.page(window, method, params, TIMEOUT)?),
+        // 메인 페이지가 처리하는 진단 메서드. 표면의 exposure 답은 페이지에서 나가기 전에 붙잡아야 요청이 끝난 뒤에
+        // 도착하므로 표면 답 붙잡기도 페이지가 처리한다(docs/spec/endpoint.md).
+        "diagnostics.transcript" | "diagnostics.surface.hold" | "diagnostics.surface.held" => {
+            exposure::parsed(&host.page(window, method, params, TIMEOUT)?)
+        }
         "diagnostics.modal.hold" => {
             let Some(on) = params.get("on").and_then(Value::as_bool) else {
                 return Err(Failure::params("on must be a boolean"));

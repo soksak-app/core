@@ -1,16 +1,18 @@
 // 페이지 쪽 진단 메서드.
 //
-// 진단 빌드의 호스트가 exposure-request 로 요청하면 이 문서에서 그 일을 한다. 메서드는
-// 셋이다. 설정과 프로젝트를 검사 전 상태로 되돌리는 diagnostics.fixture, 이름으로
-// 지정한 경계를 호스트의 시각에 맞춰 끄는 diagnostics.drag, 호출 기록을 켜고 끄는
-// diagnostics.transcript 다. 끌기의 걸음은
-// 호스트 이벤트 diagnostics-tick 으로 온다.
+// 진단 빌드의 호스트가 exposure-request 로 요청하면 이 문서에서 그 일을 한다. 설정과
+// 프로젝트를 검사 전 상태로 되돌리는 diagnostics.fixture, 이름으로 지정한 경계를 호스트의
+// 시각에 맞춰 끄는 diagnostics.drag, 호출 기록을 켜고 끄는 diagnostics.transcript, 표면의
+// exposure 답을 그 표면이 제거될 때까지 붙잡는 diagnostics.surface.hold 와
+// diagnostics.surface.held 다. 끌기의 걸음은 호스트 이벤트 diagnostics-tick 으로 온다.
 //
 // 두 애플리케이션이 이 파일을 함께 실행하므로, 어떻게 끄는지는 한 번만 적힌다.
 // 호스트가 요청하지 않으면 실행되지 않는다.
 import { registry } from "./exposure.js";
-import { log, native, watchCalls } from "./host.js";
+import { gateSurfaceReplies, log, native, watchCalls } from "./host.js";
 import { createTranscript } from "./transcript.js";
+import { createSurfaceReplyHold } from "./surface-reply-hold.js";
+import { mountedSurface } from "./surface-modules.js";
 import { watchResizeLoop } from "./resize-loop.js";
 import { host } from "@soksak/runtime";
 import { currentGrid, surfaceInput } from "./plane.js";
@@ -45,6 +47,24 @@ registry.method("diagnostics.transcript", ({ on }) => {
 });
 
 registry.method("diagnostics.drag", (plan) => shake(plan));
+
+// 붙잡은 표면의 답은 호스트가 그 표면을 제거했다고 알린 뒤에 보낸다(docs/spec/endpoint.md). 그 답은 요청이 끝난 뒤에 도착한다.
+const replyHold = createSurfaceReplyHold(log);
+gateSurfaceReplies(replyHold.gate);
+host?.on("exposure-registered", (event) => {
+  if (event?.closed) return replyHold.closed(event.surface);
+});
+
+registry.method("diagnostics.surface.hold", ({ surface }) => {
+  if (typeof surface === "string" && surface && !mountedSurface(surface)) throw new Error(`surface ${surface} is not mounted`);
+  replyHold.hold(surface);
+  return null;
+});
+
+registry.method("diagnostics.surface.held", async ({ surface }) => {
+  await replyHold.held(surface);
+  return null;
+});
 
 host?.on("diagnostics-tick", () => {
   if (waiting) {
