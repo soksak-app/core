@@ -11,15 +11,16 @@ test("registry entries carry the package declarations and the file URL and hash 
   const pkg = {
     name: "@scope/plugin-probe", version: "0.0.1", description: "Probe plugin.", license: "MIT",
     repository: { type: "git", url: "git+https://example.invalid/probe.git", directory: "plugins/probe" },
-    engines: { soksak: "^0.0.1" }, soksak: { sidecars: { "@scope/sidecar-worker": "^0.0.1" } },
+    engines: { soksak: "^0.0.1" },
   };
-  assert.deepEqual(pluginEntry({ id: "probe", name: "검사" }, pkg, { archive: "/releases/a b/probe-0.0.1.tgz", sha256: SHA }), {
+  const manifest = { id: "probe", name: "검사", dependencies: { "@scope/sidecar-worker": "^0.0.1" } };
+  assert.deepEqual(pluginEntry(manifest, pkg, { archive: "/releases/a b/probe-0.0.1.tgz", sha256: SHA }), {
     id: "probe", package: "@scope/plugin-probe", name: "검사", description: "Probe plugin.", license: "MIT",
     repository: "git+https://example.invalid/probe.git",
     versions: [{ version: "0.0.1", package: { url: "file:///releases/a%20b/probe-0.0.1.tgz", sha256: SHA },
       engines: { soksak: "^0.0.1" }, sidecars: { "@scope/sidecar-worker": "^0.0.1" } }],
   });
-  assert.deepEqual(pluginEntry({ id: "plain", name: "P" }, { ...pkg, soksak: undefined }, { archive: "/r/p.tgz", sha256: SHA }).versions[0].sidecars, {});
+  assert.deepEqual(pluginEntry({ id: "plain", name: "P" }, pkg, { archive: "/r/p.tgz", sha256: SHA }).versions[0].sidecars, {});
   assert.deepEqual(sidecarEntry({ name: "@scope/sidecar-worker", version: "0.0.1", repository: "https://example.invalid/w" },
     { executable: "build/worker", protocol: 1 }, { platform: "darwin-arm64", archive: "/r/w.tar.gz", sha256: SHA }), {
     name: "@scope/sidecar-worker", repository: "https://example.invalid/w",

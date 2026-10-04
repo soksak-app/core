@@ -266,7 +266,7 @@ func runPack(dir, out string, diagnostics bool, stdout io.Writer) error {
 	if !ok || !isIdentifier(id) {
 		return fmt.Errorf("plugin.json: id must be a lowercase identifier")
 	}
-	if err := CheckPackageManifest(pkg, manifest); err != nil {
+	if _, err := ManifestSidecars(manifest); err != nil {
 		return err
 	}
 	listed := listedFiles(pkg)

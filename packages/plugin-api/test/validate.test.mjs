@@ -7,7 +7,7 @@ import {
 
 const card = {
   id: "probe", name: "Probe", description: "검사용 표면.", mark: "p", icon: "<path/>",
-  surface: { module: "ui/probe.js", composition: { kind: "dom" } }, sidecars: ["@scope/sidecar-worker"],
+  surface: { module: "ui/probe.js", composition: { kind: "dom" } }, dependencies: { "@scope/sidecar-worker": "^1.2.0" },
   settings: { "cursor.shape": { type: "enum", label: "커서 모양", default: "block", values: ["block", "beam"] } },
 };
 const side = { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] };
@@ -69,12 +69,16 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "../list.js" }] }, /section side.list module must be a JavaScript path inside the package/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "ui/list.css" }] }, /section side.list module must be a JavaScript path inside the package/],
     [{ id: "empty", name: "Empty", description: "빈 플러그인." }, /surface or sections/],
-    [{ ...side, sidecars: ["@scope/sidecar-worker"] }, /sidecars require a surface/],
-    [{ ...card, sidecars: ["Worker"] }, /expected sidecar package names/],
+    [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface/],
+    [{ ...card, dependencies: { Worker: "^1.2.0" } }, /dependencies: Worker is not a sidecar package name/],
+    [{ ...card, dependencies: ["@scope/sidecar-worker"] }, /dependencies must map sidecar packages to version ranges/],
+    [{ ...card, dependencies: { "@scope/sidecar-worker": "*" } }, /dependencies @scope\/sidecar-worker: invalid range \*/],
+    [{ ...card, dependencies: { "@scope/sidecar-worker": "^1.02.0" } }, /invalid range \^1.02.0/],
+    [{ ...card, dependencies: { "@scope/sidecar-worker": ">=2.0.0 <1.0.0" } }, /invalid range >=2.0.0 <1.0.0/],
+    [{ ...card, sidecars: ["@scope/sidecar-worker"] }, /unknown field sidecars/],
     [{ ...card, preview: { ink: "red" } }, /preview.ink must be a theme token/],
     [{ ...card, preview: { ink: "--rail", fill: "--bg" } }, /unknown field fill/],
     [{ ...side, preview: { ink: "--rail" } }, /preview requires a surface/],
-    [{ ...card, sidecars: ["@scope/sidecar-worker", "@scope/sidecar-worker"] }, /duplicate sidecar/],
     [{ ...card, background: { sidecar: "@scope/sidecar-worker", open: { operation: "open" } } }, /unknown field open/],
     [{ ...card, background: { sidecar: "@scope/sidecar-worker" } }, /operation must be a non-empty string/],
     [{ ...card, background: { sidecar: "@scope/sidecar-worker", operation: "" } }, /operation must be a non-empty string/],

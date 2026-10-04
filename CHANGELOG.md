@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F26: a plugin declares its sidecars and their version ranges as the `dependencies` of its `plugin.json`; `plugin.json` `sidecars` and `package.json` `soksak.sidecars` are removed, and `sok plugin pack` refuses a `package.json` with `soksak`. `@soksak/plugin-api`, the workbench, both hosts, `sok plugin pack`, `sok registry build` and `make registry` read the new field; the registry index and `installed.json` keep their `sidecars` ranges. The plugin-api, workbench, host, `sok` and workspace registry tests reproduce the new contract (Red before the change: `unknown field dependencies`, no installed sidecar declarations, undefined `ManifestSidecars` and `manifest_sidecars`), and root `pnpm test`, `make boundaries`, `make exposure-check`, `make hosts-check` and `make docs-check` pass on macOS 26 (darwin-arm64).
 - F28: a window check whose pasteboard differs afterwards names the item, the type and the length and digest of each side.
 - F27: the window check of the OSC 9 notification policy fits the bundled applications: it names an undecided notification authorization and checks that the tab policy adds no system notification.
 - F24: the window check of a failed terminal presentation waits for the next terminals to present instead of failing while they have not presented yet.

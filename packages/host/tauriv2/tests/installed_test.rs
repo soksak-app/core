@@ -31,7 +31,7 @@ fn installed_fixture() -> tempfile::TempDir {
             ("plugins/installed.json", state),
             (
                 "plugins/term/0.1.0/plugin.json",
-                r#"{"id": "term", "sidecars": ["@scope/sidecar-worker"]}"#,
+                r#"{"id": "term", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
             ),
             ("plugins/term/0.1.0/ui/term.js", "export const term = 1;"),
             (
@@ -57,12 +57,12 @@ fn text(data: Vec<u8>) -> String {
 #[test]
 fn installed_plugins_document_lists_enabled_plugins_by_id() {
     let config = installed_fixture();
-    let release = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","sidecars":["@scope/sidecar-worker"]}}]}"#;
+    let release = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}}}]}"#;
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), false)),
         release
     );
-    let diagnostic = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","sidecars":["@scope/sidecar-worker"]},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}"#;
+    let diagnostic = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}"#;
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), true)),
         diagnostic
@@ -214,7 +214,7 @@ fn installed_sidecars_resolve_the_installed_version_folders() {
         config.path(),
         &[(
             "plugins/term/0.1.0/plugin.json",
-            r#"{"id": "term", "sidecars": ["@scope/sidecar-other"]}"#,
+            r#"{"id": "term", "dependencies": {"@scope/sidecar-other": "^0.1.0"}}"#,
         )],
     );
     let error = installed::installed_sidecars(config.path()).unwrap_err();

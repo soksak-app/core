@@ -63,12 +63,37 @@ const SETTING = /^[a-z][A-Za-z0-9-]*(?:\.[a-z][A-Za-z0-9-]*)*$/;
 const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 const isText = (value) => typeof value === "string" && value.length > 0;
 
-/** 사이드카 패키지 이름 목록을 검사한다. */
-function checkSidecars(where, names) {
-  if (!Array.isArray(names) || names.some((name) => typeof name !== "string" || !PACKAGE.test(name))) {
-    throw new Error(`${where}: expected sidecar package names`);
+const VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
+
+/** 두 version 을 숫자로 비교한다. */
+function compareVersion(a, b) {
+  const [x, y] = [a, b].map((value) => value.split(".").map(Number));
+  const part = x.findIndex((number, index) => number !== y[index]);
+  return part === -1 ? 0 : x[part] - y[part];
+}
+
+/** version 범위가 docs/spec/installation.md#versions-and-ranges 의 형식인지 확인한다. */
+function isRange(range) {
+  if (typeof range !== "string") return false;
+  const bounded = /^>=(\S+) <(\S+)$/.exec(range);
+  if (bounded) return VERSION.test(bounded[1]) && VERSION.test(bounded[2]) && compareVersion(bounded[1], bounded[2]) < 0;
+  return VERSION.test(range.replace(/^[\^~]/, ""));
+}
+
+/** 사이드카 패키지마다 version 범위를 정한 dependencies 를 검사하고 패키지 이름을 돌려준다. */
+function checkDependencies(where, dependencies) {
+  if (!isObject(dependencies)) throw new Error(`${where}: dependencies must map sidecar packages to version ranges`);
+  for (const [name, range] of Object.entries(dependencies)) {
+    if (!PACKAGE.test(name)) throw new Error(`${where}: dependencies: ${name} is not a sidecar package name`);
+    if (!isRange(range)) throw new Error(`${where}: dependencies ${name}: invalid range ${range}`);
   }
-  if (new Set(names).size !== names.length) throw new Error(`${where}: duplicate sidecar`);
+  return Object.keys(dependencies);
+}
+
+/** plugin.json 의 dependencies 가 가리키는 사이드카 패키지 이름. */
+export function manifestSidecars(manifest) {
+  // 기본값: dependencies 는 plugin.json 의 선택 필드이며, 없는 플러그인은 사이드카를 쓰지 않는다.
+  return Object.keys(manifest.dependencies ?? {});
 }
 
 function only(where, value, keys) {
@@ -254,12 +279,12 @@ function checkBackground(where, background, sidecars, settings = {}) {
  *   surface   카드 표면. `{ page, composition }` 은 패키지 안 문서와 합성 권한 선언이다
  *   sections  사이드바에 표시할 수 있는 섹션. id 는 `<플러그인 id>.<이름>` 형식
  *   preview   라이브러리 미리보기의 색. `ink` 는 테마 토큰 이름(`--rail` 등). surface 가 있어야 한다
- *   sidecars  표면 페이지가 사용하는 사이드카 패키지 이름. 플러그인 package.json 의 의존성이어야 한다
+ *   dependencies  표면 페이지나 상태 모듈이 사용하는 사이드카 패키지마다 version 범위
  *   exposes   표면 페이지가 등록하는 status, command, dom 항목. page 표면이 있어야 한다
  */
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
-  only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "sidecars", "background", "exposes", "settings",
+  only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "exposes", "settings",
     "state", "data", "sidebars"]);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
@@ -294,16 +319,15 @@ export function validateManifest(manifest) {
       }
     }
   }
-  if (manifest.sidecars !== undefined) {
+  if (manifest.dependencies !== undefined) {
     if (manifest.surface === undefined && manifest.state === undefined) {
-      throw new Error(`${where}: sidecars require a surface or a state module`);
+      throw new Error(`${where}: dependencies require a surface or a state module`);
     }
-    checkSidecars(`${where} sidecars`, manifest.sidecars);
+    checkDependencies(where, manifest.dependencies);
   }
   if (manifest.background !== undefined) {
     if (manifest.surface === undefined) throw new Error(`${where}: background requires a surface`);
-    // 기본값: sidecars 는 plugin.json 의 선택 필드이며, 없는 플러그인은 사이드카를 쓰지 않는다.
-    checkBackground(`${where}`, manifest.background, manifest.sidecars ?? [], manifest.settings);
+    checkBackground(`${where}`, manifest.background, manifestSidecars(manifest), manifest.settings);
   }
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
@@ -320,8 +344,7 @@ export function validateManifest(manifest) {
       throw new Error(`${where}: surface module must be a JavaScript path inside the package`);
     }
     if (surface.composition === undefined) throw new Error(`${where}: surface requires a composition`);
-    // 기본값: sidecars 는 plugin.json 의 선택 필드이며, 없는 플러그인은 사이드카를 쓰지 않는다.
-    checkComposition(`${where} surface`, surface.composition, manifest.sidecars ?? []);
+    checkComposition(`${where} surface`, surface.composition, manifestSidecars(manifest));
     if (!isText(manifest.mark)) throw new Error(`${where}: mark is required with a surface`);
     if (!isText(manifest.icon)) throw new Error(`${where}: icon is required with a surface`);
   }
@@ -525,7 +548,7 @@ export function checkReferences(environment, manifests) {
   // 사이드카를 실행하지 못하는 런타임은 표면을 열지 않지만 상태 모듈은 마운트한다(docs/spec/plugins.md#environmentjson).
   if (environment.sidecars === false) {
     for (const manifest of manifests) {
-      if (manifest.state && manifest.sidecars?.length) {
+      if (manifest.state && manifestSidecars(manifest).length > 0) {
         throw new Error(`environment.json: plugin ${manifest.id} has a state module that uses sidecars, which this environment cannot run`);
       }
     }

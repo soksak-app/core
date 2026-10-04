@@ -81,8 +81,8 @@ func pluginTree(t *testing.T) string {
 	dir := t.TempDir()
 	writeTree(t, dir, map[string]string{
 		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-			"soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui"]}`,
-		"plugin.json":   `{"id": "probe", "sidecars": ["@scope/sidecar-worker"]}`,
+			"files": ["plugin.json", "ui"]}`,
+		"plugin.json":   `{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`,
 		"ui/b.js":       "b",
 		"ui/a/run.sh*":  "run",
 		"test/skip.mjs": "not listed",
@@ -135,12 +135,19 @@ func TestPluginPackRejectsLinksAndAManifestMismatchWithoutWriting(t *testing.T) 
 		t.Fatalf("a failed pack left %v", names)
 	}
 	other := pluginTree(t)
-	writeTree(t, other, map[string]string{"plugin.json": `{"id": "probe"}`})
+	writeTree(t, other, map[string]string{"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
+		"soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui"]}`})
 	code, _, stderr = run("plugin", "pack", other, out)
-	if code != 1 || stderr != "sok: @scope/plugin-probe: plugin.json sidecars [] differ from package.json soksak.sidecars [\"@scope/sidecar-worker\"]\n" {
+	if code != 1 || stderr != "sok: package.json soksak: the sidecars of a plugin and their ranges are the dependencies of plugin.json\n" {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
-	writeTree(t, other, map[string]string{"plugin.json": `{"sidecars": ["@scope/sidecar-worker"]}`})
+	other = pluginTree(t)
+	writeTree(t, other, map[string]string{"plugin.json": `{"id": "probe", "dependencies": {"@scope/sidecar-worker": "latest"}}`})
+	code, _, stderr = run("plugin", "pack", other, out)
+	if code != 1 || !strings.HasPrefix(stderr, "sok: plugin.json dependencies @scope/sidecar-worker: invalid version range") {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	writeTree(t, other, map[string]string{"plugin.json": `{"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`})
 	code, _, stderr = run("plugin", "pack", other, out)
 	if code != 1 || stderr != "sok: plugin.json: id must be a lowercase identifier\n" {
 		t.Fatalf("code %d stderr %q", code, stderr)
@@ -236,7 +243,7 @@ func TestPluginPackAddsDiagnosticDeclarationsOnlyWithTheFlag(t *testing.T) {
 		}
 	}
 	writeTree(t, dir, map[string]string{"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-		"soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui", "probe-diagnostics.js"]}`})
+		"files": ["plugin.json", "ui", "probe-diagnostics.js"]}`})
 	code, _, stderr := run("plugin", "pack", dir, t.TempDir())
 	if code != 1 || stderr != "sok: package.json files: probe-diagnostics.js is diagnostic and must not be listed\n" {
 		t.Fatalf("code %d stderr %q", code, stderr)
@@ -250,9 +257,9 @@ func TestPluginPackAddsDiagnosticDeclarationsOnlyWithTheFlag(t *testing.T) {
 // contract: cli.pack.rejects-unlisted-modules
 func TestPluginPackRejectsAModuleThatFilesDoesNotList(t *testing.T) {
 	for _, c := range []struct{ manifest, want string }{
-		{`{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "surface": {"module": "page/probe.js"}}`, "plugin.json: surface module page/probe.js must be listed in files"},
-		{`{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}`, "plugin.json: section probe.list module side/v.js must be listed in files"},
-		{`{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "state": {"module": "state.js"}}`, "plugin.json: state module state.js must be listed in files"},
+		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"module": "page/probe.js"}}`, "plugin.json: surface module page/probe.js must be listed in files"},
+		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}`, "plugin.json: section probe.list module side/v.js must be listed in files"},
+		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "state": {"module": "state.js"}}`, "plugin.json: state module state.js must be listed in files"},
 	} {
 		dir := pluginTree(t)
 		writeTree(t, dir, map[string]string{"plugin.json": c.manifest})
@@ -262,7 +269,7 @@ func TestPluginPackRejectsAModuleThatFilesDoesNotList(t *testing.T) {
 		}
 	}
 	dir := pluginTree(t)
-	writeTree(t, dir, map[string]string{"plugin.json": `{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "surface": {"module": "ui/b.js"}, "sections": [{"id": "probe.list", "module": "ui/a/run.sh"}]}`})
+	writeTree(t, dir, map[string]string{"plugin.json": `{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"module": "ui/b.js"}, "sections": [{"id": "probe.list", "module": "ui/a/run.sh"}]}`})
 	if code, _, stderr := run("plugin", "pack", dir, t.TempDir()); code != 0 {
 		t.Fatalf("listed modules: code %d stderr %q", code, stderr)
 	}

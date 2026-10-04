@@ -7,7 +7,7 @@ import { registerState } from "./plugin-states.js";
 import { registerPlugin, registerSection } from "./registry.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
 import {
-  checkReferences, mergeExposes, modulePath, validateDiagnostics, normalizeSidebarDefaults, validateEnvironment,
+  checkReferences, manifestSidecars, mergeExposes, modulePath, validateDiagnostics, normalizeSidebarDefaults, validateEnvironment,
   validateInstalledPlugins,
 } from "@soksak/plugin-api";
 
@@ -76,8 +76,7 @@ export function installEnvironment(environmentDocument, installedDocument) {
           ...manifest.surface,
           // 기본값: exposes 는 plugin.json 의 선택 필드이며 없으면 선언이 없다.
           declarations: exposes ?? {},
-          // 기본값: sidecars 는 plugin.json 의 선택 필드이며 없으면 사이드카가 없다.
-          sidecars: manifest.sidecars ?? [],
+          sidecars: manifestSidecars(manifest),
         }),
       });
     }
@@ -91,8 +90,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
     if (exposes) exposure.declare(manifest.id, exposes);
     if (manifest.state) {
       registerState({ plugin: manifest.id, module: `/${modulePath(name, manifest.state.module)}`,
-        // 기본값: sidecars 와 data 는 plugin.json 의 선택 필드이며 없으면 비어 있다.
-        sidecars: manifest.sidecars ?? [], data: manifest.data ?? {} });
+        // 기본값: data 는 plugin.json 의 선택 필드이며 없으면 비어 있다.
+        sidecars: manifestSidecars(manifest), data: manifest.data ?? {} });
     }
   }
   setSidebarDefaults(normalizeSidebarDefaults(environment, manifests.map(({ manifest }) => manifest)));
@@ -100,8 +99,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
     id: manifest.id, name: manifest.name, description: manifest.description, version, surface: Boolean(manifest.surface),
     // 기본값: sections 는 plugin.json 의 선택 필드이며 없으면 섹션이 없다.
     sections: (manifest.sections ?? []).map((s) => s.id),
-    // 기본값: sidecars 는 plugin.json 의 선택 필드이며 없으면 사이드카가 없다.
-    sidecars: manifest.sidecars ?? [],
+    // 기본값: dependencies 는 plugin.json 의 선택 필드이며 없으면 사이드카가 없다.
+    dependencies: manifest.dependencies ?? {},
   }));
   loaded = environment;
 }

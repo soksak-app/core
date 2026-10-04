@@ -15,8 +15,8 @@ test("the plugins section lists only loaded plugins by name and leaves operation
     ...await import("../compositor.js"), standIn: () => {},
   } });
   t.mock.module("../environment.js", { exports: { pluginUnits: () => [
-    { id: "alpha", name: "알파", description: "알파 표면.", version: "1.0.0", surface: true, sections: [], sidecars: [] },
-    { id: "beta", name: "베타", description: "베타 목록.", version: "1.0.0", surface: false, sections: [], sidecars: [] },
+    { id: "alpha", name: "알파", description: "알파 표면.", version: "1.0.0", surface: true, sections: [], dependencies: {} },
+    { id: "beta", name: "베타", description: "베타 목록.", version: "1.0.0", surface: false, sections: [], dependencies: {} },
   ] } });
   // 레지스트리에만 있는 플러그인은 설정 창에 나오지 않는다.
   const status = {

@@ -16,7 +16,7 @@ A sidecar is a package in its own repository with a `sidecar.json` file ([reposi
 | `protocol` | Message format version. The current version is `1` |
 | `helpers` | Optional array of helper packages. Each item has `package` (package name) and `executable` (path inside that package) |
 
-A plugin lists the sidecar package names its page uses in `plugin.json` and gives each one a version range in its `package.json` `soksak.sidecars` ([installation](installation.md#plugin-package)). Installation extracts each sidecar's release asset into the configuration directory.
+A plugin declares the sidecar packages its page uses, each with a version range, as the `dependencies` of its `plugin.json` ([plugins](plugins.md#pluginjson)). Installation extracts each sidecar's release asset into the configuration directory.
 
 The host resolves sidecars from the installed plugins ([serving installed plugins](installation.md#serving-installed-plugins)):
 

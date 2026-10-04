@@ -318,55 +318,29 @@ pub fn validate_plugin_package(value: &Value) -> Result<(), String> {
         return Err("package.json files: plugin.json is not listed".into());
     }
     check_package_name("package.json name", pkg.get("name"))?;
-    if let Some(raw) = pkg.get("soksak") {
-        let soksak = object("package.json soksak", Some(raw))?;
-        only("package.json soksak", soksak, &["sidecars"])?;
-        check_sidecar_ranges("package.json soksak.sidecars", soksak.get("sidecars"))?;
+    if pkg.contains_key("soksak") {
+        return Err("package.json soksak: the sidecars of a plugin and their ranges are the dependencies of plugin.json".into());
     }
     check_version("package.json version", pkg.get("version")).map(|_| ())
 }
 
-/// 검사한 package.json 의 sidecar 범위. sidecar 를 쓰지 않는 plugin 은 soksak 이 없다.
-pub fn package_sidecars(pkg: &Value) -> BTreeMap<String, String> {
-    pkg["soksak"]["sidecars"]
+/// plugin.json dependencies 를 검사하고 sidecar 마다 version 범위를 돌려준다. sidecar 를 쓰지 않는 plugin 은
+/// dependencies 가 없다.
+pub fn manifest_sidecars(manifest: &Value) -> Result<BTreeMap<String, String>, String> {
+    let Some(raw) = manifest.get("dependencies") else {
+        return Ok(BTreeMap::new());
+    };
+    check_sidecar_ranges("plugin.json dependencies", Some(raw))?;
+    Ok(raw
         .as_object()
-        .map(|sidecars| {
-            sidecars
-                .iter()
-                .filter_map(|(name, range)| {
-                    range
-                        .as_str()
-                        .map(|range| (name.clone(), range.to_string()))
-                })
-                .collect()
-        })
-        // 기본값: sidecar 를 쓰지 않는 plugin 은 package.json 에 soksak 이 없고 sidecar 범위도 없다.
-        .unwrap_or_default()
-}
-
-/// Package 와 그 plugin.json 이 서로 맞는지 검사한다. plugin.json 이 쓰는 sidecar 마다 version 범위가 있어야 하고,
-/// 범위만 있고 쓰지 않는 sidecar 는 없어야 한다.
-pub fn check_package_manifest(pkg: &Value, manifest: &Value) -> Result<(), String> {
-    let mut used: Vec<String> = vec![];
-    if let Some(raw) = manifest.get("sidecars") {
-        for item in array("plugin.json sidecars", Some(raw))? {
-            let name = item
+        .into_iter()
+        .flatten()
+        .filter_map(|(name, range)| {
+            range
                 .as_str()
-                .ok_or("plugin.json sidecars: expected package names")?;
-            used.push(name.to_string());
-        }
-    }
-    used.sort();
-    let ranged: Vec<String> = package_sidecars(pkg).into_keys().collect();
-    if used != ranged {
-        return Err(format!(
-            "{}: plugin.json sidecars {} differ from package.json soksak.sidecars {}",
-            check_package_name("package.json name", pkg.get("name"))?,
-            Value::from(used),
-            Value::from(ranged)
-        ));
-    }
-    Ok(())
+                .map(|range| (name.clone(), range.to_string()))
+        })
+        .collect())
 }
 
 /// Plugin package archive 의 파일 이름.

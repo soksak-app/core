@@ -94,26 +94,31 @@ func TestVersionRangesAcceptExactCaretTildeAndBoundedForms(t *testing.T) {
 }
 
 // contract: install.package.fields-and-manifest
-func TestPluginPackageDeclaresVersionCoreRangeSidecarRangesAndFiles(t *testing.T) {
+func TestPluginPackageDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSidecarRanges(t *testing.T) {
 	text := `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-		"soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui"], "private": true}`
+		"files": ["plugin.json", "ui"], "private": true}`
 	pkg := decode(t, text)
 	if err := sok.ValidatePluginPackage(pkg); err != nil {
 		t.Fatal(err)
 	}
-	manifest := decode(t, `{"sidecars": ["@scope/sidecar-worker"]}`).(map[string]any)
-	if err := sok.CheckPackageManifest(pkg.(map[string]any), manifest); err != nil {
-		t.Fatal(err)
+	ranges, err := sok.ManifestSidecars(decode(t, `{"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`).(map[string]any))
+	if err != nil || len(ranges) != 1 || ranges["@scope/sidecar-worker"] != "^0.1.0" {
+		t.Fatalf("ranges %v %v", ranges, err)
 	}
-	rejects(t, sok.CheckPackageManifest(pkg.(map[string]any), map[string]any{}),
-		`@scope/plugin-probe: plugin.json sidecars [] differ from package.json soksak.sidecars ["@scope/sidecar-worker"]`)
+	if ranges, err := sok.ManifestSidecars(map[string]any{}); err != nil || len(ranges) != 0 {
+		t.Fatalf("a manifest without dependencies: %v %v", ranges, err)
+	}
+	_, err = sok.ManifestSidecars(decode(t, `{"dependencies": {"@scope/sidecar-worker": "*"}}`).(map[string]any))
+	rejects(t, err, "plugin.json dependencies @scope/sidecar-worker: invalid version range")
+	_, err = sok.ManifestSidecars(decode(t, `{"dependencies": ["@scope/sidecar-worker"]}`).(map[string]any))
+	rejects(t, err, "plugin.json dependencies: expected an object")
 	for change, want := range map[string]string{
-		`"engines": {}`:                          "package.json engines.soksak: invalid version range null",
-		`"files": ["ui"]`:                        "package.json files: plugin.json is not listed",
-		`"files": ["plugin.json", "../ui"]`:      "package.json files: expected paths inside the package",
-		`"soksak": {"sidecars": {}, "extra": 1}`: "package.json soksak: unknown field extra",
-		`"version": "0.2"`:                       `package.json version: invalid version "0.2": expected x.y.z`,
-		`"name": "Plugin"`:                       "package.json name: expected a package name",
+		`"engines": {}`:                     "package.json engines.soksak: invalid version range null",
+		`"files": ["ui"]`:                   "package.json files: plugin.json is not listed",
+		`"files": ["plugin.json", "../ui"]`: "package.json files: expected paths inside the package",
+		`"soksak": {"sidecars": {}}`:        "package.json soksak: the sidecars of a plugin and their ranges are the dependencies of plugin.json",
+		`"version": "0.2"`:                  `package.json version: invalid version "0.2": expected x.y.z`,
+		`"name": "Plugin"`:                  "package.json name: expected a package name",
 	} {
 		field := change[:strings.Index(change, ":")]
 		changed := decode(t, text).(map[string]any)

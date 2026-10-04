@@ -26,10 +26,9 @@ Plugin package는 plugin 파일의 archive `<id>-<version>.tgz`다. 그 `package
 | `name` | Package 이름이며, 설치한 파일은 `/modules/<name>/`에서 제공된다 |
 | `version` | Plugin version |
 | `engines.soksak` | Plugin이 지원하는 core API version 범위 |
-| `soksak.sidecars` | 선택. `plugin.json` `sidecars`가 가리키는 sidecar마다 version 범위를 정하며, 정확히 그 sidecar만 담는다 |
 | `files` | Archive가 담는 package 안의 경로이며 `plugin.json`을 포함한다 |
 
-`package.json`의 다른 필드는 package 도구의 것이므로 읽지 않는다.
+`package.json`의 다른 필드는 package 도구의 것이므로 읽지 않는다. 다만 `soksak`은 거부한다. 플러그인의 sidecar와 그 범위는 `plugin.json`의 `dependencies`다([플러그인](plugins.ko.md#pluginjson)).
 
 plugin 저장소는 한 core release의 `@soksak/plugin-api`로 빌드하고 그 release를 선언한다. `engines.soksak`은 그 `@soksak/plugin-api`의 `^<version>`이다. `@soksak/plugin-api`의 명령 `soksak-engines`가 plugin 저장소에서 이를 검사하고 `package.json: engines.soksak <range> must be ^<version>, the @soksak/plugin-api version`으로 실패한다. 각 plugin 저장소는 `make test`에서 이를 실행한다.
 
@@ -82,7 +81,7 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 
 Workbench는 `/installed-plugins.json`을 JSON module로 가져와 각 plugin을 `manifest`로 등록하고, 문서에 `error`가 있으면 그 텍스트로 불러오기를 실패한다.
 
-Host는 시작할 때 켜진 설치 plugin의 `plugin.json`이 지정한 sidecar를 읽는다. Sidecar는 `installed.json`이 그것에 기록한 `path`에서 실행되며, 실행 파일은 그 폴더의 `sidecar.json`의 `executable` 경로다. 애플리케이션 실행 중에 설치하거나 켠 plugin은 변경 뒤에 불러온 page에 제공되고, 그 sidecar는 애플리케이션을 다시 시작한 뒤 시작된다.
+Host는 시작할 때 켜진 설치 plugin의 `plugin.json` `dependencies`가 지정한 sidecar를 이름 순서로 읽는다. Sidecar는 `installed.json`이 그것에 기록한 `path`에서 실행되며, 실행 파일은 그 폴더의 `sidecar.json`의 `executable` 경로다. 애플리케이션 실행 중에 설치하거나 켠 plugin은 변경 뒤에 불러온 page에 제공되고, 그 sidecar는 애플리케이션을 다시 시작한 뒤 시작된다.
 
 ## 애플리케이션 안의 plugin 작업
 
@@ -116,7 +115,7 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 
 - 불러온 manifest의 설명, 없으면 registry 항목의 설명([plugins](plugins.ko.md)와 [registry index](#registry-index)가 설명을 요구한다). `installed.json`만 나열한 plugin은 설명이 없고 id를 이름으로 보여 준다.
 - 설치된 버전 <version>과 최신 버전 <version>(registry index가 나열한 가장 새 버전)을 있을 때 보여 주는 버전 줄.
-- 사이드카 줄: 사이드카 뒤에 plugin이 이름을 댄 사이드카를 이름 순서로 보여 준다. 각 사이드카는 `installed.json` `sidecars`의 설치된 버전을, 없으면 plugin이 선언한 범위를 보여 준다. 사이드카와 범위는 설치된 plugin이면 `installed.json` 항목에서, 아니면 가장 새 registry 버전에서, 아니면 불러온 manifest의 `sidecars`에서 범위 없이 온다. 사이드카가 없는 plugin은 사이드카 없음을 보여 준다.
+- 사이드카 줄: 사이드카 뒤에 plugin이 이름을 댄 사이드카를 이름 순서로 보여 준다. 각 사이드카는 `installed.json` `sidecars`의 설치된 버전을, 없으면 plugin이 선언한 범위를 보여 준다. 사이드카와 범위는 설치된 plugin이면 `installed.json` 항목에서, 아니면 가장 새 registry 버전에서, 아니면 불러온 manifest의 `dependencies`에서 온다. 사이드카가 없는 plugin은 사이드카 없음을 보여 준다.
 - 동작: 각각 자기 명령에 연결된 버튼이다. 설치 `core.plugins.install`은 registry가 plugin을 나열하고 설치되지 않았을 때, 업데이트 `core.plugins.update`는 설치되었고 registry가 나열할 때, 사용 `core.plugins.enable` 또는 사용 안 함 `core.plugins.disable`은 설치되었을 때 `enabled` 값에 따라, 제거 `core.plugins.remove`는 설치되었을 때 보인다. 작업이 실행되는 동안 모든 카드의 모든 동작은 비활성이고 그 plugin의 카드는 "<plugin> <action> 진행 중"을 보여 준다. 작업이 끝나면 카드는 "애플리케이션을 다시 시작하면 적용됩니다." 또는 실패한 작업의 오류를 보여 준다.
 
 페이지는 보일 때와 `plugins-changed` event를 받을 때마다 `pluginsState`로 plugin 상태를 읽는다. Registry index를 읽지 못하면 카드 위에 "레지스트리를 읽지 못했습니다: <message>"를 보여 주고, 페이지는 불러온 plugin과 설치된 plugin을 유지한다. 잘못된 `installed.json`처럼 plugin 상태를 읽지 못하면 "플러그인 상태를 읽지 못했습니다: <message>"를 보여 주고 카드는 없다. Browser 애플리케이션처럼 host가 없으면 페이지에는 불러온 plugin만 모두 `loaded`로 있고 동작은 없다.

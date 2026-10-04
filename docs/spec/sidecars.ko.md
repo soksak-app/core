@@ -16,7 +16,7 @@
 | `protocol` | 메시지 형식 버전. 현재 버전은 `1` |
 | `helpers` | 선택 필드. 헬퍼 패키지 목록. 각 항목은 `package`(패키지 이름)와 `executable`(그 패키지 안의 경로)을 가진다 |
 
-플러그인은 페이지가 사용하는 사이드카 패키지 이름을 `plugin.json`에 나열하고, 각각에 자기 `package.json` `soksak.sidecars`의 version 범위를 준다([설치](installation.ko.md#plugin-package)). 설치는 각 사이드카의 release asset을 설정 디렉터리에 푼다.
+플러그인은 페이지가 사용하는 사이드카 패키지를 version 범위와 함께 `plugin.json`의 `dependencies`로 선언한다([플러그인](plugins.ko.md#pluginjson)). 설치는 각 사이드카의 release asset을 설정 디렉터리에 푼다.
 
 호스트는 설치된 플러그인에서 사이드카를 찾는다([설치된 plugin 제공](installation.ko.md#설치된-plugin-제공)).
 

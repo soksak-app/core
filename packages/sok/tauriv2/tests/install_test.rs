@@ -78,15 +78,27 @@ fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
 
 // contract: install.package.fields-and-manifest
 #[test]
-fn plugin_package_declares_version_core_range_sidecar_ranges_and_files() {
+fn plugin_package_declares_version_core_range_and_files_and_the_manifest_declares_sidecar_ranges() {
     let pkg = json!({"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-        "soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui"], "private": true});
+        "files": ["plugin.json", "ui"], "private": true});
     install::validate_plugin_package(&pkg).expect("package");
-    install::check_package_manifest(&pkg, &json!({"sidecars": ["@scope/sidecar-worker"]}))
-        .expect("manifest");
+    let ranges =
+        install::manifest_sidecars(&json!({"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}))
+            .expect("manifest");
+    assert_eq!(
+        ranges.into_iter().collect::<Vec<_>>(),
+        [("@scope/sidecar-worker".to_string(), "^0.1.0".to_string())]
+    );
+    assert!(install::manifest_sidecars(&json!({}))
+        .expect("no dependencies")
+        .is_empty());
     rejects(
-        install::check_package_manifest(&pkg, &json!({})),
-        r#"@scope/plugin-probe: plugin.json sidecars [] differ from package.json soksak.sidecars ["@scope/sidecar-worker"]"#,
+        install::manifest_sidecars(&json!({"dependencies": {"@scope/sidecar-worker": "*"}})),
+        "plugin.json dependencies @scope/sidecar-worker: invalid version range",
+    );
+    rejects(
+        install::manifest_sidecars(&json!({"dependencies": ["@scope/sidecar-worker"]})),
+        "plugin.json dependencies: expected an object",
     );
     for (field, value, want) in [
         (
@@ -106,8 +118,8 @@ fn plugin_package_declares_version_core_range_sidecar_ranges_and_files() {
         ),
         (
             "soksak",
-            json!({"sidecars": {}, "extra": 1}),
-            "package.json soksak: unknown field extra",
+            json!({"sidecars": {}}),
+            "package.json soksak: the sidecars of a plugin and their ranges are the dependencies of plugin.json",
         ),
         (
             "version",

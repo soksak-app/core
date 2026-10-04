@@ -153,6 +153,9 @@ func TestRegistryBuildRejectsAMismatchWithoutWritingTheIndex(t *testing.T) {
 			replaceIn(t, filepath.Join(dir, "plugins/probe.json"), `"engines": {"soksak": "^0.0.2"}`, `"engines": {"soksak": "^0.0.3"}`, 1)
 		}, "plugin probe 0.2.0 package: package.json engines.soksak is ^0.0.2, the entry says ^0.0.3"},
 		{func(dir string) {
+			replaceIn(t, filepath.Join(dir, "plugins/probe.json"), `"sidecars": {"@scope/sidecar-worker": "^0.1.0"}`, `"sidecars": {"@scope/sidecar-worker": "~0.1.0"}`, 1)
+		}, `plugin probe 0.2.0 package: plugin.json dependencies {"@scope/sidecar-worker":"^0.1.0"} differ from the entry {"@scope/sidecar-worker":"~0.1.0"}`},
+		{func(dir string) {
 			if err := os.Rename(filepath.Join(dir, "packs/starter.json"), filepath.Join(dir, "packs/first.json")); err != nil {
 				t.Fatal(err)
 			}

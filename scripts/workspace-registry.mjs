@@ -54,8 +54,8 @@ export function pluginEntry(manifest, pkg, pack) {
     repository: repositoryText(pkg.repository),
     versions: [{
       version: pkg.version, package: { url: pathToFileURL(pack.archive).href, sha256: pack.sha256 },
-      // 기본값: sidecar 를 쓰지 않는 plugin 은 package.json 에 soksak 이 없고 sidecar 범위도 없다.
-      engines: { soksak: pkg.engines?.soksak }, sidecars: pkg.soksak?.sidecars ?? {},
+      // 기본값: sidecar 를 쓰지 않는 plugin 의 plugin.json 에는 dependencies 가 없다.
+      engines: { soksak: pkg.engines?.soksak }, sidecars: manifest.dependencies ?? {},
     }],
   };
 }
@@ -105,8 +105,8 @@ export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
     const pkg = read(pathToFileURL(join(dir, "package.json")));
     const pack = sok(binary, ["plugin", "pack", dir, releases, ...(diagnostics ? ["--diagnostics"] : [])]);
     write(join(out, "plugins", `${manifest.id}.json`), pluginEntry(manifest, pkg, pack));
-    // 기본값: sidecar 를 쓰지 않는 plugin 의 package.json 에는 soksak.sidecars 가 없다.
-    for (const name of Object.keys(pkg.soksak?.sidecars ?? {})) {
+    // 기본값: sidecar 를 쓰지 않는 plugin 의 plugin.json 에는 dependencies 가 없다.
+    for (const name of Object.keys(manifest.dependencies ?? {})) {
       if (!declared.has(name)) throw new Error(`${DECLARATION}: plugin ${manifest.id} uses ${name}, which no declared sidecar folder holds`);
       used.add(name);
     }

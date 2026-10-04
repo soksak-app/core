@@ -10,11 +10,11 @@ const environment = (extra = {}) => ({
   ...extra,
 });
 const card = { id: "card", name: "Card", mark: "c", icon: "<path/>", surface: { module: "ui/page.js", composition: { kind: "dom" } },
-  sidecars: ["@scope/sidecar-card"] };
+  dependencies: { "@scope/sidecar-card": "0.1.0" } };
 const stateful = { id: "probe", name: "Probe", sections: [{ id: "probe.list", name: "목록", module: "ui/list.js" }],
-  state: { module: "ui/state.js" }, sidecars: ["@scope/sidecar-probe"] };
-const plain = { ...stateful, sidecars: undefined };
-delete plain.sidecars;
+  state: { module: "ui/state.js" }, dependencies: { "@scope/sidecar-probe": ">=0.1.0 <0.3.0" } };
+const plain = { ...stateful };
+delete plain.dependencies;
 
 test("sidecars must be a boolean", () => {
   assert.equal(validateEnvironment(environment({ sidecars: false })).sidecars, false);

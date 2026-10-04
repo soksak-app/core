@@ -101,7 +101,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
         let dir = Dir::new();
         let package = format!(
             r#"{{"name": "@scope/plugin-probe", "version": "{version}", "engines": {{"soksak": "^{core}"}},
-            "soksak": {{"sidecars": {{"@scope/sidecar-worker": "^0.1.0"}}}}, "files": ["plugin.json", "ui"]}}"#
+            "files": ["plugin.json", "ui"]}}"#
         );
         let content = format!("b {version}");
         write_tree(
@@ -110,7 +110,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
                 ("package.json", &package),
                 (
                     "plugin.json",
-                    r#"{"id": "probe", "sidecars": ["@scope/sidecar-worker"]}"#,
+                    r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
                 ),
                 ("ui/b.js", &content),
             ],

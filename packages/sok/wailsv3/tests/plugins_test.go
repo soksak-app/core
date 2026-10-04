@@ -39,8 +39,8 @@ func pluginVersionsFor(t *testing.T, core string, versions ...string) string {
 		dir := t.TempDir()
 		writeTree(t, dir, map[string]string{
 			"package.json": `{"name": "@scope/plugin-probe", "version": "` + version + `", "engines": {"soksak": "^` + core + `"},
-				"soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui"]}`,
-			"plugin.json": `{"id": "probe", "sidecars": ["@scope/sidecar-worker"]}`,
+				"files": ["plugin.json", "ui"]}`,
+			"plugin.json": `{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`,
 			"ui/b.js":     "b " + version,
 		})
 		result := runJSON(t, "plugin", "pack", dir, releases)

@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import { createPluginOperations, pluginRows } from "../plugin-operations.js";
 
 const loaded = [
-  { id: "term", name: "터미널", description: "터미널 표면.", version: "0.1.0", sidecars: [] },
-  { id: "notes", name: "노트", description: "노트 목록.", version: "1.0.0", sidecars: [] },
-  { id: "gone", name: "지운 것", description: "지운 플러그인.", version: "1.0.0", sidecars: [] },
+  { id: "term", name: "터미널", description: "터미널 표면.", version: "0.1.0", dependencies: {} },
+  { id: "notes", name: "노트", description: "노트 목록.", version: "1.0.0", dependencies: {} },
+  { id: "gone", name: "지운 것", description: "지운 플러그인.", version: "1.0.0", dependencies: {} },
 ];
 
 const entry = (id, name, versions) => ({ id, package: `plugin-${id}`, name, description: `${name} 설명.`, versions: versions.map((version) => ({ version, sidecars: {} })) });
@@ -56,13 +56,13 @@ test("a row names its sidecars from the installed entry, else the newest registr
       sidecars: { [vt]: { version: "0.1.2", path: "/config/sidecars/soksak-sidecar-vt/0.1.2/darwin-arm64" } },
     },
   };
-  const term = { ...loaded[0], sidecars: [vt] };
+  const term = { ...loaded[0], dependencies: { [vt]: "^0.1.0" } };
   const rows = pluginRows([term], withSidecars);
   assert.deepEqual(rows.find((row) => row.id === "term").sidecars, [{ name: vt, range: "^0.1.0", version: "0.1.2" }]);
   assert.deepEqual(rows.find((row) => row.id === "db").sidecars,
     [{ name: "@a/b", range: "1.0.0", version: null }, { name: "@x/db", range: "^1.0.0", version: null }]);
-  // host 가 없으면 불러온 manifest 의 사이드카 이름만 안다.
-  assert.deepEqual(pluginRows([term], null)[0].sidecars, [{ name: vt, range: null, version: null }]);
+  // host 가 없으면 불러온 manifest 의 dependencies 를 쓴다.
+  assert.deepEqual(pluginRows([term], null)[0].sidecars, [{ name: vt, range: "^0.1.0", version: null }]);
 });
 
 test("without a host only the loaded plugins are listed, all loaded, and operations fail", async () => {

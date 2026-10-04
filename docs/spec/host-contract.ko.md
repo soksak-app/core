@@ -391,7 +391,7 @@ fn invalid_json_closes_connection() {
 | `cli.path.writes-and-removes-the-entry` | `sok path install`은 실행 중인 `sok`의 폴더를 담은 `<paths directory>/<identifier>`를 쓰고 파일과 폴더를 출력한다. 되풀이해도 같은 파일이다. `sok path remove`는 그것을 지우며 없어도 성공한다. 쓰기 실패는 파일과 `run sudo sok path install`을 보고한다. | both |
 | `cli.path.fails-without-a-path-entry-folder` | 경로 항목 폴더가 없는 운영체제에서 `sok path install`은 `path entries are not implemented on linux` 같은 platform의 까닭으로 실패하고 아무것도 쓰지 않는다. | both |
 | `cli.pack.writes-sorted-plugin-archive` | `sok plugin pack`은 `package.json`과 나열한 파일을 경로 순서, mode 0644나 0755, 시각 0, 소유자 0으로 담은 `<id>-<version>.tgz`를 쓰고, `archive`, `id`, `sha256`, `version`을 출력하며, 되풀이하면 같은 byte를 쓴다. | both |
-| `cli.pack.rejects-links-and-manifest-mismatch` | 나열한 폴더 안의 symbolic link, id 없는 `plugin.json`, `plugin.json`과 다른 `soksak.sidecars`는 종료 상태 1로 실패하고 출력 폴더를 비워 둔다. | both |
+| `cli.pack.rejects-links-and-manifest-mismatch` | 나열한 폴더 안의 symbolic link, id 없는 `plugin.json`, `soksak`이 있는 `package.json`은 종료 상태 1로 실패하고 출력 폴더를 비워 둔다. | both |
 | `cli.pack.diagnostics-only-with-flag` | `sok plugin pack`은 `diagnostics.json`과 그 module을 빼고, `--diagnostics`는 둘을 더하며, `files`가 둘 중 하나를 나열하면 pack이 실패하고, `plugin pack` 밖의 `--diagnostics`는 종료 상태 2다. | both |
 | `cli.pack.rejects-unlisted-modules` | `plugin.json`의 surface module, 방향과 상관없는 section module, state module이 `files`가 나열한 경로 밖에 있으면 `sok plugin pack`은 종료 상태 1로 실패하고 그 module을 밝힌다. | both |
 | `cli.release.writes-asset-and-sums` | `sok sidecar release`는 `<file name>-<version>-<platform>.tar.gz`를 쓰고 archive마다 `SHA256SUMS` 한 줄을 이름 순서로 유지하며, 같은 이름은 바꾼다. 알 수 없는 `--platform`은 종료 상태 2, 나열하지 않은 실행 파일은 1, 형식이 틀린 `SHA256SUMS`는 archive를 쓰지 않고 1이다. | both |
@@ -405,7 +405,7 @@ fn invalid_json_closes_connection() {
 | `cli.plugin.action-runs-the-command` | Installer library는 `install`, `update`, `remove`, `enable`, `disable`을 같은 `sok plugin` 명령의 결과로 실행하고, 다른 action은 `unknown plugin action`으로 거부한다. | both |
 | `cli.file.errors-name-the-path-and-the-reason` | 실패한 파일 작업은 `<경로>: <이유>`로 보고하며, 이유는 소문자로 시작하는 운영체제 오류 문구다. 없는 registry index는 `<경로>: no such file or directory`, 읽을 수 없는 `installed.json`은 `<경로>: permission denied`를 보고한다 | both |
 | `install.version.ranges-and-order` | 범위 `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z <a.b.c`는 선언한 경계를 가진다. Version은 숫자로 비교한다. 다른 형식, 앞자리 0, 빈 범위, 4294967295를 넘는 자리는 `invalid version`으로 거부한다. | both |
-| `install.package.fields-and-manifest` | Plugin `package.json`에는 package `name`, `version`, `engines.soksak`, package 안의 `plugin.json`을 나열한 `files`가 있어야 한다. `soksak`은 `sidecars`만 가진다. `soksak.sidecars`는 `plugin.json`의 `sidecars`를 정확히 지정해야 한다. 실패마다 필드를 밝힌다. | both |
+| `install.package.fields-and-manifest` | Plugin `package.json`에는 package `name`, `version`, `engines.soksak`, package 안의 `plugin.json`을 나열한 `files`가 있어야 한다. `soksak`은 거부하고, sidecar 범위는 각각 올바른 범위인 `plugin.json`의 `dependencies`다. 실패마다 필드를 밝힌다. | both |
 | `install.registry.entries` | Registry plugin, sidecar, pack, revoked 항목은 알 수 없는 필드, 절대 `file:` URL이 아니거나 query, fragment, 잘못된 escape를 가진 URL, 소문자 16진수 64자리가 아닌 `sha256`, 중복 version, 알 수 없는 플랫폼, 1이 아닌 `protocol`, 200 code point를 넘는 설명, 빈 pack, 이유 없는 revoked 항목을 거부한다. | both |
 | `install.registry.index-cross-checks` | Index는 format 2, 중복 plugin id나 package, 알 수 없는 plugin을 지정한 pack, 알 수 없는 sidecar나 어떤 sidecar version도 채우지 않는 범위가 필요한 plugin version, 나열되지 않은 revoked version을 거부한다. | both |
 | `install.select.newest-usable` | 선택은 core version에 맞고 revoked가 아닌 가장 새 plugin version과, 범위 안에 있고 플랫폼 asset이 있는 가장 새 sidecar version을 고른다. 맞는 것이 없으면 plugin, core version, sidecar, 플랫폼을 밝힌다. | both |

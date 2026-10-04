@@ -135,10 +135,11 @@ fn check_plugin_archive(plugin: &RegistryPlugin, version: &PluginVersion) -> Res
             ));
         }
     }
-    let sidecars = install::package_sidecars(&pkg);
+    let sidecars =
+        install::manifest_sidecars(&manifest).map_err(|error| format!("{at}: {error}"))?;
     if sidecars != version.sidecars {
         return Err(format!(
-            "{at}: package.json soksak.sidecars {} differ from the entry {}",
+            "{at}: plugin.json dependencies {} differ from the entry {}",
             json!(sidecars),
             json!(version.sidecars)
         ));

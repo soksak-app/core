@@ -180,13 +180,14 @@ pub fn installed_module(config_dir: &Path, url_path: &str) -> Result<Module, Str
     }
 }
 
-/// 켜진 설치 plugin 의 plugin.json 이 지정한 sidecar 를 설치가 기록한 폴더와 함께 돌려준다.
+/// 켜진 설치 plugin 의 plugin.json dependencies 가 지정한 sidecar 를 설치가 기록한 폴더와 함께 돌려준다.
 pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, String> {
     #[derive(serde::Deserialize)]
     struct Manifest {
-        // 기본값: sidecar 를 쓰지 않는 plugin 의 plugin.json 에는 sidecars 가 없다.
+        // 기본값: sidecar 를 쓰지 않는 plugin 의 plugin.json 에는 dependencies 가 없다.
+        // 두 host 가 같은 순서로 사이드카를 선언하도록 이름 순서로 읽는다.
         #[serde(default)]
-        sidecars: Vec<String>,
+        dependencies: std::collections::BTreeMap<String, String>,
     }
     let (plugins, state) = enabled_plugins(config_dir)?;
     let mut declarations: Vec<SidecarDeclaration> = vec![];
@@ -196,7 +197,7 @@ pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, 
             .map_err(|error| format!("{}: {error}", file.display()))?;
         let manifest: Manifest =
             serde_json::from_str(&text).map_err(|error| format!("{}: {error}", file.display()))?;
-        for name in manifest.sidecars {
+        for name in manifest.dependencies.into_keys() {
             if declarations.iter().any(|item| item.name == name) {
                 continue;
             }

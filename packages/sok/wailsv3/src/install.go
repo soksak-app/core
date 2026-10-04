@@ -375,66 +375,27 @@ func ValidatePluginPackage(value any) error {
 	if err := checkPackageName("package.json name", pkg["name"]); err != nil {
 		return err
 	}
-	if raw, ok := pkg["soksak"]; ok {
-		soksak, err := object("package.json soksak", raw)
-		if err != nil {
-			return err
-		}
-		if err := only("package.json soksak", soksak, "sidecars"); err != nil {
-			return err
-		}
-		if err := checkSidecarRanges("package.json soksak.sidecars", soksak["sidecars"]); err != nil {
-			return err
-		}
+	if _, ok := pkg["soksak"]; ok {
+		return fmt.Errorf("package.json soksak: the sidecars of a plugin and their ranges are the dependencies of plugin.json")
 	}
 	return checkVersion("package.json version", pkg["version"])
 }
 
-// PackageSidecars 는 검사한 package.json 의 sidecar 범위다. sidecar 를 쓰지 않는 plugin 은 soksak 이 없다.
-func PackageSidecars(pkg map[string]any) map[string]string {
+// ManifestSidecars 는 plugin.json dependencies 를 검사하고 sidecar 마다 version 범위를 돌려준다. sidecar 를 쓰지 않는
+// plugin 은 dependencies 가 없다.
+func ManifestSidecars(manifest map[string]any) (map[string]string, error) {
 	ranges := map[string]string{}
-	if soksak, ok := pkg["soksak"].(map[string]any); ok {
-		if sidecars, ok := soksak["sidecars"].(map[string]any); ok {
-			for name, rng := range sidecars {
-				if text, ok := rng.(string); ok {
-					ranges[name] = text
-				}
-			}
-		}
+	raw, ok := manifest["dependencies"]
+	if !ok {
+		return ranges, nil
 	}
-	return ranges
-}
-
-// CheckPackageManifest 는 package 와 그 plugin.json 이 서로 맞는지 검사한다. plugin.json 이 쓰는 sidecar 마다
-// version 범위가 있어야 하고, 범위만 있고 쓰지 않는 sidecar 는 없어야 한다.
-func CheckPackageManifest(pkg map[string]any, manifest map[string]any) error {
-	used := []string{}
-	if raw, ok := manifest["sidecars"]; ok {
-		list, err := array("plugin.json sidecars", raw)
-		if err != nil {
-			return err
-		}
-		for _, item := range list {
-			name, ok := item.(string)
-			if !ok {
-				return fmt.Errorf("plugin.json sidecars: expected package names")
-			}
-			used = append(used, name)
-		}
+	if err := checkSidecarRanges("plugin.json dependencies", raw); err != nil {
+		return nil, err
 	}
-	slices.Sort(used)
-	ranged := []string{}
-	for name := range PackageSidecars(pkg) {
-		ranged = append(ranged, name)
+	for name, rng := range raw.(map[string]any) {
+		ranges[name] = rng.(string)
 	}
-	slices.Sort(ranged)
-	if !slices.Equal(used, ranged) {
-		if err := checkPackageName("package.json name", pkg["name"]); err != nil {
-			return err
-		}
-		return fmt.Errorf("%s: plugin.json sidecars %s differ from package.json soksak.sidecars %s", pkg["name"], quote(used), quote(ranged))
-	}
-	return nil
+	return ranges, nil
 }
 
 // PluginArchiveName 은 plugin package archive 의 파일 이름이다.

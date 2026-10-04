@@ -16,13 +16,13 @@ function compareVersions(a, b) {
 
 /**
  * 플러그인이 이름을 댄 사이드카를 이름 순서의 {name, range, version} 으로 만든다. 설치된 플러그인은 installed.json
- * 항목의 범위와 설치된 사이드카 버전을, 아니면 가장 새 registry 버전의 범위를, 아니면 불러온 manifest 의 이름만 쓴다.
+ * 항목의 범위와 설치된 사이드카 버전을, 아니면 가장 새 registry 버전의 범위를, 아니면 불러온 manifest 의 dependencies 를 쓴다.
  */
 function sidecarsOf(record, entry, unit, state) {
   let ranges;
   if (record) ranges = Object.entries(record.sidecars);
   else if (entry) ranges = Object.entries(entry.versions.toSorted((a, b) => compareVersions(a.version, b.version)).at(-1).sidecars);
-  else ranges = unit.sidecars.map((name) => [name, null]);
+  else ranges = Object.entries(unit.dependencies);
   return ranges.sort(([a], [b]) => a.localeCompare(b)).map(([name, range]) => ({
     name, range,
     // 기본값: host 상태가 없거나 설치되지 않은 사이드카는 버전을 모른다(null).

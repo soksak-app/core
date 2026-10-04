@@ -24,7 +24,7 @@ const files = {
   card: {
     id: "card", name: "Card", description: "검사용 카드.", mark: "c", icon: "<path/>",
     surface: { module: "ui/card.js", composition: { kind: "dom" } }, sections: [{ id: "card.info", name: "Info", module: "ui/info.js" }],
-    preview: { ink: "--fixture-ink" },
+    preview: { ink: "--fixture-ink" }, dependencies: { "@fixture/sidecar-card": "^0.1.0" },
     sidebars: { sets: [{ id: "info", title: "Info", sections: ["card.info"], layout: "tabs" }], card: { top: "info" } },
     settings: { "cursor.shape": { label: "커서 모양", type: "enum", default: "block", values: ["block", "beam"] } },
   },
@@ -45,7 +45,7 @@ test("the environment registers card plugins, sections, and sidebar defaults fro
   installEnvironment(structuredClone(files["/environment.json"]), structuredClone(installed));
   assert.deepEqual(registry.plugins().map((p) => p.id), ["card"], "a plugin without a surface is not a card plugin");
   assert.deepEqual(registry.plugin("card").surface("tab 1"),
-    { module: "/modules/@fixture/card/ui/card.js", composition: { kind: "dom" }, surfaceId: "tab 1", pluginId: "card", declarations: {}, sidecars: [] });
+    { module: "/modules/@fixture/card/ui/card.js", composition: { kind: "dom" }, surfaceId: "tab 1", pluginId: "card", declarations: {}, sidecars: ["@fixture/sidecar-card"] });
   assert.equal(registry.plugin("card").ink, "--fixture-ink");
   assert.equal(await pluginDiagnostics("card"), null, "a release build has no plugin diagnostic module");
   assert.equal(registry.section("side.list").name, "List");

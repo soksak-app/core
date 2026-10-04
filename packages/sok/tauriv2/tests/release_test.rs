@@ -103,11 +103,11 @@ fn plugin_tree() -> Dir {
             (
                 "package.json",
                 r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-                "soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui"]}"#,
+                "files": ["plugin.json", "ui"]}"#,
             ),
             (
                 "plugin.json",
-                r#"{"id": "probe", "sidecars": ["@scope/sidecar-worker"]}"#,
+                r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
             ),
             ("ui/b.js", "b"),
             ("ui/a/run.sh*", "run"),
@@ -183,15 +183,41 @@ fn plugin_pack_rejects_links_and_a_manifest_mismatch_without_writing() {
         "a failed pack left files"
     );
     let other = plugin_tree();
-    write_tree(&other.0, &[("plugin.json", r#"{"id": "probe"}"#)]);
+    write_tree(
+        &other.0,
+        &[(
+            "package.json",
+            r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
+            "soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui"]}"#,
+        )],
+    );
     let (code, _, stderr) = run(&["plugin", "pack", text(&other.0), text(&out)]);
     assert_eq!(
         (code, stderr.as_str()),
-        (1, "sok: @scope/plugin-probe: plugin.json sidecars [] differ from package.json soksak.sidecars [\"@scope/sidecar-worker\"]\n")
+        (1, "sok: package.json soksak: the sidecars of a plugin and their ranges are the dependencies of plugin.json\n")
+    );
+    let other = plugin_tree();
+    write_tree(
+        &other.0,
+        &[(
+            "plugin.json",
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "latest"}}"#,
+        )],
+    );
+    let (code, _, stderr) = run(&["plugin", "pack", text(&other.0), text(&out)]);
+    assert!(
+        code == 1
+            && stderr.starts_with(
+                "sok: plugin.json dependencies @scope/sidecar-worker: invalid version range"
+            ),
+        "code {code} stderr {stderr:?}"
     );
     write_tree(
         &other.0,
-        &[("plugin.json", r#"{"sidecars": ["@scope/sidecar-worker"]}"#)],
+        &[(
+            "plugin.json",
+            r#"{"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
+        )],
     );
     let (code, _, stderr) = run(&["plugin", "pack", text(&other.0), text(&out)]);
     assert_eq!(
@@ -360,7 +386,7 @@ fn plugin_pack_adds_diagnostic_declarations_only_with_the_flag() {
         &[(
             "package.json",
             r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-            "soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui", "probe-diagnostics.js"]}"#,
+            "files": ["plugin.json", "ui", "probe-diagnostics.js"]}"#,
         )],
     );
     let out = Dir::new();
@@ -392,15 +418,15 @@ fn plugin_pack_adds_diagnostic_declarations_only_with_the_flag() {
 fn plugin_pack_rejects_a_module_that_files_does_not_list() {
     for (manifest, want) in [
         (
-            r#"{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "surface": {"module": "page/probe.js"}}"#,
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"module": "page/probe.js"}}"#,
             "plugin.json: surface module page/probe.js must be listed in files",
         ),
         (
-            r#"{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}"#,
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}"#,
             "plugin.json: section probe.list module side/v.js must be listed in files",
         ),
         (
-            r#"{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "state": {"module": "state.js"}}"#,
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "state": {"module": "state.js"}}"#,
             "plugin.json: state module state.js must be listed in files",
         ),
     ] {
@@ -415,7 +441,7 @@ fn plugin_pack_rejects_a_module_that_files_does_not_list() {
         &dir.0,
         &[(
             "plugin.json",
-            r#"{"id": "probe", "sidecars": ["@scope/sidecar-worker"], "surface": {"module": "ui/b.js"}, "sections": [{"id": "probe.list", "module": "ui/a/run.sh"}]}"#,
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"module": "ui/b.js"}, "sections": [{"id": "probe.list", "module": "ui/a/run.sh"}]}"#,
         )],
     );
     let out = Dir::new();

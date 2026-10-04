@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"mime"
 	"net/http"
 	"os"
@@ -199,7 +200,7 @@ func InstalledAssets(configDir string) application.Middleware {
 	}
 }
 
-// InstalledSidecars 는 켜진 설치 plugin 의 plugin.json 이 지정한 sidecar 를 설치가 기록한 폴더와 함께 돌려준다.
+// InstalledSidecars 는 켜진 설치 plugin 의 plugin.json dependencies 가 지정한 sidecar 를 설치가 기록한 폴더와 함께 돌려준다.
 func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
 	plugins, state, err := enabledPlugins(configDir)
 	if err != nil {
@@ -214,12 +215,13 @@ func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
 			return nil, err
 		}
 		var manifest struct {
-			Sidecars []string `json:"sidecars"`
+			Dependencies map[string]string `json:"dependencies"`
 		}
 		if err := json.Unmarshal(data, &manifest); err != nil {
 			return nil, fmt.Errorf("%s: %w", file, err)
 		}
-		for _, name := range manifest.Sidecars {
+		// 두 host 가 같은 순서로 사이드카를 선언하도록 이름 순서로 읽는다.
+		for _, name := range slices.Sorted(maps.Keys(manifest.Dependencies)) {
 			if seen[name] {
 				continue
 			}

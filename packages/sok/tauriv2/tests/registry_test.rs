@@ -83,11 +83,11 @@ fn registry_tree() -> Registry {
             (
                 "package.json",
                 r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-                "soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui"]}"#,
+                "files": ["plugin.json", "ui"]}"#,
             ),
             (
                 "plugin.json",
-                r#"{"id": "probe", "sidecars": ["@scope/sidecar-worker"]}"#,
+                r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
             ),
             ("ui/b.js", "b"),
         ],
@@ -255,7 +255,7 @@ fn replace_in(path: &Path, old: &str, replacement: &str) {
 #[test]
 fn registry_build_rejects_a_mismatch_without_writing_the_index() {
     type Change = fn(&Registry);
-    let cases: [(Change, &str); 6] = [
+    let cases: [(Change, &str); 7] = [
         (
             |r| replace_in(&r.dir.0.join("plugins/probe.json"), r#""sha256": ""#, r#""sha256": "0"#),
             "sha256 must be 64 lowercase hexadecimal digits",
@@ -270,6 +270,16 @@ fn registry_build_rejects_a_mismatch_without_writing_the_index() {
                 )
             },
             "plugin probe 0.2.0 package: package.json engines.soksak is ^0.0.2, the entry says ^0.0.3",
+        ),
+        (
+            |r| {
+                replace_in(
+                    &r.dir.0.join("plugins/probe.json"),
+                    r#""sidecars": {"@scope/sidecar-worker": "^0.1.0"}"#,
+                    r#""sidecars": {"@scope/sidecar-worker": "~0.1.0"}"#,
+                )
+            },
+            r#"plugin probe 0.2.0 package: plugin.json dependencies {"@scope/sidecar-worker":"^0.1.0"} differ from the entry {"@scope/sidecar-worker":"~0.1.0"}"#,
         ),
         (
             |r| std::fs::rename(r.dir.0.join("packs/starter.json"), r.dir.0.join("packs/first.json")).unwrap(),

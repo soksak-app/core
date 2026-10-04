@@ -131,8 +131,12 @@ func checkPluginArchive(plugin *RegistryPlugin, version *PluginVersion) error {
 			return fmt.Errorf("%s: package.json %s is %s, the entry says %s", where, field[0], field[1], field[2])
 		}
 	}
-	if sidecars := PackageSidecars(pkg); !maps.Equal(sidecars, version.Sidecars) {
-		return fmt.Errorf("%s: package.json soksak.sidecars %s differ from the entry %s", where, quote(sidecars), quote(version.Sidecars))
+	sidecars, err := ManifestSidecars(manifest.(map[string]any))
+	if err != nil {
+		return fmt.Errorf("%s: %w", where, err)
+	}
+	if !maps.Equal(sidecars, version.Sidecars) {
+		return fmt.Errorf("%s: plugin.json dependencies %s differ from the entry %s", where, quote(sidecars), quote(version.Sidecars))
 	}
 	return nil
 }

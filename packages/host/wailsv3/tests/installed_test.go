@@ -37,7 +37,7 @@ func installedFixture(t *testing.T) string {
 			"alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}},
 			"off": {"package": "plugin-off", "version": "1.0.0", "path": "plugins/off/1.0.0", "enabled": false, "sidecars": {}}},
 			"sidecars": {"@scope/sidecar-worker": {"version": "0.1.2", "path": "sidecars/scope-sidecar-worker/0.1.2/darwin-arm64"}}}`,
-		"plugins/term/0.1.0/plugin.json":                                `{"id": "term", "sidecars": ["@scope/sidecar-worker"]}`,
+		"plugins/term/0.1.0/plugin.json":                                `{"id": "term", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`,
 		"plugins/term/0.1.0/ui/term.js":                                 "export const term = 1;",
 		"plugins/term/0.1.0/diagnostics.json":                           "{\n  \"module\": \"ui/d.js\",\n  \"exposes\": {}\n}\n",
 		"plugins/alpha/1.0.0/plugin.json":                               `{"id": "alpha"}`,
@@ -50,11 +50,11 @@ func installedFixture(t *testing.T) string {
 // contract: installed.document.lists-enabled-plugins
 func TestInstalledPluginsDocumentListsEnabledPluginsById(t *testing.T) {
 	config := installedFixture(t)
-	release := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","sidecars":["@scope/sidecar-worker"]}}]}`
+	release := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}}}]}`
 	if got := string(host.InstalledPluginsDocument(config, false)); got != release {
 		t.Fatalf("release document %s", got)
 	}
-	diagnostic := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","sidecars":["@scope/sidecar-worker"]},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}`
+	diagnostic := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}`
 	if got := string(host.InstalledPluginsDocument(config, true)); got != diagnostic {
 		t.Fatalf("diagnostic document %s", got)
 	}
@@ -132,7 +132,7 @@ func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 	if _, err := host.InstalledSidecars(config); err == nil || !strings.Contains(err.Error(), filepath.Join(folder, "sidecar.json")) {
 		t.Fatalf("missing sidecar.json: %v", err)
 	}
-	writeInstalled(t, config, map[string]string{"plugins/term/0.1.0/plugin.json": `{"id": "term", "sidecars": ["@scope/sidecar-other"]}`})
+	writeInstalled(t, config, map[string]string{"plugins/term/0.1.0/plugin.json": `{"id": "term", "dependencies": {"@scope/sidecar-other": "^0.1.0"}}`})
 	if _, err := host.InstalledSidecars(config); err == nil || !strings.Contains(err.Error(), "sidecar @scope/sidecar-other has no installed version") {
 		t.Fatalf("unknown sidecar: %v", err)
 	}

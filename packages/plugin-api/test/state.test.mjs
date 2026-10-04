@@ -7,7 +7,7 @@ const base = () => ({
   id: "probe", name: "Probe", description: "검사용 플러그인.",
   sections: [{ id: "probe.list", name: "목록", module: "ui/list.js" }],
   state: { module: "ui/state.js" },
-  sidecars: ["@scope/sidecar-probe"],
+  dependencies: { "@scope/sidecar-probe": "~0.4.1" },
   data: { marks: { schema: { type: "array", items: { type: "string" } }, default: [] } },
   exposes: { status: [{ name: "probe.marks", description: "Marks.", schema: { type: "array" } }], commands: [], dom: [] },
 });
@@ -24,7 +24,7 @@ test("state, data, and sidecars are rejected when their requirements are missing
     [{ ...base(), state: { module: "ui/state.js", extra: 1 } }, /unknown field extra/],
     [without("sections"), /state requires sections/],
     [{ ...without("state"), data: base().data }, /data requires a state module/],
-    [{ ...without("state"), data: undefined }, /sidecars require a surface or a state module/],
+    [{ ...without("state"), data: undefined }, /dependencies require a surface or a state module/],
     [{ ...base(), data: { marks: { schema: { type: "array" }, default: "x" } } }, /data marks default does not match its schema/],
     [{ ...base(), data: { marks: { schema: { type: "array" } } } }, /data marks requires schema and default/],
   ];

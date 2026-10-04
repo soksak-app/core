@@ -26,10 +26,9 @@ A plugin package is the archive `<id>-<version>.tgz` of the plugin's files. Its 
 | `name` | Package name; the installed files are served at `/modules/<name>/` |
 | `version` | Plugin version |
 | `engines.soksak` | Range of core API versions the plugin supports |
-| `soksak.sidecars` | Optional map from each sidecar that `plugin.json` `sidecars` names to a version range; it lists exactly those sidecars |
 | `files` | Paths inside the package that the archive holds; it includes `plugin.json` |
 
-Other `package.json` fields belong to package tools and are not read.
+Other `package.json` fields belong to package tools and are not read, except `soksak`, which is refused: the sidecars of a plugin and their ranges are the `dependencies` of its `plugin.json` ([plugins](plugins.md#pluginjson)).
 
 A plugin repository builds against the `@soksak/plugin-api` of one core release and declares that release: `engines.soksak` is `^<version>` of that `@soksak/plugin-api`. The command `soksak-engines` of `@soksak/plugin-api` checks it in the plugin repository and fails with `package.json: engines.soksak <range> must be ^<version>, the @soksak/plugin-api version`; each plugin repository runs it in `make test`.
 
@@ -82,7 +81,7 @@ Both hosts serve these paths from the configuration directory and read `plugins/
 
 The workbench imports `/installed-plugins.json` as a JSON module, registers each plugin from its `manifest`, and fails the load with the `error` text when the document has one.
 
-When a host starts, it reads the sidecars that the `plugin.json` of each enabled installed plugin names. A sidecar runs from the `path` that `installed.json` records for it, and its executable is the `executable` path of the `sidecar.json` in that folder. A plugin installed or enabled while the application runs is served to pages that load after the change, and its sidecars start after the application restarts.
+When a host starts, it reads the sidecars that the `dependencies` of the `plugin.json` of each enabled installed plugin name, in name order. A sidecar runs from the `path` that `installed.json` records for it, and its executable is the `executable` path of the `sidecar.json` in that folder. A plugin installed or enabled while the application runs is served to pages that load after the change, and its sidecars start after the application restarts.
 
 ## Plugin operations in the application
 
@@ -116,7 +115,7 @@ A card shows:
 
 - The description of the loaded manifest, else of the registry entry ([plugins](plugins.md) and [registry index](#registry-index) require one); a plugin that only `installed.json` lists has no description and shows its id as its name.
 - A version line with 설치된 버전 <version> and 최신 버전 <version>, the newest version that the registry index lists, each when present.
-- A sidecar line, 사이드카 followed by each sidecar that the plugin names, sorted by name: the installed version from `installed.json` `sidecars`, or else the range that the plugin declares. The sidecars and ranges come from the `installed.json` entry of an installed plugin, else from the newest registry version, else from the `sidecars` of the loaded manifest without a range. A plugin without sidecars shows 사이드카 없음.
+- A sidecar line, 사이드카 followed by each sidecar that the plugin names, sorted by name: the installed version from `installed.json` `sidecars`, or else the range that the plugin declares. The sidecars and ranges come from the `installed.json` entry of an installed plugin, else from the newest registry version, else from the `dependencies` of the loaded manifest. A plugin without sidecars shows 사이드카 없음.
 - Actions, each a button bound to its command: 설치 `core.plugins.install` when the registry lists the plugin and it is not installed; 업데이트 `core.plugins.update` when it is installed and the registry lists it; 사용 `core.plugins.enable` or 사용 안 함 `core.plugins.disable` when it is installed, by its `enabled` value; 제거 `core.plugins.remove` when it is installed. While an operation runs, every action of every card is disabled and the card of its plugin shows "<plugin> <action> 진행 중". After an operation the card shows "애플리케이션을 다시 시작하면 적용됩니다." or the error of the failed operation.
 
 The page reads the plugin state with `pluginsState` when it is shown and after each `plugins-changed` event. A registry index that cannot be read shows "레지스트리를 읽지 못했습니다: <message>" above the cards, and the page keeps the loaded and installed plugins. A plugin state that cannot be read, such as an invalid `installed.json`, shows "플러그인 상태를 읽지 못했습니다: <message>" and no cards. Without a host, as in the browser application, the page has only the loaded plugins, each `loaded`, and no action.
