@@ -83,8 +83,8 @@ export function createLibrary(root, rendered = () => {}) {
   const back = root.querySelector('.library-return');
   let pending = false;
 
-  // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 보인다.
   const fail = (reason) => {
+    // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 보인다.
     error.textContent = String(reason.message ?? reason); error.hidden = false;
     reportShownError('library', error.textContent);
   };
