@@ -136,18 +136,27 @@ export function verify(controls = null) {
   );
   // 커밋은 자리만이 아니라 표면의 상태도 담는다. 흐림은 판이 정하고 슬롯에 기록하는
   // 값이므로, 그려진 슬롯과 다르면 호스트가 다른 알파를 적용한다.
+  const frameText = (r) => `${+r.x.toFixed(2)},${+r.y.toFixed(2)} ${+r.w.toFixed(2)}×${+r.h.toFixed(2)}`;
   const compare = (surfaces) => {
     const told = new Set(surfaces.map((s) => s.id));
     let worst = 0;
+    // 가장 크게 어긋난 표면과 그 두 자리. 실패가 원인을 찾을 수 있는 측정값을 밝힌다.
+    let at = "";
     let dim = 0;
     for (const s of surfaces) {
       const slot = onPlane.get(s.id);
       if (!slot) continue;
-      worst = Math.max(worst, maxDelta(drawnFrame(slot), s.declared));
+      const drawn = drawnFrame(slot);
+      const delta = maxDelta(drawn, s.declared);
+      if (delta > worst) {
+        worst = delta;
+        at = ` · ${s.id} drawn ${frameText(drawn)} declared ${frameText(s.declared)}`;
+      }
       if (s.dim !== (slot.dataset.nativeDim === "true")) dim++;
     }
     return {
       worst,
+      at,
       dim,
       gone: surfaces.filter((s) => !onPlane.has(s.id)).length,
       missed: [...onPlane.keys()].filter((id) => !told.has(id)).length,
@@ -159,12 +168,12 @@ export function verify(controls = null) {
   if (!record) add("V7a element − declared == 0", true, "아직 커밋 없음");
   else if (pendingPlacement) add("V7a element − declared == 0", true, "host placement pending");
   else {
-    const { worst, dim, gone, missed } = compare(record.surfaces);
+    const { worst, at, dim, gone, missed } = compare(record.surfaces);
     add("V7a element − declared == 0", gone === 0 && missed === 0 && worst < 0.5 && dim === 0,
         `최대 ${worst.toFixed(2)}px · 커밋에 없는 표면 ${missed} · 사라진 표면 ${gone} · ` +
         `흐림이 다른 표면 ${dim} · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq}, ` +
         // 기본값: 아직 앉힌 배치가 없으면 none 으로 적는다.
-        `seated ${seated()?.seq ?? "none"}, pending ${pendingPlacement})`);
+        `seated ${seated()?.seq ?? "none"}, pending ${pendingPlacement})${at}`);
   }
 
   // V7c — 그리기 전에 미리 게시한 자리가 그려진 자리와 같은가. 여백은 그려질
@@ -173,11 +182,11 @@ export function verify(controls = null) {
   if (!guess) add("V7c 미리 게시한 자리 == 그려진 자리", true, "이번 렌더는 미리 게시하지 않았다");
   else if (pendingPlacement) add("V7c 미리 게시한 자리 == 그려진 자리", true, "host placement pending");
   else {
-    const { worst, dim, gone, missed } = compare(guess.surfaces);
+    const { worst, at, dim, gone, missed } = compare(guess.surfaces);
     add("V7c 미리 게시한 자리 == 그려진 자리",
         gone === 0 && missed === 0 && worst === 0 && dim === 0,
         `최대 ${worst.toFixed(2)}px · 없음 ${gone} · 누락 ${missed} · 흐림이 다른 표면 ${dim} ` +
-        `(seq ${guess.seq})`);
+        `(seq ${guess.seq})${at}`);
   }
 
   // V7b — 동일한 요청의 선언 좌표와 호스트가 적용한 좌표를 비교한다.
