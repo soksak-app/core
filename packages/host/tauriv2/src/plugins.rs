@@ -14,6 +14,12 @@ pub struct RunRequest {
     pub plugin: Value,
 }
 
+/// pluginsUseRegistry 호출의 인자. index 는 문자열이 아닌 값을 거부하기 위해 형을 정하지 않고 받는다.
+#[derive(Debug, serde::Deserialize)]
+pub struct RegistryRequest {
+    pub index: Value,
+}
+
 /// plugins-changed event 의 값.
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct Changed {
@@ -48,6 +54,29 @@ impl Plugins {
     /// registry 주소, 검사한 index, 설치 상태를 돌려준다.
     pub fn state(&self) -> Result<PluginsState, String> {
         plugins::read_plugins_state(&self.config_dir, &mut std::io::stderr())
+    }
+
+    /// sok registry use <index> 와 같이 registry index 를 정하고 그 출력을 돌려준다.
+    pub fn use_registry(&self, request: RegistryRequest) -> Result<Value, String> {
+        let index = match request.index.as_str() {
+            Some(index) if !index.is_empty() => index.to_string(),
+            _ => return Err("index must be a non-empty string".to_string()),
+        };
+        let _running = match self.running.try_lock() {
+            Ok(guard) => guard,
+            Err(TryLockError::WouldBlock) => {
+                return Err("another plugin operation is running".to_string())
+            }
+            Err(TryLockError::Poisoned(error)) => {
+                return Err(format!("plugin operation state: {error}"))
+            }
+        };
+        let url = plugins::use_registry(
+            &self.config_dir,
+            &index,
+            &soksak_sok::fetch::Fetcher::default(),
+        )?;
+        Ok(serde_json::json!({ "index": url }))
     }
 
     /// sok plugin <action> <plugin> 과 같은 작업을 실행하고 그 출력을 돌려준다.

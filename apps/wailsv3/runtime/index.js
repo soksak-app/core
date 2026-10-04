@@ -82,6 +82,7 @@ const METHOD = {
   clipboardPersistPNG: "ClipboardPersistPNG",
   pluginsState: "PluginsState",
   pluginsRun: "PluginsRun",
+  pluginsUseRegistry: "PluginsUseRegistry",
 };
 
 /* 메인 페이지의 호출. 페이지가 스스로 다시 읽기 전에 보낸 호출이 모두 답을 받게 센다(docs/spec/native-host.md#page-reload). */

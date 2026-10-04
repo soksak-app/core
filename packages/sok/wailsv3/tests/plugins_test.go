@@ -369,7 +369,7 @@ func mustPlatform(t *testing.T) string {
 func TestFileErrorsNameThePathAndTheReason(t *testing.T) {
 	config := t.TempDir()
 	missing := filepath.Join(config, "missing.json")
-	if _, err := sok.UseRegistry(config, missing); err == nil || err.Error() != missing+": no such file or directory" {
+	if _, err := sok.UseRegistry(config, missing, sok.DefaultFetcher); err == nil || err.Error() != missing+": no such file or directory" {
 		t.Fatalf("missing index error = %v", err)
 	}
 	installed := filepath.Join(config, "plugins", "installed.json")

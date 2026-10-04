@@ -55,7 +55,7 @@
 
 이 명령들은 설정 폴더의 [설치 배치](installation.ko.md#설치-배치) 파일을 바꾼다. 설정 폴더 하나에는 설치가 하나이므로, 두 명령이 동시에 그것을 바꾸면 안 된다.
 
-`sok registry use <index>`는 경로나 절대 `file:` URL의 registry index를 읽어 검사하고 `plugins/registry.json`(`{ "format": 1, "index": "<file: URL>" }`)을 쓴다. 출력은 `{ index }`다. Version 0.0.2의 registry는 컴퓨터마다 경로가 다른 local 폴더이므로, 위치를 애플리케이션이 아니라 여기서 정한다.
+`sok registry use <index>`는 경로, 절대 `file:` URL, `https:` URL([받기](installation.ko.md#받기))의 registry index를 읽어 검사하고 `plugins/registry.json`(`{ "format": 1, "index": "<URL>" }`)을 쓰며, 경로는 그 절대 `file:` URL이 된다. 출력은 `{ index }`다. 애플리케이션은 첫 실행에서 자기 `environment.json`의 registry를 정하고, 이 명령은 local registry 폴더 같은 다른 registry를 정한다.
 
 `sok plugin install <id>`는 `plugins/registry.json`이 지정한 index와 `plugins/installed.json`(없으면 설치된 것이 없다)을 읽고, 이 `sok`의 core version과 실행 중인 플랫폼에 맞는 version을 고른 뒤([version 선택](installation.ko.md#version-선택)) 다음을 한다.
 

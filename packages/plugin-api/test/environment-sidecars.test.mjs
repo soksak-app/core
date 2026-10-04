@@ -29,3 +29,13 @@ test("an environment without sidecars rejects a state module that uses sidecars 
   checkReferences(environment({ sidecars: false }), [card, plain]);
   checkReferences(environment(), [card, stateful]);
 });
+
+test("the default registry is an https: or absolute file: URL", () => {
+  for (const registry of ["https://soksak-app.github.io/registry/index.json", "file:///registry/index.json"]) {
+    assert.equal(validateEnvironment(environment({ registry })).registry, registry);
+  }
+  for (const registry of ["", "http://example.invalid/index.json", "registry/index.json", "file:registry/index.json", 3]) {
+    assert.throws(() => validateEnvironment(environment({ registry })),
+      /^Error: environment\.json: registry must be an https: or absolute file: URL$/, String(registry));
+  }
+});

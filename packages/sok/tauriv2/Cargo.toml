@@ -22,7 +22,15 @@ serde_json = { version = "1", features = ["raw_value"] }
 flate2 = "1"
 sha2 = "0.10"
 tar = "0.4"
+# https 위치를 읽는다(docs/spec/installation.md#fetching). 운영체제가 신뢰하는 인증 기관을 쓰므로 platform-verifier 를
+# 켜고, gzip 은 쓰지 않는다.
+ureq = { version = "3", default-features = false, features = ["rustls", "platform-verifier"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 signal-hook = "0.3"
+
+[dev-dependencies]
+# 검사 소유의 TLS server 의 인증서와 server 연결.
+rcgen = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }

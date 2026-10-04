@@ -14,10 +14,16 @@ import {
 let loaded = null;
 let units = [];
 let starter = null;
+let registry = null;
 
 /** 첫 실행이 설치하는 starter pack 의 이름. environment.json 에 없으면 null 이다(docs/spec/installation.md). */
 export function starterPack() {
   return starter;
+}
+
+/** 첫 실행이 정하는 기본 registry index 의 위치. environment.json 에 없으면 null 이다(docs/spec/installation.md). */
+export function defaultRegistry() {
+  return registry;
 }
 
 /** 표면 선언을 탭 id 로 표면 모듈 대상을 반환하는 함수로 바꾼다. */
@@ -40,6 +46,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
   const environment = validateEnvironment(environmentDocument);
   // 기본값: starter 는 environment.json 의 선택 필드이며 없으면 첫 실행이 아무것도 설치하지 않는다.
   starter = environment.starter ?? null;
+  // 기본값: environment.json 에 registry 가 없으면 첫 실행이 정할 기본 registry 가 없다.
+  registry = environment.registry ?? null;
   const installed = validateInstalledPlugins(installedDocument);
   const manifests = installed.map(({ package: name, version, manifest }) => ({ name, manifest, version }));
   checkReferences(environment, manifests.map((m) => m.manifest));

@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -78,19 +77,20 @@ func archiveFiles(data []byte, names ...string) (map[string][]byte, error) {
 	return found, nil
 }
 
-// readArchive 는 archive 주소의 파일을 읽고 sha256 을 비교한다.
+// readArchive 는 archive 주소의 본문을 읽고 sha256 을 비교한다.
 func readArchive(where string, archive Archive) ([]byte, error) {
-	path, err := FilePath(archive.URL)
+	data, err := DefaultFetcher.Read(archive.URL, DefaultFetcher.Archive)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", where, err)
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fileError(where, err)
+	// 오류는 file: 이면 경로를, https: 면 URL 을 밝힌다.
+	shown := archive.URL
+	if path, err := FilePath(archive.URL); err == nil {
+		shown = path
 	}
 	sum := sha256.Sum256(data)
 	if got := hex.EncodeToString(sum[:]); got != archive.SHA256 {
-		return nil, fmt.Errorf("%s: %s has sha256 %s, the entry says %s", where, path, got, archive.SHA256)
+		return nil, fmt.Errorf("%s: %s has sha256 %s, the entry says %s", where, shown, got, archive.SHA256)
 	}
 	return data, nil
 }

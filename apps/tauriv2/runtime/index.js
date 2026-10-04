@@ -53,6 +53,7 @@ const COMMAND = {
   clipboardPersistPNG: "clipboard_persist_png",
   pluginsState: "plugins_state",
   pluginsRun: "plugins_run",
+  pluginsUseRegistry: "plugins_use_registry",
 };
 
 // 커맨드마다 인자의 이름이 다르다. 이름은 Rust 쪽 서명이 정한다.
@@ -110,6 +111,7 @@ const ARG = {
   clipboardPersistPNG: (request) => ({ request }),
   pluginsState: () => ({}),
   pluginsRun: (request) => ({ request }),
+  pluginsUseRegistry: (request) => ({ request }),
 };
 
 /**

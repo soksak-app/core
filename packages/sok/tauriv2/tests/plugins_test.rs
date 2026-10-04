@@ -519,8 +519,12 @@ fn run_plugin_action_matches_the_plugin_commands() {
 fn file_errors_name_the_path_and_the_reason() {
     let config = Dir::new();
     let missing = config.0.join("missing.json");
-    let error =
-        soksak_sok::plugins::use_registry(&config.0, missing.to_str().unwrap()).unwrap_err();
+    let error = soksak_sok::plugins::use_registry(
+        &config.0,
+        missing.to_str().unwrap(),
+        &soksak_sok::fetch::Fetcher::default(),
+    )
+    .unwrap_err();
     assert_eq!(
         error,
         format!("{}: no such file or directory", missing.display())

@@ -81,14 +81,22 @@ fn archive_files(data: &[u8], names: &[&str]) -> Result<BTreeMap<String, Vec<u8>
     Ok(found)
 }
 
-/// archive 주소의 파일을 읽고 sha256 을 비교한다.
+/// archive 주소의 본문을 읽고 sha256 을 비교한다.
 pub(crate) fn read_archive(at: &str, archive: &Archive) -> Result<Vec<u8>, String> {
-    let path = install::file_path(&archive.url).map_err(|error| format!("{at}: {error}"))?;
-    let data = std::fs::read(&path).map_err(|error| crate::files::file_error(at, &error))?;
+    let fetcher = crate::fetch::Fetcher::default();
+    let data = fetcher
+        .read(&archive.url, fetcher.archive)
+        .map_err(|error| format!("{at}: {error}"))?;
+    // 오류는 file: 이면 경로를, https: 면 URL 을 밝힌다.
+    let shown = if archive.url.starts_with("file:") {
+        install::file_path(&archive.url).map_err(|error| format!("{at}: {error}"))?
+    } else {
+        archive.url.clone()
+    };
     let got = hex(&Sha256::digest(&data));
     if got != archive.sha256 {
         return Err(format!(
-            "{at}: {path} has sha256 {got}, the entry says {}",
+            "{at}: {shown} has sha256 {got}, the entry says {}",
             archive.sha256
         ));
     }

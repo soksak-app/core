@@ -242,7 +242,7 @@ fn check_sidecar_ranges(at: &str, value: Option<&Value>) -> Result<(), String> {
     Ok(())
 }
 
-/// archive 주소의 local 경로. 0.0.2 는 local release 의 절대 `file:` URL 만 받는다. %XX 는 그 byte 로 읽는다.
+/// 절대 `file:` URL 의 local 경로. %XX 는 그 byte 로 읽는다.
 pub fn file_path(url: &str) -> Result<String, String> {
     let rest = url
         .strip_prefix("file://")
@@ -284,11 +284,9 @@ fn check_archive(at: &str, value: Option<&Value>) -> Result<(), String> {
         ));
     }
     let Some(url) = map.get("url").and_then(Value::as_str) else {
-        return Err(format!("{at}: url must be an absolute file: URL"));
+        return Err(format!("{at}: url must be an https: or absolute file: URL"));
     };
-    file_path(url)
-        .map(|_| ())
-        .map_err(|error| format!("{at}: {error}"))
+    crate::fetch::check_location(url).map_err(|error| format!("{at}: {error}"))
 }
 
 fn check_description(at: &str, value: Option<&Value>) -> Result<(), String> {

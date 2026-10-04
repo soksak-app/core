@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
-use soksak_host_tauriv2::plugins::{Changed, Plugins, RunRequest};
+use soksak_host_tauriv2::plugins::{Changed, Plugins, RegistryRequest, RunRequest};
 
 /// sok 명령을 실행하고 그 JSON 출력을 돌려준다.
 fn sok_json(args: &[&str]) -> Value {
@@ -113,7 +113,12 @@ fn plugins_state_reports_the_registry_and_the_installation() {
         r#"{"registry":null,"index":null,"installed":{"format":2,"plugins":{},"sidecars":{}},"firstRun":true}"#
     );
     let registry = plugin_registry();
-    soksak_sok::plugins::use_registry(config.path(), &registry.index).unwrap();
+    soksak_sok::plugins::use_registry(
+        config.path(),
+        &registry.index,
+        &soksak_sok::fetch::Fetcher::default(),
+    )
+    .unwrap();
     plugins.run(request("install", json!("probe"))).unwrap();
     let state: Value = serde_json::from_str(&state_text(&plugins)).unwrap();
     assert_eq!(state["registry"], format!("file://{}", registry.index));
@@ -138,7 +143,12 @@ fn plugins_state_reports_the_registry_and_the_installation() {
 fn plugins_run_changes_the_installation_like_the_command() {
     let config = tempfile::tempdir().unwrap();
     let registry = plugin_registry();
-    soksak_sok::plugins::use_registry(config.path(), &registry.index).unwrap();
+    soksak_sok::plugins::use_registry(
+        config.path(),
+        &registry.index,
+        &soksak_sok::fetch::Fetcher::default(),
+    )
+    .unwrap();
     let (plugins, seen) = new_plugins(config.path());
     let installed = plugins.run(request("install", json!("probe"))).unwrap();
     let want = r#"{"plugin":{"package":"plugin-probe","version":"0.0.3","path":"plugins/probe/0.0.3","enabled":true,"sidecars":{}},"sidecars":{}}"#;
@@ -168,7 +178,12 @@ fn plugins_run_changes_the_installation_like_the_command() {
 fn plugins_run_rejects_invalid_and_concurrent_operations() {
     let config = tempfile::tempdir().unwrap();
     let registry = plugin_registry();
-    soksak_sok::plugins::use_registry(config.path(), &registry.index).unwrap();
+    soksak_sok::plugins::use_registry(
+        config.path(),
+        &registry.index,
+        &soksak_sok::fetch::Fetcher::default(),
+    )
+    .unwrap();
     let (plugins, seen) = new_plugins(config.path());
     for (action, plugin, want) in [
         (
@@ -217,4 +232,31 @@ fn plugins_run_rejects_invalid_and_concurrent_operations() {
             plugin: "probe".to_string()
         }]
     );
+}
+
+// contract: plugins.registry.sets-like-the-command
+#[test]
+fn plugins_use_registry_sets_the_registry_like_the_command() {
+    let config = tempfile::tempdir().unwrap();
+    let (plugins, _) = new_plugins(config.path());
+    let registry = plugin_registry();
+    let result = plugins
+        .use_registry(RegistryRequest {
+            index: json!(registry.index),
+        })
+        .unwrap();
+    assert_eq!(
+        result,
+        json!({"index": format!("file://{}", registry.index)})
+    );
+    assert_eq!(
+        std::fs::read_to_string(config.path().join("plugins/registry.json")).unwrap(),
+        format!("{{\"format\":1,\"index\":\"file://{}\"}}\n", registry.index)
+    );
+    for value in [Value::Null, json!(""), json!(3)] {
+        assert_eq!(
+            plugins.use_registry(RegistryRequest { index: value }),
+            Err("index must be a non-empty string".to_string())
+        );
+    }
 }

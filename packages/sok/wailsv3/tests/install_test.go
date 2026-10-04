@@ -134,10 +134,11 @@ func TestRegistryEntriesRejectUnknownFieldsBadArchivesAndRepeatedVersions(t *tes
 	extra.(map[string]any)["homepage"] = "x"
 	rejects(t, sok.ValidateRegistryPlugin(extra), "registry plugin probe: unknown field homepage")
 	for url, want := range map[string]string{
-		"https://example.invalid/probe.tgz": "url must be an absolute file: URL",
-		"file:releases/probe.tgz":           "url must be an absolute file: URL",
-		"file:///releases/probe.tgz?x=1":    "url must be an absolute file: URL without a query or fragment",
-		"file:///releases/%zz.tgz":          "url has an invalid escape",
+		"ftp://example.invalid/probe.tgz": "ftp://example.invalid/probe.tgz: the URL must be https: or an absolute file: URL",
+		"https:probe.tgz":                 "https:probe.tgz: the URL must be https: or an absolute file: URL",
+		"file:releases/probe.tgz":         "file:releases/probe.tgz: url must be an absolute file: URL",
+		"file:///releases/probe.tgz?x=1":  "file:///releases/probe.tgz?x=1: url must be an absolute file: URL without a query or fragment",
+		"file:///releases/%zz.tgz":        "file:///releases/%zz.tgz: url has an invalid escape",
 	} {
 		changed := decode(t, pluginJSON())
 		at(changed, "versions", 0, "package").(map[string]any)["url"] = url

@@ -1,5 +1,6 @@
 {
   "starter": "starter",
+  "registry": "https://soksak-app.github.io/registry/index.json",
   "runtime": "runtime",
   "settings": {
     "terminal": {

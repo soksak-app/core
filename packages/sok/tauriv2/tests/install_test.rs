@@ -139,18 +139,25 @@ fn registry_entries_reject_unknown_fields_bad_archives_and_repeated_versions() {
     );
     for (url, want) in [
         (
-            "https://example.invalid/probe.tgz",
-            "url must be an absolute file: URL",
+            "ftp://example.invalid/probe.tgz",
+            "ftp://example.invalid/probe.tgz: the URL must be https: or an absolute file: URL",
+        ),
+        (
+            "https:probe.tgz",
+            "https:probe.tgz: the URL must be https: or an absolute file: URL",
         ),
         (
             "file:releases/probe.tgz",
-            "url must be an absolute file: URL",
+            "file:releases/probe.tgz: url must be an absolute file: URL",
         ),
         (
             "file:///releases/probe.tgz?x=1",
-            "url must be an absolute file: URL without a query or fragment",
+            "file:///releases/probe.tgz?x=1: url must be an absolute file: URL without a query or fragment",
         ),
-        ("file:///releases/%zz.tgz", "url has an invalid escape"),
+        (
+            "file:///releases/%zz.tgz",
+            "file:///releases/%zz.tgz: url has an invalid escape",
+        ),
     ] {
         let mut changed = plugin();
         changed["versions"][0]["package"]["url"] = json!(url);

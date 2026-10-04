@@ -21,7 +21,7 @@
 <script type="module" blocking="render">
 /* environment.json 을 가장 먼저 불러온다. 아래 모듈은 등록된 플러그인과 기본값을
    함수 호출 시점에 읽는다. */
-import { installEnvironment, starterPack } from "./environment.js";
+import { defaultRegistry, installEnvironment, starterPack } from "./environment.js";
 import { pluginOperations } from "./installed-plugins.js";
 import { installExposure } from "./exposure.js";
 /* 첫 화면을 첫 await 전에 그리도록 선언 파일과 설치 목록을 module graph 로 가져온다(docs/spec/native-host.md#page-start). */
@@ -573,7 +573,7 @@ const coreExposure = installCoreExposure({
 await pluginOperations.refresh();
 // 첫 실행이면 starter pack 을 설치하고, 설치한 plugin 을 불러오도록 page 를 다시 불러온다(docs/spec/installation.md).
 // 다시 불러오는 동안 이 page 는 space 를 만들지 않는다.
-if (await pluginOperations.installStarter(starterPack(), log, showError)) {
+if (await pluginOperations.installStarter(starterPack(), defaultRegistry(), log, showError)) {
   location.reload();
   await new Promise(() => {});
 }

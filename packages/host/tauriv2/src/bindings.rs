@@ -82,7 +82,8 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         notification_remove,
         notification_state,
         plugins_state,
-        plugins_run
+        plugins_run,
+        plugins_use_registry
     ]
 }
 
@@ -540,6 +541,16 @@ fn plugins_run(
 ) -> Result<soksak_sok::plugins::PluginActionResult, String> {
     let Argument(request) = request;
     plugins.run(request)
+}
+
+/// sok registry use <index> 와 같이 registry index 를 정한다.
+#[tauri::command(async)]
+fn plugins_use_registry(
+    plugins: tauri::State<'_, crate::plugins::Plugins>,
+    request: Argument<crate::plugins::RegistryRequest>,
+) -> Result<serde_json::Value, String> {
+    let Argument(request) = request;
+    plugins.use_registry(request)
 }
 
 /// 호출한 창의 탭 알림을 시스템 알림으로 게시한다.

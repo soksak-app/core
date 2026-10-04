@@ -97,7 +97,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 		t.Fatalf("state without a registry %s", text)
 	}
 	index, _ := pluginRegistry(t)
-	if _, err := sok.UseRegistry(config, index); err != nil {
+	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := plugins.Run(host.PluginsRunRequest{Action: "install", Plugin: "probe"}); err != nil {
@@ -137,7 +137,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 func TestPluginsRunChangesTheInstallationLikeTheCommand(t *testing.T) {
 	config := t.TempDir()
 	index, _ := pluginRegistry(t)
-	if _, err := sok.UseRegistry(config, index); err != nil {
+	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
 		t.Fatal(err)
 	}
 	plugins, seen := newPlugins(t, config)
@@ -185,7 +185,7 @@ func TestPluginsRunChangesTheInstallationLikeTheCommand(t *testing.T) {
 func TestPluginsRunRejectsInvalidAndConcurrentOperations(t *testing.T) {
 	config := t.TempDir()
 	index, archive := pluginRegistry(t)
-	if _, err := sok.UseRegistry(config, index); err != nil {
+	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
 		t.Fatal(err)
 	}
 	plugins, seen := newPlugins(t, config)
@@ -239,5 +239,27 @@ func TestPluginsRunRejectsInvalidAndConcurrentOperations(t *testing.T) {
 	}
 	if got := seen.list(); len(got) != 1 || got[0] != (host.PluginsChanged{Action: "install", Plugin: "probe"}) {
 		t.Fatalf("plugins-changed %+v", got)
+	}
+}
+
+// contract: plugins.registry.sets-like-the-command
+func TestPluginsUseRegistrySetsTheRegistryLikeTheCommand(t *testing.T) {
+	config := t.TempDir()
+	plugins, _ := newPlugins(t, config)
+	index, _ := pluginRegistry(t)
+	result, err := plugins.UseRegistry(host.PluginsRegistryRequest{Index: index})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := json.Marshal(result); string(data) != `{"index":"file://`+index+`"}` {
+		t.Fatalf("result %s", data)
+	}
+	if data, err := os.ReadFile(filepath.Join(config, "plugins/registry.json")); err != nil || string(data) != `{"format":1,"index":"file://`+index+`"}`+"\n" {
+		t.Fatalf("registry.json %q %v", data, err)
+	}
+	for _, value := range []any{nil, "", 3.0} {
+		if _, err := plugins.UseRegistry(host.PluginsRegistryRequest{Index: value}); err == nil || err.Error() != "index must be a non-empty string" {
+			t.Fatalf("index %v: %v", value, err)
+		}
 	}
 }

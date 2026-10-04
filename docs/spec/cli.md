@@ -55,7 +55,7 @@ Both archives are gzip-compressed tar files. They hold `package.json` and every 
 
 These commands change the files of the [installation layout](installation.md#installation-layout) in the configuration directory. A configuration directory has one installation, so two commands must not change it at the same time.
 
-`sok registry use <index>` reads the registry index at a path or an absolute `file:` URL, checks it, and writes `plugins/registry.json` (`{ "format": 1, "index": "<file: URL>" }`). It prints `{ index }`. The registry of version 0.0.2 is a local folder whose path differs per computer, so the location is set here instead of in the application.
+`sok registry use <index>` reads the registry index at a path, an absolute `file:` URL or an `https:` URL ([fetching](installation.md#fetching)), checks it, and writes `plugins/registry.json` (`{ "format": 1, "index": "<URL>" }`), where a path becomes its absolute `file:` URL. It prints `{ index }`. An application sets the registry of its `environment.json` on its first run; this command sets another one, such as a local registry folder.
 
 `sok plugin install <id>` reads the index that `plugins/registry.json` names and `plugins/installed.json` (none means nothing is installed), selects the versions for the core version of this `sok` and the platform it runs on ([version selection](installation.md#version-selection)), and then:
 

@@ -124,11 +124,17 @@ export function createPluginOperations({ host, loaded, changed }) {
 
   /**
    * 첫 실행이면 starter pack 의 plugin 을 pack 의 순서대로 설치하고 true 를 돌려준다(docs/spec/installation.md 의 첫
-   * 실행). 호출자는 설치한 plugin 을 불러오도록 page 를 다시 불러온다. registry 가 없으면 기록하고, plugin 이 없는 창이
-   * 그 이유를 밝히도록 show 로 알린 뒤 false 다.
+   * 실행). 호출자는 설치한 plugin 을 불러오도록 page 를 다시 불러온다. registry 가 없으면 environment 의 기본
+   * registry(defaultRegistry)를 먼저 정한다. 둘 다 없으면 기록하고, plugin 이 없는 창이 그 이유를 밝히도록 show 로
+   * 알린 뒤 false 다.
    */
-  async function installStarter(pack, log, show) {
+  async function installStarter(pack, defaultRegistry, log, show) {
     if (!host || pack === null || !state?.firstRun) return false;
+    if (state.registry === null && defaultRegistry !== null) {
+      await host.call("pluginsUseRegistry", { index: defaultRegistry });
+      await refresh();
+      if (state === null) throw new Error(`first run: ${failure.message}`);
+    }
     if (state.registry === null) {
       log(`first run: no registry is set; the starter pack ${pack} was not installed`);
       show(`플러그인 레지스트리가 없어 시작 플러그인 묶음 ${pack}을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요.`);

@@ -286,8 +286,7 @@ func checkSidecarRanges(where string, value any) error {
 	return nil
 }
 
-// FilePath 는 archive 주소의 local 경로다. 0.0.2 는 local release 의 절대 `file:` URL 만 받는다. %XX 는 그 byte 로
-// 읽는다.
+// FilePath 는 절대 `file:` URL 의 local 경로다. %XX 는 그 byte 로 읽는다.
 func FilePath(url string) (string, error) {
 	rest, ok := strings.CutPrefix(url, "file://")
 	if !ok || !strings.HasPrefix(rest, "/") {
@@ -328,9 +327,9 @@ func checkArchive(where string, value any) error {
 	}
 	url, ok := m["url"].(string)
 	if !ok {
-		return fmt.Errorf("%s: url must be an absolute file: URL", where)
+		return fmt.Errorf("%s: url must be an https: or absolute file: URL", where)
 	}
-	if _, err := FilePath(url); err != nil {
+	if err := CheckLocation(url); err != nil {
 		return fmt.Errorf("%s: %w", where, err)
 	}
 	return nil

@@ -48,7 +48,20 @@ Registry index `index.json`은 `format` 1과 다음 목록을 가진다.
 | `packs` | `{ name, description, plugins }`: 함께 설치하는 plugin id |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }] }` |
 
-Version 0.0.2는 local registry에서만 설치하므로 `url`은 local release archive의 절대 `file:` URL이고, `sha256`은 소문자 16진수 64자리다. 설명은 1자에서 200자(Unicode code point)다. Index 검사는 이 밖에도 plugin id, package, sidecar, pack, version의 중복, 알 수 없는 plugin을 가리키는 pack, 알 수 없는 sidecar나 어떤 sidecar version도 채우지 않는 범위가 필요한 plugin version, 목록에 없는 revoked version을 거부한다.
+`url`은 게시된 release archive의 `https:` URL이거나 local archive의 절대 `file:` URL([받기](#받기))이고, `sha256`은 소문자 16진수 64자리다. 설명은 1자에서 200자(Unicode code point)다. Index 검사는 이 밖에도 plugin id, package, sidecar, pack, version의 중복, 알 수 없는 plugin을 가리키는 pack, 알 수 없는 sidecar나 어떤 sidecar version도 채우지 않는 범위가 필요한 plugin version, 목록에 없는 revoked version을 거부한다.
+
+## 받기
+
+Registry index와 archive는 위치에서 읽는다. 위치는 `https:` URL, 절대 `file:` URL, 또는 명령이 경로를 받는 곳에서는 파일 경로다. 그 밖의 URL은 `<url>: the URL must be https: or an absolute file: URL`로 실패한다. `https:` URL은 다음 규칙으로 읽으며, 두 구현은 같은 문장으로 이 규칙을 따른다.
+
+- 연결은 운영체제가 신뢰하는 인증 기관으로 TLS를 쓴다.
+- redirect는 대상이 `https:` URL일 때 최대 5번 따라간다. 다른 scheme으로의 redirect는 `<url>: redirect to <target> is not https`로, 여섯 번째 redirect는 `<url>: more than 5 redirects`로 실패한다.
+- 200이 아닌 응답은 `<url>: HTTP <status>`로 실패한다.
+- 연결부터 마지막 byte까지 한 요청은 index는 60초, archive는 600초 안에 끝나야 한다. 더 느린 요청은 `<url>: timed out after <seconds> s`로 실패한다.
+- index는 최대 8 MiB, archive는 최대 256 MiB다. 더 큰 본문은 `<url>: larger than <bytes> bytes`로 실패한다.
+- 연결하거나 읽지 못하면 `<url>: cannot connect: <reason>`으로 실패하며, reason은 network library의 문장이다.
+
+아무것도 저장해 두지 않는다. 각 명령과 각 plugin 작업은 필요한 index와 archive를 다시 읽고, archive는 풀기 전에 `sha256`과 비교한다.
 
 ## Version 선택
 
@@ -81,6 +94,7 @@ Host는 시작할 때 켜진 설치 plugin의 `plugin.json`이 지정한 sidecar
 | --- | --- |
 | `pluginsState()` | `{ registry, index, installed, firstRun }`을 돌려준다. `registry`는 `plugins/registry.json`의 `index` URL이고 없으면 `null`이다. `index`는 검사한 registry index이고, registry가 없으면 `null`, 읽거나 검사하지 못하면 `{ "error": "<message>" }`다. `installed`는 `plugins/installed.json`의 내용이고, 없으면 `{ "format": 1, "plugins": {}, "sidecars": {} }`다. `firstRun`은 `plugins/installed.json`이 없는 동안 `true`다. `installed.json`을 읽지 못하면 그 message로 호출을 거부한다 |
 | `pluginsRun({ action, plugin })` | Plugin id에 대해 `install`, `update`, `remove`, `enable`, `disable`을 애플리케이션의 core version과 platform으로 실행하고, 같은 `sok plugin` 명령의 출력을 돌려준다. 다른 `action`이나 비어 있지 않은 문자열이 아닌 plugin id는 아무것도 바꾸지 않고 호출을 거부한다. 실패한 작업은 같은 명령의 message로 호출을 거부하고, `installed.json`은 그 명령이 정한 대로 남는다 |
+| `pluginsUseRegistry({ index })` | `sok registry use <index>`처럼 registry index를 정하고 그 출력 `{ index }`를 돌려준다. 비어 있지 않은 문자열이 아닌 `index`는 `index must be a non-empty string`으로 거부한다 |
 | `plugins-changed` | `pluginsRun`이 `installed.json`을 바꾼 뒤 모든 창에 `{ action, plugin }`과 함께 보낸다 |
 
 Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중일 때 `pluginsRun`을 호출하면 `another plugin operation is running`으로 거부한다. Host는 `sok` process가 만든 변경을 관찰하지 않는다. 다음 `pluginsState` 호출과 나중에 불러온 page가 그 변경을 읽는다. 변경은 애플리케이션을 다시 시작할 때 적용된다. 열려 있는 창은 이미 불러온 plugin을 유지하고, sidecar는 시작할 때만 시작한다. Browser 애플리케이션은 host가 없으므로 plugin 작업이 없다.
@@ -128,5 +142,5 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 
 ## 첫 실행
 
-`environment.json`의 `starter`가 starter pack을 정한다. 창이 시작할 때 `pluginsState`가 `firstRun`을 보고하면, workbench는 space를 만들기 전에 registry index에서 그 pack의 모든 plugin을 pack의 순서대로 `pluginsRun`으로 설치하고, 설치한 plugin을 불러오도록 page를 다시 불러온다. 첫 설치가 `installed.json`을 쓰므로, 이후의 시작은 모든 plugin을 지운 뒤라도 아무것도 설치하지 않는다. Registry가 없으면 창은 plugin 없이 시작하고 `first run: no registry is set; the starter pack <name> was not installed`를 기록하며, plugin이 없는 창이 그 이유를 밝히도록 애플리케이션 오류 `플러그인 레지스트리가 없어 시작 플러그인 묶음 <name>을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요.`를 보인다. 읽지 못한 registry index나 그 pack이 없는 index는 그 오류로 시작을 실패시킨다. `starter`가 없는 environment나 host가 없는 환경은 아무것도 설치하지 않는다.
+`environment.json`의 `starter`가 starter pack을 정한다. 창이 시작할 때 `pluginsState`가 `firstRun`을 보고하면, workbench는 space를 만들기 전에 registry index에서 그 pack의 모든 plugin을 pack의 순서대로 `pluginsRun`으로 설치하고, 설치한 plugin을 불러오도록 page를 다시 불러온다. 첫 설치가 `installed.json`을 쓰므로, 이후의 시작은 모든 plugin을 지운 뒤라도 아무것도 설치하지 않는다. `environment.json`이 `registry`에 기본 registry를 정하고 `pluginsState`가 registry가 없다고 보고하면, workbench는 먼저 `pluginsUseRegistry`로 그 registry를 정하고 상태를 다시 읽는다. 두 registry가 모두 없으면 창은 plugin 없이 시작하고 `first run: no registry is set; the starter pack <name> was not installed`를 기록하며, plugin이 없는 창이 그 이유를 밝히도록 애플리케이션 오류 `플러그인 레지스트리가 없어 시작 플러그인 묶음 <name>을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요.`를 보인다. 읽지 못한 registry index나 그 pack이 없는 index는 그 오류로 시작을 실패시킨다. `starter`가 없는 environment나 host가 없는 환경은 아무것도 설치하지 않는다.
 

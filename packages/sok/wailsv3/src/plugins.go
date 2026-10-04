@@ -51,37 +51,40 @@ func fileURL(path string) string {
 	return out.String()
 }
 
-// readIndexAt 은 경로나 `file:` URL 의 registry index 를 읽고 검사한다.
-func readIndexAt(location string) (*Index, string, error) {
-	path := location
-	if strings.HasPrefix(location, "file:") {
-		var err error
-		if path, err = FilePath(location); err != nil {
+// ReadIndexAt 은 경로, `file:` URL, `https:` URL 의 registry index 를 읽고 검사한다. 경로는 그 절대 `file:` URL 이
+// 된다. 돌려주는 주소는 읽은 index 의 URL 이다.
+func ReadIndexAt(location string, fetcher Fetcher) (*Index, string, error) {
+	url := location
+	if !strings.Contains(location, ":") {
+		path, err := filepath.Abs(location)
+		if err != nil {
 			return nil, "", err
 		}
+		url = fileURL(path)
 	}
-	path, err := filepath.Abs(path)
+	data, err := fetcher.Read(url, fetcher.Index)
 	if err != nil {
 		return nil, "", err
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, "", fileError(path, err)
+	// 오류는 file: 이면 경로를, https: 면 URL 을 밝힌다.
+	shown := url
+	if path, err := FilePath(url); err == nil {
+		shown = path
 	}
 	value, err := DecodeJSON(data)
 	if err != nil {
-		return nil, "", fmt.Errorf("%s is not valid JSON: %w", path, err)
+		return nil, "", fmt.Errorf("%s is not valid JSON: %w", shown, err)
 	}
 	index, err := ValidateRegistryIndex(value)
 	if err != nil {
-		return nil, "", fmt.Errorf("%s: %w", path, err)
+		return nil, "", fmt.Errorf("%s: %w", shown, err)
 	}
-	return index, fileURL(path), nil
+	return index, url, nil
 }
 
 // UseRegistry 는 registry index 를 검사하고 그 주소를 plugins/registry.json 에 쓴다.
-func UseRegistry(configDir, location string) (string, error) {
-	_, url, err := readIndexAt(location)
+func UseRegistry(configDir, location string, fetcher Fetcher) (string, error) {
+	_, url, err := ReadIndexAt(location, fetcher)
 	if err != nil {
 		return "", err
 	}
@@ -108,7 +111,7 @@ func readRegistry(configDir string) (*Index, error) {
 	if !exists {
 		return nil, fmt.Errorf("%s does not exist; run sok registry use <index.json>", filepath.Join(configDir, RegistryFile))
 	}
-	index, _, err := readIndexAt(url)
+	index, _, err := ReadIndexAt(url, DefaultFetcher)
 	return index, err
 }
 
@@ -138,9 +141,9 @@ func readRegistryURL(configDir string) (url string, exists bool, err error) {
 	}
 	url, ok := m["index"].(string)
 	if !ok {
-		return "", true, fmt.Errorf("%s: index must be an absolute file: URL", RegistryFile)
+		return "", true, fmt.Errorf("%s: index must be an https: or absolute file: URL", RegistryFile)
 	}
-	if _, err := FilePath(url); err != nil {
+	if err := CheckLocation(url); err != nil {
 		return "", true, fmt.Errorf("%s: %w", RegistryFile, err)
 	}
 	return url, true, nil
@@ -175,7 +178,7 @@ func ReadPluginsState(configDir string, report io.Writer) (*PluginsState, error)
 		state.Index = map[string]string{"error": err.Error()}
 	case exists:
 		state.Registry = &url
-		if index, _, err := readIndexAt(url); err != nil {
+		if index, _, err := ReadIndexAt(url, DefaultFetcher); err != nil {
 			state.Index = map[string]string{"error": err.Error()}
 		} else {
 			state.Index = index
@@ -550,7 +553,7 @@ func runPlugins(a arguments, stdout, stderr io.Writer, options Options) error {
 	var result any
 	switch command {
 	case "registry use":
-		url, err := UseRegistry(configDir, a.positionals[2])
+		url, err := UseRegistry(configDir, a.positionals[2], DefaultFetcher)
 		if err != nil {
 			return err
 		}

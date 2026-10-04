@@ -48,7 +48,20 @@ The registry index `index.json` has `format` 1 and these lists:
 | `packs` | `{ name, description, plugins }`: plugin ids installed together |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }] }` |
 
-`url` is an absolute `file:` URL of a local release archive, because version 0.0.2 installs only from a local registry; `sha256` is 64 lowercase hexadecimal digits. A description has 1 to 200 characters (Unicode code points). The index check also rejects a repeated plugin id, package, sidecar, pack or version; a pack that names an unknown plugin; a plugin version that needs an unknown sidecar or a range that no listed sidecar version satisfies; and a revoked version that is not listed.
+`url` is an `https:` URL of a published release archive or an absolute `file:` URL of a local one ([fetching](#fetching)); `sha256` is 64 lowercase hexadecimal digits. A description has 1 to 200 characters (Unicode code points). The index check also rejects a repeated plugin id, package, sidecar, pack or version; a pack that names an unknown plugin; a plugin version that needs an unknown sidecar or a range that no listed sidecar version satisfies; and a revoked version that is not listed.
+
+## Fetching
+
+A registry index and an archive are read from a location: an `https:` URL, an absolute `file:` URL, or, where a command takes a path, a file path. Any other URL fails with `<url>: the URL must be https: or an absolute file: URL`. An `https:` URL is read with these rules, which both implementations follow with the same texts:
+
+- The connection uses TLS with the certificate authorities that the operating system trusts.
+- A redirect is followed when its target is an `https:` URL, at most 5 times; a redirect to another scheme fails with `<url>: redirect to <target> is not https`, and a sixth redirect fails with `<url>: more than 5 redirects`.
+- A response other than 200 fails with `<url>: HTTP <status>`.
+- The whole request, from connecting to the last byte, takes at most 60 seconds for an index and 600 seconds for an archive; a slower request fails with `<url>: timed out after <seconds> s`.
+- An index holds at most 8 MiB and an archive at most 256 MiB; a larger body fails with `<url>: larger than <bytes> bytes`.
+- A failure to connect or to read fails with `<url>: cannot connect: <reason>`, where the reason is the text of the network library.
+
+Nothing is cached: each command and each plugin operation reads the index and the archives it needs again, and an archive is checked against its `sha256` before it is extracted.
 
 ## Version selection
 
@@ -81,6 +94,7 @@ Both hosts run plugin operations with the installer library of their command lin
 | --- | --- |
 | `pluginsState()` | Returns `{ registry, index, installed, firstRun }`: `registry` is the `index` URL of `plugins/registry.json` or `null` without one; `index` is the checked registry index, `null` without a registry, or `{ "error": "<message>" }` when it cannot be read or checked; `installed` is the content of `plugins/installed.json`, or `{ "format": 1, "plugins": {}, "sidecars": {} }` without one; `firstRun` is `true` while `plugins/installed.json` does not exist. A failure to read `installed.json` rejects the call with its message |
 | `pluginsRun({ action, plugin })` | Runs `install`, `update`, `remove`, `enable` or `disable` for the plugin id with the core version and platform of the application, and returns the output of the matching `sok plugin` command. Any other `action` or a plugin id that is not a non-empty string rejects the call without a change. An operation that fails rejects the call with the message of the matching command and leaves `installed.json` as that command defines |
+| `pluginsUseRegistry({ index })` | Sets the registry index as `sok registry use <index>` does and returns its output `{ index }`; an `index` that is not a non-empty string rejects with `index must be a non-empty string` |
 | `plugins-changed` | Sent to every window after `pluginsRun` changed `installed.json`, with `{ action, plugin }` |
 
 A host runs one operation at a time: a `pluginsRun` call while another runs rejects with `another plugin operation is running`. A host does not observe changes that a `sok` process makes; the next `pluginsState` call and pages that load later read them. A change takes effect when the application restarts: the windows that are open keep the plugins they loaded, and sidecars start only at startup. The browser application has no host, so it has no plugin operations.
@@ -128,5 +142,5 @@ Acceptance:
 
 ## First run
 
-`environment.json` names the starter pack in `starter`. When a window starts and `pluginsState` reports `firstRun`, the workbench installs every plugin of that pack from the registry index with `pluginsRun`, in the pack's order, before it builds a space, and then reloads the page so that the installed plugins load. The first installation writes `installed.json`, so a later start, also after every plugin was removed, installs nothing. Without a registry the window starts with no plugin, logs `first run: no registry is set; the starter pack <name> was not installed`, and shows the application error `플러그인 레지스트리가 없어 시작 플러그인 묶음 <name>을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요.`, so a window without plugins states why; a registry index that cannot be read, or one without the pack, fails the start with its error. An environment without `starter`, or without a host, installs nothing.
+`environment.json` names the starter pack in `starter`. When a window starts and `pluginsState` reports `firstRun`, the workbench installs every plugin of that pack from the registry index with `pluginsRun`, in the pack's order, before it builds a space, and then reloads the page so that the installed plugins load. The first installation writes `installed.json`, so a later start, also after every plugin was removed, installs nothing. When `environment.json` names a default registry in `registry` and `pluginsState` reports no registry, the workbench first sets that registry with `pluginsUseRegistry` and reads the state again. Without either registry the window starts with no plugin, logs `first run: no registry is set; the starter pack <name> was not installed`, and shows the application error `플러그인 레지스트리가 없어 시작 플러그인 묶음 <name>을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요.`, so a window without plugins states why; a registry index that cannot be read, or one without the pack, fails the start with its error. An environment without `starter`, or without a host, installs nothing.
 

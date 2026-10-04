@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
+use crate::fetch::{check_location, Fetcher};
 use crate::install::{
     self, Archive, Index, InstalledPlugin, InstalledSidecar, InstalledState, INSTALLED,
     INSTALL_FORMAT,
@@ -36,26 +37,36 @@ fn file_url(path: &Path) -> Result<String, String> {
     Ok(out)
 }
 
-/// 경로나 `file:` URL 의 registry index 를 읽고 검사한다.
-fn read_index_at(location: &str) -> Result<(Index, String), String> {
-    let path = if location.starts_with("file:") {
-        PathBuf::from(install::file_path(location)?)
+/// 경로, `file:` URL, `https:` URL 의 registry index 를 읽고 검사한다. 경로는 그 절대 `file:` URL 이 된다. 돌려주는
+/// 주소는 읽은 index 의 URL 이다.
+pub fn read_index_at(location: &str, fetcher: &Fetcher) -> Result<(Index, String), String> {
+    let url = if location.contains(':') {
+        location.to_string()
     } else {
-        PathBuf::from(location)
+        let path = std::path::absolute(location).map_err(|error| format!("{location}: {error}"))?;
+        file_url(&path)?
     };
-    let path = std::path::absolute(&path).map_err(|error| format!("{location}: {error}"))?;
-    let text = std::fs::read_to_string(&path)
-        .map_err(|error| crate::files::file_error(path.display(), &error))?;
-    let value: Value = serde_json::from_str(&text)
-        .map_err(|error| format!("{} is not valid JSON: {error}", path.display()))?;
-    let index = install::validate_registry_index(&value)
-        .map_err(|error| format!("{}: {error}", path.display()))?;
-    Ok((index, file_url(&path)?))
+    let data = fetcher.read(&url, fetcher.index)?;
+    // 오류는 file: 이면 경로를, https: 면 URL 을 밝힌다.
+    let shown = if url.starts_with("file:") {
+        install::file_path(&url)?
+    } else {
+        url.clone()
+    };
+    let value: Value = serde_json::from_slice(&data)
+        .map_err(|error| format!("{shown} is not valid JSON: {error}"))?;
+    let index =
+        install::validate_registry_index(&value).map_err(|error| format!("{shown}: {error}"))?;
+    Ok((index, url))
 }
 
 /// registry index 를 검사하고 그 주소를 plugins/registry.json 에 쓴다.
-pub fn use_registry(config_dir: &Path, location: &str) -> Result<String, String> {
-    let (_, url) = read_index_at(location)?;
+pub fn use_registry(
+    config_dir: &Path,
+    location: &str,
+    fetcher: &Fetcher,
+) -> Result<String, String> {
+    let (_, url) = read_index_at(location, fetcher)?;
     let path = config_dir.join(REGISTRY_FILE);
     create_parent(&path)?;
     let text = format!("{}\n", json!({"format": INSTALL_FORMAT, "index": url}));
@@ -79,7 +90,7 @@ fn read_registry(config_dir: &Path) -> Result<Index, String> {
             config_dir.join(REGISTRY_FILE).display()
         ));
     };
-    Ok(read_index_at(&url)?.0)
+    Ok(read_index_at(&url, &Fetcher::default())?.0)
 }
 
 /// plugins/registry.json 의 index 주소를 읽는다. 파일이 없으면 None 이다.
@@ -106,9 +117,9 @@ fn read_registry_url(config_dir: &Path) -> Result<Option<String>, String> {
         return Err(format!("{REGISTRY_FILE}: format must be {INSTALL_FORMAT}"));
     }
     let url = map.get("index").and_then(Value::as_str).ok_or(format!(
-        "{REGISTRY_FILE}: index must be an absolute file: URL"
+        "{REGISTRY_FILE}: index must be an https: or absolute file: URL"
     ))?;
-    install::file_path(url).map_err(|error| format!("{REGISTRY_FILE}: {error}"))?;
+    check_location(url).map_err(|error| format!("{REGISTRY_FILE}: {error}"))?;
     Ok(Some(url.to_string()))
 }
 
@@ -148,7 +159,7 @@ pub fn read_plugins_state(
         Err(error) => (None, IndexState::Failed { error }),
         Ok(None) => (None, IndexState::Missing),
         Ok(Some(url)) => {
-            let index = match read_index_at(&url) {
+            let index = match read_index_at(&url, &Fetcher::default()) {
                 Ok((index, _)) => IndexState::Checked(index),
                 Err(error) => IndexState::Failed { error },
             };
@@ -518,7 +529,7 @@ pub(crate) fn run_plugins(
     }
     match command.as_str() {
         "registry use" => {
-            let index = use_registry(&config_dir, &positionals[2])?;
+            let index = use_registry(&config_dir, &positionals[2], &Fetcher::default())?;
             Ok(print_json(stdout, &json!({"index": index}))?)
         }
         "plugin list" => Ok(print_json(stdout, &read_installed(&config_dir, stderr)?)?),

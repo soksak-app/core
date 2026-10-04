@@ -17,6 +17,12 @@ type PluginsRunRequest struct {
 	Plugin any    `json:"plugin"`
 }
 
+// PluginsRegistryRequest 는 pluginsUseRegistry 호출의 인자다. Index 는 문자열이 아닌 값을 거부하기 위해 형을 정하지
+// 않고 받는다.
+type PluginsRegistryRequest struct {
+	Index any `json:"index"`
+}
+
 // PluginsChanged 는 plugins-changed event 의 값이다.
 type PluginsChanged struct {
 	Action string `json:"action"`
@@ -73,6 +79,23 @@ func (p *Plugins) Run(request PluginsRunRequest) (any, error) {
 	return result, nil
 }
 
+// UseRegistry 는 sok registry use <index> 와 같이 registry index 를 정하고 그 출력을 돌려준다.
+func (p *Plugins) UseRegistry(request PluginsRegistryRequest) (any, error) {
+	index, ok := request.Index.(string)
+	if !ok || index == "" {
+		return nil, errors.New("index must be a non-empty string")
+	}
+	if !p.running.TryLock() {
+		return nil, errPluginOperationRunning
+	}
+	url, err := sok.UseRegistry(p.configDir, index, sok.DefaultFetcher)
+	p.running.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{"index": url}, nil
+}
+
 // PluginsState 는 page 의 pluginsState 호출이다.
 func (h *Host) PluginsState() (*sok.PluginsState, error) {
 	return h.plugins.State()
@@ -85,6 +108,15 @@ func (h *Host) PluginsRun(requestJSON json.RawMessage) (any, error) {
 		return nil, err
 	}
 	return h.plugins.Run(request)
+}
+
+// PluginsUseRegistry 는 page 의 pluginsUseRegistry 호출이다.
+func (h *Host) PluginsUseRegistry(requestJSON json.RawMessage) (any, error) {
+	request, err := argument[PluginsRegistryRequest]("request", requestJSON)
+	if err != nil {
+		return nil, err
+	}
+	return h.plugins.UseRegistry(request)
 }
 
 // notifyPlugins 는 모든 창에 plugins-changed 를 보낸다.

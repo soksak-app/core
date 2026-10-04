@@ -12,6 +12,7 @@ mod command;
 #[cfg(feature = "diagnostics")]
 mod diagnostics;
 pub mod endpoint;
+pub mod fetch;
 mod files;
 pub mod identity;
 pub mod install;
