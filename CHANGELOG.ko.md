@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- 검증: 2026-10-05의 열 번째 전체 window 실행(7eca547a, macOS 26.6.2 arm64)은 검사 344개 중 336개를 통과했다. 11개 processor의 load average 50에서 69에서의 load 실패: 두 host의 `native content, cards, and the sidebar rail stay aligned`(최악 121.7ms, 한도 33.3ms), 두 host의 `shaking the vertical boundary exposes no unrendered area`(녹화 간격 117ms와 113ms), Tauri의 `multiple terminals keep fixed cells during a divider drag`(frame 21개 중 20개). 나머지 세 실패는 F43, F60, F61이다.
 - F58: main page의 오류 표시와 layout 연결을 `packages/workbench/index.html`의 inline script에서 `packages/workbench/page-layout.js`(`createErrorDisplay`, `reportUncaught`, `createPageLayout`)로 옮겼다. 이 module은 문서, host 표면, 판, compositor를 인자로 받는다. `index.html`이 이를 import하고 workbench가 staging한다. `presentation-failure-lines.test.mjs`와 `layout-failure-lines.test.mjs`는 그 연결의 복사본을 다시 만들었고, 이제 module을 import하므로 page의 code를 검증한다. 단언은 바뀌지 않았다. 동작은 바뀌지 않았다.
 - F54: Windows처럼 창 크기 변경 연산이 없는 platform에서 Tauri 애플리케이션은 Wails 애플리케이션처럼 창을 열기 전에 오류를 쓰고 상태 1로 끝난다. 전에는 그 실패를 기록하고 계속한 뒤 plugin setup에서 늦게 실패했다. 이제 [hosts](docs/spec/hosts.ko.md#windows-상태)는 두 host가 `window resize animation is not implemented on windows`로 끝난다고 정한다. 전에는 종료 요청 오류를 적었다.
 - F53: Tauri host는 Wails host처럼 platform 연산 `new_session`(Go에서는 `NewSession`)으로 영속 서비스를 새 session에서 시작하며, 이 연산은 macOS에서 자식이 `setsid`를 부르게 한다. 서비스는 더 이상 애플리케이션의 process group이나 terminal의 signal을 받지 않는다. 새 contract case `sidecars-transport.persistent.starts-in-new-session`은 변경 전 Tauri에서 실패했고 두 host에서 통과한다.

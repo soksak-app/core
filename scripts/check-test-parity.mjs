@@ -1235,6 +1235,30 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F41",
+    implementation: [
+      { file: "packages/workbench/surface-reply-hold.js", symbol: "createSurfaceReplyHold" },
+    ],
+    tests: [
+      { file: "e2e/late-reply.test.mjs", id: "a surface reply that arrives after its surface closed is discarded as an observation" },
+      { file: "e2e/test/late-reply.test.mjs", id: "the observation of a late reply is found only for the closed surface" },
+    ],
+    expected: "A surface reply that arrives after its surface closed is discarded with an observation and no error line on both hosts.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F57",
+    implementation: [
+      { file: "packages/workbench/layout-queue.js", symbol: "item.resolve({ status: \"failed\" })" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure of a project switch started from the interface writes one page error line" },
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure that no command waits for writes one page error line" },
+    ],
+    expected: "A layout failure writes one page error line whether a command, a project switch or a gesture started the layout.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },
