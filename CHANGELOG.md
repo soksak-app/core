@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F18, F19: a terminal accepts pointer points in the band where the native region is smaller than its view, and a failed mouse operation answers with its own result, so the page no longer reports `unexpected mouse inputId`.
 - F17: the startup-timeout tests of both hosts no longer depend on when the silent service starts.
 - R2-2-2: the plugin and sidecar repositories declare version 0.0.3, and `@soksak/plugin-api` provides `soksak-engines`, which fails when a plugin's `engines.soksak` is not `^<version>` of the plugin API it builds against.
 - F16: `soksak-exposure` and `soksak-engines` run their check when a plugin repository starts them through the linked package; before, they ended without checking.
