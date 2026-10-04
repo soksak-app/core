@@ -928,3 +928,29 @@ func TestEndpointFileIsWrittenOnlyAfterTheFirstWindowExists(t *testing.T) {
 		t.Fatalf("a request after publication failed: %+v", reply.Error)
 	}
 }
+
+// contract: endpoint.process.rejects-a-malformed-lock
+func TestEndpointRejectsAMalformedLock(t *testing.T) {
+	for _, contents := range []string{"abc", "0", "-3", ""} {
+		config := t.TempDir()
+		lock := filepath.Join(config, "process.lock")
+		if err := os.WriteFile(lock, []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		endpoint := host.NewEndpoint(newFakeBackend())
+		info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
+			Application: "wailsv3", Version: "0.0.3", Started: time.Now()}
+		err = endpoint.Serve(listener, info, config)
+		_ = listener.Close()
+		if want := lock + ": invalid process lock"; err == nil || err.Error() != want {
+			t.Fatalf("lock %q: %v, want %q", contents, err, want)
+		}
+		if data, err := os.ReadFile(lock); err != nil || string(data) != contents {
+			t.Fatalf("lock %q changed: %q %v", contents, data, err)
+		}
+	}
+}

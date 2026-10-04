@@ -12,11 +12,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -210,11 +212,15 @@ func acquireProcessLock(directory string) (*processLock, error) {
 		}
 		contents, readErr := os.ReadFile(path)
 		if readErr != nil {
-			return nil, readErr
+			var pathErr *fs.PathError
+			if errors.As(readErr, &pathErr) {
+				readErr = pathErr.Err
+			}
+			return nil, fmt.Errorf("%s: %w", path, readErr)
 		}
-		var pid int
-		if _, scanErr := fmt.Sscanf(string(contents), "%d", &pid); scanErr != nil || pid <= 0 {
-			return nil, fmt.Errorf("invalid process lock %s", path)
+		pid, parseErr := strconv.Atoi(strings.TrimSpace(string(contents)))
+		if parseErr != nil || pid <= 0 {
+			return nil, fmt.Errorf("%s: invalid process lock", path)
 		}
 		implementation, currentErr := platform.Current()
 		if currentErr != nil {

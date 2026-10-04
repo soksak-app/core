@@ -761,3 +761,28 @@ fn closing_an_already_disconnected_connection_succeeds() {
         "closing a disconnected connection reported an error"
     );
 }
+
+// contract: endpoint.process.rejects-a-malformed-lock
+#[test]
+fn a_malformed_process_lock_is_refused() {
+    for contents in ["abc", "0", "-3", ""] {
+        let config = tempfile::tempdir().unwrap();
+        let lock = config.path().join("process.lock");
+        std::fs::write(&lock, contents).unwrap();
+        let (service, _) = Fake::new();
+        let refused = Endpoint::start(
+            &config.path().join("sockets"),
+            config.path(),
+            "test-lock",
+            service,
+        )
+        .err()
+        .unwrap();
+        assert_eq!(
+            refused,
+            format!("{}: invalid process lock", lock.display()),
+            "{contents:?}"
+        );
+        assert_eq!(std::fs::read_to_string(&lock).unwrap(), contents);
+    }
+}

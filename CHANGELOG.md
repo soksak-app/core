@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F15: both hosts report a malformed `process.lock` with the same text, `<path>: invalid process lock`.
 - F18, F19: a terminal accepts pointer points in the band where the native region is smaller than its view, and a failed mouse operation answers with its own result, so the page no longer reports `unexpected mouse inputId`.
 - R2-4-1: both hosts and `sok` read registry indexes and archives over https with fixed redirect, time and size limits, and the first run sets the default registry of `environment.json` with `pluginsUseRegistry`.
 - F17: the startup-timeout tests of both hosts no longer depend on when the silent service starts.

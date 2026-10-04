@@ -888,6 +888,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F15",
+    implementation: [
+      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "invalid process lock" },
+      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "invalid process lock" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRejectsAMalformedLock" },
+      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "a_malformed_process_lock_is_refused" },
+    ],
+    expected: "Both hosts refuse a process.lock whose contents are not a positive process ID with the same text.",
+    levels: ["unit"],
+  },
+  {
     id: "F16",
     implementation: [
       { file: "packages/plugin-api/exposure-check.js", symbol: "realpathSync(process.argv[1])" },

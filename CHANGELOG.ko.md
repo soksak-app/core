@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F15: 두 host는 잘못된 `process.lock`을 같은 문장 `<path>: invalid process lock`으로 보고한다.
 - F18, F19: 터미널은 네이티브 영역이 view보다 작은 띠의 포인터 점을 받고, 실패한 mouse 연산은 자기 결과로 답하므로 페이지가 더는 `unexpected mouse inputId`를 보고하지 않는다.
 - R2-4-1: 두 host와 `sok`은 정해진 redirect, 시간, 크기 한도로 registry index와 archive를 https로 읽고, 첫 실행은 `pluginsUseRegistry`로 `environment.json`의 기본 registry를 정한다.
 - F17: 두 host의 시작 시간 초과 테스트는 응답 없는 service가 언제 시작하는지에 더는 기대지 않는다.

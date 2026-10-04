@@ -425,15 +425,12 @@ impl ProcessLock {
                 Err(error) if error.kind() == ErrorKind::AlreadyExists && attempt == 0 => {
                     let contents = std::fs::read_to_string(&path)
                         .map_err(|read| format!("{}: {read}", path.display()))?;
-                    let pid = contents.trim().parse::<u32>().map_err(|parse| {
-                        format!(
-                            "{}: invalid process lock `{contents}`: {parse}",
-                            path.display()
-                        )
-                    })?;
-                    if pid == 0 {
-                        return Err(format!("{}: process lock contains PID 0", path.display()));
-                    }
+                    let pid = contents
+                        .trim()
+                        .parse::<u32>()
+                        .ok()
+                        .filter(|pid| *pid > 0)
+                        .ok_or_else(|| format!("{}: invalid process lock", path.display()))?;
                     if platform::current()?.service_process_exists(pid)? {
                         return Err(format!(
                             "configuration directory {} is already owned by process {pid}",
