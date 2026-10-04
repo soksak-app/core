@@ -83,6 +83,16 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 페이지의 첫 그리기는 준비를 기다리지 않으므로 제목줄을 그 첫 행의 높이로 먼저 정하고 controls 를 읽는다
+	// (docs/spec/native-surfaces.md#title-bar-height).
+	record, ok := snapshot.(Record)
+	common, has := record["common"].(Record)
+	if !ok || !has {
+		return nil, errors.New("the workspace snapshot has no common settings")
+	}
+	if err := s.startTitlebar(common); err != nil {
+		return nil, err
+	}
 	controls, err := s.WindowChrome()
 	if err != nil {
 		return nil, err

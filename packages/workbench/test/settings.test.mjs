@@ -211,3 +211,19 @@ test('a stored link to a set that no longer exists is deleted once and reported'
     globalThis.document = previous;
   }
 });
+
+// 호스트가 페이지 시작 전에 공통 설정의 textSize 로 창 제목줄을 정하므로, 프레임 배율은 공통 전용이다
+// (docs/spec/native-surfaces.md#title-bar-height).
+test('the frame text factor is common-only', async () => {
+  const realDocument = globalThis.document;
+  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const { beginSettings, set: change } = await import('../settings.js?test=text-size-common');
+  try {
+    assert.throws(() => beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: { textSize: 1.5 } }] }, 'prj-a'),
+      /project settings: textSize is common-only/);
+    beginSettings({ common: { textSize: 1.5 }, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
+    assert.throws(() => change({ textSize: 2 }, 'project'), /Text size is common-only/);
+  } finally {
+    globalThis.document = realDocument;
+  }
+});

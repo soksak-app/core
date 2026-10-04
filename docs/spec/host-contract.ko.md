@@ -351,7 +351,9 @@ fn invalid_json_closes_connection() {
 | `surfaces.sync.failure-leaves-no-begun-layout` | 표면 동기화는 배치 트랜잭션을 시작하기 전에 창 덮개를 놓으므로 거부된 덮개는 트랜잭션을 시작하지 않고, 뒤 단계가 실패하면 시작한 트랜잭션을 취소한다. 성공한 동기화는 취소하지 않는다. | both |
 | `surfaces.sync.titlebar.accepts-heights-in-range` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 `titlebar` 가 32 이상 200 이하 point 인 동기화 요청을 받는다. | both |
 | `surfaces.sync.titlebar.rejects-other-heights` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 `titlebar` 가 32 point 미만이나 200 point 초과, NaN, 무한대인 동기화 요청을 `title bar height must be a finite number from 32 through 200 points` 로 거부한다. | both |
-| `surfaces.sync.titlebar.set-in-begun-layout` | 표면 동기화는 배치 트랜잭션을 시작한 뒤, 표면을 놓기 전에 제목줄 높이를 정한다. 높이를 정하지 못하면 표면을 놓지 않고, 시작한 트랜잭션을 취소하고, 그 오류로 동기화를 실패시킨다. | both |
+| `surfaces.sync.titlebar.set-in-begun-layout` | 표면 동기화는 배치 트랜잭션을 시작한 뒤, 표면을 놓기 전에 제목줄 높이를 정한다. 높이를 정하지 못하면 표면을 놓지 않고, 시작한 트랜잭션을 취소하고, 그 오류로 동기화를 실패시킨다. 표면을 놓지 못하면 트랜잭션을 취소하기 전에 이전 제목줄 높이를 다시 정한다. | both |
+| `page.start.titlebar-follows-frame-factor` | 호스트가 시작 문서에 답하기 전에 정하는 제목줄 높이는 모든 글자 크기 단계에서 공통 설정 `textSize` 에 대한 `round(max(40, 36 × textSize))` 이고, 설정이 없으면 40 이다. 수가 아닌 `textSize` 는 `common setting textSize must be a number, not <type>` 으로, 0.5 이상 3 이하 밖의 수는 `common setting textSize must be from 0.5 through 3` 으로 실패한다. | both |
+| `workspace.settings.rejects-project-text-size-override` | `textSize` 가 있는 프로젝트 설정 파일은 스냅샷을 `<path>: textSize is common-only` 로 실패시키고, `textSize` 가 있는 프로젝트 설정 쓰기는 `textSize is common-only` 로 실패한다. | both |
 | `exposure.host-buttons.notifies-mask-change` | `host.buttons`는 버튼 source가 마지막으로 보고한 마스크를 담은 `{mask}`이고, 그와 다른 마스크의 보고는 새 값으로 감시자에게 한 번 알리며, 같은 마스크의 보고는 알리지 않는다. | both |
 | `exposure.status-change.refuses-host-name` | 메인 페이지가 `host.`로 시작하는 이름에 보낸 상태 변경은 `the page cannot change host status <name>`으로 거부되고, 다른 이름의 변경은 받아들여진다. | both |
 | `images.calls.name-the-call` | 인자 해석 뒤 image 영역 호출의 실패는 호출 이름 `imageAttach`, `imageFocus`, `imageCaret`, `imageText`, `imageDetach`를 붙인 `<call>: <reason>`이다. | both |

@@ -44,3 +44,32 @@ func TestSyncRequestRejectsOtherTitlebarHeights(t *testing.T) {
 		}
 	}
 }
+
+// contract: page.start.titlebar-follows-frame-factor
+func TestStartTitlebarFollowsFrameFactor(t *testing.T) {
+	steps := []float64{0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3}
+	rows := []float64{40, 40, 40, 40, 40, 40, 40, 45, 54, 63, 72, 90, 108}
+	for i, factor := range steps {
+		got, err := host.StartTitlebarHeight(host.Record{"textSize": factor})
+		if err != nil || got != rows[i] {
+			t.Fatalf("textSize %v gave %v, %v; want %v", factor, got, err, rows[i])
+		}
+	}
+	if got, err := host.StartTitlebarHeight(host.Record{}); err != nil || got != 40 {
+		t.Fatalf("no textSize gave %v, %v; want 40", got, err)
+	}
+	for _, c := range []struct {
+		value any
+		want  string
+	}{
+		{"1.5", "common setting textSize must be a number, not a string"},
+		{nil, "common setting textSize must be a number, not null"},
+		{true, "common setting textSize must be a number, not a boolean"},
+		{0.25, "common setting textSize must be from 0.5 through 3"},
+		{4.0, "common setting textSize must be from 0.5 through 3"},
+	} {
+		if _, err := host.StartTitlebarHeight(host.Record{"textSize": c.value}); err == nil || err.Error() != c.want {
+			t.Fatalf("textSize %#v returned %v, want %q", c.value, err, c.want)
+		}
+	}
+}

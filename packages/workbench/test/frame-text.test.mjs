@@ -60,3 +60,27 @@ test("a factor is written into the document only by a draw, and a measurement re
   applyFrameText(1);
   assert.equal(root.dataset.frameText, undefined, "factor 1 declares no zoom");
 });
+
+// 판이 없는 창의 배율 변경과 라이브러리로의 전환은 준비한 배치로 그린다. 전환은 그 전에 준비한 배치의 그리기를 취소하므로,
+// 전환의 그리기가 지금 배율을 써야 취소된 그리기의 배율이 사라지지 않는다.
+test("a frame layout prepares the row of its factor and writes the factor after clearing the plane", async (t) => {
+  const dom = new JSDOM("<!doctype html><html><body></body></html>");
+  globalThis.document = dom.window.document;
+  t.after(() => { delete globalThis.document; dom.window.close(); });
+  const { drawnFrameText, frameLayout } = await import("../frame-text.js?test=layout");
+  const { drawPrepared } = await import("../layout-queue.js");
+  const calls = [];
+  const layout = frameLayout({
+    factor: 1.5,
+    publishAhead: (rects, seated, titlebar) => {
+      calls.push(["prepare", rects.size, seated.size, titlebar, drawnFrameText()]);
+      return Promise.resolve([]);
+    },
+    publish: () => { calls.push(["publish", drawnFrameText()]); return Promise.resolve([]); },
+    frame: () => Promise.resolve(),
+    clearPlane: () => calls.push(["clear", drawnFrameText()]),
+  });
+  await drawPrepared({ epoch: 0, current: () => 0, ...layout });
+  assert.deepEqual(calls, [["prepare", 0, 0, 54, 1], ["clear", 1], ["publish", 1.5]]);
+  assert.equal(document.documentElement.style.getPropertyValue("--frame-text"), "1.5");
+});

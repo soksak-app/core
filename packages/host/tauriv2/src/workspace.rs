@@ -30,6 +30,10 @@ pub fn prepare_config_directory(
         .map_err(|error| format!("{}: {error}", path.display()))
 }
 
+/// 프로젝트 설정이 덮어쓸 수 없는 공통 설정(docs/spec/projects.md#persistence). 호스트는 페이지 시작 전에 공통 설정의
+/// textSize 로 창 제목줄을 정한다(docs/spec/native-surfaces.md#title-bar-height).
+const COMMON_ONLY: [&str; 2] = ["projectOpening", "textSize"];
+
 /// 설정 디렉터리 하나의 저장소. 쓰기 요청은 순서대로 실행한다.
 pub struct Workspace {
     directory: PathBuf,
@@ -113,8 +117,8 @@ impl Workspace {
                     let path = Path::new(project["root"].as_str().ok_or("invalid project root")?)
                         .join(".soksak/settings.json");
                     let settings: Map<String, Value> = read(&path)?;
-                    if settings.contains_key("projectOpening") {
-                        return Err(format!("{}: projectOpening is common-only", path.display()));
+                    if let Some(key) = COMMON_ONLY.iter().find(|key| settings.contains_key(**key)) {
+                        return Err(format!("{}: {key} is common-only", path.display()));
                     }
                     project["settings"] = settings.into();
                 }
@@ -179,8 +183,8 @@ impl Workspace {
                 let patch = req.patch.unwrap_or_default();
                 let path = if req.id.is_some() {
                     let at = at.ok_or("unknown project")?;
-                    if patch.contains_key("projectOpening") {
-                        return Err("projectOpening is common-only".into());
+                    if let Some(key) = COMMON_ONLY.iter().find(|key| patch.contains_key(**key)) {
+                        return Err(format!("{key} is common-only"));
                     }
                     Path::new(
                         projects[at]["root"]

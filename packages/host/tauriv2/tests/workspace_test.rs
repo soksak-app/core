@@ -248,3 +248,30 @@ fn move_without_delta_is_refused() {
         assert_eq!(error.to_string(), "move delta is missing", "{request}");
     }
 }
+
+// contract: workspace.settings.rejects-project-text-size-override
+#[test]
+fn a_project_text_size_override_is_rejected() {
+    let config = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let store = Workspace::new(config.path().into());
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
+    );
+    let refused = store.apply(
+        serde_json::from_value(
+            json!({"kind":"settings", "id":"prj-test", "patch":{"textSize":1.5}}),
+        )
+        .unwrap(),
+    );
+    assert_eq!(refused.err(), Some("textSize is common-only".to_string()));
+    let path = root.path().join(".soksak/settings.json");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, r#"{"textSize":1.5}"#).unwrap();
+    let refused = store.apply(serde_json::from_value(json!({"kind":"snapshot"})).unwrap());
+    assert_eq!(
+        refused.err(),
+        Some(format!("{}: textSize is common-only", path.display()))
+    );
+}

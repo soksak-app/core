@@ -124,7 +124,7 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 
 ### 창 단추
 
-AppKit 이 창 자신의 단추를 소유한다. 제목줄 높이가 AppKit 이 단추를 두는 자리를 정한다. AppKit 은 단추를 제목줄의 세로 가운데에 두고, 제목 변경, 크기 변경, 이동 뒤에도 그 자리를 지킨다. 각 호스트는 AppKit 의 `-[NSWindow setTitlebarHeight:]`(`windowSetTitlebarHeight`, [비공개 네이티브 API 목록](../operations/private-native-apis.ko.md)에 있다)로 제목줄 높이를 정하고, 창에는 도구막대가 없다. 각 호스트는 창을 만들 때, 창이 보이기 전에 높이를 40pt 로 정한다.
+AppKit 이 창 자신의 단추를 소유한다. 제목줄 높이가 AppKit 이 단추를 두는 자리를 정한다. AppKit 은 단추를 제목줄의 세로 가운데에 두고, 제목 변경, 크기 변경, 이동 뒤에도 그 자리를 지킨다. 각 호스트는 AppKit 의 `-[NSWindow setTitlebarHeight:]`(`windowSetTitlebarHeight`, [비공개 네이티브 API 목록](../operations/private-native-apis.ko.md)에 있다)로 제목줄 높이를 정하고, 창에는 도구막대가 없다. 각 호스트는 창을 만들 때, 창이 보이기 전에 높이를 40pt 로 정하고, 창 페이지의 시작 문서에 답하기 전에 저장된 프레임 배율의 행 높이로 정한다. 그래서 준비를 기다리지 않는 페이지의 첫 그리기가 자기 제목줄을 가진다([제목줄 높이](native-surfaces.ko.md#제목줄-높이)).
 
 페이지가 첫 행의 높이를 소유한다. `packages/workbench/app.css` 의 `--chrome-row` 는 `round(max(--chrome-h, 36px × 프레임 배율))` 이고, `--chrome-h` 는 고정된 40px 최솟값, 프레임 배율은 프레임의 [글자 크기](text-size.ko.md)다. `packages/workbench/frame-text.js` 의 `chromeRow` 가 페이지의 요청에 쓰는 같은 높이를 계산한다. 페이지는 행을 창의 답에서 얻지 않으므로 제목줄이 바뀌어도 행은 바뀌지 않는다. 제목줄 높이는 배치 트랜잭션에 속한다([제목줄 높이](native-surfaces.ko.md#제목줄-높이)). 각 준비(`syncSurfaces`)는 다음 그리기가 보이는 첫 행의 높이 `titlebar` 를 담고, 호스트는 창의 열린 트랜잭션 안에서 제목줄을 그 높이로 정하므로 제목줄과 행은 같은 표시 프레임에서 바뀐다. 페이지는 시작할 때와 창 크기가 바뀔 때마다 `windowControls` 를 읽어 첫 행에서 단추 영역의 폭을 비우고, 제목줄이 행과 다르면 행을 담은 배치를 준비한다. `host.window` 는 보이는 영역을 `controls` 로 보고한다.
 

@@ -15,8 +15,8 @@ use crate::images;
 use crate::platform::{self, Handle};
 use crate::sidecars::WindowSidecars;
 use crate::windows::{
-    emit_window, native_owner_on_main, titlebar_chrome, validate_titlebar_height, window_data,
-    Chrome,
+    emit_window, native_owner_on_main, restore_titlebar, titlebar_chrome, validate_titlebar_height,
+    window_data, Chrome, TitlebarChange,
 };
 
 /// 표면 웹뷰가 문서보다 먼저 실행하는 스크립트.
@@ -515,22 +515,37 @@ pub fn check_sync_request(
 }
 
 /// 창 덮개를 놓고 표면 배치 트랜잭션을 시작한 뒤 창 제목줄을 정하고 표면을 맞춘다. 창 덮개는 배치를 시작하기 전에
-/// 놓으므로 덮개가 거부되면 시작한 배치가 없다. 제목줄을 정하지 못하면 표면을 맞추지 않고, 둘 중 하나가 실패하면
-/// 시작한 배치를 취소한다. steps 는 titlebar 의 답을 받는다.
+/// 놓으므로 덮개가 거부되면 시작한 배치가 없다. 제목줄을 정하지 못하면 표면을 맞추지 않고 배치를 취소한다. 표면을
+/// 맞추지 못하면 restore 로 이전 제목줄을 되돌린 뒤 취소한다. 취소는 트랜잭션을 커밋하므로 되돌리지 않으면 새 제목줄이
+/// 이전 행과 함께 표시된다. steps 는 titlebar 의 답을 읽고, 성공하면 그 답을 함께 반환한다.
 pub fn run_layout<C, T>(
     overlays: impl FnOnce() -> Result<(), String>,
     begin: impl FnOnce() -> Result<(), String>,
     titlebar: impl FnOnce() -> Result<C, String>,
-    steps: impl FnOnce(C) -> Result<T, String>,
+    steps: impl FnOnce(&C) -> Result<T, String>,
+    restore: impl FnOnce(C) -> Result<(), String>,
     cancel: impl FnOnce(),
-) -> Result<T, String> {
+) -> Result<(T, C), String> {
     overlays()?;
     begin()?;
-    let result = titlebar().and_then(steps);
-    if result.is_err() {
-        cancel();
+    let change = match titlebar() {
+        Ok(change) => change,
+        Err(error) => {
+            cancel();
+            return Err(error);
+        }
+    };
+    match steps(&change) {
+        Ok(value) => Ok((value, change)),
+        Err(error) => {
+            let error = match restore(change) {
+                Ok(()) => error,
+                Err(restoring) => format!("{error}; restoring the title bar: {restoring}"),
+            };
+            cancel();
+            Err(error)
+        }
     }
-    result
 }
 
 /// 페이지가 선언한 표면에 창의 자식 웹뷰를 맞추고 표면 배치 트랜잭션을 준비한다.
@@ -607,7 +622,10 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     };
     let titlebar = request.titlebar;
     let set_titlebar = || exposure::on_main(window, move || titlebar_chrome(owner, titlebar));
-    let steps = |chrome: Chrome| -> Result<PreparedSurfaces, String> {
+    let restore = |change: TitlebarChange| {
+        exposure::on_main(window, move || restore_titlebar(owner, change.previous))
+    };
+    let steps = |change: &TitlebarChange| -> Result<PreparedSurfaces, String> {
         for s in &request.surfaces {
             context
                 .compositions
@@ -720,7 +738,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         Ok(PreparedSurfaces {
             ticket,
             placements: placed,
-            chrome,
+            chrome: change.chrome.clone(),
         })
     };
     let cancel = || {
@@ -730,9 +748,12 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             log_error("surface layout cancel", error);
         }
     };
-    let prepared = run_layout(place_overlays, begin, set_titlebar, steps, cancel)?;
-    // 배치를 맞춘 뒤 이미지 raster 갱신이 실패해도 시작한 배치를 남기지 않는다.
+    let (prepared, change) =
+        run_layout(place_overlays, begin, set_titlebar, steps, restore, cancel)?;
+    // 배치를 맞춘 뒤 이미지 raster 갱신이 실패해도 시작한 배치를 남기지 않는다. 취소는 트랜잭션을 커밋하므로 제목줄을
+    // 먼저 되돌린다.
     if let Err(error) = crate::composition::refresh_image_rasters(window) {
+        log_failure("surface layout title bar restore", restore(change));
         cancel();
         return Err(error);
     }

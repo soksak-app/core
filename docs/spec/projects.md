@@ -44,7 +44,7 @@ Removing a project from the registry, by its project tab's × or by the library'
 
 The application persists the ordered project registry, common settings, folder overrides, spaces, active space, card and tab state, focused card, sidebar and card sidebar widths (including hidden sidebars), the selected tab and folded sections of each sidebar, and project window size and position. Window ownership and live shell processes are runtime state. Closing a project window preserves its saved project and screen settings.
 
-Native hosts load common settings from `settings.json` in the application configuration directory and project overrides from `.soksak/settings.json` inside the project directory. Missing settings files contain no overrides. The project file contains only explicit overrides; removing a key resumes inheritance. The common-only `projectOpening` key is not accepted in project settings.
+Native hosts load common settings from `settings.json` in the application configuration directory and project overrides from `.soksak/settings.json` inside the project directory. Missing settings files contain no overrides. The project file contains only explicit overrides; removing a key resumes inheritance. The common-only keys `projectOpening` and `textSize` are not accepted in project settings: a project settings file with one of them fails the snapshot with `<path>: <key> is common-only`, and a project write fails with `<key> is common-only`. The frame text factor is common-only because the host sets a window's title bar from it before the page starts ([title bar height](native-surfaces.md#title-bar-height)).
 
 The default configuration directories are:
 

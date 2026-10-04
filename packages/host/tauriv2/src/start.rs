@@ -84,6 +84,13 @@ pub(crate) fn start_page(app: &AppHandle, webview: &str) -> Result<Vec<u8>, Stri
         serde_json::from_value(serde_json::json!({ "kind": "snapshot" }))
             .map_err(|error| error.to_string())?,
     )?;
+    // 페이지의 첫 그리기는 준비를 기다리지 않으므로 제목줄을 그 첫 행의 높이로 먼저 정하고 controls 를 읽는다
+    // (docs/spec/native-surfaces.md#title-bar-height).
+    let common = snapshot
+        .get("common")
+        .filter(|common| common.is_object())
+        .ok_or("the workspace snapshot has no common settings")?;
+    crate::windows::start_titlebar(&window, common)?;
     let controls = serde_json::to_value(crate::windows::window_chrome(&window)?)
         .map_err(|error| error.to_string())?;
     start_document(&snapshot, &controls)

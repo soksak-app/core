@@ -716,19 +716,66 @@ pub fn validate_titlebar_height(height: f64) -> Result<(), String> {
 /// 창의 제목줄을 height(pt)로 만들고 그 뒤의 창 단추 영역과 제목줄 높이를 반환한다. 표면 준비가 창의 배치
 /// 트랜잭션 안에서 메인 스레드에서 호출하므로 새 높이는 그 트랜잭션의 커밋과 함께 화면에 나간다. 전체 화면인 창은
 /// 높이를 바꾸지 않고 row 0 을 반환한다.
-pub(crate) fn titlebar_chrome(handle: Handle, height: f64) -> Result<Chrome, String> {
+pub(crate) fn titlebar_chrome(handle: Handle, height: f64) -> Result<TitlebarChange, String> {
     let platform = platform::current()?;
+    let previous = platform.titlebar_height(handle)?;
     platform.set_titlebar_height(handle, height)?;
     let (x, y, w, h) = platform.window_controls(handle)?;
-    Ok(Chrome {
-        controls: Rect { x, y, w, h },
-        row: platform.titlebar_height(handle)?,
+    Ok(TitlebarChange {
+        chrome: Chrome {
+            controls: Rect { x, y, w, h },
+            row: platform.titlebar_height(handle)?,
+        },
+        previous,
+    })
+}
+
+/// 표면 준비가 정한 제목줄. chrome 은 정한 뒤의 창 값이고 previous 는 준비 전의 높이(pt)다. 전체 화면이면 0 이다.
+pub(crate) struct TitlebarChange {
+    pub(crate) chrome: Chrome,
+    pub(crate) previous: f64,
+}
+
+/// 준비 전의 제목줄 높이로 되돌린다. 전체 화면에서 정한 것이 없으면(0) 되돌릴 것이 없다. 메인 스레드에서 호출한다.
+pub(crate) fn restore_titlebar(handle: Handle, previous: f64) -> Result<(), String> {
+    if previous <= 0.0 {
+        return Ok(());
+    }
+    platform::current()?.set_titlebar_height(handle, previous)
+}
+
+/// 페이지의 첫 그리기가 보일 첫 행의 높이(pt). 공통 설정 textSize 의 round(max(40, 36 × textSize)) 이고, 설정이
+/// 없으면 40 이다(docs/spec/native-surfaces.md#title-bar-height). textSize 는 공통 전용이므로 페이지는 같은 값으로 첫
+/// 행을 그린다.
+pub fn start_titlebar_height(common: &serde_json::Value) -> Result<f64, String> {
+    let Some(value) = common.get("textSize") else {
+        return Ok(INITIAL_TITLEBAR_HEIGHT);
+    };
+    let Some(factor) = value.as_f64() else {
+        return Err(format!(
+            "common setting textSize must be a number, not {}",
+            crate::arguments::kind(value)
+        ));
+    };
+    if !(0.5..=3.0).contains(&factor) {
+        return Err("common setting textSize must be from 0.5 through 3".into());
+    }
+    Ok((36.0 * factor).max(INITIAL_TITLEBAR_HEIGHT).round())
+}
+
+/// 시작 문서에 답하기 전에 창의 제목줄을 공통 설정의 첫 행 높이로 정한다. 새 창은 아직 투명하고 페이지의 첫 그리기와
+/// 함께 보이므로 그 첫 프레임의 행과 제목줄이 같다. 전체 화면인 창은 높이를 바꾸지 않는다.
+pub(crate) fn start_titlebar(window: &Window, common: &serde_json::Value) -> Result<(), String> {
+    let height = start_titlebar_height(common)?;
+    let handle = native_owner(window)?;
+    crate::exposure::on_main(window, move || {
+        platform::current()?.set_titlebar_height(handle, height)
     })
 }
 
 /// 페이지가 첫 줄을 그리는 데 쓰는 창의 값. controls 는 창 단추 영역이고 row 는 제목줄 높이(pt)다.
 /// 전체 화면처럼 제목줄이 없으면 row 는 0 이다.
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub(crate) struct Chrome {
     controls: Rect,
     row: f64,

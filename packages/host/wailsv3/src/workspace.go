@@ -42,6 +42,10 @@ func NewWorkspace(directory string) *Workspace {
 // Record 는 JSON 객체 하나다.
 type Record map[string]any
 
+// commonOnly 는 프로젝트 설정이 덮어쓸 수 없는 공통 설정이다(docs/spec/projects.md#persistence). 호스트는 페이지 시작
+// 전에 공통 설정의 textSize 로 창 제목줄을 정한다(docs/spec/native-surfaces.md#title-bar-height).
+var commonOnly = []string{"projectOpening", "textSize"}
+
 // WorkspaceRequest 는 저장소 작업 하나다. Kind 는 snapshot, add, patch, remove, move, settings 중 하나다.
 type WorkspaceRequest struct {
 	Kind    string   `json:"kind"`
@@ -140,8 +144,10 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 			if err := readJSON(path, &settings); err != nil {
 				return nil, err
 			}
-			if _, has := settings["projectOpening"]; has {
-				return nil, fmt.Errorf("%s: projectOpening is common-only", path)
+			for _, key := range commonOnly {
+				if _, has := settings[key]; has {
+					return nil, fmt.Errorf("%s: %s is common-only", path, key)
+				}
 			}
 			p["settings"] = settings
 		}
@@ -197,8 +203,10 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 			if at < 0 {
 				return nil, fmt.Errorf("unknown project: %s", req.ID)
 			}
-			if _, has := req.Patch["projectOpening"]; has {
-				return nil, fmt.Errorf("projectOpening is common-only")
+			for _, key := range commonOnly {
+				if _, has := req.Patch[key]; has {
+					return nil, fmt.Errorf("%s is common-only", key)
+				}
 			}
 			path = filepath.Join(projects[at]["root"].(string), ".soksak", "settings.json")
 		}

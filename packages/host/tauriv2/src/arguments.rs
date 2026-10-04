@@ -53,7 +53,7 @@ pub fn decode<T: DeserializeOwned>(name: &str, value: &Value) -> Result<T, Strin
 }
 
 /// JSON 값의 형식 이름.
-fn kind(value: &Value) -> &'static str {
+pub(crate) fn kind(value: &Value) -> &'static str {
     match value {
         Value::Null => "null",
         Value::Bool(_) => "a boolean",

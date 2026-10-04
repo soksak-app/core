@@ -44,3 +44,51 @@ fn sync_request_rejects_other_titlebar_heights() {
         );
     }
 }
+
+// contract: page.start.titlebar-follows-frame-factor
+#[test]
+fn the_start_titlebar_follows_the_frame_factor() {
+    use soksak_host_tauriv2::windows::start_titlebar_height;
+    let steps = [
+        0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0,
+    ];
+    let rows = [
+        40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 45.0, 54.0, 63.0, 72.0, 90.0, 108.0,
+    ];
+    for (factor, row) in steps.iter().zip(rows) {
+        assert_eq!(
+            start_titlebar_height(&serde_json::json!({"textSize": factor})),
+            Ok(row),
+            "textSize {factor}"
+        );
+    }
+    assert_eq!(start_titlebar_height(&serde_json::json!({})), Ok(40.0));
+    for (value, want) in [
+        (
+            serde_json::json!("1.5"),
+            "common setting textSize must be a number, not a string",
+        ),
+        (
+            serde_json::Value::Null,
+            "common setting textSize must be a number, not null",
+        ),
+        (
+            serde_json::json!(true),
+            "common setting textSize must be a number, not a boolean",
+        ),
+        (
+            serde_json::json!(0.25),
+            "common setting textSize must be from 0.5 through 3",
+        ),
+        (
+            serde_json::json!(4.0),
+            "common setting textSize must be from 0.5 through 3",
+        ),
+    ] {
+        assert_eq!(
+            start_titlebar_height(&serde_json::json!({"textSize": value})),
+            Err(want.to_string()),
+            "textSize {value}"
+        );
+    }
+}

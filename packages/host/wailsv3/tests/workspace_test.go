@@ -284,3 +284,27 @@ func TestMoveWithoutDeltaIsRefused(t *testing.T) {
 }
 
 func ptr(n int) *int { return &n }
+
+// contract: workspace.settings.rejects-project-text-size-override
+func TestProjectTextSizeOverrideIsRejected(t *testing.T) {
+	root := t.TempDir()
+	store := host.NewWorkspace(t.TempDir())
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "1:2"}}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := store.Apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-test", Patch: host.Record{"textSize": 1.5}})
+	if want := "textSize is common-only"; err == nil || err.Error() != want {
+		t.Fatalf("a project textSize write returned %v, want %q", err, want)
+	}
+	path := filepath.Join(root, ".soksak", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"textSize":1.5}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
+	if want := path + ": textSize is common-only"; err == nil || err.Error() != want {
+		t.Fatalf("a project settings file with textSize returned %v, want %q", err, want)
+	}
+}

@@ -304,6 +304,19 @@ function applied(values) {
   return Object.fromEntries(Object.entries(values).filter(([key]) => !keptSetting(key)));
 }
 
+/**
+ * 프로젝트 설정이 덮어쓸 수 없는 공통 전용 키(docs/spec/projects.md#persistence). 호스트는 페이지 시작 전에 공통 설정의
+ * textSize 로 창 제목줄을 정하므로 프레임 배율은 공통 전용이다(docs/spec/native-surfaces.md#title-bar-height).
+ */
+const COMMON_ONLY = Object.freeze(["projectOpening", "textSize"]);
+
+/** 프로젝트 설정에 공통 전용 키가 있으면 오류다. */
+function checkCommonOnly(values) {
+  for (const key of COMMON_ONLY) {
+    if (Object.hasOwn(values, key)) throw new Error(`project settings: ${key} is common-only`);
+  }
+}
+
 function validateValues(values, where) {
   if (!values || typeof values !== "object") throw new Error(`${where} are not an object`);
   for (const [key, value] of Object.entries(values)) {
@@ -400,6 +413,7 @@ export function beginSettings(snapshot, id) {
   const nextOverrides = migrated(snapshot.projects.find((p) => p.id === id)?.settings ?? {}, nextCommon);
   validateValues(nextCommon, "common settings");
   validateValues(nextOverrides, "project settings");
+  checkCommonOnly(nextOverrides);
   checkValues(effectiveSettings(defaults, applied(nextCommon), applied(nextOverrides)));
   projectId = id;
   common = nextCommon;
@@ -422,6 +436,7 @@ async function refresh() {
   const nextOverrides = snapshot.projects.find((p) => p.id === projectId)?.settings ?? {};
   validateValues(snapshot.common, "common settings");
   validateValues(nextOverrides, "project settings");
+  checkCommonOnly(nextOverrides);
   checkValues(effectiveSettings(defaults, applied(snapshot.common), applied(nextOverrides)));
   if (JSON.stringify(common) !== JSON.stringify(snapshot.common) || JSON.stringify(overrides) !== JSON.stringify(nextOverrides)) {
     common = snapshot.common;
@@ -522,6 +537,7 @@ export function set(patch, scope = projectId ? "project" : "common") {
   const id = scope === "project" ? projectId : null;
   if (scope === "project" && !id) throw new Error("No project is selected");
   if (id && Object.hasOwn(patch, "projectOpening")) throw new Error("Project opening mode is common-only");
+  if (id && Object.hasOwn(patch, "textSize")) throw new Error("Text size is common-only");
   for (const [key, val] of Object.entries(patch)) {
     if (!Object.hasOwn(defaults, key)) throw new Error(`Unknown setting: ${key}`);
     if (val !== undefined) validateValue(key, val);

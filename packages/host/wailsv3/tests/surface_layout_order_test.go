@@ -27,9 +27,12 @@ func TestRefusedWindowOverlayLeavesNoBegunLayout(t *testing.T) {
 // contract: surfaces.sync.failure-leaves-no-begun-layout
 func TestFailedSurfaceStepCancelsBegunLayout(t *testing.T) {
 	var calls []string
-	err := host.ApplyOrCancel(func() error {
+	err := host.ApplyOrCancel(func() (func() error, error) {
 		calls = append(calls, "titlebar")
-		return nil
+		return func() error {
+			calls = append(calls, "restore")
+			return nil
+		}, nil
 	}, func() error {
 		calls = append(calls, "steps")
 		return errors.New("surface failed")
@@ -37,10 +40,10 @@ func TestFailedSurfaceStepCancelsBegunLayout(t *testing.T) {
 		calls = append(calls, "cancel")
 		return nil
 	})
-	if err == nil || err.Error() != "surface failed" || !reflect.DeepEqual(calls, []string{"titlebar", "steps", "cancel"}) {
+	if err == nil || err.Error() != "surface failed" || !reflect.DeepEqual(calls, []string{"titlebar", "steps", "restore", "cancel"}) {
 		t.Fatalf("ApplyOrCancel = %v, calls %v", err, calls)
 	}
-	if err := host.ApplyOrCancel(func() error { return nil }, func() error { return nil }, func() error {
+	if err := host.ApplyOrCancel(func() (func() error, error) { return func() error { return nil }, nil }, func() error { return nil }, func() error {
 		t.Fatal("a successful step cancelled the layout")
 		return nil
 	}); err != nil {
@@ -57,7 +60,13 @@ func TestTitlebarIsSetInTheBegunLayoutBeforeTheSurfaces(t *testing.T) {
 			return err
 		}
 	}
-	if err := host.ApplyOrCancel(step("titlebar", nil), step("surfaces", nil), step("cancel", nil)); err != nil {
+	titlebar := func(err, restoreErr error) func() (func() error, error) {
+		return func() (func() error, error) {
+			calls = append(calls, "titlebar")
+			return step("restore", restoreErr), err
+		}
+	}
+	if err := host.ApplyOrCancel(titlebar(nil, nil), step("surfaces", nil), step("cancel", nil)); err != nil {
 		t.Fatalf("ApplyOrCancel = %v", err)
 	}
 	if want := []string{"titlebar", "surfaces"}; !reflect.DeepEqual(calls, want) {
@@ -65,11 +74,24 @@ func TestTitlebarIsSetInTheBegunLayoutBeforeTheSurfaces(t *testing.T) {
 	}
 	calls = nil
 	const refused = "the window has no standard buttons or content view for a title bar"
-	err := host.ApplyOrCancel(step("titlebar", errors.New(refused)), step("surfaces", nil), step("cancel", nil))
+	err := host.ApplyOrCancel(titlebar(errors.New(refused), nil), step("surfaces", nil), step("cancel", nil))
 	if err == nil || err.Error() != refused {
 		t.Fatalf("ApplyOrCancel = %v, want %q", err, refused)
 	}
 	if want := []string{"titlebar", "cancel"}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("a refused title bar made the calls %v, want %v", calls, want)
+	}
+	calls = nil
+	err = host.ApplyOrCancel(titlebar(nil, nil), step("surfaces", errors.New("surface failed")), step("cancel", nil))
+	if err == nil || err.Error() != "surface failed" {
+		t.Fatalf("ApplyOrCancel = %v, want surface failed", err)
+	}
+	if want := []string{"titlebar", "surfaces", "restore", "cancel"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("a failed surface step made the calls %v, want %v", calls, want)
+	}
+	calls = nil
+	err = host.ApplyOrCancel(titlebar(nil, errors.New("restore failed")), step("surfaces", errors.New("surface failed")), step("cancel", nil))
+	if want := "surface failed; restoring the title bar: restore failed"; err == nil || err.Error() != want {
+		t.Fatalf("ApplyOrCancel = %v, want %q", err, want)
 	}
 }

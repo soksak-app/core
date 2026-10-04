@@ -383,22 +383,65 @@ func ValidateTitlebarHeight(height float64) error {
 	return nil
 }
 
-// titlebarChrome 은 창의 제목줄을 height(pt)로 만들고 그 뒤의 창 단추 영역과 제목줄 높이를 반환한다. 표면 준비가
-// 창의 배치 트랜잭션 안에서 UI 스레드에서 호출하므로 새 높이는 그 트랜잭션의 커밋과 함께 화면에 나간다. 전체 화면인
-// 창은 높이를 바꾸지 않고 Row 0 을 반환한다.
-func titlebarChrome(window unsafe.Pointer, height float64) (Chrome, error) {
+// titlebarChrome 은 창의 제목줄을 height(pt)로 만들고 그 뒤의 창 단추 영역과 제목줄 높이, 그리고 이전 높이로 되돌리는
+// 함수를 반환한다. 표면 준비가 창의 배치 트랜잭션 안에서 UI 스레드에서 호출하므로 새 높이는 그 트랜잭션의 커밋과 함께
+// 화면에 나간다. 전체 화면인 창은 높이를 바꾸지 않고 Row 0 을 반환하며, 되돌릴 것이 없다.
+func titlebarChrome(window unsafe.Pointer, height float64) (Chrome, func() error, error) {
+	previous, err := system.TitlebarHeight(window)
+	if err != nil {
+		return Chrome{}, nil, err
+	}
+	restore := func() error {
+		if previous <= 0 {
+			return nil
+		}
+		return system.SetTitlebarHeight(window, previous)
+	}
 	if err := system.SetTitlebarHeight(window, height); err != nil {
-		return Chrome{}, err
+		return Chrome{}, nil, err
 	}
 	controls, err := system.WindowControls(window)
 	if err != nil {
-		return Chrome{}, err
+		return Chrome{}, restore, err
 	}
 	row, err := system.TitlebarHeight(window)
 	if err != nil {
-		return Chrome{}, err
+		return Chrome{}, restore, err
 	}
-	return Chrome{Controls: Rect(controls), Row: row}, nil
+	return Chrome{Controls: Rect(controls), Row: row}, restore, nil
+}
+
+// StartTitlebarHeight 는 페이지의 첫 그리기가 보일 첫 행의 높이(pt)다. 공통 설정 textSize 의 round(max(40, 36 ×
+// textSize)) 이고, 설정이 없으면 40 이다(docs/spec/native-surfaces.md#title-bar-height). textSize 는 공통 전용이므로
+// 페이지는 같은 값으로 첫 행을 그린다.
+func StartTitlebarHeight(common Record) (float64, error) {
+	value, has := common["textSize"]
+	if !has {
+		return initialTitlebarHeight, nil
+	}
+	factor, ok := value.(float64)
+	if !ok {
+		return 0, fmt.Errorf("common setting textSize must be a number, not %s", jsonKind(value))
+	}
+	if factor < 0.5 || factor > 3 {
+		return 0, errors.New("common setting textSize must be from 0.5 through 3")
+	}
+	return math.Round(math.Max(initialTitlebarHeight, 36*factor)), nil
+}
+
+// startTitlebar 는 시작 문서에 답하기 전에 창의 제목줄을 공통 설정의 첫 행 높이로 정한다. 새 창은 아직 투명하고 페이지의
+// 첫 그리기와 함께 보이므로 그 첫 프레임의 행과 제목줄이 같다. 전체 화면인 창은 높이를 바꾸지 않는다.
+func (s *Surfaces) startTitlebar(common Record) error {
+	height, err := StartTitlebarHeight(common)
+	if err != nil {
+		return err
+	}
+	win, ok := s.window, s.window != nil
+	if !ok {
+		return errNoWindow
+	}
+	application.InvokeSync(func() { err = system.SetTitlebarHeight(win.NativeWindow(), height) })
+	return err
 }
 
 // WindowControls 는 창 단추가 차지하는 영역을 페이지 좌표로 반환한다. 페이지는 첫 행에서

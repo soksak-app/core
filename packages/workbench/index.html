@@ -59,7 +59,7 @@ import { trace } from "./performance.js";
 /* 애플리케이션 인터페이스. 없으면 아무 일도 하지 않는 구현이 온다. */
 import { chrome, log, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
 import { setTextScope } from "./text-size.js";
-import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
+import { applyFrameText, chromeRow, drawnFrameText, frameLayout } from "./frame-text.js";
 
 /* 코어의 공개 항목과 진단 메서드. 등록소가 호스트의 요청에 답한다. */
 import { coreChanged, installCoreExposure, setVerify } from "./core-exposure.js";
@@ -268,11 +268,11 @@ async presented() {
   await presented;
   await host.waitPresented();
 }, async empty() {
-  layoutEpoch++;
-  drawing = layouts.run(async () => {
-    clear();
-    await publish();
-  });
+  // 전환은 그 전에 준비한 판의 그리기를 취소한다. 그 그리기가 새 프레임 배율을 쓰는 그리기였을 수 있으므로, 판을 지우는
+  // 그리기가 지금 배율을 쓰고 그 첫 행을 준비에 담는다(docs/spec/native-surfaces.md#title-bar-height).
+  const epoch = ++layoutEpoch;
+  const layout = frameLayout({ factor: value("textSize"), publishAhead, publish, frame: animationFrame, clearPlane: clear });
+  drawing = layouts.run(() => drawPrepared({ epoch, current: () => layoutEpoch, ...layout }));
   await drawing;
 } });
 
@@ -587,15 +587,9 @@ function drawFrame() {
     settle();
     return;
   }
-  const factor = value("textSize");
   const epoch = layoutEpoch;
-  drawing = layouts.run(() => drawPrepared({
-    epoch, current: () => layoutEpoch,
-    prepare: () => publishAhead(new Map(), new Map(), chromeRow(factor)),
-    draw: () => applyFrameText(factor),
-    frame: animationFrame,
-    presented: publish,
-  }));
+  const layout = frameLayout({ factor: value("textSize"), publishAhead, publish, frame: animationFrame });
+  drawing = layouts.run(() => drawPrepared({ epoch, current: () => layoutEpoch, ...layout }));
 }
 
 // 코어 공개 항목은 첫 await 전에 등록한다. 첫 화면의 사이드바 섹션은 그 뒤에 비동기로 마운트되며 코어 상태를 따를 수

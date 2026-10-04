@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F35.1: 각 host는 페이지의 시작 문서에 답하기 전에 창 title bar를 공통 `textSize`의 첫 행 높이로 정하므로, frame 배율이 1이 아닌 창의 첫 그리기는 더 이상 창을 만들 때의 40pt title bar 아래에 행을 보이지 않는다. `textSize`는 두 host와 페이지에서 공통 전용이다. 라이브러리로의 전환은 현재 frame 배율을 쓰는 준비한 배치다. 전환은 새 배율을 쓰는 그리기였을 수 있는 준비한 그리기를 취소하기 때문이다. title bar를 정한 뒤 실패한 준비는 취소하기 전에 이전 높이를 다시 정한다.
 - F35.1: 창 title bar 높이가 layout transaction에 들어간다. 각 표면 준비(`syncSurfaces`)는 그 뒤 그리기의 첫 행 높이 `titlebar`를 담고, 두 host는 창의 transaction을 시작한 뒤, 표면을 놓기 전에 title bar를 정하므로 행과 창 단추가 같은 표시 frame에서 바뀐다. 준비는 창의 `chrome`을 답하고, 검증 W는 행을 마지막으로 표시한 준비의 `chrome`과 비교한다. frame 배율 변경은 이제 배율을 문서에 쓰는 준비한 배치가 그린다. 전에는 설정이 배율을 바로 썼고 페이지가 그리기 뒤에 `windowTitlebar`로 title bar를 요청했으며, 이 호출은 `packages/workbench/titlebar.js`와 함께 제거되었다. 전체 화면에서 host는 실패하지 않고 title bar를 바꾸지 않으며, 페이지는 `windowControls` 답의 title bar가 행과 다르면 행을 다시 준비한다.
 - F35.1: 네이티브 검사 `window_titlebar_layout_test`는 열린 layout transaction 안에서 제목줄 높이를 정하는 동안 창을 녹화하고, 녹화 frame이 `surfaceLayoutCommit` 전에 창 단추를 새 자리에 보이거나 그 뒤에 보이지 않으면 실패한다. macOS 26.6.2에서 단추는 commit과 함께만 옮겨졌다.
 - F46: 두 host는 1007 거부가 읽는 `NSEvent.pressedMouseButtons` mask인 status `host.buttons` `{mask}`를 선언한다. `native/darwin`은 AppKit이 애플리케이션에 전달하거나 global event monitor로 다른 애플리케이션에 전달하는 mouse 버튼의 누름과 뗌마다 mask를 읽고, host는 값이 바뀌면 감시자에게 알린다. window 검사 하네스는 검사가 열어 둔 누름을 `status.watch`로 `host.buttons`가 mask 0을 보고할 때까지 기다린 뒤 뗌이 전달되기를 요구해 끝낸다. 이전에는 사람이 아직 버튼을 누르고 있는 동안 뗌을 다시 보냈고, 그 뗌도 거부되어 그 host의 이후 pointer 검사가 모두 1008로 실패했다.

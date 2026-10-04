@@ -501,6 +501,7 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	var prepared PreparedSurfaces
 	type applyResult struct {
 		chrome     Chrome
+		restore    func() error
 		gone       []string
 		placements []Placement
 		err        error
@@ -524,12 +525,13 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 					return
 				}
 				var chrome Chrome
+				var restore func() error
 				var gone []string
 				var placements []Placement
-				err := ApplyOrCancel(func() error {
+				err := ApplyOrCancel(func() (func() error, error) {
 					var err error
-					chrome, err = titlebarChrome(win.NativeWindow(), req.Titlebar)
-					return err
+					chrome, restore, err = titlebarChrome(win.NativeWindow(), req.Titlebar)
+					return restore, err
 				}, func() error {
 					var err error
 					gone, placements, err = s.apply(win, req)
@@ -540,7 +542,7 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 				} else if !req.Settled {
 					s.run(false)
 				}
-				done <- applyResult{chrome: chrome, gone: gone, placements: placements, err: err}
+				done <- applyResult{chrome: chrome, restore: restore, gone: gone, placements: placements, err: err}
 			})
 		})
 	})
@@ -564,7 +566,12 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	// 기준이 되는 raster 갱신을 수행한다.
 	if req.Settled {
 		if err := s.refreshImageRasters(); err != nil {
+			// 취소는 트랜잭션을 커밋하므로, 그리기 전의 행과 맞도록 제목줄을 먼저 되돌린다.
+			restore := outcome.restore
 			if cancel := system.EnqueueUI(func() {
+				if failure := restore(); failure != nil {
+					LogError("surface layout title bar restore", failure)
+				}
 				if failure := system.CancelLayout(win.NativeWindow()); failure != nil {
 					LogError("surface layout cancel", failure)
 				}
@@ -587,11 +594,18 @@ func RunLayout(overlays, begin func() error) error {
 }
 
 // ApplyOrCancel 은 시작한 배치에서 창 제목줄을 정한 뒤 표면을 맞추고, 둘 중 하나가 실패하면 배치를 취소한다. 제목줄을
-// 정하지 못하면 표면을 맞추지 않는다. 취소의 실패는 그 오류에 덧붙인다.
-func ApplyOrCancel(titlebar, apply, cancel func() error) error {
-	err := titlebar()
+// 정하지 못하면 표면을 맞추지 않는다. 표면을 맞추지 못하면 titlebar 가 돌려준 restore 로 이전 제목줄을 되돌린 뒤
+// 취소한다. 취소는 트랜잭션을 커밋하므로 되돌리지 않으면 새 제목줄이 이전 행과 함께 표시된다. 되돌리기와 취소의
+// 실패는 그 오류에 덧붙인다.
+func ApplyOrCancel(titlebar func() (restore func() error, err error), apply, cancel func() error) error {
+	restore, err := titlebar()
 	if err == nil {
 		err = apply()
+		if err != nil {
+			if restoreErr := restore(); restoreErr != nil {
+				err = fmt.Errorf("%w; restoring the title bar: %v", err, restoreErr)
+			}
+		}
 	}
 	if err == nil {
 		return nil
