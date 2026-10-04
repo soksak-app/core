@@ -1,6 +1,7 @@
 // 일반 페이스트보드의 모든 항목을 형식별로 읽고 쓴다. 하네스는 창 검사마다 사용자의 페이스트보드를 저장하고
 // 검사가 끝나면 되돌린다(e2e/app.mjs 의 open).
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -72,4 +73,26 @@ export function pasteboardText() {
   const { items } = readPasteboard();
   const text = items.find((item) => item["public.utf8-plain-text"] !== undefined)?.["public.utf8-plain-text"];
   return text === undefined ? null : Buffer.from(text, "base64").toString("utf8");
+}
+
+/** base64 자료의 길이와 sha256 앞 12자리. 내용은 사용자의 자료이므로 밝히지 않는다. */
+function digest(base64) {
+  if (base64 === undefined) return "absent";
+  const data = Buffer.from(base64, "base64");
+  return `${data.length} bytes sha256 ${createHash("sha256").update(data).digest("hex").slice(0, 12)}`;
+}
+
+/**
+ * 창 검사 뒤의 페이스트보드 항목 after 가 앞의 before 와 다른 첫 차이를 `<after> instead of <before>` 로 돌려준다.
+ * 항목 안 형식의 순서는 쓴 순서대로 남지 않으므로 비교하지 않는다. 같으면 null 이다.
+ */
+export function pasteboardDifference(before, after) {
+  if (before.length !== after.length) return `${after.length} items instead of ${before.length}`;
+  for (const [index, item] of before.entries()) {
+    const types = [...new Set([...Object.keys(item), ...Object.keys(after[index])])].sort();
+    for (const type of types) {
+      if (item[type] !== after[index][type]) return `item ${index + 1} ${type}: ${digest(after[index][type])} instead of ${digest(item[type])}`;
+    }
+  }
+  return null;
 }

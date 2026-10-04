@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
-import { readPasteboard, writePasteboard } from "./pasteboard.mjs";
+import { pasteboardDifference, readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
 // 검사하는 애플리케이션 실행 파일. 애플리케이션은 번들에서 실행된다(docs/spec/hosts.md). 작업 디렉터리와
 // 무관하게 이 파일 위치를 기준으로 찾는다.
@@ -174,14 +174,9 @@ export async function open(t, app) {
   }
   session.cleanup(() => {
     writePasteboard(pasteboard.items);
-    const after = readPasteboard().items;
-    // 페이스트보드는 항목 안 형식의 순서를 쓴 순서대로 두지 않는다(쓴 뒤 읽으면 utf16 과 utf8 텍스트 형식의 순서가
-    // 바뀐다). 항목의 순서와 형식별 데이터를 비교한다.
-    const canonical = (items) => JSON.stringify(items.map((item) => Object.keys(item).sort().map((type) => [type, item[type]])));
-    if (canonical(after) !== canonical(pasteboard.items)) {
-      throw new Error(`${app.name}: the pasteboard after the check differs from before it: ` +
-        `${after.map((item) => Object.keys(item).join("+")).join(", ")} instead of ` +
-        `${pasteboard.items.map((item) => Object.keys(item).join("+")).join(", ")}`);
+    const difference = pasteboardDifference(pasteboard.items, readPasteboard().items);
+    if (difference !== null) {
+      throw new Error(`${app.name}: the pasteboard after the check differs from before it: ${difference}`);
     }
   });
   // 검사가 열어 둔 누름은 검사의 정리 뒤에 뗀다. 정리는 등록의 역순으로 실행한다.

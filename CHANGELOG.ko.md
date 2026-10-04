@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F28: 뒤의 pasteboard가 다른 window check는 항목, 형식, 각 쪽의 길이와 digest를 밝힌다.
 - F27: OSC 9 알림 정책의 window check가 bundle 애플리케이션에 맞는다. 정해지지 않은 알림 권한을 밝히고, tab 정책이 시스템 알림을 더하지 않는지 확인한다.
 - F24: 실패한 terminal 표시의 window check는 다음 terminal이 아직 표시되지 않은 동안 실패하지 않고 표시를 기다린다.
 - R2-4-3: `docs/spec/registry.md`가 공개 registry를 명세한다. commit한 항목 파일, 항목 소유자의 pull request, 자동 검사와 merge, merge 때의 index 게시를 담는다.

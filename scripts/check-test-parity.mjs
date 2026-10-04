@@ -902,6 +902,17 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F28",
+    implementation: [
+      { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },
+    ],
+    tests: [
+      { file: "e2e/test/pasteboard.test.mjs", id: "a changed value names the item, the type and both lengths and digests" },
+    ],
+    expected: "A pasteboard that differs after a window check is reported by item, type, length and digest.",
+    levels: ["unit"],
+  },
+  {
     id: "F27",
     implementation: [
       { file: "e2e/terminal.test.mjs", symbol: "the notification authorization of this application is not decided" },
