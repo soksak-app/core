@@ -47,11 +47,10 @@ test("a rejected native preparation reports failure without drawing the document
   const f = fixture();
   const done = f.run();
   const failure = new Error("injected native preparation rejection");
-  const rejected = assert.rejects(done, error => error === failure);
   await Promise.resolve();
   f.frame();
   f.prepared.reject(failure);
-  await rejected;
+  assert.deepEqual(await done, { status: "failed" });
   assert.deepEqual(f.calls, ["prepare"], "a rejected preparation changed the document");
   assert.deepEqual(f.errors, [failure]);
 });

@@ -3,6 +3,9 @@
 // 기다리는 배치를 모두 차례로 실행하면 화면이 밀린 배치 수만큼 포인터보다 늦는다.
 // 가장 새 배치는 앞선 입력을 모두 담으므로, 기다리던 이전 배치를 대신하고 그 배치의
 // 준비와 그리기는 실행되지 않는다. 대신한 배치는 superseded 로 알린다.
+//
+// 실패한 배치는 failed 가 받아 보고하고, run 의 답은 { status: "failed" } 로 이행한다. 그 실패를 받은 요청자는 대기열이므로
+// 배치를 예약하거나 기다린 쪽은 같은 실패를 거절로 다시 받지 않는다(docs/spec/hosts.md#application-log).
 export function createLayoutQueue({ failed, superseded }) {
   let active = null;
   let pending = null;
@@ -14,7 +17,7 @@ export function createLayoutQueue({ failed, superseded }) {
       .then(item.work)
       .then(item.resolve, (error) => {
         failed(error);
-        item.reject(error);
+        item.resolve({ status: "failed" });
       })
       .finally(() => {
         active = null;
@@ -28,8 +31,8 @@ export function createLayoutQueue({ failed, superseded }) {
 
   return {
     run(work) {
-      const result = new Promise((resolve, reject) => {
-        const item = { work, resolve, reject };
+      const result = new Promise((resolve) => {
+        const item = { work, resolve };
         if (pending) {
           superseded(pending.work);
           pending.resolve({ status: "superseded" });
@@ -47,19 +50,14 @@ export function createLayoutQueue({ failed, superseded }) {
     /**
      * 가장 새 배치가 끝날 때까지 기다리고, 그 배치가 끝까지 실행되었으면 true, 실패했으면 false 를 반환한다. 기다리는
      * 동안 더 새 배치가 예약되면 그 배치를 다시 기다린다. 대신된 배치는 그리지 않고 끝나므로, 그 끝에서 멈추면 그 배치가
-     * 지우려던 슬롯이 문서에 남아 있다. 실패는 failed 가 이미 보고했으므로 기다림은 그 실패를 다시 던지지 않는다
-     * (docs/spec/hosts.md#application-log).
+     * 지우려던 슬롯이 문서에 남아 있다. 실패는 failed 가 이미 보고했다(docs/spec/hosts.md#application-log).
      */
     async wait() {
       for (;;) {
         const awaited = latest;
-        let completed = true;
-        try {
-          await awaited;
-        } catch {
-          completed = false;
-        }
-        if (awaited === latest) return completed;
+        const outcome = await awaited;
+        // 기본값: 끝까지 실행된 배치의 답은 그 일의 반환값이며 drawPrepared 는 값을 반환하지 않는다.
+        if (awaited === latest) return outcome?.status !== "failed";
       }
     },
   };

@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 import { animationFrame, createLayoutQueue } from "../layout-queue.js";
 
-test("a failed presentation rejects its request, reports failure, and permits the next drag", async () => {
+// 실패는 failed 가 보고하므로 요청의 답은 그 실패를 다시 거절로 주지 않고 실패한 상태만 준다(docs/spec/hosts.md#application-log).
+test("a failed presentation answers its request as failed, reports failure, and permits the next drag", async () => {
   const reported = [];
   const queue = createLayoutQueue({ failed: (error) => reported.push(error), superseded: assert.fail });
   const failure = new Error("current image raster did not present");
   const first = queue.run(() => { throw failure; });
-  await assert.rejects(first, (error) => error === failure);
+  assert.deepEqual(await first, { status: "failed" });
   assert.equal(await queue.wait(), false, "the wait must end without the failure that failed already reported");
   let drawn = 0;
   await queue.run(() => { drawn++; });
@@ -19,7 +20,7 @@ test("a failed presentation rejects its request, reports failure, and permits th
 test("a string presentation failure keeps its measured reason", async () => {
   const errors = [];
   const queue = createLayoutQueue({ failed: (error) => errors.push(String(error?.message ?? error)) });
-  await assert.rejects(queue.run(() => Promise.reject("current image raster did not present within 10s")));
+  assert.deepEqual(await queue.run(() => Promise.reject("current image raster did not present within 10s")), { status: "failed" });
   assert.deepEqual(errors, ["current image raster did not present within 10s"]);
 });
 
@@ -108,8 +109,8 @@ test("the wait for the drawn layout answers false when the newest layout failed"
   const waiting = queue.wait();
   const newest = queue.run(() => { throw failure; });
   release();
-  await assert.rejects(first);
-  await assert.rejects(newest);
+  assert.deepEqual(await first, { status: "failed" });
+  assert.deepEqual(await newest, { status: "failed" });
   assert.equal(await waiting, false);
   assert.deepEqual(reported.map((error) => error.message), ["replaced presentation failed", failure.message]);
 });
