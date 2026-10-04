@@ -192,12 +192,16 @@ type processLock struct {
 }
 
 func acquireProcessLock(directory string) (*processLock, error) {
-	if err := os.MkdirAll(directory, 0700); err != nil {
+	system, err := platform.Current()
+	if err != nil {
+		return nil, err
+	}
+	if err := system.CreatePrivateDirectories(directory); err != nil {
 		return nil, err
 	}
 	path := filepath.Join(directory, "process.lock")
 	for attempt := 0; attempt < 2; attempt++ {
-		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		file, err := system.CreatePrivateFile(path)
 		if err == nil {
 			if _, err := fmt.Fprintf(file, "%d", os.Getpid()); err != nil {
 				return nil, errors.Join(err, file.Close(), os.Remove(path))

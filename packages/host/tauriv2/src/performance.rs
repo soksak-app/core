@@ -2,7 +2,7 @@
 //! 스위치·중계 오류는 호출자에게 반환하고, 수동 계측 오류는 stderr 에 보고한다.
 
 use serde_json::{json, Map, Value};
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -18,7 +18,8 @@ pub fn target(config: &Path) -> PathBuf {
 /// 서비스 플래그를 쓴 뒤 호스트 실행 스위치를 켠다.
 pub fn enable(config: &Path) -> Result<PathBuf, String> {
     let target = target(config);
-    fs::create_dir_all(config.join("logs"))
+    crate::platform::current()?
+        .create_private_directories(&config.join("logs"))
         .map_err(|error| format!("create logs directory: {error}"))?;
     if let Err(error) = write_sidecar_flags(config, &target) {
         return Err(rollback_enable(config, error));
@@ -240,11 +241,9 @@ fn append(target: &Path, record: &Value) -> Result<(), String> {
             ))
         }
     }
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(target)
-        .map_err(|error| format!("open performance output {}: {error}", target.display()))?;
+    let mut file = crate::platform::current()?
+        .append_private_file(target)
+        .map_err(|error| format!("open performance output {error}"))?;
     file.write_all(&line)
         .map_err(|error| format!("append performance output {}: {error}", target.display()))
 }

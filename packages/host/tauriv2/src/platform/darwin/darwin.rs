@@ -50,6 +50,8 @@ mod link;
 #[path = "mouse_buttons.rs"]
 mod mouse_buttons;
 mod notifications;
+#[path = "private_files.rs"]
+mod private_files;
 #[cfg(feature = "diagnostics")]
 #[path = "process_exit.rs"]
 mod process_exit;
@@ -608,17 +610,13 @@ impl Platform for Darwin {
     }
 
     fn create_private_directories(&self, path: &Path) -> Result<(), String> {
-        std::os::unix::fs::DirBuilderExt::mode(std::fs::DirBuilder::new().recursive(true), 0o700)
-            .create(path)
-            .map_err(|error| format!("{}: {error}", path.display()))
+        private_files::create_private_directories(path)
     }
     fn append_private_file(&self, path: &Path) -> Result<std::fs::File, String> {
-        std::os::unix::fs::OpenOptionsExt::mode(
-            std::fs::OpenOptions::new().create(true).append(true),
-            0o600,
-        )
-        .open(path)
-        .map_err(|error| format!("{}: {error}", path.display()))
+        private_files::append_private_file(path)
+    }
+    fn create_private_file(&self, path: &Path) -> std::io::Result<std::fs::File> {
+        private_files::create_private_file(path)
     }
     fn directory_identity(&self, _path: &Path, metadata: &Metadata) -> Result<String, String> {
         Ok(identity::identity(metadata))
@@ -638,7 +636,7 @@ impl Platform for Darwin {
         connect_service(address)
     }
     fn secure_service_directory(&self, path: &Path) -> Result<(), String> {
-        secure_service_directory(path)
+        private_files::secure_service_directory(path)
     }
     fn service_process_exists(&self, pid: u32) -> Result<bool, String> {
         endpoint::service_process_exists(pid)
@@ -687,10 +685,5 @@ impl PersistentStream for PersistentUnixStream {
 fn connect_service(address: &str) -> Result<Box<dyn PersistentStream>, String> {
     UnixStream::connect(address)
         .map(|stream| Box::new(PersistentUnixStream(stream)) as Box<dyn PersistentStream>)
-        .map_err(|error| error.to_string())
-}
-
-fn secure_service_directory(path: &Path) -> Result<(), String> {
-    std::fs::set_permissions(path, std::os::unix::fs::PermissionsExt::from_mode(0o700))
         .map_err(|error| error.to_string())
 }

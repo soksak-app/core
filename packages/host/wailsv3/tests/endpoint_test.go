@@ -151,6 +151,18 @@ func TestEndpointAllowsOneProcessPerConfigurationDirectory(t *testing.T) {
 	}
 }
 
+// contract: endpoint.process.lock-mode-0600
+func TestProcessLockIsOwnerOnly(t *testing.T) {
+	_, _, config := serve(t, newFakeBackend())
+	info, err := os.Stat(filepath.Join(config, "process.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("process.lock mode %o, want 600", info.Mode().Perm())
+	}
+}
+
 func dial(t *testing.T, address string) net.Conn {
 	t.Helper()
 	conn, err := net.Dial("tcp", address)

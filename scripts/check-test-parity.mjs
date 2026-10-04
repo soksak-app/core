@@ -1221,6 +1221,28 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F59",
+    implementation: [
+      { file: "packages/host/wailsv3/src/platform/darwin/private_files.go", symbol: "func (implementation) CreatePrivateFile" },
+      { file: "packages/host/wailsv3/src/platform/windows/unsupported.go", symbol: "unsupported(\"private directory creation\")" },
+      { file: "packages/host/tauriv2/src/platform/darwin/private_files.rs", symbol: "pub fn create_private_file" },
+      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "platform.create_private_file(&path)" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/private_files_test.go", id: "TestCreatePrivateDirectoriesMakesMissingDirectoriesOwnerOnly" },
+      { file: "packages/host/wailsv3/tests/private_files_test.go", id: "TestAppendPrivateFileCreatesAnOwnerOnlyFileAndAppends" },
+      { file: "packages/host/wailsv3/tests/private_files_test.go", id: "TestCreatePrivateFileCreatesANewOwnerOnlyFileOnly" },
+      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestProcessLockIsOwnerOnly" },
+      { file: "packages/host/tauriv2/tests/private_files_test.rs", id: "create_private_directories_makes_missing_directories_owner_only" },
+      { file: "packages/host/tauriv2/tests/private_files_test.rs", id: "append_private_file_creates_an_owner_only_file_and_appends" },
+      { file: "packages/host/tauriv2/tests/private_files_test.rs", id: "create_private_file_creates_a_new_owner_only_file_only" },
+      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "the_process_lock_is_owner_only" },
+      { file: "scripts/test/windows-build-check.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
+    ],
+    expected: "Both hosts create owner-only files and directories only through the platform operations, Darwin gives them modes 0700 and 0600, the process lock has mode 0600 in both hosts, and the Windows implementation compiles and returns its not-implemented errors.",
+    levels: ["unit"],
+  },
+  {
     id: "F58",
     implementation: [
       { file: "packages/workbench/page-layout.js", symbol: "export function createPageLayout" },

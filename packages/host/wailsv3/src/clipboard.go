@@ -142,15 +142,19 @@ func PersistClipboardPNG(root string, bytes []byte) (string, error) {
 	if err := validatePNGHeader(bytes); err != nil {
 		return "", fmt.Errorf("clipboard PNG header is invalid: %w", err)
 	}
+	system, err := platform.Current()
+	if err != nil {
+		return "", err
+	}
 	directory := filepath.Join(root, "clipboard")
-	if err := os.MkdirAll(directory, 0700); err != nil {
+	if err := system.CreatePrivateDirectories(directory); err != nil {
 		return "", err
 	}
 	for i := 0; i < 16; i++ {
 		stamp := time.Now().UnixNano()
 		serial := atomic.AddUint64(&clipboardSerial, 1)
 		path := filepath.Join(directory, fmt.Sprintf("pasted-image-%x-%x.png", stamp, serial))
-		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		file, err := system.CreatePrivateFile(path)
 		if os.IsExist(err) {
 			continue
 		}

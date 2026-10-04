@@ -125,6 +125,7 @@ Items:
 | `host.arguments.registry-ca-in-diagnostic-builds` | A diagnostic build accepts `--registry-ca PATH`, and its registry fetches then trust only the authorities of that PEM file; a file without a certificate fails with `--registry-ca <path>: <reason>`. | both |
 | `endpoint.process.rejects-a-malformed-lock` | A `process.lock` whose contents are not a positive process ID, including `0`, refuses the endpoint with `<path>: invalid process lock` and stays in place. | both |
 | `endpoint.process.one-owner-per-config-dir` | A second endpoint on the same configuration directory is refused with "already owned by process", and the first keeps its lock until it closes. | both |
+| `endpoint.process.lock-mode-0600` | The `process.lock` of a configuration directory has mode 0600. | both |
 | `endpoint.transport.http-request-line-closes` | An HTTP request line closes the connection without a reply or a method call. | both |
 | `endpoint.transport.invalid-json-closes` | A frame whose body is not JSON closes the connection without a reply. | both |
 | `endpoint.transport.closing-a-disconnected-connection-succeeds` | Closing a connection whose socket is already disconnected succeeds; other shutdown errors are reported. | tauriv2 only: the Rust host shuts the socket down explicitly, which reports a disconnected socket, while Go closes the connection without a shutdown |
@@ -226,6 +227,9 @@ Items:
 | `performance.trace.derive-service-flags-and-reset` | New services receive the host switch; reset and disabled reattachment remove stale flags, and disabled observation does not format events. | both |
 | `log.open.rotates-at-10mb` | Opening a log file of 10 MB or more first moves it to `<name>.1`, replacing the previous generation, and starts a new file. | both |
 | `log.open.appends-below-bound` | Opening a smaller log file appends to it, and a new log file has mode 0600. | both |
+| `platform.private.creates-owner-only-directories` | The private-directory creation operation creates every missing directory of a path with mode 0700 and keeps the mode of an existing directory. | both |
+| `platform.private.appends-owner-only-file` | The private append operation creates a missing file with mode 0600, appends to an existing file, and keeps the mode of an existing file. | both |
+| `platform.private.creates-new-owner-only-file` | The private new-file operation creates a missing file with mode 0600 and fails with an already-exists error for an existing path. | both |
 | `log.application.start-replaces-standard-error` | Starting the application log writes the run's start line and makes the file the standard error of the process and of the children it starts. | both |
 | `log.error.line-form` | A host error line written through the helper is `error: <where>: <text>`, and it reaches the application log as a line that starts with `error: `. | both |
 | `log.service.standard-error-goes-to-service-log` | A persistent service started by the host writes its standard error to `logs/<executable-name>.log`. | both |

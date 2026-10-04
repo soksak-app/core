@@ -147,7 +147,7 @@ func RefreshWebKitChildren(config string) {
 		LogError("webkit children record", err)
 		return
 	}
-	if err := os.WriteFile(temporary, bytes, 0o600); err != nil {
+	if err := os.WriteFile(temporary, bytes, 0o666); err != nil {
 		LogError("webkit children record", fmt.Sprintf("write: %v", err))
 		return
 	}

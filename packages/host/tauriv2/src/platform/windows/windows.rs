@@ -484,6 +484,9 @@ impl Platform for Windows {
     fn append_private_file(&self, path: &Path) -> Result<std::fs::File, String> {
         unsupported::append_private_file(path)
     }
+    fn create_private_file(&self, path: &Path) -> std::io::Result<std::fs::File> {
+        unsupported::create_private_file(path)
+    }
     fn directory_identity(&self, path: &Path, _metadata: &Metadata) -> Result<String, String> {
         identity::identity(path)
     }

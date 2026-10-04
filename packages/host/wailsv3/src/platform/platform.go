@@ -432,6 +432,8 @@ type Platform interface {
 	// 설정 디렉터리에 속하므로 애플리케이션의 프로세스 그룹과 터미널의 신호를 받지 않는다. command 를 시작하기
 	// 전에 호출한다.
 	NewSession(command *exec.Cmd) error
+	// SecureServiceDirectory 는 영구 service 디렉터리 path 를 현재 사용자만 접근하게 한다.
+	SecureServiceDirectory(path string) error
 
 	// OnTermination 은 종료 신호(SIGTERM, SIGINT, SIGHUP)를 처음 받으면 quit 를 호출하게 한다. 그
 	// 뒤의 종료 신호는 기본 동작으로 프로세스를 끝낸다.
@@ -470,6 +472,18 @@ type Platform interface {
 
 	// DirectoryIdentity 는 디렉터리를 식별하는 문자열을 반환한다.
 	DirectoryIdentity(path string, info os.FileInfo) (string, error)
+	// CreatePrivateDirectories 는 path 에서 없는 디렉터리를 현재 사용자 전용 권한으로 만든다. 이미 있는 디렉터리의
+	// 권한은 바꾸지 않는다.
+	CreatePrivateDirectories(path string) error
+	// AppendPrivateFile 은 path 의 파일을 덧붙이기로 연다. 없으면 현재 사용자만 읽고 쓰는 파일로 만든다. 있는
+	// 파일의 권한은 바꾸지 않는다.
+	AppendPrivateFile(path string) (*os.File, error)
+	// CreatePrivateFile 은 path 에 현재 사용자만 읽고 쓰는 새 파일을 만들어 쓰기로 연다. path 가 이미 있으면
+	// os.ErrExist 인 오류다.
+	CreatePrivateFile(path string) (*os.File, error)
+	// PrivateDirectory 는 현재 사용자만 접근할 수 있는 디렉터리를 상위 디렉터리와 함께 만든다. 이미 있으면 종류,
+	// 소유자, 권한을 확인한다. 진단 빌드의 녹화와 캡처가 쓴다.
+	PrivateDirectory(path string) error
 }
 
 // PointerResult 는 포인터 입력 전달의 결과다.

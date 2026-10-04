@@ -554,3 +554,7 @@ pub fn create_private_directories(_path: &std::path::Path) -> Result<(), String>
 pub fn append_private_file(_path: &std::path::Path) -> Result<std::fs::File, String> {
     missing("private file creation")
 }
+
+pub fn create_private_file(_path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    missing("new private file creation").map_err(std::io::Error::other)
+}

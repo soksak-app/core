@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // Workspace 는 설정 디렉터리의 projects.json 과 settings.json, 각 프로젝트의
@@ -28,7 +30,11 @@ func PrepareConfigDirectory(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(absolute, 0o700); err != nil {
+	system, err := platform.Current()
+	if err != nil {
+		return "", err
+	}
+	if err := system.CreatePrivateDirectories(absolute); err != nil {
 		return "", err
 	}
 	return filepath.EvalSymlinks(absolute)
@@ -78,7 +84,11 @@ func writeJSON(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	if err = os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	system, err := platform.Current()
+	if err != nil {
+		return err
+	}
+	if err = system.CreatePrivateDirectories(filepath.Dir(path)); err != nil {
 		return err
 	}
 	file, err := os.CreateTemp(filepath.Dir(path), ".settings-*")

@@ -125,7 +125,11 @@ func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage) (an
 		return nil, err
 	}
 	root := filepath.Join(h.workspace.directory, "test-project")
-	if err := os.MkdirAll(root, 0700); err != nil {
+	system, err := platform.Current()
+	if err != nil {
+		return nil, err
+	}
+	if err := system.PrivateDirectory(filepath.Join(root, ".soksak")); err != nil {
 		return nil, err
 	}
 	if err := writeJSON(filepath.Join(root, ".soksak", "settings.json"), Record{}); err != nil {
@@ -393,7 +397,11 @@ func diagnosticCaptureStill(e *Endpoint, _ *endpointConn, params json.RawMessage
 	}
 	// 녹화와 같이 캡처마다 비공개 디렉터리를 만든다.
 	directory := filepath.Join(h.workspace.directory, "captures", fmt.Sprintf("still-%s-%d", s.name, time.Now().UnixNano()))
-	if err := os.MkdirAll(directory, 0700); err != nil {
+	system, err := platform.Current()
+	if err != nil {
+		return nil, err
+	}
+	if err := system.PrivateDirectory(directory); err != nil {
 		return nil, err
 	}
 	path := filepath.Join(directory, "window.png")

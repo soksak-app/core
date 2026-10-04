@@ -14,6 +14,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // PerformanceTarget 은 구성 디렉터리가 가리키는 트레이스 대상이다.
@@ -24,13 +26,17 @@ func PerformanceTarget(config string) string {
 // PerformanceEnable 은 서비스 플래그를 쓴 뒤 호스트 실행 스위치를 켠다.
 func PerformanceEnable(config string) (string, error) {
 	target := PerformanceTarget(config)
-	if err := os.MkdirAll(filepath.Join(config, "logs"), 0o700); err != nil {
+	system, err := platform.Current()
+	if err != nil {
+		return "", err
+	}
+	if err := system.CreatePrivateDirectories(filepath.Join(config, "logs")); err != nil {
 		return "", fmt.Errorf("create logs directory: %w", err)
 	}
 	if err := performanceWriteFlags(config, target); err != nil {
 		return "", errors.Join(err, PerformanceDisable(config))
 	}
-	if err := os.WriteFile(filepath.Join(config, "performance"), []byte(target+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(config, "performance"), []byte(target+"\n"), 0o666); err != nil {
 		return "", errors.Join(fmt.Errorf("write performance switch: %w", err), PerformanceDisable(config))
 	}
 	return target, nil
@@ -228,7 +234,7 @@ func performanceWriteFlags(config, target string) error {
 			continue
 		}
 		flag := filepath.Join(servicesDir(config), entry.Name(), "performance")
-		if err := os.WriteFile(flag, []byte(target+"\n"), 0o600); err != nil {
+		if err := os.WriteFile(flag, []byte(target+"\n"), 0o666); err != nil {
 			failures = append(failures, fmt.Errorf("write performance flag %s: %w", flag, err))
 		}
 	}
@@ -251,7 +257,11 @@ func performanceAppend(target string, record map[string]any) error {
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect performance output %s: %w", target, err)
 	}
-	file, err := os.OpenFile(target, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	system, err := platform.Current()
+	if err != nil {
+		return err
+	}
+	file, err := system.AppendPrivateFile(target)
 	if err != nil {
 		return fmt.Errorf("open performance output %s: %w", target, err)
 	}

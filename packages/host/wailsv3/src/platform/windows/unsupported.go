@@ -358,6 +358,26 @@ func (implementation) NewSession(*exec.Cmd) error {
 	return unsupported("new process session")
 }
 
+func (implementation) SecureServiceDirectory(string) error {
+	return unsupported("persistent sidecar service directory")
+}
+
+func (implementation) CreatePrivateDirectories(string) error {
+	return unsupported("private directory creation")
+}
+
+func (implementation) AppendPrivateFile(string) (*os.File, error) {
+	return nil, unsupported("private file creation")
+}
+
+func (implementation) CreatePrivateFile(string) (*os.File, error) {
+	return nil, unsupported("new private file creation")
+}
+
+func (implementation) PrivateDirectory(string) error {
+	return unsupported("private directory")
+}
+
 func (implementation) InstallDock(func()) error {
 	return unsupported("Dock menu")
 }

@@ -47,7 +47,11 @@ func ServiceLogPath(config, program string) string {
 // OpenLog 는 로그 파일 path 를 mode 0600 의 덧붙이기로 연다. 10 MB 이상인 파일은 먼저 path.1 로
 // 옮겨 이전 세대를 대체한다. 그 파일에 쓰는 다른 프로세스가 없을 때만 부른다.
 func OpenLog(path string) (*os.File, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	system, err := platform.Current()
+	if err != nil {
+		return nil, err
+	}
+	if err := system.CreatePrivateDirectories(filepath.Dir(path)); err != nil {
 		return nil, fmt.Errorf("create logs directory: %w", err)
 	}
 	if info, err := os.Stat(path); err == nil && info.Size() >= logRotateBytes {
@@ -57,7 +61,7 @@ func OpenLog(path string) (*os.File, error) {
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("inspect %s: %w", path, err)
 	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	file, err := system.AppendPrivateFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}

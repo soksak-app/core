@@ -105,6 +105,7 @@ The shell sidecar repository uses the same Go mechanism in its `src/platform/` (
 | Standard error | Replacing the process's standard error with an open file — see [Application log](#application-log); not implemented on Windows |
 | Dock | Dock menu installation |
 | Identity | Directory identity |
+| Private files | Files and directories that only the current user can access: creating the missing directories of a path (mode 0700 on macOS), opening a file for appending and creating a missing one (mode 0600), creating a new file that must not exist (mode 0600), restricting a persistent service directory, and in the diagnostics build a checked private directory. Shared host code creates such a file or directory only through these operations and sets no permission mode itself; an existing file or directory keeps its mode. Not implemented on Windows |
 | Endpoint | [Local endpoint](endpoint.md) transport: Unix socket on macOS; not implemented on Windows |
 
 Capture first-frame readiness succeeds only after a complete frame is written and no recording error is known at the readiness check. A known asynchronous start or stream failure rejects readiness even when that frame exists; the original error remains available to the caller.

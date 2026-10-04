@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"os"
 	"sync"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // CaptureTarget 은 녹화 대상이다. Display 이면 창이 있는 디스플레이에서 이 앱의 창을 녹화한다.
@@ -48,7 +50,11 @@ func (r *Recording) Start(capture Capture, target CaptureTarget, directory strin
 	if r.directory != "" {
 		return fmt.Errorf("a capture into %s is running", r.directory)
 	}
-	if err := os.MkdirAll(directory, 0700); err != nil {
+	system, err := platform.Current()
+	if err != nil {
+		return err
+	}
+	if err := system.PrivateDirectory(directory); err != nil {
 		return err
 	}
 	if err := r.begin(capture, target, directory); err != nil {

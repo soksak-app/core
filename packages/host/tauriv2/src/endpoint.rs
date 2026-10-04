@@ -7,7 +7,7 @@
 //! `platform/<os>/endpoint.*` 가 제공한다. 형식은 docs/spec/endpoint.md 에 정의한다.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -442,11 +442,11 @@ struct ProcessLock {
 
 impl ProcessLock {
     fn acquire(directory: &Path) -> Result<Self, String> {
-        std::fs::create_dir_all(directory)
-            .map_err(|error| format!("{}: {error}", directory.display()))?;
+        let platform = platform::current()?;
+        platform.create_private_directories(directory)?;
         let path = directory.join("process.lock");
         for attempt in 0..2 {
-            match OpenOptions::new().write(true).create_new(true).open(&path) {
+            match platform.create_private_file(&path) {
                 Ok(mut file) => {
                     file.write_all(std::process::id().to_string().as_bytes())
                         .map_err(|error| format!("{}: {error}", path.display()))?;
@@ -463,7 +463,7 @@ impl ProcessLock {
                         .ok()
                         .filter(|pid| *pid > 0)
                         .ok_or_else(|| format!("{}: invalid process lock", path.display()))?;
-                    if platform::current()?.service_process_exists(pid)? {
+                    if platform.service_process_exists(pid)? {
                         return Err(format!(
                             "configuration directory {} is already owned by process {pid}",
                             directory.display()
@@ -689,7 +689,7 @@ pub fn read_frame<R: Read + ?Sized>(reader: &mut R) -> Result<Option<Value>, Str
 
 /// 파일 이름을 바꿔 endpoint.json 을 한 번에 쓴다.
 fn write_record(directory: &Path, file: &Path, record: &Value) -> Result<(), String> {
-    std::fs::create_dir_all(directory).map_err(|e| format!("{}: {e}", directory.display()))?;
+    platform::current()?.create_private_directories(directory)?;
     let mut temporary = tempfile::NamedTempFile::new_in(directory).map_err(|e| e.to_string())?;
     serde_json::to_writer_pretty(&mut temporary, record).map_err(|e| e.to_string())?;
     temporary.write_all(b"\n").map_err(|e| e.to_string())?;

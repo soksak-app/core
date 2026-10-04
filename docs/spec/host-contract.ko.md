@@ -125,6 +125,7 @@ fn invalid_json_closes_connection() {
 | `host.arguments.registry-ca-in-diagnostic-builds` | 진단 build는 `--registry-ca PATH`를 받고, 그 뒤 registry 받기는 그 PEM 파일의 인증 기관만 신뢰한다. 인증서 없는 파일은 `--registry-ca <path>: <reason>`으로 실패한다. | both |
 | `endpoint.process.rejects-a-malformed-lock` | 내용이 양수 process ID가 아닌 `process.lock`은 `0`을 포함해 `<path>: invalid process lock`으로 endpoint를 거부하고 그대로 남는다. | both |
 | `endpoint.process.one-owner-per-config-dir` | 같은 설정 디렉터리의 두 번째 엔드포인트는 "already owned by process"로 거부되고, 첫 엔드포인트는 닫을 때까지 잠금을 유지한다. | both |
+| `endpoint.process.lock-mode-0600` | 설정 디렉터리의 `process.lock`은 mode 0600이다. | both |
 | `endpoint.transport.http-request-line-closes` | HTTP 요청 줄은 응답이나 메서드 호출 없이 연결을 닫는다. | both |
 | `endpoint.transport.invalid-json-closes` | 본문이 JSON이 아닌 프레임은 응답 없이 연결을 닫는다. | both |
 | `endpoint.transport.closing-a-disconnected-connection-succeeds` | socket이 이미 끊긴 연결을 닫으면 성공한다. 다른 shutdown 오류는 보고한다. | tauriv2 only: Rust host는 socket을 명시적으로 shutdown하며 끊긴 socket을 보고하고, Go는 shutdown 없이 연결을 닫는다 |
@@ -226,6 +227,9 @@ fn invalid_json_closes_connection() {
 | `performance.trace.derive-service-flags-and-reset` | 새 서비스는 호스트 스위치를 받는다. 초기화와 비활성 재접속은 잔여 플래그를 제거하고 비활성 계측은 이벤트를 구성하지 않는다. | both |
 | `log.open.rotates-at-10mb` | 10 MB 이상인 로그 파일을 열면 먼저 `<이름>.1`로 옮겨 이전 세대를 대체하고 새 파일을 시작한다. | both |
 | `log.open.appends-below-bound` | 더 작은 로그 파일을 열면 거기에 덧붙이고, 새 로그 파일은 mode 0600이다. | both |
+| `platform.private.creates-owner-only-directories` | private directory 생성 연산은 경로에서 없는 모든 디렉터리를 mode 0700으로 만들고 이미 있는 디렉터리의 mode는 유지한다. | both |
+| `platform.private.appends-owner-only-file` | private append 연산은 없는 파일을 mode 0600으로 만들고, 있는 파일에는 덧붙이며, 있는 파일의 mode는 유지한다. | both |
+| `platform.private.creates-new-owner-only-file` | private 새 파일 연산은 없는 파일을 mode 0600으로 만들고, 이미 있는 경로에는 already-exists 오류로 실패한다. | both |
 | `log.application.start-replaces-standard-error` | 애플리케이션 로그를 시작하면 실행의 첫 줄을 쓰고 그 파일을 프로세스와 그 프로세스가 시작하는 자식의 표준 오류로 만든다. | both |
 | `log.error.line-form` | helper로 쓴 호스트 오류 줄은 `error: <where>: <text>`이며, 애플리케이션 로그에 `error: `로 시작하는 줄로 들어간다. | both |
 | `log.service.standard-error-goes-to-service-log` | 호스트가 시작한 영속 서비스는 표준 오류를 `logs/<실행 파일 이름>.log`에 쓴다. | both |

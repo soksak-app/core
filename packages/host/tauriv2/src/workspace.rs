@@ -62,7 +62,7 @@ fn read<T: DeserializeOwned + Default>(path: &Path) -> Result<T, String> {
 
 fn write(path: &Path, value: &impl serde::Serialize) -> Result<(), String> {
     let dir = path.parent().ok_or("settings file has no parent")?;
-    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    crate::platform::current()?.create_private_directories(dir)?;
     let mut file = tempfile::NamedTempFile::new_in(dir).map_err(|e| e.to_string())?;
     serde_json::to_writer_pretty(&mut file, value).map_err(|e| e.to_string())?;
     file.write_all(b"\n").map_err(|e| e.to_string())?;

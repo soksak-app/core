@@ -95,6 +95,16 @@ fn a_configuration_directory_has_one_process_owner() {
     assert!(!config.path().join("process.lock").exists());
 }
 
+// contract: endpoint.process.lock-mode-0600
+#[test]
+fn the_process_lock_is_owner_only() {
+    let config = tempfile::tempdir().unwrap();
+    let (fake, _) = Fake::new();
+    let endpoint = start(config.path(), "test-lock-mode", fake);
+    assert_eq!(mode(&config.path().join("process.lock")), 0o600);
+    endpoint.stop();
+}
+
 fn mode(path: &Path) -> u32 {
     use std::os::unix::fs::PermissionsExt;
     std::fs::metadata(path).unwrap().permissions().mode() & 0o777

@@ -799,10 +799,14 @@ func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, limit time.Duration) (
 func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 	program := c.declared[name]
 	serviceDir := filepath.Join(c.configDir, "services", filepath.Base(program))
-	if err := os.MkdirAll(serviceDir, 0o700); err != nil {
+	current, err := platform.Current()
+	if err != nil {
+		return nil, err
+	}
+	if err := current.CreatePrivateDirectories(serviceDir); err != nil {
 		return nil, fmt.Errorf("sidecar %s: create service directory: %w", name, err)
 	}
-	if err := os.Chmod(serviceDir, 0o700); err != nil {
+	if err := current.SecureServiceDirectory(serviceDir); err != nil {
 		return nil, fmt.Errorf("sidecar %s: secure service directory: %w", name, err)
 	}
 	if err := PerformanceSyncServices(c.configDir); err != nil {
@@ -820,10 +824,6 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		// 영구 service 는 이 애플리케이션 프로세스의 수명이 아니라 configuration
 		// 디렉터리에 속한다. 애플리케이션이 비정상 종료해도 복구 service 가 함께
 		// 종료되지 않도록 새 session 을 시작한다.
-		current, err := platform.Current()
-		if err != nil {
-			return nil, err
-		}
 		if err := current.NewSession(cmd); err != nil {
 			return nil, fmt.Errorf("sidecar %s: new session: %w", name, err)
 		}
@@ -882,10 +882,6 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		}
 	} else {
 		return nil, fmt.Errorf("sidecar %s: read endpoint: %w", name, err)
-	}
-	current, err := platform.Current()
-	if err != nil {
-		return nil, err
 	}
 	exists, err := current.ServiceProcessExists(endpoint.PID)
 	if err != nil {

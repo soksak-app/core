@@ -1216,7 +1216,8 @@ impl<O: Owner> Core<O> {
             .filter(|value| !value.is_empty() && *value != "." && *value != "..")
             .ok_or_else(|| format!("sidecar {name}: executable has no valid basename"))?;
         let service_dir = config.join("services").join(basename);
-        std::fs::create_dir_all(&service_dir)
+        current()?
+            .create_private_directories(&service_dir)
             .map_err(|e| format!("sidecar {name}: create service directory: {e}"))?;
         // 성능 트레이스가 켜져 있으면 나중에 뜨는 사이드카에도 플래그를 쓴다(V5-104).
         crate::performance::sync_services(config)?;
