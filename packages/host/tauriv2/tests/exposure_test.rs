@@ -1,12 +1,13 @@
 //! 페이지 요청 중계와 호스트 항목 테스트. 페이지는 요청을 받는 함수가 대신한다.
 
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::value::RawValue;
 use serde_json::{json, Value};
 use soksak_host_tauriv2::exposure::{self, Relay};
-use soksak_host_tauriv2::windows::window_entry;
+use soksak_host_tauriv2::windows::{list_entries, window_entry, ListStep};
 
 const WAIT: Duration = Duration::from_secs(5);
 
@@ -498,6 +499,112 @@ fn an_open_window_lists_its_title_project_and_key_state() {
             "project": "/tmp/project", "key": false,
         })))
     );
+}
+
+/// 시험의 메인 스레드. 다른 스레드가 보낸 작업은 메인 스레드가 다음 작업을 처리하기 전에 차례대로 실행한다.
+#[derive(Default)]
+struct FakeMain {
+    pending: Mutex<Vec<Box<dyn FnOnce() + Send>>>,
+    running: AtomicBool,
+}
+
+impl FakeMain {
+    fn run_pending(&self) {
+        let tasks = std::mem::take(&mut *self.pending.lock().unwrap());
+        for task in tasks {
+            task();
+        }
+    }
+
+    /// tauri-runtime-wry 의 send_user_message 처럼, 메인 스레드에서는 바로 답하고 다른 스레드에서는
+    /// 먼저 보낸 작업이 처리된 뒤에 답한다.
+    fn query<T>(&self, answer: impl FnOnce() -> T) -> T {
+        if !self.running.load(Ordering::SeqCst) {
+            self.run_pending();
+        }
+        answer()
+    }
+
+    fn run(&self, step: ListStep) -> Result<Vec<Value>, String> {
+        self.run_pending();
+        self.running.store(true, Ordering::SeqCst);
+        let result = step();
+        self.running.store(false, Ordering::SeqCst);
+        self.run_pending();
+        result
+    }
+}
+
+/// 시험의 창. 닫기는 runtime 처럼 closing 을 세운 뒤 창을 runtime 에서 뺀다.
+struct FakeWindow {
+    label: &'static str,
+    closing: AtomicBool,
+    present: AtomicBool,
+    /// closing 을 읽을 때 메인 스레드에 이 창의 닫기를 보낸다.
+    close_on_read: AtomicBool,
+}
+
+impl FakeWindow {
+    fn open(label: &'static str, close_on_read: bool) -> Arc<Self> {
+        Arc::new(Self {
+            label,
+            closing: AtomicBool::new(false),
+            present: AtomicBool::new(true),
+            close_on_read: AtomicBool::new(close_on_read),
+        })
+    }
+}
+
+fn fake_list(main: &Arc<FakeMain>, windows: &[Arc<FakeWindow>]) -> Result<Value, String> {
+    let queries = main.clone();
+    list_entries(
+        windows.to_vec(),
+        |step| main.run(step),
+        move |window: &Arc<FakeWindow>| {
+            let closing = window.closing.load(Ordering::SeqCst);
+            if window.close_on_read.swap(false, Ordering::SeqCst) {
+                let closed = window.clone();
+                queries.pending.lock().unwrap().push(Box::new(move || {
+                    closed.closing.store(true, Ordering::SeqCst);
+                    closed.present.store(false, Ordering::SeqCst);
+                }));
+            }
+            let present = || {
+                if window.present.load(Ordering::SeqCst) {
+                    Ok(())
+                } else {
+                    Err("runtime error: failed to receive message from webview".to_string())
+                }
+            };
+            window_entry(
+                window.label,
+                closing,
+                true,
+                String::new(),
+                || queries.query(|| present().map(|()| window.label.to_string())),
+                || queries.query(|| present().map(|()| false)),
+            )
+        },
+    )
+}
+
+// host.windows 는 창의 closing 과 제목, 초점을 한 메인 스레드 단계에서 읽는다. 목록 중에 메인 스레드가
+// 처리한 닫기는 그 창을 목록에서 빼거나 넣을 뿐 목록을 실패시키지 않는다.
+// contract: exposure.windows.listed-in-one-main-thread-step
+#[test]
+fn a_close_during_the_list_does_not_fail_the_list() {
+    let main = Arc::new(FakeMain::default());
+    let windows = [
+        FakeWindow::open("main", false),
+        FakeWindow::open("w2", true),
+    ];
+    let entry = |label: &str| json!({"ready": true, "window": label, "title": label, "project": null, "key": false});
+    assert_eq!(
+        fake_list(&main, &windows),
+        Ok(json!([entry("main"), entry("w2")]))
+    );
+    assert!(windows[1].closing.load(Ordering::SeqCst));
+    assert_eq!(fake_list(&main, &windows), Ok(json!([entry("main")])));
 }
 
 // contract: exposure.status-change.refuses-host-name

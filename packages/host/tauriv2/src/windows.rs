@@ -206,22 +206,46 @@ pub(crate) fn list(app: &AppHandle) -> Result<serde_json::Value, String> {
         .map(|(label, data)| (label.clone(), data.clone()))
         .collect();
     registered.sort_by(|a, b| a.0.cmp(&b.0));
-    let mut listed = Vec::new();
-    for (label, data) in registered {
-        let Some(window) = app.get_window(&label) else {
-            continue;
-        };
-        let root = data.root.lock().map_err(|e| e.to_string())?.clone();
-        let entry = window_entry(
-            &label,
-            data.closing.load(Ordering::Relaxed),
-            data.ready.load(Ordering::Relaxed),
-            root,
-            || window.title().map_err(|e| e.to_string()),
-            || window.is_focused().map_err(|e| e.to_string()),
-        )?;
-        listed.extend(entry);
-    }
+    let windows: Vec<(Window, Arc<WindowData>)> = registered
+        .into_iter()
+        .filter_map(|(label, data)| app.get_window(&label).map(|window| (window, data)))
+        .collect();
+    list_entries(
+        windows,
+        |step| crate::exposure::app_on_main(app, step),
+        |(window, data)| {
+            let root = data.root.lock().map_err(|e| e.to_string())?.clone();
+            window_entry(
+                window.label(),
+                data.closing.load(Ordering::Relaxed),
+                data.ready.load(Ordering::Relaxed),
+                root,
+                || window.title().map_err(|e| e.to_string()),
+                || window.is_focused().map_err(|e| e.to_string()),
+            )
+        },
+    )
+}
+
+/// host.windows 목록의 한 번의 메인 스레드 단계.
+pub type ListStep = Box<dyn FnOnce() -> Result<Vec<serde_json::Value>, String> + Send>;
+
+/// 창마다 entry 로 목록 항목을 만든다. 모든 창의 entry 를 on_main 이 실행하는 한 메인 스레드 단계에서
+/// 만든다. 창의 닫기는 메인 스레드가 처리하므로, 한 단계 안에서는 closing 을 읽은 뒤 조회하기 전에 창이
+/// runtime 에서 빠지지 않는다. 메인 스레드에서 부른 창 조회는 기다리지 않고 바로 처리된다
+/// (tauri-runtime-wry 의 send_user_message).
+pub fn list_entries<W: Send + 'static>(
+    windows: Vec<W>,
+    on_main: impl FnOnce(ListStep) -> Result<Vec<serde_json::Value>, String>,
+    entry: impl Fn(&W) -> Result<Option<serde_json::Value>, String> + Send + 'static,
+) -> Result<serde_json::Value, String> {
+    let listed = on_main(Box::new(move || {
+        let mut listed = Vec::new();
+        for window in &windows {
+            listed.extend(entry(window)?);
+        }
+        Ok(listed)
+    }))?;
     Ok(serde_json::Value::Array(listed))
 }
 

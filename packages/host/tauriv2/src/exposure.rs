@@ -970,19 +970,26 @@ pub(crate) fn on_main<T: Send + 'static>(
     window: &Window,
     work: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
+    app_on_main(window.app_handle(), work)
+}
+
+/// 메인 스레드에서 work 를 실행하고 결과를 기다린다. 메인 스레드에서 부르면 바로 실행한다.
+pub(crate) fn app_on_main<T: Send + 'static>(
+    app: &AppHandle,
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
     let (tx, rx) = mpsc::channel();
-    window
-        .run_on_main_thread(move || {
-            match tx.send(work()) {
-                Ok(()) => {}
-                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
-                Err(mpsc::SendError(Err(error))) => log_error("main-thread work", error),
-                Err(mpsc::SendError(Ok(_))) => {
-                    eprintln!("main-thread result arrived after its request ended")
-                }
+    app.run_on_main_thread(move || {
+        match tx.send(work()) {
+            Ok(()) => {}
+            // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+            Err(mpsc::SendError(Err(error))) => log_error("main-thread work", error),
+            Err(mpsc::SendError(Ok(_))) => {
+                eprintln!("main-thread result arrived after its request ended")
             }
-        })
-        .map_err(|e| e.to_string())?;
+        }
+    })
+    .map_err(|e| e.to_string())?;
     rx.recv().map_err(|e| e.to_string())?
 }
 

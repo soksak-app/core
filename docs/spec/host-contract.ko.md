@@ -204,6 +204,7 @@ fn invalid_json_closes_connection() {
 | `exposure.windows.closing-window-omitted` | `host.windows`는 닫기가 받아들여진 창을 조회하지 않고 목록에서 뺀다. | tauriv2 only: Tauri는 창마다 제목과 초점을 runtime에 묻는데, 닫기가 runtime에서 창을 지운 뒤 Destroyed 이벤트가 등록을 지우기 전에는 이 조회가 실패한다. Wails는 제목을 host 상태에서 읽고 초점 조회는 오류를 돌려주지 않는다 |
 | `exposure.windows.open-window-query-failure-reported` | 열린 창의 제목이나 초점 조회가 실패하면 `host.windows`가 그 오류로 실패한다. | tauriv2 only: Tauri는 창마다 제목과 초점을 runtime에 묻는데, 닫기가 runtime에서 창을 지운 뒤 Destroyed 이벤트가 등록을 지우기 전에는 이 조회가 실패한다. Wails는 제목을 host 상태에서 읽고 초점 조회는 오류를 돌려주지 않는다 |
 | `exposure.windows.entry-fields` | 목록의 창은 `ready`, `window`, `title`, `project`(프로젝트가 없으면 null), `key`를 가진다. | tauriv2 only: Tauri는 창마다 제목과 초점을 runtime에 묻는데, 닫기가 runtime에서 창을 지운 뒤 Destroyed 이벤트가 등록을 지우기 전에는 이 조회가 실패한다. Wails는 제목을 host 상태에서 읽고 초점 조회는 오류를 돌려주지 않는다 |
+| `exposure.windows.listed-in-one-main-thread-step` | `host.windows`는 모든 창의 닫기 상태, 제목, 초점을 한 메인 스레드 단계에서 읽는다. 목록 중에 메인 스레드가 처리한 닫기는 그 창을 목록에서 빼거나 넣을 뿐 목록을 실패시키지 않는다. | tauriv2 only: Tauri는 창의 닫기를 메인 스레드에서 처리하고, 닫기가 runtime에서 지운 창의 제목이나 초점 조회를 답 없이 버린다. Wails는 제목을 host 상태에서 읽고, 초점 조회는 메인 스레드에서 native 창을 읽는데 destroy가 이미 그 값을 nil로 바꾸었으므로 false를 돌려준다 |
 | `flush.queue.rejects-send-when-full` | 사이드카가 읽지 않아 쓰기 대기열이 가득 차면 보내기가 실패한다. | both |
 | `flush.queue.full-error-says-not-keeping-up` | 대기열이 가득 찬 오류는 "is not keeping up"을 적는다. | both |
 | `flush.buffer.replies-delivered-after-drain` | 대기열이 가득 찬 동안 버퍼에 넣은 응답은 사이드카가 다시 읽은 뒤 도착한다. | both |
