@@ -338,7 +338,13 @@ for (const app of Object.values(APPS)) {
     mkdirSync(folder);
     const missing = await s.run("core.project.open", { root: folder });
     await s.run("core.projects.flush");
+    // 폴더를 지우기 전에 처음 프로젝트로 돌아간다. 열려 있는 프로젝트의 폴더를 지우면 그 표면이 지운 폴더에서
+    // 시작하려다 실패하며, 그것은 이 검사가 보는 library 의 동작이 아니다.
+    await s.run("core.project.activate", { id: first.id });
     rmSync(folder, { recursive: true });
+    // 이 검사는 사라진 폴더를 library 에 보이고 그 프로젝트를 열지 못하게 한다. 두 오류는 화면에 보이고 기록된다.
+    s.expectError(new RegExp(`^error: library project ${folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: `));
+    s.expectError(/^error: library: project directory does not exist: /);
 
     await s.run("core.projects.browse");
     const library = await s.until("core.library", (state) => state.folderErrors?.[missing.id] !== undefined,
