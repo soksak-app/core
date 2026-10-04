@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R2-2-2: plugin과 sidecar 저장소는 version 0.0.3을 선언하고, `@soksak/plugin-api`는 plugin의 `engines.soksak`이 빌드에 쓰는 plugin API의 `^<version>`이 아니면 실패하는 `soksak-engines`를 제공한다.
 - F16: `soksak-exposure`와 `soksak-engines`는 plugin 저장소가 link된 package로 시작해도 검사를 실행한다. 전에는 검사하지 않고 끝났다.
 - R2-2-1: 모든 core 선언은 0.0.3이고, 버전 검사는 애플리케이션 `Info.plist` 버전과 native pkg-config 버전도 본다.
 - R2-8: 두 release 애플리케이션은 bundle 식별자 `app.soksak.wails`와 `app.soksak.tauri`의 `soksak.app`이다. 개발 build는 `.dev` 식별자를 쓴다. release의 첫 시작은 이전 `com.soksak.*` 설정 폴더를 한 번 옮기고, `plugins/installed.json` 형식 2는 설치 폴더를 설정 폴더에 대한 상대 경로로 기록하며 형식 1 파일을 한 번 변환한다(R2-8-1).

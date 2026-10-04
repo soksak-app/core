@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R2-2-2: the plugin and sidecar repositories declare version 0.0.3, and `@soksak/plugin-api` provides `soksak-engines`, which fails when a plugin's `engines.soksak` is not `^<version>` of the plugin API it builds against.
 - F16: `soksak-exposure` and `soksak-engines` run their check when a plugin repository starts them through the linked package; before, they ended without checking.
 - R2-2-1: every core declaration is 0.0.3, and the version check also covers the application `Info.plist` versions and the native pkg-config version.
 - R2-8: both release applications are `soksak.app` with the bundle identifiers `app.soksak.wails` and `app.soksak.tauri`; development builds use `.dev` identifiers; the first release start moves the former `com.soksak.*` configuration folder once, and `plugins/installed.json` format 2 records installed folders relative to the configuration directory, converting a format 1 file once (R2-8-1).
