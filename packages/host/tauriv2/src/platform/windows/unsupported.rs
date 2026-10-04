@@ -543,6 +543,10 @@ pub fn service_process_exists(_pid: u32) -> Result<bool, String> {
     missing("service process inspection")
 }
 
+pub fn new_session(_command: &mut std::process::Command) -> Result<(), String> {
+    missing("new process session")
+}
+
 pub fn create_private_directories(_path: &std::path::Path) -> Result<(), String> {
     missing("private directory creation")
 }

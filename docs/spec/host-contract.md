@@ -334,6 +334,7 @@ Items:
 | `sidecars-transport.stop.close-owner-then-shutdown` | Stop sends close-owner and, after a successful reply, shutdown. | both |
 | `sidecars-transport.stop.accepts-close-answers-sent-before-stop` | A persistent service's answer to a closed notice sent before the stop, arriving after the stop began, is accepted; stop still sends shutdown and no surface stays closing. | both |
 | `sidecars-transport.persistent.revives-a-lost-connection` | When the service drops the connection, the host restarts it without a send and the owning surface receives the connection event. | both |
+| `sidecars-transport.persistent.starts-in-new-session` | A persistent service that the host starts is the leader of a new session, so it receives no signal of the application's process group or terminal. | both |
 | `sidecars-transport.endpoint.zombie-service-does-not-exist` | A zombie service pid does not count as an existing service, so its stale endpoint is replaced. | both |
 | `sidecars-transport.endpoint.foreign-service-process-exists` | A service pid of a process that another user owns counts as an existing service, because the refused signal check shows that the process exists. | both |
 | `sidecars-transport.persistent.revive-failure-is-reported` | A failed restart reports the disconnection and its reason to the owning surface. | both |

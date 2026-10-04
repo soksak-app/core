@@ -643,6 +643,10 @@ impl Platform for Darwin {
     fn service_process_exists(&self, pid: u32) -> Result<bool, String> {
         endpoint::service_process_exists(pid)
     }
+    fn new_session(&self, command: &mut std::process::Command) -> Result<(), String> {
+        endpoint::new_session(command);
+        Ok(())
+    }
 }
 
 struct PersistentUnixStream(UnixStream);

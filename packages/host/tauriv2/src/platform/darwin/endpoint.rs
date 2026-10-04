@@ -17,6 +17,7 @@ use super::super::{Connection, Listener};
 extern "C" {
     fn geteuid() -> u32;
     fn kill(pid: i32, signal: i32) -> i32;
+    fn setsid() -> i32;
 }
 
 /// `kill` 이 번호의 프로세스가 없을 때 알리는 오류 번호.
@@ -52,6 +53,21 @@ pub fn service_process_exists(pid: u32) -> Result<bool, String> {
         return Ok(true);
     }
     Ok(false)
+}
+
+/// command 가 setsid 로 새 session 의 leader 가 되게 한다.
+pub fn new_session(command: &mut std::process::Command) {
+    use std::os::unix::process::CommandExt;
+    // pre_exec 의 함수는 fork 와 exec 사이의 자식에서 실행되므로 async-signal-safe 인 setsid 만 부른다. 실패하면
+    // spawn 이 그 오류를 반환한다.
+    unsafe {
+        command.pre_exec(|| {
+            if setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
 }
 
 /// 번호 pid 의 프로세스가 끝났는지 반환한다.

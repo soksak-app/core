@@ -161,7 +161,7 @@ The hosts own three child-process families, each with one rule.
 
 Crash leftovers are accepted until the operating system reclaims them. A startup cleanup was tried and removed as unsound (measured 2026-09-30): live WebKit of a running application also shows no unix sockets on this system, so socket presence discriminates nothing, WebKit XPC ignore SIGTERM, and the only sound ownership proof — a Networking process holding the owning bundle's `WebsiteData` store open — identifies a minority of an orphan group, because the memory-heavy WebContent holds no identifiable path. A cleanup that cannot prove which WebKit belong to dead applications must not run.
 
-**Persistent sidecars outlive the application and reconnect.** The terminal service keeps its sessions across application restarts and connection losses; a lost connection is revived at once and a dead service respawned ([terminal runtime](terminal-runtime.md)). The application never kills a persistent service on exit.
+**Persistent sidecars outlive the application and reconnect.** The terminal service keeps its sessions across application restarts and connection losses; a lost connection is revived at once and a dead service respawned ([terminal runtime](terminal-runtime.md)). The application never kills a persistent service on exit. Both hosts start a persistent service in a new session through the platform operation `NewSession` (Go) or `new_session` (Rust), so the service receives no signal of the application's process group or terminal.
 
 **Non-persistent sidecars die with their window.** Removing a surface or closing its window sends the close notice; the process ends with the channel.
 

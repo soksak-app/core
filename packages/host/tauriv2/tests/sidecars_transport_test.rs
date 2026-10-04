@@ -1356,6 +1356,105 @@ fn persistent_service_writes_its_standard_error_to_its_log() {
     );
 }
 
+/// 검사가 시작하게 한 service 를 검사가 끝날 때 끝낸다.
+struct EndService(i32);
+
+impl Drop for EndService {
+    fn drop(&mut self) {
+        if unsafe { libc::kill(self.0, libc::SIGKILL) } != 0 {
+            eprintln!(
+                "end the service {}: {}",
+                self.0,
+                std::io::Error::last_os_error()
+            );
+        }
+    }
+}
+
+// 호스트가 시작한 service 는 새 session 의 leader 다. 그래서 애플리케이션의 프로세스 그룹과 터미널의 신호를 받지
+// 않는다. service 는 자기 번호를 파일에 쓰고 endpoint 를 출력한 뒤 검사가 끝낼 때까지 남는다.
+// contract: sidecars-transport.persistent.starts-in-new-session
+#[test]
+fn persistent_service_starts_in_a_new_session() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let socket_directory = tempfile::tempdir().unwrap();
+    let socket_path = socket_directory.path().join("service.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let pid_path = executable_directory.path().join("pid");
+    let service = executable_directory.path().join("echo");
+    std::fs::write(
+        &service,
+        format!(
+            "#!/bin/sh\necho $$ > '{}'\nprintf '{{\"protocol\":1,\"pid\":%d,\"socket\":\"{}\",\"token\":\"session-token\"}}\\n' $$\nexec sleep 600\n",
+            pid_path.display(),
+            socket_path.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, events) = owner("session", "/projects/session");
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(hello["token"], "session-token");
+        stream
+            .write_all(
+                br#"{"operation":"hello","protocol":1,"ok":true}
+"#,
+            )
+            .unwrap();
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        stream.write_all(line.as_bytes()).unwrap();
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        let close: serde_json::Value = serde_json::from_str(&line).unwrap();
+        let reply = serde_json::json!({
+            "operation": "closed-owner",
+            "request": close["request"],
+            "ok": false,
+            "error": "test close"
+        });
+        writeln!(stream, "{reply}").unwrap();
+    });
+
+    sidecars
+        .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    assert_eq!(events.recv_timeout(STALL).unwrap().surface, "surface");
+    // service 는 endpoint 를 출력하기 전에 번호를 썼다.
+    let pid: i32 = std::fs::read_to_string(&pid_path)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    let _end = EndService(pid);
+    let session = unsafe { libc::getsid(pid) };
+    assert!(
+        session != -1,
+        "session of the service {pid}: {}",
+        std::io::Error::last_os_error()
+    );
+    assert_eq!(
+        session,
+        pid,
+        "the service {pid} is in session {session} (the test is in session {}), want its own session",
+        unsafe { libc::getsid(0) }
+    );
+    sidecars.stop();
+    server.join().unwrap();
+}
+
 // 서비스 로그를 열 수 없으면 서비스를 시작하지 않고 정해진 문장으로 실패한다.
 // contract: log.service.open-failure-fails-start
 #[test]

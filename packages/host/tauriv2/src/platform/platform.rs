@@ -671,6 +671,9 @@ pub trait Platform: Send + Sync {
     fn secure_service_directory(&self, path: &Path) -> Result<(), String>;
     /// persistent service endpoint의 프로세스가 아직 존재하는지 확인한다.
     fn service_process_exists(&self, pid: u32) -> Result<bool, String>;
+    /// command 가 새 session 에서 시작하게 한다. 영구 service 는 애플리케이션 프로세스가 아니라 설정 디렉터리에
+    /// 속하므로 애플리케이션의 프로세스 그룹과 터미널의 신호를 받지 않는다. command 를 시작하기 전에 호출한다.
+    fn new_session(&self, command: &mut std::process::Command) -> Result<(), String>;
 }
 
 /// 현재 운영체제의 구현을 반환한다.

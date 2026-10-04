@@ -1253,6 +1253,11 @@ impl<O: Owner> Core<O> {
                     .stdin(Stdio::null())
                     .stdout(Stdio::piped())
                     .stderr(Stdio::from(service_log));
+                // 영구 service 는 이 애플리케이션 프로세스의 수명이 아니라 설정 디렉터리에 속한다. 애플리케이션이
+                // 비정상 종료해도 service 가 함께 종료되지 않도록 새 session 을 시작한다.
+                current()?
+                    .new_session(&mut command)
+                    .map_err(|e| format!("sidecar {name}: new session: {e}"))?;
                 let mut spawned = command
                     .spawn()
                     .map_err(|e| format!("sidecar {name}: {}: {e}", program.display()))?;

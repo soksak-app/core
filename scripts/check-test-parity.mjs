@@ -1208,6 +1208,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F53",
+    implementation: [
+      { file: "packages/host/wailsv3/src/platform/darwin/endpoint.go", symbol: "func (implementation) NewSession" },
+      { file: "packages/host/tauriv2/src/platform/darwin/endpoint.rs", symbol: "pub fn new_session" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentServiceStartsInANewSession" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_service_starts_in_a_new_session" },
+    ],
+    expected: "Both hosts start a persistent service as the leader of a new session.",
+    levels: ["unit"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

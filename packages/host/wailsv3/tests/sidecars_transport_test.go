@@ -10,8 +10,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1317,6 +1319,105 @@ func TestPersistentServiceWritesItsStandardErrorToItsLog(t *testing.T) {
 	}
 	if string(data) != "service line\n" {
 		t.Fatalf("service log %q", data)
+	}
+}
+
+// 호스트가 시작한 service 는 새 session 의 leader 다. 그래서 애플리케이션의 프로세스 그룹과 터미널의 신호를 받지
+// 않는다. service 는 자기 번호를 파일에 쓰고 endpoint 를 출력한 뒤 검사가 끝낼 때까지 남는다.
+// contract: sidecars-transport.persistent.starts-in-new-session
+func TestPersistentServiceStartsInANewSession(t *testing.T) {
+	executableDir := t.TempDir()
+	socketDir, err := os.MkdirTemp("", "sp-s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDir)
+	socket := filepath.Join(socketDir, "service.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	pidPath := filepath.Join(executableDir, "pid")
+	script := fmt.Sprintf("#!/bin/sh\necho $$ > '%s'\nprintf '{\"protocol\":1,\"pid\":%%d,\"socket\":\"%s\",\"token\":\"harness-token\"}\\n' $$\nexec sleep 600\n", pidPath, socket)
+	if err := os.WriteFile(filepath.Join(executableDir, "service"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	serverDone := make(chan error, 1)
+	go func() {
+		connection, err := listener.Accept()
+		if err != nil {
+			serverDone <- err
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		if _, err := reader.ReadBytes('\n'); err != nil {
+			serverDone <- err
+			return
+		}
+		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+			serverDone <- err
+			return
+		}
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			serverDone <- err
+			return
+		}
+		if _, err := connection.Write(line); err != nil {
+			serverDone <- err
+			return
+		}
+		line, err = reader.ReadBytes('\n')
+		if err != nil {
+			serverDone <- err
+			return
+		}
+		var closeRequest map[string]any
+		if err := json.Unmarshal(line, &closeRequest); err != nil {
+			serverDone <- err
+			return
+		}
+		response, _ := json.Marshal(map[string]any{
+			"operation": "closed-owner", "request": closeRequest["request"], "ok": false, "error": "test close",
+		})
+		_, err = connection.Write(append(response, '\n'))
+		serverDone <- err
+	}()
+	sidecars, err := NewSidecars(harnessDeclarations(executableDir), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/session", seen: make(chan SidecarMessage, 4)}
+	if err := sendWithin(t, sidecars, owner, 30*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	// service 는 endpoint 를 출력하기 전에 번호를 썼다.
+	data, err := os.ReadFile(pidPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
+			t.Errorf("end the service %d: %v", pid, err)
+		}
+	}()
+	session, err := syscall.Getsid(pid)
+	if err != nil {
+		t.Fatalf("session of the service %d: %v", pid, err)
+	}
+	if session != pid {
+		own, _ := syscall.Getsid(0)
+		t.Fatalf("the service %d is in session %d (the test is in session %d), want its own session", pid, session, own)
+	}
+	sidecars.Stop()
+	if err := <-serverDone; err != nil {
+		t.Fatal(err)
 	}
 }
 
