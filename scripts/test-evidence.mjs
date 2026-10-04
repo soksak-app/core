@@ -76,13 +76,15 @@ function gitDigest(root, args) {
 }
 
 async function dirtyState(root) {
-  const status = git(root, ['status', '--porcelain=v1', '--untracked-files=all']);
+  // -z 는 경로를 따옴표 없이 NUL 로 끝내고, 이름 바뀜과 복사 항목 뒤에 원래 경로를 따로 둔다.
+  const fields = git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all']).split('\0');
   const files = [];
-  for (const line of status.split('\n').filter(Boolean)) {
-    const state = line.slice(0, 2);
-    const path = line.slice(3);
+  for (let index = 0; index < fields.length && fields[index]; index++) {
+    const state = fields[index].slice(0, 2);
+    const path = fields[index].slice(3);
+    const from = /[RC]/.test(state) ? fields[++index] : undefined;
     try {
-      files.push({ state, path, ...(await hashFile(root, path)) });
+      files.push({ state, path, ...(from === undefined ? {} : { from }), ...(await hashFile(root, path)) });
     } catch (error) {
       if (state.includes('D')) files.push({ state, path, sha256: null });
       else throw error;

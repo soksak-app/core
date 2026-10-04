@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G4-3: test evidence records a renamed path with its original path and reads paths that `git status` would quote, so `pnpm test` no longer fails while a rename is staged.
 - R2-1: the Go modules, package fields and documented install commands name the `soksak-app` organization (`github.com/soksak-app/core`), the license holder is `soksak`, personal paths are removed from the records, and the plugin specification states the GitHub repository of each sibling folder and the checkout layout.
 - G1.4-116: both hosts wait for each visible image region's raster of the prepared size before they commit a continuous layout too, so a divider drag no longer shows a grown region with the previous raster; the drag frame counts did not drop at comparable load.
 - G1.4-90-4-2: an image region attached again in the same generation continues its raster revision in both hosts, so the terminal sidecar no longer ignores its configuration and the presentation no longer waits 10 s for a terminal mounted again; both hosts trace their image raster decisions.

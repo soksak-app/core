@@ -91,3 +91,36 @@ test('evidence is recorded for a worktree with a multi-megabyte binary change', 
     await rm(repo, { recursive: true, force: true });
   }
 });
+
+test('evidence records a renamed path and a path that git status quotes', { timeout: 30000 }, async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { writeFile, rm } = await import('node:fs/promises');
+  const repo = await mkdtemp(join(tmpdir(), 'soksak-evidence-rename-'));
+  try {
+    const run = (...args) => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' });
+    run('init', '-q');
+    run('config', 'user.email', 'evidence@example.invalid');
+    run('config', 'user.name', 'evidence');
+    await writeFile(join(repo, 'old.mjs'), 'export const value = 1;\n');
+    await writeFile(join(repo, 'source.mjs'), 'export const value = 1;\n');
+    run('add', '.');
+    run('commit', '-q', '-m', 'initial');
+    run('mv', 'old.mjs', 'new name.mjs');
+    await writeFile(join(repo, '변경 file.mjs'), 'export const value = 2;\n');
+    const record = await collectEvidence({
+      root: repo,
+      caseId: 'renamed-path', language: 'js-ts',
+      implementationFiles: ['source.mjs'], testFiles: ['source.mjs'], dependencyFiles: ['source.mjs'],
+      buildFlags: ['node>=20'],
+      result: { status: 'pass', expected: { status: 'pass', tests: 1 }, actual: { status: 'pass', tests: 1 }, elapsedMs: 1 },
+    });
+    assert.equal(validateEvidence(record).length, 0);
+    const renamed = record.git.files.find(({ path }) => path === 'new name.mjs');
+    assert.equal(renamed?.state, 'R ');
+    assert.equal(renamed?.from, 'old.mjs');
+    assert.match(renamed?.sha256 ?? '', /^[0-9a-f]{64}$/);
+    assert.ok(record.git.files.some(({ path, state }) => path === '변경 file.mjs' && state === '??'));
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+  }
+});
