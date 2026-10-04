@@ -23,6 +23,14 @@ test("without a host, report writes the line to the console as an error", () => 
   assert.deepEqual(lines, ["surface probe mount failed: x"]);
 });
 
+test("without a host, the surfaces report of a failure writes the line to the console as an error", () => {
+  const lines = [];
+  const original = console.error;
+  console.error = (line) => lines.push(line);
+  try { surfaces.report("verify: 1 fail — probe"); } finally { console.error = original; }
+  assert.deepEqual(lines, ["verify: 1 fail — probe"]);
+});
+
 test("without a host, log writes an observation to the console as information", async () => {
   const { log } = await import("../host.js");
   const info = [];

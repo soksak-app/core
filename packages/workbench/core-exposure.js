@@ -6,7 +6,7 @@
 // 변경, 모달과 라이브러리의 그리기 뒤에 호출하고, 등록소는 감시 중인 값 중 달라진
 // 것만 호스트에 보낸다.
 import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
-import { log, report } from "./host.js";
+import { log } from "./host.js";
 import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";
 import { trackPointer } from "./pointer-state.js";

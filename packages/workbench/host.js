@@ -194,7 +194,7 @@ export function surfaceContextRuntime(surface, declarations = {}) {
   const { surfaceId } = surface;
   if (typeof surfaceId !== "string" || !surfaceId) throw new TypeError("surface runtime requires surface.surfaceId");
   const invoke = (name, payload) => name === "report"
-    ? bridge.call(name, payload)
+    ? bridge.call(name, errorLine(payload))
     // 기본값: 매개변수가 없는 호출은 payload 를 생략한다.
     : bridge.call(name, { ...(payload ?? {}), surface: surfaceId });
   const listeners = new Map();
@@ -227,7 +227,7 @@ export function surfaceContextRuntime(surface, declarations = {}) {
       return removeExposurePort;
     },
     reply: (id, payload) => bridge.call("exposureReply", { id, ...payload, surface: surfaceId }),
-    report: (message) => bridge.call("report", message),
+    report: (message) => bridge.call("report", errorLine(message)),
     unregister: () => {
       if (removeExposurePort === null) return;
       removeExposurePort();
@@ -298,8 +298,14 @@ export function watchCalls(fn) {
   watcher = fn;
 }
 
-/** 줄 하나를 애플리케이션 로그로 보낸다. 호스트가 없는 문서(브라우저 예제)의 로그는 콘솔이다. */
-export const report = (line) => (bridge ? bridge.call("report", line) : console.error(line));
+/**
+ * 오류 줄. 애플리케이션 로그에서 오류는 `error: ` 로 시작하고 관측은 그렇지 않으므로, 창 검사는 이 형식으로 검사 동안의
+ * 오류를 찾는다(docs/spec/hosts.md#application-log).
+ */
+const errorLine = (line) => `error: ${line}`;
+
+/** 실패 한 줄을 애플리케이션 로그로 보낸다. 호스트가 없는 문서(브라우저 예제)의 로그는 콘솔의 오류 수준이다. */
+export const report = (line) => (bridge ? bridge.call("report", errorLine(line)) : console.error(line));
 
 /**
  * 관측 줄 하나를 애플리케이션 로그로 보낸다. 실패가 아닌 기록(포커스 전이, 저장 형식 변환)이다. 호스트가 없는
@@ -329,7 +335,7 @@ const tellInTurn = (name, payload) => {
   // 실패해도 다음 호출은 보낸다. 그 실패를 여기서 삼키면 아무 데도 남지 않으므로
   // 애플리케이션 로그에 적는다.
   turn = answered.catch((why) => {
-    bridge.call("report", `host ${name} failed: ${why}`);
+    bridge.call("report", errorLine(`host ${name} failed: ${why}`));
   });
   return answered;
 };
@@ -408,8 +414,8 @@ export const surfaces = native ? {
       return plugins().map((p) => p.id);
     },
 
-    /** 검증 결과 한 줄을 애플리케이션 로그로 전송한다. */
-    report: (line) => tell("report", line),
+    /** 실패 한 줄을 애플리케이션 로그로 전송한다. */
+    report: (line) => tell("report", errorLine(line)),
 
     theme: (values) => tellInTurn("setTheme", values),
 
@@ -481,7 +487,8 @@ export const surfaces = native ? {
     waitPresented: () => tell("waitPresented"),
 } : {
   kinds: [],
-  report: () => {},
+  // 호스트가 없는 문서의 실패는 콘솔의 오류 수준에 쓴다(docs/spec/plugins.md).
+  report: (line) => console.error(line),
   theme: () => {},
   menuLanguage: () => {},
   // 호스트가 없으면 이 문서가 앉힌 자리가 실제 자리다. 컴포지터는 그 답을 기록한다.

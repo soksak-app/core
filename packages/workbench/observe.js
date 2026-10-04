@@ -9,14 +9,14 @@
 // 두 애플리케이션이 이 파일을 함께 실행하므로, 어떻게 끄는지는 한 번만 적힌다.
 // 호스트가 요청하지 않으면 실행되지 않는다.
 import { registry } from "./exposure.js";
-import { native, report, watchCalls } from "./host.js";
+import { log, native, watchCalls } from "./host.js";
 import { createTranscript } from "./transcript.js";
 import { watchResizeLoop } from "./resize-loop.js";
 import { host } from "@soksak/runtime";
 import { currentGrid, surfaceInput } from "./plane.js";
 
 // ResizeObserver 루프가 미룬 관찰을 애플리케이션 log 에 남긴다(G1.4-115). 판과 영역이 observer 를 만들기 전에 바꾼다.
-watchResizeLoop(globalThis, report);
+watchResizeLoop(globalThis, log);
 
 registry.method("diagnostics.fixture", async ({ root, settings: overrides }) => {
   if (typeof root !== "string" || !root) throw new Error("diagnostics.fixture requires root");
@@ -36,7 +36,7 @@ registry.method("diagnostics.fixture", async ({ root, settings: overrides }) => 
 });
 
 // 호출 기록기. 기록기가 이 패키지에 있으므로 두 애플리케이션이 같은 형식과 순서로 남긴다.
-const transcript = createTranscript(report);
+const transcript = createTranscript(log);
 if (native) watchCalls((name, payload, answered) => transcript.record(name, payload, answered));
 
 registry.method("diagnostics.transcript", ({ on }) => {

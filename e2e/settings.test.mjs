@@ -296,7 +296,7 @@ for (const app of Object.values(APPS)) {
     mkdirSync(join(root, ".soksak"), { recursive: true });
     writeFileSync(join(root, ".soksak/settings.json"), JSON.stringify({ sets: broken }));
     // 이 검사가 저장한 잘못된 세트는 그 프로젝트의 설정을 다시 불러올 때마다 page 오류로도 보고된다.
-    s.expectPageError(/settings: set .* names unknown section files\.gone/);
+    s.expectError(/settings: set .* names unknown section files\.gone/);
     await s.run("core.settings.set", { patch: { projectOpening: "tabs" }, scope: "common" });
     const opened = s.run("core.project.open", { root, color: "#7fe3b0" }).catch((error) => error);
     s.cleanup(async () => {

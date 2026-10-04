@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
+import { readErrors, readOffset, writeOffset } from "./application-log.mjs";
 import { pasteboardDifference, readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
 // 검사하는 애플리케이션 실행 파일. 애플리케이션은 번들에서 실행된다(docs/spec/hosts.md). 작업 디렉터리와
@@ -191,7 +192,7 @@ export async function open(t, app) {
     throw new Error(`${app.configDir}/endpoint.json belongs to ${endpoint.application}, not ${app.name}`);
   }
   assertEndpointUsesCurrentBuild(endpoint, realpathSync(app.binary), statSync(app.binary).mtimeMs);
-  session.pageErrorStart = await session.get("core.page.error");
+  session.logStart = readOffset(app.configDir);
   return session;
 }
 
@@ -211,13 +212,16 @@ export async function finishSession(t, session, close) {
         t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
       }
     }
-    // 검사 동안 page 가 새로 보인 애플리케이션 오류는 검사가 선언하지 않았으면 검사의 실패다. 정리가 일으킨 오류도
-    // 포함하도록 정리 뒤에 읽는다.
+    // 검사 동안 애플리케이션 로그에 쓰인 오류 줄은 모두 진단으로 남기고, 검사가 선언하지 않은 오류는 검사의 실패다.
+    // 문서의 오류 표시는 reload 가 지우므로 로그로 판정한다. 정리가 일으킨 오류도 포함하도록 정리 뒤에 읽는다.
     try {
-      const shown = await session.get("core.page.error");
-      if (shown !== null && shown !== session.pageErrorStart &&
-        !session.expectedPageErrors.some((pattern) => pattern.test(shown))) {
-        throw new Error(`${session.app.name}: the page showed an application error that the check did not declare: ${shown}`);
+      const { errors, end } = readErrors(session.app.configDir, session.logStart);
+      writeOffset(session.app.configDir, end);
+      for (const line of errors) t.diagnostic(`application error: ${line}`);
+      const undeclared = errors.filter((line) => !session.expectedErrors.some((pattern) => pattern.test(line)));
+      if (undeclared.length) {
+        throw new Error(`${session.app.name}: the application logged ${undeclared.length} error${undeclared.length === 1 ? "" : "s"} ` +
+          `that the check did not declare:\n${undeclared.join("\n")}`);
       }
     } catch (error) {
       failures.push(error);
@@ -237,9 +241,9 @@ export class Session {
     this.client = client;
     this.window = "main";
     this.cleanups = [];
-    // 세션을 열 때 page 가 보이던 애플리케이션 오류와 검사가 일으킨다고 선언한 오류의 형식. finishSession 이 비교한다.
-    this.pageErrorStart = null;
-    this.expectedPageErrors = [];
+    // 검사가 읽기 시작하는 애플리케이션 로그의 위치와 검사가 일으킨다고 선언한 오류의 형식. finishSession 이 쓴다.
+    this.logStart = 0;
+    this.expectedErrors = [];
     // 전달된 down 부터 같은 버튼의 up 이 전달될 때까지 열린 합성 누름. 창과 버튼으로 찾는다(docs/spec/exposure.md).
     this.presses = new Map();
   }
@@ -249,9 +253,9 @@ export class Session {
     this.cleanups.push(fn);
   }
 
-  /** 이 검사가 일부러 일으켜 page 가 보이는 애플리케이션 오류의 형식. 그 오류는 검사의 실패가 아니다. */
-  expectPageError(pattern) {
-    this.expectedPageErrors.push(pattern);
+  /** 이 검사가 일부러 일으켜 애플리케이션 로그에 쓰이는 오류 줄의 형식. 그 오류는 검사의 실패가 아니다. */
+  expectError(pattern) {
+    this.expectedErrors.push(pattern);
   }
 
   /**
@@ -267,7 +271,7 @@ export class Session {
   on(window) {
     const other = new Session(this.app, this.client);
     other.cleanups = this.cleanups;
-    other.expectedPageErrors = this.expectedPageErrors;
+    other.expectedErrors = this.expectedErrors;
     other.presses = this.presses;
     other.window = window;
     return other;
@@ -584,7 +588,7 @@ export async function fresh(s, { performanceTrace = TRACE } = {}) {
   const verification = await s.collect("core.verify");
   const presentationErrors = [];
   const offErrors = s.client.on("diagnostics.log", (params) => {
-    if (params?.window === s.window && /^host (syncSurfaces|presentSurfaces) failed:/.test(params.line)) {
+    if (params?.window === s.window && /^error: host (syncSurfaces|presentSurfaces) failed:/.test(params.line)) {
       presentationErrors.push(params.line);
     }
   });

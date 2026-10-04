@@ -93,7 +93,7 @@ install();
 
 /* 처리되지 않은 오류를 애플리케이션 로그로 보낸다. 애플리케이션에는 콘솔이 없다. */
 addEventListener("error", (e) =>
-  host.report(`error: ${e.message} @ ${e.filename}:${e.lineno}`));
+  host.report(`${e.message} @ ${e.filename}:${e.lineno}`));
 addEventListener("unhandledrejection", (e) => {
   host.report(rejectionLine(e.reason));
   showError(e.reason);
@@ -139,11 +139,10 @@ function check() {
     : `verify: ${failed.length} fail — ` +
       failed.map((r) => `${r.name} (${r.note})`).join(" · ");
   if (line === lastSaid) return;
-  if (failed.length === 0) console.log(line);
-  else console.error(line);
-  // 애플리케이션은 자체 로그에 기록한다. 호스트가 없으면 콘솔에만 남는다.
   lastSaid = line;
-  host.report(line);
+  // 애플리케이션은 자체 로그에 기록한다. 호스트가 없으면 콘솔에만 남는다. 통과는 관측이고 실패는 오류다.
+  if (failed.length === 0) log(line);
+  else host.report(line);
 }
 
 /* 표면이 하나도 서지 않는 자리. 잠든 표면은 크기가 없다. */
@@ -233,7 +232,7 @@ let drawing = Promise.resolve();
 let supersededLayouts = 0;
 function reportSuperseded() {
   if (supersededLayouts === 0) return;
-  host.report(`layout: ${supersededLayouts} waiting layouts were replaced by newer layouts before presentation`);
+  log(`layout: ${supersededLayouts} waiting layouts were replaced by newer layouts before presentation`);
   supersededLayouts = 0;
 }
 const layouts = createLayoutQueue({
