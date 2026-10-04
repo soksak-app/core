@@ -928,6 +928,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F30",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "is not keeping up" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "is not keeping up" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestSlowSidecarDoesNotBlockOtherSends" },
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestStopForcedKill" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "slow_sidecar_does_not_block_other_sends" },
+    ],
+    expected: "A sidecar that does not read its input fills its channel and is killed after the stop deadline on any machine.",
+    levels: ["unit"],
+  },
+  {
     id: "F28",
     implementation: [
       { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },

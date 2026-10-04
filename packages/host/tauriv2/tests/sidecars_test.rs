@@ -379,9 +379,10 @@ fn slow_sidecar_does_not_block_other_sends() {
 
     let directory = tempfile::tempdir().unwrap();
 
-    // 느린 사이드카: stdin을 읽지 않지만 stdin EOF에 정상 종료한다.
+    // 느린 사이드카: stdin 을 읽지 않으므로 pipe 가 차고 stop 은 기한 뒤 kill 한다. cat 처럼 stdin 을 읽는 program 은
+    // 읽는 속도가 부하에 달려 있어 채널이 차는지가 정해지지 않는다.
     let slow_program = directory.path().join("slow");
-    std::fs::write(&slow_program, "#!/bin/sh\nexec cat >/dev/null\n").unwrap();
+    std::fs::write(&slow_program, "#!/bin/sh\nexec sleep 600\n").unwrap();
     std::fs::set_permissions(&slow_program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     // 빠른 사이드카: 받은 줄을 그대로 출력한다.

@@ -412,8 +412,9 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 
 	directory := t.TempDir()
 
-	// 느린 사이드카: stdin 을 읽지 않지만 stdin EOF에 정상 종료한다.
-	slowScript := "#!/bin/sh\nexec cat >/dev/null\n"
+	// 느린 사이드카: stdin 을 읽지 않으므로 pipe 가 차고 Stop 은 기한 뒤 kill 한다. cat 처럼 stdin 을 읽는 program 은
+	// 읽는 속도가 부하에 달려 있어 채널이 차는지가 정해지지 않는다.
+	slowScript := "#!/bin/sh\nexec sleep 600\n"
 	if err := os.WriteFile(filepath.Join(directory, "slow"), []byte(slowScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -660,8 +661,9 @@ func TestStopClosesUnreadOutput(t *testing.T) {
 func TestStopForcedKill(t *testing.T) {
 	directory := t.TempDir()
 
-	// 사이드카: stdin EOF 를 무시하고 계속 실행한다.
-	stubborn := "#!/bin/sh\ncat >/dev/null &\nwait\n"
+	// 사이드카: stdin 을 읽지 않으므로 stdin EOF 뒤에도 계속 실행한다. background 명령의 stdin 은 shell 에 따라 /dev/null 이
+	// 되어 곧바로 끝날 수 있으므로 쓰지 않는다.
+	stubborn := "#!/bin/sh\nexec sleep 600\n"
 	if err := os.WriteFile(filepath.Join(directory, "stubborn"), []byte(stubborn), 0o755); err != nil {
 		t.Fatal(err)
 	}
