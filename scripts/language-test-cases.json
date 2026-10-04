@@ -6,7 +6,7 @@
       "language": "js-ts",
       "command": "node",
       "args": ["--test", "--test-reporter=tap", "scripts/test/test-command.test.mjs"],
-      "expectedTests": 18,
+      "expectedTests": 20,
       "implementationFiles": ["scripts/test-command.mjs"],
       "testFiles": ["scripts/test/test-command.test.mjs"],
       "dependencyFiles": ["package.json", "pnpm-lock.yaml"],

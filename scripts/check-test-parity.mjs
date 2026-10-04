@@ -1249,6 +1249,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F63",
+    implementation: [{ file: "scripts/test-command.mjs", symbol: "function groupMembers" }],
+    tests: [
+      { file: "scripts/test/test-command.test.mjs", id: "counts a process group that holds only zombies as gone after a denied probe" },
+      { file: "scripts/test/test-command.test.mjs", id: "reads the members of a group from the real process table after a denied probe" },
+      { file: "scripts/test/test-command.test.mjs", id: "does not convert denied cleanup verification after SIGKILL into success" },
+    ],
+    expected: "A refused cleanup probe is decided from the process table: a group with no running member is cleaned, and a running member keeps the EPERM failure.",
+    levels: ["unit"],
+  },
+  {
     id: "F58",
     implementation: [
       { file: "packages/workbench/page-layout.js", symbol: "export function createPageLayout" },

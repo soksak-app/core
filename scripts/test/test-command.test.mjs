@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import childProcess, { execFileSync, spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { loadavg, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +8,19 @@ import { runCommand } from '../test-command.mjs';
 
 const node = process.execPath;
 const task = (source) => [node, ['-e', source]];
+
+// 끝난 프로세스는 부모가 거둘 때까지 좀비로 남고, 좀비에 대한 kill(pid, 0) 은 성공한다. 그래서 프로세스 표의 상태로 판정한다.
+// 이 파일의 다른 테스트가 바꾸는 childProcess.execFileSync 가 아니라 가져올 때의 함수를 쓴다.
+function assertEnded(pid) {
+  let state;
+  try {
+    state = execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' }).trim();
+  } catch (error) {
+    if (error.status === 1 && error.stdout === '') return;
+    throw error;
+  }
+  assert.match(state, /^Z/, `process ${pid} is running with state ${state}`);
+}
 
 test('emits ordered start and terminal events with visible output', { timeout: 2000 }, async () => {
   const events = [];
@@ -122,7 +135,7 @@ test('cleans descendants after the leader exits', { timeout: 2000 }, async (t) =
   const result = await runCommand({ id: 'descendant', command, args, timeoutMs: 500, onEvent: () => {} });
   const descendantPid = Number(await readFile(pidFile, 'utf8'));
   assert.equal(result.status, 'pass', JSON.stringify(result));
-  assert.throws(() => process.kill(descendantPid, 0), { code: 'ESRCH' });
+  assertEnded(descendantPid);
 });
 
 test('cleans a descendant that inherits supervisor stdio before close', { timeout: 2000 }, async (t) => {
@@ -134,7 +147,7 @@ test('cleans a descendant that inherits supervisor stdio before close', { timeou
   const result = await runCommand({ id: 'inherited-stdio', command, args, timeoutMs: 500, onEvent: () => {} });
   const descendantPid = Number(await readFile(pidFile, 'utf8'));
   assert.equal(result.status, 'pass');
-  assert.throws(() => process.kill(descendantPid, 0), { code: 'ESRCH' });
+  assertEnded(descendantPid);
 });
 
 test('escalates cleanup for a descendant that ignores SIGTERM', { timeout: 2000 }, async (t) => {
@@ -158,7 +171,7 @@ test('escalates cleanup for a descendant that ignores SIGTERM', { timeout: 2000 
   descendantPid = Number(await readFile(pidFile, 'utf8'));
   assert.equal(result.status, 'pass');
   assert.equal(await readFile(markerFile, 'utf8'), 'term');
-  assert.throws(() => process.kill(descendantPid, 0), { code: 'ESRCH' });
+  assertEnded(descendantPid);
 });
 
 test('turns an event callback exception into a failure and cleans the child', { timeout: 2000 }, async () => {
@@ -252,7 +265,7 @@ test('forwards CLI SIGTERM to command cancellation and cleanup', { timeout: 3000
   assert.equal(closeResult.code, 1);
   assert.match(stdout, /"type":"cancelled"/);
   assert.equal(await readFile(markerFile, 'utf8'), 'term');
-  assert.throws(() => process.kill(descendantPid, 0), { code: 'ESRCH' });
+  assertEnded(descendantPid);
 });
 
 test('rejects invalid arguments', { timeout: 2000 }, () => {
@@ -267,10 +280,21 @@ test('rejects invalid arguments', { timeout: 2000 }, () => {
 });
 
 test('does not convert denied cleanup verification after SIGKILL into success', { timeout: 3000 }, async (t) => {
+  // 확인이 거부되고 프로세스 표가 실행 중인 구성원을 보여 주는 상태를 주입한다. 이 사용자가 신호를 보낼 수 없는 구성원이다.
   const originalKill = process.kill;
+  const originalExecFileSync = childProcess.execFileSync;
   let killAttempted = false;
-  t.after(() => { process.kill = originalKill; });
+  let group;
+  t.after(() => {
+    process.kill = originalKill;
+    childProcess.execFileSync = originalExecFileSync;
+  });
+  childProcess.execFileSync = (file, args, options) => {
+    if (file !== 'ps') return originalExecFileSync(file, args, options);
+    return `${group} ${group} S\n`;
+  };
   process.kill = (pid, signal) => {
+    if (pid < 0) group = -pid;
     if (pid < 0 && signal === 'SIGKILL') { killAttempted = true; return true; }
     if (pid < 0 && signal === 0) {
       if (!killAttempted) return true;
@@ -283,5 +307,63 @@ test('does not convert denied cleanup verification after SIGKILL into success', 
   const result = await runCommand({ id: 'denied-verification', command: node, args: ['-e', 'process.exit(0)'], timeoutMs: 1000, onEvent: () => {} });
   assert.equal(result.status, 'fail', JSON.stringify(result));
   assert.equal(result.error.code, 'EPERM');
-  assert.ok(result.cleanupObservations.some((item) => item.operation === 'verify' && item.error.code === 'EPERM'));
+  assert.ok(result.cleanupObservations.some((item) => item.operation === 'verify' && item.error.code === 'EPERM' && item.members.some((member) => member.pid === group && member.state === 'S')), JSON.stringify(result.cleanupObservations));
+});
+
+test('counts a process group that holds only zombies as gone after a denied probe', { timeout: 3000 }, async (t) => {
+  // 측정된 상태를 주입한다. 구성원이 모두 끝났지만 거둬지지 않은 그룹에 macOS 의 kill(-pgid, sig) 는 EPERM 을 돌려주고,
+  // 프로세스 표는 그 구성원을 좀비(Z)로 보여 준다.
+  const originalKill = process.kill;
+  const originalExecFileSync = childProcess.execFileSync;
+  t.after(() => {
+    process.kill = originalKill;
+    childProcess.execFileSync = originalExecFileSync;
+  });
+  let group;
+  process.kill = (pid, signal) => {
+    if (pid < 0) {
+      group = -pid;
+      const error = new Error('kill EPERM');
+      error.code = 'EPERM';
+      throw error;
+    }
+    return originalKill(pid, signal);
+  };
+  childProcess.execFileSync = (file, args, options) => {
+    if (file !== 'ps') return originalExecFileSync(file, args, options);
+    return `    1     1 Ss\n${group + 1} ${group} Z\n`;
+  };
+  const result = await runCommand({ id: 'zombie-group', command: node, args: ['-e', 'process.exit(0)'], timeoutMs: 1000, onEvent: () => {} });
+  assert.equal(result.status, 'pass', JSON.stringify(result));
+  assert.deepEqual(result.cleanupObservations, [{ operation: 'verify', error: { name: 'Error', message: 'kill EPERM', code: 'EPERM' }, members: [{ pid: group + 1, state: 'Z' }] }]);
+});
+
+test('reads the members of a group from the real process table after a denied probe', { timeout: 3000 }, async (t) => {
+  // 확인만 거부하고 프로세스 표는 실제 ps 로 읽는다. 첫 확인에서 남은 자손은 실행 중으로 보이고, 정리의 SIGTERM 뒤에는 사라진다.
+  const directory = await mkdtemp(join(tmpdir(), 'test-command-members-'));
+  const pidFile = join(directory, 'pid');
+  const originalKill = process.kill;
+  let descendantPid;
+  t.after(async () => {
+    process.kill = originalKill;
+    if (descendantPid) {
+      try { process.kill(descendantPid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+    }
+    await rm(directory, { recursive: true, force: true });
+  });
+  process.kill = (pid, signal) => {
+    if (pid < 0 && signal === 0) {
+      const error = new Error('kill EPERM');
+      error.code = 'EPERM';
+      throw error;
+    }
+    return originalKill(pid, signal);
+  };
+  const source = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e','setTimeout(()=>{},2000)'],{stdio:'ignore'}); writeFileSync(${JSON.stringify(pidFile)},String(child.pid)); process.exit(0);`;
+  const result = await runCommand({ id: 'process-table', command: node, args: ['-e', source], timeoutMs: 1000, onEvent: () => {} });
+  descendantPid = Number(await readFile(pidFile, 'utf8'));
+  assert.equal(result.status, 'pass', JSON.stringify(result));
+  const verify = result.cleanupObservations.find((item) => item.operation === 'verify');
+  assert.ok(verify?.members.some((member) => member.pid === descendantPid && !member.state.startsWith('Z')), JSON.stringify(result.cleanupObservations));
+  assertEnded(descendantPid);
 });
