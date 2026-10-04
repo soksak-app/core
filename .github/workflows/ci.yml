@@ -1,0 +1,56 @@
+name: ci
+# build-machine: skip smoke reason=the window checks need a signed-in desktop and run before a release on the development Mac (docs/operations/examples.md)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      # 구조 검사는 형제 폴더의 plugin 과 sidecar repository 를 읽는다(docs/spec/plugins.md#repositories 의 배치).
+      - uses: actions/checkout@v4
+        with:
+          path: core
+      - uses: actions/checkout@v4
+        with:
+          repository: soksak-app/plugin-browser
+          path: plugins/browser
+      - uses: actions/checkout@v4
+        with:
+          repository: soksak-app/plugin-files
+          path: plugins/files
+      - uses: actions/checkout@v4
+        with:
+          repository: soksak-app/plugin-terminal
+          path: plugins/terminal
+      - uses: actions/checkout@v4
+        with:
+          repository: soksak-app/sidecar-files
+          path: sidecars/files
+      - uses: actions/checkout@v4
+        with:
+          repository: soksak-app/sidecar-vt
+          path: sidecars/vt
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: core/.node-version
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: core/package.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/packages/host/wailsv3/go.mod
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Build
+        run: make -C core build native-darwin
+      - name: Structure checks
+        run: make -C core docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check
+      - name: Host tests
+        run: make -C core host-contract-check rust-format-check go-format-check rust-clippy-check
+      - name: Package tests
+        run: pnpm -C core test

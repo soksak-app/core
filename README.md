@@ -30,6 +30,7 @@ pnpm test
 - [Native hosts](docs/spec/hosts.md)
 - [Native surface placement](docs/spec/native-surfaces.md)
 - [data-native-modal](docs/spec/native-modals.md)
+- [Install a release](docs/operations/install.md)
 - [Private native APIs and update review](docs/operations/private-native-apis.md)
 - [Implementation, validation, and release status](docs/features.md)
 - [Changes](CHANGELOG.md)

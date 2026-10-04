@@ -1,0 +1,39 @@
+name: release
+# build-machine: skip test reason=the ci workflow tests the tagged commit on main before the tag is pushed
+# build-machine: skip smoke reason=the window checks need a signed-in desktop and run before a release on the development Mac (docs/operations/examples.md)
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/host/wailsv3/go.mod
+      - uses: dtolnay/rust-toolchain@stable
+      # release 번들을 빌드하고 진단 코드가 없는지 검사한다.
+      - name: Build
+        run: make release-check
+      # 서명하지 않은 번들이므로 설치 안내를 release 본문으로 쓴다(docs/operations/install.md).
+      - name: Package
+        run: |
+          version="${{ github.ref_name }}"
+          version="${version#v}"
+          mkdir dist
+          ditto -c -k --keepParent target/release/wailsv3/soksak.app "dist/soksak-$version-macos-arm64-wails.zip"
+          ditto -c -k --keepParent target/release/tauriv2/soksak.app "dist/soksak-$version-macos-arm64-tauri.zip"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: docs/operations/install.md
