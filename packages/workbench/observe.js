@@ -11,8 +11,12 @@
 import { registry } from "./exposure.js";
 import { native, report, watchCalls } from "./host.js";
 import { createTranscript } from "./transcript.js";
+import { watchResizeLoop } from "./resize-loop.js";
 import { host } from "@soksak/runtime";
 import { currentGrid, surfaceInput } from "./plane.js";
+
+// ResizeObserver 루프가 미룬 관찰을 애플리케이션 log 에 남긴다(G1.4-115). 판과 영역이 observer 를 만들기 전에 바꾼다.
+watchResizeLoop(globalThis, report);
 
 registry.method("diagnostics.fixture", async ({ root, settings: overrides }) => {
   if (typeof root !== "string" || !root) throw new Error("diagnostics.fixture requires root");

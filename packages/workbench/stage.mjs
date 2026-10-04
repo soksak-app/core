@@ -13,7 +13,7 @@
 //   <출력>/diagnostics.js           --diagnostics 이면 워크벤치의 observe.js(페이지 진단 메서드),
 //                                  아니면 release-diagnostics.js(빈 모듈). 진단 코드는 진단 빌드에만
 //                                  들어간다
-//   <출력>/transcript.js            --diagnostics 이면 진단 모듈이 쓰는 호출 기록기
+//   <출력>/transcript.js 등          --diagnostics 이면 진단 모듈이 쓰는 파일(staged.js 의 STAGED.diagnostics)
 //
 // 플러그인은 bundle 에 넣지 않는다. 네이티브 host 는 설정 디렉터리에 설치된 플러그인을 제공한다
 // (docs/spec/installation.md). host 가 없는 애플리케이션(브라우저 예제)은 --installed 로 설정 디렉터리를 주며,
@@ -99,7 +99,9 @@ for (const name of ["soksak", "@soksak/plugin-api"]) {
 }
 cpSync(runtime, join(target, RUNTIME), { recursive: true });
 copyFileSync(join(workbench, diagnostics ? "observe.js" : "release-diagnostics.js"), join(target, "diagnostics.js"));
-if (diagnostics) copyFileSync(join(workbench, "transcript.js"), join(target, "transcript.js"));
+if (diagnostics) {
+  for (const file of STAGED.diagnostics) copyFileSync(join(workbench, file), join(target, file));
+}
 writeFileSync(join(target, ENVIRONMENT), `${JSON.stringify(environment, null, 2)}\n`);
 
 let plugins = [];
