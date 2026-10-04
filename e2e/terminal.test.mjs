@@ -1902,7 +1902,10 @@ for (const app of Object.values(APPS)) {
     assert.equal(result.deepest, 0, `divider input queue accumulated ${result.deepest} steps`);
 
     // 왕복의 끝은 시작 좌표와 같아야 한다. 실제 이동은 각 캡처의 카드 좌표로 검사한다.
-    await s.presented();
+    const { displayed } = await s.presented();
+    // frame 시각은 host 의 표시 시계(ms)다. 실패 문장에 performance trace 의 벽시계 시각으로 적어 trace 와 맞춘다.
+    const clockOffset = Date.now() - displayed;
+    const at = (time) => new Date(time + clockOffset).toISOString();
     const host = await s.get("host.window");
     const positions = [];
     let firstGlyph = null;
@@ -1916,20 +1919,20 @@ for (const app of Object.values(APPS)) {
         position: [...terminalBoxes].sort((a, b) => a.card.l - b.card.l)[1].card.l / frame.scale });
       for (const box of terminalBoxes) {
         assert.ok(box.l > box.card.l && box.r - 1 < box.card.r,
-          `frame ${index}: terminal ${box.l}..${box.r - 1} invades DOM card ${box.card.l}..${box.card.r}`);
+          `frame ${index} at ${at(frame.time)}: terminal ${box.l}..${box.r - 1} invades DOM card ${box.card.l}..${box.card.r}`);
         const scale = frame.scale;
         const leftGap = box.l - box.card.l;
         const rightGap = box.card.r - box.r;
         assert.ok(leftGap >= scale && leftGap <= 2 * scale,
-          `frame ${index}: terminal left gap is ${leftGap}px; ` +
+          `frame ${index} at ${at(frame.time)}: terminal left gap is ${leftGap}px; ` +
           `(surface=${box.l}..${box.r}, card=${box.card.l}..${box.card.r}, scale=${scale})`);
         // surfaceBoxes.r는 배타적 좌표이고 span().card.r는 카드의 마지막 픽셀이다.
         // 네이티브 영역은 오른쪽 보더의 안쪽 경계 바로 앞에서 끝나야 한다.
         assert.ok(rightGap >= 0 && rightGap <= 2 * scale,
-          `frame ${index}: terminal right gap is ${rightGap}px; ` +
+          `frame ${index} at ${at(frame.time)}: terminal right gap is ${rightGap}px; ` +
           `(surface=${box.l}..${box.r}, card=${box.card.l}..${box.card.r}, scale=${scale})`);
         assert.ok(box.r - box.l >= box.card.r - box.card.l - 4 * scale,
-          `frame ${index}: terminal native area is narrower than its card`);
+          `frame ${index} at ${at(frame.time)}: terminal native area is narrower than its card`);
         assert.equal(whitePixels(frame, { l: box.l, r: box.r, t: box.t, b: box.b }), 0,
           `frame ${index}: terminal contains white pixels`);
         const metrics = before.values().next().value;
