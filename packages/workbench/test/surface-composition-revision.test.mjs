@@ -12,6 +12,9 @@ test("a surface mounted again in the same document continues its composition rev
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  // 관찰은 다음 animation frame 에 시작하며, 이 검사는 frame 을 진행하지 않는다.
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
   const placed = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {

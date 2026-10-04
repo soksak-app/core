@@ -49,7 +49,8 @@ export function watchResizeLoop(view, report, locate = creator) {
   const sized = (entry) => `${describe(entry.target)} ${Math.round(entry.contentRect.width)}x${Math.round(entry.contentRect.height)}`;
   view.ResizeObserver = class extends Native {
     constructor(callback) {
-      const label = locate();
+      // observer 를 만든 시각도 적는다. 관찰 round 도중에 만든 observer 는 첫 관찰의 일부를 다음 frame 으로 미룬다(F32).
+      const label = `${locate()} created at ${view.performance.now().toFixed(1)}ms`;
       super((entries, observer) => {
         if (collected) {
           for (const entry of entries) collected.push(sized(entry));

@@ -191,6 +191,8 @@ export async function createSurfaceCompositionController(
   let observer = null;
   let changed = null;
   let resizeFrame = null;
+  // 관찰을 시작할 animation frame. 시작 전에 정리하면 취소한다.
+  let observeFrame = null;
   let pending = Promise.resolve();
   const inactiveError = () => Object.assign(
     new Error("surface composition is inactive"),
@@ -213,6 +215,7 @@ export async function createSurfaceCompositionController(
       view.removeEventListener("scroll", changed, true);
     }
     if (resizeFrame !== null) view.cancelAnimationFrame(resizeFrame);
+    if (observeFrame !== null) view.cancelAnimationFrame(observeFrame);
     await pending;
     const results = await Promise.allSettled([...internal.values()].map(({ handle }) => handle.detach()));
     paintBoundary?.restore();
@@ -286,20 +289,28 @@ export async function createSurfaceCompositionController(
     // 잡는다(예: 그리드가 left/top 을 바꿀 때 ResizeObserver 는 발화하지 않는다).
     const submit = () => { place().catch(reportFailure); };
     observer = new view.ResizeObserver(submit);
-    const observed = new Set();
-    for (const element of [...Object.values(regions), ...Object.values(overlays)]) {
-      for (let node = element; node; node = node.parentElement) {
-        if (!observed.has(node)) {
-          observed.add(node);
-          observer.observe(node);
+    // 관찰은 다음 animation frame 에 시작한다. 그 frame 의 관찰 round 보다 먼저 실행되므로 첫 관찰이 한 round 에 모두
+    // 전달된다. 관찰 round 도중(다른 callback 의 microtask)에 시작하면 이미 지나간 깊이의 첫 관찰이 다음 frame 으로
+    // 밀리고 WebKit 이 ResizeObserver loop 오류를 낸다(F32). 그 사이의 크기는 아래의 첫 place() 가 보내고, 그 뒤의 변화는
+    // 첫 관찰이 받는다.
+    observeFrame = view.requestAnimationFrame(() => {
+      observeFrame = null;
+      if (!active) return;
+      const observed = new Set();
+      for (const element of [...Object.values(regions), ...Object.values(overlays)]) {
+        for (let node = element; node; node = node.parentElement) {
+          if (!observed.has(node)) {
+            observed.add(node);
+            observer.observe(node);
+          }
         }
       }
-    }
-    const initialViewport = viewportOf();
-    if (initialViewport && !observed.has(initialViewport)) {
-      observed.add(initialViewport);
-      observer.observe(initialViewport);
-    }
+      const initialViewport = viewportOf();
+      if (initialViewport && !observed.has(initialViewport)) {
+        observed.add(initialViewport);
+        observer.observe(initialViewport);
+      }
+    });
     changed = () => {
       if (resizeFrame !== null) return;
       resizeFrame = view.requestAnimationFrame(() => {
