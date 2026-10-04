@@ -49,7 +49,7 @@ pub mod webkit_children;
 pub mod windows;
 pub mod workspace;
 
-use application_log::{log_error, log_failure};
+use application_log::log_error;
 use sidecars::WindowSidecars;
 
 /// 시작할 때 읽은 애플리케이션 인자(docs/spec/hosts.md#application-arguments).
@@ -125,9 +125,11 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         diagnostics: cfg!(feature = "diagnostics"),
     }));
     // 창 확대 애니메이션은 창 프레임만 움직이고 웹 문서는 그 뒤에 따라온다. AppKit 이 기본값을
-    // 읽기 전에 그 길이를 줄인다.
-    if let Ok(platform) = platform::current() {
-        log_failure("window resize", platform.instant_window_resize());
+    // 읽기 전에 그 길이를 줄인다. 이 단계를 제공하지 못하는 플랫폼에서는 창을 열기 전에 상태 1 로
+    // 끝난다(docs/spec/hosts.md#windows-state).
+    if let Err(error) = platform::current().and_then(|platform| platform.instant_window_resize()) {
+        eprintln!("{error}");
+        std::process::exit(1);
     }
     // 플러그인 설정은 설정 파일의 창을 만들기 전에 실행되므로 엔드포인트를 여기서 연다.
     let endpoint = tauri::plugin::Builder::<tauri::Wry>::new("endpoint")
