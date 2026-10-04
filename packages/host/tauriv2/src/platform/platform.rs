@@ -657,6 +657,8 @@ pub trait Platform: Send + Sync {
     fn append_private_file(&self, path: &Path) -> Result<std::fs::File, String>;
     /// path 에 현재 사용자만 읽고 쓰는 새 파일을 만들어 쓰기로 연다. path 가 이미 있으면 AlreadyExists 오류다.
     fn create_private_file(&self, path: &Path) -> std::io::Result<std::fs::File>;
+    /// path 의 파일 내용을 data 로 바꾼다. 없으면 현재 사용자만 읽고 쓰는 파일로 만든다. 있는 파일의 권한은 바꾸지 않는다.
+    fn write_private_file(&self, path: &Path, data: &[u8]) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// 현재 사용자만 접근할 수 있는 디렉터리를 상위 디렉터리와 함께 만든다.
     fn private_directory(&self, path: &Path) -> Result<(), String>;

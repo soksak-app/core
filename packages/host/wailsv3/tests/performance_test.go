@@ -306,3 +306,29 @@ func TestTraceRotatesAtTenMegabytes(t *testing.T) {
 		t.Fatalf("the new line did not start a new output: %v %q", err, current)
 	}
 }
+
+// 스위치, 서비스 플래그, 트레이스 출력은 현재 사용자만 읽고 쓴다.
+// contract: performance.trace.owner-only-files
+func TestEnableCreatesOwnerOnlyFiles(t *testing.T) {
+	config := tempConfig(t)
+	target, err := host.PerformanceEnable(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := host.PerformanceLine(target, "host", map[string]any{"event": "trace_on"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		filepath.Join(config, "performance"),
+		filepath.Join(config, "services", "fixture-service", "performance"),
+		target,
+	} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("%s has mode %o, want 600", path, info.Mode().Perm())
+		}
+	}
+}

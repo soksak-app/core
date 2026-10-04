@@ -374,6 +374,10 @@ func (implementation) CreatePrivateFile(string) (*os.File, error) {
 	return nil, unsupported("new private file creation")
 }
 
+func (implementation) WritePrivateFile(string, []byte) error {
+	return unsupported("private file writing")
+}
+
 func (implementation) PrivateDirectory(string) error {
 	return unsupported("private directory")
 }

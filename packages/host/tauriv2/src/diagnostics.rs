@@ -282,7 +282,9 @@ fn fixture(host: &Host, window: &Window, request: Map<String, Value>) -> Result<
     let root = window.state::<Workspace>().directory().join("test-project");
     let settings = root.join(".soksak");
     platform.private_directory(&settings).map_err(internal)?;
-    std::fs::write(settings.join("settings.json"), "{}\n").map_err(internal)?;
+    platform
+        .write_private_file(&settings.join("settings.json"), b"{}\n")
+        .map_err(internal)?;
     let mut params = Map::new();
     params.insert(
         "root".into(),

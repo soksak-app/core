@@ -142,8 +142,9 @@ pub fn refresh(config: &Path) {
     match serde_json::to_vec_pretty(&record)
         .map_err(|e| e.to_string())
         .and_then(|bytes| {
-            std::fs::write(&temporary, &bytes)
-                .map_err(|e| format!("write {}: {e}", temporary.display()))
+            crate::platform::current()?
+                .write_private_file(&temporary, &bytes)
+                .map_err(|e| format!("write {e}"))
         })
         .and_then(|()| std::fs::rename(&temporary, &target).map_err(|e| format!("rename: {e}")))
     {

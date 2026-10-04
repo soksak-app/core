@@ -36,7 +36,7 @@ func PerformanceEnable(config string) (string, error) {
 	if err := performanceWriteFlags(config, target); err != nil {
 		return "", errors.Join(err, PerformanceDisable(config))
 	}
-	if err := os.WriteFile(filepath.Join(config, "performance"), []byte(target+"\n"), 0o666); err != nil {
+	if err := system.WritePrivateFile(filepath.Join(config, "performance"), []byte(target+"\n")); err != nil {
 		return "", errors.Join(fmt.Errorf("write performance switch: %w", err), PerformanceDisable(config))
 	}
 	return target, nil
@@ -228,13 +228,17 @@ func performanceWriteFlags(config, target string) error {
 	if err != nil {
 		return fmt.Errorf("read performance services: %w", err)
 	}
+	system, err := platform.Current()
+	if err != nil {
+		return err
+	}
 	var failures []error
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
 		flag := filepath.Join(servicesDir(config), entry.Name(), "performance")
-		if err := os.WriteFile(flag, []byte(target+"\n"), 0o666); err != nil {
+		if err := system.WritePrivateFile(flag, []byte(target+"\n")); err != nil {
 			failures = append(failures, fmt.Errorf("write performance flag %s: %w", flag, err))
 		}
 	}

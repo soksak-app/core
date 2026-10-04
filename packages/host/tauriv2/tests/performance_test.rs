@@ -279,3 +279,26 @@ fn trace_rotates_at_ten_megabytes() {
         "the new line did not start a new output: {current:?}"
     );
 }
+
+// 스위치, 서비스 플래그, 트레이스 출력은 현재 사용자만 읽고 쓴다.
+// contract: performance.trace.owner-only-files
+#[test]
+fn enable_creates_owner_only_files() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = temp_config("owner-only");
+    let config = directory.path();
+    let target = performance::enable(config).unwrap();
+    performance::line(&target, "host", json!({"event": "trace_on"})).unwrap();
+    for path in [
+        config.join("performance"),
+        config
+            .join("services")
+            .join("fixture-service")
+            .join("performance"),
+        target,
+    ] {
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "{} has mode {mode:o}", path.display());
+    }
+    directory.close().unwrap();
+}

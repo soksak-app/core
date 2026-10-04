@@ -24,10 +24,12 @@ pub fn enable(config: &Path) -> Result<PathBuf, String> {
     if let Err(error) = write_sidecar_flags(config, &target) {
         return Err(rollback_enable(config, error));
     }
-    if let Err(error) = fs::write(
-        config.join("performance"),
-        format!("{}\n", target.display()),
-    ) {
+    if let Err(error) = crate::platform::current().and_then(|platform| {
+        platform.write_private_file(
+            &config.join("performance"),
+            format!("{}\n", target.display()).as_bytes(),
+        )
+    }) {
         return Err(rollback_enable(
             config,
             format!("write performance switch: {error}"),
@@ -150,6 +152,7 @@ pub fn write_sidecar_flags(config: &Path, target: &Path) -> Result<(), String> {
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(()),
         Err(error) => return Err(format!("read performance services: {error}")),
     };
+    let platform = crate::platform::current()?;
     let mut errors = Vec::new();
     for entry in entries {
         let entry = match entry {
@@ -171,11 +174,10 @@ pub fn write_sidecar_flags(config: &Path, target: &Path) -> Result<(), String> {
             _ => {}
         }
         let flag = entry.path().join("performance");
-        if let Err(error) = fs::write(&flag, format!("{}\n", target.display())) {
-            errors.push(format!(
-                "write performance flag {}: {error}",
-                flag.display()
-            ));
+        if let Err(error) =
+            platform.write_private_file(&flag, format!("{}\n", target.display()).as_bytes())
+        {
+            errors.push(format!("write performance flag {error}"));
         }
     }
     report_errors(errors)

@@ -1,6 +1,7 @@
 //! 현재 사용자 전용 파일과 디렉터리. 권한은 Unix mode 로 정한다.
 
 use std::fs::{DirBuilder, File, OpenOptions, Permissions};
+use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
@@ -30,6 +31,18 @@ pub fn create_private_file(path: &Path) -> std::io::Result<File> {
         .create_new(true)
         .mode(0o600)
         .open(path)
+}
+
+/// path 의 파일 내용을 data 로 바꾼다. 없으면 mode 0600 으로 만든다. 있는 파일의 권한은 바꾸지 않는다.
+pub fn write_private_file(path: &Path, data: &[u8]) -> Result<(), String> {
+    OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)
+        .and_then(|mut file| file.write_all(data))
+        .map_err(|error| format!("{}: {error}", path.display()))
 }
 
 /// 영구 service 디렉터리 path 의 권한을 0700 으로 바꾼다.

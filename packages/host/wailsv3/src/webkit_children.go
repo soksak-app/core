@@ -21,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // recordName 은 기록 파일 이름이다. 설정 디렉터리의 뿌리에 둔다.
@@ -147,7 +149,12 @@ func RefreshWebKitChildren(config string) {
 		LogError("webkit children record", err)
 		return
 	}
-	if err := os.WriteFile(temporary, bytes, 0o666); err != nil {
+	system, err := platform.Current()
+	if err != nil {
+		LogError("webkit children record", err)
+		return
+	}
+	if err := system.WritePrivateFile(temporary, bytes); err != nil {
 		LogError("webkit children record", fmt.Sprintf("write: %v", err))
 		return
 	}

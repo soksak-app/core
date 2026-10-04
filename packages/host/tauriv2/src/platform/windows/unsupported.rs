@@ -558,3 +558,7 @@ pub fn append_private_file(_path: &std::path::Path) -> Result<std::fs::File, Str
 pub fn create_private_file(_path: &std::path::Path) -> std::io::Result<std::fs::File> {
     missing("new private file creation").map_err(std::io::Error::other)
 }
+
+pub fn write_private_file(_path: &std::path::Path, _data: &[u8]) -> Result<(), String> {
+    missing("private file writing")
+}

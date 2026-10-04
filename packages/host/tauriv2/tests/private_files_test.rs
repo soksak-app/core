@@ -65,3 +65,24 @@ fn create_private_file_creates_a_new_owner_only_file_only() {
         "creating an existing file returned {error}"
     );
 }
+
+// contract: platform.private.writes-owner-only-file
+#[test]
+fn write_private_file_creates_an_owner_only_file_and_replaces_its_contents() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("private.json");
+    let current = platform::current().unwrap();
+    for contents in ["first contents\n", "second\n"] {
+        current
+            .write_private_file(&path, contents.as_bytes())
+            .unwrap();
+    }
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "second\n");
+    assert_eq!(mode(&path), 0o600);
+    // 이미 있는 파일의 권한은 바꾸지 않는다.
+    let shared = directory.path().join("shared.json");
+    std::fs::write(&shared, "").unwrap();
+    std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o644)).unwrap();
+    current.write_private_file(&shared, b"x").unwrap();
+    assert_eq!(mode(&shared), 0o644);
+}

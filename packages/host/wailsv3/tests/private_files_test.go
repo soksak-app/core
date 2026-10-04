@@ -111,3 +111,34 @@ func TestCreatePrivateFileCreatesANewOwnerOnlyFileOnly(t *testing.T) {
 		t.Fatalf("creating an existing file returned %v, want an existence error", err)
 	}
 }
+
+// contract: platform.private.writes-owner-only-file
+func TestWritePrivateFileCreatesAnOwnerOnlyFileAndReplacesItsContents(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "private.json")
+	for _, contents := range []string{"first contents\n", "second\n"} {
+		if err := currentPlatform(t).WritePrivateFile(path, []byte(contents)); err != nil {
+			t.Fatalf("write private file: %v", err)
+		}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "second\n" {
+		t.Fatalf("file holds %q", data)
+	}
+	if mode := perm(t, path); mode != 0o600 {
+		t.Fatalf("new file has mode %o, want 600", mode)
+	}
+	// 이미 있는 파일의 권한은 바꾸지 않는다.
+	shared := filepath.Join(t.TempDir(), "shared.json")
+	if err := os.WriteFile(shared, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := currentPlatform(t).WritePrivateFile(shared, []byte("x")); err != nil {
+		t.Fatalf("write an existing file: %v", err)
+	}
+	if mode := perm(t, shared); mode != 0o644 {
+		t.Fatalf("existing file has mode %o, want 644", mode)
+	}
+}

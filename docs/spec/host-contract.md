@@ -214,6 +214,7 @@ Items:
 | `flush.buffer.delivered-after-queued-bodies` | Buffered replies and close notices arrive after the bodies already queued. | both |
 | `images.invalidate.sidecar-connection-loss-resends-configure` | Invalidating a sidecar's images re-sends its configure at the same size and leaves other sidecars' images untouched. | both |
 | `performance.trace.enable-writes-log-and-sidecar-flags` | Enabling the trace creates the log file and writes the log-path flag into every existing service directory. | both |
+| `performance.trace.owner-only-files` | The performance switch, every service performance flag and the trace output have mode 0600. | both |
 | `performance.trace.disable-removes-flags-keeps-log` | Disabling the trace removes the sidecar flags and keeps the log file. | both |
 | `performance.trace.relay-requires-object-with-event` | A relayed page line must be an object with an event; rejected lines append nothing. | both |
 | `performance.trace.enable-without-services` | The enabled host accepts page events before any service exists. | both |
@@ -230,6 +231,7 @@ Items:
 | `platform.private.creates-owner-only-directories` | The private-directory creation operation creates every missing directory of a path with mode 0700 and keeps the mode of an existing directory. | both |
 | `platform.private.appends-owner-only-file` | The private append operation creates a missing file with mode 0600, appends to an existing file, and keeps the mode of an existing file. | both |
 | `platform.private.creates-new-owner-only-file` | The private new-file operation creates a missing file with mode 0600 and fails with an already-exists error for an existing path. | both |
+| `platform.private.writes-owner-only-file` | The private write operation creates a missing file with mode 0600, replaces the contents of an existing file, and keeps the mode of an existing file. | both |
 | `log.application.start-replaces-standard-error` | Starting the application log writes the run's start line and makes the file the standard error of the process and of the children it starts. | both |
 | `log.error.line-form` | A host error line written through the helper is `error: <where>: <text>`, and it reaches the application log as a line that starts with `error: `. | both |
 | `log.service.standard-error-goes-to-service-log` | A persistent service started by the host writes its standard error to `logs/<executable-name>.log`. | both |
@@ -345,6 +347,7 @@ Items:
 | `sidecars-transport.persistent.oversize-line-fails-the-connection` | A service line longer than the 64 MiB message limit closes the connection and delivers `sidecar-failure` with `message exceeds 67108864 bytes` to the surface that sent, without reading the rest of the line. | both |
 | `sidecars-transport.persistent.invalid-event-fails-the-connection` | A service line that is not a JSON object or a surface event without a string `surface` closes the connection and delivers `sidecar-failure` with `invalid message: ...` to the surface that sent; the next send reconnects. | both |
 | `webkit-children.reap.requires-alive-webkit-same-start` | A recorded WebKit child is killed only when it is alive, still a WebKit process, and its start time matches the record. | both |
+| `webkit-children.record.owner-only` | The record of the WebKit children that a refresh writes has mode 0600. | both |
 | `surface-activation.owner.resolves-registered-view` | A registered native view resolves to its surface id. | both |
 | `surface-activation.owner.ignores-unknown-view` | An unregistered native view resolves to no surface. | both |
 | `surface-activation.owner.ignores-empty-owner` | A view registered with an empty surface id resolves to no surface. | both |

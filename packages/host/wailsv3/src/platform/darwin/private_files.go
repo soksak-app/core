@@ -22,6 +22,12 @@ func (implementation) CreatePrivateFile(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 }
 
+// WritePrivateFile 은 path 의 파일 내용을 data 로 바꾼다. 없으면 mode 0600 으로 만든다. 있는 파일의 권한은
+// 바꾸지 않는다.
+func (implementation) WritePrivateFile(path string, data []byte) error {
+	return os.WriteFile(path, data, 0o600)
+}
+
 // SecureServiceDirectory 는 영구 service 디렉터리 path 의 권한을 0700 으로 바꾼다.
 func (implementation) SecureServiceDirectory(path string) error {
 	return os.Chmod(path, 0o700)

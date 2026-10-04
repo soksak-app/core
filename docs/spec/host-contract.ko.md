@@ -214,6 +214,7 @@ fn invalid_json_closes_connection() {
 | `flush.buffer.delivered-after-queued-bodies` | 버퍼에 넣은 응답과 닫기 알림은 이미 대기열에 있던 본문 뒤에 도착한다. | both |
 | `images.invalidate.sidecar-connection-loss-resends-configure` | 사이드카의 그림을 무효화하면 같은 크기의 configure 를 다시 보내고 다른 사이드카의 그림은 그대로 둔다. | both |
 | `performance.trace.enable-writes-log-and-sidecar-flags` | 트레이스를 켜면 로그 파일을 만들고 이미 있는 모든 서비스 디렉터리에 로그 경로 플래그를 쓴다. | both |
+| `performance.trace.owner-only-files` | performance switch, 모든 service performance flag, trace 출력은 mode 0600이다. | both |
 | `performance.trace.disable-removes-flags-keeps-log` | 트레이스를 끄면 사이드카 플래그를 지우고 로그 파일은 남긴다. | both |
 | `performance.trace.relay-requires-object-with-event` | 중계하는 페이지 줄은 event 를 담은 객체여야 한다. 거부된 줄은 아무 것도 덧붙이지 않는다. | both |
 | `performance.trace.enable-without-services` | 서비스가 생기기 전에도 활성 호스트는 페이지 이벤트를 받는다. | both |
@@ -230,6 +231,7 @@ fn invalid_json_closes_connection() {
 | `platform.private.creates-owner-only-directories` | private directory 생성 연산은 경로에서 없는 모든 디렉터리를 mode 0700으로 만들고 이미 있는 디렉터리의 mode는 유지한다. | both |
 | `platform.private.appends-owner-only-file` | private append 연산은 없는 파일을 mode 0600으로 만들고, 있는 파일에는 덧붙이며, 있는 파일의 mode는 유지한다. | both |
 | `platform.private.creates-new-owner-only-file` | private 새 파일 연산은 없는 파일을 mode 0600으로 만들고, 이미 있는 경로에는 already-exists 오류로 실패한다. | both |
+| `platform.private.writes-owner-only-file` | private write 연산은 없는 파일을 mode 0600으로 만들고, 있는 파일의 내용을 바꾸며, 있는 파일의 mode는 유지한다. | both |
 | `log.application.start-replaces-standard-error` | 애플리케이션 로그를 시작하면 실행의 첫 줄을 쓰고 그 파일을 프로세스와 그 프로세스가 시작하는 자식의 표준 오류로 만든다. | both |
 | `log.error.line-form` | helper로 쓴 호스트 오류 줄은 `error: <where>: <text>`이며, 애플리케이션 로그에 `error: `로 시작하는 줄로 들어간다. | both |
 | `log.service.standard-error-goes-to-service-log` | 호스트가 시작한 영속 서비스는 표준 오류를 `logs/<실행 파일 이름>.log`에 쓴다. | both |
@@ -345,6 +347,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.persistent.oversize-line-fails-the-connection` | 64 MiB 메시지 한도보다 긴 service 줄은 줄의 나머지를 읽지 않고 연결을 닫으며, 보낸 surface에 `message exceeds 67108864 bytes`와 함께 `sidecar-failure`를 보낸다. | both |
 | `sidecars-transport.persistent.invalid-event-fails-the-connection` | JSON 객체가 아닌 service 줄이나 문자열 `surface`가 없는 surface event는 연결을 닫고 보낸 surface에 `invalid message: ...`와 함께 `sidecar-failure`를 보낸다. 다음 전송은 다시 연결한다. | both |
 | `webkit-children.reap.requires-alive-webkit-same-start` | 기록된 WebKit 자식은 살아 있고, 여전히 WebKit 프로세스이며, 시작 시각이 기록과 같을 때만 죽는다. | both |
+| `webkit-children.record.owner-only` | 갱신이 쓰는 WebKit 자식 기록은 mode 0600이다. | both |
 | `surface-activation.owner.resolves-registered-view` | 등록된 네이티브 뷰는 그 표면 id로 해석된다. | both |
 | `surface-activation.owner.ignores-unknown-view` | 등록되지 않은 네이티브 뷰는 표면으로 해석되지 않는다. | both |
 | `surface-activation.owner.ignores-empty-owner` | 빈 표면 id로 등록된 뷰는 표면으로 해석되지 않는다. | both |
