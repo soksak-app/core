@@ -13,7 +13,7 @@ use tauri::webview::PlatformWebview;
 
 use std::time::Duration;
 
-use super::super::{Delivery, Frame, Handle, Hit, Key, Pointer};
+use super::super::{ButtonHeld, Delivery, Frame, FrontmostApplication, Handle, Hit, Key, Pointer};
 use super::{NSPoint, NSRect};
 
 extern "C" {
@@ -26,7 +26,7 @@ extern "C" {
         delta_x: f64,
         delta_y: f64,
         receive: f64,
-        done: extern "C" fn(*mut c_void, i32),
+        done: extern "C" fn(*mut c_void, i32, *const SpInputHeld),
         context: *mut c_void,
     );
     fn sp_input_activate_at(
@@ -53,19 +53,49 @@ const SP_INPUT_UNRECEIVED: i32 = 3;
 const SP_INPUT_BUTTON_HELD: i32 = 4;
 const SP_INPUT_PRESS_OPEN: i32 = 5;
 
+/// native/darwin 의 sp_input_held. SP_INPUT_BUTTON_HELD 로 거부한 차례의 상태다.
+#[repr(C)]
+struct SpInputHeld {
+    mask: u64,
+    /// 최전면 애플리케이션의 pid. 최전면 애플리케이션이 없으면 -1 이다.
+    pid: i32,
+    /// 번들 식별자. 없으면 NULL 이다.
+    bundle_identifier: *const c_char,
+}
+
 type Delivered = Box<dyn FnOnce(Delivery) + Send>;
 
-extern "C" fn delivered(context: *mut c_void, result: i32) {
+extern "C" fn delivered(context: *mut c_void, result: i32, held: *const SpInputHeld) {
     // context 는 pointer 가 Box::into_raw 로 넘긴 값이고 라이브러리는 done 을 한 번 호출한다.
     let done = unsafe { Box::from_raw(context as *mut Delivered) };
     done(match result {
         SP_INPUT_DELIVERED => Delivery::Delivered,
         SP_INPUT_INACTIVE => Delivery::Inactive,
         SP_INPUT_UNRECEIVED => Delivery::Unreceived,
-        SP_INPUT_BUTTON_HELD => Delivery::ButtonHeld,
+        // 라이브러리는 SP_INPUT_BUTTON_HELD 일 때만 held 를 넘기고 done 이 반환할 때까지 유효하게 둔다.
+        SP_INPUT_BUTTON_HELD => Delivery::ButtonHeld(button_held(
+            unsafe { held.as_ref() }
+                .expect("sp_input_pointer_then reported SP_INPUT_BUTTON_HELD without its state"),
+        )),
         SP_INPUT_PRESS_OPEN => Delivery::PressOpen,
         _ => Delivery::Rejected,
     });
+}
+
+/// sp_input_held 를 읽는다. pid 가 -1 이면 최전면 애플리케이션이 없다.
+fn button_held(held: &SpInputHeld) -> ButtonHeld {
+    let frontmost = (held.pid >= 0).then(|| FrontmostApplication {
+        bundle_identifier: (!held.bundle_identifier.is_null()).then(|| {
+            unsafe { std::ffi::CStr::from_ptr(held.bundle_identifier) }
+                .to_string_lossy()
+                .into_owned()
+        }),
+        pid: held.pid,
+    });
+    ButtonHeld {
+        mask: held.mask,
+        frontmost,
+    }
 }
 
 /// 창에 포인터 입력을 전달하고 결과를 done 으로 알린다. 누름과 뗌은 문서가 받은 뒤 알린다.

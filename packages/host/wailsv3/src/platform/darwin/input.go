@@ -17,8 +17,10 @@ static void activateWindowAt(void *window, double x, double y, double timeout, u
     sp_input_activate_at(window, x, y, timeout, activated, (void *)handle);
 }
 
-extern void inputDelivered(void *context, int result);
-static void delivered(void *context, sp_input_result result) { inputDelivered(context, (int)result); }
+extern void inputDelivered(void *context, int result, sp_input_held *held);
+static void delivered(void *context, sp_input_result result, const sp_input_held *held) {
+    inputDelivered(context, (int)result, (sp_input_held *)held);
+}
 static void injectPointer(void *window, double x, double y, int phase, int button, double deltaX, double deltaY,
     double receive, uintptr_t handle) {
     sp_input_pointer_then(window, x, y, phase, button, deltaX, deltaY, receive, delivered, (void *)handle);
@@ -131,13 +133,13 @@ func (implementation) WatchInput(window unsafe.Pointer, input platform.Input) (u
 }
 
 // InjectPointer 는 native/darwin 의 sp_input_pointer_then 으로 입력을 전달한다. 앱을 활성화하지 않는다.
-func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY, receive float64, done func(platform.PointerResult)) error {
+func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
 	pointerSequence.Lock()
 	var once sync.Once
-	serialized := func(result platform.PointerResult) {
+	serialized := func(result platform.PointerResult, held platform.ButtonHeld) {
 		once.Do(func() {
 			pointerSequence.Unlock()
-			done(result)
+			done(result, held)
 		})
 	}
 	C.injectPointer(window, C.double(x), C.double(y), C.int(phase), C.int(button), C.double(deltaX), C.double(deltaY),
@@ -145,25 +147,44 @@ func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, 
 	return nil
 }
 
+// inputDelivered 는 sp_input_pointer_then 의 결과를 알린다. 라이브러리는 결과가 SP_INPUT_BUTTON_HELD 일 때만
+// held 를 넘기고 done 이 반환할 때까지 유효하게 둔다.
+//
 //export inputDelivered
-func inputDelivered(context unsafe.Pointer, result C.int) {
+func inputDelivered(context unsafe.Pointer, result C.int, held *C.sp_input_held) {
 	handle := cgo.Handle(uintptr(context))
-	done := handle.Value().(func(platform.PointerResult))
+	done := handle.Value().(func(platform.PointerResult, platform.ButtonHeld))
 	handle.Delete()
 	switch C.sp_input_result(result) {
 	case C.SP_INPUT_DELIVERED:
-		done(platform.PointerDelivered)
+		done(platform.PointerDelivered, platform.ButtonHeld{})
 	case C.SP_INPUT_INACTIVE:
-		done(platform.PointerInactive)
+		done(platform.PointerInactive, platform.ButtonHeld{})
 	case C.SP_INPUT_UNRECEIVED:
-		done(platform.PointerUnreceived)
+		done(platform.PointerUnreceived, platform.ButtonHeld{})
 	case C.SP_INPUT_BUTTON_HELD:
-		done(platform.PointerButtonHeld)
+		done(platform.PointerButtonHeld, buttonHeld(held))
 	case C.SP_INPUT_PRESS_OPEN:
-		done(platform.PointerPressOpen)
+		done(platform.PointerPressOpen, platform.ButtonHeld{})
 	default:
-		done(platform.PointerRejected)
+		done(platform.PointerRejected, platform.ButtonHeld{})
 	}
+}
+
+// buttonHeld 는 sp_input_held 를 읽는다. pid 가 -1 이면 최전면 애플리케이션이 없다. 상태 없이 이 결과를 알린 것은
+// 라이브러리의 계약 위반이므로 이름을 밝혀 멈춘다.
+func buttonHeld(held *C.sp_input_held) platform.ButtonHeld {
+	if held == nil {
+		panic("sp_input_pointer_then reported SP_INPUT_BUTTON_HELD without its state")
+	}
+	result := platform.ButtonHeld{Mask: uint64(held.mask)}
+	if held.pid >= 0 {
+		result.Frontmost = &platform.FrontmostApplication{PID: int(held.pid)}
+		if held.bundleIdentifier != nil {
+			result.Frontmost.BundleIdentifier = C.GoString(held.bundleIdentifier)
+		}
+	}
+	return result
 }
 
 type activation struct {

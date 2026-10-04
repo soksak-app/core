@@ -24,7 +24,7 @@ use crate::platform;
 use crate::surfaces::label_for;
 use crate::windows::{self, native_owner_on_main, window_data};
 
-pub use crate::platform::{Delivery, Key, Pointer};
+pub use crate::platform::{ButtonHeld, Delivery, FrontmostApplication, Key, Pointer};
 
 /// 문서가 응답해야 하는 시간.
 pub const TIMEOUT: Duration = Duration::from_secs(10);
@@ -220,6 +220,25 @@ fn optional_number(params: &Map<String, Value>, name: &str) -> Result<f64, Failu
         None | Some(Value::Null) => Ok(0.0),
         Some(_) => number(params, name),
     }
+}
+
+/// 1007 오류의 메시지를 만든다. 거부한 차례의 mask 와 최전면 애플리케이션을 적는다(docs/spec/exposure.md).
+pub fn button_held_message(held: &ButtonHeld) -> String {
+    let frontmost = match &held.frontmost {
+        None => "no application".to_string(),
+        Some(FrontmostApplication {
+            bundle_identifier: None,
+            pid,
+        }) => format!("an application without a bundle identifier (pid {pid})"),
+        Some(FrontmostApplication {
+            bundle_identifier: Some(bundle),
+            pid,
+        }) => format!("{bundle} (pid {pid})"),
+    };
+    format!(
+        "AppKit reports NSEvent.pressedMouseButtons mask {:#x} while {frontmost} is frontmost; the synthetic press or release was not delivered",
+        held.mask
+    )
 }
 
 /// `input.pointer` 의 매개변수를 읽는다.
@@ -1621,10 +1640,9 @@ impl Host {
                     RECEIPT.as_millis()
                 ),
             )),
-            Delivery::ButtonHeld => Err(Failure::new(
-                BUTTON_HELD,
-                "AppKit reports a nonzero NSEvent.pressedMouseButtons mask; the synthetic press or release was not delivered",
-            )),
+            Delivery::ButtonHeld(held) => {
+                Err(Failure::new(BUTTON_HELD, button_held_message(&held)))
+            }
             Delivery::PressOpen => Err(Failure::new(
                 PRESS_OPEN,
                 "a synthetic press of this button is still open in the window; send up before the next down",

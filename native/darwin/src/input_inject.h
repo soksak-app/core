@@ -16,7 +16,16 @@ typedef enum {
 // 끌기와 뗌은 창·버튼별 누름 대상에 전달한다. 누름 없는 끌기·뗌과 중복 누름은 거부한다.
 sp_input_result sp_input_pointer(void *window, double x, double y, int phase, int button, double deltaX, double deltaY);
 
-typedef void (*sp_input_done)(void *context, sp_input_result result);
+// SP_INPUT_BUTTON_HELD 로 거부한 차례에 측정한 상태. 이 상태만으로는 원인을 알 수 없으므로 거부를
+// 받은 쪽이 원인을 찾도록 보고한다.
+typedef struct {
+    unsigned long long mask; // NSEvent.pressedMouseButtons
+    int pid; // 최전면 애플리케이션의 pid. AppKit 이 최전면 애플리케이션을 보고하지 않으면 -1 이다
+    const char *bundleIdentifier; // 최전면 애플리케이션의 번들 식별자. 없거나 pid 가 -1 이면 NULL 이다
+} sp_input_held;
+
+// held 는 result 가 SP_INPUT_BUTTON_HELD 일 때만 NULL 이 아니고, done 이 반환할 때까지만 유효하다.
+typedef void (*sp_input_done)(void *context, sp_input_result result, const sp_input_held *held);
 
 // sp_input_pointer 와 같고, 누름과 뗌은 제스처를 소유한 문서가 그 이벤트를 받은 뒤 done 을 호출한다.
 // WebKit 은 입력 칸에 초점이 있으면 마우스 이벤트를 입력기에 먼저 비동기로 넘기므로, 곧바로 이어서

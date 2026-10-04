@@ -67,11 +67,12 @@ static void drain(WKWebView *view) {
     until(^BOOL { return done; });
 }
 
-typedef struct { BOOL done; sp_input_result result; NSUInteger seen; WKWebView *view; } SPReceipt;
+typedef struct { BOOL done; sp_input_result result; NSUInteger seen; WKWebView *view; BOOL held; } SPReceipt;
 
-static void received(void *context, sp_input_result result) {
+static void received(void *context, sp_input_result result, const sp_input_held *held) {
     SPReceipt *receipt = context;
     receipt->result = result;
+    receipt->held = held != NULL;
     // 완료 시점에 문서가 받은 누름과 뗌의 수. 메인 스레드에서 동기적으로 읽는다.
     receipt->seen = [evaluate(receipt->view, @"probe.events.filter(e=>e.type==='pointerdown'||e.type==='pointerup').length") unsignedIntegerValue];
     receipt->done = YES;
@@ -79,7 +80,7 @@ static void received(void *context, sp_input_result result) {
 
 typedef struct { BOOL done; sp_input_result result; NSTimeInterval started; NSTimeInterval took; } SPTimed;
 
-static void timed(void *context, sp_input_result result) {
+static void timed(void *context, sp_input_result result, const sp_input_held *held) {
     SPTimed *state = context;
     state->result = result;
     state->took = [NSDate timeIntervalSinceReferenceDate] - state->started;
@@ -87,7 +88,7 @@ static void timed(void *context, sp_input_result result) {
 }
 
 static SPReceipt pointerThen(NSWindow *window, WKWebView *view, double x, double y, int phase, double timeout) {
-    SPReceipt receipt = {NO, SP_INPUT_REJECTED, 0, view};
+    SPReceipt receipt = {NO, SP_INPUT_REJECTED, 0, view, NO};
     SPReceipt *state = &receipt;
     sp_input_pointer_then(window, x, y, phase, 0, 0, 0, timeout, received, state);
     until(^BOOL { return state->done; });
@@ -119,8 +120,9 @@ static void checkReceipts(void) {
     evaluate(view, @"probe.events.length=0; null");
     pointerOutside(window);
     SPReceipt down = pointerThen(window, view, 50, 50, 1, 5);
-    check(down.result == SP_INPUT_DELIVERED && down.seen == 1,
-        [NSString stringWithFormat:@"a press completes after the document received it (%d, %lu events)", down.result, (unsigned long)down.seen]);
+    check(down.result == SP_INPUT_DELIVERED && down.seen == 1 && !down.held,
+        [NSString stringWithFormat:@"a press completes after the document received it without a held-button report (%d, %lu events, held %d)",
+            down.result, (unsigned long)down.seen, down.held]);
     SPReceipt up = pointerThen(window, view, 50, 50, 3, 5);
     check(up.result == SP_INPUT_DELIVERED && up.seen == 2,
         [NSString stringWithFormat:@"a release completes after the document received it (%d, %lu events)", up.result, (unsigned long)up.seen]);

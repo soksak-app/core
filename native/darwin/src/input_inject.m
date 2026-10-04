@@ -71,7 +71,15 @@ static bool moveTo(NSWindow *window, NSPoint point) {
     return false;
 }
 
-sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY) {
+// SP_INPUT_BUTTON_HELD 로 거부한 차례의 측정값. front 는 보유한 참조이며 heldDone 이 놓는다.
+typedef struct {
+    NSUInteger buttons;
+    NSRunningApplication *front;
+} SPHeld;
+
+// held 는 결과가 SP_INPUT_BUTTON_HELD 일 때 거부한 차례의 mask 와 최전면 애플리케이션을 받는다.
+static sp_input_result pointerInput(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
+    SPHeld *held) {
     NSWindow *window = (__bridge NSWindow *)handle;
     if (!window || !NSThread.isMainThread) return SP_INPUT_REJECTED;
     NSPoint point = windowPoint(window, x, y);
@@ -110,8 +118,14 @@ sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, in
     }
     // WebKit 은 마우스 이벤트의 눌린 버튼을 이벤트가 아니라 +[NSEvent pressedMouseButtons] 로 읽는다.
     // AppKit 이 눌린 버튼을 보고하는 동안의 누름과 뗌은 WebKit 에서 pointerdown 이나 pointerup 대신
-    // pointermove 로 처리될 수 있으므로 전달하지 않고 알린다. 이 상태만으로 버튼 상태의 원인은 알 수 없다.
-    if ((phase == 1 || phase == 3) && NSEvent.pressedMouseButtons != 0) return SP_INPUT_BUTTON_HELD;
+    // pointermove 로 처리될 수 있으므로 전달하지 않고 알린다. 이 상태만으로 버튼 상태의 원인은 알 수 없으므로
+    // 거부한 같은 차례에 mask 와 최전면 애플리케이션을 측정해 함께 알린다.
+    NSUInteger buttons = NSEvent.pressedMouseButtons;
+    if ((phase == 1 || phase == 3) && buttons != 0) {
+        held->buttons = buttons;
+        held->front = [NSWorkspace.sharedWorkspace.frontmostApplication retain];
+        return SP_INPUT_BUTTON_HELD;
+    }
     BOOL right = button == 1;
     switch (phase) {
         case 1:
@@ -139,6 +153,37 @@ sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, in
     }
 }
 
+sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY) {
+    SPHeld held = {0, nil};
+    sp_input_result result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, &held);
+    [held.front release];
+    return result;
+}
+
+// done 을 호출하고 held 의 참조를 놓는다. held 는 result 가 SP_INPUT_BUTTON_HELD 일 때만 보고한다.
+static void heldDone(sp_input_done done, void *context, sp_input_result result, SPHeld held) {
+    if (result != SP_INPUT_BUTTON_HELD) {
+        [held.front release];
+        done(context, result, NULL);
+        return;
+    }
+    sp_input_held report = {
+        .mask = held.buttons,
+        .pid = held.front ? held.front.processIdentifier : -1,
+        .bundleIdentifier = held.front.bundleIdentifier.UTF8String,
+    };
+    done(context, result, &report);
+    [held.front release];
+}
+
+// 입력을 전달하고 결과를 곧바로 done 으로 알린다.
+static void pointerNow(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
+    sp_input_done done, void *context) {
+    SPHeld held = {0, nil};
+    sp_input_result result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, &held);
+    heldDone(done, context, result, held);
+}
+
 // 좌표에서 이벤트를 받는 가장 안쪽 웹뷰.
 static WKWebView *webViewAt(NSWindow *window, double x, double y) {
     NSView *view = hitView(window, windowPoint(window, x, y));
@@ -159,32 +204,33 @@ void sp_input_pointer_then(void *handle, double x, double y, int phase, int butt
         [target _doAfterNextPresentationUpdate:^{
             if (finished) return;
             finished = YES;
-            done(context, sp_input_pointer(handle, x, y, phase, button, deltaX, deltaY));
+            pointerNow(handle, x, y, phase, button, deltaX, deltaY, done, context);
         }];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             if (finished) return;
             finished = YES;
-            done(context, SP_INPUT_UNRECEIVED);
+            done(context, SP_INPUT_UNRECEIVED, NULL);
         });
         return;
     }
     if (phase != 1 && phase != 3) {
-        done(context, sp_input_pointer(handle, x, y, phase, button, deltaX, deltaY));
+        pointerNow(handle, x, y, phase, button, deltaX, deltaY, done, context);
         return;
     }
     if (!target) {
-        done(context, sp_input_pointer(handle, x, y, phase, button, deltaX, deltaY));
+        pointerNow(handle, x, y, phase, button, deltaX, deltaY, done, context);
         return;
     }
     // 문서가 pointerdown 이나 pointerup 을 받은 뒤 완료한다. 받은 뒤 WebKit 의 대기 중인 마우스 처리를
     // 기다리므로, 뗌이 만드는 click 도 다음 요청보다 먼저 처리된다.
     __block sp_input_result result = SP_INPUT_REJECTED;
+    __block SPHeld held = {0, nil};
     webviewInputSendThen(target, phase == 3 ? @"pointerup" : @"pointerdown", timeoutSeconds, ^BOOL {
-        result = sp_input_pointer(handle, x, y, phase, button, deltaX, deltaY);
+        result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, &held);
         return result == SP_INPUT_DELIVERED;
     }, ^(BOOL received) {
-        done(context, result == SP_INPUT_DELIVERED && received ? SP_INPUT_DELIVERED :
-            result == SP_INPUT_DELIVERED ? SP_INPUT_UNRECEIVED : result);
+        heldDone(done, context, result == SP_INPUT_DELIVERED && received ? SP_INPUT_DELIVERED :
+            result == SP_INPUT_DELIVERED ? SP_INPUT_UNRECEIVED : result, held);
     });
 }
 

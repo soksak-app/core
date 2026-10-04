@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F37: AppKit이 0이 아닌 `NSEvent.pressedMouseButtons` mask로 거부한 합성 `input.pointer` 누름이나 뗌은, 거부와 같은 main run loop 차례에 측정한 mask와 frontmost 애플리케이션의 bundle identifier와 pid를 담은 1007을 두 host에서 같은 문장으로 반환한다. 이전 메시지는 둘 다 적지 않았다.
 - F43: ResizeObserver loop 오류 뒤 진단 기록기가 오류 frame의 DOM 변경을 callback slot별로 보고한다. 첫 callback 때 아직 전달되지 않은 변경, observer를 만든 코드와 함께 각 callback과 그 microtask checkpoint의 변경, round 뒤 다음 animation frame까지의 변경이다. 이전에는 첫 callback부터 다음 animation frame까지의 모든 변경이 한 줄에 있었다.
 - F45: 페이지가 보이는 모든 오류는 그것을 기록하는 하나의 표시 경로를 거치고, 그 경로의 요소만 오류 색을 가진다. source test가 둘을 검사한다. 이 경로가 로그 줄 없이 보이던 애플리케이션 오류 배너 메시지 여섯 개를 찾았다.
 - F39: document region과 image region은 관찰 중 실패한 배치나 처리기가 없는 image 사건처럼 어떤 호출자도 받지 않는 실패를, 애플리케이션이 기록하지 않는 콘솔 대신 surface page의 report로 보고한다. `observeRegionInsets`는 animation frame에서 관찰을 시작한다.

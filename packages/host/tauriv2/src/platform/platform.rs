@@ -147,8 +147,25 @@ pub struct Pointer {
     pub activate: bool,
 }
 
+/// Delivery::ButtonHeld 로 거부한 차례에 AppKit 이 보고한 상태.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ButtonHeld {
+    /// NSEvent.pressedMouseButtons 값.
+    pub mask: u64,
+    /// 최전면 애플리케이션. AppKit 이 최전면 애플리케이션을 보고하지 않으면 None 이다.
+    pub frontmost: Option<FrontmostApplication>,
+}
+
+/// 최전면 애플리케이션.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FrontmostApplication {
+    /// 번들 식별자. 없으면 None 이다.
+    pub bundle_identifier: Option<String>,
+    pub pid: i32,
+}
+
 /// 포인터 입력 전달 결과.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Delivery {
     /// 창에 전달했다.
     Delivered,
@@ -158,8 +175,8 @@ pub enum Delivery {
     Inactive,
     /// 누름이나 뗌을 전달했지만 문서가 제한 시간 안에 받지 않았다.
     Unreceived,
-    /// AppKit이 눌린 마우스 버튼을 보고해 합성 누름이나 뗌을 전달하지 않았다.
-    ButtonHeld,
+    /// AppKit이 눌린 마우스 버튼을 보고해 합성 누름이나 뗌을 전달하지 않았다. 값은 거부한 차례의 상태다.
+    ButtonHeld(ButtonHeld),
     /// 그 창에서 그 버튼의 합성 누름이 아직 열려 있어 누름을 전달하지 않았다.
     PressOpen,
 }

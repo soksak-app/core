@@ -148,6 +148,7 @@ Items:
 | `endpoint.input.pointer-defaults` | A pointer input without button or activate uses the left button and no activation. | both |
 | `endpoint.input.pointer-right-button-accepted` | The right pointer button is accepted and passed as the right button. | both |
 | `endpoint.input.pointer-phase-and-scroll-decoding` | The drag and scroll phases, deltaY, and fractional coordinates are passed through. | both |
+| `endpoint.input.pointer-button-held-message` | The 1007 message reports the `NSEvent.pressedMouseButtons` mask in hexadecimal and the frontmost application's bundle identifier and pid, an application without a bundle identifier by its pid, or that no application is frontmost, in the same text on both hosts. | both |
 | `endpoint.input.key-unknown-modifier-rejected` | An unknown key modifier returns -32602. | both |
 | `endpoint.input.key-shift-command-mask` | The shift and command modifiers become the bit mask 9, with the key and phase passed through. | both |
 | `endpoint.input.key-control-option-and-text` | The control and option modifiers become 6, and text is passed through. | both |

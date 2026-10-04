@@ -170,7 +170,7 @@ static NSDictionary *pressLastPixel(NSWindow *window, WKWebView *surface, CGFloa
     return pressed;
 }
 
-static void scrollDone(void *context, sp_input_result result) { *(sp_input_result *)context = result; }
+static void scrollDone(void *context, sp_input_result result, const sp_input_held *held) { *(sp_input_result *)context = result; }
 
 static WKWebView *webViewAtTopPoint(NSWindow *window, double x, double y) {
     NSView *content = window.contentView;

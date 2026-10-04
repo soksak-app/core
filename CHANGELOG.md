@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F37: a synthetic `input.pointer` press or release that AppKit refuses with a nonzero `NSEvent.pressedMouseButtons` mask returns 1007 with the mask and the frontmost application's bundle identifier and pid, measured in the same main run-loop turn as the refusal, in the same text on both hosts; the message before named neither.
 - F43: after a ResizeObserver loop error, the diagnostic recorder reports the DOM changes of the error frame by callback slot: the changes still undelivered at the first callback, the changes of each callback and its microtask checkpoint with the code that created its observer, and the changes after the round until the next animation frame; before, one line held every change from the first callback to the next animation frame.
 - F45: every error that the page shows goes through one display path that logs it, and only that path's elements take the error color; a source test checks both. The path found six application error banner messages that were shown without a log line.
 - F39: document and image regions report the failures that no caller receives, such as a placement that fails while observing and an image event without handlers, through the surface page's report instead of the console, which the applications do not record; `observeRegionInsets` starts observing at an animation frame.

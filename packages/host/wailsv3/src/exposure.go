@@ -829,15 +829,22 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	if input.Button == "right" {
 		button = 1
 	}
-	done := make(chan platform.PointerResult, 1)
+	type delivery struct {
+		result platform.PointerResult
+		held   platform.ButtonHeld
+	}
+	done := make(chan delivery, 1)
 	application.InvokeSync(func() {
 		err = system.InjectPointer(s.window.NativeWindow(), input.X, input.Y, pointerPhaseCodes[input.Phase], button,
-			input.DeltaX, input.DeltaY, receiveTimeout.Seconds(), func(result platform.PointerResult) { done <- result })
+			input.DeltaX, input.DeltaY, receiveTimeout.Seconds(), func(result platform.PointerResult, held platform.ButtonHeld) {
+				done <- delivery{result, held}
+			})
 	})
 	if err != nil {
 		return rpcError(codeNoInput, "%v", err)
 	}
-	switch <-done {
+	got := <-done
+	switch got.result {
 	case platform.PointerInactive:
 		return errInactive()
 	case platform.PointerRejected:
@@ -845,7 +852,7 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	case platform.PointerUnreceived:
 		return rpcError(codeTimeout, "the document did not receive the input within %s", receiveTimeout)
 	case platform.PointerButtonHeld:
-		return rpcError(codeButtonHeld, "AppKit reports a nonzero NSEvent.pressedMouseButtons mask; the synthetic press or release was not delivered")
+		return rpcError(codeButtonHeld, "%s", ButtonHeldMessage(got.held))
 	case platform.PointerPressOpen:
 		return rpcError(codePressOpen, "a synthetic press of this button is still open in the window; send up before the next down")
 	}
@@ -855,6 +862,21 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 		}
 	}
 	return nil
+}
+
+// ButtonHeldMessage 는 1007 오류의 메시지를 만든다. 거부한 차례의 mask 와 최전면 애플리케이션을
+// 적는다(docs/spec/exposure.md).
+func ButtonHeldMessage(held platform.ButtonHeld) string {
+	frontmost := "no application"
+	if f := held.Frontmost; f != nil {
+		if f.BundleIdentifier == "" {
+			frontmost = fmt.Sprintf("an application without a bundle identifier (pid %d)", f.PID)
+		} else {
+			frontmost = fmt.Sprintf("%s (pid %d)", f.BundleIdentifier, f.PID)
+		}
+	}
+	return fmt.Sprintf("AppKit reports NSEvent.pressedMouseButtons mask %#x while %s is frontmost; the synthetic press or release was not delivered",
+		held.Mask, frontmost)
 }
 
 // activate 는 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤, 창의 웹뷰가 활성 상태를 받을

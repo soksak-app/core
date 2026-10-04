@@ -148,6 +148,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.input.pointer-defaults` | button이나 activate가 없는 포인터 입력은 왼쪽 버튼과 비활성화를 쓴다. | both |
 | `endpoint.input.pointer-right-button-accepted` | 오른쪽 포인터 버튼을 받아들이고 오른쪽 버튼으로 전달한다. | both |
 | `endpoint.input.pointer-phase-and-scroll-decoding` | drag와 scroll phase, deltaY, 소수 좌표를 그대로 전달한다. | both |
+| `endpoint.input.pointer-button-held-message` | 1007 메시지는 `NSEvent.pressedMouseButtons` 마스크를 16진수로, frontmost 애플리케이션을 bundle identifier와 pid로 보고하며, bundle identifier가 없는 애플리케이션은 pid로, frontmost 애플리케이션이 없으면 그 사실을 두 host에서 같은 문장으로 보고한다. | both |
 | `endpoint.input.key-unknown-modifier-rejected` | 알 수 없는 키 수정자는 -32602를 반환한다. | both |
 | `endpoint.input.key-shift-command-mask` | shift와 command 수정자는 비트 마스크 9가 되고, 키와 phase는 그대로 전달된다. | both |
 | `endpoint.input.key-control-option-and-text` | control과 option 수정자는 6이 되고 text는 그대로 전달된다. | both |

@@ -343,6 +343,43 @@ fn pointer_and_key_params_are_validated() {
     );
 }
 
+// contract: endpoint.input.pointer-button-held-message
+#[test]
+fn button_held_message_reports_mask_and_frontmost_application() {
+    let cases = [
+        (
+            exposure::ButtonHeld {
+                mask: 0x1,
+                frontmost: Some(exposure::FrontmostApplication {
+                    bundle_identifier: Some("com.example.editor".to_string()),
+                    pid: 412,
+                }),
+            },
+            "AppKit reports NSEvent.pressedMouseButtons mask 0x1 while com.example.editor (pid 412) is frontmost; the synthetic press or release was not delivered",
+        ),
+        (
+            exposure::ButtonHeld {
+                mask: 0x3,
+                frontmost: Some(exposure::FrontmostApplication {
+                    bundle_identifier: None,
+                    pid: 77,
+                }),
+            },
+            "AppKit reports NSEvent.pressedMouseButtons mask 0x3 while an application without a bundle identifier (pid 77) is frontmost; the synthetic press or release was not delivered",
+        ),
+        (
+            exposure::ButtonHeld {
+                mask: 0x1a,
+                frontmost: None,
+            },
+            "AppKit reports NSEvent.pressedMouseButtons mask 0x1a while no application is frontmost; the synthetic press or release was not delivered",
+        ),
+    ];
+    for (held, want) in cases {
+        assert_eq!(exposure::button_held_message(&held), want, "{held:?}");
+    }
+}
+
 // contract: exposure.timeout.command-run-default-and-declared, exposure.timeout.status-next-unbounded, exposure.timeout.invalid-timeout-rejected, exposure.timeout.status-next-timeout-rejected
 #[test]
 fn forwarded_requests_use_the_declared_timeout() {

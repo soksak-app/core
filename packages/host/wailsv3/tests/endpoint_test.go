@@ -439,6 +439,26 @@ func TestEndpointPointerParams(t *testing.T) {
 	}
 }
 
+// contract: endpoint.input.pointer-button-held-message
+func TestButtonHeldMessage(t *testing.T) {
+	cases := []struct {
+		held platform.ButtonHeld
+		want string
+	}{
+		{platform.ButtonHeld{Mask: 0x1, Frontmost: &platform.FrontmostApplication{BundleIdentifier: "com.example.editor", PID: 412}},
+			"AppKit reports NSEvent.pressedMouseButtons mask 0x1 while com.example.editor (pid 412) is frontmost; the synthetic press or release was not delivered"},
+		{platform.ButtonHeld{Mask: 0x3, Frontmost: &platform.FrontmostApplication{PID: 77}},
+			"AppKit reports NSEvent.pressedMouseButtons mask 0x3 while an application without a bundle identifier (pid 77) is frontmost; the synthetic press or release was not delivered"},
+		{platform.ButtonHeld{Mask: 0x1a},
+			"AppKit reports NSEvent.pressedMouseButtons mask 0x1a while no application is frontmost; the synthetic press or release was not delivered"},
+	}
+	for _, c := range cases {
+		if got := host.ButtonHeldMessage(c.held); got != c.want {
+			t.Errorf("ButtonHeldMessage(%+v) = %q, want %q", c.held, got, c.want)
+		}
+	}
+}
+
 // contract: endpoint.input.key-unknown-modifier-rejected, endpoint.input.key-shift-command-mask, endpoint.input.key-control-option-and-text, endpoint.input.key-invalid-phase-or-modifier-type
 func TestEndpointKeyModifiers(t *testing.T) {
 	backend := newFakeBackend()

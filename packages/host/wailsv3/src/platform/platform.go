@@ -397,8 +397,8 @@ type Platform interface {
 	// InjectPointer 는 창의 콘텐츠 영역 좌표 (x, y) 에 포인터 입력을 전달하고 그 결과를 반환한다.
 	// phase 는 이동 0, 누름 1, 끌기 2, 뗌 3, 스크롤 4 이고 button 은 왼쪽 0, 오른쪽 1 이다.
 	// 누름과 뗌은 좌표의 문서가 그 이벤트를 받거나 receive 초가 지난 뒤 done 을 UI 스레드에서 호출한다.
-	// 다른 단계는 전달한 즉시 호출한다.
-	InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY, receive float64, done func(PointerResult)) error
+	// 다른 단계는 전달한 즉시 호출한다. held 는 결과가 PointerButtonHeld 일 때 거부한 차례의 상태다.
+	InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY, receive float64, done func(result PointerResult, held ButtonHeld)) error
 	// ActivateWindow 는 애플리케이션과 창을 활성화한다. 좌표의 웹뷰만 활성 상태를 받은 뒤
 	// done(nil) 을, timeout 초 안에 끝나지 않으면 멈춘 단계를 적은 오류로 done 을 UI 스레드에서
 	// 호출한다. 좌표가 네이티브 표면이면 웹뷰 상태를 기다리지 않는다.
@@ -471,6 +471,20 @@ const (
 	// PointerPressOpen 은 그 창에서 그 버튼의 합성 누름이 아직 열려 있어 누름을 전달하지 않았다는 뜻이다.
 	PointerPressOpen
 )
+
+// ButtonHeld 는 PointerButtonHeld 로 거부한 차례에 AppKit 이 보고한 상태다.
+type ButtonHeld struct {
+	// Mask 는 NSEvent.pressedMouseButtons 값이다.
+	Mask uint64
+	// Frontmost 는 최전면 애플리케이션이다. AppKit 이 최전면 애플리케이션을 보고하지 않으면 nil 이다.
+	Frontmost *FrontmostApplication
+}
+
+// FrontmostApplication 은 최전면 애플리케이션이다. BundleIdentifier 는 번들 식별자가 없으면 빈 문자열이다.
+type FrontmostApplication struct {
+	BundleIdentifier string
+	PID              int
+}
 
 // Endpoint 는 로컬 엔드포인트의 전송과 주소다.
 type Endpoint struct {
