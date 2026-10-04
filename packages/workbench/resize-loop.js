@@ -44,7 +44,8 @@ export function watchResizeLoop(view, report, locate = creator) {
         if (collected) {
           for (const entry of entries) collected.push(sized(entry));
         }
-        ran.push(`${label} on ${[...entries].map(sized).join(", ")}`);
+        // 시각은 performance trace 의 배치 단계와 같은 시계다. 오류가 난 frame 의 callback 과 배치 그리기를 대조한다.
+        ran.push(`${label} at ${view.performance.now().toFixed(1)}ms on ${[...entries].map(sized).join(", ")}`);
         if (!clearing) {
           clearing = true;
           view.requestAnimationFrame(() => {

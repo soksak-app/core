@@ -15,6 +15,7 @@ function fakeView() {
     }
   };
   window.requestAnimationFrame = (fn) => frames.push(fn);
+  window.performance.now = () => 1234.56;
   const frame = () => frames.splice(0).forEach((fn) => fn());
   return { window, observers, frame };
 }
@@ -36,7 +37,7 @@ test("the observations delivered in the frame after a loop error are reported", 
 
   assert.deepEqual(delivered, [1, 1], "the page callback did not run");
   assert.deepEqual(reported, [
-    "resize observer loop: this frame ran page@wails://localhost/page.js:1:1 on div#plane.plane.stage[data-expose=core.plane] 1186x670",
+    "resize observer loop: this frame ran page@wails://localhost/page.js:1:1 at 1234.6ms on div#plane.plane.stage[data-expose=core.plane] 1186x670",
     "resize observer loop: the next frame delivered div#plane.plane.stage[data-expose=core.plane] 1186x670",
   ]);
 });
@@ -60,7 +61,7 @@ test("the callbacks that ran in the frame of a loop error are reported with the 
   observers[0].callback([{ target: plane, contentRect: { width: 600, height: 400 } }], observers[0]);
   window.dispatchEvent(new window.ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }));
   assert.deepEqual(reported,
-    ["resize observer loop: this frame ran probe@wails://localhost/probe.js:7:3 on div#plane.plane.stage[data-expose=core.plane] 600x400"]);
+    ["resize observer loop: this frame ran probe@wails://localhost/probe.js:7:3 at 1234.6ms on div#plane.plane.stage[data-expose=core.plane] 600x400"]);
   frame();
   frame();
   assert.equal(reported.length, 2);
