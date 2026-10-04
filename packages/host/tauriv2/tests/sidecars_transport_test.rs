@@ -1206,13 +1206,14 @@ fn persistent_start_fails_when_hello_is_not_answered() {
 }
 
 // 새로 시작한 service 가 endpoint 를 출력하지 않으면 시작은 ready 상한 뒤 정해진 문장으로 실패하고, 호스트는 그
-// service 를 끝내고 회수한다. 검사는 기본 30초 대신 1초를 준다.
+// service 를 끝내고 회수한다. 검사는 기본 30초 대신 1초를 준다. service 는 상한보다 늦게 일을 시작하므로 부하와
+// 상관없이 시작하자마자 끝나며, 검사는 그 고유한 경로로 실행 중인 process 가 남지 않았는지 본다.
 // contract: sidecars-transport.startup.times-out
 #[test]
 fn persistent_start_fails_when_the_service_prints_no_endpoint() {
     let executable_directory = tempfile::tempdir().unwrap();
     let service = executable_directory.path().join("echo");
-    std::fs::write(&service, "#!/bin/sh\necho $$ > \"$2/pid\"\nexec sleep 60\n").unwrap();
+    std::fs::write(&service, "#!/bin/sh\nsleep 2\nwhile :; do sleep 1; done\n").unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
     let config_directory = tempfile::tempdir().unwrap();
     let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
@@ -1228,15 +1229,14 @@ fn persistent_start_fails_when_the_service_prints_no_endpoint() {
         error,
         "sidecar @fixture/sidecar-echo: the service did not print its endpoint within 1s"
     );
-    let pid = std::fs::read_to_string(config_directory.path().join("services/echo/pid")).unwrap();
-    let alive = Command::new("kill")
-        .args(["-0", pid.trim()])
-        .status()
+    let running = Command::new("pgrep")
+        .args(["-f", service.to_str().unwrap()])
+        .output()
         .unwrap();
     assert!(
-        !alive.success(),
-        "the silent service {} still runs",
-        pid.trim()
+        !running.status.success(),
+        "the silent service still runs: {}",
+        String::from_utf8_lossy(&running.stdout)
     );
 }
 

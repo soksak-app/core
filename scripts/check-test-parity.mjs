@@ -875,6 +875,19 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F17",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "the service did not print its endpoint within" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "the service did not print its endpoint within" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentStartFailsWhenTheServicePrintsNoEndpoint" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_start_fails_when_the_service_prints_no_endpoint" },
+    ],
+    expected: "A persistent service that prints no endpoint fails the start after the ready limit, and the host ends it, whenever the service starts.",
+    levels: ["unit"],
+  },
+  {
     id: "F16",
     implementation: [
       { file: "packages/plugin-api/exposure-check.js", symbol: "realpathSync(process.argv[1])" },

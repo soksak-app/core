@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F17: 두 host의 시작 시간 초과 테스트는 응답 없는 service가 언제 시작하는지에 더는 기대지 않는다.
 - R2-2-2: plugin과 sidecar 저장소는 version 0.0.3을 선언하고, `@soksak/plugin-api`는 plugin의 `engines.soksak`이 빌드에 쓰는 plugin API의 `^<version>`이 아니면 실패하는 `soksak-engines`를 제공한다.
 - F16: `soksak-exposure`와 `soksak-engines`는 plugin 저장소가 link된 package로 시작해도 검사를 실행한다. 전에는 검사하지 않고 끝났다.
 - R2-2-1: 모든 core 선언은 0.0.3이고, 버전 검사는 애플리케이션 `Info.plist` 버전과 native pkg-config 버전도 본다.

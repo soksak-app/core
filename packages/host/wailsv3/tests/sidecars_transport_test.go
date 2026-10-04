@@ -1164,11 +1164,12 @@ func TestPersistentStartFailsWhenHelloIsNotAnswered(t *testing.T) {
 }
 
 // 새로 시작한 service 가 endpoint 를 출력하지 않으면 시작은 ReadyTimeout 뒤 정해진 문장으로 실패하고, 호스트는 그
-// service 를 끝내고 회수한다. 검사는 기본 30초 대신 1초를 준다.
+// service 를 끝내고 회수한다. 검사는 기본 30초 대신 1초를 준다. service 는 상한보다 늦게 일을 시작하므로 부하와
+// 상관없이 시작하자마자 끝나며, 검사는 그 고유한 경로로 실행 중인 process 가 남지 않았는지 본다.
 // contract: sidecars-transport.startup.times-out
 func TestPersistentStartFailsWhenTheServicePrintsNoEndpoint(t *testing.T) {
 	folder := t.TempDir()
-	script := "#!/bin/sh\necho $$ > \"$2/pid\"\nexec sleep 60\n"
+	script := "#!/bin/sh\nsleep 2\nwhile :; do sleep 1; done\n"
 	if err := os.WriteFile(filepath.Join(folder, "service"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1184,16 +1185,8 @@ func TestPersistentStartFailsWhenTheServicePrintsNoEndpoint(t *testing.T) {
 	if want := "sidecar fixture-service: the service did not print its endpoint within 1s"; err == nil || err.Error() != want {
 		t.Fatalf("silent service = %v after %v, want %q", err, time.Since(begin), want)
 	}
-	text, err := os.ReadFile(filepath.Join(root, "services", "service", "pid"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var pid int
-	if _, err := fmt.Sscanf(string(text), "%d", &pid); err != nil {
-		t.Fatalf("service pid %q: %v", text, err)
-	}
-	if exists, err := exec.Command("kill", "-0", fmt.Sprint(pid)).CombinedOutput(); err == nil {
-		t.Fatalf("the silent service %d still runs: %s", pid, exists)
+	if running, err := exec.Command("pgrep", "-f", filepath.Join(folder, "service")).Output(); err == nil {
+		t.Fatalf("the silent service still runs: %s", running)
 	}
 }
 
