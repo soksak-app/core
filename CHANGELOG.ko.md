@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R2-7-2: files sidecar는 Linux에서 inotify로 디렉터리를 감시한다(sidecar-files S8).
 - R2-7-1: `sok`은 `$XDG_CONFIG_HOME`이나 `~/.config` 아래의 설정 폴더로 Linux에서 실행된다. `sok path`는 Linux에 경로 항목 폴더가 없다고 알리고, CI workflow가 Linux에서 `sok` 테스트를 실행한다.
 - F23: Go `sok`은 프로세스 umask와 무관하게 푼 파일을 mode 0755나 0644로 쓴다. 이전에는 umask 077에서 sidecar 실행 파일을 mode 0700으로 썼다.
 - F14: 두 애플리케이션은 운영체제의 종료 요청(Dock, 로그아웃, 재시작, 다른 프로그램)에 저장을 마친 뒤 오류 없이 답한다. 이전에는 Wails 애플리케이션이 취소로 답해 로그아웃도 멈췄고, Tauri 애플리케이션은 페이지 저장을 기다리지 않고 끝났다.
