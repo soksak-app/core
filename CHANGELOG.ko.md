@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F35.1: 네이티브 검사 `window_titlebar_layout_test`는 열린 layout transaction 안에서 제목줄 높이를 정하는 동안 창을 녹화하고, 녹화 frame이 `surfaceLayoutCommit` 전에 창 단추를 새 자리에 보이거나 그 뒤에 보이지 않으면 실패한다. macOS 26.6.2에서 단추는 commit과 함께만 옮겨졌다.
 - F46: 두 host는 1007 거부가 읽는 `NSEvent.pressedMouseButtons` mask인 status `host.buttons` `{mask}`를 선언한다. `native/darwin`은 AppKit이 애플리케이션에 전달하거나 global event monitor로 다른 애플리케이션에 전달하는 mouse 버튼의 누름과 뗌마다 mask를 읽고, host는 값이 바뀌면 감시자에게 알린다. window 검사 하네스는 검사가 열어 둔 누름을 `status.watch`로 `host.buttons`가 mask 0을 보고할 때까지 기다린 뒤 뗌이 전달되기를 요구해 끝낸다. 이전에는 사람이 아직 버튼을 누르고 있는 동안 뗌을 다시 보냈고, 그 뗌도 거부되어 그 host의 이후 pointer 검사가 모두 1008로 실패했다.
 - F48: Tauri의 `host.windows`는 모든 창의 닫기 상태, 제목, 초점을 하나의 main thread 단계에서 읽는다. 이전에는 닫기 상태를 endpoint thread에서 읽고 창마다 별도의 main thread 왕복으로 조회해서, 그 사이 main thread가 처리한 닫기가 목록을 `runtime error: failed to receive message from webview`로 실패시켰다. 새 계약 사례 `exposure.windows.listed-in-one-main-thread-step`가 test main thread에 넣은 닫기로 변경 전 실패를 재현하고 변경 뒤 통과한다. Wails의 목록은 바꿀 것이 없다.
 - F49: 프로젝트 탭이나 다른 창의 `core.library.remove`로 registry에서 프로젝트를 지우면, 그 프로젝트를 보이는 창은 탭을 닫을 때처럼 그 프로젝트를 끝낸다. 그 창은 registry 변경 알림으로 제거를 읽고, 그 프로젝트 탭들의 surface module을 정리한 뒤 sidecar 세션을 끝내며, 남은 첫 프로젝트를 열거나 프로젝트 없는 창으로 library를 보인다. 이전에는 그 창이 지운 프로젝트의 surface module과 terminal 세션을 남기고 다음 프로젝트 탭을 열지 않았다.

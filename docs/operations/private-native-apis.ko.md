@@ -112,7 +112,7 @@ Tauri 이벤트 전달 콜백은 Tao의 이벤트 처리 잠금을 가진다. �
 
 호출 조건: 창에 표준 단추와 content view 가 있고, 전체 화면이 아니며, 높이는 양의 유한수다. `windowSetTitlebarHeight` 는 다른 호출을 오류로 거부하고, 두 호스트는 페이지에서 32 이상 200 이하 point 만 받는다. 0 이하의 값은 사용자 지정 높이를 지우지만 제목줄을 다시 배치하지 않으므로 함수는 그 값을 보내지 않는다. 전체 화면 동안 정한 높이는 창이 전체 화면에서 나올 때 저장된 값으로 바뀌므로, 함수는 그 요청을 거부하고 페이지는 창이 나온 뒤 행 높이를 다시 보낸다. 사용자 지정 높이가 있으면 도구막대가 제목줄 높이를 정하지 않으므로 창에는 도구막대가 없다.
 
-macOS 26.6.2 (arm64) 측정: 40, 45, 54, 63, 72, 90, 108pt 에서, 빈 compact 도구막대가 있든 없든 제목줄은 요청한 높이와 같고, 단추는 0.5pt 안에서 가운데이며, 제목 변경, 크기 변경, 이동 뒤에도 배치가 유지된다. 실패 징후: [`window_controls_test.m`](../../native/darwin/tests/window_controls_test.m) 이 요청과 다른 제목줄 높이, 제목 변경이나 크기 변경 뒤 가운데를 벗어난 단추, 줄어들지 않는 제목줄을 보고하고, 페이지의 검증 W 가 단추 위아래 여백이 달라 실패한다(`W 창 단추는 첫 행 가운데`). OS 업데이트 뒤에는 `-[NSWindow setTitlebarHeight:]` 와 `-[NSThemeFrame setCustomTitlebarHeight:]` 를 역어셈블해 selector, 전달, 전체 화면의 저장과 복원을 검토한다.
+macOS 26.6.2 (arm64) 측정: 40, 45, 54, 63, 72, 90, 108pt 에서, 빈 compact 도구막대가 있든 없든 제목줄은 요청한 높이와 같고, 단추는 0.5pt 안에서 가운데이며, 제목 변경, 크기 변경, 이동 뒤에도 배치가 유지된다. 창의 배치 transaction(`surfaceLayoutBegin`)이 열린 동안 정한 높이는 단추 frame과 layer를 바로 바꾸지만, presentation layer와 녹화한 창은 `surfaceLayoutCommit`까지 display refresh 12번 동안 이전 자리를 유지하고 commit 뒤 새 자리를 보인다([`window_titlebar_layout_test.m`](../../native/darwin/tests/window_titlebar_layout_test.m)). 실패 징후: [`window_controls_test.m`](../../native/darwin/tests/window_controls_test.m) 이 요청과 다른 제목줄 높이, 제목 변경이나 크기 변경 뒤 가운데를 벗어난 단추, 줄어들지 않는 제목줄을 보고하고, 페이지의 검증 W 가 단추 위아래 여백이 달라 실패한다(`W 창 단추는 첫 행 가운데`). OS 업데이트 뒤에는 `-[NSWindow setTitlebarHeight:]` 와 `-[NSThemeFrame setCustomTitlebarHeight:]` 를 역어셈블해 selector, 전달, 전체 화면의 저장과 복원을 검토한다.
 
 ## 프레임워크 내부 의존성
 
