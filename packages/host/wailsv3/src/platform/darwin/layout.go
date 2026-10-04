@@ -10,6 +10,7 @@ package darwin
 #include "surface_layout.h"
 
 void nativeWindowLayoutBegin(void *window, uint64_t ticket, uintptr_t callback);
+void nativeWindowStartPage(void *window, uint64_t ticket, double height, uintptr_t callback);
 bool nativeWindowAfterPresentation(void *window, uintptr_t callback);
 bool nativeWindowAfterSettled(void *window, uintptr_t callback);
 void surfaceLayoutInjectSettledFailure(void);
@@ -35,6 +36,24 @@ func (implementation) CommitLayout(window unsafe.Pointer, ticket uint64) bool {
 func (implementation) CancelLayout(window unsafe.Pointer) error {
 	C.surfaceLayoutCancel(window)
 	return nil
+}
+
+func (implementation) StartPageTitlebar(window unsafe.Pointer, ticket uint64, height float64, ready func(error)) error {
+	handle := cgo.NewHandle(ready)
+	C.nativeWindowStartPage(window, C.uint64_t(ticket), C.double(height), C.uintptr_t(handle))
+	return nil
+}
+
+//export nativeStartPageReady
+func nativeStartPageReady(value C.uintptr_t, failure *C.char) {
+	handle := cgo.Handle(value)
+	ready := handle.Value().(func(error))
+	handle.Delete()
+	if failure == nil {
+		ready(nil)
+		return
+	}
+	ready(errors.New(C.GoString(failure)))
 }
 
 //export nativeLayoutReady

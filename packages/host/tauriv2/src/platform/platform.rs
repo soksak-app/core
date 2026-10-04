@@ -436,6 +436,16 @@ pub trait Platform: Send + Sync {
     fn commit_layout(&self, window: Handle, ticket: u64) -> Result<bool, String>;
     /// 창의 진행 중인 표면 배치 트랜잭션을 취소한다.
     fn cancel_layout(&self, window: Handle) -> Result<(), String>;
+    /// 새 페이지가 시작될 때 창의 제목줄을 height(pt)로 정한다. 보이는 창은 ticket 의 시작 트랜잭션 안에서 정하고
+    /// 새 페이지의 첫 표시와 함께 커밋한다(surfaceLayoutStartPage). 정한 뒤나 실패한 뒤 ready 를 UI 스레드에서
+    /// 호출한다. UI 스레드에서 호출한다.
+    fn start_page_titlebar(
+        &self,
+        window: Handle,
+        ticket: u64,
+        height: f64,
+        ready: Box<dyn Fn(Result<(), String>)>,
+    ) -> Result<(), String>;
     /// 열린 배치를 커밋하기 전에 앱 문서의 표시 준비를 확인한다.
     fn after_presentation(&self, view: &PlatformWebview, done: Box<dyn Fn()>)
         -> Result<(), String>;

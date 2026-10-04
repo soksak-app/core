@@ -255,6 +255,15 @@ impl Platform for Windows {
     fn cancel_layout(&self, window: Handle) -> Result<(), String> {
         unsupported::cancel_layout(window)
     }
+    fn start_page_titlebar(
+        &self,
+        window: Handle,
+        ticket: u64,
+        height: f64,
+        ready: Box<dyn Fn(Result<(), String>)>,
+    ) -> Result<(), String> {
+        unsupported::start_page_titlebar(window, ticket, height, ready)
+    }
     fn after_settled(
         &self,
         view: &PlatformWebview,

@@ -197,6 +197,11 @@ void nativeWindowLayoutBegin(void *window, uint64_t ticket, uintptr_t callback) 
     surfaceLayoutBegin(window, ticket, ^(int allowed) { nativeLayoutReady(callback, allowed); });
 }
 
+extern void nativeStartPageReady(uintptr_t callback, const char *failure);
+void nativeWindowStartPage(void *window, uint64_t ticket, double height, uintptr_t callback) {
+    surfaceLayoutStartPage(window, ticket, height, ^(const char *failure) { nativeStartPageReady(callback, failure); });
+}
+
 extern void nativeFullscreenDone(uintptr_t callback);
 bool nativeWindowFullscreen(void *handle, bool on, uintptr_t callback) {
     return sp_window_fullscreen(handle, on, ^{ nativeFullscreenDone(callback); });

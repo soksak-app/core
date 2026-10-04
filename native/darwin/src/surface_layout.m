@@ -2,6 +2,8 @@
 #import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
 #import "application_log.h"
+#import "window_controls.h"
+#import "window_facts.h"
 #import "private/webkit.h"
 
 @interface SPLayoutRequest : NSObject
@@ -252,4 +254,100 @@ void surfaceLayoutAfterSettled(void *handle, void (^done)(double, const char *))
 void surfaceLayoutInjectSettledFailure(void) {
     NSCAssert(NSThread.isMainThread, @"surface presentation failure injection requires the UI thread");
     injectSettledFailure = true;
+}
+
+// SPStartCommit 은 새 페이지의 읽기가 끝난 뒤 다음 표시 갱신에 시작 트랜잭션을 커밋하고 스스로를 해제한다.
+// window_reveal.m 이 새 창을 드러내는 때와 같다. 그 사이 같은 창의 새 준비가 트랜잭션을 이어받았으면 ticket 이 바뀌어
+// 커밋하지 않고, 그 준비의 표시가 커밋한다.
+@interface SPStartCommit : NSObject {
+    WKWebView *_webview;
+    void *_owner;
+    uint64_t _ticket;
+    BOOL _started;
+}
+- (instancetype)initWithWebview:(WKWebView *)webview owner:(void *)owner ticket:(uint64_t)ticket;
+@end
+
+@implementation SPStartCommit
+
+- (instancetype)initWithWebview:(WKWebView *)webview owner:(void *)owner ticket:(uint64_t)ticket {
+    if ((self = [super init])) {
+        _webview = [webview retain];
+        _owner = owner;
+        _ticket = ticket;
+        // 시작 문서는 새 페이지의 읽기 중에 요청되므로 읽기는 이미 시작했다.
+        _started = webview.loading;
+    }
+    return self;
+}
+
+- (void)start {
+    if (!_webview.loading) {
+        [self commitAfterPresentation];
+        return;
+    }
+    [_webview addObserver:self forKeyPath:@"loading" options:0 context:NULL];
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+    if (_webview.loading) {
+        _started = YES;
+        return;
+    }
+    if (!_started) return;
+    [_webview removeObserver:self forKeyPath:@"loading"];
+    [self commitAfterPresentation];
+}
+
+- (void)commitAfterPresentation {
+    [_webview _doAfterNextPresentationUpdate:^{
+        surfaceLayoutCommit(self->_owner, self->_ticket);
+        [self release];
+    }];
+}
+
+- (void)dealloc {
+    [_webview release];
+    [super dealloc];
+}
+
+@end
+
+void surfaceLayoutStartPage(void *owner, uint64_t ticket, double height, void (^ready)(const char *failure)) {
+    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
+    NSWindow *window = (NSWindow *)owner;
+    WKWebView *main = (WKWebView *)sp_window_main_webview(window);
+    if (main == nil) {
+        ready("the start title bar needs a registered main webview");
+        return;
+    }
+    char *failure = NULL;
+    // 보이지 않는 창에는 이전 페이지가 없다. 새 창은 첫 페이지가 표시될 때까지 투명하다(window_reveal.h).
+    if (!window.isVisible || window.alphaValue == 0) {
+        bool set = windowSetTitlebarHeight(window, height, &failure);
+        ready(set ? NULL : failure);
+        free(failure);
+        return;
+    }
+    void (^finish)(const char *) = [[ready copy] autorelease];
+    [main retain];
+    surfaceLayoutBegin(owner, ticket, ^(int allowed) {
+        if (!allowed) {
+            finish("the window closed before the start transaction began");
+            [main release];
+            return;
+        }
+        char *problem = NULL;
+        if (!windowSetTitlebarHeight(window, height, &problem)) {
+            surfaceLayoutCancel(owner);
+            finish(problem);
+            free(problem);
+            [main release];
+            return;
+        }
+        // 관찰 객체는 커밋할 때 스스로를 해제한다.
+        [[[SPStartCommit alloc] initWithWebview:main owner:owner ticket:ticket] start];
+        finish(NULL);
+        [main release];
+    });
 }

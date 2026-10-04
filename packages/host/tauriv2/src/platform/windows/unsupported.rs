@@ -237,6 +237,15 @@ pub fn cancel_layout(_window: Handle) -> Result<(), String> {
     missing("surface layout")
 }
 
+pub fn start_page_titlebar(
+    _window: Handle,
+    _ticket: u64,
+    _height: f64,
+    _ready: Box<dyn Fn(Result<(), String>)>,
+) -> Result<(), String> {
+    missing("start title bar")
+}
+
 pub fn after_settled(
     _view: &PlatformWebview,
     _done: Box<dyn Fn(Result<f64, String>)>,

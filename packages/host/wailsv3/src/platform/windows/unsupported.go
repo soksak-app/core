@@ -263,6 +263,10 @@ func (implementation) CancelLayout(unsafe.Pointer) error {
 	return unsupported("surface layout cancel")
 }
 
+func (implementation) StartPageTitlebar(unsafe.Pointer, uint64, float64, func(error)) error {
+	return unsupported("start title bar")
+}
+
 func (implementation) AfterSettled(unsafe.Pointer, func(float64, error)) error {
 	return unsupported("native presentation")
 }

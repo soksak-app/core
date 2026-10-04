@@ -368,6 +368,16 @@ impl Platform for Darwin {
         layout::cancel(window);
         Ok(())
     }
+    fn start_page_titlebar(
+        &self,
+        window: Handle,
+        ticket: u64,
+        height: f64,
+        ready: Box<dyn Fn(Result<(), String>)>,
+    ) -> Result<(), String> {
+        layout::start_page(window, ticket, height, ready);
+        Ok(())
+    }
     fn after_settled(
         &self,
         view: &PlatformWebview,

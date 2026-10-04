@@ -25,4 +25,11 @@ void surfaceLayoutAfterPresentation(void *mainWebview, void (^done)(void));
 void surfaceLayoutAfterSettled(void *mainWebview, void (^done)(double displayed, const char *error));
 // 다음 settled-presentation 요청에 실패를 주입한다. 진단 빌드 전용이다.
 void surfaceLayoutInjectSettledFailure(void);
+// 창 owner 의 새 페이지가 시작될 때 제목줄을 height(pt)로 정한다(docs/spec/native-surfaces.md#title-bar-height).
+// 아직 보이지 않는 창은 이전 페이지를 보이지 않으므로 바로 정한다. 보이는 창은 새 페이지가 첫 그리기를 표시할 때까지
+// 이전 페이지를 보이므로, ticket 으로 창의 배치 트랜잭션을 시작해 그 안에서 정하고, 등록된 메인 웹뷰의 읽기가 끝난 뒤
+// 다음 표시 갱신에 그 트랜잭션을 커밋한다. 그 사이 같은 창의 새 준비가 트랜잭션을 이어받았으면 그 준비가 커밋한다.
+// 높이를 정하면 ready(NULL) 을, 정하지 못하면 시작한 트랜잭션을 취소하고 ready(실패 문장) 을 메인 스레드에서 부른다.
+// 다른 창의 트랜잭션이 열려 있으면 ready 는 그 트랜잭션이 끝난 뒤에 불린다. 메인 스레드에서 호출한다.
+void surfaceLayoutStartPage(void *owner, uint64_t ticket, double height, void (^ready)(const char *failure));
 #endif

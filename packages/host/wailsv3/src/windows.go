@@ -429,8 +429,9 @@ func StartTitlebarHeight(common Record) (float64, error) {
 	return math.Round(math.Max(initialTitlebarHeight, 36*factor)), nil
 }
 
-// startTitlebar 는 시작 문서에 답하기 전에 창의 제목줄을 공통 설정의 첫 행 높이로 정한다. 새 창은 아직 투명하고 페이지의
-// 첫 그리기와 함께 보이므로 그 첫 프레임의 행과 제목줄이 같다. 전체 화면인 창은 높이를 바꾸지 않는다.
+// startTitlebar 는 시작 문서에 답하기 전에 창의 제목줄을 공통 설정의 첫 행 높이로 정한다. 아직 보이지 않는 새 창은
+// 바로 정하고, 이전 페이지를 보이는 창은 새 ticket 의 시작 트랜잭션 안에서 정해 새 페이지의 첫 표시와 함께 커밋한다
+// (docs/spec/native-surfaces.md#title-bar-height). 전체 화면인 창은 높이를 바꾸지 않는다.
 func (s *Surfaces) startTitlebar(common Record) error {
 	height, err := StartTitlebarHeight(common)
 	if err != nil {
@@ -440,8 +441,14 @@ func (s *Surfaces) startTitlebar(common Record) error {
 	if !ok {
 		return errNoWindow
 	}
-	application.InvokeSync(func() { err = system.SetTitlebarHeight(win.NativeWindow(), height) })
-	return err
+	done := make(chan error, 1)
+	application.InvokeSync(func() {
+		s.lastPreparation++
+		if began := system.StartPageTitlebar(win.NativeWindow(), s.lastPreparation, height, func(failure error) { done <- failure }); began != nil {
+			done <- began
+		}
+	})
+	return <-done
 }
 
 // WindowControls 는 창 단추가 차지하는 영역을 페이지 좌표로 반환한다. 페이지는 첫 행에서

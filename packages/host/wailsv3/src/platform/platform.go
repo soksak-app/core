@@ -375,6 +375,10 @@ type Platform interface {
 	CommitLayout(window unsafe.Pointer, ticket uint64) bool
 	// CancelLayout 은 진행 중인 배치를 취소한다.
 	CancelLayout(window unsafe.Pointer) error
+	// StartPageTitlebar 는 새 페이지가 시작될 때 창의 제목줄을 height(pt)로 정한다. 보이는 창은 ticket 의 시작
+	// 트랜잭션 안에서 정하고 새 페이지의 첫 표시와 함께 커밋한다(surfaceLayoutStartPage). 정한 뒤나 실패한 뒤 ready 를
+	// UI 스레드에서 호출한다. UI 스레드에서 호출한다.
+	StartPageTitlebar(window unsafe.Pointer, ticket uint64, height float64, ready func(error)) error
 	// AfterPresentation 은 열린 배치를 커밋하기 전에 앱 문서의 표시 준비를 확인한다.
 	AfterPresentation(window unsafe.Pointer, done func()) error
 	// AfterSettled 는 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 웹뷰와 보이는 앱 문서가 화면을

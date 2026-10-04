@@ -32,6 +32,34 @@ pub fn cancel(window: Handle) {
     unsafe { surfaceLayoutCancel(window as *mut c_void) }
 }
 
+/// 새 페이지가 시작될 때 창의 제목줄을 height(pt)로 정한다. 보이는 창은 ticket 의 시작 트랜잭션 안에서 정하고 새
+/// 페이지의 첫 표시와 함께 커밋한다. 정한 결과는 ready 에 전달한다.
+pub fn start_page(
+    window: Handle,
+    ticket: u64,
+    height: f64,
+    ready: Box<dyn Fn(Result<(), String>)>,
+) {
+    extern "C" {
+        fn surfaceLayoutStartPage(
+            owner: *mut c_void,
+            ticket: u64,
+            height: f64,
+            ready: &Block<dyn Fn(*const c_char)>,
+        );
+    }
+    let ready = RcBlock::new(move |failure: *const c_char| {
+        if failure.is_null() {
+            ready(Ok(()));
+        } else {
+            ready(Err(unsafe { CStr::from_ptr(failure) }
+                .to_string_lossy()
+                .into_owned()));
+        }
+    });
+    unsafe { surfaceLayoutStartPage(window as *mut c_void, ticket, height, &ready) }
+}
+
 /// 열린 배치를 커밋하기 전에 앱 문서의 표시 준비를 확인한다.
 pub fn after_presentation(view: &PlatformWebview, done: Box<dyn Fn()>) {
     extern "C" {
