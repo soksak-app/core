@@ -131,7 +131,7 @@ export async function initialise(storage) {
     data: { get: (id, plugin) => projects.find((p) => p.id === id)?.plugins?.[plugin] ?? {}, set: setPluginData },
   });
   await refresh();
-  store.onChange(() => { refresh().catch(failed); });
+  store.onChange(() => { reread().catch(failed); });
   await windows.onActivate((id) => activateHere(id).catch(failed));
   await windows.onCloseRequest(() => closeWindow().catch(failed));
   const requested = new URL(location.href).searchParams.get("project");
@@ -159,9 +159,21 @@ async function leaveBegun() {
   changed();
 }
 
+/** 등록부를 다시 읽는다. 이 창의 활성 프로젝트가 등록부에서 사라졌으면 true 로 끝난다. */
 function refresh() {
   refreshing = refreshing.then(readProjects, readProjects);
   return refreshing;
+}
+
+/**
+ * 등록부를 다시 읽고, 이 창의 활성 프로젝트가 사라졌으면 프로젝트 탭 닫기처럼 이 창의 남은 첫 프로젝트를 연다.
+ * 남은 프로젝트가 없으면 readProjects 가 보인 라이브러리에 남는다(docs/spec/projects.md#settings).
+ * 활성화는 refresh 를 기다리므로 readProjects 안에서 하지 않는다.
+ */
+async function reread() {
+  if (!(await refresh())) return;
+  const next = local()[0];
+  if (next) await activate(next.id);
 }
 
 /**
@@ -193,6 +205,11 @@ async function readProjects() {
   // 바꾼 저장소는 다시 읽어 그 결과를 쓴다. 바꾼 뒤에는 바꿀 것이 없으므로 한 번만 다시 읽는다.
   if (await migrateProjects((await store.snapshot()).projects)) log("projects: the registry was saved in the current layout format");
   const snapshot = await store.snapshot();
+  const listed = new Set(snapshot.projects.map((p) => p.id));
+  const removedProjects = projects.some((p) => !listed.has(p.id));
+  // 아래의 정리는 저장된 레이아웃의 탭만 남긴다. 남는 활성 프로젝트의 판에 아직 저장하지 않은 탭이 있으면 그 표면도
+  // 남도록 먼저 저장한다. 지운 프로젝트는 저장하지 않는다.
+  if (removedProjects && listed.has(activeProjectId)) await keep();
   // 기본값: 브라우저 예제의 저장소는 다른 창이 없으므로 open 을 싣지 않는다.
   openProjects = new Set(snapshot.open ?? []);
   const previous = new Map(projects.map((p) => [p.id, p]));
@@ -202,7 +219,8 @@ async function readProjects() {
   });
   const removed = [...owned].filter(id => !projects.some(p => p.id === id));
   for (const id of removed) owned.delete(id);
-  if (activeProjectId && !active()) {
+  const ended = activeProjectId !== null && !active();
+  if (ended) {
     activeProjectId = null;
     browsing = true;
     history.replaceState(null, "", location.pathname);
@@ -211,7 +229,16 @@ async function readProjects() {
     await showStates(null);
     await listener?.empty();
   } else if (removed.length && !browsing) listener?.update();
+  if (removedProjects) {
+    // 지운 프로젝트의 탭은 어떤 레이아웃에도 없다. 그 프로젝트를 지운 창이든 보이던 창이든, 이 창의 그 표면 모듈을 먼저
+    // 정리하고 사이드카 세션을 끝낸다. 모듈이 남아 있으면 끝난 세션을 다시 열며, 지운 프로젝트의 폴더가 없으면 그 열기는
+    // 실패한다(F44). 호스트는 남은 모듈의 표면 세션을 retain 에서 남긴다(docs/spec/terminal-runtime.md).
+    const remaining = layoutSurfaces();
+    await listener.retain(new Set(remaining.map((item) => item.surface)));
+    await retainSidecarSessions(remaining);
+  }
   changed();
+  return ended;
 }
 
 export function keep() {
@@ -303,12 +330,9 @@ export async function close(id) {
   await windows.releaseProject(id);
   owned.delete(id);
   await store.remove(id);
+  // 지운 프로젝트를 끝내는 일은 다른 창과 같은 readProjects 가 한다. 저장소의 바뀜 알림이 이 refresh 보다 먼저 읽었으면
+  // 그 알림의 reread 가 다음 프로젝트를 연다. 그 활성화도 같은 전환 순서를 지나므로 아래의 activate 는 그 뒤에 끝난다.
   await refresh();
-  // 지운 프로젝트의 탭은 어떤 레이아웃에도 없다. 그 표면 모듈을 먼저 정리하고 사이드카 세션을 끝낸다. 모듈이 남아
-  // 있으면 끝난 세션을 다시 열며, 지운 프로젝트의 폴더가 없으면 그 열기는 실패한다(F44).
-  const remaining = layoutSurfaces();
-  await listener.retain(new Set(remaining.map((item) => item.surface)));
-  await retainSidecarSessions(remaining);
   if (active() && !browsing) listener.update();
   if (!active()) {
     const next = local()[0];

@@ -345,7 +345,8 @@ for (const app of Object.values(APPS)) {
       "the project did not open in its own window");
     const projectWindow = listed.find((item) => item.project === folder);
     const other = s.on(projectWindow.window);
-    for (const terminal of await terminalReady(other)) {
+    const terminals = await terminalReady(other);
+    for (const terminal of terminals) {
       await other.until("terminal.session", (session) => typeof session?.sessionId === "string" && session.sessionId !== "",
         `terminal ${terminal.surface} of the project did not open its session`, { surface: terminal.surface });
     }
@@ -370,6 +371,17 @@ for (const app of Object.values(APPS)) {
     await s.until("core.library", (state) => !state.shown.includes(missing.id), "the removed project is still shown");
     assert.equal((await s.get("core.projects")).some((item) => item.id === missing.id), false, "the removed project is still stored");
     assert.equal((await s.get("core.library")).shown.includes(first.id), true, "removing a project removed another project");
+    // 지운 프로젝트를 보이던 창은 그 프로젝트 탭을 닫은 것처럼 프로젝트 없는 창이 되어 library 를 보이고, 그 탭들의 표면을
+    // 정리한다(docs/spec/projects.md#settings).
+    await s.until("host.windows", (list) => list.some((item) => item.window === projectWindow.window && item.project === null) &&
+      !list.some((item) => item.project === folder), "the window of the removed project still shows it");
+    await other.until("core.screen", (state) => state.screen === "library", "the window of the removed project did not show the library");
+    const ended = new Set(terminals.map((terminal) => terminal.surface));
+    await other.until("host.window", (state) => !state.surfaces.some((surface) => ended.has(surface.id)),
+      "the window of the removed project kept the native surfaces of its tabs");
+    // 이 검사가 연 창을 닫아 다음 검사에 창을 남기지 않는다.
+    await other.close();
+    await s.windows(1, "the window of the removed project did not close");
     t.diagnostic(`missing folder reason: ${library.folderErrors[missing.id]}`);
   });
 }

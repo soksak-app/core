@@ -4,7 +4,7 @@ import { mock, test } from "node:test";
 
 const PROJECT = {
   id: "prj-one", root: "/work/one", identity: "1:1", title: "one", color: "#fff", named: 1,
-  activeSpaceId: "spc-one", spaces: [{ id: "spc-one", title: "SPACE1", layout: { state: "one" } }], settings: {},
+  activeSpaceId: "spc-one", spaces: [{ id: "spc-one", title: "SPACE1", layout: { state: { cards: [], name: "one" } } }], settings: {},
 };
 
 // 창 열기 요청을 받은 프로젝트.
@@ -141,12 +141,10 @@ test("the surfaces of every layout are listed with their project root, and remov
     spaces: [{ id: "spc-two", title: "SPACE1", layout }],
   };
   const one = { ...structuredClone(PROJECT), id: "prj-three" };
+  one.spaces[0].layout = { state: { cards: [{ id: "one", data: { tabs: [{ id: "tab-one" }] } }] } };
   let listed = [one, two];
   const local = { ...store, snapshot: async () => ({ common: {}, projects: listed.map((item) => structuredClone(item)), open: [] }),
     remove: async (id) => { listed = listed.filter((item) => item.id !== id); } };
-  await projects.initialise(local);
-  assert.throws(() => projects.layoutSurfaces(), /has no layout cards/, "a layout without cards is an explicit error");
-  listed[0].spaces[0].layout = { state: { cards: [{ id: "one", data: { tabs: [{ id: "tab-one" }] } }] } };
   await projects.initialise(local);
   assert.deepEqual(projects.layoutSurfaces(), [
     { surface: "tab-one", root: "/work/one" },
@@ -158,12 +156,15 @@ test("the surfaces of every layout are listed with their project root, and remov
   // 지운 프로젝트의 표면 모듈을 먼저 정리한다. 모듈이 남아 있으면 끝난 세션을 지운 폴더에서 다시 연다(F44).
   assert.deepEqual(retained, [{ modules: ["tab-one"] }, [{ surface: "tab-one", root: "/work/one" }]],
     "removing a project disposes the surface modules of its tabs before it ends their sidecar sessions");
+  listed[0].spaces[0].layout = { state: {} };
+  await projects.initialise(local);
+  assert.throws(() => projects.layoutSurfaces(), /has no layout cards/, "a layout without cards is an explicit error");
 });
 
 test("a saved layout that fails the plane check rejects the open before any project or window change", async () => {
   const patches = [];
   const other = { ...structuredClone(PROJECT), id: "prj-bad", root: "/work/bad",
-    spaces: [{ id: "spc-bad", title: "SPACE1", layout: { state: "bad" } }], activeSpaceId: "spc-bad" };
+    spaces: [{ id: "spc-bad", title: "SPACE1", layout: { state: { cards: [], name: "bad" } } }], activeSpaceId: "spc-bad" };
   const listed = [structuredClone(PROJECT), other];
   await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: listed.map((item) => structuredClone(item)), open: [] }),
     patch: async (id, patch) => { patches.push([id, patch]); } });
@@ -203,8 +204,8 @@ test("opening a project whose folder cannot be read rejects with the host's mess
 test("switching to or closing into a space that fails the plane check changes neither the active space nor the plane", async () => {
   // 이 창이 소유한 프로젝트는 메모리의 스페이스를 유지하므로 앞선 검사와 다른 프로젝트를 쓴다.
   const project = { ...structuredClone(PROJECT), id: "prj-spaces", root: "/work/spaces", spaces: [
-    { id: "spc-one", title: "SPACE1", layout: { state: "one" } },
-    { id: "spc-bad", title: "SPACE2", layout: { state: "bad" } },
+    { id: "spc-one", title: "SPACE1", layout: { state: { cards: [], name: "one" } } },
+    { id: "spc-bad", title: "SPACE2", layout: { state: { cards: [], name: "bad" } } },
   ] };
   await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: [structuredClone(project)], open: [] }) });
   await projects.activate(project.id);
@@ -261,4 +262,48 @@ test("a project that the start document drew falls back to the library when its 
   assert.deepEqual(plane.events, ["empty started", "emptied"]);
   assert.equal(globalThis.location.search, "");
   assert.deepEqual(reported, ["project directory does not exist: /work/missing"], "the failed start activation was not reported once");
+});
+
+test("a project removed from the registry by another window ends in the window that shows it as closing its tab does", async () => {
+  /** 카드 하나에 탭 하나를 가진 프로젝트. */
+  const project = (id, tab) => ({ ...structuredClone(PROJECT), id, root: `/work/${id}`, spaces: [
+    { id: `spc-${id}`, title: "SPACE1", layout: { state: { cards: [{ id: `card-${id}`, data: { tabs: [{ id: tab }] } }] } } },
+  ], activeSpaceId: `spc-${id}` });
+  let listed = [project("prj-shown", "tab-shown"), project("prj-next", "tab-next"), project("prj-other", "tab-other")];
+  let notify = null;
+  const patches = [];
+  await projects.initialise({ ...store,
+    snapshot: async () => ({ common: {}, projects: listed.map((item) => structuredClone(item)), open: [] }),
+    patch: async (id, patch) => { patches.push(id); },
+    onChange: (fn) => { notify = fn; } });
+  reported.length = 0;
+  // 이 창은 두 프로젝트를 탭으로 보이고 prj-shown 이 활성이다. prj-other 는 다른 창의 프로젝트다.
+  await projects.activate("prj-next");
+  await projects.activate("prj-shown");
+  // 다른 창이 prj-shown 을 지우고 저장소가 이 창에 바뀜을 알린다. 가짜 저장소와 런타임은 마이크로태스크 안에서 끝나므로
+  // 다음 매크로태스크까지 기다리면 알림의 처리가 끝난 상태다.
+  const removeElsewhere = async (id) => {
+    listed = listed.filter((item) => item.id !== id);
+    retained.length = 0;
+    patches.length = 0;
+    plane.events.length = 0;
+    notify();
+    await new Promise((resolve) => setImmediate(resolve));
+  };
+  await removeElsewhere("prj-shown");
+  assert.equal(projects.all().some((item) => item.id === "prj-shown"), false);
+  assert.equal(projects.active()?.id, "prj-next", "the window did not open its next project as closing the project tab does");
+  assert.deepEqual(retained.slice(0, 2), [
+    { modules: ["tab-next", "tab-other"] },
+    [{ surface: "tab-next", root: "/work/prj-next" }, { surface: "tab-other", root: "/work/prj-other" }],
+  ], "the window kept the surface modules and sidecar sessions of the removed project's tabs");
+  assert.equal(patches.includes("prj-shown"), false, "the window saved the removed project");
+  await removeElsewhere("prj-next");
+  assert.equal(projects.active(), null);
+  assert.equal(projects.inLibrary(), true, "the window without a project did not show the library");
+  assert.deepEqual(projects.local(), []);
+  assert.deepEqual(retained, [{ modules: ["tab-other"] }, [{ surface: "tab-other", root: "/work/prj-other" }]],
+    "the window kept the surface modules and sidecar sessions of its last removed project");
+  assert.deepEqual(reported, [], "ending the removed project reported an error");
+  await projects.flush();
 });
