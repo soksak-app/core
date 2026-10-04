@@ -704,7 +704,7 @@ fn initial_titlebar(window: &Window) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// 페이지가 요청한 제목줄 높이(pt)를 검사한다. 첫 행은 40pt 에서 프레임 글자 배율 3 의 108pt 사이다.
+/// 표면 준비가 담은 제목줄 높이(pt)를 검사한다. 첫 행은 40pt 에서 프레임 글자 배율 3 의 108pt 사이다.
 /// AppKit 은 0 이하의 값을 사용자 지정 높이가 없다는 뜻으로 쓰므로 그 값도 이 범위 밖이다.
 pub fn validate_titlebar_height(height: f64) -> Result<(), String> {
     if height.is_nan() || !(32.0..=200.0).contains(&height) {
@@ -713,17 +713,21 @@ pub fn validate_titlebar_height(height: f64) -> Result<(), String> {
     Ok(())
 }
 
-/// 창의 제목줄을 height(pt)로 만든다. 페이지가 첫 행의 높이를 정하고 그 높이를 요청한다.
-pub(crate) fn window_titlebar(window: &Window, height: f64) -> Result<(), String> {
-    validate_titlebar_height(height)?;
-    let handle = native_owner(window)?;
-    crate::exposure::on_main(window, move || {
-        platform::current()?.set_titlebar_height(handle, height)
+/// 창의 제목줄을 height(pt)로 만들고 그 뒤의 창 단추 영역과 제목줄 높이를 반환한다. 표면 준비가 창의 배치
+/// 트랜잭션 안에서 메인 스레드에서 호출하므로 새 높이는 그 트랜잭션의 커밋과 함께 화면에 나간다. 전체 화면인 창은
+/// 높이를 바꾸지 않고 row 0 을 반환한다.
+pub(crate) fn titlebar_chrome(handle: Handle, height: f64) -> Result<Chrome, String> {
+    let platform = platform::current()?;
+    platform.set_titlebar_height(handle, height)?;
+    let (x, y, w, h) = platform.window_controls(handle)?;
+    Ok(Chrome {
+        controls: Rect { x, y, w, h },
+        row: platform.titlebar_height(handle)?,
     })
 }
 
 /// 페이지가 첫 줄을 그리는 데 쓰는 창의 값. controls 는 창 단추 영역이고 row 는 제목줄 높이(pt)다.
-/// 전체 화면처럼 제목줄이 없으면 row 는 0 이고, 페이지는 제목줄 높이를 요청하지 않는다.
+/// 전체 화면처럼 제목줄이 없으면 row 는 0 이다.
 #[derive(Serialize)]
 pub(crate) struct Chrome {
     controls: Rect,

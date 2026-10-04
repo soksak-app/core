@@ -22,7 +22,8 @@ double windowTitlebarHeight(void *handle) {
 
 // AppKit 의 setTitlebarHeight: 는 SDK 헤더에 없다(docs/operations/private-native-apis.md). 0 이하의 값은
 // 사용자 지정 높이를 지우지만 다시 배치하지 않으므로 받지 않는다. 전체 화면 전환은 들어갈 때 값을 저장하고
-// 나올 때 되돌리므로, 전체 화면 동안 정한 값은 나올 때 사라진다. 그때는 거부하고 페이지가 나온 뒤에 다시 정한다.
+// 나올 때 되돌리므로, 전체 화면 동안 정한 값은 나올 때 사라지고 그동안 제목줄은 보이지 않는다. 그때는 높이를 바꾸지
+// 않고 성공한다. 호출자는 windowTitlebarHeight 의 0 으로 그 상태를 알리고, 페이지는 창이 나온 뒤 행을 다시 준비한다.
 bool windowSetTitlebarHeight(void *handle, double height, char **failure) {
     NSCAssert(NSThread.isMainThread, @"Window controls belong to the main thread");
     NSWindow *window = (NSWindow *)handle;
@@ -35,10 +36,7 @@ bool windowSetTitlebarHeight(void *handle, double height, char **failure) {
         *failure = strdup("the window has no standard buttons or content view for a title bar");
         return false;
     }
-    if (window.styleMask & NSWindowStyleMaskFullScreen) {
-        *failure = strdup("the window shows no title bar in full screen");
-        return false;
-    }
+    if (window.styleMask & NSWindowStyleMaskFullScreen) return true;
     [window setTitlebarHeight:height];
     [window layoutIfNeeded];
     return true;

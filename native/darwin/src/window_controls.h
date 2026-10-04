@@ -8,6 +8,7 @@ void windowControls(void *window, double *out);
 double windowTitlebarHeight(void *window);
 
 // 창의 제목줄을 height(pt)로 만든다. AppKit 이 그 높이의 세로 가운데에 창 단추를 두므로 단추를 옮기지
-// 않는다. height 가 양의 유한수가 아니거나, 창이 제목줄을 가질 수 없거나, 전체 화면이면 false 를 반환하고
-// failure 에 malloc 한 문장을 쓴다. 호출자가 해제한다.
+// 않는다. height 가 양의 유한수가 아니거나 창이 제목줄을 가질 수 없으면 false 를 반환하고 failure 에 malloc 한
+// 문장을 쓴다. 호출자가 해제한다. 전체 화면인 창은 제목줄을 보이지 않고 AppKit 이 나올 때 들어갈 때의 높이를
+// 되돌리므로, 높이를 바꾸지 않고 true 를 반환한다.
 bool windowSetTitlebarHeight(void *window, double height, char **failure);

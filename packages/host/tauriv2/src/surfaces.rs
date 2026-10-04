@@ -14,7 +14,10 @@ use crate::exposure;
 use crate::images;
 use crate::platform::{self, Handle};
 use crate::sidecars::WindowSidecars;
-use crate::windows::{emit_window, native_owner_on_main, window_data};
+use crate::windows::{
+    emit_window, native_owner_on_main, titlebar_chrome, validate_titlebar_height, window_data,
+    Chrome,
+};
 
 /// 표면 웹뷰가 문서보다 먼저 실행하는 스크립트.
 pub(crate) struct Background;
@@ -231,6 +234,9 @@ pub struct SyncRequest {
     #[serde(default)]
     overlays: Vec<WindowOverlayRequest>,
     surfaces: Vec<Surface>,
+    /// 다음 그리기가 보일 첫 행의 높이(pt). 배치 트랜잭션 안에서 창 제목줄을 이 높이로 정한다
+    /// (docs/spec/native-surfaces.md#title-bar-height).
+    titlebar: f64,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -268,10 +274,13 @@ pub(crate) struct Placement {
     visible: bool,
 }
 
+/// 준비의 답. chrome 은 호스트가 이 트랜잭션에서 제목줄을 정한 뒤의 창 단추 영역과 제목줄 높이이고, 페이지는 이
+/// 준비의 표시를 확인한 뒤 그것을 커밋된 상태로 읽는다.
 #[derive(Serialize)]
 pub(crate) struct PreparedSurfaces {
     ticket: u64,
     placements: Vec<Placement>,
+    chrome: Chrome,
 }
 
 #[derive(Deserialize)]
@@ -464,6 +473,7 @@ pub fn check_sync_request(
     request: &SyncRequest,
     held: &HashMap<String, SurfaceComposition>,
 ) -> Result<Vec<platform::WindowOverlay>, String> {
+    validate_titlebar_height(request.titlebar)?;
     let mut ids = HashSet::new();
     for surface in &request.surfaces {
         if surface.id.is_empty() || !ids.insert(surface.id.clone()) {
@@ -504,17 +514,19 @@ pub fn check_sync_request(
         .collect()
 }
 
-/// 창 덮개를 놓고 표면 배치 트랜잭션을 시작한 뒤 표면을 맞춘다. 창 덮개는 배치를 시작하기 전에 놓으므로 덮개가
-/// 거부되면 시작한 배치가 없고, 표면을 맞추다 실패하면 시작한 배치를 취소한다.
-pub fn run_layout<T>(
+/// 창 덮개를 놓고 표면 배치 트랜잭션을 시작한 뒤 창 제목줄을 정하고 표면을 맞춘다. 창 덮개는 배치를 시작하기 전에
+/// 놓으므로 덮개가 거부되면 시작한 배치가 없다. 제목줄을 정하지 못하면 표면을 맞추지 않고, 둘 중 하나가 실패하면
+/// 시작한 배치를 취소한다. steps 는 titlebar 의 답을 받는다.
+pub fn run_layout<C, T>(
     overlays: impl FnOnce() -> Result<(), String>,
     begin: impl FnOnce() -> Result<(), String>,
-    steps: impl FnOnce() -> Result<T, String>,
+    titlebar: impl FnOnce() -> Result<C, String>,
+    steps: impl FnOnce(C) -> Result<T, String>,
     cancel: impl FnOnce(),
 ) -> Result<T, String> {
     overlays()?;
     begin()?;
-    let result = steps();
+    let result = titlebar().and_then(steps);
     if result.is_err() {
         cancel();
     }
@@ -593,7 +605,9 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             platform.set_window_overlays(main_handle, &overlays)
         })
     };
-    let steps = || -> Result<PreparedSurfaces, String> {
+    let titlebar = request.titlebar;
+    let set_titlebar = || exposure::on_main(window, move || titlebar_chrome(owner, titlebar));
+    let steps = |chrome: Chrome| -> Result<PreparedSurfaces, String> {
         for s in &request.surfaces {
             context
                 .compositions
@@ -706,6 +720,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         Ok(PreparedSurfaces {
             ticket,
             placements: placed,
+            chrome,
         })
     };
     let cancel = || {
@@ -715,7 +730,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             log_error("surface layout cancel", error);
         }
     };
-    let prepared = run_layout(place_overlays, begin, steps, cancel)?;
+    let prepared = run_layout(place_overlays, begin, set_titlebar, steps, cancel)?;
     // 배치를 맞춘 뒤 이미지 raster 갱신이 실패해도 시작한 배치를 남기지 않는다.
     if let Err(error) = crate::composition::refresh_image_rasters(window) {
         cancel();

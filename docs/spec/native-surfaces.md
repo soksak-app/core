@@ -64,6 +64,17 @@ On macOS, content webviews use a shared native container whose coordinates are d
 
 The [private native API inventory](../operations/private-native-apis.md) records the geometry, presentation, and input dependencies, their necessity, and the first review steps after native updates.
 
+## Title bar height
+
+The window title bar joins the layout transaction, so the window buttons move in the presented frame that draws the page's first row ([window buttons](hosts.md#window-buttons)).
+
+- Every preparation carries `titlebar`, the height in points of the first row that the page shows after the draw that follows the preparation: `round(max(40, 36 × frame factor))` for the frame factor of that draw. A preparation sent after a draw carries the height of the drawn row.
+- The host checks the height with the rest of the request before it begins the transaction. After it begins the window's transaction, and before it places the surfaces and answers the preparation, it sets the window's title bar to that height, so the new height reaches the screen with the commit of the DOM frame. A failure to set the height cancels the begun transaction and fails the preparation with that error.
+- The answer of a preparation carries `chrome`, the window's button area and title bar height after the host set the height, in the form of the `windowControls` answer (`{controls, row}`). Verification W compares the first row with the button area in the `chrome` of the latest preparation whose presentation the host confirmed, which is the committed state, and not with an earlier `windowControls` answer.
+- A change of the frame factor is drawn by a prepared layout: the page writes the new factor into the document in the draw of that layout, not when the setting changes. Before it prepares the layout, it measures the plane size that the new factor gives by writing the factor, reading the plane, and writing the drawn factor back in the same task, so the document renders nothing in between and the card rectangles of the preparation fit the new row. A window without a plane (the library) draws a factor change with a preparation that carries the height and no surfaces.
+- A window in full screen shows no title bar. AppKit saves the title bar height when the window enters full screen, clears it, and restores the saved height when the window leaves full screen, so a height set in between would be replaced. The host therefore leaves the title bar unchanged in a preparation while the window is in full screen; the preparation succeeds and its `chrome.row` is 0.
+- The title bar can differ from the first row without a draw of the page: the host creates the window with a 40pt title bar, and when the window leaves full screen AppKit restores the height saved on entering, which differs from the row if the frame factor changed during full screen. The page reads `windowControls` when it starts and on every window resize, which leaving full screen causes. When the answer has a title bar (`row` greater than 0) whose height differs from the row of the current frame factor, the page prepares a layout that carries the row and sends that preparation even when it equals the request it sent last.
+
 ## Regions
 
 A region is a place on a surface where native content is displayed. Its ownership, hierarchy, complete-snapshot geometry, stacking, input, generation, and raster rules are defined by [surface composition](surface-composition.md). This document defines behavior specific to document and image suppliers.

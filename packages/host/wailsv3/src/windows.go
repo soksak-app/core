@@ -344,14 +344,14 @@ func (h *Host) shouldQuit() bool {
 }
 
 // Chrome 은 페이지가 첫 행을 그리는 데 쓰는 창의 값이다. Controls 는 창 단추가 차지하는 영역이고
-// Row 는 제목줄의 높이(pt)다. 전체 화면처럼 제목줄이 없으면 Row 는 0 이고, 페이지는 제목줄 높이를 요청하지 않는다.
+// Row 는 제목줄의 높이(pt)다. 전체 화면처럼 제목줄이 없으면 Row 는 0 이다.
 type Chrome struct {
 	Controls Rect    `json:"controls"`
 	Row      float64 `json:"row"`
 }
 
 // WindowChrome 은 창 단추 영역과 제목줄 높이를 반환한다. 페이지는 첫 행에서 단추만큼을 비우고
-// 제목줄이 행과 다르면 행의 높이를 요청한다(SetTitlebarHeight).
+// 제목줄이 행과 다르면 행을 담은 배치를 준비한다(docs/spec/native-surfaces.md#title-bar-height).
 func (s *Surfaces) WindowChrome() (Chrome, error) {
 	controls, err := s.WindowControls()
 	if err != nil {
@@ -374,7 +374,7 @@ func (s *Surfaces) WindowChrome() (Chrome, error) {
 // (packages/workbench/app.css 의 --chrome-h).
 const initialTitlebarHeight = 40
 
-// ValidateTitlebarHeight 는 페이지가 요청한 제목줄 높이(pt)를 검사한다. 첫 행은 40pt 에서 프레임 글자 배율 3 의
+// ValidateTitlebarHeight 는 표면 준비가 담은 제목줄 높이(pt)를 검사한다. 첫 행은 40pt 에서 프레임 글자 배율 3 의
 // 108pt 사이다. AppKit 은 0 이하의 값을 사용자 지정 높이가 없다는 뜻으로 쓰므로 그 값도 이 범위 밖이다.
 func ValidateTitlebarHeight(height float64) error {
 	if math.IsNaN(height) || height < 32 || height > 200 {
@@ -383,18 +383,22 @@ func ValidateTitlebarHeight(height float64) error {
 	return nil
 }
 
-// SetTitlebarHeight 는 창의 제목줄을 height(pt)로 만든다. 페이지가 첫 행의 높이를 정하고 그 높이를 요청한다.
-func (s *Surfaces) SetTitlebarHeight(height float64) error {
-	if err := ValidateTitlebarHeight(height); err != nil {
-		return err
+// titlebarChrome 은 창의 제목줄을 height(pt)로 만들고 그 뒤의 창 단추 영역과 제목줄 높이를 반환한다. 표면 준비가
+// 창의 배치 트랜잭션 안에서 UI 스레드에서 호출하므로 새 높이는 그 트랜잭션의 커밋과 함께 화면에 나간다. 전체 화면인
+// 창은 높이를 바꾸지 않고 Row 0 을 반환한다.
+func titlebarChrome(window unsafe.Pointer, height float64) (Chrome, error) {
+	if err := system.SetTitlebarHeight(window, height); err != nil {
+		return Chrome{}, err
 	}
-	win, ok := s.window, s.window != nil
-	if !ok {
-		return errNoWindow
+	controls, err := system.WindowControls(window)
+	if err != nil {
+		return Chrome{}, err
 	}
-	var err error
-	application.InvokeSync(func() { err = system.SetTitlebarHeight(win.NativeWindow(), height) })
-	return err
+	row, err := system.TitlebarHeight(window)
+	if err != nil {
+		return Chrome{}, err
+	}
+	return Chrome{Controls: Rect(controls), Row: row}, nil
 }
 
 // WindowControls 는 창 단추가 차지하는 영역을 페이지 좌표로 반환한다. 페이지는 첫 행에서

@@ -282,7 +282,8 @@ pub trait Platform: Send + Sync {
     /// 오류를 반환한다. UI 스레드에서 호출한다.
     fn titlebar_height(&self, window: Handle) -> Result<f64, String>;
     /// 창의 제목줄을 height(pt)로 만든다. AppKit 이 그 높이의 세로 가운데에 창 단추를 두므로 호스트는 단추를
-    /// 옮기지 않는다. 창에 단추가 없거나 전체 화면이면 오류를 반환한다. UI 스레드에서 호출한다.
+    /// 옮기지 않는다. 창에 단추가 없으면 오류를 반환한다. 전체 화면인 창은 제목줄을 보이지 않고 AppKit 이 나올 때
+    /// 들어갈 때의 높이를 되돌리므로 높이를 바꾸지 않고 성공한다. UI 스레드에서 호출한다.
     fn set_titlebar_height(&self, window: Handle, height: f64) -> Result<(), String>;
     /// 창 버튼이 차지하는 영역을 페이지 좌표로 반환한다.
     fn window_controls(&self, window: Handle) -> Result<Frame, String>;

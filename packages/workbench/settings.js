@@ -572,10 +572,8 @@ export function install() {
   root.dataset.focusInd = settings.focusInd;
   root.dataset.fullRule = settings.fullRule;
   root.dataset.seam = seam();
-  // 프레임 크롬의 CSS zoom 이 읽는 프레임 글자 배율. 1 이면 zoom 을 선언하지 않는다(app.css).
-  root.style.setProperty("--frame-text", String(settings.textSize));
-  if (settings.textSize === 1) delete root.dataset.frameText;
-  else root.dataset.frameText = "";
+  // 프레임 크롬의 CSS zoom 이 읽는 프레임 글자 배율은 여기서 쓰지 않는다. 준비한 배치의 그리기가 쓴다(frame-text.js).
+  // 표면은 자기 실제 배율을 다시 읽는다.
   notifyTextSize();
   for (const [token, value] of Object.entries(themeTokens())) {
     root.style.setProperty(token, value);

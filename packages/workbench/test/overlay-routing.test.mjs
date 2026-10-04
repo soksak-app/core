@@ -11,7 +11,7 @@ test("native surface synchronization includes the active app-DOM menu bounds", a
   const calls = [];
   mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {}, page: (path) => path,
-    call: async (name, request) => { calls.push({ name, request }); return name === "syncSurfaces" ? { placements: [] } : request?.placements ?? []; },
+    call: async (name, request) => { calls.push({ name, request }); return name === "syncSurfaces" ? { placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: 40 } } : request?.placements ?? []; },
   } } });
   const { overlay, surfaces } = await import("../host.js");
   const menu = document.getElementById("menu");

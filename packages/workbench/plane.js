@@ -7,6 +7,7 @@
 import { Soksak, SoksakView, outline } from "soksak";
 import { borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
 import { effectiveTextScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
+import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
 import { hasPlugin, isPlace, plugin, plugins } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
 import { bindSidebarGrip } from "./sidebar-grip.js";
@@ -1317,17 +1318,24 @@ function build(kept) {
     // 판은 stage 안쪽으로 이 값만큼 들어와 있다. 호스트만 아는 값이므로 뷰에 전달해야
     // 판 가장자리에 닿는 선이 stage 경계까지 이어진다.
     bleed: stagePad(),
+    // 그리기는 지금 설정의 프레임 배율을 문서에 쓴다. 준비는 그 배율의 첫 행 높이를 담아 호스트가 같은 트랜잭션에서
+    // 창 제목줄을 정하게 한다(docs/spec/native-surfaces.md#title-bar-height).
     commit: (made, draw) => {
-      if (!layouter) return draw();
+      const factor = value("textSize");
+      if (!layouter) {
+        applyFrameText(factor);
+        return draw();
+      }
       const seated = seats(made);
       return layouter(made, () => {
+        applyFrameText(factor);
         transactionSeats = seated;
         try {
           draw();
         } finally {
           transactionSeats = null;
         }
-      }, seated);
+      }, seated, chromeRow(factor));
     },
     // 판의 렌더는 뷰가 그리는 것과 이 문서가 그리는 것으로 이루어진다. onChange 는
     // 뷰가 그린 직후에 발생하므로, 나머지를 여기서 그리고 그 뒤에 수신자를 호출한다.
@@ -1413,7 +1421,9 @@ export function setGap(half) {
   view.bleed = stagePad();
   // 통로는 stage 의 안쪽 여백이기도 하므로 통로가 바뀌면 판의 크기도 바뀐다. 옵저버를
   // 기다리면 그 사이의 렌더가 이전 크기로 그려지고 표면에도 그 값이 전달된다.
-  grid.resize(plane.clientWidth, plane.clientHeight);
+  // 프레임 배율은 다음 그리기가 문서에 쓰므로, 판의 크기는 그 배율에서 잰다(frame-text.js).
+  const [width, height] = measureAt(value("textSize"), () => [plane.clientWidth, plane.clientHeight]);
+  grid.resize(width, height);
 }
 
 /**

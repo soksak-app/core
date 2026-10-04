@@ -7,6 +7,7 @@
 // 기록하고, 이 모듈은 그 속성을 읽어 측정하고 보고한다.
 import { plugin } from "./registry.js";
 import { native, surfaces as app } from "./host.js";
+import { chromeRow, drawnFrameText } from "./frame-text.js";
 
 const plane = document.getElementById("plane");
 
@@ -159,7 +160,7 @@ function syncNativePaintClip(rects) {
 /**
  * 현재 슬롯을 측정해 커밋한다. 지연이 설정되어 있으면 그만큼 늦게 적용한다.
  *
- * 호출로만 동작한다. 위치 변경을 감시하지 않고, 위치를 정한 쪽이 호출한다.
+ * 호출로만 동작한다. 위치 변경을 감시하지 않고, 위치를 정한 쪽이 호출한다. 커밋은 그려진 첫 행의 높이를 담는다.
  */
 export function publish() {
   const mine = ++seq;
@@ -178,22 +179,25 @@ export function publish() {
       frame,
     });
   }
-  return deliver(mine, snapshot);
+  return deliver(mine, snapshot, chromeRow(drawnFrameText()));
 }
 
-/** 이 스냅샷을 커밋하고, 실행이 시작되거나 끝났으면 그 끝을 알린다. */
-function deliver(mine, snapshot) {
+/** 이 스냅샷을 커밋하고, 실행이 시작되거나 끝났으면 그 끝을 알린다. titlebar 는 그 배치의 첫 행 높이다. */
+function deliver(mine, snapshot, titlebar) {
   const running = !settled();
   if (running !== going) {
     going = running;
     // 기본값: 실행 경계 수신자는 등록한 때만 있다.
     edge?.(going);
   }
-  return commit(mine, snapshot, !running);
+  return commit(mine, snapshot, !running, titlebar);
 }
 
-/** 다음 카드 배치를 준비한다. 위치를 계산할 수 없는 기존 표면은 먼저 숨긴다. */
-export function publishAhead(rects, seated) {
+/**
+ * 다음 카드 배치를 준비한다. 위치를 계산할 수 없는 기존 표면은 먼저 숨긴다. titlebar 는 다음 그리기가 보일 첫 행의
+ * 높이이고, 호스트가 같은 트랜잭션에서 창 제목줄을 그 높이로 정한다(docs/spec/native-surfaces.md#title-bar-height).
+ */
+export function publishAhead(rects, seated, titlebar) {
   aheadRecord = null;
   aheadComplete = true;
   const seats = [];
@@ -231,7 +235,7 @@ export function publishAhead(rects, seated) {
   }
   aheadComplete &&= seats.length === seated.size;
   aheadSeq = ++seq;
-  return deliver(aheadSeq, seats);
+  return deliver(aheadSeq, seats, titlebar);
 }
 
 /**
@@ -240,8 +244,8 @@ export function publishAhead(rects, seated) {
  * `deliver` 가 앞선 커밋을 취소하고 시퀀스는 커질 뿐이므로, 여기 도착하는 스냅샷은
  * 언제나 가장 최근의 것이다.
  */
-function commit(mine, snapshot, final) {
-  const record = { seq: mine, settled: final, drawn: mine !== aheadSeq, surfaces: [] };
+function commit(mine, snapshot, final, titlebar) {
+  const record = { seq: mine, settled: final, drawn: mine !== aheadSeq, titlebar, surfaces: [] };
   const kinds = app.kinds;
   for (const s of snapshot) {
     // 호스트가 없으면 이 모듈이 표면을 모사하므로 적용 위치도 여기서 정한다.

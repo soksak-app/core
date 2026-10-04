@@ -52,7 +52,6 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         overlay_hide,
         overlay_pick,
         window_controls,
-        window_titlebar,
         sidecar_send,
         sidecars_retain,
         theme,
@@ -284,13 +283,6 @@ fn overlay_pick(
 #[tauri::command]
 fn window_controls(window: Window) -> Result<windows::Chrome, String> {
     windows::window_chrome(&window)
-}
-
-/// 창의 제목줄 높이(pt)를 정한다. 페이지가 첫 행의 높이로 요청한다.
-#[tauri::command]
-fn window_titlebar(window: Window, height: Argument<f64>) -> Result<(), String> {
-    let Argument(height) = height;
-    windows::window_titlebar(&window, height)
 }
 
 /// 표면 페이지가 보낸 메시지를 사이드카에 전달한다.

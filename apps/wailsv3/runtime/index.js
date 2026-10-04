@@ -55,7 +55,6 @@ const METHOD = {
   overlayUpdate: "OverlayUpdate",
   overlayHide: "OverlayHide",
   windowControls: "WindowControls",
-  windowTitlebar: "WindowTitlebar",
   exposureReply: "ExposureReply",
   exposureChanged: "ExposureChanged",
   exposureForward: "ExposureForward",

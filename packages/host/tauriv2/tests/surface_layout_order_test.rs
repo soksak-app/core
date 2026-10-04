@@ -19,6 +19,10 @@ fn run(
             Ok(())
         },
         || {
+            calls.borrow_mut().push("titlebar");
+            Ok(())
+        },
+        |()| {
             calls.borrow_mut().push("steps");
             steps
         },
@@ -55,4 +59,54 @@ fn a_successful_sync_does_not_cancel() {
     let (result, calls) = run(Ok(()), Ok(7));
     assert_eq!(result, Ok(7));
     assert!(!calls.contains(&"cancel"), "calls {calls:?}");
+}
+
+// contract: surfaces.sync.titlebar.set-in-begun-layout
+#[test]
+fn the_titlebar_is_set_in_the_begun_layout_before_the_surfaces() {
+    let calls = RefCell::new(Vec::new());
+    let result = run_layout(
+        || {
+            calls.borrow_mut().push("overlays");
+            Ok(())
+        },
+        || {
+            calls.borrow_mut().push("begin");
+            Ok(())
+        },
+        || {
+            calls.borrow_mut().push("titlebar");
+            Ok(54.0)
+        },
+        |row: f64| {
+            calls.borrow_mut().push("surfaces");
+            Ok(row)
+        },
+        || calls.borrow_mut().push("cancel"),
+    );
+    assert_eq!(
+        result,
+        Ok(54.0),
+        "the surfaces step receives the title bar answer"
+    );
+    assert_eq!(
+        calls.take(),
+        vec!["overlays", "begin", "titlebar", "surfaces"]
+    );
+    let refused = "the window has no standard buttons or content view for a title bar";
+    let result = run_layout(
+        || Ok(()),
+        || Ok(()),
+        || -> Result<f64, String> {
+            calls.borrow_mut().push("titlebar");
+            Err(refused.into())
+        },
+        |row: f64| {
+            calls.borrow_mut().push("surfaces");
+            Ok(row)
+        },
+        || calls.borrow_mut().push("cancel"),
+    );
+    assert_eq!(result, Err(refused.to_string()));
+    assert_eq!(calls.take(), vec!["titlebar", "cancel"]);
 }

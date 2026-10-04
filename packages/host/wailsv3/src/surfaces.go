@@ -134,6 +134,9 @@ type SyncRequest struct {
 	Settled  bool                   `json:"settled"`
 	Surfaces []Surface              `json:"surfaces"`
 	Overlays []WindowOverlayRequest `json:"overlays,omitempty"`
+	// 다음 그리기가 보일 첫 행의 높이(pt). 배치 트랜잭션 안에서 창 제목줄을 이 높이로 정한다
+	// (docs/spec/native-surfaces.md#title-bar-height).
+	Titlebar float64 `json:"titlebar"`
 }
 
 type WindowOverlayRequest struct {
@@ -445,6 +448,9 @@ func aligned(win *application.WebviewWindow, at Rect) (Rect, error) {
 // CheckSyncRequest 는 배치를 시작하기 전에 동기화 요청 전체를 검사하고 창 오버레이를
 // 반환한다. held 는 창이 이미 받은 표면의 composition 선언이다.
 func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition) ([]platform.WindowOverlay, error) {
+	if err := ValidateTitlebarHeight(req.Titlebar); err != nil {
+		return nil, err
+	}
 	seen := map[string]bool{}
 	for _, surface := range req.Surfaces {
 		if surface.ID == "" || seen[surface.ID] {
@@ -494,6 +500,7 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	s.first.Do(func() { s.Emit("page-ready") })
 	var prepared PreparedSurfaces
 	type applyResult struct {
+		chrome     Chrome
 		gone       []string
 		placements []Placement
 		err        error
@@ -516,9 +523,14 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 					done <- applyResult{err: errNoWindow}
 					return
 				}
+				var chrome Chrome
 				var gone []string
 				var placements []Placement
 				err := ApplyOrCancel(func() error {
+					var err error
+					chrome, err = titlebarChrome(win.NativeWindow(), req.Titlebar)
+					return err
+				}, func() error {
 					var err error
 					gone, placements, err = s.apply(win, req)
 					return err
@@ -528,7 +540,7 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 				} else if !req.Settled {
 					s.run(false)
 				}
-				done <- applyResult{gone: gone, placements: placements, err: err}
+				done <- applyResult{chrome: chrome, gone: gone, placements: placements, err: err}
 			})
 		})
 	})
@@ -541,6 +553,7 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	}
 	gone := outcome.gone
 	prepared.Placements = outcome.placements
+	prepared.Chrome = outcome.chrome
 	// 제거된 표면을 사이드카와 메인 페이지의 노출 등록에 알린다. 주 스레드 밖에서 호출한다.
 	for _, id := range gone {
 		s.sidecars.Close(id)
@@ -573,9 +586,13 @@ func RunLayout(overlays, begin func() error) error {
 	return begin()
 }
 
-// ApplyOrCancel 은 시작한 배치의 표면을 맞추고, 실패하면 배치를 취소한다. 취소의 실패는 맞추기의 오류에 덧붙인다.
-func ApplyOrCancel(apply, cancel func() error) error {
-	err := apply()
+// ApplyOrCancel 은 시작한 배치에서 창 제목줄을 정한 뒤 표면을 맞추고, 둘 중 하나가 실패하면 배치를 취소한다. 제목줄을
+// 정하지 못하면 표면을 맞추지 않는다. 취소의 실패는 그 오류에 덧붙인다.
+func ApplyOrCancel(titlebar, apply, cancel func() error) error {
+	err := titlebar()
+	if err == nil {
+		err = apply()
+	}
 	if err == nil {
 		return nil
 	}
@@ -603,16 +620,20 @@ type Placement struct {
 	Visible bool `json:"visible"`
 }
 
+// PreparedSurfaces 는 준비의 답이다. Chrome 은 호스트가 이 트랜잭션에서 제목줄을 정한 뒤의 창 단추 영역과 제목줄
+// 높이이고, 페이지는 이 준비의 표시를 확인한 뒤 그것을 커밋된 상태로 읽는다.
 type PreparedSurfaces struct {
 	Ticket     uint64      `json:"ticket"`
 	Placements []Placement `json:"placements"`
+	Chrome     Chrome      `json:"chrome"`
 }
 
 // PresentRequest 는 DOM 표시 확인 요청이다. PresentSurfaces 는 AppKit 스레드를 막지 않고 확인한다.
 type PresentRequest struct {
-	PreparedSurfaces
-	Settled             bool `json:"settled"`
-	WaitForPresentation bool `json:"waitForPresentation,omitempty"`
+	Ticket              uint64      `json:"ticket"`
+	Placements          []Placement `json:"placements"`
+	Settled             bool        `json:"settled"`
+	WaitForPresentation bool        `json:"waitForPresentation,omitempty"`
 }
 
 func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {

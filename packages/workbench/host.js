@@ -358,6 +358,9 @@ function continueAfterLayoutFailure(phase, error) {
   return undefined;
 }
 let layoutPresented = false;
+/* 호스트가 표시를 확인한 가장 최근 준비의 창 단추 영역과 제목줄 높이({controls, row}). 커밋된 상태이고, 표시를
+   확인하기 전에는 null 이다(docs/spec/native-surfaces.md#title-bar-height). */
+let presentedChrome = null;
 const surfacePreparedListeners = new Set();
 let lastPreparedSurfaces = [];
 
@@ -388,6 +391,14 @@ export function onSurfacePrepared(listener) {
   return () => surfacePreparedListeners.delete(listener);
 }
 
+/** 준비의 답이 담은 창 단추 영역과 제목줄 높이를 검사한다. 검증 W 가 이 값을 첫 행과 비교한다. */
+function checkChrome(chrome) {
+  const area = chrome?.controls;
+  if (!area || ![area.x, area.y, area.w, area.h, chrome.row].every(Number.isFinite) || chrome.row < 0) {
+    throw new Error(`the surface preparation answered no window chrome: ${JSON.stringify(chrome)}`);
+  }
+}
+
 function notifySurfacePrepared(placements) {
   lastPreparedSurfaces = placements;
   for (const listener of surfacePreparedListeners) listener(placements);
@@ -402,10 +413,13 @@ function notifySurfacePrepared(placements) {
  */
 export const chrome = native ? {
   draggable: (el) => bridge.draggable(el),
-  /** 창이 그리는 단추가 차지하는 영역. 단추를 그리지 않는 창이면 폭이 0 이다. */
+  /** 창이 그리는 단추가 차지하는 영역과 제목줄 높이. 단추를 그리지 않는 창이면 폭이 0 이다. */
   controls: () => tellInTurn("windowControls"),
-  /** 창 제목줄의 높이(pt)를 정한다. 창은 그 높이의 세로 가운데에 단추를 둔다(docs/spec/hosts.md#window-buttons). */
-  titlebar: (height) => tellInTurn("windowTitlebar", height),
+  /**
+   * 표시를 확인한 가장 최근 준비의 {controls, row}. 제목줄 높이는 준비가 담고 호스트가 그 트랜잭션에서 정하므로
+   * 이것이 화면에 커밋된 단추 영역이다. 표시를 확인한 준비가 없으면 null 이다.
+   */
+  presented: () => presentedChrome,
 } : null;
 
 /** 표면 인터페이스. 애플리케이션이 없으면 아무 일도 하지 않는다. */
@@ -448,6 +462,8 @@ export const surfaces = native ? {
           surface.composition.regions?.some(({ kind }) => kind === "image") === true),
         overlays: windowOverlays(),
         surfaces,
+        // 다음 그리기가 보일 첫 행의 높이(pt). 호스트가 이 준비의 트랜잭션에서 창 제목줄을 이 높이로 정한다.
+        titlebar: record.titlebar,
       };
       const key = JSON.stringify(request);
       if (key !== last) {
@@ -458,6 +474,7 @@ export const surfaces = native ? {
         const scheduled = layoutTurn.then(() => tell("syncSurfaces", request));
         layoutFrame = scheduled;
         layoutResult = scheduled.then((frame) => {
+          checkChrome(frame.chrome);
           notifySurfacePrepared(frame.placements);
           return frame.placements;
         });
@@ -469,9 +486,13 @@ export const surfaces = native ? {
         const preparedLayout = layoutFrame;
         const presentedLayout = preparedLayout.then((frame) =>
           tell("presentSurfaces", {
-            ...frame,
+            ticket: frame.ticket,
+            placements: frame.placements,
             settled: request.settled,
             waitForPresentation: request.waitForPresentation,
+          }).then((placed) => {
+            presentedChrome = frame.chrome;
+            return placed;
           }));
         layoutResult = presentedLayout;
         layoutPresented = true;
@@ -488,6 +509,13 @@ export const surfaces = native ? {
     },
     // 표면 배치 RPC가 끝난 뒤에 호출해야 페이지가 네이티브 래스터 이벤트를 계속 처리할 수 있다.
     waitPresented: () => tell("waitPresented"),
+    /**
+     * 마지막으로 보낸 요청을 잊어, 다음 배치가 그 요청과 같아도 보내게 한다. 창의 상태가 요청 없이 바뀌었을 때
+     * (전체 화면에서 나온 창의 제목줄을 AppKit 이 되돌렸을 때) 페이지가 부른다.
+     */
+    forget() {
+      last = "";
+    },
 } : {
   kinds: [],
   // 호스트가 없는 문서의 실패는 콘솔의 오류 수준에 쓴다(docs/spec/plugins.md).
@@ -497,6 +525,7 @@ export const surfaces = native ? {
   // 호스트가 없으면 이 문서가 앉힌 자리가 실제 자리다. 컴포지터는 그 답을 기록한다.
   place: (record) => record.surfaces.map((s) => ({ id: s.id, ...s.applied })),
   waitPresented: async () => null,
+  forget: () => {},
 };
 
 let pick = null;

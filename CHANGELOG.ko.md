@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F35.1: 창 title bar 높이가 layout transaction에 들어간다. 각 표면 준비(`syncSurfaces`)는 그 뒤 그리기의 첫 행 높이 `titlebar`를 담고, 두 host는 창의 transaction을 시작한 뒤, 표면을 놓기 전에 title bar를 정하므로 행과 창 단추가 같은 표시 frame에서 바뀐다. 준비는 창의 `chrome`을 답하고, 검증 W는 행을 마지막으로 표시한 준비의 `chrome`과 비교한다. frame 배율 변경은 이제 배율을 문서에 쓰는 준비한 배치가 그린다. 전에는 설정이 배율을 바로 썼고 페이지가 그리기 뒤에 `windowTitlebar`로 title bar를 요청했으며, 이 호출은 `packages/workbench/titlebar.js`와 함께 제거되었다. 전체 화면에서 host는 실패하지 않고 title bar를 바꾸지 않으며, 페이지는 `windowControls` 답의 title bar가 행과 다르면 행을 다시 준비한다.
 - F35.1: 네이티브 검사 `window_titlebar_layout_test`는 열린 layout transaction 안에서 제목줄 높이를 정하는 동안 창을 녹화하고, 녹화 frame이 `surfaceLayoutCommit` 전에 창 단추를 새 자리에 보이거나 그 뒤에 보이지 않으면 실패한다. macOS 26.6.2에서 단추는 commit과 함께만 옮겨졌다.
 - F46: 두 host는 1007 거부가 읽는 `NSEvent.pressedMouseButtons` mask인 status `host.buttons` `{mask}`를 선언한다. `native/darwin`은 AppKit이 애플리케이션에 전달하거나 global event monitor로 다른 애플리케이션에 전달하는 mouse 버튼의 누름과 뗌마다 mask를 읽고, host는 값이 바뀌면 감시자에게 알린다. window 검사 하네스는 검사가 열어 둔 누름을 `status.watch`로 `host.buttons`가 mask 0을 보고할 때까지 기다린 뒤 뗌이 전달되기를 요구해 끝낸다. 이전에는 사람이 아직 버튼을 누르고 있는 동안 뗌을 다시 보냈고, 그 뗌도 거부되어 그 host의 이후 pointer 검사가 모두 1008로 실패했다.
 - F48: Tauri의 `host.windows`는 모든 창의 닫기 상태, 제목, 초점을 하나의 main thread 단계에서 읽는다. 이전에는 닫기 상태를 endpoint thread에서 읽고 창마다 별도의 main thread 왕복으로 조회해서, 그 사이 main thread가 처리한 닫기가 목록을 `runtime error: failed to receive message from webview`로 실패시켰다. 새 계약 사례 `exposure.windows.listed-in-one-main-thread-step`가 test main thread에 넣은 닫기로 변경 전 실패를 재현하고 변경 뒤 통과한다. Wails의 목록은 바꿀 것이 없다.

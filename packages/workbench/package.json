@@ -56,7 +56,7 @@
     "settings-ui.js",
     "tab-reports.js",
     "text-size.js",
-    "titlebar.js",
+    "frame-text.js",
     "verify.js",
     "verify-checks.js",
     "exposure.json",

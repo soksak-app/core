@@ -20,6 +20,7 @@ test("native preparation cannot present before DOM drawing and presents each tic
           { id: "surface", x: 1, y: 2, w: 3, h: 4, visible: true },
           { id: "hidden", x: 0, y: 0, w: 1, h: 1, visible: false },
         ],
+        chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: 40 },
       };
       if (name === "presentSurfaces") return request.placements;
       throw new Error(`unexpected host call ${name}`);

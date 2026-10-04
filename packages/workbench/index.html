@@ -58,8 +58,8 @@ import { trace } from "./performance.js";
 
 /* 애플리케이션 인터페이스. 없으면 아무 일도 하지 않는 구현이 온다. */
 import { chrome, log, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
-import { onTextSize, setTextScope } from "./text-size.js";
-import { fitTitlebar } from "./titlebar.js";
+import { setTextScope } from "./text-size.js";
+import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
 
 /* 코어의 공개 항목과 진단 메서드. 등록소가 호스트의 요청에 답한다. */
 import { coreChanged, installCoreExposure, setVerify } from "./core-exposure.js";
@@ -131,6 +131,7 @@ onRun((going) => {
 
 function check() {
   if (!currentGrid() || projects.inLibrary()) return;
+  controlsAt = presentedControls();
   const rows = verify(controlsAt);
   if (layoutFailure) rows.push({ name: "Surface presentation", ok: false, note: layoutFailure.message });
   setVerify(rows);
@@ -291,49 +292,53 @@ const chromeActs = document.getElementById("chromeActs");
    단추가 이 막대 위에 배치된다. 그 폭은 호스트에 요청해서 받고, 막대의 왼쪽을
    그만큼 비운다.
 
+   창 제목줄의 높이는 배치의 준비가 담고 호스트가 그 트랜잭션에서 정한다(docs/spec/native-surfaces.md#title-bar-height).
+   검증 W 는 표시를 확인한 준비의 단추 영역(controlsAt)을 그려진 첫 행과 비교한다.
+
    브라우저에는 창이 없다. 그때 chrome 은 null 이고 막대를 들여쓰지 않는다. */
 let controlsAt = null;
-const chromeBar = document.querySelector(".chrome-bar");
-/* 마지막으로 창 제목줄에 맞춘 첫 행의 높이(px). */
-let fittedRow = null;
+/* 마지막으로 읽은 창 단추 영역의 오른쪽 끝(px). 첫 행은 그만큼 비운다. */
+let controlsWidth = 0;
 
 if (chrome) {
   chrome.draggable(document.getElementById("winDrag"));
-  askControls();
-  // 창의 크기가 바뀌면 OS 가 단추를 다시 배치하므로, 그 영역을 다시 요청한다. 전체 화면에서 나온 창도 여기서
-  // 제목줄 높이를 다시 받는다.
+  // 창의 크기가 바뀌면 OS 가 단추를 다시 배치하므로, 그 영역을 다시 읽는다. 전체 화면에서 나온 창은 AppKit 이
+  // 되돌린 제목줄 높이를 여기서 알린다.
   addEventListener("resize", askControls);
-  // 프레임 글자 배율이 바뀌면 첫 행(--chrome-row)의 높이가 바뀐다. 배율 알림은 판을 그릴 때마다 오므로 행 높이가
-  // 마지막으로 맞춘 높이와 다를 때만 요청한다.
-  onTextSize(() => {
-    if (chromeRow() !== fittedRow) askControls();
-  });
 }
 
-/** 첫 행의 높이(px). */
-function chromeRow() {
-  return chromeBar.getBoundingClientRect().height;
-}
-
-/** 창 제목줄을 첫 행 높이에 맞추고, 창이 그리는 단추의 영역으로 첫 행의 들여쓰기를 설정한다. */
+/** 창 단추 영역을 읽어 첫 행의 들여쓰기를 설정하고, 제목줄이 첫 행과 다르면 첫 행을 다시 준비한다. */
 function askControls() {
-  fittedRow = chromeRow();
-  fitTitlebar(chrome, chromeRow).then((answer) => {
-    if (!applyControls(answer)) return;
-    // 답이 도착해도 렌더는 발생하지 않는다. 네이티브 배치와 DOM을 함께 표시한 뒤
-    // 검증해야 이전 프레임을 새 선언과 비교하지 않는다.
-    Promise.resolve(presented).then(check);
+  chrome.controls().then((answer) => {
+    applyControls(answer);
+    fitTitlebar(answer);
   });
 }
 
-/** 창 단추 응답으로 첫 행의 들여쓰기를 설정한다. 단추가 없는 답이면 설정하지 않고 false 다. 행의 높이는
-    페이지가 정하고 창의 답에서 읽지 않는다. 읽으면 배율을 내려도 행이 줄지 않는다. */
+/** 창 단추 답으로 첫 행의 들여쓰기를 설정한다. 단추가 없는 답이면 설정하지 않는다. */
 function applyControls(answer) {
-  const at = answer?.controls;
-  if (!at || at.w <= 0) return false;
-  controlsAt = at;
-  document.documentElement.style.setProperty("--controls-w", `${at.x + at.w}px`);
-  return true;
+  const at = answer.controls;
+  if (at.w <= 0) return;
+  controlsWidth = at.x + at.w;
+  document.documentElement.style.setProperty("--controls-w", `${controlsWidth}px`);
+}
+
+/**
+ * 답에 제목줄이 있고(row > 0) 그 높이가 지금 배율의 첫 행과 다르면, 창이 페이지의 그리기 없이 제목줄을 바꾼 것이다
+ * (창을 만들 때의 40pt, 전체 화면에서 나올 때 AppKit 이 되돌린 높이). 그때는 마지막 요청을 잊고 첫 행을 담은 배치를
+ * 다시 준비한다. 행의 높이는 페이지가 정하고 창의 답에서 읽지 않는다.
+ */
+function fitTitlebar(answer) {
+  if (answer.row > 0 && answer.row !== chromeRow(value("textSize"))) {
+    host.forget();
+    drawFrame();
+  }
+}
+
+/** 표시를 확인한 준비의 창 단추 영역. 제목줄이 없는 창(전체 화면)이나 단추를 그리지 않는 창이면 null 이다. */
+function presentedControls() {
+  const committed = chrome?.presented();
+  return committed && committed.row > 0 && committed.controls.w > 0 ? committed.controls : null;
 }
 
 /** 크롬 행의 아이콘 버튼 하나를 만든다. 누르면 command 를 params 로 실행한다. */
@@ -554,19 +559,44 @@ const library = createLibrary(document.getElementById("library"), coreChanged);
 projects.onChange(() => { drawBars(); drawSettings(); library.refreshFolders(); library.render(); coreChanged(); });
 if (chrome) applyControls(start.controls);
 projects.begin(start.workspace);
-onLayout((made, draw, seated) => {
+// 판의 첫 그리기는 프레임 배율을 문서에 쓴다. 판이 없는 첫 화면(라이브러리)에는 그 그리기가 없으므로 여기서 쓴다.
+applyFrameText(value("textSize"));
+onLayout((made, draw, seated, titlebar) => {
   const epoch = layoutEpoch;
   const id = ++layoutTraceId;
   const mark = (phase) => trace("layout", { phase, id, t: performance.now() });
   mark("queued");
   drawing = layouts.run(() => drawPrepared({
     epoch, current: () => layoutEpoch,
-    prepare: async () => { mark("prepare"); const result = await publishAhead(made, seated); mark("prepared"); return result; },
+    prepare: async () => { mark("prepare"); const result = await publishAhead(made, seated, titlebar); mark("prepared"); return result; },
     draw: () => { mark("draw"); draw(); mark("drawn"); },
     frame: async () => { await animationFrame(); mark("frame"); },
     presented: async () => { await presented; mark("presented"); },
   }));
 });
+// 호스트는 창을 40pt 제목줄로 만든다. 첫 행이 다르면 첫 행을 담은 배치를 준비한다.
+if (chrome) fitTitlebar(start.controls);
+
+/**
+ * 첫 행을 준비한 배치로 그린다. 판이 있으면 판을 다시 그리고, 판이 없는 창(라이브러리)은 표면 없이 첫 행의 높이를 담은
+ * 준비 뒤에 지금 설정의 프레임 배율을 쓴다. 준비가 창 제목줄을 같은 트랜잭션에서 정하므로 행과 단추가 같은 프레임에
+ * 바뀐다(docs/spec/native-surfaces.md#title-bar-height).
+ */
+function drawFrame() {
+  if (currentGrid()) {
+    settle();
+    return;
+  }
+  const factor = value("textSize");
+  const epoch = layoutEpoch;
+  drawing = layouts.run(() => drawPrepared({
+    epoch, current: () => layoutEpoch,
+    prepare: () => publishAhead(new Map(), new Map(), chromeRow(factor)),
+    draw: () => applyFrameText(factor),
+    frame: animationFrame,
+    presented: publish,
+  }));
+}
 
 // 코어 공개 항목은 첫 await 전에 등록한다. 첫 화면의 사이드바 섹션은 그 뒤에 비동기로 마운트되며 코어 상태를 따를 수
 // 있다(docs/spec/plugins.md#sections). 호스트와의 연결은 아래에서 기다린다.
@@ -580,7 +610,7 @@ const coreExposure = installCoreExposure({
     await Promise.all(ids.map((id) => waitSurfaceCompositionDeclared(id)));
   },
   chrome: () => ({
-    controlsWidth: controlsAt ? controlsAt.x + controlsAt.w : 0,
+    controlsWidth,
     projectTabs: workarea.querySelector(".project-column") ? "left" : "top",
   }),
 });
@@ -644,7 +674,8 @@ if (!chrome) addEventListener("pagehide", () => { projects.flush().catch(showErr
 onSettingsChange(() => {
   const half = halfGap();
   setGap(half);
-  settle();
+  // 판이 없는 창은 프레임 배율이 바뀔 때만 첫 행을 다시 그린다. 판은 설정이 바뀔 때마다 다시 그린다.
+  if (currentGrid() || drawnFrameText() !== value("textSize")) drawFrame();
   drawBars();
   drawSettings();
   coreChanged();

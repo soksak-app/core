@@ -31,6 +31,10 @@ fn arguments_are_refused_with_the_shared_messages() {
         "argument request.surfaces is missing"
     );
     assert_eq!(
+        refusal::<SyncRequest>("request", json!({"settled": true, "surfaces": []})),
+        "argument request.titlebar is missing"
+    );
+    assert_eq!(
         refusal::<SyncRequest>("request", json!({"settled": true, "surfaces": [surface]})),
         "argument request.surfaces[0].h is missing"
     );

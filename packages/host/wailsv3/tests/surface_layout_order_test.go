@@ -28,19 +28,48 @@ func TestRefusedWindowOverlayLeavesNoBegunLayout(t *testing.T) {
 func TestFailedSurfaceStepCancelsBegunLayout(t *testing.T) {
 	var calls []string
 	err := host.ApplyOrCancel(func() error {
+		calls = append(calls, "titlebar")
+		return nil
+	}, func() error {
 		calls = append(calls, "steps")
 		return errors.New("surface failed")
 	}, func() error {
 		calls = append(calls, "cancel")
 		return nil
 	})
-	if err == nil || err.Error() != "surface failed" || !reflect.DeepEqual(calls, []string{"steps", "cancel"}) {
+	if err == nil || err.Error() != "surface failed" || !reflect.DeepEqual(calls, []string{"titlebar", "steps", "cancel"}) {
 		t.Fatalf("ApplyOrCancel = %v, calls %v", err, calls)
 	}
-	if err := host.ApplyOrCancel(func() error { return nil }, func() error {
+	if err := host.ApplyOrCancel(func() error { return nil }, func() error { return nil }, func() error {
 		t.Fatal("a successful step cancelled the layout")
 		return nil
 	}); err != nil {
 		t.Fatalf("ApplyOrCancel = %v", err)
+	}
+}
+
+// contract: surfaces.sync.titlebar.set-in-begun-layout
+func TestTitlebarIsSetInTheBegunLayoutBeforeTheSurfaces(t *testing.T) {
+	var calls []string
+	step := func(name string, err error) func() error {
+		return func() error {
+			calls = append(calls, name)
+			return err
+		}
+	}
+	if err := host.ApplyOrCancel(step("titlebar", nil), step("surfaces", nil), step("cancel", nil)); err != nil {
+		t.Fatalf("ApplyOrCancel = %v", err)
+	}
+	if want := []string{"titlebar", "surfaces"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("calls %v, want %v", calls, want)
+	}
+	calls = nil
+	const refused = "the window has no standard buttons or content view for a title bar"
+	err := host.ApplyOrCancel(step("titlebar", errors.New(refused)), step("surfaces", nil), step("cancel", nil))
+	if err == nil || err.Error() != refused {
+		t.Fatalf("ApplyOrCancel = %v, want %q", err, refused)
+	}
+	if want := []string{"titlebar", "cancel"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("a refused title bar made the calls %v, want %v", calls, want)
 	}
 }
