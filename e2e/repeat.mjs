@@ -31,7 +31,7 @@ for (let run = 1; run <= count; run++) {
   // 실행한 검사 수는 기계 형식인 TAP 에서 센다. 사람이 읽는 출력은 환경에 따라 색 코드가 붙는다. 이름이
   // 맞는 검사가 없으면 파일 자체가 결과 한 줄로 보고되므로, 제목이 이름 패턴에 맞고 건너뛰지 않은 결과만 센다.
   const result = spawnSync(process.execPath,
-    ["--test", "--test-concurrency=1", "--test-reporter=tap", `--test-name-pattern=${options.name}`, options.file],
+    ["--test", "--test-concurrency=1", "--test-global-setup=./session.mjs", "--test-reporter=tap", `--test-name-pattern=${options.name}`, options.file],
     { cwd: directory, encoding: "utf8" });
   const output = `${result.stdout}${result.stderr}`;
   const passed = result.stdout.split("\n")

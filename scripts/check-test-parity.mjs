@@ -1187,6 +1187,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F55",
+    implementation: [
+      { file: "e2e/frontmost.mjs", symbol: "export function sessionBaseline" },
+      { file: "e2e/session.mjs", symbol: "export async function globalSetup" },
+    ],
+    tests: [
+      { file: "e2e/test/frontmost.test.mjs", id: "a session whose frontmost application before the checks is a tested host is refused" },
+    ],
+    expected: "A window-check run whose frontmost application before the checks is a tested host fails once before its first check.",
+    levels: ["unit"],
+  },
+  {
     id: "F28",
     implementation: [
       { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },

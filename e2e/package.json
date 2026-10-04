@@ -5,12 +5,12 @@
   "description": "Window checks for running Wails and Tauri applications.",
   "type": "module",
   "scripts": {
-    "verify": "node --test --test-concurrency=1 './*.test.mjs'",
-    "verify:activation": "node --test --test-concurrency=1 'activation/*.test.mjs'",
-    "verify:real": "node --test --test-concurrency=1 'real/*.test.mjs'",
+    "verify": "node --test --test-concurrency=1 --test-global-setup=./session.mjs './*.test.mjs'",
+    "verify:activation": "node --test --test-concurrency=1 --test-global-setup=./session.mjs 'activation/*.test.mjs'",
+    "verify:real": "node --test --test-concurrency=1 --test-global-setup=./session.mjs 'real/*.test.mjs'",
     "repeat": "node repeat.mjs",
     "test": "node --test test/*.test.mjs",
-    "verify:terminal-sidebar-current": "node --test observation/terminal-sidebar-current.test.mjs"
+    "verify:terminal-sidebar-current": "node --test --test-global-setup=./session.mjs observation/terminal-sidebar-current.test.mjs"
   },
   "dependencies": {
     "@soksak/client": "workspace:*"

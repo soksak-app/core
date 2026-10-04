@@ -17,6 +17,10 @@ const frontmost = jxa(`
 const app = $.NSWorkspace.sharedWorkspace.frontmostApplication;
 return JSON.stringify(app.isNil() ? null : app.processIdentifier);`);
 
+const identify = jxa(`
+const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(input.pid);
+return JSON.stringify(app.isNil() ? null : { name: ObjC.unwrap(app.localizedName) ?? null, bundle: ObjC.unwrap(app.bundleIdentifier) ?? null });`);
+
 const activate = jxa(`
 const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(input.pid);
 return JSON.stringify(!app.isNil() && app.activateWithOptions(0));`);
@@ -24,6 +28,28 @@ return JSON.stringify(!app.isNil() && app.activateWithOptions(0));`);
 /** 지금 활성인 애플리케이션의 프로세스 번호. */
 export function frontmostApp() {
   return frontmost();
+}
+
+/** 프로세스 pid 의 애플리케이션을 이름과 bundle identifier 로 적는다. */
+export function describeApp(pid) {
+  const app = identify({ pid });
+  return app === null ? `pid ${pid}, no running application` : `pid ${pid}, ${app.name ?? "no name"}, ${app.bundle ?? "no bundle identifier"}`;
+}
+
+/**
+ * 검사 전 활성 애플리케이션을 세션의 기준 baseline 으로 읽는다. 기준이 검사할 호스트(hosts, { name, pid }) 중
+ * 하나이면 세션의 모든 합성 포인터 측정이 활성 애플리케이션을 재게 되므로, 첫 검사 전에 그 애플리케이션과 호스트를
+ * 밝혀 실패한다.
+ */
+export function sessionBaseline({ hosts, read = frontmostApp, describe = describeApp }) {
+  const baseline = read();
+  const host = hosts.find(({ pid }) => pid === baseline);
+  if (host !== undefined) {
+    throw new Error(`the frontmost application before the checks is tested host ${host.name} (${describe(baseline)}); ` +
+      `tested hosts: ${hosts.map(({ name, pid }) => `${name} pid ${pid}`).join(", ")}; nothing was measured. ` +
+      "Bring another application to the front and run the checks again.");
+  }
+  return baseline;
 }
 
 /** 프로세스 pid 의 애플리케이션을 활성화한다. 활성화할 수 없으면 실패한다. */
