@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -363,6 +364,23 @@ func (e *Endpoint) StatusChanged(window, name, surface string, value any) {
 		params["surface"] = surface
 	}
 	e.publish(topic{window, name, surface}, "status.changed", params)
+}
+
+// NotifyWatchers 는 창에 매이지 않은 상태 name 을 표면 지정 없이 감시하는 연결에 창마다 새 값을 알린다.
+// 알림은 호출한 차례대로 각 연결의 송신 대기열에 들어가고 호출자를 막지 않는다.
+func (e *Endpoint) NotifyWatchers(name string, value any) {
+	e.mu.Lock()
+	windows := make([]string, 0)
+	for t, count := range e.counts {
+		if t.name == name && t.surface == "" && count > 0 {
+			windows = append(windows, t.window)
+		}
+	}
+	e.mu.Unlock()
+	sort.Strings(windows)
+	for _, window := range windows {
+		e.StatusChanged(window, name, "", value)
+	}
 }
 
 // Watching 은 창 window 의 상태 name 을 감시하는 연결이 있는지 반환한다.

@@ -349,6 +349,7 @@ fn invalid_json_closes_connection() {
 | `surfaces-geometry.sync.rejects-surface-rect-before-layout` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 표면 사각형의 크기가 음수인 동기화 요청을 `surface "<id>" geometry must not have a negative size`로 거부하고, 올바른 요청은 받는다. | both |
 | `surfaces-geometry.sync.rejects-overlay-rect-before-layout` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 창 overlay 사각형의 크기가 음수인 동기화 요청을 `window overlay geometry must not have a negative size`로 거부하고, 올바른 요청의 overlay를 표시 여부와 함께 반환한다. | both |
 | `surfaces.sync.failure-leaves-no-begun-layout` | 표면 동기화는 배치 트랜잭션을 시작하기 전에 창 덮개를 놓으므로 거부된 덮개는 트랜잭션을 시작하지 않고, 뒤 단계가 실패하면 시작한 트랜잭션을 취소한다. 성공한 동기화는 취소하지 않는다. | both |
+| `exposure.host-buttons.notifies-mask-change` | `host.buttons`는 버튼 source가 마지막으로 보고한 마스크를 담은 `{mask}`이고, 그와 다른 마스크의 보고는 새 값으로 감시자에게 한 번 알리며, 같은 마스크의 보고는 알리지 않는다. | both |
 | `exposure.status-change.refuses-host-name` | 메인 페이지가 `host.`로 시작하는 이름에 보낸 상태 변경은 `the page cannot change host status <name>`으로 거부되고, 다른 이름의 변경은 받아들여진다. | both |
 | `images.calls.name-the-call` | 인자 해석 뒤 image 영역 호출의 실패는 호출 이름 `imageAttach`, `imageFocus`, `imageCaret`, `imageText`, `imageDetach`를 붙인 `<call>: <reason>`이다. | both |
 | `host-calls.decode.messages` | 인자 decoder는 빠졌거나 `null`인 필수 field, 다른 JSON 형식의 값, 정수 field 범위 밖이거나 소수인 수, `null` 인자, 길이가 다른 고정 길이 배열을 [host 호출](native-host.ko.md#host-호출)의 message로 거부하고, 빠졌거나 `null`인 선택 field는 받는다. | both |

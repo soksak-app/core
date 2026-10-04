@@ -450,6 +450,9 @@ impl Platform for Windows {
     fn open_link(&self, url: &str) -> Result<(), String> {
         unsupported::open_link(url)
     }
+    fn watch_buttons(&self, changed: Box<dyn Fn(u64) + Send + Sync>) -> Result<(), String> {
+        unsupported::watch_buttons(changed)
+    }
     fn start_notifications(
         &self,
         receive: Box<dyn Fn(String) + Send + Sync>,

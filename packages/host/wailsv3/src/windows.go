@@ -49,7 +49,9 @@ type Host struct {
 	owners     map[string]*Surfaces
 	sidecars   *Sidecars
 	plugins    *Plugins
-	configDir  string
+	// buttons 는 host.buttons 의 값이다. 애플리케이션이 시작한 뒤 endpoint.json 을 쓰기 전에 감시를 설치한다.
+	buttons   *Buttons
+	configDir string
 	// endpoint 는 로컬 엔드포인트이고 relay 는 페이지에 보낸 노출 요청이다.
 	endpoint *Endpoint
 	relay    *Relay[relayTarget]

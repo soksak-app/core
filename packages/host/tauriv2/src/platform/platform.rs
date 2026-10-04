@@ -610,6 +610,10 @@ pub trait Platform: Send + Sync {
     fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String>;
     /// URL 을 그 스킴의 사용자 기본 애플리케이션으로 연다. 메인 스레드에서 호출한다.
     fn open_link(&self, url: &str) -> Result<(), String>;
+    /// 운영체제가 보고하는 눌린 마우스 버튼 mask 의 감시를 설치한다. 설치한 차례에 현재 mask 를, 그 뒤 어느
+    /// 애플리케이션에 전달된 마우스 버튼의 누름이나 뗌마다 그 차례의 mask 를 changed 로 메인 스레드에서 알린다.
+    /// 같은 mask 도 다시 알린다. 메인 스레드에서 한 번 호출한다.
+    fn watch_buttons(&self, changed: Box<dyn Fn(u64) + Send + Sync>) -> Result<(), String>;
     /// 운영체제의 알림 센터를 쓰기 시작하고 그 사건 JSON 을 receive 로 메인 스레드에서 넘긴다
     /// ({"type":"state",...} 와 {"type":"activated","identifier":...}). 메인 스레드에서 호출한다.
     fn start_notifications(&self, receive: Box<dyn Fn(String) + Send + Sync>)

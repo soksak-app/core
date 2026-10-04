@@ -326,13 +326,17 @@ export class Session {
 
   /**
    * 세션이 열어 둔 누름마다 그 자리에서 up 을 보낸다. 거부된 뗌은 누름을 열어 두므로, 끝내지 않으면 그 창의 다음
-   * 검사가 누를 수 없다. 끝내지 못한 누름은 모아서 알린다.
+   * 검사가 누를 수 없다(1008). 사람이 버튼을 누르고 있는 동안 input.pointer 는 뗌을 1007 로 거부하므로, 먼저
+   * host.buttons 가 mask 0 을 알릴 때까지 알림으로 기다린 뒤 보내고, 그 뗌이 전달되기를 요구한다
+   * (docs/spec/exposure.md). 끝내지 못한 누름은 모아서 알린다.
    */
   async releasePresses() {
     const failures = [];
     for (const { window, x, y, button } of [...this.presses.values()]) {
+      const session = this.on(window);
       try {
-        await this.on(window).pointer(x, y, "up", { button });
+        await session.until("host.buttons", (value) => value.mask === 0, "a mouse button stayed pressed");
+        await session.pointer(x, y, "up", { button });
       } catch (error) {
         failures.push(new Error(`the synthetic ${button} press at ${x},${y} in ${window} stayed open: ${error.message}`));
       }

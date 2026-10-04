@@ -16,6 +16,7 @@ use tauri::Manager;
 pub mod application_log;
 pub mod arguments;
 mod bindings;
+pub mod buttons;
 pub mod clipboard;
 pub mod command_line;
 mod composition;
@@ -257,6 +258,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 .get_webview_window("main")
                 .ok_or("the configuration has no main window")?;
             windows::register(main.as_ref().window())?;
+            // host.buttons 는 endpoint.json 을 쓰기 전에 운영체제의 값을 가진다. 감시할 수 없으면 애플리케이션을
+            // 시작하지 않는다.
+            exposure::watch_buttons(app.handle())?;
             // 클라이언트는 endpoint.json 을 읽자마자 첫 창에 요청하므로 창을 등록한 뒤 쓴다.
             exposure::publish(app.handle(), "main")?;
             Ok(())

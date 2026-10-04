@@ -47,6 +47,8 @@ mod layout;
 #[path = "link.rs"]
 mod link;
 
+#[path = "mouse_buttons.rs"]
+mod mouse_buttons;
 mod notifications;
 #[cfg(feature = "diagnostics")]
 #[path = "process_exit.rs"]
@@ -578,6 +580,9 @@ impl Platform for Darwin {
     }
     fn open_link(&self, url: &str) -> Result<(), String> {
         link::open(url)
+    }
+    fn watch_buttons(&self, changed: Box<dyn Fn(u64) + Send + Sync>) -> Result<(), String> {
+        mouse_buttons::watch(changed)
     }
     fn start_notifications(
         &self,

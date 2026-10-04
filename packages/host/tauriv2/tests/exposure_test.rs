@@ -162,6 +162,7 @@ fn host_entries_are_appended_as_registered() {
         status,
         [
             "core.layout",
+            "host.buttons",
             "host.dock",
             "host.menu",
             "host.screens",

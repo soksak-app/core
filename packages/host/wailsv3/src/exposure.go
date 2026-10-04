@@ -92,6 +92,10 @@ var hostStatus = map[string]hostEntry{
 			}},
 		}},
 	},
+	"host.buttons": {
+		Description: "The mouse buttons that AppKit reports as pressed: {mask}, the NSEvent.pressedMouseButtons mask (bit 0 left, bit 1 right). It changes with a press or release of a person's button in any application; input.pointer refuses a press or release with 1007 while it is not 0.",
+		Schema:      map[string]any{"type": "object", "properties": map[string]any{"mask": map[string]any{"type": "integer"}}},
+	},
 	"host.screens": {
 		Description: "The displays in screen coordinates with their backing scale and the area not covered by the menu bar and Dock.",
 		Schema: map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
@@ -684,6 +688,8 @@ func (b hostBackend) HostStatus(window, name string) (any, error) {
 		return b.Windows(), nil
 	case "host.sidecars":
 		return b.sidecarsState(), nil
+	case "host.buttons":
+		return b.h.buttons.Value(), nil
 	}
 	return s.windowState()
 }

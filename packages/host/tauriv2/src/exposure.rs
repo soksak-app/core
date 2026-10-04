@@ -48,6 +48,10 @@ fn host_declarations() -> Value {
     let nothing = json!({"type": "null"});
     json!({
         "status": [{
+            "name": "host.buttons",
+            "description": "The mouse buttons that AppKit reports as pressed: {mask}, the NSEvent.pressedMouseButtons mask (bit 0 left, bit 1 right). It changes with a press or release of a person's button in any application; input.pointer refuses a press or release with 1007 while it is not 0.",
+            "schema": {"type": "object", "properties": {"mask": {"type": "integer"}}},
+        }, {
             "name": "host.dock",
             "description": "The titles of the application's Dock menu items in order.",
             "schema": {"type": "array", "items": {"type": "string"}},
@@ -873,6 +877,47 @@ pub(crate) fn windows_changed(app: &AppHandle) {
     });
 }
 
+/// host.buttons 의 감시를 설치한다. 바뀐 값은 한 스레드가 받은 차례대로 감시하는 연결에 보낸다. 엔드포인트의
+/// 쓰기는 연결을 기다릴 수 있으므로 메인 스레드에서 보내지 않는다. 메인 스레드에서 endpoint.json 을 쓰기 전에
+/// 호출한다(docs/spec/exposure.md#host-entries).
+pub(crate) fn watch_buttons(app: &AppHandle) -> Result<(), String> {
+    let (send, receive) = mpsc::channel::<Value>();
+    let notifying = app.clone();
+    std::thread::spawn(move || {
+        for value in receive {
+            let Some(notifier) = notifying
+                .state::<Exposure>()
+                .endpoint
+                .get()
+                .map(Endpoint::notifier)
+            else {
+                log_error("host.buttons change", "the endpoint is not started");
+                continue;
+            };
+            match raw(&value) {
+                Ok(text) => notifier.notify_watchers("host.buttons", &text),
+                Err(error) => log_error("host.buttons change", error.message),
+            }
+        }
+    });
+    let send = Mutex::new(send);
+    app.manage(crate::buttons::Buttons::new(move |value| {
+        let sent = send
+            .lock()
+            .map_err(|_| "the sender is poisoned".to_string())
+            .and_then(|send| send.send(value).map_err(|error| error.to_string()));
+        if let Err(error) = sent {
+            log_error("host.buttons change", error);
+        }
+    }));
+    let reporting = app.clone();
+    platform::current()?
+        .watch_buttons(Box::new(move |mask| {
+            reporting.state::<crate::buttons::Buttons>().report(mask)
+        }))
+        .map_err(|error| format!("mouse buttons: {error}"))
+}
+
 /// host.sidecars 의 현재 값이다.
 fn sidecars_status(app: &AppHandle) -> Value {
     json!({ "closing": app.state::<crate::sidecars::WindowSidecars>().closing() })
@@ -1510,6 +1555,11 @@ impl Host {
             }
             ("status.get", "host.windows") => windows::list(&self.0).map_err(internal),
             ("status.get", "host.sidecars") => Ok(sidecars_status(&self.0)),
+            ("status.get", "host.buttons") => self
+                .0
+                .try_state::<crate::buttons::Buttons>()
+                .map(|buttons| buttons.value())
+                .ok_or_else(|| internal("the mouse buttons are not watched")),
             ("status.get", "host.dock") => {
                 let platform = platform::current().map_err(internal)?;
                 on_main(window, move || platform.dock_items()).map_err(internal)
@@ -1525,7 +1575,7 @@ impl Host {
             (
                 "status.watch" | "status.unwatch",
                 "host.window" | "host.windows" | "host.screens" | "host.dock" | "host.menu"
-                | "host.sidecars",
+                | "host.sidecars" | "host.buttons",
             ) => Ok(Value::Null),
             ("command.run", _) => {
                 let arguments = match params.get("params") {

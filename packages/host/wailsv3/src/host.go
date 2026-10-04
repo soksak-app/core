@@ -110,6 +110,7 @@ func Run(assets fs.FS, options Options) error {
 		return fmt.Errorf("local endpoint: %w", err)
 	}
 	host.endpoint = NewEndpoint(hostBackend{host})
+	host.buttons = NewButtons(func(value map[string]any) { host.endpoint.NotifyWatchers("host.buttons", value) })
 	info := EndpointInfo{Transport: address.Transport, Address: address.Address, PID: os.Getpid(),
 		Application: applicationName, Version: applicationVersion, Started: time.Now()}
 	if err := host.endpoint.Serve(listener, info, host.workspace.directory); err != nil {
@@ -185,6 +186,13 @@ func Run(assets fs.FS, options Options) error {
 		close(started)
 		// 알림 센터를 쓸 수 없으면 애플리케이션을 시작하지 않는다(docs/spec/hosts.md).
 		if err := host.startNotifications(); err != nil {
+			unpublished <- err
+			app.Quit()
+			return
+		}
+		// host.buttons 는 endpoint.json 을 쓰기 전에 운영체제의 값을 가진다. 감시할 수 없으면 애플리케이션을 시작하지
+		// 않는다(docs/spec/exposure.md#host-entries).
+		if err := host.watchButtons(); err != nil {
 			unpublished <- err
 			app.Quit()
 			return

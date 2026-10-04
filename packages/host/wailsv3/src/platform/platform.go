@@ -396,6 +396,11 @@ type Platform interface {
 	// UnwatchInput 은 WatchInput 이 반환한 감시를 해제한다.
 	UnwatchInput(monitor uintptr)
 
+	// WatchButtons 는 운영체제가 보고하는 눌린 마우스 버튼 mask 의 감시를 설치한다. 설치한 차례에 현재 mask 를,
+	// 그 뒤 어느 애플리케이션에 전달된 마우스 버튼의 누름이나 뗌마다 그 차례의 mask 를 changed 로 UI 스레드에서
+	// 알린다. 같은 mask 도 다시 알린다. 애플리케이션이 시작한 뒤 UI 스레드에서 한 번 호출한다.
+	WatchButtons(changed func(mask uint64)) error
+
 	// InjectPointer 는 창의 콘텐츠 영역 좌표 (x, y) 에 포인터 입력을 전달하고 그 결과를 반환한다.
 	// phase 는 이동 0, 누름 1, 끌기 2, 뗌 3, 스크롤 4 이고 button 은 왼쪽 0, 오른쪽 1 이다.
 	// 누름과 뗌은 좌표의 문서가 그 이벤트를 받거나 receive 초가 지난 뒤 done 을 UI 스레드에서 호출한다.

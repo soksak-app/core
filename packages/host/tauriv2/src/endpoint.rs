@@ -303,6 +303,27 @@ impl Notifier {
         )
     }
 
+    /// 창에 매이지 않은 상태 name 을 표면 지정 없이 감시하는 연결에 창마다 `status.changed` 를 보낸다.
+    pub fn notify_watchers(&self, name: &str, value: &RawValue) {
+        let mut windows: Vec<String> = match self.0.peers.lock() {
+            Ok(peers) => peers
+                .values()
+                .flat_map(|peer| peer.watches.iter())
+                .filter(|watch| watch.name == name && watch.surface.is_none())
+                .map(|watch| watch.window.clone())
+                .collect(),
+            Err(_) => {
+                log_error("endpoint notification", "the peer list is poisoned");
+                return;
+            }
+        };
+        windows.sort();
+        windows.dedup();
+        for window in windows {
+            self.changed(&window, name, None, value);
+        }
+    }
+
     /// 창 window 의 감시를 반환한다.
     pub fn watches(&self, window: &str) -> Vec<Watch> {
         let mut watches: Vec<Watch> = match self.0.peers.lock() {
