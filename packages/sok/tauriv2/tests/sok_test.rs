@@ -172,7 +172,7 @@ fn run(args: &[&str]) -> (i32, String, String) {
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
         former: None,
-        paths_dir: &paths,
+        paths_dir: Ok(&paths),
         core_version: "0.0.2",
     };
     let code = soksak_sok::run(&args, &mut stdout, &mut stderr, &options);
@@ -224,7 +224,7 @@ fn an_error_that_cannot_be_written_exits_with_status_3() {
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
         former: None,
-        paths_dir: &paths,
+        paths_dir: Ok(&paths),
         core_version: "0.0.2",
     };
     let mut stdout = Vec::new();
@@ -670,4 +670,30 @@ fn path_install_writes_the_executable_directory_and_remove_deletes_it() {
         "{stderr}"
     );
     *PATHS.lock().expect("paths") = PathBuf::new();
+}
+
+// contract: cli.path.fails-without-a-path-entry-folder
+#[test]
+fn path_entries_fail_where_the_operating_system_has_no_folder() {
+    let args = vec!["path".to_string(), "install".to_string()];
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let options = soksak_sok::Options {
+        identifier: "com.soksak.test",
+        former: None,
+        paths_dir: Err("path entries are not implemented on linux".to_string()),
+        core_version: "0.0.2",
+    };
+    let code = soksak_sok::run(&args, &mut stdout, &mut stderr, &options);
+    assert_eq!(
+        (
+            code,
+            String::from_utf8(stdout).expect("stdout"),
+            String::from_utf8(stderr).expect("stderr")
+        ),
+        (
+            1,
+            String::new(),
+            "sok: path entries are not implemented on linux\n".to_string()
+        )
+    );
 }

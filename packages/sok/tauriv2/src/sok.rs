@@ -636,8 +636,9 @@ pub struct Options<'a> {
     /// 옮기기 전 설정 폴더의 이름. 기본 설정 폴더를 쓰기 전에 그 폴더가 남아 있지 않은지 확인한다. None 이면 확인하지
     /// 않는다(docs/spec/projects.md#persistence).
     pub former: Option<&'a str>,
-    /// 경로 항목을 두는 폴더(macOS 는 /etc/paths.d).
-    pub paths_dir: &'a Path,
+    /// 경로 항목을 두는 폴더(macOS 는 /etc/paths.d). 이 운영체제에 그런 폴더가 없으면 그 까닭이며, sok path 가
+    /// 그 오류로 실패한다.
+    pub paths_dir: Result<&'a Path, String>,
     /// plugin 을 고를 때 쓰는 core version. 실행 파일은 이 crate 의 version 을 준다.
     pub core_version: &'a str,
 }

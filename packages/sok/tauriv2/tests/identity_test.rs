@@ -113,7 +113,7 @@ fn sok_refuses_an_unmoved_former_directory() {
         let options = soksak_sok::Options {
             identifier: "app.soksak.current",
             former: Some("com.soksak.former"),
-            paths_dir: paths.path(),
+            paths_dir: Ok(paths.path()),
             core_version: "0.0.2",
         };
         let code = soksak_sok::run(&args, &mut stdout, &mut stderr, &options);

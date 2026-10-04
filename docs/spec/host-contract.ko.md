@@ -393,6 +393,7 @@ fn invalid_json_closes_connection() {
 | `cli.command.rejects-undeclared-or-invalid-values` | 선언되지 않은 flag, schema와 맞지 않는 값, 값이 없는 flag, 값이 따라오는 boolean, 매개변수 flag와 함께 쓴 `--params`, 선언되지 않은 command는 `command.run`을 보내기 전에 종료 상태 2로 끝난다. | both |
 | `cli.commands.lists-declared-commands` | `sok commands`는 `exposure.list`의 `commands` 목록을 애플리케이션이 선언한 순서대로 출력한다. | both |
 | `cli.path.writes-and-removes-the-entry` | `sok path install`은 실행 중인 `sok`의 폴더를 담은 `<paths directory>/<identifier>`를 쓰고 파일과 폴더를 출력한다. 되풀이해도 같은 파일이다. `sok path remove`는 그것을 지우며 없어도 성공한다. 쓰기 실패는 파일과 `run sudo sok path install`을 보고한다. | both |
+| `cli.path.fails-without-a-path-entry-folder` | 경로 항목 폴더가 없는 운영체제에서 `sok path install`은 `path entries are not implemented on linux` 같은 platform의 까닭으로 실패하고 아무것도 쓰지 않는다. | both |
 | `cli.pack.writes-sorted-plugin-archive` | `sok plugin pack`은 `package.json`과 나열한 파일을 경로 순서, mode 0644나 0755, 시각 0, 소유자 0으로 담은 `<id>-<version>.tgz`를 쓰고, `archive`, `id`, `sha256`, `version`을 출력하며, 되풀이하면 같은 byte를 쓴다. | both |
 | `cli.pack.rejects-links-and-manifest-mismatch` | 나열한 폴더 안의 symbolic link, id 없는 `plugin.json`, `plugin.json`과 다른 `soksak.sidecars`는 종료 상태 1로 실패하고 출력 폴더를 비워 둔다. | both |
 | `cli.pack.diagnostics-only-with-flag` | `sok plugin pack`은 `diagnostics.json`과 그 module을 빼고, `--diagnostics`는 둘을 더하며, `files`가 둘 중 하나를 나열하면 pack이 실패하고, `plugin pack` 밖의 `--diagnostics`는 종료 상태 2다. | both |

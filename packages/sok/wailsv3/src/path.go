@@ -13,6 +13,9 @@ import (
 )
 
 func runPath(action string, stdout io.Writer, options Options) error {
+	if options.PathsError != nil {
+		return options.PathsError
+	}
 	file := filepath.Join(options.PathsDir, options.Identifier)
 	switch action {
 	case "install":

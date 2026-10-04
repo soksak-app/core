@@ -27,6 +27,7 @@ import (
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 	// plugin 작업(plugins.go)은 command line 의 installer library 를 쓰므로 그 platform 구현도 등록한다.
 	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/darwin"
+	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/linux"
 	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/windows"
 )
 

@@ -472,6 +472,8 @@ type Options struct {
 	Former string
 	// PathsDir 는 경로 항목을 두는 폴더다(macOS 는 /etc/paths.d).
 	PathsDir string
+	// PathsError 는 이 운영체제에 경로 항목 폴더가 없는 까닭이다. 있으면 sok path 가 그 오류로 실패한다.
+	PathsError error
 	// CoreVersion 은 plugin 을 고를 때 쓰는 core version 이다. 실행 파일은 이 package 의 CoreVersion 을 준다.
 	CoreVersion string
 }

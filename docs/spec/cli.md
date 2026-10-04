@@ -4,6 +4,10 @@
 
 `sok` is the command line of a soksak application, and every command is public through it. Two packages implement it with one contract: `packages/sok/tauriv2` in Rust for the Tauri application and `packages/sok/wailsv3` in Go for the Wails application ([hosts](hosts.md#command-line-tree)). They do not link the application frameworks. Each application bundle holds its `sok` next to its executable (`Contents/MacOS/sok` on macOS), and the host runs that `sok` for the plugin commands of the settings window, so each language has one installation implementation. A `sok` uses the configuration directory of the application it belongs to (`app.soksak.tauri` or `app.soksak.wails`, with `.dev` in diagnostic builds, see [projects](projects.md#persistence)) unless `--config-dir` names another, so the `sok` that `PATH` reaches decides the implementation and the configuration directory. `PATH` reaches a bundle through a path entry, `/etc/paths.d/<application identifier>`, that holds the bundle's executable directory. `sok path install` writes that entry for the `sok` that runs it and `sok path remove` deletes it; both need administrator rights (`sudo`), give the same result when repeated, and report a failed write with the file and the reason. A new shell reads the entry. The command line does not use symbolic links.
 
+## Operating systems
+
+`sok` runs on macOS and Linux. Its platform key is `<os>-<arch>` with `arm64` or `x64` ([installation](installation.md)). On Linux the configuration directory is the application identifier under `$XDG_CONFIG_HOME`, or under `~/.config` when that is not set, and the endpoint is a Unix socket as on macOS ([endpoint](endpoint.md)). Linux has no path entry folder, so `sok path install` and `sok path remove` fail there with `path entries are not implemented on linux`. On Windows every operation of the platform interface fails with `<operation> is not implemented on windows`.
+
 ## Commands
 
 | Command | Action |

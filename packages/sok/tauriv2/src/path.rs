@@ -12,7 +12,7 @@ pub(crate) fn run_path(
     stdout: &mut dyn Write,
     options: &Options,
 ) -> Result<(), Error> {
-    let file = options.paths_dir.join(options.identifier);
+    let file = options.paths_dir.clone()?.join(options.identifier);
     match action {
         "install" => {
             let executable = std::env::current_exe()

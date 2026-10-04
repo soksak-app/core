@@ -54,3 +54,21 @@ jobs:
         run: make -C core host-contract-check rust-format-check go-format-check rust-clippy-check
       - name: Package tests
         run: pnpm -C core test
+
+  # sok 은 Linux 에서도 실행된다(docs/spec/cli.md#operating-systems). 두 언어의 sok 테스트를 Linux 에서 실행한다.
+  sok-linux:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/sok/wailsv3/go.mod
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build sok
+        run: |
+          go build -C packages/sok/wailsv3 ./...
+          cargo build --locked -p soksak-sok-tauriv2
+      - name: Go sok tests
+        run: go test -C packages/sok/wailsv3 -count=1 ./...
+      - name: Rust sok tests
+        run: cargo test --locked -p soksak-sok-tauriv2

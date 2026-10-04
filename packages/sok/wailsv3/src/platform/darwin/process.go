@@ -23,6 +23,9 @@ func (darwin) ProcessRunning(pid int) error {
 	return nil
 }
 
+// PathsDir 는 macOS 의 경로 항목 폴더다. shell 은 이 폴더의 파일마다 그 줄을 PATH 에 더한다.
+func (darwin) PathsDir() (string, error) { return "/etc/paths.d", nil }
+
 // Key 는 macOS 의 release asset key 다.
 func (darwin) Key() (string, error) {
 	switch runtime.GOARCH {

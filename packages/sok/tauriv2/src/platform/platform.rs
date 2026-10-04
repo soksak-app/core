@@ -26,6 +26,8 @@ pub trait Platform {
     fn executable(&self, metadata: &std::fs::Metadata) -> bool;
     /// 이 플랫폼의 release asset key(`<os>-<arch>`). 이 architecture 의 key 가 없으면 오류다.
     fn key(&self) -> Result<String, String>;
+    /// 경로 항목을 두는 폴더. 이 운영체제에 그런 폴더가 없으면 오류다(docs/spec/cli.md).
+    fn paths_dir(&self) -> Result<PathBuf, String>;
     /// 푼 파일의 mode 를 실행 파일이면 0755, 아니면 0644 로 정한다.
     fn set_executable(&self, path: &std::path::Path, executable: bool) -> Result<(), String>;
     /// path 의 파일을 닫고 그 결과를 돌려준다. 표준 라이브러리의 drop 은 닫기 결과를 버린다.
@@ -36,6 +38,10 @@ pub trait Platform {
 #[path = "darwin/darwin.rs"]
 mod darwin;
 
+#[cfg(target_os = "linux")]
+#[path = "linux/linux.rs"]
+mod linux;
+
 #[cfg(windows)]
 #[path = "windows/windows.rs"]
 mod windows;
@@ -44,8 +50,10 @@ mod windows;
 pub fn current() -> Result<Box<dyn Platform>, String> {
     #[cfg(target_os = "macos")]
     return Ok(Box::new(darwin::Darwin));
+    #[cfg(target_os = "linux")]
+    return Ok(Box::new(linux::Linux));
     #[cfg(windows)]
     return Ok(Box::new(windows::Windows));
-    #[cfg(not(any(target_os = "macos", windows)))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
     return Err("no platform implementation exists for this operating system".into());
 }

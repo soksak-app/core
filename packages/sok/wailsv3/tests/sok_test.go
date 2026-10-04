@@ -19,6 +19,7 @@ import (
 
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/darwin"
+	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/linux"
 )
 
 type fakeEndpoint struct {
@@ -406,5 +407,14 @@ func TestPathInstallWritesTheExecutableDirectoryAndRemoveDeletesIt(t *testing.T)
 	code, _, stderr := run("path", "install")
 	if code != 1 || !strings.HasPrefix(stderr, "sok: cannot write "+filepath.Join(pathsDir, "com.soksak.test")+": ") || !strings.HasSuffix(stderr, "; run sudo sok path install\n") {
 		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+}
+
+// contract: cli.path.fails-without-a-path-entry-folder
+func TestPathEntriesFailWhereTheOperatingSystemHasNoFolder(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := sok.Run([]string{"path", "install"}, &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", PathsError: errors.New("path entries are not implemented on linux"), CoreVersion: "0.0.2"})
+	if code != 1 || stdout.String() != "" || stderr.String() != "sok: path entries are not implemented on linux\n" {
+		t.Fatalf("code %d stdout %q stderr %q", code, stdout.String(), stderr.String())
 	}
 }

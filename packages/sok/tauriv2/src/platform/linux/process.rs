@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use super::super::{Connection, Platform};
-use super::Darwin;
+use super::Linux;
 
-impl Platform for Darwin {
+impl Platform for Linux {
     /// signal 0 으로 프로세스가 있는지 본다. 다른 사용자의 프로세스(EPERM)도 실행 중이다.
     fn process_running(&self, pid: i32) -> Result<(), String> {
         // SAFETY: kill 은 signal 0 을 보내 프로세스 존재만 확인하며 메모리를 다루지 않는다.
@@ -18,15 +18,15 @@ impl Platform for Darwin {
     }
 
     fn connect(&self, address: &str) -> Result<Box<dyn Connection>, String> {
-        Darwin::connect(address)
+        Linux::connect(address)
     }
 
     fn on_interrupt(&self, interrupted: Box<dyn FnOnce() + Send>) -> Result<(), String> {
-        Darwin::on_interrupt(interrupted)
+        Linux::on_interrupt(interrupted)
     }
 
     fn config_dir(&self) -> Result<PathBuf, String> {
-        Darwin::config_dir()
+        Linux::config_dir()
     }
 
     fn executable(&self, metadata: &std::fs::Metadata) -> bool {
@@ -52,16 +52,16 @@ impl Platform for Darwin {
         }
     }
 
-    /// shell 은 이 폴더의 파일마다 그 줄을 PATH 에 더한다.
+    /// Linux 의 shell 에는 파일마다 PATH 항목을 더하는 폴더가 없다.
     fn paths_dir(&self) -> Result<PathBuf, String> {
-        Ok(PathBuf::from("/etc/paths.d"))
+        Err("path entries are not implemented on linux".into())
     }
 
     fn key(&self) -> Result<String, String> {
         match std::env::consts::ARCH {
-            "aarch64" => Ok("darwin-arm64".into()),
-            "x86_64" => Ok("darwin-x64".into()),
-            other => Err(format!("darwin/{other} has no platform key")),
+            "aarch64" => Ok("linux-arm64".into()),
+            "x86_64" => Ok("linux-x64".into()),
+            other => Err(format!("linux/{other} has no platform key")),
         }
     }
 }

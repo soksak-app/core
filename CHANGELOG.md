@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R2-7-1: `sok` runs on Linux with the configuration directory under `$XDG_CONFIG_HOME` or `~/.config`; `sok path` reports that Linux has no path entry folder, and the CI workflow runs the `sok` tests on Linux.
 - F23: the Go `sok` writes extracted files at mode 0755 or 0644 whatever the process umask is; under the umask 077 it wrote a sidecar executable at mode 0700.
 - F14: both applications answer the operating system's quit request (Dock, logout, restart, another program) without an error after their saves; the Wails application answered it with a cancellation, which also stops a logout, and the Tauri application ended without waiting for page saves.
 - F21: both hosts accept a persistent service's answer to a close sent before the quit, so the quit still sends `shutdown` and the terminal service ends with the application.
