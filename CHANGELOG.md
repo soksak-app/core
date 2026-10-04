@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R2-7-3: `docs/plans/linux-host.md` proposes the Linux host: the framework facts, the Linux mechanism of each host operation group and private API, the vt frame transport, the decisions D1–D8 and the order of implementation.
 - R2-7-2: the files sidecar watches directories on Linux with inotify (sidecar-files S8).
 - R2-7-1: `sok` runs on Linux with the configuration directory under `$XDG_CONFIG_HOME` or `~/.config`; `sok path` reports that Linux has no path entry folder, and the CI workflow runs the `sok` tests on Linux.
 - F23: the Go `sok` writes extracted files at mode 0755 or 0644 whatever the process umask is; under the umask 077 it wrote a sidecar executable at mode 0700.

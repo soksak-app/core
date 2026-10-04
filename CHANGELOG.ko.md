@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R2-7-3: `docs/plans/linux-host.md`가 Linux host를 제안한다. framework 사실, host 동작 묶음과 비공개 API마다의 Linux 방식, vt frame 전송, 결정 D1–D8, 구현 순서를 담는다.
 - R2-7-2: files sidecar는 Linux에서 inotify로 디렉터리를 감시한다(sidecar-files S8).
 - R2-7-1: `sok`은 `$XDG_CONFIG_HOME`이나 `~/.config` 아래의 설정 폴더로 Linux에서 실행된다. `sok path`는 Linux에 경로 항목 폴더가 없다고 알리고, CI workflow가 Linux에서 `sok` 테스트를 실행한다.
 - F23: Go `sok`은 프로세스 umask와 무관하게 푼 파일을 mode 0755나 0644로 쓴다. 이전에는 umask 077에서 sidecar 실행 파일을 mode 0700으로 썼다.
