@@ -22,10 +22,12 @@
     "clipboard.js",
     "links.js",
     "exposure-check.js",
+    "engines-check.js",
     "core-exposure.json"
   ],
   "bin": {
-    "soksak-exposure": "./exposure-check.js"
+    "soksak-exposure": "./exposure-check.js",
+    "soksak-engines": "./engines-check.js"
   },
   "scripts": {
     "test": "node --test test/"
