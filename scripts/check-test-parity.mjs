@@ -943,6 +943,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F31",
+    implementation: [
+      { file: "e2e/application-log.mjs", symbol: "export function readErrors" },
+      { file: "packages/workbench/host.js", symbol: "const errorLine" },
+    ],
+    tests: [
+      { file: "e2e/test/session-cleanup.test.mjs", id: "an error line that the application logged during the check fails the check unless it is declared" },
+      { file: "packages/workbench/test/report-levels.test.mjs", id: "a reported failure starts with error: and an observation does not" },
+    ],
+    expected: "Every error line that the application logs during a window check is printed and fails the check unless the check declares it.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F28",
     implementation: [
       { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },
