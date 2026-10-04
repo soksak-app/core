@@ -200,10 +200,14 @@ export function verify(controls = null) {
   // 화면의 프레임 간 정렬은 outside.test.mjs가 별도로 검사한다.
   const placed = seated();
   let land = 0, landed = 0, escaped = 0;
+  // 가장 크게 어긋난 표면과 그 두 자리. 실패가 원인을 찾을 수 있는 측정값을 밝힌다(F36).
+  let landedAt = "";
   // 기본값: 아직 앉힌 배치가 없으면 잴 표면이 없다.
   for (const s of placed?.surfaces ?? []) {
     if (!s.visible || s.declared.w < 1 || s.declared.h < 1) continue;
-    land = Math.max(land, maxDelta(s.declared, s.applied));
+    const delta = maxDelta(s.declared, s.applied);
+    if (delta > land) landedAt = ` · ${s.id} declared ${frameText(s.declared)} applied ${frameText(s.applied)}`;
+    land = Math.max(land, delta);
     escaped = Math.max(escaped, beyond(s.applied, s.declared));
     landed++;
   }
@@ -211,7 +215,7 @@ export function verify(controls = null) {
       landed === 0 || (escaped === 0 && land === 0),
       landed
         ? `밖으로 ${escaped.toFixed(2)}px · 차이 ${land.toFixed(2)}px · ` +
-          `${placed.settled ? "정지" : "갱신 중"} (seq ${placed.seq})`
+          `${placed.settled ? "정지" : "갱신 중"} (seq ${placed.seq})${landedAt}`
         : "아직 답 없음");
 
   const transformed = [...plane.querySelectorAll(".card")]

@@ -90,7 +90,10 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 :root[data-frame-text] .chrome-bar > .brand,:root[data-frame-text] .chrome-bar > .tabs--project,
 :root[data-frame-text] .chrome-bar__acts,:root[data-frame-text] .tabs--space,
 :root[data-frame-text] .workarea > .tabs--project{zoom:var(--frame-text)}
-.chrome-bar{--chrome-row:max(var(--chrome-h),calc(var(--chrome-row-h) * var(--frame-text)))}
+/* 판 위와 왼쪽의 줄은 배율을 곱한 크기를 1px 단위로 맞춘다. 소수 크기는 판의 원점을 device pixel 밖에 두어, 호스트가
+   격자에 앉힌 네이티브 표면과 DOM 이 반 pixel 어긋나고 카드 테두리가 흐려진다(F36). zoom 요소는 지정한 크기에 배율을
+   곱해 그리므로 맞춘 크기를 배율로 나눠 지정한다. */
+.chrome-bar{--chrome-row:round(nearest,max(var(--chrome-h),calc(var(--chrome-row-h) * var(--frame-text))),1px)}
 .chrome-bar{position:relative;flex:0 0 var(--chrome-row);height:var(--chrome-row);display:flex;align-items:center;
   gap:var(--space-2);padding:0 var(--space-3) 0 calc(var(--space-3) + var(--controls-w));
   border-bottom:var(--bw) solid var(--edge);background:var(--card);user-select:none}
@@ -117,7 +120,8 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .tabs--project{align-self:center}
 
 /* 스페이스 탭 행. 판 바로 위에 위치하므로 탭의 아래가 판과 이어진다. */
-.tabs--space{flex:0 0 auto;gap:2px;height:var(--chrome-row-h);padding:5px var(--space-3);
+.tabs--space{flex:0 0 auto;gap:2px;height:calc(round(nearest,calc(var(--chrome-row-h) * var(--frame-text)),1px) / var(--frame-text));
+  padding:5px var(--space-3);
   align-items:center;background:var(--card);border-bottom:var(--bw) solid var(--edge)}
 .tabs--space .bar-tab{height:26px;border-radius:var(--r-xs) var(--r-xs) 0 0}
 
@@ -146,7 +150,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 /* 프로젝트 탭이 왼쪽에 배치될 때. 스페이스 행보다 위에서 시작해 아래까지 이어진다. */
 .workarea{display:flex;flex:1 1 auto;min-height:0}
 .work{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
-.project-column{display:flex;flex-direction:column;gap:4px;width:64px;flex:0 0 auto;
+.project-column{display:flex;flex-direction:column;gap:4px;width:calc(round(nearest,calc(64px * var(--frame-text)),1px) / var(--frame-text));flex:0 0 auto;
   padding:5px;background:var(--card);border-right:var(--bw) solid var(--edge)}
 .project-column .bar-tab{position:relative;width:100%;height:36px;justify-content:center;padding:0 4px}
 .project-column .bar-tab__name{max-width:100%;text-align:center}

@@ -71,8 +71,13 @@ for (const app of Object.values(APPS)) {
     const spaceTab = await s.rect("core.space-tab", 0);
     await press(s, spaceTab);
     await s.until("core.text", (value) => value.scope.kind === "frame", "pressing the frame did not make it the scope");
-    // 1 에서 세 단계(1.1, 1.25, 1.5)를 올린다.
-    for (let step = 0; step < 3; step++) await s.run("host.menu.select", { menu: titles.menu, title: titles.larger });
+    // 1 에서 세 단계(1.1, 1.25, 1.5)를 올린다. 단계마다 표시를 기다려, 그 배율에서 판과 네이티브 표면이 같은 device
+    // pixel 에 앉는지 페이지 검증(V7b)이 판정하게 한다(F36).
+    for (const factor of [1.1, 1.25, 1.5]) {
+      await s.run("host.menu.select", { menu: titles.menu, title: titles.larger });
+      await s.until("core.text", (value) => value.frame === factor, `the frame factor did not reach ${factor}`);
+      await s.presented();
+    }
     await s.until("core.text", (value) => value.frame === 1.5, "three frame steps did not reach factor 1.5");
     await s.presented();
     const spaceAfter = await s.rect("core.space-tab", 0);

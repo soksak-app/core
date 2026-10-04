@@ -980,6 +980,18 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F36",
+    implementation: [
+      { file: "packages/workbench/app.css", symbol: "round(nearest,calc(var(--chrome-row-h) * var(--frame-text)),1px)" },
+    ],
+    tests: [
+      { file: "e2e/text-size.test.mjs", id: "text size commands enlarge the pressed card or the frame and keep the plane in the window" },
+      { file: "packages/workbench/test/verify-ahead.test.mjs", id: "a failed V7b names the surface and its declared and applied rectangles" },
+    ],
+    expected: "The plane stays on the device pixel grid at every frame text factor, so native surfaces are seated where they are declared.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F28",
     implementation: [
       { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },

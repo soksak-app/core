@@ -32,3 +32,26 @@ test("a failed V7c names the surface and both of its rectangles", async (t) => {
   assert.match(row.note, /최대 30\.00px/);
   assert.match(row.note, /probe drawn 30,34 370×240 declared 0,34 400×240 · bands 6\/0\/0\/0 drawn 36px\/0\/0\/0/);
 });
+
+test("a failed V7b names the surface and its declared and applied rectangles", async (t) => {
+  const dom = new JSDOM('<div class="chrome-bar"></div><div id="stage"><div id="plane"></div></div>');
+  globalThis.document = dom.window.document;
+  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
+  t.after(() => dom.window.close());
+  const plane = document.querySelector("#plane");
+  plane.getBoundingClientRect = () => rect(6, 6, 400, 300);
+  const grid = new Soksak(undefined, { width: 400, height: 300 });
+  const placed = { seq: 39, settled: true, surfaces: [{ id: "probe", visible: true, dim: false,
+    declared: { x: 10, y: 45.25, w: 380, h: 200 }, applied: { x: 10, y: 45.5, w: 380, h: 200 } }] };
+  t.mock.module("../compositor.js", { exports: { ahead: () => null, latest: () => null, placementPending: () => false, seated: () => placed } });
+  t.mock.module("../plane.js", { exports: {
+    currentGrid: () => grid, dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane, presentedCardRect: () => undefined,
+    railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
+  } });
+  t.mock.module("../registry.js", { exports: { isPlace: () => false } });
+  t.mock.module("../settings.js", { exports: { cardRadius: () => 4 } });
+  const { verify } = await import("../verify.js?v7b");
+  const row = verify().find((item) => item.name.startsWith("V7b "));
+  assert.equal(row.ok, false);
+  assert.match(row.note, /probe declared 10,45\.25 380×200 applied 10,45\.5 380×200/);
+});
