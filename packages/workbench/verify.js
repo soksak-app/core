@@ -7,7 +7,7 @@
 import { Soksak } from "soksak";
 
 import { ahead, latest, placementPending, seated } from "./compositor.js";
-import { currentGrid, dropBands, plane, railOutline, tabsOf } from "./plane.js";
+import { currentGrid, dropBands, plane, presentedCardRect, railOutline, tabsOf } from "./plane.js";
 import { isPlace } from "./registry.js";
 import { expectedRailLoops, windowSidebarsPlaced } from "./verify-checks.js";
 import { cardRadius } from "./settings.js";
@@ -243,14 +243,23 @@ export function verify(controls = null) {
   // 여백은 재서 얻는다 — 이음새에서 스타일시트가 여백을 0 으로 만드므로 통로의
   // 절반과 다르다.
   //
-  // 판이 뷰가 배치한 크기 그대로일 때만 잰다. 호스트가 판의 크기를 바꾸고 아직 다시
-  // 그리지 않았으면 선은 이전 크기의 것이고, 그 차이는 선이 나간 거리가 아니다.
+  // 판이 뷰가 마지막으로 그린 크기 그대로일 때만 잰다. 호스트가 판의 크기를 바꾸고 아직 다시
+  // 그리지 않았으면 선은 이전 크기의 것이고, 그 차이는 선이 나간 거리가 아니다. grid 는 그리기 전에
+  // 새 크기가 되므로(새 배치가 기다리던 배치를 대체할 때) 그려진 카드가 덮는 범위와 비교한다(F34).
   const stage = plane.parentElement;
   const frame = stage.getBoundingClientRect();
   const pad = Math.max(0,
     host.left - (frame.left + parseFloat(getComputedStyle(stage).borderLeftWidth)));
-  const laid = Math.abs(host.width - grid.width) < 0.5
-    && Math.abs(host.height - grid.height) < 0.5;
+  let paintedWidth = 0;
+  let paintedHeight = 0;
+  for (const card of cards) {
+    const shown = presentedCardRect(card.id);
+    if (!shown) continue;
+    paintedWidth = Math.max(paintedWidth, shown.x + shown.w);
+    paintedHeight = Math.max(paintedHeight, shown.y + shown.h);
+  }
+  const laid = Math.abs(host.width - paintedWidth) < 0.5
+    && Math.abs(host.height - paintedHeight) < 0.5;
   let past = 0;
   for (const rule of plane.querySelectorAll(".sp-rule")) {
     const r = rule.getBoundingClientRect();

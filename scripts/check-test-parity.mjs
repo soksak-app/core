@@ -956,6 +956,17 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F34",
+    implementation: [
+      { file: "packages/workbench/verify.js", symbol: "presentedCardRect(card.id)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/verify-rail-lines.test.mjs", id: "rail lines are not measured while the plane shows a layout of an earlier size" },
+    ],
+    expected: "The page verification measures the rail lines only when the plane shows the size of its painted cards.",
+    levels: ["unit"],
+  },
+  {
     id: "F28",
     implementation: [
       { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },
