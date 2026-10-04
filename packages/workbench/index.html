@@ -256,7 +256,10 @@ onChoicesChange(() => projects.keep());
 
 /* 스페이스가 바뀌면 현재 판을 저장하고 다른 상태를 적용한다. 프로젝트 전환도 같은
    동작이다. */
-projects.onSwitch({ check: checkStoredLayout, save: capture, load: adopt, update: settle, async presented() {
+projects.onSwitch({ check: checkStoredLayout, save: capture, load: adopt, update: settle,
+// 어떤 레이아웃에도 없는 탭의 표면 모듈을 정리한다. 불러오지 않은 플러그인의 자리 표시도 그 탭과 함께 사라진다.
+retain: (surfaceIds) => disposeSurfacesExcept(surfaceIds),
+async presented() {
   await drawing;
   // `draw()`는 onRender 커밋이 끝나기 전에 반환한다. 최신 네이티브 배치가
   // 대기 중이면 프로젝트 명령은 완료되지 않은 상태다.

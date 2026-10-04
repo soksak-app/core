@@ -297,13 +297,18 @@ export async function open({ root, color, layout }) {
 }
 
 export async function close(id) {
-  if (id === activeProjectId) await keep();
+  // 아래의 정리는 저장된 레이아웃의 탭을 남긴다. 활성 프로젝트의 판에 아직 저장하지 않은 탭이 있으면 그 표면도 남도록
+  // 먼저 저장한다.
+  await keep();
   await windows.releaseProject(id);
   owned.delete(id);
   await store.remove(id);
   await refresh();
-  // 지운 프로젝트의 탭은 어떤 레이아웃에도 없으므로 그 사이드카 세션을 끝낸다.
-  await retainSidecarSessions(layoutSurfaces());
+  // 지운 프로젝트의 탭은 어떤 레이아웃에도 없다. 그 표면 모듈을 먼저 정리하고 사이드카 세션을 끝낸다. 모듈이 남아
+  // 있으면 끝난 세션을 다시 열며, 지운 프로젝트의 폴더가 없으면 그 열기는 실패한다(F44).
+  const remaining = layoutSurfaces();
+  await listener.retain(new Set(remaining.map((item) => item.surface)));
+  await retainSidecarSessions(remaining);
   if (active() && !browsing) listener.update();
   if (!active()) {
     const next = local()[0];

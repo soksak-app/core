@@ -76,6 +76,8 @@ projects.onSwitch({
   },
   load: (layout) => { plane.layout = layout; plane.events.push("load"); },
   update: () => {},
+  // 남은 레이아웃의 탭 밖의 표면 모듈을 정리한다. 세션 정리와의 순서를 retained 에 함께 기록한다.
+  retain: async (surfaceIds) => { retained.push({ modules: [...surfaceIds] }); },
   presented: async () => {},
   empty: async () => {
     plane.events.push("empty started");
@@ -153,8 +155,9 @@ test("the surfaces of every layout are listed with their project root, and remov
   ]);
   retained.length = 0;
   await projects.close("prj-two");
-  assert.deepEqual(retained, [[{ surface: "tab-one", root: "/work/one" }]],
-    "removing a project retains only the surfaces of the remaining layouts");
+  // 지운 프로젝트의 표면 모듈을 먼저 정리한다. 모듈이 남아 있으면 끝난 세션을 지운 폴더에서 다시 연다(F44).
+  assert.deepEqual(retained, [{ modules: ["tab-one"] }, [{ surface: "tab-one", root: "/work/one" }]],
+    "removing a project disposes the surface modules of its tabs before it ends their sidecar sessions");
 });
 
 test("a saved layout that fails the plane check rejects the open before any project or window change", async () => {
