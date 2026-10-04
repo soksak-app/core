@@ -429,7 +429,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.card.split", ({ card, side, plugin }) => splitCard(card, side, plugin));
   registry.command("core.card.close", ({ card }) => { closeCard(card); });
   registry.command("core.tab.select", ({ tab }) => { trace("action", { kind: "tab.select", tab }); selectTab(tab); });
-  registry.command("core.tab.close", ({ tab }) => { closeTabById(tab); });
+  registry.command("core.tab.close", async ({ tab }) => { await closeTabById(tab); });
   registry.command("core.tab.move", ({ tab, card, zone }) => { moveTab(tab, card, zone); });
   registry.command("core.picker.pick", ({ index }) => { pickItem(index); });
   registry.command("core.picker.close", () => { closePicker(); });

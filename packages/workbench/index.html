@@ -596,9 +596,10 @@ function drawFrame() {
 // 있다(docs/spec/plugins.md#sections). 호스트와의 연결은 아래에서 기다린다.
 const coreExposure = installCoreExposure({
   library, renames,
-  // 판의 그리기 순서. 배치를 바꾼 코어 명령은 이것을 기다린 뒤 답한다.
+  // 판의 그리기 순서. 배치를 바꾼 코어 명령은 이것을 기다린 뒤 답한다. 슬롯은 가장 새 배치를 그린 뒤에 읽으므로, 이 명령이나
+  // 뒤의 명령이 해제한 표면의 슬롯은 남아 있지 않다(docs/spec/exposure.md#registration).
   drawn: async () => {
-    await drawing;
+    await layouts.wait();
     const ids = [...document.querySelectorAll("[data-native-surface-id]")]
       .map((slot) => slot.dataset.nativeSurfaceId);
     await Promise.all(ids.map((id) => waitSurfaceCompositionDeclared(id)));

@@ -75,3 +75,38 @@ test("an animation frame wait resolves on the next frame", { timeout: 5000 }, as
   frame(16.7);
   await waiting;
 });
+
+// 앞선 탭 닫기가 예약한 배치를 기다리는 동안 다음 탭 닫기가 표면을 해제하고 더 새 배치를 예약하면, 기다리던 배치는
+// 그리지 않고 대신된다. 기다림이 그때 끝나면 해제된 표면의 슬롯이 아직 문서에 있다(F50).
+test("the wait for the drawn layout continues through a layout that a newer layout replaces", async () => {
+  const queue = createLayoutQueue({ failed: assert.fail, superseded: () => {} });
+  let slots = ["tab-a", "tab-b"];
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const active = queue.run(async () => { await gate; });
+  // 첫 닫기가 tab-a 를 해제하고 예약한 배치.
+  queue.run(() => { slots = ["tab-b"]; });
+  let read = null;
+  const waiting = queue.wait().then(() => { read = slots; });
+  // 다음 닫기가 tab-b 를 해제하고 예약한 배치가 기다리던 배치를 대신한다.
+  const newest = queue.run(() => { slots = []; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(read, null, `the wait ended before the newest layout drew and read ${JSON.stringify(read)}`);
+  release();
+  await Promise.all([active, newest, waiting]);
+  assert.deepEqual(read, []);
+});
+
+test("the wait for the drawn layout fails with the failure of the newest layout", async () => {
+  const failure = new Error("current image raster did not present");
+  const queue = createLayoutQueue({ failed: () => {}, superseded: () => {} });
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const first = queue.run(async () => { await gate; throw new Error("replaced presentation failed"); });
+  const waiting = queue.wait();
+  const newest = queue.run(() => { throw failure; });
+  release();
+  await assert.rejects(first);
+  await assert.rejects(newest);
+  await assert.rejects(waiting, (error) => error === failure);
+});
