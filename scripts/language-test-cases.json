@@ -50,7 +50,7 @@
       "language": "shell",
       "command": "sh",
       "args": ["scripts/test/check-build-environment.sh"],
-      "expectedTests": 2,
+      "expectedTests": 4,
       "implementationFiles": ["scripts/check-build-environment.sh"],
       "testFiles": ["scripts/test/check-build-environment.sh"],
       "dependencyFiles": [".node-version", "package.json", "pnpm-lock.yaml"],
