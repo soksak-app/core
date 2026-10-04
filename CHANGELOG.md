@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F27: the window check of the OSC 9 notification policy fits the bundled applications: it names an undecided notification authorization and checks that the tab policy adds no system notification.
 - F24: the window check of a failed terminal presentation waits for the next terminals to present instead of failing while they have not presented yet.
 - R2-4-3: `docs/spec/registry.md` specifies the public registry: committed entry files, pull requests by entry owners, an automatic check and merge, and publication of the index on merge.
 - R2-9: the applications and `sok` no longer move the 0.0.2 configuration folders or convert `installed.json` format 1; a file of another format fails with its name.

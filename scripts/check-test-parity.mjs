@@ -902,6 +902,17 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F27",
+    implementation: [
+      { file: "e2e/terminal.test.mjs", symbol: "the notification authorization of this application is not decided" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "an OSC 9 notification from a terminal out of view follows the system policy and then the tab policy" },
+    ],
+    expected: "The OSC 9 policy check of a bundled application names an undecided authorization and checks that the tab policy posts nothing new.",
+    levels: ["application"],
+  },
+  {
     id: "F24",
     implementation: [
       { file: "e2e/terminal.test.mjs", symbol: "region.presented !== null" },

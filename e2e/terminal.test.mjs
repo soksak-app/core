@@ -569,7 +569,7 @@ for (const app of Object.values(APPS)) {
       "the notice stayed after the tab came into view");
   });
 
-  test(`${app.name}: an OSC 9 notification from a terminal out of view stays a tab notice because this executable is outside a bundle`, async (t) => {
+  test(`${app.name}: an OSC 9 notification from a terminal out of view follows the system policy and then the tab policy`, async (t) => {
       const s = await open(t, app);
       if (!s) return t.skip(`${app.binary} is not built`);
       await fresh(s);
@@ -582,20 +582,28 @@ for (const app of Object.values(APPS)) {
       await s.run("terminal.input", { bytes: "printf '\\033]9;SYSTEM-POLICY\\007'\r" }, hidden.surface);
       await s.until("terminal.session", (session) => session.vendor?.notification === "SYSTEM-POLICY",
         "the system notification policy did not reach the terminal", { surface: hidden.surface });
-      // 이 실행 파일은 번들 밖이라 시스템 알림 권한이 거부될 수 있다. 거부는 명시적인
-      // 결과다: 게시도 오류도 오지 않고 권한 상태로만 알려진다(V5-111).
-      await s.until("core.notifications", (state) =>
-        state.posted.includes(hidden.surface) || state.error !== null || state.authorization === "denied",
-        "the system notification policy produced neither a post, a native error, nor a denied authorization", { timeout: 10000 });
+      // 시스템 정책의 결과는 게시, native 오류, 거부된 권한 중 하나다. 거부는 게시도 오류도 없이 권한 상태로만
+      // 알려진다(V5-111). 애플리케이션 bundle 의 알림 권한은 사용자가 시스템의 질문에 답해야 정해진다.
+      const decided = (state) => state.posted.includes(hidden.surface) || state.error !== null || state.authorization === "denied";
+      try {
+        await s.until("core.notifications", decided,
+          "the system notification policy produced neither a post, a native error, nor a denied authorization", { timeout: 10000 });
+      } catch (error) {
+        const state = await s.get("core.notifications");
+        if (state.authorization === "notDetermined") {
+          throw new Error(`${app.name}: the notification authorization of this application is not decided; answer its system notification prompt once`, { cause: error });
+        }
+        throw error;
+      }
       assert.equal((await s.get("core.grid")).cards.flatMap((card) => card.tabs).find((tab) => tab.id === hidden.surface).notice,
         null, "the system notification policy fell back to a tab notice");
       await s.run("core.settings.change", { key: "terminal.notifications", value: "tab", scope: "common" });
+      const posted = (await s.get("core.notifications")).posted.length;
       await s.run("terminal.input", { bytes: "printf '\\033]9;TAB-NOTICE\\007'\r" }, hidden.surface);
       const notice = (grid, surface) => grid.cards.find((card) => card.tabs.some((tab) => tab.id === surface)).tabs.find((tab) => tab.id === surface).notice;
       await s.until("core.grid", (grid) => notice(grid, hidden.surface) === "TAB-NOTICE",
         "the terminal out of view did not show a tab notice", { timeout: 10000 });
-      const state = await s.get("core.notifications");
-      assert.deepEqual(state.posted, [], "an executable outside a bundle posted a system notification");
+      assert.equal((await s.get("core.notifications")).posted.length, posted, "the tab policy posted a system notification");
       await s.run("core.card.focus", { card: cardOf(await s.get("core.grid"), hidden.surface).id });
       await s.until("core.grid", (grid) => notice(grid, hidden.surface) === null,
         "the tab notice stayed after the tab came into view");

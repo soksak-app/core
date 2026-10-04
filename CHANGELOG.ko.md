@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F27: OSC 9 알림 정책의 window check가 bundle 애플리케이션에 맞는다. 정해지지 않은 알림 권한을 밝히고, tab 정책이 시스템 알림을 더하지 않는지 확인한다.
 - F24: 실패한 terminal 표시의 window check는 다음 terminal이 아직 표시되지 않은 동안 실패하지 않고 표시를 기다린다.
 - R2-4-3: `docs/spec/registry.md`가 공개 registry를 명세한다. commit한 항목 파일, 항목 소유자의 pull request, 자동 검사와 merge, merge 때의 index 게시를 담는다.
 - R2-9: 애플리케이션과 `sok`은 더 이상 0.0.2 설정 폴더를 옮기거나 `installed.json` format 1을 바꾸지 않는다. 다른 형식의 파일은 그 이름과 함께 실패한다.
