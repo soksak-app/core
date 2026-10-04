@@ -121,6 +121,7 @@ Items:
 | `documents.registry.rejects-set-after-surface-removed` | Setting a document key whose surface was removed fails. | both |
 | `documents.registry.remove-reserved-returns-empty` | Removing a reserved but unset document name succeeds with an empty handle. | both |
 | `documents.registry.remove-attached-returns-handle-once` | Removing an attached document name returns its handle, and removing it again fails. | both |
+| `host.arguments.declared-only` | `--config-dir PATH` and `--config-dir=PATH` set the configuration directory; an undeclared argument, a flag without a value and a repeated flag fail with their texts. | both |
 | `endpoint.process.rejects-a-malformed-lock` | A `process.lock` whose contents are not a positive process ID, including `0`, refuses the endpoint with `<path>: invalid process lock` and stays in place. | both |
 | `endpoint.process.one-owner-per-config-dir` | A second endpoint on the same configuration directory is refused with "already owned by process", and the first keeps its lock until it closes. | both |
 | `endpoint.transport.http-request-line-closes` | An HTTP request line closes the connection without a reply or a method call. | both |

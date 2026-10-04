@@ -6,8 +6,9 @@ package main
 
 import (
 	"embed"
-	"flag"
+	"fmt"
 	"log"
+	"os"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
@@ -16,10 +17,12 @@ import (
 var assets embed.FS
 
 func main() {
-	var options host.Options
-	flag.StringVar(&options.ConfigDir, "config-dir", "", "Application configuration directory")
-	flag.Parse()
-
+	// 인자는 창을 열기 전에 읽는다. 잘못된 인자는 상태 2 로 끝낸다(docs/spec/hosts.md#application-arguments).
+	options, err := host.ParseArguments(os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
 	if err := host.Run(assets, options); err != nil {
 		log.Fatal(err)
 	}

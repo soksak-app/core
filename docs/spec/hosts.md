@@ -198,6 +198,10 @@ packages/sok/wailsv3/          packages/sok/tauriv2/
 
 The pair follows the same file-name rule and structure check as the host packages. Its contract cases are listed in [host contract](host-contract.md) under `cli.`.
 
+## Application arguments
+
+An application accepts `--config-dir PATH` ([projects](projects.md#persistence)), written as two arguments or as `--config-dir=PATH`. Both hosts read the arguments with one rule before any window opens: an argument that the application does not declare fails with `unknown argument <argument>`, a flag without a value fails with `--<flag> needs a value`, and a repeated flag fails with `--<flag> is given twice`; the application writes the message to its standard error and ends with status 2.
+
 ## Frontend and executables
 
 `soksak-stage` places the frontend in `apps/<app>/src/frontend/`, which each application's `.gitignore` excludes. Wails embeds it with `//go:embed all:frontend` in `src/main.go` because `go:embed` reaches only files below the embedding package's directory; `host.Run` uses `frontend/` as the asset root. Tauri reads it through `"frontendDist": "src/frontend"` in `tauri.conf.json`, and `src/main.rs` includes `frontend/background.js`.

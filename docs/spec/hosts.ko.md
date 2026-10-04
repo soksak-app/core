@@ -199,6 +199,10 @@ packages/sok/wailsv3/          packages/sok/tauriv2/
 
 이 쌍은 호스트 패키지와 같은 파일 이름 규칙과 구조 검사를 따른다. 그 contract case는 [호스트 계약](host-contract.ko.md)에 `cli.`로 나열한다.
 
+## 애플리케이션 인자
+
+애플리케이션은 `--config-dir PATH`([projects](projects.ko.md#저장))를 두 인자 또는 `--config-dir=PATH`로 받는다. 두 host는 창을 열기 전에 하나의 규칙으로 인자를 읽는다. 애플리케이션이 선언하지 않은 인자는 `unknown argument <argument>`로, 값 없는 flag는 `--<flag> needs a value`로, 두 번 준 flag는 `--<flag> is given twice`로 실패한다. 애플리케이션은 그 문장을 표준 오류에 쓰고 상태 2로 끝난다.
+
 ## 프런트엔드와 실행 파일
 
 `soksak-stage`는 프런트엔드를 `apps/<app>/src/frontend/`에 배치하며, 각 애플리케이션의 `.gitignore`가 이 디렉터리를 제외한다. `go:embed`는 포함하는 패키지 디렉터리 아래의 파일만 포함할 수 있으므로 Wails는 `src/main.go`의 `//go:embed all:frontend`로 이 디렉터리를 포함한다. `host.Run`은 `frontend/`를 자산 루트로 사용한다. Tauri는 `tauri.conf.json`의 `"frontendDist": "src/frontend"`로 이 디렉터리를 읽고, `src/main.rs`는 `frontend/background.js`를 포함한다.

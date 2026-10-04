@@ -888,6 +888,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F20",
+    implementation: [
+      { file: "packages/host/wailsv3/src/command_line.go", symbol: "ParseArguments" },
+      { file: "packages/host/tauriv2/src/command_line.rs", symbol: "parse_arguments" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/command_line_test.go", id: "TestApplicationArgumentsAreDeclaredOnly" },
+      { file: "packages/host/tauriv2/tests/command_line_test.rs", id: "application_arguments_are_declared_only" },
+    ],
+    expected: "Both applications reject an undeclared argument, a flag without a value and a repeated flag with the same text and status 2.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F15",
     implementation: [
       { file: "packages/host/wailsv3/src/endpoint.go", symbol: "invalid process lock" },

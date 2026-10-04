@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F20: 두 애플리케이션은 선언하지 않은 인자, 값 없는 flag, 두 번 준 flag를 같은 문장과 상태 2로 거부한다. Tauri 애플리케이션은 더는 그것을 무시하지 않는다.
 - F15: 두 host는 잘못된 `process.lock`을 같은 문장 `<path>: invalid process lock`으로 보고한다.
 - F18, F19: 터미널은 네이티브 영역이 view보다 작은 띠의 포인터 점을 받고, 실패한 mouse 연산은 자기 결과로 답하므로 페이지가 더는 `unexpected mouse inputId`를 보고하지 않는다.
 - R2-4-1: 두 host와 `sok`은 정해진 redirect, 시간, 크기 한도로 registry index와 archive를 https로 읽고, 첫 실행은 `pluginsUseRegistry`로 `environment.json`의 기본 registry를 정한다.

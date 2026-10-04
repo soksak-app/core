@@ -17,6 +17,7 @@ pub mod application_log;
 pub mod arguments;
 mod bindings;
 pub mod clipboard;
+pub mod command_line;
 mod composition;
 #[cfg(feature = "diagnostics")]
 mod diagnostics;
@@ -57,29 +58,20 @@ pub(crate) fn log_error(result: Result<(), String>) {
     }
 }
 
-/// 명령줄 플래그 값을 반환한다. `--flag value` 와 `--flag=value` 형식을 받는다. Go 의 flag 패키지도
-/// 두 형식을 받으므로 두 애플리케이션에 같은 인자를 전달할 수 있다.
-fn flag(name: &str) -> Option<String> {
-    let mut args = std::env::args().skip(1);
-    let long = format!("--{name}");
-    let short = format!("-{name}");
-    while let Some(arg) = args.next() {
-        if arg == long || arg == short {
-            return args.next();
-        }
-        for prefix in [format!("{long}="), format!("{short}=")] {
-            if let Some(value) = arg.strip_prefix(&prefix) {
-                return Some(value.to_string());
-            }
-        }
-    }
-    None
+/// 시작할 때 읽은 애플리케이션 인자(docs/spec/hosts.md#application-arguments).
+static ARGUMENTS: std::sync::OnceLock<command_line::Arguments> = std::sync::OnceLock::new();
+
+/// 애플리케이션 인자. run 이 창을 열기 전에 정한다.
+fn arguments() -> &'static command_line::Arguments {
+    ARGUMENTS
+        .get()
+        .expect("run reads the application arguments before any window opens")
 }
 
 /// 설정 디렉터리. `--config-dir` 가 없으면 사용자 설정 디렉터리 아래 이 build 의 식별자 디렉터리이다
 /// (docs/spec/projects.md#persistence). 디렉터리를 만들고 정규 경로를 반환한다.
 pub(crate) fn config_directory(app: &tauri::AppHandle) -> tauri::Result<std::path::PathBuf> {
-    let directory = match flag("config-dir") {
+    let directory = match &arguments().config_dir {
         Some(directory) => std::path::PathBuf::from(directory),
         None => app
             .path()
@@ -97,7 +89,7 @@ pub(crate) fn config_directory(app: &tauri::AppHandle) -> tauri::Result<std::pat
 fn move_former_config_directory(
     app: &tauri::AppHandle,
 ) -> tauri::Result<Option<std::path::PathBuf>> {
-    if flag("config-dir").is_some() {
+    if arguments().config_dir.is_some() {
         return Ok(None);
     }
     let (identifier, former) = soksak_sok::identity::identity();
@@ -129,6 +121,18 @@ fn run_menu_command(app: &tauri::AppHandle, command: &str) -> Result<(), String>
 /// 문서보다 먼저 실행하는 스크립트이며, 애플리케이션이 프론트엔드의 `background.js` 를
 /// 포함해 전달한다.
 pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
+    // 인자는 창을 열기 전에 읽는다. 잘못된 인자는 상태 2 로 끝낸다(docs/spec/hosts.md#application-arguments).
+    match command_line::parse_arguments(std::env::args().skip(1)) {
+        Ok(parsed) => {
+            ARGUMENTS
+                .set(parsed)
+                .expect("run reads the application arguments once");
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(2);
+        }
+    }
     // 설치된 plugin 은 설정 폴더에서 제공한다(docs/spec/installation.md). 설정 폴더는 setup 이 정한다.
     let installed_directory = std::sync::Arc::new(std::sync::OnceLock::new());
     let frontend = context.set_assets(Box::new(installed::NoAssets));
