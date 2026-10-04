@@ -139,10 +139,102 @@ pub(crate) fn native_owner(window: &Window) -> Result<Handle, String> {
     platform::current()?.window_handle(window)
 }
 
-/// AppKit main thread에서 native window handle을 반환한다.
-pub(crate) fn native_owner_on_main(window: &Window) -> Result<Handle, String> {
-    let target = window.clone();
-    crate::exposure::on_main(window, move || native_owner(&target))
+/// 창의 네이티브 주소를 쓰는 작업의 실패.
+#[derive(Debug, PartialEq)]
+pub enum NativeFailure {
+    /// 창이 작업의 메인 스레드 단계 전에 닫혔다. 네이티브 코드는 창을 받지 않았다.
+    Closed,
+    /// 주소를 읽지 못했거나 네이티브 코드가 실패했다.
+    Failed(String),
+}
+
+impl std::fmt::Display for NativeFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NativeFailure::Closed => f.write_str("project window is closed"),
+            NativeFailure::Failed(error) => f.write_str(error),
+        }
+    }
+}
+
+/// 메인 스레드의 한 단계에서 실행할 작업.
+pub type MainStep = Box<dyn FnOnce() + Send>;
+
+/// owner 로 창의 네이티브 주소를 읽고 그 주소로 work 를 실행한다. 읽기와 실행은 on_main 이 실행하는 한 메인
+/// 스레드 단계에 있다. 창의 닫기는 메인 스레드가 처리하고 그 처리에서 runtime 이 NSWindow 를 닫고 놓으므로,
+/// 단계를 나누면 그 사이의 닫기가 닫힌 창의 주소를 네이티브 코드에 넘긴다. 단계 전에 닫힌 창은 owner 가 None 이고
+/// work 를 실행하지 않고 Closed 를 반환한다.
+pub fn use_owner<W: Send + 'static, T: Send + 'static>(
+    window: W,
+    on_main: impl FnOnce(MainStep) -> Result<(), String>,
+    owner: impl FnOnce(&W) -> Result<Option<Handle>, String> + Send + 'static,
+    work: impl FnOnce(Handle) -> Result<T, String> + Send + 'static,
+) -> Result<T, NativeFailure> {
+    let (tx, rx) = mpsc::channel();
+    on_main(Box::new(move || {
+        let result = match owner(&window) {
+            Ok(Some(handle)) => work(handle).map_err(NativeFailure::Failed),
+            Ok(None) => Err(NativeFailure::Closed),
+            Err(error) => Err(NativeFailure::Failed(error)),
+        };
+        match tx.send(result) {
+            Ok(()) => {}
+            // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+            Err(mpsc::SendError(Err(error))) => log_error("native window work", error),
+            Err(mpsc::SendError(Ok(_))) => {
+                eprintln!("native window result arrived after its request ended")
+            }
+        }
+    }))
+    .map_err(NativeFailure::Failed)?;
+    rx.recv()
+        .map_err(|e| NativeFailure::Failed(e.to_string()))?
+}
+
+/// 등록되어 있고 닫기가 받아들여지지 않은 창의 네이티브 주소. 닫히는 창이나 Destroyed 가 등록을 지운 창은
+/// None 이다. 메인 스레드에서 호출한다. 닫기 요청을 막지 않으면 runtime 은 같은 메인 스레드 처리에서 closing 을
+/// 세운 뒤 창을 닫으므로, 메인 스레드에서 closing 이 아니면 창은 열려 있다.
+fn open_owner(window: &Window) -> Result<Option<Handle>, String> {
+    let open = window
+        .state::<Windows>()
+        .windows
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get(window.label())
+        .is_some_and(|data| !data.closing.load(Ordering::Relaxed));
+    if !open {
+        return Ok(None);
+    }
+    native_owner(window).map(Some)
+}
+
+/// 메인 스레드의 한 단계에서 창의 네이티브 주소를 읽고 그 주소로 work 를 실행한다. 그 단계 전에 닫힌 창은
+/// work 를 실행하지 않고 Closed 이다.
+pub(crate) fn with_native_owner<T: Send + 'static>(
+    window: &Window,
+    work: impl FnOnce(Handle) -> Result<T, String> + Send + 'static,
+) -> Result<T, NativeFailure> {
+    use_owner(
+        window.clone(),
+        |step| {
+            crate::exposure::on_main(window, move || {
+                step();
+                Ok(())
+            })
+        },
+        open_owner,
+        work,
+    )
+}
+
+/// 창의 열린 표면 배치 트랜잭션을 취소한다. 닫힌 창의 트랜잭션은 그 창의 Destroyed 가 취소하므로 취소할 것이
+/// 없다.
+pub(crate) fn cancel_window_layout(window: &Window) -> Result<(), String> {
+    let platform = platform::current()?;
+    match with_native_owner(window, move |owner| platform.cancel_layout(owner)) {
+        Ok(()) | Err(NativeFailure::Closed) => Ok(()),
+        Err(NativeFailure::Failed(error)) => Err(error),
+    }
 }
 
 /// 창의 웹뷰에 이벤트를 보낸다. main 창이면 애플리케이션 수신기에도 보낸다.
@@ -692,12 +784,17 @@ const INITIAL_TITLEBAR_HEIGHT: f64 = 40.0;
 /// 기다리면 그 자리에서 멈추므로 메인 스레드에 예약한다. 창을 만드는 즉시 예약하므로 페이지가 제목줄 높이를
 /// 요청하기 전에 실행된다.
 fn initial_titlebar(window: &Window) -> Result<(), String> {
-    let handle = native_owner(window)?;
+    let target = window.clone();
     window
         .run_on_main_thread(move || {
-            if let Err(error) = platform::current()
-                .and_then(|platform| platform.set_titlebar_height(handle, INITIAL_TITLEBAR_HEIGHT))
-            {
+            // 주소는 그 주소를 쓰는 이 단계에서 읽는다. 그 전에 닫힌 창은 제목줄을 정할 것이 없다.
+            let result = open_owner(&target).and_then(|owner| match owner {
+                Some(handle) => {
+                    platform::current()?.set_titlebar_height(handle, INITIAL_TITLEBAR_HEIGHT)
+                }
+                None => Ok(()),
+            });
+            if let Err(error) = result {
                 log_error("window title bar", error);
             }
         })

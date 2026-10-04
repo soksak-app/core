@@ -93,7 +93,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 ## 창
 
-애플리케이션에는 창이 하나 이상 있고, 창마다 메인 페이지와 등록소가 따로 있다. `windows.list`를 제외한 모든 메서드는 `window`를 받는다. 이 값은 `windows.list`가 반환하는 식별자다. 더 이상 없는 창을 요청하면 오류 1003을 반환한다.
+애플리케이션에는 창이 하나 이상 있고, 창마다 메인 페이지와 등록소가 따로 있다. `windows.list`를 제외한 모든 메서드는 `window`를 받는다. 이 값은 `windows.list`가 반환하는 식별자다. 더 이상 없는 창을 요청하면 오류 1003 `window "<name>" does not exist`를 반환한다. host가 요청을 받은 뒤 닫힌 창도 같다. host는 native 창을 native code에 넘기는 main thread 단계에서 읽고, 그 단계 전에 닫힌 창은 native code에 닿지 않고 요청을 1003으로 실패시킨다. 그런 창의 `host.window` 변경은 아무것도 알리지 않는다. 닫기는 `host.windows`에서 창이 빠지는 것으로 알려진다.
 
 ## 호스트 항목
 

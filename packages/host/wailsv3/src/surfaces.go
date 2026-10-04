@@ -371,8 +371,8 @@ func (s *Surfaces) pressAt(x, y float64) error {
 	var got struct {
 		View uint64 `json:"view"`
 	}
-	if err := native(func() (string, error) {
-		return system.WindowHit(s.window.NativeWindow(), x, y)
+	if err := s.nativeFacts(func(window unsafe.Pointer) (string, error) {
+		return system.WindowHit(window, x, y)
 	}, &got, nil); err != nil {
 		return err
 	}

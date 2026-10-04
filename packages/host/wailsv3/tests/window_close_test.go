@@ -104,3 +104,39 @@ func TestClosingAWindowReportsEveryFailureAndClosesTheRest(t *testing.T) {
 		t.Fatalf("error %v, want both failures", err)
 	}
 }
+
+// 창의 네이티브 창은 그 창을 쓰는 UI 스레드 단계에서 읽는다. 그 단계 전에 Wails 의 destroy 가 닫은 창은
+// 네이티브 코드에 넘기지 않고 1003 으로 답한다.
+// contract: window-close.native-window.used-in-reading-step
+func TestACloseBeforeTheNativeStepDoesNotReachNativeCode(t *testing.T) {
+	var window int
+	native := unsafe.Pointer(&window)
+	// 시험의 UI 스레드. 다른 스레드가 보낸 작업은 다음 단계를 실행하기 전에 차례대로 실행한다.
+	var pending []func()
+	invoke := func(step func()) {
+		queued := pending
+		pending = nil
+		for _, task := range queued {
+			task()
+		}
+		step()
+	}
+	var used []unsafe.Pointer
+	use := func(window unsafe.Pointer) error {
+		used = append(used, window)
+		return nil
+	}
+	if err := host.UseNativeWindow(invoke, "w2", func() unsafe.Pointer { return native }, use); err != nil {
+		t.Fatalf("an open window: %v", err)
+	}
+	// 엔드포인트가 창을 찾은 뒤 UI 스레드가 그 창의 destroy 를 처리한다. destroy 는 네이티브 창을 nil 로 만든다.
+	pending = append(pending, func() { native = nil })
+	err := host.UseNativeWindow(invoke, "w2", func() unsafe.Pointer { return native }, use)
+	var coded *host.RPCError
+	if !errors.As(err, &coded) || coded.Code != 1003 || coded.Message != `window "w2" does not exist` {
+		t.Fatalf("a window closed before the step: %v", err)
+	}
+	if len(used) != 1 || used[0] != unsafe.Pointer(&window) {
+		t.Fatalf("native code received %v, want only the open window %v", used, unsafe.Pointer(&window))
+	}
+}

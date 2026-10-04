@@ -63,6 +63,37 @@ type Host struct {
 // 무언가를 배치하거나 읽으므로 어느 것도 성공할 수 없다.
 var errNoWindow = errors.New("the main window is gone")
 
+// UseNativeWindow 는 invoke 가 실행하는 UI 스레드의 한 단계에서 native 로 창 name 의 네이티브 창을 읽고 그 창으로
+// use 를 실행한다. Wails 의 destroy 는 UI 스레드에서 창을 닫고 네이티브 창을 nil 로 만드므로, 그 단계 전에 닫힌
+// 창은 nil 이다. 그 창은 use 를 실행하지 않고 없는 창의 오류 1003 을 반환한다. 네이티브 코드는 닫힌 창을 받지
+// 않는다.
+func UseNativeWindow(invoke func(func()), name string, native func() unsafe.Pointer, use func(window unsafe.Pointer) error) error {
+	var err error
+	invoke(func() {
+		window := native()
+		if window == nil {
+			err = errMissingWindow(name)
+			return
+		}
+		err = use(window)
+	})
+	return err
+}
+
+// useWindow 는 UI 스레드의 한 단계에서 이 창의 네이티브 창으로 use 를 실행한다. 그 단계 전에 닫힌 창은 1003 이다.
+func (s *Surfaces) useWindow(use func(window unsafe.Pointer) error) error {
+	return UseNativeWindow(application.InvokeSync, s.name, s.window.NativeWindow, use)
+}
+
+// nativeError 는 네이티브 창을 쓴 작업의 오류를 code 의 오류로 바꾼다. 닫힌 창의 오류 1003 은 그대로 둔다.
+func nativeError(code int, err error) error {
+	var coded *RPCError
+	if err == nil || errors.As(err, &coded) {
+		return err
+	}
+	return rpcError(code, "%v", err)
+}
+
 func newHost(directory string) (*Host, error) {
 	h := &Host{workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{},
 		relay: NewRelay[relayTarget]()}

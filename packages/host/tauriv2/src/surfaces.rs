@@ -15,8 +15,8 @@ use crate::images;
 use crate::platform::{self, Handle};
 use crate::sidecars::WindowSidecars;
 use crate::windows::{
-    emit_window, native_owner_on_main, restore_titlebar, titlebar_chrome, validate_titlebar_height,
-    window_data, Chrome, TitlebarChange,
+    cancel_window_layout, emit_window, restore_titlebar, titlebar_chrome, validate_titlebar_height,
+    window_data, with_native_owner, Chrome, NativeFailure, TitlebarChange,
 };
 
 /// 표면 웹뷰가 문서보다 먼저 실행하는 스크립트.
@@ -210,19 +210,24 @@ pub fn surface_owner_id(named: &HashMap<Handle, String>, view: Handle) -> Option
 
 /// 직접 주입한 누름의 좌표가 표면 또는 그 문서에 있는 경우 페이지에 표면 누름을 전달한다.
 /// 직접 주입은 AppKit 로컬 이벤트 감시기를 거치지 않으므로 감시기와 별도로 호출한다.
-pub(crate) fn press_at(window: &Window, x: f64, y: f64) -> Result<(), String> {
-    let data = window_data(window)?;
-    let handle = native_owner_on_main(window)?;
-    let hit = platform::current()?.hit(handle, x, y)?;
-    let named = data.views.0.lock().map_err(|e| e.to_string())?;
-    let documents = data.documents.names();
-    let id = hit.chain.iter().find_map(|view| {
-        surface_owner_id(&named, *view)
-            .map(str::to_owned)
-            .or_else(|| documents.get(view).map(|(surface, _)| surface.clone()))
-    });
+pub(crate) fn press_at(window: &Window, x: f64, y: f64) -> Result<(), NativeFailure> {
+    let platform = platform::current().map_err(NativeFailure::Failed)?;
+    let target = window.clone();
+    let id = with_native_owner(window, move |handle| {
+        let hit = platform.hit(handle, x, y)?;
+        // 등록은 Destroyed 가 지우므로 창이 열려 있는 이 단계에서 읽는다.
+        let data = window_data(&target)?;
+        let named = data.views.0.lock().map_err(|e| e.to_string())?;
+        let documents = data.documents.names();
+        Ok(hit.chain.iter().find_map(|view| {
+            surface_owner_id(&named, *view)
+                .map(str::to_owned)
+                .or_else(|| documents.get(view).map(|(surface, _)| surface.clone()))
+        }))
+    })?;
     if let Some(id) = id {
-        emit_window(window, "surface-pressed", id).map_err(|e| e.to_string())?;
+        emit_window(window, "surface-pressed", id)
+            .map_err(|e| NativeFailure::Failed(e.to_string()))?;
     }
     Ok(())
 }
@@ -376,56 +381,39 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
     let watched = watching.0.clone();
     let host = window.clone();
     let pointing = window.clone();
-    let handle = native_owner_on_main(window)?;
-    let (tx, rx) = mpsc::channel();
-    window
-        .run_on_main_thread(move || {
-            let result = (move || -> Result<(), String> {
-                let mut started = watched.lock().map_err(|e| e.to_string())?;
-                if started.is_some() {
-                    return Ok(());
-                }
-                let pressed = Box::new(move |chain: Vec<Handle>| {
-                    let Ok(map) = named.lock() else { return false };
-                    let Some(id) = chain.iter().find_map(|view| {
-                        surface_owner_id(&map, *view)
-                            .map(str::to_owned)
-                            .or_else(|| {
-                                data.documents
-                                    .names()
-                                    .get(view)
-                                    .map(|(surface, _)| surface.clone())
-                            })
-                    }) else {
-                        return false;
-                    };
-                    if let Err(error) = emit_window(&host, "surface-pressed", id.clone()) {
-                        log_error("surface-pressed", error);
-                    }
-                    true
-                });
-                let pointed = Box::new(move |phase, x, y| {
-                    if let Err(error) =
-                        emit_window(&pointing, "surface-input", InputStep { phase, x, y })
-                    {
-                        log_error("surface-input", error);
-                    }
-                });
-                *started = Some(platform.watch_input(handle, pressed, pointed)?);
-                Ok(())
-            })();
-            match tx.send(result) {
-                Ok(()) => {}
-                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
-                Err(mpsc::SendError(Err(error))) => log_error("surface input", error),
-                Err(mpsc::SendError(Ok(()))) => {
-                    eprintln!("surface input setup arrived after its request ended")
-                }
+    with_native_owner(window, move |handle| {
+        let mut started = watched.lock().map_err(|e| e.to_string())?;
+        if started.is_some() {
+            return Ok(());
+        }
+        let pressed = Box::new(move |chain: Vec<Handle>| {
+            let Ok(map) = named.lock() else { return false };
+            let Some(id) = chain.iter().find_map(|view| {
+                surface_owner_id(&map, *view)
+                    .map(str::to_owned)
+                    .or_else(|| {
+                        data.documents
+                            .names()
+                            .get(view)
+                            .map(|(surface, _)| surface.clone())
+                    })
+            }) else {
+                return false;
+            };
+            if let Err(error) = emit_window(&host, "surface-pressed", id.clone()) {
+                log_error("surface-pressed", error);
             }
-        })
-        .map_err(|e| e.to_string())?;
-    rx.recv().map_err(|e| e.to_string())??;
-    Ok(())
+            true
+        });
+        let pointed = Box::new(move |phase, x, y| {
+            if let Err(error) = emit_window(&pointing, "surface-input", InputStep { phase, x, y }) {
+                log_error("surface-input", error);
+            }
+        });
+        *started = Some(platform.watch_input(handle, pressed, pointed)?);
+        Ok(())
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// 웹뷰를 네이티브 포인터 라우팅에 등록한다.
@@ -581,7 +569,6 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
 
     let main = exposure::root_view_on_main(window)?;
     let ticket = running.prepared.fetch_add(1, Ordering::Relaxed) + 1;
-    let owner = native_owner_on_main(window)?;
     let main_handle = {
         let (tx, rx) = mpsc::channel::<Result<Handle, String>>();
         main.with_webview(move |webview| {
@@ -599,7 +586,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     };
     let begin = || -> Result<(), String> {
         let (tx, rx) = mpsc::channel::<bool>();
-        exposure::on_main(window, move || {
+        with_native_owner(window, move |owner| {
             platform.begin_layout(
                 owner,
                 ticket,
@@ -609,7 +596,8 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                     }
                 }),
             )
-        })?;
+        })
+        .map_err(|e| e.to_string())?;
         if !rx.recv().map_err(|e| e.to_string())? {
             return Err("window closed before layout".into());
         }
@@ -621,9 +609,15 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         })
     };
     let titlebar = request.titlebar;
-    let set_titlebar = || exposure::on_main(window, move || titlebar_chrome(owner, titlebar));
+    let set_titlebar = || {
+        with_native_owner(window, move |owner| titlebar_chrome(owner, titlebar))
+            .map_err(|e| e.to_string())
+    };
     let restore = |change: TitlebarChange| {
-        exposure::on_main(window, move || restore_titlebar(owner, change.previous))
+        with_native_owner(window, move |owner| {
+            restore_titlebar(owner, change.previous)
+        })
+        .map_err(|e| e.to_string())
     };
     let steps = |change: &TitlebarChange| -> Result<PreparedSurfaces, String> {
         for s in &request.surfaces {
@@ -742,8 +736,9 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         })
     };
     let cancel = || {
+        let target = window.clone();
         if let Err(error) = platform.enqueue_ui(Box::new(move || {
-            log_failure("surface layout cancel", platform.cancel_layout(owner));
+            log_failure("surface layout cancel", cancel_window_layout(&target));
         })) {
             log_error("surface layout cancel", error);
         }
@@ -788,7 +783,6 @@ pub(crate) async fn present(
     let ticket = request.ticket;
     let finished = window.clone();
     let context = window_data(&window)?;
-    let owner = native_owner_on_main(&window)?;
     let images = context.images.clone();
     let presentation_window = finished.clone();
     let placements = request.placements;
@@ -854,10 +848,9 @@ pub(crate) async fn present(
         // presentation 실패는 sync가 native transaction을 연 뒤에 발생한다.
         // 반환하기 전에 그 transaction을 해제하여
         // 다음 split이 실패한 owner 뒤에서 무한히 기다리지 않게 한다.
+        let target = window.clone();
         let cancel_error = platform::current()?.enqueue_ui(Box::new(move || {
-            if let Err(cancel) = platform::current().and_then(|p| p.cancel_layout(owner)) {
-                log_error("surface layout cancel", cancel);
-            }
+            log_failure("surface layout cancel", cancel_window_layout(&target));
         }));
         if let Err(cancel) = cancel_error {
             return Err(format!("{error}; cancelling layout: {cancel}"));
@@ -901,13 +894,15 @@ pub(crate) async fn present(
             let placed = match prepared {
                 Ok(placed) => placed,
                 Err(error) => {
-                    platform
-                        .cancel_layout(owner)
+                    cancel_window_layout(&presentation_window)
                         .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
                     return Err(error);
                 }
             };
-            let committed = platform.commit_layout(owner, ticket)?;
+            let committed = with_native_owner(&presentation_window, move |owner| {
+                platform.commit_layout(owner, ticket)
+            })
+            .map_err(|e| e.to_string())?;
             if !committed {
                 return Err(format!("surface preparation {ticket} is no longer current"));
             }

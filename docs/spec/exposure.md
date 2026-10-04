@@ -93,7 +93,7 @@ Several surface pages can register the same name. A request for such a name can 
 
 ## Windows
 
-An application has one or more windows, and each window has its own main page and registry. Every method except `windows.list` takes `window`, the identifier that `windows.list` returns. A request for a window that no longer exists returns error 1003.
+An application has one or more windows, and each window has its own main page and registry. Every method except `windows.list` takes `window`, the identifier that `windows.list` returns. A request for a window that no longer exists returns error 1003 `window "<name>" does not exist`. This includes a window that closes after the host accepted the request: the host reads the native window in the main-thread step that passes it to native code, and a window that closed before that step fails the request with 1003 without reaching native code. A `host.window` change of such a window notifies nothing; the window's removal from `host.windows` reports the close.
 
 ## Host entries
 

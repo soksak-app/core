@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -743,9 +744,7 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 		if p.X == nil || p.Y == nil {
 			return nil, rpcError(codeInvalidParams, "x and y are required")
 		}
-		var moved error
-		application.InvokeSync(func() { moved = system.MoveWindow(s.window.NativeWindow(), *p.X, *p.Y) })
-		return nil, moved
+		return nil, s.useWindow(func(window unsafe.Pointer) error { return system.MoveWindow(window, *p.X, *p.Y) })
 	case "host.menu.select":
 		var p struct {
 			Menu, Title *string
@@ -840,14 +839,14 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 		held   platform.ButtonHeld
 	}
 	done := make(chan delivery, 1)
-	application.InvokeSync(func() {
-		err = system.InjectPointer(s.window.NativeWindow(), input.X, input.Y, pointerPhaseCodes[input.Phase], button,
+	err = s.useWindow(func(window unsafe.Pointer) error {
+		return system.InjectPointer(window, input.X, input.Y, pointerPhaseCodes[input.Phase], button,
 			input.DeltaX, input.DeltaY, receiveTimeout.Seconds(), func(result platform.PointerResult, held platform.ButtonHeld) {
 				done <- delivery{result, held}
 			})
 	})
 	if err != nil {
-		return rpcError(codeNoInput, "%v", err)
+		return nativeError(codeNoInput, err)
 	}
 	got := <-done
 	switch got.result {
@@ -864,7 +863,7 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	}
 	if input.Phase == "down" {
 		if err := s.pressAt(input.X, input.Y); err != nil {
-			return rpcError(codeNoInput, "%v", err)
+			return nativeError(codeNoInput, err)
 		}
 	}
 	return nil
@@ -889,12 +888,11 @@ func ButtonHeldMessage(held platform.ButtonHeld) string {
 // 때까지 기다린다. 활성화가 끝나지 않으면 멈춘 단계를 적은 1006 오류를 반환한다.
 func (s *Surfaces) activate(x, y float64) error {
 	done := make(chan error, 1)
-	var err error
-	application.InvokeSync(func() {
-		err = system.ActivateWindow(s.window.NativeWindow(), x, y, activateTimeout.Seconds(), func(result error) { done <- result })
+	err := s.useWindow(func(window unsafe.Pointer) error {
+		return system.ActivateWindow(window, x, y, activateTimeout.Seconds(), func(result error) { done <- result })
 	})
 	if err != nil {
-		return rpcError(codeNoInput, "%v", err)
+		return nativeError(codeNoInput, err)
 	}
 	if err := <-done; err != nil {
 		return rpcError(codeInactive, "%v", err)
@@ -908,13 +906,18 @@ func (b hostBackend) Key(window string, input KeyInput) error {
 		return err
 	}
 	var result platform.PointerResult
-	application.InvokeSync(func() {
-		result, err = system.InjectKey(s.window.NativeWindow(), input.Key, input.Text, input.Modifiers, input.Down)
+	err = s.useWindow(func(window unsafe.Pointer) error {
+		var injected error
+		result, injected = system.InjectKey(window, input.Key, input.Text, input.Modifiers, input.Down)
+		return injected
 	})
-	if err == nil && result == platform.PointerInactive {
+	if err != nil {
+		return nativeError(codeNoInput, err)
+	}
+	if result == platform.PointerInactive {
 		return rpcError(codeInactive, "keys reach only the key window of the active application")
 	}
-	return delivered(result == platform.PointerDelivered, err)
+	return delivered(result == platform.PointerDelivered, nil)
 }
 
 // native 는 UI 스레드에서 read 로 네이티브 JSON 을 읽어 into 에 넣는다. inspect 는 같은 UI 스레드
@@ -927,6 +930,24 @@ func native(read func() (string, error), into any, inspect func()) error {
 		if err == nil && inspect != nil {
 			inspect()
 		}
+	})
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal([]byte(text), into)
+}
+
+// nativeFacts 는 UI 스레드의 한 단계에서 이 창의 네이티브 창으로 read 가 읽은 네이티브 JSON 을 into 에 넣는다.
+// inspect 는 같은 단계에서 읽은 뒤 실행한다. 그 단계 전에 닫힌 창은 1003 이다.
+func (s *Surfaces) nativeFacts(read func(window unsafe.Pointer) (string, error), into any, inspect func()) error {
+	var text string
+	err := s.useWindow(func(window unsafe.Pointer) error {
+		var err error
+		text, err = read(window)
+		if err == nil && inspect != nil {
+			inspect()
+		}
+		return err
 	})
 	if err != nil {
 		return err
@@ -1109,7 +1130,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	var named map[uint64]string
 	var documents map[uint64]DocumentKey
 	regions := []WindowRegion{}
-	err := native(func() (string, error) {
+	err := s.nativeFacts(func(window unsafe.Pointer) (string, error) {
 		named = s.viewNames()
 		documents = s.documents.Names()
 		for _, key := range s.images.Names() {
@@ -1127,7 +1148,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 			}
 			regions = append(regions, region)
 		}
-		return system.WindowFacts(s.window.NativeWindow())
+		return system.WindowFacts(window)
 	}, &facts, nil)
 	if err != nil {
 		return WindowStatus{}, err
@@ -1261,7 +1282,7 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 		} `json:"hit"`
 	}
 	var documents map[uint64]DocumentKey
-	err := native(func() (string, error) { return system.WindowHit(s.window.NativeWindow(), x, y) }, &got, func() {
+	err := s.nativeFacts(func(window unsafe.Pointer) (string, error) { return system.WindowHit(window, x, y) }, &got, func() {
 		documents = s.documents.Names()
 	})
 	if err != nil {
@@ -1282,9 +1303,8 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 // 요청을 무시하므로 네이티브 코드가 그 전환이 끝난 뒤에 이어서 처리한다.
 func (s *Surfaces) fullscreen(on bool) error {
 	done := make(chan struct{}, 1)
-	var err error
-	application.InvokeSync(func() {
-		err = system.Fullscreen(s.window.NativeWindow(), on, func() { done <- struct{}{} })
+	err := s.useWindow(func(window unsafe.Pointer) error {
+		return system.Fullscreen(window, on, func() { done <- struct{}{} })
 	})
 	if err != nil {
 		return err
@@ -1413,6 +1433,11 @@ func (s *Surfaces) windowChanged() {
 	}
 	go func() {
 		state, err := s.windowState()
+		var coded *RPCError
+		if errors.As(err, &coded) && coded.Code == codeNoWindow {
+			// 상태를 읽기 전에 닫힌 창은 알릴 상태가 없다.
+			return
+		}
 		if err != nil {
 			s.log(fmt.Sprintf("host.window: %v", err))
 			return

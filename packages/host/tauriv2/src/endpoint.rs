@@ -94,6 +94,14 @@ pub struct Failure {
     pub message: String,
 }
 
+/// 없는 창의 오류 1003.
+pub fn missing_window(window: &str) -> Failure {
+    Failure::new(
+        MISSING_DOCUMENT,
+        format!("window {window:?} does not exist"),
+    )
+}
+
 impl Failure {
     pub fn new(code: i64, message: impl Into<String>) -> Self {
         Self {
@@ -826,10 +834,7 @@ fn target(
         name(&params)?;
     }
     if !shared.service.exists(&window) {
-        return Err(Failure::new(
-            MISSING_DOCUMENT,
-            format!("window {window} does not exist"),
-        ));
+        return Err(missing_window(&window));
     }
     Ok((window, params))
 }

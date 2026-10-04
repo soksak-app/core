@@ -18,12 +18,12 @@ use tauri::{AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, Wind
 
 use crate::application_log::log_error;
 use crate::endpoint::{
-    Endpoint, Failure, Service, BUTTON_HELD, HANDLER_FAILED, INVALID_PARAMS, MISSING_DOCUMENT,
-    NOT_ACTIVE, NO_INPUT, PRESS_OPEN, TIMED_OUT, UNKNOWN_NAME,
+    missing_window, Endpoint, Failure, Service, BUTTON_HELD, HANDLER_FAILED, INVALID_PARAMS,
+    MISSING_DOCUMENT, NOT_ACTIVE, NO_INPUT, PRESS_OPEN, TIMED_OUT, UNKNOWN_NAME,
 };
 use crate::platform;
 use crate::surfaces::label_for;
-use crate::windows::{self, native_owner_on_main, window_data};
+use crate::windows::{self, window_data, with_native_owner, NativeFailure};
 
 pub use crate::platform::{ButtonHeld, Delivery, FrontmostApplication, Key, Pointer};
 
@@ -980,6 +980,8 @@ pub(crate) fn window_changed(window: &Window) {
     std::thread::spawn(move || {
         let value = match window_status(&window) {
             Ok(value) => value,
+            // 상태를 읽기 전에 닫힌 창은 알릴 상태가 없다. 창의 닫기는 window_closed 가 알린다.
+            Err(error) if error.code == MISSING_DOCUMENT => return,
             Err(error) => {
                 log_error("host.window", error.message);
                 return;
@@ -1008,6 +1010,15 @@ pub(crate) fn window_changed(window: &Window) {
 
 fn internal(error: impl ToString) -> Failure {
     Failure::new(-32603, error.to_string())
+}
+
+/// 창의 네이티브 주소를 쓴 작업의 실패를 code 의 오류로 바꾼다. 작업의 메인 스레드 단계 전에 닫힌 창은 없는
+/// 창과 같다.
+pub fn native_failure(window: &str, code: i64) -> impl Fn(NativeFailure) -> Failure + '_ {
+    move |failure| match failure {
+        NativeFailure::Closed => missing_window(window),
+        NativeFailure::Failed(error) => Failure::new(code, error),
+    }
 }
 
 /// 메인 스레드에서 work 를 실행하고 결과를 기다린다.
@@ -1104,30 +1115,30 @@ pub(crate) fn with_view<T: Send + 'static>(
 /// 창의 host.window 값을 계산한다. 메인 스레드가 아닌 스레드에서 호출한다.
 fn window_status(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
-    let handle = native_owner_on_main(window).map_err(internal)?;
-    let context = window_data(window).map_err(internal)?;
-    let snapshot = context.clone();
-    let (facts, named, documents, regions) = on_main(window, move || {
+    let target = window.clone();
+    let (context, facts, named, documents, regions) = with_native_owner(window, move |handle| {
+        // 등록은 Destroyed 가 지우므로 창이 열려 있는 이 단계에서 읽는다.
+        let context = window_data(&target)?;
         let facts = platform.window_facts(handle)?;
-        let named: HashMap<_, _> = snapshot
+        let named: HashMap<_, _> = context
             .surface_hosts
             .lock()
             .map_err(|e| e.to_string())?
             .iter()
             .map(|(id, handle)| (*handle, id.clone()))
             .collect();
-        let documents = snapshot.documents.names();
+        let documents = context.documents.names();
         let mut regions = Vec::new();
-        for (handle, (surface, name)) in snapshot.images.names() {
+        for (handle, (surface, name)) in context.images.names() {
             let text = platform.image_facts(handle)?;
             let mut region: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
             region["surface"] = Value::String(surface);
             region["name"] = Value::String(name);
             regions.push(region);
         }
-        Ok((facts, named, documents, regions))
+        Ok((context, facts, named, documents, regions))
     })
-    .map_err(internal)?;
+    .map_err(native_failure(window.label(), -32603))?;
     let webviews = facts["webviews"]
         .as_array()
         .ok_or_else(|| internal("window facts missing webviews"))?;
@@ -1318,9 +1329,8 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
 /// 무시하므로 네이티브 코드가 그 전환이 끝난 뒤에 이어서 처리한다.
 fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
-    let handle = native_owner_on_main(window).map_err(internal)?;
     let (tx, rx) = mpsc::channel();
-    on_main(window, move || {
+    with_native_owner(window, move |handle| {
         platform.fullscreen(
             handle,
             on,
@@ -1331,7 +1341,7 @@ fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
             }),
         )
     })
-    .map_err(internal)?;
+    .map_err(native_failure(window.label(), -32603))?;
     match rx.recv_timeout(TIMEOUT) {
         Ok(()) => Ok(Value::Null),
         Err(_) => Err(Failure::new(
@@ -1443,9 +1453,12 @@ pub(crate) fn inject_presentation_failure(window: &Window) -> Result<(), Failure
 /// 창 좌표의 점을 소유한 문서나 뷰를 반환한다.
 fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
-    let handle = native_owner_on_main(window).map_err(internal)?;
-    let found = on_main(window, move || platform.hit(handle, x, y)).map_err(internal)?;
-    let context = window_data(window).map_err(internal)?;
+    let target = window.clone();
+    let (found, context) = with_native_owner(window, move |handle| {
+        // 등록은 Destroyed 가 지우므로 창이 열려 있는 이 단계에서 읽는다.
+        Ok((platform.hit(handle, x, y)?, window_data(&target)?))
+    })
+    .map_err(native_failure(window.label(), -32603))?;
     let documents = context.documents.names();
     let owner = found.chain.iter().find_map(|view| {
         documents
@@ -1625,8 +1638,8 @@ impl Host {
                 let x = number(arguments, "x")?;
                 let y = number(arguments, "y")?;
                 let platform = platform::current().map_err(internal)?;
-                let handle = native_owner_on_main(window).map_err(internal)?;
-                on_main(window, move || platform.move_window(handle, x, y)).map_err(internal)?;
+                with_native_owner(window, move |handle| platform.move_window(handle, x, y))
+                    .map_err(native_failure(window.label(), -32603))?;
                 Ok(Value::Null)
             })(),
             "host.menu.select" => (|| {
@@ -1664,10 +1677,9 @@ impl Host {
     /// 포인터 입력을 메인 스레드에서 전달한다. activate 이면 먼저 창을 활성화한다.
     fn input_pointer(&self, window: &Window, pointer: Pointer) -> Result<Value, Failure> {
         let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
-        let handle = native_owner_on_main(window).map_err(|e| Failure::new(NO_INPUT, e))?;
         if pointer.activate {
             let (tx, rx) = mpsc::channel();
-            on_main(window, move || {
+            with_native_owner(window, move |handle| {
                 platform.input_activate(
                     handle,
                     pointer.x,
@@ -1685,7 +1697,7 @@ impl Host {
                     }),
                 )
             })
-            .map_err(|e| Failure::new(NO_INPUT, e))?;
+            .map_err(native_failure(window.label(), NO_INPUT))?;
             // 라이브러리는 ACTIVATION 이 지나면 멈춘 단계로 done 을 호출하므로 결과는 항상 도착한다.
             rx.recv()
                 .map_err(|e| e.to_string())
@@ -1693,7 +1705,7 @@ impl Host {
                 .map_err(|e| Failure::new(NOT_ACTIVE, e))?;
         }
         let (tx, rx) = mpsc::channel();
-        on_main(window, move || {
+        with_native_owner(window, move |handle| {
             platform.input_pointer(
                 handle,
                 pointer,
@@ -1705,7 +1717,7 @@ impl Host {
                 }),
             )
         })
-        .map_err(|e| Failure::new(NO_INPUT, e))?;
+        .map_err(native_failure(window.label(), NO_INPUT))?;
         // 라이브러리는 RECEIPT 가 지나면 Unreceived 로 done 을 호출하므로 결과는 항상 도착한다.
         match rx
             .recv()
@@ -1714,7 +1726,7 @@ impl Host {
             Delivery::Delivered => {
                 if pointer.phase == 1 {
                     crate::surfaces::press_at(window, pointer.x, pointer.y)
-                        .map_err(|e| Failure::new(NO_INPUT, e))?;
+                        .map_err(native_failure(window.label(), NO_INPUT))?;
                 }
                 Ok(Value::Null)
             }
@@ -1743,8 +1755,7 @@ impl Host {
     /// 키 입력을 메인 스레드에서 전달한다.
     fn input_key(&self, window: &Window, key: Key) -> Result<Value, Failure> {
         let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
-        let handle = native_owner_on_main(window).map_err(|e| Failure::new(NO_INPUT, e))?;
-        match on_main(window, move || platform.input_key(handle, &key)) {
+        match with_native_owner(window, move |handle| platform.input_key(handle, &key)) {
             Ok(Delivery::Delivered) => Ok(Value::Null),
             Ok(Delivery::Inactive) => Err(Failure::new(
                 NOT_ACTIVE,
@@ -1754,7 +1765,7 @@ impl Host {
                 INVALID_PARAMS,
                 "the window did not accept the input",
             )),
-            Err(error) => Err(Failure::new(NO_INPUT, error)),
+            Err(failure) => Err(native_failure(window.label(), NO_INPUT)(failure)),
         }
     }
 }
@@ -1774,9 +1785,7 @@ impl Service for Host {
         method: &str,
         params: Map<String, Value>,
     ) -> Result<Box<RawValue>, Failure> {
-        let window = windows::find(&self.0, window).ok_or_else(|| {
-            Failure::new(MISSING_DOCUMENT, format!("window {window} does not exist"))
-        })?;
+        let window = windows::find(&self.0, window).ok_or_else(|| missing_window(window))?;
         // 모든 엔드포인트 메서드의 시간과 결과를 성능 트레이스에 남긴다(V5-104).
         // 거부도 그대로 기록한다 — 어긋난 값은 오류 문자열이 담는다.
         let started = std::time::Instant::now();

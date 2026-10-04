@@ -340,7 +340,7 @@ const FEATURE_LINKS = [
     id: "F0.5.9",
     implementation: [
       { file: "packages/host/tauriv2/src/exposure.rs", symbol: "root_view_on_main" },
-      { file: "packages/host/tauriv2/src/windows.rs", symbol: "native_owner_on_main" },
+      { file: "packages/host/tauriv2/src/windows.rs", symbol: "with_native_owner" },
       { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "sync" },
     ],
     tests: [
