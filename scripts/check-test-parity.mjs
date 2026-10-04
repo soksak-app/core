@@ -917,6 +917,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F29",
+    implementation: [
+      { file: "scripts/check-build-environment.sh", symbol: "pnpm_actual=$(pnpm --version" },
+    ],
+    tests: [
+      { file: "scripts/test/check-build-environment.sh", id: "a standalone pnpm executable of the declared version is accepted" },
+    ],
+    expected: "The build environment check accepts a pnpm executable of the declared version wherever it is installed and rejects another version.",
+    levels: ["unit"],
+  },
+  {
     id: "F28",
     implementation: [
       { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },

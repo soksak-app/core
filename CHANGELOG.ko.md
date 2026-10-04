@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F29: build 환경 검사가 GitHub runner에서 `pnpm/action-setup`이 설치하는 것처럼 npm package 밖의 pnpm 실행 파일을 받아들인다. `pnpm --version`이 실행되는 version을 측정하며, core CI는 모든 GitHub 실행에서 `make preflight`가 `pnpmExecutable=unknown`으로 실패했다. `scripts/test/check-build-environment.sh`가 변경 전 실패를 재현하고 변경 뒤 통과한다.
 - F26: plugin은 sidecar와 그 version 범위를 `plugin.json`의 `dependencies`로 선언한다. `plugin.json` `sidecars`와 `package.json` `soksak.sidecars`를 없애고, `sok plugin pack`은 `soksak`이 있는 `package.json`을 거부한다. `@soksak/plugin-api`, workbench, 두 host, `sok plugin pack`, `sok registry build`, `make registry`가 새 필드를 읽으며, registry index와 `installed.json`은 `sidecars` 범위를 그대로 둔다. plugin-api, workbench, host, `sok`, workspace registry test가 새 계약을 재현하고(변경 전 Red: `unknown field dependencies`, 설치된 sidecar 선언 없음, 정의되지 않은 `ManifestSidecars`와 `manifest_sidecars`), macOS 26(darwin-arm64)에서 root `pnpm test`, `make boundaries`, `make exposure-check`, `make hosts-check`, `make docs-check`가 통과한다.
 - F28: 뒤의 pasteboard가 다른 window check는 항목, 형식, 각 쪽의 길이와 digest를 밝힌다.
 - F27: OSC 9 알림 정책의 window check가 bundle 애플리케이션에 맞는다. 정해지지 않은 알림 권한을 밝히고, tab 정책이 시스템 알림을 더하지 않는지 확인한다.

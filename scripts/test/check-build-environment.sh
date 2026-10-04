@@ -14,6 +14,33 @@ else
   exit 1
 fi
 
+# GitHub runner 의 pnpm/action-setup 처럼 npm package 밖의 단독 실행 파일로 설치한 pnpm 도 그 version 을 보고하면 맞는 toolchain 이다.
+standalone=$(mktemp -d)
+trap 'rm -rf "$standalone"' EXIT
+declared=$(node -p 'require("./package.json").packageManager.slice("pnpm@".length)')
+printf '#!/bin/sh\nprintf "%%s\\n" %s\n' "$declared" > "$standalone/pnpm"
+chmod +x "$standalone/pnpm"
+if ready=$(PATH="$standalone:$PATH" sh scripts/check-build-environment.sh 2>&1); then
+  printf 'PASS: a standalone pnpm executable of the declared version is accepted\n'
+else
+  status=$?
+  printf 'FAIL: a standalone pnpm executable of the declared version exited %s: %s\n' "$status" "$ready"
+  exit 1
+fi
+printf '#!/bin/sh\nprintf "0.0.1\\n"\n' > "$standalone/pnpm"
+if other=$(PATH="$standalone:$PATH" sh scripts/check-build-environment.sh 2>&1); then
+  printf 'FAIL: a pnpm executable of another version was accepted\n'
+  exit 1
+else
+  status=$?
+  if [ "$status" -eq 78 ] && printf '%s\n' "$other" | grep -q ' actual node=v[^ ]* pnpm=0.0.1 '; then
+    printf 'PASS: a pnpm executable of another version is a toolchain mismatch\n'
+  else
+    printf 'FAIL: a pnpm executable of another version returned status %s and output: %s\n' "$status" "$other"
+    exit 1
+  fi
+fi
+
 if invalid=$(sh scripts/check-build-environment.sh unexpected 2>&1); then
   printf 'FAIL: an unexpected argument was accepted\n'
   exit 1
