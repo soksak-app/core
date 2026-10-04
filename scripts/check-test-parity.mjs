@@ -967,6 +967,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F33",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "transactionSeats?.get(card.id)?.presentation" },
+      { file: "packages/workbench/verify.js", symbol: "bands ${" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/verify-ahead.test.mjs", id: "a failed V7c names the surface and both of its rectangles" },
+      { file: "e2e/card-panels.test.mjs", id: "a click opens a side folded for lack of space and a drag opens a folded side under the pointer" },
+    ],
+    expected: "A layout transaction draws the card sidebars with the presentation it predicted the native surface seats with.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F28",
     implementation: [
       { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },

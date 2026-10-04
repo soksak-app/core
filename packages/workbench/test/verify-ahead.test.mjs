@@ -16,7 +16,9 @@ test("a failed V7c names the surface and both of its rectangles", async (t) => {
   document.querySelector(".slot").getBoundingClientRect = () => rect(36, 40, 370, 240);
   const grid = new Soksak(undefined, { width: 400, height: 300 });
   const declared = { x: 0, y: 34, w: 400, h: 240 };
-  const guess = { seq: 12, surfaces: [{ id: "probe", dim: false, declared, applied: declared }] };
+  document.querySelector(".card").style.setProperty("--pt", "36px");
+  const bands = { top: 6, bottom: 0, left: 0, right: 0 };
+  const guess = { seq: 12, surfaces: [{ id: "probe", dim: false, declared, applied: declared, bands }] };
   t.mock.module("../compositor.js", { exports: { ahead: () => guess, latest: () => guess, placementPending: () => false, seated: () => null } });
   t.mock.module("../plane.js", { exports: {
     currentGrid: () => grid, dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane, presentedCardRect: () => undefined,
@@ -28,5 +30,5 @@ test("a failed V7c names the surface and both of its rectangles", async (t) => {
   const row = verify().find((item) => item.name.startsWith("V7c "));
   assert.equal(row.ok, false);
   assert.match(row.note, /최대 30\.00px/);
-  assert.match(row.note, /probe drawn 30,34 370×240 declared 0,34 400×240/);
+  assert.match(row.note, /probe drawn 30,34 370×240 declared 0,34 400×240 · bands 6\/0\/0\/0 drawn 36px\/0\/0\/0/);
 });

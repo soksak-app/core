@@ -214,6 +214,8 @@ export function publishAhead(rects, seated) {
       title: slot.dataset.nativeTitle,
       plugin: slot.dataset.nativePlugin,
       dim: seat?.dim === true,
+      // 기본값: 앉을 자리가 없는 표면에는 예측한 띠가 없다(null).
+      bands: seat?.bands ?? null,
       // 준비는 창의 레이어 트랜잭션 안에서 적용되어 커밋 전에는 화면에 나오지 않는다. 위치를 잰 표면은
       // 새 자리에 보인 채로 두어, 화면에 보이는 표면이 그동안 입력을 받게 한다. 자리를 잴 수 없는 표면만 숨긴다.
       visible: measurable,
@@ -247,6 +249,8 @@ function commit(mine, snapshot, final) {
     const declared = {
       id: s.id, plugin: s.plugin, layer: s.layer, declared: s.frame, applied: seat,
       visible: s.visible, dim: s.dim,
+      // 기본값: 측정한 커밋의 표면에는 예측한 띠가 없다(null).
+      bands: s.bands ?? null,
       // 표면이 표시할 대상은 플러그인이 정한다. 호스트가 종류로 분기하면 플러그인을
       // 추가할 때마다 호스트를 수정해야 한다.
       surface: plugin(s.plugin).surface(s.id),

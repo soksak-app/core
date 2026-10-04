@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F33: layout transaction의 그리기는 그 transaction이 네이티브 표면 자리를 예측할 때 쓴 표시 상태로 카드 sidebar를 그린다. 그리기 전에 온 sidebar 크기 명령이 DOM과 네이티브 표면을 끌기 한 걸음만큼 어긋나게 했다. 실패한 자리 검증(V7a, V7c)은 표면, 두 사각형, 예측한 sidebar 띠와 그려진 띠를 밝힌다.
 - F34: 페이지 검증 R은 판이 그려진 카드의 크기일 때만 선을 잰다. 그리기 전에 새 크기가 되는 grid와 판을 비교해서, 대체된 배치의 선을 판 밖으로 나간 선으로 보고했다.
 - F31: window check는 그 동안 애플리케이션이 기록한 모든 오류를 판정한다. 페이지는 실패를 `error: `로 시작하는 줄로, 관측을 `log`로 보고하고, 하네스는 이전 check 뒤로 애플리케이션이 쓴 오류 줄을 읽어 각각 `application error:`로 출력하며 check가 `expectError`로 선언하지 않았으면 check를 실패시킨다. 이전에는 정리의 reload가 문서에서 오류를 지운 뒤 `core.page.error`를 한 번 읽었다. browser 예제는 `surfaces.report`의 실패를 버리지 않고 콘솔에 쓴다. `4d3edb86`의 전체 window 실행(test 338개, 319개 통과)이 페이지 오류 F32~F35를 찾았다.
 - F30: 느린 sidecar와 멈추지 않는 sidecar의 test가 standard input을 읽지 않는 program을 쓴다. `cat`은 pipe를 읽었고 `cat &`은 곧바로 끝날 수 있어 두 test가 기계 속도와 shell에 따라 달랐으며, core CI의 GitHub 실행에서 실패했다. macOS 26에서 Go와 Rust repeat target이 5/5 통과한다.

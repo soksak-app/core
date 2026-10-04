@@ -917,7 +917,10 @@ function drawCardSidebars(el, card, rect) {
   if (!card.data) return null;
   const defaults = sidebarDefaults();
   const sets = sidebarSets();
-  const presentation = cardSidebars(card, rect);
+  // 배치 transaction 의 그리기는 그 transaction 이 표면 자리를 예측할 때 쓴 표시 상태를 그린다. 그 뒤의 크기 명령이
+  // 이전 transaction 의 그리기에 섞이면 DOM 과 네이티브 표면이 어긋난다(F33).
+  // 기본값: 예측하지 않은 그리기(호스트가 없는 문서, 예측 때 요소가 없던 카드)는 지금의 상태를 그린다.
+  const presentation = transactionSeats?.get(card.id)?.presentation ?? cardSidebars(card, rect);
   for (const side of SIDEBAR_SIDES) {
     const existing = el.querySelector(`:scope > .card-sidebar[data-side-of="${side}"]`);
     // 기본값: 표시 상태가 없는 면에는 사이드바가 없다.
@@ -1242,6 +1245,8 @@ export function onRender(fn) {
 
 /* 배치를 바꾸기로 했을 때의 수신자. 그리기 전에 호출된다. */
 let layouter = null;
+/* 그리는 중인 배치 transaction 이 예측한 카드별 자리와 사이드바 표시 상태. 그리기 밖에서는 null 이다. */
+let transactionSeats = null;
 
 /**
  * 배치를 렌더링하기 전에 호출할 함수를 등록한다.
@@ -1269,17 +1274,23 @@ function seats(rects) {
     const el = cardElement(card.id);
     const slot = el?.querySelector(":scope > .slot[data-native-surface]");
     let inset = null;
+    // 예측에 쓴 사방의 띠 폭. 검증 V7c 가 그려진 띠와 비교해 어긋난 원인을 밝힌다(F33).
+    let bands = null;
+    // 예측에 쓴 사이드바 표시 상태. 이 transaction 의 그리기가 같은 상태를 그린다.
+    // 기본값: 요소가 아직 없는 카드는 예측하지 않으므로 표시 상태가 없다(null).
+    const presentation = el && card.data ? cardSidebars(card, rects.get(card.id)) : null;
     if (slot) {
       const folded = parseFloat(getComputedStyle(el).getPropertyValue("--divider"));
       if (!Number.isFinite(folded) || folded < 0) throw new Error("invalid sidebar divider width");
-      const effective = cardSidebars(card, rects.get(card.id));
-      const bands = Object.fromEntries(SIDEBAR_SIDES.map(side => {
+      // 기본값: 사이드바 기록이 없는 카드에는 사이드바가 없다.
+      const effective = presentation ?? {};
+      bands = Object.fromEntries(SIDEBAR_SIDES.map(side => {
         const state = effective[side];
         return [side, state ? (state.collapsed ? folded : deviceGridSize(state.shownSize, devicePixelRatio)) : 0];
       }));
       inset = targetCardInsets(el, slot, bands);
     }
-    out.set(card.id, { id: activeTab(card).id, dim: dimmed(card.id), inset });
+    out.set(card.id, { id: activeTab(card).id, dim: dimmed(card.id), inset, bands, presentation });
   }
   return out;
 }
@@ -1306,7 +1317,18 @@ function build(kept) {
     // 판은 stage 안쪽으로 이 값만큼 들어와 있다. 호스트만 아는 값이므로 뷰에 전달해야
     // 판 가장자리에 닿는 선이 stage 경계까지 이어진다.
     bleed: stagePad(),
-    commit: (made, draw) => layouter ? layouter(made, draw, seats(made)) : draw(),
+    commit: (made, draw) => {
+      if (!layouter) return draw();
+      const seated = seats(made);
+      return layouter(made, () => {
+        transactionSeats = seated;
+        try {
+          draw();
+        } finally {
+          transactionSeats = null;
+        }
+      }, seated);
+    },
     // 판의 렌더는 뷰가 그리는 것과 이 문서가 그리는 것으로 이루어진다. onChange 는
     // 뷰가 그린 직후에 발생하므로, 나머지를 여기서 그리고 그 뒤에 수신자를 호출한다.
     onChange: (reason) => {

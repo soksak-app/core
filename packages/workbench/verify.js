@@ -151,6 +151,13 @@ export function verify(controls = null) {
       if (delta > worst) {
         worst = delta;
         at = ` · ${s.id} drawn ${frameText(drawn)} declared ${frameText(s.declared)}`;
+        // 미리 게시한 띠와 그려진 카드의 띠. 둘이 다르면 예측이 다른 사이드바 상태로 계산된 것이다(F33).
+        if (s.bands) {
+          const card = slot.closest("[data-card-id]");
+          // 기본값: 사이드바가 없는 변의 카드에는 띠 변수가 없고 그 변은 공간을 차지하지 않는다(0).
+          const shown = ["top", "bottom", "left", "right"].map((side) => card?.style.getPropertyValue(`--p${side[0]}`) || "0");
+          at += ` · bands ${["top", "bottom", "left", "right"].map((side) => s.bands[side]).join("/")} drawn ${shown.join("/")}`;
+        }
       }
       if (s.dim !== (slot.dataset.nativeDim === "true")) dim++;
     }
