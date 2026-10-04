@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R2-4-3: `docs/spec/registry.md` specifies the public registry: committed entry files, pull requests by entry owners, an automatic check and merge, and publication of the index on merge.
 - R2-9: the applications and `sok` no longer move the 0.0.2 configuration folders or convert `installed.json` format 1; a file of another format fails with its name.
 - R2-7-3: `docs/plans/linux-host.md` proposes the Linux host: the framework facts, the Linux mechanism of each host operation group and private API, the vt frame transport, the decisions D1–D8 and the order of implementation.
 - R2-7-2: the files sidecar watches directories on Linux with inotify (sidecar-files S8).
