@@ -175,10 +175,15 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       eventListeners.get(type).add(listener);
       return () => eventListeners.get(type)?.delete(listener);
     };
+    // 모듈이 만든 composition. 표면을 제거할 때 모듈의 dispose 보다 먼저 해제한다(disposeModule).
+    const compositions = [];
     const composition = {
       create: async (elements) => {
         await page.composition.declare(surface.composition);
-        return createSurfaceCompositionController(page, surface.composition, elements, view, () => viewport);
+        const controller = await createSurfaceCompositionController(page, surface.composition, elements, view,
+          () => viewport);
+        compositions.push(controller);
+        return controller;
       },
     };
     // 마운트는 탭이 판에 있을 때 시작한다. 탭이 판에서 빠지면 해제될 때까지 마지막 배율을 유지한다
@@ -224,7 +229,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     });
     const state = context.status.subscribe(onState);
     onState(context.status.read());
-    entry = { slot, host, shadow, context, state, exposure: null, composition: compositionReady.promise,
+    entry = { slot, host, shadow, context, state, exposure: null, composition: compositionReady.promise, compositions,
       mounted: null, ready: null, authorized: false, disposed: false, surfaceId: surface.surfaceId,
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
@@ -247,7 +252,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     entry.ready = entry.mounted.then(async (mountedModule) => {
         if (!mountedModule) return null;
         if (entry.disposed) {
-          await mountedModule.dispose();
+          await disposeModule(entry, mountedModule);
           return null;
         }
         entry.module = mountedModule;
@@ -302,6 +307,16 @@ export function suspendSurface(surfaceId) {
   if (entry) entry.host.dataset.surfaceSuspended = "true";
 }
 
+/**
+ * 표면의 영역을 떼고 모듈을 해제한다. 모듈의 dispose 는 사이드카 세션을 끝내고, 공급자는 세션을 끝낼 때 전송 그림을
+ * 놓는다. 영역을 먼저 떼므로 공급자가 그 전에 보낸 프레임은 stale 로 답하고, 붙은 영역이 놓인 그림을 표시하지 않는다
+ * (docs/spec/plugins.md#surface-module-ownership). composition 의 해제는 반복해도 같은 정리를 기다리므로 모듈이 다시 해제해도 된다.
+ */
+async function disposeModule(entry, module) {
+  for (const composition of entry.compositions) await composition.dispose();
+  await module.dispose();
+}
+
 export async function disposeSurface(surfaceId) {
   placeholders.get(surfaceId)?.remove();
   placeholders.delete(surfaceId);
@@ -312,7 +327,7 @@ export async function disposeSurface(surfaceId) {
   entry.disposing = (async () => {
     // 여기서 승인을 기다리지 않는다. 제거된 탭은 모듈이 mount를 허가받은 적이 없다는
     // 이유만으로 layout commit을 살려 두면 안 된다.
-    if (entry.module) await entry.module.dispose();
+    if (entry.module) await disposeModule(entry, entry.module);
     // 실패한 마운트는 오류를 표면 상태와 mountSurface 호출자에게 이미 보고했다. 해제는 마운트가 끝나기만 기다린다.
     else if (entry.authorized) await Promise.allSettled([entry.ready]);
     if (entry.exposure) entry.exposure.dispose();
