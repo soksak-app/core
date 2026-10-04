@@ -47,7 +47,7 @@ impl Plugins {
 
     /// registry 주소, 검사한 index, 설치 상태를 돌려준다.
     pub fn state(&self) -> Result<PluginsState, String> {
-        plugins::read_plugins_state(&self.config_dir)
+        plugins::read_plugins_state(&self.config_dir, &mut std::io::stderr())
     }
 
     /// sok plugin <action> <plugin> 과 같은 작업을 실행하고 그 출력을 돌려준다.
@@ -76,6 +76,7 @@ impl Plugins {
                 &plugin,
                 &self.core,
                 &self.platform,
+                &mut std::io::stderr(),
             )?
         };
         (self.changed)(Changed {

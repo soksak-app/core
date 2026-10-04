@@ -467,6 +467,9 @@ func watch(client *Client, params map[string]any, stdout io.Writer) error {
 type Options struct {
 	// Identifier 는 애플리케이션의 식별자이며 --config-dir 이 없을 때 설정 폴더 이름이고 경로 항목의 파일 이름이다.
 	Identifier string
+	// Former 는 옮기기 전 설정 폴더의 이름이다. 기본 설정 폴더를 쓰기 전에 그 폴더가 남아 있지 않은지 확인한다. 비어
+	// 있으면 확인하지 않는다(docs/spec/projects.md#persistence).
+	Former string
 	// PathsDir 는 경로 항목을 두는 폴더다(macOS 는 /etc/paths.d).
 	PathsDir string
 	// CoreVersion 은 plugin 을 고를 때 쓰는 core version 이다. 실행 파일은 이 package 의 CoreVersion 을 준다.
@@ -475,7 +478,7 @@ type Options struct {
 
 // Run 은 명령 하나를 실행하고 종료 상태를 돌려준다.
 func Run(args []string, stdout, stderr io.Writer, options Options) int {
-	err := run(args, stdout, options)
+	err := run(args, stdout, stderr, options)
 	if err == nil {
 		return 0
 	}
@@ -494,8 +497,8 @@ func Run(args []string, stdout, stderr io.Writer, options Options) int {
 }
 
 // connectTo 는 --config-dir 이나 이 애플리케이션의 설정 폴더에서 엔드포인트를 찾아 연결한다.
-func connectTo(values map[string]string, identifier string) (*Client, error) {
-	configDir, err := configDirOf(values, identifier)
+func connectTo(values map[string]string, options Options) (*Client, error) {
+	configDir, err := configDirOf(values, options)
 	if err != nil {
 		return nil, err
 	}
@@ -506,11 +509,10 @@ func connectTo(values map[string]string, identifier string) (*Client, error) {
 	return Dial(endpoint)
 }
 
-func run(args []string, stdout io.Writer, options Options) (err error) {
-	identifier := options.Identifier
+func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 	// 점이 있는 명령 단어는 선언된 command 다(docs/spec/cli.md).
 	if strings.Contains(commandWord(args), ".") {
-		return runCommand(args, stdout, identifier)
+		return runCommand(args, stdout, options)
 	}
 	a, err := parse(args)
 	if err != nil {
@@ -521,7 +523,7 @@ func run(args []string, stdout io.Writer, options Options) (err error) {
 		return err
 	}
 	if len(a.positionals) > 1 && (a.positionals[0] == "plugin" && a.positionals[1] != "pack" || a.positionals[0] == "registry" && a.positionals[1] == "use") {
-		return runPlugins(a, stdout, options)
+		return runPlugins(a, stdout, stderr, options)
 	}
 	if len(a.positionals) > 0 && a.positionals[0] == "registry" {
 		return runRegistry(a, stdout)
@@ -542,7 +544,7 @@ func run(args []string, stdout io.Writer, options Options) (err error) {
 			return client, nil
 		}
 		var err error
-		client, err = connectTo(a.values, identifier)
+		client, err = connectTo(a.values, options)
 		return client, err
 	}
 	// 명령이 성공했으면 연결을 닫은 결과도 보고한다. 실패했으면 그 실패가 결과다.

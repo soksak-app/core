@@ -93,7 +93,7 @@ func stateText(t *testing.T, plugins *host.Plugins) string {
 func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	config := t.TempDir()
 	plugins, _ := newPlugins(t, config)
-	if text := stateText(t, plugins); text != `{"registry":null,"index":null,"installed":{"format":1,"plugins":{},"sidecars":{}},"firstRun":true}` {
+	if text := stateText(t, plugins); text != `{"registry":null,"index":null,"installed":{"format":2,"plugins":{},"sidecars":{}},"firstRun":true}` {
 		t.Fatalf("state without a registry %s", text)
 	}
 	index, _ := pluginRegistry(t)
@@ -149,7 +149,7 @@ func TestPluginsRunChangesTheInstallationLikeTheCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"plugin":{"package":"plugin-probe","version":"0.0.2","path":"` + filepath.Join(config, "plugins/probe/0.0.2") + `","enabled":true,"sidecars":{}},"sidecars":{}}`
+	want := `{"plugin":{"package":"plugin-probe","version":"0.0.2","path":"plugins/probe/0.0.2","enabled":true,"sidecars":{}},"sidecars":{}}`
 	if string(data) != want {
 		t.Fatalf("install result %s", data)
 	}

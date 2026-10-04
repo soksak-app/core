@@ -21,3 +21,11 @@ func TestCaptureRequestIsADiagnosticCommand(t *testing.T) {
 		t.Fatalf("capture request = %s %s", req.method, params)
 	}
 }
+
+// contract: cli.identity.build-identifier
+func TestTheDiagnosticBuildUsesTheDevelopmentIdentifier(t *testing.T) {
+	identifier, former := Identity()
+	if identifier != "app.soksak.wails.dev" || former != "" {
+		t.Fatalf("identity = %q, %q", identifier, former)
+	}
+}

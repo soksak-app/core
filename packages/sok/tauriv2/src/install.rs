@@ -7,8 +7,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-/// Registry index 와 설치 상태 파일의 형식 번호.
+/// Registry index 의 형식 번호.
 pub const INSTALL_FORMAT: u64 = 1;
+
+/// 설치 상태 파일의 형식 번호. 형식 2 는 설치 폴더를 설정 폴더에 대한 상대 경로로 기록한다.
+pub const INSTALLED_FORMAT: u64 = 2;
 
 /// 설정 폴더 안에서 설치 상태를 담는 파일.
 pub const INSTALLED: &str = "plugins/installed.json";
@@ -819,19 +822,98 @@ pub struct InstalledState {
     pub sidecars: BTreeMap<String, InstalledSidecar>,
 }
 
-/// 설치가 기록한 절대 폴더인지 검사한다.
-fn check_folder(at: &str, value: Option<&Value>) -> Result<(), String> {
+/// plugin 의 path 가 설치 규칙의 폴더 plugins/<id>/<version> 인지 검사한다.
+fn check_plugin_folder(
+    at: &str,
+    id: &str,
+    version: &str,
+    value: Option<&Value>,
+) -> Result<(), String> {
+    let folder = plugin_install_path(id, version)?;
     match text(value) {
-        Some(path) if std::path::Path::new(path).is_absolute() => Ok(()),
-        _ => Err(format!("{at}: path must be an absolute folder")),
+        Some(path) if path == folder => Ok(()),
+        _ => Err(format!("{at}: path must be {folder}")),
     }
+}
+
+/// sidecar 의 path 가 설치 규칙의 폴더 sidecars/<file name>/<version>/<platform> 인지 검사한다.
+fn check_sidecar_folder(
+    at: &str,
+    name: &str,
+    version: &str,
+    value: Option<&Value>,
+) -> Result<(), String> {
+    let prefix = format!("sidecars/{}/{version}/", sidecar_file_name(name)?);
+    match text(value).and_then(|path| path.strip_prefix(&prefix)) {
+        Some(platform) if check_platform(platform).is_ok() => Ok(()),
+        _ => Err(format!("{at}: path must be {prefix}<platform>")),
+    }
+}
+
+/// 0.0.2 가 절대 폴더로 쓴 형식 1 설치 상태를 형식 2 로 바꾼다. 각 path 는 그 절대 폴더가 끝나는 설치 규칙의 폴더가
+/// 되며, 그 폴더로 끝나지 않는 path 는 오류다(docs/spec/installation.md).
+pub(crate) fn convert_installed_format_1(value: &Value) -> Result<Value, String> {
+    let mut value = value.clone();
+    object(INSTALLED, Some(&value))?;
+    object(&format!("{INSTALLED} plugins"), value.get("plugins"))?;
+    object(&format!("{INSTALLED} sidecars"), value.get("sidecars"))?;
+    let relative = |at: &str,
+                    item: &mut Value,
+                    folder: &dyn Fn(&str) -> Result<String, String>|
+     -> Result<(), String> {
+        let Some(path) = text(item.get("path")).map(str::to_string) else {
+            return Err(format!("{at}: path must be an absolute folder"));
+        };
+        let Some((_, platform)) = path.rsplit_once('/') else {
+            return Err(format!("{at}: path must be an absolute folder"));
+        };
+        let want = folder(platform)?;
+        if !path.ends_with(&format!("/{want}")) {
+            return Err(format!(
+                "{at}: path {path} is not the installed folder {want}"
+            ));
+        }
+        item["path"] = Value::String(want);
+        Ok(())
+    };
+    let ids: Vec<String> = sorted_keys(value["plugins"].as_object().expect("checked object"))
+        .into_iter()
+        .cloned()
+        .collect();
+    for id in ids {
+        let at = format!("{INSTALLED} {id}");
+        object(&at, value["plugins"].get(&id))?;
+        let item = &mut value["plugins"][&id];
+        let version = check_version(&format!("{at} version"), item.get("version"))?.to_string();
+        relative(&at, item, &|_| plugin_install_path(&id, &version))?;
+    }
+    let names: Vec<String> = sorted_keys(value["sidecars"].as_object().expect("checked object"))
+        .into_iter()
+        .cloned()
+        .collect();
+    for name in names {
+        let at = format!("{INSTALLED} sidecar {name}");
+        object(&at, value["sidecars"].get(&name))?;
+        let item = &mut value["sidecars"][&name];
+        let version = check_version(&format!("{at} version"), item.get("version"))?.to_string();
+        relative(&at, item, &|platform| {
+            sidecar_install_path(&name, &version, platform)
+        })?;
+    }
+    value["format"] = Value::from(INSTALLED_FORMAT);
+    Ok(value)
+}
+
+/// 값이 형식 1 설치 상태인지.
+pub(crate) fn is_installed_format_1(value: &Value) -> bool {
+    value.is_object() && is_one(value.get("format"))
 }
 
 impl InstalledState {
     /// 아무것도 설치하지 않은 상태.
     pub fn empty() -> Self {
         InstalledState {
-            format: INSTALL_FORMAT,
+            format: INSTALLED_FORMAT,
             plugins: BTreeMap::new(),
             sidecars: BTreeMap::new(),
         }
@@ -842,8 +924,8 @@ impl InstalledState {
 pub fn validate_installed(value: &Value) -> Result<InstalledState, String> {
     let root = object(INSTALLED, Some(value))?;
     only(INSTALLED, root, &["format", "plugins", "sidecars"])?;
-    if !is_one(root.get("format")) {
-        return Err(format!("{INSTALLED}: format must be {INSTALL_FORMAT}"));
+    if root.get("format").and_then(Value::as_u64) != Some(INSTALLED_FORMAT) {
+        return Err(format!("{INSTALLED}: format must be {INSTALLED_FORMAT}"));
     }
     let plugins = object(&format!("{INSTALLED} plugins"), root.get("plugins"))?;
     let mut packages = BTreeSet::new();
@@ -868,12 +950,12 @@ pub fn validate_installed(value: &Value) -> Result<InstalledState, String> {
         if !packages.insert(name) {
             return Err(format!("{at}: package {name} is installed twice"));
         }
-        check_folder(&at, item.get("path"))?;
         if let Some(previous) = item.get("previous") {
             check_version(&format!("{at} previous"), Some(previous))?;
         }
         check_sidecar_ranges(&format!("{at} sidecars"), item.get("sidecars"))?;
-        check_version(&format!("{at} version"), item.get("version"))?;
+        let version = check_version(&format!("{at} version"), item.get("version"))?;
+        check_plugin_folder(&at, id, version, item.get("path"))?;
         named.extend(
             item["sidecars"]
                 .as_object()
@@ -886,8 +968,8 @@ pub fn validate_installed(value: &Value) -> Result<InstalledState, String> {
         let at = format!("{INSTALLED} sidecar {name}");
         let item = object(&at, sidecars.get(name))?;
         only(&at, item, &["path", "version"])?;
-        check_folder(&at, item.get("path"))?;
-        check_version(&format!("{at} version"), item.get("version"))?;
+        let version = check_version(&format!("{at} version"), item.get("version"))?;
+        check_sidecar_folder(&at, name, version, item.get("path"))?;
         if !named.contains(name) {
             return Err(format!(
                 "{INSTALLED}: sidecar {name} is named by no installed plugin"

@@ -16,11 +16,15 @@ test("the environment lists no plugins; the configuration directory installs the
   assert.deepEqual(Object.keys(pkg.dependencies).filter((name) => name.startsWith("@soksak/plugin-")), []);
 });
 
-test("the bundle identifier and the Tauri identifier are the application identifier of docs/spec/hosts.md", () => {
-  // Tauri 는 identifier 로 기본 설정 디렉터리를 정하고, macOS 는 번들 식별자로 알림 권한을 구분한다. 둘이 다르면 같은 앱의 데이터와 권한이 갈라진다.
+test("the bundle and the Tauri configuration declare the release identity of docs/spec/hosts.md", () => {
+  // release 번들은 soksak 이름과 release 식별자를 쓰고, 디버그 build 가 식별자와 이름을 바꾼다. 호스트는 command line
+  // package 의 식별자로 기본 설정 디렉터리를 정하고, macOS 는 번들 식별자로 알림 권한을 구분한다.
   const conf = JSON.parse(readFileSync(new URL("../tauri.conf.json", import.meta.url), "utf8"));
   const plist = readFileSync(new URL("../platform/darwin/Info.plist", import.meta.url), "utf8");
-  const bundle = plist.match(/<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
-  assert.equal(conf.identifier, "com.soksak.tauri");
-  assert.equal(bundle, "com.soksak.tauri");
+  const value = (key) => plist.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`))?.[1];
+  assert.equal(conf.identifier, "app.soksak.tauri");
+  assert.equal(value("CFBundleIdentifier"), "app.soksak.tauri");
+  assert.equal(value("CFBundleName"), "soksak");
+  assert.equal(value("CFBundleDisplayName"), "soksak");
+  assert.equal(value("CFBundleExecutable"), "soksak-tauriv2");
 });

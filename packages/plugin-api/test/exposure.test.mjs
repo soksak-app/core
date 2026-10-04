@@ -286,8 +286,8 @@ test("the installed plugin document lists plugins with their manifests and diagn
   ];
   assert.equal(validateInstalledPlugins({ plugins }), plugins);
   assert.deepEqual(validateInstalledPlugins({ plugins: [] }), []);
-  assert.throws(() => validateInstalledPlugins({ error: "plugins/installed.json: format must be 1" }),
-    /^Error: installed plugins: plugins\/installed.json: format must be 1$/);
+  assert.throws(() => validateInstalledPlugins({ error: "plugins/installed.json: format must be 2" }),
+    /^Error: installed plugins: plugins\/installed.json: format must be 2$/);
   assert.throws(() => validateInstalledPlugins({ plugins: [plugins[0], plugins[0]] }), /plugin alpha appears twice/);
   assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[0], package: "Bad" }] }), /package must be a package name/);
   assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[0], extra: 1 }] }), /unknown field extra/);

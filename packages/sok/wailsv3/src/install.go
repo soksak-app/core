@@ -8,18 +8,20 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 )
 
-// InstallFormat 은 registry index 와 설치 상태 파일의 형식 번호다.
+// InstallFormat 은 registry index 의 형식 번호다.
 const InstallFormat = 1
 
 // Installed 는 설정 폴더 안에서 설치 상태를 담는 파일이다.
 const Installed = "plugins/installed.json"
+
+// InstalledFormat 은 설치 상태 파일의 형식 번호다. 형식 2 는 설치 폴더를 설정 폴더에 대한 상대 경로로 기록한다.
+const InstalledFormat = 2
 
 // Platforms 는 sidecar release asset 이 쓰는 플랫폼 key(`<os>-<arch>`)다.
 var Platforms = []string{"darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64", "windows-arm64", "windows-x64"}
@@ -240,6 +242,14 @@ func checkVersion(where string, value any) error {
 		return fmt.Errorf("%s: %w", where, err)
 	}
 	return nil
+}
+
+// checkedVersion 은 checkVersion 을 통과한 version 문자열이다.
+func checkedVersion(where string, value any) (string, error) {
+	if err := checkVersion(where, value); err != nil {
+		return "", err
+	}
+	return value.(string), nil
 }
 
 func checkRange(where string, value any) error {
@@ -897,7 +907,7 @@ func sortedNames(m map[string]string) []string {
 	return names
 }
 
-// InstalledPlugin 은 설치한 plugin 하나다. Path 는 설치가 쓰는 version 을 푼 절대 폴더다.
+// InstalledPlugin 은 설치한 plugin 하나다. Path 는 설치가 쓰는 version 을 푼 폴더이며 설정 폴더에 대한 상대 경로다.
 type InstalledPlugin struct {
 	Package  string            `json:"package"`
 	Version  string            `json:"version"`
@@ -907,7 +917,8 @@ type InstalledPlugin struct {
 	Previous string            `json:"previous,omitempty"`
 }
 
-// InstalledSidecar 는 설치한 sidecar 하나다. Path 는 설치가 그 플랫폼 asset 을 푼 절대 폴더다.
+// InstalledSidecar 는 설치한 sidecar 하나다. Path 는 설치가 그 플랫폼 asset 을 푼 폴더이며 설정 폴더에 대한 상대
+// 경로다.
 type InstalledSidecar struct {
 	Version string `json:"version"`
 	Path    string `json:"path"`
@@ -922,12 +933,96 @@ type InstalledState struct {
 	Sidecars map[string]InstalledSidecar `json:"sidecars"`
 }
 
-// checkFolder 는 설치가 기록한 절대 폴더인지 검사한다.
-func checkFolder(where string, value any) error {
-	if path, ok := text(value); !ok || !filepath.IsAbs(path) {
-		return fmt.Errorf("%s: path must be an absolute folder", where)
+// checkPluginFolder 는 plugin 의 path 가 설치 규칙의 폴더 plugins/<id>/<version> 인지 검사한다.
+func checkPluginFolder(where, id, version string, value any) error {
+	folder, err := PluginInstallPath(id, version)
+	if err != nil {
+		return err
+	}
+	if path, ok := text(value); !ok || path != folder {
+		return fmt.Errorf("%s: path must be %s", where, folder)
 	}
 	return nil
+}
+
+// checkSidecarFolder 는 sidecar 의 path 가 설치 규칙의 폴더 sidecars/<file name>/<version>/<platform> 인지 검사한다.
+func checkSidecarFolder(where, name, version string, value any) error {
+	file, err := SidecarFileName(name)
+	if err != nil {
+		return err
+	}
+	prefix := "sidecars/" + file + "/" + version + "/"
+	path, ok := text(value)
+	if !ok || !strings.HasPrefix(path, prefix) || checkPlatform(strings.TrimPrefix(path, prefix)) != nil {
+		return fmt.Errorf("%s: path must be %s<platform>", where, prefix)
+	}
+	return nil
+}
+
+// convertInstalledFormat1 은 0.0.2 가 절대 폴더로 쓴 형식 1 설치 상태를 형식 2 로 바꾼다. 각 path 는 그 절대 폴더가
+// 끝나는 설치 규칙의 폴더가 되며, 그 폴더로 끝나지 않는 path 는 오류다(docs/spec/installation.md).
+func convertInstalledFormat1(value any) (any, error) {
+	root, err := object(Installed, value)
+	if err != nil {
+		return nil, err
+	}
+	plugins, err := object(Installed+" plugins", root["plugins"])
+	if err != nil {
+		return nil, err
+	}
+	sidecars, err := object(Installed+" sidecars", root["sidecars"])
+	if err != nil {
+		return nil, err
+	}
+	relative := func(where string, item map[string]any, folder func(platform string) (string, error)) error {
+		path, ok := text(item["path"])
+		if !ok {
+			return fmt.Errorf("%s: path must be an absolute folder", where)
+		}
+		slash := strings.LastIndex(path, "/")
+		if slash < 0 {
+			return fmt.Errorf("%s: path must be an absolute folder", where)
+		}
+		want, err := folder(path[slash+1:])
+		if err != nil {
+			return err
+		}
+		if !strings.HasSuffix(path, "/"+want) {
+			return fmt.Errorf("%s: path %s is not the installed folder %s", where, path, want)
+		}
+		item["path"] = want
+		return nil
+	}
+	for _, id := range sortedKeys(plugins) {
+		where := Installed + " " + id
+		item, err := object(where, plugins[id])
+		if err != nil {
+			return nil, err
+		}
+		version, err := checkedVersion(where+" version", item["version"])
+		if err != nil {
+			return nil, err
+		}
+		if err := relative(where, item, func(string) (string, error) { return PluginInstallPath(id, version) }); err != nil {
+			return nil, err
+		}
+	}
+	for _, name := range sortedKeys(sidecars) {
+		where := Installed + " sidecar " + name
+		item, err := object(where, sidecars[name])
+		if err != nil {
+			return nil, err
+		}
+		version, err := checkedVersion(where+" version", item["version"])
+		if err != nil {
+			return nil, err
+		}
+		if err := relative(where, item, func(platform string) (string, error) { return SidecarInstallPath(name, version, platform) }); err != nil {
+			return nil, err
+		}
+	}
+	root["format"] = json.Number(strconv.Itoa(InstalledFormat))
+	return root, nil
 }
 
 // ValidateInstalled 는 설치 상태 파일을 검사한다.
@@ -939,8 +1034,8 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 	if err := only(Installed, root, "format", "plugins", "sidecars"); err != nil {
 		return nil, err
 	}
-	if !isOne(root["format"]) {
-		return nil, fmt.Errorf("%s: format must be %d", Installed, InstallFormat)
+	if format, ok := root["format"].(json.Number); !ok || format.String() != strconv.Itoa(InstalledFormat) {
+		return nil, fmt.Errorf("%s: format must be %d", Installed, InstalledFormat)
 	}
 	plugins, err := object(Installed+" plugins", root["plugins"])
 	if err != nil {
@@ -970,9 +1065,6 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 			return nil, fmt.Errorf("%s: package %s is installed twice", where, name)
 		}
 		packages[name] = true
-		if err := checkFolder(where, item["path"]); err != nil {
-			return nil, err
-		}
 		if previous, ok := item["previous"]; ok {
 			if err := checkVersion(where+" previous", previous); err != nil {
 				return nil, err
@@ -981,7 +1073,11 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 		if err := checkSidecarRanges(where+" sidecars", item["sidecars"]); err != nil {
 			return nil, err
 		}
-		if err := checkVersion(where+" version", item["version"]); err != nil {
+		version, err := checkedVersion(where+" version", item["version"])
+		if err != nil {
+			return nil, err
+		}
+		if err := checkPluginFolder(where, id, version, item["path"]); err != nil {
 			return nil, err
 		}
 	}
@@ -1005,10 +1101,11 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 		if err := only(where, item, "path", "version"); err != nil {
 			return nil, err
 		}
-		if err := checkFolder(where, item["path"]); err != nil {
+		version, err := checkedVersion(where+" version", item["version"])
+		if err != nil {
 			return nil, err
 		}
-		if err := checkVersion(where+" version", item["version"]); err != nil {
+		if err := checkSidecarFolder(where, name, version, item["path"]); err != nil {
 			return nil, err
 		}
 		if !named[name] {

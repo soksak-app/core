@@ -37,6 +37,7 @@ fn run(args: &[&str]) -> (i32, String, String) {
     let (mut stdout, mut stderr) = (vec![], vec![]);
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
+        former: None,
         paths_dir: Path::new("/nonexistent/paths.d"),
         core_version: "0.0.2",
     };

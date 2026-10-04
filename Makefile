@@ -14,7 +14,8 @@ release-check: wailsv3-build-release tauriv2-build-release
 page-memory:
 	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "page-memory requires APP=wailsv3|tauriv2 CONFIG=DIR [BUILD=release|debug] [MINUTES=60] [RELOADS=20]" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "page-memory requires CONFIG=DIR" >&2; exit 2;; esac
-	@node scripts/measure-page-memory.mjs --sok target/$(or $(BUILD),release)/soksak-$(APP).app/Contents/MacOS/sok --config-dir "$(CONFIG)" --idle-minutes $(or $(MINUTES),60) --reloads $(or $(RELOADS),20)
+	@case "$(BUILD)" in ''|release|debug) ;; *) echo "page-memory requires BUILD=release|debug" >&2; exit 2;; esac
+	@node scripts/measure-page-memory.mjs --sok $(if $(filter debug,$(BUILD)),target/debug/soksak-$(APP).app,target/release/$(APP)/soksak.app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --idle-minutes $(or $(MINUTES),60) --reloads $(or $(RELOADS),20)
 
 # 코어, 플러그인, 사이드카가 서로의 이름을 코드에 적지 않았는지 검사한다.
 boundaries:
@@ -178,9 +179,9 @@ CARGO_ENV    = MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM)
 # macOS 의 알림 센터는 번들에서 실행된 프로세스만 받으므로 애플리케이션은 번들에서 실행한다
 # (docs/spec/hosts.md). 사이드카도 번들의 Contents/MacOS 에 둔다.
 TAURI_DEBUG_BUNDLE   = target/debug/soksak-tauriv2.app
-TAURI_RELEASE_BUNDLE = target/release/soksak-tauriv2.app
+TAURI_RELEASE_BUNDLE = target/release/tauriv2/soksak.app
 WAILS_DEBUG_BUNDLE   = target/debug/soksak-wailsv3.app
-WAILS_RELEASE_BUNDLE = target/release/soksak-wailsv3.app
+WAILS_RELEASE_BUNDLE = target/release/wailsv3/soksak.app
 TAURI_DEBUG   = $(TAURI_DEBUG_BUNDLE)/Contents/MacOS/soksak-tauriv2
 TAURI_RELEASE = $(TAURI_RELEASE_BUNDLE)/Contents/MacOS/soksak-tauriv2
 WAILS_DEBUG   = $(WAILS_DEBUG_BUNDLE)/Contents/MacOS/soksak-wailsv3
@@ -194,6 +195,10 @@ WAILS_RELEASE = $(WAILS_RELEASE_BUNDLE)/Contents/MacOS/soksak-wailsv3
 bundle-info = rm -rf $(1)/Contents && mkdir -p $(1)/Contents/MacOS $(1)/Contents/Resources \
 	&& cp apps/$(2)/platform/darwin/Info.plist $(1)/Contents/Info.plist \
 	&& cp apps/$(2)/platform/darwin/AppIcon.icns $(1)/Contents/Resources/AppIcon.icns
+# 디버그 번들은 release 애플리케이션 옆에서 실행되도록 Info.plist 의 release 식별자에 .dev 를 붙이고 번들 이름을
+# 실행 파일 이름으로 쓴다(docs/spec/hosts.md#frontend-and-executables). 첫 인자는 번들, 둘째 인자는 애플리케이션이다.
+bundle-dev = plutil -replace CFBundleIdentifier -string "$$(plutil -extract CFBundleIdentifier raw $(1)/Contents/Info.plist).dev" $(1)/Contents/Info.plist \
+	&& plutil -replace CFBundleName -string soksak-$(2) $(1)/Contents/Info.plist
 # 번들 안의 실행 파일과 Info.plist 를 ad hoc 서명으로 봉인하고 LaunchServices 에 다시 등록한다. Dock 은
 # 등록된 번들 정보로 아이콘을 보이며, 번들 안의 파일만 바뀌면 LaunchServices 는 등록을 새로 읽지 않는다.
 LSREGISTER = /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
@@ -244,6 +249,7 @@ frontend-tauriv2: build
 # generate_context! 가 프런트엔드를 포함하므로 크레이트를 다시 빌드하게 한다.
 tauriv2-build: native-darwin frontend-tauriv2
 	@$(call bundle-info,$(TAURI_DEBUG_BUNDLE),tauriv2)
+	@$(call bundle-dev,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@touch apps/tauriv2/src/main.rs
 	@$(CARGO_ENV) cargo build -p soksak-tauriv2 --features diagnostics
 	@cp target/debug/soksak-tauriv2 $(TAURI_DEBUG)
@@ -261,6 +267,7 @@ tauriv2-build-release: native-darwin build
 
 wailsv3-build: native-darwin frontend-wailsv3
 	@$(call bundle-info,$(WAILS_DEBUG_BUNDLE),wailsv3)
+	@$(call bundle-dev,$(WAILS_DEBUG_BUNDLE),wailsv3)
 	@$(GO_ENV) go build -C apps/wailsv3 -tags diagnostics -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
 	@$(call sok-wailsv3,$(WAILS_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(WAILS_DEBUG_BUNDLE))

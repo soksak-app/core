@@ -13,6 +13,7 @@ mod command;
 mod diagnostics;
 pub mod endpoint;
 mod files;
+pub mod identity;
 pub mod install;
 mod path;
 #[path = "platform/platform.rs"]
@@ -631,6 +632,9 @@ fn watch(
 pub struct Options<'a> {
     /// 애플리케이션의 식별자이며 --config-dir 이 없을 때 설정 폴더 이름이고 경로 항목의 파일 이름이다.
     pub identifier: &'a str,
+    /// 옮기기 전 설정 폴더의 이름. 기본 설정 폴더를 쓰기 전에 그 폴더가 남아 있지 않은지 확인한다. None 이면 확인하지
+    /// 않는다(docs/spec/projects.md#persistence).
+    pub former: Option<&'a str>,
     /// 경로 항목을 두는 폴더(macOS 는 /etc/paths.d).
     pub paths_dir: &'a Path,
     /// plugin 을 고를 때 쓰는 core version. 실행 파일은 이 crate 의 version 을 준다.
@@ -644,7 +648,7 @@ pub fn run(
     stderr: &mut dyn Write,
     options: &Options,
 ) -> i32 {
-    let result = execute(args, stdout, options);
+    let result = execute(args, stdout, stderr, options);
     // 표준 오류에 오류를 쓰지 못하면 알릴 곳이 없으므로 종료 상태 3 으로 알린다(docs/spec/cli.md).
     let (written, status) = match result {
         Ok(()) => return 0,
@@ -661,28 +665,33 @@ pub fn run(
 /// --config-dir 이나 이 애플리케이션의 설정 폴더.
 pub(crate) fn config_dir_of(
     values: &HashMap<String, String>,
-    identifier: &str,
+    options: &Options,
 ) -> Result<PathBuf, Error> {
-    Ok(match values.get("config-dir") {
-        Some(dir) => PathBuf::from(dir),
-        None => platform::current()?
-            .config_dir()
-            .map_err(|error| format!("the default configuration directory is unknown: {error}"))?
-            .join(identifier),
-    })
+    if let Some(dir) = values.get("config-dir") {
+        return Ok(PathBuf::from(dir));
+    }
+    let base = platform::current()?
+        .config_dir()
+        .map_err(|error| format!("the default configuration directory is unknown: {error}"))?;
+    identity::check_former_config_dir(&base, options.former, options.identifier)?;
+    Ok(base.join(options.identifier))
 }
 
-fn connect_to(values: &HashMap<String, String>, identifier: &str) -> Result<Client, Error> {
-    let config_dir = config_dir_of(values, identifier)?;
+fn connect_to(values: &HashMap<String, String>, options: &Options) -> Result<Client, Error> {
+    let config_dir = config_dir_of(values, options)?;
     let endpoint = endpoint::read_endpoint(Path::new(&config_dir))?;
     Ok(Client::dial(&endpoint)?)
 }
 
-fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result<(), Error> {
-    let identifier = options.identifier;
+fn execute(
+    args: &[String],
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+    options: &Options,
+) -> Result<(), Error> {
     // 점이 있는 명령 단어는 선언된 command 다(docs/spec/cli.md).
     if command::command_word(args).is_some_and(|word| word.contains('.')) {
-        return command::run_command(args, stdout, identifier);
+        return command::run_command(args, stdout, options);
     }
     let a = parse(args)?;
     if a.flag("help") {
@@ -696,7 +705,7 @@ fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result
     if matches!(first_two, (Some("plugin"), Some(action)) if action != "pack")
         || first_two == (Some("registry"), Some("use"))
     {
-        return plugins::run_plugins(&a.positionals, &a.values, stdout, options);
+        return plugins::run_plugins(&a.positionals, &a.values, stdout, stderr, options);
     }
     if a.positionals.first().map(String::as_str) == Some("registry") {
         return registry::run_registry(&a.positionals, stdout);
@@ -714,7 +723,7 @@ fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result
     let mut client: Option<Client> = None;
     let connect = |client: &mut Option<Client>| -> Result<(), Error> {
         if client.is_none() {
-            *client = Some(connect_to(&a.values, identifier)?);
+            *client = Some(connect_to(&a.values, options)?);
         }
         Ok(())
     };

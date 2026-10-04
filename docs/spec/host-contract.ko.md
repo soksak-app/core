@@ -380,6 +380,11 @@ fn invalid_json_closes_connection() {
 | `cli.diagnostics.capture-only-in-diagnostic-builds` | 진단 build의 sok은 `capture`를 고른 창과 함께 `diagnostics.capture.still`로 보내고, 다른 build는 `capture`를 사용법 오류 `capture needs a diagnostic build of sok`로 거부하며 진단 method를 담지 않는다. | both |
 | `cli.status.watch-prints-value-and-changes` | `status --watch`는 현재 값과 그 뒤 같은 status의 각 변경을 compact JSON 한 줄씩 출력하고, 다른 status의 변경은 무시한다. | both |
 | `cli.config-dir.default-uses-application-identifier` | `--config-dir`이 없으면 명령은 `<사용자 설정 폴더>/<application identifier>`를 쓴다. | both |
+| `cli.config-dir.refuses-an-unmoved-former-directory` | `--config-dir`이 없으면 이전 설정 폴더가 있는 동안 명령은 종료 상태 1로 실패하고, 두 폴더를 밝히며, 현재 폴더를 만들지 않는다. | both |
+| `cli.identity.build-identifier` | release build는 `app.soksak.<wails 또는 tauri>`를 쓰고 이전 `com.soksak.<wails 또는 tauri>` 폴더를 옮긴다. 진단 build는 `.dev`를 붙인 식별자를 쓰고 이전 폴더가 없다. | both |
+| `cli.identity.moves-only-the-former-directory` | 이전 폴더만 있으면 내용과 함께 현재 이름으로 바뀌고 그 경로를 돌려준다. 두 번째 시작과 이전 식별자가 없는 build는 아무것도 옮기지 않는다. | both |
+| `cli.identity.refuses-both-directories` | 두 폴더가 모두 있으면 아무것도 옮기지 않고 오류가 두 폴더를 밝힌다. | both |
+| `cli.identity.refuses-a-former-directory-in-use` | 이전 폴더의 `process.lock`이 실행 중인 프로세스를 가리키면 아무것도 옮기지 않고 오류가 폴더와 프로세스를 밝힌다. 끝난 프로세스의 lock은 폴더와 함께 옮겨진다. | both |
 | `cli.command.flags-from-schema` | 선언된 command는 창, surface, 그리고 선언된 schema로 flag에서 바꾼 매개변수와 함께 `command.run`으로 실행된다. 텍스트, 숫자, 정수, boolean, enum 값, nullable type의 `null`, JSON 객체와 배열, `--`로 시작하며 `=` 뒤에 준 값이며, `--params`는 객체 전체를 준다. | both |
 | `cli.command.rejects-undeclared-or-invalid-values` | 선언되지 않은 flag, schema와 맞지 않는 값, 값이 없는 flag, 값이 따라오는 boolean, 매개변수 flag와 함께 쓴 `--params`, 선언되지 않은 command는 `command.run`을 보내기 전에 종료 상태 2로 끝난다. | both |
 | `cli.commands.lists-declared-commands` | `sok commands`는 `exposure.list`의 `commands` 목록을 애플리케이션이 선언한 순서대로 출력한다. | both |
@@ -404,7 +409,8 @@ fn invalid_json_closes_connection() {
 | `install.select.newest-usable` | 선택은 core version에 맞고 revoked가 아닌 가장 새 plugin version과, 범위 안에 있고 플랫폼 asset이 있는 가장 새 sidecar version을 고른다. 맞는 것이 없으면 plugin, core version, sidecar, 플랫폼을 밝힌다. | both |
 | `install.select.shared-sidecar` | 선택은 쓰고 있는 sidecar version이 다른 모든 설치된 plugin의 범위를 채우면 그대로 두고, 아니면 모든 범위를 채우는 가장 새 version을 고른다. 설치하는 plugin의 이전 범위는 무시하며, 충돌하면 각 plugin과 범위를 밝힌다. | both |
 | `install.names.archives-and-paths` | Archive 이름은 `<id>-<version>.tgz`와 `<file name>-<version>-<platform>.tar.gz`, 설치 경로는 `plugins/<id>/<version>`와 `sidecars/<file name>/<version>/<platform>`이며, `@scope/name`은 `scope-name`이 된다. 알 수 없는 플랫폼이나 잘못된 plugin id는 거부한다. | both |
-| `install.installed.consistency` | `plugins/installed.json`은 `enabled` 누락, 두 번 설치한 package, 절대 폴더가 아닌 plugin이나 sidecar의 `path`, `{ version, path }`가 아닌 sidecar 항목, 없는 `sidecars` 객체, 쓰는 version이 없는 sidecar, plugin 범위 밖의 쓰는 version, 어느 plugin도 지정하지 않은 sidecar를 거부한다. | both |
+| `install.installed.converts-format-1` | 절대 경로가 설치 규칙의 폴더로 끝나는 `format` 1 파일을 읽으면 그 폴더로 `format` 2로 저장하고 표준 오류에 변환을 보고한다. 그 폴더로 끝나지 않는 경로는 실패하고 파일을 바꾸지 않는다. | both |
+| `install.installed.consistency` | `plugins/installed.json`은 `enabled` 누락, 두 번 설치한 package, 설치 규칙의 폴더가 아닌 plugin이나 sidecar의 `path`, 2가 아닌 `format`, `{ version, path }`가 아닌 sidecar 항목, 없는 `sidecars` 객체, 쓰는 version이 없는 sidecar, plugin 범위 밖의 쓰는 version, 어느 plugin도 지정하지 않은 sidecar를 거부한다. | both |
 | `installed.document.lists-enabled-plugins` | `/installed-plugins.json`은 켜진 설치 plugin을 id 순서로 `id`, `package`, `version`, 그리고 `plugin.json`의 compact 내용인 `manifest`와 함께 나열하고, 진단 build에서만 `diagnostics.json`의 compact 내용을 더하며, `installed.json`이 없으면 `{"plugins":[]}`다. | both |
 | `installed.document.reports-errors` | 켜진 plugin의 `plugin.json`이 없거나 잘못되었거나, `diagnostics.json`이나 `installed.json`이 잘못되었으면 `/installed-plugins.json`은 파일과 이유를 담은 `{"error":...}`다. | both |
 | `page.start.document` | 시작 문서는 작업 공간 스냅샷과 window의 `windowControls` 답을 이 순서로 담은 `{"workspace":...,"controls":...}`다. | both |

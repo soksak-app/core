@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -104,7 +105,7 @@ func TestPluginInstallExtractsCheckedArchivesAndRecordsTheState(t *testing.T) {
   "plugin": {
     "package": "@scope/plugin-probe",
     "version": "0.2.0",
-    "path": "` + filepath.Join(config, "plugins/probe/0.2.0") + `",
+    "path": "plugins/probe/0.2.0",
     "enabled": true,
     "sidecars": {
       "@scope/sidecar-worker": "^0.1.0"
@@ -126,7 +127,7 @@ func TestPluginInstallExtractsCheckedArchivesAndRecordsTheState(t *testing.T) {
 		t.Fatalf("worker %v %v", info, err)
 	}
 	installed := readText(t, filepath.Join(config, "plugins/installed.json"))
-	sidecarPath := `"path": "` + filepath.Join(config, "sidecars/scope-sidecar-worker/0.1.0", platform) + `"`
+	sidecarPath := `"path": "sidecars/scope-sidecar-worker/0.1.0/` + platform + `"`
 	if !strings.Contains(installed, sidecarPath) || !strings.Contains(installed, `"version": "0.2.0"`) {
 		t.Fatalf("installed.json %s", installed)
 	}
@@ -247,7 +248,7 @@ func TestPluginUpdateKeepsPreviousAndRemoveDeletesTheFolders(t *testing.T) {
 		t.Fatalf("version folders %v", names)
 	}
 	code, stdout, _ = run("plugin", "list", "--config-dir", config)
-	if code != 0 || !strings.Contains(stdout, `"probe": {`) || !strings.Contains(stdout, `"format": 1`) {
+	if code != 0 || !strings.Contains(stdout, `"probe": {`) || !strings.Contains(stdout, `"format": 2`) {
 		t.Fatalf("list %d %q", code, stdout)
 	}
 	code, stdout, _ = run("plugin", "enable", "probe", "--config-dir", config)
@@ -261,7 +262,7 @@ func TestPluginUpdateKeepsPreviousAndRemoveDeletesTheFolders(t *testing.T) {
 	if exists(filepath.Join(config, "plugins/probe")) || exists(filepath.Join(config, "sidecars/scope-sidecar-worker")) {
 		t.Fatal("remove left plugin or sidecar folders")
 	}
-	if text := readText(t, filepath.Join(config, "plugins/installed.json")); text != "{\n  \"format\": 1,\n  \"plugins\": {},\n  \"sidecars\": {}\n}\n" {
+	if text := readText(t, filepath.Join(config, "plugins/installed.json")); text != "{\n  \"format\": 2,\n  \"plugins\": {},\n  \"sidecars\": {}\n}\n" {
 		t.Fatalf("installed.json %q", text)
 	}
 	code, _, stderr = run("plugin", "remove", "probe", "--config-dir", config)
@@ -273,7 +274,7 @@ func TestPluginUpdateKeepsPreviousAndRemoveDeletesTheFolders(t *testing.T) {
 // stateJSON 은 ReadPluginsState 의 결과를 JSON 문장으로 만든다.
 func stateJSON(t *testing.T, config string) string {
 	t.Helper()
-	state, err := sok.ReadPluginsState(config)
+	state, err := sok.ReadPluginsState(config, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,15 +288,15 @@ func stateJSON(t *testing.T, config string) string {
 // contract: cli.plugin.state-reads-registry-and-installed
 func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	config := t.TempDir()
-	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":1,"plugins":{},"sidecars":{}},"firstRun":true}` {
+	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":2,"plugins":{},"sidecars":{}},"firstRun":true}` {
 		t.Fatalf("state without a registry = %s", text)
 	}
 	index := pluginVersions(t, "0.2.0")
 	runJSON(t, "registry", "use", index, "--config-dir", config)
-	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t)); err != nil {
+	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t), io.Discard); err != nil {
 		t.Fatal(err)
 	}
-	state, err := sok.ReadPluginsState(config)
+	state, err := sok.ReadPluginsState(config, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +322,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(config, "plugins/installed.json"), []byte("{"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sok.ReadPluginsState(config); err == nil || !strings.Contains(err.Error(), "installed.json is not valid JSON") {
+	if _, err := sok.ReadPluginsState(config, io.Discard); err == nil || !strings.Contains(err.Error(), "installed.json is not valid JSON") {
 		t.Fatalf("state with an invalid installed.json: %v", err)
 	}
 }
@@ -330,10 +331,10 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 func TestRunPluginActionMatchesThePluginCommands(t *testing.T) {
 	config := t.TempDir()
 	runJSON(t, "registry", "use", pluginVersions(t, "0.2.0"), "--config-dir", config)
-	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t)); err != nil {
+	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t), io.Discard); err != nil {
 		t.Fatal(err)
 	}
-	disabled, err := sok.RunPluginAction(config, "disable", "probe", "0.0.2", "")
+	disabled, err := sok.RunPluginAction(config, "disable", "probe", "0.0.2", "", io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,10 +345,10 @@ func TestRunPluginActionMatchesThePluginCommands(t *testing.T) {
 	if !strings.Contains(stdout, `"enabled": false`) {
 		t.Fatalf("plugin list after disable %s", stdout)
 	}
-	if _, err := sok.RunPluginAction(config, "rename", "probe", "0.0.2", ""); err == nil || err.Error() != `unknown plugin action "rename"` {
+	if _, err := sok.RunPluginAction(config, "rename", "probe", "0.0.2", "", io.Discard); err == nil || err.Error() != `unknown plugin action "rename"` {
 		t.Fatalf("unknown action: %v", err)
 	}
-	if removed, err := sok.RunPluginAction(config, "remove", "probe", "0.0.2", ""); err != nil || removed != nil {
+	if removed, err := sok.RunPluginAction(config, "remove", "probe", "0.0.2", "", io.Discard); err != nil || removed != nil {
 		t.Fatalf("remove = %v, %v", removed, err)
 	}
 	if exists(filepath.Join(config, "plugins/probe")) {
@@ -378,7 +379,7 @@ func TestFileErrorsNameThePathAndTheReason(t *testing.T) {
 	if err := os.WriteFile(installed, []byte("{}"), 0o000); err != nil {
 		t.Fatal(err)
 	}
-	_, err := sok.ReadPluginsState(config)
+	_, err := sok.ReadPluginsState(config, io.Discard)
 	if chmodErr := os.Chmod(installed, 0o644); chmodErr != nil {
 		t.Fatal(chmodErr)
 	}

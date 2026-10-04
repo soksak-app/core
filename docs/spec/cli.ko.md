@@ -2,7 +2,7 @@
 
 [English](cli.md)
 
-`sok`은 soksak 애플리케이션의 command line이며, 모든 명령을 이것으로 공개한다. 두 package가 한 계약으로 이것을 구현한다. Tauri 애플리케이션용 Rust `packages/sok/tauriv2`와 Wails 애플리케이션용 Go `packages/sok/wailsv3`이다([hosts](hosts.ko.md#command-line-트리)). 두 package는 애플리케이션 framework를 link하지 않는다. 각 애플리케이션 bundle은 실행 파일 옆에 자기 `sok`을 담고(macOS에서는 `Contents/MacOS/sok`), host는 설정 창의 plugin 명령에 그 `sok`을 실행하므로 언어마다 설치 구현은 하나다. `sok`은 `--config-dir`가 다른 폴더를 지정하지 않으면 자신이 속한 애플리케이션의 설정 폴더(`com.soksak.tauri` 또는 `com.soksak.wails`, [projects](projects.ko.md) 참조)를 쓴다. 그래서 `PATH`가 닿는 `sok`이 구현과 설정 폴더를 정한다. `PATH`는 bundle의 실행 파일 폴더를 담은 경로 항목 `/etc/paths.d/<application identifier>`로 bundle에 닿는다. `sok path install`은 그것을 실행한 `sok`의 항목을 쓰고 `sok path remove`는 지운다. 둘 다 관리자 권한(`sudo`)이 필요하고, 되풀이해도 결과가 같으며, 쓰기에 실패하면 파일과 이유를 보고한다. 새 shell이 항목을 읽는다. Command line은 symbolic link를 쓰지 않는다.
+`sok`은 soksak 애플리케이션의 command line이며, 모든 명령을 이것으로 공개한다. 두 package가 한 계약으로 이것을 구현한다. Tauri 애플리케이션용 Rust `packages/sok/tauriv2`와 Wails 애플리케이션용 Go `packages/sok/wailsv3`이다([hosts](hosts.ko.md#command-line-트리)). 두 package는 애플리케이션 framework를 link하지 않는다. 각 애플리케이션 bundle은 실행 파일 옆에 자기 `sok`을 담고(macOS에서는 `Contents/MacOS/sok`), host는 설정 창의 plugin 명령에 그 `sok`을 실행하므로 언어마다 설치 구현은 하나다. `sok`은 `--config-dir`가 다른 폴더를 지정하지 않으면 자신이 속한 애플리케이션의 설정 폴더(`app.soksak.tauri` 또는 `app.soksak.wails`, 진단 빌드는 `.dev`를 붙인다. [projects](projects.ko.md#저장) 참조)를 쓴다. 그래서 `PATH`가 닿는 `sok`이 구현과 설정 폴더를 정한다. `PATH`는 bundle의 실행 파일 폴더를 담은 경로 항목 `/etc/paths.d/<application identifier>`로 bundle에 닿는다. `sok path install`은 그것을 실행한 `sok`의 항목을 쓰고 `sok path remove`는 지운다. 둘 다 관리자 권한(`sudo`)이 필요하고, 되풀이해도 결과가 같으며, 쓰기에 실패하면 파일과 이유를 보고한다. 새 shell이 항목을 읽는다. Command line은 symbolic link를 쓰지 않는다.
 
 ## 명령
 

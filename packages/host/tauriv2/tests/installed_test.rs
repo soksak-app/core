@@ -20,22 +20,15 @@ fn write_installed(config: &Path, files: &[(&str, &str)]) {
 /// 켜진 plugin 둘과 꺼진 plugin 하나, 그리고 sidecar 하나를 설치한 설정 폴더.
 fn installed_fixture() -> tempfile::TempDir {
     let config = tempfile::tempdir().unwrap();
-    let at = |path: &str| config.path().join(path).display().to_string();
-    let state = format!(
-        r#"{{"format": 1, "plugins": {{
-        "term": {{"package": "@scope/plugin-term", "version": "0.1.0", "path": "{}", "enabled": true, "sidecars": {{"@scope/sidecar-worker": "^0.1.0"}}}},
-        "alpha": {{"package": "plugin-alpha", "version": "1.0.0", "path": "{}", "enabled": true, "sidecars": {{}}}},
-        "off": {{"package": "plugin-off", "version": "1.0.0", "path": "{}", "enabled": false, "sidecars": {{}}}}}},
-        "sidecars": {{"@scope/sidecar-worker": {{"version": "0.1.2", "path": "{}"}}}}}}"#,
-        at("plugins/term/0.1.0"),
-        at("plugins/alpha/1.0.0"),
-        at("plugins/off/1.0.0"),
-        at("sidecars/scope-sidecar-worker/0.1.2/darwin-arm64")
-    );
+    let state = r#"{"format": 2, "plugins": {
+        "term": {"package": "@scope/plugin-term", "version": "0.1.0", "path": "plugins/term/0.1.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+        "alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}},
+        "off": {"package": "plugin-off", "version": "1.0.0", "path": "plugins/off/1.0.0", "enabled": false, "sidecars": {}}},
+        "sidecars": {"@scope/sidecar-worker": {"version": "0.1.2", "path": "sidecars/scope-sidecar-worker/0.1.2/darwin-arm64"}}}"#;
     write_installed(
         config.path(),
         &[
-            ("plugins/installed.json", &state),
+            ("plugins/installed.json", state),
             (
                 "plugins/term/0.1.0/plugin.json",
                 r#"{"id": "term", "sidecars": ["@scope/sidecar-worker"]}"#,
@@ -118,16 +111,41 @@ fn installed_plugins_document_reports_an_invalid_state() {
         config.path(),
         &[(
             "plugins/installed.json",
-            r#"{"format": 2, "plugins": {}, "sidecars": {}}"#,
+            r#"{"format": 3, "plugins": {}, "sidecars": {}}"#,
         )],
     );
     let file = config.path().join("plugins/installed.json");
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), false)),
         format!(
-            r#"{{"error":"{}: plugins/installed.json: format must be 1"}}"#,
+            r#"{{"error":"{}: plugins/installed.json: format must be 2"}}"#,
             file.display()
         )
+    );
+}
+
+// contract: installed.document.lists-enabled-plugins
+#[test]
+fn a_moved_configuration_serves_its_installed_plugins() {
+    let config = installed_fixture();
+    // 0.0.2 는 설정 폴더의 절대 경로를 기록했다. 다른 자리에서 옮겨 온 설정 폴더도 자기 안의 설치 폴더를 쓴다.
+    write_installed(
+        config.path(),
+        &[(
+            "plugins/installed.json",
+            r#"{"format": 1, "plugins": {
+        "alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "/moved/config/plugins/alpha/1.0.0", "enabled": true, "sidecars": {}}},
+        "sidecars": {}}"#,
+        )],
+    );
+    assert_eq!(
+        text(installed::installed_plugins_document(config.path(), false)),
+        r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}}]}"#
+    );
+    let data = std::fs::read_to_string(config.path().join("plugins/installed.json")).unwrap();
+    assert!(
+        data.contains(r#""path": "plugins/alpha/1.0.0""#) && data.contains(r#""format": 2"#),
+        "{data}"
     );
 }
 

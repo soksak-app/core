@@ -16,8 +16,13 @@ test("the environment lists no plugins; the configuration directory installs the
   assert.deepEqual(Object.keys(pkg.dependencies).filter((name) => name.startsWith("@soksak/plugin-")), []);
 });
 
-test("the bundle identifier is the application identifier of docs/spec/hosts.md", () => {
-  // 호스트는 같은 식별자(ApplicationIdentifier)로 기본 설정 디렉터리를 정한다.
+test("the bundle declares the release identity of docs/spec/hosts.md", () => {
+  // release 번들은 soksak 이름과 release 식별자를 쓰고, 디버그 build 가 식별자와 이름을 바꾼다. 호스트는 같은
+  // 식별자로 기본 설정 디렉터리를 정한다(docs/spec/projects.md#persistence).
   const plist = readFileSync(new URL("../platform/darwin/Info.plist", import.meta.url), "utf8");
-  assert.equal(plist.match(/<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/)?.[1], "com.soksak.wails");
+  const value = (key) => plist.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`))?.[1];
+  assert.equal(value("CFBundleIdentifier"), "app.soksak.wails");
+  assert.equal(value("CFBundleName"), "soksak");
+  assert.equal(value("CFBundleDisplayName"), "soksak");
+  assert.equal(value("CFBundleExecutable"), "soksak-wailsv3");
 });

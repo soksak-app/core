@@ -9,9 +9,8 @@ import (
 	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/windows"
 )
 
-// identifier 는 Wails 애플리케이션의 식별자이며 기본 설정 폴더와 경로 항목의 이름이다(docs/spec/projects.md).
-const identifier = "com.soksak.wails"
-
 func main() {
-	os.Exit(sok.Run(os.Args[1:], os.Stdout, os.Stderr, sok.Options{Identifier: identifier, PathsDir: "/etc/paths.d", CoreVersion: sok.CoreVersion}))
+	// 식별자는 기본 설정 폴더와 경로 항목의 이름이다(docs/spec/projects.md#persistence).
+	identifier, former := sok.Identity()
+	os.Exit(sok.Run(os.Args[1:], os.Stdout, os.Stderr, sok.Options{Identifier: identifier, Former: former, PathsDir: "/etc/paths.d", CoreVersion: sok.CoreVersion}))
 }

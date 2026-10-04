@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R2-8: both release applications are `soksak.app` with the bundle identifiers `app.soksak.wails` and `app.soksak.tauri`; development builds use `.dev` identifiers; the first release start moves the former `com.soksak.*` configuration folder once, and `plugins/installed.json` format 2 records installed folders relative to the configuration directory, converting a format 1 file once (R2-8-1).
 - G4-3: test evidence records a renamed path with its original path and reads paths that `git status` would quote, so `pnpm test` no longer fails while a rename is staged.
 - R2-1: the Go modules, package fields and documented install commands name the `soksak-app` organization (`github.com/soksak-app/core`), the license holder is `soksak`, personal paths are removed from the records, and the plugin specification states the GitHub repository of each sibling folder and the checkout layout.
 - G1.4-116: both hosts wait for each visible image region's raster of the prepared size before they commit a continuous layout too, so a divider drag no longer shows a grown region with the previous raster; the drag frame counts did not drop at comparable load.

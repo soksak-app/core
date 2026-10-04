@@ -33,30 +33,10 @@ type installedPlugin struct {
 	id, pkg, version, dir string
 }
 
-// readInstalledState 는 plugins/installed.json 을 읽고 검사한다. 파일이 없으면 아무것도 설치하지 않은 상태다.
-func readInstalledState(configDir string) (*sok.InstalledState, error) {
-	file := filepath.Join(configDir, sok.Installed)
-	data, err := os.ReadFile(file)
-	if errors.Is(err, os.ErrNotExist) {
-		return &sok.InstalledState{Format: sok.InstallFormat, Plugins: map[string]sok.InstalledPlugin{}, Sidecars: map[string]sok.InstalledSidecar{}}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	value, err := sok.DecodeJSON(data)
-	if err != nil {
-		return nil, fmt.Errorf("%s is not valid JSON: %w", file, err)
-	}
-	state, err := sok.ValidateInstalled(value)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", file, err)
-	}
-	return state, nil
-}
-
-// enabledPlugins 는 켜진 설치 plugin 을 id 순서로 돌려준다.
+// enabledPlugins 는 켜진 설치 plugin 을 id 순서로 돌려준다. 설치 폴더는 설정 폴더에 대한 상대 경로로 기록되며, 형식
+// 1 파일의 변환 보고는 애플리케이션 로그인 표준 오류에 쓴다(docs/spec/installation.md).
 func enabledPlugins(configDir string) ([]installedPlugin, *sok.InstalledState, error) {
-	state, err := readInstalledState(configDir)
+	state, err := sok.ReadInstalled(configDir, os.Stderr)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -65,7 +45,7 @@ func enabledPlugins(configDir string) ([]installedPlugin, *sok.InstalledState, e
 		if !plugin.Enabled {
 			continue
 		}
-		plugins = append(plugins, installedPlugin{id: id, pkg: plugin.Package, version: plugin.Version, dir: plugin.Path})
+		plugins = append(plugins, installedPlugin{id: id, pkg: plugin.Package, version: plugin.Version, dir: filepath.Join(configDir, plugin.Path)})
 	}
 	slices.SortFunc(plugins, func(a, b installedPlugin) int { return strings.Compare(a.id, b.id) })
 	return plugins, state, nil
@@ -248,7 +228,7 @@ func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
 			if !ok {
 				return nil, fmt.Errorf("%s: sidecar %s has no installed version", file, name)
 			}
-			folder := sidecar.Path
+			folder := filepath.Join(configDir, sidecar.Path)
 			declaration, err := os.ReadFile(filepath.Join(folder, "sidecar.json"))
 			if err != nil {
 				return nil, err

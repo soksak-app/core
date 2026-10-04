@@ -48,8 +48,12 @@
 
 | 호스트 | macOS | Windows | Linux |
 | --- | --- | --- | --- |
-| Wails | `~/Library/Application Support/com.soksak.wails` | `%AppData%/com.soksak.wails` | `$XDG_CONFIG_HOME/com.soksak.wails`, 미설정 시 `~/.config/com.soksak.wails` |
-| Tauri | `~/Library/Application Support/com.soksak.tauri` | `%AppData%/com.soksak.tauri` | `$XDG_CONFIG_HOME/com.soksak.tauri`, 미설정 시 `~/.config/com.soksak.tauri` |
+| Wails | `~/Library/Application Support/app.soksak.wails` | `%AppData%/app.soksak.wails` | `$XDG_CONFIG_HOME/app.soksak.wails`, 미설정 시 `~/.config/app.soksak.wails` |
+| Tauri | `~/Library/Application Support/app.soksak.tauri` | `%AppData%/app.soksak.tauri` | `$XDG_CONFIG_HOME/app.soksak.tauri`, 미설정 시 `~/.config/app.soksak.tauri` |
+
+디렉터리 이름은 애플리케이션 식별자다. 디버그 대상이 만드는 진단 빌드는 `.dev`를 붙이므로(`app.soksak.wails.dev`, `app.soksak.tauri.dev`) 개발 빌드는 release 애플리케이션의 데이터를 읽거나 쓰지 않는다. 각 언어의 command line package가 식별자를 가지며(`packages/sok/<app>/src/identity.*`), host는 그것을 쓴다.
+
+0.0.2까지의 버전은 release 디렉터리 이름을 `com.soksak.wails`와 `com.soksak.tauri`로 썼다. `--config-dir` 없이 시작한 release host는 이전 디렉터리만 있으면 디렉터리를 준비하기 전에 이전 디렉터리를 현재 이름으로 바꾸고, 애플리케이션 로그에 두 경로를 적는다(`configuration directory moved from <former> to <current>`). 둘 다 있으면 host는 시작하지 않고 시작할 때 받은 표준 오류에 `<former> and <current> both exist; move or remove <former>`를 보고한다. 이전 디렉터리의 `process.lock`이 실행 중인 프로세스를 가리키면 이전 애플리케이션이 아직 그 디렉터리를 쓰는 것이다. host는 시작하지 않고 `<former> is in use by process <pid>; quit that application first`를 보고한다. 끝난 프로세스의 lock은 디렉터리와 함께 옮겨지고, 끝난 프로세스의 [endpoint](endpoint.ko.md) lock처럼 교체된다. `--config-dir` 없는 release `sok`은 디렉터리를 옮기거나 만들지 않는다. 이전 디렉터리가 있는 동안 `<former> has not been moved; start the application once to move it to <current>`로 실패하거나, 둘 다 있을 때의 오류로 실패한다. 진단 빌드는 이전 디렉터리를 쓰지 않는다.
 
 `--config-dir PATH`로 앱 설정 디렉터리를 변경한다. 호스트는 빈 경로를 거부하고, 경로에서 없는 디렉터리를 권한 0700(소유자 전용)으로 만들며, 이미 있는 디렉터리의 권한은 유지하고, 정규 경로를 쓴다. 프로젝트 덮어쓰기 경로는 각 프로젝트 내부를 유지한다. 전역 편집은 공통 설정 파일을, 프로젝트 편집은 선택한 프로젝트의 설정 파일을 변경한다. **전역값 사용**으로 개별 덮어쓰기를 제거한다. 프로젝트 탭을 드래그해 순서를 변경하며 이 순서를 라이브러리의 기본 순서로 사용한다. 탭의 ×는 등록 목록에서 프로젝트를 제거하고 폴더와 설정 파일은 유지한다. OS 창의 닫기 버튼은 등록된 프로젝트를 유지한다.
 

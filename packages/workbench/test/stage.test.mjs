@@ -60,8 +60,8 @@ function installedConfiguration(t) {
     mkdirSync(join(configuration, path, ".."), { recursive: true });
     writeFileSync(join(configuration, path), text);
   };
-  const folder = (id, version) => join(configuration, "plugins", id, version);
-  write("plugins/installed.json", JSON.stringify({ format: 1, plugins: {
+  const folder = (id, version) => `plugins/${id}/${version}`;
+  write("plugins/installed.json", JSON.stringify({ format: 2, plugins: {
     probe: { package: "@fixture/probe", version: "0.1.0", path: folder("probe", "0.1.0"), enabled: true, sidecars: {} },
     alpha: { package: "plugin-alpha", version: "1.0.0", path: folder("alpha", "1.0.0"), enabled: true, sidecars: {} },
     off: { package: "plugin-off", version: "1.0.0", path: folder("off", "1.0.0"), enabled: false, sidecars: {} },

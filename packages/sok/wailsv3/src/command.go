@@ -209,12 +209,12 @@ func parameters(command declaredCommand, flags []string) (map[string]any, error)
 }
 
 // runCommand 는 선언된 command 하나를 실행하고 결과를 출력한다.
-func runCommand(args []string, stdout io.Writer, identifier string) error {
+func runCommand(args []string, stdout io.Writer, options Options) error {
 	parsed, err := parseCommand(args)
 	if err != nil {
 		return err
 	}
-	client, err := connectTo(parsed.common, identifier)
+	client, err := connectTo(parsed.common, options)
 	if err != nil {
 		return err
 	}

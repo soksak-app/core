@@ -7,9 +7,10 @@ description = "soksak native host for Tauri v2"
 [lib]
 path = "src/host.rs"
 
-# diagnostics 는 진단 엔드포인트 메서드를 포함한다. 릴리스 빌드는 포함하지 않는다.
+# diagnostics 는 진단 엔드포인트 메서드와 command line 의 진단 build(.dev 식별자)를 포함한다. 릴리스 빌드는
+# 포함하지 않는다.
 [features]
-diagnostics = []
+diagnostics = ["soksak-sok-tauriv2/diagnostics"]
 
 [build-dependencies]
 pkg-config = "0.3"

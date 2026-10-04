@@ -6,7 +6,7 @@ use std::io::Write;
 
 use serde_json::{Map, Value};
 
-use crate::{connect_to, indent, no_notify, select_window, Arguments, Error};
+use crate::{connect_to, indent, no_notify, select_window, Arguments, Error, Options};
 
 /// 선언된 command 와 함께 쓰는, 값을 받는 공통 option.
 const COMMON_VALUES: &[&str] = &["config-dir", "window", "project", "surface", "params"];
@@ -223,10 +223,10 @@ fn parameters(
 pub(crate) fn run_command(
     args: &[String],
     stdout: &mut dyn Write,
-    identifier: &str,
+    options: &Options,
 ) -> Result<(), Error> {
     let parsed = parse_command(args)?;
-    let mut client = connect_to(&parsed.common, identifier)?;
+    let mut client = connect_to(&parsed.common, options)?;
     let arguments = Arguments {
         positionals: vec![],
         values: parsed.common.clone(),

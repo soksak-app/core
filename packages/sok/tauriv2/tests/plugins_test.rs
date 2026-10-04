@@ -40,6 +40,7 @@ fn run(args: &[&str]) -> (i32, String, String) {
     let (mut stdout, mut stderr) = (vec![], vec![]);
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
+        former: None,
         paths_dir: Path::new("/nonexistent/paths.d"),
         core_version: "0.0.2",
     };
@@ -184,12 +185,11 @@ fn plugin_install_extracts_checked_archives_and_records_the_state() {
     );
     let (code, stdout, stderr) =
         run(&["plugin", "install", "probe", "--config-dir", config.text()]);
-    let plugin_path = config.0.join("plugins/probe/0.2.0").display().to_string();
     let want = r#"{
   "plugin": {
     "package": "@scope/plugin-probe",
     "version": "0.2.0",
-    "path": "PLUGIN_PATH",
+    "path": "plugins/probe/0.2.0",
     "enabled": true,
     "sidecars": {
       "@scope/sidecar-worker": "^0.1.0"
@@ -199,9 +199,8 @@ fn plugin_install_extracts_checked_archives_and_records_the_state() {
     "@scope/sidecar-worker": "0.1.0"
   }
 }
-"#
-    .replace("PLUGIN_PATH", &plugin_path);
-    assert_eq!((code, stdout.as_str()), (0, want.as_str()), "{stderr}");
+"#;
+    assert_eq!((code, stdout.as_str()), (0, want), "{stderr}");
     assert_eq!(
         read_text(&config.0.join("plugins/probe/0.2.0/ui/b.js")),
         "b 0.2.0"
@@ -216,14 +215,7 @@ fn plugin_install_extracts_checked_archives_and_records_the_state() {
         0o755
     );
     let installed = read_text(&config.0.join("plugins/installed.json"));
-    let sidecar_path = format!(
-        r#""path": "{}""#,
-        config
-            .0
-            .join("sidecars/scope-sidecar-worker/0.1.0")
-            .join(&platform)
-            .display()
-    );
+    let sidecar_path = format!(r#""path": "sidecars/scope-sidecar-worker/0.1.0/{platform}""#);
     assert!(installed.contains(&sidecar_path), "{installed}");
     assert!(installed.contains(r#""version": "0.2.0""#), "{installed}");
     // 같은 version 을 다시 설치하면 아무것도 바꾸지 않는다.
@@ -387,7 +379,7 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
     assert_eq!(names, ["0.3.0", "0.4.0"]);
     let (code, stdout, _) = run(&["plugin", "list", "--config-dir", config.text()]);
     assert!(
-        code == 0 && stdout.contains(r#""probe": {"#) && stdout.contains(r#""format": 1"#),
+        code == 0 && stdout.contains(r#""probe": {"#) && stdout.contains(r#""format": 2"#),
         "{stdout}"
     );
     let enabled = run_json(&["plugin", "enable", "probe", "--config-dir", config.text()]);
@@ -400,7 +392,7 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
     );
     assert_eq!(
         read_text(&config.0.join("plugins/installed.json")),
-        "{\n  \"format\": 1,\n  \"plugins\": {},\n  \"sidecars\": {}\n}\n"
+        "{\n  \"format\": 2,\n  \"plugins\": {},\n  \"sidecars\": {}\n}\n"
     );
     let (code, _, stderr) = run(&["plugin", "remove", "probe", "--config-dir", config.text()]);
     assert_eq!(
@@ -411,7 +403,8 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
 
 /// read_plugins_state 의 결과를 JSON 문장으로 만든다.
 fn state_json(config: &Dir) -> String {
-    let state = soksak_sok::plugins::read_plugins_state(&config.0).expect("plugins state");
+    let state = soksak_sok::plugins::read_plugins_state(&config.0, &mut std::io::sink())
+        .expect("plugins state");
     serde_json::to_string(&state).expect("state JSON")
 }
 
@@ -421,7 +414,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let config = Dir::new();
     assert_eq!(
         state_json(&config),
-        r#"{"registry":null,"index":null,"installed":{"format":1,"plugins":{},"sidecars":{}},"firstRun":true}"#
+        r#"{"registry":null,"index":null,"installed":{"format":2,"plugins":{},"sidecars":{}},"firstRun":true}"#
     );
     let registry = plugin_versions(&["0.2.0"]);
     run_json(&[
@@ -432,8 +425,15 @@ fn plugins_state_reports_the_registry_and_the_installation() {
         config.text(),
     ]);
     let platform = soksak_sok::current_platform().expect("platform");
-    soksak_sok::plugins::run_plugin_action(&config.0, "install", "probe", "0.0.2", &platform)
-        .expect("install");
+    soksak_sok::plugins::run_plugin_action(
+        &config.0,
+        "install",
+        "probe",
+        "0.0.2",
+        &platform,
+        &mut std::io::sink(),
+    )
+    .expect("install");
     let state: Value = serde_json::from_str(&state_json(&config)).unwrap();
     assert_eq!(state["registry"], format!("file://{}", registry.index()));
     assert_eq!(state["index"]["plugins"][0]["id"], "probe");
@@ -447,7 +447,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     assert!(error.contains(&registry.index()), "{error}");
     assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.2.0");
     std::fs::write(config.0.join("plugins/installed.json"), "{").unwrap();
-    let error = soksak_sok::plugins::read_plugins_state(&config.0)
+    let error = soksak_sok::plugins::read_plugins_state(&config.0, &mut std::io::sink())
         .err()
         .expect("invalid installed.json fails");
     assert!(
@@ -469,20 +469,47 @@ fn run_plugin_action_matches_the_plugin_commands() {
         config.text(),
     ]);
     let platform = soksak_sok::current_platform().expect("platform");
-    soksak_sok::plugins::run_plugin_action(&config.0, "install", "probe", "0.0.2", &platform)
-        .expect("install");
-    let disabled =
-        soksak_sok::plugins::run_plugin_action(&config.0, "disable", "probe", "0.0.2", "")
-            .expect("disable");
+    soksak_sok::plugins::run_plugin_action(
+        &config.0,
+        "install",
+        "probe",
+        "0.0.2",
+        &platform,
+        &mut std::io::sink(),
+    )
+    .expect("install");
+    let disabled = soksak_sok::plugins::run_plugin_action(
+        &config.0,
+        "disable",
+        "probe",
+        "0.0.2",
+        "",
+        &mut std::io::sink(),
+    )
+    .expect("disable");
     assert_eq!(serde_json::to_value(&disabled).unwrap()["enabled"], false);
     let (_, stdout, _) = run(&["plugin", "list", "--config-dir", config.text()]);
     assert!(stdout.contains(r#""enabled": false"#), "{stdout}");
-    let error = soksak_sok::plugins::run_plugin_action(&config.0, "rename", "probe", "0.0.2", "")
-        .err()
-        .expect("unknown action fails");
+    let error = soksak_sok::plugins::run_plugin_action(
+        &config.0,
+        "rename",
+        "probe",
+        "0.0.2",
+        "",
+        &mut std::io::sink(),
+    )
+    .err()
+    .expect("unknown action fails");
     assert_eq!(error, r#"unknown plugin action "rename""#);
-    let removed = soksak_sok::plugins::run_plugin_action(&config.0, "remove", "probe", "0.0.2", "")
-        .expect("remove");
+    let removed = soksak_sok::plugins::run_plugin_action(
+        &config.0,
+        "remove",
+        "probe",
+        "0.0.2",
+        "",
+        &mut std::io::sink(),
+    )
+    .expect("remove");
     assert_eq!(serde_json::to_string(&removed).unwrap(), "null");
     assert!(!config.0.join("plugins/probe").exists());
 }
@@ -502,9 +529,61 @@ fn file_errors_name_the_path_and_the_reason() {
     std::fs::create_dir_all(installed.parent().unwrap()).unwrap();
     std::fs::write(&installed, "{}").unwrap();
     std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o0)).unwrap();
-    let error = soksak_sok::plugins::read_plugins_state(&config.0)
+    let error = soksak_sok::plugins::read_plugins_state(&config.0, &mut std::io::sink())
         .err()
         .expect("an unreadable installed state is an error");
     std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o644)).unwrap();
     assert_eq!(error, format!("{}: permission denied", installed.display()));
+}
+
+// contract: install.installed.converts-format-1
+#[test]
+fn installed_format_1_is_converted_once() {
+    let config = Dir::new();
+    let file = config.0.join("plugins/installed.json");
+    std::fs::create_dir_all(file.parent().expect("plugins")).expect("plugins folder");
+    // 0.0.2 는 다른 자리의 설정 폴더 절대 경로를 기록했다. 설정 폴더를 옮긴 뒤에도 같은 설치 폴더로 끝난다.
+    let former = r#"{"format": 1, "plugins": {
+        "probe": {"package": "@scope/plugin-probe", "version": "0.2.0", "path": "/moved/config/plugins/probe/0.2.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}},
+        "sidecars": {"@scope/sidecar-worker": {"version": "0.1.1", "path": "/moved/config/sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"}}}"#;
+    std::fs::write(&file, former).expect("format 1");
+    let (code, stdout, stderr) = run(&["plugin", "list", "--config-dir", config.text()]);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            0,
+            format!("{}: converted format 1 to format 2\n", file.display()).as_str()
+        )
+    );
+    assert!(stdout.contains(r#""probe""#), "{stdout}");
+    let converted = read_text(&file);
+    for want in [
+        r#""format": 2"#,
+        r#""path": "plugins/probe/0.2.0""#,
+        r#""path": "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64""#,
+    ] {
+        assert!(converted.contains(want), "{want}: {converted}");
+    }
+    // 변환은 한 번이다.
+    let (code, _, stderr) = run(&["plugin", "list", "--config-dir", config.text()]);
+    assert_eq!((code, stderr.as_str()), (0, ""));
+    // 설치 폴더로 끝나지 않는 경로는 변환하지 않는다.
+    let wrong = former.replacen(
+        "/moved/config/plugins/probe/0.2.0",
+        "/moved/config/plugins/probe/0.1.0",
+        1,
+    );
+    std::fs::write(&file, &wrong).expect("wrong format 1");
+    let (code, _, stderr) = run(&["plugin", "list", "--config-dir", config.text()]);
+    assert_eq!(
+        (code, stderr),
+        (
+            1,
+            format!(
+                "sok: {}: plugins/installed.json probe: path /moved/config/plugins/probe/0.1.0 is not the installed folder plugins/probe/0.2.0\n",
+                file.display()
+            )
+        )
+    );
+    assert_eq!(read_text(&file), wrong);
 }

@@ -71,8 +71,9 @@ function enabledInstalledPlugins(configuration) {
   const file = join(configuration, "plugins", "installed.json");
   if (!existsSync(file)) throw new Error(`${file} does not exist; install plugins with sok first`);
   const installed = readJson(file);
-  if (installed?.format !== 1 || typeof installed.plugins !== "object" || installed.plugins === null) {
-    throw new Error(`${file}: expected format 1 with plugins`);
+  // 형식 1 파일은 sok 이나 애플리케이션이 읽을 때 형식 2 로 바꾼다.
+  if (installed?.format !== 2 || typeof installed.plugins !== "object" || installed.plugins === null) {
+    throw new Error(`${file}: expected format 2 with plugins`);
   }
   return Object.entries(installed.plugins)
     .filter(([, plugin]) => plugin.enabled === true)
@@ -80,8 +81,8 @@ function enabledInstalledPlugins(configuration) {
       if (typeof plugin.package !== "string" || typeof plugin.version !== "string" || typeof plugin.path !== "string") {
         throw new Error(`${file}: plugin ${id} requires package, version and path`);
       }
-      // 파일은 설치가 기록한 폴더에서만 읽는다(docs/spec/installation.md).
-      return { id, package: plugin.package, version: plugin.version, dir: plugin.path };
+      // 파일은 설치가 설정 디렉터리에 대한 상대 경로로 기록한 폴더에서만 읽는다(docs/spec/installation.md).
+      return { id, package: plugin.package, version: plugin.version, dir: join(configuration, plugin.path) };
     })
     .sort((a, b) => (a.id < b.id ? -1 : 1));
 }

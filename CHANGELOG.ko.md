@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R2-8: 두 release 애플리케이션은 bundle 식별자 `app.soksak.wails`와 `app.soksak.tauri`의 `soksak.app`이다. 개발 build는 `.dev` 식별자를 쓴다. release의 첫 시작은 이전 `com.soksak.*` 설정 폴더를 한 번 옮기고, `plugins/installed.json` 형식 2는 설치 폴더를 설정 폴더에 대한 상대 경로로 기록하며 형식 1 파일을 한 번 변환한다(R2-8-1).
 - G4-3: 테스트 증거는 이름이 바뀐 경로를 원래 경로와 함께 기록하고 `git status`가 따옴표로 감쌀 경로도 읽으므로, rename이 staged된 동안에도 `pnpm test`가 실패하지 않는다.
 - R2-1: Go module, package field, 문서의 설치 명령이 `soksak-app` organization(`github.com/soksak-app/core`)을 가리키고, 라이선스 보유자는 `soksak`이며, 기록에서 개인 경로를 지웠고, plugin 명세가 각 sibling 폴더의 GitHub repository와 checkout 배치를 정한다.
 - G1.4-116: 두 host는 연속 배치도 commit하기 전에 보이는 image 영역마다 준비된 크기의 raster를 기다리므로, divider 끌기가 더 이상 커진 영역에 이전 raster를 보이지 않는다. 비슷한 부하에서 끌기 frame 수는 줄지 않았다.

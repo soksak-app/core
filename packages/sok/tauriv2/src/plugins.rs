@@ -135,8 +135,11 @@ pub enum IndexState {
 
 /// registry 주소, 검사한 index, 설치 상태를 읽는다. index 를 읽지 못하면 그 오류를 index 자리에
 /// 담고, 설치 상태를 읽지 못하면 실패한다.
-pub fn read_plugins_state(config_dir: &Path) -> Result<PluginsState, String> {
-    let installed = read_installed(config_dir)?;
+pub fn read_plugins_state(
+    config_dir: &Path,
+    report: &mut dyn Write,
+) -> Result<PluginsState, String> {
+    let installed = read_installed(config_dir, report)?;
     let first_run = !config_dir
         .join(INSTALLED)
         .try_exists()
@@ -176,6 +179,7 @@ pub fn run_plugin_action(
     id: &str,
     core: &str,
     platform: &str,
+    report: &mut dyn Write,
 ) -> Result<PluginActionResult, String> {
     match action {
         "install" | "update" => Ok(PluginActionResult::Installed(install_plugin(
@@ -184,16 +188,18 @@ pub fn run_plugin_action(
             core,
             platform,
             action == "update",
+            report,
         )?)),
         "remove" | "enable" | "disable" => Ok(PluginActionResult::Changed(change_plugin(
-            config_dir, id, action,
+            config_dir, id, action, report,
         )?)),
         _ => Err(format!("unknown plugin action {action:?}")),
     }
 }
 
-/// plugins/installed.json 을 읽는다. 파일이 없으면 아무것도 설치하지 않은 상태다.
-fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
+/// plugins/installed.json 을 읽는다. 파일이 없으면 아무것도 설치하지 않은 상태다. 형식 1 파일은 한 번 형식 2 로
+/// 바꿔 저장하고 report 에 알린다(docs/spec/installation.md).
+pub fn read_installed(config_dir: &Path, report: &mut dyn Write) -> Result<InstalledState, String> {
     let path = config_dir.join(INSTALLED);
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
@@ -202,9 +208,21 @@ fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
         }
         Err(error) => return Err(crate::files::file_error(path.display(), &error)),
     };
-    let value: Value = serde_json::from_str(&text)
+    let mut value: Value = serde_json::from_str(&text)
         .map_err(|error| format!("{} is not valid JSON: {error}", path.display()))?;
-    install::validate_installed(&value)
+    let converted = install::is_installed_format_1(&value);
+    if converted {
+        value = install::convert_installed_format_1(&value)
+            .map_err(|error| format!("{}: {error}", path.display()))?;
+    }
+    let state = install::validate_installed(&value)
+        .map_err(|error| format!("{}: {error}", path.display()))?;
+    if converted {
+        write_installed(config_dir, &state)?;
+        writeln!(report, "{}: converted format 1 to format 2", path.display())
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(state)
 }
 
 /// installed.json 을 한 번에 바꾼다.
@@ -317,9 +335,10 @@ pub fn install_plugin(
     core: &str,
     platform: &str,
     update: bool,
+    report: &mut dyn Write,
 ) -> Result<PluginResult, String> {
     let index = read_registry(config_dir)?;
-    let mut state = read_installed(config_dir)?;
+    let mut state = read_installed(config_dir, report)?;
     let current = state.plugins.get(id).cloned();
     if update && current.is_none() {
         return Err(format!("plugin {id} is not installed"));
@@ -332,7 +351,8 @@ pub fn install_plugin(
     {
         return Ok(plugin_result(&state, id));
     }
-    let plugin_folder = config_dir.join(install::plugin_install_path(id, &version)?);
+    let plugin_path = install::plugin_install_path(id, &version)?;
+    let plugin_folder = config_dir.join(&plugin_path);
     install_archive(
         &format!("plugin {id} {version} package"),
         &selection.version.package,
@@ -340,11 +360,8 @@ pub fn install_plugin(
     )?;
     let mut chosen = vec![];
     for sidecar in &selection.sidecars {
-        let folder = config_dir.join(install::sidecar_install_path(
-            &sidecar.name,
-            &sidecar.version,
-            platform,
-        )?);
+        let path = install::sidecar_install_path(&sidecar.name, &sidecar.version, platform)?;
+        let folder = config_dir.join(&path);
         install_archive(
             &format!("sidecar {} {} {platform}", sidecar.name, sidecar.version),
             &sidecar.asset,
@@ -354,14 +371,14 @@ pub fn install_plugin(
             sidecar.name.clone(),
             InstalledSidecar {
                 version: sidecar.version.clone(),
-                path: folder.display().to_string(),
+                path,
             },
         ));
     }
     let entry = InstalledPlugin {
         package: selection.plugin.package.clone(),
         version: version.clone(),
-        path: plugin_folder.display().to_string(),
+        path: plugin_path,
         enabled: current.as_ref().is_none_or(|plugin| plugin.enabled),
         sidecars: selection.version.sidecars.clone(),
         previous: current.map(|plugin| plugin.version),
@@ -462,8 +479,9 @@ pub fn change_plugin(
     config_dir: &Path,
     id: &str,
     action: &str,
+    report: &mut dyn Write,
 ) -> Result<Option<InstalledPlugin>, String> {
-    let mut state = read_installed(config_dir)?;
+    let mut state = read_installed(config_dir, report)?;
     let Some(plugin) = state.plugins.get_mut(id) else {
         return Err(format!("plugin {id} is not installed"));
     };
@@ -486,11 +504,10 @@ pub(crate) fn run_plugins(
     positionals: &[String],
     values: &HashMap<String, String>,
     stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
     options: &Options,
 ) -> Result<(), Error> {
-    // 설치 상태는 절대 폴더를 기록하므로 설정 폴더도 절대 경로로 쓴다.
-    let config_dir = std::path::absolute(config_dir_of(values, options.identifier)?)
-        .map_err(|error| format!("configuration directory: {error}"))?;
+    let config_dir = config_dir_of(values, options)?;
     let command = format!("{} {}", positionals[0], positionals[1]);
     let want = if command == "plugin list" { 2 } else { 3 };
     if positionals.len() < want {
@@ -504,7 +521,7 @@ pub(crate) fn run_plugins(
             let index = use_registry(&config_dir, &positionals[2])?;
             Ok(print_json(stdout, &json!({"index": index}))?)
         }
-        "plugin list" => Ok(print_json(stdout, &read_installed(&config_dir)?)?),
+        "plugin list" => Ok(print_json(stdout, &read_installed(&config_dir, stderr)?)?),
         "plugin install" | "plugin update" | "plugin remove" | "plugin enable"
         | "plugin disable" => {
             let action = positionals[1].as_str();
@@ -520,6 +537,7 @@ pub(crate) fn run_plugins(
                 &positionals[2],
                 options.core_version,
                 &platform,
+                stderr,
             )?;
             Ok(print_json(stdout, &result)?)
         }

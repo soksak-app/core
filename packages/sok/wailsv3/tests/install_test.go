@@ -4,6 +4,8 @@ package tests
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -305,13 +307,13 @@ func TestArchivesAndInstallationPathsFollowTheDeclaredNames(t *testing.T) {
 
 // contract: install.installed.consistency
 func TestInstalledStateNamesOneVersionOfEachPluginAndSidecar(t *testing.T) {
-	text := `{"format": 1, "plugins": {
-		"probe": {"package": "@scope/plugin-probe", "version": "0.2.0", "path": "/config/plugins/probe/0.2.0", "enabled": true, "previous": "0.1.0", "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
-		"side": {"package": "plugin-side", "version": "1.0.0", "path": "/config/plugins/side/1.0.0", "enabled": false, "sidecars": {}}},
-		"sidecars": {"@scope/sidecar-worker": {"version": "0.1.1", "path": "/config/sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"}}}`
+	text := `{"format": 2, "plugins": {
+		"probe": {"package": "@scope/plugin-probe", "version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true, "previous": "0.1.0", "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+		"side": {"package": "plugin-side", "version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}},
+		"sidecars": {"@scope/sidecar-worker": {"version": "0.1.1", "path": "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"}}}`
 	state, err := sok.ValidateInstalled(decode(t, text))
 	if err != nil || state.Plugins["probe"].Previous != "0.1.0" || state.Sidecars["@scope/sidecar-worker"].Version != "0.1.1" ||
-		state.Plugins["probe"].Path != "/config/plugins/probe/0.2.0" {
+		state.Plugins["probe"].Path != "plugins/probe/0.2.0" {
 		t.Fatalf("%v %v", state, err)
 	}
 	cases := []struct {
@@ -323,12 +325,23 @@ func TestInstalledStateNamesOneVersionOfEachPluginAndSidecar(t *testing.T) {
 		{func(v any) { delete(v.(map[string]any), "sidecars") }, "plugins/installed.json sidecars: expected an object"},
 		{func(v any) { delete(at(v, "plugins", "side").(map[string]any), "sidecars") }, "plugins/installed.json side sidecars: expected an object"},
 		{func(v any) { v.(map[string]any)["sidecars"] = map[string]any{} }, "plugins/installed.json probe: sidecar @scope/sidecar-worker has no version in use"},
-		{func(v any) { at(v, "sidecars", "@scope/sidecar-worker").(map[string]any)["version"] = "0.2.0" }, "plugins/installed.json probe: sidecar @scope/sidecar-worker 0.2.0 does not satisfy ^0.1.0"},
 		{func(v any) {
-			at(v, "sidecars").(map[string]any)["unused"] = map[string]any{"version": "1.0.0", "path": "/config/sidecars/unused/1.0.0/darwin-arm64"}
+			sidecar := at(v, "sidecars", "@scope/sidecar-worker").(map[string]any)
+			sidecar["version"], sidecar["path"] = "0.2.0", "sidecars/scope-sidecar-worker/0.2.0/darwin-arm64"
+		}, "plugins/installed.json probe: sidecar @scope/sidecar-worker 0.2.0 does not satisfy ^0.1.0"},
+		{func(v any) {
+			at(v, "sidecars").(map[string]any)["unused"] = map[string]any{"version": "1.0.0", "path": "sidecars/unused/1.0.0/darwin-arm64"}
 		}, "plugins/installed.json: sidecar unused is named by no installed plugin"},
-		{func(v any) { at(v, "plugins", "probe").(map[string]any)["path"] = "plugins/probe/0.2.0" }, "plugins/installed.json probe: path must be an absolute folder"},
-		{func(v any) { delete(at(v, "sidecars", "@scope/sidecar-worker").(map[string]any), "path") }, "plugins/installed.json sidecar @scope/sidecar-worker: path must be an absolute folder"},
+		{func(v any) { v.(map[string]any)["format"] = 1.0 }, "plugins/installed.json: format must be 2"},
+		{func(v any) { at(v, "plugins", "probe").(map[string]any)["path"] = "/config/plugins/probe/0.2.0" }, "plugins/installed.json probe: path must be plugins/probe/0.2.0"},
+		{func(v any) { at(v, "plugins", "probe").(map[string]any)["path"] = "plugins/probe/../side/1.0.0" }, "plugins/installed.json probe: path must be plugins/probe/0.2.0"},
+		{func(v any) {
+			at(v, "sidecars", "@scope/sidecar-worker").(map[string]any)["path"] = "sidecars/scope-sidecar-worker/0.1.0/darwin-arm64"
+		}, "plugins/installed.json sidecar @scope/sidecar-worker: path must be sidecars/scope-sidecar-worker/0.1.1/<platform>"},
+		{func(v any) {
+			at(v, "sidecars", "@scope/sidecar-worker").(map[string]any)["path"] = "sidecars/scope-sidecar-worker/0.1.1/plan9-arm64"
+		}, "plugins/installed.json sidecar @scope/sidecar-worker: path must be sidecars/scope-sidecar-worker/0.1.1/<platform>"},
+		{func(v any) { delete(at(v, "sidecars", "@scope/sidecar-worker").(map[string]any), "path") }, "plugins/installed.json sidecar @scope/sidecar-worker: path must be sidecars/scope-sidecar-worker/0.1.1/<platform>"},
 		{func(v any) { at(v, "sidecars").(map[string]any)["@scope/sidecar-worker"] = "0.1.1" }, "plugins/installed.json sidecar @scope/sidecar-worker: expected an object"},
 	}
 	for _, c := range cases {
@@ -336,5 +349,45 @@ func TestInstalledStateNamesOneVersionOfEachPluginAndSidecar(t *testing.T) {
 		c.change(value)
 		_, err := sok.ValidateInstalled(value)
 		rejects(t, err, c.want)
+	}
+}
+
+// contract: install.installed.converts-format-1
+func TestInstalledFormat1IsConvertedOnce(t *testing.T) {
+	config := t.TempDir()
+	file := filepath.Join(config, "plugins/installed.json")
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// 0.0.2 는 다른 자리의 설정 폴더 절대 경로를 기록했다. 설정 폴더를 옮긴 뒤에도 같은 설치 폴더로 끝난다.
+	former := `{"format": 1, "plugins": {
+		"probe": {"package": "@scope/plugin-probe", "version": "0.2.0", "path": "/moved/config/plugins/probe/0.2.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}},
+		"sidecars": {"@scope/sidecar-worker": {"version": "0.1.1", "path": "/moved/config/sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"}}}`
+	if err := os.WriteFile(file, []byte(former), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := run("plugin", "list", "--config-dir", config)
+	if code != 0 || stderr != file+": converted format 1 to format 2\n" || !strings.Contains(stdout, `"probe"`) {
+		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+	converted := readText(t, file)
+	for _, want := range []string{`"format": 2`, `"path": "plugins/probe/0.2.0"`, `"path": "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"`} {
+		if !strings.Contains(converted, want) {
+			t.Fatalf("installed.json lacks %s: %s", want, converted)
+		}
+	}
+	// 변환은 한 번이다.
+	if code, _, stderr := run("plugin", "list", "--config-dir", config); code != 0 || stderr != "" {
+		t.Fatalf("second read: code %d stderr %q", code, stderr)
+	}
+	// 설치 폴더로 끝나지 않는 경로는 변환하지 않는다.
+	wrong := strings.Replace(former, "/moved/config/plugins/probe/0.2.0", "/moved/config/plugins/probe/0.1.0", 1)
+	if err := os.WriteFile(file, []byte(wrong), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr = run("plugin", "list", "--config-dir", config)
+	want := "sok: " + file + ": plugins/installed.json probe: path /moved/config/plugins/probe/0.1.0 is not the installed folder plugins/probe/0.2.0\n"
+	if code != 1 || stderr != want || readText(t, file) != wrong {
+		t.Fatalf("code %d stderr %q want %q", code, stderr, want)
 	}
 }

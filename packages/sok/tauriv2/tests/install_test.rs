@@ -394,26 +394,30 @@ fn archives_and_installation_paths_follow_the_declared_names() {
 // contract: install.installed.consistency
 #[test]
 fn installed_state_names_one_version_of_each_plugin_and_sidecar() {
-    let state = json!({"format": 1, "plugins": {
-        "probe": {"package": "@scope/plugin-probe", "version": "0.2.0", "path": "/config/plugins/probe/0.2.0", "enabled": true,
+    let state = json!({"format": 2, "plugins": {
+        "probe": {"package": "@scope/plugin-probe", "version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true,
             "previous": "0.1.0", "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
-        "side": {"package": "plugin-side", "version": "1.0.0", "path": "/config/plugins/side/1.0.0", "enabled": false, "sidecars": {}}},
-        "sidecars": {"@scope/sidecar-worker": {"version": "0.1.1", "path": "/config/sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"}}});
+        "side": {"package": "plugin-side", "version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}},
+        "sidecars": {"@scope/sidecar-worker": {"version": "0.1.1", "path": "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"}}});
     let read = install::validate_installed(&state).expect("installed");
     assert_eq!(read.plugins["probe"].previous.as_deref(), Some("0.1.0"));
     assert_eq!(read.sidecars["@scope/sidecar-worker"].version, "0.1.1");
-    assert_eq!(read.plugins["probe"].path, "/config/plugins/probe/0.2.0");
+    assert_eq!(read.plugins["probe"].path, "plugins/probe/0.2.0");
     type Change = fn(&mut Value);
-    let cases: [(Change, &str); 10] = [
+    let cases: [(Change, &str); 14] = [
         (|v| _ = v["plugins"]["probe"].as_object_mut().unwrap().remove("enabled"), "plugins/installed.json probe: enabled must be true or false"),
         (|v| v["plugins"]["side"]["package"] = json!("@scope/plugin-probe"), "plugins/installed.json side: package @scope/plugin-probe is installed twice"),
         (|v| _ = v.as_object_mut().unwrap().remove("sidecars"), "plugins/installed.json sidecars: expected an object"),
         (|v| _ = v["plugins"]["side"].as_object_mut().unwrap().remove("sidecars"), "plugins/installed.json side sidecars: expected an object"),
         (|v| v["sidecars"] = json!({}), "plugins/installed.json probe: sidecar @scope/sidecar-worker has no version in use"),
-        (|v| v["sidecars"]["@scope/sidecar-worker"]["version"] = json!("0.2.0"), "plugins/installed.json probe: sidecar @scope/sidecar-worker 0.2.0 does not satisfy ^0.1.0"),
-        (|v| v["sidecars"]["unused"] = json!({"version": "1.0.0", "path": "/config/sidecars/unused/1.0.0/darwin-arm64"}), "plugins/installed.json: sidecar unused is named by no installed plugin"),
-        (|v| v["plugins"]["probe"]["path"] = json!("plugins/probe/0.2.0"), "plugins/installed.json probe: path must be an absolute folder"),
-        (|v| _ = v["sidecars"]["@scope/sidecar-worker"].as_object_mut().unwrap().remove("path"), "plugins/installed.json sidecar @scope/sidecar-worker: path must be an absolute folder"),
+        (|v| v["sidecars"]["@scope/sidecar-worker"] = json!({"version": "0.2.0", "path": "sidecars/scope-sidecar-worker/0.2.0/darwin-arm64"}), "plugins/installed.json probe: sidecar @scope/sidecar-worker 0.2.0 does not satisfy ^0.1.0"),
+        (|v| v["sidecars"]["unused"] = json!({"version": "1.0.0", "path": "sidecars/unused/1.0.0/darwin-arm64"}), "plugins/installed.json: sidecar unused is named by no installed plugin"),
+        (|v| v["format"] = json!(1), "plugins/installed.json: format must be 2"),
+        (|v| v["plugins"]["probe"]["path"] = json!("/config/plugins/probe/0.2.0"), "plugins/installed.json probe: path must be plugins/probe/0.2.0"),
+        (|v| v["plugins"]["probe"]["path"] = json!("plugins/probe/../side/1.0.0"), "plugins/installed.json probe: path must be plugins/probe/0.2.0"),
+        (|v| v["sidecars"]["@scope/sidecar-worker"]["path"] = json!("sidecars/scope-sidecar-worker/0.1.0/darwin-arm64"), "plugins/installed.json sidecar @scope/sidecar-worker: path must be sidecars/scope-sidecar-worker/0.1.1/<platform>"),
+        (|v| v["sidecars"]["@scope/sidecar-worker"]["path"] = json!("sidecars/scope-sidecar-worker/0.1.1/plan9-arm64"), "plugins/installed.json sidecar @scope/sidecar-worker: path must be sidecars/scope-sidecar-worker/0.1.1/<platform>"),
+        (|v| _ = v["sidecars"]["@scope/sidecar-worker"].as_object_mut().unwrap().remove("path"), "plugins/installed.json sidecar @scope/sidecar-worker: path must be sidecars/scope-sidecar-worker/0.1.1/<platform>"),
         (|v| v["sidecars"]["@scope/sidecar-worker"] = json!("0.1.1"), "plugins/installed.json sidecar @scope/sidecar-worker: expected an object"),
     ];
     for (change, want) in cases {

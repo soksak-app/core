@@ -15,7 +15,7 @@ const state = {
   registry: "file:///registry/index.json",
   index: { plugins: [entry("term", "Terminal", ["0.1.0", "0.10.0", "0.9.0"]), entry("db", "DB", ["2.0.0"]), entry("off", "Off", ["1.0.0"])] },
   installed: {
-    format: 1,
+    format: 2,
     plugins: {
       term: { version: "0.1.0", enabled: true, sidecars: {} },
       notes: { version: "1.1.0", enabled: true, sidecars: {} },
@@ -51,7 +51,7 @@ test("a row names its sidecars from the installed entry, else the newest registr
       { version: "2.0.0", sidecars: { "@x/db": "^1.0.0", "@a/b": "1.0.0" } },
     ] }] },
     installed: {
-      format: 1,
+      format: 2,
       plugins: { term: { version: "0.1.0", enabled: true, sidecars: { [vt]: "^0.1.0" } } },
       sidecars: { [vt]: { version: "0.1.2", path: "/config/sidecars/soksak-sidecar-vt/0.1.2/darwin-arm64" } },
     },
@@ -131,7 +131,7 @@ function starterHost({ registry = "file:///registry/index.json", index, firstRun
     async call(method, params) {
       calls.push([method, params ?? null]);
       if (method === "pluginsRun") { first = false; return null; }
-      return { registry, index, installed: { format: 1, plugins: {}, sidecars: {} }, firstRun: first };
+      return { registry, index, installed: { format: 2, plugins: {}, sidecars: {} }, firstRun: first };
     },
   };
 }

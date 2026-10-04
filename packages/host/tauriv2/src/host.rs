@@ -76,16 +76,33 @@ fn flag(name: &str) -> Option<String> {
     None
 }
 
-/// 설정 디렉터리. `--config-dir` 가 없으면 애플리케이션 설정 디렉터리이다. 디렉터리를 만들고 정규 경로를 반환한다.
+/// 설정 디렉터리. `--config-dir` 가 없으면 사용자 설정 디렉터리 아래 이 build 의 식별자 디렉터리이다
+/// (docs/spec/projects.md#persistence). 디렉터리를 만들고 정규 경로를 반환한다.
 pub(crate) fn config_directory(app: &tauri::AppHandle) -> tauri::Result<std::path::PathBuf> {
     let directory = match flag("config-dir") {
         Some(directory) => std::path::PathBuf::from(directory),
-        None => app.path().app_config_dir()?,
+        None => app
+            .path()
+            .config_dir()?
+            .join(soksak_sok::identity::identity().0),
     };
     workspace::prepare_config_directory(&directory, |path| {
         platform::current()?.create_private_directories(path)
     })
     .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))
+}
+
+/// `--config-dir` 가 없으면 이전 설정 디렉터리를 이 build 의 식별자 디렉터리로 옮기고 옮긴 경로를 돌려준다
+/// (docs/spec/projects.md#persistence). 설정 디렉터리를 처음 정하기 전에 한 번 부른다.
+fn move_former_config_directory(
+    app: &tauri::AppHandle,
+) -> tauri::Result<Option<std::path::PathBuf>> {
+    if flag("config-dir").is_some() {
+        return Ok(None);
+    }
+    let (identifier, former) = soksak_sok::identity::identity();
+    soksak_sok::identity::move_former_config_dir(&app.path().config_dir()?, former, identifier)
+        .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))
 }
 
 /// 애플리케이션 주 창의 메인 페이지에 명령 실행을 요청한다. 메뉴 이벤트는 메인 스레드에서 처리된다.
@@ -151,6 +168,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 // 프로세스를 즉시 끝낸다 — 저장 없이 끝나는 것은 이미 두 번째 신호의 설계다.
                 std::process::exit(0);
             }))?;
+            let moved = move_former_config_directory(app)?;
             let directory = config_directory(app)?;
             // 지난 실행이 남긴 WebKit 자식을 기록으로 수확하고, 남의 것을 덮지 않게 지금
             // 떠 있는 WebKit 을 기준선으로 찍는다(V5-113). 아직 창이 없으므로 이 실행의
@@ -169,7 +187,14 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             exposure::start(app, &directory)?;
             // 애플리케이션 로그는 엔드포인트가 process lock 을 잡은 뒤에 연다. 그래서 같은 파일에 쓰는
             // 다른 실행이 없다(docs/spec/hosts.md#application-log).
-            application_log::start_application_log(&directory, &app.config().identifier)?;
+            application_log::start_application_log(&directory, soksak_sok::identity::identity().0)?;
+            if let Some(moved) = moved {
+                eprintln!(
+                    "configuration directory moved from {} to {}",
+                    moved.display(),
+                    directory.display()
+                );
+            }
             Ok(())
         })
         .build();

@@ -32,11 +32,11 @@ func writeInstalled(t *testing.T, config string, files map[string]string) {
 func installedFixture(t *testing.T) string {
 	config := t.TempDir()
 	writeInstalled(t, config, map[string]string{
-		"plugins/installed.json": `{"format": 1, "plugins": {
-			"term": {"package": "@scope/plugin-term", "version": "0.1.0", "path": "` + filepath.Join(config, "plugins/term/0.1.0") + `", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
-			"alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "` + filepath.Join(config, "plugins/alpha/1.0.0") + `", "enabled": true, "sidecars": {}},
-			"off": {"package": "plugin-off", "version": "1.0.0", "path": "` + filepath.Join(config, "plugins/off/1.0.0") + `", "enabled": false, "sidecars": {}}},
-			"sidecars": {"@scope/sidecar-worker": {"version": "0.1.2", "path": "` + filepath.Join(config, "sidecars/scope-sidecar-worker/0.1.2/darwin-arm64") + `"}}}`,
+		"plugins/installed.json": `{"format": 2, "plugins": {
+			"term": {"package": "@scope/plugin-term", "version": "0.1.0", "path": "plugins/term/0.1.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+			"alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}},
+			"off": {"package": "plugin-off", "version": "1.0.0", "path": "plugins/off/1.0.0", "enabled": false, "sidecars": {}}},
+			"sidecars": {"@scope/sidecar-worker": {"version": "0.1.2", "path": "sidecars/scope-sidecar-worker/0.1.2/darwin-arm64"}}}`,
 		"plugins/term/0.1.0/plugin.json":                                `{"id": "term", "sidecars": ["@scope/sidecar-worker"]}`,
 		"plugins/term/0.1.0/ui/term.js":                                 "export const term = 1;",
 		"plugins/term/0.1.0/diagnostics.json":                           "{\n  \"module\": \"ui/d.js\",\n  \"exposes\": {}\n}\n",
@@ -63,6 +63,22 @@ func TestInstalledPluginsDocumentListsEnabledPluginsById(t *testing.T) {
 	}
 }
 
+// contract: installed.document.lists-enabled-plugins
+func TestAMovedConfigurationServesItsInstalledPlugins(t *testing.T) {
+	config := installedFixture(t)
+	// 0.0.2 는 설정 폴더의 절대 경로를 기록했다. 다른 자리에서 옮겨 온 설정 폴더도 자기 안의 설치 폴더를 쓴다.
+	writeInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 1, "plugins": {
+		"alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "/moved/config/plugins/alpha/1.0.0", "enabled": true, "sidecars": {}}},
+		"sidecars": {}}`})
+	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}}]}` {
+		t.Fatalf("moved document %s", got)
+	}
+	data, err := os.ReadFile(filepath.Join(config, "plugins/installed.json"))
+	if err != nil || !strings.Contains(string(data), `"path": "plugins/alpha/1.0.0"`) || !strings.Contains(string(data), `"format": 2`) {
+		t.Fatalf("installed.json %s %v", data, err)
+	}
+}
+
 // contract: installed.document.reports-errors
 func TestInstalledPluginsDocumentReportsAnInvalidState(t *testing.T) {
 	config := installedFixture(t)
@@ -80,8 +96,8 @@ func TestInstalledPluginsDocumentReportsAnInvalidState(t *testing.T) {
 	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"error":"`+filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")+`: the plugin manifest is missing"}` {
 		t.Fatalf("missing manifest %s", got)
 	}
-	writeInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 2, "plugins": {}, "sidecars": {}}`})
-	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"error":"`+filepath.Join(config, "plugins/installed.json")+`: plugins/installed.json: format must be 1"}` {
+	writeInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 3, "plugins": {}, "sidecars": {}}`})
+	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"error":"`+filepath.Join(config, "plugins/installed.json")+`: plugins/installed.json: format must be 2"}` {
 		t.Fatalf("state error %s", got)
 	}
 }

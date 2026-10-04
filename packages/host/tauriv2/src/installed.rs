@@ -8,7 +8,7 @@ use std::sync::{Arc, OnceLock};
 
 use serde::Serialize;
 use serde_json::value::RawValue;
-use soksak_sok::install::{self, InstalledState, INSTALLED};
+use soksak_sok::install::InstalledState;
 
 use crate::sidecars::SidecarDeclaration;
 
@@ -23,24 +23,10 @@ struct InstalledPlugin {
     dir: PathBuf,
 }
 
-/// plugins/installed.json 을 읽고 검사한다. 파일이 없으면 아무것도 설치하지 않은 상태다.
-fn read_installed_state(config_dir: &Path) -> Result<InstalledState, String> {
-    let file = config_dir.join(INSTALLED);
-    let text = match std::fs::read_to_string(&file) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(InstalledState::empty())
-        }
-        Err(error) => return Err(format!("{}: {error}", file.display())),
-    };
-    let value: serde_json::Value = serde_json::from_str(&text)
-        .map_err(|error| format!("{} is not valid JSON: {error}", file.display()))?;
-    install::validate_installed(&value).map_err(|error| format!("{}: {error}", file.display()))
-}
-
-/// 켜진 설치 plugin 을 id 순서로 돌려준다.
+/// 켜진 설치 plugin 을 id 순서로 돌려준다. 설치 폴더는 설정 폴더에 대한 상대 경로로 기록되며, 형식 1 파일의 변환
+/// 보고는 애플리케이션 로그인 표준 오류에 쓴다(docs/spec/installation.md).
 fn enabled_plugins(config_dir: &Path) -> Result<(Vec<InstalledPlugin>, InstalledState), String> {
-    let state = read_installed_state(config_dir)?;
+    let state = soksak_sok::plugins::read_installed(config_dir, &mut std::io::stderr())?;
     let mut plugins = vec![];
     for (id, plugin) in &state.plugins {
         if !plugin.enabled {
@@ -50,7 +36,7 @@ fn enabled_plugins(config_dir: &Path) -> Result<(Vec<InstalledPlugin>, Installed
             id: id.clone(),
             package: plugin.package.clone(),
             version: plugin.version.clone(),
-            dir: PathBuf::from(&plugin.path),
+            dir: config_dir.join(&plugin.path),
         });
     }
     plugins.sort_by(|a, b| a.id.cmp(&b.id));
@@ -220,7 +206,7 @@ pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, 
                     file.display()
                 )
             })?;
-            let folder = PathBuf::from(&sidecar.path);
+            let folder = config_dir.join(&sidecar.path);
             let declaration = folder.join("sidecar.json");
             let data = std::fs::read(&declaration)
                 .map_err(|error| format!("{}: {error}", declaration.display()))?;

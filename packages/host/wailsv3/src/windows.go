@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -63,20 +61,9 @@ type Host struct {
 // 무언가를 배치하거나 읽으므로 어느 것도 성공할 수 없다.
 var errNoWindow = errors.New("the main window is gone")
 
-func newHost(sidecars *Sidecars, configDir string) (*Host, error) {
-	directory := configDir
-	if directory == "" {
-		config, err := os.UserConfigDir()
-		if err != nil {
-			return nil, err
-		}
-		directory = filepath.Join(config, ApplicationIdentifier)
-	}
-	h := &Host{workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: sidecars,
+func newHost(directory string) (*Host, error) {
+	h := &Host{workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{},
 		relay: NewRelay[relayTarget]()}
-	if sidecars != nil {
-		sidecars.ClosingChanged = h.sidecarsChanged
-	}
 	plugins, err := NewPlugins(directory, h.notifyPlugins)
 	if err != nil {
 		return nil, err

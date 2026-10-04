@@ -24,18 +24,16 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 	_ "github.com/soksak-app/core/packages/host/wailsv3/src/platform/darwin"
 	_ "github.com/soksak-app/core/packages/host/wailsv3/src/platform/windows"
+	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 	// plugin 작업(plugins.go)은 command line 의 installer library 를 쓰므로 그 platform 구현도 등록한다.
 	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/darwin"
 	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/windows"
 )
 
-// ApplicationIdentifier 는 애플리케이션 번들 식별자이며 기본 설정 디렉터리의 이름이다(docs/spec/projects.md). 번들의
-// Info.plist 와 같은 값이다.
-const ApplicationIdentifier = "com.soksak.wails"
-
 // Options 는 애플리케이션이 명령행에서 읽어 전달하는 값이다.
 type Options struct {
-	// ConfigDir 은 설정 디렉터리다. 비어 있으면 사용자 설정 디렉터리의 ApplicationIdentifier 디렉터리를 사용한다.
+	// ConfigDir 은 설정 디렉터리다. 비어 있으면 사용자 설정 디렉터리 아래 이 build 의 식별자 디렉터리를 사용한다
+	// (docs/spec/projects.md#persistence).
 	ConfigDir string
 }
 
@@ -78,13 +76,19 @@ func Run(assets fs.FS, options Options) error {
 		return err
 	}
 	backgroundScript = string(background)
+	identifier, former := sok.Identity()
 	configDirectory := options.ConfigDir
+	// moved 는 이 시작이 옮긴 이전 설정 디렉터리다. 애플리케이션 로그를 연 뒤에 알린다.
+	moved := ""
 	if configDirectory == "" {
 		config, err := os.UserConfigDir()
 		if err != nil {
 			return err
 		}
-		configDirectory = filepath.Join(config, ApplicationIdentifier)
+		if moved, err = sok.MoveFormerConfigDir(config, former, identifier); err != nil {
+			return err
+		}
+		configDirectory = filepath.Join(config, identifier)
 	}
 	configDirectory, err = PrepareConfigDirectory(configDirectory)
 	if err != nil {
@@ -97,15 +101,7 @@ func Run(assets fs.FS, options Options) error {
 	// WebKit 을 기준선으로 찍는다(V5-113). 아직 창이 없으므로 이 실행의 WebKit 은 없다.
 	ReapRecordedWebKit(configDirectory)
 	SnapshotBaseline()
-	declarations, err := InstalledSidecars(configDirectory)
-	if err != nil {
-		return fmt.Errorf("installed plugins: %w", err)
-	}
-	sidecars, err := NewSidecars(declarations, configDirectory)
-	if err != nil {
-		return err
-	}
-	host, err := newHost(sidecars, configDirectory)
+	host, err := newHost(configDirectory)
 	if err != nil {
 		return err
 	}
@@ -125,11 +121,27 @@ func Run(assets fs.FS, options Options) error {
 	defer host.endpoint.Close()
 	// 애플리케이션 로그는 Serve 가 process lock 을 잡은 뒤에 연다. 그래서 같은 파일에 쓰는 다른
 	// 실행이 없다(docs/spec/hosts.md#application-log).
-	if err := StartApplicationLog(configDirectory, ApplicationIdentifier); err != nil {
+	if err := StartApplicationLog(configDirectory, identifier); err != nil {
 		return err
 	}
 	// 호스트의 줄은 두 호스트가 같은 형식으로 접두사 없이 쓴다. 시각은 실행의 첫 줄이 가진다.
 	log.SetFlags(0)
+	if moved != "" {
+		log.Printf("configuration directory moved from %s to %s", moved, configDirectory)
+	}
+	// 설치 상태는 process lock 을 잡고 애플리케이션 로그를 연 뒤에 읽는다. 형식 1 파일의 변환은 이 실행이 소유한
+	// 설정 디렉터리에만 쓰고, 그 보고는 애플리케이션 로그에 남는다(docs/spec/installation.md). 아직 endpoint.json 이
+	// 없으므로 sidecar 를 쓰는 요청은 오지 않는다.
+	declarations, err := InstalledSidecars(configDirectory)
+	if err != nil {
+		return fmt.Errorf("installed plugins: %w", err)
+	}
+	sidecars, err := NewSidecars(declarations, configDirectory)
+	if err != nil {
+		return err
+	}
+	host.sidecars = sidecars
+	sidecars.ClosingChanged = host.sidecarsChanged
 	app := application.New(application.Options{
 		Name: "soksak", Description: "soksak layout running in Wails v3",
 		Assets: application.AssetOptions{Handler: application.BundledAssetFileServer(assets), Middleware: func(next http.Handler) http.Handler {

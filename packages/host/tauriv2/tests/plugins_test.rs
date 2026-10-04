@@ -15,6 +15,7 @@ fn sok_json(args: &[&str]) -> Value {
     let paths = tempfile::tempdir().unwrap();
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
+        former: None,
         paths_dir: paths.path(),
         core_version: soksak_sok::version::CORE_VERSION,
     };
@@ -109,7 +110,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let (plugins, _) = new_plugins(config.path());
     assert_eq!(
         state_text(&plugins),
-        r#"{"registry":null,"index":null,"installed":{"format":1,"plugins":{},"sidecars":{}},"firstRun":true}"#
+        r#"{"registry":null,"index":null,"installed":{"format":2,"plugins":{},"sidecars":{}},"firstRun":true}"#
     );
     let registry = plugin_registry();
     soksak_sok::plugins::use_registry(config.path(), &registry.index).unwrap();
@@ -140,10 +141,7 @@ fn plugins_run_changes_the_installation_like_the_command() {
     soksak_sok::plugins::use_registry(config.path(), &registry.index).unwrap();
     let (plugins, seen) = new_plugins(config.path());
     let installed = plugins.run(request("install", json!("probe"))).unwrap();
-    let want = format!(
-        r#"{{"plugin":{{"package":"plugin-probe","version":"0.0.2","path":"{}","enabled":true,"sidecars":{{}}}},"sidecars":{{}}}}"#,
-        config.path().join("plugins/probe/0.0.2").display()
-    );
+    let want = r#"{"plugin":{"package":"plugin-probe","version":"0.0.2","path":"plugins/probe/0.0.2","enabled":true,"sidecars":{}},"sidecars":{}}"#;
     assert_eq!(serde_json::to_string(&installed).unwrap(), want);
     for action in ["update", "disable", "enable"] {
         plugins.run(request(action, json!("probe"))).unwrap();
