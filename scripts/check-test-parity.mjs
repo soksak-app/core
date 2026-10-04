@@ -29,7 +29,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 
 // 기존 구성요소 연결도 파일 목록으로 유지한다. 동작 증거로 해석하지 않는다.
 const MATRIX = [
-  lane("Node repeat target", "build", ["Makefile"], ["scripts/test/node-repeat.test.mjs"], { testLanguage: "js-ts" }),
+  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/node-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs"], { testLanguage: "js-ts" }),
   lane("native library pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs"], { testLanguage: "js-ts" }),
   lane("workspace audit scripts", "js-ts", [
     "scripts/check-boundaries.mjs",
@@ -1189,6 +1189,23 @@ const FEATURE_LINKS = [
     ],
     expected: "One image presentation timeout writes one application log line, the page display line, on both hosts.",
     levels: ["unit", "application"],
+  },
+  {
+    id: "F52",
+    implementation: [
+      { file: "Makefile", symbol: "windows-build-check:" },
+      { file: "packages/host/wailsv3/src/platform/darwin/endpoint.go", symbol: "err != syscall.EPERM" },
+      { file: "packages/host/tauriv2/src/platform/darwin/endpoint.rs", symbol: "Some(EPERM) => {}" },
+    ],
+    tests: [
+      { file: "scripts/test/windows-build-check.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
+      { file: "scripts/test/windows-build-check.test.mjs", id: "hosts-check runs the Windows build check" },
+      { file: "scripts/test/windows-build-check.test.mjs", id: "the Windows Rust build check names the missing Windows C compiler" },
+      { file: "packages/host/wailsv3/tests/service_process_test.go", id: "TestAServiceProcessOfAnotherUserExists" },
+      { file: "packages/host/tauriv2/tests/service_process_test.rs", id: "a_service_process_of_another_user_exists" },
+    ],
+    expected: "Both hosts compile for Windows in the checks, every unsupported Windows operation returns its error, and a service pid of another user exists.",
+    levels: ["unit"],
   },
   {
     id: "F45",

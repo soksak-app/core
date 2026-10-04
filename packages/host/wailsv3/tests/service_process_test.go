@@ -26,10 +26,32 @@ func TestAZombieServiceProcessDoesNotExist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("platform failed: %v", err)
 	}
-	if current.ServiceProcessExists(sleep.Process.Pid) {
+	exists, err := current.ServiceProcessExists(sleep.Process.Pid)
+	if err != nil {
+		t.Fatalf("inspect the zombie: %v", err)
+	}
+	if exists {
 		t.Fatal("a zombie service process must not exist")
 	}
 	if err := sleep.Wait(); err == nil {
 		t.Fatal("the killed sleep exited successfully")
+	}
+}
+
+// 다른 사용자의 프로세스에는 신호 확인이 거부된다. 거부(EPERM)는 그 번호의 프로세스가 있다는 뜻이므로 그 service
+// 프로세스는 존재한다.
+// contract: sidecars-transport.endpoint.foreign-service-process-exists
+func TestAServiceProcessOfAnotherUserExists(t *testing.T) {
+	current, err := platform.Current()
+	if err != nil {
+		t.Fatalf("platform failed: %v", err)
+	}
+	// 1 은 root 가 실행하는 launchd 다.
+	exists, err := current.ServiceProcessExists(1)
+	if err != nil {
+		t.Fatalf("inspect process 1: %v", err)
+	}
+	if !exists {
+		t.Fatal("process 1 of another user must exist")
 	}
 }

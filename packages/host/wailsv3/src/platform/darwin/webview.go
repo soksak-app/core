@@ -22,7 +22,7 @@ void nativeWebviewHidden(void *view, bool hidden);
 void nativeWebviewBackground(void *view, bool enabled);
 void nativeWebviewEval(void *view, const char *script);
 void nativeWebviewClose(void *view);
-void nativeWindowConfigureMain(void *window, bool dark);
+bool nativeWindowConfigureMain(void *window, bool dark);
 bool nativeWindowSetMainWebview(void *window);
 
 extern void fileDropped(void *context, char *json);
@@ -98,6 +98,7 @@ static void modalAligned(void* parentWindow, double x, double y, double w, doubl
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"runtime/cgo"
 	"unsafe"
@@ -160,8 +161,11 @@ func (implementation) EvaluateScript(view unsafe.Pointer, script string) {
 
 func (implementation) CloseWebview(view unsafe.Pointer) { C.nativeWebviewClose(view) }
 
-func (implementation) ConfigureMainWindow(window unsafe.Pointer, dark bool) {
-	C.nativeWindowConfigureMain(window, C.bool(dark))
+func (implementation) ConfigureMainWindow(window unsafe.Pointer, dark bool) error {
+	if !bool(C.nativeWindowConfigureMain(window, C.bool(dark))) {
+		return errors.New("the window has no main webview or the requested appearance is unavailable")
+	}
+	return nil
 }
 
 //export fileDropped

@@ -206,7 +206,11 @@ func Run(assets fs.FS, options Options) error {
 	// 표의 언어에 대응한 값이고 페이지가 설정 언어를 알리면 SetMenuLanguage 가 같은 표로 메뉴를
 	// 다시 만든다(docs/spec/host-contract.md 의 Application menu).
 	menuWindowNew = host.WindowNew
-	assignMenuLanguage(InitialMenuLanguage())
+	language, err := InitialMenuLanguage()
+	if err != nil {
+		return err
+	}
+	assignMenuLanguage(language)
 	menu, menuFailure := ApplicationMenu()
 	if menuFailure != nil {
 		return menuFailure

@@ -31,7 +31,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
@@ -821,7 +820,13 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		// 영구 service 는 이 애플리케이션 프로세스의 수명이 아니라 configuration
 		// 디렉터리에 속한다. 애플리케이션이 비정상 종료해도 복구 service 가 함께
 		// 종료되지 않도록 새 session 을 시작한다.
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		current, err := platform.Current()
+		if err != nil {
+			return nil, err
+		}
+		if err := current.NewSession(cmd); err != nil {
+			return nil, fmt.Errorf("sidecar %s: new session: %w", name, err)
+		}
 		cmd.Stdin = nil
 		// 서비스는 이 호스트보다 오래 살므로 호스트의 표준 오류가 아니라 자기 로그 파일에 쓴다
 		// (docs/spec/hosts.md#application-log). endpoint 가 없으므로 그 파일에 쓰는 서비스가 없다.
@@ -882,7 +887,11 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !current.ServiceProcessExists(endpoint.PID) {
+	exists, err := current.ServiceProcessExists(endpoint.PID)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
 		if err := os.Remove(endpointPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("sidecar %s: remove stale endpoint: %w", name, err)
 		}

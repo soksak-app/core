@@ -118,17 +118,13 @@ pub fn text_command(id: &str) -> bool {
 
 /// 페이지가 설정 언어를 보내기 전의 초기 메뉴 언어. 시스템 선호 언어의 주 태그를 표의
 /// 언어에서 찾고 표에 없으면 기본 언어를 쓴다(docs/spec/host-contract.md 의 Application menu).
-/// 시스템 언어 조사는 플랫폼 계층이 제공한다.
-pub fn initial_language() -> String {
-    // 기본값: 시스템 언어 조사가 없는 플랫폼은 기본 언어가 초기 언어다.
-    let tag = crate::platform::current()
-        .and_then(|platform| platform.preferred_language())
-        // 기본값: 시스템 언어 조사가 없는 플랫폼은 빈 태그가 와 표의 기본 언어로 내려간다.
-        .unwrap_or_default();
+/// 시스템 언어 조사는 플랫폼 계층이 제공하고, 시스템 언어를 읽지 못하면 오류다.
+pub fn initial_language() -> Result<String, String> {
+    let tag = crate::platform::current()?.preferred_language()?;
     if LANGUAGES.iter().any(|(tag_name, _)| *tag_name == tag) {
-        tag
+        Ok(tag)
     } else {
-        DEFAULT_LANGUAGE.to_string()
+        Ok(DEFAULT_LANGUAGE.to_string())
     }
 }
 

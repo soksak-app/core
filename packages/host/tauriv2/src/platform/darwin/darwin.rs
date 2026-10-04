@@ -612,6 +612,14 @@ impl Platform for Darwin {
             .create(path)
             .map_err(|error| format!("{}: {error}", path.display()))
     }
+    fn append_private_file(&self, path: &Path) -> Result<std::fs::File, String> {
+        std::os::unix::fs::OpenOptionsExt::mode(
+            std::fs::OpenOptions::new().create(true).append(true),
+            0o600,
+        )
+        .open(path)
+        .map_err(|error| format!("{}: {error}", path.display()))
+    }
     fn directory_identity(&self, _path: &Path, metadata: &Metadata) -> Result<String, String> {
         Ok(identity::identity(metadata))
     }

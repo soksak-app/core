@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
@@ -21,8 +22,8 @@ func unsupported(name string) error {
 	return fmt.Errorf("%s is not implemented on windows", name)
 }
 
-// unreachable 은 핸들을 받는 동작에서 실패한다. 핸들을 만드는 함수가 모두 오류를 반환하므로
-// 이 동작에 전달할 핸들은 없다.
+// unreachable 은 오류 결과가 없는 동작에서 실패한다. Windows 에서 Run 은 창을 열기 전에 미구현 오류로
+// 끝나므로 이 동작은 호출되지 않는다. 호출되면 그 시작 계약이 깨진 것이므로 동작 이름의 오류로 멈춘다.
 func unreachable(name string) {
 	panic(unsupported(name))
 }
@@ -54,7 +55,9 @@ func (implementation) WindowControls(unsafe.Pointer) (platform.Rect, error) {
 func (implementation) WindowFacts(unsafe.Pointer) (string, error) {
 	return "", unsupported("window state")
 }
-func (implementation) ConfigureMainWindow(unsafe.Pointer, bool) {}
+func (implementation) ConfigureMainWindow(unsafe.Pointer, bool) error {
+	return unsupported("main window configuration")
+}
 func (implementation) RevealAfterLoad(unsafe.Pointer) error {
 	return unsupported("window reveal")
 }
@@ -128,15 +131,17 @@ func (implementation) MenuItems() (string, error) {
 	return "", unsupported("application menu")
 }
 
-// 이 애플리케이션은 메뉴를 만들기 전에 다른 미구현 동작에서 실패하므로 시스템 언어를 읽지
-// 않는다. 빈 태그는 호출자의 계약 표에 없는 언어다.
-func (implementation) PreferredLanguage() string { return "" }
+func (implementation) PreferredLanguage() (string, error) {
+	return "", unsupported("preferred language")
+}
 
 func (implementation) MenuSelect(string, string) error {
 	return unsupported("application menu")
 }
 
-func (implementation) MainWindow() unsafe.Pointer { return nil }
+func (implementation) MainWindow() (unsafe.Pointer, error) {
+	return nil, unsupported("main window")
+}
 
 func (implementation) DockSelect(string) error {
 	return unsupported("Dock menu")
@@ -214,14 +219,32 @@ func (implementation) WebviewFrame(unsafe.Pointer) platform.Rect {
 	unreachable("native webview frame")
 	return platform.Rect{}
 }
+
 func (implementation) CreateSurface(unsafe.Pointer) (unsafe.Pointer, error) {
-	return nil, missing("surface hosts")
+	return nil, unsupported("surface host")
 }
-func (implementation) CloseSurface(unsafe.Pointer)                                         {}
-func (implementation) SetSurfaceBounds(unsafe.Pointer, float64, float64, float64, float64) {}
-func (implementation) SurfaceFrame(unsafe.Pointer) platform.Rect                           { return platform.Rect{} }
-func (implementation) SetSurfaceHiddenHandle(unsafe.Pointer, bool)                         {}
-func (implementation) SetSurfaceAlphaHandle(unsafe.Pointer, float64)                       {}
+
+func (implementation) CloseSurface(unsafe.Pointer) {
+	unreachable("surface host removal")
+}
+
+func (implementation) SetSurfaceBounds(unsafe.Pointer, float64, float64, float64, float64) {
+	unreachable("surface host placement")
+}
+
+func (implementation) SurfaceFrame(unsafe.Pointer) platform.Rect {
+	unreachable("surface host frame")
+	return platform.Rect{}
+}
+
+func (implementation) SetSurfaceHiddenHandle(unsafe.Pointer, bool) {
+	unreachable("surface visibility")
+}
+
+func (implementation) SetSurfaceAlphaHandle(unsafe.Pointer, float64) {
+	unreachable("surface opacity")
+}
+
 func (implementation) SetWindowOverlays(unsafe.Pointer, []platform.WindowOverlay) error {
 	return unsupported("window DOM overlays")
 }
@@ -327,8 +350,12 @@ func (implementation) Listen(string, string) (net.Listener, platform.Endpoint, e
 	return nil, platform.Endpoint{}, unsupported("local endpoint")
 }
 
-func (implementation) ServiceProcessExists(pid int) bool {
-	return pid > 0
+func (implementation) ServiceProcessExists(int) (bool, error) {
+	return false, unsupported("service process inspection")
+}
+
+func (implementation) NewSession(*exec.Cmd) error {
+	return unsupported("new process session")
 }
 
 func (implementation) InstallDock(func()) error {
@@ -354,8 +381,7 @@ func (implementation) RasterImage(unsafe.Pointer) (int, int, float64, bool) {
 }
 
 func (implementation) PresentImage(unsafe.Pointer, uint32, [16]byte, float64, float64, float64) error {
-	unreachable("image presentation")
-	return nil
+	return unsupported("image presentation")
 }
 
 func (implementation) FocusImage(unsafe.Pointer) {
@@ -371,7 +397,7 @@ func (implementation) TextImage(unsafe.Pointer, string) {
 }
 
 func (implementation) FactsImage(unsafe.Pointer) (string, error) {
-	return "", unreachableError("image facts")
+	return "", unsupported("image facts")
 }
 
 func (implementation) CloseImage(unsafe.Pointer) {

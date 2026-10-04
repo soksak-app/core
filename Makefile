@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify browser-example-check docs-check boundaries platforms hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory
+.PHONY: preflight prepare build verify browser-example-check docs-check boundaries platforms windows-build-check windows-build-check-rust hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -142,8 +142,33 @@ node-repeat:
 platforms:
 	@node scripts/check-platforms.mjs
 
+# 두 네이티브 호스트의 원본을 Windows 대상으로 기본 build 와 진단 build 로 컴파일한다. platforms 와 hosts-check 의
+# 파일 배치 검사는 Windows 구현(platform/windows/)과 공용 코드의 운영체제 API 사용을 확인하지 않으므로 이 검사가
+# 컴파일로 확인한다. 호스트 테스트는 macOS 에서만 실행하므로(docs/spec/host-contract.md) 컴파일 대상이 아니다.
+# Rust 호스트의 의존성 ring 은 Windows C 컴파일러 $(WINDOWS_RUST_CC) 로 C 원본을 컴파일하므로, 그 컴파일러가 없으면
+# windows-build-check-rust 는 그 이름을 적고 실패한다.
+WINDOWS_GOARCH      = arm64
+WINDOWS_RUST_TARGET = aarch64-pc-windows-gnullvm
+WINDOWS_RUST_CC     = aarch64-w64-mingw32-clang
+windows-build-check:
+	@echo "START: wailsv3 host go vet GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@cd packages/host/wailsv3 && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet ./src/...
+	@echo "PASS: wailsv3 host for windows/$(WINDOWS_GOARCH)"
+	@echo "START: wailsv3 host go vet -tags diagnostics GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@cd packages/host/wailsv3 && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet -tags diagnostics ./src/...
+	@echo "PASS: wailsv3 diagnostics host for windows/$(WINDOWS_GOARCH)"
+
+windows-build-check-rust:
+	@command -v $(WINDOWS_RUST_CC) > /dev/null 2>&1 || { echo "FAIL: windows-build-check-rust requires the Windows C compiler $(WINDOWS_RUST_CC), which is not installed" >&2; exit 1; }
+	@echo "START: tauriv2 host cargo check --target $(WINDOWS_RUST_TARGET)"
+	@cargo check -q --manifest-path Cargo.toml -p soksak-host-tauriv2 --target $(WINDOWS_RUST_TARGET)
+	@echo "PASS: tauriv2 host for $(WINDOWS_RUST_TARGET)"
+	@echo "START: tauriv2 host cargo check --features diagnostics --target $(WINDOWS_RUST_TARGET)"
+	@cargo check -q --manifest-path Cargo.toml -p soksak-host-tauriv2 --features diagnostics --target $(WINDOWS_RUST_TARGET)
+	@echo "PASS: tauriv2 diagnostics host for $(WINDOWS_RUST_TARGET)"
+
 # 두 네이티브 호스트와 두 네이티브 앱의 파일 구조가 허용된 차이만 갖는지 검사한다.
-hosts-check:
+hosts-check: windows-build-check
 	@node scripts/check-hosts.mjs
 
 preflight:

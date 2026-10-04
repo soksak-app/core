@@ -14,6 +14,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"os/exec"
 	"sync"
 	"unsafe"
 )
@@ -266,7 +267,8 @@ type Platform interface {
 	// CollectGarbage 는 view 의 WebContent process 들이 JavaScript 객체를 수집하게 한다. 진단 build 의 메모리 측정이
 	// 쓴다. UI 스레드에서 호출한다.
 	CollectGarbage(view unsafe.Pointer) error
-	ConfigureMainWindow(window unsafe.Pointer, dark bool)
+	// ConfigureMainWindow 는 창의 메인 웹뷰 배경을 투명하게 하고 창의 외관을 dark 에 맞춘다. UI 스레드에서 호출한다.
+	ConfigureMainWindow(window unsafe.Pointer, dark bool) error
 	ClipboardRead(kind string) (ClipboardValue, error)
 	ClipboardWriteText(text string) error
 	ClipboardWritePNG(bytes []byte) error
@@ -424,8 +426,12 @@ type Platform interface {
 	// 리스너를 닫으면 주소도 제거된다.
 	Listen(directory, application string) (net.Listener, Endpoint, error)
 	// ServiceProcessExists 는 애플리케이션 재시작 뒤 endpoint 를 재사용하기 전에
-	// 보존된 sidecar service 프로세스가 아직 살아 있는지 확인한다.
-	ServiceProcessExists(pid int) bool
+	// 보존된 sidecar service 프로세스가 아직 살아 있는지 확인한다. 확인하지 못하면 오류다.
+	ServiceProcessExists(pid int) (bool, error)
+	// NewSession 은 command 가 새 session 에서 시작하게 한다. 영구 service 는 애플리케이션 프로세스가 아니라
+	// 설정 디렉터리에 속하므로 애플리케이션의 프로세스 그룹과 터미널의 신호를 받지 않는다. command 를 시작하기
+	// 전에 호출한다.
+	NewSession(command *exec.Cmd) error
 
 	// OnTermination 은 종료 신호(SIGTERM, SIGINT, SIGHUP)를 처음 받으면 quit 를 호출하게 한다. 그
 	// 뒤의 종료 신호는 기본 동작으로 프로세스를 끝낸다.
@@ -454,11 +460,11 @@ type Platform interface {
 	MenuItems() (string, error)
 	// PreferredLanguage 는 시스템 선호 언어의 주 태그(예: "ko")를 반환한다. 초기 메뉴 언어를
 	// 계약 표의 언어와 대응할 때 쓴다. UI 스레드에서 호출한다.
-	PreferredLanguage() string
+	PreferredLanguage() (string, error)
 	// MenuSelect 는 제목이 menu 인 하위 메뉴에서 제목이 title 인 항목을 실행한다. UI 스레드에서 호출한다.
 	MenuSelect(menu, title string) error
 	// MainWindow 는 애플리케이션의 주 창 핸들이다. 없으면 nil 이다. UI 스레드에서 호출한다.
-	MainWindow() unsafe.Pointer
+	MainWindow() (unsafe.Pointer, error)
 	// DockSelect 는 제목이 title 인 Dock 메뉴 항목을 실행한다. UI 스레드에서 호출한다.
 	DockSelect(title string) error
 

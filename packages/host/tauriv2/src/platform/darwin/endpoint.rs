@@ -21,12 +21,15 @@ extern "C" {
 
 /// `kill` 이 번호의 프로세스가 없을 때 알리는 오류 번호.
 const ESRCH: i32 = 3;
+/// `kill` 이 다른 사용자의 프로세스에 신호를 거부할 때 알리는 오류 번호.
+const EPERM: i32 = 1;
 
 /// persistent service endpoint의 프로세스가 아직 존재하는지 확인한다.
 ///
 /// 시그널을 받을 수 있는 프로세스만 존재한다. 기다리지 않은 스폰은 좀비로 남아
 /// kill(pid, 0) 을 통과하므로(V5-106), 통과한 프로세스는 상태를 읽어 좀비를 가려낸다 —
-/// 좀비는 이미 끝났고, 그 endpoint 는 낡은 것이다.
+/// 좀비는 이미 끝났고, 그 endpoint 는 낡은 것이다. 다른 사용자의 프로세스에 대한 거부(EPERM)는 그
+/// 프로세스가 있다는 뜻이다.
 pub fn service_process_exists(pid: u32) -> Result<bool, String> {
     if pid == 0 {
         return Ok(false);
@@ -34,10 +37,11 @@ pub fn service_process_exists(pid: u32) -> Result<bool, String> {
     let result = unsafe { kill(pid as i32, 0) };
     if result != 0 {
         let error = std::io::Error::last_os_error();
-        if error.raw_os_error() == Some(ESRCH) {
-            return Ok(false);
+        match error.raw_os_error() {
+            Some(ESRCH) => return Ok(false),
+            Some(EPERM) => {}
+            _ => return Err(format!("cannot inspect service process {pid}: {error}")),
         }
-        return Err(format!("cannot inspect service process {pid}: {error}"));
     }
     let output = std::process::Command::new("ps")
         .args(["-o", "stat=", "-p", &pid.to_string()])

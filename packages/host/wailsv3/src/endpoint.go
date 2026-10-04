@@ -226,7 +226,11 @@ func acquireProcessLock(directory string) (*processLock, error) {
 		if currentErr != nil {
 			return nil, currentErr
 		}
-		if implementation.ServiceProcessExists(pid) {
+		exists, existsErr := implementation.ServiceProcessExists(pid)
+		if existsErr != nil {
+			return nil, existsErr
+		}
+		if exists {
 			return nil, fmt.Errorf("configuration directory %s is already owned by process %d", directory, pid)
 		}
 		if err := os.Remove(path); err != nil {

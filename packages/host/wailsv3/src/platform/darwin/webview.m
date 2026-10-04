@@ -93,13 +93,16 @@ void nativeWindowPrepare(void *handle) {
     }
 }
 
-void nativeWindowConfigureMain(void *handle, bool dark) {
+bool nativeWindowConfigureMain(void *handle, bool dark) {
     NSWindow *window = (NSWindow *)handle;
     WKWebView *root = sp_window_main_webview(handle);
-    if (!root) return;
+    if (!root) return false;
+    NSAppearance *appearance = [NSAppearance appearanceNamed:(dark ? NSAppearanceNameDarkAqua : NSAppearanceNameAqua)];
+    if (!appearance) return false;
     root.underPageBackgroundColor = NSColor.clearColor;
     [root setValue:@NO forKey:@"drawsBackground"];
-    window.appearance = [NSAppearance appearanceNamed:(dark ? NSAppearanceNameDarkAqua : NSAppearanceNameAqua)];
+    window.appearance = appearance;
+    return true;
 }
 
 bool nativeWindowSetMainWebview(void *handle) {

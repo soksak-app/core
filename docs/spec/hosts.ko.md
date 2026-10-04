@@ -136,6 +136,8 @@ AppKit 이 창 자신의 단추를 소유한다. 제목줄 높이가 AppKit 이 
 
 Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`)만 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 실패한다. Wails의 `Run`과 Tauri의 엔드포인트 setup이 창을 열기 전에 종료 요청 오류를 반환한다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
 
+`make hosts-check`는 `make windows-build-check`를 실행하며, 이 target은 Wails host source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다. `make windows-build-check-rust`는 Tauri host를 `aarch64-pc-windows-gnullvm`용으로 check한다. 그 의존성 `ring`은 Windows C compiler `aarch64-w64-mingw32-clang`으로 C source를 compile하므로, 그 compiler가 설치되지 않았으면 target은 그 이름을 적고 실패한다.
+
 ## 허용 차이
 
 | ID | Wails | Tauri | 이유 |

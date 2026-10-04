@@ -1,8 +1,7 @@
 //! 애플리케이션 로그(docs/spec/hosts.md#application-log).
 
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::Write;
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 use crate::platform;
@@ -43,11 +42,10 @@ pub fn service_log_path(config: &Path, basename: &str) -> PathBuf {
 /// 로그 파일 path 를 mode 0600 의 덧붙이기로 연다. 10 MB 이상인 파일은 먼저 path.1 로 옮겨 이전
 /// 세대를 대체한다. 그 파일에 쓰는 다른 프로세스가 없을 때만 부른다.
 pub fn open_log(path: &Path) -> Result<File, String> {
+    let platform = platform::current()?;
     if let Some(directory) = path.parent() {
-        std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(directory)
+        platform
+            .create_private_directories(directory)
             .map_err(|error| format!("create logs directory: {error}"))?;
     }
     match std::fs::metadata(path) {
@@ -61,12 +59,9 @@ pub fn open_log(path: &Path) -> Result<File, String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(format!("inspect {}: {error}", path.display())),
     }
-    OpenOptions::new()
-        .create(true)
-        .append(true)
-        .mode(0o600)
-        .open(path)
-        .map_err(|error| format!("open {}: {error}", path.display()))
+    platform
+        .append_private_file(path)
+        .map_err(|error| format!("open {error}"))
 }
 
 /// 설정 디렉터리 config 의 애플리케이션 로그를 열고 실행의 첫 줄을 쓴 뒤 그 파일을 프로세스의 표준

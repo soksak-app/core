@@ -252,7 +252,9 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			if err := system.SetMainWebview(win.NativeWindow()); err != nil {
 				fatalError("main webview identity", err)
 			}
-			system.ConfigureMainWindow(win.NativeWindow(), s.Theme().Scheme == "dark")
+			if err := system.ConfigureMainWindow(win.NativeWindow(), s.Theme().Scheme == "dark"); err != nil {
+				fatalError("main window configuration", err)
+			}
 			prepareWindow(win)
 			// 놓기 뷰는 창 합성 뷰에 들어가고, 합성 뷰는 만들 때의 메인 웹뷰 크기를 가진다. 메인 웹뷰를 내용
 			// 영역에 맞춘 뒤에 등록한다.

@@ -43,10 +43,10 @@ func (implementation) MenuItems() (string, error) {
 
 // PreferredLanguage 는 시스템 선호 언어의 주 태그를 반환한다(window_facts.h 의
 // sp_preferred_language). 그 태그가 계약 표의 언어인지는 호출자가 정한다.
-func (implementation) PreferredLanguage() string {
+func (implementation) PreferredLanguage() (string, error) {
 	tag := C.sp_preferred_language()
 	defer C.free(unsafe.Pointer(tag))
-	return C.GoString(tag)
+	return C.GoString(tag), nil
 }
 
 func (implementation) MenuSelect(menu, title string) error {
@@ -59,7 +59,7 @@ func (implementation) MenuSelect(menu, title string) error {
 	return nil
 }
 
-func (implementation) MainWindow() unsafe.Pointer { return C.sp_app_main_window() }
+func (implementation) MainWindow() (unsafe.Pointer, error) { return C.sp_app_main_window(), nil }
 
 func (implementation) DockSelect(title string) error {
 	text := C.CString(title)

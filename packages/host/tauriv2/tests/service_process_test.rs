@@ -19,3 +19,16 @@ fn a_zombie_service_process_does_not_exist() {
     assert!(!exists, "a zombie service process must not exist");
     child.wait().expect("reap sleep");
 }
+
+// 다른 사용자의 프로세스에는 신호 확인이 거부된다. 거부(EPERM)는 그 번호의 프로세스가 있다는 뜻이므로 그 service
+// 프로세스는 존재한다.
+// contract: sidecars-transport.endpoint.foreign-service-process-exists
+#[test]
+fn a_service_process_of_another_user_exists() {
+    // 1 은 root 가 실행하는 launchd 다.
+    let exists = soksak_host_tauriv2::platform::current()
+        .expect("platform")
+        .service_process_exists(1)
+        .expect("inspect process 1");
+    assert!(exists, "process 1 of another user must exist");
+}

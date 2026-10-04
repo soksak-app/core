@@ -13,8 +13,8 @@ use tauri::Window;
 use std::time::Duration;
 
 use super::{
-    Connection, DOMOverlay, Delivery, Frame, Handle, Hit, Insets, Key, Listener, Platform, Pointer,
-    Raster, WindowBuilder, WindowOverlay,
+    ClipboardValue, Connection, DOMOverlay, Delivery, Frame, Handle, Hit, Insets, Key, Listener,
+    PersistentStream, Platform, Pointer, Raster, WindowBuilder, WindowOverlay,
 };
 
 #[path = "identity.rs"]
@@ -437,6 +437,9 @@ impl Platform for Windows {
     fn menu_items(&self) -> Result<Value, String> {
         unsupported::menu_items()
     }
+    fn preferred_language(&self) -> Result<String, String> {
+        unsupported::preferred_language()
+    }
     fn menu_select(&self, menu: &str, title: &str) -> Result<(), String> {
         unsupported::menu_select(menu, title)
     }
@@ -447,7 +450,7 @@ impl Platform for Windows {
         unsupported::dock_select(title)
     }
 
-    fn clipboard_read(&self, kind: &str) -> Result<super::ClipboardValue, String> {
+    fn clipboard_read(&self, kind: &str) -> Result<ClipboardValue, String> {
         unsupported::clipboard_read(kind)
     }
     fn clipboard_write_text(&self, text: &str) -> Result<(), String> {
@@ -477,6 +480,9 @@ impl Platform for Windows {
 
     fn create_private_directories(&self, path: &Path) -> Result<(), String> {
         unsupported::create_private_directories(path)
+    }
+    fn append_private_file(&self, path: &Path) -> Result<std::fs::File, String> {
+        unsupported::append_private_file(path)
     }
     fn directory_identity(&self, path: &Path, _metadata: &Metadata) -> Result<String, String> {
         identity::identity(path)

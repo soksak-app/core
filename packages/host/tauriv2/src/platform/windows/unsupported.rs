@@ -7,8 +7,8 @@ use tauri::webview::PlatformWebview;
 use tauri::Window;
 
 use super::super::{
-    Connection, DOMOverlay, Delivery, Frame, Handle, Hit, Insets, Key, Listener, Pointer, Raster,
-    WindowBuilder, WindowOverlay,
+    ClipboardValue, Connection, DOMOverlay, Delivery, Frame, Handle, Hit, Insets, Key, Listener,
+    PersistentStream, Pointer, Raster, WindowBuilder, WindowOverlay,
 };
 
 /// operation 을 이름에 포함한 오류를 반환한다.
@@ -50,10 +50,10 @@ pub fn set_titlebar_height(_window: Handle, _height: f64) -> Result<(), String> 
 }
 
 pub fn window_controls(_window: Handle) -> Result<Frame, String> {
-    missing("window button area")
+    missing("window controls")
 }
 
-pub fn clipboard_read(_kind: &str) -> Result<super::ClipboardValue, String> {
+pub fn clipboard_read(_kind: &str) -> Result<ClipboardValue, String> {
     missing("clipboard read")
 }
 pub fn clipboard_write_text(_text: &str) -> Result<(), String> {
@@ -84,7 +84,7 @@ pub fn window_numbers(_window: &Window) -> Result<Vec<isize>, String> {
 }
 
 pub fn hit(_window: Handle, _x: f64, _y: f64) -> Result<Hit, String> {
-    missing("hit testing")
+    missing("window hit testing")
 }
 
 pub fn place_webview(
@@ -101,16 +101,16 @@ pub fn webview_frame(_view: &PlatformWebview) -> Result<[f64; 4], String> {
     missing("webview frame")
 }
 pub fn create_surface(_main: Handle) -> Result<Handle, String> {
-    Err("surface hosts are not implemented on windows".into())
+    missing("surface host")
 }
 pub fn close_surface(_surface: Handle) -> Result<(), String> {
-    Err("surface hosts are not implemented on windows".into())
+    missing("surface host removal")
 }
 pub fn place_surface(_surface: Handle, _x: f64, _y: f64, _w: f64, _h: f64) -> Result<(), String> {
-    Err("surface hosts are not implemented on windows".into())
+    missing("surface host placement")
 }
 pub fn surface_frame(_surface: Handle) -> Result<[f64; 4], String> {
-    Err("surface hosts are not implemented on windows".into())
+    missing("surface host frame")
 }
 pub fn set_surface_hidden_handle(_surface: Handle, _hidden: bool) -> Result<(), String> {
     missing("surface visibility")
@@ -226,7 +226,7 @@ pub fn begin_layout(
 }
 
 pub fn commit_layout(_window: Handle, _ticket: u64) -> Result<bool, String> {
-    missing("surface layout")
+    missing("surface layout commit")
 }
 
 pub fn enqueue_ui(_work: Box<dyn FnOnce() + Send>) -> Result<(), String> {
@@ -234,7 +234,7 @@ pub fn enqueue_ui(_work: Box<dyn FnOnce() + Send>) -> Result<(), String> {
 }
 
 pub fn cancel_layout(_window: Handle) -> Result<(), String> {
-    missing("surface layout")
+    missing("surface layout cancel")
 }
 
 pub fn start_page_titlebar(
@@ -250,23 +250,23 @@ pub fn after_settled(
     _view: &PlatformWebview,
     _done: Box<dyn Fn(Result<f64, String>)>,
 ) -> Result<(), String> {
-    missing("presentation tracking")
+    missing("native presentation")
 }
 
 pub fn inject_settled_failure() -> Result<(), String> {
-    missing("presentation tracking")
+    missing("native presentation")
 }
 
 pub fn after_presentation(_view: &PlatformWebview, _done: Box<dyn Fn()>) -> Result<(), String> {
-    missing("presentation tracking")
+    missing("native presentation")
 }
 
 pub fn create_shape(_window: Handle, _frame: Frame) -> Result<Handle, String> {
-    missing("shapes")
+    missing("native shapes")
 }
 
 pub fn place_shape(_shape: Handle, _frame: Frame) -> Result<(), String> {
-    missing("shapes")
+    missing("native shape frame")
 }
 
 pub fn style_shape(
@@ -276,11 +276,11 @@ pub fn style_shape(
     _fill: [f64; 4],
     _line: [f64; 4],
 ) -> Result<(), String> {
-    missing("shapes")
+    missing("native shape style")
 }
 
 pub fn destroy_shape(_shape: Handle) -> Result<(), String> {
-    missing("shapes")
+    missing("native shape destroy")
 }
 
 pub fn register_input(_view: &PlatformWebview) -> Result<bool, String> {
@@ -296,11 +296,11 @@ pub fn watch_input(
     _pressed: Box<dyn Fn(Vec<Handle>) -> bool>,
     _pointed: Box<dyn Fn(u8, f64, f64)>,
 ) -> Result<Handle, String> {
-    missing("input monitoring")
+    missing("surface input")
 }
 
 pub fn unwatch_input(_monitor: Handle) -> Result<(), String> {
-    missing("input monitoring")
+    missing("surface input release")
 }
 
 pub fn input_pointer(
@@ -309,7 +309,7 @@ pub fn input_pointer(
     _receive: std::time::Duration,
     _done: Box<dyn FnOnce(Delivery) + Send>,
 ) -> Result<(), String> {
-    missing("native input")
+    missing("native pointer input")
 }
 
 pub fn input_activate(
@@ -319,11 +319,11 @@ pub fn input_activate(
     _timeout: std::time::Duration,
     _done: Box<dyn FnOnce(Result<(), String>) + Send>,
 ) -> Result<(), String> {
-    missing("native input")
+    missing("window activation")
 }
 
 pub fn input_key(_window: Handle, _key: &Key) -> Result<Delivery, String> {
-    missing("native input")
+    missing("native key input")
 }
 
 #[cfg(feature = "diagnostics")]
@@ -440,6 +440,10 @@ pub fn menu_items() -> Result<Value, String> {
     missing("application menu")
 }
 
+pub fn preferred_language() -> Result<String, String> {
+    missing("preferred language")
+}
+
 pub fn menu_select(_menu: &str, _title: &str) -> Result<(), String> {
     missing("application menu")
 }
@@ -477,7 +481,7 @@ pub fn endpoint_connect(_address: &str) -> Result<Box<dyn Connection>, String> {
     missing("local endpoint")
 }
 
-pub fn connect_service(_address: &str) -> Result<Box<dyn super::super::PersistentStream>, String> {
+pub fn connect_service(_address: &str) -> Result<Box<dyn PersistentStream>, String> {
     missing("persistent sidecar transport")
 }
 
@@ -541,4 +545,8 @@ pub fn service_process_exists(_pid: u32) -> Result<bool, String> {
 
 pub fn create_private_directories(_path: &std::path::Path) -> Result<(), String> {
     missing("private directory creation")
+}
+
+pub fn append_private_file(_path: &std::path::Path) -> Result<std::fs::File, String> {
+    missing("private file creation")
 }

@@ -133,13 +133,17 @@ func menuLanguageInTable(language string) bool {
 
 // InitialMenuLanguage 는 시스템 선호 언어의 주 태그를 계약 표의 언어와 대응해 반환한다. 표에
 // 없는 언어는 기본 언어 en 이다. 페이지가 설정 언어를 알리기 전의 초기 메뉴가 시스템 언어를
-// 따르게 한다(docs/spec/host-contract.md 의 Application menu). UI 스레드에서 호출한다.
-func InitialMenuLanguage() string {
-	tag := system.PreferredLanguage()
-	if !menuLanguageInTable(tag) {
-		return "en"
+// 따르게 한다(docs/spec/host-contract.md 의 Application menu). 시스템 언어를 읽지 못하면 오류다. UI 스레드에서
+// 호출한다.
+func InitialMenuLanguage() (string, error) {
+	tag, err := system.PreferredLanguage()
+	if err != nil {
+		return "", err
 	}
-	return tag
+	if !menuLanguageInTable(tag) {
+		return "en", nil
+	}
+	return tag, nil
 }
 
 // ApplicationMenu 는 현재 언어의 애플리케이션 메뉴를 반환한다. Run 이 InitialMenuLanguage 로
@@ -325,7 +329,12 @@ func (h *Host) SetMenuLanguage(ctx context.Context, languageJSON json.RawMessage
 // 읽는다. 주 창이 없으면 기록한다.
 func runMenuCommand(command string) {
 	var main unsafe.Pointer
-	application.InvokeSync(func() { main = system.MainWindow() })
+	var err error
+	application.InvokeSync(func() { main, err = system.MainWindow() })
+	if err != nil {
+		LogError("menu command "+command, err)
+		return
+	}
 	for _, window := range application.Get().Window.GetAll() {
 		if main != nil && window.NativeWindow() == main {
 			window.EmitEvent("menu-command", map[string]any{"name": command})

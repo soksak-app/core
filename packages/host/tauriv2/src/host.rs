@@ -233,7 +233,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             }))?;
             // 페이지가 설정 언어를 보내기 전에는 시스템 언어로 메뉴를 만든다. 언어 상태는
             // set_menu_language 와 host.menu 보고가 같이 쓴다(docs/spec/host-contract.md).
-            let language = menu::initial_language();
+            let language = menu::initial_language()?;
             let menu = menu::build(app.handle(), &language)?;
             app.manage(menu::MenuLanguage(std::sync::Mutex::new(language)));
             app.set_menu(menu)?;
