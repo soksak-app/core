@@ -17,6 +17,11 @@ function fixture() {
     observe(node) { observed.push(node); }
     disconnect() { this.disconnected = true; callbacks.length = 0; }
   };
+  // 관찰은 animation frame 에서 시작한다. frame() 이 기다리는 콜백을 실행한다.
+  const frames = [];
+  window.requestAnimationFrame = (fn) => frames.push(fn);
+  window.cancelAnimationFrame = () => {};
+  const reported = [];
   Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
   Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
   window.visualViewport = { get width() { return window.innerWidth; }, get height() { return window.innerHeight; } };
@@ -27,6 +32,9 @@ function fixture() {
     window, element, observed,
     resize: (next) => { rect = next; for (const fn of [...callbacks]) fn([]); },
     callbacks,
+    reported,
+    report: (line) => { reported.push(line); },
+    frame: () => { for (const fn of frames.splice(0)) fn(); },
   };
 }
 
@@ -51,7 +59,7 @@ function port() {
 test("attach calls with correct name and sidecar", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window);
+  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
   await settle();
   assert.equal(p.calls[0][0], "attach");
   assert.equal(p.calls[0][1], "preview");
@@ -62,7 +70,7 @@ test("attach calls with correct name and sidecar", async () => {
 test("place is called with element insets when element size changes", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window);
+  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
   await settle();
   p.calls.length = 0;
   f.resize({ left: 20, top: 40, right: 420, bottom: 340, width: 400, height: 300 });
@@ -78,7 +86,7 @@ test("place is called with element insets when element size changes", async () =
 test("visible(false) calls place with visible false", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window);
+  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
   await settle();
   p.calls.length = 0;
   await image.visible(false);
@@ -91,7 +99,7 @@ test("visible(false) calls place with visible false", async () => {
 test("on() receives only events for this image", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window);
+  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
   await settle();
   const received = [];
   image.on("key", (event) => received.push(event));
@@ -105,7 +113,7 @@ test("on() receives only events for this image", async () => {
 test("on() filters by event type", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window);
+  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
   await settle();
   const keyEvents = [];
   const insertEvents = [];
@@ -122,7 +130,7 @@ test("on() filters by event type", async () => {
 test("focus() calls the focus method", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window);
+  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
   await settle();
   p.calls.length = 0;
   await image.focus();
@@ -133,7 +141,7 @@ test("focus() calls the focus method", async () => {
 test("setCaret() calls caret with coordinates", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window);
+  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
   await settle();
   p.calls.length = 0;
   await image.setCaret({ x: 10, y: 20, width: 2, height: 24 });
@@ -144,7 +152,7 @@ test("setCaret() calls caret with coordinates", async () => {
 test("setAccessibleText() calls text with string", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window);
+  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
   await settle();
   p.calls.length = 0;
   await image.setAccessibleText("hello");
@@ -155,7 +163,7 @@ test("setAccessibleText() calls text with string", async () => {
 test("detach stops observation and rejects later calls", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window);
+  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
   await settle();
   await image.detach();
   await settle();
@@ -171,51 +179,30 @@ test("detach stops observation and rejects later calls", async () => {
 test("invalid names are rejected", async () => {
   const f = fixture();
   const p = port();
-  assert.throws(() => attachImage(p, f.element, "Preview", "editor", f.window), /invalid image name/);
+  assert.throws(() => attachImage(p, f.element, "Preview", "editor", f.window, { report: f.report }), /invalid image name/);
 });
 
-test("unknown event types are warned about", async () => {
+test("an event of a type without handlers is reported as an error, not dropped", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window);
+  attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
   await settle();
-  p.calls.length = 0;
-
-  const warnings = [];
-  const originalWarn = console.warn;
-  console.warn = (...args) => warnings.push(args);
-
-  try {
-    p.send("preview", { type: "unknownType", data: "test" });
-    await settle();
-
-    assert(warnings.length > 0, "console.warn called for unknown event type");
-    const warnText = warnings[0][0];
-    assert(warnText.includes("no handlers"), "warning mentions no handlers");
-  } finally {
-    console.warn = originalWarn;
-  }
+  p.send("preview", { type: "unknownType", data: "test" });
+  await settle();
+  assert.deepEqual(f.reported, ["image preview: no handlers for event type unknownType"]);
 });
 
-test("events without type field are warned about", async () => {
+test("an event without a type is reported as an error, not dropped", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window);
+  attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
   await settle();
-  p.calls.length = 0;
+  p.send("preview", { data: "test" }); // type 필드가 없다
+  await settle();
+  assert.deepEqual(f.reported, ['image preview: event has no type: {"data":"test"}']);
+});
 
-  const warnings = [];
-  const originalWarn = console.warn;
-  console.warn = (...args) => warnings.push(args);
-
-  try {
-    p.send("preview", { data: "test" }); // type 필드가 없다
-    await settle();
-
-    assert(warnings.length > 0, "console.warn called for event without type");
-    const warnText = warnings[0][0];
-    assert(warnText.includes("no type"), "warning mentions no type");
-  } finally {
-    console.warn = originalWarn;
-  }
+test("an image region requires a report for its failures", () => {
+  const f = fixture();
+  assert.throws(() => attachImage(port(), f.element, "preview", "editor", f.window), /requires a report/);
 });

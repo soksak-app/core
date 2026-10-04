@@ -16,6 +16,11 @@ function fixture() {
     observe(node) { observed.push(node); }
     disconnect() { this.disconnected = true; callbacks.length = 0; }
   };
+  // 관찰은 animation frame 에서 시작한다. frame() 이 기다리는 콜백을 실행한다.
+  const frames = [];
+  window.requestAnimationFrame = (fn) => frames.push(fn);
+  window.cancelAnimationFrame = () => {};
+  const reported = [];
   Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
   Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
   window.visualViewport = { get width() { return window.innerWidth; }, get height() { return window.innerHeight; } };
@@ -26,6 +31,9 @@ function fixture() {
     window, element, observed,
     resize: (next) => { rect = next; for (const fn of [...callbacks]) fn([]); },
     callbacks,
+    reported,
+    report: (line) => { reported.push(line); },
+    frame: () => { for (const fn of frames.splice(0)) fn(); },
   };
 }
 
@@ -69,7 +77,7 @@ test("fractional viewport sizes do not create native region insets", () => {
 test("calls wait for attach and run in order", async () => {
   const f = fixture();
   const p = port();
-  const region = attachRegion(p, f.element, "page", f.window);
+  const region = attachRegion(p, f.element, "page", f.window, { report: f.report });
   const loaded = region.load("http://127.0.0.1/");
   const went = region.back();
   await settle();
@@ -89,7 +97,10 @@ test("layout changes place the region once per change", async () => {
   const f = fixture();
   const p = port();
   p.release();
-  const region = attachRegion(p, f.element, "page", f.window);
+  const region = attachRegion(p, f.element, "page", f.window, { report: f.report });
+  // 관찰은 다음 animation frame 에 시작한다(AGENTS.md).
+  assert.deepEqual(f.observed, [], "an element was observed before the next animation frame");
+  f.frame();
   assert.deepEqual(f.observed.map((node) => node.id || node.tagName), ["region", "outer", "BODY", "HTML"]);
   f.resize({ left: 20, top: 40, right: 420, bottom: 340, width: 400, height: 300 });
   f.resize({ left: 20, top: 40, right: 420, bottom: 340, width: 400, height: 300 });
@@ -109,7 +120,7 @@ test("state reaches only the named region", async () => {
   const f = fixture();
   const p = port();
   p.release();
-  const region = attachRegion(p, f.element, "page", f.window);
+  const region = attachRegion(p, f.element, "page", f.window, { report: f.report });
   const seen = [];
   region.onState((state) => seen.push(state));
   p.send("other", { url: "https://other.test/" });
@@ -122,7 +133,7 @@ test("detach stops observation and rejects later calls", async () => {
   const f = fixture();
   const p = port();
   p.release();
-  const region = attachRegion(p, f.element, "page", f.window);
+  const region = attachRegion(p, f.element, "page", f.window, { report: f.report });
   await region.detach();
   await settle();
   assert.equal(p.calls.at(-1)[0], "detach");
@@ -137,9 +148,9 @@ test("detach stops observation and rejects later calls", async () => {
 test("invalid names and actions are rejected", async () => {
   const f = fixture();
   const p = port();
-  assert.throws(() => attachRegion(p, f.element, "Page", f.window), /invalid document name/);
+  assert.throws(() => attachRegion(p, f.element, "Page", f.window, { report: f.report }), /invalid document name/);
   p.release();
-  const region = attachRegion(p, f.element, "page", f.window);
+  const region = attachRegion(p, f.element, "page", f.window, { report: f.report });
   await assert.rejects(region.go("home"), /unknown document action/);
   await assert.rejects(region.entry(0), /invalid history offset/);
   await assert.rejects(region.entry(1.5), /invalid history offset/);
@@ -149,7 +160,7 @@ test("a history entry is sent as the entry action with its offset", async () => 
   const f = fixture();
   const p = port();
   p.release();
-  const region = attachRegion(p, f.element, "page", f.window);
+  const region = attachRegion(p, f.element, "page", f.window, { report: f.report });
   assert.equal(await region.entry(-2), true);
   assert.deepEqual(p.calls.at(-1), ["go", "page", "entry", -2]);
 });
@@ -188,7 +199,7 @@ test("visibility: propagates through attachRegion place", async () => {
   const p = port();
   p.release();
 
-  const region = attachRegion(p, f.element, "page", f.window);
+  const region = attachRegion(p, f.element, "page", f.window, { report: f.report });
   await settle();
 
   // 첫 place 호출이 visible=true인지 확인한다
@@ -205,4 +216,21 @@ test("visibility: propagates through attachRegion place", async () => {
   const placeCallsAfter = p.calls.filter(([kind]) => kind === "place");
   assert.equal(placeCallsAfter.length, 2, "place called again on visibility change");
   assert.equal(placeCallsAfter[1][3], false, "visible is false when display:none");
+});
+
+test("a document region requires a report for its failures", () => {
+  const f = fixture();
+  assert.throws(() => attachRegion(port(), f.element, "page", f.window), /requires a report/);
+});
+
+test("a placement that fails while observing is reported as an error", async () => {
+  const f = fixture();
+  const p = port();
+  p.release();
+  p.place = async () => { throw new Error("host refused the placement"); };
+  attachRegion(p, f.element, "page", f.window, { report: f.report });
+  f.frame();
+  f.resize({ left: 20, top: 40, right: 420, bottom: 340, width: 400, height: 300 });
+  await settle();
+  assert.ok(f.reported.some((line) => line === "document page place: host refused the placement"), JSON.stringify(f.reported));
 });

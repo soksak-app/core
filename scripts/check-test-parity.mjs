@@ -1037,6 +1037,30 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F39",
+    implementation: [
+      { file: "packages/plugin-api/document-region.js", symbol: "export function observeRegionInsets(element, view, onPlace, report)" },
+      { file: "packages/plugin-api/image-region.js", symbol: "no handlers for event type" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/document-region.test.mjs", id: "a placement that fails while observing is reported as an error" },
+      { file: "packages/plugin-api/test/image-region.test.mjs", id: "an event of a type without handlers is reported as an error, not dropped" },
+    ],
+    expected: "Region failures that no caller receives are reported as errors, and region observation starts at an animation frame.",
+    levels: ["unit"],
+  },
+  {
+    id: "F40",
+    implementation: [
+      { file: "packages/workbench/host.js", symbol: "data-native-paint-clip" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/overlay-paint-clip.test.mjs", id: "the dialog document receives the page styles without the native paint clip" },
+    ],
+    expected: "The dialog document receives the page styles without the native paint clip of the main document.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F28",
     implementation: [
       { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },

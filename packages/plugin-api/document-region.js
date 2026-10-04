@@ -44,9 +44,11 @@ export function regionInsets(element, view) {
 
 /**
  * 요소의 뷰포트 여백을 관찰하고 변화를 onPlace 로 통보한다. 관찰을 멈길 수 있는 정리 함수를 반환한다.
- * onPlace 는 비동기 작업을 되돌려주고, 반환이 이행되어야 다음 배치를 보낸다.
+ * onPlace 는 비동기 작업을 되돌려주고, 반환이 이행되어야 다음 배치를 보낸다. onPlace 의 실패는 받을 호출자가 없으므로
+ * report(line) 로 오류를 알린다. 관찰은 다음 animation frame 에 시작한다(AGENTS.md).
  */
-export function observeRegionInsets(element, view, onPlace) {
+export function observeRegionInsets(element, view, onPlace, report) {
+  if (typeof report !== "function") throw new TypeError("observing region insets requires a report for its failures");
   let placed = null;
   let detached = false;
   const place = () => {
@@ -55,19 +57,21 @@ export function observeRegionInsets(element, view, onPlace) {
     const key = JSON.stringify(next);
     if (key === placed) return;
     placed = key;
-    onPlace(next).catch((error) => {
-      // 배치 작업이 실패해도 관찰은 계속 진행한다. 실패를 기록한다.
-      // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
-      console.error(`place operation failed: ${error?.message ?? error}`);
-    });
+    // 배치 작업이 실패해도 관찰은 계속 진행한다. 실패는 오류로 알린다.
+    onPlace(next).catch(report);
   };
   const observer = new view.ResizeObserver(place);
-  for (let node = element; node; node = node.parentElement) observer.observe(node);
+  let frame = view.requestAnimationFrame(() => {
+    frame = null;
+    if (detached) return;
+    for (let node = element; node; node = node.parentElement) observer.observe(node);
+  });
   view.addEventListener("resize", place);
   view.addEventListener("scroll", place, true);
   place();
   return () => {
     detached = true;
+    if (frame !== null) view.cancelAnimationFrame(frame);
     observer.disconnect();
     view.removeEventListener("resize", place);
     view.removeEventListener("scroll", place, true);
@@ -82,6 +86,9 @@ export function observeRegionInsets(element, view, onPlace) {
  */
 export function attachRegion(port, element, name, view = element.ownerDocument.defaultView, options = {}) {
   if (!DOCUMENT_NAME.test(name)) throw new Error(`invalid document name ${JSON.stringify(name)}`);
+  // 호출자에게 돌아가지 않는 실패(관찰 중의 배치)는 이 함수로 오류를 알린다.
+  const { report } = options;
+  if (typeof report !== "function") throw new TypeError(`document ${name} requires a report for its failures`);
   const listeners = new Set();
   let state = null;
   let detached = false;
@@ -89,11 +96,8 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
   const queue = (work) => {
     if (detached) return Promise.reject(new Error(`document ${name} is detached`));
     const next = chain.then(work);
-    // 내부 체인에서만 에러를 기록한다. 호출자는 next를 받으므로 실패 시 rejection이 전달된다.
-    chain = next.catch((error) => {
-      // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
-      console.error(`document ${name} operation failed:`, error?.message ?? error);
-    });
+    // 실패는 next 를 받은 호출자에게 rejection 으로 전달된다. 체인은 다음 작업을 위해 그 실패 뒤에도 이어진다.
+    chain = next.then(() => undefined, () => undefined);
     return next;
   };
 
@@ -104,8 +108,9 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
   }));
 
   const placeAt = ({ insets, visible }) => queue(() => port.place(name, insets, visible));
-  const stopObserving = options.observe === false ? () => {} : observeRegionInsets(element, view, (placement) =>
-    placeAt(placement).catch((error) => console.error(`document ${name} place: ${error.message}`)));
+  // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
+  const failed = (error) => report(`document ${name} place: ${error?.message ?? error}`);
+  const stopObserving = options.observe === false ? () => {} : observeRegionInsets(element, view, placeAt, failed);
 
   return {
     name,
@@ -118,8 +123,7 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     /** 요소가 바뀐 배치를 알린다. 관찰로 드러나지 않는 이동에 쓴다. */
     place: () => {
       const { insets, visible } = regionInsets(element, view);
-      return placeAt({ insets, visible })
-        .catch((error) => console.error(`document ${name} place: ${error.message}`));
+      return placeAt({ insets, visible });
     },
     _place: placeAt,
     load: (url) => queue(() => port.load(name, url)),

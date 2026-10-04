@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F39: document and image regions report the failures that no caller receives, such as a placement that fails while observing and an image event without handlers, through the surface page's report instead of the console, which the applications do not record; `observeRegionInsets` starts observing at an animation frame.
 - F40: the settings dialog no longer receives the native paint clip of the main document, which cut the native surface holes of the main page into the dialog scrim and made the two hosts send different dialog styles depending on the frame of the last commit.
 - F42: the page logs every error it shows when it shows it: the card surface status, the library error, the plugin status error, a failed plugin operation, a missing project folder and a library preview error now write `error: <where>: <text>`, so a window check judges an error that the next draw removes.
 - F38: a window without a focused card, such as the library before a space opens, has the frame as its text size scope; the text size commands failed there with `text size card undefined is not in the layout`.

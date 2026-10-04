@@ -233,8 +233,8 @@ export async function createSurfaceCompositionController(
     for (const declared of declaredRegions) {
       const element = regions[declared.name];
       const handle = declared.kind === "document"
-        ? attachRegion(runtimePage.document, element, declared.name, view, { observe: false })
-        : attachImage(runtimePage.image, element, declared.name, declared.sidecar, view, { observe: false });
+        ? attachRegion(runtimePage.document, element, declared.name, view, { observe: false, report: runtimePage.surfaces.report })
+        : attachImage(runtimePage.image, element, declared.name, declared.sidecar, view, { observe: false, report: runtimePage.surfaces.report });
       internal.set(declared.name, { declared, element, handle });
     }
 

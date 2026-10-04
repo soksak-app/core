@@ -14,38 +14,40 @@ export const IMAGE_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
  */
 export function attachImage(port, element, name, sidecar, view = element.ownerDocument.defaultView, options = {}) {
   if (!IMAGE_NAME.test(name)) throw new Error(`invalid image name ${JSON.stringify(name)}`);
+  // 호출자에게 돌아가지 않는 실패(관찰 중의 배치, 처리할 곳이 없는 사건)는 이 함수로 오류를 알린다.
+  const { report } = options;
+  if (typeof report !== "function") throw new TypeError(`image ${name} requires a report for its failures`);
   const listeners = new Map();
   let detached = false;
   let chain = port.attach(name, sidecar);
   const queue = (work) => {
     if (detached) return Promise.reject(new Error(`image ${name} is detached`));
     const next = chain.then(work);
-    // 내부 체인에서만 에러를 기록한다. 호출자는 next를 받으므로 실패 시 rejection이 전달된다.
-    chain = next.catch((error) => {
-      // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
-      console.error(`image ${name} operation failed:`, error?.message ?? error);
-    });
+    // 실패는 next 를 받은 호출자에게 rejection 으로 전달된다. 체인은 다음 작업을 위해 그 실패 뒤에도 이어진다.
+    chain = next.then(() => undefined, () => undefined);
     return next;
   };
 
   const unlisten = Promise.resolve(port.on((imageName, event) => {
     if (imageName !== name || detached) return;
     const eventType = typeof event === "string" ? event : event?.type;
+    // 처리할 곳이 없는 사건은 버리지 않고 오류로 알린다.
     if (!eventType) {
-      console.warn(`image ${name}: event has no type`, event);
+      report(`image ${name}: event has no type: ${JSON.stringify(event)}`);
       return;
     }
     const handlers = listeners.get(eventType);
     if (!handlers) {
-      console.warn(`image ${name}: no handlers for event type ${eventType}`);
+      report(`image ${name}: no handlers for event type ${eventType}`);
       return;
     }
     for (const fn of handlers) fn(event);
   }));
 
   const placeAt = ({ insets, visible }) => queue(() => port.place(name, insets, visible));
-  const stopObserving = options.observe === false ? () => {} : observeRegionInsets(element, view, (placement) =>
-    placeAt(placement).catch((error) => console.error(`image ${name} place: ${error.message}`)));
+  // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
+  const failed = (error) => report(`image ${name} place: ${error?.message ?? error}`);
+  const stopObserving = options.observe === false ? () => {} : observeRegionInsets(element, view, placeAt, failed);
 
   return {
     name,
