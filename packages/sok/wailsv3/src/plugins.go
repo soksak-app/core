@@ -301,7 +301,11 @@ func extract(data []byte, target string) (err error) {
 			if err != nil {
 				return fileError(path, err)
 			}
-			_, err = io.Copy(file, reader)
+			// 만들 때의 mode 는 프로세스의 umask 가 좁히므로 명세의 mode 를 따로 정한다.
+			err = file.Chmod(mode)
+			if err == nil {
+				_, err = io.Copy(file, reader)
+			}
 			if closeErr := file.Close(); err == nil {
 				err = closeErr
 			}

@@ -902,6 +902,18 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F23",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/plugins.go", symbol: "file.Chmod(mode)" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallSetsTheModesWhateverTheUmask" },
+      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_install_sets_the_modes_whatever_the_umask" },
+    ],
+    expected: "Both sok implementations write extracted files at mode 0755 or 0644 under any umask.",
+    levels: ["unit"],
+  },
+  {
     id: "F14",
     implementation: [
       { file: "native/darwin/src/quit_request.m", symbol: "sp_quit_request_install" },

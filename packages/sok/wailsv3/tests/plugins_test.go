@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -23,6 +24,12 @@ import (
 // build 한 뒤 index.json 의 경로를 돌려준다.
 func pluginVersions(t *testing.T, versions ...string) string {
 	t.Helper()
+	return pluginVersionsFor(t, "0.0.2", versions...)
+}
+
+// pluginVersionsFor 는 plugin 이 core version core 를 요구하는 registry 를 만든다.
+func pluginVersionsFor(t *testing.T, core string, versions ...string) string {
+	t.Helper()
 	platform, err := sok.CurrentPlatform()
 	if err != nil {
 		t.Fatal(err)
@@ -32,14 +39,14 @@ func pluginVersions(t *testing.T, versions ...string) string {
 	for _, version := range versions {
 		dir := t.TempDir()
 		writeTree(t, dir, map[string]string{
-			"package.json": `{"name": "@scope/plugin-probe", "version": "` + version + `", "engines": {"soksak": "^0.0.2"},
+			"package.json": `{"name": "@scope/plugin-probe", "version": "` + version + `", "engines": {"soksak": "^` + core + `"},
 				"soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui"]}`,
 			"plugin.json": `{"id": "probe", "sidecars": ["@scope/sidecar-worker"]}`,
 			"ui/b.js":     "b " + version,
 		})
 		result := runJSON(t, "plugin", "pack", dir, releases)
 		entries = append(entries, `{"version": "`+version+`", "package": {"url": "file://`+result["archive"]+`", "sha256": "`+result["sha256"]+`"},
-			"engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}`)
+			"engines": {"soksak": "^`+core+`"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}`)
 	}
 	sidecar := runJSON(t, "sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", platform)
 	registry := t.TempDir()
@@ -385,5 +392,34 @@ func TestFileErrorsNameThePathAndTheReason(t *testing.T) {
 	}
 	if err == nil || err.Error() != installed+": permission denied" {
 		t.Fatalf("unreadable installed state error = %v", err)
+	}
+}
+
+// contract: cli.plugin.install-modes-ignore-the-umask
+func TestPluginInstallSetsTheModesWhateverTheUmask(t *testing.T) {
+	platform, err := sok.CurrentPlatform()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 빌드한 sok 은 이 package 의 CoreVersion 으로 plugin 을 고른다.
+	index := pluginVersionsFor(t, sok.CoreVersion, "0.2.0")
+	config := t.TempDir()
+	runJSON(t, "registry", "use", index, "--config-dir", config)
+	// 프로세스의 umask 는 실행 파일 단위이므로 sok 을 빌드해 umask 077 의 shell 에서 실행한다.
+	binary := filepath.Join(t.TempDir(), "sok")
+	if output, err := exec.Command("go", "build", "-o", binary, "github.com/soksak-app/core/packages/sok/wailsv3/src/cmd/sok").CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, output)
+	}
+	install := exec.Command("sh", "-c", `umask 077 && exec "$0" "$@"`, binary, "plugin", "install", "probe", "--config-dir", config)
+	if output, err := install.CombinedOutput(); err != nil {
+		t.Fatalf("plugin install: %v\n%s", err, output)
+	}
+	for path, want := range map[string]os.FileMode{
+		filepath.Join(config, "sidecars/scope-sidecar-worker/0.1.0", platform, "build/worker"): 0o755,
+		filepath.Join(config, "plugins/probe/0.2.0/ui/b.js"):                                   0o644,
+	} {
+		if info, err := os.Stat(path); err != nil || info.Mode().Perm() != want {
+			t.Fatalf("%s: mode %v err %v, want %v", path, info.Mode().Perm(), err, want)
+		}
 	}
 }

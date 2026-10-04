@@ -89,6 +89,11 @@ impl Registry {
 }
 
 fn plugin_versions(versions: &[&str]) -> Registry {
+    plugin_versions_for("0.0.2", versions)
+}
+
+/// plugin 이 core version core 를 요구하는 registry.
+fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
     let platform = soksak_sok::current_platform().expect("platform");
     let releases = Dir::new();
     let mut work = vec![];
@@ -96,7 +101,7 @@ fn plugin_versions(versions: &[&str]) -> Registry {
     for version in versions {
         let dir = Dir::new();
         let package = format!(
-            r#"{{"name": "@scope/plugin-probe", "version": "{version}", "engines": {{"soksak": "^0.0.2"}},
+            r#"{{"name": "@scope/plugin-probe", "version": "{version}", "engines": {{"soksak": "^{core}"}},
             "soksak": {{"sidecars": {{"@scope/sidecar-worker": "^0.1.0"}}}}, "files": ["plugin.json", "ui"]}}"#
         );
         let content = format!("b {version}");
@@ -114,7 +119,7 @@ fn plugin_versions(versions: &[&str]) -> Registry {
         let result = run_json(&["plugin", "pack", dir.text(), releases.text()]);
         entries.push(format!(
             r#"{{"version": "{version}", "package": {{"url": "file://{}", "sha256": "{}"}},
-            "engines": {{"soksak": "^0.0.2"}}, "sidecars": {{"@scope/sidecar-worker": "^0.1.0"}}}}"#,
+            "engines": {{"soksak": "^{core}"}}, "sidecars": {{"@scope/sidecar-worker": "^0.1.0"}}}}"#,
             result["archive"].as_str().unwrap(),
             result["sha256"].as_str().unwrap()
         ));
@@ -590,4 +595,54 @@ fn installed_format_1_is_converted_once() {
         )
     );
     assert_eq!(read_text(&file), wrong);
+}
+
+// contract: cli.plugin.install-modes-ignore-the-umask
+#[test]
+fn plugin_install_sets_the_modes_whatever_the_umask() {
+    use std::os::unix::fs::PermissionsExt;
+    let platform = soksak_sok::current_platform().expect("platform");
+    // 실행 파일 sok 은 이 crate 의 core version 으로 plugin 을 고른다.
+    let registry = plugin_versions_for(soksak_sok::version::CORE_VERSION, &["0.2.0"]);
+    let config = Dir::new();
+    run_json(&[
+        "registry",
+        "use",
+        &registry.index(),
+        "--config-dir",
+        config.text(),
+    ]);
+    // 프로세스의 umask 는 실행 파일 단위이므로 umask 077 의 shell 에서 sok 을 실행한다.
+    let output = std::process::Command::new("sh")
+        .args([
+            "-c",
+            r#"umask 077 && exec "$0" "$@""#,
+            env!("CARGO_BIN_EXE_sok"),
+        ])
+        .args(["plugin", "install", "probe", "--config-dir", config.text()])
+        .output()
+        .expect("sok");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for (path, want) in [
+        (
+            config
+                .0
+                .join("sidecars/scope-sidecar-worker/0.1.0")
+                .join(&platform)
+                .join("build/worker"),
+            0o755,
+        ),
+        (config.0.join("plugins/probe/0.2.0/ui/b.js"), 0o644),
+    ] {
+        let mode = std::fs::metadata(&path)
+            .expect("installed file")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, want, "{}", path.display());
+    }
 }
