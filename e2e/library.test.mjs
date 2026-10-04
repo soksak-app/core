@@ -338,13 +338,17 @@ for (const app of Object.values(APPS)) {
     mkdirSync(folder);
     const missing = await s.run("core.project.open", { root: folder });
     await s.run("core.projects.flush");
-    // 그 프로젝트의 터미널이 세션을 연 뒤에 처음 프로젝트로 돌아가고 폴더를 지운다. 시작 중인 터미널의 폴더를 지우면
-    // 그 열기가 지운 폴더에서 실패하며(F44), 그것은 이 검사가 보는 library 의 동작이 아니다.
-    for (const terminal of await terminalReady(s)) {
-      await s.until("terminal.session", (session) => typeof session?.sessionId === "string" && session.sessionId !== "",
+    // 프로젝트는 자기 창에서 열린다(projectOpening 기본값 windows). 그 창의 터미널이 세션을 연 뒤에 폴더를 지운다.
+    // 시작 중인 터미널의 폴더를 지우면 그 열기가 지운 폴더에서 실패하며(F44), 그것은 이 검사가 보는 library 의
+    // 동작이 아니다.
+    const listed = await s.until("host.windows", (list) => list.some((item) => item.project === folder && item.ready),
+      "the project did not open in its own window");
+    const projectWindow = listed.find((item) => item.project === folder);
+    const other = s.on(projectWindow.window);
+    for (const terminal of await terminalReady(other)) {
+      await other.until("terminal.session", (session) => typeof session?.sessionId === "string" && session.sessionId !== "",
         `terminal ${terminal.surface} of the project did not open its session`, { surface: terminal.surface });
     }
-    await s.run("core.project.activate", { id: first.id });
     rmSync(folder, { recursive: true });
     // 이 검사는 사라진 폴더를 library 에 보이고 그 프로젝트를 열지 못하게 한다. 두 오류는 화면에 보이고 기록된다.
     s.expectError(new RegExp(`^error: library project ${folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: `));

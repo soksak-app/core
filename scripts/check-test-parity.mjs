@@ -1025,6 +1025,18 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F44",
+    implementation: [
+      { file: "packages/workbench/projects.js", symbol: "await listener.retain(new Set(remaining.map((item) => item.surface)))" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "the surfaces of every layout are listed with their project root, and removing a project retains the rest" },
+      { file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" },
+    ],
+    expected: "Removing a project disposes the surface modules of its tabs before it ends their sidecar sessions.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F28",
     implementation: [
       { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },
