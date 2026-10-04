@@ -694,3 +694,13 @@ fn path_entries_fail_where_the_operating_system_has_no_folder() {
         )
     );
 }
+
+// contract: cli.identity.build-identifier
+#[test]
+fn the_build_identifier_follows_the_build() {
+    if cfg!(feature = "diagnostics") {
+        assert_eq!(soksak_sok::identity::identity(), "app.soksak.tauri.dev");
+    } else {
+        assert_eq!(soksak_sok::identity::identity(), "app.soksak.tauri");
+    }
+}
