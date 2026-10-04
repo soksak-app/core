@@ -11,7 +11,7 @@ test("the plugin page of the library lists each plugin with its description, ver
     inLibrary: () => true, all: () => [], isOpen: () => false, active: () => null,
   } });
   t.mock.module("../plane.js", { namedExports: { fresh: () => ({}) } });
-  t.mock.module("@soksak/runtime", { namedExports: { windows: { createsFolders: false, folder: async (root) => ({ root }) } } });
+  t.mock.module("@soksak/runtime", { namedExports: { host: null, windows: { createsFolders: false, folder: async (root) => ({ root }) } } });
   t.mock.module("../library-preview.js", { namedExports: { preview: () => document.createElement("div") } });
   t.mock.module("../commands.js", { namedExports: { delegate: () => {}, mark: (element, command, params, value) => {
     element.dataset.command = command;

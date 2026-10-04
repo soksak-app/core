@@ -1003,6 +1003,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F42",
+    implementation: [
+      { file: "packages/workbench/shown-errors.js", symbol: "export function reportShownError" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/shown-errors.test.mjs", id: "an error shown on the screen is logged once until it changes or clears" },
+    ],
+    expected: "Every error that the page shows is written to the application log when it appears.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F28",
     implementation: [
       { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },

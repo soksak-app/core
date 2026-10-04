@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F42: the page logs every error it shows when it shows it: the card surface status, the library error, the plugin status error, a failed plugin operation, a missing project folder and a library preview error now write `error: <where>: <text>`, so a window check judges an error that the next draw removes.
 - F38: a window without a focused card, such as the library before a space opens, has the frame as its text size scope; the text size commands failed there with `text size card undefined is not in the layout`.
 - F36: the space row, the left project column and the first row take their frame-factored size in whole pixels, so the plane stays on the device pixel grid and the host seats native surfaces where the page declares them; at factor 1.1 they differed by half a pixel. A failed V7b names the surface and both rectangles.
 - F33: the draw of a layout transaction draws the card sidebars with the presentation that the transaction predicted the native surface seats with; a sidebar size command that arrived before the draw made the DOM and the native surface differ by one drag step. A failed placement verification (V7a, V7c) names the surface, both rectangles and the predicted and drawn sidebar bands.

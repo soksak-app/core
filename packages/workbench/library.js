@@ -7,6 +7,7 @@ import { preview } from "./library-preview.js";
 import { delegate, mark } from "./commands.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { matchPlugins } from "./plugin-search.js";
+import { clearShownError, reportShownError } from "./shown-errors.js";
 
 const TINTS = ["#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"];
 const element = (tag, cls, text) => {
@@ -83,10 +84,13 @@ export function createLibrary(root, rendered = () => {}) {
   let pending = false;
 
   // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 보인다.
-  const fail = (reason) => { error.textContent = String(reason.message ?? reason); error.hidden = false; };
+  const fail = (reason) => {
+    error.textContent = String(reason.message ?? reason); error.hidden = false;
+    reportShownError('library', error.textContent);
+  };
   async function perform(work) {
     if (pending) return;
-    pending = true; error.hidden = true;
+    pending = true; error.hidden = true; clearShownError('library');
     root.setAttribute('aria-busy', 'true');
     try { await work(); } catch (reason) { fail(reason); }
     finally { pending = false; root.removeAttribute('aria-busy'); render(); }
@@ -219,6 +223,8 @@ export function createLibrary(root, rendered = () => {}) {
         : operation.state === 'done' ? '애플리케이션을 다시 시작하면 적용됩니다.' : operation.error);
       line.dataset.state = operation.state;
       card.append(line);
+      if (operation.state === 'failed') reportShownError(`library plugin ${row.id}`, line.textContent);
+      else clearShownError(`library plugin ${row.id}`);
     }
     return card;
   }
@@ -234,6 +240,9 @@ export function createLibrary(root, rendered = () => {}) {
         ? `레지스트리를 읽지 못했습니다: ${failure.message}` : `플러그인 상태를 읽지 못했습니다: ${failure.message}`);
       line.dataset.kind = failure.kind; line.setAttribute('role', 'alert');
       pluginList.append(line);
+      reportShownError('library plugins', line.textContent);
+    } else {
+      clearShownError('library plugins');
     }
     const rows = matchPlugins(status.plugins, pluginQuery);
     for (const row of rows) pluginList.append(pluginCard(row, status));
@@ -285,6 +294,9 @@ export function createLibrary(root, rendered = () => {}) {
         choose.disabled=true;
         card.dataset.folderError=folder.error;
         text.append(element('p','library-project__missing',folderReason(folder.error)));
+        reportShownError(`library project ${project.root}`, folderReason(folder.error));
+      } else {
+        clearShownError(`library project ${project.root}`);
       }
       choose.append(text);
       const pin=element('button','act library-project__pin');pin.type='button';pin.dataset.expose='core.library.pin';pin.innerHTML=icon('star');

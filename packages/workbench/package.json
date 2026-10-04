@@ -24,6 +24,7 @@
     "compositor.js",
     "surface-modules.js",
     "system-notifications.js",
+    "shown-errors.js",
     "surface-status.js",
     "modal-order.js",
     "scroll-keep.js",

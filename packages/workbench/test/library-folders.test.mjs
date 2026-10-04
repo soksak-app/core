@@ -14,7 +14,7 @@ test("a project whose folder cannot be read shows the reason in the library and 
     close: async (id) => { closed.push(id); },
   } });
   t.mock.module("../plane.js", { namedExports: { fresh: () => ({}) } });
-  t.mock.module("@soksak/runtime", { namedExports: { windows: { createsFolders: false,
+  t.mock.module("@soksak/runtime", { namedExports: { host: null, windows: { createsFolders: false,
     folder: async (root) => {
       if (root === "/work/missing") throw new Error("project directory does not exist: /work/missing");
       return { root, identity: "id" };
