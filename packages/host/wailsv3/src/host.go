@@ -35,6 +35,8 @@ type Options struct {
 	// ConfigDir 은 설정 디렉터리다. 비어 있으면 사용자 설정 디렉터리 아래 이 build 의 식별자 디렉터리를 사용한다
 	// (docs/spec/projects.md#persistence).
 	ConfigDir string
+	// RegistryCA 는 진단 build 의 --registry-ca 다. registry 받기가 신뢰하는 인증 기관의 PEM 파일이다.
+	RegistryCA string
 }
 
 // 엔드포인트가 알리는 애플리케이션 이름과 버전.

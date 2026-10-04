@@ -296,6 +296,13 @@ test("release marker scanner reports diagnostics and ignores clean content", { t
   assert.deepEqual(clean, []);
 });
 
+test("release marker scanner finds the diagnostic registry authority argument", { timeout: 2000 }, () => {
+  const errors = [];
+  findReleaseMarkers(errors, "soksak-wailsv3", "unknown argument\u0000registry-ca\u0000config-dir");
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /diagnostic argument/);
+});
+
 test("release marker scanner finds capture code in an executable without symbols", { timeout: 2000 }, () => {
   // 기호를 벗긴 실행 파일에는 sp_capture_ 기호가 없지만 ObjC 클래스 이름은 문자열로 남는다.
   const errors = [];

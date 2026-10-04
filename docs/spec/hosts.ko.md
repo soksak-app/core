@@ -203,6 +203,8 @@ packages/sok/wailsv3/          packages/sok/tauriv2/
 
 애플리케이션은 `--config-dir PATH`([projects](projects.ko.md#저장))를 두 인자 또는 `--config-dir=PATH`로 받는다. 두 host는 창을 열기 전에 하나의 규칙으로 인자를 읽는다. 애플리케이션이 선언하지 않은 인자는 `unknown argument <argument>`로, 값 없는 flag는 `--<flag> needs a value`로, 두 번 준 flag는 `--<flag> is given twice`로 실패한다. 애플리케이션은 그 문장을 표준 오류에 쓰고 상태 2로 끝난다.
 
+진단 build는 `--registry-ca PATH`도 받는다. host의 registry 받기가 운영체제의 인증 기관 대신 신뢰하는 인증 기관을 담은 PEM 파일이며([받기](installation.ko.md#받기)), window check가 local TLS registry를 쓸 수 있게 한다. 읽을 수 없거나 인증서가 없는 파일은 `--registry-ca <path>: <reason>`과 상태 2로 시작을 끝낸다. release build는 이 인자를 선언하지 않으므로 모르는 인자로 거부한다.
+
 ## 프런트엔드와 실행 파일
 
 `soksak-stage`는 프런트엔드를 `apps/<app>/src/frontend/`에 배치하며, 각 애플리케이션의 `.gitignore`가 이 디렉터리를 제외한다. `go:embed`는 포함하는 패키지 디렉터리 아래의 파일만 포함할 수 있으므로 Wails는 `src/main.go`의 `//go:embed all:frontend`로 이 디렉터리를 포함한다. `host.Run`은 `frontend/`를 자산 루트로 사용한다. Tauri는 `tauri.conf.json`의 `"frontendDist": "src/frontend"`로 이 디렉터리를 읽고, `src/main.rs`는 `frontend/background.js`를 포함한다.

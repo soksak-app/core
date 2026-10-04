@@ -19,6 +19,9 @@ var assets embed.FS
 func main() {
 	// 인자는 창을 열기 전에 읽는다. 잘못된 인자는 상태 2 로 끝낸다(docs/spec/hosts.md#application-arguments).
 	options, err := host.ParseArguments(os.Args[1:])
+	if err == nil {
+		err = host.ApplyArguments(options)
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)

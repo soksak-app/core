@@ -122,7 +122,9 @@ fn run_menu_command(app: &tauri::AppHandle, command: &str) -> Result<(), String>
 /// 포함해 전달한다.
 pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
     // 인자는 창을 열기 전에 읽는다. 잘못된 인자는 상태 2 로 끝낸다(docs/spec/hosts.md#application-arguments).
-    match command_line::parse_arguments(std::env::args().skip(1)) {
+    match command_line::parse_arguments(std::env::args().skip(1))
+        .and_then(|parsed| command_line::apply_arguments(&parsed).map(|()| parsed))
+    {
         Ok(parsed) => {
             ARGUMENTS
                 .set(parsed)

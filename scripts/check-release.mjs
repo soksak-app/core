@@ -23,6 +23,8 @@ const MARKS = [
   // 기호를 벗긴 release 실행 파일에는 sp_capture_ 가 없다. 녹화의 ObjC 클래스 이름은 문자열로 남는다.
   { what: "window capture class", pattern: /SPCapture/ },
   { what: "sidecar diagnostic symbol", pattern: /sp_diag_/ },
+  // release build 는 진단 인자 --registry-ca 를 선언하지 않는다(docs/spec/hosts.md#application-arguments).
+  { what: "diagnostic argument", pattern: /registry-ca/ },
 ];
 
 // 텍스트에서 진단 표지를 찾는다. 발견하면 errors 배열에 추가한다.

@@ -27,11 +27,42 @@ pub struct Fetcher {
 /// 따라가는 redirect 의 최대 수.
 const MAX_REDIRECTS: usize = 5;
 
+/// 진단 build 의 host 가 --registry-ca 로 정한 인증 기관(docs/spec/hosts.md#application-arguments).
+#[cfg(feature = "diagnostics")]
+static REGISTRY_AUTHORITIES: std::sync::OnceLock<Vec<Vec<u8>>> = std::sync::OnceLock::new();
+
+/// path 의 PEM 파일이 담은 인증 기관만 registry 받기가 신뢰하게 한다. 진단 build 의 host 가 --registry-ca 로 부른다.
+#[cfg(feature = "diagnostics")]
+pub fn use_registry_authorities(path: &std::path::Path) -> Result<(), String> {
+    let data = std::fs::read(path).map_err(|error| file_error(path.display(), &error))?;
+    let mut authorities = vec![];
+    for item in ureq::tls::parse_pem(&data) {
+        if let ureq::tls::PemItem::Certificate(certificate) =
+            item.map_err(|error| format!("{}: {error}", path.display()))?
+        {
+            authorities.push(certificate.der().to_vec());
+        }
+    }
+    if authorities.is_empty() {
+        return Err(format!("{}: the file holds no certificate", path.display()));
+    }
+    REGISTRY_AUTHORITIES.set(authorities).map_err(|_| {
+        format!(
+            "{}: the registry authorities are already set",
+            path.display()
+        )
+    })
+}
+
 impl Default for Fetcher {
-    /// 명세의 한도를 쓰는 Fetcher.
+    /// 명세의 한도를 쓰는 Fetcher. 진단 build 에서 --registry-ca 가 정한 인증 기관이 있으면 그것만 신뢰한다.
     fn default() -> Self {
+        #[cfg(feature = "diagnostics")]
+        let roots = REGISTRY_AUTHORITIES.get().cloned();
+        #[cfg(not(feature = "diagnostics"))]
+        let roots = None;
         Fetcher {
-            roots: None,
+            roots,
             index: Limit {
                 bytes: 8 << 20,
                 timeout: Duration::from_secs(60),

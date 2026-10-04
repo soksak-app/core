@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R2-6-1: a diagnostic build accepts `--registry-ca PATH`, so a window check can serve a local TLS registry; a release build rejects the argument.
 - F20: both applications reject an undeclared argument, a flag without a value and a repeated flag with the same text and status 2; the Tauri application no longer ignores them.
 - F15: both hosts report a malformed `process.lock` with the same text, `<path>: invalid process lock`.
 - F18, F19: a terminal accepts pointer points in the band where the native region is smaller than its view, and a failed mouse operation answers with its own result, so the page no longer reports `unexpected mouse inputId`.

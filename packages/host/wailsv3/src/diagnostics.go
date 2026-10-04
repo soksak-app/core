@@ -23,10 +23,22 @@ import (
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 func init() {
+	// --registry-ca 는 registry 받기가 신뢰하는 인증 기관이다(docs/spec/hosts.md#application-arguments).
+	declaredArguments["registry-ca"] = func(options *Options) *string { return &options.RegistryCA }
+	argumentEffects = append(argumentEffects, func(options Options) error {
+		if options.RegistryCA == "" {
+			return nil
+		}
+		if err := sok.UseRegistryAuthorities(options.RegistryCA); err != nil {
+			return fmt.Errorf("--registry-ca %w", err)
+		}
+		return nil
+	})
 	diagnosticPlugins = true
 	diagnosticMethods["diagnostics.fixture"] = diagnosticFixture
 	diagnosticMethods["diagnostics.drag"] = diagnosticDrag

@@ -122,6 +122,7 @@ Items:
 | `documents.registry.remove-reserved-returns-empty` | Removing a reserved but unset document name succeeds with an empty handle. | both |
 | `documents.registry.remove-attached-returns-handle-once` | Removing an attached document name returns its handle, and removing it again fails. | both |
 | `host.arguments.declared-only` | `--config-dir PATH` and `--config-dir=PATH` set the configuration directory; an undeclared argument, a flag without a value and a repeated flag fail with their texts. | both |
+| `host.arguments.registry-ca-in-diagnostic-builds` | A diagnostic build accepts `--registry-ca PATH`, and its registry fetches then trust only the authorities of that PEM file; a file without a certificate fails with `--registry-ca <path>: <reason>`. | both |
 | `endpoint.process.rejects-a-malformed-lock` | A `process.lock` whose contents are not a positive process ID, including `0`, refuses the endpoint with `<path>: invalid process lock` and stays in place. | both |
 | `endpoint.process.one-owner-per-config-dir` | A second endpoint on the same configuration directory is refused with "already owned by process", and the first keeps its lock until it closes. | both |
 | `endpoint.transport.http-request-line-closes` | An HTTP request line closes the connection without a reply or a method call. | both |

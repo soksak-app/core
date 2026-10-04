@@ -22,6 +22,9 @@ enum Reply {
 struct Server {
     url: String,
     ca: Vec<u8>,
+    /// 진단 build 의 --registry-ca 검사가 파일로 쓰는 인증 기관.
+    #[cfg(feature = "diagnostics")]
+    ca_pem: String,
 }
 
 fn serve(handler: fn(&str) -> Reply) -> Server {
@@ -100,6 +103,8 @@ fn serve(handler: fn(&str) -> Reply) -> Server {
     Server {
         url,
         ca: ca.der().to_vec(),
+        #[cfg(feature = "diagnostics")]
+        ca_pem: ca.pem(),
     }
 }
 
@@ -259,4 +264,23 @@ fn registry_use_records_an_https_index() {
     );
     // 검사 뒤 정리다. 지우지 못한 폴더는 다음 검사에 영향을 주지 않는 고유 이름이다.
     let _ = std::fs::remove_dir_all(&config);
+}
+
+// contract: host.arguments.registry-ca-in-diagnostic-builds
+#[cfg(feature = "diagnostics")]
+#[test]
+fn a_diagnostic_build_trusts_the_registry_authorities_of_a_file() {
+    let server = serve(|_| Reply::Body(b"index".to_vec()));
+    let folder = std::env::temp_dir().join(format!("sok-fetch-ca{}", std::process::id()));
+    std::fs::create_dir_all(&folder).expect("folder");
+    let authority = folder.join("ca.pem");
+    std::fs::write(&authority, &server.ca_pem).expect("ca.pem");
+    soksak_sok::fetch::use_registry_authorities(&authority).expect("authorities");
+    let fetcher = Fetcher::default();
+    assert_eq!(
+        fetcher.read(&format!("{}/index.json", server.url), fetcher.index),
+        Ok(b"index".to_vec())
+    );
+    // 검사 뒤 정리다. 지우지 못한 폴더는 다음 검사에 영향을 주지 않는 고유 이름이다.
+    let _ = std::fs::remove_dir_all(&folder);
 }
