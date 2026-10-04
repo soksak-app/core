@@ -1,7 +1,7 @@
 // 라이브러리의 프로젝트 미리보기. 활성 스페이스의 저장 배치를 카드 격자로 그린다.
 import { hasPlugin, isPlace, plugin } from "./registry.js";
 import { checkStoredLayout } from "./stored-layout.js";
-import { reportShownError } from "./shown-errors.js";
+import { showError } from "./shown-errors.js";
 
 /** className 을 가진 요소를 만든다. */
 function part(tag, className) {
@@ -21,11 +21,10 @@ export function preview(project) {
   try {
     checkStoredLayout(layout);
   } catch (error) {
-    el.dataset.error=error.message;
+    el.dataset.previewError=error.message;
     const reason=part('p','library-preview__error');
-    reason.textContent=error.message;
     el.append(reason);
-    reportShownError(`library preview ${project.id}`, error.message);
+    showError(reason, `library preview ${project.id}`, error.message);
     return el;
   }
   const {cards,xs,ys}=layout.state;

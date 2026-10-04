@@ -1,5 +1,5 @@
 // native surface lifecycle을 카드 상태 행에 계속 보이게 한다.
-import { clearShownError, reportShownError } from "./shown-errors.js";
+import { hideError, showError } from "./shown-errors.js";
 /** 오류 상태의 설명. 오류 상태는 오류를 가져야 한다. */
 export function surfaceErrorText(state) {
   if (state.error === null || state.error === undefined) throw new Error("a surface error state carries no error");
@@ -22,9 +22,7 @@ export function setSurfaceStatus(status, state) {
   status.setAttribute("aria-busy", String(phase === "loading"));
   indicator.dataset.surfaceStatus = phase;
   indicator.hidden = phase === "ready";
-  indicator.textContent = phase === "error"
-    ? `표면 오류 · ${surfaceErrorText(state)}`
-    : phase === "loading" ? "불러오는 중" : "";
+
   // 표면 오류는 상태 행에 보이는 순간 로그에도 남긴다. 다음 상태가 그 표시를 지운다.
   // 기본값: 카드에 속하지 않은 상태 행은 자리 이름 없이 적는다.
   const card = status.closest("[data-card-id]");
@@ -33,6 +31,10 @@ export function setSurfaceStatus(status, state) {
   const surface = card?.querySelector("[data-native-surface-id]")?.dataset.nativeSurfaceId ?? "without a surface";
   // 기본값: 카드에 속하지 않은 상태 행은 카드 이름 없이 적는다.
   const where = `surface status ${card?.dataset.cardId ?? "outside a card"} ${surface}`;
-  if (phase === "error") reportShownError(where, indicator.textContent);
-  else clearShownError(where);
+  if (phase === "error") {
+    showError(indicator, where, `표면 오류 · ${surfaceErrorText(state)}`);
+    return;
+  }
+  hideError(indicator, where);
+  indicator.textContent = phase === "loading" ? "불러오는 중" : "";
 }

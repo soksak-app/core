@@ -344,7 +344,6 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .surface-status{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;margin-right:6px;color:var(--muted)}
 .surface-status::before{content:"";width:8px;height:8px;border:1px solid currentColor;border-top-color:transparent;
   border-radius:50%;animation:surface-status-spin .8s linear infinite}
-.surface-status[data-surface-status=error]{color:var(--no)}
 .surface-status[data-surface-status=error]::before{border:0;background:currentColor;animation:none}
 .surface-status[hidden]{display:none}
 @keyframes surface-status-spin{to{transform:rotate(360deg)}}
@@ -519,14 +518,16 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .th__dot{position:absolute;right:3px;bottom:3px;width:6px;height:6px;border-radius:50%}
 .th__name{text-align:center}
 
+/* 오류 색은 오류 표시 경로(shown-errors.js)가 붙이는 data-error 요소에만 쓴다(AGENTS.md). */
+[data-error] { color: var(--no); }
 #applicationError {
   padding: 8px 12px;
-  color: var(--no);
   background: var(--bg);
-  border-bottom: 1px solid var(--no);
   font: var(--text-control)/var(--line-height) var(--font);
   user-select: text;
 }
+#applicationError[data-error], .library-error[data-error] { border-color: var(--no); }
+#applicationError { border-bottom: 1px solid var(--edge); }
 .set-reset { font-size: var(--text-caption); }
 .set-row:has(.set-reset) { flex-wrap: wrap; }
 

@@ -29,13 +29,13 @@ const project = (plugin) => ({
 
 test("a library preview draws a saved layout of registered plugins", () => {
   const el = preview(project("probe"));
-  assert.equal(el.dataset.error, undefined);
+  assert.equal(el.dataset.previewError, undefined);
   assert.deepEqual([...el.querySelectorAll(".library-preview__pane")].map((pane) => pane.dataset.plugin), ["probe"]);
 });
 
 test("a library preview draws a tab of a plugin that is not loaded as a placeholder pane", () => {
   const el = preview(project("gone"));
-  assert.equal(el.dataset.error, undefined, el.dataset.error);
+  assert.equal(el.dataset.previewError, undefined, el.dataset.previewError);
   const panes = [...el.querySelectorAll(".library-preview__pane")];
   assert.deepEqual(panes.map((pane) => [pane.dataset.plugin, pane.dataset.placeholder]), [["gone", "true"]]);
 });

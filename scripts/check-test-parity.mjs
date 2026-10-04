@@ -1005,10 +1005,11 @@ const FEATURE_LINKS = [
   {
     id: "F42",
     implementation: [
-      { file: "packages/workbench/shown-errors.js", symbol: "export function reportShownError" },
+      { file: "packages/workbench/shown-errors.js", symbol: "export function showError" },
     ],
     tests: [
       { file: "packages/workbench/test/shown-errors.test.mjs", id: "an error shown on the screen is logged once until it changes or clears" },
+      { file: "packages/workbench/test/error-display.test.mjs", id: "the error color is used only by the elements of the error display path" },
     ],
     expected: "Every error that the page shows is written to the application log when it appears.",
     levels: ["unit", "application"],
@@ -1059,6 +1060,18 @@ const FEATURE_LINKS = [
     ],
     expected: "The dialog document receives the page styles without the native paint clip of the main document.",
     levels: ["unit", "application"],
+  },
+  {
+    id: "F45",
+    implementation: [
+      { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/error-display.test.mjs", id: "only the error display path marks an element as an error" },
+      { file: "packages/workbench/test/error-display.test.mjs", id: "the error color is used only by the elements of the error display path" },
+    ],
+    expected: "Every error the page shows goes through one display path that logs it, and only that path's elements take the error color.",
+    levels: ["unit"],
   },
   {
     id: "F28",

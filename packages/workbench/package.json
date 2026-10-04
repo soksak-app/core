@@ -46,7 +46,6 @@
     "projects.js",
     "plugin-states.js",
     "registry.js",
-    "rejection.js",
     "performance.js",
     "settings.js",
     "sidebar-sets.js",

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F45: 페이지가 보이는 모든 오류는 그것을 기록하는 하나의 표시 경로를 거치고, 그 경로의 요소만 오류 색을 가진다. source test가 둘을 검사한다. 이 경로가 로그 줄 없이 보이던 애플리케이션 오류 배너 메시지 여섯 개를 찾았다.
 - F39: document region과 image region은 관찰 중 실패한 배치나 처리기가 없는 image 사건처럼 어떤 호출자도 받지 않는 실패를, 애플리케이션이 기록하지 않는 콘솔 대신 surface page의 report로 보고한다. `observeRegionInsets`는 animation frame에서 관찰을 시작한다.
 - F40: 설정 dialog는 더 이상 main 문서의 native paint clip을 받지 않는다. 그 clip은 main page의 native surface 구멍을 dialog의 어두운 막에 냈고, 마지막 커밋의 frame에 따라 두 host가 다른 dialog 스타일을 보내게 했다.
 - F42: 페이지는 보이는 모든 오류를 보이는 순간 기록한다. 카드 surface 상태, library 오류, plugin 상태 오류, 실패한 plugin 작업, 사라진 project 폴더, library preview 오류가 이제 `error: <where>: <text>`를 써서, 다음 그리기가 지우는 오류도 window check가 판정한다.

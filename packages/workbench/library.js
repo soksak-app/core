@@ -7,7 +7,7 @@ import { preview } from "./library-preview.js";
 import { delegate, mark } from "./commands.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { matchPlugins } from "./plugin-search.js";
-import { clearShownError, reportShownError } from "./shown-errors.js";
+import { hideError, showError } from "./shown-errors.js";
 
 const TINTS = ["#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"];
 const element = (tag, cls, text) => {
@@ -83,14 +83,11 @@ export function createLibrary(root, rendered = () => {}) {
   const back = root.querySelector('.library-return');
   let pending = false;
 
-  const fail = (reason) => {
-    // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 보인다.
-    error.textContent = String(reason.message ?? reason); error.hidden = false;
-    reportShownError('library', error.textContent);
-  };
+  // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 보인다.
+  const fail = (reason) => showError(error, 'library', String(reason.message ?? reason));
   async function perform(work) {
     if (pending) return;
-    pending = true; error.hidden = true; clearShownError('library');
+    pending = true; error.hidden = true; hideError(error, 'library');
     root.setAttribute('aria-busy', 'true');
     try { await work(); } catch (reason) { fail(reason); }
     finally { pending = false; root.removeAttribute('aria-busy'); render(); }
@@ -220,11 +217,11 @@ export function createLibrary(root, rendered = () => {}) {
     const operation = status.operation;
     if (operation && operation.plugin === row.id) {
       const line = element('p', 'library-plugin__operation', operation.state === 'running' ? `${row.id} ${operation.action} 진행 중`
-        : operation.state === 'done' ? '애플리케이션을 다시 시작하면 적용됩니다.' : operation.error);
+        : operation.state === 'done' ? '애플리케이션을 다시 시작하면 적용됩니다.' : '');
       line.dataset.state = operation.state;
       card.append(line);
-      if (operation.state === 'failed') reportShownError(`library plugin ${row.id}`, line.textContent);
-      else clearShownError(`library plugin ${row.id}`);
+      if (operation.state === 'failed') showError(line, `library plugin ${row.id}`, operation.error);
+      else hideError(line, `library plugin ${row.id}`);
     }
     return card;
   }
@@ -236,13 +233,13 @@ export function createLibrary(root, rendered = () => {}) {
     const failure = pluginOperations.failure();
     pluginList.replaceChildren();
     if (failure) {
-      const line = element('p', 'library-plugins-error', failure.kind === 'index'
-        ? `레지스트리를 읽지 못했습니다: ${failure.message}` : `플러그인 상태를 읽지 못했습니다: ${failure.message}`);
+      const line = element('p', 'library-plugins-error');
       line.dataset.kind = failure.kind; line.setAttribute('role', 'alert');
       pluginList.append(line);
-      reportShownError('library plugins', line.textContent);
+      showError(line, 'library plugins', failure.kind === 'index'
+        ? `레지스트리를 읽지 못했습니다: ${failure.message}` : `플러그인 상태를 읽지 못했습니다: ${failure.message}`);
     } else {
-      clearShownError('library plugins');
+      hideError(null, 'library plugins');
     }
     const rows = matchPlugins(status.plugins, pluginQuery);
     for (const row of rows) pluginList.append(pluginCard(row, status));
@@ -293,10 +290,11 @@ export function createLibrary(root, rendered = () => {}) {
         // 열 수 없는 폴더의 카드는 누를 수 없다. 이유는 카드에 보이고, 기록은 제거 버튼으로 지운다.
         choose.disabled=true;
         card.dataset.folderError=folder.error;
-        text.append(element('p','library-project__missing',folderReason(folder.error)));
-        reportShownError(`library project ${project.root}`, folderReason(folder.error));
+        const missing=element('p','library-project__missing');
+        text.append(missing);
+        showError(missing, `library project ${project.root}`, folderReason(folder.error));
       } else {
-        clearShownError(`library project ${project.root}`);
+        hideError(null, `library project ${project.root}`);
       }
       choose.append(text);
       const pin=element('button','act library-project__pin');pin.type='button';pin.dataset.expose='core.library.pin';pin.innerHTML=icon('star');
@@ -320,7 +318,7 @@ export function createLibrary(root, rendered = () => {}) {
   function state() {
     const previews={}, previewErrors={}, folderErrors={};
     for(const card of grid.querySelectorAll('.library-project')) {
-      const failed=card.querySelector('.library-preview')?.dataset.error;
+      const failed=card.querySelector('.library-preview')?.dataset.previewError;
       if(failed!==undefined) previewErrors[card.dataset.projectId]=failed;
       if(card.dataset.folderError!==undefined) folderErrors[card.dataset.projectId]=card.dataset.folderError;
       previews[card.dataset.projectId]=[...card.querySelectorAll('.library-preview__pane')].map(pane=>{

@@ -25,8 +25,8 @@ body[data-screen=library] #chromeActs .act[title="우측 사이드바 위치"]{d
 .library-preview{display:grid;gap:var(--space-2);height:145px;margin:var(--half-gap);padding:var(--space-4) calc(var(--space-4) * 2);border-radius:var(--r-xs);overflow:hidden;background:var(--bg)}
 .library-preview__pane{--preview-ink:var(--muted);min-width:0;min-height:0;overflow:hidden;padding:var(--space-2);border:var(--bw) solid color-mix(in srgb,var(--preview-ink) 24%,var(--card));border-radius:var(--r-xs);background:color-mix(in srgb,var(--preview-ink) 10%,var(--card));color:color-mix(in srgb,var(--preview-ink) 65%,var(--card))}
 .library-preview__mark{display:block;width:14px;height:14px;max-width:100%}
-.library-preview__error{grid-column:1/-1;align-self:center;margin:0;color:var(--no);font-size:var(--text-caption);white-space:pre-wrap;overflow-wrap:anywhere}
-.library-project__missing{margin:0;color:var(--no);font-size:var(--text-caption);overflow-wrap:anywhere}
+.library-preview__error{grid-column:1/-1;align-self:center;margin:0;font-size:var(--text-caption);white-space:pre-wrap;overflow-wrap:anywhere}
+.library-project__missing{margin:0;font-size:var(--text-caption);overflow-wrap:anywhere}
 .library-preview__mark svg{display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round}
 .library-preview__pane::after{content:"";display:block;width:60%;height:3px;margin-top:var(--space-2);border-radius:var(--r-xs);background:currentColor;box-shadow:0 7px 0 currentColor;opacity:.35}
 .library-preview__pane[data-plugin=sidebar]{padding:var(--space-1)}
@@ -56,13 +56,12 @@ body[data-screen=library] #chromeActs .act[title="우측 사이드바 위치"]{d
 .library-plugin__about{font-size:var(--text-small)}
 .library-plugin__actions{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-1)}
 .library-plugin__operation{font-size:var(--text-caption);color:var(--muted)}
-.library-plugin__operation[data-state=failed],.library-plugins-error{color:var(--no)}
 .library-plugins-error,.library-plugins-none{grid-column:1/-1;margin:0}
 .library-plugins-none{color:var(--muted)}
 .library-footer{grid-column:1/-1;display:flex;align-items:center;gap:var(--space-3);border-top:var(--bw) solid var(--edge);padding:0 var(--space-3);background:var(--card);color:var(--muted);font-size:var(--text-caption)}
 .library-footer button{border:0;background:transparent;color:var(--muted);padding:0 var(--space-1)}
 .library-footer button:last-child{margin-left:auto}
-.library-error{color:var(--no);padding:var(--space-3);border:var(--bw) solid var(--no);border-radius:var(--r-sm);margin-bottom:var(--space-3);white-space:pre-wrap}
+.library-error{padding:var(--space-3);border:var(--bw) solid var(--edge);border-radius:var(--r-sm);margin-bottom:var(--space-3);white-space:pre-wrap}
 .library-error[hidden],.library-form[hidden],.library-return[hidden]{display:none}
 .library-form{max-width:560px;border:var(--bw) solid var(--edge);border-radius:var(--r-sm);padding:var(--space-4);margin:0 0 var(--space-3);background:var(--card)}
 .library-form h2{margin:0 0 var(--space-3);font-size:var(--text-control);font-weight:600}
