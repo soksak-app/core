@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F24: 실패한 terminal 표시의 window check는 다음 terminal이 아직 표시되지 않은 동안 실패하지 않고 표시를 기다린다.
 - R2-4-3: `docs/spec/registry.md`가 공개 registry를 명세한다. commit한 항목 파일, 항목 소유자의 pull request, 자동 검사와 merge, merge 때의 index 게시를 담는다.
 - R2-9: 애플리케이션과 `sok`은 더 이상 0.0.2 설정 폴더를 옮기거나 `installed.json` format 1을 바꾸지 않는다. 다른 형식의 파일은 그 이름과 함께 실패한다.
 - R2-7-3: `docs/plans/linux-host.md`가 Linux host를 제안한다. framework 사실, host 동작 묶음과 비공개 API마다의 Linux 방식, vt frame 전송, 결정 D1–D8, 구현 순서를 담는다.

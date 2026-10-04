@@ -902,6 +902,17 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F24",
+    implementation: [
+      { file: "e2e/terminal.test.mjs", symbol: "region.presented !== null" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "a presentation that fails while the terminal service is stopped leaves the next fixture and splits usable" },
+    ],
+    expected: "The window check of a failed terminal presentation waits while a region has not presented yet.",
+    levels: ["application"],
+  },
+  {
     id: "F23",
     implementation: [
       { file: "packages/sok/wailsv3/src/plugins.go", symbol: "file.Chmod(mode)" },

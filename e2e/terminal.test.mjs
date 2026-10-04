@@ -702,7 +702,7 @@ for (const app of Object.values(APPS)) {
     const terminals = await ensureTerminals(s, 3);
     for (const item of terminals) {
       await s.until("host.window", (value) => value.regions.some((region) => region.surface === item.surface &&
-        region.visible && region.presented?.width === Math.round(region.frame.width * region.presented.scale)),
+        region.visible && region.presented !== null && region.presented.width === Math.round(region.frame.width * region.presented.scale)),
         `${item.surface} did not present after the failed presentation`);
     }
     const failed = (await s.get("core.surfaces")).filter((item) => item.status.phase === "error");
