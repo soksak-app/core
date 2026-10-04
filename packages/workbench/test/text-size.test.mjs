@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TEXT_STEPS, nextTextSize, onTextScope, setTextScope, textScope } from "../text-size.js";
+import { TEXT_STEPS, effectiveTextScope, nextTextSize, onTextScope, setTextScope, textScope } from "../text-size.js";
 
 test("text size moves through the declared steps and stops at the ends", () => {
   assert.deepEqual(TEXT_STEPS, [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3]);
@@ -27,4 +27,11 @@ test("the text scope is a card or the frame and reports each change", () => {
   assert.throws(() => setTextScope({ kind: "card" }), /card/);
   assert.throws(() => setTextScope({ kind: "window" }), /scope/);
   stop();
+});
+
+test("without a pressed place the scope is the focused card, and the frame when no card is focused", () => {
+  assert.deepEqual(effectiveTextScope(null, "c1"), { kind: "card", card: "c1" });
+  assert.deepEqual(effectiveTextScope(null, null), { kind: "frame" }, "a window without a card, such as the library, has no card to enlarge");
+  assert.deepEqual(effectiveTextScope(null, undefined), { kind: "frame" });
+  assert.deepEqual(effectiveTextScope({ kind: "frame" }, "c1"), { kind: "frame" });
 });

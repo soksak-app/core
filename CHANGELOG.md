@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F38: a window without a focused card, such as the library before a space opens, has the frame as its text size scope; the text size commands failed there with `text size card undefined is not in the layout`.
 - F36: the space row, the left project column and the first row take their frame-factored size in whole pixels, so the plane stays on the device pixel grid and the host seats native surfaces where the page declares them; at factor 1.1 they differed by half a pixel. A failed V7b names the surface and both rectangles.
 - F33: the draw of a layout transaction draws the card sidebars with the presentation that the transaction predicted the native surface seats with; a sidebar size command that arrived before the draw made the DOM and the native surface differ by one drag step. A failed placement verification (V7a, V7c) names the surface, both rectangles and the predicted and drawn sidebar bands.
 - F34: the page verification R measures the lines only when the plane shows the size of the painted cards; it compared the plane with the grid, which takes a new size before its draw, and reported the lines of a replaced layout as extending beyond the plane.

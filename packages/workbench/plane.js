@@ -6,7 +6,7 @@
 // 검증의 존재를 알지 않는다. 렌더링 완료만 통지하고 이후 처리는 문서가 정한다.
 import { Soksak, SoksakView, outline } from "soksak";
 import { borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
-import { nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
+import { effectiveTextScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { hasPlugin, isPlace, plugin, plugins } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
 import { bindSidebarGrip } from "./sidebar-grip.js";
@@ -1661,10 +1661,9 @@ export const currentGrid = () => grid;
 // 기본값: 위 주석대로 글자 크기 배율을 정하지 않은 카드는 1 이다.
 const cardTextSize = (card) => card?.data?.textSize ?? 1;
 
-/** 글자 크기의 현재 범위. 아직 누른 곳이 없으면 포커스된 카드다. */
+/** 글자 크기의 현재 범위(docs/spec/text-size.md#scope). */
 export function currentTextScope() {
-  // 기본값: 위 주석대로 아직 누른 곳이 없으면 포커스된 카드다.
-  return textScope() ?? { kind: "card", card: focusedId };
+  return effectiveTextScope(textScope(), focusedId);
 }
 
 /** 표면(탭)의 실제 글자 배율. 프레임 배율과 그 탭을 담은 카드의 배율을 곱한다. 판에 없는 탭은 null 이다. */

@@ -11,7 +11,7 @@ The scope is the place the user pressed last:
 - A press on a card, including its native terminal region or browser document, selects that card.
 - A press on the frame outside the plane (the project bar, the space bar, or the frame chrome) selects the frame.
 
-The window starts with the focused card as the scope.
+The window starts with the focused card as the scope. A window without a focused card, such as the library before a space opens, has the frame as the scope, because the frame is the only place whose text it shows.
 
 ## Steps and values
 

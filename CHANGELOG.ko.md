@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F38: space가 열리기 전의 library처럼 포커스된 카드가 없는 창은 frame을 글자 크기 범위로 가진다. 그 창에서 글자 크기 명령이 `text size card undefined is not in the layout`으로 실패했다.
 - F36: space 줄, 왼쪽 project 열, 첫 행은 frame 배율을 곱한 크기를 정수 pixel로 가져서, 판이 device pixel 격자에 남고 host가 페이지가 선언한 자리에 네이티브 표면을 앉힌다. 배율 1.1에서 반 pixel 어긋났다. 실패한 V7b는 표면과 두 사각형을 밝힌다.
 - F33: layout transaction의 그리기는 그 transaction이 네이티브 표면 자리를 예측할 때 쓴 표시 상태로 카드 sidebar를 그린다. 그리기 전에 온 sidebar 크기 명령이 DOM과 네이티브 표면을 끌기 한 걸음만큼 어긋나게 했다. 실패한 자리 검증(V7a, V7c)은 표면, 두 사각형, 예측한 sidebar 띠와 그려진 띠를 밝힌다.
 - F34: 페이지 검증 R은 판이 그려진 카드의 크기일 때만 선을 잰다. 그리기 전에 새 크기가 되는 grid와 판을 비교해서, 대체된 배치의 선을 판 밖으로 나간 선으로 보고했다.

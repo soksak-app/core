@@ -51,6 +51,15 @@ export function onTextSize(fn) {
 /** 현재 범위. {kind: "card", card} 이거나 {kind: "frame"} 이며, 누르기 전에는 null 이다. */
 export const textScope = () => scope;
 
+/**
+ * 글자 크기를 바꿀 범위. 누른 곳이 있으면 그곳이고, 없으면 포커스된 카드다. 포커스된 카드가 없는 창(space 가 열리기
+ * 전의 library)은 frame 이다(docs/spec/text-size.md#scope).
+ */
+export function effectiveTextScope(pressed, focused) {
+  if (pressed) return pressed;
+  return typeof focused === "string" && focused ? { kind: "card", card: focused } : { kind: "frame" };
+}
+
 /** 범위를 바꾸고 알린다. */
 export function setTextScope(next) {
   if (next?.kind === "card") {

@@ -992,6 +992,17 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F38",
+    implementation: [
+      { file: "packages/workbench/text-size.js", symbol: "export function effectiveTextScope" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/text-size.test.mjs", id: "without a pressed place the scope is the focused card, and the frame when no card is focused" },
+    ],
+    expected: "A window without a focused card has the frame as its text size scope.",
+    levels: ["unit"],
+  },
+  {
     id: "F28",
     implementation: [
       { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },
