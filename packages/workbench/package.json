@@ -1,6 +1,6 @@
 {
   "name": "@soksak/workbench",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "description": "Workbench frontend: projects, spaces, cards, tabs, sidebars, settings, and plugin loading.",
   "type": "module",

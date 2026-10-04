@@ -44,7 +44,7 @@ $(PKGCONFIG): pkgconfig-current | $(BUILD)
 	@printf '%s\n' \
 	  'Name: soksak-darwin' \
 	  'Description: Shared macOS window, webview, and surface layout code' \
-	  'Version: 0.0.2' \
+	  'Version: 0.0.3' \
 	  'Cflags: -I$(CURDIR)/src $(MINIMUM)' \
 	  'Libs: -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM)' > $@.next
 	@if cmp -s $@.next $@; then rm $@.next; else mv $@.next $@; fi

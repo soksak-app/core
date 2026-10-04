@@ -36,3 +36,20 @@ test("Cargo version reading ignores dependency versions outside [package]", { ti
   assert.equal(cargoPackageVersion('[dependencies]\nversion = "9"\n[package]\nversion = "0.0.1"\n'), "0.0.1");
   assert.equal(cargoPackageVersion('[workspace]\nmembers = []\n'), undefined);
 });
+
+test("version audit rejects an application bundle and a pkg-config Makefile with another version", { timeout: 1000 }, () => {
+  const plist = (short, build) => `<plist version="1.0">\n<dict>\n\t<key>CFBundleShortVersionString</key>\n\t<string>${short}</string>\n\t<key>CFBundleVersion</key>\n\t<string>${build}</string>\n</dict>\n</plist>\n`;
+  assert.deepEqual(auditVersions([
+    { path: "apps/a/platform/darwin/Info.plist", text: plist("0.0.0", RELEASE) },
+    { path: "apps/b/platform/darwin/Info.plist", text: plist(RELEASE, "0.0.0") },
+    { path: "apps/c/platform/darwin/Info.plist", text: plist(RELEASE, RELEASE) },
+    { path: "native/darwin/Makefile", text: "\t  'Name: soksak-darwin' \\\n\t  'Version: 0.0.0' \\\n" },
+    { path: "Makefile", text: "build:\n\techo\n" },
+  ]), [
+    `apps/a/platform/darwin/Info.plist: CFBundleShortVersionString "0.0.0" must be ${RELEASE}`,
+    `apps/b/platform/darwin/Info.plist: CFBundleVersion "0.0.0" must be ${RELEASE}`,
+    `native/darwin/Makefile: version "0.0.0" must be ${RELEASE}`,
+  ]);
+  assert.deepEqual(auditVersions([{ path: "apps/d/Info.plist", text: "<plist><dict></dict></plist>" }]),
+    ["apps/d/Info.plist: CFBundleShortVersionString is not declared", "apps/d/Info.plist: CFBundleVersion is not declared"]);
+});

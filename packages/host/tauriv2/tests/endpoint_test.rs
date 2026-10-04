@@ -279,7 +279,7 @@ fn endpoint_file_is_written_and_removed() {
     assert_eq!(written["address"], endpoint.address());
     assert_eq!(written["pid"], std::process::id());
     assert_eq!(written["application"], "test-file");
-    assert_eq!(written["version"], "0.0.2");
+    assert_eq!(written["version"], env!("CARGO_PKG_VERSION"));
     let executable = std::fs::canonicalize(std::env::current_exe().unwrap()).unwrap();
     assert_eq!(written["executable"], executable.to_string_lossy().as_ref());
     let started = written["started"].as_str().unwrap();
