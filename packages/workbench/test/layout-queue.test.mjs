@@ -60,7 +60,7 @@ test("an animation frame wait fails with its own error when the document runs no
   mock.timers.enable({ apis: ["setTimeout"] });
   t.after(() => mock.timers.reset());
   let settled = null;
-  const waiting = animationFrame(() => {}).then(() => { settled = "frame"; }, (error) => { settled = error; });
+  const waiting = animationFrame(() => {}, () => {}).then(() => { settled = "frame"; }, (error) => { settled = error; });
   mock.timers.tick(9999);
   await Promise.resolve();
   assert.equal(settled, null, "the frame wait failed before 10 seconds");
@@ -70,11 +70,21 @@ test("an animation frame wait fails with its own error when the document runs no
     String(settled));
 });
 
-test("an animation frame wait resolves on the next frame", { timeout: 5000 }, async () => {
+test("an animation frame wait runs its work in the frame callback and resolves with the frame time", { timeout: 5000 }, async () => {
   let frame;
-  const waiting = animationFrame((callback) => { frame = callback; });
+  const calls = [];
+  const waiting = animationFrame(() => calls.push("work"), (callback) => { frame = callback; });
+  assert.deepEqual(calls, [], "the work ran before the frame");
   frame(16.7);
-  await waiting;
+  assert.deepEqual(calls, ["work"], "the work did not run in the frame callback");
+  assert.equal(await waiting, 16.7);
+});
+
+test("an animation frame wait fails with the error of its work", { timeout: 5000 }, async () => {
+  let frame;
+  const waiting = animationFrame(() => { throw new Error("injected draw failure"); }, (callback) => { frame = callback; });
+  frame(16.7);
+  await assert.rejects(waiting, /injected draw failure/);
 });
 
 // 앞선 탭 닫기가 예약한 배치를 기다리는 동안 다음 탭 닫기가 표면을 해제하고 더 새 배치를 예약하면, 기다리던 배치는

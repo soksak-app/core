@@ -77,7 +77,7 @@ test("a frame layout prepares the row of its factor and writes the factor after 
       return Promise.resolve([]);
     },
     publish: () => { calls.push(["publish", drawnFrameText()]); return Promise.resolve([]); },
-    frame: () => Promise.resolve(),
+    frame: (work) => { work(); return Promise.resolve(); },
     clearPlane: () => calls.push(["clear", drawnFrameText()]),
   });
   await drawPrepared({ epoch: 0, current: () => 0, ...layout });

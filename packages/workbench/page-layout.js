@@ -129,7 +129,7 @@ export function createPageLayout({
           return result;
         },
         draw: () => { mark("draw"); draw(); mark("drawn"); },
-        frame: async () => { await animationFrame(); mark("frame"); },
+        frame: async (work) => { await animationFrame(work); mark("frame"); },
         presented: async () => { await rendered(); mark("presented"); },
       }));
     },

@@ -63,7 +63,7 @@ export function measureAt(factor, read) {
  * 행 높이를 담고, 그리기는 판을 지운 뒤(clearPlane) factor 를 쓰고, 표시는 그린 행의 커밋이다. 라이브러리로의 전환은
  * 그 전에 준비한 판의 그리기를 취소하므로 지금 배율로 이 배치를 그려 취소된 그리기의 배율을 잃지 않는다.
  *
- *   publishAhead(rects, seated, titlebar), publish(), frame()  compositor.js 와 layout-queue.js 의 함수
+ *   publishAhead(rects, seated, titlebar), publish(), frame(work)  compositor.js 와 layout-queue.js 의 함수
  */
 export function frameLayout({ factor, publishAhead, publish, frame, clearPlane = () => {} }) {
   const titlebar = chromeRow(factor);
