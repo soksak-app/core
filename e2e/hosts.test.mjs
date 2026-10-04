@@ -164,7 +164,7 @@ test("both hosts answer the same page the same way", async (t) => {
     const answers = `\nWails ${mine.request} -> ${mine.answer}\nTauri ${theirs.request} -> ${theirs.answer}`;
     // 긴 요청은 메시지에서 잘리므로 처음 달라지는 자리를 먼저 밝힌다(F40).
     assert.equal(theirs.request, mine.request,
-      `${name} was asked differently, Tauri ${textDifference(theirs.request, mine.request)} of Wails:${answers}`);
+      `${name} was asked differently, Tauri ${textDifference(theirs.request, mine.request)} of Wails; ${stateReport}:${answers}`);
     assert.equal(theirs.answer, mine.answer,
       `${name} was answered differently, Tauri ${textDifference(theirs.answer, mine.answer)} of Wails:${answers}`);
   }

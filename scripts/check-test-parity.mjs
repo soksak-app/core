@@ -1014,6 +1014,17 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F32",
+    implementation: [
+      { file: "packages/plugin-api/surface-composition.js", symbol: "observeFrame = view.requestAnimationFrame" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/surface-composition.test.mjs", id: "the controller starts observing at the next animation frame, before that frame's observation round" },
+    ],
+    expected: "A surface composition controller starts observing at an animation frame, so its first observations are delivered in one round.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F28",
     implementation: [
       { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },
