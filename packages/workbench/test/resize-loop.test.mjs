@@ -38,6 +38,7 @@ test("the observations delivered in the frame after a loop error are reported", 
   assert.deepEqual(delivered, [1, 1], "the page callback did not run");
   assert.deepEqual(reported, [
     "resize observer loop: this frame ran page@wails://localhost/page.js:1:1 at 1234.6ms on div#plane.plane.stage[data-expose=core.plane] 1186x670",
+    "resize observer loop: this frame changed nothing",
     "resize observer loop: the next frame delivered div#plane.plane.stage[data-expose=core.plane] 1186x670",
   ]);
 });
@@ -60,11 +61,13 @@ test("the callbacks that ran in the frame of a loop error are reported with the 
   const plane = window.document.getElementById("plane");
   observers[0].callback([{ target: plane, contentRect: { width: 600, height: 400 } }], observers[0]);
   window.dispatchEvent(new window.ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }));
-  assert.deepEqual(reported,
-    ["resize observer loop: this frame ran probe@wails://localhost/probe.js:7:3 at 1234.6ms on div#plane.plane.stage[data-expose=core.plane] 600x400"]);
+  assert.deepEqual(reported, [
+    "resize observer loop: this frame ran probe@wails://localhost/probe.js:7:3 at 1234.6ms on div#plane.plane.stage[data-expose=core.plane] 600x400",
+    "resize observer loop: this frame changed nothing",
+  ]);
   frame();
   frame();
-  assert.equal(reported.length, 2);
+  assert.equal(reported.length, 3);
 });
 
 test("the callbacks of an earlier frame are not reported with a loop error", () => {
@@ -76,5 +79,18 @@ test("the callbacks of an earlier frame are not reported with a loop error", () 
   observers[0].callback([{ target: plane, contentRect: { width: 600, height: 400 } }], observers[0]);
   frame();
   window.dispatchEvent(new window.ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }));
-  assert.deepEqual(reported, ["resize observer loop: this frame ran no callback"]);
+  assert.deepEqual(reported, ["resize observer loop: this frame ran no callback", "resize observer loop: this frame changed nothing"]);
+});
+
+test("the DOM changes after the first callback of the error frame are reported with their targets", async () => {
+  const { window, observers } = fakeView();
+  const reported = [];
+  watchResizeLoop(window, (line) => reported.push(line), () => "probe@wails://localhost/probe.js:7:3");
+  new window.ResizeObserver(() => {});
+  const plane = window.document.getElementById("plane");
+  observers[0].callback([{ target: plane, contentRect: { width: 600, height: 400 } }], observers[0]);
+  plane.style.setProperty("--pt", "26px");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  window.dispatchEvent(new window.ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }));
+  assert.match(reported[1], /^resize observer loop: this frame changed attributes style of div#plane\.plane\.stage\[data-expose=core\.plane\]/);
 });

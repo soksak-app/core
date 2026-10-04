@@ -35,7 +35,17 @@ export function watchResizeLoop(view, report, locate = creator) {
   let collected = null;
   // 이번 frame 에 실행된 callback. 다음 frame 의 rAF 가 비우며, 그 rAF 는 다음 frame 의 관찰 round 보다 먼저 실행된다.
   let ran = [];
+  // 이번 frame 의 첫 callback 뒤에 일어난 DOM 변경. 크기를 바꾼 코드가 callback 밖에 있어도 그 대상을 밝힌다(F32).
+  let changed = [];
   let clearing = false;
+  const mutations = new view.MutationObserver((records) => {
+    if (!clearing) return;
+    for (const record of records) {
+      const what = record.type === "attributes" ? `attributes ${record.attributeName}` : record.type;
+      changed.push(`${what} of ${record.target.nodeType === 1 ? describe(record.target) : record.target.nodeName}`);
+    }
+  });
+  mutations.observe(view.document, { subtree: true, childList: true, attributes: true, characterData: true });
   const sized = (entry) => `${describe(entry.target)} ${Math.round(entry.contentRect.width)}x${Math.round(entry.contentRect.height)}`;
   view.ResizeObserver = class extends Native {
     constructor(callback) {
@@ -50,6 +60,7 @@ export function watchResizeLoop(view, report, locate = creator) {
           clearing = true;
           view.requestAnimationFrame(() => {
             ran = [];
+            changed = [];
             clearing = false;
           });
         }
@@ -60,6 +71,12 @@ export function watchResizeLoop(view, report, locate = creator) {
   view.addEventListener("error", (event) => {
     if (!/^ResizeObserver loop/.test(event.message) || collected) return;
     report(`resize observer loop: this frame ran ${ran.length ? ran.join("; ") : "no callback"}`);
+    // 변경 기록은 microtask 로 전달되므로 오류 시점까지의 기록을 먼저 가져온다.
+    for (const record of mutations.takeRecords()) {
+      const what = record.type === "attributes" ? `attributes ${record.attributeName}` : record.type;
+      changed.push(`${what} of ${record.target.nodeType === 1 ? describe(record.target) : record.target.nodeName}`);
+    }
+    report(`resize observer loop: this frame changed ${changed.length ? [...new Set(changed)].join(", ") : "nothing"}`);
     // 다음 frame 의 rAF 는 그 frame 의 관찰 round 전에 실행되고, 그다음 frame 의 rAF 는 그 round 뒤에 실행된다.
     view.requestAnimationFrame(() => {
       collected = [];
