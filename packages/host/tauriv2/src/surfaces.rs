@@ -8,10 +8,10 @@ use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, Webview, Window};
 
+use crate::application_log::{log_error, log_failure};
 use crate::documents;
 use crate::exposure;
 use crate::images;
-use crate::log_error;
 use crate::platform::{self, Handle};
 use crate::sidecars::WindowSidecars;
 use crate::windows::{emit_window, native_owner_on_main, window_data};
@@ -391,7 +391,7 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
                         return false;
                     };
                     if let Err(error) = emit_window(&host, "surface-pressed", id.clone()) {
-                        eprintln!("surface-pressed event failed: {error}");
+                        log_error("surface-pressed", error);
                     }
                     true
                 });
@@ -399,14 +399,19 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
                     if let Err(error) =
                         emit_window(&pointing, "surface-input", InputStep { phase, x, y })
                     {
-                        eprintln!("surface-input event failed: {error}");
+                        log_error("surface-input", error);
                     }
                 });
                 *started = Some(platform.watch_input(handle, pressed, pointed)?);
                 Ok(())
             })();
-            if tx.send(result).is_err() {
-                eprintln!("surface input setup had no pending receiver");
+            match tx.send(result) {
+                Ok(()) => {}
+                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                Err(mpsc::SendError(Err(error))) => log_error("surface input", error),
+                Err(mpsc::SendError(Ok(()))) => {
+                    eprintln!("surface input setup arrived after its request ended")
+                }
             }
         })
         .map_err(|e| e.to_string())?;
@@ -428,8 +433,13 @@ pub(crate) fn isolate_webview(view: &Webview, page_focus: PageFocus) -> Result<(
                 PageFocus::Allowed => Ok(registered),
                 PageFocus::Ignored => Ok(registered && platform.ignore_page_focus(&webview)?),
             });
-        if tx.send(isolated).is_err() {
-            eprintln!("surface focus result had no pending receiver");
+        match tx.send(isolated) {
+            Ok(()) => {}
+            // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+            Err(mpsc::SendError(Err(error))) => log_error("surface focus", error),
+            Err(mpsc::SendError(Ok(_))) => {
+                eprintln!("surface focus result arrived after its request ended")
+            }
         }
     })
     .map_err(|e| e.to_string())?;
@@ -548,8 +558,13 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     let main_handle = {
         let (tx, rx) = mpsc::channel::<Result<Handle, String>>();
         main.with_webview(move |webview| {
-            if tx.send(platform.view_id(&webview)).is_err() {
-                eprintln!("main webview handle had no pending receiver");
+            match tx.send(platform.view_id(&webview)) {
+                Ok(()) => {}
+                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                Err(mpsc::SendError(Err(error))) => log_error("main webview handle", error),
+                Err(mpsc::SendError(Ok(_))) => {
+                    eprintln!("main webview handle arrived after its request ended")
+                }
             }
         })
         .map_err(|e| e.to_string())?;
@@ -563,7 +578,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 ticket,
                 Box::new(move |allowed| {
                     if tx.send(allowed).is_err() {
-                        eprintln!("surface preparation result had no pending receiver");
+                        eprintln!("surface preparation result arrived after its request ended");
                     }
                 }),
             )
@@ -695,9 +710,9 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     };
     let cancel = || {
         if let Err(error) = platform.enqueue_ui(Box::new(move || {
-            log_error(platform.cancel_layout(owner));
+            log_failure("surface layout cancel", platform.cancel_layout(owner));
         })) {
-            log_error(Err(error));
+            log_error("surface layout cancel", error);
         }
     };
     let prepared = run_layout(place_overlays, begin, steps, cancel)?;
@@ -757,14 +772,15 @@ pub(crate) async fn present(
                     &view,
                     Box::new(move || {
                         if ready.send(Ok(())).is_err() {
-                            eprintln!("surface readiness had no pending receiver");
+                            eprintln!("surface readiness arrived after its request ended");
                         }
                     }),
                 )
             });
             if let Err(error) = outcome {
-                if dom_tx.send(Err(error)).is_err() {
-                    eprintln!("DOM presentation failure had no pending receiver");
+                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                if let Err(mpsc::SendError(Err(error))) = dom_tx.send(Err(error)) {
+                    log_error("DOM presentation", error);
                 }
             }
         })
@@ -804,7 +820,7 @@ pub(crate) async fn present(
         // 다음 split이 실패한 owner 뒤에서 무한히 기다리지 않게 한다.
         let cancel_error = platform::current()?.enqueue_ui(Box::new(move || {
             if let Err(cancel) = platform::current().and_then(|p| p.cancel_layout(owner)) {
-                eprintln!("surface presentation failure could not cancel layout: {cancel}");
+                log_error("surface layout cancel", cancel);
             }
         }));
         if let Err(cancel) = cancel_error {
@@ -869,8 +885,21 @@ pub(crate) async fn present(
             exposure::window_changed(&presentation_window);
             Ok(placed)
         })();
-        if let Err(error) = ui_tx.try_send(result) {
-            eprintln!("surface placement result had no pending receiver: {error}");
+        if let Err(failure) = ui_tx.try_send(result) {
+            // 받는 쪽만 채널을 닫을 수 있으므로 지금 닫혀 있지 않으면 보낼 때 채널이 가득 찼던 것이다. 채널은 이
+            // 결과 하나만 받으므로 가득 찬 채널은 결과를 버린 실패다.
+            let closed = ui_tx.is_closed();
+            match (closed, failure.into_inner()) {
+                (false, _) => log_error(
+                    "surface placement",
+                    "the result channel is full and the result was dropped",
+                ),
+                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                (true, Err(error)) => log_error("surface placement", error),
+                (true, Ok(_)) => {
+                    eprintln!("surface placement result arrived after its request ended")
+                }
+            }
         }
     }))?;
     ui_rx
@@ -891,7 +920,7 @@ fn announce_run(window: &Window, running: &Running, going: bool) -> Result<(), S
         if !going {
             for done in running.settled.lock().map_err(|e| e.to_string())?.drain(..) {
                 if done.send(()).is_err() {
-                    eprintln!("surface settled notification had no pending receiver");
+                    eprintln!("surface settled notification arrived after its request ended");
                 }
             }
         }

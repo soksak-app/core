@@ -1,7 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
-#import <stdio.h>
 #import "surface_layout.h"
+#import "application_log.h"
 #import "private/webkit.h"
 
 @interface SPLayoutRequest : NSObject
@@ -215,7 +215,7 @@ static void settle(WKWebView *main, void (^done)(double, const char *)) {
     [main retain];
     [main evaluateJavaScript:@"void document.documentElement.offsetWidth" completionHandler:^(id value, NSError *error) {
         if (error) {
-            fprintf(stderr, "surface settle DOM completion failed: %s\\n", error.localizedDescription.UTF8String);
+            sp_log_error("surface settle", [NSString stringWithFormat:@"DOM completion failed: %@", error.localizedDescription].UTF8String);
             done(0, error.localizedDescription.UTF8String);
             [main release];
             return;

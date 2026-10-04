@@ -3,7 +3,6 @@
 package host
 
 import (
-	"log"
 	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -55,7 +54,7 @@ func (s *Surfaces) SetShape(req ShapeRequest) error {
 		system.RaiseShape(shape.handle)
 	})
 	if err != nil {
-		log.Printf("shape %s: %v", req.ID, err)
+		LogError("shape "+req.ID, err)
 	}
 	return err
 }

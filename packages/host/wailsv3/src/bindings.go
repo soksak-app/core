@@ -534,7 +534,7 @@ func committedNative(viewID uint64) {
 func dispatchNative(viewID uint64, body string) {
 	var call nativeCall
 	if err := json.Unmarshal([]byte(body), &call); err != nil {
-		log.Printf("native message: %v", err)
+		LogError("native message", err)
 		return
 	}
 	var owner *Surfaces
@@ -553,7 +553,7 @@ func dispatchNative(viewID uint64, body string) {
 	}
 	data, err := json.Marshal(reply)
 	if err != nil {
-		log.Printf("native reply: %v", err)
+		LogError("native reply", err)
 		return
 	}
 	application.InvokeSync(func() {

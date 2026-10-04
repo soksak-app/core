@@ -147,6 +147,9 @@ func Run(assets fs.FS, options Options) error {
 		// 기본 동작으로 프로세스를 끝내지 않는다. 호스트 명세의 종료 신호 계약은 Run 이 등록한
 		// 처리기가 지킨다(docs/spec/hosts.md).
 		DisableDefaultSignalHandler: true,
+		// Wails 의 오류는 기본 logger 의 수준 접두사 대신 호스트의 오류 줄로 쓴다. 창 검사가 그 줄을 오류로 읽는다
+		// (docs/spec/hosts.md#application-log).
+		ErrorHandler: func(err error) { LogError("wails", err) },
 		OnShutdown: func() {
 			// 종료 전에 모든 창의 웹 프로세스를 죽인다. AppKit 은 XPC 서비스를 클라이언트보다
 			// 오래 살려두므로(V5-105), 죽이지 않으면 WebContent·GPU·Networking 프로세스가
@@ -162,14 +165,14 @@ func Run(assets fs.FS, options Options) error {
 				application.InvokeSync(func() {
 					if main, err := system.MainWebview(window.NativeWindow()); err == nil {
 						if err := system.KillWebContentProcess(main); err != nil {
-							log.Printf("shutdown web content kill: %v", err)
+							LogError("web content kill", err)
 						}
 					}
 				})
 			}
 			sidecars.Stop()
 			if err := host.endpoint.Close(); err != nil {
-				log.Printf("local endpoint: %v", err)
+				LogError("endpoint close", err)
 			}
 			// 저장과 정리를 마쳤으므로 받은 운영체제의 종료 요청에 답한다.
 			application.InvokeSync(system.AnswerQuitRequests)
@@ -222,7 +225,7 @@ func setupQuitRequest() {
 	application.Get().Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		application.InvokeSync(func() {
 			if err := system.OnQuitRequest(func() { application.Get().Quit() }); err != nil {
-				log.Fatal(err)
+				fatalError("quit request", err)
 			}
 		})
 	})
@@ -233,7 +236,7 @@ func setupDockMenu(host *Host) {
 	application.Get().Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		application.InvokeSync(func() {
 			if err := system.InstallDock(host.WindowNew); err != nil {
-				log.Fatal(err)
+				fatalError("dock menu", err)
 			}
 		})
 	})

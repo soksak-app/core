@@ -1012,7 +1012,7 @@ fn failed_close_answer_is_logged() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "the child check failed: {stderr}");
     assert!(
-        stderr.contains("sidecar @fixture/sidecar-echo: close s1: busy"),
+        stderr.contains("error: sidecar @fixture/sidecar-echo: close s1: busy\n"),
         "the failed close was not logged: {stderr}"
     );
 }

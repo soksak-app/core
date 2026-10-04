@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -158,7 +157,7 @@ func (h *Host) WindowClose(ctx context.Context) error {
 // prepareWindow 는 창의 콘텐츠와 메인 웹뷰의 크기를 맞춘다. UI 스레드에서 호출한다.
 func prepareWindow(win *application.WebviewWindow) {
 	if err := system.PrepareWindow(win.NativeWindow()); err != nil {
-		log.Printf("window: %v", err)
+		LogError("window prepare", err)
 	}
 }
 
@@ -167,10 +166,10 @@ func cancelLayout(win *application.WebviewWindow) {
 	owner := win.NativeWindow()
 	if err := system.EnqueueUI(func() {
 		if err := system.CancelLayout(owner); err != nil {
-			log.Printf("surface layout: %v", err)
+			LogError("surface layout cancel", err)
 		}
 	}); err != nil {
-		log.Printf("surface layout: %v", err)
+		LogError("surface layout cancel", err)
 	}
 }
 
@@ -181,7 +180,7 @@ var handleNavigation func(s *Surfaces, handle func())
 // 앱 DOM 재로드는 모든 플러그인 문서를 교체하지만 터미널 세션은 종료하지 않는다.
 func (s *Surfaces) reloadSurfaceDocuments() {
 	if err := system.CancelLayout(s.window.NativeWindow()); err != nil {
-		log.Printf("surface reload: %v", err)
+		LogError("surface layout cancel", err)
 		return
 	}
 	ids := make([]string, 0, len(s.views))
@@ -218,7 +217,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	place := func(*application.WindowEvent) {
 		application.InvokeSync(func() {
 			if err := system.SetMainWebview(win.NativeWindow()); err != nil {
-				log.Fatalf("main webview identity: %v", err)
+				fatalError("main webview identity", err)
 			}
 			system.ConfigureMainWindow(win.NativeWindow(), s.Theme().Scheme == "dark")
 			prepareWindow(win)
@@ -233,7 +232,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 					})
 				}
 				if err != nil {
-					log.Fatalf("file drop: %v", err)
+					fatalError("file drop", err)
 				}
 			})
 		})
@@ -252,12 +251,12 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			var titled error
 			application.InvokeSync(func() { titled = system.SetTitlebarHeight(win.NativeWindow(), initialTitlebarHeight) })
 			if titled != nil {
-				log.Printf("window title bar: %v", titled)
+				LogError("window title bar", titled)
 			}
 			var failed error
 			application.InvokeSync(func() { failed = system.RevealAfterLoad(win.NativeWindow()) })
 			if failed != nil {
-				log.Fatalf("window reveal: %v", failed)
+				fatalError("window reveal", failed)
 			}
 			win.Show()
 		})
@@ -445,7 +444,7 @@ func (s *Surfaces) close() {
 			return nil
 		})
 		if err != nil {
-			log.Printf("window close: %v", err)
+			LogError("window close", err)
 		}
 		clear(s.views)
 		clear(s.named)

@@ -956,7 +956,7 @@ fn presentation_outcome_names_the_current_frame_of_a_failure() {
         assert!(!invalidated, "{detail}");
         assert_eq!(
             line,
-            format!("image present on main thread error: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail} current generation=3 raster=2")
+            format!("error: image present: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail} current generation=3 raster=2")
         );
     }
 }

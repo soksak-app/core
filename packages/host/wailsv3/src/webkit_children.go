@@ -14,6 +14,7 @@ package host
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -143,15 +144,15 @@ func RefreshWebKitChildren(config string) {
 	temporary := target + ".new"
 	bytes, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
-		log.Printf("webkit children record: %v", err)
+		LogError("webkit children record", err)
 		return
 	}
 	if err := os.WriteFile(temporary, bytes, 0o600); err != nil {
-		log.Printf("webkit children record: write: %v", err)
+		LogError("webkit children record", fmt.Sprintf("write: %v", err))
 		return
 	}
 	if err := os.Rename(temporary, target); err != nil {
-		log.Printf("webkit children record: rename: %v", err)
+		LogError("webkit children record", fmt.Sprintf("rename: %v", err))
 	}
 }
 
@@ -168,7 +169,7 @@ func ReapRecordedWebKit(config string) {
 	}
 	var record webkitRecord
 	if err := json.Unmarshal(bytes, &record); err != nil {
-		log.Printf("webkit children record is invalid: %v", err)
+		LogError("webkit children record", fmt.Sprintf("the record is invalid: %v", err))
 		return
 	}
 	if record.HostPid == os.Getpid() {
@@ -186,7 +187,7 @@ func ReapRecordedWebKit(config string) {
 			continue
 		}
 		if out, err := exec.Command("kill", "-9", strconv.Itoa(child.Pid)).Output(); err != nil {
-			log.Printf("webkit children: kill %d: %v: %s", child.Pid, err, strings.TrimSpace(string(out)))
+			LogError("webkit children", fmt.Sprintf("kill %d: %v: %s", child.Pid, err, strings.TrimSpace(string(out))))
 		} else {
 			log.Printf("webkit children: reaped orphaned %s pid %d left by host %d", child.Kind, child.Pid, record.HostPid)
 		}

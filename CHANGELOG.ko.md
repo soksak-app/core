@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F47: host는 모든 실패를 page와 같은 형식의 오류 줄 `error: <where>: <text>`로 `LogError`(Go), `log_error`(Rust), native `sp_log_error`를 거쳐 쓰고, 공유하는 위치에서는 두 host가 같은 문장을 쓴다. 그래서 window 검사가 host 실패를 본다. Wails framework 오류도 같은 경로를 거친다. `error: `로 시작하지 않는 host 줄은 `<result> arrived after its request ended`처럼 예상된 상태를 밝히는 관측이며, 실패를 담고 늦게 도착한 결과는 이제 오류로 쓴다. workbench는 `exposure settled failed: …`, `exposure: …`, layout queue 실패를 `error: ` 없이 썼고 이제 오류 줄로 쓴다. native surface settle 줄은 문자 그대로의 `\n`을 써서 다음 log 줄을 그 줄에 붙였다.
 - F35: 페이지는 새 `windowTitlebar` host 호출로 창 title bar를 첫 행 높이로 정하므로, AppKit이 모든 frame 글자 배율에서 창 단추를 행 가운데에 둔다. host는 title bar를 40pt로 고정하던 항목 없는 unified compact toolbar 대신 AppKit의 `-[NSWindow setTitlebarHeight:]`로 높이를 정하고, 행은 더 이상 창에서 높이를 되읽지 않으므로 줄어들 수 있다. 두 host는 32 이상 200 이하 point 밖의 높이와 전체 화면 중의 요청을 같은 문장으로 거부한다. `window_controls_test`는 제목 변경과 크기 변경 뒤 40에서 108pt의 title bar와 가운데 정렬을 측정하고, `titlebar.test.mjs`는 페이지가 행 높이마다 한 번 요청하는지 검사한다.
 - F37: AppKit이 0이 아닌 `NSEvent.pressedMouseButtons` mask로 거부한 합성 `input.pointer` 누름이나 뗌은, 거부와 같은 main run loop 차례에 측정한 mask와 frontmost 애플리케이션의 bundle identifier와 pid를 담은 1007을 두 host에서 같은 문장으로 반환한다. 이전 메시지는 둘 다 적지 않았다.
 - F43: ResizeObserver loop 오류 뒤 진단 기록기가 오류 frame의 DOM 변경을 callback slot별로 보고한다. 첫 callback 때 아직 전달되지 않은 변경, observer를 만든 코드와 함께 각 callback과 그 microtask checkpoint의 변경, round 뒤 다음 animation frame까지의 변경이다. 이전에는 첫 callback부터 다음 animation frame까지의 모든 변경이 한 줄에 있었다.

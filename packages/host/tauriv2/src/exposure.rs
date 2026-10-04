@@ -16,6 +16,7 @@ use serde_json::value::RawValue;
 use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, Window};
 
+use crate::application_log::log_error;
 use crate::endpoint::{
     Endpoint, Failure, Service, BUTTON_HELD, HANDLER_FAILED, INVALID_PARAMS, MISSING_DOCUMENT,
     NOT_ACTIVE, NO_INPUT, PRESS_OPEN, TIMED_OUT, UNKNOWN_NAME,
@@ -452,7 +453,7 @@ impl Relay {
                 )))
                 .is_err()
             {
-                eprintln!("closed-document failure had no pending receiver: {target}");
+                eprintln!("closed-document failure of {target} arrived after its request ended");
             }
         }
     }
@@ -748,7 +749,7 @@ pub(crate) fn replay_registrations(window: &Window) {
             "exposure-registered",
             json!({"surface": surface, "kind": kind, "name": name}),
         ) {
-            eprintln!("{error}");
+            log_error("exposure-registered", error);
         }
     }
 }
@@ -770,7 +771,7 @@ pub(crate) fn surface_closed(window: &Window, surface: &str) {
         "exposure-registered",
         json!({"surface": surface, "closed": true}),
     ) {
-        eprintln!("{error}");
+        log_error("exposure-registered", error);
     }
 }
 
@@ -847,12 +848,15 @@ pub(crate) fn windows_changed(app: &AppHandle) {
         let list = match windows::list(&app) {
             Ok(list) => list,
             Err(error) => {
-                eprintln!("host.windows: {error}");
+                log_error("host.windows", error);
                 return;
             }
         };
         let Some(entries) = list.as_array().cloned() else {
-            eprintln!("host.windows: the window list is not an array: {list}");
+            log_error(
+                "host.windows",
+                format!("the window list is not an array: {list}"),
+            );
             return;
         };
         for entry in entries {
@@ -862,7 +866,7 @@ pub(crate) fn windows_changed(app: &AppHandle) {
             if notifier.watched(window, "host.windows") {
                 match raw(&list) {
                     Ok(text) => notifier.changed(window, "host.windows", None, &text),
-                    Err(error) => eprintln!("host.windows change: {}", error.message),
+                    Err(error) => log_error("host.windows change", error.message),
                 }
             }
         }
@@ -891,12 +895,15 @@ pub(crate) fn sidecars_changed(app: &AppHandle) {
         let list = match windows::list(&app) {
             Ok(list) => list,
             Err(error) => {
-                eprintln!("host.sidecars: {error}");
+                log_error("host.sidecars", error);
                 return;
             }
         };
         let Some(entries) = list.as_array().cloned() else {
-            eprintln!("host.sidecars: the window list is not an array: {list}");
+            log_error(
+                "host.sidecars",
+                format!("the window list is not an array: {list}"),
+            );
             return;
         };
         for entry in entries {
@@ -906,7 +913,7 @@ pub(crate) fn sidecars_changed(app: &AppHandle) {
             if notifier.watched(window, "host.sidecars") {
                 match raw(&value) {
                     Ok(text) => notifier.changed(window, "host.sidecars", None, &text),
-                    Err(error) => eprintln!("host.sidecars change: {}", error.message),
+                    Err(error) => log_error("host.sidecars change", error.message),
                 }
             }
         }
@@ -929,7 +936,7 @@ pub(crate) fn window_changed(window: &Window) {
         let value = match window_status(&window) {
             Ok(value) => value,
             Err(error) => {
-                eprintln!("host.window: {}", error.message);
+                log_error("host.window", error.message);
                 return;
             }
         };
@@ -948,7 +955,7 @@ pub(crate) fn window_changed(window: &Window) {
                 Ok(text) => endpoint
                     .notifier()
                     .changed(window.label(), "host.window", None, &text),
-                Err(error) => eprintln!("host.window change: {}", error.message),
+                Err(error) => log_error("host.window change", error.message),
             }
         }
     });
@@ -966,8 +973,13 @@ pub(crate) fn on_main<T: Send + 'static>(
     let (tx, rx) = mpsc::channel();
     window
         .run_on_main_thread(move || {
-            if tx.send(work()).is_err() {
-                eprintln!("main-thread result had no pending receiver");
+            match tx.send(work()) {
+                Ok(()) => {}
+                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                Err(mpsc::SendError(Err(error))) => log_error("main-thread work", error),
+                Err(mpsc::SendError(Ok(_))) => {
+                    eprintln!("main-thread result arrived after its request ended")
+                }
             }
         })
         .map_err(|e| e.to_string())?;
@@ -1003,8 +1015,13 @@ fn with_view_if_present<T: Send + 'static>(
     let (tx, rx) = mpsc::channel();
     webview
         .with_webview(move |view| {
-            if tx.send(work(&view)).is_err() {
-                eprintln!("webview result had no pending receiver");
+            match tx.send(work(&view)) {
+                Ok(()) => {}
+                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                Err(mpsc::SendError(Err(error))) => log_error("webview work", error),
+                Err(mpsc::SendError(Ok(_))) => {
+                    eprintln!("webview result arrived after its request ended")
+                }
             }
         })
         .map_err(|e| e.to_string())?;
@@ -1019,8 +1036,13 @@ pub(crate) fn with_view<T: Send + 'static>(
     let (tx, rx) = mpsc::channel();
     webview
         .with_webview(move |view| {
-            if tx.send(work(&view)).is_err() {
-                eprintln!("webview result had no pending receiver");
+            match tx.send(work(&view)) {
+                Ok(()) => {}
+                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                Err(mpsc::SendError(Err(error))) => log_error("webview work", error),
+                Err(mpsc::SendError(Ok(_))) => {
+                    eprintln!("webview result arrived after its request ended")
+                }
             }
         })
         .map_err(|e| e.to_string())?;
@@ -1252,7 +1274,7 @@ fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
             on,
             Box::new(move || {
                 if tx.send(()).is_err() {
-                    eprintln!("fullscreen completion had no pending receiver");
+                    eprintln!("fullscreen completion arrived after its request ended");
                 }
             }),
         )
@@ -1282,13 +1304,19 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
             if let Err(error) = platform.after_settled(
                 &view,
                 Box::new(move |displayed| {
-                    if done.send(displayed).is_err() {
-                        eprintln!("presentation completion had no pending receiver");
+                    match done.send(displayed) {
+                        Ok(()) => {}
+                        // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                        Err(mpsc::SendError(Err(error))) => log_error("presentation", error),
+                        Err(mpsc::SendError(Ok(_))) => {
+                            eprintln!("presentation completion arrived after its request ended")
+                        }
                     }
                 }),
             ) {
-                if failed.send(Err(error)).is_err() {
-                    eprintln!("presentation failure had no pending receiver");
+                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                if let Err(mpsc::SendError(Err(error))) = failed.send(Err(error)) {
+                    log_error("presentation", error);
                 }
             }
         })
@@ -1589,8 +1617,13 @@ impl Host {
                     pointer.y,
                     ACTIVATION,
                     Box::new(move |result| {
-                        if tx.send(result).is_err() {
-                            eprintln!("activation result had no pending receiver");
+                        match tx.send(result) {
+                            Ok(()) => {}
+                            // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                            Err(mpsc::SendError(Err(error))) => log_error("activation", error),
+                            Err(mpsc::SendError(Ok(()))) => {
+                                eprintln!("activation result arrived after its request ended")
+                            }
                         }
                     }),
                 )
@@ -1610,7 +1643,7 @@ impl Host {
                 RECEIPT,
                 Box::new(move |delivery| {
                     if tx.send(delivery).is_err() {
-                        eprintln!("pointer delivery had no pending receiver");
+                        eprintln!("pointer delivery arrived after its request ended");
                     }
                 }),
             )

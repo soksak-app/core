@@ -21,6 +21,7 @@ use std::time::Duration;
 
 use wait_timeout::ChildExt;
 
+use crate::application_log::log_error;
 use crate::platform::{current, PersistentStream};
 use crate::windows::{emit_window, window_data};
 use serde::{Deserialize, Serialize};
@@ -169,7 +170,10 @@ fn close_answer<O: Owner>(
         return Err(format!("unexpected close answer for {}", answer.surface));
     }
     if let Some(error) = answer.error {
-        eprintln!("sidecar {sidecar}: close {}: {error}", answer.surface);
+        log_error(
+            &format!("sidecar {sidecar}"),
+            format!("close {}: {error}", answer.surface),
+        );
     }
     if let Some(changed) = changed {
         changed();
@@ -229,9 +233,37 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
     }
 }
 
+/// 기다리던 요청이 끝난 뒤에 도착한 서비스의 답을 남긴다. 실패한 답은 그 요청이 보고하지 않았으므로 오류 줄이다.
+fn late_reply(sidecar: &str, operation: &str, result: Result<(), String>) {
+    match result {
+        Ok(()) => {
+            eprintln!("sidecar {sidecar}: the {operation} reply arrived after its request ended")
+        }
+        Err(error) => log_error(
+            &format!("sidecar {sidecar}"),
+            format!("{operation}: {error}"),
+        ),
+    }
+}
+
+/// 영속 연결의 쓰기 스레드가 끝날 때 연결을 닫는다. 서비스가 먼저 연결을 끊었으면 소켓은 이미 연결되지 않은 상태
+/// (ENOTCONN)이고 그 끊김은 읽기 스레드가 연결 상실로 남기므로, 그 경우는 관측이다.
+fn shut_down_writer(name: &str, writer: &mut dyn PersistentStream) {
+    match writer.shutdown() {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotConnected => {
+            eprintln!("sidecar {name}: the connection closed before its writer shut down")
+        }
+        Err(error) => log_error(
+            &format!("sidecar {name}"),
+            format!("writer shutdown: {error}"),
+        ),
+    }
+}
+
 fn write_line(stdin: &mut ChildStdin, name: &str, line: &[u8]) -> bool {
     if let Err(e) = stdin.write_all(line) {
-        eprintln!("sidecar {name}: write: {e}");
+        log_error(&format!("sidecar {name}"), format!("write: {e}"));
         return false;
     }
     true
@@ -259,7 +291,7 @@ fn write_pending_socket<O>(
 
 fn write_socket_line(stream: &mut dyn PersistentStream, name: &str, line: &[u8]) -> bool {
     if let Err(error) = stream.write_all(line).and_then(|_| stream.flush()) {
-        eprintln!("sidecar {name}: write: {error}");
+        log_error(&format!("sidecar {name}"), format!("write: {error}"));
         return false;
     }
     true
@@ -619,7 +651,10 @@ impl<O: Owner> Sidecars<O> {
                             .push(line.clone());
                         eprintln!("sidecar {name}: close {surface}: outbox full, buffered");
                     } else {
-                        eprintln!("sidecar {name}: close {surface}: outbox disconnected");
+                        log_error(
+                            &format!("sidecar {name}"),
+                            format!("close {surface}: the outbox is disconnected"),
+                        );
                     }
                 }
             }
@@ -829,7 +864,7 @@ impl<O: Owner> Sidecars<O> {
         // 모든 프로세스를 병렬로 기다린다.
         let deadline = std::time::Instant::now() + self.stop_timeout;
         let mut handles = Vec::new();
-        for (_name, process) in processes {
+        for (name, process) in processes {
             let handle = thread::spawn(move || {
                 let remaining = deadline.saturating_duration_since(std::time::Instant::now());
                 if process.child.is_none() {
@@ -842,7 +877,10 @@ impl<O: Owner> Sidecars<O> {
                         let mut bytes = match serde_json::to_vec(&line) {
                             Ok(bytes) => bytes,
                             Err(error) => {
-                                eprintln!("sidecar: close-owner serialization failed: {error}");
+                                log_error(
+                                    &format!("sidecar {name}"),
+                                    format!("close-owner serialization: {error}"),
+                                );
                                 return;
                             }
                         };
@@ -854,7 +892,10 @@ impl<O: Owner> Sidecars<O> {
                             .expect("close waiters")
                             .insert(request, tx);
                         if let Err(error) = process.outbox.send(Outgoing::Line(bytes)) {
-                            eprintln!("sidecar: send close-owner: {error}");
+                            log_error(
+                                &format!("sidecar {name}"),
+                                format!("send close-owner: {error}"),
+                            );
                             return;
                         }
                         let result = rx.recv_timeout(remaining);
@@ -877,26 +918,44 @@ impl<O: Owner> Sidecars<O> {
                                 if let Err(error) =
                                     process.outbox.send(Outgoing::Line(shutdown_bytes))
                                 {
-                                    eprintln!("sidecar: send shutdown: {error}");
+                                    log_error(
+                                        &format!("sidecar {name}"),
+                                        format!("send shutdown: {error}"),
+                                    );
                                 } else {
                                     let shutdown_remaining = deadline
                                         .saturating_duration_since(std::time::Instant::now());
                                     match shutdown_rx.recv_timeout(shutdown_remaining) {
                                         Ok(Ok(())) => {}
                                         Ok(Err(error)) => {
-                                            eprintln!("sidecar: shutdown: {error}");
+                                            log_error(
+                                                &format!("sidecar {name}"),
+                                                format!("shutdown: {error}"),
+                                            );
                                         }
                                         Err(error) => {
-                                            eprintln!("sidecar: shutdown wait: {error}");
+                                            log_error(
+                                                &format!("sidecar {name}"),
+                                                format!("shutdown wait: {error}"),
+                                            );
                                         }
                                     }
                                 }
                             }
-                            Ok(Err(error)) => eprintln!("sidecar: close owner: {error}"),
-                            Err(error) => eprintln!("sidecar: close owner wait: {error}"),
+                            Ok(Err(error)) => log_error(
+                                &format!("sidecar {name}"),
+                                format!("close owner: {error}"),
+                            ),
+                            Err(error) => log_error(
+                                &format!("sidecar {name}"),
+                                format!("close owner wait: {error}"),
+                            ),
                         }
                         if let Err(error) = process.outbox.send(Outgoing::Close) {
-                            eprintln!("sidecar: close persistent transport: {error}");
+                            log_error(
+                                &format!("sidecar {name}"),
+                                format!("close persistent transport: {error}"),
+                            );
                         }
                     }
                     return;
@@ -908,9 +967,13 @@ impl<O: Owner> Sidecars<O> {
                         // 채널이 가득 참: 별도 스레드에서 블로킹 send를 시도한다.
                         // 이 스레드는 stop()을 막지 않는다.
                         let tx = process.outbox.clone();
+                        let close_name = name.clone();
                         thread::spawn(move || {
                             if let Err(e) = tx.send(close) {
-                                eprintln!("sidecar: send close: {e}");
+                                log_error(
+                                    &format!("sidecar {close_name}"),
+                                    format!("send close: {e}"),
+                                );
                             }
                         });
                     }
@@ -940,15 +1003,15 @@ impl<O: Owner> Sidecars<O> {
                     Ok(None) => {
                         // 기한 초과. 강제 종료.
                         if let Err(e) = child.kill() {
-                            eprintln!("sidecar: kill: {e}");
+                            log_error(&format!("sidecar {name}"), format!("kill: {e}"));
                         }
                         if let Err(e) = child.wait() {
-                            eprintln!("sidecar: wait after kill: {e}");
+                            log_error(&format!("sidecar {name}"), format!("wait after kill: {e}"));
                         }
                     }
                     Err(e) => {
                         // wait() 오류. 이미 종료되었거나 이미 waited.
-                        eprintln!("sidecar: wait_timeout: {e}");
+                        log_error(&format!("sidecar {name}"), format!("wait: {e}"));
                     }
                 }
             });
@@ -958,7 +1021,7 @@ impl<O: Owner> Sidecars<O> {
         // 모든 스레드가 완료될 때까지 기다린다.
         for handle in handles {
             if let Err(e) = handle.join() {
-                eprintln!("sidecar: thread join: {:?}", e);
+                log_error("sidecar stop", format!("thread join: {e:?}"));
             }
         }
     }
@@ -1318,11 +1381,12 @@ impl<O: Owner> Core<O> {
                         }
                         Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
                             if !write_pending_socket(&write_state, &write_name, &mut *writer) {
-                                eprintln!("sidecar: flush pending socket failed during close");
+                                log_error(
+                                    &format!("sidecar {write_name}"),
+                                    "the pending lines were not written before close",
+                                );
                             }
-                            if let Err(error) = writer.shutdown() {
-                                eprintln!("sidecar: writer shutdown failed: {error}");
-                            }
+                            shut_down_writer(&write_name, &mut *writer);
                             return;
                         }
                         Err(TryRecvError::Empty) => break,
@@ -1339,11 +1403,12 @@ impl<O: Owner> Core<O> {
                     }
                     Ok(Outgoing::Close) | Err(RecvError) => {
                         if !write_pending_socket(&write_state, &write_name, &mut *writer) {
-                            eprintln!("sidecar: flush pending socket failed during disconnect");
+                            log_error(
+                                &format!("sidecar {write_name}"),
+                                "the pending lines were not written before disconnect",
+                            );
                         }
-                        if let Err(error) = writer.shutdown() {
-                            eprintln!("sidecar: writer shutdown failed: {error}");
-                        }
+                        shut_down_writer(&write_name, &mut *writer);
                         return;
                     }
                 }
@@ -1381,7 +1446,7 @@ impl<O: Owner> Core<O> {
                     {
                         Ok(read) => read,
                         Err(error) => {
-                            eprintln!("sidecar {sidecar}: persistent read: {error}");
+                            log_error(&format!("sidecar {sidecar}"), format!("persistent read: {error}"));
                             return None;
                         }
                     };
@@ -1423,8 +1488,8 @@ impl<O: Owner> Core<O> {
                                         Ok(()) => Ok(reply.closed),
                                         Err(error) => Err(error),
                                     };
-                                    if sender.send(result).is_err() {
-                                        eprintln!("sidecar: retain response had no waiter");
+                                    if let Err(std::sync::mpsc::SendError(result)) = sender.send(result) {
+                                        late_reply(&sidecar, "retain", result.map(|_| ()));
                                     }
                                 }
                             }
@@ -1432,8 +1497,8 @@ impl<O: Owner> Core<O> {
                                 if let Some(sender) =
                                     waiters.lock().expect("close waiters").remove(&request)
                                 {
-                                    if sender.send(reply.result).is_err() {
-                                        eprintln!("sidecar: close-owner response had no waiter");
+                                    if let Err(std::sync::mpsc::SendError(result)) = sender.send(reply.result) {
+                                        late_reply(&sidecar, "close-owner", result);
                                     }
                                 }
                             }
@@ -1443,8 +1508,8 @@ impl<O: Owner> Core<O> {
                                     .expect("shutdown waiters")
                                     .remove(&request)
                                 {
-                                    if sender.send(reply.result).is_err() {
-                                        eprintln!("sidecar: shutdown response had no waiter");
+                                    if let Err(std::sync::mpsc::SendError(result)) = sender.send(reply.result) {
+                                        late_reply(&sidecar, "shutdown", result);
                                     }
                                 }
                             }
@@ -1528,7 +1593,7 @@ impl<O: Owner> Core<O> {
                 Err("persistent service disconnected before close-owner ack".to_string());
             for (_, sender) in waiters.lock().expect("close waiters").drain() {
                 if sender.send(close_error.clone()).is_err() {
-                    eprintln!("sidecar {sidecar}: close waiter disconnected");
+                    eprintln!("sidecar {sidecar}: the close-owner failure arrived after its request ended");
                 }
             }
             let error = Err("persistent service disconnected before shutdown ack".to_string());
@@ -1538,13 +1603,13 @@ impl<O: Owner> Core<O> {
                 .drain()
             {
                 if sender.send(error.clone()).is_err() {
-                    eprintln!("sidecar {sidecar}: shutdown waiter disconnected");
+                    eprintln!("sidecar {sidecar}: the shutdown failure arrived after its request ended");
                 }
             }
             if let Some(reason) = violation {
                 // 서비스가 프로토콜을 어겼다. 같은 메시지가 다음 연결도 끝내므로 곧바로 다시 맺지 않고, 다음
                 // 전송이 생성 경로로 다시 맺는다(docs/spec/terminal-runtime.md#service-transport).
-                eprintln!("sidecar {sidecar} failed: {reason}");
+                log_error(&format!("sidecar {sidecar}"), format!("failed: {reason}"));
                 for (surface, owner) in owned {
                     owner.deliver_failure(Failure {
                         sidecar: sidecar.clone(),
@@ -1607,7 +1672,10 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
             if let Some(endpoint) = endpoint {
                 if let Err(error) = std::fs::remove_file(&endpoint) {
                     if error.kind() != std::io::ErrorKind::NotFound {
-                        eprintln!("sidecar {name}: remove refused endpoint: {error}");
+                        log_error(
+                            &format!("sidecar {name}"),
+                            format!("remove refused endpoint: {error}"),
+                        );
                     }
                 }
             }
@@ -1617,7 +1685,10 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
     match &outcome {
         Ok(true) => eprintln!("sidecar {name}: connection lost; restarted"),
         Ok(false) => {}
-        Err(reason) => eprintln!("sidecar {name}: connection lost; restart failed: {reason}"),
+        Err(reason) => log_error(
+            &format!("sidecar {name}"),
+            format!("connection lost; restart failed: {reason}"),
+        ),
     }
     notify_connection(core, name, outcome.map(|_| ()));
 }
@@ -1659,7 +1730,10 @@ fn notify_connection<O: Owner>(core: &Arc<Core<O>>, name: &str, outcome: Result<
     let body = match RawValue::from_string(value.to_string()) {
         Ok(body) => body,
         Err(error) => {
-            eprintln!("sidecar {name}: connection notice serialization: {error}");
+            log_error(
+                &format!("sidecar {name}"),
+                format!("connection notice serialization: {error}"),
+            );
             return;
         }
     };
@@ -1861,7 +1935,7 @@ fn fail<O: Owner>(state: &Arc<Mutex<State<O>>>, sidecar: &str, violation: Option
     for failure in failures {
         reason = format!("{reason}; {failure}");
     }
-    eprintln!("sidecar {sidecar} failed: {reason}");
+    log_error(&format!("sidecar {sidecar}"), format!("failed: {reason}"));
     for (surface, owner) in owned {
         owner.deliver_failure(Failure {
             sidecar: sidecar.to_string(),
@@ -1897,17 +1971,20 @@ impl Owner for Window {
     }
     fn sidecar_reconnected(&self, sidecar: &str) {
         if let Err(error) = crate::composition::refresh_sidecar_rasters(self, sidecar) {
-            eprintln!("sidecar {sidecar} reconnection reconfigure: {error}");
+            log_error(
+                &format!("sidecar {sidecar} reconnection reconfigure"),
+                error,
+            );
         }
     }
     fn deliver(&self, message: Message) {
         if let Err(error) = emit_window(self, "sidecar-message", message) {
-            eprintln!("sidecar message: {error}");
+            log_error("sidecar-message", error);
         }
     }
     fn deliver_failure(&self, failure: Failure) {
         if let Err(error) = emit_window(self, "sidecar-failure", failure) {
-            eprintln!("sidecar failure: {error}");
+            log_error("sidecar-failure", error);
         }
     }
     fn decide_image_envelope(
@@ -1920,7 +1997,10 @@ impl Owner for Window {
         let data = match window_data(self) {
             Ok(data) => data,
             Err(e) => {
-                eprintln!("sidecar {sidecar_name}: image envelope for {surface}: {e}");
+                log_error(
+                    &format!("sidecar {sidecar_name}"),
+                    format!("image envelope for {surface}: {e}"),
+                );
                 return false;
             }
         };

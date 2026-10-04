@@ -648,10 +648,8 @@ impl PersistentStream for PersistentUnixStream {
             .map_err(|error| error.to_string())
     }
 
-    fn shutdown(&self) -> Result<(), String> {
-        self.0
-            .shutdown(std::net::Shutdown::Both)
-            .map_err(|error| error.to_string())
+    fn shutdown(&self) -> std::io::Result<()> {
+        self.0.shutdown(std::net::Shutdown::Both)
     }
 
     fn set_read_deadline(&self, timeout: Option<std::time::Duration>) -> Result<(), String> {

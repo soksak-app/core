@@ -133,7 +133,7 @@ impl Listener for Socket {
     fn remove(&self) {
         if let Err(error) = fs::remove_file(&self.path) {
             if error.kind() != std::io::ErrorKind::NotFound {
-                eprintln!("{}: {error}", self.path.display());
+                crate::application_log::log_error(&self.path.display().to_string(), error);
             }
         }
     }

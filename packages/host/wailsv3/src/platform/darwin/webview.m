@@ -2,6 +2,7 @@
 
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "application_log.h"
 #import "webview_input.h"
 #import "surface_layout.h"
 #import "webview_geometry.h"
@@ -42,7 +43,7 @@ extern void nativeCommitted(unsigned long long identifier);
 - (void)webView:(WKWebView *)view didCommitNavigation:(WKNavigation *)navigation {
     nativeCommitted(self.messageIdentifier);
     [self evaluateJavaScript:self.backgroundEnabled ? @"window.__soksakBackground = true" : @"window.__soksakBackground = false" completionHandler:^(id result, NSError *error) {
-        if (error) NSLog(@"surface background failed: %@", error);
+        if (error) sp_log_error("surface background", error.localizedDescription.UTF8String);
     }];
 }
 - (void)dealloc {

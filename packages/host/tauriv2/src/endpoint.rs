@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use serde_json::{json, Map, Value};
 
+use crate::application_log::log_error;
 use crate::platform::{self, Listener};
 
 pub use crate::platform::Connection;
@@ -255,7 +256,7 @@ impl Answer {
             Err(error) => Err(error.to_string()),
         };
         if let Err(error) = written {
-            eprintln!("endpoint answer failed: {error}");
+            log_error("endpoint reply", error);
         }
     }
 }
@@ -379,7 +380,7 @@ impl Notifier {
         for writer in writers {
             if let Ok(mut writer) = writer.lock() {
                 if let Err(error) = write_frame(&mut *writer, message) {
-                    eprintln!("endpoint notification failed: {error}");
+                    log_error("endpoint notification", error);
                 }
             }
         }
@@ -459,7 +460,7 @@ impl Drop for ProcessLock {
     fn drop(&mut self) {
         if let Err(error) = std::fs::remove_file(&self.path) {
             if error.kind() != ErrorKind::NotFound {
-                eprintln!("{}: {error}", self.path.display());
+                log_error(&self.path.display().to_string(), error);
             }
         }
     }
@@ -522,7 +523,7 @@ impl Endpoint {
                 }
                 Err(error) => {
                     if !stopped.load(Ordering::Relaxed) {
-                        eprintln!("endpoint: {error}");
+                        log_error("endpoint accept", error);
                     }
                     return;
                 }
@@ -564,16 +565,16 @@ impl Endpoint {
         // 다른 프로세스가 대체한 endpoint.json 은 그 프로세스의 것이므로 지우지 않는다.
         match std::fs::read(&self.file) {
             Err(error) if error.kind() == ErrorKind::NotFound => {}
-            Err(error) => eprintln!("{}: {error}", self.file.display()),
+            Err(error) => log_error(&self.file.display().to_string(), error),
             Ok(data) => match serde_json::from_slice::<Value>(&data) {
-                Err(error) => eprintln!(
-                    "{}: endpoint file is not valid JSON: {error}",
-                    self.file.display()
+                Err(error) => log_error(
+                    &self.file.display().to_string(),
+                    format!("endpoint file is not valid JSON: {error}"),
                 ),
                 Ok(current) if current == self.record => {
                     if let Err(error) = std::fs::remove_file(&self.file) {
                         if error.kind() != ErrorKind::NotFound {
-                            eprintln!("{}: {error}", self.file.display());
+                            log_error(&self.file.display().to_string(), error);
                         }
                     }
                 }
@@ -584,13 +585,13 @@ impl Endpoint {
             for peer in peers.values() {
                 if let Ok(writer) = peer.writer.lock() {
                     if let Err(error) = writer.close() {
-                        eprintln!("endpoint shutdown failed: {error}");
+                        log_error("endpoint connection close", error);
                     }
                 }
             }
         }
         if let Err(error) = self._process_lock.release() {
-            eprintln!("process lock release failed: {error}");
+            log_error("process lock release", error);
         }
     }
 }
@@ -734,7 +735,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
     let writer = match connection.try_clone() {
         Ok(writer) => Arc::new(Mutex::new(writer)),
         Err(error) => {
-            eprintln!("endpoint: {error}");
+            log_error("endpoint connection", error);
             return;
         }
     };
@@ -771,7 +772,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         std::thread::spawn(move || answer.send(run(&shared, &request.method, request.params)));
     }
     if let Err(error) = connection.close() {
-        eprintln!("endpoint shutdown failed: {error}");
+        log_error("endpoint connection close", error);
     }
     forget(&shared, peer);
 }

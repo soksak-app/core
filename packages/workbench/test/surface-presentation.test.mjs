@@ -68,6 +68,10 @@ test("native preparation cannot present before DOM drawing and presents each tic
       await surfaces.place(changed);
       await assert.rejects(surfaces.place({ ...changed, drawn: true }), /injected presentSurfaces failure/);
     }
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(calls.filter((call) => call.name === "report").map((call) => call.request),
+      [`error: host ${stage} failed while advancing the layout queue: injected ${stage} failure`],
+      `${stage} rejection must be written as an error line`);
     calls.length = 0;
     await surfaces.place(changed);
     await surfaces.place({ ...changed, drawn: true });

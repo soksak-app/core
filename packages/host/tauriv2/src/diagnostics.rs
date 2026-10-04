@@ -17,6 +17,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde_json::{json, Map, Value};
 use tauri::{Emitter, EventTarget, Manager, Window};
 
+use crate::application_log::log_error;
 use crate::endpoint::Failure;
 use crate::exposure::{self, on_main, Host, TIMEOUT};
 use crate::platform;
@@ -167,7 +168,7 @@ fn native_objects(window: &Window, params: &Map<String, Value>) -> Result<Value,
             TIMEOUT.as_secs_f64(),
             Box::new(move |counts, reached| {
                 if tx.send((counts, reached)).is_err() {
-                    eprintln!("window object counts had no pending receiver");
+                    eprintln!("window object counts arrived after their request ended");
                 }
             }),
         )
@@ -201,7 +202,7 @@ fn process_exit(window: &Window, params: &Map<String, Value>) -> Result<Value, F
             TIMEOUT.as_secs_f64(),
             Box::new(move |exited| {
                 if tx.send(exited).is_err() {
-                    eprintln!("a process exit answer had no pending receiver");
+                    eprintln!("process exit answer arrived after its request ended");
                 }
             }),
         )
@@ -455,12 +456,12 @@ fn tick(
             if let Some(platform) = clock {
                 match (platform.capture_clock(), sent.lock()) {
                     (Ok(now), Ok(mut ticks)) => ticks.push(now),
-                    (Err(error), _) => eprintln!("drag tick clock: {error}"),
-                    (_, Err(error)) => eprintln!("drag tick clock: {error}"),
+                    (Err(error), _) => log_error("drag tick clock", error),
+                    (_, Err(error)) => log_error("drag tick clock", error),
                 }
             }
             if let Err(error) = app.emit_to(EventTarget::webview(&label), "diagnostics-tick", ()) {
-                eprintln!("{error}");
+                log_error("diagnostics-tick", error);
                 return;
             }
         }
@@ -611,7 +612,7 @@ fn delivered_notifications(window: &Window) -> Result<Value, Failure> {
     on_main(window, move || {
         platform::current()?.delivered_notifications(Box::new(move |list| {
             if tx.send(list).is_err() {
-                eprintln!("delivered notifications had no pending receiver");
+                eprintln!("delivered notifications arrived after their request ended");
             }
         }))
     })

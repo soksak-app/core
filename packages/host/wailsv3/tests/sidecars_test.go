@@ -824,7 +824,7 @@ func TestFailedCloseAnswerIsLogged(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if want := "sidecar @fixture/sidecar-echo: close s1: busy"; !strings.Contains(written.String(), want) {
+	if want := "error: sidecar @fixture/sidecar-echo: close s1: busy\n"; !strings.Contains(written.String(), want) {
 		t.Fatalf("log %q does not contain %q", written.String(), want)
 	}
 }

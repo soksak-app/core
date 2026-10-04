@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Window};
 
+use crate::application_log::log_error;
 use crate::exposure;
 use crate::platform;
 use crate::windows::emit_window;
@@ -144,12 +145,15 @@ fn failed(app: &AppHandle, reason: String) {
 
 fn emit_state(app: &AppHandle) {
     let Ok(state) = STATE.lock().map(|state| state.clone()) else {
-        eprintln!("notification state lock is poisoned");
+        log_error(
+            "notification-state",
+            "the notification state lock is poisoned",
+        );
         return;
     };
     for window in app.windows().values() {
         if let Err(error) = emit_window(window, "notification-state", state.clone()) {
-            eprintln!("notification-state: {error}");
+            log_error("notification-state", error);
         }
     }
 }

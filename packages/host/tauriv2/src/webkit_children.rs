@@ -148,7 +148,7 @@ pub fn refresh(config: &Path) {
         .and_then(|()| std::fs::rename(&temporary, &target).map_err(|e| format!("rename: {e}")))
     {
         Ok(()) => {}
-        Err(error) => eprintln!("webkit children record: {error}"),
+        Err(error) => crate::application_log::log_error("webkit children record", error),
     }
 }
 
@@ -165,7 +165,10 @@ pub fn reap_recorded(config: &Path) {
     let record: Record = match serde_json::from_slice(&bytes) {
         Ok(record) => record,
         Err(error) => {
-            eprintln!("webkit children record is invalid: {error}");
+            crate::application_log::log_error(
+                "webkit children record",
+                format!("the record is invalid: {error}"),
+            );
             return;
         }
     };
@@ -196,7 +199,10 @@ pub fn reap_recorded(config: &Path) {
                     "webkit children: reaped orphaned {} pid {} left by host {}",
                     child.kind, child.pid, record.host_pid
                 ),
-                Err(error) => eprintln!("webkit children: kill {}: {error}", child.pid),
+                Err(error) => crate::application_log::log_error(
+                    "webkit children",
+                    format!("kill {}: {error}", child.pid),
+                ),
             },
             Err(reason) => eprintln!("webkit children: pid {}: {}", child.pid, reason),
         }

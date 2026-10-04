@@ -10,6 +10,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import "capture.h"
+#import "application_log.h"
 #import <ImageIO/ImageIO.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 #include <compression.h>
@@ -107,7 +108,7 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
     NSString *message = [NSString stringWithFormat:@"frame %d was not written: %@ %@: %s",
         number, operation, path, strerror(error)];
     setCaptureError(message);
-    fprintf(stderr, "observe: %s\n", message.UTF8String);
+    sp_log_error("capture", message.UTF8String);
 }
 
 @implementation SPCapture
@@ -227,8 +228,9 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
     }
     CVPixelBufferUnlockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
     if (copy == NULL) {
-        setCaptureError([NSString stringWithFormat:@"frame %d could not be copied: %s", self.queued + 1, strerror(errno)]);
-        fprintf(stderr, "observe: frame %d was not copied, %s\n", self.queued + 1, strerror(errno));
+        NSString *message = [NSString stringWithFormat:@"frame %d could not be copied: %s", self.queued + 1, strerror(errno)];
+        setCaptureError(message);
+        sp_log_error("capture", message.UTF8String);
         dispatch_semaphore_signal(capturePending);
         return;
     }
@@ -327,7 +329,7 @@ static void reportCaptureStreamFailure(SCStream *stream, NSString *message) {
     @synchronized([SPCapture class]) {
         bool current = stream != nil && stream == captureStream;
         if (current) setCaptureError(message);
-        fprintf(stderr, "observe: %s (stream=%p current=%d)\n", message.UTF8String, stream, current);
+        sp_log_error("capture", [NSString stringWithFormat:@"%@ (stream=%p current=%d)", message, stream, current].UTF8String);
     }
 }
 
@@ -344,7 +346,7 @@ const char *sp_capture_error(void) {
 static bool captureOperationFailure(char **errorOut, NSString *message) {
     *errorOut = strdup(message.UTF8String);
     if (*errorOut == NULL) {
-        fprintf(stderr, "capture error allocation failed\n");
+        sp_log_error("capture", "the error text could not be allocated");
         abort();
     }
     return false;
@@ -371,7 +373,7 @@ static bool captureOperationFailure(char **errorOut, NSString *message) {
     self.filter = filter;
     self.configuration = configuration;
     self.error = error;
-    if (error != nil) fprintf(stderr, "capture preparation callback failed: %s\n", error.UTF8String);
+    if (error != nil) sp_log_error("capture preparation", error.UTF8String);
     dispatch_semaphore_signal(self.answered);
 }
 - (void)dealloc {
@@ -422,7 +424,7 @@ static void followWindowSize(size_t width, size_t height, size_t needWidth, size
 
 bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
     if (errorOut == NULL) {
-        fprintf(stderr, "capture open needs an error output\n");
+        sp_log_error("capture open", "an error output is required");
         return false;
     }
     *errorOut = NULL;
@@ -501,7 +503,7 @@ bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
 
 bool sp_capture_start(const char* directory, char **errorOut) {
     if (errorOut == NULL) {
-        fprintf(stderr, "capture start needs an error output\n");
+        sp_log_error("capture start", "an error output is required");
         return false;
     }
     *errorOut = NULL;
@@ -509,7 +511,7 @@ bool sp_capture_start(const char* directory, char **errorOut) {
     clearCaptureError();
     if (captureFilter == nil) {
         setCaptureError(@"capture has no prepared window");
-        fprintf(stderr, "observe: capture has no window to record\n");
+        sp_log_error("capture start", "capture has no prepared window");
         return captureOperationFailure(errorOut, @"capture has no prepared window");
     }
     if (directory == NULL) {
@@ -558,9 +560,9 @@ bool sp_capture_start(const char* directory, char **errorOut) {
                 sampleHandlerQueue:captureQueue
                              error:&error];
     if (error != nil) {
-        setCaptureError([NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription]);
-        fprintf(stderr, "observe: capture output not added, %s\n",
-            error.localizedDescription.UTF8String);
+        NSString *message = [NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription];
+        setCaptureError(message);
+        sp_log_error("capture start", message.UTF8String);
         @synchronized([SPCapture class]) { captureStream = nil; }
         [stream release];
         return captureOperationFailure(errorOut,
@@ -641,7 +643,7 @@ int sp_capture_stop(double after) {
             ? @"no frame at the window's device-pixel size arrived within 1000ms after the requested display time"
             : @"no frame arrived within 1000ms after the requested display time";
         setCaptureError(message);
-        fprintf(stderr, "observe: %s\n", message.UTF8String);
+        sp_log_error("capture stop", message.UTF8String);
     }
     dispatch_sync(captureQueue, ^{
         captureCaughtUp = NULL;
@@ -718,7 +720,7 @@ double sp_capture_longest_gap(void) {
     self.written = written;
     self.error = error;
     // 호출자가 시간 초과로 돌아간 뒤 도착한 오류도 로그로 보고한다.
-    if (error != nil) fprintf(stderr, "still capture callback failed: %s\n", error.UTF8String);
+    if (error != nil) sp_log_error("still capture", error.UTF8String);
     dispatch_semaphore_signal(self.answered);
 }
 - (void)dealloc {
@@ -731,7 +733,7 @@ double sp_capture_longest_gap(void) {
 
 bool sp_capture_still(long windowNumber, const char *path, char **errorOut) {
     if (errorOut == NULL) {
-        fprintf(stderr, "still capture needs an error output\n");
+        sp_log_error("still capture", "an error output is required");
         return false;
     }
     *errorOut = NULL;

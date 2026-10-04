@@ -226,6 +226,7 @@ fn invalid_json_closes_connection() {
 | `log.open.rotates-at-10mb` | 10 MB 이상인 로그 파일을 열면 먼저 `<이름>.1`로 옮겨 이전 세대를 대체하고 새 파일을 시작한다. | both |
 | `log.open.appends-below-bound` | 더 작은 로그 파일을 열면 거기에 덧붙이고, 새 로그 파일은 mode 0600이다. | both |
 | `log.application.start-replaces-standard-error` | 애플리케이션 로그를 시작하면 실행의 첫 줄을 쓰고 그 파일을 프로세스와 그 프로세스가 시작하는 자식의 표준 오류로 만든다. | both |
+| `log.error.line-form` | helper로 쓴 호스트 오류 줄은 `error: <where>: <text>`이며, 애플리케이션 로그에 `error: `로 시작하는 줄로 들어간다. | both |
 | `log.service.standard-error-goes-to-service-log` | 호스트가 시작한 영속 서비스는 표준 오류를 `logs/<실행 파일 이름>.log`에 쓴다. | both |
 | `log.service.open-failure-fails-start` | 서비스 로그를 열 수 없으면 `sidecar <name>: service log: <error>`로 시작을 실패시키고 서비스를 시작하지 않는다. | both |
 | `images.envelope.rejects-unattached-image` | 연결된 적 없는 이미지 이름의 봉투에 notAttached로 응답한다. | both |
@@ -268,7 +269,7 @@ fn invalid_json_closes_connection() {
 | `images.attach.surface-close-removes-only-its-images` | 표면을 제거하면 그 이미지 핸들을 반환하고 다른 표면의 이미지는 유지한다. | both |
 | `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없는 이미지 예약을 거부하고 아무것도 등록하지 않는다. | both |
 | `images.present.replaced-frame-is-logged-as-invalidated` | 더는 현재가 아닌 프레임(`stale`, `notAttached`, `staleRaster native=... frame=...`)은 `stale`로 답하고 표시 실패로 기록하지 않으며 `image frame invalidated before native presentation: ... reason=<detail>`을 남긴다. | both |
-| `images.present.failure-line-names-the-current-frame` | 다른 표시 실패는 그 사유(알 수 없는 상세는 `presentFailed`)로 답하고 `image present on main thread error: ... reason=<detail> current <frame state>`를 남긴다. | both |
+| `images.present.failure-line-names-the-current-frame` | 다른 표시 실패는 그 사유(알 수 없는 상세는 `presentFailed`)로 답하고 오류 줄 `error: image present: ... reason=<detail> current <frame state>`를 남긴다. | both |
 | `recording.finish.keeps-folder-and-reports-frames` | 녹화를 마치면 폴더를 유지하고 프레임 수를 보고하며, 두 번째 마침은 실패한다. | both |
 | `recording.start.failed-open-removes-folder` | 캡처 열기에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | both |
 | `recording.start.failed-start-removes-folder` | 캡처 시작에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | both |
@@ -305,7 +306,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.send.slow-sidecar-does-not-block-others` | 한 사이드카 대기열이 가득 찬 동안 다른 사이드카로의 보내기는 50ms 안에 반환된다. | both |
 | `sidecars.send.start-does-not-block-other-sidecars` | 영속 service가 hello 응답을 늦추는 동안 실행 중인 다른 사이드카로의 보내기는 50ms 안에 반환된다. | both |
 | `sidecars.close.answer-ends-closing` | `closed`를 보낸 뒤 `host.sidecars`는 사이드카가 답할 때까지 그 표면을 나열하고, 답하면 목록이 빈다. | both |
-| `sidecars.close.failed-answer-is-logged` | `error`가 있는 닫기 응답은 host 로그에 "sidecar <name>: close <surface>: <error>"를 쓰고 닫는 중 항목을 끝낸다. | both |
+| `sidecars.close.failed-answer-is-logged` | `error`가 있는 닫기 응답은 host 로그에 오류 줄 "error: sidecar <name>: close <surface>: <error>"를 쓰고 닫는 중 항목을 끝낸다. | both |
 | `sidecars.close.unexpected-answer-fails` | host가 닫고 있지 않은 표면의 닫기 응답은 "unexpected close answer for <surface>"로 사이드카를 실패시킨다. | both |
 | `sidecars.close.process-end-clears-closing` | 사이드카 process가 답하지 않고 끝나면 그 표면은 `host.sidecars`에서 빠진다. | both |
 | `sidecars.stop.honors-stop-timeout` | 입력을 비우지 않는 사이드카의 중지는 중지 제한 시간의 두 배 안에 반환된다. | both |

@@ -161,13 +161,13 @@ func InstalledAssets(configDir string) application.Middleware {
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("Cache-Control", "no-store")
 				if _, err := w.Write(InstalledPluginsDocument(configDir, diagnosticPlugins)); err != nil {
-					fmt.Fprintf(os.Stderr, "%s: %v\n", InstalledPluginsPath, err)
+					LogError(InstalledPluginsPath, err)
 				}
 				return
 			}
 			file, installed, found, err := InstalledModule(configDir, r.URL.Path)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s: %v\n", r.URL.Path, err)
+				LogError(r.URL.Path, err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -181,7 +181,7 @@ func InstalledAssets(configDir string) application.Middleware {
 			}
 			data, err := os.ReadFile(file)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s: %v\n", r.URL.Path, err)
+				LogError(r.URL.Path, err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -194,7 +194,7 @@ func InstalledAssets(configDir string) application.Middleware {
 			}
 			w.Header().Set("Cache-Control", "no-store")
 			if _, err := w.Write(data); err != nil {
-				fmt.Fprintf(os.Stderr, "%s: %v\n", r.URL.Path, err)
+				LogError(r.URL.Path, err)
 			}
 		})
 	}

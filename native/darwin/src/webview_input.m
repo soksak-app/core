@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "webview_input.h"
+#import "application_log.h"
 // _setIgnoresMouseMoveEvents: 는 키보드, 클릭, 드래그를 끄지 않고 pointer tracking 만
 // 제어한다. 그 이벤트를 받는 webview 는 AppKit 의 hit test 가 선택한다.
 #import "private/webkit.h"
@@ -95,7 +96,7 @@ static SPInputReceipts *receiptsFor(WKWebView *view) {
 
 static BOOL hasPendingMouseDrain(WKWebView *view) {
     if ([view respondsToSelector:@selector(_doAfterProcessingAllPendingMouseEvents:)]) return YES;
-    fprintf(stderr, "webview input: _doAfterProcessingAllPendingMouseEvents: is unavailable\n");
+    sp_log_error("webview input", "_doAfterProcessingAllPendingMouseEvents: is unavailable");
     return NO;
 }
 

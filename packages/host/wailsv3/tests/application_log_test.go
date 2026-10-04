@@ -3,6 +3,7 @@
 package host_test
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -112,6 +113,32 @@ func TestStartApplicationLogWritesTheStartLineAndTakesTheStandardErrorOfTheProce
 	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
 	start := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z application log: com\.soksak\.test pid \d+$`)
 	if len(lines) < 3 || !start.MatchString(lines[0]) || lines[1] != "host line" || lines[2] != "child line" {
+		t.Fatalf("application log %q", lines)
+	}
+}
+
+// contract: log.error.line-form
+func TestLogErrorWritesAnErrorLineToTheApplicationLog(t *testing.T) {
+	if config := os.Getenv(applicationLogChild); config != "" {
+		if err := host.StartApplicationLog(config, "com.soksak.test"); err != nil {
+			os.Stdout.WriteString(err.Error() + "\n")
+			os.Exit(2)
+		}
+		host.LogError("surface input", errors.New("the window has no content view"))
+		return
+	}
+	config := t.TempDir()
+	command := exec.Command(os.Args[0], "-test.run=^TestLogErrorWritesAnErrorLineToTheApplicationLog$")
+	command.Env = append(os.Environ(), applicationLogChild+"="+config)
+	if output, err := command.Output(); err != nil {
+		t.Fatalf("child ended with %v, output %q", err, output)
+	}
+	data, err := os.ReadFile(host.ApplicationLogPath(config))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	if len(lines) != 2 || lines[1] != "error: surface input: the window has no content view" {
 		t.Fatalf("application log %q", lines)
 	}
 }

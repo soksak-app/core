@@ -763,7 +763,7 @@ func PresentationOutcome(surface, name string, generation, raster uint64, sequen
 	if reason == "stale" {
 		return reason, true, "image frame invalidated before native presentation: " + frame
 	}
-	return reason, false, "image present on main thread error: " + frame + " current " + current
+	return reason, false, ErrorLine("image present", frame+" current "+current)
 }
 
 // FrameState 는 거부한 프레임과 비교할 수 있도록 영역의 현재 프레임 상태를 글로 돌려준다.
@@ -792,7 +792,7 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 
 	case *Reply:
 		if err := sendResponse(d.Name, d.JSON); err != nil {
-			log.Printf("image reply %s: %v", d.Name, err)
+			LogError("image reply "+d.Name, err)
 		}
 		return true
 
@@ -802,7 +802,7 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 		if err != nil {
 			response := AfterPresent(false, "notAttached", d.Name, d.Generation, d.Raster, d.Sequence)
 			if err := sendResponse(d.Name, response); err != nil {
-				log.Printf("image notAttached %s: %v", d.Name, err)
+				LogError("image notAttached "+d.Name, err)
 			}
 			return true
 		}
@@ -830,18 +830,18 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 			if !invalidated {
 				images.MarkPresentationFailed(key, d.Generation, d.Raster, d.Sequence, reason)
 				if err := recoverFrame(reason); err != nil {
-					log.Printf("image recovery failed: surface=%s name=%s reason=%s error=%v", surface, d.Name, reason, err)
+					LogError("image recovery", fmt.Sprintf("surface=%s name=%s reason=%s error=%v", surface, d.Name, reason, err))
 				}
 			}
 			response := AfterPresent(false, reason, d.Name, d.Generation, d.Raster, d.Sequence)
 			if err := sendResponse(d.Name, response); err != nil {
-				log.Printf("image %s %s: %v", reason, d.Name, err)
+				LogError("image response "+d.Name, err)
 			}
 		} else {
 			images.MarkPresented(key, d.Generation, d.Raster, d.Sequence)
 			response := AfterPresent(true, "", d.Name, d.Generation, d.Raster, d.Sequence)
 			if err := sendResponse(d.Name, response); err != nil {
-				log.Printf("image consumed %s: %v", d.Name, err)
+				LogError("image response "+d.Name, err)
 			}
 		}
 		return true

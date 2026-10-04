@@ -3,6 +3,7 @@ package host
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -11,6 +12,27 @@ import (
 
 // logRotateBytes 는 로그 파일을 열 때 이전 세대로 넘기는 크기다(docs/spec/hosts.md#application-log).
 const logRotateBytes = 10 * 1024 * 1024
+
+// ErrorLine 은 오류 한 줄 `error: <where>: <text>` 다. 페이지의 오류 줄과 같은 형식이므로 창 검사가 호스트의 실패도
+// 오류로 읽는다(docs/spec/hosts.md#application-log). where 는 실패한 연산이나 대상이고 text 는 실패 내용이다.
+func ErrorLine(where string, text any) string {
+	return fmt.Sprintf("error: %s: %v", where, text)
+}
+
+// LogError 는 오류 줄 하나를 표준 logger 의 출력에 한 번의 write 로 쓴다. 그 출력은 표준 오류이고 표준 오류는
+// StartApplicationLog 뒤에 애플리케이션 로그다. logger 의 시각 접두사 설정과 관계없이 줄은 `error: ` 로 시작한다. 쓰지
+// 못하면 그 실패를 알릴 곳이 없으므로 panic 한다.
+func LogError(where string, text any) {
+	if _, err := fmt.Fprintln(log.Writer(), ErrorLine(where, text)); err != nil {
+		panic(fmt.Sprintf("write the application log: %v", err))
+	}
+}
+
+// fatalError 는 오류 줄을 쓰고 프로세스를 상태 1 로 끝낸다. 로그를 연 뒤의 치명적 실패가 쓴다.
+func fatalError(where string, text any) {
+	LogError(where, text)
+	os.Exit(1)
+}
 
 // ApplicationLogPath 는 설정 디렉터리 config 의 애플리케이션 로그 경로다.
 func ApplicationLogPath(config string) string {

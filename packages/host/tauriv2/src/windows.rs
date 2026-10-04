@@ -12,7 +12,7 @@ use tauri::{
     WebviewWindowBuilder, Window,
 };
 
-use crate::log_error;
+use crate::application_log::{log_error, log_failure};
 use crate::modals::Overlay;
 use crate::platform::{self, Handle};
 use crate::projects::project_folder;
@@ -167,7 +167,7 @@ pub(crate) fn emit_window<S: Serialize + Clone>(
 pub(crate) fn notify_workspace(app: &AppHandle) {
     for window in app.windows().values() {
         if let Err(error) = emit_window(window, "workspace-changed", ()) {
-            eprintln!("{error}");
+            log_error("workspace-changed", error);
         }
     }
 }
@@ -176,7 +176,7 @@ pub(crate) fn notify_workspace(app: &AppHandle) {
 pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
     for window in app.windows().values() {
         if let Err(error) = emit_window(window, "plugins-changed", change.clone()) {
-            eprintln!("{error}");
+            log_error("plugins-changed", error);
         }
     }
 }
@@ -304,7 +304,7 @@ pub(crate) fn window_new(app: AppHandle) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
     app.run_on_main_thread(move || {
         if tx.send(window_new_on_main(task)).is_err() {
-            eprintln!("window creation result had no pending receiver");
+            eprintln!("window creation result arrived after its request ended");
         }
     })
     .map_err(|e| e.to_string())?;
@@ -336,7 +336,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         main,
         Box::new(move |json| {
             if let Err(error) = emit_window(&dropped, "files-dropped", json) {
-                eprintln!("files-dropped: {error}");
+                log_error("files-dropped", error);
             }
         }),
     )?;
@@ -353,7 +353,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         tauri::WindowEvent::CloseRequested { api, .. } if context.ready.load(Ordering::Relaxed) => {
             api.prevent_close();
             if let Err(error) = emit_window(&host, "project-close-request", ()) {
-                eprintln!("{error}");
+                log_error("project-close-request", error);
             }
         }
         tauri::WindowEvent::CloseRequested { .. } => {
@@ -363,44 +363,53 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         tauri::WindowEvent::Destroyed => {
             crate::exposure::window_closed(&host);
             let natives = context.clone();
-            log_error(platform.enqueue_ui(Box::new(move || {
-                log_error(platform.cancel_layout(owner));
-                // 논리 표면은 메인 웹뷰를 보유하므로 닫지 않으면 메인 웹뷰와 그 웹 콘텐츠 프로세스가 남는다.
-                let surfaces = match natives.surface_hosts.lock() {
-                    Ok(mut surfaces) => std::mem::take(&mut *surfaces),
-                    Err(error) => {
-                        log_error(Err(error.to_string()));
-                        return;
-                    }
-                };
-                log_error(crate::surfaces::close_window_surfaces(
-                    surfaces,
-                    &natives.documents,
-                    &natives.images,
-                    &mut |native| match native {
-                        crate::surfaces::WindowNative::Document(handle) => {
-                            platform.close_document(handle)
+            log_failure(
+                "window close",
+                platform.enqueue_ui(Box::new(move || {
+                    log_failure("surface layout cancel", platform.cancel_layout(owner));
+                    // 논리 표면은 메인 웹뷰를 보유하므로 닫지 않으면 메인 웹뷰와 그 웹 콘텐츠 프로세스가 남는다.
+                    let surfaces = match natives.surface_hosts.lock() {
+                        Ok(mut surfaces) => std::mem::take(&mut *surfaces),
+                        Err(error) => {
+                            log_error("window close", error);
+                            return;
                         }
-                        crate::surfaces::WindowNative::Image(handle) => {
-                            platform.close_image(handle)
-                        }
-                        crate::surfaces::WindowNative::Surface(handle) => {
-                            platform.close_surface(handle)
-                        }
-                    },
-                ));
-            })));
+                    };
+                    log_failure(
+                        "window close",
+                        crate::surfaces::close_window_surfaces(
+                            surfaces,
+                            &natives.documents,
+                            &natives.images,
+                            &mut |native| match native {
+                                crate::surfaces::WindowNative::Document(handle) => {
+                                    platform.close_document(handle)
+                                }
+                                crate::surfaces::WindowNative::Image(handle) => {
+                                    platform.close_image(handle)
+                                }
+                                crate::surfaces::WindowNative::Surface(handle) => {
+                                    platform.close_surface(handle)
+                                }
+                            },
+                        ),
+                    );
+                })),
+            );
             if let Ok(mut monitor) = context.watching.0.lock() {
                 if let Some(monitor) = monitor.take() {
-                    log_error(platform.unwatch_input(monitor));
+                    log_failure("surface input", platform.unwatch_input(monitor));
                 }
             }
             if let Ok(mut shapes) = context.shapes.0.lock() {
                 for (_, shape) in shapes.drain() {
-                    log_error(platform.destroy_shape(shape));
+                    log_failure("shape", platform.destroy_shape(shape));
                 }
             }
-            log_error(host.state::<WindowSidecars>().retain(&host, &|_| false));
+            log_failure(
+                "sidecar retain",
+                host.state::<WindowSidecars>().retain(&host, &|_| false),
+            );
             let registry = host.state::<Windows>();
             if let Ok(mut owners) = registry.owners.lock() {
                 owners.retain(|_, label| label != host.label());
@@ -608,7 +617,7 @@ pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
     crate::exposure::windows_changed(window.app_handle());
     for ready in data.readied.lock().map_err(|e| e.to_string())?.drain(..) {
         if ready.send(()).is_err() {
-            eprintln!("window readiness had no pending receiver");
+            eprintln!("window readiness arrived after its request ended");
         }
     }
     crate::exposure::rewatch(window);
@@ -644,7 +653,7 @@ pub(crate) fn quit(app: &AppHandle, api: tauri::ExitRequestApi) {
             window.close()
         };
         if let Err(error) = result {
-            eprintln!("{error}");
+            log_error("window quit", error);
         }
     }
 }
@@ -665,7 +674,7 @@ fn initial_titlebar(window: &Window) -> Result<(), String> {
             if let Err(error) = platform::current()
                 .and_then(|platform| platform.set_titlebar_height(handle, INITIAL_TITLEBAR_HEIGHT))
             {
-                eprintln!("window title bar: {error}");
+                log_error("window title bar", error);
             }
         })
         .map_err(|e| e.to_string())

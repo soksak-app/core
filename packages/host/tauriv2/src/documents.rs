@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{Manager, Webview, Window};
 
+use crate::application_log::{log_error, log_failure};
 use crate::exposure::{self, on_main, with_view};
-use crate::log_error;
 use crate::platform::{self, Handle};
 use crate::surfaces::{require_region, surface_handle};
 use crate::windows::{emit_window, window_data};
@@ -229,7 +229,10 @@ fn create(
             let state = match serde_json::from_str(&state) {
                 Ok(state) => state,
                 Err(error) => {
-                    log_error(Err(format!("document state is not JSON: {error}: {state}")));
+                    log_error(
+                        "document-state",
+                        format!("the state is not JSON: {error}: {state}"),
+                    );
                     return;
                 }
             };
@@ -238,9 +241,9 @@ fn create(
                 document: state_document.clone(),
                 state,
             };
-            log_error(
-                emit_window(&state_host, "document-state", payload).map_err(|e| e.to_string()),
-            );
+            if let Err(error) = emit_window(&state_host, "document-state", payload) {
+                log_error("document-state", error);
+            }
             exposure::window_changed(&state_host);
         });
         let surface = surface_handle(&host, &surface_id)?;
@@ -266,22 +269,24 @@ fn create(
                 let event = match serde_json::from_str(&value) {
                     Ok(event) => event,
                     Err(error) => {
-                        log_error(Err(format!("document event is not JSON: {error}: {value}")));
+                        log_error(
+                            "document-event",
+                            format!("the event is not JSON: {error}: {value}"),
+                        );
                         return;
                     }
                 };
-                log_error(
-                    emit_window(
-                        &event_host,
-                        "document-event",
-                        Event {
-                            surface: event_surface.clone(),
-                            document: event_document.clone(),
-                            event,
-                        },
-                    )
-                    .map_err(|e| e.to_string()),
-                );
+                if let Err(error) = emit_window(
+                    &event_host,
+                    "document-event",
+                    Event {
+                        surface: event_surface.clone(),
+                        document: event_document.clone(),
+                        event,
+                    },
+                ) {
+                    log_error("document-event", error);
+                }
                 exposure::window_changed(&event_host);
             }),
         )?;
@@ -382,14 +387,16 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
     let Ok(data) = window_data(window) else {
         return;
     };
-    let Ok(platform) = platform::current() else {
-        return;
+    let platform = match platform::current() {
+        Ok(platform) => platform,
+        Err(error) => return log_error("document close", error),
     };
     let host = window.clone();
     let surface = surface.to_string();
     // 등록 해제와 닫기를 메인 스레드의 한 작업에서 한다. 문서를 쓰는 다른 작업도 메인 스레드에서
     // 조회하므로 해제된 주소를 쓰지 않는다.
-    log_error(
+    log_failure(
+        "document close",
         window
             .run_on_main_thread(move || {
                 let handles = data.documents.remove_surface(&surface);
@@ -397,7 +404,7 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
                     return;
                 }
                 for handle in handles {
-                    log_error(platform.close_document(handle));
+                    log_failure("document close", platform.close_document(handle));
                 }
                 exposure::window_changed(&host);
             })
@@ -410,15 +417,20 @@ pub(crate) fn set_background(window: &Window, enabled: bool) {
     let Ok(data) = window_data(window) else {
         return;
     };
-    let Ok(platform) = platform::current() else {
-        return;
+    let platform = match platform::current() {
+        Ok(platform) => platform,
+        Err(error) => return log_error("document background", error),
     };
     // 문서 주소는 메인 스레드에서 조회한다. 닫기와 같은 스레드이므로 해제된 주소를 쓰지 않는다.
-    log_error(
+    log_failure(
+        "document background",
         window
             .run_on_main_thread(move || {
                 for handle in data.documents.all() {
-                    log_error(platform.set_document_background(handle, enabled));
+                    log_failure(
+                        "document background",
+                        platform.set_document_background(handle, enabled),
+                    );
                 }
             })
             .map_err(|e| e.to_string()),

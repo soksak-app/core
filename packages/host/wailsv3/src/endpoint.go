@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -376,7 +375,7 @@ func (e *Endpoint) Watching(window, name string) bool {
 func (e *Endpoint) publish(t topic, method string, params any) {
 	data, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})
 	if err != nil {
-		log.Printf("endpoint: %v", err)
+		LogError("endpoint notification", err)
 		return
 	}
 	e.mu.Lock()
@@ -440,7 +439,7 @@ func (c *endpointConn) close() {
 	c.once.Do(func() {
 		close(c.done)
 		if err := c.conn.Close(); err != nil {
-			log.Printf("endpoint: close connection: %v", err)
+			LogError("endpoint connection close", err)
 		}
 	})
 }
@@ -451,7 +450,7 @@ func (c *endpointConn) send(body []byte) {
 	case c.out <- body:
 	case <-c.done:
 	default:
-		log.Printf("endpoint: closing a connection that does not read")
+		LogError("endpoint", "closing a connection that does not read")
 		c.close()
 	}
 }
@@ -586,7 +585,7 @@ func (e *Endpoint) drop(c *endpointConn) {
 	for _, t := range held {
 		e.enqueue(t, func() {
 			if err := e.change(c, t, false); err != nil {
-				log.Printf("endpoint: release %s on %s: %v", t.name, t.window, err)
+				LogError("endpoint release", fmt.Sprintf("%s on %s: %v", t.name, t.window, err))
 			}
 		})
 	}
@@ -644,7 +643,7 @@ func (e *Endpoint) reply(c *endpointConn, req request, result any, err error) {
 	}
 	data, marshalErr := json.Marshal(reply)
 	if marshalErr != nil {
-		log.Printf("endpoint: cannot encode reply for %s: %v", req.ID, marshalErr)
+		LogError("endpoint reply", fmt.Sprintf("cannot encode the reply for %s: %v", req.ID, marshalErr))
 		c.close()
 		return
 	}

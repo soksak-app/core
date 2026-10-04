@@ -7,6 +7,26 @@ use std::path::{Path, PathBuf};
 
 use crate::platform;
 
+/// 오류 한 줄 `error: <place>: <text>` 이다. 페이지의 오류 줄과 같은 형식이므로 창 검사가 호스트의 실패도 오류로
+/// 읽는다. place 는 실패한 연산이나 대상이고 text 는 실패 내용이다.
+pub fn error_line(place: &str, text: impl std::fmt::Display) -> String {
+    format!("error: {place}: {text}")
+}
+
+/// 오류 줄 하나를 표준 오류에 한 번의 write 로 쓴다. 표준 오류는 start_application_log 뒤에 애플리케이션 로그다.
+/// 표준 오류에 쓰지 못하면 eprint! 처럼 panic 한다. 그 실패를 알릴 다른 곳이 없다.
+pub fn log_error(place: &str, text: impl std::fmt::Display) {
+    let line = format!("{}\n", error_line(place, text));
+    eprint!("{line}");
+}
+
+/// result 가 실패이면 그 오류를 place 의 오류 줄로 쓴다. 결과를 호출자에게 돌려줄 수 없는 작업이 쓴다.
+pub fn log_failure(place: &str, result: Result<(), String>) {
+    if let Err(error) = result {
+        log_error(place, error);
+    }
+}
+
 /// 로그 파일을 열 때 이전 세대로 넘기는 크기다.
 const ROTATE_BYTES: u64 = 10 * 1024 * 1024;
 

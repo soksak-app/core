@@ -350,7 +350,7 @@ let layoutResult = layoutTurn;
 
 function continueAfterLayoutFailure(phase, error) {
   // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
-  const message = `host ${phase} failed while advancing the layout queue: ${error?.message ?? error}`;
+  const message = errorLine(`host ${phase} failed while advancing the layout queue: ${error?.message ?? error}`);
   bridge.call("report", message).then(undefined, (reportError) => {
     // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
     console.error(`${message}; reporting failed: ${reportError?.message ?? reportError}`);

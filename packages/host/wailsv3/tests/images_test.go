@@ -1071,7 +1071,7 @@ func TestPresentationOutcomeLogsAReplacedFrameAsInvalidated(t *testing.T) {
 func TestPresentationOutcomeNamesTheCurrentFrameOfAFailure(t *testing.T) {
 	for detail, want := range map[string]string{"notFound": "notFound", "presentFailed": "presentFailed", "boom": "presentFailed"} {
 		reason, invalidated, line := host.PresentationOutcome("s1", "view", 3, 2, 1, 9, detail, "generation=3 raster=2")
-		wantLine := "image present on main thread error: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason=" + detail + " current generation=3 raster=2"
+		wantLine := "error: image present: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason=" + detail + " current generation=3 raster=2"
 		if reason != want || invalidated || line != wantLine {
 			t.Fatalf("%s: reason %q invalidated %v line %q", detail, reason, invalidated, line)
 		}

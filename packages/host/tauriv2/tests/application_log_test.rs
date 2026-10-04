@@ -5,7 +5,9 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Stdio};
 
-use soksak_host_tauriv2::application_log::{application_log_path, open_log, start_application_log};
+use soksak_host_tauriv2::application_log::{
+    application_log_path, log_error, open_log, start_application_log,
+};
 
 /// 자식 프로세스에 설정 디렉터리를 알리는 환경 변수.
 const CHILD: &str = "SOKSAK_APPLICATION_LOG_CHILD";
@@ -94,6 +96,44 @@ fn start_application_log_writes_the_start_line_and_takes_the_standard_error_of_t
     let start = regex_start(lines.first().copied().unwrap_or(""));
     assert!(
         start && lines.get(1) == Some(&"host line") && lines.get(2) == Some(&"child line"),
+        "application log {lines:?}"
+    );
+}
+
+// contract: log.error.line-form
+#[test]
+fn log_error_writes_an_error_line_to_the_application_log() {
+    if let Some(config) = std::env::var_os(CHILD) {
+        if let Err(error) = start_application_log(std::path::Path::new(&config), "com.soksak.test")
+        {
+            println!("{error}");
+            std::process::exit(2);
+        }
+        log_error("surface input", "the window has no content view");
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "log_error_writes_an_error_line_to_the_application_log",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(CHILD, config.path())
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "child ended with {:?}, output {:?}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
+    let lines: Vec<&str> = log.lines().collect();
+    assert!(
+        lines.len() == 2 && lines[1] == "error: surface input: the window has no content view",
         "application log {lines:?}"
     );
 }

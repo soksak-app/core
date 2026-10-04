@@ -16,8 +16,8 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, Webview};
 
+use crate::application_log::{log_error, log_failure};
 use crate::exposure::{self, on_main};
-use crate::log_error;
 use crate::platform::{self, Handle};
 use crate::surfaces::{require_region, surface_handle};
 use crate::windows::{emit_window, window_data};
@@ -770,7 +770,10 @@ impl Images {
                         ))
                     })
                     .collect();
-                eprintln!("image presentation timeout pending: {}", pending.join("; "));
+                log_error(
+                    "image presentation timeout",
+                    format!("pending {}", pending.join("; ")),
+                );
                 return Err("presentationTimeout".to_string());
             }
         }
@@ -803,9 +806,8 @@ fn create(
             let event_surface = surface_id.clone();
             let event_name = event_name.clone();
             let result = (|| {
-                let event: serde_json::Value = serde_json::from_str(&json).map_err(|error| {
-                    format!("image event {event_surface}/{event_name}: {error}")
-                })?;
+                let event: serde_json::Value = serde_json::from_str(&json)
+                    .map_err(|error| format!("{event_surface}/{event_name}: {error}"))?;
                 // 포커스 전이는 성능 트레이스의 타임라인에도 남는다(V5-114, performance-trace
                 // 스펙이 약속한 창 이벤트 줄). 트레이스가 꺼져 있으면 line 이 아무 것도 쓰지
                 // 않는다.
@@ -834,18 +836,16 @@ fn create(
                         let sent = emit_window(&deferred_host, "image-event", payload)
                             .map_err(|error| error.to_string())
                             .map_err(|error| {
-                                format!("image event {deferred_surface}/{deferred_name}: {error}")
+                                format!("{deferred_surface}/{deferred_name}: {error}")
                             });
-                        log_error(sent);
+                        log_failure("image event", sent);
                         exposure::window_changed(&deferred_host);
                     }))
                     .map_err(|error| {
-                        format!(
-                            "image event {report_surface}/{report_name} scheduling failed: {error}"
-                        )
+                        format!("{report_surface}/{report_name}: scheduling failed: {error}")
                     })
             })();
-            log_error(result);
+            log_failure("image event", result);
         });
         let handle = platform.create_image(surface, &name, event)?;
         Ok(handle)
@@ -904,7 +904,10 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
         Ok(handle) => handle,
         Err(error) => {
             if let Err(e) = data.images.remove(&key) {
-                eprintln!("failed to remove reserved image {}: {}", key.1, e);
+                log_error(
+                    &format!("image {}", key.1),
+                    format!("remove the reserved image: {e}"),
+                );
             }
             return Err(error);
         }
@@ -914,10 +917,16 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
             let platform = platform::current()?;
             platform.close_image(handle)
         }) {
-            eprintln!("failed to close image on main thread: {}", e);
+            log_error(
+                &format!("image {}", key.1),
+                format!("close the image on the main thread: {e}"),
+            );
         }
         if let Err(e) = data.images.remove(&key) {
-            eprintln!("failed to remove image after failed set: {}", e);
+            log_error(
+                &format!("image {}", key.1),
+                format!("remove the image after a failed set: {e}"),
+            );
         }
         return Err(format!(
             "surface {:?} closed while its image was created",
@@ -997,14 +1006,15 @@ pub(crate) fn close_surface(window: &tauri::Window, surface: &str) {
     data.images.begin_generation(&surface);
     let handles = data.images.remove_surface(&surface);
 
-    log_error(
+    log_failure(
+        "image close",
         window
             .run_on_main_thread(move || {
                 if handles.is_empty() {
                     return;
                 }
                 for handle in handles {
-                    log_error(platform.close_image(handle));
+                    log_failure("image close", platform.close_image(handle));
                 }
                 exposure::window_changed(&host);
             })
@@ -1236,7 +1246,7 @@ where
         Decision::NotImage => false,
         Decision::Reply { name, json } => {
             if let Err(e) = send_response(&name, json) {
-                eprintln!("image reply {}: {}", name, e);
+                log_error(&format!("image reply {name}"), e);
             }
             true
         }
@@ -1305,9 +1315,12 @@ where
                         images.mark_presentation_failed(&key, generation, raster, sequence, reason);
                         if reason == "notFound" {
                             if let Err(error) = recover(reason) {
-                                eprintln!(
-                                    "image recovery failed: surface={} name={} reason={} error={}",
-                                    key.0, name, reason, error
+                                log_error(
+                                    "image recovery",
+                                    format!(
+                                        "surface={} name={} reason={} error={}",
+                                        key.0, name, reason, error
+                                    ),
                                 );
                             }
                         }
@@ -1323,14 +1336,14 @@ where
                         }
                     };
                     if let Err(e) = send_response(&name, response) {
-                        eprintln!("image response {}: {}", name, e);
+                        log_error(&format!("image response {name}"), e);
                     }
                 }
                 Err(_) => {
                     let response =
                         after_present(Err("notAttached"), &name, generation, raster, sequence);
                     if let Err(e) = send_response(&name, response) {
-                        eprintln!("image notAttached {}: {}", name, e);
+                        log_error(&format!("image notAttached {name}"), e);
                     }
                 }
             }
@@ -1376,6 +1389,6 @@ pub fn presentation_outcome(
     (
         reason,
         false,
-        format!("image present on main thread error: {frame} current {current}"),
+        crate::application_log::error_line("image present", format!("{frame} current {current}")),
     )
 }

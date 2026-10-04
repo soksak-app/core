@@ -226,6 +226,7 @@ Items:
 | `log.open.rotates-at-10mb` | Opening a log file of 10 MB or more first moves it to `<name>.1`, replacing the previous generation, and starts a new file. | both |
 | `log.open.appends-below-bound` | Opening a smaller log file appends to it, and a new log file has mode 0600. | both |
 | `log.application.start-replaces-standard-error` | Starting the application log writes the run's start line and makes the file the standard error of the process and of the children it starts. | both |
+| `log.error.line-form` | A host error line written through the helper is `error: <where>: <text>`, and it reaches the application log as a line that starts with `error: `. | both |
 | `log.service.standard-error-goes-to-service-log` | A persistent service started by the host writes its standard error to `logs/<executable-name>.log`. | both |
 | `log.service.open-failure-fails-start` | A service log that cannot open fails the start with `sidecar <name>: service log: <error>` and the service does not start. | both |
 | `images.envelope.rejects-unattached-image` | An envelope for an image name that was never attached is answered with notAttached. | both |
@@ -268,7 +269,7 @@ Items:
 | `images.attach.surface-close-removes-only-its-images` | Removing a surface returns its image handles and keeps another surface's images. | both |
 | `images.attach.rejects-reservation-without-sidecar` | An image reservation without its owning sidecar is rejected and registers nothing. | both |
 | `images.present.replaced-frame-is-logged-as-invalidated` | A frame that is no longer current (`stale`, `notAttached`, or `staleRaster native=... frame=...`) answers `stale` and logs `image frame invalidated before native presentation: ... reason=<detail>` without marking a presentation failure. | both |
-| `images.present.failure-line-names-the-current-frame` | Another presentation failure answers its reason (`presentFailed` for an unknown detail) and logs `image present on main thread error: ... reason=<detail> current <frame state>`. | both |
+| `images.present.failure-line-names-the-current-frame` | Another presentation failure answers its reason (`presentFailed` for an unknown detail) and logs the error line `error: image present: ... reason=<detail> current <frame state>`. | both |
 | `recording.finish.keeps-folder-and-reports-frames` | Finishing a recording keeps its folder, reports its frame count, and a second finish fails. | both |
 | `recording.start.failed-open-removes-folder` | A recording whose capture fails to open removes its folder and leaves nothing running. | both |
 | `recording.start.failed-start-removes-folder` | A recording whose capture fails to start removes its folder and leaves nothing running. | both |
@@ -305,7 +306,7 @@ Items:
 | `sidecars.send.slow-sidecar-does-not-block-others` | While one sidecar queue is full, a send to another sidecar returns within 50 ms. | both |
 | `sidecars.send.start-does-not-block-other-sidecars` | While a persistent service delays its hello reply, a send to another running sidecar returns within 50 ms. | both |
 | `sidecars.close.answer-ends-closing` | After `closed` is sent, `host.sidecars` lists the surface until the sidecar answers, then the list is empty. | both |
-| `sidecars.close.failed-answer-is-logged` | A close answer with `error` writes "sidecar <name>: close <surface>: <error>" to the host log and ends the closing entry. | both |
+| `sidecars.close.failed-answer-is-logged` | A close answer with `error` writes the error line "error: sidecar <name>: close <surface>: <error>" to the host log and ends the closing entry. | both |
 | `sidecars.close.unexpected-answer-fails` | A close answer for a surface that the host is not closing fails the sidecar with "unexpected close answer for <surface>". | both |
 | `sidecars.close.process-end-clears-closing` | When a sidecar process ends without answering, its surfaces leave `host.sidecars`. | both |
 | `sidecars.stop.honors-stop-timeout` | Stop returns within twice the stop timeout for a sidecar that does not drain its input. | both |

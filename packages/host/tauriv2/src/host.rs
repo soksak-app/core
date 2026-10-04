@@ -48,15 +48,8 @@ pub mod webkit_children;
 pub mod windows;
 pub mod workspace;
 
+use application_log::{log_error, log_failure};
 use sidecars::WindowSidecars;
-
-/// 실패한 네이티브 호출의 오류를 표준 오류에 기록한다. 결과를 호출자에게 돌려줄 수 없는
-/// 메인 스레드 작업에서 사용한다.
-pub(crate) fn log_error(result: Result<(), String>) {
-    if let Err(error) = result {
-        eprintln!("{error}");
-    }
-}
 
 /// 시작할 때 읽은 애플리케이션 인자(docs/spec/hosts.md#application-arguments).
 static ARGUMENTS: std::sync::OnceLock<command_line::Arguments> = std::sync::OnceLock::new();
@@ -133,7 +126,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
     // 창 확대 애니메이션은 창 프레임만 움직이고 웹 문서는 그 뒤에 따라온다. AppKit 이 기본값을
     // 읽기 전에 그 길이를 줄인다.
     if let Ok(platform) = platform::current() {
-        log_error(platform.instant_window_resize());
+        log_failure("window resize", platform.instant_window_resize());
     }
     // 플러그인 설정은 설정 파일의 창을 만들기 전에 실행되므로 엔드포인트를 여기서 연다.
     let endpoint = tauri::plugin::Builder::<tauri::Wry>::new("endpoint")
@@ -151,7 +144,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                             if let Err(error) = crate::exposure::with_view(&view, |native| {
                                 platform::current()?.kill_web_content_process(native)
                             }) {
-                                eprintln!("termination web content kill: {error}");
+                                log_error("web content kill", error);
                             }
                         }
                     }
@@ -234,7 +227,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             let dock = app.handle().clone();
             platform::current()?.install_dock_menu(Box::new(move || {
                 if let Err(error) = windows::window_new_on_main(dock.clone()) {
-                    eprintln!("{error}");
+                    log_error("window new", error);
                 }
             }))?;
             // 페이지가 설정 언어를 보내기 전에는 시스템 언어로 메뉴를 만든다. 언어 상태는
@@ -272,11 +265,11 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             let id = event.id().as_ref();
             if id == "new-window" {
                 if let Err(error) = windows::window_new_on_main(app.clone()) {
-                    eprintln!("{error}");
+                    log_error("window new", error);
                 }
             } else if menu::text_command(id) {
                 if let Err(error) = run_menu_command(app, id) {
-                    eprintln!("menu command {id}: {error}");
+                    log_error(&format!("menu command {id}"), error);
                 }
             }
         })
@@ -303,7 +296,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 // 저장과 정리를 마쳤으므로 받은 운영체제의 종료 요청에 답한다.
                 match platform::current() {
                     Ok(platform) => platform.answer_quit_requests(),
-                    Err(error) => eprintln!("quit request answer: {error}"),
+                    Err(error) => log_error("quit request answer", error),
                 }
             }
             if let tauri::RunEvent::ExitRequested { api, .. } = event {

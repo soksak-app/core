@@ -6,7 +6,6 @@ package host
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -47,7 +46,7 @@ func StartAssets(start func(window uint) ([]byte, error)) application.Middleware
 				data, err = start(uint(window))
 			}
 			if err != nil {
-				log.Printf("%s: %v", StartDocumentPath, err)
+				LogError(StartDocumentPath, err)
 				status := http.StatusInternalServerError
 				if errors.Is(err, ErrNoStartWindow) {
 					status = http.StatusBadRequest
@@ -58,7 +57,7 @@ func StartAssets(start func(window uint) ([]byte, error)) application.Middleware
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Cache-Control", "no-store")
 			if _, err := w.Write(data); err != nil {
-				log.Printf("%s: %v", StartDocumentPath, err)
+				LogError(StartDocumentPath, err)
 			}
 		})
 	}

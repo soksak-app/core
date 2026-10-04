@@ -126,7 +126,7 @@ pub fn observe(config: &Path, layer: &str, fields: impl FnOnce() -> Value) {
         Ok::<(), String>(())
     })();
     if let Err(error) = result {
-        eprintln!("performance trace failed: {error}");
+        crate::application_log::log_error("performance trace", error);
     }
 }
 

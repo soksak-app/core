@@ -5,6 +5,8 @@ use serde_json::Value;
 use tauri::http::Response;
 use tauri::{AppHandle, Manager};
 
+use crate::application_log::log_error;
+
 /// 시작 문서를 제공하는 URI scheme. 요청한 webview 를 알 수 있는 custom scheme 처리기가 답한다.
 pub const SCHEME: &str = "soksak";
 
@@ -59,11 +61,11 @@ pub fn serve(
             .body(data)
             // 기본값: 응답을 만들지 못한 시작 문서는 그 오류를 기록하고 500 으로 답한다.
             .unwrap_or_else(|error| {
-                eprintln!("{START_DOCUMENT_PATH}: {error}");
+                log_error(START_DOCUMENT_PATH, &error);
                 failure(500, error.to_string())
             }),
         Err(error) => {
-            eprintln!("{START_DOCUMENT_PATH}: {error}");
+            log_error(START_DOCUMENT_PATH, &error);
             failure(if error == NO_WINDOW { 400 } else { 500 }, error)
         }
     }

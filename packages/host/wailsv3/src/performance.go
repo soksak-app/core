@@ -112,7 +112,7 @@ func PerformanceObserve(config, layer string, fields func() map[string]any) {
 	}
 }
 
-func logPerformanceError(err error) { fmt.Fprintln(os.Stderr, "performance trace failed:", err) }
+func logPerformanceError(err error) { LogError("performance trace", err) }
 
 // PerformanceSyncServices 는 서비스 생성·재접속 전에 유효 실행 스위치를 전파한다.
 func PerformanceSyncServices(config string) error {

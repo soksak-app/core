@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"reflect"
 	"sort"
@@ -265,7 +264,7 @@ func (s *Surfaces) sidecarSendFrom(viewID uint64, name, surface string, body jso
 // configure 를 다시 보낸다(V5-106) — 이전 연결이 확인한 configure 상태는 연결과 함께 죽는다.
 func (s *Surfaces) SidecarReconnected(sidecar string) {
 	if err := s.RefreshSidecarRasters(sidecar); err != nil {
-		log.Printf("sidecar %s reconnection reconfigure: %v", sidecar, err)
+		LogError(fmt.Sprintf("sidecar %s reconnection reconfigure", sidecar), err)
 	}
 }
 
@@ -554,7 +553,7 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 		if err := s.refreshImageRasters(); err != nil {
 			if cancel := system.EnqueueUI(func() {
 				if failure := system.CancelLayout(win.NativeWindow()); failure != nil {
-					log.Printf("cancel surface preparation: %v", failure)
+					LogError("surface layout cancel", failure)
 				}
 			}); cancel != nil {
 				return prepared, fmt.Errorf("%w; scheduling layout cancellation: %v", err, cancel)
@@ -590,7 +589,7 @@ func ApplyOrCancel(apply, cancel func() error) error {
 func (s *Surfaces) watchInput(win *application.WebviewWindow) {
 	monitor, err := system.WatchInput(win.NativeWindow(), platform.Input{Press: s.press, Point: s.point})
 	if err != nil {
-		log.Printf("surface input: %v", err)
+		LogError("surface input", err)
 		return
 	}
 	s.monitor = monitor

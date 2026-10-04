@@ -10,6 +10,7 @@ use serde::Serialize;
 use serde_json::value::RawValue;
 use soksak_sok::install::InstalledState;
 
+use crate::application_log::log_error;
 use crate::sidecars::SidecarDeclaration;
 
 /// 페이지가 설치된 plugin 목록을 읽는 경로.
@@ -249,7 +250,7 @@ impl<R: tauri::Runtime> tauri::Assets<R> for InstalledAssets<R> {
     fn get(&self, key: &tauri::utils::assets::AssetKey) -> Option<Cow<'_, [u8]>> {
         let path = key.as_ref();
         let Some(config_dir) = self.config_dir.get() else {
-            eprintln!("{path}: the configuration directory is not ready");
+            log_error(path, "the configuration directory is not ready");
             return None;
         };
         if path == INSTALLED_PLUGINS_PATH {
@@ -264,12 +265,12 @@ impl<R: tauri::Runtime> tauri::Assets<R> for InstalledAssets<R> {
             Ok(Module::File(file)) => match std::fs::read(&file) {
                 Ok(data) => Some(Cow::Owned(data)),
                 Err(error) => {
-                    eprintln!("{path}: {}: {error}", file.display());
+                    log_error(path, format!("{}: {error}", file.display()));
                     None
                 }
             },
             Err(error) => {
-                eprintln!("{path}: {error}");
+                log_error(path, error);
                 None
             }
         }

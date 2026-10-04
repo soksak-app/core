@@ -19,7 +19,10 @@ pub fn on_termination(quit: Box<dyn Fn() + Send>) -> Result<(), String> {
             // 다음 신호는 기본 동작으로 프로세스를 끝낸다. 종료 중 저장이 멈춰도 끝낼 수 있다.
             for signal in received {
                 if let Err(error) = emulate_default_handler(signal) {
-                    eprintln!("termination signal {signal}: {error}");
+                    crate::application_log::log_error(
+                        &format!("termination signal {signal}"),
+                        error,
+                    );
                 }
             }
         })

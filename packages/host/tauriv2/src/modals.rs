@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 use tauri::webview::Color;
 use tauri::{LogicalPosition, LogicalSize, Webview, WebviewBuilder, WebviewUrl, Window};
 
+use crate::application_log::{log_error, log_failure};
 use crate::documents;
 use crate::exposure;
-use crate::log_error;
 use crate::platform;
 use crate::surfaces::{aligned, isolate_webview, PageFocus, Rect};
 use crate::windows::{emit_window, root_view, window_data};
@@ -179,7 +179,10 @@ pub(crate) fn set_background(window: &Window, enabled: bool) -> Result<(), Strin
 fn place_overlay(view: &Webview, at: Rect) -> Result<(), String> {
     let platform = platform::current()?;
     view.with_webview(move |webview| {
-        log_error(platform.place_webview(&webview, at.x, at.y, at.w, at.h))
+        log_failure(
+            "modal place",
+            platform.place_webview(&webview, at.x, at.y, at.w, at.h),
+        )
     })
     .map_err(|e| e.to_string())
 }
@@ -377,15 +380,18 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
     let platform = platform::current()?;
     set_background(window, first.content.mode == "dialog")?;
     view.with_webview(move |webview| {
-        log_error(platform.round_corners(&webview, first.radius));
-        log_error(platform.raise_webview(&webview));
+        log_failure(
+            "modal corners",
+            platform.round_corners(&webview, first.radius),
+        );
+        log_failure("modal raise", platform.raise_webview(&webview));
     })
     .map_err(|e| e.to_string())?;
     view.show().map_err(|e| e.to_string())?;
     let host = window.clone();
     view.with_webview(move |webview| {
         if let Err(error) = platform.focus_webview(&webview) {
-            eprintln!("modal {id}: {error}");
+            log_error(&format!("modal {id}"), error);
             return;
         }
         let marked = window_data(&host).and_then(|context| {
@@ -398,8 +404,10 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
             }
             Ok(())
         });
-        log_error(marked);
-        log_error(emit_window(&host, "modal-rendered", &id).map_err(|e| e.to_string()));
+        log_failure(&format!("modal {id}"), marked);
+        if let Err(error) = emit_window(&host, "modal-rendered", &id) {
+            log_error("modal-rendered", error);
+        }
         exposure::log(&host, &format!("observe: modal rendered {id}"));
         exposure::window_changed(&host);
     })
@@ -441,7 +449,7 @@ pub(crate) fn hide(window: &Window, id: String) -> Result<(), String> {
             }
             if let Some(main) = root_view(&host) {
                 if let Err(error) = main.set_focus() {
-                    eprintln!("modal focus restoration failed: {error}");
+                    log_error("modal focus restoration", error);
                 }
             }
         }))

@@ -26,3 +26,20 @@ test("a surface module reports its failure as an error line", async () => {
   await runtime.native.call("report", "surface composition failed: probe");
   assert.deepEqual(lines.splice(0), ["error: surface composition failed: probe"]);
 });
+
+test("a failed settling wait of a core command and a refused registration are error lines", async () => {
+  const { connectExposure, registry, revisitRegistrations } = await import("../exposure.js");
+  registry.declare("core", { status: [], dom: [], commands: [{
+    name: "core.fixture.add", description: "Adds.",
+    params: { type: "object", properties: { n: { type: "integer" } } }, result: { type: "integer" },
+  }] });
+  registry.command("core.fixture.add", ({ n }) => n + 1);
+  await connectExposure({
+    settled: async () => { throw new Error("surface tab-1 is not mounted"); },
+    report,
+  });
+  lines.length = 0;
+  assert.equal(await registry.run("core.fixture.add", { n: 1 }), 2);
+  assert.deepEqual(lines.splice(0), ["error: exposure settled failed: surface tab-1 is not mounted"]);
+  assert.throws(() => revisitRegistrations(), /requires report/);
+});

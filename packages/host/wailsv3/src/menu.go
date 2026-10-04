@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"unsafe"
@@ -333,5 +332,5 @@ func runMenuCommand(command string) {
 			return
 		}
 	}
-	log.Printf("menu command %s: no main window", command)
+	LogError("menu command "+command, "no main window")
 }

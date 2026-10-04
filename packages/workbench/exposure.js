@@ -535,12 +535,13 @@ export async function dispatchSurfaceRequest(request) {
   return true;
 }
 
-/** 보류된 표면 등록을 반영한다. 선언과 맞지 않는 등록은 호스트 로그로 보고한다. */
-export function revisitRegistrations() {
+/** 보류된 표면 등록을 반영한다. 선언과 맞지 않는 등록은 report(줄)로 오류 줄을 남긴다. */
+export function revisitRegistrations(report) {
+  if (typeof report !== "function") throw new TypeError("revisitRegistrations requires report(line)");
   try {
     registry.revisit();
   } catch (error) {
-    if (host) host.call("report", `exposure: ${error.message}`);
+    report(`exposure: ${error.message}`);
   }
 }
 
@@ -552,17 +553,18 @@ export function installExposure(document) {
 /**
  * 등록소를 호스트에 연결한다. 호스트가 없으면 문서가 아는 값만 받는다.
  *
- * 등록이 선언과 맞지 않으면 report 로 기록한다. 표면의 호출은 호스트가 이미 받았으므로
+ * 등록이 선언과 맞지 않으면 values.report(줄)로 오류 줄을 남긴다. 표면의 호출은 호스트가 이미 받았으므로
  * 그 표면에 실패를 돌려줄 경로가 없다.
  */
-export async function connectExposure(values) {
+export async function connectExposure({ report, ...values }) {
+  if (typeof report !== "function") throw new TypeError("connectExposure requires report(line)");
   registry.configure({
     ...values,
     // default: 호출자가 실패 hook을 주지 않으면 workbench가 보고를 맡는다.
     failed: values.failed ?? ((error) => {
       if (!host) return false;
       // default: Error가 아닌 거절은 그 값을 진단 이유로 담는다.
-      host.call("report", `exposure settled failed: ${String(error?.message ?? error)}`);
+      report(`exposure settled failed: ${String(error?.message ?? error)}`);
       return true;
     }),
   });
@@ -577,7 +579,7 @@ export async function connectExposure(values) {
     try {
       registry.registered(event);
     } catch (error) {
-      host.call("report", `exposure: ${error.message}`);
+      report(`exposure: ${error.message}`);
     }
   });
 }

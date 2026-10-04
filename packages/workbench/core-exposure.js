@@ -6,7 +6,7 @@
 // 변경, 모달과 라이브러리의 그리기 뒤에 호출하고, 등록소는 감시 중인 값 중 달라진
 // 것만 호스트에 보낸다.
 import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
-import { log } from "./host.js";
+import { log, report } from "./host.js";
 import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";
 import { trackPointer } from "./pointer-state.js";
@@ -45,7 +45,7 @@ let scheduled = false;
  * 코어 상태가 바뀌었을 수 있음을 알린다. 같은 작업 안의 여러 호출은 한 번으로 묶는다.
  */
 export function coreChanged() {
-  revisitRegistrations();
+  revisitRegistrations(report);
   if (scheduled || watchers.size === 0) return;
   scheduled = true;
   queueMicrotask(() => {
@@ -476,7 +476,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   onModalState(coreChanged);
   onSaved(coreChanged);
 
-  await connectExposure({ surfacePlugin, preferred, registrationChanged: coreChanged, settled: drawn });
+  await connectExposure({ surfacePlugin, preferred, registrationChanged: coreChanged, settled: drawn, report });
 }
 
 // 창 크기 변화의 행위 마커(V5-104). 로그의 닻 — 무엇을 했을 때 무엇이 일어났나.

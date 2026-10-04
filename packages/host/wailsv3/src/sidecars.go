@@ -344,7 +344,7 @@ func (c *Sidecars) closeSurface(surface string) bool {
 
 	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Closed: true})
 	if err != nil {
-		log.Printf("sidecar close %s: marshal: %v", surface, err)
+		LogError("sidecar close "+surface, fmt.Sprintf("marshal: %v", err))
 		return false
 	}
 	line = append(line, '\n')
@@ -410,7 +410,7 @@ func (c *Sidecars) closeAnswered(name, surface string, closed bool, failure *str
 		return "unexpected close answer for " + surface
 	}
 	if failure != nil {
-		log.Printf("sidecar %s: close %s: %s", name, surface, *failure)
+		LogError("sidecar "+name, fmt.Sprintf("close %s: %s", surface, *failure))
 	}
 	c.closingChanged()
 	return ""
@@ -494,7 +494,7 @@ func (c *Sidecars) Stop() {
 			defer wg.Done()
 			if p.persistent {
 				if err := c.closePersistentOwner(p, ctx); err != nil {
-					log.Printf("sidecar %s: close owner: %v", p.name, err)
+					LogError("sidecar "+p.name, fmt.Sprintf("close owner: %v", err))
 				}
 				return
 			}
@@ -505,7 +505,7 @@ func (c *Sidecars) Stop() {
 			case <-ctx.Done():
 				// 기한 초과. 강제 종료.
 				if err := p.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-					log.Printf("sidecar %s: kill: %v", p.name, err)
+					LogError("sidecar "+p.name, fmt.Sprintf("kill: %v", err))
 				}
 				// read() 고루틴이 종료될 때까지 기다린다.
 				<-p.exited
@@ -969,7 +969,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 func (c *Sidecars) write(process *sidecar) {
 	defer func() {
 		if err := process.stdin.Close(); err != nil {
-			log.Printf("sidecar %s: close stdin: %v", process.name, err)
+			LogError("sidecar "+process.name, fmt.Sprintf("close stdin: %v", err))
 		}
 	}()
 	for {
@@ -1040,7 +1040,7 @@ func (c *Sidecars) writePersistent(process *sidecar) {
 
 func (c *Sidecars) writePersistentLine(process *sidecar, line []byte) bool {
 	if _, err := process.conn.Write(line); err != nil {
-		log.Printf("sidecar %s: write: %v", process.name, err)
+		LogError("sidecar "+process.name, fmt.Sprintf("write: %v", err))
 		return false
 	}
 	return true
@@ -1066,7 +1066,7 @@ func (c *Sidecars) writePersistentPending(process *sidecar) bool {
 
 func (c *Sidecars) writeLine(process *sidecar, line []byte) bool {
 	if _, err := process.stdin.Write(line); err != nil {
-		log.Printf("sidecar %s: write: %v", process.name, err)
+		LogError("sidecar "+process.name, fmt.Sprintf("write: %v", err))
 		return false
 	}
 	return true
@@ -1103,7 +1103,7 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 	violation := c.relay(process, stdout)
 	// 읽기 끝을 닫아 아직 쓰는 프로세스가 쓰기에서 막히지 않게 한다. 막히면 Stop 의 기한 뒤 강제 종료까지 끝나지 않는다.
 	if err := stdout.Close(); err != nil {
-		log.Printf("sidecar %s: close output: %v", process.name, err)
+		LogError("sidecar "+process.name, fmt.Sprintf("close output: %v", err))
 	}
 	c.mu.Lock()
 	failed := !c.stopped && c.running[process.name] == process
@@ -1129,7 +1129,7 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 	}
 	if !failed {
 		if err := process.cmd.Wait(); err != nil {
-			log.Printf("sidecar %s exited while stopping: %v", process.name, err)
+			LogError("sidecar "+process.name, fmt.Sprintf("exited while stopping: %v", err))
 		}
 		close(process.exited)
 		return
@@ -1147,7 +1147,7 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 		reason = "output closed: " + exit
 	}
 	close(process.exited)
-	log.Printf("sidecar %s failed: %s", process.name, reason)
+	LogError("sidecar "+process.name, "failed: "+reason)
 	for _, item := range owned {
 		item.owner.Emit("sidecar-failure", SidecarFailure{Sidecar: process.name, Surface: item.surface, Reason: reason})
 	}
@@ -1241,7 +1241,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	if violation != "" {
 		// 서비스가 프로토콜을 어겼다. 같은 메시지가 다음 연결도 끝내므로 곧바로 다시 맺지 않고, 다음 전송이
 		// 생성 경로로 다시 맺는다(docs/spec/terminal-runtime.md#service-transport).
-		log.Printf("sidecar %s failed: %s", process.name, violation)
+		LogError("sidecar "+process.name, "failed: "+violation)
 		for _, item := range owned {
 			item.owner.Emit("sidecar-failure", SidecarFailure{Sidecar: process.name, Surface: item.surface, Reason: violation})
 		}
@@ -1345,7 +1345,7 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 	if err := scanner.Err(); errors.Is(err, bufio.ErrTooLong) {
 		return fmt.Sprintf("message exceeds %d bytes", sidecarMessageLimit)
 	} else if err != nil {
-		log.Printf("sidecar %s: persistent read: %v", process.name, err)
+		LogError("sidecar "+process.name, fmt.Sprintf("persistent read: %v", err))
 	}
 	return ""
 }
@@ -1363,7 +1363,7 @@ func (c *Sidecars) revivePersistent(name string) {
 		if program, ok := c.declared[name]; ok {
 			endpoint := filepath.Join(c.configDir, "services", filepath.Base(program), "endpoint.json")
 			if err := os.Remove(endpoint); err != nil && !errors.Is(err, os.ErrNotExist) {
-				log.Printf("sidecar %s: remove refused endpoint: %v", name, err)
+				LogError("sidecar "+name, fmt.Sprintf("remove refused endpoint: %v", err))
 			}
 		}
 		announced, failure = c.reviveAttempt(name)
@@ -1371,7 +1371,7 @@ func (c *Sidecars) revivePersistent(name string) {
 	switch {
 	case failure != nil:
 		// 시작에 실패했다 — 끊김 기록은 남겨 다음 시작이 알린다.
-		log.Printf("sidecar %s: connection lost; restart failed: %v", name, failure)
+		LogError("sidecar "+name, fmt.Sprintf("connection lost; restart failed: %v", failure))
 		c.notifyConnection(name, failure)
 	case announced:
 		// 다른 경로(전송)가 이미 다시 시작했으면 알림도 그 호출이 보냈다.
@@ -1428,7 +1428,7 @@ func (c *Sidecars) notifyConnection(name string, failure error) {
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
-		log.Printf("sidecar %s: connection notice encoding: %v", name, err)
+		LogError("sidecar "+name, fmt.Sprintf("connection notice serialization: %v", err))
 		return
 	}
 	reconfigured := map[SidecarOwner]bool{}
