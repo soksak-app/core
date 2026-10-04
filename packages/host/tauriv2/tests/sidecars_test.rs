@@ -673,9 +673,10 @@ fn stop_forced_kill() {
 
     let directory = tempfile::tempdir().unwrap();
 
-    // 사이드카: stdin EOF를 무시하고 계속 실행한다.
+    // 사이드카: stdin 을 읽지 않으므로 stdin EOF 뒤에도 계속 실행한다. background 명령의 stdin 은 shell 에 따라 /dev/null 이
+    // 되어 곧바로 끝날 수 있으므로 쓰지 않는다.
     let stubborn_program = directory.path().join("stubborn");
-    std::fs::write(&stubborn_program, "#!/bin/sh\ncat >/dev/null &\nwait\n").unwrap();
+    std::fs::write(&stubborn_program, "#!/bin/sh\nexec sleep 600\n").unwrap();
     std::fs::set_permissions(&stubborn_program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     let files: Files = vec![(

@@ -937,6 +937,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestSlowSidecarDoesNotBlockOtherSends" },
       { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestStopForcedKill" },
       { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "slow_sidecar_does_not_block_other_sends" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "stop_forced_kill" },
     ],
     expected: "A sidecar that does not read its input fills its channel and is killed after the stop deadline on any machine.",
     levels: ["unit"],
