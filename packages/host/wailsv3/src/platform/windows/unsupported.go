@@ -8,7 +8,7 @@ import (
 	"os"
 	"unsafe"
 
-	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // implementation 은 Windows 의 platform.Platform 이다.

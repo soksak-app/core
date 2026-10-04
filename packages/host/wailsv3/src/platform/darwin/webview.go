@@ -102,7 +102,7 @@ import (
 	"runtime/cgo"
 	"unsafe"
 
-	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // dispatcher 는 웹뷰의 commit 과 메시지를 수신 함수에 넘긴다. 수신 함수는 마지막으로 만든 웹뷰의 것이며, 호스트는

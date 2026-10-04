@@ -26,7 +26,7 @@ import "C"
 import (
 	"runtime/cgo"
 
-	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 //export windowObjectsCounted

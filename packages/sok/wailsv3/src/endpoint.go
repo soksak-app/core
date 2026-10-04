@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/min-median-max/soksak/packages/sok/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
 
 // MaxFrameLength 는 프레임 본문의 최대 길이다.

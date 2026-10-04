@@ -12,7 +12,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // privateDirectory 는 path 를 현재 사용자만 접근할 수 있는 디렉터리로 만든다. 이미 있으면

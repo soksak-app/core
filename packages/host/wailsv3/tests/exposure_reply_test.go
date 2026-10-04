@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
 // contract: authorization.main.known-main-caller-accepted, authorization.main.unknown-main-caller-rejected, exposure-reply.payload.main-reply-unscoped, exposure-reply.payload.scoped-reply-keeps-surface

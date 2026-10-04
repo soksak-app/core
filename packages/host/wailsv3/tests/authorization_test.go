@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
 // contract: authorization.surface.cross-surface-rejected, authorization.surface.own-surface-accepted, authorization.main.known-main-caller-accepted, authorization.main.unknown-main-caller-rejected

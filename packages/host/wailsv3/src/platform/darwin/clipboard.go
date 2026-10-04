@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 func clipboardJSON(value *C.char) (map[string]any, error) {

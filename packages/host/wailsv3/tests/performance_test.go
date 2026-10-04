@@ -5,7 +5,7 @@ package host_test
 
 import (
 	"encoding/json"
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 	"os"
 	"path/filepath"
 	"strings"

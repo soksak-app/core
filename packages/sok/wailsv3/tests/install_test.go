@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/min-median-max/soksak/packages/sok/wailsv3/src"
+	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
 const sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

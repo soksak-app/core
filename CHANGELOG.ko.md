@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R2-1: Go module, package field, 문서의 설치 명령이 `soksak-app` organization(`github.com/soksak-app/core`)을 가리키고, 라이선스 보유자는 `soksak`이며, 기록에서 개인 경로를 지웠고, plugin 명세가 각 sibling 폴더의 GitHub repository와 checkout 배치를 정한다.
 - G1.4-116: 두 host는 연속 배치도 commit하기 전에 보이는 image 영역마다 준비된 크기의 raster를 기다리므로, divider 끌기가 더 이상 커진 영역에 이전 raster를 보이지 않는다. 비슷한 부하에서 끌기 frame 수는 줄지 않았다.
 - G1.4-90-4-2: 두 host에서 같은 generation에서 다시 붙인 image region은 raster revision을 이어 세므로, terminal sidecar가 그 구성을 무시하지 않고 다시 mount한 terminal의 presentation이 10초를 기다리지 않는다. 두 host는 image raster 결정을 trace한다.
 - G1.4-90-4-2: terminal 사이드카는 영속 연결에서 `close` 요청 뒤 표면을 다시 연다(vt S14). 이로써 terminal check의 10초 raster 시간 초과가 사라진다. 이전의 입력 정지 진단은 service를 일부러 멈추는 check 중에 측정한 것이라 철회한다.

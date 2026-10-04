@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
 // png 은 1x1 RGBA PNG 다. IHDR 의 CRC 는 0x1F15C489 다.

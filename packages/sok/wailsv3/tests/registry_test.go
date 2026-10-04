@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/min-median-max/soksak/packages/sok/wailsv3/src"
+	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
 // registryTree 는 pack 과 release 로 archive 를 만들고 그 주소와 hash 를 담은 registry 폴더를 쓴다.

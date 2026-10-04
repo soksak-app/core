@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	sok "github.com/min-median-max/soksak/packages/sok/wailsv3/src"
+	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
 // PluginsRunRequest 는 pluginsRun 호출의 인자다(docs/spec/installation.md#plugin-operations-in-the-application).

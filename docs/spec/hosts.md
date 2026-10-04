@@ -6,7 +6,7 @@ Core's native side lives in two library packages with the same structure. [Nativ
 
 | Package | Language | Identity |
 | --- | --- | --- |
-| `packages/host/wailsv3` | Go | Module `github.com/min-median-max/soksak/packages/host/wailsv3`; package `host` in `src/`, imported as `github.com/min-median-max/soksak/packages/host/wailsv3/src` |
+| `packages/host/wailsv3` | Go | Module `github.com/soksak-app/core/packages/host/wailsv3`; package `host` in `src/`, imported as `github.com/soksak-app/core/packages/host/wailsv3/src` |
 | `packages/host/tauriv2` | Rust | Crate `soksak-host-tauriv2`, `[lib] path = "src/host.rs"` |
 
 The applications `apps/wailsv3` and `apps/tauriv2` contain only `src/main.*`, `environment.json`, `runtime/index.js`, tests, manifests, and framework configuration. `apps/wailsv3/src/main.go` reads the command-line flags into `host.Options` and calls `host.Run(assets, options)`. `apps/tauriv2/src/main.rs` calls `soksak_host_tauriv2::run(tauri::generate_context!(), BACKGROUND)`, where `BACKGROUND` is the staged `frontend/background.js`.
@@ -183,7 +183,7 @@ apps/wailsv3/                  apps/tauriv2/
 
 `apps/wailsv3/go.mod` requires the host module. `apps/tauriv2/Cargo.toml` depends on `soksak-host-tauriv2` by path and on `tauri`. `apps/tauriv2/build.rs` calls only `tauri_build::build()`.
 
-The Wails binding service name is `github.com/min-median-max/soksak/packages/host/wailsv3/src.Host`. Wails derives it from the Go package path and type name, and `apps/wailsv3/runtime/index.js` uses it.
+The Wails binding service name is `github.com/soksak-app/core/packages/host/wailsv3/src.Host`. Wails derives it from the Go package path and type name, and `apps/wailsv3/runtime/index.js` uses it.
 
 ## Command line tree
 

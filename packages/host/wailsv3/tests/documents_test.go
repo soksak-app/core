@@ -6,8 +6,8 @@ import (
 	"testing"
 	"unsafe"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
-	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // contract: documents.request.accepts-own-surface, documents.request.rejects-foreign-or-missing-caller, documents.request.rejects-invalid-names

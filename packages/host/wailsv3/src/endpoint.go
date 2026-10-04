@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // 프레임 본문의 최대 길이.

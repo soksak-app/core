@@ -103,7 +103,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // watchers 는 모니터 번호별 입력 수신 핸들이다. 주 스레드에서만 읽고 바꾼다.

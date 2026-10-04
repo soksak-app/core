@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R2-1: the Go modules, package fields and documented install commands name the `soksak-app` organization (`github.com/soksak-app/core`), the license holder is `soksak`, personal paths are removed from the records, and the plugin specification states the GitHub repository of each sibling folder and the checkout layout.
 - G1.4-116: both hosts wait for each visible image region's raster of the prepared size before they commit a continuous layout too, so a divider drag no longer shows a grown region with the previous raster; the drag frame counts did not drop at comparable load.
 - G1.4-90-4-2: an image region attached again in the same generation continues its raster revision in both hosts, so the terminal sidecar no longer ignores its configuration and the presentation no longer waits 10 s for a terminal mounted again; both hosts trace their image raster decisions.
 - G1.4-90-4-2: the terminal sidecar opens a surface again after a `close` request on a persistent connection (vt S14), which removes the 10 s raster timeouts of the terminal checks; the earlier input-stall diagnosis was measured during a check that stops the service on purpose and is withdrawn.

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
 // fakeCapture 는 호출을 기록하고 지정한 단계에서 실패한다.

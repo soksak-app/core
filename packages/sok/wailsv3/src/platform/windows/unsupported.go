@@ -5,7 +5,7 @@ package windows
 import (
 	"errors"
 
-	"github.com/min-median-max/soksak/packages/sok/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
 
 type windows struct{}

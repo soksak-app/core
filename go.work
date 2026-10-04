@@ -7,5 +7,5 @@ use (
 )
 
 // 앱 go.mod 가 선언한 호스트 의존성을 이 저장소의 모듈로 해석한다.
-replace github.com/min-median-max/soksak/packages/host/wailsv3 v0.0.0 => ./packages/host/wailsv3
-replace github.com/min-median-max/soksak/packages/sok/wailsv3 v0.0.0 => ./packages/sok/wailsv3
+replace github.com/soksak-app/core/packages/host/wailsv3 v0.0.0 => ./packages/host/wailsv3
+replace github.com/soksak-app/core/packages/sok/wailsv3 v0.0.0 => ./packages/sok/wailsv3

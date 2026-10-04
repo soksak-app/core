@@ -5,7 +5,7 @@
 A headless soksak layout library with shared grid lines, optional DOM binding, and no runtime dependencies. The library computes card geometry; applications provide content, styling, and native views.
 
 ```sh
-pnpm add "github:min-median-max/soksak#path:packages/soksak"
+pnpm add "github:soksak-app/core#path:packages/soksak"
 ```
 
 The Git dependency includes `dist/`. The package uses ESM.

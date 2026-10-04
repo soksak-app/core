@@ -6,7 +6,7 @@
 
 | 패키지 | 언어 | 식별 |
 | --- | --- | --- |
-| `packages/host/wailsv3` | Go | 모듈 `github.com/min-median-max/soksak/packages/host/wailsv3`. `src/`의 패키지 `host`이며 `github.com/min-median-max/soksak/packages/host/wailsv3/src`로 가져온다 |
+| `packages/host/wailsv3` | Go | 모듈 `github.com/soksak-app/core/packages/host/wailsv3`. `src/`의 패키지 `host`이며 `github.com/soksak-app/core/packages/host/wailsv3/src`로 가져온다 |
 | `packages/host/tauriv2` | Rust | 크레이트 `soksak-host-tauriv2`, `[lib] path = "src/host.rs"` |
 
 애플리케이션 `apps/wailsv3`와 `apps/tauriv2`는 `src/main.*`, `environment.json`, `runtime/index.js`, 테스트, 매니페스트, 프레임워크 설정만 가진다. `apps/wailsv3/src/main.go`는 명령행 플래그를 `host.Options`로 읽고 `host.Run(assets, options)`를 호출한다. `apps/tauriv2/src/main.rs`는 `soksak_host_tauriv2::run(tauri::generate_context!(), BACKGROUND)`를 호출하며, `BACKGROUND`는 스테이징된 `frontend/background.js`다.
@@ -184,7 +184,7 @@ apps/wailsv3/                  apps/tauriv2/
 
 `apps/wailsv3/go.mod`는 호스트 모듈을 요구한다. `apps/tauriv2/Cargo.toml`은 경로로 지정한 `soksak-host-tauriv2`와 `tauri`에 의존한다. `apps/tauriv2/build.rs`는 `tauri_build::build()`만 호출한다.
 
-Wails 바인딩 서비스 이름은 `github.com/min-median-max/soksak/packages/host/wailsv3/src.Host`다. Wails가 Go 패키지 경로와 타입 이름으로 이 이름을 만들고, `apps/wailsv3/runtime/index.js`가 이를 사용한다.
+Wails 바인딩 서비스 이름은 `github.com/soksak-app/core/packages/host/wailsv3/src.Host`다. Wails가 Go 패키지 경로와 타입 이름으로 이 이름을 만들고, `apps/wailsv3/runtime/index.js`가 이를 사용한다.
 
 ## Command line 트리
 

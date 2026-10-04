@@ -4,7 +4,7 @@
 // 웹뷰 설정의 자산 서버를 공유하므로 문서는 같은 스킴에서 로드된다.
 //
 // 바인딩된 메서드를 「패키지 · 타입 · 이름」으로 호출한다. Wails 는 호스트 패키지의
-// 가져오기 경로와 타입 이름인 github.com/min-median-max/soksak/packages/host/wailsv3/src.Host 를 사용한다.
+// 가져오기 경로와 타입 이름인 github.com/soksak-app/core/packages/host/wailsv3/src.Host 를 사용한다.
 //
 // 런타임은 /wails/runtime.js 의 ES 모듈이므로 script 태그가 아니라 import 로
 // 로드한다. import 는 비동기이므로 아래 두 인터페이스는 완료를 기다린 뒤 호출한다.
@@ -14,7 +14,7 @@ import { settlingCalls } from "@soksak/workbench/host-calls.js";
 import { createClipboardBridge } from "@soksak/plugin-api";
 import { createLifecycleListener } from "./listener-lifecycle.js";
 
-const SERVICE = "github.com/min-median-max/soksak/packages/host/wailsv3/src.Host";
+const SERVICE = "github.com/soksak-app/core/packages/host/wailsv3/src.Host";
 
 /* 런타임 모듈. import 는 한 번만 평가된다. */
 const runtime = () => import("/wails/runtime.js");

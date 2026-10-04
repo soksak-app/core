@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"testing"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
-	sok "github.com/min-median-max/soksak/packages/sok/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
 // sokJSON 은 sok 명령을 실행하고 그 JSON 출력을 돌려준다.

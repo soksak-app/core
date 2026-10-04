@@ -97,7 +97,7 @@ this before anything moves.
 ## Install
 
 ```sh
-pnpm add github:min-median-max/soksak
+pnpm add github:soksak-app/core#path:packages/soksak
 ```
 
 Install from git. The npm name `soksak` is taken by an unrelated package.

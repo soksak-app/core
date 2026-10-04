@@ -21,7 +21,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // platformRect 는 운영체제 구현이 사용하는 영역이다. Rect 와 필드가 같으므로 서로 변환한다.

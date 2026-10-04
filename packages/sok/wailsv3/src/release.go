@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/min-median-max/soksak/packages/sok/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
 
 // archiveEntry 는 archive 에 넣는 파일 하나다. path 는 폴더 기준 상대 경로이며 / 로 나눈다.

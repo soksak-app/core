@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
 // applicationLogChild 는 자식 프로세스에 설정 디렉터리를 알리는 환경 변수다.

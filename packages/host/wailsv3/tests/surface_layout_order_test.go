@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
 // contract: surfaces.sync.failure-leaves-no-begun-layout

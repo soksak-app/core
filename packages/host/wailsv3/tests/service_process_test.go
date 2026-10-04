@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	platform "github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+	platform "github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // contract: sidecars-transport.endpoint.zombie-service-does-not-exist

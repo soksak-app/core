@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // contract: diagnostics.native-objects.payload-names-counts

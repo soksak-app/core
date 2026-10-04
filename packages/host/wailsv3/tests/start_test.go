@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
 // contract: page.start.document

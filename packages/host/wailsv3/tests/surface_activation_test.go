@@ -6,7 +6,7 @@ import (
 	"testing"
 	"unsafe"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
 // contract: surface-activation.owner.resolves-registered-view, surface-activation.owner.ignores-unknown-view, surface-activation.owner.ignores-empty-owner

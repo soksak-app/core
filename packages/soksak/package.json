@@ -48,16 +48,16 @@
     "headless"
   ],
   "license": "MIT",
-  "author": "min-median-max",
+  "author": "soksak",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/min-median-max/soksak.git",
+    "url": "git+https://github.com/soksak-app/core.git",
     "directory": "packages/soksak"
   },
   "bugs": {
-    "url": "https://github.com/min-median-max/soksak/issues"
+    "url": "https://github.com/soksak-app/core/issues"
   },
-  "homepage": "https://github.com/min-median-max/soksak/tree/main/packages/soksak#readme",
+  "homepage": "https://github.com/soksak-app/core/tree/main/packages/soksak#readme",
   "devDependencies": {
     "jsdom": "^30.0.1",
     "fake-indexeddb": "^6.2.5",

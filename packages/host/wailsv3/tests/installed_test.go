@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
 // writeInstalled 는 경로마다 내용을 설정 폴더에 쓴다.

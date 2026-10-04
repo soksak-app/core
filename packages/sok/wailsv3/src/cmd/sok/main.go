@@ -4,9 +4,9 @@ package main
 import (
 	"os"
 
-	"github.com/min-median-max/soksak/packages/sok/wailsv3/src"
-	_ "github.com/min-median-max/soksak/packages/sok/wailsv3/src/platform/darwin"
-	_ "github.com/min-median-max/soksak/packages/sok/wailsv3/src/platform/windows"
+	"github.com/soksak-app/core/packages/sok/wailsv3/src"
+	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/darwin"
+	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/windows"
 )
 
 // identifier 는 Wails 애플리케이션의 식별자이며 기본 설정 폴더와 경로 항목의 이름이다(docs/spec/projects.md).

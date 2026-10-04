@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
-	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // fakeBackend 는 창 하나("main")와 그 페이지를 흉내 낸다. 페이지 요청은 기록하고 null 로 답한다.

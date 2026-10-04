@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"testing"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
 // terminationChild 는 자식 프로세스임을 알리는 환경 변수다.

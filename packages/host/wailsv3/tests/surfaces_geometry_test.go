@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
-	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // contract: surfaces-geometry.rect.accepts-zero-size, surfaces-geometry.rect.rejects-negative-size, surfaces-geometry.rect.rejects-non-finite

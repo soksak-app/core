@@ -17,7 +17,7 @@ import (
 	"slices"
 	"strings"
 
-	sok "github.com/min-median-max/soksak/packages/sok/wailsv3/src"
+	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 

@@ -92,7 +92,7 @@ px 크기는 슬롯 하나를 기술하므로, 자르기는 그것을 두 쪽으
 ## 설치
 
 ```sh
-pnpm add github:min-median-max/soksak
+pnpm add github:soksak-app/core#path:packages/soksak
 ```
 
 git 에서 설치한다. npm 이름 `soksak` 은 무관한 패키지가 쓰고 있다. `dist/` 가

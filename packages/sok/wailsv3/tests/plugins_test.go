@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/min-median-max/soksak/packages/sok/wailsv3/src"
+	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
 // pluginVersions 는 plugin probe 의 version 마다 pack 한 archive 와 sidecar 0.1.0 의 release 로 registry 를 만들고

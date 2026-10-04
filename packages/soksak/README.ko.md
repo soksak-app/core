@@ -5,7 +5,7 @@
 공유 격자선과 선택적 DOM 바인딩을 제공하는 헤드리스 분할 배치 라이브러리다. 런타임 의존성은 없다. 라이브러리는 카드 좌표를 계산하고 애플리케이션은 콘텐츠, 스타일, 네이티브 뷰를 제공한다.
 
 ```sh
-pnpm add "github:min-median-max/soksak#path:packages/soksak"
+pnpm add "github:soksak-app/core#path:packages/soksak"
 ```
 
 Git 의존성에 `dist/`를 포함한다. 패키지는 ESM을 사용한다.

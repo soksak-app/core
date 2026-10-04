@@ -16,9 +16,9 @@
     "example": "make browser-example"
   },
   "license": "MIT",
-  "author": "min-median-max",
+  "author": "soksak",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/min-median-max/soksak.git"
+    "url": "git+https://github.com/soksak-app/core.git"
   }
 }

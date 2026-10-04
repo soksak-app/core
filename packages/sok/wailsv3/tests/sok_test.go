@@ -17,8 +17,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/min-median-max/soksak/packages/sok/wailsv3/src"
-	_ "github.com/min-median-max/soksak/packages/sok/wailsv3/src/platform/darwin"
+	"github.com/soksak-app/core/packages/sok/wailsv3/src"
+	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/darwin"
 )
 
 type fakeEndpoint struct {
