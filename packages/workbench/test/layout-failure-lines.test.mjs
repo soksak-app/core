@@ -1,6 +1,7 @@
 // 배치 하나의 실패가 애플리케이션 로그에 쓰는 줄을 검사한다. 배치 대기열의 failed 가 그 실패를 받아 보이므로, 그 배치를
 // 기다린 프로젝트 전환 명령이나 배치를 예약한 몸짓은 같은 실패를 다시 쓰지 않는다(docs/spec/hosts.md#application-log).
-// 연결은 index.html 의 배치 대기열, 오류 표시, 처리되지 않은 거절의 보고, 프로젝트 전환의 presented 와 같다.
+// 연결은 index.html 이 쓰는 page-layout.js 의 오류 표시, 처리되지 않은 거절의 보고, 배치 수신자, 프로젝트 전환의
+// presented 이고, 이 검사는 호스트 브리지, 컴포지터, 창의 사건만 가짜로 둔다.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
@@ -18,41 +19,39 @@ mock.module("@soksak/runtime", { namedExports: { host: {
     throw new Error(`unexpected host call ${name}`);
   },
 } } });
-const { report } = await import("../host.js");
-const { createLayoutQueue } = await import("../layout-queue.js");
-const { hideError, showError: showShownError } = await import("../shown-errors.js");
+const { report, surfaces } = await import("../host.js");
+const { createErrorDisplay, createPageLayout, reportUncaught } = await import("../page-layout.js");
+const { hideError } = await import("../shown-errors.js");
 const { connectExposure, registry } = await import("../exposure.js");
 const { bind } = await import("../commands.js");
 
-// index.html 의 showError 와 같다.
 const banner = document.getElementById("applicationError");
-const showError = (reason, detail = "") => showShownError(banner, "page", String(reason), detail);
+const showError = createErrorDisplay({ document, changed: () => {} });
+// 문서의 창. 브라우저는 처리되지 않은 거절을 창의 unhandledrejection 사건으로 알린다.
+const target = new EventTarget();
+reportUncaught(target, showError);
 /**
- * 처리되지 않은 거절을 index.html 처럼 보고한다. 문서의 처리되지 않은 거절은 이 보고만 받으므로, 첫 test() 가 설치하는
+ * 처리되지 않은 거절을 창의 사건으로 보낸다. 문서의 처리되지 않은 거절은 그 사건의 보고만 받으므로, 첫 test() 가 설치하는
  * 테스트 실행기의 처리기를 각 테스트의 시작에서 뗀다.
  */
 function reportRejectionsAsPage() {
   process.removeAllListeners("unhandledRejection");
   process.on("unhandledRejection", (reason) => {
-    const stack = reason instanceof Error && reason.stack ? `\n${reason.stack}` : "";
-    showError(reason instanceof Error ? reason.message : reason, stack);
+    target.dispatchEvent(Object.assign(new Event("unhandledrejection"), { reason }));
   });
 }
 
-const layouts = createLayoutQueue({
-  failed(error) {
-    showError(`surface presentation failed: ${String(error?.message ?? error)}`);
-  },
-  superseded() {},
+const page = createPageLayout({
+  document, showError, setVerify: () => {}, log: () => {}, surfaces,
+  plane: {},
+  compositor: { publishAhead: () => Promise.reject(new Error(TIMEOUT)) },
+  textSize: () => 1,
+  rendered: () => Promise.resolve(),
+  waitSurfaceCompositionDeclared: async () => {},
 });
-await connectExposure({ settled: async () => { await layouts.wait(); }, report });
-const failing = () => Promise.reject(new Error(TIMEOUT));
-/** 판이 배치를 예약한다(index.html 의 onLayout). */
-const schedule = () => { layouts.run(failing); };
-/** 프로젝트 전환이 판의 표시를 기다린다(index.html 의 onSwitch presented). */
-async function presented() {
-  if (!(await layouts.wait())) return;
-}
+await connectExposure({ settled: page.drawn, report });
+/** 판이 배치를 예약한다. 그 배치의 준비가 실패한다. */
+const schedule = () => { page.onLayout(new Map(), () => {}, new Map(), 40); };
 
 /** 다음 macrotask 까지의 모든 microtask 와 처리되지 않은 거절의 보고를 끝낸다. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -66,7 +65,7 @@ test("a layout failure of a project switch started from the interface writes one
   // 프로젝트 전환은 불러온 배치를 판에 예약하고 그 표시를 기다린 뒤 답한다(projects.js 의 showProject).
   registry.command("core.fixture.activate", async () => {
     schedule();
-    await presented();
+    await page.presented();
     return null;
   });
   bind(document.getElementById("projectTab"), "core.fixture.activate");

@@ -53,13 +53,13 @@ import {
 /* 판과 컴포지터를 읽어 검증한다. 아무것도 변경하지 않으므로 그 둘은 이 모듈을
    알지 않는다. */
 import { verify } from "./verify.js";
-import { animationFrame, createLayoutQueue, drawPrepared } from "./layout-queue.js";
-import { trace } from "./performance.js";
+/* 오류 표시와 배치 대기열의 배선. 이 문서가 문서, 호스트, 판, 컴포지터를 넘긴다. */
+import { createErrorDisplay, createPageLayout, reportUncaught } from "./page-layout.js";
 
 /* 애플리케이션 인터페이스. 없으면 아무 일도 하지 않는 구현이 온다. */
 import { chrome, log, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
 import { setTextScope } from "./text-size.js";
-import { applyFrameText, chromeRow, drawnFrameText, frameLayout } from "./frame-text.js";
+import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
 
 /* 코어의 공개 항목과 진단 메서드. 등록소가 호스트의 요청에 답한다. */
 import { coreChanged, installCoreExposure, setVerify } from "./core-exposure.js";
@@ -70,7 +70,6 @@ import "./diagnostics.js";
    상태를 저장한 뒤 다른 상태를 적용하는 것이다. */
 import * as projects from "./projects.js";
 import * as registry from "./registry.js";
-import { showError as showShownError } from "./shown-errors.js";
 
 /* 설정 모달. 사이드바를 연결할 자리 목록은 등록된 플러그인이 정한다. */
 import { drawSettings } from "./settings-ui.js";
@@ -92,25 +91,9 @@ installTheme(document);
 /* 설정값을 문서 루트에 설정한다. 스타일시트가 그 값을 읽는다. */
 install();
 
-/* 처리되지 않은 오류를 보이고 애플리케이션 로그로 보낸다. 애플리케이션에는 콘솔이 없다. 위치와 stack 은 로그에만 남긴다. */
-addEventListener("error", (e) => showError(e.message, ` @ ${e.filename}:${e.lineno}`));
-addEventListener("unhandledrejection", (e) => {
-  // 기본값: rejection 값이 Error 가 아니면 stack 이 없다.
-  const stack = e.reason instanceof Error && e.reason.stack ? `\n${e.reason.stack}` : "";
-  showError(e.reason instanceof Error ? e.reason.message : e.reason, stack);
-});
-/** 메인 문서의 오류 배너에 오류를 보인다. 보이는 순간 기록한다(shown-errors.js). */
-function showError(reason, detail = "") {
-  let el = document.getElementById("applicationError");
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "applicationError";
-    el.setAttribute("role", "alert");
-    document.querySelector("header").after(el);
-  }
-  showShownError(el, "page", String(reason), detail);
-  coreChanged();
-}
+/* 메인 문서의 오류 배너. 처리되지 않은 오류도 이 배너에 보이고 애플리케이션 로그로 보낸다(page-layout.js). */
+const showError = createErrorDisplay({ document, changed: coreChanged });
+reportUncaught(globalThis, showError);
 
 /* ── 배선 ─────────────────────────────────────────────────────────────── */
 
@@ -123,7 +106,6 @@ function showError(reason, detail = "") {
  * 일생에 걸쳐 따지면 두 번째 실행부터는 결과가 어디에도 남지 않는다.
  */
 let lastSaid = "";
-let layoutFailure = null;
 
 onRun((going) => {
   if (going) lastSaid = "";
@@ -133,6 +115,7 @@ function check() {
   if (!currentGrid() || projects.inLibrary()) return;
   controlsAt = presentedControls();
   const rows = verify(controlsAt);
+  const layoutFailure = pageLayout.failure();
   if (layoutFailure) rows.push({ name: "Surface presentation", ok: false, note: layoutFailure.message });
   setVerify(rows);
   const failed = rows.filter((r) => !r.ok);
@@ -212,12 +195,12 @@ onRender(() => {
   const record = latest();
   presented = presented.then(() => {
     if (latest() !== record) return false;
-    layoutFailure = null;
+    pageLayout.clearFailure();
     check();
     coreChanged();
     if (record?.settled !== false) {
       projects.keep();
-      reportSuperseded();
+      pageLayout.reportSuperseded();
     }
     return true;
   }).then(async () => {
@@ -227,30 +210,15 @@ onRender(() => {
   });
 });
 
-/* 표시되기 전에 더 새 배치로 대신된 배치의 수. 움직임이 멈춘 표시에서 애플리케이션 로그에
-   한 줄로 남긴다. 움직이는 동안 배치마다 호스트를 부르면 표시가 그만큼 늦어진다. */
-let supersededLayouts = 0;
-function reportSuperseded() {
-  if (supersededLayouts === 0) return;
-  log(`layout: ${supersededLayouts} waiting layouts were replaced by newer layouts before presentation`);
-  supersededLayouts = 0;
-}
-const layouts = createLayoutQueue({
-  failed(error) {
-    layoutFailure = error;
-    const message = String(error?.message ?? error);
-    console.error(`surface presentation failed: ${message}`);
-    showError(`surface presentation failed: ${message}`);
-    setVerify([{ name: "Surface presentation", ok: false, note: message }]);
-  },
-  superseded() {
-    supersededLayouts++;
-  },
+/* 배치 대기열. 판의 배치, 판이 없는 창의 첫 행, 프로젝트 전환의 빈 판을 하나씩 표시한다. */
+const pageLayout = createPageLayout({
+  document, showError, setVerify, log, surfaces: host,
+  plane: { currentGrid, settle, clear },
+  compositor: { publishAhead, publish },
+  textSize: () => value("textSize"),
+  rendered: () => presented,
+  waitSurfaceCompositionDeclared,
 });
-let layoutEpoch = 0;
-/* 성능 기록의 배치 번호. 기록이 켜져 있으면 배치마다 대기, 준비 응답, DOM 그리기 전후, animation frame, 표시의
-   시각(performance.now, ms)을 남겨 배치가 화면에 늦게 나오는 단계를 가린다. */
-let layoutTraceId = 0;
 // 사이드바의 탭 선택과 접기는 스페이스에 저장한다(docs/spec/projects.md#persistence).
 onChoicesChange(() => projects.keep());
 
@@ -259,22 +227,7 @@ onChoicesChange(() => projects.keep());
 projects.onSwitch({ check: checkStoredLayout, save: capture, load: adopt, update: settle,
 // 어떤 레이아웃에도 없는 탭의 표면 모듈을 정리한다. 불러오지 않은 플러그인의 자리 표시도 그 탭과 함께 사라진다.
 retain: (surfaceIds) => disposeSurfacesExcept(surfaceIds),
-async presented() {
-  // 불러온 배치가 실패하면 대기열의 failed 가 그 실패를 보였다. 표시되지 않은 배치의 표시는 기다리지 않는다.
-  if (!(await layouts.wait())) return;
-  // `draw()`는 onRender 커밋이 끝나기 전에 반환한다. 최신 네이티브 배치가
-  // 대기 중이면 프로젝트 명령은 완료되지 않은 상태다.
-  await presented;
-  await host.waitPresented();
-}, async empty() {
-  // 전환은 그 전에 준비한 판의 그리기를 취소한다. 그 그리기가 새 프레임 배율을 쓰는 그리기였을 수 있으므로, 판을 지우는
-  // 그리기가 지금 배율을 쓰고 그 첫 행을 준비에 담는다(docs/spec/native-surfaces.md#title-bar-height).
-  const epoch = ++layoutEpoch;
-  const layout = frameLayout({ factor: value("textSize"), publishAhead, publish, frame: animationFrame, clearPlane: clear });
-  layouts.run(() => drawPrepared({ epoch, current: () => layoutEpoch, ...layout }));
-  // 판을 비운 배치가 실패하면 대기열의 failed 가 그 실패를 보였다.
-  await layouts.wait();
-} });
+presented: pageLayout.presented, empty: pageLayout.empty });
 
 
 /* ── 프로젝트와 스페이스 행 ─────────────────────────────────────────────
@@ -331,7 +284,7 @@ function applyControls(answer) {
 function fitTitlebar(answer) {
   if (answer.row > 0 && answer.row !== chromeRow(value("textSize"))) {
     host.forget();
-    drawFrame();
+    pageLayout.drawFrame();
   }
 }
 
@@ -561,50 +514,16 @@ if (chrome) applyControls(start.controls);
 projects.begin(start.workspace);
 // 판의 첫 그리기는 프레임 배율을 문서에 쓴다. 판이 없는 첫 화면(라이브러리)에는 그 그리기가 없으므로 여기서 쓴다.
 applyFrameText(value("textSize"));
-onLayout((made, draw, seated, titlebar) => {
-  const epoch = layoutEpoch;
-  const id = ++layoutTraceId;
-  const mark = (phase) => trace("layout", { phase, id, t: performance.now() });
-  mark("queued");
-  layouts.run(() => drawPrepared({
-    epoch, current: () => layoutEpoch,
-    prepare: async () => { mark("prepare"); const result = await publishAhead(made, seated, titlebar); mark("prepared"); return result; },
-    draw: () => { mark("draw"); draw(); mark("drawn"); },
-    frame: async () => { await animationFrame(); mark("frame"); },
-    presented: async () => { await presented; mark("presented"); },
-  }));
-});
+onLayout(pageLayout.onLayout);
 // 호스트는 창을 40pt 제목줄로 만든다. 첫 행이 다르면 첫 행을 담은 배치를 준비한다.
 if (chrome) fitTitlebar(start.controls);
-
-/**
- * 첫 행을 준비한 배치로 그린다. 판이 있으면 판을 다시 그리고, 판이 없는 창(라이브러리)은 표면 없이 첫 행의 높이를 담은
- * 준비 뒤에 지금 설정의 프레임 배율을 쓴다. 준비가 창 제목줄을 같은 트랜잭션에서 정하므로 행과 단추가 같은 프레임에
- * 바뀐다(docs/spec/native-surfaces.md#title-bar-height).
- */
-function drawFrame() {
-  if (currentGrid()) {
-    settle();
-    return;
-  }
-  const epoch = layoutEpoch;
-  const layout = frameLayout({ factor: value("textSize"), publishAhead, publish, frame: animationFrame });
-  layouts.run(() => drawPrepared({ epoch, current: () => layoutEpoch, ...layout }));
-}
 
 // 코어 공개 항목은 첫 await 전에 등록한다. 첫 화면의 사이드바 섹션은 그 뒤에 비동기로 마운트되며 코어 상태를 따를 수
 // 있다(docs/spec/plugins.md#sections). 호스트와의 연결은 아래에서 기다린다.
 const coreExposure = installCoreExposure({
   library, renames,
-  // 판의 그리기 순서. 배치를 바꾼 코어 명령은 이것을 기다린 뒤 답한다. 슬롯은 가장 새 배치를 그린 뒤에 읽으므로, 이 명령이나
-  // 뒤의 명령이 해제한 표면의 슬롯은 남아 있지 않다(docs/spec/exposure.md#registration).
-  drawn: async () => {
-    // 가장 새 배치가 실패하면 대기열의 failed 가 그 실패를 보였다. 표시되지 않은 배치의 슬롯은 기다리지 않는다.
-    if (!(await layouts.wait())) return;
-    const ids = [...document.querySelectorAll("[data-native-surface-id]")]
-      .map((slot) => slot.dataset.nativeSurfaceId);
-    await Promise.all(ids.map((id) => waitSurfaceCompositionDeclared(id)));
-  },
+  // 판의 그리기 순서. 배치를 바꾼 코어 명령은 이것을 기다린 뒤 답한다(page-layout.js).
+  drawn: pageLayout.drawn,
   chrome: () => ({
     controlsWidth,
     projectTabs: workarea.querySelector(".project-column") ? "left" : "top",
@@ -671,7 +590,7 @@ onSettingsChange(() => {
   const half = halfGap();
   setGap(half);
   // 판이 없는 창은 프레임 배율이 바뀔 때만 첫 행을 다시 그린다. 판은 설정이 바뀔 때마다 다시 그린다.
-  if (currentGrid() || drawnFrameText() !== value("textSize")) drawFrame();
+  if (currentGrid() || drawnFrameText() !== value("textSize")) pageLayout.drawFrame();
   drawBars();
   drawSettings();
   coreChanged();

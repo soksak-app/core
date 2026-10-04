@@ -419,7 +419,7 @@ const FEATURE_LINKS = [
   {
     id: "F0.5.7-1",
     implementation: [
-      { file: "packages/workbench/index.html", symbol: "waitSurfaceCompositionDeclared" },
+      { file: "packages/workbench/page-layout.js", symbol: "waitSurfaceCompositionDeclared" },
       { file: "packages/workbench/surface-modules.js", symbol: "waitSurfaceCompositionDeclared" },
       { file: "packages/plugin-api/surface-composition.js", symbol: "boundaryToken" },
     ],
@@ -1218,6 +1218,20 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_service_starts_in_a_new_session" },
     ],
     expected: "Both hosts start a persistent service as the leader of a new session.",
+    levels: ["unit"],
+  },
+  {
+    id: "F58",
+    implementation: [
+      { file: "packages/workbench/page-layout.js", symbol: "export function createPageLayout" },
+      { file: "packages/workbench/index.html", symbol: "createPageLayout" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/presentation-failure-lines.test.mjs", id: "one presentation timeout writes one page error line" },
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure of a project switch started from the interface writes one page error line" },
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure that no command waits for writes one page error line" },
+    ],
+    expected: "The layout wiring of the main page is one module that the page and its tests import.",
     levels: ["unit"],
   },
   {

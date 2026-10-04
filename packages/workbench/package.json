@@ -42,6 +42,7 @@
     "stored-layout.js",
     "stored-layout-migration.js",
     "layout-queue.js",
+    "page-layout.js",
     "plane.js",
     "projects.js",
     "plugin-states.js",
