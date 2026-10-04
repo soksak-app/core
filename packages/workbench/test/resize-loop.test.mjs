@@ -37,8 +37,9 @@ test("the observations delivered in the frame after a loop error are reported", 
 
   assert.deepEqual(delivered, [1, 1], "the page callback did not run");
   assert.deepEqual(reported, [
-    "resize observer loop: this frame ran page@wails://localhost/page.js:1:1 created at 1234.6ms at 1234.6ms on div#plane.plane.stage[data-expose=core.plane] 1186x670",
-    "resize observer loop: this frame changed nothing",
+    "resize observer loop: before the round, undelivered at the first callback: nothing",
+    "resize observer loop: in the round callback 1 ran page@wails://localhost/page.js:1:1 created at 1234.6ms at 1234.6ms on div#plane.plane.stage[data-expose=core.plane] 1186x670, then changed nothing",
+    "resize observer loop: after the round changed nothing",
     "resize observer loop: the next frame delivered div#plane.plane.stage[data-expose=core.plane] 1186x670",
   ]);
 });
@@ -62,12 +63,12 @@ test("the callbacks that ran in the frame of a loop error are reported with the 
   observers[0].callback([{ target: plane, contentRect: { width: 600, height: 400 } }], observers[0]);
   window.dispatchEvent(new window.ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }));
   assert.deepEqual(reported, [
-    "resize observer loop: this frame ran probe@wails://localhost/probe.js:7:3 created at 1234.6ms at 1234.6ms on div#plane.plane.stage[data-expose=core.plane] 600x400",
-    "resize observer loop: this frame changed nothing",
+    "resize observer loop: before the round, undelivered at the first callback: nothing",
+    "resize observer loop: in the round callback 1 ran probe@wails://localhost/probe.js:7:3 created at 1234.6ms at 1234.6ms on div#plane.plane.stage[data-expose=core.plane] 600x400, then changed nothing",
   ]);
   frame();
   frame();
-  assert.equal(reported.length, 3);
+  assert.equal(reported.length, 4);
 });
 
 test("the callbacks of an earlier frame are not reported with a loop error", () => {
@@ -79,18 +80,44 @@ test("the callbacks of an earlier frame are not reported with a loop error", () 
   observers[0].callback([{ target: plane, contentRect: { width: 600, height: 400 } }], observers[0]);
   frame();
   window.dispatchEvent(new window.ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }));
-  assert.deepEqual(reported, ["resize observer loop: this frame ran no callback", "resize observer loop: this frame changed nothing"]);
+  assert.deepEqual(reported, [
+    "resize observer loop: before the round, undelivered at the first callback: nothing",
+    "resize observer loop: this frame ran no callback",
+  ]);
 });
 
-test("the DOM changes after the first callback of the error frame are reported with their targets", async () => {
-  const { window, observers } = fakeView();
+test("each DOM change is reported in the callback slot of the round it happened in, or after the round", async () => {
+  const { window, observers, frame } = fakeView();
   const reported = [];
-  watchResizeLoop(window, (line) => reported.push(line), () => "probe@wails://localhost/probe.js:7:3");
-  new window.ResizeObserver(() => {});
+  let made = 0;
+  watchResizeLoop(window, (line) => reported.push(line), () => `probe@wails://localhost/probe.js:${++made}:1`);
   const plane = window.document.getElementById("plane");
-  observers[0].callback([{ target: plane, contentRect: { width: 600, height: 400 } }], observers[0]);
-  plane.style.setProperty("--pt", "26px");
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  // callback 1 의 변경 기록은 그 callback 뒤 microtask checkpoint 에서 MutationObserver 로 전달된다.
+  new window.ResizeObserver(() => plane.setAttribute("data-height", "517"));
+  // callback 2 의 변경 기록은 checkpoint 없이 callback 3 이 오므로 전달되지 않은 기록으로 남는다.
+  new window.ResizeObserver(() => plane.setAttribute("title", "tree"));
+  new window.ResizeObserver(() => {});
+  const entry = { target: plane, contentRect: { width: 188, height: 498 } };
+
+  observers[0].callback([entry], observers[0]);
+  await new Promise((resolve) => queueMicrotask(resolve));
+  observers[1].callback([entry], observers[1]);
+  observers[2].callback([entry], observers[2]);
   window.dispatchEvent(new window.ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }));
-  assert.match(reported[1], /^resize observer loop: this frame changed attributes style of div#plane\.plane\.stage\[data-expose=core\.plane\]/);
+  // 관찰 round 가 끝난 뒤의 task 가 바꾼 것은 round 안의 변경이 아니다.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  plane.hidden = true;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  frame();
+  frame();
+
+  const target = "div#plane.plane.stage[data-expose=core.plane]";
+  assert.deepEqual(reported, [
+    "resize observer loop: before the round, undelivered at the first callback: nothing",
+    `resize observer loop: in the round callback 1 ran probe@wails://localhost/probe.js:1:1 created at 1234.6ms at 1234.6ms on ${target} 188x498, then changed attributes data-height of ${target}`,
+    `resize observer loop: in the round callback 2 ran probe@wails://localhost/probe.js:2:1 created at 1234.6ms at 1234.6ms on ${target} 188x498, then changed attributes title of ${target}`,
+    `resize observer loop: in the round callback 3 ran probe@wails://localhost/probe.js:3:1 created at 1234.6ms at 1234.6ms on ${target} 188x498, then changed nothing`,
+    `resize observer loop: after the round changed attributes hidden of ${target}`,
+    "resize observer loop: the next frame delivered no observation",
+  ]);
 });
