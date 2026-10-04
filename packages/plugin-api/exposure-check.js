@@ -9,7 +9,7 @@
 // 문서의 audit 이 판단한다.
 //
 //   soksak-exposure [plugin repository]
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -134,7 +134,8 @@ export function checkPluginRepository(root, core = coreExposure()) {
   });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// package manager 는 package 를 link 로 두므로 시작한 경로를 풀어서 이 module 과 비교한다.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   // 기본값: 인자가 없으면 현재 폴더의 plugin repository 를 검사한다.
   const root = resolve(process.argv[2] ?? ".");
   const errors = checkPluginRepository(root);

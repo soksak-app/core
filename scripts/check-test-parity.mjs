@@ -875,6 +875,16 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F16",
+    implementation: [
+      { file: "packages/plugin-api/exposure-check.js", symbol: "realpathSync(process.argv[1])" },
+      { file: "packages/plugin-api/engines-check.js", symbol: "realpathSync(process.argv[1])" },
+    ],
+    tests: [{ file: "packages/plugin-api/test/command-entry.test.mjs", id: "the plugin commands run their check when started through a linked package" }],
+    expected: "soksak-exposure and soksak-engines run their check when a plugin repository starts them through the package that its package manager links.",
+    levels: ["unit"],
+  },
+  {
     id: "V1",
     implementation: [{ file: "scripts/checklist.mjs", symbol: "checkCompletedItems" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits translated text and linked follow-up identifiers" }],
