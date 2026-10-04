@@ -72,3 +72,13 @@ fn main_and_scoped_reply_payloads_reach_their_requests() {
     });
     assert_eq!(scoped.unwrap().get(), r#"{"ok":true}"#);
 }
+
+// contract: exposure-reply.removed-surface-discarded
+#[test]
+fn reply_of_a_removed_surface_is_an_observation() {
+    // 표면을 제거할 때 그 표면의 요청은 이미 1003 으로 끝났으므로 늦은 답은 오류가 아니라 관측이다.
+    assert_eq!(
+        soksak_host_tauriv2::exposure::removed_surface_reply(7228, "tab-4sswjb"),
+        r#"exposure reply 7228 of removed surface "tab-4sswjb" arrived after its request ended"#
+    );
+}

@@ -174,6 +174,8 @@ The host and the pages exchange these messages. They are internal to core and no
 
 The main page validates names against the declarations before it registers or forwards them. It keeps a registration from a surface that no loaded layout contains yet, and applies or rejects it when a layout containing the surface is loaded. `exposureReply` from the main page answers an `exposure-request` of the host; `exposureReply` from a surface page answers a forwarded request. The host identifies the caller by its webview.
 
+A surface page can answer a forwarded request after its surface was removed, for example a `status.next` that it answers as the surface closes. The host already ended every request to that surface with 1003 when it removed the surface, so the reply has no request to answer: the host discards it and writes the observation `exposure reply <id> of removed surface "<surface>" arrived after its request ended` to the application log instead of refusing the call.
+
 The runtime modules map these calls to framework bindings:
 
 | Call | Wails method | Tauri command |

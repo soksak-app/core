@@ -181,6 +181,7 @@ fn invalid_json_closes_connection() {
 | `exposure-reply.payload.scoped-reply-keeps-surface` | surface가 있는 응답 페이로드는 인코딩과 해석을 거쳐도 surface를 유지한다. | both |
 | `exposure-reply.target.main-and-surface-distinct` | surface가 없는 응답은 창의 주 문서를, surface가 있는 응답은 그 표면 문서를 대상으로 한다. | both |
 | `exposure-reply.target.invalid-surface-rejected` | surface가 null, 빈 문자열, 숫자, 객체인 응답은 주 응답이 아니라 오류다. | both |
+| `exposure-reply.removed-surface-discarded` | 표면이 제거된 표면 페이지의 답은 오류 대신 관측 `exposure reply <id> of removed surface "<surface>" arrived after its request ended`와 함께 버려진다. | both |
 | `exposure.list.appends-host-entries-registered` | 노출 목록은 페이지 항목을 유지하고 호스트 상태와 명령 항목을 등록된 항목으로 더한다. | both |
 | `exposure.list.host-entries-exact-sorted-set` | 호스트 상태와 명령 이름은 정해진 정렬 목록과 같다. | both |
 | `exposure.list.host-entries-described` | 모든 호스트 항목은 비어 있지 않은 설명을 가진다. | both |

@@ -66,3 +66,11 @@ func TestExposureReplyTargetsTheMainDocumentOrOneSurface(t *testing.T) {
 		}
 	}
 }
+
+// contract: exposure-reply.removed-surface-discarded
+func TestReplyOfARemovedSurfaceIsAnObservation(t *testing.T) {
+	// 표면을 제거할 때 그 표면의 요청은 이미 1003 으로 끝났으므로 늦은 답은 오류가 아니라 관측이다.
+	if got, want := host.RemovedSurfaceReply(7228, "tab-4sswjb"), `exposure reply 7228 of removed surface "tab-4sswjb" arrived after its request ended`; got != want {
+		t.Fatalf("observation %q, want %q", got, want)
+	}
+}

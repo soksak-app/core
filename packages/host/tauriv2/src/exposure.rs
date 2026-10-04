@@ -518,6 +518,11 @@ fn emit_to(app: &AppHandle, label: &str, event: &str, payload: Value) -> Result<
 }
 
 /// 호출한 문서의 응답을 기다리는 요청에 전달한다. 제한 시간이 지난 응답은 버린다.
+/// 제거된 표면이 보낸 늦은 답의 관측 줄.
+pub fn removed_surface_reply(id: u64, surface: &str) -> String {
+    format!("exposure reply {id} of removed surface {surface:?} arrived after its request ended")
+}
+
 pub fn reply_target(window: &str, request: &Value) -> Result<String, String> {
     match request.get("surface") {
         None => Ok(window.to_string()),
@@ -537,7 +542,16 @@ pub(crate) fn reply(webview: &Webview, request: String) -> Result<(), String> {
     let routing: Value = serde_json::from_str(text.get()).map_err(|error| error.to_string())?;
     let target = reply_target(window.label(), &routing)?;
     if let Some(surface) = routing.get("surface").and_then(Value::as_str) {
-        crate::surfaces::surface_handle(&window, surface)?;
+        if !crate::surfaces::surface_attached(&window, surface)? {
+            // 표면을 제거할 때 그 표면의 요청은 이미 1003 으로 끝났다. 늦은 답은 답할 요청이 없으므로 버리고 관측으로
+            // 남긴다(docs/spec/exposure.md).
+            let id = routing
+                .get("id")
+                .and_then(Value::as_u64)
+                .ok_or("exposure reply has no id")?;
+            eprintln!("{}", removed_surface_reply(id, surface));
+            return Ok(());
+        }
     }
     if !webview.state::<Exposure>().relay.reply(&target, &text) {
         return Err("exposure reply does not match a pending request".into());

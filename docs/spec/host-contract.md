@@ -181,6 +181,7 @@ Items:
 | `exposure-reply.payload.scoped-reply-keeps-surface` | A reply payload with a surface keeps it through encoding and decoding. | both |
 | `exposure-reply.target.main-and-surface-distinct` | A reply without a surface targets the window's main document, and a reply with a surface targets that surface document. | both |
 | `exposure-reply.target.invalid-surface-rejected` | A reply whose surface is null, empty, a number, or an object is an error, not a main reply. | both |
+| `exposure-reply.removed-surface-discarded` | A reply from a surface page whose surface was removed is discarded with the observation `exposure reply <id> of removed surface "<surface>" arrived after its request ended` instead of an error. | both |
 | `exposure.list.appends-host-entries-registered` | The exposure list keeps the page's entries and adds the host status and command entries as registered. | both |
 | `exposure.list.host-entries-exact-sorted-set` | The host status and command names equal an exact sorted list. | both |
 | `exposure.list.host-entries-described` | Every host entry has a non-empty description. | both |

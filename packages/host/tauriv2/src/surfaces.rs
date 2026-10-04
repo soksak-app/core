@@ -177,6 +177,15 @@ pub(crate) fn declare(webview: &Webview, request: CompositionDeclareRequest) -> 
     Ok(())
 }
 
+/// 표면이 이 창에 붙어 있는지. 창의 상태를 읽지 못하면 오류다.
+pub(crate) fn surface_attached(window: &Window, surface: &str) -> Result<bool, String> {
+    Ok(window_data(window)?
+        .surface_hosts
+        .lock()
+        .map_err(|e| e.to_string())?
+        .contains_key(surface))
+}
+
 pub(crate) fn surface_handle(window: &Window, surface: &str) -> Result<Handle, String> {
     window_data(window)?
         .surface_hosts
