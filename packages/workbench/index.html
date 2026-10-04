@@ -599,7 +599,8 @@ const coreExposure = installCoreExposure({
   // 판의 그리기 순서. 배치를 바꾼 코어 명령은 이것을 기다린 뒤 답한다. 슬롯은 가장 새 배치를 그린 뒤에 읽으므로, 이 명령이나
   // 뒤의 명령이 해제한 표면의 슬롯은 남아 있지 않다(docs/spec/exposure.md#registration).
   drawn: async () => {
-    await layouts.wait();
+    // 가장 새 배치가 실패하면 대기열의 failed 가 그 실패를 보였다. 표시되지 않은 배치의 슬롯은 기다리지 않는다.
+    if (!(await layouts.wait())) return;
     const ids = [...document.querySelectorAll("[data-native-surface-id]")]
       .map((slot) => slot.dataset.nativeSurfaceId);
     await Promise.all(ids.map((id) => waitSurfaceCompositionDeclared(id)));

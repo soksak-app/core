@@ -1,6 +1,7 @@
 //! 그림 봉투의 의사결정 로직과 표현 확인을 검사한다.
 
 use serde_json::json;
+use soksak_host_tauriv2::application_log::{application_log_path, start_application_log};
 use soksak_host_tauriv2::images::{
     after_present, decide, handle_envelope, handle_envelope_with_recovery, Configure, Decision,
     Images, Key,
@@ -368,6 +369,59 @@ fn presentation_wait_tracks_the_visible_current_raster() {
     assert!(images.wait_current(Duration::ZERO).is_err());
     images.end_generation(&key.0);
     assert!(images.wait_current(Duration::ZERO).is_ok());
+}
+
+/// 자식 프로세스에 설정 디렉터리를 알리는 환경 변수.
+const APPLICATION_LOG_CHILD: &str = "SOKSAK_APPLICATION_LOG_CHILD";
+
+// contract: images.wait.timeout-writes-no-log-line
+#[test]
+fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
+    if let Some(config) = std::env::var_os(APPLICATION_LOG_CHILD) {
+        if let Err(error) = start_application_log(std::path::Path::new(&config), "com.soksak.test")
+        {
+            println!("{error}");
+            std::process::exit(2);
+        }
+        let images = Images::default();
+        let key: Key = ("tab-1".to_string(), "view".to_string());
+        images.reserve(&key, "owner", "sidecar-a").unwrap();
+        assert!(images.set(&key, 100));
+        images
+            .configure_raster(&key, 800, 600, 2.0, true)
+            .unwrap()
+            .unwrap();
+        // 제한 시간이 0 이면 기다리기 전에 끝나므로, 기다림이 제한 시간에 끝나는 경로를 지나도록 짧은 시간을 준다.
+        assert_eq!(
+            images.wait_current(Duration::from_millis(20)),
+            Err("presentationTimeout".to_string())
+        );
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "presentation_wait_timeout_returns_its_failure_and_writes_no_log_line",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(APPLICATION_LOG_CHILD, config.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "child ended with {:?}, output {:?}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
+    let lines: Vec<&str> = log.lines().collect();
+    assert!(
+        lines.len() == 1 && lines[0].contains(" application log: com.soksak.test pid "),
+        "a presentation timeout wrote host lines: {lines:?}"
+    );
 }
 
 // contract: images.visibility.survives-first-document-navigation

@@ -691,7 +691,9 @@ for (const app of Object.values(APPS)) {
     let stopped = true;
     s.cleanup(() => { if (stopped) process.kill(service, "SIGCONT"); });
     const card = (await s.get("core.grid")).cards.find((item) => item.active === terminal.surface);
-    s.expectError(/did not present/);
+    // 분할의 표시 요청이 받은 제한 시간은 페이지가 오류 표시 한 줄로 쓴다. 호스트와 다른 경로는 같은 실패를 다시 쓰지 않는다
+    // (docs/spec/hosts.md#application-log).
+    s.expectError(/^error: page: surface presentation failed: the current image raster did not present within /);
     const { tab } = await s.run("core.card.split", { card: card.id, side: "right", plugin: "terminal" });
     await s.until("core.page.error", (error) => /did not present/.test(error ?? ""),
       "the presentation did not fail while the terminal service was stopped");

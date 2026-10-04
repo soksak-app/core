@@ -70,9 +70,9 @@ test("native preparation cannot present before DOM drawing and presents each tic
       await assert.rejects(surfaces.place({ ...changed, drawn: true }), /injected presentSurfaces failure/);
     }
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(calls.filter((call) => call.name === "report").map((call) => call.request),
-      [`error: host ${stage} failed while advancing the layout queue: injected ${stage} failure`],
-      `${stage} rejection must be written as an error line`);
+    // 배치를 요청한 쪽이 그 실패를 받아 보고하므로 대기열은 같은 실패를 다시 쓰지 않는다(docs/spec/hosts.md#application-log).
+    assert.deepEqual(calls.filter((call) => call.name === "report").map((call) => call.request), [],
+      `${stage} rejection that the place request received must not be written again by the layout queue`);
     calls.length = 0;
     await surfaces.place(changed);
     await surfaces.place({ ...changed, drawn: true });

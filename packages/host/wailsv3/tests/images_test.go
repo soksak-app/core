@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -381,6 +382,43 @@ func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 	images.EndGeneration(key.Surface)
 	if !images.WaitCurrent(0) {
 		t.Fatal("an ended surface generation blocked presentation")
+	}
+}
+
+// contract: images.wait.timeout-writes-no-log-line
+func TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine(t *testing.T) {
+	if config := os.Getenv(applicationLogChild); config != "" {
+		if err := host.StartApplicationLog(config, "com.soksak.test"); err != nil {
+			os.Stdout.WriteString(err.Error() + "\n")
+			os.Exit(2)
+		}
+		images := host.NewImages()
+		key := host.ImageKey{Surface: "tab-1", Name: "view"}
+		owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+		var handle int
+		if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
+			t.Fatalf("attach image: %v", err)
+		}
+		configureImage(t, images, key, 800, 600, 2.0)
+		// 제한 시간이 0 이면 기다리기 전에 끝나므로, 기다림이 제한 시간에 끝나는 경로를 지나도록 짧은 시간을 준다.
+		if err := images.WaitCurrentError(20 * time.Millisecond); err == nil || err.Error() != "presentationTimeout" {
+			t.Fatalf("the presentation wait ended with %v", err)
+		}
+		return
+	}
+	config := t.TempDir()
+	command := exec.Command(os.Args[0], "-test.run=^TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine$")
+	command.Env = append(os.Environ(), applicationLogChild+"="+config)
+	if output, err := command.Output(); err != nil {
+		t.Fatalf("child ended with %v, output %q", err, output)
+	}
+	data, err := os.ReadFile(host.ApplicationLogPath(config))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	if len(lines) != 1 || !strings.Contains(lines[0], " application log: com.soksak.test pid ") {
+		t.Fatalf("a presentation timeout wrote host lines: %q", lines)
 	}
 }
 

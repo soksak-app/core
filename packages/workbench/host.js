@@ -362,15 +362,11 @@ let layoutTurn = Promise.resolve();
 let layoutFrame = layoutTurn;
 let layoutResult = layoutTurn;
 
-function continueAfterLayoutFailure(phase, error) {
-  // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
-  const message = errorLine(`host ${phase} failed while advancing the layout queue: ${error?.message ?? error}`);
-  bridge.call("report", message).then(undefined, (reportError) => {
-    // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
-    console.error(`${message}; reporting failed: ${reportError?.message ?? reportError}`);
-  });
-  return undefined;
-}
+/**
+ * 레이아웃 단계 step 이 끝나면 이행되는 순서 promise. 실패한 트랜잭션이 다음 독립 레이아웃을 막지 않게 실패에서도 이행한다.
+ * 그 실패는 이 단계를 담은 place 의 답으로 호출자가 받아 보고하므로 여기서 다시 쓰지 않는다(docs/spec/hosts.md#application-log).
+ */
+const layoutStepEnd = (step) => step.then(() => undefined, () => undefined);
 let layoutPresented = false;
 /* 호스트가 표시를 확인한 가장 최근 준비의 창 단추 영역과 제목줄 높이({controls, row}). 커밋된 상태이고, 표시를
    확인하기 전에는 null 이다(docs/spec/native-surfaces.md#title-bar-height). */
@@ -493,8 +489,7 @@ export const surfaces = native ? {
           return frame.placements;
         });
         layoutPresented = false;
-        // 실패한 트랜잭션이 다음 독립 레이아웃을 막지 않게 한다.
-        layoutTurn = scheduled.then(() => undefined, (error) => continueAfterLayoutFailure("syncSurfaces", error));
+        layoutTurn = layoutStepEnd(scheduled);
       }
       if (record.drawn && !layoutPresented) {
         const preparedLayout = layoutFrame;
@@ -510,7 +505,7 @@ export const surfaces = native ? {
           }));
         layoutResult = presentedLayout;
         layoutPresented = true;
-        layoutTurn = presentedLayout.then(() => undefined, (error) => continueAfterLayoutFailure("presentSurfaces", error));
+        layoutTurn = layoutStepEnd(presentedLayout);
       }
       // 이전 ticket이 커밋되기 전에 새 동기화가 네이티브 ticket을 교체하지 않도록
       // 동기화와 표시 호출을 함께 처리한다.

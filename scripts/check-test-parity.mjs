@@ -548,7 +548,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-test-parity.mjs", symbol: "auditJsFailurePropagation" },
       { file: "packages/client/client.js", symbol: "status.unwatch" },
       { file: "packages/workbench/exposure.js", symbol: "release" },
-      { file: "packages/workbench/host.js", symbol: "continueAfterLayoutFailure" },
+      { file: "packages/workbench/host.js", symbol: "layoutStepEnd" },
       { file: "packages/workbench/projects.js", symbol: "inTurn" },
       { file: "packages/workbench/transcript.js", symbol: "createTranscript" },
     ],
@@ -1156,7 +1156,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/tab-close-settled.test.mjs", id: "core.tab.close answers after the tab close and its draw" },
-      { file: "packages/workbench/test/layout-queue.test.mjs", id: "the wait for the drawn layout fails with the failure of the newest layout" },
+      { file: "packages/workbench/test/layout-queue.test.mjs", id: "the wait for the drawn layout answers false when the newest layout failed" },
     ],
     expected: "A command answers after its handler's work and the newest draw.",
     levels: ["unit", "application"],
@@ -1172,6 +1172,22 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/tests/window_close_test.go", id: "TestACloseBeforeTheNativeStepDoesNotReachNativeCode" },
     ],
     expected: "A native window handle is used only in the main-thread step that reads it.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F56",
+    implementation: [
+      { file: "packages/host/tauriv2/src/images.rs", symbol: "wait_current" },
+      { file: "packages/host/wailsv3/src/images.go", symbol: "WaitCurrentError" },
+      { file: "packages/workbench/host.js", symbol: "layoutStepEnd" },
+      { file: "packages/workbench/layout-queue.js", symbol: "async wait()" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/images_test.rs", id: "presentation_wait_timeout_returns_its_failure_and_writes_no_log_line" },
+      { file: "packages/host/wailsv3/tests/images_test.go", id: "TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine" },
+      { file: "packages/workbench/test/presentation-failure-lines.test.mjs", id: "one presentation timeout writes one page error line" },
+    ],
+    expected: "One image presentation timeout writes one application log line, the page display line, on both hosts.",
     levels: ["unit", "application"],
   },
   {

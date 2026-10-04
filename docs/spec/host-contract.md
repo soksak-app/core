@@ -259,6 +259,7 @@ Items:
 | `images.wait.hidden-image-does-not-block` | A hidden image does not block the presentation wait, and showing it blocks again. | both |
 | `images.wait.hidden-surface-does-not-block` | A hidden surface does not block the presentation wait, and showing it blocks again. | both |
 | `images.wait.ended-generation-does-not-block` | Ending the surface generation releases the presentation wait. | both |
+| `images.wait.timeout-writes-no-log-line` | A presentation wait that reaches its limit returns `presentationTimeout` to its caller and writes no line to the application log, because the request that waited reports the failure. | both |
 | `images.visibility.survives-first-document-navigation` | A surface hidden before its first document navigation stays hidden afterwards. | both |
 | `images.visibility.hidden-surface-defers-configuration` | Configuring an image of a hidden surface returns no configuration until the surface is shown. | both |
 | `images.visibility.shown-surface-reconfigures-its-raster` | A surface shown again after it was hidden configures a new raster revision even at the same size, so the presentation barrier does not wait for frames of the hidden period. | both |

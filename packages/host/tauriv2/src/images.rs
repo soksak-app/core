@@ -736,44 +736,8 @@ impl Images {
                 // 기본값: 잠금을 쥔 채 멈춘 스레드도 상태를 한 번의 넣기, 빼기, 읽기로만 바꾸므로 상태는 일관되고, 그 멈춤은 패닉 보고로 이미 알려졌다.
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             inner = next;
+            // 제한 시간의 실패는 호출자가 기다리던 영역을 담아 그 요청에 답한다(docs/spec/hosts.md#application-log).
             if result.timed_out() && !Self::current_presented_locked(&inner) {
-                let pending: Vec<_> = inner
-                    .states
-                    .iter()
-                    .filter_map(|(key, state)| {
-                        let surface_visible = inner
-                            .surface_visibility
-                            .get(&key.0)
-                            .copied()
-                            // 기본값: 숨김을 알리지 않은 표면은 보인다(숨길 때만 surface_visibility 에 적는다).
-                            .unwrap_or(true);
-                        // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
-                        let handle = inner.handles.get(key).copied().unwrap_or_default();
-                        let waiting = handle != 0
-                            && state.visible
-                            && surface_visible
-                            && state.raster != 0
-                            && !(state.last_sequence > 0
-                                && state.presented_raster == state.raster
-                                && state.presented_sequence == state.last_sequence);
-                        waiting.then(|| format!(
-                            "surface={} name={} generation={} raster={} sequence={} configured={} presentedRaster={} presentedSequence={} handle={}",
-                            key.0,
-                            key.1,
-                            state.generation,
-                            state.raster,
-                            state.last_sequence,
-                            state.configured,
-                            state.presented_raster,
-                            state.presented_sequence,
-                            handle,
-                        ))
-                    })
-                    .collect();
-                log_error(
-                    "image presentation timeout",
-                    format!("pending {}", pending.join("; ")),
-                );
                 return Err("presentationTimeout".to_string());
             }
         }

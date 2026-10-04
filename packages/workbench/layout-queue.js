@@ -45,19 +45,21 @@ export function createLayoutQueue({ failed, superseded }) {
       return latest;
     },
     /**
-     * 가장 새 배치가 끝날 때까지 기다린다. 기다리는 동안 더 새 배치가 예약되면 그 배치를 다시 기다린다. 대신된 배치는
-     * 그리지 않고 끝나므로, 그 끝에서 멈추면 그 배치가 지우려던 슬롯이 문서에 남아 있다. 가장 새 배치가 실패하면 그
-     * 오류로 실패한다.
+     * 가장 새 배치가 끝날 때까지 기다리고, 그 배치가 끝까지 실행되었으면 true, 실패했으면 false 를 반환한다. 기다리는
+     * 동안 더 새 배치가 예약되면 그 배치를 다시 기다린다. 대신된 배치는 그리지 않고 끝나므로, 그 끝에서 멈추면 그 배치가
+     * 지우려던 슬롯이 문서에 남아 있다. 실패는 failed 가 이미 보고했으므로 기다림은 그 실패를 다시 던지지 않는다
+     * (docs/spec/hosts.md#application-log).
      */
     async wait() {
       for (;;) {
         const awaited = latest;
+        let completed = true;
         try {
           await awaited;
-        } catch (error) {
-          if (awaited === latest) throw error;
+        } catch {
+          completed = false;
         }
-        if (awaited === latest) return;
+        if (awaited === latest) return completed;
       }
     },
   };

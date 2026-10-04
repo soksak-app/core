@@ -259,6 +259,7 @@ fn invalid_json_closes_connection() {
 | `images.wait.hidden-image-does-not-block` | 숨긴 이미지는 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | both |
 | `images.wait.hidden-surface-does-not-block` | 숨긴 표면은 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | both |
 | `images.wait.ended-generation-does-not-block` | 표면 generation을 끝내면 표시 대기가 풀린다. | both |
+| `images.wait.timeout-writes-no-log-line` | 제한 시간에 이른 표시 대기는 호출자에게 `presentationTimeout`을 반환하고 애플리케이션 로그에 줄을 쓰지 않는다. 기다린 요청이 그 실패를 보고하기 때문이다. | both |
 | `images.visibility.survives-first-document-navigation` | 첫 문서 이동 전에 숨긴 표면은 이동 뒤에도 숨겨진 상태를 유지한다. | both |
 | `images.visibility.hidden-surface-defers-configuration` | 숨긴 표면의 이미지를 구성하면 표면이 보일 때까지 구성을 반환하지 않는다. | both |
 | `images.visibility.shown-surface-reconfigures-its-raster` | 숨겼다가 다시 보인 표면은 같은 크기라도 새 raster revision을 설정하므로, 표시 장벽은 숨긴 동안의 frame을 기다리지 않는다. | both |

@@ -8,10 +8,10 @@ test("a failed presentation rejects its request, reports failure, and permits th
   const failure = new Error("current image raster did not present");
   const first = queue.run(() => { throw failure; });
   await assert.rejects(first, (error) => error === failure);
-  await assert.rejects(queue.wait(), (error) => error === failure);
+  assert.equal(await queue.wait(), false, "the wait must end without the failure that failed already reported");
   let drawn = 0;
   await queue.run(() => { drawn++; });
-  await queue.wait();
+  assert.equal(await queue.wait(), true);
   assert.equal(drawn, 1);
   assert.deepEqual(reported, [failure]);
 });
@@ -97,9 +97,11 @@ test("the wait for the drawn layout continues through a layout that a newer layo
   assert.deepEqual(read, []);
 });
 
-test("the wait for the drawn layout fails with the failure of the newest layout", async () => {
+// 가장 새 배치의 실패는 failed 가 보고한다. 기다림은 그 실패를 다시 받지 않고, 그 배치가 그려지지 않았음만 답한다.
+test("the wait for the drawn layout answers false when the newest layout failed", async () => {
   const failure = new Error("current image raster did not present");
-  const queue = createLayoutQueue({ failed: () => {}, superseded: () => {} });
+  const reported = [];
+  const queue = createLayoutQueue({ failed: (error) => reported.push(error), superseded: () => {} });
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
   const first = queue.run(async () => { await gate; throw new Error("replaced presentation failed"); });
@@ -108,5 +110,6 @@ test("the wait for the drawn layout fails with the failure of the newest layout"
   release();
   await assert.rejects(first);
   await assert.rejects(newest);
-  await assert.rejects(waiting, (error) => error === failure);
+  assert.equal(await waiting, false);
+  assert.deepEqual(reported.map((error) => error.message), ["replaced presentation failed", failure.message]);
 });
