@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -281,7 +280,7 @@ func TestPluginUpdateKeepsPreviousAndRemoveDeletesTheFolders(t *testing.T) {
 // stateJSON 은 ReadPluginsState 의 결과를 JSON 문장으로 만든다.
 func stateJSON(t *testing.T, config string) string {
 	t.Helper()
-	state, err := sok.ReadPluginsState(config, io.Discard)
+	state, err := sok.ReadPluginsState(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,10 +299,10 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	}
 	index := pluginVersions(t, "0.2.0")
 	runJSON(t, "registry", "use", index, "--config-dir", config)
-	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t), io.Discard); err != nil {
+	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t)); err != nil {
 		t.Fatal(err)
 	}
-	state, err := sok.ReadPluginsState(config, io.Discard)
+	state, err := sok.ReadPluginsState(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +328,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(config, "plugins/installed.json"), []byte("{"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sok.ReadPluginsState(config, io.Discard); err == nil || !strings.Contains(err.Error(), "installed.json is not valid JSON") {
+	if _, err := sok.ReadPluginsState(config); err == nil || !strings.Contains(err.Error(), "installed.json is not valid JSON") {
 		t.Fatalf("state with an invalid installed.json: %v", err)
 	}
 }
@@ -338,10 +337,10 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 func TestRunPluginActionMatchesThePluginCommands(t *testing.T) {
 	config := t.TempDir()
 	runJSON(t, "registry", "use", pluginVersions(t, "0.2.0"), "--config-dir", config)
-	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t), io.Discard); err != nil {
+	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t)); err != nil {
 		t.Fatal(err)
 	}
-	disabled, err := sok.RunPluginAction(config, "disable", "probe", "0.0.2", "", io.Discard)
+	disabled, err := sok.RunPluginAction(config, "disable", "probe", "0.0.2", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,10 +351,10 @@ func TestRunPluginActionMatchesThePluginCommands(t *testing.T) {
 	if !strings.Contains(stdout, `"enabled": false`) {
 		t.Fatalf("plugin list after disable %s", stdout)
 	}
-	if _, err := sok.RunPluginAction(config, "rename", "probe", "0.0.2", "", io.Discard); err == nil || err.Error() != `unknown plugin action "rename"` {
+	if _, err := sok.RunPluginAction(config, "rename", "probe", "0.0.2", ""); err == nil || err.Error() != `unknown plugin action "rename"` {
 		t.Fatalf("unknown action: %v", err)
 	}
-	if removed, err := sok.RunPluginAction(config, "remove", "probe", "0.0.2", "", io.Discard); err != nil || removed != nil {
+	if removed, err := sok.RunPluginAction(config, "remove", "probe", "0.0.2", ""); err != nil || removed != nil {
 		t.Fatalf("remove = %v, %v", removed, err)
 	}
 	if exists(filepath.Join(config, "plugins/probe")) {
@@ -386,7 +385,7 @@ func TestFileErrorsNameThePathAndTheReason(t *testing.T) {
 	if err := os.WriteFile(installed, []byte("{}"), 0o000); err != nil {
 		t.Fatal(err)
 	}
-	_, err := sok.ReadPluginsState(config, io.Discard)
+	_, err := sok.ReadPluginsState(config)
 	if chmodErr := os.Chmod(installed, 0o644); chmodErr != nil {
 		t.Fatal(chmodErr)
 	}

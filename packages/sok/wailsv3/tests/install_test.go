@@ -353,42 +353,20 @@ func TestInstalledStateNamesOneVersionOfEachPluginAndSidecar(t *testing.T) {
 	}
 }
 
-// contract: install.installed.converts-format-1
-func TestInstalledFormat1IsConvertedOnce(t *testing.T) {
+// contract: install.installed.rejects-another-format
+func TestInstalledFileOfAnotherFormatIsRejected(t *testing.T) {
 	config := t.TempDir()
 	file := filepath.Join(config, "plugins/installed.json")
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// 0.0.2 는 다른 자리의 설정 폴더 절대 경로를 기록했다. 설정 폴더를 옮긴 뒤에도 같은 설치 폴더로 끝난다.
-	former := `{"format": 1, "plugins": {
-		"probe": {"package": "@scope/plugin-probe", "version": "0.2.0", "path": "/moved/config/plugins/probe/0.2.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}},
-		"sidecars": {"@scope/sidecar-worker": {"version": "0.1.1", "path": "/moved/config/sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"}}}`
+	former := `{"format": 1, "plugins": {}, "sidecars": {}}`
 	if err := os.WriteFile(file, []byte(former), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	code, stdout, stderr := run("plugin", "list", "--config-dir", config)
-	if code != 0 || stderr != file+": converted format 1 to format 2\n" || !strings.Contains(stdout, `"probe"`) {
-		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
-	}
-	converted := readText(t, file)
-	for _, want := range []string{`"format": 2`, `"path": "plugins/probe/0.2.0"`, `"path": "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"`} {
-		if !strings.Contains(converted, want) {
-			t.Fatalf("installed.json lacks %s: %s", want, converted)
-		}
-	}
-	// 변환은 한 번이다.
-	if code, _, stderr := run("plugin", "list", "--config-dir", config); code != 0 || stderr != "" {
-		t.Fatalf("second read: code %d stderr %q", code, stderr)
-	}
-	// 설치 폴더로 끝나지 않는 경로는 변환하지 않는다.
-	wrong := strings.Replace(former, "/moved/config/plugins/probe/0.2.0", "/moved/config/plugins/probe/0.1.0", 1)
-	if err := os.WriteFile(file, []byte(wrong), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	code, _, stderr = run("plugin", "list", "--config-dir", config)
-	want := "sok: " + file + ": plugins/installed.json probe: path /moved/config/plugins/probe/0.1.0 is not the installed folder plugins/probe/0.2.0\n"
-	if code != 1 || stderr != want || readText(t, file) != wrong {
+	code, _, stderr := run("plugin", "list", "--config-dir", config)
+	want := "sok: " + file + ": plugins/installed.json: format must be 2\n"
+	if code != 1 || stderr != want || readText(t, file) != former {
 		t.Fatalf("code %d stderr %q want %q", code, stderr, want)
 	}
 }

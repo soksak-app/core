@@ -36,7 +36,7 @@ type installedPlugin struct {
 // enabledPlugins 는 켜진 설치 plugin 을 id 순서로 돌려준다. 설치 폴더는 설정 폴더에 대한 상대 경로로 기록되며, 형식
 // 1 파일의 변환 보고는 애플리케이션 로그인 표준 오류에 쓴다(docs/spec/installation.md).
 func enabledPlugins(configDir string) ([]installedPlugin, *sok.InstalledState, error) {
-	state, err := sok.ReadInstalled(configDir, os.Stderr)
+	state, err := sok.ReadInstalled(configDir)
 	if err != nil {
 		return nil, nil, err
 	}

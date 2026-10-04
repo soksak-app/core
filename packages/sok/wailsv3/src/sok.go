@@ -467,9 +467,6 @@ func watch(client *Client, params map[string]any, stdout io.Writer) error {
 type Options struct {
 	// Identifier 는 애플리케이션의 식별자이며 --config-dir 이 없을 때 설정 폴더 이름이고 경로 항목의 파일 이름이다.
 	Identifier string
-	// Former 는 옮기기 전 설정 폴더의 이름이다. 기본 설정 폴더를 쓰기 전에 그 폴더가 남아 있지 않은지 확인한다. 비어
-	// 있으면 확인하지 않는다(docs/spec/projects.md#persistence).
-	Former string
 	// PathsDir 는 경로 항목을 두는 폴더다(macOS 는 /etc/paths.d).
 	PathsDir string
 	// PathsError 는 이 운영체제에 경로 항목 폴더가 없는 까닭이다. 있으면 sok path 가 그 오류로 실패한다.
@@ -525,7 +522,7 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 		return err
 	}
 	if len(a.positionals) > 1 && (a.positionals[0] == "plugin" && a.positionals[1] != "pack" || a.positionals[0] == "registry" && a.positionals[1] == "use") {
-		return runPlugins(a, stdout, stderr, options)
+		return runPlugins(a, stdout, options)
 	}
 	if len(a.positionals) > 0 && a.positionals[0] == "registry" {
 		return runRegistry(a, stdout)

@@ -171,7 +171,6 @@ fn run(args: &[&str]) -> (i32, String, String) {
     let paths = PATHS.lock().expect("paths").clone();
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
-        former: None,
         paths_dir: Ok(&paths),
         core_version: "0.0.2",
     };
@@ -223,7 +222,6 @@ fn an_error_that_cannot_be_written_exits_with_status_3() {
     let paths = PATHS.lock().expect("paths").clone();
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
-        former: None,
         paths_dir: Ok(&paths),
         core_version: "0.0.2",
     };
@@ -679,7 +677,6 @@ fn path_entries_fail_where_the_operating_system_has_no_folder() {
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
-        former: None,
         paths_dir: Err("path entries are not implemented on linux".to_string()),
         core_version: "0.0.2",
     };

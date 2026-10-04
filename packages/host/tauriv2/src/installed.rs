@@ -26,7 +26,7 @@ struct InstalledPlugin {
 /// 켜진 설치 plugin 을 id 순서로 돌려준다. 설치 폴더는 설정 폴더에 대한 상대 경로로 기록되며, 형식 1 파일의 변환
 /// 보고는 애플리케이션 로그인 표준 오류에 쓴다(docs/spec/installation.md).
 fn enabled_plugins(config_dir: &Path) -> Result<(Vec<InstalledPlugin>, InstalledState), String> {
-    let state = soksak_sok::plugins::read_installed(config_dir, &mut std::io::stderr())?;
+    let state = soksak_sok::plugins::read_installed(config_dir)?;
     let mut plugins = vec![];
     for (id, plugin) in &state.plugins {
         if !plugin.enabled {

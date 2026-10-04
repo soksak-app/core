@@ -848,65 +848,6 @@ fn check_sidecar_folder(
     }
 }
 
-/// 0.0.2 가 절대 폴더로 쓴 형식 1 설치 상태를 형식 2 로 바꾼다. 각 path 는 그 절대 폴더가 끝나는 설치 규칙의 폴더가
-/// 되며, 그 폴더로 끝나지 않는 path 는 오류다(docs/spec/installation.md).
-pub(crate) fn convert_installed_format_1(value: &Value) -> Result<Value, String> {
-    let mut value = value.clone();
-    object(INSTALLED, Some(&value))?;
-    object(&format!("{INSTALLED} plugins"), value.get("plugins"))?;
-    object(&format!("{INSTALLED} sidecars"), value.get("sidecars"))?;
-    let relative = |at: &str,
-                    item: &mut Value,
-                    folder: &dyn Fn(&str) -> Result<String, String>|
-     -> Result<(), String> {
-        let Some(path) = text(item.get("path")).map(str::to_string) else {
-            return Err(format!("{at}: path must be an absolute folder"));
-        };
-        let Some((_, platform)) = path.rsplit_once('/') else {
-            return Err(format!("{at}: path must be an absolute folder"));
-        };
-        let want = folder(platform)?;
-        if !path.ends_with(&format!("/{want}")) {
-            return Err(format!(
-                "{at}: path {path} is not the installed folder {want}"
-            ));
-        }
-        item["path"] = Value::String(want);
-        Ok(())
-    };
-    let ids: Vec<String> = sorted_keys(value["plugins"].as_object().expect("checked object"))
-        .into_iter()
-        .cloned()
-        .collect();
-    for id in ids {
-        let at = format!("{INSTALLED} {id}");
-        object(&at, value["plugins"].get(&id))?;
-        let item = &mut value["plugins"][&id];
-        let version = check_version(&format!("{at} version"), item.get("version"))?.to_string();
-        relative(&at, item, &|_| plugin_install_path(&id, &version))?;
-    }
-    let names: Vec<String> = sorted_keys(value["sidecars"].as_object().expect("checked object"))
-        .into_iter()
-        .cloned()
-        .collect();
-    for name in names {
-        let at = format!("{INSTALLED} sidecar {name}");
-        object(&at, value["sidecars"].get(&name))?;
-        let item = &mut value["sidecars"][&name];
-        let version = check_version(&format!("{at} version"), item.get("version"))?.to_string();
-        relative(&at, item, &|platform| {
-            sidecar_install_path(&name, &version, platform)
-        })?;
-    }
-    value["format"] = Value::from(INSTALLED_FORMAT);
-    Ok(value)
-}
-
-/// 값이 형식 1 설치 상태인지.
-pub(crate) fn is_installed_format_1(value: &Value) -> bool {
-    value.is_object() && is_one(value.get("format"))
-}
-
 impl InstalledState {
     /// 아무것도 설치하지 않은 상태.
     pub fn empty() -> Self {

@@ -633,9 +633,6 @@ fn watch(
 pub struct Options<'a> {
     /// 애플리케이션의 식별자이며 --config-dir 이 없을 때 설정 폴더 이름이고 경로 항목의 파일 이름이다.
     pub identifier: &'a str,
-    /// 옮기기 전 설정 폴더의 이름. 기본 설정 폴더를 쓰기 전에 그 폴더가 남아 있지 않은지 확인한다. None 이면 확인하지
-    /// 않는다(docs/spec/projects.md#persistence).
-    pub former: Option<&'a str>,
     /// 경로 항목을 두는 폴더(macOS 는 /etc/paths.d). 이 운영체제에 그런 폴더가 없으면 그 까닭이며, sok path 가
     /// 그 오류로 실패한다.
     pub paths_dir: Result<&'a Path, String>,
@@ -650,7 +647,7 @@ pub fn run(
     stderr: &mut dyn Write,
     options: &Options,
 ) -> i32 {
-    let result = execute(args, stdout, stderr, options);
+    let result = execute(args, stdout, options);
     // 표준 오류에 오류를 쓰지 못하면 알릴 곳이 없으므로 종료 상태 3 으로 알린다(docs/spec/cli.md).
     let (written, status) = match result {
         Ok(()) => return 0,
@@ -675,7 +672,6 @@ pub(crate) fn config_dir_of(
     let base = platform::current()?
         .config_dir()
         .map_err(|error| format!("the default configuration directory is unknown: {error}"))?;
-    identity::check_former_config_dir(&base, options.former, options.identifier)?;
     Ok(base.join(options.identifier))
 }
 
@@ -685,12 +681,7 @@ fn connect_to(values: &HashMap<String, String>, options: &Options) -> Result<Cli
     Ok(Client::dial(&endpoint)?)
 }
 
-fn execute(
-    args: &[String],
-    stdout: &mut dyn Write,
-    stderr: &mut dyn Write,
-    options: &Options,
-) -> Result<(), Error> {
+fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result<(), Error> {
     // 점이 있는 명령 단어는 선언된 command 다(docs/spec/cli.md).
     if command::command_word(args).is_some_and(|word| word.contains('.')) {
         return command::run_command(args, stdout, options);
@@ -707,7 +698,7 @@ fn execute(
     if matches!(first_two, (Some("plugin"), Some(action)) if action != "pack")
         || first_two == (Some("registry"), Some("use"))
     {
-        return plugins::run_plugins(&a.positionals, &a.values, stdout, stderr, options);
+        return plugins::run_plugins(&a.positionals, &a.values, stdout, options);
     }
     if a.positionals.first().map(String::as_str) == Some("registry") {
         return registry::run_registry(&a.positionals, stdout);

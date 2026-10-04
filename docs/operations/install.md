@@ -12,6 +12,6 @@ The applications are not signed with a Developer ID or notarized, so macOS refus
 
 Alternatively, remove the download quarantine in Terminal before the first start: `xattr -dr com.apple.quarantine /Applications/soksak.app`.
 
-On its first start the application installs the starter plugins from the public registry `https://soksak-app.github.io/registry/index.json` ([first run](../spec/installation.md#first-run)). A version up to 0.0.2 kept its data in `com.soksak.wails` or `com.soksak.tauri`; the first start moves that folder once.
+On its first start the application installs the starter plugins from the public registry `https://soksak-app.github.io/registry/index.json` ([first run](../spec/installation.md#first-run)).
 
 To use the command line of an application from a shell, run its `sok path install` with administrator rights: `sudo /Applications/soksak.app/Contents/MacOS/sok path install` ([command line](../spec/cli.md)).

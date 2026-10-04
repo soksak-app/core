@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
@@ -53,7 +52,7 @@ func NewPlugins(configDir string, changed func(PluginsChanged)) (*Plugins, error
 
 // State 는 registry 주소, 검사한 index, 설치 상태를 돌려준다.
 func (p *Plugins) State() (*sok.PluginsState, error) {
-	return sok.ReadPluginsState(p.configDir, os.Stderr)
+	return sok.ReadPluginsState(p.configDir)
 }
 
 // Run 은 sok plugin <action> <plugin> 과 같은 작업을 실행하고 그 출력을 돌려준다.
@@ -70,7 +69,7 @@ func (p *Plugins) Run(request PluginsRunRequest) (any, error) {
 	if !p.running.TryLock() {
 		return nil, errPluginOperationRunning
 	}
-	result, err := sok.RunPluginAction(p.configDir, request.Action, plugin, p.core, p.platform, os.Stderr)
+	result, err := sok.RunPluginAction(p.configDir, request.Action, plugin, p.core, p.platform)
 	p.running.Unlock()
 	if err != nil {
 		return nil, err

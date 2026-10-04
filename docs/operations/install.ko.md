@@ -12,6 +12,6 @@
 
 또는 첫 시작 전에 Terminal에서 받은 파일의 격리 표시를 지운다: `xattr -dr com.apple.quarantine /Applications/soksak.app`.
 
-첫 시작에서 애플리케이션은 공개 registry `https://soksak-app.github.io/registry/index.json`에서 시작 plugin을 설치한다([첫 실행](../spec/installation.ko.md#첫-실행)). 0.0.2까지의 버전은 데이터를 `com.soksak.wails`나 `com.soksak.tauri`에 두었고, 첫 시작이 그 폴더를 한 번 옮긴다.
+첫 시작에서 애플리케이션은 공개 registry `https://soksak-app.github.io/registry/index.json`에서 시작 plugin을 설치한다([첫 실행](../spec/installation.ko.md#첫-실행)).
 
 shell에서 애플리케이션의 command line을 쓰려면 그 `sok path install`을 관리자 권한으로 실행한다: `sudo /Applications/soksak.app/Contents/MacOS/sok path install`([command line](../spec/cli.ko.md)).

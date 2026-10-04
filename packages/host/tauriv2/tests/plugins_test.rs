@@ -15,7 +15,6 @@ fn sok_json(args: &[&str]) -> Value {
     let paths = tempfile::tempdir().unwrap();
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
-        former: None,
         paths_dir: Ok(paths.path()),
         core_version: soksak_sok::version::CORE_VERSION,
     };

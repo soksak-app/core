@@ -20,6 +20,6 @@ func main() {
 	}
 	paths, pathsErr := system.PathsDir()
 	// 식별자는 기본 설정 폴더와 경로 항목의 이름이다(docs/spec/projects.md#persistence).
-	identifier, former := sok.Identity()
-	os.Exit(sok.Run(os.Args[1:], os.Stdout, os.Stderr, sok.Options{Identifier: identifier, Former: former, PathsDir: paths, PathsError: pathsErr, CoreVersion: sok.CoreVersion}))
+	identifier := sok.Identity()
+	os.Exit(sok.Run(os.Args[1:], os.Stdout, os.Stderr, sok.Options{Identifier: identifier, PathsDir: paths, PathsError: pathsErr, CoreVersion: sok.CoreVersion}))
 }

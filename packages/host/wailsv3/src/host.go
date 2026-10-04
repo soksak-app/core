@@ -79,16 +79,11 @@ func Run(assets fs.FS, options Options) error {
 		return err
 	}
 	backgroundScript = string(background)
-	identifier, former := sok.Identity()
+	identifier := sok.Identity()
 	configDirectory := options.ConfigDir
-	// moved 는 이 시작이 옮긴 이전 설정 디렉터리다. 애플리케이션 로그를 연 뒤에 알린다.
-	moved := ""
 	if configDirectory == "" {
 		config, err := os.UserConfigDir()
 		if err != nil {
-			return err
-		}
-		if moved, err = sok.MoveFormerConfigDir(config, former, identifier); err != nil {
 			return err
 		}
 		configDirectory = filepath.Join(config, identifier)
@@ -129,12 +124,8 @@ func Run(assets fs.FS, options Options) error {
 	}
 	// 호스트의 줄은 두 호스트가 같은 형식으로 접두사 없이 쓴다. 시각은 실행의 첫 줄이 가진다.
 	log.SetFlags(0)
-	if moved != "" {
-		log.Printf("configuration directory moved from %s to %s", moved, configDirectory)
-	}
-	// 설치 상태는 process lock 을 잡고 애플리케이션 로그를 연 뒤에 읽는다. 형식 1 파일의 변환은 이 실행이 소유한
-	// 설정 디렉터리에만 쓰고, 그 보고는 애플리케이션 로그에 남는다(docs/spec/installation.md). 아직 endpoint.json 이
-	// 없으므로 sidecar 를 쓰는 요청은 오지 않는다.
+	// 설치 상태는 process lock 을 잡고 애플리케이션 로그를 연 뒤에 읽는다. 읽기 오류는 애플리케이션 로그에 남는다
+	// (docs/spec/installation.md). 아직 endpoint.json 이 없으므로 sidecar 를 쓰는 요청은 오지 않는다.
 	declarations, err := InstalledSidecars(configDirectory)
 	if err != nil {
 		return fmt.Errorf("installed plugins: %w", err)

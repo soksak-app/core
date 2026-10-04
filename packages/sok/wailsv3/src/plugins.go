@@ -31,9 +31,6 @@ func configDirOf(values map[string]string, options Options) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("the default configuration directory is unknown: %w", err)
 	}
-	if err := checkFormerConfigDir(base, options.Former, options.Identifier); err != nil {
-		return "", err
-	}
 	return filepath.Join(base, options.Identifier), nil
 }
 
@@ -161,8 +158,8 @@ type PluginsState struct {
 
 // ReadPluginsState 는 registry 주소, 검사한 index, 설치 상태를 읽는다. index 를 읽지 못하면
 // 그 오류를 index 자리에 담고, 설치 상태를 읽지 못하면 실패한다.
-func ReadPluginsState(configDir string, report io.Writer) (*PluginsState, error) {
-	installed, err := ReadInstalled(configDir, report)
+func ReadPluginsState(configDir string) (*PluginsState, error) {
+	installed, err := ReadInstalled(configDir)
 	if err != nil {
 		return nil, err
 	}
@@ -189,20 +186,20 @@ func ReadPluginsState(configDir string, report io.Writer) (*PluginsState, error)
 
 // RunPluginAction 은 sok plugin <action> <id> 와 같은 작업을 실행하고 그 출력을 돌려준다.
 // action 은 install, update, remove, enable, disable 중 하나다.
-func RunPluginAction(configDir, action, id, core, platform string, report io.Writer) (any, error) {
+func RunPluginAction(configDir, action, id, core, platform string) (any, error) {
 	switch action {
 	case "install", "update":
-		return InstallPlugin(configDir, id, core, platform, action == "update", report)
+		return InstallPlugin(configDir, id, core, platform, action == "update")
 	case "remove", "enable", "disable":
-		return ChangePlugin(configDir, id, action, report)
+		return ChangePlugin(configDir, id, action)
 	default:
 		return nil, fmt.Errorf("unknown plugin action %q", action)
 	}
 }
 
-// ReadInstalled 는 plugins/installed.json 을 읽는다. 파일이 없으면 아무것도 설치하지 않은 상태다. 형식 1 파일은 한 번
-// 형식 2 로 바꿔 저장하고 report 에 알린다(docs/spec/installation.md).
-func ReadInstalled(configDir string, report io.Writer) (*InstalledState, error) {
+// ReadInstalled 는 plugins/installed.json 을 읽는다. 파일이 없으면 아무것도 설치하지 않은 상태다. 현재 형식이 아닌
+// 파일은 오류다(docs/spec/installation.md).
+func ReadInstalled(configDir string) (*InstalledState, error) {
 	path := filepath.Join(configDir, Installed)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -215,25 +212,9 @@ func ReadInstalled(configDir string, report io.Writer) (*InstalledState, error) 
 	if err != nil {
 		return nil, fmt.Errorf("%s is not valid JSON: %w", path, err)
 	}
-	root, isObject := value.(map[string]any)
-	converted := isObject && isOne(root["format"])
-	if converted {
-		if value, err = convertInstalledFormat1(value); err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
-		}
-	}
 	state, err := ValidateInstalled(value)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	if !converted {
-		return state, nil
-	}
-	if err := writeInstalled(configDir, state); err != nil {
-		return nil, err
-	}
-	if _, err := fmt.Fprintf(report, "%s: converted format 1 to format 2\n", path); err != nil {
-		return nil, err
 	}
 	return state, nil
 }
@@ -350,12 +331,12 @@ func pluginResult(state *InstalledState, id string) map[string]any {
 }
 
 // InstallPlugin 은 plugin 의 고른 version 을 설치한다. update 가 참이면 설치된 plugin 만 받는다.
-func InstallPlugin(configDir, id, core, platform string, update bool, report io.Writer) (map[string]any, error) {
+func InstallPlugin(configDir, id, core, platform string, update bool) (map[string]any, error) {
 	index, err := readRegistry(configDir)
 	if err != nil {
 		return nil, err
 	}
-	state, err := ReadInstalled(configDir, report)
+	state, err := ReadInstalled(configDir)
 	if err != nil {
 		return nil, err
 	}
@@ -508,8 +489,8 @@ func pruneFolders(configDir string, state *InstalledState) error {
 }
 
 // ChangePlugin 은 설치된 plugin 을 지우거나 켜고 끈다.
-func ChangePlugin(configDir, id, action string, report io.Writer) (any, error) {
-	state, err := ReadInstalled(configDir, report)
+func ChangePlugin(configDir, id, action string) (any, error) {
+	state, err := ReadInstalled(configDir)
 	if err != nil {
 		return nil, err
 	}
@@ -538,7 +519,7 @@ func ChangePlugin(configDir, id, action string, report io.Writer) (any, error) {
 }
 
 // runPlugins 는 registry use 와 plugin install, update, remove, enable, disable, list 를 실행한다.
-func runPlugins(a arguments, stdout, stderr io.Writer, options Options) error {
+func runPlugins(a arguments, stdout io.Writer, options Options) error {
 	configDir, err := configDirOf(a.values, options)
 	if err != nil {
 		return err
@@ -563,7 +544,7 @@ func runPlugins(a arguments, stdout, stderr io.Writer, options Options) error {
 		}
 		result = map[string]string{"index": url}
 	case "plugin list":
-		state, err := ReadInstalled(configDir, stderr)
+		state, err := ReadInstalled(configDir)
 		if err != nil {
 			return err
 		}
@@ -576,7 +557,7 @@ func runPlugins(a arguments, stdout, stderr io.Writer, options Options) error {
 				return err
 			}
 		}
-		if result, err = RunPluginAction(configDir, a.positionals[1], a.positionals[2], options.CoreVersion, platform, stderr); err != nil {
+		if result, err = RunPluginAction(configDir, a.positionals[1], a.positionals[2], options.CoreVersion, platform); err != nil {
 			return err
 		}
 	default:
