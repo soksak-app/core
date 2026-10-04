@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, drag, fresh, open } from "./app.mjs";
+import { textDifference } from "./text-difference.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -120, dy: 0, ms: 48, times: 2 };
 
@@ -161,8 +162,11 @@ test("both hosts answer the same page the same way", async (t) => {
     const theirs = tauri.get(name).at(-1);
     // 간헐적인 차이를 분류할 수 있도록 실패 메시지에 두 호스트의 요청과 응답을 모두 적는다.
     const answers = `\nWails ${mine.request} -> ${mine.answer}\nTauri ${theirs.request} -> ${theirs.answer}`;
-    assert.equal(theirs.request, mine.request, `${name} was asked differently:${answers}`);
-    assert.equal(theirs.answer, mine.answer, `${name} was answered differently:${answers}`);
+    // 긴 요청은 메시지에서 잘리므로 처음 달라지는 자리를 먼저 밝힌다(F40).
+    assert.equal(theirs.request, mine.request,
+      `${name} was asked differently, Tauri ${textDifference(theirs.request, mine.request)} of Wails:${answers}`);
+    assert.equal(theirs.answer, mine.answer,
+      `${name} was answered differently, Tauri ${textDifference(theirs.answer, mine.answer)} of Wails:${answers}`);
   }
 });
 
