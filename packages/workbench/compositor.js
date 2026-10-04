@@ -149,6 +149,8 @@ function syncNativePaintClip(rects) {
   const rule = `body::before{clip-path:path("M0,0H${width}V${height}H0Z${holes}")}`;
   if (!paintClip) {
     paintClip = document.createElement("style");
+    // 모달 문서는 메인 문서의 스타일을 복사하지만 이 clip 은 복사하지 않는다(docs/spec/native-modals.md).
+    paintClip.dataset.nativePaintClip = "";
     document.head.appendChild(paintClip);
   }
   paintClip.textContent = rule;

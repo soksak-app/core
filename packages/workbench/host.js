@@ -66,8 +66,9 @@ function drawing(el) {
     title: el.getAttribute("aria-label") || "",
     className: el.className,
     html: el.innerHTML,
+    // 메인 문서의 native paint clip 은 메인 문서의 표면을 따르며, 대화상자 문서에 복사하지 않는다(docs/spec/native-modals.md).
     css: [...document.styleSheets]
-      .filter((sheet) => !document.adoptedStyleSheets.includes(sheet))
+      .filter((sheet) => !document.adoptedStyleSheets.includes(sheet) && !sheet.ownerNode?.hasAttribute("data-native-paint-clip"))
       .map((sheet) => [...sheet.cssRules].map((rule) => rule.cssText).join("\n"))
       .join("\n"),
     border: over(style.borderTopColor, style.backgroundColor),

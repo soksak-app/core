@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F40: the settings dialog no longer receives the native paint clip of the main document, which cut the native surface holes of the main page into the dialog scrim and made the two hosts send different dialog styles depending on the frame of the last commit.
 - F42: the page logs every error it shows when it shows it: the card surface status, the library error, the plugin status error, a failed plugin operation, a missing project folder and a library preview error now write `error: <where>: <text>`, so a window check judges an error that the next draw removes.
 - F38: a window without a focused card, such as the library before a space opens, has the frame as its text size scope; the text size commands failed there with `text size card undefined is not in the layout`.
 - F36: the space row, the left project column and the first row take their frame-factored size in whole pixels, so the plane stays on the device pixel grid and the host seats native surfaces where the page declares them; at factor 1.1 they differed by half a pixel. A failed V7b names the surface and both rectangles.

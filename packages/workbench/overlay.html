@@ -77,11 +77,10 @@
       document.head.insertAdjacentHTML("beforeend", `<style>
         html, body { margin: 0; padding: 0; height: 100%; background: transparent !important }
         /* 복사한 workbench 시트의 body::before 배경은 메인 문서 전용이다. 네이티브
-           모달 문서에서는 backing을 가리지 않도록 제거한다. */
+           모달 문서에서는 backing을 가리지 않도록 제거한다. 메인 문서의 native paint clip 은
+           메인 문서가 복사에서 뺀다(docs/spec/native-modals.md). */
         body::before {
-          background: transparent !important;
-          -webkit-mask-image: none !important;
-          mask-image: none !important
+          background: transparent !important
         }
         body[data-mode="dialog"]::before {
           content: ""; position: fixed; inset: 0; z-index: 0;
