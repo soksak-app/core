@@ -1421,6 +1421,17 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F72",
+    implementation: [
+      { file: "e2e/package.json", symbol: "verify:shutdown" },
+    ],
+    tests: [
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "Every standalone window check script has a declared entry point.",
+    levels: ["application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

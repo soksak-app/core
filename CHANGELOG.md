@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F72: `pnpm -F @soksak/e2e run verify:shutdown` runs the quit lifecycle check, and two window check probes that nothing ran are removed.
 - F25.1: the window check harness is the package `@soksak/window-check`; the application executables are declared by `SOKSAK_BINARY_WAILSV3` and `SOKSAK_BINARY_TAURIV2`, which core's `e2e/setup.mjs` takes from the cargo target directory.
 - Validation: the thirteenth full window run of 2026-10-05 (eb707869, macOS 26.6.2 arm64) passed 334 of 344 checks. A person used Safari during the run, which caused the Wails pointer refusal, the failed activation and the changed frontmost baseline. Load failures at load average 58 to 93 on 11 processors: recording gaps of 109 to 242ms, the alignment timing (161.7ms against 33.3ms) and 20 of 21 divider frames. The remaining failure is F71.
 - F69: a window check request that does not answer within its limit records the host's threads at that moment with `sample` and names the file in its error.

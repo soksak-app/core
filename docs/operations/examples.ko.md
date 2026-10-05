@@ -32,7 +32,7 @@ make wailsv3-build tauriv2-build
 
 `make parity-check`로 구조 목록 게이트를 실행한다. 언어별 고정 루트 없이 Git에 보이는 JS/TS·Rust·Go·Objective-C·네이티브 헤더·HTML/CSS·셸 스크립트·계약 선언·빌드 매니페스트를 발견한다. 생성된 라이브러리 출력·Tauri 스키마는 명시적 제외 사유를 갖고 소스/출력 일치는 별도 빌드 검사로 유지한다. 연결 없는 구현·테스트, 빈 패턴, 중복 소유는 실패한다. 테스트 공유를 이유로 구현 중복 소유를 허용하지 않는다.
 
-`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`와 `make go-format-check`를 실행한다. `make go-format-check`는 `gofmt`가 바꿀 추적 Go file을 모두 나열하고 실패한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 60개, 구현 파일 370개, 테스트 파일 407개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
+`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`와 `make go-format-check`를 실행한다. `make go-format-check`는 `gofmt`가 바꿀 추적 Go file을 모두 나열하고 실패한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 60개, 구현 파일 370개, 테스트 파일 405개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
 
 `pnpm test`는 패키지 검사 전에 감사·체크리스트·명령 감독 자체 검사를 실행한다. Rust 터미널 패키지 두 개는 실제 Cargo 검사를 호출한다. 패키지 명령 검사는 Cargo를 실패 fixture로 교체해 호출·실패 전달을 검증하며 엔진 동작 검사로 세지 않는다.
 
@@ -191,6 +191,8 @@ make -C native/darwin test-activation
 추적 `capture-still.test.mjs`는 정지 파일의 장치 픽셀 크기·투명도와 선언된 네이티브 좌표의 경계 픽셀을 확인한다. `png.test.mjs`는 PNG 투명도와 잘못된 좌표·디코딩 길이 검사를 소유한다. 이는 출력 무결성 검증이며 제스처 완전성·표시 시간은 계속 녹화 프레임으로 검증한다. 네이티브 모달의 capture는 `host.window`가 `modal.shown`을 알린 뒤 `host.window.presented`를 기다린다. `core.settings-modal`의 `open` 같은 페이지 상태는 메인 페이지의 상태이고 모달 webview의 첫 렌더보다 앞서므로, 그 뒤에 찍은 still에는 모달이 없는 창이 보일 수 있다. `modal.test.mjs`는 표시 시각 이후 녹화된 모든 프레임에 설정 scrim이 보이는지 확인한다.
 
 `SOKSAK_PERFORMANCE_TRACE=1`은 모든 check 준비(`fresh()`)에서 performance trace를 켜고, terminal readiness가 실패하면 그 준비가 시작된 뒤 기록된 surface 등록 timeline을 보고한다. 다른 값은 거부한다. trace는 timing을 바꾸므로, trace를 켜면 사라지는 실패는 trace 없는 재현이 따로 필요하다.
+
+`SOKSAK_APP=<wailsv3|tauriv2> pnpm -F @soksak/e2e run verify:shutdown`은 `SOKSAK_APP`이 고른 실행 중인 host 하나에서 선언된 종료 생명주기(`host.quit`의 `command.run`)를 검사한다. host가 끝나므로 단독으로 실행하고 그 뒤 host를 다시 시작한다(`e2e/normal-shutdown.mjs`).
 
 `pnpm -F @soksak/e2e run repeat --file <파일> --name <검사 이름 패턴> --count <n>`은 실행 중인 앱에 창 검사 하나를 반복 실행한다(`SOKSAK_APP`으로 호스트 하나를 고른다). 실행마다 새 `node:test` 프로세스를 쓰며, 처음 실패한 실행에서 멈춰 그 출력을 보이고, 실행된 검사가 없으면 실패한다. `make -C native/darwin repeat TEST=<name>_test COUNT=<n>`은 기본 검사 하나를, `make -C native/darwin repeat-suite COUNT=<n>`은 기본 스위트를 반복 실행한다. 둘 다 첫 실패에서 멈추고 실행 번호와 시스템 부하를 보고한다. `make rust-tests-alone PACKAGE=<package> [MANIFEST=<Cargo.toml>]`은 Rust 패키지의 각 테스트를 새 프로세스에서 혼자 실행하고, 혼자 실행할 때 실패하는 첫 테스트를 보고한다. 다른 테스트가 실행된 뒤에만 통과하는 테스트는 공유 상태나 시간 순서에 의존한다. `make rust-repeat PACKAGE=<package> COUNT=<n> [TEST=<name>] [MANIFEST=<Cargo.toml>]`은 Rust 패키지의 테스트, 또는 `TEST`로 이름을 준 테스트 하나를 `COUNT`번 차례로 실행한다. 첫 실패한 실행에서 멈춰 그 출력, 실행 번호, 시스템 부하를 보고하고, `TEST`가 어떤 테스트도 가리키지 않으면 실패한다. `make go-repeat PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>]`는 Go 테스트에 대해 같은 일을 하며, `TEST`는 `go test -run` 패턴이다. `make node-repeat FILE=<test file> NAME=<test name pattern> COUNT=<n>`은 저장소 루트에서 Node 테스트 파일의 맞는 테스트를 같은 방식으로 실행하고, 맞는 테스트가 없으면 실패한다.
 
