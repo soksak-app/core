@@ -1383,6 +1383,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F68",
+    implementation: [
+      { file: "packages/host/wailsv3/src/webkit_children.go", symbol: "func WriteWebKitRecord" },
+      { file: "packages/host/tauriv2/src/webkit_children.rs", symbol: "pub fn write_record" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/webkit_children_test.go", id: "TestConcurrentWebKitRecordWritesAllSucceed" },
+      { file: "packages/host/tauriv2/tests/webkit_children_test.rs", id: "concurrent_webkit_record_writes_all_succeed" },
+    ],
+    expected: "Concurrent WebKit child record writes all succeed on both hosts.",
+    levels: ["unit"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

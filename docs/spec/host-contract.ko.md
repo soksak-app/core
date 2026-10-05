@@ -348,6 +348,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.persistent.invalid-event-fails-the-connection` | JSON 객체가 아닌 service 줄이나 문자열 `surface`가 없는 surface event는 연결을 닫고 보낸 surface에 `invalid message: ...`와 함께 `sidecar-failure`를 보낸다. 다음 전송은 다시 연결한다. | both |
 | `webkit-children.reap.requires-alive-webkit-same-start` | 기록된 WebKit 자식은 살아 있고, 여전히 WebKit 프로세스이며, 시작 시각이 기록과 같을 때만 죽는다. | both |
 | `webkit-children.record.owner-only` | 갱신이 쓰는 WebKit 자식 기록은 mode 0600이다. | both |
+| `webkit-children.record.concurrent-refreshes` | 동시에 실행된 기록 쓰기는 모두 성공하고 임시 파일을 남기지 않는다. | both |
 | `surface-activation.owner.resolves-registered-view` | 등록된 네이티브 뷰는 그 표면 id로 해석된다. | both |
 | `surface-activation.owner.ignores-unknown-view` | 등록되지 않은 네이티브 뷰는 표면으로 해석되지 않는다. | both |
 | `surface-activation.owner.ignores-empty-owner` | 빈 표면 id로 등록된 뷰는 표면으로 해석되지 않는다. | both |

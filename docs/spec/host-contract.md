@@ -348,6 +348,7 @@ Items:
 | `sidecars-transport.persistent.invalid-event-fails-the-connection` | A service line that is not a JSON object or a surface event without a string `surface` closes the connection and delivers `sidecar-failure` with `invalid message: ...` to the surface that sent; the next send reconnects. | both |
 | `webkit-children.reap.requires-alive-webkit-same-start` | A recorded WebKit child is killed only when it is alive, still a WebKit process, and its start time matches the record. | both |
 | `webkit-children.record.owner-only` | The record of the WebKit children that a refresh writes has mode 0600. | both |
+| `webkit-children.record.concurrent-refreshes` | Record writes that run at the same time all succeed and leave no temporary file. | both |
 | `surface-activation.owner.resolves-registered-view` | A registered native view resolves to its surface id. | both |
 | `surface-activation.owner.ignores-unknown-view` | An unregistered native view resolves to no surface. | both |
 | `surface-activation.owner.ignores-empty-owner` | A view registered with an empty surface id resolves to no surface. | both |

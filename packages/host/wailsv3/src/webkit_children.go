@@ -143,24 +143,36 @@ func RefreshWebKitChildren(config string) {
 			}
 		}
 	}
-	temporary := target + ".new"
 	bytes, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
 		LogError("webkit children record", err)
 		return
 	}
+	if err := WriteWebKitRecord(target, bytes); err != nil {
+		LogError("webkit children record", err)
+	}
+}
+
+// recordWrites 는 기록 쓰기를 하나씩 실행한다. 페이지 적재 알림은 창마다 다른 goroutine 에서 오므로 두 쓰기가
+// 같은 .new 파일을 쓰면 먼저 이름을 바꾼 쓰기가 다른 쓰기의 파일을 가져가고 나머지 이름 바꾸기가 실패한다(F68).
+var recordWrites sync.Mutex
+
+// WriteWebKitRecord 는 기록 파일 target 을 bytes 로 원자적으로 교체한다. 옆의 .new 파일에 쓰고 이름을 바꾼다.
+func WriteWebKitRecord(target string, bytes []byte) error {
+	recordWrites.Lock()
+	defer recordWrites.Unlock()
 	system, err := platform.Current()
 	if err != nil {
-		LogError("webkit children record", err)
-		return
+		return err
 	}
+	temporary := target + ".new"
 	if err := system.WritePrivateFile(temporary, bytes); err != nil {
-		LogError("webkit children record", fmt.Sprintf("write: %v", err))
-		return
+		return fmt.Errorf("write: %w", err)
 	}
 	if err := os.Rename(temporary, target); err != nil {
-		LogError("webkit children record", fmt.Sprintf("rename: %v", err))
+		return fmt.Errorf("rename: %w", err)
 	}
+	return nil
 }
 
 func recordPath(config string) string {

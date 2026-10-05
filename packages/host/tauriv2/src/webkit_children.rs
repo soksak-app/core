@@ -12,6 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::sync::OnceLock;
 
 /// 기록 파일 이름. 설정 디렉터리의 뿌리에 둔다.
@@ -138,19 +139,29 @@ pub fn refresh(config: &Path) {
             }
         }
     }
-    let temporary: PathBuf = target.with_extension("json.new");
     match serde_json::to_vec_pretty(&record)
         .map_err(|e| e.to_string())
-        .and_then(|bytes| {
-            crate::platform::current()?
-                .write_private_file(&temporary, &bytes)
-                .map_err(|e| format!("write {e}"))
-        })
-        .and_then(|()| std::fs::rename(&temporary, &target).map_err(|e| format!("rename: {e}")))
+        .and_then(|bytes| write_record(&target, &bytes))
     {
         Ok(()) => {}
         Err(error) => crate::application_log::log_error("webkit children record", error),
     }
+}
+
+/// 기록 쓰기를 하나씩 실행한다. 두 쓰기가 같은 .new 파일을 쓰면 먼저 이름을 바꾼 쓰기가 다른 쓰기의 파일을
+/// 가져가고 나머지 이름 바꾸기가 실패한다(F68).
+static RECORD_WRITES: Mutex<()> = Mutex::new(());
+
+/// 기록 파일 target 을 bytes 로 원자적으로 교체한다. 옆의 .new 파일에 쓰고 이름을 바꾼다.
+pub fn write_record(target: &Path, bytes: &[u8]) -> Result<(), String> {
+    let _turn = RECORD_WRITES
+        .lock()
+        .map_err(|_| "webkit children record writes: a writer panicked".to_string())?;
+    let temporary: PathBuf = target.with_extension("json.new");
+    crate::platform::current()?
+        .write_private_file(&temporary, bytes)
+        .map_err(|e| format!("write: {e}"))?;
+    std::fs::rename(&temporary, target).map_err(|e| format!("rename: {e}"))
 }
 
 fn record_path(config: &Path) -> PathBuf {
