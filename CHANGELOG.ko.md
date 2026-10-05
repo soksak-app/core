@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F66.2: settings와 menu dialog 문서는 내용을 제자리에서 갱신한다. 같은 종류와 명령의 node는 문서에 남고 바뀐 속성, 글, 값만 정해지므로, 누름과 뗌 사이의 갱신이 더는 click을 잃지 않는다.
 - F66.1: library는 render 사이에 바뀌지 않은 project card와 plugin card, 그 control을 문서에 두고 순서가 틀린 요소만 옮기므로, 누름과 뗌 사이의 render가 더는 click을 잃지 않는다.
 - 검증: 2026-10-05의 열한 번째 전체 window 실행(core a3498ed4, terminal service b9b46c4, terminal plugin dfd2858, macOS 26.6.2 arm64)은 검사 344개 중 339개를 통과했다. `native content, cards, and the sidebar rail stay aligned`는 11개 processor의 load average 27에서 42에서 최악 frame 한도 33.3ms에 대해 64.8ms(Wails)와 44.1ms(Tauri)로 두 host에서 실패했고 이는 load다. 나머지 실패는 F43, F64, F65다.
 - F65: card header 그리기는 sidebar 접기 control을 순서가 틀릴 때만 옮긴다(`packages/workbench/plane.js`의 `drawSideToggles`). 이전에는 card 도구 바로 앞의 control을 뺀 모든 보이는 control을 `insertBefore`로 옮겼고, 이는 control을 먼저 문서에서 빼며, WebKit은 node가 문서에서 빠진 누름에 `click`을 보내지 않는다. 열한 번째 전체 window 실행은 Wails에서 앞선 접기의 그리기가 누름과 뗌 사이에 실행되어 header click이 접힌 왼쪽 sidebar를 열지 않은 것을 기록했다. 이 규칙은 exposure 명세에 적었다. 검증: `a draw keeps the pressed card header fold control in the document`(`packages/workbench/test/plane-side-toggles.test.mjs`)가 변경 전에는 뺀 control `["top", "left"]`로 실패했고 변경 뒤 통과한다. workbench 검사 301개가 통과한다.

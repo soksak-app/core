@@ -31,6 +31,7 @@
   import { onAnswer, onGripDrag, showValue } from "./card.js";
   import { modalOrder } from "./modal-order.js";
   import { restoreScroll, scrollPositions } from "./scroll-keep.js";
+  import { updateContent } from "./overlay-content.js";
 
   followTheme().then(report);
 
@@ -102,7 +103,7 @@
     root.setAttribute("aria-label", title);
     // 같은 내용을 다시 그리면 그 스크롤 위치를 유지한다. 다른 내용은 data-scroll-key 가 달라 위에서 시작한다.
     const positions = scrollPositions(root);
-    root.innerHTML = html;
+    updateContent(root, html);
     root.style.borderColor = border;
     // 새 위치가 없으면 이미 적용한 위치를 유지한다.
     const at = card ?? pendingCard;

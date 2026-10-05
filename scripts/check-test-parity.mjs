@@ -1345,6 +1345,32 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F66.2",
+    implementation: [
+      { file: "packages/workbench/overlay-content.js", symbol: "export function updateContent" },
+      { file: "packages/workbench/overlay.html", symbol: "updateContent(root, html)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/overlay-content.test.mjs", id: "an update keeps the controls of the dialog in the document and applies the changed values" },
+      { file: "packages/workbench/test/overlay-content.test.mjs", id: "an update replaces an element whose kind or command changed" },
+    ],
+    expected: "A dialog content update keeps unchanged controls in the document and applies only the changes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F66",
+    implementation: [
+      { file: "packages/workbench/library.js", symbol: "function place(parent, nodes)" },
+      { file: "packages/workbench/overlay-content.js", symbol: "export function updateContent" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/library-redraw.test.mjs", id: "a library render keeps the controls of unchanged project cards in the document" },
+      { file: "packages/workbench/test/overlay-content.test.mjs", id: "an update keeps the controls of the dialog in the document and applies the changed values" },
+    ],
+    expected: "No redraw of core takes an unchanged control out of the document.",
+    levels: ["unit"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

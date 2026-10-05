@@ -28,6 +28,7 @@
     "surface-status.js",
     "modal-order.js",
     "scroll-keep.js",
+    "overlay-content.js",
     "environment.js",
     "installed-plugins.js",
     "surface-exposure.js",
