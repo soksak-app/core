@@ -1442,6 +1442,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F75",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) Declare(" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn declare(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestDeclaringAddsSidecarsInstalledAfterTheStart" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "declaring_adds_sidecars_installed_after_the_start" },
+    ],
+    expected: "A plugin that the first run installs starts its sidecars without a restart in both hosts.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

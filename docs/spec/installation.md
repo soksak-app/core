@@ -81,7 +81,7 @@ Both hosts serve these paths from the configuration directory and read `plugins/
 
 The workbench imports `/installed-plugins.json` as a JSON module, registers each plugin from its `manifest`, and fails the load with the `error` text when the document has one.
 
-When a host starts, it reads the sidecars that the `dependencies` of the `plugin.json` of each enabled installed plugin name, in name order. A sidecar runs from the `path` that `installed.json` records for it, and its executable is the `executable` path of the `sidecar.json` in that folder. A plugin installed or enabled while the application runs is served to pages that load after the change, and its sidecars start after the application restarts.
+When a host starts, it reads the sidecars that the `dependencies` of the `plugin.json` of each enabled installed plugin name, in name order. A sidecar runs from the `path` that `installed.json` records for it, and its executable is the `executable` path of the `sidecar.json` in that folder. A plugin installed or enabled while the application runs is served to pages that load after the change: a `pluginsRun` install, update or enable that succeeds declares the sidecars of the enabled installed plugins that the host has not declared yet, so a page that loads after it, such as the page that the first run reloads, starts them. A sidecar that the host has declared keeps its folder until the application restarts.
 
 ## Plugin operations in the application
 
@@ -94,7 +94,7 @@ Both hosts run plugin operations with the installer library of their command lin
 | `pluginsUseRegistry({ index })` | Sets the registry index as `sok registry use <index>` does and returns its output `{ index }`; an `index` that is not a non-empty string rejects with `index must be a non-empty string` |
 | `plugins-changed` | Sent to every window after `pluginsRun` changed `installed.json`, with `{ action, plugin }` |
 
-A host runs one operation at a time: a `pluginsRun` call while another runs rejects with `another plugin operation is running`. A host does not observe changes that a `sok` process makes; the next `pluginsState` call and pages that load later read them. A change takes effect when the application restarts: the windows that are open keep the plugins they loaded, and sidecars start only at startup. The browser application has no host, so it has no plugin operations.
+A host runs one operation at a time: a `pluginsRun` call while another runs rejects with `another plugin operation is running`. A host does not observe changes that a `sok` process makes; the next `pluginsState` call and pages that load later read them. A change takes effect when the application restarts: the windows that are open keep the plugins they loaded. The browser application has no host, so it has no plugin operations.
 
 ## Plugin screen
 

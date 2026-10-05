@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F75: a plugin that the first run installs starts its sidecars without a restart; both hosts declare the sidecars of a successful install, update or enable at once.
 - F74: `make hosts-check` no longer compiles the Tauri host for Windows, which needed llvm-mingw and failed every GitHub CI run of core; `windows-build-check` still vets the Wails host for Windows.
 - Validation: the fourteenth full window run of 2026-10-05 (c2f21e69, apps eb707869, macOS 26.6.2 arm64) passed 338 of 344 checks. Load failures at load average 93 to 118 on 11 processors: `native content, cards, and the sidebar rail stay aligned` on both hosts (worst 245.0ms and 160.4ms against 33.3ms) and the Tauri maximise settling (225ms against 150ms). The Tauri page stall of F69 failed `the application log file holds the lines the page reports` and, through its undeclared `exposure reply does not match a pending request`, `a page reload loses no host reply`; the Tauri recording stop of F73 failed `a new window shows its complete first screen from its first frame`.
 - F69: a stalled request also records the page's WebContent processes, including a request that the host ends because the page did not reply.

@@ -304,6 +304,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | 선언된 사이드카가 없으면 생성은 성공하고 모든 보내기는 "not declared by any plugin"으로 실패한다. | both |
 | `sidecars.start.fails-on-missing-executable` | 디스크에 없는 선언된 실행 파일은 첫 보내기를 사이드카 이름과 함께 실패시킨다. | both |
 | `sidecars.declaration.fails-on-missing-sidecar-json` | sidecar.json이 없는 설치 sidecar 폴더는 그 경로와 함께 설치 sidecar 찾기를 실패시킨다. | both |
+| `sidecars.declaration.adds-sidecars-installed-after-start` | 생성 뒤에 설치 sidecar를 선언하면 선언되지 않은 것을 더하므로 그 sidecar로의 보내기가 그것을 시작하고, 이미 선언한 sidecar의 폴더는 유지한다. | both |
 | `sidecars.declaration.rejects-executable-escaping-package` | 패키지 밖의 실행 파일 경로는 생성을 실패시킨다. | both |
 | `sidecars.declaration.rejects-absolute-executable` | 절대 실행 파일 경로는 생성을 실패시킨다. | both |
 | `sidecars.declaration.rejects-unsupported-protocol` | 지원하지 않는 프로토콜 버전은 생성을 실패시킨다. | both |

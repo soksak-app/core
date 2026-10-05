@@ -258,6 +258,44 @@ fn a_missing_executable_fails() {
     assert!(error.contains(&format!("sidecar {ECHO}")), "{error}");
 }
 
+// contract: sidecars.declaration.adds-sidecars-installed-after-start
+#[test]
+fn declaring_adds_sidecars_installed_after_the_start() {
+    let directory = tempfile::tempdir().unwrap();
+    let record = directory.path().join("requests");
+    let program = directory.path().join("echo");
+    std::fs::write(&program, format!("#!/bin/sh\ntee {}\n", record.display())).unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut sidecars = create(&Vec::new(), directory.path()).unwrap();
+    sidecars.stop_timeout = STALL;
+    let (window, events) = owner("a", "/projects/a");
+    let error = sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err();
+    assert!(error.contains("is not declared by any plugin"), "{error}");
+    sidecars
+        .declare(&declare(
+            &files(r#"{"executable":"echo","protocol":1}"#),
+            directory.path(),
+        ))
+        .unwrap();
+    // 이미 선언한 sidecar 는 다른 폴더의 선언으로 바뀌지 않는다.
+    let other = tempfile::tempdir().unwrap();
+    sidecars
+        .declare(&declare(
+            &files(r#"{"executable":"absent","protocol":1}"#),
+            other.path(),
+        ))
+        .unwrap();
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    let event = events.recv_timeout(STALL).unwrap();
+    assert_eq!(
+        (event.surface.as_str(), event.body.get()),
+        ("s1", r#"{"operation":"open"}"#)
+    );
+    sidecars.stop();
+}
+
 // contract: sidecars.declaration.rejects-executable-escaping-package
 #[test]
 fn an_executable_outside_the_package_fails() {

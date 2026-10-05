@@ -341,6 +341,38 @@ func TestMissingSidecarExecutableFails(t *testing.T) {
 	}
 }
 
+// contract: sidecars.declaration.adds-sidecars-installed-after-start
+func TestDeclaringAddsSidecarsInstalledAfterTheStart(t *testing.T) {
+	directory := t.TempDir()
+	record := filepath.Join(directory, "requests")
+	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ntee "+record+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sidecars, err := host.NewSidecars(nil, directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecars.StopTimeout = stall
+	owner := newFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "is not declared by any plugin") {
+		t.Fatalf("send before the declaration = %v", err)
+	}
+	if err := sidecars.Declare(declare(directory, `{"executable":"echo","protocol":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	// 이미 선언한 sidecar 는 다른 폴더의 선언으로 바뀌지 않는다.
+	if err := sidecars.Declare(declare(t.TempDir(), `{"executable":"absent","protocol":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if event := owner.next(t); event.Surface != "s1" || string(event.Body) != `{"operation":"open"}` {
+		t.Fatalf("event = %+v", event)
+	}
+	sidecars.Stop()
+}
+
 // contract: sidecars.declaration.rejects-executable-escaping-package, sidecars.declaration.rejects-absolute-executable, sidecars.declaration.rejects-unsupported-protocol, sidecars.declaration.rejects-unknown-transport, sidecars.declaration.persistent-requires-config-directory
 func TestInvalidSidecarDeclarationsFail(t *testing.T) {
 	cases := map[string]struct {

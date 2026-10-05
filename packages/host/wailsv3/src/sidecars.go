@@ -119,10 +119,13 @@ type SidecarOwner interface {
 
 // Sidecars 는 애플리케이션 하나의 사이드카 프로세스와 표면 소유 창을 관리한다.
 type Sidecars struct {
-	mu         sync.Mutex
-	declared   map[string]string
-	persistent map[string]bool
-	running    map[string]*sidecar
+	mu sync.Mutex
+	// declarations 는 declared, persistent, basenames 를 보호한다. 설치가 실행 중에 선언을 더하고 시작은 c.mu 밖에서
+	// 실행 파일을 읽으므로 c.mu 와 따로 둔다.
+	declarations sync.RWMutex
+	declared     map[string]string
+	persistent   map[string]bool
+	running      map[string]*sidecar
 	// starting 은 시작 중인 사이드카다. 시작은 잠금 밖에서 하며, 끝나면 그 채널을 닫는다.
 	starting map[string]chan struct{}
 	// closing 은 사이드카마다 closed 를 보냈고 답을 받지 않은 표면이다.
@@ -137,7 +140,9 @@ type Sidecars struct {
 	// unannouncedLoss 는 연결이 끊겼고 아직 소유 표면에 알리지 않은 영속 사이드카다(V5-106).
 	// 끊김을 알린 시작이 이 기록을 소진한다 — 첫 시작은 알림이 없다.
 	unannouncedLoss map[string]bool
-	StopTimeout     time.Duration // 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
+	// basenames 는 영속 sidecar 실행 파일의 basename 과 그 sidecar 이름이다.
+	basenames   map[string]string
+	StopTimeout time.Duration // 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
 	// ReadyTimeout 은 새로 시작한 영속 service 가 endpoint 를 출력하기까지의 상한이다. 기본값 30초. 테스트가 주입한다.
 	ReadyTimeout time.Duration
 	// RetainSending 은 Retain 이 서비스를 준비한 뒤 retain 을 보내기 전에 서비스 이름으로 호출된다. 검사가 그 사이에
@@ -166,6 +171,7 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		owners:          map[string]SidecarOwner{},
 		roots:           map[string]string{},
 		unannouncedLoss: map[string]bool{},
+		basenames:       map[string]string{},
 		StopTimeout:     5 * time.Second,
 		ReadyTimeout:    30 * time.Second,
 	}
@@ -181,7 +187,17 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		}
 		c.configDir = config
 	}
-	basenames := map[string]string{}
+	if err := c.Declare(declarations); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// Declare 는 아직 선언하지 않은 sidecar 를 더한다. 이미 선언한 sidecar 는 애플리케이션을 다시 시작할 때까지 그 폴더를
+// 유지한다(docs/spec/installation.md#serving-installed-plugins). 선언의 형식이 틀리면 실패한다.
+func (c *Sidecars) Declare(declarations []SidecarDeclaration) error {
+	c.declarations.Lock()
+	defer c.declarations.Unlock()
 	for _, item := range declarations {
 		name := item.Name
 		if _, known := c.declared[name]; known {
@@ -194,34 +210,42 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 			Transport  string `json:"transport"`
 		}
 		if err := json.Unmarshal(item.Data, &declared); err != nil {
-			return nil, fmt.Errorf("%s: %w", file, err)
+			return fmt.Errorf("%s: %w", file, err)
 		}
 		if declared.Executable == "" || path.IsAbs(declared.Executable) ||
 			strings.Contains("/"+declared.Executable+"/", "/../") {
-			return nil, fmt.Errorf("%s: executable must be a path inside the package", file)
+			return fmt.Errorf("%s: executable must be a path inside the package", file)
 		}
 		if declared.Protocol != 1 {
-			return nil, fmt.Errorf("%s: protocol must be 1", file)
+			return fmt.Errorf("%s: protocol must be 1", file)
 		}
 		if declared.Transport != "" && declared.Transport != "persistent" {
-			return nil, fmt.Errorf("%s: transport %s is not supported", file, declared.Transport)
+			return fmt.Errorf("%s: transport %s is not supported", file, declared.Transport)
 		}
-		if declared.Transport == "persistent" && !configDirectoryProvided {
-			return nil, fmt.Errorf("%s: persistent transport requires a config directory", file)
+		if declared.Transport == "persistent" && c.configDir == "" {
+			return fmt.Errorf("%s: persistent transport requires a config directory", file)
 		}
 		if declared.Transport == "persistent" {
 			base := path.Base(declared.Executable)
-			if other, exists := basenames[base]; exists {
-				return nil, fmt.Errorf("%s: executable basename %s is already used by %s", file, base, other)
+			if other, exists := c.basenames[base]; exists {
+				return fmt.Errorf("%s: executable basename %s is already used by %s", file, base, other)
 			}
-			basenames[base] = name
+			c.basenames[base] = name
 		}
 		c.declared[name] = filepath.Join(item.Folder, filepath.FromSlash(declared.Executable))
 		if declared.Transport == "persistent" {
 			c.persistent[name] = true
 		}
 	}
-	return c, nil
+	return nil
+}
+
+// declaration 은 선언된 sidecar name 의 실행 파일과 영속 여부를 돌려준다. c.mu 와 무관하게 부를 수 있다.
+func (c *Sidecars) declaration(name string) (program string, persistent, ok bool) {
+	c.declarations.RLock()
+	defer c.declarations.RUnlock()
+	program, ok = c.declared[name]
+	return program, c.persistent[name], ok
 }
 
 // Send 는 owner 창의 표면 surface 에서 온 body 를 사이드카 name 에 전달한다.
@@ -253,7 +277,7 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 	if c.stopped {
 		return fmt.Errorf("sidecars are stopped")
 	}
-	if _, ok := c.declared[name]; !ok {
+	if _, _, ok := c.declaration(name); !ok {
 		return fmt.Errorf("sidecar %s is not declared by any plugin", name)
 	}
 	if other, ok := c.owners[surface]; ok && other != owner {
@@ -559,13 +583,15 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 	for surface, root := range c.roots {
 		keep = append(keep, RetainedSurface{Surface: surface, Root: root})
 	}
+	c.mu.Unlock()
+	c.declarations.RLock()
 	names := make([]string, 0, len(c.persistent))
 	for name, persistent := range c.persistent {
 		if persistent {
 			names = append(names, name)
 		}
 	}
-	c.mu.Unlock()
+	c.declarations.RUnlock()
 	for _, item := range keep {
 		if item.Surface == "" || item.Root == "" {
 			return 0, fmt.Errorf("retain surface entry is invalid: %+v", item)
@@ -586,7 +612,12 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 			return total, errors.New("sidecars are stopped")
 		}
 		if _, running := c.running[name]; !running {
-			endpoint := filepath.Join(c.configDir, "services", filepath.Base(c.declared[name]), "endpoint.json")
+			program, _, ok := c.declaration(name)
+			if !ok {
+				c.mu.Unlock()
+				return total, fmt.Errorf("sidecar %s is not declared by any plugin", name)
+			}
+			endpoint := filepath.Join(c.configDir, "services", filepath.Base(program), "endpoint.json")
 			if _, err := os.Stat(endpoint); errors.Is(err, os.ErrNotExist) {
 				c.mu.Unlock()
 				continue
@@ -743,10 +774,14 @@ func (c *Sidecars) process(name string) (process *sidecar, started bool, err err
 
 // launch 는 사이드카 name 을 시작한다. 잠금 없이 부르며 등록하지 않는다.
 func (c *Sidecars) launch(name string) (*sidecar, error) {
-	if c.persistent[name] {
+	program, persistent, ok := c.declaration(name)
+	if !ok {
+		return nil, fmt.Errorf("sidecar %s is not declared by any plugin", name)
+	}
+	if persistent {
 		return c.processPersistent(name)
 	}
-	cmd := exec.Command(c.declared[name])
+	cmd := exec.Command(program)
 	cmd.Stderr = os.Stderr
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -820,7 +855,10 @@ func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, limit time.Duration) (
 }
 
 func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
-	program := c.declared[name]
+	program, _, ok := c.declaration(name)
+	if !ok {
+		return nil, fmt.Errorf("sidecar %s is not declared by any plugin", name)
+	}
 	serviceDir := filepath.Join(c.configDir, "services", filepath.Base(program))
 	current, err := platform.Current()
 	if err != nil {
@@ -1407,7 +1445,7 @@ func (c *Sidecars) revivePersistent(name string) {
 	// 버리고 한 번 더 시도한다(V5-106). 전송 경로의 계약은 그대로다: 차가운 전송의
 	// live-unreachable 보고는 endpoint 를 바꾸지 않는다.
 	if failure != nil && refusedConnect(failure, name) {
-		if program, ok := c.declared[name]; ok {
+		if program, _, ok := c.declaration(name); ok {
 			endpoint := filepath.Join(c.configDir, "services", filepath.Base(program), "endpoint.json")
 			if err := os.Remove(endpoint); err != nil && !errors.Is(err, os.ErrNotExist) {
 				LogError("sidecar "+name, fmt.Sprintf("remove refused endpoint: %v", err))

@@ -15,7 +15,7 @@ use std::path::{Component, Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{sync_channel, RecvError, SyncSender, TryRecvError, TrySendError};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, RwLock};
 use std::thread;
 use std::time::Duration;
 
@@ -397,15 +397,32 @@ struct Stopping {
 /// 사이드카 채널의 스레드 공유 부분. 읽기 스레드가 연결 끊김을 감지하면 같은 시작
 /// 경로로 다시 시작해야 하므로(V5-106) 시작에 필요한 구성과 상태를 여기 둔다.
 struct Core<O> {
-    /// 사이드카 패키지 이름과 실행 파일 경로.
-    declared: HashMap<String, PathBuf>,
-    persistent: HashMap<String, bool>,
+    /// 선언된 사이드카. 설치가 실행 중에 선언을 더하므로 state 와 따로 잠근다.
+    declarations: RwLock<Declarations>,
     config_directory: PathBuf,
     state: Arc<Mutex<State<O>>>,
     /// 시작이 끝날 때마다 알린다. 같은 사이드카의 요청과 stop 이 기다린다.
     started: Condvar,
     /// 새로 시작한 영속 service 가 endpoint 를 출력하기까지의 상한.
     ready_timeout: Duration,
+}
+
+/// 선언된 사이드카의 실행 파일, 영속 여부, 영속 실행 파일 basename 을 쓰는 사이드카.
+#[derive(Default)]
+struct Declarations {
+    /// 사이드카 패키지 이름과 실행 파일 경로.
+    declared: HashMap<String, PathBuf>,
+    persistent: HashMap<String, bool>,
+    basenames: HashMap<String, String>,
+}
+
+impl<O> Core<O> {
+    /// 선언된 사이드카 name 의 실행 파일과 영속 여부.
+    fn declaration(&self, name: &str) -> Option<(PathBuf, bool)> {
+        let declarations = self.declarations.read().expect("sidecar declarations");
+        let program = declarations.declared.get(name)?.clone();
+        Some((program, declarations.persistent[name]))
+    }
 }
 
 /// 애플리케이션 하나의 사이드카 프로세스와 표면 소유 창을 관리한다.
@@ -433,6 +450,40 @@ impl<O: Owner> Sidecars<O> {
         let config_directory = config_directory
             .canonicalize()
             .map_err(|e| format!("config directory: {e}"))?;
+        let sidecars = Self {
+            core: Arc::new(Core {
+                declarations: RwLock::new(Declarations::default()),
+                config_directory,
+                state: Arc::new(Mutex::new(State {
+                    running: HashMap::new(),
+                    starting: HashSet::new(),
+                    closing: std::collections::BTreeMap::new(),
+                    closing_changed: None,
+                    owners: HashMap::new(),
+                    roots: HashMap::new(),
+                    stopped: false,
+                    pending_replies: HashMap::new(),
+                    pending_closes: HashMap::new(),
+                    unannounced_loss: std::collections::HashSet::new(),
+                    stopping: HashMap::new(),
+                })),
+                started: Condvar::new(),
+                ready_timeout: READY_TIMEOUT,
+            }),
+            stop_timeout: Duration::from_secs(5),
+        };
+        sidecars.declare(declarations)?;
+        Ok(sidecars)
+    }
+
+    /// 아직 선언하지 않은 사이드카를 더한다. 이미 선언한 사이드카는 애플리케이션을 다시 시작할 때까지 그 폴더를
+    /// 유지한다(docs/spec/installation.md#serving-installed-plugins). 선언의 형식이 틀리면 실패한다.
+    pub fn declare(&self, declarations: &[SidecarDeclaration]) -> Result<(), String> {
+        let mut current = self
+            .core
+            .declarations
+            .write()
+            .expect("sidecar declarations");
         #[derive(Deserialize)]
         struct Sidecar {
             executable: String,
@@ -440,12 +491,9 @@ impl<O: Owner> Sidecars<O> {
             #[serde(default)]
             transport: Option<String>,
         }
-        let mut declared = HashMap::new();
-        let mut persistent = HashMap::new();
-        let mut persistent_basenames: HashMap<String, String> = HashMap::new();
         for item in declarations {
             let name = item.name.clone();
-            if declared.contains_key(&name) {
+            if current.declared.contains_key(&name) {
                 continue;
             }
             let path = item.folder.join("sidecar.json").display().to_string();
@@ -474,38 +522,18 @@ impl<O: Owner> Sidecars<O> {
             })?;
             if is_persistent {
                 let basename = file.to_string_lossy().into_owned();
-                if let Some(other) = persistent_basenames.insert(basename.clone(), name.clone()) {
+                if let Some(other) = current.basenames.insert(basename.clone(), name.clone()) {
                     return Err(format!(
                         "{path}: executable basename {basename} is already used by {other}"
                     ));
                 }
             }
-            declared.insert(name.clone(), item.folder.join(executable));
-            persistent.insert(name, is_persistent);
+            current
+                .declared
+                .insert(name.clone(), item.folder.join(executable));
+            current.persistent.insert(name, is_persistent);
         }
-        Ok(Self {
-            core: Arc::new(Core {
-                declared,
-                persistent,
-                config_directory,
-                state: Arc::new(Mutex::new(State {
-                    running: HashMap::new(),
-                    starting: HashSet::new(),
-                    closing: std::collections::BTreeMap::new(),
-                    closing_changed: None,
-                    owners: HashMap::new(),
-                    roots: HashMap::new(),
-                    stopped: false,
-                    pending_replies: HashMap::new(),
-                    pending_closes: HashMap::new(),
-                    unannounced_loss: std::collections::HashSet::new(),
-                    stopping: HashMap::new(),
-                })),
-                started: Condvar::new(),
-                ready_timeout: READY_TIMEOUT,
-            }),
-            stop_timeout: Duration::from_secs(5),
-        })
+        Ok(())
     }
 
     /// 새로 시작한 영속 service 가 endpoint 를 출력하기까지의 상한을 바꾼다. 검사가 기본 30초 대신 짧은 상한을 준다.
@@ -547,7 +575,7 @@ impl<O: Owner> Sidecars<O> {
         if state.stopped {
             return Err("sidecars are stopped".into());
         }
-        if !self.core.declared.contains_key(name) {
+        if self.core.declaration(name).is_none() {
             return Err(format!("sidecar {name} is not declared by any plugin"));
         }
         if let Some(other) = state.owners.get(surface) {
@@ -606,7 +634,9 @@ impl<O: Owner> Sidecars<O> {
             .iter()
             .filter(|(name, process)| {
                 // 기본값: persistent 를 선언하지 않은 사이드카는 창마다 실행된다.
-                self.core.persistent.get(*name).copied().unwrap_or(false)
+                self.core
+                    .declaration(name)
+                    .is_some_and(|(_, persistent)| persistent)
                     && process
                         .persistent
                         .as_ref()
@@ -720,6 +750,9 @@ impl<O: Owner> Sidecars<O> {
         let mut total = 0;
         let mut names: Vec<String> = self
             .core
+            .declarations
+            .read()
+            .expect("sidecar declarations")
             .persistent
             .iter()
             .filter(|(_, persistent)| **persistent)
@@ -748,10 +781,9 @@ impl<O: Owner> Sidecars<O> {
                     ),
                 );
                 if !state.running.contains_key(&name) {
-                    let program = self
+                    let (program, _) = self
                         .core
-                        .declared
-                        .get(&name)
+                        .declaration(&name)
                         .ok_or_else(|| format!("sidecar {name} is not declared"))?;
                     let basename = program
                         .file_name()
@@ -1168,16 +1200,15 @@ impl<O: Owner> Core<O> {
     /// 사이드카를 시작한다. 영속 선언이면 서비스에 붙고, 아니면 창의 자식 프로세스로 띄운다. 쓰기와 읽기 스레드는
     /// 등록한 뒤에 띄우도록 돌려준다.
     fn start(core: &Arc<Self>, name: &str) -> Result<Started, String> {
-        let program = core
-            .declared
-            .get(name)
+        let (program, persistent) = core
+            .declaration(name)
             .ok_or_else(|| format!("sidecar {name} is not declared by any plugin"))?;
         // 기본값: persistent 를 선언하지 않은 사이드카는 창마다 실행된다.
-        if *core.persistent.get(name).unwrap_or(&false) {
-            return Self::start_persistent(core, name, program);
+        if persistent {
+            return Self::start_persistent(core, name, &program);
         }
         let mut threads: Vec<Thread> = Vec::new();
-        let mut child = Command::new(program)
+        let mut child = Command::new(&program)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -1720,9 +1751,9 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
     let mut outcome = revive_attempt(core, name);
     if let Err(reason) = &outcome {
         if refused_connect(reason, name) {
-            let endpoint = core
-                .declared
-                .get(name)
+            let program = core.declaration(name).map(|(program, _)| program);
+            let endpoint = program
+                .as_deref()
                 .and_then(|program| program.file_name())
                 .and_then(|value| value.to_str())
                 .map(|basename| {

@@ -1,7 +1,7 @@
 //! 애플리케이션 안의 plugin 작업(docs/spec/installation.md#plugin-operations-in-the-application). 설정 폴더의 plugin
 //! 설치를 command line 의 installer library 로 바꾼다. 작업은 한 번에 하나만 실행하고, 바꾼 뒤 알린다.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, TryLockError};
 
 use serde_json::Value;
@@ -49,6 +49,11 @@ impl Plugins {
             running: Mutex::new(()),
             changed,
         })
+    }
+
+    /// plugin 을 설치하는 설정 폴더.
+    pub fn config_dir(&self) -> &Path {
+        &self.config_dir
     }
 
     /// registry 주소, 검사한 index, 설치 상태를 돌려준다.

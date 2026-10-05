@@ -106,7 +106,23 @@ func (h *Host) PluginsRun(requestJSON json.RawMessage) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return h.plugins.Run(request)
+	result, err := h.plugins.Run(request)
+	if err != nil {
+		return nil, err
+	}
+	// 설치한 plugin 의 sidecar 를 선언해 그 뒤에 불러온 page 가 시작하게 한다. 첫 실행은 설치한 뒤 page 만 다시
+	// 불러오기 때문이다(docs/spec/installation.md#serving-installed-plugins).
+	switch request.Action {
+	case "install", "update", "enable":
+		declarations, err := InstalledSidecars(h.configDir)
+		if err != nil {
+			return nil, fmt.Errorf("installed plugins: %w", err)
+		}
+		if err := h.sidecars.Declare(declarations); err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
 }
 
 // PluginsUseRegistry 는 page 의 pluginsUseRegistry 호출이다.

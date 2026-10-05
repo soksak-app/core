@@ -81,7 +81,7 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 
 Workbench는 `/installed-plugins.json`을 JSON module로 가져와 각 plugin을 `manifest`로 등록하고, 문서에 `error`가 있으면 그 텍스트로 불러오기를 실패한다.
 
-Host는 시작할 때 켜진 설치 plugin의 `plugin.json` `dependencies`가 지정한 sidecar를 이름 순서로 읽는다. Sidecar는 `installed.json`이 그것에 기록한 `path`에서 실행되며, 실행 파일은 그 폴더의 `sidecar.json`의 `executable` 경로다. 애플리케이션 실행 중에 설치하거나 켠 plugin은 변경 뒤에 불러온 page에 제공되고, 그 sidecar는 애플리케이션을 다시 시작한 뒤 시작된다.
+Host는 시작할 때 켜진 설치 plugin의 `plugin.json` `dependencies`가 지정한 sidecar를 이름 순서로 읽는다. Sidecar는 `installed.json`이 그것에 기록한 `path`에서 실행되며, 실행 파일은 그 폴더의 `sidecar.json`의 `executable` 경로다. 애플리케이션 실행 중에 설치하거나 켠 plugin은 변경 뒤에 불러온 page에 제공된다. 성공한 `pluginsRun` install, update, enable은 켜진 설치 plugin의 sidecar 중 host가 아직 선언하지 않은 것을 선언하므로, 그 뒤에 불러온 page는 첫 실행이 다시 불러온 page처럼 그 sidecar를 시작한다. host가 이미 선언한 sidecar는 애플리케이션을 다시 시작할 때까지 그 폴더를 유지한다.
 
 ## 애플리케이션 안의 plugin 작업
 
@@ -94,7 +94,7 @@ Host는 시작할 때 켜진 설치 plugin의 `plugin.json` `dependencies`가 �
 | `pluginsUseRegistry({ index })` | `sok registry use <index>`처럼 registry index를 정하고 그 출력 `{ index }`를 돌려준다. 비어 있지 않은 문자열이 아닌 `index`는 `index must be a non-empty string`으로 거부한다 |
 | `plugins-changed` | `pluginsRun`이 `installed.json`을 바꾼 뒤 모든 창에 `{ action, plugin }`과 함께 보낸다 |
 
-Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중일 때 `pluginsRun`을 호출하면 `another plugin operation is running`으로 거부한다. Host는 `sok` process가 만든 변경을 관찰하지 않는다. 다음 `pluginsState` 호출과 나중에 불러온 page가 그 변경을 읽는다. 변경은 애플리케이션을 다시 시작할 때 적용된다. 열려 있는 창은 이미 불러온 plugin을 유지하고, sidecar는 시작할 때만 시작한다. Browser 애플리케이션은 host가 없으므로 plugin 작업이 없다.
+Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중일 때 `pluginsRun`을 호출하면 `another plugin operation is running`으로 거부한다. Host는 `sok` process가 만든 변경을 관찰하지 않는다. 다음 `pluginsState` 호출과 나중에 불러온 page가 그 변경을 읽는다. 변경은 애플리케이션을 다시 시작할 때 적용된다. 열려 있는 창은 이미 불러온 plugin을 유지한다. Browser 애플리케이션은 host가 없으므로 plugin 작업이 없다.
 
 ## Plugin 화면
 

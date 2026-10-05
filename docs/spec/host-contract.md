@@ -304,6 +304,7 @@ Items:
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | Without declared sidecars, construction succeeds and every send fails with "not declared by any plugin". | both |
 | `sidecars.start.fails-on-missing-executable` | A declared executable missing on disk makes the first send fail with the sidecar name. | both |
 | `sidecars.declaration.fails-on-missing-sidecar-json` | An installed sidecar folder without sidecar.json makes the installed sidecar lookup fail with its path. | both |
+| `sidecars.declaration.adds-sidecars-installed-after-start` | Declaring the installed sidecars after construction adds the undeclared ones, so a send to such a sidecar starts it, and keeps the folder of a sidecar that is already declared. | both |
 | `sidecars.declaration.rejects-executable-escaping-package` | An executable path outside the package makes construction fail. | both |
 | `sidecars.declaration.rejects-absolute-executable` | An absolute executable path makes construction fail. | both |
 | `sidecars.declaration.rejects-unsupported-protocol` | An unsupported protocol version makes construction fail. | both |
