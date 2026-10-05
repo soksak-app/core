@@ -20,7 +20,7 @@ package의 test는 다른 package의 구현을 검증하지 않는다. core의 w
 
 ## 비용
 
-2026-10-05에 각 검사 파일이 쓰는 status와 command로 세었다. 5개 파일은 plugin 동작을 검사하며(`browser`, `files`, `terminal`, `terminal-font`, `terminal-protocols`) F25.3에서 F25.5에 걸쳐 plugin 저장소로 옮긴다. 17개 파일은 surface, section, document region에 닿으려고 terminal, browser, files의 status를 쓰며(`card-sidebar-space`, `commands`, `library`, `modal`, `plugin-screen`, `project-directory`, `projects`, `registry`, `reload-composition`, `section-orientation`, `settings`, `sidebar`, `sidebar-choices`, `sidecar-recovery`, `text-size`, `window-sidebars`, `window-sidebar-persistence`) fixture status로 바뀐다. 나머지 파일은 `fresh`를 통해서만 plugin에 의존한다. fixture sidecar가 따라야 하는 terminal service의 IOSurface frame 코드는 1,301줄이다. 각 단계의 앞뒤로 두 host에서 window suite가 통과해야 한다.
+2026-10-05에 각 검사 파일이 쓰는 status와 command로 세었다. 5개 파일은 plugin 동작을 검사하며(`browser`, `files`, `terminal`, `terminal-font`, `terminal-protocols`) F25.3에서 F25.5에 걸쳐 plugin 저장소로 옮긴다. 17개 파일은 surface, section, document region에 닿으려고 terminal, browser, files의 status를 쓰며(`card-sidebar-space`, `commands`, `library`, `modal`, `plugin-screen`, `project-directory`, `projects`, `registry`, `reload-composition`, `section-orientation`, `settings`, `sidebar`, `sidebar-choices`, `sidecar-recovery`, `text-size`, `window-sidebars`, `window-sidebar-persistence`) fixture status로 바뀐다. 나머지 파일은 `fresh`를 통해서만 plugin에 의존한다. fixture sidecar는 terminal service를 반복하지 않는다. `native/darwin/tests/image_region_test.m`의 `createColoredGlobalSurface`가 약 40줄로 하는 것처럼 IOSurface 하나를 단색으로 채우고, [native surfaces](../spec/native-surfaces.ko.md#그림-영역)의 image envelope에 답한다. 각 단계의 앞뒤로 두 host에서 window suite가 통과해야 한다.
 
 ## 순서
 
