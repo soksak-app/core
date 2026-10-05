@@ -4,6 +4,9 @@ package host_test
 
 import (
 	"errors"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +15,7 @@ import (
 	"testing"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // applicationLogChild 는 자식 프로세스에 설정 디렉터리를 알리는 환경 변수다.
@@ -140,5 +144,22 @@ func TestLogErrorWritesAnErrorLineToTheApplicationLog(t *testing.T) {
 	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
 	if len(lines) != 2 || lines[1] != "error: surface input: the window has no content view" {
 		t.Fatalf("application log %q", lines)
+	}
+}
+
+// page 가 받는 binding 실패는 page 가 한 번 기록한다. host 가 쓰는 Wails transport 가 그 실패를 다시 기록하면
+// 실패 하나가 두 줄로 남는다(docs/spec/hosts.md#application-log).
+// contract: log.binding-failure.returned-not-logged
+func TestTheTransportReturnsAFailedCallWithoutLoggingIt(t *testing.T) {
+	var logged strings.Builder
+	transport := application.NewHTTPTransport(application.HTTPTransportWithLogger(slog.New(slog.NewTextHandler(&logged, nil))))
+	handler := transport.Handler()(http.NotFoundHandler())
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/wails/runtime", strings.NewReader("{}")))
+	if response.Code != http.StatusUnprocessableEntity || !strings.Contains(response.Body.String(), "missing object value") {
+		t.Fatalf("response = %d %q", response.Code, response.Body.String())
+	}
+	if logged.Len() != 0 {
+		t.Fatalf("the transport logged the failure it returned: %q", logged.String())
 	}
 }

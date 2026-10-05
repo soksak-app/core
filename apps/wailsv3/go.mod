@@ -17,3 +17,7 @@ require (
 	github.com/soksak-app/core/packages/sok/wailsv3 v0.0.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 )
+
+// Wails 의 HTTP transport 는 page 에 돌려주는 오류를 로그에도 써서 실패 한 번을 두 번 기록한다. fork 의
+// soksak/http-error-log 가 그 기록을 지운다(docs/features.md F70).
+replace github.com/wailsapp/wails/v3 => github.com/min-median-max/wails/v3 v3.0.0-20261005084317-e8da589ca4b7

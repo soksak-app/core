@@ -234,6 +234,7 @@ Items:
 | `platform.private.writes-owner-only-file` | The private write operation creates a missing file with mode 0600, replaces the contents of an existing file, and keeps the mode of an existing file. | both |
 | `log.application.start-replaces-standard-error` | Starting the application log writes the run's start line and makes the file the standard error of the process and of the children it starts. | both |
 | `log.error.line-form` | A host error line written through the helper is `error: <where>: <text>`, and it reaches the application log as a line that starts with `error: `. | both |
+| `log.binding-failure.returned-not-logged` | A failed binding call is returned to the page without a log line of the framework transport, so the page writes the failure once. | wailsv3 only: the Wails HTTP transport carries binding calls; Tauri invoke writes no log line for a returned error |
 | `log.service.standard-error-goes-to-service-log` | A persistent service started by the host writes its standard error to `logs/<executable-name>.log`. | both |
 | `log.service.open-failure-fails-start` | A service log that cannot open fails the start with `sidecar <name>: service log: <error>` and the service does not start. | both |
 | `images.envelope.rejects-unattached-image` | An envelope for an image name that was never attached is answered with notAttached. | both |

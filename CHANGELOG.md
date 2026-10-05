@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F70: the Wails host uses the fork `min-median-max/wails` (`soksak/http-error-log`), whose HTTP transport no longer logs an error that it returns to the page, so a failed binding call is written once.
 - Validation: the core release v0.0.3, published again from 4a51f38d, installs the starter pack from the public registry on its first run and starts its terminal without a restart on both hosts (macOS 26.6.2 arm64).
 - F75: a plugin that the first run installs starts its sidecars without a restart; both hosts declare the sidecars of a successful install, update or enable at once.
 - F74: `make hosts-check` no longer compiles the Tauri host for Windows, which needed llvm-mingw and failed every GitHub CI run of core; `windows-build-check` still vets the Wails host for Windows.

@@ -1455,6 +1455,17 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F70",
+    implementation: [
+      { file: "packages/host/wailsv3/go.mod", symbol: "replace github.com/wailsapp/wails/v3 => github.com/min-median-max/wails/v3" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestTheTransportReturnsAFailedCallWithoutLoggingIt" },
+    ],
+    expected: "A failed binding call of the Wails host is written once, by the page.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

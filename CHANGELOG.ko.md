@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F70: Wails host는 fork `min-median-max/wails`(`soksak/http-error-log`)를 쓴다. 그 HTTP transport는 page에 돌려주는 오류를 더 이상 로그에 쓰지 않으므로 실패한 binding 호출은 한 번만 기록된다.
 - 검증: 4a51f38d에서 다시 게시한 core release v0.0.3은 첫 실행에서 공개 registry로 시작 plugin 묶음을 설치하고, 두 host 모두 다시 시작하지 않고 terminal을 시작한다(macOS 26.6.2 arm64).
 - F75: 첫 실행이 설치한 plugin은 다시 시작하지 않고 그 sidecar를 시작한다. 두 host는 성공한 install, update, enable의 sidecar를 바로 선언한다.
 - F74: `make hosts-check`는 더 이상 Tauri host를 Windows용으로 compile하지 않는다. 그 검사는 llvm-mingw가 필요해 core의 모든 GitHub CI run을 실패시켰다. `windows-build-check`는 계속 Wails host를 Windows용으로 vet한다.
