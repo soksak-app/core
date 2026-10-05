@@ -21,6 +21,7 @@
     "surface.js",
     "clipboard.js",
     "links.js",
+    "list.js",
     "exposure-check.js",
     "engines-check.js",
     "core-exposure.json"

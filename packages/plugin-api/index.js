@@ -19,6 +19,7 @@ export { createSurfaceCompositionController } from "./surface-composition.js";
 export { orderedSidecar } from "./sidecar-port.js";
 export { CLIPBOARD_TYPES, ClipboardError, createClipboardBridge, shellQuotePath } from "./clipboard.js";
 export { createLinkBridge } from "./links.js";
+export { drawList } from "./list.js";
 
 export const ENVIRONMENT = "environment.json";
 export const MANIFEST = "plugin.json";

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F67: `@soksak/plugin-api` exports `drawList(list, entries, { key, create, update })`, which updates a list of controls in place, so plugin sections no longer rebuild lists whose entries did not change.
 - F66.2: the settings and menu dialog documents update their content in place: nodes of the same kind and command stay in the document and only changed attributes, text and values are set, so an update between a press and its release no longer loses the click.
 - F66.1: the library keeps unchanged project and plugin cards and their controls in the document across renders and moves only an element that is out of order, so a render between a press and its release no longer loses the click.
 - Validation: the eleventh full window run of 2026-10-05 (core a3498ed4, terminal service b9b46c4, terminal plugin dfd2858, macOS 26.6.2 arm64) passed 339 of 344 checks. `native content, cards, and the sidebar rail stay aligned` failed on both hosts with 64.8ms (Wails) and 44.1ms (Tauri) against a worst-frame limit of 33.3ms at load average 27 to 42 on 11 processors, which is load; the other failures are F43, F64 and F65.

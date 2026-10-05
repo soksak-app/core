@@ -1371,6 +1371,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F67",
+    implementation: [
+      { file: "packages/plugin-api/list.js", symbol: "export function drawList" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/list.test.mjs", id: "drawList keeps the element of each unchanged key and updates it" },
+      { file: "packages/plugin-api/test/list.test.mjs", id: "drawList builds new keys, removes missing keys and moves only elements out of order" },
+    ],
+    expected: "drawList keeps the element of each key in the document and moves only an element out of order.",
+    levels: ["unit"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },
