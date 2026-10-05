@@ -1396,6 +1396,30 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F43",
+    implementation: [
+      { file: "packages/workbench/page-layout.js", symbol: "async empty(show)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "browsing shows the library in the draw that empties the plane, not where a later host reply resolves" },
+    ],
+    expected: "The switch to the library shows the library screen in the prepared draw that empties the plane, before the observation round.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F64",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "stopClosing map[string]bool" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "struct Stopping" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestStopReadsOutputToItsEnd" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "stop_reads_output_to_its_end" },
+    ],
+    expected: "A stopping sidecar's output is read to its end on both hosts, so the sidecar completes its writes.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

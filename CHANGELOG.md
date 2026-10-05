@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Validation: the thirteenth full window run of 2026-10-05 (eb707869, macOS 26.6.2 arm64) passed 334 of 344 checks. A person used Safari during the run, which caused the Wails pointer refusal, the failed activation and the changed frontmost baseline. Load failures at load average 58 to 93 on 11 processors: recording gaps of 109 to 242ms, the alignment timing (161.7ms against 33.3ms) and 20 of 21 divider frames. The remaining failure is F71.
 - F69: a window check request that does not answer within its limit records the host's threads at that moment with `sample` and names the file in its error.
 - F43: the switch to the library shows the library screen in the prepared draw that empties the plane, at the animation frame before the observation round, and the diagnostic recorder reports the stack of each `body` dataset write inside a callback slot.
 - F64: both hosts read a stopping sidecar's output to its end and accept its answers to the closes that the stop removed, so the sidecar no longer ends with SIGPIPE; a nonzero end during a stop is written as `exit status <code>` or `signal <number>` in both hosts.
