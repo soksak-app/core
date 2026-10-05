@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Validation: the fourteenth full window run of 2026-10-05 (c2f21e69, apps eb707869, macOS 26.6.2 arm64) passed 338 of 344 checks. Load failures at load average 93 to 118 on 11 processors: `native content, cards, and the sidebar rail stay aligned` on both hosts (worst 245.0ms and 160.4ms against 33.3ms) and the Tauri maximise settling (225ms against 150ms). The Tauri page stall of F69 failed `the application log file holds the lines the page reports` and, through its undeclared `exposure reply does not match a pending request`, `a page reload loses no host reply`; the Tauri recording stop of F73 failed `a new window shows its complete first screen from its first frame`.
 - F69: a stalled request also records the page's WebContent processes, including a request that the host ends because the page did not reply.
 - F72: `pnpm -F @soksak/e2e run verify:shutdown` runs the quit lifecycle check, and two window check probes that nothing ran are removed.
 - F25.1: the window check harness is the package `@soksak/window-check`; the application executables are declared by `SOKSAK_BINARY_WAILSV3` and `SOKSAK_BINARY_TAURIV2`, which core's `e2e/setup.mjs` takes from the cargo target directory.
