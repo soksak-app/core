@@ -1201,7 +1201,6 @@ const FEATURE_LINKS = [
     tests: [
       { file: "scripts/test/windows-build-check.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
       { file: "scripts/test/windows-build-check.test.mjs", id: "hosts-check runs the Windows build check" },
-      { file: "scripts/test/windows-build-check.test.mjs", id: "the Windows Rust build check names the missing Windows C compiler" },
       { file: "packages/host/wailsv3/tests/service_process_test.go", id: "TestAServiceProcessOfAnotherUserExists" },
       { file: "packages/host/tauriv2/tests/service_process_test.rs", id: "a_service_process_of_another_user_exists" },
     ],
@@ -1430,6 +1429,17 @@ const FEATURE_LINKS = [
     ],
     expected: "Every standalone window check script has a declared entry point.",
     levels: ["application"],
+  },
+  {
+    id: "F74",
+    implementation: [
+      { file: "Makefile", symbol: "hosts-check: windows-build-check" },
+    ],
+    tests: [
+      { file: "scripts/test/windows-build-check.test.mjs", id: "hosts-check runs the Windows build check" },
+    ],
+    expected: "hosts-check vets the Wails host for Windows and needs no Windows C compiler.",
+    levels: ["unit"],
   },
   {
     id: "F45",

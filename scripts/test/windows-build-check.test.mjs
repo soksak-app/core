@@ -15,13 +15,4 @@ test('hosts-check runs the Windows build check',{timeout:30000},()=>{
  assert.equal(result.status,0,result.stdout+result.stderr);
  assert.match(result.stdout,/GOOS=windows GOARCH=arm64 go vet \.\/src\/\.\.\./);
  assert.match(result.stdout,/GOOS=windows GOARCH=arm64 go vet -tags diagnostics \.\/src\/\.\.\./);
- assert.match(result.stdout,/cargo check -q --manifest-path Cargo\.toml -p soksak-host-tauriv2 --target aarch64-pc-windows-gnullvm/);
- assert.match(result.stdout,/cargo check -q --manifest-path Cargo\.toml -p soksak-host-tauriv2 --features diagnostics --target aarch64-pc-windows-gnullvm/);
-});
-// LLVM_MINGW 가 컴파일러가 없는 폴더를 가리키면 검사는 그 경로를 적고 실패한다.
-test('the Windows Rust build check names the missing Windows C compiler',{timeout:30000},()=>{
- const result=spawnSync('make',['windows-build-check-rust','LLVM_MINGW=/nonexistent/llvm-mingw'],{cwd:root,encoding:'utf8',timeout:20000});
- assert.notEqual(result.status,0,result.stdout+result.stderr);
- assert.match(result.stderr,/FAIL: windows-build-check-rust requires the Windows C compiler \/nonexistent\/llvm-mingw\/bin\/aarch64-w64-mingw32-clang, which is not installed/);
- assert.doesNotMatch(result.stdout,/START: tauriv2 host/);
 });

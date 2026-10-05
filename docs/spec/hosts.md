@@ -136,7 +136,7 @@ Moving the buttons into the page's own view is what made AppKit take them back o
 
 On Windows both hosts implement only directory identity (`platform/windows/identity.*`). Every other operation in `platform/windows/unsupported.*` returns an error of the form `<operation> is not implemented on windows`. Application startup fails on Windows at its first platform operation: Wails `Run` and Tauri `run` end with `window resize animation is not implemented on windows` and status 1 before any window opens. Linux has no implementation; `platform.Current()` and `platform::current()` return an error there.
 
-`make hosts-check` runs `make windows-build-check`, which vets the Wails host source for `windows/arm64` in the default and the diagnostics build. `make windows-build-check-rust` checks the Tauri host for `aarch64-pc-windows-gnullvm`; its dependency `ring` compiles C sources with the Windows C compiler `aarch64-w64-mingw32-clang`, and the target fails with that name when the compiler is not installed.
+`make hosts-check` runs `make windows-build-check`, which vets the Wails host source for `windows/arm64` in the default and the diagnostics build.
 
 ## Allowed differences
 

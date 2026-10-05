@@ -26,7 +26,7 @@ make wailsv3-build tauriv2-build
 
 디버그 실행 파일은 `target/debug/soksak-wailsv3.app`와 `target/debug/soksak-tauriv2.app`다. 릴리스 빌드는 `make wailsv3-build-release tauriv2-build-release`를 사용하며 `target/release/wailsv3/soksak.app`과 `target/release/tauriv2/soksak.app`을 만든다. 두 release 실행 파일에는 기호 테이블이 없다. Wails 빌드는 `-s -w`로 링크하고, 루트 `Cargo.toml`의 release 프로필은 `strip = true`다. 그래서 `make release-check`는 기호를 벗겨도 남는 문자열(진단 메서드 이름과 녹화 클래스 이름 `SPCapture`)로 진단 코드를 찾는다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
 
-`make hosts-check`는 두 host를 Windows용으로도 compile한다(`windows-build-check`, `windows-build-check-rust`). Rust 검사는 `ring`의 C 원본을 위해 llvm-mingw 배포판의 Windows C compiler가 필요하다. Makefile 변수 `LLVM_MINGW`가 그 설치 폴더를 정하며(기본값 `~/.local/opt/llvm-mingw`, `mstorsjo/llvm-mingw`의 macOS universal release), compiler가 없으면 검사는 그 compiler 경로를 적고 실패한다. Rust target `aarch64-pc-windows-gnullvm`은 `rustup target add`로 설치한다.
+`make hosts-check`는 Wails host source를 Windows용으로도 vet한다(`windows-build-check`).
 
 ## 테스트 동등성
 
