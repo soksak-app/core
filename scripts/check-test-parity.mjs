@@ -1298,6 +1298,29 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F60",
+    implementation: [
+      { file: "packages/workbench/surface-modules.js", symbol: "async function disposeModule" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-dispose-order.test.mjs", id: "removing a surface detaches its regions before the module ends its sidecar session" },
+    ],
+    expected: "Removing a surface detaches its image regions before its module ends the sidecar session, so no frame reaches a region whose image was released.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F61",
+    implementation: [
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn close_answer" },
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) closeAnswered" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "closing terminal tabs reaps every PTY child without killing the shared service" },
+    ],
+    expected: "A terminal close answers only after the terminal service has reaped the PTY child, on both hosts.",
+    levels: ["application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },
