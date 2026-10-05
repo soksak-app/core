@@ -20,7 +20,7 @@ package의 test는 다른 package의 구현을 검증하지 않는다. core의 w
 
 ## 비용
 
-fixture sidecar는 terminal service가 구현하는 image supplier 계약을 반복하며, 크기는 terminal service의 image 코드만 하다. core의 모든 검사 파일이 바뀐다. 작업은 여러 날 걸리며, 각 단계의 앞뒤로 두 host에서 window suite가 통과해야 한다.
+2026-10-05에 측정했다. core 검사 파일 42개 중 terminal의 status나 command를 직접 쓰는 것은 `project-directory`, `library`, `projects`, `text-size`뿐이고, 나머지는 `fresh`가 terminal 표면을 기다리기 때문에만 terminal plugin에 의존하므로 `fresh`와 그 네 파일이 바뀐다. terminal service의 IOSurface frame 코드는 1,301줄이다. fixture sidecar는 단색 raster 하나를 그리고 그 envelope에 답하므로 수백 줄이다. 작업은 하루에서 이틀이며, 각 단계의 앞뒤로 두 host에서 window suite가 통과해야 한다.
 
 ## 순서
 

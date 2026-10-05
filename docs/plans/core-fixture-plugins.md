@@ -20,7 +20,7 @@ A package's tests do not verify another package's implementation. Core's window 
 
 ## Cost
 
-The fixture sidecar repeats the image supplier contract that the terminal service implements, about the size of the terminal service's image code, and every core check file changes. The work takes several days, and the window suites must pass on both hosts before and after each step.
+Measured on 2026-10-05: of the 42 core check files, only `project-directory`, `library`, `projects` and `text-size` use terminal statuses or commands themselves; the others depend on the terminal plugin only because `fresh` waits for a terminal surface, so `fresh` and those four files change. The terminal service's IOSurface frame code is 1,301 lines; the fixture sidecar draws one solid raster and answers its envelopes, a few hundred lines. The work is about one to two days, and the window suites must pass on both hosts before and after each step.
 
 ## Order
 
