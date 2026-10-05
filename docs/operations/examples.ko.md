@@ -26,6 +26,8 @@ make wailsv3-build tauriv2-build
 
 디버그 실행 파일은 `target/debug/soksak-wailsv3.app`와 `target/debug/soksak-tauriv2.app`다. 릴리스 빌드는 `make wailsv3-build-release tauriv2-build-release`를 사용하며 `target/release/wailsv3/soksak.app`과 `target/release/tauriv2/soksak.app`을 만든다. 두 release 실행 파일에는 기호 테이블이 없다. Wails 빌드는 `-s -w`로 링크하고, 루트 `Cargo.toml`의 release 프로필은 `strip = true`다. 그래서 `make release-check`는 기호를 벗겨도 남는 문자열(진단 메서드 이름과 녹화 클래스 이름 `SPCapture`)로 진단 코드를 찾는다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
 
+`make hosts-check`는 두 host를 Windows용으로도 compile한다(`windows-build-check`, `windows-build-check-rust`). Rust 검사는 `ring`의 C 원본을 위해 llvm-mingw 배포판의 Windows C compiler가 필요하다. Makefile 변수 `LLVM_MINGW`가 그 설치 폴더를 정하며(기본값 `~/.local/opt/llvm-mingw`, `mstorsjo/llvm-mingw`의 macOS universal release), compiler가 없으면 검사는 그 compiler 경로를 적고 실패한다. Rust target `aarch64-pc-windows-gnullvm`은 `rustup target add`로 설치한다.
+
 ## 테스트 동등성
 
 `make parity-check`로 구조 목록 게이트를 실행한다. 언어별 고정 루트 없이 Git에 보이는 JS/TS·Rust·Go·Objective-C·네이티브 헤더·HTML/CSS·셸 스크립트·계약 선언·빌드 매니페스트를 발견한다. 생성된 라이브러리 출력·Tauri 스키마는 명시적 제외 사유를 갖고 소스/출력 일치는 별도 빌드 검사로 유지한다. 연결 없는 구현·테스트, 빈 패턴, 중복 소유는 실패한다. 테스트 공유를 이유로 구현 중복 소유를 허용하지 않는다.

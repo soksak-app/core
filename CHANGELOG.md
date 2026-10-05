@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F52: `make hosts-check` also compiles the Tauri host for Windows with the Windows C compiler of llvm-mingw, which the Makefile variable `LLVM_MINGW` locates.
 - F67: `@soksak/plugin-api` exports `drawList(list, entries, { key, create, update })`, which updates a list of controls in place, so plugin sections no longer rebuild lists whose entries did not change.
 - F66.2: the settings and menu dialog documents update their content in place: nodes of the same kind and command stay in the document and only changed attributes, text and values are set, so an update between a press and its release no longer loses the click.
 - F66.1: the library keeps unchanged project and plugin cards and their controls in the document across renders and moves only an element that is out of order, so a render between a press and its release no longer loses the click.

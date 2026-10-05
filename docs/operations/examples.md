@@ -26,6 +26,8 @@ The build targets build `native/darwin` and the workbench, then run `soksak-stag
 
 Debug executables are `target/debug/soksak-wailsv3.app` and `target/debug/soksak-tauriv2.app`. Release builds use `make wailsv3-build-release tauriv2-build-release` and write `target/release/wailsv3/soksak.app` and `target/release/tauriv2/soksak.app`. Both release executables carry no symbol table: the Wails build links with `-s -w`, and the root `Cargo.toml` release profile sets `strip = true`; `make release-check` therefore finds diagnostic code by strings that stripping keeps (diagnostic method names and the capture class name `SPCapture`). `make examples-size` builds both profiles and reports their sizes.
 
+`make hosts-check` also compiles both hosts for Windows (`windows-build-check`, `windows-build-check-rust`). The Rust check needs the Windows C compiler of the llvm-mingw distribution for the C sources of `ring`; the Makefile variable `LLVM_MINGW` names its installation folder (default `~/.local/opt/llvm-mingw`, the macOS universal release of `mstorsjo/llvm-mingw`), and the check fails with the compiler path when the compiler is missing. The Rust target `aarch64-pc-windows-gnullvm` is installed with `rustup target add`.
+
 ## Test parity
 
 Run the structural inventory gate with `make parity-check`. It discovers Git-visible JS/TS, Rust, Go, Objective-C, native headers, HTML/CSS, shell scripts, contract declarations, and build manifests without fixed language roots. Generated library output and Tauri schemas have explicit exclusions; source/output equality remains a separate build check. Unclaimed implementation or test files, empty patterns, and duplicate ownership fail. Shared tests do not permit duplicate implementation ownership.

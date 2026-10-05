@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F52: `make hosts-check`는 Makefile 변수 `LLVM_MINGW`가 가리키는 llvm-mingw의 Windows C compiler로 Tauri host도 Windows용으로 compile한다.
 - F67: `@soksak/plugin-api`는 control 목록을 제자리에서 갱신하는 `drawList(list, entries, { key, create, update })`를 export하므로, plugin section은 항목이 바뀌지 않은 목록을 더는 다시 만들지 않는다.
 - F66.2: settings와 menu dialog 문서는 내용을 제자리에서 갱신한다. 같은 종류와 명령의 node는 문서에 남고 바뀐 속성, 글, 값만 정해지므로, 누름과 뗌 사이의 갱신이 더는 click을 잃지 않는다.
 - F66.1: library는 render 사이에 바뀌지 않은 project card와 plugin card, 그 control을 문서에 두고 순서가 틀린 요소만 옮기므로, 누름과 뗌 사이의 render가 더는 click을 잃지 않는다.
