@@ -1322,6 +1322,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F62",
+    implementation: [
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", symbol: "func serveHarnessConnections" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "second opens after the first reconnected" },
+    ],
+    expected: "The Wails persistent transport harness receives a connection event for each host when one host's revived connection reaches the service before the other host's first connection.",
+    levels: ["unit"],
+  },
+  {
     id: "F28",
     implementation: [
       { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },

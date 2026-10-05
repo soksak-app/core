@@ -60,19 +60,29 @@ func writeHarnessEndpoint(t *testing.T, directory, socket string) {
 	}
 }
 
-func serveHarnessConnections(t *testing.T, listener net.Listener, connections int, rejectClose bool) <-chan error {
+// serveHarnessConnections 는 connections 개의 연결을 받는다. 연결마다 인증 뒤 요청을 되돌리고, open 요청을
+// 되돌린 연결은 끊어 실행 중 연결 끊김을 재현한다. 끊을 연결은 받은 순서가 아니라 요청으로 고른다:
+// 한 host 가 다시 맺은 연결이 다른 host 의 첫 연결보다 먼저 올 수 있다. close-owner 에는 실패로 답한다.
+func serveHarnessConnections(t *testing.T, listener net.Listener, connections int) <-chan error {
 	t.Helper()
 	done := make(chan error, 1)
 	go func() {
 		var wg sync.WaitGroup
+		var mu sync.Mutex
 		var firstErr error
+		fail := func(err error) {
+			mu.Lock()
+			defer mu.Unlock()
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
 		for index := 0; index < connections; index++ {
 			connection, err := listener.Accept()
 			if err != nil {
-				firstErr = err
+				fail(err)
 				break
 			}
-			connectionIndex := index
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -80,9 +90,7 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 				reader := bufio.NewReader(connection)
 				line, err := reader.ReadBytes('\n')
 				if err != nil {
-					if firstErr == nil {
-						firstErr = err
-					}
+					fail(err)
 					return
 				}
 				var hello map[string]any
@@ -91,46 +99,33 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 					return
 				}
 				_, _ = io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
-				line, err = reader.ReadBytes('\n')
-				if err != nil {
-					return
-				}
-				var request map[string]any
-				if json.Unmarshal(line, &request) != nil {
-					return
-				}
-				if request["operation"] == "close-owner" {
-					if rejectClose {
-						_, _ = io.WriteString(connection, `{"operation":"closed-owner","request":"1","ok":false,"error":"close failed"}`+"\n")
-					}
-					return
-				}
-				_, _ = connection.Write(line)
-				// 처음 두 연결은 실행 중 연결 끊김을 재현한다. 재연결은
-				// endpoint 를 사용하고 host 가 선언한 identity 를 유지해야 한다.
-				if connectionIndex < 2 {
-					return
-				}
 				for {
 					line, err = reader.ReadBytes('\n')
 					if err != nil {
 						return
 					}
-					var next map[string]any
-					if json.Unmarshal(line, &next) != nil {
+					var request map[string]any
+					if json.Unmarshal(line, &request) != nil {
 						return
 					}
-					if next["operation"] == "close-owner" {
-						requestID, _ := next["request"].(string)
+					if request["operation"] == "close-owner" {
+						requestID, _ := request["request"].(string)
 						response, _ := json.Marshal(map[string]any{"operation": "closed-owner", "request": requestID, "ok": false, "error": "close failed"})
 						_, _ = connection.Write(append(response, '\n'))
 						return
 					}
 					_, _ = connection.Write(line)
+					// 페이지 요청의 operation 은 body 안에 있다. 재연결은 endpoint 를 사용하고
+					// host 가 선언한 identity 를 유지해야 한다.
+					if body, ok := request["body"].(map[string]any); ok && body["operation"] == "open" {
+						return
+					}
 				}
 			}()
 		}
 		wg.Wait()
+		mu.Lock()
+		defer mu.Unlock()
 		done <- firstErr
 	}()
 	return done
@@ -138,6 +133,13 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 
 // contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
 func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t *testing.T) {
+	// 두 host 가 동시에 연다. 한 host 가 끊김 뒤 다시 맺은 연결을 다른 host 의 첫 연결보다 먼저
+	// 맺는 순서도 검사한다. 서비스는 그 순서와 상관없이 host 마다 첫 연결을 끊어야 한다.
+	t.Run("concurrent", func(t *testing.T) { runHarnessReconnect(t, false) })
+	t.Run("second opens after the first reconnected", func(t *testing.T) { runHarnessReconnect(t, true) })
+}
+
+func runHarnessReconnect(t *testing.T, sequential bool) {
 	root := t.TempDir()
 	socketDirectory, err := os.MkdirTemp("", "sp-h")
 	if err != nil {
@@ -151,7 +153,7 @@ func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t 
 	}
 	defer listener.Close()
 	writeHarnessEndpoint(t, root, socket)
-	serverDone := serveHarnessConnections(t, listener, 4, true)
+	serverDone := serveHarnessConnections(t, listener, 4)
 
 	first, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
 	if err != nil {
@@ -164,38 +166,16 @@ func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t 
 	firstOwner := &harnessOwner{root: "/first", seen: make(chan SidecarMessage, 4)}
 	secondOwner := &harnessOwner{root: "/second", seen: make(chan SidecarMessage, 4)}
 
-	start := make(chan struct{})
-	var group sync.WaitGroup
-	for _, send := range []func() error{
-		func() error {
-			<-start
-			return first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`))
-		},
-		func() error {
-			<-start
-			return second.Send(secondOwner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`))
-		},
-	} {
-		group.Add(1)
-		go func(send func() error) {
-			defer group.Done()
-			if err := send(); err != nil {
-				t.Error(err)
-			}
-		}(send)
-	}
-	close(start)
-	group.Wait()
-	for _, owner := range []*harnessOwner{firstOwner, secondOwner} {
+	awaitInitial := func(owner *harnessOwner) {
 		select {
 		case <-owner.seen:
 		case <-time.After(stall):
 			t.Fatal("no initial event; the test stalled")
 		}
 	}
-	// 처음 두 socket 이 모두 끊긴다. host 는 곧바로 다시 맺고 연결 이벤트를 보낸다. 그 이벤트를 받은 뒤의
+	// 끊긴 socket 을 host 는 곧바로 다시 맺고 연결 이벤트를 보낸다. 그 이벤트를 받은 뒤의
 	// send 는 다시 맺은 연결로 가므로 endpoint 재사용과 재연결을 검증한다.
-	for _, owner := range []*harnessOwner{firstOwner, secondOwner} {
+	awaitConnection := func(owner *harnessOwner) {
 		select {
 		case event := <-owner.seen:
 			if string(event.Body) != `{"connected":true,"event":"connection"}` {
@@ -203,6 +183,48 @@ func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t 
 			}
 		case <-time.After(stall):
 			t.Fatal("no connection event; the test stalled")
+		}
+	}
+	if sequential {
+		// 첫 host 가 끊기고 다시 맺은 연결을 서비스가 받은 뒤에 둘째 host 가 첫 연결을 맺는다.
+		if err := first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+			t.Fatal(err)
+		}
+		awaitInitial(firstOwner)
+		awaitConnection(firstOwner)
+		if err := second.Send(secondOwner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+			t.Fatal(err)
+		}
+		awaitInitial(secondOwner)
+		awaitConnection(secondOwner)
+	} else {
+		start := make(chan struct{})
+		var group sync.WaitGroup
+		for _, send := range []func() error{
+			func() error {
+				<-start
+				return first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`))
+			},
+			func() error {
+				<-start
+				return second.Send(secondOwner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`))
+			},
+		} {
+			group.Add(1)
+			go func(send func() error) {
+				defer group.Done()
+				if err := send(); err != nil {
+					t.Error(err)
+				}
+			}(send)
+		}
+		close(start)
+		group.Wait()
+		for _, owner := range []*harnessOwner{firstOwner, secondOwner} {
+			awaitInitial(owner)
+		}
+		for _, owner := range []*harnessOwner{firstOwner, secondOwner} {
+			awaitConnection(owner)
 		}
 	}
 	if err := first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"reconnect"}`)); err != nil {
