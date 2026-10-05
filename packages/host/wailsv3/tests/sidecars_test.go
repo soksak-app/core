@@ -212,7 +212,7 @@ func TestSidecarOutputCloseNotifiesEachSurface(t *testing.T) {
 	}
 	for surface, owner := range map[string]*fakeOwner{"s1": first, "s2": second} {
 		failure := owner.failure(t)
-		if failure.Sidecar != echoSidecar || failure.Surface != surface || !strings.Contains(failure.Reason, "output closed") {
+		if failure.Sidecar != echoSidecar || failure.Surface != surface || failure.Reason != "output closed: exit status 3" {
 			t.Fatalf("%s: failure = %+v", surface, failure)
 		}
 	}
@@ -626,10 +626,12 @@ func TestCloseDuringStopSendsNothing(t *testing.T) {
 	}
 }
 
-// TestStopClosesUnreadOutput 은 멈추는 동안 호스트가 더 읽지 않는 출력의 읽기 끝을 닫아, 끝나면서 파이프가 담는
-// 것보다 많이 쓰는 사이드카도 강제 종료 없이 끝나는지 검증한다. 출력은 호스트가 기다리지 않는 닫기 응답이다.
+// TestStopClosesUnreadOutput 은 멈추는 동안의 프로토콜 실패를 로그에 쓰고, 호스트가 더 읽지 않는 출력의 읽기 끝을
+// 닫아, 그 뒤 파이프가 담는 것보다 많이 쓰는 사이드카도 강제 종료 없이 끝나는지 검증한다. 출력은 호스트가 닫지 않은
+// 표면의 닫기 응답이다. 그 프로세스의 종료는 닫힌 파이프 때문이므로 보고하지 않는다.
 // contract: sidecars.stop.closes-unread-output
 func TestStopClosesUnreadOutput(t *testing.T) {
+	written := captureLog(t)
 	directory := t.TempDir()
 	script := "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n" +
 		"i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"closed\":true}'; i=$((i+1)); done\nexit 0\n"
@@ -654,11 +656,77 @@ func TestStopClosesUnreadOutput(t *testing.T) {
 	if elapsed := time.Since(start); elapsed >= sidecars.StopTimeout {
 		t.Errorf("stop took %v and reached the %v deadline: the host left the unread output open", elapsed, sidecars.StopTimeout)
 	}
+	logged := written()
+	if want := "error: sidecar @fixture/sidecar-echo: failed: unexpected close answer for s1\n"; !strings.Contains(logged, want) {
+		t.Errorf("log %q does not contain %q", logged, want)
+	}
+	if strings.Contains(logged, "exited while stopping") {
+		t.Errorf("log %q reports the exit that the closed pipe caused", logged)
+	}
+}
+
+// TestStopReadsOutputToItsEnd 는 멈추는 동안 호스트가 출력을 끝까지 읽는지 검증한다. 사이드카는 중지 전에 받은 닫기에
+// 입력이 끝난 뒤에야 답하고, 그다음 파이프가 담는 것보다 많이 쓴 뒤 모든 쓰기가 성공했을 때만 finished 를 기록한다.
+// 애플리케이션이 끝날 때 창 닫기가 보낸 closed 에 files 사이드카가 답하는 순서와 같다.
+// contract: sidecars.stop.reads-output-to-end
+func TestStopReadsOutputToItsEnd(t *testing.T) {
+	written := captureLog(t)
+	script := "#!/bin/sh\nclosed=\nwhile read line; do case \"$line\" in *'\"closed\":true'*) closed=1;; *) echo \"$line\";; esac; done\n" +
+		"[ -n \"$closed\" ] || exit 4\necho '{\"surface\":\"s1\",\"closed\":true}' || exit 5\n" +
+		"i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"body\":\"late\"}' || exit 5; i=$((i+1)); done\n" +
+		"echo finished > DIR/finished\nexit 0\n"
+	sidecars, directory := scriptSidecars(t, script)
+	sidecars.StopTimeout = stall
+	owner := newFakeOwner("/projects/test")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	if event := owner.next(t); event.Surface != "s1" {
+		t.Fatalf("echo event = %+v", event)
+	}
+	sidecars.Close("s1")
+	start := time.Now()
+	sidecars.Stop()
+	if elapsed := time.Since(start); elapsed >= sidecars.StopTimeout {
+		t.Errorf("stop took %v and reached the %v deadline", elapsed, sidecars.StopTimeout)
+	}
+	if data, err := os.ReadFile(filepath.Join(directory, "finished")); err != nil || string(data) != "finished\n" {
+		t.Errorf("the sidecar did not complete its writes on its way out: finished = %q, %v", data, err)
+	}
+	if logged := written(); strings.Contains(logged, "error: ") {
+		t.Errorf("stop logged an error: %q", logged)
+	}
+}
+
+// TestStopReportsExitStatus 는 멈추는 동안 0 이 아닌 종료 상태나 신호로 끝난 사이드카를 두 호스트에 같은 형식으로
+// 로그에 쓰는지 검증한다.
+// contract: sidecars.stop.reports-exit-status
+func TestStopReportsExitStatus(t *testing.T) {
+	written := captureLog(t)
+	for ending, want := range map[string]string{
+		"exit 3":        "error: sidecar @fixture/sidecar-echo: exited while stopping: exit status 3\n",
+		"kill -TERM $$": "error: sidecar @fixture/sidecar-echo: exited while stopping: signal 15\n",
+	} {
+		sidecars, _ := scriptSidecars(t, "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n"+ending+"\n")
+		sidecars.StopTimeout = stall
+		owner := newFakeOwner("/projects/test")
+		if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+			t.Fatalf("send: %v", err)
+		}
+		if event := owner.next(t); event.Surface != "s1" {
+			t.Fatalf("echo event = %+v", event)
+		}
+		sidecars.Stop()
+		if logged := written(); !strings.Contains(logged, want) {
+			t.Errorf("%s: log %q does not contain %q", ending, logged, want)
+		}
+	}
 }
 
 // TestStopForcedKill 은 기한을 초과해도 종료하지 않는 사이드카를 kill 하는지 검증한다.
 // contract: sidecars.stop.kills-after-timeout
 func TestStopForcedKill(t *testing.T) {
+	written := captureLog(t)
 	directory := t.TempDir()
 
 	// 사이드카: stdin 을 읽지 않으므로 stdin EOF 뒤에도 계속 실행한다. background 명령의 stdin 은 shell 에 따라 /dev/null 이
@@ -692,6 +760,13 @@ func TestStopForcedKill(t *testing.T) {
 	// kill 뒤 process 가 끝나는 시간은 부하에 따라 늘어나므로 상한으로 성공을 판정하지 않는다.
 	if elapsed < sidecars.StopTimeout || elapsed > stall {
 		t.Errorf("forced kill stop took %v, want at least the %v deadline", elapsed, sidecars.StopTimeout)
+	}
+	logged := written()
+	if want := "error: sidecar @fixture/sidecar-echo: did not end within the stop timeout and was killed\n"; !strings.Contains(logged, want) {
+		t.Errorf("log %q does not contain %q", logged, want)
+	}
+	if strings.Contains(logged, "exited while stopping") {
+		t.Errorf("log %q reports the exit that the kill caused", logged)
 	}
 }
 
@@ -861,6 +936,23 @@ func TestEndedSidecarLeavesNoClosingSurface(t *testing.T) {
 	}
 	if got := nextClosing(t, snapshots); len(got) != 0 {
 		t.Fatalf("closing after the sidecar ended = %v, want none", got)
+	}
+}
+
+// captureLog 는 검사가 끝날 때까지 애플리케이션 로그를 기록하고, 그때까지 기록한 내용을 반환하는 함수를 돌려준다.
+func captureLog(t *testing.T) func() string {
+	var written strings.Builder
+	var mu sync.Mutex
+	log.SetOutput(writerFunc(func(p []byte) (int, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		return written.Write(p)
+	}))
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	return func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		return written.String()
 	}
 }
 

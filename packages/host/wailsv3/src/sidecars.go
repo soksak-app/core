@@ -100,6 +100,13 @@ type sidecar struct {
 	retained map[string]int
 	// surfaces 는 이 프로세스에 요청을 보낸 표면이다. 실패를 알릴 표면이다. c.mu 로 보호한다.
 	surfaces map[string]bool
+	// stopClosing 은 Stop 이 closing 목록에서 뺀 이 프로세스의 닫기다. 표준 입출력 사이드카는 끝나면서 이 닫기에
+	// 답하므로 그 답은 실패가 아니다(docs/spec/sidecars.md#messages). c.mu 로 보호한다.
+	stopClosing map[string]bool
+	// violated 와 waitErr 는 멈추는 동안 read 가 기록하고 exited 를 닫는다. Stop 은 exited 뒤에 읽는다.
+	// violated 는 프로토콜 위반으로 읽기를 멈춘 것이고, waitErr 는 프로세스를 기다린 결과다.
+	violated bool
+	waitErr  error
 	// begin 은 등록된 프로세스의 쓰기와 읽기 고루틴을 시작한다.
 	begin func()
 }
@@ -392,26 +399,31 @@ func (c *Sidecars) closingChanged() {
 	}
 }
 
-// closeAnswered 는 사이드카 name 이 surface 의 closed 에 답한 것을 기록한다. 그 표면을 닫고 있지 않았으면
-// 프로토콜 위반의 까닭을 반환한다. 닫지 못한 까닭은 로그에 쓴다. 잠금 밖에서 호출한다.
-func (c *Sidecars) closeAnswered(name, surface string, closed bool, failure *string) string {
+// closeAnswered 는 사이드카 process 가 surface 의 closed 에 답한 것을 기록한다. 그 표면을 닫고 있지 않았고 Stop 이
+// 목록에서 뺀 닫기도 아니면 프로토콜 위반의 까닭을 반환한다. 닫지 못한 까닭은 로그에 쓴다. 잠금 밖에서 호출한다.
+func (c *Sidecars) closeAnswered(process *sidecar, surface string, closed bool, failure *string) string {
 	if !closed {
 		return "invalid message: closed is not true"
 	}
+	name := process.name
 	c.mu.Lock()
 	pending := c.closing[name][surface]
 	delete(c.closing[name], surface)
 	if len(c.closing[name]) == 0 {
 		delete(c.closing, name)
 	}
+	stopped := !pending && process.stopClosing[surface]
+	delete(process.stopClosing, surface)
 	c.mu.Unlock()
-	if !pending {
+	if !pending && !stopped {
 		return "unexpected close answer for " + surface
 	}
 	if failure != nil {
 		LogError("sidecar "+name, fmt.Sprintf("close %s: %s", surface, *failure))
 	}
-	c.closingChanged()
+	if pending {
+		c.closingChanged()
+	}
 	return ""
 }
 
@@ -466,6 +478,7 @@ func (c *Sidecars) Stop() {
 		processes = append(processes, process)
 		delete(c.running, name)
 		if !process.persistent {
+			process.stopClosing = c.closing[name]
 			forgot = c.forgetClosing(name) || forgot
 		}
 	}
@@ -497,17 +510,27 @@ func (c *Sidecars) Stop() {
 				}
 				return
 			}
-			// read() 고루틴이 종료되면 process.exited 채널이 닫힌다.
+			// read() 고루틴이 출력을 끝까지 읽고 프로세스를 기다리면 process.exited 채널이 닫힌다.
+			killed := false
 			select {
 			case <-p.exited:
-				// 프로세스가 정상 종료됨.
 			case <-ctx.Done():
 				// 기한 초과. 강제 종료.
-				if err := p.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+				err := p.cmd.Process.Kill()
+				killed = err == nil
+				if err != nil && !errors.Is(err, os.ErrProcessDone) {
 					LogError("sidecar "+p.name, fmt.Sprintf("kill: %v", err))
 				}
 				// read() 고루틴이 종료될 때까지 기다린다.
 				<-p.exited
+			}
+			// 강제 종료나 위반 뒤 닫은 파이프가 일으킨 종료는 보고하지 않는다(docs/spec/sidecars.md#declaration-and-startup).
+			switch {
+			case killed:
+				LogError("sidecar "+p.name, "did not end within the stop timeout and was killed")
+			case p.violated:
+			case p.waitErr != nil:
+				LogError("sidecar "+p.name, "exited while stopping: "+exitStatus(p.cmd, p.waitErr))
 			}
 		}(process)
 	}
@@ -1133,9 +1156,12 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 		c.closingChanged()
 	}
 	if !failed {
-		if err := process.cmd.Wait(); err != nil {
-			LogError("sidecar "+process.name, fmt.Sprintf("exited while stopping: %v", err))
+		// 멈추는 중이다. 위반은 로그에 쓰고 실패 이벤트는 보내지 않는다. 종료의 보고는 Stop 이 정한다.
+		if violation != "" {
+			LogError("sidecar "+process.name, "failed: "+violation)
 		}
+		process.violated = violation != ""
+		process.waitErr = process.cmd.Wait()
 		close(process.exited)
 		return
 	}
@@ -1144,10 +1170,7 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 	if err := process.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		reason = fmt.Sprintf("%s; kill: %v", reason, err)
 	}
-	exit := "exit status 0"
-	if err := process.cmd.Wait(); err != nil {
-		exit = err.Error()
-	}
+	exit := exitStatus(process.cmd, process.cmd.Wait())
 	if violation == "" {
 		reason = "output closed: " + exit
 	}
@@ -1156,6 +1179,25 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 	for _, item := range owned {
 		item.owner.Emit("sidecar-failure", SidecarFailure{Sidecar: process.name, Surface: item.surface, Reason: reason})
 	}
+}
+
+// exitStatus 는 끝난 프로세스 cmd 의 종료를 `exit status <code>` 나 `signal <number>` 로 쓴다
+// (docs/spec/sidecars.md#declaration-and-startup). waitErr 는 cmd.Wait 의 결과다. 종료 상태가 아닌 기다리기의 오류는
+// 그 오류를 쓴다.
+func exitStatus(cmd *exec.Cmd, waitErr error) string {
+	var exit *exec.ExitError
+	if waitErr != nil && !errors.As(waitErr, &exit) {
+		return fmt.Sprintf("wait: %v", waitErr)
+	}
+	current, err := platform.Current()
+	if err != nil {
+		return fmt.Sprintf("exit status of process %d: %v", cmd.ProcessState.Pid(), err)
+	}
+	text, err := current.ExitStatus(cmd.ProcessState)
+	if err != nil {
+		return fmt.Sprintf("exit status of process %d: %v", cmd.ProcessState.Pid(), err)
+	}
+	return text
 }
 
 // relay 는 출력의 메시지를 소유 창에 전달한다. 출력이 끝나면 빈 문자열을, 프로토콜을 어기거나 읽기가
@@ -1173,7 +1215,7 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 			return "invalid message: surface is missing"
 		}
 		if output.Closed != nil {
-			if violation := c.closeAnswered(process.name, *output.Surface, *output.Closed, output.Error); violation != "" {
+			if violation := c.closeAnswered(process, *output.Surface, *output.Closed, output.Error); violation != "" {
 				return violation
 			}
 			continue
@@ -1328,7 +1370,7 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 			return "invalid message: surface is missing"
 		}
 		if output.Closed != nil {
-			if violation := c.closeAnswered(process.name, *output.Surface, *output.Closed, output.Error); violation != "" {
+			if violation := c.closeAnswered(process, *output.Surface, *output.Closed, output.Error); violation != "" {
 				return violation
 			}
 			continue

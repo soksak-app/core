@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F64: 두 host는 멈추는 sidecar의 출력을 끝까지 읽고 멈춤이 뺀 닫기에 대한 답을 받아들이므로, sidecar가 더는 SIGPIPE로 끝나지 않는다. 멈추는 동안 0이 아닌 종료는 두 host에서 `exit status <code>` 또는 `signal <number>`로 쓴다.
 - F68: 두 host가 WebKit 자식 기록 쓰기를 직렬화하므로, 겹친 페이지 적재가 더는 그 이름 바꾸기를 실패시키지 않는다.
 - F52: `make hosts-check`는 Makefile 변수 `LLVM_MINGW`가 가리키는 llvm-mingw의 Windows C compiler로 Tauri host도 Windows용으로 compile한다.
 - F67: `@soksak/plugin-api`는 control 목록을 제자리에서 갱신하는 `drawList(list, entries, { key, create, update })`를 export하므로, plugin section은 항목이 바뀌지 않은 목록을 더는 다시 만들지 않는다.

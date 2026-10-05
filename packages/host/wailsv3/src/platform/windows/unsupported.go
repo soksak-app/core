@@ -358,6 +358,10 @@ func (implementation) NewSession(*exec.Cmd) error {
 	return unsupported("new process session")
 }
 
+func (implementation) ExitStatus(*os.ProcessState) (string, error) {
+	return "", unsupported("process exit status")
+}
+
 func (implementation) SecureServiceDirectory(string) error {
 	return unsupported("persistent sidecar service directory")
 }

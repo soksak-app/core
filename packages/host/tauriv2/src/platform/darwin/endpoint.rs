@@ -55,6 +55,21 @@ pub fn service_process_exists(pid: u32) -> Result<bool, String> {
     Ok(false)
 }
 
+/// 끝난 프로세스의 wait 상태를 `exit status <code>` 나 `signal <number>` 로 쓴다.
+pub fn exit_status(status: std::process::ExitStatus) -> Result<String, String> {
+    use std::os::unix::process::ExitStatusExt;
+    if let Some(signal) = status.signal() {
+        return Ok(format!("signal {signal}"));
+    }
+    match status.code() {
+        Some(code) => Ok(format!("exit status {code}")),
+        None => Err(format!(
+            "wait status {:#x} has neither an exit code nor a signal",
+            status.into_raw()
+        )),
+    }
+}
+
 /// command 가 setsid 로 새 session 의 leader 가 되게 한다.
 pub fn new_session(command: &mut std::process::Command) {
     use std::os::unix::process::CommandExt;

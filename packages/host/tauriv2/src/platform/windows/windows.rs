@@ -516,4 +516,7 @@ impl Platform for Windows {
     fn new_session(&self, command: &mut std::process::Command) -> Result<(), String> {
         unsupported::new_session(command)
     }
+    fn exit_status(&self, status: std::process::ExitStatus) -> Result<String, String> {
+        unsupported::exit_status(status)
+    }
 }

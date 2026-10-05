@@ -547,6 +547,10 @@ pub fn new_session(_command: &mut std::process::Command) -> Result<(), String> {
     missing("new process session")
 }
 
+pub fn exit_status(_status: std::process::ExitStatus) -> Result<String, String> {
+    missing("process exit status")
+}
+
 pub fn create_private_directories(_path: &std::path::Path) -> Result<(), String> {
     missing("private directory creation")
 }

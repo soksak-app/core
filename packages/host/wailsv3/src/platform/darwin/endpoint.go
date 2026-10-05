@@ -122,3 +122,19 @@ func (implementation) NewSession(command *exec.Cmd) error {
 	command.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	return nil
 }
+
+// ExitStatus 는 끝난 프로세스의 종료를 wait 상태에서 읽어 `exit status <code>` 나 `signal <number>` 로 쓴다.
+func (implementation) ExitStatus(state *os.ProcessState) (string, error) {
+	status, ok := state.Sys().(syscall.WaitStatus)
+	if !ok {
+		return "", fmt.Errorf("process %d: state %T is not a wait status", state.Pid(), state.Sys())
+	}
+	switch {
+	case status.Signaled():
+		return fmt.Sprintf("signal %d", int(status.Signal())), nil
+	case status.Exited():
+		return fmt.Sprintf("exit status %d", status.ExitStatus()), nil
+	default:
+		return "", fmt.Errorf("process %d has not ended: wait status %#x", state.Pid(), uint32(status))
+	}
+}

@@ -151,12 +151,17 @@ fn close_answer<O: Owner>(
     if !answer.closed {
         return Err("invalid message: closed is not true".to_string());
     }
-    let (pending, changed) = {
+    let (pending, stopped, changed) = {
         let mut state = state.lock().expect("sidecar state");
         let pending = state
             .closing
             .get_mut(sidecar)
             .is_some_and(|surfaces| surfaces.remove(&answer.surface));
+        let stopped = !pending
+            && state
+                .stopping
+                .get_mut(sidecar)
+                .is_some_and(|stopping| stopping.closing.remove(&answer.surface));
         if state
             .closing
             .get(sidecar)
@@ -164,9 +169,9 @@ fn close_answer<O: Owner>(
         {
             state.closing.remove(sidecar);
         }
-        (pending, state.closing_changed.clone())
+        (pending, stopped, state.closing_changed.clone())
     };
-    if !pending {
+    if !pending && !stopped {
         return Err(format!("unexpected close answer for {}", answer.surface));
     }
     if let Some(error) = answer.error {
@@ -174,6 +179,9 @@ fn close_answer<O: Owner>(
             &format!("sidecar {sidecar}"),
             format!("close {}: {error}", answer.surface),
         );
+    }
+    if !pending {
+        return Ok(true);
     }
     if let Some(changed) = changed {
         changed();
@@ -371,6 +379,19 @@ struct State<O> {
     // 연결이 끊겼고 아직 소유 표면에 알리지 않은 영속 사이드카(V5-106). 끊김을 알린
     // 시작이 이 기록을 소진한다 — 첫 시작은 알림이 없다.
     unannounced_loss: std::collections::HashSet<String>,
+    /// 멈추는 표준 입출력 사이드카마다 읽기 스레드가 출력의 끝까지 쓰는 기록이다(docs/spec/sidecars.md#messages).
+    stopping: HashMap<String, Stopping>,
+}
+
+/// 멈추는 표준 입출력 사이드카의 기록. stop 이 실행 중인 목록을 비운 뒤에도 읽기 스레드는 출력을 끝까지 읽는다.
+#[derive(Default)]
+struct Stopping {
+    /// 이 프로세스에 요청을 보낸 표면. 멈추는 동안 그 표면의 메시지는 위반이 아니다.
+    surfaces: HashSet<String>,
+    /// stop 이 closing 목록에서 뺀 닫기. 사이드카는 끝나면서 이 닫기에 답하므로 그 답은 위반이 아니다.
+    closing: HashSet<String>,
+    /// 멈추는 동안 프로토콜을 어겨 읽기를 멈췄다. 닫은 파이프가 일으킨 종료는 보고하지 않는다.
+    violated: bool,
 }
 
 /// 사이드카 채널의 스레드 공유 부분. 읽기 스레드가 연결 끊김을 감지하면 같은 시작
@@ -478,6 +499,7 @@ impl<O: Owner> Sidecars<O> {
                     pending_replies: HashMap::new(),
                     pending_closes: HashMap::new(),
                     unannounced_loss: std::collections::HashSet::new(),
+                    stopping: HashMap::new(),
                 })),
                 started: Condvar::new(),
                 ready_timeout: READY_TIMEOUT,
@@ -853,6 +875,21 @@ impl<O: Owner> Sidecars<O> {
                 .collect();
             let mut changed = None;
             for name in stdio {
+                let surfaces = state.running[&name].surfaces.iter().cloned().collect();
+                let closing = state
+                    .closing
+                    .get(&name)
+                    .map(|surfaces| surfaces.iter().cloned().collect())
+                    // 기본값: closing 에 이 사이드카가 없으면 답을 기다리는 닫기가 없으므로 뺀 닫기도 없다.
+                    .unwrap_or_default();
+                state.stopping.insert(
+                    name.clone(),
+                    Stopping {
+                        surfaces,
+                        closing,
+                        violated: false,
+                    },
+                );
                 changed = forget_closing(&mut state, &name).or(changed);
             }
             (state.running.drain().collect(), changed)
@@ -865,6 +902,7 @@ impl<O: Owner> Sidecars<O> {
         let deadline = std::time::Instant::now() + self.stop_timeout;
         let mut handles = Vec::new();
         for (name, process) in processes {
+            let state = Arc::clone(&self.core.state);
             let handle = thread::spawn(move || {
                 let remaining = deadline.saturating_duration_since(std::time::Instant::now());
                 if process.child.is_none() {
@@ -996,14 +1034,32 @@ impl<O: Owner> Sidecars<O> {
                         other => break other,
                     }
                 };
+                // 종료의 보고는 위반 뒤 닫은 파이프가 일으킨 종료를 빼고 쓴다(docs/spec/sidecars.md#declaration-and-startup).
+                let violated = |state: &Arc<Mutex<State<O>>>| {
+                    state
+                        .lock()
+                        .expect("sidecar state")
+                        .stopping
+                        .get(&name)
+                        .is_some_and(|stopping| stopping.violated)
+                };
                 match waited {
-                    Ok(Some(_status)) => {
-                        // 정상 종료됨.
+                    Ok(Some(status)) => {
+                        if !status.success() && !violated(&state) {
+                            log_error(
+                                &format!("sidecar {name}"),
+                                format!("exited while stopping: {}", exit_text(status)),
+                            );
+                        }
                     }
                     Ok(None) => {
                         // 기한 초과. 강제 종료.
-                        if let Err(e) = child.kill() {
-                            log_error(&format!("sidecar {name}"), format!("kill: {e}"));
+                        match child.kill() {
+                            Ok(()) => log_error(
+                                &format!("sidecar {name}"),
+                                "did not end within the stop timeout and was killed",
+                            ),
+                            Err(e) => log_error(&format!("sidecar {name}"), format!("kill: {e}")),
                         }
                         if let Err(e) = child.wait() {
                             log_error(&format!("sidecar {name}"), format!("wait after kill: {e}"));
@@ -1854,7 +1910,11 @@ fn relay<O: Owner>(
             let addressed = state
                 .running
                 .get(sidecar)
-                .is_some_and(|process| process.surfaces.contains(&event.surface));
+                .is_some_and(|process| process.surfaces.contains(&event.surface))
+                || state
+                    .stopping
+                    .get(sidecar)
+                    .is_some_and(|stopping| stopping.surfaces.contains(&event.surface));
             (state.owners.get(&event.surface).cloned(), addressed)
         };
         // 이 프로세스에 보낸 적 없는 표면의 메시지는 프로토콜 위반이다. 보낸 적이 있고 소유 창이 없으면 표면이
@@ -1888,6 +1948,15 @@ fn relay<O: Owner>(
     }
 }
 
+/// 끝난 사이드카의 종료를 `exit status <code>` 나 `signal <number>` 로 쓴다(docs/spec/sidecars.md#declaration-and-startup).
+/// 종료를 읽지 못하면 그 까닭을 같은 자리에 쓴다.
+fn exit_text(status: std::process::ExitStatus) -> String {
+    match crate::platform::current().and_then(|platform| platform.exit_status(status)) {
+        Ok(text) => text,
+        Err(error) => format!("exit status unreadable: {error}"),
+    }
+}
+
 /// 출력이 끝났거나 프로토콜을 어긴 표준 입출력 사이드카를 처리한다. 종료 중이면 stop 이 프로세스를
 /// 기다린다. 아니면 프로세스를 실행 중인 사이드카에서 빼고 끝낸 뒤, 그 프로세스에 보낸 표면의 소유
 /// 창마다 실패를 알린다. 실패 뒤의 프로토콜 상태는 정의되지 않으므로 프로세스를 끝낸다.
@@ -1895,6 +1964,16 @@ fn fail<O: Owner>(state: &Arc<Mutex<State<O>>>, sidecar: &str, violation: Option
     let (process, owned, changed) = {
         let mut state = state.lock().expect("sidecar state");
         if state.stopped {
+            // 멈추는 중이다. 위반은 로그에 쓰고 실패 이벤트는 보내지 않는다. 종료의 보고는 stop 이 정한다.
+            if let Some(violation) = violation {
+                if let Some(stopping) = state.stopping.get_mut(sidecar) {
+                    stopping.violated = true;
+                }
+                log_error(
+                    &format!("sidecar {sidecar}"),
+                    format!("failed: {violation}"),
+                );
+            }
             return;
         }
         // 표준 입출력 사이드카는 읽기 스레드가 끝나기 전에는 다시 시작되지 않으므로 이 이름의 프로세스가 이 프로세스다.
@@ -1925,7 +2004,7 @@ fn fail<O: Owner>(state: &Arc<Mutex<State<O>>>, sidecar: &str, violation: Option
                 failures.push(format!("kill: {error}"));
             }
             match child.wait() {
-                Ok(status) => status.to_string(),
+                Ok(status) => exit_text(status),
                 Err(error) => {
                     failures.push(format!("wait: {error}"));
                     "unknown exit status".to_string()

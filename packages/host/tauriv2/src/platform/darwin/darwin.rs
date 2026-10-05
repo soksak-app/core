@@ -648,6 +648,9 @@ impl Platform for Darwin {
         endpoint::new_session(command);
         Ok(())
     }
+    fn exit_status(&self, status: std::process::ExitStatus) -> Result<String, String> {
+        endpoint::exit_status(status)
+    }
 }
 
 struct PersistentUnixStream(UnixStream);

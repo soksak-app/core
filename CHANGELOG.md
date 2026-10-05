@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F64: both hosts read a stopping sidecar's output to its end and accept its answers to the closes that the stop removed, so the sidecar no longer ends with SIGPIPE; a nonzero end during a stop is written as `exit status <code>` or `signal <number>` in both hosts.
 - F68: both hosts serialize the writes of the WebKit child record, so overlapping page loads no longer fail its rename.
 - F52: `make hosts-check` also compiles the Tauri host for Windows with the Windows C compiler of llvm-mingw, which the Makefile variable `LLVM_MINGW` locates.
 - F67: `@soksak/plugin-api` exports `drawList(list, entries, { key, create, update })`, which updates a list of controls in place, so plugin sections no longer rebuild lists whose entries did not change.

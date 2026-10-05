@@ -678,6 +678,9 @@ pub trait Platform: Send + Sync {
     /// command 가 새 session 에서 시작하게 한다. 영구 service 는 애플리케이션 프로세스가 아니라 설정 디렉터리에
     /// 속하므로 애플리케이션의 프로세스 그룹과 터미널의 신호를 받지 않는다. command 를 시작하기 전에 호출한다.
     fn new_session(&self, command: &mut std::process::Command) -> Result<(), String>;
+    /// 끝난 프로세스의 종료를 `exit status <code>` 나 `signal <number>` 로 쓴다. 두 호스트가 같은 글로 사이드카의 종료를
+    /// 로그에 쓴다(docs/spec/sidecars.md#declaration-and-startup).
+    fn exit_status(&self, status: std::process::ExitStatus) -> Result<String, String>;
 }
 
 /// 현재 운영체제의 구현을 반환한다.

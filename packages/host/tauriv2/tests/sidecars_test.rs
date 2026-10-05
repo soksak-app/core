@@ -537,8 +537,26 @@ fn stop_graceful_shutdown() {
 // contract: sidecars.stop.closes-unread-output
 #[test]
 fn stop_closes_unread_output() {
-    // 멈추는 동안 호스트가 더 읽지 않는 출력의 읽기 끝을 닫아, 끝나면서 파이프가 담는 것보다 많이 쓰는 사이드카도
-    // 강제 종료 없이 끝나는지 검증한다. 출력은 호스트가 기다리지 않는 닫기 응답이다.
+    // 멈추는 동안의 프로토콜 실패를 로그에 쓰고, 호스트가 더 읽지 않는 출력의 읽기 끝을 닫아, 그 뒤 파이프가 담는 것보다
+    // 많이 쓰는 사이드카도 강제 종료 없이 끝나는지 검증한다. 출력은 호스트가 닫지 않은 표면의 닫기 응답이다. 그 프로세스의
+    // 종료는 닫힌 파이프 때문이므로 보고하지 않는다.
+    let Some(stderr) = logged_by_child("stop_closes_unread_output") else {
+        stop_closes_unread_output_in_child();
+        return;
+    };
+    let want =
+        "error: sidecar @fixture/sidecar-talkative: failed: unexpected close answer for s1\n";
+    assert!(
+        stderr.contains(want),
+        "log {stderr:?} does not contain {want:?}"
+    );
+    assert!(
+        !stderr.contains("exited while stopping"),
+        "log {stderr:?} reports the exit that the closed pipe caused"
+    );
+}
+
+fn stop_closes_unread_output_in_child() {
     let directory = tempfile::tempdir().unwrap();
     let program = directory.path().join("talkative");
     std::fs::write(
@@ -576,6 +594,83 @@ fn stop_closes_unread_output() {
         "stop took {elapsed:?} and reached the {:?} deadline: the host left the unread output open",
         sidecars.stop_timeout
     );
+}
+
+// contract: sidecars.stop.reads-output-to-end
+#[test]
+fn stop_reads_output_to_its_end() {
+    // 멈추는 동안 호스트가 출력을 끝까지 읽는지 검증한다. 사이드카는 중지 전에 받은 닫기에 입력이 끝난 뒤에야 답하고,
+    // 그다음 파이프가 담는 것보다 많이 쓴 뒤 모든 쓰기가 성공했을 때만 finished 를 기록한다. 애플리케이션이 끝날 때 창
+    // 닫기가 보낸 closed 에 files 사이드카가 답하는 순서와 같다.
+    let Some(stderr) = logged_by_child("stop_reads_output_to_its_end") else {
+        let (mut sidecars, directory) = script_sidecars(
+            "#!/bin/sh\nclosed=\nwhile read line; do case \"$line\" in *'\"closed\":true'*) closed=1;; *) echo \"$line\";; esac; done\n\
+             [ -n \"$closed\" ] || exit 4\necho '{\"surface\":\"s1\",\"closed\":true}' || exit 5\n\
+             i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"body\":\"late\"}' || exit 5; i=$((i+1)); done\n\
+             echo finished > DIR/finished\nexit 0\n",
+        );
+        sidecars.0.stop_timeout = STALL;
+        let (window, events) = owner("a", "/projects/test");
+        sidecars
+            .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
+            .unwrap();
+        let event = events
+            .recv_timeout(STALL)
+            .expect("no echo event; the test stalled");
+        assert_eq!(event.surface, "s1");
+        sidecars.retain(&window, &|_| false).unwrap();
+        let start = std::time::Instant::now();
+        sidecars.stop();
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < sidecars.stop_timeout,
+            "stop took {elapsed:?} and reached the {:?} deadline",
+            sidecars.stop_timeout
+        );
+        let finished = std::fs::read_to_string(directory.path().join("finished"));
+        assert!(
+            matches!(&finished, Ok(text) if text == "finished\n"),
+            "the sidecar did not complete its writes on its way out: finished = {finished:?}"
+        );
+        return;
+    };
+    assert!(
+        !stderr.contains("error: "),
+        "stop logged an error: {stderr:?}"
+    );
+}
+
+// contract: sidecars.stop.reports-exit-status
+#[test]
+fn stop_reports_exit_status() {
+    // 멈추는 동안 0 이 아닌 종료 상태나 신호로 끝난 사이드카를 두 호스트에 같은 형식으로 로그에 쓰는지 검증한다.
+    let Some(stderr) = logged_by_child("stop_reports_exit_status") else {
+        for ending in ["exit 3", "kill -TERM $$"] {
+            let (mut sidecars, _directory) = script_sidecars(&format!(
+                "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n{ending}\n"
+            ));
+            sidecars.0.stop_timeout = STALL;
+            let (window, events) = owner("a", "/projects/test");
+            sidecars
+                .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
+                .unwrap();
+            let event = events
+                .recv_timeout(STALL)
+                .expect("no echo event; the test stalled");
+            assert_eq!(event.surface, "s1");
+            sidecars.stop();
+        }
+        return;
+    };
+    for want in [
+        "error: sidecar @fixture/sidecar-echo: exited while stopping: exit status 3\n",
+        "error: sidecar @fixture/sidecar-echo: exited while stopping: signal 15\n",
+    ] {
+        assert!(
+            stderr.contains(want),
+            "log {stderr:?} does not contain {want:?}"
+        );
+    }
 }
 
 // contract: sidecars.stop.forgets-running-sidecars
@@ -669,8 +764,24 @@ fn close_during_stop_sends_nothing() {
 // contract: sidecars.stop.kills-after-timeout
 #[test]
 fn stop_forced_kill() {
-    // 기한을 초과해도 종료하지 않는 사이드카를 kill 하는지 검증한다.
+    // 기한을 초과해도 종료하지 않는 사이드카를 kill 하고 그 kill 을 로그에 쓰는지 검증한다.
+    let Some(stderr) = logged_by_child("stop_forced_kill") else {
+        stop_forced_kill_in_child();
+        return;
+    };
+    let want =
+        "error: sidecar @fixture/sidecar-stubborn: did not end within the stop timeout and was killed\n";
+    assert!(
+        stderr.contains(want),
+        "log {stderr:?} does not contain {want:?}"
+    );
+    assert!(
+        !stderr.contains("exited while stopping"),
+        "log {stderr:?} reports the exit that the kill caused"
+    );
+}
 
+fn stop_forced_kill_in_child() {
     let directory = tempfile::tempdir().unwrap();
 
     // 사이드카: stdin 을 읽지 않으므로 stdin EOF 뒤에도 계속 실행한다. background 명령의 stdin 은 shell 에 따라 /dev/null 이
@@ -712,6 +823,23 @@ fn stop_forced_kill() {
         elapsed,
         sidecars.stop_timeout
     );
+}
+
+/// 로그는 표준 오류이므로 로그를 단언하는 검사는 같은 검사를 자식 process 로 실행해 그 출력을 읽는다. 자식 process 이면
+/// None 을 반환하고 검사는 사이드카를 실행한다. 부모 process 이면 test 이름의 검사를 자식으로 실행하고, 그 검사가
+/// 통과했을 때 표준 오류를 반환한다.
+fn logged_by_child(test: &str) -> Option<String> {
+    if std::env::var_os("SOKSAK_SIDECAR_LOG_CHILD").is_some() {
+        return None;
+    }
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", test, "--nocapture"])
+        .env("SOKSAK_SIDECAR_LOG_CHILD", "1")
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(output.status.success(), "the child check failed: {stderr}");
+    Some(stderr)
 }
 
 /// 사이드카 메시지 한 줄의 줄바꿈 앞 최대 크기(docs/spec/sidecars.md#messages).
@@ -881,8 +1009,8 @@ fn an_output_close_notifies_each_surface() {
             (failure.sidecar.as_str(), failure.surface.as_str()),
             (ECHO, surface)
         );
-        assert!(
-            failure.reason.contains("output closed"),
+        assert_eq!(
+            failure.reason, "output closed: exit status 3",
             "{surface}: {failure:?}"
         );
     }

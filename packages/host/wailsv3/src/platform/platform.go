@@ -432,6 +432,9 @@ type Platform interface {
 	// 설정 디렉터리에 속하므로 애플리케이션의 프로세스 그룹과 터미널의 신호를 받지 않는다. command 를 시작하기
 	// 전에 호출한다.
 	NewSession(command *exec.Cmd) error
+	// ExitStatus 는 끝난 프로세스의 종료를 `exit status <code>` 나 `signal <number>` 로 쓴다. 두 호스트가 같은 글로
+	// 사이드카의 종료를 로그에 쓴다(docs/spec/sidecars.md#declaration-and-startup).
+	ExitStatus(state *os.ProcessState) (string, error)
 	// SecureServiceDirectory 는 영구 service 디렉터리 path 를 현재 사용자만 접근하게 한다.
 	SecureServiceDirectory(path string) error
 
