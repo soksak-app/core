@@ -2,8 +2,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, fresh, open } from "./app.mjs";
-import { frames, readFrame } from "./frame.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { recordedEdges } from "./sidebar-gesture-recording.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
 

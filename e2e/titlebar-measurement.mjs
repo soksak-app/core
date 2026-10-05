@@ -1,6 +1,6 @@
 // 녹화 프레임 하나에서 창 단추의 가운데와 첫 행의 가운데를 픽셀로 잰다(docs/spec/native-surfaces.md#title-bar-height).
 // 판정이 어긋난 프레임과 잴 수 없는 프레임을 거부하는지 test/titlebar-measurement.test.mjs 가 검사한다.
-import { pixel } from "./frame.mjs";
+import { pixel } from "@soksak/window-check/frame.mjs";
 
 /** 단추 가운데와 첫 행 가운데가 다를 수 있는 가장 큰 거리(px). */
 export const TOLERANCE = 0.5;

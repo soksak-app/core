@@ -1,6 +1,6 @@
 // 사방 손잡이 녹화의 모든 프레임에서 경계 좌표를 검사한다.
 import assert from "node:assert/strict";
-import { pixel } from "./frame.mjs";
+import { pixel } from "@soksak/window-check/frame.mjs";
 const sign = (side) => (side === "top" || side === "left" ? 1 : -1);
 function border(frame, side, at, cross) {
   const ratio = frame.scale * frame.contentScale;

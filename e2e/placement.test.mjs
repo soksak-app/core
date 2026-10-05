@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
+import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 
 test("fresh places the two check windows at their own frames", async (t) => {
   const sessions = [];

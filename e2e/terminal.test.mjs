@@ -15,8 +15,9 @@ const MENU_TITLES = {
 const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language] ?? MENU_TITLES.en;
 
 
-import { APPS, drag, failure, fresh, open, within } from "./app.mjs";
-import { frames, pixel, readFrame } from "./frame.mjs";
+import { APPS, drag, failure, open, within } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
 import { assertHeldStatesShown } from "./drag-measurement.mjs";
 import { terminalProcessSnapshot } from "./terminal-processes.mjs";

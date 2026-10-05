@@ -5,8 +5,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, drag, fresh, open } from "./app.mjs";
-import { frames, readFrame } from "./frame.mjs";
+import { APPS, drag, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { terminalMarks } from "./outside.mjs";
 import { bare, cardSize } from "./surface.mjs";
 

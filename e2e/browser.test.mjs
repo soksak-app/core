@@ -14,8 +14,9 @@ const MENU_TITLES = {
 const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language] ?? MENU_TITLES.en;
 
 
-import { APPS, fresh, open, terminalCardSidebar } from "./app.mjs";
-import { frames, pixel, readFrame } from "./frame.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh, terminalCardSidebar } from "./fixture.mjs";
+import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
 /** block 문서의 왼쪽 위에 놓는 CSS 크기 120×60 의 빨간 블록. 페이지 확대만큼 픽셀이 커진다. */
 const BLOCK = '<div style="position:absolute;left:0;top:0;width:120px;height:60px;background:rgb(220,30,30)"></div>';

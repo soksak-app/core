@@ -2,8 +2,9 @@
 // 1×·2× 배율과 반 포인트 표면 크기는 native/darwin/tests/webview_geometry_test.m 이 검사한다.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, drag, fresh, open } from "./app.mjs";
-import { frames, pixel, readFrame } from "./frame.mjs";
+import { APPS, drag, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { rasterRow, terminalMarks } from "./outside.mjs";
 
 for (const app of Object.values(APPS)) {

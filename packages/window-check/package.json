@@ -1,0 +1,43 @@
+{
+  "name": "@soksak/window-check",
+  "version": "0.0.3",
+  "private": true,
+  "description": "Harness for window checks against running soksak applications.",
+  "type": "module",
+  "exports": {
+    "./app.mjs": "./app.mjs",
+    "./application-log.mjs": "./application-log.mjs",
+    "./frame.mjs": "./frame.mjs",
+    "./frontmost.mjs": "./frontmost.mjs",
+    "./lz4.mjs": "./lz4.mjs",
+    "./pasteboard.mjs": "./pasteboard.mjs",
+    "./png.mjs": "./png.mjs",
+    "./repeat.mjs": "./repeat.mjs",
+    "./session.mjs": "./session.mjs",
+    "./stall-sample.mjs": "./stall-sample.mjs",
+    "./text-difference.mjs": "./text-difference.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "app.mjs",
+    "application-log.mjs",
+    "frame.mjs",
+    "frontmost.mjs",
+    "lz4.mjs",
+    "pasteboard.mjs",
+    "png.mjs",
+    "repeat.mjs",
+    "session.mjs",
+    "stall-sample.mjs",
+    "text-difference.mjs"
+  ],
+  "bin": {
+    "soksak-window-repeat": "./repeat.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@soksak/client": "workspace:*"
+  }
+}

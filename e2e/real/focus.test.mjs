@@ -6,8 +6,9 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, fresh, open } from "../app.mjs";
-import { frames } from "../frame.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "../fixture.mjs";
+import { frames } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals } from "../terminal-screen.mjs";
 import { bringFront, click, requireTrusted, screenCenter } from "./hid.mjs";
 

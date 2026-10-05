@@ -22,7 +22,7 @@ export function auditE2EHostParity(
       unitOnly.push({ file, reason });
       continue;
     }
-    if (!/import\s*\{[^}]*\bAPPS\b[^}]*\}\s*from\s+["']\.\/app\.mjs["']/.test(source)) {
+    if (!/import\s*\{[^}]*\bAPPS\b[^}]*\}\s*from\s+["']@soksak\/window-check\/app\.mjs["']/.test(source)) {
       errors.push(`${file}: app behavior test does not import APPS`);
       continue;
     }

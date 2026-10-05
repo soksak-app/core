@@ -6,8 +6,9 @@ import assert from "node:assert/strict";
 import { statSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, failure, fresh, open } from "./app.mjs";
-import { applicationLog, readLines } from "./application-log.mjs";
+import { APPS, failure, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { applicationLog, readLines } from "@soksak/window-check/application-log.mjs";
 import { heldRepliesSent, lateReplyFindings } from "./late-reply.mjs";
 
 /** 탭 id 가 있는 카드. */

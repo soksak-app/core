@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { APPS, fresh, open, terminalCardSidebar } from "./app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh, terminalCardSidebar } from "./fixture.mjs";
 import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { frames, pixel, readFrame } from "./frame.mjs";
+import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
 /** 손잡이는 사이드바 테두리 위에 겹치므로 표면은 사이드바 바로 뒤에서 시작한다. */
 const GRIP = 0;

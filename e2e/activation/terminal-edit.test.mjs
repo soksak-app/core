@@ -5,9 +5,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, fresh, open } from "../app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "../fixture.mjs";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
-import { pasteboardText, writePasteboard } from "../pasteboard.mjs";
+import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys`, { timeout: 90000 }, async (t) => {

@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { availableParallelism, loadavg } from "node:os";
 import test from "node:test";
 
-import { APPS, drag, fresh, keepCommonSettings, open } from "./app.mjs";
-import { frames, readFrame } from "./frame.mjs";
+import { APPS, drag, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { outside, terminalMarks, whitePixels } from "./outside.mjs";
 import { alignment, alignmentDelta } from "./alignment.mjs";
 import { assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag } from "./drag-measurement.mjs";

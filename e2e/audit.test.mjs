@@ -5,7 +5,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 
 /** 메인 문서와 보이는 모든 플러그인 표면 문서의 audit 가 비어 있는지 확인한다. */
 async function clean(s, where) {

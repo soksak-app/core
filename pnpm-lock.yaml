@@ -46,6 +46,9 @@ importers:
       '@soksak/client':
         specifier: workspace:*
         version: link:../packages/client
+      '@soksak/window-check':
+        specifier: workspace:*
+        version: link:../packages/window-check
 
   packages/client: {}
 
@@ -76,6 +79,12 @@ importers:
       typescript:
         specifier: 7.0.2
         version: 7.0.2
+
+  packages/window-check:
+    dependencies:
+      '@soksak/client':
+        specifier: workspace:*
+        version: link:../client
 
   packages/workbench:
     dependencies:

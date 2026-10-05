@@ -16,7 +16,7 @@
 // 터미널 표면의 기본 배경은 카드와 같은 색(--card)이므로 배경으로는 카드와 구별되지 않는다. 검사는 OSC 11 로
 // 터미널의 기본 배경을 측정용 색(terminal-screen.mjs 의 MEASURED_BACKGROUND)으로 바꾼다. 그 색의 가로 구간이 그
 // 프레임에 합성된 터미널 래스터의 가로 구간이다.
-import { pixel } from "./frame.mjs";
+import { pixel } from "@soksak/window-check/frame.mjs";
 import { MEASURED_BACKGROUND, readScreenUntil, setMeasuredBackground } from "./terminal-screen.mjs";
 
 /** 카드의 배경. 머리와 발이 이 색이다. midnight 테마의 --card(#191b24). */

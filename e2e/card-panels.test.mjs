@@ -4,10 +4,11 @@ import { rmSync } from "node:fs";
 import { dirname } from "node:path";
 import test from "node:test";
 
-import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
+import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 import { checkLinkedPanels } from "./linked-panels.mjs";
 import { gripInk, requireCleared, tabSwitchPair } from "./card-panel-checks.mjs";
-import { readPng } from "./png.mjs";
+import { readPng } from "@soksak/window-check/png.mjs";
 const geometry=grid=>grid.cards.map(({id,x,y,w,h})=>({id,x,y,w,h})).sort((a,b)=>a.id.localeCompare(b.id));
 
 for (const app of Object.values(APPS)) {

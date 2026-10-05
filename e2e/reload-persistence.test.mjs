@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a reload keeps a tab that was closed just before it closed`, { timeout: 120000 }, async (t) => {

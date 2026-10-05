@@ -2,8 +2,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, open } from "../app.mjs";
-import { frames, readFrame } from "../frame.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 
 for (const app of Object.values(APPS))
   test(`${app.name}: current terminal right sidebar follows saved plugin settings`, { timeout: 90000 }, async (t) => {

@@ -6,9 +6,10 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, coveredBy, fresh, open } from "./app.mjs";
+import { APPS, coveredBy, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
-import { frames, readFrame } from "./frame.mjs";
+import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { TOLERANCE, measureTitlebar, misaligned, rowHeight } from "./titlebar-measurement.mjs";
 
 // 1 에서 3 까지 오르는 배율 단계(docs/spec/text-size.md).

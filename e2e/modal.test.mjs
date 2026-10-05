@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
-import { frames, readFrame } from "./frame.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 
 /** 빈 문서 하나를 주는 루프백 서버의 주소. 검사가 끝나면 닫는다. */
 async function serveDocument(s) {

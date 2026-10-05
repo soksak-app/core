@@ -3,8 +3,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
-import { frames, readFrame } from "./frame.mjs";
+import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { railPixels } from "./rail.mjs";
 
 for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adjacent, detached, fullscreen and restored cards`, { timeout: 90000 }, async (t) => {

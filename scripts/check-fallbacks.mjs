@@ -10,7 +10,9 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** 제품 코드. 테스트, 검사 도구, 벤치, 생성물은 뺀다. */
-const PRODUCT = /^(packages|native|apps)\//;
+// packages/window-check 는 실행 중인 앱을 검사하는 harness 다. 앱에 실리지 않는 검사 코드이므로 e2e 와 같이 제품
+// 코드에서 뺀다(F25.1 에서 e2e 에서 옮겼다).
+const PRODUCT = /^(packages\/(?!window-check\/)|native\/|apps\/)/;
 const EXCLUDED = /(^|\/)(test|tests|testing|bench|dist|build|scripts|node_modules)\/|\.test\.|_test\.(go|rs|m)$|\.d\.(ts|mts|cts)$/;
 
 /** 언어별 형태. 한 줄에서 찾는다. */

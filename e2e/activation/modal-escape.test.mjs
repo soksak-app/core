@@ -1,7 +1,8 @@
 // 활성 키 창의 네이티브 Escape 가 선택기 문서에 도착하는지 검사한다.
 import test from "node:test";
 
-import { APPS, fresh, open } from "../app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "../fixture.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an active key window closes its add picker with native Escape`, async (t) => {

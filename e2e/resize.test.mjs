@@ -4,8 +4,9 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
-import { frames, readFrame } from "./frame.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 
 /**
  * 배치의 오른쪽·아래 끝과 창 끝 사이의 여백이 기준과 이만큼(pt) 넘게 다른 프레임은 배치가 창보다 늦은 프레임이다.

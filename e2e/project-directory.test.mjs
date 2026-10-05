@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { realpathSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 import { readScreenUntil } from "./terminal-screen.mjs";
 
 /** 브라우저 카드에 plugin 탭을 더하고 그 표면을 반환한다. 브라우저 탭은 디렉터리를 알리지 않으므로 origin 이 없다. */

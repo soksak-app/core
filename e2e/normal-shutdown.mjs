@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { existsSync, watch } from "node:fs";
 import { dirname } from "node:path";
 import { connect } from "@soksak/client";
-import { APPS } from "./app.mjs";
+import { APPS } from "@soksak/window-check/app.mjs";
 
 const app = APPS[Object.keys(APPS)[0]];
 const endpointFile = `${app.configDir}/endpoint.json`;

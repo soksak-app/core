@@ -2,9 +2,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
+import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
-import { frames, readFrame, pixel } from "./frame.mjs";
+import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 
 const geometry = (grid) =>
   grid.cards.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })).sort((a, b) => a.id.localeCompare(b.id));

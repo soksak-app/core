@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 
-import { frames, pixel, readFrame } from "./frame.mjs";
+import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
 export function textLines(screen) {
   assert.ok(screen && Array.isArray(screen.lines), `invalid terminal screen: ${JSON.stringify(screen)}`);

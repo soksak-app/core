@@ -5,8 +5,9 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
-import { frames, pixel, readFrame } from "./frame.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
 /** 디스플레이 녹화 frame 에서 화면 좌표(포인트) point 의 픽셀. 디스플레이의 원점은 display 다. */
 function sample(frame, display, point) {

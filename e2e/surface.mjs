@@ -2,7 +2,7 @@
 //
 // 터미널 표면의 기본 배경은 카드와 같은 색(--card)이다(terminal.test.mjs 의 배경 검사). midnight 테마에서 창의 어느 것도
 // 흰색이 아니므로, 카드 색에 맞붙은 흰 픽셀은 웹뷰가 아직 렌더링하지 않은 자리다.
-import { pixel } from "./frame.mjs";
+import { pixel } from "@soksak/window-check/frame.mjs";
 
 /** 카드와 터미널 표면의 기본 배경. midnight 테마의 --card(#191b24)다. */
 const CARD = [25, 27, 36];

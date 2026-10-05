@@ -13,9 +13,15 @@ import { sampleProcess } from "./stall-sample.mjs";
 import { readErrors, readOffset, writeOffset } from "./application-log.mjs";
 import { pasteboardDifference, readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
-// 검사하는 애플리케이션 실행 파일. 애플리케이션은 번들에서 실행된다(docs/spec/hosts.md). 작업 디렉터리와
-// 무관하게 이 파일 위치를 기준으로 찾는다.
-const built = (name) => fileURLToPath(new URL(`../target/debug/${name}.app/Contents/MacOS/${name}`, import.meta.url));
+// 검사하는 애플리케이션 실행 파일은 실행이 선언한다. SOKSAK_BINARY_WAILSV3 와 SOKSAK_BINARY_TAURIV2 가 각 앱의
+// 번들 안 실행 파일 경로다(docs/operations/examples.md#window-checks). core 의 검사는 build 출력 폴더에서 그 경로를 찾아
+// 넘기고, 다른 저장소의 검사는 검사할 build 를 직접 선언한다.
+const declared = (name) => {
+  const variable = `SOKSAK_BINARY_${name.toUpperCase()}`;
+  const path = process.env[variable];
+  if (!path) throw new Error(`${variable} is not set; it names the executable of the ${name} application to check`);
+  return path;
+};
 
 /** 검사 대상 앱. 실행 파일과 설정 폴더. */
 const appNames = process.env.SOKSAK_APP ? [process.env.SOKSAK_APP] : ["wailsv3", "tauriv2"];
@@ -25,7 +31,8 @@ if (!appNames.every((name) => ["wailsv3", "tauriv2"].includes(name))) {
 
 export const APPS = Object.fromEntries(appNames.map((name) => [name, {
   name,
-  binary: built(`soksak-${name}`),
+  // 실행 파일은 쓸 때 읽는다. 선언이 없으면 그 앱을 검사하는 자리에서 변수 이름을 밝혀 실패한다.
+  get binary() { return declared(name); },
   // default: 실행이 명시적인 config 디렉터리나 격리된 root를 주지 않으면 창 검사는 일회용 임시 endpoint 디렉터리를 사용한다.
   configDir: process.env.SOKSAK_CONFIG_DIR ?? join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), `soksak-check-${name}`),
 }]));
@@ -530,73 +537,11 @@ export async function failure(promise) {
 const START = { width: 1200, height: 760 };
 
 /**
- * 창을 검사 시작 상태로 만든다. 다른 창을 닫고, 창 크기를 시작 크기로 되돌리고, 테스트 프로젝트를 새 배치로 열고 메인 문서를 다시 읽은 뒤,
- * 첫 셸 문서가 테마를 적용할 때까지 기다리고 표시 완료를 확인한다.
+ * 창을 검사 시작 상태로 만든다. 다른 창을 닫고, 창 크기와 자리를 시작 상태로 되돌리고, 테스트 프로젝트를 settings 로
+ * 새 배치(diagnostics.fixture)로 열고, 메인 문서를 다시 읽은 뒤, 그 사이 표시 실패가 없었는지 확인한다. 배치의
+ * 표면을 기다리는 일은 그 표면을 아는 저장소의 준비가 한다.
  */
-
-/** 창 검사 터미널의 셸. 로그인 셸의 프로필에 따라 달라지는 프롬프트를 피한다. */
-const CHECK_SHELL = fileURLToPath(new URL("./check-shell", import.meta.url));
-/**
- * 지금의 공통 설정을 기억하고, 검사가 끝나면 바뀐 값을 되돌린다. 공통 설정을 바꾸는 검사는 fresh 뒤에 이것을
- * 부른다. 검사 앱은 사람도 쓰므로 검사가 바꾼 값이 남으면 안 된다.
- */
-export async function keepCommonSettings(s) {
-  const before = (await s.get("core.settings")).values;
-  s.cleanup(async () => {
-    const now = (await s.get("core.settings")).values;
-    const patch = Object.fromEntries(Object.entries(before)
-      .filter(([key, value]) => JSON.stringify(now[key]) !== JSON.stringify(value)));
-    if (Object.keys(patch).length) await s.run("core.settings.set", { patch, scope: "common" });
-  });
-}
-
-/**
- * 터미널 카드에 안쪽 왼쪽 사이드바를 둔다. 기본 배치에는 카드 사이드바가 없으므로, 카드 사이드바를 검사하는 검사는
- * 세트 set-files(files.tree, files.bookmarks, list)와 터미널의 card-left 연결을 공통 설정에 더한다. 검사가 끝나면
- * keepCommonSettings 가 세트와 연결을 함께 되돌리므로 호출자는 sets 를 따로 초기화하지 않는다.
- */
-export async function terminalCardSidebar(s) {
-  await keepCommonSettings(s);
-  const sets = (await s.get("core.settings")).values.sets;
-  await s.run("core.settings.set", { patch: { sets: [...sets,
-    { id: "set-files", title: "파일", sections: ["files.tree", "files.bookmarks"], layout: "list" }] }, scope: "common" });
-  await s.run("core.settings.link", { place: "card-left", plugin: "terminal", set: "set-files", scope: "common" });
-  await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "terminal:left"),
-    "the terminal card sidebar did not appear");
-}
-
-/**
- * 검사 앱마다 정해진 창 자리. 첫 앱은 주 화면 작업 영역의 왼쪽 위, 둘째 앱은 오른쪽 위에 둔다. 검사마다 창의
- * 자리가 앞선 검사가 옮긴 자리에 따라 달라지지 않는다. 작업 영역이 두 창 폭의 합보다 좁으면 가운데가 겹친다.
- * 같은 자리의 두 창도 서로를 완전히 가리지 않으며(창의 그림자가 보인다, V5-86), 다른 애플리케이션의 창은 이
- * 자리와 무관하게 검사 창을 가릴 수 있다. 창 이동은 애플리케이션을 활성화하지 않는다.
- */
-async function place(s) {
-  const [screen] = await s.get("host.screens");
-  const area = screen.visible;
-  const { frame } = await s.get("host.window");
-  const x = ["wailsv3", "tauriv2"].indexOf(s.app.name) === 0 ? area.x : area.x + area.width - frame.width;
-  const y = area.y;
-  if (frame.x === x && frame.y === y) return;
-  await s.run("host.window.move", { x, y });
-  await s.until("host.window", (w) => w.frame.x === x && w.frame.y === y, `the window did not move to its check frame ${x},${y}`);
-}
-
-// SOKSAK_PERFORMANCE_TRACE=1 은 모든 검사 준비에서 성능 기록을 켜서 등록 손실의 순서를 남긴다. 다른 값은 거부한다.
-const TRACE = { undefined: false, "1": true }[process.env.SOKSAK_PERFORMANCE_TRACE];
-if (TRACE === undefined) throw new Error(`SOKSAK_PERFORMANCE_TRACE must be unset or 1, not ${process.env.SOKSAK_PERFORMANCE_TRACE}`);
-
-/** 기록 파일의 offset 뒤에 쓰인 표면 등록 기록. */
-function registrationTimeline(s, offset) {
-  const file = join(s.app.configDir, "logs", "performance.ndjson");
-  if (!existsSync(file)) return [];
-  return readFileSync(file, "utf8").slice(offset).trim().split("\n").filter(Boolean)
-    .map((line) => JSON.parse(line)).filter((row) => row.event === "surface.registration");
-}
-
-export async function fresh(s, { performanceTrace = TRACE } = {}) {
-  const traceFile = join(s.app.configDir, "logs", "performance.ndjson");
-  const traceOffset = existsSync(traceFile) ? readFileSync(traceFile, "utf8").length : 0;
+export async function prepareFixture(s, { settings = {}, performanceTrace = TRACE } = {}) {
   for (const window of await s.get("host.windows")) {
     if (window.window !== s.window) await s.on(window.window).close();
   }
@@ -617,10 +562,7 @@ export async function fresh(s, { performanceTrace = TRACE } = {}) {
   const initial = verification.values.length;
   let records;
   try {
-    // 창 검사의 터미널은 사용자의 로그인 셸과 무관하게 검사용 셸(check-shell)로 시작한다.
-    await s.request("diagnostics.fixture", { settings: {
-      "terminal.shell": CHECK_SHELL, "diagnostics.performance": performanceTrace,
-    } });
+    await s.request("diagnostics.fixture", { settings: { ...settings, "diagnostics.performance": performanceTrace } });
     await s.presented();
     if (presentationErrors.length) {
       throw new Error(`test preparation reported presentation errors before reload: ${JSON.stringify(presentationErrors)}; ` +
@@ -638,47 +580,42 @@ export async function fresh(s, { performanceTrace = TRACE } = {}) {
     .filter((row) => row.name === "Surface presentation" && !row.ok);
   if (failed.length) throw new Error(`test preparation reported presentation errors: ${JSON.stringify(failed)}`);
   if (presentationErrors.length) throw new Error(`test preparation reported presentation errors: ${JSON.stringify(presentationErrors)}`);
-  let terminal;
-  try {
-    [terminal] = await terminalReady(s);
-  } catch (error) {
-    if (!performanceTrace) throw error;
-    throw new Error(`${error.message}; registration timeline: ${JSON.stringify(registrationTimeline(s, traceOffset))}`, { cause: error });
-  }
-  await s.presented();
-  try {
-    await s.get("terminal.session", terminal.surface);
-  } catch (error) {
-    throw new Error(`terminal readiness returned stale surface ${terminal.surface}: ${error.message}; ` +
-      `current surfaces: ${JSON.stringify(await s.get("core.surfaces"))}`);
-  }
-  return terminal;
 }
 
-/** 보이는 터미널 표면들이 등록되고 테마를 적용할 때까지 기다린 뒤 그 표면들을 반환한다. */
-export async function terminalReady(s) {
-  await s.until("core.surfaces",
-    (all) => all.some((x) => x.visible && x.plugin === "terminal" &&
-      x.exposes.includes("status core.surface.document") &&
-      x.exposes.includes("status terminal.session") &&
-      x.exposes.includes("dom terminal.view")),
-    "no visible terminal surface registered its document, session, and view");
-  // predicate를 만족하는 알림은 reload가 surface를 교체하기 바로 전의 surface를
-  // 설명할 수 있다. id를 반환하기 전에 현재 registry를 읽는다. 오래된 surface id로
-  // 진행하지 않는다.
-  const active = new Set((await s.get("core.grid")).cards
-    .map((card) => card.active)
-    .filter(Boolean));
-  const terminals = (await s.surfaces("terminal")).filter((x) => active.has(x.surface) &&
-    x.exposes.includes("status core.surface.document") &&
-    x.exposes.includes("status terminal.session") &&
-    x.exposes.includes("dom terminal.view"));
-  for (const terminal of terminals) {
-    await s.until("core.surface.document", (doc) => doc !== null && doc.readyState === "complete" && doc.themed,
-      `terminal ${terminal.surface} did not apply its theme`, { surface: terminal.surface });
-  }
-  return terminals;
+/**
+ * 지금의 공통 설정을 기억하고, 검사가 끝나면 바뀐 값을 되돌린다. 공통 설정을 바꾸는 검사는 준비 뒤에 이것을
+ * 부른다. 검사 앱은 사람도 쓰므로 검사가 바꾼 값이 남으면 안 된다.
+ */
+export async function keepCommonSettings(s) {
+  const before = (await s.get("core.settings")).values;
+  s.cleanup(async () => {
+    const now = (await s.get("core.settings")).values;
+    const patch = Object.fromEntries(Object.entries(before)
+      .filter(([key, value]) => JSON.stringify(now[key]) !== JSON.stringify(value)));
+    if (Object.keys(patch).length) await s.run("core.settings.set", { patch, scope: "common" });
+  });
 }
+
+/**
+ * 검사 앱마다 정해진 창 자리. 첫 앱은 주 화면 작업 영역의 왼쪽 위, 둘째 앱은 오른쪽 위에 둔다. 검사마다 창의
+ * 자리가 앞선 검사가 옮긴 자리에 따라 달라지지 않는다. 작업 영역이 두 창 폭의 합보다 좁으면 가운데가 겹친다.
+ * 같은 자리의 두 창도 서로를 완전히 가리지 않으며(창의 그림자가 보인다, V5-86), 다른 애플리케이션의 창은 이
+ * 자리와 무관하게 검사 창을 가릴 수 있다. 창 이동은 애플리케이션을 활성화하지 않는다.
+ */
+async function place(s) {
+  const [screen] = await s.get("host.screens");
+  const area = screen.visible;
+  const { frame } = await s.get("host.window");
+  const x = ["wailsv3", "tauriv2"].indexOf(s.app.name) === 0 ? area.x : area.x + area.width - frame.width;
+  const y = area.y;
+  if (frame.x === x && frame.y === y) return;
+  await s.run("host.window.move", { x, y });
+  await s.until("host.window", (w) => w.frame.x === x && w.frame.y === y, `the window did not move to its check frame ${x},${y}`);
+}
+
+// SOKSAK_PERFORMANCE_TRACE=1 은 모든 검사 준비에서 성능 기록을 켜서 등록 손실의 순서를 남긴다. 다른 값은 거부한다.
+export const TRACE = { undefined: false, "1": true }[process.env.SOKSAK_PERFORMANCE_TRACE];
+if (TRACE === undefined) throw new Error(`SOKSAK_PERFORMANCE_TRACE must be unset or 1, not ${process.env.SOKSAK_PERFORMANCE_TRACE}`);
 
 /**
  * 경계 끌기를 호스트 시각으로 실행한다. capture 이면 창을 기록하고 프레임 폴더를 반환한다.

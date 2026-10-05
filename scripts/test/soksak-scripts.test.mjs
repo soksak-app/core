@@ -209,7 +209,7 @@ test("window-source audit requires window-check cleanup through the session", { 
     "e2e/fixture.test.mjs:1: uses t.after for cleanup; register it with session.cleanup",
   ]);
   assert.deepEqual(auditE2ESource(line, "e2e/real/fixture.test.mjs").length, 1);
-  assert.deepEqual(auditE2ESource(line, "e2e/app.mjs"), []);
+  assert.deepEqual(auditE2ESource(line, "packages/window-check/app.mjs"), []);
   assert.deepEqual(auditE2ESource(line, "e2e/test/fixture.test.mjs"), []);
   assert.deepEqual(auditE2ESource("s.cleanup(() => server.close());", "e2e/fixture.test.mjs"), []);
 });

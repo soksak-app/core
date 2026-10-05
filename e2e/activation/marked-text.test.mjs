@@ -9,7 +9,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, fresh, open } from "../app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "../fixture.mjs";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 
 const ABC = "com.apple.keylayout.ABC";

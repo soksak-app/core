@@ -1,4 +1,4 @@
-import { pixel } from "./frame.mjs";
+import { pixel } from "@soksak/window-check/frame.mjs";
 
 // 카드 사이 간격의 배경. midnight 테마의 --bg(#101117)다.
 const PAGE = [16, 17, 23];

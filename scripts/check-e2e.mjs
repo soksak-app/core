@@ -4,7 +4,7 @@
 // 문서에 코드를 보내 실행하는 방법은 없으며, 그런 호출을 적은 검사는 거부한다.
 // 상태는 status.watch 알림으로 기다린다. 정해진 시간만큼 기다리는 대기와 반복 조회는
 // 거부한다. setTimeout 은 기다림의 상한(시간이 지나면 거절)으로만 쓸 수 있다.
-// e2e 아래의 모든 .mjs 파일을 검사한다(node_modules 제외).
+// e2e 와 창 검사 harness(packages/window-check) 아래의 모든 .mjs 파일을 검사한다(node_modules 제외).
 //
 //   node scripts/check-e2e.mjs
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -12,7 +12,7 @@ import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const ROOT = new URL("../", import.meta.url).pathname;
-const DIR = join(ROOT, "e2e");
+const DIRS = [join(ROOT, "e2e"), join(ROOT, "packages", "window-check")];
 
 const RULES = [
   { what: "eval", pattern: /\beval(Async)?\b/ },
@@ -34,8 +34,8 @@ const ACTIVATION_DIRS = ["e2e/activation/", "e2e/real/"];
 // 실제 입력 도구는 사람이 움직이는 속도로 HID 이벤트 사이에 간격을 둔다. 상태를 기다리는 대기가 아니며,
 // 간격 없이 보낸 끌기 이벤트는 창 서버가 합친다. 이 파일 밖에서는 고정 대기를 쓸 수 없다.
 const INPUT_PACING_FILE = "e2e/real/hid.mjs";
-// 세션을 만드는 app.mjs 와, 창 검사가 아닌 e2e/test 의 단위 검사는 t.after 를 쓴다.
-const SESSION_CLEANUP_EXEMPT = ["e2e/app.mjs", "e2e/test/"];
+// 세션을 만드는 harness 의 app.mjs 와, 창 검사가 아닌 단위 검사는 t.after 를 쓴다.
+const SESSION_CLEANUP_EXEMPT = ["packages/window-check/app.mjs", "packages/window-check/test/", "e2e/test/"];
 
 /* setTimeout 은 콜백이 거절(reject)하는 상한으로만 허용한다. */
 const TIMEOUT = /\bsetTimeout\s*\(/g;
@@ -70,7 +70,7 @@ export function auditE2ESource(text, file) {
 }
 
 const errors = [];
-for (const path of sources(DIR)) {
+for (const path of DIRS.flatMap((dir) => [...sources(dir)])) {
   errors.push(...auditE2ESource(readFileSync(path, "utf8"), relative(ROOT, path)));
 }
 

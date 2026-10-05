@@ -4,8 +4,9 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, drag, fresh, open } from "./app.mjs";
-import { textDifference } from "./text-difference.mjs";
+import { APPS, drag, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { textDifference } from "@soksak/window-check/text-difference.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -120, dy: 0, ms: 48, times: 2 };
 

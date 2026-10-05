@@ -4,8 +4,9 @@ import test from "node:test";
 
 import { rmSync } from "node:fs";
 
-import { APPS, drag, fresh, open } from "./app.mjs";
-import { frames, pixel, readFrame } from "./frame.mjs";
+import { APPS, drag, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 3 };
 

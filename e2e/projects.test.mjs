@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
 
-import { APPS, failure, fresh, keepCommonSettings, open } from "./app.mjs";
-import { frontmostApp } from "./frontmost.mjs";
+import { APPS, failure, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { frontmostApp } from "@soksak/window-check/frontmost.mjs";
 import { openStages, systemState, traceLength } from "./open-report.mjs";
 
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));

@@ -5,7 +5,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { APPS, fresh, open, terminalCardSidebar } from "./app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh, terminalCardSidebar } from "./fixture.mjs";
 
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 

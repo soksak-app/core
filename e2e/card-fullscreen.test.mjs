@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
 import { dirname } from "node:path";
-import { readPng } from "./png.mjs";
-import { frames, readFrame, pixel } from "./frame.mjs";
-import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
+import { readPng } from "@soksak/window-check/png.mjs";
+import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
+import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 
 async function clickFullscreen(t, s, card, expected) {
   const control = await s.rect("core.card.fullscreen", card.pane);

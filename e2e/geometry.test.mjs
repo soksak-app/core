@@ -2,7 +2,8 @@
 // native/darwin/tests/webview_geometry_test.m 이 검사한다.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, fresh as prepare, open } from "./app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh as prepare } from "./fixture.mjs";
 
 /**
  * 표시 완료 후 네이티브 표면, DOM 슬롯, 표면 문서의 배율과 크기가 일치할 때까지 기다리고

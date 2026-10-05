@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
+import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 
 /** 플러그인 페이지를 보이고, 검사가 끝나면 프로젝트 페이지와 작업 화면으로 돌아간다. */
 async function showPlugins(s) {

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F25.1: window 검사 harness는 package `@soksak/window-check`다. 애플리케이션 실행 파일은 `SOKSAK_BINARY_WAILSV3`와 `SOKSAK_BINARY_TAURIV2`가 선언하며, core의 `e2e/setup.mjs`가 cargo target 폴더에서 가져온다.
 - 검증: 2026-10-05의 열세 번째 전체 window 실행(eb707869, macOS 26.6.2 arm64)은 검사 344개 중 334개를 통과했다. 실행 중 사람이 Safari를 써서 Wails pointer 거부, activation 실패, 바뀐 최전면 기준선이 생겼다. 11개 processor의 load average 58에서 93에서의 load 실패: 109에서 242ms의 녹화 간격, 정렬 timing(33.3ms 한도에 161.7ms), divider frame 21개 중 20개. 남은 실패는 F71이다.
 - F69: 한도 안에 답하지 않은 window 검사 요청은 그 순간 호스트의 thread를 `sample`로 기록하고 오류에 그 파일을 적는다.
 - F43: library로의 전환은 관찰 round 전의 animation frame에서, 판을 비우는 준비된 그리기 안에서 library 화면을 보이며, 진단 기록기는 callback slot 안의 각 `body` dataset 쓰기의 stack을 보고한다.

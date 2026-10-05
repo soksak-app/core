@@ -6,10 +6,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { APPS, fresh, open } from "../app.mjs";
-import { frames, pixel, readFrame } from "../frame.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "../fixture.mjs";
+import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { cellBackgrounds, ensureTerminals, isColor, readScreenUntil, selectionBackground } from "../terminal-screen.mjs";
-import { pasteboardText, writePasteboard } from "../pasteboard.mjs";
+import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
 import { LAUNCH, PROMPT } from "../fixture-tui.mjs";
 import { activateFinder, appPid, bringFront, click, closeFinderWindow, dragPath, finderItemCenter, frontWindowAt, key, KEYS,
   dragPasteboard, openFinderWindow, post, postWithCursorSamples, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";

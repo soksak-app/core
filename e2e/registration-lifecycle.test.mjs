@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: fixture reload retains core registrations and records their lifecycle`, { timeout: 90000 }, async (t) => {

@@ -5,7 +5,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
 
 // 설정 디렉터리의 영속 서비스 디렉터리 하나가 담은 endpoint 를 읽는다.

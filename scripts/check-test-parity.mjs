@@ -76,6 +76,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
     "packages/client/bench/**/*.mjs",
   ], ["packages/client/test/**/*.mjs"]),
   lane("MCP client", "js-ts", ["packages/mcp/**/*.js"], ["packages/mcp/test/**/*.mjs"]),
+  lane("window check harness", "js-ts", ["packages/window-check/*.mjs"], ["packages/window-check/test/**/*.mjs"]),
   lane("browser runtime", "js-ts", ["apps/browser/runtime/**/*.js"], ["apps/browser/test/**/*.mjs", "apps/browser/check/**/*.mjs"], { sharedTests: true }),
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
@@ -363,7 +364,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F0.5.9-3",
-    implementation: [{ file: "e2e/app.mjs", symbol: "acquireWindowCheckSlot" }],
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "acquireWindowCheckSlot" }],
     tests: [
       { file: "e2e/app-contract.test.mjs", id: "window checks reject overlapping sessions that target the same application" },
       { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
@@ -947,11 +948,11 @@ const FEATURE_LINKS = [
   {
     id: "F31",
     implementation: [
-      { file: "e2e/application-log.mjs", symbol: "export function readErrors" },
+      { file: "packages/window-check/application-log.mjs", symbol: "export function readErrors" },
       { file: "packages/workbench/host.js", symbol: "const errorLine" },
     ],
     tests: [
-      { file: "e2e/test/session-cleanup.test.mjs", id: "an error line that the application logged during the check fails the check unless it is declared" },
+      { file: "packages/window-check/test/session-cleanup.test.mjs", id: "an error line that the application logged during the check fails the check unless it is declared" },
       { file: "packages/workbench/test/report-levels.test.mjs", id: "a reported failure starts with error: and an observation does not" },
     ],
     expected: "Every error line that the application logs during a window check is printed and fails the check unless the check declares it.",
@@ -1434,11 +1435,11 @@ const FEATURE_LINKS = [
   {
     id: "F55",
     implementation: [
-      { file: "e2e/frontmost.mjs", symbol: "export function sessionBaseline" },
-      { file: "e2e/session.mjs", symbol: "export async function globalSetup" },
+      { file: "packages/window-check/frontmost.mjs", symbol: "export function sessionBaseline" },
+      { file: "packages/window-check/session.mjs", symbol: "export async function globalSetup" },
     ],
     tests: [
-      { file: "e2e/test/frontmost.test.mjs", id: "a session whose frontmost application before the checks is a tested host is refused" },
+      { file: "packages/window-check/test/frontmost.test.mjs", id: "a session whose frontmost application before the checks is a tested host is refused" },
     ],
     expected: "A window-check run whose frontmost application before the checks is a tested host fails once before its first check.",
     levels: ["unit"],
@@ -1457,10 +1458,10 @@ const FEATURE_LINKS = [
   {
     id: "F28",
     implementation: [
-      { file: "e2e/pasteboard.mjs", symbol: "pasteboardDifference" },
+      { file: "packages/window-check/pasteboard.mjs", symbol: "pasteboardDifference" },
     ],
     tests: [
-      { file: "e2e/test/pasteboard.test.mjs", id: "a changed value names the item, the type and both lengths and digests" },
+      { file: "packages/window-check/test/pasteboard.test.mjs", id: "a changed value names the item, the type and both lengths and digests" },
     ],
     expected: "A pasteboard that differs after a window check is reported by item, type, length and digest.",
     levels: ["unit"],
@@ -1528,10 +1529,10 @@ const FEATURE_LINKS = [
   {
     id: "F22",
     implementation: [
-      { file: "e2e/repeat.mjs", symbol: "USAGE" },
+      { file: "packages/window-check/repeat.mjs", symbol: "USAGE" },
     ],
     tests: [
-      { file: "e2e/test/repeat.test.mjs", id: "repeat prints the diagnostics of each passing run" },
+      { file: "packages/window-check/test/repeat.test.mjs", id: "repeat prints the diagnostics of each passing run" },
     ],
     expected: "The repeat tool's tests run the tool under the FORCE_COLOR they set, without an inherited NO_COLOR, so its output holds no node color warning.",
     levels: ["unit"],

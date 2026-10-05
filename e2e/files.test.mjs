@@ -7,8 +7,9 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { APPS, coveredBy, fresh, open, terminalCardSidebar } from "./app.mjs";
-import { distance, readPng } from "./png.mjs";
+import { APPS, coveredBy, open } from "@soksak/window-check/app.mjs";
+import { fresh, terminalCardSidebar } from "./fixture.mjs";
+import { distance, readPng } from "@soksak/window-check/png.mjs";
 
 /** 요소의 가운데를 네이티브 입력으로 누른다. */
 const press = async (s, name, index) => {

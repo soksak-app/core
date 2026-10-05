@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { unlinkSync, rmdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { APPS, fresh, open } from "./app.mjs";
-import { readPng, distance } from "./png.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { readPng, distance } from "@soksak/window-check/png.mjs";
 for (const app of Object.values(APPS))
   test(`${app.name}: inactive still PNG contains opaque native boundaries`, { timeout: 120000 }, async (t) => {
     console.info(`START ${app.name}: still PNG observation`);

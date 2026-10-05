@@ -4,8 +4,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
-import { pasteboardText, writePasteboard } from "./pasteboard.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
 import { cellBackgrounds, ensureTerminals, isColor, readScreenUntil, selectionBackground } from "./terminal-screen.mjs";
 
 // d N: 커서를 12행으로 옮기고 완료 표시를 쓴다. r SEQ END N: SEQ 를 쓰고 END 까지의 응답을 16진수로 쓴다.

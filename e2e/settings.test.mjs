@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, fresh, keepCommonSettings, open, terminalCardSidebar } from "./app.mjs";
+import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { fresh, terminalCardSidebar } from "./fixture.mjs";
 
 /** 설정 창의 현재 컨트롤. */
 const controls = async (s) => (await s.get("core.settings-modal")).controls;

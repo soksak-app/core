@@ -2,9 +2,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 import { requireContentWidth } from "./card-panel-checks.mjs";
-import { frames, readFrame, pixel } from "./frame.mjs";
+import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 const sides = ["top", "bottom", "left", "right"];
 const near = (a, b, label) => assert.ok(Math.abs(a - b) <= 1, `${label}: actual ${a}, expected ${b}`);
 /**

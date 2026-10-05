@@ -6,7 +6,8 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 
 /** 카드 id 의 카드. */
 const cardOf = (grid, id) => grid?.cards.find((c) => c.id === id);

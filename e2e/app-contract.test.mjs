@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acquireWindowCheckSlot, assertEndpointUsesCurrentBuild } from "./app.mjs";
+import { acquireWindowCheckSlot, assertEndpointUsesCurrentBuild } from "@soksak/window-check/app.mjs";
 
 const endpoint = {
   pid: 123,

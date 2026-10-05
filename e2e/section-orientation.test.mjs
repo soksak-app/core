@@ -2,8 +2,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { frames, readFrame, pixel } from "./frame.mjs";
-import { APPS, fresh, open } from "./app.mjs";
+import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS))
   test(

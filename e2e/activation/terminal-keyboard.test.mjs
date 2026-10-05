@@ -10,7 +10,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
-import { APPS, fresh, open } from "../app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "../fixture.mjs";
 import { ensureTerminals, readScreenUntil, textLines } from "../terminal-screen.mjs";
 
 const ABC = "com.apple.keylayout.ABC";

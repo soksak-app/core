@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, failure, fresh, open, terminalReady } from "./app.mjs";
-import { frames, pixel, readFrame } from "./frame.mjs";
+import { APPS, failure, open } from "@soksak/window-check/app.mjs";
+import { fresh, terminalReady } from "./fixture.mjs";
+import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { terminalProcessSnapshot } from "./terminal-processes.mjs";
 
 /** 창 목록에서 known 에 없는 창 하나. */
