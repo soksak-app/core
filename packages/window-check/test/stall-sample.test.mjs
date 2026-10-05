@@ -68,3 +68,16 @@ test("a request that the page did not answer names the stall records or why they
   await assert.rejects(s.request("status.get", { name: "core.verify" }),
     /^EndpointError: tauriv2 status\.get core\.verify: main did not reply within 10000 ms; sampling the host failed: .*webkit-children\.json: ENOENT/);
 });
+
+test("a page process that already ended does not cost the records of the host and the other pages", async () => {
+  const { sampleStall } = await import("../stall-sample.mjs");
+  const results = sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7, sample: (pid, file) => {
+    if (pid === 12) throw new Error("sample 12 exited with 255: process 12 no longer appears to be running");
+    return file;
+  } });
+  assert.deepEqual(results, [
+    "/x/logs/stall-10-7.txt",
+    "page 12 not sampled: sample 12 exited with 255: process 12 no longer appears to be running",
+    "/x/logs/stall-10-7-page-13.txt",
+  ]);
+});

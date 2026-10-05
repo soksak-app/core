@@ -37,10 +37,19 @@ export function pageProcesses(configDir) {
 }
 
 /**
- * 답하지 않은 호스트 host 와 그 page 프로세스 pages 의 thread 를 directory 에 기록하고 그 파일들을 반환한다. 파일 이름은
- * 호스트 pid 와 time 을 공유하므로 한 멈춤의 기록이 함께 놓인다.
+ * 답하지 않은 호스트 host 와 그 page 프로세스 pages 의 thread 를 directory 에 기록하고, 프로세스마다 그 파일이나 기록하지
+ * 못한 까닭을 반환한다. 기록은 페이지를 다시 읽은 뒤 끝난 WebContent 도 담을 수 있으므로, 한 프로세스를 기록하지 못해도
+ * 나머지는 기록한다. 호스트를 기록하지 못하면 그 까닭으로 실패한다. 파일 이름은 호스트 pid 와 time 을 공유한다.
  */
 export function sampleStall({ host, pages, directory, time = Date.now(), sample = sampleProcess }) {
   const base = join(directory, `stall-${host}-${time}`);
-  return [sample(host, `${base}.txt`), ...pages.map((pid) => sample(pid, `${base}-page-${pid}.txt`))];
+  const records = [sample(host, `${base}.txt`)];
+  for (const pid of pages) {
+    try {
+      records.push(sample(pid, `${base}-page-${pid}.txt`));
+    } catch (error) {
+      records.push(`page ${pid} not sampled: ${error.message}`);
+    }
+  }
+  return records;
 }
