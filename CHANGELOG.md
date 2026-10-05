@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F80: the card auto-arrange button after the project library button runs `core.layout.balance`, which keeps the arrangement and gives every card a fair share: the cards of the fullest row along each axis come out the same size (`Soksak.balance()`).
 - F79: both hosts report a relayed request that times out as `the document did not reply within <ms> ms` and a late reply with its delay (`exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`).
 - Validation: the fifteenth full window run of 2026-10-05 (16d699ec) is invalid because the disk filled (`ENOSPC`) after 5 minutes. The sixteenth (16d699ec, macOS 26.6.2 arm64, load average up to 218 on 11 processors) passed 338 of 344 checks: the alignment timing on both hosts (89.5 ms and 124.4 ms against 33.3 ms) and a divider recording of 20 of 21 frames on Tauri are load; the Wails document stall of F69 failed the font family check, and F77 and F78 record the zsh redraw and the files bookmark failures on Tauri.
 - F70: the Wails host uses the fork `min-median-max/wails` (`soksak/http-error-log`), whose HTTP transport no longer logs an error that it returns to the page, so a failed binding call is written once.

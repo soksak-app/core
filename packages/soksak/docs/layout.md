@@ -334,6 +334,36 @@ grid.moveBoundary("x", 1, 260);        // px
 grid.centerBoundary("x", 1);
 ```
 
+## Balancing
+
+`balance()` keeps the arrangement and gives every card a fair share of the plane.
+An arrangement made by splitting is a slicing floorplan, so it reads as a tree of
+cuts, and the share is counted on it per axis:
+
+- a card counts one;
+- a cut along the axis counts the sum of its sides;
+- a cut along the other axis counts the side that counts most;
+- each cut gives its sides room in proportion to their counts.
+
+So the cards of the row that holds the most cards come out the same size, and a
+card that spans several of them is drawn across them. Three cards over four give
+the upper row a third each, the lower row a quarter each, and the two rows half
+the height each; ten cards side by side get a tenth each. A line that runs
+through both rows is a cut of its own: each side of it counts its fullest row.
+
+The sizes are the drawn ones. A card at the plane's border insets on one side
+only, so the lines are placed for equal drawn sizes, not equal coordinates. A
+card with a px size on an axis keeps the size it is drawn at and counts nothing
+there; the others share what is left. Two rows that used one line and now need
+it in two places each get a line of their own. The lines are moved the way a
+drag moves them, so no card goes below `minSize`; on a plane too small for the
+fair sizes a line stops at the end of its range. `balance()` returns false and
+changes nothing when the arrangement is not slicing.
+
+```js
+grid.balance();
+```
+
 ## A card that reaches across the plane
 
 A rail stands between panes and reaches from one side of the plane to the other.
@@ -467,6 +497,7 @@ first.
 | `zoneAt(x, y, options)` | where a drop lands |
 | `dividers()`, `rules()` | grab areas, and boundaries to draw |
 | `boundaryPos`, `boundaryRange`, `hasBoundary(axis, line)`, `moveBoundary(axis, line, px, allowSnap?)`, `centerBoundary` | drag a boundary |
+| `balance()` | give every card a fair share and keep the arrangement |
 | `mergeCoincident(axis, line)` | fold a line onto the neighbour it now coincides with |
 | `tidy()`, `virtualCount()`, `isVirtual(axis, line)`, `crossings(card)`, `cardsCrossing(axis, line)` | virtual lines |
 | `isSlicing()`, `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | inspection and state |

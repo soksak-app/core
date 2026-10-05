@@ -44,6 +44,8 @@ import type { Divider, Plane, Rule, ZoneHit, ZoneOptions } from './geometry.js';
 
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
 import { fillFor, isSlicing } from './slicing.js';
+import { balanceRegions, sliceTree } from './balance.js';
+import type { Region } from './balance.js';
 import type { Fill, FillOrder, Span } from './slicing.js';
 
 export type { Axis, Card, CardInit, Rect, Side } from './card.js';
@@ -965,6 +967,82 @@ export class Soksak {
       while (line > 1 && this.boundaryPos(axis, line) !== at) line--;
     }
     return at;
+  }
+
+  /**
+   * Gives every card a fair share of the plane and keeps the arrangement.
+   *
+   * The cuts of the arrangement stay as they are; each gives its sides space in
+   * proportion to the cards they hold along its axis, counted on the row that
+   * holds the most (`balance.ts`). A card with a px size keeps the size it is
+   * drawn at. Rows that shared a line are given a line each where their shares
+   * differ. The lines are then moved to their places the way a drag moves them,
+   * so no card is taken below `minSize`; on a plane too small for the fair
+   * sizes a line stops where its range ends. Returns false when the
+   * arrangement is not slicing, which leaves it unchanged.
+   */
+  balance(): boolean {
+    const tree = sliceTree(this.list);
+    if (!tree) return false;
+    const rects = this.rects();
+    const drawn = (card: Card, axis: Axis): number => {
+      const rect = rects.get(card.id) as Rect;
+      return axis === 'x' ? rect.w : rect.h;
+    };
+    const regions = balanceRegions(
+      tree,
+      { x0: 0, x1: this.w, y0: 0, y1: this.h, left: true, right: true, top: true, bottom: true },
+      this.gap,
+      drawn,
+    );
+    // Each axis gets the lines the regions end at, in order. A line two rows
+    // shared at different shares becomes two lines.
+    const linesOf = (from: 'x0' | 'y0', to: 'x1' | 'y1', size: number): number[] => {
+      const at = [...regions.values()].flatMap((r) => [r[from], r[to]]).sort((a, b) => a - b);
+      const out: number[] = [];
+      for (const value of at) if (!out.length || value - out[out.length - 1] > 0.01) out.push(value);
+      out[0] = 0;
+      out[out.length - 1] = size;
+      return out;
+    };
+    const xs = linesOf('x0', 'x1', this.w);
+    const ys = linesOf('y0', 'y1', this.h);
+    const index = (lines: number[], value: number): number => {
+      let best = 0;
+      for (let i = 1; i < lines.length; i++) {
+        if (Math.abs(lines[i] - value) < Math.abs(lines[best] - value)) best = i;
+      }
+      return best;
+    };
+    const cards = this.list.map((card) => {
+      const r = regions.get(card.id) as Region;
+      return { ...card, c0: index(xs, r.x0), c1: index(xs, r.x1), r0: index(ys, r.y0), r1: index(ys, r.y1) };
+    });
+    this.replace({
+      xs: xs.map((value) => value / this.w),
+      ys: ys.map((value) => value / this.h),
+      cards,
+      paidBy: Object.fromEntries(this.paidBy),
+    });
+    // The normalised lines above are where the lines stand only when no slot
+    // holds a px size. Each line is moved to its place, and every pass measures
+    // again, because a move beside a px size changes how the rest is shared.
+    for (let pass = 0; pass < 8; pass++) {
+      let moved = false;
+      for (const [axis, lines] of [['x', xs], ['y', ys]] as [Axis, number[]][]) {
+        for (let line = 1; line < lines.length - 1; line++) {
+          if (!this.hasBoundary(axis, line)) continue;
+          if (Math.abs(this.boundaryPos(axis, line) - lines[line]) < 0.01) continue;
+          const [low, high] = this.boundaryRange(axis, line);
+          const target = clamp(lines[line], low, high);
+          if (Math.abs(this.boundaryPos(axis, line) - target) < 0.01) continue;
+          this.moveBoundary(axis, line, target, false);
+          moved = true;
+        }
+      }
+      if (!moved) break;
+    }
+    return true;
   }
 
   /**

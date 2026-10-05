@@ -1746,6 +1746,17 @@
         }
       },
       {
+        "name": "core.layout.balance",
+        "description": "Gives every card of the current space a fair share of the plane and keeps the arrangement; a cut gives its sides room in proportion to the cards they hold along its axis, counted on their fullest row.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.settings.change",
         "description": "Sets one setting from a control value; strings are converted to the setting's type. Without scope it sets the common value.",
         "params": {
@@ -2801,6 +2812,10 @@
       {
         "name": "core.chrome.bar",
         "description": "The window chrome row."
+      },
+      {
+        "name": "core.chrome.balance",
+        "description": "The card auto-arrange button after the project library button."
       },
       {
         "name": "core.chrome.projects",

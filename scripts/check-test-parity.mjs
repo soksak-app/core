@@ -1479,6 +1479,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F80",
+    implementation: [
+      { file: "packages/soksak/src/balance.ts", symbol: "export function sliceTree" },
+      { file: "packages/workbench/core-exposure.js", symbol: "core.layout.balance" },
+    ],
+    tests: [
+      { file: "packages/soksak/test/balance.test.mjs", id: "three cards over four give a third and a quarter each, and the rows halve the height" },
+      { file: "e2e/balance.test.mjs", id: "the auto-arrange button gives three over four cards a fair share" },
+    ],
+    expected: "The card auto-arrange button gives every card a fair share and keeps the arrangement.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

@@ -309,6 +309,19 @@ export declare class Soksak {
      */
     centerBoundary(axis: Axis, line: number): number;
     /**
+     * Gives every card a fair share of the plane and keeps the arrangement.
+     *
+     * The cuts of the arrangement stay as they are; each gives its sides space in
+     * proportion to the cards they hold along its axis, counted on the row that
+     * holds the most (`balance.ts`). A card with a px size keeps the size it is
+     * drawn at. Rows that shared a line are given a line each where their shares
+     * differ. The lines are then moved to their places the way a drag moves them,
+     * so no card is taken below `minSize`; on a plane too small for the fair
+     * sizes a line stops where its range ends. Returns false when the
+     * arrangement is not slicing, which leaves it unchanged.
+     */
+    balance(): boolean;
+    /**
      * Where the two cards meeting at a boundary come out the same size.
      *
      * This is not the midpoint of the two lines: a card at the plane's border

@@ -313,6 +313,32 @@ grid.moveBoundary("x", 1, 260);        // px
 grid.centerBoundary("x", 1);
 ```
 
+## 균형 맞추기
+
+`balance()`는 배치를 유지하고 모든 카드에 판의 공정한 몫을 준다. 자르기로 만든 배치는
+slicing floorplan이므로 자르기의 나무로 읽히고, 몫은 그 나무에서 축마다 센다.
+
+- 카드 하나는 1로 센다.
+- 그 축을 따라 자른 것은 두 쪽의 합으로 센다.
+- 다른 축을 따라 자른 것은 가장 많이 세는 쪽으로 센다.
+- 자르기마다 그 쪽들에 센 수에 비례해 공간을 준다.
+
+그래서 카드가 가장 많은 줄의 카드들은 같은 크기가 되고, 그중 여럿에 걸친 카드는 그만큼
+걸쳐 그려진다. 세 카드 아래 네 카드가 있으면 윗줄은 1/3씩, 아랫줄은 1/4씩, 두 줄은 높이를
+절반씩 갖고, 나란한 열 카드는 1/10씩 갖는다. 두 줄을 관통하는 선은 그 자체로 자르기이므로,
+그 양쪽은 각자 가장 많은 줄로 센다.
+
+크기는 그려진 크기다. 판 가장자리의 카드는 한쪽만 들여쓰므로 선은 같은 좌표가 아니라 같은
+그려진 크기가 되도록 놓인다. 한 축에 px 크기가 있는 카드는 그려진 크기를 유지하고 그 축에서
+아무것도 세지 않으며, 나머지가 남은 공간을 나눈다. 한 선을 함께 쓰던 두 줄이 그 선을 서로
+다른 곳에 필요로 하면 각자 선을 하나씩 갖는다. 선은 끌기가 움직이는 방식으로 움직이므로 어떤
+카드도 `minSize` 아래로 가지 않고, 공정한 크기를 담지 못하는 판에서는 선이 범위의 끝에서
+멈춘다. 배치가 slicing이 아니면 `balance()`는 false를 돌려주고 아무것도 바꾸지 않는다.
+
+```js
+grid.balance();
+```
+
 ## 판을 가로지르는 카드
 
 레일은 페인 사이에 서서 판의 한쪽 끝에서 반대쪽 끝까지 닿는다. 카드를 쪼개서 만들 수
@@ -441,6 +467,7 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 | `zoneAt(x, y, options)` | 드롭이 내려앉는 곳 |
 | `dividers()`, `rules()` | 잡는 영역과 그릴 경계 |
 | `boundaryPos`, `boundaryRange`, `hasBoundary(axis, line)`, `moveBoundary(axis, line, px, allowSnap?)`, `centerBoundary` | 경계를 끈다 |
+| `balance()` | 배치를 유지하고 모든 카드에 공정한 몫을 준다 |
 | `mergeCoincident(axis, line)` | 이제 같은 자리에 있는 이웃 선으로 접는다 |
 | `tidy()`, `virtualCount()`, `isVirtual(axis, line)`, `crossings(card)`, `cardsCrossing(axis, line)` | 가상 선 |
 | `isSlicing()`, `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | 검사와 상태 |

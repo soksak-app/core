@@ -51,6 +51,7 @@
     "core.space.close",
     "core.grid.size",
     "core.boundary.move",
+    "core.layout.balance",
     "core.settings.change",
     "core.settings.theme",
     "core.settings.link",

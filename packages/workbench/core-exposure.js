@@ -466,6 +466,14 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
     return { position: moved };
   });
 
+  // 배치를 유지하고 모든 카드에 공정한 몫을 준다(packages/soksak/docs/layout.md#balancing).
+  registry.command("core.layout.balance", () => {
+    const grid = currentGrid();
+    if (!grid) throw new Error("the window shows no layout");
+    if (!grid.balance()) throw new Error("the layout is not slicing");
+    settle();
+  });
+
   for (const { name } of registry.list().dom) {
     if (name.startsWith("core.")) registry.dom(name);
   }
