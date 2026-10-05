@@ -1614,7 +1614,7 @@ export { closePicker };
  * 접거나 펼치고, 면이 펼쳐져 있는 동안 눌린 상태다. 접힌 면도 머리에 남으므로 다시 펼칠 수 있다(docs/spec/example-model.md).
  */
 function drawSideToggles(acts, el, cardId) {
-  const tools = acts.querySelector(".chrome__act[data-do]");
+  const shownButtons = [];
   for (const side of SIDEBAR_SIDES) {
     const shown = el.dataset[`sidebar${side[0].toUpperCase()}${side.slice(1)}`];
     let button = acts.querySelector(`.chrome__side[data-side="${side}"]`);
@@ -1631,11 +1631,17 @@ function drawSideToggles(acts, el, cardId) {
       button.innerHTML = icon(`panel-${side}`);
       bind(button, "core.card.sidebar.toggle", { card: cardId, side });
     }
-    // 순서를 지키도록 매번 도구 앞으로 옮긴다. 이미 그 자리면 DOM 은 바뀌지 않는다.
-    if (button.nextElementSibling !== tools) acts.insertBefore(button, tools);
     button.setAttribute("aria-pressed", String(shown === "open"));
     button.title = `${sideName(side)} 사이드바 ${shown === "open" ? "접기" : "펼치기"}`;
     button.setAttribute("aria-label", button.title);
+    shownButtons.push(button);
+  }
+  // 자리가 틀린 단추만 옮긴다. insertBefore 는 옮길 단추를 문서에서 먼저 빼고, WebKit 은 누름을 받은 노드가 빠지면 그
+  // 누름의 click 을 보내지 않는다(F65). 뒤에서부터 각 단추의 다음 형제가 다음 단추(마지막은 도구)인지 본다.
+  let next = acts.querySelector(".chrome__act[data-do]");
+  for (const button of shownButtons.reverse()) {
+    if (button.nextElementSibling !== next) acts.insertBefore(button, next);
+    next = button;
   }
 }
 
