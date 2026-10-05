@@ -2,7 +2,7 @@
 
 [English](registry.md)
 
-공개 registry는 저장소 `soksak-app/registry`다. 이 저장소는 [registry index](installation.ko.md#registry-index)의 항목마다 파일 하나를 두고, 누구나 pull request로 항목이나 version을 더한다. 검사가 각 pull request를 확인하고, 검사가 통과하면 workflow가 merge하며, merge는 애플리케이션의 기본 registry인 `https://soksak-app.github.io/registry/index.json`에 `index.json`을 게시한다([첫 실행](installation.ko.md#첫-실행)).
+공개 registry는 저장소 `soksak-app/registry`다. 이 저장소는 [registry index](installation.ko.md#registry-index)의 항목마다 파일 하나를 두고, 누구나 pull request로 항목이나 version을 더한다. 검사가 각 pull request를 확인하고, registry 관리자가 검토해 merge하며, `main`으로의 각 push가 애플리케이션의 기본 registry인 `https://soksak-app.github.io/registry/index.json`에 `index.json`을 게시한다([첫 실행](installation.ko.md#첫-실행)).
 
 ## 파일
 
@@ -41,12 +41,12 @@ pull request의 검사는 base branch의 script로 pull request의 파일을 데
 
 ## Merge와 게시
 
-- `validate.yml`은 읽기 권한만으로 `pull_request`에서 검사를 실행하고, 검사한 head commit을 기록한다.
-- `merge.yml`은 `validate.yml`이 끝나면 쓰기 권한으로 실행한다. 검사가 성공했고, pull request의 head commit이 여전히 검사한 commit이며, pull request가 항목 파일만 바꿀 때만 squash merge하고, 같은 실행에서 index를 게시한다.
-- `publish.yml`은 관리자가 merge한 변경을 위해 `main`으로의 push에서 index를 게시하며, `merge.yml`이 부르는 게시 job이다. 게시는 `sok registry build`로 `index.json`을 만들고 GitHub Pages로 배포한다.
+- `validate.yml`은 `pull_request`에서 읽기 권한만으로 검사를 실행하므로, 관리자는 그 결과와 함께 pull request를 검토한다.
+- registry 관리자는 검사가 통과하고 검토를 마친 pull request를 merge한다.
+- `publish.yml`은 `main`으로의 각 push에서 index를 게시한다. `sok registry build`로 `index.json`을 만들고 GitHub Pages로 배포한다.
 
 검사와 게시의 `sok`은 workflow가 지정한 core release의 `sok`이다.
 
 ## soksak component의 release
 
-soksak plugin과 sidecar 저장소도 같은 방법으로 version을 더한다. component의 release workflow가 asset을 게시한 뒤, 새 version을 자기 항목에 더하는 pull request를 연다. workflow는 `soksak-app/registry`에 pull request를 열 수 있는 token인 저장소 secret `REGISTRY_TOKEN`을 쓰며, pull request의 작성자는 그 token의 소유자다.
+soksak plugin과 sidecar는 registry 관리자가 관리한다. component release가 asset을 게시한 뒤, 관리자는 registry의 `scripts/add-version.mjs`로 새 version을 항목에 쓰고 그 항목 파일을 `main`에 push하며, 그 push가 게시한다. archive가 항목과 맞지 않으면 게시가 실패한다.

@@ -2,7 +2,7 @@
 
 [한국어](registry.ko.md)
 
-The public registry is the repository `soksak-app/registry`. It holds one file per entry of the [registry index](installation.md#registry-index), and anyone adds an entry or a version with a pull request. A check validates each pull request, a workflow merges it when the check passes, and the merge publishes `index.json` at `https://soksak-app.github.io/registry/index.json`, the default registry of the applications ([first run](installation.md#first-run)).
+The public registry is the repository `soksak-app/registry`. It holds one file per entry of the [registry index](installation.md#registry-index), and anyone adds an entry or a version with a pull request. A check validates each pull request, the registry maintainers review and merge it, and each push to `main` publishes `index.json` at `https://soksak-app.github.io/registry/index.json`, the default registry of the applications ([first run](installation.md#first-run)).
 
 ## Files
 
@@ -41,12 +41,12 @@ The check of a pull request reads the files of the pull request as data with the
 
 ## Merge and publication
 
-- `validate.yml` runs the check on `pull_request` with read permission only and records the head commit it checked.
-- `merge.yml` runs on the completion of `validate.yml` with write permission. It merges the pull request with a squash merge only when the check succeeded, the head commit of the pull request is still the commit that was checked, and the pull request changes only entry files; it then publishes the index in the same run.
-- `publish.yml` publishes the index on a push to `main`, for changes that maintainers merge, and is the publication job that `merge.yml` calls. Publication builds `index.json` with `sok registry build` and deploys it with GitHub Pages.
+- `validate.yml` runs the check on `pull_request` with read permission only, so the maintainers review a pull request with its result.
+- The registry maintainers merge a pull request after its check passes and they have reviewed it.
+- `publish.yml` publishes the index on each push to `main`: it builds `index.json` with `sok registry build` and deploys it with GitHub Pages.
 
 The `sok` of the check and of publication is the `sok` of the core release named by the workflow.
 
 ## Releases of soksak components
 
-The soksak plugin and sidecar repositories add their versions the same way: after the release workflow of a component publishes its assets, it opens a pull request that adds the new version to its entry. The workflow uses the repository secret `REGISTRY_TOKEN`, a token that can open pull requests on `soksak-app/registry`, and the pull request author is the owner of that token.
+The soksak plugins and sidecars are maintained by the registry maintainers. After a component release publishes its assets, a maintainer writes the new version into its entry with `scripts/add-version.mjs` of the registry and pushes the entry file to `main`, which publishes it; publication fails when an archive does not match its entry.
