@@ -251,6 +251,13 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .chrome__ham svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round}
 .chrome__ham:hover{background:var(--inset);color:var(--fg)}
 .chrome[data-fit=one] .chrome__tabs .tab:not([data-active=true]){display:none}
+/* 도구가 한 줄에 들어가지 않으면 도구 줄 대신 ⋯ 를 보인다. 메뉴는 같은 단추와 명령을 나열한다. */
+.chrome__more{display:none;place-items:center;width:20px;height:20px;padding:0;border:0;margin-left:auto;
+  flex:0 0 auto;background:transparent;color:var(--muted);border-radius:var(--r-xs);cursor:pointer}
+.chrome__more svg{width:14px;height:14px;fill:currentColor;stroke:none}
+.chrome__more:hover{background:var(--inset);color:var(--fg)}
+.chrome[data-tools=menu] .chrome__more{display:grid}
+.chrome[data-tools=menu] .chrome__acts{display:none}
 .chrome[data-fit=ham] .chrome__tabs{display:none}
 .tab{display:flex;align-items:center;gap:4px;padding:3px 7px;border-radius:var(--r-xs);
   font-size:var(--text-small);color:var(--muted);cursor:grab;user-select:none;white-space:nowrap;

@@ -441,6 +441,12 @@
                           "one",
                           "ham"
                         ]
+                      },
+                      "tools": {
+                        "enum": [
+                          "bar",
+                          "menu"
+                        ]
                       }
                     }
                   }
@@ -2345,6 +2351,21 @@
         }
       },
       {
+        "name": "core.card.tools",
+        "description": "Opens or closes a card's tool menu, which a narrow card header shows instead of its tools; its items run the same commands as the sidebar buttons and the enabled tools.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.card.add-tab",
         "description": "Adds a tab of a plugin to a card and activates it.",
         "params": {
@@ -3150,6 +3171,11 @@
       {
         "name": "core.card.tab-list",
         "description": "The tab list buttons of the cards, in card order.",
+        "many": true
+      },
+      {
+        "name": "core.card.tools",
+        "description": "The tool menu buttons of the cards, in card order.",
         "many": true
       },
       {

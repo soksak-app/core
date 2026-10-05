@@ -317,6 +317,17 @@ function updateCard(el, card, rect) {
   if (!acts) {
     acts = createCardTools(card.id);
     chrome.appendChild(acts);
+    // 도구가 한 줄에 들어가지 않는 좁은 머리에서 도구를 대신하는 메뉴 단추. 도구 뒤에 둔다.
+    const more = document.createElement("button");
+    more.className = "chrome__more";
+    more.dataset.expose = "core.card.tools";
+    more.type = "button";
+    more.title = "카드 도구";
+    more.setAttribute("aria-label", more.title);
+    more.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' +
+      '<circle cx="3.5" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="12.5" cy="8" r="1"/></svg>';
+    bind(more, "core.card.tools", () => ({ card: el.dataset.cardId }));
+    chrome.appendChild(more);
   }
   updateCardTools(acts, {
     canClose: grid.canClose(card.id),
@@ -653,7 +664,9 @@ function openLayer(anchor, ask, items, pick, align = "right") {
       b.dataset.notice = "true";
       b.title = systemNotifications.tooltip(it.notice);
     }
-    b.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${it.svg}</svg>` +
+    // 기본값: 플러그인 표시는 16 단위 그림이고, 다른 크기의 그림을 넘기는 항목만 viewBox 를 함께 준다.
+    const box = it.viewBox === undefined ? "0 0 16 16" : it.viewBox;
+    b.innerHTML = `<svg viewBox="${box}" aria-hidden="true">${it.svg}</svg>` +
       `<span class="picker__name"></span><small></small>`;
     b.querySelector(".picker__name").textContent = it.name;
     b.querySelector("small").textContent = it.mark;
@@ -1120,12 +1133,12 @@ function centreTab(strip, activeId) {
 /**
  * 헤더 너비를 측정해 표시 단계를 결정한다.
  *
- * 측정 전에 strip 단계로 되돌려 모든 탭을 표시한다. 접힌 상태로 측정하면 접힌
- * 너비를 얻고, 그 값으로 단계를 다시 정하면 한 번 접힌 헤더가 넓어져도 복귀하지
- * 못한다. 두 번의 쓰기 사이에는 렌더링이 일어나지 않으므로 화면에 나타나지 않는다.
+ * 측정 전에 strip 단계와 도구 줄로 되돌려 모든 탭과 도구를 표시한다. 접힌 상태로
+ * 측정하면 접힌 너비를 얻고, 그 값으로 단계를 다시 정하면 한 번 접힌 헤더가 넓어져도
+ * 복귀하지 못한다. 두 번의 쓰기 사이에는 렌더링이 일어나지 않으므로 화면에 나타나지 않는다.
  *
- * 도구 버튼은 비활성인 것부터 숨긴다. 96px 카드는 절반이 최소 너비보다 작아
- * 쪼갤 수 없고, 그래서 쪼개기 버튼은 이미 비활성이다.
+ * 도구가 현재 탭 제목과 함께 들어가지 않으면 도구 줄을 ⋯ 메뉴로 접는다(F81). 제목이
+ * 도구보다 오래 남는다.
  */
 // PEEK    strip 단계를 유지하는 데 필요한 활성 탭 외 여유 너비
 // MIN_TAB 말줄임한 활성 탭의 최소 너비. 이보다 좁으면 ham 단계로 내려간다
@@ -1134,8 +1147,10 @@ const PEEK = 56, MIN_TAB = 48;
 function fitChrome(chrome, strip) {
   const acts = chrome.querySelector(".chrome__acts");
   if (!acts) return;
+  // 모든 단계에서 재기 위해 탭 전체와 도구 줄을 보인 상태에서 시작한다.
   chrome.dataset.fit = "strip";
-  // 머리의 좌우 여백과 그 안의 요소 사이 간격, 그리고 ≡ 의 너비는 스타일시트가
+  chrome.dataset.tools = "bar";
+  // 머리의 좌우 여백과 그 안의 요소 사이 간격, 그리고 ≡ 와 ⋯ 의 너비는 스타일시트가
   // 정하므로 재서 얻는다. 여기에 적으면 스타일시트와 갈리고, 갈린 만큼 헤더가
   // 접히는 너비가 어긋난다. 탭 사이의 간격을 재는 것과 같은 이유다.
   const head = getComputedStyle(chrome);
@@ -1143,14 +1158,10 @@ function fitChrome(chrome, strip) {
   const gap = parseFloat(head.columnGap) || 0;
   const inner = chrome.clientWidth
     - parseFloat(head.paddingLeft) - parseFloat(head.paddingRight);
-  // ≡ 는 strip 단계에서 그려지지 않으므로 rect 가 아니라 선언된 너비를 읽는다.
+  // ≡ 와 ⋯ 는 strip 단계에서 그려지지 않으므로 rect 가 아니라 선언된 너비를 읽는다.
   const ham = parseFloat(getComputedStyle(chrome.querySelector(".chrome__ham")).width);
-  const all = [...acts.children];
-  for (const b of all) b.hidden = false;
-  const wide = acts.getBoundingClientRect().width;
-  const tight = inner - wide < ham + gap;
-  if (tight) for (const b of all) b.hidden = b.disabled;
-  const room = inner - (tight ? acts.getBoundingClientRect().width : wide) - gap;
+  const more = parseFloat(getComputedStyle(chrome.querySelector(".chrome__more")).width);
+  const tools = acts.getBoundingClientRect().width;
 
   const tabs = [...strip.querySelectorAll(".tab")];
   const active = strip.querySelector(".tab[data-active=true]");
@@ -1160,10 +1171,16 @@ function fitChrome(chrome, strip) {
   const between = parseFloat(getComputedStyle(strip).columnGap) || 0;
   const whole = tabs.reduce((n, t) => n + t.getBoundingClientRect().width, 0)
     + Math.max(0, tabs.length - 1) * between;
-  // 탭 전체가 들어가면 접지 않는다. 넘쳐도 활성 탭과 여유 너비가 있으면 strip 을 유지한다.
-  chrome.dataset.fit = room >= Math.min(whole, activeW + PEEK) ? "strip"
-    : room >= ham + gap + Math.min(activeW, MIN_TAB) ? "one"
-    : "ham";
+  // 머리는 다른 탭, 도구(메뉴로), 제목의 최소 폭까지, 제목 순으로 접는다. 앞의 단계가 들어가는 첫 단계를 쓴다.
+  const withTools = inner - tools - gap;
+  const withMenu = inner - more - gap;
+  const [fit, folded] =
+    withTools >= Math.min(whole, activeW + PEEK) ? ["strip", "bar"]
+    : withTools >= ham + gap + activeW ? ["one", "bar"]
+    : withMenu >= ham + gap + Math.min(activeW, MIN_TAB) ? ["one", "menu"]
+    : ["ham", "menu"];
+  chrome.dataset.fit = fit;
+  chrome.dataset.tools = folded;
 }
 
 /* 렌더 완료 후에 측정한다. 너비가 갱신되기 전에 측정하면 잘못된 위치를 계산한다.
@@ -1534,6 +1551,35 @@ export function openCardMenu(id, menu) {
   openPicker(anchor, what, id);
 }
 
+/**
+ * 카드의 도구 메뉴를 연다. 열려 있으면 닫는다. 메뉴는 머리에 보일 사이드바 단추와 활성 도구를 같은 순서로 나열하고,
+ * 고른 항목은 그 단추와 같은 명령을 실행한다. 탭 추가와 쪼개기는 같은 단추 아래에 새 탭의 플러그인을 묻는다.
+ */
+export function openCardTools(id) {
+  paneCard(id);
+  const anchor = cardElement(id)?.querySelector(".chrome__more");
+  if (!anchor) throw new Error(`card ${id} has no tool menu button`);
+  if (picker?.anchor === anchor) { closePicker(); return; }
+  const acts = cardElement(id).querySelector(".chrome__acts");
+  const items = [...acts.querySelectorAll(".chrome__act")].filter((b) => !b.disabled).map((b) => ({
+    // 사이드바 단추는 data-do 가 없고 data-side 로 면을 가리킨다.
+    key: b.classList.contains("chrome__side") ? `side-${b.dataset.side}` : b.dataset.do,
+    name: b.title.split(" — ")[0],
+    mark: "",
+    svg: b.querySelector("svg").innerHTML,
+    viewBox: b.querySelector("svg").getAttribute("viewBox"),
+    active: b.getAttribute("aria-pressed") === "true",
+  }));
+  focusedId = id;
+  settle();
+  openLayer(anchor, "카드 도구", items, (key) => {
+    if (key.startsWith("side-")) return run("core.card.sidebar.toggle", { card: id, side: key.slice(5) });
+    if (key === "fullscreen") return run("core.card.fullscreen", { card: id });
+    if (key === "close") return run("core.card.close", { card: id });
+    return openPicker(anchor, key, id);
+  });
+}
+
 /** 카드의 탭 목록을 연다. 열려 있으면 닫는다. */
 export function openCardTabs(id) {
   paneCard(id);
@@ -1652,10 +1698,12 @@ export function cardActs(id) {
   if (!acts) return null;
   const buttons = Object.fromEntries([...acts.querySelectorAll(".chrome__act[data-do]")].map((b) => [
     ["close", "fullscreen"].includes(b.dataset.do) ? b.dataset.do : MENU_OF[b.dataset.do],
-    { enabled: !b.disabled, hidden: b.hidden, title: b.title },
+    // 도구를 메뉴로 접은 머리는 도구 줄을 그리지 않는다.
+    { enabled: !b.disabled, hidden: b.hidden || chrome.dataset.tools === "menu", title: b.title },
   ]));
   // 기본값: 탭 줄을 아직 맞추지 않은 카드의 머리는 접히지 않은 strip 이다.
-  return { ...buttons, fit: chrome.dataset.fit ?? "strip" };
+  // 기본값: 머리를 아직 맞추지 않은 카드는 도구를 한 줄에 보인다.
+  return { ...buttons, fit: chrome.dataset.fit ?? "strip", tools: chrome.dataset.tools ?? "bar" };
 }
 
 /** 레일 외곽선과 포커스 표식. */

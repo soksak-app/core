@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F81: 좁은 카드 머리는 탭 목록 버튼, 현재 탭 제목, 도구 메뉴 버튼 `⋯`를 보인다. 메뉴는 사이드바 버튼과 활성 도구를 나열하고 그 명령을 실행한다(`core.card.tools`).
 - F80: 프로젝트 목록 단추 뒤의 카드 자동 정렬 단추가 `core.layout.balance`를 실행한다. 이 명령은 배치를 유지하고 모든 카드에 공정한 몫을 주므로, 각 축에서 카드가 가장 많은 줄의 카드들이 같은 크기가 된다(`Soksak.balance()`).
 - F79: 두 host는 시간이 초과된 중계 요청을 `the document did not reply within <ms> ms`로, 늦은 답을 그 지연과 함께(`exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`) 보고한다.
 - 검증: 2026-10-05 열다섯 번째 전체 window run(16d699ec)은 5분 뒤 디스크가 가득 차(`ENOSPC`) 무효다. 열여섯 번째(16d699ec, macOS 26.6.2 arm64, 11 processor에 load average 최대 218)는 344개 중 338개 check를 통과했다. 두 host의 정렬 시간(33.3ms에 대해 89.5ms와 124.4ms)과 Tauri의 21개 중 20개 frame divider 녹화는 부하다. F69의 Wails document 멈춤이 글꼴 family 검사를 실패시켰고, F77과 F78이 Tauri의 zsh 다시 그리기와 files bookmark 실패를 기록한다.

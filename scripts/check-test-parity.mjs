@@ -1492,6 +1492,17 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F81",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "export function openCardTools" },
+    ],
+    tests: [
+      { file: "e2e/card-tools-menu.test.mjs", id: "a narrow card folds its tools into a menu that runs them and keeps its title" },
+    ],
+    expected: "A narrow card header shows the tab list, the current title and a tool menu that runs the tools.",
+    levels: ["application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

@@ -15,7 +15,7 @@ import * as projects from "./projects.js";
 import {
   activeTab, addTabTo, assignSidebar, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
-  focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, pickItem, pickerState, plane, railState, selectTab,
+  focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, splitCard, surfaceState, tabsOf,
 } from "./plane.js";
 import {
@@ -425,6 +425,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.card.fullscreen", ({ card }) => { toggleCardFullscreen(card); });
   registry.command("core.card.menu", ({ card, menu }) => { openCardMenu(card, menu); });
   registry.command("core.card.tab-list", ({ card }) => { openCardTabs(card); });
+  registry.command("core.card.tools", ({ card }) => { openCardTools(card); });
   registry.command("core.card.add-tab", ({ card, plugin }) => ({ tab: addTabTo(card, plugin) }));
   registry.command("core.card.split", ({ card, side, plugin }) => splitCard(card, side, plugin));
   registry.command("core.card.close", ({ card }) => { closeCard(card); });
