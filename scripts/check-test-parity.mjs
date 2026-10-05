@@ -2405,9 +2405,9 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
   return errors;
 }
 
-// Aggregate review records and withdrawn items are not capabilities and therefore do not need a
+// Aggregate review and release records and withdrawn items are not capabilities and therefore do not need a
 // behavior link. Every completed capability must have one otherwise.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F13", "F25", "G1.4-2", "V3"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F13", "F25", "G1.4-2", "R2", "V3"]);
 
 // Completed capabilities whose implementation and tests moved to a plugin or sidecar repository
 // (R1-5, docs/spec/plugins.md#repositories). Core cannot read those repositories, so their links
