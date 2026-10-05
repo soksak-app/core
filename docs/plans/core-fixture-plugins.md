@@ -20,7 +20,7 @@ A package's tests do not verify another package's implementation. Core's window 
 
 ## Cost
 
-Measured on 2026-10-05: of the 42 core check files, only `project-directory`, `library`, `projects` and `text-size` use terminal statuses or commands themselves; the others depend on the terminal plugin only because `fresh` waits for a terminal surface, so `fresh` and those four files change. The terminal service's IOSurface frame code is 1,301 lines; the fixture sidecar draws one solid raster and answers its envelopes, a few hundred lines. The work is about one to two days, and the window suites must pass on both hosts before and after each step.
+Counted on 2026-10-05 from the statuses and commands each check file names: 5 files check plugin behaviour (`browser`, `files`, `terminal`, `terminal-font`, `terminal-protocols`) and move to the plugin repositories in F25.3 to F25.5; 17 files name terminal, browser or files statuses to reach a surface, a section or a document region (`card-sidebar-space`, `commands`, `library`, `modal`, `plugin-screen`, `project-directory`, `projects`, `registry`, `reload-composition`, `section-orientation`, `settings`, `sidebar`, `sidebar-choices`, `sidecar-recovery`, `text-size`, `window-sidebars`, `window-sidebar-persistence`) and change to fixture statuses; the remaining files depend on the plugins only through `fresh`. The terminal service's IOSurface frame code that the fixture sidecar mirrors is 1,301 lines. The window suites must pass on both hosts before and after each step.
 
 ## Order
 

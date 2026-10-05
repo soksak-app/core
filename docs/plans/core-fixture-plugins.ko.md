@@ -20,7 +20,7 @@ package의 test는 다른 package의 구현을 검증하지 않는다. core의 w
 
 ## 비용
 
-2026-10-05에 측정했다. core 검사 파일 42개 중 terminal의 status나 command를 직접 쓰는 것은 `project-directory`, `library`, `projects`, `text-size`뿐이고, 나머지는 `fresh`가 terminal 표면을 기다리기 때문에만 terminal plugin에 의존하므로 `fresh`와 그 네 파일이 바뀐다. terminal service의 IOSurface frame 코드는 1,301줄이다. fixture sidecar는 단색 raster 하나를 그리고 그 envelope에 답하므로 수백 줄이다. 작업은 하루에서 이틀이며, 각 단계의 앞뒤로 두 host에서 window suite가 통과해야 한다.
+2026-10-05에 각 검사 파일이 쓰는 status와 command로 세었다. 5개 파일은 plugin 동작을 검사하며(`browser`, `files`, `terminal`, `terminal-font`, `terminal-protocols`) F25.3에서 F25.5에 걸쳐 plugin 저장소로 옮긴다. 17개 파일은 surface, section, document region에 닿으려고 terminal, browser, files의 status를 쓰며(`card-sidebar-space`, `commands`, `library`, `modal`, `plugin-screen`, `project-directory`, `projects`, `registry`, `reload-composition`, `section-orientation`, `settings`, `sidebar`, `sidebar-choices`, `sidecar-recovery`, `text-size`, `window-sidebars`, `window-sidebar-persistence`) fixture status로 바뀐다. 나머지 파일은 `fresh`를 통해서만 plugin에 의존한다. fixture sidecar가 따라야 하는 terminal service의 IOSurface frame 코드는 1,301줄이다. 각 단계의 앞뒤로 두 host에서 window suite가 통과해야 한다.
 
 ## 순서
 
