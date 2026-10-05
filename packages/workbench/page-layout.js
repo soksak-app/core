@@ -101,14 +101,18 @@ export function createPageLayout({
       await rendered();
       await surfaces.waitPresented();
     },
-    /** 프로젝트 전환이 판을 비운다(projects.js 의 onSwitch). */
-    async empty() {
+    /**
+     * 프로젝트 전환이 판을 비운다(projects.js 의 onSwitch). 판을 지우는 그리기가 show 로 라이브러리 화면을 그린다. 그
+     * 그리기는 관찰 round 보다 먼저 실행되는 animation frame 에서 실행되므로, 작업 영역을 숨기는 화면 전환이 round 안에서
+     * 관찰된 요소의 크기를 바꾸지 않는다(F43).
+     */
+    async empty(show) {
       // 전환은 그 전에 준비한 판의 그리기를 취소한다. 그 그리기가 새 프레임 배율을 쓰는 그리기였을 수 있으므로, 판을 지우는
       // 그리기가 지금 배율을 쓰고 그 첫 행을 준비에 담는다(docs/spec/native-surfaces.md#title-bar-height).
       const epoch = ++layoutEpoch;
       const layout = frameLayout({
         factor: textSize(), publishAhead: compositor.publishAhead, publish: compositor.publish,
-        frame: animationFrame, clearPlane: plane.clear,
+        frame: animationFrame, clearPlane: plane.clear, show,
       });
       layouts.run(() => drawPrepared({ epoch, current: () => layoutEpoch, ...layout }));
       // 판을 비운 배치가 실패하면 대기열의 failed 가 그 실패를 보였다.

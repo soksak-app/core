@@ -10,6 +10,9 @@
 // 다음 callback 직전에 takeRecords 로 가져온 기록과 그 사이 MutationObserver 에 전달된 기록이 그 slot 의 변경이다.
 // error 이벤트는 round 가 끝난 뒤 보내지므로 그때 가져온 기록은 마지막 slot 의 변경이고, 그 뒤 다음 frame 의
 // rAF 까지 전달된 기록은 round 뒤의 변경이다.
+//
+// 변경 기록에는 그 변경을 만든 코드가 없다. body 의 dataset 쓰기(화면 전환의 data-screen 등)는 slot 안에서 쓴 코드의
+// stack 을 그 slot 의 줄로 함께 보내, round 안에서 화면을 바꾼 경로를 측정으로 찾는다(F43).
 
 /** observer 를 만든 코드의 위치. stack 에서 이 파일 밖의 첫 줄이다. */
 function creator() {
@@ -18,6 +21,18 @@ function creator() {
   // 기본값: 이 파일 밖의 줄이 없으면 위치를 알 수 없음을 그대로 적는다.
   return lines.find((line) => !line.includes("resize-loop.js") && !/^Error\b/.test(line)) ?? "unknown creator";
 }
+
+/** 이 파일 밖의 호출 stack. 안쪽 frame 부터 " < " 로 잇는다. */
+function callStack() {
+  // 기본값: stack 이 없는 엔진에는 위치 줄이 없으므로 빈 글로 읽고 아래에서 알 수 없음을 적는다.
+  const lines = (new Error().stack ?? "").split("\n").map((line) => line.trim())
+    .filter((line) => line && !line.includes("resize-loop.js") && !/^Error\b/.test(line));
+  // 기본값: stack 이 없는 엔진에는 위치 줄이 없고, 그때는 stack 을 알 수 없음을 그대로 적는다.
+  return lines.length ? lines.join(" < ") : "unknown stack";
+}
+
+/** dataset 의 key 를 속성 이름으로 적는다. */
+const dataName = (key) => `data-${String(key).replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
 
 /** 관찰 대상을 로그에서 알아볼 수 있게 적는다. */
 function describe(element) {
@@ -44,9 +59,10 @@ function changes(list) {
 
 /**
  * view 의 ResizeObserver 를 기록하는 하위 클래스로 바꾸고, 루프 오류가 난 frame 의 callback slot 별 변경과 round 뒤의
- * 변경, 다음 frame 에 전달된 관찰을 report(line) 로 보낸다. 바꾼 뒤 만든 observer 만 기록한다.
+ * 변경, 다음 frame 에 전달된 관찰을 report(line) 로 보낸다. 바꾼 뒤 만든 observer 만 기록한다. slot 안에서 body 의
+ * dataset 을 쓴 코드는 trace() 의 stack 으로 보낸다.
  */
-export function watchResizeLoop(view, report, locate = creator) {
+export function watchResizeLoop(view, report, locate = creator, trace = callStack) {
   const Native = view.ResizeObserver;
   let collected = null;
   // 이번 frame 의 첫 callback 에서 아직 전달되지 않았던 변경. 첫 callback 전에 전달된 기록은 이전 frame 의 것과
@@ -74,6 +90,24 @@ export function watchResizeLoop(view, report, locate = creator) {
   const take = (into) => {
     for (const record of mutations.takeRecords()) into.push(change(record));
   };
+  // body 의 dataset 을 쓰는 코드를 slot 안에서 기록한다. dataset 은 body 의 속성을 그대로 쓰고 지운다.
+  const body = view.document.body;
+  const dataset = body.dataset;
+  const write = (what) => {
+    if (clearing && !after) slots.at(-1).writes.push(`${what} at ${trace()}`);
+  };
+  const traced = new Proxy(dataset, {
+    set(target, key, value) {
+      write(`set ${dataName(key)} of body to ${value}`);
+      target[key] = value;
+      return true;
+    },
+    deleteProperty(target, key) {
+      write(`removed ${dataName(key)} of body`);
+      return delete target[key];
+    },
+  });
+  Object.defineProperty(body, "dataset", { configurable: true, get: () => traced });
   const sized = (entry) => `${describe(entry.target)} ${Math.round(entry.contentRect.width)}x${Math.round(entry.contentRect.height)}`;
   view.ResizeObserver = class extends Native {
     constructor(callback) {
@@ -86,7 +120,7 @@ export function watchResizeLoop(view, report, locate = creator) {
         // 이 callback 전까지의 기록은 앞 slot, 첫 callback 이면 round 전의 변경이다.
         take(current());
         // 시각은 performance trace 의 배치 단계와 같은 시계다. 오류가 난 frame 의 callback 과 배치 그리기를 대조한다.
-        slots.push({ ran: `${label} at ${view.performance.now().toFixed(1)}ms on ${[...entries].map(sized).join(", ")}`, changed: [] });
+        slots.push({ ran: `${label} at ${view.performance.now().toFixed(1)}ms on ${[...entries].map(sized).join(", ")}`, changed: [], writes: [] });
         if (!clearing) {
           clearing = true;
           view.requestAnimationFrame(() => {
@@ -107,6 +141,7 @@ export function watchResizeLoop(view, report, locate = creator) {
     if (!slots.length) report("resize observer loop: this frame ran no callback");
     slots.forEach((slot, index) => {
       report(`resize observer loop: in the round callback ${index + 1} ran ${slot.ran}, then changed ${changes(slot.changed)}`);
+      for (const written of slot.writes) report(`resize observer loop: in the round callback ${index + 1} ${written}`);
     });
     after = [];
     // 다음 frame 의 rAF 는 그 frame 의 관찰 round 전에 실행되고, 그다음 frame 의 rAF 는 그 round 뒤에 실행된다.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F43: library로의 전환은 관찰 round 전의 animation frame에서, 판을 비우는 준비된 그리기 안에서 library 화면을 보이며, 진단 기록기는 callback slot 안의 각 `body` dataset 쓰기의 stack을 보고한다.
 - F64: 두 host는 멈추는 sidecar의 출력을 끝까지 읽고 멈춤이 뺀 닫기에 대한 답을 받아들이므로, sidecar가 더는 SIGPIPE로 끝나지 않는다. 멈추는 동안 0이 아닌 종료는 두 host에서 `exit status <code>` 또는 `signal <number>`로 쓴다.
 - F68: 두 host가 WebKit 자식 기록 쓰기를 직렬화하므로, 겹친 페이지 적재가 더는 그 이름 바꾸기를 실패시키지 않는다.
 - F52: `make hosts-check`는 Makefile 변수 `LLVM_MINGW`가 가리키는 llvm-mingw의 Windows C compiler로 Tauri host도 Windows용으로 compile한다.

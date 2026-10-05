@@ -62,8 +62,9 @@ test("a factor is written into the document only by a draw, and a measurement re
 });
 
 // 판이 없는 창의 배율 변경과 라이브러리로의 전환은 준비한 배치로 그린다. 전환은 그 전에 준비한 배치의 그리기를 취소하므로,
-// 전환의 그리기가 지금 배율을 써야 취소된 그리기의 배율이 사라지지 않는다.
-test("a frame layout prepares the row of its factor and writes the factor after clearing the plane", async (t) => {
+// 전환의 그리기가 지금 배율을 써야 취소된 그리기의 배율이 사라지지 않는다. 라이브러리 화면은 같은 그리기에서 판을 지운 뒤
+// 그린다(F43).
+test("a frame layout prepares the row of its factor and writes the factor and shows the screen after clearing the plane", async (t) => {
   const dom = new JSDOM("<!doctype html><html><body></body></html>");
   globalThis.document = dom.window.document;
   t.after(() => { delete globalThis.document; dom.window.close(); });
@@ -79,8 +80,9 @@ test("a frame layout prepares the row of its factor and writes the factor after 
     publish: () => { calls.push(["publish", drawnFrameText()]); return Promise.resolve([]); },
     frame: (work) => { work(); return Promise.resolve(); },
     clearPlane: () => calls.push(["clear", drawnFrameText()]),
+    show: () => calls.push(["show", drawnFrameText()]),
   });
   await drawPrepared({ epoch: 0, current: () => 0, ...layout });
-  assert.deepEqual(calls, [["prepare", 0, 0, 54, 1], ["clear", 1], ["publish", 1.5]]);
+  assert.deepEqual(calls, [["prepare", 0, 0, 54, 1], ["clear", 1], ["show", 1.5], ["publish", 1.5]]);
   assert.equal(document.documentElement.style.getPropertyValue("--frame-text"), "1.5");
 });

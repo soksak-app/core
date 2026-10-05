@@ -121,3 +121,29 @@ test("each DOM change is reported in the callback slot of the round it happened 
     "resize observer loop: the next frame delivered no observation",
   ]);
 });
+
+// MutationObserver 기록에는 바꾼 코드가 없다. 관찰 round 의 callback slot 안에서 body 의 dataset 을 쓴 코드의 stack 을
+// 그 slot 의 줄 뒤에 적어, 화면 전환을 시작한 코드를 측정으로 찾는다(F43).
+test("a body dataset write inside a callback slot is reported with the stack of the code that wrote it", async () => {
+  const { window, observers, frame } = fakeView();
+  const reported = [];
+  watchResizeLoop(window, (line) => reported.push(line), () => "probe@wails://localhost/probe.js:1:1",
+    () => "drawBars@wails://localhost/index.html:419:30 < @wails://localhost/projects.js:64:5");
+  const body = window.document.body;
+  // round 밖의 쓰기는 기록하지 않는다.
+  body.dataset.screen = "workspace";
+  const plane = window.document.getElementById("plane");
+  new window.ResizeObserver(() => queueMicrotask(() => { body.dataset.screen = "library"; delete body.dataset.dragging; }));
+  observers[0].callback([{ target: plane, contentRect: { width: 188, height: 498 } }], observers[0]);
+  await new Promise((resolve) => queueMicrotask(resolve));
+  window.dispatchEvent(new window.ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }));
+  frame();
+  frame();
+
+  assert.equal(body.getAttribute("data-screen"), "library", "the traced dataset did not write the attribute");
+  assert.deepEqual(reported.slice(1, 4), [
+    "resize observer loop: in the round callback 1 ran probe@wails://localhost/probe.js:1:1 created at 1234.6ms at 1234.6ms on div#plane.plane.stage[data-expose=core.plane] 188x498, then changed attributes data-screen of body",
+    "resize observer loop: in the round callback 1 set data-screen of body to library at drawBars@wails://localhost/index.html:419:30 < @wails://localhost/projects.js:64:5",
+    "resize observer loop: in the round callback 1 removed data-dragging of body at drawBars@wails://localhost/index.html:419:30 < @wails://localhost/projects.js:64:5",
+  ]);
+});

@@ -46,10 +46,12 @@ mock.module("../plugin-states.js", {
 });
 /* 첫 화면이 설정을 고른 프로젝트. */
 const begunSettings = [];
+/* 설정 프로젝트 선택의 호스트 답. 검사가 답을 붙잡을 수 있다. */
+let selection = async () => {};
 mock.module("../settings.js", {
   namedExports: {
     beginSettings: (snapshot, id) => { begunSettings.push(id); },
-    selectProject: async () => {},
+    selectProject: () => selection(),
     value: () => "tabs",
     flushSettings: async () => {},
   },
@@ -63,8 +65,11 @@ globalThis.history = { replaceState: (state, title, url) => { globalThis.locatio
 
 const projects = await import("../projects.js");
 
-/** 판의 역할을 하는 기록기. hold() 뒤의 비우기는 release() 할 때까지 끝나지 않는다. rejected 배치는 검사에서 거부한다. */
-const plane = { layout: null, events: [], gate: Promise.resolve(), rejected: null };
+/**
+ * 판의 역할을 하는 기록기. hold() 뒤의 비우기는 release() 할 때까지 끝나지 않는다. rejected 배치는 검사에서 거부한다.
+ * 비우기의 그리기는 판을 지우고 받은 화면 그리기(show)를 실행한다. drawing 은 그 그리기 동안 참이다.
+ */
+const plane = { layout: null, events: [], gate: Promise.resolve(), rejected: null, drawing: false };
 plane.hold = () => {
   plane.gate = new Promise((resolve) => { plane.release = resolve; });
 };
@@ -79,10 +84,13 @@ projects.onSwitch({
   // 남은 레이아웃의 탭 밖의 표면 모듈을 정리한다. 세션 정리와의 순서를 retained 에 함께 기록한다.
   retain: async (surfaceIds) => { retained.push({ modules: [...surfaceIds] }); },
   presented: async () => {},
-  empty: async () => {
+  empty: async (show) => {
     plane.events.push("empty started");
     await plane.gate;
+    plane.drawing = true;
     plane.layout = null;
+    show?.();
+    plane.drawing = false;
     plane.events.push("emptied");
   },
 });
@@ -305,5 +313,40 @@ test("a project removed from the registry by another window ends in the window t
   assert.deepEqual(retained, [{ modules: ["tab-other"] }, [{ surface: "tab-other", root: "/work/prj-other" }]],
     "the window kept the surface modules and sidecar sessions of its last removed project");
   assert.deepEqual(reported, [], "ending the removed project reported an error");
+  await projects.flush();
+});
+
+// WebKit 은 호스트 답이 이행한 promise 의 반응을 다음 microtask checkpoint 에서 실행하고, 그 checkpoint 는 다음
+// rendering update 의 ResizeObserver callback 뒤일 수 있다. 라이브러리로의 화면 전환이 그 반응에서 일어나면 관찰 round 가
+// 이미 전달한 작업 영역의 요소(파일 트리, 터미널 화면)가 0x0 이 되어 loop 오류가 난다(F43). 전환은 판을 비우는 그리기,
+// 곧 관찰 round 보다 먼저 실행되는 animation frame 에서 일어나야 한다.
+test("browsing shows the library in the draw that empties the plane, not where a later host reply resolves", async () => {
+  await projects.initialise(store);
+  await projects.activate(PROJECT.id);
+  let screen = "workspace";
+  let inRound = false;
+  const switches = [];
+  projects.onChange(() => {
+    const next = projects.inLibrary() ? "library" : "workspace";
+    if (next !== screen) switches.push(`${next} in ${plane.drawing ? "the empty draw" : inRound ? "the observation round" : "a task"}`);
+    screen = next;
+  });
+  // 설정 프로젝트 선택의 호스트 답은 파일 트리 observer 의 callback 뒤 checkpoint 에서 이행된다.
+  const reply = Promise.withResolvers();
+  selection = () => reply.promise;
+  try {
+    const browsing = projects.browse();
+    await new Promise((resolve) => setImmediate(resolve));
+    // 관찰 round: 트리 callback 이 실행되고, 그 checkpoint 에서 붙잡힌 답이 이행된다.
+    inRound = true;
+    reply.resolve();
+    await new Promise((resolve) => setImmediate(resolve));
+    inRound = false;
+    await browsing;
+    assert.deepEqual(switches, ["library in the empty draw"], "the library screen was not drawn by the draw that empties the plane");
+  } finally {
+    selection = async () => {};
+    projects.onChange(() => {});
+  }
   await projects.flush();
 });

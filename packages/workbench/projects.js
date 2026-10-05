@@ -54,12 +54,28 @@ function inTurn(run) {
   return done;
 }
 
+/*
+ * 라이브러리 상태와 화면은 판을 비우는 그리기에서 함께 바뀐다(showLibrary). 그 그리기는 관찰 round 보다 먼저 실행되는
+ * animation frame 이므로, 판이 비고 라이브러리가 보이는 것이 한 frame 에 함께 나타나고 작업 영역을 숨기는 전환이 round
+ * 안에서 실행되지 않는다. 측정한 사실: 이전에는 이 전환이 files 트리 observer 의 callback slot 안에서 실행되었다(F43).
+ * 그 slot 에서 전환을 시작한 경로는 진단 기록기(resize-loop.js)가 body dataset 쓰기의 stack 으로 보고한다.
+ */
+function showLibrary() {
+  browsing = true;
+  changed();
+}
+
+/** 판을 비우고 그 그리기에서 라이브러리를 보인다. 그리기가 실패해도 전환은 라이브러리로 끝난다. 실패는 배치 대기열이 보였다. */
+async function emptyToLibrary() {
+  await listener.empty(showLibrary);
+  browsing = true;
+}
+
 export function browse() {
   return inTurn(async () => {
     await flush();
-    browsing = true;
     await showStates(null);
-    await listener.empty();
+    await emptyToLibrary();
     await selectProject(null);
     changed();
   });
@@ -151,12 +167,10 @@ function failed(error) { dispatchEvent(new ErrorEvent("error", { message: error.
 /** 첫 화면에 그렸지만 열지 못한 프로젝트를 닫고 라이브러리를 보인다. */
 async function leaveBegun() {
   activeProjectId = null;
-  browsing = true;
   savedLayout = "";
   history.replaceState(null, "", location.pathname);
   await selectProject(null);
-  await listener.empty();
-  changed();
+  await emptyToLibrary();
 }
 
 /** 등록부를 다시 읽는다. 이 창의 활성 프로젝트가 등록부에서 사라졌으면 true 로 끝난다. */
@@ -222,12 +236,11 @@ async function readProjects() {
   const ended = activeProjectId !== null && !active();
   if (ended) {
     activeProjectId = null;
-    browsing = true;
     history.replaceState(null, "", location.pathname);
     savedLayout = "";
     await selectProject(null);
     await showStates(null);
-    await listener?.empty();
+    await emptyToLibrary();
   } else if (removed.length && !browsing) listener?.update();
   if (removedProjects) {
     // 지운 프로젝트의 탭은 어떤 레이아웃에도 없다. 그 프로젝트를 지운 창이든 보이던 창이든, 이 창의 그 표면 모듈을 먼저
