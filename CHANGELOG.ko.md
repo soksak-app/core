@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- 검증: 4a51f38d에서 다시 게시한 core release v0.0.3은 첫 실행에서 공개 registry로 시작 plugin 묶음을 설치하고, 두 host 모두 다시 시작하지 않고 terminal을 시작한다(macOS 26.6.2 arm64).
 - F75: 첫 실행이 설치한 plugin은 다시 시작하지 않고 그 sidecar를 시작한다. 두 host는 성공한 install, update, enable의 sidecar를 바로 선언한다.
 - F74: `make hosts-check`는 더 이상 Tauri host를 Windows용으로 compile하지 않는다. 그 검사는 llvm-mingw가 필요해 core의 모든 GitHub CI run을 실패시켰다. `windows-build-check`는 계속 Wails host를 Windows용으로 vet한다.
 - 검증: 2026-10-05 열네 번째 전체 window run(c2f21e69, 앱 eb707869, macOS 26.6.2 arm64)은 344개 중 338개 check를 통과했다. 11 processor에 load average 93에서 118인 부하 실패: 두 host의 `native content, cards, and the sidebar rail stay aligned`(33.3ms에 대해 최악 245.0ms와 160.4ms)와 Tauri 최대화 정착(150ms에 대해 225ms). F69의 Tauri page 멈춤이 `the application log file holds the lines the page reports`를, 그 선언되지 않은 `exposure reply does not match a pending request`로 `a page reload loses no host reply`를 실패시켰고, F73의 Tauri 녹화 stop이 `a new window shows its complete first screen from its first frame`을 실패시켰다.
