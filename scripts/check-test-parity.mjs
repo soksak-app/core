@@ -1466,6 +1466,19 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F79",
+    implementation: [
+      { file: "packages/host/wailsv3/src/exposure.go", symbol: "relayExpiredLimit" },
+      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "EXPIRED_LIMIT" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/exposure_test.go", id: "TestRelayLateReplyStatesItsDelay" },
+      { file: "packages/host/tauriv2/tests/exposure_test.rs", id: "late_reply_states_its_delay" },
+    ],
+    expected: "Both hosts report a timed-out relayed request and its late reply with the same texts and the delay.",
+    levels: ["unit"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

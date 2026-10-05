@@ -206,6 +206,19 @@ type Relay[T comparable] struct {
 	mu      sync.Mutex
 	next    uint64
 	waiting map[uint64]*relayWaiter[T]
+	// expired 는 시간이 초과된 최근 요청이다. 늦은 답의 지연을 오류에 밝히기 위해 relayExpiredLimit 개까지
+	// 기억하고 가장 오래된 것을 버린다(docs/spec/exposure.md#errors).
+	expired []relayExpired[T]
+}
+
+// relayExpiredLimit 는 늦은 답을 위해 기억하는 시간 초과 요청 수다.
+const relayExpiredLimit = 256
+
+type relayExpired[T comparable] struct {
+	id      uint64
+	target  T
+	sent    time.Time
+	timeout time.Duration
 }
 
 type relayWaiter[T comparable] struct {
@@ -228,6 +241,7 @@ func (r *Relay[T]) Request(target T, timeout time.Duration, send func(id uint64)
 	w := &relayWaiter[T]{target: target, reply: make(chan ExposureResult, 1)}
 	r.waiting[id] = w
 	r.mu.Unlock()
+	sent := time.Now()
 	if err := send(id); err != nil {
 		r.mu.Lock()
 		delete(r.waiting, id)
@@ -245,13 +259,18 @@ func (r *Relay[T]) Request(target T, timeout time.Duration, send func(id uint64)
 	case <-timer.C:
 		r.mu.Lock()
 		delete(r.waiting, id)
-		r.mu.Unlock()
 		select {
 		case reply := <-w.reply:
+			r.mu.Unlock()
 			return reply
 		default:
 		}
-		return ExposureResult{Error: rpcError(codeTimeout, "the document did not reply within %s", timeout)}
+		if len(r.expired) == relayExpiredLimit {
+			r.expired = r.expired[1:]
+		}
+		r.expired = append(r.expired, relayExpired[T]{id: id, target: target, sent: sent, timeout: timeout})
+		r.mu.Unlock()
+		return ExposureResult{Error: rpcError(codeTimeout, "the document did not reply within %d ms", timeout.Milliseconds())}
 	}
 }
 
@@ -260,7 +279,14 @@ func (r *Relay[T]) Resolve(id uint64, from T, reply ExposureResult) error {
 	r.mu.Lock()
 	w := r.waiting[id]
 	if w == nil || w.target != from {
-		r.mu.Unlock()
+		defer r.mu.Unlock()
+		for i, expired := range r.expired {
+			if expired.id == id && expired.target == from {
+				r.expired = append(r.expired[:i], r.expired[i+1:]...)
+				return fmt.Errorf("exposure reply %d arrived %d ms after it was sent; its request timed out after %d ms",
+					id, time.Since(expired.sent).Milliseconds(), expired.timeout.Milliseconds())
+			}
+		}
 		return fmt.Errorf("exposure reply %d has no matching request", id)
 	}
 	delete(r.waiting, id)

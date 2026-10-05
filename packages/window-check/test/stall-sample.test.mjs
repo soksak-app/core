@@ -62,11 +62,11 @@ test("a request that the page did not answer names the stall records or why they
   const { EndpointError } = await import("@soksak/client");
   const { Session } = await import("../app.mjs");
   const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-config-"));
-  const client = { endpoint: { pid: 999999 }, request: async () => { throw new EndpointError({ code: -32603, message: "main did not reply within 10000 ms" }); } };
+  const client = { endpoint: { pid: 999999 }, request: async () => { throw new EndpointError({ code: -32603, message: "the document did not reply within 10000 ms" }); } };
   const s = new Session({ name: "tauriv2", configDir }, client);
   // 이 설정 폴더에는 WebKit 자식 기록이 없으므로 기록하지 못한 까닭이 오류에 남는다.
   await assert.rejects(s.request("status.get", { name: "core.verify" }),
-    /^EndpointError: tauriv2 status\.get core\.verify: main did not reply within 10000 ms; sampling the host failed: .*webkit-children\.json: ENOENT/);
+    /^EndpointError: tauriv2 status\.get core\.verify: the document did not reply within 10000 ms; sampling the host failed: .*webkit-children\.json: ENOENT/);
 });
 
 test("a page process that already ended does not cost the records of the host and the other pages", async () => {

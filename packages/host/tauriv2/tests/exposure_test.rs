@@ -33,7 +33,9 @@ fn reply_from_target_document_resolves_request() {
     let replying = relay.clone();
     let result = relay.request("main", Some(WAIT), move |id| {
         std::thread::spawn(move || {
-            assert!(replying.reply("main", &text(json!({"id": id, "result": {"ok": true}}))));
+            replying
+                .reply("main", &text(json!({"id": id, "result": {"ok": true}})))
+                .unwrap();
         });
         Ok(())
     });
@@ -49,7 +51,7 @@ fn reply_keeps_the_text_and_key_order_of_the_page_value() {
     let result = relay.request("main", Some(WAIT), move |id| {
         let body = format!(r#"{{"id":{id},"result":{{"zeta":1,"alpha":{{"b":2,"a":1}}}}}}"#);
         let payload = RawValue::from_string(body).unwrap();
-        assert!(replying.reply("main", &payload));
+        replying.reply("main", &payload).unwrap();
         Ok(())
     });
     assert_eq!(result.unwrap().get(), r#"{"zeta":1,"alpha":{"b":2,"a":1}}"#);
@@ -61,7 +63,7 @@ fn missing_result_is_null() {
     let relay = Arc::new(Relay::default());
     let replying = relay.clone();
     let result = relay.request("main", Some(WAIT), move |id| {
-        assert!(replying.reply("main", &text(json!({"id": id}))));
+        replying.reply("main", &text(json!({"id": id}))).unwrap();
         Ok(())
     });
     assert_eq!(value(&result.unwrap()), Value::Null);
@@ -74,10 +76,12 @@ fn error_reply_keeps_code_and_message() {
     let replying = relay.clone();
     let failure = relay
         .request("main", Some(WAIT), move |id| {
-            replying.reply(
-                "main",
-                &text(json!({"id": id, "error": {"code": 1002, "message": "not registered"}})),
-            );
+            replying
+                .reply(
+                    "main",
+                    &text(json!({"id": id, "error": {"code": 1002, "message": "not registered"}})),
+                )
+                .unwrap();
             Ok(())
         })
         .unwrap_err();
@@ -94,12 +98,49 @@ fn reply_from_another_document_is_ignored_and_request_times_out() {
     let replying = relay.clone();
     let failure = relay
         .request("main", Some(Duration::from_millis(50)), move |id| {
-            assert!(!replying.reply("surface-main-a", &text(json!({"id": id, "result": 1}))));
+            assert!(replying
+                .reply("surface-main-a", &text(json!({"id": id, "result": 1})))
+                .is_err());
             Ok(())
         })
         .unwrap_err();
     assert_eq!(failure.code, 1005);
-    assert!(!relay.reply("main", &text(json!({"id": 1, "result": 1}))));
+    assert!(relay
+        .reply("main", &text(json!({"id": 1, "result": 1})))
+        .is_err());
+}
+
+// contract: exposure.relay.late-reply-states-its-delay
+#[test]
+fn late_reply_states_its_delay() {
+    let relay = Relay::default();
+    let failure = relay
+        .request("main", Some(Duration::from_millis(50)), |_| Ok(()))
+        .unwrap_err();
+    assert_eq!(
+        (failure.code, failure.message.as_str()),
+        (1005, "the document did not reply within 50 ms")
+    );
+    let error = relay
+        .reply("main", &text(json!({"id": 1, "result": 1})))
+        .unwrap_err();
+    let delay = error
+        .strip_prefix("exposure reply 1 arrived ")
+        .and_then(|rest| {
+            rest.strip_suffix(" ms after it was sent; its request timed out after 50 ms")
+        });
+    assert!(
+        delay.is_some_and(
+            |delay| !delay.is_empty() && delay.bytes().all(|byte| byte.is_ascii_digit())
+        ),
+        "{error}"
+    );
+    assert_eq!(
+        relay
+            .reply("main", &text(json!({"id": 101, "result": 1})))
+            .unwrap_err(),
+        "exposure reply 101 has no matching request"
+    );
 }
 
 // contract: exposure.relay.send-failure-1003

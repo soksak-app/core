@@ -3,6 +3,8 @@ package host_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"regexp"
 	"slices"
 	"testing"
 	"time"
@@ -214,6 +216,26 @@ func TestRelayReplyFromAnotherDocumentIsRejectedAndTheRequestTimesOut(t *testing
 	}
 	if err := relay.Resolve(requested, "main", host.ExposureResult{Result: json.RawMessage(`1`)}); err == nil {
 		t.Fatal("a late reply was accepted after the timeout")
+	}
+}
+
+// contract: exposure.relay.late-reply-states-its-delay
+func TestRelayLateReplyStatesItsDelay(t *testing.T) {
+	relay := host.NewRelay[string]()
+	var requested uint64
+	got := relay.Request("main", 50*time.Millisecond, func(id uint64) error {
+		requested = id
+		return nil
+	})
+	if got.Error == nil || got.Error.Code != 1005 || got.Error.Message != "the document did not reply within 50 ms" {
+		t.Fatalf("reply %+v, want 1005 with the timeout in milliseconds", got.Error)
+	}
+	err := relay.Resolve(requested, "main", host.ExposureResult{Result: json.RawMessage(`1`)})
+	if err == nil || !regexp.MustCompile(fmt.Sprintf(`^exposure reply %d arrived \d+ ms after it was sent; its request timed out after 50 ms$`, requested)).MatchString(err.Error()) {
+		t.Fatalf("late reply = %v", err)
+	}
+	if err := relay.Resolve(requested+100, "main", host.ExposureResult{Result: json.RawMessage(`1`)}); err == nil || err.Error() != fmt.Sprintf("exposure reply %d has no matching request", requested+100) {
+		t.Fatalf("reply to no request = %v", err)
 	}
 }
 

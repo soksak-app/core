@@ -51,10 +51,9 @@ fn main_and_scoped_reply_payloads_reach_their_requests() {
         let payload = decode(json!({"id": id, "result": null}));
         assert_eq!(payload.get("surface"), None);
         let target = reply_target("main", &payload).unwrap();
-        assert!(
-            replying.reply(&target, &raw(&payload)),
-            "main reply went to {target}"
-        );
+        replying
+            .reply(&target, &raw(&payload))
+            .unwrap_or_else(|error| panic!("main reply went to {target}: {error}"));
         Ok(())
     });
     assert_eq!(main.unwrap().get(), "null");
@@ -64,10 +63,9 @@ fn main_and_scoped_reply_payloads_reach_their_requests() {
         let payload = decode(json!({"id": id, "surface": "tab-1", "result": {"ok": true}}));
         assert_eq!(payload["surface"], "tab-1");
         let target = reply_target("main", &payload).unwrap();
-        assert!(
-            replying.reply(&target, &raw(&payload)),
-            "scoped reply went to {target}"
-        );
+        replying
+            .reply(&target, &raw(&payload))
+            .unwrap_or_else(|error| panic!("scoped reply went to {target}: {error}"));
         Ok(())
     });
     assert_eq!(scoped.unwrap().get(), r#"{"ok":true}"#);

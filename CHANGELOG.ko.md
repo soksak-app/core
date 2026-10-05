@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F79: 두 host는 시간이 초과된 중계 요청을 `the document did not reply within <ms> ms`로, 늦은 답을 그 지연과 함께(`exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`) 보고한다.
 - 검증: 2026-10-05 열다섯 번째 전체 window run(16d699ec)은 5분 뒤 디스크가 가득 차(`ENOSPC`) 무효다. 열여섯 번째(16d699ec, macOS 26.6.2 arm64, 11 processor에 load average 최대 218)는 344개 중 338개 check를 통과했다. 두 host의 정렬 시간(33.3ms에 대해 89.5ms와 124.4ms)과 Tauri의 21개 중 20개 frame divider 녹화는 부하다. F69의 Wails document 멈춤이 글꼴 family 검사를 실패시켰고, F77과 F78이 Tauri의 zsh 다시 그리기와 files bookmark 실패를 기록한다.
 - F70: Wails host는 fork `min-median-max/wails`(`soksak/http-error-log`)를 쓴다. 그 HTTP transport는 page에 돌려주는 오류를 더 이상 로그에 쓰지 않으므로 실패한 binding 호출은 한 번만 기록된다.
 - 검증: 4a51f38d에서 다시 게시한 core release v0.0.3은 첫 실행에서 공개 registry로 시작 plugin 묶음을 설치하고, 두 host 모두 다시 시작하지 않고 terminal을 시작한다(macOS 26.6.2 arm64).

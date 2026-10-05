@@ -198,6 +198,7 @@ Items:
 | `exposure.relay.missing-result-is-null` | A reply without a result resolves to null. | both |
 | `exposure.relay.error-reply-keeps-code-and-message` | An error reply fails the request with the same code and message. | both |
 | `exposure.relay.foreign-document-reply-ignored-timeout-1005` | A reply from another document is ignored, the request times out with 1005, and a late reply is not accepted. | both |
+| `exposure.relay.late-reply-states-its-delay` | A timed-out request fails with `the document did not reply within <ms> ms`, a reply that arrives after it fails with the delay since the request was sent and the timeout, and a reply to no request fails with `has no matching request`. | both |
 | `exposure.relay.send-failure-1003` | A failed send to the document fails the request at once with 1003. | both |
 | `exposure.relay.closed-document-fails-pending-1003` | Closing a document fails its pending requests with 1003. | both |
 | `exposure.relay.no-timeout-waits-until-close` | A request without a timeout waits until the document closes and then fails with 1003. | both |

@@ -205,4 +205,6 @@ The page interface for surface pages is `page.exposure`: `register(kind, name)`,
 | 1008 | A synthetic press of that button is still open in the window, so a pointer `down` was not delivered |
 | -32000 | A registered command or status handler failed; `message` is its error message |
 
+A 1005 error of a relayed request has the message `the document did not reply within <ms> ms`. Both hosts remember the 256 most recent requests that timed out, dropping the oldest; a reply to one of them fails with `exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`, and a reply to no remembered request fails with `exposure reply <id> has no matching request`, so the delay of a late reply is in the error that the page reports.
+
 The [local endpoint](endpoint.md) closes the connection after an undeclared method.

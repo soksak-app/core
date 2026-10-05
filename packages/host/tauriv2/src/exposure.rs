@@ -353,7 +353,13 @@ struct Answer {
 pub struct Relay {
     next: AtomicU64,
     pending: Mutex<HashMap<u64, Waiting>>,
+    /// 시간이 초과된 최근 요청의 id, 문서, 보낸 시각, 제한 시간. 늦은 답의 지연을 오류에 밝히기 위해
+    /// EXPIRED_LIMIT 개까지 기억하고 가장 오래된 것을 버린다(docs/spec/exposure.md#errors).
+    expired: Mutex<std::collections::VecDeque<(u64, String, std::time::Instant, Duration)>>,
 }
+
+/// 늦은 답을 위해 기억하는 시간 초과 요청 수.
+const EXPIRED_LIMIT: usize = 256;
 
 impl Relay {
     /// send 로 요청 id 를 문서 target 에 보내고 target 의 응답을 timeout 동안 기다린다. timeout 이
@@ -370,6 +376,7 @@ impl Relay {
             .lock()
             .map_err(|e| Failure::new(-32603, e.to_string()))?
             .insert(id, (target.to_string(), tx));
+        let sent = std::time::Instant::now();
         if let Err(error) = send(id) {
             self.forget(id);
             return Err(Failure::new(MISSING_DOCUMENT, error));
@@ -383,10 +390,32 @@ impl Relay {
         match rx.recv_timeout(timeout) {
             Ok(outcome) => outcome,
             Err(_) => {
-                self.forget(id);
+                let taken = self
+                    .pending
+                    .lock()
+                    .map_err(|e| Failure::new(-32603, e.to_string()))?
+                    .remove(&id)
+                    .is_none();
+                if taken {
+                    // 제한 시간과 같은 때에 답이 요청을 가져갔으면 그 답이 곧 전달된다.
+                    return rx
+                        .recv()
+                        .map_err(|_| Failure::new(MISSING_DOCUMENT, format!("{target} closed")))?;
+                }
+                let mut expired = self
+                    .expired
+                    .lock()
+                    .map_err(|e| Failure::new(-32603, e.to_string()))?;
+                if expired.len() == EXPIRED_LIMIT {
+                    expired.pop_front();
+                }
+                expired.push_back((id, target.to_string(), sent, timeout));
                 Err(Failure::new(
                     TIMED_OUT,
-                    format!("{target} did not reply within {} ms", timeout.as_millis()),
+                    format!(
+                        "the document did not reply within {} ms",
+                        timeout.as_millis()
+                    ),
                 ))
             }
         }
@@ -395,25 +424,21 @@ impl Relay {
     /// 문서 from 의 응답 `{id, result}` 또는 `{id, error}` 를 기다리는 요청에 전달한다. 전달했으면
     /// true 이다. 다른 문서에 보낸 요청의 id 는 전달하지 않는다. result 는 받은 텍스트 그대로 전달하므로
     /// 페이지 값의 키 순서가 바뀌지 않는다.
-    pub fn reply(&self, from: &str, payload: &RawValue) -> bool {
-        let Ok(Answer {
-            id: Some(id),
-            result,
-            error,
-        }) = serde_json::from_str::<Answer>(payload.get())
-        else {
-            return false;
-        };
+    pub fn reply(&self, from: &str, payload: &RawValue) -> Result<(), String> {
+        let Answer { id, result, error } =
+            serde_json::from_str::<Answer>(payload.get()).map_err(|error| error.to_string())?;
+        let id = id.ok_or("exposure reply has no id")?;
         let waiting = {
-            let Ok(mut pending) = self.pending.lock() else {
-                return false;
-            };
-            if !pending.get(&id).is_some_and(|(target, _)| target == from) {
-                return false;
+            let mut pending = self.pending.lock().map_err(|e| e.to_string())?;
+            if pending.get(&id).is_some_and(|(target, _)| target == from) {
+                pending.remove(&id)
+            } else {
+                None
             }
-            pending.remove(&id)
         };
-        let Some((_, tx)) = waiting else { return false };
+        let Some((_, tx)) = waiting else {
+            return Err(self.unmatched(id, from)?);
+        };
         let outcome = match error {
             Some(error) if !error.is_null() => Err(Failure::new(
                 // 기본값: 코드가 없는 페이지 오류는 JSON-RPC 내부 오류(-32603)로 알린다.
@@ -427,7 +452,25 @@ impl Relay {
             // 기본값: 값을 돌려주지 않은 명령의 답에는 result 가 없고, 그 결과는 null 이다.
             _ => result.map_or_else(|| raw(&Value::Null), Ok),
         };
-        tx.send(outcome).is_ok()
+        tx.send(outcome)
+            .map_err(|_| format!("exposure reply {id} has no matching request"))
+    }
+
+    /// 기다리는 요청이 없는 답 id 의 오류. 시간이 초과된 요청이면 보낸 뒤의 지연과 제한 시간을 밝힌다.
+    fn unmatched(&self, id: u64, from: &str) -> Result<String, String> {
+        let mut expired = self.expired.lock().map_err(|e| e.to_string())?;
+        let Some(index) = expired
+            .iter()
+            .position(|(held, target, _, _)| *held == id && target == from)
+        else {
+            return Ok(format!("exposure reply {id} has no matching request"));
+        };
+        let (_, _, sent, timeout) = expired.remove(index).expect("the position is in the queue");
+        Ok(format!(
+            "exposure reply {id} arrived {} ms after it was sent; its request timed out after {} ms",
+            sent.elapsed().as_millis(),
+            timeout.as_millis()
+        ))
     }
 
     /// 문서 target 에 보낸 요청을 모두 오류 1003 으로 끝낸다.
@@ -577,10 +620,7 @@ pub(crate) fn reply(webview: &Webview, request: String) -> Result<(), String> {
             return Ok(());
         }
     }
-    if !webview.state::<Exposure>().relay.reply(&target, &text) {
-        return Err("exposure reply does not match a pending request".into());
-    }
-    Ok(())
+    webview.state::<Exposure>().relay.reply(&target, &text)
 }
 
 #[derive(Deserialize)]
