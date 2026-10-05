@@ -1321,6 +1321,18 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F65",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "drawSideToggles" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plane-side-toggles.test.mjs", id: "a draw keeps the pressed card header fold control in the document" },
+      { file: "e2e/card-panels.test.mjs", id: "the card header has a fold control for each sidebar the card shows" },
+    ],
+    expected: "A redraw keeps the card header fold controls in the document, so a click that a draw interrupts still reaches its control.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },
