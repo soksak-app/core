@@ -65,6 +65,15 @@ export function createLibrary(root, rendered = () => {}) {
     </main>
     <footer class="library-footer"><span class="library-count"></span><button type="button" class="library-return" data-expose="core.library.return" data-command="core.library.return" hidden>작업 화면으로 돌아가기</button><button type="button" data-action="window" data-expose="core.library.window" data-command="core.library.window">＋ 새 창</button></footer>`;
   const grid = root.querySelector('.library-grid');
+  // 프로젝트 id 마다 그 카드와 카드를 만든 값이다. 같은 값이면 render 가 카드를 다시 만들지 않는다.
+  const cards = new Map();
+  // 플러그인 id 마다 그 카드와 카드를 만든 값, 그리고 목록 위의 실패 글이다.
+  const pluginCards = new Map();
+  const failureLine = { key: null, node: null };
+  const noPlugins = element('p', 'library-plugins-none', '찾는 플러그인이 없습니다.');
+  const add=element('button','library-add','＋ 프로젝트 만들기');add.type='button';add.dataset.action='create';add.dataset.expose='core.library.add';
+  mark(add,'core.library.form.open');
+  const noResults=element('p','library-no-results','일치하는 프로젝트가 없습니다.'); noResults.dataset.expose='core.library.no-results';
   const search = root.querySelector('[data-expose="core.library.search"]');
   const sort = root.querySelector('select');
   const pages = root.querySelector('.library-pages');
@@ -231,44 +240,41 @@ export function createLibrary(root, rendered = () => {}) {
     if (pluginSearch.value !== pluginQuery) pluginSearch.value = pluginQuery;
     const status = pluginOperations.status();
     const failure = pluginOperations.failure();
-    pluginList.replaceChildren();
+    // 바뀌지 않은 플러그인 카드는 문서에 그대로 둔다(render 의 프로젝트 카드와 같은 까닭이다).
+    const wanted = [];
     if (failure) {
-      const line = element('p', 'library-plugins-error');
-      line.dataset.kind = failure.kind; line.setAttribute('role', 'alert');
-      pluginList.append(line);
-      showError(line, 'library plugins', failure.kind === 'index'
-        ? `레지스트리를 읽지 못했습니다: ${failure.message}` : `플러그인 상태를 읽지 못했습니다: ${failure.message}`);
+      const key = JSON.stringify(failure);
+      if (failureLine.key !== key) {
+        failureLine.key = key;
+        failureLine.node = element('p', 'library-plugins-error');
+        failureLine.node.dataset.kind = failure.kind; failureLine.node.setAttribute('role', 'alert');
+        showError(failureLine.node, 'library plugins', failure.kind === 'index'
+          ? `레지스트리를 읽지 못했습니다: ${failure.message}` : `플러그인 상태를 읽지 못했습니다: ${failure.message}`);
+      }
+      wanted.push(failureLine.node);
     } else {
+      failureLine.key = null;
       hideError(null, 'library plugins');
     }
     const rows = matchPlugins(status.plugins, pluginQuery);
-    for (const row of rows) pluginList.append(pluginCard(row, status));
+    const running = status.operation?.state === 'running';
+    for (const row of rows) {
+      const operation = status.operation?.plugin === row.id ? status.operation : null;
+      const key = JSON.stringify([row, pluginOperations.hosted, running, operation]);
+      const kept = pluginCards.get(row.id);
+      if (kept?.key === key) { wanted.push(kept.card); continue; }
+      const card = pluginCard(row, status);
+      pluginCards.set(row.id, { key, card });
+      wanted.push(card);
+    }
+    for (const id of [...pluginCards.keys()]) if (!rows.some((row) => row.id === id)) pluginCards.delete(id);
     // 상태를 읽지 못하면 카드가 없고 그 까닭은 위의 글이 보인다.
-    if (!rows.length && failure?.kind !== 'state') pluginList.append(element('p', 'library-plugins-none', '찾는 플러그인이 없습니다.'));
+    if (!rows.length && failure?.kind !== 'state') wanted.push(noPlugins);
+    place(pluginList, wanted);
   }
 
-  function render() {
-    if (!projects.inLibrary()) return;
-    const all=projects.all(), open=all.filter(p=>projects.isOpen(p.id));
-    checkFolders(all);
-    root.querySelector('.library-count').textContent=`프로젝트 ${all.length} · 열림 ${open.length}`;
-    back.hidden=!projects.active();
-    showPage();
-    if (page === 'plugins') {
-      grid.replaceChildren();
-      renderPlugins();
-      rendered();
-      return;
-    }
-    pluginList.replaceChildren();
-    const query=search.value.trim().toLocaleLowerCase();
-    const shown=all.filter(p=>`${p.title} ${p.root}`.toLocaleLowerCase().includes(query));
-    if(sort.value==='name') shown.sort((a,b)=>a.title.localeCompare(b.title));
-    // 기본값: 한 번도 열지 않은 프로젝트는 lastOpened 가 없으므로 가장 오래된 것으로 정렬한다.
-    if(sort.value==='recent') shown.sort((a,b)=>(b.lastOpened??0)-(a.lastOpened??0));
-    if(sort.value==='open') shown.sort((a,b)=>Number(projects.isOpen(b.id))-Number(projects.isOpen(a.id)));
-    grid.replaceChildren();
-    for(const project of shown) {
+  /** 프로젝트 하나의 카드. folder 는 그 폴더를 읽은 결과다. */
+  function projectCard(project, folder) {
       const card=element('article','library-project'); card.dataset.projectId=project.id; card.setAttribute('role','listitem');
       card.dataset.open=String(projects.isOpen(project.id));
       const choose=element('button','library-project__open'); choose.type='button'; choose.title=project.root; choose.dataset.expose='core.library.open';
@@ -285,7 +291,6 @@ export function createLibrary(root, rendered = () => {}) {
       }
       text.append(meta);
       // 폴더를 읽을 수 없는 프로젝트는 열기 전에 그 까닭을 보인다.
-      const folder=folders.get(project.root);
       if(folder?.error) {
         // 열 수 없는 폴더의 카드는 누를 수 없다. 이유는 카드에 보이고, 기록은 제거 버튼으로 지운다.
         choose.disabled=true;
@@ -304,14 +309,62 @@ export function createLibrary(root, rendered = () => {}) {
       remove.title='라이브러리에서 제거';remove.setAttribute('aria-label',`${project.title} 라이브러리에서 제거`);
       mark(remove,'core.library.remove',{id:project.id});
       const actions=element('div','library-project__actions'); actions.append(remove,pin);
-      card.append(choose,actions); grid.append(card);
+      card.append(choose,actions);
+    return card;
+  }
+
+  /** parent 의 자식을 nodes 의 순서로 맞춘다. 제자리에 있는 요소는 옮기지 않고, nodes 에 없는 자식은 뺀다. */
+  function place(parent, nodes) {
+    const keep=new Set(nodes);
+    for(const child of [...parent.children]) if(!keep.has(child)) child.remove();
+    // 기본값: index 가 자식 수와 같으면 그 자리가 끝이므로 null 로 끝에 넣는다.
+    nodes.forEach((node, index)=>{ if(parent.children[index]!==node) parent.insertBefore(node, parent.children[index] ?? null); });
+  }
+
+  function render() {
+    if (!projects.inLibrary()) return;
+    const all=projects.all(), open=all.filter(p=>projects.isOpen(p.id));
+    checkFolders(all);
+    root.querySelector('.library-count').textContent=`프로젝트 ${all.length} · 열림 ${open.length}`;
+    back.hidden=!projects.active();
+    showPage();
+    if (page === 'plugins') {
+      place(grid, []);
+      cards.clear();
+      renderPlugins();
+      rendered();
+      return;
     }
-    const add=element('button','library-add','＋ 프로젝트 만들기');add.type='button';add.dataset.action='create';add.dataset.expose='core.library.add';
-    mark(add,'core.library.form.open');grid.append(add);
+    place(pluginList, []);
+    pluginCards.clear();
+    const query=search.value.trim().toLocaleLowerCase();
+    const shown=all.filter(p=>`${p.title} ${p.root}`.toLocaleLowerCase().includes(query));
+    if(sort.value==='name') shown.sort((a,b)=>a.title.localeCompare(b.title));
+    // 기본값: 한 번도 열지 않은 프로젝트는 lastOpened 가 없으므로 가장 오래된 것으로 정렬한다.
+    if(sort.value==='recent') shown.sort((a,b)=>(b.lastOpened??0)-(a.lastOpened??0));
+    if(sort.value==='open') shown.sort((a,b)=>Number(projects.isOpen(b.id))-Number(projects.isOpen(a.id)));
+    // 바뀌지 않은 카드와 그 조작 요소는 문서에 그대로 둔다. 다시 만들면 누름과 뗌 사이의 다시 그리기가 click 을
+    // 잃는다(docs/spec/exposure.md). 카드의 내용을 정하는 값이 같으면 이전 카드를 쓰고, 순서가 틀린 요소만 옮긴다.
+    const wanted=[];
+    for(const project of shown) {
+      const folder=folders.get(project.root);
+      // 기본값: 아직 읽지 않았거나 읽은 폴더에는 오류가 없으므로 그 값은 null 이다.
+      const key=JSON.stringify([project, projects.isOpen(project.id), folder?.error ?? null]);
+      const kept=cards.get(project.id);
+      if(kept?.key===key) {
+        if(!folder?.error) hideError(null, `library project ${project.root}`);
+        wanted.push(kept.card);
+        continue;
+      }
+      const card=projectCard(project, folder);
+      cards.set(project.id, {key, card});
+      wanted.push(card);
+    }
+    for(const id of [...cards.keys()]) if(!shown.some((project)=>project.id===id)) cards.delete(id);
+    if(!shown.length&&all.length) wanted.unshift(noResults);
+    wanted.push(add);
+    place(grid, wanted);
     const empty=root.querySelector('.library-empty');empty.hidden=all.length>0;
-    if(!shown.length&&all.length) {
-      const none=element('p','library-no-results','일치하는 프로젝트가 없습니다.'); none.dataset.expose='core.library.no-results'; grid.prepend(none);
-    }
     rendered();
   }
   /** 화면의 상태. 미리보기 사각형은 뷰포트 기준이다. */

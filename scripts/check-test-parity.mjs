@@ -1333,6 +1333,18 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F66.1",
+    implementation: [
+      { file: "packages/workbench/library.js", symbol: "function place(parent, nodes)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/library-redraw.test.mjs", id: "a library render keeps the controls of unchanged project cards in the document" },
+      { file: "packages/workbench/test/library-redraw.test.mjs", id: "a plugin page render keeps the controls of unchanged plugin cards in the document" },
+    ],
+    expected: "A library render keeps the cards and controls whose values did not change in the document.",
+    levels: ["unit"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },
