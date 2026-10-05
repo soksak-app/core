@@ -32,3 +32,39 @@ test("sampleProcess runs sample on the host process into the given file and repo
   assert.throws(() => sampleProcess(4321, "/x/stall.txt", () => ({ status: 1, stderr: "sample cannot examine process 4321\n" })),
     /^Error: sample 4321 exited with 1: sample cannot examine process 4321$/);
 });
+
+test("the page processes of a host are the WebContent children of its record", async () => {
+  const { mkdtempSync, writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const { pageProcesses } = await import("../stall-sample.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "soksak-stall-"));
+  writeFileSync(join(dir, "webkit-children.json"), JSON.stringify({ host_pid: 10, children: [
+    { pid: 11, kind: "GPU" }, { pid: 12, kind: "WebContent" }, { pid: 13, kind: "WebContent" },
+  ] }));
+  assert.deepEqual(pageProcesses(dir), [12, 13]);
+  assert.throws(() => pageProcesses(join(dir, "missing")), /webkit-children\.json/);
+});
+
+test("a page that does not reply records the host and its page processes and names the records", async () => {
+  const { sampleStall } = await import("../stall-sample.mjs");
+  const sampled = [];
+  const files = sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7,
+    sample: (pid, file) => { sampled.push([pid, file]); return file; } });
+  assert.deepEqual(sampled, [[10, "/x/logs/stall-10-7.txt"], [12, "/x/logs/stall-10-7-page-12.txt"], [13, "/x/logs/stall-10-7-page-13.txt"]]);
+  assert.deepEqual(files, sampled.map(([, file]) => file));
+});
+
+test("a request that the page did not answer names the stall records or why they could not be made", async () => {
+  const { mkdtempSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const { EndpointError } = await import("@soksak/client");
+  const { Session } = await import("../app.mjs");
+  const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-config-"));
+  const client = { endpoint: { pid: 999999 }, request: async () => { throw new EndpointError({ code: -32603, message: "main did not reply within 10000 ms" }); } };
+  const s = new Session({ name: "tauriv2", configDir }, client);
+  // 이 설정 폴더에는 WebKit 자식 기록이 없으므로 기록하지 못한 까닭이 오류에 남는다.
+  await assert.rejects(s.request("status.get", { name: "core.verify" }),
+    /^EndpointError: tauriv2 status\.get core\.verify: main did not reply within 10000 ms; sampling the host failed: .*webkit-children\.json: ENOENT/);
+});

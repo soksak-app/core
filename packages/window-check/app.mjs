@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
-import { sampleProcess } from "./stall-sample.mjs";
+import { pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { readErrors, readOffset, writeOffset } from "./application-log.mjs";
 import { pasteboardDifference, readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
@@ -287,16 +287,25 @@ export class Session {
 
   request(method, params = {}, { timeout = REQUEST } = {}) {
     const what = `${this.app.name} ${method} ${params.name ?? ""}`.trimEnd();
+    // 답하지 않으면 그 순간 이 호스트와 그 page 프로세스의 thread 를 설정 폴더의 logs 에 기록한다(F69).
+    const sample = async () => sampleStall({
+      host: this.client.endpoint.pid, pages: pageProcesses(this.app.configDir), directory: join(this.app.configDir, "logs"),
+    }).join(", ");
     // 실패한 요청의 이름을 오류에 남긴다. code 는 그대로 둔다.
-    const answer = this.client.request(method, { window: this.window, ...params }).catch((error) => {
-      if (error instanceof EndpointError) error.message = `${what}: ${error.message}`;
+    const answer = this.client.request(method, { window: this.window, ...params }).catch(async (error) => {
+      if (error instanceof EndpointError) {
+        error.message = `${what}: ${error.message}`;
+        // 호스트가 page 의 답을 기다리다 끝낸 요청도 답하지 않은 멈춤이므로 그 순간을 기록한다.
+        if (/did not reply within/.test(error.message)) {
+          try {
+            error.message += `; the host's threads at that moment: ${await sample()}`;
+          } catch (failure) {
+            error.message += `; sampling the host failed: ${failure.message}`;
+          }
+        }
+      }
       throw error;
     });
-    // 답하지 않으면 그 순간 이 호스트의 thread 를 설정 폴더의 logs 에 기록한다.
-    const sample = async () => {
-      const { pid } = this.client.endpoint;
-      return sampleProcess(pid, join(this.app.configDir, "logs", `stall-${pid}-${Date.now()}.txt`));
-    };
     return within(answer, timeout, what, sample);
   }
 

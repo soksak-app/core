@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F69: 멈춘 요청은 page의 WebContent process도 기록하며, page가 답하지 않아 host가 끝낸 요청도 포함한다.
 - F72: `pnpm -F @soksak/e2e run verify:shutdown`이 종료 생명주기 검사를 실행하고, 아무것도 실행하지 않던 window 검사 probe 두 개를 지웠다.
 - F25.1: window 검사 harness는 package `@soksak/window-check`다. 애플리케이션 실행 파일은 `SOKSAK_BINARY_WAILSV3`와 `SOKSAK_BINARY_TAURIV2`가 선언하며, core의 `e2e/setup.mjs`가 cargo target 폴더에서 가져온다.
 - 검증: 2026-10-05의 열세 번째 전체 window 실행(eb707869, macOS 26.6.2 arm64)은 검사 344개 중 334개를 통과했다. 실행 중 사람이 Safari를 써서 Wails pointer 거부, activation 실패, 바뀐 최전면 기준선이 생겼다. 11개 processor의 load average 58에서 93에서의 load 실패: 109에서 242ms의 녹화 간격, 정렬 timing(33.3ms 한도에 161.7ms), divider frame 21개 중 20개. 남은 실패는 F71이다.
