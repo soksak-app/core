@@ -14,7 +14,7 @@ package의 test는 다른 package의 구현을 검증하지 않는다. core의 w
    - `fixture-image`: fixture sidecar가 raster를 주는 image region 하나를 가진 surface page, 그 session과 cell 크기의 status, 크기를 바꾸고 presentation을 일부러 실패시키는 command.
    - `fixture-sections`: sidebar, set, orientation 검사를 위한 control과 status를 가진 세로와 가로 section.
    - `fixture-document`: document region과 modal 검사를 위한 document region 하나를 가진 surface page.
-2. **core의 fixture image sidecar.** `fixtures/sidecars/image`는 [native surfaces](../spec/native-surfaces.ko.md#image-regions)의 image supplier 쪽을 구현하는 작은 Rust sidecar다. 요청한 크기의 단색 raster를 IOSurface에 그리고, image envelope를 보내며, host가 답할 때까지 각 transfer image를 유지하고, session을 해제한 뒤 `closed`에 답한다. shell은 실행하지 않는다.
+2. **core의 fixture image sidecar.** `fixtures/sidecars/image`는 [native surfaces](../spec/native-surfaces.ko.md#그림-영역)의 image supplier 쪽을 구현하는 작은 Rust sidecar다. 요청한 크기의 단색 raster를 IOSurface에 그리고, image envelope를 보내며, host가 답할 때까지 각 transfer image를 유지하고, session을 해제한 뒤 `closed`에 답한다. shell은 실행하지 않는다.
 3. **이름 대신 선언.** `scripts/workspace-registry.json`이 `make registry`와 `make install-plugins`를 위해 fixture plugin과 fixture sidecar를 선언하고, `diagnostics.fixture`는 terminal plugin의 이름 대신 선언된 fixture에서 배치를 가져온다.
 4. **검사.** `e2e/fixture.mjs`의 `fresh`는 fixture image surface를 기다리고, 42개 검사 파일은 terminal, files, browser의 status와 command를 fixture의 것으로 바꾼다. terminal, browser, files 동작의 검사는 F25.3에서 F25.5에 걸쳐 각 저장소로 옮긴다.
 
