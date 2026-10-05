@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F69: 한도 안에 답하지 않은 window 검사 요청은 그 순간 호스트의 thread를 `sample`로 기록하고 오류에 그 파일을 적는다.
 - F43: library로의 전환은 관찰 round 전의 animation frame에서, 판을 비우는 준비된 그리기 안에서 library 화면을 보이며, 진단 기록기는 callback slot 안의 각 `body` dataset 쓰기의 stack을 보고한다.
 - F64: 두 host는 멈추는 sidecar의 출력을 끝까지 읽고 멈춤이 뺀 닫기에 대한 답을 받아들이므로, sidecar가 더는 SIGPIPE로 끝나지 않는다. 멈추는 동안 0이 아닌 종료는 두 host에서 `exit status <code>` 또는 `signal <number>`로 쓴다.
 - F68: 두 host가 WebKit 자식 기록 쓰기를 직렬화하므로, 겹친 페이지 적재가 더는 그 이름 바꾸기를 실패시키지 않는다.

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F69: a window check request that does not answer within its limit records the host's threads at that moment with `sample` and names the file in its error.
 - F43: the switch to the library shows the library screen in the prepared draw that empties the plane, at the animation frame before the observation round, and the diagnostic recorder reports the stack of each `body` dataset write inside a callback slot.
 - F64: both hosts read a stopping sidecar's output to its end and accept its answers to the closes that the stop removed, so the sidecar no longer ends with SIGPIPE; a nonzero end during a stop is written as `exit status <code>` or `signal <number>` in both hosts.
 - F68: both hosts serialize the writes of the WebKit child record, so overlapping page loads no longer fail its rename.

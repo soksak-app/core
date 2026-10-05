@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
+import { sampleProcess } from "./stall-sample.mjs";
 import { readErrors, readOffset, writeOffset } from "./application-log.mjs";
 import { pasteboardDifference, readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
@@ -284,7 +285,12 @@ export class Session {
       if (error instanceof EndpointError) error.message = `${what}: ${error.message}`;
       throw error;
     });
-    return within(answer, timeout, what);
+    // 답하지 않으면 그 순간 이 호스트의 thread 를 설정 폴더의 logs 에 기록한다.
+    const sample = async () => {
+      const { pid } = this.client.endpoint;
+      return sampleProcess(pid, join(this.app.configDir, "logs", `stall-${pid}-${Date.now()}.txt`));
+    };
+    return within(answer, timeout, what, sample);
   }
 
   get(name, surface) {
@@ -489,10 +495,22 @@ function compact(object) {
   return Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined));
 }
 
-export function within(promise, ms, what) {
+/**
+ * promise 가 ms 안에 답하지 않으면 실패한다. sample 이 있으면 실패하기 전에 그 순간의 호스트 thread 를 기록하고 그
+ * 기록의 경로를 오류에 적는다(F69). 기록하지 못하면 그 까닭을 오류에 적는다.
+ */
+export function within(promise, ms, what, sample) {
   let timer;
   const limit = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${what} did not answer within ${ms} ms`)), ms);
+    timer = setTimeout(async () => {
+      const message = `${what} did not answer within ${ms} ms`;
+      if (!sample) return reject(new Error(message));
+      try {
+        reject(new Error(`${message}; the host's threads at that moment: ${await sample()}`));
+      } catch (error) {
+        reject(new Error(`${message}; sampling the host failed: ${error.message}`));
+      }
+    }, ms);
   });
   return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
 }
