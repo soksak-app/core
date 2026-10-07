@@ -14,9 +14,16 @@ test("a failed V7c names the surface and both of its rectangles", async (t) => {
   const plane = document.querySelector("#plane");
   plane.getBoundingClientRect = () => rect(6, 6, 400, 300);
   document.querySelector(".slot").getBoundingClientRect = () => rect(36, 40, 370, 240);
+  // 그려진 카드의 자리와 style, 페이지의 device pixel ratio 는 실패 문장이 밝히는 측정값이다(F90).
+  const card = document.querySelector(".card");
+  card.getBoundingClientRect = () => rect(6, 6, 400, 300);
+  card.style.width = "400px";
+  card.style.height = "300px";
+  globalThis.devicePixelRatio = 1;
+  t.after(() => { delete globalThis.devicePixelRatio; });
   const grid = new Soksak(undefined, { width: 400, height: 300 });
   const declared = { x: 0, y: 34, w: 400, h: 240 };
-  document.querySelector(".card").style.setProperty("--pt", "36px");
+  card.style.setProperty("--pt", "36px");
   const bands = { top: 6, bottom: 0, left: 0, right: 0 };
   const guess = { seq: 12, surfaces: [{ id: "probe", dim: false, declared, applied: declared, bands }] };
   t.mock.module("../compositor.js", { exports: { ahead: () => guess, latest: () => guess, placementPending: () => false, seated: () => null } });
@@ -31,6 +38,7 @@ test("a failed V7c names the surface and both of its rectangles", async (t) => {
   assert.equal(row.ok, false);
   assert.match(row.note, /최대 30\.00px/);
   assert.match(row.note, /probe drawn 30,34 370×240 declared 0,34 400×240 · bands 6\/0\/0\/0 drawn 36px\/0\/0\/0/);
+  assert.match(row.note, / · card 0,0 400×300 inset 30,34,0,26 · plane 6,6 400×300 · card style 400px×300px · devicePixelRatio 1$/);
 });
 
 test("a failed V7b names the surface and its declared and applied rectangles", async (t) => {
