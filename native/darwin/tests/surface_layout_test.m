@@ -192,7 +192,7 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
         until(^BOOL { return shown != 0; });
         int count = sp_capture_stop(shown);
         check(count >= 2 && !sp_capture_limited(), @"the composition recording includes initial and final frames without truncation");
-        double timeline[4] = {0};
+        double timeline[SURFACE_LAYOUT_TRACE_STAGES] = {0};
         check(surfaceLayoutTraceStop(timeline, 1) == 1, @"the composition recording contains its transaction timeline");
         for (int index = 1; index <= count; index++) {
             NSString *path = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:
@@ -320,13 +320,13 @@ int main(void) { @autoreleasepool {
     until(^BOOL { return mainReady; });
     check(surfaceLayoutCommit(window, 103), @"the app DOM confirms its new layout before native commit");
     double traceEnded = CACurrentMediaTime() * 1000;
-    double trace[4 * 4];
+    double trace[4 * SURFACE_LAYOUT_TRACE_STAGES];
     size_t traced = surfaceLayoutTraceStop(trace, 4);
-    check(traced == 1 && trace[0] == 103 && traceBegan <= trace[1] && trace[1] <= trace[2] && trace[2] <= trace[3] &&
-        trace[3] <= traceEnded,
-        [NSString stringWithFormat:@"the trace records ticket 103 begun <= presented <= committed within the transaction "
-            "(%zu records: ticket %.0f, %.3f, %.3f, %.3f within %.3f..%.3f)",
-            traced, trace[0], trace[1], trace[2], trace[3], traceBegan, traceEnded]);
+    check(traced == 1 && trace[0] == 103 && traceBegan <= trace[1] && trace[1] <= trace[4] && trace[4] <= trace[2] &&
+        trace[2] <= trace[3] && trace[3] <= traceEnded,
+        [NSString stringWithFormat:@"the trace records ticket 103 begun <= requested <= presented <= committed within the "
+            "transaction (%zu records: ticket %.0f, begun %.3f, requested %.3f, presented %.3f, committed %.3f within %.3f..%.3f)",
+            traced, trace[0], trace[1], trace[4], trace[2], trace[3], traceBegan, traceEnded]);
     surfaceLayoutBegin(window, 104, ^(int allowed) {});
     check(surfaceLayoutCommit(window, 104) && surfaceLayoutTraceStop(trace, 4) == 0,
         @"a stopped trace records nothing");

@@ -38,9 +38,9 @@ func TestCaptureStopPayloadRequiresLayoutTimeline(t *testing.T) {
 
 // contract: diagnostics.capture-stop.payload-preserves-layout-stages
 func TestCaptureStopPayloadPreservesLayoutStages(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, [][4]float64{{7, 10, 20, 30}})
+	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, [][5]float64{{7, 10, 20, 30, 15}})
 	layouts := payload["layouts"].([]map[string]any)
-	if len(layouts) != 1 || layouts[0]["ticket"] != uint64(7) || layouts[0]["begun"] != float64(10) || layouts[0]["presented"] != float64(20) || layouts[0]["committed"] != float64(30) {
+	if len(layouts) != 1 || layouts[0]["ticket"] != uint64(7) || layouts[0]["begun"] != float64(10) || layouts[0]["requested"] != float64(15) || layouts[0]["presented"] != float64(20) || layouts[0]["committed"] != float64(30) {
 		t.Fatalf("layout stages changed: %#v", payload)
 	}
 }

@@ -134,17 +134,17 @@ func (implementation) DeliveredNotifications(done func(json string)) {
 
 func (implementation) LayoutTraceStart() { C.surfaceLayoutTraceStart() }
 
-func (implementation) LayoutTraceStop() ([][4]float64, error) {
+func (implementation) LayoutTraceStop() ([][5]float64, error) {
 	const capacity = 4096
-	values := make([]C.double, capacity*4)
+	values := make([]C.double, capacity*C.SURFACE_LAYOUT_TRACE_STAGES)
 	count := int(C.surfaceLayoutTraceStop(&values[0], capacity))
 	if count > capacity {
 		return nil, fmt.Errorf("layout trace capacity exceeded: %d records, capacity %d", count, capacity)
 	}
-	records := make([][4]float64, count)
+	records := make([][5]float64, count)
 	for i := range records {
-		for j := 0; j < 4; j++ {
-			records[i][j] = float64(values[i*4+j])
+		for j := 0; j < C.SURFACE_LAYOUT_TRACE_STAGES; j++ {
+			records[i][j] = float64(values[i*C.SURFACE_LAYOUT_TRACE_STAGES+j])
 		}
 	}
 	return records, nil

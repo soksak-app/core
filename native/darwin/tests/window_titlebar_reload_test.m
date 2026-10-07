@@ -242,11 +242,11 @@ int main(void) { @autoreleasepool {
     [webview evaluateJavaScript:@"location.reload()" completionHandler:nil];
     until(@"the reloaded page presented", ^BOOL { return reloaded; });
     waitFrames(window.screen, kRefreshes);
-    double records[4 * 8];
+    double records[SURFACE_LAYOUT_TRACE_STAGES * 8];
     size_t transactions = surfaceLayoutTraceStop(records, 8);
     double committed = NAN;
     for (size_t index = 0; index < transactions && index < 8; index++) {
-        if (records[index * 4] == 301) committed = records[index * 4 + 3];
+        if (records[index * SURFACE_LAYOUT_TRACE_STAGES] == 301) committed = records[index * SURFACE_LAYOUT_TRACE_STAGES + 3];
     }
     check(pages->ready && pages->failure == nil, [NSString stringWithFormat:
         @"the start sets the title bar before the new page is answered (%@)", pages->failure ?: @"no failure"]);

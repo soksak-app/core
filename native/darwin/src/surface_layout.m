@@ -44,7 +44,7 @@ static void traceMark(uint64_t ticket, NSUInteger stage) {
         if (item[0].unsignedLongLongValue == ticket) { record = item; break; }
     }
     if (!record) {
-        record = [NSMutableArray arrayWithObjects:@(ticket), @(NAN), @(NAN), @(NAN), nil];
+        record = [NSMutableArray arrayWithObjects:@(ticket), @(NAN), @(NAN), @(NAN), @(NAN), nil];
         [trace addObject:record];
     }
     // 한 트랜잭션이 표시를 여러 번 확인하면 마지막 확인을 남긴다.
@@ -63,7 +63,7 @@ size_t surfaceLayoutTraceStop(double *out, size_t capacity) {
     size_t count = 0;
     for (NSMutableArray<NSNumber *> *record in trace) {
         if (count >= capacity) break;
-        for (NSUInteger i = 0; i < 4; i++) out[count * 4 + i] = record[i].doubleValue;
+        for (NSUInteger i = 0; i < SURFACE_LAYOUT_TRACE_STAGES; i++) out[count * SURFACE_LAYOUT_TRACE_STAGES + i] = record[i].doubleValue;
         count++;
     }
     [trace release];
@@ -186,6 +186,9 @@ void surfaceLayoutAfterPresentation(void *handle, void (^done)(void)) {
     WKWebView *main = (WKWebView *)handle;
     // 모든 플러그인 DOM은 이 웹뷰에 있다. 다른 웹뷰는 독립적인 문서 콘텐츠다.
     uint64_t ticket = preparation;
+    // 페이지가 그린 DOM 의 표시 확인을 요청한 시각. 표시까지의 대기가 그린 frame 의 갱신을 기다리는지 그 다음 갱신을
+    // 기다리는지 이 시각과 presented 로 잰다(docs/features.md F92).
+    traceMark(ticket, 4);
     void (^finish)(void) = [[done copy] autorelease];
     [main _doAfterNextPresentationUpdate:^{
         traceMark(ticket, 2);

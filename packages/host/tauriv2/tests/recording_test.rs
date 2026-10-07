@@ -238,10 +238,10 @@ fn the_stop_payload_preserves_layout_stages() {
         3,
         false,
         0.0,
-        &[[7.0, 10.0, 20.0, 30.0]],
+        &[[7.0, 10.0, 20.0, 30.0, 15.0]],
     );
     assert_eq!(
         payload["layouts"],
-        serde_json::json!([{"ticket":7,"begun":10.0,"presented":20.0,"committed":30.0}])
+        serde_json::json!([{"ticket":7,"begun":10.0,"requested":15.0,"presented":20.0,"committed":30.0}])
     );
 }

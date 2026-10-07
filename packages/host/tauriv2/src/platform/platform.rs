@@ -576,7 +576,7 @@ pub trait Platform: Send + Sync {
     #[cfg(feature = "diagnostics")]
     /// 기록을 멈추고 트랜잭션마다 ticket, begun, presented, committed(ms, 표시 시각과 같은 시계)를
     /// 반환한다. 일어나지 않은 단계는 NaN 이다. 메인 스레드에서 호출한다.
-    fn layout_trace_stop(&self) -> Result<Vec<[f64; 4]>, String>;
+    fn layout_trace_stop(&self) -> Result<Vec<[f64; 5]>, String>;
 
     // 입력 소스
 

@@ -395,7 +395,7 @@ pub fn layout_trace_start() -> Result<(), String> {
 }
 
 #[cfg(feature = "diagnostics")]
-pub fn layout_trace_stop() -> Result<Vec<[f64; 4]>, String> {
+pub fn layout_trace_stop() -> Result<Vec<[f64; 5]>, String> {
     missing("surface layout trace")
 }
 

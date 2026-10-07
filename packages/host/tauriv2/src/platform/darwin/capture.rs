@@ -41,10 +41,11 @@ pub fn layout_trace_start() {
     unsafe { surfaceLayoutTraceStart() }
 }
 
-/// 기록을 멈추고 트랜잭션마다 ticket, begun, presented, committed 를 반환한다. 메인 스레드에서 호출한다.
-pub fn layout_trace_stop() -> Result<Vec<[f64; 4]>, String> {
+/// 기록을 멈추고 트랜잭션마다 ticket, begun, presented, committed, requested 를 반환한다. 메인 스레드에서 호출한다.
+/// 값 수는 native 의 SURFACE_LAYOUT_TRACE_STAGES 와 같다.
+pub fn layout_trace_stop() -> Result<Vec<[f64; 5]>, String> {
     const CAPACITY: usize = 4096;
-    let mut values = vec![0.0; CAPACITY * 4];
+    let mut values = vec![0.0; CAPACITY * 5];
     let count = unsafe { surfaceLayoutTraceStop(values.as_mut_ptr(), CAPACITY) };
     if count > CAPACITY {
         return Err(format!(
@@ -52,11 +53,11 @@ pub fn layout_trace_stop() -> Result<Vec<[f64; 4]>, String> {
         ));
     }
     Ok(values
-        .as_chunks::<4>()
+        .as_chunks::<5>()
         .0
         .iter()
         .take(count)
-        .map(|record| [record[0], record[1], record[2], record[3]])
+        .copied()
         .collect())
 }
 

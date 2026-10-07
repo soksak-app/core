@@ -15,13 +15,13 @@ pub fn stop_payload(
     count: i32,
     limited: bool,
     longest_gap: f64,
-    layouts: &[[f64; 4]],
+    layouts: &[[f64; 5]],
 ) -> Value {
     json!({"frames": directory.to_string_lossy(), "count": count, "limited": limited, "longestGap": longest_gap, "layouts": layout_trace(layouts)})
 }
 
 /// 배치 트랜잭션 기록을 {ticket, begun, presented, committed} 로 바꾼다. 일어나지 않은 단계는 null 이다.
-pub fn layout_trace(records: &[[f64; 4]]) -> Value {
+pub fn layout_trace(records: &[[f64; 5]]) -> Value {
     let stage = |value: f64| {
         if value.is_nan() {
             Value::Null
@@ -36,6 +36,7 @@ pub fn layout_trace(records: &[[f64; 4]]) -> Value {
                 serde_json::json!({
                     "ticket": record[0] as u64,
                     "begun": stage(record[1]),
+                    "requested": stage(record[4]),
                     "presented": stage(record[2]),
                     "committed": stage(record[3]),
                 })

@@ -9,10 +9,12 @@ bool surfaceLayoutRenderAtDisplayRate(void *webview);
 // 웹뷰가 60fps 근처의 렌더링 갱신을 선호하면 1, 아니면 0, 기능이 없으면 -1 을 반환한다.
 int surfaceLayoutPrefersNear60FPS(void *webview);
 void surfaceLayoutCancel(void *owner);
-// 진단 전용. 배치 트랜잭션마다 시작, 앱 DOM 표시 확인, 커밋 시각(ms, 녹화 프레임과 같은 mach 시계)을
+// 진단 전용. 배치 트랜잭션마다 시작, 앱 DOM 표시 확인, 커밋, 표시 확인 요청 시각(ms, 녹화 프레임과 같은 mach 시계)을
 // 기록하기 시작한다. 이전 기록은 지운다.
 void surfaceLayoutTraceStart(void);
-// 기록을 멈추고 트랜잭션마다 ticket, begun, presented, committed 네 값을 out 에 최대 capacity 개 쓴다.
+// 한 트랜잭션 기록의 값 수: ticket, begun, presented, committed, requested.
+#define SURFACE_LAYOUT_TRACE_STAGES 5
+// 기록을 멈추고 트랜잭션마다 SURFACE_LAYOUT_TRACE_STAGES 개의 값을 out 에 최대 capacity 개 쓴다.
 // 일어나지 않은 단계는 NaN 이다. 전체 트랜잭션 수를 반환한다. capacity 초과는 호출자가 오류로 처리한다.
 size_t surfaceLayoutTraceStop(double *out, size_t capacity);
 #ifdef __BLOCKS__

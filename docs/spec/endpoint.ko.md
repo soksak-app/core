@@ -96,7 +96,7 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 | `diagnostics.navigation.delay` | `{window, ms}` | window의 main webview가 이후 받는 navigation callback마다 host 처리를 `ms` 밀리초 늦추고(정수 0–10000, 0이면 지연 제거) `null`을 반환한다. window check가 새 page가 시작된 뒤에 navigation callback을 전달할 때 쓴다 |
 | `diagnostics.input.source` | `{window, select?}` | `select`가 있으면 켜진 키보드 입력 소스 가운데 그것을 선택하고, 선택된 입력 소스 식별자 `{current}`를 반환한다. 키보드 입력 소스가 없는 플랫폼은 오류를 반환한다. 활성화 등급 창 검사가 사용자의 입력 소스 순서를 재현할 때 쓴다 |
 
-직접 capture.start/stop 녹화의 layouts는 시작 이후의 트랜잭션별 `{ticket, begun, presented, committed}` 배열이며 시각은 프레임과 같은 ms 시계다. 일어나지 않은 단계는 null이며 트랜잭션이 없으면 빈 배열이다. diagnostics.drag는 기존 응답에 자신의 타임라인을 반환한다. 추적 종료 오류가 발생하면 요청자가 받지 못하는 프레임 폴더를 정리하고 오류를 보존한다.
+직접 capture.start/stop 녹화의 layouts는 시작 이후의 트랜잭션별 `{ticket, begun, requested, presented, committed}` 배열이며 시각은 프레임과 같은 ms 시계다. `requested`는 페이지가 그린 DOM의 표시를 기다리도록 host에 요청한 시각이고, `presented`는 그 표시가 확인된 시각이다. 일어나지 않은 단계는 null이며 트랜잭션이 없으면 빈 배열이다. diagnostics.drag는 기존 응답에 자신의 타임라인을 반환한다. 추적 종료 오류가 발생하면 요청자가 받지 못하는 프레임 폴더를 정리하고 오류를 보존한다.
 
 녹화 콜백은 대기 중인 디스크 쓰기를 기다리지 않는다. 64프레임 쓰기 대기 용량이 소진되면 명시적 오류로 녹화를 거부하며 부분 캡처를 성공으로 반환하지 않는다. 종료는 녹화 오류를 보존하고 종료 오류를 추가한다. 600프레임 버스트 상한은 보고하는 유한한 결과로 유지한다. 상태가 없는 프레임과, 이미지·표시 시각·콘텐츠 사각형·콘텐츠 배율·장치 배율 중 하나가 없는 완성 프레임은 그 프레임 번호와 빠진 항목을 밝힌 오류로 녹화를 거부한다. idle 프레임은 이미지가 없으며 개수만 센다.
 

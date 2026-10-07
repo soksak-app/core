@@ -194,7 +194,7 @@ type captureStatus interface {
 	LongestGap() float64
 }
 
-func captureStopPayload(c captureStatus, directory string, count int, records [][4]float64) map[string]any {
+func captureStopPayload(c captureStatus, directory string, count int, records [][5]float64) map[string]any {
 	return map[string]any{
 		"frames":     directory,
 		"count":      count,
@@ -284,7 +284,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	var layouts []map[string]any
 	if p.Capture {
 		if capture, captureErr := recorder(); captureErr == nil {
-			var records [][4]float64
+			var records [][5]float64
 			var traceErr error
 			application.InvokeSync(func() { records, traceErr = capture.LayoutTraceStop() })
 			err = errors.Join(err, traceErr)
@@ -317,7 +317,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 }
 
 // layoutTrace 는 배치 트랜잭션 기록을 {ticket, begun, presented, committed} 로 바꾼다. 일어나지 않은 단계는 null 이다.
-func layoutTrace(records [][4]float64) []map[string]any {
+func layoutTrace(records [][5]float64) []map[string]any {
 	layouts := make([]map[string]any, 0, len(records))
 	stage := func(value float64) any {
 		if math.IsNaN(value) {
@@ -327,7 +327,7 @@ func layoutTrace(records [][4]float64) []map[string]any {
 	}
 	for _, record := range records {
 		layouts = append(layouts, map[string]any{
-			"ticket": uint64(record[0]), "begun": stage(record[1]), "presented": stage(record[2]), "committed": stage(record[3]),
+			"ticket": uint64(record[0]), "begun": stage(record[1]), "requested": stage(record[4]), "presented": stage(record[2]), "committed": stage(record[3]),
 		})
 	}
 	return layouts
@@ -461,7 +461,7 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage)
 	if err != nil {
 		return nil, err
 	}
-	var records [][4]float64
+	var records [][5]float64
 	application.InvokeSync(func() { records, err = capture.LayoutTraceStop() })
 	if err != nil {
 		return nil, errors.Join(err, os.RemoveAll(directory))
