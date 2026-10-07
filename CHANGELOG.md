@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F92 (measurement): the layout trace of a recording records `requested`, when the page asks the host to wait for the presentation of its drawn DOM, and the drag check prints the start interval and the stages of the layout transactions.
 - F93: `make go-repeat` takes `TAGS` and fails when no test file was built, and `make rust-repeat` and `make rust-tests-alone` take `FEATURES`, so tests behind the `diagnostics` tag or feature can be repeated.
 - F73.1: window checks start recordings with `s.record`, which sends one stop and keeps its error; the session cleanup stops an unstopped recording and removes its folder.
 - F90: the layout view writes each layout on the device pixel grid its commit reported, so a ratio that changes before the draw no longer moves cards off the rects the host placed; the V7c failure text names the drawn card, its style, the plane and the device pixel ratio.
