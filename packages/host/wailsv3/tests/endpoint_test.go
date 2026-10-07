@@ -975,7 +975,7 @@ func TestEndpointRejectsAMalformedLock(t *testing.T) {
 		}
 		endpoint := host.NewEndpoint(newFakeBackend())
 		info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
-			Application: "wailsv3", Version: "0.0.3", Started: time.Now()}
+			Application: "wailsv3", Version: "0.0.4", Started: time.Now()}
 		err = endpoint.Serve(listener, info, config)
 		_ = listener.Close()
 		if want := lock + ": invalid process lock"; err == nil || err.Error() != want {
