@@ -3,7 +3,7 @@
 // 검사는 앱을 실행하지 않는다. 앱은 `--config-dir <tmpdir>/soksak-check-<app>` 로 실행되어
 // 있어야 하고, 하네스는 그 폴더의 endpoint.json 으로 연결한다. 명세는 docs/spec/endpoint.md 와
 // docs/spec/exposure.md 에 있다.
-import { closeSync, existsSync, openSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -201,7 +201,15 @@ export async function open(t, app) {
   }
   assertEndpointUsesCurrentBuild(endpoint, realpathSync(app.binary), statSync(app.binary).mtimeMs);
   session.logStart = readOffset(app.configDir);
+  session.recordingsBefore = recordingFolders(app.configDir);
   return session;
+}
+
+/** 설정 폴더의 captures 아래에 있는 녹화 폴더의 이름. 폴더가 없으면 빈 목록이다. */
+export function recordingFolders(configDir) {
+  const captures = join(configDir, "captures");
+  if (!existsSync(captures)) return [];
+  return readdirSync(captures, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
 }
 
 /**
@@ -235,6 +243,19 @@ export async function finishSession(t, session, close) {
       failures.push(error);
       t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
     }
+    // 검사가 시작한 녹화는 검사의 정리가 지운다. 정리 뒤에 남은 새 녹화 폴더는 검사의 실패이고, 다음 검사가 같은
+    // 상태에서 시작하도록 지운다. SOKSAK_KEEP_FAILURE_CAPTURE 는 실패한 검사의 녹화를 남기므로 이름만 알린다.
+    const left = recordingFolders(session.app.configDir).filter((name) => !session.recordingsBefore.includes(name))
+      .map((name) => join(session.app.configDir, "captures", name));
+    if (left.length && process.env.SOKSAK_KEEP_FAILURE_CAPTURE) {
+      for (const folder of left) t.diagnostic(`kept recording: ${folder}`);
+    } else if (left.length) {
+      for (const folder of left) rmSync(folder, { recursive: true, force: true });
+      const error = new Error(`${session.app.name}: the check left ${left.length} recording${left.length === 1 ? "" : "s"}: ` +
+        `${left.join(", ")}; a check removes the recordings it starts in its cleanup`);
+      failures.push(error);
+      t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
+    }
   } finally {
     close();
   }
@@ -252,6 +273,8 @@ export class Session {
     // 검사가 읽기 시작하는 애플리케이션 로그의 위치와 검사가 일으킨다고 선언한 오류의 형식. finishSession 이 쓴다.
     this.logStart = 0;
     this.expectedErrors = [];
+    // 세션을 열 때 있던 녹화 폴더. finishSession 은 이것에 없는 폴더를 검사가 남긴 녹화로 판정한다.
+    this.recordingsBefore = [];
     // 전달된 down 부터 같은 버튼의 up 이 전달될 때까지 열린 합성 누름. 창과 버튼으로 찾는다(docs/spec/exposure.md).
     this.presses = new Map();
   }
@@ -633,10 +656,10 @@ if (TRACE === undefined) throw new Error(`SOKSAK_PERFORMANCE_TRACE must be unset
  * 끌기가 요청한 속도로 실행되지 않으면(한 번 재시도 후) 실패한다. 느린 끌기의 통과는 통과가 아니다.
  */
 export async function drag(t, s, plan, { capture = false } = {}) {
-  let result = await dragOnce(t, s, plan, capture);
+  let result = await dragOnce(s, plan, capture);
   if (paced(result)) return result;
   t.diagnostic(`the drag took ${result.took}ms for ${result.asked}ms; dragging again`);
-  result = await dragOnce(t, s, plan, capture);
+  result = await dragOnce(s, plan, capture);
   if (!paced(result)) {
     throw new Error(
       `the drag ran slower than it was asked to, twice (${result.took}ms for ${result.asked}ms). The steps come ` +
@@ -661,7 +684,7 @@ export function coveredBy(s, window) {
     : "windows that together cover it";
 }
 
-async function dragOnce(t, s, plan, capture) {
+async function dragOnce(s, plan, capture) {
   // 활성 창은 배치가 바뀔 때 AppKit 의 커서 갱신을 받고, 창은 실제 포인터 위치를 페이지에 이동으로 넘긴다.
   // 버튼 없이 합성한 진단 끌기는 그 이동과 섞이므로 비활성 애플리케이션에서만 잰다.
   const window = await s.get("host.window");
@@ -680,7 +703,7 @@ async function dragOnce(t, s, plan, capture) {
   const result = await s.request("diagnostics.drag", { ...plan, capture }, { timeout: REQUEST + ms * 4 });
   if (!capture) return result;
   if (!process.env.SOKSAK_KEEP_FAILURE_CAPTURE) {
-    t.after(() => rmSync(result.frames, { recursive: true, force: true }));
+    s.cleanup(() => rmSync(result.frames, { recursive: true, force: true }));
   }
   // 끌기의 마지막 화면이 표시되는 시각까지 녹화한다.
   const { displayed } = await s.presented();

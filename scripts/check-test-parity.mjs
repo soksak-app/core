@@ -1561,6 +1561,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F83",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "export function recordingFolders" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/session-cleanup.test.mjs", id: "a recording folder that the check left fails the check and is removed" },
+    ],
+    expected: "A window check that leaves a recording folder fails, and the harness removes the folder.",
+    levels: ["unit"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F83: a window check fails when it leaves a recording folder under the captures folder, and the harness removes that folder; the settings modal check and the drag capture now remove their recordings in the session cleanup.
 - F82: the Wails host no longer logs its own close of a persistent service connection as a read error when it quits.
 - F84: a fullscreen card shows a space apps button at the front of its header; it lists every tab of the space grouped by card in the order of the slicing tree, each heading with a map of the cards, and picking a tab moves fullscreen to its card.
 - F86, F87: a rejected installed plugin manifest stops the page start with the error shown and logged, naming the plugin, its version and package, instead of a blank window whose logo stood under the window buttons.

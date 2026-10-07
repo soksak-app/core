@@ -1,7 +1,7 @@
 // 창 검사의 정리 실패가 검사 본문의 실패와 함께 보고되는지 검사한다.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -80,4 +80,35 @@ test("an error line that the check declares does not fail the check", { timeout:
   const result = runLoggedError(t, "[/ResizeObserver loop/]");
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /# application error: error: ResizeObserver loop completed/);
+});
+
+// 검사가 시작한 녹화는 검사가 끝날 때 지워져 있어야 한다. 남은 녹화 폴더는 검사의 실패이고, 다음 검사를 위해 지운다
+// (AGENTS.md, docs/features.md F83). 검사가 시작하기 전부터 있던 폴더는 그 검사의 것이 아니다.
+test("a recording folder that the check left fails the check and is removed", { timeout: 30000 }, (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "soksak-session-recording-"));
+  t.after(() => rmSync(`${dir}.log-offset`, { force: true }));
+  t.after(() => rmSync(dir, { recursive: true }));
+  mkdirSync(join(dir, "logs"));
+  writeFileSync(join(dir, "logs", "application.log"), "");
+  mkdirSync(join(dir, "captures", "earlier"), { recursive: true });
+  const file = join(dir, "probe.test.mjs");
+  writeFileSync(file, `import test from "node:test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { finishSession, recordingFolders } from ${JSON.stringify(app)};
+test("probe body passes", async (t) => {
+  const configDir = ${JSON.stringify(dir)};
+  const session = { app: { name: "probe", configDir }, cleanups: [], logStart: 0, expectedErrors: [],
+    recordingsBefore: recordingFolders(configDir) };
+  mkdirSync(join(configDir, "captures", "left"));
+  writeFileSync(join(configDir, "captures", "left", "frame-0001.bgra"), "x");
+  t.after(() => finishSession(t, session, () => {}));
+});
+`);
+  const { NODE_TEST_CONTEXT, ...environment } = process.env;
+  const result = spawnSync(process.execPath, ["--test", "--test-reporter=tap", file],
+    { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /probe: the check left 1 recording: .*captures\/left/);
+  assert.deepEqual(readdirSync(join(dir, "captures")), ["earlier"]);
 });

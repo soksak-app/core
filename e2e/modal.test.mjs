@@ -1,5 +1,6 @@
 // 모달의 표시 순서, 배경, 입력, 이동, 크기 변경 및 제거를 검사한다.
 import assert from "node:assert/strict";
+import { rmSync } from "node:fs";
 import { createServer } from "node:http";
 import test from "node:test";
 
@@ -101,6 +102,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const { frames: directory } = await s.request("diagnostics.capture.start", {});
+    s.cleanup(() => rmSync(directory, { recursive: true, force: true }));
     let displayed = 0;
     let stopped;
     try {
