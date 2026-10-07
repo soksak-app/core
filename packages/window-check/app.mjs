@@ -189,7 +189,9 @@ export async function open(t, app) {
     }
   });
   // 검사가 열어 둔 누름은 검사의 정리 뒤에 뗀다. 정리는 등록의 역순으로 실행한다.
-  session.cleanup(() => session.releasePresses());
+  session.cleanup(async () => {
+    for (const line of await session.releasePresses()) t.diagnostic(line);
+  });
   // 검사의 정리는 연결을 닫기 전에 실행한다. node:test 는 after 훅을 등록 순서로 실행한다.
   t.after(() => finishSession(t, session, () => {
     client.close();
@@ -365,6 +367,8 @@ export class Session {
     } catch (error) {
       // 1005 는 누름이나 뗌을 전달했지만 문서가 받았다는 알림이 늦은 것이다. 창의 누름 상태는 전달대로 바뀌었다.
       if (error.code === 1005) delivered();
+      // 거부된 사건이 누름인지 뗌인지가 열린 누름이 남는지를 정하므로, 오류는 단계와 자리를 밝힌다.
+      error.message = `input.pointer ${phase} of the ${button} button at ${x},${y} in ${this.window}: ${error.message}`;
       throw error;
     }
   }
@@ -373,21 +377,26 @@ export class Session {
    * 세션이 열어 둔 누름마다 그 자리에서 up 을 보낸다. 거부된 뗌은 누름을 열어 두므로, 끝내지 않으면 그 창의 다음
    * 검사가 누를 수 없다(1008). 사람이 버튼을 누르고 있는 동안 input.pointer 는 뗌을 1007 로 거부하므로, 먼저
    * host.buttons 가 mask 0 을 알릴 때까지 알림으로 기다린 뒤 보내고, 그 뗌이 전달되기를 요구한다
-   * (docs/spec/exposure.md). 끝내지 못한 누름은 모아서 알린다.
+   * (docs/spec/exposure.md). 끝낸 누름마다 기다린 시간을 담은 줄을 돌려주고, 끝내지 못한 누름은 모아서 알린다.
    */
   async releasePresses() {
     const failures = [];
+    const released = [];
     for (const { window, x, y, button } of [...this.presses.values()]) {
       const session = this.on(window);
       try {
+        const began = performance.now();
         await session.until("host.buttons", (value) => value.mask === 0, "a mouse button stayed pressed");
+        const waited = Math.round(performance.now() - began);
         await session.pointer(x, y, "up", { button });
+        released.push(`released open press: ${button} at ${x},${y} in ${window} after host.buttons reported mask 0 (waited ${waited}ms)`);
       } catch (error) {
         failures.push(new Error(`the synthetic ${button} press at ${x},${y} in ${window} stayed open: ${error.message}`));
       }
     }
     if (failures.length === 1) throw failures[0];
     if (failures.length) throw new AggregateError(failures, `${failures.length} synthetic presses stayed open`);
+    return released;
   }
 
   key(key, phase, options = {}) {

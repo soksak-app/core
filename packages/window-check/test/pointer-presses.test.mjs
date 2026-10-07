@@ -81,17 +81,23 @@ test("a refused release keeps the press open until the held button is released",
   const s = new Session(app, client);
   await s.pointer(10, 20, "down");
   client.press(0x1);
-  await assert.rejects(s.pointer(10, 20, "up"), (error) => error.code === 1007 && /mask 0x1/.test(error.message));
+  // 거부된 사건이 누름인지 뗌인지는 열린 누름이 남는지를 정하므로, 오류가 단계와 자리를 밝힌다.
+  await assert.rejects(s.pointer(10, 20, "up"), (error) => error.code === 1007 &&
+    /^input\.pointer up of the left button at 10,20 in main: AppKit reports NSEvent\.pressedMouseButtons mask 0x1/.test(error.message));
   assert.deepEqual(open(s), [{ window: "main", x: 10, y: 20, button: "left" }]);
   const sent = client.requests.length;
   let ended = false;
-  const release = s.releasePresses().then(() => { ended = true; });
+  let released;
+  const release = s.releasePresses().then((lines) => { ended = true; released = lines; });
   await settle();
   assert.equal(ended, false, "the cleanup ended while the button was held");
   assert.deepEqual(client.requests.slice(sent), [{ method: "status.watch", window: "main", name: "host.buttons" }],
     "the cleanup sent a release while host.buttons reported a held button");
   client.press(0);
   await release;
+  // 정리가 끝낸 누름은 검사의 진단으로 남아 창 실행의 출력에서 뗌 대기가 실행됐음을 보인다.
+  assert.equal(released.length, 1);
+  assert.match(released[0], /^released open press: left at 10,20 in main after host\.buttons reported mask 0 \(waited \d+ms\)$/);
   assert.deepEqual(client.requests.slice(sent), [
     { method: "status.watch", window: "main", name: "host.buttons" },
     { method: "input.pointer", window: "main", x: 10, y: 20, phase: "up", button: "left" },
