@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F99: F95, F95.1, F97을 담은 soksak 0.0.5를 릴리스했고, F98을 담은 terminal service 0.0.5와 terminal plugin 0.0.5가 공개 registry에 있다.
 - F99.1: 선언된 모든 version은 0.0.5다. parity audit은 릴리스 기록 F96과 F99를 feature link 없이 나열한다.
 - F98: terminal service는 `close-owner`에서 소유자 session보다 surface actor를 먼저 닫으므로, terminal이 열린 채 끝내도 `close owner` 오류를 쓰지 않는다(sidecar-vt S23).
 - F95.1: native 테스트가 창의 변경 뒤에도 cursor rect가 꺼진 채로 남는지 확인하고, image region은 더 이상 `resetCursorRects`를 오버라이드하지 않는다.
