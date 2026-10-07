@@ -72,14 +72,13 @@ for (const app of Object.values(APPS)) {
       assert.ok(before.active && before.key && !before.occluded, `inactive test window: ${JSON.stringify(before)}`);
       const screenBefore = await s.get("terminal.screen", surface);
       const selectedBefore = textCells.filter((col) => screenBefore[row]?.[col]?.inverse === true);
-      const recording = await s.request("diagnostics.capture.start", {});
+      const recording = await s.record();
       let sent;
       let trace;
       let waitError;
       let selectionWaitError;
       let selectionWaitMs;
       let selectionAfterWaitCells;
-      let stopped = false;
       try {
         sent = post([{ type: "move", ...from }, { type: "down", ...from },
           ...Array.from({ length: steps }, (_, i) => ({ type: "drag", x: from.x + (to.x - from.x) * (i + 1) / steps,
@@ -122,8 +121,7 @@ for (const app of Object.values(APPS)) {
         // 선택 상태의 확정과 그 칠의 래스터 제시는 별개다. 마지막 제시 시각만 넘기면 아직 칠이
         // 스트림에 못 미친 프레임에서 녹화가 멈출 수 있으므로 제시 간격과 합성 지연을 덮는 여유를
         // 더해 녹화 마지막 프레임이 확정된 선택을 담게 한다.
-        await s.request("diagnostics.capture.stop", { after: displayed.displayed + 0.25 });
-        stopped = true;
+        await recording.stop({ after: displayed.displayed + 0.25 });
         const files = frames(recording.frames);
         const samples = files.map((file) => {
           const frame = readFrame(file);
@@ -154,10 +152,7 @@ for (const app of Object.values(APPS)) {
           terminal: await s.get("terminal.session", surface), selectionByFrame,
         };
       } finally {
-        if (!stopped) await s.request("diagnostics.capture.stop", {}).catch((error) => {
-          t.diagnostic(`capture stop failed: ${String(error)}`);
-          throw error;
-        });
+        // 녹화를 멈추지 못한 실패는 세션 정리가 멈춘다(Session.record).
         rmSync(recording.frames, { recursive: true, force: true });
       }
     };

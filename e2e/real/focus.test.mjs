@@ -3,7 +3,6 @@
 // 초점을 받아 보였다. 실제 HID 클릭의 전 과정을 녹화하고, 그 동안의 core.focus 변화를 모두 모아 주소창으로 들어온
 // 초점 전이가 없는지, 네이티브 first responder 가 누른 터미널로 가는지 확인한다.
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
@@ -33,12 +32,9 @@ for (const app of Object.values(APPS)) {
     await s.until("core.focus", (focus) => focus?.name === "browser.address" && focus.surface === browser,
       "a real click on the address field did not give it focus in core.focus");
 
-    const { frames: directory } = await s.request("diagnostics.capture.start", {});
-    let stopped = null;
-    s.cleanup(async () => {
-      if (!stopped) await s.request("diagnostics.capture.stop", { after: 0 });
-      rmSync(directory, { recursive: true, force: true });
-    });
+    // 녹화의 stop 은 한 번만 보내고, 세션 정리가 멈추지 않은 녹화를 멈추고 폴더를 지운다(Session.record).
+    const recording = await s.record();
+    const directory = recording.frames;
     const focus = await s.collect("core.focus");
     for (const terminal of terminals) {
       const target = await screenCenter(s, await s.rect("terminal.view", undefined, terminal.surface));
@@ -47,7 +43,7 @@ for (const app of Object.values(APPS)) {
         `${terminal.surface} did not become the native first responder after a real click`);
     }
     const { displayed } = await s.presented();
-    stopped = await s.request("diagnostics.capture.stop", { after: displayed });
+    const stopped = await recording.stop({ after: displayed });
     const values = await focus.stop();
 
     assert.equal(stopped.limited, false, "the recording reached its frame limit");
