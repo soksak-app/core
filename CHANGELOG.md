@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F94: the real wheel check makes its terminal card fullscreen, so the terminal is wide enough for its history lines.
 - F73.2: `real/focus` splits its card with `side: "bottom"` instead of the earlier `axis`, and both real-input checks pass with `s.record`.
 - F73.2: the real-input checks `real/focus` and `real/tui-drag` start their recordings with `s.record`, which sends one stop and keeps its error.
 - The documentation audit accepts the `[-]` checklist state when the item records its attempts after `Not reproduced:` (`재현되지 않음:` in the Korean checklist), and rejects an item that leaves `[-]`.

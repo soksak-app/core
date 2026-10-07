@@ -78,13 +78,21 @@ async function blankCellsWithPixels(s, surface) {
 }
 
 // 터미널에 한 줄을 쓰고, 그 줄의 행과 화면 원점을 돌려준다. 검사는 창을 앞으로 가져온 뒤 실제 입력을 보낸다.
-async function prepare(t, app, line) {
+async function prepare(t, app, line, { fullscreen = false } = {}) {
   requireTrusted();
   const s = await open(t, app);
   assert.ok(s, `${app.binary} is not built`);
   await fresh(s);
   const [terminal] = await ensureTerminals(s, 1);
   const surface = terminal.surface;
+  if (fullscreen) {
+    // 고정 배치의 터미널보다 넓은 화면이 필요한 검사는 터미널 카드를 전체 화면으로 하고 끝날 때 되돌린다.
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface)).id;
+    const before = (await s.get("terminal.session", surface)).cols;
+    await s.run("core.card.fullscreen", { card });
+    s.cleanup(() => s.run("core.card.fullscreen", { card }));
+    await s.until("terminal.session", (value) => value.cols > before, "the fullscreen terminal did not widen", { surface });
+  }
   await s.run("terminal.input", { bytes: `clear; printf '${line}\\n'\r` }, surface);
   const lines = await readScreenUntil(s, surface, (screen) => screen.includes(line), `${line} did not render`);
   const session = await s.get("terminal.session", surface);
@@ -496,7 +504,7 @@ function topMark(frame, region, session) {
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a real wheel over a long history is shown without lag, stalls, or reversal`, { timeout: 240000 }, async (t) => {
-    const { s, surface, session, origin } = await prepare(t, app, "WHEELSTART");
+    const { s, surface, session, origin } = await prepare(t, app, "WHEELSTART", { fullscreen: true });
     assert.ok(session.cols > MARKS, `the terminal has ${session.cols} columns; the check needs more than ${MARKS}`);
     await s.run("terminal.input", {
       bytes: "clear; awk 'BEGIN{for(i=0;i<100000;i++) printf \"%\" (i%97+1) \"s\\n\", \"#\"}'; printf 'WHEELREADY\\n'\r",
