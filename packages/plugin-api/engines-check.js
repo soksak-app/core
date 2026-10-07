@@ -26,10 +26,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
   // 기본값: 사용법의 [plugin repository] 를 생략하면 현재 폴더의 plugin repository 를 검사한다.
   const repository = resolve(process.argv[2] ?? ".");
   const version = pluginApiVersion();
-  const errors = enginesErrors(JSON.parse(readFileSync(join(repository, "package.json"), "utf8")), version);
+  const pkg = JSON.parse(readFileSync(join(repository, "package.json"), "utf8"));
+  const errors = enginesErrors(pkg, version);
   if (errors.length) {
     process.stderr.write(errors.map((error) => `${error}\n`).join(""));
     process.exit(1);
   }
-  process.stdout.write(`Engines check passed: engines.soksak is ^${version}\n`);
+  process.stdout.write(`Engines check passed: engines.soksak is ${pkg.engines.soksak}\n`);
 }

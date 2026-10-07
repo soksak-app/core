@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F97: `soksak-engines`의 성공 줄은 선언된 범위를 출력한다.
 - F96: soksak 0.0.4를 릴리스했고, `engines.soksak` `*`를 선언한 browser, files, terminal plugin 0.0.4가 공개 registry에 있다.
 - F96.2: 선언된 모든 작업공간 버전은 0.0.4다.
 - F96.1: 설치기와 `soksak-engines`는 상한이 없는 `>=0.0.0`인 범위 `*`를 받는다.

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F97: the success line of `soksak-engines` prints the declared range.
 - F96: soksak 0.0.4 is released, and the browser, files and terminal plugins 0.0.4, which declare `engines.soksak` `*`, are in the public registry.
 - F96.2: every declared workspace version is 0.0.4.
 - F96.1: the installers and `soksak-engines` accept the range `*`, which is `>=0.0.0` without an upper bound.

@@ -1692,6 +1692,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F97",
+    implementation: [
+      { file: "packages/plugin-api/engines-check.js", symbol: "engines.soksak is ${pkg.engines.soksak}" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/engines-check.test.mjs", id: "the command checks the package.json of the given plugin repository" },
+    ],
+    expected: "soksak-engines prints the range it checked.",
+    levels: ["unit"],
+  },
+  {
     id: "F46",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "async releasePresses()" },

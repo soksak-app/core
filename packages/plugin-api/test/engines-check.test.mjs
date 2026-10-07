@@ -29,6 +29,10 @@ test("the command checks the package.json of the given plugin repository", async
     writeFileSync(join(repository, "package.json"), JSON.stringify({ engines: { soksak: `^${version}` } }));
     assert.equal(execFileSync(process.execPath, [command, repository], { encoding: "utf8" }),
       `Engines check passed: engines.soksak is ^${version}\n`);
+    // 성공 줄은 검사한 범위를 그대로 적는다.
+    writeFileSync(join(repository, "package.json"), JSON.stringify({ engines: { soksak: "*" } }));
+    assert.equal(execFileSync(process.execPath, [command, repository], { encoding: "utf8" }),
+      "Engines check passed: engines.soksak is *\n");
     writeFileSync(join(repository, "package.json"), JSON.stringify({ engines: { soksak: "^0.0.1" } }));
     assert.throws(() => execFileSync(process.execPath, [command, repository], { encoding: "utf8", stdio: "pipe" }),
       (error) => error.status === 1 && error.stderr === `package.json: engines.soksak ^0.0.1 must be * or ^${version}, the @soksak/plugin-api version\n`);
