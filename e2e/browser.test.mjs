@@ -90,15 +90,9 @@ const DARK_DOCUMENT = [21, 28, 42];
 /** 현재 문서 영역 중앙의 실제 창 픽셀을 캡처해 읽는다. */
 async function documentPixel(s, surface, at = (rect) => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 })) {
   const rect = await regionRect(s, surface);
-  const capture = await s.request("diagnostics.capture.start", {});
-  let stopped = false;
-  s.cleanup(async () => {
-    if (!stopped) await s.request("diagnostics.capture.stop", { after: 0 });
-    rmSync(capture.frames, { recursive: true, force: true });
-  });
+  const recording = await s.record();
   const { displayed } = await s.presented();
-  const result = await s.request("diagnostics.capture.stop", { after: displayed });
-  stopped = true;
+  const result = await recording.stop({ after: displayed });
   const files = frames(result.frames);
   assert.ok(files.length > 0, "document pixel capture produced no frames");
   const frame = readFrame(files.at(-1));

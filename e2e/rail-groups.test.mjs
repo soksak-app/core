@@ -19,17 +19,11 @@ for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adj
 
   // 상태를 바꾸는 동안 녹화하고, 녹화가 완전한지와 마지막 프레임의 레일 색을 잰다.
   const record = async (label, change, loops) => {
-    const { frames: directory } = await s.request("diagnostics.capture.start", {});
-    let stopped;
-    try {
-      await change();
-      const { displayed } = await s.presented();
-      stopped = await s.request("diagnostics.capture.stop", { after: displayed });
-    } catch (error) {
-      if (!stopped) await s.request("diagnostics.capture.stop", { after: 0 }).catch(() => {});
-      rmSync(directory, { recursive: true, force: true });
-      throw error;
-    }
+    const recording = await s.record();
+    const directory = recording.frames;
+    await change();
+    const { displayed } = await s.presented();
+    const stopped = await recording.stop({ after: displayed });
     try {
       assert.equal(stopped.limited, false, `${label}: the recording reached its frame limit`);
       assert.ok(stopped.count > 0, `${label}: the recording has no frames`);

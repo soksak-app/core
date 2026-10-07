@@ -2,7 +2,6 @@
 // 뒤에만 시작할 수 있으므로, 기존 창이 있는 디스플레이에서 이 앱의 창을 모두 담는 디스플레이 녹화로 새 창이 생기는 순간을
 // 담는다. 새 창의 영역은 녹화가 끝난 뒤 그 창의 화면 좌표로 정한다.
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
@@ -38,8 +37,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const { displayed } = await s.presented();
-    const recording = await s.request("diagnostics.capture.start", { display: true });
-    let stopped = false;
+    const recording = await s.record({ display: true });
     let child;
     try {
       await s.run("core.window.new");
@@ -47,8 +45,7 @@ for (const app of Object.values(APPS)) {
       child = s.on(list.find((w) => w.window !== s.window).window);
       await child.until("core.screen", (value) => value.screen === "library", "the new window did not show the library");
       const shown = await child.presented();
-      const stop = await s.request("diagnostics.capture.stop", { after: Math.max(displayed, shown.displayed) + 100 });
-      stopped = true;
+      const stop = await recording.stop({ after: Math.max(displayed, shown.displayed) + 100 });
       assert.equal(stop.limited, false, "the recording reached its frame cap");
       const window = (await child.get("host.window")).frame;
       // 디스플레이 녹화는 녹화한 창의 중심이 있는 디스플레이를 담는다(native/darwin/src/capture.m).
@@ -80,8 +77,6 @@ for (const app of Object.values(APPS)) {
         `undrawn ${JSON.stringify(undrawn)}`);
       assert.deepEqual(undrawn, [], "the new window showed frames without its first screen");
     } finally {
-      if (!stopped) await s.request("diagnostics.capture.stop", { after: displayed });
-      rmSync(recording.frames, { recursive: true, force: true });
       if (child) await child.close();
     }
   });

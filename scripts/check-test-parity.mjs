@@ -1618,6 +1618,40 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F73.1",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "async record(params = {})" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose stop fails reports that stop's error and sends no second stop" },
+      { file: "e2e/window-first-frames.test.mjs", id: "a new window shows its complete first screen from its first frame" },
+    ],
+    expected: "A window check sends one stop for each recording, keeps that stop's error, and leaves no recording folder.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F46",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "async releasePresses()" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/pointer-presses.test.mjs", id: "a refused release keeps the press open until the held button is released" },
+    ],
+    expected: "A check whose press or release a held button refused leaves no open press for a later check.",
+    levels: ["unit"],
+  },
+  {
+    id: "F76",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "sp_capture_stop" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_resize_test.m", id: "native capture follows a growing window" },
+    ],
+    expected: "A recording of a growing window ends with a frame of the grown window at device pixels.",
+    levels: ["native"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

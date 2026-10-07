@@ -41,19 +41,16 @@ async function recordable(s) {
  */
 async function record(s, buttons, action) {
   const { displayed } = await s.presented();
-  const recording = await s.request("diagnostics.capture.start", {});
-  let stopped = false;
+  const recording = await s.record();
   try {
     const poses = await action(displayed);
-    const stop = await s.request("diagnostics.capture.stop", { after: poses.at(-1).displayed + 100 });
-    stopped = true;
+    const stop = await recording.stop({ after: poses.at(-1).displayed + 100 });
     assert.equal(stop.limited, false, "the recording reached its frame cap");
     // 프레임을 하나씩 읽고 잰다. 녹화 전체를 메모리에 두지 않는다.
     const measured = frames(recording.frames).map((path, index) => ({ index, ...measureTitlebar(readFrame(path), buttons) }));
     return { poses, stop, measured };
   } finally {
-    // 동작이 실패해도 녹화를 끝내야 다음 검사가 녹화를 시작할 수 있다.
-    if (!stopped) await s.request("diagnostics.capture.stop", { after: displayed });
+    // 녹화를 멈추지 못한 실패는 세션 정리가 멈춘다(Session.record).
     rmSync(recording.frames, { recursive: true, force: true });
   }
 }

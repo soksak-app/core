@@ -45,18 +45,15 @@ function undrawn(captured, logo, card) {
 
 async function record(s, action) {
   const { displayed } = await s.presented();
-  const recording = await s.request("diagnostics.capture.start", {});
-  let stopped = false;
+  const recording = await s.record();
   try {
     await action();
     const shown = await s.presented();
-    const stop = await s.request("diagnostics.capture.stop", { after: Math.max(displayed, shown.displayed) + 100 });
-    stopped = true;
+    const stop = await recording.stop({ after: Math.max(displayed, shown.displayed) + 100 });
     assert.equal(stop.limited, false, "the recording reached its frame cap");
     return frames(recording.frames).map(readFrame);
   } finally {
-    // 동작이 실패해도 녹화를 끝내야 다음 검사가 녹화를 시작할 수 있다.
-    if (!stopped) await s.request("diagnostics.capture.stop", { after: displayed });
+    // 녹화를 멈추지 못한 실패는 세션 정리가 멈춘다(Session.record).
     rmSync(recording.frames, { recursive: true, force: true });
   }
 }

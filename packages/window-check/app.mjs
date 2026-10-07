@@ -399,6 +399,31 @@ export class Session {
     return released;
   }
 
+  /**
+   * 녹화를 시작한다. 반환한 stop 은 diagnostics.capture.stop 을 한 번 보내고 그 결과나 오류를 돌려준다. host 는
+   * stop 이 실패해도 녹화를 이미 끝냈을 수 있으므로 두 번째 stop 은 보내지 않는다. 세션 정리는 stop 을 보낸 적이
+   * 없을 때만 stop 을 보내고 녹화 폴더를 지운다(docs/operations/examples.md).
+   */
+  async record(params = {}) {
+    const { frames } = await this.request("diagnostics.capture.start", params);
+    let sent = false;
+    this.cleanup(async () => {
+      try {
+        if (!sent) await this.request("diagnostics.capture.stop", { after: 0 });
+      } finally {
+        rmSync(frames, { recursive: true, force: true });
+      }
+    });
+    return {
+      frames,
+      stop: (options = {}) => {
+        if (sent) return Promise.reject(new Error(`the stop was already sent for the recording ${frames}`));
+        sent = true;
+        return this.request("diagnostics.capture.stop", options);
+      },
+    };
+  }
+
   key(key, phase, options = {}) {
     return this.request("input.key", { key, phase, ...options });
   }
