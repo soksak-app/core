@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -342,6 +343,93 @@ func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
 	}
 	if got := strings.Join(<-operations, ","); got != "hello,open,close-owner,shutdown" {
 		t.Fatalf("service operations = %s, want hello,open,close-owner,shutdown", got)
+	}
+}
+
+// contract: sidecars-transport.stop.own-close-is-not-a-read-error
+func TestPersistentStopDoesNotLogItsOwnCloseAsAReadError(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDirectory)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+	var written strings.Builder
+	var mu sync.Mutex
+	log.SetOutput(writerFunc(func(p []byte) (int, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		return written.Write(p)
+	}))
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	// 서비스는 shutdown 에 답한 뒤에도 연결을 닫지 않는다. 연결은 host 가 닫는다.
+	release := make(chan struct{})
+	served := make(chan error, 1)
+	go func() {
+		connection, err := listener.Accept()
+		if err != nil {
+			served <- err
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				served <- nil
+				<-release
+				return
+			}
+			var request map[string]any
+			if err := json.Unmarshal(line, &request); err != nil {
+				served <- err
+				return
+			}
+			operation, _ := request["operation"].(string)
+			var reply map[string]any
+			switch operation {
+			case "hello":
+				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true}
+			case "close-owner":
+				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
+			case "shutdown":
+				reply = map[string]any{"operation": "shutdown", "request": request["request"], "ok": true}
+			}
+			if reply != nil {
+				encoded, _ := json.Marshal(reply)
+				if _, err := connection.Write(append(encoded, '\n')); err != nil {
+					served <- err
+					return
+				}
+			}
+		}
+	}()
+
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/stop", seen: make(chan SidecarMessage, 1)}
+	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	sidecars.Stop()
+	if err := <-served; err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+	mu.Lock()
+	defer mu.Unlock()
+	if strings.Contains(written.String(), "persistent read") {
+		t.Fatalf("the stop logged its own close of the connection: %q", written.String())
 	}
 }
 

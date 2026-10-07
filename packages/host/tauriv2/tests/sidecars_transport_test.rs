@@ -622,6 +622,88 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
     service.join().unwrap();
 }
 
+// contract: sidecars-transport.stop.own-close-is-not-a-read-error
+#[test]
+fn persistent_stop_does_not_log_its_own_close_as_a_read_error() {
+    // 로그는 표준 오류이므로 같은 검사를 자식 process 로 실행해 그 출력을 읽는다.
+    if std::env::var_os("SOKSAK_OWN_CLOSE_CHILD").is_none() {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "persistent_stop_does_not_log_its_own_close_as_a_read_error",
+                "--nocapture",
+            ])
+            .env("SOKSAK_OWN_CLOSE_CHILD", "1")
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "the child check failed: {stderr}");
+        assert!(
+            !stderr.contains("persistent read"),
+            "the stop logged its own close of the connection: {stderr}"
+        );
+        return;
+    }
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("own.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "own-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    // 서비스는 shutdown 에 답한 뒤에도 연결을 닫지 않는다. 연결은 host 가 닫는다.
+    let (release, released) = std::sync::mpsc::channel::<()>();
+    let service = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        loop {
+            line.clear();
+            if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                break;
+            }
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let reply = match request["operation"].as_str() {
+                Some("hello") => {
+                    serde_json::json!({"operation": "hello", "protocol": 1, "ok": true})
+                }
+                Some("close-owner") => {
+                    serde_json::json!({"operation": "closed-owner", "request": request["request"], "ok": true})
+                }
+                Some("shutdown") => {
+                    serde_json::json!({"operation": "shutdown", "request": request["request"], "ok": true})
+                }
+                _ => continue,
+            };
+            writeln!(stream, "{}", reply).unwrap();
+        }
+        released.recv().unwrap();
+    });
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, _events) = owner("own", "/projects/own");
+    sidecars
+        .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    sidecars.stop();
+    release.send(()).unwrap();
+    service.join().unwrap();
+}
+
 // contract: sidecars-transport.stop.accepts-close-answers-sent-before-stop
 #[test]
 fn persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop() {

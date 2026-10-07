@@ -1549,6 +1549,18 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F82",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "!errors.Is(err, net.ErrClosed)" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentStopDoesNotLogItsOwnCloseAsAReadError" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_stop_does_not_log_its_own_close_as_a_read_error" },
+    ],
+    expected: "A stop that closes a persistent service connection writes no read error on either host.",
+    levels: ["unit"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

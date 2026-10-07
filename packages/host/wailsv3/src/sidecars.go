@@ -1427,9 +1427,10 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		}
 	}
+	// net.ErrClosed 는 이 host 가 연결을 닫았다는 뜻이다(종료나 실패 뒤의 정리). 상대가 닫으면 EOF 이고 오류가 없다.
 	if err := scanner.Err(); errors.Is(err, bufio.ErrTooLong) {
 		return fmt.Sprintf("message exceeds %d bytes", sidecarMessageLimit)
-	} else if err != nil {
+	} else if err != nil && !errors.Is(err, net.ErrClosed) {
 		LogError("sidecar "+process.name, fmt.Sprintf("persistent read: %v", err))
 	}
 	return ""
