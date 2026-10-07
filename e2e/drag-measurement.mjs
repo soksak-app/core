@@ -124,3 +124,22 @@ export function assertHeldStatesShown(samples, ticks, boundary, hold = HOLD) {
     `layouts held for ${hold}ms or longer are missing from the recording; ` +
     `recorded offsets: ${samples.map(({ position }) => (position - base).toFixed(0)).join(",")}`);
 }
+
+/**
+ * 끌기 동안 호스트가 기록한 배치 트랜잭션의 주기를 잰다. layouts 는 { begun, presented } 목록(ms)이다. 이어지는 두
+ * 트랜잭션의 시작 간격(interval)과 한 트랜잭션의 시작부터 표시까지(presenting)의 중앙값과 90 백분위를 돌려준다
+ * (docs/features.md F92). 표시되지 않고 대신된 트랜잭션은 presenting 에 넣지 않는다.
+ */
+export function transactionCadence(layouts) {
+  const begun = layouts.map((layout) => layout.begun).filter((value) => value !== null).sort((a, b) => a - b);
+  const intervals = begun.slice(1).map((value, index) => value - begun[index]);
+  const presenting = layouts.filter(({ begun: start, presented }) => start !== null && presented !== null)
+    .map(({ begun: start, presented }) => presented - start);
+  const spread = (values) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    // 기본값: 값이 없으면 잴 것이 없다(null).
+    const at = (fraction) => sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))] : null;
+    return { count: sorted.length, median: at(0.5), p90: at(0.9) };
+  };
+  return { interval: spread(intervals), presenting: spread(presenting) };
+}

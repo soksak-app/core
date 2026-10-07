@@ -8,7 +8,7 @@ import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { outside, terminalMarks, whitePixels } from "./outside.mjs";
 import { alignment, alignmentDelta } from "./alignment.mjs";
-import { assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag } from "./drag-measurement.mjs";
+import { assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag, transactionCadence } from "./drag-measurement.mjs";
 
 // 1번 세로 선은 왼쪽 고정 사이드바와 터미널 카드 사이 경계다. 끌면 터미널 카드의 왼쪽 가장자리가 움직인다.
 const PLAN = { axis: "x", line: 1, dx: 250, dy: 0, ms: 400, times: 2 };
@@ -119,6 +119,8 @@ for (const app of Object.values(APPS)) {
     await s.until("core.rail", (rail) => rail.groups.length === 1, "the terminal override drew no rail");
     const marks = await terminalMarks(s, { measured: true });
     const run = await drag(t, s, PLAN, { capture: true });
+    // 트랜잭션 주기는 지연 판정 전에 알린다. 판정이 실패해도 그 주기가 출력에 남는다(F92).
+    t.diagnostic(`transaction cadence (ms): ${JSON.stringify(transactionCadence(run.layouts))}`);
     const lag = assertAligned(run, marks, (await s.get("host.window")).refreshRate);
     t.diagnostic(`pointer lag: worst ${lag.lag.toFixed(1)}ms, p90 ${lag.p90.toFixed(1)}ms, median ${lag.median.toFixed(1)}ms; transactions ${lag.stages}`);
     t.diagnostic(`page handling per step (ms), first 12: ${JSON.stringify(run.handled?.slice(0, 12))}, steps 40-51: ${JSON.stringify(run.handled?.slice(40, 52))}`);
