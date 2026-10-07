@@ -4,7 +4,7 @@
 // 요청한다. 표면을 측정하고 보고하는 방법은 알지 않는다.
 //
 // 검증의 존재를 알지 않는다. 렌더링 완료만 통지하고 이후 처리는 문서가 정한다.
-import { Soksak, SoksakView, outline } from "soksak";
+import { Soksak, SoksakView, outline, sliceTree } from "soksak";
 import { borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
 import { effectiveTextScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
@@ -275,6 +275,19 @@ function updateCard(el, card, rect) {
       '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>';
     bind(ham, "core.card.tab-list", () => ({ card: el.dataset.cardId }));
     chrome.insertBefore(ham, chrome.firstChild);
+  }
+  // 전체 화면 카드의 머리 맨 앞에 서는 스페이스 앱 단추. 전체 화면이 아니면 CSS 가 숨긴다(docs/spec/example-model.md).
+  if (!chrome.querySelector(".chrome__apps")) {
+    const apps = document.createElement("button");
+    apps.className = "chrome__apps";
+    apps.dataset.expose = "core.card.space-apps";
+    apps.type = "button";
+    apps.title = "스페이스 앱";
+    apps.setAttribute("aria-label", apps.title);
+    apps.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' +
+      '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>';
+    bind(apps, "core.space.apps", () => ({ card: el.dataset.cardId }));
+    chrome.insertBefore(apps, chrome.firstChild);
   }
   let strip = chrome.querySelector(".chrome__tabs");
   if (!strip) {
@@ -1140,8 +1153,12 @@ function fitChrome(chrome, strip) {
   const head = getComputedStyle(chrome);
   // 기본값: columnGap 의 계산값 normal 은 수가 아니며 flex 에서 0 이다.
   const gap = parseFloat(head.columnGap) || 0;
+  // 전체 화면 카드는 맨 앞에 스페이스 앱 단추를 보이므로 그 너비만큼 줄인 머리로 맞춘다.
+  const apps = chrome.querySelector(".chrome__apps");
+  const lead = chrome.closest(".card")?.dataset.fullscreen === "true" && apps
+    ? parseFloat(getComputedStyle(apps).width) + gap : 0;
   const inner = chrome.clientWidth
-    - parseFloat(head.paddingLeft) - parseFloat(head.paddingRight);
+    - parseFloat(head.paddingLeft) - parseFloat(head.paddingRight) - lead;
   // ≡ 와 ⋯ 는 strip 단계에서 그려지지 않으므로 rect 가 아니라 선언된 너비를 읽는다.
   const ham = parseFloat(getComputedStyle(chrome.querySelector(".chrome__ham")).width);
   const more = parseFloat(getComputedStyle(chrome.querySelector(".chrome__more")).width);
@@ -1562,6 +1579,64 @@ export function openCardTools(id) {
     if (key === "close") return run("core.card.close", { card: id });
     return openPicker(anchor, key, id);
   });
+}
+
+/**
+ * 전체 화면 카드의 스페이스 앱 목록을 연다. 열려 있으면 닫는다. 목록은 스페이스의 모든 탭을 내용 카드마다 묶고, 묶음은
+ * 배치의 slicing tree 를 판의 처음부터 읽은 순서이며, 제목은 판 지도와 `카드 N` 과 tree 깊이를 보인다
+ * (docs/spec/example-model.md#card-fullscreen). 고른 탭의 카드로 전체 화면을 옮긴다.
+ */
+export function openSpaceApps(id) {
+  paneCard(id);
+  if (view.fullscreenCard !== id) throw new Error(`card ${id} is not fullscreen`);
+  const anchor = cardElement(id)?.querySelector(".chrome__apps");
+  if (!anchor) throw new Error(`card ${id} has no space apps button`);
+  if (picker?.anchor === anchor) { closePicker(); return; }
+  const cards = grid.cards.filter((card) => card.data);
+  const tree = sliceTree(cards);
+  if (!tree) throw new Error("the cards of the space are not a slicing arrangement");
+  const rects = grid.rects();
+  const map = (own) => cards.map((card) => {
+    const r = rects.get(card.id);
+    const sx = 16 / grid.width;
+    const sy = 10 / grid.height;
+    return `<rect x="${(r.x * sx).toFixed(2)}" y="${(r.y * sy).toFixed(2)}" width="${(r.w * sx).toFixed(2)}" ` +
+      `height="${(r.h * sy).toFixed(2)}" rx=".6" data-own="${card.id === own}"/>`;
+  }).join("");
+  const groups = [];
+  // 카드는 그 위의 자르기 수에서 하나를 뺀 깊이에 선다. 같은 자르기 아래의 카드는 같은 깊이다.
+  const walk = (slice, cuts) => {
+    if ("card" in slice) {
+      const card = slice.card;
+      groups.push({
+        heading: { id: card.id, name: `카드 ${groups.length + 1}`, depth: Math.max(0, cuts - 1), map: map(card.id) },
+        items: tabsOf(card).map((t) => ({
+          key: `${card.id}/${t.id}`, name: tabName(t),
+          mark: hasPlugin(t.plugin) ? plugin(t.plugin).mark : "?", svg: hasPlugin(t.plugin) ? plugin(t.plugin).svg : "",
+          notice: tabNotice(t.id),
+          active: card.id === id && t.id === card.data.activeId,
+        })),
+      });
+      return;
+    }
+    for (const side of slice.sides) walk(side, cuts + 1);
+  };
+  walk(tree, 0);
+  const total = groups.reduce((n, group) => n + group.items.length, 0);
+  openLayer(anchor, `스페이스 앱 ${total}개`, [], (key) => {
+    const [cardId, tabId] = key.split("/");
+    showFullscreen(cardId, tabId);
+  }, "left", groups);
+}
+
+/** 전체 화면을 카드 cardId 로 옮기고 그 탭 tabId 를 보인다. 전체 화면은 유지한다. */
+function showFullscreen(cardId, tabId) {
+  const card = grid.card(cardId);
+  if (!card?.data || !tabsOf(card).some((t) => t.id === tabId)) throw new Error(`no tab ${tabId} in card ${cardId}`);
+  card.data.activeId = tabId;
+  focusedId = cardId;
+  if (view.fullscreenCard !== cardId) view.fullscreen(cardId);
+  settle();
 }
 
 /** 카드의 탭 목록을 연다. 열려 있으면 닫는다. */

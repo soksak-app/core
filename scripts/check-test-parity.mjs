@@ -1536,6 +1536,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F84",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "export function openSpaceApps" },
+      { file: "packages/workbench/picker-layer.js", symbol: "export function fillPicker" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/picker-layer.test.mjs", id: "a grouped picker draws headings that take no press and counts only the items" },
+      { file: "e2e/space-apps.test.mjs", id: "a fullscreen card lists the apps of the space by card and switches to a picked one" },
+    ],
+    expected: "A fullscreen card lists the apps of the space by card and moves fullscreen to a picked tab's card.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

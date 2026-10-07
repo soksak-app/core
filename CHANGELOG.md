@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F84: a fullscreen card shows a space apps button at the front of its header; it lists every tab of the space grouped by card in the order of the slicing tree, each heading with a map of the cards, and picking a tab moves fullscreen to its card.
 - F86, F87: a rejected installed plugin manifest stops the page start with the error shown and logged, naming the plugin, its version and package, instead of a blank window whose logo stood under the window buttons.
 - F85: clicking another tab of a fullscreen card switches the tab and keeps fullscreen; only a tab drag returns the card to its normal size.
 - F81: a narrow card header shows the tab list button, the current tab's title and a tool menu button `⋯`, which lists the sidebar buttons and the enabled tools and runs their commands (`core.card.tools`).

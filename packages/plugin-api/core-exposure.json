@@ -85,6 +85,7 @@
     "core.sidebar.section.fold",
     "core.card.tab-list",
     "core.card.tools",
+    "core.space.apps",
     "core.card.add-tab",
     "core.card.split",
     "core.card.close",

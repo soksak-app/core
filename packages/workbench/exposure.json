@@ -865,7 +865,7 @@
       },
       {
         "name": "core.picker",
-        "description": "Whether the add or tab menu is open, its title, and its items in order.",
+        "description": "Whether the add, tab, tool or space apps menu is open, its title, and its items in order; group is the card of an item in a grouped menu and null otherwise.",
         "schema": {
           "type": "object",
           "properties": {
@@ -888,6 +888,9 @@
                   },
                   "active": {
                     "type": "boolean"
+                  },
+                  "group": {
+                    "type": ["string", "null"]
                   }
                 }
               }
@@ -2366,6 +2369,21 @@
         }
       },
       {
+        "name": "core.space.apps",
+        "description": "Opens or closes the space apps list of a fullscreen card: every tab of the space in groups by card, in the order of the tree of cuts of the arrangement; picking a tab moves fullscreen to its card and shows it.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.card.add-tab",
         "description": "Adds a tab of a plugin to a card and activates it.",
         "params": {
@@ -3176,6 +3194,11 @@
       {
         "name": "core.card.tools",
         "description": "The tool menu buttons of the cards, in card order.",
+        "many": true
+      },
+      {
+        "name": "core.card.space-apps",
+        "description": "The space apps buttons of the cards, in card order; the button is shown at the front of a fullscreen card's header.",
         "many": true
       },
       {
