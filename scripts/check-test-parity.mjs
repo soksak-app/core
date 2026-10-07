@@ -1583,6 +1583,18 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F89",
+    implementation: [
+      { file: "packages/workbench/verify.js", symbol: "const pixel = 1 / devicePixelRatio" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/verify-controls.test.mjs", id: "the window buttons count as centred within one device pixel of the first row" },
+      { file: "e2e/titlebar-recording.test.mjs", id: "window buttons centred" },
+    ],
+    expected: "The page judges the window buttons centred in the first row within one device pixel at every scale.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },
