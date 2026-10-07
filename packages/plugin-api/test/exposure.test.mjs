@@ -299,3 +299,10 @@ test("the installed plugin document lists plugins with their manifests and diagn
     /plugin alpha has a plugin.json with id beta/);
   assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[0], manifest: { id: "alpha" } }] }), /name/);
 });
+
+test("a rejected installed manifest names the plugin, its version and package", () => {
+  const plugin = { id: "alpha", package: "plugin-alpha", version: "0.0.3",
+    manifest: { id: "alpha", name: "Alpha", description: "검사용.", sidecars: ["@fixture/sidecar"] } };
+  assert.throws(() => validateInstalledPlugins({ plugins: [plugin] }),
+    /^Error: installed plugin alpha 0\.0\.3 \(plugin-alpha\): plugin\.json: unknown field sidecars$/);
+});

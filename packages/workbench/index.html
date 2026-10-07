@@ -81,8 +81,24 @@ import { onChoicesChange } from "./sidebar-sections.js";
 
 import { createLibrary } from "./library.js";
 
+/* 메인 문서의 오류 배너. 처리되지 않은 오류도 이 배너에 보이고 애플리케이션 로그로 보낸다(page-layout.js). 시작을 멈추는
+   오류도 보이도록 다른 무엇보다 먼저 설치한다. */
+const showError = createErrorDisplay({ document, changed: coreChanged });
+reportUncaught(globalThis, showError);
+/* 마지막으로 읽은 창 단추 영역의 오른쪽 끝(px). 첫 행은 그만큼 비운다. 시작이 멈춰도 첫 행이 창 단추를 덮지 않도록 시작
+   문서의 단추 영역을 먼저 적용한다. */
+let controlsWidth = 0;
+if (chrome) applyControls(start.controls);
+
 installExposure(exposureFile);
-installEnvironment(environmentFile, installedPlugins);
+// 설치 plugin 의 manifest 를 거부하면 page 는 시작할 수 없다. 그 오류를 보이고 시작을 여기서 멈춘다. 다시 읽기는
+// host.window.reload 가 한다(docs/spec/installation.md).
+try {
+  installEnvironment(environmentFile, installedPlugins);
+} catch (error) {
+  showError(error.message);
+  await new Promise(() => {});
+}
 
 // 선과 divider 의 모양은 이 시트가 정의한다. 이 문서는 색만 지정하고 아래 :root 가
 // 그 토큰을 이 문서의 색에 연결한다.
@@ -91,9 +107,6 @@ installTheme(document);
 /* 설정값을 문서 루트에 설정한다. 스타일시트가 그 값을 읽는다. */
 install();
 
-/* 메인 문서의 오류 배너. 처리되지 않은 오류도 이 배너에 보이고 애플리케이션 로그로 보낸다(page-layout.js). */
-const showError = createErrorDisplay({ document, changed: coreChanged });
-reportUncaught(globalThis, showError);
 
 /* ── 배선 ─────────────────────────────────────────────────────────────── */
 
@@ -250,8 +263,6 @@ const chromeActs = document.getElementById("chromeActs");
 
    브라우저에는 창이 없다. 그때 chrome 은 null 이고 막대를 들여쓰지 않는다. */
 let controlsAt = null;
-/* 마지막으로 읽은 창 단추 영역의 오른쪽 끝(px). 첫 행은 그만큼 비운다. */
-let controlsWidth = 0;
 
 if (chrome) {
   chrome.draggable(document.getElementById("winDrag"));
@@ -514,7 +525,6 @@ const library = createLibrary(document.getElementById("library"), coreChanged);
    화면이다(docs/spec/native-host.md#page-start). 판의 첫 그리기는 네이티브 준비를 기다리지 않도록 배치 대기열을 그
    뒤에 연결한다. 플러그인 내용과 네이티브 표면은 이어서 채운다. */
 projects.onChange(() => { drawBars(); drawSettings(); library.refreshFolders(); library.render(); coreChanged(); });
-if (chrome) applyControls(start.controls);
 projects.begin(start.workspace);
 // 판의 첫 그리기는 프레임 배율을 문서에 쓴다. 판이 없는 첫 화면(라이브러리)에는 그 그리기가 없으므로 여기서 쓴다.
 applyFrameText(value("textSize"));

@@ -1514,6 +1514,28 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F86",
+    implementation: [
+      { file: "packages/workbench/index.html", symbol: "installEnvironment(environmentFile, installedPlugins);" },
+    ],
+    tests: [
+      { file: "e2e/start-failure.test.mjs", id: "a rejected installed plugin manifest stops the page start with a shown and logged error" },
+    ],
+    expected: "A rejected installed plugin manifest stops the page start with the error shown and logged.",
+    levels: ["application"],
+  },
+  {
+    id: "F87",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "installed plugin ${plugin.id} ${plugin.version}" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a rejected installed manifest names the plugin, its version and package" },
+    ],
+    expected: "A rejected installed manifest names the plugin, its version and package.",
+    levels: ["unit"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

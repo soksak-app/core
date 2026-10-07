@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F86, F87: a rejected installed plugin manifest stops the page start with the error shown and logged, naming the plugin, its version and package, instead of a blank window whose logo stood under the window buttons.
 - F85: clicking another tab of a fullscreen card switches the tab and keeps fullscreen; only a tab drag returns the card to its normal size.
 - F81: a narrow card header shows the tab list button, the current tab's title and a tool menu button `⋯`, which lists the sidebar buttons and the enabled tools and runs their commands (`core.card.tools`).
 - F80: the card auto-arrange button after the project library button runs `core.layout.balance`, which keeps the arrangement and gives every card a fair share: the cards of the fullest row along each axis come out the same size (`Soksak.balance()`).

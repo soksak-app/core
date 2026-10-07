@@ -858,7 +858,12 @@ export function validateInstalledPlugins(document) {
     if (!isObject(plugin.manifest) || plugin.manifest.id !== plugin.id) {
       throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} has a plugin.json with id ${plugin.manifest?.id}`);
     }
-    validateManifest(plugin.manifest);
+    try {
+      validateManifest(plugin.manifest);
+    } catch (error) {
+      // 거부한 manifest 가 어느 설치 plugin 의 것인지 밝힌다. 그 파일은 plugins/<id>/<version>/plugin.json 이다.
+      throw new Error(`installed plugin ${plugin.id} ${plugin.version} (${plugin.package}): ${error.message}`);
+    }
     if (plugin.diagnostics !== undefined && !isObject(plugin.diagnostics)) {
       throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} diagnostics must be an object`);
     }

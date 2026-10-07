@@ -79,7 +79,7 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 | `/installed-plugins.json` | `{ "plugins": [{ id, package, version, manifest, diagnostics? }] }`: `installed.json`의 켜진 plugin을 id 순서로 담고, `manifest`는 설치된 `plugin.json`의 내용이다. 진단 build에서 `diagnostics`는 설치된 package가 `diagnostics.json`을 담을 때 그 내용이며, release build는 보내지 않는다. `installed.json`이 없으면 `{ "plugins": [] }`다. `installed.json`, `plugin.json`, `diagnostics.json`을 읽거나 검사할 수 없으면 문서는 `{ "error": "<message>" }`다 |
 | `/modules/<package>/<path>` | 켜진 설치 plugin의 package는 그 plugin의 기록된 `path` 안의 `<path>` 파일이다. 빈 segment, `.`, `..`가 있는 경로나 없는 파일은 찾을 수 없다. 다른 package는 애플리케이션 frontend에서 온다 |
 
-Workbench는 `/installed-plugins.json`을 JSON module로 가져와 각 plugin을 `manifest`로 등록하고, 문서에 `error`가 있으면 그 텍스트로 불러오기를 실패한다.
+Workbench는 `/installed-plugins.json`을 JSON module로 가져와 각 plugin을 `manifest`로 등록하고, 문서에 `error`가 있으면 그 텍스트로 불러오기를 실패한다. Workbench가 거부한 manifest는 `installed plugin <id> <version> (<package>): <이유>`로 보고된다. Main page는 plugin을 등록하기 전에 오류 표시를 설치하고 창 버튼 영역을 비우므로, 거부된 manifest나 `error` 문서는 그 오류를 보이고 애플리케이션 로그에 쓴 채로 page 시작을 멈춘다. page는 준비를 보고하지 않으며, `host.window.reload`가 다시 시작한다.
 
 Host는 시작할 때 켜진 설치 plugin의 `plugin.json` `dependencies`가 지정한 sidecar를 이름 순서로 읽는다. Sidecar는 `installed.json`이 그것에 기록한 `path`에서 실행되며, 실행 파일은 그 폴더의 `sidecar.json`의 `executable` 경로다. 애플리케이션 실행 중에 설치하거나 켠 plugin은 변경 뒤에 불러온 page에 제공된다. 성공한 `pluginsRun` install, update, enable은 켜진 설치 plugin의 sidecar 중 host가 아직 선언하지 않은 것을 선언하므로, 그 뒤에 불러온 page는 첫 실행이 다시 불러온 page처럼 그 sidecar를 시작한다. host가 이미 선언한 sidecar는 애플리케이션을 다시 시작할 때까지 그 폴더를 유지한다.
 
