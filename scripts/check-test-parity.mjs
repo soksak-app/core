@@ -1681,6 +1681,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F96",
+    implementation: [
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.4";' },
+    ],
+    tests: [
+      { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release version" },
+    ],
+    expected: "Every declared workspace version is 0.0.4, the release that installs the plugins declaring engines.soksak *.",
+    levels: ["unit"],
+  },
+  {
     id: "F46",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "async releasePresses()" },
