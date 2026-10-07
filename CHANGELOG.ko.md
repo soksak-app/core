@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F85: 전체 화면 카드의 다른 탭을 클릭하면 전체 화면을 유지한 채 탭이 바뀐다. 탭 드래그만 카드를 일반 크기로 되돌린다.
 - F81: 좁은 카드 머리는 탭 목록 버튼, 현재 탭 제목, 도구 메뉴 버튼 `⋯`를 보인다. 메뉴는 사이드바 버튼과 활성 도구를 나열하고 그 명령을 실행한다(`core.card.tools`).
 - F80: 프로젝트 목록 단추 뒤의 카드 자동 정렬 단추가 `core.layout.balance`를 실행한다. 이 명령은 배치를 유지하고 모든 카드에 공정한 몫을 주므로, 각 축에서 카드가 가장 많은 줄의 카드들이 같은 크기가 된다(`Soksak.balance()`).
 - F79: 두 host는 시간이 초과된 중계 요청을 `the document did not reply within <ms> ms`로, 늦은 답을 그 지연과 함께(`exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`) 보고한다.

@@ -189,3 +189,29 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(failures, [], "setting changes produced an intermediate placement failure");
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a native click on another tab of a fullscreen card switches the tab and keeps fullscreen`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    await s.run("core.card.add-tab", { card: "terminal", plugin: "browser" });
+    const added = await s.until("core.grid", grid => grid.cards.find(item => item.id === "terminal")?.tabs.length === 2,
+      "the second tab did not appear");
+    const card = added.cards.find(item => item.id === "terminal");
+    const other = card.tabs.find(tab => tab.id !== card.active);
+    await s.run("core.card.fullscreen", { card: "terminal" });
+    await s.until("core.grid", grid => grid.fullscreen === "terminal", "the card did not become fullscreen");
+    const index = card.tabs.findIndex(tab => tab.id === other.id);
+    const rect = await s.rect("core.card.tab", index);
+    await s.click((rect.document?.x ?? 0) + rect.x + rect.width / 2, (rect.document?.y ?? 0) + rect.y + rect.height / 2);
+    await s.until("core.grid", grid => grid.cards.find(item => item.id === "terminal").active === other.id,
+      "the click did not switch the tab");
+    // 누름과 뗌이 만든 그리기가 모두 표시된 뒤의 상태를 읽는다.
+    await s.presented();
+    const after = await s.get("core.grid");
+    assert.equal(after.fullscreen, "terminal", `the tab click left fullscreen: ${JSON.stringify(after.cards.map(c => ({ id: c.id, w: c.w, fullscreen: c.fullscreen })))}`);
+    await s.run("core.card.fullscreen", { card: "terminal" });
+    await s.until("core.grid", grid => grid.fullscreen === null, "fullscreen did not end");
+  });
+}

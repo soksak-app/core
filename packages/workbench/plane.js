@@ -508,7 +508,6 @@ export const dropBands = () => {
 };
 
 function beginTabDrag(e, cardId, tabId) {
-  restoreFullscreen();
   e.preventDefault();
   // 보더는 드래그 한 번 동안 바뀌지 않으므로 시작할 때 한 번 잰다.
   const band = dropBands();
@@ -522,7 +521,9 @@ function beginTabDrag(e, cardId, tabId) {
     if (!tabDrag) return;
     if (Math.hypot(ev.clientX - tabDrag.from.x, ev.clientY - tabDrag.from.y) > 4) tabDrag.moved = true;
     if (!tabDrag.moved) return;
-    if (!tabDrag.stood) { tabDrag.stood = true; standIn(true); }
+    // 움직인 누름만 드래그다. 드롭 구획은 일반 배치의 카드에 있으므로 그때 전체 화면을 풀고, 움직이지 않은 누름(클릭)은
+    // 전체 화면을 유지한다(docs/spec/example-model.md#card-fullscreen).
+    if (!tabDrag.stood) { tabDrag.stood = true; restoreFullscreen(); standIn(true); }
     const host = plane.getBoundingClientRect();
     const only = tabsOf(grid.card(tabDrag.cardId)).length === 1 ? tabDrag.cardId : undefined;
     tabDrag.hit = grid.zoneAt(ev.clientX - host.left, ev.clientY - host.top,

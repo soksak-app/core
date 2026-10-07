@@ -1503,6 +1503,17 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F85",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "function beginTabDrag" },
+    ],
+    tests: [
+      { file: "e2e/card-fullscreen.test.mjs", id: "a native click on another tab of a fullscreen card switches the tab and keeps fullscreen" },
+    ],
+    expected: "A click on a tab of a fullscreen card keeps fullscreen.",
+    levels: ["application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },
