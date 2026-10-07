@@ -90,6 +90,34 @@ for (const [name, english, korean] of [
   });
 }
 
+// [-] 는 한 번 관측된 실패를 정한 시도 뒤에도 재현하지 못해 닫은 항목이다. 시도한 내용을 기록해야 하고, 닫은 뒤에는
+// 다시 열지 않으며 다시 나면 연결된 새 ID 로 연다.
+test("checklist permits an item closed as not reproduced with the record of its attempts", { timeout: 3000 }, (t) => {
+  const english = "- [-] G1 — failed once. Not reproduced: three full runs, one under load.\n";
+  const korean = "- [-] G1 — 한 번 실패했다. 재현되지 않음: 전체 실행 세 번, 한 번은 부하에서.\n";
+  const result = check(t, english, korean);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+for (const [name, english, korean] of [
+  ["missing record", "- [-] G1 — failed once.\n", "- [-] G1 — 한 번 실패했다. 재현되지 않음: 세 번.\n"],
+  ["empty record", "- [-] G1 — failed once. Not reproduced: .\n", "- [-] G1 — 한 번 실패했다. 재현되지 않음: 세 번.\n"],
+  ["missing Korean record", "- [-] G1 — failed once. Not reproduced: three runs.\n", "- [-] G1 — 한 번 실패했다.\n"],
+]) {
+  test(`checklist rejects [-] with ${name}`, { timeout: 3000 }, (t) => {
+    const result = check(t, english, korean);
+    assert.notEqual(result.status, 0, "documentation audit accepted a closed item without its attempts");
+    assert.match(result.stderr, /not reproduced checklist item .* requires/);
+  });
+}
+
+test("an item closed as not reproduced cannot reopen", { timeout: 3000 }, (t) => {
+  const previous = "- [-] G1 — failed once. Not reproduced: three runs.\n";
+  const result = check(t, "- [~] G1 — failed again\n", "- [~] G1 — 다시 실패했다\n", previous);
+  assert.notEqual(result.status, 0, "a closed item was reopened");
+  assert.match(result.stderr, /closed checklist item G1 must remain closed/);
+});
+
 for (const updated of ["- [~] G1 — reopened\n", "- [~] G1-1 — replaced\n"]) {
   test(`checklist preserves completed scope: ${updated.trim()}`, { timeout: 3000 }, (t) => {
     const result = check(t, updated, updated, "- [o] G1 — completed\n");

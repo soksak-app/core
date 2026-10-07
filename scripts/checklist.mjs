@@ -6,7 +6,7 @@ export function checklist(text, file, errors) {
     const match = line.match(/^(\s*)- \[([^\]]*)\] (.*)$/);
     if (!match) continue;
     const [, indent, state, label] = match;
-    if (![" ", "~", "o", "!"].includes(state)) errors.push(`${file}:${index + 1}: invalid checklist state [${state}]`);
+    if (![" ", "~", "o", "!", "-"].includes(state)) errors.push(`${file}:${index + 1}: invalid checklist state [${state}]`);
     const id = label.match(/^([A-Z]\d+(?:\.\d+)*(?:-\d+)*)\s+—\s+/)?.[1] ?? null;
     if (state === "!") {
       const korean = file.endsWith(".ko.md");
@@ -17,6 +17,14 @@ export function checklist(text, file, errors) {
       const hasContent = (value) => value && /[\p{L}\p{N}]/u.test(value);
       const missing = [!hasContent(causeValue) && (korean ? "원인" : "cause"), !hasContent(retryValue) && (korean ? "재시도 조건" : "retry condition")].filter(Boolean);
       if (missing.length) errors.push(`${file}:${index + 1}: blocked checklist item ${id ?? "without an identifier"} requires nonempty ${missing.join(" and ")}`);
+    }
+    // [-] 는 재현하지 못해 닫은 항목이다. 닫기 전에 시도한 내용을 기록한다.
+    if (state === "-") {
+      const korean = file.endsWith(".ko.md");
+      const record = (korean ? /재현되지 않음:\s*(.+)$/u : /Not reproduced:\s*(.+)$/i).exec(label)?.[1]?.trim();
+      if (!record || !/[\p{L}\p{N}]/u.test(record)) {
+        errors.push(`${file}:${index + 1}: not reproduced checklist item ${id ?? "without an identifier"} requires a nonempty ${korean ? "재현되지 않음" : "Not reproduced"} record`);
+      }
     }
     if (id && identifiers.has(id)) errors.push(`${file}:${index + 1}: duplicate checklist identifier ${id}`);
     if (id) identifiers.add(id);
@@ -41,6 +49,9 @@ export function checkCompletedItems(previous, current, file, retiredIds = new Se
   for (const entry of before) {
     if (entry.id && entry.state === "o" && after.get(entry.id)?.state !== "o" && !retiredIds.has(entry.id)) {
       errors.push(`${file}: completed checklist item ${entry.id} must remain complete; add a linked follow-up identifier`);
+    }
+    if (entry.id && entry.state === "-" && after.get(entry.id)?.state !== "-" && !retiredIds.has(entry.id)) {
+      errors.push(`${file}: closed checklist item ${entry.id} must remain closed; add a linked follow-up identifier`);
     }
   }
   return errors;

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The documentation audit accepts the `[-]` checklist state when the item records its attempts after `Not reproduced:` (`재현되지 않음:` in the Korean checklist), and rejects an item that leaves `[-]`.
 - F92: the page draws a prepared layout in the next task instead of the next animation frame, so the rendering update that the host's presentation wait starts carries the draw; on a 60 Hz display a drag shows a new layout every frame again (transactions 16.7 ms apart instead of 33.4 ms).
 - F92 (measurement): the layout trace of a recording records `requested`, when the page asks the host to wait for the presentation of its drawn DOM, and the drag check prints the start interval and the stages of the layout transactions.
 - F93: `make go-repeat` takes `TAGS` and fails when no test file was built, and `make rust-repeat` and `make rust-tests-alone` take `FEATURES`, so tests behind the `diagnostics` tag or feature can be repeated.
