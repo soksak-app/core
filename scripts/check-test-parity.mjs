@@ -1703,6 +1703,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F95",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "[main.window disableCursorRects];" },
+    ],
+    tests: [
+      { file: "e2e/real/terminal.test.mjs", id: "slow pointer movement over terminal text" },
+    ],
+    expected: "The text pointer stays over terminal text during slow pointer movement on both hosts.",
+    levels: ["application"],
+  },
+  {
     id: "F46",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "async releasePresses()" },

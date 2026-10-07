@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F95: 창은 cursor rect를 끄므로 Tauri 콘텐츠 뷰의 화살표 rect가 더 이상 터미널 글자 위의 텍스트 포인터를 대신하지 않는다.
 - F97: `soksak-engines`의 성공 줄은 선언된 범위를 출력한다.
 - F96: soksak 0.0.4를 릴리스했고, `engines.soksak` `*`를 선언한 browser, files, terminal plugin 0.0.4가 공개 registry에 있다.
 - F96.2: 선언된 모든 작업공간 버전은 0.0.4다.

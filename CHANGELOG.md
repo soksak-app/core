@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F95: the window turns off cursor rectangles, so the arrow rectangle of the Tauri content view no longer replaces the text pointer over terminal text.
 - F97: the success line of `soksak-engines` prints the declared range.
 - F96: soksak 0.0.4 is released, and the browser, files and terminal plugins 0.0.4, which declare `engines.soksak` `*`, are in the public registry.
 - F96.2: every declared workspace version is 0.0.4.

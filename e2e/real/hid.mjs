@@ -35,17 +35,24 @@ ObjC.import("Foundation");
 $.NSApplication.sharedApplication;
 const types = ${JSON.stringify(TYPES)};
 const times = [];
-const cursors = { arrow: 0, iBeam: 0, other: 0, missing: 0 };
+const cursors = { arrow: 0, iBeam: 0, other: 0, missing: 0, runs: [] };
+// 표본의 종류가 바뀔 때마다 [종류, 연속 개수] 를 남긴다. 다른 커서가 끼어든 때를 순서로 보인다.
+const count = (kind) => {
+  cursors[kind]++;
+  const last = cursors.runs[cursors.runs.length - 1];
+  if (last && last[0] === kind) last[1]++;
+  else cursors.runs.push([kind, 1]);
+};
 const cursorImage = (cursor) => cursor.image.TIFFRepresentation;
 const arrowImage = input.sampleCursor ? cursorImage($.NSCursor.arrowCursor) : null;
 const textImage = input.sampleCursor ? cursorImage($.NSCursor.IBeamCursor) : null;
 const sampleCursor = () => {
   const current = $.NSCursor.currentSystemCursor;
-  if (current.isNil()) { cursors.missing++; return; }
+  if (current.isNil()) { count("missing"); return; }
   const image = cursorImage(current);
-  if (image.isEqualToData(arrowImage)) cursors.arrow++;
-  else if (image.isEqualToData(textImage)) cursors.iBeam++;
-  else cursors.other++;
+  if (image.isEqualToData(arrowImage)) count("arrow");
+  else if (image.isEqualToData(textImage)) count("iBeam");
+  else count("other");
 };
 for (const step of input.steps) {
   let event;

@@ -478,6 +478,10 @@ static SPWindowComposition *windowComposition(WKWebView *main) {
         coordinates.mainView = main;
         composition.coordinates = coordinates;
         [composition addSubview:coordinates positioned:NSWindowAbove relativeTo:main];
+        // 창의 커서는 페이지를 그리는 WebKit 이 추적 영역으로 정한다. 창 콘텐츠 뷰가 cursor rect 를 두면(Tauri 의 tao 는
+        // 콘텐츠 전체에 화살표 rect 를 둔다) AppKit 이 rect 를 다시 적용할 때마다 페이지가 정한 커서를 화살표로 덮는다
+        // (docs/features.md F95). 이 창은 cursor rect 를 쓰지 않으므로 그 관리를 끈다.
+        [main.window disableCursorRects];
     }
     return composition;
 }
