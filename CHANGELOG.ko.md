@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F98: terminal service는 `close-owner`에서 소유자 session보다 surface actor를 먼저 닫으므로, terminal이 열린 채 끝내도 `close owner` 오류를 쓰지 않는다(sidecar-vt S23).
 - F95.1: native 테스트가 창의 변경 뒤에도 cursor rect가 꺼진 채로 남는지 확인하고, image region은 더 이상 `resetCursorRects`를 오버라이드하지 않는다.
 - F95: 창은 cursor rect를 끄므로 Tauri 콘텐츠 뷰의 화살표 rect가 더 이상 터미널 글자 위의 텍스트 포인터를 대신하지 않는다.
 - F97: `soksak-engines`의 성공 줄은 선언된 범위를 출력한다.
