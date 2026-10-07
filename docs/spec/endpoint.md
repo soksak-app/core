@@ -30,7 +30,7 @@ The host also atomically creates `<config-dir>/process.lock` before listening. I
   "address": "/path/to/socket",
   "pid": 1234,
   "application": "wailsv3",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "executable": "/path/to/soksak-wailsv3",
   "started": "2026-09-17T09:00:00Z"
 }

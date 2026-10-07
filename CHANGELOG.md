@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F99.1: every declared version is 0.0.5. The parity audit lists the release records F96 and F99 without a feature link.
 - F98: the terminal service closes the surface actors before the owner sessions on `close-owner`, so quitting with a terminal open writes no `close owner` error (sidecar-vt S23).
 - F95.1: a native test keeps the window's cursor rectangles off through window changes, and the image region no longer overrides `resetCursorRects`.
 - F95: the window turns off cursor rectangles, so the arrow rectangle of the Tauri content view no longer replaces the text pointer over terminal text.

@@ -146,8 +146,8 @@ test("completed capability entries all have feature evidence links", { timeout: 
 
 test("completed aggregate F13 is exempt while other completed top-level capabilities still need feature links", () => {
   assert.deepEqual(
-    auditCompletedFeatureLinks([], "- [o] F13 — aggregate\n- [o] F99 — capability\n"),
-    ["F99: completed capability has no feature link"],
+    auditCompletedFeatureLinks([], "- [o] F13 — aggregate\n- [o] X1 — capability\n"),
+    ["X1: completed capability has no feature link"],
   );
 });
 
