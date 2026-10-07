@@ -1572,6 +1572,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F88",
+    implementation: [
+      { file: "native/darwin/src/window_controls.m", symbol: "windowSetTitlebarHeight" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_controls_test.m", id: "the buttons are centred within one device pixel" },
+    ],
+    expected: "AppKit centres the window buttons in a title bar of the requested height within one device pixel at every backing scale.",
+    levels: ["native"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

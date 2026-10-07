@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F88: the native title bar test judges the centring of the window buttons within one device pixel, so it passes on a display at backing scale 1.
 - F46.1: a refused native pointer error of the window checks names its phase, button, position and window, and the cleanup prints each open press it ended with the time it waited for the buttons to be released.
 - F83: a window check fails when it leaves a recording folder under the captures folder, and the harness removes that folder; the settings modal check and the drag capture now remove their recordings in the session cleanup.
 - F82: the Wails host no longer logs its own close of a persistent service connection as a read error when it quits.

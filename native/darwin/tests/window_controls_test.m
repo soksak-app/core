@@ -23,7 +23,8 @@ static NSWindow *hostLikeWindow(void) {
 }
 
 // 창 프레임과 콘텐츠 배치 영역의 차이로 잰 제목줄 높이와 windowTitlebarHeight 가 모두 row 이고,
-// 단추 위와 아래의 여백이 같은지 검사한다.
+// 단추 위와 아래의 여백이 한 device pixel 안에서 같은지 검사한다. AppKit 은 단추를 device pixel 에 맞추므로,
+// 남는 높이가 pixel 수로 홀수이면 위와 아래는 한 pixel(1 / backingScaleFactor pt) 다르다.
 static void expectCentred(NSWindow *window, double row, NSString *when) {
     double bar = window.frame.size.height - window.contentLayoutRect.size.height;
     double reported = windowTitlebarHeight(window);
@@ -31,10 +32,11 @@ static void expectCentred(NSWindow *window, double row, NSString *when) {
     windowControls(window, area);
     double above = area[1];
     double below = row - (area[1] + area[3]);
-    check(bar == row && reported == row && area[3] > 0 && fabs(above - below) <= 0.5,
-        [NSString stringWithFormat:@"%@: the buttons are centred in the %.1fpt title bar "
-            "(title bar %.1f, reported %.1f, buttons %.1f, above %.2f, below %.2f)",
-            when, row, bar, reported, area[3], above, below]);
+    double pixel = 1 / window.backingScaleFactor;
+    check(bar == row && reported == row && area[3] > 0 && fabs(above - below) <= pixel,
+        [NSString stringWithFormat:@"%@: the buttons are centred within one device pixel in the %.1fpt title bar "
+            "(title bar %.1f, reported %.1f, buttons %.1f, above %.2f, below %.2f, pixel %.2fpt)",
+            when, row, bar, reported, area[3], above, below, pixel]);
 }
 
 // 높이 설정이 실패하고 실패 문장이 expected 이며 제목줄이 그대로인지 검사한다.
