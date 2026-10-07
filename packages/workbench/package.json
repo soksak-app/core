@@ -45,6 +45,7 @@
     "layout-queue.js",
     "page-layout.js",
     "plane.js",
+    "picker-layer.js",
     "projects.js",
     "plugin-states.js",
     "registry.js",

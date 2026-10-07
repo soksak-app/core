@@ -22,6 +22,7 @@ import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "
 import { icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run } from "./commands.js";
+import { fillPicker, pickerItems } from "./picker-layer.js";
 import { disposeSurface, focusSurface, mountSurface, placePluginPlaceholder } from "./surface-modules.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
@@ -583,9 +584,7 @@ export function onPicker(fn) {
 export const pickerState = () => ({
   open: picker !== null,
   title: picker ? pickerEl.getAttribute("aria-label") : "",
-  items: picker ? [...pickerEl.querySelectorAll(".picker__item")].map((b) => ({
-    key: b.dataset.key, name: b.querySelector(".picker__name").textContent, active: b.dataset.active === "true",
-  })) : [],
+  items: picker ? pickerItems(pickerEl) : [],
 });
 
 /* 카드 도구 버튼의 data-do 와 core.card.menu 의 menu 값. */
@@ -644,35 +643,19 @@ function openTabList(anchor, cardId) {
  * 항목 이름은 `textContent` 로 설정한다. 탭 제목은 사용자 입력이므로 마크업으로
  * 삽입하면 제목이 레이어 구조를 변경할 수 있다.
  */
-function openLayer(anchor, ask, items, pick, align = "right") {
+function openLayer(anchor, ask, items, pick, align = "right", groups = [{ heading: null, items }]) {
   closePicker();
-  pickerEl.textContent = "";
   // 호스트가 이 레이어를 창으로 그릴 때 창 이름으로 쓴다. 보이는 물음과 같은 값이다.
   pickerEl.setAttribute("aria-label", ask);
-  const head = document.createElement("div");
-  head.className = "picker__head";
-  head.textContent = ask;                  // 레이어 너비를 측정하기 전에 설정한다
-  pickerEl.appendChild(head);
-  for (const [index, it] of items.entries()) {
-    const b = document.createElement("button");
-    b.className = "picker__item";
-    b.dataset.expose = "core.picker.item";
+  // 묶음 제목이 있는 목록은 항목이 많으므로 더 높게 그린다.
+  pickerEl.classList.toggle("picker--grouped", groups.some((group) => group.heading));
+  const keys = fillPicker(pickerEl, ask, groups, (b, index, it) => {
     mark(b, "core.picker.pick", { index });
-    b.type = "button";
-    b.dataset.key = it.key;
-    b.dataset.active = String(!!it.active);
     if (it.notice) {
       b.dataset.notice = "true";
       b.title = systemNotifications.tooltip(it.notice);
     }
-    // 기본값: 플러그인 표시는 16 단위 그림이고, 다른 크기의 그림을 넘기는 항목만 viewBox 를 함께 준다.
-    const box = it.viewBox === undefined ? "0 0 16 16" : it.viewBox;
-    b.innerHTML = `<svg viewBox="${box}" aria-hidden="true">${it.svg}</svg>` +
-      `<span class="picker__name"></span><small></small>`;
-    b.querySelector(".picker__name").textContent = it.name;
-    b.querySelector("small").textContent = it.mark;
-    pickerEl.appendChild(b);
-  }
+  });
   const host = plane.getBoundingClientRect();
   pickerEl.style.left = "0px";
   pickerEl.style.top = "0px";
@@ -687,7 +670,7 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   };
   pickerEl.style.left = `${rect.x}px`;
   pickerEl.style.top = `${rect.y}px`;
-  picker = { anchor, pick, rect, keys: items.map((it) => it.key) };
+  picker = { anchor, pick, rect, keys };
   pickerChanged();
   // DOM 은 네이티브 뷰 위에 그릴 수 없고, 웹뷰는 DOM 을 렌더링하는 네이티브 뷰다.
   // 애플리케이션이 이 요소를 받아 그런 뷰에 렌더링하므로 아래의 표면은 계속 실행된다.
@@ -696,7 +679,7 @@ function openLayer(anchor, ask, items, pick, align = "right") {
     // 모달은 닫힘을 빈 key 로 보고한다. 그것을 선택으로 넘기면 등록되지 않은
     // 플러그인을 찾다 예외가 난다.
     overlay.show(pickerEl, rect, (key) => {
-      const index = items.findIndex((it) => it.key === key);
+      const index = keys.indexOf(key);
       return index < 0 ? run("core.picker.close") : run("core.picker.pick", { index });
     });
     pickerEl.hidden = true;
