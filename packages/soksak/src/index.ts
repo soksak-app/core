@@ -31,6 +31,6 @@ export type { ThemeMetrics, ThemeOptions, ThemePalette } from './theme.js';
 /** The span of a card, which is all `isSlicing` needs to answer. */
 export type { Span } from './slicing.js';
 
-/** The tree of cuts of a slicing arrangement, which `balance()` reads. */
+/** The slicing tree of an arrangement, which `balance()` reads. */
 export { sliceTree } from './balance.js';
 export type { Slice } from './balance.js';

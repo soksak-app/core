@@ -2,7 +2,7 @@
  * Fair sizes for an arrangement that is kept.
  *
  * An arrangement built by splitting is a slicing floorplan, so it reads as a
- * tree of cuts. A card counts one along each axis; a cut along an axis counts
+ * slicing tree. A card counts one along each axis; a cut along an axis counts
  * the sum of its sides, and a cut along the other axis counts the side that
  * holds the most. Each cut gives its sides space in proportion to that count,
  * so every card in the row that holds the most cards is drawn at the same size
@@ -13,7 +13,7 @@
  */
 import { SPAN, fixedSize } from './card.js';
 /**
- * The tree of cuts of a slicing arrangement, or null when it is not slicing.
+ * The slicing tree of an arrangement, or null when it is not slicing.
  *
  * Every line one cut can divide the cards at is taken at once, so the sides of
  * a cut along an axis are the cards between two of those lines.

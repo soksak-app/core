@@ -163,7 +163,7 @@ test("a card with a px size keeps it and the others share the rest", () => {
   assertTiling(grid, "after balance");
 });
 
-test("the tree of cuts is exported and reads the plane from its start", async () => {
+test("the slicing tree is exported and reads the plane from its start", async () => {
   const { sliceTree } = await import("../dist/index.js");
   assert.equal(typeof sliceTree, "function", "sliceTree is not exported");
   const grid = new Soksak(
