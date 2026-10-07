@@ -72,18 +72,25 @@ pub fn parse_version(text: &str) -> Result<Version, String> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Range {
     pub min: Version,
-    pub below: Version,
+    /// 포함하지 않는 상한. None 이면 상한이 없다.
+    pub below: Option<Version>,
 }
 
 impl Range {
     /// version 이 범위 안에 있는지.
     pub fn contains(&self, version: Version) -> bool {
-        version >= self.min && version < self.below
+        version >= self.min && self.below.is_none_or(|below| version < below)
     }
 }
 
-/// `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z <a.b.c` 범위를 읽는다.
+/// `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z <a.b.c` 범위를 읽는다. `*` 는 `>=0.0.0`, 곧 모든 version 이다.
 pub fn parse_range(text: &str) -> Result<Range, String> {
+    if text == "*" {
+        return Ok(Range {
+            min: Version([0, 0, 0]),
+            below: None,
+        });
+    }
     if let Some(rest) = text.strip_prefix(">=") {
         if let Some((low, high)) = rest.split_once(" <") {
             if !low.is_empty() && !high.is_empty() && !low.contains(' ') && !high.contains(' ') {
@@ -92,7 +99,10 @@ pub fn parse_range(text: &str) -> Result<Range, String> {
                 if min >= below {
                     return Err(format!("invalid version range {text}: empty"));
                 }
-                return Ok(Range { min, below });
+                return Ok(Range {
+                    min,
+                    below: Some(below),
+                });
             }
         }
     }
@@ -103,7 +113,7 @@ pub fn parse_range(text: &str) -> Result<Range, String> {
     };
     let Version([major, minor, patch]) = parse_version(&text[operator.len()..]).map_err(|_| {
         format!(
-            "invalid version range {}: expected x.y.z, ^x.y.z, ~x.y.z or >=x.y.z <a.b.c",
+            "invalid version range {}: expected *, x.y.z, ^x.y.z, ~x.y.z or >=x.y.z <a.b.c",
             quote(&Value::from(text))
         )
     })?;
@@ -117,7 +127,7 @@ pub fn parse_range(text: &str) -> Result<Range, String> {
     };
     Ok(Range {
         min,
-        below: Version(below),
+        below: Some(Version(below)),
     })
 }
 

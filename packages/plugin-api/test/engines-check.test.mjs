@@ -10,12 +10,14 @@ const VERSION = "0.0.3";
 
 test("a plugin declares the core release of its plugin API", () => {
   assert.deepEqual(enginesErrors({ engines: { soksak: `^${VERSION}` } }, VERSION), []);
+  // * 는 모든 core version 에서 설치된다는 선언이다.
+  assert.deepEqual(enginesErrors({ engines: { soksak: "*" } }, VERSION), []);
   assert.deepEqual(enginesErrors({ engines: { soksak: "^0.0.2" } }, VERSION),
-    [`package.json: engines.soksak ^0.0.2 must be ^${VERSION}, the @soksak/plugin-api version`]);
+    [`package.json: engines.soksak ^0.0.2 must be * or ^${VERSION}, the @soksak/plugin-api version`]);
   assert.deepEqual(enginesErrors({ engines: {} }, VERSION),
-    [`package.json: engines.soksak undefined must be ^${VERSION}, the @soksak/plugin-api version`]);
+    [`package.json: engines.soksak undefined must be * or ^${VERSION}, the @soksak/plugin-api version`]);
   assert.deepEqual(enginesErrors({}, VERSION),
-    [`package.json: engines.soksak undefined must be ^${VERSION}, the @soksak/plugin-api version`]);
+    [`package.json: engines.soksak undefined must be * or ^${VERSION}, the @soksak/plugin-api version`]);
 });
 
 test("the command checks the package.json of the given plugin repository", async () => {
@@ -29,7 +31,7 @@ test("the command checks the package.json of the given plugin repository", async
       `Engines check passed: engines.soksak is ^${version}\n`);
     writeFileSync(join(repository, "package.json"), JSON.stringify({ engines: { soksak: "^0.0.1" } }));
     assert.throws(() => execFileSync(process.execPath, [command, repository], { encoding: "utf8", stdio: "pipe" }),
-      (error) => error.status === 1 && error.stderr === `package.json: engines.soksak ^0.0.1 must be ^${version}, the @soksak/plugin-api version\n`);
+      (error) => error.status === 1 && error.stderr === `package.json: engines.soksak ^0.0.1 must be * or ^${version}, the @soksak/plugin-api version\n`);
   } finally {
     rmSync(repository, { recursive: true, force: true });
   }

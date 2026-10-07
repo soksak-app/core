@@ -1666,6 +1666,21 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F96.1",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/install.go", symbol: "func ParseRange" },
+      { file: "packages/sok/tauriv2/src/install.rs", symbol: "pub fn parse_range" },
+      { file: "packages/plugin-api/engines-check.js", symbol: "export function enginesErrors" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestVersionRangesAcceptExactCaretTildeAndBoundedForms" },
+      { file: "packages/sok/tauriv2/tests/install_test.rs", id: "version_ranges_accept_exact_caret_tilde_and_bounded_forms" },
+      { file: "packages/plugin-api/test/engines-check.test.mjs", id: "a plugin declares the core release of its plugin API" },
+    ],
+    expected: "The range * is >=0.0.0 without an upper bound in both installers, and soksak-engines accepts it.",
+    levels: ["unit"],
+  },
+  {
     id: "F46",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "async releasePresses()" },

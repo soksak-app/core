@@ -78,14 +78,22 @@ func ParseVersion(text string) (Version, error) {
 	return v, nil
 }
 
-// Range 는 포함하는 하한 Min 과 포함하지 않는 상한 Below 다.
-type Range struct{ Min, Below Version }
+// Range 는 포함하는 하한 Min 과 포함하지 않는 상한 Below 다. Below 가 nil 이면 상한이 없다.
+type Range struct {
+	Min   Version
+	Below *Version
+}
 
 // Contains 는 v 가 범위 안에 있는지 알려 준다.
-func (r Range) Contains(v Version) bool { return v.Compare(r.Min) >= 0 && v.Compare(r.Below) < 0 }
+func (r Range) Contains(v Version) bool {
+	return v.Compare(r.Min) >= 0 && (r.Below == nil || v.Compare(*r.Below) < 0)
+}
 
-// ParseRange 는 `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z <a.b.c` 범위를 읽는다.
+// ParseRange 는 `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z <a.b.c` 범위를 읽는다. `*` 는 `>=0.0.0`, 곧 모든 version 이다.
 func ParseRange(text string) (Range, error) {
+	if text == "*" {
+		return Range{Min: Version{}}, nil
+	}
 	if rest, ok := strings.CutPrefix(text, ">="); ok {
 		low, high, found := strings.Cut(rest, " <")
 		if found && !strings.ContainsAny(low, " ") && !strings.ContainsAny(high, " ") && low != "" && high != "" {
@@ -100,7 +108,7 @@ func ParseRange(text string) (Range, error) {
 			if min.Compare(below) >= 0 {
 				return Range{}, fmt.Errorf("invalid version range %s: empty", text)
 			}
-			return Range{min, below}, nil
+			return Range{min, &below}, nil
 		}
 	}
 	operator := ""
@@ -109,19 +117,22 @@ func ParseRange(text string) (Range, error) {
 	}
 	v, err := ParseVersion(text[len(operator):])
 	if err != nil {
-		return Range{}, fmt.Errorf("invalid version range %s: expected x.y.z, ^x.y.z, ~x.y.z or >=x.y.z <a.b.c", quote(text))
+		return Range{}, fmt.Errorf("invalid version range %s: expected *, x.y.z, ^x.y.z, ~x.y.z or >=x.y.z <a.b.c", quote(text))
 	}
+	var below Version
 	switch {
 	case operator == "":
-		return Range{v, Version{v[0], v[1], v[2] + 1}}, nil
+		below = Version{v[0], v[1], v[2] + 1}
 	case operator == "~":
-		return Range{v, Version{v[0], v[1] + 1, 0}}, nil
+		below = Version{v[0], v[1] + 1, 0}
 	case v[0] > 0:
-		return Range{v, Version{v[0] + 1, 0, 0}}, nil
+		below = Version{v[0] + 1, 0, 0}
 	case v[1] > 0:
-		return Range{v, Version{0, v[1] + 1, 0}}, nil
+		below = Version{0, v[1] + 1, 0}
+	default:
+		below = Version{0, 0, v[2] + 1}
 	}
-	return Range{v, Version{0, 0, v[2] + 1}}, nil
+	return Range{v, &below}, nil
 }
 
 // Satisfies 는 version 이 범위 안에 있는지 알려 준다. 둘 다 이미 검사한 값이어야 한다.

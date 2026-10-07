@@ -74,19 +74,28 @@ func TestVersionRangesAcceptExactCaretTildeAndBoundedForms(t *testing.T) {
 		"^1.2.3": {"1.2.3", "2.0.0"}, "~1.2.3": {"1.2.3", "1.3.0"}, ">=0.0.2 <0.1.0": {"0.0.2", "0.1.0"},
 	} {
 		r, err := sok.ParseRange(text)
-		if err != nil || r.Min.String() != want[0] || r.Below.String() != want[1] {
+		if err != nil || r.Min.String() != want[0] || r.Below == nil || r.Below.String() != want[1] {
 			t.Fatalf("%s: %v %v", text, r, err)
 		}
 	}
 	if !sok.Satisfies("0.0.9", ">=0.0.2 <0.1.0") || sok.Satisfies("0.1.0", ">=0.0.2 <0.1.0") {
 		t.Fatal("bounded range bounds")
 	}
+	// * 는 >=0.0.0, 곧 상한이 없는 모든 version 이다.
+	if r, err := sok.ParseRange("*"); err != nil || r.Min.String() != "0.0.0" || r.Below != nil {
+		t.Fatalf("*: %v %v", r, err)
+	}
+	for _, version := range []string{"0.0.0", "0.0.4", "1.2.3", "4294967295.4294967295.4294967295"} {
+		if !sok.Satisfies(version, "*") {
+			t.Fatalf("* does not contain %s", version)
+		}
+	}
 	a, _ := sok.ParseVersion("0.10.0")
 	b, _ := sok.ParseVersion("0.9.9")
 	if a.Compare(b) <= 0 {
 		t.Fatal("versions compare by number, not text")
 	}
-	for _, bad := range []string{"*", "latest", "0.0", "01.0.0", ">=0.1.0 <0.1.0", "^0.0.2-beta", "4294967296.0.0"} {
+	for _, bad := range []string{"**", "latest", "0.0", "01.0.0", ">=0.1.0 <0.1.0", "^0.0.2-beta", "4294967296.0.0"} {
 		if _, err := sok.ParseRange(bad); err == nil || !strings.Contains(err.Error(), "invalid version") {
 			t.Fatalf("%s: %v", bad, err)
 		}
@@ -108,7 +117,7 @@ func TestPluginPackageDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSide
 	if ranges, err := sok.ManifestSidecars(map[string]any{}); err != nil || len(ranges) != 0 {
 		t.Fatalf("a manifest without dependencies: %v %v", ranges, err)
 	}
-	_, err = sok.ManifestSidecars(decode(t, `{"dependencies": {"@scope/sidecar-worker": "*"}}`).(map[string]any))
+	_, err = sok.ManifestSidecars(decode(t, `{"dependencies": {"@scope/sidecar-worker": "latest"}}`).(map[string]any))
 	rejects(t, err, "plugin.json dependencies @scope/sidecar-worker: invalid version range")
 	_, err = sok.ManifestSidecars(decode(t, `{"dependencies": ["@scope/sidecar-worker"]}`).(map[string]any))
 	rejects(t, err, "plugin.json dependencies: expected an object")

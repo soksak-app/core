@@ -10,6 +10,7 @@ Version은 숫자 부분으로 된 `x.y.z`이며 앞자리 0을 쓰지 않고, �
 
 | 범위 | Version |
 | --- | --- |
+| `*` | `>=0.0.0`: 모든 version |
 | `x.y.z` | 그 version만 |
 | `^x.y.z` | `x.y.z`부터 첫 0이 아닌 자리가 바뀌기 전까지: `^1.2.3`은 `2.0.0` 미만, `^0.2.3`은 `0.3.0` 미만, `^0.0.2`는 `0.0.3` 미만 |
 | `~x.y.z` | `x.y.z`부터 `x.(y+1).0` 미만 |
@@ -30,7 +31,7 @@ Plugin package는 plugin 파일의 archive `<id>-<version>.tgz`다. 그 `package
 
 `package.json`의 다른 필드는 package 도구의 것이므로 읽지 않는다. 다만 `soksak`은 거부한다. 플러그인의 sidecar와 그 범위는 `plugin.json`의 `dependencies`다([플러그인](plugins.ko.md#pluginjson)).
 
-plugin 저장소는 한 core release의 `@soksak/plugin-api`로 빌드하고 그 release를 선언한다. `engines.soksak`은 그 `@soksak/plugin-api`의 `^<version>`이다. `@soksak/plugin-api`의 명령 `soksak-engines`가 plugin 저장소에서 이를 검사하고 `package.json: engines.soksak <range> must be ^<version>, the @soksak/plugin-api version`으로 실패한다. 각 plugin 저장소는 `make test`에서 이를 실행한다.
+plugin 저장소는 한 core release의 `@soksak/plugin-api`로 빌드한다. 그 `engines.soksak`은 모든 core version이 만족하는 `*`이거나, 그 release만 만족하는 그 `@soksak/plugin-api`의 `^<version>`이다. `@soksak/plugin-api`의 명령 `soksak-engines`가 plugin 저장소에서 이를 검사하고 `package.json: engines.soksak <range> must be * or ^<version>, the @soksak/plugin-api version`으로 실패한다. 각 plugin 저장소는 `make test`에서 이를 실행한다.
 
 ## Sidecar release asset
 

@@ -52,19 +52,28 @@ fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
     ] {
         let range = install::parse_range(text).expect(text);
         assert_eq!(
-            (range.min.to_string(), range.below.to_string()),
+            (
+                range.min.to_string(),
+                range.below.map(|below| below.to_string()).unwrap_or_default()
+            ),
             (min.to_string(), below.to_string()),
             "{text}"
         );
     }
     assert!(install::satisfies("0.0.9", ">=0.0.2 <0.1.0"));
     assert!(!install::satisfies("0.1.0", ">=0.0.2 <0.1.0"));
+    // * 는 >=0.0.0, 곧 상한이 없는 모든 version 이다.
+    let any = install::parse_range("*").expect("*");
+    assert_eq!((any.min.to_string(), any.below), ("0.0.0".to_string(), None));
+    for version in ["0.0.0", "0.0.4", "1.2.3", "4294967295.4294967295.4294967295"] {
+        assert!(install::satisfies(version, "*"), "* does not contain {version}");
+    }
     assert!(
         install::parse_version("0.10.0").unwrap() > install::parse_version("0.9.9").unwrap(),
         "versions compare by number, not text"
     );
     for bad in [
-        "*",
+        "**",
         "latest",
         "0.0",
         "01.0.0",
@@ -93,7 +102,7 @@ fn plugin_package_declares_version_core_range_and_files_and_the_manifest_declare
         .expect("no dependencies")
         .is_empty());
     rejects(
-        install::manifest_sidecars(&json!({"dependencies": {"@scope/sidecar-worker": "*"}})),
+        install::manifest_sidecars(&json!({"dependencies": {"@scope/sidecar-worker": "latest"}})),
         "plugin.json dependencies @scope/sidecar-worker: invalid version range",
     );
     rejects(
