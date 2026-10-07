@@ -100,6 +100,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   ], [
     "native/darwin/tests/document_view_test.m",
     "native/darwin/tests/image_region_test.m",
+    "native/darwin/tests/presentation_order_test.m",
     "native/darwin/tests/surface_layout_test.m",
     "native/darwin/tests/webview_geometry_test.m",
     "native/darwin/tests/webview_inspector_test.m",
