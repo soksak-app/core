@@ -54,7 +54,10 @@ fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
         assert_eq!(
             (
                 range.min.to_string(),
-                range.below.map(|below| below.to_string()).unwrap_or_default()
+                range
+                    .below
+                    .map(|below| below.to_string())
+                    .unwrap_or_default()
             ),
             (min.to_string(), below.to_string()),
             "{text}"
@@ -64,9 +67,20 @@ fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
     assert!(!install::satisfies("0.1.0", ">=0.0.2 <0.1.0"));
     // * 는 >=0.0.0, 곧 상한이 없는 모든 version 이다.
     let any = install::parse_range("*").expect("*");
-    assert_eq!((any.min.to_string(), any.below), ("0.0.0".to_string(), None));
-    for version in ["0.0.0", "0.0.4", "1.2.3", "4294967295.4294967295.4294967295"] {
-        assert!(install::satisfies(version, "*"), "* does not contain {version}");
+    assert_eq!(
+        (any.min.to_string(), any.below),
+        ("0.0.0".to_string(), None)
+    );
+    for version in [
+        "0.0.0",
+        "0.0.4",
+        "1.2.3",
+        "4294967295.4294967295.4294967295",
+    ] {
+        assert!(
+            install::satisfies(version, "*"),
+            "* does not contain {version}"
+        );
     }
     assert!(
         install::parse_version("0.10.0").unwrap() > install::parse_version("0.9.9").unwrap(),
