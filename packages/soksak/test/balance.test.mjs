@@ -162,3 +162,23 @@ test("a card with a px size keeps it and the others share the rest", () => {
   same(grid, ["upper", "x"], "h", "the rows");
   assertTiling(grid, "after balance");
 });
+
+test("the tree of cuts is exported and reads the plane from its start", async () => {
+  const { sliceTree } = await import("../dist/index.js");
+  assert.equal(typeof sliceTree, "function", "sliceTree is not exported");
+  const grid = new Soksak(
+    {
+      xs: [0, 0.5, 1],
+      ys: [0, 0.5, 1],
+      cards: [
+        { id: "c", c0: 1, c1: 2, r0: 1, r1: 2 },
+        { id: "a", c0: 0, c1: 1, r0: 0, r1: 2 },
+        { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+      ],
+    },
+    { width: W, height: H },
+  );
+  const tree = sliceTree(grid.cards);
+  const read = (slice) => ("card" in slice ? slice.card.id : { axis: slice.axis, sides: slice.sides.map(read) });
+  assert.deepEqual(read(tree), { axis: "x", sides: ["a", { axis: "y", sides: ["b", "c"] }] });
+});

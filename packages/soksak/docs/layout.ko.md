@@ -468,6 +468,7 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 | `dividers()`, `rules()` | 잡는 영역과 그릴 경계 |
 | `boundaryPos`, `boundaryRange`, `hasBoundary(axis, line)`, `moveBoundary(axis, line, px, allowSnap?)`, `centerBoundary` | 경계를 끈다 |
 | `balance()` | 배치를 유지하고 모든 카드에 공정한 몫을 준다 |
+| `sliceTree(cards)` | slicing 배치의 자르기 나무(`Slice`: 카드 하나, 또는 한 축을 따라 판의 처음부터 나눈 쪽들), 아니면 null |
 | `mergeCoincident(axis, line)` | 이제 같은 자리에 있는 이웃 선으로 접는다 |
 | `tidy()`, `virtualCount()`, `isVirtual(axis, line)`, `crossings(card)`, `cardsCrossing(axis, line)` | 가상 선 |
 | `isSlicing()`, `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | 검사와 상태 |

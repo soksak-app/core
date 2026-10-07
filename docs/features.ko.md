@@ -562,7 +562,7 @@
 - [ ] F83 — P1: 검사가 녹화를 지우고 남으면 실패한다는 규칙과 달리 녹화 폴더를 남기는 window check를 찾는다. 2026-10-06 디스크 사용량을 재다 발견했다. check 앱의 captures 폴더에 2026-10-05 전체 run에서 생긴 Wails 녹화 폴더 12개와 Tauri 18개(약 400MB)가 남아 있었고, 각각 마지막 frame만 담고 있었다(예: `main-1791191630116352000`은 `frame-0865`에서 `frame-0888`, `1791191644757-62`는 `frame-1659`에서 `frame-1691`). 그 때문에 실패한 검사는 없었다. 이 기록 뒤에 폴더를 지웠다.
 - [~] F84 — P1: 2026-10-07 사용자 요청대로 전체 화면 카드에서 스페이스의 모든 앱을 나열하고 그중 하나로 전환한다. 카드가 전체 화면인 동안 머리 맨 앞의 버튼이 스페이스의 탭을 카드별로 묶어 나열하고, 묶음은 배치 안에서 카드끼리의 관계를 보이며, 탭을 고르면 전체 화면이 그 카드로 옮겨 간다([카드 전체 화면](spec/example-model.ko.md#카드-전체-화면)).
   - [o] F84.1 — P1: 카드 전체 화면 계약에 스페이스 앱 목록을 명세한다. 2026-10-07 [카드 전체 화면](spec/example-model.ko.md#카드-전체-화면)에서 완료했다. `core.space.apps`, `core.card.space-apps`, `core.picker` 항목의 `group` 선언은 F84.4에서 그 등록과 함께 들어간다.
-  - [ ] F84.2 — P1: 배치 라이브러리에서 자르기 나무(`sliceTree`, `Slice`)를 export하고 문서화한다.
+  - [o] F84.2 — P1: 배치 라이브러리에서 자르기 나무(`sliceTree`, `Slice`)를 export하고 문서화한다. 2026-10-07 완료: `packages/soksak/src/index.ts`가 둘을 export하고 배치 문서의 API 표가 그것을 적는다. Red: `the tree of cuts is exported and reads the plane from its start`가 `sliceTree is not exported`로 실패했다. Green: 라이브러리 테스트가 통과한다.
   - [ ] F84.3 — P1: 선택 레이어가 누름을 받지 않는 묶음 제목을 그리게 하고, 고르는 index는 항목만 센다.
   - [ ] F84.4 — P1: 스페이스 앱 버튼과 명령을 더하고 전체 화면을 고른 카드로 옮긴다.
   - [ ] F84.5 — P1: 목록과 전환을 두 host의 window check로 확인한다.
