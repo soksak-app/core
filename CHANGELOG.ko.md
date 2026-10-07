@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F73.2: `real/focus`는 예전 `axis` 대신 `side: "bottom"`으로 카드를 나누며, 두 실입력 검사는 `s.record`로 통과한다.
 - F73.2: 실입력 검사 `real/focus`와 `real/tui-drag`는 `s.record`로 녹화를 시작하며, 이것은 stop을 한 번 보내고 그 오류를 유지한다.
 - 문서 감사는 항목이 `[-]` 체크리스트 상태에서 시도를 `Not reproduced:`(한국어 체크리스트는 `재현되지 않음:`) 뒤에 기록하면 받아들이고, `[-]`를 벗어나는 항목은 거부한다.
 - F92: 페이지는 준비된 배치를 다음 animation frame 대신 다음 task에서 그리므로 host의 표시 기다림이 시작하는 rendering update가 그 그리기를 담는다. 60 Hz 디스플레이에서 끌기는 다시 매 frame 새 배치를 보인다(트랜잭션 간격 33.4 ms 대신 16.7 ms).

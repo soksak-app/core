@@ -19,7 +19,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const terminals = await ensureTerminals(s, 2);
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === terminals[1].surface));
-    const { tab: browser } = await s.run("core.card.split", { card: card.id, axis: "y", plugin: "browser" });
+    const { tab: browser } = await s.run("core.card.split", { card: card.id, side: "bottom", plugin: "browser" });
     s.cleanup(() => s.run("core.tab.close", { tab: browser }));
     await s.until("core.surfaces", (list) => list.some((item) => item.surface === browser && item.exposes.includes("dom browser.address")),
       "the browser surface did not register its address field");
