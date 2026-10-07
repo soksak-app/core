@@ -1515,6 +1515,29 @@ test("display-scale changes redraw the pixel grid without resizing the host", ()
   assert.equal(commits, count, "destroy must remove the resolution listener");
 });
 
+// The host places its views on the rects a commit reports, and the paint of that
+// commit draws the elements later. A ratio that changes in between - a window
+// that AppKit animates reports another backing scale for a moment - must not make
+// the elements leave the rects the host was given.
+test("a paint writes the rects its commit reported when the ratio changes before it draws", () => {
+  let reported = null;
+  let pending = null;
+  const { window, grid, view } = mount({
+    commit: (rects, draw) => {
+      reported = rects;
+      pending = draw;
+    },
+  });
+  Object.defineProperty(window, "devicePixelRatio", { value: 1, configurable: true, writable: true });
+  grid.moveBoundary("x", 1, 300.3);
+  view.render();
+  window.devicePixelRatio = 2;
+  pending();
+  assert.equal(reported.get("card").w, 288, "the commit reported the rect at a ratio of 1");
+  assert.equal(view.element("card").style.width, "288px", "the paint wrote the rect the commit reported");
+  view.destroy();
+});
+
 /**
  * Two boundaries on one axis, with a line no card reads below both.
  *

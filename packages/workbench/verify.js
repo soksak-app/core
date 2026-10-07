@@ -158,6 +158,15 @@ export function verify(controls = null) {
           const shown = ["top", "bottom", "left", "right"].map((side) => card?.style.getPropertyValue(`--p${side[0]}`) || "0");
           at += ` · bands ${["top", "bottom", "left", "right"].map((side) => s.bands[side]).join("/")} drawn ${shown.join("/")}`;
         }
+        // 그려진 카드와 그 안의 표면 자리. 차이가 카드의 크기에서 오는지 카드 안의 배치에서 오는지 밝힌다(F90).
+        const owner = slot.closest("[data-card-id]");
+        if (owner) {
+          const box = drawnFrame(owner);
+          at += ` · card ${frameText(box)} inset ${+(drawn.x - box.x).toFixed(2)},${+(drawn.y - box.y).toFixed(2)},` +
+            `${+(box.x + box.w - drawn.x - drawn.w).toFixed(2)},${+(box.y + box.h - drawn.y - drawn.h).toFixed(2)}` +
+            ` · plane ${+host.left.toFixed(2)},${+host.top.toFixed(2)} ${+host.width.toFixed(2)}×${+host.height.toFixed(2)}` +
+            ` · card style ${owner.style.width}×${owner.style.height} · devicePixelRatio ${devicePixelRatio}`;
+        }
       }
       if (s.dim !== (slot.dataset.nativeDim === "true")) dim++;
     }

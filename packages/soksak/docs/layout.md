@@ -522,7 +522,9 @@ constructor runs; call it to reject a stale saved layout before installing one.
 `commit(rects, draw)` runs before every layout change. It receives the rectangles
 on the device's pixel grid. The host calls `draw()` after preparing its views.
 Each callback draws the layout it received, once; a later grid change cannot
-replace that layout before it is drawn. A host that skips an older callback
+replace that layout before it is drawn, and a device pixel ratio that changes
+before the draw does not change the rectangles it writes. The view draws again
+on the new pixel grid when the ratio changes. A host that skips an older callback
 skips that layout. DOM and native presentation require separate synchronization
 in the host.
 

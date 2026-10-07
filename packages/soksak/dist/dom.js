@@ -223,6 +223,7 @@ export class SoksakView {
             dividers: fullscreen === null ? [...this.grid.dividers()] : [],
             width: this.grid.width,
             height: this.grid.height,
+            step: this.step,
         };
         let consumed = false;
         const drawn = () => {
@@ -242,7 +243,7 @@ export class SoksakView {
         }
         // The host places its own views on these rects, so they are the rects the
         // render will write, not the ones the grid computed.
-        const step = this.step;
+        const step = snapshot.step;
         const on = new Map();
         for (const [id, rect] of snapshot.rects)
             on.set(id, onGrid(rect, step));
@@ -273,9 +274,9 @@ export class SoksakView {
         // names it, and every reason is one it may name.
         if (host)
             this.settle();
-        // The width of one device pixel, read every render because a window moved to
-        // another display gets a different one.
-        const step = this.step;
+        // The width of one device pixel, read for every snapshot because a window moved
+        // to another display gets a different one.
+        const step = snapshot.step;
         // One measurement for every card. Requesting each card's rect separately
         // rebuilt the whole coordinate system once per card, on every pointer move
         // of a drag.

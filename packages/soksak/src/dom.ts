@@ -105,6 +105,13 @@ interface PaintSnapshot {
   dividers: readonly Divider[];
   width: number;
   height: number;
+  /**
+   * One device pixel when the snapshot was taken. The commit reports the rects on
+   * this grid and the paint writes them on it, so a ratio that changes between
+   * the two does not move the elements off the rects the host was given; the
+   * resolution listener draws again on the new grid.
+   */
+  step: number;
 }
 
 const DOUBLE_TAP_MS = 350;
@@ -303,6 +310,7 @@ export class SoksakView {
       dividers: fullscreen === null ? [...this.grid.dividers()] : [],
       width: this.grid.width,
       height: this.grid.height,
+      step: this.step,
     };
     let consumed = false;
     const drawn = (): void => {
@@ -320,7 +328,7 @@ export class SoksakView {
     }
     // The host places its own views on these rects, so they are the rects the
     // render will write, not the ones the grid computed.
-    const step = this.step;
+    const step = snapshot.step;
     const on = new Map<string, Rect>();
     for (const [id, rect] of snapshot.rects) on.set(id, onGrid(rect, step));
     // A draw `render()` hands over carries a change the host made, so the
@@ -350,9 +358,9 @@ export class SoksakView {
     // names it, and every reason is one it may name.
     if (host) this.settle();
 
-    // The width of one device pixel, read every render because a window moved to
-    // another display gets a different one.
-    const step = this.step;
+    // The width of one device pixel, read for every snapshot because a window moved
+    // to another display gets a different one.
+    const step = snapshot.step;
 
     // One measurement for every card. Requesting each card's rect separately
     // rebuilt the whole coordinate system once per card, on every pointer move

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F90: the layout view writes each layout on the device pixel grid its commit reported, so a ratio that changes before the draw no longer moves cards off the rects the host placed; the V7c failure text names the drawn card, its style, the plane and the device pixel ratio.
 - F91: the workbench gives no focus to a surface whose removal started while the focus waited for presentation, so closing a tab right after a card focus no longer logs `image view is detached`.
 - F89: the page's `W` verification row judges the centring of the window buttons within one device pixel, so it passes on a display at scale 1.
 - F88: the native title bar test judges the centring of the window buttons within one device pixel, so it passes on a display at backing scale 1.

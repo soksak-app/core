@@ -1606,6 +1606,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F90",
+    implementation: [
+      { file: "packages/soksak/src/dom.ts", symbol: "const step = snapshot.step;" },
+    ],
+    tests: [
+      { file: "packages/soksak/test/dom.test.mjs", id: "a paint writes the rects its commit reported when the ratio changes before it draws" },
+      { file: "e2e/resize.test.mjs", id: "maximising and restoring settle with the layout at the window size" },
+    ],
+    expected: "A layout is written on the pixel grid its commit reported, so the cards stay on the rects the host placed when the ratio changes before the draw.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },
