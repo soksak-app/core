@@ -290,7 +290,10 @@ export async function waitSurfaceCompositionDeclared(surfaceId) {
   await Promise.race([entry.composition, entry.ready.then(() => entry.composition)]);
 }
 
-/** mount된 surface의 카드가 settled된 뒤 그 native 입력 소유자에게 focus를 준다. */
+/**
+ * mount된 surface의 카드가 settled된 뒤 그 native 입력 소유자에게 focus를 준다. 기다리는 동안 탭이 닫혀 표면의 해제가
+ * 시작되면 해제된 모듈의 영역은 focus 를 받지 않으므로 focus 를 주지 않고 false 를 돌려준다.
+ */
 export async function focusSurface(surfaceId) {
   if (placeholders.has(surfaceId)) return false;
   const entry = mounted.get(surfaceId);
@@ -298,6 +301,7 @@ export async function focusSurface(surfaceId) {
   await entry.ready;
   if (typeof entry.module?.focus !== "function") return false;
   if (native) await hostSurfaces.waitPresented();
+  if (entry.disposed) return false;
   await entry.module.focus();
   return true;
 }

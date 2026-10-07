@@ -1595,6 +1595,17 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F91",
+    implementation: [
+      { file: "packages/workbench/surface-modules.js", symbol: "if (entry.disposed) return false;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-focus-dispose.test.mjs", id: "a surface removed while its focus waits for presentation takes no focus" },
+    ],
+    expected: "A surface removed while its focus waits takes no focus, and the disposed module is not asked for focus.",
+    levels: ["unit"],
+  },
+  {
     id: "F45",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },

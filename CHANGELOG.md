@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F91: the workbench gives no focus to a surface whose removal started while the focus waited for presentation, so closing a tab right after a card focus no longer logs `image view is detached`.
 - F89: the page's `W` verification row judges the centring of the window buttons within one device pixel, so it passes on a display at scale 1.
 - F88: the native title bar test judges the centring of the window buttons within one device pixel, so it passes on a display at backing scale 1.
 - F46.1: a refused native pointer error of the window checks names its phase, button, position and window, and the cleanup prints each open press it ended with the time it waited for the buttons to be released.
