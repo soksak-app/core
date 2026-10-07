@@ -103,6 +103,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
     "native/darwin/tests/presentation_order_test.m",
     "native/darwin/tests/surface_layout_test.m",
     "native/darwin/tests/webview_geometry_test.m",
+    "native/darwin/tests/window_cursor_rects_test.m",
     "native/darwin/tests/webview_inspector_test.m",
     "native/darwin/tests/surface_host_test.m",
   ], { sharedTests: true }),
@@ -1712,6 +1713,17 @@ const FEATURE_LINKS = [
     ],
     expected: "The text pointer stays over terminal text during slow pointer movement on both hosts.",
     levels: ["application"],
+  },
+  {
+    id: "F95.1",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "[main.window disableCursorRects];" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_cursor_rects_test.m", id: "the window composition turns cursor rectangles off" },
+    ],
+    expected: "The window composition keeps cursor rectangles off through window changes.",
+    levels: ["native"],
   },
   {
     id: "F46",

@@ -243,12 +243,6 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     return nil;
 }
 
-// 선택·편집할 수 있는 NSTextView 는 자기 영역 전체에 I-빔 커서 영역을 둔다. 창이 키 창이 될 때 AppKit 이 커서
-// 영역을 다시 만들면 그 I-빔이 영역 위의 페이지 요소(스크롤바 손잡이 등)의 커서를 덮는다. 포인터는 이 뷰를
-// 지나 페이지로 가므로 커서도 페이지가 정한다.
-- (void)resetCursorRects {
-}
-
 // NSTextView 는 updateTrackingAreas 에서 I-빔 커서 추적 영역을 다시 만든다.
 // 이 뷰는 포인터 적중 대상이 아니므로 그 영역을 제거하고 페이지의 커서를 유지한다.
 - (void)updateTrackingAreas {
