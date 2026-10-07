@@ -75,15 +75,15 @@ language-test: native-darwin
 	@node scripts/language-test-adapters.mjs scripts/language-test-cases.json
 
 # Rust 패키지의 각 테스트를 새 프로세스에서 혼자 실행한다. 다른 테스트가 만든 상태나 시간 순서에 기대는 테스트를 찾는다.
-# 첫 실패에서 테스트 이름을 보고한다. MANIFEST 는 패키지가 속한 작업 공간의 Cargo.toml 이다.
+# 첫 실패에서 테스트 이름을 보고한다. MANIFEST 는 패키지가 속한 작업 공간의 Cargo.toml 이고 FEATURES 는 cargo 의 --features 값이다.
 MANIFEST ?= Cargo.toml
 rust-tests-alone:
-	@case "$(PACKAGE)" in '') echo "rust-tests-alone requires PACKAGE=<cargo package> [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
-	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) --no-run
-	@names=$$(cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) -- --list 2>/dev/null | sed -n 's/: test$$//p'); \
+	@case "$(PACKAGE)" in '') echo "rust-tests-alone requires PACKAGE=<cargo package> [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
+	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
+	@names=$$(cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) -- --list 2>/dev/null | sed -n 's/: test$$//p'); \
 	  count=0; for name in $$names; do \
 	    count=$$((count + 1)); \
-	    cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) -- --exact "$$name" > /dev/null 2>&1 \
+	    cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) -- --exact "$$name" > /dev/null 2>&1 \
 	      || { echo "FAIL: $(PACKAGE) $$name fails when it runs alone (test $$count)" >&2; exit 1; }; \
 	  done; \
 	  [ $$count -gt 0 ] || { echo "rust-tests-alone found no tests in $(PACKAGE)" >&2; exit 1; }; \
@@ -92,29 +92,31 @@ rust-tests-alone:
 # Rust 패키지의 테스트를 COUNT 번 차례로 실행한다. TEST 를 주면 그 이름의 테스트만 실행한다.
 # 간헐 실패를 재현하고 수용하는 대상이다. 첫 실패에서 실행 번호, 시스템 부하, 그 실행의 출력을 보고한다.
 rust-repeat:
-	@case "$(PACKAGE)" in '') echo "rust-repeat requires PACKAGE=<cargo package> COUNT=<n> [TEST=<name>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
+	@case "$(PACKAGE)" in '') echo "rust-repeat requires PACKAGE=<cargo package> COUNT=<n> [TEST=<name>] [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "rust-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
-	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) --no-run
+	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
 	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
 	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    if [ -n "$(TEST)" ]; then cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) -- --exact "$(TEST)" > "$$output" 2>&1; \
-	    else cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) > "$$output" 2>&1; fi \
+	    if [ -n "$(TEST)" ]; then cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) -- --exact "$(TEST)" > "$$output" 2>&1; \
+	    else cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) > "$$output" 2>&1; fi \
 	      || { cat "$$output"; echo "FAIL: $(PACKAGE) $(TEST) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
 	    if [ -n "$(TEST)" ] && ! grep -q "1 passed" "$$output"; then cat "$$output"; echo "FAIL: $(PACKAGE) has no test named $(TEST)" >&2; exit 1; fi; \
 	    run=$$((run + 1)); \
 	  done; \
 	  echo "$(PACKAGE) $(TEST): $(COUNT) of $(COUNT) runs pass"
 
-# Go 패키지의 테스트를 COUNT 번 차례로 실행한다. TEST 는 go test -run 정규식이다.
+# Go 패키지의 테스트를 COUNT 번 차례로 실행한다. TEST 는 go test -run 정규식이고 TAGS 는 go test -tags 값이다.
+# 빌드된 테스트 파일이 없거나(build tag) 이름이 맞는 테스트가 없는 실행은 실패다.
 # 간헐 실패를 재현하고 수용하는 대상이다. 첫 실패에서 실행 번호, 시스템 부하, 그 실행의 출력을 보고한다.
 go-repeat:
-	@case "$(PACKAGE)" in '') echo "go-repeat requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>]" >&2; exit 2;; esac
+	@case "$(PACKAGE)" in '') echo "go-repeat requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "go-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
 	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    $(GO_ENV) go test -count=1 -ldflags "$(GO_LINK)" $(if $(TEST),-run '$(TEST)') $(PACKAGE) > "$$output" 2>&1 \
+	    $(GO_ENV) go test -count=1 $(if $(TAGS),-tags '$(TAGS)') -ldflags "$(GO_LINK)" $(if $(TEST),-run '$(TEST)') $(PACKAGE) > "$$output" 2>&1 \
 	      || { cat "$$output"; echo "FAIL: $(PACKAGE) $(TEST) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
 	    if grep -q "no tests to run" "$$output"; then cat "$$output"; echo "FAIL: $(PACKAGE) has no test matching $(TEST)" >&2; exit 1; fi; \
+	    if grep -q "no test files" "$$output"; then cat "$$output"; echo "FAIL: $(PACKAGE) has no test files built with tags '$(TAGS)'" >&2; exit 1; fi; \
 	    run=$$((run + 1)); \
 	  done; \
 	  echo "$(PACKAGE) $(TEST): $(COUNT) of $(COUNT) runs pass"

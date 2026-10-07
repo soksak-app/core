@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F93: `make go-repeat`는 `TAGS`를 받고 빌드된 테스트 파일이 없으면 실패하며, `make rust-repeat`와 `make rust-tests-alone`은 `FEATURES`를 받으므로 `diagnostics` 태그나 feature 뒤의 테스트를 반복할 수 있다.
 - F73.1: 창 검사는 `s.record`로 녹화를 시작하며, 이것은 stop을 한 번 보내고 그 오류를 유지한다. 세션 정리는 멈추지 않은 녹화를 멈추고 폴더를 지운다.
 - F90: 배치 뷰는 각 배치를 그 commit이 알린 device pixel 격자로 쓰므로, 그리기 전에 바뀐 비율이 더 이상 카드를 host가 놓은 사각형 밖으로 옮기지 않는다. V7c 실패 문장은 그려진 카드, 그 style, 판, device pixel ratio를 밝힌다.
 - F91: 워크벤치는 포커스가 표시를 기다리는 동안 제거가 시작된 표면에 포커스를 주지 않으므로, 카드 포커스 직후 탭을 닫아도 더 이상 `image view is detached`를 기록하지 않는다.

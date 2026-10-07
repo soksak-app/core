@@ -29,7 +29,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 
 // 기존 구성요소 연결도 파일 목록으로 유지한다. 동작 증거로 해석하지 않는다.
 const MATRIX = [
-  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/node-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs"], { testLanguage: "js-ts" }),
+  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/language-repeat.test.mjs", "scripts/test/node-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs"], { testLanguage: "js-ts" }),
   lane("native library pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs"], { testLanguage: "js-ts" }),
   lane("workspace audit scripts", "js-ts", [
     "scripts/check-boundaries.mjs",
@@ -1628,6 +1628,18 @@ const FEATURE_LINKS = [
     ],
     expected: "A window check sends one stop for each recording, keeps that stop's error, and leaves no recording folder.",
     levels: ["unit", "application"],
+  },
+  {
+    id: "F93",
+    implementation: [
+      { file: "Makefile", symbol: "has no test files built with tags" },
+    ],
+    tests: [
+      { file: "scripts/test/language-repeat.test.mjs", id: "go repeat fails a package whose test files are not built" },
+      { file: "scripts/test/language-repeat.test.mjs", id: "rust repeat passes its features to every cargo test" },
+    ],
+    expected: "The Go and Rust repeat targets run tests behind build tags and features and fail when no test ran.",
+    levels: ["unit"],
   },
   {
     id: "F46",
