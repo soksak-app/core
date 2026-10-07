@@ -1643,6 +1643,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F92",
+    implementation: [
+      { file: "packages/workbench/layout-queue.js", symbol: "export function nextTask" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/layout-queue.test.mjs", id: "a prepared draw runs in the next task, not in the checkpoint that answered its preparation" },
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+    ],
+    expected: "A prepared layout is drawn in the next task, so a drag shows a new layout every display frame at 60 Hz.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F46",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "async releasePresses()" },

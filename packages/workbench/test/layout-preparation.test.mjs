@@ -33,7 +33,7 @@ test("the document waits for native preparation before drawing and retains the p
   assert.deepEqual(f.calls, ["prepare"], "the document drew before native preparation answered");
   f.prepared.resolve([]);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(f.calls, ["prepare"], "the document drew before the animation frame");
+  assert.deepEqual(f.calls, ["prepare"], "the document drew before its draw task");
   let completed = false;
   done.then(() => { completed = true; });
   f.frame(); await f.drawn.promise; await Promise.resolve();
@@ -70,8 +70,8 @@ test("a changed layout epoch cancels an old draw after pending native preparatio
 
 // WebKit 의 관찰 round 는 callback 마다 microtask checkpoint 를 실행하고, 그 뒤 이미 전달한 깊이 이하의 요소 크기가
 // 바뀌었으면 그 관찰을 다음 frame 으로 미루고 loop 오류를 낸다. 준비 응답이 그 checkpoint 에서 이행되어도 그리기는
-// 다음 animation frame 에서 실행되어야 한다. 그 frame 은 다음 관찰 round 보다 먼저 실행된다(F43).
-test("a prepared draw runs at the next animation frame when its preparation is answered inside an observation round", async () => {
+// 그 round 밖의 다음 task 에서 실행되어야 한다(F43).
+test("a prepared draw runs after the observation round when its preparation is answered inside it", async () => {
   const frames = [];
   const answered = Promise.withResolvers();
   // 판을 비우면 파일 트리를 담은 카드가 사라지고 트리 컨테이너의 크기가 0 이 된다.
@@ -97,10 +97,10 @@ test("a prepared draw runs at the next animation frame when its preparation is a
   assert.equal(tree.height, delivered, "the draw changed the tree container inside the observation round");
   for (const run of frames.splice(0)) run();
   await done;
-  assert.equal(tree.height, 0, "the draw did not run at the animation frame");
+  assert.equal(tree.height, 0, "the draw did not run in its task");
 });
 
-test("a changed layout epoch cancels a draw that waits for its animation frame", async () => {
+test("a changed layout epoch cancels a draw that waits for its task", async () => {
   const f = fixture();
   const done = f.run();
   f.prepared.resolve([]);

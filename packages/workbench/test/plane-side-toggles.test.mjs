@@ -1,6 +1,6 @@
 // 카드 머리의 사이드바 단추는 판을 다시 그려도 문서에서 빠지지 않아야 한다. WebKit 은 누름을 받은 노드가 문서에서
 // 빠지면 그 누름의 click 대상을 지우고(EventHandler::nodeWillBeRemoved), 뗌에서 click 을 보내지 않는다. insertBefore 로
-// 이미 있는 노드를 옮겨도 먼저 빠진다. 접기 명령의 배치는 준비 뒤 animation frame 에서 그려지므로(F43), 누름과 뗌
+// 이미 있는 노드를 옮겨도 먼저 빠진다. 접기 명령의 배치는 준비 뒤 다음 task 에서 그려지므로(F43, F92), 누름과 뗌
 // 사이에 그 그리기가 오면 단추의 click 이 사라진다(F65).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -63,7 +63,7 @@ test("a draw keeps the pressed card header fold control in the document", { time
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const plane = await import("../plane.js");
   try {
-    // 수신자는 그리기 함수를 보관하고 즉시 그리지 않는다. 네이티브 준비와 animation frame 을 기다리는 페이지와 같다.
+    // 수신자는 그리기 함수를 보관하고 즉시 그리지 않는다. 네이티브 준비와 다음 task 를 기다리는 페이지와 같다.
     let held = null;
     plane.onLayout((made, draw) => { held = draw; });
     const drawHeld = () => { const draw = held; held = null; draw(); };

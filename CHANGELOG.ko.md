@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F92: 페이지는 준비된 배치를 다음 animation frame 대신 다음 task에서 그리므로 host의 표시 기다림이 시작하는 rendering update가 그 그리기를 담는다. 60 Hz 디스플레이에서 끌기는 다시 매 frame 새 배치를 보인다(트랜잭션 간격 33.4 ms 대신 16.7 ms).
 - F92(측정): 녹화의 layout trace는 페이지가 그린 DOM의 표시를 기다리도록 host에 요청한 시각인 `requested`를 기록하고, 끌기 검사는 배치 트랜잭션의 시작 간격과 단계를 출력한다.
 - F93: `make go-repeat`는 `TAGS`를 받고 빌드된 테스트 파일이 없으면 실패하며, `make rust-repeat`와 `make rust-tests-alone`은 `FEATURES`를 받으므로 `diagnostics` 태그나 feature 뒤의 테스트를 반복할 수 있다.
 - F73.1: 창 검사는 `s.record`로 녹화를 시작하며, 이것은 stop을 한 번 보내고 그 오류를 유지한다. 세션 정리는 멈추지 않은 녹화를 멈추고 폴더를 지운다.

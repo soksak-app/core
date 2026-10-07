@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import test, { mock } from "node:test";
-import { animationFrame, createLayoutQueue } from "../layout-queue.js";
+import test from "node:test";
+import { createLayoutQueue, nextTask } from "../layout-queue.js";
 
 // 실패는 failed 가 보고하므로 요청의 답은 그 실패를 다시 거절로 주지 않고 실패한 상태만 준다(docs/spec/hosts.md#application-log).
 test("a failed presentation answers its request as failed, reports failure, and permits the next drag", async () => {
@@ -56,35 +56,19 @@ test("a newer waiting layout replaces the older waiting layout and reports it", 
   assert.deepEqual(superseded, [old]);
 });
 
-test("an animation frame wait fails with its own error when the document runs no frame", { timeout: 5000 }, async (t) => {
-  mock.timers.enable({ apis: ["setTimeout"] });
-  t.after(() => mock.timers.reset());
-  let settled = null;
-  const waiting = animationFrame(() => {}, () => {}).then(() => { settled = "frame"; }, (error) => { settled = error; });
-  mock.timers.tick(9999);
-  await Promise.resolve();
-  assert.equal(settled, null, "the frame wait failed before 10 seconds");
-  mock.timers.tick(1);
-  await waiting;
-  assert.ok(settled instanceof Error && /the main document ran no animation frame within 10000ms/.test(settled.message),
-    String(settled));
-});
-
-test("an animation frame wait runs its work in the frame callback and resolves with the frame time", { timeout: 5000 }, async () => {
-  let frame;
+// 준비 응답은 어느 microtask checkpoint 에서든 이행될 수 있으므로 그리기는 그 checkpoint 가 아니라 다음 task 에서 실행한다.
+// task 는 렌더링 갱신과 그 관찰 round 사이에 실행되지 않고, animation frame 처럼 화면 갱신을 기다리지도 않는다(F43, F92).
+test("a prepared draw runs in the next task, not in the checkpoint that answered its preparation", { timeout: 5000 }, async () => {
   const calls = [];
-  const waiting = animationFrame(() => calls.push("work"), (callback) => { frame = callback; });
-  assert.deepEqual(calls, [], "the work ran before the frame");
-  frame(16.7);
-  assert.deepEqual(calls, ["work"], "the work did not run in the frame callback");
-  assert.equal(await waiting, 16.7);
+  const waiting = nextTask(() => calls.push("work"));
+  for (let checkpoint = 0; checkpoint < 5; checkpoint++) await Promise.resolve();
+  assert.deepEqual(calls, [], "the work ran in the microtask checkpoint that scheduled it");
+  await waiting;
+  assert.deepEqual(calls, ["work"]);
 });
 
-test("an animation frame wait fails with the error of its work", { timeout: 5000 }, async () => {
-  let frame;
-  const waiting = animationFrame(() => { throw new Error("injected draw failure"); }, (callback) => { frame = callback; });
-  frame(16.7);
-  await assert.rejects(waiting, /injected draw failure/);
+test("a prepared draw that throws fails its task wait with that error", { timeout: 5000 }, async () => {
+  await assert.rejects(nextTask(() => { throw new Error("injected draw failure"); }), /injected draw failure/);
 });
 
 // 앞선 탭 닫기가 예약한 배치를 기다리는 동안 다음 탭 닫기가 표면을 해제하고 더 새 배치를 예약하면, 기다리던 배치는

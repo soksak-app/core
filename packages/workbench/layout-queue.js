@@ -65,12 +65,10 @@ export function createLayoutQueue({ failed, superseded }) {
 
 /**
  * 배치 하나를 그린다. 네이티브 준비 응답(prepare)이 트랜잭션의 시작과 적용을 확인한 뒤 DOM 을 그린다(draw). 요청
- * 시작만으로 준비를 확정하면 새 DOM 이 이전 네이티브 영역 아래에 먼저 표시된다. 그리기는 준비 뒤 다음 animation frame 의
- * callback 에서 실행한다(frame(work)). 준비 응답은 어느 microtask checkpoint 에서든 이행될 수 있고, ResizeObserver
- * callback 의 checkpoint 에서 그리면 관찰 round 가 이미 전달한 요소의 크기가 바뀌어 WebKit 이 loop 오류를 낸다. animation
- * frame 은 그 frame 의 관찰 round 보다 먼저 실행되고, 그 frame 이 그린 DOM 을 화면에 낸다(F43). 그린 뒤에는 해당 호스트
- * 표시(presented)까지 기다려, 다음 배치가 DOM 을 먼저 교체하지 못하게 한다. 준비하는 동안이나 frame 을 기다리는 동안
- * current() 가 epoch 와 달라지면 그리지 않는다.
+ * 시작만으로 준비를 확정하면 새 DOM 이 이전 네이티브 영역 아래에 먼저 표시된다. 그리기는 준비 뒤 다음 task 에서
+ * 실행한다(frame(work), nextTask). 준비 응답이 이행된 microtask checkpoint 는 ResizeObserver callback 의 것일 수 있고,
+ * task 는 관찰 round 밖에서 실행된다(F43). 그린 뒤에는 해당 호스트 표시(presented)까지 기다려, 다음 배치가 DOM 을 먼저
+ * 교체하지 못하게 한다. 준비하는 동안이나 그리기를 기다리는 동안 current() 가 epoch 와 달라지면 그리지 않는다.
  */
 export async function drawPrepared({ epoch, current, prepare, draw, frame, presented }) {
   if (epoch !== current()) return;
@@ -86,26 +84,24 @@ export async function drawPrepared({ epoch, current, prepare, draw, frame, prese
   await presented();
 }
 
-/** 문서가 animation frame 하나를 실행하기를 기다리는 시간(ms). 호스트의 표시 한도와 같다(docs/spec/native-surfaces.md). */
-const FRAME_TIMEOUT = 10_000;
-
 /**
- * 다음 animation frame 의 callback 에서 work 를 실행하고 그 frame 의 시각으로 끝난다. work 가 던지면 그 오류로 실패한다.
- * 문서가 frame 을 실행하지 않으면(WebKit 이 렌더링을 멈춘 경우) 이 기다림의 오류로 실패하여, 배치와 그 배치를
- * 기다리는 명령이 끝없이 기다리지 않게 한다.
+ * 다음 task 에서 work 를 실행하고 끝난다. work 가 던지면 그 오류로 실패한다. 준비 응답은 어느 microtask checkpoint 에서든
+ * 이행될 수 있고, ResizeObserver callback 의 checkpoint 에서 그리면 관찰 round 가 이미 전달한 요소의 크기가 바뀌어 WebKit 이
+ * loop 오류를 낸다(F43). task 는 렌더링 갱신과 그 관찰 round 사이에 실행되지 않는다. animation frame 과 달리 화면 갱신을
+ * 기다리지 않으므로, 호스트가 표시를 기다리며 일으키는 렌더링 갱신이 이 그리기를 담는다(F92).
  */
-export function animationFrame(work, request = requestAnimationFrame) {
+export function nextTask(work) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`the main document ran no animation frame within ${FRAME_TIMEOUT}ms`)), FRAME_TIMEOUT);
-    request((time) => {
-      clearTimeout(timer);
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
       try {
         work();
-        resolve(time);
+        resolve();
       } catch (error) {
         reject(error);
       }
-    });
+    };
+    channel.port2.postMessage(null);
   });
 }

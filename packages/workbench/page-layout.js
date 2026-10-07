@@ -1,7 +1,7 @@
 // 메인 문서(index.html)의 오류 표시와 배치 배선. 배치 대기열이 판의 배치, 판이 없는 창의 첫 행, 프로젝트 전환의 빈 판을
 // 하나씩 표시하고, 그 실패를 받아 오류 표시로 보인다. 그 배치를 기다리는 프로젝트 전환과 코어 명령은 같은 실패를 다시
 // 쓰지 않는다(docs/spec/hosts.md#application-log). 문서, 호스트, 판, 컴포지터는 호출자가 넘긴다.
-import { animationFrame, createLayoutQueue, drawPrepared } from "./layout-queue.js";
+import { createLayoutQueue, drawPrepared, nextTask } from "./layout-queue.js";
 import { frameLayout } from "./frame-text.js";
 import { trace } from "./performance.js";
 import { showError as showShownError } from "./shown-errors.js";
@@ -112,7 +112,7 @@ export function createPageLayout({
       const epoch = ++layoutEpoch;
       const layout = frameLayout({
         factor: textSize(), publishAhead: compositor.publishAhead, publish: compositor.publish,
-        frame: animationFrame, clearPlane: plane.clear, show,
+        frame: nextTask, clearPlane: plane.clear, show,
       });
       layouts.run(() => drawPrepared({ epoch, current: () => layoutEpoch, ...layout }));
       // 판을 비운 배치가 실패하면 대기열의 failed 가 그 실패를 보였다.
@@ -133,7 +133,7 @@ export function createPageLayout({
           return result;
         },
         draw: () => { mark("draw"); draw(); mark("drawn"); },
-        frame: async (work) => { await animationFrame(work); mark("frame"); },
+        frame: async (work) => { await nextTask(work); mark("frame"); },
         presented: async () => { await rendered(); mark("presented"); },
       }));
     },
@@ -149,7 +149,7 @@ export function createPageLayout({
       }
       const epoch = layoutEpoch;
       const layout = frameLayout({
-        factor: textSize(), publishAhead: compositor.publishAhead, publish: compositor.publish, frame: animationFrame,
+        factor: textSize(), publishAhead: compositor.publishAhead, publish: compositor.publish, frame: nextTask,
       });
       layouts.run(() => drawPrepared({ epoch, current: () => layoutEpoch, ...layout }));
     },

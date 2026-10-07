@@ -319,7 +319,7 @@ test("a project removed from the registry by another window ends in the window t
 // WebKit 은 호스트 답이 이행한 promise 의 반응을 다음 microtask checkpoint 에서 실행하고, 그 checkpoint 는 다음
 // rendering update 의 ResizeObserver callback 뒤일 수 있다. 라이브러리로의 화면 전환이 그 반응에서 일어나면 관찰 round 가
 // 이미 전달한 작업 영역의 요소(파일 트리, 터미널 화면)가 0x0 이 되어 loop 오류가 난다(F43). 전환은 판을 비우는 그리기,
-// 곧 관찰 round 보다 먼저 실행되는 animation frame 에서 일어나야 한다.
+// 곧 관찰 round 밖에서 실행되는 다음 task 에서 일어나야 한다.
 test("browsing shows the library in the draw that empties the plane, not where a later host reply resolves", async () => {
   await projects.initialise(store);
   await projects.activate(PROJECT.id);
