@@ -923,7 +923,7 @@ impl<O: Owner> Sidecars<O> {
                 let closing = state
                     .closing
                     .get(&name)
-                    .map(|surfaces| surfaces.clone())
+                    .cloned()
                     // 기본값: closing 에 이 사이드카가 없으면 답을 기다리는 닫기가 없으므로 뺀 닫기도 없다.
                     .unwrap_or_default();
                 state.stopping.insert(
