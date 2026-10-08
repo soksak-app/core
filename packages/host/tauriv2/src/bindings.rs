@@ -54,6 +54,7 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         window_controls,
         sidecar_send,
         sidecars_retain,
+        sidecars_replace,
         theme,
         set_theme,
         set_menu_language,
@@ -318,6 +319,19 @@ struct RetainedSurface {
 #[derive(serde::Deserialize)]
 struct RetainRequest {
     surfaces: Vec<RetainedSurface>,
+}
+
+#[derive(serde::Deserialize)]
+struct ReplaceRequest {
+    sidecar: String,
+}
+
+/// Replaces the outdated persistent service of a sidecar (docs/spec/terminal-runtime.md#updates). The call waits
+/// for the service, so it is an async command.
+#[tauri::command(async)]
+fn sidecars_replace(window: Window, request: Argument<ReplaceRequest>) -> Result<(), String> {
+    let Argument(request) = request;
+    window.state::<WindowSidecars>().replace(&request.sidecar)
 }
 
 /// 영속 사이드카 서비스에서 어떤 레이아웃에도 없는 표면의 세션을 닫고 닫은 수를 반환한다

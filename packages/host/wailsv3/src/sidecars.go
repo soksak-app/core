@@ -145,6 +145,9 @@ type Sidecars struct {
 	// unannouncedLoss 는 연결이 끊겼고 아직 소유 표면에 알리지 않은 영속 사이드카다(V5-106).
 	// 끊김을 알린 시작이 이 기록을 소진한다 — 첫 시작은 알림이 없다.
 	unannouncedLoss map[string]bool
+	// replacing holds the persistent services that Replace closes: the running and the installed version, which the
+	// reconnection after the close writes to the log.
+	replacing map[string]replacement
 	// basenames 는 영속 sidecar 실행 파일의 basename 과 그 sidecar 이름이다.
 	basenames   map[string]string
 	StopTimeout time.Duration // 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
@@ -189,6 +192,7 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		owners:          map[string]SidecarOwner{},
 		roots:           map[string]string{},
 		unannouncedLoss: map[string]bool{},
+		replacing:       map[string]replacement{},
 		basenames:       map[string]string{},
 		StopTimeout:     5 * time.Second,
 		ReadyTimeout:    30 * time.Second,
@@ -435,6 +439,7 @@ func (c *Sidecars) Close(surface string) {
 	if c.closeSurface(surface) {
 		c.closingChanged()
 	}
+	c.replaceIdle()
 }
 
 // closeSurface 는 surface 의 closed 를 실행 중인 사이드카에 보내고, 응답을 기다리는 표면을 기록했으면 true 를 반환한다.
@@ -527,6 +532,60 @@ func (c *Sidecars) outdated(process *sidecar) bool {
 	installed := c.versions[process.name]
 	c.declarations.RUnlock()
 	return process.version == nil || *process.version != installed
+}
+
+// replacement is the versions of a persistent service that is being replaced.
+type replacement struct {
+	running   *string
+	installed string
+}
+
+// Replace replaces the persistent service of the sidecar name, whose `hello` version differs from the installed
+// version: it sends close-owner and shutdown, closes the connection, and the reconnection that follows starts the
+// installed executable through the creation path and notifies the surfaces that sent to the sidecar
+// (docs/spec/terminal-runtime.md#updates). A sidecar without a running service of another version is refused.
+func (c *Sidecars) Replace(ctx context.Context, name string) error {
+	c.mu.Lock()
+	process, running := c.running[name]
+	if c.stopped || !running || !c.outdated(process) {
+		c.mu.Unlock()
+		return fmt.Errorf("sidecar %s: no running service of another version than the installed one", name)
+	}
+	if _, replacing := c.replacing[name]; replacing {
+		c.mu.Unlock()
+		return fmt.Errorf("sidecar %s: a replacement is running", name)
+	}
+	c.declarations.RLock()
+	installed := c.versions[name]
+	c.declarations.RUnlock()
+	c.replacing[name] = replacement{running: process.version, installed: installed}
+	c.mu.Unlock()
+	if err := c.closePersistentOwner(process, ctx); err != nil {
+		c.mu.Lock()
+		delete(c.replacing, name)
+		c.mu.Unlock()
+		return fmt.Errorf("sidecar %s: replace: %w", name, err)
+	}
+	return nil
+}
+
+// replaceIdle replaces each outdated service that has no open surface of this application.
+func (c *Sidecars) replaceIdle() {
+	for _, item := range c.Outdated() {
+		c.mu.Lock()
+		_, busy := c.replacing[item.Sidecar]
+		c.mu.Unlock()
+		if item.Sessions != 0 || busy {
+			continue
+		}
+		go func(name string) {
+			ctx, cancel := context.WithTimeout(context.Background(), c.StopTimeout)
+			defer cancel()
+			if err := c.Replace(ctx, name); err != nil {
+				LogError("replace", err)
+			}
+		}(item.Sidecar)
+	}
 }
 
 // closingChanged 는 closing 이 바뀐 것을 알린다. 잠금 밖에서 호출한다.
@@ -1590,11 +1649,24 @@ func (c *Sidecars) revivePersistent(name string) {
 		}
 		announced, failure = c.reviveAttempt(name)
 	}
+	c.mu.Lock()
+	replaced, replacing := c.replacing[name]
+	delete(c.replacing, name)
+	c.mu.Unlock()
 	switch {
 	case failure != nil:
 		// 시작에 실패했다 — 끊김 기록은 남겨 다음 시작이 알린다.
 		LogError("sidecar "+name, fmt.Sprintf("connection lost; restart failed: %v", failure))
 		c.notifyConnection(name, failure)
+	case announced && replacing:
+		// The replacement closed the connection on purpose and the installed service started: an expected state.
+		running := "none"
+		if replaced.running != nil {
+			running = *replaced.running
+		}
+		log.Printf("sidecar %s: service %s replaced by %s", name, running, replaced.installed)
+		c.notifyConnection(name, nil)
+		c.closingChanged()
 	case announced:
 		// 다른 경로(전송)가 이미 다시 시작했으면 알림도 그 호출이 보냈다.
 		LogError("sidecar "+name, "connection lost; restarted")

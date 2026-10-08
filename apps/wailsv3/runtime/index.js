@@ -74,6 +74,7 @@ const METHOD = {
   documentDetach: "DocumentDetach",
   sidecarSend: "SidecarSend",
   sidecarsRetain: "SidecarsRetain",
+  sidecarsReplace: "SidecarsReplace",
   clipboardRead: "ClipboardRead",
   linkOpen: "LinkOpen",
   notify: "Notify",

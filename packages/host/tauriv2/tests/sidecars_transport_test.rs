@@ -3,6 +3,7 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -1696,4 +1697,162 @@ fn a_lost_connection_is_reported_as_an_error_line() {
             "connection lost; restart failed: refused".to_string()
         ))
     );
+}
+
+/// A fake persistent service that the host replaces: its first connection reports the old version, acknowledges
+/// close-owner and shutdown and then ends; its second connection reports the installed version.
+struct ReplaceService {
+    /// The top-level operations that the first connection received (a message of a surface has none).
+    operations: Arc<Mutex<Vec<String>>>,
+    /// Receives one value when the second connection is accepted.
+    second: Receiver<()>,
+}
+
+fn serve_replace_service(config_directory: &Path, old: &str, installed: &str) -> ReplaceService {
+    let service_directory = config_directory.join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("replace.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "replace-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let operations = Arc::new(Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&operations);
+    let (second_sender, second) = channel();
+    let (old, installed) = (old.to_string(), installed.to_string());
+    thread::spawn(move || {
+        for index in 0.. {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let first = index == 0;
+            let version = if first {
+                old.clone()
+            } else {
+                installed.clone()
+            };
+            if !first {
+                let _ = second_sender.send(());
+            }
+            let recorded = Arc::clone(&recorded);
+            thread::spawn(move || {
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut line = String::new();
+                while reader.read_line(&mut line).unwrap_or(0) > 0 {
+                    let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                    let operation = request["operation"].as_str().unwrap_or("").to_string();
+                    if first {
+                        recorded.lock().unwrap().push(operation.clone());
+                    }
+                    let reply = match operation.as_str() {
+                        "hello" => serde_json::json!({"operation": "hello", "protocol": 1, "ok": true, "version": version}).to_string(),
+                        "close-owner" => serde_json::json!({"operation": "closed-owner", "request": request["request"], "ok": true}).to_string(),
+                        "shutdown" => serde_json::json!({"operation": "shutdown", "request": request["request"], "ok": true}).to_string(),
+                        _ => line.trim_end().to_string(),
+                    };
+                    if writeln!(stream, "{reply}").is_err() || operation == "shutdown" {
+                        return;
+                    }
+                    line.clear();
+                }
+            });
+        }
+    });
+    ReplaceService { operations, second }
+}
+
+fn replace_sidecars(config_directory: &Path, executable_directory: &Path) -> Sidecars<FakeOwner> {
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let mut declarations = declare(&fixture, executable_directory);
+    declarations[0].version = "0.0.7".to_string();
+    Sidecars::new(&declarations, config_directory.to_path_buf()).unwrap()
+}
+
+// contract: sidecars-transport.replace.replaces-an-outdated-service
+#[test]
+fn an_outdated_service_is_replaced() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service = serve_replace_service(config_directory.path(), "0.0.6", "0.0.7");
+    let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
+    let (owner, events) = owner("replace", "/projects/replace");
+    sidecars
+        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv_timeout(STALL).unwrap();
+    assert_eq!(
+        sidecars.outdated(),
+        vec![OutdatedSidecar {
+            sidecar: ECHO.to_string(),
+            running: Some("0.0.6".to_string()),
+            installed: "0.0.7".to_string(),
+            sessions: 1,
+        }]
+    );
+    sidecars.replace(ECHO).unwrap();
+    // The surface that sent to the sidecar receives the connection notice of the new service.
+    let notice = events.recv_timeout(STALL).unwrap();
+    assert_eq!(notice.surface, "surface-1");
+    let event: serde_json::Value = serde_json::from_str(notice.body.get()).unwrap();
+    assert_eq!(
+        (event["event"].as_str(), event["connected"].as_bool()),
+        (Some("connection"), Some(true))
+    );
+    service.second.recv_timeout(STALL).unwrap();
+    assert!(sidecars.outdated().is_empty());
+    assert_eq!(
+        *service.operations.lock().unwrap(),
+        ["hello", "", "close-owner", "shutdown"]
+    );
+    sidecars.stop();
+}
+
+// contract: sidecars-transport.replace.refuses-a-service-that-is-not-outdated
+#[test]
+fn a_service_that_is_not_outdated_is_not_replaced() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service = serve_replace_service(config_directory.path(), "0.0.7", "0.0.7");
+    let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
+    let error = sidecars.replace(ECHO).unwrap_err();
+    assert!(error.contains(ECHO), "{error}");
+    let (owner, events) = owner("replace", "/projects/replace");
+    sidecars
+        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv_timeout(STALL).unwrap();
+    let error = sidecars.replace(ECHO).unwrap_err();
+    assert!(error.contains(ECHO), "{error}");
+    assert_eq!(*service.operations.lock().unwrap(), ["hello", ""]);
+    sidecars.stop();
+}
+
+// contract: sidecars-transport.replace.runs-when-sessions-reach-zero
+#[test]
+fn an_outdated_service_is_replaced_when_its_sessions_end() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service = serve_replace_service(config_directory.path(), "0.0.6", "0.0.7");
+    let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
+    let (owner, events) = owner("replace", "/projects/replace");
+    sidecars
+        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv_timeout(STALL).unwrap();
+    sidecars.retain(&owner, &|_| false).unwrap();
+    service.second.recv_timeout(STALL).unwrap();
+    let operations = service.operations.lock().unwrap().clone();
+    assert_eq!(
+        &operations[operations.len() - 2..],
+        ["close-owner", "shutdown"]
+    );
+    sidecars.stop();
 }

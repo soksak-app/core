@@ -365,6 +365,24 @@ func (h *Host) SidecarsRetain(ctx context.Context, reqJSON json.RawMessage) (Ret
 	return RetainResult{Closed: closed}, err
 }
 
+// ReplaceRequest names the sidecar whose outdated service the page asks the host to replace.
+type ReplaceRequest struct {
+	Sidecar string `json:"sidecar"`
+}
+
+// SidecarsReplace replaces the outdated persistent service of a sidecar (docs/spec/terminal-runtime.md#updates).
+// It waits for the service, so the call can take as long as the stop timeout.
+func (h *Host) SidecarsReplace(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[ReplaceRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	if _, err := h.surface(ctx); err != nil {
+		return err
+	}
+	return h.sidecars.Replace(ctx, req.Sidecar)
+}
+
 func (h *Host) SidecarSend(ctx context.Context, nameJSON json.RawMessage, surfaceJSON json.RawMessage, body json.RawMessage) error {
 	name, err := argument[string]("sidecar", nameJSON)
 	if err != nil {

@@ -3,6 +3,7 @@ package host_test
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1746,5 +1748,180 @@ func TestPersistentTransportWritesAnErrorLineForALostConnection(t *testing.T) {
 	count := strings.Count(logged.String(), "error: sidecar fixture-service: connection lost; restarted\n")
 	if count != 1 {
 		t.Fatalf("the log has %d lines of the lost connection: %q", count, logged.String())
+	}
+}
+
+// replaceService is a fake persistent service (a message of a surface has no operation at its top level) that the host replaces: its first connection reports the old version,
+// acknowledges close-owner and shutdown and then ends; its second connection reports the installed version.
+type replaceService struct {
+	listener   net.Listener
+	mutex      sync.Mutex
+	operations []string
+	second     chan struct{}
+}
+
+func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string) *replaceService {
+	t.Helper()
+	socketDirectory, err := os.MkdirTemp("", "sp-replace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(socketDirectory) })
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { listener.Close() })
+	writeHarnessEndpoint(t, root, socket)
+	service := &replaceService{listener: listener, second: make(chan struct{})}
+	go func() {
+		for index := 0; ; index++ {
+			connection, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			version := oldVersion
+			if index > 0 {
+				version = installedVersion
+				select {
+				case <-service.second:
+				default:
+					close(service.second)
+				}
+			}
+			go func(first bool) {
+				defer connection.Close()
+				reader := bufio.NewReader(connection)
+				for {
+					line, err := reader.ReadBytes('\n')
+					if err != nil {
+						return
+					}
+					var request map[string]any
+					if json.Unmarshal(line, &request) != nil {
+						return
+					}
+					operation, _ := request["operation"].(string)
+					if first {
+						service.mutex.Lock()
+						service.operations = append(service.operations, operation)
+						service.mutex.Unlock()
+					}
+					var reply []byte
+					switch operation {
+					case "hello":
+						reply, _ = json.Marshal(map[string]any{"operation": "hello", "protocol": 1, "ok": true, "version": version})
+					case "close-owner":
+						reply, _ = json.Marshal(map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true})
+					case "shutdown":
+						reply, _ = json.Marshal(map[string]any{"operation": "shutdown", "request": request["request"], "ok": true})
+					default:
+						reply = line[:len(line)-1]
+					}
+					if _, err := connection.Write(append(reply, '\n')); err != nil {
+						return
+					}
+					if operation == "shutdown" {
+						return
+					}
+				}
+			}(index == 0)
+		}
+	}()
+	return service
+}
+
+func (s *replaceService) received() []string {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	return append([]string{}, s.operations...)
+}
+
+func replaceSidecars(t *testing.T, root string) *host.Sidecars {
+	t.Helper()
+	declarations := harnessDeclarations(t.TempDir())
+	declarations[0].Version = "0.0.7"
+	sidecars, err := NewSidecars(declarations, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
+	return sidecars
+}
+
+// contract: sidecars-transport.replace.replaces-an-outdated-service
+func TestAnOutdatedServiceIsReplaced(t *testing.T) {
+	var logged syncBuffer
+	previous := log.Writer()
+	log.SetOutput(&logged)
+	defer log.SetOutput(previous)
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
+	sidecars := replaceSidecars(t, root)
+	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.seen)
+	if got := sidecars.Outdated(); len(got) != 1 || got[0].Installed != "0.0.7" || got[0].Running == nil || *got[0].Running != "0.0.6" {
+		t.Fatalf("outdated before the replacement: %+v", got)
+	}
+	if err := sidecars.Replace(context.Background(), "fixture-service"); err != nil {
+		t.Fatal(err)
+	}
+	// The surface that sent to the sidecar receives the connection notice of the new service.
+	notice := receiveSidecarMessage(t, owner.seen)
+	var event map[string]any
+	if err := json.Unmarshal(notice.Body, &event); err != nil || event["event"] != "connection" || event["connected"] != true {
+		t.Fatalf("the notice after the replacement is %s (%v)", notice.Body, err)
+	}
+	<-service.second
+	if got := sidecars.Outdated(); len(got) != 0 {
+		t.Fatalf("outdated after the replacement: %+v", got)
+	}
+	if got := service.received(); !slices.Equal(got, []string{"hello", "", "close-owner", "shutdown"}) {
+		t.Fatalf("the old service received %v", got)
+	}
+	if want := "sidecar fixture-service: service 0.0.6 replaced by 0.0.7"; !strings.Contains(logged.String(), want) {
+		t.Fatalf("the log has no %q: %q", want, logged.String())
+	}
+}
+
+// contract: sidecars-transport.replace.refuses-a-service-that-is-not-outdated
+func TestAServiceThatIsNotOutdatedIsNotReplaced(t *testing.T) {
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
+	sidecars := replaceSidecars(t, root)
+	if err := sidecars.Replace(context.Background(), "fixture-service"); err == nil || !strings.Contains(err.Error(), "fixture-service") {
+		t.Fatalf("replace without a running service: %v", err)
+	}
+	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.seen)
+	if err := sidecars.Replace(context.Background(), "fixture-service"); err == nil || !strings.Contains(err.Error(), "fixture-service") {
+		t.Fatalf("replace of the installed version: %v", err)
+	}
+	if got := service.received(); !slices.Equal(got, []string{"hello", ""}) {
+		t.Fatalf("the service received %v after the refused replacements", got)
+	}
+}
+
+// contract: sidecars-transport.replace.runs-when-sessions-reach-zero
+func TestAnOutdatedServiceIsReplacedWhenItsSessionsEnd(t *testing.T) {
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
+	sidecars := replaceSidecars(t, root)
+	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.seen)
+	sidecars.Close("surface-1")
+	<-service.second
+	if got := service.received(); len(got) < 4 || got[len(got)-2] != "close-owner" || got[len(got)-1] != "shutdown" {
+		t.Fatalf("the old service received %v", got)
 	}
 }

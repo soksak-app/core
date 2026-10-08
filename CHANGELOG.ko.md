@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F117.5.3: 두 host가 `hello` version이 설치된 version과 다른 상주 service를 마지막 세션이 닫힐 때와 host 호출 `sidecarsReplace({sidecar})`에서 교체한다: `close-owner`, `shutdown`, 설치된 service를 시작하는 재연결, 각 표면의 연결 알림, `outdated`에서 sidecar가 빠진 `host.sidecars`, 애플리케이션 로그의 `sidecar <name>: service <running> replaced by <installed>`.
 - F128.4: Tauri host의 fatal signal이나 잡히지 않은 예외를 process가 끝나기 전에 `error: fatal: …` 한 줄로 애플리케이션 로그에 쓴다. native 라이브러리가 handler를 설치하고 앞서 설치된 handler를 호출한다.
 - F128.3: Tauri host의 panic을 기본 panic 메시지보다 먼저 `error: panic: <file>:<line>: <message>`로 애플리케이션 로그에 쓴다.
 - F128.1: 창의 WebContent process가 끝나면 두 host가 한 번 `error: page process: <window>: terminated`를 쓰고 page를 다시 불러온다. 이전에는 Tauri host가 다시 불러오지 않아 창이 page 없이 남았다.

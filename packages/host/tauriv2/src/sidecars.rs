@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{sync_channel, RecvError, SyncSender, TryRecvError, TrySendError};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, RwLock};
 use std::thread;
@@ -230,6 +230,85 @@ fn is_outdated<O>(core: &Core<O>, name: &str, process: &Process) -> bool {
     })
 }
 
+/// Why the owner of a persistent service could not be closed, and whether the transport is still closed after it.
+struct CloseFailure {
+    text: String,
+    send_close: bool,
+}
+
+/// Sends close-owner and shutdown through the outbox of a persistent service and waits for each answer until the
+/// deadline. The ids of the requests start with `prefix`.
+fn close_persistent_owner(
+    outbox: &SyncSender<Outgoing>,
+    close_waiters: &ReplyWaiters,
+    shutdown_waiters: &ReplyWaiters,
+    prefix: &str,
+    deadline: std::time::Instant,
+) -> Result<(), CloseFailure> {
+    let request = format!("{prefix}-close");
+    let line = serde_json::json!({"operation": "close-owner", "request": request});
+    let mut bytes = serde_json::to_vec(&line).map_err(|error| CloseFailure {
+        text: format!("close-owner serialization: {error}"),
+        send_close: false,
+    })?;
+    bytes.push(b'\n');
+    let (tx, rx) = sync_channel(1);
+    close_waiters
+        .lock()
+        .expect("close waiters")
+        .insert(request, tx);
+    outbox
+        .send(Outgoing::Line(bytes))
+        .map_err(|error| CloseFailure {
+            text: format!("send close-owner: {error}"),
+            send_close: false,
+        })?;
+    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+    match rx.recv_timeout(remaining) {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            return Err(CloseFailure {
+                text: format!("close owner: {error}"),
+                send_close: true,
+            })
+        }
+        Err(error) => {
+            return Err(CloseFailure {
+                text: format!("close owner wait: {error}"),
+                send_close: true,
+            })
+        }
+    }
+    let shutdown_request = format!("{prefix}-shutdown");
+    let shutdown_line = serde_json::json!({"operation": "shutdown", "request": shutdown_request});
+    let mut shutdown_bytes =
+        serde_json::to_vec(&shutdown_line).expect("shutdown request serialization cannot fail");
+    shutdown_bytes.push(b'\n');
+    let (shutdown_tx, shutdown_rx) = sync_channel(1);
+    shutdown_waiters
+        .lock()
+        .expect("shutdown waiters")
+        .insert(shutdown_request, shutdown_tx);
+    outbox
+        .send(Outgoing::Line(shutdown_bytes))
+        .map_err(|error| CloseFailure {
+            text: format!("send shutdown: {error}"),
+            send_close: true,
+        })?;
+    let shutdown_remaining = deadline.saturating_duration_since(std::time::Instant::now());
+    match shutdown_rx.recv_timeout(shutdown_remaining) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(error)) => Err(CloseFailure {
+            text: format!("shutdown: {error}"),
+            send_close: true,
+        }),
+        Err(error) => Err(CloseFailure {
+            text: format!("shutdown wait: {error}"),
+            send_close: true,
+        }),
+    }
+}
+
 fn forget_closing<O>(state: &mut State<O>, sidecar: &str) -> Option<ClosingChanged> {
     state.closing.remove(sidecar)?;
     state.closing_changed.clone()
@@ -401,6 +480,12 @@ struct PersistentConnection {
     connected: Arc<AtomicBool>,
 }
 
+/// The versions of a persistent service that is being replaced.
+struct Replacement {
+    running: Option<String>,
+    installed: String,
+}
+
 struct State<O> {
     running: HashMap<String, Process>,
     /// 시작 중인 사이드카. 시작은 잠금 밖에서 하며, 끝나면 Core::started 로 알린다.
@@ -422,6 +507,9 @@ struct State<O> {
     // 연결이 끊겼고 아직 소유 표면에 알리지 않은 영속 사이드카(V5-106). 끊김을 알린
     // 시작이 이 기록을 소진한다 — 첫 시작은 알림이 없다.
     unannounced_loss: std::collections::HashSet<String>,
+    /// The persistent services that `replace` closes, with the running and the installed version, which the
+    /// reconnection after the close writes to the log.
+    replacing: HashMap<String, Replacement>,
     /// 멈추는 표준 입출력 사이드카마다 읽기 스레드가 출력의 끝까지 쓰는 기록이다(docs/spec/sidecars.md#messages).
     stopping: HashMap<String, Stopping>,
 }
@@ -536,6 +624,7 @@ impl<O: Owner> Sidecars<O> {
                     pending_replies: HashMap::new(),
                     pending_closes: HashMap::new(),
                     unannounced_loss: std::collections::HashSet::new(),
+                    replacing: HashMap::new(),
                     stopping: HashMap::new(),
                 })),
                 started: Condvar::new(),
@@ -840,6 +929,7 @@ impl<O: Owner> Sidecars<O> {
         if let (true, Some(changed)) = (closed_any, changed) {
             changed();
         }
+        self.replace_idle();
         Ok(())
     }
 
@@ -867,6 +957,111 @@ impl<O: Owner> Sidecars<O> {
             .collect();
         list.sort_by(|left, right| left.sidecar.cmp(&right.sidecar));
         list
+    }
+
+    /// Replaces the persistent service of the sidecar `name`, whose `hello` version differs from the installed
+    /// version: it sends close-owner and shutdown and closes the transport, and the reconnection that follows starts
+    /// the installed executable through the creation path and notifies the surfaces that sent to the sidecar
+    /// (docs/spec/terminal-runtime.md#updates). A sidecar without a running service of another version is refused.
+    pub fn replace(&self, name: &str) -> Result<(), String> {
+        let (outbox, close_waiters, shutdown_waiters) = {
+            let mut state = self.core.state.lock().expect("sidecar state");
+            let refused = || {
+                format!(
+                    "sidecar {name}: no running service of another version than the installed one"
+                )
+            };
+            if state.stopped {
+                return Err(refused());
+            }
+            let process = state.running.get(name).ok_or_else(refused)?;
+            if !is_outdated(&self.core, name, process) {
+                return Err(refused());
+            }
+            let Some(connection) = process.persistent.as_ref() else {
+                return Err(refused());
+            };
+            let handles = (
+                process.outbox.clone(),
+                Arc::clone(&connection.close_waiters),
+                Arc::clone(&connection.shutdown_waiters),
+            );
+            let running = connection.version.clone();
+            if state.replacing.contains_key(name) {
+                return Err(format!("sidecar {name}: a replacement is running"));
+            }
+            state.replacing.insert(
+                name.to_string(),
+                Replacement {
+                    running,
+                    installed: self.core.version(name),
+                },
+            );
+            handles
+        };
+        static REPLACEMENTS: AtomicU64 = AtomicU64::new(0);
+        let prefix = format!(
+            "{}-replace-{}",
+            std::process::id(),
+            REPLACEMENTS.fetch_add(1, Ordering::Relaxed)
+        );
+        let deadline = std::time::Instant::now() + self.stop_timeout;
+        let failure = close_persistent_owner(
+            &outbox,
+            &close_waiters,
+            &shutdown_waiters,
+            &prefix,
+            deadline,
+        )
+        .err();
+        let send_close = failure.as_ref().is_none_or(|failure| failure.send_close);
+        if send_close {
+            if let Err(error) = outbox.send(Outgoing::Close) {
+                log_error(
+                    &format!("sidecar {name}"),
+                    format!("close persistent transport: {error}"),
+                );
+            }
+        }
+        match failure {
+            None => Ok(()),
+            Some(failure) => {
+                self.core
+                    .state
+                    .lock()
+                    .expect("sidecar state")
+                    .replacing
+                    .remove(name);
+                Err(format!("sidecar {name}: replace: {}", failure.text))
+            }
+        }
+    }
+
+    /// Replaces each outdated service that has no open surface of this application.
+    fn replace_idle(&self)
+    where
+        O: 'static,
+    {
+        for item in self.outdated() {
+            let busy = self
+                .core
+                .state
+                .lock()
+                .expect("sidecar state")
+                .replacing
+                .contains_key(&item.sidecar);
+            if item.sessions != 0 || busy {
+                continue;
+            }
+            let core = Arc::clone(&self.core);
+            let stop_timeout = self.stop_timeout;
+            thread::spawn(move || {
+                let sidecars = Sidecars { core, stop_timeout };
+                if let Err(error) = sidecars.replace(&item.sidecar) {
+                    log_error("replace", error);
+                }
+            });
+        }
     }
 
     /// closed 를 보냈고 답을 받지 않은 표면을 사이드카와 표면 순으로 반환한다(host.sidecars).
@@ -1076,96 +1271,28 @@ impl<O: Owner> Sidecars<O> {
         for (name, process) in processes {
             let state = Arc::clone(&self.core.state);
             let handle = thread::spawn(move || {
-                let remaining = deadline.saturating_duration_since(std::time::Instant::now());
                 if process.child.is_none() {
                     if let Some(persistent) = process.persistent {
-                        let request = format!("{}-close", std::process::id());
-                        let line = serde_json::json!({
-                            "operation": "close-owner",
-                            "request": request,
-                        });
-                        let mut bytes = match serde_json::to_vec(&line) {
-                            Ok(bytes) => bytes,
-                            Err(error) => {
+                        let prefix = std::process::id().to_string();
+                        let failure = close_persistent_owner(
+                            &process.outbox,
+                            &persistent.close_waiters,
+                            &persistent.shutdown_waiters,
+                            &prefix,
+                            deadline,
+                        )
+                        .err();
+                        let send_close = failure.as_ref().is_none_or(|failure| failure.send_close);
+                        if let Some(failure) = failure {
+                            log_error(&format!("sidecar {name}"), failure.text);
+                        }
+                        if send_close {
+                            if let Err(error) = process.outbox.send(Outgoing::Close) {
                                 log_error(
                                     &format!("sidecar {name}"),
-                                    format!("close-owner serialization: {error}"),
+                                    format!("close persistent transport: {error}"),
                                 );
-                                return;
                             }
-                        };
-                        bytes.push(b'\n');
-                        let (tx, rx) = sync_channel(1);
-                        persistent
-                            .close_waiters
-                            .lock()
-                            .expect("close waiters")
-                            .insert(request, tx);
-                        if let Err(error) = process.outbox.send(Outgoing::Line(bytes)) {
-                            log_error(
-                                &format!("sidecar {name}"),
-                                format!("send close-owner: {error}"),
-                            );
-                            return;
-                        }
-                        let result = rx.recv_timeout(remaining);
-                        match result {
-                            Ok(Ok(())) => {
-                                let shutdown_request = format!("{}-shutdown", std::process::id());
-                                let shutdown_line = serde_json::json!({
-                                    "operation": "shutdown",
-                                    "request": shutdown_request,
-                                });
-                                let mut shutdown_bytes = serde_json::to_vec(&shutdown_line)
-                                    .expect("shutdown request serialization cannot fail");
-                                shutdown_bytes.push(b'\n');
-                                let (shutdown_tx, shutdown_rx) = sync_channel(1);
-                                persistent
-                                    .shutdown_waiters
-                                    .lock()
-                                    .expect("shutdown waiters")
-                                    .insert(shutdown_request, shutdown_tx);
-                                if let Err(error) =
-                                    process.outbox.send(Outgoing::Line(shutdown_bytes))
-                                {
-                                    log_error(
-                                        &format!("sidecar {name}"),
-                                        format!("send shutdown: {error}"),
-                                    );
-                                } else {
-                                    let shutdown_remaining = deadline
-                                        .saturating_duration_since(std::time::Instant::now());
-                                    match shutdown_rx.recv_timeout(shutdown_remaining) {
-                                        Ok(Ok(())) => {}
-                                        Ok(Err(error)) => {
-                                            log_error(
-                                                &format!("sidecar {name}"),
-                                                format!("shutdown: {error}"),
-                                            );
-                                        }
-                                        Err(error) => {
-                                            log_error(
-                                                &format!("sidecar {name}"),
-                                                format!("shutdown wait: {error}"),
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                            Ok(Err(error)) => log_error(
-                                &format!("sidecar {name}"),
-                                format!("close owner: {error}"),
-                            ),
-                            Err(error) => log_error(
-                                &format!("sidecar {name}"),
-                                format!("close owner wait: {error}"),
-                            ),
-                        }
-                        if let Err(error) = process.outbox.send(Outgoing::Close) {
-                            log_error(
-                                &format!("sidecar {name}"),
-                                format!("close persistent transport: {error}"),
-                            );
                         }
                     }
                     return;
@@ -1922,8 +2049,35 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
             outcome = revive_attempt(core, name);
         }
     }
-    if let Some((place, text)) = connection_loss_report(name, &outcome) {
-        log_error(&place, text);
+    let replaced = core
+        .state
+        .lock()
+        .expect("sidecar state")
+        .replacing
+        .remove(name);
+    match (&outcome, replaced) {
+        (Ok(true), Some(replaced)) => {
+            // The replacement closed the connection on purpose and the installed service started: an expected state.
+            let running = replaced.running.as_deref().unwrap_or("none"); // default: a service that sent no version has none to name
+            eprintln!(
+                "sidecar {name}: service {running} replaced by {}",
+                replaced.installed
+            );
+            let changed = core
+                .state
+                .lock()
+                .expect("sidecar state")
+                .closing_changed
+                .clone();
+            if let Some(changed) = changed {
+                changed();
+            }
+        }
+        _ => {
+            if let Some((place, text)) = connection_loss_report(name, &outcome) {
+                log_error(&place, text);
+            }
+        }
     }
     notify_connection(core, name, outcome.map(|_| ()));
 }

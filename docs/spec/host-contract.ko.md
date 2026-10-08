@@ -356,6 +356,9 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.stop.accepts-close-answers-sent-before-stop` | 지속 service가 중지 전에 보낸 closed 알림에 중지가 시작된 뒤 답해도 받아들인다. 중지는 shutdown을 보내고 닫는 중인 표면이 남지 않는다. | both |
 | `sidecars-transport.persistent.revives-a-lost-connection` | 서비스가 연결을 끊으면 호스트가 전송 없이 다시 시작하고 소유 표면이 연결 이벤트를 받는다. | both |
 | `sidecars-transport.persistent.lost-connection-writes-an-error-line` | host가 실행되는 동안 프로토콜 위반 없이 끝난 상주 service의 연결은 host가 다시 연결한 뒤 `error: sidecar <name>: connection lost; restarted`를 한 번 쓰고, 연결하지 못하면 `error: sidecar <name>: connection lost; restart failed: <reason>`을 쓴다. | both |
+| `sidecars-transport.replace.replaces-an-outdated-service` | `hello`의 version이 설치된 version과 다른 상주 service를 교체하면 `close-owner`와 `shutdown`을 보내고, 연결을 닫고, 생성 경로로 설치된 service를 시작하고, 그 sidecar로 보낸 각 표면에 연결 알림을 보내고, `host.sidecars`의 `outdated`에서 그 sidecar를 빼고, `sidecar <name>: service <running> replaced by <installed>`를 쓴다. | both |
+| `sidecars-transport.replace.refuses-a-service-that-is-not-outdated` | 실행 중인 service가 없거나 service가 설치된 version이면 그 sidecar의 교체는 sidecar를 밝히는 오류로 실패하고 service에 아무것도 보내지 않는다. | both |
+| `sidecars-transport.replace.runs-when-sessions-reach-zero` | 오래된 service로 보낸 마지막 열린 표면이 닫히면 host가 그 service를 교체한다. | both |
 | `sidecars-transport.persistent.starts-in-new-session` | 호스트가 시작한 영속 서비스는 새 session의 leader이므로 애플리케이션의 process group이나 terminal의 signal을 받지 않는다. | both |
 | `sidecars-transport.endpoint.zombie-service-does-not-exist` | 좀비 서비스 pid 는 존재하는 서비스로 치지 않아 낡은 endpoint 를 교체한다. | both |
 | `sidecars-transport.endpoint.foreign-service-process-exists` | 다른 사용자가 소유한 프로세스의 service pid 는 존재하는 service 다. 거부된 signal 확인이 그 프로세스가 있음을 보이기 때문이다. | both |
