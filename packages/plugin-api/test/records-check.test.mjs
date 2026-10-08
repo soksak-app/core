@@ -80,16 +80,16 @@ test("commit messages use the subject form with a checklist ID, a body and no fo
 });
 
 test("a rejected synonym is reported with the term to use, also in identifiers", () => {
-  assert.deepEqual(termViolations("The plugin package holds pages.\nconst packageFolder = 1;\nfn package_folder() {}", "a.md"), [
+  assert.deepEqual(termViolations("The plugin package holds pages.\nconst pluginPackage = 1;\nfn plugin_package() {}", "a.md"), [
     'a.md:1: rejected term "plugin package", use "plugin": plugin package',
-    'a.md:2: rejected term "package folder", use "plugin folder": packageFolder',
-    'a.md:3: rejected term "package folder", use "plugin folder": package_folder',
+    'a.md:2: rejected term "plugin package", use "plugin": pluginPackage',
+    'a.md:3: rejected term "plugin package", use "plugin": plugin_package',
   ]);
 });
 
 test("a rejected synonym joined inside an identifier is reported", () => {
-  assert.deepEqual(termViolations("func isPackageName(text string) bool {", "a.go"),
-    ['a.go:1: rejected term "package name", use "the name of package.json": PackageName']);
+  assert.deepEqual(termViolations("func isSidecarPackage(text string) bool {", "a.go"),
+    ['a.go:1: rejected term "sidecar package", use "sidecar": SidecarPackage']);
   assert.deepEqual(termViolations("import \"archive/tar\"; let reader = tar::Archive::new(data);", "a.rs"), []);
 });
 

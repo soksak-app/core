@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R5.2.1: 용어 검사가 실제 npm package를 가리키는 "package folder"와 "package name"을 더 이상 거부하지 않는다.
 - R5.3.7: 명세가 package라고 부른 plugin이나 sidecar를 plugin이나 sidecar라고 부른다. Go, Cargo, npm package는 package로 둔다.
 - R5.5: registry index가 plugin version의 파일을 `release`, sidecar version의 파일을 `releases`라고 부른다.
 - R5.6: `sidecar.json`의 helper는 프로그램을 `name`으로 가리키고, `package`는 거부한다.

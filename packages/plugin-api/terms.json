@@ -21,15 +21,6 @@
       "allowed": []
     },
     {
-      "term": "the name of package.json",
-      "definition": "The name field of the package.json of a plugin or a sidecar, such as @scope/name, which dependencies and the paths /modules/<name>/ use.",
-      "rejected": [
-        "package name",
-        "패키지 이름"
-      ],
-      "allowed": []
-    },
-    {
       "term": "release",
       "definition": "The file that sok plugin pack or sok sidecar release writes and that a registry lists: <id>-<version>.tgz of a plugin or <file name>-<version>-<platform>.tar.gz of a sidecar.",
       "rejected": [
@@ -47,9 +38,7 @@
     {
       "term": "plugin folder",
       "definition": "The folder that plugins/installed.json records for an installed plugin.",
-      "rejected": [
-        "package folder"
-      ],
+      "rejected": [],
       "allowed": []
     },
     {
