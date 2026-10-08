@@ -49,7 +49,7 @@ import { authorizeSurface, disposeSurfacesExcept, focusSurface, waitSurfaceCompo
 
 /* 판 하나. 이 문서는 판의 렌더링 방식을 알지 않고 렌더 완료만 수신한다. */
 import {
-  currentGrid, onLayout, onRender, takeSurfaceFocus, setGap, settle, tabsOf,
+  currentGrid, onLayout, onRender, takeSurfaceFocus, setGap, settle, settleModifiedTabsToClose, tabsOf,
 } from "./plane.js";
 
 /* 판과 컴포지터를 읽어 검증한다. 아무것도 변경하지 않으므로 그 둘은 이 모듈을
@@ -242,7 +242,7 @@ onChoicesChange(() => projects.keep());
 projects.onSwitch({ check: checkStoredLayout, save: capture, load: adopt, update: settle,
 // 어떤 레이아웃에도 없는 탭의 표면 모듈을 정리한다. 불러오지 않은 플러그인의 자리 표시도 그 탭과 함께 사라진다.
 retain: (surfaceIds) => disposeSurfacesExcept(surfaceIds),
-presented: pageLayout.presented, empty: pageLayout.empty });
+presented: pageLayout.presented, empty: pageLayout.empty, settleTabs: settleModifiedTabsToClose });
 
 
 /* ── 프로젝트와 스페이스 행 ─────────────────────────────────────────────

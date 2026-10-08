@@ -1751,28 +1751,40 @@ function askBeforeClose(cardId, t, then) {
   });
 }
 
+/** The answers of the question about a modified tab when a plugin change applies and when the window closes. */
+const APPLY = { save: "저장하고 적용", discard: "저장하지 않고 적용", keep: "적용하지 않기" };
+const CLOSE = { save: "저장하고 닫기", discard: "저장하지 않고 닫기", keep: "닫지 않기" };
+
 /**
  * Asks for each modified tab of the window whether to save it, discard its changes or keep the page, before the page
  * reloads to apply a plugin change (docs/spec/installation.md#applying-a-change). Resolves true when no tab was kept.
  */
-export async function settleModifiedTabs() {
+export const settleModifiedTabs = () => settleTabs(APPLY);
+
+/**
+ * Asks in the same way before the window closes or the application quits (docs/spec/plugins.md#tab-reports).
+ * Resolves true when no tab was kept.
+ */
+export const settleModifiedTabsToClose = () => settleTabs(CLOSE);
+
+async function settleTabs(words) {
   // The library screen shows no space, so the window has no tab to ask about.
   if (!grid) return true;
   for (const card of grid.cards) {
     for (const t of tabsOf(card)) {
-      if (tabModified(t.id) && !(await askBeforeApply(card.id, t))) return false;
+      if (tabModified(t.id) && !(await askModified(card.id, t, words))) return false;
     }
   }
   return true;
 }
 
 /** Asks about the modified tab t of the card cardId and resolves true when its changes were saved or discarded. */
-function askBeforeApply(cardId, t) {
+function askModified(cardId, t, words) {
   const save = plugin(t.plugin).save;
   const items = [
-    ...(save ? [{ key: "save", name: "저장하고 적용" }] : []),
-    { key: "discard", name: "저장하지 않고 적용" },
-    { key: "keep", name: "적용하지 않기" },
+    ...(save ? [{ key: "save", name: words.save }] : []),
+    { key: "discard", name: words.discard },
+    { key: "keep", name: words.keep },
   ];
   // default: a header too narrow for its tabs shows no button for the tab, so the question opens at the card.
   const anchor = cardElement(cardId)?.querySelector(`[data-tab-id="${t.id}"]`) ?? cardElement(cardId);
@@ -1795,7 +1807,7 @@ function askBeforeApply(cardId, t) {
       }
       resolve(true);
     });
-    // Closing the layer keeps the tab, as 적용하지 않기 does.
+    // Closing the layer keeps the tab, as the keep answer does.
     picker.dismiss = () => resolve(false);
   });
 }

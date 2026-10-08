@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F122.1: 창을 닫거나 애플리케이션을 종료할 때 창의 수정된 탭마다 탭을 닫을 때처럼 저장하고 닫기, 저장하지 않고 닫기, 닫지 않기를 묻는다. 닫지 않은 탭이 있으면 창은 열려 있고 프로젝트는 저장하지 않는다. `e2e/window-close.test.mjs`가 두 host에서 질문과 두 답을 관측한다.
 - F130: 두 host는 디버그 화면이 상태를 기록한 뒤 가장 새 `logs/state-<time>.json` 20개만 두고 더 오래된 것을 지운다. 그래서 logs 폴더가 열 때마다 커지지 않는다.
 - F120: Tauri host가 상주 service에 보내는 `hello`가 Wails host와 같이 애플리케이션의 설정 폴더를 `client`로 싣는다. terminal runtime 명세가 `client`를 정의한다.
 - F117.5.6: host는 교체한 상주 sidecar의 설치된 service를 옛 service의 process가 끝난 뒤에만 시작한다. 모든 빌드에서 process 종료의 커널 알림으로 기다리며, 중지 기한 안에 끝나지 않는 process는 오류 줄과 함께 교체를 실패시키고 sidecar는 오래된 채로 남는다.

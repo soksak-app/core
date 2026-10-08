@@ -395,6 +395,8 @@ export async function flush() {
 }
 
 async function closeWindow() {
+  // A modified tab that the person keeps keeps the window open (docs/spec/plugins.md#tab-reports).
+  if (!(await listener.settleTabs())) return;
   await flush();
   await windows.close();
 }
