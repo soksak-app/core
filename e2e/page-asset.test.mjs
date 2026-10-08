@@ -17,7 +17,10 @@ for (const app of Object.values(APPS)) {
     const before = readOffset(app.configDir);
     // The page requests each file twice; the host reports a path once.
     for (const path of [first, second, first]) {
-      assert.equal((await s.request("diagnostics.page.request", { path })).path, path);
+      const answer = await s.request("diagnostics.page.request", { path });
+      assert.equal(answer.path, path);
+      // The start document does not answer a missing file; the status is the error of the host's file server.
+      assert.ok(answer.status >= 400, `${path} was answered with status ${answer.status}`);
     }
     const { errors } = readErrors(app.configDir, before);
     assert.deepEqual(errors.filter((line) => line.includes(`missing-${process.pid}`)).sort(), [

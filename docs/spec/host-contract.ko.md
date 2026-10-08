@@ -436,6 +436,7 @@ fn invalid_json_closes_connection() {
 | `debug.read.returns-a-png-file-as-an-image` | `debugRead`는 PNG 파일 전체의 `data:image/png;base64,` 주소를 `kind` `image`인 `{path, size, truncated, kind, image}`로 답하고, PNG signature로 시작하지 않는 `.png` 파일과 16 MB보다 큰 PNG 파일은 거부한다. | both |
 | `debug.read.refuses-a-path-outside-logs-and-a-file-that-is-not-text` | `debugRead`는 `logs/` 밖의 경로, 파일이 아닌 경로, 내용이 UTF-8 글이 아닌 파일을 그 경로를 밝히는 오류로 거부한다. | both |
 | `assets.missing.writes-one-error-line-for-each-path` | host가 내줄 수 없는 page 파일 요청은 그 경로마다 한 번 `error: page asset: <path>: not found`로 알리고, 내준 파일은 알리지 않으며, 파일 확장자가 없는 경로도 알리지 않는다. | both |
+| `assets.missing.does-not-answer-with-the-start-document` | 파일 확장자가 있고 어떤 파일도 가리키지 않는 경로의 요청은 두 host의 파일 서버에서 시작 문서로 답하지 않는다. Wails 서버는 404로, Tauri 프레임워크는 asset 오류로 답한다. | tauriv2 only: Tauri 프레임워크는 `<path>`, `<path>.html`, `<path>/index.html`을 찾고 시작 문서로 대신한다. Wails 서버는 스스로 404로 답한다 |
 | `assets.missing.runtime-optional-file-is-not-reported` | Wails runtime이 요청하고 애플리케이션이 제공하지 않는 runtime 파일 `/wails/custom.js`는 알리지 않는다. | wailsv3 only: Wails runtime이 이 선택 파일을 설계상 요청한다 |
 | `page.process.termination-writes-an-error-line` | host가 실행되는 동안 창의 WebContent process가 끝나면 host는 그 종료마다 한 번 `error: page process: <window>: terminated`를 쓴다. 단 host가 종료하는 동안은 process를 일부러 끝내므로 쓰지 않는다. | both |
 | `quit.cancel.ends-the-quit-state` | 시작한 종료 상태는 `windowCloseKept`가 취소할 때까지 유지된다. 시작과 취소는 멱등이고, `host.window`가 이 상태를 `quitting`으로 보고한다. | both |

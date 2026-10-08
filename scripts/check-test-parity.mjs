@@ -951,6 +951,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F132",
+    implementation: [
+      { file: "packages/host/tauriv2/src/assets.rs", symbol: "Step::Start => None" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/assets_test.rs", id: "a_missing_file_is_not_answered_with_the_start_document" },
+    ],
+    expected: "The Tauri host does not answer a path with a file extension that names no file with the start document.",
+    levels: ["unit"],
+  },
+  {
     id: "F129",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export async function prepareFixture" },

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F132: the Tauri host no longer answers a path with a file extension that names no file with the start document, which the framework falls back to; the framework answers its asset error, status 500, and the Wails server answers 404. `e2e/page-asset.test.mjs` asserts a status of 400 or more on both running hosts.
 - F127.3: the diagnostic request `diagnostics.page.request {window, path}` makes the page request a file of its application, and `e2e/page-asset.test.mjs` observes in both running hosts that a missing path writes `error: page asset: <path>: not found` once. The observation showed that the Tauri host also reported the framework lookups `<path>.html` and `<path>/index.html` of a missing path; it no longer reports them. F132 records that the Tauri host answers such a path with the start document.
 - F117.7.3: each time a window becomes the key window, both hosts send it the event `window-active` and the page reads the plugin state again, so a newer version in the remote registry, which sends no change event, appears when the person returns to the window. The page does not use the DOM `focus` event, which the Tauri webview does not send when the host focuses the window.
 - F117.7.2: every window shows the control 업데이트 N first in its bar while the registry lists a plugin update; it runs the new command `core.plugins.show-updates`, which shows the plugin page at the update list. The update list and the outdated service rows take a whole row of the card grid.
