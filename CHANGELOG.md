@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F100.1: the plugin specification states that a plugin or sidecar version has no relation to a core version, and that its release workflow declares the core release that builds `sok`.
 - F99: soksak 0.0.5 is released with F95, F95.1 and F97; the terminal plugin 0.0.5 and the terminal service 0.0.5, which carries F98, are in the public registry.
 - F99.1: every declared version is 0.0.5. The parity audit lists the release records F96 and F99 without a feature link.
 - F98: the terminal service closes the surface actors before the owner sessions on `close-owner`, so quitting with a terminal open writes no `close owner` error (sidecar-vt S23).
