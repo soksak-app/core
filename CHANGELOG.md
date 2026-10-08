@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R5.3.4, R5.3.5: the plugin and sidecar repositories call plugins, sidecars and releases so.
 - R5.2.1: the term check no longer rejects "package folder" and "package name", which name real npm packages.
 - R5.3.7: the specifications call a plugin or a sidecar that they named a package a plugin or a sidecar; Go, Cargo and npm packages stay packages.
 - R5.5: the registry index names the file of a plugin version `release` and the files of a sidecar version `releases`.
