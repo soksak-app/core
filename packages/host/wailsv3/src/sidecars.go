@@ -102,7 +102,7 @@ type sidecar struct {
 	surfaces map[string]bool
 	// stopClosing 은 Stop 이 closing 목록에서 뺀 이 프로세스의 닫기다. 표준 입출력 사이드카는 끝나면서 이 닫기에
 	// 답하므로 그 답은 실패가 아니다(docs/spec/sidecars.md#messages). c.mu 로 보호한다.
-	stopClosing map[string]bool
+	stopClosing map[string]int
 	// violated 와 waitErr 는 멈추는 동안 read 가 기록하고 exited 를 닫는다. Stop 은 exited 뒤에 읽는다.
 	// violated 는 프로토콜 위반으로 읽기를 멈춘 것이고, waitErr 는 프로세스를 기다린 결과다.
 	violated bool
@@ -128,8 +128,9 @@ type Sidecars struct {
 	running      map[string]*sidecar
 	// starting 은 시작 중인 사이드카다. 시작은 잠금 밖에서 하며, 끝나면 그 채널을 닫는다.
 	starting map[string]chan struct{}
-	// closing 은 사이드카마다 closed 를 보냈고 답을 받지 않은 표면이다.
-	closing map[string]map[string]bool
+	// closing 은 사이드카마다 closed 를 보냈고 답을 받지 않은 표면과 그 닫기의 수다. 같은 표면을 답이 오기 전에 다시
+	// 닫으면 답도 닫기마다 온다.
+	closing map[string]map[string]int
 	// ClosingChanged 는 closing 이 바뀐 뒤 잠금 밖에서 호출된다. 호스트가 host.sidecars 를 알린다.
 	ClosingChanged func()
 	owners         map[string]SidecarOwner
@@ -167,7 +168,7 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		persistent:      map[string]bool{},
 		running:         map[string]*sidecar{},
 		starting:        map[string]chan struct{}{},
-		closing:         map[string]map[string]bool{},
+		closing:         map[string]map[string]int{},
 		owners:          map[string]SidecarOwner{},
 		roots:           map[string]string{},
 		unannouncedLoss: map[string]bool{},
@@ -381,9 +382,9 @@ func (c *Sidecars) closeSurface(surface string) bool {
 
 	for _, process := range c.running {
 		if c.closing[process.name] == nil {
-			c.closing[process.name] = map[string]bool{}
+			c.closing[process.name] = map[string]int{}
 		}
-		c.closing[process.name][surface] = true
+		c.closing[process.name][surface]++
 		// 논블로킹으로 채널에 전송한다. 채널이 가득 차면 pendingCloses에 저장한다.
 		select {
 		case process.outbox <- line:
@@ -431,13 +432,11 @@ func (c *Sidecars) closeAnswered(process *sidecar, surface string, closed bool, 
 	}
 	name := process.name
 	c.mu.Lock()
-	pending := c.closing[name][surface]
-	delete(c.closing[name], surface)
+	pending := take(c.closing[name], surface)
 	if len(c.closing[name]) == 0 {
 		delete(c.closing, name)
 	}
-	stopped := !pending && process.stopClosing[surface]
-	delete(process.stopClosing, surface)
+	stopped := !pending && take(process.stopClosing, surface)
 	c.mu.Unlock()
 	if !pending && !stopped {
 		return "unexpected close answer for " + surface
@@ -449,6 +448,18 @@ func (c *Sidecars) closeAnswered(process *sidecar, surface string, closed bool, 
 		c.closingChanged()
 	}
 	return ""
+}
+
+// take 는 counts 에서 key 의 수를 하나 줄이고, 줄였으면 true 를 반환한다. 0 이 된 key 는 지운다.
+func take(counts map[string]int, key string) bool {
+	if counts[key] == 0 {
+		return false
+	}
+	counts[key]--
+	if counts[key] == 0 {
+		delete(counts, key)
+	}
+	return true
 }
 
 // forgetClosing 는 끝난 프로세스나 끊긴 연결의 사이드카 name 이 답하지 않은 닫기를 지운다. c.mu 를 쥔 채 호출하며,

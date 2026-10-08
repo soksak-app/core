@@ -1412,7 +1412,7 @@ const FEATURE_LINKS = [
   {
     id: "F64",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "stopClosing map[string]bool" },
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "stopClosing map[string]int" },
       { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "struct Stopping" },
     ],
     tests: [
@@ -1706,6 +1706,19 @@ const FEATURE_LINKS = [
     ],
     expected: "The first press on a document region that does not hold the keyboard focus reaches its page, and a drag selects text.",
     levels: ["native"],
+  },
+  {
+    id: "F119",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func take(counts map[string]int, key string) bool" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn take(counts: &mut std::collections::BTreeMap<String, usize>, key: &str) -> bool" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestRepeatedCloseAwaitsEachAnswer" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "repeated_close_awaits_each_answer" },
+    ],
+    expected: "A surface closed again before the sidecar answered stays closing until each close is answered, and no answer fails the sidecar.",
+    levels: ["unit"],
   },
   {
     id: "F118",

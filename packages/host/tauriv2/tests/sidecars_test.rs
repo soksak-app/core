@@ -1183,6 +1183,49 @@ fn failed_close_answer_is_logged() {
     );
 }
 
+// contract: sidecars.close.repeated-close-awaits-each-answer
+#[test]
+fn repeated_close_awaits_each_answer() {
+    // The log is standard error, so the same check runs as a child process and its output is read.
+    if std::env::var_os("SOKSAK_REPEATED_CLOSE_CHILD").is_some() {
+        // The sidecar echoes requests and answers both closes of s1 after it has received the second one.
+        let script = "#!/bin/sh\nn=0\nwhile read line; do case \"$line\" in *closed*) n=$((n+1)); if [ $n -eq 2 ]; then printf '{\"surface\":\"s1\",\"closed\":true}\\n{\"surface\":\"s1\",\"closed\":true}\\n'; fi;; *) echo \"$line\";; esac; done\n";
+        let (sidecars, snapshots, _directory) = closing_sidecars(script);
+        let (window, events) = owner("a", "/projects/closing");
+        for _ in 0..2 {
+            sidecars
+                .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+                .unwrap();
+            events.recv_timeout(STALL).unwrap();
+            sidecars.retain(&window, &|_| false).unwrap();
+            assert_eq!(snapshots.recv_timeout(STALL).unwrap(), closing_of("s1"));
+        }
+        while !snapshots.recv_timeout(STALL).unwrap().is_empty() {}
+        // The echo of a later request follows both answers in the output, so a failure of either answer is logged first.
+        sidecars
+            .send(&window, ECHO, "s2", &raw(r#"{"data":2}"#))
+            .unwrap();
+        events.recv_timeout(STALL).unwrap();
+        sidecars.stop();
+        return;
+    }
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "repeated_close_awaits_each_answer",
+            "--nocapture",
+        ])
+        .env("SOKSAK_REPEATED_CLOSE_CHILD", "1")
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "the child check failed: {stderr}");
+    assert!(
+        !stderr.contains("failed"),
+        "the second answer of a repeated close failed the sidecar: {stderr}"
+    );
+}
+
 // contract: sidecars.close.unexpected-answer-fails
 #[test]
 fn close_answer_for_an_open_surface_fails_the_sidecar() {

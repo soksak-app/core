@@ -320,6 +320,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.send.start-does-not-block-other-sidecars` | 영속 service가 hello 응답을 늦추는 동안 실행 중인 다른 사이드카로의 보내기는 50ms 안에 반환된다. | both |
 | `sidecars.close.answer-ends-closing` | `closed`를 보낸 뒤 `host.sidecars`는 사이드카가 답할 때까지 그 표면을 나열하고, 답하면 목록이 빈다. | both |
 | `sidecars.close.failed-answer-is-logged` | `error`가 있는 닫기 응답은 host 로그에 오류 줄 "error: sidecar <name>: close <surface>: <error>"를 쓰고 닫는 중 항목을 끝낸다. | both |
+| `sidecars.close.repeated-close-awaits-each-answer` | 사이드카가 앞 닫기에 답하기 전에 다시 닫은 표면은 사이드카가 닫기마다 답할 때까지 닫는 중으로 남고, 어느 답도 사이드카를 실패시키지 않는다. | both |
 | `sidecars.close.unexpected-answer-fails` | host가 닫고 있지 않은 표면의 닫기 응답은 "unexpected close answer for <surface>"로 사이드카를 실패시킨다. | both |
 | `sidecars.close.process-end-clears-closing` | 사이드카 process가 답하지 않고 끝나면 그 표면은 `host.sidecars`에서 빠진다. | both |
 | `sidecars.stop.honors-stop-timeout` | 입력을 비우지 않는 사이드카의 중지는 중지 제한 시간의 두 배 안에 반환된다. | both |

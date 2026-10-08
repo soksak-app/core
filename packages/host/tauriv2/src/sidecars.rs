@@ -155,12 +155,12 @@ fn close_answer<O: Owner>(
         let pending = state
             .closing
             .get_mut(sidecar)
-            .is_some_and(|surfaces| surfaces.remove(&answer.surface));
+            .is_some_and(|surfaces| take(surfaces, &answer.surface));
         let stopped = !pending
             && state
                 .stopping
                 .get_mut(sidecar)
-                .is_some_and(|stopping| stopping.closing.remove(&answer.surface));
+                .is_some_and(|stopping| take(&mut stopping.closing, &answer.surface));
         if state
             .closing
             .get(sidecar)
@@ -188,7 +188,18 @@ fn close_answer<O: Owner>(
     Ok(true)
 }
 
-/// 끝난 프로세스나 끊긴 연결의 사이드카가 답하지 않은 닫기를 지운다. 지웠으면 알림을 돌려준다.
+/// counts 에서 key 의 수를 하나 줄이고, 줄였으면 true 를 반환한다. 0 이 된 key 는 지운다.
+fn take(counts: &mut std::collections::BTreeMap<String, usize>, key: &str) -> bool {
+    let Some(count) = counts.get_mut(key) else {
+        return false;
+    };
+    *count -= 1;
+    if *count == 0 {
+        counts.remove(key);
+    }
+    true
+}
+
 fn forget_closing<O>(state: &mut State<O>, sidecar: &str) -> Option<ClosingChanged> {
     state.closing.remove(sidecar)?;
     state.closing_changed.clone()
@@ -362,8 +373,9 @@ struct State<O> {
     running: HashMap<String, Process>,
     /// 시작 중인 사이드카. 시작은 잠금 밖에서 하며, 끝나면 Core::started 로 알린다.
     starting: HashSet<String>,
-    /// 사이드카마다 closed 를 보냈고 답을 받지 않은 표면.
-    closing: std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+    /// 사이드카마다 closed 를 보냈고 답을 받지 않은 표면과 그 닫기의 수. 같은 표면을 답이 오기 전에 다시 닫으면 답도
+    /// 닫기마다 온다.
+    closing: std::collections::BTreeMap<String, std::collections::BTreeMap<String, usize>>,
     /// closing 이 바뀐 뒤 잠금 밖에서 부르는 알림. 호스트가 host.sidecars 를 알린다.
     closing_changed: Option<ClosingChanged>,
     owners: HashMap<String, O>,
@@ -387,8 +399,8 @@ struct State<O> {
 struct Stopping {
     /// 이 프로세스에 요청을 보낸 표면. 멈추는 동안 그 표면의 메시지는 위반이 아니다.
     surfaces: HashSet<String>,
-    /// stop 이 closing 목록에서 뺀 닫기. 사이드카는 끝나면서 이 닫기에 답하므로 그 답은 위반이 아니다.
-    closing: HashSet<String>,
+    /// stop 이 closing 목록에서 뺀 닫기와 그 수. 사이드카는 끝나면서 이 닫기에 답하므로 그 답은 위반이 아니다.
+    closing: std::collections::BTreeMap<String, usize>,
     /// 멈추는 동안 프로토콜을 어겨 읽기를 멈췄다. 닫은 파이프가 일으킨 종료는 보고하지 않는다.
     violated: bool,
 }
@@ -674,11 +686,12 @@ impl<O: Owner> Sidecars<O> {
 
             let names: Vec<String> = state.running.keys().cloned().collect();
             for name in names {
-                state
+                *state
                     .closing
                     .entry(name)
                     .or_default()
-                    .insert(surface.clone());
+                    .entry(surface.clone())
+                    .or_default() += 1;
                 closed_any = true;
             }
             // 채널 전송을 시도할 프로세스들을 먼저 수집한다 (borrow 충돌 방지).
@@ -725,7 +738,7 @@ impl<O: Owner> Sidecars<O> {
             .closing
             .iter()
             .flat_map(|(sidecar, surfaces)| {
-                surfaces.iter().map(move |surface| ClosingSurface {
+                surfaces.keys().map(move |surface| ClosingSurface {
                     sidecar: sidecar.clone(),
                     surface: surface.clone(),
                 })
@@ -910,7 +923,7 @@ impl<O: Owner> Sidecars<O> {
                 let closing = state
                     .closing
                     .get(&name)
-                    .map(|surfaces| surfaces.iter().cloned().collect())
+                    .map(|surfaces| surfaces.clone())
                     // 기본값: closing 에 이 사이드카가 없으면 답을 기다리는 닫기가 없으므로 뺀 닫기도 없다.
                     .unwrap_or_default();
                 state.stopping.insert(

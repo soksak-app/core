@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F119: 두 host가 표면의 답을 기다리는 닫기를 수로 센다. 사이드카가 답하기 전에 다시 닫은 표면이 더 이상 "unexpected close answer"로 사이드카를 실패시키지 않는다. 그 실패는 종료 중 owner close 전에 terminal service 연결을 끝내, service가 애플리케이션보다 오래 남았다.
 - F118: 창 검사가 시작하는 요청과 status 대기마다 `step <app> +<seconds> s <step>`을 써서, test 시간 제한으로 끝난 검사가 실행하던 단계를 알려 준다.
 - F115: `document_press_test`가 문서 영역의 첫 누름이 그 페이지에 닿는지 검사한다.
 - F116: mount를 끝내지 않은 모듈의 탭을 닫으면 mount를 기다리지 않고 표면을 바로 없앤다.

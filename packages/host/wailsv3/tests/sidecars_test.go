@@ -953,6 +953,44 @@ func TestCloseAnswerForAnOpenSurfaceFailsTheSidecar(t *testing.T) {
 	}
 }
 
+// contract: sidecars.close.repeated-close-awaits-each-answer
+func TestRepeatedCloseAwaitsEachAnswer(t *testing.T) {
+	// The sidecar echoes requests and answers both closes of s1 after it has received the second one.
+	script := "#!/bin/sh\nn=0\nwhile read line; do case \"$line\" in *closed*) n=$((n+1)); if [ $n -eq 2 ]; then " +
+		"printf '{\"surface\":\"s1\",\"closed\":true}\\n{\"surface\":\"s1\",\"closed\":true}\\n'; fi;; *) echo \"$line\";; esac; done\n"
+	sidecars := closingSidecars(t, script)
+	snapshots := closingSnapshots(sidecars)
+	var written strings.Builder
+	var mu sync.Mutex
+	log.SetOutput(writerFunc(func(p []byte) (int, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		return written.Write(p)
+	}))
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	owner := newFakeOwner("/projects/closing")
+	for round := 0; round < 2; round++ {
+		if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+			t.Fatal(err)
+		}
+		owner.next(t)
+		sidecars.Close("s1")
+		nextClosing(t, snapshots)
+	}
+	for len(nextClosing(t, snapshots)) != 0 {
+	}
+	// The echo of a later request follows both answers in the output, so a failure of either answer arrives first.
+	if err := sidecars.Send(owner, echoSidecar, "s2", json.RawMessage(`{"data":2}`)); err != nil {
+		t.Fatal(err)
+	}
+	owner.next(t)
+	mu.Lock()
+	defer mu.Unlock()
+	if strings.Contains(written.String(), "failed") {
+		t.Fatalf("the second answer of a repeated close failed the sidecar: %q", written.String())
+	}
+}
+
 // contract: sidecars.close.process-end-clears-closing
 func TestEndedSidecarLeavesNoClosingSurface(t *testing.T) {
 	// 첫 요청에 답하고, closed 를 받으면 답하지 않고 끝난다.

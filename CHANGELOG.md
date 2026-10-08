@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F119: both hosts count the pending closes of a surface, so a surface that is closed again before the sidecar answered no longer fails the sidecar with "unexpected close answer"; that failure had ended the terminal service connection during a quit before the owner close, and the service outlived the application.
 - F118: a window check writes each request and status wait it starts as `step <app> +<seconds> s <step>`, so a check that its test time limit ends names the step that ran.
 - F115: `document_press_test` checks that the first press on a document region reaches its page.
 - F116: closing a tab whose module has not finished mounting removes the surface at once instead of waiting for the mount.
