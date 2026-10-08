@@ -641,6 +641,11 @@
   - [ ] F111.4 — P1: 두 host의 창 검사로 region의 package 문서와 그 메시지를 확인한다.
   - [o] F111.5 — P0: F111.2의 후속. 입력: 창이 browser 카드 같은 hybrid 표면을 보인다. 동작: 창 동기화가 표면의 composition을 plugin 없이 먼저 저장하고, 페이지가 plugin과 함께 composition을 선언하므로 표면이 `surface "<id>" changed its composition declaration`으로 실패한다. 기대: 동기화가 표면마다 plugin을 싣고, 같은 plugin의 페이지 선언을 받는다. Red: Wails host에서 `browser.test.mjs`가 `error: surface tab-hfesku mount failed: surface "tab-hfesku" changed its composition declaration`을 기록한다. Green: workbench가 동기화에 표면마다 plugin을 보내고, 두 host가 그것을 composition과 함께 저장하며 plugin이 없거나 다른 표면을 거부하고(contract case `surfaces-geometry.sync.plugin`, `make host-contract-check`가 386개 사례를 통과한다), `browser.test.mjs`가 두 host에서 22개 검사를 통과한다. 2026-10-08 완료.
   - [o] F111.6 — P0: F111.3의 후속. 입력: 페이지가 package 문서에 message를 보낸다. 동작: workbench가 `documentPost`를 부르고, 두 애플리케이션의 runtime은 호출 표에 이 호출이 없어 `unknown host call: documentPost`로 거부한다. 기대: 두 runtime이 `documentPost`를 host command `DocumentPost`와 `document_post`로 넘긴다. Red: `apps/wailsv3/test/runtime-contract.test.mjs`와 `apps/tauriv2/test/runtime-contract.test.mjs`가 `unknown host call: documentPost`로 실패한다. Green: 둘 다 통과한다. `apps/wailsv3`는 10개, `apps/tauriv2`는 12개 test를 통과한다. 2026-10-08 완료.
+  - [~] F111.7 — P1: 웹뷰 안의 애플리케이션 문서를 `sok://<owner>/<path>`로 부르고(owner는 `core`나 plugin id), `soksak://`는 딥링크(F112)를 위해 비워 둔다. 영역은 `soksak-package://<plugin>/<path>` 대신 `sok://<plugin>/<path>`를 열고, Tauri는 시작 문서를 `soksak://localhost/start.json` 대신 `sok://core/start.json`에서 내보내며, 명세, 식별자, 오류, test는 plugin의 문서를 package 문서 대신 plugin 문서라고 부른다.
+    - [o] F111.7.1 — P1: `sok` scheme, 그 owner, plugin 문서를 `docs/spec/native-surfaces.md`, `docs/spec/native-host.md`, `docs/spec/host-contract.md`에 명세한다. 2026-10-08 완료: `native-host.md`에 애플리케이션 주소 절이 있고, 영역, 계약, 시작 문서의 문장이 `sok`와 plugin 문서를 쓴다.
+    - [ ] F111.7.2 — P1: native library와 두 host에서 plugin 문서를 `sok://<plugin>/<path>`로 내보내고, 식별자, 오류, 계약 사례, test를 plugin 문서로 부른다.
+    - [ ] F111.7.3 — P1: Tauri 시작 문서를 `sok://core/start.json`에서 내보낸다.
+- [ ] F112 — P1: 딥링크를 연다. 애플리케이션 번들은 `soksak` URL scheme을 등록하고, host는 `soksak://<owner>/<command>?<params>`(owner는 `core`나 plugin id)를 그 owner의 선언된 command로 실행한다.
 - [o] V1 — 과거 증거의 실제 범위를 보존하고 근거 없는 완료 주장을 제거하며 정본·번역 상태를 동기화한다. 정본 체크리스트 감사가 영문/한글 식별자·깊이·상태를 비교하고 완료 항목 재개·삭제를 거부하며 `make docs-check`가 현재 체크리스트에서 통과한다.
   - [o] V1.1 — 정본 항목 수가 175개가 된 뒤 V1에 남은 잘못된 항목 수를 정정했다. 영문·한글 문서의 식별자·깊이·상태가 같으며 `make docs-check`와 직접 항목 수 검사가 모두 통과한다.
   - [o] V1-1 — P1: 변경 기록 번역 일치를 복구하고 기계적으로 검사한다. `CHANGELOG.md`는 항목 241개, `CHANGELOG.ko.md`는 184개를 가진다(예: F8-4 항목의 번역이 없다). AGENTS.md는 두 파일에 같은 정보를 요구하지만 `make docs-check`는 체크리스트 항목만 비교하고 변경 기록 항목은 비교하지 않는다. 수용 기준: 누락된 항목을 모두 같은 순서로 번역한다. 변경 기록 항목을 빼거나 순서를 바꾼 주입 사례에서 `make docs-check`가 실패하고, 수정한 파일에서는 통과한다. 2026-09-23 완료: 작업 ID, 코드 조각, 숫자로 항목을 정렬해 번역이 없는 영어 항목 57개를 찾았다(미배포 항목 38개와 한국어 파일에 없던 `## 2026-09-22`의 항목 19개). 모두 같은 순서로 번역했다. 두 파일은 이제 제목, 번역 링크, 미배포 구역 하나, 날짜 구역의 한 구조를 가진다. `scripts/checklist.mjs`의 `checkChangelogTranslations`가 `make docs-check`에서 실행된다. Red: 이전 커밋에서 첫 구역 앞의 항목을 보고하며, 단위 테스트는 빠진 항목, 순서가 바뀐 항목, 바뀐 항목, 빠진 구역을 주입한다. 정렬 뒤 코드 조각이 다른 항목 3개(번역된 코드 조각, 빠진 `null`)를 고쳤다. `make docs-check`와 `pnpm test`가 통과한다.
@@ -1051,6 +1056,10 @@
     - [o] R3.5.1 — P1: 검사를 `@soksak/plugin-api`의 `soksak-records`와 `soksak-commits` 명령으로 제공한다. 2026-10-08에 완료했다. `records-check.js`와 `commits-check.js`가 검사와 명령을 담고, core는 `make records-check`, `make commits-check`, commit-msg hook으로 그것을 실행하며, `packages/plugin-api/test/records-check.test.mjs`가 4개 중 4개 통과한다.
     - [ ] R3.5.2 — P1: R3.5.1을 담은 core 릴리스의 `@soksak/plugin-api`로 plugin-browser, plugin-files, plugin-terminal, sidecar-files, sidecar-vt, registry의 `make test`와 CI에서 `soksak-records`와 `soksak-commits`를 실행한다.
 - [o] R4 — P1: `AGENTS.md`에 체크리스트 항목 하나는 따로 개발·검증·커밋하는 기능 하나이고, 더 큰 항목은 세부 항목으로 쪼개며, 완료한 항목은 changelog 항목을 쓰고 커밋한다고 적는다. 2026-10-08 완료.
+- [ ] R5 — P1: 모든 저장소의 코드, 명세, 기록에서 한 개념을 한 용어로 부른다.
+  - [ ] R5.1 — P1: 규칙을 `AGENTS.md`에 적고, 용어와 거부하는 동의어를 `docs/spec/terms.md`에 둔다.
+  - [ ] R5.2 — P1: `make records-check`와 `soksak-records`가 문서, 주석, 식별자, 오류 문구의 거부 동의어를 보고한다.
+  - [ ] R5.3 — P1: core, plugin, sidecar, registry의 거부 동의어를 바꾼다.
 
 ## Tauri/Wails 대칭 감사 (2026-09-21)
 

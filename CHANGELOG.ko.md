@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F111.7.1: 명세가 웹뷰 안의 애플리케이션 문서를 `sok://<owner>/<path>`로 부르고, `soksak` scheme은 딥링크에 남기며, plugin의 문서를 plugin 문서라고 부른다.
 - F111.5: 창 동기화가 표면마다 plugin을 실으므로, browser 카드 같은 hybrid 표면이 `changed its composition declaration`으로 실패하지 않고 올라온다.
 - F111.6: 두 애플리케이션의 runtime이 `documentPost`를 host로 넘기므로, 페이지가 `unknown host call: documentPost`로 실패하지 않고 package 문서에 message를 보낸다.
 - R4: `AGENTS.md`는 체크리스트 항목 하나를 기능 하나의 크기로 정하고, 완료한 항목마다 changelog 항목과 커밋을 요구한다.
