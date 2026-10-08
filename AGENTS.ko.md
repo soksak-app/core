@@ -28,7 +28,7 @@
 ## 구조
 
 - 코어(`packages/`), 플러그인, 사이드카는 코드와 테스트에 서로의 이름을 적지 않는다. 플러그인과 사이드카는 자기 repository에 있다([Repository](docs/spec/plugins.ko.md#repository)). 선언 파일만 이들을 연결한다: `environment.json`은 플러그인을 나열하고, `plugin.json`은 `dependencies`에 필요한 사이드카와 플러그인 패키지를, `extends`와 `contributes`에 선언하고 기여하는 확장 지점을 나열하며, `sidecar.json`은 사이드카를 설명한다. `make boundaries`는 `scripts/workspace-registry.json`이 선언한 repository의 플러그인 id와 사이드카 패키지 이름을 코어 소스가 적지 않았는지 검사한다. 각 플러그인과 사이드카 repository는 자기 소스를 검사한다.
-- 코어, 플러그인, 사이드카, 킷, 명세, 계약은 별도 저장소 경계다. 교환은 선언된 와이어 계약과 노출된 command·DOM·status로만 한다. `environment.json`, `settings`, `plugin.json` 같은 명부가 무엇이 어느 버전으로 설치됐는지 적고, 패키지 사이의 관계는 매니페스트의 `dependencies`와 `contributes`로만 선언한다. 한 패키지의 테스트는 다른 패키지의 구현을 검증하지 않는다. 소비자 테스트는 소비자 경계의 fake/fixture를 사용하고, 구현과 공통 계약 사례는 소유 패키지에서 실행한다. window check는 패키지 테스트가 아니라 environment가 설치한 plugin과 함께 application 전체를 검사하는 e2e 검사이며, 이 규칙은 적용되지 않는다. 다른 패키지의 경로·SDK·빌드·구현 이름을 읽는 테스트는 금지한다.
+- 코어, 플러그인, 사이드카, 킷, 명세, 계약은 별도 저장소 경계다. 교환은 선언된 와이어 계약과 노출된 command·DOM·status로만 한다. `environment.json`, `settings`, `plugin.json` 같은 명부가 무엇이 어느 버전으로 설치됐는지 적고, 패키지 사이의 관계는 매니페스트의 `dependencies`로만 선언한다. 한 패키지의 테스트는 다른 패키지의 구현을 검증하지 않는다. 소비자 테스트는 소비자 경계의 fake/fixture를 사용하고, 구현과 공통 계약 사례는 소유 패키지에서 실행한다. window check는 패키지 테스트가 아니라 environment가 설치한 plugin과 함께 application 전체를 검사하는 e2e 검사이며, 이 규칙은 적용되지 않는다. 다른 패키지의 경로·SDK·빌드·구현 이름을 읽는 테스트는 금지한다.
 - 공통 기능은 코어에 두어 플러그인이 다시 구현하지 않게 한다. 플러그인 기능은 코어로 옮기지 않는다. 사이드카는 한 영역의 네이티브 기능을 담는다.
 - 플랫폼 전용 파일은 소유 패키지의 `platform/<os>/`(`darwin`, `windows`, `linux`) 아래에만 둔다. 다른 플랫폼용 빈 구현 파일을 두지 않는다.
 - 네이티브 코드 패키지(Go, Rust, Objective-C)는 코드를 `src/`, 테스트를 `tests/`, 매니페스트와 빌드 파일을 루트에 둔다. 같은 역할의 Go·Rust 파일은 이름이 같고, 테스트 파일은 두 언어 모두 `_test`로 끝난다. 허용하는 차이는 [네이티브 호스트 명세](docs/spec/hosts.ko.md)에 나열한다.
