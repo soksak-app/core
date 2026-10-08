@@ -43,6 +43,14 @@ pub fn on_quit_request(quit: Box<dyn Fn()>) -> Result<(), String> {
     }
 }
 
+/// 받은 종료 요청에 userCanceledErr 로 답한다(quit_request.h).
+pub fn cancel_quit_requests() {
+    extern "C" {
+        fn sp_quit_request_cancel();
+    }
+    unsafe { sp_quit_request_cancel() }
+}
+
 /// 받은 종료 요청에 오류 없이 답한다(quit_request.h).
 pub fn answer_quit_requests() {
     extern "C" {

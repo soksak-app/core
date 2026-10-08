@@ -820,7 +820,14 @@ pub(crate) fn window_close(window: &Window) -> Result<(), String> {
 pub(crate) fn window_close_kept(window: &Window) -> Result<(), String> {
     window_data(window)?;
     window.state::<Windows>().quit.cancel();
-    Ok(())
+    // A request of the operating system waits for its answer; the application does not quit, so the answer is the
+    // cancellation.
+    window
+        .run_on_main_thread(|| match platform::current() {
+            Ok(platform) => platform.cancel_quit_requests(),
+            Err(error) => log_error("quit request cancel", error),
+        })
+        .map_err(|e| e.to_string())
 }
 
 /// 종료 요청을 처리한다. 준비된 창이 있으면 종료를 막고 각 창에 닫기 요청을 보낸다.

@@ -458,6 +458,9 @@ type Platform interface {
 	OnQuitRequest(quit func()) error
 	// AnswerQuitRequests 는 받은 종료 요청에 오류 없이 답한다. 저장을 마치고 끝나기 직전에 UI 스레드에서 호출한다.
 	AnswerQuitRequests()
+	// CancelQuitRequests 는 받은 종료 요청에 userCanceledErr 로 답한다. 창이 수정된 탭을 지켜 애플리케이션이 끝나지 않을 때
+	// UI 스레드에서 호출한다.
+	CancelQuitRequests()
 
 	// InstantWindowResize 는 창 확대와 애니메이션 크기 변경을 한 화면 갱신 안에 끝나게 한다.
 	// 창을 만들기 전에 호출한다.

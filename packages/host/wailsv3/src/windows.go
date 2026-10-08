@@ -204,6 +204,9 @@ func (h *Host) WindowCloseKept(ctx context.Context) error {
 		return err
 	}
 	h.quit.Cancel()
+	// A request of the operating system waits for its answer; the application does not quit, so the answer is the
+	// cancellation.
+	application.InvokeSync(system.CancelQuitRequests)
 	return nil
 }
 

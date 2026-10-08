@@ -49,3 +49,5 @@ func (implementation) OnQuitRequest(quit func()) error {
 }
 
 func (implementation) AnswerQuitRequests() { C.sp_quit_request_answer() }
+
+func (implementation) CancelQuitRequests() { C.sp_quit_request_cancel() }

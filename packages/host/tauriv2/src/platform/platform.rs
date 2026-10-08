@@ -610,6 +610,9 @@ pub trait Platform: Send + Sync {
     fn on_quit_request(&self, quit: Box<dyn Fn()>) -> Result<(), String>;
     /// 받은 종료 요청에 오류 없이 답한다. 저장을 마치고 끝나기 직전에 메인 스레드에서 호출한다.
     fn answer_quit_requests(&self);
+    /// 받은 종료 요청에 userCanceledErr 로 답한다. 창이 수정된 탭을 지켜 애플리케이션이 끝나지 않을 때 메인 스레드에서
+    /// 호출한다.
+    fn cancel_quit_requests(&self);
 
     // 창 동작
 

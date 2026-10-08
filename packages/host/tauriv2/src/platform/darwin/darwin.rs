@@ -565,6 +565,9 @@ impl Platform for Darwin {
     fn answer_quit_requests(&self) {
         termination::answer_quit_requests()
     }
+    fn cancel_quit_requests(&self) {
+        termination::cancel_quit_requests()
+    }
     fn instant_window_resize(&self) -> Result<(), String> {
         window::instant_resize();
         Ok(())

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F102.6: 창이 수정된 탭을 지키면 두 host가 대기 중인 운영체제의 종료 요청(Dock, 로그아웃, 다른 프로그램)마다 새 플랫폼 연산 `CancelQuitRequests`(`sp_quit_request_cancel`)로 `userCanceledErr`로 답하므로, 보낸 쪽이 애플리케이션이 남는다는 것을 안다.
 - F132: Tauri host는 파일 이름이 아닌, 파일 확장자가 있는 경로에 프레임워크가 대신하는 시작 문서로 답하지 않는다. 프레임워크가 asset 오류(상태 500)로 답하고 Wails 서버는 404로 답한다. `e2e/page-asset.test.mjs`가 실행 중인 두 host에서 400 이상의 상태를 단언한다.
 - F127.3: 진단 요청 `diagnostics.page.request {window, path}`가 page에 애플리케이션의 파일을 요청하게 하고, `e2e/page-asset.test.mjs`가 실행 중인 두 host에서 없는 경로가 `error: page asset: <path>: not found`를 한 번 쓰는 것을 관측한다. 이 관측으로 Tauri host가 없는 경로에 대한 프레임워크 조회 `<path>.html`과 `<path>/index.html`도 보고한다는 것을 알았고, 이제 보고하지 않는다. F132는 Tauri host가 그런 경로에 시작 문서로 답하는 차이를 기록한다.
 - F117.7.3: 창이 key window가 될 때마다 두 host가 그 창에 `window-active` event를 보내고 page가 plugin 상태를 다시 읽는다. 그래서 변경 event를 보내지 않는 원격 registry의 더 새 버전이 사용자가 창으로 돌아올 때 나타난다. host가 창을 포커스해도 Tauri webview는 DOM `focus` event를 보내지 않으므로 page는 그 event를 쓰지 않는다.

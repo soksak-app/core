@@ -23,18 +23,30 @@ static void check(BOOL condition, NSString *message) {
 }
 @end
 
-// 종료 event 를 설치된 처리기로 배달하고 처리기의 결과를 반환한다.
-static OSErr dispatchQuit(void) {
+// 종료 event 를 설치된 처리기로 배달하고 처리기의 결과를 반환한다. replyOut 이 NULL 이 아니면 보낸 쪽이 답을 요구하는
+// 것처럼 답 event 를 만들어 처리기에 넘기고 그 위치에 돌려주며, 호출자가 AEDisposeDesc 로 해제한다.
+static OSErr dispatchQuit(AppleEvent *replyOut) {
     NSAppleEventDescriptor *event = [NSAppleEventDescriptor appleEventWithEventClass:kCoreEventClass
         eventID:kAEQuitApplication targetDescriptor:[NSAppleEventDescriptor currentProcessDescriptor]
         returnID:kAutoGenerateReturnID transactionID:kAnyTransactionID];
     AppleEvent reply = {typeNull, NULL};
+    if (replyOut) {
+        NSAppleEventDescriptor *sender = [NSAppleEventDescriptor currentProcessDescriptor];
+        AECreateAppleEvent(kCoreEventClass, kAEAnswer, sender.aeDesc, kAutoGenerateReturnID, kAnyTransactionID, &reply);
+    }
     // 처리기는 refCon 을 쓰지 않지만 인터페이스가 null 을 받지 않는다.
     static int refCon;
     OSErr result = [[NSAppleEventManager sharedAppleEventManager] dispatchRawAppleEvent:event.aeDesc
         withRawReply:&reply handlerRefCon:(SRefCon)&refCon];
-    AEDisposeDesc(&reply);
+    if (replyOut) *replyOut = reply; else AEDisposeDesc(&reply);
     return result;
+}
+
+// The error number of a reply event; 0 when the reply carries none.
+static OSErr replyError(const AppleEvent *reply) {
+    SInt32 error = 0;
+    AEGetParamPtr(reply, keyErrorNumber, typeSInt32, NULL, &error, sizeof error, NULL);
+    return (OSErr)error;
 }
 
 // 실제 애플리케이션처럼 [NSApp run] 이 기본 처리기를 설치한 뒤에 검사한다.
@@ -47,7 +59,7 @@ static void runChecks(SPCancellingDelegate *delegate) {
     }), @"the quit request handler installs once");
     check(!sp_quit_request_install(^{ }), @"a second installation is rejected");
 
-    OSErr result = dispatchQuit();
+    OSErr result = dispatchQuit(NULL);
     check(result == noErr, [NSString stringWithFormat:@"the handler accepts the quit event (%d)", result]);
     check(requests == 1 && requestOnMain, [NSString stringWithFormat:@"the request runs once on the main thread (%d)", requests]);
     check(delegate.terminateCalls == 0,
@@ -55,6 +67,21 @@ static void runChecks(SPCancellingDelegate *delegate) {
     sp_quit_request_answer();
     sp_quit_request_answer();
     check(YES, @"the answer resumes the suspended event once and a later answer does nothing");
+
+    // A request that the sender wants answered is answered without an error when the application answers it, and with
+    // userCanceledErr when the application cancels it because a window keeps a modified tab.
+    AppleEvent answeredReply = {typeNull, NULL};
+    check(dispatchQuit(&answeredReply) == noErr, @"the handler accepts a quit event that wants an answer");
+    sp_quit_request_answer();
+    check(replyError(&answeredReply) == noErr, [NSString stringWithFormat:@"an answered request carries no error (%d)", replyError(&answeredReply)]);
+    AEDisposeDesc(&answeredReply);
+    AppleEvent cancelledReply = {typeNull, NULL};
+    check(dispatchQuit(&cancelledReply) == noErr, @"the handler accepts a second quit event that wants an answer");
+    sp_quit_request_cancel();
+    sp_quit_request_cancel();
+    check(replyError(&cancelledReply) == userCanceledErr,
+          [NSString stringWithFormat:@"a cancelled request carries userCanceledErr (%d)", replyError(&cancelledReply)]);
+    AEDisposeDesc(&cancelledReply);
 }
 
 int main(void) { @autoreleasepool {

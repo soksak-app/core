@@ -434,6 +434,9 @@ impl Platform for Windows {
     fn answer_quit_requests(&self) {
         unsupported::answer_quit_requests()
     }
+    fn cancel_quit_requests(&self) {
+        unsupported::cancel_quit_requests()
+    }
     fn instant_window_resize(&self) -> Result<(), String> {
         unsupported::instant_window_resize()
     }

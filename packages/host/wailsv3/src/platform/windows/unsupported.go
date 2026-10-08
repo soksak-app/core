@@ -116,6 +116,9 @@ func (implementation) OnQuitRequest(func()) error {
 // AnswerQuitRequests 는 받은 종료 요청이 없으므로 답할 것이 없다. OnQuitRequest 가 실패하면 애플리케이션이 시작하지 않는다.
 func (implementation) AnswerQuitRequests() {}
 
+// CancelQuitRequests 는 받은 종료 요청이 없으므로 취소할 것이 없다.
+func (implementation) CancelQuitRequests() {}
+
 func (implementation) InstantWindowResize() error {
 	return unsupported("window resize animation")
 }

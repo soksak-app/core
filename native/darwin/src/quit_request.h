@@ -8,3 +8,8 @@ bool sp_quit_request_install(void (^request)(void));
 
 // 보류한 종료 요청 event 에 모두 오류 없이 답한다. 보류한 event 가 없으면 아무것도 하지 않는다. 메인 스레드에서 호출한다.
 void sp_quit_request_answer(void);
+
+// Answers every suspended quit request event with userCanceledErr, so the sender (the Dock, a logout, another program)
+// learns that the application did not quit because a window keeps a modified tab. Does nothing without a suspended
+// event. Call it on the main thread.
+void sp_quit_request_cancel(void);

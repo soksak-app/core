@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F102.6: when a window keeps a modified tab, both hosts answer each pending quit request of the operating system (the Dock, a logout, another program) with `userCanceledErr` through the new platform operation `CancelQuitRequests` (`sp_quit_request_cancel`), so the sender learns that the application stays.
 - F132: the Tauri host no longer answers a path with a file extension that names no file with the start document, which the framework falls back to; the framework answers its asset error, status 500, and the Wails server answers 404. `e2e/page-asset.test.mjs` asserts a status of 400 or more on both running hosts.
 - F127.3: the diagnostic request `diagnostics.page.request {window, path}` makes the page request a file of its application, and `e2e/page-asset.test.mjs` observes in both running hosts that a missing path writes `error: page asset: <path>: not found` once. The observation showed that the Tauri host also reported the framework lookups `<path>.html` and `<path>/index.html` of a missing path; it no longer reports them. F132 records that the Tauri host answers such a path with the start document.
 - F117.7.3: each time a window becomes the key window, both hosts send it the event `window-active` and the page reads the plugin state again, so a newer version in the remote registry, which sends no change event, appears when the person returns to the window. The page does not use the DOM `focus` event, which the Tauri webview does not send when the host focuses the window.

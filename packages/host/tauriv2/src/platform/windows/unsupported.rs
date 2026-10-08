@@ -432,6 +432,7 @@ pub fn on_quit_request(_quit: Box<dyn Fn()>) -> Result<(), String> {
 
 /// 받은 종료 요청이 없으므로 답할 것이 없다. on_quit_request 가 실패하면 애플리케이션이 시작하지 않는다.
 pub fn answer_quit_requests() {}
+pub fn cancel_quit_requests() {}
 
 pub fn instant_window_resize() -> Result<(), String> {
     missing("window resize animation")
