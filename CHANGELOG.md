@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F123: both hosts write each answer to an image frame, consumed or refused with its reason, as an `image.frame` event of the performance trace, so a terminal whose frames stop showing tells whether the service sent frames and whether the host presented them.
 - F117.5.2: both hosts read `version` from the `hello` reply of a persistent service and report a service of another version than `installed.json` records, or of no version, in `host.sidecars` `outdated` with its running and installed versions and its open surfaces.
 - F117.4: after each plugin operation both hosts declare the installed sidecars again before they send `plugins-changed`: a standard input and output sidecar whose folder changed or that no plugin names any longer is stopped by the stop rules, so the next send starts the installed executable. The Tauri host identifies the process of a reader by its pid, because a replacement can start a process of the same name before the reader of the stopped one ends.
 - F119.1: the first termination signal makes the Tauri host run its normal quit, as `host.quit` does, instead of ending the process at once, so the windows save, the sidecars stop and the terminal service ends; the Tauri host kills the WebContent process of each window that closes during the quit. `e2e/normal-shutdown.mjs` sends SIGTERM with `SOKSAK_SHUTDOWN_BY=signal` and requires the terminal service to end with `SOKSAK_SHUTDOWN_TERMINAL=1`.

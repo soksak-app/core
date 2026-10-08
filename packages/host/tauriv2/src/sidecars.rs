@@ -25,7 +25,7 @@ use crate::platform::{current, PersistentStream};
 use crate::windows::{emit_window, window_data};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use tauri::Window;
+use tauri::{Manager, Window};
 
 /// 사이드카가 보낸 메시지를 페이지에 전달하는 이벤트 값.
 #[derive(Clone, Serialize)]
@@ -2286,6 +2286,19 @@ impl Owner for Window {
                 crate::exposure::on_main(&window, work)
             },
             |image, response| {
+                // Every answer to a frame, consumed or refused with its reason, is an image.frame event of the
+                // performance trace, so a frame that the host does not present is visible in the timeline
+                // (docs/spec/performance-trace.md).
+                if let Some(workspace) = window.try_state::<crate::workspace::Workspace>() {
+                    crate::performance::observe(workspace.directory(), "host", || {
+                        serde_json::json!({
+                            "event": "image.frame",
+                            "surface": surface,
+                            "name": image,
+                            "response": response,
+                        })
+                    });
+                }
                 let text = serde_json::to_string(&response).map_err(|e| e.to_string())?;
                 let body = RawValue::from_string(text).map_err(|e| e.to_string())?;
                 response_sender.send(surface, image, &body)

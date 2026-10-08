@@ -288,6 +288,11 @@ func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.Ra
 			return err
 		},
 		func(image string, response map[string]interface{}) error {
+			// Every answer to a frame, consumed or refused with its reason, is an image.frame event of the performance
+			// trace, so a frame that the host does not present is visible in the timeline (docs/spec/performance-trace.md).
+			PerformanceObserve(s.host.configDir, "host", func() map[string]any {
+				return map[string]any{"event": "image.frame", "surface": surface, "name": image, "response": response}
+			})
 			responseBytes, err := json.Marshal(response)
 			if err != nil {
 				return err
