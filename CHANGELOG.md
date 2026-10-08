@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F116: closing a tab whose module has not finished mounting removes the surface at once instead of waiting for the mount.
 - R5.3.4, R5.3.5: the plugin and sidecar repositories call plugins, sidecars and releases so.
 - R5.2.1: the term check no longer rejects "package folder" and "package name", which name real npm packages.
 - R5.3.7: the specifications call a plugin or a sidecar that they named a package a plugin or a sidecar; Go, Cargo and npm packages stay packages.

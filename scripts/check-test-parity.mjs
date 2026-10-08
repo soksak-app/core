@@ -1697,6 +1697,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F116",
+    implementation: [
+      { file: "packages/workbench/surface-modules.js", symbol: "closed before it created its composition" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-dispose-pending.test.mjs", id: "a surface whose module has not finished mounting is disposed without waiting for the mount" },
+    ],
+    expected: "Closing a tab removes its surface at once also while its module is mounting, and a mount that ends later disposes its module.",
+    levels: ["unit"],
+  },
+  {
     id: "F105",
     implementation: [
       { file: "scripts/check-release.mjs", symbol: "export function auditMinimum" },

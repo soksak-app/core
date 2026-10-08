@@ -182,6 +182,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     const compositions = [];
     const composition = {
       create: async (elements) => {
+        if (entry.disposed) throw new Error(`surface ${surface.surfaceId} closed before it created its composition`);
         await page.composition.declare(surface.composition);
         const controller = await createSurfaceCompositionController(page, surface.composition, elements, view,
           () => viewport);
@@ -339,9 +340,10 @@ export async function disposeSurface(surfaceId) {
   entry.disposing = (async () => {
     // 여기서 승인을 기다리지 않는다. 제거된 탭은 모듈이 mount를 허가받은 적이 없다는
     // 이유만으로 layout commit을 살려 두면 안 된다.
+    // A module that has not finished mounting is not waited for: closing removes the surface at once, the compositions
+    // that the module created are released here, and a mount that ends later disposes its module (entry.ready).
     if (entry.module) await disposeModule(entry, entry.module);
-    // 실패한 마운트는 오류를 표면 상태와 mountSurface 호출자에게 이미 보고했다. 해제는 마운트가 끝나기만 기다린다.
-    else if (entry.authorized) await Promise.allSettled([entry.ready]);
+    else for (const composition of entry.compositions) await composition.dispose();
     if (entry.exposure) entry.exposure.dispose();
     await entry.context.exposure.dispose();
     entry.state();
