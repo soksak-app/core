@@ -923,6 +923,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F126",
+    implementation: [
+      { file: "packages/workbench/page-start-errors.js", symbol: "export function installPageStartErrors" },
+      { file: "packages/workbench/page-start-errors-install.js", symbol: "export const pageStart" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/page-start-errors.test.mjs", id: "an error before the first screen is written as a page start error with its file and line" },
+      { file: "packages/workbench/test/page-start-errors.test.mjs", id: "the first module of the start document installs the handler" },
+      { file: "packages/workbench/test/files-list.test.mjs", id: "every file that the start document and the modules of the page import is listed in package.json files" },
+    ],
+    expected: "An error that stops the main page from starting is written to the application log as error: page start: <text> @ <file>:<line>, and package.json lists every file that the start document and the page modules import.",
+    levels: ["unit"],
+  },
+  {
     id: "F29",
     implementation: [
       { file: "scripts/check-build-environment.sh", symbol: "pnpm_actual=$(pnpm --version" },
@@ -2761,9 +2775,9 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
   return errors;
 }
 
-// Aggregate review and release records, withdrawn items and changes of agent guidance (R4) are not capabilities and
+// Aggregate review and release records, withdrawn items and changes of agent guidance (R4, R6) are not capabilities and
 // therefore do not need a behavior link. Every completed capability must have one otherwise.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F13", "F25", "G1.4-2", "R2", "R4", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109) and the window checks of plugins (F110). Core cannot read

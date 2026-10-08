@@ -1,4 +1,4 @@
-// A module that the page imports and that package.json does not list in `files` is not staged into the application, so
+// A module that the page imports and that package.json does not list in its file list is not staged into the application, so
 // its request fails and the main page does not start.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";

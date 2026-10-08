@@ -8,8 +8,9 @@ function errorText(event) {
     const where = event.filename ? ` @ ${event.filename}:${event.lineno}` : "";
     return `${event.message}${where}`;
   }
-  const address = event.target?.src ?? event.target?.href;
-  if (address) return `cannot load ${address}`;
+  const element = event.target;
+  if (element && typeof element.src === "string") return `cannot load ${element.src}`;
+  if (element && typeof element.href === "string") return `cannot load ${element.href}`;
   return "an error event without a message or an address";
 }
 
