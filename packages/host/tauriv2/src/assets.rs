@@ -8,7 +8,8 @@ use tauri::utils::assets::{AssetKey, AssetsIter, CspHash};
 use tauri::{Assets, Runtime};
 
 /// Wraps the page files of the application. `report` receives the path of each file that the wrapped files do not
-/// hold, once for each path; a path without a file extension is a document route and is not reported.
+/// hold, once for each path; a path without a file extension is a document route and is not reported, and neither is
+/// the lookup of `<path>.html` or `<path>/index.html` that follows a reported path.
 pub struct ReportingAssets<R: Runtime> {
     inner: Box<dyn Assets<R>>,
     report: Box<dyn Fn(&str) + Send + Sync>,
@@ -34,12 +35,18 @@ impl<R: Runtime> Assets<R> for ReportingAssets<R> {
         let found = self.inner.get(key);
         let path: &str = key.as_ref();
         if found.is_none() && std::path::Path::new(path).extension().is_some() {
-            let first = self
+            let mut reported = self
                 .reported
                 .lock()
-                .expect("the reported paths are not poisoned")
-                .insert(path.to_string());
-            if first {
+                .expect("the reported paths are not poisoned");
+            // The framework looks up `<path>.html` and `<path>/index.html` after a path that it does not find; those
+            // lookups are not requests of the page.
+            let lookup = [".html", "/index.html"].iter().any(|suffix| {
+                path.strip_suffix(suffix)
+                    .is_some_and(|base| reported.contains(base))
+            });
+            if !lookup && reported.insert(path.to_string()) {
+                drop(reported);
                 (self.report)(path);
             }
         }

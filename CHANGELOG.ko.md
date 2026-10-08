@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F127.3: 진단 요청 `diagnostics.page.request {window, path}`가 page에 애플리케이션의 파일을 요청하게 하고, `e2e/page-asset.test.mjs`가 실행 중인 두 host에서 없는 경로가 `error: page asset: <path>: not found`를 한 번 쓰는 것을 관측한다. 이 관측으로 Tauri host가 없는 경로에 대한 프레임워크 조회 `<path>.html`과 `<path>/index.html`도 보고한다는 것을 알았고, 이제 보고하지 않는다. F132는 Tauri host가 그런 경로에 시작 문서로 답하는 차이를 기록한다.
 - F117.7.3: 창이 key window가 될 때마다 두 host가 그 창에 `window-active` event를 보내고 page가 plugin 상태를 다시 읽는다. 그래서 변경 event를 보내지 않는 원격 registry의 더 새 버전이 사용자가 창으로 돌아올 때 나타난다. host가 창을 포커스해도 Tauri webview는 DOM `focus` event를 보내지 않으므로 page는 그 event를 쓰지 않는다.
 - F117.7.2: registry에 plugin 업데이트가 있는 동안 모든 창이 막대 맨 앞에 업데이트 N 컨트롤을 보이고, 이 컨트롤은 새 명령 `core.plugins.show-updates`로 업데이트 목록이 있는 plugin 페이지를 보인다. 업데이트 목록과 오래된 service 행은 카드 격자의 한 줄 전체를 차지한다.
 - F117.7.1: plugin 화면이 registry에 더 새 버전이 있는 plugin을 카드 위에 `<id>: <installed> → <latest>`로 나열하고, 새 명령 `core.plugins.update-all`에 묶인 모두 업데이트 동작이 id 순서로 업데이트하며 첫 실패에서 멈춘다.

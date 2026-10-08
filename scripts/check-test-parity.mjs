@@ -937,6 +937,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F127",
+    implementation: [
+      { file: "packages/workbench/observe.js", symbol: "diagnostics.page.request" },
+      { file: "packages/host/wailsv3/src/assets.go", symbol: "func MissingAssets" },
+      { file: "packages/host/tauriv2/src/assets.rs", symbol: "pub struct ReportingAssets" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/assets_test.go", id: "TestMissingAssetsReportEachPathOnce" },
+      { file: "packages/host/tauriv2/tests/assets_test.rs", id: "missing_assets_report_each_path_once" },
+    ],
+    expected: "A request for a page file that does not exist writes error: page asset: <path>: not found once for the path in both hosts.",
+    levels: ["unit"],
+  },
+  {
     id: "F129",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export async function prepareFixture" },

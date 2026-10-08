@@ -48,6 +48,14 @@ registry.method("diagnostics.transcript", ({ on }) => {
 
 registry.method("diagnostics.drag", (plan) => shake(plan));
 
+// The page requests a file of its application and answers the status, so a check can make the host report a file that
+// does not exist (docs/spec/diagnostics.md).
+registry.method("diagnostics.page.request", async ({ path }) => {
+  if (typeof path !== "string" || !path.startsWith("/")) throw new Error("diagnostics.page.request requires a path that starts with /");
+  const response = await fetch(path);
+  return { path, status: response.status };
+});
+
 // 붙잡은 표면의 답은 호스트가 그 표면을 제거했다고 알린 뒤에 보낸다(docs/spec/endpoint.md). 그 답은 요청이 끝난 뒤에 도착한다.
 const replyHold = createSurfaceReplyHold(log);
 gateSurfaceReplies(replyHold.gate);

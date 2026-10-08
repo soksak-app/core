@@ -56,6 +56,7 @@ func init() {
 	diagnosticMethods["diagnostics.page.collect"] = diagnosticPageCollect
 	diagnosticMethods["diagnostics.native.objects"] = diagnosticNativeObjects
 	diagnosticMethods["diagnostics.process.exit"] = diagnosticProcessExit
+	diagnosticMethods["diagnostics.page.request"] = diagnosticPageMethod("diagnostics.page.request")
 	diagnosticMethods["diagnostics.surface.hold"] = diagnosticPageMethod("diagnostics.surface.hold")
 	diagnosticMethods["diagnostics.surface.held"] = diagnosticPageMethod("diagnostics.surface.held")
 	handleNavigation = navigationDelays.handle

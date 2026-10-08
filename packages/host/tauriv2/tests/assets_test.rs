@@ -33,16 +33,25 @@ fn missing_assets_report_each_path_once() {
         Box::new(Fixture),
         Box::new(move |path| sink.lock().unwrap().push(path.to_string())),
     );
+    // The framework looks up `<path>.html` and `<path>/index.html` after a path that it does not find, and those two
+    // lookups are not requests of the page.
     for path in [
         "/present.js",
         "/missing.js",
+        "/missing.js.html",
+        "/missing.js/index.html",
         "/missing.js",
         "/other.css",
+        "/other.css.html",
+        "/other.css/index.html",
+        "/page.html",
+        "/page.html.html",
+        "/page.html/index.html",
         "/",
         "/no-extension",
     ] {
         let key: AssetKey = path.into();
         let _ = Assets::<Wry>::get(&assets, &key);
     }
-    assert_eq!(*reported.lock().unwrap(), ["/missing.js", "/other.css"]);
+    assert_eq!(*reported.lock().unwrap(), ["/missing.js", "/other.css", "/page.html"]);
 }
