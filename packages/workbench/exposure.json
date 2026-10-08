@@ -1965,7 +1965,7 @@
       },
       {
         "name": "core.space.close",
-        "description": "Closes a space of the current project.",
+        "description": "Closes a space of the current project; the last space does not close. A modified tab of the active space is not closed until the workbench asks whether to save, discard or keep it, and keeping it leaves the space open. The result is closed false when the space stays.",
         "params": {
           "type": "object",
           "properties": {
@@ -1975,7 +1975,12 @@
           }
         },
         "result": {
-          "type": "null"
+          "type": "object",
+          "properties": {
+            "closed": {
+              "type": "boolean"
+            }
+          }
         }
       },
       {

@@ -19,7 +19,7 @@ import {
   activeTab, addTabTo, assignSidebar, openFile, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
   focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, pickItem, pickerState, plane, railState, selectTab,
-  cardSidebars, resizeSidebar, settle, settleModifiedTabs, splitCard, surfaceState, tabsOf,
+  cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
 } from "./plane.js";
 import {
   applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, settingProject, THEMES, value,
@@ -404,7 +404,14 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   });
   registry.command("core.space.activate", ({ id }) => { projects.activateSpace(id); });
   registry.command("core.space.rename", ({ id, title }) => { projects.renameSpace(id, title); });
-  registry.command("core.space.close", ({ id }) => { projects.closeSpace(id); });
+  registry.command("core.space.close", async ({ id }) => {
+    const project = projects.active();
+    // The last space does not close. Only the active space has tabs in the plane, so only it can hold a modified tab.
+    if (project.spaces.length === 1) return { closed: false };
+    if (id === project.activeSpaceId && !(await settleModifiedTabsToClose())) return { closed: false };
+    projects.closeSpace(id);
+    return { closed: true };
+  });
   registry.command("core.grid.size", ({ card, axis, size }) => {
     const grid = currentGrid();
     if (!grid?.setSize(card, axis, size)) throw new Error(`cannot size ${card} on ${axis}`);

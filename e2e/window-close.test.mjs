@@ -95,4 +95,56 @@ for (const app of Object.values(APPS)) {
     await s.until("host.window", (value) => value.quitting === false, "닫지 않기 did not end the quit state");
     await quitting;
   });
+
+  test(`${app.name}: removing the active space asks about a modified tab`, { timeout: 90000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const project = await s.get("core.project");
+    const folder = `space-close-check-${process.pid}`;
+    const path = `${folder}/note.txt`;
+    mkdirSync(join(project.root, folder));
+    writeFileSync(join(project.root, path), "alpha\n");
+    s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
+    const spaces = async () => (await s.get("core.project")).spaces.map((space) => space.id);
+    const first = (await spaces())[0];
+    const space = await s.run("core.space.add");
+    s.cleanup(async () => {
+      if ((await spaces()).includes(space.id)) await s.run("core.space.activate", { id: space.id });
+      const grid = await s.get("core.grid");
+      for (const card of grid.cards) {
+        for (const tab of card.tabs ?? []) {
+          if (tab.modified) {
+            const { closed } = await s.run("core.tab.close", { tab: tab.id });
+            if (!closed) {
+              const picker = await s.until("core.picker", (value) => value.open, "the close question did not open");
+              await s.run("core.picker.pick", { index: picker.items.findIndex((item) => item.name === "저장하지 않고 닫기") });
+            }
+          }
+        }
+      }
+      if ((await spaces()).includes(space.id)) await s.run("core.space.close", { id: space.id });
+    });
+    const { tab } = await s.run("core.file.open", { path });
+    await s.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
+      "the editor tab did not open");
+    await s.until("editor.document", (value) => value.path === path && value.version !== null,
+      "the editor did not read the file", { surface: tab });
+    await s.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, tab);
+    await s.until("editor.document", (value) => value.modified, "editor.edit did not modify the text", { surface: tab });
+
+    const ask = async () => (await s.until("core.picker", (picker) => picker.open && picker.title.includes("저장하지 않은 변경이 있습니다"),
+      "removing the space did not ask about the modified tab")).items.map((item) => item.name);
+    const removing = s.run("core.space.close", { id: space.id });
+    assert.deepEqual(await ask(), QUESTION);
+    await s.run("core.picker.pick", { index: 2 });
+    assert.deepEqual(await removing, { closed: false });
+    assert.deepEqual(await spaces(), [first, space.id], "닫지 않기 removed the space");
+
+    const discarding = s.run("core.space.close", { id: space.id });
+    assert.deepEqual(await ask(), QUESTION);
+    await s.run("core.picker.pick", { index: 1 });
+    assert.deepEqual(await discarding, { closed: true });
+    assert.deepEqual(await spaces(), [first]);
+  });
 }
