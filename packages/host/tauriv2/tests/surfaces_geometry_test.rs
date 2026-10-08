@@ -54,7 +54,8 @@ fn sync_request_check_rejects_an_invalid_window_overlay_rectangle() {
         "overlays": [{"x": 1.0, "y": 2.0, "w": 3.0, "h": 4.0}, {"x": 5.0, "y": 6.0, "w": 7.0, "h": 8.0, "visible": false}],
     }));
     assert_eq!(
-        check_sync_request(&valid, &held, &HashMap::new()).expect("a valid sync request is accepted"),
+        check_sync_request(&valid, &held, &HashMap::new())
+            .expect("a valid sync request is accepted"),
         vec![
             WindowOverlay {
                 x: 1.0,
@@ -92,7 +93,9 @@ fn sync_request_check_requires_the_same_plugin_of_each_surface() {
         "tab-1".to_string(),
         serde_json::from_value(document).expect("the composition fixture is valid"),
     )]);
-    let request = sync_request(serde_json::json!({"settled": true, "titlebar": 40.0, "surfaces": [value.clone()]}));
+    let request = sync_request(
+        serde_json::json!({"settled": true, "titlebar": 40.0, "surfaces": [value.clone()]}),
+    );
     let same = HashMap::from([("tab-1".to_string(), "page".to_string())]);
     assert!(check_sync_request(&request, &held, &same).is_ok());
     let other = HashMap::from([("tab-1".to_string(), "other".to_string())]);
@@ -101,7 +104,8 @@ fn sync_request_check_requires_the_same_plugin_of_each_surface() {
         r#"surface "tab-1" changed its composition declaration"#
     );
     value["plugin"] = serde_json::json!("");
-    let missing = sync_request(serde_json::json!({"settled": true, "titlebar": 40.0, "surfaces": [value]}));
+    let missing =
+        sync_request(serde_json::json!({"settled": true, "titlebar": 40.0, "surfaces": [value]}));
     assert_eq!(
         check_sync_request(&missing, &HashMap::new(), &HashMap::new()).unwrap_err(),
         r#"surface "tab-1" requires its plugin"#
