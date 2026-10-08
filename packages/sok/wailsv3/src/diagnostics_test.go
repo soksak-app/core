@@ -1,4 +1,4 @@
-//go:build diagnostics
+//go:build diagnostics && !dev
 
 package sok
 
@@ -23,8 +23,9 @@ func TestCaptureRequestIsADiagnosticCommand(t *testing.T) {
 }
 
 // contract: cli.identity.build-identifier
-func TestTheDiagnosticBuildUsesTheDevelopmentIdentifier(t *testing.T) {
-	if identifier := Identity(); identifier != "app.soksak.wails.dev" {
+func TestADiagnosticBuildWithoutTheDevTagUsesTheReleaseIdentifier(t *testing.T) {
+	// A 0.0.x release is a diagnostic build and reads the configuration folder of the installed application.
+	if identifier := Identity(); identifier != "app.soksak.wails" {
 		t.Fatalf("identity = %q", identifier)
 	}
 }

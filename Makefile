@@ -201,7 +201,11 @@ verify: prepare docs-check exposure-check parity-check host-parity-check
 #
 # 각 앱은 debug 와 release 두 프로필로 빌드한다. release 는 각 도구의 표준 축소
 # 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다. debug 는 진단 빌드(Go 태그·cargo
-# 기능 diagnostics)이고 release 는 진단 메서드를 포함하지 않는다.
+# 기능 diagnostics)다. While the declared release version is 0.0.x, release is a diagnostic build too, so a defect on a
+# user's machine is recorded when it appears (AGENTS.md); a later version series builds release without diagnostics.
+COMMA := ,
+# The declared release version is the RELEASE constant of scripts/check-versions.mjs.
+DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
 .PHONY: native-darwin registry install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check rust-clippy-check go-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
@@ -252,8 +256,8 @@ LSREGISTER = /System/Library/Frameworks/CoreServices.framework/Frameworks/Launch
 bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
 
 # command line sok(docs/spec/cli.md)을 build 해 번들의 실행 파일 옆에 둔다. 첫 인자는 번들, 둘째 인자는 profile 이다.
-sok-wailsv3 = go build -C packages/sok/wailsv3 $(if $(filter release,$(2)),-trimpath -ldflags "-s -w",-tags diagnostics) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
-sok-tauriv2 = cargo build -p soksak-sok-tauriv2 $(if $(filter release,$(2)),--release,--features diagnostics) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
+sok-wailsv3 = go build -C packages/sok/wailsv3 $(if $(filter release,$(2)),-trimpath -ldflags "-s -w") $(if $(filter debug,$(2)),-tags "diagnostics dev",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
+sok-tauriv2 = cargo build -p soksak-sok-tauriv2 $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features diagnostics$(COMMA)dev,$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
 native-darwin:
 	@$(MAKE) -C native/darwin
@@ -298,16 +302,16 @@ tauriv2-build: native-darwin frontend-tauriv2
 	@$(call bundle-info,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@$(call bundle-dev,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@touch apps/tauriv2/src/main.rs
-	@$(CARGO_ENV) cargo build -p soksak-tauriv2 --features diagnostics
+	@$(CARGO_ENV) cargo build -p soksak-tauriv2 --features diagnostics,dev
 	@cp target/debug/soksak-tauriv2 $(TAURI_DEBUG)
 	@$(call sok-tauriv2,$(TAURI_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(TAURI_DEBUG_BUNDLE))
 
 tauriv2-build-release: native-darwin build
 	@$(call bundle-info,$(TAURI_RELEASE_BUNDLE),tauriv2)
-	@$(call stage-tauriv2)
+	@$(call stage-tauriv2,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
 	@touch apps/tauriv2/src/main.rs
-	@$(CARGO_ENV) cargo build --release -p soksak-tauriv2
+	@$(CARGO_ENV) cargo build --release -p soksak-tauriv2 $(if $(DIAGNOSTIC_RELEASE),--features diagnostics)
 	@cp target/release/soksak-tauriv2 $(TAURI_RELEASE)
 	@$(call sok-tauriv2,$(TAURI_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(TAURI_RELEASE_BUNDLE))
@@ -315,14 +319,14 @@ tauriv2-build-release: native-darwin build
 wailsv3-build: native-darwin frontend-wailsv3
 	@$(call bundle-info,$(WAILS_DEBUG_BUNDLE),wailsv3)
 	@$(call bundle-dev,$(WAILS_DEBUG_BUNDLE),wailsv3)
-	@$(GO_ENV) go build -C apps/wailsv3 -tags diagnostics -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
+	@$(GO_ENV) go build -C apps/wailsv3 -tags "diagnostics dev" -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
 	@$(call sok-wailsv3,$(WAILS_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(WAILS_DEBUG_BUNDLE))
 
 wailsv3-build-release: native-darwin build
 	@$(call bundle-info,$(WAILS_RELEASE_BUNDLE),wailsv3)
-	@$(call stage-wailsv3)
-	@$(GO_ENV) go build -C apps/wailsv3 -trimpath -ldflags "-s -w $(GO_LINK)" -o ../../$(WAILS_RELEASE) ./src
+	@$(call stage-wailsv3,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
+	@$(GO_ENV) go build -C apps/wailsv3 -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_LINK)" -o ../../$(WAILS_RELEASE) ./src
 	@$(call sok-wailsv3,$(WAILS_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(WAILS_RELEASE_BUNDLE))
 

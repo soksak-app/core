@@ -146,10 +146,10 @@ export const defaults = {
   /* 애플리케이션 메뉴의 언어. auto = 시스템 언어(지원하지 않으면 en). */
   language: "auto",
 
-  /* 성능 트레이스(V5-104). 켜면 모든 계층이 <config-dir>/logs/performance.ndjson 에
-     성능 줄을 기록하고 꺼지면 어떤 파일 작업도 하지 않는다. 진단 빌드 전용이 아니라
-     모든 빌드에 상시 있는 장치다(docs/spec/settings.md). */
-  "diagnostics.performance": false,
+  /* The performance trace, present in every build. When it is on, every layer appends to
+     <config-dir>/logs/performance.ndjson; when it is off, no layer does any file work. While the release version is
+     0.0.x it is on by default, so a defect is recorded when it appears (AGENTS.md, docs/spec/settings.md). */
+  "diagnostics.performance": true,
 
   /* 프로젝트 탭의 위치. top = 크롬 행, left = 왼쪽 세로 목록. */
   projectTabs: "top",

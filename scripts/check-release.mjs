@@ -1,4 +1,6 @@
-// release 번들에 진단 코드가 없는지 검사한다.
+// Checks the diagnostic code of the release bundles. While the version is 0.0.x every release is a diagnostic build
+// (AGENTS.md), so its executables carry the diagnostic methods and the frontend embeds the page diagnostic module; a
+// later version series carries no diagnostic code and embeds the release page diagnostic module.
 //
 // 진단 코드(호스트의 진단 메서드, 창 녹화, 페이지 진단 모듈)는 진단 빌드에만 들어간다. 이 검사는 지정한
 // 번들의 Contents/MacOS 에 있는 모든 실행 파일을 읽는다. 두 애플리케이션은 프런트엔드를 압축 없이 실행 파일에
@@ -15,7 +17,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
-import { plistString } from "./check-versions.mjs";
+import { plistString, RELEASE } from "./check-versions.mjs";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 
@@ -32,6 +34,18 @@ const MARKS = [
   { what: "diagnostic argument", pattern: /registry-ca/ },
 ];
 
+/** Whether a release of version is a diagnostic build: every 0.0.x release is one (AGENTS.md). */
+export const diagnosticRelease = (version) => /^0\.0\./.test(version);
+
+/**
+ * Audits the diagnostic code of an executable. A diagnostic release requires the diagnostic methods; another release
+ * refuses every diagnostic mark.
+ */
+export function auditDiagnostics(errors, label, text, required) {
+  if (!required) return find(errors, label, text);
+  if (!MARKS[0].pattern.test(text)) errors.push(`${label}: lacks the diagnostic methods that a 0.0.x release carries`);
+}
+
 // 텍스트에서 진단 표지를 찾는다. 발견하면 errors 배열에 추가한다.
 export const find = (errors, label, text) => {
   for (const mark of MARKS) {
@@ -46,9 +60,9 @@ const latin1 = (bytes) => Buffer.from(bytes).toString("latin1");
  * published 는 워크벤치가 배포하는 파일 {path, bytes}, releaseModule 은 release 페이지 진단 모듈의
  * 바이트다. 배포 파일이나 release 모듈이 원문으로 없으면 프런트엔드를 읽을 수 없다는 오류를 낸다.
  */
-export function auditFrontend(errors, label, text, { published, releaseModule }) {
+export function auditFrontend(errors, label, text, { published, pageModule, pageModuleName }) {
   const missing = published.filter((file) => !text.includes(latin1(file.bytes))).map((file) => file.path);
-  if (!text.includes(latin1(releaseModule))) missing.push("release page diagnostics module");
+  if (!text.includes(latin1(pageModule))) missing.push(pageModuleName);
   if (missing.length) errors.push(`${label}: does not embed a readable frontend; missing ${missing.join(", ")}`);
 }
 
@@ -109,13 +123,17 @@ function* expand(dir, path) {
   else for (const name of readdirSync(full)) yield* expand(dir, join(path, name));
 }
 
-/** 애플리케이션의 워크벤치 배포 파일과 release 페이지 진단 모듈. */
-function applicationSources(app) {
+/**
+ * The published files of the workbench of an application and the page diagnostic module that a release embeds: the
+ * diagnostic module (observe.js) in a diagnostic release, the release module otherwise.
+ */
+function applicationSources(app, diagnostic) {
   const appDir = join(ROOT, "apps", app);
   const workbench = packageDir(appDir, "@soksak/workbench");
   const { files } = JSON.parse(readFileSync(join(workbench, "package.json"), "utf8"));
   const published = files.flatMap((file) => [...expand(workbench, file)]).map((path) => ({ path, bytes: readFileSync(join(workbench, path)) }));
-  return { published, releaseModule: readFileSync(join(workbench, "release-diagnostics.js")) };
+  const module = diagnostic ? "observe.js" : "release-diagnostics.js";
+  return { published, pageModule: readFileSync(join(workbench, module)), pageModuleName: `page diagnostics module ${module}` };
 }
 
 // CLI 로 직접 실행될 때만 검사를 수행한다.
@@ -142,6 +160,9 @@ if (import.meta.main) {
     throw new Error("required release options: --macos-minimum VERSION --wailsv3-bundle PATH --tauriv2-bundle PATH");
   }
   const errors = [];
+  // The version of the release is the declared workspace version.
+  const version = RELEASE;
+  const diagnostic = diagnosticRelease(version);
 
   for (const app of APPS) {
     // 애플리케이션과 command line sok 은 번들의 Contents/MacOS 에 있다(docs/spec/hosts.md).
@@ -157,8 +178,11 @@ if (import.meta.main) {
       const path = join(executables, name);
       const bytes = readFileSync(path);
       const text = latin1(bytes);
-      find(errors, path, text);
-      if (path === executable) auditFrontend(errors, path, text, applicationSources(app));
+      // A diagnostic release requires the diagnostic methods in the application and in sok; the other executables
+      // are sidecar helpers that carry none.
+      if (path === executable || name === "sok") auditDiagnostics(errors, path, text, diagnostic);
+      else find(errors, path, text);
+      if (path === executable) auditFrontend(errors, path, text, applicationSources(app, diagnostic));
       try {
         built.push({ path, application: path === executable, minimum: machoMinimum(bytes) });
       } catch (error) {
@@ -173,6 +197,6 @@ if (import.meta.main) {
     console.error(errors.join("\n"));
     process.exitCode = 1;
   } else {
-    console.log(`Release checks passed: ${APPS.length} applications`);
+    console.log(`Release checks passed: ${APPS.length} applications, ${diagnostic ? "diagnostic" : "without diagnostics"} for version ${version}`);
   }
 }

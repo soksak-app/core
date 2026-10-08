@@ -12,7 +12,7 @@ test('project values override common values and opening mode remains common-only
   assert.equal(effectiveSettings(defaults,{},{}).projectOpening,'windows');
 });
 
-test('the performance trace flag is a declared boolean defaulting to false', async () => {
+test('the performance trace flag is a declared boolean defaulting to true', async () => {
   const realDocument = globalThis.document;
   globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
   const memory = { common: {}, projects: [] };
@@ -23,11 +23,11 @@ test('the performance trace flag is a declared boolean defaulting to false', asy
       settings: async (id, values) => { memory.common = { ...memory.common, ...values }; },
       onChange: () => () => {},
     });
-    // 기본은 꺼짐 — 꺼진 상태가 성능 기록의 정상이다.
-    assert.equal(value('diagnostics.performance'), false);
-    await change({ 'diagnostics.performance': true }, 'common');
-    assert.equal(memory.common['diagnostics.performance'], true);
+    // While the version is 0.0.x the trace is on by default, so a defect is recorded when it appears (AGENTS.md).
     assert.equal(value('diagnostics.performance'), true);
+    await change({ 'diagnostics.performance': false }, 'common');
+    assert.equal(memory.common['diagnostics.performance'], false);
+    assert.equal(value('diagnostics.performance'), false);
     assert.throws(() => change({ 'diagnostics.performance': 'yes' }, 'common'),
       /Invalid setting diagnostics.performance/);
   } finally {
@@ -51,9 +51,10 @@ test('a settings file change propagates the effective performance switch', async
       snapshot: async () => structuredClone(memory), settings: async () => {},
       onChange: (listener) => { changed = listener; },
     });
-    memory.common['diagnostics.performance'] = true;
+    // The trace starts on by default, and a settings file that turns it off propagates the change.
+    memory.common['diagnostics.performance'] = false;
     await changed();
-    assert.deepEqual(calls, [false, true], 'file changes did not propagate the effective switch');
+    assert.deepEqual(calls, [true, false], 'file changes did not propagate the effective switch');
   } finally {
     globalThis.document = previous;
   }

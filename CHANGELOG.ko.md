@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F124, F124.1: release version이 0.0.x인 동안 `make wailsv3-build-release tauriv2-build-release`가 두 host, `sok`, page를 진단 포함으로 빌드하고, `scripts/check-release.mjs`는 그런 release에 진단 method와 page 진단 module이 있기를 요구하며, `diagnostics.performance`의 기본값은 true다. `.dev` 식별자는 debug 빌드만 정하는 새 `dev` build 플래그(Go 태그, Cargo 기능)에서 오므로, 진단 release는 `app.soksak.<host>`와 설치된 애플리케이션의 설정 폴더를 유지한다.
 - F123: 두 host가 image frame에 대한 모든 답(consumed나 그 까닭을 담은 거절)을 performance trace의 `image.frame` event로 쓴다. 그래서 frame 표시가 멈춘 terminal에서 service가 frame을 보냈는지와 host가 표시했는지를 알 수 있다.
 - F117.5.2: 두 host가 persistent service의 `hello` 응답에서 `version`을 읽고, `installed.json`의 기록과 다르거나 version이 없는 service를 실행 중인 version, 설치된 version, 열린 표면 수와 함께 `host.sidecars` `outdated`로 보고한다.
 - F117.4: 두 host는 plugin 작업마다 `plugins-changed`를 보내기 전에 설치된 sidecar를 다시 선언한다. 폴더가 바뀌었거나 어느 plugin도 더 이상 지정하지 않는 표준 입출력 sidecar는 중지 규칙대로 멈추므로, 다음 send가 설치된 실행 파일을 시작한다. 교체는 멈춘 process의 읽기 스레드가 끝나기 전에 같은 이름의 process를 시작할 수 있으므로, Tauri host는 읽기 스레드의 process를 pid로 구분한다.

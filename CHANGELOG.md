@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F124, F124.1: while the release version is 0.0.x, `make wailsv3-build-release tauriv2-build-release` build both hosts, `sok` and the page with diagnostics, `scripts/check-release.mjs` requires the diagnostic methods and the page diagnostic module in such a release, and `diagnostics.performance` defaults to true. The `.dev` identifier comes from the new `dev` build flag (Go tag, Cargo feature), which only debug builds set, so a diagnostic release keeps `app.soksak.<host>` and the configuration folder of the installed application.
 - F123: both hosts write each answer to an image frame, consumed or refused with its reason, as an `image.frame` event of the performance trace, so a terminal whose frames stop showing tells whether the service sent frames and whether the host presented them.
 - F117.5.2: both hosts read `version` from the `hello` reply of a persistent service and report a service of another version than `installed.json` records, or of no version, in `host.sidecars` `outdated` with its running and installed versions and its open surfaces.
 - F117.4: after each plugin operation both hosts declare the installed sidecars again before they send `plugins-changed`: a standard input and output sidecar whose folder changed or that no plugin names any longer is stopped by the stop rules, so the next send starts the installed executable. The Tauri host identifies the process of a reader by its pid, because a replacement can start a process of the same name before the reader of the stopped one ends.

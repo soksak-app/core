@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { auditFrontend, auditMinimum, machoMinimum } from "../check-release.mjs";
+import { auditDiagnostics, auditFrontend, auditMinimum, diagnosticRelease, machoMinimum } from "../check-release.mjs";
 
 const script = fileURLToPath(new URL("../check-release.mjs", import.meta.url));
 
@@ -24,7 +24,8 @@ function check(args) {
 const bytes = (text) => Buffer.from(text, "utf8");
 const sources = {
   published: [{ path: "index.html", bytes: bytes("<main>작업</main>") }, { path: "card.js", bytes: bytes("export const card = 1;") }],
-  releaseModule: bytes("// 진단 빌드가 아니다.\nexport {};\n"),
+  pageModule: bytes("// 진단 빌드가 아니다.\nexport {};\n"),
+  pageModuleName: "release page diagnostics module",
 };
 const [page, card, release] = ["<main>작업</main>", "export const card = 1;", "// 진단 빌드가 아니다.\nexport {};\n"];
 
@@ -131,3 +132,21 @@ for (const [name, args, message] of [
     assert.match(check(args), message);
   });
 }
+
+// While the version is 0.0.x, a release is a diagnostic build, so its executables carry the diagnostic methods; a later
+// version series carries none (AGENTS.md, F124).
+test("a 0.0.x release requires the diagnostic methods and a later release refuses them", () => {
+  assert.equal(diagnosticRelease("0.0.8"), true);
+  assert.equal(diagnosticRelease("0.1.0"), false);
+  const audited = (text, required) => {
+    const errors = [];
+    auditDiagnostics(errors, "app", text, required);
+    return errors;
+  };
+  const diagnostic = executable("diagnostics.capture.still", "sp_capture_start");
+  const plain = executable("host.window", "page");
+  assert.deepEqual(audited(diagnostic, true), []);
+  assert.deepEqual(audited(plain, true), ["app: lacks the diagnostic methods that a 0.0.x release carries"]);
+  assert.deepEqual(audited(plain, false), []);
+  assert.match(audited(diagnostic, false).join("\n"), /app: contains a diagnostic method/);
+});

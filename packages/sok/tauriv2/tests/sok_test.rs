@@ -697,8 +697,10 @@ fn path_entries_fail_where_the_operating_system_has_no_folder() {
 
 // contract: cli.identity.build-identifier
 #[test]
-fn the_build_identifier_follows_the_build() {
-    if cfg!(feature = "diagnostics") {
+fn the_build_identifier_follows_the_dev_feature() {
+    // A debug build sets dev and runs beside the installed application; a diagnostic release without dev reads the
+    // configuration folder of the installed application.
+    if cfg!(feature = "dev") {
         assert_eq!(soksak_sok::identity::identity(), "app.soksak.tauri.dev");
     } else {
         assert_eq!(soksak_sok::identity::identity(), "app.soksak.tauri");

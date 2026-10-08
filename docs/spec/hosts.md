@@ -152,7 +152,8 @@ On Windows both hosts implement only directory identity (`platform/windows/ident
 | A3 | none | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri configuration |
 | A4 | `go.mod`, `go.sum` | `Cargo.toml` | Each language has its own manifest; the host packages have the same difference |
 | C1 | `src/cmd/sok/main.go` | `src/main.rs` | A Go command needs its own `main` package directory; a Rust binary target is `src/main.rs` beside the library root |
-| C2 | `src/diagnostics_test.go`, `tests/build_test.go` | none | A Go file belongs to one build by its build constraint, so the diagnostic build of `sok` tests its `capture` request and its `.dev` identifier in a `diagnostics`-tagged unit test and the other build tests the usage error and the release identifier in a `!diagnostics` test; Rust tests both builds with `cfg(feature = "diagnostics")` in `tests/sok_test.rs` |
+| C2 | `src/diagnostics_test.go`, `src/dev_test.go`, `tests/build_test.go` | none | A Go file belongs to one build by its build constraint, so the diagnostic build of `sok` tests its `capture` request and the release identifier in a `diagnostics && !dev` unit test, the build with `dev` tests the `.dev` identifier in a `dev` unit test, and the other build tests the usage error and the release identifier in a `!diagnostics` test; Rust tests the builds with `cfg(feature = "diagnostics")` and `cfg(feature = "dev")` in `tests/sok_test.rs` |
+| C3 | `src/dev.go` | none | Go selects the `.dev` identifier by an `init` in a file that only the `dev` build tag compiles; Rust selects it with `cfg!(feature = "dev")` inside `src/identity.rs`, so it has no file of its own |
 
 ## Process lifecycle
 

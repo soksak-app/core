@@ -5,8 +5,10 @@ edition = "2021"
 description = "Command line sok of the Tauri application"
 
 [features]
-# 진단 build 의 명령(capture)을 둔다. 디버그 bundle 의 sok 만 켠다.
+# diagnostics adds the diagnostic command (capture); debug bundles and 0.0.x releases set it.
 diagnostics = []
+# dev selects the .dev identifier, so a debug bundle does not use the data of the installed application.
+dev = []
 
 [lib]
 name = "soksak_sok"

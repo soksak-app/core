@@ -40,7 +40,7 @@ Window choices select content for one fixed left sidebar and one fixed right sid
 
 ### 진단
 
-`diagnostics.performance` is the permanent performance trace ([performance trace](performance-trace.md)). It is a boolean, default false, set through the settings file rather than a settings-window control. While it is false no layer performs any performance logging work — no file is created, no formatting runs. Setting it true makes every layer append events to `logs/performance.ndjson` under the configuration directory, and setting it back false stops the logging at the next event boundary; the file and its rotation belong to the trace, not to the setting, so an old log survives a restart with the flag off.
+`diagnostics.performance` is the permanent performance trace ([performance trace](performance-trace.md)). It is a boolean, set through the settings file rather than a settings-window control; it defaults to true while the release version is 0.0.x, so a defect is recorded when it appears, and to false in a later version series. While it is false no layer performs any performance logging work — no file is created, no formatting runs. Setting it true makes every layer append events to `logs/performance.ndjson` under the configuration directory, and setting it back false stops the logging at the next event boundary; the file and its rotation belong to the trace, not to the setting, so an old log survives a restart with the flag off.
 
 
 ### 플러그인
