@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F129: the preparation of a window check restores the settings that it changed, including `diagnostics.performance`, when the check ends, so a person who uses the check application afterwards still has the performance trace.
 - F124.3.6: every file of the debug view has 보기 and 저장 in the same columns, and a PNG file (a capture) shows as an image; `debugRead` answers `kind` `text` with `text` or `kind` `image` with the `data:image/png;base64,` address `image`, and refuses a PNG file larger than 16 MB and a `.png` file without the PNG signature. The optional file `/wails/custom.js` of the Wails runtime is not reported as a missing page file.
 - F127.2: both hosts write `error: page asset: <path>: not found` once for each page file that they cannot serve; a path without a file extension is a document route and is not reported.
 - F124.3.5: the debug view shows the content of a text file of `logs/` with a 보기 button and a 목록 button that returns to the list; a file larger than 256 KB shows its last 256 KB from a character boundary and says that the beginning is left out. The host call `debugRead` refuses a path outside `logs/` and a file that is not text, and `core.debug` reports `viewing`.

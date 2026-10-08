@@ -937,6 +937,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F129",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "export async function prepareFixture" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/prepare-fixture-settings.test.mjs", id: "the preparation of a check restores the settings that it changed when the check ends" },
+    ],
+    expected: "The preparation of a window check restores the settings that it changed, including diagnostics.performance, when the check ends.",
+    levels: ["unit"],
+  },
+  {
     id: "F29",
     implementation: [
       { file: "scripts/check-build-environment.sh", symbol: "pnpm_actual=$(pnpm --version" },

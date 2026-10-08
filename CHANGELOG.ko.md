@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F129: 창 검사의 준비는 바꾼 설정(`diagnostics.performance` 포함)을 검사가 끝날 때 되돌린다. 그래서 그 뒤에 검사 애플리케이션을 쓰는 사람도 performance trace를 가진다.
 - F124.3.6: 디버그 화면의 모든 파일이 같은 칸에 보기와 저장을 가지고, PNG 파일(캡처)은 이미지로 보인다. `debugRead`는 `kind` `text`이면 `text`를, `kind` `image`이면 `data:image/png;base64,` 주소 `image`를 답하고, 16 MB보다 큰 PNG 파일과 PNG signature가 없는 `.png` 파일을 거부한다. Wails runtime의 선택 파일 `/wails/custom.js`는 없는 page 파일로 알리지 않는다.
 - F127.2: 두 host가 내줄 수 없는 page 파일마다 한 번 `error: page asset: <path>: not found`를 쓴다. 파일 확장자가 없는 경로는 문서 경로이므로 알리지 않는다.
 - F124.3.5: 디버그 화면이 보기 단추로 `logs/`의 글 파일 내용을 보이고 목록 단추로 목록에 돌아간다. 256 KB보다 큰 파일은 문자 경계에서 시작하는 마지막 256 KB를 보이고 앞부분이 생략됐다고 밝힌다. host 호출 `debugRead`는 `logs/` 밖의 경로와 글이 아닌 파일을 거부하고, `core.debug`는 `viewing`을 보고한다.

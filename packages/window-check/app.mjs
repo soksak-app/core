@@ -619,6 +619,9 @@ const START = { width: 1200, height: 760 };
  * 표면을 기다리는 일은 그 표면을 아는 저장소의 준비가 한다.
  */
 export async function prepareFixture(s, { settings = {}, performanceTrace = TRACE } = {}) {
+  // Remember the values before the preparation changes the settings. A person also uses the check application, so the
+  // values return when the check ends (F129).
+  await keepCommonSettings(s);
   for (const window of await s.get("host.windows")) {
     if (window.window !== s.window) await s.on(window.window).close();
   }
