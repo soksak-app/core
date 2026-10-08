@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F101.2: the terminal service 0.0.6 and the terminal plugin 0.0.6, whose shells run in a UTF-8 locale, are in the public registry.
 - F101.1: a terminal shell runs in a UTF-8 locale when the terminal service has no `LANG`, `LC_ALL` or `LC_CTYPE`.
 - R3.1: AGENTS.md states that records state facts about the repository and that commit messages use `type(scope): Subject (#ID)` without footers.
 - F100.2: the release workflows of the plugin and sidecar repositories build `sok` from a declared core release instead of the core tag of their own name.
