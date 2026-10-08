@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F127.2: 두 host가 내줄 수 없는 page 파일마다 한 번 `error: page asset: <path>: not found`를 쓴다. 파일 확장자가 없는 경로는 문서 경로이므로 알리지 않는다.
 - F124.3.5: 디버그 화면이 보기 단추로 `logs/`의 글 파일 내용을 보이고 목록 단추로 목록에 돌아간다. 256 KB보다 큰 파일은 문자 경계에서 시작하는 마지막 256 KB를 보이고 앞부분이 생략됐다고 밝힌다. host 호출 `debugRead`는 `logs/` 밖의 경로와 글이 아닌 파일을 거부하고, `core.debug`는 `viewing`을 보고한다.
 - F124.3.3: 두 host의 도움말 > 디버그가 디버그 화면을 연다. 화면은 `logs/state-<time>.json`을 기록하고 `logs/`의 파일을 크기와 시각과 함께 나열하며 파일 하나나 전부를 저장 창으로 저장한다. page는 `core.debug`, `core.debug.open`, `core.debug.close`, `core.debug.save`, `core.debug.save-all`을 선언하고, 화면이 열려 있는 동안 `core.screen`은 `modal` `debug`를 보고한다.
 - F126: main page가 시작하지 못하게 하는 오류(불러오지 못하거나 해석하지 못하거나 실행 중 던진 module)를, 시작 문서의 첫 module이 설치하고 page가 첫 화면 뒤에 거두는 handler가 `error: page start: <text> @ <file>:<line>`로 애플리케이션 로그에 쓴다. 시작 문서와 page module이 import하는 모든 파일을 `package.json` `files`가 담아야 한다는 test가 있다.

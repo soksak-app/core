@@ -140,7 +140,7 @@ func Run(assets fs.FS, options Options) error {
 	app := application.New(application.Options{
 		Name: "soksak", Description: "soksak layout running in Wails v3",
 		Assets: application.AssetOptions{Handler: application.BundledAssetFileServer(assets), Middleware: func(next http.Handler) http.Handler {
-			return StartAssets(host.startPage)(InstalledAssets(configDirectory)(next))
+			return MissingAssets(StartAssets(host.startPage)(InstalledAssets(configDirectory)(next)), reportMissingAsset)
 		}},
 		Services:   []application.Service{application.NewService(host)},
 		ShouldQuit: host.shouldQuit,

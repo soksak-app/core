@@ -15,6 +15,7 @@ use tauri::Manager;
 
 pub mod application_log;
 pub mod arguments;
+pub mod assets;
 mod bindings;
 pub mod buttons;
 pub mod clipboard;
@@ -120,11 +121,16 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
     // 설치된 plugin 은 설정 폴더에서 제공한다(docs/spec/installation.md). 설정 폴더는 setup 이 정한다.
     let installed_directory = std::sync::Arc::new(std::sync::OnceLock::new());
     let frontend = context.set_assets(Box::new(installed::NoAssets));
-    context.set_assets(Box::new(installed::InstalledAssets {
+    let installed_assets = installed::InstalledAssets {
         frontend,
         config_dir: installed_directory.clone(),
         diagnostics: cfg!(feature = "diagnostics"),
-    }));
+    };
+    // A page file that neither the application nor an installed plugin holds is an error line (docs/spec/diagnostics.md).
+    context.set_assets(Box::new(assets::ReportingAssets::new(
+        Box::new(installed_assets),
+        Box::new(|path| application_log::log_error("page asset", format!("{path}: not found"))),
+    )));
     // 창 확대 애니메이션은 창 프레임만 움직이고 웹 문서는 그 뒤에 따라온다. AppKit 이 기본값을
     // 읽기 전에 그 길이를 줄인다. 이 단계를 제공하지 못하는 플랫폼에서는 창을 열기 전에 상태 1 로
     // 끝난다(docs/spec/hosts.md#windows-state).
