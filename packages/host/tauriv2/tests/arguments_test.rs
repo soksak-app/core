@@ -24,7 +24,7 @@ struct Shape {
 // contract: host-calls.decode.messages
 #[test]
 fn arguments_are_refused_with_the_shared_messages() {
-    let surface = json!({"id": "tab-1", "x": 0, "y": 0, "w": 1, "h": null, "visible": true, "dim": false,
+    let surface = json!({"id": "tab-1", "x": 0, "y": 0, "w": 1, "h": null, "visible": true, "dim": false, "plugin": "page",
         "composition": {"kind": "web"}});
     assert_eq!(
         refusal::<SyncRequest>("request", json!({"settled": true})),

@@ -54,7 +54,7 @@ func TestArgumentRefusalMessages(t *testing.T) {
 	h := &host.Host{}
 	background := context.Background()
 	raw := func(text string) json.RawMessage { return json.RawMessage(text) }
-	surface := `{"id":"tab-1","x":0,"y":0,"w":1,"h":null,"visible":true,"dim":false,"composition":{"kind":"web"}}`
+	surface := `{"id":"tab-1","x":0,"y":0,"w":1,"h":null,"visible":true,"dim":false,"plugin":"page","composition":{"kind":"web"}}`
 	cases := []struct {
 		name string
 		call func() error

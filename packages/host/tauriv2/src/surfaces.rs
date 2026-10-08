@@ -33,6 +33,8 @@ pub(crate) struct Surface {
     visible: bool,
     /// 페이지가 이 표면을 흐리게 표시하도록 요청했는지 나타낸다.
     dim: bool,
+    /// 표면을 소유한 plugin 의 id. 문서 영역은 그 plugin 의 package 문서를 연다.
+    plugin: String,
     composition: SurfaceComposition,
 }
 
@@ -467,11 +469,12 @@ pub(crate) enum PageFocus {
     Ignored,
 }
 
-/// 배치를 시작하기 전에 동기화 요청 전체를 검사하고 창 오버레이를 반환한다. `held` 는
-/// 창이 이미 받은 표면의 composition 선언이다.
+/// 배치를 시작하기 전에 동기화 요청 전체를 검사하고 창 오버레이를 반환한다. `held` 와
+/// `plugins` 는 창이 이미 받은 표면의 composition 선언과 plugin 이다.
 pub fn check_sync_request(
     request: &SyncRequest,
     held: &HashMap<String, SurfaceComposition>,
+    plugins: &HashMap<String, String>,
 ) -> Result<Vec<platform::WindowOverlay>, String> {
     validate_titlebar_height(request.titlebar)?;
     let mut ids = HashSet::new();
@@ -488,10 +491,12 @@ pub fn check_sync_request(
         )?;
         validate_composition(&surface.composition)
             .map_err(|e| format!("surface {:?}: {e}", surface.id))?;
-        if held
-            .get(&surface.id)
-            .is_some_and(|value| value != &surface.composition)
-        {
+        if surface.plugin.is_empty() {
+            return Err(format!("surface {:?} requires its plugin", surface.id));
+        }
+        if held.get(&surface.id).is_some_and(|value| {
+            value != &surface.composition || plugins.get(&surface.id) != Some(&surface.plugin)
+        }) {
             return Err(format!(
                 "surface {:?} changed its composition declaration",
                 surface.id
@@ -559,6 +564,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     let overlays = check_sync_request(
         &request,
         &*context.compositions.lock().map_err(|e| e.to_string())?,
+        &*context.surface_plugins.lock().map_err(|e| e.to_string())?,
     )?;
 
     if !request.settled {
@@ -638,6 +644,11 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 .lock()
                 .map_err(|e| e.to_string())?
                 .insert(s.id.clone(), s.composition.clone());
+            context
+                .surface_plugins
+                .lock()
+                .map_err(|e| e.to_string())?
+                .insert(s.id.clone(), s.plugin.clone());
             // 크기가 0 인 웹뷰는 보이지 않고 일부 플랫폼은 거부하므로 숨긴 표면으로 처리한다.
             let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
             context.images.set_surface_visible(&s.id, visible);

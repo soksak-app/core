@@ -19,7 +19,7 @@ fn titlebar_request(titlebar: f64) -> SyncRequest {
 fn sync_request_accepts_titlebar_heights_in_range() {
     for height in [32.0, 40.0, 54.0, 54.5, 108.0, 200.0] {
         assert!(
-            check_sync_request(&titlebar_request(height), &HashMap::new()).is_ok(),
+            check_sync_request(&titlebar_request(height), &HashMap::new(), &HashMap::new()).is_ok(),
             "a sync request with title bar {height} was refused"
         );
     }
@@ -31,7 +31,7 @@ fn sync_request_rejects_other_titlebar_heights() {
     let want = "title bar height must be a finite number from 32 through 200 points";
     for height in [31.99, 0.0, -1.0, -40.0, 200.01, 1e300] {
         assert_eq!(
-            check_sync_request(&titlebar_request(height), &HashMap::new()).err(),
+            check_sync_request(&titlebar_request(height), &HashMap::new(), &HashMap::new()).err(),
             Some(want.to_string()),
             "title bar {height}"
         );

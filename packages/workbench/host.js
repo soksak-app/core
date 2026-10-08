@@ -454,6 +454,7 @@ export const surfaces = native ? {
         id: s.id,
         dim: s.dim,
         module: s.surface.module,
+        plugin: s.surface.pluginId,
         composition: s.surface.composition,
         visible: s.visible,
         ...toPage(s.applied),

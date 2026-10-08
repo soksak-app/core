@@ -367,6 +367,7 @@ fn invalid_json_closes_connection() {
 | `surfaces-geometry.rect.rejects-non-finite` | 크기가 유한하지 않은 사각형을 거부한다. | both |
 | `surfaces-geometry.sync.rejects-surface-rect-before-layout` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 표면 사각형의 크기가 음수인 동기화 요청을 `surface "<id>" geometry must not have a negative size`로 거부하고, 올바른 요청은 받는다. | both |
 | `surfaces-geometry.sync.rejects-overlay-rect-before-layout` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 창 overlay 사각형의 크기가 음수인 동기화 요청을 `window overlay geometry must not have a negative size`로 거부하고, 올바른 요청의 overlay를 표시 여부와 함께 반환한다. | both |
+| `surfaces-geometry.sync.plugin` | 동기화 요청은 표면마다 그 plugin을 적는다. 배치 트랜잭션을 시작하기 전에 실행하는 검사는 plugin이 없는 표면을 `surface "<id>" requires its plugin`으로, 이미 받은 표면의 plugin이 다르면 `surface "<id>" changed its composition declaration`으로 거부하고, plugin과 composition이 같은 표면은 받는다. 동기화가 받은 표면의 페이지 composition 선언은 같은 plugin을 적는다. | both |
 | `surfaces.sync.failure-leaves-no-begun-layout` | 표면 동기화는 배치 트랜잭션을 시작하기 전에 창 덮개를 놓으므로 거부된 덮개는 트랜잭션을 시작하지 않고, 뒤 단계가 실패하면 시작한 트랜잭션을 취소한다. 성공한 동기화는 취소하지 않는다. | both |
 | `surfaces.sync.titlebar.accepts-heights-in-range` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 `titlebar` 가 32 이상 200 이하 point 인 동기화 요청을 받는다. | both |
 | `surfaces.sync.titlebar.rejects-other-heights` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 `titlebar` 가 32 point 미만이나 200 point 초과, NaN, 무한대인 동기화 요청을 `title bar height must be a finite number from 32 through 200 points` 로 거부한다. | both |

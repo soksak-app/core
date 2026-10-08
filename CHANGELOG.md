@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F111.5: the window synchronization carries the plugin of each surface, so a hybrid surface such as a browser card mounts instead of failing with `changed its composition declaration`.
 - F111.6: the runtime of both applications passes `documentPost` to the host, so a page posts messages to a package document instead of failing with `unknown host call: documentPost`.
 - R4: `AGENTS.md` sizes a checklist item to one unit of function and requires a changelog entry and a commit for each completed item.
 - F110: the window check `e2e/hwp.test.mjs` opens an `.hwp` file in the hwp plugin, edits it with a native key and saves it on both hosts; the workspace registry includes the hwp plugin.

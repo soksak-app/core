@@ -38,7 +38,9 @@ type Surface struct {
 	ID      string `json:"id"`
 	Visible bool   `json:"visible"`
 	// 페이지가 초점을 잃은 표면을 흐리게 표시하도록 요청했는지 나타낸다.
-	Dim         bool               `json:"dim"`
+	Dim bool `json:"dim"`
+	// Plugin 은 표면을 소유한 plugin 의 id 다. 문서 영역은 그 plugin 의 package 문서를 연다.
+	Plugin      string             `json:"plugin"`
 	Composition SurfaceComposition `json:"composition"`
 	Rect
 }
@@ -449,8 +451,8 @@ func aligned(win *application.WebviewWindow, at Rect) (Rect, error) {
 }
 
 // CheckSyncRequest 는 배치를 시작하기 전에 동기화 요청 전체를 검사하고 창 오버레이를
-// 반환한다. held 는 창이 이미 받은 표면의 composition 선언이다.
-func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition) ([]platform.WindowOverlay, error) {
+// 반환한다. held 와 plugins 는 창이 이미 받은 표면의 composition 선언과 plugin 이다.
+func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugins map[string]string) ([]platform.WindowOverlay, error) {
 	if err := ValidateTitlebarHeight(req.Titlebar); err != nil {
 		return nil, err
 	}
@@ -466,7 +468,10 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition) ([]pl
 		if err := validateComposition(surface.Composition); err != nil {
 			return nil, fmt.Errorf("surface %q: %w", surface.ID, err)
 		}
-		if declared, exists := held[surface.ID]; exists && !reflect.DeepEqual(declared, surface.Composition) {
+		if surface.Plugin == "" {
+			return nil, fmt.Errorf("surface %q requires its plugin", surface.ID)
+		}
+		if declared, exists := held[surface.ID]; exists && (!reflect.DeepEqual(declared, surface.Composition) || plugins[surface.ID] != surface.Plugin) {
 			return nil, fmt.Errorf("surface %q changed its composition declaration", surface.ID)
 		}
 	}
@@ -493,7 +498,7 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 		return PreparedSurfaces{}, errNoWindow
 	}
 	s.mu.Lock()
-	windowOverlays, err := CheckSyncRequest(req, s.compositions)
+	windowOverlays, err := CheckSyncRequest(req, s.compositions, s.surfacePlugins)
 	s.mu.Unlock()
 	if err != nil {
 		return PreparedSurfaces{}, err
@@ -888,6 +893,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 	for _, item := range desired {
 		s.mu.Lock()
 		s.compositions[item.id] = item.decl.Composition
+		s.surfacePlugins[item.id] = item.decl.Plugin
 		s.mu.Unlock()
 		s.images.SetSurfaceVisible(item.id, item.visible)
 		// PresentSurfaces 가 대응하는 애플리케이션 DOM frame 이 표시되었음을

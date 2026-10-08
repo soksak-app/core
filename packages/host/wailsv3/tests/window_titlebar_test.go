@@ -23,7 +23,7 @@ func titlebarRequest(t *testing.T, titlebar string) host.SyncRequest {
 // contract: surfaces.sync.titlebar.accepts-heights-in-range
 func TestSyncRequestAcceptsTitlebarHeightsInRange(t *testing.T) {
 	for _, height := range []string{"32", "40", "54", "54.5", "108", "200"} {
-		if _, err := host.CheckSyncRequest(titlebarRequest(t, height), map[string]host.SurfaceComposition{}); err != nil {
+		if _, err := host.CheckSyncRequest(titlebarRequest(t, height), map[string]host.SurfaceComposition{}, map[string]string{}); err != nil {
 			t.Fatalf("a sync request with title bar %s was refused: %v", height, err)
 		}
 	}
@@ -33,7 +33,7 @@ func TestSyncRequestAcceptsTitlebarHeightsInRange(t *testing.T) {
 func TestSyncRequestRejectsOtherTitlebarHeights(t *testing.T) {
 	const want = "title bar height must be a finite number from 32 through 200 points"
 	for _, height := range []string{"31.99", "0", "-1", "-40", "200.01", "1e300"} {
-		_, err := host.CheckSyncRequest(titlebarRequest(t, height), map[string]host.SurfaceComposition{})
+		_, err := host.CheckSyncRequest(titlebarRequest(t, height), map[string]host.SurfaceComposition{}, map[string]string{})
 		if err == nil || err.Error() != want {
 			t.Fatalf("the sync check returned %v for title bar %s before the layout began, want %q", err, height, want)
 		}
