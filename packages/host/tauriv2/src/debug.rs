@@ -89,6 +89,52 @@ pub fn copy(config: &Path, relative: &str, destination: &Path) -> Result<(), Str
     Ok(())
 }
 
+/// The number of bytes of the end of a file that [`read`] returns.
+const READ_LIMIT: u64 = 262_144;
+
+/// The answer of debugRead: the content of a text file, or its last [`READ_LIMIT`] bytes from a character boundary
+/// with `truncated` true.
+#[derive(Debug, Serialize)]
+pub struct ReadResult {
+    pub path: String,
+    pub size: u64,
+    pub truncated: bool,
+    pub text: String,
+}
+
+/// Returns the end of the text file `relative` under `<config-dir>/logs/`. A file whose content is not UTF-8 text is
+/// refused with an error that names it.
+pub fn read(config: &Path, relative: &str) -> Result<ReadResult, String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let full = log_file(config, relative)?;
+    let failed = |error: std::io::Error| format!("debug: {relative}: {error}");
+    let mut file = File::open(&full).map_err(failed)?;
+    let size = file.metadata().map_err(failed)?.len();
+    let start = size.saturating_sub(READ_LIMIT);
+    file.seek(SeekFrom::Start(start)).map_err(failed)?;
+    let mut data = Vec::new();
+    file.take(size - start)
+        .read_to_end(&mut data)
+        .map_err(failed)?;
+    let mut begin = 0;
+    if start > 0 {
+        // The cut may divide a character; the text starts at the next character boundary.
+        while begin < data.len() && (data[begin] & 0xC0) == 0x80 {
+            begin += 1;
+        }
+    }
+    let text = std::str::from_utf8(&data[begin..])
+        .ok()
+        .filter(|text| !text.contains('\0'))
+        .ok_or_else(|| format!("debug: {relative} is not text"))?;
+    Ok(ReadResult {
+        path: relative.to_string(),
+        size,
+        truncated: start > 0,
+        text: text.to_string(),
+    })
+}
+
 /// Writes every file under `<config-dir>/logs/` into a gzip-compressed tar file at destination, with the paths of
 /// [`list`].
 pub fn write_logs_tar(config: &Path, destination: &Path) -> Result<(), String> {
@@ -275,6 +321,11 @@ pub(crate) fn save(window: &Window, request: SaveRequest) -> Result<Saved, Strin
     Ok(Saved {
         saved: Some(chosen.to_string_lossy().into_owned()),
     })
+}
+
+/// The page's debugRead call: the end of one text file of the logs folder.
+pub(crate) fn read_file(window: &Window, request: SaveRequest) -> Result<ReadResult, String> {
+    read(&config(window.app_handle()), &request.path)
 }
 
 /// The page's debugSaveAll call: saves the logs folder as one gzip-compressed tar file.

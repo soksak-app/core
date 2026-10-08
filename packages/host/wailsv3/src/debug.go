@@ -2,6 +2,7 @@ package host
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
@@ -102,6 +104,57 @@ func DebugCopy(configDir, relative, destination string) error {
 		return fmt.Errorf("debug: %s: %w", destination, err)
 	}
 	return nil
+}
+
+// debugReadLimit is the number of bytes of the end of a file that DebugRead returns.
+const debugReadLimit = 262144
+
+// DebugReadResult is the answer of the debugRead call: the content of a text file, or its last debugReadLimit bytes
+// from a character boundary with Truncated true.
+type DebugReadResult struct {
+	Path      string `json:"path"`
+	Size      int64  `json:"size"`
+	Truncated bool   `json:"truncated"`
+	Text      string `json:"text"`
+}
+
+// DebugRead returns the end of the text file relative under <config-dir>/logs/. A file whose content is not UTF-8 text
+// is refused with an error that names it.
+func DebugRead(configDir, relative string) (DebugReadResult, error) {
+	full, err := debugLogFile(configDir, relative)
+	if err != nil {
+		return DebugReadResult{}, err
+	}
+	file, err := os.Open(full)
+	if err != nil {
+		return DebugReadResult{}, fmt.Errorf("debug: %s: %w", relative, err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return DebugReadResult{}, fmt.Errorf("debug: %s: %w", relative, err)
+	}
+	size := info.Size()
+	start := int64(0)
+	if size > debugReadLimit {
+		start = size - debugReadLimit
+	}
+	data := make([]byte, size-start)
+	read, err := file.ReadAt(data, start)
+	if err != nil && err != io.EOF {
+		return DebugReadResult{}, fmt.Errorf("debug: %s: %w", relative, err)
+	}
+	data = data[:read]
+	if start > 0 {
+		// The cut may divide a character; the text starts at the next character boundary.
+		for len(data) > 0 && !utf8.RuneStart(data[0]) {
+			data = data[1:]
+		}
+	}
+	if !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 {
+		return DebugReadResult{}, fmt.Errorf("debug: %s is not text", relative)
+	}
+	return DebugReadResult{Path: relative, Size: size, Truncated: start > 0, Text: string(data)}, nil
 }
 
 // DebugWriteLogsTar writes every file under <config-dir>/logs/ into a gzip-compressed tar file at destination, with
@@ -200,6 +253,15 @@ type DebugSaved struct {
 // DebugFiles is the page's debugFiles call.
 func (h *Host) DebugFiles() ([]DebugFile, error) {
 	return DebugFiles(h.configDir)
+}
+
+// DebugRead is the page's debugRead call.
+func (h *Host) DebugRead(requestJSON json.RawMessage) (DebugReadResult, error) {
+	request, err := argument[DebugSaveRequest]("request", requestJSON)
+	if err != nil {
+		return DebugReadResult{}, err
+	}
+	return DebugRead(h.configDir, request.Path)
 }
 
 // DebugRecord is the page's debugRecord call. It writes the state file of every window and, in a diagnostic build,

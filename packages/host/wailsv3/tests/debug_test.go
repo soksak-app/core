@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
@@ -125,5 +126,51 @@ func TestDebugWriteStateWritesTheStateFile(t *testing.T) {
 	var state map[string]any
 	if err := json.Unmarshal(data, &state); err != nil || state["host"] != "wailsv3" || state["time"] != "20261009T010203Z" {
 		t.Fatalf("state %s: %v", data, err)
+	}
+}
+
+// contract: debug.read.returns-the-end-of-a-text-file
+func TestDebugReadReturnsTheEndOfATextFile(t *testing.T) {
+	config := debugConfig(t)
+	read, err := host.DebugRead(config, "logs/application.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read.Path != "logs/application.log" || read.Size != 8 || read.Truncated || read.Text != "started\n" {
+		t.Fatalf("read %+v", read)
+	}
+	// 100000 characters of three bytes: the last 262144 bytes start inside a character.
+	big := strings.Repeat("끝", 100000)
+	if err := os.WriteFile(filepath.Join(config, "logs", "big.log"), []byte(big), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	read, err = host.DebugRead(config, "logs/big.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !read.Truncated || read.Size != int64(len(big)) || !strings.HasSuffix(read.Text, "끝") || len(read.Text) > 262144 || len(read.Text) < 262142 {
+		t.Fatalf("truncated read has size %d, truncated %v, length %d", read.Size, read.Truncated, len(read.Text))
+	}
+	// The cut starts after the character that it divides.
+	if !utf8.ValidString(read.Text) {
+		t.Fatal("the cut text is not valid UTF-8")
+	}
+}
+
+// contract: debug.read.refuses-a-path-outside-logs-and-a-file-that-is-not-text
+func TestDebugReadRefusesAPathOutsideLogsAndAFileThatIsNotText(t *testing.T) {
+	config := debugConfig(t)
+	if err := os.WriteFile(filepath.Join(config, "logs", "binary.bin"), []byte{0xff, 0xfe, 0x00, 0x01}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]string{
+		"plugins/installed.json":         "debug: plugins/installed.json is not a file under logs/",
+		"logs/../plugins/installed.json": "debug: logs/../plugins/installed.json is not a file under logs/",
+		"logs/missing.log":               "debug: logs/missing.log is not a file under logs/",
+		"logs/binary.bin":                "debug: logs/binary.bin is not text",
+	} {
+		if _, err := host.DebugRead(config, path); err == nil || err.Error() != want {
+			t.Fatalf("read %s: %v, want %q", path, err, want)
+		}
 	}
 }

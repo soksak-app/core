@@ -88,7 +88,8 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         debug_files,
         debug_record,
         debug_save,
-        debug_save_all
+        debug_save_all,
+        debug_read
     ]
 }
 
@@ -545,6 +546,16 @@ fn debug_files(window: Window) -> Result<Vec<crate::debug::DebugFile>, String> {
         .directory()
         .to_path_buf();
     crate::debug::list(&directory)
+}
+
+/// Reads the end of one text file of the logs folder.
+#[tauri::command(async)]
+fn debug_read(
+    window: Window,
+    request: Argument<crate::debug::SaveRequest>,
+) -> Result<crate::debug::ReadResult, String> {
+    let Argument(request) = request;
+    crate::debug::read_file(&window, request)
 }
 
 /// Records the state of every window into the logs folder.

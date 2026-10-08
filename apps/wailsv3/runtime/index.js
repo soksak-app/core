@@ -86,6 +86,7 @@ const METHOD = {
   debugRecord: "DebugRecord",
   debugSave: "DebugSave",
   debugSaveAll: "DebugSaveAll",
+  debugRead: "DebugRead",
   pluginsRun: "PluginsRun",
   pluginsUseRegistry: "PluginsUseRegistry",
 };

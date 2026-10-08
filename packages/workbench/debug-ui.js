@@ -18,11 +18,15 @@ let scrim = null;
 let card = null;
 let list = null;
 let error = null;
+let view = null;
+let text = null;
 
 /** The path of the state file that opening wrote, or null. */
 let recorded = null;
 /** The listed files of logs/. */
 let entries = [];
+/** The file that the view shows, {path, size, truncated}, or null while the list is shown. */
+let viewing = null;
 /** The running or last operation {action, path, state}, or null. */
 let operation = null;
 /** The error of the last failed step or operation, or null. */
@@ -40,7 +44,7 @@ export function onDebugDrawn(fn) {
 
 /** The status core.debug. */
 export function debugState() {
-  return { open: card !== null, recorded, entries, operation, error: failure };
+  return { open: card !== null, recorded, entries, viewing, operation, error: failure };
 }
 
 /** A size in bytes as text. */
@@ -79,8 +83,21 @@ function draw() {
     const facts = document.createElement("span");
     facts.className = "dbg-row__facts";
     facts.textContent = `${sizeText(file.size)} · ${timeText(file.modified)}`;
-    row.append(path, facts, button(`save:${file.path}`, "core.debug.save", "저장", "core.debug.save", { path: file.path }));
+    const acts = document.createElement("span");
+    acts.className = "dbg-row__acts";
+    // A capture is not text, so its row has no 보기.
+    if (!file.path.startsWith("logs/captures/")) {
+      acts.append(button(`view:${file.path}`, "core.debug.view", "보기", "core.debug.view", { path: file.path }));
+    }
+    acts.append(button(`save:${file.path}`, "core.debug.save", "저장", "core.debug.save", { path: file.path }));
+    row.append(path, facts, acts);
     list.appendChild(row);
+  }
+  list.hidden = viewing !== null;
+  view.hidden = viewing === null;
+  if (viewing !== null) {
+    view.querySelector(".dbg-card__path").textContent = `${viewing.path} · ${sizeText(viewing.size)}`;
+    view.querySelector(".dbg-card__cut").hidden = !viewing.truncated;
   }
   if (failure === null) hideError(error, "debug");
   else showError(error, "debug", failure);
@@ -133,8 +150,13 @@ function makeCard() {
       '<div class="set-actions"></div>' +
       '<p class="dbg-card__error" hidden></p>' +
       '<div class="dbg-card__list"></div>' +
+      '<div class="dbg-card__view" hidden>' +
+        '<div class="dbg-card__bar"><span class="dbg-card__path"></span><span class="dbg-card__cut" hidden>앞부분 생략</span></div>' +
+        '<pre class="dbg-card__text" data-expose="core.debug.text"></pre>' +
+      '</div>' +
     '</div>';
   el.querySelector(".set-actions").append(button("save-all", "core.debug.save-all", "모두 저장", "core.debug.save-all", {}));
+  el.querySelector(".dbg-card__bar").prepend(button("list", "core.debug.list", "목록", "core.debug.list", {}));
   // Without a host this document's card receives input; a control runs the command that it points to.
   delegate(el);
   return el;
@@ -177,6 +199,9 @@ export async function openDebug() {
   document.body.appendChild(scrim);
   list = card.querySelector(".dbg-card__list");
   error = card.querySelector(".dbg-card__error");
+  view = card.querySelector(".dbg-card__view");
+  text = view.querySelector(".dbg-card__text");
+  viewing = null;
   recorded = null;
   entries = [];
   operation = null;
@@ -216,6 +241,33 @@ export function closeDebug() {
   card = null;
   list = null;
   error = null;
+  view = null;
+  text = null;
+  viewing = null;
+}
+
+/** Shows the content of one text file of logs/ in the view. */
+export async function viewDebugFile(path) {
+  if (!card) throw new Error("the debug view is not open");
+  failure = null;
+  try {
+    const read = await debug.read({ path });
+    text.textContent = read.text;
+    viewing = { path: read.path, size: read.size, truncated: read.truncated, length: read.text.length };
+  } catch (reason) {
+    fail("view", reason);
+    throw reason;
+  } finally {
+    draw();
+  }
+}
+
+/** Shows the list of files again. */
+export function listDebugFiles() {
+  if (!card) throw new Error("the debug view is not open");
+  viewing = null;
+  text.textContent = "";
+  draw();
 }
 
 /** Runs one save operation of the open view and answers the host's {saved}. */

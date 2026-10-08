@@ -405,6 +405,7 @@ export const debug = native ? {
   record: (page) => tell("debugRecord", { page }),
   save: (request) => tell("debugSave", request),
   saveAll: () => tell("debugSaveAll"),
+  read: (request) => tell("debugRead", request),
 } : null;
 
 export function onSurfacePrepared(listener) {

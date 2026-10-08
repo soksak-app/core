@@ -104,3 +104,63 @@ fn debug_write_state_writes_the_state_file() {
     assert_eq!(state["host"], "tauriv2");
     assert_eq!(state["time"], "20261009T010203Z");
 }
+
+// contract: debug.read.returns-the-end-of-a-text-file
+#[test]
+fn debug_read_returns_the_end_of_a_text_file() {
+    let config = debug_config();
+    let read = debug::read(config.path(), "logs/application.log").unwrap();
+    assert_eq!(
+        (
+            read.path.as_str(),
+            read.size,
+            read.truncated,
+            read.text.as_str()
+        ),
+        ("logs/application.log", 8, false, "started\n")
+    );
+    // 100000 characters of three bytes: the last 262144 bytes start inside a character.
+    let big = "끝".repeat(100_000);
+    std::fs::write(config.path().join("logs/big.log"), &big).unwrap();
+    let read = debug::read(config.path(), "logs/big.log").unwrap();
+    assert!(read.truncated);
+    assert_eq!(read.size, big.len() as u64);
+    assert!(read.text.ends_with('끝'));
+    assert!(
+        (262_142..=262_144).contains(&read.text.len()),
+        "length {}",
+        read.text.len()
+    );
+}
+
+// contract: debug.read.refuses-a-path-outside-logs-and-a-file-that-is-not-text
+#[test]
+fn debug_read_refuses_a_path_outside_logs_and_a_file_that_is_not_text() {
+    let config = debug_config();
+    std::fs::write(
+        config.path().join("logs/binary.bin"),
+        [0xff, 0xfe, 0x00, 0x01],
+    )
+    .unwrap();
+    for (path, want) in [
+        (
+            "plugins/installed.json",
+            "debug: plugins/installed.json is not a file under logs/",
+        ),
+        (
+            "logs/../plugins/installed.json",
+            "debug: logs/../plugins/installed.json is not a file under logs/",
+        ),
+        (
+            "logs/missing.log",
+            "debug: logs/missing.log is not a file under logs/",
+        ),
+        ("logs/binary.bin", "debug: logs/binary.bin is not text"),
+    ] {
+        assert_eq!(
+            debug::read(config.path(), path).err().as_deref(),
+            Some(want),
+            "read {path}"
+        );
+    }
+}

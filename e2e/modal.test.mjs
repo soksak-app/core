@@ -339,6 +339,13 @@ for (const app of Object.values(APPS)) {
     assert.equal(state.host, app.name);
     assert.ok(state.versions.core && state.versions.macos && state.windows.length > 0 && state.page.length > 0,
       `the state file is incomplete: ${Object.keys(state)}`);
+    // Viewing shows the whole content of a text file; the state file does not change while the view is open.
+    const stateText = readFileSync(join(s.app.configDir, opened.recorded), "utf8");
+    await s.run("core.debug.view", { path: opened.recorded });
+    const viewed = await s.until("core.debug", (debug) => debug.viewing !== null, "the debug view did not show the file");
+    assert.deepEqual(viewed.viewing, { path: opened.recorded, size: Buffer.byteLength(stateText), truncated: false, length: stateText.length });
+    await s.run("core.debug.list");
+    await s.until("core.debug", (debug) => debug.viewing === null, "the debug view did not return to the list");
     await assert.rejects(s.run("core.debug.save", { path: "settings.json" }),
       /debug: settings.json is not a file under logs\//);
     s.expectError(/^error: .*debug: settings.json is not a file under logs\//);

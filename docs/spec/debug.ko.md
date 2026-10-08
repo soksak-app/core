@@ -24,6 +24,10 @@ host 호출 `debugFiles()`는 `<config-dir>/logs/` 아래 모든 파일을 `path
 - `core.debug.save {path}`는 host 호출 `debugSave({path})`를 실행한다. host는 파일 이름으로 macOS 저장 창을 보이고 고른 곳에 파일을 복사한다. 고른 경로 `{saved}`로, 취소하면 `{saved: null}`로 답한다. `logs/` 밖이거나 파일이 없는 `path`는 그 경로를 밝히는 오류로 거부한다.
 - `core.debug.save-all`은 host 호출 `debugSaveAll()`을 실행한다. host는 이름 `soksak-<host>-debug-<time>.tar.gz`로 저장 창을 보이고 `<config-dir>/logs/`를 gzip으로 압축한 tar 파일로 쓴다. `debugSave`처럼 답한다.
 
+## 보기
+
+글 파일마다 보기 단추가 있다. `core.debug.view {path}`는 host 호출 `debugRead({path})`를 실행하고, 이 호출은 `{path, size, truncated, text}`로 답한다. `text`는 파일의 내용이고, 파일이 더 크면 마지막 262144 byte(문자 경계에서 시작)이며 이때 `truncated`는 true다. `logs/` 밖이거나 파일이 아니거나 내용이 UTF-8 글이 아닌 `path`는 그 경로를 밝히는 오류로 거부한다. 화면은 경로와 크기와 함께 글을 보이고, `truncated`가 true이면 `앞부분 생략`을 밝히며, `core.debug.list`를 실행해 목록을 다시 보이는 목록 단추를 둔다. 캡처는 글이 아니므로 그 행에는 저장만 있고 보기는 없다.
+
 ## Status
 
-`core.debug`는 `{open, recorded, entries, operation, error}`를 보고한다: 화면이 열렸는지, 열기가 쓴 상태 파일의 경로나 `null`, 나열된 항목 `{path, size, modified}`, 실행 중이거나 마지막 작업 `{action, path, state}`(`action`은 `save`나 `save-all`, `path`는 저장한 파일이나 `null`, `state`는 `running`, `done`, `failed`), 마지막 실패한 단계나 작업의 오류나 `null`. 화면이 열려 있는 동안 `core.screen`은 `modal` `debug`를 보고한다.
+`core.debug`는 `{open, recorded, entries, viewing, operation, error}`를 보고한다: 화면이 열렸는지, 열기가 쓴 상태 파일의 경로나 `null`, 나열된 항목 `{path, size, modified}`, 보이는 파일 `{path, size, truncated, length}`(`length`는 보이는 글의 문자 수)나 `null`, 실행 중이거나 마지막 작업 `{action, path, state}`(`action`은 `save`나 `save-all`, `path`는 저장한 파일이나 `null`, `state`는 `running`, `done`, `failed`), 마지막 실패한 단계나 작업의 오류나 `null`. 화면이 열려 있는 동안 `core.screen`은 `modal` `debug`를 보고한다.

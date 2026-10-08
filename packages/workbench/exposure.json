@@ -928,7 +928,7 @@
       },
       {
         "name": "core.debug",
-        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the running or last save operation, and the error of the last failed step or operation or null.",
+        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows or null, the running or last save operation, and the error of the last failed step or operation or null.",
         "schema": {
           "type": "object",
           "properties": {
@@ -955,6 +955,26 @@
                   "modified": {
                     "type": "number"
                   }
+                }
+              }
+            },
+            "viewing": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "number"
+                },
+                "truncated": {
+                  "type": "boolean"
+                },
+                "length": {
+                  "type": "number"
                 }
               }
             },
@@ -1670,6 +1690,33 @@
           }
         },
         "timeout": 600000
+      },
+      {
+        "name": "core.debug.view",
+        "description": "Shows the content of one text file of the logs folder in the open debug view: the whole file, or its last 262144 bytes.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
+        "name": "core.debug.list",
+        "description": "Shows the list of the files of the logs folder again in the open debug view.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
       },
       {
         "name": "core.projects.browse",
@@ -3350,6 +3397,19 @@
       {
         "name": "core.debug.save-all",
         "description": "The button that saves the logs folder as one file."
+      },
+      {
+        "name": "core.debug.view",
+        "description": "The 보기 buttons of the text file rows in path order.",
+        "many": true
+      },
+      {
+        "name": "core.debug.list",
+        "description": "The button that shows the list of files again."
+      },
+      {
+        "name": "core.debug.text",
+        "description": "The text of the shown file."
       },
       {
         "name": "core.debug.file",

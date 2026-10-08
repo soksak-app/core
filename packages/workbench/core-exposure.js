@@ -27,7 +27,7 @@ import {
 import {
   closeSettings, editSet, moveSettings, onSettingsDrawn, openSettings, settingsModalState, searchPlugins, showPlugin, showScope, showSection,
 } from "./settings-ui.js";
-import { closeDebug, debugState, onDebugDrawn, openDebug, saveDebugFile, saveDebugFiles } from "./debug-ui.js";
+import { closeDebug, debugState, listDebugFiles, onDebugDrawn, openDebug, saveDebugFile, saveDebugFiles, viewDebugFile } from "./debug-ui.js";
 import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
 import { pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
@@ -373,6 +373,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.debug.close", () => { closeDebug(); });
   registry.command("core.debug.save", ({ path }) => saveDebugFile(path));
   registry.command("core.debug.save-all", () => saveDebugFiles());
+  registry.command("core.debug.view", ({ path }) => viewDebugFile(path));
+  registry.command("core.debug.list", () => { listDebugFiles(); });
   // 프로젝트 목록은 라이브러리의 프로젝트 페이지를 보인다.
   registry.command("core.projects.browse", async () => {
     await projects.browse();

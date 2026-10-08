@@ -57,6 +57,7 @@ const COMMAND = {
   debugRecord: "debug_record",
   debugSave: "debug_save",
   debugSaveAll: "debug_save_all",
+  debugRead: "debug_read",
   pluginsRun: "plugins_run",
   pluginsUseRegistry: "plugins_use_registry",
 };
@@ -120,6 +121,7 @@ const ARG = {
   debugRecord: (request) => ({ request }),
   debugSave: (request) => ({ request }),
   debugSaveAll: () => ({}),
+  debugRead: (request) => ({ request }),
   pluginsRun: (request) => ({ request }),
   pluginsUseRegistry: (request) => ({ request }),
 };

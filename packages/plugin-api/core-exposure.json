@@ -41,6 +41,8 @@
     "core.debug.close",
     "core.debug.save",
     "core.debug.save-all",
+    "core.debug.view",
+    "core.debug.list",
     "core.projects.browse",
     "core.projects.flush",
     "core.project.open",
