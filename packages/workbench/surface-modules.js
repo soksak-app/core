@@ -162,7 +162,8 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       resolve: resolveComposition,
       reject: rejectComposition,
     };
-    if (!native) compositionReady.resolve();
+    // A dom composition has no native region; plugin.json declares it, and its module does not create one.
+    if (!native || surface.composition?.kind === "dom") compositionReady.resolve();
     const page = pageRuntime(surface, scoped, compositionReady);
     let viewport = slot;
     const eventListeners = new Map();
@@ -284,7 +285,10 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   return entry.ready;
 }
 
-/** 네이티브 표면이 composition 을 선언할 때까지 기다린다. 마운트에 실패한 모듈은 선언하지 않으므로 그 마운트 오류로도 끝난다. */
+/**
+ * Waits until a native surface declares its composition; a dom surface has declared it when it mounts. A module that
+ * fails to mount declares nothing, so the wait also ends with that mount error.
+ */
 export async function waitSurfaceCompositionDeclared(surfaceId) {
   if (placeholders.has(surfaceId)) return;
   const entry = mounted.get(surfaceId);

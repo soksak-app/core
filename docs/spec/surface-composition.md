@@ -40,7 +40,7 @@ Every `plugin.json` surface declares one composition.
 }
 ```
 
-A hybrid composition declares every native region and every DOM overlay before the page loads.
+A `dom` composition has no native region, and `plugin.json` declares it completely: its page does not create a composition, and a core command that waits for the declared composition of a surface does not wait for a call of a `dom` surface. A hybrid composition declares every native region and every DOM overlay before the page loads.
 
 ```json
 {
