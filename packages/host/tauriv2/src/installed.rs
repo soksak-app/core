@@ -149,6 +149,73 @@ pub enum Module {
     File(PathBuf),
 }
 
+/// The file at a relative path inside a package when every part of the path is a name and the file is a regular file.
+fn inside_package(dir: &Path, parts: &[&str]) -> Module {
+    if parts
+        .iter()
+        .any(|part| part.is_empty() || *part == "." || *part == "..")
+    {
+        return Module::Missing;
+    }
+    let file = parts
+        .iter()
+        .fold(dir.to_path_buf(), |path, part| path.join(part));
+    if file.is_file() {
+        Module::File(file)
+    } else {
+        Module::Missing
+    }
+}
+
+/// The path prefix that serves the shared modules of extension points.
+pub const SHARED_PREFIX: &str = "/shared/";
+
+/// Returns the file that extends.<point>.modules of the plugin.json of the enabled installed plugin maps the specifier
+/// of /shared/<plugin id>.<point>/<specifier> to. Another path is Frontend. A point that the plugin does not declare, a
+/// specifier that the point does not map, a missing file and a path outside the package are Missing.
+pub fn installed_shared(config_dir: &Path, url_path: &str) -> Result<Module, String> {
+    #[derive(serde::Deserialize)]
+    struct Point {
+        // Default: a point without shared modules has no modules.
+        #[serde(default)]
+        modules: std::collections::BTreeMap<String, String>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Manifest {
+        // Default: the plugin.json of a plugin that declares no extension point has no extends.
+        #[serde(default)]
+        extends: std::collections::BTreeMap<String, Point>,
+    }
+    let Some(rest) = url_path.strip_prefix(SHARED_PREFIX) else {
+        return Ok(Module::Frontend);
+    };
+    let Some(((id, point), specifier)) = rest
+        .split_once('/')
+        .and_then(|(key, specifier)| Some((key.split_once('.')?, specifier)))
+        .filter(|(_, specifier)| !specifier.is_empty())
+    else {
+        return Ok(Module::Missing);
+    };
+    let (plugins, _) = enabled_plugins(config_dir)?;
+    let Some(plugin) = plugins.iter().find(|plugin| plugin.id == id) else {
+        return Ok(Module::Missing);
+    };
+    let file = plugin.dir.join("plugin.json");
+    let text =
+        std::fs::read_to_string(&file).map_err(|error| format!("{}: {error}", file.display()))?;
+    let manifest: Manifest =
+        serde_json::from_str(&text).map_err(|error| format!("{}: {error}", file.display()))?;
+    let Some(target) = manifest
+        .extends
+        .get(point)
+        .and_then(|point| point.modules.get(specifier))
+    else {
+        return Ok(Module::Missing);
+    };
+    let parts: Vec<&str> = target.split('/').collect();
+    Ok(inside_package(&plugin.dir, &parts))
+}
+
 /// /modules/<package>/<path> 가 켜진 설치 plugin 의 파일이면 그 경로를 돌려준다.
 pub fn installed_module(config_dir: &Path, url_path: &str) -> Result<Module, String> {
     let Some(rest) = url_path.strip_prefix("/modules/") else {
@@ -164,21 +231,7 @@ pub fn installed_module(config_dir: &Path, url_path: &str) -> Result<Module, Str
     let Some(plugin) = plugins.iter().find(|plugin| plugin.package == name) else {
         return Ok(Module::Frontend);
     };
-    let inside = &parts[count..];
-    if inside
-        .iter()
-        .any(|part| part.is_empty() || *part == "." || *part == "..")
-    {
-        return Ok(Module::Missing);
-    }
-    let file = inside
-        .iter()
-        .fold(plugin.dir.clone(), |path, part| path.join(part));
-    if file.is_file() {
-        Ok(Module::File(file))
-    } else {
-        Ok(Module::Missing)
-    }
+    Ok(inside_package(&plugin.dir, &parts[count..]))
 }
 
 /// 켜진 설치 plugin 의 plugin.json dependencies 가 지정한 sidecar 를 설치가 기록한 폴더와 함께 돌려준다.
@@ -263,7 +316,12 @@ impl<R: tauri::Runtime> tauri::Assets<R> for InstalledAssets<R> {
                 self.diagnostics,
             )));
         }
-        match installed_module(config_dir, path) {
+        let module = if path.starts_with(SHARED_PREFIX) {
+            installed_shared(config_dir, path)
+        } else {
+            installed_module(config_dir, path)
+        };
+        match module {
             Ok(Module::Frontend) => self.frontend.get(key),
             Ok(Module::Missing) => None,
             Ok(Module::File(file)) => match std::fs::read(&file) {

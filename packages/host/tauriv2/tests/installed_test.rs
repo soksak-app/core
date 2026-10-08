@@ -191,6 +191,74 @@ fn installed_assets_serve_the_files_of_enabled_packages() {
         .starts_with(r#"{"plugins":[{"id":"alpha""#));
 }
 
+/// A configuration directory where the enabled plugin alpha declares the shared modules of the point language and the
+/// disabled plugin off declares a point of the same name.
+fn shared_fixture() -> tempfile::TempDir {
+    let config = installed_fixture();
+    write_installed(
+        config.path(),
+        &[
+            (
+                "plugins/alpha/1.0.0/plugin.json",
+                r#"{"id": "alpha", "extends": {"language": {"version": "1.0.0", "schema": {},
+                "modules": {"@codemirror/state": "ui/state.js", "gone": "ui/gone.js", "outside": "../../term/0.1.0/ui/term.js"}}}}"#,
+            ),
+            ("plugins/alpha/1.0.0/ui/state.js", "export const state = 1;"),
+            (
+                "plugins/off/1.0.0/plugin.json",
+                r#"{"id": "off", "extends": {"language": {"version": "1.0.0", "schema": {}, "modules": {"x": "ui/x.js"}}}}"#,
+            ),
+            ("plugins/off/1.0.0/ui/x.js", "export const x = 1;"),
+        ],
+    );
+    config
+}
+
+// contract: installed.shared.serve-extension-point-modules
+#[test]
+fn installed_assets_serve_the_shared_modules_of_extension_points() {
+    let config = shared_fixture();
+    let directory = Arc::new(OnceLock::new());
+    directory.set(config.path().to_path_buf()).unwrap();
+    let assets = InstalledAssets::<tauri::Wry> {
+        frontend: Box::new(Frontend),
+        config_dir: directory,
+        diagnostics: false,
+    };
+    assert_eq!(
+        assets
+            .get(&AssetKey::from("/shared/alpha.language/@codemirror/state"))
+            .map(|data| text(data.into_owned()))
+            .as_deref(),
+        Some("export const state = 1;")
+    );
+    // An undeclared point, an unmapped specifier, a missing file, a path outside the package and a disabled plugin
+    // are not found.
+    for path in [
+        "/shared/alpha.missing/@codemirror/state",
+        "/shared/alpha.language/@codemirror/view",
+        "/shared/alpha.language/gone",
+        "/shared/alpha.language/outside",
+        "/shared/off.language/x",
+        "/shared/nobody.language/x",
+        "/shared/alpha",
+        "/shared/alpha.language/",
+    ] {
+        assert_eq!(
+            installed::installed_shared(config.path(), path),
+            Ok(Module::Missing),
+            "{path}"
+        );
+        assert!(assets.get(&AssetKey::from(path)).is_none(), "{path}");
+    }
+    write_installed(config.path(), &[("plugins/alpha/1.0.0/plugin.json", "{")]);
+    let error =
+        installed::installed_shared(config.path(), "/shared/alpha.language/@codemirror/state")
+            .unwrap_err();
+    let manifest = config.path().join("plugins/alpha/1.0.0/plugin.json");
+    assert!(error.contains(&manifest.display().to_string()), "{error}");
+}
+
 // contract: installed.sidecars.resolve-installed-folders, sidecars.declaration.fails-on-missing-sidecar-json
 #[test]
 fn installed_sidecars_resolve_the_installed_version_folders() {

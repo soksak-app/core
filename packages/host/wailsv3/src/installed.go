@@ -141,16 +141,68 @@ func InstalledModule(configDir, urlPath string) (file string, installed, found b
 	if index < 0 {
 		return "", false, false, nil
 	}
-	inside := parts[count:]
-	if slices.ContainsFunc(inside, func(part string) bool { return part == "" || part == "." || part == ".." }) {
-		return "", true, false, nil
+	file, found = insidePackage(plugins[index].dir, parts[count:])
+	return file, true, found, nil
+}
+
+// insidePackage returns the file at a relative path inside a package when every part of the path is a name and the
+// file is a regular file.
+func insidePackage(dir string, parts []string) (string, bool) {
+	if slices.ContainsFunc(parts, func(part string) bool { return part == "" || part == "." || part == ".." }) {
+		return "", false
 	}
-	file = filepath.Join(plugins[index].dir, filepath.FromSlash(path.Join(inside...)))
+	file := filepath.Join(dir, filepath.FromSlash(path.Join(parts...)))
 	info, err := os.Stat(file)
 	if err != nil || !info.Mode().IsRegular() {
+		return "", false
+	}
+	return file, true
+}
+
+// SharedPrefix is the path prefix that serves the shared modules of extension points.
+const SharedPrefix = "/shared/"
+
+// InstalledShared returns the file that extends.<point>.modules of the plugin.json of the enabled installed plugin maps
+// the specifier of /shared/<plugin id>.<point>/<specifier> to. shared is false for another path. found is false for a
+// point that the plugin does not declare, a specifier that the point does not map, a missing file and a path outside
+// the package.
+func InstalledShared(configDir, urlPath string) (file string, shared, found bool, err error) {
+	rest, ok := strings.CutPrefix(urlPath, SharedPrefix)
+	if !ok {
+		return "", false, false, nil
+	}
+	key, specifier, ok := strings.Cut(rest, "/")
+	id, point, dotted := strings.Cut(key, ".")
+	if !ok || !dotted || specifier == "" {
 		return "", true, false, nil
 	}
-	return file, true, true, nil
+	plugins, _, err := enabledPlugins(configDir)
+	if err != nil {
+		return "", true, false, err
+	}
+	index := slices.IndexFunc(plugins, func(plugin installedPlugin) bool { return plugin.id == id })
+	if index < 0 {
+		return "", true, false, nil
+	}
+	manifestFile := filepath.Join(plugins[index].dir, "plugin.json")
+	data, err := os.ReadFile(manifestFile)
+	if err != nil {
+		return "", true, false, err
+	}
+	var manifest struct {
+		Extends map[string]struct {
+			Modules map[string]string `json:"modules"`
+		} `json:"extends"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return "", true, false, fmt.Errorf("%s: %w", manifestFile, err)
+	}
+	target, ok := manifest.Extends[point].Modules[specifier]
+	if !ok {
+		return "", true, false, nil
+	}
+	file, found = insidePackage(plugins[index].dir, strings.Split(target, "/"))
+	return file, true, found, nil
 }
 
 // InstalledAssets 는 설치된 plugin 을 제공하는 asset server middleware 다. 다른 경로는 다음 handler 가 제공한다.
@@ -165,7 +217,11 @@ func InstalledAssets(configDir string) application.Middleware {
 				}
 				return
 			}
-			file, installed, found, err := InstalledModule(configDir, r.URL.Path)
+			lookup := InstalledModule
+			if strings.HasPrefix(r.URL.Path, SharedPrefix) {
+				lookup = InstalledShared
+			}
+			file, installed, found, err := lookup(configDir, r.URL.Path)
 			if err != nil {
 				LogError(r.URL.Path, err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)

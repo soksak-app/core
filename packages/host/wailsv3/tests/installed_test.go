@@ -114,6 +114,47 @@ func TestInstalledAssetsServeTheFilesOfEnabledPackages(t *testing.T) {
 	}
 }
 
+// sharedFixture is a configuration directory where the enabled plugin alpha declares the shared modules of the point
+// language and the disabled plugin off declares a point of the same name.
+func sharedFixture(t *testing.T) string {
+	config := installedFixture(t)
+	writeInstalled(t, config, map[string]string{
+		"plugins/alpha/1.0.0/plugin.json": `{"id": "alpha", "extends": {"language": {"version": "1.0.0", "schema": {},
+			"modules": {"@codemirror/state": "ui/state.js", "gone": "ui/gone.js", "outside": "../../term/0.1.0/ui/term.js"}}}}`,
+		"plugins/alpha/1.0.0/ui/state.js": "export const state = 1;",
+		"plugins/off/1.0.0/plugin.json":   `{"id": "off", "extends": {"language": {"version": "1.0.0", "schema": {}, "modules": {"x": "ui/x.js"}}}}`,
+		"plugins/off/1.0.0/ui/x.js":       "export const x = 1;",
+	})
+	return config
+}
+
+// contract: installed.shared.serve-extension-point-modules
+func TestInstalledAssetsServeTheSharedModulesOfExtensionPoints(t *testing.T) {
+	config := sharedFixture(t)
+	frontend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "frontend "+r.URL.Path) })
+	handler := host.InstalledAssets(config)(frontend)
+	get := func(path string) (int, string, string) {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		return recorder.Code, recorder.Body.String(), recorder.Header().Get("Content-Type")
+	}
+	if code, body, kind := get("/shared/alpha.language/@codemirror/state"); code != 200 || body != "export const state = 1;" || kind != "text/javascript" {
+		t.Fatalf("shared module %d %q %q", code, body, kind)
+	}
+	// An undeclared point, an unmapped specifier, a missing file, a path outside the package and a disabled plugin are
+	// not found.
+	for _, path := range []string{"/shared/alpha.missing/@codemirror/state", "/shared/alpha.language/@codemirror/view", "/shared/alpha.language/gone",
+		"/shared/alpha.language/outside", "/shared/off.language/x", "/shared/nobody.language/x", "/shared/alpha", "/shared/alpha.language/"} {
+		if code, body, _ := get(path); code != 404 {
+			t.Fatalf("%s answered %d %q", path, code, body)
+		}
+	}
+	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": "{"})
+	if code, body, _ := get("/shared/alpha.language/@codemirror/state"); code != 500 || !strings.Contains(body, filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")) {
+		t.Fatalf("invalid manifest %d %q", code, body)
+	}
+}
+
 // contract: installed.sidecars.resolve-installed-folders, sidecars.declaration.fails-on-missing-sidecar-json
 func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 	config := installedFixture(t)
