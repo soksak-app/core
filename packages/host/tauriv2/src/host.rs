@@ -267,7 +267,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 if let Err(error) = windows::window_new_on_main(app.clone()) {
                     log_error("window new", error);
                 }
-            } else if menu::text_command(id) {
+            } else if menu::runs_page_command(id) {
                 if let Err(error) = run_menu_command(app, id) {
                     log_error(&format!("menu command {id}"), error);
                 }

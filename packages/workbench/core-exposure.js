@@ -27,6 +27,7 @@ import {
 import {
   closeSettings, editSet, moveSettings, onSettingsDrawn, openSettings, settingsModalState, searchPlugins, showPlugin, showScope, showSection,
 } from "./settings-ui.js";
+import { closeDebug, debugState, onDebugDrawn, openDebug, saveDebugFile, saveDebugFiles } from "./debug-ui.js";
 import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
 import { pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
@@ -255,7 +256,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   }));
   status("core.screen", () => ({
     screen: document.body.dataset.screen,
-    modal: settingsModalState().open ? "settings" : pickerState().open ? "picker" : null,
+    modal: settingsModalState().open ? "settings" : debugState().open ? "debug" : pickerState().open ? "picker" : null,
   }));
   status("core.page.audit", () => ({ unbound: audit(document.body) }));
   // WebKit 이 문서를 숨기면 animation frame 이 멈추므로 표시 상태의 변화를 알린다.
@@ -288,6 +289,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   }));
   status("core.themes", () => THEMES);
   status("core.settings-modal", settingsModalState);
+  status("core.debug", debugState);
   status("core.contributions", contributionsState);
   onContributionsChange(coreChanged);
   status("core.plugins", () => pluginOperations.status());
@@ -364,8 +366,13 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.settings.sets.delete", async ({ id, scope = "common" }) => {
     await set(deleteSet(scopedValue("sets", scope), scopedValue("links", scope), id), scope);
   });
-  registry.command("core.settings.open", () => { openSettings(); });
+  registry.command("core.settings.open", () => { closeDebug(); openSettings(); });
   registry.command("core.settings.close", () => { closeSettings(); });
+  // The debug view and the settings modal are both dialogs, and the host shows one native modal at a time.
+  registry.command("core.debug.open", async () => { closeSettings(); await openDebug(); });
+  registry.command("core.debug.close", () => { closeDebug(); });
+  registry.command("core.debug.save", ({ path }) => saveDebugFile(path));
+  registry.command("core.debug.save-all", () => saveDebugFiles());
   // 프로젝트 목록은 라이브러리의 프로젝트 페이지를 보인다.
   registry.command("core.projects.browse", async () => {
     await projects.browse();
@@ -499,6 +506,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   onPicker(coreChanged);
   onSurfaceState(coreChanged);
   onSettingsDrawn(coreChanged);
+  onDebugDrawn(coreChanged);
   onModalState(coreChanged);
   onSaved(coreChanged);
 

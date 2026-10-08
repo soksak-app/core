@@ -479,6 +479,15 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set-row:has(> .set-caption){grid-template-columns:1fr auto}
 .set-row > .set-caption{margin:0;min-width:0}
 
+/* The debug view lists the files of the logs folder: the path takes the free width and the size, time and save button
+   follow it on the same line. */
+.dbg-card{width:640px}
+.dbg-card__pane{flex:1 1 auto;min-height:0;padding:14px 18px 18px;overflow:auto}
+.dbg-card__error{margin:0 0 10px;font-size:var(--text-small)}
+.dbg-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;min-height:30px}
+.dbg-row__path{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-control);color:var(--fg)}
+.dbg-row__facts{font-size:var(--text-small);color:var(--muted);font-variant-numeric:tabular-nums}
+
 /* select. 화살표는 감싼 요소가 그리고 select 자체는 기본 모양을 쓰지 않는다. */
 .select-field{position:relative;display:block}
 .select-field::after{content:"▾";position:absolute;right:10px;top:50%;translate:0 -50%;

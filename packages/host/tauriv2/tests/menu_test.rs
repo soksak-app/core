@@ -47,10 +47,10 @@ fn view_menu_has_full_screen_and_text_size() {
         ["text-larger", "text-smaller", "text-default", "fullscreen"]
     );
     // 글자 크기 항목은 페이지 명령 id 를 메뉴 항목 id 로 쓴다.
-    assert!(menu::text_command("core.text.larger"));
-    assert!(menu::text_command("core.text.smaller"));
-    assert!(menu::text_command("core.text.reset"));
-    assert!(!menu::text_command("new-window"));
+    assert!(menu::runs_page_command("core.text.larger"));
+    assert!(menu::runs_page_command("core.text.smaller"));
+    assert!(menu::runs_page_command("core.text.reset"));
+    assert!(!menu::runs_page_command("new-window"));
     // 단축키는 계약표의 key 형식에서 메뉴 라이브러리 형식으로 바뀐다. 글자 크기는 =, -, 0.
     assert_eq!(menu::accelerator("cmd+=").unwrap(), "CmdOrCtrl+=");
     assert_eq!(menu::accelerator("cmd+-").unwrap(), "CmdOrCtrl+-");
@@ -130,10 +130,21 @@ fn table_titles_serve_both_languages() {
         ["text-larger", "text-smaller", "text-default", "fullscreen"]
     );
     assert_eq!(item_ids("window"), ["new-window", "bring-all-to-front"]);
-    assert_eq!(item_ids("help"), Vec::<&str>::new());
+    assert_eq!(item_ids("help"), ["debug"]);
     // 계약 표에 없는 언어는 메뉴를 만들지 못한다.
     let error = menu::menu_title("file", "fr").unwrap_err();
     assert!(error.contains("fr"), "{error}");
     assert!(menu::item_title("edit", "undo", "ja").is_err());
     assert!(menu::language_column("korean").is_err());
+}
+
+// contract: menu.application.help-has-debug
+#[test]
+fn help_menu_has_debug() {
+    assert_eq!(item_ids("help"), ["debug"]);
+    assert_eq!(titled_item_titles("help", "ko"), ["디버그"]);
+    assert_eq!(titled_item_titles("help", "en"), ["Debug"]);
+    assert_eq!(menu::page_command("debug"), Some("core.debug.open"));
+    assert_eq!(menu::page_command("text-larger"), Some("core.text.larger"));
+    assert_eq!(menu::page_command("new-window"), None);
 }

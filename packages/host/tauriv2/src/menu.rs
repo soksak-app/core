@@ -43,6 +43,7 @@ pub const ITEMS: &[(&str, &str, &str, &str, &str, &str)] = &[
     ("view", "fullscreen", "system", "", "", ""),
     ("window", "new-window", "title", "새 창", "New Window", "shift+cmd+n"),
     ("window", "bring-all-to-front", "system", "", "", ""),
+    ("help", "debug", "title", "디버그", "Debug", ""),
 ];
 
 /// 표의 언어와 그 제목 열. 계약 표에 언어 열을 더하면 이 표도 함께 늘어난다.
@@ -51,11 +52,13 @@ const LANGUAGES: &[(&str, usize)] = &[("ko", 1), ("en", 2)];
 /// 기본 언어. 시스템 언어가 표의 언어가 아닐 때 초기 메뉴가 쓴다.
 const DEFAULT_LANGUAGE: &str = "en";
 
-/// 글자 크기 항목의 표 id 와 메뉴 항목 id. 메뉴 항목 id 는 페이지로 보내는 명령 이름이다.
-const TEXT_COMMANDS: &[(&str, &str)] = &[
-    ("text-larger", "core.text.larger"),
-    ("text-smaller", "core.text.smaller"),
-    ("text-default", "core.text.reset"),
+/// The menu, table id and menu item id of the items that run a page command. The menu item id is the name of the
+/// command that the main page runs.
+const PAGE_COMMANDS: &[(&str, &str, &str)] = &[
+    ("view", "text-larger", "core.text.larger"),
+    ("view", "text-smaller", "core.text.smaller"),
+    ("view", "text-default", "core.text.reset"),
+    ("help", "debug", "core.debug.open"),
 ];
 
 /// 현재 메뉴 언어. 페이지가 설정 언어를 보내기 전에는 시스템 언어에서 정한 초기 값이다.
@@ -111,9 +114,17 @@ pub fn accelerator(key: &str) -> Result<String, String> {
     Ok(out.join("+"))
 }
 
-/// 메뉴 항목 id 가 글자 크기 명령인지 알려준다. 메뉴 이벤트 배선이 쓴다.
-pub fn text_command(id: &str) -> bool {
-    TEXT_COMMANDS.iter().any(|(_, command)| *command == id)
+/// The page command that the item of table id runs, or `None` when the item runs none.
+pub fn page_command(id: &str) -> Option<&'static str> {
+    PAGE_COMMANDS
+        .iter()
+        .find(|(_, row, _)| *row == id)
+        .map(|(_, _, command)| *command)
+}
+
+/// Whether the menu item id is a page command. The menu event wiring uses it.
+pub fn runs_page_command(id: &str) -> bool {
+    PAGE_COMMANDS.iter().any(|(_, _, command)| *command == id)
 }
 
 /// 페이지가 설정 언어를 보내기 전의 초기 메뉴 언어. 시스템 선호 언어의 주 태그를 표의
@@ -158,8 +169,7 @@ pub fn build(app: &AppHandle, language: &str) -> Result<Menu<Wry>, String> {
             "edit" => edit_submenu(app, language),
             "view" => view_submenu(app, language),
             "window" => window_submenu(app, language),
-            "help" => Submenu::with_id(app, id, menu_title(id, language)?, true)
-                .map_err(|error| error.to_string()),
+            "help" => help_submenu(app, language),
             unknown => return Err(format!("the menu table has unknown menu {unknown:?}")),
         }?;
         menu.append(&submenu).map_err(|error| error.to_string())?;
@@ -266,7 +276,7 @@ fn edit_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String>
 /// 사례, 접근성에서는 숨는다) 계약표에는 있지만 여기서 만들 항목이 없다.
 fn view_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String> {
     let mut text_items = Vec::new();
-    for (row, command) in TEXT_COMMANDS {
+    for (_, row, command) in PAGE_COMMANDS.iter().filter(|(menu, ..)| *menu == "view") {
         let item = MenuItem::with_id(
             app,
             *command,
@@ -287,6 +297,20 @@ fn view_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String>
         .chain(std::iter::once(&fullscreen as &dyn IsMenuItem<Wry>))
         .collect();
     Submenu::with_id_and_items(app, "view", menu_title("view", language)?, true, &items)
+        .map_err(string)
+}
+
+/// Builds the Help menu: the debug item runs its page command.
+fn help_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String> {
+    let debug = MenuItem::with_id(
+        app,
+        "core.debug.open",
+        item_title("help", "debug", language)?,
+        true,
+        None::<&str>,
+    )
+    .map_err(string)?;
+    Submenu::with_id_and_items(app, "help", menu_title("help", language)?, true, &[&debug])
         .map_err(string)
 }
 

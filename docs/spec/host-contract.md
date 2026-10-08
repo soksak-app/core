@@ -72,6 +72,7 @@ Items:
 | view | fullscreen | system | | | |
 | window | new-window | title | 새 창 | New Window | shift+cmd+n |
 | window | bring-all-to-front | system | | | |
+| help | debug | title | 디버그 | Debug | |
 
 `host.menu` reports `{language, menus}` — the active menu language and the built menus; the language is the host's own state, never inferred from titles. Its per-host comparison and the table above are checked at the window tier, and `scripts/check-host-parity.mjs` checks that both hosts carry this same table in their menu builders.
 
@@ -301,6 +302,7 @@ Items:
 | `sidecars.retain.skips-service-without-endpoint` | Retaining without a running service or its endpoint file starts no service and closes nothing. | both |
 | `sidecars.retain.rejects-after-stop` | A retain that starts after the sidecars stop, or that a stop interrupts after the service is prepared, fails with "sidecars are stopped" and sends no retain to the service. | both |
 | `menu.application.view-has-full-screen-and-text-size` | The application menu's View menu has full screen and the [text size](text-size.md) items with Command `=`, `-`, and `0`; no menu item zooms or reloads the whole webview. | both |
+| `menu.application.help-has-debug` | The application menu's Help menu has the item 디버그 (Debug) without a key; it runs `core.debug.open` in the main page of the main window ([debug view](debug.md)). | both |
 | `sidecars.protocol.surface-keeps-its-first-root` | After the owning window changes project, requests and the closed notice of an open surface carry the root of its first request. | both |
 | `sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail` | A stdio sidecar message for a surface that the host closed is discarded, while a message for a surface that the host never sent to that process fails the sidecar with `unknown surface <surface>` delivered to the surfaces that sent. | both |
 | `sidecars.send.rejects-undeclared-sidecar` | Sending to a sidecar that no plugin declares fails with "not declared". | both |

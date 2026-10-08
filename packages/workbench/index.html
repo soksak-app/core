@@ -572,8 +572,8 @@ addEventListener("keydown", (event) => {
 addEventListener("pointerdown", (event) => {
   if (event.target.closest?.(".chrome-bar, .tabs--space, .tabs--project")) setTextScope({ kind: "frame" });
 }, true);
-/* 애플리케이션 메뉴의 글자 크기 항목은 이 명령들만 요청한다. 다른 이름은 오류로 알린다. */
-const MENU_COMMANDS = ["core.text.larger", "core.text.smaller", "core.text.reset"];
+/* 애플리케이션 메뉴의 글자 크기 항목과 도움말의 디버그 항목은 이 명령들만 요청한다. 다른 이름은 오류로 알린다. */
+const MENU_COMMANDS = ["core.text.larger", "core.text.smaller", "core.text.reset", "core.debug.open"];
 onMenuCommand((name) => {
   if (!MENU_COMMANDS.includes(name)) {
     showError(`menu command is not allowed: ${String(name)}`);

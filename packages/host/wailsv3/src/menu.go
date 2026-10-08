@@ -44,6 +44,7 @@ var itemTable = []struct{ menu, id, source, ko, en, key string }{
 	{"view", "fullscreen", "system", "", "", ""},
 	{"window", "new-window", "title", "새 창", "New Window", "shift+cmd+n"},
 	{"window", "bring-all-to-front", "system", "", "", ""},
+	{"help", "debug", "title", "디버그", "Debug", ""},
 }
 
 // menuRoles 는 계약 표의 항목 id 가 쓰는 Wails 역할이다. app 항목도 언어표 제목과 함께 여기를 지나며
@@ -75,6 +76,13 @@ var menuCommands = map[string]string{
 	"text-larger":  "core.text.larger",
 	"text-smaller": "core.text.smaller",
 	"text-default": "core.text.reset",
+	"debug":        "core.debug.open",
+}
+
+// MenuCommand returns the page command that the menu item id of the contract table runs, and whether it runs one.
+func MenuCommand(id string) (string, bool) {
+	command, ok := menuCommands[id]
+	return command, ok
 }
 
 // menuModifiers 는 계약 표의 단축키 수정 키를 Wails 수정 키로 바꾼다.

@@ -72,6 +72,7 @@ fn invalid_json_closes_connection() {
 | view | fullscreen | system | | | |
 | window | new-window | title | 새 창 | New Window | shift+cmd+n |
 | window | bring-all-to-front | system | | | |
+| help | debug | title | 디버그 | Debug | |
 
 `host.menu`는 `{language, menus}` 를 보고한다 — 활성 메뉴 언어와 구성된 메뉴다. 언어는 호스트 자신의 상태이지 제목에서 추측하는 값이 아니다. 호스트 사이 비교와 위 표 대조는 창 검사 계층에서 확인하고, `scripts/check-host-parity.mjs`가 두 호스트의 메뉴 빌더가 이 표와 같은 표를 담고 있는지 검사한다.
 
@@ -301,6 +302,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.retain.skips-service-without-endpoint` | 실행 중인 서비스와 그 엔드포인트 파일이 없으면 retain은 서비스를 시작하지 않고 아무것도 닫지 않는다. | both |
 | `sidecars.retain.rejects-after-stop` | 사이드카가 멈춘 뒤 시작한 retain이나 서비스를 준비한 뒤 멈춤이 끼어든 retain은 "sidecars are stopped"로 실패하고 서비스에 retain을 보내지 않는다. | both |
 | `menu.application.view-has-full-screen-and-text-size` | 애플리케이션 메뉴의 View 메뉴에는 전체 화면과 Command `=`, `-`, `0`의 [글자 크기](text-size.ko.md) 항목이 있고, 웹뷰 전체를 확대하거나 다시 읽는 메뉴 항목이 없다. | both |
+| `menu.application.help-has-debug` | 애플리케이션 메뉴의 도움말 메뉴에 단축키 없는 항목 디버그(Debug)가 있다. 이 항목은 main 창의 메인 page에서 `core.debug.open`을 실행한다([디버그 화면](debug.ko.md)). | both |
 | `sidecars.protocol.surface-keeps-its-first-root` | 소유 창의 프로젝트가 바뀐 뒤에도 열린 표면의 요청과 closed 알림은 첫 요청의 root를 가진다. | both |
 | `sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail` | 호스트가 닫은 표면에 대한 stdio sidecar 메시지는 버리고, 호스트가 그 프로세스에 한 번도 보내지 않은 표면의 메시지는 보낸 표면에 `unknown surface <surface>`를 전달하며 sidecar를 실패시킨다. | both |
 | `sidecars.send.rejects-undeclared-sidecar` | 어떤 플러그인도 선언하지 않은 사이드카로 보내면 "not declared"로 실패한다. | both |

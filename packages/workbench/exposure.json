@@ -60,6 +60,7 @@
               ],
               "enum": [
                 "settings",
+                "debug",
                 "picker",
                 null
               ]
@@ -926,6 +927,74 @@
         }
       },
       {
+        "name": "core.debug",
+        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the running or last save operation, and the error of the last failed step or operation or null.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "open": {
+              "type": "boolean"
+            },
+            "recorded": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "number"
+                  },
+                  "modified": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "operation": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "action": {
+                  "enum": [
+                    "save",
+                    "save-all"
+                  ]
+                },
+                "path": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "enum": [
+                    "running",
+                    "done",
+                    "failed"
+                  ]
+                }
+              }
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      },
+      {
         "name": "core.picker",
         "description": "Whether the add, tab, tool or space apps menu is open, its title, and its items in order; group is the card of an item in a grouped menu and null otherwise.",
         "schema": {
@@ -1534,6 +1603,73 @@
         "result": {
           "type": "null"
         }
+      },
+      {
+        "name": "core.debug.open",
+        "description": "Closes the settings modal, opens the debug view, records the state of every window into the logs folder and lists the files of the logs folder.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 120000
+      },
+      {
+        "name": "core.debug.close",
+        "description": "Closes the debug view.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.debug.save",
+        "description": "Saves one file of the logs folder through the save panel where the person chooses; answers the chosen path, or null when the person cancels.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "saved": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "core.debug.save-all",
+        "description": "Saves the logs folder as one gzip-compressed tar file through the save panel where the person chooses; answers the chosen path, or null when the person cancels.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "saved": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "timeout": 600000
       },
       {
         "name": "core.projects.browse",
@@ -3198,6 +3334,32 @@
       {
         "name": "core.library.form.submit",
         "description": "The form submit button."
+      },
+      {
+        "name": "core.debug.card",
+        "description": "The debug card in the main document; the native modal draws it at the same rectangle."
+      },
+      {
+        "name": "core.debug.scrim",
+        "description": "The layer that blocks the main document while the debug view is open."
+      },
+      {
+        "name": "core.debug.close",
+        "description": "The debug view close button."
+      },
+      {
+        "name": "core.debug.save-all",
+        "description": "The button that saves the logs folder as one file."
+      },
+      {
+        "name": "core.debug.file",
+        "description": "The rows of the files of the logs folder in path order.",
+        "many": true
+      },
+      {
+        "name": "core.debug.save",
+        "description": "The save buttons of the file rows in path order.",
+        "many": true
       },
       {
         "name": "core.settings-modal.card",

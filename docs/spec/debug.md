@@ -6,7 +6,7 @@ The debug view lets a person who meets a defect hand over every diagnostic recor
 
 ## Opening
 
-The Help menu of both hosts has 디버그 (Debug) ([host contract](host-contract.md#application-menu)). It runs `core.debug.open` in the key window, or in the main window when no window is key. The view is a `dialog` [native modal](native-modals.md) that closes with its × button (`core.debug.close`).
+The Help menu of both hosts has 디버그 (Debug) ([host contract](host-contract.md#application-menu)). It runs `core.debug.open` in the main page of the application's main window, the same window as the text-size items of the View menu ([text size](text-size.md)). The view is a `dialog` [native modal](native-modals.md) that closes with its × button (`core.debug.close`); opening it closes the settings modal, and opening the settings modal closes it. A page without the application host has no debug view, and `core.debug.open` fails there with an error.
 
 Opening records the state, then lists the files:
 
@@ -22,8 +22,8 @@ A failure of a step is shown in the view through the error display and the other
 The host call `debugFiles()` answers `[{path, size, modified}]` for every file under `<config-dir>/logs/`, sorted by `path`: `path` is relative to `<config-dir>`, `size` is in bytes and `modified` is the modification time in milliseconds since the epoch. The view lists each file with its size and time and a 저장 button, and has 모두 저장 above the list.
 
 - `core.debug.save {path}` runs the host call `debugSave({path})`, which shows the macOS save panel with the file name and copies the file to the chosen place. It answers `{saved}`, the chosen path, or `{saved: null}` when the person cancels. A `path` outside `logs/` or of no file is refused with an error that names it.
-- `core.debug.saveAll` runs the host call `debugSaveAll()`, which shows the save panel with the name `soksak-<host>-debug-<time>.tar.gz` and writes a gzip-compressed tar file of `<config-dir>/logs/`. It answers like `debugSave`.
+- `core.debug.save-all` runs the host call `debugSaveAll()`, which shows the save panel with the name `soksak-<host>-debug-<time>.tar.gz` and writes a gzip-compressed tar file of `<config-dir>/logs/`. It answers like `debugSave`.
 
 ## Status
 
-`core.debug` reports `{open, recorded, files, operation, error}`: whether the view is open, the path of the state file that opening wrote or `null`, the listed files, the running or last operation `{action, path, state}` with `state` `running`, `done` or `failed`, and the error of the last failed operation or `null`.
+`core.debug` reports `{open, recorded, entries, operation, error}`: whether the view is open, the path of the state file that opening wrote or `null`, the listed entries `{path, size, modified}`, the running or last operation `{action, path, state}` with `action` `save` or `save-all`, `path` the saved file or `null`, and `state` `running`, `done` or `failed`, and the error of the last failed step or operation or `null`. `core.screen` reports `modal` `debug` while the view is open.

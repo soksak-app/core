@@ -1,10 +1,11 @@
 // 모달의 표시 순서, 배경, 입력, 이동, 크기 변경 및 제거를 검사한다.
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, recordingFolders } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 
@@ -302,5 +303,47 @@ for (const app of Object.values(APPS)) {
       `settings must stay inside the window: ${JSON.stringify(resized)}`);
     await modalAt(s, resized);
     await background(s, true);
+  });
+}
+
+const HELP_TITLES = {
+  ko: { menu: "도움말", debug: "디버그" },
+  en: { menu: "Help", debug: "Debug" },
+};
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: Help > Debug records the state, lists the logs folder and refuses a path outside it`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const titles = HELP_TITLES[(await s.get("host.menu")).language];
+    s.cleanup(() => s.run("core.debug.close"));
+    // Opening the view writes a still capture of each window into logs/captures; the check removes the folders it caused.
+    s.cleanup(() => {
+      for (const folder of recordingFolders(s.app.configDir)) {
+        if (!s.recordingsBefore.includes(folder)) rmSync(join(s.app.configDir, "logs", "captures", folder), { recursive: true, force: true });
+      }
+    });
+    await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
+    const opened = await s.until("core.debug", (debug) => debug.open && debug.recorded !== null && debug.entries.length > 0,
+      "the debug view did not record the state and list the files");
+    assert.equal(opened.error, null, "opening the debug view failed a step");
+    assert.match(opened.recorded, /^logs\/state-\d{8}T\d{6}Z\.json$/);
+    assert.ok(opened.entries.some((file) => file.path === opened.recorded), `the list does not contain ${opened.recorded}`);
+    assert.ok(opened.entries.every((file) => file.path.startsWith("logs/") && file.size >= 0 && file.modified > 0),
+      `a listed file is outside logs/ or has no size and time: ${JSON.stringify(opened.entries)}`);
+    assert.equal((await s.get("core.screen")).modal, "debug");
+    await s.until("host.window", (w) => w.modal?.id === "debug" && w.modal.shown, "the debug view was not shown");
+    // The state file holds the host, the versions, the windows and the page statuses.
+    const state = JSON.parse(readFileSync(join(s.app.configDir, opened.recorded), "utf8"));
+    assert.equal(state.host, app.name);
+    assert.ok(state.versions.core && state.versions.macos && state.windows.length > 0 && state.page.length > 0,
+      `the state file is incomplete: ${Object.keys(state)}`);
+    await assert.rejects(s.run("core.debug.save", { path: "settings.json" }),
+      /debug: settings.json is not a file under logs\//);
+    s.expectError(/^error: .*debug: settings.json is not a file under logs\//);
+    await s.run("core.debug.close");
+    await s.until("core.debug", (debug) => !debug.open, "the debug view did not close");
+    assert.equal((await s.get("core.screen")).modal, null);
   });
 }

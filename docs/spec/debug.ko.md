@@ -6,7 +6,7 @@
 
 ## 열기
 
-두 host의 도움말 메뉴에 디버그(Debug)가 있다([host contract](host-contract.ko.md#애플리케이션-메뉴)). 디버그는 key 창에서, key 창이 없으면 main 창에서 `core.debug.open`을 실행한다. 화면은 × 버튼(`core.debug.close`)으로 닫는 `dialog` [native modal](native-modals.ko.md)이다.
+두 host의 도움말 메뉴에 디버그(Debug)가 있다([host contract](host-contract.ko.md#애플리케이션-메뉴)). 디버그는 애플리케이션 main 창의 메인 page에서 `core.debug.open`을 실행한다. 보기 메뉴의 글자 크기 항목과 같은 창이다([글자 크기](text-size.ko.md)). 화면은 × 버튼(`core.debug.close`)으로 닫는 `dialog` [native modal](native-modals.ko.md)이다. 화면을 열면 설정 modal이 닫히고, 설정 modal을 열면 화면이 닫힌다. 애플리케이션 host가 없는 page에는 디버그 화면이 없고, 거기서 `core.debug.open`은 오류로 실패한다.
 
 열기는 상태를 기록한 뒤 파일을 나열한다.
 
@@ -22,8 +22,8 @@
 host 호출 `debugFiles()`는 `<config-dir>/logs/` 아래 모든 파일을 `path` 순으로 `[{path, size, modified}]`로 답한다. `path`는 `<config-dir>`에 대한 상대 경로, `size`는 byte, `modified`는 epoch 이후 millisecond의 수정 시각이다. 화면은 파일마다 크기, 시각, 저장 버튼을 보이고, 목록 위에 모두 저장을 둔다.
 
 - `core.debug.save {path}`는 host 호출 `debugSave({path})`를 실행한다. host는 파일 이름으로 macOS 저장 창을 보이고 고른 곳에 파일을 복사한다. 고른 경로 `{saved}`로, 취소하면 `{saved: null}`로 답한다. `logs/` 밖이거나 파일이 없는 `path`는 그 경로를 밝히는 오류로 거부한다.
-- `core.debug.saveAll`은 host 호출 `debugSaveAll()`을 실행한다. host는 이름 `soksak-<host>-debug-<time>.tar.gz`로 저장 창을 보이고 `<config-dir>/logs/`를 gzip으로 압축한 tar 파일로 쓴다. `debugSave`처럼 답한다.
+- `core.debug.save-all`은 host 호출 `debugSaveAll()`을 실행한다. host는 이름 `soksak-<host>-debug-<time>.tar.gz`로 저장 창을 보이고 `<config-dir>/logs/`를 gzip으로 압축한 tar 파일로 쓴다. `debugSave`처럼 답한다.
 
 ## Status
 
-`core.debug`는 `{open, recorded, files, operation, error}`를 보고한다: 화면이 열렸는지, 열기가 쓴 상태 파일의 경로나 `null`, 나열된 파일, 실행 중이거나 마지막 작업 `{action, path, state}`(`state`는 `running`, `done`, `failed`), 마지막 실패한 작업의 오류나 `null`.
+`core.debug`는 `{open, recorded, entries, operation, error}`를 보고한다: 화면이 열렸는지, 열기가 쓴 상태 파일의 경로나 `null`, 나열된 항목 `{path, size, modified}`, 실행 중이거나 마지막 작업 `{action, path, state}`(`action`은 `save`나 `save-all`, `path`는 저장한 파일이나 `null`, `state`는 `running`, `done`, `failed`), 마지막 실패한 단계나 작업의 오류나 `null`. 화면이 열려 있는 동안 `core.screen`은 `modal` `debug`를 보고한다.

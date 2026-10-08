@@ -397,6 +397,16 @@ export const notificationCenter = native ? {
   onActivated: (listener) => bridge.on("notification-activated", listener),
 } : null;
 
+/**
+ * The host calls of the debug view (docs/spec/debug.md). Null without the application host, which has no logs folder.
+ */
+export const debug = native ? {
+  files: () => tell("debugFiles"),
+  record: (page) => tell("debugRecord", { page }),
+  save: (request) => tell("debugSave", request),
+  saveAll: () => tell("debugSaveAll"),
+} : null;
+
 export function onSurfacePrepared(listener) {
   if (typeof listener !== "function") throw new TypeError("surface preparation listener must be a function");
   surfacePreparedListeners.add(listener);

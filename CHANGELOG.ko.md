@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F124.3.3: 두 host의 도움말 > 디버그가 디버그 화면을 연다. 화면은 `logs/state-<time>.json`을 기록하고 `logs/`의 파일을 크기와 시각과 함께 나열하며 파일 하나나 전부를 저장 창으로 저장한다. page는 `core.debug`, `core.debug.open`, `core.debug.close`, `core.debug.save`, `core.debug.save-all`을 선언하고, 화면이 열려 있는 동안 `core.screen`은 `modal` `debug`를 보고한다.
 - F126: main page가 시작하지 못하게 하는 오류(불러오지 못하거나 해석하지 못하거나 실행 중 던진 module)를, 시작 문서의 첫 module이 설치하고 page가 첫 화면 뒤에 거두는 handler가 `error: page start: <text> @ <file>:<line>`로 애플리케이션 로그에 쓴다. 시작 문서와 page module이 import하는 모든 파일을 `package.json` `files`가 담아야 한다는 test가 있다.
 - F127.1: `docs/spec/diagnostics.md`가 `logs/`의 파일, 기록의 세 형태(오류 줄, event, state file), 규칙, 각 실패 지점의 기록을 정하고, 용어 목록에 application log, performance trace, state file, debug view가 있다.
 - F124.3.2: 두 host가 host 호출 `debugFiles`, `debugRecord`, `debugSave`, `debugSaveAll`에 답한다. `<config-dir>/logs/`의 모든 파일을 나열하고, host, core·macOS·설치된 plugin의 version, 모든 창의 status를 담은 `logs/state-<time>.json`을 쓰며 진단 빌드에서는 각 창의 정지 캡처도 쓴다. `logs/`의 파일 하나를 저장 창으로 저장하고 다른 경로는 거부하며, 폴더 전체를 gzip으로 압축한 tar 파일 하나로 저장한다. 계약 사례 4개가 Go와 Rust에서 돈다.
