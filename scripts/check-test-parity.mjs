@@ -1683,6 +1683,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F105",
+    implementation: [
+      { file: "scripts/check-release.mjs", symbol: "export function auditMinimum" },
+      { file: "scripts/check-release.mjs", symbol: "export function machoMinimum" },
+    ],
+    tests: [
+      { file: "scripts/test/check-release-paths.test.mjs", id: "minimum audit requires the declared minimum in Info.plist and the application, and no newer executable" },
+      { file: "scripts/test/check-release-paths.test.mjs", id: "machoMinimum reads the minimum macOS version of an executable" },
+    ],
+    expected: "make release-check fails unless both bundles declare MACOS_MINIMUM and both application executables are built for it.",
+    levels: ["unit"],
+  },
+  {
     id: "F97",
     implementation: [
       { file: "packages/plugin-api/engines-check.js", symbol: "engines.soksak is ${pkg.engines.soksak}" },

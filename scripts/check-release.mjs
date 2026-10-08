@@ -7,10 +7,15 @@
 // package.json 의 의존성으로 찾는다. 플러그인과 사이드카는 번들에 없고 설정 폴더에 설치된다(docs/spec/installation.md).
 // `make release-check` 가 release 빌드를 먼저 실행한다.
 //
-//   node scripts/check-release.mjs --wailsv3-bundle PATH --tauriv2-bundle PATH
+// The check also compares each bundle with the macOS minimum of the Makefile (`MACOS_MINIMUM`): Info.plist declares it
+// in LSMinimumSystemVersion, the application executable is built for it, and no other executable is built for a newer
+// macOS (docs/spec/hosts.md#nativedarwin).
+//
+//   node scripts/check-release.mjs --macos-minimum VERSION --wailsv3-bundle PATH --tauriv2-bundle PATH
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
+import { plistString } from "./check-versions.mjs";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 
@@ -47,6 +52,51 @@ export function auditFrontend(errors, label, text, { published, releaseModule })
   if (missing.length) errors.push(`${label}: does not embed a readable frontend; missing ${missing.join(", ")}`);
 }
 
+/** The minimum macOS version of a thin 64-bit Mach-O executable, from LC_BUILD_VERSION or LC_VERSION_MIN_MACOSX. */
+export function machoMinimum(bytes) {
+  if (bytes.length < 32 || bytes.readUInt32LE(0) !== 0xfeedfacf) throw new Error("not a 64-bit Mach-O executable");
+  const count = bytes.readUInt32LE(16);
+  for (let offset = 32, index = 0; index < count && offset + 16 <= bytes.length; index += 1) {
+    const cmd = bytes.readUInt32LE(offset);
+    const at = cmd === 0x32 ? offset + 12 : cmd === 0x24 ? offset + 8 : -1;
+    if (at >= 0) {
+      const encoded = bytes.readUInt32LE(at);
+      const patch = encoded & 0xff;
+      return `${encoded >>> 16}.${(encoded >>> 8) & 0xff}${patch ? `.${patch}` : ""}`;
+    }
+    offset += bytes.readUInt32LE(offset + 4);
+  }
+  throw new Error("declares no minimum macOS version");
+}
+
+/** Negative, zero or positive as version a is older than, equal to or newer than version b. */
+function compareVersions(a, b) {
+  const [x, y] = [a, b].map((version) => version.split(".").map(Number));
+  for (let index = 0; index < Math.max(x.length, y.length); index += 1) {
+    const difference = (x[index] ?? 0) - (y[index] ?? 0); // default: a missing component is 0
+    if (difference) return difference;
+  }
+  return 0;
+}
+
+/**
+ * Compares a bundle with the macOS minimum. plist is the text of Contents/Info.plist; executables are
+ * {path, application, minimum}. The application executable is built for the minimum, and no other executable is
+ * built for a newer macOS.
+ */
+export function auditMinimum(errors, bundle, minimum, plist, executables) {
+  const declared = plistString(plist, "LSMinimumSystemVersion");
+  // default: an absent key is reported as missing.
+  if (declared !== minimum) errors.push(`${join(bundle, "Contents/Info.plist")}: LSMinimumSystemVersion is ${declared ?? "missing"}, not the macOS minimum ${minimum}`);
+  for (const executable of executables) {
+    if (executable.application && compareVersions(executable.minimum, minimum) !== 0) {
+      errors.push(`${executable.path}: built for macOS ${executable.minimum}, not the macOS minimum ${minimum}`);
+    } else if (compareVersions(executable.minimum, minimum) > 0) {
+      errors.push(`${executable.path}: built for macOS ${executable.minimum}, newer than the macOS minimum ${minimum}`);
+    }
+  }
+}
+
 /** from 패키지의 의존성으로 name 패키지의 디렉터리를 찾는다. */
 function packageDir(from, name) {
   return dirname(createRequire(join(from, "package.json")).resolve(`${name}/package.json`));
@@ -71,9 +121,16 @@ function applicationSources(app) {
 // CLI 로 직접 실행될 때만 검사를 수행한다.
 if (import.meta.main) {
   const bundles = new Map();
+  let minimum;
   const args = process.argv.slice(2);
   for (let index = 0; index < args.length; index += 2) {
     const option = args[index];
+    if (option === "--macos-minimum") {
+      if (minimum !== undefined) throw new Error(`duplicate release option: ${option}`);
+      minimum = args[index + 1];
+      if (typeof minimum !== "string" || !/^\d+\.\d+(?:\.\d+)?$/.test(minimum)) throw new Error(`${option} requires a macOS version such as 14.4`);
+      continue;
+    }
     const app = APPS.find((app) => option === `--${app}-bundle`);
     if (!app) throw new Error(`unknown release option: ${option}`);
     if (bundles.has(app)) throw new Error(`duplicate release option: ${option}`);
@@ -81,7 +138,9 @@ if (import.meta.main) {
     if (!path || path.startsWith("--")) throw new Error(`${option} requires a bundle path`);
     bundles.set(app, resolve(path));
   }
-  if (bundles.size !== APPS.length) throw new Error("required release bundle options: --wailsv3-bundle PATH --tauriv2-bundle PATH");
+  if (minimum === undefined || bundles.size !== APPS.length) {
+    throw new Error("required release options: --macos-minimum VERSION --wailsv3-bundle PATH --tauriv2-bundle PATH");
+  }
   const errors = [];
 
   for (const app of APPS) {
@@ -93,12 +152,21 @@ if (import.meta.main) {
       continue;
     }
     // 실행 파일은 바이트로 읽는다. 표지는 ASCII 이므로 latin1 로 해석해도 위치가 바뀌지 않는다.
+    const built = [];
     for (const name of readdirSync(executables)) {
       const path = join(executables, name);
-      const text = latin1(readFileSync(path));
+      const bytes = readFileSync(path);
+      const text = latin1(bytes);
       find(errors, path, text);
       if (path === executable) auditFrontend(errors, path, text, applicationSources(app));
+      try {
+        built.push({ path, application: path === executable, minimum: machoMinimum(bytes) });
+      } catch (error) {
+        errors.push(`${path}: ${error.message}`);
+      }
     }
+    const plist = join(bundles.get(app), "Contents", "Info.plist");
+    auditMinimum(errors, bundles.get(app), minimum, existsSync(plist) ? readFileSync(plist, "utf8") : "", built);
   }
 
   if (errors.length) {

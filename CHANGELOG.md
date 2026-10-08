@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F105: both application bundles declare the macOS minimum 14.4, the Tauri application is built for it, and `make release-check` checks `LSMinimumSystemVersion` and the minimum macOS version of each executable against `MACOS_MINIMUM`.
 - F102.9: every declared version is 0.0.6, and `make release-check` checks that the new core accepts the manifest of every plugin version of the registry that admits it; core 0.0.6 is released.
 - F102.1.3, F102.1.4: `sok` installs the plugin dependencies of a plugin, refuses to remove or disable a required plugin, keeps dependent ranges on update, and `sok registry build` checks plugin dependencies; hosts leave plugin packages out of their sidecars, and serve `/shared/` for extension points (F102.1.5).
 - F102.5: a surface reports unsaved changes with `tab.modified`, and closing a modified tab or its card asks whether to save, discard or keep it.

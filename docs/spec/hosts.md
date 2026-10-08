@@ -254,7 +254,7 @@ On macOS each application runs from an application bundle, because the operating
 
 ## native/darwin
 
-`native/darwin` is the shared macOS library that both hosts call. Its minimum macOS version is 14.0.
+`native/darwin` is the shared macOS library that both hosts call. Its minimum macOS version is 14.4, because `capture.m` calls `SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:`, which macOS 14.4 introduced. The Makefile declares it in `MACOS_MINIMUM` and builds the library and both applications for it; `Info.plist` of both applications declares it in `LSMinimumSystemVersion`, and `apps/tauriv2/tauri.conf.json` in `bundle.macOS.minimumSystemVersion`, because the Tauri bundler builds the application for that value. `make release-check` fails when a bundle declares another value, when an application executable is built for another macOS version, or when another executable of the bundle is built for a newer one.
 
 | Path | Contents |
 | --- | --- |
