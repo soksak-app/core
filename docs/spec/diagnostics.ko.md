@@ -32,7 +32,7 @@
 
 - 실패 지점의 기록은 아래 표에 있다. 표에 없는 실패 지점은 이 문서의 결함이다.
 - 기록은 실패가 일어난 순간 그것을 알리는 event가 쓴다. timer나 polling으로 실패를 찾지 않는다. 한 원인은 한 줄을 쓰고, 같은 원인의 반복 보고는 아무것도 더하지 않는다.
-- 한계는 파일을 열 때만이 아니라 쓰는 동안에도 적용한다.
+- 각 파일의 크기 한계는 쓰는 쪽이 파일을 열 때 적용한다. 쓰는 쪽이 하나인 performance trace는 쓰는 동안에도 적용하고, 한 descriptor를 여럿이 쓰는 application log와 service log는 다음에 열 때까지 커진다.
 - 기록은 종류와 길이만 담고 입력한 글자나 파일 내용은 담지 않는다.
 - 기록을 쓰지 못하는 쪽은 할 수 있는 곳에 오류를 알린다. application log를 열지 못한 host는 시작하지 않는다.
 - 각 실패 지점에는 그 실패를 일으키고 기록을 읽는 test가 있다.
@@ -51,8 +51,8 @@
 | Rust host가 panic한다 | panic hook의 `error: panic: <file>:<line>: <message>`. Wails host의 panic은 Go runtime이 stack을 표준 오류에 쓴다 |
 | host가 실행되는 동안 표준 입출력 sidecar process가 끝난다 | `error: sidecar <name>: failed: output closed: <exit status>` |
 | host가 실행되는 동안 상주 service의 연결이 끝난다 | `error: sidecar <name>: connection lost; restarted`, 또는 `connection lost; restart failed: <reason>` |
-| document region이 navigation에 실패한다 | `error: document <surface>: <text>` |
-| `sok` 명령이 실패한다 | standard error의 실패와 `application.log`의 `error: sok <command>: <text>` |
+
+호출자가 받아 오류 표시로 보이는 실패는 그 표시가 기록한다. endpoint 요청은 실패를 client에 답하고, `sok` 명령은 상태와 메시지를 표준 오류로 끝내며, plugin은 host가 문서의 `failure`로 알린 document region의 탐색 실패를 `tab.error`([plugins](plugins.md))로 보이고 그 표시가 `error: tab error <tab id>: <text>`를 쓴다.
 
 ## 읽기
 

@@ -32,7 +32,7 @@ Three forms of record exist, and each fact has the form that fits it.
 
 - A failure point has its record in the table below. A failure point that the table does not list is a defect of this document.
 - A record is written at the moment of the failure, by the event that reports it. A timer or polling does not search for failures. One cause writes one line; a repeated report of the same cause adds nothing.
-- A bound applies while a file is written and not only when it is opened.
+- Each file has a size bound that its writer applies when it opens the file. The performance trace, which has one writer, also applies it while it writes; the application log and the service logs have several writers of one descriptor, so they grow until the next open.
 - A record holds kinds and lengths, never typed text or file content.
 - A writer that cannot write its record reports the error where it can: the host that cannot open its application log does not start.
 - Each failure point has a test that causes the failure and reads the record.
@@ -51,8 +51,8 @@ Three forms of record exist, and each fact has the form that fits it.
 | the Rust host panics | `error: panic: <file>:<line>: <message>` from the panic hook; the Go runtime writes the stack of a panic of the Wails host to the standard error |
 | a sidecar process of standard input and output ends while the host runs | `error: sidecar <name>: failed: output closed: <exit status>` |
 | the connection to a persistent service ends while the host runs | `error: sidecar <name>: connection lost; restarted`, or `connection lost; restart failed: <reason>` |
-| a document region fails to navigate | `error: document <surface>: <text>` |
-| a `sok` command fails | the failure on its standard error and `error: sok <command>: <text>` in `application.log` |
+
+A failure that the caller of an operation receives, and that the caller shows through the error display, is recorded by that display: a request of the endpoint answers its failure to its client, a `sok` command ends with its status and its message on the standard error, and a plugin shows the failed navigation of its document region, which the host reports as the `failure` of the document, with `tab.error` ([plugins](plugins.md)), whose display writes `error: tab error <tab id>: <text>`.
 
 ## Reading
 
