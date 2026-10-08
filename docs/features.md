@@ -1076,7 +1076,7 @@ Previous completed component work remains evidence, not completion of these wide
     - [ ] R5.3.6 — P1: Replace the rejected synonyms in the registry.
   - [ ] R5.4 — P1: Remove `package` from `plugins/installed.json`; the hosts and `sok` read the `name` of a plugin from its `package.json`, and a reader refuses an `installed.json` with `package`.
   - [ ] R5.5 — P1: Rename the `package` of plugin versions and the `assets` of sidecar versions in the registry index to `release` and `releases`.
-  - [ ] R5.6 — P1: Rename `helpers[].package` of `sidecar.json` to `helpers[].name`.
+  - [o] R5.6 — P1: Rename `helpers[].package` of `sidecar.json` to `helpers[].name`. Red: `a sidecar manifest may include optional helpers with name and executable` failed with `sidecar.json helpers: unknown field name`. Green: `@soksak/plugin-api` passes 157 tests; a helper with `package` fails with `unknown field package`. No sidecar declares helpers. Done on 2026-10-08.
 
 ## Tauri/Wails parity audit (2026-09-21)
 

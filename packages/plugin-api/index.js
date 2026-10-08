@@ -560,7 +560,7 @@ export function checkProjectData(plugin, data, key, value) {
  *   executable  빌드된 실행 파일의 패키지 안 경로. 네이티브 호스트는 이 파일 이름으로
  *               애플리케이션 실행 파일과 같은 디렉터리에서 찾는다
  *   protocol    메시지 형식 버전. 현재 1
- *   helpers     선택 필드. 사이드카가 사용하는 헬퍼 패키지 목록
+ *   helpers     optional; the helper programs of the sidecar, each with the name of its package.json and its executable
  */
 export function validateSidecar(sidecar) {
   if (!isObject(sidecar)) throw new Error("sidecar.json: expected an object");
@@ -579,13 +579,13 @@ export function validateSidecar(sidecar) {
     const names = new Set([executable.split("/").pop()]);
     for (const helper of sidecar.helpers) {
       if (!isObject(helper)) throw new Error("sidecar.json helpers: expected an object");
-      only("sidecar.json helpers", helper, ["package", "executable"]);
-      if (!isText(helper.package) || !PACKAGE.test(helper.package)) {
-        throw new Error("sidecar.json helpers: package must be a package.json name");
+      only("sidecar.json helpers", helper, ["name", "executable"]);
+      if (!isText(helper.name) || !PACKAGE.test(helper.name)) {
+        throw new Error("sidecar.json helpers: name must be a package.json name");
       }
       const path = helper.executable;
       if (!isText(path) || path.startsWith("/") || path.split("/").includes("..")) {
-        throw new Error("sidecar.json helpers: executable must be a path inside the package");
+        throw new Error("sidecar.json helpers: executable must be a path inside the helper folder");
       }
       const file = path.split("/").pop();
       if (names.has(file)) throw new Error(`sidecar.json helpers: ${file} is declared twice`);

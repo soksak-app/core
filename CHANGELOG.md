@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R5.6: a helper of `sidecar.json` names its program with `name`; `package` is refused.
 - R5.2: the record check reports the rejected synonyms of `packages/plugin-api/terms.json` in files and commit messages, and `make hooks` adds a pre-commit hook that runs it.
 - R5.3.3: specifications, comments and errors of core call the name field of a `package.json` the `name` of `package.json`, and `sok` reports `expected a package.json name`.
 - R5.3.2: `sok plugin pack` and `sok sidecar release` print the written file as `release`, and the identifiers and contract cases of `sok` say release.

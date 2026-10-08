@@ -203,13 +203,13 @@ test("a persistent sidecar declares its transport explicitly", () => {
   }
 });
 
-test("a sidecar manifest may include optional helpers field with package and executable", () => {
+test("a sidecar manifest may include optional helpers with name and executable", () => {
   const base = { executable: "build/worker", protocol: 1 };
   const withHelpers = {
     ...base,
     helpers: [
-      { package: "@scope/helper", executable: "build/ptyd" },
-      { package: "lib-shared", executable: "dist/helper" },
+      { name: "@scope/helper", executable: "build/ptyd" },
+      { name: "lib-shared", executable: "dist/helper" },
     ],
   };
   assert.equal(validateSidecar(withHelpers), withHelpers);
@@ -218,17 +218,18 @@ test("a sidecar manifest may include optional helpers field with package and exe
 test("a sidecar helpers field is rejected for invalid cases", () => {
   const base = { executable: "build/worker", protocol: 1 };
   const cases = [
-    [{ ...base, helpers: [{ package: "@scope/helper", executable: "build/ptyd", extra: "field" }] }, /unknown field extra/],
-    [{ ...base, helpers: [{ package: "lib-shared" }] }, /executable must be a path inside the package/],
-    [{ ...base, helpers: [{ executable: "build/helper" }] }, /package must be a package\.json name/],
-    [{ ...base, helpers: [{ package: "Bad Name", executable: "build/helper" }] }, /package must be a package\.json name/],
-    [{ ...base, helpers: [{ package: "lib-shared", executable: "/bin/helper" }] }, /must be a path inside the package/],
-    [{ ...base, helpers: [{ package: "lib-shared", executable: "../helper" }] }, /must be a path inside the package/],
+    [{ ...base, helpers: [{ name: "@scope/helper", executable: "build/ptyd", extra: "field" }] }, /unknown field extra/],
+    [{ ...base, helpers: [{ name: "lib-shared" }] }, /executable must be a path inside the helper folder/],
+    [{ ...base, helpers: [{ executable: "build/helper" }] }, /name must be a package\.json name/],
+    [{ ...base, helpers: [{ name: "Bad Name", executable: "build/helper" }] }, /name must be a package\.json name/],
+    [{ ...base, helpers: [{ name: "lib-shared", executable: "/bin/helper" }] }, /must be a path inside the helper folder/],
+    [{ ...base, helpers: [{ name: "lib-shared", executable: "../helper" }] }, /must be a path inside the helper folder/],
     [{ ...base, helpers: [
-      { package: "@scope/helper", executable: "build/ptyd" },
-      { package: "lib-shared", executable: "build/ptyd" },
+      { name: "@scope/helper", executable: "build/ptyd" },
+      { name: "lib-shared", executable: "build/ptyd" },
     ] }, /ptyd is declared twice/],
-    [{ ...base, helpers: [{ package: "lib-shared", executable: "dist/worker" }] }, /worker is declared twice/],
+    [{ ...base, helpers: [{ name: "lib-shared", executable: "dist/worker" }] }, /worker is declared twice/],
+    [{ ...base, helpers: [{ package: "lib-shared", executable: "build/helper" }] }, /unknown field package/],
   ];
   for (const [value, message] of cases) assert.throws(() => validateSidecar(value), message);
 });
