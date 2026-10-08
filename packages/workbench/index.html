@@ -22,6 +22,7 @@
 <script type="module" blocking="render">
 /* environment.json 을 가장 먼저 불러온다. 아래 모듈은 등록된 플러그인과 기본값을
    함수 호출 시점에 읽는다. */
+import { pageStart } from "./page-start-errors-install.js";
 import { defaultRegistry, installEnvironment, starterPack } from "./environment.js";
 import { pluginOperations } from "./installed-plugins.js";
 import { installExposure } from "./exposure.js";
@@ -532,6 +533,8 @@ applyFrameText(value("textSize"));
 onLayout(pageLayout.onLayout);
 // 호스트는 창을 40pt 제목줄로 만든다. 첫 행이 다르면 첫 행을 담은 배치를 준비한다.
 if (chrome) fitTitlebar(start.controls);
+// 첫 화면을 그렸으므로 시작 오류 handler 를 거두고, 이어지는 오류는 이 문서의 오류 표시가 받는다.
+pageStart.finish();
 
 // 코어 공개 항목은 첫 await 전에 등록한다. 첫 화면의 사이드바 섹션은 그 뒤에 비동기로 마운트되며 코어 상태를 따를 수
 // 있다(docs/spec/plugins.md#sections). 호스트와의 연결은 아래에서 기다린다.

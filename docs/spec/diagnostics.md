@@ -43,6 +43,7 @@ Three forms of record exist, and each fact has the form that fits it.
 | Failure | Record |
 |---|---|
 | a module of the main page fails to load or throws while it loads | `error: page start: <text> @ <file>:<line>` ([page start](native-host.md#page-start)) |
+| the host cannot serve a file that the page requests | `error: page asset: <path>: not found`, once for each path |
 | the main page throws or rejects after its first screen | `error: <where>: <text>` of the page's error display |
 | the WebContent process of a window ends | `error: page process: <window>: <reason>` |
 | a native call fails | `error: <where>: <text>` from `sp_log_error` |

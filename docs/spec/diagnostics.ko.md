@@ -43,6 +43,7 @@
 | 실패 | 기록 |
 |---|---|
 | main page의 module이 불러오지 못하거나 불러오는 중 던진다 | `error: page start: <text> @ <file>:<line>`([page 시작](native-host.ko.md#page-시작)) |
+| host가 page가 요청한 파일을 내줄 수 없다 | `error: page asset: <path>: not found`, 경로마다 한 번 |
 | main page가 첫 화면 뒤에 던지거나 reject한다 | page 오류 표시의 `error: <where>: <text>` |
 | 창의 WebContent process가 끝난다 | `error: page process: <window>: <reason>` |
 | native 호출이 실패한다 | `sp_log_error`의 `error: <where>: <text>` |
