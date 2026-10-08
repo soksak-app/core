@@ -1,5 +1,6 @@
 // 다시 그려도 같은 내용이면 스크롤 위치를 유지한다(docs/spec/settings.md). 스크롤하는 요소는 data-scroll-key 로
-// 보이는 내용을 밝힌다. 키가 같으면 같은 내용이고, 키가 다르면 맨 위에서 시작한다.
+// 보이는 내용을 밝힌다. 키가 같으면 같은 내용이고, 키가 다르면 맨 위에서 시작한다. data-scroll-end 가 있는 요소는
+// 키가 다를 때 끝에서 시작한다.
 
 /** root 안의 data-scroll-key 요소마다 스크롤 위치를 키별로 읽는다. */
 export function scrollPositions(root) {
@@ -14,7 +15,11 @@ export function scrollPositions(root) {
 export function restoreScroll(root, positions) {
   for (const element of root.querySelectorAll("[data-scroll-key]")) {
     const position = positions.get(element.dataset.scrollKey);
-    if (!position) continue;
+    if (!position) {
+      // Content that asks for its end (data-scroll-end), as a log does, starts there when its key is new.
+      if (element.dataset.scrollEnd !== undefined) element.scrollTop = element.scrollHeight;
+      continue;
+    }
     element.scrollTop = position.top;
     element.scrollLeft = position.left;
   }

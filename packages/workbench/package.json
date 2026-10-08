@@ -26,6 +26,7 @@
     "system-notifications.js",
     "shown-errors.js",
     "debug-ui.js",
+    "debug-order.js",
     "page-start-errors.js",
     "page-start-errors-install.js",
     "surface-status.js",

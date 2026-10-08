@@ -330,6 +330,9 @@ for (const app of Object.values(APPS)) {
     assert.equal(opened.error, null, "opening the debug view failed a step");
     assert.match(opened.recorded, /^logs\/state-\d{8}T\d{6}Z\.json$/);
     assert.ok(opened.entries.some((file) => file.path === opened.recorded), `the list does not contain ${opened.recorded}`);
+    // The list shows the newest file first, and files of the same time by path.
+    const expectedOrder = opened.entries.toSorted((left, right) => right.modified - left.modified || left.path.localeCompare(right.path));
+    assert.deepEqual(opened.entries.map((file) => file.path), expectedOrder.map((file) => file.path), "the list is not newest first");
     assert.ok(opened.entries.every((file) => file.path.startsWith("logs/") && file.size >= 0 && file.modified > 0),
       `a listed file is outside logs/ or has no size and time: ${JSON.stringify(opened.entries)}`);
     assert.equal((await s.get("core.screen")).modal, "debug");
@@ -342,7 +345,8 @@ for (const app of Object.values(APPS)) {
     // Viewing shows the whole content of a text file; the state file does not change while the view is open.
     const stateText = readFileSync(join(s.app.configDir, opened.recorded), "utf8");
     await s.run("core.debug.view", { path: opened.recorded });
-    const viewed = await s.until("core.debug", (debug) => debug.viewing !== null, "the debug view did not show the file");
+    // A text opens scrolled to its end, where its newest lines are; the state file is taller than the view.
+    const viewed = await s.until("core.debug", (debug) => debug.viewing !== null && debug.scroll > 0, "the debug view did not show the end of the file");
     assert.deepEqual(viewed.viewing, { path: opened.recorded, size: Buffer.byteLength(stateText), truncated: false, kind: "text", length: stateText.length });
     await s.run("core.debug.list");
     await s.until("core.debug", (debug) => debug.viewing === null, "the debug view did not return to the list");

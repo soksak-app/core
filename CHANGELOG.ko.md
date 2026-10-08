@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F124.3.7: 디버그 화면이 가장 새 파일을 먼저 나열하고, 파일의 글을 가장 새 줄이 있는 끝에서 열며, 목록 단추가 있는 머리줄을 스크롤하는 pane 위에 고정한다. `core.debug`는 `scroll`을 보고한다.
 - F128.1: host가 종료하는 동안 일부러 끝낸 WebContent process는 기록하지 않고 Tauri host는 page를 다시 불러오지 않는다. 다시 불러오면 애플리케이션이 끝나지 못했다.
 - F117.5.4: plugin 화면이 카드 위에 오래된 상주 service마다 `<running> → <installed>`와 새 명령 `core.plugins.replace {sidecar}`를 실행하는 동작 터미널 <sessions>개를 끝내고 적용을 보인다. `core.plugins`는 `outdated`를 보고하고, 두 host는 `sidecarsOutdated`에 답하고 `sidecars-changed`를 보낸다.
 - F117.5.3: 두 host가 `hello` version이 설치된 version과 다른 상주 service를 마지막 세션이 닫힐 때와 host 호출 `sidecarsReplace({sidecar})`에서 교체한다: `close-owner`, `shutdown`, 설치된 service를 시작하는 재연결, 각 표면의 연결 알림, `outdated`에서 sidecar가 빠진 `host.sidecars`, 애플리케이션 로그의 `sidecar <name>: service <running> replaced by <installed>`.

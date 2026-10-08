@@ -9,6 +9,8 @@ import { icon } from "./icons.js";
 import { commandOf, delegate, mark, run } from "./commands.js";
 import { registry } from "./exposure.js";
 import { hideError, showError } from "./shown-errors.js";
+import { newestFirst } from "./debug-order.js";
+import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 
 /** The name of the view: its visible title and the name the host gives its window. */
 const NAME = "디버그";
@@ -45,7 +47,7 @@ export function onDebugDrawn(fn) {
 
 /** The status core.debug. */
 export function debugState() {
-  return { open: card !== null, recorded, entries, viewing, operation, error: failure };
+  return { open: card !== null, recorded, entries, viewing, scroll: debugScroll(), operation, error: failure };
 }
 
 /** A size in bytes as text. */
@@ -73,6 +75,12 @@ function button(key, name, label, command, params) {
 function draw() {
   if (!card) return;
   queueMicrotask(() => drawn());
+  // The same content keeps its scroll position; another content starts at the top, and the text of a file at its end.
+  const positions = scrollPositions(card);
+  const pane = card.querySelector(".dbg-card__pane");
+  pane.dataset.scrollKey = viewing === null ? "list" : `view:${viewing.path}`;
+  if (viewing === null) delete pane.dataset.scrollEnd;
+  else pane.dataset.scrollEnd = "";
   list.textContent = "";
   for (const file of entries) {
     const row = document.createElement("div");
@@ -103,6 +111,7 @@ function draw() {
   const rect = cardRect();
   if (native) overlay.place(card, rect);
   else standIn(true, rect);
+  restoreScroll(card, positions);
 }
 
 /** Records a failed step or operation and shows it. */
@@ -222,7 +231,7 @@ export async function openDebug() {
     fail("record", reason);
   }
   try {
-    entries = await debug.files();
+    entries = newestFirst(await debug.files());
   } catch (reason) {
     fail("list", reason);
   }

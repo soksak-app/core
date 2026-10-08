@@ -951,7 +951,7 @@
       },
       {
         "name": "core.debug",
-        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the running or last save operation, and the error of the last failed step or operation or null.",
+        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the scroll position of the shown content in points, the running or last save operation, and the error of the last failed step or operation or null.",
         "schema": {
           "type": "object",
           "properties": {
@@ -1006,6 +1006,9 @@
                   "type": "number"
                 }
               }
+            },
+            "scroll": {
+              "type": "number"
             },
             "operation": {
               "type": [

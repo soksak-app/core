@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F124.3.7: the debug view lists the newest file first, opens the text of a file at its end, where the newest lines are, and keeps the bar with the 목록 button at the top of the scrolling pane; `core.debug` reports `scroll`.
 - F128.1: a WebContent process that the host ends while it quits is not reported and the Tauri host does not load the page again, which kept the application from ending.
 - F117.5.4: the plugin page shows each outdated persistent service above the plugin cards with `<running> → <installed>` and the action 터미널 <sessions>개를 끝내고 적용, which runs the new command `core.plugins.replace {sidecar}`; `core.plugins` reports `outdated`, and both hosts answer `sidecarsOutdated` and send `sidecars-changed`.
 - F117.5.3: both hosts replace a persistent service whose `hello` version differs from the installed version when its last session closes and on the host call `sidecarsReplace({sidecar})`: `close-owner`, `shutdown`, the reconnection that starts the installed service, the connection notice of each surface, `host.sidecars` without the sidecar in `outdated`, and `sidecar <name>: service <running> replaced by <installed>` in the application log.

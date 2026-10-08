@@ -482,12 +482,15 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 /* The debug view lists the files of the logs folder: the path takes the free width and the size, time and save button
    follow it on the same line. */
 .dbg-card{width:640px}
-.dbg-card__pane{flex:1 1 auto;min-height:0;padding:14px 18px 18px;overflow:auto}
+/* The pane has no padding above, so the sticky bar of a shown file stays at its top edge. */
+.dbg-card__pane{flex:1 1 auto;min-height:0;padding:0 18px 18px;overflow:auto}
+.dbg-card__pane > :first-child{margin-top:14px}
 .dbg-card__error{margin:0 0 10px;font-size:var(--text-small)}
 .dbg-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;min-height:30px}
 .dbg-row__path{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-control);color:var(--fg)}
 .dbg-row__acts{display:inline-flex;gap:var(--space-2)}
-.dbg-card__bar{display:flex;align-items:center;gap:12px;margin:0 0 var(--space-3);min-height:30px}
+/* The bar of a shown file stays at the top of the scrolling pane, so the 목록 button is in view at the end of a long text. */
+.dbg-card__bar{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:12px;margin:0 0 var(--space-3);padding:var(--space-1) 0;min-height:30px;background:var(--card)}
 .dbg-card__path{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-control);color:var(--fg)}
 .dbg-card__cut{font-size:var(--text-small);color:var(--muted)}
 .dbg-card__image{display:block;max-width:100%;height:auto;border:var(--bw) solid var(--edge);border-radius:var(--r-xs)}

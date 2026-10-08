@@ -16,3 +16,12 @@ test("a redraw with the same scroll key keeps the position and another key start
   restoreScroll(rootOf(same, other), positions);
   assert.deepEqual([same.scrollTop, other.scrollTop], [240, 0]);
 });
+
+test("content with a new scroll key that asks for the end starts at its end, and a known key keeps its position", () => {
+  const known = { dataset: { scrollKey: "view:a", scrollEnd: "" }, scrollTop: 0, scrollLeft: 0, scrollHeight: 900 };
+  const positions = scrollPositions(rootOf({ ...known, scrollTop: 120 }));
+  const fresh = { dataset: { scrollKey: "view:b", scrollEnd: "" }, scrollTop: 0, scrollLeft: 0, scrollHeight: 900 };
+  const top = { dataset: { scrollKey: "list" }, scrollTop: 0, scrollLeft: 0, scrollHeight: 900 };
+  restoreScroll(rootOf(known, fresh, top), positions);
+  assert.deepEqual([known.scrollTop, fresh.scrollTop, top.scrollTop], [120, 900, 0]);
+});
