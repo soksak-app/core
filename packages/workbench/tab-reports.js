@@ -5,6 +5,7 @@ const directories = new Map();
 const origins = new Map();
 const notices = new Map();
 const noticePolicies = new Map();
+const modified = new Set();
 // 탭이 보이는지(포커스된 카드의 활성 탭인지) 판이 알려 준다.
 let visibleTab = () => false;
 const listeners = new Set();
@@ -29,6 +30,18 @@ export function reportTitle(tabId, text) {
   labels.set(tabId, text);
   notify();
 }
+
+/** Records whether the surface of tabId holds unsaved changes (docs/spec/plugins.md#tab-reports). */
+export function reportModified(tabId, value) {
+  if (typeof value !== "boolean") throw new TypeError("a modified state must be true or false");
+  if (modified.has(tabId) === value) return;
+  if (value) modified.add(tabId);
+  else modified.delete(tabId);
+  notify();
+}
+
+/** Whether the surface of tabId holds unsaved changes. */
+export const tabModified = (tabId) => modified.has(tabId);
 
 /** 판이 탭이 보이는지 판단하는 함수를 정한다. */
 export function setVisibleTab(probe) {
@@ -111,7 +124,8 @@ export function forgetTab(tabId) {
   const noticed = notices.delete(tabId);
   noticePolicies.delete(tabId);
   const footed = footers.delete(tabId);
-  if (labels.delete(tabId) || noticed || footed) notify();
+  const unsaved = modified.delete(tabId);
+  if (labels.delete(tabId) || noticed || footed || unsaved) notify();
 }
 
 export function onTabReports(listener) {

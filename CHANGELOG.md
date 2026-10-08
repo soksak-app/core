@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F102.5: a surface reports unsaved changes with `tab.modified`, and closing a modified tab or its card asks whether to save, discard or keep it.
 - F102.4: `core.file.open` opens a file of the project in the plugin whose `surface.opens` declares its extension, or in the plugin that declares `*`.
 - F102.3: a plugin declares the parameters of its tabs in `surface.params`; `core.card.add-tab` stores checked `params` with the tab and the surface context gives them as `tab.params`.
 - F104.1: comments are written in English, and the comment language check reports comment lines that hold Hangul.

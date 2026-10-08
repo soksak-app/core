@@ -1,8 +1,8 @@
 // 표면이 알린 탭 제목과 작업 디렉터리, 새 탭의 출처 디렉터리.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clearVisibleNotices, forgetTab, onTabReports, recordOrigin, reportDirectory, reportNotice, reportTitle,
-  setVisibleTab, tabLabel, tabNotice, tabNotices, tabOrigin } from "../tab-reports.js";
+import { clearVisibleNotices, forgetTab, onTabReports, recordOrigin, reportDirectory, reportModified, reportNotice, reportTitle,
+  setVisibleTab, tabLabel, tabModified, tabNotice, tabNotices, tabOrigin } from "../tab-reports.js";
 
 test("a reported title is the tab label until it is removed, and changes notify once", () => {
   let notified = 0;
@@ -78,4 +78,24 @@ test("a system notification policy hides the tab dot but exposes the notice to t
   assert.deepEqual(tabNotices(), [["tab-system", "system body"]]);
   assert.throws(() => reportNotice("tab-invalid-policy", "body", "other"), /unknown tab notice policy/);
   forgetTab("tab-system");
+});
+
+test("a surface reports whether its tab holds unsaved changes until the tab is forgotten", () => {
+  let notified = 0;
+  const off = onTabReports(() => notified++);
+  assert.equal(tabModified("tab-m"), false);
+  reportModified("tab-m", true);
+  reportModified("tab-m", true);
+  assert.equal(tabModified("tab-m"), true);
+  assert.equal(notified, 1);
+  for (const invalid of ["yes", 1, null, undefined]) {
+    assert.throws(() => reportModified("tab-m", invalid), /a modified state must be true or false/);
+  }
+  reportModified("tab-m", false);
+  assert.equal(tabModified("tab-m"), false);
+  reportModified("tab-m", true);
+  forgetTab("tab-m");
+  assert.equal(tabModified("tab-m"), false);
+  assert.equal(notified, 4);
+  off();
 });

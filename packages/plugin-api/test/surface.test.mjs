@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "../surface.js";
 
-const TAB = { title() {}, footer() {}, directory() {}, notify() {} };
+const TAB = { title() {}, footer() {}, directory() {}, notify() {}, modified() {} };
 const ICON = (name) => `<svg data-icon="${name}"></svg>`;
 
 test("surface modules mount into the supplied root and dispose exactly once", async () => {
@@ -47,18 +47,20 @@ test("surface context carries the tab reports and the origin directory", () => {
   const runtime = { exposure: { command() {} }, sidecar() {}, emit() {}, native: {} };
   const context = createSurfaceContext({ root, surfaceId: "tab-1", pluginId: "fixture", runtime, icon: ICON,
     tab: { title: (text) => reported.push(["title", text]), footer: (text) => reported.push(["footer", text]),
-      directory: (path) => reported.push(["directory", path]), notify: (text) => reported.push(["notify", text]) },
+      directory: (path) => reported.push(["directory", path]), notify: (text) => reported.push(["notify", text]),
+      modified: (value) => reported.push(["modified", value]) },
     origin: { directory: "/tmp/origin" } });
   context.tab.title("vim");
   context.tab.footer("/tmp");
   context.tab.directory("/tmp");
   context.tab.notify("done");
-  assert.deepEqual(reported, [["title", "vim"], ["footer", "/tmp"], ["directory", "/tmp"], ["notify", "done"]]);
+  context.tab.modified(true);
+  assert.deepEqual(reported, [["title", "vim"], ["footer", "/tmp"], ["directory", "/tmp"], ["notify", "done"], ["modified", true]]);
   assert.equal(context.origin.directory, "/tmp/origin");
   assert.equal(Object.isFrozen(context.origin), true);
   assert.equal(createSurfaceContext({ root, surfaceId: "tab-2", runtime, tab: TAB, icon: ICON }).origin.directory, null);
   assert.throws(() => createSurfaceContext({ root, surfaceId: "tab-3", runtime, icon: ICON }),
-    /surface context requires tab.title, tab.footer, tab.directory, and tab.notify/);
+    /surface context requires tab.title, tab.footer, tab.directory, tab.notify, and tab.modified/);
 });
 
 test("surface context offers the core icons and requires them", () => {

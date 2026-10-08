@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F102.5: 표면은 `tab.modified`로 저장하지 않은 변경을 알리고, 수정된 탭이나 그 카드를 닫으면 저장, 버리기, 두기를 묻는다.
 - F102.4: `core.file.open`은 project의 파일을 `surface.opens`에 그 확장자를 선언한 plugin에서, 없으면 `*`를 선언한 plugin에서 연다.
 - F102.3: plugin은 `surface.params`에 탭 인자를 선언하고, `core.card.add-tab`은 검사한 `params`를 탭과 함께 저장하며, surface context는 그것을 `tab.params`로 준다.
 - F104.1: 주석은 영어로 쓰고, 주석 언어 검사는 한글을 담은 주석 줄을 보고한다.

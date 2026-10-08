@@ -227,7 +227,7 @@
       },
       {
         "name": "core.grid",
-        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, and the footer text it reported) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation.",
+        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, the footer text it reported, and whether it holds unsaved changes as modified) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation.",
         "schema": {
           "type": [
             "object",
@@ -360,6 +360,9 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "modified": {
+                          "type": "boolean"
                         }
                       }
                     }
@@ -2507,7 +2510,7 @@
       },
       {
         "name": "core.card.close",
-        "description": "Closes a card with all its tabs.",
+        "description": "Closes a card with all its tabs. When a tab of the card is modified, the workbench asks about that tab first, the result is closed false, and the card closes after its modified tabs are saved or discarded.",
         "params": {
           "type": "object",
           "properties": {
@@ -2517,7 +2520,12 @@
           }
         },
         "result": {
-          "type": "null"
+          "type": "object",
+          "properties": {
+            "closed": {
+              "type": "boolean"
+            }
+          }
         }
       },
       {
@@ -2537,7 +2545,7 @@
       },
       {
         "name": "core.tab.close",
-        "description": "Closes a tab; the last tab closes its card when the card can close.",
+        "description": "Closes a tab; the last tab closes its card when the card can close. A modified tab is not closed: the workbench asks whether to save, discard or keep it, and the result is closed false.",
         "params": {
           "type": "object",
           "properties": {
@@ -2547,7 +2555,12 @@
           }
         },
         "result": {
-          "type": "null"
+          "type": "object",
+          "properties": {
+            "closed": {
+              "type": "boolean"
+            }
+          }
         }
       },
       {

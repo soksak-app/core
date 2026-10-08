@@ -28,7 +28,9 @@ import { fillPicker, pickerItems } from "./picker-layer.js";
 import { disposeSurface, focusSurface, mountSurface, placePluginPlaceholder } from "./surface-modules.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
-import { clearVisibleNotices, onTabReports, recordOrigin, setVisibleTab, tabFooter, tabLabel, tabNotice } from "./tab-reports.js";
+import { clearVisibleNotices, onTabReports, recordOrigin, setVisibleTab, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
+import { hideError, showError } from "./shown-errors.js";
+import { registry } from "./exposure.js";
 import { configureSystemNotifications, systemNotifications } from "./system-notifications.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt",
@@ -131,7 +133,8 @@ const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId
 const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
 /** 탭에 보이는 이름: 표면이 알린 제목이 있으면 그것, 없으면 탭 이름. */
 // 기본값: 표면이 제목을 알리지 않았으면 탭 이름을 보인다(docs/spec/plugins.md 의 tab.title).
-const tabName = (t) => tabLabel(t.id) ?? t.title;
+// A modified tab shows a dot before its name (docs/spec/plugins.md#tab-reports).
+const tabName = (t) => `${tabModified(t.id) ? "● " : ""}${tabLabel(t.id) ?? t.title}`;
 
 /** 새 탭 하나. 번호는 화면에 보이는 이름일 뿐이고 id 는 ids.js 가 발급한다. */
 function newTab(kind, params) {
@@ -398,6 +401,26 @@ function updateCard(el, card, rect) {
   });
   cardFolds.set(card.id, folded);
   setText(statusText, cardStatusText(card, tabs, folded));
+  showSaveError(status, shown.id);
+}
+
+/* The save failure of a tab that asked before it closed, shown in its card's status row while the tab is active. */
+const saveErrors = new Map();
+
+function showSaveError(status, tabId) {
+  let line = status.querySelector(".status__save-error");
+  if (!line) {
+    line = document.createElement("span");
+    line.className = "status__save-error";
+    status.appendChild(line);
+  }
+  const where = `tab save ${tabId}`;
+  if (saveErrors.has(tabId)) {
+    showError(line, where, `저장하지 못했습니다 · ${saveErrors.get(tabId)}`);
+    return;
+  }
+  line.hidden = true;
+  hideError(line, where);
 }
 
 // 카드마다 마지막으로 그린 공간 부족 접힘 문구. 탭이 하단 글을 바꾸면 다시 그리지 않고 발만 고친다.
@@ -1676,11 +1699,54 @@ export function splitCard(id, side, kind) {
 export function closeCard(id) {
   paneCard(id);
   if (!grid.canClose(id)) throw new Error(`card ${id} cannot close`);
+  const unsaved = tabsOf(grid.card(id)).find((t) => tabModified(t.id));
+  if (unsaved) {
+    // Asks about the modified tab first; once it is closed, closing the card asks about the next one or closes it.
+    askBeforeClose(id, unsaved, () => closeCard(id));
+    return { closed: false };
+  }
   restoreFullscreen();
   grid.close(id);
   // 기본값: 자리 카드만 남으면 포커스할 카드가 없다(null).
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   settle();
+  return { closed: true };
+}
+
+/**
+ * Asks whether to save, discard or keep the modified tab t of the card cardId (docs/spec/plugins.md#tab-reports).
+ * then runs after the tab has closed.
+ */
+function askBeforeClose(cardId, t, then) {
+  const save = plugin(t.plugin).save;
+  const items = [
+    ...(save ? [{ key: "save", name: "저장하고 닫기" }] : []),
+    { key: "discard", name: "저장하지 않고 닫기" },
+    { key: "keep", name: "닫지 않기" },
+  ];
+  // default: a header too narrow for its tabs shows no button for the tab, so the question opens at the card.
+  const anchor = cardElement(cardId)?.querySelector(`[data-tab-id="${t.id}"]`) ?? cardElement(cardId);
+  openLayer(anchor, `${tabName(t)} 탭에 저장하지 않은 변경이 있습니다`, items, async (key) => {
+    if (key === "keep") return;
+    if (key === "save") {
+      try {
+        await registry.run(save, {}, t.id);
+      } catch (error) {
+        saveErrors.set(t.id, `${save}: ${error.message}`);
+        settle();
+        return;
+      }
+      saveErrors.delete(t.id);
+      if (tabModified(t.id)) {
+        saveErrors.set(t.id, `${save} left the tab modified`);
+        settle();
+        return;
+      }
+    }
+    saveErrors.delete(t.id);
+    await closeTab(cardId, t.id);
+    then();
+  });
 }
 
 /**
@@ -1711,8 +1777,14 @@ export function selectTab(tabId) {
 
 export async function closeTabById(tabId) {
   const card = cardOfTab(tabId);
+  const t = tabsOf(card).find((entry) => entry.id === tabId);
+  if (tabModified(tabId)) {
+    askBeforeClose(card.id, t, () => {});
+    return { closed: false };
+  }
   restoreFullscreen();
   await closeTab(card.id, tabId);
+  return { closed: true };
 }
 
 const ZONES = ["centre", "left", "right", "top", "bottom"];

@@ -6,7 +6,7 @@ import { pluginDiagnostics } from "./environment.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
-import { forgetTab, reportDirectory, reportFooter, reportNotice, reportTitle, tabOrigin } from "./tab-reports.js";
+import { forgetTab, reportDirectory, reportFooter, reportModified, reportNotice, reportTitle, tabOrigin } from "./tab-reports.js";
 import { icon } from "./icons.js";
 import { active } from "./projects.js";
 const mounted = new Map();
@@ -197,7 +197,8 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       tab: { title: (text) => reportTitle(surface.surfaceId, text),
         footer: (text) => reportFooter(surface.surfaceId, text),
         directory: (path) => reportDirectory(surface.surfaceId, path),
-        notify: (text, policy) => reportNotice(surface.surfaceId, text, policy), params: surface.params },
+        notify: (text, policy) => reportNotice(surface.surfaceId, text, policy),
+        modified: (value) => reportModified(surface.surfaceId, value), params: surface.params },
       origin: tabOrigin(surface.surfaceId),
       // 표면 창이 보이는 프로젝트의 정규 루트(docs/spec/plugins.md#tab-reports). 라이브러리 창에는 없다.
       project: active() ? { root: active().root } : null,

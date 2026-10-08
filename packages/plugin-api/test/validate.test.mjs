@@ -417,3 +417,10 @@ test("a surface that opens files declares extensions and a path parameter", () =
     [{ ...opener.surface, opens: { extensions: ["md"], mime: [] } }, /unknown field mime/],
   ]) assert.throws(() => validateManifest({ ...card, surface }), error);
 });
+
+test("a surface names its save command among its declared commands", () => {
+  const exposes = { commands: [{ name: "probe.save", description: "Saves.", params: { type: "object", properties: {} }, result: { type: "null" } }] };
+  assert.equal(validateManifest({ ...card, exposes, surface: { ...card.surface, save: "probe.save" } }).surface.save, "probe.save");
+  assert.throws(() => validateManifest({ ...card, exposes, surface: { ...card.surface, save: "probe.write" } }),
+    /surface save must name a command declared in exposes/);
+});

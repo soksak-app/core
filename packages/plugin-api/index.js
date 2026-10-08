@@ -444,7 +444,13 @@ export function validateManifest(manifest) {
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
     if (!isObject(surface)) throw new Error(`${where}: surface must be an object`);
-    only(`${where} surface`, surface, ["module", "composition", "drop", "params", "opens"]);
+    only(`${where} surface`, surface, ["module", "composition", "drop", "params", "opens", "save"]);
+    // The command that saves the surface's changes before a modified tab closes (docs/spec/plugins.md#tab-reports).
+    if (surface.save !== undefined && (!isText(surface.save) ||
+      // default: exposes and its commands are optional; a plugin without declared commands has no save command.
+      !(manifest.exposes?.commands ?? []).some((command) => command.name === surface.save))) {
+      throw new Error(`${where}: surface save must name a command declared in exposes`);
+    }
     // The parameters of a tab of the plugin (docs/spec/plugins.md#pluginjson).
     if (surface.params !== undefined) {
       if (!isObject(surface.params) || surface.params.type !== "object") {
