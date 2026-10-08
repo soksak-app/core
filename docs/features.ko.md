@@ -1109,6 +1109,7 @@
   - [o] R5.5 — P1: registry index에서 plugin version의 `package`와 sidecar version의 `assets`를 `release`와 `releases`로 바꾼다. Red: 새 형식 fixture로 Go `sok` test가 `registry sidecar @scope/sidecar-worker version: unknown field releases`로 실패했다. Green: 두 `sok` 모음이 통과하고, scripts가 185개 test를, `make host-contract-check`가 387개 사례를 통과하며, `sok`는 `package`나 `assets`를 가진 version을 알 수 없는 필드로 거부한다. 2026-10-08 완료.
     - [ ] R5.5.1 — P1: registry 저장소의 항목을 `release`와 `releases`로 쓰고, 그것을 읽는 core 릴리스 뒤에 게시한다. 그때부터 이전 core의 애플리케이션은 index를 읽지 못한다.
   - [o] R5.6 — P1: `sidecar.json`의 `helpers[].package`를 `helpers[].name`으로 바꾼다. Red: `a sidecar manifest may include optional helpers with name and executable`가 `sidecar.json helpers: unknown field name`으로 실패했다. Green: `@soksak/plugin-api`가 157개 test를 통과하고, `package`를 가진 helper는 `unknown field package`로 실패한다. helper를 선언한 sidecar는 없다. 2026-10-08 완료.
+- [o] R6 — P1: 새 지시는 체크리스트에 기록하고 진행 중인 작업이 멈출 지점에 이르면 우선순위에 따라 진행하며, 명시적 요청이나 우선순위가 요구할 때만 진행 중인 작업을 멈추고, 항목 하나의 미커밋 범위가 독립 항목의 시작을 금지하지 않는다는 것을 `AGENTS.md`에 적는다. 2026-10-09 완료.
 
 ## Tauri/Wails 대칭 감사 (2026-09-21)
 
