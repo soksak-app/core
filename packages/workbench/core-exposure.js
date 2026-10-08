@@ -39,7 +39,7 @@ import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
 import { foldSection, onSectionsChange, selectSection, sidebarsState } from "./sidebar-sections.js";
 import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
-import { followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
+import { followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 
 /* 감시 중인 코어 status 의 수신자. */
 const watchers = new Set();
@@ -276,6 +276,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   onPluginOperations(coreChanged);
   followPluginChanges(applyPluginChange);
   followSidecarChanges();
+  followActivation();
   onTabReports(coreChanged);
   status("core.surfaces", surfacesState);
   status("core.drop", () => lastDrop);

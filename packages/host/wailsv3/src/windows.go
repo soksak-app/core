@@ -329,6 +329,9 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		events.Common.WindowFocus, events.Common.WindowLostFocus, events.Common.WindowShow, events.Common.WindowHide} {
 		win.OnWindowEvent(event, changed)
 	}
+	// The page reads state that no event announces, such as the registry index, when its window becomes active
+	// (docs/spec/installation.md).
+	win.OnWindowEvent(events.Common.WindowFocus, func(*application.WindowEvent) { s.Emit("window-active") })
 	// The framework loads the page again after the WebContent process ends; the host writes the end as an error line
 	// (docs/spec/diagnostics.md).
 	win.OnWindowEvent(events.Mac.WebViewWebContentProcessDidTerminate, func(*application.WindowEvent) {

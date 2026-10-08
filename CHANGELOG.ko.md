@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F117.7.3: 창이 key window가 될 때마다 두 host가 그 창에 `window-active` event를 보내고 page가 plugin 상태를 다시 읽는다. 그래서 변경 event를 보내지 않는 원격 registry의 더 새 버전이 사용자가 창으로 돌아올 때 나타난다. host가 창을 포커스해도 Tauri webview는 DOM `focus` event를 보내지 않으므로 page는 그 event를 쓰지 않는다.
 - F117.7.2: registry에 plugin 업데이트가 있는 동안 모든 창이 막대 맨 앞에 업데이트 N 컨트롤을 보이고, 이 컨트롤은 새 명령 `core.plugins.show-updates`로 업데이트 목록이 있는 plugin 페이지를 보인다. 업데이트 목록과 오래된 service 행은 카드 격자의 한 줄 전체를 차지한다.
 - F117.7.1: plugin 화면이 registry에 더 새 버전이 있는 plugin을 카드 위에 `<id>: <installed> → <latest>`로 나열하고, 새 명령 `core.plugins.update-all`에 묶인 모두 업데이트 동작이 id 순서로 업데이트하며 첫 실패에서 멈춘다.
 - F122.5: 다른 창이 보여 주는 프로젝트를 제거하면 그 창에 묻는다. `windows.askRemoveProject`가 새 host 호출 `projectRemoveAsk`를 보내고, host가 프로젝트를 보이는 창에 `project-remove-request`를 보내며, 그 창이 수정된 탭마다 묻고 `projectRemoveAnswer`로 답하고, 제거는 그 답을 기다린다. 탭을 지키면 프로젝트가 registry에 남고 `core.project.close`는 `closed: false`로 답한다. 묻는 동안 끝나는 창은 제거를 허용한다. `core.project.close`, `core.library.remove`, `core.space.close`는 사람을 기다리므로 `timeout` 600000을 선언한다.

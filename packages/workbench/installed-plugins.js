@@ -27,6 +27,15 @@ export function followPluginChanges(apply) {
   });
 }
 
+/**
+ * On window-active from the host, reads the plugin state again, which the host sends each time the window becomes active: the registry sends no change event, so a newer
+ * version appears only when the index is read (docs/spec/installation.md). The read reports its failure as the error of
+ * the state.
+ */
+export function followActivation() {
+  if (host) host.on("window-active", () => { pluginOperations.refresh(); });
+}
+
 /** On sidecars-changed from the host, reads the outdated sidecars again (docs/spec/installation.md). */
 export function followSidecarChanges() {
   if (host) host.on("sidecars-changed", () => pluginOperations.refreshOutdated());

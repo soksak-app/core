@@ -98,6 +98,7 @@ Host는 시작할 때 켜진 설치 plugin의 `plugin.json` `dependencies`가 �
 | `pluginsRun({ action, plugin })` | Plugin id에 대해 `install`, `update`, `remove`, `enable`, `disable`을 애플리케이션의 core version과 platform으로 실행하고, 같은 `sok plugin` 명령의 출력을 돌려준다. 다른 `action`이나 비어 있지 않은 문자열이 아닌 plugin id는 아무것도 바꾸지 않고 호출을 거부한다. 실패한 작업은 같은 명령의 message로 호출을 거부하고, `installed.json`은 그 명령이 정한 대로 남는다 |
 | `pluginsUseRegistry({ index })` | `sok registry use <index>`처럼 registry index를 정하고 그 출력 `{ index }`를 돌려준다. 비어 있지 않은 문자열이 아닌 `index`는 `index must be a non-empty string`으로 거부한다 |
 | `plugins-changed` | `pluginsRun`이 `installed.json`을 바꾼 뒤 모든 창에 `{ action, plugin }`과 함께 보낸다 |
+| `window-active` | 창이 key window가 될 때마다 그 창에 보낸다. 원격 registry는 변경 event를 보내지 않으므로 page가 plugin 상태를 다시 읽는다 |
 | `sidecarsOutdated()` | `host.sidecars`의 `outdated` 목록 `[{sidecar, running, installed, sessions}]`을 sidecar 순으로 돌려준다([terminal runtime](terminal-runtime.ko.md#updates)) |
 | `sidecarsReplace({ sidecar })` | [terminal runtime](terminal-runtime.ko.md#updates)이 정한 대로 sidecar의 오래된 상주 service를 교체하고, 다른 version의 service가 실행 중이지 않으면 그 sidecar를 밝히는 오류로 거부한다 |
 | `sidecars-changed` | `host.sidecars`가 바뀌면 모든 창에 값 없이 보낸다 |

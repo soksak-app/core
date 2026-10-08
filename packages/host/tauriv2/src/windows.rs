@@ -573,7 +573,12 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         tauri::WindowEvent::Resized(_) => {
             crate::exposure::window_changed(&host);
         }
-        tauri::WindowEvent::Focused(_) => {
+        tauri::WindowEvent::Focused(focused) => {
+            if *focused {
+                if let Err(error) = emit_window(&host, "window-active", ()) {
+                    log_error("window-active", error);
+                }
+            }
             crate::exposure::window_changed(&host);
             crate::exposure::windows_changed(host.app_handle());
         }
