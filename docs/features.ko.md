@@ -616,6 +616,13 @@
   - [ ] F102.8 — P1: 두 host의 window check로 파일이 파일 tree에서 그 확장자를 선언한 plugin으로 열리는지, 그 탭이 재시작 뒤 인자를 유지하는지, 수정된 탭을 닫을 때 닫기 전에 묻는지 확인한다.
   - [ ] F102.9 — P1: registry 검사가 새 core를 허용하는 모든 plugin version을 검증한 뒤, F102.1부터 F102.6까지를 담은 core를 릴리스한다.
 - [ ] F103 — P2: 저장된 layout과 설정을 현재 형식으로만 읽는다. 입력: 이전 형식의 `projects.json`이나 설정 파일. 동작: workbench가 읽을 때 `stored-layout-migration.js`와 `settings-migration.js`가 그것을 바꾼다. 기대 동작: AGENTS.md가 요구하듯 현재 형식이 아닌 저장 형식은 파일과 찾은 내용을 밝힌 오류로 거절한다.
+- [ ] F104 — P2: 모든 주석을 영어로 쓴다. 입력: 한국어 주석이 있는 core의 source 파일. 동작: core의 주석 10,573줄이 한글을 담는다. 기대 동작: 주석은 영어이고, `scripts/check-comment-language.mjs`가 `pnpm test`에서 저장소 전체를 검사하며 보고하는 줄이 없다.
+  - [o] F104.1 — P2: 영어 주석 규칙을 검사한다. 2026-10-08에 완료했다. `findKoreanComments`는 `packages/soksak`을 포함한 source 파일에서 한글을 담은 주석 줄을 각각 보고하고, 문자열과 생성 폴더는 빼놓는다. 이전 검사는 `packages/soksak` 밖의 영어 주석을 보고했다. `scripts/test/comment-language.test.mjs`가 5개 중 5개 통과한다. F104.2부터 F104.6까지 주석을 다시 쓰면 이 검사가 저장소 전체에서 실행된다.
+  - [ ] F104.2 — P2: `packages/host`의 주석을 영어로 다시 쓴다.
+  - [ ] F104.3 — P2: `packages/workbench`의 주석을 영어로 다시 쓴다.
+  - [ ] F104.4 — P2: `native/darwin`의 주석을 영어로 다시 쓴다.
+  - [ ] F104.5 — P2: `packages/sok`, `packages/plugin-api`, `packages/window-check`, `packages/client`, `apps`의 주석을 영어로 다시 쓴다.
+  - [ ] F104.6 — P2: `e2e`, `scripts`, Makefile과 나머지 파일의 주석을 영어로 다시 쓰고, `pnpm test`에서 저장소 전체 검사를 실행한다.
 - [o] V1 — 과거 증거의 실제 범위를 보존하고 근거 없는 완료 주장을 제거하며 정본·번역 상태를 동기화한다. 정본 체크리스트 감사가 영문/한글 식별자·깊이·상태를 비교하고 완료 항목 재개·삭제를 거부하며 `make docs-check`가 현재 체크리스트에서 통과한다.
   - [o] V1.1 — 정본 항목 수가 175개가 된 뒤 V1에 남은 잘못된 항목 수를 정정했다. 영문·한글 문서의 식별자·깊이·상태가 같으며 `make docs-check`와 직접 항목 수 검사가 모두 통과한다.
   - [o] V1-1 — P1: 변경 기록 번역 일치를 복구하고 기계적으로 검사한다. `CHANGELOG.md`는 항목 241개, `CHANGELOG.ko.md`는 184개를 가진다(예: F8-4 항목의 번역이 없다). AGENTS.md는 두 파일에 같은 정보를 요구하지만 `make docs-check`는 체크리스트 항목만 비교하고 변경 기록 항목은 비교하지 않는다. 수용 기준: 누락된 항목을 모두 같은 순서로 번역한다. 변경 기록 항목을 빼거나 순서를 바꾼 주입 사례에서 `make docs-check`가 실패하고, 수정한 파일에서는 통과한다. 2026-09-23 완료: 작업 ID, 코드 조각, 숫자로 항목을 정렬해 번역이 없는 영어 항목 57개를 찾았다(미배포 항목 38개와 한국어 파일에 없던 `## 2026-09-22`의 항목 19개). 모두 같은 순서로 번역했다. 두 파일은 이제 제목, 번역 링크, 미배포 구역 하나, 날짜 구역의 한 구조를 가진다. `scripts/checklist.mjs`의 `checkChangelogTranslations`가 `make docs-check`에서 실행된다. Red: 이전 커밋에서 첫 구역 앞의 항목을 보고하며, 단위 테스트는 빠진 항목, 순서가 바뀐 항목, 바뀐 항목, 빠진 구역을 주입한다. 정렬 뒤 코드 조각이 다른 항목 3개(번역된 코드 조각, 빠진 `null`)를 고쳤다. `make docs-check`와 `pnpm test`가 통과한다.

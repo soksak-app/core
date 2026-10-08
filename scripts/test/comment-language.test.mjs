@@ -1,40 +1,35 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { dirname, join } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
-import { comments, findEnglishComments, workingTreeFiles } from "../check-comment-language.mjs";
+import { comments, findKoreanComments, workingTreeFiles } from "../check-comment-language.mjs";
 
-const scan = (files) => findEnglishComments(Object.keys(files), (file) => files[file])
+const scan = (files) => findKoreanComments(Object.keys(files), (file) => files[file])
   .map((item) => `${item.file}:${item.line}`);
 
-test("English comment sentences outside packages/soksak are reported", () => {
+test("comment lines that hold Hangul are reported in every source language", () => {
   assert.deepEqual(scan({
-    "packages/a/a.js": "// Wait for the layout.\nconst x = 1; // keep this value\n/* Block comment here\n * continues on */\n",
-    "native/darwin/src/a.m": "// Frames displayed before the request\n",
-    "packages/host/x/src/a.go": "// Host owns the window\n",
-    "packages/host/y/src/a.rs": "/// Returns the window list\n",
-    "Makefile": "# builds the library\nall:\n",
-    "packages/a/index.html": "<!-- the main page -->\n<script>\n// runs the page\n</script>\n",
-    "packages/a/a.css": "/* card layout rules */\n",
+    "packages/a/a.js": "// 배치를 기다린다.\nconst x = 1; // 값을 둔다\n/* 블록 주석\n * 이어진다 */\n",
+    "native/darwin/src/a.m": "// 요청 전에 보인 frame\n",
+    "packages/host/x/src/a.go": "// host 가 창을 갖는다\n",
+    "packages/host/y/src/a.rs": "/// 창 목록을 돌려준다\n",
+    "Makefile": "# 라이브러리를 만든다\nall:\n",
+    "packages/a/index.html": "<!-- 주 페이지 -->\n<script>\n// 페이지를 실행한다\n</script>\n",
+    "packages/a/a.css": "/* 카드 배치 */\n",
+    "packages/soksak/src/a.ts": "// 라이브러리 주석\n",
   }), [
     "packages/a/a.js:1", "packages/a/a.js:2", "packages/a/a.js:3", "packages/a/a.js:4",
     "native/darwin/src/a.m:1", "packages/host/x/src/a.go:1", "packages/host/y/src/a.rs:1", "Makefile:1",
-    "packages/a/index.html:1", "packages/a/index.html:3", "packages/a/a.css:1",
+    "packages/a/index.html:1", "packages/a/index.html:3", "packages/a/a.css:1", "packages/soksak/src/a.ts:1",
   ]);
 });
 
-test("Korean comments, directives, identifiers and other places are not reported", () => {
+test("English comments, Hangul outside comments and generated folders are not reported", () => {
   assert.deepEqual(scan({
-    "packages/a/a.js": "// 배치를 기다린다(core.grid).\n// eslint-disable-next-line no-console\nconst url = \"http://a.b/c\"; // core.grid\n",
-    "packages/host/x/src/a.go": "//go:build diagnostics\n//export sp_window_ready\n// contract: endpoint.transport.invalid-json-closes\n",
-    "packages/soksak/src/a.ts": "// Comments in the library are English.\n",
-    "packages/a/b.js": "const text = \"see // not a comment here\";\nconst more = `multi\n// still a string here\n`;\n",
-    "scripts/run.sh": "#!/bin/sh\necho \"# not a comment here\"\n",
-    "native/darwin/src/a.h": "// {frame, content, scale: {x, y}}\n// `status.next` `core.grid`\n// <script src=\"./x\">\n",
-    "packages/host/a/src/a.rs": "/// 사용법:\n/// ```\n/// let mut composer = State::new();\n/// ```\n",
-    "scripts/check-a.mjs": "// 경계를 검사한다. 다음처럼 실행한다.\n//   node scripts/check-a.mjs\n//   status  {name, description}\n",
+    "packages/a/a.js": "// Waits for the layout (core.grid).\nconst label = \"// 설정\"; // the label\n",
+    "packages/a/b.js": "const more = `multi\n// 문자열 안이다\n`;\n",
+    "scripts/run.sh": "#!/bin/sh\necho \"# 주석이 아니다\"\n",
+    "packages/a/dist/a.js": "// 생성된 파일\n",
+    "packages/a/node_modules/x/a.js": "// 의존성\n",
   }), []);
 });
 
@@ -44,14 +39,8 @@ test("a Rust lifetime does not start a string", () => {
 
 test("a cgo preamble is C code, and only its C comments are checked", () => {
   assert.deepEqual(scan({
-    "packages/host/x/src/platform/darwin/a.go": "package darwin\n\n/*\n#cgo CFLAGS: -x objective-c\nextern void soksak_ready(void);\n// returns the window here\nstatic void call(void) { soksak_ready(); }\n*/\nimport \"C\"\n",
+    "packages/host/x/src/platform/darwin/a.go": "package darwin\n\n/*\n#cgo CFLAGS: -x objective-c\nextern void soksak_ready(void);\n// 창을 돌려준다\nstatic void call(void) { soksak_ready(); }\n*/\nimport \"C\"\n",
   }), ["packages/host/x/src/platform/darwin/a.go:6"]);
-});
-
-test("the repository has no English comment outside packages/soksak", () => {
-  const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
-  const result = spawnSync(process.execPath, ["scripts/check-comment-language.mjs"], { cwd: root, encoding: "utf8" });
-  assert.equal(result.status, 0, result.stderr);
 });
 
 test("the check reads the working tree: new files are read and deleted files are not", () => {
