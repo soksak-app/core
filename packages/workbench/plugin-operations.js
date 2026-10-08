@@ -30,6 +30,11 @@ function sidecarsOf(record, entry, unit, state) {
   }));
 }
 
+/** The registry index lists a version of the installed plugin of row that is newer than the installed version. */
+export function hasUpdate(row) {
+  return row.installed !== null && row.latest !== null && compareVersions(row.latest, row.installed.version) > 0;
+}
+
 /**
  * 목록 행을 id 순서로 만든다. loaded 는 창이 불러온 플러그인 {id, name, description, version, sidecars},
  * state 는 host 의 pluginsState 결과이며 host 가 없으면 null 이다.
@@ -126,6 +131,7 @@ export function createPluginOperations({ host, loaded, changed }) {
       plugins: rows,
       operation,
       restart: rows.some((row) => row.state === "restart"),
+      updates: rows.filter(hasUpdate).map((row) => ({ id: row.id, installed: row.installed.version, latest: row.latest })),
     };
   }
 

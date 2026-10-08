@@ -29,8 +29,9 @@ test("the plugin page of the library lists each plugin with its description, ver
         sidecars: [{ name: "@x/db", range: "^1.0.0", version: null }] },
       { id: "term", name: "터미널", description: "명령을 실행하는 표면.", state: "loaded", installed: { version: "0.1.0", enabled: true },
         latest: "0.2.0", sidecars: [{ name: "@soksak/sidecar-vt", range: "^0.1.0", version: "0.1.2" }] },
+      // The registry lists the installed version as its newest, so the card offers no update.
       { id: "plain", name: "plain", description: "", state: "disabled", installed: { version: "1.0.0", enabled: false },
-        latest: null, sidecars: [] },
+        latest: "1.0.0", sidecars: [] },
     ],
   };
   const operations = { hosted: true, status: () => status, failure: () => null, refresh: async () => { refreshed++; } };

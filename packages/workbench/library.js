@@ -8,6 +8,7 @@ import { delegate, mark } from "./commands.js";
 import { contributionsState, onContributionsChange } from "./contributions.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { matchPlugins } from "./plugin-search.js";
+import { hasUpdate } from "./plugin-operations.js";
 import { hideError, showError } from "./shown-errors.js";
 
 const TINTS = ["#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"];
@@ -229,7 +230,7 @@ export function createLibrary(root, rendered = () => {}) {
         actions.append(button);
       };
       if (!row.installed && row.latest) action('설치', 'install');
-      if (row.installed && row.latest) action('업데이트', 'update');
+      if (hasUpdate(row)) action('업데이트', 'update');
       if (row.installed) action(row.installed.enabled ? '사용 안 함' : '사용', row.installed.enabled ? 'disable' : 'enable');
       if (row.installed) action('제거', 'remove');
       if (actions.children.length) card.append(actions);

@@ -74,6 +74,12 @@ test("without a host only the loaded plugins are listed, all loaded, and operati
   assert.equal(changes, 0);
 });
 
+test("status reports the installed plugins that the registry lists in a newer version", async () => {
+  const operations = createPluginOperations({ host: fakeHost({ pluginsState: [state] }), loaded: () => loaded, changed: () => {} });
+  await operations.refresh();
+  assert.deepEqual(operations.status().updates, [{ id: "term", installed: "0.1.0", latest: "0.10.0" }]);
+});
+
 /** 호출을 기록하고 정한 답을 주는 host. */
 function fakeHost(answers) {
   const calls = [];
