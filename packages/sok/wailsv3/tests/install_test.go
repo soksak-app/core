@@ -109,7 +109,7 @@ func TestVersionRangesAcceptExactCaretTildeAndBoundedForms(t *testing.T) {
 	}
 }
 
-// contract: install.package.fields-and-manifest
+// contract: install.package-json.fields-and-manifest
 func TestPackageJSONDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSidecarRanges(t *testing.T) {
 	text := `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
 		"files": ["plugin.json", "ui"], "private": true}`

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R5.3.7: the specifications call a plugin or a sidecar that they named a package a plugin or a sidecar; Go, Cargo and npm packages stay packages.
 - R5.5: the registry index names the file of a plugin version `release` and the files of a sidecar version `releases`.
 - R5.6: a helper of `sidecar.json` names its program with `name`; `package` is refused.
 - R5.2: the record check reports the rejected synonyms of `packages/plugin-api/terms.json` in files and commit messages, and `make hooks` adds a pre-commit hook that runs it.

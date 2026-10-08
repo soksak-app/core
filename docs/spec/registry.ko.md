@@ -14,7 +14,7 @@
 | `revoked.json` | index의 `{ plugins, sidecars }` | registry 관리자 |
 | `.github/`, `scripts/`, `test/`, `CODEOWNERS` | 검사와 workflow | registry 관리자 |
 
-이 파일들이 index의 원천이다. `index.json`은 이 파일들로 `sok registry build`가 만들며([command line](cli.ko.md#package-release-registry)) commit하지 않는다. `CODEOWNERS`는 관리자만 바꾸는 모든 경로에 registry 관리자를 지정한다. core window check와 개발은 형제 checkout으로 `make registry`가 만드는 로컬 registry를 쓴다([repository](plugins.ko.md#repository)). 공개 registry에는 로컬 build가 없다.
+이 파일들이 index의 원천이다. `index.json`은 이 파일들로 `sok registry build`가 만들며([command line](cli.ko.md#release-registry)) commit하지 않는다. `CODEOWNERS`는 관리자만 바꾸는 모든 경로에 registry 관리자를 지정한다. core window check와 개발은 형제 checkout으로 `make registry`가 만드는 로컬 registry를 쓴다([repository](plugins.ko.md#repository)). 공개 registry에는 로컬 build가 없다.
 
 ## 항목 규칙
 

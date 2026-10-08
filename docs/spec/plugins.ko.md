@@ -37,7 +37,7 @@ Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별�
 
 Checkout은 repository를 이 sibling 폴더에 두고, repository 둘 이상이 필요한 workflow도 같은 방식으로 checkout한다. 그래서 `scripts/workspace-registry.json`의 상대 폴더가 어디서나 성립한다.
 
-Plugin이나 sidecar의 version은 자기 것이며 core version과 관계가 없다. Plugin의 `engines.soksak` 범위가 그 plugin을 설치하는 core version을 정한다. Plugin repository는 test를 위해 `@soksak/plugin-api`에 git 의존을 둔다. 자기 `package.json`이 지정한 core release tag와 `path:/packages/plugin-api`를 쓴다. Test가 `validateSidecar`로 `sidecar.json`을 검사하는 sidecar repository도 같은 방식으로 의존한다. Plugin이나 sidecar repository의 release workflow는 자기가 릴리스하는 tag와 무관하게, workflow가 `CORE_RELEASE`에 선언한 core release에서 `sok`를 build한다. Plugin repository는 build를 위해 sidecar에 의존하지 않고, `plugin.json`의 `dependencies`가 설치할 sidecar와 그 범위를 가리킨다. `make test`는 plugin repository의 test를 실행하고, `make pack OUT=<folder>`는 `sok plugin pack`으로 package를 쓴다. Sidecar repository에는 `make test`, `sidecar.json`이 가리키는 실행 파일을 쓰는 `make build`, 현재 platform으로 `sok sidecar release`를 실행하는 `make release OUT=<folder>`가 있다. Registry repository `../registry`는 제3자의 것을 포함해 새 plugin, sidecar, version을 항목 파일을 바꾸는 pull request로 받는다. 그 workflow가 pull request를 검사하고 merge한 뒤 index를 게시하며([공개 registry](registry.ko.md)), 그 `make build`는 `sok registry build`를 실행한다. `sok registry build`는 `index.json`을 쓰기 전에 모든 release를 그 항목과 대조한다.
+Plugin이나 sidecar의 version은 자기 것이며 core version과 관계가 없다. Plugin의 `engines.soksak` 범위가 그 plugin을 설치하는 core version을 정한다. Plugin repository는 test를 위해 `@soksak/plugin-api`에 git 의존을 둔다. 자기 `package.json`이 지정한 core release tag와 `path:/packages/plugin-api`를 쓴다. Test가 `validateSidecar`로 `sidecar.json`을 검사하는 sidecar repository도 같은 방식으로 의존한다. Plugin이나 sidecar repository의 release workflow는 자기가 릴리스하는 tag와 무관하게, workflow가 `CORE_RELEASE`에 선언한 core release에서 `sok`를 build한다. Plugin repository는 build를 위해 sidecar에 의존하지 않고, `plugin.json`의 `dependencies`가 설치할 sidecar와 그 범위를 가리킨다. `make test`는 plugin repository의 test를 실행하고, `make pack OUT=<folder>`는 `sok plugin pack`으로 release를 쓴다. Sidecar repository에는 `make test`, `sidecar.json`이 가리키는 실행 파일을 쓰는 `make build`, 현재 platform으로 `sok sidecar release`를 실행하는 `make release OUT=<folder>`가 있다. Registry repository `../registry`는 제3자의 것을 포함해 새 plugin, sidecar, version을 항목 파일을 바꾸는 pull request로 받는다. 그 workflow가 pull request를 검사하고 merge한 뒤 index를 게시하며([공개 registry](registry.ko.md)), 그 `make build`는 `sok registry build`를 실행한다. `sok registry build`는 `index.json`을 쓰기 전에 모든 release를 그 항목과 대조한다.
 
 Core window check는 registry fixture에서 plugin을 설치한다. `scripts/workspace-registry.json`은 core checkout 기준 상대 폴더로 plugin repository, sidecar 폴더(`sidecar.json`을 가진 폴더), pack을 선언한다. `make registry`는 선언된 각 sidecar를 build하고 release하며, 선언된 각 plugin을 pack하고, `target/registry`에 index를 만든다. Network는 쓰지 않는다. `shell` plugin과 `@soksak/sidecar-shell`은 repository가 있지만 선언하지 않으므로, 두 애플리케이션의 새 space layout은 shell card 자리에 terminal card를 둔다.
 
@@ -48,13 +48,13 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `id` | 예 | 소문자 식별자. 탭과 설정이 참조한다 |
 | `name` | 예 | 표시 이름 |
 | `description` | 예 | 플러그인이 하는 일을 말하는 1자에서 200자 사이의 한두 문장. [plugin 화면](installation.ko.md#plugin-화면)이 보여 주고, plugin 화면과 설정 창이 검색한다 |
-| `surface` | 아니오 | `{ "module": "ui/page.js", "composition": ... }`: 패키지 안의 모듈과 필수 [표면 합성](surface-composition.ko.md). 모듈은 앱 DOM에 마운트하며 외부 웹 문서는 문서 영역을 사용한다. 웹 주소는 표면이 아니다 |
+| `surface` | 아니오 | `{ "module": "ui/page.js", "composition": ... }`: plugin 안의 모듈과 필수 [표면 합성](surface-composition.ko.md). 모듈은 앱 DOM에 마운트하며 외부 웹 문서는 문서 영역을 사용한다. 웹 주소는 표면이 아니다 |
 | `mark` | `surface`가 있으면 | 추가 메뉴와 새 탭 제목에 표시하는 짧은 텍스트 |
 | `icon` | `surface`가 있으면 | 16×16 뷰박스용 SVG 요소 |
-| `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name", "module" }`. `module`은 섹션을 그리는 패키지 안의 JavaScript 경로이고, 선택 항목 `fill: true`는 섹션에 남은 사이드바 높이를 준다([섹션](#섹션)) |
+| `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name", "module" }`. `module`은 섹션을 그리는 plugin 안의 JavaScript 경로이고, 선택 항목 `fill: true`는 섹션에 남은 사이드바 높이를 준다([섹션](#섹션)) |
 | `sidebars` | 아니오 | 로컬 기본 세트와 선택적인 네 변 `card` 연결([기본 사이드바 세트](#기본-사이드바-세트)) |
 | `preview` | 아니오 | `{ "ink": "--<토큰>" }`: 라이브러리 미리보기에서 플러그인 카드의 색을 정하는 테마 토큰 이름. `surface`가 필요하다 |
-| `dependencies` | 아니오 | `{ "<package>": "<version range>" }`: plugin이 필요로 하는 package와, plugin이 함께 동작하는 그 version의 범위([version과 범위](installation.ko.md#version과-범위)). 의존은 표면 페이지나 상태 모듈이 쓰는 [사이드카](sidecars.ko.md)를 가리키며 그때 `surface`나 `state`가 필요하거나, plugin이 기여하는 [확장 지점](#확장-지점)을 가진 plugin을 가리키며 plugin을 설치하면 그것도 설치된다. registry index나 `installed.json`의 plugin이 그 이름을 가지면 의존은 plugin을 가리키고, 아니면 sidecar를 가리킨다. plugin이 다른 package에 요구하는 것의 유일한 선언이다 |
+| `dependencies` | 아니오 | `{ "<package>": "<version range>" }`: plugin이 필요로 하는 sidecar와 plugin, 그리고 plugin이 함께 동작하는 그 version의 범위([version과 범위](installation.ko.md#version과-범위)). 의존은 표면 페이지나 상태 모듈이 쓰는 [사이드카](sidecars.ko.md)를 가리키며 그때 `surface`나 `state`가 필요하거나, plugin이 기여하는 [확장 지점](#확장-지점)을 가진 plugin을 가리키며 plugin을 설치하면 그것도 설치된다. registry index나 `installed.json`의 plugin이 그 이름을 가지면 의존은 plugin을 가리키고, 아니면 sidecar를 가리킨다. plugin이 다른 sidecar와 plugin에 요구하는 것의 유일한 선언이다 |
 | `extends` | 아니오 | `{ "<point>": { "version": "x.y.z", "schema": <스키마>, "modules"?: { "<bare specifier>": "<경로>" } } }`: 다른 plugin이 기여하는 [확장 지점](#확장-지점). `surface`가 필요하다 |
 | `contributes` | 아니오 | `{ "<plugin id>.<point>": [ { "range": "<version range>", "module": "<경로>", ... } ] }`: plugin이 다른 plugin의 확장 지점에 기여하는 항목 |
 | `state` | 아니오 | `{ "module": "ui/state.js" }`: 표면 밖의 상태를 갖는 [플러그인 상태](#플러그인-상태) 모듈. `sections`가 필요하다 |
@@ -83,7 +83,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 
 ## 섹션
 
-섹션의 `module`은 두 방향에 공통인 JavaScript 경로 하나 또는 `{horizontal, vertical}` 경로 객체다. 객체는 두 키를 모두 요구하며 그 외 키를 허용하지 않는다. 각 값은 패키지 내부의 상대 `.js` 경로이고 두 파일 모두 배포 목록에 있어야 한다. 한 방향을 다른 방향으로 대체하지 않는다. 카드 레이아웃은 상·하에 `horizontal`, 좌·우와 외부 창 사이드바에 `vertical`을 선택한다. 워크벤치는 선택한 구현의 `mount(root, context)`에 `context.orientation`을 전달하고 `core.sidebars`에 방향을 공개한다. 방향이 바뀌면 기존 구현을 해제하고 새 구현을 마운트하며 섹션 선택·접힘 상태는 유지한다. 가로 `list`는 섹션을 좌우로 배치하고 세로 `list`는 상하로 배치한다. 최종 공통 검사와 릴리스 적용은 미완료다.
+섹션의 `module`은 두 방향에 공통인 JavaScript 경로 하나 또는 `{horizontal, vertical}` 경로 객체다. 객체는 두 키를 모두 요구하며 그 외 키를 허용하지 않는다. 각 값은 plugin 내부의 상대 `.js` 경로이고 두 파일 모두 배포 목록에 있어야 한다. 한 방향을 다른 방향으로 대체하지 않는다. 카드 레이아웃은 상·하에 `horizontal`, 좌·우와 외부 창 사이드바에 `vertical`을 선택한다. 워크벤치는 선택한 구현의 `mount(root, context)`에 `context.orientation`을 전달하고 `core.sidebars`에 방향을 공개한다. 방향이 바뀌면 기존 구현을 해제하고 새 구현을 마운트하며 섹션 선택·접힘 상태는 유지한다. 가로 `list`는 섹션을 좌우로 배치하고 세로 `list`는 상하로 배치한다. 최종 공통 검사와 릴리스 적용은 미완료다.
 
 섹션은 플러그인이 그리는 사이드바의 한 부분이다. 워크벤치는 섹션의 `module`을 불러 표면 페이지처럼 섹션 요소에서 `mount(root, context)`를 호출하고, 섹션이 사이드바를 떠나면 돌려받은 해제 함수를 호출한다. `context.card`는 사이드바가 속한 카드의 id이고 `context.surface`는 그 카드의 활성 탭이며, 좌측 사이드바에서는 둘 다 `null`이다. 섹션은 애플리케이션 문서 안에 그려지며 네이티브 표면을 갖지 않는다.
 
@@ -93,7 +93,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 
 사이드바는 세트 제목이나 자리 이름을 보이지 않는다. 섹션은 사이드바 맨 위에서 시작한다. 창 사이드바는 자리를 말하고 끝에 접기 컨트롤(`core.sidebar.fold`)을 둔 상태 줄로 끝난다. 접기 컨트롤은 `core.settings.set`(`left`나 `right`를 false로)으로 사이드바를 끄고, 창 머리의 컨트롤이 다시 켠다. 카드 안 사이드바는 자기 면과 세트를 말하는 상태 줄로 끝난다([카드 배치](example-model.ko.md)). 접은 섹션은 머리만 남는다. 섹션은 내용의 높이를 가지며, `fill: true`로 선언한 펼친 섹션만 다른 섹션이 쓰고 남은 사이드바 높이를 나눠 갖고 그 안에서 내용을 스크롤한다. 접힌 fill 섹션은 그 자리를 다른 fill 섹션에 준다. 높이를 선언으로 정하는 이유는, 파일 트리 같은 가상 목록은 워크벤치가 자리가 필요함을 알 내용 높이가 없고, 짧은 목록을 늘리면 빈 공간이 보이기 때문이다. 섹션 머리는 카드 머리의 높이, 상태 줄은 카드 발의 높이를 가져 선이 이웃 카드의 선과 한 줄에 놓인다. 섹션은 빈 목록을 기록 없음 같은 말로 알린다.
 
-사이드바는 그것을 담은 카드의 id로 식별한다. `left`, `right`, 또는 카드 내부 사이드바의 `카드id:변`(`top`, `bottom`, `left`, `right`)이다. 섹션 머리를 접고 펴면 `core.sidebar.section.fold`를, 탭을 고르면 `core.sidebar.section.select`를 `{sidebar, section}`으로 실행한다. status `core.sidebars`는 그려진 모든 사이드바의 세트, 레이아웃, 고른 탭, 각 섹션의 접힘과 마운트 상태를 알린다. 섹션 모듈은 패키지의 `files`에 나열한 파일이므로 plugin release가 담는다. 섹션 모듈이 나열되어 있지 않으면 `sok plugin pack`이 실패한다.
+사이드바는 그것을 담은 카드의 id로 식별한다. `left`, `right`, 또는 카드 내부 사이드바의 `카드id:변`(`top`, `bottom`, `left`, `right`)이다. 섹션 머리를 접고 펴면 `core.sidebar.section.fold`를, 탭을 고르면 `core.sidebar.section.select`를 `{sidebar, section}`으로 실행한다. status `core.sidebars`는 그려진 모든 사이드바의 세트, 레이아웃, 고른 탭, 각 섹션의 접힘과 마운트 상태를 알린다. 섹션 모듈은 `package.json`의 `files`에 나열한 파일이므로 plugin release가 담는다. 섹션 모듈이 나열되어 있지 않으면 `sok plugin pack`이 실패한다.
 
 세로 목록의 펼친 fill 섹션은 머리와 본문의 고유 최소 높이를 유지한다. 사이드바가 더 작으면 세트 전체를 스크롤하며 섹션을 높이 0으로 줄이지 않는다. 플러그인이 가상 목록을 사용하면 플러그인이 최소 가시 행 높이를 선언한다. 파일 트리는 28포인트 도구 줄과 최소 한 행 20포인트를 확보한다. 이 동작은 카드 콘텐츠의 잔여 높이를 늘리거나 저장한 사이드바 크기를 바꾸지 않는다.
 
@@ -106,7 +106,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 - `sidecar`: 플러그인이 선언한 유일한 사이드카의 `{send(body), on(fn), onFailure(fn)}`. `onFailure`는 세션의 각 [사이드카 실패](sidecars.ko.md#실패) 이유를 받는다. 세션 식별자는 `state:<플러그인 id>:<프로젝트 id>`이므로 호스트는 사이드카에 프로젝트 디렉터리를 `root`로 준다([사이드카](sidecars.ko.md#메시지)).
 - `data.get(key)`와 `data.set(key, value)`: 플러그인의 [프로젝트 데이터](#프로젝트-데이터).
 
-상태 모듈은 패키지 `files`에 나열한 파일이며, 나열하지 않으면 `sok plugin pack`이 실패한다. 마운트나 해제의 실패는 페이지 오류로 보고한다.
+상태 모듈은 `package.json`의 `files`에 나열한 파일이며, 나열하지 않으면 `sok plugin pack`이 실패한다. 마운트나 해제의 실패는 페이지 오류로 보고한다.
 
 ## 프로젝트 데이터
 
@@ -119,8 +119,8 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한다. 제공자는 `extends`에 지점을 선언하고, 기여자는 `contributes`에 항목을 선언하며, workbench는 이 선언만으로 둘을 잇는다. 어떤 plugin도 코드에서 다른 plugin의 이름을 쓰지 않는다.
 
 - **이름과 version.** plugin `<id>`의 지점 `<name>`은 `<id>.<name>`이다. `version`은 지점 interface의 version이고, 기여한 각 항목은 `range`로 함께 동작하는 version을 적는다. 이전 version에 맞춰 쓴 항목이 실패할 수 있으면 제공자는 `version`의 major를 올리고, interface에 더하면 minor를 올린다.
-- **항목.** 각 항목은 `range`, 기여자 package 안의 JavaScript 경로 `module`, 그리고 지점의 `schema`가 exposure 선언의 schema 부분집합으로 선언한 필드를 갖는다. workbench는 모든 항목을 schema로 검증한다.
-- **공유 module.** `modules`는 bare import specifier를 제공자 package의 파일에 대응한다. page import map은 `@soksak/shared/`를 `/shared/`에 대응하고, `/shared/<plugin id>.<point>/<specifier>.js`는 그 specifier의 제공자 파일을 내보낸다([설치된 plugin 제공](installation.ko.md#설치된-plugin-제공)). Tauri host의 webview는 module의 MIME type을 경로 끝에서 정하므로 경로는 `.js`로 끝난다. 제공자와 기여자는 공유 library를 `@soksak/shared/<plugin id>.<point>/<specifier>.js`로 import하므로 한 URL에서 불러와 instance 하나를 함께 쓴다. 각자 그 library를 그 external import로 번들한다.
+- **항목.** 각 항목은 `range`, 기여자 plugin 안의 JavaScript 경로 `module`, 그리고 지점의 `schema`가 exposure 선언의 schema 부분집합으로 선언한 필드를 갖는다. workbench는 모든 항목을 schema로 검증한다.
+- **공유 module.** `modules`는 bare import specifier를 제공자 plugin의 파일에 대응한다. page import map은 `@soksak/shared/`를 `/shared/`에 대응하고, `/shared/<plugin id>.<point>/<specifier>.js`는 그 specifier의 제공자 파일을 내보낸다([설치된 plugin 제공](installation.ko.md#설치된-plugin-제공)). Tauri host의 webview는 module의 MIME type을 경로 끝에서 정하므로 경로는 `.js`로 끝난다. 제공자와 기여자는 공유 library를 `@soksak/shared/<plugin id>.<point>/<specifier>.js`로 import하므로 한 URL에서 불러와 instance 하나를 함께 쓴다. 각자 그 library를 그 external import로 번들한다.
 - **연결.** page를 불러올 때 workbench는 설치되고 켜진 plugin의 기여를 해석한다. 항목은 제공자가 설치되고 켜져 있고 그 `range`가 지점의 `version`을 포함하면 `connected`, 제공자가 설치되지 않았거나 켜져 있지 않으면 `provider-missing`, 범위가 version을 포함하지 않으면 `version-mismatch`, 항목이 schema와 맞지 않거나 그 module을 불러오거나 확장하다 실패하면 `invalid`다. status `core.contributions`가 모든 항목을 `{plugin, point, state, reason}`으로 보고한다. `connected`가 아닌 상태는 애플리케이션의 오류가 아니며, `invalid`는 오류 표시로 보인다.
 - **설치.** `dependencies`에 제공자를 적은 기여자는 제공자와 함께 설치된다. 그 의존이 없는 기여자는 제공자가 설치되어 있을 때만 연결된다. 기여자나 제공자를 설치, 켜기, 끄기, 제거하면 다른 plugin 변경과 같이 그 뒤에 불러오는 page에 적용된다([설치](installation.ko.md)).
 - **제공자 interface.** 제공자 page의 surface context는 `contributions(point)`를 가지며, 그 지점의 연결된 항목을 `{plugin, item, module}`로 돌려준다. `module`은 import할 URL이다. 제공자는 각 module을 import하고 지점 interface가 정한 export를 호출한다. 실패한 export는 그 항목을 `invalid`로 만들고 다른 항목은 연결된 채로 둔다.
@@ -128,11 +128,11 @@ plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한
 
 ## 외부 라이브러리
 
-스테이징은 패키지 `files`를 복사하고 페이지 import map은 코어 모듈과 `@soksak/shared/`만 가리키므로, 플러그인 페이지, 섹션, 상태 모듈은 자기 패키지 안의 파일과 [확장 지점](#확장-지점)의 공유 module만 불러오고, 제공자 페이지는 자기 지점의 기여 module도 불러온다. 외부 브라우저 라이브러리를 쓰는 플러그인은 자기 `scripts/build-vendor.mjs`(esbuild)로 라이브러리를 `ui/vendor/` 아래 ES 모듈 하나로 번들하고, 번들에 든 모든 패키지의 라이선스와 고지를 담은 `.LICENSE.txt` 파일과 함께 커밋하며, `ui`를 통해 `files`에 나열한다. 라이브러리와 esbuild는 정확한 버전의 `devDependencies`다. 플러그인의 `pnpm test`는 스크립트를 `--check`로 실행하며, 커밋된 파일이 새 빌드와 다르면 실패한다. 파일 플러그인은 바닐라 진입점 `@pierre/trees`로 `@pierre/trees` 1.0.0-beta.4(Apache-2.0)와 그 의존성 `preact`(MIT)를 번들한다. 플러그인은 React를 쓰지 않는다.
+스테이징은 패키지 `files`를 복사하고 페이지 import map은 코어 모듈과 `@soksak/shared/`만 가리키므로, 플러그인 페이지, 섹션, 상태 모듈은 자기 plugin 안의 파일과 [확장 지점](#확장-지점)의 공유 module만 불러오고, 제공자 페이지는 자기 지점의 기여 module도 불러온다. 외부 브라우저 라이브러리를 쓰는 플러그인은 자기 `scripts/build-vendor.mjs`(esbuild)로 라이브러리를 `ui/vendor/` 아래 ES 모듈 하나로 번들하고, 번들에 든 모든 패키지의 라이선스와 고지를 담은 `.LICENSE.txt` 파일과 함께 커밋하며, `ui`를 통해 `files`에 나열한다. 라이브러리와 esbuild는 정확한 버전의 `devDependencies`다. 플러그인의 `pnpm test`는 스크립트를 `--check`로 실행하며, 커밋된 파일이 새 빌드와 다르면 실패한다. 파일 플러그인은 바닐라 진입점 `@pierre/trees`로 `@pierre/trees` 1.0.0-beta.4(Apache-2.0)와 그 의존성 `preact`(MIT)를 번들한다. 플러그인은 React를 쓰지 않는다.
 
 ## 진단 선언
 
-표면이 있는 플러그인은 검사에만 쓰는 status와 명령 항목을 패키지 루트의 `diagnostics.json` 파일에 둘 수 있다: `{ "module": "ui/<파일>.js", "exposes": { ... } }`. `module`은 패키지 안의 파일이며, `exposes`는 `plugin.json` `exposes`의 형식과 소유자 규칙을 따른다. 한 이름은 `plugin.json`과 `diagnostics.json` 중 한 곳에만 선언한다. `diagnostics.json`과 그 모듈은 패키지의 `files`에 나열하지 않으므로, plugin release는 `sok plugin pack --diagnostics`가 쓸 때만 이를 담는다([command line](cli.ko.md#package-release-registry)). 둘 중 하나가 나열되어 있으면 스테이징과 pack이 실패한다. 사용자 입력이나 OS가 만드는 상태를 주입하거나 검사를 위해 내부 이벤트를 기록하는 항목은 `diagnostics.json`에 속하고, 보이는 상태를 보고하거나 사용자 조작을 수행하는 항목은 `plugin.json`에 속한다.
+표면이 있는 플러그인은 검사에만 쓰는 status와 명령 항목을 plugin 루트의 `diagnostics.json` 파일에 둘 수 있다: `{ "module": "ui/<파일>.js", "exposes": { ... } }`. `module`은 plugin 안의 파일이며, `exposes`는 `plugin.json` `exposes`의 형식과 소유자 규칙을 따른다. 한 이름은 `plugin.json`과 `diagnostics.json` 중 한 곳에만 선언한다. `diagnostics.json`과 그 모듈은 `package.json`의 `files`에 나열하지 않으므로, plugin release는 `sok plugin pack --diagnostics`가 쓸 때만 이를 담는다([command line](cli.ko.md#release-registry)). 둘 중 하나가 나열되어 있으면 스테이징과 pack이 실패한다. 사용자 입력이나 OS가 만드는 상태를 주입하거나 검사를 위해 내부 이벤트를 기록하는 항목은 `diagnostics.json`에 속하고, 보이는 상태를 보고하거나 사용자 조작을 수행하는 항목은 `plugin.json`에 속한다.
 
 진단 빌드에서 워크벤치는 이 선언을 플러그인의 표면 선언에 더하고, 표면을 마운트하기 전에 모듈을 import한다. 표면 context는 그 모듈을 `diagnostics`로 전달하며, 릴리스 빌드에서 `diagnostics`는 `null`이다. 표면 모듈은 이를 구현에 넘기고, 구현은 진단 항목이 쓰는 내부 연산을 모듈에 넘겨 호출한다.
 
@@ -227,9 +227,9 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 
 애플리케이션의 bundle에는 플러그인이 없다. 호스트가 설정 디렉터리에 설치된 플러그인을 제공한다([설치된 plugin 제공](installation.ko.md#설치된-plugin-제공)). 호스트가 없는 애플리케이션인 브라우저 예제는 `--installed <설정 디렉터리>`를 주며, 그러면 도구가 그 디렉터리에서 호스트가 제공할 문서를 쓴다. `/installed-plugins.json`과 켜진 각 설치 플러그인의 파일을 `/modules/<패키지>/`에 쓰며, `diagnostics`는 `--diagnostics`일 때만 담는다.
 
-게시된 파일이 import하는 모든 파일은 패키지의 `files` 배열에 나열되어야 하며, `packages/workbench/test/published-imports.test.mjs`가 이를 검증한다.
+게시된 파일이 import하는 모든 파일은 그 `package.json`의 `files` 배열에 나열되어야 하며, `packages/workbench/test/published-imports.test.mjs`가 이를 검증한다.
 
-디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`는 `--diagnostics`를 더한다. 릴리스 빌드에는 페이지 진단 코드가 없고, 플러그인 진단 코드는 [진단 package](cli.ko.md#package-release-registry)를 설치한 설정에만 있다. `make release-check`는 스테이징된 릴리스 프런트엔드에 `/transcript.js`나 페이지 진단 모듈이 있으면 실패한다.
+디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`는 `--diagnostics`를 더한다. 릴리스 빌드에는 페이지 진단 코드가 없고, 플러그인 진단 코드는 [진단 release](cli.ko.md#release-registry)를 설치한 설정에만 있다. `make release-check`는 스테이징된 릴리스 프런트엔드에 `/transcript.js`나 페이지 진단 모듈이 있으면 실패한다.
 
 모든 페이지는 `PAGE_IMPORTS`와 같은 import map 하나를 선언한다. 항목은 `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/runtime`, `@soksak/workbench/`다.
 

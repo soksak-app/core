@@ -12,7 +12,7 @@
 
 | 필드 | 의미 |
 | --- | --- |
-| `executable` | 빌드된 실행 파일의 패키지 안 경로 |
+| `executable` | 빌드된 실행 파일의 sidecar 안 경로 |
 | `protocol` | 메시지 형식 버전. 현재 버전은 `1` |
 | `helpers` | 선택 필드. 헬퍼 프로그램 목록. 각 항목은 `name`(헬퍼 `package.json`의 `name`)과 `executable`(헬퍼 폴더 안의 경로)을 가진다 |
 
@@ -24,7 +24,7 @@
 2. 각 플러그인 폴더의 `plugin.json`이 그 사이드카를 나열한다.
 3. 각 사이드카 폴더의 `sidecar.json`이 그 사이드카의 `executable` 경로와 `protocol`을 지정한다.
 
-호스트는 그 폴더 안의 `executable`을 실행한다. `installed.json`이나 `sidecar.json`이 없거나 틀렸거나, `executable`이 패키지 안의 경로가 아니거나, `protocol`이 `1`이 아니면 시작 시 실패한다. 페이지가 사이드카에 처음 요청을 보내면 사이드카를 시작한다. 어떤 플러그인도 선언하지 않은 사이드카에 대한 요청은 `sidecar <name> is not declared by any plugin`으로 실패하고, 호스트가 사이드카를 종료한 뒤의 요청도 실패한다.
+호스트는 그 폴더 안의 `executable`을 실행한다. `installed.json`이나 `sidecar.json`이 없거나 틀렸거나, `executable`이 sidecar 안의 경로가 아니거나, `protocol`이 `1`이 아니면 시작 시 실패한다. 페이지가 사이드카에 처음 요청을 보내면 사이드카를 시작한다. 어떤 플러그인도 선언하지 않은 사이드카에 대한 요청은 `sidecar <name> is not declared by any plugin`으로 실패하고, 호스트가 사이드카를 종료한 뒤의 요청도 실패한다.
 
 사이드카가 남기는 자식 프로세스는 호스트의 파이프와 프로세스 그룹을 상속하지 않는다. 호스트가 사이드카의 표준 입력을 닫으면 사이드카는 2초 안에 끝나야 한다. 그렇지 않으면 호스트는 최대 5초까지 기다린 뒤 강제 종료 신호를 보내고 로그에 `sidecar <name>: did not end within the stop timeout and was killed`를 쓴다. 기다리는 동안 호스트는 사이드카의 표준 출력을 출력이 끝날 때까지 읽으므로, 끝나면서 하는 사이드카의 쓰기는 막히지도 실패하지도 않는다. 멈추는 동안 0이 아닌 종료 상태나 신호로 끝난 사이드카는 로그에 `sidecar <name>: exited while stopping: <exit>`로 쓴다. 호스트가 강제 종료한 프로세스와, [실패](#실패) 뒤 호스트가 출력을 더 읽지 않은 프로세스에는 이 줄을 쓰지 않는다. `<exit>`는 두 호스트에서 `exit status <code>`나 `signal <number>`다.
 

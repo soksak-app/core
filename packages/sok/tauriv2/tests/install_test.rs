@@ -112,7 +112,7 @@ fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
     }
 }
 
-// contract: install.package.fields-and-manifest
+// contract: install.package-json.fields-and-manifest
 #[test]
 fn package_json_declares_version_core_range_and_files_and_the_manifest_declares_sidecar_ranges() {
     let pkg = json!({"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},

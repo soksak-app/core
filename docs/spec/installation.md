@@ -28,7 +28,7 @@ A plugin release is the file `<id>-<version>.tgz` of the plugin's files that `so
 | `name` | The name under which the installed files are served at `/modules/<name>/` |
 | `version` | Plugin version |
 | `engines.soksak` | Range of core API versions the plugin supports |
-| `files` | Paths inside the package that the release holds; it includes `plugin.json` |
+| `files` | Paths inside the plugin that the release holds; it includes `plugin.json` |
 
 Other `package.json` fields belong to package tools and are not read, except `soksak`, which is refused: the sidecars of a plugin and their ranges are the `dependencies` of its `plugin.json` ([plugins](plugins.md#pluginjson)).
 

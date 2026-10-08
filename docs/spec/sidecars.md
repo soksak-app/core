@@ -12,7 +12,7 @@ A sidecar is a program in its own repository with a `package.json` and a `sideca
 
 | Field | Meaning |
 | --- | --- |
-| `executable` | Path of the built executable inside the package |
+| `executable` | Path of the built executable inside the sidecar |
 | `protocol` | Message format version. The current version is `1` |
 | `helpers` | Optional array of helper programs. Each item has `name` (the `name` of the helper's `package.json`) and `executable` (the path inside the helper's folder) |
 
@@ -24,7 +24,7 @@ The host resolves sidecars from the installed plugins ([serving installed plugin
 2. The `plugin.json` in each plugin folder lists its sidecars.
 3. The `sidecar.json` in each sidecar folder gives the `executable` path and `protocol` of the sidecar.
 
-The host runs the `executable` inside that folder. It fails at startup when `installed.json` or a `sidecar.json` is missing or invalid, its `executable` is not a path inside the package, or its `protocol` is not `1`. It starts a sidecar when a page first sends to it. A request for a sidecar that no plugin declares fails with `sidecar <name> is not declared by any plugin`; a request after the host stops its sidecars also fails.
+The host runs the `executable` inside that folder. It fails at startup when `installed.json` or a `sidecar.json` is missing or invalid, its `executable` is not a path inside the sidecar, or its `protocol` is not `1`. It starts a sidecar when a page first sends to it. A request for a sidecar that no plugin declares fails with `sidecar <name> is not declared by any plugin`; a request after the host stops its sidecars also fails.
 
 Child processes spawned by a sidecar do not inherit the host's pipes or process group. When the host closes the sidecar's standard input, the sidecar must end within 2 seconds; if it does not, the host waits up to 5 seconds total before sending a force-kill signal, and writes `sidecar <name>: did not end within the stop timeout and was killed` to its log. While it waits, the host reads the sidecar's standard output until the output ends, so the sidecar's writes on its way out neither block nor fail. A sidecar that ends during the stop with an exit status other than 0 or by a signal is written to the log as `sidecar <name>: exited while stopping: <exit>`; the host writes no such line for a process that it killed or whose output it stopped reading after a [failure](#failure). `<exit>` is `exit status <code>` or `signal <number>` on both hosts.
 

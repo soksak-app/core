@@ -14,7 +14,7 @@ The public registry is the repository `soksak-app/registry`. It holds one file p
 | `revoked.json` | `{ plugins, sidecars }` of the index | Registry maintainers |
 | `.github/`, `scripts/`, `test/`, `CODEOWNERS` | The checks and workflows | Registry maintainers |
 
-These files are the source of the index; `index.json` is built from them by `sok registry build` ([command line](cli.md#packages-releases-and-the-registry)) and is not committed. `CODEOWNERS` names the registry maintainers for every path that only they change. Core window checks and development use a local registry built from sibling checkouts by `make registry` ([repositories](plugins.md#repositories)); the public registry has no local build.
+These files are the source of the index; `index.json` is built from them by `sok registry build` ([command line](cli.md#releases-and-the-registry)) and is not committed. `CODEOWNERS` names the registry maintainers for every path that only they change. Core window checks and development use a local registry built from sibling checkouts by `make registry` ([repositories](plugins.md#repositories)); the public registry has no local build.
 
 ## Entry rules
 

@@ -309,7 +309,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.start.fails-on-missing-executable` | 디스크에 없는 선언된 실행 파일은 첫 보내기를 사이드카 이름과 함께 실패시킨다. | both |
 | `sidecars.declaration.fails-on-missing-sidecar-json` | sidecar.json이 없는 설치 sidecar 폴더는 그 경로와 함께 설치 sidecar 찾기를 실패시킨다. | both |
 | `sidecars.declaration.adds-sidecars-installed-after-start` | 생성 뒤에 설치 sidecar를 선언하면 선언되지 않은 것을 더하므로 그 sidecar로의 보내기가 그것을 시작하고, 이미 선언한 sidecar의 폴더는 유지한다. | both |
-| `sidecars.declaration.rejects-executable-escaping-package` | 패키지 밖의 실행 파일 경로는 생성을 실패시킨다. | both |
+| `sidecars.declaration.rejects-executable-escaping-package` | sidecar 밖의 실행 파일 경로는 생성을 실패시킨다. | both |
 | `sidecars.declaration.rejects-absolute-executable` | 절대 실행 파일 경로는 생성을 실패시킨다. | both |
 | `sidecars.declaration.rejects-unsupported-protocol` | 지원하지 않는 프로토콜 버전은 생성을 실패시킨다. | both |
 | `sidecars.declaration.rejects-unknown-transport` | 알 수 없는 전송 방식은 "is not supported"로 생성을 실패시킨다. | both |
@@ -441,7 +441,7 @@ fn invalid_json_closes_connection() {
 | `cli.plugin.action-runs-the-command` | Installer library는 `install`, `update`, `remove`, `enable`, `disable`을 같은 `sok plugin` 명령의 결과로 실행하고, 다른 action은 `unknown plugin action`으로 거부한다. | both |
 | `cli.file.errors-name-the-path-and-the-reason` | 실패한 파일 작업은 `<경로>: <이유>`로 보고하며, 이유는 소문자로 시작하는 운영체제 오류 문구다. 없는 registry index는 `<경로>: no such file or directory`, 읽을 수 없는 `installed.json`은 `<경로>: permission denied`를 보고한다 | both |
 | `install.version.ranges-and-order` | 범위 `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z <a.b.c`는 선언한 경계를 가지고, `*`는 상한이 없는 `>=0.0.0`이다. Version은 숫자로 비교한다. 다른 형식, 앞자리 0, 빈 범위, 4294967295를 넘는 자리는 `invalid version`으로 거부한다. | both |
-| `install.package.fields-and-manifest` | Plugin `package.json`에는 package `name`, `version`, `engines.soksak`, package 안의 `plugin.json`을 나열한 `files`가 있어야 한다. `soksak`은 거부하고, `plugin.json`의 `dependencies`는 각각 올바른 범위다. 실패마다 필드를 밝힌다. | both |
+| `install.package-json.fields-and-manifest` | Plugin `package.json`에는 `name`, `version`, `engines.soksak`, plugin 안의 `plugin.json`을 나열한 `files`가 있어야 한다. `soksak`은 거부하고, `plugin.json`의 `dependencies`는 각각 올바른 범위다. 실패마다 필드를 밝힌다. | both |
 | `install.registry.entries` | Registry plugin, sidecar, pack, revoked 항목은 알 수 없는 필드, 절대 `file:` URL이 아니거나 query, fragment, 잘못된 escape를 가진 URL, 소문자 16진수 64자리가 아닌 `sha256`, 중복 version, 알 수 없는 플랫폼, 1이 아닌 `protocol`, 200 code point를 넘는 설명, 빈 pack, 이유 없는 revoked 항목을 거부한다. | both |
 | `install.registry.index-cross-checks` | Index는 format 2, 중복 plugin id나 package, 알 수 없는 plugin을 지정한 pack, 알 수 없는 sidecar나 어떤 sidecar version도 채우지 않는 범위가 필요한 plugin version, 나열되지 않은 revoked version을 거부한다. | both |
 | `install.select.newest-usable` | 선택은 core version에 맞고 revoked가 아니며 그 plugin을 지정하는 모든 설치된 plugin의 범위를 채우는 가장 새 plugin version과, 범위 안에 있고 플랫폼 release가 있는 가장 새 sidecar version을 고른다. 맞는 것이 없으면 plugin, core version, sidecar, 플랫폼, 각 plugin과 범위를 밝힌다. | both |

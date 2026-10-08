@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R5.3.7: 명세가 package라고 부른 plugin이나 sidecar를 plugin이나 sidecar라고 부른다. Go, Cargo, npm package는 package로 둔다.
 - R5.5: registry index가 plugin version의 파일을 `release`, sidecar version의 파일을 `releases`라고 부른다.
 - R5.6: `sidecar.json`의 helper는 프로그램을 `name`으로 가리키고, `package`는 거부한다.
 - R5.2: 기록 검사가 `packages/plugin-api/terms.json`의 거부 동의어를 파일과 커밋 메시지에서 보고하고, `make hooks`가 그것을 실행하는 pre-commit hook을 더한다.

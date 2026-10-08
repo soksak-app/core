@@ -28,7 +28,7 @@ Plugin release는 `sok plugin pack`이 쓰는, plugin 파일을 담은 파일 `<
 | `name` | 설치한 파일을 제공하는 `/modules/<name>/`의 이름이다 |
 | `version` | Plugin version |
 | `engines.soksak` | Plugin이 지원하는 core API version 범위 |
-| `files` | Release가 담는 package 안의 경로이며 `plugin.json`을 포함한다 |
+| `files` | Release가 담는 plugin 안의 경로이며 `plugin.json`을 포함한다 |
 
 `package.json`의 다른 필드는 package 도구의 것이므로 읽지 않는다. 다만 `soksak`은 거부한다. 플러그인의 sidecar와 그 범위는 `plugin.json`의 `dependencies`다([플러그인](plugins.ko.md#pluginjson)).
 
