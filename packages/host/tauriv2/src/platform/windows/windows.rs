@@ -531,6 +531,13 @@ impl Platform for Windows {
     fn service_process_exists(&self, pid: u32) -> Result<bool, String> {
         unsupported::service_process_exists(pid)
     }
+    fn wait_service_process_end(
+        &self,
+        pid: u32,
+        timeout: std::time::Duration,
+    ) -> Result<bool, String> {
+        unsupported::wait_service_process_end(pid, timeout)
+    }
     fn new_session(&self, command: &mut std::process::Command) -> Result<(), String> {
         unsupported::new_session(command)
     }

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F117.5.6: the host starts the installed service of a replaced persistent sidecar only after the process of the old service has ended, waiting for it with the kernel notification of the end of a process in every build; a process that does not end within the stop timeout fails the replacement with an error line and the sidecar stays outdated.
 - F124.3.7: the debug view lists the newest file first, opens the text of a file at its end, where the newest lines are, and keeps the bar with the 목록 button at the top of the scrolling pane; `core.debug` reports `scroll`.
 - F128.1: a WebContent process that the host ends while it quits is not reported and the Tauri host does not load the page again, which kept the application from ending.
 - F117.5.4: the plugin page shows each outdated persistent service above the plugin cards with `<running> → <installed>` and the action 터미널 <sessions>개를 끝내고 적용, which runs the new command `core.plugins.replace {sidecar}`; `core.plugins` reports `outdated`, and both hosts answer `sidecarsOutdated` and send `sidecars-changed`.

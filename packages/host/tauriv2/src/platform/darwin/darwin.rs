@@ -665,6 +665,13 @@ impl Platform for Darwin {
     fn service_process_exists(&self, pid: u32) -> Result<bool, String> {
         endpoint::service_process_exists(pid)
     }
+    fn wait_service_process_end(
+        &self,
+        pid: u32,
+        timeout: std::time::Duration,
+    ) -> Result<bool, String> {
+        endpoint::wait_service_process_end(pid, timeout)
+    }
     fn new_session(&self, command: &mut std::process::Command) -> Result<(), String> {
         endpoint::new_session(command);
         Ok(())

@@ -32,3 +32,42 @@ fn a_service_process_of_another_user_exists() {
         .expect("inspect process 1");
     assert!(exists, "process 1 of another user must exist");
 }
+
+// contract: sidecars-transport.endpoint.waits-for-the-end-of-a-service-process
+#[test]
+fn the_wait_for_the_end_of_a_service_process() {
+    use std::time::{Duration, Instant};
+    let platform = soksak_host_tauriv2::platform::current().expect("platform");
+    let mut ending = std::process::Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .expect("spawn sleep");
+    let pid = ending.id();
+    let killer = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(150));
+        ending.kill().expect("kill sleep");
+        ending.wait().expect("reap sleep");
+    });
+    let started = Instant::now();
+    let ended = platform
+        .wait_service_process_end(pid, Duration::from_secs(10))
+        .expect("wait for a process that ends");
+    assert!(
+        ended && started.elapsed() < Duration::from_secs(5),
+        "ended {ended} after {:?}",
+        started.elapsed()
+    );
+    killer.join().expect("killer");
+    let mut running = std::process::Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .expect("spawn sleep");
+    assert!(!platform
+        .wait_service_process_end(running.id(), Duration::from_millis(200))
+        .expect("wait for a process that keeps running"));
+    running.kill().expect("kill sleep");
+    running.wait().expect("reap sleep");
+    assert!(platform
+        .wait_service_process_end(pid, Duration::from_secs(1))
+        .expect("wait for a process that does not exist"));
+}

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F117.5.6: host는 교체한 상주 sidecar의 설치된 service를 옛 service의 process가 끝난 뒤에만 시작한다. 모든 빌드에서 process 종료의 커널 알림으로 기다리며, 중지 기한 안에 끝나지 않는 process는 오류 줄과 함께 교체를 실패시키고 sidecar는 오래된 채로 남는다.
 - F124.3.7: 디버그 화면이 가장 새 파일을 먼저 나열하고, 파일의 글을 가장 새 줄이 있는 끝에서 열며, 목록 단추가 있는 머리줄을 스크롤하는 pane 위에 고정한다. `core.debug`는 `scroll`을 보고한다.
 - F128.1: host가 종료하는 동안 일부러 끝낸 WebContent process는 기록하지 않고 Tauri host는 page를 다시 불러오지 않는다. 다시 불러오면 애플리케이션이 끝나지 못했다.
 - F117.5.4: plugin 화면이 카드 위에 오래된 상주 service마다 `<running> → <installed>`와 새 명령 `core.plugins.replace {sidecar}`를 실행하는 동작 터미널 <sessions>개를 끝내고 적용을 보인다. `core.plugins`는 `outdated`를 보고하고, 두 host는 `sidecarsOutdated`에 답하고 `sidecars-changed`를 보낸다.

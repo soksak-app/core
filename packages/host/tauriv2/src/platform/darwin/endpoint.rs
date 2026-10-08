@@ -55,6 +55,57 @@ pub fn service_process_exists(pid: u32) -> Result<bool, String> {
     Ok(false)
 }
 
+/// Waits for the end of the service process `pid` with the kqueue notification NOTE_EXIT, for at most `timeout`. A
+/// process that does not exist has ended; the registration for it fails with ESRCH.
+pub fn wait_service_process_end(pid: u32, timeout: std::time::Duration) -> Result<bool, String> {
+    if pid == 0 {
+        return Ok(true);
+    }
+    let failed = |error: std::io::Error| format!("cannot wait for service process {pid}: {error}");
+    let queue = unsafe { libc::kqueue() };
+    if queue < 0 {
+        return Err(failed(std::io::Error::last_os_error()));
+    }
+    let change = libc::kevent {
+        ident: pid as libc::uintptr_t,
+        filter: libc::EVFILT_PROC,
+        flags: libc::EV_ADD | libc::EV_ONESHOT,
+        fflags: libc::NOTE_EXIT,
+        data: 0,
+        udata: std::ptr::null_mut(),
+    };
+    let limit = libc::timespec {
+        tv_sec: timeout.as_secs() as libc::time_t,
+        tv_nsec: timeout.subsec_nanos() as libc::c_long,
+    };
+    let mut event: libc::kevent = unsafe { std::mem::zeroed() };
+    let result = loop {
+        let count = unsafe { libc::kevent(queue, &change, 1, &mut event, 1, &limit) };
+        if count < 0 {
+            let error = std::io::Error::last_os_error();
+            match error.raw_os_error() {
+                Some(libc::EINTR) => continue,
+                Some(libc::ESRCH) => break Ok(true),
+                _ => break Err(failed(error)),
+            }
+        }
+        if count == 0 {
+            break Ok(false);
+        }
+        if event.flags & libc::EV_ERROR != 0 {
+            let code = event.data as i32;
+            break if code == libc::ESRCH {
+                Ok(true)
+            } else {
+                Err(failed(std::io::Error::from_raw_os_error(code)))
+            };
+        }
+        break Ok(true);
+    };
+    unsafe { libc::close(queue) };
+    result
+}
+
 /// 끝난 프로세스의 wait 상태를 `exit status <code>` 나 `signal <number>` 로 쓴다.
 pub fn exit_status(status: std::process::ExitStatus) -> Result<String, String> {
     use std::os::unix::process::ExitStatusExt;

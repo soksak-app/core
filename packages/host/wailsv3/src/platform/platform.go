@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -434,6 +435,10 @@ type Platform interface {
 	// ServiceProcessExists 는 애플리케이션 재시작 뒤 endpoint 를 재사용하기 전에
 	// 보존된 sidecar service 프로세스가 아직 살아 있는지 확인한다. 확인하지 못하면 오류다.
 	ServiceProcessExists(pid int) (bool, error)
+	// WaitServiceProcessEnd waits until the service process pid ends, for at most timeout, and answers whether it ended.
+	// A process that does not exist has ended. The wait uses the kernel notification of the end of a process, which
+	// also reports a process that stays as a zombie, so it does not poll (docs/spec/terminal-runtime.md#updates).
+	WaitServiceProcessEnd(pid int, timeout time.Duration) (bool, error)
 	// NewSession 은 command 가 새 session 에서 시작하게 한다. 영구 service 는 애플리케이션 프로세스가 아니라
 	// 설정 디렉터리에 속하므로 애플리케이션의 프로세스 그룹과 터미널의 신호를 받지 않는다. command 를 시작하기
 	// 전에 호출한다.

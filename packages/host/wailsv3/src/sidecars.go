@@ -85,11 +85,13 @@ type ClosingSurface struct {
 type sidecar struct {
 	name string
 	// version is the version that a persistent service sent in its hello reply, or nil when the reply had none.
-	version       *string
-	cmd           *exec.Cmd
-	stdin         io.WriteCloser
-	conn          net.Conn
-	persistent    bool
+	version    *string
+	cmd        *exec.Cmd
+	stdin      io.WriteCloser
+	conn       net.Conn
+	persistent bool
+	// servicePID is the process of the service endpoint that a persistent connection reached.
+	servicePID    int
 	outbox        chan []byte
 	exited        chan struct{}
 	muClosed      sync.Mutex
@@ -538,6 +540,8 @@ func (c *Sidecars) outdated(process *sidecar) bool {
 type replacement struct {
 	running   *string
 	installed string
+	// pid is the process of the service endpoint, which ends before the installed service starts.
+	pid int
 }
 
 // Replace replaces the persistent service of the sidecar name, whose `hello` version differs from the installed
@@ -558,7 +562,7 @@ func (c *Sidecars) Replace(ctx context.Context, name string) error {
 	c.declarations.RLock()
 	installed := c.versions[name]
 	c.declarations.RUnlock()
-	c.replacing[name] = replacement{running: process.version, installed: installed}
+	c.replacing[name] = replacement{running: process.version, installed: installed, pid: process.servicePID}
 	c.mu.Unlock()
 	if err := c.closePersistentOwner(process, ctx); err != nil {
 		c.mu.Lock()
@@ -1212,7 +1216,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		return nil, fmt.Errorf("sidecar %s: service protocol mismatch in hello response", name)
 	}
 	process := &sidecar{
-		name: name, cmd: cmd, conn: conn, persistent: true, version: response.Version,
+		name: name, cmd: cmd, conn: conn, persistent: true, version: response.Version, servicePID: endpoint.PID,
 		outbox: make(chan []byte, 256), exited: make(chan struct{}),
 		pendingCloses: make([][]byte, 0), pendingReplies: make([][]byte, 0),
 		closeWaiters: make(map[string]chan error), surfaces: make(map[string]bool),
@@ -1635,6 +1639,7 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 // 다른 경로가 다시 시작했거나 종료 중이면 아무 일도 하지 않는다. 한 번의 연결 끊김에 한 번만
 // 시도한다 — 실패는 알림으로 보고하고, 다음 전송이 같은 경로를 다시 지나간다.
 func (c *Sidecars) revivePersistent(name string) {
+	c.awaitReplacedService(name)
 	announced, failure := c.reviveAttempt(name)
 	// 연결이 거부된 첫 시도는 endpoint 가 더는 듣지 않는다는 증거다 — 재활용된 pid 가
 	// kill(pid, 0) 을 통과시켜도 소켓은 죽었다. 끊김 기록이 있는 재시작에서만 endpoint 를
@@ -1671,6 +1676,37 @@ func (c *Sidecars) revivePersistent(name string) {
 		// 다른 경로(전송)가 이미 다시 시작했으면 알림도 그 호출이 보냈다.
 		LogError("sidecar "+name, "connection lost; restarted")
 		c.notifyConnection(name, nil)
+	}
+}
+
+// awaitReplacedService waits until the process of the service that Replace closed has ended, so the installed service
+// starts after it (docs/spec/terminal-runtime.md#updates). A process that does not end within the stop timeout fails
+// the replacement: the error line names the sidecar, and the reconnection that follows reaches the service that still
+// runs, so the sidecar stays outdated.
+func (c *Sidecars) awaitReplacedService(name string) {
+	c.mu.Lock()
+	replaced, replacing := c.replacing[name]
+	c.mu.Unlock()
+	if !replacing || replaced.pid <= 0 {
+		return
+	}
+	failed := func(reason string) {
+		LogError("sidecar "+name, "replace: "+reason)
+		c.mu.Lock()
+		delete(c.replacing, name)
+		c.mu.Unlock()
+	}
+	current, err := platform.Current()
+	if err != nil {
+		failed(err.Error())
+		return
+	}
+	ended, err := current.WaitServiceProcessEnd(replaced.pid, c.StopTimeout)
+	switch {
+	case err != nil:
+		failed(err.Error())
+	case !ended:
+		failed(fmt.Sprintf("the service process %d did not end within %v", replaced.pid, c.StopTimeout))
 	}
 }
 

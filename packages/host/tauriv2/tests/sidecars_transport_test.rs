@@ -1704,18 +1704,41 @@ fn a_lost_connection_is_reported_as_an_error_line() {
 struct ReplaceService {
     /// The top-level operations that the first connection received (a message of a surface has none).
     operations: Arc<Mutex<Vec<String>>>,
-    /// Receives one value when the second connection is accepted.
-    second: Receiver<()>,
+    /// Receives the time of the second connection when it is accepted.
+    second: Receiver<std::time::Instant>,
+    /// The time at which the process of the service was ended after the shutdown answer.
+    ended: Receiver<std::time::Instant>,
 }
 
-fn serve_replace_service(config_directory: &Path, old: &str, installed: &str) -> ReplaceService {
+fn serve_replace_service(
+    config_directory: &Path,
+    executable_directory: &Path,
+    old: &str,
+    installed: &str,
+    ends_after: Duration,
+) -> ReplaceService {
     let service_directory = config_directory.join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("replace.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
+    // The endpoint names a process that stands for the service and ends after the shutdown answer.
+    let process = std::process::Command::new("sleep")
+        .arg("60")
+        .spawn()
+        .expect("spawn sleep");
+    let process_id = process.id();
+    let process = Arc::new(Mutex::new(process));
+    // The executable that the host starts for the installed service announces the endpoint of this fake service.
+    let script = format!(
+        "#!/bin/sh\nprintf '{{\"protocol\":1,\"pid\":%s,\"socket\":\"{}\",\"token\":\"replace-token\"}}\\n' \"$$\"\nexec sleep 20\n",
+        socket_path.display()
+    );
+    let executable = executable_directory.join("echo");
+    std::fs::write(&executable, script).unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
     let endpoint = serde_json::json!({
         "protocol": 1,
-        "pid": std::process::id(),
+        "pid": process_id,
         "socket": socket_path,
         "token": "replace-token"
     });
@@ -1727,6 +1750,8 @@ fn serve_replace_service(config_directory: &Path, old: &str, installed: &str) ->
     let operations = Arc::new(Mutex::new(Vec::new()));
     let recorded = Arc::clone(&operations);
     let (second_sender, second) = channel();
+    let (ended_sender, ended) = channel();
+    let ending = Arc::clone(&process);
     let (old, installed) = (old.to_string(), installed.to_string());
     thread::spawn(move || {
         for index in 0.. {
@@ -1740,9 +1765,11 @@ fn serve_replace_service(config_directory: &Path, old: &str, installed: &str) ->
                 installed.clone()
             };
             if !first {
-                let _ = second_sender.send(());
+                let _ = second_sender.send(std::time::Instant::now());
             }
             let recorded = Arc::clone(&recorded);
+            let ending = Arc::clone(&ending);
+            let ended_sender = ended_sender.clone();
             thread::spawn(move || {
                 let mut reader = BufReader::new(stream.try_clone().unwrap());
                 let mut line = String::new();
@@ -1758,7 +1785,18 @@ fn serve_replace_service(config_directory: &Path, old: &str, installed: &str) ->
                         "shutdown" => serde_json::json!({"operation": "shutdown", "request": request["request"], "ok": true}).to_string(),
                         _ => line.trim_end().to_string(),
                     };
-                    if writeln!(stream, "{reply}").is_err() || operation == "shutdown" {
+                    if writeln!(stream, "{reply}").is_err() {
+                        return;
+                    }
+                    if operation == "shutdown" {
+                        let (ending, ended_sender) = (Arc::clone(&ending), ended_sender.clone());
+                        std::thread::spawn(move || {
+                            std::thread::sleep(ends_after);
+                            let mut process = ending.lock().unwrap();
+                            let _ = process.kill();
+                            let _ = process.wait();
+                            let _ = ended_sender.send(std::time::Instant::now());
+                        });
                         return;
                     }
                     line.clear();
@@ -1766,7 +1804,11 @@ fn serve_replace_service(config_directory: &Path, old: &str, installed: &str) ->
             });
         }
     });
-    ReplaceService { operations, second }
+    ReplaceService {
+        operations,
+        second,
+        ended,
+    }
 }
 
 fn replace_sidecars(config_directory: &Path, executable_directory: &Path) -> Sidecars<FakeOwner> {
@@ -1781,7 +1823,13 @@ fn replace_sidecars(config_directory: &Path, executable_directory: &Path) -> Sid
 fn an_outdated_service_is_replaced() {
     let executable_directory = tempfile::tempdir().unwrap();
     let config_directory = tempfile::tempdir().unwrap();
-    let service = serve_replace_service(config_directory.path(), "0.0.6", "0.0.7");
+    let service = serve_replace_service(
+        config_directory.path(),
+        executable_directory.path(),
+        "0.0.6",
+        "0.0.7",
+        Duration::ZERO,
+    );
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let (owner, events) = owner("replace", "/projects/replace");
     sidecars
@@ -1820,7 +1868,13 @@ fn an_outdated_service_is_replaced() {
 fn a_service_that_is_not_outdated_is_not_replaced() {
     let executable_directory = tempfile::tempdir().unwrap();
     let config_directory = tempfile::tempdir().unwrap();
-    let service = serve_replace_service(config_directory.path(), "0.0.7", "0.0.7");
+    let service = serve_replace_service(
+        config_directory.path(),
+        executable_directory.path(),
+        "0.0.7",
+        "0.0.7",
+        Duration::ZERO,
+    );
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let error = sidecars.replace(ECHO).unwrap_err();
     assert!(error.contains(ECHO), "{error}");
@@ -1840,7 +1894,13 @@ fn a_service_that_is_not_outdated_is_not_replaced() {
 fn an_outdated_service_is_replaced_when_its_sessions_end() {
     let executable_directory = tempfile::tempdir().unwrap();
     let config_directory = tempfile::tempdir().unwrap();
-    let service = serve_replace_service(config_directory.path(), "0.0.6", "0.0.7");
+    let service = serve_replace_service(
+        config_directory.path(),
+        executable_directory.path(),
+        "0.0.6",
+        "0.0.7",
+        Duration::ZERO,
+    );
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let (owner, events) = owner("replace", "/projects/replace");
     sidecars
@@ -1853,6 +1913,35 @@ fn an_outdated_service_is_replaced_when_its_sessions_end() {
     assert_eq!(
         &operations[operations.len() - 2..],
         ["close-owner", "shutdown"]
+    );
+    sidecars.stop();
+}
+
+// contract: sidecars-transport.replace.waits-for-the-end-of-the-service-process
+#[test]
+fn a_replaced_service_starts_after_the_end_of_its_process() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service = serve_replace_service(
+        config_directory.path(),
+        executable_directory.path(),
+        "0.0.6",
+        "0.0.7",
+        Duration::from_millis(300),
+    );
+    let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
+    let (owner, events) = owner("replace", "/projects/replace");
+    sidecars
+        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv_timeout(STALL).unwrap();
+    sidecars.replace(ECHO).unwrap();
+    let second = service.second.recv_timeout(STALL).unwrap();
+    let ended = service.ended.recv_timeout(STALL).unwrap();
+    assert!(
+        second > ended,
+        "the installed service started {:?} before its predecessor ended",
+        ended.saturating_duration_since(second)
     );
     sidecars.stop();
 }

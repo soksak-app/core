@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
@@ -365,6 +366,10 @@ func (implementation) Listen(string, string) (net.Listener, platform.Endpoint, e
 
 func (implementation) ServiceProcessExists(int) (bool, error) {
 	return false, unsupported("service process inspection")
+}
+
+func (implementation) WaitServiceProcessEnd(int, time.Duration) (bool, error) {
+	return false, unsupported("service process wait")
 }
 
 func (implementation) NewSession(*exec.Cmd) error {

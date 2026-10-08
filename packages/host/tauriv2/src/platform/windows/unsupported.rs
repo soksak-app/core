@@ -564,6 +564,10 @@ pub fn service_process_exists(_pid: u32) -> Result<bool, String> {
     missing("service process inspection")
 }
 
+pub fn wait_service_process_end(_pid: u32, _timeout: std::time::Duration) -> Result<bool, String> {
+    missing("service process wait")
+}
+
 pub fn new_session(_command: &mut std::process::Command) -> Result<(), String> {
     missing("new process session")
 }

@@ -1758,6 +1758,15 @@ type replaceService struct {
 	mutex      sync.Mutex
 	operations []string
 	second     chan struct{}
+	// afterShutdown runs after the service answered shutdown, while its process still runs.
+	process *exec.Cmd
+	// folder holds the executable that the host starts for the installed service: it announces the endpoint of this
+	// fake service and keeps a process of its own.
+	folder    string
+	endsAfter time.Duration
+	endedAt   time.Time
+	ended     sync.WaitGroup
+	secondAt  time.Time
 }
 
 func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string) *replaceService {
@@ -1774,7 +1783,33 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 	}
 	t.Cleanup(func() { listener.Close() })
 	writeHarnessEndpoint(t, root, socket)
-	service := &replaceService{listener: listener, second: make(chan struct{})}
+	// The endpoint names a process that stands for the service and ends when the service shuts down.
+	process := exec.Command("sleep", "60")
+	if err := process.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { process.Process.Kill(); process.Wait() })
+	endpoint, err := os.ReadFile(filepath.Join(root, "services", "service", "endpoint.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(endpoint, &fields); err != nil {
+		t.Fatal(err)
+	}
+	fields["pid"] = process.Process.Pid
+	if endpoint, err = json.Marshal(fields); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "services", "service", "endpoint.json"), endpoint, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	folder := t.TempDir()
+	script := "#!/bin/sh\nprintf '{\"protocol\":1,\"pid\":%s,\"socket\":\"" + socket + "\",\"token\":\"harness-token\"}\\n' \"$$\"\nexec sleep 20\n"
+	if err := os.WriteFile(filepath.Join(folder, "service"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	service := &replaceService{listener: listener, second: make(chan struct{}), process: process, folder: folder}
 	go func() {
 		for index := 0; ; index++ {
 			connection, err := listener.Accept()
@@ -1787,6 +1822,7 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 				select {
 				case <-service.second:
 				default:
+					service.secondAt = time.Now()
 					close(service.second)
 				}
 			}
@@ -1823,6 +1859,13 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 						return
 					}
 					if operation == "shutdown" {
+						// The process of the service ends after the answer, as that of a real service does.
+						service.ended.Add(1)
+						time.AfterFunc(service.endsAfter, func() {
+							defer service.ended.Done()
+							service.endedAt = time.Now()
+							service.process.Process.Kill()
+						})
 						return
 					}
 				}
@@ -1838,9 +1881,9 @@ func (s *replaceService) received() []string {
 	return append([]string{}, s.operations...)
 }
 
-func replaceSidecars(t *testing.T, root string) *host.Sidecars {
+func replaceSidecars(t *testing.T, root string, service *replaceService) *host.Sidecars {
 	t.Helper()
-	declarations := harnessDeclarations(t.TempDir())
+	declarations := harnessDeclarations(service.folder)
 	declarations[0].Version = "0.0.7"
 	sidecars, err := NewSidecars(declarations, root)
 	if err != nil {
@@ -1858,7 +1901,7 @@ func TestAnOutdatedServiceIsReplaced(t *testing.T) {
 	defer log.SetOutput(previous)
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
-	sidecars := replaceSidecars(t, root)
+	sidecars := replaceSidecars(t, root, service)
 	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
@@ -1892,7 +1935,7 @@ func TestAnOutdatedServiceIsReplaced(t *testing.T) {
 func TestAServiceThatIsNotOutdatedIsNotReplaced(t *testing.T) {
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
-	sidecars := replaceSidecars(t, root)
+	sidecars := replaceSidecars(t, root, service)
 	if err := sidecars.Replace(context.Background(), "fixture-service"); err == nil || !strings.Contains(err.Error(), "fixture-service") {
 		t.Fatalf("replace without a running service: %v", err)
 	}
@@ -1913,7 +1956,7 @@ func TestAServiceThatIsNotOutdatedIsNotReplaced(t *testing.T) {
 func TestAnOutdatedServiceIsReplacedWhenItsSessionsEnd(t *testing.T) {
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
-	sidecars := replaceSidecars(t, root)
+	sidecars := replaceSidecars(t, root, service)
 	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
@@ -1923,5 +1966,26 @@ func TestAnOutdatedServiceIsReplacedWhenItsSessionsEnd(t *testing.T) {
 	<-service.second
 	if got := service.received(); len(got) < 4 || got[len(got)-2] != "close-owner" || got[len(got)-1] != "shutdown" {
 		t.Fatalf("the old service received %v", got)
+	}
+}
+
+// contract: sidecars-transport.replace.waits-for-the-end-of-the-service-process
+func TestAReplacedServiceStartsAfterTheEndOfItsProcess(t *testing.T) {
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
+	service.endsAfter = 300 * time.Millisecond
+	sidecars := replaceSidecars(t, root, service)
+	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.seen)
+	if err := sidecars.Replace(context.Background(), "fixture-service"); err != nil {
+		t.Fatal(err)
+	}
+	<-service.second
+	service.ended.Wait()
+	if !service.secondAt.After(service.endedAt) {
+		t.Fatalf("the installed service started %v before its predecessor was ended at %v", service.endedAt.Sub(service.secondAt), service.endedAt)
 	}
 }

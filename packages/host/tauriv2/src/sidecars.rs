@@ -478,12 +478,18 @@ struct PersistentConnection {
     retain_waiters: RetainWaiters,
     shutdown_waiters: ReplyWaiters,
     connected: Arc<AtomicBool>,
+    /// The process of the service endpoint that this connection reached.
+    service_pid: u32,
 }
 
 /// The versions of a persistent service that is being replaced.
 struct Replacement {
     running: Option<String>,
     installed: String,
+    /// The process of the service endpoint, which ends before the installed service starts.
+    pid: u32,
+    /// How long the host waits for that process to end.
+    timeout: Duration,
 }
 
 struct State<O> {
@@ -987,6 +993,7 @@ impl<O: Owner> Sidecars<O> {
                 Arc::clone(&connection.shutdown_waiters),
             );
             let running = connection.version.clone();
+            let service_pid = connection.service_pid;
             if state.replacing.contains_key(name) {
                 return Err(format!("sidecar {name}: a replacement is running"));
             }
@@ -995,6 +1002,8 @@ impl<O: Owner> Sidecars<O> {
                 Replacement {
                     running,
                     installed: self.core.version(name),
+                    pid: service_pid,
+                    timeout: self.stop_timeout,
                 },
             );
             handles
@@ -2004,11 +2013,41 @@ impl<O: Owner> Core<O> {
                     retain_waiters,
                     shutdown_waiters,
                     connected,
+                    service_pid: endpoint.pid,
                 }),
             },
             threads,
         })
     }
+}
+
+/// Waits until the process of the service that `replace` closed has ended, so the installed service starts after it
+/// (docs/spec/terminal-runtime.md#updates). A process that does not end within the stop timeout fails the replacement:
+/// the error line names the sidecar, and the reconnection that follows reaches the service that still runs, so the
+/// sidecar stays outdated.
+fn await_replaced_service<O: Owner>(core: &Arc<Core<O>>, name: &str) {
+    let replaced = {
+        let state = core.state.lock().expect("sidecar state");
+        state
+            .replacing
+            .get(name)
+            .map(|replaced| (replaced.pid, replaced.timeout))
+    };
+    let Some((pid, timeout)) = replaced else {
+        return;
+    };
+    let failure =
+        match current().and_then(|platform| platform.wait_service_process_end(pid, timeout)) {
+            Ok(true) => return,
+            Ok(false) => format!("the service process {pid} did not end within {timeout:?}"),
+            Err(error) => error,
+        };
+    log_error(&format!("sidecar {name}"), format!("replace: {failure}"));
+    core.state
+        .lock()
+        .expect("sidecar state")
+        .replacing
+        .remove(name);
 }
 
 /// 끊긴 영속 연결을 다시 맺고 결과를 소유 표면에 알린다(V5-106). 이미 다른 경로가 다시
@@ -2022,6 +2061,7 @@ impl<O: Owner> Core<O> {
 /// 전송 경로의 계약은 그대로다: 차가운 전송의 live-unreachable 보고는 endpoint 를 바꾸지
 /// 않는다.
 fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
+    await_replaced_service(core, name);
     let mut outcome = revive_attempt(core, name);
     if let Err(reason) = &outcome {
         if refused_connect(reason, name) {

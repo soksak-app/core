@@ -55,3 +55,33 @@ func TestAServiceProcessOfAnotherUserExists(t *testing.T) {
 		t.Fatal("process 1 of another user must exist")
 	}
 }
+
+// contract: sidecars-transport.endpoint.waits-for-the-end-of-a-service-process
+func TestTheWaitForTheEndOfAServiceProcess(t *testing.T) {
+	current, err := platform.Current()
+	if err != nil {
+		t.Fatalf("platform failed: %v", err)
+	}
+	ending := exec.Command("sleep", "30")
+	if err := ending.Start(); err != nil {
+		t.Fatalf("start sleep failed: %v", err)
+	}
+	time.AfterFunc(150*time.Millisecond, func() { ending.Process.Kill() })
+	started := time.Now()
+	ended, err := current.WaitServiceProcessEnd(ending.Process.Pid, 10*time.Second)
+	if err != nil || !ended || time.Since(started) > 5*time.Second {
+		t.Fatalf("a process that ends within the timeout: ended %v after %v, %v", ended, time.Since(started), err)
+	}
+	ending.Wait()
+	running := exec.Command("sleep", "30")
+	if err := running.Start(); err != nil {
+		t.Fatalf("start sleep failed: %v", err)
+	}
+	defer func() { running.Process.Kill(); running.Wait() }()
+	if ended, err := current.WaitServiceProcessEnd(running.Process.Pid, 200*time.Millisecond); err != nil || ended {
+		t.Fatalf("a process that keeps running: ended %v, %v", ended, err)
+	}
+	if ended, err := current.WaitServiceProcessEnd(ending.Process.Pid, time.Second); err != nil || !ended {
+		t.Fatalf("a process that does not exist: ended %v, %v", ended, err)
+	}
+}
