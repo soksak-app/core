@@ -37,8 +37,8 @@ pub fn start_document(workspace: &Value, controls: &Value) -> Result<Vec<u8>, St
     .map_err(|error| error.to_string())
 }
 
-/// 시작 문서 요청을 요청한 webview 의 label 로 start 에 넘긴다. 다른 owner 와 다른 경로는 없는 문서다. 창을 찾지 못하면 page 를
-/// 시작하지 않고 400 으로, 다른 실패는 500 으로 답한다.
+/// Passes a start document request to start with the label of the requesting webview. Another owner or path is not
+/// found. When no window is found, it starts no page and answers 400; another failure answers 500.
 pub fn serve(
     owner: &str,
     path: &str,

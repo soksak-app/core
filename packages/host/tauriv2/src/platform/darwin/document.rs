@@ -95,7 +95,7 @@ pub fn create(
     Ok(handle)
 }
 
-/// http, https, file 또는 sok 주소를 연다. 그 밖의 주소이면 false 를 반환한다.
+/// Opens an http, https, file or sok address; returns false for another address.
 pub fn load(document: Handle, url: &str) -> Result<bool, String> {
     let url = CString::new(url).map_err(|e| e.to_string())?;
     Ok(unsafe { sp_document_load(document as *mut c_void, url.as_ptr()) })

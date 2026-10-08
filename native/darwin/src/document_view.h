@@ -38,7 +38,7 @@ bool sp_document_post(void *document, const char *json);
 // 호출자는 문서가 살아 있는 동안 context 를 유지해야 한다.
 void sp_document_set_event(void *document, sp_document_event event, void *context);
 
-// http, https, file 또는 sok 주소를 연다. 그 밖의 주소는 거부하고 false 를 반환한다.
+// Opens an http, https, file or sok address. Refuses another address and returns false.
 bool sp_document_load(void *document, const char *url);
 
 // action: 0 뒤로, 1 앞으로, 2 다시 읽기, 3 멈춤, 4 현재 항목에서 offset 만큼 떨어진 세션 기록 항목.

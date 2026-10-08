@@ -376,7 +376,7 @@ pub trait Platform: Send + Sync {
     ) -> Result<(), String>;
     /// Posts the JSON value json to the current plugin document; false when there is none.
     fn post_document(&self, document: Handle, json: &str) -> Result<bool, String>;
-    /// http, https, file 또는 sok 주소를 연다. 그 밖의 주소이면 false 를 반환한다. 메인 스레드에서 호출한다.
+    /// Opens an http, https, file or sok address; returns false for another address. Called on the main thread.
     fn load_document(&self, document: Handle, url: &str) -> Result<bool, String>;
     /// 문서의 페이지 확대를 정한다. 유한한 양수가 아니면 false 다.
     fn zoom_document(&self, document: Handle, zoom: f64) -> Result<bool, String>;

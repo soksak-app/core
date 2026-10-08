@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F111.7.4: `sok` 변경이 고친 주석을 영문으로 썼다.
 - F111.7.3: Tauri 애플리케이션이 `sok://core/start.json`으로 창을 시작하므로 `soksak` scheme이 딥링크에 비어 있다.
 - F111.7.2: 문서 영역이 plugin 문서를 `soksak-package://<plugin>/<path>` 대신 `sok://<plugin>/<path>`에서 연다.
 - F111.7.1: 명세가 웹뷰 안의 애플리케이션 문서를 `sok://<owner>/<path>`로 부르고, `soksak` scheme은 딥링크에 남기며, plugin의 문서를 plugin 문서라고 부른다.

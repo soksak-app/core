@@ -369,7 +369,7 @@ static NSString *pluginContentType(NSString *path) {
     [self report];
 }
 
-// 문서 영역은 웹 주소, 파일 주소, plugin 주소를 연다. 앱의 스킴은 거부한다.
+// A document region opens web addresses, file addresses and plugin addresses, and refuses the application's scheme.
 static BOOL webAddress(NSURL *url) {
     NSString *scheme = url.scheme.lowercaseString;
     return [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"]

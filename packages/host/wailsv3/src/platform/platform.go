@@ -335,7 +335,7 @@ type Platform interface {
 	SetDocumentMessage(document unsafe.Pointer, message func(value string)) error
 	// PostDocument posts the JSON value json to the current plugin document; false when there is none.
 	PostDocument(document unsafe.Pointer, json string) bool
-	// LoadDocument 는 http, https, file 또는 sok 주소를 연다. 그 밖의 주소이면 false 를 반환한다.
+	// LoadDocument opens an http, https, file or sok address; it returns false for another address.
 	LoadDocument(document unsafe.Pointer, url string) bool
 	// ZoomDocument 는 문서의 페이지 확대를 정한다. 유한한 양수가 아니면 false 를 반환한다.
 	ZoomDocument(document unsafe.Pointer, zoom float64) bool

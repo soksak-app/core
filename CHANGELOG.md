@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F111.7.4: the comments that the `sok` change touched are written in English.
 - F111.7.3: the Tauri application starts its window from `sok://core/start.json`, so the `soksak` scheme is free for deep links.
 - F111.7.2: document regions load plugin documents at `sok://<plugin>/<path>` instead of `soksak-package://<plugin>/<path>`.
 - F111.7.1: the specification addresses application documents inside webviews at `sok://<owner>/<path>`, keeps the `soksak` scheme for deep links, and calls a document of a plugin a plugin document.
