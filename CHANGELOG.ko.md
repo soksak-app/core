@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F128.2: host가 상주 service의 연결 손실을 관측이 아니라 오류 줄 `error: sidecar <name>: connection lost; restarted`(실패하면 `restart failed: <reason>`)로 쓴다.
 - F129: 창 검사의 준비는 바꾼 설정(`diagnostics.performance` 포함)을 검사가 끝날 때 되돌린다. 그래서 그 뒤에 검사 애플리케이션을 쓰는 사람도 performance trace를 가진다.
 - F124.3.6: 디버그 화면의 모든 파일이 같은 칸에 보기와 저장을 가지고, PNG 파일(캡처)은 이미지로 보인다. `debugRead`는 `kind` `text`이면 `text`를, `kind` `image`이면 `data:image/png;base64,` 주소 `image`를 답하고, 16 MB보다 큰 PNG 파일과 PNG signature가 없는 `.png` 파일을 거부한다. Wails runtime의 선택 파일 `/wails/custom.js`는 없는 page 파일로 알리지 않는다.
 - F127.2: 두 host가 내줄 수 없는 page 파일마다 한 번 `error: page asset: <path>: not found`를 쓴다. 파일 확장자가 없는 경로는 문서 경로이므로 알리지 않는다.

@@ -1922,15 +1922,24 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
             outcome = revive_attempt(core, name);
         }
     }
-    match &outcome {
-        Ok(true) => eprintln!("sidecar {name}: connection lost; restarted"),
-        Ok(false) => {}
-        Err(reason) => log_error(
-            &format!("sidecar {name}"),
-            format!("connection lost; restart failed: {reason}"),
-        ),
+    if let Some((place, text)) = connection_loss_report(name, &outcome) {
+        log_error(&place, text);
     }
     notify_connection(core, name, outcome.map(|_| ()));
+}
+
+/// The error line of a lost connection to a persistent service: the place and the text, or `None` when another path
+/// had already reconnected and wrote it (docs/spec/diagnostics.md).
+pub fn connection_loss_report(
+    name: &str,
+    outcome: &Result<bool, String>,
+) -> Option<(String, String)> {
+    let place = format!("sidecar {name}");
+    match outcome {
+        Ok(true) => Some((place, "connection lost; restarted".to_string())),
+        Ok(false) => None,
+        Err(reason) => Some((place, format!("connection lost; restart failed: {reason}"))),
+    }
 }
 
 /// 재시작 한 번. 이미 다른 경로가 다시 시작했으면 Ok(false), 시작에 실패하면 Err.

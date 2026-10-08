@@ -1597,7 +1597,7 @@ func (c *Sidecars) revivePersistent(name string) {
 		c.notifyConnection(name, failure)
 	case announced:
 		// 다른 경로(전송)가 이미 다시 시작했으면 알림도 그 호출이 보냈다.
-		log.Printf("sidecar %s: connection lost; restarted", name)
+		LogError("sidecar "+name, "connection lost; restarted")
 		c.notifyConnection(name, nil)
 	}
 }

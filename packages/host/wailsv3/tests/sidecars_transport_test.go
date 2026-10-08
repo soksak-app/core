@@ -1664,3 +1664,87 @@ func TestPersistentServiceOfAnotherVersionIsReportedOutdated(t *testing.T) {
 
 // text is a pointer to value.
 func text(value string) *string { return &value }
+
+// syncBuffer is a log writer that the test and the reader goroutines share.
+type syncBuffer struct {
+	mutex  sync.Mutex
+	buffer bytes.Buffer
+}
+
+func (b *syncBuffer) Write(data []byte) (int, error) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	return b.buffer.Write(data)
+}
+
+func (b *syncBuffer) String() string {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	return b.buffer.String()
+}
+
+// contract: sidecars-transport.persistent.lost-connection-writes-an-error-line
+func TestPersistentTransportWritesAnErrorLineForALostConnection(t *testing.T) {
+	var logged syncBuffer
+	previous := log.Writer()
+	log.SetOutput(&logged)
+	defer log.SetOutput(previous)
+	root := t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-lost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDirectory)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeHarnessEndpoint(t, root, socket)
+	// The first connection answers hello and one request and then ends; the second stays open until the host stops.
+	go func() {
+		for index := 0; index < 2; index++ {
+			connection, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer connection.Close()
+				reader := bufio.NewReader(connection)
+				if _, err := reader.ReadBytes('\n'); err != nil {
+					return
+				}
+				if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+					return
+				}
+				line, err := reader.ReadBytes('\n')
+				if err != nil {
+					return
+				}
+				if _, err := connection.Write(line); err != nil {
+					return
+				}
+				if index == 0 {
+					return
+				}
+				_, _ = reader.ReadBytes('\n')
+			}()
+		}
+	}()
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/only", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.seen) // the open echo
+	receiveSidecarMessage(t, owner.seen) // the connection notice of the reconnection
+	sidecars.Stop()
+	listener.Close()
+	count := strings.Count(logged.String(), "error: sidecar fixture-service: connection lost; restarted\n")
+	if count != 1 {
+		t.Fatalf("the log has %d lines of the lost connection: %q", count, logged.String())
+	}
+}

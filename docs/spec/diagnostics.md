@@ -45,11 +45,12 @@ Three forms of record exist, and each fact has the form that fits it.
 | a module of the main page fails to load or throws while it loads | `error: page start: <text> @ <file>:<line>` ([page start](native-host.md#page-start)) |
 | the host cannot serve a file that the page requests | `error: page asset: <path>: not found`, once for each path |
 | the main page throws or rejects after its first screen | `error: <where>: <text>` of the page's error display |
-| the WebContent process of a window ends | `error: page process: <window>: <reason>` |
 | a native call fails | `error: <where>: <text>` from `sp_log_error` |
 | a native fatal error (signal, uncaught exception) | one `error: fatal: <signal or exception>` line, then the process ends |
 | the Rust host panics | `error: panic: <where>: <text>` from the panic hook |
-| a sidecar process exits while the host runs | `error: sidecar <name>: exited <status>` |
+| the WebContent process of a window ends | `error: page process: <window>: <reason>` |
+| a sidecar process of standard input and output ends while the host runs | `error: sidecar <name>: failed: output closed: <exit status>` |
+| the connection to a persistent service ends while the host runs | `error: sidecar <name>: connection lost; restarted`, or `connection lost; restart failed: <reason>` |
 | a document region fails to navigate | `error: document <surface>: <text>` |
 | a `sok` command fails | the failure on its standard error and `error: sok <command>: <text>` in `application.log` |
 

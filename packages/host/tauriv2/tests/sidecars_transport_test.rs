@@ -1676,3 +1676,24 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
         sidecars.stop();
     }
 }
+
+// contract: sidecars-transport.persistent.lost-connection-writes-an-error-line
+#[test]
+fn a_lost_connection_is_reported_as_an_error_line() {
+    use soksak_host_tauriv2::sidecars::connection_loss_report;
+    assert_eq!(
+        connection_loss_report("fixture-service", &Ok(true)),
+        Some((
+            "sidecar fixture-service".to_string(),
+            "connection lost; restarted".to_string()
+        ))
+    );
+    assert_eq!(connection_loss_report("fixture-service", &Ok(false)), None);
+    assert_eq!(
+        connection_loss_report("fixture-service", &Err("refused".to_string())),
+        Some((
+            "sidecar fixture-service".to_string(),
+            "connection lost; restart failed: refused".to_string()
+        ))
+    );
+}

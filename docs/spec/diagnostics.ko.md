@@ -45,11 +45,12 @@
 | main page의 module이 불러오지 못하거나 불러오는 중 던진다 | `error: page start: <text> @ <file>:<line>`([page 시작](native-host.ko.md#page-시작)) |
 | host가 page가 요청한 파일을 내줄 수 없다 | `error: page asset: <path>: not found`, 경로마다 한 번 |
 | main page가 첫 화면 뒤에 던지거나 reject한다 | page 오류 표시의 `error: <where>: <text>` |
-| 창의 WebContent process가 끝난다 | `error: page process: <window>: <reason>` |
 | native 호출이 실패한다 | `sp_log_error`의 `error: <where>: <text>` |
 | native 치명 오류(signal, 잡히지 않은 예외) | `error: fatal: <signal 또는 예외>` 한 줄, 그 뒤 process가 끝난다 |
 | Rust host가 panic한다 | panic hook의 `error: panic: <where>: <text>` |
-| host가 실행되는 동안 sidecar process가 끝난다 | `error: sidecar <name>: exited <status>` |
+| 창의 WebContent process가 끝난다 | `error: page process: <window>: <reason>` |
+| host가 실행되는 동안 표준 입출력 sidecar process가 끝난다 | `error: sidecar <name>: failed: output closed: <exit status>` |
+| host가 실행되는 동안 상주 service의 연결이 끝난다 | `error: sidecar <name>: connection lost; restarted`, 또는 `connection lost; restart failed: <reason>` |
 | document region이 navigation에 실패한다 | `error: document <surface>: <text>` |
 | `sok` 명령이 실패한다 | standard error의 실패와 `application.log`의 `error: sok <command>: <text>` |
 
