@@ -75,6 +75,7 @@ const METHOD = {
   sidecarSend: "SidecarSend",
   sidecarsRetain: "SidecarsRetain",
   sidecarsReplace: "SidecarsReplace",
+  sidecarsOutdated: "SidecarsOutdated",
   clipboardRead: "ClipboardRead",
   linkOpen: "LinkOpen",
   notify: "Notify",

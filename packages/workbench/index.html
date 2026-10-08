@@ -550,6 +550,7 @@ const coreExposure = installCoreExposure({
 // 불러오지 않은 플러그인의 탭은 설치 상태에 따라 자리 표시의 이유가 정해진다(docs/spec/plugins.md). 상태를 읽으면
 // 자리 표시를 다시 그린다. 읽기 실패는 그 상태의 오류로 남는다.
 await pluginOperations.refresh();
+await pluginOperations.refreshOutdated();
 // 첫 실행이면 starter pack 을 설치하고, 설치한 plugin 을 불러오도록 page 를 다시 불러온다(docs/spec/installation.md).
 // 다시 불러오는 동안 이 page 는 space 를 만들지 않는다.
 if (await pluginOperations.installStarter(starterPack(), defaultRegistry(), log, showError)) {

@@ -55,6 +55,7 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         sidecar_send,
         sidecars_retain,
         sidecars_replace,
+        sidecars_outdated,
         theme,
         set_theme,
         set_menu_language,
@@ -319,6 +320,12 @@ struct RetainedSurface {
 #[derive(serde::Deserialize)]
 struct RetainRequest {
     surfaces: Vec<RetainedSurface>,
+}
+
+/// The outdated persistent services (docs/spec/installation.md).
+#[tauri::command(async)]
+fn sidecars_outdated(window: Window) -> Vec<crate::sidecars::OutdatedSidecar> {
+    window.state::<WindowSidecars>().outdated()
 }
 
 #[derive(serde::Deserialize)]

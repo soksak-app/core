@@ -790,6 +790,29 @@
                   }
                 }
               }
+            },
+            "outdated": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "sidecar": {
+                    "type": "string"
+                  },
+                  "running": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "installed": {
+                    "type": "string"
+                  },
+                  "sessions": {
+                    "type": "number"
+                  }
+                }
+              }
             }
           }
         }
@@ -2338,6 +2361,22 @@
         "timeout": 600000
       },
       {
+        "name": "core.plugins.replace",
+        "description": "Replaces the outdated persistent service of a sidecar after its sessions end, as the plugin screen offers, and reads the outdated sidecars again; fails with the host error when the sidecar has no running service of another version.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sidecar": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
         "name": "core.plugins.registry",
         "description": "Sets the registry index that plugin operations read, through the host, as sok registry use does, and reads the plugin state again.",
         "params": {
@@ -3323,6 +3362,16 @@
       {
         "name": "core.library.plugins.action",
         "description": "The action buttons of the plugin cards in document order: 설치, 업데이트, 사용 or 사용 안 함, and 제거, each bound to its core.plugins command.",
+        "many": true
+      },
+      {
+        "name": "core.library.plugins.outdated",
+        "description": "The rows of the outdated persistent services above the plugin cards, in sidecar order.",
+        "many": true
+      },
+      {
+        "name": "core.library.plugins.replace",
+        "description": "The buttons that end the sessions of an outdated service and replace it, in the order of the rows.",
         "many": true
       },
       {

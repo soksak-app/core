@@ -365,6 +365,14 @@ func (h *Host) SidecarsRetain(ctx context.Context, reqJSON json.RawMessage) (Ret
 	return RetainResult{Closed: closed}, err
 }
 
+// SidecarsOutdated returns the outdated persistent services (docs/spec/installation.md).
+func (h *Host) SidecarsOutdated(ctx context.Context) ([]OutdatedSidecar, error) {
+	if _, err := h.surface(ctx); err != nil {
+		return nil, err
+	}
+	return h.sidecars.Outdated(), nil
+}
+
 // ReplaceRequest names the sidecar whose outdated service the page asks the host to replace.
 type ReplaceRequest struct {
 	Sidecar string `json:"sidecar"`

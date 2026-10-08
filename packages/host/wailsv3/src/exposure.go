@@ -1433,6 +1433,7 @@ func (b hostBackend) sidecarsState() map[string]any {
 
 // sidecarsChanged 는 host.sidecars 를 감시하는 연결에 새 값을 보낸다.
 func (h *Host) sidecarsChanged() {
+	h.notifySidecars()
 	if h.endpoint == nil {
 		return
 	}

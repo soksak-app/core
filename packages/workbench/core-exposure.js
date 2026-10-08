@@ -39,7 +39,7 @@ import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
 import { foldSection, onSectionsChange, selectSection, sidebarsState } from "./sidebar-sections.js";
 import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
-import { followPluginChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
+import { followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 
 /* 감시 중인 코어 status 의 수신자. */
 const watchers = new Set();
@@ -275,6 +275,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   onSectionsChange(coreChanged);
   onPluginOperations(coreChanged);
   followPluginChanges(applyPluginChange);
+  followSidecarChanges();
   onTabReports(coreChanged);
   status("core.surfaces", surfacesState);
   status("core.drop", () => lastDrop);
@@ -419,6 +420,12 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.plugins.enable", pluginCommand("enable"));
   registry.command("core.plugins.disable", pluginCommand("disable"));
   registry.command("core.plugins.apply", () => applyPluginChange());
+  registry.command("core.plugins.replace", async ({ sidecar }) => {
+    if (typeof sidecar !== "string" || sidecar === "") {
+      throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "sidecar must be a non-empty string");
+    }
+    await pluginOperations.replace(sidecar);
+  });
   registry.command("core.plugins.registry", async ({ index }) => {
     if (typeof index !== "string" || index === "") {
       throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "index must be a non-empty string");

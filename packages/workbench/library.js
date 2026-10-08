@@ -73,6 +73,7 @@ export function createLibrary(root, rendered = () => {}) {
   const cards = new Map();
   // 플러그인 id 마다 그 카드와 카드를 만든 값, 그리고 목록 위의 실패 글이다.
   const pluginCards = new Map();
+  const outdatedRows = new Map();
   const failureLine = { key: null, node: null };
   const noPlugins = element('p', 'library-plugins-none', '찾는 플러그인이 없습니다.');
   const add=element('button','library-add','＋ 프로젝트 만들기');add.type='button';add.dataset.action='create';add.dataset.expose='core.library.add';
@@ -270,6 +271,26 @@ export function createLibrary(root, rendered = () => {}) {
       failureLine.key = null;
       hideError(null, 'library plugins');
     }
+    // An outdated persistent service stays until its sessions end; the action ends them and replaces the service.
+    if (pluginOperations.hosted) {
+      for (const item of status.outdated) {
+        const key = JSON.stringify(item);
+        const kept = outdatedRows.get(item.sidecar);
+        if (kept?.key === key) { wanted.push(kept.node); continue; }
+        const node = element('div', 'library-outdated');
+        node.dataset.expose = 'core.library.plugins.outdated'; node.dataset.sidecar = item.sidecar;
+        // A service that sent no version is of an earlier version.
+        const running = item.running === null ? '이전 버전' : item.running;
+        node.append(element('p', 'library-outdated__text', `${item.sidecar}: ${running} → ${item.installed}`));
+        const button = element('button', 'ui-button', `터미널 ${item.sessions}개를 끝내고 적용`); button.type = 'button';
+        button.dataset.expose = 'core.library.plugins.replace';
+        mark(button, 'core.plugins.replace', { sidecar: item.sidecar });
+        node.append(button);
+        outdatedRows.set(item.sidecar, { key, node });
+        wanted.push(node);
+      }
+      for (const name of [...outdatedRows.keys()]) if (!status.outdated.some((item) => item.sidecar === name)) outdatedRows.delete(name);
+    }
     const rows = matchPlugins(status.plugins, pluginQuery);
     const running = status.operation?.state === 'running';
     for (const row of rows) {
@@ -418,7 +439,7 @@ export function createLibrary(root, rendered = () => {}) {
       if(!PAGES.some(([id])=>id===next)) throw new Error(`unknown library page ${next}`);
       page=next;
       // 플러그인 페이지는 보일 때 host 의 상태를 읽는다. 읽기 실패는 상태의 error 로 보고된다.
-      if(page==='plugins') pluginOperations.refresh();
+      if(page==='plugins') { pluginOperations.refresh(); pluginOperations.refreshOutdated(); }
       render();
     },
     searchPlugins(query){

@@ -127,6 +127,19 @@ func (h *Host) PluginsUseRegistry(requestJSON json.RawMessage) (any, error) {
 	return h.plugins.UseRegistry(request)
 }
 
+// notifySidecars sends sidecars-changed to every window (docs/spec/installation.md).
+func (h *Host) notifySidecars() {
+	h.mu.Lock()
+	windows := make([]*Surfaces, 0, len(h.windows))
+	for _, s := range h.windows {
+		windows = append(windows, s)
+	}
+	h.mu.Unlock()
+	for _, s := range windows {
+		s.Emit("sidecars-changed")
+	}
+}
+
 // notifyPlugins 는 모든 창에 plugins-changed 를 보낸다.
 func (h *Host) notifyPlugins(change PluginsChanged) {
 	h.mu.Lock()

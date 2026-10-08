@@ -23,6 +23,8 @@ test("the plugin page of the library lists each plugin with its description, ver
   const listeners = [];
   const status = {
     registry: "file:///registry/index.json", error: null, reload: false,
+    // A persistent service that runs another version than the installed one, with the sessions that its replacement ends.
+    outdated: [{ sidecar: "@fixture/sidecar-service", running: "0.0.3", installed: "0.0.7", sessions: 2 }],
     operation: { action: "install", plugin: "db", state: "running", error: null },
     plugins: [
       { id: "db", name: "DB", description: "데이터베이스 표면.", state: "available", installed: null, latest: "2.0.0",
@@ -37,7 +39,11 @@ test("the plugin page of the library lists each plugin with its description, ver
         latest: "1.0.0", sidecars: [] },
     ],
   };
-  const operations = { hosted: true, status: () => status, failure: () => null, refresh: async () => { refreshed++; } };
+  let outdatedRefreshed = 0;
+  const operations = {
+    hosted: true, status: () => status, failure: () => null, refresh: async () => { refreshed++; },
+    refreshOutdated: async () => { outdatedRefreshed++; },
+  };
   t.mock.module("../installed-plugins.js", { namedExports: {
     pluginOperations: operations, onPluginOperations: (fn) => { listeners.push(fn); },
   } });
@@ -56,7 +62,15 @@ test("the plugin page of the library lists each plugin with its description, ver
 
     library.actions.page("plugins");
     assert.equal(refreshed, 1, "showing the plugin page did not read the plugin state");
+    assert.equal(outdatedRefreshed, 1, "showing the plugin page did not read the outdated sidecars");
     assert.equal(library.state().page, "plugins");
+    // Each outdated service is a row above the cards with the action that ends its sessions and replaces it.
+    const outdatedRows = [...root.querySelectorAll('[data-expose="core.library.plugins.outdated"]')];
+    assert.deepEqual(outdatedRows.map((row) => [row.querySelector("p").textContent, row.querySelector("button").textContent,
+      row.querySelector("button").dataset.command, row.querySelector("button").dataset.params]), [[
+      "@fixture/sidecar-service: 0.0.3 → 0.0.7", "터미널 2개를 끝내고 적용", "core.plugins.replace",
+      JSON.stringify({ sidecar: "@fixture/sidecar-service" }),
+    ]]);
     assert.deepEqual(library.state().plugins.shown, ["db", "term", "kept", "plain"]);
     assert.deepEqual(library.state().plugins.actions.map(({ plugin, action, disabled }) => `${plugin} ${action} ${disabled}`), [
       "db install true", "term update true", "term disable true", "term remove true", "kept apply true", "kept disable true", "kept remove true",

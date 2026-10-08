@@ -209,3 +209,32 @@ test("setting the registry runs pluginsUseRegistry and reads the state again", a
   const hostless = createPluginOperations({ host: null, loaded: () => [], changed: () => {} });
   await assert.rejects(hostless.useRegistry("https://127.0.0.1:8443/index.json"), /plugin operations need a native host/);
 });
+
+test("status reports the outdated sidecars that the host lists", async () => {
+  const outdated = [{ sidecar: "@fixture/sidecar-service", running: "0.0.3", installed: "0.0.7", sessions: 2 }];
+  const operations = createPluginOperations({ host: fakeHost({ sidecarsOutdated: [outdated] }), loaded: () => loaded, changed: () => {} });
+  assert.deepEqual(operations.status().outdated, []);
+  await operations.refreshOutdated();
+  assert.deepEqual(operations.status().outdated, outdated);
+});
+
+test("replacing a sidecar runs the host call and reads the outdated sidecars again, also after a failure", async () => {
+  const host = fakeHost({
+    sidecarsReplace: [{}, new Error("sidecar vt: replace: close owner: boom")],
+    sidecarsOutdated: [[], [{ sidecar: "vt", running: "0.0.3", installed: "0.0.7", sessions: 0 }]],
+  });
+  const operations = createPluginOperations({ host, loaded: () => loaded, changed: () => {} });
+  await operations.replace("vt");
+  await assert.rejects(operations.replace("vt"), /close owner: boom/);
+  assert.deepEqual(host.calls, [
+    ["sidecarsReplace", { sidecar: "vt" }], ["sidecarsOutdated"], ["sidecarsReplace", { sidecar: "vt" }], ["sidecarsOutdated"],
+  ]);
+  assert.equal(operations.status().outdated.length, 1);
+});
+
+test("without a host the outdated sidecars are empty and replacing fails", async () => {
+  const operations = createPluginOperations({ host: null, loaded: () => loaded, changed: () => {} });
+  await operations.refreshOutdated();
+  assert.deepEqual(operations.status().outdated, []);
+  await assert.rejects(operations.replace("vt"), /plugin operations need a native host/);
+});

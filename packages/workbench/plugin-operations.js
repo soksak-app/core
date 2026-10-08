@@ -81,6 +81,31 @@ export function createPluginOperations({ host, loaded, changed }) {
   // 읽기 실패는 {kind, message} 다. kind 는 registry index 를 읽지 못한 index 나 plugin 상태를 읽지 못한 state 다.
   let failure = null;
   let operation = null;
+  // The outdated persistent services that the host reports: `[{sidecar, running, installed, sessions}]`.
+  let outdated = [];
+
+  /** Reads the outdated sidecars of the host again. A read that fails is reported as the error of the state. */
+  async function refreshOutdated() {
+    if (!host) return;
+    try {
+      outdated = await host.call("sidecarsOutdated");
+    } catch (error) {
+      outdated = [];
+      failure = { kind: "state", message: error.message };
+    } finally {
+      changed();
+    }
+  }
+
+  /** Replaces the outdated service of a sidecar, then reads the outdated sidecars again, also after a failure. */
+  async function replace(sidecar) {
+    if (!host) throw new Error("plugin operations need a native host");
+    try {
+      await host.call("sidecarsReplace", { sidecar });
+    } finally {
+      await refreshOutdated();
+    }
+  }
 
   /** host 의 상태를 다시 읽는다. 읽지 못하면 그 오류를 failure 로 보고한다. */
   async function refresh() {
@@ -132,6 +157,7 @@ export function createPluginOperations({ host, loaded, changed }) {
       operation,
       reload: rows.some((row) => row.state === "reload"),
       updates: rows.filter(hasUpdate).map((row) => ({ id: row.id, installed: row.installed.version, latest: row.latest })),
+      outdated,
     };
   }
 
@@ -159,5 +185,5 @@ export function createPluginOperations({ host, loaded, changed }) {
     return true;
   }
 
-  return { refresh, run: runAction, useRegistry, status, installStarter, failure: () => failure, hosted: Boolean(host) };
+  return { refresh, refreshOutdated, replace, run: runAction, useRegistry, status, installStarter, failure: () => failure, hosted: Boolean(host) };
 }

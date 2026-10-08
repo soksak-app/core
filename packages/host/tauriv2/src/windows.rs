@@ -266,6 +266,15 @@ pub(crate) fn notify_workspace(app: &AppHandle) {
     }
 }
 
+/// Sends sidecars-changed to every window (docs/spec/installation.md).
+pub(crate) fn notify_sidecars(app: &AppHandle) {
+    for window in app.windows().values() {
+        if let Err(error) = emit_window(window, "sidecars-changed", ()) {
+            log_error("sidecars-changed", error);
+        }
+    }
+}
+
 /// 모든 창에 plugins-changed 를 보낸다.
 pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
     for window in app.windows().values() {

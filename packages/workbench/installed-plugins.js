@@ -22,6 +22,12 @@ export function onPluginOperations(fn) {
 export function followPluginChanges(apply) {
   if (host) host.on("plugins-changed", async () => {
     await pluginOperations.refresh();
+    await pluginOperations.refreshOutdated();
     await apply();
   });
+}
+
+/** On sidecars-changed from the host, reads the outdated sidecars again (docs/spec/installation.md). */
+export function followSidecarChanges() {
+  if (host) host.on("sidecars-changed", () => pluginOperations.refreshOutdated());
 }

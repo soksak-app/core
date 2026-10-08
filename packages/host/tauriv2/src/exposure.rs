@@ -988,6 +988,7 @@ fn sidecars_status(app: &AppHandle) -> Value {
 pub(crate) fn sidecars_changed(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
+        windows::notify_sidecars(&app);
         let Some(notifier) = app
             .state::<Exposure>()
             .endpoint
