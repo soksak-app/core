@@ -36,6 +36,8 @@ test("record checks accept facts that contain hexadecimal values and the rule's 
     "기록은 누가 요청·결정·발견했는지 적지 않는다.",
     "Plugin 발견/소유 규칙.",
     "The user's settings are kept.",
+    "The build-machine rehearsal이 macOS에서 통과했다.",
+    "The rehearsal of this macOS runner passed.",
   ]) assert.deepEqual(recordViolations(line, "doc.md"), [], line);
   assert.deepEqual(recordViolations("```\nFound on 2026-10-05\n```\n", "doc.md"), [], "a code block is not a record statement");
 });

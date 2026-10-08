@@ -8,7 +8,8 @@ export const RECORD_PATTERNS = [
   ["CI run number", /\brun \d{8,}\b/i],
   ["personal path", /\/Users\/|~\/backup/],
   ["account of who found or requested", /\bFound (?:on|while)\b|\bRequested by\b|\bas the user asked\b|\bthe user (?:asked|decided|requested)\b|사용자 요청|사용자가 요청|발견:|\d{4}-\d{2}-\d{2}[^.\n]{0,80}?발견했/i],
-  ["local environment", /\bthis (?:machine|Mac)\b|이 머신|이 Mac/i],
+  // macOS 는 운영 체제 이름이다. "Mac" 은 뒤에 글자가 없을 때만 그 컴퓨터를 가리킨다.
+  ["local environment", /\b[Tt]his (?:machine|Mac)(?![A-Za-z])|이 (?:머신|Mac)(?![A-Za-z])/],
 ];
 
 // 마크다운 코드 블록을 같은 수의 빈 줄로 바꾼다. 위반의 줄 번호가 원본과 같게 유지된다.
