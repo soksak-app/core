@@ -62,10 +62,10 @@ func TestDebugCopyCopiesAFileOfTheLogsFolderOnly(t *testing.T) {
 		t.Fatalf("copied %q", data)
 	}
 	for path, want := range map[string]string{
-		"plugins/installed.json": "debug: plugins/installed.json is not a file under logs/",
+		"plugins/installed.json":         "debug: plugins/installed.json is not a file under logs/",
 		"logs/../plugins/installed.json": "debug: logs/../plugins/installed.json is not a file under logs/",
-		"logs/missing.log": "debug: logs/missing.log is not a file under logs/",
-		"logs/captures": "debug: logs/captures is not a file under logs/",
+		"logs/missing.log":               "debug: logs/missing.log is not a file under logs/",
+		"logs/captures":                  "debug: logs/captures is not a file under logs/",
 	} {
 		if err := host.DebugCopy(config, path, filepath.Join(t.TempDir(), "copy")); err == nil || err.Error() != want {
 			t.Fatalf("copy %s: %v, want %q", path, err, want)
