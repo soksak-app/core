@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F109: the files sidecar specifies `readBytes` and `writeBytes` for binary files up to 32 MiB.
 - F108: every declared version is 0.0.8, and core 0.0.8 is released.
 - F102.1.7: hosts serve the shared modules of extension points at `/shared/<plugin id>.<point>/<specifier>.js`, so the Tauri webview loads them as JavaScript.
 - F102.11: core commands no longer wait without end for a tab whose surface composition is `dom`.

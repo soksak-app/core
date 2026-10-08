@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F109: files sidecar는 32 MiB까지의 binary 파일에 `readBytes`와 `writeBytes`를 명세한다.
 - F108: 선언된 모든 version은 0.0.8이고, core 0.0.8을 릴리스했다.
 - F102.1.7: host는 확장 지점의 공유 module을 `/shared/<plugin id>.<point>/<specifier>.js`에서 내보내므로, Tauri webview가 그것을 JavaScript로 불러온다.
 - F102.11: core 명령은 표면 composition이 `dom`인 탭을 더는 끝없이 기다리지 않는다.
