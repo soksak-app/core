@@ -76,6 +76,7 @@
     "core.plugins.enable",
     "core.plugins.disable",
     "core.plugins.apply",
+    "core.plugins.update-all",
     "core.plugins.replace",
     "core.plugins.registry",
     "core.plugins.browse",

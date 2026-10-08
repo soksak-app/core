@@ -25,6 +25,8 @@ test("the plugin page of the library lists each plugin with its description, ver
     registry: "file:///registry/index.json", error: null, reload: false,
     // A persistent service that runs another version than the installed one, with the sessions that its replacement ends.
     outdated: [{ sidecar: "@fixture/sidecar-service", running: "0.0.3", installed: "0.0.7", sessions: 2 }],
+    // The plugins that the registry lists in a newer version.
+    updates: [{ id: "term", installed: "0.1.0", latest: "0.2.0" }],
     operation: { action: "install", plugin: "db", state: "running", error: null },
     plugins: [
       { id: "db", name: "DB", description: "데이터베이스 표면.", state: "available", installed: null, latest: "2.0.0",
@@ -71,6 +73,11 @@ test("the plugin page of the library lists each plugin with its description, ver
       "@fixture/sidecar-service: 0.0.3 → 0.0.7", "터미널 2개를 끝내고 적용", "core.plugins.replace",
       JSON.stringify({ sidecar: "@fixture/sidecar-service" }),
     ]]);
+    // The update list names each update and offers one action that updates all of them.
+    const updateRows = [...root.querySelectorAll('[data-expose="core.library.plugins.updates"]')];
+    assert.deepEqual(updateRows.map((row) => row.textContent), ["term: 0.1.0 → 0.2.0"]);
+    const updateAll = root.querySelector('[data-expose="core.library.plugins.update-all"]');
+    assert.deepEqual([updateAll.textContent, updateAll.dataset.command], ["모두 업데이트", "core.plugins.update-all"]);
     assert.deepEqual(library.state().plugins.shown, ["db", "term", "kept", "plain"]);
     assert.deepEqual(library.state().plugins.actions.map(({ plugin, action, disabled }) => `${plugin} ${action} ${disabled}`), [
       "db install true", "term update true", "term disable true", "term remove true", "kept apply true", "kept disable true", "kept remove true",

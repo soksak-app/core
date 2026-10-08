@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F117.7.1: the plugin screen lists the plugins that the registry lists in a newer version above the cards, as `<id>: <installed> → <latest>`, with the action 모두 업데이트 bound to the new command `core.plugins.update-all`, which updates them in id order and stops at the first failure.
 - F122.5: removing a project that another window shows asks that window: `windows.askRemoveProject` sends the new host call `projectRemoveAsk`, the host sends `project-remove-request` to the window that shows the project, that window asks for each modified tab and answers with `projectRemoveAnswer`, and the removal waits for the answer; a kept tab keeps the project in the registry and `core.project.close` answers `closed: false`. A window that ends while it is asked allows the removal. `core.project.close`, `core.library.remove` and `core.space.close` declare `timeout` 600000 because they wait for a person.
 - F131: recorded three single errors of the window-close checks that did not recur in six runs; the records that show their cause are in place.
 - F122.4: `core.project.close` asks for each modified tab of the window that shows the project with 저장하고 닫기, 저장하지 않고 닫기 and 닫지 않기 before it removes the project, and answers `{closed}`; keeping a tab keeps the project.

@@ -427,6 +427,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.plugins.enable", pluginCommand("enable"));
   registry.command("core.plugins.disable", pluginCommand("disable"));
   registry.command("core.plugins.apply", () => applyPluginChange());
+  registry.command("core.plugins.update-all", () => pluginOperations.updateAll());
   registry.command("core.plugins.replace", async ({ sidecar }) => {
     if (typeof sidecar !== "string" || sidecar === "") {
       throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "sidecar must be a non-empty string");

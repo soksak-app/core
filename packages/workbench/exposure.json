@@ -2376,6 +2376,18 @@
         "timeout": 600000
       },
       {
+        "name": "core.plugins.update-all",
+        "description": "Updates the plugins that the registry lists in a newer version, in id order, one after the other, and reads the plugin state again after each; stops at the first failure with the host error and does nothing when no plugin has an update.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 600000
+      },
+      {
         "name": "core.plugins.replace",
         "description": "Replaces the outdated persistent service of a sidecar after its sessions end, as the plugin screen offers, and reads the outdated sidecars again; fails with the host error when the sidecar has no running service of another version.",
         "params": {
@@ -3384,6 +3396,15 @@
         "name": "core.library.plugins.outdated",
         "description": "The rows of the outdated persistent services above the plugin cards, in sidecar order.",
         "many": true
+      },
+      {
+        "name": "core.library.plugins.updates",
+        "description": "The rows of the plugins that the registry lists in a newer version, above the plugin cards, in id order.",
+        "many": true
+      },
+      {
+        "name": "core.library.plugins.update-all",
+        "description": "The button that updates every plugin of the update list."
       },
       {
         "name": "core.library.plugins.replace",

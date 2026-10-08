@@ -238,3 +238,29 @@ test("without a host the outdated sidecars are empty and replacing fails", async
   assert.deepEqual(operations.status().outdated, []);
   await assert.rejects(operations.replace("vt"), /plugin operations need a native host/);
 });
+
+test("update-all updates the plugins of updates one after the other and stops at the first failure", async () => {
+  const outdated = { ...state, installed: { ...state.installed, plugins: {
+    term: { version: "0.1.0", enabled: true, sidecars: {} }, db: { version: "1.0.0", enabled: true, sidecars: {} },
+  } } };
+  const host = fakeHost({
+    pluginsState: [outdated, outdated, outdated, outdated],
+    pluginsRun: [{}, new Error("plugin term cannot be updated")],
+  });
+  const operations = createPluginOperations({ host, loaded: () => loaded, changed: () => {} });
+  await operations.refresh();
+  assert.deepEqual(operations.status().updates.map((update) => update.id), ["db", "term"]);
+  await assert.rejects(operations.updateAll(), /plugin term cannot be updated/);
+  assert.deepEqual(host.calls, [
+    ["pluginsState"], ["pluginsRun", { action: "update", plugin: "db" }], ["pluginsState"],
+    ["pluginsRun", { action: "update", plugin: "term" }], ["pluginsState"],
+  ]);
+  // Without an update the command does nothing and asks the host for nothing.
+  const newest = { ...state, installed: { ...state.installed, plugins: { term: { version: "0.10.0", enabled: true, sidecars: {} } } } };
+  const current = fakeHost({ pluginsState: [newest] });
+  const quiet = createPluginOperations({ host: current, loaded: () => loaded, changed: () => {} });
+  await quiet.refresh();
+  assert.deepEqual(quiet.status().updates, []);
+  await quiet.updateAll();
+  assert.deepEqual(current.calls, [["pluginsState"]]);
+});

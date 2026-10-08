@@ -74,6 +74,7 @@ export function createLibrary(root, rendered = () => {}) {
   // 플러그인 id 마다 그 카드와 카드를 만든 값, 그리고 목록 위의 실패 글이다.
   const pluginCards = new Map();
   const outdatedRows = new Map();
+  const updateList = { key: null, node: null };
   const failureLine = { key: null, node: null };
   const noPlugins = element('p', 'library-plugins-none', '찾는 플러그인이 없습니다.');
   const add=element('button','library-add','＋ 프로젝트 만들기');add.type='button';add.dataset.action='create';add.dataset.expose='core.library.add';
@@ -270,6 +271,27 @@ export function createLibrary(root, rendered = () => {}) {
     } else {
       failureLine.key = null;
       hideError(null, 'library plugins');
+    }
+    // The plugins that the registry lists in a newer version, with the action that updates all of them.
+    if (pluginOperations.hosted && status.updates.length) {
+      const key = JSON.stringify(status.updates);
+      if (updateList.key !== key) {
+        updateList.key = key;
+        const node = element('div', 'library-updates');
+        for (const update of status.updates) {
+          const row = element('p', 'library-updates__row', `${update.id}: ${update.installed} → ${update.latest}`);
+          row.dataset.expose = 'core.library.plugins.updates'; row.dataset.plugin = update.id;
+          node.append(row);
+        }
+        const all = element('button', 'ui-button', '모두 업데이트'); all.type = 'button';
+        all.dataset.expose = 'core.library.plugins.update-all';
+        mark(all, 'core.plugins.update-all');
+        node.append(all);
+        updateList.node = node;
+      }
+      wanted.push(updateList.node);
+    } else {
+      updateList.key = null;
     }
     // An outdated persistent service stays until its sessions end; the action ends them and replaces the service.
     if (pluginOperations.hosted) {

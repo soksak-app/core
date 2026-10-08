@@ -26,7 +26,7 @@ test("a library render keeps the controls of unchanged project cards in the docu
   } } });
   t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
   t.mock.module("../installed-plugins.js", { namedExports: {
-    pluginOperations: { hosted: false, status: () => ({ plugins: [], operation: null, outdated: [] }), failure: () => null, refresh: async () => {}, refreshOutdated: async () => {} },
+    pluginOperations: { hosted: false, status: () => ({ plugins: [], operation: null, outdated: [], updates: [] }), failure: () => null, refresh: async () => {}, refreshOutdated: async () => {} },
     onPluginOperations: () => {},
   } });
   const { createLibrary } = await import("../library.js?redraw");
@@ -66,7 +66,7 @@ test("a plugin page render keeps the controls of unchanged plugin cards in the d
     element.dataset.command = command; element.dataset.params = JSON.stringify(params ?? {});
   } } });
   t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
-  const status = { registry: "file:///registry/index.json", error: null, restart: false, operation: null, outdated: [], plugins: [
+  const status = { registry: "file:///registry/index.json", error: null, restart: false, operation: null, outdated: [], updates: [], plugins: [
     { id: "term", name: "터미널", description: "", state: "loaded", installed: { version: "0.1.0", enabled: true }, latest: "0.1.0", sidecars: [] },
   ] };
   t.mock.module("../installed-plugins.js", { namedExports: {

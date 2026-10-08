@@ -138,6 +138,12 @@ export function createPluginOperations({ host, loaded, changed }) {
     }
   }
 
+  /** Updates the plugins of `updates` one after the other and stops at the first failure (docs/spec/installation.md). */
+  async function updateAll() {
+    if (!host) throw new Error("plugin operations need a native host");
+    for (const update of status().updates) await runAction("update", update.id);
+  }
+
   /** registry index 를 정하고 상태를 다시 읽는다(docs/spec/installation.md). */
   async function useRegistry(index) {
     if (!host) throw new Error("plugin operations need a native host");
@@ -185,5 +191,5 @@ export function createPluginOperations({ host, loaded, changed }) {
     return true;
   }
 
-  return { refresh, refreshOutdated, replace, run: runAction, useRegistry, status, installStarter, failure: () => failure, hosted: Boolean(host) };
+  return { refresh, refreshOutdated, replace, run: runAction, updateAll, useRegistry, status, installStarter, failure: () => failure, hosted: Boolean(host) };
 }
