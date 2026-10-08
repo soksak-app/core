@@ -135,6 +135,10 @@ func (implementation) PreferredLanguage() (string, error) {
 	return "", unsupported("preferred language")
 }
 
+func (implementation) OSVersion() (string, error) {
+	return "", unsupported("operating system version")
+}
+
 func (implementation) MenuSelect(string, string) error {
 	return unsupported("application menu")
 }

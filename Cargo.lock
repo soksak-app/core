@@ -3220,6 +3220,7 @@ version = "0.0.8"
 dependencies = [
  "base64 0.22.1",
  "block2",
+ "flate2",
  "libc",
  "objc2",
  "pkg-config",
@@ -3227,6 +3228,7 @@ dependencies = [
  "serde_json",
  "signal-hook",
  "soksak-sok-tauriv2",
+ "tar",
  "tauri",
  "tauri-plugin-dialog",
  "tempfile",

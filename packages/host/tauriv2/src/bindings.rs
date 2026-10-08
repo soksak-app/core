@@ -84,7 +84,11 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         notification_state,
         plugins_state,
         plugins_run,
-        plugins_use_registry
+        plugins_use_registry,
+        debug_files,
+        debug_record,
+        debug_save,
+        debug_save_all
     ]
 }
 
@@ -531,6 +535,42 @@ fn clipboard_read(
 fn link_open(window: Window, request: Argument<link::OpenRequest>) -> Result<(), String> {
     let Argument(request) = request;
     link::open(&window, request)
+}
+
+/// The files of the logs folder (docs/spec/debug.md).
+#[tauri::command(async)]
+fn debug_files(window: Window) -> Result<Vec<crate::debug::DebugFile>, String> {
+    let directory = window
+        .state::<crate::workspace::Workspace>()
+        .directory()
+        .to_path_buf();
+    crate::debug::list(&directory)
+}
+
+/// Records the state of every window into the logs folder.
+#[tauri::command(async)]
+fn debug_record(
+    window: Window,
+    request: Argument<crate::debug::RecordRequest>,
+) -> Result<serde_json::Value, String> {
+    let Argument(request) = request;
+    crate::debug::record(window.app_handle(), request)
+}
+
+/// Saves one file of the logs folder through the save panel.
+#[tauri::command(async)]
+fn debug_save(
+    window: Window,
+    request: Argument<crate::debug::SaveRequest>,
+) -> Result<crate::debug::Saved, String> {
+    let Argument(request) = request;
+    crate::debug::save(&window, request)
+}
+
+/// Saves the logs folder as one gzip-compressed tar file through the save panel.
+#[tauri::command(async)]
+fn debug_save_all(window: Window) -> Result<crate::debug::Saved, String> {
+    crate::debug::save_all(&window)
 }
 
 /// registry 주소, 검사한 index, 설치 상태를 돌려준다.

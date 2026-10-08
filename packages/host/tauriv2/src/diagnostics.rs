@@ -259,6 +259,20 @@ fn capture_still(window: &Window) -> Result<Value, Failure> {
     Ok(json!({"path": path.to_string_lossy()}))
 }
 
+/// Writes a still capture of each window for the debug view and returns their paths (docs/spec/debug.md).
+pub(crate) fn capture_windows(app: &tauri::AppHandle) -> Result<Vec<String>, String> {
+    let mut paths = Vec::new();
+    for (label, window) in app.windows() {
+        let value = capture_still(&window)
+            .map_err(|failure| format!("window {label}: {}", failure.message))?;
+        let path = value["path"].as_str().ok_or_else(|| {
+            format!("window {label}: the still capture answered {value} without a path")
+        })?;
+        paths.push(path.to_string());
+    }
+    Ok(paths)
+}
+
 /// select 가 있으면 그 입력 소스를 선택하고, 현재 선택된 키보드 입력 소스를 반환한다.
 fn input_source(window: &Window, params: Map<String, Value>) -> Result<Value, Failure> {
     let select = match params.get("select") {

@@ -962,6 +962,22 @@ pub(crate) fn watch_buttons(app: &AppHandle) -> Result<(), String> {
 }
 
 /// host.sidecars 의 현재 값이다.
+/// The value of the host status name of window for the debug view: `host.window`, `host.sidecars` or `host.screens`
+/// (docs/spec/debug.md).
+pub(crate) fn host_status(window: &Window, name: &str) -> Result<Value, String> {
+    match name {
+        "host.window" => window_status(window).map_err(|failure| failure.message),
+        "host.sidecars" => Ok(sidecars_status(window.app_handle())),
+        "host.screens" => {
+            let platform = platform::current()?;
+            on_main(window, move || platform.screens())
+        }
+        other => Err(format!(
+            "debug: {other} is not a host status of the debug view"
+        )),
+    }
+}
+
 fn sidecars_status(app: &AppHandle) -> Value {
     let sidecars = app.state::<crate::sidecars::WindowSidecars>();
     json!({ "closing": sidecars.closing(), "outdated": sidecars.outdated() })

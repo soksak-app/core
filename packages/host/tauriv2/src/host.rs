@@ -20,6 +20,7 @@ pub mod buttons;
 pub mod clipboard;
 pub mod command_line;
 mod composition;
+pub mod debug;
 #[cfg(feature = "diagnostics")]
 mod diagnostics;
 pub mod documents;

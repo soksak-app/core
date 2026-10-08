@@ -452,6 +452,9 @@ impl Platform for Windows {
     fn preferred_language(&self) -> Result<String, String> {
         unsupported::preferred_language()
     }
+    fn os_version(&self) -> Result<String, String> {
+        unsupported::os_version()
+    }
     fn menu_select(&self, menu: &str, title: &str) -> Result<(), String> {
         unsupported::menu_select(menu, title)
     }

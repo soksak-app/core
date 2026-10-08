@@ -82,6 +82,10 @@ const METHOD = {
   clipboardWriteText: "ClipboardWriteText",
   clipboardPersistPNG: "ClipboardPersistPNG",
   pluginsState: "PluginsState",
+  debugFiles: "DebugFiles",
+  debugRecord: "DebugRecord",
+  debugSave: "DebugSave",
+  debugSaveAll: "DebugSaveAll",
   pluginsRun: "PluginsRun",
   pluginsUseRegistry: "PluginsUseRegistry",
 };

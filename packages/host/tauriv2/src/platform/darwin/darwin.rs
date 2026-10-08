@@ -59,6 +59,8 @@ mod process_exit;
 mod shapes;
 #[path = "standard_error.rs"]
 mod standard_error;
+#[path = "system.rs"]
+mod system;
 #[path = "termination.rs"]
 mod termination;
 #[path = "webview.rs"]
@@ -578,6 +580,9 @@ impl Platform for Darwin {
     }
     fn preferred_language(&self) -> Result<String, String> {
         dock::preferred_language()
+    }
+    fn os_version(&self) -> Result<String, String> {
+        system::os_version()
     }
 
     fn menu_items(&self) -> Result<Value, String> {

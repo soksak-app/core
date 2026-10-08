@@ -457,6 +457,10 @@ pub fn preferred_language() -> Result<String, String> {
     missing("preferred language")
 }
 
+pub fn os_version() -> Result<String, String> {
+    missing("operating system version")
+}
+
 pub fn menu_select(_menu: &str, _title: &str) -> Result<(), String> {
     missing("application menu")
 }

@@ -49,6 +49,7 @@ func init() {
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
 	diagnosticMethods["diagnostics.input.source"] = diagnosticInputSource
 	diagnosticMethods["diagnostics.capture.still"] = diagnosticCaptureStill
+	debugCaptures = debugCaptureWindows
 	diagnosticMethods["diagnostics.notifications"] = diagnosticNotifications
 	holdModalContent = modalHolds.wait
 	diagnosticMethods["diagnostics.navigation.delay"] = diagnosticNavigationDelay
@@ -383,32 +384,61 @@ func diagnosticCaptureStill(e *Endpoint, _ *endpointConn, params json.RawMessage
 	if err != nil {
 		return nil, err
 	}
-	capture, err := recorder()
+	path, err := captureStill(h, s)
 	if err != nil {
 		return nil, err
+	}
+	return map[string]string{"path": path}, nil
+}
+
+// captureStill writes a still PNG of the window of s into a private folder under <config-dir>/logs/captures and
+// returns its path.
+func captureStill(h *Host, s *Surfaces) (string, error) {
+	capture, err := recorder()
+	if err != nil {
+		return "", err
 	}
 	var numbers []int
 	application.InvokeSync(func() { numbers, err = capture.WindowNumbers(s.window.NativeWindow()) })
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if len(numbers) == 0 {
-		return nil, errors.New("the window has no window server number")
+		return "", errors.New("the window has no window server number")
 	}
 	// 녹화와 같이 캡처마다 비공개 디렉터리를 만든다.
 	directory := filepath.Join(h.workspace.directory, "logs", "captures", fmt.Sprintf("still-%s-%d", s.name, time.Now().UnixNano()))
 	system, err := platform.Current()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if err := system.PrivateDirectory(directory); err != nil {
-		return nil, err
+		return "", err
 	}
 	path := filepath.Join(directory, "window.png")
 	if err := capture.CaptureStill(numbers[0], path); err != nil {
-		return nil, err
+		return "", err
 	}
-	return map[string]string{"path": path}, nil
+	return path, nil
+}
+
+// debugCaptureWindows writes a still capture of each window for the debug view (docs/spec/debug.md).
+func debugCaptureWindows(h *Host) ([]string, error) {
+	h.mu.Lock()
+	windows := make([]*Surfaces, 0, len(h.windows))
+	for _, s := range h.windows {
+		windows = append(windows, s)
+	}
+	h.mu.Unlock()
+	paths := []string{}
+	for _, s := range windows {
+		path, err := captureStill(h, s)
+		if err != nil {
+			return paths, fmt.Errorf("window %s: %w", s.name, err)
+		}
+		paths = append(paths, path)
+	}
+	return paths, nil
 }
 
 // diagnosticCaptureStart 는 창 녹화를 시작하고 프레임 폴더를 반환한다.

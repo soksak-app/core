@@ -53,6 +53,10 @@ const COMMAND = {
   clipboardWriteText: "clipboard_write_text",
   clipboardPersistPNG: "clipboard_persist_png",
   pluginsState: "plugins_state",
+  debugFiles: "debug_files",
+  debugRecord: "debug_record",
+  debugSave: "debug_save",
+  debugSaveAll: "debug_save_all",
   pluginsRun: "plugins_run",
   pluginsUseRegistry: "plugins_use_registry",
 };
@@ -112,6 +116,10 @@ const ARG = {
   clipboardWriteText: (text) => ({ text }),
   clipboardPersistPNG: (request) => ({ request }),
   pluginsState: () => ({}),
+  debugFiles: () => ({}),
+  debugRecord: (request) => ({ request }),
+  debugSave: (request) => ({ request }),
+  debugSaveAll: () => ({}),
   pluginsRun: (request) => ({ request }),
   pluginsUseRegistry: (request) => ({ request }),
 };

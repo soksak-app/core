@@ -25,6 +25,8 @@ soksak-sok-tauriv2 = { path = "../../sok/tauriv2" }
 serde_json = { version = "1", features = ["raw_value"] }
 tauri-plugin-dialog = "2"
 tempfile = "3"
+flate2 = "1"
+tar = "0.4"
 wait-timeout = "0.2"
 base64 = "0.22"
 url = "2"
