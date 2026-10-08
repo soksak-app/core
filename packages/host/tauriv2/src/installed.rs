@@ -176,13 +176,13 @@ pub const SHARED_PREFIX: &str = "/shared/";
 pub fn installed_shared(config_dir: &Path, url_path: &str) -> Result<Module, String> {
     #[derive(serde::Deserialize)]
     struct Point {
-        // Default: a point without shared modules has no modules.
+        // default: a point without shared modules has no modules.
         #[serde(default)]
         modules: std::collections::BTreeMap<String, String>,
     }
     #[derive(serde::Deserialize)]
     struct Manifest {
-        // Default: the plugin.json of a plugin that declares no extension point has no extends.
+        // default: the plugin.json of a plugin that declares no extension point has no extends.
         #[serde(default)]
         extends: std::collections::BTreeMap<String, Point>,
     }

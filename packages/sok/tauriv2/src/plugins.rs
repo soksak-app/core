@@ -471,14 +471,14 @@ impl DependencyPlan<'_> {
         }
         let index = self.index;
         let current = self.state.plugins.get(id).cloned();
-        // Default: a plugin that neither the index nor installed.json lists has no package, so no plugin names it,
-        // and resolve_install reports that it is not in the registry.
         let package = index
             .plugins
             .iter()
             .find(|entry| entry.id == id)
             .map(|entry| entry.package.clone())
             .or_else(|| current.as_ref().map(|plugin| plugin.package.clone()))
+            // default: a plugin that neither the index nor installed.json lists has no package, so no plugin names
+            // it, and resolve_install reports that it is not in the registry.
             .unwrap_or_default();
         let needs = self.needs(id, &package)?;
         let satisfied = current.as_ref().is_some_and(|plugin| {
