@@ -1708,6 +1708,17 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F118",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "step(what)" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/session-steps.test.mjs", id: "a check that its test limit ends names the steps it started" },
+    ],
+    expected: "A window check writes each request and status wait it starts with its elapsed time, so a check that its test limit ends names the step that ran.",
+    levels: ["unit"],
+  },
+  {
     id: "F116",
     implementation: [
       { file: "packages/workbench/surface-modules.js", symbol: "closed before it created its composition" },

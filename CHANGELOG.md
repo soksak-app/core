@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F118: a window check writes each request and status wait it starts as `step <app> +<seconds> s <step>`, so a check that its test time limit ends names the step that ran.
 - F115: `document_press_test` checks that the first press on a document region reaches its page.
 - F116: closing a tab whose module has not finished mounting removes the surface at once instead of waiting for the mount.
 - R5.3.4, R5.3.5: the plugin and sidecar repositories call plugins, sidecars and releases so.

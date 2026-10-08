@@ -279,6 +279,14 @@ export class Session {
     this.recordingsBefore = [];
     // 전달된 down 부터 같은 버튼의 up 이 전달될 때까지 열린 합성 누름. 창과 버튼으로 찾는다(docs/spec/exposure.md).
     this.presses = new Map();
+    // The moment the session opened. step writes the time of each step from it.
+    this.started = performance.now();
+  }
+
+  /** Writes a step that the check starts with its time since the session opened, so a check that its test time limit
+   * ends names the step that ran. */
+  step(what) {
+    process.stderr.write(`step ${this.app.name} +${((performance.now() - this.started) / 1000).toFixed(1)} s ${what}\n`);
   }
 
   /** 연결을 닫기 전에 실행할 정리. 등록의 역순으로 실행한다. */
@@ -306,12 +314,14 @@ export class Session {
     other.cleanups = this.cleanups;
     other.expectedErrors = this.expectedErrors;
     other.presses = this.presses;
+    other.started = this.started;
     other.window = window;
     return other;
   }
 
   request(method, params = {}, { timeout = REQUEST } = {}) {
     const what = `${this.app.name} ${method} ${params.name ?? ""}`.trimEnd();
+    this.step(`${method} ${params.name ?? ""}`.trimEnd());
     // 답하지 않으면 그 순간 이 호스트와 그 page 프로세스의 thread 를 설정 폴더의 logs 에 기록한다(F69).
     const sample = async () => sampleStall({
       host: this.client.endpoint.pid, pages: pageProcesses(this.app.configDir), directory: join(this.app.configDir, "logs"),
@@ -483,6 +493,7 @@ export class Session {
 
   /** status 가 predicate 를 만족할 때까지 알림으로 기다린다. */
   until(name, predicate, message, { surface, timeout = REQUEST } = {}) {
+    this.step(`until ${name}`);
     return this.client.watch(this.window, name, predicate, { surface, timeout }).catch((error) => {
       if (error.code === "ETIMEDOUT") error.message = `${this.app.name}: ${message} (${error.message})`;
       // 감시나 첫 값 요청이 실패하면 어느 상태였는지 오류에 남긴다. code 는 그대로 둔다.

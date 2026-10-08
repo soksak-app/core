@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F118: 창 검사가 시작하는 요청과 status 대기마다 `step <app> +<seconds> s <step>`을 써서, test 시간 제한으로 끝난 검사가 실행하던 단계를 알려 준다.
 - F115: `document_press_test`가 문서 영역의 첫 누름이 그 페이지에 닿는지 검사한다.
 - F116: mount를 끝내지 않은 모듈의 탭을 닫으면 mount를 기다리지 않고 표면을 바로 없앤다.
 - R5.3.4, R5.3.5: plugin과 sidecar 저장소가 plugin, sidecar, release를 그 말로 부른다.
