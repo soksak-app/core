@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F119.1: the first termination signal makes the Tauri host run its normal quit, as `host.quit` does, instead of ending the process at once, so the windows save, the sidecars stop and the terminal service ends; the Tauri host kills the WebContent process of each window that closes during the quit. `e2e/normal-shutdown.mjs` sends SIGTERM with `SOKSAK_SHUTDOWN_BY=signal` and requires the terminal service to end with `SOKSAK_SHUTDOWN_TERMINAL=1`.
 - F117.3: a window applies a plugin operation by reloading its page after it asks about each modified tab (저장하고 적용, 저장하지 않고 적용, 적용하지 않기); a kept page shows its changed plugins as `reload` with 적용 (`core.plugins.apply`), and the card shows no restart message. `exposure.json` declares `core.plugins.apply`, the `reload` state and the `updates` field of `core.plugins`, which F117.2 reported without declaring it.
 - F117.2: a plugin card shows 업데이트 only when the registry lists a version newer than the installed one, and `core.plugins` reports `updates`.
 - F117.1: the specifications state that a plugin operation applies at once: the host replaces changed standard input and output sidecars, each window reloads its page after the questions of modified tabs, the card state `restart` becomes `reload`, `core.plugins` reports `updates`, and a terminal service of another version is reported as `outdated` in `host.sidecars` and replaced when its sessions end or through `core.plugins.replace`. The implementation is pending in F117.2 to F117.5.

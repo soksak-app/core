@@ -134,29 +134,11 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
     // 플러그인 설정은 설정 파일의 창을 만들기 전에 실행되므로 엔드포인트를 여기서 연다.
     let endpoint = tauri::plugin::Builder::<tauri::Wry>::new("endpoint")
         .setup(|app, _api| {
-            // 종료 신호는 엔드포인트를 열기 전부터 받는다. host.quit 과 같은 일반 종료 요청이며,
-            // 이벤트 루프가 시작한 뒤 처리되어 준비된 창의 저장을 마친 뒤 끝난다.
+            // 종료 신호는 엔드포인트를 열기 전부터 받는다. 첫 신호는 host.quit 과 같은 일반 종료를 요청하고,
+            // 이벤트 루프가 그 요청을 처리해 준비된 창의 저장과 사이드카 중지를 마친 뒤 끝난다. 저장이 멈추면 다음
+            // 신호가 기본 동작으로 프로세스를 끝낸다(docs/spec/hosts.md).
             let quit = app.clone();
-            termination::on_termination(Box::new(move || {
-                // 종료 전에 모든 웹뷰의 웹 프로세스를 죽인다. AppKit 은 XPC 서비스를
-                // 클라이언트보다 오래 살려두므로(V5-105), 죽이지 않으면 WebContent·GPU·
-                // Networking 프로세스가 앱 종료 후에도 남아 메모리를 차지한다.
-                for (label, _) in quit.webview_windows() {
-                    if let Some(window) = quit.get_window(&label) {
-                        if let Some(view) = crate::windows::root_view(&window) {
-                            if let Err(error) = crate::exposure::with_view(&view, |native| {
-                                platform::current()?.kill_web_content_process(native)
-                            }) {
-                                log_error("web content kill", error);
-                            }
-                        }
-                    }
-                }
-                // 종료 신호는 강제 종료다. quit.exit(0) 은 ExitRequested 를 거쳐 준비된 창의
-                // 저장을 기다리므로 페이지가 응답하지 않으면 영원히 대기한다. 종료 신호에서는
-                // 프로세스를 즉시 끝낸다 — 저장 없이 끝나는 것은 이미 두 번째 신호의 설계다.
-                std::process::exit(0);
-            }))?;
+            termination::on_termination(Box::new(move || quit.exit(0)))?;
             let directory = config_directory(app)?;
             // 지난 실행이 남긴 WebKit 자식을 기록으로 수확하고, 남의 것을 덮지 않게 지금
             // 떠 있는 WebKit 을 기준선으로 찍는다(V5-113). 아직 창이 없으므로 이 실행의

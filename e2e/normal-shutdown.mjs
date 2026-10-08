@@ -1,9 +1,12 @@
 // 이미 실행 중인 호스트에서 선언된 command.run -> host.quit 생명주기를 검증한다.
 // 이 검사는 애플리케이션을 시작하거나 활성화하지 않는다. 실행 전에
 // SOKSAK_APP이 선택한 설정 디렉터리로 호스트를 시작한다.
+// SOKSAK_SHUTDOWN_BY=signal sends SIGTERM to the host instead, which requests the same quit (docs/spec/hosts.md). With
+// SOKSAK_SHUTDOWN_TERMINAL=1 the quit also ends the terminal service, because a normal quit ends the owned sessions and
+// shuts the service down (docs/spec/terminal-runtime.md).
 import { spawn } from "node:child_process";
-import { existsSync, watch } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, readFileSync, readdirSync, watch } from "node:fs";
+import { dirname, join } from "node:path";
 import { connect } from "@soksak/client";
 import { APPS } from "@soksak/window-check/app.mjs";
 
@@ -94,6 +97,14 @@ async function prepareTerminal(client) {
   throw new Error("terminal session did not become ready before shutdown");
 }
 
+/** The process id of the one persistent service of the configuration directory that published an endpoint. */
+function serviceProcess() {
+  const directory = join(app.configDir, "services");
+  const services = readdirSync(directory).filter((name) => existsSync(join(directory, name, "endpoint.json")));
+  if (services.length !== 1) throw new Error(`${directory} has ${services.length} services with an endpoint, expected the terminal service`);
+  return JSON.parse(readFileSync(join(directory, services[0], "endpoint.json"), "utf8")).pid;
+}
+
 // 프로세스 종료는 설정 디렉터리의 파일 이벤트를 만들지 않는다. 호스트는 종료하기 전에
 // endpoint.json 을 지우므로 파일 이벤트만 기다리면 그 뒤의 종료를 확인하지 못한다. Node 는
 // 다른 프로세스의 종료 알림(kqueue NOTE_EXIT)을 제공하지 않으므로, 그 알림으로 pid 의 종료를
@@ -158,14 +169,37 @@ const client = await connect({ configDir: app.configDir });
 const pid = client.endpoint.pid;
 await waitForReady(client);
 const terminal = process.env.SOKSAK_SHUTDOWN_TERMINAL === "1" ? await prepareTerminal(client) : null;
+const by = process.env.SOKSAK_SHUTDOWN_BY ?? "command";
+if (by !== "command" && by !== "signal") throw new Error(`SOKSAK_SHUTDOWN_BY is ${by}, expected command or signal`);
+// The service that holds the terminal session: the one persistent service directory that published an endpoint.
+const service = terminal ? serviceProcess() : null;
+const serviceExit = service ? waitForExit(service) : null;
 
-const started = Date.now();
-const result = await request(client, "command.run", {
-  window: "main",
-  name: "host.quit",
-  params: {},
-});
-if (result !== null) throw new Error(`host.quit returned ${JSON.stringify(result)}, expected null`);
+if (by === "signal") {
+  process.kill(pid, "SIGTERM");
+} else {
+  const result = await request(client, "command.run", {
+    window: "main",
+    name: "host.quit",
+    params: {},
+  });
+  if (result !== null) throw new Error(`host.quit returned ${JSON.stringify(result)}, expected null`);
+}
 const { exitedAt, removedAt } = await waitForShutdown(pid, SHUTDOWN_LIMIT);
 client.close();
-console.log(`PASS normal-shutdown app=${app.name} pid=${pid} terminal=${terminal?.sessionId ?? "none"} endpoint_removed_ms=${removedAt} exited_ms=${exitedAt}`);
+let serviceEndedAt = "none";
+if (serviceExit) {
+  const started = Date.now();
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`the terminal service ${service} still runs ${SHUTDOWN_LIMIT}ms after the application quit by ${by}`)), SHUTDOWN_LIMIT);
+  });
+  try {
+    await Promise.race([serviceExit.exited, deadline]);
+  } finally {
+    clearTimeout(timer);
+    serviceExit.cancel();
+  }
+  serviceEndedAt = Date.now() - started;
+}
+console.log(`PASS normal-shutdown app=${app.name} by=${by} pid=${pid} terminal=${terminal?.sessionId ?? "none"} endpoint_removed_ms=${removedAt} exited_ms=${exitedAt} service_ended_ms=${serviceEndedAt}`);

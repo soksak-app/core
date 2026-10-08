@@ -477,6 +477,17 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         tauri::WindowEvent::CloseRequested { .. } => {
             // 막지 않은 닫기 요청이다. 창은 곧 runtime 에서 사라지므로 목록에서 뺀다.
             context.closing.store(true, Ordering::Relaxed);
+            // 종료 중이면 창의 웹 프로세스를 죽인다. AppKit 은 XPC 서비스를 클라이언트보다 오래 살려두므로,
+            // 죽이지 않으면 WebContent 프로세스가 애플리케이션 종료 후에도 남는다(docs/spec/hosts.md#process-lifecycle).
+            if host.state::<Windows>().quitting.load(Ordering::Relaxed) {
+                if let Some(view) = root_view(&host) {
+                    if let Err(error) = crate::exposure::with_view(&view, |native| {
+                        platform::current()?.kill_web_content_process(native)
+                    }) {
+                        log_error("web content kill", error);
+                    }
+                }
+            }
         }
         tauri::WindowEvent::Destroyed => {
             crate::exposure::window_closed(&host);
