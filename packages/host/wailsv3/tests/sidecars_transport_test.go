@@ -1989,3 +1989,62 @@ func TestAReplacedServiceStartsAfterTheEndOfItsProcess(t *testing.T) {
 		t.Fatalf("the installed service started %v before its predecessor was ended at %v", service.endedAt.Sub(service.secondAt), service.endedAt)
 	}
 }
+
+// contract: sidecars-transport.hello.client-is-the-configuration-directory
+func TestTheHelloCarriesTheConfigurationDirectoryAsClient(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-client")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDirectory)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+	hello := make(chan map[string]any, 1)
+	go func() {
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			var request map[string]any
+			if json.Unmarshal(line, &request) != nil {
+				return
+			}
+			if request["operation"] == "hello" {
+				hello <- request
+				io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
+				continue
+			}
+			connection.Write(line)
+		}
+	}()
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sidecars.Stop()
+	owner := &harnessOwner{root: "/client", seen: make(chan SidecarMessage, 1)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	// The configuration directory is the host-resolved one, with symlinks resolved (docs/spec/performance-trace.md).
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := (<-hello)["client"]; got != resolved {
+		t.Fatalf("client %v, want the configuration directory %s", got, resolved)
+	}
+}

@@ -968,6 +968,19 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F120",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) processPersistent" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn start_persistent" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestTheHelloCarriesTheConfigurationDirectoryAsClient" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "the_hello_carries_the_configuration_directory_as_client" },
+    ],
+    expected: "The hello that either host sends to a persistent service carries the configuration directory of the application as client.",
+    levels: ["unit"],
+  },
+  {
     id: "F29",
     implementation: [
       { file: "scripts/check-build-environment.sh", symbol: "pnpm_actual=$(pnpm --version" },

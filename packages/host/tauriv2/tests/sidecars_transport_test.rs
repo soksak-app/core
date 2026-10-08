@@ -1945,3 +1945,63 @@ fn a_replaced_service_starts_after_the_end_of_its_process() {
     );
     sidecars.stop();
 }
+
+// contract: sidecars-transport.hello.client-is-the-configuration-directory
+#[test]
+fn the_hello_carries_the_configuration_directory_as_client() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("client.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "client-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let (hello_sender, hello) = channel();
+    std::thread::spawn(move || {
+        let Ok((mut stream, _)) = listener.accept() else {
+            return;
+        };
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        while reader.read_line(&mut line).unwrap_or(0) > 0 {
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let reply = if request["operation"] == "hello" {
+                let _ = hello_sender.send(request.clone());
+                serde_json::json!({"operation": "hello", "protocol": 1, "ok": true}).to_string()
+            } else {
+                line.trim_end().to_string()
+            };
+            if writeln!(stream, "{reply}").is_err() {
+                return;
+            }
+            line.clear();
+        }
+    });
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let declarations = declare(&fixture, executable_directory.path());
+    let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf()).unwrap();
+    let (owner, events) = owner("client", "/projects/client");
+    sidecars
+        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv_timeout(STALL).unwrap();
+    let request = hello.recv_timeout(STALL).unwrap();
+    // The configuration directory is the host-resolved one, with symlinks resolved (docs/spec/performance-trace.md).
+    let resolved = std::fs::canonicalize(config_directory.path()).unwrap();
+    assert_eq!(
+        request["client"].as_str(),
+        resolved.to_str(),
+        "the hello names the configuration directory of the application"
+    );
+    sidecars.stop();
+}

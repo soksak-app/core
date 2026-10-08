@@ -1670,7 +1670,7 @@ impl<O: Owner> Core<O> {
             "operation": "hello",
             "protocol": 1,
             "token": endpoint.token.clone(),
-            "client": service_dir.to_string_lossy(),
+            "client": core.config_directory.to_string_lossy(),
         });
         let mut line = serde_json::to_vec(&hello).map_err(|e| e.to_string())?;
         line.push(b'\n');
