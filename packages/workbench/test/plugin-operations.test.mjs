@@ -29,17 +29,17 @@ const state = {
 test("plugin rows join loaded, installed and registry plugins by id with their states", () => {
   assert.deepEqual(pluginRows(loaded, state), [
     { id: "db", name: "DB", description: "DB 설명.", state: "available", installed: null, latest: "2.0.0", sidecars: [] },
-    { id: "fresh", name: "fresh", description: "", state: "restart", installed: { version: "0.1.0", enabled: true }, latest: null, sidecars: [] },
-    { id: "gone", name: "지운 것", description: "지운 플러그인.", state: "restart", installed: null, latest: null, sidecars: [] },
-    { id: "notes", name: "노트", description: "노트 목록.", state: "restart", installed: { version: "1.1.0", enabled: true }, latest: null, sidecars: [] },
+    { id: "fresh", name: "fresh", description: "", state: "reload", installed: { version: "0.1.0", enabled: true }, latest: null, sidecars: [] },
+    { id: "gone", name: "지운 것", description: "지운 플러그인.", state: "reload", installed: null, latest: null, sidecars: [] },
+    { id: "notes", name: "노트", description: "노트 목록.", state: "reload", installed: { version: "1.1.0", enabled: true }, latest: null, sidecars: [] },
     { id: "off", name: "Off", description: "Off 설명.", state: "disabled", installed: { version: "1.0.0", enabled: false }, latest: "1.0.0", sidecars: [] },
     { id: "term", name: "터미널", description: "터미널 표면.", state: "loaded", installed: { version: "0.1.0", enabled: true }, latest: "0.10.0", sidecars: [] },
   ]);
 });
 
-test("a loaded plugin that was disabled after the window loaded waits for a restart", () => {
+test("a loaded plugin that was disabled after the window loaded waits for a page reload", () => {
   const disabled = { ...state, installed: { ...state.installed, plugins: { term: { version: "0.1.0", enabled: false, sidecars: {} } } } };
-  assert.equal(pluginRows([loaded[0]], disabled).find((row) => row.id === "term").state, "restart");
+  assert.equal(pluginRows([loaded[0]], disabled).find((row) => row.id === "term").state, "reload");
 });
 
 test("a row names its sidecars from the installed entry, else the newest registry version, else the manifest", () => {
@@ -111,7 +111,7 @@ test("an operation is recorded as running before the host call and its result af
     { action: "remove", plugin: "db", state: "running", error: null },
     { action: "remove", plugin: "db", state: "failed", error: "plugin db is not installed" },
   ]);
-  assert.equal(operations.status().restart, true);
+  assert.equal(operations.status().reload, true);
 });
 
 test("an unreadable registry index keeps the installed rows and an unreadable state lists none", async () => {

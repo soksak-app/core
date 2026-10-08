@@ -437,7 +437,7 @@ function cardStatusText(card, tabs, folded) {
 const PLACEHOLDER_LINES = {
   missing: (id) => `${id} 플러그인이 설치되어 있지 않습니다.`,
   disabled: (id) => `${id} 플러그인을 사용하지 않습니다.`,
-  restart: (id) => `애플리케이션을 다시 시작하면 ${id} 플러그인이 열립니다.`,
+  reload: (id) => `창을 다시 불러오면 ${id} 플러그인이 열립니다.`,
   host: (id) => `${id} 플러그인은 네이티브 호스트가 있어야 설치됩니다.`,
   unread: (id) => `${id} 플러그인의 설치 상태를 읽지 못했습니다.`,
 };
@@ -448,7 +448,7 @@ function placeholderReason(id) {
   if (pluginOperations.failure()?.kind === "state") return "unread";
   const row = pluginOperations.status().plugins.find((entry) => entry.id === id);
   if (!row?.installed) return "missing";
-  return row.installed.enabled ? "restart" : "disabled";
+  return row.installed.enabled ? "reload" : "disabled";
 }
 
 /**
@@ -745,6 +745,8 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
 
 function closePicker() {
   if (!picker) return;
+  // A question that waits for its answer learns that the layer closed without a pick.
+  const { dismiss } = picker;
   picker = null;
   pickerChanged();
   pickerEl.hidden = true;
@@ -752,6 +754,8 @@ function closePicker() {
   document.removeEventListener("keydown", onPickerKey, true);
   if (native) overlay.hide(pickerEl);
   else standIn(false);
+  // default: only a question that waits for its answer has dismiss; another layer closes without a notice.
+  dismiss?.();
 }
 
 /** + 버튼의 후속 처리. 배치를 변경하지 않고 탭만 추가한다. */
@@ -1748,6 +1752,55 @@ function askBeforeClose(cardId, t, then) {
 }
 
 /**
+ * Asks for each modified tab of the window whether to save it, discard its changes or keep the page, before the page
+ * reloads to apply a plugin change (docs/spec/installation.md#applying-a-change). Resolves true when no tab was kept.
+ */
+export async function settleModifiedTabs() {
+  // The library screen shows no space, so the window has no tab to ask about.
+  if (!grid) return true;
+  for (const card of grid.cards) {
+    for (const t of tabsOf(card)) {
+      if (tabModified(t.id) && !(await askBeforeApply(card.id, t))) return false;
+    }
+  }
+  return true;
+}
+
+/** Asks about the modified tab t of the card cardId and resolves true when its changes were saved or discarded. */
+function askBeforeApply(cardId, t) {
+  const save = plugin(t.plugin).save;
+  const items = [
+    ...(save ? [{ key: "save", name: "저장하고 적용" }] : []),
+    { key: "discard", name: "저장하지 않고 적용" },
+    { key: "keep", name: "적용하지 않기" },
+  ];
+  // default: a header too narrow for its tabs shows no button for the tab, so the question opens at the card.
+  const anchor = cardElement(cardId)?.querySelector(`[data-tab-id="${t.id}"]`) ?? cardElement(cardId);
+  return new Promise((resolve) => {
+    openLayer(anchor, `${tabName(t)} 탭에 저장하지 않은 변경이 있습니다`, items, async (key) => {
+      if (key === "keep") return resolve(false);
+      if (key === "save") {
+        try {
+          await registry.run(save, {}, t.id);
+        } catch (error) {
+          reportError(t.id, `저장하지 못했습니다 · ${save}: ${error.message}`);
+          settle();
+          return resolve(false);
+        }
+        if (tabModified(t.id)) {
+          reportError(t.id, `저장하지 못했습니다 · ${save} left the tab modified`);
+          settle();
+          return resolve(false);
+        }
+      }
+      resolve(true);
+    });
+    // Closing the layer keeps the tab, as 적용하지 않기 does.
+    picker.dismiss = () => resolve(false);
+  });
+}
+
+/**
  * Opens the file path, relative to the project root, in the plugin that declares its extension
  * (docs/spec/plugins.md#pluginjson): activates the tab of that plugin with the same path, or adds one to cardId, or to the
  * focused card when cardId is undefined. Returns {card, tab}.
@@ -1806,6 +1859,7 @@ export function pickItem(index) {
   const key = picker.keys[index];
   if (key === undefined) throw new Error(`the menu has no item ${index}`);
   const { pick } = picker;
+  picker.dismiss = null;
   closePicker();
   pick(key);
 }

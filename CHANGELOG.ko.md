@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F117.3: 창은 수정된 탭마다 물은 뒤(저장하고 적용, 저장하지 않고 적용, 적용하지 않기) page를 다시 불러와 plugin 작업을 적용한다. 유지한 page는 바뀐 plugin을 `reload`와 적용(`core.plugins.apply`)으로 보이고, 카드는 다시 시작 문구를 보이지 않는다. `exposure.json`이 `core.plugins.apply`, `reload` 상태, 그리고 F117.2가 선언 없이 보고한 `core.plugins`의 `updates` 필드를 선언한다.
 - F117.2: plugin 카드는 registry가 설치된 것보다 새 version을 나열할 때만 업데이트를 보이고, `core.plugins`가 `updates`를 보고한다.
 - F117.1: 명세가 plugin 작업이 바로 적용된다고 정한다. host는 바뀐 표준 입출력 sidecar를 교체하고, 각 창은 수정된 탭을 물은 뒤 page를 다시 불러오며, 카드 상태 `restart`는 `reload`가 되고, `core.plugins`는 `updates`를 보고한다. 다른 version의 terminal service는 `host.sidecars`에 `outdated`로 보고되고, 그 session이 끝날 때나 `core.plugins.replace`로 교체된다. 구현은 F117.2–F117.5에 남아 있다.
 - F119: 두 host가 표면의 답을 기다리는 닫기를 수로 센다. 사이드카가 답하기 전에 다시 닫은 표면이 더 이상 "unexpected close answer"로 사이드카를 실패시키지 않는다. 그 실패는 종료 중 owner close 전에 terminal service 연결을 끝내, service가 애플리케이션보다 오래 남았다.

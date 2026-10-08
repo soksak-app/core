@@ -59,7 +59,7 @@ export function pluginRows(loaded, state) {
     if (unit && record && record.enabled && record.version === unit.version) status = "loaded";
     else if (!unit && record && !record.enabled) status = "disabled";
     else if (!unit && !record) status = "available";
-    else status = "restart";
+    else status = "reload";
     const latest = entry ? entry.versions.map((v) => v.version).sort(compareVersions).at(-1) : null;
     // 기본값: 이름과 설명은 불러온 manifest, registry 항목, plugin id 순서로 정한다(docs/spec/installation.md).
     const about = unit ?? entry ?? { name: id, description: "" };
@@ -130,7 +130,7 @@ export function createPluginOperations({ host, loaded, changed }) {
       error: failure?.message ?? null,
       plugins: rows,
       operation,
-      restart: rows.some((row) => row.state === "restart"),
+      reload: rows.some((row) => row.state === "reload"),
       updates: rows.filter(hasUpdate).map((row) => ({ id: row.id, installed: row.installed.version, latest: row.latest })),
     };
   }

@@ -467,7 +467,7 @@
       },
       {
         "name": "core.surfaces",
-        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message. A tab of a plugin that is not loaded is reported with its plugin, visible true and placeholder set to the reason (missing, disabled, restart, host or unread); a mounted surface reports placeholder null.",
+        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message. A tab of a plugin that is not loaded is reported with its plugin, visible true and placeholder set to the reason (missing, disabled, reload, host or unread); a mounted surface reports placeholder null.",
         "schema": {
           "type": "array",
           "items": {
@@ -527,7 +527,7 @@
                 "enum": [
                   "missing",
                   "disabled",
-                  "restart",
+                  "reload",
                   "host",
                   "unread",
                   null
@@ -662,7 +662,7 @@
       },
       {
         "name": "core.plugins",
-        "description": "The plugin cards of the library plugin page: the registry index URL or null, the registry index or plugin state error or null, one entry per loaded, installed or registry plugin sorted by id with its name, description, state (loaded, disabled, available or restart), installed version and enabled value or null, newest registry version or null, and sidecars with their range and installed version, the latest plugin operation with its state (running, done or failed) and error, or null, and whether a plugin waits for a restart.",
+        "description": "The plugin cards of the library plugin page: the registry index URL or null, the registry index or plugin state error or null, one entry per loaded, installed or registry plugin sorted by id with its name, description, state (loaded, disabled, available or reload), installed version and enabled value or null, newest registry version or null, and sidecars with their range and installed version, the latest plugin operation with its state (running, done or failed) and error, or null, whether a plugin waits for a page reload, and the installed plugins whose registry index lists a newer version.",
         "schema": {
           "type": "object",
           "properties": {
@@ -698,7 +698,7 @@
                       "loaded",
                       "disabled",
                       "available",
-                      "restart"
+                      "reload"
                     ]
                   },
                   "installed": {
@@ -770,8 +770,25 @@
                 }
               }
             },
-            "restart": {
+            "reload": {
               "type": "boolean"
+            },
+            "updates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "installed": {
+                    "type": "string"
+                  },
+                  "latest": {
+                    "type": "string"
+                  }
+                }
+              }
             }
           }
         }
@@ -966,7 +983,7 @@
                     "type": "object",
                     "properties": {
                       "plugin": { "type": "string" },
-                      "action": { "enum": ["install", "update", "remove", "enable", "disable"] },
+                      "action": { "enum": ["install", "update", "apply", "remove", "enable", "disable"] },
                       "disabled": { "type": "boolean" }
                     }
                   }
@@ -2041,7 +2058,7 @@
       },
       {
         "name": "core.plugins.install",
-        "description": "Installs a plugin from the registry index through the host, as sok plugin install does; the change takes effect after an application restart.",
+        "description": "Installs a plugin from the registry index through the host, as sok plugin install does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
         "params": {
           "type": "object",
           "properties": {
@@ -2056,7 +2073,7 @@
       },
       {
         "name": "core.plugins.update",
-        "description": "Installs the selected version of an installed plugin through the host, as sok plugin update does; the change takes effect after an application restart.",
+        "description": "Installs the selected version of an installed plugin through the host, as sok plugin update does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
         "params": {
           "type": "object",
           "properties": {
@@ -2071,7 +2088,7 @@
       },
       {
         "name": "core.plugins.remove",
-        "description": "Removes an installed plugin through the host, as sok plugin remove does; the change takes effect after an application restart.",
+        "description": "Removes an installed plugin through the host, as sok plugin remove does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
         "params": {
           "type": "object",
           "properties": {
@@ -2086,7 +2103,7 @@
       },
       {
         "name": "core.plugins.enable",
-        "description": "Enables an installed plugin through the host, as sok plugin enable does; the change takes effect after an application restart.",
+        "description": "Enables an installed plugin through the host, as sok plugin enable does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
         "params": {
           "type": "object",
           "properties": {
@@ -2101,7 +2118,7 @@
       },
       {
         "name": "core.plugins.disable",
-        "description": "Disables an installed plugin through the host, as sok plugin disable does; the change takes effect after an application restart.",
+        "description": "Disables an installed plugin through the host, as sok plugin disable does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
         "params": {
           "type": "object",
           "properties": {
@@ -2113,6 +2130,23 @@
         "result": {
           "type": "null"
         }
+      },
+      {
+        "name": "core.plugins.apply",
+        "description": "Asks for each modified tab of the window whether to save it, discard its changes or keep the page, then saves the projects and reloads the page so that it loads the plugins that installed.json lists; answers reloaded false when a tab is kept.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "reloaded": {
+              "type": "boolean"
+            }
+          }
+        },
+        "timeout": 600000
       },
       {
         "name": "core.plugins.registry",

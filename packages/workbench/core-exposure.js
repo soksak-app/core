@@ -7,8 +7,9 @@
 // 것만 호스트에 보낸다.
 import { contributionsState, onContributionsChange } from "./contributions.js";
 import { checkOpenPath } from "./file-open.js";
-import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
-import { log, report } from "./host.js";
+import { registry, connectExposure, revisitRegistrations, whenRepliesSent } from "./exposure.js";
+import { log, reloadPage, report } from "./host.js";
+import { createPluginApply } from "./plugin-apply.js";
 import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";
 import { trackPointer } from "./pointer-state.js";
@@ -18,7 +19,7 @@ import {
   activeTab, addTabTo, assignSidebar, openFile, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
   focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, pickItem, pickerState, plane, railState, selectTab,
-  cardSidebars, resizeSidebar, settle, splitCard, surfaceState, tabsOf,
+  cardSidebars, resizeSidebar, settle, settleModifiedTabs, splitCard, surfaceState, tabsOf,
 } from "./plane.js";
 import {
   applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, settingProject, THEMES, value,
@@ -86,6 +87,11 @@ async function dropFiles(payload) {
   }
   lastDrop = record;
 }
+
+/** Applies a plugin change to this window: the questions of modified tabs, then a page reload (core.plugins.apply). */
+const applyPluginChange = createPluginApply({
+  settle: settleModifiedTabs, flush: projects.flush, reload: () => whenRepliesSent().then(reloadPage),
+});
 
 /** core.plugins.<action> 명령의 처리기. plugin 은 비어 있지 않은 문자열이다(docs/spec/installation.md 의 Plugin screen). */
 function pluginCommand(action) {
@@ -267,7 +273,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   status("core.sidebars", sidebarsState);
   onSectionsChange(coreChanged);
   onPluginOperations(coreChanged);
-  followPluginChanges();
+  followPluginChanges(applyPluginChange);
   onTabReports(coreChanged);
   status("core.surfaces", surfacesState);
   status("core.drop", () => lastDrop);
@@ -403,6 +409,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.plugins.remove", pluginCommand("remove"));
   registry.command("core.plugins.enable", pluginCommand("enable"));
   registry.command("core.plugins.disable", pluginCommand("disable"));
+  registry.command("core.plugins.apply", () => applyPluginChange());
   registry.command("core.plugins.registry", async ({ index }) => {
     if (typeof index !== "string" || index === "") {
       throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "index must be a non-empty string");

@@ -320,6 +320,9 @@ export function watchCalls(fn) {
 const errorLine = (line) => `error: ${line}`;
 
 /** 실패 한 줄을 애플리케이션 로그로 보낸다. 호스트가 없는 문서(브라우저 예제)의 로그는 콘솔의 오류 수준이다. */
+/** Reloads this page after every sent call has its answer (docs/spec/native-host.md#page-reload). */
+export const reloadPage = () => bridge.reload();
+
 export const report = (line) => (bridge ? bridge.call("report", errorLine(line)) : console.error(line));
 
 /**

@@ -528,6 +528,24 @@ export function registerSurfacePort(surface, port) {
   return () => { if (surfacePorts.get(surface) === port) surfacePorts.delete(surface); };
 }
 
+// The exposure requests that the page has received and not yet answered. A page reload waits until none remain, because
+// a reply that the reload stops is lost (whenRepliesSent).
+let unanswered = 0;
+let answeredWaiters = [];
+
+function requestAnswered() {
+  unanswered--;
+  if (unanswered > 0) return;
+  const waiters = answeredWaiters;
+  answeredWaiters = [];
+  for (const resolve of waiters) resolve();
+}
+
+/** Resolves when the page has sent the reply of every exposure request that it has received. */
+export function whenRepliesSent() {
+  return unanswered === 0 ? Promise.resolve() : new Promise((resolve) => answeredWaiters.push(resolve));
+}
+
 export async function dispatchSurfaceRequest(request) {
   const port = surfacePorts.get(request.surface);
   if (!port) return false;
@@ -570,10 +588,11 @@ export async function connectExposure({ report, ...values }) {
   });
   if (!host) return;
   await host.on("exposure-request", (request) => {
+    unanswered++;
     dispatchSurfaceRequest(request).then((handled) => {
       if (handled) return;
       return registry.handle(request).then((payload) => host.call("exposureReply", { id: request.id, ...payload }));
-    });
+    }).finally(requestAnswered);
   });
   await host.on("exposure-registered", (event) => {
     try {

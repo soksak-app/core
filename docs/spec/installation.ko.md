@@ -108,7 +108,7 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 - 켜진 설치 plugin이 지정한 sidecar를 `installed.json`이 기록한 폴더로 선언한다. 기록된 폴더가 바뀐 표준 입출력 sidecar는 교체된다. host는 실행 중인 process를 [sidecar](sidecars.ko.md#선언과-시작)의 중지 규칙대로 멈추고, 다음 send가 새 폴더의 실행 파일을 시작한다. 켜진 설치 plugin이 더 이상 지정하지 않는 sidecar는 멈추고 선언에서 빠지므로, 그 sidecar로의 send는 선언되지 않은 sidecar로의 send처럼 실패한다.
 - 실행 중인 service의 version이 `installed.json`의 기록과 다른 persistent sidecar는 [terminal runtime](terminal-runtime.ko.md#updates)대로 보고하고 교체한다.
 
-`plugins-changed`를 받은 창은 page를 다시 불러와 `installed.json`이 나열한 plugin을 불러온다. 다시 불러오기 전에 창을 닫을 때처럼([plugins](plugins.ko.md)) 창의 수정된 탭마다 묻는다. 닫지 않기는 그 창의 page를 유지한다. 그 창의 plugin은 불러온 그대로이고, 바뀐 plugin의 카드는 `core.plugins.apply`가 같은 질문 뒤에 page를 다시 불러올 때까지 상태 `reload`를 보인다. page 다시 불러오기가 실패한 창은 오류 표시로 그 오류를 보인다.
+`plugins-changed`를 받은 창은 page를 다시 불러와 `installed.json`이 나열한 plugin을 불러온다. 다시 불러오기 전에 창의 수정된 탭마다 그 탭에서 선택 layer `<name> 탭에 저장하지 않은 변경이 있습니다`로 묻는다. 저장하고 적용(`surface.save`가 있을 때만)은 저장 명령을 실행하고 탭이 더 이상 수정되지 않았으면 계속한다. 저장하지 않고 적용은 계속하고 다시 불러오기로 변경을 버린다. 적용하지 않기나 layer 닫기는 그 창의 page를 유지한다. 실패한 저장은 탭을 닫을 때처럼([plugins](plugins.ko.md)) 그 오류를 탭의 오류로 보고하고 page를 유지한다. 유지한 page: 그 창의 plugin은 불러온 그대로이고, 바뀐 plugin의 카드는 `core.plugins.apply`가 같은 질문 뒤에 page를 다시 불러올 때까지 상태 `reload`를 보인다. page 다시 불러오기가 실패한 창은 오류 표시로 그 오류를 보인다.
 
 ## Plugin 화면
 

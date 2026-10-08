@@ -68,6 +68,7 @@
     "core.plugins.remove",
     "core.plugins.enable",
     "core.plugins.disable",
+    "core.plugins.apply",
     "core.plugins.registry",
     "core.plugins.browse",
     "core.settings-modal.plugin",

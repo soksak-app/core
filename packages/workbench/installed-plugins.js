@@ -14,7 +14,13 @@ export function onPluginOperations(fn) {
   listeners.add(fn);
 }
 
-/** host 가 plugins-changed 를 보내면 상태를 다시 읽는다. 읽기 실패는 상태의 error 로 보고된다. */
-export function followPluginChanges() {
-  if (host) host.on("plugins-changed", () => pluginOperations.refresh());
+/**
+ * host 가 plugins-changed 를 보내면 상태를 다시 읽고 apply 로 변경을 이 창에 적용한다(docs/spec/installation.md#applying-a-change).
+ * 읽기 실패는 상태의 error 로 보고되고, 적용의 실패는 문서의 unhandledrejection 으로 오류 표시에 간다.
+ */
+export function followPluginChanges(apply) {
+  if (host) host.on("plugins-changed", async () => {
+    await pluginOperations.refresh();
+    await apply();
+  });
 }

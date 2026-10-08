@@ -41,7 +41,7 @@ function folderReason(message) {
 const PAGES = [['projects', '프로젝트'], ['plugins', '플러그인']];
 
 /** 플러그인 카드의 상태 글. */
-const PLUGIN_STATES = { loaded: '사용 중', disabled: '사용 안 함', available: '설치 안 됨', restart: '다시 시작하면 적용' };
+const PLUGIN_STATES = { loaded: '사용 중', disabled: '사용 안 함', available: '설치 안 됨', reload: '창을 다시 불러오면 적용' };
 // The states of contributions to extension points (docs/spec/plugins.md#extension-points); invalid shows through the error display.
 const CONTRIBUTION_STATES = { connected: '연결됨', 'provider-missing': '제공자 없음', 'version-mismatch': 'version 불일치', invalid: '오류' };
 
@@ -222,23 +222,25 @@ export function createLibrary(root, rendered = () => {}) {
     }
     if (pluginOperations.hosted) {
       const actions = element('div', 'library-plugin__actions');
-      const action = (label, name) => {
+      // core.plugins.apply reloads the window for every changed plugin, so it takes no plugin.
+      const action = (label, name, params = { plugin: row.id }) => {
         const button = element('button', 'ui-button', label); button.type = 'button'; button.dataset.expose = 'core.library.plugins.action'; button.dataset.action = name;
-        mark(button, `core.plugins.${name}`, { plugin: row.id });
+        mark(button, `core.plugins.${name}`, params);
         // 작업이 실행되는 동안에는 어느 작업도 시작하지 않는다.
         button.disabled = status.operation?.state === 'running';
         actions.append(button);
       };
       if (!row.installed && row.latest) action('설치', 'install');
       if (hasUpdate(row)) action('업데이트', 'update');
+      if (row.state === 'reload') action('적용', 'apply', {});
       if (row.installed) action(row.installed.enabled ? '사용 안 함' : '사용', row.installed.enabled ? 'disable' : 'enable');
       if (row.installed) action('제거', 'remove');
       if (actions.children.length) card.append(actions);
     }
     const operation = status.operation;
-    if (operation && operation.plugin === row.id) {
-      const line = element('p', 'library-plugin__operation', operation.state === 'running' ? `${row.id} ${operation.action} 진행 중`
-        : operation.state === 'done' ? '애플리케이션을 다시 시작하면 적용됩니다.' : '');
+    // A plugin operation that succeeds reloads the window, so a done operation shows no line.
+    if (operation && operation.plugin === row.id && operation.state !== 'done') {
+      const line = element('p', 'library-plugin__operation', operation.state === 'running' ? `${row.id} ${operation.action} 진행 중` : '');
       line.dataset.state = operation.state;
       card.append(line);
       if (operation.state === 'failed') showError(line, `library plugin ${row.id}`, operation.error);

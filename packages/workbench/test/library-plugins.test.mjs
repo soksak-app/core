@@ -22,13 +22,16 @@ test("the plugin page of the library lists each plugin with its description, ver
   let refreshed = 0;
   const listeners = [];
   const status = {
-    registry: "file:///registry/index.json", error: null, restart: false,
+    registry: "file:///registry/index.json", error: null, reload: false,
     operation: { action: "install", plugin: "db", state: "running", error: null },
     plugins: [
       { id: "db", name: "DB", description: "데이터베이스 표면.", state: "available", installed: null, latest: "2.0.0",
         sidecars: [{ name: "@x/db", range: "^1.0.0", version: null }] },
       { id: "term", name: "터미널", description: "명령을 실행하는 표면.", state: "loaded", installed: { version: "0.1.0", enabled: true },
         latest: "0.2.0", sidecars: [{ name: "@soksak/sidecar-vt", range: "^0.1.0", version: "0.1.2" }] },
+      // The window kept its page when the plugin changed, so the card offers to apply the change.
+      { id: "kept", name: "kept", description: "", state: "reload", installed: { version: "2.0.0", enabled: true },
+        latest: null, sidecars: [] },
       // The registry lists the installed version as its newest, so the card offers no update.
       { id: "plain", name: "plain", description: "", state: "disabled", installed: { version: "1.0.0", enabled: false },
         latest: "1.0.0", sidecars: [] },
@@ -54,9 +57,10 @@ test("the plugin page of the library lists each plugin with its description, ver
     library.actions.page("plugins");
     assert.equal(refreshed, 1, "showing the plugin page did not read the plugin state");
     assert.equal(library.state().page, "plugins");
-    assert.deepEqual(library.state().plugins.shown, ["db", "term", "plain"]);
+    assert.deepEqual(library.state().plugins.shown, ["db", "term", "kept", "plain"]);
     assert.deepEqual(library.state().plugins.actions.map(({ plugin, action, disabled }) => `${plugin} ${action} ${disabled}`), [
-      "db install true", "term update true", "term disable true", "term remove true", "plain enable true", "plain remove true",
+      "db install true", "term update true", "term disable true", "term remove true", "kept apply true", "kept disable true", "kept remove true",
+      "plain enable true", "plain remove true",
     ]);
     const card = (id) => root.querySelector(`.library-plugin[data-plugin-id="${id}"]`);
     const text = (id, part) => card(id).querySelector(`.library-plugin__${part}`)?.textContent ?? null;
@@ -83,10 +87,13 @@ test("the plugin page of the library lists each plugin with its description, ver
       ["제거", "core.plugins.remove", JSON.stringify({ plugin: "term" }), true],
     ]);
     assert.deepEqual(actions("plain").map(([label]) => label), ["사용", "제거"]);
+    assert.equal(text("kept", "state"), "창을 다시 불러오면 적용");
+    assert.deepEqual(actions("kept")[0], ["적용", "core.plugins.apply", JSON.stringify({}), true]);
 
     status.operation = { action: "install", plugin: "db", state: "done", error: null };
     for (const fn of listeners) fn();
-    assert.equal(text("db", "operation"), "애플리케이션을 다시 시작하면 적용됩니다.");
+    // A plugin operation that succeeds reloads the window, so the card states nothing after it.
+    assert.equal(text("db", "operation"), null);
     assert.equal(actions("db")[0][3], false, "the actions stay disabled after the operation");
 
     const search = root.querySelector('[data-expose="core.library.plugins.search"]');

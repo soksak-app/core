@@ -201,11 +201,11 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 | --- | --- | --- |
 | `missing` | <plugin> 플러그인이 설치되어 있지 않습니다. | registry index가 플러그인을 나열하면 설치, `core.plugins.install {plugin}` |
 | `disabled` | <plugin> 플러그인을 사용하지 않습니다. | 사용, `core.plugins.enable {plugin}` |
-| `restart` | 애플리케이션을 다시 시작하면 <plugin> 플러그인이 열립니다. | 없음 |
+| `reload` | 창을 다시 불러오면 <plugin> 플러그인이 열립니다. | 없음. plugin 카드의 적용이 창을 다시 불러온다([변경 적용](installation.ko.md#변경-적용)) |
 | `host` | <plugin> 플러그인은 네이티브 호스트가 있어야 설치됩니다. | 없음. 애플리케이션에 host가 없다 |
 | `unread` | <plugin> 플러그인의 설치 상태를 읽지 못했습니다. | 없음. plugin 상태를 읽지 못했다 |
 
-  이유는 `installed.json`이 플러그인을 끈 상태로 나열하면 `disabled`, 켠 상태로 나열하면 `restart`, 나열하지 않으면 `missing`, host가 없으면 `host`, [plugin 상태](installation.ko.md#애플리케이션-안의-plugin-작업)를 읽지 못하면 `unread`다. 워크벤치는 첫 스페이스를 열기 전에 plugin 상태를 읽는다. 카드는 `plugins-changed` event마다 이유를 다시 정한다.
+  이유는 `installed.json`이 플러그인을 끈 상태로 나열하면 `disabled`, 켠 상태로 나열하면 `reload`, 나열하지 않으면 `missing`, host가 없으면 `host`, [plugin 상태](installation.ko.md#애플리케이션-안의-plugin-작업)를 읽지 못하면 `unread`다. 워크벤치는 첫 스페이스를 열기 전에 plugin 상태를 읽는다. 카드는 `plugins-changed` event마다 이유를 다시 정한다.
 - 그런 플러그인을 가리키는 사이드바 연결은 유지하며 아무 내용도 고르지 않는다. 플러그인(첫 `.` 앞의 id)을 불러오지 않은 세트 섹션은 세트에 유지하되 보이지 않는다. 세트 편집은 그 행을 "<section id> (불러오지 않음)"과 ▲, ▼, −로 보여 준다.
 - 그런 플러그인의 `plugins.<plugin id>` 아래 프로젝트 데이터는 바꾸지 않고 유지한다.
 - 그런 플러그인을 가리키는 `environment.json` 항목은 유지한다. 그 `settings`는 검사하지도 적용하지도 않고, 그 `workspace` 탭은 placeholder 카드로 열린다. 그래서 환경이 가리키는 플러그인을 끄거나 제거해도 애플리케이션은 시작한다.
