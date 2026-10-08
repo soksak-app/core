@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F101.3: Korean input-method composition at a zsh prompt of a terminal service started without locale variables passes the activation-tier checks on both hosts.
 - R3.3: the checklist, changelog, specifications and plans of core and the checklists of the plugin, sidecar and registry repositories state facts about their repository, and `make docs-check` runs the record check.
 - R3.2: `make records-check` reports record lines that are not facts about the repository, and `make commits-check`, the commit-msg hook and CI check the commit form `type(scope): Subject (#ID)` without footers.
 - F101.2: the terminal service 0.0.6 and the terminal plugin 0.0.6, whose shells run in a UTF-8 locale, are in the public registry.
