@@ -52,6 +52,8 @@ test("Wails page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["DocumentAttach", [{ surface: "s1", document: "doc" }]]);
   await page.document.load("doc", "https://example.test");
   assert.deepEqual(recorded.at(-1), ["DocumentLoad", [{ surface: "s1", document: "doc", url: "https://example.test" }]]);
+  await host.call("documentPost", { surface: "s1", document: "doc", message: { ping: 1 } });
+  assert.deepEqual(recorded.at(-1), ["DocumentPost", [{ surface: "s1", document: "doc", message: { ping: 1 } }]]);
   await host.call("compositionPlace", { revision: 1, regions: [], overlays: [] });
   assert.deepEqual(recorded.at(-1), ["CompositionPlace", [{ revision: 1, regions: [], overlays: [] }]]);
   assert.deepEqual(await host.call("waitPresented"), { displayed: 42 });

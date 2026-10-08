@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F111.6: 두 애플리케이션의 runtime이 `documentPost`를 host로 넘기므로, 페이지가 `unknown host call: documentPost`로 실패하지 않고 package 문서에 message를 보낸다.
 - R4: `AGENTS.md`는 체크리스트 항목 하나를 기능 하나의 크기로 정하고, 완료한 항목마다 changelog 항목과 커밋을 요구한다.
 - F110: 창 검사 `e2e/hwp.test.mjs`가 두 host에서 `.hwp` 파일을 hwp plugin으로 열고 네이티브 키로 고쳐 저장한다. workspace registry에 hwp plugin이 들어간다.
 - F109: files sidecar는 32 MiB까지의 binary 파일에 `readBytes`와 `writeBytes`를 명세한다.

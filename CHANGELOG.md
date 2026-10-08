@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F111.6: the runtime of both applications passes `documentPost` to the host, so a page posts messages to a package document instead of failing with `unknown host call: documentPost`.
 - R4: `AGENTS.md` sizes a checklist item to one unit of function and requires a changelog entry and a commit for each completed item.
 - F110: the window check `e2e/hwp.test.mjs` opens an `.hwp` file in the hwp plugin, edits it with a native key and saves it on both hosts; the workspace registry includes the hwp plugin.
 - F109: the files sidecar specifies `readBytes` and `writeBytes` for binary files up to 32 MiB.

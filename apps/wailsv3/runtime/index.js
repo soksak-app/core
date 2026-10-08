@@ -70,6 +70,7 @@ const METHOD = {
   documentLoad: "DocumentLoad",
   documentZoom: "DocumentZoom",
   documentGo: "DocumentGo",
+  documentPost: "DocumentPost",
   documentDetach: "DocumentDetach",
   sidecarSend: "SidecarSend",
   sidecarsRetain: "SidecarsRetain",
