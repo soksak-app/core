@@ -35,6 +35,10 @@ test("a manifest with a page surface or with sections only is accepted", () => {
   assert.equal(validateManifest(side), side);
   assert.equal(validateManifest({ ...side, sections: [{ ...side.sections[0], fill: true }] }).sections[0].fill, true);
   assert.equal(validateManifest({ ...card, preview: { ink: "--surface-fg" } }).preview.ink, "--surface-fg");
+  // 범위는 sok 과 같은 형식이다: `*`, 하한만 있는 `>=x.y.z`, 상한이 있는 `>=x.y.z <a.b.c`(docs/spec/installation.md).
+  for (const range of ["*", ">=0.0.6", ">=0.0.2 <0.1.0", "^1.2.0", "~1.2.0", "1.2.0"]) {
+    assert.equal(validateManifest({ ...card, dependencies: { "@scope/sidecar-worker": range } }).dependencies["@scope/sidecar-worker"], range);
+  }
   const address = (value) => ({ ...card, settings: { home: { label: "홈 주소", type: "address", default: value } } });
   assert.equal(validateManifest(address("")).settings.home.default, "");
   assert.equal(validateManifest(address("https://example.com/start")).settings.home.default, "https://example.com/start");
@@ -72,7 +76,9 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface/],
     [{ ...card, dependencies: { Worker: "^1.2.0" } }, /dependencies: Worker is not a sidecar package name/],
     [{ ...card, dependencies: ["@scope/sidecar-worker"] }, /dependencies must map sidecar packages to version ranges/],
-    [{ ...card, dependencies: { "@scope/sidecar-worker": "*" } }, /dependencies @scope\/sidecar-worker: invalid range \*/],
+    [{ ...card, dependencies: { "@scope/sidecar-worker": "**" } }, /dependencies @scope\/sidecar-worker: invalid range \*\*/],
+    [{ ...card, dependencies: { "@scope/sidecar-worker": ">=" } }, /invalid range >=/],
+    [{ ...card, dependencies: { "@scope/sidecar-worker": ">=0.0" } }, /invalid range >=0.0/],
     [{ ...card, dependencies: { "@scope/sidecar-worker": "^1.02.0" } }, /invalid range \^1.02.0/],
     [{ ...card, dependencies: { "@scope/sidecar-worker": ">=2.0.0 <1.0.0" } }, /invalid range >=2.0.0 <1.0.0/],
     [{ ...card, sidecars: ["@scope/sidecar-worker"] }, /unknown field sidecars/],

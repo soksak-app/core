@@ -14,9 +14,10 @@ A version is `x.y.z` with numeric parts and no leading zeros; versions compare b
 | `x.y.z` | that version only |
 | `^x.y.z` | from `x.y.z` below the next change of the first non-zero part: `^1.2.3` is below `2.0.0`, `^0.2.3` below `0.3.0`, `^0.0.2` below `0.0.3` |
 | `~x.y.z` | from `x.y.z` below `x.(y+1).0` |
+| `>=x.y.z` | `x.y.z` and every later version |
 | `>=x.y.z <a.b.c` | from `x.y.z` below `a.b.c`; an empty range is rejected |
 
-Other forms, such as `*`, `latest` or pre-release suffixes, are rejected.
+Other forms, such as `latest`, `**` or pre-release suffixes, are rejected.
 
 ## Plugin package
 
@@ -31,7 +32,7 @@ A plugin package is the archive `<id>-<version>.tgz` of the plugin's files. Its 
 
 Other `package.json` fields belong to package tools and are not read, except `soksak`, which is refused: the sidecars of a plugin and their ranges are the `dependencies` of its `plugin.json` ([plugins](plugins.md#pluginjson)).
 
-A plugin repository builds against the `@soksak/plugin-api` of one core release. Its `engines.soksak` is `*`, which every core version satisfies, or `^<version>` of that `@soksak/plugin-api`, which only that release satisfies. The command `soksak-engines` of `@soksak/plugin-api` checks it in the plugin repository and fails with `package.json: engines.soksak <range> must be * or ^<version>, the @soksak/plugin-api version`; each plugin repository runs it in `make test`.
+A plugin repository builds against the `@soksak/plugin-api` of one core release. Its `engines.soksak` is `*`, which every core version satisfies, `^<version>` of that `@soksak/plugin-api`, which only that release satisfies, or `>=<x.y.z>` with a lower bound up to that version, which that core release and every later one satisfy; a plugin that uses a manifest field that core added in a release declares `>=` that release. The command `soksak-engines` of `@soksak/plugin-api` checks it in the plugin repository and fails with `package.json: engines.soksak <range> must be *, ^<version> or >= a version up to <version>, the @soksak/plugin-api version`; each plugin repository runs it in `make test`.
 
 ## Sidecar release asset
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // plugin 이 빌드에 쓰는 core release 를 engines.soksak 으로 선언했는지 검사한다(docs/spec/installation.md).
 //
-// 규칙: plugin repository 의 package.json engines.soksak 은 `*`(`>=0.0.0`, 모든 core version) 이거나 이 @soksak/plugin-api 의
-// version 에 대한 `^<version>` 이다.
+// 규칙: plugin repository 의 package.json engines.soksak 은 `*`(`>=0.0.0`, 모든 core version), 이 @soksak/plugin-api 의
+// version 에 대한 `^<version>`, 또는 하한이 그 version 을 넘지 않는 `>=<x.y.z>` 이다.
 //
 //   soksak-engines [plugin repository]
 import { readFileSync, realpathSync } from "node:fs";
@@ -14,11 +14,22 @@ export function pluginApiVersion() {
   return JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version;
 }
 
-/** plugin package.json 의 engines.soksak 이 `*` 나 `^<version>` 이 아니면 오류 하나를 돌려준다. */
+/** a 와 b 가 x.y.z 일 때 a 가 b 보다 크지 않으면 참. */
+function notAbove(a, b) {
+  const [x, y] = [a, b].map((text) => text.split(".").map(Number));
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i];
+  return true;
+}
+
+/**
+ * plugin package.json 의 engines.soksak 이 `*`, `^<version>`, 또는 하한이 이 version 을 넘지 않는 `>=<x.y.z>` 가 아니면
+ * 오류 하나를 돌려준다. `>=<x.y.z>` 는 그 core 부터의 모든 core 에서 설치된다는 선언이다.
+ */
 export function enginesErrors(pkg, version) {
   const range = pkg?.engines?.soksak;
-  return range === "*" || range === `^${version}` ? []
-    : [`package.json: engines.soksak ${range} must be * or ^${version}, the @soksak/plugin-api version`];
+  const lower = typeof range === "string" ? /^>=(\d+\.\d+\.\d+)$/.exec(range) : null;
+  return range === "*" || range === `^${version}` || (lower && notAbove(lower[1], version)) ? []
+    : [`package.json: engines.soksak ${range} must be *, ^${version} or >= a version up to ${version}, the @soksak/plugin-api version`];
 }
 
 // package manager 는 package 를 link 로 두므로 시작한 경로를 풀어서 이 module 과 비교한다.

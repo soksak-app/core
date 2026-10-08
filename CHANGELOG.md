@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F102.1.1: version ranges accept `>=x.y.z` without an upper bound in `sok`, plugin manifests and `soksak-engines`, and plugin manifests accept the sidecar range `*`.
 - Retired checklist entry `R3.1`: a checklist entry holds project work, and this entry held a work-process rule or its application, which AGENTS.md holds.
 - Retired checklist entry `R3.3`: a checklist entry holds project work, and this entry held a work-process rule or its application, which AGENTS.md holds.
 - Retired checklist entry `R3.4`: a checklist entry holds project work, and this entry held a work-process rule or its application, which AGENTS.md holds.

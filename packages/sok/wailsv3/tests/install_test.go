@@ -90,12 +90,19 @@ func TestVersionRangesAcceptExactCaretTildeAndBoundedForms(t *testing.T) {
 			t.Fatalf("* does not contain %s", version)
 		}
 	}
+	// >=x.y.z 는 하한만 있고 상한이 없다.
+	if r, err := sok.ParseRange(">=0.0.6"); err != nil || r.Min.String() != "0.0.6" || r.Below != nil {
+		t.Fatalf(">=0.0.6: %v %v", r, err)
+	}
+	if !sok.Satisfies("0.0.6", ">=0.0.6") || !sok.Satisfies("0.1.0", ">=0.0.6") || sok.Satisfies("0.0.5", ">=0.0.6") {
+		t.Fatal(">=0.0.6 bounds")
+	}
 	a, _ := sok.ParseVersion("0.10.0")
 	b, _ := sok.ParseVersion("0.9.9")
 	if a.Compare(b) <= 0 {
 		t.Fatal("versions compare by number, not text")
 	}
-	for _, bad := range []string{"**", "latest", "0.0", "01.0.0", ">=0.1.0 <0.1.0", "^0.0.2-beta", "4294967296.0.0"} {
+	for _, bad := range []string{"**", "latest", "0.0", "01.0.0", ">=0.1.0 <0.1.0", "^0.0.2-beta", "4294967296.0.0", ">=", ">=0.0", ">= 0.0.6", ">=0.0.6 <"} {
 		if _, err := sok.ParseRange(bad); err == nil || !strings.Contains(err.Error(), "invalid version") {
 			t.Fatalf("%s: %v", bad, err)
 		}

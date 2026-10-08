@@ -82,6 +82,15 @@ fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
             "* does not contain {version}"
         );
     }
+    // >=x.y.z 는 하한만 있고 상한이 없다.
+    let lower = install::parse_range(">=0.0.6").expect(">=0.0.6");
+    assert_eq!(
+        (lower.min.to_string(), lower.below),
+        ("0.0.6".to_string(), None)
+    );
+    assert!(install::satisfies("0.0.6", ">=0.0.6"));
+    assert!(install::satisfies("0.1.0", ">=0.0.6"));
+    assert!(!install::satisfies("0.0.5", ">=0.0.6"));
     assert!(
         install::parse_version("0.10.0").unwrap() > install::parse_version("0.9.9").unwrap(),
         "versions compare by number, not text"
@@ -94,6 +103,10 @@ fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
         ">=0.1.0 <0.1.0",
         "^0.0.2-beta",
         "4294967296.0.0",
+        ">=",
+        ">=0.0",
+        ">= 0.0.6",
+        ">=0.0.6 <",
     ] {
         rejects(install::parse_range(bad), "invalid version");
     }

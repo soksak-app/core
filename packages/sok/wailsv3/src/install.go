@@ -89,7 +89,7 @@ func (r Range) Contains(v Version) bool {
 	return v.Compare(r.Min) >= 0 && (r.Below == nil || v.Compare(*r.Below) < 0)
 }
 
-// ParseRange 는 `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z <a.b.c` 범위를 읽는다. `*` 는 `>=0.0.0`, 곧 모든 version 이다.
+// ParseRange 는 `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z`, `>=x.y.z <a.b.c` 범위를 읽는다. `*` 는 `>=0.0.0`, 곧 모든 version 이다.
 func ParseRange(text string) (Range, error) {
 	if text == "*" {
 		return Range{Min: Version{}}, nil
@@ -110,6 +110,12 @@ func ParseRange(text string) (Range, error) {
 			}
 			return Range{min, &below}, nil
 		}
+		// >=x.y.z 는 하한만 있고 상한이 없다.
+		if !found && rest != "" && !strings.ContainsAny(rest, " ") {
+			if min, err := ParseVersion(rest); err == nil {
+				return Range{Min: min}, nil
+			}
+		}
 	}
 	operator := ""
 	if strings.HasPrefix(text, "^") || strings.HasPrefix(text, "~") {
@@ -117,7 +123,7 @@ func ParseRange(text string) (Range, error) {
 	}
 	v, err := ParseVersion(text[len(operator):])
 	if err != nil {
-		return Range{}, fmt.Errorf("invalid version range %s: expected *, x.y.z, ^x.y.z, ~x.y.z or >=x.y.z <a.b.c", quote(text))
+		return Range{}, fmt.Errorf("invalid version range %s: expected *, x.y.z, ^x.y.z, ~x.y.z, >=x.y.z or >=x.y.z <a.b.c", quote(text))
 	}
 	var below Version
 	switch {

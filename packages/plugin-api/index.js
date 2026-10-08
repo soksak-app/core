@@ -76,8 +76,12 @@ function compareVersion(a, b) {
 /** version 범위가 docs/spec/installation.md#versions-and-ranges 의 형식인지 확인한다. */
 function isRange(range) {
   if (typeof range !== "string") return false;
+  if (range === "*") return true;
   const bounded = /^>=(\S+) <(\S+)$/.exec(range);
   if (bounded) return VERSION.test(bounded[1]) && VERSION.test(bounded[2]) && compareVersion(bounded[1], bounded[2]) < 0;
+  // `>=x.y.z` 는 하한만 있고 상한이 없다.
+  const lower = /^>=(\S+)$/.exec(range);
+  if (lower) return VERSION.test(lower[1]);
   return VERSION.test(range.replace(/^[\^~]/, ""));
 }
 

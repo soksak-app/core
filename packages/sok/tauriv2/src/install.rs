@@ -83,7 +83,7 @@ impl Range {
     }
 }
 
-/// `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z <a.b.c` 범위를 읽는다. `*` 는 `>=0.0.0`, 곧 모든 version 이다.
+/// `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z`, `>=x.y.z <a.b.c` 범위를 읽는다. `*` 는 `>=0.0.0`, 곧 모든 version 이다.
 pub fn parse_range(text: &str) -> Result<Range, String> {
     if text == "*" {
         return Ok(Range {
@@ -104,6 +104,11 @@ pub fn parse_range(text: &str) -> Result<Range, String> {
                     below: Some(below),
                 });
             }
+        } else if !rest.is_empty() && !rest.contains(' ') {
+            // >=x.y.z 는 하한만 있고 상한이 없다.
+            if let Ok(min) = parse_version(rest) {
+                return Ok(Range { min, below: None });
+            }
         }
     }
     let operator = if text.starts_with('^') || text.starts_with('~') {
@@ -113,7 +118,7 @@ pub fn parse_range(text: &str) -> Result<Range, String> {
     };
     let Version([major, minor, patch]) = parse_version(&text[operator.len()..]).map_err(|_| {
         format!(
-            "invalid version range {}: expected *, x.y.z, ^x.y.z, ~x.y.z or >=x.y.z <a.b.c",
+            "invalid version range {}: expected *, x.y.z, ^x.y.z, ~x.y.z, >=x.y.z or >=x.y.z <a.b.c",
             quote(&Value::from(text))
         )
     })?;
