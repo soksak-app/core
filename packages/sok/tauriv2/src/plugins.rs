@@ -1,4 +1,4 @@
-//! 설정 폴더에 plugin 을 설치하고 바꾼다(docs/spec/cli.md, docs/spec/installation.md). archive 는 임시 폴더에 푼
+//! 설정 폴더에 plugin 을 설치하고 바꾼다(docs/spec/cli.md, docs/spec/installation.md). release 는 임시 폴더에 푼
 //! 뒤 이름을 바꿔 제자리에 두고, installed.json 은 마지막에 한 번에 바꾸므로 실패한 설치는 이전 설치를 바꾸지
 //! 않는다.
 
@@ -10,11 +10,11 @@ use serde_json::{json, Value};
 
 use crate::fetch::{check_location, Fetcher};
 use crate::install::{
-    self, Archive, Index, InstalledPlugin, InstalledSidecar, InstalledState, Need, SelectedSidecar,
+    self, Release, Index, InstalledPlugin, InstalledSidecar, InstalledState, Need, SelectedSidecar,
     Selection, INSTALLED, INSTALL_FORMAT,
 };
 use crate::platform;
-use crate::registry::{archive_files, read_archive};
+use crate::registry::{release_files, read_release};
 use crate::release::{current_platform, print_json, replace_file};
 use crate::{config_dir_of, Error, Options};
 
@@ -228,7 +228,7 @@ fn write_installed(config_dir: &Path, state: &InstalledState) -> Result<(), Stri
     replace_file(&path, &out)
 }
 
-/// tar.gz archive 를 target 옆 임시 폴더에 푼 뒤 이름을 바꿔 target 에 둔다. 일반 파일과 폴더만 받고, 절대 경로와
+/// tar.gz release 를 target 옆 임시 폴더에 푼 뒤 이름을 바꿔 target 에 둔다. 일반 파일과 폴더만 받고, 절대 경로와
 /// `..` 는 거부한다.
 fn extract(data: &[u8], target: &Path) -> Result<(), String> {
     create_parent(target)?;
@@ -249,15 +249,15 @@ fn extract(data: &[u8], target: &Path) -> Result<(), String> {
 fn extract_into(data: &[u8], temp: &Path) -> Result<(), String> {
     std::fs::create_dir_all(temp)
         .map_err(|error| crate::files::file_error(temp.display(), &error))?;
-    let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(data));
-    for entry in archive.entries().map_err(|error| error.to_string())? {
+    let mut reader = tar::Archive::new(flate2::read::GzDecoder::new(data));
+    for entry in reader.entries().map_err(|error| error.to_string())? {
         let mut entry = entry.map_err(|error| error.to_string())?;
         let raw = String::from_utf8(entry.path_bytes().into_owned())
-            .map_err(|_| "archive entry name is not UTF-8".to_string())?;
+            .map_err(|_| "release entry name is not UTF-8".to_string())?;
         // 기본값: 끝의 / 는 폴더 항목의 표기일 뿐이므로 없으면 이름을 그대로 쓴다.
         let name = raw.strip_suffix('/').unwrap_or(&raw);
         if name.is_empty() || name.starts_with('/') || name.split('/').any(|part| part == "..") {
-            return Err(format!("archive entry {raw} leaves the folder"));
+            return Err(format!("release entry {raw} leaves the folder"));
         }
         let path = temp.join(name);
         let kind = entry.header().entry_type();
@@ -268,7 +268,7 @@ fn extract_into(data: &[u8], temp: &Path) -> Result<(), String> {
         }
         if !kind.is_file() {
             return Err(format!(
-                "archive entry {raw} is neither a regular file nor a folder"
+                "release entry {raw} is neither a regular file nor a folder"
             ));
         }
         let mode = entry.header().mode().map_err(|error| error.to_string())?;
@@ -289,14 +289,14 @@ fn extract_into(data: &[u8], temp: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// 아직 없는 version 폴더에 archive 를 확인해 푼다.
-fn install_archive(at: &str, archive: &Archive, target: &Path) -> Result<(), String> {
+/// 아직 없는 version 폴더에 release 를 확인해 푼다.
+fn install_release(at: &str, release: &Release, target: &Path) -> Result<(), String> {
     match std::fs::metadata(target) {
         Ok(_) => return Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(crate::files::file_error(at, &error)),
     }
-    let data = read_archive(at, archive)?;
+    let data = read_release(at, release)?;
     extract(&data, target).map_err(|error| format!("{at}: {error}"))
 }
 
@@ -324,7 +324,7 @@ fn plugin_result(state: &InstalledState, id: &str) -> PluginResult {
 
 /// Installs the selected version of a plugin and its plugin dependencies. With update it accepts only an installed
 /// plugin. It reads the plugin.json of every selected plugin version and completes the plan before it extracts an
-/// archive.
+/// release.
 pub fn install_plugin(
     config_dir: &Path,
     id: &str,
@@ -345,7 +345,7 @@ pub fn install_plugin(
         state,
         dependencies: BTreeMap::new(),
         providers: BTreeMap::new(),
-        archives: BTreeMap::new(),
+        releases: BTreeMap::new(),
         order: vec![],
         sidecars: BTreeMap::new(),
         placed: BTreeSet::new(),
@@ -354,7 +354,7 @@ pub fn install_plugin(
     plan.place(id, false, &[])?;
     let DependencyPlan {
         mut state,
-        archives,
+        releases,
         order,
         sidecars,
         changed,
@@ -364,7 +364,7 @@ pub fn install_plugin(
         return Ok(plugin_result(&state, id));
     }
     for changed in &order {
-        let Some(data) = archives.get(changed) else {
+        let Some(data) = releases.get(changed) else {
             continue;
         };
         let plugin = &state.plugins[changed];
@@ -380,7 +380,7 @@ pub fn install_plugin(
         else {
             continue;
         };
-        install_archive(
+        install_release(
             &format!("sidecar {} {} {platform}", sidecar.name, sidecar.version),
             &sidecar.asset,
             &config_dir.join(&installed.path),
@@ -394,7 +394,7 @@ pub fn install_plugin(
 
 /// The plan that installs a plugin and its plugin dependencies. state is the planned installation state; dependencies
 /// holds the plugin.json dependencies of the version in use of each plugin of state; providers holds the plugin
-/// dependencies of the versions that the plan selected; archives holds the archives of plugin versions that are not
+/// dependencies of the versions that the plan selected; releases holds the releases of plugin versions that are not
 /// extracted yet; order lists the plugins whose version changed in selection order; sidecars holds the sidecar
 /// versions that the plan selected.
 struct DependencyPlan<'a> {
@@ -405,7 +405,7 @@ struct DependencyPlan<'a> {
     state: InstalledState,
     dependencies: BTreeMap<String, BTreeMap<String, String>>,
     providers: BTreeMap<String, BTreeMap<String, String>>,
-    archives: BTreeMap<String, Vec<u8>>,
+    releases: BTreeMap<String, Vec<u8>>,
     order: Vec<String>,
     sidecars: BTreeMap<String, SelectedSidecar>,
     placed: BTreeSet<String>,
@@ -557,7 +557,7 @@ impl DependencyPlan<'_> {
     }
 
     /// Adds the selected version of a plugin to the plan. It reads the plugin.json of that version from its
-    /// extracted folder, or else from the archive after it checks the sha256, and keeps the archive for extraction
+    /// extracted folder, or else from the release after it checks the sha256, and keeps the release for extraction
     /// after the plan is complete.
     fn replace(
         &mut self,
@@ -577,13 +577,13 @@ impl DependencyPlan<'_> {
                     .map_err(|error| crate::files::file_error(manifest.display(), &error))?,
             ),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                let archive = read_archive(&at, &selection.version.package)?;
-                let mut files = archive_files(&archive, &["plugin.json"])
+                let release = read_release(&at, &selection.version.package)?;
+                let mut files = release_files(&release, &["plugin.json"])
                     .map_err(|error| format!("{at}: {error}"))?;
                 let data = files
                     .remove("plugin.json")
-                    .ok_or_else(|| format!("{at}: the archive holds no plugin.json"))?;
-                self.archives.insert(id.to_string(), archive);
+                    .ok_or_else(|| format!("{at}: the release holds no plugin.json"))?;
+                self.releases.insert(id.to_string(), release);
                 (format!("{at}: plugin.json"), data)
             }
             Err(error) => return Err(crate::files::file_error(&at, &error)),

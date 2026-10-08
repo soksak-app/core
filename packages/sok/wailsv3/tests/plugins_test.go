@@ -1,6 +1,6 @@
 package tests
 
-// plugin 설치(docs/spec/cli.md)가 archive 를 확인해 풀고 installed.json 을 한 번에 바꾸는지 검사한다.
+// plugin 설치(docs/spec/cli.md)가 release 를 확인해 풀고 installed.json 을 한 번에 바꾸는지 검사한다.
 
 import (
 	"archive/tar"
@@ -20,7 +20,7 @@ import (
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
-// pluginVersions 는 plugin probe 의 version 마다 pack 한 archive 와 sidecar 0.1.0 의 release 로 registry 를 만들고
+// pluginVersions 는 plugin probe 의 version 마다 pack 한 release 와 sidecar 0.1.0 의 release 로 registry 를 만들고
 // build 한 뒤 index.json 의 경로를 돌려준다.
 func pluginVersions(t *testing.T, versions ...string) string {
 	t.Helper()
@@ -45,7 +45,7 @@ func pluginVersionsFor(t *testing.T, core string, versions ...string) string {
 			"ui/b.js":     "b " + version,
 		})
 		result := runJSON(t, "plugin", "pack", dir, releases)
-		entries = append(entries, `{"version": "`+version+`", "package": {"url": "file://`+result["archive"]+`", "sha256": "`+result["sha256"]+`"},
+		entries = append(entries, `{"version": "`+version+`", "package": {"url": "file://`+result["release"]+`", "sha256": "`+result["sha256"]+`"},
 			"engines": {"soksak": "^`+core+`"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}`)
 	}
 	sidecar := runJSON(t, "sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", platform)
@@ -55,7 +55,7 @@ func pluginVersionsFor(t *testing.T, core string, versions ...string) string {
 			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [` + strings.Join(entries, ",") + `]}`,
 		"sidecars/scope-sidecar-worker.json": `{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
 			"versions": [{"version": "0.1.0", "protocol": 1, "assets": {"` + platform + `":
-			{"url": "file://` + sidecar["archive"] + `", "sha256": "` + sidecar["sha256"] + `"}}}]}`,
+			{"url": "file://` + sidecar["release"] + `", "sha256": "` + sidecar["sha256"] + `"}}}]}`,
 		"revoked.json": `{"plugins": [], "sidecars": []}`,
 	})
 	runJSON(t, "registry", "build", registry)
@@ -94,7 +94,7 @@ func exists(path string) bool {
 }
 
 // contract: cli.plugin.install-extracts-and-records
-func TestPluginInstallExtractsCheckedArchivesAndRecordsTheState(t *testing.T) {
+func TestPluginInstallExtractsCheckedReleasesAndRecordsTheState(t *testing.T) {
 	platform, err := sok.CurrentPlatform()
 	if err != nil {
 		t.Fatal(err)
@@ -147,25 +147,25 @@ func TestPluginInstallExtractsCheckedArchivesAndRecordsTheState(t *testing.T) {
 	}
 }
 
-// unsafeArchive 는 package.json 과 plugin.json 옆에 폴더 밖 경로를 담은 archive 를 쓰고 그 sha256 을 돌려준다.
-func unsafeArchive(t *testing.T, path string) string {
+// unsafeRelease 는 package.json 과 plugin.json 옆에 폴더 밖 경로를 담은 release 를 쓰고 그 sha256 을 돌려준다.
+func unsafeRelease(t *testing.T, path string) string {
 	t.Helper()
 	var data bytes.Buffer
 	zipped := gzip.NewWriter(&data)
-	archive := tar.NewWriter(zipped)
+	release := tar.NewWriter(zipped)
 	for _, entry := range [][2]string{
 		{"package.json", `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`},
 		{"plugin.json", `{"id": "probe"}`},
 		{"../escape.txt", "outside"},
 	} {
-		if err := archive.WriteHeader(&tar.Header{Typeflag: tar.TypeReg, Name: entry[0], Mode: 0o644, Size: int64(len(entry[1]))}); err != nil {
+		if err := release.WriteHeader(&tar.Header{Typeflag: tar.TypeReg, Name: entry[0], Mode: 0o644, Size: int64(len(entry[1]))}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := archive.Write([]byte(entry[1])); err != nil {
+		if _, err := release.Write([]byte(entry[1])); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := archive.Close(); err != nil {
+	if err := release.Close(); err != nil {
 		t.Fatal(err)
 	}
 	if err := zipped.Close(); err != nil {
@@ -185,7 +185,7 @@ func TestPluginInstallFailureKeepsThePreviousState(t *testing.T) {
 	if code != 1 || stderr != "sok: "+filepath.Join(config, "plugins/registry.json")+" does not exist; run sok registry use <index.json>\n" {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
-	// index 를 쓴 뒤 archive 가 바뀌면 hash 비교가 설치를 멈춘다.
+	// index 를 쓴 뒤 release 가 바뀌면 hash 비교가 설치를 멈춘다.
 	index := pluginVersions(t, "0.2.0")
 	runJSON(t, "registry", "use", index, "--config-dir", config)
 	var registry map[string]any
@@ -193,19 +193,19 @@ func TestPluginInstallFailureKeepsThePreviousState(t *testing.T) {
 		t.Fatal(err)
 	}
 	url := registry["plugins"].([]any)[0].(map[string]any)["versions"].([]any)[0].(map[string]any)["package"].(map[string]any)["url"].(string)
-	archive := strings.TrimPrefix(url, "file://")
-	if err := os.WriteFile(archive, []byte("changed"), 0o644); err != nil {
+	release := strings.TrimPrefix(url, "file://")
+	if err := os.WriteFile(release, []byte("changed"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	code, _, stderr = run("plugin", "install", "probe", "--config-dir", config)
-	if code != 1 || !strings.HasPrefix(stderr, "sok: plugin probe 0.2.0 package: "+archive+" has sha256 ") {
+	if code != 1 || !strings.HasPrefix(stderr, "sok: plugin probe 0.2.0 package: "+release+" has sha256 ") {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 	if exists(filepath.Join(config, "plugins/installed.json")) || exists(filepath.Join(config, "plugins/probe/0.2.0")) {
 		t.Fatal("a failed install changed the installation")
 	}
-	// 폴더 밖 경로를 담은 archive 는 풀지 않는다.
-	sum := unsafeArchive(t, archive)
+	// 폴더 밖 경로를 담은 release 는 풀지 않는다.
+	sum := unsafeRelease(t, release)
 	registryDir := filepath.Dir(index)
 	replaceIn(t, filepath.Join(registryDir, "plugins/probe.json"), `"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]`, `"sidecars": {}}]`, 1)
 	text := readText(t, filepath.Join(registryDir, "plugins/probe.json"))
@@ -213,12 +213,12 @@ func TestPluginInstallFailureKeepsThePreviousState(t *testing.T) {
 	replaceIn(t, filepath.Join(registryDir, "plugins/probe.json"), old, sum, 1)
 	runJSON(t, "registry", "build", registryDir)
 	code, _, stderr = run("plugin", "install", "probe", "--config-dir", config)
-	if code != 1 || stderr != "sok: plugin probe 0.2.0 package: archive entry ../escape.txt leaves the folder\n" {
+	if code != 1 || stderr != "sok: plugin probe 0.2.0 package: release entry ../escape.txt leaves the folder\n" {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 	if exists(filepath.Join(config, "plugins/installed.json")) || exists(filepath.Join(config, "plugins/probe/0.2.0")) ||
 		exists(filepath.Join(config, "plugins/probe/escape.txt")) {
-		t.Fatal("an unsafe archive changed the installation")
+		t.Fatal("an unsafe release changed the installation")
 	}
 }
 
@@ -439,7 +439,7 @@ func jsonText(t *testing.T, value any) string {
 	return string(data)
 }
 
-// dependencyRegistry writes the entry files of a registry folder with a packed archive of each version and the release
+// dependencyRegistry writes the entry files of a registry folder with a packed release of each version and the release
 // of sidecar worker 0.1.0, writes index.json from the same entries, and returns the registry folder. The sidecars of
 // the index hold only the dependencies that start with @scope/sidecar-.
 func dependencyRegistry(t *testing.T, versions ...dependent) string {
@@ -469,11 +469,11 @@ func dependencyRegistry(t *testing.T, versions ...dependent) string {
 				"license": "MIT", "repository": "https://example.invalid/" + item.id, "versions": []any{}}
 		}
 		plugins[item.id]["versions"] = append(plugins[item.id]["versions"].([]any), entry{"version": item.version,
-			"package": entry{"url": "file://" + result["archive"], "sha256": result["sha256"]}, "engines": entry{"soksak": "^0.0.2"}, "sidecars": sidecars})
+			"package": entry{"url": "file://" + result["release"], "sha256": result["sha256"]}, "engines": entry{"soksak": "^0.0.2"}, "sidecars": sidecars})
 	}
 	sidecar := runJSON(t, "sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", platform)
 	worker := entry{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker", "versions": []any{entry{"version": "0.1.0",
-		"protocol": 1, "assets": entry{platform: entry{"url": "file://" + sidecar["archive"], "sha256": sidecar["sha256"]}}}}}
+		"protocol": 1, "assets": entry{platform: entry{"url": "file://" + sidecar["release"], "sha256": sidecar["sha256"]}}}}}
 	revoked := entry{"plugins": []any{}, "sidecars": []any{}}
 	files := map[string]string{"sidecars/scope-sidecar-worker.json": jsonText(t, worker), "revoked.json": jsonText(t, revoked)}
 	slices.Sort(ids)

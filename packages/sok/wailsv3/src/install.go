@@ -332,7 +332,7 @@ func FilePath(url string) (string, error) {
 	return path.String(), nil
 }
 
-func checkArchive(where string, value any) error {
+func checkReleaseEntry(where string, value any) error {
 	m, err := object(where, value)
 	if err != nil {
 		return err
@@ -416,8 +416,8 @@ func ManifestDependencies(manifest map[string]any) (map[string]string, error) {
 	return ranges, nil
 }
 
-// PluginArchiveName is the file name of a packed plugin.
-func PluginArchiveName(id, version string) string { return id + "-" + version + ".tgz" }
+// ReleaseName is the file name of a packed plugin.
+func ReleaseName(id, version string) string { return id + "-" + version + ".tgz" }
 
 // SidecarFileName 은 sidecar 이름을 파일 이름과 폴더 이름에 쓰는 형태로 바꾼다. `@scope/name` 은 `scope-name` 이다.
 func SidecarFileName(name string) (string, error) {
@@ -478,8 +478,8 @@ func SidecarInstallPath(name, version, platform string) (string, error) {
 	return "sidecars/" + file + "/" + version + "/" + platform, nil
 }
 
-// Archive 는 release archive 의 주소와 hash 다.
-type Archive struct {
+// Release 는 release release 의 주소와 hash 다.
+type Release struct {
 	URL    string `json:"url"`
 	SHA256 string `json:"sha256"`
 }
@@ -487,7 +487,7 @@ type Archive struct {
 // PluginVersion 은 registry 의 plugin version 하나다.
 type PluginVersion struct {
 	Version string  `json:"version"`
-	Package Archive `json:"package"`
+	Package Release `json:"package"`
 	Engines struct {
 		Soksak string `json:"soksak"`
 	} `json:"engines"`
@@ -509,7 +509,7 @@ type RegistryPlugin struct {
 type SidecarVersion struct {
 	Version  string             `json:"version"`
 	Protocol int                `json:"protocol"`
-	Assets   map[string]Archive `json:"assets"`
+	Assets   map[string]Release `json:"assets"`
 }
 
 // RegistrySidecar 는 registry 의 sidecar 항목이다.
@@ -622,7 +622,7 @@ func ValidateRegistryPlugin(value any) error {
 		if err := checkRange(where+" "+version+" engines.soksak", engines["soksak"]); err != nil {
 			return err
 		}
-		if err := checkArchive(where+" "+version+" package", item["package"]); err != nil {
+		if err := checkReleaseEntry(where+" "+version+" package", item["package"]); err != nil {
 			return err
 		}
 		if err := checkSidecarRanges(where+" "+version+" sidecars", item["sidecars"]); err != nil {
@@ -683,7 +683,7 @@ func ValidateRegistrySidecar(value any) error {
 			if err := checkPlatform(platform); err != nil {
 				return fmt.Errorf("%s %s: %w", where, version, err)
 			}
-			if err := checkArchive(where+" "+version+" "+platform, assets[platform]); err != nil {
+			if err := checkReleaseEntry(where+" "+version+" "+platform, assets[platform]); err != nil {
 				return err
 			}
 		}
@@ -1078,7 +1078,7 @@ func needsText(needs []Need) string {
 type SelectedSidecar struct {
 	Name    string
 	Version string
-	Asset   Archive
+	Asset   Release
 }
 
 // Selection 은 설치할 plugin version 과 그 sidecar version 이다.

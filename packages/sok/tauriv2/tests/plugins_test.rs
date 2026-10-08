@@ -1,4 +1,4 @@
-//! plugin 설치(docs/spec/cli.md)가 archive 를 확인해 풀고 installed.json 을 한 번에 바꾸는지 검사한다.
+//! plugin 설치(docs/spec/cli.md)가 release 를 확인해 풀고 installed.json 을 한 번에 바꾸는지 검사한다.
 
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
@@ -76,7 +76,7 @@ fn read_text(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
 }
 
-/// plugin probe 의 version 마다 pack 한 archive 와 sidecar 0.1.0 의 release 로 registry 를 만들고 build 한다.
+/// plugin probe 의 version 마다 pack 한 release 와 sidecar 0.1.0 의 release 로 registry 를 만들고 build 한다.
 struct Registry {
     dir: Dir,
     _work: Vec<Dir>,
@@ -120,7 +120,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
         entries.push(format!(
             r#"{{"version": "{version}", "package": {{"url": "file://{}", "sha256": "{}"}},
             "engines": {{"soksak": "^{core}"}}, "sidecars": {{"@scope/sidecar-worker": "^0.1.0"}}}}"#,
-            result["archive"].as_str().unwrap(),
+            result["release"].as_str().unwrap(),
             result["sha256"].as_str().unwrap()
         ));
         work.push(dir);
@@ -158,7 +158,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
         r#"{{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
         "versions": [{{"version": "0.1.0", "protocol": 1, "assets": {{"{platform}":
         {{"url": "file://{}", "sha256": "{}"}}}}}}]}}"#,
-        released["archive"].as_str().unwrap(),
+        released["release"].as_str().unwrap(),
         released["sha256"].as_str().unwrap()
     );
     write_tree(
@@ -177,7 +177,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
 
 // contract: cli.plugin.install-extracts-and-records
 #[test]
-fn plugin_install_extracts_checked_archives_and_records_the_state() {
+fn plugin_install_extracts_checked_releases_and_records_the_state() {
     let platform = soksak_sok::current_platform().expect("platform");
     let registry = plugin_versions(&["0.2.0"]);
     let index = registry.index();
@@ -232,12 +232,12 @@ fn plugin_install_extracts_checked_archives_and_records_the_state() {
     );
 }
 
-/// package.json 과 plugin.json 옆에 폴더 밖 경로를 담은 archive 를 쓰고 그 sha256 을 돌려준다.
-fn unsafe_archive(path: &Path) -> String {
+/// package.json 과 plugin.json 옆에 폴더 밖 경로를 담은 release 를 쓰고 그 sha256 을 돌려준다.
+fn unsafe_release(path: &Path) -> String {
     let mut data = vec![];
     {
         let zipped = flate2::write::GzEncoder::new(&mut data, flate2::Compression::default());
-        let mut archive = tar::Builder::new(zipped);
+        let mut release = tar::Builder::new(zipped);
         for (name, content) in [
             (
                 "package.json",
@@ -253,9 +253,9 @@ fn unsafe_archive(path: &Path) -> String {
             // tar crate 는 .. 를 담은 이름을 set_path 에서 거부하므로 이름 칸에 직접 쓴다.
             header.as_gnu_mut().unwrap().name[..name.len()].copy_from_slice(name.as_bytes());
             header.set_cksum();
-            archive.append(&header, content.as_bytes()).unwrap();
+            release.append(&header, content.as_bytes()).unwrap();
         }
-        archive.into_inner().unwrap().finish().unwrap();
+        release.into_inner().unwrap().finish().unwrap();
     }
     std::fs::write(path, &data).unwrap();
     Sha256::digest(&data)
@@ -280,7 +280,7 @@ fn plugin_install_failure_keeps_the_previous_state() {
         config.0.join("plugins/registry.json").display()
     );
     assert_eq!((code, stderr), (1, want));
-    // index 를 쓴 뒤 archive 가 바뀌면 hash 비교가 설치를 멈춘다.
+    // index 를 쓴 뒤 release 가 바뀌면 hash 비교가 설치를 멈춘다.
     let registry = plugin_versions(&["0.2.0"]);
     run_json(&[
         "registry",
@@ -293,14 +293,14 @@ fn plugin_install_failure_keeps_the_previous_state() {
     let url = index["plugins"][0]["versions"][0]["package"]["url"]
         .as_str()
         .unwrap();
-    let archive = PathBuf::from(url.strip_prefix("file://").unwrap());
-    std::fs::write(&archive, "changed").unwrap();
+    let release = PathBuf::from(url.strip_prefix("file://").unwrap());
+    std::fs::write(&release, "changed").unwrap();
     let (code, _, stderr) = run(&["plugin", "install", "probe", "--config-dir", config.text()]);
     assert_eq!(code, 1);
     assert!(
         stderr.starts_with(&format!(
             "sok: plugin probe 0.2.0 package: {} has sha256 ",
-            archive.display()
+            release.display()
         )),
         "{stderr}"
     );
@@ -308,8 +308,8 @@ fn plugin_install_failure_keeps_the_previous_state() {
         !config.0.join("plugins/installed.json").exists()
             && !config.0.join("plugins/probe/0.2.0").exists()
     );
-    // 폴더 밖 경로를 담은 archive 는 풀지 않는다.
-    let sum = unsafe_archive(&archive);
+    // 폴더 밖 경로를 담은 release 는 풀지 않는다.
+    let sum = unsafe_release(&release);
     let entry = registry.dir.0.join("plugins/probe.json");
     replace_in(
         &entry,
@@ -332,7 +332,7 @@ fn plugin_install_failure_keeps_the_previous_state() {
         (code, stderr.as_str()),
         (
             1,
-            "sok: plugin probe 0.2.0 package: archive entry ../escape.txt leaves the folder\n"
+            "sok: plugin probe 0.2.0 package: release entry ../escape.txt leaves the folder\n"
         )
     );
     assert!(!config.0.join("plugins/installed.json").exists());
@@ -605,7 +605,7 @@ fn ext(range: &'static str) -> Dependent {
     }
 }
 
-/// Writes the entry files of a registry folder with a packed archive of each version and the release of sidecar
+/// Writes the entry files of a registry folder with a packed release of each version and the release of sidecar
 /// worker 0.1.0, and writes index.json from the same entries. The sidecars of the index hold only the dependencies
 /// that start with @scope/sidecar-.
 fn dependency_registry(versions: &[Dependent]) -> Registry {
@@ -639,7 +639,7 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
                 "repository": format!("https://example.invalid/{}", item.id), "versions": []})
         });
         entry["versions"].as_array_mut().unwrap().push(json!({"version": item.version,
-            "package": {"url": format!("file://{}", result["archive"].as_str().unwrap()), "sha256": result["sha256"]},
+            "package": {"url": format!("file://{}", result["release"].as_str().unwrap()), "sha256": result["sha256"]},
             "engines": {"soksak": "^0.0.2"}, "sidecars": sidecars}));
         work.push(dir);
     }
@@ -668,7 +668,7 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
     ]);
     let worker = json!({"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
         "versions": [{"version": "0.1.0", "protocol": 1, "assets": {platform.as_str():
-        {"url": format!("file://{}", released["archive"].as_str().unwrap()), "sha256": released["sha256"]}}}]});
+        {"url": format!("file://{}", released["release"].as_str().unwrap()), "sha256": released["sha256"]}}}]});
     let revoked = json!({"plugins": [], "sidecars": []});
     let mut files = vec![
         (

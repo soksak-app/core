@@ -10,8 +10,8 @@ import { registryManifestErrors } from "../check-registry-manifests.mjs";
 
 const good = { id: "probe", name: "Probe", description: "Fixture plugin.", sections: [{ id: "probe.list", name: "List", module: "ui/list.js" }] };
 
-/** A plugin archive with manifest at its root, as `sok plugin pack` writes it. */
-function archive(t, manifest) {
+/** A plugin release with manifest at its root, as `sok plugin pack` writes it. */
+function release(t, manifest) {
   const folder = mkdtempSync(join(tmpdir(), "registry-manifest-fixture-"));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   writeFileSync(join(folder, "plugin.json"), JSON.stringify(manifest));
@@ -23,10 +23,10 @@ function archive(t, manifest) {
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 test("each plugin version that the new core installs and whose manifest it rejects is reported", async (t) => {
-  const accepted = archive(t, good);
-  const rejected = archive(t, { ...good, panel: true });
-  const archives = new Map([["a", accepted], ["b", rejected], ["c", accepted], ["d", rejected], ["e", rejected]]);
-  const version = (v, key, range, digest = sha(archives.get(key))) => ({
+  const accepted = release(t, good);
+  const rejected = release(t, { ...good, panel: true });
+  const releases = new Map([["a", accepted], ["b", rejected], ["c", accepted], ["d", rejected], ["e", rejected]]);
+  const version = (v, key, range, digest = sha(releases.get(key))) => ({
     version: v, package: { url: key, sha256: digest }, engines: { soksak: range }, sidecars: {},
   });
   const index = {
@@ -39,10 +39,10 @@ test("each plugin version that the new core installs and whose manifest it rejec
     ] }],
     revoked: { plugins: [{ id: "probe", version: "0.0.5", reason: "Fixture." }], sidecars: [] },
   };
-  const { checked, errors } = await registryManifestErrors(index, "0.0.6", async (url) => archives.get(url));
+  const { checked, errors } = await registryManifestErrors(index, "0.0.6", async (url) => releases.get(url));
   assert.equal(checked, 3, "0.0.4 is outside its range and 0.0.5 is revoked");
   assert.deepEqual(errors, [
     "plugin probe 0.0.2: plugin.json: unknown field panel",
-    `plugin probe 0.0.3: archive sha256 ${sha(accepted)} differs from the index ${"0".repeat(64)}`,
+    `plugin probe 0.0.3: release sha256 ${sha(accepted)} differs from the index ${"0".repeat(64)}`,
   ]);
 });

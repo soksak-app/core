@@ -30,22 +30,22 @@ func sokJSON(t *testing.T, args ...string) map[string]any {
 	return value
 }
 
-// pluginRegistry 는 fixtures/plugin-probe(sidecar 가 없는 plugin probe 0.0.8)의 archive 와 그 registry 를
-// 만들고 index.json 과 archive 의 경로를 돌려준다. go test 는 package 폴더에서 실행하므로 fixture 는 그 아래에 있다.
-func pluginRegistry(t *testing.T) (index, archive string) {
+// pluginRegistry 는 fixtures/plugin-probe(sidecar 가 없는 plugin probe 0.0.8)의 release 와 그 registry 를
+// 만들고 index.json 과 release 의 경로를 돌려준다. go test 는 package 폴더에서 실행하므로 fixture 는 그 아래에 있다.
+func pluginRegistry(t *testing.T) (index, release string) {
 	t.Helper()
 	releases, registry := t.TempDir(), t.TempDir()
 	packed := sokJSON(t, "plugin", "pack", "fixtures/plugin-probe", releases)
-	archive = packed["archive"].(string)
+	release = packed["release"].(string)
 	writeInstalled(t, registry, map[string]string{
 		"plugins/probe.json": `{"id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
 			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.0.8",
-			"package": {"url": "file://` + archive + `", "sha256": "` + packed["sha256"].(string) + `"},
+			"package": {"url": "file://` + release + `", "sha256": "` + packed["sha256"].(string) + `"},
 			"engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}]}`,
 		"revoked.json": `{"plugins": [], "sidecars": []}`,
 	})
 	sokJSON(t, "registry", "build", registry)
-	return filepath.Join(registry, "index.json"), archive
+	return filepath.Join(registry, "index.json"), release
 }
 
 // changes 는 plugins-changed 알림을 모은다.
@@ -184,7 +184,7 @@ func TestPluginsRunChangesTheInstallationLikeTheCommand(t *testing.T) {
 // contract: plugins.run.rejects-invalid-and-concurrent
 func TestPluginsRunRejectsInvalidAndConcurrentOperations(t *testing.T) {
 	config := t.TempDir()
-	index, archive := pluginRegistry(t)
+	index, release := pluginRegistry(t)
 	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
 		t.Fatal(err)
 	}
@@ -202,15 +202,15 @@ func TestPluginsRunRejectsInvalidAndConcurrentOperations(t *testing.T) {
 			t.Fatalf("%+v: %v, want %s", request.request, err, request.want)
 		}
 	}
-	// archive 를 FIFO 로 바꾸면 설치는 그 FIFO 를 읽는 동안 멈춘다. FIFO 를 쓰기로 연 순간 설치는 실행 중이다.
-	data, err := os.ReadFile(archive)
+	// release 를 FIFO 로 바꾸면 설치는 그 FIFO 를 읽는 동안 멈춘다. FIFO 를 쓰기로 연 순간 설치는 실행 중이다.
+	data, err := os.ReadFile(release)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(archive); err != nil {
+	if err := os.Remove(release); err != nil {
 		t.Fatal(err)
 	}
-	if err := syscall.Mkfifo(archive, 0o644); err != nil {
+	if err := syscall.Mkfifo(release, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	first := make(chan error, 1)
@@ -218,7 +218,7 @@ func TestPluginsRunRejectsInvalidAndConcurrentOperations(t *testing.T) {
 		_, err := plugins.Run(host.PluginsRunRequest{Action: "install", Plugin: "probe"})
 		first <- err
 	}()
-	writer, err := os.OpenFile(archive, os.O_WRONLY, 0)
+	writer, err := os.OpenFile(release, os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

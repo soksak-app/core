@@ -287,7 +287,7 @@ pub fn file_path(url: &str) -> Result<String, String> {
     String::from_utf8(path).map_err(|_| "url is not UTF-8 after unescaping".to_string())
 }
 
-fn check_archive(at: &str, value: Option<&Value>) -> Result<(), String> {
+fn check_release_entry(at: &str, value: Option<&Value>) -> Result<(), String> {
     let map = object(at, value)?;
     only(at, map, &["sha256", "url"])?;
     if !map
@@ -360,7 +360,7 @@ pub fn manifest_dependencies(manifest: &Value) -> Result<BTreeMap<String, String
 }
 
 /// The file name of a packed plugin.
-pub fn plugin_archive_name(id: &str, version: &str) -> String {
+pub fn release_name(id: &str, version: &str) -> String {
     format!("{id}-{version}.tgz")
 }
 
@@ -416,9 +416,9 @@ pub fn sidecar_install_path(name: &str, version: &str, platform: &str) -> Result
     ))
 }
 
-/// Release archive 의 주소와 hash.
+/// Release release 의 주소와 hash.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-pub struct Archive {
+pub struct Release {
     pub url: String,
     pub sha256: String,
 }
@@ -433,7 +433,7 @@ pub struct Engines {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PluginVersion {
     pub version: String,
-    pub package: Archive,
+    pub package: Release,
     pub engines: Engines,
     pub sidecars: BTreeMap<String, String>,
 }
@@ -455,7 +455,7 @@ pub struct RegistryPlugin {
 pub struct SidecarVersion {
     pub version: String,
     pub protocol: u64,
-    pub assets: BTreeMap<String, Archive>,
+    pub assets: BTreeMap<String, Release>,
 }
 
 /// Registry 의 sidecar 항목.
@@ -565,7 +565,7 @@ pub fn validate_registry_plugin(value: &Value) -> Result<(), String> {
             &format!("{at} {version} engines.soksak"),
             engines.get("soksak"),
         )?;
-        check_archive(&format!("{at} {version} package"), item.get("package"))?;
+        check_release_entry(&format!("{at} {version} package"), item.get("package"))?;
         check_sidecar_ranges(&format!("{at} {version} sidecars"), item.get("sidecars"))?;
     }
     if seen.is_empty() {
@@ -601,7 +601,7 @@ pub fn validate_registry_sidecar(value: &Value) -> Result<(), String> {
         }
         for platform in sorted_keys(assets) {
             check_platform(platform).map_err(|error| format!("{at} {version}: {error}"))?;
-            check_archive(&format!("{at} {version} {platform}"), assets.get(platform))?;
+            check_release_entry(&format!("{at} {version} {platform}"), assets.get(platform))?;
         }
         if !is_one(item.get("protocol")) {
             return Err(format!("{at} {version}: protocol must be 1"));
@@ -970,7 +970,7 @@ pub fn needs_text(needs: &[Need]) -> String {
 pub struct SelectedSidecar {
     pub name: String,
     pub version: String,
-    pub asset: Archive,
+    pub asset: Release,
 }
 
 /// 설치할 plugin version 과 그 sidecar version.

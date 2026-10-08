@@ -22,7 +22,7 @@ pub trait Platform {
     fn on_interrupt(&self, interrupted: Box<dyn FnOnce() + Send>) -> Result<(), String>;
     /// 사용자 설정 폴더. Go 의 os.UserConfigDir 와 같은 자리다.
     fn config_dir(&self) -> Result<PathBuf, String>;
-    /// 파일에 실행 bit 가 있는지. archive 항목의 mode 를 정한다.
+    /// 파일에 실행 bit 가 있는지. release 항목의 mode 를 정한다.
     fn executable(&self, metadata: &std::fs::Metadata) -> bool;
     /// 이 플랫폼의 release asset key(`<os>-<arch>`). 이 architecture 의 key 가 없으면 오류다.
     fn key(&self) -> Result<String, String>;

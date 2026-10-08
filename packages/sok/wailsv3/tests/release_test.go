@@ -1,6 +1,6 @@
 package tests
 
-// plugin pack 과 sidecar release(docs/spec/cli.md)가 쓰는 archive 와 SHA256SUMS 를 검사한다.
+// plugin pack 과 sidecar release(docs/spec/cli.md)가 쓰는 release 와 SHA256SUMS 를 검사한다.
 
 import (
 	"archive/tar"
@@ -42,7 +42,7 @@ type tarEntry struct {
 	content string
 }
 
-func readArchive(t *testing.T, path string) ([]tarEntry, string) {
+func readRelease(t *testing.T, path string) ([]tarEntry, string) {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -90,17 +90,17 @@ func pluginTree(t *testing.T) string {
 	return dir
 }
 
-// contract: cli.pack.writes-sorted-plugin-archive
-func TestPluginPackWritesASortedArchiveOfTheListedFiles(t *testing.T) {
+// contract: cli.pack.writes-sorted-plugin-release
+func TestPluginPackWritesASortedReleaseOfTheListedFiles(t *testing.T) {
 	dir := pluginTree(t)
 	out := filepath.Join(t.TempDir(), "out")
 	code, stdout, stderr := run("plugin", "pack", dir, out)
 	if code != 0 {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
-	archive := filepath.Join(out, "probe-0.2.0.tgz")
-	entries, sum := readArchive(t, archive)
-	want := fmt.Sprintf("{\n  \"archive\": %q,\n  \"id\": \"probe\",\n  \"sha256\": %q,\n  \"version\": \"0.2.0\"\n}\n", archive, sum)
+	release := filepath.Join(out, "probe-0.2.0.tgz")
+	entries, sum := readRelease(t, release)
+	want := fmt.Sprintf("{\n  \"id\": \"probe\",\n  \"release\": %q,\n  \"sha256\": %q,\n  \"version\": \"0.2.0\"\n}\n", release, sum)
 	if stdout != want {
 		t.Fatalf("stdout %q, want %q", stdout, want)
 	}
@@ -128,7 +128,7 @@ func TestPluginPackRejectsLinksAndAManifestMismatchWithoutWriting(t *testing.T) 
 	}
 	out := filepath.Join(t.TempDir(), "out")
 	code, _, stderr := run("plugin", "pack", dir, out)
-	if code != 1 || stderr != "sok: ui/link.js is a symbolic link; an archive holds no links\n" {
+	if code != 1 || stderr != "sok: ui/link.js is a symbolic link; an release holds no links\n" {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 	if names, _ := os.ReadDir(out); len(names) != 0 {
@@ -165,7 +165,7 @@ func sidecarTree(t *testing.T, version string) string {
 	return dir
 }
 
-// contract: cli.release.writes-asset-and-sums
+// contract: cli.release.writes-release-and-sums
 func TestSidecarReleaseWritesTheAssetAndKeepsSHA256SUMSSorted(t *testing.T) {
 	out := t.TempDir()
 	var sums []string
@@ -179,8 +179,8 @@ func TestSidecarReleaseWritesTheAssetAndKeepsSHA256SUMSSorted(t *testing.T) {
 			t.Fatal(err)
 		}
 		name := "scope-sidecar-worker-" + item[0] + "-" + item[1] + ".tar.gz"
-		entries, sum := readArchive(t, filepath.Join(out, name))
-		if result["archive"] != filepath.Join(out, name) || result["sha256"] != sum || result["platform"] != item[1] ||
+		entries, sum := readRelease(t, filepath.Join(out, name))
+		if result["release"] != filepath.Join(out, name) || result["sha256"] != sum || result["platform"] != item[1] ||
 			result["name"] != "@scope/sidecar-worker" || result["version"] != item[0] {
 			t.Fatalf("result %v", result)
 		}
@@ -189,7 +189,7 @@ func TestSidecarReleaseWritesTheAssetAndKeepsSHA256SUMSSorted(t *testing.T) {
 		}
 		sums = append(sums, sum+"  "+name)
 	}
-	// 같은 이름의 세 번째 release 는 첫 줄을 바꾸고, 줄은 archive 이름 순서다.
+	// 같은 이름의 세 번째 release 는 첫 줄을 바꾸고, 줄은 release 이름 순서다.
 	data, err := os.ReadFile(filepath.Join(out, "SHA256SUMS"))
 	if err != nil || string(data) != sums[1]+"\n"+sums[2]+"\n" {
 		t.Fatalf("SHA256SUMS %q %v", data, err)
@@ -206,11 +206,11 @@ func TestSidecarReleaseWritesTheAssetAndKeepsSHA256SUMSSorted(t *testing.T) {
 	}
 	writeTree(t, out, map[string]string{"SHA256SUMS": "broken\n"})
 	code, _, stderr = run("sidecar", "release", sidecarTree(t, "0.2.0"), out, "--platform", "darwin-arm64")
-	if code != 1 || stderr != "sok: "+filepath.Join(out, "SHA256SUMS")+" line 1 is not \"<sha256>  <archive name>\"\n" {
+	if code != 1 || stderr != "sok: "+filepath.Join(out, "SHA256SUMS")+" line 1 is not \"<sha256>  <release name>\"\n" {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 	if _, err := os.Stat(filepath.Join(out, "scope-sidecar-worker-0.2.0-darwin-arm64.tar.gz")); !os.IsNotExist(err) {
-		t.Fatalf("a failed release left its archive: %v", err)
+		t.Fatalf("a failed release left its release: %v", err)
 	}
 }
 
@@ -233,7 +233,7 @@ func TestPluginPackAddsDiagnosticDeclarationsOnlyWithTheFlag(t *testing.T) {
 		if code != 0 {
 			t.Fatalf("%v: code %d stderr %q", c.flags, code, stderr)
 		}
-		entries, _ := readArchive(t, filepath.Join(out, "probe-0.2.0.tgz"))
+		entries, _ := readRelease(t, filepath.Join(out, "probe-0.2.0.tgz"))
 		var names []string
 		for _, entry := range entries {
 			names = append(names, entry.name)

@@ -22,8 +22,8 @@ import (
 	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
 
-// archiveEntry 는 archive 에 넣는 파일 하나다. path 는 폴더 기준 상대 경로이며 / 로 나눈다.
-type archiveEntry struct {
+// releaseEntry 는 release 에 넣는 파일 하나다. path 는 폴더 기준 상대 경로이며 / 로 나눈다.
+type releaseEntry struct {
 	path       string
 	source     string
 	executable bool
@@ -38,11 +38,11 @@ func CurrentPlatform() (string, error) {
 	return current.Key()
 }
 
-// collect 는 package.json 과 files 의 경로를 archive 항목으로 모은다. 폴더는 그 아래 파일까지 모으고, symbolic
+// collect 는 package.json 과 files 의 경로를 release 항목으로 모은다. 폴더는 그 아래 파일까지 모으고, symbolic
 // link 나 일반 파일도 폴더도 아닌 파일은 거부한다.
-func collect(dir string, listed []string) ([]archiveEntry, error) {
+func collect(dir string, listed []string) ([]releaseEntry, error) {
 	seen := map[string]bool{}
-	var entries []archiveEntry
+	var entries []releaseEntry
 	var add func(path string) error
 	add = func(path string) error {
 		if seen[path] {
@@ -56,7 +56,7 @@ func collect(dir string, listed []string) ([]archiveEntry, error) {
 		}
 		switch {
 		case info.Mode()&os.ModeSymlink != 0:
-			return fmt.Errorf("%s is a symbolic link; an archive holds no links", path)
+			return fmt.Errorf("%s is a symbolic link; an release holds no links", path)
 		case info.IsDir():
 			children, err := os.ReadDir(source)
 			if err != nil {
@@ -68,7 +68,7 @@ func collect(dir string, listed []string) ([]archiveEntry, error) {
 				}
 			}
 		case info.Mode().IsRegular():
-			entries = append(entries, archiveEntry{path: path, source: source, executable: info.Mode()&0o111 != 0})
+			entries = append(entries, releaseEntry{path: path, source: source, executable: info.Mode()&0o111 != 0})
 		default:
 			return fmt.Errorf("%s is neither a regular file nor a directory", path)
 		}
@@ -83,13 +83,13 @@ func collect(dir string, listed []string) ([]archiveEntry, error) {
 			return nil, err
 		}
 	}
-	slices.SortFunc(entries, func(a, b archiveEntry) int { return strings.Compare(a.path, b.path) })
+	slices.SortFunc(entries, func(a, b releaseEntry) int { return strings.Compare(a.path, b.path) })
 	return entries, nil
 }
 
-// writeArchive 는 항목을 output 에 쓰고 그 sha256 을 돌려준다. 같은 폴더의 임시 파일에 쓴 뒤 이름을 바꾸므로
+// writeRelease 는 항목을 output 에 쓰고 그 sha256 을 돌려준다. 같은 폴더의 임시 파일에 쓴 뒤 이름을 바꾸므로
 // 실패하면 output 은 바뀌지 않는다.
-func writeArchive(entries []archiveEntry, output string) (sum string, err error) {
+func writeRelease(entries []releaseEntry, output string) (sum string, err error) {
 	temp, err := os.CreateTemp(filepath.Dir(output), "."+filepath.Base(output)+".*")
 	if err != nil {
 		return "", fileError(output, err)
@@ -106,7 +106,7 @@ func writeArchive(entries []archiveEntry, output string) (sum string, err error)
 	}()
 	hash := sha256.New()
 	zipped := gzip.NewWriter(io.MultiWriter(temp, hash))
-	archive := tar.NewWriter(zipped)
+	release := tar.NewWriter(zipped)
 	for _, entry := range entries {
 		data, err := os.ReadFile(entry.source)
 		if err != nil {
@@ -117,14 +117,14 @@ func writeArchive(entries []archiveEntry, output string) (sum string, err error)
 			mode = 0o755
 		}
 		header := &tar.Header{Typeflag: tar.TypeReg, Name: entry.path, Mode: mode, Size: int64(len(data)), ModTime: time.Unix(0, 0)}
-		if err := archive.WriteHeader(header); err != nil {
+		if err := release.WriteHeader(header); err != nil {
 			return "", err
 		}
-		if _, err := archive.Write(data); err != nil {
+		if _, err := release.Write(data); err != nil {
 			return "", err
 		}
 	}
-	for _, closer := range []io.Closer{archive, zipped, temp} {
+	for _, closer := range []io.Closer{release, zipped, temp} {
 		if err := closer.Close(); err != nil {
 			return "", err
 		}
@@ -287,15 +287,15 @@ func runPack(dir, out string, diagnostics bool, stdout io.Writer) error {
 		return err
 	}
 	version := pkg["version"].(string)
-	output, err := outputPath(out, PluginArchiveName(id, version))
+	output, err := outputPath(out, ReleaseName(id, version))
 	if err != nil {
 		return err
 	}
-	sum, err := writeArchive(entries, output)
+	sum, err := writeRelease(entries, output)
 	if err != nil {
 		return err
 	}
-	return printJSON(stdout, map[string]string{"id": id, "version": version, "archive": output, "sha256": sum})
+	return printJSON(stdout, map[string]string{"id": id, "version": version, "release": output, "sha256": sum})
 }
 
 // runRelease 는 sidecar 폴더를 검사하고 release asset 을 쓴 뒤 SHA256SUMS 를 갱신한다.
@@ -356,13 +356,13 @@ func runRelease(dir, out, platform string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	// SHA256SUMS 를 먼저 읽으므로 그 파일이 틀리면 archive 를 쓰지 않는다.
+	// SHA256SUMS 를 먼저 읽으므로 그 파일이 틀리면 release 를 쓰지 않는다.
 	sumsPath := filepath.Join(filepath.Dir(output), "SHA256SUMS")
 	sums, err := readSums(sumsPath)
 	if err != nil {
 		return err
 	}
-	sum, err := writeArchive(entries, output)
+	sum, err := writeRelease(entries, output)
 	if err != nil {
 		return err
 	}
@@ -370,10 +370,10 @@ func runRelease(dir, out, platform string, stdout io.Writer) error {
 	if err := writeSums(sumsPath, sums); err != nil {
 		return err
 	}
-	return printJSON(stdout, map[string]string{"name": name, "version": version, "platform": platform, "archive": output, "sha256": sum})
+	return printJSON(stdout, map[string]string{"name": name, "version": version, "platform": platform, "release": output, "sha256": sum})
 }
 
-// readSums 는 SHA256SUMS 를 archive 이름마다 sha256 으로 읽는다. 파일이 없으면 빈 목록이다.
+// readSums 는 SHA256SUMS 를 release 이름마다 sha256 으로 읽는다. 파일이 없으면 빈 목록이다.
 func readSums(path string) (map[string]string, error) {
 	sums := map[string]string{}
 	data, err := os.ReadFile(path)
@@ -386,14 +386,14 @@ func readSums(path string) (map[string]string, error) {
 	for i, line := range strings.Split(strings.TrimSuffix(string(data), "\n"), "\n") {
 		hash, name, found := strings.Cut(line, "  ")
 		if !found || !isSHA256(hash) || name == "" {
-			return nil, fmt.Errorf("%s line %d is not \"<sha256>  <archive name>\"", path, i+1)
+			return nil, fmt.Errorf("%s line %d is not \"<sha256>  <release name>\"", path, i+1)
 		}
 		sums[name] = hash
 	}
 	return sums, nil
 }
 
-// writeSums 는 SHA256SUMS 를 archive 이름 순서로 쓴다.
+// writeSums 는 SHA256SUMS 를 release 이름 순서로 쓴다.
 func writeSums(path string, sums map[string]string) error {
 	names := make([]string, 0, len(sums))
 	for name := range sums {

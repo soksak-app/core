@@ -117,7 +117,7 @@ fn fetcher(server: &Server) -> Fetcher {
     Fetcher {
         roots: Some(vec![server.ca.clone()]),
         index: limit,
-        archive: limit,
+        release: limit,
     }
 }
 
@@ -198,14 +198,14 @@ fn status_size_and_timeout_fail_with_their_texts() {
     ] {
         let url = format!("{}{path}", server.url);
         assert_eq!(
-            fetcher.read(&url, fetcher.archive),
+            fetcher.read(&url, fetcher.release),
             Err(format!("{url}: {want}"))
         );
     }
     assert_eq!(SLOW.load(Ordering::SeqCst), 1);
     assert_eq!(
         fetcher
-            .read(&format!("{}/limit", server.url), fetcher.archive)
+            .read(&format!("{}/limit", server.url), fetcher.release)
             .map(|data| data.len()),
         Ok(16)
     );

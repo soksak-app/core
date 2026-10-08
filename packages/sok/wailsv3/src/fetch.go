@@ -1,6 +1,6 @@
 package sok
 
-// registry index 와 archive 를 위치에서 읽는다(docs/spec/installation.md#fetching). 위치는 https: URL 이나 절대
+// registry index 와 release 를 위치에서 읽는다(docs/spec/installation.md#fetching). 위치는 https: URL 이나 절대
 // file: URL 이다. https: 는 운영체제가 신뢰하는 인증 기관으로 TLS 를 쓰고, https: 로의 redirect 만 5 번까지 따라가며,
 // 200 이 아닌 응답, 한도보다 큰 본문, 한도보다 느린 요청을 정한 문장으로 거부한다. 아무것도 저장해 두지 않는다.
 
@@ -28,7 +28,7 @@ type Limit struct {
 type Fetcher struct {
 	TLS     *tls.Config
 	Index   Limit
-	Archive Limit
+	Release Limit
 }
 
 // maxRedirects 는 따라가는 redirect 의 최대 수다.
@@ -37,7 +37,7 @@ const maxRedirects = 5
 // DefaultFetcher 는 명세의 한도를 쓰는 Fetcher 다.
 var DefaultFetcher = Fetcher{
 	Index:   Limit{Bytes: 8 << 20, Timeout: 60 * time.Second},
-	Archive: Limit{Bytes: 256 << 20, Timeout: 600 * time.Second},
+	Release: Limit{Bytes: 256 << 20, Timeout: 600 * time.Second},
 }
 
 // errRedirect 는 따를 수 없는 redirect 다. 문장은 그대로 오류가 된다.

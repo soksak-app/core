@@ -1,4 +1,4 @@
-//! registry index 와 archive 를 위치에서 읽는다(docs/spec/installation.md#fetching). 위치는 https: URL 이나 절대
+//! registry index 와 release 를 위치에서 읽는다(docs/spec/installation.md#fetching). 위치는 https: URL 이나 절대
 //! file: URL 이다. https: 는 운영체제가 신뢰하는 인증 기관으로 TLS 를 쓰고, https: 로의 redirect 만 5 번까지 따라가며,
 //! 200 이 아닌 응답, 한도보다 큰 본문, 한도보다 느린 요청을 정한 문장으로 거부한다. 아무것도 저장해 두지 않는다.
 
@@ -21,7 +21,7 @@ pub struct Limit {
 pub struct Fetcher {
     pub roots: Option<Vec<Vec<u8>>>,
     pub index: Limit,
-    pub archive: Limit,
+    pub release: Limit,
 }
 
 /// 따라가는 redirect 의 최대 수.
@@ -67,7 +67,7 @@ impl Default for Fetcher {
                 bytes: 8 << 20,
                 timeout: Duration::from_secs(60),
             },
-            archive: Limit {
+            release: Limit {
                 bytes: 256 << 20,
                 timeout: Duration::from_secs(600),
             },

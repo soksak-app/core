@@ -64,7 +64,7 @@ fn write_tree(dir: &Path, files: &[(&str, &str)]) {
     }
 }
 
-/// registry 폴더와 archive 의 주소와 hash.
+/// registry 폴더와 release 의 주소와 hash.
 struct Registry {
     dir: Dir,
     _releases: Dir,
@@ -72,7 +72,7 @@ struct Registry {
     sidecar: (String, String),
 }
 
-/// pack 과 release 로 archive 를 만들고 그 주소와 hash 를 담은 registry 폴더를 쓴다.
+/// pack 과 release 로 release 를 만들고 그 주소와 hash 를 담은 registry 폴더를 쓴다.
 fn registry_tree() -> Registry {
     let platform = soksak_sok::current_platform().expect("platform");
     let releases = Dir::new();
@@ -123,7 +123,7 @@ fn registry_tree() -> Registry {
         assert_eq!(code, 0, "{stderr}");
         let result: Value = serde_json::from_str(&stdout).unwrap();
         results.push((
-            result["archive"].as_str().unwrap().to_string(),
+            result["release"].as_str().unwrap().to_string(),
             result["sha256"].as_str().unwrap().to_string(),
         ));
     }
@@ -164,7 +164,7 @@ fn registry_tree() -> Registry {
 
 // contract: cli.registry.writes-checked-index
 #[test]
-fn registry_build_writes_the_index_after_checking_every_archive() {
+fn registry_build_writes_the_index_after_checking_every_release() {
     let registry = registry_tree();
     let platform = soksak_sok::current_platform().expect("platform");
     let (code, stdout, stderr) = run(&["registry", "build", registry.dir.text()]);
@@ -254,7 +254,7 @@ fn replace_in(path: &Path, old: &str, replacement: &str) {
 /// The packages and ranges of the plugin.json dependencies of each plugin id.
 type Plugins<'a> = &'a [(&'a str, &'a [(&'a str, &'a str)])];
 
-/// Writes a registry folder with an archive packed from the plugin.json dependencies of version 1.0.0 of each plugin
+/// Writes a registry folder with an release packed from the plugin.json dependencies of version 1.0.0 of each plugin
 /// id and the release of sidecar worker 0.1.0. The sidecars of an entry hold only the dependencies that start with
 /// @scope/sidecar-.
 fn dependency_tree(plugins: Plugins) -> (Dir, Dir) {
@@ -284,7 +284,7 @@ fn dependency_tree(plugins: Plugins) -> (Dir, Dir) {
             .collect();
         let entry = json!({"id": id, "package": format!("@scope/plugin-{id}"), "name": id,
             "description": "검사용 plugin.", "license": "MIT", "repository": format!("https://example.invalid/{id}"),
-            "versions": [{"version": "1.0.0", "package": {"url": format!("file://{}", result["archive"].as_str().unwrap()),
+            "versions": [{"version": "1.0.0", "package": {"url": format!("file://{}", result["release"].as_str().unwrap()),
             "sha256": result["sha256"]}, "engines": {"soksak": "^0.0.2"}, "sidecars": sidecars}]});
         write_tree(
             &dir.0,
@@ -318,7 +318,7 @@ fn dependency_tree(plugins: Plugins) -> (Dir, Dir) {
     let released: Value = serde_json::from_str(&stdout).unwrap();
     let worker = json!({"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
         "versions": [{"version": "0.1.0", "protocol": 1, "assets": {platform.as_str():
-        {"url": format!("file://{}", released["archive"].as_str().unwrap()), "sha256": released["sha256"]}}}]});
+        {"url": format!("file://{}", released["release"].as_str().unwrap()), "sha256": released["sha256"]}}}]});
     write_tree(
         &dir.0,
         &[

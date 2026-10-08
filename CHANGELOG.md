@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R5.3.2: `sok plugin pack` and `sok sidecar release` print the written file as `release`, and the identifiers and contract cases of `sok` say release.
 - R5.3.1: the specifications and comments of core call plugins plugins, sidecars sidecars and their `.tgz` files releases; `sok` errors and identifiers follow.
 - F111.7.6: the contract case `page.start.sok-core-owner` covers the Tauri start document address.
 - F111.7.5: the Tauri start document handler states why a request without a host answers not found.

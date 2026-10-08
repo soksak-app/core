@@ -22,7 +22,7 @@ func tlsFetcher(server *httptest.Server) sok.Fetcher {
 	return sok.Fetcher{
 		TLS:     &tls.Config{RootCAs: transport.TLSClientConfig.RootCAs},
 		Index:   sok.Limit{Bytes: 16, Timeout: time.Second},
-		Archive: sok.Limit{Bytes: 16, Timeout: time.Second},
+		Release: sok.Limit{Bytes: 16, Timeout: time.Second},
 	}
 }
 
@@ -95,11 +95,11 @@ func TestStatusSizeAndTimeoutFailWithTheirTexts(t *testing.T) {
 		"/slow":    "timed out after 1 s",
 	}
 	for path, want := range cases {
-		if _, err := fetcher.Read(server.URL+path, fetcher.Archive); err == nil || err.Error() != server.URL+path+": "+want {
+		if _, err := fetcher.Read(server.URL+path, fetcher.Release); err == nil || err.Error() != server.URL+path+": "+want {
 			t.Fatalf("%s: %v", path, err)
 		}
 	}
-	if data, err := fetcher.Read(server.URL+"/limit", fetcher.Archive); err != nil || len(data) != 16 {
+	if data, err := fetcher.Read(server.URL+"/limit", fetcher.Release); err != nil || len(data) != 16 {
 		t.Fatalf("limit: %d %v", len(data), err)
 	}
 }

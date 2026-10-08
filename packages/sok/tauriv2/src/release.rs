@@ -11,8 +11,8 @@ use sha2::{Digest, Sha256};
 use crate::install::{self, check_platform};
 use crate::{platform, Error};
 
-/// archive 에 넣는 파일 하나. path 는 폴더 기준 상대 경로이며 / 로 나눈다.
-struct ArchiveEntry {
+/// release 에 넣는 파일 하나. path 는 폴더 기준 상대 경로이며 / 로 나눈다.
+struct ReleaseEntry {
     path: String,
     source: PathBuf,
     executable: bool,
@@ -27,13 +27,13 @@ fn leaves(path: &str) -> bool {
     path.is_empty() || path.starts_with('/') || path.split('/').any(|part| part == "..")
 }
 
-/// package.json 과 files 의 경로를 archive 항목으로 모은다. 폴더는 그 아래 파일까지 모으고, symbolic link 나 일반
+/// package.json 과 files 의 경로를 release 항목으로 모은다. 폴더는 그 아래 파일까지 모으고, symbolic link 나 일반
 /// 파일도 폴더도 아닌 파일은 거부한다.
-fn collect(dir: &Path, listed: &[String]) -> Result<Vec<ArchiveEntry>, String> {
+fn collect(dir: &Path, listed: &[String]) -> Result<Vec<ReleaseEntry>, String> {
     fn add(
         dir: &Path,
         path: String,
-        entries: &mut BTreeMap<String, ArchiveEntry>,
+        entries: &mut BTreeMap<String, ReleaseEntry>,
     ) -> Result<(), String> {
         if entries.contains_key(&path) {
             return Ok(());
@@ -44,7 +44,7 @@ fn collect(dir: &Path, listed: &[String]) -> Result<Vec<ArchiveEntry>, String> {
         let kind = info.file_type();
         if kind.is_symlink() {
             return Err(format!(
-                "{path} is a symbolic link; an archive holds no links"
+                "{path} is a symbolic link; an release holds no links"
             ));
         }
         if kind.is_dir() {
@@ -71,7 +71,7 @@ fn collect(dir: &Path, listed: &[String]) -> Result<Vec<ArchiveEntry>, String> {
         let executable = platform::current()?.executable(&info);
         entries.insert(
             path.clone(),
-            ArchiveEntry {
+            ReleaseEntry {
                 path,
                 source,
                 executable,
@@ -132,7 +132,7 @@ pub fn replace_file(path: &Path, data: &[u8]) -> Result<(), String> {
 }
 
 /// 항목을 output 에 쓰고 그 sha256 을 돌려준다.
-fn write_archive(entries: &[ArchiveEntry], output: &Path) -> Result<String, String> {
+fn write_release(entries: &[ReleaseEntry], output: &Path) -> Result<String, String> {
     let mut sum = String::new();
     replace_with(output, |file| {
         let hashing = HashingWriter {
@@ -142,7 +142,7 @@ fn write_archive(entries: &[ArchiveEntry], output: &Path) -> Result<String, Stri
         let zipped = flate2::GzBuilder::new()
             .mtime(0)
             .write(hashing, flate2::Compression::default());
-        let mut archive = tar::Builder::new(zipped);
+        let mut release = tar::Builder::new(zipped);
         for entry in entries {
             let data = std::fs::read(&entry.source)
                 .map_err(|error| crate::files::file_error(&entry.path, &error))?;
@@ -153,11 +153,11 @@ fn write_archive(entries: &[ArchiveEntry], output: &Path) -> Result<String, Stri
             header.set_mtime(0);
             header.set_uid(0);
             header.set_gid(0);
-            archive
+            release
                 .append_data(&mut header, &entry.path, data.as_slice())
                 .map_err(|error| crate::files::file_error(&entry.path, &error))?;
         }
-        let zipped = archive.into_inner().map_err(|error| error.to_string())?;
+        let zipped = release.into_inner().map_err(|error| error.to_string())?;
         let hashing = zipped.finish().map_err(|error| error.to_string())?;
         sum = hex(&hashing.hash.finalize());
         Ok(())
@@ -323,15 +323,15 @@ fn run_pack(dir: &str, out: &str, diagnostics: bool, stdout: &mut dyn Write) -> 
     let version = pkg["version"]
         .as_str()
         .ok_or("package.json version: expected x.y.z")?;
-    let output = output_path(out, &install::plugin_archive_name(id, version))?;
-    let sum = write_archive(&entries, &output)?;
+    let output = output_path(out, &install::release_name(id, version))?;
+    let sum = write_release(&entries, &output)?;
     print_json(
         stdout,
-        &json!({"id": id, "version": version, "archive": output.display().to_string(), "sha256": sum}),
+        &json!({"id": id, "version": version, "release": output.display().to_string(), "sha256": sum}),
     )
 }
 
-/// SHA256SUMS 를 archive 이름마다 sha256 으로 읽는다. 파일이 없으면 빈 목록이다.
+/// SHA256SUMS 를 release 이름마다 sha256 으로 읽는다. 파일이 없으면 빈 목록이다.
 fn read_sums(path: &Path) -> Result<BTreeMap<String, String>, String> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
@@ -348,7 +348,7 @@ fn read_sums(path: &Path) -> Result<BTreeMap<String, String>, String> {
             }
             _ => {
                 return Err(format!(
-                    "{} line {} is not \"<sha256>  <archive name>\"",
+                    "{} line {} is not \"<sha256>  <release name>\"",
                     path.display(),
                     i + 1
                 ))
@@ -358,7 +358,7 @@ fn read_sums(path: &Path) -> Result<BTreeMap<String, String>, String> {
     Ok(sums)
 }
 
-/// SHA256SUMS 를 archive 이름 순서로 쓴다.
+/// SHA256SUMS 를 release 이름 순서로 쓴다.
 fn write_sums(path: &Path, sums: &BTreeMap<String, String>) -> Result<(), String> {
     let text: String = sums
         .iter()
@@ -396,16 +396,16 @@ fn run_release(dir: &str, out: &str, platform: &str, stdout: &mut dyn Write) -> 
     let asset = install::sidecar_asset_name(name, version, platform)?;
     let entries = collect(dir, &listed)?;
     let output = output_path(out, &asset)?;
-    // SHA256SUMS 를 먼저 읽으므로 그 파일이 틀리면 archive 를 쓰지 않는다.
+    // SHA256SUMS 를 먼저 읽으므로 그 파일이 틀리면 release 를 쓰지 않는다.
     let sums_path = output.with_file_name("SHA256SUMS");
     let mut sums = read_sums(&sums_path)?;
-    let sum = write_archive(&entries, &output)?;
+    let sum = write_release(&entries, &output)?;
     sums.insert(asset, sum.clone());
     write_sums(&sums_path, &sums)?;
     print_json(
         stdout,
         &json!({"name": name, "version": version, "platform": platform,
-            "archive": output.display().to_string(), "sha256": sum}),
+            "release": output.display().to_string(), "sha256": sum}),
     )
 }
 

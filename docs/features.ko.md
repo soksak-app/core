@@ -1068,7 +1068,7 @@
   - [ ] R5.2 — P1: `make records-check`와 `soksak-records`가 문서, 주석, 식별자, 오류 문구의 거부 동의어를 보고한다.
   - [~] R5.3 — P1: core, plugin, sidecar, registry의 거부 동의어를 바꾼다.
     - [o] R5.3.1 — P1: core의 명세, 주석, 식별자, 오류 문구에서 plugin은 plugin, sidecar는 sidecar, plugin과 sidecar의 `.tgz` 파일은 release라고 부른다. 2026-10-08 완료: 명세, AGENTS.md, `sok`와 두 host와 `@soksak/plugin-api`의 주석이 plugin package, sidecar package, package name, plugin archive, release asset을 더 이상 쓰지 않고, `validate_package_json`, `ValidatePackageJSON`, 계약 사례 `installed.sidecars.leave-out-plugin-dependencies`가 이전 이름을 대신하며, `@soksak/plugin-api`가 152개, workbench가 312개, scripts가 185개 test를 통과하고, 두 `sok` test 모음과 `make host-contract-check`의 387개 사례가 통과한다.
-    - [ ] R5.3.2 — P1: `sok`의 출력과 식별자를 release로 부른다. `sok plugin pack`과 `sok sidecar release`의 `archive` 필드, `PluginArchiveName`, `checkPluginArchive`, `SHA256SUMS`의 `<archive name>` 줄, 계약 사례 `cli.pack.writes-sorted-plugin-archive`, `cli.release.writes-asset-and-sums`, `install.names.archives-and-paths`가 대상이다.
+    - [o] R5.3.2 — P1: `sok`의 출력과 식별자를 release로 부른다. 2026-10-08 완료: `sok plugin pack`과 `sok sidecar release`가 `release`를 출력하고, `SHA256SUMS` 줄은 `<sha256>  <release name>`이며, Go와 Rust 식별자, test 이름, 계약 사례 `cli.pack.writes-sorted-plugin-release`, `cli.release.writes-release-and-sums`, `install.names.releases-and-paths`가 release라고 부른다. 외부 이름 `archive/tar`와 `tar::Archive`는 그대로다. 두 `sok` test 모음이 통과하고, `make host-contract-check`가 387개 사례를, scripts가 185개 test를 통과한다.
     - [ ] R5.3.3 — P1: 명세와 주석에서 core의 library를 package 대신 그 이름으로 부른다. Go, Cargo, npm의 package는 그 도구를 말할 때 그대로 둔다.
     - [ ] R5.3.4 — P1: plugin 저장소의 거부 동의어를 바꾼다.
     - [ ] R5.3.5 — P1: sidecar 저장소의 거부 동의어를 바꾼다.

@@ -36,11 +36,11 @@ fn write_tree(dir: &Path, files: &[(&str, &str)]) {
     }
 }
 
-/// tests/fixtures/plugin-probe(sidecar 가 없는 plugin probe 0.0.8)의 archive 와 그 registry.
+/// tests/fixtures/plugin-probe(sidecar 가 없는 plugin probe 0.0.8)의 release 와 그 registry.
 /// 폴더는 값이 사라질 때 지운다.
 struct Registry {
     index: String,
-    archive: String,
+    release: String,
     _dirs: Vec<tempfile::TempDir>,
 }
 
@@ -53,11 +53,11 @@ fn plugin_registry() -> Registry {
         source.to_str().unwrap(),
         releases.path().to_str().unwrap(),
     ]);
-    let archive = packed["archive"].as_str().unwrap().to_string();
+    let release = packed["release"].as_str().unwrap().to_string();
     let entry = json!({
         "id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
         "license": "MIT", "repository": "https://example.invalid/probe",
-        "versions": [{"version": "0.0.8", "package": {"url": format!("file://{archive}"), "sha256": packed["sha256"]},
+        "versions": [{"version": "0.0.8", "package": {"url": format!("file://{release}"), "sha256": packed["sha256"]},
             "engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}],
     });
     write_tree(
@@ -75,7 +75,7 @@ fn plugin_registry() -> Registry {
             .to_str()
             .unwrap()
             .to_string(),
-        archive,
+        release,
         _dirs: vec![releases, registry],
     }
 }
@@ -200,10 +200,10 @@ fn plugins_run_rejects_invalid_and_concurrent_operations() {
             .expect("rejected");
         assert_eq!(error, want);
     }
-    // archive 를 FIFO 로 바꾸면 설치는 그 FIFO 를 읽는 동안 멈춘다. FIFO 를 쓰기로 연 순간 설치는 실행 중이다.
-    let data = std::fs::read(&registry.archive).unwrap();
-    std::fs::remove_file(&registry.archive).unwrap();
-    let fifo = CString::new(registry.archive.as_str()).unwrap();
+    // release 를 FIFO 로 바꾸면 설치는 그 FIFO 를 읽는 동안 멈춘다. FIFO 를 쓰기로 연 순간 설치는 실행 중이다.
+    let data = std::fs::read(&registry.release).unwrap();
+    std::fs::remove_file(&registry.release).unwrap();
+    let fifo = CString::new(registry.release.as_str()).unwrap();
     // SAFETY: fifo 는 NUL 로 끝나는 경로이고 mkfifo 는 그 경로만 읽는다.
     assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o644) }, 0, "mkfifo");
     let plugins = Arc::new(plugins);
@@ -213,7 +213,7 @@ fn plugins_run_rejects_invalid_and_concurrent_operations() {
     };
     let mut writer = std::fs::OpenOptions::new()
         .write(true)
-        .open(&registry.archive)
+        .open(&registry.release)
         .unwrap();
     let error = plugins
         .run(request("install", json!("probe")))

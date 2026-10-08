@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Checks before a core release that every plugin version of the public registry that the new core installs still has a
 // manifest that the new core accepts (docs/spec/installation.md#version-selection). A plugin version is checked when it
-// is not revoked and its engines.soksak contains the core version; the check downloads its archive, verifies the sha256,
+// is not revoked and its engines.soksak contains the core version; the check downloads its release, verifies the sha256,
 // reads plugin.json and runs validateManifest of this checkout's @soksak/plugin-api.
 //
 //   node scripts/check-registry-manifests.mjs [--index URL]
@@ -23,20 +23,20 @@ async function fetchBytes(url) {
   return Buffer.from(await response.arrayBuffer());
 }
 
-/** plugin.json of a plugin archive, a gzip tar with plugin.json at its root. */
-function archiveManifest(bytes) {
+/** plugin.json of a plugin release, a gzip tar with plugin.json at its root. */
+function releaseManifest(bytes) {
   const folder = mkdtempSync(join(tmpdir(), "soksak-registry-manifest-"));
   try {
-    const archive = join(folder, "plugin.tgz");
-    writeFileSync(archive, bytes);
-    return JSON.parse(execFileSync("tar", ["-xzOf", archive, "plugin.json"], { encoding: "utf8" }));
+    const release = join(folder, "plugin.tgz");
+    writeFileSync(release, bytes);
+    return JSON.parse(execFileSync("tar", ["-xzOf", release, "plugin.json"], { encoding: "utf8" }));
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }
 }
 
 /** The errors of the plugin versions of index that core installs and whose manifests validateManifest rejects. */
-export async function registryManifestErrors(index, core, fetchArchive = fetchBytes) {
+export async function registryManifestErrors(index, core, fetchRelease = fetchBytes) {
   const revoked = new Set(index.revoked.plugins.map((entry) => `${entry.id}@${entry.version}`));
   const errors = [];
   let checked = 0;
@@ -46,10 +46,10 @@ export async function registryManifestErrors(index, core, fetchArchive = fetchBy
       checked += 1;
       const where = `plugin ${plugin.id} ${version.version}`;
       try {
-        const bytes = await fetchArchive(version.package.url);
+        const bytes = await fetchRelease(version.package.url);
         const digest = createHash("sha256").update(bytes).digest("hex");
-        if (digest !== version.package.sha256) throw new Error(`archive sha256 ${digest} differs from the index ${version.package.sha256}`);
-        validateManifest(archiveManifest(bytes));
+        if (digest !== version.package.sha256) throw new Error(`release sha256 ${digest} differs from the index ${version.package.sha256}`);
+        validateManifest(releaseManifest(bytes));
       } catch (error) {
         errors.push(`${where}: ${error.message}`);
       }

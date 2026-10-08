@@ -17,7 +17,7 @@ import { fresh } from "./fixture.mjs";
 const TLS = join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), "soksak-check-registry-tls");
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 
-/** 검사 소유 TLS registry. index 변형마다 경로가 있고, archive 는 /archives/<file> 로 제공한다. */
+/** 검사 소유 TLS registry. index 변형마다 경로가 있고, release 는 /releases/<file> 로 제공한다. */
 async function serveRegistry() {
   for (const file of ["server.pem", "server-key.pem", "ca.pem"]) {
     if (!existsSync(join(TLS, file))) throw new Error(`${join(TLS, file)} is missing; run make e2e-registry-tls and start the check applications with --registry-ca ${join(TLS, "ca.pem")}`);
@@ -28,8 +28,8 @@ async function serveRegistry() {
   const server = createServer({ cert: readFileSync(join(TLS, "server.pem")), key: readFileSync(join(TLS, "server-key.pem")) });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const base = `https://127.0.0.1:${server.address().port}`;
-  // archive 의 file: 주소를 이 server 의 주소로 바꾼다. sha256 은 같은 파일이므로 그대로다.
-  const index = JSON.parse(JSON.stringify(original).replaceAll(prefix, `${base}/archives/`));
+  // release 의 file: 주소를 이 server 의 주소로 바꾼다. sha256 은 같은 파일이므로 그대로다.
+  const index = JSON.parse(JSON.stringify(original).replaceAll(prefix, `${base}/releases/`));
   const browser = index.plugins.find((plugin) => plugin.id === "browser");
   const version = browser.versions.at(-1).version;
   const badHash = structuredClone(index);
@@ -43,10 +43,10 @@ async function serveRegistry() {
       response.end(JSON.stringify(documents[request.url]));
       return;
     }
-    const archive = request.url.startsWith("/archives/") ? join(REGISTRY, decodeURIComponent(request.url.slice("/archives/".length))) : null;
-    if (archive && !archive.includes("..") && existsSync(archive)) {
+    const release = request.url.startsWith("/releases/") ? join(REGISTRY, decodeURIComponent(request.url.slice("/releases/".length))) : null;
+    if (release && !release.includes("..") && existsSync(release)) {
       response.writeHead(200);
-      response.end(readFileSync(archive));
+      response.end(readFileSync(release));
       return;
     }
     response.writeHead(404);

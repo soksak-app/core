@@ -12,7 +12,7 @@ import (
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
-// registryTree 는 pack 과 release 로 archive 를 만들고 그 주소와 hash 를 담은 registry 폴더를 쓴다.
+// registryTree 는 pack 과 release 로 release 를 만들고 그 주소와 hash 를 담은 registry 폴더를 쓴다.
 func registryTree(t *testing.T) (dir, pluginSum, sidecarSum string) {
 	t.Helper()
 	platform, err := sok.CurrentPlatform()
@@ -39,19 +39,19 @@ func registryTree(t *testing.T) (dir, pluginSum, sidecarSum string) {
 	writeTree(t, dir, map[string]string{
 		"plugins/probe.json": `{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
 			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.2.0",
-			"package": {"url": "file://` + results["plugin"]["archive"] + `", "sha256": "` + results["plugin"]["sha256"] + `"},
+			"package": {"url": "file://` + results["plugin"]["release"] + `", "sha256": "` + results["plugin"]["sha256"] + `"},
 			"engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]}`,
 		"sidecars/scope-sidecar-worker.json": `{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
 			"versions": [{"version": "0.1.0", "protocol": 1, "assets": {"` + platform + `":
-			{"url": "file://` + results["sidecar"]["archive"] + `", "sha256": "` + results["sidecar"]["sha256"] + `"}}}]}`,
+			{"url": "file://` + results["sidecar"]["release"] + `", "sha256": "` + results["sidecar"]["sha256"] + `"}}}]}`,
 		"packs/starter.json": `{"name": "starter", "description": "처음 설치하는 plugin.", "plugins": ["probe"]}`,
 		"revoked.json":       `{"plugins": [], "sidecars": []}`,
 	})
-	return dir, results["plugin"]["archive"] + " " + results["plugin"]["sha256"], results["sidecar"]["archive"] + " " + results["sidecar"]["sha256"]
+	return dir, results["plugin"]["release"] + " " + results["plugin"]["sha256"], results["sidecar"]["release"] + " " + results["sidecar"]["sha256"]
 }
 
 // contract: cli.registry.writes-checked-index
-func TestRegistryBuildWritesTheIndexAfterCheckingEveryArchive(t *testing.T) {
+func TestRegistryBuildWritesTheIndexAfterCheckingEveryRelease(t *testing.T) {
 	dir, plugin, sidecar := registryTree(t)
 	platform, err := sok.CurrentPlatform()
 	if err != nil {
@@ -65,8 +65,8 @@ func TestRegistryBuildWritesTheIndexAfterCheckingEveryArchive(t *testing.T) {
 	if want := "{\n  \"index\": \"" + index + "\",\n  \"packs\": 1,\n  \"plugins\": 1,\n  \"sidecars\": 1\n}\n"; stdout != want {
 		t.Fatalf("stdout %q, want %q", stdout, want)
 	}
-	pluginArchive, pluginHash, _ := strings.Cut(plugin, " ")
-	sidecarArchive, sidecarHash, _ := strings.Cut(sidecar, " ")
+	pluginRelease, pluginHash, _ := strings.Cut(plugin, " ")
+	sidecarRelease, sidecarHash, _ := strings.Cut(sidecar, " ")
 	want := `{
   "format": 1,
   "plugins": [
@@ -81,7 +81,7 @@ func TestRegistryBuildWritesTheIndexAfterCheckingEveryArchive(t *testing.T) {
         {
           "version": "0.2.0",
           "package": {
-            "url": "file://` + pluginArchive + `",
+            "url": "file://` + pluginRelease + `",
             "sha256": "` + pluginHash + `"
           },
           "engines": {
@@ -104,7 +104,7 @@ func TestRegistryBuildWritesTheIndexAfterCheckingEveryArchive(t *testing.T) {
           "protocol": 1,
           "assets": {
             "` + platform + `": {
-              "url": "file://` + sidecarArchive + `",
+              "url": "file://` + sidecarRelease + `",
               "sha256": "` + sidecarHash + `"
             }
           }

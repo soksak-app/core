@@ -53,7 +53,7 @@ export function pluginEntry(manifest, pkg, pack) {
     id: manifest.id, package: pkg.name, name: manifest.name, description: pkg.description, license: pkg.license,
     repository: repositoryText(pkg.repository),
     versions: [{
-      version: pkg.version, package: { url: pathToFileURL(pack.archive).href, sha256: pack.sha256 },
+      version: pkg.version, package: { url: pathToFileURL(pack.release).href, sha256: pack.sha256 },
       // 기본값: sidecar 를 쓰지 않는 plugin 의 plugin.json 에는 dependencies 가 없다.
       engines: { soksak: pkg.engines?.soksak }, sidecars: manifest.dependencies ?? {},
     }],
@@ -66,7 +66,7 @@ export function sidecarEntry(pkg, declaration, release) {
     name: pkg.name, repository: repositoryText(pkg.repository),
     versions: [{
       version: pkg.version, protocol: declaration.protocol,
-      assets: { [release.platform]: { url: pathToFileURL(release.archive).href, sha256: release.sha256 } },
+      assets: { [release.platform]: { url: pathToFileURL(release.release).href, sha256: release.sha256 } },
     }],
   };
 }

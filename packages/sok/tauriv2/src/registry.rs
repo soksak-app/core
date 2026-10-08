@@ -8,7 +8,7 @@ use std::path::Path;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use crate::install::{self, Archive, Index, PluginVersion, RegistryPlugin};
+use crate::install::{self, Release, Index, PluginVersion, RegistryPlugin};
 use crate::release::{hex, print_json, read_json_file, replace_file};
 use crate::Error;
 
@@ -57,13 +57,13 @@ fn read_entries(
 }
 
 /// tar.gz 의 최상위 파일 중 names 의 내용을 읽는다.
-pub(crate) fn archive_files(
+pub(crate) fn release_files(
     data: &[u8],
     names: &[&str],
 ) -> Result<BTreeMap<String, Vec<u8>>, String> {
-    let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(data));
+    let mut reader = tar::Archive::new(flate2::read::GzDecoder::new(data));
     let mut found = BTreeMap::new();
-    for entry in archive.entries().map_err(|error| error.to_string())? {
+    for entry in reader.entries().map_err(|error| error.to_string())? {
         let mut entry = entry.map_err(|error| error.to_string())?;
         let path = entry
             .path()
@@ -79,44 +79,44 @@ pub(crate) fn archive_files(
         }
     }
     if let Some(name) = names.iter().find(|name| !found.contains_key(**name)) {
-        return Err(format!("the archive holds no {name}"));
+        return Err(format!("the release holds no {name}"));
     }
     Ok(found)
 }
 
-/// archive 주소의 본문을 읽고 sha256 을 비교한다.
-pub(crate) fn read_archive(at: &str, archive: &Archive) -> Result<Vec<u8>, String> {
+/// release 주소의 본문을 읽고 sha256 을 비교한다.
+pub(crate) fn read_release(at: &str, release: &Release) -> Result<Vec<u8>, String> {
     let fetcher = crate::fetch::Fetcher::default();
     let data = fetcher
-        .read(&archive.url, fetcher.archive)
+        .read(&release.url, fetcher.release)
         .map_err(|error| format!("{at}: {error}"))?;
     // 오류는 file: 이면 경로를, https: 면 URL 을 밝힌다.
-    let shown = if archive.url.starts_with("file:") {
-        install::file_path(&archive.url).map_err(|error| format!("{at}: {error}"))?
+    let shown = if release.url.starts_with("file:") {
+        install::file_path(&release.url).map_err(|error| format!("{at}: {error}"))?
     } else {
-        archive.url.clone()
+        release.url.clone()
     };
     let got = hex(&Sha256::digest(&data));
-    if got != archive.sha256 {
+    if got != release.sha256 {
         return Err(format!(
             "{at}: {shown} has sha256 {got}, the entry says {}",
-            archive.sha256
+            release.sha256
         ));
     }
     Ok(data)
 }
 
-/// Checks that a plugin archive holds the plugin.json id and the package.json of its entry, that the sidecar
+/// Checks that a plugin release holds the plugin.json id and the package.json of its entry, that the sidecar
 /// dependencies of plugin.json equal the sidecars of the entry, and that a listed version satisfies the range of each
 /// plugin dependency.
-fn check_plugin_archive(
+fn check_plugin_release(
     index: &Index,
     plugin: &RegistryPlugin,
     version: &PluginVersion,
 ) -> Result<(), String> {
     let at = format!("plugin {} {} package", plugin.id, version.version);
-    let data = read_archive(&at, &version.package)?;
-    let files = archive_files(&data, &["package.json", "plugin.json"])
+    let data = read_release(&at, &version.package)?;
+    let files = release_files(&data, &["package.json", "plugin.json"])
         .map_err(|error| format!("{at}: {error}"))?;
     let manifest: Value = serde_json::from_slice(&files["plugin.json"])
         .map_err(|error| format!("{at}: plugin.json is not valid JSON: {error}"))?;
@@ -202,13 +202,13 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
     index.packs.sort_by(|a, b| a.name.cmp(&b.name));
     for plugin in &index.plugins {
         for version in &plugin.versions {
-            check_plugin_archive(&index, plugin, version)?;
+            check_plugin_release(&index, plugin, version)?;
         }
     }
     for sidecar in &index.sidecars {
         for version in &sidecar.versions {
             for (platform, asset) in &version.assets {
-                read_archive(
+                read_release(
                     &format!("sidecar {} {} {platform}", sidecar.name, version.version),
                     asset,
                 )?;

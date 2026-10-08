@@ -47,8 +47,8 @@ func readEntries(dir, kind string, validate func(any) error, fileName func(map[s
 	return entries, nil
 }
 
-// archiveFiles 는 tar.gz 의 최상위 파일 중 names 의 내용을 읽는다.
-func archiveFiles(data []byte, names ...string) (map[string][]byte, error) {
+// releaseFiles 는 tar.gz 의 최상위 파일 중 names 의 내용을 읽는다.
+func releaseFiles(data []byte, names ...string) (map[string][]byte, error) {
 	zipped, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -71,40 +71,40 @@ func archiveFiles(data []byte, names ...string) (map[string][]byte, error) {
 	}
 	for _, name := range names {
 		if found[name] == nil {
-			return nil, fmt.Errorf("the archive holds no %s", name)
+			return nil, fmt.Errorf("the release holds no %s", name)
 		}
 	}
 	return found, nil
 }
 
-// readArchive 는 archive 주소의 본문을 읽고 sha256 을 비교한다.
-func readArchive(where string, archive Archive) ([]byte, error) {
-	data, err := DefaultFetcher.Read(archive.URL, DefaultFetcher.Archive)
+// readRelease 는 release 주소의 본문을 읽고 sha256 을 비교한다.
+func readRelease(where string, release Release) ([]byte, error) {
+	data, err := DefaultFetcher.Read(release.URL, DefaultFetcher.Release)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", where, err)
 	}
 	// 오류는 file: 이면 경로를, https: 면 URL 을 밝힌다.
-	shown := archive.URL
-	if path, err := FilePath(archive.URL); err == nil {
+	shown := release.URL
+	if path, err := FilePath(release.URL); err == nil {
 		shown = path
 	}
 	sum := sha256.Sum256(data)
-	if got := hex.EncodeToString(sum[:]); got != archive.SHA256 {
-		return nil, fmt.Errorf("%s: %s has sha256 %s, the entry says %s", where, shown, got, archive.SHA256)
+	if got := hex.EncodeToString(sum[:]); got != release.SHA256 {
+		return nil, fmt.Errorf("%s: %s has sha256 %s, the entry says %s", where, shown, got, release.SHA256)
 	}
 	return data, nil
 }
 
-// checkPluginArchive checks that a plugin archive holds the plugin.json id and the package.json of its entry, that the
+// checkPluginRelease checks that a plugin release holds the plugin.json id and the package.json of its entry, that the
 // sidecar dependencies of plugin.json equal the sidecars of the entry, and that a listed version satisfies the range of
 // each plugin dependency.
-func checkPluginArchive(index *Index, plugin *RegistryPlugin, version *PluginVersion) error {
+func checkPluginRelease(index *Index, plugin *RegistryPlugin, version *PluginVersion) error {
 	where := "plugin " + plugin.ID + " " + version.Version + " package"
-	data, err := readArchive(where, version.Package)
+	data, err := readRelease(where, version.Package)
 	if err != nil {
 		return err
 	}
-	files, err := archiveFiles(data, "package.json", "plugin.json")
+	files, err := releaseFiles(data, "package.json", "plugin.json")
 	if err != nil {
 		return fmt.Errorf("%s: %w", where, err)
 	}
@@ -184,7 +184,7 @@ func BuildRegistry(dir string) (map[string]any, error) {
 	for i := range index.Plugins {
 		plugin := &index.Plugins[i]
 		for j := range plugin.Versions {
-			if err := checkPluginArchive(index, plugin, &plugin.Versions[j]); err != nil {
+			if err := checkPluginRelease(index, plugin, &plugin.Versions[j]); err != nil {
 				return nil, err
 			}
 		}
@@ -192,7 +192,7 @@ func BuildRegistry(dir string) (map[string]any, error) {
 	for _, sidecar := range index.Sidecars {
 		for _, version := range sidecar.Versions {
 			for _, platform := range slices.Sorted(maps.Keys(version.Assets)) {
-				if _, err := readArchive("sidecar "+sidecar.Name+" "+version.Version+" "+platform, version.Assets[platform]); err != nil {
+				if _, err := readRelease("sidecar "+sidecar.Name+" "+version.Version+" "+platform, version.Assets[platform]); err != nil {
 					return nil, err
 				}
 			}

@@ -5,13 +5,13 @@ use soksak_sok::install::{self, InstalledPlugin, InstalledSidecar, InstalledStat
 
 const SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
-fn archive(name: &str) -> Value {
+fn release(name: &str) -> Value {
     json!({"url": format!("file:///releases/{name}"), "sha256": SHA})
 }
 
 fn plugin() -> Value {
     let version = |version: &str, core: &str| {
-        json!({"version": version, "package": archive(&format!("probe-{version}.tgz")), "engines": {"soksak": core},
+        json!({"version": version, "package": release(&format!("probe-{version}.tgz")), "engines": {"soksak": core},
             "sidecars": {"@scope/sidecar-worker": "^0.1.0"}})
     };
     json!({"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.", "license": "MIT",
@@ -21,8 +21,8 @@ fn plugin() -> Value {
 
 fn sidecar() -> Value {
     json!({"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker", "versions": [
-        {"version": "0.1.0", "protocol": 1, "assets": {"darwin-arm64": archive("a"), "darwin-x64": archive("b")}},
-        {"version": "0.1.1", "protocol": 1, "assets": {"darwin-arm64": archive("c")}}]})
+        {"version": "0.1.0", "protocol": 1, "assets": {"darwin-arm64": release("a"), "darwin-x64": release("b")}},
+        {"version": "0.1.1", "protocol": 1, "assets": {"darwin-arm64": release("c")}}]})
 }
 
 fn index() -> Value {
@@ -179,7 +179,7 @@ fn package_json_declares_version_core_range_and_files_and_the_manifest_declares_
 
 // contract: install.registry.entries
 #[test]
-fn registry_entries_reject_unknown_fields_bad_archives_and_repeated_versions() {
+fn registry_entries_reject_unknown_fields_bad_releases_and_repeated_versions() {
     install::validate_registry_plugin(&plugin()).expect("plugin");
     install::validate_registry_sidecar(&sidecar()).expect("sidecar");
     let mut extra = plugin();
@@ -243,7 +243,7 @@ fn registry_entries_reject_unknown_fields_bad_archives_and_repeated_versions() {
     long["description"] = json!("가".repeat(200));
     install::validate_registry_plugin(&long).expect("200 characters");
     let mut platform = sidecar();
-    platform["versions"][0]["assets"]["darwin-ppc"] = archive("x");
+    platform["versions"][0]["assets"]["darwin-ppc"] = release("x");
     rejects(
         install::validate_registry_sidecar(&platform),
         "registry sidecar @scope/sidecar-worker 0.1.0: unknown platform darwin-ppc",
@@ -436,11 +436,11 @@ fn installation_keeps_one_sidecar_version_that_satisfies_every_installed_plugin(
     assert_eq!(versions(&again), ["@scope/sidecar-worker 0.1.0"]);
 }
 
-// contract: install.names.archives-and-paths
+// contract: install.names.releases-and-paths
 #[test]
-fn archives_and_installation_paths_follow_the_declared_names() {
+fn releases_and_installation_paths_follow_the_declared_names() {
     assert_eq!(
-        install::plugin_archive_name("probe", "0.2.0"),
+        install::release_name("probe", "0.2.0"),
         "probe-0.2.0.tgz"
     );
     assert_eq!(

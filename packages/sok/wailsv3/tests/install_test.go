@@ -14,22 +14,22 @@ import (
 
 const sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
-func archive(name string) string {
+func release(name string) string {
 	return `{"url": "file:///releases/` + name + `", "sha256": "` + sha + `"}`
 }
 
 func pluginJSON() string {
 	return `{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.", "license": "MIT",
 		"repository": "https://example.invalid/probe", "versions": [
-		{"version": "0.1.0", "package": ` + archive("probe-0.1.0.tgz") + `, "engines": {"soksak": "^0.0.1"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
-		{"version": "0.2.0", "package": ` + archive("probe-0.2.0.tgz") + `, "engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
-		{"version": "0.3.0", "package": ` + archive("probe-0.3.0.tgz") + `, "engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]}`
+		{"version": "0.1.0", "package": ` + release("probe-0.1.0.tgz") + `, "engines": {"soksak": "^0.0.1"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+		{"version": "0.2.0", "package": ` + release("probe-0.2.0.tgz") + `, "engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+		{"version": "0.3.0", "package": ` + release("probe-0.3.0.tgz") + `, "engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]}`
 }
 
 func sidecarJSON() string {
 	return `{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker", "versions": [
-		{"version": "0.1.0", "protocol": 1, "assets": {"darwin-arm64": ` + archive("a") + `, "darwin-x64": ` + archive("b") + `}},
-		{"version": "0.1.1", "protocol": 1, "assets": {"darwin-arm64": ` + archive("c") + `}}]}`
+		{"version": "0.1.0", "protocol": 1, "assets": {"darwin-arm64": ` + release("a") + `, "darwin-x64": ` + release("b") + `}},
+		{"version": "0.1.1", "protocol": 1, "assets": {"darwin-arm64": ` + release("c") + `}}]}`
 }
 
 func indexJSON() string {
@@ -144,7 +144,7 @@ func TestPackageJSONDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSideca
 }
 
 // contract: install.registry.entries
-func TestRegistryEntriesRejectUnknownFieldsBadArchivesAndRepeatedVersions(t *testing.T) {
+func TestRegistryEntriesRejectUnknownFieldsBadReleasesAndRepeatedVersions(t *testing.T) {
 	if err := sok.ValidateRegistryPlugin(decode(t, pluginJSON())); err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestRegistryEntriesRejectUnknownFieldsBadArchivesAndRepeatedVersions(t *tes
 		t.Fatalf("200 characters: %v", err)
 	}
 	platform := decode(t, sidecarJSON())
-	at(platform, "versions", 0, "assets").(map[string]any)["darwin-ppc"] = decode(t, archive("x"))
+	at(platform, "versions", 0, "assets").(map[string]any)["darwin-ppc"] = decode(t, release("x"))
 	rejects(t, sok.ValidateRegistrySidecar(platform), "registry sidecar @scope/sidecar-worker 0.1.0: unknown platform darwin-ppc")
 	protocol := decode(t, sidecarJSON())
 	at(protocol, "versions", 0).(map[string]any)["protocol"] = json.Number("1.0")
@@ -307,9 +307,9 @@ func TestInstallationKeepsOneSidecarVersionThatSatisfiesEveryInstalledPlugin(t *
 	}
 }
 
-// contract: install.names.archives-and-paths
-func TestArchivesAndInstallationPathsFollowTheDeclaredNames(t *testing.T) {
-	if name := sok.PluginArchiveName("probe", "0.2.0"); name != "probe-0.2.0.tgz" {
+// contract: install.names.releases-and-paths
+func TestReleasesAndInstallationPathsFollowTheDeclaredNames(t *testing.T) {
+	if name := sok.ReleaseName("probe", "0.2.0"); name != "probe-0.2.0.tgz" {
 		t.Fatal(name)
 	}
 	if name, err := sok.SidecarAssetName("@scope/sidecar-worker", "0.1.1", "darwin-arm64"); err != nil || name != "scope-sidecar-worker-0.1.1-darwin-arm64.tar.gz" {

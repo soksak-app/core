@@ -1,6 +1,6 @@
 package sok
 
-// 설정 폴더에 plugin 을 설치하고 바꾼다(docs/spec/cli.md, docs/spec/installation.md). archive 는 임시 폴더에 푼 뒤
+// 설정 폴더에 plugin 을 설치하고 바꾼다(docs/spec/cli.md, docs/spec/installation.md). release 는 임시 폴더에 푼 뒤
 // 이름을 바꿔 제자리에 두고, installed.json 은 마지막에 한 번에 바꾸므로 실패한 설치는 이전 설치를 바꾸지 않는다.
 
 import (
@@ -232,7 +232,7 @@ func writeInstalled(configDir string, state *InstalledState) error {
 	return replaceFile(path, out.Bytes())
 }
 
-// extract 는 tar.gz archive 를 target 옆 임시 폴더에 푼 뒤 이름을 바꿔 target 에 둔다. 일반 파일과 폴더만 받고,
+// extract 는 tar.gz release 를 target 옆 임시 폴더에 푼 뒤 이름을 바꿔 target 에 둔다. 일반 파일과 폴더만 받고,
 // 절대 경로와 `..` 는 거부한다.
 func extract(data []byte, target string) (err error) {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
@@ -262,7 +262,7 @@ func extract(data []byte, target string) (err error) {
 		}
 		name := strings.TrimSuffix(header.Name, "/")
 		if name == "" || strings.HasPrefix(name, "/") || slices.Contains(strings.Split(name, "/"), "..") {
-			return fmt.Errorf("archive entry %s leaves the folder", header.Name)
+			return fmt.Errorf("release entry %s leaves the folder", header.Name)
 		}
 		path := filepath.Join(temp, filepath.FromSlash(name))
 		switch header.Typeflag {
@@ -294,7 +294,7 @@ func extract(data []byte, target string) (err error) {
 				return fileError(path, err)
 			}
 		default:
-			return fmt.Errorf("archive entry %s is neither a regular file nor a folder", header.Name)
+			return fmt.Errorf("release entry %s is neither a regular file nor a folder", header.Name)
 		}
 	}
 	if err := os.Rename(temp, target); err != nil {
@@ -303,14 +303,14 @@ func extract(data []byte, target string) (err error) {
 	return nil
 }
 
-// installArchive 는 아직 없는 version 폴더에 archive 를 확인해 푼다.
-func installArchive(where string, archive Archive, target string) error {
+// installRelease 는 아직 없는 version 폴더에 release 를 확인해 푼다.
+func installRelease(where string, release Release, target string) error {
 	if _, err := os.Stat(target); err == nil {
 		return nil
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return fileError(where, err)
 	}
-	data, err := readArchive(where, archive)
+	data, err := readRelease(where, release)
 	if err != nil {
 		return err
 	}
@@ -332,7 +332,7 @@ func pluginResult(state *InstalledState, id string) map[string]any {
 
 // InstallPlugin installs the selected version of a plugin and its plugin dependencies. With update it accepts only an
 // installed plugin. It reads the plugin.json of every selected plugin version and completes the plan before it extracts
-// an archive.
+// an release.
 func InstallPlugin(configDir, id, core, platform string, update bool) (map[string]any, error) {
 	index, err := readRegistry(configDir)
 	if err != nil {
@@ -346,7 +346,7 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 		return nil, fmt.Errorf("plugin %s is not installed", id)
 	}
 	plan := &dependencyPlan{configDir: configDir, core: core, platform: platform, index: index, state: state,
-		dependencies: map[string]map[string]string{}, providers: map[string]map[string]string{}, archives: map[string][]byte{},
+		dependencies: map[string]map[string]string{}, providers: map[string]map[string]string{}, releases: map[string][]byte{},
 		sidecars: map[string]SelectedSidecar{}, placed: map[string]bool{}}
 	if err := plan.place(id, false, nil); err != nil {
 		return nil, err
@@ -355,7 +355,7 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 		return pluginResult(state, id), nil
 	}
 	for _, changed := range plan.order {
-		data, ok := plan.archives[changed]
+		data, ok := plan.releases[changed]
 		if !ok {
 			continue
 		}
@@ -371,7 +371,7 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 		if !ok || installed.Version != sidecar.Version {
 			continue
 		}
-		if err := installArchive("sidecar "+sidecar.Name+" "+sidecar.Version+" "+platform, sidecar.Asset, filepath.Join(configDir, installed.Path)); err != nil {
+		if err := installRelease("sidecar "+sidecar.Name+" "+sidecar.Version+" "+platform, sidecar.Asset, filepath.Join(configDir, installed.Path)); err != nil {
 			return nil, err
 		}
 	}
@@ -393,7 +393,7 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 
 // dependencyPlan is the plan that installs a plugin and its plugin dependencies. state is the planned installation
 // state; dependencies holds the plugin.json dependencies of the version in use of each plugin of state; providers holds
-// the plugin dependencies of the versions that the plan selected; archives holds the archives of plugin versions that
+// the plugin dependencies of the versions that the plan selected; releases holds the releases of plugin versions that
 // are not extracted yet; order lists the plugins whose version changed in selection order; sidecars holds the sidecar
 // versions that the plan selected.
 type dependencyPlan struct {
@@ -402,7 +402,7 @@ type dependencyPlan struct {
 	state                     *InstalledState
 	dependencies              map[string]map[string]string
 	providers                 map[string]map[string]string
-	archives                  map[string][]byte
+	releases                  map[string][]byte
 	order                     []string
 	sidecars                  map[string]SelectedSidecar
 	placed                    map[string]bool
@@ -553,7 +553,7 @@ func (p *dependencyPlan) place(id string, provider bool, path []string) error {
 }
 
 // replace adds the selected version of a plugin to the plan. It reads the plugin.json of that version from its
-// extracted folder, or else from the archive after it checks the sha256, and keeps the archive for extraction after
+// extracted folder, or else from the release after it checks the sha256, and keeps the release for extraction after
 // the plan is complete.
 func (p *dependencyPlan) replace(id string, current InstalledPlugin, installed bool, selection *Selection) error {
 	version := selection.Version.Version
@@ -570,16 +570,16 @@ func (p *dependencyPlan) replace(id string, current InstalledPlugin, installed b
 			return fileError(file, err)
 		}
 	} else if errors.Is(err, fs.ErrNotExist) {
-		archive, err := readArchive(where, selection.Version.Package)
+		release, err := readRelease(where, selection.Version.Package)
 		if err != nil {
 			return err
 		}
-		files, err := archiveFiles(archive, "plugin.json")
+		files, err := releaseFiles(release, "plugin.json")
 		if err != nil {
 			return fmt.Errorf("%s: %w", where, err)
 		}
 		data, file = files["plugin.json"], where+": plugin.json"
-		p.archives[id] = archive
+		p.releases[id] = release
 	} else {
 		return fileError(where, err)
 	}

@@ -1,4 +1,4 @@
-//! plugin pack 과 sidecar release(docs/spec/cli.md)가 쓰는 archive 와 SHA256SUMS 를 검사한다.
+//! plugin pack 과 sidecar release(docs/spec/cli.md)가 쓰는 release 와 SHA256SUMS 를 검사한다.
 
 use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
@@ -71,15 +71,15 @@ struct TarEntry {
     content: String,
 }
 
-fn read_archive(path: &Path) -> (Vec<TarEntry>, String) {
-    let data = std::fs::read(path).expect("archive");
+fn read_release(path: &Path) -> (Vec<TarEntry>, String) {
+    let data = std::fs::read(path).expect("release");
     let sum: String = Sha256::digest(&data)
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect();
-    let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(data.as_slice()));
+    let mut reader = tar::Archive::new(flate2::read::GzDecoder::new(data.as_slice()));
     let mut entries = vec![];
-    for entry in archive.entries().expect("entries") {
+    for entry in reader.entries().expect("entries") {
         let mut entry = entry.expect("entry");
         let header = entry.header().clone();
         let mut content = String::new();
@@ -121,19 +121,19 @@ fn text(path: &Path) -> &str {
     path.to_str().expect("UTF-8 path")
 }
 
-// contract: cli.pack.writes-sorted-plugin-archive
+// contract: cli.pack.writes-sorted-plugin-release
 #[test]
-fn plugin_pack_writes_a_sorted_archive_of_the_listed_files() {
+fn plugin_pack_writes_a_sorted_release_of_the_listed_files() {
     let dir = plugin_tree();
     let base = Dir::new();
     let out = base.0.join("out");
     let (code, stdout, stderr) = run(&["plugin", "pack", text(&dir.0), text(&out)]);
     assert_eq!(code, 0, "{stderr}");
-    let archive = out.join("probe-0.2.0.tgz");
-    let (entries, sum) = read_archive(&archive);
+    let release = out.join("probe-0.2.0.tgz");
+    let (entries, sum) = read_release(&release);
     let want = format!(
-        "{{\n  \"archive\": {:?},\n  \"id\": \"probe\",\n  \"sha256\": {sum:?},\n  \"version\": \"0.2.0\"\n}}\n",
-        text(&archive)
+        "{{\n  \"id\": \"probe\",\n  \"release\": {:?},\n  \"sha256\": {sum:?},\n  \"version\": \"0.2.0\"\n}}\n",
+        text(&release)
     );
     assert_eq!(stdout, want);
     let names: Vec<String> = entries
@@ -172,7 +172,7 @@ fn plugin_pack_rejects_links_and_a_manifest_mismatch_without_writing() {
         (code, stderr.as_str()),
         (
             1,
-            "sok: ui/link.js is a symbolic link; an archive holds no links\n"
+            "sok: ui/link.js is a symbolic link; an release holds no links\n"
         )
     );
     assert_eq!(
@@ -247,7 +247,7 @@ fn sidecar_tree(version: &str) -> Dir {
     dir
 }
 
-// contract: cli.release.writes-asset-and-sums
+// contract: cli.release.writes-release-and-sums
 #[test]
 fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
     let out = Dir::new();
@@ -269,8 +269,8 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
         assert_eq!(code, 0, "{stderr}");
         let result: Value = serde_json::from_str(&stdout).unwrap();
         let name = format!("scope-sidecar-worker-{version}-{platform}.tar.gz");
-        let (entries, sum) = read_archive(&out.0.join(&name));
-        assert_eq!(result["archive"], text(&out.0.join(&name)));
+        let (entries, sum) = read_release(&out.0.join(&name));
+        assert_eq!(result["release"], text(&out.0.join(&name)));
         assert_eq!(result["sha256"], sum.as_str());
         assert_eq!(
             (result["platform"].as_str(), result["version"].as_str()),
@@ -291,7 +291,7 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
         );
         sums.push(format!("{sum}  {name}"));
     }
-    // 같은 이름의 세 번째 release 는 첫 줄을 바꾸고, 줄은 archive 이름 순서다.
+    // 같은 이름의 세 번째 release 는 첫 줄을 바꾸고, 줄은 release 이름 순서다.
     let written = std::fs::read_to_string(out.0.join("SHA256SUMS")).unwrap();
     assert_eq!(written, format!("{}\n{}\n", sums[1], sums[2]));
     let tree = sidecar_tree("0.1.0");
@@ -339,7 +339,7 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
         "darwin-arm64",
     ]);
     let want = format!(
-        "sok: {} line 1 is not \"<sha256>  <archive name>\"\n",
+        "sok: {} line 1 is not \"<sha256>  <release name>\"\n",
         text(&out.0.join("SHA256SUMS"))
     );
     assert_eq!((code, stderr), (1, want));
@@ -347,7 +347,7 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
         !out.0
             .join("scope-sidecar-worker-0.2.0-darwin-arm64.tar.gz")
             .exists(),
-        "a failed release left its archive"
+        "a failed release left its release"
     );
 }
 
@@ -377,7 +377,7 @@ fn plugin_pack_adds_diagnostic_declarations_only_with_the_flag() {
         args.extend(flags.iter().copied());
         let (code, _, stderr) = run(&args);
         assert_eq!(code, 0, "{flags:?}: {stderr}");
-        let (entries, _) = read_archive(&out.0.join("probe-0.2.0.tgz"));
+        let (entries, _) = read_release(&out.0.join("probe-0.2.0.tgz"));
         let names: Vec<&str> = entries.iter().map(|entry| entry.name.as_str()).collect();
         assert_eq!(names.join(", "), want, "{flags:?}");
     }
