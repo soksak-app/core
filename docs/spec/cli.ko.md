@@ -69,7 +69,7 @@
 
 이미 고른 version으로 설치된 plugin은 바꾸지 않는다. 1단계나 2단계가 실패하면 `installed.json`은 그대로이고 그 단계를 보고한다. 3단계가 실패하면 지우지 못한 폴더를 보고한다. 풀기는 `..` 없는 상대 경로의 일반 파일과 폴더만 받고, 실행 bit가 있는 파일은 mode 0755, 그 밖에는 0644로 둔다. 출력은 `{ plugin, sidecars }`이며, `installed.json`의 plugin 항목과 그것이 쓰는 sidecar version이다.
 
-`sok plugin update <id>`는 설치된 plugin의 고른 version을 설치하며, 설치되지 않은 plugin이면 실패한다. `sok plugin remove <id>`는 `installed.json`에서 plugin을 지운 뒤 `plugins/<id>`와 `installed.json`이 더 이상 지정하지 않는 sidecar version 폴더를 지운다. `sok plugin enable <id>`와 `sok plugin disable <id>`는 `enabled`를 정한다. 이 셋은 plugin 항목을 출력하고, 제거 뒤에는 `null`을 출력한다. `sok plugin list`는 `installed.json`을 출력한다.
+`sok plugin update <id>`는 설치된 plugin의 고른 version을 설치하며, 설치되지 않은 plugin이면 실패한다. `sok plugin remove <id>`는 `installed.json`에서 plugin을 지운 뒤 `plugins/<id>`와 `installed.json`이 더 이상 지정하지 않는 sidecar version 폴더를 지운다. `sok plugin enable <id>`와 `sok plugin disable <id>`는 `enabled`를 정한다. plugin을 설치하면 그 plugin 의존도 설치되고, 켜진 설치 plugin이 필요로 하는 plugin의 `remove`와 `disable`은 실패한다([version 선택](installation.ko.md#version-선택)). 이 셋은 plugin 항목을 출력하고, 제거 뒤에는 `null`을 출력한다. `sok plugin list`는 `installed.json`을 출력한다.
 
 ## 설치와 실행 중인 애플리케이션
 

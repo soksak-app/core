@@ -69,7 +69,7 @@ These commands change the files of the [installation layout](installation.md#ins
 
 A plugin already installed at the selected version is left unchanged. A failure in step 1 or 2 leaves `installed.json` unchanged and reports the step; a failure in step 3 reports the folder it could not delete. Extraction accepts only regular files and folders at relative paths without `..`, and keeps mode 0755 for a file with an executable bit and 0644 otherwise. The command prints `{ plugin, sidecars }`: the entry of the plugin in `installed.json` and the sidecar versions it uses.
 
-`sok plugin update <id>` installs the selected version of an installed plugin and fails for a plugin that is not installed. `sok plugin remove <id>` deletes the plugin from `installed.json` and then deletes `plugins/<id>` and the sidecar version folders that `installed.json` no longer names. `sok plugin enable <id>` and `sok plugin disable <id>` set `enabled`. These three print the plugin entry, or `null` after removal. `sok plugin list` prints `installed.json`.
+`sok plugin update <id>` installs the selected version of an installed plugin and fails for a plugin that is not installed. `sok plugin remove <id>` deletes the plugin from `installed.json` and then deletes `plugins/<id>` and the sidecar version folders that `installed.json` no longer names. `sok plugin enable <id>` and `sok plugin disable <id>` set `enabled`. Installing a plugin also installs its plugin dependencies, and `remove` and `disable` fail for a plugin that an enabled installed plugin requires ([version selection](installation.md#version-selection)). These three print the plugin entry, or `null` after removal. `sok plugin list` prints `installed.json`.
 
 ## Installation and a running application
 
