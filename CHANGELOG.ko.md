@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F102.1.7: host는 확장 지점의 공유 module을 `/shared/<plugin id>.<point>/<specifier>.js`에서 내보내므로, Tauri webview가 그것을 JavaScript로 불러온다.
+- F102.11: core 명령은 표면 composition이 `dom`인 탭을 더는 끝없이 기다리지 않는다.
+- F102.8: 창 검사 `e2e/editor.test.mjs`가 두 host에서 tree의 파일을 편집기 plugin으로 열고 저장, 탭 오류, 다시 읽기, 닫기 질문을 확인한다. workspace registry에 편집기 plugin이 들어간다.
 - F103: 저장된 배치와 설정은 현재 형식으로만 읽는다. 이전 형식은 `projects.json`이나 설정 파일을 밝히는 오류로 실패하고, 변환은 지웠다.
 - F106: 선언된 모든 version은 0.0.7이고, core 0.0.7을 릴리스했다.
 - F102.10: 표면은 `tab.error(text)`로 실패한 작업의 오류를 카드 상태 행에 보이고 `tab.error(null)`로 지운다. `core.grid`는 탭마다 `error`를 보고한다.

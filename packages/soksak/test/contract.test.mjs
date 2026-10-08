@@ -14,7 +14,7 @@ import { H, W, three } from "./helpers.mjs";
 
 test("everything the API hands back is a copy the host may keep", () => {
   const grid = three();
-  grid.split("upper", "x", { id: "editor", data: { pty: 3 } });
+  grid.split("upper", "x", { id: "writer", data: { pty: 3 } });
 
   // `lower` spans the line the split just made, so cardsCrossing has someone
   // to answer with. Without that the loop below skipped it.

@@ -59,18 +59,18 @@ function port() {
 test("attach calls with correct name and sidecar", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", f.window, { report: f.report });
   await settle();
   assert.equal(p.calls[0][0], "attach");
   assert.equal(p.calls[0][1], "preview");
-  assert.equal(p.calls[0][2], "editor");
+  assert.equal(p.calls[0][2], "writer");
   assert.equal(image.name, "preview");
 });
 
 test("place is called with element insets when element size changes", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", f.window, { report: f.report });
   await settle();
   p.calls.length = 0;
   f.resize({ left: 20, top: 40, right: 420, bottom: 340, width: 400, height: 300 });
@@ -86,7 +86,7 @@ test("place is called with element insets when element size changes", async () =
 test("visible(false) calls place with visible false", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", f.window, { report: f.report });
   await settle();
   p.calls.length = 0;
   await image.visible(false);
@@ -99,7 +99,7 @@ test("visible(false) calls place with visible false", async () => {
 test("on() receives only events for this image", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", f.window, { report: f.report });
   await settle();
   const received = [];
   image.on("key", (event) => received.push(event));
@@ -113,7 +113,7 @@ test("on() receives only events for this image", async () => {
 test("on() filters by event type", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", f.window, { report: f.report });
   await settle();
   const keyEvents = [];
   const insertEvents = [];
@@ -130,7 +130,7 @@ test("on() filters by event type", async () => {
 test("focus() calls the focus method", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", f.window, { report: f.report });
   await settle();
   p.calls.length = 0;
   await image.focus();
@@ -141,7 +141,7 @@ test("focus() calls the focus method", async () => {
 test("setCaret() calls caret with coordinates", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", f.window, { report: f.report });
   await settle();
   p.calls.length = 0;
   await image.setCaret({ x: 10, y: 20, width: 2, height: 24 });
@@ -152,7 +152,7 @@ test("setCaret() calls caret with coordinates", async () => {
 test("setAccessibleText() calls text with string", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", f.window, { report: f.report });
   await settle();
   p.calls.length = 0;
   await image.setAccessibleText("hello");
@@ -163,7 +163,7 @@ test("setAccessibleText() calls text with string", async () => {
 test("detach stops observation and rejects later calls", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", f.window, { report: f.report });
   await settle();
   await image.detach();
   await settle();
@@ -179,13 +179,13 @@ test("detach stops observation and rejects later calls", async () => {
 test("invalid names are rejected", async () => {
   const f = fixture();
   const p = port();
-  assert.throws(() => attachImage(p, f.element, "Preview", "editor", f.window, { report: f.report }), /invalid image name/);
+  assert.throws(() => attachImage(p, f.element, "Preview", "writer", f.window, { report: f.report }), /invalid image name/);
 });
 
 test("an event of a type without handlers is reported as an error, not dropped", async () => {
   const f = fixture();
   const p = port();
-  attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
+  attachImage(p, f.element, "preview", "writer", f.window, { report: f.report });
   await settle();
   p.send("preview", { type: "unknownType", data: "test" });
   await settle();
@@ -195,7 +195,7 @@ test("an event of a type without handlers is reported as an error, not dropped",
 test("an event without a type is reported as an error, not dropped", async () => {
   const f = fixture();
   const p = port();
-  attachImage(p, f.element, "preview", "editor", f.window, { report: f.report });
+  attachImage(p, f.element, "preview", "writer", f.window, { report: f.report });
   await settle();
   p.send("preview", { data: "test" }); // type 필드가 없다
   await settle();
@@ -204,5 +204,5 @@ test("an event without a type is reported as an error, not dropped", async () =>
 
 test("an image region requires a report for its failures", () => {
   const f = fixture();
-  assert.throws(() => attachImage(port(), f.element, "preview", "editor", f.window), /requires a report/);
+  assert.throws(() => attachImage(port(), f.element, "preview", "writer", f.window), /requires a report/);
 });

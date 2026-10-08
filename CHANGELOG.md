@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F102.1.7: hosts serve the shared modules of extension points at `/shared/<plugin id>.<point>/<specifier>.js`, so the Tauri webview loads them as JavaScript.
+- F102.11: core commands no longer wait without end for a tab whose surface composition is `dom`.
+- F102.8: the window check `e2e/editor.test.mjs` opens a file from the tree in the editor plugin and checks saving, the tab error, reloading and the close question on both hosts; the workspace registry includes the editor plugin.
 - F103: stored layouts and settings are read only in their current form; an earlier form fails with an error that names `projects.json` or the settings file, and the conversions are removed.
 - F106: every declared version is 0.0.7, and core 0.0.7 is released.
 - F102.10: a surface shows the error of a failed operation in its card status row with `tab.error(text)` and removes it with `tab.error(null)`; `core.grid` reports `error` for each tab.

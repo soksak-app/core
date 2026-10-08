@@ -142,7 +142,7 @@ test("a fixed card is never split and never closed", () => {
 
 test("state round-trips through JSON", () => {
   const grid = three();
-  grid.split("upper", "x", { id: "editor", data: { pty: 7 } });
+  grid.split("upper", "x", { id: "writer", data: { pty: 7 } });
   grid.setSize("sidebar", "x", 210);
   grid.setFixed("sidebar", true);
   grid.moveBoundary("x", 2, 0.7 * W);
@@ -151,7 +151,7 @@ test("state round-trips through JSON", () => {
   // Comparing the two toJSON results would pass on a state that drops a
   // field, since both sides forget it. Read the copy through the API instead,
   // and against values named here rather than fetched from the original.
-  assert.deepEqual(copy.card("editor").data, { pty: 7 }, "the payload came across");
+  assert.deepEqual(copy.card("writer").data, { pty: 7 }, "the payload came across");
   assert.equal(copy.card("sidebar").width, 210, "and the px size");
   assert.equal(copy.card("sidebar").fixed, true, "and the role");
   assert.deepEqual(copy.cards.map((c) => c.id).sort(), grid.cards.map((c) => c.id).sort());
@@ -159,7 +159,7 @@ test("state round-trips through JSON", () => {
 
   // Behaviour, not just shape: the same operation must do the same thing.
   const same = Soksak.from(grid.toJSON(), { width: W, height: H });
-  assert.equal(same.close("editor"), grid.close("editor"));
+  assert.equal(same.close("writer"), grid.close("writer"));
   assert.deepEqual(
     [...same.rects()].map(([id, r]) => [id, r.w, r.h]),
     [...grid.rects()].map(([id, r]) => [id, r.w, r.h]),
@@ -188,9 +188,9 @@ test("every field of a card survives the round trip", () => {
 
 test("a split carries the payload the host gives the new card", () => {
   const grid = three();
-  const id = grid.split("upper", "x", { id: "editor", data: { title: "editor", layer: 20 } });
-  assert.equal(id, "editor");
-  assert.deepEqual(grid.card("editor").data, { title: "editor", layer: 20 });
+  const id = grid.split("upper", "x", { id: "writer", data: { title: "writer", layer: 20 } });
+  assert.equal(id, "writer");
+  assert.deepEqual(grid.card("writer").data, { title: "writer", layer: 20 });
   // and the source keeps its own — a payload is never shared between two cards
   assert.equal(grid.card("upper").data, undefined);
 });

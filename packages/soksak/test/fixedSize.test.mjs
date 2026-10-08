@@ -49,7 +49,7 @@ test("a card in a middle slot spans the plane and nothing crosses it", () => {
         { id: "upper", c0: 0, c1: 1, r0: 0, r1: 1 },
         { id: "lower", c0: 0, c1: 1, r0: 1, r1: 2 },
         { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 190, fixed: true },
-        { id: "editor", c0: 2, c1: 3, r0: 0, r1: 2 },
+        { id: "writer", c0: 2, c1: 3, r0: 0, r1: 2 },
       ],
     },
     { width: W, height: H },
