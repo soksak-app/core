@@ -48,7 +48,7 @@
 | 창의 WebContent process가 끝난다 | `error: page process: <window>: terminated` |
 | native 호출이 실패한다 | `sp_log_error`의 `error: <where>: <text>` |
 | native 치명 오류(signal, 잡히지 않은 예외) | `error: fatal: <signal 또는 예외>` 한 줄, 그 뒤 process가 끝난다 |
-| Rust host가 panic한다 | panic hook의 `error: panic: <where>: <text>` |
+| Rust host가 panic한다 | panic hook의 `error: panic: <file>:<line>: <message>`. Wails host의 panic은 Go runtime이 stack을 표준 오류에 쓴다 |
 | host가 실행되는 동안 표준 입출력 sidecar process가 끝난다 | `error: sidecar <name>: failed: output closed: <exit status>` |
 | host가 실행되는 동안 상주 service의 연결이 끝난다 | `error: sidecar <name>: connection lost; restarted`, 또는 `connection lost; restart failed: <reason>` |
 | document region이 navigation에 실패한다 | `error: document <surface>: <text>` |

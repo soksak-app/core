@@ -48,7 +48,7 @@ Three forms of record exist, and each fact has the form that fits it.
 | the WebContent process of a window ends | `error: page process: <window>: terminated` |
 | a native call fails | `error: <where>: <text>` from `sp_log_error` |
 | a native fatal error (signal, uncaught exception) | one `error: fatal: <signal or exception>` line, then the process ends |
-| the Rust host panics | `error: panic: <where>: <text>` from the panic hook |
+| the Rust host panics | `error: panic: <file>:<line>: <message>` from the panic hook; the Go runtime writes the stack of a panic of the Wails host to the standard error |
 | a sidecar process of standard input and output ends while the host runs | `error: sidecar <name>: failed: output closed: <exit status>` |
 | the connection to a persistent service ends while the host runs | `error: sidecar <name>: connection lost; restarted`, or `connection lost; restart failed: <reason>` |
 | a document region fails to navigate | `error: document <surface>: <text>` |

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F128.3: Tauri host의 panic을 기본 panic 메시지보다 먼저 `error: panic: <file>:<line>: <message>`로 애플리케이션 로그에 쓴다.
 - F128.1: 창의 WebContent process가 끝나면 두 host가 한 번 `error: page process: <window>: terminated`를 쓰고 page를 다시 불러온다. 이전에는 Tauri host가 다시 불러오지 않아 창이 page 없이 남았다.
 - F128.2: host가 상주 service의 연결 손실을 관측이 아니라 오류 줄 `error: sidecar <name>: connection lost; restarted`(실패하면 `restart failed: <reason>`)로 쓴다.
 - F129: 창 검사의 준비는 바꾼 설정(`diagnostics.performance` 포함)을 검사가 끝날 때 되돌린다. 그래서 그 뒤에 검사 애플리케이션을 쓰는 사람도 performance trace를 가진다.

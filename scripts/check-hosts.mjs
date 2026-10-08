@@ -25,6 +25,7 @@ const PAIRS = [
       right: {
         "Cargo.toml": "A4", "Cargo.lock": "A4",
         "build": "H1",
+        "tests/panic_hook_test": "H7",
       },
     },
   },

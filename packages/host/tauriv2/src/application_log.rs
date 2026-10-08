@@ -81,5 +81,28 @@ pub fn start_application_log(config: &Path, identifier: &str) -> Result<(), Stri
     // 표준 오류는 복제한 descriptor 를 가지므로 연 파일은 이 함수가 끝날 때 닫힌다.
     platform
         .replace_standard_error(&file)
-        .map_err(|error| format!("application log: {error}"))
+        .map_err(|error| format!("application log: {error}"))?;
+    install_panic_hook();
+    Ok(())
+}
+
+/// Writes each panic of the host as `error: panic: <file>:<line>: <message>` before the previous hook prints its message
+/// (docs/spec/diagnostics.md). The standard error is the application log once [`start_application_log`] ran.
+pub fn install_panic_hook() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let message = match info.payload().downcast_ref::<&str>() {
+            Some(text) => text.to_string(),
+            None => match info.payload().downcast_ref::<String>() {
+                Some(text) => text.clone(),
+                None => "a payload that is not text".to_string(),
+            },
+        };
+        let location = match info.location() {
+            Some(location) => format!("{}:{}", location.file(), location.line()),
+            None => "an unknown location".to_string(),
+        };
+        log_error("panic", format!("{location}: {message}"));
+        previous(info);
+    }));
 }
