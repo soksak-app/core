@@ -148,7 +148,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | H4 | `src/platform/darwin/webview.m` | 없음 | Wails에 자식 웹뷰 API가 없어 호스트가 Objective-C로 웹뷰를 생성하며, Tauri는 `add_child`를 사용한다 |
 | H5 | `src/diagnostics_test.go` | 없음 | 진단 전용 Go 단위 검사는 호스트 API를 넓히지 않고 비공개 capture payload helper를 검사하기 위해 구현 옆에 둔다. Rust 진단 범위는 호스트 통합 테스트에 있다 |
 | H6 | `src/menu.go`, `tests/menu_test.go` | 없음 | Wails 기본 애플리케이션 메뉴는 View 메뉴에서 메인 웹뷰 전체를 확대하고 다시 읽으므로 Wails 호스트가 애플리케이션 메뉴를 정한다. Tauri 호스트는 View 메뉴에 전체 화면만 있는 Tauri 기본 메뉴를 쓴다 |
-| H7 | 없음 | `tests/panic_hook_test.rs` | Go runtime은 panic의 stack을 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다. Rust panic은 `application_log.rs`의 hook이 있어야 오류 줄을 쓴다 |
+| H7 | 없음 | `tests/panic_hook_test.rs`, `tests/fatal_signal_test.rs` | Go runtime은 panic의 stack과 fatal signal의 보고를 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다. Rust panic은 `application_log.rs`의 hook이, fatal signal은 native 라이브러리의 handler가 있어야 오류 줄을 쓴다 |
 | A1 | 내용만 다름 | 내용만 다름 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다 |
 | A2 | 없음 | `build.rs` | Tauri는 `tauri_build::build()`를 요구한다 |
 | A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri 설정 |

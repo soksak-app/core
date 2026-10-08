@@ -12,3 +12,12 @@ pub fn replace(file: &std::fs::File) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Installs the fatal signal and uncaught exception handlers of the native library (application_log.h).
+pub fn install_fatal_handlers() {
+    extern "C" {
+        fn sp_log_install_fatal_handlers();
+    }
+    // SAFETY: the native function installs process-wide handlers and takes no arguments.
+    unsafe { sp_log_install_fatal_handlers() }
+}

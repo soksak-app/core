@@ -82,6 +82,9 @@ pub fn start_application_log(config: &Path, identifier: &str) -> Result<(), Stri
     platform
         .replace_standard_error(&file)
         .map_err(|error| format!("application log: {error}"))?;
+    platform
+        .install_fatal_handlers()
+        .map_err(|error| format!("application log: {error}"))?;
     install_panic_hook();
     Ok(())
 }

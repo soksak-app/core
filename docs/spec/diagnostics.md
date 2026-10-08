@@ -47,7 +47,7 @@ Three forms of record exist, and each fact has the form that fits it.
 | the main page throws or rejects after its first screen | `error: <where>: <text>` of the page's error display |
 | the WebContent process of a window ends | `error: page process: <window>: terminated` |
 | a native call fails | `error: <where>: <text>` from `sp_log_error` |
-| a native fatal error (signal, uncaught exception) | one `error: fatal: <signal or exception>` line, then the process ends |
+| a fatal signal or an uncaught exception of the Tauri host | one `error: fatal: <signal name>` or `error: fatal: uncaught exception <name>: <reason>` line, then the process ends; the Go runtime writes the report of a fatal signal of the Wails host to the standard error |
 | the Rust host panics | `error: panic: <file>:<line>: <message>` from the panic hook; the Go runtime writes the stack of a panic of the Wails host to the standard error |
 | a sidecar process of standard input and output ends while the host runs | `error: sidecar <name>: failed: output closed: <exit status>` |
 | the connection to a persistent service ends while the host runs | `error: sidecar <name>: connection lost; restarted`, or `connection lost; restart failed: <reason>` |

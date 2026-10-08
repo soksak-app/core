@@ -437,6 +437,10 @@ pub fn instant_window_resize() -> Result<(), String> {
     missing("window resize animation")
 }
 
+pub fn install_fatal_handlers() -> Result<(), String> {
+    Err("install fatal handlers: not implemented on windows".to_string())
+}
+
 pub fn replace_standard_error(_file: &std::fs::File) -> Result<(), String> {
     missing("standard error replacement")
 }

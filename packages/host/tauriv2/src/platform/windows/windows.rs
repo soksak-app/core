@@ -440,6 +440,9 @@ impl Platform for Windows {
     fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String> {
         unsupported::replace_standard_error(file)
     }
+    fn install_fatal_handlers(&self) -> Result<(), String> {
+        unsupported::install_fatal_handlers()
+    }
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String> {
         unsupported::install_dock_menu(new_window)
     }

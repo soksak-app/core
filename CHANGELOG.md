@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F128.4: a fatal signal or an uncaught exception of the Tauri host is written as one `error: fatal: …` line to the application log before the process ends; the native library installs the handlers and calls a handler that was installed before.
 - F128.3: a panic of the Tauri host is written as `error: panic: <file>:<line>: <message>` to the application log before the default panic message.
 - F128.1: when the WebContent process of a window ends, both hosts write `error: page process: <window>: terminated` once and load the page again; the Tauri host did not load it again before, and the window stayed without a page.
 - F128.2: the host writes a lost connection to a persistent service as `error: sidecar <name>: connection lost; restarted` (or `restart failed: <reason>`), as an error line and not as an observation.

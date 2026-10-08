@@ -572,6 +572,10 @@ impl Platform for Darwin {
     fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String> {
         standard_error::replace(file)
     }
+    fn install_fatal_handlers(&self) -> Result<(), String> {
+        standard_error::install_fatal_handlers();
+        Ok(())
+    }
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String> {
         dock::install(new_window)
     }

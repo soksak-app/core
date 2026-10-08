@@ -239,6 +239,7 @@ fn invalid_json_closes_connection() {
 | `log.application.start-replaces-standard-error` | 애플리케이션 로그를 시작하면 실행의 첫 줄을 쓰고 그 파일을 프로세스와 그 프로세스가 시작하는 자식의 표준 오류로 만든다. | both |
 | `log.error.line-form` | helper로 쓴 호스트 오류 줄은 `error: <where>: <text>`이며, 애플리케이션 로그에 `error: `로 시작하는 줄로 들어간다. | both |
 | `log.panic.writes-an-error-line` | 애플리케이션 로그를 연 뒤 host가 panic하면 기본 panic 메시지보다 먼저 `error: panic: <file>:<line>: <message>`를 쓴다. | tauriv2 only: Go runtime은 panic의 stack을 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다 |
+| `log.fatal-signal.writes-an-error-line` | 애플리케이션 로그를 연 뒤 host process가 fatal signal을 받으면 그 signal로 process가 끝나기 전에 `error: fatal: <signal name>`을 한 번 쓴다. | tauriv2 only: Go runtime은 fatal signal을 스스로 처리하고 보고를 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다 |
 | `log.binding-failure.returned-not-logged` | 실패한 binding 호출은 framework transport의 log 줄 없이 page로 돌아가므로 page가 그 실패를 한 번 기록한다. | wailsv3 only: Wails HTTP transport가 binding 호출을 나르고, Tauri invoke는 돌려준 오류에 log 줄을 쓰지 않는다 |
 | `log.service.standard-error-goes-to-service-log` | 호스트가 시작한 영속 서비스는 표준 오류를 `logs/<실행 파일 이름>.log`에 쓴다. | both |
 | `log.service.open-failure-fails-start` | 서비스 로그를 열 수 없으면 `sidecar <name>: service log: <error>`로 시작을 실패시키고 서비스를 시작하지 않는다. | both |

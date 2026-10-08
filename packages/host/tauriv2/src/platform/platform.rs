@@ -621,6 +621,8 @@ pub trait Platform: Send + Sync {
     /// 프로세스의 표준 오류를 file 로 바꾼다. 이후 시작하는 자식 프로세스도 그 descriptor 를
     /// 물려받는다(docs/spec/hosts.md#application-log).
     fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String>;
+    /// Installs the handlers that write a fatal signal or an uncaught exception as an error line before the process ends.
+    fn install_fatal_handlers(&self) -> Result<(), String>;
 
     // Dock
 
