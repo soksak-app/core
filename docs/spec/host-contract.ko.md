@@ -355,6 +355,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.stop.close-owner-then-shutdown` | 중지는 close-owner를 보내고 성공 응답 뒤에 shutdown을 보낸다. | both |
 | `sidecars-transport.stop.own-close-is-not-a-read-error` | 중지 중에 서비스 연결을 닫아도 `persistent read` 오류 줄을 쓰지 않는다. host 자신이 닫았기 때문이다. | both |
 | `sidecars-transport.stop.accepts-close-answers-sent-before-stop` | 지속 service가 중지 전에 보낸 closed 알림에 중지가 시작된 뒤 답해도 받아들인다. 중지는 shutdown을 보내고 닫는 중인 표면이 남지 않는다. | both |
+| `sidecars-transport.stop.leaves-the-close-of-a-replacement-to-the-replacement` | 지속 service의 owner 닫기는 연결마다 한 번 실행된다. 교체가 owner를 닫는 동안 시작한 종료는 두 번째 close-owner를 보내지 않고, 교체가 끝나기를 기다리며, transport를 다시 닫지 않는다. | both |
 | `sidecars-transport.persistent.revives-a-lost-connection` | 서비스가 연결을 끊으면 호스트가 전송 없이 다시 시작하고 소유 표면이 연결 이벤트를 받는다. | both |
 | `sidecars-transport.persistent.lost-connection-writes-an-error-line` | host가 실행되는 동안 프로토콜 위반 없이 끝난 상주 service의 연결은 host가 다시 연결한 뒤 `error: sidecar <name>: connection lost; restarted`를 한 번 쓰고, 연결하지 못하면 `error: sidecar <name>: connection lost; restart failed: <reason>`을 쓴다. | both |
 | `sidecars-transport.replace.replaces-an-outdated-service` | `hello`의 version이 설치된 version과 다른 상주 service를 교체하면 `close-owner`와 `shutdown`을 보내고, 연결을 닫고, 생성 경로로 설치된 service를 시작하고, 그 sidecar로 보낸 각 표면에 연결 알림을 보내고, `host.sidecars`의 `outdated`에서 그 sidecar를 빼고, `sidecar <name>: service <running> replaced by <installed>`를 쓴다. | both |

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F133: both hosts close the owner of a persistent service once for its connection, so a stop that begins while the replacement of an outdated service closes the owner no longer sends a second `close-owner`; the Rust host no longer answers the close of a surface twice and the Go host no longer panics with `close of closed channel`. F134 records a CI failure of a time-dependent test that did not recur.
 - F117.6: the terminal plugin repository registers the item P23, which starts the new shell of a replaced terminal service in the last working directory of the terminal.
 - F102.6: when a window keeps a modified tab, both hosts answer each pending quit request of the operating system (the Dock, a logout, another program) with `userCanceledErr` through the new platform operation `CancelQuitRequests` (`sp_quit_request_cancel`), so the sender learns that the application stays.
 - F132: the Tauri host no longer answers a path with a file extension that names no file with the start document, which the framework falls back to; the framework answers its asset error, status 500, and the Wails server answers 404. `e2e/page-asset.test.mjs` asserts a status of 400 or more on both running hosts.

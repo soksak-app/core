@@ -1044,6 +1044,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F133",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) closeOwnerAndShutdown" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn send_close_owner_and_shutdown" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestAStopLeavesTheCloseOfAReplacementToTheReplacement" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "stop_does_not_close_the_owner_again_while_a_replacement_closes_it" },
+    ],
+    expected: "The close of the owner of a persistent service runs once for its connection, whether a replacement or a stop begins it.",
+    levels: ["unit"],
+  },
+  {
     id: "F29",
     implementation: [
       { file: "scripts/check-build-environment.sh", symbol: "pnpm_actual=$(pnpm --version" },

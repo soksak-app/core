@@ -236,9 +236,29 @@ struct CloseFailure {
     send_close: bool,
 }
 
+/// Closes the owner of a persistent service and tells it to shut down, once for the connection: a caller that finds
+/// the close done or running by another caller waits for it and returns `Ok(false)`, and the caller that does it
+/// returns `Ok(true)`. A failed close is not done, so the next caller tries again.
+fn close_persistent_owner(
+    outbox: &SyncSender<Outgoing>,
+    close_waiters: &ReplyWaiters,
+    shutdown_waiters: &ReplyWaiters,
+    owner_closed: &Mutex<bool>,
+    prefix: &str,
+    deadline: std::time::Instant,
+) -> Result<bool, CloseFailure> {
+    let mut closed = owner_closed.lock().expect("owner close");
+    if *closed {
+        return Ok(false);
+    }
+    send_close_owner_and_shutdown(outbox, close_waiters, shutdown_waiters, prefix, deadline)?;
+    *closed = true;
+    Ok(true)
+}
+
 /// Sends close-owner and shutdown through the outbox of a persistent service and waits for each answer until the
 /// deadline. The ids of the requests start with `prefix`.
-fn close_persistent_owner(
+fn send_close_owner_and_shutdown(
     outbox: &SyncSender<Outgoing>,
     close_waiters: &ReplyWaiters,
     shutdown_waiters: &ReplyWaiters,
@@ -477,6 +497,9 @@ struct PersistentConnection {
     /// retain 요청마다 서비스가 닫은 세션 수나 오류를 받는다.
     retain_waiters: RetainWaiters,
     shutdown_waiters: ReplyWaiters,
+    /// Whether the owner of this connection was closed and the service was told to shut down. The close of a
+    /// replacement and the close of a stop run once between them.
+    owner_closed: Arc<Mutex<bool>>,
     connected: Arc<AtomicBool>,
     /// The process of the service endpoint that this connection reached.
     service_pid: u32,
@@ -970,7 +993,7 @@ impl<O: Owner> Sidecars<O> {
     /// the installed executable through the creation path and notifies the surfaces that sent to the sidecar
     /// (docs/spec/terminal-runtime.md#updates). A sidecar without a running service of another version is refused.
     pub fn replace(&self, name: &str) -> Result<(), String> {
-        let (outbox, close_waiters, shutdown_waiters) = {
+        let (outbox, close_waiters, shutdown_waiters, owner_closed) = {
             let mut state = self.core.state.lock().expect("sidecar state");
             let refused = || {
                 format!(
@@ -991,6 +1014,7 @@ impl<O: Owner> Sidecars<O> {
                 process.outbox.clone(),
                 Arc::clone(&connection.close_waiters),
                 Arc::clone(&connection.shutdown_waiters),
+                Arc::clone(&connection.owner_closed),
             );
             let running = connection.version.clone();
             let service_pid = connection.service_pid;
@@ -1015,15 +1039,20 @@ impl<O: Owner> Sidecars<O> {
             REPLACEMENTS.fetch_add(1, Ordering::Relaxed)
         );
         let deadline = std::time::Instant::now() + self.stop_timeout;
-        let failure = close_persistent_owner(
+        let closed = close_persistent_owner(
             &outbox,
             &close_waiters,
             &shutdown_waiters,
+            &owner_closed,
             &prefix,
             deadline,
-        )
-        .err();
-        let send_close = failure.as_ref().is_none_or(|failure| failure.send_close);
+        );
+        // The caller that did not close the owner leaves the transport to the one that did.
+        let send_close = match &closed {
+            Ok(done) => *done,
+            Err(failure) => failure.send_close,
+        };
+        let failure = closed.err();
         if send_close {
             if let Err(error) = outbox.send(Outgoing::Close) {
                 log_error(
@@ -1283,16 +1312,20 @@ impl<O: Owner> Sidecars<O> {
                 if process.child.is_none() {
                     if let Some(persistent) = process.persistent {
                         let prefix = std::process::id().to_string();
-                        let failure = close_persistent_owner(
+                        let closed = close_persistent_owner(
                             &process.outbox,
                             &persistent.close_waiters,
                             &persistent.shutdown_waiters,
+                            &persistent.owner_closed,
                             &prefix,
                             deadline,
-                        )
-                        .err();
-                        let send_close = failure.as_ref().is_none_or(|failure| failure.send_close);
-                        if let Some(failure) = failure {
+                        );
+                        // The caller that did not close the owner leaves the transport to the one that did.
+                        let send_close = match &closed {
+                            Ok(done) => *done,
+                            Err(failure) => failure.send_close,
+                        };
+                        if let Err(failure) = closed {
                             log_error(&format!("sidecar {name}"), failure.text);
                         }
                         if send_close {
@@ -2012,6 +2045,7 @@ impl<O: Owner> Core<O> {
                     close_waiters,
                     retain_waiters,
                     shutdown_waiters,
+                    owner_closed: Arc::new(Mutex::new(false)),
                     connected,
                     service_pid: endpoint.pid,
                 }),

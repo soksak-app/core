@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -1764,9 +1765,13 @@ type replaceService struct {
 	// fake service and keeps a process of its own.
 	folder    string
 	endsAfter time.Duration
-	endedAt   time.Time
-	ended     sync.WaitGroup
-	secondAt  time.Time
+	// hold, when set, keeps the first service from answering close-owner until it is closed; closeOwner receives a
+	// signal for each close-owner that the first service read.
+	hold       chan struct{}
+	closeOwner chan struct{}
+	endedAt    time.Time
+	ended      sync.WaitGroup
+	secondAt   time.Time
 }
 
 func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string) *replaceService {
@@ -1849,6 +1854,12 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 					case "hello":
 						reply, _ = json.Marshal(map[string]any{"operation": "hello", "protocol": 1, "ok": true, "version": version})
 					case "close-owner":
+						if first && service.closeOwner != nil {
+							service.closeOwner <- struct{}{}
+						}
+						if first && service.hold != nil {
+							<-service.hold
+						}
 						reply, _ = json.Marshal(map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true})
 					case "shutdown":
 						reply, _ = json.Marshal(map[string]any{"operation": "shutdown", "request": request["request"], "ok": true})
@@ -2046,5 +2057,47 @@ func TestTheHelloCarriesTheConfigurationDirectoryAsClient(t *testing.T) {
 	}
 	if got := (<-hello)["client"]; got != resolved {
 		t.Fatalf("client %v, want the configuration directory %s", got, resolved)
+	}
+}
+
+// contract: sidecars-transport.stop.leaves-the-close-of-a-replacement-to-the-replacement
+func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
+	service.hold = make(chan struct{})
+	service.closeOwner = make(chan struct{}, 4)
+	sidecars := replaceSidecars(t, root, service)
+	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.seen)
+	replaced := make(chan error, 1)
+	go func() { replaced <- sidecars.Replace(context.Background(), "fixture-service") }()
+	// The replacement has sent its close-owner when the service has read it, and the service holds the answer.
+	<-service.closeOwner
+	stopped := make(chan struct{})
+	go func() {
+		sidecars.Stop()
+		close(stopped)
+	}()
+	// The stop has begun when the host refuses a send; give its close time to reach the service.
+	for sidecars.Send(owner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`)) == nil {
+		runtime.Gosched()
+	}
+	time.Sleep(200 * time.Millisecond)
+	close(service.hold)
+	<-stopped
+	if err := <-replaced; err != nil {
+		t.Fatalf("the replacement failed: %v", err)
+	}
+	closes := 0
+	for _, operation := range service.received() {
+		if operation == "close-owner" {
+			closes++
+		}
+	}
+	if closes != 1 {
+		t.Fatalf("the service received %d close-owner requests: %v", closes, service.received())
 	}
 }

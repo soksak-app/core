@@ -100,6 +100,10 @@ type sidecar struct {
 	// 각 항목을 보존하여 sequence가 다른 응답을 덮어쓰지 않는다.
 	pendingReplies [][]byte
 	closeWaiters   map[string]chan error
+	// ownerMutex serializes the close of the owner of a persistent service, and transportClosed is true once it closed the
+	// transport, so the close of a replacement and the close of a stop run once between them.
+	ownerMutex      sync.Mutex
+	transportClosed bool
 	// retained 는 retain 요청마다 서비스가 닫은 세션 수다.
 	retained map[string]int
 	// surfaces 는 이 프로세스에 요청을 보낸 표면이다. 실패를 알릴 표면이다. c.mu 로 보호한다.
@@ -872,6 +876,18 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 }
 
 func (c *Sidecars) closePersistentOwner(process *sidecar, ctx context.Context) error {
+	process.ownerMutex.Lock()
+	defer process.ownerMutex.Unlock()
+	if process.transportClosed {
+		// Another caller closed the owner and the transport.
+		return nil
+	}
+	return c.closeOwnerAndShutdown(process, ctx)
+}
+
+// closeOwnerAndShutdown sends close-owner and shutdown, waits for each answer and closes the transport. It is called
+// with process.ownerMutex held.
+func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) error {
 	request := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
 	waiter := make(chan error, 1)
 	defer func() {
@@ -895,8 +911,7 @@ func (c *Sidecars) closePersistentOwner(process *sidecar, ctx context.Context) e
 	select {
 	case err := <-waiter:
 		if err != nil {
-			process.conn.Close()
-			close(process.outbox)
+			process.closeTransport()
 			return err
 		}
 		shutdown := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
@@ -916,17 +931,14 @@ func (c *Sidecars) closePersistentOwner(process *sidecar, ctx context.Context) e
 		}
 		select {
 		case shutdownErr := <-shutdownWaiter:
-			process.conn.Close()
-			close(process.outbox)
+			process.closeTransport()
 			return shutdownErr
 		case <-ctx.Done():
-			process.conn.Close()
-			close(process.outbox)
+			process.closeTransport()
 			return ctx.Err()
 		}
 	case <-ctx.Done():
-		process.conn.Close()
-		close(process.outbox)
+		process.closeTransport()
 		return ctx.Err()
 	}
 }
@@ -1783,4 +1795,11 @@ func (c *Sidecars) tryHandleImageEnvelope(owner SidecarOwner, sidecarName, surfa
 	}
 
 	return false
+}
+
+// closeTransport closes the connection and the outbox of a persistent service. It is called with ownerMutex held.
+func (s *sidecar) closeTransport() {
+	s.conn.Close()
+	close(s.outbox)
+	s.transportClosed = true
 }

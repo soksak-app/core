@@ -2005,3 +2005,105 @@ fn the_hello_carries_the_configuration_directory_as_client() {
     );
     sidecars.stop();
 }
+
+// contract: sidecars-transport.stop.leaves-the-close-of-a-replacement-to-the-replacement
+#[test]
+fn stop_does_not_close_the_owner_again_while_a_replacement_closes_it() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("replacing.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "protocol": 1,
+            "pid": std::process::id(),
+            "socket": socket_path,
+            "token": "replacing-token"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    // The service reads every line at once and answers close-owner and shutdown only when the check releases the
+    // answers, so a replacement is in progress while the application stops.
+    let (seen_sender, seen) = channel::<String>();
+    let (release, released) = channel::<()>();
+    let service = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let (requests_sender, requests) = channel::<serde_json::Value>();
+        let writer = thread::spawn(move || {
+            released.recv().unwrap();
+            while let Ok(request) = requests.recv() {
+                let operation = request["operation"].as_str().unwrap_or("");
+                let reply = match operation {
+                    "close-owner" => {
+                        serde_json::json!({"operation": "closed-owner", "request": request["request"], "ok": true})
+                    }
+                    "shutdown" => {
+                        serde_json::json!({"operation": "shutdown", "request": request["request"], "ok": true})
+                    }
+                    _ => continue,
+                };
+                if writeln!(stream, "{reply}").is_err() {
+                    return;
+                }
+                if operation == "shutdown" {
+                    return;
+                }
+            }
+        });
+        let mut line = String::new();
+        while reader.read_line(&mut line).unwrap_or(0) > 0 {
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let operation = request["operation"].as_str().unwrap_or("").to_string();
+            if operation == "hello" {
+                // The version differs from the installed one, so the service is outdated.
+                let reply = serde_json::json!({"operation": "hello", "protocol": 1, "ok": true, "version": "0.0.6"});
+                writeln!(reader.get_mut(), "{reply}").unwrap();
+            }
+            seen_sender.send(operation.clone()).unwrap();
+            if operation == "close-owner" || operation == "shutdown" {
+                requests_sender.send(request).unwrap();
+            }
+            line.clear();
+        }
+        drop(requests_sender);
+        writer.join().unwrap();
+    });
+    let sidecars = Arc::new(replace_sidecars(
+        config_directory.path(),
+        executable_directory.path(),
+    ));
+    let (owner, events) = owner("replacing", "/projects/replacing");
+    sidecars
+        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv_timeout(STALL).ok();
+    let replacing = {
+        let sidecars = Arc::clone(&sidecars);
+        thread::spawn(move || sidecars.replace(ECHO))
+    };
+    // The replacement has sent its close-owner when the service has read it.
+    loop {
+        if seen.recv_timeout(STALL).unwrap() == "close-owner" {
+            break;
+        }
+    }
+    let stopping = {
+        let sidecars = Arc::clone(&sidecars);
+        thread::spawn(move || sidecars.stop())
+    };
+    // The stop leaves the close of the owner to the replacement: the service reads no second close-owner while it
+    // holds the first answer.
+    if let Ok(operation) = seen.recv_timeout(Duration::from_millis(300)) {
+        panic!("the stop sent {operation} while the replacement closed the owner");
+    }
+    release.send(()).unwrap();
+    stopping.join().unwrap();
+    replacing.join().unwrap().unwrap();
+    service.join().unwrap();
+}
