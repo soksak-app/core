@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F124.2: 표면이 `context.runtime.trace(event, fields)`로 자기 event를 plugin과 표면 이름과 함께 performance trace에 쓴다. 그래서 plugin은 입력의 단계를 host와 sidecar의 event와 함께 `<config-dir>/logs/performance.ndjson`에 기록한다.
 - F124.2: 두 host가 정지 캡처와 녹화를 `<config-dir>/logs/captures/`에 쓴다. 그래서 애플리케이션의 모든 진단 파일이 `<config-dir>/logs/`에 있고, `hosts.md`는 이 폴더를 넘겨줄 유일한 폴더로 적는다.
 - F124, F124.1: release version이 0.0.x인 동안 `make wailsv3-build-release tauriv2-build-release`가 두 host, `sok`, page를 진단 포함으로 빌드하고, `scripts/check-release.mjs`는 그런 release에 진단 method와 page 진단 module이 있기를 요구하며, `diagnostics.performance`의 기본값은 true다. `.dev` 식별자는 debug 빌드만 정하는 새 `dev` build 플래그(Go 태그, Cargo 기능)에서 오므로, 진단 release는 `app.soksak.<host>`와 설치된 애플리케이션의 설정 폴더를 유지한다.
 - F123: 두 host가 image frame에 대한 모든 답(consumed나 그 까닭을 담은 거절)을 performance trace의 `image.frame` event로 쓴다. 그래서 frame 표시가 멈춘 terminal에서 service가 frame을 보냈는지와 host가 표시했는지를 알 수 있다.

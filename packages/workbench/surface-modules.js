@@ -9,6 +9,7 @@ import { onTextSize, surfaceTextSize } from "./text-size.js";
 import { forgetTab, reportDirectory, reportError, reportFooter, reportModified, reportNotice, reportTitle, tabOrigin } from "./tab-reports.js";
 import { icon } from "./icons.js";
 import { active } from "./projects.js";
+import { trace } from "./performance.js";
 const mounted = new Map();
 /* 호스트가 없는 문서에서 마운트하지 않은 표면의 자리 표시. 표면 id 마다 요소다. */
 const placeholders = new Map();
@@ -231,6 +232,8 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         } },
         settings: { read: () => pluginSettings(surface.pluginId), on: (listener) =>
           onSettingsChange(() => listener(pluginSettings(surface.pluginId))) },
+        // The page trace writes the event while the performance trace is on (docs/spec/plugins.md#tracing).
+        trace: (event, fields) => { trace(event, fields); },
       },
     });
     const state = context.status.subscribe(onState);

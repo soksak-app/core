@@ -170,6 +170,10 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 
 표면 컨텍스트에는 `runtime.links.open(url)`이 있으며, 호스트에 절대 `http`, `https`, `mailto` URL을 그 스킴의 사용자 기본 애플리케이션으로 열도록 요청한다. 호스트는 다른 스킴, 해석되지 않는 URL, 8192자보다 긴 URL을 거부하고, 반환한 promise는 그 이유로 거부된다. macOS 호스트는 `NSWorkspace`로 URL을 연다. Windows 플랫폼은 `not implemented on windows`를 반환한다.
 
+## Tracing
+
+`context.runtime.trace(event, fields)`는 표면의 event를 page 계층으로 [성능 트레이스](performance-trace.md)에 쓴다. `event`는 비어 있지 않은 이름이고 `fields`는 객체이며, event에는 plugin과 표면의 id인 `plugin`과 `surface`가 붙는다. 트레이스가 꺼져 있을 때와 host가 없는 page에서는 아무것도 쓰지 않는다. plugin은 다른 방법으로 보일 수 없는 입력의 단계를 기록해, 한 번 나타난 결함이 host와 sidecar의 event와 함께 기록되게 한다.
+
 ## 아이콘
 
 표면 컨텍스트와 섹션 컨텍스트에는 `icon(name)`이 있으며, 코어 아이콘 `name`을 24 단위 `viewBox`, 획 경로만, `aria-hidden`을 가진 SVG 마크업으로 반환한다. 없는 이름은 예외를 던진다. 코어는 아이콘을 `packages/workbench/icons.js`에 두고, 플러그인은 워크벤치를 가져올 수 없으므로 플러그인 페이지는 자체 그림 대신 컨텍스트로 아이콘을 그린다. 마크업에는 스타일이 없고, 페이지가 자기 Shadow Root에서 크기, 색, 획을 정한다. 이름은 `star`, `projects`, `panel-left`, `panel-right`, `sun`, `moon`, `settings`, `close`와 Lucide 아이콘 `chevron-left`, `chevron-right`, `rotate-cw`다.

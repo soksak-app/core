@@ -111,3 +111,18 @@ test("surface context gives a copy of the tab parameters, or null for a tab with
   const plain = createSurfaceContext({ root, surfaceId: "tab-2", pluginId: "fixture", icon: ICON, runtime, tab: TAB });
   assert.equal(plain.tab.params, null);
 });
+
+// A plugin writes its events to the performance trace through the surface context, named with its plugin and surface,
+// so a defect of a surface is recorded with the events of the host and the sidecars (docs/spec/plugins.md).
+test("surface context traces an event with the plugin and the surface", () => {
+  const root = { appendChild() {} };
+  const lines = [];
+  const context = createSurfaceContext({ root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
+    exposure: { command() {} }, sidecar() {}, emit() {}, native: {},
+    trace: (event, fields) => lines.push([event, fields]),
+  } });
+  context.runtime.trace("fixture.input", { key: "a" });
+  assert.deepEqual(lines, [["fixture.input", { key: "a", plugin: "fixture", surface: "tab-1" }]]);
+  assert.throws(() => context.runtime.trace("", {}), /trace requires an event name/);
+  assert.throws(() => context.runtime.trace("fixture.input", null), /trace requires fields as an object/);
+});

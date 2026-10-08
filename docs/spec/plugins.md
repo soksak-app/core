@@ -170,6 +170,10 @@ The `system` policy is a system notification. The host posts it through the oper
 
 A surface context has `runtime.links.open(url)`, which asks the host to open an absolute `http`, `https`, or `mailto` URL with the user's default application for its scheme. The host rejects another scheme, a URL that does not parse, and a URL longer than 8192 characters, and the returned promise rejects with the reason. The macOS hosts open the URL through `NSWorkspace`; the Windows platform returns `not implemented on windows`.
 
+## Tracing
+
+`context.runtime.trace(event, fields)` writes an event of the surface to the [performance trace](performance-trace.md) with the page layer: `event` is a non-empty name and `fields` an object, and the event carries `plugin` and `surface`, the ids of the plugin and the surface. It writes nothing while the trace is off and on a page without a host. A plugin traces the steps of an input whose effect it cannot show otherwise, so a defect that appears once is recorded with the events of the host and the sidecars.
+
 ## Icons
 
 A surface context and a section context have `icon(name)`, which returns the core icon `name` as SVG markup with a 24-unit `viewBox`, stroke paths only, and `aria-hidden`; an unknown name throws. Core keeps the icons in `packages/workbench/icons.js`, and a plugin page draws them through the context instead of carrying its own artwork, because plugins cannot import the workbench. The markup carries no style: the page sets the size, color, and stroke in its own Shadow Root. The names are `star`, `projects`, `panel-left`, `panel-right`, `sun`, `moon`, `settings`, `close`, and the Lucide icons `chevron-left`, `chevron-right`, and `rotate-cw`.

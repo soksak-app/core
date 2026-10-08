@@ -70,6 +70,16 @@ export function createSurfaceContext({
       settings: runtime.settings,
       // 이 표면의 실제 글자 배율. read() 는 현재 배율, on(fn) 은 배율이 바뀔 때 fn(배율) 을 부른다.
       textSize: runtime.textSize,
+      // Writes an event of this surface to the performance trace with the plugin and surface ids
+      // (docs/spec/plugins.md#tracing). The trace writes nothing while it is off.
+      trace: (event, fields = {}) => {
+        if (typeof event !== "string" || event === "") throw new TypeError("trace requires an event name");
+        if (fields === null || typeof fields !== "object" || Array.isArray(fields)) {
+          throw new TypeError("trace requires fields as an object");
+        }
+        // default: a page without a host (the browser application, a test) has no trace, as a trace that is off.
+        runtime.trace?.(event, { ...fields, plugin: pluginId, surface: surfaceId });
+      },
     }),
     exposure: Object.freeze(runtime.exposure),
     events: Object.freeze({

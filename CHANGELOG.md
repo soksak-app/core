@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F124.2: a surface writes its own events to the performance trace with `context.runtime.trace(event, fields)`, named with its plugin and surface, so a plugin records the steps of an input in `<config-dir>/logs/performance.ndjson` with the events of the host and the sidecars.
 - F124.2: both hosts write still captures and recordings to `<config-dir>/logs/captures/`, so every diagnostic file of an application is in `<config-dir>/logs/`, which `hosts.md` names as the one folder to hand over.
 - F124, F124.1: while the release version is 0.0.x, `make wailsv3-build-release tauriv2-build-release` build both hosts, `sok` and the page with diagnostics, `scripts/check-release.mjs` requires the diagnostic methods and the page diagnostic module in such a release, and `diagnostics.performance` defaults to true. The `.dev` identifier comes from the new `dev` build flag (Go tag, Cargo feature), which only debug builds set, so a diagnostic release keeps `app.soksak.<host>` and the configuration folder of the installed application.
 - F123: both hosts write each answer to an image frame, consumed or refused with its reason, as an `image.frame` event of the performance trace, so a terminal whose frames stop showing tells whether the service sent frames and whether the host presented them.
