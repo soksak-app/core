@@ -310,7 +310,12 @@ export async function open({ root, color, layout }) {
   return project;
 }
 
+/**
+ * Removes the project id from the registry. A window that shows the project in its plane asks for each modified tab
+ * first (docs/spec/plugins.md#tab-reports). Resolves false when a kept tab keeps the project.
+ */
 export async function close(id) {
+  if (id === activeProjectId && !browsing && !(await listener.settleTabs())) return false;
   // 아래의 정리는 저장된 레이아웃의 탭을 남긴다. 활성 프로젝트의 판에 아직 저장하지 않은 탭이 있으면 그 표면도 남도록
   // 먼저 저장한다.
   await keep();
@@ -325,6 +330,7 @@ export async function close(id) {
     const next = local()[0];
     if (next) await activate(next.id);
   }
+  return true;
 }
 
 export const rename = (id, title) => store.patch(id, { title });

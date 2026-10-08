@@ -147,4 +147,51 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(await discarding, { closed: true });
     assert.deepEqual(await spaces(), [first]);
   });
+
+  test(`${app.name}: removing the project shown in a window asks about a modified tab`, { timeout: 90000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-project-remove-")));
+    writeFileSync(join(root, "note.txt"), "alpha\n");
+    s.cleanup(() => rmSync(root, { recursive: true, force: true }));
+    s.cleanup(async () => {
+      for (const window of await s.get("host.windows")) {
+        if (window.window !== s.window) await s.on(window.window).close();
+      }
+      await s.windows(1, "the check left an extra window");
+      for (const project of await s.get("core.projects")) {
+        if (project.root.startsWith(root)) await s.run("core.project.close", { id: project.id });
+      }
+      await s.run("core.projects.flush");
+    });
+    await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
+    const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
+    const windows = await s.windows(2, "the project window did not open");
+    const child = s.on(windows.find((item) => item.window !== s.window).window);
+    await child.until("core.project", (project) => project?.id === opened.id, "the project did not become active");
+    const { tab } = await child.run("core.file.open", { path: "note.txt" });
+    await child.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
+      "the editor tab did not open");
+    await child.until("editor.document", (value) => value.path === "note.txt" && value.version !== null,
+      "the editor did not read the file", { surface: tab });
+    await child.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, tab);
+    await child.until("editor.document", (value) => value.modified, "editor.edit did not modify the text", { surface: tab });
+
+    const ask = async () => (await child.until("core.picker", (picker) => picker.open && picker.title.includes("저장하지 않은 변경이 있습니다"),
+      "removing the project did not ask about the modified tab")).items.map((item) => item.name);
+    const listed = async () => (await s.get("core.projects")).some((project) => project.id === opened.id);
+    const keeping = child.run("core.project.close", { id: opened.id });
+    assert.deepEqual(await ask(), QUESTION);
+    await child.run("core.picker.pick", { index: 2 });
+    assert.deepEqual(await keeping, { closed: false });
+    assert.equal(await listed(), true, "닫지 않기 removed the project");
+
+    const discarding = child.run("core.project.close", { id: opened.id });
+    assert.deepEqual(await ask(), QUESTION);
+    await child.run("core.picker.pick", { index: 1 });
+    assert.deepEqual(await discarding, { closed: true });
+    await s.until("core.projects", (projects) => !projects.some((project) => project.id === opened.id),
+      "저장하지 않고 닫기 did not remove the project");
+  });
 }

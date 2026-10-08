@@ -1807,7 +1807,7 @@
       },
       {
         "name": "core.project.close",
-        "description": "Closes and removes a project.",
+        "description": "Closes and removes a project. A window that shows the project asks about each modified tab first, and keeping a tab keeps the project: the result is closed false.",
         "params": {
           "type": "object",
           "properties": {
@@ -1817,7 +1817,12 @@
           }
         },
         "result": {
-          "type": "null"
+          "type": "object",
+          "properties": {
+            "closed": {
+              "type": "boolean"
+            }
+          }
         }
       },
       {

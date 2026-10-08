@@ -390,7 +390,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.project.activate", async ({ id }) => { await projects.activate(id); });
   registry.command("core.project.close", async ({ id }) => {
     need(projects.all().find((p) => p.id === id), id);
-    await projects.close(id);
+    return { closed: await projects.close(id) };
   });
   registry.command("core.project.rename", async ({ id, title }) => { await projects.rename(id, title); });
   registry.command("core.project.move", async ({ id, delta }) => { await projects.move(id, delta); });

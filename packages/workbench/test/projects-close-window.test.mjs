@@ -19,6 +19,7 @@ mock.module("@soksak/runtime", {
       releaseProject: async () => {},
       state: async () => { events.push("geometry"); return null; },
       close: async () => { events.push("close"); },
+      releaseProject: async () => { events.push("release"); },
       closeKept: async () => { events.push("kept"); },
       ready: async () => {},
       onActivate: async () => {},
@@ -56,7 +57,7 @@ const store = {
   snapshot: async () => ({ common: {}, projects: [structuredClone(PROJECT)], open: [] }),
   add: async () => { throw new Error("not used"); },
   patch: async () => { events.push("patch"); },
-  remove: async () => {},
+  remove: async () => { events.push("remove"); },
   onChange: () => {},
 };
 
@@ -76,4 +77,16 @@ test("a kept modified tab keeps the window open and unsaved", async () => {
   kept = true;
   await requestClose();
   assert.deepEqual(events, ["ask", "kept"], "a kept tab did not report the kept close to the host");
+});
+
+test("removing the project shown in the window asks about modified tabs before it removes the project", async () => {
+  events.length = 0;
+  kept = true;
+  assert.equal(await projects.close(PROJECT.id), false);
+  assert.deepEqual(events, ["ask"], "a kept modified tab did not keep the project");
+  kept = false;
+  events.length = 0;
+  assert.equal(await projects.close(PROJECT.id), true);
+  assert.equal(events[0], "ask", `the project was saved or removed before the question: ${events}`);
+  assert.ok(events.includes("remove"));
 });
