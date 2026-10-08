@@ -2,7 +2,7 @@
 //! 뒤 이름을 바꿔 제자리에 두고, installed.json 은 마지막에 한 번에 바꾸므로 실패한 설치는 이전 설치를 바꾸지
 //! 않는다.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -10,11 +10,11 @@ use serde_json::{json, Value};
 
 use crate::fetch::{check_location, Fetcher};
 use crate::install::{
-    self, Archive, Index, InstalledPlugin, InstalledSidecar, InstalledState, INSTALLED,
-    INSTALL_FORMAT,
+    self, Archive, Index, InstalledPlugin, InstalledSidecar, InstalledState, Need, SelectedSidecar,
+    Selection, INSTALLED, INSTALL_FORMAT,
 };
 use crate::platform;
-use crate::registry::read_archive;
+use crate::registry::{archive_files, read_archive};
 use crate::release::{current_platform, print_json, replace_file};
 use crate::{config_dir_of, Error, Options};
 
@@ -322,7 +322,9 @@ fn plugin_result(state: &InstalledState, id: &str) -> PluginResult {
     PluginResult { plugin, sidecars }
 }
 
-/// plugin 의 고른 version 을 설치한다. update 가 참이면 설치된 plugin 만 받는다.
+/// Installs the selected version of a plugin and its plugin dependencies. With update it accepts only an installed
+/// plugin. It reads the plugin.json of every selected plugin version and completes the plan before it extracts an
+/// archive.
 pub fn install_plugin(
     config_dir: &Path,
     id: &str,
@@ -331,58 +333,291 @@ pub fn install_plugin(
     update: bool,
 ) -> Result<PluginResult, String> {
     let index = read_registry(config_dir)?;
-    let mut state = read_installed(config_dir)?;
-    let current = state.plugins.get(id).cloned();
-    if update && current.is_none() {
+    let state = read_installed(config_dir)?;
+    if update && !state.plugins.contains_key(id) {
         return Err(format!("plugin {id} is not installed"));
     }
-    let selection = install::resolve_install(&index, id, core, platform, &state)?;
-    let version = selection.version.version.clone();
-    if current
-        .as_ref()
-        .is_some_and(|plugin| plugin.version == version)
-    {
+    let mut plan = DependencyPlan {
+        config_dir,
+        core,
+        platform,
+        index: &index,
+        state,
+        dependencies: BTreeMap::new(),
+        providers: BTreeMap::new(),
+        archives: BTreeMap::new(),
+        order: vec![],
+        sidecars: BTreeMap::new(),
+        placed: BTreeSet::new(),
+        changed: false,
+    };
+    plan.place(id, false, &[])?;
+    let DependencyPlan {
+        mut state,
+        archives,
+        order,
+        sidecars,
+        changed,
+        ..
+    } = plan;
+    if !changed {
         return Ok(plugin_result(&state, id));
     }
-    let plugin_path = install::plugin_install_path(id, &version)?;
-    let plugin_folder = config_dir.join(&plugin_path);
-    install_archive(
-        &format!("plugin {id} {version} package"),
-        &selection.version.package,
-        &plugin_folder,
-    )?;
-    let mut chosen = vec![];
-    for sidecar in &selection.sidecars {
-        let path = install::sidecar_install_path(&sidecar.name, &sidecar.version, platform)?;
-        let folder = config_dir.join(&path);
+    for changed in &order {
+        let Some(data) = archives.get(changed) else {
+            continue;
+        };
+        let plugin = &state.plugins[changed];
+        extract(data, &config_dir.join(&plugin.path))
+            .map_err(|error| format!("plugin {changed} {} package: {error}", plugin.version))?;
+    }
+    drop_unnamed_sidecars(&mut state);
+    for (name, sidecar) in &sidecars {
+        let Some(installed) = state
+            .sidecars
+            .get(name)
+            .filter(|installed| installed.version == sidecar.version)
+        else {
+            continue;
+        };
         install_archive(
             &format!("sidecar {} {} {platform}", sidecar.name, sidecar.version),
             &sidecar.asset,
-            &folder,
+            &config_dir.join(&installed.path),
         )?;
-        chosen.push((
-            sidecar.name.clone(),
-            InstalledSidecar {
-                version: sidecar.version.clone(),
-                path,
-            },
-        ));
     }
-    let entry = InstalledPlugin {
-        package: selection.plugin.package.clone(),
-        version: version.clone(),
-        path: plugin_path,
-        enabled: current.as_ref().is_none_or(|plugin| plugin.enabled),
-        sidecars: selection.version.sidecars.clone(),
-        previous: current.map(|plugin| plugin.version),
-    };
-    state.plugins.insert(id.to_string(), entry);
-    state.sidecars.extend(chosen);
-    drop_unnamed_sidecars(&mut state);
     install::validate_installed(&serde_json::to_value(&state).map_err(|error| error.to_string())?)?;
     write_installed(config_dir, &state)?;
     prune_folders(config_dir, &state)?;
     Ok(plugin_result(&state, id))
+}
+
+/// The plan that installs a plugin and its plugin dependencies. state is the planned installation state; dependencies
+/// holds the plugin.json dependencies of the version in use of each plugin of state; providers holds the plugin
+/// dependencies of the versions that the plan selected; archives holds the archives of plugin versions that are not
+/// extracted yet; order lists the plugins whose version changed in selection order; sidecars holds the sidecar
+/// versions that the plan selected.
+struct DependencyPlan<'a> {
+    config_dir: &'a Path,
+    core: &'a str,
+    platform: &'a str,
+    index: &'a Index,
+    state: InstalledState,
+    dependencies: BTreeMap<String, BTreeMap<String, String>>,
+    providers: BTreeMap<String, BTreeMap<String, String>>,
+    archives: BTreeMap<String, Vec<u8>>,
+    order: Vec<String>,
+    sidecars: BTreeMap<String, SelectedSidecar>,
+    placed: BTreeSet<String>,
+    changed: bool,
+}
+
+/// Checks and returns the dependencies of a plugin.json text. file is the location for errors.
+fn manifest_dependencies_of(file: &str, data: &[u8]) -> Result<BTreeMap<String, String>, String> {
+    let value: Value = serde_json::from_slice(data)
+        .map_err(|error| format!("{file} is not valid JSON: {error}"))?;
+    if !value.is_object() {
+        return Err(format!("{file}: expected an object"));
+    }
+    install::manifest_dependencies(&value).map_err(|error| format!("{file}: {error}"))
+}
+
+/// Reads the plugin.json dependencies from the recorded folder of an installed plugin.
+fn installed_dependencies(
+    config_dir: &Path,
+    plugin: &InstalledPlugin,
+) -> Result<BTreeMap<String, String>, String> {
+    let file = config_dir.join(&plugin.path).join("plugin.json");
+    let data =
+        std::fs::read(&file).map_err(|error| crate::files::file_error(file.display(), &error))?;
+    manifest_dependencies_of(&file.display().to_string(), &data)
+}
+
+impl DependencyPlan<'_> {
+    /// The plugin.json dependencies of the version in use of a planned plugin.
+    fn manifest(&mut self, id: &str) -> Result<BTreeMap<String, String>, String> {
+        if let Some(dependencies) = self.dependencies.get(id) {
+            return Ok(dependencies.clone());
+        }
+        let dependencies = installed_dependencies(self.config_dir, &self.state.plugins[id])?;
+        self.dependencies
+            .insert(id.to_string(), dependencies.clone());
+        Ok(dependencies)
+    }
+
+    /// The range of each planned plugin that names the package. The range of id itself is left out.
+    fn needs(&mut self, id: &str, package: &str) -> Result<Vec<Need>, String> {
+        let mut needs = vec![];
+        let others: Vec<String> = self.state.plugins.keys().cloned().collect();
+        for other in others.iter().filter(|other| *other != id) {
+            if let Some(range) = self.manifest(other)?.get(package) {
+                needs.push(Need {
+                    who: format!("{other} {}", self.state.plugins[other].version),
+                    range: range.clone(),
+                });
+            }
+        }
+        Ok(needs)
+    }
+
+    /// Adds plugin id to the plan and then each of its plugin dependencies. A provider is a plugin that another
+    /// plugin names as a dependency: its installed version is kept when it satisfies every range, and it is enabled
+    /// when it is disabled. path lists the plugin ids that the dependencies were followed through.
+    fn place(&mut self, id: &str, provider: bool, path: &[String]) -> Result<(), String> {
+        if let Some(start) = path.iter().position(|item| item == id) {
+            let mut cycle = path[start..].to_vec();
+            cycle.push(id.to_string());
+            return Err(format!("plugin dependency cycle: {}", cycle.join(" -> ")));
+        }
+        let index = self.index;
+        let current = self.state.plugins.get(id).cloned();
+        // Default: a plugin that neither the index nor installed.json lists has no package, so no plugin names it,
+        // and resolve_install reports that it is not in the registry.
+        let package = index
+            .plugins
+            .iter()
+            .find(|entry| entry.id == id)
+            .map(|entry| entry.package.clone())
+            .or_else(|| current.as_ref().map(|plugin| plugin.package.clone()))
+            .unwrap_or_default();
+        let needs = self.needs(id, &package)?;
+        let satisfied = current.as_ref().is_some_and(|plugin| {
+            needs
+                .iter()
+                .all(|need| install::satisfies(&plugin.version, &need.range))
+        });
+        if self.placed.contains(id) {
+            // A version that the plan selected earlier must also satisfy the range of a dependent that was read
+            // later.
+            if !satisfied {
+                return Err(format!(
+                    "plugin {id} has no version for core {} that satisfies every installed plugin: {}",
+                    self.core,
+                    install::needs_text(&needs)
+                ));
+            }
+            return Ok(());
+        }
+        self.placed.insert(id.to_string());
+        if !provider || !satisfied {
+            let selection =
+                install::resolve_install(index, id, self.core, self.platform, &self.state, &needs)?;
+            if current
+                .as_ref()
+                .is_none_or(|plugin| plugin.version != selection.version.version)
+            {
+                self.replace(id, current.as_ref(), selection)?;
+            }
+        }
+        if let Some(plugin) = self
+            .state
+            .plugins
+            .get_mut(id)
+            .filter(|plugin| provider && !plugin.enabled)
+        {
+            plugin.enabled = true;
+            self.changed = true;
+        }
+        let providers = match self.providers.get(id) {
+            Some(providers) => providers.clone(),
+            None => {
+                // The plugin dependencies of a plugin that the plan did not change are its dependencies without a
+                // recorded sidecar range.
+                let sidecars = self.state.plugins[id].sidecars.clone();
+                self.manifest(id)?
+                    .into_iter()
+                    .filter(|(name, _)| !sidecars.contains_key(name))
+                    .collect()
+            }
+        };
+        for name in providers.keys() {
+            let dependency = index
+                .plugins
+                .iter()
+                .find(|entry| &entry.package == name)
+                .map(|entry| entry.id.clone())
+                .or_else(|| {
+                    self.state
+                        .plugins
+                        .iter()
+                        .find(|(_, plugin)| &plugin.package == name)
+                        .map(|(other, _)| other.clone())
+                });
+            let Some(dependency) = dependency else {
+                return Err(format!(
+                    "{id} {}: dependency {name} is neither a plugin nor a sidecar of the registry",
+                    self.state.plugins[id].version
+                ));
+            };
+            let mut next = path.to_vec();
+            next.push(id.to_string());
+            self.place(&dependency, true, &next)?;
+        }
+        Ok(())
+    }
+
+    /// Adds the selected version of a plugin to the plan. It reads the plugin.json of that version from its
+    /// extracted folder, or else from the archive after it checks the sha256, and keeps the archive for extraction
+    /// after the plan is complete.
+    fn replace(
+        &mut self,
+        id: &str,
+        current: Option<&InstalledPlugin>,
+        selection: Selection,
+    ) -> Result<(), String> {
+        let version = selection.version.version.clone();
+        let at = format!("plugin {id} {version} package");
+        let plugin_path = install::plugin_install_path(id, &version)?;
+        let folder = self.config_dir.join(&plugin_path);
+        let manifest = folder.join("plugin.json");
+        let (file, data) = match std::fs::metadata(&folder) {
+            Ok(_) => (
+                manifest.display().to_string(),
+                std::fs::read(&manifest)
+                    .map_err(|error| crate::files::file_error(manifest.display(), &error))?,
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let archive = read_archive(&at, &selection.version.package)?;
+                let mut files = archive_files(&archive, &["plugin.json"])
+                    .map_err(|error| format!("{at}: {error}"))?;
+                let data = files
+                    .remove("plugin.json")
+                    .ok_or_else(|| format!("{at}: the archive holds no plugin.json"))?;
+                self.archives.insert(id.to_string(), archive);
+                (format!("{at}: plugin.json"), data)
+            }
+            Err(error) => return Err(crate::files::file_error(&at, &error)),
+        };
+        let dependencies = manifest_dependencies_of(&file, &data)?;
+        let (providers, _) =
+            install::classify_dependencies(self.index, id, &version, &dependencies)?;
+        self.dependencies.insert(id.to_string(), dependencies);
+        self.providers.insert(id.to_string(), providers);
+        let entry = InstalledPlugin {
+            package: selection.plugin.package.clone(),
+            version: version.clone(),
+            path: plugin_path,
+            enabled: current.is_none_or(|plugin| plugin.enabled),
+            sidecars: selection.version.sidecars.clone(),
+            previous: current.map(|plugin| plugin.version.clone()),
+        };
+        self.state.plugins.insert(id.to_string(), entry);
+        for sidecar in selection.sidecars {
+            let path =
+                install::sidecar_install_path(&sidecar.name, &sidecar.version, self.platform)?;
+            self.state.sidecars.insert(
+                sidecar.name.clone(),
+                InstalledSidecar {
+                    version: sidecar.version.clone(),
+                    path,
+                },
+            );
+            self.sidecars.insert(sidecar.name.clone(), sidecar);
+        }
+        self.order.push(id.to_string());
+        self.changed = true;
+        Ok(())
+    }
 }
 
 /// 어느 plugin 도 지정하지 않은 sidecar 를 지운다.
@@ -474,13 +709,25 @@ pub fn change_plugin(
     action: &str,
 ) -> Result<Option<InstalledPlugin>, String> {
     let mut state = read_installed(config_dir)?;
-    let Some(plugin) = state.plugins.get_mut(id) else {
+    let Some(plugin) = state.plugins.get(id) else {
         return Err(format!("plugin {id} is not installed"));
     };
+    if action == "remove" || action == "disable" {
+        // A plugin whose package another enabled plugin names as a dependency is neither removed nor disabled.
+        for (other, dependent) in &state.plugins {
+            if other == id || !dependent.enabled {
+                continue;
+            }
+            if let Some(range) = installed_dependencies(config_dir, dependent)?.get(&plugin.package)
+            {
+                return Err(format!("plugin {id} is required by {other} {range}"));
+            }
+        }
+    }
     if action == "remove" {
         state.plugins.remove(id);
         drop_unnamed_sidecars(&mut state);
-    } else {
+    } else if let Some(plugin) = state.plugins.get_mut(id) {
         plugin.enabled = action == "enable";
     }
     write_installed(config_dir, &state)?;

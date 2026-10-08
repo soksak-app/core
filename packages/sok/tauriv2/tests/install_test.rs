@@ -118,22 +118,25 @@ fn plugin_package_declares_version_core_range_and_files_and_the_manifest_declare
     let pkg = json!({"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
         "files": ["plugin.json", "ui"], "private": true});
     install::validate_plugin_package(&pkg).expect("package");
-    let ranges =
-        install::manifest_sidecars(&json!({"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}))
-            .expect("manifest");
+    let ranges = install::manifest_dependencies(
+        &json!({"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}),
+    )
+    .expect("manifest");
     assert_eq!(
         ranges.into_iter().collect::<Vec<_>>(),
         [("@scope/sidecar-worker".to_string(), "^0.1.0".to_string())]
     );
-    assert!(install::manifest_sidecars(&json!({}))
+    assert!(install::manifest_dependencies(&json!({}))
         .expect("no dependencies")
         .is_empty());
     rejects(
-        install::manifest_sidecars(&json!({"dependencies": {"@scope/sidecar-worker": "latest"}})),
+        install::manifest_dependencies(
+            &json!({"dependencies": {"@scope/sidecar-worker": "latest"}}),
+        ),
         "plugin.json dependencies @scope/sidecar-worker: invalid version range",
     );
     rejects(
-        install::manifest_sidecars(&json!({"dependencies": ["@scope/sidecar-worker"]})),
+        install::manifest_dependencies(&json!({"dependencies": ["@scope/sidecar-worker"]})),
         "plugin.json dependencies: expected an object",
     );
     for (field, value, want) in [
@@ -330,29 +333,44 @@ fn installation_resolves_newest_usable_plugin_and_sidecar_versions() {
     let index = install::validate_registry_index(&index()).expect("index");
     let empty = InstalledState::empty();
     // 0.3.0 은 revoked 이므로 0.2.0 을 고르고, sidecar 는 darwin-arm64 asset 이 있는 가장 새 0.1.1 을 고른다.
-    let arm = install::resolve_install(&index, "probe", "0.0.2", "darwin-arm64", &empty)
+    let arm = install::resolve_install(&index, "probe", "0.0.2", "darwin-arm64", &empty, &[])
         .expect("darwin-arm64");
     assert_eq!(arm.version.version, "0.2.0");
     assert_eq!(versions(&arm), ["@scope/sidecar-worker 0.1.1"]);
     assert_eq!(arm.sidecars[0].asset.url, "file:///releases/c");
     // darwin-x64 asset 은 0.1.0 에만 있다.
-    let x64 = install::resolve_install(&index, "probe", "0.0.2", "darwin-x64", &empty)
+    let x64 = install::resolve_install(&index, "probe", "0.0.2", "darwin-x64", &empty, &[])
         .expect("darwin-x64");
     assert_eq!(versions(&x64), ["@scope/sidecar-worker 0.1.0"]);
-    let old = install::resolve_install(&index, "probe", "0.0.1", "darwin-arm64", &empty)
+    let old = install::resolve_install(&index, "probe", "0.0.1", "darwin-arm64", &empty, &[])
         .expect("core 0.0.1");
     assert_eq!(old.version.version, "0.1.0");
     rejects(
-        install::resolve_install(&index, "probe", "0.1.0", "darwin-arm64", &empty),
+        install::resolve_install(&index, "probe", "0.1.0", "darwin-arm64", &empty, &[]),
         "plugin probe has no version for core 0.1.0",
     );
     rejects(
-        install::resolve_install(&index, "probe", "0.0.2", "linux-x64", &empty),
+        install::resolve_install(&index, "probe", "0.0.2", "linux-x64", &empty, &[]),
         "sidecar @scope/sidecar-worker has no version for linux-x64 that satisfies every installed plugin: probe 0.2.0 needs ^0.1.0",
     );
     rejects(
-        install::resolve_install(&index, "gone", "0.0.2", "darwin-arm64", &empty),
+        install::resolve_install(&index, "gone", "0.0.2", "darwin-arm64", &empty, &[]),
         "plugin gone is not in the registry",
+    );
+    // A version that does not satisfy the range of an installed plugin that names the plugin is not selected.
+    rejects(
+        install::resolve_install(
+            &index,
+            "probe",
+            "0.0.2",
+            "darwin-arm64",
+            &empty,
+            &[install::Need {
+                who: "ext 1.0.0".into(),
+                range: "^0.3.0".into(),
+            }],
+        ),
+        "plugin probe has no version for core 0.0.2 that satisfies every installed plugin: ext 1.0.0 needs ^0.3.0",
     );
 }
 
@@ -391,6 +409,7 @@ fn installation_keeps_one_sidecar_version_that_satisfies_every_installed_plugin(
         "0.0.2",
         "darwin-arm64",
         &other("^0.1.0", "0.1.0"),
+        &[],
     )
     .expect("kept");
     assert_eq!(versions(&kept), ["@scope/sidecar-worker 0.1.0"]);
@@ -401,18 +420,19 @@ fn installation_keeps_one_sidecar_version_that_satisfies_every_installed_plugin(
         "0.0.2",
         "darwin-arm64",
         &other("0.1.0", "0.1.0"),
+        &[],
     )
     .expect("exact");
     assert_eq!(versions(&exact), ["@scope/sidecar-worker 0.1.0"]);
     // 범위를 함께 채우는 version 이 없으면 각 plugin 과 범위를 밝혀 실패한다.
     rejects(
-        install::resolve_install(&index, "probe", "0.0.2", "darwin-arm64", &other("^0.2.0", "0.2.0")),
+        install::resolve_install(&index, "probe", "0.0.2", "darwin-arm64", &other("^0.2.0", "0.2.0"), &[]),
         "sidecar @scope/sidecar-worker has no version for darwin-arm64 that satisfies every installed plugin: probe 0.2.0 needs ^0.1.0, other 1.0.0 needs ^0.2.0",
     );
     // 같은 plugin 의 이전 version 범위는 새 version 을 막지 않는다.
     let own = installed("probe", "@scope/plugin-probe", "0.1.0", "0.1.0", "0.1.0");
-    let again =
-        install::resolve_install(&index, "probe", "0.0.2", "darwin-arm64", &own).expect("self");
+    let again = install::resolve_install(&index, "probe", "0.0.2", "darwin-arm64", &own, &[])
+        .expect("self");
     assert_eq!(versions(&again), ["@scope/sidecar-worker 0.1.0"]);
 }
 

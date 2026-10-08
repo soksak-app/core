@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -420,5 +421,251 @@ func TestPluginInstallSetsTheModesWhateverTheUmask(t *testing.T) {
 		if info, err := os.Stat(path); err != nil || info.Mode().Perm() != want {
 			t.Fatalf("%s: mode %v err %v, want %v", path, info.Mode().Perm(), err, want)
 		}
+	}
+}
+
+// dependent is a test plugin version with plugin.json dependencies. Its package is @scope/plugin-<id>.
+type dependent struct {
+	id, version  string
+	dependencies map[string]string
+}
+
+func jsonText(t *testing.T, value any) string {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+// dependencyRegistry writes the entry files of a registry folder with a packed archive of each version and the release
+// of sidecar worker 0.1.0, writes index.json from the same entries, and returns the registry folder. The sidecars of
+// the index hold only the dependencies that start with @scope/sidecar-.
+func dependencyRegistry(t *testing.T, versions ...dependent) string {
+	t.Helper()
+	platform := mustPlatform(t)
+	releases := t.TempDir()
+	type entry = map[string]any
+	plugins := map[string]entry{}
+	var ids []string
+	for _, item := range versions {
+		dir := t.TempDir()
+		writeTree(t, dir, map[string]string{
+			"package.json": `{"name": "@scope/plugin-` + item.id + `", "version": "` + item.version + `", "engines": {"soksak": "^0.0.2"},
+				"files": ["plugin.json"]}`,
+			"plugin.json": jsonText(t, entry{"id": item.id, "dependencies": item.dependencies}),
+		})
+		result := runJSON(t, "plugin", "pack", dir, releases)
+		sidecars := map[string]string{}
+		for name, rng := range item.dependencies {
+			if strings.HasPrefix(name, "@scope/sidecar-") {
+				sidecars[name] = rng
+			}
+		}
+		if plugins[item.id] == nil {
+			ids = append(ids, item.id)
+			plugins[item.id] = entry{"id": item.id, "package": "@scope/plugin-" + item.id, "name": item.id, "description": "검사용 plugin.",
+				"license": "MIT", "repository": "https://example.invalid/" + item.id, "versions": []any{}}
+		}
+		plugins[item.id]["versions"] = append(plugins[item.id]["versions"].([]any), entry{"version": item.version,
+			"package": entry{"url": "file://" + result["archive"], "sha256": result["sha256"]}, "engines": entry{"soksak": "^0.0.2"}, "sidecars": sidecars})
+	}
+	sidecar := runJSON(t, "sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", platform)
+	worker := entry{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker", "versions": []any{entry{"version": "0.1.0",
+		"protocol": 1, "assets": entry{platform: entry{"url": "file://" + sidecar["archive"], "sha256": sidecar["sha256"]}}}}}
+	revoked := entry{"plugins": []any{}, "sidecars": []any{}}
+	files := map[string]string{"sidecars/scope-sidecar-worker.json": jsonText(t, worker), "revoked.json": jsonText(t, revoked)}
+	slices.Sort(ids)
+	list := []any{}
+	for _, id := range ids {
+		files["plugins/"+id+".json"] = jsonText(t, plugins[id])
+		list = append(list, plugins[id])
+	}
+	files["index.json"] = jsonText(t, entry{"format": 1, "plugins": list, "sidecars": []any{worker}, "packs": []any{}, "revoked": revoked})
+	registry := t.TempDir()
+	writeTree(t, registry, files)
+	return registry
+}
+
+func base(version string) dependent {
+	return dependent{"base", version, map[string]string{"@scope/sidecar-worker": "^0.1.0"}}
+}
+
+func ext(rng string) dependent {
+	return dependent{"ext", "1.0.0", map[string]string{"@scope/plugin-base": rng}}
+}
+
+// useRegistry makes the configuration directory use the index.json of the registry folder.
+func useRegistry(t *testing.T, config, registry string) {
+	t.Helper()
+	runJSON(t, "registry", "use", filepath.Join(registry, "index.json"), "--config-dir", config)
+}
+
+func installedOf(t *testing.T, config string) *sok.InstalledState {
+	t.Helper()
+	state, err := sok.ReadInstalled(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return state
+}
+
+// succeeds runs a sok command and stops the test when it fails.
+func succeeds(t *testing.T, args ...string) string {
+	t.Helper()
+	code, stdout, stderr := run(args...)
+	if code != 0 {
+		t.Fatalf("%v: code %d stderr %q", args, code, stderr)
+	}
+	return stdout
+}
+
+// contract: cli.plugin.dependencies-install
+func TestPluginInstallInstallsThePluginDependencies(t *testing.T) {
+	full := dependencyRegistry(t, base("1.0.0"), base("1.1.0"), base("2.0.0"), ext("^1.0.0"))
+	// A provider that is not installed gets the newest version that satisfies the range.
+	config := t.TempDir()
+	useRegistry(t, config, full)
+	stdout := succeeds(t, "plugin", "install", "ext", "--config-dir", config)
+	want := `{
+  "plugin": {
+    "package": "@scope/plugin-ext",
+    "version": "1.0.0",
+    "path": "plugins/ext/1.0.0",
+    "enabled": true,
+    "sidecars": {}
+  },
+  "sidecars": {}
+}
+`
+	if stdout != want {
+		t.Fatalf("install ext %q", stdout)
+	}
+	state := installedOf(t, config)
+	if provider := state.Plugins["base"]; provider.Version != "1.1.0" || !provider.Enabled || provider.Previous != "" ||
+		fmt.Sprint(provider.Sidecars) != "map[@scope/sidecar-worker:^0.1.0]" || state.Sidecars["@scope/sidecar-worker"].Version != "0.1.0" {
+		t.Fatalf("installed %+v", state)
+	}
+	if !exists(filepath.Join(config, "plugins/base/1.1.0/plugin.json")) || !exists(filepath.Join(config, "plugins/ext/1.0.0/plugin.json")) {
+		t.Fatal("install ext did not extract both plugins")
+	}
+	// An installed provider that satisfies the range is kept and enabled.
+	config = t.TempDir()
+	useRegistry(t, config, dependencyRegistry(t, base("1.0.0")))
+	succeeds(t, "plugin", "install", "base", "--config-dir", config)
+	succeeds(t, "plugin", "disable", "base", "--config-dir", config)
+	useRegistry(t, config, full)
+	succeeds(t, "plugin", "install", "ext", "--config-dir", config)
+	if provider := installedOf(t, config).Plugins["base"]; provider.Version != "1.0.0" || !provider.Enabled || provider.Previous != "" {
+		t.Fatalf("kept provider %+v", provider)
+	}
+	// An installed provider that does not satisfy the range gets the newest version that satisfies it.
+	config = t.TempDir()
+	useRegistry(t, config, full)
+	succeeds(t, "plugin", "install", "base", "--config-dir", config)
+	succeeds(t, "plugin", "install", "ext", "--config-dir", config)
+	if provider := installedOf(t, config).Plugins["base"]; provider.Version != "1.1.0" || provider.Previous != "2.0.0" {
+		t.Fatalf("replaced provider %+v", provider)
+	}
+}
+
+// pluginFolders lists the names in the plugins folder of the configuration directory.
+func pluginFolders(t *testing.T, config string) string {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(config, "plugins"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	return strings.Join(names, " ")
+}
+
+// contract: cli.plugin.dependencies-reject
+func TestPluginInstallRejectsUnresolvablePluginDependencies(t *testing.T) {
+	for _, c := range []struct {
+		plugin   string
+		versions []dependent
+		want     string
+	}{
+		{"ext", []dependent{{"ext", "1.0.0", map[string]string{"@scope/plugin-gone": "^1.0.0"}}},
+			"sok: ext 1.0.0: dependency @scope/plugin-gone is neither a plugin nor a sidecar of the registry\n"},
+		{"ext", []dependent{base("1.0.0"), ext("^2.0.0")},
+			"sok: plugin base has no version for core 0.0.2 that satisfies every installed plugin: ext 1.0.0 needs ^2.0.0\n"},
+		{"first", []dependent{{"first", "1.0.0", map[string]string{"@scope/plugin-second": "^1.0.0"}},
+			{"second", "1.0.0", map[string]string{"@scope/plugin-first": "^1.0.0"}}},
+			"sok: plugin dependency cycle: first -> second -> first\n"},
+	} {
+		config := t.TempDir()
+		useRegistry(t, config, dependencyRegistry(t, c.versions...))
+		code, _, stderr := run("plugin", "install", c.plugin, "--config-dir", config)
+		if code != 1 || stderr != c.want {
+			t.Fatalf("install %s: code %d stderr %q, want %q", c.plugin, code, stderr, c.want)
+		}
+		if folders := pluginFolders(t, config); folders != "registry.json" {
+			t.Fatalf("install %s changed the installation: %s", c.plugin, folders)
+		}
+	}
+	// A provider that the index does not list is not a plugin dependency, even when it is installed.
+	config := t.TempDir()
+	useRegistry(t, config, dependencyRegistry(t, base("1.0.0")))
+	succeeds(t, "plugin", "install", "base", "--config-dir", config)
+	before := readText(t, filepath.Join(config, "plugins/installed.json"))
+	useRegistry(t, config, dependencyRegistry(t, ext("^1.0.0")))
+	code, _, stderr := run("plugin", "install", "ext", "--config-dir", config)
+	if code != 1 || stderr != "sok: ext 1.0.0: dependency @scope/plugin-base is neither a plugin nor a sidecar of the registry\n" {
+		t.Fatalf("provider missing from the index: code %d stderr %q", code, stderr)
+	}
+	if readText(t, filepath.Join(config, "plugins/installed.json")) != before || exists(filepath.Join(config, "plugins/ext")) {
+		t.Fatal("a failed install changed the installation")
+	}
+}
+
+// contract: cli.plugin.dependencies-update
+func TestPluginUpdateSelectsAProviderVersionThatSatisfiesEveryDependent(t *testing.T) {
+	config := t.TempDir()
+	useRegistry(t, config, dependencyRegistry(t, base("1.0.0"), ext("^1.0.0")))
+	succeeds(t, "plugin", "install", "ext", "--config-dir", config)
+	useRegistry(t, config, dependencyRegistry(t, base("1.0.0"), base("1.1.0"), base("2.0.0"), ext("^1.0.0")))
+	succeeds(t, "plugin", "update", "base", "--config-dir", config)
+	if provider := installedOf(t, config).Plugins["base"]; provider.Version != "1.1.0" || provider.Previous != "1.0.0" {
+		t.Fatalf("update with a dependent %+v", provider)
+	}
+	// A disabled dependent also names a range.
+	succeeds(t, "plugin", "disable", "ext", "--config-dir", config)
+	succeeds(t, "plugin", "update", "base", "--config-dir", config)
+	if provider := installedOf(t, config).Plugins["base"]; provider.Version != "1.1.0" {
+		t.Fatalf("update with a disabled dependent %+v", provider)
+	}
+	succeeds(t, "plugin", "remove", "ext", "--config-dir", config)
+	succeeds(t, "plugin", "update", "base", "--config-dir", config)
+	if provider := installedOf(t, config).Plugins["base"]; provider.Version != "2.0.0" || provider.Previous != "1.1.0" {
+		t.Fatalf("update without a dependent %+v", provider)
+	}
+}
+
+// contract: cli.plugin.dependencies-required
+func TestPluginRemoveAndDisableRefuseAPluginThatAnEnabledPluginRequires(t *testing.T) {
+	config := t.TempDir()
+	useRegistry(t, config, dependencyRegistry(t, base("1.0.0"), ext("^1.0.0")))
+	succeeds(t, "plugin", "install", "ext", "--config-dir", config)
+	before := readText(t, filepath.Join(config, "plugins/installed.json"))
+	for _, action := range []string{"remove", "disable"} {
+		code, _, stderr := run("plugin", action, "base", "--config-dir", config)
+		if code != 1 || stderr != "sok: plugin base is required by ext ^1.0.0\n" {
+			t.Fatalf("%s base: code %d stderr %q", action, code, stderr)
+		}
+		if readText(t, filepath.Join(config, "plugins/installed.json")) != before || !exists(filepath.Join(config, "plugins/base/1.0.0/plugin.json")) {
+			t.Fatalf("a refused %s changed the installation", action)
+		}
+	}
+	// A disabled plugin does not require its provider.
+	succeeds(t, "plugin", "disable", "ext", "--config-dir", config)
+	succeeds(t, "plugin", "disable", "base", "--config-dir", config)
+	if stdout := succeeds(t, "plugin", "remove", "base", "--config-dir", config); stdout != "null\n" {
+		t.Fatalf("remove base %q", stdout)
 	}
 }

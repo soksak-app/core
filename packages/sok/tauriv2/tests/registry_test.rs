@@ -4,7 +4,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use serde_json::Value;
+use serde_json::{json, Value};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
@@ -249,6 +249,131 @@ fn replace_in(path: &Path, old: &str, replacement: &str) {
     let text = std::fs::read_to_string(path).unwrap();
     assert!(text.contains(old), "{} has no {old:?}", path.display());
     std::fs::write(path, text.replacen(old, replacement, 1)).unwrap();
+}
+
+/// The packages and ranges of the plugin.json dependencies of each plugin id.
+type Plugins<'a> = &'a [(&'a str, &'a [(&'a str, &'a str)])];
+
+/// Writes a registry folder with an archive packed from the plugin.json dependencies of version 1.0.0 of each plugin
+/// id and the release of sidecar worker 0.1.0. The sidecars of an entry hold only the dependencies that start with
+/// @scope/sidecar-.
+fn dependency_tree(plugins: Plugins) -> (Dir, Dir) {
+    let platform = soksak_sok::current_platform().expect("platform");
+    let releases = Dir::new();
+    let dir = Dir::new();
+    for (id, dependencies) in plugins {
+        let source = Dir::new();
+        let dependencies: serde_json::Map<String, Value> = dependencies
+            .iter()
+            .map(|(name, range)| (name.to_string(), Value::from(*range)))
+            .collect();
+        let package = json!({"name": format!("@scope/plugin-{id}"), "version": "1.0.0",
+            "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]})
+        .to_string();
+        let manifest = json!({"id": id, "dependencies": dependencies}).to_string();
+        write_tree(
+            &source.0,
+            &[("package.json", &package), ("plugin.json", &manifest)],
+        );
+        let (code, stdout, stderr) = run(&["plugin", "pack", source.text(), releases.text()]);
+        assert_eq!(code, 0, "{stderr}");
+        let result: Value = serde_json::from_str(&stdout).unwrap();
+        let sidecars: serde_json::Map<String, Value> = dependencies
+            .into_iter()
+            .filter(|(name, _)| name.starts_with("@scope/sidecar-"))
+            .collect();
+        let entry = json!({"id": id, "package": format!("@scope/plugin-{id}"), "name": id,
+            "description": "검사용 plugin.", "license": "MIT", "repository": format!("https://example.invalid/{id}"),
+            "versions": [{"version": "1.0.0", "package": {"url": format!("file://{}", result["archive"].as_str().unwrap()),
+            "sha256": result["sha256"]}, "engines": {"soksak": "^0.0.2"}, "sidecars": sidecars}]});
+        write_tree(
+            &dir.0,
+            &[(&format!("plugins/{id}.json"), &entry.to_string())],
+        );
+    }
+    let sidecar = Dir::new();
+    write_tree(
+        &sidecar.0,
+        &[
+            (
+                "package.json",
+                r#"{"name": "@scope/sidecar-worker", "version": "0.1.0", "files": ["sidecar.json", "build/worker"]}"#,
+            ),
+            (
+                "sidecar.json",
+                r#"{"executable": "build/worker", "protocol": 1}"#,
+            ),
+            ("build/worker*", "binary 0.1.0"),
+        ],
+    );
+    let (code, stdout, stderr) = run(&[
+        "sidecar",
+        "release",
+        sidecar.text(),
+        releases.text(),
+        "--platform",
+        &platform,
+    ]);
+    assert_eq!(code, 0, "{stderr}");
+    let released: Value = serde_json::from_str(&stdout).unwrap();
+    let worker = json!({"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
+        "versions": [{"version": "0.1.0", "protocol": 1, "assets": {platform.as_str():
+        {"url": format!("file://{}", released["archive"].as_str().unwrap()), "sha256": released["sha256"]}}}]});
+    write_tree(
+        &dir.0,
+        &[
+            ("sidecars/scope-sidecar-worker.json", &worker.to_string()),
+            ("revoked.json", r#"{"plugins": [], "sidecars": []}"#),
+        ],
+    );
+    (dir, releases)
+}
+
+// contract: cli.registry.checks-plugin-dependencies
+#[test]
+fn registry_build_checks_plugin_dependencies() {
+    // A plugin dependency names the package of a listed plugin, and the sidecars of the index hold only sidecar
+    // dependencies.
+    let (dir, _releases) = dependency_tree(&[
+        ("base", &[("@scope/sidecar-worker", "^0.1.0")]),
+        (
+            "ext",
+            &[
+                ("@scope/plugin-base", "^1.0.0"),
+                ("@scope/sidecar-worker", "^0.1.0"),
+            ],
+        ),
+    ]);
+    let (code, _, stderr) = run(&["registry", "build", dir.text()]);
+    assert_eq!(code, 0, "{stderr}");
+    let built: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.0.join("index.json")).unwrap()).unwrap();
+    assert_eq!(
+        built["plugins"][1]["versions"][0]["sidecars"].to_string(),
+        r#"{"@scope/sidecar-worker":"^0.1.0"}"#
+    );
+    let cases: [(Plugins, &str); 2] = [
+        (
+            &[("ext", &[("@scope/plugin-gone", "^1.0.0")])],
+            "sok: ext 1.0.0: dependency @scope/plugin-gone is neither a plugin nor a sidecar of the registry\n",
+        ),
+        (
+            &[
+                ("base", &[("@scope/sidecar-worker", "^0.1.0")]),
+                ("ext", &[("@scope/plugin-base", "^2.0.0")]),
+            ],
+            "sok: ext 1.0.0: plugin dependency @scope/plugin-base ^2.0.0 is satisfied by no listed version\n",
+        ),
+    ];
+    for (plugins, want) in cases {
+        let (dir, _releases) = dependency_tree(plugins);
+        let (code, _, stderr) = run(&["registry", "build", dir.text()]);
+        assert_eq!((code, stderr.as_str()), (1, want));
+        assert!(
+            !dir.0.join("index.json").exists(),
+            "a failed build wrote index.json"
+        );
+    }
 }
 
 // contract: cli.registry.rejects-without-writing

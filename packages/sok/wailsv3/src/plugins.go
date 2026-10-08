@@ -330,7 +330,9 @@ func pluginResult(state *InstalledState, id string) map[string]any {
 	return map[string]any{"plugin": plugin, "sidecars": sidecars}
 }
 
-// InstallPlugin 은 plugin 의 고른 version 을 설치한다. update 가 참이면 설치된 plugin 만 받는다.
+// InstallPlugin installs the selected version of a plugin and its plugin dependencies. With update it accepts only an
+// installed plugin. It reads the plugin.json of every selected plugin version and completes the plan before it extracts
+// an archive.
 func InstallPlugin(configDir, id, core, platform string, update bool) (map[string]any, error) {
 	index, err := readRegistry(configDir)
 	if err != nil {
@@ -340,48 +342,39 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 	if err != nil {
 		return nil, err
 	}
-	current, installed := state.Plugins[id]
-	if update && !installed {
+	if _, installed := state.Plugins[id]; update && !installed {
 		return nil, fmt.Errorf("plugin %s is not installed", id)
 	}
-	selection, err := ResolveInstall(index, id, core, platform, state)
-	if err != nil {
+	plan := &dependencyPlan{configDir: configDir, core: core, platform: platform, index: index, state: state,
+		dependencies: map[string]map[string]string{}, providers: map[string]map[string]string{}, archives: map[string][]byte{},
+		sidecars: map[string]SelectedSidecar{}, placed: map[string]bool{}}
+	if err := plan.place(id, false, nil); err != nil {
 		return nil, err
 	}
-	version := selection.Version.Version
-	if installed && current.Version == version {
+	if !plan.changed {
 		return pluginResult(state, id), nil
 	}
-	pluginPath, err := PluginInstallPath(id, version)
-	if err != nil {
-		return nil, err
-	}
-	pluginFolder := filepath.Join(configDir, pluginPath)
-	if err := installArchive("plugin "+id+" "+version+" package", selection.Version.Package, pluginFolder); err != nil {
-		return nil, err
-	}
-	sidecarFolders := map[string]string{}
-	for _, sidecar := range selection.Sidecars {
-		path, err := SidecarInstallPath(sidecar.Name, sidecar.Version, platform)
-		if err != nil {
-			return nil, err
+	for _, changed := range plan.order {
+		data, ok := plan.archives[changed]
+		if !ok {
+			continue
 		}
-		folder := filepath.Join(configDir, path)
-		if err := installArchive("sidecar "+sidecar.Name+" "+sidecar.Version+" "+platform, sidecar.Asset, folder); err != nil {
-			return nil, err
+		plugin := state.Plugins[changed]
+		if err := extract(data, filepath.Join(configDir, plugin.Path)); err != nil {
+			return nil, fmt.Errorf("plugin %s %s package: %w", changed, plugin.Version, err)
 		}
-		sidecarFolders[sidecar.Name] = path
-	}
-	entry := InstalledPlugin{Package: selection.Plugin.Package, Version: version, Path: pluginPath, Enabled: true, Sidecars: maps.Clone(selection.Version.Sidecars)}
-	if installed {
-		entry.Enabled = current.Enabled
-		entry.Previous = current.Version
-	}
-	state.Plugins[id] = entry
-	for _, sidecar := range selection.Sidecars {
-		state.Sidecars[sidecar.Name] = InstalledSidecar{Version: sidecar.Version, Path: sidecarFolders[sidecar.Name]}
 	}
 	dropUnnamedSidecars(state)
+	for _, name := range sortedNames(plan.selectedSidecars()) {
+		sidecar := plan.sidecars[name]
+		installed, ok := state.Sidecars[name]
+		if !ok || installed.Version != sidecar.Version {
+			continue
+		}
+		if err := installArchive("sidecar "+sidecar.Name+" "+sidecar.Version+" "+platform, sidecar.Asset, filepath.Join(configDir, installed.Path)); err != nil {
+			return nil, err
+		}
+	}
 	value, err := stateValue(state)
 	if err != nil {
 		return nil, err
@@ -396,6 +389,226 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 		return nil, err
 	}
 	return pluginResult(state, id), nil
+}
+
+// dependencyPlan is the plan that installs a plugin and its plugin dependencies. state is the planned installation
+// state; dependencies holds the plugin.json dependencies of the version in use of each plugin of state; providers holds
+// the plugin dependencies of the versions that the plan selected; archives holds the archives of plugin versions that
+// are not extracted yet; order lists the plugins whose version changed in selection order; sidecars holds the sidecar
+// versions that the plan selected.
+type dependencyPlan struct {
+	configDir, core, platform string
+	index                     *Index
+	state                     *InstalledState
+	dependencies              map[string]map[string]string
+	providers                 map[string]map[string]string
+	archives                  map[string][]byte
+	order                     []string
+	sidecars                  map[string]SelectedSidecar
+	placed                    map[string]bool
+	changed                   bool
+}
+
+// selectedSidecars is the version of each sidecar that the plan selected.
+func (p *dependencyPlan) selectedSidecars() map[string]string {
+	versions := map[string]string{}
+	for name, sidecar := range p.sidecars {
+		versions[name] = sidecar.Version
+	}
+	return versions
+}
+
+// manifestDependenciesOf checks and returns the dependencies of a plugin.json text. file is the location for errors.
+func manifestDependenciesOf(file string, data []byte) (map[string]string, error) {
+	value, err := DecodeJSON(data)
+	if err != nil {
+		return nil, fmt.Errorf("%s is not valid JSON: %w", file, err)
+	}
+	manifest, err := object(file, value)
+	if err != nil {
+		return nil, err
+	}
+	dependencies, err := ManifestDependencies(manifest)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", file, err)
+	}
+	return dependencies, nil
+}
+
+// installedDependencies reads the plugin.json dependencies from the recorded folder of an installed plugin.
+func installedDependencies(configDir string, plugin InstalledPlugin) (map[string]string, error) {
+	file := filepath.Join(configDir, plugin.Path, "plugin.json")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return nil, fileError(file, err)
+	}
+	return manifestDependenciesOf(file, data)
+}
+
+// manifest is the plugin.json dependencies of the version in use of a planned plugin.
+func (p *dependencyPlan) manifest(id string) (map[string]string, error) {
+	if dependencies, ok := p.dependencies[id]; ok {
+		return dependencies, nil
+	}
+	dependencies, err := installedDependencies(p.configDir, p.state.Plugins[id])
+	if err != nil {
+		return nil, err
+	}
+	p.dependencies[id] = dependencies
+	return dependencies, nil
+}
+
+// needs is the range of each planned plugin that names the package. The range of id itself is left out.
+func (p *dependencyPlan) needs(id, pkg string) ([]Need, error) {
+	var needs []Need
+	for _, other := range sortedPluginIDs(p.state.Plugins) {
+		if other == id {
+			continue
+		}
+		dependencies, err := p.manifest(other)
+		if err != nil {
+			return nil, err
+		}
+		if rng, ok := dependencies[pkg]; ok {
+			needs = append(needs, Need{other + " " + p.state.Plugins[other].Version, rng})
+		}
+	}
+	return needs, nil
+}
+
+// place adds plugin id to the plan and then each of its plugin dependencies. A provider is a plugin that another plugin
+// names as a dependency: its installed version is kept when it satisfies every range, and it is enabled when it is
+// disabled. path lists the plugin ids that the dependencies were followed through.
+func (p *dependencyPlan) place(id string, provider bool, path []string) error {
+	if i := slices.Index(path, id); i >= 0 {
+		return fmt.Errorf("plugin dependency cycle: %s", strings.Join(append(slices.Clone(path[i:]), id), " -> "))
+	}
+	current, installed := p.state.Plugins[id]
+	pkg := current.Package
+	if i := slices.IndexFunc(p.index.Plugins, func(entry RegistryPlugin) bool { return entry.ID == id }); i >= 0 {
+		pkg = p.index.Plugins[i].Package
+	}
+	needs, err := p.needs(id, pkg)
+	if err != nil {
+		return err
+	}
+	satisfied := installed && !slices.ContainsFunc(needs, func(n Need) bool { return !Satisfies(current.Version, n.Range) })
+	if p.placed[id] {
+		// A version that the plan selected earlier must also satisfy the range of a dependent that was read later.
+		if !satisfied {
+			return fmt.Errorf("plugin %s has no version for core %s that satisfies every installed plugin: %s", id, p.core, needsText(needs))
+		}
+		return nil
+	}
+	p.placed[id] = true
+	if !provider || !satisfied {
+		selection, err := ResolveInstall(p.index, id, p.core, p.platform, p.state, needs)
+		if err != nil {
+			return err
+		}
+		if !installed || selection.Version.Version != current.Version {
+			if err := p.replace(id, current, installed, selection); err != nil {
+				return err
+			}
+		}
+	}
+	if plugin := p.state.Plugins[id]; provider && !plugin.Enabled {
+		plugin.Enabled = true
+		p.state.Plugins[id] = plugin
+		p.changed = true
+	}
+	providers, ok := p.providers[id]
+	if !ok {
+		// The plugin dependencies of a plugin that the plan did not change are its dependencies without a recorded
+		// sidecar range.
+		dependencies, err := p.manifest(id)
+		if err != nil {
+			return err
+		}
+		providers = map[string]string{}
+		for name, rng := range dependencies {
+			if _, sidecar := p.state.Plugins[id].Sidecars[name]; !sidecar {
+				providers[name] = rng
+			}
+		}
+	}
+	for _, name := range sortedNames(providers) {
+		dependency := ""
+		if i := slices.IndexFunc(p.index.Plugins, func(entry RegistryPlugin) bool { return entry.Package == name }); i >= 0 {
+			dependency = p.index.Plugins[i].ID
+		}
+		for _, other := range sortedPluginIDs(p.state.Plugins) {
+			if dependency == "" && p.state.Plugins[other].Package == name {
+				dependency = other
+			}
+		}
+		if dependency == "" {
+			return fmt.Errorf("%s %s: dependency %s is neither a plugin nor a sidecar of the registry", id, p.state.Plugins[id].Version, name)
+		}
+		if err := p.place(dependency, true, append(slices.Clone(path), id)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// replace adds the selected version of a plugin to the plan. It reads the plugin.json of that version from its
+// extracted folder, or else from the archive after it checks the sha256, and keeps the archive for extraction after
+// the plan is complete.
+func (p *dependencyPlan) replace(id string, current InstalledPlugin, installed bool, selection *Selection) error {
+	version := selection.Version.Version
+	where := "plugin " + id + " " + version + " package"
+	pluginPath, err := PluginInstallPath(id, version)
+	if err != nil {
+		return err
+	}
+	folder := filepath.Join(p.configDir, pluginPath)
+	file := filepath.Join(folder, "plugin.json")
+	var data []byte
+	if _, err := os.Stat(folder); err == nil {
+		if data, err = os.ReadFile(file); err != nil {
+			return fileError(file, err)
+		}
+	} else if errors.Is(err, fs.ErrNotExist) {
+		archive, err := readArchive(where, selection.Version.Package)
+		if err != nil {
+			return err
+		}
+		files, err := archiveFiles(archive, "plugin.json")
+		if err != nil {
+			return fmt.Errorf("%s: %w", where, err)
+		}
+		data, file = files["plugin.json"], where+": plugin.json"
+		p.archives[id] = archive
+	} else {
+		return fileError(where, err)
+	}
+	dependencies, err := manifestDependenciesOf(file, data)
+	if err != nil {
+		return err
+	}
+	providers, _, err := ClassifyDependencies(p.index, id, version, dependencies)
+	if err != nil {
+		return err
+	}
+	p.dependencies[id], p.providers[id] = dependencies, providers
+	entry := InstalledPlugin{Package: selection.Plugin.Package, Version: version, Path: pluginPath, Enabled: true, Sidecars: maps.Clone(selection.Version.Sidecars)}
+	if installed {
+		entry.Enabled = current.Enabled
+		entry.Previous = current.Version
+	}
+	p.state.Plugins[id] = entry
+	for _, sidecar := range selection.Sidecars {
+		path, err := SidecarInstallPath(sidecar.Name, sidecar.Version, p.platform)
+		if err != nil {
+			return err
+		}
+		p.state.Sidecars[sidecar.Name] = InstalledSidecar{Version: sidecar.Version, Path: path}
+		p.sidecars[sidecar.Name] = sidecar
+	}
+	p.order = append(p.order, id)
+	p.changed = true
+	return nil
 }
 
 // dropUnnamedSidecars 는 어느 plugin 도 지정하지 않은 sidecar 를 지운다.
@@ -497,6 +710,22 @@ func ChangePlugin(configDir, id, action string) (any, error) {
 	plugin, installed := state.Plugins[id]
 	if !installed {
 		return nil, fmt.Errorf("plugin %s is not installed", id)
+	}
+	if action == "remove" || action == "disable" {
+		// A plugin whose package another enabled plugin names as a dependency is neither removed nor disabled.
+		for _, other := range sortedPluginIDs(state.Plugins) {
+			dependent := state.Plugins[other]
+			if other == id || !dependent.Enabled {
+				continue
+			}
+			dependencies, err := installedDependencies(configDir, dependent)
+			if err != nil {
+				return nil, err
+			}
+			if rng, ok := dependencies[plugin.Package]; ok {
+				return nil, fmt.Errorf("plugin %s is required by %s %s", id, other, rng)
+			}
+		}
 	}
 	switch action {
 	case "remove":

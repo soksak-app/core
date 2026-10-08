@@ -8,7 +8,7 @@ use std::path::Path;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use crate::install::{self, Archive, PluginVersion, RegistryPlugin};
+use crate::install::{self, Archive, Index, PluginVersion, RegistryPlugin};
 use crate::release::{hex, print_json, read_json_file, replace_file};
 use crate::Error;
 
@@ -57,7 +57,10 @@ fn read_entries(
 }
 
 /// tar.gz 의 최상위 파일 중 names 의 내용을 읽는다.
-fn archive_files(data: &[u8], names: &[&str]) -> Result<BTreeMap<String, Vec<u8>>, String> {
+pub(crate) fn archive_files(
+    data: &[u8],
+    names: &[&str],
+) -> Result<BTreeMap<String, Vec<u8>>, String> {
     let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(data));
     let mut found = BTreeMap::new();
     for entry in archive.entries().map_err(|error| error.to_string())? {
@@ -103,8 +106,14 @@ pub(crate) fn read_archive(at: &str, archive: &Archive) -> Result<Vec<u8>, Strin
     Ok(data)
 }
 
-/// plugin archive 가 항목의 plugin.json id 와 package.json 을 담는지 본다.
-fn check_plugin_archive(plugin: &RegistryPlugin, version: &PluginVersion) -> Result<(), String> {
+/// Checks that a plugin archive holds the plugin.json id and the package.json of its entry, that the sidecar
+/// dependencies of plugin.json equal the sidecars of the entry, and that a listed version satisfies the range of each
+/// plugin dependency.
+fn check_plugin_archive(
+    index: &Index,
+    plugin: &RegistryPlugin,
+    version: &PluginVersion,
+) -> Result<(), String> {
     let at = format!("plugin {} {} package", plugin.id, version.version);
     let data = read_archive(&at, &version.package)?;
     let files = archive_files(&data, &["package.json", "plugin.json"])
@@ -135,14 +144,30 @@ fn check_plugin_archive(plugin: &RegistryPlugin, version: &PluginVersion) -> Res
             ));
         }
     }
-    let sidecars =
-        install::manifest_sidecars(&manifest).map_err(|error| format!("{at}: {error}"))?;
+    let dependencies =
+        install::manifest_dependencies(&manifest).map_err(|error| format!("{at}: {error}"))?;
+    let (plugins, sidecars) =
+        install::classify_dependencies(index, &plugin.id, &version.version, &dependencies)?;
     if sidecars != version.sidecars {
         return Err(format!(
             "{at}: plugin.json dependencies {} differ from the entry {}",
             json!(sidecars),
             json!(version.sidecars)
         ));
+    }
+    for (name, range) in &plugins {
+        let satisfied = index
+            .plugins
+            .iter()
+            .filter(|entry| &entry.package == name)
+            .flat_map(|entry| &entry.versions)
+            .any(|candidate| install::satisfies(&candidate.version, range));
+        if !satisfied {
+            return Err(format!(
+                "{} {}: plugin dependency {name} {range} is satisfied by no listed version",
+                plugin.id, version.version
+            ));
+        }
     }
     Ok(())
 }
@@ -177,7 +202,7 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
     index.packs.sort_by(|a, b| a.name.cmp(&b.name));
     for plugin in &index.plugins {
         for version in &plugin.versions {
-            check_plugin_archive(plugin, version)?;
+            check_plugin_archive(&index, plugin, version)?;
         }
     }
     for sidecar in &index.sidecars {

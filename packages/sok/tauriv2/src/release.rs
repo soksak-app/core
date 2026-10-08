@@ -305,7 +305,7 @@ fn run_pack(dir: &str, out: &str, diagnostics: bool, stdout: &mut dyn Write) -> 
     else {
         return Err("plugin.json: id must be a lowercase identifier".into());
     };
-    install::manifest_sidecars(&manifest)?;
+    install::manifest_dependencies(&manifest)?;
     let object = pkg.as_object().ok_or("package.json: expected an object")?;
     let mut listed = listed_files(object)?;
     for (what, module) in manifest_modules(&manifest) {

@@ -117,16 +117,16 @@ func TestPluginPackageDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSide
 	if err := sok.ValidatePluginPackage(pkg); err != nil {
 		t.Fatal(err)
 	}
-	ranges, err := sok.ManifestSidecars(decode(t, `{"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`).(map[string]any))
+	ranges, err := sok.ManifestDependencies(decode(t, `{"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`).(map[string]any))
 	if err != nil || len(ranges) != 1 || ranges["@scope/sidecar-worker"] != "^0.1.0" {
 		t.Fatalf("ranges %v %v", ranges, err)
 	}
-	if ranges, err := sok.ManifestSidecars(map[string]any{}); err != nil || len(ranges) != 0 {
+	if ranges, err := sok.ManifestDependencies(map[string]any{}); err != nil || len(ranges) != 0 {
 		t.Fatalf("a manifest without dependencies: %v %v", ranges, err)
 	}
-	_, err = sok.ManifestSidecars(decode(t, `{"dependencies": {"@scope/sidecar-worker": "latest"}}`).(map[string]any))
+	_, err = sok.ManifestDependencies(decode(t, `{"dependencies": {"@scope/sidecar-worker": "latest"}}`).(map[string]any))
 	rejects(t, err, "plugin.json dependencies @scope/sidecar-worker: invalid version range")
-	_, err = sok.ManifestSidecars(decode(t, `{"dependencies": ["@scope/sidecar-worker"]}`).(map[string]any))
+	_, err = sok.ManifestDependencies(decode(t, `{"dependencies": ["@scope/sidecar-worker"]}`).(map[string]any))
 	rejects(t, err, "plugin.json dependencies: expected an object")
 	for change, want := range map[string]string{
 		`"engines": {}`:                     "package.json engines.soksak: invalid version range null",
@@ -245,7 +245,7 @@ func TestInstallationResolvesNewestUsablePluginAndSidecarVersions(t *testing.T) 
 		t.Fatal(err)
 	}
 	// 0.3.0 은 revoked 이므로 0.2.0 을 고르고, sidecar 는 darwin-arm64 asset 이 있는 가장 새 0.1.1 을 고른다.
-	arm, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", emptyInstalled())
+	arm, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", emptyInstalled(), nil)
 	if err != nil || arm.Version.Version != "0.2.0" || strings.Join(versions(arm), ",") != "@scope/sidecar-worker 0.1.1" {
 		t.Fatalf("darwin-arm64: %v %v", arm, err)
 	}
@@ -253,20 +253,23 @@ func TestInstallationResolvesNewestUsablePluginAndSidecarVersions(t *testing.T) 
 		t.Fatalf("asset %v", arm.Sidecars[0].Asset)
 	}
 	// darwin-x64 asset 은 0.1.0 에만 있다.
-	x64, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-x64", emptyInstalled())
+	x64, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-x64", emptyInstalled(), nil)
 	if err != nil || strings.Join(versions(x64), ",") != "@scope/sidecar-worker 0.1.0" {
 		t.Fatalf("darwin-x64: %v %v", x64, err)
 	}
-	old, err := sok.ResolveInstall(index, "probe", "0.0.1", "darwin-arm64", emptyInstalled())
+	old, err := sok.ResolveInstall(index, "probe", "0.0.1", "darwin-arm64", emptyInstalled(), nil)
 	if err != nil || old.Version.Version != "0.1.0" {
 		t.Fatalf("core 0.0.1: %v %v", old, err)
 	}
-	_, err = sok.ResolveInstall(index, "probe", "0.1.0", "darwin-arm64", emptyInstalled())
+	_, err = sok.ResolveInstall(index, "probe", "0.1.0", "darwin-arm64", emptyInstalled(), nil)
 	rejects(t, err, "plugin probe has no version for core 0.1.0")
-	_, err = sok.ResolveInstall(index, "probe", "0.0.2", "linux-x64", emptyInstalled())
+	_, err = sok.ResolveInstall(index, "probe", "0.0.2", "linux-x64", emptyInstalled(), nil)
 	rejects(t, err, "sidecar @scope/sidecar-worker has no version for linux-x64 that satisfies every installed plugin: probe 0.2.0 needs ^0.1.0")
-	_, err = sok.ResolveInstall(index, "gone", "0.0.2", "darwin-arm64", emptyInstalled())
+	_, err = sok.ResolveInstall(index, "gone", "0.0.2", "darwin-arm64", emptyInstalled(), nil)
 	rejects(t, err, "plugin gone is not in the registry")
+	// A version that does not satisfy the range of an installed plugin that names the plugin is not selected.
+	_, err = sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", emptyInstalled(), []sok.Need{{Who: "ext 1.0.0", Range: "^0.3.0"}})
+	rejects(t, err, "plugin probe has no version for core 0.0.2 that satisfies every installed plugin: ext 1.0.0 needs ^0.3.0")
 }
 
 // contract: install.select.shared-sidecar
@@ -282,23 +285,23 @@ func TestInstallationKeepsOneSidecarVersionThatSatisfiesEveryInstalledPlugin(t *
 		return state
 	}
 	// 다른 plugin 이 0.1.0 을 쓰고 있고 그 version 이 두 범위를 채우므로 더 새 0.1.1 대신 0.1.0 을 그대로 둔다.
-	kept, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", other("^0.1.0", "0.1.0"))
+	kept, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", other("^0.1.0", "0.1.0"), nil)
 	if err != nil || strings.Join(versions(kept), ",") != "@scope/sidecar-worker 0.1.0" {
 		t.Fatalf("kept: %v %v", kept, err)
 	}
 	// 다른 plugin 의 범위가 0.1.0 만 허용하면 두 범위를 채우는 0.1.0 을 고른다.
-	exact, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", other("0.1.0", "0.1.0"))
+	exact, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", other("0.1.0", "0.1.0"), nil)
 	if err != nil || strings.Join(versions(exact), ",") != "@scope/sidecar-worker 0.1.0" {
 		t.Fatalf("exact: %v %v", exact, err)
 	}
 	// 범위를 함께 채우는 version 이 없으면 각 plugin 과 범위를 밝혀 실패한다.
-	_, err = sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", other("^0.2.0", "0.2.0"))
+	_, err = sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", other("^0.2.0", "0.2.0"), nil)
 	rejects(t, err, "sidecar @scope/sidecar-worker has no version for darwin-arm64 that satisfies every installed plugin: probe 0.2.0 needs ^0.1.0, other 1.0.0 needs ^0.2.0")
 	// 같은 plugin 의 이전 version 범위는 새 version 을 막지 않는다.
 	self := emptyInstalled()
 	self.Plugins["probe"] = sok.InstalledPlugin{Package: "@scope/plugin-probe", Version: "0.1.0", Path: "/config/plugins/probe/0.1.0", Enabled: true, Sidecars: map[string]string{"@scope/sidecar-worker": "0.1.0"}}
 	self.Sidecars["@scope/sidecar-worker"] = sok.InstalledSidecar{Version: "0.1.0", Path: "/config/sidecars/scope-sidecar-worker/0.1.0/darwin-arm64"}
-	again, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", self)
+	again, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", self, nil)
 	if err != nil || strings.Join(versions(again), ",") != "@scope/sidecar-worker 0.1.0" {
 		t.Fatalf("self: %v %v", again, err)
 	}

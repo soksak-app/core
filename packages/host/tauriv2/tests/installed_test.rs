@@ -227,3 +227,20 @@ fn installed_sidecars_resolve_the_installed_version_folders() {
         .unwrap()
         .is_empty());
 }
+
+// contract: installed.sidecars.leave-out-plugin-packages
+#[test]
+fn installed_sidecars_leave_out_the_packages_of_installed_plugins() {
+    let config = installed_fixture();
+    // The packages of an enabled and a disabled plugin are plugin dependencies, not sidecars.
+    write_installed(
+        config.path(),
+        &[(
+            "plugins/term/0.1.0/plugin.json",
+            r#"{"id": "term", "dependencies": {"@scope/sidecar-worker": "^0.1.0", "plugin-alpha": "^1.0.0", "plugin-off": "^1.0.0"}}"#,
+        )],
+    );
+    let declarations = installed::installed_sidecars(config.path()).unwrap();
+    let names: Vec<&str> = declarations.iter().map(|item| item.name.as_str()).collect();
+    assert_eq!(names, ["@scope/sidecar-worker"]);
+}

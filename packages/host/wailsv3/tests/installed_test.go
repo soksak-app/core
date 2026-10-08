@@ -140,3 +140,19 @@ func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 		t.Fatalf("empty configuration %v %v", declarations, err)
 	}
 }
+
+// contract: installed.sidecars.leave-out-plugin-packages
+func TestInstalledSidecarsLeaveOutThePackagesOfInstalledPlugins(t *testing.T) {
+	config := installedFixture(t)
+	// The packages of an enabled and a disabled plugin are plugin dependencies, not sidecars.
+	writeInstalled(t, config, map[string]string{
+		"plugins/term/0.1.0/plugin.json": `{"id": "term", "dependencies": {"@scope/sidecar-worker": "^0.1.0", "plugin-alpha": "^1.0.0", "plugin-off": "^1.0.0"}}`,
+	})
+	declarations, err := host.InstalledSidecars(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(declarations) != 1 || declarations[0].Name != "@scope/sidecar-worker" {
+		t.Fatalf("declarations %+v", declarations)
+	}
+}

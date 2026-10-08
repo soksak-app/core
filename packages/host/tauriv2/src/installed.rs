@@ -182,6 +182,7 @@ pub fn installed_module(config_dir: &Path, url_path: &str) -> Result<Module, Str
 }
 
 /// 켜진 설치 plugin 의 plugin.json dependencies 가 지정한 sidecar 를 설치가 기록한 폴더와 함께 돌려준다.
+/// A dependency that names the package of an installed plugin is not a sidecar.
 pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, String> {
     #[derive(serde::Deserialize)]
     struct Manifest {
@@ -199,7 +200,10 @@ pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, 
         let manifest: Manifest =
             serde_json::from_str(&text).map_err(|error| format!("{}: {error}", file.display()))?;
         for name in manifest.dependencies.into_keys() {
-            if declarations.iter().any(|item| item.name == name) {
+            // The package of an installed plugin is a plugin dependency, so it is not declared as a sidecar.
+            if declarations.iter().any(|item| item.name == name)
+                || state.plugins.values().any(|plugin| plugin.package == name)
+            {
                 continue;
             }
             let sidecar = state.sidecars.get(&name).ok_or_else(|| {

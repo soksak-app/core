@@ -1,10 +1,11 @@
 //! plugin 설치(docs/spec/cli.md)가 archive 를 확인해 풀고 installed.json 을 한 번에 바꾸는지 검사한다.
 
+use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -579,4 +580,339 @@ fn plugin_install_sets_the_modes_whatever_the_umask() {
             & 0o777;
         assert_eq!(mode, want, "{}", path.display());
     }
+}
+
+/// A test plugin version with plugin.json dependencies. Its package is @scope/plugin-<id>.
+struct Dependent {
+    id: &'static str,
+    version: &'static str,
+    dependencies: Vec<(&'static str, &'static str)>,
+}
+
+fn base(version: &'static str) -> Dependent {
+    Dependent {
+        id: "base",
+        version,
+        dependencies: vec![("@scope/sidecar-worker", "^0.1.0")],
+    }
+}
+
+fn ext(range: &'static str) -> Dependent {
+    Dependent {
+        id: "ext",
+        version: "1.0.0",
+        dependencies: vec![("@scope/plugin-base", range)],
+    }
+}
+
+/// Writes the entry files of a registry folder with a packed archive of each version and the release of sidecar
+/// worker 0.1.0, and writes index.json from the same entries. The sidecars of the index hold only the dependencies
+/// that start with @scope/sidecar-.
+fn dependency_registry(versions: &[Dependent]) -> Registry {
+    let platform = soksak_sok::current_platform().expect("platform");
+    let releases = Dir::new();
+    let mut work = vec![];
+    let mut plugins: BTreeMap<&str, Value> = BTreeMap::new();
+    for item in versions {
+        let dir = Dir::new();
+        let dependencies: serde_json::Map<String, Value> = item
+            .dependencies
+            .iter()
+            .map(|(name, range)| (name.to_string(), Value::from(*range)))
+            .collect();
+        let package = json!({"name": format!("@scope/plugin-{}", item.id), "version": item.version,
+            "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]})
+        .to_string();
+        let manifest = json!({"id": item.id, "dependencies": dependencies}).to_string();
+        write_tree(
+            &dir.0,
+            &[("package.json", &package), ("plugin.json", &manifest)],
+        );
+        let result = run_json(&["plugin", "pack", dir.text(), releases.text()]);
+        let sidecars: serde_json::Map<String, Value> = dependencies
+            .into_iter()
+            .filter(|(name, _)| name.starts_with("@scope/sidecar-"))
+            .collect();
+        let entry = plugins.entry(item.id).or_insert_with(|| {
+            json!({"id": item.id, "package": format!("@scope/plugin-{}", item.id), "name": item.id,
+                "description": "검사용 plugin.", "license": "MIT",
+                "repository": format!("https://example.invalid/{}", item.id), "versions": []})
+        });
+        entry["versions"].as_array_mut().unwrap().push(json!({"version": item.version,
+            "package": {"url": format!("file://{}", result["archive"].as_str().unwrap()), "sha256": result["sha256"]},
+            "engines": {"soksak": "^0.0.2"}, "sidecars": sidecars}));
+        work.push(dir);
+    }
+    let sidecar = Dir::new();
+    write_tree(
+        &sidecar.0,
+        &[
+            (
+                "package.json",
+                r#"{"name": "@scope/sidecar-worker", "version": "0.1.0", "files": ["sidecar.json", "build/worker"]}"#,
+            ),
+            (
+                "sidecar.json",
+                r#"{"executable": "build/worker", "protocol": 1}"#,
+            ),
+            ("build/worker*", "binary 0.1.0"),
+        ],
+    );
+    let released = run_json(&[
+        "sidecar",
+        "release",
+        sidecar.text(),
+        releases.text(),
+        "--platform",
+        &platform,
+    ]);
+    let worker = json!({"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
+        "versions": [{"version": "0.1.0", "protocol": 1, "assets": {platform.as_str():
+        {"url": format!("file://{}", released["archive"].as_str().unwrap()), "sha256": released["sha256"]}}}]});
+    let revoked = json!({"plugins": [], "sidecars": []});
+    let mut files = vec![
+        (
+            "sidecars/scope-sidecar-worker.json".to_string(),
+            worker.to_string(),
+        ),
+        ("revoked.json".to_string(), revoked.to_string()),
+    ];
+    for (id, entry) in &plugins {
+        files.push((format!("plugins/{id}.json"), entry.to_string()));
+    }
+    let index = json!({"format": 1, "plugins": plugins.values().collect::<Vec<_>>(), "sidecars": [worker],
+        "packs": [], "revoked": revoked});
+    files.push(("index.json".to_string(), index.to_string()));
+    let files: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(name, content)| (name.as_str(), content.as_str()))
+        .collect();
+    let dir = Dir::new();
+    write_tree(&dir.0, &files);
+    work.push(releases);
+    work.push(sidecar);
+    Registry { dir, _work: work }
+}
+
+/// Makes the configuration directory use the index.json of the registry folder.
+fn use_registry(config: &Dir, registry: &Registry) {
+    run_json(&[
+        "registry",
+        "use",
+        &registry.index(),
+        "--config-dir",
+        config.text(),
+    ]);
+}
+
+fn installed_of(config: &Dir) -> soksak_sok::install::InstalledState {
+    soksak_sok::plugins::read_installed(&config.0).expect("installed state")
+}
+
+/// Runs a sok command and stops the test when it fails.
+fn succeeds(args: &[&str]) -> String {
+    let (code, stdout, stderr) = run(args);
+    assert_eq!(code, 0, "{args:?}: {stderr}");
+    stdout
+}
+
+// contract: cli.plugin.dependencies-install
+#[test]
+fn plugin_install_installs_the_plugin_dependencies() {
+    let full = dependency_registry(&[base("1.0.0"), base("1.1.0"), base("2.0.0"), ext("^1.0.0")]);
+    // A provider that is not installed gets the newest version that satisfies the range.
+    let config = Dir::new();
+    use_registry(&config, &full);
+    let stdout = succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
+    let want = r#"{
+  "plugin": {
+    "package": "@scope/plugin-ext",
+    "version": "1.0.0",
+    "path": "plugins/ext/1.0.0",
+    "enabled": true,
+    "sidecars": {}
+  },
+  "sidecars": {}
+}
+"#;
+    assert_eq!(stdout, want);
+    let state = installed_of(&config);
+    let provider = &state.plugins["base"];
+    assert_eq!(
+        (
+            provider.version.as_str(),
+            provider.enabled,
+            provider.previous.as_deref()
+        ),
+        ("1.1.0", true, None)
+    );
+    assert_eq!(
+        serde_json::to_string(&provider.sidecars).unwrap(),
+        r#"{"@scope/sidecar-worker":"^0.1.0"}"#
+    );
+    assert_eq!(state.sidecars["@scope/sidecar-worker"].version, "0.1.0");
+    assert!(
+        config.0.join("plugins/base/1.1.0/plugin.json").exists()
+            && config.0.join("plugins/ext/1.0.0/plugin.json").exists(),
+        "install ext did not extract both plugins"
+    );
+    // An installed provider that satisfies the range is kept and enabled.
+    let config = Dir::new();
+    let small = dependency_registry(&[base("1.0.0")]);
+    use_registry(&config, &small);
+    succeeds(&["plugin", "install", "base", "--config-dir", config.text()]);
+    succeeds(&["plugin", "disable", "base", "--config-dir", config.text()]);
+    use_registry(&config, &full);
+    succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
+    let provider = &installed_of(&config).plugins["base"];
+    assert_eq!(
+        (
+            provider.version.as_str(),
+            provider.enabled,
+            provider.previous.as_deref()
+        ),
+        ("1.0.0", true, None)
+    );
+    // An installed provider that does not satisfy the range gets the newest version that satisfies it.
+    let config = Dir::new();
+    use_registry(&config, &full);
+    succeeds(&["plugin", "install", "base", "--config-dir", config.text()]);
+    succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
+    let provider = &installed_of(&config).plugins["base"];
+    assert_eq!(
+        (provider.version.as_str(), provider.previous.as_deref()),
+        ("1.1.0", Some("2.0.0"))
+    );
+}
+
+/// The names in the plugins folder of the configuration directory.
+fn plugin_folders(config: &Dir) -> String {
+    let mut names: Vec<String> = std::fs::read_dir(config.0.join("plugins"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect();
+    names.sort();
+    names.join(" ")
+}
+
+// contract: cli.plugin.dependencies-reject
+#[test]
+fn plugin_install_rejects_unresolvable_plugin_dependencies() {
+    let cases = [
+        (
+            "ext",
+            vec![Dependent {
+                id: "ext",
+                version: "1.0.0",
+                dependencies: vec![("@scope/plugin-gone", "^1.0.0")],
+            }],
+            "sok: ext 1.0.0: dependency @scope/plugin-gone is neither a plugin nor a sidecar of the registry\n",
+        ),
+        (
+            "ext",
+            vec![base("1.0.0"), ext("^2.0.0")],
+            "sok: plugin base has no version for core 0.0.2 that satisfies every installed plugin: ext 1.0.0 needs ^2.0.0\n",
+        ),
+        (
+            "first",
+            vec![
+                Dependent {
+                    id: "first",
+                    version: "1.0.0",
+                    dependencies: vec![("@scope/plugin-second", "^1.0.0")],
+                },
+                Dependent {
+                    id: "second",
+                    version: "1.0.0",
+                    dependencies: vec![("@scope/plugin-first", "^1.0.0")],
+                },
+            ],
+            "sok: plugin dependency cycle: first -> second -> first\n",
+        ),
+    ];
+    for (plugin, versions, want) in cases {
+        let config = Dir::new();
+        let registry = dependency_registry(&versions);
+        use_registry(&config, &registry);
+        let (code, _, stderr) = run(&["plugin", "install", plugin, "--config-dir", config.text()]);
+        assert_eq!((code, stderr.as_str()), (1, want), "install {plugin}");
+        assert_eq!(
+            plugin_folders(&config),
+            "registry.json",
+            "install {plugin} changed the installation"
+        );
+    }
+    // A provider that the index does not list is not a plugin dependency, even when it is installed.
+    let config = Dir::new();
+    let small = dependency_registry(&[base("1.0.0")]);
+    use_registry(&config, &small);
+    succeeds(&["plugin", "install", "base", "--config-dir", config.text()]);
+    let before = read_text(&config.0.join("plugins/installed.json"));
+    let only_ext = dependency_registry(&[ext("^1.0.0")]);
+    use_registry(&config, &only_ext);
+    let (code, _, stderr) = run(&["plugin", "install", "ext", "--config-dir", config.text()]);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: ext 1.0.0: dependency @scope/plugin-base is neither a plugin nor a sidecar of the registry\n"
+        )
+    );
+    assert_eq!(read_text(&config.0.join("plugins/installed.json")), before);
+    assert!(!config.0.join("plugins/ext").exists());
+}
+
+// contract: cli.plugin.dependencies-update
+#[test]
+fn plugin_update_selects_a_provider_version_that_satisfies_every_dependent() {
+    let config = Dir::new();
+    let first = dependency_registry(&[base("1.0.0"), ext("^1.0.0")]);
+    use_registry(&config, &first);
+    succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
+    let full = dependency_registry(&[base("1.0.0"), base("1.1.0"), base("2.0.0"), ext("^1.0.0")]);
+    use_registry(&config, &full);
+    succeeds(&["plugin", "update", "base", "--config-dir", config.text()]);
+    let provider = &installed_of(&config).plugins["base"];
+    assert_eq!(
+        (provider.version.as_str(), provider.previous.as_deref()),
+        ("1.1.0", Some("1.0.0"))
+    );
+    // A disabled dependent also names a range.
+    succeeds(&["plugin", "disable", "ext", "--config-dir", config.text()]);
+    succeeds(&["plugin", "update", "base", "--config-dir", config.text()]);
+    assert_eq!(installed_of(&config).plugins["base"].version, "1.1.0");
+    succeeds(&["plugin", "remove", "ext", "--config-dir", config.text()]);
+    succeeds(&["plugin", "update", "base", "--config-dir", config.text()]);
+    let provider = &installed_of(&config).plugins["base"];
+    assert_eq!(
+        (provider.version.as_str(), provider.previous.as_deref()),
+        ("2.0.0", Some("1.1.0"))
+    );
+}
+
+// contract: cli.plugin.dependencies-required
+#[test]
+fn plugin_remove_and_disable_refuse_a_plugin_that_an_enabled_plugin_requires() {
+    let config = Dir::new();
+    let registry = dependency_registry(&[base("1.0.0"), ext("^1.0.0")]);
+    use_registry(&config, &registry);
+    succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
+    let before = read_text(&config.0.join("plugins/installed.json"));
+    for action in ["remove", "disable"] {
+        let (code, _, stderr) = run(&["plugin", action, "base", "--config-dir", config.text()]);
+        assert_eq!(
+            (code, stderr.as_str()),
+            (1, "sok: plugin base is required by ext ^1.0.0\n"),
+            "{action} base"
+        );
+        assert_eq!(read_text(&config.0.join("plugins/installed.json")), before);
+        assert!(config.0.join("plugins/base/1.0.0/plugin.json").exists());
+    }
+    // A disabled plugin does not require its provider.
+    succeeds(&["plugin", "disable", "ext", "--config-dir", config.text()]);
+    succeeds(&["plugin", "disable", "base", "--config-dir", config.text()]);
+    assert_eq!(
+        succeeds(&["plugin", "remove", "base", "--config-dir", config.text()]),
+        "null\n"
+    );
 }

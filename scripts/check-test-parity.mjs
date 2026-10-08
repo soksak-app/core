@@ -910,8 +910,8 @@ const FEATURE_LINKS = [
     id: "F26",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "function checkDependencies" },
-      { file: "packages/sok/wailsv3/src/install.go", symbol: "func ManifestSidecars" },
-      { file: "packages/sok/tauriv2/src/install.rs", symbol: "pub fn manifest_sidecars" },
+      { file: "packages/sok/wailsv3/src/install.go", symbol: "func ManifestDependencies" },
+      { file: "packages/sok/tauriv2/src/install.rs", symbol: "pub fn manifest_dependencies" },
     ],
     tests: [
       { file: "packages/plugin-api/test/validate.test.mjs", id: "a manifest is rejected for each invalid field" },

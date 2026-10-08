@@ -201,13 +201,18 @@ func InstalledAssets(configDir string) application.Middleware {
 }
 
 // InstalledSidecars 는 켜진 설치 plugin 의 plugin.json dependencies 가 지정한 sidecar 를 설치가 기록한 폴더와 함께 돌려준다.
+// A dependency that names the package of an installed plugin is not a sidecar.
 func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
 	plugins, state, err := enabledPlugins(configDir)
 	if err != nil {
 		return nil, err
 	}
 	var declarations []SidecarDeclaration
+	// The package of an installed plugin is a plugin dependency, so it is not declared as a sidecar.
 	seen := map[string]bool{}
+	for _, plugin := range state.Plugins {
+		seen[plugin.Package] = true
+	}
 	for _, plugin := range plugins {
 		file := filepath.Join(plugin.dir, "plugin.json")
 		data, err := os.ReadFile(file)

@@ -398,9 +398,9 @@ func ValidatePluginPackage(value any) error {
 	return checkVersion("package.json version", pkg["version"])
 }
 
-// ManifestSidecars 는 plugin.json dependencies 를 검사하고 sidecar 마다 version 범위를 돌려준다. sidecar 를 쓰지 않는
-// plugin 은 dependencies 가 없다.
-func ManifestSidecars(manifest map[string]any) (map[string]string, error) {
+// ManifestDependencies checks the dependencies of plugin.json and returns the version range of each package. A plugin
+// that needs no other package has no dependencies.
+func ManifestDependencies(manifest map[string]any) (map[string]string, error) {
 	ranges := map[string]string{}
 	raw, ok := manifest["dependencies"]
 	if !ok {
@@ -1042,6 +1042,37 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 	return &state, nil
 }
 
+// ClassifyDependencies splits the dependencies of a plugin version into plugin dependencies, which name the package of
+// a plugin of the registry index, and sidecar dependencies, which name a sidecar of the index. A dependency that is
+// neither is an error.
+func ClassifyDependencies(index *Index, id, version string, dependencies map[string]string) (plugins, sidecars map[string]string, err error) {
+	plugins, sidecars = map[string]string{}, map[string]string{}
+	for _, name := range sortedNames(dependencies) {
+		switch {
+		case slices.ContainsFunc(index.Plugins, func(entry RegistryPlugin) bool { return entry.Package == name }):
+			plugins[name] = dependencies[name]
+		case slices.ContainsFunc(index.Sidecars, func(entry RegistrySidecar) bool { return entry.Name == name }):
+			sidecars[name] = dependencies[name]
+		default:
+			return nil, nil, fmt.Errorf("%s %s: dependency %s is neither a plugin nor a sidecar of the registry", id, version, name)
+		}
+	}
+	return plugins, sidecars, nil
+}
+
+// Need is the range that one installed plugin requires of a plugin or a sidecar. Who is `<id> <version>`.
+type Need struct {
+	Who, Range string
+}
+
+func needsText(needs []Need) string {
+	texts := make([]string, len(needs))
+	for i, n := range needs {
+		texts[i] = n.Who + " needs " + n.Range
+	}
+	return strings.Join(texts, ", ")
+}
+
 // SelectedSidecar 는 설치할 sidecar version 하나와 그 플랫폼 asset 이다.
 type SelectedSidecar struct {
 	Name    string
@@ -1072,11 +1103,12 @@ func newer(a, b string) bool {
 	return errA == nil && errB == nil && x.Compare(y) > 0
 }
 
-// ResolveInstall 은 설치할 plugin version 과 그 sidecar version 을 고른다. Plugin 은 engines.soksak 이 core 를
-// 포함하고 revoked 가 아닌 가장 새 version 이다. Sidecar 는 한 설치에 version 하나이므로, 그 version 의 범위와
-// installed 의 다른 plugin 이 지정한 범위를 모두 채워야 한다. 쓰고 있는 version 이 범위를 모두 채우고 revoked 가
-// 아니며 platform asset 이 있으면 그대로 두고, 아니면 그런 version 중 가장 새 것을 고른다.
-func ResolveInstall(index *Index, id, core, platform string, installed *InstalledState) (*Selection, error) {
+// ResolveInstall selects the plugin version to install and its sidecar versions. The plugin version is the newest one
+// whose engines.soksak contains core, that is not revoked, and that satisfies every range of needs, the ranges of the
+// installed plugins that name the plugin. An installation has one version of a sidecar, so it satisfies the range of
+// the selected version and the ranges that the other installed plugins name. The version in use is kept when it
+// satisfies every range, is not revoked and has an asset for the platform; otherwise the newest such version is selected.
+func ResolveInstall(index *Index, id, core, platform string, installed *InstalledState, needs []Need) (*Selection, error) {
 	var plugin *RegistryPlugin
 	for i := range index.Plugins {
 		if index.Plugins[i].ID == id {
@@ -1089,21 +1121,24 @@ func ResolveInstall(index *Index, id, core, platform string, installed *Installe
 	var chosen *PluginVersion
 	for i := range plugin.Versions {
 		item := &plugin.Versions[i]
-		if Satisfies(core, item.Engines.Soksak) && !revokedPlugin(index, id, item.Version) && (chosen == nil || newer(item.Version, chosen.Version)) {
+		fits := !slices.ContainsFunc(needs, func(n Need) bool { return !Satisfies(item.Version, n.Range) })
+		if Satisfies(core, item.Engines.Soksak) && !revokedPlugin(index, id, item.Version) && fits && (chosen == nil || newer(item.Version, chosen.Version)) {
 			chosen = item
 		}
+	}
+	if chosen == nil && len(needs) > 0 {
+		return nil, fmt.Errorf("plugin %s has no version for core %s that satisfies every installed plugin: %s", id, core, needsText(needs))
 	}
 	if chosen == nil {
 		return nil, fmt.Errorf("plugin %s has no version for core %s", id, core)
 	}
 	selection := &Selection{Plugin: plugin, Version: chosen}
 	for _, name := range sortedNames(chosen.Sidecars) {
-		type need struct{ who, rng string }
-		needs := []need{{id + " " + chosen.Version, chosen.Sidecars[name]}}
+		needs := []Need{{id + " " + chosen.Version, chosen.Sidecars[name]}}
 		for _, other := range sortedPluginIDs(installed.Plugins) {
 			item := installed.Plugins[other]
 			if rng, ok := item.Sidecars[name]; ok && other != id {
-				needs = append(needs, need{other + " " + item.Version, rng})
+				needs = append(needs, Need{other + " " + item.Version, rng})
 			}
 		}
 		var entry *RegistrySidecar
@@ -1120,7 +1155,7 @@ func ResolveInstall(index *Index, id, core, platform string, installed *Installe
 		for i := range candidates {
 			item := &candidates[i]
 			_, hasAsset := item.Assets[platform]
-			fits := !slices.ContainsFunc(needs, func(n need) bool { return !Satisfies(item.Version, n.rng) })
+			fits := !slices.ContainsFunc(needs, func(n Need) bool { return !Satisfies(item.Version, n.Range) })
 			if !hasAsset || !fits || revokedSidecar(index, name, item.Version) {
 				continue
 			}
@@ -1132,11 +1167,7 @@ func ResolveInstall(index *Index, id, core, platform string, installed *Installe
 			}
 		}
 		if best == nil {
-			texts := make([]string, len(needs))
-			for i, n := range needs {
-				texts[i] = n.who + " needs " + n.rng
-			}
-			return nil, fmt.Errorf("sidecar %s has no version for %s that satisfies every installed plugin: %s", name, platform, strings.Join(texts, ", "))
+			return nil, fmt.Errorf("sidecar %s has no version for %s that satisfies every installed plugin: %s", name, platform, needsText(needs))
 		}
 		if kept != nil {
 			best = kept

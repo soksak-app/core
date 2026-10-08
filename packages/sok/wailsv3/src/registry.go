@@ -95,8 +95,10 @@ func readArchive(where string, archive Archive) ([]byte, error) {
 	return data, nil
 }
 
-// checkPluginArchive 는 plugin archive 가 항목의 plugin.json id 와 package.json 을 담는지 본다.
-func checkPluginArchive(plugin *RegistryPlugin, version *PluginVersion) error {
+// checkPluginArchive checks that a plugin archive holds the plugin.json id and the package.json of its entry, that the
+// sidecar dependencies of plugin.json equal the sidecars of the entry, and that a listed version satisfies the range of
+// each plugin dependency.
+func checkPluginArchive(index *Index, plugin *RegistryPlugin, version *PluginVersion) error {
 	where := "plugin " + plugin.ID + " " + version.Version + " package"
 	data, err := readArchive(where, version.Package)
 	if err != nil {
@@ -131,12 +133,22 @@ func checkPluginArchive(plugin *RegistryPlugin, version *PluginVersion) error {
 			return fmt.Errorf("%s: package.json %s is %s, the entry says %s", where, field[0], field[1], field[2])
 		}
 	}
-	sidecars, err := ManifestSidecars(manifest.(map[string]any))
+	dependencies, err := ManifestDependencies(manifest.(map[string]any))
 	if err != nil {
 		return fmt.Errorf("%s: %w", where, err)
 	}
+	plugins, sidecars, err := ClassifyDependencies(index, plugin.ID, version.Version, dependencies)
+	if err != nil {
+		return err
+	}
 	if !maps.Equal(sidecars, version.Sidecars) {
 		return fmt.Errorf("%s: plugin.json dependencies %s differ from the entry %s", where, quote(sidecars), quote(version.Sidecars))
+	}
+	for _, name := range sortedNames(plugins) {
+		provider := index.Plugins[slices.IndexFunc(index.Plugins, func(entry RegistryPlugin) bool { return entry.Package == name })]
+		if !slices.ContainsFunc(provider.Versions, func(candidate PluginVersion) bool { return Satisfies(candidate.Version, plugins[name]) }) {
+			return fmt.Errorf("%s %s: plugin dependency %s %s is satisfied by no listed version", plugin.ID, version.Version, name, plugins[name])
+		}
 	}
 	return nil
 }
@@ -172,7 +184,7 @@ func BuildRegistry(dir string) (map[string]any, error) {
 	for i := range index.Plugins {
 		plugin := &index.Plugins[i]
 		for j := range plugin.Versions {
-			if err := checkPluginArchive(plugin, &plugin.Versions[j]); err != nil {
+			if err := checkPluginArchive(index, plugin, &plugin.Versions[j]); err != nil {
 				return nil, err
 			}
 		}
