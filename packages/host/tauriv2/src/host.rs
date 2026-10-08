@@ -38,11 +38,11 @@ pub mod performance;
 #[path = "platform/platform.rs"]
 pub mod platform;
 pub mod plugins;
+pub mod project_removal;
 pub mod projects;
 pub mod quit;
 #[cfg(feature = "diagnostics")]
 pub mod recording;
-pub mod project_removal;
 mod shapes;
 pub mod sidecars;
 pub mod start;
