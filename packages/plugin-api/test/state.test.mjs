@@ -24,7 +24,7 @@ test("state, data, and sidecars are rejected when their requirements are missing
     [{ ...base(), state: { module: "ui/state.js", extra: 1 } }, /unknown field extra/],
     [without("sections"), /state requires sections/],
     [{ ...without("state"), data: base().data }, /data requires a state module/],
-    [{ ...without("state"), data: undefined }, /dependencies require a surface or a state module/],
+    [{ ...without("state"), data: undefined }, /dependencies require a surface, a state module or contributes/],
     [{ ...base(), data: { marks: { schema: { type: "array" }, default: "x" } } }, /data marks default does not match its schema/],
     [{ ...base(), data: { marks: { schema: { type: "array" } } } }, /data marks requires schema and default/],
   ];

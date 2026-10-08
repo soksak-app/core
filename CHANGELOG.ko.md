@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F102.1.2: plugin manifest는 `extends`에 확장 지점을, `contributes`에 기여를 선언하고, `dependencies`는 plugin package를 가리킬 수 있다.
 - F102.1.1: `sok`, plugin manifest, `soksak-engines`의 version 범위는 상한 없는 `>=x.y.z`를 받고, plugin manifest는 sidecar 범위 `*`를 받는다.
 - 체크리스트 항목 `R3.1` 폐기: 체크리스트 항목은 project 작업을 담고, 이 항목은 AGENTS.md가 담는 작업 규칙이나 그 적용을 담았다.
 - 체크리스트 항목 `R3.3` 폐기: 체크리스트 항목은 project 작업을 담고, 이 항목은 AGENTS.md가 담는 작업 규칙이나 그 적용을 담았다.

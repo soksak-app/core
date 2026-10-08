@@ -72,8 +72,8 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...side, sections: [{ ...side.sections[0], fill: "yes" }] }, /section side.list fill must be a boolean/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "../list.js" }] }, /section side.list module must be a JavaScript path inside the package/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "ui/list.css" }] }, /section side.list module must be a JavaScript path inside the package/],
-    [{ id: "empty", name: "Empty", description: "빈 플러그인." }, /surface or sections/],
-    [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface/],
+    [{ id: "empty", name: "Empty", description: "빈 플러그인." }, /surface, sections or contributes/],
+    [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a state module or contributes/],
     [{ ...card, dependencies: { Worker: "^1.2.0" } }, /dependencies: Worker is not a sidecar package name/],
     [{ ...card, dependencies: ["@scope/sidecar-worker"] }, /dependencies must map sidecar packages to version ranges/],
     [{ ...card, dependencies: { "@scope/sidecar-worker": "**" } }, /dependencies @scope\/sidecar-worker: invalid range \*\*/],
@@ -347,4 +347,46 @@ test("references to a loaded plugin still name its declared sections and surface
   const tab = environment();
   tab.workspace.grid.cards[1].tabs[0].plugin = "side";
   assert.throws(() => checkReferences(tab, [card, side]), /tab plugin side has no surface/);
+});
+
+const point = {
+  version: "1.0.0",
+  schema: { type: "object", properties: { extensions: { type: "array", items: { type: "string" } } } },
+  modules: { "@scope/library": "ui/vendor/library.js" },
+};
+const provider = { ...card, extends: { language: point } };
+const contributor = {
+  id: "tidy", name: "Tidy", description: "검사용 기여.",
+  contributes: { "probe.language": [{ range: "^1.0.0", module: "ui/tidy.js", extensions: ["tidy"] }] },
+  dependencies: { "@scope/plugin-probe": ">=0.0.1" },
+};
+
+test("a provider declares extension points and a contributor may consist of contributions only", () => {
+  assert.equal(validateManifest(provider).extends.language.version, "1.0.0");
+  assert.equal(validateManifest({ ...provider, extends: { language: { version: "2.1.0", schema: { type: "object" } } } }).extends.language.version, "2.1.0");
+  assert.equal(validateManifest(contributor).contributes["probe.language"][0].module, "ui/tidy.js");
+  assert.equal(validateManifest({ ...side, contributes: contributor.contributes }).contributes["probe.language"].length, 1);
+});
+
+test("extension points and contributions are rejected for each invalid field", () => {
+  const item = contributor.contributes["probe.language"][0];
+  for (const [manifest, error] of [
+    [{ ...side, extends: { language: point } }, /extends requires a surface/],
+    [{ ...card, extends: [] }, /extends must be an object/],
+    [{ ...card, extends: { Language: point } }, /invalid extension point Language/],
+    [{ ...card, extends: { language: { ...point, version: "1.0" } } }, /extension point language version must be x.y.z/],
+    [{ ...card, extends: { language: { ...point, schema: { type: "text" } } } }, /unknown schema type/],
+    [{ ...card, extends: { language: { ...point, owner: "probe" } } }, /unknown field owner/],
+    [{ ...card, extends: { language: { ...point, modules: { "@scope/library": "../library.js" } } } }, /extension point language module @scope\/library must be a JavaScript path inside the package/],
+    [{ ...card, extends: { language: { ...point, modules: { "./library.js": "ui/library.js" } } } }, /extension point language module \.\/library\.js is not a bare specifier/],
+    [{ ...contributor, contributes: [] }, /contributes must be an object/],
+    [{ ...contributor, contributes: { language: [item] } }, /contributes language must be <plugin id>.<point>/],
+    [{ ...contributor, contributes: { "tidy.language": [item] } }, /contributes to its own extension point tidy.language/],
+    [{ ...contributor, contributes: { "probe.language": item } }, /contributes probe.language must be a non-empty array/],
+    [{ ...contributor, contributes: { "probe.language": [] } }, /contributes probe.language must be a non-empty array/],
+    [{ ...contributor, contributes: { "probe.language": [{ ...item, range: "latest" }] } }, /contributes probe.language item 1 range latest is invalid/],
+    [{ ...contributor, contributes: { "probe.language": [{ ...item, module: "/tidy.js" }] } }, /contributes probe.language item 1 module must be a JavaScript path inside the package/],
+    [{ id: "none", name: "None", description: "아무것도 없다." }, /a plugin requires a surface, sections or contributes/],
+    [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a state module or contributes/],
+  ]) assert.throws(() => validateManifest(manifest), error, JSON.stringify(manifest).slice(0, 120));
 });

@@ -274,6 +274,54 @@ function checkBackground(where, background, sidecars, settings = {}) {
   }
 }
 
+
+/** path 가 패키지 안의 JavaScript 파일 경로인지. */
+function isModulePath(path) {
+  return isText(path) && !path.startsWith("/") && !path.split("/").includes("..") && path.endsWith(".js");
+}
+
+// bare specifier 는 상대 경로, 절대 경로, URL 이 아닌 package 이름과 그 하위 경로다.
+const BARE = /^(@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*(\/[A-Za-z0-9._-]+)*$/;
+
+/** 제공자의 확장 지점 선언을 검사한다(docs/spec/plugins.md#extension-points). */
+function checkExtends(where, points) {
+  if (!isObject(points)) throw new Error(`${where}: extends must be an object`);
+  for (const [name, point] of Object.entries(points)) {
+    if (!ID.test(name)) throw new Error(`${where}: invalid extension point ${name}`);
+    const at = `${where} extension point ${name}`;
+    if (!isObject(point)) throw new Error(`${at}: must be an object`);
+    only(at, point, ["version", "schema", "modules"]);
+    if (typeof point.version !== "string" || !VERSION.test(point.version)) throw new Error(`${at} version must be x.y.z`);
+    checkSchema(`${at} schema`, point.schema);
+    if (point.modules !== undefined) {
+      if (!isObject(point.modules)) throw new Error(`${at}: modules must be an object`);
+      for (const [specifier, path] of Object.entries(point.modules)) {
+        if (!BARE.test(specifier)) throw new Error(`${at} module ${specifier} is not a bare specifier`);
+        if (!isModulePath(path)) throw new Error(`${at} module ${specifier} must be a JavaScript path inside the package`);
+      }
+    }
+  }
+}
+
+/** 기여자의 기여 선언을 검사한다. 항목의 schema 필드는 제공자의 선언으로 workbench 가 검사한다. */
+function checkContributes(where, id, contributes) {
+  if (!isObject(contributes)) throw new Error(`${where}: contributes must be an object`);
+  for (const [name, items] of Object.entries(contributes)) {
+    const dot = name.indexOf(".");
+    if (dot < 0 || !ID.test(name.slice(0, dot)) || !ID.test(name.slice(dot + 1))) {
+      throw new Error(`${where}: contributes ${name} must be <plugin id>.<point>`);
+    }
+    if (name.slice(0, dot) === id) throw new Error(`${where}: contributes to its own extension point ${name}`);
+    if (!Array.isArray(items) || items.length === 0) throw new Error(`${where}: contributes ${name} must be a non-empty array`);
+    items.forEach((item, index) => {
+      const at = `${where}: contributes ${name} item ${index + 1}`;
+      if (!isObject(item)) throw new Error(`${at} must be an object`);
+      if (!isRange(item.range)) throw new Error(`${at} range ${item.range} is invalid`);
+      if (!isModulePath(item.module)) throw new Error(`${at} module must be a JavaScript path inside the package`);
+    });
+  }
+}
+
 /**
  * plugin.json 하나를 검사한다. 형식이 틀리면 예외를 던지고, 맞으면 받은 값을 반환한다.
  *
@@ -290,7 +338,7 @@ function checkBackground(where, background, sidecars, settings = {}) {
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "exposes", "settings",
-    "state", "data", "sidebars"]);
+    "state", "data", "sidebars", "extends", "contributes"]);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
   const where = `plugin ${id}`;
@@ -325,11 +373,17 @@ export function validateManifest(manifest) {
     }
   }
   if (manifest.dependencies !== undefined) {
-    if (manifest.surface === undefined && manifest.state === undefined) {
-      throw new Error(`${where}: dependencies require a surface or a state module`);
+    // sidecar package 는 표면이나 상태 모듈이, plugin package 는 기여가 쓴다(docs/spec/plugins.md#pluginjson).
+    if (manifest.surface === undefined && manifest.state === undefined && manifest.contributes === undefined) {
+      throw new Error(`${where}: dependencies require a surface, a state module or contributes`);
     }
     checkDependencies(where, manifest.dependencies);
   }
+  if (manifest.extends !== undefined) {
+    if (manifest.surface === undefined) throw new Error(`${where}: extends requires a surface`);
+    checkExtends(where, manifest.extends);
+  }
+  if (manifest.contributes !== undefined) checkContributes(where, id, manifest.contributes);
   if (manifest.background !== undefined) {
     if (manifest.surface === undefined) throw new Error(`${where}: background requires a surface`);
     checkBackground(`${where}`, manifest.background, manifestSidecars(manifest), manifest.settings);
@@ -397,8 +451,8 @@ export function validateManifest(manifest) {
     validateExposes(id, manifest.exposes);
   }
   checkSettings(`${where}`, manifest.settings);
-  if (manifest.surface === undefined && manifest.sections === undefined) {
-    throw new Error(`${where}: a plugin requires a surface or sections`);
+  if (manifest.surface === undefined && manifest.sections === undefined && manifest.contributes === undefined) {
+    throw new Error(`${where}: a plugin requires a surface, sections or contributes`);
   }
   if (manifest.sidebars !== undefined) validatePluginSidebarDefaults(manifest);
   return manifest;
