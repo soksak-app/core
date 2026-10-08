@@ -109,7 +109,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | status | `host.screens` | `[{x, y, width, height, scale, visible}]`: 화면 좌표의 디스플레이와 백킹 배율, 그리고 메뉴 막대와 Dock 을 뺀 영역 `visible`(최대화한 창의 프레임) |
 | status | `host.dock` | 애플리케이션 Dock 메뉴 항목 제목의 순서 목록 |
 | status | `host.buttons` | `{mask}`: AppKit이 눌렸다고 보고하는 mouse 버튼(`+[NSEvent pressedMouseButtons]`: bit 0 왼쪽, bit 1 오른쪽, 그 위 bit는 다른 버튼). 호스트는 AppKit이 mouse 버튼의 누름이나 뗌을 애플리케이션에 전달할 때(local event monitor)와 다른 애플리케이션에 전달할 때(global event monitor) 마스크를 읽고, 마스크가 바뀌면 `host.buttons` 감시자에게 알린다. 그래서 다른 애플리케이션이 최전면인 동안의 사람의 버튼도 값을 바꾼다. 합성 `input.pointer` 누름과 뗌은 AppKit의 event 전달을 거치지 않고 뷰로 가므로 값을 바꾸지 않는다 |
-| status | `host.sidecars` | `{closing: [{sidecar, surface}]}`: 호스트가 `closed`를 보냈고 사이드카가 아직 답하지 않은 표면([사이드카](sidecars.ko.md#메시지)) |
+| status | `host.sidecars` | `{closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}`: 호스트가 `closed`를 보냈고 사이드카가 아직 답하지 않은 표면([사이드카](sidecars.ko.md#메시지))과, 서비스가 설치된 것과 다른 version으로 도는 persistent 사이드카([terminal runtime](terminal-runtime.ko.md#updates)) |
 | command | `host.menu.select` | 애플리케이션 메뉴 항목 `{menu, title}`을 실행한다. 제목이 `menu`인 하위 메뉴에서 제목이 `title`인 항목이다 |
 | status | `host.menu` | 애플리케이션 메뉴. 구분선을 뺀 하위 메뉴마다 `[{title, items: [{title, key}]}]`이며, `key`는 수정 키 `ctrl`, `opt`, `shift`, `cmd`를 이 순서로 `+`로 이은 뒤 키를 붙인 단축키이거나 빈 문자열이다 |
 | command | `host.window.close` | 창의 일반 닫기 동작으로 창을 닫는다 |

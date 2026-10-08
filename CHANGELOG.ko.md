@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F117.1: 명세가 plugin 작업이 바로 적용된다고 정한다. host는 바뀐 표준 입출력 sidecar를 교체하고, 각 창은 수정된 탭을 물은 뒤 page를 다시 불러오며, 카드 상태 `restart`는 `reload`가 되고, `core.plugins`는 `updates`를 보고한다. 다른 version의 terminal service는 `host.sidecars`에 `outdated`로 보고되고, 그 session이 끝날 때나 `core.plugins.replace`로 교체된다. 구현은 F117.2–F117.5에 남아 있다.
 - F119: 두 host가 표면의 답을 기다리는 닫기를 수로 센다. 사이드카가 답하기 전에 다시 닫은 표면이 더 이상 "unexpected close answer"로 사이드카를 실패시키지 않는다. 그 실패는 종료 중 owner close 전에 terminal service 연결을 끝내, service가 애플리케이션보다 오래 남았다.
 - F118: 창 검사가 시작하는 요청과 status 대기마다 `step <app> +<seconds> s <step>`을 써서, test 시간 제한으로 끝난 검사가 실행하던 단계를 알려 준다.
 - F115: `document_press_test`가 문서 영역의 첫 누름이 그 페이지에 닿는지 검사한다.

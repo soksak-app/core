@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F117.1: the specifications state that a plugin operation applies at once: the host replaces changed standard input and output sidecars, each window reloads its page after the questions of modified tabs, the card state `restart` becomes `reload`, `core.plugins` reports `updates`, and a terminal service of another version is reported as `outdated` in `host.sidecars` and replaced when its sessions end or through `core.plugins.replace`. The implementation is pending in F117.2 to F117.5.
 - F119: both hosts count the pending closes of a surface, so a surface that is closed again before the sidecar answered no longer fails the sidecar with "unexpected close answer"; that failure had ended the terminal service connection during a quit before the owner close, and the service outlived the application.
 - F118: a window check writes each request and status wait it starts as `step <app> +<seconds> s <step>`, so a check that its test time limit ends names the step that ran.
 - F115: `document_press_test` checks that the first press on a document region reaches its page.
