@@ -152,7 +152,7 @@
 
 ## files
 
-`@soksak/sidecar-files`(repository `../sidecars/files`)는 `make build`로 `build/soksak-files`를 빌드하고 세션의 `root` 안의 디렉터리를 나열하고 감시한다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/files`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 디렉터리 감시. macOS는 디렉터리에 kqueue `EVFILT_VNODE` 필터를 걸어 감시하고, Linux와 Windows는 `watching directories is not implemented on <os>`를 반환한다. 세션은 감시하는 경로만 상태로 갖는다. 사이드카는 사이드카 출력 줄 한도와 같은 67108864 byte까지의 요청 줄을 읽고, 답을 HTML escape 없이 쓴다. JSON이 최대 여섯 배로 escape한 8 MiB 텍스트는 그 한도 안에 있다.
+`@soksak/sidecar-files`(repository `../sidecars/files`)는 `make build`로 `build/soksak-files`를 빌드하고 세션의 `root` 안의 디렉터리를 나열하고 감시한다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/files`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 디렉터리 감시. macOS는 디렉터리나 일반 파일에 kqueue `EVFILT_VNODE` 필터를 걸어 감시하고, Linux는 디렉터리를 inotify로 감시하며 일반 파일은 `watching files is not implemented on linux`로 실패하고, Windows는 `watching directories is not implemented on windows`로 실패한다. 세션은 감시하는 경로만 상태로 갖는다. 사이드카는 사이드카 출력 줄 한도와 같은 67108864 byte까지의 요청 줄을 읽고, 답을 HTML escape 없이 쓴다. JSON이 최대 여섯 배로 escape한 8 MiB 텍스트는 그 한도 안에 있다.
 
 | 요청 본문 | 답 본문 |
 | --- | --- |
