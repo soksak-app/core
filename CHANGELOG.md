@@ -4,7 +4,7 @@
 
 ## Unreleased
 
-- F108: every declared version is 0.0.8.
+- F108: every declared version is 0.0.8, and core 0.0.8 is released.
 - F102.1.7: hosts serve the shared modules of extension points at `/shared/<plugin id>.<point>/<specifier>.js`, so the Tauri webview loads them as JavaScript.
 - F102.11: core commands no longer wait without end for a tab whose surface composition is `dom`.
 - F102.8: the window check `e2e/editor.test.mjs` opens a file from the tree in the editor plugin and checks saving, the tab error, reloading and the close question on both hosts; the workspace registry includes the editor plugin.
