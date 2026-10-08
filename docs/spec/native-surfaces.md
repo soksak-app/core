@@ -91,7 +91,7 @@ There are two kinds of region suppliers:
 
 ## Input over native views
 
-A native view is placed on the DOM: it draws the DOM element it is placed on and does not own that element's input. Input over it is decided by the page for the DOM element under the point, as if the native view were absent:
+A native view is placed on the DOM: it draws the DOM element it is placed on and does not own that element's input. The page decides input over it for the DOM element under the point, as if the native view were absent:
 
 - Pointer and wheel events pass through image regions to the page; the page decides their meaning, including the cursor.
 - A native view registers no cursor rectangles and no dragged types.

@@ -180,8 +180,12 @@ test("modal parity Red is dated and followed by current F10.2 evidence", { timeo
   );
 });
 
-test("F0.1 evidence identifies its committed build", { timeout: 1000 }, () => {
+test("F0.1 evidence identifies its build by its checklist ID", { timeout: 1000 }, () => {
   assert.deepEqual(auditCommittedEvidenceWording(), []);
+  assert.match(
+    auditCommittedEvidenceWording("- [o] F0.1 — Unblock native input measurement. Package and structural checks passed for the build.")[0],
+    /by its checklist ID/,
+  );
   assert.match(
     auditCommittedEvidenceWording("- [o] F0.1 — Unblock native input measurement. Package and structural checks pass on the current dirty implementation.")[0],
     /current dirty implementation/,

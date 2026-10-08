@@ -4,6 +4,7 @@ SHELL := /bin/sh
 
 docs-check:
 	@node scripts/check-docs.mjs
+	@node scripts/check-records.mjs
 
 # 문서와 설정 주석이 저장소에 관한 사실만 적는지 검사한다(AGENTS.md Documentation).
 records-check:

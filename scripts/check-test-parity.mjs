@@ -244,8 +244,8 @@ const FEATURE_LINKS = [
   {
     id: "G1.3-5",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditCommittedEvidenceWording" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "F0.1 evidence identifies its committed build" }],
-    expected: "F0.1 evidence identifies the committed build used for its host result and does not claim that the current worktree is dirty.",
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "F0.1 evidence identifies its build by its checklist ID" }],
+    expected: "F0.1 evidence identifies the build used for its host result by its checklist ID and does not claim that the current worktree is dirty.",
     levels: ["unit"],
   },
   {
@@ -2752,7 +2752,8 @@ export function auditCommittedEvidenceWording(checklistSource = readFileSync(`${
   const line = checklistSource.split("\n").find((entry) => entry.includes("F0.1 — Unblock native input measurement"));
   if (!line) return ["F0.1 evidence line is missing"];
   if (line.includes("current dirty implementation")) return ["F0.1 evidence still claims a current dirty implementation"];
-  if (!line.includes("commit `7a3cee6`")) return ["F0.1 evidence does not identify its committed build"];
+  // 기록은 commit id 를 적지 않는다(AGENTS.md Documentation). 증거는 자기 build 를 체크리스트 ID 로 가리킨다.
+  if (!line.includes("this F0.1 change")) return ["F0.1 evidence does not identify its build by its checklist ID"];
   return [];
 }
 

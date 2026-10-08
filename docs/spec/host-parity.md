@@ -2,7 +2,7 @@
 
 [한국어](host-parity.ko.md)
 
-The two application hosts (`tauriv2`, `wailsv3`) implement the same product. Parity between them is not a review opinion: each proposition below is decided by `make host-parity-check` (`scripts/check-host-parity.mjs`), which reads both hosts' sources and fails on any difference. A legitimate difference does not relax a proposition; it is a change to the proposition itself, made in this document together with the correction.
+The two application hosts (`tauriv2`, `wailsv3`) implement the same product. Parity between them is not a review opinion: `make host-parity-check` (`scripts/check-host-parity.mjs`) decides each proposition below; it reads both hosts' sources and fails on any difference. A legitimate difference does not relax a proposition; it is a change to the proposition itself, made in this document together with the correction.
 
 ## Propositions
 

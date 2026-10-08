@@ -46,7 +46,7 @@ The host also atomically creates `<config-dir>/process.lock` before listening. I
 | `executable` | Absolute path of the host executable with symbolic links resolved |
 | `started` | Start time in ISO 8601 |
 
-The host removes the file and its socket on exit, including an exit requested by a termination signal (SIGTERM, SIGINT, SIGHUP), which runs the same quit as `host.quit`. A process that ends without that exit, such as one killed with SIGKILL, leaves its socket; the next host of the same application removes sockets named `<application>-<pid>.sock` whose process is no longer running before it listens. A client reads the file to connect. When the process with `pid` is not running, the client reports an error and does not connect.
+The host removes the file and its socket on exit, including an exit that a termination signal (SIGTERM, SIGINT, SIGHUP) starts, which runs the same quit as `host.quit`. A process that ends without that exit, such as one killed with SIGKILL, leaves its socket; the next host of the same application removes sockets named `<application>-<pid>.sock` whose process is no longer running before it listens. A client reads the file to connect. When the process with `pid` is not running, the client reports an error and does not connect.
 
 ## Framing
 
