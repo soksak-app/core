@@ -22,6 +22,8 @@ test("record checks report each statement that is not a fact about the repositor
     ["Withdrawn on 2026-10-05 by the user's decision for R2-4-5.", "account of who found or requested"],
     ["2026-10-05 사용자 결정에 따라 철회한다.", "account of who found or requested"],
     ["사용자가 보고한 스크롤바를 관측했다.", "account of who found or requested"],
+    ["2026-10-03 core G1.4-100이 발견했다: 연결은 계속 썼다.", "account of who found or requested"],
+    ["2026-10-04 사용자가 631 point 터미널에서 오류를 보고했다.", "account of who found or requested"],
     ["`@soksak/plugin-api` is pinned to core `75709f2a`.", "commit reference"],
     ["`drawList` (core F67, pin 5b0107ec) keeps the elements.", "commit reference"],
     ["It passes on this Mac.", "local environment"],
