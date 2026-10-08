@@ -20,6 +20,7 @@ let list = null;
 let error = null;
 let view = null;
 let text = null;
+let image = null;
 
 /** The path of the state file that opening wrote, or null. */
 let recorded = null;
@@ -85,10 +86,7 @@ function draw() {
     facts.textContent = `${sizeText(file.size)} · ${timeText(file.modified)}`;
     const acts = document.createElement("span");
     acts.className = "dbg-row__acts";
-    // A capture is not text, so its row has no 보기.
-    if (!file.path.startsWith("logs/captures/")) {
-      acts.append(button(`view:${file.path}`, "core.debug.view", "보기", "core.debug.view", { path: file.path }));
-    }
+    acts.append(button(`view:${file.path}`, "core.debug.view", "보기", "core.debug.view", { path: file.path }));
     acts.append(button(`save:${file.path}`, "core.debug.save", "저장", "core.debug.save", { path: file.path }));
     row.append(path, facts, acts);
     list.appendChild(row);
@@ -153,6 +151,7 @@ function makeCard() {
       '<div class="dbg-card__view" hidden>' +
         '<div class="dbg-card__bar"><span class="dbg-card__path"></span><span class="dbg-card__cut" hidden>앞부분 생략</span></div>' +
         '<pre class="dbg-card__text" data-expose="core.debug.text"></pre>' +
+        '<img class="dbg-card__image" data-expose="core.debug.image" alt="" hidden>' +
       '</div>' +
     '</div>';
   el.querySelector(".set-actions").append(button("save-all", "core.debug.save-all", "모두 저장", "core.debug.save-all", {}));
@@ -201,6 +200,7 @@ export async function openDebug() {
   error = card.querySelector(".dbg-card__error");
   view = card.querySelector(".dbg-card__view");
   text = view.querySelector(".dbg-card__text");
+  image = view.querySelector(".dbg-card__image");
   viewing = null;
   recorded = null;
   entries = [];
@@ -243,6 +243,7 @@ export function closeDebug() {
   error = null;
   view = null;
   text = null;
+  image = null;
   viewing = null;
 }
 
@@ -252,8 +253,12 @@ export async function viewDebugFile(path) {
   failure = null;
   try {
     const read = await debug.read({ path });
-    text.textContent = read.text;
-    viewing = { path: read.path, size: read.size, truncated: read.truncated, length: read.text.length };
+    text.textContent = read.kind === "text" ? read.text : "";
+    text.hidden = read.kind !== "text";
+    image.hidden = read.kind !== "image";
+    if (read.kind === "image") image.src = read.image;
+    else image.removeAttribute("src");
+    viewing = { path: read.path, size: read.size, truncated: read.truncated, kind: read.kind, length: read.text.length };
   } catch (reason) {
     fail("view", reason);
     throw reason;
@@ -267,6 +272,7 @@ export function listDebugFiles() {
   if (!card) throw new Error("the debug view is not open");
   viewing = null;
   text.textContent = "";
+  image.removeAttribute("src");
   draw();
 }
 

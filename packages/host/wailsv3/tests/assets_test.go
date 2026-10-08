@@ -27,3 +27,13 @@ func TestMissingAssetsReportEachPathOnce(t *testing.T) {
 		t.Fatalf("reported %v, want %v", reported, want)
 	}
 }
+
+// contract: assets.missing.runtime-optional-file-is-not-reported
+func TestMissingAssetsDoNotReportTheOptionalFileOfTheRuntime(t *testing.T) {
+	var reported []string
+	handler := host.MissingAssets(http.NotFoundHandler(), func(path string) { reported = append(reported, path) })
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/wails/custom.js", nil))
+	if len(reported) != 0 {
+		t.Fatalf("reported %v", reported)
+	}
+}

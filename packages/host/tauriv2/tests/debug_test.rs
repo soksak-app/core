@@ -113,11 +113,12 @@ fn debug_read_returns_the_end_of_a_text_file() {
     assert_eq!(
         (
             read.path.as_str(),
+            read.kind,
             read.size,
             read.truncated,
             read.text.as_str()
         ),
-        ("logs/application.log", 8, false, "started\n")
+        ("logs/application.log", "text", 8, false, "started\n")
     );
     // 100000 characters of three bytes: the last 262144 bytes start inside a character.
     let big = "끝".repeat(100_000);
@@ -163,4 +164,58 @@ fn debug_read_refuses_a_path_outside_logs_and_a_file_that_is_not_text() {
             "read {path}"
         );
     }
+}
+
+// contract: debug.read.returns-a-png-file-as-an-image
+#[test]
+fn debug_read_returns_a_png_file_as_an_image() {
+    let config = debug_config();
+    let folder = config.path().join("logs/captures/still-1");
+    let png = [&b"\x89PNG\r\n\x1a\n"[..], &b"data"[..]].concat();
+    std::fs::write(folder.join("window.png"), &png).unwrap();
+    let read = debug::read(config.path(), "logs/captures/still-1/window.png").unwrap();
+    assert_eq!(read.kind, "image");
+    assert_eq!(
+        read.image.as_deref(),
+        Some(format!("data:image/png;base64,{}", base64_of(&png)).as_str())
+    );
+    assert_eq!(
+        (read.size, read.truncated, read.text.as_str()),
+        (png.len() as u64, false, "")
+    );
+    std::fs::write(folder.join("fake.png"), "not a png").unwrap();
+    assert_eq!(
+        debug::read(config.path(), "logs/captures/still-1/fake.png")
+            .err()
+            .as_deref(),
+        Some("debug: logs/captures/still-1/fake.png is not a PNG file")
+    );
+    let large = [&b"\x89PNG\r\n\x1a\n"[..], &vec![0u8; 16 * 1024 * 1024][..]].concat();
+    std::fs::write(folder.join("large.png"), large).unwrap();
+    assert_eq!(
+        debug::read(config.path(), "logs/captures/still-1/large.png")
+            .err()
+            .as_deref(),
+        Some("debug: logs/captures/still-1/large.png is larger than 16 MB")
+    );
+}
+
+/// The standard base64 text of bytes, computed here without the code under test.
+fn base64_of(bytes: &[u8]) -> String {
+    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let n = chunk
+            .iter()
+            .enumerate()
+            .fold(0u32, |acc, (i, b)| acc | (*b as u32) << (16 - 8 * i));
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(TABLE[((n >> (18 - 6 * i)) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
 }

@@ -6,14 +6,18 @@ import (
 	"sync"
 )
 
+// runtimeOptionalFile is a file that the Wails runtime requests and that the application does not provide.
+const runtimeOptionalFile = "/wails/custom.js"
+
 // MissingAssets wraps next and calls report with the path of each page file that next answers with 404, once for
-// each path. A path without a file extension is a document route and is not reported (docs/spec/diagnostics.md).
+// each path. A path without a file extension is a document route and the optional file of the Wails runtime is not a page file;
+// neither is reported (docs/spec/diagnostics.md).
 func MissingAssets(next http.Handler, report func(path string)) http.Handler {
 	var mutex sync.Mutex
 	reported := map[string]bool{}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(&statusWriter{ResponseWriter: w, notFound: func() {
-			if path.Ext(r.URL.Path) == "" {
+			if path.Ext(r.URL.Path) == "" || r.URL.Path == runtimeOptionalFile {
 				return
 			}
 			mutex.Lock()

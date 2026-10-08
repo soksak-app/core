@@ -343,9 +343,16 @@ for (const app of Object.values(APPS)) {
     const stateText = readFileSync(join(s.app.configDir, opened.recorded), "utf8");
     await s.run("core.debug.view", { path: opened.recorded });
     const viewed = await s.until("core.debug", (debug) => debug.viewing !== null, "the debug view did not show the file");
-    assert.deepEqual(viewed.viewing, { path: opened.recorded, size: Buffer.byteLength(stateText), truncated: false, length: stateText.length });
+    assert.deepEqual(viewed.viewing, { path: opened.recorded, size: Buffer.byteLength(stateText), truncated: false, kind: "text", length: stateText.length });
     await s.run("core.debug.list");
     await s.until("core.debug", (debug) => debug.viewing === null, "the debug view did not return to the list");
+    // A diagnostic build writes a still capture of each window when the view opens; viewing it shows an image.
+    const capture = opened.entries.find((file) => file.path.endsWith(".png"));
+    assert.ok(capture, `no capture is listed: ${JSON.stringify(opened.entries.map((file) => file.path))}`);
+    await s.run("core.debug.view", { path: capture.path });
+    const image = await s.until("core.debug", (debug) => debug.viewing?.kind === "image", "the debug view did not show the capture");
+    assert.deepEqual({ path: image.viewing.path, size: image.viewing.size, length: image.viewing.length }, { path: capture.path, size: capture.size, length: 0 });
+    await s.run("core.debug.list");
     await assert.rejects(s.run("core.debug.save", { path: "settings.json" }),
       /debug: settings.json is not a file under logs\//);
     s.expectError(/^error: .*debug: settings.json is not a file under logs\//);

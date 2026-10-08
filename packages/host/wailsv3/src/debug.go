@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -109,13 +110,21 @@ func DebugCopy(configDir, relative, destination string) error {
 // debugReadLimit is the number of bytes of the end of a file that DebugRead returns.
 const debugReadLimit = 262144
 
+// debugImageLimit is the largest PNG file that DebugRead returns, in bytes.
+const debugImageLimit = 16 * 1024 * 1024
+
+// debugPNGSignature starts every PNG file.
+const debugPNGSignature = "\x89PNG\r\n\x1a\n"
+
 // DebugReadResult is the answer of the debugRead call: the content of a text file, or its last debugReadLimit bytes
-// from a character boundary with Truncated true.
+// from a character boundary with Truncated true, or the data address of a PNG file.
 type DebugReadResult struct {
 	Path      string `json:"path"`
 	Size      int64  `json:"size"`
 	Truncated bool   `json:"truncated"`
+	Kind      string `json:"kind"`
 	Text      string `json:"text"`
+	Image     string `json:"image,omitempty"`
 }
 
 // DebugRead returns the end of the text file relative under <config-dir>/logs/. A file whose content is not UTF-8 text
@@ -135,6 +144,9 @@ func DebugRead(configDir, relative string) (DebugReadResult, error) {
 		return DebugReadResult{}, fmt.Errorf("debug: %s: %w", relative, err)
 	}
 	size := info.Size()
+	if strings.EqualFold(path.Ext(relative), ".png") {
+		return debugReadImage(file, relative, size)
+	}
 	start := int64(0)
 	if size > debugReadLimit {
 		start = size - debugReadLimit
@@ -154,7 +166,22 @@ func DebugRead(configDir, relative string) (DebugReadResult, error) {
 	if !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 {
 		return DebugReadResult{}, fmt.Errorf("debug: %s is not text", relative)
 	}
-	return DebugReadResult{Path: relative, Size: size, Truncated: start > 0, Text: string(data)}, nil
+	return DebugReadResult{Path: relative, Size: size, Truncated: start > 0, Kind: "text", Text: string(data)}, nil
+}
+
+// debugReadImage returns the PNG file as a data address.
+func debugReadImage(file *os.File, relative string, size int64) (DebugReadResult, error) {
+	if size > debugImageLimit {
+		return DebugReadResult{}, fmt.Errorf("debug: %s is larger than 16 MB", relative)
+	}
+	data := make([]byte, size)
+	if _, err := io.ReadFull(file, data); err != nil {
+		return DebugReadResult{}, fmt.Errorf("debug: %s: %w", relative, err)
+	}
+	if !bytes.HasPrefix(data, []byte(debugPNGSignature)) {
+		return DebugReadResult{}, fmt.Errorf("debug: %s is not a PNG file", relative)
+	}
+	return DebugReadResult{Path: relative, Size: size, Kind: "image", Image: "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)}, nil
 }
 
 // DebugWriteLogsTar writes every file under <config-dir>/logs/ into a gzip-compressed tar file at destination, with

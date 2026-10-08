@@ -3,6 +3,7 @@ package host_test
 import (
 	"archive/tar"
 	"compress/gzip"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"os"
@@ -136,7 +137,7 @@ func TestDebugReadReturnsTheEndOfATextFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if read.Path != "logs/application.log" || read.Size != 8 || read.Truncated || read.Text != "started\n" {
+	if read.Path != "logs/application.log" || read.Kind != "text" || read.Size != 8 || read.Truncated || read.Text != "started\n" {
 		t.Fatalf("read %+v", read)
 	}
 	// 100000 characters of three bytes: the last 262144 bytes start inside a character.
@@ -172,5 +173,39 @@ func TestDebugReadRefusesAPathOutsideLogsAndAFileThatIsNotText(t *testing.T) {
 		if _, err := host.DebugRead(config, path); err == nil || err.Error() != want {
 			t.Fatalf("read %s: %v, want %q", path, err, want)
 		}
+	}
+}
+
+// contract: debug.read.returns-a-png-file-as-an-image
+func TestDebugReadReturnsAPNGFileAsAnImage(t *testing.T) {
+	config := debugConfig(t)
+	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("data")...)
+	if err := os.WriteFile(filepath.Join(config, "logs", "captures", "still-1", "window.png"), png, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	read, err := host.DebugRead(config, "logs/captures/still-1/window.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
+	if read.Kind != "image" || read.Image != want || read.Size != int64(len(png)) || read.Truncated || read.Text != "" {
+		t.Fatalf("read %+v", read)
+	}
+	// The fixture file of debugConfig is named .png and does not start with the signature.
+	if _, err := host.DebugRead(config, "logs/captures/still-1/window.png"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(config, "logs", "captures", "still-1", "fake.png"), []byte("not a png"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.DebugRead(config, "logs/captures/still-1/fake.png"); err == nil || err.Error() != "debug: logs/captures/still-1/fake.png is not a PNG file" {
+		t.Fatalf("fake png: %v", err)
+	}
+	large := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 16*1024*1024)...)
+	if err := os.WriteFile(filepath.Join(config, "logs", "captures", "still-1", "large.png"), large, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.DebugRead(config, "logs/captures/still-1/large.png"); err == nil || err.Error() != "debug: logs/captures/still-1/large.png is larger than 16 MB" {
+		t.Fatalf("large png: %v", err)
 	}
 }

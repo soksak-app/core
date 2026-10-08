@@ -99,7 +99,43 @@ pub struct ReadResult {
     pub path: String,
     pub size: u64,
     pub truncated: bool,
+    pub kind: &'static str,
     pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
+}
+
+/// The largest PNG file that [`read`] returns, in bytes.
+const IMAGE_LIMIT: u64 = 16 * 1024 * 1024;
+
+/// Starts every PNG file.
+const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
+
+/// Returns the PNG file as a data address.
+fn read_image(file: File, relative: &str, size: u64) -> Result<ReadResult, String> {
+    use base64::Engine;
+    use std::io::Read;
+    if size > IMAGE_LIMIT {
+        return Err(format!("debug: {relative} is larger than 16 MB"));
+    }
+    let mut data = Vec::new();
+    file.take(size)
+        .read_to_end(&mut data)
+        .map_err(|error| format!("debug: {relative}: {error}"))?;
+    if !data.starts_with(PNG_SIGNATURE) {
+        return Err(format!("debug: {relative} is not a PNG file"));
+    }
+    Ok(ReadResult {
+        path: relative.to_string(),
+        size,
+        truncated: false,
+        kind: "image",
+        text: String::new(),
+        image: Some(format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(&data)
+        )),
+    })
 }
 
 /// Returns the end of the text file `relative` under `<config-dir>/logs/`. A file whose content is not UTF-8 text is
@@ -110,6 +146,12 @@ pub fn read(config: &Path, relative: &str) -> Result<ReadResult, String> {
     let failed = |error: std::io::Error| format!("debug: {relative}: {error}");
     let mut file = File::open(&full).map_err(failed)?;
     let size = file.metadata().map_err(failed)?.len();
+    if Path::new(relative)
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("png"))
+    {
+        return read_image(file, relative, size);
+    }
     let start = size.saturating_sub(READ_LIMIT);
     file.seek(SeekFrom::Start(start)).map_err(failed)?;
     let mut data = Vec::new();
@@ -131,7 +173,9 @@ pub fn read(config: &Path, relative: &str) -> Result<ReadResult, String> {
         path: relative.to_string(),
         size,
         truncated: start > 0,
+        kind: "text",
         text: text.to_string(),
+        image: None,
     })
 }
 
