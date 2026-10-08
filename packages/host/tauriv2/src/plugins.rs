@@ -33,7 +33,7 @@ pub struct Plugins {
     core: String,
     platform: String,
     running: Mutex<()>,
-    /// 작업의 변경을 사이드카에 적용한다(docs/spec/installation.md#applying-a-change).
+    /// Applies an operation to the sidecars (docs/spec/installation.md#applying-a-change).
     apply: Box<dyn Fn() -> Result<(), String> + Send + Sync>,
     changed: Box<dyn Fn(Changed) + Send + Sync>,
 }
@@ -117,7 +117,8 @@ impl Plugins {
             )?;
             (result, (self.apply)())
         };
-        // installed.json 이 바뀌었으므로 적용이 실패해도 창에 알린다. 적용의 실패는 작업의 오류다.
+        // installed.json changed, so the windows are notified also when the apply step fails; that failure is the
+        // error of the operation.
         let action = request.action;
         (self.changed)(Changed {
             action: action.clone(),

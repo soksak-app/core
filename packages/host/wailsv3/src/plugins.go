@@ -32,7 +32,7 @@ type PluginsChanged struct {
 var errPluginOperationRunning = errors.New("another plugin operation is running")
 
 // Plugins 는 설정 폴더의 plugin 설치를 command line 의 installer library 로 바꾼다.
-// 작업은 한 번에 하나만 실행하고, 바꾼 뒤 apply 로 sidecar 에 적용한 다음 changed 로 알린다
+// It runs one operation at a time, applies a change to the sidecars with apply and then notifies changed
 // (docs/spec/installation.md#applying-a-change).
 type Plugins struct {
 	configDir string
@@ -76,7 +76,8 @@ func (p *Plugins) Run(request PluginsRunRequest) (any, error) {
 		p.running.Unlock()
 		return nil, err
 	}
-	// installed.json 이 바뀌었으므로 적용이 실패해도 창에 알린다. 적용의 실패는 작업의 오류다.
+	// installed.json changed, so the windows are notified also when the apply step fails; that failure is the error of
+	// the operation.
 	applied := p.apply()
 	p.running.Unlock()
 	p.changed(PluginsChanged{Action: request.Action, Plugin: plugin})

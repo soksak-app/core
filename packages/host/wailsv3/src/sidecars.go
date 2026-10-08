@@ -128,8 +128,8 @@ type Sidecars struct {
 	running      map[string]*sidecar
 	// starting 은 시작 중인 사이드카다. 시작은 잠금 밖에서 하며, 끝나면 그 채널을 닫는다.
 	starting map[string]chan struct{}
-	// closing 은 사이드카마다 closed 를 보냈고 답을 받지 않은 표면과 그 닫기의 수다. 같은 표면을 답이 오기 전에 다시
-	// 닫으면 답도 닫기마다 온다.
+	// closing holds, for each sidecar, the surfaces whose closed was sent and not answered, with the number of those
+	// closes. A surface closed again before the answer receives one answer per close.
 	closing map[string]map[string]int
 	// ClosingChanged 는 closing 이 바뀐 뒤 잠금 밖에서 호출된다. 호스트가 host.sidecars 를 알린다.
 	ClosingChanged func()
@@ -194,17 +194,18 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 	return c, nil
 }
 
-// Declare 는 설치된 sidecar 를 선언한다(docs/spec/installation.md#applying-a-change). 실행 파일이 바뀐 표준 입출력
-// sidecar 와 더 이상 선언하지 않는 표준 입출력 sidecar 는 실행 중인 프로세스를 중지 규칙대로 멈추므로, 다음 Send 가 새
-// 실행 파일을 시작한다. 지속 service 는 다음 시작부터 새 실행 파일을 쓴다. 선언의 형식이 틀리면 아무것도 바꾸지 않고
-// 실패한다.
+// Declare declares the installed sidecars (docs/spec/installation.md#applying-a-change). The running process of a
+// standard input and output sidecar whose executable changed or that is no longer declared stops by the stop rules, so
+// the next Send starts the new executable. A persistent service uses the new executable from its next start. An
+// invalid declaration fails without a change.
 func (c *Sidecars) Declare(declarations []SidecarDeclaration) error {
 	changed, err := c.declare(declarations)
 	if err != nil {
 		return err
 	}
 	c.mu.Lock()
-	// 시작 중인 sidecar 는 끝나면 등록되므로, 그 시작을 기다린 뒤 실행 중인 목록을 읽는다.
+	// A sidecar that is starting registers when its start ends, so the start is awaited before the running list is
+	// read.
 	for {
 		var wait chan struct{}
 		for _, name := range changed {
@@ -236,8 +237,8 @@ func (c *Sidecars) Declare(declarations []SidecarDeclaration) error {
 	return nil
 }
 
-// declare 는 declarations 로 선언을 바꾸고, 실행 파일이 바뀌었거나 선언에서 빠진 이미 선언한 sidecar 의 이름을 돌려준다.
-// 형식이 틀린 선언이 하나라도 있으면 아무것도 바꾸지 않는다.
+// declare replaces the declarations with declarations and returns the declared sidecars whose executable changed or
+// that are no longer declared. Nothing changes when a declaration is invalid.
 func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) {
 	c.declarations.Lock()
 	defer c.declarations.Unlock()
@@ -497,7 +498,7 @@ func (c *Sidecars) closeAnswered(process *sidecar, surface string, closed bool, 
 	return ""
 }
 
-// take 는 counts 에서 key 의 수를 하나 줄이고, 줄였으면 true 를 반환한다. 0 이 된 key 는 지운다.
+// take lowers the count of key in counts by one and returns true when it did; a key whose count reaches 0 is removed.
 func take(counts map[string]int, key string) bool {
 	if counts[key] == 0 {
 		return false
@@ -567,8 +568,8 @@ func (c *Sidecars) Stop() {
 	c.stopProcesses(processes)
 }
 
-// detach 는 멈출 프로세스를 실행 목록에서 뺀다. 표준 입출력 사이드카는 끝나므로 답하지 않은 닫기를 stopClosing 으로
-// 옮긴다. c.mu 를 쥔 채 호출하며, closing 을 바꿨으면 true 를 반환한다.
+// detach removes a process that stops from the running list. A standard input and output sidecar ends, so its
+// unanswered closes move to stopClosing. It is called with c.mu held and returns true when closing changed.
 func (c *Sidecars) detach(name string, process *sidecar) bool {
 	delete(c.running, name)
 	if process.persistent {
@@ -578,7 +579,7 @@ func (c *Sidecars) detach(name string, process *sidecar) bool {
 	return c.forgetClosing(name)
 }
 
-// stopProcesses 는 실행 목록에서 뺀 processes 를 중지 규칙대로 멈추고 끝날 때까지 기다린다
+// stopProcesses stops processes, which are out of the running list, by the stop rules and waits until they end
 // (docs/spec/sidecars.md#declaration-and-startup).
 func (c *Sidecars) stopProcesses(processes []*sidecar) {
 	// 모든 사이드카에 대해 채널을 닫아 EOF 신호를 보낸다.

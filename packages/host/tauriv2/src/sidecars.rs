@@ -188,7 +188,7 @@ fn close_answer<O: Owner>(
     Ok(true)
 }
 
-/// counts 에서 key 의 수를 하나 줄이고, 줄였으면 true 를 반환한다. 0 이 된 key 는 지운다.
+/// Lowers the count of key in counts by one and returns true when it did; a key whose count reaches 0 is removed.
 fn take(counts: &mut std::collections::BTreeMap<String, usize>, key: &str) -> bool {
     let Some(count) = counts.get_mut(key) else {
         return false;
@@ -200,15 +200,16 @@ fn take(counts: &mut std::collections::BTreeMap<String, usize>, key: &str) -> bo
     true
 }
 
-/// 멈출 표준 입출력 사이드카 name 의 표면과 답하지 않은 닫기를 stopping 에 옮긴다. 읽기 스레드는 멈추는 동안의
-/// 출력을 이 기록으로 판정한다. 실행 목록에서 빼는 것은 호출자다. closing 을 바꿨으면 그 알림을 돌려준다.
+/// Moves the surfaces and the unanswered closes of the standard input and output sidecar name that stops into
+/// stopping, by which its reader judges the output while it stops. The caller removes it from the running list.
+/// Returns the closing notification when closing changed.
 fn detach_stdio<O>(state: &mut State<O>, name: &str) -> Option<ClosingChanged> {
     let surfaces = state.running[name].surfaces.iter().cloned().collect();
     let closing = state
         .closing
         .get(name)
         .cloned()
-        // 기본값: closing 에 이 사이드카가 없으면 답을 기다리는 닫기가 없으므로 뺀 닫기도 없다.
+        // default: without an entry in closing the sidecar has no unanswered close, so none is moved.
         .unwrap_or_default();
     state.stopping.insert(
         name.to_string(),
@@ -394,8 +395,8 @@ struct State<O> {
     running: HashMap<String, Process>,
     /// 시작 중인 사이드카. 시작은 잠금 밖에서 하며, 끝나면 Core::started 로 알린다.
     starting: HashSet<String>,
-    /// 사이드카마다 closed 를 보냈고 답을 받지 않은 표면과 그 닫기의 수. 같은 표면을 답이 오기 전에 다시 닫으면 답도
-    /// 닫기마다 온다.
+    /// For each sidecar, the surfaces whose closed was sent and not answered, with the number of those closes. A
+    /// surface closed again before the answer receives one answer per close.
     closing: std::collections::BTreeMap<String, std::collections::BTreeMap<String, usize>>,
     /// closing 이 바뀐 뒤 잠금 밖에서 부르는 알림. 호스트가 host.sidecars 를 알린다.
     closing_changed: Option<ClosingChanged>,
@@ -420,7 +421,8 @@ struct State<O> {
 struct Stopping {
     /// 이 프로세스에 요청을 보낸 표면. 멈추는 동안 그 표면의 메시지는 위반이 아니다.
     surfaces: HashSet<String>,
-    /// stop 이 closing 목록에서 뺀 닫기와 그 수. 사이드카는 끝나면서 이 닫기에 답하므로 그 답은 위반이 아니다.
+    /// The closes, with their number, that stop moved out of closing. The sidecar answers them on its way out, so
+    /// such an answer is not a violation.
     closing: std::collections::BTreeMap<String, usize>,
     /// 멈추는 동안 프로토콜을 어겨 읽기를 멈췄다. 닫은 파이프가 일으킨 종료는 보고하지 않는다.
     violated: bool,
@@ -508,15 +510,16 @@ impl<O: Owner> Sidecars<O> {
         Ok(sidecars)
     }
 
-    /// 설치된 사이드카를 선언한다(docs/spec/installation.md#applying-a-change). 실행 파일이 바뀐 표준 입출력
-    /// 사이드카와 더 이상 선언하지 않는 표준 입출력 사이드카는 실행 중인 프로세스를 중지 규칙대로 멈추므로, 다음 send 가
-    /// 새 실행 파일을 시작한다. 지속 service 는 다음 시작부터 새 실행 파일을 쓴다. 선언의 형식이 틀리면 아무것도 바꾸지
-    /// 않고 실패한다.
+    /// Declares the installed sidecars (docs/spec/installation.md#applying-a-change). The running process of a
+    /// standard input and output sidecar whose executable changed or that is no longer declared stops by the stop
+    /// rules, so the next send starts the new executable. A persistent service uses the new executable from its next
+    /// start. An invalid declaration fails without a change.
     pub fn declare(&self, declarations: &[SidecarDeclaration]) -> Result<(), String> {
         let changed = self.replace_declarations(declarations)?;
         let (processes, closing_changed) = {
             let mut state = self.core.state.lock().expect("sidecar state");
-            // 시작 중인 사이드카는 끝나면 등록되므로, 그 시작을 기다린 뒤 실행 중인 목록을 읽는다.
+            // A sidecar that is starting registers when its start ends, so the start is awaited before the running
+            // list is read.
             while changed.iter().any(|name| state.starting.contains(name)) {
                 state = self.core.started.wait(state).expect("sidecar state");
             }
@@ -543,8 +546,8 @@ impl<O: Owner> Sidecars<O> {
         Ok(())
     }
 
-    /// declarations 로 선언을 바꾸고, 실행 파일이 바뀌었거나 선언에서 빠진 이미 선언한 사이드카의 이름을 돌려준다.
-    /// 형식이 틀린 선언이 하나라도 있으면 아무것도 바꾸지 않는다.
+    /// Replaces the declarations with declarations and returns the declared sidecars whose executable changed or that
+    /// are no longer declared. Nothing changes when a declaration is invalid.
     fn replace_declarations(
         &self,
         declarations: &[SidecarDeclaration],
@@ -992,7 +995,7 @@ impl<O: Owner> Sidecars<O> {
         self.stop_processes(processes);
     }
 
-    /// 실행 목록에서 뺀 processes 를 중지 규칙대로 멈추고 끝날 때까지 기다린다
+    /// Stops processes, which are out of the running list, by the stop rules and waits until they end
     /// (docs/spec/sidecars.md#declaration-and-startup).
     fn stop_processes(&self, processes: Vec<(String, Process)>) {
         // 모든 프로세스를 병렬로 기다린다.
@@ -2065,8 +2068,8 @@ fn fail<O: Owner>(
 ) {
     let (process, owned, changed) = {
         let mut state = state.lock().expect("sidecar state");
-        // 선언 교체가 이 프로세스를 멈추고 같은 이름의 새 프로세스를 시작했을 수 있으므로, 실행 중인 프로세스가 이 읽기
-        // 스레드의 프로세스인지 pid 로 확인한다. 아니면 이 프로세스는 멈추는 중이다.
+        // A declaration change can stop this process and start a new one of the same name, so the pid tells whether
+        // the running process is the process of this reader; otherwise this process is stopping.
         let current = state
             .running
             .get(sidecar)

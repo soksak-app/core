@@ -15,8 +15,9 @@ export function onPluginOperations(fn) {
 }
 
 /**
- * host 가 plugins-changed 를 보내면 상태를 다시 읽고 apply 로 변경을 이 창에 적용한다(docs/spec/installation.md#applying-a-change).
- * 읽기 실패는 상태의 error 로 보고되고, 적용의 실패는 문서의 unhandledrejection 으로 오류 표시에 간다.
+ * On plugins-changed from the host, reads the state again and applies the change to this window with apply
+ * (docs/spec/installation.md#applying-a-change). A read failure is reported as the error of the state, and a failure
+ * of apply reaches the error display through the document's unhandledrejection.
  */
 export function followPluginChanges(apply) {
   if (host) host.on("plugins-changed", async () => {

@@ -97,8 +97,8 @@ func nativeError(code int, err error) error {
 func newHost(directory string) (*Host, error) {
 	h := &Host{workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{},
 		relay: NewRelay[relayTarget]()}
-	// 작업의 변경을 sidecar 에 적용한다. 바뀐 sidecar 를 교체하고 빠진 sidecar 를 멈추므로, 다시 불러온 page 가 설치된
-	// 실행 파일을 쓴다(docs/spec/installation.md#applying-a-change).
+	// apply applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page that
+	// reloads uses the installed executables (docs/spec/installation.md#applying-a-change).
 	apply := func() error {
 		declarations, err := InstalledSidecars(directory)
 		if err != nil {

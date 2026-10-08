@@ -134,9 +134,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
     // 플러그인 설정은 설정 파일의 창을 만들기 전에 실행되므로 엔드포인트를 여기서 연다.
     let endpoint = tauri::plugin::Builder::<tauri::Wry>::new("endpoint")
         .setup(|app, _api| {
-            // 종료 신호는 엔드포인트를 열기 전부터 받는다. 첫 신호는 host.quit 과 같은 일반 종료를 요청하고,
-            // 이벤트 루프가 그 요청을 처리해 준비된 창의 저장과 사이드카 중지를 마친 뒤 끝난다. 저장이 멈추면 다음
-            // 신호가 기본 동작으로 프로세스를 끝낸다(docs/spec/hosts.md).
+            // Termination signals are received from before the endpoint opens. The first one requests the normal quit
+            // that host.quit requests; the event loop runs it and ends after the ready windows saved and the sidecars
+            // stopped. When a save stalls, the next signal ends the process with the default action (docs/spec/hosts.md).
             let quit = app.clone();
             termination::on_termination(Box::new(move || quit.exit(0)))?;
             let directory = config_directory(app)?;
@@ -230,8 +230,8 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             crate::performance::disable(&directory)?;
             app.manage(workspace::Workspace::new(directory.clone()));
             let handle = app.handle().clone();
-            // 작업의 변경을 사이드카에 적용한다. 바뀐 사이드카를 교체하고 빠진 사이드카를 멈추므로, 다시 불러온 page 가
-            // 설치된 실행 파일을 쓴다(docs/spec/installation.md#applying-a-change).
+            // Applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page
+            // that reloads uses the installed executables (docs/spec/installation.md#applying-a-change).
             let applying = app.handle().clone();
             let installed = directory.clone();
             app.manage(plugins::Plugins::new(
