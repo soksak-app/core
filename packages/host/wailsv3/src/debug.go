@@ -259,7 +259,36 @@ func DebugWriteState(configDir string, at time.Time, state map[string]any) (stri
 	if err := os.WriteFile(full, data, 0o600); err != nil {
 		return "", fmt.Errorf("debug: %s: %w", relative, err)
 	}
+	if err := debugPruneStates(filepath.Dir(full)); err != nil {
+		return "", err
+	}
 	return relative, nil
+}
+
+// debugStatesKept is the number of state files that the logs folder keeps.
+const debugStatesKept = 20
+
+// debugPruneStates removes the oldest state files of the folder beyond the newest debugStatesKept. The time in the
+// name orders them.
+func debugPruneStates(folder string) error {
+	entries, err := os.ReadDir(folder)
+	if err != nil {
+		return fmt.Errorf("debug: list %s: %w", folder, err)
+	}
+	var states []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), "state-") && strings.HasSuffix(entry.Name(), ".json") {
+			states = append(states, entry.Name())
+		}
+	}
+	sort.Strings(states)
+	for len(states) > debugStatesKept {
+		if err := os.Remove(filepath.Join(folder, states[0])); err != nil {
+			return fmt.Errorf("debug: remove %s: %w", states[0], err)
+		}
+		states = states[1:]
+	}
+	return nil
 }
 
 // DebugRecordRequest is the argument of the debugRecord call: the status values that the page collected.

@@ -249,7 +249,32 @@ pub fn write_state(config: &Path, at: SystemTime, state: Value) -> Result<String
     let text = serde_json::to_vec_pretty(&Value::Object(record))
         .map_err(|error| format!("debug: state: {error}"))?;
     std::fs::write(&full, text).map_err(|error| format!("debug: {relative}: {error}"))?;
+    prune_states(full.parent().expect("logs/ is the parent"))?;
     Ok(relative)
+}
+
+/// The number of state files that the logs folder keeps.
+const STATES_KEPT: usize = 20;
+
+/// Removes the oldest state files of the folder beyond the newest [`STATES_KEPT`]. The time in the name orders them.
+fn prune_states(folder: &Path) -> Result<(), String> {
+    let mut states = Vec::new();
+    for entry in std::fs::read_dir(folder)
+        .map_err(|error| format!("debug: list {}: {error}", folder.display()))?
+    {
+        let entry = entry.map_err(|error| format!("debug: list {}: {error}", folder.display()))?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with("state-") && name.ends_with(".json") {
+            states.push(name);
+        }
+    }
+    states.sort();
+    let excess = states.len().saturating_sub(STATES_KEPT);
+    for name in &states[..excess] {
+        std::fs::remove_file(folder.join(name))
+            .map_err(|error| format!("debug: remove {name}: {error}"))?;
+    }
+    Ok(())
 }
 
 /// The argument of the debugRecord call: the status values that the page collected.

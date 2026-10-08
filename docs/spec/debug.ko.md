@@ -12,6 +12,7 @@
 
 1. page는 registry가 제공하는 모든 status, 곧 core status와 모든 표면의 status 값을 이름과 표면별로 모아 host 호출 `debugRecord({page})`로 보낸다. 읽기에 실패한 status는 그 오류와 함께 기록한다.
 2. host는 `logs/state-<time>.json`에 `{time, host, versions, windows, page}`를 쓴다. `host`는 `wailsv3`나 `tauriv2`다. `versions`는 core version, macOS version, `plugins/installed.json`의 내용을 담는다. `windows`는 창마다 `windows.list` 항목, `host.window`, `host.sidecars`, `host.screens`를 담는다. `page`는 page가 보낸 값이다. `<time>`은 UTC 시각 `YYYYMMDDTHHMMSSZ`다.
+   host는 파일을 쓴 뒤 가장 새 20개를 넘는 가장 오래된 `logs/state-<time>.json` 파일을 지우므로, 폴더는 한계 있는 수만 가진다.
 3. 진단 빌드에서 host는 각 창의 정지 캡처를 `logs/captures/`에 쓴다.
 4. host 호출은 `<config-dir>`에 대한 상태 파일의 상대 경로 `{path}`로 답한다.
 

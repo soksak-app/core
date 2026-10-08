@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F130: 두 host는 디버그 화면이 상태를 기록한 뒤 가장 새 `logs/state-<time>.json` 20개만 두고 더 오래된 것을 지운다. 그래서 logs 폴더가 열 때마다 커지지 않는다.
 - F120: Tauri host가 상주 service에 보내는 `hello`가 Wails host와 같이 애플리케이션의 설정 폴더를 `client`로 싣는다. terminal runtime 명세가 `client`를 정의한다.
 - F117.5.6: host는 교체한 상주 sidecar의 설치된 service를 옛 service의 process가 끝난 뒤에만 시작한다. 모든 빌드에서 process 종료의 커널 알림으로 기다리며, 중지 기한 안에 끝나지 않는 process는 오류 줄과 함께 교체를 실패시키고 sidecar는 오래된 채로 남는다.
 - F124.3.7: 디버그 화면이 가장 새 파일을 먼저 나열하고, 파일의 글을 가장 새 줄이 있는 끝에서 열며, 목록 단추가 있는 머리줄을 스크롤하는 pane 위에 고정한다. `core.debug`는 `scroll`을 보고한다.

@@ -439,6 +439,7 @@ fn invalid_json_closes_connection() {
 | `assets.missing.runtime-optional-file-is-not-reported` | Wails runtime이 요청하고 애플리케이션이 제공하지 않는 runtime 파일 `/wails/custom.js`는 알리지 않는다. | wailsv3 only: Wails runtime이 이 선택 파일을 설계상 요청한다 |
 | `page.process.termination-writes-an-error-line` | host가 실행되는 동안 창의 WebContent process가 끝나면 host는 그 종료마다 한 번 `error: page process: <window>: terminated`를 쓴다. 단 host가 종료하는 동안은 process를 일부러 끝내므로 쓰지 않는다. | both |
 | `debug.record.writes-the-state-file` | 기록은 주어진 상태와 UTC `time` `YYYYMMDDTHHMMSSZ`를 담은 `logs/state-<time>.json`을 쓰고 그 상대 경로로 답한다. | both |
+| `debug.record.keeps-the-newest-20-state-files` | 상태 파일을 쓴 뒤 host는 시각으로 가장 새 20개를 넘는 `logs/state-<time>.json` 파일을 지우고 `logs/`의 다른 파일은 둔다. | both |
 | `cli.identity.build-identifier` | `dev` 플래그 build는 `app.soksak.<wails 또는 tauri>.dev`를 쓰고, 진단 build를 포함한 다른 build는 `app.soksak.<wails 또는 tauri>`를 쓴다. | both |
 | `cli.command.flags-from-schema` | 선언된 command는 창, surface, 그리고 선언된 schema로 flag에서 바꾼 매개변수와 함께 `command.run`으로 실행된다. 텍스트, 숫자, 정수, boolean, enum 값, nullable type의 `null`, JSON 객체와 배열, `--`로 시작하며 `=` 뒤에 준 값이며, `--params`는 객체 전체를 준다. | both |
 | `cli.command.rejects-undeclared-or-invalid-values` | 선언되지 않은 flag, schema와 맞지 않는 값, 값이 없는 flag, 값이 따라오는 boolean, 매개변수 flag와 함께 쓴 `--params`, 선언되지 않은 command는 `command.run`을 보내기 전에 종료 상태 2로 끝난다. | both |

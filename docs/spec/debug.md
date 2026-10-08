@@ -11,7 +11,8 @@ The Help menu of both hosts has 디버그 (Debug) ([host contract](host-contract
 Opening records the state, then lists the files:
 
 1. The page collects the value of every status that its registry serves, core statuses and the statuses of every surface, by name and surface, and sends them with the host call `debugRecord({page})`. A status whose read fails is recorded with its error.
-2. The host writes `logs/state-<time>.json` with `{time, host, versions, windows, page}`: `host` is `wailsv3` or `tauriv2`; `versions` holds the core version, the macOS version and the content of `plugins/installed.json`; `windows` holds, for each window, `windows.list` entry, `host.window`, `host.sidecars` and `host.screens`; `page` is the value the page sent. `<time>` is the UTC time `YYYYMMDDTHHMMSSZ`.
+2. The host writes `logs/state-<time>.json` with `{time, host, versions, windows, page}`: `host` is `wailsv3` or `tauriv2`; `versions` holds the core version, the macOS version and the content of `plugins/installed.json`; `windows` holds, for each window, `windows.list` entry, `host.window`, `host.sidecars` and `host.screens`; `page` is the value the page sent. `<time>` is the UTC time `YYYYMMDDTHHMMSSZ`. After it writes a state file, the host removes the oldest `logs/state-<time>.json` files beyond the newest 20, so the folder keeps a bounded number of them.
+   After it writes the file, the host removes the oldest `logs/state-<time>.json` files beyond the newest 20, so the folder holds a bounded number of them.
 3. In a diagnostic build the host writes a still capture of each window to `logs/captures/`.
 4. The host call answers `{path}`, the path of the state file relative to `<config-dir>`.
 

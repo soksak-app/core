@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -207,5 +208,37 @@ func TestDebugReadReturnsAPNGFileAsAnImage(t *testing.T) {
 	}
 	if _, err := host.DebugRead(config, "logs/captures/still-1/large.png"); err == nil || err.Error() != "debug: logs/captures/still-1/large.png is larger than 16 MB" {
 		t.Fatalf("large png: %v", err)
+	}
+}
+
+// contract: debug.record.keeps-the-newest-20-state-files
+func TestDebugWriteStateKeepsTheNewest20StateFiles(t *testing.T) {
+	config := debugConfig(t)
+	// 22 earlier state files, one for each minute of the hour 00 of 2026-10-09, and a file that is not a state file.
+	for minute := 0; minute < 22; minute++ {
+		name := fmt.Sprintf("state-20261009T00%02d00Z.json", minute)
+		if err := os.WriteFile(filepath.Join(config, "logs", name), []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	at := time.Date(2026, 10, 9, 1, 0, 0, 0, time.UTC)
+	if _, err := host.DebugWriteState(config, at, map[string]any{"host": "wailsv3"}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(filepath.Join(config, "logs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var states []string
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "state-") {
+			states = append(states, entry.Name())
+		}
+	}
+	if len(states) != 20 || states[0] != "state-20261009T000300Z.json" || states[19] != "state-20261009T010000Z.json" {
+		t.Fatalf("state files %v", states)
+	}
+	if _, err := os.Stat(filepath.Join(config, "logs", "application.log")); err != nil {
+		t.Fatalf("the application log was removed: %v", err)
 	}
 }

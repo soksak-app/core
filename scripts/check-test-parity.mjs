@@ -981,6 +981,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F130",
+    implementation: [
+      { file: "packages/host/wailsv3/src/debug.go", symbol: "func debugPruneStates" },
+      { file: "packages/host/tauriv2/src/debug.rs", symbol: "fn prune_states" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/debug_test.go", id: "TestDebugWriteStateKeepsTheNewest20StateFiles" },
+      { file: "packages/host/tauriv2/tests/debug_test.rs", id: "debug_write_state_keeps_the_newest_20_state_files" },
+    ],
+    expected: "The host keeps the newest 20 state files of logs/ after it writes one.",
+    levels: ["unit"],
+  },
+  {
     id: "F29",
     implementation: [
       { file: "scripts/check-build-environment.sh", symbol: "pnpm_actual=$(pnpm --version" },

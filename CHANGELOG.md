@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F130: both hosts keep the newest 20 `logs/state-<time>.json` files and remove the older ones after the debug view records a state, so the logs folder does not grow with each opening.
 - F120: the `hello` that the Tauri host sends to a persistent service carries the configuration directory of the application as `client`, as the Wails host does; the terminal runtime specification defines `client`.
 - F117.5.6: the host starts the installed service of a replaced persistent sidecar only after the process of the old service has ended, waiting for it with the kernel notification of the end of a process in every build; a process that does not end within the stop timeout fails the replacement with an error line and the sidecar stays outdated.
 - F124.3.7: the debug view lists the newest file first, opens the text of a file at its end, where the newest lines are, and keeps the bar with the 목록 button at the top of the scrolling pane; `core.debug` reports `scroll`.

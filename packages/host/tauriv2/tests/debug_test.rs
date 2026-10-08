@@ -219,3 +219,26 @@ fn base64_of(bytes: &[u8]) -> String {
     }
     out
 }
+
+// contract: debug.record.keeps-the-newest-20-state-files
+#[test]
+fn debug_write_state_keeps_the_newest_20_state_files() {
+    let config = debug_config();
+    // 22 earlier state files, one for each minute of the hour 00 of 2026-10-09.
+    for minute in 0..22 {
+        let name = format!("state-20261009T00{minute:02}00Z.json");
+        std::fs::write(config.path().join("logs").join(name), "{}").unwrap();
+    }
+    let at = UNIX_EPOCH + Duration::from_secs(1_791_507_723 + 3600 * 24);
+    debug::write_state(config.path(), at, serde_json::json!({"host": "tauriv2"})).unwrap();
+    let mut states: Vec<String> = std::fs::read_dir(config.path().join("logs"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with("state-"))
+        .collect();
+    states.sort();
+    assert_eq!(states.len(), 20, "{states:?}");
+    assert_eq!(states[0], "state-20261009T000300Z.json");
+    assert!(states[19].starts_with("state-20261010T"), "{states:?}");
+    assert!(config.path().join("logs/application.log").exists());
+}
