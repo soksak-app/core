@@ -1697,6 +1697,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F115",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "SPDocumentView" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_press_test.m", id: "the first press reaches the page and the drag selects text" },
+    ],
+    expected: "The first press on a document region that does not hold the keyboard focus reaches its page, and a drag selects text.",
+    levels: ["native"],
+  },
+  {
     id: "F116",
     implementation: [
       { file: "packages/workbench/surface-modules.js", symbol: "closed before it created its composition" },
