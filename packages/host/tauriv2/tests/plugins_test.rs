@@ -36,7 +36,7 @@ fn write_tree(dir: &Path, files: &[(&str, &str)]) {
     }
 }
 
-/// tests/fixtures/plugin-probe(sidecar 가 없는 plugin probe 0.0.7)의 archive 와 그 registry.
+/// tests/fixtures/plugin-probe(sidecar 가 없는 plugin probe 0.0.8)의 archive 와 그 registry.
 /// 폴더는 값이 사라질 때 지운다.
 struct Registry {
     index: String,
@@ -57,7 +57,7 @@ fn plugin_registry() -> Registry {
     let entry = json!({
         "id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
         "license": "MIT", "repository": "https://example.invalid/probe",
-        "versions": [{"version": "0.0.7", "package": {"url": format!("file://{archive}"), "sha256": packed["sha256"]},
+        "versions": [{"version": "0.0.8", "package": {"url": format!("file://{archive}"), "sha256": packed["sha256"]},
             "engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}],
     });
     write_tree(
@@ -122,13 +122,13 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let state: Value = serde_json::from_str(&state_text(&plugins)).unwrap();
     assert_eq!(state["registry"], format!("file://{}", registry.index));
     assert_eq!(state["index"]["plugins"][0]["id"], "probe");
-    assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.0.7");
+    assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.0.8");
     assert_eq!(state["installed"]["plugins"]["probe"]["enabled"], true);
     std::fs::remove_file(&registry.index).unwrap();
     let state: Value = serde_json::from_str(&state_text(&plugins)).unwrap();
     let error = state["index"]["error"].as_str().expect("index error");
     assert!(error.contains(&registry.index), "{error}");
-    assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.0.7");
+    assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.0.8");
     std::fs::write(config.path().join("plugins/installed.json"), "{").unwrap();
     let error = plugins.state().err().expect("invalid installed.json fails");
     assert!(
@@ -150,7 +150,7 @@ fn plugins_run_changes_the_installation_like_the_command() {
     .unwrap();
     let (plugins, seen) = new_plugins(config.path());
     let installed = plugins.run(request("install", json!("probe"))).unwrap();
-    let want = r#"{"plugin":{"package":"plugin-probe","version":"0.0.7","path":"plugins/probe/0.0.7","enabled":true,"sidecars":{}},"sidecars":{}}"#;
+    let want = r#"{"plugin":{"package":"plugin-probe","version":"0.0.8","path":"plugins/probe/0.0.8","enabled":true,"sidecars":{}},"sidecars":{}}"#;
     assert_eq!(serde_json::to_string(&installed).unwrap(), want);
     for action in ["update", "disable", "enable"] {
         plugins.run(request(action, json!("probe"))).unwrap();

@@ -1,6 +1,6 @@
 {
   "name": "@soksak/mcp",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "private": true,
   "type": "module",
   "description": "stdio MCP server that exposes the local endpoint of a running soksak application as tools.",
