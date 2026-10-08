@@ -1048,6 +1048,7 @@ Previous completed component work remains evidence, not completion of these wide
   - [ ] R3.5 — P1: Run the record check and the commit form check in the plugin, sidecar and registry repositories through a declared dependency, because a repository does not read the files of another.
     - [o] R3.5.1 — P1: Provide the checks as the `soksak-records` and `soksak-commits` commands of `@soksak/plugin-api`. Done on 2026-10-08: `records-check.js` and `commits-check.js` hold the checks and their commands, core runs them through `make records-check`, `make commits-check` and the commit-msg hook, and `packages/plugin-api/test/records-check.test.mjs` passes 4 of 4.
     - [ ] R3.5.2 — P1: Run `soksak-records` and `soksak-commits` in `make test` and CI of plugin-browser, plugin-files, plugin-terminal, sidecar-files, sidecar-vt and registry through `@soksak/plugin-api` at the core release that contains R3.5.1.
+- [o] R4 — P1: State in `AGENTS.md` that a checklist item is one unit of function that is developed, verified and committed on its own, that a larger item is split into sub-items, and that a completed item gets its changelog entry and its commit. Done on 2026-10-08.
 
 ## Tauri/Wails parity audit (2026-09-21)
 

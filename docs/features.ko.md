@@ -1048,6 +1048,7 @@
   - [ ] R3.5 — P1: plugin, sidecar, registry 저장소에서도 선언된 의존으로 기록 검사와 커밋 형식 검사를 실행한다. 저장소는 다른 저장소의 파일을 읽지 않는다.
     - [o] R3.5.1 — P1: 검사를 `@soksak/plugin-api`의 `soksak-records`와 `soksak-commits` 명령으로 제공한다. 2026-10-08에 완료했다. `records-check.js`와 `commits-check.js`가 검사와 명령을 담고, core는 `make records-check`, `make commits-check`, commit-msg hook으로 그것을 실행하며, `packages/plugin-api/test/records-check.test.mjs`가 4개 중 4개 통과한다.
     - [ ] R3.5.2 — P1: R3.5.1을 담은 core 릴리스의 `@soksak/plugin-api`로 plugin-browser, plugin-files, plugin-terminal, sidecar-files, sidecar-vt, registry의 `make test`와 CI에서 `soksak-records`와 `soksak-commits`를 실행한다.
+- [o] R4 — P1: `AGENTS.md`에 체크리스트 항목 하나는 따로 개발·검증·커밋하는 기능 하나이고, 더 큰 항목은 세부 항목으로 쪼개며, 완료한 항목은 changelog 항목을 쓰고 커밋한다고 적는다. 2026-10-08 완료.
 
 ## Tauri/Wails 대칭 감사 (2026-09-21)
 
