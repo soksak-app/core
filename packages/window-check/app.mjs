@@ -207,9 +207,9 @@ export async function open(t, app) {
   return session;
 }
 
-/** 설정 폴더의 captures 아래에 있는 녹화 폴더의 이름. 폴더가 없으면 빈 목록이다. */
+/** The names of the recording folders under logs/captures of the configuration folder; none without the folder. */
 export function recordingFolders(configDir) {
-  const captures = join(configDir, "captures");
+  const captures = join(configDir, "logs", "captures");
   if (!existsSync(captures)) return [];
   return readdirSync(captures, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
 }
@@ -248,7 +248,7 @@ export async function finishSession(t, session, close) {
     // 검사가 시작한 녹화는 검사의 정리가 지운다. 정리 뒤에 남은 새 녹화 폴더는 검사의 실패이고, 다음 검사가 같은
     // 상태에서 시작하도록 지운다. SOKSAK_KEEP_FAILURE_CAPTURE 는 실패한 검사의 녹화를 남기므로 이름만 알린다.
     const left = recordingFolders(session.app.configDir).filter((name) => !session.recordingsBefore.includes(name))
-      .map((name) => join(session.app.configDir, "captures", name));
+      .map((name) => join(session.app.configDir, "logs", "captures", name));
     if (left.length && process.env.SOKSAK_KEEP_FAILURE_CAPTURE) {
       for (const folder of left) t.diagnostic(`kept recording: ${folder}`);
     } else if (left.length) {

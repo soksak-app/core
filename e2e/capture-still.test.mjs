@@ -1,8 +1,8 @@
 // 정지 PNG의 실제 불투명 픽셀과 네이티브 경계를 검사한다. 미리보기의 표시 상태를 판정에 쓰지 않는다.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { unlinkSync, rmdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { realpathSync, unlinkSync, rmdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { readPng, distance } from "@soksak/window-check/png.mjs";
@@ -34,6 +34,9 @@ for (const app of Object.values(APPS))
     const { path } = await s.request("diagnostics.capture.still", {});
     s.cleanup(() => rmdirSync(dirname(path)));
     s.cleanup(() => unlinkSync(path));
+    // Every diagnostic file of an application is in <config-dir>/logs, captures in its captures folder (F124.2).
+    const captures = join(realpathSync(app.configDir), "logs", "captures");
+    assert.ok(realpathSync(path).startsWith(`${captures}/`), `the still capture ${path} is not in ${captures}`);
     {
       const image = readPng(path),
         scale = before.scale,

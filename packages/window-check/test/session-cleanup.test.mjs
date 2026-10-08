@@ -90,7 +90,7 @@ test("a recording folder that the check left fails the check and is removed", { 
   t.after(() => rmSync(dir, { recursive: true }));
   mkdirSync(join(dir, "logs"));
   writeFileSync(join(dir, "logs", "application.log"), "");
-  mkdirSync(join(dir, "captures", "earlier"), { recursive: true });
+  mkdirSync(join(dir, "logs", "captures", "earlier"), { recursive: true });
   const file = join(dir, "probe.test.mjs");
   writeFileSync(file, `import test from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -100,8 +100,8 @@ test("probe body passes", async (t) => {
   const configDir = ${JSON.stringify(dir)};
   const session = { app: { name: "probe", configDir }, cleanups: [], logStart: 0, expectedErrors: [],
     recordingsBefore: recordingFolders(configDir) };
-  mkdirSync(join(configDir, "captures", "left"));
-  writeFileSync(join(configDir, "captures", "left", "frame-0001.bgra"), "x");
+  mkdirSync(join(configDir, "logs", "captures", "left"));
+  writeFileSync(join(configDir, "logs", "captures", "left", "frame-0001.bgra"), "x");
   t.after(() => finishSession(t, session, () => {}));
 });
 `);
@@ -110,5 +110,5 @@ test("probe body passes", async (t) => {
     { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /probe: the check left 1 recording: .*captures\/left/);
-  assert.deepEqual(readdirSync(join(dir, "captures")), ["earlier"]);
+  assert.deepEqual(readdirSync(join(dir, "logs", "captures")), ["earlier"]);
 });

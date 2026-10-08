@@ -369,7 +369,7 @@ func startCapture(h *Host, s *Surfaces, display bool) (string, error) {
 	if len(numbers) == 0 {
 		return "", errors.New("the window has no window server number")
 	}
-	directory := filepath.Join(h.workspace.directory, "captures", fmt.Sprintf("%s-%d", s.name, time.Now().UnixNano()))
+	directory := filepath.Join(h.workspace.directory, "logs", "captures", fmt.Sprintf("%s-%d", s.name, time.Now().UnixNano()))
 	if err := recording.Start(capture, CaptureTarget{Window: numbers[0], Display: display}, directory); err != nil {
 		return "", err
 	}
@@ -396,7 +396,7 @@ func diagnosticCaptureStill(e *Endpoint, _ *endpointConn, params json.RawMessage
 		return nil, errors.New("the window has no window server number")
 	}
 	// 녹화와 같이 캡처마다 비공개 디렉터리를 만든다.
-	directory := filepath.Join(h.workspace.directory, "captures", fmt.Sprintf("still-%s-%d", s.name, time.Now().UnixNano()))
+	directory := filepath.Join(h.workspace.directory, "logs", "captures", fmt.Sprintf("still-%s-%d", s.name, time.Now().UnixNano()))
 	system, err := platform.Current()
 	if err != nil {
 		return nil, err

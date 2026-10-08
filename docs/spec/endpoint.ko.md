@@ -89,7 +89,7 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 | `diagnostics.surface.held` | `{window, surface}` | 표면이 답 하나를 붙잡으면 답한다. 그 표면의 답을 붙잡고 있지 않으면 `exposure replies of surface "<surface>" are not held`로, 호스트가 먼저 표면을 제거하면 `surface "<surface>" closed before it held an exposure reply`로 실패한다 |
 | `diagnostics.transcript` | `{window, on}` | 호스트 요청, 응답, 페이지 검증 줄에 대한 `diagnostics.log` 알림 `{window, line}`을 시작하거나 중지한다 |
 | `diagnostics.notifications` | `{}` | 운영체제의 알림 센터가 아직 보이는 이 애플리케이션의 알림을 `[{identifier, title, body}]`로 반환한다. `identifier`는 `[window, surface]`의 JSON 문자열이다 |
-| `diagnostics.capture.still` | `{window}` | 창에 포커스를 주지 않고 장치 픽셀 해상도의 정지 PNG를 쓰고, 비공개 `<config-dir>/captures/still-*` 디렉터리 안의 `{path}`를 반환한다. 개발 중 관측 자료이며 측정에는 `diagnostics.capture.start`/`stop` 프레임을 쓴다. 요청자는 확인한 뒤 그 디렉터리를 지운다 |
+| `diagnostics.capture.still` | `{window}` | 창에 포커스를 주지 않고 장치 픽셀 해상도의 정지 PNG를 쓰고, 비공개 `<config-dir>/logs/captures/still-*` 디렉터리 안의 `{path}`를 반환한다. 개발 중 관측 자료이며 측정에는 `diagnostics.capture.start`/`stop` 프레임을 쓴다. 요청자는 확인한 뒤 그 디렉터리를 지운다 |
 | `diagnostics.page.collect` | `{window}` | window의 main page를 그리는 WebContent process가 JavaScript 객체를 수집하게 하고, 요청을 보내면 `null`을 반환한다. 메모리 검사는 결과가 다음 수집 시점에 좌우되지 않도록 재기 전에 부른다 |
 | `diagnostics.native.objects` | `{window, equal?}` | 애플리케이션 정의 event 하나를 넣고, 애플리케이션이 그 event를 처리한 뒤 공용 macOS library가 window와 webview에 붙인 native 객체의 살아 있는 수 `{windowCompositions, surfaceHosts, inputRegistrations}`를 반환한다(window의 content view 안에서 main webview를 보유하는 composition view, 논리 surface와 붙인 surface webview의 container, main·modal·surface webview의 입력 등록). 수는 `window`만이 아니라 process 전체의 수다. window를 닫는 동안 autorelease된 객체는 AppKit이 그 event 반복의 autorelease pool을 비울 때 해제되고, pool은 애플리케이션이 event를 처리할 때 비워지므로 넣은 event 뒤에 센다. AppKit은 화면에 있던 window를 close animation이 끝날 때까지 유지하고, pool을 비우는 동안 autorelease된 객체를 다음 비우기에서 해제하므로, 닫은 window의 객체는 그 event 뒤에도 남을 수 있다. 세 이름의 음이 아닌 정수를 담은 객체 `equal`을 주면, 요청은 수가 `equal`과 같아질 때 응답한다. 기다리는 동안 library는 main run loop가 잠들기 전마다 event 하나를 더 넣고 그 event를 처리한 뒤마다 수를 비교한다. autorelease pool에 남은 객체를 알리는 event가 없기 때문이다. 10초 안에 수가 `equal`과 같아지지 않으면 요청은 `window object counts did not reach <equal> within 10s; they are <counts>`로 실패하며, 각 수는 `windowCompositions N, surfaceHosts N, inputRegistrations N`으로 쓴다. 그 밖의 `equal`은 `equal must be an object of windowCompositions, surfaceHosts and inputRegistrations, each a non-negative integer`로 실패한다. 애플리케이션이 10초 안에 그 event를 처리하지 않으면 요청은 `the application did not handle an event within 10s`로 실패한다. window check는 project window를 열기 전과 닫은 뒤의 수를 비교한다 |
 | `diagnostics.process.exit` | `{window, pid}` | process `pid`가 끝나면 `null`로 응답하며, kernel의 종료 알림으로 기다린다. 이미 없는 process는 끝난 것이다. window check는 닫은 window의 web content process를 기다리는 데 쓰며, 그 pid는 window가 열려 있을 때 `host.window` `pageProcess`에서 읽는다. 10초 안에 process가 끝나지 않으면 요청은 `process <pid> did not exit within 10s`로 실패한다. 1부터 2147483647 사이의 정수가 아닌 `pid`는 `pid must be a positive integer`로 실패한다 |
@@ -105,7 +105,7 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 
 배치 타임라인 응답의 상한은 트랜잭션 4096개다. 실제 기록이 상한을 넘으면 호스트는 오류를 반환하고 요청자가 받지 못하는 녹화 디렉터리를 정리한다. 잘린 타임라인을 성공 응답으로 반환하지 않는다.
 
-호스트는 캡처 같은 큰 데이터를 설정 디렉터리 아래 파일에 기록하고, 응답에는 파일 경로를 담는다. 요청자는 측정 후 캡처 파일을 삭제한다.
+호스트는 캡처 같은 큰 데이터를 `<config-dir>/logs/captures` 아래 파일에 기록하고, 응답에는 파일 경로를 담는다. 요청자는 측정 후 캡처 파일을 삭제한다.
 
 `diagnostics.drag`는 호스트가 정한 시각에 페이지의 기존 surface-input 경로로 단계를 전달한다. 네이티브 녹화는 해당 제스처의 합성을 측정하며 OS 마우스 버튼 전달을 증명하지 않는다. 합성 검사는 실제 카드 이동과 요청한 모든 왕복도 측정해야 한다. 네이티브 포인터 전달은 별도의 `input.pointer` 검사 대상이다.
 

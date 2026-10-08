@@ -245,6 +245,7 @@ fn capture_still(window: &Window) -> Result<Value, Failure> {
     let directory = window
         .state::<Workspace>()
         .directory()
+        .join("logs")
         .join("captures")
         .join(format!(
             "still-{stamp}-{}",
@@ -489,6 +490,7 @@ fn capture_start(window: &Window, display: bool) -> Result<PathBuf, Failure> {
     let directory = window
         .state::<Workspace>()
         .directory()
+        .join("logs")
         .join("captures")
         .join(format!(
             "{stamp}-{}",
