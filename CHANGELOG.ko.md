@@ -4,7 +4,7 @@
 
 ## 미배포
 
-- F102.9: 선언된 모든 version은 0.0.6이다.
+- F102.9: 선언된 모든 version은 0.0.6이고, `make release-check`는 새 core를 허용하는 registry의 모든 plugin version의 manifest를 새 core가 받는지 검사한다. core 0.0.6을 릴리스했다.
 - F102.1.3, F102.1.4: `sok`은 plugin의 plugin 의존을 설치하고, 필요한 plugin의 제거와 끄기를 거절하며, update에서 dependent 범위를 지키고, `sok registry build`는 plugin 의존을 검사한다. host는 plugin package를 sidecar에서 빼고, 확장 지점의 `/shared/`를 내보낸다(F102.1.5).
 - F102.5: 표면은 `tab.modified`로 저장하지 않은 변경을 알리고, 수정된 탭이나 그 카드를 닫으면 저장, 버리기, 두기를 묻는다.
 - F102.4: `core.file.open`은 project의 파일을 `surface.opens`에 그 확장자를 선언한 plugin에서, 없으면 `*`를 선언한 plugin에서 연다.
