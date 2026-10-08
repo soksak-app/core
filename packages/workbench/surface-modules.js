@@ -55,7 +55,9 @@ function pageRuntime(surface, scoped, compositionReady) {
       zoom: (name, zoom) => invoke("documentZoom", { document: name, zoom }),
       go: (name, action, offset) => invoke("documentGo", offset === undefined ? { document: name, action } : { document: name, action, offset }),
       detach: (name) => invoke("documentDetach", { document: name }),
+      post: (name, message) => invoke("documentPost", { document: name, message }),
       onState: (listener) => scoped.native.on("document-state", (event) => listener(event.document, event.state)),
+      onMessage: (listener) => scoped.native.on("document-message", (event) => listener(event.document, event.message)),
     },
     image: {
       attach: (name, sidecar) => invoke("imageAttach", { name, sidecar }),

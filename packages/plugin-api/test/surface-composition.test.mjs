@@ -66,6 +66,8 @@ function runtime({ documentAttach, imageAttach, place } = {}) {
     go: (...args) => { documentCalls.push(["go", ...args]); return Promise.resolve(true); },
     detach: (name) => { documentCalls.push(["detach", name]); return Promise.resolve(); },
     onState: () => Promise.resolve(() => {}),
+    post: (...args) => { documentCalls.push(["post", ...args]); return Promise.resolve(); },
+    onMessage: () => Promise.resolve(() => {}),
   };
   const image = {
     attach: (name, sidecar) => {

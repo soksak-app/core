@@ -106,6 +106,12 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     state = value;
     for (const fn of listeners) fn(value);
   }));
+  // The messages of a package document of this region (docs/spec/native-surfaces.md#document-regions).
+  const messageListeners = new Set();
+  const unlistenMessages = Promise.resolve(port.onMessage((document, message) => {
+    if (document !== name || detached) return;
+    for (const fn of messageListeners) fn(message);
+  }));
 
   const placeAt = ({ insets, visible }) => queue(() => port.place(name, insets, visible));
   // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
@@ -127,6 +133,13 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     },
     _place: placeAt,
     load: (url) => queue(() => port.load(name, url)),
+    /** Sends a JSON value to the window of the region's package document. */
+    post: (message) => queue(() => port.post(name, message)),
+    /** Calls fn with each message that the region's package document posts to its own window; returns the stop. */
+    onMessage(fn) {
+      messageListeners.add(fn);
+      return () => messageListeners.delete(fn);
+    },
     /** 문서의 페이지 확대를 글자 배율로 정한다(docs/spec/text-size.md). */
     zoom: (factor) => queue(() => port.zoom(name, factor)),
     go(action) {
@@ -147,7 +160,9 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       detached = true;
       stopObserving();
       listeners.clear();
+      messageListeners.clear();
       unlisten.then((stop) => stop());
+      unlistenMessages.then((stop) => stop());
       return done;
     },
   };

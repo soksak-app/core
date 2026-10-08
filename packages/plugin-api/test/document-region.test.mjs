@@ -39,11 +39,12 @@ function fixture() {
 
 function port() {
   const calls = [];
+  const port = {};
   let receive = null;
   let stopped = false;
   let release;
   const attached = new Promise((resolve) => { release = resolve; });
-  return {
+  return Object.assign(port, {
     calls, attached, release,
     send: (document, state) => receive(document, state),
     stopped: () => stopped,
@@ -53,7 +54,9 @@ function port() {
     go: async (name, action, offset) => { calls.push(offset === undefined ? ["go", name, action] : ["go", name, action, offset]); return true; },
     detach: async (name) => { calls.push(["detach", name]); },
     onState: (fn) => { receive = fn; return Promise.resolve(() => { stopped = true; }); },
-  };
+    post: async (name, message) => { calls.push(["post", name, message]); },
+    onMessage: (fn) => { port.message = fn; return Promise.resolve(() => {}); },
+  });
 }
 
 test("regionInsets measures the element against the viewport", () => {
@@ -233,4 +236,21 @@ test("a placement that fails while observing is reported as an error", async () 
   f.resize({ left: 20, top: 40, right: 420, bottom: 340, width: 400, height: 300 });
   await settle();
   assert.ok(f.reported.some((line) => line === "document page place: host refused the placement"), JSON.stringify(f.reported));
+});
+
+test("a document handle posts messages and receives the messages of its own document", async () => {
+  const f = fixture();
+  const p = port();
+  const region = attachRegion(p, f.element, "page", f.window, { report() {} });
+  p.release();
+  const received = [];
+  region.onMessage((message) => received.push(message));
+  await region.post({ type: "request", id: 1 });
+  assert.deepEqual(p.calls.filter(([kind]) => kind === "post"), [["post", "page", { type: "request", id: 1 }]]);
+  p.message("page", { type: "reply", id: 1 });
+  p.message("other", { type: "ignored" });
+  assert.deepEqual(received, [{ type: "reply", id: 1 }]);
+  await region.detach();
+  p.message("page", { type: "late" });
+  assert.deepEqual(received, [{ type: "reply", id: 1 }]);
 });
