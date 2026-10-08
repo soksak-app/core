@@ -1,0 +1,4 @@
+#!/bin/sh
+# Checks that the records of the working tree state facts about this repository and use one term per concept.
+# `make hooks` sets this folder as the git hook folder.
+exec node "$(git rev-parse --show-toplevel)/packages/plugin-api/records-check.js" "$(git rev-parse --show-toplevel)"

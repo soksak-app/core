@@ -2,33 +2,70 @@
   "terms": [
     {
       "term": "plugin",
-      "definition": "An installable unit with a plugin.json: its pages, sections, settings and declarations. Its files are installed in its plugin folder.",
-      "rejected": ["plugin package"]
+      "definition": "An installable unit with a plugin.json: its pages, sections, settings and declarations.",
+      "rejected": [
+        "plugin package",
+        "플러그인 패키지",
+        "plugin 패키지"
+      ],
+      "allowed": []
     },
     {
-      "term": "plugin archive",
-      "definition": "The file <id>-<version>.tgz of a plugin's files that sok plugin pack writes and that a registry lists.",
-      "rejected": ["plugin package archive", "package archive"]
+      "term": "sidecar",
+      "definition": "A native program of one domain with a sidecar.json that plugin pages talk to.",
+      "rejected": [
+        "sidecar package",
+        "사이드카 패키지",
+        "sidecar 패키지"
+      ],
+      "allowed": []
     },
     {
-      "term": "package name",
-      "definition": "The name in the package.json of a plugin or a sidecar, such as @scope/name; dependencies name plugins and sidecars by their package names.",
-      "rejected": ["sidecar package"]
+      "term": "the name of package.json",
+      "definition": "The name field of the package.json of a plugin or a sidecar, such as @scope/name, which dependencies and the paths /modules/<name>/ use.",
+      "rejected": [
+        "package name",
+        "패키지 이름"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "release",
+      "definition": "The file that sok plugin pack or sok sidecar release writes and that a registry lists: <id>-<version>.tgz of a plugin or <file name>-<version>-<platform>.tar.gz of a sidecar.",
+      "rejected": [
+        "plugin package archive",
+        "plugin archive",
+        "release asset",
+        "packed plugin",
+        "archive"
+      ],
+      "allowed": [
+        "archive/tar",
+        "tar::Archive"
+      ]
     },
     {
       "term": "plugin folder",
       "definition": "The folder that plugins/installed.json records for an installed plugin.",
-      "rejected": ["package folder"]
+      "rejected": [
+        "package folder"
+      ],
+      "allowed": []
     },
     {
       "term": "plugin document",
       "definition": "A document of a plugin that a document region shows at sok://<plugin id>/<path>.",
-      "rejected": ["package document", "soksak-package"]
+      "rejected": [
+        "package document",
+        "soksak-package"
+      ],
+      "allowed": []
     },
     {
       "term": "deep link",
       "definition": "An address soksak://<owner>/<command> that opens from outside the application.",
-      "rejected": []
+      "rejected": [],
+      "allowed": []
     }
   ]
 }

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R5.2: 기록 검사가 `packages/plugin-api/terms.json`의 거부 동의어를 파일과 커밋 메시지에서 보고하고, `make hooks`가 그것을 실행하는 pre-commit hook을 더한다.
 - R5.3.3: core의 명세, 주석, 오류가 `package.json`의 name 필드를 `package.json`의 `name`이라고 부르고, `sok`가 `expected a package.json name`을 보고한다.
 - R5.3.2: `sok plugin pack`과 `sok sidecar release`가 쓴 파일을 `release`로 출력하고, `sok`의 식별자와 계약 사례가 release라고 부른다.
 - R5.3.1: core의 명세와 주석이 plugin은 plugin, sidecar는 sidecar, 그 `.tgz` 파일은 release라고 부르고, `sok`의 오류와 식별자도 따른다.

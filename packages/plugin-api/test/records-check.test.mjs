@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { commitMessageErrors, recordKind, recordViolations } from "../records-check.js";
+import { commitMessageErrors, recordKind, recordViolations, termChecked, termViolations } from "../records-check.js";
 
 test("record checks report each statement that is not a fact about the repository", () => {
   const cases = [
@@ -77,4 +77,43 @@ test("commit messages use the subject form with a checklist ID, a body and no fo
     assert.match(commitMessageErrors(`fix(vt): Run PTY shells (#S26)${body}\n${footer}\n`).join("\n"), /is a footer/, footer);
   }
   assert.match(commitMessageErrors(`fix(vt): Run PTY shells (#S26)\n\nFixed after PR #3 was merged.\n`).join("\n"), /pull request number/);
+});
+
+test("a rejected synonym is reported with the term to use, also in identifiers", () => {
+  assert.deepEqual(termViolations("The plugin package holds pages.\nconst packageFolder = 1;\nfn package_folder() {}", "a.md"), [
+    'a.md:1: rejected term "plugin package", use "plugin": plugin package',
+    'a.md:2: rejected term "package folder", use "plugin folder": packageFolder',
+    'a.md:3: rejected term "package folder", use "plugin folder": package_folder',
+  ]);
+});
+
+test("a rejected synonym joined inside an identifier is reported", () => {
+  assert.deepEqual(termViolations("func isPackageName(text string) bool {", "a.go"),
+    ['a.go:1: rejected term "package name", use "the name of package.json": PackageName']);
+  assert.deepEqual(termViolations("import \"archive/tar\"; let reader = tar::Archive::new(data);", "a.rs"), []);
+});
+
+test("a longer rejected synonym is reported once and a file name is not a use", () => {
+  assert.deepEqual(termViolations("Writes a plugin package archive.", "a.md"),
+    ['a.md:1: rejected term "plugin package archive", use "release": plugin package archive']);
+  assert.deepEqual(termViolations("Reads the plugin package.json and the plugin folder.", "a.md"), []);
+  assert.deepEqual(termViolations("installed.sidecars.leave-out-plugin-packages", "a.md"),
+    ['a.md:1: rejected term "plugin package", use "plugin": plugin-packages']);
+});
+
+test("the term list, the changelogs and the checklists are not checked for rejected terms", () => {
+  assert.equal(termChecked("packages/plugin-api/terms.json"), false);
+  assert.equal(termChecked("CHANGELOG.ko.md"), false);
+  assert.equal(termChecked("packages/plugin-api/test/records-check.test.mjs"), false);
+  assert.equal(termChecked("docs/features.md"), false);
+  assert.equal(termChecked("docs/spec/plugins.md"), true);
+  assert.equal(termChecked("src/install.rs"), true);
+  assert.equal(termChecked("Makefile"), true);
+  assert.equal(termChecked("ui/vendor/image.png"), false);
+});
+
+test("a commit message that uses a rejected synonym is refused", () => {
+  const message = "docs(spec): Rename the plugin package (#R5.2)\n\nThe plugin package is a plugin.\n";
+  assert.ok(commitMessageErrors(message).some((error) => error.includes('rejected term "plugin package", use "plugin"')),
+    commitMessageErrors(message).join("\n"));
 });

@@ -7,10 +7,11 @@ const { terms } = JSON.parse(readFileSync(new URL("../terms.json", import.meta.u
 test("each term has a definition and a list of rejected synonyms", () => {
   assert.ok(terms.length > 0);
   for (const entry of terms) {
-    assert.deepEqual(Object.keys(entry).sort(), ["definition", "rejected", "term"], JSON.stringify(entry));
+    assert.deepEqual(Object.keys(entry).sort(), ["allowed", "definition", "rejected", "term"], JSON.stringify(entry));
     assert.ok(typeof entry.term === "string" && entry.term !== "", JSON.stringify(entry));
     assert.ok(typeof entry.definition === "string" && entry.definition !== "", JSON.stringify(entry));
     assert.ok(Array.isArray(entry.rejected) && entry.rejected.every((word) => typeof word === "string" && word !== ""), JSON.stringify(entry));
+    assert.ok(Array.isArray(entry.allowed) && entry.allowed.every((name) => typeof name === "string" && name !== ""), JSON.stringify(entry));
   }
 });
 
