@@ -12,6 +12,7 @@ package darwin
 
 extern void documentChanged(void *context, char *state);
 extern void documentEvent(void *context, char *event);
+extern void documentMessage(void *context, char *message);
 
 static void documentChangedBridge(void *context, const char *state) {
     documentChanged(context, (char *)state);
@@ -20,8 +21,15 @@ static void documentEventBridge(void *context, const char *event) {
     documentEvent(context, (char *)event);
 }
 
-static void *documentCreate(void *surface, const char *store, uintptr_t context) {
-    return sp_document_create(surface, store, documentChangedBridge, (void *)context);
+static void documentMessageBridge(void *context, const char *message) {
+    documentMessage(context, (char *)message);
+}
+
+static void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, uintptr_t context) {
+    return sp_document_create(surface, store, package, plugin, documentChangedBridge, (void *)context);
+}
+static void documentSetMessage(void *document, uintptr_t context) {
+    sp_document_set_message(document, documentMessageBridge, (void *)context);
 }
 static void documentSetEvent(void *document, uintptr_t context) {
     sp_document_set_event(document, documentEventBridge, (void *)context);
@@ -38,6 +46,7 @@ import (
 // documents 는 문서 핸들별 상태 수신 핸들이다. UI 스레드에서만 읽고 바꾼다.
 var documents = map[unsafe.Pointer]cgo.Handle{}
 var documentEvents = map[unsafe.Pointer]cgo.Handle{}
+var documentMessages = map[unsafe.Pointer]cgo.Handle{}
 
 //export documentChanged
 func documentChanged(context unsafe.Pointer, state *C.char) {
@@ -45,16 +54,25 @@ func documentChanged(context unsafe.Pointer, state *C.char) {
 	changed(C.GoString(state))
 }
 
+//export documentMessage
+func documentMessage(context unsafe.Pointer, value *C.char) {
+	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+}
+
 //export documentEvent
 func documentEvent(context unsafe.Pointer, value *C.char) {
 	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
-func (implementation) CreateDocument(surface unsafe.Pointer, directory string, changed func(state string)) (unsafe.Pointer, error) {
+func (implementation) CreateDocument(surface unsafe.Pointer, directory, pkg, plugin string, changed func(state string)) (unsafe.Pointer, error) {
 	name := C.CString(directory)
 	defer C.free(unsafe.Pointer(name))
+	folder := C.CString(pkg)
+	defer C.free(unsafe.Pointer(folder))
+	id := C.CString(plugin)
+	defer C.free(unsafe.Pointer(id))
 	receiver := cgo.NewHandle(changed)
-	document := C.documentCreate(surface, name, C.uintptr_t(receiver))
+	document := C.documentCreate(surface, name, folder, id, C.uintptr_t(receiver))
 	if document == nil {
 		receiver.Delete()
 		return nil, errors.New("cannot create a document view in this surface")
@@ -78,6 +96,19 @@ func (implementation) SetDocumentEvent(document unsafe.Pointer, event func(value
 	C.documentSetEvent(document, C.uintptr_t(receiver))
 	documentEvents[document] = receiver
 	return nil
+}
+
+func (implementation) SetDocumentMessage(document unsafe.Pointer, message func(value string)) error {
+	receiver := cgo.NewHandle(message)
+	C.documentSetMessage(document, C.uintptr_t(receiver))
+	documentMessages[document] = receiver
+	return nil
+}
+
+func (implementation) PostDocument(document unsafe.Pointer, json string) bool {
+	value := C.CString(json)
+	defer C.free(unsafe.Pointer(value))
+	return bool(C.sp_document_post(document, value))
 }
 
 func (implementation) GoDocument(document unsafe.Pointer, action, offset int) bool {
@@ -105,5 +136,9 @@ func (implementation) CloseDocument(document unsafe.Pointer) {
 	if receiver, ok := documentEvents[document]; ok {
 		receiver.Delete()
 		delete(documentEvents, document)
+	}
+	if receiver, ok := documentMessages[document]; ok {
+		receiver.Delete()
+		delete(documentMessages, document)
 	}
 }

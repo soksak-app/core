@@ -30,7 +30,9 @@ type CompositionPlaceRequest struct {
 }
 
 type CompositionDeclareRequest struct {
-	Surface     string             `json:"surface"`
+	Surface string `json:"surface"`
+	// Plugin is the id of the plugin whose page the surface shows; its document regions serve that plugin's package.
+	Plugin      string             `json:"plugin"`
 	Composition SurfaceComposition `json:"composition"`
 }
 
@@ -162,6 +164,9 @@ func (s *Surfaces) declareComposition(viewID uint64, request CompositionDeclareR
 	if request.Surface == "" {
 		return fmt.Errorf("composition declaration requires a surface")
 	}
+	if request.Plugin == "" {
+		return fmt.Errorf("composition declaration of surface %q requires its plugin", request.Surface)
+	}
 	if err := s.authorizeSurface(viewID, request.Surface); err != nil {
 		return err
 	}
@@ -172,12 +177,13 @@ func (s *Surfaces) declareComposition(viewID uint64, request CompositionDeclareR
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if previous, exists := s.compositions[request.Surface]; exists {
-		if !reflect.DeepEqual(previous, request.Composition) {
+		if !reflect.DeepEqual(previous, request.Composition) || s.surfacePlugins[request.Surface] != request.Plugin {
 			return fmt.Errorf("surface %q changed its composition declaration", request.Surface)
 		}
 		return nil
 	}
 	s.compositions[request.Surface] = request.Composition
+	s.surfacePlugins[request.Surface] = request.Plugin
 	return nil
 }
 

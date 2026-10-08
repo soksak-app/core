@@ -3,6 +3,7 @@ package host_test
 // 설정 폴더에 설치된 plugin 의 제공과 그 sidecar 찾기(docs/spec/installation.md 의 설치된 plugin 제공)를 검사한다.
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -196,5 +197,36 @@ func TestInstalledSidecarsLeaveOutThePackagesOfInstalledPlugins(t *testing.T) {
 	}
 	if len(declarations) != 1 || declarations[0].Name != "@scope/sidecar-worker" {
 		t.Fatalf("declarations %+v", declarations)
+	}
+}
+
+// contract: document.package.folder
+func TestPackageFolderIsTheFolderOfTheEnabledInstalledPlugin(t *testing.T) {
+	config := installedFixture(t)
+	folder, err := host.PackageFolder(config, "alpha")
+	if err != nil || folder != filepath.Join(config, "plugins/alpha/1.0.0") {
+		t.Fatalf("alpha folder %q %v", folder, err)
+	}
+	for _, plugin := range []string{"off", "nobody"} {
+		if _, err := host.PackageFolder(config, plugin); err == nil || err.Error() != "plugin "+plugin+" is not installed and enabled" {
+			t.Fatalf("%s: %v", plugin, err)
+		}
+	}
+}
+
+// contract: document.message.forward
+func TestDocumentMessageIsSentToTheSurfaceOrItsReasonIsLogged(t *testing.T) {
+	payload, reason, err := host.DocumentMessage("tab-1", "page", `{"message":{"type":"reply","id":3}}`)
+	if err != nil || reason != "" {
+		t.Fatalf("message %v %q", err, reason)
+	}
+	if encoded, _ := json.Marshal(payload); string(encoded) != `{"document":"page","message":{"type":"reply","id":3},"surface":"tab-1"}` {
+		t.Fatalf("payload %s", encoded)
+	}
+	if _, reason, err := host.DocumentMessage("tab-1", "page", `{"error":"the message data is not JSON"}`); err != nil || reason != "the message data is not JSON" {
+		t.Fatalf("error %v %q", err, reason)
+	}
+	if _, _, err := host.DocumentMessage("tab-1", "page", `{}`); err == nil || err.Error() != "document message page has neither message nor error" {
+		t.Fatalf("empty %v", err)
 	}
 }

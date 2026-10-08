@@ -33,6 +33,27 @@ type DocumentRequest struct {
 	Action   string   `json:"action,omitempty"`
 	Zoom     *float64 `json:"zoom,omitempty"`
 	Offset   *int32   `json:"offset,omitempty"`
+	// Message is the JSON value that documentPost sends to a package document.
+	Message json.RawMessage `json:"message,omitempty"`
+}
+
+// DocumentMessage turns a message of a package document, {"message": value} or {"error": reason}, into the payload of
+// the document-message event of the owning surface, or into the reason that the host writes to the application log.
+func DocumentMessage(surface, document, value string) (payload map[string]any, reason string, err error) {
+	var received struct {
+		Message json.RawMessage `json:"message"`
+		Error   *string         `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(value), &received); err != nil {
+		return nil, "", fmt.Errorf("document message %s is not JSON: %w", document, err)
+	}
+	if received.Error != nil {
+		return nil, *received.Error, nil
+	}
+	if received.Message == nil {
+		return nil, "", fmt.Errorf("document message %s has neither message nor error", document)
+	}
+	return map[string]any{"surface": surface, "document": document, "message": received.Message}, "", nil
 }
 
 // ZoomFactor 는 문서의 글자 배율이다(docs/spec/text-size.md). 없거나 유한한 양수가 아니면 오류다.
@@ -212,7 +233,15 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 			err = fmt.Errorf("surface %q has no view", key.Surface)
 			return
 		}
-		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), func(state string) {
+		s.mu.Lock()
+		plugin := s.surfacePlugins[key.Surface]
+		s.mu.Unlock()
+		var folder string
+		folder, err = PackageFolder(s.host.configDir, plugin)
+		if err != nil {
+			return
+		}
+		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, func(state string) {
 			s.documentChanged(key, state)
 		})
 		if err == nil {
@@ -222,6 +251,9 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 			system.SetDocumentAppearance(handle, dark)
 			system.SetDocumentBackground(handle, s.dialog())
 			err = system.SetDocumentEvent(handle, func(event string) { s.documentEvent(key, event) })
+		}
+		if err == nil {
+			err = system.SetDocumentMessage(handle, func(value string) { s.documentMessage(key, value) })
 		}
 	})
 	if err != nil {
@@ -247,6 +279,21 @@ func (s *Surfaces) documentChanged(key DocumentKey, state string) {
 	payload := DocumentState{Surface: key.Surface, Document: key.Name, State: json.RawMessage(state)}
 	s.emitToSurface(key.Surface, "document-state", payload)
 	s.windowChanged()
+}
+
+// documentMessage sends a message of a package document to the owning surface, or writes its failure to the
+// application log. UI 스레드에서 호출된다.
+func (s *Surfaces) documentMessage(key DocumentKey, value string) {
+	payload, reason, err := DocumentMessage(key.Surface, key.Name, value)
+	if err != nil {
+		LogError("document message "+key.Name, err)
+		return
+	}
+	if reason != "" {
+		LogError("document message "+key.Name, reason)
+		return
+	}
+	s.emitToSurface(key.Surface, "document-message", payload)
 }
 
 func (s *Surfaces) documentEvent(key DocumentKey, event string) {
@@ -279,7 +326,20 @@ func (s *Surfaces) withDocument(viewID uint64, req DocumentRequest, run func(han
 func (s *Surfaces) loadDocument(viewID uint64, req DocumentRequest) error {
 	return s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
 		if !system.LoadDocument(handle, req.URL) {
-			return fmt.Errorf("only http, https, and file addresses can be opened: %q", req.URL)
+			return fmt.Errorf("only http, https, file, and soksak-package addresses can be opened: %q", req.URL)
+		}
+		return nil
+	})
+}
+
+// postDocument sends a JSON message to the current package document of a region.
+func (s *Surfaces) postDocument(viewID uint64, req DocumentRequest) error {
+	if !json.Valid(req.Message) {
+		return fmt.Errorf("documentPost requires a JSON message")
+	}
+	return s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		if !system.PostDocument(handle, string(req.Message)) {
+			return fmt.Errorf("document %s shows no package document", req.Document)
 		}
 		return nil
 	})

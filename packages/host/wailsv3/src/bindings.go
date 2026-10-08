@@ -231,6 +231,17 @@ func (h *Host) DocumentZoom(ctx context.Context, reqJSON json.RawMessage) error 
 	}
 	return s.zoomDocument(uint64(s.window.ID()), req)
 }
+func (h *Host) DocumentPost(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.postDocument(uint64(s.window.ID()), req)
+}
 func (h *Host) DocumentGo(ctx context.Context, reqJSON json.RawMessage) (bool, error) {
 	req, err := argument[DocumentRequest]("request", reqJSON)
 	if err != nil {
@@ -451,7 +462,7 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 			return s.ModalContent(id, instance), nil
 		}
 		return nil, s.ModalReady(id, instance)
-	case "DocumentAttach", "DocumentLoad", "DocumentZoom", "DocumentGo", "DocumentDetach":
+	case "DocumentAttach", "DocumentLoad", "DocumentZoom", "DocumentGo", "DocumentPost", "DocumentDetach":
 		var req DocumentRequest
 		if err := nativeArgs(call, nativeArg{"request", &req}); err != nil {
 			return nil, err
@@ -465,6 +476,8 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 			return nil, s.zoomDocument(viewID, req)
 		case "DocumentGo":
 			return s.goDocument(viewID, req)
+		case "DocumentPost":
+			return nil, s.postDocument(viewID, req)
 		default:
 			return nil, s.detachDocument(viewID, req)
 		}

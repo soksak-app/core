@@ -254,9 +254,21 @@ impl Platform for Darwin {
         &self,
         surface: Handle,
         store: &str,
+        package: &str,
+        plugin: &str,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
-        document::create(surface, store, changed)
+        document::create(surface, store, package, plugin, changed)
+    }
+    fn set_document_message(
+        &self,
+        document: Handle,
+        message: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String> {
+        document::set_message(document, message)
+    }
+    fn post_document(&self, document: Handle, json: &str) -> Result<bool, String> {
+        document::post(document, json)
     }
     fn set_document_event(
         &self,

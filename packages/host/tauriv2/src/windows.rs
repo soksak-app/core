@@ -46,6 +46,8 @@ pub(crate) struct WindowData {
     pub images: crate::images::Images,
     /// 메인 페이지가 선언하고 호스트가 영역 호출 권한 검사에 쓰는 표면 합성.
     pub compositions: Mutex<HashMap<String, SurfaceComposition>>,
+    /// The plugin of each surface that declared its composition; its document regions serve that plugin's package.
+    pub surface_plugins: Mutex<HashMap<String, String>>,
     /// 표면별로 마지막에 적용한 완전한 합성 리비전.
     pub composition_revisions: Mutex<HashMap<String, u64>>,
 }

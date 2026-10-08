@@ -323,3 +323,44 @@ fn installed_sidecars_leave_out_the_packages_of_installed_plugins() {
     let names: Vec<&str> = declarations.iter().map(|item| item.name.as_str()).collect();
     assert_eq!(names, ["@scope/sidecar-worker"]);
 }
+
+// contract: document.package.folder
+#[test]
+fn package_folder_is_the_folder_of_the_enabled_installed_plugin() {
+    let config = installed_fixture();
+    assert_eq!(
+        installed::package_folder(config.path(), "alpha"),
+        Ok(config.path().join("plugins/alpha/1.0.0"))
+    );
+    for plugin in ["off", "nobody"] {
+        assert_eq!(
+            installed::package_folder(config.path(), plugin),
+            Err(format!("plugin {plugin} is not installed and enabled"))
+        );
+    }
+}
+
+// contract: document.message.forward
+#[test]
+fn document_message_is_sent_to_the_surface_or_its_reason_is_logged() {
+    use soksak_host_tauriv2::documents::{document_message, Message};
+    match document_message("tab-1", "page", r#"{"message":{"type":"reply","id":3}}"#) {
+        Ok(Message::Forward(payload)) => assert_eq!(
+            payload.to_string(),
+            r#"{"document":"page","message":{"id":3,"type":"reply"},"surface":"tab-1"}"#
+        ),
+        _ => panic!("the message was not forwarded"),
+    }
+    match document_message(
+        "tab-1",
+        "page",
+        r#"{"error":"the message data is not JSON"}"#,
+    ) {
+        Ok(Message::Failure(reason)) => assert_eq!(reason, "the message data is not JSON"),
+        _ => panic!("the failure was not reported"),
+    }
+    assert_eq!(
+        document_message("tab-1", "page", "{}").err(),
+        Some("document message page has neither message nor error".to_string())
+    );
+}

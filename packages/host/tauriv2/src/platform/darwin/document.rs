@@ -11,10 +11,14 @@ extern "C" {
     fn sp_document_create(
         surface: *mut c_void,
         store: *const c_char,
+        package: *const c_char,
+        plugin: *const c_char,
         changed: Changed,
         context: *mut c_void,
     ) -> *mut c_void;
     fn sp_document_set_event(document: *mut c_void, event: Event, context: *mut c_void);
+    fn sp_document_set_message(document: *mut c_void, message: Event, context: *mut c_void);
+    fn sp_document_post(document: *mut c_void, json: *const c_char) -> bool;
     fn sp_document_load(document: *mut c_void, url: *const c_char) -> bool;
     fn sp_document_zoom(document: *mut c_void, zoom: f64) -> bool;
     fn sp_document_go(document: *mut c_void, action: i32, offset: i32) -> bool;
@@ -40,6 +44,8 @@ thread_local! {
         std::cell::RefCell::new(std::collections::HashMap::new());
     static EVENTS: std::cell::RefCell<std::collections::HashMap<Handle, *mut EventReceiver>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
+    static MESSAGES: std::cell::RefCell<std::collections::HashMap<Handle, *mut EventReceiver>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
 extern "C" fn changed(context: *mut c_void, state: *const c_char) {
@@ -62,14 +68,20 @@ extern "C" fn event(context: *mut c_void, value: *const c_char) {
 pub fn create(
     surface: Handle,
     store: &str,
+    package: &str,
+    plugin: &str,
     receive: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {
     let store = CString::new(store).map_err(|e| e.to_string())?;
+    let package = CString::new(package).map_err(|e| e.to_string())?;
+    let plugin = CString::new(plugin).map_err(|e| e.to_string())?;
     let receiver = Box::into_raw(Box::new(Receiver(receive)));
     let document = unsafe {
         sp_document_create(
             surface as *mut c_void,
             store.as_ptr(),
+            package.as_ptr(),
+            plugin.as_ptr(),
             changed,
             receiver as *mut c_void,
         )
@@ -83,7 +95,7 @@ pub fn create(
     Ok(handle)
 }
 
-/// http 또는 https 주소를 연다. 그 밖의 주소이면 false 를 반환한다.
+/// http, https, file 또는 soksak-package 주소를 연다. 그 밖의 주소이면 false 를 반환한다.
 pub fn load(document: Handle, url: &str) -> Result<bool, String> {
     let url = CString::new(url).map_err(|e| e.to_string())?;
     Ok(unsafe { sp_document_load(document as *mut c_void, url.as_ptr()) })
@@ -99,6 +111,20 @@ pub fn set_event(document: Handle, receive: Box<dyn Fn(String) + Send>) -> Resul
     unsafe { sp_document_set_event(document as *mut c_void, event, receiver as *mut c_void) };
     EVENTS.with(|all| all.borrow_mut().insert(document, receiver));
     Ok(())
+}
+
+/// Receives the messages of package documents as {"message": value} or {"error": reason}.
+pub fn set_message(document: Handle, receive: Box<dyn Fn(String) + Send>) -> Result<(), String> {
+    let receiver = Box::into_raw(Box::new(EventReceiver(receive)));
+    unsafe { sp_document_set_message(document as *mut c_void, event, receiver as *mut c_void) };
+    MESSAGES.with(|all| all.borrow_mut().insert(document, receiver));
+    Ok(())
+}
+
+/// Posts the JSON value json to the current package document; false when there is none.
+pub fn post(document: Handle, json: &str) -> Result<bool, String> {
+    let json = CString::new(json).map_err(|e| e.to_string())?;
+    Ok(unsafe { sp_document_post(document as *mut c_void, json.as_ptr()) })
 }
 
 /// 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3 을 실행하고 실행했는지 반환한다.
@@ -136,6 +162,9 @@ pub fn close(document: Handle) {
         drop(unsafe { Box::from_raw(receiver) });
     }
     if let Some(receiver) = EVENTS.with(|all| all.borrow_mut().remove(&document)) {
+        drop(unsafe { Box::from_raw(receiver) });
+    }
+    if let Some(receiver) = MESSAGES.with(|all| all.borrow_mut().remove(&document)) {
         drop(unsafe { Box::from_raw(receiver) });
     }
 }

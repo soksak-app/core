@@ -44,6 +44,17 @@ fn enabled_plugins(config_dir: &Path) -> Result<(Vec<InstalledPlugin>, Installed
     Ok((plugins, state))
 }
 
+/// The folder of the enabled installed plugin, which the document regions of its surfaces serve at
+/// soksak-package://<plugin>/ (docs/spec/native-surfaces.md#document-regions).
+pub fn package_folder(config_dir: &Path, plugin: &str) -> Result<PathBuf, String> {
+    let (plugins, _) = enabled_plugins(config_dir)?;
+    plugins
+        .into_iter()
+        .find(|entry| entry.id == plugin)
+        .map(|entry| entry.dir)
+        .ok_or_else(|| format!("plugin {plugin} is not installed and enabled"))
+}
+
 /// JSON 텍스트에서 문자열 밖의 공백을 지운다. 키 순서와 문자열은 그대로 둔다.
 fn compact(text: &str) -> String {
     let mut out = String::with_capacity(text.len());

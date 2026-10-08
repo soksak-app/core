@@ -191,7 +191,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         [NSString stringWithFormat:@"soksak-document-store-%d", getpid()]];
     NSString *storeA = [stores stringByAppendingPathComponent:@"a"];
     NSString *storeB = [stores stringByAppendingPathComponent:@"b"];
-    void *document = sp_document_create(surface, storeA.fileSystemRepresentation, changed, NULL);
+    void *document = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, changed, NULL);
     check(document != NULL, @"a document view is created inside the surface");
     WKWebView *view = (WKWebView *)document;
     check([view.appearance.name isEqual:NSAppearanceNameDarkAqua],
@@ -448,8 +448,8 @@ int main(int argc, char **argv) { @autoreleasepool {
     });
 
     // 같은 디렉터리의 문서는 사이트 데이터를 공유하고, 다른 디렉터리의 문서는 공유하지 않는다.
-    void *same = sp_document_create(surface, storeA.fileSystemRepresentation, changed, NULL);
-    void *other = sp_document_create(surface, storeB.fileSystemRepresentation, changed, NULL);
+    void *same = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, changed, NULL);
+    void *other = sp_document_create(surface, storeB.fileSystemRepresentation, NULL, NULL, changed, NULL);
     check(same != NULL && other != NULL, @"documents are created for a shared and a separate store directory");
     NSHTTPCookie *cookie = [NSHTTPCookie cookieWithProperties:@{
         NSHTTPCookieDomain: @"127.0.0.1", NSHTTPCookiePath: @"/", NSHTTPCookieName: @"store",

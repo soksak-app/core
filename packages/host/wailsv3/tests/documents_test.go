@@ -2,6 +2,7 @@ package host_test
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"unsafe"
@@ -40,7 +41,7 @@ func TestDocumentRequestDoesNotExposeIndividualPlacement(t *testing.T) {
 		t.Fatalf("url %q action %q, want both empty", req.URL, req.Action)
 	}
 	want := host.DocumentRequest{Surface: "tab-1", Document: "page"}
-	if req != want {
+	if !reflect.DeepEqual(req, want) {
 		t.Fatalf("got %+v", req)
 	}
 }

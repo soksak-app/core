@@ -156,9 +156,21 @@ impl Platform for Windows {
         &self,
         surface: Handle,
         store: &str,
+        package: &str,
+        plugin: &str,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
-        unsupported::create_document(surface, store, changed)
+        unsupported::create_document(surface, store, package, plugin, changed)
+    }
+    fn set_document_message(
+        &self,
+        document: Handle,
+        message: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::set_document_message(document, message)
+    }
+    fn post_document(&self, document: Handle, json: &str) -> Result<bool, String> {
+        unsupported::post_document(document, json)
     }
     fn set_document_event(
         &self,

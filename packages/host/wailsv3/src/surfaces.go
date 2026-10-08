@@ -185,9 +185,11 @@ type Surfaces struct {
 	// 호스트 호출 사이의 모달 상태와 테마를 보호한다.
 	// 뷰는 주 스레드에서만 다루므로 잠금이 필요 없고, 이 잠금을 잡은 경로는 주 스레드를
 	// 기다리지 않는다.
-	mu                   sync.Mutex
-	views                map[string]*nativeWebview
-	compositions         map[string]SurfaceComposition
+	mu           sync.Mutex
+	views        map[string]*nativeWebview
+	compositions map[string]SurfaceComposition
+	// surfacePlugins is the plugin of each surface that declared its composition.
+	surfacePlugins       map[string]string
 	compositionRevisions map[string]uint64
 	// 표면은 네이티브 뷰이므로 표면을 누른 입력은 페이지에 도달하지 않는다. 이 맵은 누른
 	// 뷰를 페이지가 사용하는 표면 id 로 바꾼다.
@@ -226,6 +228,7 @@ func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 		window: win, projects: map[string]bool{}, sidecars: sidecars,
 		views:                map[string]*nativeWebview{},
 		compositions:         map[string]SurfaceComposition{},
+		surfacePlugins:       map[string]string{},
 		compositionRevisions: map[string]uint64{},
 		named:                map[uintptr]string{},
 		live:                 map[string]bool{},
@@ -915,6 +918,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		delete(s.views, id)
 		s.mu.Lock()
 		delete(s.compositions, id)
+		delete(s.surfacePlugins, id)
 		s.mu.Unlock()
 		delete(s.compositionRevisions, id)
 		// 표면 생명주기의 계기(V5-104): 목록에서 사라진 표면은 이 자리에서 파괴된다.

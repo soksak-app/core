@@ -173,9 +173,22 @@ pub fn focus_webview(_view: &PlatformWebview) -> Result<(), String> {
 pub fn create_document(
     _surface: Handle,
     _store: &str,
+    _package: &str,
+    _plugin: &str,
     _changed: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {
     missing("document view")
+}
+
+pub fn set_document_message(
+    _document: Handle,
+    _message: Box<dyn Fn(String) + Send>,
+) -> Result<(), String> {
+    missing("document messages")
+}
+
+pub fn post_document(_document: Handle, _json: &str) -> Result<bool, String> {
+    missing("document messages")
 }
 
 pub fn set_document_event(

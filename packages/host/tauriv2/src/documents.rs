@@ -37,6 +37,34 @@ pub struct Request {
     pub zoom: Option<f64>,
     #[serde(default)]
     pub offset: Option<i32>,
+    /// The JSON value that documentPost sends to a package document.
+    #[serde(default)]
+    pub message: Option<serde_json::Value>,
+}
+
+/// A message of a package document, {"message": value} or {"error": reason}: the payload of the document-message
+/// event of the owning surface, or the reason that the host writes to the application log.
+pub enum Message {
+    Forward(serde_json::Value),
+    Failure(String),
+}
+
+pub fn document_message(surface: &str, document: &str, value: &str) -> Result<Message, String> {
+    let received: serde_json::Value = serde_json::from_str(value)
+        .map_err(|error| format!("document message {document} is not JSON: {error}"))?;
+    if let Some(reason) = received.get("error").and_then(|reason| reason.as_str()) {
+        return Ok(Message::Failure(reason.to_string()));
+    }
+    match received.get("message") {
+        Some(message) => Ok(Message::Forward(serde_json::json!({
+            "surface": surface,
+            "document": document,
+            "message": message,
+        }))),
+        None => Err(format!(
+            "document message {document} has neither message nor error"
+        )),
+    }
 }
 
 impl Request {
@@ -256,10 +284,42 @@ fn create(
                 directory.display()
             )
         })?;
-        let handle = platform.create_document(surface, directory, changed)?;
+        let plugin = window_data(&host)?
+            .surface_plugins
+            .lock()
+            .map_err(|e| e.to_string())?
+            .get(&surface_id)
+            .cloned()
+            .ok_or_else(|| format!("surface {surface_id:?} has no composition declaration"))?;
+        let config = crate::config_directory(host.app_handle()).map_err(|e| e.to_string())?;
+        let folder = crate::installed::package_folder(&config, &plugin)?;
+        let folder = folder
+            .to_str()
+            .ok_or_else(|| format!("package folder is not UTF-8: {}", folder.display()))?
+            .to_string();
+        let handle = platform.create_document(surface, directory, &folder, &plugin, changed)?;
         let dark = crate::theme::is_dark(&host)?;
         platform.set_document_appearance(handle, dark)?;
         platform.set_document_background(handle, dialog)?;
+        let message_host = host.clone();
+        let message_surface = surface_id.clone();
+        let message_document = name.clone();
+        platform.set_document_message(
+            handle,
+            Box::new(move |value| {
+                let place = format!("document message {message_document}");
+                match document_message(&message_surface, &message_document, &value) {
+                    Ok(Message::Forward(payload)) => {
+                        if let Err(error) = emit_window(&message_host, "document-message", payload)
+                        {
+                            log_error(&place, error);
+                        }
+                    }
+                    Ok(Message::Failure(reason)) => log_error(&place, reason),
+                    Err(error) => log_error(&place, error),
+                }
+            }),
+        )?;
         let event_host = host.clone();
         let event_surface = surface_id.clone();
         let event_document = name.clone();
@@ -308,6 +368,24 @@ fn with_document<T: Send + 'static>(
     on_main(&window, move || work(data.documents.get(&key)?))
 }
 
+/// Sends a JSON message to the current package document of a region.
+pub(crate) fn post(webview: &Webview, request: Request) -> Result<(), String> {
+    let platform = platform::current()?;
+    let message = request
+        .message
+        .clone()
+        .ok_or("documentPost requires a JSON message")?
+        .to_string();
+    let name = request.document.clone();
+    with_document(webview, &request, move |handle| {
+        if platform.post_document(handle, &message)? {
+            Ok(())
+        } else {
+            Err(format!("document {name} shows no package document"))
+        }
+    })
+}
+
 pub(crate) fn load(webview: &Webview, request: Request) -> Result<(), String> {
     let platform = platform::current()?;
     let url = request.url.clone();
@@ -316,7 +394,7 @@ pub(crate) fn load(webview: &Webview, request: Request) -> Result<(), String> {
             Ok(())
         } else {
             Err(format!(
-                "only http, https, and file addresses can be opened: {url:?}"
+                "only http, https, file, and soksak-package addresses can be opened: {url:?}"
             ))
         }
     })

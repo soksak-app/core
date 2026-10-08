@@ -353,10 +353,14 @@ pub trait Platform: Send + Sync {
     /// 표면 웹뷰 surface 안에 외부 문서 웹뷰를 숨긴 상태로 만든다. store 는 영구 데이터 저장소가
     /// 사이트 데이터를 두는 절대 경로다. changed 는 상태 JSON({url, title, loading, progress, canGoBack, canGoForward,
     /// error, scroll}) 을 메인 스레드에서 받는다. 메인 스레드에서 호출한다.
+    /// package and plugin are the package folder and the id of the plugin whose surface owns the region; the region
+    /// serves soksak-package://<plugin>/<path> from package (docs/spec/native-surfaces.md#document-regions).
     fn create_document(
         &self,
         surface: Handle,
         store: &str,
+        package: &str,
+        plugin: &str,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String>;
     fn set_document_event(
@@ -364,7 +368,15 @@ pub trait Platform: Send + Sync {
         document: Handle,
         event: Box<dyn Fn(String) + Send>,
     ) -> Result<(), String>;
-    /// http 또는 https 주소를 연다. 그 밖의 주소이면 false 를 반환한다. 메인 스레드에서 호출한다.
+    /// Receives {"message": value} for each message of a package document and {"error": reason}.
+    fn set_document_message(
+        &self,
+        document: Handle,
+        message: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String>;
+    /// Posts the JSON value json to the current package document; false when there is none.
+    fn post_document(&self, document: Handle, json: &str) -> Result<bool, String>;
+    /// http, https, file 또는 soksak-package 주소를 연다. 그 밖의 주소이면 false 를 반환한다. 메인 스레드에서 호출한다.
     fn load_document(&self, document: Handle, url: &str) -> Result<bool, String>;
     /// 문서의 페이지 확대를 정한다. 유한한 양수가 아니면 false 다.
     fn zoom_document(&self, document: Handle, zoom: f64) -> Result<bool, String>;

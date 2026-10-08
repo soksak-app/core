@@ -127,7 +127,7 @@ int main(void) { @autoreleasepool {
         check(surface != NULL, @"a logical surface is created");
         webviewSetFrame(surface, 10, 10, 400, 300);
         webviewSetSurfaceHidden(surface, false);
-        document = sp_document_create(surface, store.fileSystemRepresentation, documentChanged, NULL);
+        document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, documentChanged, NULL);
         check(document != NULL, @"a document region is created");
         sp_document_place(document, 10, 10, 10, 10, true);
         region = sp_region_create(surface, "region", regionEvent, NULL);

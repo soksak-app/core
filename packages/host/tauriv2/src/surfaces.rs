@@ -66,6 +66,8 @@ pub struct SurfaceComposition {
 #[derive(Debug, Deserialize)]
 pub(crate) struct CompositionDeclareRequest {
     pub(crate) surface: String,
+    /// The id of the plugin whose page the surface shows.
+    pub(crate) plugin: String,
     pub(crate) composition: SurfaceComposition,
 }
 
@@ -164,11 +166,20 @@ pub(crate) fn declare(webview: &Webview, request: CompositionDeclareRequest) -> 
     if request.surface.is_empty() {
         return Err("composition declaration requires a surface".into());
     }
+    if request.plugin.is_empty() {
+        return Err(format!(
+            "composition declaration of surface {:?} requires its plugin",
+            request.surface
+        ));
+    }
     validate_composition(&request.composition)?;
     let data = window_data(&webview.window())?;
     let mut all = data.compositions.lock().map_err(|e| e.to_string())?;
+    let mut plugins = data.surface_plugins.lock().map_err(|e| e.to_string())?;
     if let Some(previous) = all.get(&request.surface) {
-        if previous != &request.composition {
+        if previous != &request.composition
+            || plugins.get(&request.surface) != Some(&request.plugin)
+        {
             return Err(format!(
                 "surface {:?} changed its composition declaration",
                 request.surface
@@ -176,6 +187,7 @@ pub(crate) fn declare(webview: &Webview, request: CompositionDeclareRequest) -> 
         }
         return Ok(());
     }
+    plugins.insert(request.surface.clone(), request.plugin);
     all.insert(request.surface, request.composition);
     Ok(())
 }
@@ -697,6 +709,11 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             surface_hosts.lock().map_err(|e| e.to_string())?.remove(&id);
             context
                 .compositions
+                .lock()
+                .map_err(|e| e.to_string())?
+                .remove(&id);
+            context
+                .surface_plugins
                 .lock()
                 .map_err(|e| e.to_string())?
                 .remove(&id);

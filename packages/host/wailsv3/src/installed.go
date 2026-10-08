@@ -52,6 +52,20 @@ func enabledPlugins(configDir string) ([]installedPlugin, *sok.InstalledState, e
 	return plugins, state, nil
 }
 
+// PackageFolder returns the folder of the enabled installed plugin, which the document regions of its surfaces serve
+// at soksak-package://<plugin>/ (docs/spec/native-surfaces.md#document-regions).
+func PackageFolder(configDir, plugin string) (string, error) {
+	plugins, _, err := enabledPlugins(configDir)
+	if err != nil {
+		return "", err
+	}
+	index := slices.IndexFunc(plugins, func(entry installedPlugin) bool { return entry.id == plugin })
+	if index < 0 {
+		return "", fmt.Errorf("plugin %s is not installed and enabled", plugin)
+	}
+	return plugins[index].dir, nil
+}
+
 // InstalledPluginsDocument 는 /installed-plugins.json 의 내용이다. plugin 마다 설치된 plugin.json 을 manifest 로 담아
 // page 가 첫 화면 전에 plugin 을 등록하게 한다. 설치 상태를 읽을 수 없으면 { "error" } 문서다.
 func InstalledPluginsDocument(configDir string, diagnostics bool) []byte {

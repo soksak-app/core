@@ -69,7 +69,7 @@ function pageRuntime(surface, scoped, compositionReady) {
     composition: {
       declare: async (declaration) => {
         try {
-          const result = await invoke("compositionDeclare", { composition: declaration });
+          const result = await invoke("compositionDeclare", { plugin: surface.pluginId, composition: declaration });
           compositionReady.resolve();
           return result;
         } catch (error) {

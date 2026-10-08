@@ -65,6 +65,7 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         document_attach,
         composition_declare,
         document_load,
+        document_post,
         document_zoom,
         document_go,
         document_detach,
@@ -432,6 +433,13 @@ fn composition_place(
 fn document_load(webview: Webview, request: Argument<documents::Request>) -> Result<(), String> {
     let Argument(request) = request;
     documents::load(&webview, request)
+}
+
+/// Sends a JSON message to the package document of a region (docs/spec/native-surfaces.md#document-regions).
+#[tauri::command(async)]
+fn document_post(webview: Webview, request: Argument<documents::Request>) -> Result<(), String> {
+    let Argument(request) = request;
+    documents::post(&webview, request)
 }
 
 /// 문서 영역의 페이지 확대를 글자 배율로 정한다.

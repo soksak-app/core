@@ -121,6 +121,8 @@ Items:
 | `documents.registry.rejects-set-after-surface-removed` | Setting a document key whose surface was removed fails. | both |
 | `documents.registry.remove-reserved-returns-empty` | Removing a reserved but unset document name succeeds with an empty handle. | both |
 | `documents.registry.remove-attached-returns-handle-once` | Removing an attached document name returns its handle, and removing it again fails. | both |
+| `document.package.folder` | The package folder of a document region is the folder that `plugins/installed.json` records for the enabled installed plugin of the surface; a disabled or unknown plugin fails with `plugin <id> is not installed and enabled`. | both |
+| `document.message.forward` | A message `{"message": value}` of a package document becomes the payload `{surface, document, message}` of `document-message`, `{"error": reason}` gives the reason that the host logs, and a value with neither fails with `document message <name> has neither message nor error`. | both |
 | `host.arguments.declared-only` | `--config-dir PATH` and `--config-dir=PATH` set the configuration directory; an undeclared argument, a flag without a value and a repeated flag fail with their texts. | both |
 | `host.arguments.registry-ca-in-diagnostic-builds` | A diagnostic build accepts `--registry-ca PATH`, and its registry fetches then trust only the authorities of that PEM file; a file without a certificate fails with `--registry-ca <path>: <reason>`. | both |
 | `endpoint.process.rejects-a-malformed-lock` | A `process.lock` whose contents are not a positive process ID, including `0`, refuses the endpoint with `<path>: invalid process lock` and stays in place. | both |

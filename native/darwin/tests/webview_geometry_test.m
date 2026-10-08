@@ -384,7 +384,7 @@ int main(void) { @autoreleasepool {
     // 문서 저장소 디렉터리는 검사가 끝나면 지운다.
     NSString *store = [NSTemporaryDirectory() stringByAppendingPathComponent:
         [NSString stringWithFormat:@"soksak-geometry-store-%d", getpid()]];
-    WKWebView *region = (WKWebView *)sp_document_create(surface, store.fileSystemRepresentation, ignoreState, NULL);
+    WKWebView *region = (WKWebView *)sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, ignoreState, NULL);
     check(region != NULL, @"a document region is created in the surface");
     sp_document_place(region, 10, 20, 30, 40, true);
     verifyRegion(region, 2, 260, 140.5, @"at 2x");

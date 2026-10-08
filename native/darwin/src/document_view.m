@@ -24,6 +24,21 @@ static NSString *const kScrollScript = @"(() => {"
 // 문서의 요소와 Performance API 가 기록한 요청을 보내는 스크립트(docs/spec/native-surfaces.md#document-regions).
 // 호스트의 콘텐츠 월드에서 실행되므로 페이지 스크립트는 이 처리기에 보낼 수 없다. 페이지 캐시에서 돌아온
 // 문서는 스크립트를 다시 실행하지 않으므로 pageshow 에서도 보낸다.
+// Forwards each message that a package document posts to its own window (docs/spec/native-surfaces.md#document-regions).
+// The script runs in the host's content world, so it sees the message events of the page world without giving the
+// page access to the handler; other documents have no message channel.
+static NSString *const kMessageMessage = @"soksakDocumentMessage";
+static NSString *const kMessageScript = @"(() => {"
+    "if (location.protocol !== 'soksak-package:') return;"
+    "addEventListener('message', (event) => {"
+    "if (event.source !== window) return;"
+    "let text;"
+    "try { text = JSON.stringify(event.data); } catch (error) { text = undefined; }"
+    "window.webkit.messageHandlers.soksakDocumentMessage.postMessage("
+    "text === undefined ? { error: 'the message data is not JSON' } : { message: text });"
+    "});"
+    "})();";
+
 static NSString *const kPageMessage = @"soksakDocumentPage";
 static NSString *const kPageScript = @"(() => {"
     "const post = (value) => window.webkit.messageHandlers.soksakDocumentPage.postMessage(value);"
@@ -83,6 +98,11 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 
 @interface SPDocumentView : WKWebView <WKNavigationDelegate, WKUIDelegate>
 @property sp_document_changed changed;
+@property sp_document_message message;
+@property void *messageContext;
+// The id of the plugin whose surface owns the region; its package documents have the origin soksak-package://<plugin>.
+@property(copy) NSString *plugin;
+- (void)reportMessage:(NSDictionary *)value;
 @property void *context;
 @property sp_document_event event;
 @property void *eventContext;
@@ -115,11 +135,75 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 - (void)reportEvent:(const char *)json;
 @end
 
+static NSString *const kPackageScheme = @"soksak-package";
+
+// The content type of a package file from its extension (docs/spec/native-surfaces.md#document-regions).
+static NSString *packageContentType(NSString *path) {
+    static NSDictionary<NSString *, NSString *> *types;
+    if (!types) {
+        types = [@{
+            @"html": @"text/html", @"js": @"text/javascript", @"mjs": @"text/javascript", @"css": @"text/css",
+            @"json": @"application/json", @"wasm": @"application/wasm", @"svg": @"image/svg+xml", @"png": @"image/png",
+            @"jpg": @"image/jpeg", @"jpeg": @"image/jpeg", @"webp": @"image/webp", @"ico": @"image/x-icon",
+            @"woff2": @"font/woff2", @"woff": @"font/woff", @"ttf": @"font/ttf", @"otf": @"font/otf", @"txt": @"text/plain",
+        } retain];
+    }
+    NSString *type = types[path.pathExtension.lowercaseString];
+    return type ?: @"application/octet-stream"; // default: an extension outside the list is sent as bytes.
+}
+
+// Serves soksak-package://<plugin>/<path> from the package folder of the region's plugin.
+@interface SPPackageScheme : NSObject <WKURLSchemeHandler>
+@property(copy) NSString *root;
+@property(copy) NSString *plugin;
+@end
+
+@implementation SPPackageScheme
+- (void)webView:(WKWebView *)view startURLSchemeTask:(id<WKURLSchemeTask>)task {
+    (void)view;
+    NSURL *url = task.request.URL;
+    NSArray<NSString *> *parts = [url.path componentsSeparatedByString:@"/"];
+    BOOL inside = self.root != nil && [url.host isEqualToString:self.plugin] && parts.count > 1 && parts[0].length == 0;
+    for (NSUInteger index = 1; inside && index < parts.count; index++) {
+        NSString *part = parts[index];
+        if (part.length == 0 || [part isEqualToString:@"."] || [part isEqualToString:@".."]) inside = NO;
+    }
+    NSString *file = inside ? [self.root stringByAppendingPathComponent:[url.path substringFromIndex:1]] : nil;
+    BOOL directory = NO;
+    NSData *data = file && [[NSFileManager defaultManager] fileExistsAtPath:file isDirectory:&directory] && !directory
+        ? [NSData dataWithContentsOfFile:file] : nil;
+    if (!data) {
+        [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorFileDoesNotExist
+            userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"%@ is not found", url.absoluteString] }]];
+        return;
+    }
+    NSHTTPURLResponse *response = [[[NSHTTPURLResponse alloc] initWithURL:url statusCode:200 HTTPVersion:@"HTTP/1.1"
+        headerFields:@{ @"Content-Type": packageContentType(file), @"Content-Length": @(data.length).stringValue }] autorelease];
+    [task didReceiveResponse:response];
+    [task didReceiveData:data];
+    [task didFinish];
+}
+
+- (void)webView:(WKWebView *)view stopURLSchemeTask:(id<WKURLSchemeTask>)task {
+    (void)view; (void)task;
+}
+
+- (void)dealloc { [_root release]; [_plugin release]; [super dealloc]; }
+@end
+
 @implementation SPDocumentScroll
 - (void)userContentController:(WKUserContentController *)controller didReceiveScriptMessage:(WKScriptMessage *)message {
     SPDocumentView *view = self.view;
     if (!view || !message.frameInfo.isMainFrame || ![message.body isKindOfClass:NSDictionary.class]) return;
     NSDictionary *body = message.body;
+    if ([message.name isEqualToString:kMessageMessage]) {
+        if ([body[@"message"] isKindOfClass:NSString.class]) {
+            [view reportMessage:@{ @"text": body[@"message"] }];
+        } else {
+            [view reportMessage:@{ @"error": [body[@"error"] isKindOfClass:NSString.class] ? body[@"error"] : @"the message has no data" }];
+        }
+        return;
+    }
     if ([message.name isEqualToString:kPageMessage]) {
         if ([body[@"elements"] isKindOfClass:NSDictionary.class]) view.elements = body[@"elements"];
         if ([body[@"requests"] isKindOfClass:NSDictionary.class]) view.requests = body[@"requests"];
@@ -143,6 +227,7 @@ static CGFloat documentSurfaceScale(NSView *surface) {
     [_elements release];
     [_requests release];
     [_link release];
+    [_plugin release];
     [_navigation release];
     [_eventMonitor release];
     [super dealloc];
@@ -150,6 +235,19 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 
 - (void)reportEvent:(const char *)json {
     if (!self.closed && self.event) self.event(self.eventContext, json);
+}
+
+// Sends {"message": <text>} with the JSON text of a message, or {"error": <reason>}, to the message receiver.
+- (void)reportMessage:(NSDictionary *)value {
+    if (self.closed || !self.message) return;
+    NSString *json;
+    if (value[@"text"]) {
+        json = [NSString stringWithFormat:@"{\"message\":%@}", value[@"text"]];
+    } else {
+        NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"error": value[@"error"] } options:0 error:nil];
+        json = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+    }
+    self.message(self.messageContext, json.UTF8String);
 }
 
 - (void)installEventMonitor {
@@ -270,12 +368,14 @@ static CGFloat documentSurfaceScale(NSView *surface) {
     [self report];
 }
 
-// 문서 영역은 웹 주소와 파일 주소를 연다. 앱의 스킴은 거부한다.
+// 문서 영역은 웹 주소, 파일 주소, package 주소를 연다. 앱의 스킴은 거부한다.
 static BOOL webAddress(NSURL *url) {
     NSString *scheme = url.scheme.lowercaseString;
     return [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"]
-        || [scheme isEqualToString:@"file"] || [url.absoluteString isEqualToString:@"about:blank"];
+        || [scheme isEqualToString:@"file"] || [scheme isEqualToString:kPackageScheme]
+        || [url.absoluteString isEqualToString:@"about:blank"];
 }
+
 
 - (void)webView:(WKWebView *)view decidePolicyForNavigationAction:(WKNavigationAction *)action
     decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
@@ -372,7 +472,8 @@ static NSString *safariApplicationName(void) {
     return [NSString stringWithFormat:@"Version/%@.%@ Safari/605.1.15", parts[0], parts[1]];
 }
 
-void *sp_document_create(void *surfaceHandle, const char *directory, sp_document_changed changed, void *context) {
+void *sp_document_create(void *surfaceHandle, const char *directory, const char *package, const char *plugin,
+    sp_document_changed changed, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     NSView *surface = (NSView *)surfaceHandle;
     if (!surface || !directory || !changed || !surface.window) return NULL;
@@ -383,10 +484,19 @@ void *sp_document_create(void *surfaceHandle, const char *directory, sp_document
     WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
     configuration.applicationNameForUserAgent = applicationName;
     configuration.websiteDataStore = store;
+    SPPackageScheme *scheme = [[SPPackageScheme new] autorelease];
+    if (package && plugin) {
+        scheme.root = [NSString stringWithUTF8String:package];
+        scheme.plugin = [NSString stringWithUTF8String:plugin];
+    }
+    [configuration setURLSchemeHandler:scheme forURLScheme:kPackageScheme];
     WKContentWorld *world = [WKContentWorld worldWithName:@"soksak-document"];
     SPDocumentScroll *scroll = [[SPDocumentScroll new] autorelease];
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kScrollMessage];
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kPageMessage];
+    [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kMessageMessage];
+    [configuration.userContentController addUserScript:[[[WKUserScript alloc] initWithSource:kMessageScript
+        injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES inContentWorld:world] autorelease]];
     WKUserScript *script = [[[WKUserScript alloc] initWithSource:kScrollScript
         injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:YES inContentWorld:world] autorelease];
     [configuration.userContentController addUserScript:script];
@@ -398,6 +508,7 @@ void *sp_document_create(void *surfaceHandle, const char *directory, sp_document
     view.scroll = scroll;
     view.changed = changed;
     view.context = context;
+    view.plugin = package && plugin ? scheme.plugin : nil;
     view.navigationDelegate = view;
     view.UIDelegate = view;
     view.webSurface = surface;
@@ -421,6 +532,31 @@ void *sp_document_create(void *surfaceHandle, const char *directory, sp_document
     [view _setOverrideDeviceScaleFactor:sp_surface_scale(surface)];
     for (NSString *key in observedKeys()) [view addObserver:view forKeyPath:key options:0 context:NULL];
     return view; // sp_document_close 까지 호출자가 이 참조를 소유한다.
+}
+
+void sp_document_set_message(void *handle, sp_document_message message, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) return;
+    view.message = message;
+    view.messageContext = context;
+}
+
+bool sp_document_post(void *handle, const char *json) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed || !json || !view.plugin) return false;
+    NSURL *url = view.URL;
+    if (![url.scheme.lowercaseString isEqualToString:kPackageScheme] || ![url.host isEqualToString:view.plugin]) return false;
+    id value = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:json length:strlen(json)]
+        options:NSJSONReadingFragmentsAllowed error:nil];
+    if (!value) return false;
+    [view callAsyncJavaScript:@"window.postMessage(message, location.origin);" arguments:@{ @"message": value }
+        inFrame:nil inContentWorld:WKContentWorld.pageWorld completionHandler:^(id result, NSError *error) {
+        (void)result;
+        if (error) [view reportMessage:@{ @"error": [NSString stringWithFormat:@"post failed: %@", error.localizedDescription] }];
+    }];
+    return true;
 }
 
 void sp_document_set_event(void *handle, sp_document_event event, void *context) {
