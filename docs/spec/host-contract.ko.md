@@ -453,6 +453,7 @@ fn invalid_json_closes_connection() {
 | `installed.document.reports-errors` | 켜진 plugin의 `plugin.json`이 없거나 잘못되었거나, `diagnostics.json`이나 `installed.json`이 잘못되었으면 `/installed-plugins.json`은 파일과 이유를 담은 `{"error":...}`다. | both |
 | `page.start.document` | 시작 문서는 작업 공간 스냅샷과 window의 `windowControls` 답을 이 순서로 담은 `{"workspace":...,"controls":...}`다. | both |
 | `page.start.requires-window` | 시작 문서 요청은 요청한 window를 시작한 뒤 문서를 `no-store`인 `application/json`으로 답하고, 요청이 window를 가리키지 않으면 아무것도 시작하지 않고 400과 `the start document request names no window`로 실패하며, 시작이 실패하면 500과 그 이유로 실패한다. | both |
+| `page.start.sok-core-owner` | Tauri는 시작 문서를 `sok://core/start.json`에서 내보낸다. 다른 owner의 `sok` 주소는 창을 시작하지 않고 404와 `sok://<owner>/start.json not found`로 답한다. | tauriv2 only: Wails는 시작 문서를 asset server의 `/start.json`에서 내보낸다 |
 | `plugins.state.reports-registry-and-installed` | `pluginsState`는 `plugins/registry.json`이 없으면 `registry`와 `index`를 `null`로, 있으면 index URL과 검사한 index를, 읽거나 검사하지 못한 index는 `index`를 `{"error":...}`로 돌려주고, `installed.json`의 내용 또는 없을 때 빈 format 1 문서를 돌려준다. | both |
 | `plugins.run.changes-like-the-command` | `install`, `update`, `disable`, `enable`, `remove`의 `pluginsRun`은 같은 `sok plugin` 명령처럼 `installed.json`과 폴더를 바꾸고 그 출력을 돌려주며, 바꿀 때마다 모든 창에 `{action, plugin}`과 함께 `plugins-changed`를 보낸다. | both |
 | `plugins.run.rejects-invalid-and-concurrent` | `pluginsRun`은 알 수 없는 action, 비어 있지 않은 문자열이 아닌 plugin id, 명령의 message로 실패한 작업, 다른 작업이 실행 중일 때의 호출을 `another plugin operation is running`으로 거부하고, `plugins-changed` event를 보내지 않는다. | both |

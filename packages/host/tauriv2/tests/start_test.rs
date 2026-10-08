@@ -54,6 +54,7 @@ fn start_requests_start_the_requesting_main_webview_only() {
     assert_eq!(started, vec!["main".to_string(), "gone".to_string()]);
 }
 
+// contract: page.start.sok-core-owner
 /// Tauri serves the start document at sok://core/start.json (docs/spec/native-host.md#application-addresses); the
 /// sok address of another owner answers not found without starting a window.
 #[test]

@@ -647,6 +647,7 @@
     - [o] F111.7.3 — P1: Tauri 시작 문서를 `sok://core/start.json`에서 내보낸다. Red: `start_document_is_served_at_the_core_owner_of_sok`가 `cannot find value CORE in module start`로 build되지 않았다. Green: Tauri host test가 통과하고, 다시 빌드한 Tauri 애플리케이션이 macOS 26.6.2 arm64에서 `sok://core/start.json`으로 창을 시작하며 `core.screen`이 `library`를 보고한다. 2026-10-08 완료.
     - [o] F111.7.4 — P2: F111.7.2와 F111.7.3이 바꾼 주석을 영문으로 쓴다. 2026-10-08 완료.
     - [o] F111.7.5 — P2: F111.7.3의 후속. 입력: `scripts/test/fallbacks.test.mjs`. 동작: Tauri 시작 문서 처리기가 없는 host를 이유 없이 기본값으로 바꿔 `packages/host/tauriv2/src/host.rs:192: defaulting unwrap without a stated reason`으로 실패했다. 기대: 그 줄이 host 없는 요청은 owner를 가리키지 않으므로 찾을 수 없다고 답한다는 이유를 적는다. Red: 위 실패. Green: test가 통과한다. 2026-10-08 완료.
+    - [o] F111.7.6 — P2: F111.7.3의 후속. 입력: `make host-contract-check`. 동작: `start_document_is_served_at_the_core_owner_of_sok declares no contract case`로 실패했다. 기대: Tauri 전용 사례 `page.start.sok-core-owner`가 그 test를 가리킨다. Red: 위 실패. Green: 검사가 387개 사례를 통과한다. 2026-10-08 완료.
 - [ ] F112 — P1: 딥링크를 연다. 애플리케이션 번들은 `soksak` URL scheme을 등록하고, host는 `soksak://<owner>/<command>?<params>`(owner는 `core`나 plugin id)를 그 owner의 선언된 command로 실행한다.
 - [ ] F113 — P0: 두 host에서 문서 영역이 입력한 글자를 받는다. 입력: ABC 입력 소스에서 영역 문서의 입력 칸을 네이티브로 누르고 x와 y를 누른다. 동작: Tauri의 hwp 검사에서 편집기가 이동 키는 받았지만 입력한 글자는 받지 않았다. 기대: 두 host에서 입력 칸이 `xy`를 받는다.
   - [o] F113.1 — P1: `native/darwin/tests/document_typing_test.m`에서 비활성 애플리케이션의 순수 AppKit 창에서 문서 영역이 입력한 글자를 받는지 검사한다. 2026-10-08 완료: macOS 26.6.2 arm64에서 test가 통과하고, 영역 문서의 입력 칸이 `xy`를 받는다.
