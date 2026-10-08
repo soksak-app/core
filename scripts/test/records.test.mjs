@@ -18,6 +18,12 @@ test("record checks report each statement that is not a fact about the repositor
     ["2026-10-05 R1-5-4에서 발견: 실패를 보고하지 않았다.", "account of who found or requested"],
     ["2026-10-07에 F95를 확인하다가 발견했다.", "account of who found or requested"],
     ["사용자 요청으로 추가한다.", "account of who found or requested"],
+    ["Reported by the user on 2026-10-02: the bar stayed dark.", "account of who found or requested"],
+    ["Withdrawn on 2026-10-05 by the user's decision for R2-4-5.", "account of who found or requested"],
+    ["2026-10-05 사용자 결정에 따라 철회한다.", "account of who found or requested"],
+    ["사용자가 보고한 스크롤바를 관측했다.", "account of who found or requested"],
+    ["`@soksak/plugin-api` is pinned to core `75709f2a`.", "commit reference"],
+    ["`drawList` (core F67, pin 5b0107ec) keeps the elements.", "commit reference"],
     ["It passes on this Mac.", "local environment"],
     ["이 머신에서 통과한다.", "local environment"],
   ];
