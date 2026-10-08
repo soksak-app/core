@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F101.1: a terminal shell runs in a UTF-8 locale when the terminal service has no `LANG`, `LC_ALL` or `LC_CTYPE`.
 - R3.1: AGENTS.md states that records state facts about the repository and that commit messages use `type(scope): Subject (#ID)` without footers.
 - F100.2: the release workflows of the plugin and sidecar repositories build `sok` from a declared core release instead of the core tag of their own name.
 - F100.1: the plugin specification states that a plugin or sidecar version has no relation to a core version, and that its release workflow declares the core release that builds `sok`.
