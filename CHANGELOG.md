@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F111.7.2: document regions load plugin documents at `sok://<plugin>/<path>` instead of `soksak-package://<plugin>/<path>`.
 - F111.7.1: the specification addresses application documents inside webviews at `sok://<owner>/<path>`, keeps the `soksak` scheme for deep links, and calls a document of a plugin a plugin document.
 - F111.5: the window synchronization carries the plugin of each surface, so a hybrid surface such as a browser card mounts instead of failing with `changed its composition declaration`.
 - F111.6: the runtime of both applications passes `documentPost` to the host, so a page posts messages to a package document instead of failing with `unknown host call: documentPost`.

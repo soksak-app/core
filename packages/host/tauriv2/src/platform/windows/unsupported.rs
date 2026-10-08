@@ -173,7 +173,7 @@ pub fn focus_webview(_view: &PlatformWebview) -> Result<(), String> {
 pub fn create_document(
     _surface: Handle,
     _store: &str,
-    _package: &str,
+    _folder: &str,
     _plugin: &str,
     _changed: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {

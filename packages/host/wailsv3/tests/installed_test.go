@@ -200,15 +200,15 @@ func TestInstalledSidecarsLeaveOutThePackagesOfInstalledPlugins(t *testing.T) {
 	}
 }
 
-// contract: document.package.folder
-func TestPackageFolderIsTheFolderOfTheEnabledInstalledPlugin(t *testing.T) {
+// contract: document.plugin.folder
+func TestPluginFolderIsTheFolderOfTheEnabledInstalledPlugin(t *testing.T) {
 	config := installedFixture(t)
-	folder, err := host.PackageFolder(config, "alpha")
+	folder, err := host.PluginFolder(config, "alpha")
 	if err != nil || folder != filepath.Join(config, "plugins/alpha/1.0.0") {
 		t.Fatalf("alpha folder %q %v", folder, err)
 	}
 	for _, plugin := range []string{"off", "nobody"} {
-		if _, err := host.PackageFolder(config, plugin); err == nil || err.Error() != "plugin "+plugin+" is not installed and enabled" {
+		if _, err := host.PluginFolder(config, plugin); err == nil || err.Error() != "plugin "+plugin+" is not installed and enabled" {
 			t.Fatalf("%s: %v", plugin, err)
 		}
 	}

@@ -14,23 +14,23 @@ typedef void (*sp_document_changed)(void *context, const char *state);
 // 해제된다. 메인 스레드에서 호출된다.
 typedef void (*sp_document_event)(void *context, const char *json);
 
-// A message of a package document: the JSON object {"message": <value>} for each message that the document posts to
+// A message of a plugin document: the JSON object {"message": <value>} for each message that the document posts to
 // its own window, or {"error": <reason>} when its data is not JSON or a post of the page fails. json is released when
 // the call returns. Called on the main thread.
 typedef void (*sp_document_message)(void *context, const char *json);
 
 // surface 웹뷰 안에 숨긴 문서 웹뷰를 만든다. directory 는 영구 데이터 저장소가 사이트 데이터를 두는
-// 절대 경로로, 없으면 만든다. 같은 디렉터리의 문서는 같은 저장소를 쓴다. package and plugin name the package
-// folder and the id of the plugin whose surface owns the region; soksak-package://<plugin>/<path> serves <path> from
-// that folder, and NULL package serves nothing. 만들 수 없으면 NULL 을 반환한다.
-void *sp_document_create(void *surface, const char *directory, const char *package, const char *plugin,
+// 절대 경로로, 없으면 만든다. 같은 디렉터리의 문서는 같은 저장소를 쓴다. folder and plugin name the installed
+// folder and the id of the plugin whose surface owns the region; sok://<plugin>/<path> serves <path> from that folder,
+// and NULL folder serves nothing. 만들 수 없으면 NULL 을 반환한다.
+void *sp_document_create(void *surface, const char *directory, const char *folder, const char *plugin,
     sp_document_changed changed, void *context);
 
-// Sets the receiver of the messages of package documents. NULL reports none. The caller keeps context while the
+// Sets the receiver of the messages of plugin documents. NULL reports none. The caller keeps context while the
 // document lives.
 void sp_document_set_message(void *document, sp_document_message message, void *context);
 
-// Posts the JSON value json to the window of the current package document of the region's plugin. Returns false and
+// Posts the JSON value json to the window of the current plugin document of the region's plugin. Returns false and
 // posts nothing when the current document is not such a document or json is not JSON.
 bool sp_document_post(void *document, const char *json);
 
@@ -38,7 +38,7 @@ bool sp_document_post(void *document, const char *json);
 // 호출자는 문서가 살아 있는 동안 context 를 유지해야 한다.
 void sp_document_set_event(void *document, sp_document_event event, void *context);
 
-// http, https, file 또는 soksak-package 주소를 연다. 그 밖의 주소는 거부하고 false 를 반환한다.
+// http, https, file 또는 sok 주소를 연다. 그 밖의 주소는 거부하고 false 를 반환한다.
 bool sp_document_load(void *document, const char *url);
 
 // action: 0 뒤로, 1 앞으로, 2 다시 읽기, 3 멈춤, 4 현재 항목에서 offset 만큼 떨어진 세션 기록 항목.

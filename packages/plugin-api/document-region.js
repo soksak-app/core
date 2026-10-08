@@ -106,7 +106,7 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     state = value;
     for (const fn of listeners) fn(value);
   }));
-  // The messages of a package document of this region (docs/spec/native-surfaces.md#document-regions).
+  // The messages of a plugin document of this region (docs/spec/native-surfaces.md#document-regions).
   const messageListeners = new Set();
   const unlistenMessages = Promise.resolve(port.onMessage((document, message) => {
     if (document !== name || detached) return;
@@ -133,9 +133,9 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     },
     _place: placeAt,
     load: (url) => queue(() => port.load(name, url)),
-    /** Sends a JSON value to the window of the region's package document. */
+    /** Sends a JSON value to the window of the region's plugin document. */
     post: (message) => queue(() => port.post(name, message)),
-    /** Calls fn with each message that the region's package document posts to its own window; returns the stop. */
+    /** Calls fn with each message that the region's plugin document posts to its own window; returns the stop. */
     onMessage(fn) {
       messageListeners.add(fn);
       return () => messageListeners.delete(fn);

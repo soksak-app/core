@@ -52,9 +52,9 @@ func enabledPlugins(configDir string) ([]installedPlugin, *sok.InstalledState, e
 	return plugins, state, nil
 }
 
-// PackageFolder returns the folder of the enabled installed plugin, which the document regions of its surfaces serve
-// at soksak-package://<plugin>/ (docs/spec/native-surfaces.md#document-regions).
-func PackageFolder(configDir, plugin string) (string, error) {
+// PluginFolder returns the folder of the enabled installed plugin, which the document regions of its surfaces serve
+// at sok://<plugin>/ (docs/spec/native-surfaces.md#document-regions).
+func PluginFolder(configDir, plugin string) (string, error) {
 	plugins, _, err := enabledPlugins(configDir)
 	if err != nil {
 		return "", err

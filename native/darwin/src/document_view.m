@@ -24,12 +24,12 @@ static NSString *const kScrollScript = @"(() => {"
 // 문서의 요소와 Performance API 가 기록한 요청을 보내는 스크립트(docs/spec/native-surfaces.md#document-regions).
 // 호스트의 콘텐츠 월드에서 실행되므로 페이지 스크립트는 이 처리기에 보낼 수 없다. 페이지 캐시에서 돌아온
 // 문서는 스크립트를 다시 실행하지 않으므로 pageshow 에서도 보낸다.
-// Forwards each message that a package document posts to its own window (docs/spec/native-surfaces.md#document-regions).
+// Forwards each message that a plugin document posts to its own window (docs/spec/native-surfaces.md#document-regions).
 // The script runs in the host's content world, so it sees the message events of the page world without giving the
 // page access to the handler; other documents have no message channel.
 static NSString *const kMessageMessage = @"soksakDocumentMessage";
 static NSString *const kMessageScript = @"(() => {"
-    "if (location.protocol !== 'soksak-package:') return;"
+    "if (location.protocol !== 'sok:') return;"
     "addEventListener('message', (event) => {"
     "if (event.source !== window) return;"
     "let text;"
@@ -100,7 +100,7 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 @property sp_document_changed changed;
 @property sp_document_message message;
 @property void *messageContext;
-// The id of the plugin whose surface owns the region; its package documents have the origin soksak-package://<plugin>.
+// The id of the plugin whose surface owns the region; its plugin documents have the origin sok://<plugin>.
 @property(copy) NSString *plugin;
 - (void)reportMessage:(NSDictionary *)value;
 @property void *context;
@@ -135,10 +135,11 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 - (void)reportEvent:(const char *)json;
 @end
 
-static NSString *const kPackageScheme = @"soksak-package";
+// The scheme of application documents inside webviews (docs/spec/native-host.md#application-addresses).
+static NSString *const kApplicationScheme = @"sok";
 
-// The content type of a package file from its extension (docs/spec/native-surfaces.md#document-regions).
-static NSString *packageContentType(NSString *path) {
+// The content type of a plugin file from its extension (docs/spec/native-surfaces.md#document-regions).
+static NSString *pluginContentType(NSString *path) {
     static NSDictionary<NSString *, NSString *> *types;
     if (!types) {
         types = [@{
@@ -152,13 +153,13 @@ static NSString *packageContentType(NSString *path) {
     return type ?: @"application/octet-stream"; // default: an extension outside the list is sent as bytes.
 }
 
-// Serves soksak-package://<plugin>/<path> from the package folder of the region's plugin.
-@interface SPPackageScheme : NSObject <WKURLSchemeHandler>
+// Serves sok://<plugin>/<path> from the folder of the region's plugin.
+@interface SPPluginScheme : NSObject <WKURLSchemeHandler>
 @property(copy) NSString *root;
 @property(copy) NSString *plugin;
 @end
 
-@implementation SPPackageScheme
+@implementation SPPluginScheme
 - (void)webView:(WKWebView *)view startURLSchemeTask:(id<WKURLSchemeTask>)task {
     (void)view;
     NSURL *url = task.request.URL;
@@ -178,7 +179,7 @@ static NSString *packageContentType(NSString *path) {
         return;
     }
     NSHTTPURLResponse *response = [[[NSHTTPURLResponse alloc] initWithURL:url statusCode:200 HTTPVersion:@"HTTP/1.1"
-        headerFields:@{ @"Content-Type": packageContentType(file), @"Content-Length": @(data.length).stringValue }] autorelease];
+        headerFields:@{ @"Content-Type": pluginContentType(file), @"Content-Length": @(data.length).stringValue }] autorelease];
     [task didReceiveResponse:response];
     [task didReceiveData:data];
     [task didFinish];
@@ -368,11 +369,11 @@ static NSString *packageContentType(NSString *path) {
     [self report];
 }
 
-// 문서 영역은 웹 주소, 파일 주소, package 주소를 연다. 앱의 스킴은 거부한다.
+// 문서 영역은 웹 주소, 파일 주소, plugin 주소를 연다. 앱의 스킴은 거부한다.
 static BOOL webAddress(NSURL *url) {
     NSString *scheme = url.scheme.lowercaseString;
     return [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"]
-        || [scheme isEqualToString:@"file"] || [scheme isEqualToString:kPackageScheme]
+        || [scheme isEqualToString:@"file"] || [scheme isEqualToString:kApplicationScheme]
         || [url.absoluteString isEqualToString:@"about:blank"];
 }
 
@@ -472,7 +473,7 @@ static NSString *safariApplicationName(void) {
     return [NSString stringWithFormat:@"Version/%@.%@ Safari/605.1.15", parts[0], parts[1]];
 }
 
-void *sp_document_create(void *surfaceHandle, const char *directory, const char *package, const char *plugin,
+void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin,
     sp_document_changed changed, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     NSView *surface = (NSView *)surfaceHandle;
@@ -484,12 +485,12 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
     configuration.applicationNameForUserAgent = applicationName;
     configuration.websiteDataStore = store;
-    SPPackageScheme *scheme = [[SPPackageScheme new] autorelease];
-    if (package && plugin) {
-        scheme.root = [NSString stringWithUTF8String:package];
+    SPPluginScheme *scheme = [[SPPluginScheme new] autorelease];
+    if (folder && plugin) {
+        scheme.root = [NSString stringWithUTF8String:folder];
         scheme.plugin = [NSString stringWithUTF8String:plugin];
     }
-    [configuration setURLSchemeHandler:scheme forURLScheme:kPackageScheme];
+    [configuration setURLSchemeHandler:scheme forURLScheme:kApplicationScheme];
     WKContentWorld *world = [WKContentWorld worldWithName:@"soksak-document"];
     SPDocumentScroll *scroll = [[SPDocumentScroll new] autorelease];
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kScrollMessage];
@@ -508,7 +509,7 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     view.scroll = scroll;
     view.changed = changed;
     view.context = context;
-    view.plugin = package && plugin ? scheme.plugin : nil;
+    view.plugin = folder && plugin ? scheme.plugin : nil;
     view.navigationDelegate = view;
     view.UIDelegate = view;
     view.webSurface = surface;
@@ -547,7 +548,7 @@ bool sp_document_post(void *handle, const char *json) {
     SPDocumentView *view = (SPDocumentView *)handle;
     if (!view || view.closed || !json || !view.plugin) return false;
     NSURL *url = view.URL;
-    if (![url.scheme.lowercaseString isEqualToString:kPackageScheme] || ![url.host isEqualToString:view.plugin]) return false;
+    if (![url.scheme.lowercaseString isEqualToString:kApplicationScheme] || ![url.host isEqualToString:view.plugin]) return false;
     id value = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:json length:strlen(json)]
         options:NSJSONReadingFragmentsAllowed error:nil];
     if (!value) return false;

@@ -33,11 +33,11 @@ type DocumentRequest struct {
 	Action   string   `json:"action,omitempty"`
 	Zoom     *float64 `json:"zoom,omitempty"`
 	Offset   *int32   `json:"offset,omitempty"`
-	// Message is the JSON value that documentPost sends to a package document.
+	// Message is the JSON value that documentPost sends to a plugin document.
 	Message json.RawMessage `json:"message,omitempty"`
 }
 
-// DocumentMessage turns a message of a package document, {"message": value} or {"error": reason}, into the payload of
+// DocumentMessage turns a message of a plugin document, {"message": value} or {"error": reason}, into the payload of
 // the document-message event of the owning surface, or into the reason that the host writes to the application log.
 func DocumentMessage(surface, document, value string) (payload map[string]any, reason string, err error) {
 	var received struct {
@@ -237,7 +237,7 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 		plugin := s.surfacePlugins[key.Surface]
 		s.mu.Unlock()
 		var folder string
-		folder, err = PackageFolder(s.host.configDir, plugin)
+		folder, err = PluginFolder(s.host.configDir, plugin)
 		if err != nil {
 			return
 		}
@@ -281,7 +281,7 @@ func (s *Surfaces) documentChanged(key DocumentKey, state string) {
 	s.windowChanged()
 }
 
-// documentMessage sends a message of a package document to the owning surface, or writes its failure to the
+// documentMessage sends a message of a plugin document to the owning surface, or writes its failure to the
 // application log. UI 스레드에서 호출된다.
 func (s *Surfaces) documentMessage(key DocumentKey, value string) {
 	payload, reason, err := DocumentMessage(key.Surface, key.Name, value)
@@ -326,20 +326,20 @@ func (s *Surfaces) withDocument(viewID uint64, req DocumentRequest, run func(han
 func (s *Surfaces) loadDocument(viewID uint64, req DocumentRequest) error {
 	return s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
 		if !system.LoadDocument(handle, req.URL) {
-			return fmt.Errorf("only http, https, file, and soksak-package addresses can be opened: %q", req.URL)
+			return fmt.Errorf("only http, https, file, and sok addresses can be opened: %q", req.URL)
 		}
 		return nil
 	})
 }
 
-// postDocument sends a JSON message to the current package document of a region.
+// postDocument sends a JSON message to the current plugin document of a region.
 func (s *Surfaces) postDocument(viewID uint64, req DocumentRequest) error {
 	if !json.Valid(req.Message) {
 		return fmt.Errorf("documentPost requires a JSON message")
 	}
 	return s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
 		if !system.PostDocument(handle, string(req.Message)) {
-			return fmt.Errorf("document %s shows no package document", req.Document)
+			return fmt.Errorf("document %s shows no plugin document", req.Document)
 		}
 		return nil
 	})

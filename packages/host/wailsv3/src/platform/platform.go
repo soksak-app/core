@@ -327,15 +327,15 @@ type Platform interface {
 	// CreateDocument 는 표면 웹뷰 surface 안에 외부 문서 웹뷰를 숨긴 상태로 만든다. directory 는 영구
 	// 데이터 저장소가 사이트 데이터를 두는 절대 경로다. changed 는 상태 JSON({url, title, loading, progress, canGoBack, canGoForward,
 	// error, scroll}) 을 UI 스레드에서 받는다.
-	// pkg and plugin are the package folder and the id of the plugin whose surface owns the region; the region serves
-	// soksak-package://<plugin>/<path> from pkg (docs/spec/native-surfaces.md#document-regions).
-	CreateDocument(surface unsafe.Pointer, directory, pkg, plugin string, changed func(state string)) (unsafe.Pointer, error)
+	// folder and plugin are the installed folder and the id of the plugin whose surface owns the region; the region serves
+	// sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions).
+	CreateDocument(surface unsafe.Pointer, directory, folder, plugin string, changed func(state string)) (unsafe.Pointer, error)
 	SetDocumentEvent(document unsafe.Pointer, event func(value string)) error
-	// SetDocumentMessage receives {"message": value} for each message of a package document and {"error": reason}.
+	// SetDocumentMessage receives {"message": value} for each message of a plugin document and {"error": reason}.
 	SetDocumentMessage(document unsafe.Pointer, message func(value string)) error
-	// PostDocument posts the JSON value json to the current package document; false when there is none.
+	// PostDocument posts the JSON value json to the current plugin document; false when there is none.
 	PostDocument(document unsafe.Pointer, json string) bool
-	// LoadDocument 는 http, https, file 또는 soksak-package 주소를 연다. 그 밖의 주소이면 false 를 반환한다.
+	// LoadDocument 는 http, https, file 또는 sok 주소를 연다. 그 밖의 주소이면 false 를 반환한다.
 	LoadDocument(document unsafe.Pointer, url string) bool
 	// ZoomDocument 는 문서의 페이지 확대를 정한다. 유한한 양수가 아니면 false 를 반환한다.
 	ZoomDocument(document unsafe.Pointer, zoom float64) bool

@@ -64,15 +64,15 @@ func documentEvent(context unsafe.Pointer, value *C.char) {
 	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
-func (implementation) CreateDocument(surface unsafe.Pointer, directory, pkg, plugin string, changed func(state string)) (unsafe.Pointer, error) {
+func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, plugin string, changed func(state string)) (unsafe.Pointer, error) {
 	name := C.CString(directory)
 	defer C.free(unsafe.Pointer(name))
-	folder := C.CString(pkg)
-	defer C.free(unsafe.Pointer(folder))
+	folderText := C.CString(folder)
+	defer C.free(unsafe.Pointer(folderText))
 	id := C.CString(plugin)
 	defer C.free(unsafe.Pointer(id))
 	receiver := cgo.NewHandle(changed)
-	document := C.documentCreate(surface, name, folder, id, C.uintptr_t(receiver))
+	document := C.documentCreate(surface, name, folderText, id, C.uintptr_t(receiver))
 	if document == nil {
 		receiver.Delete()
 		return nil, errors.New("cannot create a document view in this surface")

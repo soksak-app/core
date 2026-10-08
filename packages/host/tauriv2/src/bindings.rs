@@ -435,7 +435,7 @@ fn document_load(webview: Webview, request: Argument<documents::Request>) -> Res
     documents::load(&webview, request)
 }
 
-/// Sends a JSON message to the package document of a region (docs/spec/native-surfaces.md#document-regions).
+/// Sends a JSON message to the plugin document of a region (docs/spec/native-surfaces.md#document-regions).
 #[tauri::command(async)]
 fn document_post(webview: Webview, request: Argument<documents::Request>) -> Result<(), String> {
     let Argument(request) = request;

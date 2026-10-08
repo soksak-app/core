@@ -324,17 +324,17 @@ fn installed_sidecars_leave_out_the_packages_of_installed_plugins() {
     assert_eq!(names, ["@scope/sidecar-worker"]);
 }
 
-// contract: document.package.folder
+// contract: document.plugin.folder
 #[test]
-fn package_folder_is_the_folder_of_the_enabled_installed_plugin() {
+fn plugin_folder_is_the_folder_of_the_enabled_installed_plugin() {
     let config = installed_fixture();
     assert_eq!(
-        installed::package_folder(config.path(), "alpha"),
+        installed::plugin_folder(config.path(), "alpha"),
         Ok(config.path().join("plugins/alpha/1.0.0"))
     );
     for plugin in ["off", "nobody"] {
         assert_eq!(
-            installed::package_folder(config.path(), plugin),
+            installed::plugin_folder(config.path(), plugin),
             Err(format!("plugin {plugin} is not installed and enabled"))
         );
     }
