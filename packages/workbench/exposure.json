@@ -616,6 +616,42 @@
         }
       },
       {
+        "name": "core.contributions",
+        "description": "The contributions of the installed and enabled plugins to extension points, resolved when the page loaded, sorted by plugin, point and item: the contributing plugin id, the point as <plugin id>.<point>, the item index, the state (connected, provider-missing, version-mismatch or invalid) and the reason, or null for a connected item.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "point": {
+                "type": "string"
+              },
+              "index": {
+                "type": "integer"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "connected",
+                  "provider-missing",
+                  "version-mismatch",
+                  "invalid"
+                ]
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
         "name": "core.plugins",
         "description": "The plugin cards of the library plugin page: the registry index URL or null, the registry index or plugin state error or null, one entry per loaded, installed or registry plugin sorted by id with its name, description, state (loaded, disabled, available or restart), installed version and enabled value or null, newest registry version or null, and sidecars with their range and installed version, the latest plugin operation with its state (running, done or failed) and error, or null, and whether a plugin waits for a restart.",
         "schema": {

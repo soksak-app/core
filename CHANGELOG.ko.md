@@ -5,6 +5,7 @@
 ## 미배포
 
 - F104.1: 주석은 영어로 쓰고, 주석 언어 검사는 한글을 담은 주석 줄을 보고한다.
+- F102.1.5: workbench는 page를 불러올 때 확장 지점에 대한 기여를 해석하고, `core.contributions`와 plugin 카드에 보고하며, 제공자 표면에 `contributions(point)`를 주고, page import map은 `@soksak/shared/`를 확장 지점의 공유 module에 대응한다. manifest의 sidecar 목록은 설치된 plugin의 package를 뺀다.
 - F102.1.2: plugin manifest는 `extends`에 확장 지점을, `contributes`에 기여를 선언하고, `dependencies`는 plugin package를 가리킬 수 있다.
 - F102.1.1: `sok`, plugin manifest, `soksak-engines`의 version 범위는 상한 없는 `>=x.y.z`를 받고, plugin manifest는 sidecar 범위 `*`를 받는다.
 - 체크리스트 항목 `R3.1` 폐기: 체크리스트 항목은 project 작업을 담고, 이 항목은 AGENTS.md가 담는 작업 규칙이나 그 적용을 담았다.

@@ -2,6 +2,7 @@
 //
 // 워크벤치는 특정 플러그인을 알지 않는다. 플러그인 목록은 host 가 제공하는 /installed-plugins.json 에서 오고
 // (docs/spec/installation.md), 새 스페이스의 배치와 사이드바 기본값은 environment.json 에서 온다.
+import { contributionsOf, installContributions } from "./contributions.js";
 import { registry as exposure } from "./exposure.js";
 import { registerState } from "./plugin-states.js";
 import { registerPlugin, registerSection } from "./registry.js";
@@ -30,7 +31,8 @@ export function defaultRegistry() {
 function surfaceOf(name, pluginId, surface) {
   const module = `/${modulePath(name, surface.module)}`;
   return (tabId) => ({ module, composition: surface.composition, surfaceId: tabId,
-    pluginId, declarations: surface.declarations, sidecars: surface.sidecars });
+    pluginId, declarations: surface.declarations, sidecars: surface.sidecars,
+    contributions: (point) => contributionsOf(pluginId, point) });
 }
 
 /* 진단 빌드에서 플러그인 id 마다 불러온 진단 모듈. 등록이 불러오기를 시작하고 표면을 올릴 때 기다린다. */
@@ -50,6 +52,9 @@ export function installEnvironment(environmentDocument, installedDocument) {
   registry = environment.registry ?? null;
   const installed = validateInstalledPlugins(installedDocument);
   const manifests = installed.map(({ package: name, version, manifest }) => ({ name, manifest, version }));
+  // A dependency that names the package of an installed plugin is a plugin dependency, not a sidecar (docs/spec/plugins.md#pluginjson).
+  const pluginPackages = new Set(installed.map((plugin) => plugin.package));
+  installContributions(installed);
   checkReferences(environment, manifests.map((m) => m.manifest));
   const diagnosticPlugins = Object.fromEntries(installed.filter((plugin) => plugin.diagnostics)
     .map((plugin) => [plugin.package, validateDiagnostics(plugin.manifest, plugin.diagnostics)]));
@@ -76,7 +81,7 @@ export function installEnvironment(environmentDocument, installedDocument) {
           ...manifest.surface,
           // 기본값: exposes 는 plugin.json 의 선택 필드이며 없으면 선언이 없다.
           declarations: exposes ?? {},
-          sidecars: manifestSidecars(manifest),
+          sidecars: manifestSidecars(manifest, pluginPackages),
         }),
       });
     }
@@ -91,7 +96,7 @@ export function installEnvironment(environmentDocument, installedDocument) {
     if (manifest.state) {
       registerState({ plugin: manifest.id, module: `/${modulePath(name, manifest.state.module)}`,
         // 기본값: data 는 plugin.json 의 선택 필드이며 없으면 비어 있다.
-        sidecars: manifestSidecars(manifest), data: manifest.data ?? {} });
+        sidecars: manifestSidecars(manifest, pluginPackages), data: manifest.data ?? {} });
     }
   }
   setSidebarDefaults(normalizeSidebarDefaults(environment, manifests.map(({ manifest }) => manifest)));

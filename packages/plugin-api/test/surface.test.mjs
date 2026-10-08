@@ -82,3 +82,15 @@ test("surface context carries the window's project root or null", () => {
 test("releasing the ready state of an unknown context is an error", () => {
   assert.throws(() => releaseSurfaceReady({}), /createSurfaceContext/);
 });
+
+test("surface context gives the contributions of the plugin's declared extension points", () => {
+  const root = { appendChild() {} };
+  const runtime = { sidecar: () => "port", exposure: { command() {} }, emit() {} };
+  const plain = createSurfaceContext({ root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime });
+  assert.throws(() => plain.contributions("language"), /extension point language is not declared by fixture/);
+  const items = [{ plugin: "tidy", item: { name: "tidy" }, module: "/modules/tidy/ui/tidy.js" }];
+  const provider = createSurfaceContext({ root, surfaceId: "tab-2", pluginId: "fixture", tab: TAB, icon: ICON, runtime,
+    contributions: (point) => (point === "language" ? items : []) });
+  assert.equal(provider.contributions("language"), items);
+  assert.throws(() => provider.contributions(""), /contributions requires an extension point name/);
+});

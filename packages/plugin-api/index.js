@@ -45,6 +45,7 @@ export const PAGE_IMPORTS = Object.freeze({
   "@soksak/plugin-api": `/${modulePath("@soksak/plugin-api", "index.js")}`,
   "@soksak/plugin-api/page": `/${modulePath("@soksak/plugin-api", "page.js")}`,
   "@soksak/runtime": `/${RUNTIME}/index.js`,
+  "@soksak/shared/": "/shared/",
   "@soksak/workbench/": "/",
 });
 
@@ -95,10 +96,62 @@ function checkDependencies(where, dependencies) {
   return Object.keys(dependencies);
 }
 
-/** plugin.json 의 dependencies 가 가리키는 사이드카 패키지 이름. */
-export function manifestSidecars(manifest) {
+/**
+ * The sidecar packages that the dependencies of plugin.json name. plugins holds the packages of installed plugins; such a
+ * package is a plugin dependency and is left out (docs/spec/plugins.md#pluginjson).
+ */
+export function manifestSidecars(manifest, plugins = new Set()) {
   // 기본값: dependencies 는 plugin.json 의 선택 필드이며, 없는 플러그인은 사이드카를 쓰지 않는다.
-  return Object.keys(manifest.dependencies ?? {});
+  return Object.keys(manifest.dependencies ?? {}).filter((name) => !plugins.has(name));
+}
+
+/** Whether version is in range, a range of the form in docs/spec/installation.md#versions-and-ranges. */
+export function rangeContains(range, version) {
+  if (!isRange(range)) throw new Error(`invalid range ${range}`);
+  if (!VERSION.test(version)) throw new Error(`invalid version ${version}`);
+  if (range === "*") return true;
+  const bounded = /^>=(\S+) <(\S+)$/.exec(range);
+  if (bounded) return compareVersion(version, bounded[1]) >= 0 && compareVersion(version, bounded[2]) < 0;
+  const lower = /^>=(\S+)$/.exec(range);
+  if (lower) return compareVersion(version, lower[1]) >= 0;
+  const operator = /^[\^~]/.test(range) ? range[0] : "";
+  const [major, minor, patch] = range.slice(operator.length).split(".").map(Number);
+  const low = `${major}.${minor}.${patch}`;
+  const below = operator === "" ? `${major}.${minor}.${patch + 1}`
+    : operator === "~" ? `${major}.${minor + 1}.0`
+    : major > 0 ? `${major + 1}.0.0` : minor > 0 ? `0.${minor + 1}.0` : `0.0.${patch + 1}`;
+  return compareVersion(version, low) >= 0 && compareVersion(version, below) < 0;
+}
+
+/**
+ * Resolves the contributions of the installed and enabled plugins ({id, package, version, manifest})
+ * (docs/spec/plugins.md#extension-points). Each item is {plugin, point, index, state, reason}; a connected item also has
+ * provider, item (the fields without range and module) and module (a URL). Items are sorted by plugin id, point and index.
+ */
+export function resolveContributions(installed) {
+  const providers = new Map(installed.map((plugin) => [plugin.id, plugin]));
+  const resolved = [];
+  for (const plugin of [...installed].sort((a, b) => a.id.localeCompare(b.id))) {
+    // default: contributes is an optional field of plugin.json; a plugin without it contributes nothing.
+    for (const [point, items] of Object.entries(plugin.manifest.contributes ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
+      const [providerId, name] = [point.slice(0, point.indexOf(".")), point.slice(point.indexOf(".") + 1)];
+      const provider = providers.get(providerId);
+      // default: extends is an optional field; a plugin without it declares no extension point.
+      const declaration = provider?.manifest.extends?.[name];
+      items.forEach((entry, index) => {
+        const base = { plugin: plugin.id, point, index };
+        const { range, module, ...item } = entry;
+        if (!provider) return resolved.push({ ...base, state: "provider-missing", reason: `plugin ${providerId} is not installed or not enabled` });
+        if (!declaration) return resolved.push({ ...base, state: "invalid", reason: `${providerId} ${provider.version} declares no extension point ${name}` });
+        if (!rangeContains(range, declaration.version)) {
+          return resolved.push({ ...base, state: "version-mismatch", reason: `range ${range} does not contain ${point} ${declaration.version}` });
+        }
+        if (!matchesSchema(declaration.schema, item)) return resolved.push({ ...base, state: "invalid", reason: `item does not match the schema of ${point}` });
+        resolved.push({ ...base, state: "connected", reason: null, provider: providerId, item, module: `/${modulePath(plugin.package, module)}` });
+      });
+    }
+  }
+  return resolved;
 }
 
 function only(where, value, keys) {

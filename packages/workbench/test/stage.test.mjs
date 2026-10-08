@@ -68,6 +68,7 @@ function installedConfiguration(t) {
   }, sidecars: {} }));
   write("plugins/probe/0.1.0/plugin.json", JSON.stringify(MANIFESTS.probe));
   write("plugins/probe/0.1.0/ui/probe.js", "export function mount() {}\n");
+  write("plugins/probe/0.1.0/ui/vendor/library.js", "export const library = 1;\n");
   write("plugins/probe/0.1.0/diagnostics.json", JSON.stringify(DIAGNOSTICS));
   write("plugins/alpha/1.0.0/plugin.json", JSON.stringify(MANIFESTS.alpha));
   write("plugins/off/1.0.0/plugin.json", "{}");
@@ -76,7 +77,8 @@ function installedConfiguration(t) {
 
 const MANIFESTS = {
   probe: { id: "probe", name: "Probe", description: "검사용 표면.", mark: "P", icon: "<path/>",
-    surface: { module: "ui/probe.js", composition: { kind: "dom" } } },
+    surface: { module: "ui/probe.js", composition: { kind: "dom" } },
+    extends: { language: { version: "1.0.0", schema: { type: "object" }, modules: { "@scope/library": "ui/vendor/library.js" } } } },
   alpha: { id: "alpha", name: "Alpha", description: "검사용 섹션.", sections: [{ id: "alpha.list", name: "List", module: "ui/list.js" }] },
 };
 
@@ -97,6 +99,8 @@ test("an application without a host stages the enabled installed plugins as a ho
   ] });
   assert.equal(readFileSync(join(app, "out/modules/@fixture/probe/ui/probe.js"), "utf8"), "export function mount() {}\n");
   assert.equal(existsSync(join(app, "out/modules/plugin-off")), false);
+  // The shared modules of extension points are placed where a host serves /shared/<plugin id>.<point>/<specifier>.
+  assert.equal(readFileSync(join(app, "out/shared/probe.language/@scope/library"), "utf8"), "export const library = 1;\n");
   stage(app, "--installed", configuration, "--diagnostics");
   assert.deepEqual(JSON.parse(readFileSync(join(app, "out/installed-plugins.json"), "utf8")).plugins[1].diagnostics, DIAGNOSTICS);
   assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--installed", join(configuration, "missing")], { cwd: app, stdio: "pipe" }),

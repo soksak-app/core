@@ -5,6 +5,7 @@
 // status 의 변경은 coreChanged() 호출로 알린다. 문서가 판의 렌더, 프로젝트와 설정의
 // 변경, 모달과 라이브러리의 그리기 뒤에 호출하고, 등록소는 감시 중인 값 중 달라진
 // 것만 호스트에 보낸다.
+import { contributionsState, onContributionsChange } from "./contributions.js";
 import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
 import { log, report } from "./host.js";
 import { trace } from "./performance.js";
@@ -279,6 +280,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   }));
   status("core.themes", () => THEMES);
   status("core.settings-modal", settingsModalState);
+  status("core.contributions", contributionsState);
+  onContributionsChange(coreChanged);
   status("core.plugins", () => pluginOperations.status());
   status("core.picker", pickerState);
   status("core.library", () => library.state());

@@ -64,6 +64,7 @@
     "verify-checks.js",
     "exposure.json",
     "exposure.js",
+    "contributions.js",
     "core-exposure.js",
     "focus-state.js",
     "pointer-state.js",

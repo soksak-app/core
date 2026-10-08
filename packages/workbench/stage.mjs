@@ -21,6 +21,7 @@
 //
 //   <출력>/installed-plugins.json   켜진 설치 플러그인 목록과 manifest. diagnostics 는 --diagnostics 일 때만 담는다
 //   <출력>/modules/<플러그인>/       켜진 각 설치 플러그인의 파일
+//   <출력>/shared/<id>.<point>/      the shared modules of extension points
 
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -112,6 +113,16 @@ if (installedDirectory) {
   for (const plugin of plugins) {
     cpSync(plugin.dir, join(target, modulePath(plugin.package, "")), { recursive: true });
     const entry = { id: plugin.id, package: plugin.package, version: plugin.version, manifest: readJson(join(plugin.dir, "plugin.json")) };
+    // Places the shared modules of extension points where a host serves /shared/<plugin id>.<point>/<specifier> (docs/spec/installation.md).
+    // default: extends is an optional field of plugin.json; a plugin without it shares no module.
+    for (const [point, declaration] of Object.entries(entry.manifest.extends ?? {})) {
+      // default: a point without modules shares no module.
+      for (const [specifier, path] of Object.entries(declaration.modules ?? {})) {
+        const shared = join(target, "shared", `${plugin.id}.${point}`, specifier);
+        mkdirSync(dirname(shared), { recursive: true });
+        copyFileSync(join(plugin.dir, path), shared);
+      }
+    }
     const declared = join(plugin.dir, "diagnostics.json");
     // 기본값: diagnostics.json 이 없는 플러그인은 진단 선언이 없다.
     if (diagnostics && existsSync(declared)) entry.diagnostics = readJson(declared);

@@ -14,6 +14,7 @@
     "core.notifications",
     "core.settings",
     "core.themes",
+    "core.contributions",
     "core.plugins",
     "core.settings-modal",
     "core.picker",

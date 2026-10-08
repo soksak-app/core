@@ -5,6 +5,7 @@ import { windows } from "@soksak/runtime";
 import { icon } from "./icons.js";
 import { preview } from "./library-preview.js";
 import { delegate, mark } from "./commands.js";
+import { contributionsState, onContributionsChange } from "./contributions.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { matchPlugins } from "./plugin-search.js";
 import { hideError, showError } from "./shown-errors.js";
@@ -40,6 +41,8 @@ const PAGES = [['projects', '프로젝트'], ['plugins', '플러그인']];
 
 /** 플러그인 카드의 상태 글. */
 const PLUGIN_STATES = { loaded: '사용 중', disabled: '사용 안 함', available: '설치 안 됨', restart: '다시 시작하면 적용' };
+// The states of contributions to extension points (docs/spec/plugins.md#extension-points); invalid shows through the error display.
+const CONTRIBUTION_STATES = { connected: '연결됨', 'provider-missing': '제공자 없음', 'version-mismatch': 'version 불일치', invalid: '오류' };
 
 /** 사이드카 줄. 설치된 버전이 있으면 그 버전을, 없으면 선언한 범위를 보인다. */
 function sidecarLine(sidecars) {
@@ -208,6 +211,14 @@ export function createLibrary(root, rendered = () => {}) {
     ].filter(Boolean).join(' · ');
     if (versions) card.append(element('p', 'library-plugin__versions', versions));
     card.append(element('p', 'library-plugin__sidecars', sidecarLine(row.sidecars)));
+    for (const entry of contributionsState().filter((item) => item.plugin === row.id)) {
+      const where = `library plugin ${row.id} contribution ${entry.point} ${entry.index + 1}`;
+      const line = element('p', 'library-plugin__contribution', `${entry.point} 기여 ${entry.index + 1}: ${CONTRIBUTION_STATES[entry.state]}`);
+      line.dataset.state = entry.state;
+      card.append(line);
+      if (entry.state === 'invalid') showError(line, where, `${entry.point} 기여 ${entry.index + 1}: ${entry.reason}`);
+      else hideError(line, where);
+    }
     if (pluginOperations.hosted) {
       const actions = element('div', 'library-plugin__actions');
       const action = (label, name) => {
@@ -260,7 +271,7 @@ export function createLibrary(root, rendered = () => {}) {
     const running = status.operation?.state === 'running';
     for (const row of rows) {
       const operation = status.operation?.plugin === row.id ? status.operation : null;
-      const key = JSON.stringify([row, pluginOperations.hosted, running, operation]);
+      const key = JSON.stringify([row, pluginOperations.hosted, running, operation, contributionsState().filter((item) => item.plugin === row.id)]);
       const kept = pluginCards.get(row.id);
       if (kept?.key === key) { wanted.push(kept.card); continue; }
       const card = pluginCard(row, status);
@@ -427,6 +438,7 @@ export function createLibrary(root, rendered = () => {}) {
   };
   // 플러그인 페이지는 plugins-changed 와 작업마다 바뀐 상태를 다시 그린다.
   onPluginOperations(()=>{ if(page==='plugins') render(); });
+  onContributionsChange(()=>{ if(page==='plugins') render(); });
   return {render, refreshFolders, state, actions};
 }
 

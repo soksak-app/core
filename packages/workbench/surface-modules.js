@@ -193,7 +193,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     let diagnostics = null;
     const context = createSurfaceContext({
       root: shadow, surfaceId: surface.surfaceId, pluginId: surface.pluginId,
-      declarations: surface.declarations, composition, diagnostics: () => diagnostics,
+      declarations: surface.declarations, composition, diagnostics: () => diagnostics, contributions: surface.contributions,
       tab: { title: (text) => reportTitle(surface.surfaceId, text),
         footer: (text) => reportFooter(surface.surfaceId, text),
         directory: (path) => reportDirectory(surface.surfaceId, path),

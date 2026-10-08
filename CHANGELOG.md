@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F104.1: comments are written in English, and the comment language check reports comment lines that hold Hangul.
+- F102.1.5: the workbench resolves contributions to extension points when a page loads, reports them in `core.contributions` and on the plugin cards, gives a provider surface `contributions(point)`, and the page import map maps `@soksak/shared/` to the shared modules of extension points; manifests leave the packages of installed plugins out of their sidecars.
 - F102.1.2: plugin manifests declare extension points in `extends` and contributions in `contributes`, and `dependencies` may name plugin packages.
 - F102.1.1: version ranges accept `>=x.y.z` without an upper bound in `sok`, plugin manifests and `soksak-engines`, and plugin manifests accept the sidecar range `*`.
 - Retired checklist entry `R3.1`: a checklist entry holds project work, and this entry held a work-process rule or its application, which AGENTS.md holds.

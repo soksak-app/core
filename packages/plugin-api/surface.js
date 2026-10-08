@@ -9,6 +9,8 @@ const readyReleases = new WeakMap();
 export function createSurfaceContext({
   root, surfaceId, pluginId, declarations = {}, composition = null, diagnostics = () => null, runtime = {},
   tab, origin = { directory: null }, project = null, icon,
+  // default: the surface of a plugin without extension points has no contributions, and every point is undeclared.
+  contributions = (point) => { throw new Error(`extension point ${point} is not declared by ${pluginId}`); },
 } = {}) {
   if (!root || typeof root.appendChild !== "function") throw new TypeError("surface context requires a root element");
   if (typeof surfaceId !== "string" || surfaceId === "") throw new TypeError("surface context requires surfaceId");
@@ -82,6 +84,11 @@ export function createSurfaceContext({
       },
     }),
     status: Object.freeze({ report, read: () => ({ ...state }), subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); } }),
+    // The connected contributions to the extension point point that this plugin declares (docs/spec/plugins.md#extension-points).
+    contributions: (point) => {
+      if (typeof point !== "string" || point === "") throw new TypeError("contributions requires an extension point name");
+      return contributions(point);
+    },
   });
   readyReleases.set(context, () => {
     if (readyRequested && state.phase === "loading") publish("ready");

@@ -44,8 +44,11 @@ test("the environment registers card plugins, sections, and sidebar defaults fro
   assert.throws(() => environment(), /not loaded/);
   installEnvironment(structuredClone(files["/environment.json"]), structuredClone(installed));
   assert.deepEqual(registry.plugins().map((p) => p.id), ["card"], "a plugin without a surface is not a card plugin");
-  assert.deepEqual(registry.plugin("card").surface("tab 1"),
+  const { contributions, ...target } = registry.plugin("card").surface("tab 1");
+  assert.deepEqual(target,
     { module: "/modules/@fixture/card/ui/card.js", composition: { kind: "dom" }, surfaceId: "tab 1", pluginId: "card", declarations: {}, sidecars: ["@fixture/sidecar-card"] });
+  // card declares no extension point, so every point is undeclared.
+  assert.throws(() => contributions("language"), /extension point language is not declared by card/);
   assert.equal(registry.plugin("card").ink, "--fixture-ink");
   assert.equal(await pluginDiagnostics("card"), null, "a release build has no plugin diagnostic module");
   assert.equal(registry.section("side.list").name, "List");

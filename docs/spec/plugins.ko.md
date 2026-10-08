@@ -116,7 +116,7 @@ plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한
 
 - **이름과 version.** plugin `<id>`의 지점 `<name>`은 `<id>.<name>`이다. `version`은 지점 interface의 version이고, 기여한 각 항목은 `range`로 함께 동작하는 version을 적는다. 이전 version에 맞춰 쓴 항목이 실패할 수 있으면 제공자는 `version`의 major를 올리고, interface에 더하면 minor를 올린다.
 - **항목.** 각 항목은 `range`, 기여자 package 안의 JavaScript 경로 `module`, 그리고 지점의 `schema`가 exposure 선언의 schema 부분집합으로 선언한 필드를 갖는다. workbench는 모든 항목을 schema로 검증한다.
-- **공유 module.** `modules`는 bare import specifier를 제공자 package의 파일에 대응한다. 그런 specifier를 import하는 기여 module은 기여자 package의 import map scope로 제공자의 파일을 받으므로, 제공자와 기여자는 library 하나의 instance를 함께 쓴다. 기여자는 지점이 공유하는 library를 external import로 번들한다.
+- **공유 module.** `modules`는 bare import specifier를 제공자 package의 파일에 대응한다. page import map은 `@soksak/shared/`를 `/shared/`에 대응하고, `/shared/<plugin id>.<point>/<specifier>`는 그 specifier의 제공자 파일을 내보낸다([설치된 plugin 제공](installation.ko.md#설치된-plugin-제공)). 제공자와 기여자는 공유 library를 `@soksak/shared/<plugin id>.<point>/<specifier>`로 import하므로 한 URL에서 불러와 instance 하나를 함께 쓴다. 각자 그 library를 그 external import로 번들한다.
 - **연결.** page를 불러올 때 workbench는 설치되고 켜진 plugin의 기여를 해석한다. 항목은 제공자가 설치되고 켜져 있고 그 `range`가 지점의 `version`을 포함하면 `connected`, 제공자가 설치되지 않았거나 켜져 있지 않으면 `provider-missing`, 범위가 version을 포함하지 않으면 `version-mismatch`, 항목이 schema와 맞지 않거나 그 module을 불러오거나 확장하다 실패하면 `invalid`다. status `core.contributions`가 모든 항목을 `{plugin, point, state, reason}`으로 보고한다. `connected`가 아닌 상태는 애플리케이션의 오류가 아니며, `invalid`는 오류 표시로 보인다.
 - **설치.** `dependencies`에 제공자의 plugin package를 적은 기여자는 제공자와 함께 설치된다. 그 의존이 없는 기여자는 제공자가 설치되어 있을 때만 연결된다. 기여자나 제공자를 설치, 켜기, 끄기, 제거하면 다른 plugin 변경과 같이 그 뒤에 불러오는 page에 적용된다([설치](installation.ko.md)).
 - **제공자 interface.** 제공자 page의 surface context는 `contributions(point)`를 가지며, 그 지점의 연결된 항목을 `{plugin, item, module}`로 돌려준다. `module`은 import할 URL이다. 제공자는 각 module을 import하고 지점 interface가 정한 export를 호출한다. 실패한 export는 그 항목을 `invalid`로 만들고 다른 항목은 연결된 채로 둔다.
@@ -124,7 +124,7 @@ plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한
 
 ## 외부 라이브러리
 
-스테이징은 패키지 `files`를 복사하고 페이지 import map은 코어 모듈과 확장 지점의 공유 module만 가리키므로, 플러그인 페이지, 섹션, 상태 모듈은 자기 패키지 안의 파일만 불러오고, 제공자 페이지는 자기 [확장 지점](#확장-지점)의 기여 module도 불러온다. 외부 브라우저 라이브러리를 쓰는 플러그인은 자기 `scripts/build-vendor.mjs`(esbuild)로 라이브러리를 `ui/vendor/` 아래 ES 모듈 하나로 번들하고, 번들에 든 모든 패키지의 라이선스와 고지를 담은 `.LICENSE.txt` 파일과 함께 커밋하며, `ui`를 통해 `files`에 나열한다. 라이브러리와 esbuild는 정확한 버전의 `devDependencies`다. 플러그인의 `pnpm test`는 스크립트를 `--check`로 실행하며, 커밋된 파일이 새 빌드와 다르면 실패한다. 파일 플러그인은 바닐라 진입점 `@pierre/trees`로 `@pierre/trees` 1.0.0-beta.4(Apache-2.0)와 그 의존성 `preact`(MIT)를 번들한다. 플러그인은 React를 쓰지 않는다.
+스테이징은 패키지 `files`를 복사하고 페이지 import map은 코어 모듈과 `@soksak/shared/`만 가리키므로, 플러그인 페이지, 섹션, 상태 모듈은 자기 패키지 안의 파일과 [확장 지점](#확장-지점)의 공유 module만 불러오고, 제공자 페이지는 자기 지점의 기여 module도 불러온다. 외부 브라우저 라이브러리를 쓰는 플러그인은 자기 `scripts/build-vendor.mjs`(esbuild)로 라이브러리를 `ui/vendor/` 아래 ES 모듈 하나로 번들하고, 번들에 든 모든 패키지의 라이선스와 고지를 담은 `.LICENSE.txt` 파일과 함께 커밋하며, `ui`를 통해 `files`에 나열한다. 라이브러리와 esbuild는 정확한 버전의 `devDependencies`다. 플러그인의 `pnpm test`는 스크립트를 `--check`로 실행하며, 커밋된 파일이 새 빌드와 다르면 실패한다. 파일 플러그인은 바닐라 진입점 `@pierre/trees`로 `@pierre/trees` 1.0.0-beta.4(Apache-2.0)와 그 의존성 `preact`(MIT)를 번들한다. 플러그인은 React를 쓰지 않는다.
 
 ## 진단 선언
 
