@@ -30,6 +30,10 @@ jobs:
           path: plugins/files
       - uses: actions/checkout@v4
         with:
+          repository: soksak-app/plugin-hwp
+          path: plugins/hwp
+      - uses: actions/checkout@v4
+        with:
           repository: soksak-app/plugin-terminal
           path: plugins/terminal
       - uses: actions/checkout@v4

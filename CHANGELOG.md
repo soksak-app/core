@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F110: the window check `e2e/hwp.test.mjs` opens an `.hwp` file in the hwp plugin, edits it with a native key and saves it on both hosts; the workspace registry includes the hwp plugin.
 - F109: the files sidecar specifies `readBytes` and `writeBytes` for binary files up to 32 MiB.
 - F108: every declared version is 0.0.8, and core 0.0.8 is released.
 - F102.1.7: hosts serve the shared modules of extension points at `/shared/<plugin id>.<point>/<specifier>.js`, so the Tauri webview loads them as JavaScript.
