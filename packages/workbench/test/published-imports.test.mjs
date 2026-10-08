@@ -41,8 +41,8 @@ function readJson(path) {
   }
 }
 
-/** 패키지 폴더 맵 (패키지 이름 → 디렉터리 경로). */
-function getPackageFolders(base = root) {
+/** The source folders by the name of their package.json. */
+function getSourceFolders(base = root) {
   const packages = new Map();
   // plugin 은 자기 repository 에 있다(docs/spec/plugins.md#repositories).
   const places = ["packages"];
@@ -191,12 +191,12 @@ function isInBuildOutputDir(resolvedPath, packageDir, buildOutputDirs) {
 }
 
 /** 모든 배포 파일 스캔. 존재하지 않는 파일은 결과에 missing: true로 포함된다 */
-function collectPublishedImports(packageName, packageDir, filesArray) {
+function collectPublishedImports(name, packageDir, filesArray) {
   const results = [];
   const checkedFiles = new Set();
   const buildOutputDirs = getBuildOutputDirs(packageDir, filesArray);
   // 워크벤치는 스테이징이 만드는 파일들을 import할 수 있다
-  const isWorkbench = packageName === "@soksak/workbench";
+  const isWorkbench = name === "@soksak/workbench";
 
   function processFile(filePath) {
     if (checkedFiles.has(filePath)) return;
@@ -265,11 +265,11 @@ function collectPublishedImports(packageName, packageDir, filesArray) {
 }
 
 test("every import of a published file is listed in its package files", () => {
-  const packages = getPackageFolders();
+  const packages = getSourceFolders();
   const errors = [];
   const allowed = []; // 스테이징이나 빌드로 생성되는 파일들
 
-  for (const [packageName, packageDir] of packages) {
+  for (const [name, packageDir] of packages) {
     const packageJsonPath = join(packageDir, "package.json");
 
     {
@@ -280,30 +280,30 @@ test("every import of a published file is listed in its package files", () => {
         continue;
       }
 
-      const imports = collectPublishedImports(packageName, packageDir, pkg.files);
+      const imports = collectPublishedImports(name, packageDir, pkg.files);
 
       for (const imp of imports) {
         // 스테이징이 만드는 파일은 허용 (배포 때 stage.mjs가 만듦)
         if (imp.isStaged) {
-          allowed.push(`${packageName}: ${imp.file} → ${imp.resolvedPath} (${imp.stagedType === "served" ? "host 가 제공" : "스테이징이 생성"})`);
+          allowed.push(`${name}: ${imp.file} → ${imp.resolvedPath} (${imp.stagedType === "served" ? "host 가 제공" : "스테이징이 생성"})`);
           continue;
         }
 
         // 빌드 산출물은 허용 (테스트 때 아직 생성되지 않지만 build 후 생김)
         if (imp.isBuildOutput) {
-          allowed.push(`${packageName}: ${imp.file} → ${imp.resolvedPath} (빌드 산출물)`);
+          allowed.push(`${name}: ${imp.file} → ${imp.resolvedPath} (빌드 산출물)`);
           continue;
         }
 
         // 존재하지 않는 파일은 실패
         if (imp.missing) {
-          errors.push(`패키지 ${packageName}의 ${imp.file}이 import 하는 ${imp.resolvedPath}이 존재하지 않는다`);
+          errors.push(`패키지 ${name}의 ${imp.file}이 import 하는 ${imp.resolvedPath}이 존재하지 않는다`);
           continue;
         }
 
         // 존재하지만 files에 없는 파일은 실패
         if (!imp.inPublished) {
-          errors.push(`패키지 ${packageName}의 ${imp.file}이 import 하는 ${imp.resolvedPath}이 files에 없다`);
+          errors.push(`패키지 ${name}의 ${imp.file}이 import 하는 ${imp.resolvedPath}이 files에 없다`);
         }
       }
     }
@@ -428,7 +428,7 @@ test("an unparsable package.json fails the package discovery with its path", () 
   mkdirSync(join(base, "plugins"), { recursive: true });
   try {
     writeFileSync(join(base, "packages", "broken", "package.json"), "{");
-    assert.throws(() => getPackageFolders(base), /packages\/broken\/package\.json/);
+    assert.throws(() => getSourceFolders(base), /packages\/broken\/package\.json/);
   } finally {
     rmSync(base, { recursive: true, force: true });
   }

@@ -56,7 +56,8 @@ const escape = (text) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 const all = components();
 const errors = [];
 for (const component of all.filter((item) => item.kind === "core")) {
-  // 플러그인과 사이드카의 패키지 이름과, 플러그인 id 를 따옴표·속성값·섹션 접두사로 쓴 곳을 찾는다.
+  // Finds the package.json names of plugins and sidecars and the plugin ids written in quotes, attribute values and
+  // section prefixes.
   const rules = [];
   for (const other of all) {
     if (other === component || component.allowed.has(other.name) || other.kind === "core") continue;

@@ -1,5 +1,5 @@
 //! The formats of installable plugins (docs/spec/installation.md): versions and ranges, the plugin file, the
-//! registry index, the sidecar release asset, the installed layout and the installed state. A wrong format returns an
+//! registry index, the sidecar release, the installed layout and the installed state. A wrong format returns an
 //! error that names what is wrong. Fields are checked in a fixed order, so both implementations return the same error
 //! when several fields are wrong.
 
@@ -17,7 +17,7 @@ pub const INSTALLED_FORMAT: u64 = 2;
 /// 설정 폴더 안에서 설치 상태를 담는 파일.
 pub const INSTALLED: &str = "plugins/installed.json";
 
-/// Sidecar release asset 이 쓰는 플랫폼 key(`<os>-<arch>`).
+/// The platform keys (`<os>-<arch>`) of sidecar releases.
 pub const PLATFORMS: [&str; 6] = [
     "darwin-arm64",
     "darwin-x64",
@@ -155,7 +155,7 @@ pub(crate) fn is_identifier(text: &str) -> bool {
 }
 
 /// `name` 이나 `@scope/name` 형태인지.
-fn is_package_name(text: &str) -> bool {
+fn is_package_json_name(text: &str) -> bool {
     match text.strip_prefix('@') {
         Some(scoped) => scoped
             .split_once('/')
@@ -238,13 +238,13 @@ fn check_range(at: &str, value: Option<&Value>) -> Result<(), String> {
 }
 
 /// package 이름을 검사하고 그 텍스트를 돌려준다.
-pub(crate) fn check_package_name<'a>(
+pub(crate) fn check_package_json_name<'a>(
     at: &str,
     value: Option<&'a Value>,
 ) -> Result<&'a str, String> {
     match text(value) {
-        Some(name) if is_package_name(name) => Ok(name),
-        _ => Err(format!("{at}: expected a package name")),
+        Some(name) if is_package_json_name(name) => Ok(name),
+        _ => Err(format!("{at}: expected a package.json name")),
     }
 }
 
@@ -252,7 +252,7 @@ fn check_sidecar_ranges(at: &str, value: Option<&Value>) -> Result<(), String> {
     let map = object(at, value)?;
     for name in sorted_keys(map) {
         let place = format!("{at} {name}");
-        check_package_name(&place, Some(&Value::from(name.as_str())))?;
+        check_package_json_name(&place, Some(&Value::from(name.as_str())))?;
         check_range(&place, map.get(name))?;
     }
     Ok(())
@@ -333,7 +333,7 @@ pub fn validate_package_json(value: &Value) -> Result<(), String> {
     if !listed {
         return Err("package.json files: plugin.json is not listed".into());
     }
-    check_package_name("package.json name", pkg.get("name"))?;
+    check_package_json_name("package.json name", pkg.get("name"))?;
     if pkg.contains_key("soksak") {
         return Err("package.json soksak: the sidecars of a plugin and their ranges are the dependencies of plugin.json".into());
     }
@@ -359,14 +359,14 @@ pub fn manifest_dependencies(manifest: &Value) -> Result<BTreeMap<String, String
         .collect())
 }
 
-/// The file name of a packed plugin.
+/// The file name of a plugin release.
 pub fn release_name(id: &str, version: &str) -> String {
     format!("{id}-{version}.tgz")
 }
 
 /// Sidecar 이름을 파일 이름과 폴더 이름에 쓰는 형태로 바꾼다. `@scope/name` 은 `scope-name` 이다.
 pub fn sidecar_file_name(name: &str) -> Result<String, String> {
-    check_package_name("sidecar", Some(&Value::from(name)))?;
+    check_package_json_name("sidecar", Some(&Value::from(name)))?;
     Ok(match name.strip_prefix('@') {
         Some(scoped) => scoped.replacen('/', "-", 1),
         None => name.to_string(),
@@ -381,7 +381,7 @@ pub(crate) fn check_platform(platform: &str) -> Result<(), String> {
     }
 }
 
-/// Sidecar release asset 의 파일 이름.
+/// The file name of a sidecar release.
 pub fn sidecar_asset_name(name: &str, version: &str, platform: &str) -> Result<String, String> {
     check_version(
         &format!("sidecar {name} version"),
@@ -542,7 +542,7 @@ pub fn validate_registry_plugin(value: &Value) -> Result<(), String> {
     if text(entry.get("name")).is_none() {
         return Err(format!("{at}: name is required"));
     }
-    check_package_name(&format!("{at} package"), entry.get("package"))?;
+    check_package_json_name(&format!("{at} package"), entry.get("package"))?;
     if text(entry.get("repository")).is_none() {
         return Err(format!("{at}: repository is required"));
     }
@@ -579,7 +579,7 @@ pub fn validate_registry_sidecar(value: &Value) -> Result<(), String> {
     let entry = object("registry sidecar", Some(value))?;
     let at = entry_at("registry sidecar", entry, "name");
     only(&at, entry, &["name", "repository", "versions"])?;
-    check_package_name(&format!("{at} name"), entry.get("name"))?;
+    check_package_json_name(&format!("{at} name"), entry.get("name"))?;
     if text(entry.get("repository")).is_none() {
         return Err(format!("{at}: repository is required"));
     }
@@ -875,7 +875,7 @@ pub fn validate_installed(value: &Value) -> Result<InstalledState, String> {
         if !item.get("enabled").is_some_and(Value::is_boolean) {
             return Err(format!("{at}: enabled must be true or false"));
         }
-        let name = check_package_name(&format!("{at} package"), item.get("package"))?;
+        let name = check_package_json_name(&format!("{at} package"), item.get("package"))?;
         if !packages.insert(name) {
             return Err(format!("{at}: package {name} is installed twice"));
         }

@@ -23,7 +23,7 @@ func (linux) ProcessRunning(pid int) error {
 	return nil
 }
 
-// Key 는 Linux 의 release asset key 다.
+// Key is the release key of Linux.
 func (linux) Key() (string, error) {
 	switch runtime.GOARCH {
 	case "arm64":

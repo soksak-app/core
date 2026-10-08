@@ -24,7 +24,7 @@ pub trait Platform {
     fn config_dir(&self) -> Result<PathBuf, String>;
     /// 파일에 실행 bit 가 있는지. release 항목의 mode 를 정한다.
     fn executable(&self, metadata: &std::fs::Metadata) -> bool;
-    /// 이 플랫폼의 release asset key(`<os>-<arch>`). 이 architecture 의 key 가 없으면 오류다.
+    /// The release key (`<os>-<arch>`) of this platform; an architecture without a key is an error.
     fn key(&self) -> Result<String, String>;
     /// 경로 항목을 두는 폴더. 이 운영체제에 그런 폴더가 없으면 오류다(docs/spec/cli.md).
     fn paths_dir(&self) -> Result<PathBuf, String>;

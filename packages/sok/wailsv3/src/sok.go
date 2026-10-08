@@ -35,7 +35,7 @@ commands:
   plugin pack DIRECTORY OUTPUT [--diagnostics]
                             writes the plugin into OUTPUT; --diagnostics adds diagnostics.json
   sidecar release DIRECTORY OUTPUT [--platform P]
-                            writes the sidecar release asset into OUTPUT and updates SHA256SUMS
+                            writes the sidecar release into OUTPUT and updates SHA256SUMS
   registry build DIRECTORY  checks a registry and writes its index.json
   registry use INDEX        sets the registry index that installation reads
   plugin install|update|remove|enable|disable ID

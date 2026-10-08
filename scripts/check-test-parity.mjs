@@ -252,14 +252,14 @@ const FEATURE_LINKS = [
     id: "G1.4-1",
     implementation: [
       { file: "scripts/check-test-parity.mjs", symbol: "auditOwnership" },
-      { file: "packages/workbench/host.js", symbol: "does not accept a package name" },
+      { file: "packages/workbench/host.js", symbol: "takes no argument; it uses the declared sidecar" },
       { file: "packages/workbench/environment.js", symbol: "sidecars: surface.sidecars" },
     ],
     tests: [
       { file: "scripts/test/test-parity.test.mjs", id: "ownership audit rejects cross-owner implementation names and private paths" },
-      { file: "packages/workbench/test/surface-runtime.test.mjs", id: "surface sidecar access is resolved from the declared surface and rejects package names" },
+      { file: "packages/workbench/test/surface-runtime.test.mjs", id: "surface sidecar access is resolved from the declared surface and takes no argument" },
     ],
-    expected: "Implementation and test sources cannot cross owner boundaries or read private paths; plugin sidecar access is resolved from the declaration and never by a package-name fallback.",
+    expected: "Implementation and test sources cannot cross owner boundaries or read private paths; plugin sidecar access is resolved from the declaration and never by a name that the page passes.",
     levels: ["unit"],
   },
   {

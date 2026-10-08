@@ -8,13 +8,13 @@ The approved persistent terminal service is defined by [terminal runtime](termin
 
 ## Declaration and startup
 
-A sidecar is a package in its own repository with a `sidecar.json` file ([repositories](plugins.md#repositories)). The sidecar identity is its package name, for example `@soksak/sidecar-shell`. [`validateSidecar`](../../packages/plugin-api/index.js) checks the file:
+A sidecar is a program in its own repository with a `package.json` and a `sidecar.json` file ([repositories](plugins.md#repositories)). The `name` of its `package.json` identifies the sidecar, for example `@soksak/sidecar-shell`. [`validateSidecar`](../../packages/plugin-api/index.js) checks the file:
 
 | Field | Meaning |
 | --- | --- |
 | `executable` | Path of the built executable inside the package |
 | `protocol` | Message format version. The current version is `1` |
-| `helpers` | Optional array of helper packages. Each item has `package` (package name) and `executable` (path inside that package) |
+| `helpers` | Optional array of helper programs. Each item has `package` (the `name` of the helper's `package.json`) and `executable` (the path inside the helper's folder) |
 
 A plugin declares the sidecars its page uses, each with a version range, as the `dependencies` of its `plugin.json` ([plugins](plugins.md#pluginjson)). Installation extracts each sidecar's release into the configuration directory.
 
@@ -41,7 +41,7 @@ Each message is one JSON object on one line. A sidecar message on standard outpu
 | Sidecar → host | `{"surface": id, "body": value}` |
 | Sidecar → host | `{"surface": id, "closed": true}` once the sidecar has released the resources of a closed surface, such as its sessions, processes and watches, or `{"surface": id, "closed": true, "error": text}` when it could not release them |
 
-The host records the window that first sends for a surface and delivers each sidecar message only to that window, as the `sidecar-message` event `{sidecar, surface, body}`, where `sidecar` is the package name. A request from another window for the same surface fails. When the application exits, the host closes each sidecar's standard input and waits for the process to end.
+The host records the window that first sends for a surface and delivers each sidecar message only to that window, as the `sidecar-message` event `{sidecar, surface, body}`, where `sidecar` is the `name` of the sidecar's `package.json`. A request from another window for the same surface fails. When the application exits, the host closes each sidecar's standard input and waits for the process to end.
 
 The host remembers, for each sidecar process, every surface it has sent a request to, until the process ends. A message for such a surface that no longer has an owning window is discarded: the sidecar sent it after the host removed the surface and sent `closed`, before its answer to `closed`.
 

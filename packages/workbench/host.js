@@ -256,7 +256,7 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     sidecar(name) {
       // 기본값: sidecars 는 plugin.json 의 선택 필드이며 없으면 사이드카가 없다(docs/spec/plugins.md).
       const declared = surface.sidecars ?? [];
-      if (name !== undefined) throw new Error("surface runtime sidecar() does not accept a package name; use the declared sidecar");
+      if (name !== undefined) throw new Error("surface runtime sidecar() takes no argument; it uses the declared sidecar");
       if (declared.length !== 1) throw new Error(`surface runtime requires exactly one declared sidecar, got ${declared.length}`);
       const sidecarName = declared[0];
       const ordered = orderedSidecarPort(sidecarName);

@@ -220,8 +220,8 @@ test("a sidecar helpers field is rejected for invalid cases", () => {
   const cases = [
     [{ ...base, helpers: [{ package: "@scope/helper", executable: "build/ptyd", extra: "field" }] }, /unknown field extra/],
     [{ ...base, helpers: [{ package: "lib-shared" }] }, /executable must be a path inside the package/],
-    [{ ...base, helpers: [{ executable: "build/helper" }] }, /package must be a package name/],
-    [{ ...base, helpers: [{ package: "Bad Name", executable: "build/helper" }] }, /package must be a package name/],
+    [{ ...base, helpers: [{ executable: "build/helper" }] }, /package must be a package\.json name/],
+    [{ ...base, helpers: [{ package: "Bad Name", executable: "build/helper" }] }, /package must be a package\.json name/],
     [{ ...base, helpers: [{ package: "lib-shared", executable: "/bin/helper" }] }, /must be a path inside the package/],
     [{ ...base, helpers: [{ package: "lib-shared", executable: "../helper" }] }, /must be a path inside the package/],
     [{ ...base, helpers: [

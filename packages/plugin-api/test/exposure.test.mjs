@@ -289,7 +289,7 @@ test("the installed plugin document lists plugins with their manifests and diagn
   assert.throws(() => validateInstalledPlugins({ error: "plugins/installed.json: format must be 2" }),
     /^Error: installed plugins: plugins\/installed.json: format must be 2$/);
   assert.throws(() => validateInstalledPlugins({ plugins: [plugins[0], plugins[0]] }), /plugin alpha appears twice/);
-  assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[0], package: "Bad" }] }), /package must be a package name/);
+  assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[0], package: "Bad" }] }), /package must be a package\.json name/);
   assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[0], extra: 1 }] }), /unknown field extra/);
   assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[1], diagnostics: [] }] }), /diagnostics must be an object/);
   assert.throws(() => validateInstalledPlugins([]), /expected an object/);

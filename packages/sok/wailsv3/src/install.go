@@ -1,7 +1,7 @@
 package sok
 
 // The formats of installable plugins (docs/spec/installation.md): versions and ranges, the plugin file, the
-// registry index, the sidecar release asset, the installed layout and the installed state. A wrong format returns an
+// registry index, the sidecar release, the installed layout and the installed state. A wrong format returns an
 // error that names what is wrong. Fields are checked in a fixed order, so both implementations return the same error
 // when several fields are wrong.
 
@@ -24,7 +24,7 @@ const Installed = "plugins/installed.json"
 // InstalledFormat 은 설치 상태 파일의 형식 번호다. 형식 2 는 설치 폴더를 설정 폴더에 대한 상대 경로로 기록한다.
 const InstalledFormat = 2
 
-// Platforms 는 sidecar release asset 이 쓰는 플랫폼 key(`<os>-<arch>`)다.
+// Platforms are the platform keys (`<os>-<arch>`) of sidecar releases.
 var Platforms = []string{"darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64", "windows-arm64", "windows-x64"}
 
 const descriptionMax = 200
@@ -172,8 +172,8 @@ func isLowerWord(text string) bool {
 	return true
 }
 
-// isPackageName 은 `name` 이나 `@scope/name` 형태인지 알려 준다.
-func isPackageName(text string) bool {
+// isPackageJSONName reports whether text has the form of the name of a package.json, `name` or `@scope/name`.
+func isPackageJSONName(text string) bool {
 	if scoped, ok := strings.CutPrefix(text, "@"); ok {
 		scope, name, found := strings.Cut(scoped, "/")
 		return found && isLowerWord(scope) && isLowerWord(name)
@@ -281,9 +281,9 @@ func checkRange(where string, value any) error {
 	return nil
 }
 
-func checkPackageName(where string, value any) error {
-	if s, ok := text(value); !ok || !isPackageName(s) {
-		return fmt.Errorf("%s: expected a package name", where)
+func checkPackageJSONName(where string, value any) error {
+	if s, ok := text(value); !ok || !isPackageJSONName(s) {
+		return fmt.Errorf("%s: expected a package.json name", where)
 	}
 	return nil
 }
@@ -294,7 +294,7 @@ func checkSidecarRanges(where string, value any) error {
 		return err
 	}
 	for _, name := range sortedKeys(m) {
-		if err := checkPackageName(where+" "+name, name); err != nil {
+		if err := checkPackageJSONName(where+" "+name, name); err != nil {
 			return err
 		}
 		if err := checkRange(where+" "+name, m[name]); err != nil {
@@ -390,7 +390,7 @@ func ValidatePackageJSON(value any) error {
 	if !listed {
 		return fmt.Errorf("package.json files: plugin.json is not listed")
 	}
-	if err := checkPackageName("package.json name", pkg["name"]); err != nil {
+	if err := checkPackageJSONName("package.json name", pkg["name"]); err != nil {
 		return err
 	}
 	if _, ok := pkg["soksak"]; ok {
@@ -416,12 +416,12 @@ func ManifestDependencies(manifest map[string]any) (map[string]string, error) {
 	return ranges, nil
 }
 
-// ReleaseName is the file name of a packed plugin.
+// ReleaseName is the file name of a plugin release.
 func ReleaseName(id, version string) string { return id + "-" + version + ".tgz" }
 
 // SidecarFileName 은 sidecar 이름을 파일 이름과 폴더 이름에 쓰는 형태로 바꾼다. `@scope/name` 은 `scope-name` 이다.
 func SidecarFileName(name string) (string, error) {
-	if err := checkPackageName("sidecar", name); err != nil {
+	if err := checkPackageJSONName("sidecar", name); err != nil {
 		return "", err
 	}
 	if scoped, ok := strings.CutPrefix(name, "@"); ok {
@@ -437,7 +437,7 @@ func checkPlatform(platform string) error {
 	return nil
 }
 
-// SidecarAssetName 은 sidecar release asset 의 파일 이름이다.
+// SidecarAssetName is the file name of a sidecar release.
 func SidecarAssetName(name, version, platform string) (string, error) {
 	if err := checkVersion("sidecar "+name+" version", version); err != nil {
 		return "", err
@@ -585,7 +585,7 @@ func ValidateRegistryPlugin(value any) error {
 	if _, ok := text(entry["name"]); !ok {
 		return fmt.Errorf("%s: name is required", where)
 	}
-	if err := checkPackageName(where+" package", entry["package"]); err != nil {
+	if err := checkPackageJSONName(where+" package", entry["package"]); err != nil {
 		return err
 	}
 	if _, ok := text(entry["repository"]); !ok {
@@ -645,7 +645,7 @@ func ValidateRegistrySidecar(value any) error {
 	if err := only(where, entry, "name", "repository", "versions"); err != nil {
 		return err
 	}
-	if err := checkPackageName(where+" name", entry["name"]); err != nil {
+	if err := checkPackageJSONName(where+" name", entry["name"]); err != nil {
 		return err
 	}
 	if _, ok := text(entry["repository"]); !ok {
@@ -969,7 +969,7 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 		if _, ok := item["enabled"].(bool); !ok {
 			return nil, fmt.Errorf("%s: enabled must be true or false", where)
 		}
-		if err := checkPackageName(where+" package", item["package"]); err != nil {
+		if err := checkPackageJSONName(where+" package", item["package"]); err != nil {
 			return nil, err
 		}
 		name := item["package"].(string)

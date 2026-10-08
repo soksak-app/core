@@ -1,6 +1,6 @@
 package sok
 
-// Writes packed plugins and sidecar release assets (docs/spec/cli.md). Both are gzip-compressed tar files whose entries
+// Writes plugin releases and sidecar releases (docs/spec/cli.md). Both are gzip-compressed tar files whose entries
 // are in path order with modification time 0, owner 0 and mode 0644 or 0755. A failure leaves no file.
 
 import (
@@ -298,7 +298,7 @@ func runPack(dir, out string, diagnostics bool, stdout io.Writer) error {
 	return printJSON(stdout, map[string]string{"id": id, "version": version, "release": output, "sha256": sum})
 }
 
-// runRelease 는 sidecar 폴더를 검사하고 release asset 을 쓴 뒤 SHA256SUMS 를 갱신한다.
+// runRelease checks a sidecar folder, writes its release and updates SHA256SUMS.
 func runRelease(dir, out, platform string, stdout io.Writer) error {
 	value, err := readJSONFile(dir, "package.json")
 	if err != nil {
@@ -308,7 +308,7 @@ func runRelease(dir, out, platform string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := checkPackageName("package.json name", pkg["name"]); err != nil {
+	if err := checkPackageJSONName("package.json name", pkg["name"]); err != nil {
 		return err
 	}
 	if err := checkVersion("package.json version", pkg["version"]); err != nil {

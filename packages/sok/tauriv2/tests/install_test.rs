@@ -168,7 +168,7 @@ fn package_json_declares_version_core_range_and_files_and_the_manifest_declares_
         (
             "name",
             json!("Plugin"),
-            "package.json name: expected a package name",
+            "package.json name: expected a package.json name",
         ),
     ] {
         let mut changed = pkg.clone();

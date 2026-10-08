@@ -134,7 +134,7 @@ func TestPackageJSONDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSideca
 		`"files": ["plugin.json", "../ui"]`: "package.json files: expected paths inside the package",
 		`"soksak": {"sidecars": {}}`:        "package.json soksak: the sidecars of a plugin and their ranges are the dependencies of plugin.json",
 		`"version": "0.2"`:                  `package.json version: invalid version "0.2": expected x.y.z`,
-		`"name": "Plugin"`:                  "package.json name: expected a package name",
+		`"name": "Plugin"`:                  "package.json name: expected a package.json name",
 	} {
 		field := change[:strings.Index(change, ":")]
 		changed := decode(t, text).(map[string]any)

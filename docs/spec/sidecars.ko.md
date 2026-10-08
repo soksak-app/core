@@ -8,13 +8,13 @@
 
 ## 선언과 시작
 
-사이드카는 자기 repository에 있고 `sidecar.json` 파일을 가진 패키지다([Repository](plugins.ko.md#repository)). 사이드카 식별자는 패키지 이름이다(예: `@soksak/sidecar-shell`). [`validateSidecar`](../../packages/plugin-api/index.js)가 이 파일을 검사한다.
+사이드카는 자기 repository에 있고 `package.json`과 `sidecar.json` 파일을 가진 프로그램이다([Repository](plugins.ko.md#repository)). `package.json`의 `name`이 사이드카를 식별한다(예: `@soksak/sidecar-shell`). [`validateSidecar`](../../packages/plugin-api/index.js)가 이 파일을 검사한다.
 
 | 필드 | 의미 |
 | --- | --- |
 | `executable` | 빌드된 실행 파일의 패키지 안 경로 |
 | `protocol` | 메시지 형식 버전. 현재 버전은 `1` |
-| `helpers` | 선택 필드. 헬퍼 패키지 목록. 각 항목은 `package`(패키지 이름)와 `executable`(그 패키지 안의 경로)을 가진다 |
+| `helpers` | 선택 필드. 헬퍼 프로그램 목록. 각 항목은 `package`(헬퍼 `package.json`의 `name`)와 `executable`(헬퍼 폴더 안의 경로)을 가진다 |
 
 플러그인은 페이지가 사용하는 사이드카를 version 범위와 함께 `plugin.json`의 `dependencies`로 선언한다([플러그인](plugins.ko.md#pluginjson)). 설치는 각 사이드카의 release를 설정 디렉터리에 푼다.
 
@@ -41,7 +41,7 @@
 | 사이드카 → 호스트 | `{"surface": id, "body": 값}` |
 | 사이드카 → 호스트 | 닫힌 표면의 세션, 프로세스, 감시 같은 자원을 놓은 뒤 `{"surface": id, "closed": true}`, 놓지 못했으면 `{"surface": id, "closed": true, "error": 문장}` |
 
-호스트는 표면에 처음 요청을 보낸 창을 기록하고, 사이드카 메시지를 그 창에만 `sidecar-message` 이벤트 `{sidecar, surface, body}`로 전달한다. `sidecar`는 패키지 이름이다. 다른 창이 같은 표면에 보낸 요청은 실패한다. 애플리케이션이 종료되면 호스트는 각 사이드카의 표준 입력을 닫고 프로세스 종료를 기다린다.
+호스트는 표면에 처음 요청을 보낸 창을 기록하고, 사이드카 메시지를 그 창에만 `sidecar-message` 이벤트 `{sidecar, surface, body}`로 전달한다. `sidecar`는 사이드카 `package.json`의 `name`이다. 다른 창이 같은 표면에 보낸 요청은 실패한다. 애플리케이션이 종료되면 호스트는 각 사이드카의 표준 입력을 닫고 프로세스 종료를 기다린다.
 
 호스트는 사이드카 프로세스마다 요청을 보낸 모든 표면을 그 프로세스가 끝날 때까지 기억한다. 그런 표면 중 소유 창이 없어진 표면의 메시지는 버린다. 호스트가 표면을 제거하고 `closed`를 보낸 뒤, 사이드카가 `closed`에 답하기 전에 보낸 것이다.
 

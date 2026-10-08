@@ -7,7 +7,7 @@
 // Node 모듈 해석으로 찾는다. 파일은 복사만 하고 내용을 바꾸지 않는다.
 //
 //   <출력>/                        워크벤치 패키지의 files
-//   <출력>/modules/<패키지 이름>/   soksak, plugin-api 패키지의 files
+//   <output>/modules/<package.json name>/   the files of soksak and plugin-api
 //   <출력>/runtime/                 environment.json 의 runtime 디렉터리
 //   <출력>/environment.json         애플리케이션의 environment.json
 //   <출력>/diagnostics.js           --diagnostics 이면 워크벤치의 observe.js(페이지 진단 메서드),

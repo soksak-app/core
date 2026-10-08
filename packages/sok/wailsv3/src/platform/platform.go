@@ -9,7 +9,7 @@ import "errors"
 type Platform interface {
 	// ProcessRunning 은 pid 프로세스가 실행 중이면 nil 을 돌려준다.
 	ProcessRunning(pid int) error
-	// Key 는 이 플랫폼의 release asset key(`<os>-<arch>`)다. 이 architecture 의 key 가 없으면 오류다.
+	// Key is the release key (`<os>-<arch>`) of this platform; an architecture without a key is an error.
 	Key() (string, error)
 	// PathsDir 는 경로 항목을 두는 폴더다. 이 운영체제에 그런 폴더가 없으면 오류다(docs/spec/cli.md).
 	PathsDir() (string, error)

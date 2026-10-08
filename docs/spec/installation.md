@@ -25,7 +25,7 @@ A plugin release is the file `<id>-<version>.tgz` of the plugin's files that `so
 
 | Field | Meaning |
 | --- | --- |
-| `name` | Package name; the installed files are served at `/modules/<name>/` |
+| `name` | The name under which the installed files are served at `/modules/<name>/` |
 | `version` | Plugin version |
 | `engines.soksak` | Range of core API versions the plugin supports |
 | `files` | Paths inside the package that the release holds; it includes `plugin.json` |
@@ -72,7 +72,7 @@ A dependency of the selected version's `plugin.json` that names the package of a
 
 ## Installation layout
 
-Inside the configuration directory, plugin version `<version>` of `<id>` is extracted into `plugins/<id>/<version>`, and the platform release of a sidecar version into `sidecars/<file name>/<version>/<platform>`. `plugins/installed.json` has `format` 2, `plugins` and `sidecars`. `plugins` maps each plugin id to `{ package, version, path, enabled, sidecars, previous? }`: the package name, the version in use, the folder that installation extracted that version into, `plugins/<id>/<version>`, whether the plugin loads, the sidecar ranges of that version, and the version that rollback restores. A package appears once. `sidecars` maps each sidecar that an installed plugin names to `{ version, path }`: the version in use, which satisfies the range of every installed plugin that names it, and the folder that installation extracted its platform release into, `sidecars/<file name>/<version>/<platform>`; a sidecar that no installed plugin names is not listed. Each `path` is relative to the configuration directory and must equal the folder that these rules give, so the configuration directory can move ([projects](projects.md#persistence)). Installation records each `path` when it extracts the release, and the hosts and `sok` read files only from recorded paths, resolved against the configuration directory. A file whose `format` is not 2 fails with `<file>: plugins/installed.json: format must be 2` and stays unchanged.
+Inside the configuration directory, plugin version `<version>` of `<id>` is extracted into `plugins/<id>/<version>`, and the platform release of a sidecar version into `sidecars/<file name>/<version>/<platform>`. `plugins/installed.json` has `format` 2, `plugins` and `sidecars`. `plugins` maps each plugin id to `{ package, version, path, enabled, sidecars, previous? }`: the `name` of the plugin's `package.json`, the version in use, the folder that installation extracted that version into, `plugins/<id>/<version>`, whether the plugin loads, the sidecar ranges of that version, and the version that rollback restores. A `name` appears once. `sidecars` maps each sidecar that an installed plugin names to `{ version, path }`: the version in use, which satisfies the range of every installed plugin that names it, and the folder that installation extracted its platform release into, `sidecars/<file name>/<version>/<platform>`; a sidecar that no installed plugin names is not listed. Each `path` is relative to the configuration directory and must equal the folder that these rules give, so the configuration directory can move ([projects](projects.md#persistence)). Installation records each `path` when it extracts the release, and the hosts and `sok` read files only from recorded paths, resolved against the configuration directory. A file whose `format` is not 2 fails with `<file>: plugins/installed.json: format must be 2` and stays unchanged.
 
 ## Serving installed plugins
 

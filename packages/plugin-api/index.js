@@ -6,7 +6,7 @@
 /*
  * 스테이징된 프런트엔드의 경로 규칙.
  *
- * 워크벤치 파일은 문서 루트에 놓인다. 다른 패키지는 `modules/<패키지 이름>/` 아래에
+ * 워크벤치 파일은 문서 루트에 놓인다. 다른 모듈은 `modules/<package.json name>/` 아래에
  * 패키지 안의 경로 그대로 놓인다. 런타임 모듈은 `runtime/` 에 놓인다.
  */
 import { createBinder } from "./binder.js";
@@ -581,7 +581,7 @@ export function validateSidecar(sidecar) {
       if (!isObject(helper)) throw new Error("sidecar.json helpers: expected an object");
       only("sidecar.json helpers", helper, ["package", "executable"]);
       if (!isText(helper.package) || !PACKAGE.test(helper.package)) {
-        throw new Error("sidecar.json helpers: package must be a package name");
+        throw new Error("sidecar.json helpers: package must be a package.json name");
       }
       const path = helper.executable;
       if (!isText(path) || path.startsWith("/") || path.split("/").includes("..")) {
@@ -994,7 +994,7 @@ export function validateInstalledPlugins(document) {
     only(`${INSTALLED_PLUGINS} plugin ${plugin.id}`, plugin, ["id", "package", "version", "manifest", "diagnostics"]);
     if (!isText(plugin.id) || !ID.test(plugin.id)) throw new Error(`${INSTALLED_PLUGINS}: plugin id ${plugin.id} is invalid`);
     if (!isText(plugin.package) || !PACKAGE.test(plugin.package)) {
-      throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} package must be a package name`);
+      throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} package must be a package.json name`);
     }
     if (!isText(plugin.version)) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} version is required`);
     if (plugin.manifest === undefined) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} manifest is required`);
@@ -1051,7 +1051,7 @@ export function declarationMap(exposes, into = new Map()) {
   return into;
 }
 
-/** 스테이징된 문서 경로에서 그 문서를 담은 패키지 이름을 반환한다. 모듈 경로가 아니면 null. */
+/** Returns the package.json name of the module that holds a staged document path, or null for another path. */
 export function pagePackage(pathname) {
   const parts = pathname.split("/").filter(Boolean);
   if (parts[0] !== "modules") return null;

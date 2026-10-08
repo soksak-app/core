@@ -25,7 +25,7 @@ Plugin release는 `sok plugin pack`이 쓰는, plugin 파일을 담은 파일 `<
 
 | 필드 | 뜻 |
 | --- | --- |
-| `name` | Package 이름이며, 설치한 파일은 `/modules/<name>/`에서 제공된다 |
+| `name` | 설치한 파일을 제공하는 `/modules/<name>/`의 이름이다 |
 | `version` | Plugin version |
 | `engines.soksak` | Plugin이 지원하는 core API version 범위 |
 | `files` | Release가 담는 package 안의 경로이며 `plugin.json`을 포함한다 |
@@ -72,7 +72,7 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 
 ## 설치 배치
 
-설정 폴더 안에서 `<id>`의 plugin version `<version>`은 `plugins/<id>/<version>`에, sidecar version의 플랫폼 release는 `sidecars/<file name>/<version>/<platform>`에 푼다. `plugins/installed.json`은 `format` 2, `plugins`, `sidecars`를 가진다. `plugins`는 plugin id마다 `{ package, version, path, enabled, sidecars, previous? }`를 정한다. 각각 package 이름, 쓰는 version, 설치가 그 version을 푼 폴더 `plugins/<id>/<version>`, 불러올지 여부, 그 version의 sidecar 범위, 되돌리기가 복원할 version이다. 한 package는 한 번만 나온다. `sidecars`는 설치된 plugin이 지정한 sidecar마다 `{ version, path }`를 정한다. 쓰는 version은 그 sidecar를 지정한 모든 설치된 plugin의 범위를 채우며, `path`는 설치가 그 플랫폼 release를 푼 폴더 `sidecars/<file name>/<version>/<platform>`이다. 어느 설치된 plugin도 지정하지 않은 sidecar는 나오지 않는다. 각 `path`는 설정 폴더에 대한 상대 경로이며 이 규칙이 정하는 폴더와 같아야 하므로 설정 폴더를 옮길 수 있다([projects](projects.ko.md#저장)). 설치는 release를 풀 때 각 `path`를 기록하고, host와 `sok`은 설정 폴더에 대해 푼 기록된 경로에서만 파일을 읽는다. `format`이 2가 아닌 파일은 `<file>: plugins/installed.json: format must be 2`로 실패하고 바뀌지 않는다.
+설정 폴더 안에서 `<id>`의 plugin version `<version>`은 `plugins/<id>/<version>`에, sidecar version의 플랫폼 release는 `sidecars/<file name>/<version>/<platform>`에 푼다. `plugins/installed.json`은 `format` 2, `plugins`, `sidecars`를 가진다. `plugins`는 plugin id마다 `{ package, version, path, enabled, sidecars, previous? }`를 정한다. 각각 plugin `package.json`의 `name`, 쓰는 version, 설치가 그 version을 푼 폴더 `plugins/<id>/<version>`, 불러올지 여부, 그 version의 sidecar 범위, 되돌리기가 복원할 version이다. 한 `name`은 한 번만 나온다. `sidecars`는 설치된 plugin이 지정한 sidecar마다 `{ version, path }`를 정한다. 쓰는 version은 그 sidecar를 지정한 모든 설치된 plugin의 범위를 채우며, `path`는 설치가 그 플랫폼 release를 푼 폴더 `sidecars/<file name>/<version>/<platform>`이다. 어느 설치된 plugin도 지정하지 않은 sidecar는 나오지 않는다. 각 `path`는 설정 폴더에 대한 상대 경로이며 이 규칙이 정하는 폴더와 같아야 하므로 설정 폴더를 옮길 수 있다([projects](projects.ko.md#저장)). 설치는 release를 풀 때 각 `path`를 기록하고, host와 `sok`은 설정 폴더에 대해 푼 기록된 경로에서만 파일을 읽는다. `format`이 2가 아닌 파일은 `<file>: plugins/installed.json: format must be 2`로 실패하고 바뀌지 않는다.
 
 ## 설치된 plugin 제공
 

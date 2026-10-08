@@ -1,4 +1,4 @@
-//! Writes packed plugins and sidecar release assets (docs/spec/cli.md). Both are gzip-compressed tar files whose entries
+//! Writes plugin releases and sidecar releases (docs/spec/cli.md). Both are gzip-compressed tar files whose entries
 //! are in path order with modification time 0, owner 0 and mode 0644 or 0755. A failure leaves no file.
 
 use std::collections::BTreeMap;
@@ -370,12 +370,12 @@ fn write_sums(path: &Path, sums: &BTreeMap<String, String>) -> Result<(), String
     })
 }
 
-/// sidecar 폴더를 검사하고 release asset 을 쓴 뒤 SHA256SUMS 를 갱신한다.
+/// Checks a sidecar folder, writes its release and updates SHA256SUMS.
 fn run_release(dir: &str, out: &str, platform: &str, stdout: &mut dyn Write) -> Result<(), String> {
     let dir = Path::new(dir);
     let pkg = read_json_file(dir, "package.json")?;
     let object = pkg.as_object().ok_or("package.json: expected an object")?;
-    let name = install::check_package_name("package.json name", object.get("name"))?;
+    let name = install::check_package_json_name("package.json name", object.get("name"))?;
     let version = install::check_version("package.json version", object.get("version"))?;
     let listed = listed_files(object)?;
     let declaration = read_json_file(dir, "sidecar.json")?;
