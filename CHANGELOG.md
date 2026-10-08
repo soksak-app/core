@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F106: every declared version is 0.0.7.
 - F102.10: a surface shows the error of a failed operation in its card status row with `tab.error(text)` and removes it with `tab.error(null)`; `core.grid` reports `error` for each tab.
 - F105: both application bundles declare the macOS minimum 14.4, the Tauri application is built for it, and `make release-check` checks `LSMinimumSystemVersion` and the minimum macOS version of each executable against `MACOS_MINIMUM`.
 - F102.9: every declared version is 0.0.6, and `make release-check` checks that the new core accepts the manifest of every plugin version of the registry that admits it; core 0.0.6 is released.

@@ -1,6 +1,6 @@
 {
   "name": "@soksak/browser",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "private": true,
   "type": "module",
   "description": "Browser application: the workbench without a native host. Plugin surfaces show placeholders.",

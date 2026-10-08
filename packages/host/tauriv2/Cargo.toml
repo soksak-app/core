@@ -1,6 +1,6 @@
 [package]
 name = "soksak-host-tauriv2"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
 description = "soksak native host for Tauri v2"
 
