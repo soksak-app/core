@@ -226,7 +226,9 @@ fn installed_assets_serve_the_shared_modules_of_extension_points() {
         diagnostics: false,
     };
     let served = assets
-        .get(&AssetKey::from("/shared/alpha.language/@codemirror/state.js"))
+        .get(&AssetKey::from(
+            "/shared/alpha.language/@codemirror/state.js",
+        ))
         .map(|data| data.into_owned());
     assert_eq!(
         served.clone().map(text).as_deref(),
