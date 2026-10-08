@@ -115,10 +115,14 @@ var hostStatus = map[string]hostEntry{
 		}}},
 	},
 	"host.sidecars": {
-		Description: "The surfaces whose closed the host has sent and the sidecar has not answered: {closing: [{sidecar, surface}]}, sorted by sidecar and surface.",
+		Description: "The surfaces whose closed the host has sent and the sidecar has not answered, sorted by sidecar and surface, and the persistent sidecars whose service runs another version than the installed one, sorted by sidecar, with the running version (null when the service sent none), the installed version and the number of open surfaces of the service: {closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"closing": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"sidecar": map[string]any{"type": "string"}, "surface": map[string]any{"type": "string"},
+			}}},
+			"outdated": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
+				"sidecar": map[string]any{"type": "string"}, "running": map[string]any{"type": []any{"string", "null"}},
+				"installed": map[string]any{"type": "string"}, "sessions": map[string]any{"type": "integer"},
 			}}},
 		}},
 	},
@@ -1419,10 +1423,12 @@ func (s *Surfaces) presented() (float64, error) {
 // sidecarsState 는 host.sidecars 의 현재 값이다.
 func (b hostBackend) sidecarsState() map[string]any {
 	closing := []ClosingSurface{}
+	outdated := []OutdatedSidecar{}
 	if b.h.sidecars != nil {
 		closing = b.h.sidecars.Closing()
+		outdated = b.h.sidecars.Outdated()
 	}
-	return map[string]any{"closing": closing}
+	return map[string]any{"closing": closing, "outdated": outdated}
 }
 
 // sidecarsChanged 는 host.sidecars 를 감시하는 연결에 새 값을 보낸다.

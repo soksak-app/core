@@ -222,6 +222,14 @@ fn detach_stdio<O>(state: &mut State<O>, name: &str) -> Option<ClosingChanged> {
     forget_closing(state, name)
 }
 
+/// Whether process is a persistent service whose version differs from the installed version of the sidecar name. A
+/// service that sent no version is of an earlier version.
+fn is_outdated<O>(core: &Core<O>, name: &str, process: &Process) -> bool {
+    process.persistent.as_ref().is_some_and(|connection| {
+        connection.version.as_deref() != Some(core.version(name).as_str())
+    })
+}
+
 fn forget_closing<O>(state: &mut State<O>, sidecar: &str) -> Option<ClosingChanged> {
     state.closing.remove(sidecar)?;
     state.closing_changed.clone()
@@ -384,6 +392,8 @@ type RetainWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<usize, String>>
 type ReplyWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>;
 
 struct PersistentConnection {
+    /// The version that the service sent in its hello reply, or `None` when the reply had none.
+    version: Option<String>,
     close_waiters: ReplyWaiters,
     /// retain 요청마다 서비스가 닫은 세션 수나 오류를 받는다.
     retain_waiters: RetainWaiters,
@@ -446,11 +456,25 @@ struct Core<O> {
 struct Declarations {
     /// The sidecar and the path of its executable.
     declared: HashMap<String, PathBuf>,
+    /// The version that installed.json records for each declared sidecar.
+    versions: HashMap<String, String>,
     persistent: HashMap<String, bool>,
     basenames: HashMap<String, String>,
 }
 
 impl<O> Core<O> {
+    /// The version that installed.json records for the declared sidecar name, or an empty text for an undeclared one.
+    fn version(&self, name: &str) -> String {
+        self.declarations
+            .read()
+            .expect("sidecar declarations")
+            .versions
+            .get(name)
+            .cloned()
+            // default: an undeclared sidecar has no installed version, and no service version equals the empty text.
+            .unwrap_or_default()
+    }
+
     /// 선언된 사이드카 name 의 실행 파일과 영속 여부.
     fn declaration(&self, name: &str) -> Option<(PathBuf, bool)> {
         let declarations = self.declarations.read().expect("sidecar declarations");
@@ -472,6 +496,19 @@ pub struct SidecarDeclaration {
     pub name: String,
     pub folder: PathBuf,
     pub data: Vec<u8>,
+    /// The version that installed.json records for the sidecar.
+    pub version: String,
+}
+
+/// A persistent sidecar whose running service has another version than the installed one
+/// (docs/spec/terminal-runtime.md#updates). `running` is `None` when the service sent no version; `sessions` counts
+/// the open surfaces of the application that have sent to the service.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct OutdatedSidecar {
+    pub sidecar: String,
+    pub running: Option<String>,
+    pub installed: String,
+    pub sessions: usize,
 }
 
 impl<O: Owner> Sidecars<O> {
@@ -596,6 +633,7 @@ impl<O: Owner> Sidecars<O> {
             }
             next.declared
                 .insert(name.clone(), item.folder.join(executable));
+            next.versions.insert(name.clone(), item.version.clone());
             next.persistent.insert(name, is_persistent);
         }
         let mut current = self
@@ -686,6 +724,10 @@ impl<O: Owner> Sidecars<O> {
             .entry(surface.to_string())
             .or_insert_with(|| root.clone());
         let process = state.running.get_mut(name).expect("started above");
+        // A new surface or a new service of an outdated sidecar changes host.sidecars, which is announced after the
+        // unlock.
+        let outdated_changed = (started || !process.surfaces.contains(surface))
+            && is_outdated(&self.core, name, process);
         process.surfaces.insert(surface.to_string());
 
         // 논블로킹으로 채널에 전송한다. 채널이 가득 차면 "is not keeping up" 오류를 반환한다.
@@ -693,9 +735,13 @@ impl<O: Owner> Sidecars<O> {
             .outbox
             .try_send(Outgoing::Line(line))
             .map_err(|_| format!("sidecar {name} is not keeping up"));
+        let changed = state.closing_changed.clone();
         drop(state);
         if restarted {
             notify_connection(&self.core, name, Ok(()));
+        }
+        if let (true, Some(changed)) = (outdated_changed, changed) {
+            changed();
         }
         delivered
     }
@@ -795,6 +841,32 @@ impl<O: Owner> Sidecars<O> {
             changed();
         }
         Ok(())
+    }
+
+    /// The persistent sidecars whose running service has another version than the installed one, sorted by sidecar
+    /// (host.sidecars, docs/spec/terminal-runtime.md#updates).
+    pub fn outdated(&self) -> Vec<OutdatedSidecar> {
+        let state = self.core.state.lock().expect("sidecar state");
+        let mut list: Vec<OutdatedSidecar> = state
+            .running
+            .iter()
+            .filter(|(name, process)| is_outdated(&self.core, name, process))
+            .map(|(name, process)| OutdatedSidecar {
+                sidecar: name.clone(),
+                running: process
+                    .persistent
+                    .as_ref()
+                    .and_then(|connection| connection.version.clone()),
+                installed: self.core.version(name),
+                sessions: process
+                    .surfaces
+                    .iter()
+                    .filter(|surface| state.owners.contains_key(*surface))
+                    .count(),
+            })
+            .collect();
+        list.sort_by(|left, right| left.sidecar.cmp(&right.sidecar));
+        list
     }
 
     /// closed 를 보냈고 답을 받지 않은 표면을 사이드카와 표면 순으로 반환한다(host.sidecars).
@@ -1506,6 +1578,11 @@ impl<O: Owner> Core<O> {
                 "sidecar {name}: service protocol mismatch in hello response"
             ));
         }
+        // A service that sends no version is of an earlier version (docs/spec/terminal-runtime.md#updates).
+        let version = response
+            .get("version")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
         // 인사가 성공했으니 읽기 기한을 하루로 늘린다. macOS 는 상대가 닫은 소켓의
         // SO_RCVTIMEO 설정을 EINVAL 으로 거부하므로 이 단계의 실패는 닫힌 연결이다 —
         // 인사에 답하고 곧 닫는 서비스는 살아 있는 연결이 아니다.
@@ -1795,6 +1872,7 @@ impl<O: Owner> Core<O> {
                 outbox: tx,
                 surfaces: HashSet::new(),
                 persistent: Some(PersistentConnection {
+                    version,
                     close_waiters,
                     retain_waiters,
                     shutdown_waiters,

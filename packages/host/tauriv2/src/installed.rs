@@ -281,7 +281,12 @@ pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, 
             let declaration = folder.join("sidecar.json");
             let data = std::fs::read(&declaration)
                 .map_err(|error| format!("{}: {error}", declaration.display()))?;
-            declarations.push(SidecarDeclaration { name, folder, data });
+            declarations.push(SidecarDeclaration {
+                name,
+                folder,
+                data,
+                version: sidecar.version.clone(),
+            });
         }
     }
     Ok(declarations)

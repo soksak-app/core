@@ -1575,3 +1575,92 @@ func TestPersistentStartFailsWhenTheServiceExitsBeforeItsEndpoint(t *testing.T) 
 		t.Fatalf("exited service = %v, want %q", err, want)
 	}
 }
+
+// serveHelloVersion answers the hello of one connection with version, or without a version when it is nil, and then
+// echoes each surface request.
+func serveHelloVersion(t *testing.T, listener net.Listener, version *string) {
+	t.Helper()
+	go func() {
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			var request map[string]any
+			if json.Unmarshal(line, &request) != nil {
+				return
+			}
+			var reply []byte
+			if request["operation"] == "hello" {
+				answer := map[string]any{"operation": "hello", "protocol": 1, "ok": true}
+				if version != nil {
+					answer["version"] = *version
+				}
+				reply, _ = json.Marshal(answer)
+			} else {
+				reply = line[:len(line)-1]
+			}
+			if _, err := connection.Write(append(reply, '\n')); err != nil {
+				return
+			}
+		}
+	}()
+}
+
+// contract: sidecars-transport.hello.reports-a-service-of-another-version
+func TestPersistentServiceOfAnotherVersionIsReportedOutdated(t *testing.T) {
+	old := "0.0.6"
+	cases := []struct {
+		name    string
+		version *string
+		want    []host.OutdatedSidecar
+	}{
+		{"another version", &old, []host.OutdatedSidecar{{Sidecar: "fixture-service", Running: &old, Installed: "0.0.7", Sessions: 1}}},
+		{"no version", nil, []host.OutdatedSidecar{{Sidecar: "fixture-service", Running: nil, Installed: "0.0.7", Sessions: 1}}},
+		{"the installed version", text("0.0.7"), []host.OutdatedSidecar{}},
+	}
+	for _, item := range cases {
+		t.Run(item.name, func(t *testing.T) {
+			root := t.TempDir()
+			socketDirectory, err := os.MkdirTemp("", "sp-v")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.RemoveAll(socketDirectory)
+			socket := filepath.Join(socketDirectory, "s.sock")
+			listener, err := net.Listen("unix", socket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer listener.Close()
+			writeHarnessEndpoint(t, root, socket)
+			serveHelloVersion(t, listener, item.version)
+			declarations := harnessDeclarations(t.TempDir())
+			declarations[0].Version = "0.0.7"
+			sidecars, err := NewSidecars(declarations, root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer sidecars.Stop()
+			owner := &harnessOwner{root: "/outdated", seen: make(chan SidecarMessage, 1)}
+			if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
+				t.Fatal(err)
+			}
+			receiveSidecarMessage(t, owner.seen)
+			got, _ := json.Marshal(sidecars.Outdated())
+			want, _ := json.Marshal(item.want)
+			if string(got) != string(want) {
+				t.Fatalf("outdated = %s, want %s", got, want)
+			}
+		})
+	}
+}
+
+// text is a pointer to value.
+func text(value string) *string { return &value }

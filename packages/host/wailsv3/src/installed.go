@@ -312,7 +312,7 @@ func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
 			if err != nil {
 				return nil, err
 			}
-			declarations = append(declarations, SidecarDeclaration{Name: name, Folder: folder, Data: declaration})
+			declarations = append(declarations, SidecarDeclaration{Name: name, Folder: folder, Data: declaration, Version: sidecar.Version})
 		}
 	}
 	return declarations, nil

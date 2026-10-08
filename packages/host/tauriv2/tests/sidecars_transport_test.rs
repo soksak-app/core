@@ -12,7 +12,9 @@ use std::os::unix::net::UnixListener;
 use std::process::Command;
 
 use serde_json::value::RawValue;
-use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
+use soksak_host_tauriv2::sidecars::{
+    Failure, Message, OutdatedSidecar, Owner, SidecarDeclaration, Sidecars,
+};
 
 #[derive(Clone)]
 struct FakeOwner {
@@ -68,6 +70,7 @@ fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
             name: name.to_string(),
             folder: folder.to_path_buf(),
             data: data.as_bytes().to_vec(),
+            version: "0.0.1".to_string(),
         })
         .collect()
 }
@@ -1590,4 +1593,86 @@ fn persistent_start_fails_when_the_service_exits_before_its_endpoint() {
         error,
         "sidecar @fixture/sidecar-echo: service exited before endpoint"
     );
+}
+
+// contract: sidecars-transport.hello.reports-a-service-of-another-version
+#[test]
+fn a_persistent_service_of_another_version_is_reported_outdated() {
+    let cases: [(Option<&str>, Vec<OutdatedSidecar>); 3] = [
+        (
+            Some("0.0.6"),
+            vec![OutdatedSidecar {
+                sidecar: ECHO.to_string(),
+                running: Some("0.0.6".to_string()),
+                installed: "0.0.7".to_string(),
+                sessions: 1,
+            }],
+        ),
+        (
+            None,
+            vec![OutdatedSidecar {
+                sidecar: ECHO.to_string(),
+                running: None,
+                installed: "0.0.7".to_string(),
+                sessions: 1,
+            }],
+        ),
+        (Some("0.0.7"), vec![]),
+    ];
+    for (version, want) in cases {
+        let executable_directory = tempfile::tempdir().unwrap();
+        let config_directory = tempfile::tempdir().unwrap();
+        let service_directory = config_directory.path().join("services/echo");
+        std::fs::create_dir_all(&service_directory).unwrap();
+        let socket_path = service_directory.join("version.sock");
+        let listener = UnixListener::bind(&socket_path).unwrap();
+        let endpoint = serde_json::json!({
+            "protocol": 1,
+            "pid": std::process::id(),
+            "socket": socket_path,
+            "token": "version-token"
+        });
+        std::fs::write(
+            service_directory.join("endpoint.json"),
+            serde_json::to_vec(&endpoint).unwrap(),
+        )
+        .unwrap();
+        // The service answers hello with the version of the case and echoes each surface request.
+        let reply_version = version.map(str::to_string);
+        std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap_or(0) > 0 {
+                let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let reply = if request["operation"] == "hello" {
+                    let mut answer =
+                        serde_json::json!({"operation": "hello", "protocol": 1, "ok": true});
+                    if let Some(version) = &reply_version {
+                        answer["version"] = serde_json::json!(version);
+                    }
+                    answer.to_string()
+                } else {
+                    line.trim_end().to_string()
+                };
+                if writeln!(stream, "{reply}").is_err() {
+                    return;
+                }
+                line.clear();
+            }
+        });
+        let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+        let mut declarations = declare(&fixture, executable_directory.path());
+        declarations[0].version = "0.0.7".to_string();
+        let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf()).unwrap();
+        let (owner, events) = owner("version", "/projects/version");
+        sidecars
+            .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+        events.recv_timeout(STALL).unwrap();
+        assert_eq!(sidecars.outdated(), want, "hello version {version:?}");
+        sidecars.stop();
+    }
 }

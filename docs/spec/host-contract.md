@@ -339,6 +339,7 @@ Items:
 | `sidecars-transport.hello.declares-protocol-one` | The hello request declares protocol 1. | both |
 | `sidecars-transport.reconnect.after-connection-loss-preserves-owner` | After the service drops the connection, the next send reconnects and events still reach the owner and surface. | both |
 | `sidecars-transport.stop.close-owner-failure-returns-promptly` | A close-owner failure reply does not delay stop beyond 1 s. | both |
+| `sidecars-transport.hello.reports-a-service-of-another-version` | A persistent service whose hello reply has another `version` than `installed.json` records, or no `version`, is listed in `host.sidecars` `outdated` with the running version or `null`, the installed version and its open surfaces; a service of the installed version is not. | both |
 | `sidecars-transport.hello.rejects-auth-failure` | A failed hello reply makes the send fail with "authentication handshake failed". | both |
 | `sidecars-transport.hello.rejects-unsupported-protocol-without-replacing-endpoint` | A hello reply with another protocol fails the send and leaves endpoint.json unchanged. | both |
 | `sidecars-transport.hello.times-out` | A service that receives the hello and does not answer fails the send after 5 s with "the service did not answer hello within 5s". | both |

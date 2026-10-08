@@ -83,7 +83,9 @@ type ClosingSurface struct {
 }
 
 type sidecar struct {
-	name          string
+	name string
+	// version is the version that a persistent service sent in its hello reply, or nil when the reply had none.
+	version       *string
 	cmd           *exec.Cmd
 	stdin         io.WriteCloser
 	conn          net.Conn
@@ -124,8 +126,10 @@ type Sidecars struct {
 	// 실행 파일을 읽으므로 c.mu 와 따로 둔다.
 	declarations sync.RWMutex
 	declared     map[string]string
-	persistent   map[string]bool
-	running      map[string]*sidecar
+	// versions holds the version that installed.json records for each declared sidecar.
+	versions   map[string]string
+	persistent map[string]bool
+	running    map[string]*sidecar
 	// starting 은 시작 중인 사이드카다. 시작은 잠금 밖에서 하며, 끝나면 그 채널을 닫는다.
 	starting map[string]chan struct{}
 	// closing holds, for each sidecar, the surfaces whose closed was sent and not answered, with the number of those
@@ -158,6 +162,18 @@ type SidecarDeclaration struct {
 	Name   string
 	Folder string
 	Data   []byte
+	// Version is the version that installed.json records for the sidecar.
+	Version string
+}
+
+// OutdatedSidecar is a persistent sidecar whose running service has another version than the installed one
+// (docs/spec/terminal-runtime.md#updates). Running is nil when the service sent no version; Sessions counts the open
+// surfaces of the application that have sent to the service.
+type OutdatedSidecar struct {
+	Sidecar   string  `json:"sidecar"`
+	Running   *string `json:"running"`
+	Installed string  `json:"installed"`
+	Sessions  int     `json:"sessions"`
 }
 
 // NewSidecars 는 선언된 sidecar 로 채널을 생성한다. 실행 파일은 각 Folder 안의 executable 경로다. 선언의 형식이
@@ -165,6 +181,7 @@ type SidecarDeclaration struct {
 func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Sidecars, error) {
 	c := &Sidecars{
 		declared:        map[string]string{},
+		versions:        map[string]string{},
 		persistent:      map[string]bool{},
 		running:         map[string]*sidecar{},
 		starting:        map[string]chan struct{}{},
@@ -243,6 +260,7 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 	c.declarations.Lock()
 	defer c.declarations.Unlock()
 	declared := map[string]string{}
+	versions := map[string]string{}
 	persistent := map[string]bool{}
 	basenames := map[string]string{}
 	for _, item := range declarations {
@@ -278,6 +296,7 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 			persistent[name] = true
 		}
 		declared[name] = filepath.Join(item.Folder, filepath.FromSlash(sidecar.Executable))
+		versions[name] = item.Version
 	}
 	changed := []string{}
 	for name, program := range c.declared {
@@ -285,7 +304,7 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 			changed = append(changed, name)
 		}
 	}
-	c.declared, c.persistent, c.basenames = declared, persistent, basenames
+	c.declared, c.versions, c.persistent, c.basenames = declared, versions, persistent, basenames
 	return changed, nil
 }
 
@@ -321,6 +340,13 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 			c.notifyConnection(name, nil)
 		}
 	}()
+	// A new surface or a new service of an outdated sidecar changes host.sidecars, which is announced after the unlock.
+	var outdatedChanged bool
+	defer func() {
+		if outdatedChanged {
+			c.closingChanged()
+		}
+	}()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.stopped {
@@ -344,6 +370,7 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 	if other, ok := c.owners[surface]; ok && other != owner {
 		return fmt.Errorf("surface %s belongs to another window", surface)
 	}
+	outdatedChanged = (started || !process.surfaces[surface]) && c.outdated(process)
 	process.surfaces[surface] = true
 	c.owners[surface] = owner
 	if _, ok := c.roots[surface]; !ok {
@@ -463,6 +490,43 @@ func (c *Sidecars) Closing() []ClosingSurface {
 		return list[i].Surface < list[j].Surface
 	})
 	return list
+}
+
+// Outdated returns the persistent sidecars whose running service has another version than the installed one, sorted by
+// sidecar (host.sidecars, docs/spec/terminal-runtime.md#updates).
+func (c *Sidecars) Outdated() []OutdatedSidecar {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	list := []OutdatedSidecar{}
+	for name, process := range c.running {
+		if !c.outdated(process) {
+			continue
+		}
+		sessions := 0
+		for surface := range process.surfaces {
+			if c.owners[surface] != nil {
+				sessions++
+			}
+		}
+		c.declarations.RLock()
+		installed := c.versions[name]
+		c.declarations.RUnlock()
+		list = append(list, OutdatedSidecar{Sidecar: name, Running: process.version, Installed: installed, Sessions: sessions})
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].Sidecar < list[j].Sidecar })
+	return list
+}
+
+// outdated reports whether process is a persistent service whose version differs from the installed version of its
+// sidecar. A service that sent no version is of an earlier version. It is called with c.mu held.
+func (c *Sidecars) outdated(process *sidecar) bool {
+	if !process.persistent {
+		return false
+	}
+	c.declarations.RLock()
+	installed := c.versions[process.name]
+	c.declarations.RUnlock()
+	return process.version == nil || *process.version != installed
 }
 
 // closingChanged 는 closing 이 바뀐 것을 알린다. 잠금 밖에서 호출한다.
@@ -1069,6 +1133,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 	var response struct {
 		Operation string  `json:"operation"`
 		Protocol  *uint64 `json:"protocol"`
+		Version   *string `json:"version"`
 		OK        bool    `json:"ok"`
 		Error     string  `json:"error"`
 	}
@@ -1088,7 +1153,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		return nil, fmt.Errorf("sidecar %s: service protocol mismatch in hello response", name)
 	}
 	process := &sidecar{
-		name: name, cmd: cmd, conn: conn, persistent: true,
+		name: name, cmd: cmd, conn: conn, persistent: true, version: response.Version,
 		outbox: make(chan []byte, 256), exited: make(chan struct{}),
 		pendingCloses: make([][]byte, 0), pendingReplies: make([][]byte, 0),
 		closeWaiters: make(map[string]chan error), surfaces: make(map[string]bool),

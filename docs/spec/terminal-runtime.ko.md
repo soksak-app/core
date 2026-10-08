@@ -50,7 +50,7 @@ Host는 service 연결을 한 줄씩 읽고 각 줄에 stdio transport의 [메�
 
 ### Updates
 
-`hello` 응답의 `version`이 `installed.json`이 그 사이드카에 기록한 version과 다르면(사이드카를 update한 뒤, 또는 애플리케이션이 시작할 때 이전 애플리케이션이 남긴 서비스를 찾았을 때) host는 서비스와 그 세션을 유지하고 그 사이드카를 `host.sidecars`에 `outdated: [{sidecar, running, installed, sessions}]`로 사이드카 순으로 보고한다. `sessions`는 서비스가 가진 이 애플리케이션 표면의 수다. host는 `sessions`가 0이 될 때와 page가 host 호출 `sidecarsReplace({sidecar})`를 실행할 때 서비스를 교체한다. `close-owner`와 `shutdown`을 보내고 연결을 닫은 뒤 서비스 endpoint의 process가 끝날 때까지 기다리고, 생성 경로로 설치된 실행 파일을 시작한다. 교체된 서비스의 세션은 끝나고, 그 사이드카에 보낸 적이 있는 표면은 모두 연결 알림을 받아 새 세션을 연다. plugin 화면은 각 outdated 사이드카를 `core.plugins.replace {sidecar}`에 연결된 동작 터미널 <sessions>개를 끝내고 적용과 함께 보인다. 실패한 교체는 그 까닭과 함께 보고되고 사이드카는 outdated로 남는다. host는 다른 경로로 서비스를 끝내지 않는다. application log는 `sidecar <name>: service <running> replaced by <installed>`를 기록한다.
+`hello` 응답의 `version`이 `installed.json`이 그 사이드카에 기록한 version과 다르면(사이드카를 update한 뒤, 또는 애플리케이션이 시작할 때 이전 애플리케이션이 남긴 서비스를 찾았을 때) host는 서비스와 그 세션을 유지하고 그 사이드카를 `host.sidecars`에 `outdated: [{sidecar, running, installed, sessions}]`로 사이드카 순으로 보고한다. `version`을 보내지 않은 서비스는 이전 version의 서비스이므로 `running`이 `null`이고, `sessions`는 그 서비스에 보낸 적이 있는 이 애플리케이션의 열린 표면 수다. host는 목록이 바뀌면 `host.sidecars`를 감시하는 연결에 알린다. host는 `sessions`가 0이 될 때와 page가 host 호출 `sidecarsReplace({sidecar})`를 실행할 때 서비스를 교체한다. `close-owner`와 `shutdown`을 보내고 연결을 닫은 뒤 서비스 endpoint의 process가 끝날 때까지 기다리고, 생성 경로로 설치된 실행 파일을 시작한다. 교체된 서비스의 세션은 끝나고, 그 사이드카에 보낸 적이 있는 표면은 모두 연결 알림을 받아 새 세션을 연다. plugin 화면은 각 outdated 사이드카를 `core.plugins.replace {sidecar}`에 연결된 동작 터미널 <sessions>개를 끝내고 적용과 함께 보인다. 실패한 교체는 그 까닭과 함께 보고되고 사이드카는 outdated로 남는다. host는 다른 경로로 서비스를 끝내지 않는다. application log는 `sidecar <name>: service <running> replaced by <installed>`를 기록한다.
 
 ## 터미널 입력과 표시
 
