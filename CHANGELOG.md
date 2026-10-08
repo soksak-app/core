@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R3.2: `make records-check` reports record lines that are not facts about the repository, and `make commits-check`, the commit-msg hook and CI check the commit form `type(scope): Subject (#ID)` without footers.
 - F101.2: the terminal service 0.0.6 and the terminal plugin 0.0.6, whose shells run in a UTF-8 locale, are in the public registry.
 - F101.1: a terminal shell runs in a UTF-8 locale when the terminal service has no `LANG`, `LC_ALL` or `LC_CTYPE`.
 - R3.1: AGENTS.md states that records state facts about the repository and that commit messages use `type(scope): Subject (#ID)` without footers.

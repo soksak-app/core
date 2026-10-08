@@ -1,9 +1,22 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify browser-example-check docs-check boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory
+.PHONY: preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory
 
 docs-check:
 	@node scripts/check-docs.mjs
+
+# 문서와 설정 주석이 저장소에 관한 사실만 적는지 검사한다(AGENTS.md Documentation).
+records-check:
+	@node scripts/check-records.mjs
+
+# RANGE 의 커밋 메시지 형식을 검사한다. 예: make commits-check RANGE=origin/main..HEAD
+commits-check:
+	@test -n "$(RANGE)" || { echo "make commits-check RANGE=<revision range>" >&2; exit 2; }
+	@node scripts/check-commits.mjs "$(RANGE)"
+
+# 이 checkout 의 git hook 폴더를 .githooks 로 정한다. commit-msg hook 이 커밋 메시지 형식을 검사한다.
+hooks:
+	@git config core.hooksPath .githooks
 
 # release 빌드를 만들고, 스테이징된 프런트엔드와 release 실행 파일에 진단 코드가 없는지 검사한다.
 release-check: wailsv3-build-release tauriv2-build-release

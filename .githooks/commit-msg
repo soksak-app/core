@@ -1,0 +1,3 @@
+#!/bin/sh
+# 커밋 메시지 형식을 검사한다. `make hooks` 가 이 폴더를 git hook 폴더로 정한다.
+exec node "$(git rev-parse --show-toplevel)/scripts/check-commits.mjs" "$1"

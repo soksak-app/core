@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R3.2: `make records-check`는 저장소에 관한 사실이 아닌 기록 줄을 보고하고, `make commits-check`와 commit-msg hook과 CI는 꼬리말 없는 커밋 형식 `type(scope): Subject (#ID)`를 검사한다.
 - F101.2: shell을 UTF-8 locale로 실행하는 terminal service 0.0.6과 terminal plugin 0.0.6이 공개 registry에 있다.
 - F101.1: terminal service에 `LANG`, `LC_ALL`, `LC_CTYPE`이 없을 때 터미널 shell은 UTF-8 locale로 실행된다.
 - R3.1: AGENTS.md는 기록이 저장소에 관한 사실을 적고 커밋 메시지가 꼬리말 없는 `type(scope): Subject (#ID)` 형식을 쓴다고 적는다.
