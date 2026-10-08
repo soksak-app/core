@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F113.1: `document_typing_test`가 비활성 애플리케이션에서 문서 영역이 입력한 글자를 받는지 검사한다.
 - F111.7.4: `sok` 변경이 고친 주석을 영문으로 썼다.
 - F111.7.3: Tauri 애플리케이션이 `sok://core/start.json`으로 창을 시작하므로 `soksak` scheme이 딥링크에 비어 있다.
 - F111.7.2: 문서 영역이 plugin 문서를 `soksak-package://<plugin>/<path>` 대신 `sok://<plugin>/<path>`에서 연다.

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F113.1: `document_typing_test` checks that a document region takes typed text in an inactive application.
 - F111.7.4: the comments that the `sok` change touched are written in English.
 - F111.7.3: the Tauri application starts its window from `sok://core/start.json`, so the `soksak` scheme is free for deep links.
 - F111.7.2: document regions load plugin documents at `sok://<plugin>/<path>` instead of `soksak-package://<plugin>/<path>`.
