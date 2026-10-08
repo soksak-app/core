@@ -189,6 +189,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         .register_uri_scheme_protocol(start::SCHEME, |context, request| {
             let app = context.app_handle().clone();
             start::serve(
+                request.uri().host().unwrap_or_default(),
                 request.uri().path(),
                 context.webview_label(),
                 &mut |webview| start::start_page(&app, webview),

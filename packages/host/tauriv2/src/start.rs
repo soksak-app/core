@@ -7,8 +7,12 @@ use tauri::{AppHandle, Manager};
 
 use crate::application_log::log_error;
 
-/// 시작 문서를 제공하는 URI scheme. 요청한 webview 를 알 수 있는 custom scheme 처리기가 답한다.
-pub const SCHEME: &str = "soksak";
+/// The scheme of application documents inside webviews (docs/spec/native-host.md#application-addresses). A custom
+/// scheme handler, which knows the requesting webview, answers the start document at sok://core/start.json.
+pub const SCHEME: &str = "sok";
+
+/// The owner of core documents in sok addresses.
+pub const CORE: &str = "core";
 
 /// main page 가 시작 문서를 가져오는 경로.
 pub const START_DOCUMENT_PATH: &str = "/start.json";
@@ -33,9 +37,10 @@ pub fn start_document(workspace: &Value, controls: &Value) -> Result<Vec<u8>, St
     .map_err(|error| error.to_string())
 }
 
-/// 시작 문서 요청을 요청한 webview 의 label 로 start 에 넘긴다. 다른 경로는 없는 문서다. 창을 찾지 못하면 page 를
+/// 시작 문서 요청을 요청한 webview 의 label 로 start 에 넘긴다. 다른 owner 와 다른 경로는 없는 문서다. 창을 찾지 못하면 page 를
 /// 시작하지 않고 400 으로, 다른 실패는 500 으로 답한다.
 pub fn serve(
+    owner: &str,
     path: &str,
     webview: &str,
     start: &mut dyn FnMut(&str) -> Result<Vec<u8>, String>,
@@ -49,8 +54,8 @@ pub fn serve(
             // 기본값: 고정된 상태와 헤더로 만든 응답은 실패하지 않으며, 실패하면 빈 500 응답을 쓴다.
             .unwrap_or_else(|_| Response::new(vec![]))
     };
-    if path != START_DOCUMENT_PATH {
-        return failure(404, format!("{path} not found"));
+    if owner != CORE || path != START_DOCUMENT_PATH {
+        return failure(404, format!("{SCHEME}://{owner}{path} not found"));
     }
     match start(webview) {
         Ok(data) => Response::builder()
