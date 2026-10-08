@@ -189,7 +189,11 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         // The end of the WebContent process leaves the web view without a page. The host writes the end as an error
         // line (docs/spec/diagnostics.md) and loads the page again, as the Wails host does through its framework.
         .on_web_content_process_terminate(|webview| {
-            let (place, text) = page_process::page_process_ended(webview.label());
+            let quitting = windows::is_quitting(webview.app_handle());
+            let Some((place, text)) = page_process::page_process_ended(webview.label(), quitting)
+            else {
+                return;
+            };
             log_error(&place, text);
             if let Err(error) = webview.reload() {
                 log_error(&place, format!("{}: reload: {error}", webview.label()));

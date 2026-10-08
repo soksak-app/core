@@ -321,7 +321,12 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	// The framework loads the page again after the WebContent process ends; the host writes the end as an error line
 	// (docs/spec/diagnostics.md).
 	win.OnWindowEvent(events.Mac.WebViewWebContentProcessDidTerminate, func(*application.WindowEvent) {
-		LogError(PageProcessEnded(s.name))
+		h.mu.Lock()
+		quitting := h.quitting
+		h.mu.Unlock()
+		if place, text, reported := PageProcessEnded(s.name, quitting); reported {
+			LogError(place, text)
+		}
 	})
 	win.OnWindowEvent(events.Mac.WebViewDidCommitNavigation, func(*application.WindowEvent) {
 		// 이 callback 은 별도 goroutine 에서 새 페이지의 호출보다 늦게 실행될 수 있다. 이전 페이지의 정리는

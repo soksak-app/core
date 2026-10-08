@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F128.1: host가 종료하는 동안 일부러 끝낸 WebContent process는 기록하지 않고 Tauri host는 page를 다시 불러오지 않는다. 다시 불러오면 애플리케이션이 끝나지 못했다.
 - F117.5.4: plugin 화면이 카드 위에 오래된 상주 service마다 `<running> → <installed>`와 새 명령 `core.plugins.replace {sidecar}`를 실행하는 동작 터미널 <sessions>개를 끝내고 적용을 보인다. `core.plugins`는 `outdated`를 보고하고, 두 host는 `sidecarsOutdated`에 답하고 `sidecars-changed`를 보낸다.
 - F117.5.3: 두 host가 `hello` version이 설치된 version과 다른 상주 service를 마지막 세션이 닫힐 때와 host 호출 `sidecarsReplace({sidecar})`에서 교체한다: `close-owner`, `shutdown`, 설치된 service를 시작하는 재연결, 각 표면의 연결 알림, `outdated`에서 sidecar가 빠진 `host.sidecars`, 애플리케이션 로그의 `sidecar <name>: service <running> replaced by <installed>`.
 - F128.4: Tauri host의 fatal signal이나 잡히지 않은 예외를 process가 끝나기 전에 `error: fatal: …` 한 줄로 애플리케이션 로그에 쓴다. native 라이브러리가 handler를 설치하고 앞서 설치된 handler를 호출한다.

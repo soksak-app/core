@@ -266,6 +266,11 @@ pub(crate) fn notify_workspace(app: &AppHandle) {
     }
 }
 
+/// Whether the application is quitting, which ends the WebContent process of each window on purpose.
+pub(crate) fn is_quitting(app: &AppHandle) -> bool {
+    app.state::<Windows>().quitting.load(Ordering::Relaxed)
+}
+
 /// Sends sidecars-changed to every window (docs/spec/installation.md).
 pub(crate) fn notify_sidecars(app: &AppHandle) {
     for window in app.windows().values() {
