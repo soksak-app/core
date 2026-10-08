@@ -194,51 +194,98 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 	return c, nil
 }
 
-// Declare 는 아직 선언하지 않은 sidecar 를 더한다. 이미 선언한 sidecar 는 애플리케이션을 다시 시작할 때까지 그 폴더를
-// 유지한다(docs/spec/installation.md#serving-installed-plugins). 선언의 형식이 틀리면 실패한다.
+// Declare 는 설치된 sidecar 를 선언한다(docs/spec/installation.md#applying-a-change). 실행 파일이 바뀐 표준 입출력
+// sidecar 와 더 이상 선언하지 않는 표준 입출력 sidecar 는 실행 중인 프로세스를 중지 규칙대로 멈추므로, 다음 Send 가 새
+// 실행 파일을 시작한다. 지속 service 는 다음 시작부터 새 실행 파일을 쓴다. 선언의 형식이 틀리면 아무것도 바꾸지 않고
+// 실패한다.
 func (c *Sidecars) Declare(declarations []SidecarDeclaration) error {
+	changed, err := c.declare(declarations)
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	// 시작 중인 sidecar 는 끝나면 등록되므로, 그 시작을 기다린 뒤 실행 중인 목록을 읽는다.
+	for {
+		var wait chan struct{}
+		for _, name := range changed {
+			if starting := c.starting[name]; starting != nil {
+				wait = starting
+				break
+			}
+		}
+		if wait == nil {
+			break
+		}
+		c.mu.Unlock()
+		<-wait
+		c.mu.Lock()
+	}
+	processes := make([]*sidecar, 0, len(changed))
+	forgot := false
+	for _, name := range changed {
+		if process := c.running[name]; process != nil && !process.persistent {
+			forgot = c.detach(name, process) || forgot
+			processes = append(processes, process)
+		}
+	}
+	c.mu.Unlock()
+	if forgot {
+		c.closingChanged()
+	}
+	c.stopProcesses(processes)
+	return nil
+}
+
+// declare 는 declarations 로 선언을 바꾸고, 실행 파일이 바뀌었거나 선언에서 빠진 이미 선언한 sidecar 의 이름을 돌려준다.
+// 형식이 틀린 선언이 하나라도 있으면 아무것도 바꾸지 않는다.
+func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) {
 	c.declarations.Lock()
 	defer c.declarations.Unlock()
+	declared := map[string]string{}
+	persistent := map[string]bool{}
+	basenames := map[string]string{}
 	for _, item := range declarations {
 		name := item.Name
-		if _, known := c.declared[name]; known {
-			continue
-		}
 		file := filepath.Join(item.Folder, "sidecar.json")
-		var declared struct {
+		var sidecar struct {
 			Executable string `json:"executable"`
 			Protocol   int    `json:"protocol"`
 			Transport  string `json:"transport"`
 		}
-		if err := json.Unmarshal(item.Data, &declared); err != nil {
-			return fmt.Errorf("%s: %w", file, err)
+		if err := json.Unmarshal(item.Data, &sidecar); err != nil {
+			return nil, fmt.Errorf("%s: %w", file, err)
 		}
-		if declared.Executable == "" || path.IsAbs(declared.Executable) ||
-			strings.Contains("/"+declared.Executable+"/", "/../") {
-			return fmt.Errorf("%s: executable must be a path inside the package", file)
+		if sidecar.Executable == "" || path.IsAbs(sidecar.Executable) ||
+			strings.Contains("/"+sidecar.Executable+"/", "/../") {
+			return nil, fmt.Errorf("%s: executable must be a path inside the package", file)
 		}
-		if declared.Protocol != 1 {
-			return fmt.Errorf("%s: protocol must be 1", file)
+		if sidecar.Protocol != 1 {
+			return nil, fmt.Errorf("%s: protocol must be 1", file)
 		}
-		if declared.Transport != "" && declared.Transport != "persistent" {
-			return fmt.Errorf("%s: transport %s is not supported", file, declared.Transport)
+		if sidecar.Transport != "" && sidecar.Transport != "persistent" {
+			return nil, fmt.Errorf("%s: transport %s is not supported", file, sidecar.Transport)
 		}
-		if declared.Transport == "persistent" && c.configDir == "" {
-			return fmt.Errorf("%s: persistent transport requires a config directory", file)
+		if sidecar.Transport == "persistent" && c.configDir == "" {
+			return nil, fmt.Errorf("%s: persistent transport requires a config directory", file)
 		}
-		if declared.Transport == "persistent" {
-			base := path.Base(declared.Executable)
-			if other, exists := c.basenames[base]; exists {
-				return fmt.Errorf("%s: executable basename %s is already used by %s", file, base, other)
+		if sidecar.Transport == "persistent" {
+			base := path.Base(sidecar.Executable)
+			if other, exists := basenames[base]; exists {
+				return nil, fmt.Errorf("%s: executable basename %s is already used by %s", file, base, other)
 			}
-			c.basenames[base] = name
+			basenames[base] = name
+			persistent[name] = true
 		}
-		c.declared[name] = filepath.Join(item.Folder, filepath.FromSlash(declared.Executable))
-		if declared.Transport == "persistent" {
-			c.persistent[name] = true
+		declared[name] = filepath.Join(item.Folder, filepath.FromSlash(sidecar.Executable))
+	}
+	changed := []string{}
+	for name, program := range c.declared {
+		if declared[name] != program {
+			changed = append(changed, name)
 		}
 	}
-	return nil
+	c.declared, c.persistent, c.basenames = declared, persistent, basenames
+	return changed, nil
 }
 
 // declaration 은 선언된 sidecar name 의 실행 파일과 영속 여부를 돌려준다. c.mu 와 무관하게 부를 수 있다.
@@ -511,17 +558,29 @@ func (c *Sidecars) Stop() {
 	forgot := false
 	for name, process := range c.running {
 		processes = append(processes, process)
-		delete(c.running, name)
-		if !process.persistent {
-			process.stopClosing = c.closing[name]
-			forgot = c.forgetClosing(name) || forgot
-		}
+		forgot = c.detach(name, process) || forgot
 	}
 	c.mu.Unlock()
 	if forgot {
 		c.closingChanged()
 	}
+	c.stopProcesses(processes)
+}
 
+// detach 는 멈출 프로세스를 실행 목록에서 뺀다. 표준 입출력 사이드카는 끝나므로 답하지 않은 닫기를 stopClosing 으로
+// 옮긴다. c.mu 를 쥔 채 호출하며, closing 을 바꿨으면 true 를 반환한다.
+func (c *Sidecars) detach(name string, process *sidecar) bool {
+	delete(c.running, name)
+	if process.persistent {
+		return false
+	}
+	process.stopClosing = c.closing[name]
+	return c.forgetClosing(name)
+}
+
+// stopProcesses 는 실행 목록에서 뺀 processes 를 중지 규칙대로 멈추고 끝날 때까지 기다린다
+// (docs/spec/sidecars.md#declaration-and-startup).
+func (c *Sidecars) stopProcesses(processes []*sidecar) {
 	// 모든 사이드카에 대해 채널을 닫아 EOF 신호를 보낸다.
 	// 쓰기 고루틴이 채널 닫힘을 감지하고 stdin을 닫는다.
 	for _, process := range processes {

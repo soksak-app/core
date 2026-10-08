@@ -85,6 +85,7 @@ fn new_plugins(config: &Path) -> (Plugins, Arc<Mutex<Vec<Changed>>>) {
     let sink = seen.clone();
     let plugins = Plugins::new(
         config.to_path_buf(),
+        Box::new(|| Ok(())),
         Box::new(move |change| sink.lock().unwrap().push(change)),
     )
     .expect("plugins");
@@ -169,6 +170,41 @@ fn plugins_run_changes_the_installation_like_the_command() {
     assert_eq!(
         actions,
         ["install", "update", "disable", "enable", "disable", "remove"]
+    );
+}
+
+// contract: plugins.run.applies-before-it-notifies
+#[test]
+fn plugins_run_applies_the_change_before_it_notifies() {
+    let config = tempfile::tempdir().unwrap();
+    let registry = plugin_registry();
+    soksak_sok::plugins::use_registry(
+        config.path(),
+        &registry.index,
+        &soksak_sok::fetch::Fetcher::default(),
+    )
+    .unwrap();
+    let steps = Arc::new(Mutex::new(Vec::new()));
+    let (applied, changed) = (steps.clone(), steps.clone());
+    let plugins = Plugins::new(
+        config.path().to_path_buf(),
+        Box::new(move || {
+            applied.lock().unwrap().push("apply".to_string());
+            Ok(())
+        }),
+        Box::new(move |change| {
+            changed
+                .lock()
+                .unwrap()
+                .push(format!("changed {}", change.action))
+        }),
+    )
+    .expect("plugins");
+    plugins.run(request("install", json!("probe"))).unwrap();
+    assert_eq!(
+        *steps.lock().unwrap(),
+        ["apply", "changed install"],
+        "the change was not applied to the sidecars before plugins-changed"
     );
 }
 

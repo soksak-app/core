@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F117.4: 두 host는 plugin 작업마다 `plugins-changed`를 보내기 전에 설치된 sidecar를 다시 선언한다. 폴더가 바뀌었거나 어느 plugin도 더 이상 지정하지 않는 표준 입출력 sidecar는 중지 규칙대로 멈추므로, 다음 send가 설치된 실행 파일을 시작한다. 교체는 멈춘 process의 읽기 스레드가 끝나기 전에 같은 이름의 process를 시작할 수 있으므로, Tauri host는 읽기 스레드의 process를 pid로 구분한다.
 - F119.1: 첫 종료 신호에 Tauri host가 프로세스를 바로 끝내지 않고 `host.quit`처럼 정상 종료를 실행한다. 그래서 창이 저장하고 sidecar가 멈추며 terminal service가 끝난다. Tauri host는 종료 중 닫히는 각 창의 WebContent 프로세스를 죽인다. `e2e/normal-shutdown.mjs`는 `SOKSAK_SHUTDOWN_BY=signal`로 SIGTERM을 보내고, `SOKSAK_SHUTDOWN_TERMINAL=1`로 terminal service가 끝나기를 요구한다.
 - F117.3: 창은 수정된 탭마다 물은 뒤(저장하고 적용, 저장하지 않고 적용, 적용하지 않기) page를 다시 불러와 plugin 작업을 적용한다. 유지한 page는 바뀐 plugin을 `reload`와 적용(`core.plugins.apply`)으로 보이고, 카드는 다시 시작 문구를 보이지 않는다. `exposure.json`이 `core.plugins.apply`, `reload` 상태, 그리고 F117.2가 선언 없이 보고한 `core.plugins`의 `updates` 필드를 선언한다.
 - F117.2: plugin 카드는 registry가 설치된 것보다 새 version을 나열할 때만 업데이트를 보이고, `core.plugins`가 `updates`를 보고한다.

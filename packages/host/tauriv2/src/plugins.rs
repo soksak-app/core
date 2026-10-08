@@ -33,6 +33,8 @@ pub struct Plugins {
     core: String,
     platform: String,
     running: Mutex<()>,
+    /// 작업의 변경을 사이드카에 적용한다(docs/spec/installation.md#applying-a-change).
+    apply: Box<dyn Fn() -> Result<(), String> + Send + Sync>,
     changed: Box<dyn Fn(Changed) + Send + Sync>,
 }
 
@@ -40,6 +42,7 @@ impl Plugins {
     /// 이 애플리케이션의 core version 과 platform 으로 작업한다.
     pub fn new(
         config_dir: PathBuf,
+        apply: Box<dyn Fn() -> Result<(), String> + Send + Sync>,
         changed: Box<dyn Fn(Changed) + Send + Sync>,
     ) -> Result<Plugins, String> {
         Ok(Plugins {
@@ -47,6 +50,7 @@ impl Plugins {
             core: soksak_sok::version::CORE_VERSION.to_string(),
             platform: soksak_sok::current_platform()?,
             running: Mutex::new(()),
+            apply,
             changed,
         })
     }
@@ -94,7 +98,7 @@ impl Plugins {
             Some(plugin) if !plugin.is_empty() => plugin.to_string(),
             _ => return Err("plugin must be a non-empty string".to_string()),
         };
-        let result = {
+        let (result, applied) = {
             let _running = match self.running.try_lock() {
                 Ok(guard) => guard,
                 Err(TryLockError::WouldBlock) => {
@@ -104,18 +108,22 @@ impl Plugins {
                     return Err(format!("plugin operation state: {error}"))
                 }
             };
-            plugins::run_plugin_action(
+            let result = plugins::run_plugin_action(
                 &self.config_dir,
                 &request.action,
                 &plugin,
                 &self.core,
                 &self.platform,
-            )?
+            )?;
+            (result, (self.apply)())
         };
+        // installed.json 이 바뀌었으므로 적용이 실패해도 창에 알린다. 적용의 실패는 작업의 오류다.
+        let action = request.action;
         (self.changed)(Changed {
-            action: request.action,
-            plugin,
+            action: action.clone(),
+            plugin: plugin.clone(),
         });
+        applied.map_err(|error| format!("apply {action} {plugin}: {error}"))?;
         Ok(result)
     }
 }

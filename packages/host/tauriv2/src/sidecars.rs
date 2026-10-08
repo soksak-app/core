@@ -200,6 +200,27 @@ fn take(counts: &mut std::collections::BTreeMap<String, usize>, key: &str) -> bo
     true
 }
 
+/// 멈출 표준 입출력 사이드카 name 의 표면과 답하지 않은 닫기를 stopping 에 옮긴다. 읽기 스레드는 멈추는 동안의
+/// 출력을 이 기록으로 판정한다. 실행 목록에서 빼는 것은 호출자다. closing 을 바꿨으면 그 알림을 돌려준다.
+fn detach_stdio<O>(state: &mut State<O>, name: &str) -> Option<ClosingChanged> {
+    let surfaces = state.running[name].surfaces.iter().cloned().collect();
+    let closing = state
+        .closing
+        .get(name)
+        .cloned()
+        // 기본값: closing 에 이 사이드카가 없으면 답을 기다리는 닫기가 없으므로 뺀 닫기도 없다.
+        .unwrap_or_default();
+    state.stopping.insert(
+        name.to_string(),
+        Stopping {
+            surfaces,
+            closing,
+            violated: false,
+        },
+    );
+    forget_closing(state, name)
+}
+
 fn forget_closing<O>(state: &mut State<O>, sidecar: &str) -> Option<ClosingChanged> {
     state.closing.remove(sidecar)?;
     state.closing_changed.clone()
@@ -487,14 +508,47 @@ impl<O: Owner> Sidecars<O> {
         Ok(sidecars)
     }
 
-    /// 아직 선언하지 않은 사이드카를 더한다. 이미 선언한 사이드카는 애플리케이션을 다시 시작할 때까지 그 폴더를
-    /// 유지한다(docs/spec/installation.md#serving-installed-plugins). 선언의 형식이 틀리면 실패한다.
+    /// 설치된 사이드카를 선언한다(docs/spec/installation.md#applying-a-change). 실행 파일이 바뀐 표준 입출력
+    /// 사이드카와 더 이상 선언하지 않는 표준 입출력 사이드카는 실행 중인 프로세스를 중지 규칙대로 멈추므로, 다음 send 가
+    /// 새 실행 파일을 시작한다. 지속 service 는 다음 시작부터 새 실행 파일을 쓴다. 선언의 형식이 틀리면 아무것도 바꾸지
+    /// 않고 실패한다.
     pub fn declare(&self, declarations: &[SidecarDeclaration]) -> Result<(), String> {
-        let mut current = self
-            .core
-            .declarations
-            .write()
-            .expect("sidecar declarations");
+        let changed = self.replace_declarations(declarations)?;
+        let (processes, closing_changed) = {
+            let mut state = self.core.state.lock().expect("sidecar state");
+            // 시작 중인 사이드카는 끝나면 등록되므로, 그 시작을 기다린 뒤 실행 중인 목록을 읽는다.
+            while changed.iter().any(|name| state.starting.contains(name)) {
+                state = self.core.started.wait(state).expect("sidecar state");
+            }
+            let mut closing_changed = None;
+            let mut processes = Vec::new();
+            for name in &changed {
+                if !state
+                    .running
+                    .get(name)
+                    .is_some_and(|process| process.persistent.is_none())
+                {
+                    continue;
+                }
+                closing_changed = detach_stdio(&mut state, name).or(closing_changed);
+                let process = state.running.remove(name).expect("checked above");
+                processes.push((name.clone(), process));
+            }
+            (processes, closing_changed)
+        };
+        if let Some(changed) = closing_changed {
+            changed();
+        }
+        self.stop_processes(processes);
+        Ok(())
+    }
+
+    /// declarations 로 선언을 바꾸고, 실행 파일이 바뀌었거나 선언에서 빠진 이미 선언한 사이드카의 이름을 돌려준다.
+    /// 형식이 틀린 선언이 하나라도 있으면 아무것도 바꾸지 않는다.
+    fn replace_declarations(
+        &self,
+        declarations: &[SidecarDeclaration],
+    ) -> Result<Vec<String>, String> {
         #[derive(Deserialize)]
         struct Sidecar {
             executable: String,
@@ -502,11 +556,9 @@ impl<O: Owner> Sidecars<O> {
             #[serde(default)]
             transport: Option<String>,
         }
+        let mut next = Declarations::default();
         for item in declarations {
             let name = item.name.clone();
-            if current.declared.contains_key(&name) {
-                continue;
-            }
             let path = item.folder.join("sidecar.json").display().to_string();
             let sidecar: Sidecar =
                 serde_json::from_slice(&item.data).map_err(|e| format!("{path}: {e}"))?;
@@ -533,18 +585,29 @@ impl<O: Owner> Sidecars<O> {
             })?;
             if is_persistent {
                 let basename = file.to_string_lossy().into_owned();
-                if let Some(other) = current.basenames.insert(basename.clone(), name.clone()) {
+                if let Some(other) = next.basenames.insert(basename.clone(), name.clone()) {
                     return Err(format!(
                         "{path}: executable basename {basename} is already used by {other}"
                     ));
                 }
             }
-            current
-                .declared
+            next.declared
                 .insert(name.clone(), item.folder.join(executable));
-            current.persistent.insert(name, is_persistent);
+            next.persistent.insert(name, is_persistent);
         }
-        Ok(())
+        let mut current = self
+            .core
+            .declarations
+            .write()
+            .expect("sidecar declarations");
+        let changed = current
+            .declared
+            .iter()
+            .filter(|(name, program)| next.declared.get(*name) != Some(*program))
+            .map(|(name, _)| name.clone())
+            .collect();
+        *current = next;
+        Ok(changed)
     }
 
     /// 새로 시작한 영속 service 가 endpoint 를 출력하기까지의 상한을 바꾼다. 검사가 기본 30초 대신 짧은 상한을 준다.
@@ -919,29 +982,19 @@ impl<O: Owner> Sidecars<O> {
                 .collect();
             let mut changed = None;
             for name in stdio {
-                let surfaces = state.running[&name].surfaces.iter().cloned().collect();
-                let closing = state
-                    .closing
-                    .get(&name)
-                    .cloned()
-                    // 기본값: closing 에 이 사이드카가 없으면 답을 기다리는 닫기가 없으므로 뺀 닫기도 없다.
-                    .unwrap_or_default();
-                state.stopping.insert(
-                    name.clone(),
-                    Stopping {
-                        surfaces,
-                        closing,
-                        violated: false,
-                    },
-                );
-                changed = forget_closing(&mut state, &name).or(changed);
+                changed = detach_stdio(&mut state, &name).or(changed);
             }
             (state.running.drain().collect(), changed)
         };
         if let Some(changed) = changed {
             changed();
         }
+        self.stop_processes(processes);
+    }
 
+    /// 실행 목록에서 뺀 processes 를 중지 규칙대로 멈추고 끝날 때까지 기다린다
+    /// (docs/spec/sidecars.md#declaration-and-startup).
+    fn stop_processes(&self, processes: Vec<(String, Process)>) {
         // 모든 프로세스를 병렬로 기다린다.
         let deadline = std::time::Instant::now() + self.stop_timeout;
         let mut handles = Vec::new();
@@ -1279,13 +1332,14 @@ impl<O: Owner> Core<O> {
         let state = Arc::clone(&core.state);
         let sidecar = name.to_string();
         let tx_clone = tx.clone();
+        let pid = child.id();
         threads.push(Box::new(move || {
             let mut reader = BufReader::new(stdout);
             let violation = relay(&mut reader, &state, &sidecar, &tx_clone);
             // 읽기 끝을 닫아 아직 쓰는 프로세스가 쓰기에서 막히지 않게 한다.
             drop(reader);
             drop(tx_clone);
-            fail(&state, &sidecar, violation);
+            fail(&state, &sidecar, pid, violation);
         }));
 
         Ok(Started {
@@ -2003,10 +2057,22 @@ fn exit_text(status: std::process::ExitStatus) -> String {
 /// 출력이 끝났거나 프로토콜을 어긴 표준 입출력 사이드카를 처리한다. 종료 중이면 stop 이 프로세스를
 /// 기다린다. 아니면 프로세스를 실행 중인 사이드카에서 빼고 끝낸 뒤, 그 프로세스에 보낸 표면의 소유
 /// 창마다 실패를 알린다. 실패 뒤의 프로토콜 상태는 정의되지 않으므로 프로세스를 끝낸다.
-fn fail<O: Owner>(state: &Arc<Mutex<State<O>>>, sidecar: &str, violation: Option<String>) {
+fn fail<O: Owner>(
+    state: &Arc<Mutex<State<O>>>,
+    sidecar: &str,
+    pid: u32,
+    violation: Option<String>,
+) {
     let (process, owned, changed) = {
         let mut state = state.lock().expect("sidecar state");
-        if state.stopped {
+        // 선언 교체가 이 프로세스를 멈추고 같은 이름의 새 프로세스를 시작했을 수 있으므로, 실행 중인 프로세스가 이 읽기
+        // 스레드의 프로세스인지 pid 로 확인한다. 아니면 이 프로세스는 멈추는 중이다.
+        let current = state
+            .running
+            .get(sidecar)
+            .and_then(|process| process.child.as_ref())
+            .map(|child| child.id());
+        if state.stopped || current != Some(pid) {
             // 멈추는 중이다. 위반은 로그에 쓰고 실패 이벤트는 보내지 않는다. 종료의 보고는 stop 이 정한다.
             if let Some(violation) = violation {
                 if let Some(stopping) = state.stopping.get_mut(sidecar) {
@@ -2019,10 +2085,7 @@ fn fail<O: Owner>(state: &Arc<Mutex<State<O>>>, sidecar: &str, violation: Option
             }
             return;
         }
-        // 표준 입출력 사이드카는 읽기 스레드가 끝나기 전에는 다시 시작되지 않으므로 이 이름의 프로세스가 이 프로세스다.
-        let Some(process) = state.running.remove(sidecar) else {
-            return;
-        };
+        let process = state.running.remove(sidecar).expect("checked by pid above");
         let changed = forget_closing(&mut state, sidecar);
         let owned: Vec<(String, O)> = process
             .surfaces

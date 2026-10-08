@@ -69,7 +69,7 @@ func (c *changes) list() []host.PluginsChanged {
 func newPlugins(t *testing.T, config string) (*host.Plugins, *changes) {
 	t.Helper()
 	seen := &changes{}
-	plugins, err := host.NewPlugins(config, seen.add)
+	plugins, err := host.NewPlugins(config, func() error { return nil }, seen.add)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,6 +178,29 @@ func TestPluginsRunChangesTheInstallationLikeTheCommand(t *testing.T) {
 	}
 	if got := strings.Join(actions, " "); got != "install update disable enable disable remove" {
 		t.Fatalf("plugins-changed actions %q", got)
+	}
+}
+
+// contract: plugins.run.applies-before-it-notifies
+func TestPluginsRunAppliesTheChangeBeforeItNotifies(t *testing.T) {
+	config := t.TempDir()
+	index, _ := pluginRegistry(t)
+	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
+		t.Fatal(err)
+	}
+	var steps []string
+	plugins, err := host.NewPlugins(config, func() error {
+		steps = append(steps, "apply")
+		return nil
+	}, func(change host.PluginsChanged) { steps = append(steps, "changed "+change.Action) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := plugins.Run(host.PluginsRunRequest{Action: "install", Plugin: "probe"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(steps, ", "); got != "apply, changed install" {
+		t.Fatalf("steps %s, want the change applied to the sidecars before plugins-changed", got)
 	}
 }
 

@@ -360,10 +360,6 @@ func TestDeclaringAddsSidecarsInstalledAfterTheStart(t *testing.T) {
 	if err := sidecars.Declare(declare(directory, `{"executable":"echo","protocol":1}`)); err != nil {
 		t.Fatal(err)
 	}
-	// 이미 선언한 sidecar 는 다른 폴더의 선언으로 바뀌지 않는다.
-	if err := sidecars.Declare(declare(t.TempDir(), `{"executable":"absent","protocol":1}`)); err != nil {
-		t.Fatal(err)
-	}
 	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -950,6 +946,50 @@ func TestCloseAnswerForAnOpenSurfaceFailsTheSidecar(t *testing.T) {
 		}
 	case <-time.After(stall):
 		t.Fatal("the unexpected close answer did not fail the sidecar")
+	}
+}
+
+// contract: sidecars.declaration.replaces-changed-folder
+func TestDeclarationReplacesASidecarWhoseFolderChanged(t *testing.T) {
+	// Each folder holds a sidecar that answers every request with the name of its folder.
+	folder := func(name string) string {
+		directory := filepath.Join(t.TempDir(), name)
+		if err := os.MkdirAll(directory, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		script := "#!/bin/sh\nwhile read line; do printf '{\"surface\":\"s1\",\"body\":{\"from\":\"" + name + "\"}}\\n'; done\n"
+		if err := os.WriteFile(filepath.Join(directory, "answer"), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return directory
+	}
+	data := `{"executable":"answer","protocol":1}`
+	first, second := folder("first"), folder("second")
+	sidecars, err := host.NewSidecars(declare(first, data), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
+	owner := newFakeOwner("/projects/replace")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(owner.next(t).Body); got != `{"from":"first"}` {
+		t.Fatalf("the first answer = %s", got)
+	}
+	if err := sidecars.Declare(declare(second, data)); err != nil {
+		t.Fatal(err)
+	}
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":2}`)); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(owner.next(t).Body); got != `{"from":"second"}` {
+		t.Fatalf("the answer after the folder changed = %s, want the sidecar of the new folder", got)
+	}
+	select {
+	case failure := <-owner.failures:
+		t.Fatalf("replacing the sidecar reported a failure: %v", failure)
+	default:
 	}
 }
 

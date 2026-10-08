@@ -545,20 +545,10 @@ fn plugins_state(
 #[tauri::command(async)]
 fn plugins_run(
     plugins: tauri::State<'_, crate::plugins::Plugins>,
-    sidecars: tauri::State<'_, crate::sidecars::WindowSidecars>,
     request: Argument<crate::plugins::RunRequest>,
 ) -> Result<soksak_sok::plugins::PluginActionResult, String> {
     let Argument(request) = request;
-    let action = request.action.clone();
-    let result = plugins.run(request)?;
-    // 설치한 plugin 의 sidecar 를 선언해 그 뒤에 불러온 page 가 시작하게 한다. 첫 실행은 설치한 뒤 page 만 다시
-    // 불러오기 때문이다(docs/spec/installation.md#serving-installed-plugins).
-    if matches!(action.as_str(), "install" | "update" | "enable") {
-        let declarations = crate::installed::installed_sidecars(plugins.config_dir())
-            .map_err(|error| format!("installed plugins: {error}"))?;
-        sidecars.declare(&declarations)?;
-    }
-    Ok(result)
+    plugins.run(request)
 }
 
 /// sok registry use <index> 와 같이 registry index 를 정한다.

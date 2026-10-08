@@ -308,7 +308,7 @@ Items:
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | Without declared sidecars, construction succeeds and every send fails with "not declared by any plugin". | both |
 | `sidecars.start.fails-on-missing-executable` | A declared executable missing on disk makes the first send fail with the sidecar name. | both |
 | `sidecars.declaration.fails-on-missing-sidecar-json` | An installed sidecar folder without sidecar.json makes the installed sidecar lookup fail with its path. | both |
-| `sidecars.declaration.adds-sidecars-installed-after-start` | Declaring the installed sidecars after construction adds the undeclared ones, so a send to such a sidecar starts it, and keeps the folder of a sidecar that is already declared. | both |
+| `sidecars.declaration.adds-sidecars-installed-after-start` | Declaring the installed sidecars after construction adds the undeclared ones, so a send to such a sidecar starts it. | both |
 | `sidecars.declaration.rejects-executable-escaping-package` | An executable path outside the sidecar makes construction fail. | both |
 | `sidecars.declaration.rejects-absolute-executable` | An absolute executable path makes construction fail. | both |
 | `sidecars.declaration.rejects-unsupported-protocol` | An unsupported protocol version makes construction fail. | both |
@@ -320,6 +320,7 @@ Items:
 | `sidecars.send.start-does-not-block-other-sidecars` | While a persistent service delays its hello reply, a send to another running sidecar returns within 50 ms. | both |
 | `sidecars.close.answer-ends-closing` | After `closed` is sent, `host.sidecars` lists the surface until the sidecar answers, then the list is empty. | both |
 | `sidecars.close.failed-answer-is-logged` | A close answer with `error` writes the error line "error: sidecar <name>: close <surface>: <error>" to the host log and ends the closing entry. | both |
+| `sidecars.declaration.replaces-changed-folder` | Declaring a sidecar whose folder changed stops its running standard input and output process without a failure, and the next send starts the executable of the new folder. | both |
 | `sidecars.close.repeated-close-awaits-each-answer` | A surface that is closed again before the sidecar answered the earlier close stays closing until the sidecar answered each close, and no answer fails the sidecar. | both |
 | `sidecars.close.unexpected-answer-fails` | A close answer for a surface that the host is not closing fails the sidecar with "unexpected close answer for <surface>". | both |
 | `sidecars.close.process-end-clears-closing` | When a sidecar process ends without answering, its surfaces leave `host.sidecars`. | both |
@@ -457,6 +458,7 @@ Items:
 | `page.start.sok-core-owner` | Tauri serves the start document at `sok://core/start.json`; a `sok` address of another owner answers 404 with `sok://<owner>/start.json not found` without starting a window. | tauriv2 only: Wails serves the start document from its asset server at `/start.json` |
 | `plugins.state.reports-registry-and-installed` | `pluginsState` returns `registry` and `index` as `null` without `plugins/registry.json`, the index URL and checked index with one, `{"error":...}` as `index` for an index that cannot be read or checked, and the content of `installed.json` or the empty format 1 document without one. | both |
 | `plugins.run.changes-like-the-command` | `pluginsRun` with `install`, `update`, `disable`, `enable` and `remove` changes `installed.json` and the folders as the matching `sok plugin` command, returns its output, and sends `plugins-changed` with `{action, plugin}` to every window after each change. | both |
+| `plugins.run.applies-before-it-notifies` | A plugin operation that changes `installed.json` applies the change to the sidecars before it sends `plugins-changed`. | both |
 | `plugins.run.rejects-invalid-and-concurrent` | `pluginsRun` rejects an unknown action, a plugin id that is not a non-empty string, a failing operation with the command's message, and a call while another operation runs with `another plugin operation is running`, without a `plugins-changed` event. | both |
 | `plugins.registry.sets-like-the-command` | `pluginsUseRegistry` with a registry index writes `plugins/registry.json` and returns `{ index }` as `sok registry use` does; an `index` that is not a non-empty string rejects with `index must be a non-empty string`. | both |
 | `fetch.https.reads-a-tls-response` | An `https:` index or release is read from a TLS server that the configured authorities trust, and an release whose `sha256` differs from its entry fails. | both |

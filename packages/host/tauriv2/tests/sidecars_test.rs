@@ -277,14 +277,6 @@ fn declaring_adds_sidecars_installed_after_the_start() {
             directory.path(),
         ))
         .unwrap();
-    // 이미 선언한 sidecar 는 다른 폴더의 선언으로 바뀌지 않는다.
-    let other = tempfile::tempdir().unwrap();
-    sidecars
-        .declare(&declare(
-            &files(r#"{"executable":"absent","protocol":1}"#),
-            other.path(),
-        ))
-        .unwrap();
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
@@ -1181,6 +1173,49 @@ fn failed_close_answer_is_logged() {
         stderr.contains("error: sidecar @fixture/sidecar-echo: close s1: busy\n"),
         "the failed close was not logged: {stderr}"
     );
+}
+
+// contract: sidecars.declaration.replaces-changed-folder
+#[test]
+fn declaration_replaces_a_sidecar_whose_folder_changed() {
+    // Each folder holds a sidecar that answers every request with the name of its folder.
+    let root = tempfile::tempdir().unwrap();
+    let folder = |name: &str| {
+        let directory = root.path().join(name);
+        std::fs::create_dir_all(&directory).unwrap();
+        let program = directory.join("answer");
+        let script = format!(
+            "#!/bin/sh\nwhile read line; do printf '{{\"surface\":\"s1\",\"body\":{{\"from\":\"{name}\"}}}}\\n'; done\n"
+        );
+        std::fs::write(&program, script).unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        directory
+    };
+    let files: Files = vec![(ECHO, r#"{"executable":"answer","protocol":1}"#.to_string())];
+    let (first, second) = (folder("first"), folder("second"));
+    let sidecars = create(&files, &first).unwrap();
+    let (window, messages, failures) = failing_owner("a", "/projects/replace");
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+        .unwrap();
+    assert_eq!(
+        messages.recv_timeout(STALL).unwrap().body.get(),
+        r#"{"from":"first"}"#
+    );
+    sidecars.declare(&declare(&files, &second)).unwrap();
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"data":2}"#))
+        .unwrap();
+    assert_eq!(
+        messages.recv_timeout(STALL).unwrap().body.get(),
+        r#"{"from":"second"}"#,
+        "the answer after the folder changed did not come from the sidecar of the new folder"
+    );
+    assert!(
+        failures.try_recv().is_err(),
+        "replacing the sidecar reported a failure"
+    );
+    sidecars.stop();
 }
 
 // contract: sidecars.close.repeated-close-awaits-each-answer

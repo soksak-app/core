@@ -230,8 +230,17 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             crate::performance::disable(&directory)?;
             app.manage(workspace::Workspace::new(directory.clone()));
             let handle = app.handle().clone();
+            // 작업의 변경을 사이드카에 적용한다. 바뀐 사이드카를 교체하고 빠진 사이드카를 멈추므로, 다시 불러온 page 가
+            // 설치된 실행 파일을 쓴다(docs/spec/installation.md#applying-a-change).
+            let applying = app.handle().clone();
+            let installed = directory.clone();
             app.manage(plugins::Plugins::new(
                 directory.clone(),
+                Box::new(move || {
+                    let declarations = installed::installed_sidecars(&installed)
+                        .map_err(|error| format!("installed plugins: {error}"))?;
+                    applying.state::<WindowSidecars>().declare(&declarations)
+                }),
                 Box::new(move |change| windows::notify_plugins(&handle, change)),
             )?);
             let declarations = installed::installed_sidecars(&directory)
