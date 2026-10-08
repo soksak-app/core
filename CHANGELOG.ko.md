@@ -4,14 +4,14 @@
 
 ## 미배포
 
+- 체크리스트 항목 `R3.1` 폐기: 체크리스트 항목은 project 작업을 담고, 이 항목은 AGENTS.md가 담는 작업 규칙이나 그 적용을 담았다.
+- 체크리스트 항목 `R3.3` 폐기: 체크리스트 항목은 project 작업을 담고, 이 항목은 AGENTS.md가 담는 작업 규칙이나 그 적용을 담았다.
+- 체크리스트 항목 `R3.4` 폐기: 체크리스트 항목은 project 작업을 담고, 이 항목은 AGENTS.md가 담는 작업 규칙이나 그 적용을 담았다.
 - R3.5.1: `@soksak/plugin-api`가 기록 검사와 커밋 형식 검사를 `soksak-records`와 `soksak-commits` 명령으로 제공한다.
-- R3.4: 게시된 커밋 메시지는 재작성하지 않는다. 커밋 형식은 R3.1부터의 커밋에 적용한다.
 - F101.3: locale 변수 없이 시작한 terminal service의 zsh 프롬프트에서 한글 input method 조합이 두 host의 activation tier 검사를 통과한다.
-- R3.3: core의 체크리스트, changelog, 명세, 계획과 plugin, sidecar, registry 저장소의 체크리스트는 그 저장소에 관한 사실을 적고, `make docs-check`가 기록 검사를 실행한다.
 - R3.2: `make records-check`는 저장소에 관한 사실이 아닌 기록 줄을 보고하고, `make commits-check`와 commit-msg hook과 CI는 꼬리말 없는 커밋 형식 `type(scope): Subject (#ID)`를 검사한다.
 - F101.2: shell을 UTF-8 locale로 실행하는 terminal service 0.0.6과 terminal plugin 0.0.6이 공개 registry에 있다.
 - F101.1: terminal service에 `LANG`, `LC_ALL`, `LC_CTYPE`이 없을 때 터미널 shell은 UTF-8 locale로 실행된다.
-- R3.1: AGENTS.md는 기록이 저장소에 관한 사실을 적고 커밋 메시지가 꼬리말 없는 `type(scope): Subject (#ID)` 형식을 쓴다고 적는다.
 - F100.2: plugin과 sidecar 저장소의 release workflow는 자기 이름의 core tag 대신 선언된 core release에서 `sok`를 build한다.
 - F100.1: plugin 명세는 plugin과 sidecar의 version이 core version과 관계가 없고, 그 release workflow가 `sok`를 build할 core release를 선언한다고 적는다.
 - F99: F95, F95.1, F97을 담은 soksak 0.0.5를 릴리스했고, F98을 담은 terminal service 0.0.5와 terminal plugin 0.0.5가 공개 registry에 있다.

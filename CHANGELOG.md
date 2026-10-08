@@ -4,14 +4,14 @@
 
 ## Unreleased
 
+- Retired checklist entry `R3.1`: a checklist entry holds project work, and this entry held a work-process rule or its application, which AGENTS.md holds.
+- Retired checklist entry `R3.3`: a checklist entry holds project work, and this entry held a work-process rule or its application, which AGENTS.md holds.
+- Retired checklist entry `R3.4`: a checklist entry holds project work, and this entry held a work-process rule or its application, which AGENTS.md holds.
 - R3.5.1: `@soksak/plugin-api` provides the record and commit form checks as the `soksak-records` and `soksak-commits` commands.
-- R3.4: published commit messages are not rewritten; the commit form applies to commits from R3.1 on.
 - F101.3: Korean input-method composition at a zsh prompt of a terminal service started without locale variables passes the activation-tier checks on both hosts.
-- R3.3: the checklist, changelog, specifications and plans of core and the checklists of the plugin, sidecar and registry repositories state facts about their repository, and `make docs-check` runs the record check.
 - R3.2: `make records-check` reports record lines that are not facts about the repository, and `make commits-check`, the commit-msg hook and CI check the commit form `type(scope): Subject (#ID)` without footers.
 - F101.2: the terminal service 0.0.6 and the terminal plugin 0.0.6, whose shells run in a UTF-8 locale, are in the public registry.
 - F101.1: a terminal shell runs in a UTF-8 locale when the terminal service has no `LANG`, `LC_ALL` or `LC_CTYPE`.
-- R3.1: AGENTS.md states that records state facts about the repository and that commit messages use `type(scope): Subject (#ID)` without footers.
 - F100.2: the release workflows of the plugin and sidecar repositories build `sok` from a declared core release instead of the core tag of their own name.
 - F100.1: the plugin specification states that a plugin or sidecar version has no relation to a core version, and that its release workflow declares the core release that builds `sok`.
 - F99: soksak 0.0.5 is released with F95, F95.1 and F97; the terminal plugin 0.0.5 and the terminal service 0.0.5, which carries F98, are in the public registry.
