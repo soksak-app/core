@@ -225,24 +225,33 @@ fn installed_assets_serve_the_shared_modules_of_extension_points() {
         config_dir: directory,
         diagnostics: false,
     };
+    let served = assets
+        .get(&AssetKey::from("/shared/alpha.language/@codemirror/state.js"))
+        .map(|data| data.into_owned());
     assert_eq!(
-        assets
-            .get(&AssetKey::from("/shared/alpha.language/@codemirror/state"))
-            .map(|data| text(data.into_owned()))
-            .as_deref(),
+        served.clone().map(text).as_deref(),
         Some("export const state = 1;")
     );
-    // An undeclared point, an unmapped specifier, a missing file, a path outside the package and a disabled plugin
-    // are not found.
+    // The protocol of the webview takes the MIME type from the path, so the path of a shared module ends in .js.
+    assert_eq!(
+        tauri::utils::mime_type::MimeType::parse(
+            &served.unwrap(),
+            "/shared/alpha.language/@codemirror/state.js"
+        ),
+        "text/javascript"
+    );
+    // A path without .js, an undeclared point, an unmapped specifier, a missing file, a path outside the package and
+    // a disabled plugin are not found.
     for path in [
-        "/shared/alpha.missing/@codemirror/state",
-        "/shared/alpha.language/@codemirror/view",
-        "/shared/alpha.language/gone",
-        "/shared/alpha.language/outside",
-        "/shared/off.language/x",
-        "/shared/nobody.language/x",
+        "/shared/alpha.language/@codemirror/state",
+        "/shared/alpha.missing/@codemirror/state.js",
+        "/shared/alpha.language/@codemirror/view.js",
+        "/shared/alpha.language/gone.js",
+        "/shared/alpha.language/outside.js",
+        "/shared/off.language/x.js",
+        "/shared/nobody.language/x.js",
         "/shared/alpha",
-        "/shared/alpha.language/",
+        "/shared/alpha.language/.js",
     ] {
         assert_eq!(
             installed::installed_shared(config.path(), path),
@@ -253,7 +262,7 @@ fn installed_assets_serve_the_shared_modules_of_extension_points() {
     }
     write_installed(config.path(), &[("plugins/alpha/1.0.0/plugin.json", "{")]);
     let error =
-        installed::installed_shared(config.path(), "/shared/alpha.language/@codemirror/state")
+        installed::installed_shared(config.path(), "/shared/alpha.language/@codemirror/state.js")
             .unwrap_err();
     let manifest = config.path().join("plugins/alpha/1.0.0/plugin.json");
     assert!(error.contains(&manifest.display().to_string()), "{error}");

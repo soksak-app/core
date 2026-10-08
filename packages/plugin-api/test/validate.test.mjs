@@ -236,7 +236,7 @@ test("a sidecar helpers field is rejected for invalid cases", () => {
 test("page imports resolve inside the staged layout", () => {
   assert.equal(PAGE_IMPORTS["soksak"], "/modules/soksak/dist/index.js");
   assert.equal(PAGE_IMPORTS["@soksak/runtime"], "/runtime/index.js");
-  // Shared modules of extension points come from /shared/<plugin id>.<point>/<specifier> (docs/spec/plugins.md#extension-points).
+  // Shared modules of extension points come from /shared/<plugin id>.<point>/<specifier>.js (docs/spec/plugins.md#extension-points).
   assert.equal(PAGE_IMPORTS["@soksak/shared/"], "/shared/");
   assert.equal(modulePath("@scope/name", "ui/page.html"), "modules/@scope/name/ui/page.html");
   assert.throws(() => { PAGE_IMPORTS.extra = "/x.js"; }, TypeError);

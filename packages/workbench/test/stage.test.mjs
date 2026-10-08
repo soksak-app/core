@@ -99,8 +99,8 @@ test("an application without a host stages the enabled installed plugins as a ho
   ] });
   assert.equal(readFileSync(join(app, "out/modules/@fixture/probe/ui/probe.js"), "utf8"), "export function mount() {}\n");
   assert.equal(existsSync(join(app, "out/modules/plugin-off")), false);
-  // The shared modules of extension points are placed where a host serves /shared/<plugin id>.<point>/<specifier>.
-  assert.equal(readFileSync(join(app, "out/shared/probe.language/@scope/library"), "utf8"), "export const library = 1;\n");
+  // The shared modules of extension points are placed where a host serves /shared/<plugin id>.<point>/<specifier>.js.
+  assert.equal(readFileSync(join(app, "out/shared/probe.language/@scope/library.js"), "utf8"), "export const library = 1;\n");
   stage(app, "--installed", configuration, "--diagnostics");
   assert.deepEqual(JSON.parse(readFileSync(join(app, "out/installed-plugins.json"), "utf8")).plugins[1].diagnostics, DIAGNOSTICS);
   assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--installed", join(configuration, "missing")], { cwd: app, stdio: "pipe" }),

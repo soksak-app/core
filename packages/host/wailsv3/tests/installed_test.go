@@ -138,19 +138,20 @@ func TestInstalledAssetsServeTheSharedModulesOfExtensionPoints(t *testing.T) {
 		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
 		return recorder.Code, recorder.Body.String(), recorder.Header().Get("Content-Type")
 	}
-	if code, body, kind := get("/shared/alpha.language/@codemirror/state"); code != 200 || body != "export const state = 1;" || kind != "text/javascript" {
+	if code, body, kind := get("/shared/alpha.language/@codemirror/state.js"); code != 200 || body != "export const state = 1;" || kind != "text/javascript" {
 		t.Fatalf("shared module %d %q %q", code, body, kind)
 	}
-	// An undeclared point, an unmapped specifier, a missing file, a path outside the package and a disabled plugin are
-	// not found.
-	for _, path := range []string{"/shared/alpha.missing/@codemirror/state", "/shared/alpha.language/@codemirror/view", "/shared/alpha.language/gone",
-		"/shared/alpha.language/outside", "/shared/off.language/x", "/shared/nobody.language/x", "/shared/alpha", "/shared/alpha.language/"} {
+	// A path without .js, an undeclared point, an unmapped specifier, a missing file, a path outside the package and a
+	// disabled plugin are not found.
+	for _, path := range []string{"/shared/alpha.language/@codemirror/state", "/shared/alpha.missing/@codemirror/state.js",
+		"/shared/alpha.language/@codemirror/view.js", "/shared/alpha.language/gone.js", "/shared/alpha.language/outside.js",
+		"/shared/off.language/x.js", "/shared/nobody.language/x.js", "/shared/alpha", "/shared/alpha.language/.js"} {
 		if code, body, _ := get(path); code != 404 {
 			t.Fatalf("%s answered %d %q", path, code, body)
 		}
 	}
 	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": "{"})
-	if code, body, _ := get("/shared/alpha.language/@codemirror/state"); code != 500 || !strings.Contains(body, filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")) {
+	if code, body, _ := get("/shared/alpha.language/@codemirror/state.js"); code != 500 || !strings.Contains(body, filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")) {
 		t.Fatalf("invalid manifest %d %q", code, body)
 	}
 }

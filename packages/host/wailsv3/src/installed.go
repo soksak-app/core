@@ -163,17 +163,19 @@ func insidePackage(dir string, parts []string) (string, bool) {
 const SharedPrefix = "/shared/"
 
 // InstalledShared returns the file that extends.<point>.modules of the plugin.json of the enabled installed plugin maps
-// the specifier of /shared/<plugin id>.<point>/<specifier> to. shared is false for another path. found is false for a
-// point that the plugin does not declare, a specifier that the point does not map, a missing file and a path outside
-// the package.
+// the specifier of /shared/<plugin id>.<point>/<specifier>.js to. The path ends in .js because the webview of the Tauri
+// host takes the MIME type of a module from its path. shared is false for another path. found is false for a path
+// without .js, a point that the plugin does not declare, a specifier that the point does not map, a missing file and
+// a path outside the package.
 func InstalledShared(configDir, urlPath string) (file string, shared, found bool, err error) {
 	rest, ok := strings.CutPrefix(urlPath, SharedPrefix)
 	if !ok {
 		return "", false, false, nil
 	}
-	key, specifier, ok := strings.Cut(rest, "/")
+	key, file, ok := strings.Cut(rest, "/")
 	id, point, dotted := strings.Cut(key, ".")
-	if !ok || !dotted || specifier == "" {
+	specifier, module := strings.CutSuffix(file, ".js")
+	if !ok || !dotted || !module || specifier == "" {
 		return "", true, false, nil
 	}
 	plugins, _, err := enabledPlugins(configDir)

@@ -171,8 +171,9 @@ fn inside_package(dir: &Path, parts: &[&str]) -> Module {
 pub const SHARED_PREFIX: &str = "/shared/";
 
 /// Returns the file that extends.<point>.modules of the plugin.json of the enabled installed plugin maps the specifier
-/// of /shared/<plugin id>.<point>/<specifier> to. Another path is Frontend. A point that the plugin does not declare, a
-/// specifier that the point does not map, a missing file and a path outside the package are Missing.
+/// of /shared/<plugin id>.<point>/<specifier>.js to. The path ends in .js because the webview protocol takes the MIME
+/// type of a module from its path. Another path is Frontend. A path without .js, a point that the plugin does not
+/// declare, a specifier that the point does not map, a missing file and a path outside the package are Missing.
 pub fn installed_shared(config_dir: &Path, url_path: &str) -> Result<Module, String> {
     #[derive(serde::Deserialize)]
     struct Point {
@@ -191,7 +192,7 @@ pub fn installed_shared(config_dir: &Path, url_path: &str) -> Result<Module, Str
     };
     let Some(((id, point), specifier)) = rest
         .split_once('/')
-        .and_then(|(key, specifier)| Some((key.split_once('.')?, specifier)))
+        .and_then(|(key, file)| Some((key.split_once('.')?, file.strip_suffix(".js")?)))
         .filter(|(_, specifier)| !specifier.is_empty())
     else {
         return Ok(Module::Missing);
