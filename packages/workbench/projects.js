@@ -3,7 +3,6 @@ import { issueId } from "./ids.js";
 import { beginSettings, selectProject, value, flushSettings } from "./settings.js";
 import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
-import { migrateStoredLayout } from "./stored-layout-migration.js";
 import { configureStates, showStates } from "./plugin-states.js";
 
 let store;
@@ -96,28 +95,21 @@ async function setPluginData(id, plugin, key, value) {
 }
 
 /**
- * 시작 문서의 스냅샷으로 첫 화면을 그린다(docs/spec/native-host.md#page-start). 주소의 프로젝트가 있고 판이 그 활성
- * 공간을 열 수 있으면 그 배치를 판에 그리고, 아니면 라이브러리다. 저장된 이전 형식은 메모리에서 바꾼다. 바꾼 형식의
- * 저장, 폴더 확인, 창 소유와 그 실패 보고는 initialise 의 활성화가 이어서 한다.
+ * Draws the first screen from the snapshot of the start document (docs/spec/native-host.md#page-start): the layout of
+ * the active space of the project in the address when the plane can open it, or else the library. The activation of
+ * initialise then checks the folder, owns the window and reports its failures.
  */
 export function begin(snapshot) {
   // 기본값: 브라우저 예제의 저장소는 다른 창이 없으므로 open 을 싣지 않는다.
   openProjects = new Set(snapshot.open ?? []);
-  projects = snapshot.projects.map((project) => {
-    try {
-      return { ...project, spaces: project.spaces.map((space) => ({ ...space, layout: migrateStoredLayout(space.layout).layout })) };
-    } catch {
-      // 바꿀 수 없는 배치는 그대로 둔다. initialise 의 readProjects 가 그 이유를 보고하고 미리보기와 열기가 보인다.
-      return project;
-    }
-  });
+  projects = snapshot.projects;
   // 기본값: project 를 지정하지 않았거나 등록부에 없는 project 를 지정한 창은 라이브러리로 시작한다.
   const requested = projects.find((p) => p.id === new URL(location.href).searchParams.get("project")) ?? null;
   const layout = requested?.spaces.find((s) => s.id === requested.activeSpaceId)?.layout;
   let opened = null;
   if (layout) {
     try {
-      listener.check(layout);
+      checkSpace(requested, requested.activeSpaceId);
       opened = requested;
     } catch {
       // 판이 열 수 없는 배치는 initialise 의 활성화가 그 오류를 보고하고 라이브러리에 남는다.
@@ -190,34 +182,7 @@ async function reread() {
   if (next) await activate(next.id);
 }
 
-/**
- * 이전 형식으로 저장한 공간 배치를 현재 형식으로 바꿔 저장하고 바꾼 내용을 application log 에 남긴다. 바꿀 수 없는
- * 프로젝트는 오류를 알리고 그대로 둔다. 미리보기와 열기가 그 이유를 보여 준다(docs/spec/projects.md).
- */
-async function migrateProjects(list) {
-  let migrated = false;
-  for (const project of list) {
-    try {
-      const notes = [];
-      const spaces = project.spaces.map((space) => {
-        const { layout, changes } = migrateStoredLayout(space.layout);
-        for (const change of changes) notes.push(`space ${space.id}: ${change}`);
-        return changes.length ? { ...space, layout } : space;
-      });
-      if (!notes.length) continue;
-      await store.patch(project.id, { spaces });
-      log(`projects: converted the stored layout of ${project.root}: ${notes.join("; ")}`);
-      migrated = true;
-    } catch (error) {
-      failed(new Error(`projects: the stored layout of ${project.root} cannot be converted: ${error.message}`));
-    }
-  }
-  return migrated;
-}
-
 async function readProjects() {
-  // 바꾼 저장소는 다시 읽어 그 결과를 쓴다. 바꾼 뒤에는 바꿀 것이 없으므로 한 번만 다시 읽는다.
-  if (await migrateProjects((await store.snapshot()).projects)) log("projects: the registry was saved in the current layout format");
   const snapshot = await store.snapshot();
   const listed = new Set(snapshot.projects.map((p) => p.id));
   const removedProjects = projects.some((p) => !listed.has(p.id));
@@ -300,7 +265,16 @@ export function activate(id) {
 
 /** 프로젝트의 활성 스페이스 배치를 판이 열 수 있는지 검사한다. 실패하면 프로젝트·창·저장 기록을 바꾸기 전에 그 오류를 던진다. */
 function checkProject(project) {
-  listener.check(project.spaces.find((s) => s.id === project.activeSpaceId).layout);
+  checkSpace(project, project.activeSpaceId);
+}
+
+/** Checks that the plane can open the stored layout of a space; the error names projects.json and the space. */
+function checkSpace(project, id) {
+  try {
+    listener.check(project.spaces.find((s) => s.id === id).layout);
+  } catch (error) {
+    throw new Error(`projects.json: project ${project.root} space ${id}: ${error.message}`);
+  }
 }
 
 async function activateInTurn(id) {
@@ -379,7 +353,7 @@ export function activateSpace(id) {
   const space = project.spaces.find((s) => s.id === id);
   if (!space) throw new Error(`Unknown space: ${id}`);
   // 판이 열 수 없는 배치면 활성 스페이스를 바꾸기 전에 실패한다.
-  listener.check(space.layout);
+  checkSpace(project, space.id);
   keep();
   project.activeSpaceId = id;
   restore();
@@ -393,7 +367,7 @@ export function closeSpace(id) {
   // 활성 스페이스를 닫으면 다음 스페이스를 연다. 판이 그 배치를 열 수 없으면 아무것도 지우기 전에 실패한다.
   const rest = project.spaces.filter((s) => s.id !== id);
   const next = id === project.activeSpaceId ? rest[Math.min(at, rest.length - 1)] : null;
-  if (next) listener.check(next.layout);
+  if (next) checkSpace(project, next.id);
   keep();
   project.spaces.splice(at, 1);
   if (next) project.activeSpaceId = next.id;

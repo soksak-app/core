@@ -59,40 +59,28 @@ test('a settings file change propagates the effective performance switch', async
   }
 });
 
-test('settings stored under removed keys are deleted once when the settings are connected', async (t) => {
+test('settings stored in an earlier form are refused with the file that holds them and are not written', async (t) => {
   const reports = [];
   t.mock.module('../host.js', { namedExports: {
     surfaces: { theme() {}, menuLanguage() {} }, log: (line) => { reports.push(line); },
   } });
   const previous = globalThis.document;
   globalThis.document = { addEventListener() {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
-  const memory = {
-    common: { gap: 8, cardSidebar: 'inset', railWidth: 190 },
-    projects: [{ id: 'prj-a', settings: { rail: 'flow', mode: 'light' } }, { id: 'prj-b' }],
-  };
-  const writes = [];
-  const { connectSettings, value } = await import('../settings.js?test=removed-keys');
+  const store = (memory, writes) => ({
+    snapshot: async () => structuredClone(memory),
+    settings: async (id, values) => { writes.push([id, values]); },
+    onChange: () => () => {},
+  });
   try {
-    await connectSettings({
-      snapshot: async () => structuredClone(memory),
-      settings: async (id, values) => {
-        writes.push([id, values]);
-        const target = id === null ? memory.common : memory.projects.find((p) => p.id === id).settings;
-        for (const [key, val] of Object.entries(values)) {
-          if (val === undefined) delete target[key];
-          else target[key] = val;
-        }
-      },
-      onChange: () => () => {},
-    });
-    assert.deepEqual(memory.common, { gap: 8 });
-    assert.deepEqual(memory.projects[0].settings, { mode: 'light' });
-    assert.deepEqual(writes.map(([id, values]) => [id, Object.keys(values)]), [[null, ['cardSidebar', 'railWidth']], ['prj-a', ['rail']]]);
-    assert.deepEqual(reports, [
-      'settings: converted the common settings: removed cardSidebar, railWidth because they are no longer settings',
-      'settings: converted the project prj-a settings: removed rail because they are no longer settings',
-    ]);
-    assert.equal(value('gap'), 8);
+    const writes = [];
+    const { connectSettings } = await import('../settings.js?test=removed-keys');
+    await assert.rejects(connectSettings(store({ common: { gap: 8, cardSidebar: 'inset' }, projects: [] }, writes)),
+      /^Error: settings\.json: unknown setting cardSidebar$/);
+    const { beginSettings } = await import('../settings.js?test=removed-project-keys');
+    assert.throws(() => beginSettings({ common: {}, projects: [{ id: 'prj-a', root: '/work/a', settings: { rail: 'flow' } }] }, 'prj-a'),
+      /^Error: \/work\/a\/\.soksak\/settings\.json: unknown setting rail$/);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(reports, []);
   } finally {
     globalThis.document = previous;
   }
@@ -131,11 +119,11 @@ test('the start document applies the common and project settings in the current 
   globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
   const { beginSettings, value, settingProject } = await import('../settings.js?test=begin');
   try {
-    beginSettings({ common: { gap: 8, latency: 3 }, projects: [{ id: 'prj-a', settings: { gap: 12 } }, { id: 'prj-b', settings: { gap: 4 } }] }, 'prj-a');
+    beginSettings({ common: { gap: 8 }, projects: [{ id: 'prj-a', root: '/work/a', settings: { gap: 12 } }, { id: 'prj-b', root: '/work/b', settings: { gap: 4 } }] }, 'prj-a');
     assert.equal(value('gap'), 12, 'the project overrides were not applied');
-    assert.equal(value('latency'), undefined, 'a removed key of the stored format was applied');
+    assert.throws(() => beginSettings({ common: { gap: 8, latency: 3 }, projects: [] }, null), /^Error: settings\.json: unknown setting latency$/);
     assert.equal(settingProject(), 'prj-a');
-    assert.throws(() => beginSettings({ common: { unknownSetting: 1 }, projects: [] }, null), /unknown setting unknownSetting/);
+    assert.throws(() => beginSettings({ common: { unknownSetting: 1 }, projects: [] }, null), /settings\.json: unknown setting unknownSetting/);
   } finally {
     globalThis.document = realDocument;
   }
@@ -174,7 +162,7 @@ test('stored and changed core setting values must have their declared form', asy
   }
 });
 
-test('a stored link to a set that no longer exists is deleted once and reported', async (t) => {
+test('a stored link to a set that does not exist is refused and not written', async (t) => {
   const reports = [];
   t.mock.module('../host.js', { namedExports: {
     surfaces: { theme() {}, menuLanguage() {} }, log: (line) => { reports.push(line); },
@@ -184,29 +172,18 @@ test('a stored link to a set that no longer exists is deleted once and reported'
   const kept = { id: 'set-kept', title: '남은 세트', sections: [], layout: 'list' };
   const memory = {
     common: { sets: [kept], links: [{ place: 'left', plugin: null, set: 'set-kept' }, { place: 'right', plugin: null, set: 'set-gone' }] },
-    // 프로젝트 설정의 연결은 세트를 덮어쓰지 않으면 공통 세트를 가리킨다.
-    projects: [{ id: 'prj-a', settings: { links: [{ place: 'left', plugin: null, set: 'set-kept' }, { place: 'right', plugin: null, set: 'set-old' }] } }],
+    projects: [],
   };
-  const { connectSettings, value } = await import('../settings.js?test=gone-sets');
+  const writes = [];
+  const { connectSettings } = await import('../settings.js?test=gone-sets');
   try {
-    await connectSettings({
+    await assert.rejects(connectSettings({
       snapshot: async () => structuredClone(memory),
-      settings: async (id, values) => {
-        const target = id === null ? memory.common : memory.projects.find((p) => p.id === id).settings;
-        for (const [key, val] of Object.entries(values)) {
-          if (val === undefined) delete target[key];
-          else target[key] = val;
-        }
-      },
+      settings: async (id, values) => { writes.push([id, values]); },
       onChange: () => () => {},
-    });
-    assert.deepEqual(memory.common.links, [{ place: 'left', plugin: null, set: 'set-kept' }]);
-    assert.deepEqual(memory.projects[0].settings.links, [{ place: 'left', plugin: null, set: 'set-kept' }]);
-    assert.deepEqual(reports, [
-      'settings: converted the common settings: the right link was dropped because its set set-gone no longer exists',
-      'settings: converted the project prj-a settings: the right link was dropped because its set set-old no longer exists',
-    ]);
-    assert.deepEqual(value('links'), [{ place: 'left', plugin: null, set: 'set-kept' }]);
+    }), /a right link requires a known set/);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(reports, []);
   } finally {
     globalThis.document = previous;
   }

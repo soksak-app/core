@@ -1683,6 +1683,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F103",
+    implementation: [
+      { file: "packages/workbench/stored-layout.js", symbol: "an earlier form of sidebars" },
+      { file: "packages/workbench/settings.js", symbol: "const projectSettingsFile" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/window-sidebar-restoration.test.mjs", id: "a stored layout in an earlier form is refused with what it found" },
+      { file: "packages/workbench/test/library-preview.test.mjs", id: "a library preview of a layout in an earlier form names projects.json and what it found" },
+      { file: "packages/workbench/test/settings.test.mjs", id: "settings stored in an earlier form are refused with the file that holds them and are not written" },
+    ],
+    expected: "A stored layout or settings file in an earlier form fails with an error that names its file, and nothing is converted or written.",
+    levels: ["unit"],
+  },
+  {
     id: "F105",
     implementation: [
       { file: "scripts/check-release.mjs", symbol: "export function auditMinimum" },
@@ -2703,7 +2717,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 
 // Aggregate review and release records and withdrawn items are not capabilities and therefore do not need a
 // behavior link. Every completed capability must have one otherwise.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F13", "F25", "G1.4-2", "R2", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F13", "F25", "G1.4-2", "R2", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and corrections made there (F98, F100, F101). Core cannot read

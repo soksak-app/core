@@ -29,6 +29,16 @@ test("saved window state rejects obsolete and unknown cards before replacing the
   checkStoredLayout({ state: { cards: [{ id: "a", data: { tabs: [{ id: "t", plugin: "missing" }], activeId: "t" } }] }, windowSidebars: {} });
 });
 
+test("a stored layout in an earlier form is refused with what it found", () => {
+  const card = (data) => ({ id: "a", data: { tabs: [{ id: "t", plugin: "pane" }], activeId: "t", ...data } });
+  assert.throws(() => checkStoredLayout({ state: { cards: [card({ panels: {} })] }, windowSidebars: {} }),
+    /^Error: card a stores panels, an earlier form of sidebars$/);
+  assert.throws(() => checkStoredLayout({ state: { cards: [card({ sidebar: { width: 190 } })] }, windowSidebars: {} }),
+    /^Error: card a stores sidebar, an earlier form of sidebars$/);
+  assert.throws(() => checkStoredLayout({ state: { cards: [card({})] }, windowSidebars: {}, sidebars: { a: { tab: null, folded: [] } } }),
+    /^Error: sidebar choice a names card a, an earlier form of a:left$/);
+});
+
 test("saved obsolete width fields fail even when empty", () => {
   for (const field of ["railWidth", "edgeWidth"]) {
     assert.throws(() => checkStoredLayout({ state: { cards: [] }, [field]: {} }), /obsolete/);

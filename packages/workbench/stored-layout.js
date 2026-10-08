@@ -16,6 +16,10 @@ export function checkStoredLayout(kept) {
     if (descriptor) {
       if (card.data !== null && card.data !== undefined) throw new Error(`invalid stored window sidebar data ${card.id}`);
     } else {
+      // An earlier form of card sidebars is refused; the stored layout is not converted (AGENTS.md).
+      for (const key of ["panels", "sidebar"]) {
+        if (card.data && Object.hasOwn(card.data, key)) throw new Error(`card ${card.id} stores ${key}, an earlier form of sidebars`);
+      }
       const tabs = card.data?.tabs;
       if (!Array.isArray(tabs) || !tabs.length) throw new Error(`invalid stored content card ${card.id}`);
       // 불러오지 않은 플러그인의 탭은 placeholder 로 열리고, 불러온 플러그인은 표면이 있어야 한다(docs/spec/plugins.md).
@@ -26,6 +30,10 @@ export function checkStoredLayout(kept) {
       if (!tabs.some(tab => tab.id === card.data.activeId)) throw new Error(`invalid stored active tab ${card.id}`);
     }
   }
-  // 기본값: 저장 레이아웃의 sidebars 는 선택 필드다.
-  for (const id of Object.keys(kept.sidebars ?? {})) if (id.startsWith("rail-") || id.startsWith("window:")) throw new Error(`obsolete stored sidebar ${id}`);
+  const content = new Set(kept.state.cards.filter((card) => card.data).map((card) => card.id));
+  // default: sidebars is an optional field of a stored layout.
+  for (const id of Object.keys(kept.sidebars ?? {})) {
+    if (id.startsWith("rail-") || id.startsWith("window:")) throw new Error(`obsolete stored sidebar ${id}`);
+    if (content.has(id)) throw new Error(`sidebar choice ${id} names card ${id}, an earlier form of ${id}:left`);
+  }
 }

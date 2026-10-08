@@ -27,6 +27,14 @@ const project = (plugin) => ({
   ] } } }],
 });
 
+test("a library preview of a layout in an earlier form names projects.json and what it found", () => {
+  const stored = project("probe");
+  stored.root = "/work/a";
+  stored.spaces[0].layout.state.cards[0].data.panels = {};
+  const el = preview(stored);
+  assert.equal(el.dataset.previewError, "projects.json: project /work/a space space: card main stores panels, an earlier form of sidebars");
+});
+
 test("a library preview draws a saved layout of registered plugins", () => {
   const el = preview(project("probe"));
   assert.equal(el.dataset.previewError, undefined);

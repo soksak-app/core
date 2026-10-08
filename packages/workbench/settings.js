@@ -28,7 +28,6 @@ import { host as bridge } from "@soksak/runtime";
 import { log, surfaces as host } from "./host.js";
 import { checkSidebarReferences, isSettingAddress, validateSidebars } from "@soksak/plugin-api";
 import { effectiveSettings } from "./settings-scope.js";
-import { migrateSettings } from "./settings-migration.js";
 import { chooseLink, resolveSidebar } from "./sidebar-sets.js";
 import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
 import { setTraceEnabled } from "./performance.js";
@@ -369,50 +368,20 @@ export function setSidebarDefaults(sidebars) {
   settings = structuredClone(defaults);
 }
 
-/** 공통 설정과 각 프로젝트 설정을 현재 형식으로 한 번 바꿔 저장하고 그 결과를 보고한다(docs/spec/settings.md). */
-async function migrateStoredSettings() {
-  const snapshot = await store.snapshot();
-  const scopes = [[null, "the common settings", snapshot.common],
-    // 기본값: 설정을 덮어쓰지 않은 프로젝트에는 settings 가 없다.
-    ...snapshot.projects.map((project) => [project.id, `the project ${project.id} settings`, project.settings ?? {}])];
-  for (const [id, where, values] of scopes) {
-    const { patch, notes } = migrateSettings(values, knownSets(values, id === null ? null : snapshot.common));
-    if (!notes.length) continue;
-    await store.settings(id, patch);
-    log(`settings: converted ${where}: ${notes.join("; ")}`);
-  }
-}
-
-/**
- * values 의 연결이 가리킬 수 있는 세트 id. 세트는 그 범위에 저장된 것이고, 없으면 공통 설정(common 이 주어지면)의
- * 것이며, 그것도 없으면 환경의 기본 세트다.
- */
-function knownSets(values, common) {
-  // 기본값: 세트를 저장하지 않은 범위는 아래 범위의 세트를 쓴다.
-  const sets = values.sets ?? common?.sets ?? defaults.sets;
-  return new Set(sets.map((set) => set.id));
-}
-
-/** 저장된 값을 현재 형식으로 바꾼 값. 바꾼 값의 저장과 보고는 migrateStoredSettings 가 한다. */
-function migrated(values, common) {
-  const next = { ...values };
-  for (const [key, value] of Object.entries(migrateSettings(values, knownSets(values, common)).patch)) {
-    if (value === undefined) delete next[key];
-    else next[key] = value;
-  }
-  return next;
-}
+/** The file of the settings of a project of the snapshot (docs/spec/projects.md#settings). */
+const projectSettingsFile = (project) => `${project.root}/.soksak/settings.json`;
 
 /**
  * 시작 문서의 스냅샷으로 첫 화면의 설정을 적용한다(docs/spec/native-host.md#page-start). id 는 창이 여는 프로젝트이고
  * 라이브러리면 null 이다. 저장소 연결과 이후의 변경은 connectSettings 가 맡는다.
  */
 export function beginSettings(snapshot, id) {
-  const nextCommon = migrated(snapshot.common, null);
-  // 기본값: 설정을 덮어쓰지 않은 프로젝트에는 settings 가 없다.
-  const nextOverrides = migrated(snapshot.projects.find((p) => p.id === id)?.settings ?? {}, nextCommon);
-  validateValues(nextCommon, "common settings");
-  validateValues(nextOverrides, "project settings");
+  const nextCommon = snapshot.common;
+  const project = snapshot.projects.find((p) => p.id === id);
+  // default: a project that overrides no setting has no settings.
+  const nextOverrides = project?.settings ?? {};
+  validateValues(nextCommon, "settings.json");
+  if (project) validateValues(nextOverrides, projectSettingsFile(project));
   checkCommonOnly(nextOverrides);
   checkValues(effectiveSettings(defaults, applied(nextCommon), applied(nextOverrides)));
   projectId = id;
@@ -423,7 +392,6 @@ export function beginSettings(snapshot, id) {
 
 export async function connectSettings(storage) {
   store = storage;
-  await migrateStoredSettings();
   store.onChange(() => { if (!changes) return refresh().catch((e) => dispatchEvent(new ErrorEvent("error", { message: e.message }))); });
   await refresh();
 }
@@ -432,10 +400,11 @@ async function refresh() {
   const mine = ++revision;
   const snapshot = await store.snapshot();
   if (changes || mine !== revision) return;
-  // 기본값: 설정을 덮어쓰지 않은 프로젝트에는 settings 가 없다.
-  const nextOverrides = snapshot.projects.find((p) => p.id === projectId)?.settings ?? {};
-  validateValues(snapshot.common, "common settings");
-  validateValues(nextOverrides, "project settings");
+  const project = snapshot.projects.find((p) => p.id === projectId);
+  // default: a project that overrides no setting has no settings.
+  const nextOverrides = project?.settings ?? {};
+  validateValues(snapshot.common, "settings.json");
+  if (project) validateValues(nextOverrides, projectSettingsFile(project));
   checkCommonOnly(nextOverrides);
   checkValues(effectiveSettings(defaults, applied(snapshot.common), applied(nextOverrides)));
   if (JSON.stringify(common) !== JSON.stringify(snapshot.common) || JSON.stringify(overrides) !== JSON.stringify(nextOverrides)) {

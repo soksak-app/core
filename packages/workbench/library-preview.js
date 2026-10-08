@@ -21,10 +21,11 @@ export function preview(project) {
   try {
     checkStoredLayout(layout);
   } catch (error) {
-    el.dataset.previewError=error.message;
+    const text=`projects.json: project ${project.root} space ${project.activeSpaceId}: ${error.message}`;
+    el.dataset.previewError=text;
     const reason=part('p','library-preview__error');
     el.append(reason);
-    showError(reason, `library preview ${project.id}`, error.message);
+    showError(reason, `library preview ${project.id}`, text);
     return el;
   }
   const {cards,xs,ys}=layout.state;

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F103: stored layouts and settings are read only in their current form; an earlier form fails with an error that names `projects.json` or the settings file, and the conversions are removed.
 - F106: every declared version is 0.0.7, and core 0.0.7 is released.
 - F102.10: a surface shows the error of a failed operation in its card status row with `tab.error(text)` and removes it with `tab.error(null)`; `core.grid` reports `error` for each tab.
 - F105: both application bundles declare the macOS minimum 14.4, the Tauri application is built for it, and `make release-check` checks `LSMinimumSystemVersion` and the minimum macOS version of each executable against `MACOS_MINIMUM`.

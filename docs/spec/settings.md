@@ -126,14 +126,7 @@ Plugin settings take the form of their declaration ([plugins](plugins.md)).
 
 ## Earlier formats
 
-The settings files keep only declared settings in the current format. When the settings are connected, the page converts the common settings and every project's settings once, saves the result and reports each conversion in the application log:
-
-- The keys of earlier settings (`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`) are deleted.
-- A `rail` link becomes a `card-left` link of the same plugin and set.
-- A `left` or `right` link that names a plugin becomes a `window-left` or `window-right` link. Such a link without a set selected no content for that plugin; the current format cannot express it, so it is deleted and the general content shows.
-- A link to a set that the scope does not hold is deleted, because the set it chose was removed with an earlier declaration. The sets of a scope are its stored sets; without them the project scope uses the common sets, and the common scope uses the sets that the environment declares.
-
-Any other unknown key or invalid value fails the settings check with its name.
+The settings files are read only in their current form, and the page does not convert them. A key that is not a declared setting, including the keys of earlier settings (`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`), fails with `settings.json: unknown setting <key>` for the common settings and `<project root>/.soksak/settings.json: unknown setting <key>` for the settings of the project that the window opens. A `rail` link, a `left` or `right` link that names a plugin, and a link to a set that the scope does not hold fail the check of sets and links below. A failure replaces nothing and writes nothing.
 
 ## Stored sets and links
 
