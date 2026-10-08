@@ -260,6 +260,9 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 | `onCloseRequest(fn)` | 호스트가 창에 닫기를 요청하면 `fn`을 호출한다 |
 | `ready()` | 창이 요청을 받을 수 있음을 알린다 |
 | `closeKept()` | 닫기 요청을 받은 뒤 page가 수정된 탭을 지켜 창이 열려 있음을 알린다. host가 그 요청이 속한 종료를 끝낸다 |
+| `askRemoveProject(id)` | 프로젝트를 보이는 창에 프로젝트를 제거해도 되는지 묻고, 제거해도 되면 `true`로 이행한다. 다른 창이 보이지 않으면 바로 `true`로 이행한다 |
+| `onRemoveProjectRequest(fn)` | 이 창이 보이는 프로젝트를 제거해도 되는지 다른 창이 물으면 `fn(id)`를 호출한다 |
+| `answerRemoveProject(id, allowed)` | `onRemoveProjectRequest`의 제거 요청에 답한다 |
 | `close()` | 창을 닫는다 |
 | `state()` | 창 좌표를 반환한다. 런타임에 창 좌표가 없으면 `null` |
 | `folder(root)` | 프로젝트 디렉터리의 `{ root, identity }`를 반환한다. 브라우저 애플리케이션은 앞뒤 공백을 제거한 경로와 식별자 `path:<공백 제거 경로>`를 반환한다 |

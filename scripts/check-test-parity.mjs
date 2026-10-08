@@ -994,6 +994,31 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F122",
+    implementation: [
+      { file: "packages/workbench/projects.js", symbol: "async function closeWindow" },
+      { file: "packages/workbench/projects.js", symbol: "async function answerRemoval" },
+      { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.space.close\"" },
+      { file: "packages/host/wailsv3/src/quit.go", symbol: "type Quit struct" },
+      { file: "packages/host/tauriv2/src/quit.rs", symbol: "pub struct Quit" },
+      { file: "packages/host/wailsv3/src/project_removal.go", symbol: "type Removals struct" },
+      { file: "packages/host/tauriv2/src/project_removal.rs", symbol: "pub struct Removals" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/projects-close-window.test.mjs", id: "a window close request asks about modified tabs before it saves and closes" },
+      { file: "packages/workbench/test/projects-close-window.test.mjs", id: "a kept modified tab keeps the window open and unsaved" },
+      { file: "packages/workbench/test/projects-close-window.test.mjs", id: "removing the project shown in the window asks about modified tabs before it removes the project" },
+      { file: "packages/workbench/test/projects-close-window.test.mjs", id: "removing a project that another window shows asks that window and keeps the project when it refuses" },
+      { file: "packages/workbench/test/space-close-asks.test.mjs", id: "core.space.close asks about modified tabs before it removes the active space" },
+      { file: "packages/host/wailsv3/tests/quit_test.go", id: "TestACancelledQuitEndsTheQuitState" },
+      { file: "packages/host/tauriv2/tests/quit_test.rs", id: "a_cancelled_quit_ends_the_quit_state" },
+      { file: "packages/host/wailsv3/tests/project_removal_test.go", id: "TestAProjectRemovalRequestResolvesWithTheOwnerAnswer" },
+      { file: "packages/host/tauriv2/tests/project_removal_test.rs", id: "a_project_removal_request_resolves_with_the_owner_answer" },
+    ],
+    expected: "A window close, a quit, the removal of the active space and the removal of a project ask for each modified tab, and a kept tab keeps the window, the space or the project and ends the quit.",
+    levels: ["unit"],
+  },
+  {
     id: "F29",
     implementation: [
       { file: "scripts/check-build-environment.sh", symbol: "pnpm_actual=$(pnpm --version" },

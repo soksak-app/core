@@ -113,6 +113,7 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
 #[derive(Default)]
 pub(crate) struct Windows {
     pub(crate) quit: crate::quit::Quit,
+    removals: crate::project_removal::Removals,
     next_window: AtomicU64,
     opening: Mutex<()>,
     windows: Mutex<HashMap<String, Arc<WindowData>>>,
@@ -505,6 +506,8 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             }
         }
         tauri::WindowEvent::Destroyed => {
+            // A window that ends keeps no tab, so a removal that asked it is allowed.
+            host.state::<Windows>().removals.abandon(host.label());
             crate::exposure::window_closed(&host);
             let natives = context.clone();
             log_failure(
@@ -715,6 +718,39 @@ pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String>
     }
     notify_workspace(window.app_handle());
     Ok(())
+}
+
+/// Asks the window that shows the project whether the project may be removed and returns its answer; returns true at
+/// once when no other window shows the project (docs/spec/projects.md).
+pub(crate) fn project_remove_ask(window: &Window, id: &str) -> Result<bool, String> {
+    let registry = window.state::<Windows>();
+    let owner = registry
+        .owners
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get(id)
+        .cloned();
+    let Some(label) = owner.filter(|label| label != window.label()) else {
+        return Ok(true);
+    };
+    let asked = registry.removals.begin(id, &label)?;
+    let target = window
+        .get_window(&label)
+        .ok_or("project window is closed")?;
+    if let Err(error) = emit_window(&target, "project-remove-request", id) {
+        registry.removals.abandon(&label);
+        return Err(error.to_string());
+    }
+    asked.recv().map_err(|e| e.to_string())
+}
+
+/// Answers the removal request that `project_remove_ask` sent to this window.
+pub(crate) fn project_remove_answer(
+    window: &Window,
+    id: &str,
+    allowed: bool,
+) -> Result<(), String> {
+    window.state::<Windows>().removals.answer(id, allowed)
 }
 
 /// 일반 상태 창의 위치와 크기를 반환한다. 최대화, 전체 화면, 최소화 상태이면 None 이다.

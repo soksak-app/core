@@ -31,6 +31,8 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         project_folder,
         project_open,
         project_release,
+        project_remove_ask,
+        project_remove_answer,
         window_state,
         performance,
         window_ready,
@@ -118,6 +120,31 @@ fn project_open(
 fn project_release(window: Window, id: Argument<String>) -> Result<(), String> {
     let Argument(id) = id;
     windows::project_release(&window, id)
+}
+
+/// Asks the window that shows the project whether the project may be removed.
+#[tauri::command(async)]
+async fn project_remove_ask(window: Window, id: Argument<String>) -> Result<bool, String> {
+    let Argument(id) = id;
+    // The wait is for the person's answer, so it does not hold a runtime thread.
+    tauri::async_runtime::spawn_blocking(move || windows::project_remove_ask(&window, &id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Answers the removal request that this window received.
+#[tauri::command]
+fn project_remove_answer(window: Window, answer: Argument<RemovalAnswer>) -> Result<(), String> {
+    let Argument(answer) = answer;
+    windows::project_remove_answer(&window, &answer.id, answer.allowed)
+}
+
+/// The answer of a window to a removal request.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RemovalAnswer {
+    id: String,
+    allowed: bool,
 }
 
 /// 성능 트레이스를 켜고 끄고 페이지 줄을 중계한다(V5-104).

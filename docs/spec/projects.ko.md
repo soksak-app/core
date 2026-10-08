@@ -38,7 +38,7 @@
 
 프로젝트 창은 독립 OS 창이다. 설정과 추가·분할 메뉴는 [네이티브 모달](native-modals.ko.md)에 정의한 창 내부 네이티브 웹뷰를 유지한다. 각 프로젝트 창은 활성 프로젝트, 표면, 모달, 테마, 입력 상태, 셸 구독을 관리한다. 한 창의 배치 준비, 다시 로드, 설정, 닫기가 다른 창의 네이티브 상태를 변경하면 안 된다.
 
-프로젝트 탭의 ×나 어느 창의 library 제거 버튼(`core.library.remove`)으로 registry에서 프로젝트를 지우면, 그 프로젝트를 보이는 창은 두 경우 모두 같은 방식으로 그 프로젝트를 끝낸다. 그 창은 registry 변경 알림으로 제거를 읽는다. 그 프로젝트 탭들의 surface module을 정리한 뒤 그 sidecar 세션을 끝내고([터미널 런타임](terminal-runtime.ko.md#종료와-복구)), 남은 첫 프로젝트를 연다. 다른 프로젝트를 보이지 않는 창은 같은 OS 창에 library를 보이고 프로젝트 없는 창으로 열려 있다. `host.windows`는 그 창의 `project`를 null로 보고하고, `core.projects`는 지운 프로젝트를 더 나열하지 않는다. 창의 마지막 프로젝트 탭을 닫아도 결과가 같다.
+프로젝트 탭의 ×나 어느 창의 library 제거 버튼(`core.library.remove`)으로 registry에서 프로젝트를 지우면, 그 프로젝트를 보이는 창은 두 경우 모두 같은 방식으로 그 프로젝트를 끝낸다. 프로젝트를 판에 보이는 창은 제거 전에 수정된 탭마다 묻는다([plugins](plugins.ko.md#탭-알림)). 다른 창이 보이는 프로젝트를 제거하는 창은 host를 거쳐(`windows.askRemoveProject`) 그 창에 묻는다. 프로젝트를 보이는 창이 수정된 탭마다 묻고 답하며, 제거는 그 답을 기다리고, 탭을 지키면 프로젝트가 registry에 남고 `closed: false`로 답한다. 묻는 동안 끝나는 창은 제거해도 된다고 답한 것으로 본다. 그 창은 registry 변경 알림으로 제거를 읽는다. 그 프로젝트 탭들의 surface module을 정리한 뒤 그 sidecar 세션을 끝내고([터미널 런타임](terminal-runtime.ko.md#종료와-복구)), 남은 첫 프로젝트를 연다. 다른 프로젝트를 보이지 않는 창은 같은 OS 창에 library를 보이고 프로젝트 없는 창으로 열려 있다. `host.windows`는 그 창의 `project`를 null로 보고하고, `core.projects`는 지운 프로젝트를 더 나열하지 않는다. 창의 마지막 프로젝트 탭을 닫아도 결과가 같다.
 
 ## 저장
 

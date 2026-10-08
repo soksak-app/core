@@ -11,6 +11,10 @@ const PROJECT = {
 /* The order of the saves, the questions and the window close. */
 const events = [];
 let requestClose = null;
+let requestRemoval = null;
+/* Whether another window shows the project; the host answers a removal request for it with allowed. */
+let elsewhere = false;
+let hostAllows = true;
 mock.module("@soksak/runtime", {
   namedExports: {
     windows: {
@@ -24,6 +28,9 @@ mock.module("@soksak/runtime", {
       ready: async () => {},
       onActivate: async () => {},
       onCloseRequest: async (fn) => { requestClose = fn; },
+      onRemoveProjectRequest: async (fn) => { requestRemoval = fn; },
+      askRemoveProject: async (id) => { events.push(`host asked ${id}`); return hostAllows; },
+      answerRemoveProject: async (id, allowed) => { events.push(`answered ${id} ${allowed}`); },
     },
   },
 });
@@ -89,4 +96,36 @@ test("removing the project shown in the window asks about modified tabs before i
   assert.equal(await projects.close(PROJECT.id), true);
   assert.equal(events[0], "ask", `the project was saved or removed before the question: ${events}`);
   assert.ok(events.includes("remove"));
+});
+
+test("removing a project that another window shows asks that window and keeps the project when it refuses", async () => {
+  await projects.initialise(store);
+  await projects.browse();
+  events.length = 0;
+  hostAllows = false;
+  assert.equal(await projects.close(PROJECT.id), false);
+  assert.deepEqual(events, [`host asked ${PROJECT.id}`], "the refusal of the owner window did not keep the project");
+  hostAllows = true;
+  events.length = 0;
+  assert.equal(await projects.close(PROJECT.id), true);
+  assert.equal(events[0], `host asked ${PROJECT.id}`);
+  assert.ok(events.includes("remove"));
+});
+
+test("a removal request for the project shown here asks about modified tabs and answers the host", async () => {
+  await projects.initialise(store);
+  await projects.activate(PROJECT.id);
+  events.length = 0;
+  kept = true;
+  await requestRemoval(PROJECT.id);
+  assert.deepEqual(events, ["ask", `answered ${PROJECT.id} false`]);
+  events.length = 0;
+  kept = false;
+  await requestRemoval(PROJECT.id);
+  assert.deepEqual(events, ["ask", `answered ${PROJECT.id} true`]);
+  // A project that the library shows has no tab in the plane, so the answer needs no question.
+  await projects.browse();
+  events.length = 0;
+  await requestRemoval(PROJECT.id);
+  assert.deepEqual(events, [`answered ${PROJECT.id} true`]);
 });

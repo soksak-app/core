@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F122.5: 다른 창이 보여 주는 프로젝트를 제거하면 그 창에 묻는다. `windows.askRemoveProject`가 새 host 호출 `projectRemoveAsk`를 보내고, host가 프로젝트를 보이는 창에 `project-remove-request`를 보내며, 그 창이 수정된 탭마다 묻고 `projectRemoveAnswer`로 답하고, 제거는 그 답을 기다린다. 탭을 지키면 프로젝트가 registry에 남고 `core.project.close`는 `closed: false`로 답한다. 묻는 동안 끝나는 창은 제거를 허용한다. `core.project.close`, `core.library.remove`, `core.space.close`는 사람을 기다리므로 `timeout` 600000을 선언한다.
+- F131: window-close 검사에서 한 번씩 기록되고 여섯 번의 실행에서 재발하지 않은 오류 세 건을 기록했다. 재발하면 원인을 보여 줄 기록은 갖춰져 있다.
 - F122.4: `core.project.close`는 프로젝트를 보이는 창의 수정된 탭마다 프로젝트를 제거하기 전에 저장하고 닫기, 저장하지 않고 닫기, 닫지 않기를 묻고 `{closed}`로 답한다. 탭을 지키면 프로젝트가 남는다.
 - F122.3: `core.space.close`는 활성 스페이스를 제거하기 전에 그 스페이스의 수정된 탭마다 저장하고 닫기, 저장하지 않고 닫기, 닫지 않기를 묻고 `{closed}`로 답한다. 탭을 지키면 스페이스가 남는다. 마지막 스페이스는 닫히지 않고 `closed: false`로 답한다.
 - F122.2: 수정된 탭을 지켜 취소한 종료는 두 host의 종료 상태를 끝낸다. page가 새 host 호출 `windowCloseKept`로 알리고, host가 종료 상태(`quit.go`, `quit.rs`의 `Quit`)를 지우며, `host.window`가 이를 `quitting`으로 보고한다. 이후 마지막 창을 닫아도 애플리케이션이 종료되지 않고, WebContent process의 종료는 다시 오류 줄이 된다.

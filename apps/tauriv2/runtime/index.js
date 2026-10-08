@@ -11,7 +11,7 @@ import { createLifecycleListener } from "./listener-lifecycle.js";
 const COMMAND = {
   workspace: "workspace",
   windowNew: "window_new", folderChoose: "folder_choose", projectCreate: "project_create",
-  projectFolder: "project_folder", projectOpen: "project_open", projectRelease: "project_release",
+  projectFolder: "project_folder", projectOpen: "project_open", projectRelease: "project_release", projectRemoveAsk: "project_remove_ask", projectRemoveAnswer: "project_remove_answer",
   windowState: "window_state", performance: "performance", windowReady: "window_ready", windowClose: "window_close", windowCloseKept: "window_close_kept",
   syncSurfaces: "sync_surfaces",
   presentSurfaces: "present_surfaces",
@@ -69,6 +69,7 @@ const ARG = {
   workspace: (request) => ({ request }),
   windowNew: () => ({}), folderChoose: () => ({}), projectCreate: (request) => ({ request }),
   projectFolder: (root) => ({ root }), projectOpen: (request) => ({ request }), projectRelease: (id) => ({ id }),
+  projectRemoveAsk: (id) => ({ id }), projectRemoveAnswer: (answer) => ({ answer }),
   windowState: () => ({}), windowReady: () => ({}), windowClose: () => ({}), windowCloseKept: () => ({}),
   syncSurfaces: (v) => ({ request: v }),
   presentSurfaces: (v) => ({ request: v }),

@@ -41,6 +41,7 @@ const (
 // Host 는 호출한 창의 네이티브 상태를 선택한다. Wails 는 Host 의 공개 메서드를 페이지에 바인딩한다.
 type Host struct {
 	quit       Quit
+	removals   Removals
 	nextWindow uint64
 	workspace  *Workspace
 	opening    sync.Mutex
@@ -529,6 +530,8 @@ func (s *Surfaces) WindowControls() (Rect, error) {
 
 // close 는 창이 닫힐 때 창의 네이티브 뷰, 입력 감시와 사이드카 표면을 정리한다.
 func (s *Surfaces) close() {
+	// A window that ends keeps no tab, so a removal that asked it is allowed.
+	s.host.removals.Abandon(s.name)
 	application.InvokeSync(func() {
 		cancelLayout(s.window)
 		if s.monitor != 0 {

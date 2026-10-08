@@ -142,6 +142,7 @@ export async function initialise(storage) {
   store.onChange(() => { reread().catch(failed); });
   await windows.onActivate((id) => activateHere(id).catch(failed));
   await windows.onCloseRequest(() => closeWindow().catch(failed));
+  await windows.onRemoveProjectRequest((id) => answerRemoval(id).catch(failed));
   const requested = new URL(location.href).searchParams.get("project");
   const first = requested ? projects.find((p) => p.id === requested) : null;
   if (first) {
@@ -152,6 +153,19 @@ export async function initialise(storage) {
   begun = null;
   await windows.ready();
   changed();
+}
+
+/**
+ * Answers the host's request that another window sends before it removes the project id: a window that shows the
+ * project in its plane asks for each modified tab first (docs/spec/plugins.md#tab-reports).
+ */
+async function answerRemoval(id) {
+  let allowed = false;
+  try {
+    allowed = !(id === activeProjectId && !browsing) || await listener.settleTabs();
+  } finally {
+    await windows.answerRemoveProject(id, allowed);
+  }
 }
 
 function failed(error) { dispatchEvent(new ErrorEvent("error", { message: error.message })); }
@@ -311,11 +325,13 @@ export async function open({ root, color, layout }) {
 }
 
 /**
- * Removes the project id from the registry. A window that shows the project in its plane asks for each modified tab
- * first (docs/spec/plugins.md#tab-reports). Resolves false when a kept tab keeps the project.
+ * Removes the project id from the registry. The window that shows the project asks for each modified tab first
+ * (docs/spec/plugins.md#tab-reports). Resolves false when a kept tab keeps the project.
  */
 export async function close(id) {
-  if (id === activeProjectId && !browsing && !(await listener.settleTabs())) return false;
+  // The window that shows the project asks here; another window shows it, the host asks that window.
+  const asked = id === activeProjectId && !browsing ? await listener.settleTabs() : await windows.askRemoveProject(id);
+  if (!asked) return false;
   // 아래의 정리는 저장된 레이아웃의 탭을 남긴다. 활성 프로젝트의 판에 아직 저장하지 않은 탭이 있으면 그 표면도 남도록
   // 먼저 저장한다.
   await keep();

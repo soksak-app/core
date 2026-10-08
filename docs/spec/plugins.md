@@ -267,6 +267,9 @@ Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/p
 | `createFolder({ parent, name })` | Creates a project folder. The browser application rejects the call |
 | `openProject({ id, root, title, geometry, separate, current })` | Opens a project and returns `{ local }`; `local` is `true` when the calling window shows the project. The browser application opens a separate project in a new tab |
 | `releaseProject(id)` | Releases the calling window's ownership of a project |
+| `askRemoveProject(id)` | Asks the window that shows the project whether the project may be removed and resolves `true` when it may; resolves `true` at once when no other window shows it |
+| `onRemoveProjectRequest(fn)` | Calls `fn(id)` when another window asks whether the project that this window shows may be removed |
+| `answerRemoveProject(id, allowed)` | Answers a removal request of `onRemoveProjectRequest` |
 
 The workbench uses only these exports and does not branch on the runtime. When `host` is `null`, a surface whose plugin declares sidecars or a `hybrid` composition cannot run, because its sidecars, native regions, and exposure relay need the host. The workbench does not import its module; the surface slot shows the placeholder "<plugin name> 표면은 네이티브 호스트가 있어야 열립니다", the surface reports `ready`, takes no focus, and its placeholder leaves with its tab. A `dom` surface without sidecars mounts. Without a host, `report` writes its line to the console as an error.
 

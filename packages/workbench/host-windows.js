@@ -27,5 +27,9 @@ export function hostWindows(host) {
     openProject: ({ id, root, title, separate, geometry }) =>
       host.call("projectOpen", { id, root, title, separate, geometry }),
     releaseProject: (id) => host.call("projectRelease", id),
+    /** 프로젝트를 보이는 다른 창에 프로젝트를 제거해도 되는지 묻고, 제거해도 되면 true 로 이행한다. */
+    askRemoveProject: (id) => host.call("projectRemoveAsk", id),
+    onRemoveProjectRequest: (fn) => host.on("project-remove-request", fn),
+    answerRemoveProject: (id, allowed) => host.call("projectRemoveAnswer", { id, allowed }),
   };
 }

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F122.5: removing a project that another window shows asks that window: `windows.askRemoveProject` sends the new host call `projectRemoveAsk`, the host sends `project-remove-request` to the window that shows the project, that window asks for each modified tab and answers with `projectRemoveAnswer`, and the removal waits for the answer; a kept tab keeps the project in the registry and `core.project.close` answers `closed: false`. A window that ends while it is asked allows the removal. `core.project.close`, `core.library.remove` and `core.space.close` declare `timeout` 600000 because they wait for a person.
+- F131: recorded three single errors of the window-close checks that did not recur in six runs; the records that show their cause are in place.
 - F122.4: `core.project.close` asks for each modified tab of the window that shows the project with 저장하고 닫기, 저장하지 않고 닫기 and 닫지 않기 before it removes the project, and answers `{closed}`; keeping a tab keeps the project.
 - F122.3: `core.space.close` asks for each modified tab of the active space with 저장하고 닫기, 저장하지 않고 닫기 and 닫지 않기 before it removes the space, and answers `{closed}`; keeping a tab keeps the space. The last space does not close and answers `closed: false`.
 - F122.2: a quit that a kept modified tab cancels ends the quit state of both hosts: the page reports the new host call `windowCloseKept`, the host clears its quit state (`Quit` in `quit.go` and `quit.rs`), and `host.window` reports it as `quitting`. Closing the last window afterwards does not quit the application, and the end of a WebContent process is an error line again.

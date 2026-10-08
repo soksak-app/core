@@ -193,6 +193,43 @@ func (h *Host) ProjectRelease(idJSON json.RawMessage) error {
 	return nil
 }
 
+// ProjectRemoveAsk asks the window that shows the project whether the project may be removed and returns its answer;
+// it returns true at once when no other window shows the project (docs/spec/projects.md).
+func (h *Host) ProjectRemoveAsk(ctx context.Context, idJSON json.RawMessage) (bool, error) {
+	id, err := argument[string]("id", idJSON)
+	if err != nil {
+		return false, err
+	}
+	current, err := h.surface(ctx)
+	if err != nil {
+		return false, err
+	}
+	h.mu.Lock()
+	owner := h.owners[id]
+	h.mu.Unlock()
+	if owner == nil || owner == current {
+		return true, nil
+	}
+	asked, err := h.removals.Begin(id, owner.name)
+	if err != nil {
+		return false, err
+	}
+	owner.Emit("project-remove-request", id)
+	return <-asked, nil
+}
+
+// ProjectRemoveAnswer answers the removal request that ProjectRemoveAsk sent to this window.
+func (h *Host) ProjectRemoveAnswer(answerJSON json.RawMessage) error {
+	answer, err := argument[struct {
+		ID      string `json:"id"`
+		Allowed bool   `json:"allowed"`
+	}]("answer", answerJSON)
+	if err != nil {
+		return err
+	}
+	return h.removals.Answer(answer.ID, answer.Allowed)
+}
+
 func (h *Host) FolderChoose(ctx context.Context) (string, error) {
 	s, err := h.surface(ctx)
 	if err != nil {

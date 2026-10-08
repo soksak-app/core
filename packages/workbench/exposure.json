@@ -1823,7 +1823,8 @@
               "type": "boolean"
             }
           }
-        }
+        },
+        "timeout": 600000
       },
       {
         "name": "core.project.rename",
@@ -1986,7 +1987,8 @@
               "type": "boolean"
             }
           }
-        }
+        },
+        "timeout": 600000
       },
       {
         "name": "core.grid.size",
@@ -3011,7 +3013,8 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 600000
       },
       {
         "name": "core.library.window",

@@ -38,6 +38,8 @@ const METHOD = {
   projectFolder: "ProjectFolder",
   projectOpen: "ProjectOpen",
   projectRelease: "ProjectRelease",
+  projectRemoveAsk: "ProjectRemoveAsk",
+  projectRemoveAnswer: "ProjectRemoveAnswer",
   windowState: "WindowState",
   windowReady: "WindowReady",
   windowClose: "WindowClose",
