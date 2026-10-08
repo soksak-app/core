@@ -533,7 +533,7 @@ applyFrameText(value("textSize"));
 onLayout(pageLayout.onLayout);
 // 호스트는 창을 40pt 제목줄로 만든다. 첫 행이 다르면 첫 행을 담은 배치를 준비한다.
 if (chrome) fitTitlebar(start.controls);
-// 첫 화면을 그렸으므로 시작 오류 handler 를 거두고, 이어지는 오류는 이 문서의 오류 표시가 받는다.
+// The first screen is drawn, so the start error handler ends and the error display of this document takes the later errors.
 pageStart.finish();
 
 // 코어 공개 항목은 첫 await 전에 등록한다. 첫 화면의 사이드바 섹션은 그 뒤에 비동기로 마운트되며 코어 상태를 따를 수
@@ -572,7 +572,7 @@ addEventListener("keydown", (event) => {
 addEventListener("pointerdown", (event) => {
   if (event.target.closest?.(".chrome-bar, .tabs--space, .tabs--project")) setTextScope({ kind: "frame" });
 }, true);
-/* 애플리케이션 메뉴의 글자 크기 항목과 도움말의 디버그 항목은 이 명령들만 요청한다. 다른 이름은 오류로 알린다. */
+/* The text size items of the application menu and the Debug item of Help request only these commands. Another name is reported as an error. */
 const MENU_COMMANDS = ["core.text.larger", "core.text.smaller", "core.text.reset", "core.debug.open"];
 onMenuCommand((name) => {
   if (!MENU_COMMANDS.includes(name)) {
