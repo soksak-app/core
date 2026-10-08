@@ -8,7 +8,7 @@ use std::path::Path;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use crate::install::{self, Release, Index, PluginVersion, RegistryPlugin};
+use crate::install::{self, Index, PluginVersion, RegistryPlugin, Release};
 use crate::release::{hex, print_json, read_json_file, replace_file};
 use crate::Error;
 

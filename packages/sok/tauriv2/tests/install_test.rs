@@ -439,10 +439,7 @@ fn installation_keeps_one_sidecar_version_that_satisfies_every_installed_plugin(
 // contract: install.names.releases-and-paths
 #[test]
 fn releases_and_installation_paths_follow_the_declared_names() {
-    assert_eq!(
-        install::release_name("probe", "0.2.0"),
-        "probe-0.2.0.tgz"
-    );
+    assert_eq!(install::release_name("probe", "0.2.0"), "probe-0.2.0.tgz");
     assert_eq!(
         install::sidecar_release_name("@scope/sidecar-worker", "0.1.1", "darwin-arm64").as_deref(),
         Ok("scope-sidecar-worker-0.1.1-darwin-arm64.tar.gz")

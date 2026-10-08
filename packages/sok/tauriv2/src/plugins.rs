@@ -10,11 +10,11 @@ use serde_json::{json, Value};
 
 use crate::fetch::{check_location, Fetcher};
 use crate::install::{
-    self, Release, Index, InstalledPlugin, InstalledSidecar, InstalledState, Need, SelectedSidecar,
+    self, Index, InstalledPlugin, InstalledSidecar, InstalledState, Need, Release, SelectedSidecar,
     Selection, INSTALLED, INSTALL_FORMAT,
 };
 use crate::platform;
-use crate::registry::{release_files, read_release};
+use crate::registry::{read_release, release_files};
 use crate::release::{current_platform, print_json, replace_file};
 use crate::{config_dir_of, Error, Options};
 

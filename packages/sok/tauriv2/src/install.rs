@@ -601,7 +601,10 @@ pub fn validate_registry_sidecar(value: &Value) -> Result<(), String> {
         }
         for platform in sorted_keys(releases) {
             check_platform(platform).map_err(|error| format!("{at} {version}: {error}"))?;
-            check_release_entry(&format!("{at} {version} {platform}"), releases.get(platform))?;
+            check_release_entry(
+                &format!("{at} {version} {platform}"),
+                releases.get(platform),
+            )?;
         }
         if !is_one(item.get("protocol")) {
             return Err(format!("{at} {version}: protocol must be 1"));
