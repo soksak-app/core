@@ -2,7 +2,7 @@
 
 [한국어](debug.ko.md)
 
-The debug view lets a person who meets a defect hand over every diagnostic record of the application. Every diagnostic file of an application is in `<config-dir>/logs/` ([hosts](hosts.md#application-log)); the debug view records the current state into that folder, lists its files, and saves one file or all of them where the person chooses.
+The debug view lets a person who meets a defect hand over every diagnostic record of the application. Every diagnostic file of an application is in `<config-dir>/logs/` ([diagnostics](diagnostics.md)) ([hosts](hosts.md#application-log)); the debug view records the current state into that folder, lists its files, and saves one file or all of them where the person chooses.
 
 ## Opening
 

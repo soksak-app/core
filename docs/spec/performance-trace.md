@@ -2,7 +2,7 @@
 
 [한국어](performance-trace.ko.md)
 
-The performance trace is a permanent instrument, present in every build, that records what the application spends time and memory on. It is not a diagnostics-build feature and is never removed after use. The switch is the declared setting `diagnostics.performance` ([settings](settings.md)); while it is false no layer does any logging work — no file is created and no formatting runs.
+The performance trace is one of the records of [diagnostics](diagnostics.md): the event form. It is a permanent instrument, present in every build, that records what the application spends time and memory on. It is not a diagnostics-build feature and is never removed after use. The switch is the declared setting `diagnostics.performance` ([settings](settings.md)); while it is false no layer does any logging work — no file is created and no formatting runs.
 
 The page does not format or relay events while disabled or awaiting enable acknowledgment. Switch requests and event relays preserve their order: disabling stops new events immediately and waits behind already accepted relays. Switch failures reject the settings operation; relay failures are reported explicitly and do not replace the result of the measured command.
 

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F127.1: `docs/spec/diagnostics.md` states the files of `logs/`, the three forms of record (error line, event, state file), the rules, and the record of each failure point; the term list has application log, performance trace, state file and debug view.
 - F124.3.2: both hosts answer the host calls `debugFiles`, `debugRecord`, `debugSave` and `debugSaveAll`: they list every file of `<config-dir>/logs/`, write `logs/state-<time>.json` with the host, the versions of core, macOS and the installed plugins and the status of every window, with a still capture of each window in a diagnostic build, save one file of `logs/` through the save panel and refuse any other path, and save the folder as one gzip-compressed tar file. Four contract cases run in Go and Rust.
 - F124.2: a surface writes its own events to the performance trace with `context.runtime.trace(event, fields)`, named with its plugin and surface, so a plugin records the steps of an input in `<config-dir>/logs/performance.ndjson` with the events of the host and the sidecars.
 - F124.2: both hosts write still captures and recordings to `<config-dir>/logs/captures/`, so every diagnostic file of an application is in `<config-dir>/logs/`, which `hosts.md` names as the one folder to hand over.

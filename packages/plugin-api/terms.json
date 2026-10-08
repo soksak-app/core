@@ -55,6 +55,39 @@
       "definition": "An address soksak://<owner>/<command> that opens from outside the application.",
       "rejected": [],
       "allowed": []
+    },
+    {
+      "term": "application log",
+      "definition": "The file logs/application.log under the configuration directory: the host lines, the page lines sent through report, and the standard error of the sidecars that the host starts.",
+      "rejected": [
+        "app log"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "performance trace",
+      "definition": "The file logs/performance.ndjson under the configuration directory: one JSON event per line from the page, the host and the sidecars.",
+      "rejected": [
+        "perf trace"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "state file",
+      "definition": "A file logs/state-<time>.json that the debug view writes: the state of the host, the versions and every window at one time.",
+      "rejected": [
+        "snapshot file"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "debug view",
+      "definition": "The dialog that Help > Debug opens: it records a state file, lists the files of logs/ and saves them.",
+      "rejected": [
+        "debug window",
+        "debug dialog"
+      ],
+      "allowed": []
     }
   ]
 }

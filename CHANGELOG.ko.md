@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F127.1: `docs/spec/diagnostics.md`가 `logs/`의 파일, 기록의 세 형태(오류 줄, event, state file), 규칙, 각 실패 지점의 기록을 정하고, 용어 목록에 application log, performance trace, state file, debug view가 있다.
 - F124.3.2: 두 host가 host 호출 `debugFiles`, `debugRecord`, `debugSave`, `debugSaveAll`에 답한다. `<config-dir>/logs/`의 모든 파일을 나열하고, host, core·macOS·설치된 plugin의 version, 모든 창의 status를 담은 `logs/state-<time>.json`을 쓰며 진단 빌드에서는 각 창의 정지 캡처도 쓴다. `logs/`의 파일 하나를 저장 창으로 저장하고 다른 경로는 거부하며, 폴더 전체를 gzip으로 압축한 tar 파일 하나로 저장한다. 계약 사례 4개가 Go와 Rust에서 돈다.
 - F124.2: 표면이 `context.runtime.trace(event, fields)`로 자기 event를 plugin과 표면 이름과 함께 performance trace에 쓴다. 그래서 plugin은 입력의 단계를 host와 sidecar의 event와 함께 `<config-dir>/logs/performance.ndjson`에 기록한다.
 - F124.2: 두 host가 정지 캡처와 녹화를 `<config-dir>/logs/captures/`에 쓴다. 그래서 애플리케이션의 모든 진단 파일이 `<config-dir>/logs/`에 있고, `hosts.md`는 이 폴더를 넘겨줄 유일한 폴더로 적는다.

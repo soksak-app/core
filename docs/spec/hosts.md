@@ -169,7 +169,7 @@ Crash leftovers are accepted until the operating system reclaims them. A startup
 
 ## Application log
 
-Every diagnostic file of an application is in one fixed folder, `logs/` under the configuration directory: the application log, the [performance trace](performance-trace.md), the service logs, the stall samples, and still captures and recordings in `logs/captures/`. A person who meets a defect hands over this folder.
+[Diagnostics](diagnostics.md) states every record, its form and where each failure leaves it. Every diagnostic file of an application is in one fixed folder, `logs/` under the configuration directory: the application log, the [performance trace](performance-trace.md), the service logs, the stall samples, and still captures and recordings in `logs/captures/`. A person who meets a defect hands over this folder.
 
 Each host writes its application log to `logs/application.log` under the configuration directory. Right after the host creates its [endpoint](endpoint.md), which holds the process lock of the configuration directory, it opens that file for appending with mode 0600 and makes the file the standard error of the process through the platform standard-error operation. The file then holds the host's own lines, each page line sent through `report`, the runtime's crash output, and the standard error of every non-persistent sidecar, which inherits the descriptor. A line is in the file when the write that produced it returns. Both hosts write their own lines and the page lines without a prefix; each run starts the log with the line `<ISO-8601 time> application log: <application identifier> pid <pid>`, which carries the time. Output written before the endpoint exists goes to the standard error that the process was started with.
 
