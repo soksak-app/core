@@ -6,6 +6,7 @@ const origins = new Map();
 const notices = new Map();
 const noticePolicies = new Map();
 const modified = new Set();
+const errors = new Map();
 // 탭이 보이는지(포커스된 카드의 활성 탭인지) 판이 알려 준다.
 let visibleTab = () => false;
 const listeners = new Set();
@@ -42,6 +43,23 @@ export function reportModified(tabId, value) {
 
 /** Whether the surface of tabId holds unsaved changes. */
 export const tabModified = (tabId) => modified.has(tabId);
+
+/** Shows the operation error text of the surface of tabId, or removes it with null (docs/spec/plugins.md#tab-reports). */
+export function reportError(tabId, text) {
+  if (text === null) {
+    if (errors.delete(tabId)) notify();
+    return;
+  }
+  if (typeof text !== "string" || text.length === 0 || text.length > 1024 || CONTROL.test(text)) {
+    throw new TypeError("a tab error must be 1 to 1024 characters without control characters, or null");
+  }
+  if (errors.get(tabId) === text) return;
+  errors.set(tabId, text);
+  notify();
+}
+
+// default: a tab whose surface reported no error has none.
+export const tabError = (tabId) => errors.get(tabId) ?? null;
 
 /** 판이 탭이 보이는지 판단하는 함수를 정한다. */
 export function setVisibleTab(probe) {
@@ -125,7 +143,8 @@ export function forgetTab(tabId) {
   noticePolicies.delete(tabId);
   const footed = footers.delete(tabId);
   const unsaved = modified.delete(tabId);
-  if (labels.delete(tabId) || noticed || footed || unsaved) notify();
+  const failed = errors.delete(tabId);
+  if (labels.delete(tabId) || noticed || footed || unsaved || failed) notify();
 }
 
 export function onTabReports(listener) {

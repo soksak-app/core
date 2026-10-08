@@ -1,8 +1,8 @@
 // 표면이 알린 탭 제목과 작업 디렉터리, 새 탭의 출처 디렉터리.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clearVisibleNotices, forgetTab, onTabReports, recordOrigin, reportDirectory, reportModified, reportNotice, reportTitle,
-  setVisibleTab, tabLabel, tabModified, tabNotice, tabNotices, tabOrigin } from "../tab-reports.js";
+import { clearVisibleNotices, forgetTab, onTabReports, recordOrigin, reportDirectory, reportError, reportModified, reportNotice, reportTitle,
+  setVisibleTab, tabError, tabLabel, tabModified, tabNotice, tabNotices, tabOrigin } from "../tab-reports.js";
 
 test("a reported title is the tab label until it is removed, and changes notify once", () => {
   let notified = 0;
@@ -78,6 +78,26 @@ test("a system notification policy hides the tab dot but exposes the notice to t
   assert.deepEqual(tabNotices(), [["tab-system", "system body"]]);
   assert.throws(() => reportNotice("tab-invalid-policy", "body", "other"), /unknown tab notice policy/);
   forgetTab("tab-system");
+});
+
+test("a surface shows an operation error on its tab and removes it", () => {
+  let notified = 0;
+  const off = onTabReports(() => notified++);
+  assert.equal(tabError("tab-e"), null);
+  reportError("tab-e", "write failed");
+  reportError("tab-e", "write failed");
+  assert.equal(tabError("tab-e"), "write failed");
+  assert.equal(notified, 1);
+  for (const invalid of ["", "a\nb", "x".repeat(1025), 1, undefined]) {
+    assert.throws(() => reportError("tab-e", invalid), /a tab error must be 1 to 1024 characters without control characters, or null/);
+  }
+  reportError("tab-e", null);
+  assert.equal(tabError("tab-e"), null);
+  reportError("tab-e", "read failed");
+  forgetTab("tab-e");
+  assert.equal(tabError("tab-e"), null);
+  assert.equal(notified, 4);
+  off();
 });
 
 test("a surface reports whether its tab holds unsaved changes until the tab is forgotten", () => {

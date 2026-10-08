@@ -28,7 +28,7 @@ import { fillPicker, pickerItems } from "./picker-layer.js";
 import { disposeSurface, focusSurface, mountSurface, placePluginPlaceholder } from "./surface-modules.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
-import { clearVisibleNotices, onTabReports, recordOrigin, setVisibleTab, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
+import { clearVisibleNotices, onTabReports, recordOrigin, reportError, setVisibleTab, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
 import { hideError, showError } from "./shown-errors.js";
 import { registry } from "./exposure.js";
 import { configureSystemNotifications, systemNotifications } from "./system-notifications.js";
@@ -401,22 +401,21 @@ function updateCard(el, card, rect) {
   });
   cardFolds.set(card.id, folded);
   setText(statusText, cardStatusText(card, tabs, folded));
-  showSaveError(status, shown.id);
+  showTabError(status, shown.id);
 }
 
-/* The save failure of a tab that asked before it closed, shown in its card's status row while the tab is active. */
-const saveErrors = new Map();
-
-function showSaveError(status, tabId) {
-  let line = status.querySelector(".status__save-error");
+/* The operation error of the active tab, shown in its card's status row (docs/spec/plugins.md#tab-reports). */
+function showTabError(status, tabId) {
+  let line = status.querySelector(".status__error");
   if (!line) {
     line = document.createElement("span");
-    line.className = "status__save-error";
+    line.className = "status__error";
     status.appendChild(line);
   }
-  const where = `tab save ${tabId}`;
-  if (saveErrors.has(tabId)) {
-    showError(line, where, `저장하지 못했습니다 · ${saveErrors.get(tabId)}`);
+  const where = `tab error ${tabId}`;
+  const text = tabError(tabId);
+  if (text !== null) {
+    showError(line, where, text);
     return;
   }
   line.hidden = true;
@@ -1450,6 +1449,7 @@ const redrawTabReports = () => {
     const statusText = el.querySelector(":scope > .status .status__text");
     // 기본값: 아직 그리지 않은 카드에는 접힌 면 문구가 없다.
     if (statusText && !isPlace(card.id)) setText(statusText, cardStatusText(card, tabsOf(card), cardFolds.get(card.id) ?? null));
+    if (statusText && !isPlace(card.id) && tabsOf(card).length) showTabError(statusText.parentElement, activeTab(card).id);
   }
 };
 onTabReports(redrawTabReports);
@@ -1732,18 +1732,16 @@ function askBeforeClose(cardId, t, then) {
       try {
         await registry.run(save, {}, t.id);
       } catch (error) {
-        saveErrors.set(t.id, `${save}: ${error.message}`);
+        reportError(t.id, `저장하지 못했습니다 · ${save}: ${error.message}`);
         settle();
         return;
       }
-      saveErrors.delete(t.id);
       if (tabModified(t.id)) {
-        saveErrors.set(t.id, `${save} left the tab modified`);
+        reportError(t.id, `저장하지 못했습니다 · ${save} left the tab modified`);
         settle();
         return;
       }
     }
-    saveErrors.delete(t.id);
     await closeTab(cardId, t.id);
     then();
   });

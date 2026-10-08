@@ -148,9 +148,11 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 
 ## 탭 알림
 
-표면 컨텍스트에는 `tab.title(text)`, `tab.footer(text)`, `tab.directory(path)`, `tab.notify(text, policy)`, `tab.modified(value)`, 고정된 `origin` 객체, 고정된 `project` 객체가 있다.
+표면 컨텍스트에는 `tab.title(text)`, `tab.footer(text)`, `tab.directory(path)`, `tab.notify(text, policy)`, `tab.modified(value)`, `tab.error(text)`, 고정된 `origin` 객체, 고정된 `project` 객체가 있다.
 
-`tab.modified(value)`는 표면이 저장하지 않은 변경을 가졌는지를 `true`나 `false`로 알린다. 다른 값은 예외를 던진다. 탭이 수정된 동안 탭은 이름 앞에 점을 보이고, `core.grid`는 탭마다 `modified`를 보고하며, 이 상태는 layout에 저장하지 않는다. `surface.save`가 있으면 표면의 변경을 저장하는 `exposes`의 명령을 가리킨다. `core.tab.close`와 `core.card.close`는 수정된 탭을 닫지 않는다. workbench는 탭에 `<이름> 탭에 저장하지 않은 변경이 있습니다` 선택 레이어를 저장하고 닫기(`surface.save`가 있을 때만), 저장하지 않고 닫기, 닫지 않기와 함께 열고, 명령은 `{closed: false}`로 답한다. 저장하고 닫기는 표면에서 저장 명령을 실행하고, 명령이 성공하고 탭이 더는 수정되지 않았으면 탭을 닫는다. 실패한 저장은 오류 표시로 그 오류를 보이고 탭을 둔다. 저장하지 않고 닫기는 탭을 닫고 변경을 버리며, 닫지 않기와 레이어 닫기는 탭을 둔다. 창 닫기, 애플리케이션 끝내기, space 제거, project 제거는 진행하기 전에 수정된 탭마다 같은 방식으로 묻는다.
+`tab.modified(value)`는 표면이 저장하지 않은 변경을 가졌는지를 `true`나 `false`로 알린다. 다른 값은 예외를 던진다. 탭이 수정된 동안 탭은 이름 앞에 점을 보이고, `core.grid`는 탭마다 `modified`를 보고하며, 이 상태는 layout에 저장하지 않는다. `surface.save`가 있으면 표면의 변경을 저장하는 `exposes`의 명령을 가리킨다. `core.tab.close`와 `core.card.close`는 수정된 탭을 닫지 않는다. workbench는 탭에 `<이름> 탭에 저장하지 않은 변경이 있습니다` 선택 레이어를 저장하고 닫기(`surface.save`가 있을 때만), 저장하지 않고 닫기, 닫지 않기와 함께 열고, 명령은 `{closed: false}`로 답한다. 저장하고 닫기는 표면에서 저장 명령을 실행하고, 명령이 성공하고 탭이 더는 수정되지 않았으면 탭을 닫는다. 실패한 저장은 `저장하지 못했습니다 · <command>: <error>`를 탭의 오류로 알리고 탭을 둔다. 저장하지 않고 닫기는 탭을 닫고 변경을 버리며, 닫지 않기와 레이어 닫기는 탭을 둔다. 창 닫기, 애플리케이션 끝내기, space 제거, project 제거는 진행하기 전에 수정된 탭마다 같은 방식으로 묻는다.
+
+`tab.error(text)`는 표면이 준비된 뒤 실패한 표면 작업(예: 저장)의 오류를 제어 문자 없는 1자부터 1024자까지의 글로 보이고, `tab.error(null)`은 그것을 지운다. 다른 값은 예외를 던진다. 탭이 활성인 동안 카드 상태 행이 오류 표시로 그 글을 보이고, 오류 표시는 글이 나타날 때 애플리케이션 로그에 `error: tab error <tab id>: <text>`를 쓴다. `core.grid`는 탭마다 `error`를 글이나 `null`로 보고하고, 이 오류는 layout에 저장하지 않는다. 표면 자체의 실패는 표면 상태가 `error`로 두며, 이는 탭이 닫힐 때까지 남는다.
 
 `tab.title(text)`는 표면의 탭이 이름 대신 보일 제목을 정하고, `tab.title(null)`은 그 제목을 지워 탭이 다시 이름을 보이게 한다. 텍스트는 제어 문자(U+0000–U+001F, U+007F–U+009F)가 없는 1–256자의 문자열이며, 다른 값은 예외를 던진다. 제목은 레이아웃과 함께 저장하지 않는다. `core.grid`는 각 탭이 보이는 제목을 `label`로, 없으면 `null`로 알린다.
 

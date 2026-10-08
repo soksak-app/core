@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F102.10: 표면은 `tab.error(text)`로 실패한 작업의 오류를 카드 상태 행에 보이고 `tab.error(null)`로 지운다. `core.grid`는 탭마다 `error`를 보고한다.
 - F105: 두 애플리케이션 번들이 macOS 최소값 14.4를 선언하고, Tauri 애플리케이션이 그 값으로 build되며, `make release-check`가 `LSMinimumSystemVersion`과 각 실행 파일의 최소 macOS version을 `MACOS_MINIMUM`과 비교한다.
 - F102.9: 선언된 모든 version은 0.0.6이고, `make release-check`는 새 core를 허용하는 registry의 모든 plugin version의 manifest를 새 core가 받는지 검사한다. core 0.0.6을 릴리스했다.
 - F102.1.3, F102.1.4: `sok`은 plugin의 plugin 의존을 설치하고, 필요한 plugin의 제거와 끄기를 거절하며, update에서 dependent 범위를 지키고, `sok registry build`는 plugin 의존을 검사한다. host는 plugin package를 sidecar에서 빼고, 확장 지점의 `/shared/`를 내보낸다(F102.1.5).
