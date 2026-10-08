@@ -33,6 +33,7 @@ pub mod link;
 pub mod menu;
 mod modals;
 pub mod notifications;
+pub mod page_process;
 pub mod performance;
 #[path = "platform/platform.rs"]
 pub mod platform;
@@ -184,6 +185,15 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 context.webview_label(),
                 &mut |webview| start::start_page(&app, webview),
             )
+        })
+        // The end of the WebContent process leaves the web view without a page. The host writes the end as an error
+        // line (docs/spec/diagnostics.md) and loads the page again, as the Wails host does through its framework.
+        .on_web_content_process_terminate(|webview| {
+            let (place, text) = page_process::page_process_ended(webview.label());
+            log_error(&place, text);
+            if let Err(error) = webview.reload() {
+                log_error(&place, format!("{}: reload: {error}", webview.label()));
+            }
         })
         .on_page_load(|view, payload| {
             if payload.event() != tauri::webview::PageLoadEvent::Started {

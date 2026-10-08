@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F128.1: when the WebContent process of a window ends, both hosts write `error: page process: <window>: terminated` once and load the page again; the Tauri host did not load it again before, and the window stayed without a page.
 - F128.2: the host writes a lost connection to a persistent service as `error: sidecar <name>: connection lost; restarted` (or `restart failed: <reason>`), as an error line and not as an observation.
 - F129: the preparation of a window check restores the settings that it changed, including `diagnostics.performance`, when the check ends, so a person who uses the check application afterwards still has the performance trace.
 - F124.3.6: every file of the debug view has 보기 and 저장 in the same columns, and a PNG file (a capture) shows as an image; `debugRead` answers `kind` `text` with `text` or `kind` `image` with the `data:image/png;base64,` address `image`, and refuses a PNG file larger than 16 MB and a `.png` file without the PNG signature. The optional file `/wails/custom.js` of the Wails runtime is not reported as a missing page file.
