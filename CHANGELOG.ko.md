@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F102.3: plugin은 `surface.params`에 탭 인자를 선언하고, `core.card.add-tab`은 검사한 `params`를 탭과 함께 저장하며, surface context는 그것을 `tab.params`로 준다.
 - F104.1: 주석은 영어로 쓰고, 주석 언어 검사는 한글을 담은 주석 줄을 보고한다.
 - F102.1.5: workbench는 page를 불러올 때 확장 지점에 대한 기여를 해석하고, `core.contributions`와 plugin 카드에 보고하며, 제공자 표면에 `contributions(point)`를 주고, page import map은 `@soksak/shared/`를 확장 지점의 공유 module에 대응한다. manifest의 sidecar 목록은 설치된 plugin의 package를 뺀다.
 - F102.1.2: plugin manifest는 `extends`에 확장 지점을, `contributes`에 기여를 선언하고, `dependencies`는 plugin package를 가리킬 수 있다.

@@ -94,3 +94,15 @@ test("surface context gives the contributions of the plugin's declared extension
   assert.equal(provider.contributions("language"), items);
   assert.throws(() => provider.contributions(""), /contributions requires an extension point name/);
 });
+
+test("surface context gives a copy of the tab parameters, or null for a tab without them", () => {
+  const root = { appendChild() {} };
+  const runtime = { sidecar: () => "port", exposure: { command() {} }, emit() {} };
+  const params = { path: "notes/todo.md" };
+  const context = createSurfaceContext({ root, surfaceId: "tab-1", pluginId: "fixture", icon: ICON, runtime, tab: { ...TAB, params } });
+  assert.deepEqual(context.tab.params, params);
+  assert.notEqual(context.tab.params, params);
+  assert.equal(Object.isFrozen(context.tab.params), true);
+  const plain = createSurfaceContext({ root, surfaceId: "tab-2", pluginId: "fixture", icon: ICON, runtime, tab: TAB });
+  assert.equal(plain.tab.params, null);
+});

@@ -57,6 +57,7 @@
     "settings-migration.js",
     "settings-scope.js",
     "settings-ui.js",
+    "tab-params.js",
     "tab-reports.js",
     "text-size.js",
     "frame-text.js",

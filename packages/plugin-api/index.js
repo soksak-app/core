@@ -444,7 +444,14 @@ export function validateManifest(manifest) {
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
     if (!isObject(surface)) throw new Error(`${where}: surface must be an object`);
-    only(`${where} surface`, surface, ["module", "composition", "drop"]);
+    only(`${where} surface`, surface, ["module", "composition", "drop", "params"]);
+    // The parameters of a tab of the plugin (docs/spec/plugins.md#pluginjson).
+    if (surface.params !== undefined) {
+      if (!isObject(surface.params) || surface.params.type !== "object") {
+        throw new Error(`${where}: surface params must be a schema of type object`);
+      }
+      checkSchema(`${where} surface params`, surface.params);
+    }
     // 놓기 명령은 파일이 표면에 놓였을 때 페이지가 그 표면에서 {urls} 로 실행하는 선언된 명령이다.
     if (surface.drop !== undefined && (!isText(surface.drop) ||
       // 기본값: exposes 와 그 commands 는 선택 필드이며, 명령을 선언하지 않은 플러그인에는 놓기 명령이 없다.

@@ -392,3 +392,12 @@ test("extension points and contributions are rejected for each invalid field", (
     [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a state module or contributes/],
   ]) assert.throws(() => validateManifest(manifest), error, JSON.stringify(manifest).slice(0, 120));
 });
+
+test("a surface declares the schema of its tab parameters", () => {
+  const params = { type: "object", properties: { path: { type: "string" } } };
+  assert.deepEqual(validateManifest({ ...card, surface: { ...card.surface, params } }).surface.params, params);
+  assert.throws(() => validateManifest({ ...card, surface: { ...card.surface, params: { type: "string" } } }),
+    /surface params must be a schema of type object/);
+  assert.throws(() => validateManifest({ ...card, surface: { ...card.surface, params: { type: "object", minimum: 1 } } }),
+    /unknown field minimum/);
+});

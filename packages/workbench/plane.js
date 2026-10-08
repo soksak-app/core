@@ -17,6 +17,7 @@ import { SIDEBAR_SIDES, deviceGridSize, presentSidebars, effectiveSidebar, resol
 import { arrangeWindowSidebars, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, standingLink, windowSidebarCards } from "./window-sidebars.js";
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout } from "./stored-layout.js";
+import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
 import { icon } from "./icons.js";
@@ -119,7 +120,9 @@ let named = 0;
    T3 가운데 드롭 = 대상 카드의 탭이 된다. 배치는 그대로다
    T4 변에 드롭 = 그쪽에 새 자리가 필요하다
    T5 마지막 탭이 떠나면 그 카드는 사라진다 — 빈 카드는 남지 않는다        */
-const tab = (plugin, title) => ({ id: issueId("tab"), plugin, title });
+// A tab stores params only when it was opened with them (docs/spec/plugins.md#pluginjson).
+const tab = (plugin, title, params) => (params === null
+  ? { id: issueId("tab"), plugin, title } : { id: issueId("tab"), plugin, title, params });
 // 기본값: 고정 좌우 사이드바 카드는 data가 null이므로 표면 탭이 없다.
 const tabsOf = (card) => card?.data?.tabs ?? [];
 const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId);
@@ -130,8 +133,8 @@ const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
 const tabName = (t) => tabLabel(t.id) ?? t.title;
 
 /** 새 탭 하나. 번호는 화면에 보이는 이름일 뿐이고 id 는 ids.js 가 발급한다. */
-function newTab(kind) {
-  const t = tab(kind, "");
+function newTab(kind, params) {
+  const t = tab(kind, "", params);
   t.title = `${plugin(kind).mark} 탭 ${++named}`;
   return t;
 }
@@ -357,10 +360,12 @@ function updateCard(el, card, rect) {
   // 쓰고, 카드 id 는 스페이스마다 같은 값이라 스페이스가 달라도 같은 표면이 된다.
   const slot = el.querySelector(".slot");
   const shown = activeTab(card);
-  if (!hasPlugin(shown.plugin)) {
+  const paramsProblem = hasPlugin(shown.plugin) ? storedParamsProblem(shown.plugin,
+    pluginUnits().find((unit) => unit.id === shown.plugin).version, plugin(shown.plugin).params, shown.params) : null;
+  if (!hasPlugin(shown.plugin) || paramsProblem) {
     // 불러오지 않은 플러그인의 탭은 표면이 아니라 자리 표시다. 컴포지터가 표면으로 보지 않도록 표면 표시를 지운다.
     for (const key of ["nativeSurface", "nativeSurfaceId", "nativeLayer", "nativePlugin", "nativeTitle", "nativeDim"]) delete slot.dataset[key];
-    placePluginPlaceholder(slot, shown.id, pluginPlaceholder(shown));
+    placePluginPlaceholder(slot, shown.id, pluginPlaceholder(shown, paramsProblem));
     slot.dataset.surfaceStatus = "ready";
     setSurfaceStatus(status, { phase: "ready" });
     surfaceStates.set(shown.id, { phase: "ready", error: null });
@@ -375,7 +380,8 @@ function updateCard(el, card, rect) {
   slot.dataset.nativePlugin = shown.plugin;
   slot.dataset.nativeTitle = shown.title;
   slot.dataset.nativeDim = String(dimmed(card.id));
-  const surface = plugin(shown.plugin).surface(shown.id);
+  // default: a tab opened without parameters mounts with params null.
+  const surface = { ...plugin(shown.plugin).surface(shown.id), params: shown.params ?? null };
   mountSurface(slot, surface, {
     onState: (state) => {
       slot.dataset.surfaceStatus = state.phase;
@@ -422,15 +428,18 @@ function placeholderReason(id) {
   return row.installed.enabled ? "restart" : "disabled";
 }
 
-/** 자리 표시 요소. 이유에 따라 설치나 사용 버튼이 있다. */
-function pluginPlaceholder(tab) {
-  const reason = placeholderReason(tab.plugin);
+/**
+ * The placeholder of a tab whose plugin is not loaded, or whose stored params do not match the loaded plugin
+ * (paramsProblem). Depending on the reason it has an install or enable button.
+ */
+function pluginPlaceholder(tab, paramsProblem) {
+  const reason = paramsProblem ? "params" : placeholderReason(tab.plugin);
   const el = document.createElement("div");
   el.dataset.pluginPlaceholder = reason;
   el.dataset.plugin = tab.plugin;
   el.style.cssText = "position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:10px;color:var(--muted)";
   const line = document.createElement("p");
-  line.textContent = PLACEHOLDER_LINES[reason](tab.plugin);
+  line.textContent = reason === "params" ? paramsProblem : PLACEHOLDER_LINES[reason](tab.plugin);
   el.append(line);
   const row = pluginOperations.status().plugins.find((entry) => entry.id === tab.plugin);
   const action = reason === "missing" && row?.latest ? ["install", "설치"] : reason === "disabled" ? ["enable", "사용"] : null;
@@ -469,7 +478,7 @@ async function closeTab(cardId, tabId) {
     // 때마다 이 파일을 고쳐야 한다.
     if (grid.canClose(cardId)) grid.close(cardId);
     // 기본값: 위 주석대로 포커스된 플러그인이 없으면 등록된 첫 플러그인의 탭을 연다.
-    else card.data.tabs = [newTab(focusedPlugin() ?? plugins()[0].id)];
+    else card.data.tabs = [newTab(focusedPlugin() ?? plugins()[0].id, null)];
   }
   if (!tabsOf(card).some((t) => t.id === card.data?.activeId)) {
     // 기본값: 탭이 남지 않은 카드는 활성 탭이 없다(null).
@@ -629,7 +638,7 @@ const onPickerKey = (e) => {
 function openPicker(anchor, what, cardId) {
   openLayer(anchor, PICKER_ASK[what],
     plugins().map((p) => ({ key: p.id, name: p.name, mark: p.mark, svg: p.svg })),
-    (k) => (what === "add" ? addTab(cardId, k) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k)));
+    (k) => (what === "add" ? addTab(cardId, k, null) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k)));
 }
 
 /** 활성화할 탭을 선택받는다. 헤더가 접혔을 때 탭 목록을 표시한다. */
@@ -723,11 +732,11 @@ function closePicker() {
 }
 
 /** + 버튼의 후속 처리. 배치를 변경하지 않고 탭만 추가한다. */
-function addTab(cardId, plugin) {
+function addTab(cardId, plugin, params) {
   if (view.fullscreenCard !== cardId) restoreFullscreen();
   const card = grid.card(cardId);
   if (!card?.data) return;
-  const t = newTab(plugin);
+  const t = newTab(plugin, params);
   recordOrigin(t.id, activeTab(card)?.id);
   card.data.tabs.push(t);
   card.data.activeId = t.id;
@@ -745,7 +754,7 @@ function splitWith(cardId, side, plugin) {
   restoreFullscreen();
   const card = grid.card(cardId);
   if (!card?.data) return;
-  const t = newTab(plugin);
+  const t = newTab(plugin, null);
   recordOrigin(t.id, activeTab(card)?.id);
   // 공간이 없으면 splitToward 가 null 을 반환한다. 원본 카드에서 제거한 탭이 없으므로
   // 복구할 상태가 없다.
@@ -1648,10 +1657,10 @@ export function openCardTabs(id) {
   openTabList(anchor, id);
 }
 
-export function addTabTo(id, kind) {
+export function addTabTo(id, kind, params) {
   paneCard(id);
   knownPlugin(kind);
-  return addTab(id, kind);
+  return addTab(id, kind, checkTabParams(kind, plugin(kind).params, params));
 }
 
 export function splitCard(id, side, kind) {

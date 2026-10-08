@@ -50,7 +50,9 @@ export function createSurfaceContext({
     // 모듈을 mount 하기 전에 채운 값을 읽는다.
     get diagnostics() { return diagnostics(); },
     // 탭 알림(docs/spec/plugins.md#tab-reports): 탭에 보일 제목, 카드 발의 하단 글과 작업 디렉터리를 워크벤치에 알린다.
-    tab: Object.freeze({ title: tab.title, footer: tab.footer, directory: tab.directory, notify: tab.notify }),
+    tab: Object.freeze({ title: tab.title, footer: tab.footer, directory: tab.directory, notify: tab.notify,
+      // default: a tab opened without parameters has none (docs/spec/plugins.md#pluginjson).
+      params: tab.params === undefined || tab.params === null ? null : Object.freeze(structuredClone(tab.params)) }),
     // 이 탭을 만든 카드의 활성 탭이 그때 기록한 작업 디렉터리.
     // 기본값: 원래 카드의 활성 탭이 디렉터리를 기록하지 않았으면 origin.directory 는 null 이다.
     origin: Object.freeze({ directory: origin.directory ?? null }),

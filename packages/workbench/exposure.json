@@ -2421,7 +2421,7 @@
       },
       {
         "name": "core.card.add-tab",
-        "description": "Adds a tab of a plugin to a card and activates it.",
+        "description": "Adds a tab of a plugin to a card and activates it. params, when given, must match the plugin's surface.params and are stored with the tab.",
         "params": {
           "type": "object",
           "properties": {
@@ -2430,6 +2430,9 @@
             },
             "plugin": {
               "type": "string"
+            },
+            "params": {
+              "type": "object"
             }
           }
         },
