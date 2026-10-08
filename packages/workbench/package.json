@@ -67,6 +67,7 @@
     "exposure.js",
     "contributions.js",
     "core-exposure.js",
+    "file-open.js",
     "focus-state.js",
     "pointer-state.js",
     "stage.mjs",

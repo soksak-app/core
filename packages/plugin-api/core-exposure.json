@@ -87,6 +87,7 @@
     "core.card.tab-list",
     "core.card.tools",
     "core.space.apps",
+    "core.file.open",
     "core.card.add-tab",
     "core.card.split",
     "core.card.close",

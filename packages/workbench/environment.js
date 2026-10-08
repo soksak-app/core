@@ -79,6 +79,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
         drop: manifest.surface?.drop ?? null,
         // default: surface.params is optional; a plugin without it opens tabs without parameters (null).
         params: manifest.surface.params ?? null,
+        // default: surface.opens is optional; a plugin without it opens no file (null).
+        opens: manifest.surface.opens?.extensions ?? null,
         surface: surfaceOf(name, manifest.id, {
           ...manifest.surface,
           // 기본값: exposes 는 plugin.json 의 선택 필드이며 없으면 선언이 없다.

@@ -2420,6 +2420,32 @@
         }
       },
       {
+        "name": "core.file.open",
+        "description": "Opens the file at path, relative to the project root, in the loaded plugin whose surface.opens declares its extension, or else in the plugin that declares *: activates the tab of that plugin with the same path, or adds a tab with params {path} to card or to the focused card.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "tab": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
         "name": "core.card.add-tab",
         "description": "Adds a tab of a plugin to a card and activates it. params, when given, must match the plugin's surface.params and are stored with the tab.",
         "params": {

@@ -6,6 +6,7 @@
 // 변경, 모달과 라이브러리의 그리기 뒤에 호출하고, 등록소는 감시 중인 값 중 달라진
 // 것만 호스트에 보낸다.
 import { contributionsState, onContributionsChange } from "./contributions.js";
+import { checkOpenPath } from "./file-open.js";
 import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
 import { log, report } from "./host.js";
 import { trace } from "./performance.js";
@@ -14,7 +15,7 @@ import { trackPointer } from "./pointer-state.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
 import {
-  activeTab, addTabTo, assignSidebar, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
+  activeTab, addTabTo, assignSidebar, openFile, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
   focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, splitCard, surfaceState, tabsOf,
@@ -431,6 +432,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.card.tools", ({ card }) => { openCardTools(card); });
   registry.command("core.space.apps", ({ card }) => { openSpaceApps(card); });
   registry.command("core.card.add-tab", ({ card, plugin, params }) => ({ tab: addTabTo(card, plugin, params) }));
+  registry.command("core.file.open", ({ path, card }) => {
+    if (!projects.active()) throw new Error("this window shows no project");
+    return openFile(checkOpenPath(path), card);
+  });
   registry.command("core.card.split", ({ card, side, plugin }) => splitCard(card, side, plugin));
   registry.command("core.card.close", ({ card }) => { closeCard(card); });
   registry.command("core.tab.select", ({ tab }) => { trace("action", { kind: "tab.select", tab }); selectTab(tab); });

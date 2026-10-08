@@ -18,6 +18,7 @@ import { arrangeWindowSidebars, keepWindowSidebarWidths, railSidebars, restoreWi
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout } from "./stored-layout.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
+import { chooseOpener } from "./file-open.js";
 import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
 import { icon } from "./icons.js";
@@ -1680,6 +1681,24 @@ export function closeCard(id) {
   // 기본값: 자리 카드만 남으면 포커스할 카드가 없다(null).
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   settle();
+}
+
+/**
+ * Opens the file path, relative to the project root, in the plugin that declares its extension
+ * (docs/spec/plugins.md#pluginjson): activates the tab of that plugin with the same path, or adds one to cardId, or to the
+ * focused card when cardId is undefined. Returns {card, tab}.
+ */
+export function openFile(path, cardId) {
+  const opener = chooseOpener(plugins().map((entry) => ({ id: entry.id, opens: entry.opens })), path);
+  for (const card of grid.cards) {
+    const open = tabsOf(card).find((t) => t.plugin === opener && t.params?.path === path);
+    if (open) {
+      selectTab(open.id);
+      return { card: card.id, tab: open.id };
+    }
+  }
+  const target = cardId === undefined ? focusedId : cardId;
+  return { card: target, tab: addTabTo(target, opener, { path }) };
 }
 
 export function selectTab(tabId) {

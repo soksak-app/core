@@ -444,13 +444,31 @@ export function validateManifest(manifest) {
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
     if (!isObject(surface)) throw new Error(`${where}: surface must be an object`);
-    only(`${where} surface`, surface, ["module", "composition", "drop", "params"]);
+    only(`${where} surface`, surface, ["module", "composition", "drop", "params", "opens"]);
     // The parameters of a tab of the plugin (docs/spec/plugins.md#pluginjson).
     if (surface.params !== undefined) {
       if (!isObject(surface.params) || surface.params.type !== "object") {
         throw new Error(`${where}: surface params must be a schema of type object`);
       }
       checkSchema(`${where} surface params`, surface.params);
+    }
+    // The files that the plugin opens with core.file.open (docs/spec/plugins.md#pluginjson).
+    if (surface.opens !== undefined) {
+      if (!isObject(surface.opens)) throw new Error(`${where}: surface opens must be an object`);
+      only(`${where} surface opens`, surface.opens, ["extensions"]);
+      if (surface.params?.properties?.path?.type !== "string") {
+        throw new Error(`${where}: surface opens requires surface params with a string property path`);
+      }
+      const { extensions } = surface.opens;
+      if (!Array.isArray(extensions) || extensions.length === 0) throw new Error(`${where}: surface opens extensions must be a non-empty array`);
+      const seen = new Set();
+      for (const extension of extensions) {
+        if (extension !== "*" && !(typeof extension === "string" && /^[a-z0-9]+$/.test(extension))) {
+          throw new Error(`${where}: surface opens extension ${extension} must be * or lowercase letters and digits`);
+        }
+        if (seen.has(extension)) throw new Error(`${where}: surface opens extension ${extension} is repeated`);
+        seen.add(extension);
+      }
     }
     // 놓기 명령은 파일이 표면에 놓였을 때 페이지가 그 표면에서 {urls} 로 실행하는 선언된 명령이다.
     if (surface.drop !== undefined && (!isText(surface.drop) ||
