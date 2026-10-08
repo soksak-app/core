@@ -382,7 +382,7 @@ pub fn install_plugin(
         };
         install_release(
             &format!("sidecar {} {} {platform}", sidecar.name, sidecar.version),
-            &sidecar.asset,
+            &sidecar.release,
             &config_dir.join(&installed.path),
         )?;
     }
@@ -577,7 +577,7 @@ impl DependencyPlan<'_> {
                     .map_err(|error| crate::files::file_error(manifest.display(), &error))?,
             ),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                let release = read_release(&at, &selection.version.package)?;
+                let release = read_release(&at, &selection.version.release)?;
                 let mut files = release_files(&release, &["plugin.json"])
                     .map_err(|error| format!("{at}: {error}"))?;
                 let data = files

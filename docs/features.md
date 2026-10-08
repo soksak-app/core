@@ -1075,7 +1075,8 @@ Previous completed component work remains evidence, not completion of these wide
     - [ ] R5.3.5 — P1: Replace the rejected synonyms in the sidecar repositories.
     - [ ] R5.3.6 — P1: Replace the rejected synonyms in the registry.
   - [ ] R5.4 — P1: Remove `package` from `plugins/installed.json`; the hosts and `sok` read the `name` of a plugin from its `package.json`, and a reader refuses an `installed.json` with `package`.
-  - [ ] R5.5 — P1: Rename the `package` of plugin versions and the `assets` of sidecar versions in the registry index to `release` and `releases`.
+  - [o] R5.5 — P1: Rename the `package` of plugin versions and the `assets` of sidecar versions in the registry index to `release` and `releases`. Red: with the fixtures in the new form, the Go `sok` tests failed with `registry sidecar @scope/sidecar-worker version: unknown field releases`. Green: both `sok` suites pass, the scripts pass 185 tests and `make host-contract-check` passes 387 cases; `sok` refuses a version with `package` or `assets` as an unknown field. Done on 2026-10-08.
+    - [ ] R5.5.1 — P1: Write the entries of the registry repository with `release` and `releases` and publish them after the core release that reads them; an application of an earlier core cannot read the index from then on.
   - [o] R5.6 — P1: Rename `helpers[].package` of `sidecar.json` to `helpers[].name`. Red: `a sidecar manifest may include optional helpers with name and executable` failed with `sidecar.json helpers: unknown field name`. Green: `@soksak/plugin-api` passes 157 tests; a helper with `package` fails with `unknown field package`. No sidecar declares helpers. Done on 2026-10-08.
 
 ## Tauri/Wails parity audit (2026-09-21)

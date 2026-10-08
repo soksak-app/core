@@ -344,7 +344,7 @@ func runRelease(dir, out, platform string, stdout io.Writer) error {
 		}
 	}
 	name, version := pkg["name"].(string), pkg["version"].(string)
-	asset, err := SidecarAssetName(name, version, platform)
+	file, err := SidecarReleaseName(name, version, platform)
 	if err != nil {
 		return err
 	}
@@ -352,7 +352,7 @@ func runRelease(dir, out, platform string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	output, err := outputPath(out, asset)
+	output, err := outputPath(out, file)
 	if err != nil {
 		return err
 	}
@@ -366,7 +366,7 @@ func runRelease(dir, out, platform string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	sums[asset] = sum
+	sums[file] = sum
 	if err := writeSums(sumsPath, sums); err != nil {
 		return err
 	}

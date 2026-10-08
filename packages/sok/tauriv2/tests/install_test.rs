@@ -11,7 +11,7 @@ fn release(name: &str) -> Value {
 
 fn plugin() -> Value {
     let version = |version: &str, core: &str| {
-        json!({"version": version, "package": release(&format!("probe-{version}.tgz")), "engines": {"soksak": core},
+        json!({"version": version, "release": release(&format!("probe-{version}.tgz")), "engines": {"soksak": core},
             "sidecars": {"@scope/sidecar-worker": "^0.1.0"}})
     };
     json!({"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.", "license": "MIT",
@@ -21,8 +21,8 @@ fn plugin() -> Value {
 
 fn sidecar() -> Value {
     json!({"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker", "versions": [
-        {"version": "0.1.0", "protocol": 1, "assets": {"darwin-arm64": release("a"), "darwin-x64": release("b")}},
-        {"version": "0.1.1", "protocol": 1, "assets": {"darwin-arm64": release("c")}}]})
+        {"version": "0.1.0", "protocol": 1, "releases": {"darwin-arm64": release("a"), "darwin-x64": release("b")}},
+        {"version": "0.1.1", "protocol": 1, "releases": {"darwin-arm64": release("c")}}]})
 }
 
 fn index() -> Value {
@@ -211,10 +211,10 @@ fn registry_entries_reject_unknown_fields_bad_releases_and_repeated_versions() {
         ),
     ] {
         let mut changed = plugin();
-        changed["versions"][0]["package"]["url"] = json!(url);
+        changed["versions"][0]["release"]["url"] = json!(url);
         rejects(
             install::validate_registry_plugin(&changed),
-            &format!("registry plugin probe 0.1.0 package: {want}"),
+            &format!("registry plugin probe 0.1.0 release: {want}"),
         );
     }
     assert_eq!(
@@ -222,7 +222,7 @@ fn registry_entries_reject_unknown_fields_bad_releases_and_repeated_versions() {
         Ok("/Users/a b/probe.tgz")
     );
     let mut hash = plugin();
-    hash["versions"][0]["package"]["sha256"] = json!("ABC");
+    hash["versions"][0]["release"]["sha256"] = json!("ABC");
     rejects(
         install::validate_registry_plugin(&hash),
         "sha256 must be 64 lowercase hexadecimal digits",
@@ -243,7 +243,7 @@ fn registry_entries_reject_unknown_fields_bad_releases_and_repeated_versions() {
     long["description"] = json!("가".repeat(200));
     install::validate_registry_plugin(&long).expect("200 characters");
     let mut platform = sidecar();
-    platform["versions"][0]["assets"]["darwin-ppc"] = release("x");
+    platform["versions"][0]["releases"]["darwin-ppc"] = release("x");
     rejects(
         install::validate_registry_sidecar(&platform),
         "registry sidecar @scope/sidecar-worker 0.1.0: unknown platform darwin-ppc",
@@ -337,7 +337,7 @@ fn installation_resolves_newest_usable_plugin_and_sidecar_versions() {
         .expect("darwin-arm64");
     assert_eq!(arm.version.version, "0.2.0");
     assert_eq!(versions(&arm), ["@scope/sidecar-worker 0.1.1"]);
-    assert_eq!(arm.sidecars[0].asset.url, "file:///releases/c");
+    assert_eq!(arm.sidecars[0].release.url, "file:///releases/c");
     // darwin-x64 asset 은 0.1.0 에만 있다.
     let x64 = install::resolve_install(&index, "probe", "0.0.2", "darwin-x64", &empty, &[])
         .expect("darwin-x64");
@@ -444,7 +444,7 @@ fn releases_and_installation_paths_follow_the_declared_names() {
         "probe-0.2.0.tgz"
     );
     assert_eq!(
-        install::sidecar_asset_name("@scope/sidecar-worker", "0.1.1", "darwin-arm64").as_deref(),
+        install::sidecar_release_name("@scope/sidecar-worker", "0.1.1", "darwin-arm64").as_deref(),
         Ok("scope-sidecar-worker-0.1.1-darwin-arm64.tar.gz")
     );
     assert_eq!(
@@ -456,7 +456,7 @@ fn releases_and_installation_paths_follow_the_declared_names() {
         Ok("sidecars/scope-sidecar-worker/0.1.1/darwin-arm64")
     );
     rejects(
-        install::sidecar_asset_name("@scope/sidecar-worker", "0.1.1", "solaris-sparc"),
+        install::sidecar_release_name("@scope/sidecar-worker", "0.1.1", "solaris-sparc"),
         "unknown platform solaris-sparc",
     );
     rejects(

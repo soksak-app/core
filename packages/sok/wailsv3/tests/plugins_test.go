@@ -45,7 +45,7 @@ func pluginVersionsFor(t *testing.T, core string, versions ...string) string {
 			"ui/b.js":     "b " + version,
 		})
 		result := runJSON(t, "plugin", "pack", dir, releases)
-		entries = append(entries, `{"version": "`+version+`", "package": {"url": "file://`+result["release"]+`", "sha256": "`+result["sha256"]+`"},
+		entries = append(entries, `{"version": "`+version+`", "release": {"url": "file://`+result["release"]+`", "sha256": "`+result["sha256"]+`"},
 			"engines": {"soksak": "^`+core+`"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}`)
 	}
 	sidecar := runJSON(t, "sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", platform)
@@ -54,7 +54,7 @@ func pluginVersionsFor(t *testing.T, core string, versions ...string) string {
 		"plugins/probe.json": `{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
 			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [` + strings.Join(entries, ",") + `]}`,
 		"sidecars/scope-sidecar-worker.json": `{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
-			"versions": [{"version": "0.1.0", "protocol": 1, "assets": {"` + platform + `":
+			"versions": [{"version": "0.1.0", "protocol": 1, "releases": {"` + platform + `":
 			{"url": "file://` + sidecar["release"] + `", "sha256": "` + sidecar["sha256"] + `"}}}]}`,
 		"revoked.json": `{"plugins": [], "sidecars": []}`,
 	})
@@ -192,7 +192,7 @@ func TestPluginInstallFailureKeepsThePreviousState(t *testing.T) {
 	if err := json.Unmarshal([]byte(readText(t, index)), &registry); err != nil {
 		t.Fatal(err)
 	}
-	url := registry["plugins"].([]any)[0].(map[string]any)["versions"].([]any)[0].(map[string]any)["package"].(map[string]any)["url"].(string)
+	url := registry["plugins"].([]any)[0].(map[string]any)["versions"].([]any)[0].(map[string]any)["release"].(map[string]any)["url"].(string)
 	release := strings.TrimPrefix(url, "file://")
 	if err := os.WriteFile(release, []byte("changed"), 0o644); err != nil {
 		t.Fatal(err)
@@ -469,11 +469,11 @@ func dependencyRegistry(t *testing.T, versions ...dependent) string {
 				"license": "MIT", "repository": "https://example.invalid/" + item.id, "versions": []any{}}
 		}
 		plugins[item.id]["versions"] = append(plugins[item.id]["versions"].([]any), entry{"version": item.version,
-			"package": entry{"url": "file://" + result["release"], "sha256": result["sha256"]}, "engines": entry{"soksak": "^0.0.2"}, "sidecars": sidecars})
+			"release": entry{"url": "file://" + result["release"], "sha256": result["sha256"]}, "engines": entry{"soksak": "^0.0.2"}, "sidecars": sidecars})
 	}
 	sidecar := runJSON(t, "sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", platform)
 	worker := entry{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker", "versions": []any{entry{"version": "0.1.0",
-		"protocol": 1, "assets": entry{platform: entry{"url": "file://" + sidecar["release"], "sha256": sidecar["sha256"]}}}}}
+		"protocol": 1, "releases": entry{platform: entry{"url": "file://" + sidecar["release"], "sha256": sidecar["sha256"]}}}}}
 	revoked := entry{"plugins": []any{}, "sidecars": []any{}}
 	files := map[string]string{"sidecars/scope-sidecar-worker.json": jsonText(t, worker), "revoked.json": jsonText(t, revoked)}
 	slices.Sort(ids)

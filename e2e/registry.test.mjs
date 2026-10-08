@@ -33,7 +33,7 @@ async function serveRegistry() {
   const browser = index.plugins.find((plugin) => plugin.id === "browser");
   const version = browser.versions.at(-1).version;
   const badHash = structuredClone(index);
-  badHash.plugins.find((plugin) => plugin.id === "browser").versions.at(-1).package.sha256 = "0".repeat(64);
+  badHash.plugins.find((plugin) => plugin.id === "browser").versions.at(-1).release.sha256 = "0".repeat(64);
   const revoked = structuredClone(index);
   revoked.revoked.plugins.push({ id: "browser", version, reason: "registry window check" });
   const documents = { "/good/index.json": index, "/bad-hash/index.json": badHash, "/revoked/index.json": revoked };

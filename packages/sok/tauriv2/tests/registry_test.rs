@@ -132,13 +132,13 @@ fn registry_tree() -> Registry {
     let plugin_entry = format!(
         r#"{{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
         "license": "MIT", "repository": "https://example.invalid/probe", "versions": [{{"version": "0.2.0",
-        "package": {{"url": "file://{}", "sha256": "{}"}},
+        "release": {{"url": "file://{}", "sha256": "{}"}},
         "engines": {{"soksak": "^0.0.2"}}, "sidecars": {{"@scope/sidecar-worker": "^0.1.0"}}}}]}}"#,
         plugin.0, plugin.1
     );
     let sidecar_entry = format!(
         r#"{{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
-        "versions": [{{"version": "0.1.0", "protocol": 1, "assets": {{"{platform}":
+        "versions": [{{"version": "0.1.0", "protocol": 1, "releases": {{"{platform}":
         {{"url": "file://{}", "sha256": "{}"}}}}}}]}}"#,
         sidecar.0, sidecar.1
     );
@@ -189,7 +189,7 @@ fn registry_build_writes_the_index_after_checking_every_release() {
       "versions": [
         {{
           "version": "0.2.0",
-          "package": {{
+          "release": {{
             "url": "file://{}",
             "sha256": "{}"
           }},
@@ -211,7 +211,7 @@ fn registry_build_writes_the_index_after_checking_every_release() {
         {{
           "version": "0.1.0",
           "protocol": 1,
-          "assets": {{
+          "releases": {{
             "{platform}": {{
               "url": "file://{}",
               "sha256": "{}"
@@ -284,7 +284,7 @@ fn dependency_tree(plugins: Plugins) -> (Dir, Dir) {
             .collect();
         let entry = json!({"id": id, "package": format!("@scope/plugin-{id}"), "name": id,
             "description": "검사용 plugin.", "license": "MIT", "repository": format!("https://example.invalid/{id}"),
-            "versions": [{"version": "1.0.0", "package": {"url": format!("file://{}", result["release"].as_str().unwrap()),
+            "versions": [{"version": "1.0.0", "release": {"url": format!("file://{}", result["release"].as_str().unwrap()),
             "sha256": result["sha256"]}, "engines": {"soksak": "^0.0.2"}, "sidecars": sidecars}]});
         write_tree(
             &dir.0,
@@ -317,7 +317,7 @@ fn dependency_tree(plugins: Plugins) -> (Dir, Dir) {
     assert_eq!(code, 0, "{stderr}");
     let released: Value = serde_json::from_str(&stdout).unwrap();
     let worker = json!({"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
-        "versions": [{"version": "0.1.0", "protocol": 1, "assets": {platform.as_str():
+        "versions": [{"version": "0.1.0", "protocol": 1, "releases": {platform.as_str():
         {"url": format!("file://{}", released["release"].as_str().unwrap()), "sha256": released["sha256"]}}}]});
     write_tree(
         &dir.0,

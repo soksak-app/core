@@ -393,14 +393,14 @@ fn run_release(dir: &str, out: &str, platform: &str, stdout: &mut dyn Write) -> 
             return Err(format!("package.json files: {required} is not listed"));
         }
     }
-    let asset = install::sidecar_asset_name(name, version, platform)?;
+    let file = install::sidecar_release_name(name, version, platform)?;
     let entries = collect(dir, &listed)?;
-    let output = output_path(out, &asset)?;
+    let output = output_path(out, &file)?;
     // SHA256SUMS 를 먼저 읽으므로 그 파일이 틀리면 release 를 쓰지 않는다.
     let sums_path = output.with_file_name("SHA256SUMS");
     let mut sums = read_sums(&sums_path)?;
     let sum = write_release(&entries, &output)?;
-    sums.insert(asset, sum.clone());
+    sums.insert(file, sum.clone());
     write_sums(&sums_path, &sums)?;
     print_json(
         stdout,

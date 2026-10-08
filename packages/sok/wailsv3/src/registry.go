@@ -100,7 +100,7 @@ func readRelease(where string, release Release) ([]byte, error) {
 // each plugin dependency.
 func checkPluginRelease(index *Index, plugin *RegistryPlugin, version *PluginVersion) error {
 	where := "plugin " + plugin.ID + " " + version.Version + " package"
-	data, err := readRelease(where, version.Package)
+	data, err := readRelease(where, version.Release)
 	if err != nil {
 		return err
 	}
@@ -191,8 +191,8 @@ func BuildRegistry(dir string) (map[string]any, error) {
 	}
 	for _, sidecar := range index.Sidecars {
 		for _, version := range sidecar.Versions {
-			for _, platform := range slices.Sorted(maps.Keys(version.Assets)) {
-				if _, err := readRelease("sidecar "+sidecar.Name+" "+version.Version+" "+platform, version.Assets[platform]); err != nil {
+			for _, platform := range slices.Sorted(maps.Keys(version.Releases)) {
+				if _, err := readRelease("sidecar "+sidecar.Name+" "+version.Version+" "+platform, version.Releases[platform]); err != nil {
 					return nil, err
 				}
 			}

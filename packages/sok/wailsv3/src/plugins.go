@@ -371,7 +371,7 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 		if !ok || installed.Version != sidecar.Version {
 			continue
 		}
-		if err := installRelease("sidecar "+sidecar.Name+" "+sidecar.Version+" "+platform, sidecar.Asset, filepath.Join(configDir, installed.Path)); err != nil {
+		if err := installRelease("sidecar "+sidecar.Name+" "+sidecar.Version+" "+platform, sidecar.Release, filepath.Join(configDir, installed.Path)); err != nil {
 			return nil, err
 		}
 	}
@@ -570,7 +570,7 @@ func (p *dependencyPlan) replace(id string, current InstalledPlugin, installed b
 			return fileError(file, err)
 		}
 	} else if errors.Is(err, fs.ErrNotExist) {
-		release, err := readRelease(where, selection.Version.Package)
+		release, err := readRelease(where, selection.Version.Release)
 		if err != nil {
 			return err
 		}

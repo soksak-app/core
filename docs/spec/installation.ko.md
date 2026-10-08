@@ -44,8 +44,8 @@ Registry index `index.json`은 `format` 1과 다음 목록을 가진다.
 
 | 필드 | 항목 |
 | --- | --- |
-| `plugins` | `{ id, package, name, description, license, repository, versions }`. 각 version은 `{ version, package: { url, sha256 }, engines: { soksak }, sidecars }`이며, `sidecars`는 그 version의 `plugin.json`의 sidecar 의존마다 범위를 정하고 sidecar가 없는 plugin은 `{}`다. plugin 의존은 index에 적지 않는다 |
-| `sidecars` | `{ name, repository, versions }`. 각 version은 `{ version, protocol: 1, assets }`이며, `assets`는 플랫폼마다 `{ url, sha256 }`을 정한다 |
+| `plugins` | `{ id, package, name, description, license, repository, versions }`. 각 version은 `{ version, release: { url, sha256 }, engines: { soksak }, sidecars }`이며, `sidecars`는 그 version의 `plugin.json`의 sidecar 의존마다 범위를 정하고 sidecar가 없는 plugin은 `{}`다. plugin 의존은 index에 적지 않는다 |
+| `sidecars` | `{ name, repository, versions }`. 각 version은 `{ version, protocol: 1, releases }`이며, `releases`는 플랫폼마다 `{ url, sha256 }`을 정한다 |
 | `packs` | `{ name, description, plugins }`: 함께 설치하는 plugin id |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }] }` |
 

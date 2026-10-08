@@ -382,7 +382,7 @@ pub(crate) fn check_platform(platform: &str) -> Result<(), String> {
 }
 
 /// The file name of a sidecar release.
-pub fn sidecar_asset_name(name: &str, version: &str, platform: &str) -> Result<String, String> {
+pub fn sidecar_release_name(name: &str, version: &str, platform: &str) -> Result<String, String> {
     check_version(
         &format!("sidecar {name} version"),
         Some(&Value::from(version)),
@@ -403,7 +403,7 @@ pub fn plugin_install_path(id: &str, version: &str) -> Result<String, String> {
     Ok(format!("plugins/{id}/{version}"))
 }
 
-/// 설정 폴더 안에서 sidecar version 하나의 플랫폼 asset 을 푸는 폴더.
+/// The folder in the configuration directory that the release of one sidecar version and platform is extracted into.
 pub fn sidecar_install_path(name: &str, version: &str, platform: &str) -> Result<String, String> {
     check_version(
         &format!("sidecar {name} version"),
@@ -433,7 +433,7 @@ pub struct Engines {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PluginVersion {
     pub version: String,
-    pub package: Release,
+    pub release: Release,
     pub engines: Engines,
     pub sidecars: BTreeMap<String, String>,
 }
@@ -455,7 +455,7 @@ pub struct RegistryPlugin {
 pub struct SidecarVersion {
     pub version: String,
     pub protocol: u64,
-    pub assets: BTreeMap<String, Release>,
+    pub releases: BTreeMap<String, Release>,
 }
 
 /// Registry 의 sidecar 항목.
@@ -552,7 +552,7 @@ pub fn validate_registry_plugin(value: &Value) -> Result<(), String> {
         only(
             &format!("{at} version"),
             item,
-            &["engines", "package", "sidecars", "version"],
+            &["engines", "release", "sidecars", "version"],
         )?;
         let version = check_version(&format!("{at} version"), item.get("version"))?;
         if !seen.insert(version.to_string()) {
@@ -565,7 +565,7 @@ pub fn validate_registry_plugin(value: &Value) -> Result<(), String> {
             &format!("{at} {version} engines.soksak"),
             engines.get("soksak"),
         )?;
-        check_release_entry(&format!("{at} {version} package"), item.get("package"))?;
+        check_release_entry(&format!("{at} {version} release"), item.get("release"))?;
         check_sidecar_ranges(&format!("{at} {version} sidecars"), item.get("sidecars"))?;
     }
     if seen.is_empty() {
@@ -589,19 +589,19 @@ pub fn validate_registry_sidecar(value: &Value) -> Result<(), String> {
         only(
             &format!("{at} version"),
             item,
-            &["assets", "protocol", "version"],
+            &["protocol", "releases", "version"],
         )?;
         let version = check_version(&format!("{at} version"), item.get("version"))?;
         if !seen.insert(version.to_string()) {
             return Err(format!("{at}: version {version} appears twice"));
         }
-        let assets = object(&format!("{at} {version} assets"), item.get("assets"))?;
-        if assets.is_empty() {
-            return Err(format!("{at} {version}: assets is empty"));
+        let releases = object(&format!("{at} {version} releases"), item.get("releases"))?;
+        if releases.is_empty() {
+            return Err(format!("{at} {version}: releases is empty"));
         }
-        for platform in sorted_keys(assets) {
+        for platform in sorted_keys(releases) {
             check_platform(platform).map_err(|error| format!("{at} {version}: {error}"))?;
-            check_release_entry(&format!("{at} {version} {platform}"), assets.get(platform))?;
+            check_release_entry(&format!("{at} {version} {platform}"), releases.get(platform))?;
         }
         if !is_one(item.get("protocol")) {
             return Err(format!("{at} {version}: protocol must be 1"));
@@ -793,7 +793,7 @@ pub struct InstalledPlugin {
     pub previous: Option<String>,
 }
 
-/// 설치한 sidecar 하나. path 는 설치가 그 플랫폼 asset 을 푼 절대 폴더다.
+/// One installed sidecar. path is the absolute folder that installation extracted its platform release into.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct InstalledSidecar {
     pub version: String,
@@ -965,12 +965,12 @@ pub fn needs_text(needs: &[Need]) -> String {
         .join(", ")
 }
 
-/// 설치할 sidecar version 하나와 그 플랫폼 asset.
+/// One sidecar version to install with its platform release.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SelectedSidecar {
     pub name: String,
     pub version: String,
-    pub asset: Release,
+    pub release: Release,
 }
 
 /// 설치할 plugin version 과 그 sidecar version.
@@ -989,7 +989,7 @@ fn newer(a: &str, b: &str) -> bool {
 /// engines.soksak contains core, that is not revoked, and that satisfies every range of needs, the ranges of the
 /// installed plugins that name the plugin. An installation has one version of a sidecar, so it satisfies the range of
 /// the selected version and the ranges that the other installed plugins name. The version in use is kept when it
-/// satisfies every range, is not revoked and has an asset for the platform; otherwise the newest such version is
+/// satisfies every range, is not revoked and has a release for the platform; otherwise the newest such version is
 /// selected.
 pub fn resolve_install<'a>(
     index: &'a Index,
@@ -1059,7 +1059,7 @@ pub fn resolve_install<'a>(
                 .sidecars
                 .iter()
                 .any(|r| &r.name == name && r.version == item.version);
-            if !item.assets.contains_key(platform) || !fits || revoked {
+            if !item.releases.contains_key(platform) || !fits || revoked {
                 continue;
             }
             if installed.sidecars.get(name).map(|sidecar| &sidecar.version) == Some(&item.version) {
@@ -1078,7 +1078,7 @@ pub fn resolve_install<'a>(
         sidecars.push(SelectedSidecar {
             name: name.clone(),
             version: version.version.clone(),
-            asset: version.assets[platform].clone(),
+            release: version.releases[platform].clone(),
         });
     }
     Ok(Selection {

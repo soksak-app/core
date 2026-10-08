@@ -21,15 +21,15 @@ func release(name string) string {
 func pluginJSON() string {
 	return `{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.", "license": "MIT",
 		"repository": "https://example.invalid/probe", "versions": [
-		{"version": "0.1.0", "package": ` + release("probe-0.1.0.tgz") + `, "engines": {"soksak": "^0.0.1"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
-		{"version": "0.2.0", "package": ` + release("probe-0.2.0.tgz") + `, "engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
-		{"version": "0.3.0", "package": ` + release("probe-0.3.0.tgz") + `, "engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]}`
+		{"version": "0.1.0", "release": ` + release("probe-0.1.0.tgz") + `, "engines": {"soksak": "^0.0.1"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+		{"version": "0.2.0", "release": ` + release("probe-0.2.0.tgz") + `, "engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+		{"version": "0.3.0", "release": ` + release("probe-0.3.0.tgz") + `, "engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]}`
 }
 
 func sidecarJSON() string {
 	return `{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker", "versions": [
-		{"version": "0.1.0", "protocol": 1, "assets": {"darwin-arm64": ` + release("a") + `, "darwin-x64": ` + release("b") + `}},
-		{"version": "0.1.1", "protocol": 1, "assets": {"darwin-arm64": ` + release("c") + `}}]}`
+		{"version": "0.1.0", "protocol": 1, "releases": {"darwin-arm64": ` + release("a") + `, "darwin-x64": ` + release("b") + `}},
+		{"version": "0.1.1", "protocol": 1, "releases": {"darwin-arm64": ` + release("c") + `}}]}`
 }
 
 func indexJSON() string {
@@ -162,14 +162,14 @@ func TestRegistryEntriesRejectUnknownFieldsBadReleasesAndRepeatedVersions(t *tes
 		"file:///releases/%zz.tgz":        "file:///releases/%zz.tgz: url has an invalid escape",
 	} {
 		changed := decode(t, pluginJSON())
-		at(changed, "versions", 0, "package").(map[string]any)["url"] = url
-		rejects(t, sok.ValidateRegistryPlugin(changed), "registry plugin probe 0.1.0 package: "+want)
+		at(changed, "versions", 0, "release").(map[string]any)["url"] = url
+		rejects(t, sok.ValidateRegistryPlugin(changed), "registry plugin probe 0.1.0 release: "+want)
 	}
 	if path, err := sok.FilePath("file:///Users/a%20b/probe.tgz"); err != nil || path != "/Users/a b/probe.tgz" {
 		t.Fatalf("escaped path %q %v", path, err)
 	}
 	hash := decode(t, pluginJSON())
-	at(hash, "versions", 0, "package").(map[string]any)["sha256"] = "ABC"
+	at(hash, "versions", 0, "release").(map[string]any)["sha256"] = "ABC"
 	rejects(t, sok.ValidateRegistryPlugin(hash), "sha256 must be 64 lowercase hexadecimal digits")
 	twice := decode(t, pluginJSON())
 	twice.(map[string]any)["versions"] = append(at(twice, "versions").([]any), at(twice, "versions", 0))
@@ -182,7 +182,7 @@ func TestRegistryEntriesRejectUnknownFieldsBadReleasesAndRepeatedVersions(t *tes
 		t.Fatalf("200 characters: %v", err)
 	}
 	platform := decode(t, sidecarJSON())
-	at(platform, "versions", 0, "assets").(map[string]any)["darwin-ppc"] = decode(t, release("x"))
+	at(platform, "versions", 0, "releases").(map[string]any)["darwin-ppc"] = decode(t, release("x"))
 	rejects(t, sok.ValidateRegistrySidecar(platform), "registry sidecar @scope/sidecar-worker 0.1.0: unknown platform darwin-ppc")
 	protocol := decode(t, sidecarJSON())
 	at(protocol, "versions", 0).(map[string]any)["protocol"] = json.Number("1.0")
@@ -249,8 +249,8 @@ func TestInstallationResolvesNewestUsablePluginAndSidecarVersions(t *testing.T) 
 	if err != nil || arm.Version.Version != "0.2.0" || strings.Join(versions(arm), ",") != "@scope/sidecar-worker 0.1.1" {
 		t.Fatalf("darwin-arm64: %v %v", arm, err)
 	}
-	if arm.Sidecars[0].Asset.URL != "file:///releases/c" {
-		t.Fatalf("asset %v", arm.Sidecars[0].Asset)
+	if arm.Sidecars[0].Release.URL != "file:///releases/c" {
+		t.Fatalf("release %v", arm.Sidecars[0].Release)
 	}
 	// darwin-x64 asset 은 0.1.0 에만 있다.
 	x64, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-x64", emptyInstalled(), nil)
@@ -312,7 +312,7 @@ func TestReleasesAndInstallationPathsFollowTheDeclaredNames(t *testing.T) {
 	if name := sok.ReleaseName("probe", "0.2.0"); name != "probe-0.2.0.tgz" {
 		t.Fatal(name)
 	}
-	if name, err := sok.SidecarAssetName("@scope/sidecar-worker", "0.1.1", "darwin-arm64"); err != nil || name != "scope-sidecar-worker-0.1.1-darwin-arm64.tar.gz" {
+	if name, err := sok.SidecarReleaseName("@scope/sidecar-worker", "0.1.1", "darwin-arm64"); err != nil || name != "scope-sidecar-worker-0.1.1-darwin-arm64.tar.gz" {
 		t.Fatal(name, err)
 	}
 	if path, err := sok.PluginInstallPath("probe", "0.2.0"); err != nil || path != "plugins/probe/0.2.0" {
@@ -321,7 +321,7 @@ func TestReleasesAndInstallationPathsFollowTheDeclaredNames(t *testing.T) {
 	if path, err := sok.SidecarInstallPath("@scope/sidecar-worker", "0.1.1", "darwin-arm64"); err != nil || path != "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64" {
 		t.Fatal(path, err)
 	}
-	_, err := sok.SidecarAssetName("@scope/sidecar-worker", "0.1.1", "solaris-sparc")
+	_, err := sok.SidecarReleaseName("@scope/sidecar-worker", "0.1.1", "solaris-sparc")
 	rejects(t, err, "unknown platform solaris-sparc")
 	_, err = sok.PluginInstallPath("../x", "0.2.0")
 	rejects(t, err, "invalid plugin id ../x")

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R5.5: the registry index names the file of a plugin version `release` and the files of a sidecar version `releases`.
 - R5.6: a helper of `sidecar.json` names its program with `name`; `package` is refused.
 - R5.2: the record check reports the rejected synonyms of `packages/plugin-api/terms.json` in files and commit messages, and `make hooks` adds a pre-commit hook that runs it.
 - R5.3.3: specifications, comments and errors of core call the name field of a `package.json` the `name` of `package.json`, and `sok` reports `expected a package.json name`.

@@ -40,7 +40,7 @@ func pluginRegistry(t *testing.T) (index, release string) {
 	writeInstalled(t, registry, map[string]string{
 		"plugins/probe.json": `{"id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
 			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.0.8",
-			"package": {"url": "file://` + release + `", "sha256": "` + packed["sha256"].(string) + `"},
+			"release": {"url": "file://` + release + `", "sha256": "` + packed["sha256"].(string) + `"},
 			"engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}]}`,
 		"revoked.json": `{"plugins": [], "sidecars": []}`,
 	})

@@ -39,10 +39,10 @@ func registryTree(t *testing.T) (dir, pluginSum, sidecarSum string) {
 	writeTree(t, dir, map[string]string{
 		"plugins/probe.json": `{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
 			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.2.0",
-			"package": {"url": "file://` + results["plugin"]["release"] + `", "sha256": "` + results["plugin"]["sha256"] + `"},
+			"release": {"url": "file://` + results["plugin"]["release"] + `", "sha256": "` + results["plugin"]["sha256"] + `"},
 			"engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]}`,
 		"sidecars/scope-sidecar-worker.json": `{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
-			"versions": [{"version": "0.1.0", "protocol": 1, "assets": {"` + platform + `":
+			"versions": [{"version": "0.1.0", "protocol": 1, "releases": {"` + platform + `":
 			{"url": "file://` + results["sidecar"]["release"] + `", "sha256": "` + results["sidecar"]["sha256"] + `"}}}]}`,
 		"packs/starter.json": `{"name": "starter", "description": "처음 설치하는 plugin.", "plugins": ["probe"]}`,
 		"revoked.json":       `{"plugins": [], "sidecars": []}`,
@@ -80,7 +80,7 @@ func TestRegistryBuildWritesTheIndexAfterCheckingEveryRelease(t *testing.T) {
       "versions": [
         {
           "version": "0.2.0",
-          "package": {
+          "release": {
             "url": "file://` + pluginRelease + `",
             "sha256": "` + pluginHash + `"
           },
@@ -102,7 +102,7 @@ func TestRegistryBuildWritesTheIndexAfterCheckingEveryRelease(t *testing.T) {
         {
           "version": "0.1.0",
           "protocol": 1,
-          "assets": {
+          "releases": {
             "` + platform + `": {
               "url": "file://` + sidecarRelease + `",
               "sha256": "` + sidecarHash + `"

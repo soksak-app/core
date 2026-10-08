@@ -118,7 +118,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
         );
         let result = run_json(&["plugin", "pack", dir.text(), releases.text()]);
         entries.push(format!(
-            r#"{{"version": "{version}", "package": {{"url": "file://{}", "sha256": "{}"}},
+            r#"{{"version": "{version}", "release": {{"url": "file://{}", "sha256": "{}"}},
             "engines": {{"soksak": "^{core}"}}, "sidecars": {{"@scope/sidecar-worker": "^0.1.0"}}}}"#,
             result["release"].as_str().unwrap(),
             result["sha256"].as_str().unwrap()
@@ -156,7 +156,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
     );
     let sidecar_entry = format!(
         r#"{{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
-        "versions": [{{"version": "0.1.0", "protocol": 1, "assets": {{"{platform}":
+        "versions": [{{"version": "0.1.0", "protocol": 1, "releases": {{"{platform}":
         {{"url": "file://{}", "sha256": "{}"}}}}}}]}}"#,
         released["release"].as_str().unwrap(),
         released["sha256"].as_str().unwrap()
@@ -290,7 +290,7 @@ fn plugin_install_failure_keeps_the_previous_state() {
         config.text(),
     ]);
     let index: Value = serde_json::from_str(&read_text(Path::new(&registry.index()))).unwrap();
-    let url = index["plugins"][0]["versions"][0]["package"]["url"]
+    let url = index["plugins"][0]["versions"][0]["release"]["url"]
         .as_str()
         .unwrap();
     let release = PathBuf::from(url.strip_prefix("file://").unwrap());
@@ -639,7 +639,7 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
                 "repository": format!("https://example.invalid/{}", item.id), "versions": []})
         });
         entry["versions"].as_array_mut().unwrap().push(json!({"version": item.version,
-            "package": {"url": format!("file://{}", result["release"].as_str().unwrap()), "sha256": result["sha256"]},
+            "release": {"url": format!("file://{}", result["release"].as_str().unwrap()), "sha256": result["sha256"]},
             "engines": {"soksak": "^0.0.2"}, "sidecars": sidecars}));
         work.push(dir);
     }
@@ -667,7 +667,7 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
         &platform,
     ]);
     let worker = json!({"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
-        "versions": [{"version": "0.1.0", "protocol": 1, "assets": {platform.as_str():
+        "versions": [{"version": "0.1.0", "protocol": 1, "releases": {platform.as_str():
         {"url": format!("file://{}", released["release"].as_str().unwrap()), "sha256": released["sha256"]}}}]});
     let revoked = json!({"plugins": [], "sidecars": []});
     let mut files = vec![

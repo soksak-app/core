@@ -27,7 +27,7 @@ test("each plugin version that the new core installs and whose manifest it rejec
   const rejected = release(t, { ...good, panel: true });
   const releases = new Map([["a", accepted], ["b", rejected], ["c", accepted], ["d", rejected], ["e", rejected]]);
   const version = (v, key, range, digest = sha(releases.get(key))) => ({
-    version: v, package: { url: key, sha256: digest }, engines: { soksak: range }, sidecars: {},
+    version: v, release: { url: key, sha256: digest }, engines: { soksak: range }, sidecars: {},
   });
   const index = {
     plugins: [{ id: "probe", versions: [

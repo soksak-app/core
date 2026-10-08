@@ -115,7 +115,7 @@ fn check_plugin_release(
     version: &PluginVersion,
 ) -> Result<(), String> {
     let at = format!("plugin {} {} package", plugin.id, version.version);
-    let data = read_release(&at, &version.package)?;
+    let data = read_release(&at, &version.release)?;
     let files = release_files(&data, &["package.json", "plugin.json"])
         .map_err(|error| format!("{at}: {error}"))?;
     let manifest: Value = serde_json::from_slice(&files["plugin.json"])
@@ -207,10 +207,10 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
     }
     for sidecar in &index.sidecars {
         for version in &sidecar.versions {
-            for (platform, asset) in &version.assets {
+            for (platform, release) in &version.releases {
                 read_release(
                     &format!("sidecar {} {} {platform}", sidecar.name, version.version),
-                    asset,
+                    release,
                 )?;
             }
         }

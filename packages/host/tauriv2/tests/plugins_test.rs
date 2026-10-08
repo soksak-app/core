@@ -57,7 +57,7 @@ fn plugin_registry() -> Registry {
     let entry = json!({
         "id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
         "license": "MIT", "repository": "https://example.invalid/probe",
-        "versions": [{"version": "0.0.8", "package": {"url": format!("file://{release}"), "sha256": packed["sha256"]},
+        "versions": [{"version": "0.0.8", "release": {"url": format!("file://{release}"), "sha256": packed["sha256"]},
             "engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}],
     });
     write_tree(

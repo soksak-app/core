@@ -44,8 +44,8 @@ The registry index `index.json` has `format` 1 and these lists:
 
 | Field | Entry |
 | --- | --- |
-| `plugins` | `{ id, package, name, description, license, repository, versions }`; each version is `{ version, package: { url, sha256 }, engines: { soksak }, sidecars }` where `sidecars` maps the sidecar dependencies of the version's `plugin.json` to their ranges and is `{}` for a plugin without sidecars; plugin dependencies are not listed in the index |
-| `sidecars` | `{ name, repository, versions }`; each version is `{ version, protocol: 1, assets }` where `assets` maps platforms to `{ url, sha256 }` |
+| `plugins` | `{ id, package, name, description, license, repository, versions }`; each version is `{ version, release: { url, sha256 }, engines: { soksak }, sidecars }` where `sidecars` maps the sidecar dependencies of the version's `plugin.json` to their ranges and is `{}` for a plugin without sidecars; plugin dependencies are not listed in the index |
+| `sidecars` | `{ name, repository, versions }`; each version is `{ version, protocol: 1, releases }` where `releases` maps platforms to `{ url, sha256 }` |
 | `packs` | `{ name, description, plugins }`: plugin ids installed together |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }] }` |
 

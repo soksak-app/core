@@ -437,8 +437,8 @@ func checkPlatform(platform string) error {
 	return nil
 }
 
-// SidecarAssetName is the file name of a sidecar release.
-func SidecarAssetName(name, version, platform string) (string, error) {
+// SidecarReleaseName is the file name of a sidecar release.
+func SidecarReleaseName(name, version, platform string) (string, error) {
 	if err := checkVersion("sidecar "+name+" version", version); err != nil {
 		return "", err
 	}
@@ -463,7 +463,7 @@ func PluginInstallPath(id, version string) (string, error) {
 	return "plugins/" + id + "/" + version, nil
 }
 
-// SidecarInstallPath 는 설정 폴더 안에서 sidecar version 하나의 플랫폼 asset 을 푸는 폴더다.
+// SidecarInstallPath is the folder in the configuration directory that the release of one sidecar version and platform is extracted into.
 func SidecarInstallPath(name, version, platform string) (string, error) {
 	if err := checkVersion("sidecar "+name+" version", version); err != nil {
 		return "", err
@@ -487,7 +487,7 @@ type Release struct {
 // PluginVersion 은 registry 의 plugin version 하나다.
 type PluginVersion struct {
 	Version string  `json:"version"`
-	Package Release `json:"package"`
+	Release Release `json:"release"`
 	Engines struct {
 		Soksak string `json:"soksak"`
 	} `json:"engines"`
@@ -509,7 +509,7 @@ type RegistryPlugin struct {
 type SidecarVersion struct {
 	Version  string             `json:"version"`
 	Protocol int                `json:"protocol"`
-	Assets   map[string]Release `json:"assets"`
+	Releases map[string]Release `json:"releases"`
 }
 
 // RegistrySidecar 는 registry 의 sidecar 항목이다.
@@ -601,7 +601,7 @@ func ValidateRegistryPlugin(value any) error {
 		if err != nil {
 			return err
 		}
-		if err := only(where+" version", item, "engines", "package", "sidecars", "version"); err != nil {
+		if err := only(where+" version", item, "engines", "release", "sidecars", "version"); err != nil {
 			return err
 		}
 		if err := checkVersion(where+" version", item["version"]); err != nil {
@@ -622,7 +622,7 @@ func ValidateRegistryPlugin(value any) error {
 		if err := checkRange(where+" "+version+" engines.soksak", engines["soksak"]); err != nil {
 			return err
 		}
-		if err := checkReleaseEntry(where+" "+version+" package", item["package"]); err != nil {
+		if err := checkReleaseEntry(where+" "+version+" release", item["release"]); err != nil {
 			return err
 		}
 		if err := checkSidecarRanges(where+" "+version+" sidecars", item["sidecars"]); err != nil {
@@ -661,7 +661,7 @@ func ValidateRegistrySidecar(value any) error {
 		if err != nil {
 			return err
 		}
-		if err := only(where+" version", item, "assets", "protocol", "version"); err != nil {
+		if err := only(where+" version", item, "protocol", "releases", "version"); err != nil {
 			return err
 		}
 		if err := checkVersion(where+" version", item["version"]); err != nil {
@@ -672,18 +672,18 @@ func ValidateRegistrySidecar(value any) error {
 			return fmt.Errorf("%s: version %s appears twice", where, version)
 		}
 		seen[version] = true
-		assets, err := object(where+" "+version+" assets", item["assets"])
+		releases, err := object(where+" "+version+" releases", item["releases"])
 		if err != nil {
 			return err
 		}
-		if len(assets) == 0 {
-			return fmt.Errorf("%s %s: assets is empty", where, version)
+		if len(releases) == 0 {
+			return fmt.Errorf("%s %s: releases is empty", where, version)
 		}
-		for _, platform := range sortedKeys(assets) {
+		for _, platform := range sortedKeys(releases) {
 			if err := checkPlatform(platform); err != nil {
 				return fmt.Errorf("%s %s: %w", where, version, err)
 			}
-			if err := checkReleaseEntry(where+" "+version+" "+platform, assets[platform]); err != nil {
+			if err := checkReleaseEntry(where+" "+version+" "+platform, releases[platform]); err != nil {
 				return err
 			}
 		}
@@ -895,8 +895,8 @@ type InstalledPlugin struct {
 	Previous string            `json:"previous,omitempty"`
 }
 
-// InstalledSidecar 는 설치한 sidecar 하나다. Path 는 설치가 그 플랫폼 asset 을 푼 폴더이며 설정 폴더에 대한 상대
-// 경로다.
+// InstalledSidecar is one installed sidecar. Path is the folder that installation extracted its platform release into,
+// relative to the configuration directory.
 type InstalledSidecar struct {
 	Version string `json:"version"`
 	Path    string `json:"path"`
@@ -1074,11 +1074,11 @@ func needsText(needs []Need) string {
 	return strings.Join(texts, ", ")
 }
 
-// SelectedSidecar 는 설치할 sidecar version 하나와 그 플랫폼 asset 이다.
+// SelectedSidecar is one sidecar version to install with its platform release.
 type SelectedSidecar struct {
 	Name    string
 	Version string
-	Asset   Release
+	Release Release
 }
 
 // Selection 은 설치할 plugin version 과 그 sidecar version 이다.
@@ -1108,7 +1108,7 @@ func newer(a, b string) bool {
 // whose engines.soksak contains core, that is not revoked, and that satisfies every range of needs, the ranges of the
 // installed plugins that name the plugin. An installation has one version of a sidecar, so it satisfies the range of
 // the selected version and the ranges that the other installed plugins name. The version in use is kept when it
-// satisfies every range, is not revoked and has an asset for the platform; otherwise the newest such version is selected.
+// satisfies every range, is not revoked and has a release for the platform; otherwise the newest such version is selected.
 func ResolveInstall(index *Index, id, core, platform string, installed *InstalledState, needs []Need) (*Selection, error) {
 	var plugin *RegistryPlugin
 	for i := range index.Plugins {
@@ -1155,9 +1155,9 @@ func ResolveInstall(index *Index, id, core, platform string, installed *Installe
 		}
 		for i := range candidates {
 			item := &candidates[i]
-			_, hasAsset := item.Assets[platform]
+			_, hasRelease := item.Releases[platform]
 			fits := !slices.ContainsFunc(needs, func(n Need) bool { return !Satisfies(item.Version, n.Range) })
-			if !hasAsset || !fits || revokedSidecar(index, name, item.Version) {
+			if !hasRelease || !fits || revokedSidecar(index, name, item.Version) {
 				continue
 			}
 			if item.Version == installed.Sidecars[name].Version {
@@ -1173,7 +1173,7 @@ func ResolveInstall(index *Index, id, core, platform string, installed *Installe
 		if kept != nil {
 			best = kept
 		}
-		selection.Sidecars = append(selection.Sidecars, SelectedSidecar{Name: name, Version: best.Version, Asset: best.Assets[platform]})
+		selection.Sidecars = append(selection.Sidecars, SelectedSidecar{Name: name, Version: best.Version, Release: best.Releases[platform]})
 	}
 	return selection, nil
 }

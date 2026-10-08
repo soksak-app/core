@@ -46,9 +46,9 @@ export async function registryManifestErrors(index, core, fetchRelease = fetchBy
       checked += 1;
       const where = `plugin ${plugin.id} ${version.version}`;
       try {
-        const bytes = await fetchRelease(version.package.url);
+        const bytes = await fetchRelease(version.release.url);
         const digest = createHash("sha256").update(bytes).digest("hex");
-        if (digest !== version.package.sha256) throw new Error(`release sha256 ${digest} differs from the index ${version.package.sha256}`);
+        if (digest !== version.release.sha256) throw new Error(`release sha256 ${digest} differs from the index ${version.release.sha256}`);
         validateManifest(releaseManifest(bytes));
       } catch (error) {
         errors.push(`${where}: ${error.message}`);
