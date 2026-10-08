@@ -41,6 +41,7 @@ const METHOD = {
   windowState: "WindowState",
   windowReady: "WindowReady",
   windowClose: "WindowClose",
+  windowCloseKept: "WindowCloseKept",
   syncSurfaces: "SyncSurfaces",
   presentSurfaces: "PresentSurfaces",
   waitPresented: "WaitPresented",

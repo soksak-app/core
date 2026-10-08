@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F122.2: a quit that a kept modified tab cancels ends the quit state of both hosts: the page reports the new host call `windowCloseKept`, the host clears its quit state (`Quit` in `quit.go` and `quit.rs`), and `host.window` reports it as `quitting`. Closing the last window afterwards does not quit the application, and the end of a WebContent process is an error line again.
 - F122.1: closing a window or quitting the application asks for each modified tab of the window with 저장하고 닫기, 저장하지 않고 닫기 and 닫지 않기, as closing a tab does; a kept tab keeps the window open and the projects unsaved. `e2e/window-close.test.mjs` observes the question and both answers in both hosts.
 - F130: both hosts keep the newest 20 `logs/state-<time>.json` files and remove the older ones after the debug view records a state, so the logs folder does not grow with each opening.
 - F120: the `hello` that the Tauri host sends to a persistent service carries the configuration directory of the application as `client`, as the Wails host does; the terminal runtime specification defines `client`.

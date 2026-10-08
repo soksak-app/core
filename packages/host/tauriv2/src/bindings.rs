@@ -35,6 +35,7 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         performance,
         window_ready,
         window_close,
+        window_close_kept,
         window_new,
         workspace,
         folder_choose,
@@ -148,6 +149,12 @@ fn window_ready(window: Window) -> Result<(), String> {
 #[tauri::command]
 fn window_close(window: Window) -> Result<(), String> {
     windows::window_close(&window)
+}
+
+/// Records that the page kept a modified tab when the window was asked to close.
+#[tauri::command]
+fn window_close_kept(window: Window) -> Result<(), String> {
+    windows::window_close_kept(&window)
 }
 
 /// 새 프로젝트 창을 연다.

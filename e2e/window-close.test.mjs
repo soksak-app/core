@@ -1,6 +1,6 @@
 // A window close request asks about each modified tab before the window closes (docs/spec/plugins.md#tab-reports).
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -58,5 +58,41 @@ for (const app of Object.values(APPS)) {
     await child.run("core.picker.pick", { index: 1 });
     await s.windows(1, "저장하지 않고 닫기 did not close the window");
     assert.equal(readFileSync(file, "utf8"), "alpha\n");
+  });
+
+  test(`${app.name}: a quit that a kept modified tab cancels ends the quit state`, { timeout: 90000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const project = await s.get("core.project");
+    const folder = `quit-cancel-check-${process.pid}`;
+    const path = `${folder}/note.txt`;
+    mkdirSync(join(project.root, folder));
+    writeFileSync(join(project.root, path), "alpha\n");
+    s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
+    const { tab } = await s.run("core.file.open", { path });
+    s.cleanup(async () => {
+      const grid = await s.get("core.grid");
+      if (!grid.cards.some((card) => (card.tabs ?? []).some((entry) => entry.id === tab))) return;
+      const { closed } = await s.run("core.tab.close", { tab });
+      if (closed) return;
+      const picker = await s.until("core.picker", (value) => value.open, "the close question did not open");
+      await s.run("core.picker.pick", { index: picker.items.findIndex((item) => item.name === "저장하지 않고 닫기") });
+    });
+    await s.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
+      "the editor tab did not open");
+    await s.until("editor.document", (value) => value.path === path && value.version !== null,
+      "the editor did not read the file", { surface: tab });
+    await s.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, tab);
+    await s.until("editor.document", (value) => value.modified, "editor.edit did not modify the text", { surface: tab });
+
+    assert.equal((await s.get("host.window")).quitting, false);
+    const quitting = s.run("host.quit");
+    await s.until("core.picker", (picker) => picker.open && picker.title.includes("저장하지 않은 변경이 있습니다"),
+      "the quit did not ask about the modified tab");
+    assert.equal((await s.get("host.window")).quitting, true, "the quit did not set the quit state");
+    await s.run("core.picker.pick", { index: 2 });
+    await s.until("host.window", (value) => value.quitting === false, "닫지 않기 did not end the quit state");
+    await quitting;
   });
 }

@@ -34,6 +34,7 @@ pub mod menu;
 mod modals;
 pub mod notifications;
 pub mod page_process;
+pub mod quit;
 pub mod performance;
 #[path = "platform/platform.rs"]
 pub mod platform;

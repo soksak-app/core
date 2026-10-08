@@ -13,6 +13,7 @@ export const windows = {
   onCloseRequest: async () => {},
   ready: async () => {},
   close: async () => {},
+  closeKept: async () => {},
   state: async () => null,
   folder: async (root) => ({ root: root.trim(), identity: `path:${root.trim()}` }),
   chooseFolder: () => Promise.reject(new Error("The browser runtime cannot choose folders")),

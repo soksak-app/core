@@ -40,7 +40,7 @@ const (
 
 // Host 는 호출한 창의 네이티브 상태를 선택한다. Wails 는 Host 의 공개 메서드를 페이지에 바인딩한다.
 type Host struct {
-	quitting   bool
+	quit       Quit
 	nextWindow uint64
 	workspace  *Workspace
 	opening    sync.Mutex
@@ -196,6 +196,16 @@ func (h *Host) WindowClose(ctx context.Context) error {
 	return nil
 }
 
+// WindowCloseKept records that the page kept a modified tab when the window was asked to close, which ends a quit that
+// asked the window (docs/spec/hosts.md#process-lifecycle).
+func (h *Host) WindowCloseKept(ctx context.Context) error {
+	if _, err := h.surface(ctx); err != nil {
+		return err
+	}
+	h.quit.Cancel()
+	return nil
+}
+
 // prepareWindow 는 창의 콘텐츠와 메인 웹뷰의 크기를 맞춘다. UI 스레드에서 호출한다.
 func prepareWindow(win *application.WebviewWindow) {
 	if err := system.PrepareWindow(win.NativeWindow()); err != nil {
@@ -321,10 +331,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	// The framework loads the page again after the WebContent process ends; the host writes the end as an error line
 	// (docs/spec/diagnostics.md).
 	win.OnWindowEvent(events.Mac.WebViewWebContentProcessDidTerminate, func(*application.WindowEvent) {
-		h.mu.Lock()
-		quitting := h.quitting
-		h.mu.Unlock()
-		if place, text, reported := PageProcessEnded(s.name, quitting); reported {
+		if place, text, reported := PageProcessEnded(s.name, h.quit.Active()); reported {
 			LogError(place, text)
 		}
 	})
@@ -351,7 +358,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 				delete(h.owners, id)
 			}
 		}
-		quit := h.quitting && len(h.windows) == 0
+		quit := h.quit.Active() && len(h.windows) == 0
 		h.mu.Unlock()
 		if ready {
 			e.Cancel()
@@ -381,7 +388,7 @@ func (h *Host) shouldQuit() bool {
 		}
 	}
 	if len(windows) > 0 {
-		h.quitting = true
+		h.quit.Begin()
 	}
 	h.mu.Unlock()
 	for _, s := range windows {

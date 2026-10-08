@@ -260,6 +260,7 @@ Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/p
 | `onCloseRequest(fn)` | Calls `fn` when the host asks the window to close |
 | `ready()` | Reports that the window can receive requests |
 | `close()` | Closes the window |
+| `closeKept()` | Reports that the page kept a modified tab after a close request, so the window stays open; the host ends the quit that the request belonged to |
 | `state()` | Returns the window geometry, or `null` when the runtime has none |
 | `folder(root)` | Returns `{ root, identity }` for a project directory. The browser application returns the trimmed path and the identity `path:<trimmed path>` |
 | `chooseFolder()` | Shows the folder selection dialog. The browser application rejects the call |

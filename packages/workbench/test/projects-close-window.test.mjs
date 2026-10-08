@@ -19,6 +19,7 @@ mock.module("@soksak/runtime", {
       releaseProject: async () => {},
       state: async () => { events.push("geometry"); return null; },
       close: async () => { events.push("close"); },
+      closeKept: async () => { events.push("kept"); },
       ready: async () => {},
       onActivate: async () => {},
       onCloseRequest: async (fn) => { requestClose = fn; },
@@ -74,5 +75,5 @@ test("a kept modified tab keeps the window open and unsaved", async () => {
   events.length = 0;
   kept = true;
   await requestClose();
-  assert.deepEqual(events, ["ask"]);
+  assert.deepEqual(events, ["ask", "kept"], "a kept tab did not report the kept close to the host");
 });

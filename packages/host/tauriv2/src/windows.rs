@@ -112,7 +112,7 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
 /// 애플리케이션의 창 등록부와 프로젝트 소유 창.
 #[derive(Default)]
 pub(crate) struct Windows {
-    quitting: AtomicBool,
+    pub(crate) quit: crate::quit::Quit,
     next_window: AtomicU64,
     opening: Mutex<()>,
     windows: Mutex<HashMap<String, Arc<WindowData>>>,
@@ -268,7 +268,7 @@ pub(crate) fn notify_workspace(app: &AppHandle) {
 
 /// Whether the application is quitting, which ends the WebContent process of each window on purpose.
 pub(crate) fn is_quitting(app: &AppHandle) -> bool {
-    app.state::<Windows>().quitting.load(Ordering::Relaxed)
+    app.state::<Windows>().quit.active()
 }
 
 /// Sends sidecars-changed to every window (docs/spec/installation.md).
@@ -494,7 +494,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             // While the application quits, the web process of the window is killed: AppKit keeps XPC services alive
             // longer than their client, so the WebContent process would outlive the application
             // (docs/spec/hosts.md#process-lifecycle).
-            if host.state::<Windows>().quitting.load(Ordering::Relaxed) {
+            if host.state::<Windows>().quit.active() {
                 if let Some(view) = root_view(&host) {
                     if let Err(error) = crate::exposure::with_view(&view, |native| {
                         platform::current()?.kill_web_content_process(native)
@@ -560,7 +560,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             }
             if let Ok(mut windows) = registry.windows.lock() {
                 windows.remove(host.label());
-                if windows.is_empty() && registry.quitting.load(Ordering::Relaxed) {
+                if windows.is_empty() && registry.quit.active() {
                     host.app_handle().exit(0);
                 }
             };
@@ -774,6 +774,14 @@ pub(crate) fn window_close(window: &Window) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
 }
 
+/// Records that the page kept a modified tab when the window was asked to close, which ends a quit that asked the
+/// window (docs/spec/hosts.md#process-lifecycle).
+pub(crate) fn window_close_kept(window: &Window) -> Result<(), String> {
+    window_data(window)?;
+    window.state::<Windows>().quit.cancel();
+    Ok(())
+}
+
 /// 종료 요청을 처리한다. 준비된 창이 있으면 종료를 막고 각 창에 닫기 요청을 보낸다.
 pub(crate) fn quit(app: &AppHandle, api: tauri::ExitRequestApi) {
     let registry = app.state::<Windows>();
@@ -789,7 +797,7 @@ pub(crate) fn quit(app: &AppHandle, api: tauri::ExitRequestApi) {
         return;
     }
     api.prevent_exit();
-    registry.quitting.store(true, Ordering::Relaxed);
+    registry.quit.begin();
     for (label, window) in app.windows() {
         let result = if waiting.contains(&label) {
             emit_window(&window, "project-close-request", ())
