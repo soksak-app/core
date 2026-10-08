@@ -32,7 +32,7 @@ make wailsv3-build tauriv2-build
 
 `make parity-check`로 구조 목록 게이트를 실행한다. 언어별 고정 루트 없이 Git에 보이는 JS/TS·Rust·Go·Objective-C·네이티브 헤더·HTML/CSS·셸 스크립트·계약 선언·빌드 매니페스트를 발견한다. 생성된 라이브러리 출력·Tauri 스키마는 명시적 제외 사유를 갖고 소스/출력 일치는 별도 빌드 검사로 유지한다. 연결 없는 구현·테스트, 빈 패턴, 중복 소유는 실패한다. 테스트 공유를 이유로 구현 중복 소유를 허용하지 않는다.
 
-`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`와 `make go-format-check`를 실행한다. `make go-format-check`는 `gofmt`가 바꿀 추적 Go file을 모두 나열하고 실패한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 60개, 구현 파일 377개, 테스트 파일 423개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
+`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`와 `make go-format-check`를 실행한다. `make go-format-check`는 `gofmt`가 바꿀 추적 Go file을 모두 나열하고 실패한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 61개, 구현 파일 378개, 테스트 파일 424개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
 
 `pnpm test`는 패키지 검사 전에 감사·체크리스트·명령 감독 자체 검사를 실행한다. Rust 터미널 패키지 두 개는 실제 Cargo 검사를 호출한다. 패키지 명령 검사는 Cargo를 실패 fixture로 교체해 호출·실패 전달을 검증하며 엔진 동작 검사로 세지 않는다.
 
@@ -48,7 +48,7 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 
 `make node-repeat FILE=<test> NAME=<pattern> COUNT=<n>`은 회차 번호와 자식 검사의 stdout/stderr를 실행 중 출력하고 첫 실패에서 중단한다. 출력 전달은 자식의 실패 종료 상태를 보존해야 하며 일치하는 성공 검사가 없는 실행도 실패한다.
 
-release 검증은 정확한 번들 경로를 요구한다: `node scripts/check-release.mjs --wailsv3-bundle PATH --tauriv2-bundle PATH`. 두 옵션이 모두 필요하며 알 수 없는 옵션·중복 옵션·빠진 값은 파일 검사 전에 실패한다. `make release-check`는 `WAILS_RELEASE_BUNDLE`과 `TAURI_RELEASE_BUNDLE`을 이 명령에 전달한다. 해당 빌드 변수를 지정하면 실행 중인 번들을 변경하지 않고 별도 번들을 준비하며 검사기는 동일하게 지정한 경로를 검사해야 한다. 검사기는 각 번들의 `Contents/MacOS`에 있는 모든 실행 파일을 읽고 스테이징된 프런트엔드는 읽지 않는다. 두 애플리케이션은 프런트엔드를 압축 없이 넣으므로(Wails `go:embed`, `compression` 기능을 끈 Tauri) 애플리케이션 실행 파일에 워크벤치가 배포하는 모든 파일과 `release-diagnostics.js`가 원문 그대로 있어야 하며, 없으면 검사기는 프런트엔드를 읽을 수 없다고 보고한다. 그다음 실행 파일에서 발견한 플러그인 진단 항목 이름과 진단 모듈 원본을 거부한다. 워크벤치와 플러그인은 애플리케이션 `package.json`의 의존성으로 찾는다.
+번들 검사 전에 `make release-check`는 `make registry-manifest-check`를 실행한다. `node scripts/check-registry-manifests.mjs`는 `environment.json`이 가리키는 registry index를 읽고, revoke되지 않았고 `engines.soksak`이 이 checkout의 version을 포함하는 모든 plugin version을 받아 sha256을 확인하며, 그 `plugin.json`에 이 checkout의 `validateManifest`를 실행한다. 새 core가 manifest를 거절하는 plugin version은 release 검사를 실패시키며, release 전에 registry에서 revoke한다. release 검증은 정확한 번들 경로를 요구한다: `node scripts/check-release.mjs --wailsv3-bundle PATH --tauriv2-bundle PATH`. 두 옵션이 모두 필요하며 알 수 없는 옵션·중복 옵션·빠진 값은 파일 검사 전에 실패한다. `make release-check`는 `WAILS_RELEASE_BUNDLE`과 `TAURI_RELEASE_BUNDLE`을 이 명령에 전달한다. 해당 빌드 변수를 지정하면 실행 중인 번들을 변경하지 않고 별도 번들을 준비하며 검사기는 동일하게 지정한 경로를 검사해야 한다. 검사기는 각 번들의 `Contents/MacOS`에 있는 모든 실행 파일을 읽고 스테이징된 프런트엔드는 읽지 않는다. 두 애플리케이션은 프런트엔드를 압축 없이 넣으므로(Wails `go:embed`, `compression` 기능을 끈 Tauri) 애플리케이션 실행 파일에 워크벤치가 배포하는 모든 파일과 `release-diagnostics.js`가 원문 그대로 있어야 하며, 없으면 검사기는 프런트엔드를 읽을 수 없다고 보고한다. 그다음 실행 파일에서 발견한 플러그인 진단 항목 이름과 진단 모듈 원본을 거부한다. 워크벤치와 플러그인은 애플리케이션 `package.json`의 의존성으로 찾는다.
 
 ## 창 검사
 

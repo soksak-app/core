@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory
+.PHONY: preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -20,8 +20,13 @@ hooks:
 	@git config core.hooksPath .githooks
 
 # release 빌드를 만들고, 스테이징된 프런트엔드와 release 실행 파일에 진단 코드가 없는지 검사한다.
-release-check: wailsv3-build-release tauriv2-build-release
+release-check: wailsv3-build-release tauriv2-build-release registry-manifest-check
 	@node scripts/check-release.mjs --wailsv3-bundle "$(WAILS_RELEASE_BUNDLE)" --tauriv2-bundle "$(TAURI_RELEASE_BUNDLE)"
+
+# Checks that the core of this checkout accepts the manifest of every plugin version of the public registry that it
+# installs (docs/operations/examples.md).
+registry-manifest-check:
+	@node scripts/check-registry-manifests.mjs
 
 # 실행 중인 애플리케이션의 main page process 메모리를 시작, 유휴, 다시 읽기 뒤에 잰다(docs/operations/examples.md).
 # APP 은 wailsv3 또는 tauriv2, CONFIG 는 그 애플리케이션의 설정 폴더, BUILD 는 release(기본) 또는 debug 다.
