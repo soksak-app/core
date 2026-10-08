@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R3.5.1: `@soksak/plugin-api` provides the record and commit form checks as the `soksak-records` and `soksak-commits` commands.
 - R3.4: published commit messages are not rewritten; the commit form applies to commits from R3.1 on.
 - F101.3: Korean input-method composition at a zsh prompt of a terminal service started without locale variables passes the activation-tier checks on both hosts.
 - R3.3: the checklist, changelog, specifications and plans of core and the checklists of the plugin, sidecar and registry repositories state facts about their repository, and `make docs-check` runs the record check.

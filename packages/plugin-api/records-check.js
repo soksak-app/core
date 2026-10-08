@@ -1,5 +1,12 @@
-// 기록이 저장소에 관한 사실만 적는지 검사한다(AGENTS.md Documentation). 문서는 코드 블록 밖의 모든 줄을, 설정
-// 파일(workflow, Makefile)은 주석 줄만 검사한다.
+#!/usr/bin/env node
+// 기록이 저장소에 관한 사실만 적는지 검사한다. 문서는 코드 블록 밖의 모든 줄을, 설정 파일(workflow, Makefile)은 주석 줄만
+// 검사하고, 위반을 `path:line` 으로 보고한다. 저장소마다 이 명령으로 자기 기록을 검사한다.
+//
+//   soksak-records [repository]
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 /** 기록에 쓰지 않는 표현과 그 범주. 색 코드와 UUID 같은 16진수 값은 커밋 참조가 아니다. */
 export const RECORD_PATTERNS = [
@@ -61,4 +68,23 @@ export function commitMessageErrors(message) {
   });
   for (const error of recordViolations(lines.join("\n"), "message")) errors.push(error.replace(/^message:/, "line "));
   return errors;
+}
+
+/** repository 가 추적하는 기록 파일의 위반. */
+export function repositoryRecordViolations(repository) {
+  const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { cwd: repository, encoding: "utf8" })
+    .split("\0").filter((file) => file && recordKind(file) && existsSync(join(repository, file)));
+  return { files, errors: files.flatMap((file) => recordViolations(readFileSync(join(repository, file), "utf8"), file, recordKind(file))) };
+}
+
+// package manager 는 package 를 link 로 두므로 시작한 경로를 풀어서 이 module 과 비교한다.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
+  // 기본값: 사용법의 [repository] 를 생략하면 현재 폴더의 repository 를 검사한다.
+  const { files, errors } = repositoryRecordViolations(resolve(process.argv[2] ?? "."));
+  if (errors.length) {
+    process.stderr.write(errors.map((error) => `${error}\n`).join(""));
+    process.stderr.write(`${errors.length} record lines state something other than facts about this repository\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`Record checks passed: ${files.length} files\n`);
 }

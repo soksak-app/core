@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R3.5.1: `@soksak/plugin-api`가 기록 검사와 커밋 형식 검사를 `soksak-records`와 `soksak-commits` 명령으로 제공한다.
 - R3.4: 게시된 커밋 메시지는 재작성하지 않는다. 커밋 형식은 R3.1부터의 커밋에 적용한다.
 - F101.3: locale 변수 없이 시작한 terminal service의 zsh 프롬프트에서 한글 input method 조합이 두 host의 activation tier 검사를 통과한다.
 - R3.3: core의 체크리스트, changelog, 명세, 계획과 plugin, sidecar, registry 저장소의 체크리스트는 그 저장소에 관한 사실을 적고, `make docs-check`가 기록 검사를 실행한다.

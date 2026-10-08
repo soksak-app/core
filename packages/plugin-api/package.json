@@ -8,7 +8,8 @@
     ".": "./index.js",
     "./page": "./page.js",
     "./exposure-check": "./exposure-check.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./records-check": "./records-check.js"
   },
   "files": [
     "index.js",
@@ -24,11 +25,15 @@
     "list.js",
     "exposure-check.js",
     "engines-check.js",
-    "core-exposure.json"
+    "core-exposure.json",
+    "records-check.js",
+    "commits-check.js"
   ],
   "bin": {
     "soksak-exposure": "./exposure-check.js",
-    "soksak-engines": "./engines-check.js"
+    "soksak-engines": "./engines-check.js",
+    "soksak-records": "./records-check.js",
+    "soksak-commits": "./commits-check.js"
   },
   "scripts": {
     "test": "node --test test/"

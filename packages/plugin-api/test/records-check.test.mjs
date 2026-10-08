@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { commitMessageErrors, recordKind, recordViolations } from "../records.mjs";
+import { commitMessageErrors, recordKind, recordViolations } from "../records-check.js";
 
 test("record checks report each statement that is not a fact about the repository", () => {
   const cases = [

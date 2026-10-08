@@ -4,16 +4,16 @@ SHELL := /bin/sh
 
 docs-check:
 	@node scripts/check-docs.mjs
-	@node scripts/check-records.mjs
+	@node packages/plugin-api/records-check.js
 
 # 문서와 설정 주석이 저장소에 관한 사실만 적는지 검사한다(AGENTS.md Documentation).
 records-check:
-	@node scripts/check-records.mjs
+	@node packages/plugin-api/records-check.js
 
 # RANGE 의 커밋 메시지 형식을 검사한다. 예: make commits-check RANGE=origin/main..HEAD
 commits-check:
 	@test -n "$(RANGE)" || { echo "make commits-check RANGE=<revision range>" >&2; exit 2; }
-	@node scripts/check-commits.mjs "$(RANGE)"
+	@node packages/plugin-api/commits-check.js "$(RANGE)"
 
 # 이 checkout 의 git hook 폴더를 .githooks 로 정한다. commit-msg hook 이 커밋 메시지 형식을 검사한다.
 hooks:
