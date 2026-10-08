@@ -22,6 +22,10 @@ jobs:
           path: plugins/browser
       - uses: actions/checkout@v4
         with:
+          repository: soksak-app/plugin-editor
+          path: plugins/editor
+      - uses: actions/checkout@v4
+        with:
           repository: soksak-app/plugin-files
           path: plugins/files
       - uses: actions/checkout@v4
