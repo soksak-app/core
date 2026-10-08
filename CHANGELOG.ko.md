@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F100.2: plugin과 sidecar 저장소의 release workflow는 자기 이름의 core tag 대신 선언된 core release에서 `sok`를 build한다.
 - F100.1: plugin 명세는 plugin과 sidecar의 version이 core version과 관계가 없고, 그 release workflow가 `sok`를 build할 core release를 선언한다고 적는다.
 - F99: F95, F95.1, F97을 담은 soksak 0.0.5를 릴리스했고, F98을 담은 terminal service 0.0.5와 terminal plugin 0.0.5가 공개 registry에 있다.
 - F99.1: 선언된 모든 version은 0.0.5다. parity audit은 릴리스 기록 F96과 F99를 feature link 없이 나열한다.
