@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R3.1: AGENTS.md states that records state facts about the repository and that commit messages use `type(scope): Subject (#ID)` without footers.
 - F100.2: the release workflows of the plugin and sidecar repositories build `sok` from a declared core release instead of the core tag of their own name.
 - F100.1: the plugin specification states that a plugin or sidecar version has no relation to a core version, and that its release workflow declares the core release that builds `sok`.
 - F99: soksak 0.0.5 is released with F95, F95.1 and F97; the terminal plugin 0.0.5 and the terminal service 0.0.5, which carries F98, are in the public registry.

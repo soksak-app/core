@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R3.1: AGENTS.md는 기록이 저장소에 관한 사실을 적고 커밋 메시지가 꼬리말 없는 `type(scope): Subject (#ID)` 형식을 쓴다고 적는다.
 - F100.2: plugin과 sidecar 저장소의 release workflow는 자기 이름의 core tag 대신 선언된 core release에서 `sok`를 build한다.
 - F100.1: plugin 명세는 plugin과 sidecar의 version이 core version과 관계가 없고, 그 release workflow가 `sok`를 build할 core release를 선언한다고 적는다.
 - F99: F95, F95.1, F97을 담은 soksak 0.0.5를 릴리스했고, F98을 담은 terminal service 0.0.5와 terminal plugin 0.0.5가 공개 registry에 있다.
