@@ -948,6 +948,26 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F128",
+    implementation: [
+      { file: "packages/host/wailsv3/src/page_process.go", symbol: "func PageProcessEnded" },
+      { file: "packages/host/tauriv2/src/page_process.rs", symbol: "pub fn page_process_ended" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn connection_loss_report" },
+      { file: "packages/host/tauriv2/src/application_log.rs", symbol: "pub fn install_panic_hook" },
+      { file: "native/darwin/src/application_log.m", symbol: "void sp_log_install_fatal_handlers" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/page_process_test.go", id: "TestThePageProcessEndIsAnErrorLine" },
+      { file: "packages/host/tauriv2/tests/page_process_test.rs", id: "the_page_process_end_is_an_error_line" },
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportWritesAnErrorLineForALostConnection" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_lost_connection_is_reported_as_an_error_line" },
+      { file: "packages/host/tauriv2/tests/panic_hook_test.rs", id: "a_panic_writes_an_error_line_to_the_application_log" },
+      { file: "packages/host/tauriv2/tests/fatal_signal_test.rs", id: "a_fatal_signal_writes_an_error_line_to_the_application_log" },
+    ],
+    expected: "The end of a page process, a lost connection to a persistent service, a panic of the Tauri host and a fatal signal each write one error line to the application log.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F29",
     implementation: [
       { file: "scripts/check-build-environment.sh", symbol: "pnpm_actual=$(pnpm --version" },
