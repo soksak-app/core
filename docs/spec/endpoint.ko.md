@@ -30,7 +30,7 @@ macOS 호스트가 이 명세를 구현하며 [기능 상태](../features.ko.md)
   "address": "/path/to/socket",
   "pid": 1234,
   "application": "wailsv3",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "executable": "/path/to/soksak-wailsv3",
   "started": "2026-09-17T09:00:00Z"
 }

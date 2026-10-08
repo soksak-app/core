@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F102.9: every declared version is 0.0.6.
 - F102.1.3, F102.1.4: `sok` installs the plugin dependencies of a plugin, refuses to remove or disable a required plugin, keeps dependent ranges on update, and `sok registry build` checks plugin dependencies; hosts leave plugin packages out of their sidecars, and serve `/shared/` for extension points (F102.1.5).
 - F102.5: a surface reports unsaved changes with `tab.modified`, and closing a modified tab or its card asks whether to save, discard or keep it.
 - F102.4: `core.file.open` opens a file of the project in the plugin whose `surface.opens` declares its extension, or in the plugin that declares `*`.

@@ -1,6 +1,6 @@
 {
   "name": "@soksak/plugin-api",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
   "description": "Plugin manifest and application environment validation, and helpers for plugin pages.",
   "type": "module",

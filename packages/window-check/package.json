@@ -1,6 +1,6 @@
 {
   "name": "@soksak/window-check",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
   "description": "Harness for window checks against running soksak applications.",
   "type": "module",
