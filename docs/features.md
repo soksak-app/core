@@ -670,7 +670,7 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [ ] F117.6 — P1: Register the terminal plugin item that starts a new shell of a replaced service in the last working directory of that terminal (`directory` event).
   - [~] F117.7 — P1: Show available updates in one place: a window control "업데이트 N" that appears only when updates exist and opens the plugin screen at its update list with `<installed> → <latest>`, a release link and "모두 업데이트"; the registry index and the core release are read when the application starts and when it becomes active, because the remote registry sends no change event.
     - [o] F117.7.1 — P1: List the plugin updates on the plugin screen: a section above the cards with `<id>: <installed> → <latest>` for each plugin in `updates` and the action 모두 업데이트 bound to the new command `core.plugins.update-all`, which updates the listed plugins one after the other and stops at the first failure.
-    - [ ] F117.7.2 — P1: Show the window control 업데이트 N, only while `updates` is not empty, which runs `core.plugins.show-updates` (the plugin screen at its update list).
+    - [o] F117.7.2 — P1: Show the window control 업데이트 N, only while `updates` is not empty, which runs `core.plugins.show-updates` (the plugin screen at its update list).
     - [ ] F117.7.3 — P1: Read the registry index when the application starts and when the window becomes active again, because the remote registry sends no change event.
     - [ ] F117.7.4 — P1: List the core release first in the update list, with its release link. Requires F121.
   - [ ] F117.8 — P1: Register the releases that carry F117 to users: vt sidecar with `version` in `hello`, the terminal plugin of F117.6, and core 0.0.9.

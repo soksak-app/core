@@ -670,7 +670,7 @@
   - [ ] F117.6 — P1: 교체된 service의 새 shell을 그 terminal의 마지막 작업 폴더(`directory` event)에서 시작하는 terminal plugin 항목을 등록한다.
   - [~] F117.7 — P1: 사용 가능한 update를 한 곳에 보인다. update가 있을 때만 보이는 창 control "업데이트 N"이 plugin 화면의 업데이트 목록(`<installed> → <latest>`, release 링크, "모두 업데이트")을 연다. 원격 registry는 변경 event를 보내지 않으므로, registry index와 core release를 애플리케이션이 시작할 때와 활성화될 때 읽는다.
     - [o] F117.7.1 — P1: 플러그인 화면에 플러그인 업데이트 목록을 둔다. 카드 위 영역이 `updates`의 plugin마다 `<id>: <installed> → <latest>`를 보이고, 새 명령 `core.plugins.update-all`에 묶인 모두 업데이트 동작이 목록의 plugin을 차례로 업데이트하며 첫 실패에서 멈춘다.
-    - [ ] F117.7.2 — P1: `updates`가 비어 있지 않은 동안에만 창 컨트롤 업데이트 N을 보이고, 이 컨트롤은 `core.plugins.show-updates`(업데이트 목록에 놓인 플러그인 화면)를 실행한다.
+    - [o] F117.7.2 — P1: `updates`가 비어 있지 않은 동안에만 창 컨트롤 업데이트 N을 보이고, 이 컨트롤은 `core.plugins.show-updates`(업데이트 목록에 놓인 플러그인 화면)를 실행한다.
     - [ ] F117.7.3 — P1: 원격 registry는 변경 이벤트를 보내지 않으므로 애플리케이션이 시작할 때와 창이 다시 활성화될 때 registry index를 읽는다.
     - [ ] F117.7.4 — P1: 업데이트 목록 맨 위에 코어 release를 release 링크와 함께 보인다. F121이 필요하다.
   - [ ] F117.8 — P1: F117을 사용자에게 전하는 release를 등록한다. `hello`에 `version`을 싣는 vt sidecar, F117.6의 terminal plugin, core 0.0.9.

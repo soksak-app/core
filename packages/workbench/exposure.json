@@ -2376,6 +2376,17 @@
         "timeout": 600000
       },
       {
+        "name": "core.plugins.show-updates",
+        "description": "Shows the library plugin page with the update list; the window control 업데이트 N runs it.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.plugins.update-all",
         "description": "Updates the plugins that the registry lists in a newer version, in id order, one after the other, and reads the plugin state again after each; stops at the first failure with the host error and does nothing when no plugin has an update.",
         "params": {
@@ -3249,6 +3260,10 @@
       {
         "name": "core.chrome.settings",
         "description": "The settings button."
+      },
+      {
+        "name": "core.chrome.updates",
+        "description": "The window control 업데이트 N, present only while the registry lists a plugin update; it shows the plugin page at the update list."
       },
       {
         "name": "core.project-tab",

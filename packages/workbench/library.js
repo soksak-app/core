@@ -464,6 +464,11 @@ export function createLibrary(root, rendered = () => {}) {
       if(page==='plugins') { pluginOperations.refresh(); pluginOperations.refreshOutdated(); }
       render();
     },
+    /** Shows the plugin page with the update list at the top of the list. */
+    showUpdates(){
+      actions.page('plugins');
+      updateList.node?.scrollIntoView({ block: 'start' });
+    },
     searchPlugins(query){
       if(typeof query!=='string') throw new Error('query must be a string');
       pluginQuery=query; render();

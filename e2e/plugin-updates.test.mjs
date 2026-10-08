@@ -47,6 +47,10 @@ for (const app of Object.values(APPS)) {
       "the registry with a newer version did not list an update");
     assert.deepEqual(listed.updates, [{ id: "browser", installed, latest: newer }]);
 
+    // The window shows the control 업데이트 N while an update exists; it opens the plugin screen at the update list.
+    const control = await s.rect("core.chrome.updates");
+    assert.ok(control.width > 0 && control.height > 0, `the update control has no size: ${JSON.stringify(control)}`);
+    await s.act("core.chrome.updates", "click");
     await s.run("core.plugins.browse");
     await s.until("core.library", (library) => library.page === "plugins" && library.plugins.shown.length > 0, "the plugin page did not show");
     const row = await s.rect("core.library.plugins.updates", 0);
@@ -61,5 +65,10 @@ for (const app of Object.values(APPS)) {
       "모두 업데이트 did not run the update of browser");
     assert.match(failed.operation.error, /has sha256 [0-9a-f]{64}, the entry says 0{64}/);
     assert.equal(failed.plugins.find((entry) => entry.id === "browser").installed.version, installed);
+
+    // The control leaves with the last update.
+    await s.run("core.plugins.registry", { index: before.registry });
+    await s.until("core.plugins", (value) => value.updates.length === 0, "the original registry still lists an update");
+    await assert.rejects(s.rect("core.chrome.updates"), /core\.chrome\.updates/);
   });
 }

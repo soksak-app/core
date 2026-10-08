@@ -446,6 +446,11 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
     if (!projects.inLibrary()) await projects.browse();
     library.actions.page("plugins");
   });
+  registry.command("core.plugins.show-updates", async () => {
+    closeSettings();
+    if (!projects.inLibrary()) await projects.browse();
+    library.actions.showUpdates();
+  });
   registry.command("core.settings-modal.edit", ({ set: id = null }) => { editSet(id); });
   registry.command("core.settings-modal.move", ({ dx, dy }) => { moveSettings(dx, dy); });
 
