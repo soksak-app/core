@@ -20,10 +20,10 @@ These files are the source of the index; `index.json` is built from them by `sok
 
 A plugin or sidecar entry follows the [registry index](installation.md#registry-index) and these rules:
 
-- `repository` is `https://github.com/<owner>/<repo>`, the repository that publishes the entry's archives.
-- Every `url` is `https://github.com/<owner>/<repo>/releases/download/v<version>/<asset>` with the `<owner>` and `<repo>` of `repository` and the version of its entry. `<asset>` is `<id>-<version>.tgz` for a plugin version and `<file name>-<version>-<platform>.tar.gz` for a sidecar asset of a platform ([installation](installation.md)).
-- A version that the published index lists does not change: its `url`, `sha256`, `engines`, `sidecars`, `protocol` and assets stay as they are, and it is not removed. A version is withdrawn only by a `revoked.json` entry.
-- A plugin id, a plugin package name and a sidecar name belong to one entry.
+- `repository` is `https://github.com/<owner>/<repo>`, the repository that publishes the entry's releases.
+- Every `url` is `https://github.com/<owner>/<repo>/releases/download/v<version>/<file>` with the `<owner>` and `<repo>` of `repository` and the version of its entry. `<file>` is `<id>-<version>.tgz` for a plugin version and `<file name>-<version>-<platform>.tar.gz` for a sidecar release of a platform ([installation](installation.md)).
+- A version that the published index lists does not change: its `url`, `sha256`, `engines`, `sidecars`, `protocol` and releases stay as they are, and it is not removed. A version is withdrawn only by a `revoked.json` entry.
+- A plugin id, the `name` of the plugin's `package.json` and a sidecar name belong to one entry.
 
 ## Owners
 
@@ -37,7 +37,7 @@ The check of a pull request reads the files of the pull request as data with the
 - a file name does not match its entry, or a file is not valid JSON;
 - an entry breaks an entry rule;
 - the author does not own an entry that the pull request adds or changes;
-- `sok registry build` fails on the whole registry of the pull request: every archive is read over https and compared with its `sha256`, and each plugin archive must hold the `plugin.json` and `package.json` of its entry.
+- `sok registry build` fails on the whole registry of the pull request: every release is read over https and compared with its `sha256`, and each plugin release must hold the `plugin.json` and `package.json` of its entry.
 
 ## Merge and publication
 
@@ -49,4 +49,4 @@ The `sok` of the check and of publication is the `sok` of the core release named
 
 ## Releases of soksak components
 
-The soksak plugins and sidecars are maintained by the registry maintainers. After a component release publishes its assets, a maintainer writes the new version into its entry with `scripts/add-version.mjs` of the registry and pushes the entry file to `main`, which publishes it; publication fails when an archive does not match its entry.
+The soksak plugins and sidecars are maintained by the registry maintainers. After a repository publishes a release, a maintainer writes the new version into its entry with `scripts/add-version.mjs` of the registry and pushes the entry file to `main`, which publishes it; publication fails when an release does not match its entry.

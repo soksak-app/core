@@ -119,7 +119,7 @@ func checkPluginArchive(index *Index, plugin *RegistryPlugin, version *PluginVer
 	if err != nil {
 		return fmt.Errorf("%s: package.json is not valid JSON: %w", where, err)
 	}
-	if err := ValidatePluginPackage(value); err != nil {
+	if err := ValidatePackageJSON(value); err != nil {
 		return fmt.Errorf("%s: %w", where, err)
 	}
 	pkg := value.(map[string]any)

@@ -19,24 +19,24 @@ Version은 숫자 부분으로 된 `x.y.z`이며 앞자리 0을 쓰지 않고, �
 
 `latest`, `**`, pre-release 접미사 같은 다른 형식은 거부한다.
 
-## Plugin package
+## Plugin release
 
-Plugin package는 plugin 파일의 archive `<id>-<version>.tgz`다. 그 `package.json`은 다음을 선언한다.
+Plugin release는 `sok plugin pack`이 쓰는, plugin 파일을 담은 파일 `<id>-<version>.tgz`다. 그 `package.json`은 다음을 선언한다.
 
 | 필드 | 뜻 |
 | --- | --- |
 | `name` | Package 이름이며, 설치한 파일은 `/modules/<name>/`에서 제공된다 |
 | `version` | Plugin version |
 | `engines.soksak` | Plugin이 지원하는 core API version 범위 |
-| `files` | Archive가 담는 package 안의 경로이며 `plugin.json`을 포함한다 |
+| `files` | Release가 담는 package 안의 경로이며 `plugin.json`을 포함한다 |
 
 `package.json`의 다른 필드는 package 도구의 것이므로 읽지 않는다. 다만 `soksak`은 거부한다. 플러그인의 sidecar와 그 범위는 `plugin.json`의 `dependencies`다([플러그인](plugins.ko.md#pluginjson)).
 
 plugin 저장소는 한 core release의 `@soksak/plugin-api`로 빌드한다. 그 `engines.soksak`은 모든 core version이 만족하는 `*`, 그 release만 만족하는 그 `@soksak/plugin-api`의 `^<version>`, 또는 그 core release와 이후의 모든 release가 만족하는, 하한이 그 version을 넘지 않는 `>=<x.y.z>`이다. core가 어떤 release에서 더한 manifest 필드를 쓰는 plugin은 그 release로 `>=`를 선언한다. `@soksak/plugin-api`의 명령 `soksak-engines`가 plugin 저장소에서 이를 검사하고 `package.json: engines.soksak <range> must be *, ^<version> or >= a version up to <version>, the @soksak/plugin-api version`으로 실패한다. 각 plugin 저장소는 `make test`에서 이를 실행한다.
 
-## Sidecar release asset
+## Sidecar release
 
-Sidecar version은 플랫폼마다 archive 하나 `<file name>-<version>-<platform>.tar.gz`로 release된다. Sidecar `@scope/name`의 file name은 `scope-name`이고, scope가 없는 이름은 그대로 쓴다. 플랫폼은 `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `windows-arm64`, `windows-x64` 중 하나다. Installer는 sidecar archive를 풀고 실행하기 전에 registry 항목의 `sha256`으로만 검사한다. 제3자의 것을 포함해 sidecar는 애플리케이션이 서명이나 다른 방법으로 검토하지 않는다.
+Sidecar version은 플랫폼마다 release 하나 `<file name>-<version>-<platform>.tar.gz`로 release된다. Sidecar `@scope/name`의 file name은 `scope-name`이고, scope가 없는 이름은 그대로 쓴다. 플랫폼은 `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `windows-arm64`, `windows-x64` 중 하나다. Installer는 sidecar release를 풀고 실행하기 전에 registry 항목의 `sha256`으로만 검사한다. 제3자의 것을 포함해 sidecar는 애플리케이션이 서명이나 다른 방법으로 검토하지 않는다.
 
 ## Registry index
 
@@ -49,30 +49,30 @@ Registry index `index.json`은 `format` 1과 다음 목록을 가진다.
 | `packs` | `{ name, description, plugins }`: 함께 설치하는 plugin id |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }] }` |
 
-`url`은 게시된 release archive의 `https:` URL이거나 local archive의 절대 `file:` URL([받기](#받기))이고, `sha256`은 소문자 16진수 64자리다. 설명은 1자에서 200자(Unicode code point)다. Index 검사는 이 밖에도 plugin id, package, sidecar, pack, version의 중복, 알 수 없는 plugin을 가리키는 pack, 알 수 없는 sidecar나 어떤 sidecar version도 채우지 않는 범위가 필요한 plugin version, 목록에 없는 revoked version을 거부한다. `sok registry build`는 각 plugin archive의 `plugin.json`도 읽어, 의존이 목록의 plugin package도 목록의 sidecar도 가리키지 않거나 plugin 의존의 범위를 채우는 목록의 version이 없으면 실패한다.
+`url`은 게시된 release의 `https:` URL이거나 local release의 절대 `file:` URL([받기](#받기))이고, `sha256`은 소문자 16진수 64자리다. 설명은 1자에서 200자(Unicode code point)다. Index 검사는 이 밖에도 plugin id, package, sidecar, pack, version의 중복, 알 수 없는 plugin을 가리키는 pack, 알 수 없는 sidecar나 어떤 sidecar version도 채우지 않는 범위가 필요한 plugin version, 목록에 없는 revoked version을 거부한다. `sok registry build`는 각 plugin의 `plugin.json`도 읽어, 의존이 목록의 plugin도 목록의 sidecar도 가리키지 않거나 plugin 의존의 범위를 채우는 목록의 version이 없으면 실패한다.
 
 ## 받기
 
-Registry index와 archive는 위치에서 읽는다. 위치는 `https:` URL, 절대 `file:` URL, 또는 명령이 경로를 받는 곳에서는 파일 경로다. 그 밖의 URL은 `<url>: the URL must be https: or an absolute file: URL`로 실패한다. `https:` URL은 다음 규칙으로 읽으며, 두 구현은 같은 문장으로 이 규칙을 따른다.
+Registry index와 release는 위치에서 읽는다. 위치는 `https:` URL, 절대 `file:` URL, 또는 명령이 경로를 받는 곳에서는 파일 경로다. 그 밖의 URL은 `<url>: the URL must be https: or an absolute file: URL`로 실패한다. `https:` URL은 다음 규칙으로 읽으며, 두 구현은 같은 문장으로 이 규칙을 따른다.
 
 - 연결은 운영체제가 신뢰하는 인증 기관으로 TLS를 쓴다.
 - redirect는 대상이 `https:` URL일 때 최대 5번 따라간다. 다른 scheme으로의 redirect는 `<url>: redirect to <target> is not https`로, 여섯 번째 redirect는 `<url>: more than 5 redirects`로 실패한다.
 - 200이 아닌 응답은 `<url>: HTTP <status>`로 실패한다.
-- 연결부터 마지막 byte까지 한 요청은 index는 60초, archive는 600초 안에 끝나야 한다. 더 느린 요청은 `<url>: timed out after <seconds> s`로 실패한다.
-- index는 최대 8 MiB, archive는 최대 256 MiB다. 더 큰 본문은 `<url>: larger than <bytes> bytes`로 실패한다.
+- 연결부터 마지막 byte까지 한 요청은 index는 60초, release는 600초 안에 끝나야 한다. 더 느린 요청은 `<url>: timed out after <seconds> s`로 실패한다.
+- index는 최대 8 MiB, release는 최대 256 MiB다. 더 큰 본문은 `<url>: larger than <bytes> bytes`로 실패한다.
 - 연결하거나 읽지 못하면 `<url>: cannot connect: <reason>`으로 실패하며, reason은 network library의 문장이다.
 
-아무것도 저장해 두지 않는다. 각 명령과 각 plugin 작업은 필요한 index와 archive를 다시 읽고, archive는 풀기 전에 `sha256`과 비교한다.
+아무것도 저장해 두지 않는다. 각 명령과 각 plugin 작업은 필요한 index와 release를 다시 읽고, release는 풀기 전에 `sha256`과 비교한다.
 
 ## Version 선택
 
-Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 core version을 포함하고 revoked가 아닌 가장 새 plugin version을 고른다. 한 설치에서 sidecar는 version 하나이며, 그 sidecar를 지정한 설치된 plugin이 모두 함께 쓴다. 고른 plugin version의 sidecar마다, 범위는 그 version의 범위와 그 sidecar를 지정한 다른 설치된 plugin의 범위다. 쓰고 있는 version이 모든 범위를 채우고 revoked가 아니며 그 플랫폼 asset이 있으면 그대로 두고, 아니면 모든 범위를 채우고 revoked가 아니며 그 플랫폼 asset이 있는 가장 새 sidecar version을 고른다. 고를 것이 없으면 설치는 plugin, version이나 범위, core version이나 플랫폼을 밝혀 실패하며, sidecar의 경우 각 plugin과 범위를 밝힌다.
+Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 core version을 포함하고 revoked가 아닌 가장 새 plugin version을 고른다. 한 설치에서 sidecar는 version 하나이며, 그 sidecar를 지정한 설치된 plugin이 모두 함께 쓴다. 고른 plugin version의 sidecar마다, 범위는 그 version의 범위와 그 sidecar를 지정한 다른 설치된 plugin의 범위다. 쓰고 있는 version이 모든 범위를 채우고 revoked가 아니며 그 플랫폼 release가 있으면 그대로 두고, 아니면 모든 범위를 채우고 revoked가 아니며 그 플랫폼 release가 있는 가장 새 sidecar version을 고른다. 고를 것이 없으면 설치는 plugin, version이나 범위, core version이나 플랫폼을 밝혀 실패하며, sidecar의 경우 각 plugin과 범위를 밝힌다.
 
-고른 version의 `plugin.json` 의존 가운데 index의 plugin package를 가리키는 것은 plugin 의존이다. 설치는 아무것도 풀기 전에 받은 archive에서 `plugin.json`을 읽는다. plugin을 설치하면 각 plugin 의존을 같은 규칙으로 재귀적으로 설치한다. 설치된 제공자의 version이 그것을 가리키는 모든 설치된 plugin의 범위를 채우면 그대로 두고, 아니면 모든 범위, `engines.soksak`, revoked 규칙을 채우는 가장 새 제공자 version을 고른다. 설치되었지만 켜지지 않은 제공자는 켠다. index의 plugin도 sidecar도 가리키지 않는 의존은 `<plugin> <version>: dependency <package> is neither a plugin nor a sidecar of the registry`로, 순환은 `plugin dependency cycle: <id> -> <id> -> <id>`로 실패한다. `sok plugin update`는 제공자를 가리키는 모든 설치된 plugin의 범위를 채우는 제공자 version만 고른다. `sok plugin remove`와 `sok plugin disable`은 켜진 설치 plugin이 그 package를 가리키면 `plugin <id> is required by <dependent> <range>`로 실패하며, `installed.json`과 폴더는 바뀌지 않는다.
+고른 version의 `plugin.json` 의존 가운데 index의 plugin을 가리키는 것은 plugin 의존이다. 설치는 아무것도 풀기 전에 받은 release에서 `plugin.json`을 읽는다. plugin을 설치하면 각 plugin 의존을 같은 규칙으로 재귀적으로 설치한다. 설치된 제공자의 version이 그것을 가리키는 모든 설치된 plugin의 범위를 채우면 그대로 두고, 아니면 모든 범위, `engines.soksak`, revoked 규칙을 채우는 가장 새 제공자 version을 고른다. 설치되었지만 켜지지 않은 제공자는 켠다. index의 plugin도 sidecar도 가리키지 않는 의존은 `<plugin> <version>: dependency <package> is neither a plugin nor a sidecar of the registry`로, 순환은 `plugin dependency cycle: <id> -> <id> -> <id>`로 실패한다. `sok plugin update`는 제공자를 가리키는 모든 설치된 plugin의 범위를 채우는 제공자 version만 고른다. `sok plugin remove`와 `sok plugin disable`은 켜진 설치 plugin이 그 package를 가리키면 `plugin <id> is required by <dependent> <range>`로 실패하며, `installed.json`과 폴더는 바뀌지 않는다.
 
 ## 설치 배치
 
-설정 폴더 안에서 `<id>`의 plugin version `<version>`은 `plugins/<id>/<version>`에, sidecar version의 플랫폼 asset은 `sidecars/<file name>/<version>/<platform>`에 푼다. `plugins/installed.json`은 `format` 2, `plugins`, `sidecars`를 가진다. `plugins`는 plugin id마다 `{ package, version, path, enabled, sidecars, previous? }`를 정한다. 각각 package 이름, 쓰는 version, 설치가 그 version을 푼 폴더 `plugins/<id>/<version>`, 불러올지 여부, 그 version의 sidecar 범위, 되돌리기가 복원할 version이다. 한 package는 한 번만 나온다. `sidecars`는 설치된 plugin이 지정한 sidecar마다 `{ version, path }`를 정한다. 쓰는 version은 그 sidecar를 지정한 모든 설치된 plugin의 범위를 채우며, `path`는 설치가 그 플랫폼 asset을 푼 폴더 `sidecars/<file name>/<version>/<platform>`이다. 어느 설치된 plugin도 지정하지 않은 sidecar는 나오지 않는다. 각 `path`는 설정 폴더에 대한 상대 경로이며 이 규칙이 정하는 폴더와 같아야 하므로 설정 폴더를 옮길 수 있다([projects](projects.ko.md#저장)). 설치는 archive를 풀 때 각 `path`를 기록하고, host와 `sok`은 설정 폴더에 대해 푼 기록된 경로에서만 파일을 읽는다. `format`이 2가 아닌 파일은 `<file>: plugins/installed.json: format must be 2`로 실패하고 바뀌지 않는다.
+설정 폴더 안에서 `<id>`의 plugin version `<version>`은 `plugins/<id>/<version>`에, sidecar version의 플랫폼 release는 `sidecars/<file name>/<version>/<platform>`에 푼다. `plugins/installed.json`은 `format` 2, `plugins`, `sidecars`를 가진다. `plugins`는 plugin id마다 `{ package, version, path, enabled, sidecars, previous? }`를 정한다. 각각 package 이름, 쓰는 version, 설치가 그 version을 푼 폴더 `plugins/<id>/<version>`, 불러올지 여부, 그 version의 sidecar 범위, 되돌리기가 복원할 version이다. 한 package는 한 번만 나온다. `sidecars`는 설치된 plugin이 지정한 sidecar마다 `{ version, path }`를 정한다. 쓰는 version은 그 sidecar를 지정한 모든 설치된 plugin의 범위를 채우며, `path`는 설치가 그 플랫폼 release를 푼 폴더 `sidecars/<file name>/<version>/<platform>`이다. 어느 설치된 plugin도 지정하지 않은 sidecar는 나오지 않는다. 각 `path`는 설정 폴더에 대한 상대 경로이며 이 규칙이 정하는 폴더와 같아야 하므로 설정 폴더를 옮길 수 있다([projects](projects.ko.md#저장)). 설치는 release를 풀 때 각 `path`를 기록하고, host와 `sok`은 설정 폴더에 대해 푼 기록된 경로에서만 파일을 읽는다. `format`이 2가 아닌 파일은 `<file>: plugins/installed.json: format must be 2`로 실패하고 바뀌지 않는다.
 
 ## 설치된 plugin 제공
 

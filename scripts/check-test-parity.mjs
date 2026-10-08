@@ -916,8 +916,8 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/plugin-api/test/validate.test.mjs", id: "a manifest is rejected for each invalid field" },
-      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestPluginPackageDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSidecarRanges" },
-      { file: "packages/sok/tauriv2/tests/install_test.rs", id: "plugin_package_declares_version_core_range_and_files_and_the_manifest_declares_sidecar_ranges" },
+      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestPackageJSONDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSidecarRanges" },
+      { file: "packages/sok/tauriv2/tests/install_test.rs", id: "package_json_declares_version_core_range_and_files_and_the_manifest_declares_sidecar_ranges" },
     ],
     expected: "A plugin declares its sidecars and their version ranges only as the dependencies of plugin.json, and a package.json with soksak is refused.",
     levels: ["unit"],

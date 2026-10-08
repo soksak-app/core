@@ -20,10 +20,10 @@
 
 plugin이나 sidecar 항목은 [registry index](installation.ko.md#registry-index)와 다음 규칙을 따른다.
 
-- `repository`는 항목의 archive를 게시하는 저장소 `https://github.com/<owner>/<repo>`다.
-- 모든 `url`은 `repository`의 `<owner>`와 `<repo>`, 그리고 그 항목의 version을 쓴 `https://github.com/<owner>/<repo>/releases/download/v<version>/<asset>`이다. `<asset>`은 plugin version이면 `<id>-<version>.tgz`, platform의 sidecar asset이면 `<file name>-<version>-<platform>.tar.gz`다([설치](installation.ko.md)).
-- 게시한 index에 있는 version은 바뀌지 않는다. 그 `url`, `sha256`, `engines`, `sidecars`, `protocol`, asset은 그대로이며 지워지지 않는다. version은 `revoked.json` 항목으로만 거둔다.
-- plugin id, plugin package 이름, sidecar 이름은 항목 하나에만 속한다.
+- `repository`는 항목의 release를 게시하는 저장소 `https://github.com/<owner>/<repo>`다.
+- 모든 `url`은 `repository`의 `<owner>`와 `<repo>`, 그리고 그 항목의 version을 쓴 `https://github.com/<owner>/<repo>/releases/download/v<version>/<file>`이다. `<file>`은 plugin version이면 `<id>-<version>.tgz`, platform의 sidecar release이면 `<file name>-<version>-<platform>.tar.gz`다([설치](installation.ko.md)).
+- 게시한 index에 있는 version은 바뀌지 않는다. 그 `url`, `sha256`, `engines`, `sidecars`, `protocol`, release는 그대로이며 지워지지 않는다. version은 `revoked.json` 항목으로만 거둔다.
+- plugin id, `package.json`의 plugin 이름, sidecar 이름은 항목 하나에만 속한다.
 
 ## 소유자
 
@@ -37,7 +37,7 @@ pull request의 검사는 base branch의 script로 pull request의 파일을 데
 - 파일 이름이 항목과 맞지 않거나 파일이 올바른 JSON이 아니다.
 - 항목이 항목 규칙을 어긴다.
 - pull request가 더하거나 바꾸는 항목을 작성자가 소유하지 않는다.
-- pull request의 registry 전체에서 `sok registry build`가 실패한다. 모든 archive를 https로 읽어 `sha256`과 비교하고, 각 plugin archive는 그 항목의 `plugin.json`과 `package.json`을 담아야 한다.
+- pull request의 registry 전체에서 `sok registry build`가 실패한다. 모든 release를 https로 읽어 `sha256`과 비교하고, 각 plugin release는 그 항목의 `plugin.json`과 `package.json`을 담아야 한다.
 
 ## Merge와 게시
 
@@ -49,4 +49,4 @@ pull request의 검사는 base branch의 script로 pull request의 파일을 데
 
 ## soksak component의 release
 
-soksak plugin과 sidecar는 registry 관리자가 관리한다. component release가 asset을 게시한 뒤, 관리자는 registry의 `scripts/add-version.mjs`로 새 version을 항목에 쓰고 그 항목 파일을 `main`에 push하며, 그 push가 게시한다. archive가 항목과 맞지 않으면 게시가 실패한다.
+soksak plugin과 sidecar는 registry 관리자가 관리한다. 저장소가 release를 게시한 뒤, 관리자는 registry의 `scripts/add-version.mjs`로 새 version을 항목에 쓰고 그 항목 파일을 `main`에 push하며, 그 push가 게시한다. release가 항목과 맞지 않으면 게시가 실패한다.

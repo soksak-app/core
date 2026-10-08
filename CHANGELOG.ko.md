@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R5.3.1: core의 명세와 주석이 plugin은 plugin, sidecar는 sidecar, 그 `.tgz` 파일은 release라고 부르고, `sok`의 오류와 식별자도 따른다.
 - F111.7.6: 계약 사례 `page.start.sok-core-owner`가 Tauri 시작 문서 주소를 다룬다.
 - F111.7.5: Tauri 시작 문서 처리기가 host 없는 요청이 찾을 수 없다고 답하는 이유를 적는다.
 - R5.1: `AGENTS.md`가 한 개념을 한 용어로 부르게 하고, `packages/plugin-api/terms.json`이 용어와 거부 동의어를 적는다.

@@ -27,7 +27,7 @@
 
 ## 구조
 
-- 코어(`packages/`), 플러그인, 사이드카는 코드와 테스트에 서로의 이름을 적지 않는다. 플러그인과 사이드카는 자기 repository에 있다([Repository](docs/spec/plugins.ko.md#repository)). 선언 파일만 이들을 연결한다: `environment.json`은 플러그인을 나열하고, `plugin.json`은 `dependencies`에 필요한 사이드카와 플러그인 패키지를, `extends`와 `contributes`에 선언하고 기여하는 확장 지점을 나열하며, `sidecar.json`은 사이드카를 설명한다. `make boundaries`는 `scripts/workspace-registry.json`이 선언한 repository의 플러그인 id와 사이드카 패키지 이름을 코어 소스가 적지 않았는지 검사한다. 각 플러그인과 사이드카 repository는 자기 소스를 검사한다.
+- 코어(`packages/`), 플러그인, 사이드카는 코드와 테스트에 서로의 이름을 적지 않는다. 플러그인과 사이드카는 자기 repository에 있다([Repository](docs/spec/plugins.ko.md#repository)). 선언 파일만 이들을 연결한다: `environment.json`은 플러그인을 나열하고, `plugin.json`은 `dependencies`에 필요한 사이드카와 플러그인을, `extends`와 `contributes`에 선언하고 기여하는 확장 지점을 나열하며, `sidecar.json`은 사이드카를 설명한다. `make boundaries`는 `scripts/workspace-registry.json`이 선언한 repository의 플러그인과 사이드카를 코어 소스가 적지 않았는지 검사한다. 각 플러그인과 사이드카 repository는 자기 소스를 검사한다.
 - 코어, 플러그인, 사이드카, 킷, 명세, 계약은 별도 저장소 경계다. 교환은 선언된 와이어 계약과 노출된 command·DOM·status·확장 지점으로만 한다. `environment.json`, `settings`, `plugin.json` 같은 명부가 무엇이 어느 버전으로 설치됐는지 적고, 패키지 사이의 관계는 매니페스트의 `dependencies`로만 선언한다. 한 패키지의 테스트는 다른 패키지의 구현을 검증하지 않는다. 소비자 테스트는 소비자 경계의 fake/fixture를 사용하고, 구현과 공통 계약 사례는 소유 패키지에서 실행한다. window check는 패키지 테스트가 아니라 environment가 설치한 plugin과 함께 application 전체를 검사하는 e2e 검사이며, 이 규칙은 적용되지 않는다. 다른 패키지의 경로·SDK·빌드·구현 이름을 읽는 테스트는 금지한다.
 - 공통 기능은 코어에 두어 플러그인이 다시 구현하지 않게 한다. 플러그인 기능은 코어로 옮기지 않는다. 사이드카는 한 영역의 네이티브 기능을 담는다.
 - 플랫폼 전용 파일은 소유 패키지의 `platform/<os>/`(`darwin`, `windows`, `linux`) 아래에만 둔다. 다른 플랫폼용 빈 구현 파일을 두지 않는다.
@@ -37,7 +37,7 @@
 - 플랫폼은 호스트 플랫폼 인터페이스의 기능을 구현하거나 `platform/<os>/unsupported.*`에서 `not implemented on <os>` 오류를 반환한다. 필요한 기능을 제공할 수 없는 호스트는 일부만 동작하지 않고 시작 시 실패한다. `make platforms`와 `make hosts-check`가 배치를 검사한다.
 - 검사가 시작한 녹화·프로세스·서비스는 검사가 끝나면 종료하거나 제거하며, 하나라도 남으면 검사가 실패한다.
 - 문서의 모든 사용자 조작은 선언된 명령을 실행한다. 컨트롤은 `data-command`로 명령을 가리키고, 처리기는 모듈 함수를 직접 부르지 않고 등록소로 명령을 실행한다. 연속 조작은 결과를 만드는 명령을 가지며 단축키도 명령을 실행한다. 명령을 먼저 선언하고, 요소는 공용 연결기(`@soksak/plugin-api`의 `createBinder`)로 선언된 명령에만 연결한다. 보이는 모든 상태는 status를, 모든 조작 요소는 명령 연결과 dom 이름을 가진다. 충족 여부는 소스 모양이 아니라 실행 중 연결기 audit(`core.page.audit`, `core.surface.document`의 `unbound`, `e2e/audit.test.mjs`)로 판단한다. `make exposure-check`는 소스의 이름이 선언되었는지와 선언이 등록되었는지만 검사한다. 규칙은 [노출 명세](docs/spec/exposure.ko.md)가 정한다.
-- 표면은 플러그인 패키지의 페이지를 표시한다. 페이지는 자기 요소에 붙인 문서 영역에서만 웹 문서를 표시하며([네이티브 표면](docs/spec/native-surfaces.ko.md#문서-영역)), 웹 주소는 표면이 아니다.
+- 표면은 플러그인의 페이지를 표시한다. 페이지는 자기 요소에 붙인 문서 영역에서만 웹 문서를 표시하며([네이티브 표면](docs/spec/native-surfaces.ko.md#문서-영역)), 웹 주소는 표면이 아니다.
 - 진단 코드(호스트 진단 메서드, 녹화, 페이지 진단 모듈)는 진단 빌드에만 존재한다. 릴리스 스테이징은 페이지 진단 모듈을 넣지 않는다.
 - 사용자가 볼 수 있는 모든 오류는 나타나는 순간 애플리케이션 로그에 쓰는(`error: <where>: <text>`) 하나의 표시 경로로 보인다. 다른 경로로 오류를 보이는 표시는 결함이며, 오류 색은 그 경로만 쓴다. 표시는 현재 상태만 보이므로 다음 그리기가 지우는 오류의 기록은 로그다.
 - core의 ResizeObserver는 그 frame의 관찰 round보다 먼저 실행되는 animation frame에서 관찰을 시작한다. round 도중에 시작한 관찰은 첫 알림을 미루고 WebKit은 loop 오류를 알린다.

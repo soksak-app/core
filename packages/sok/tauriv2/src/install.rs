@@ -1,6 +1,7 @@
-//! 설치형 plugin 의 형식(docs/spec/installation.md): version 과 범위, plugin package, registry index, sidecar
-//! release asset, 설치 배치와 설치 상태. 형식이 틀리면 어디가 틀렸는지 담은 오류를 돌려준다. 필드는 정해진 순서로
-//! 검사하므로 여러 필드가 틀려도 두 구현이 같은 오류를 낸다.
+//! The formats of installable plugins (docs/spec/installation.md): versions and ranges, the plugin file, the
+//! registry index, the sidecar release asset, the installed layout and the installed state. A wrong format returns an
+//! error that names what is wrong. Fields are checked in a fixed order, so both implementations return the same error
+//! when several fields are wrong.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -313,9 +314,9 @@ fn check_description(at: &str, value: Option<&Value>) -> Result<(), String> {
     }
 }
 
-/// Plugin package 의 package.json 에서 설치에 쓰는 필드를 검사한다. 다른 npm 필드는 package 도구의 것이므로 보지
-/// 않는다.
-pub fn validate_plugin_package(value: &Value) -> Result<(), String> {
+/// Checks the fields of the package.json of a plugin that installation uses. Other npm fields belong to the
+/// package tools and are not read.
+pub fn validate_package_json(value: &Value) -> Result<(), String> {
     let pkg = object("package.json", Some(value))?;
     let engines = object("package.json engines", pkg.get("engines"))?;
     check_range("package.json engines.soksak", engines.get("soksak"))?;
@@ -358,7 +359,7 @@ pub fn manifest_dependencies(manifest: &Value) -> Result<BTreeMap<String, String
         .collect())
 }
 
-/// Plugin package archive 의 파일 이름.
+/// The file name of a packed plugin.
 pub fn plugin_archive_name(id: &str, version: &str) -> String {
     format!("{id}-{version}.tgz")
 }

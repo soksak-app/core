@@ -184,7 +184,7 @@ func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 	}
 }
 
-// contract: installed.sidecars.leave-out-plugin-packages
+// contract: installed.sidecars.leave-out-plugin-dependencies
 func TestInstalledSidecarsLeaveOutThePackagesOfInstalledPlugins(t *testing.T) {
 	config := installedFixture(t)
 	// The packages of an enabled and a disabled plugin are plugin dependencies, not sidecars.

@@ -307,7 +307,7 @@ fn installed_sidecars_resolve_the_installed_version_folders() {
         .is_empty());
 }
 
-// contract: installed.sidecars.leave-out-plugin-packages
+// contract: installed.sidecars.leave-out-plugin-dependencies
 #[test]
 fn installed_sidecars_leave_out_the_packages_of_installed_plugins() {
     let config = installed_fixture();

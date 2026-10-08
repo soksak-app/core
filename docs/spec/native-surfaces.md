@@ -100,7 +100,7 @@ A native view is placed on the DOM: it draws the DOM element it is placed on and
 
 ## Document regions
 
-A surface page shows a web document in one of its elements through a document region. Surfaces themselves always show a page of their plugin package ([plugins](plugins.md)); a web address is never a surface.
+A surface page shows a web document in one of its elements through a document region. Surfaces themselves always show a page of their plugin ([plugins](plugins.md)); a web address is never a surface.
 
 - The manifest declares a unique name that matches `^[a-z0-9][a-z0-9-]{0,63}$`. The page obtains the document handle from `createSurfaceComposition`; individual attach, place, and detach operations are not public.
 - The host creates a web view under the calling surface's `SurfaceHost.NativePlane` and verifies on every call that the calling DOM webview is the surface named in the request. A surface cannot operate another surface's regions.

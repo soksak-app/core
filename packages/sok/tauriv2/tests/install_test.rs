@@ -114,10 +114,10 @@ fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
 
 // contract: install.package.fields-and-manifest
 #[test]
-fn plugin_package_declares_version_core_range_and_files_and_the_manifest_declares_sidecar_ranges() {
+fn package_json_declares_version_core_range_and_files_and_the_manifest_declares_sidecar_ranges() {
     let pkg = json!({"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
         "files": ["plugin.json", "ui"], "private": true});
-    install::validate_plugin_package(&pkg).expect("package");
+    install::validate_package_json(&pkg).expect("package");
     let ranges = install::manifest_dependencies(
         &json!({"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}),
     )
@@ -173,7 +173,7 @@ fn plugin_package_declares_version_core_range_and_files_and_the_manifest_declare
     ] {
         let mut changed = pkg.clone();
         changed[field] = value;
-        rejects(install::validate_plugin_package(&changed), want);
+        rejects(install::validate_package_json(&changed), want);
     }
 }
 

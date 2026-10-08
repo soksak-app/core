@@ -1,10 +1,9 @@
 //! 사이드카 채널.
 //!
-//! 사용할 수 있는 사이드카는 프론트엔드에 배치된 설정 파일로 정한다. environment.json 의
-//! plugins 에 있는 플러그인 패키지마다 modules/<패키지>/plugin.json 의 sidecars 를 읽고,
-//! 사이드카 패키지마다 modules/<패키지>/sidecar.json 의 executable 과 protocol 을 읽는다.
-//! 실행 파일은 애플리케이션 실행 파일과 같은 디렉터리에 basename(executable) 이름으로 있다.
-//! 사이드카는 패키지 이름으로 구분한다.
+//! The configuration files staged with the frontend decide the available sidecars. For each plugin in the plugins of
+//! environment.json, the host reads the sidecars of modules/<plugin>/plugin.json, and for each sidecar it reads
+//! the executable and protocol of modules/<sidecar>/sidecar.json. The executable is in the directory of the
+//! application executable under the name basename(executable). A sidecar is identified by its name.
 //!
 //! 선언된 사이드카를 처음 사용할 때 실행하고, 표면 페이지와 사이드카 사이에서 한 줄 JSON
 //! 메시지를 전달한다. 메시지 본문은 해석하지 않는다. 형식은 docs/spec/sidecars.md 에 정의한다.
@@ -31,7 +30,7 @@ use tauri::Window;
 /// 사이드카가 보낸 메시지를 페이지에 전달하는 이벤트 값.
 #[derive(Clone, Serialize)]
 pub struct Message {
-    /// 메시지를 보낸 사이드카 패키지 이름.
+    /// The sidecar that sent the message.
     pub sidecar: String,
     /// 메시지를 받을 표면 id.
     pub surface: String,
@@ -42,7 +41,7 @@ pub struct Message {
 /// 사이드카 실패를 페이지에 알리는 이벤트 값(docs/spec/sidecars.md#failure).
 #[derive(Clone, Debug, Serialize)]
 pub struct Failure {
-    /// 실패한 사이드카 패키지 이름.
+    /// The sidecar that failed.
     pub sidecar: String,
     /// 실패한 프로세스에 요청을 보낸 표면 id.
     pub surface: String,
@@ -125,7 +124,7 @@ struct CloseAnswer {
 /// 호스트가 closed 를 보냈고 사이드카가 아직 답하지 않은 표면(host.sidecars).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ClosingSurface {
-    /// closed 를 받은 사이드카 패키지 이름.
+    /// The sidecar that received closed.
     pub sidecar: String,
     /// 닫힌 표면 id.
     pub surface: String,
@@ -410,7 +409,7 @@ struct Core<O> {
 /// 선언된 사이드카의 실행 파일, 영속 여부, 영속 실행 파일 basename 을 쓰는 사이드카.
 #[derive(Default)]
 struct Declarations {
-    /// 사이드카 패키지 이름과 실행 파일 경로.
+    /// The sidecar and the path of its executable.
     declared: HashMap<String, PathBuf>,
     persistent: HashMap<String, bool>,
     basenames: HashMap<String, String>,

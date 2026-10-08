@@ -1,8 +1,9 @@
 package sok
 
-// 설치형 plugin 의 형식(docs/spec/installation.md): version 과 범위, plugin package, registry index, sidecar release
-// asset, 설치 배치와 설치 상태. 형식이 틀리면 어디가 틀렸는지 담은 오류를 돌려준다. 필드는 정해진 순서로 검사하므로
-// 여러 필드가 틀려도 두 구현이 같은 오류를 낸다.
+// The formats of installable plugins (docs/spec/installation.md): versions and ranges, the plugin file, the
+// registry index, the sidecar release asset, the installed layout and the installed state. A wrong format returns an
+// error that names what is wrong. Fields are checked in a fixed order, so both implementations return the same error
+// when several fields are wrong.
 
 import (
 	"bytes"
@@ -360,9 +361,9 @@ func checkDescription(where string, value any) error {
 	return nil
 }
 
-// ValidatePluginPackage 는 plugin package 의 package.json 에서 설치에 쓰는 필드를 검사한다. 다른 npm 필드는
-// package 도구의 것이므로 보지 않는다.
-func ValidatePluginPackage(value any) error {
+// ValidatePackageJSON checks the fields of the package.json of a plugin that installation uses. Other npm
+// fields belong to the package tools and are not read.
+func ValidatePackageJSON(value any) error {
 	pkg, err := object("package.json", value)
 	if err != nil {
 		return err
@@ -415,7 +416,7 @@ func ManifestDependencies(manifest map[string]any) (map[string]string, error) {
 	return ranges, nil
 }
 
-// PluginArchiveName 은 plugin package archive 의 파일 이름이다.
+// PluginArchiveName is the file name of a packed plugin.
 func PluginArchiveName(id, version string) string { return id + "-" + version + ".tgz" }
 
 // SidecarFileName 은 sidecar 이름을 파일 이름과 폴더 이름에 쓰는 형태로 바꾼다. `@scope/name` 은 `scope-name` 이다.

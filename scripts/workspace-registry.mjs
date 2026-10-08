@@ -89,7 +89,7 @@ function write(path, value) {
 export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
   const declaration = checkDeclaration(read(new URL(DECLARATION, root)));
   const folder = (relative) => fileURLToPath(new URL(relative.endsWith("/") ? relative : `${relative}/`, root));
-  // sidecar package 이름 → 선언된 repository 와 sidecar 폴더.
+  // A sidecar name → its declared repository and sidecar folder.
   const declared = new Map();
   for (const item of declaration.sidecars) {
     const repository = folder(item.repository);

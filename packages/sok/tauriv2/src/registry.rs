@@ -125,7 +125,7 @@ fn check_plugin_archive(
     }
     let pkg: Value = serde_json::from_slice(&files["package.json"])
         .map_err(|error| format!("{at}: package.json is not valid JSON: {error}"))?;
-    install::validate_plugin_package(&pkg).map_err(|error| format!("{at}: {error}"))?;
+    install::validate_package_json(&pkg).map_err(|error| format!("{at}: {error}"))?;
     for (field, got, want) in [
         ("name", &pkg["name"], &plugin.package),
         ("version", &pkg["version"], &version.version),

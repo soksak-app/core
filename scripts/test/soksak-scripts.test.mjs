@@ -106,7 +106,7 @@ test("boundary audit reports a clean component graph", { timeout: 5000 }, async 
   assert.match(result.stdout, /Boundary checks passed:/);
 });
 
-test("boundary audit reports core sources that name a declared plugin id or sidecar package", { timeout: 5000 }, async (t) => {
+test("boundary audit reports core sources that name a declared plugin or sidecar", { timeout: 5000 }, async (t) => {
   const fixture = await mkdtemp(join(tmpdir(), "soksak-boundaries-"));
   t.after(() => rm(fixture, { recursive: true, force: true }));
   const core = join(fixture, "core");

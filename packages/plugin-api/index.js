@@ -27,7 +27,7 @@ export const SIDECAR = "sidecar.json";
 export const RUNTIME = "runtime";
 /** 코어가 공개하는 항목의 선언 파일. 워크벤치 패키지 루트에 있다. */
 export const EXPOSURE = "exposure.json";
-/** 플러그인 패키지 루트의 진단 선언 파일. 진단 빌드에만 스테이징된다. */
+/** The diagnostic declaration file at the root of a plugin. Only diagnostic builds stage it. */
 export const DIAGNOSTICS = "diagnostics.json";
 /** 스테이징 루트의 플러그인 진단 선언 목록. 진단 빌드가 아니면 {} 다. */
 /** host 가 설정 폴더의 설치된 plugin 목록을 제공하는 문서(docs/spec/installation.md 의 설치된 plugin 제공). */
@@ -86,19 +86,19 @@ function isRange(range) {
   return VERSION.test(range.replace(/^[\^~]/, ""));
 }
 
-/** 사이드카 패키지마다 version 범위를 정한 dependencies 를 검사하고 패키지 이름을 돌려준다. */
+/** Checks that dependencies give each sidecar or plugin a version range and returns their names. */
 function checkDependencies(where, dependencies) {
-  if (!isObject(dependencies)) throw new Error(`${where}: dependencies must map sidecar packages to version ranges`);
+  if (!isObject(dependencies)) throw new Error(`${where}: dependencies must map sidecars and plugins to version ranges`);
   for (const [name, range] of Object.entries(dependencies)) {
-    if (!PACKAGE.test(name)) throw new Error(`${where}: dependencies: ${name} is not a sidecar package name`);
+    if (!PACKAGE.test(name)) throw new Error(`${where}: dependencies: ${name} is not a sidecar or plugin name`);
     if (!isRange(range)) throw new Error(`${where}: dependencies ${name}: invalid range ${range}`);
   }
   return Object.keys(dependencies);
 }
 
 /**
- * The sidecar packages that the dependencies of plugin.json name. plugins holds the packages of installed plugins; such a
- * package is a plugin dependency and is left out (docs/spec/plugins.md#pluginjson).
+ * The sidecars that the dependencies of plugin.json name. plugins holds the names of installed plugins; such a name
+ * is a plugin dependency and is left out (docs/spec/plugins.md#pluginjson).
  */
 export function manifestSidecars(manifest, plugins = new Set()) {
   // 기본값: dependencies 는 plugin.json 의 선택 필드이며, 없는 플러그인은 사이드카를 쓰지 않는다.
@@ -385,7 +385,7 @@ function checkContributes(where, id, contributes) {
  *   surface   카드 표면. `{ page, composition }` 은 패키지 안 문서와 합성 권한 선언이다
  *   sections  사이드바에 표시할 수 있는 섹션. id 는 `<플러그인 id>.<이름>` 형식
  *   preview   라이브러리 미리보기의 색. `ink` 는 테마 토큰 이름(`--rail` 등). surface 가 있어야 한다
- *   dependencies  표면 페이지나 상태 모듈이 사용하는 사이드카 패키지마다 version 범위
+ *   dependencies  the version range of each sidecar that the page surface or the state module uses and of each plugin that it contributes to
  *   exposes   표면 페이지가 등록하는 status, command, dom 항목. page 표면이 있어야 한다
  */
 export function validateManifest(manifest) {
@@ -426,7 +426,8 @@ export function validateManifest(manifest) {
     }
   }
   if (manifest.dependencies !== undefined) {
-    // sidecar package 는 표면이나 상태 모듈이, plugin package 는 기여가 쓴다(docs/spec/plugins.md#pluginjson).
+    // A sidecar dependency serves the surface or the state module, and a plugin dependency serves the contributions
+    // (docs/spec/plugins.md#pluginjson).
     if (manifest.surface === undefined && manifest.state === undefined && manifest.contributes === undefined) {
       throw new Error(`${where}: dependencies require a surface, a state module or contributes`);
     }

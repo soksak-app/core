@@ -1066,7 +1066,16 @@ Previous completed component work remains evidence, not completion of these wide
 - [~] R5 — P1: Name each concept with one term in code, specifications and records of every repository.
   - [o] R5.1 — P1: State the rule in `AGENTS.md` and keep the terms and their rejected synonyms in one list. Done on 2026-10-08: `AGENTS.md` states the rule, `packages/plugin-api/terms.json` holds the terms with their definitions and rejected synonyms, `docs/spec/terms.md` describes the list, and `test/terms.test.mjs` of `@soksak/plugin-api` checks its form.
   - [ ] R5.2 — P1: Report a rejected synonym in documents, comments, identifiers and error texts in `make records-check` and `soksak-records`.
-  - [ ] R5.3 — P1: Replace the rejected synonyms in core, the plugins, the sidecars and the registry.
+  - [~] R5.3 — P1: Replace the rejected synonyms in core, the plugins, the sidecars and the registry.
+    - [o] R5.3.1 — P1: Call plugins plugins, sidecars sidecars and the `.tgz` files of plugins and sidecars releases in the specifications, comments, identifiers and error texts of core. Done on 2026-10-08: the specifications, AGENTS.md and the comments of `sok`, both hosts and `@soksak/plugin-api` no longer say plugin package, sidecar package, package name, plugin archive or release asset; `validate_package_json`, `ValidatePackageJSON` and the contract case `installed.sidecars.leave-out-plugin-dependencies` replace the earlier names, and `@soksak/plugin-api` passes 152 tests, the workbench 312, the scripts 185, both `sok` test suites pass and `make host-contract-check` passes 387 cases.
+    - [ ] R5.3.2 — P1: Name the outputs and identifiers of `sok` after releases: the `archive` fields of `sok plugin pack` and `sok sidecar release`, `PluginArchiveName`, `checkPluginArchive`, the `<archive name>` lines of `SHA256SUMS` and the contract cases `cli.pack.writes-sorted-plugin-archive`, `cli.release.writes-asset-and-sums` and `install.names.archives-and-paths`.
+    - [ ] R5.3.3 — P1: Name the libraries of core by their names instead of package in the specifications and comments; the package of Go, of Cargo and of npm stays where those tools are meant.
+    - [ ] R5.3.4 — P1: Replace the rejected synonyms in the plugin repositories.
+    - [ ] R5.3.5 — P1: Replace the rejected synonyms in the sidecar repositories.
+    - [ ] R5.3.6 — P1: Replace the rejected synonyms in the registry.
+  - [ ] R5.4 — P1: Remove `package` from `plugins/installed.json`; the hosts and `sok` read the `name` of a plugin from its `package.json`, and a reader refuses an `installed.json` with `package`.
+  - [ ] R5.5 — P1: Rename the `package` of plugin versions and the `assets` of sidecar versions in the registry index to `release` and `releases`.
+  - [ ] R5.6 — P1: Rename `helpers[].package` of `sidecar.json` to `helpers[].name`.
 
 ## Tauri/Wails parity audit (2026-09-21)
 

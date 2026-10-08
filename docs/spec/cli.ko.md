@@ -25,8 +25,8 @@
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | 설치된 plugin을 바꾼다([설치](installation.ko.md)) |
 | `sok plugin list` | 설치된 plugin을 나열한다 |
 | `sok registry use <index>` | 설치가 읽는 registry index를 정한다 |
-| `sok plugin pack <directory> <output directory> [--diagnostics]` | Plugin package archive를 쓴다. `--diagnostics`는 plugin의 진단 선언을 더한다 |
-| `sok sidecar release <directory> <output directory> [--platform <platform>]` | Sidecar release archive를 쓰고 `SHA256SUMS`를 갱신한다 |
+| `sok plugin pack <directory> <output directory> [--diagnostics]` | plugin release `<id>-<version>.tgz`를 쓴다. `--diagnostics`는 plugin의 진단 선언을 더한다 |
+| `sok sidecar release <directory> <output directory> [--platform <platform>]` | Sidecar release를 쓰고 `SHA256SUMS`를 갱신한다 |
 | `sok registry build <directory>` | Registry를 검증하고 그 `index.json`을 쓴다 |
 
 선언된 command 이름에는 점이 있으므로(`core.card.split`, `terminal.input`) 위의 명령 단어와 겹치지 않는다.
@@ -47,13 +47,13 @@
 
 이 명령들은 파일을 쓰며 실행 중인 애플리케이션이 필요 없다.
 
-`sok plugin pack <directory> <output directory>`는 plugin 폴더의 `package.json`과 `plugin.json`을 읽고, [plugin package](installation.ko.md#plugin-package)와 `plugin.json`의 `dependencies`를 검사한 뒤 `<id>-<version>.tgz`를 쓴다. `<id>`는 `plugin.json`의 `id`다. `plugin.json`의 surface module, section module, state module이 `files`가 나열한 경로 안에 없거나, `files`가 `diagnostics.json`이나 `diagnostics.json`이 지정한 `module`을 나열하면 실패한다([진단 선언](plugins.ko.md#진단-선언)). `--diagnostics`를 주고 `diagnostics.json`이 폴더 안의 존재하는 JavaScript module을 지정하면, archive는 `diagnostics.json`과 그 module도 담는다. 이 진단 package는 진단 build와 window check용이다. 출력은 절대 archive 경로를 담은 `{ id, version, archive, sha256 }`이다.
+`sok plugin pack <directory> <output directory>`는 plugin 폴더의 `package.json`과 `plugin.json`을 읽고, [plugin release](installation.ko.md#plugin-release)과 `plugin.json`의 `dependencies`를 검사한 뒤 `<id>-<version>.tgz`를 쓴다. `<id>`는 `plugin.json`의 `id`다. `plugin.json`의 surface module, section module, state module이 `files`가 나열한 경로 안에 없거나, `files`가 `diagnostics.json`이나 `diagnostics.json`이 지정한 `module`을 나열하면 실패한다([진단 선언](plugins.ko.md#진단-선언)). `--diagnostics`를 주고 `diagnostics.json`이 폴더 안의 존재하는 JavaScript module을 지정하면, release는 `diagnostics.json`과 그 module도 담는다. 이 진단 package는 진단 build와 window check용이다. 출력은 절대 release 경로를 담은 `{ id, version, archive, sha256 }`이다.
 
-`sok sidecar release <directory> <output directory> [--platform <platform>]`는 sidecar 폴더의 `package.json`과 `sidecar.json`을 읽고, `package.json`에 package `name`, `version`, 그리고 `sidecar.json`과 `sidecar.json`의 `executable`을 나열한 `files`가 있는지 검사한 뒤 [release asset](installation.ko.md#sidecar-release-asset) `<file name>-<version>-<platform>.tar.gz`를 쓴다. `--platform`이 다른 플랫폼을 지정하지 않으면 플랫폼은 `sok`이 실행되는 플랫폼이다. `sok`은 파일 내용을 보지 않으므로, 다른 플랫폼을 지정하면 그 플랫폼용으로 build한 파일에 이름을 붙이는 것이다. 그다음 출력 폴더에 `SHA256SUMS`를 쓴다. Archive마다 `<sha256>  <archive name>` 한 줄이며 archive 이름 순서이고, 같은 이름의 archive 줄은 바꾼다. Archive를 쓰기 전에 `SHA256SUMS`를 읽으므로, 형식이 틀린 파일이면 아무것도 쓰지 않고 실패한다. 출력은 `{ name, version, platform, archive, sha256 }`이다.
+`sok sidecar release <directory> <output directory> [--platform <platform>]`는 sidecar 폴더의 `package.json`과 `sidecar.json`을 읽고, `package.json`에 package `name`, `version`, 그리고 `sidecar.json`과 `sidecar.json`의 `executable`을 나열한 `files`가 있는지 검사한 뒤 [release](installation.ko.md#sidecar-release) `<file name>-<version>-<platform>.tar.gz`를 쓴다. `--platform`이 다른 플랫폼을 지정하지 않으면 플랫폼은 `sok`이 실행되는 플랫폼이다. `sok`은 파일 내용을 보지 않으므로, 다른 플랫폼을 지정하면 그 플랫폼용으로 build한 파일에 이름을 붙이는 것이다. 그다음 출력 폴더에 `SHA256SUMS`를 쓴다. Release마다 `<sha256>  <archive name>` 한 줄이며 release 이름 순서이고, 같은 이름의 release 줄은 바꾼다. Release를 쓰기 전에 `SHA256SUMS`를 읽으므로, 형식이 틀린 파일이면 아무것도 쓰지 않고 실패한다. 출력은 `{ name, version, platform, archive, sha256 }`이다.
 
-두 archive는 gzip으로 압축한 tar 파일이다. `package.json`과 `files`의 모든 경로를 폴더 기준 상대 경로로 담으며, 폴더는 그 아래 파일까지 담는다. 항목은 경로 순서이고, 수정 시각 0, 소유자 0, mode 0644를 가지며 실행 bit가 있는 파일은 0755다. 나열한 경로가 없거나, 폴더 밖으로 나가거나, symbolic link이거나 그것을 담거나, 일반 파일도 폴더도 아닌 파일이면 명령은 실패하고 아무것도 쓰지 않는다. 두 구현은 같은 항목을 쓰지만 gzip stream이 다르므로, archive의 `sha256`은 그것을 쓴 `sok`이 출력한 값이다.
+두 release는 gzip으로 압축한 tar 파일이다. `package.json`과 `files`의 모든 경로를 폴더 기준 상대 경로로 담으며, 폴더는 그 아래 파일까지 담는다. 항목은 경로 순서이고, 수정 시각 0, 소유자 0, mode 0644를 가지며 실행 bit가 있는 파일은 0755다. 나열한 경로가 없거나, 폴더 밖으로 나가거나, symbolic link이거나 그것을 담거나, 일반 파일도 폴더도 아닌 파일이면 명령은 실패하고 아무것도 쓰지 않는다. 두 구현은 같은 항목을 쓰지만 gzip stream이 다르므로, release의 `sha256`은 그것을 쓴 `sok`이 출력한 값이다.
 
-`sok registry build <directory>`는 registry 폴더의 `plugins/<id>.json`, `sidecars/<file name>.json`, `packs/<name>.json`, `revoked.json`(`{ plugins, sidecars }`)을 읽는다. 각 파일은 [registry index](installation.ko.md#registry-index)의 항목 하나를 담고, 파일 이름은 항목과 맞는다. 명령은 항목을 하나의 index로 검사하고, 모든 archive를 읽어 `sha256`을 비교하며, plugin archive가 plugin id와 항목의 sidecar 범위를 `dependencies`로 가진 `plugin.json`, 항목의 package 이름, version, `engines.soksak`을 가진 `package.json`을 담는지 검사한다. 모든 검사를 통과할 때만 각 목록을 id나 이름 순서로 정렬하고 두 칸 들여쓰기와 [registry index](installation.ko.md#registry-index) 표의 필드 순서로 `index.json`을 쓰므로 두 구현이 같은 byte를 쓰며, 파일은 한 번에 바꾼다. `plugins`, `sidecars`, `packs` 폴더가 없으면 항목이 없는 것이고, `revoked.json`이 없으면 build는 실패한다. 출력은 경로와 항목 수를 담은 `{ index, plugins, sidecars, packs }`이다.
+`sok registry build <directory>`는 registry 폴더의 `plugins/<id>.json`, `sidecars/<file name>.json`, `packs/<name>.json`, `revoked.json`(`{ plugins, sidecars }`)을 읽는다. 각 파일은 [registry index](installation.ko.md#registry-index)의 항목 하나를 담고, 파일 이름은 항목과 맞는다. 명령은 항목을 하나의 index로 검사하고, 모든 release를 읽어 `sha256`을 비교하며, plugin release가 plugin id와 항목의 sidecar 범위를 `dependencies`로 가진 `plugin.json`, 항목의 package 이름, version, `engines.soksak`을 가진 `package.json`을 담는지 검사한다. 모든 검사를 통과할 때만 각 목록을 id나 이름 순서로 정렬하고 두 칸 들여쓰기와 [registry index](installation.ko.md#registry-index) 표의 필드 순서로 `index.json`을 쓰므로 두 구현이 같은 byte를 쓰며, 파일은 한 번에 바꾼다. `plugins`, `sidecars`, `packs` 폴더가 없으면 항목이 없는 것이고, `revoked.json`이 없으면 build는 실패한다. 출력은 경로와 항목 수를 담은 `{ index, plugins, sidecars, packs }`이다.
 
 ## Plugin 설치
 
@@ -63,7 +63,7 @@
 
 `sok plugin install <id>`는 `plugins/registry.json`이 지정한 index와 `plugins/installed.json`(없으면 설치된 것이 없다)을 읽고, 이 `sok`의 core version과 실행 중인 플랫폼에 맞는 version을 고른 뒤([version 선택](installation.ko.md#version-선택)) 다음을 한다.
 
-1. 아직 설치되지 않은 고른 archive마다 읽어 `sha256`을 비교하고, 설치 경로 옆 임시 폴더에 푼 뒤 이름을 바꿔 제자리에 둔다.
+1. 아직 설치되지 않은 고른 release마다 읽어 `sha256`을 비교하고, 설치 경로 옆 임시 폴더에 푼 뒤 이름을 바꿔 제자리에 둔다.
 2. `plugins/installed.json`을 한 번에 쓴다. Plugin은 package, version, `enabled: true`, 그 version의 sidecar 범위, 다른 version을 바꿀 때의 `previous`를 가진다. 고른 sidecar version을 담고, 어느 plugin도 지정하지 않은 sidecar는 담지 않는다.
 3. 설치된 plugin의 쓰는 version과 `previous`가 아닌 모든 plugin 폴더와 version 폴더, `installed.json`이 지정하지 않은 모든 sidecar 폴더와 version 폴더를 지운다.
 

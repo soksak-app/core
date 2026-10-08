@@ -110,11 +110,11 @@ func TestVersionRangesAcceptExactCaretTildeAndBoundedForms(t *testing.T) {
 }
 
 // contract: install.package.fields-and-manifest
-func TestPluginPackageDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSidecarRanges(t *testing.T) {
+func TestPackageJSONDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSidecarRanges(t *testing.T) {
 	text := `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
 		"files": ["plugin.json", "ui"], "private": true}`
 	pkg := decode(t, text)
-	if err := sok.ValidatePluginPackage(pkg); err != nil {
+	if err := sok.ValidatePackageJSON(pkg); err != nil {
 		t.Fatal(err)
 	}
 	ranges, err := sok.ManifestDependencies(decode(t, `{"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`).(map[string]any))
@@ -139,7 +139,7 @@ func TestPluginPackageDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSide
 		field := change[:strings.Index(change, ":")]
 		changed := decode(t, text).(map[string]any)
 		changed[strings.Trim(field, `"`)] = at(decode(t, "{"+change+"}"), strings.Trim(field, `"`))
-		rejects(t, sok.ValidatePluginPackage(changed), want)
+		rejects(t, sok.ValidatePackageJSON(changed), want)
 	}
 }
 

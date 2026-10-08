@@ -53,7 +53,7 @@ async function fetchJson(path) {
   return response.json();
 }
 
-/** 이 문서가 속한 플러그인 패키지의 plugin.json. 문서는 `modules/<패키지>/...` 에 있다. */
+/** The plugin.json of the plugin of this document. The document is in `modules/<plugin>/...`. */
 export async function ownManifest() {
   const name = pagePackage(location.pathname);
   if (!name) throw new Error(`${location.pathname} is not a plugin page`);

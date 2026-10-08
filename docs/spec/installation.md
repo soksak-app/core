@@ -19,24 +19,24 @@ A version is `x.y.z` with numeric parts and no leading zeros; versions compare b
 
 Other forms, such as `latest`, `**` or pre-release suffixes, are rejected.
 
-## Plugin package
+## Plugin release
 
-A plugin package is the archive `<id>-<version>.tgz` of the plugin's files. Its `package.json` declares:
+A plugin release is the file `<id>-<version>.tgz` of the plugin's files that `sok plugin pack` writes. Its `package.json` declares:
 
 | Field | Meaning |
 | --- | --- |
 | `name` | Package name; the installed files are served at `/modules/<name>/` |
 | `version` | Plugin version |
 | `engines.soksak` | Range of core API versions the plugin supports |
-| `files` | Paths inside the package that the archive holds; it includes `plugin.json` |
+| `files` | Paths inside the package that the release holds; it includes `plugin.json` |
 
 Other `package.json` fields belong to package tools and are not read, except `soksak`, which is refused: the sidecars of a plugin and their ranges are the `dependencies` of its `plugin.json` ([plugins](plugins.md#pluginjson)).
 
 A plugin repository builds against the `@soksak/plugin-api` of one core release. Its `engines.soksak` is `*`, which every core version satisfies, `^<version>` of that `@soksak/plugin-api`, which only that release satisfies, or `>=<x.y.z>` with a lower bound up to that version, which that core release and every later one satisfy; a plugin that uses a manifest field that core added in a release declares `>=` that release. The command `soksak-engines` of `@soksak/plugin-api` checks it in the plugin repository and fails with `package.json: engines.soksak <range> must be *, ^<version> or >= a version up to <version>, the @soksak/plugin-api version`; each plugin repository runs it in `make test`.
 
-## Sidecar release asset
+## Sidecar release
 
-A sidecar version is released as one archive per platform, `<file name>-<version>-<platform>.tar.gz`. The file name of a sidecar `@scope/name` is `scope-name`; an unscoped name is used as it is. A platform is one of `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `windows-arm64` and `windows-x64`. The installer checks a sidecar archive only against the `sha256` of its registry entry before it extracts and runs it; a sidecar, including one from a third party, is not signed or otherwise reviewed by the application.
+A sidecar version is released as one release per platform, `<file name>-<version>-<platform>.tar.gz`. The file name of a sidecar `@scope/name` is `scope-name`; an unscoped name is used as it is. A platform is one of `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `windows-arm64` and `windows-x64`. The installer checks a sidecar release only against the `sha256` of its registry entry before it extracts and runs it; a sidecar, including one from a third party, is not signed or otherwise reviewed by the application.
 
 ## Registry index
 
@@ -49,30 +49,30 @@ The registry index `index.json` has `format` 1 and these lists:
 | `packs` | `{ name, description, plugins }`: plugin ids installed together |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }] }` |
 
-`url` is an `https:` URL of a published release archive or an absolute `file:` URL of a local one ([fetching](#fetching)); `sha256` is 64 lowercase hexadecimal digits. A description has 1 to 200 characters (Unicode code points). The index check also rejects a repeated plugin id, package, sidecar, pack or version; a pack that names an unknown plugin; a plugin version that needs an unknown sidecar or a range that no listed sidecar version satisfies; and a revoked version that is not listed. `sok registry build` also reads the `plugin.json` of each plugin archive and fails when a dependency names neither a listed plugin package nor a listed sidecar, or when no listed version of a plugin dependency satisfies its range.
+`url` is an `https:` URL of a published release or an absolute `file:` URL of a local one ([fetching](#fetching)); `sha256` is 64 lowercase hexadecimal digits. A description has 1 to 200 characters (Unicode code points). The index check also rejects a repeated plugin id, package, sidecar, pack or version; a pack that names an unknown plugin; a plugin version that needs an unknown sidecar or a range that no listed sidecar version satisfies; and a revoked version that is not listed. `sok registry build` also reads the `plugin.json` of each plugin and fails when a dependency names neither a listed plugin nor a listed sidecar, or when no listed version of a plugin dependency satisfies its range.
 
 ## Fetching
 
-A registry index and an archive are read from a location: an `https:` URL, an absolute `file:` URL, or, where a command takes a path, a file path. Any other URL fails with `<url>: the URL must be https: or an absolute file: URL`. An `https:` URL is read with these rules, which both implementations follow with the same texts:
+A registry index and an release are read from a location: an `https:` URL, an absolute `file:` URL, or, where a command takes a path, a file path. Any other URL fails with `<url>: the URL must be https: or an absolute file: URL`. An `https:` URL is read with these rules, which both implementations follow with the same texts:
 
 - The connection uses TLS with the certificate authorities that the operating system trusts.
 - A redirect is followed when its target is an `https:` URL, at most 5 times; a redirect to another scheme fails with `<url>: redirect to <target> is not https`, and a sixth redirect fails with `<url>: more than 5 redirects`.
 - A response other than 200 fails with `<url>: HTTP <status>`.
-- The whole request, from connecting to the last byte, takes at most 60 seconds for an index and 600 seconds for an archive; a slower request fails with `<url>: timed out after <seconds> s`.
-- An index holds at most 8 MiB and an archive at most 256 MiB; a larger body fails with `<url>: larger than <bytes> bytes`.
+- The whole request, from connecting to the last byte, takes at most 60 seconds for an index and 600 seconds for an release; a slower request fails with `<url>: timed out after <seconds> s`.
+- An index holds at most 8 MiB and an release at most 256 MiB; a larger body fails with `<url>: larger than <bytes> bytes`.
 - A failure to connect or to read fails with `<url>: cannot connect: <reason>`, where the reason is the text of the network library.
 
-Nothing is cached: each command and each plugin operation reads the index and the archives it needs again, and an archive is checked against its `sha256` before it is extracted.
+Nothing is cached: each command and each plugin operation reads the index and the releases it needs again, and an release is checked against its `sha256` before it is extracted.
 
 ## Version selection
 
 Installing a plugin for a core version and platform selects the newest plugin version whose `engines.soksak` contains the core version and that is not revoked. Each installation has one version of a sidecar, shared by every installed plugin that names it. For each sidecar of the selected plugin version, the ranges are the range of that version and the ranges of the other installed plugins that name the sidecar. The version in use is kept when it satisfies every range, is not revoked and has an asset for the platform; otherwise the newest sidecar version that satisfies every range, is not revoked and has an asset for the platform is selected. When a selection is empty, installation fails with the plugin, the version or ranges and the core version or platform; for a sidecar it names each plugin and range.
 
-A dependency of the selected version's `plugin.json` that names the package of a plugin of the index is a plugin dependency; installation reads the `plugin.json` from the downloaded archive before it extracts anything. Installing the plugin installs each plugin dependency by the same rules, recursively: an installed provider is kept when its version satisfies the range of every installed plugin that names it, and otherwise the newest provider version that satisfies every range, `engines.soksak` and revocation is selected; a provider that is installed but not enabled is enabled. A dependency that names neither a plugin of the index nor a sidecar of the index fails with `<plugin> <version>: dependency <package> is neither a plugin nor a sidecar of the registry`, and a cycle fails with `plugin dependency cycle: <id> -> <id> -> <id>`. `sok plugin update` selects only provider versions that satisfy the range of every installed plugin that names the provider. `sok plugin remove` and `sok plugin disable` fail with `plugin <id> is required by <dependent> <range>` when an enabled installed plugin names its package; `installed.json` and the folders stay unchanged.
+A dependency of the selected version's `plugin.json` that names the package of a plugin of the index is a plugin dependency; installation reads the `plugin.json` from the downloaded release before it extracts anything. Installing the plugin installs each plugin dependency by the same rules, recursively: an installed provider is kept when its version satisfies the range of every installed plugin that names it, and otherwise the newest provider version that satisfies every range, `engines.soksak` and revocation is selected; a provider that is installed but not enabled is enabled. A dependency that names neither a plugin of the index nor a sidecar of the index fails with `<plugin> <version>: dependency <package> is neither a plugin nor a sidecar of the registry`, and a cycle fails with `plugin dependency cycle: <id> -> <id> -> <id>`. `sok plugin update` selects only provider versions that satisfy the range of every installed plugin that names the provider. `sok plugin remove` and `sok plugin disable` fail with `plugin <id> is required by <dependent> <range>` when an enabled installed plugin names its package; `installed.json` and the folders stay unchanged.
 
 ## Installation layout
 
-Inside the configuration directory, plugin version `<version>` of `<id>` is extracted into `plugins/<id>/<version>`, and the platform asset of a sidecar version into `sidecars/<file name>/<version>/<platform>`. `plugins/installed.json` has `format` 2, `plugins` and `sidecars`. `plugins` maps each plugin id to `{ package, version, path, enabled, sidecars, previous? }`: the package name, the version in use, the folder that installation extracted that version into, `plugins/<id>/<version>`, whether the plugin loads, the sidecar ranges of that version, and the version that rollback restores. A package appears once. `sidecars` maps each sidecar that an installed plugin names to `{ version, path }`: the version in use, which satisfies the range of every installed plugin that names it, and the folder that installation extracted its platform asset into, `sidecars/<file name>/<version>/<platform>`; a sidecar that no installed plugin names is not listed. Each `path` is relative to the configuration directory and must equal the folder that these rules give, so the configuration directory can move ([projects](projects.md#persistence)). Installation records each `path` when it extracts the archive, and the hosts and `sok` read files only from recorded paths, resolved against the configuration directory. A file whose `format` is not 2 fails with `<file>: plugins/installed.json: format must be 2` and stays unchanged.
+Inside the configuration directory, plugin version `<version>` of `<id>` is extracted into `plugins/<id>/<version>`, and the platform release of a sidecar version into `sidecars/<file name>/<version>/<platform>`. `plugins/installed.json` has `format` 2, `plugins` and `sidecars`. `plugins` maps each plugin id to `{ package, version, path, enabled, sidecars, previous? }`: the package name, the version in use, the folder that installation extracted that version into, `plugins/<id>/<version>`, whether the plugin loads, the sidecar ranges of that version, and the version that rollback restores. A package appears once. `sidecars` maps each sidecar that an installed plugin names to `{ version, path }`: the version in use, which satisfies the range of every installed plugin that names it, and the folder that installation extracted its platform release into, `sidecars/<file name>/<version>/<platform>`; a sidecar that no installed plugin names is not listed. Each `path` is relative to the configuration directory and must equal the folder that these rules give, so the configuration directory can move ([projects](projects.md#persistence)). Installation records each `path` when it extracts the release, and the hosts and `sok` read files only from recorded paths, resolved against the configuration directory. A file whose `format` is not 2 fails with `<file>: plugins/installed.json: format must be 2` and stays unchanged.
 
 ## Serving installed plugins
 

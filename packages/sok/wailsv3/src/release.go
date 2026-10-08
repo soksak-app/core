@@ -1,7 +1,7 @@
 package sok
 
-// plugin package archive 와 sidecar release asset 을 쓴다(docs/spec/cli.md). 두 archive 는 gzip 으로 압축한 tar
-// 이며, 항목은 경로 순서이고 수정 시각 0, 소유자 0, mode 0644 또는 0755 다. 실패하면 아무 파일도 남기지 않는다.
+// Writes packed plugins and sidecar release assets (docs/spec/cli.md). Both are gzip-compressed tar files whose entries
+// are in path order with modification time 0, owner 0 and mode 0644 or 0755. A failure leaves no file.
 
 import (
 	"archive/tar"
@@ -250,7 +250,7 @@ func runPack(dir, out string, diagnostics bool, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := ValidatePluginPackage(value); err != nil {
+	if err := ValidatePackageJSON(value); err != nil {
 		return err
 	}
 	pkg := value.(map[string]any)

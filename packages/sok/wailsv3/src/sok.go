@@ -33,7 +33,7 @@ commands:
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
   plugin pack DIRECTORY OUTPUT [--diagnostics]
-                            writes the plugin package archive into OUTPUT; --diagnostics adds diagnostics.json
+                            writes the plugin into OUTPUT; --diagnostics adds diagnostics.json
   sidecar release DIRECTORY OUTPUT [--platform P]
                             writes the sidecar release asset into OUTPUT and updates SHA256SUMS
   registry build DIRECTORY  checks a registry and writes its index.json

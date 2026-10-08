@@ -6,8 +6,8 @@
 //
 // 사이드카는 스테이징된 설정 파일로만 찾는다.
 //
-//	environment.json                  plugins: 플러그인 패키지 이름
-//	modules/<플러그인>/plugin.json     sidecars: 사이드카 패키지 이름
+//	environment.json                  plugins: plugins
+//	modules/<플러그인>/plugin.json     sidecars: sidecars
 //	modules/<사이드카>/sidecar.json    executable: 패키지 안의 실행 파일 경로
 //
 // 실행 파일은 애플리케이션 실행 파일과 같은 디렉터리에 같은 파일 이름으로 놓인다.

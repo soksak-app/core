@@ -16,12 +16,12 @@ A sidecar is a package in its own repository with a `sidecar.json` file ([reposi
 | `protocol` | Message format version. The current version is `1` |
 | `helpers` | Optional array of helper packages. Each item has `package` (package name) and `executable` (path inside that package) |
 
-A plugin declares the sidecar packages its page uses, each with a version range, as the `dependencies` of its `plugin.json` ([plugins](plugins.md#pluginjson)). Installation extracts each sidecar's release asset into the configuration directory.
+A plugin declares the sidecars its page uses, each with a version range, as the `dependencies` of its `plugin.json` ([plugins](plugins.md#pluginjson)). Installation extracts each sidecar's release into the configuration directory.
 
 The host resolves sidecars from the installed plugins ([serving installed plugins](installation.md#serving-installed-plugins)):
 
 1. `plugins/installed.json` lists the enabled plugins with their recorded folders and each sidecar with its recorded folder.
-2. The `plugin.json` in each plugin folder lists its sidecar packages.
+2. The `plugin.json` in each plugin folder lists its sidecars.
 3. The `sidecar.json` in each sidecar folder gives the `executable` path and `protocol` of the sidecar.
 
 The host runs the `executable` inside that folder. It fails at startup when `installed.json` or a `sidecar.json` is missing or invalid, its `executable` is not a path inside the package, or its `protocol` is not `1`. It starts a sidecar when a page first sends to it. A request for a sidecar that no plugin declares fails with `sidecar <name> is not declared by any plugin`; a request after the host stops its sidecars also fails.
@@ -68,7 +68,7 @@ While the host stops its sidecars, the end of output is not a failure. Any other
 
 ## Page interface
 
-`page.sidecar(name)` takes a sidecar package name and returns `send(surface, body)`, `on(surface, fn)`, and `onFailure(surface, fn)`. `on` calls `fn(body)` for each `sidecar-message` event of that sidecar and surface, and `onFailure` calls `fn(reason)` for each `sidecar-failure` event of that sidecar and surface. Both return a promise that resolves after the subscription is registered; a page subscribes before its first request.
+`page.sidecar(name)` takes a sidecar and returns `send(surface, body)`, `on(surface, fn)`, and `onFailure(surface, fn)`. `on` calls `fn(body)` for each `sidecar-message` event of that sidecar and surface, and `onFailure` calls `fn(reason)` for each `sidecar-failure` event of that sidecar and surface. Both return a promise that resolves after the subscription is registered; a page subscribes before its first request.
 
 In the application document, the workbench installs one `sidecar-failure` listener before it sends the first sidecar request. It calls the failure handlers that surface modules, state modules, and background sessions registered through the workbench for that sidecar and surface. When no handler is registered, the workbench reports the failure as a page error: it dispatches an `error` event to the window, which writes the failure to the application log and shows it in the application error alert.
 

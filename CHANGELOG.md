@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R5.3.1: the specifications and comments of core call plugins plugins, sidecars sidecars and their `.tgz` files releases; `sok` errors and identifiers follow.
 - F111.7.6: the contract case `page.start.sok-core-owner` covers the Tauri start document address.
 - F111.7.5: the Tauri start document handler states why a request without a host answers not found.
 - R5.1: `AGENTS.md` names each concept with one term, and `packages/plugin-api/terms.json` lists the terms and their rejected synonyms.

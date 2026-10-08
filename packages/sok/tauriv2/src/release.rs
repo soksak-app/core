@@ -1,5 +1,5 @@
-//! plugin package archive 와 sidecar release asset 을 쓴다(docs/spec/cli.md). 두 archive 는 gzip 으로 압축한 tar
-//! 이며, 항목은 경로 순서이고 수정 시각 0, 소유자 0, mode 0644 또는 0755 다. 실패하면 아무 파일도 남기지 않는다.
+//! Writes packed plugins and sidecar release assets (docs/spec/cli.md). Both are gzip-compressed tar files whose entries
+//! are in path order with modification time 0, owner 0 and mode 0644 or 0755. A failure leaves no file.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -294,7 +294,7 @@ fn diagnostic_files(dir: &Path, listed: &[String]) -> Result<Vec<String>, String
 fn run_pack(dir: &str, out: &str, diagnostics: bool, stdout: &mut dyn Write) -> Result<(), String> {
     let dir = Path::new(dir);
     let pkg = read_json_file(dir, "package.json")?;
-    install::validate_plugin_package(&pkg)?;
+    install::validate_package_json(&pkg)?;
     let manifest = read_json_file(dir, "plugin.json")?;
     if !manifest.is_object() {
         return Err("plugin.json: expected an object".into());
