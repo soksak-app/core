@@ -1,0 +1,34 @@
+{
+  "terms": [
+    {
+      "term": "plugin",
+      "definition": "An installable unit with a plugin.json: its pages, sections, settings and declarations. Its files are installed in its plugin folder.",
+      "rejected": ["plugin package"]
+    },
+    {
+      "term": "plugin archive",
+      "definition": "The file <id>-<version>.tgz of a plugin's files that sok plugin pack writes and that a registry lists.",
+      "rejected": ["plugin package archive", "package archive"]
+    },
+    {
+      "term": "package name",
+      "definition": "The name in the package.json of a plugin or a sidecar, such as @scope/name; dependencies name plugins and sidecars by their package names.",
+      "rejected": ["sidecar package"]
+    },
+    {
+      "term": "plugin folder",
+      "definition": "The folder that plugins/installed.json records for an installed plugin.",
+      "rejected": ["package folder"]
+    },
+    {
+      "term": "plugin document",
+      "definition": "A document of a plugin that a document region shows at sok://<plugin id>/<path>.",
+      "rejected": ["package document", "soksak-package"]
+    },
+    {
+      "term": "deep link",
+      "definition": "An address soksak://<owner>/<command> that opens from outside the application.",
+      "rejected": []
+    }
+  ]
+}

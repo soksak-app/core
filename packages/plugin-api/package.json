@@ -27,7 +27,8 @@
     "engines-check.js",
     "core-exposure.json",
     "records-check.js",
-    "commits-check.js"
+    "commits-check.js",
+    "terms.json"
   ],
   "bin": {
     "soksak-exposure": "./exposure-check.js",

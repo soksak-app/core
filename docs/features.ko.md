@@ -647,7 +647,7 @@
     - [o] F111.7.3 — P1: Tauri 시작 문서를 `sok://core/start.json`에서 내보낸다. Red: `start_document_is_served_at_the_core_owner_of_sok`가 `cannot find value CORE in module start`로 build되지 않았다. Green: Tauri host test가 통과하고, 다시 빌드한 Tauri 애플리케이션이 macOS 26.6.2 arm64에서 `sok://core/start.json`으로 창을 시작하며 `core.screen`이 `library`를 보고한다. 2026-10-08 완료.
     - [o] F111.7.4 — P2: F111.7.2와 F111.7.3이 바꾼 주석을 영문으로 쓴다. 2026-10-08 완료.
 - [ ] F112 — P1: 딥링크를 연다. 애플리케이션 번들은 `soksak` URL scheme을 등록하고, host는 `soksak://<owner>/<command>?<params>`(owner는 `core`나 plugin id)를 그 owner의 선언된 command로 실행한다.
-- [~] F113 — P0: 두 host에서 문서 영역이 입력한 글자를 받는다. 입력: ABC 입력 소스에서 영역 문서의 입력 칸을 네이티브로 누르고 x와 y를 누른다. 동작: Tauri의 hwp 검사에서 편집기가 이동 키는 받았지만 입력한 글자는 받지 않았다. 기대: 두 host에서 입력 칸이 `xy`를 받는다.
+- [ ] F113 — P0: 두 host에서 문서 영역이 입력한 글자를 받는다. 입력: ABC 입력 소스에서 영역 문서의 입력 칸을 네이티브로 누르고 x와 y를 누른다. 동작: Tauri의 hwp 검사에서 편집기가 이동 키는 받았지만 입력한 글자는 받지 않았다. 기대: 두 host에서 입력 칸이 `xy`를 받는다.
   - [o] F113.1 — P1: `native/darwin/tests/document_typing_test.m`에서 비활성 애플리케이션의 순수 AppKit 창에서 문서 영역이 입력한 글자를 받는지 검사한다. 2026-10-08 완료: macOS 26.6.2 arm64에서 test가 통과하고, 영역 문서의 입력 칸이 `xy`를 받는다.
   - [ ] F113.2 — P0: Tauri host가 문서 영역에 입력한 글자를 넣지 않는 원인을 찾아 없앤다. Red는 `e2e/browser.test.mjs`의 창 검사 `a document region takes typed text into the field that a native press focuses`다. Tauri에서 page 제목이 `keys:xy typed:`이므로 두 keydown은 page에 닿고 글자는 들어가지 않는다. Wails에서는 통과한다. 배제한 것: Tauri webview 부모 뷰의 keyDown override, Tauri 창의 sendEvent override, host들의 키 이벤트 모니터.
 - [ ] F114 — P1: Wails의 hwp 파일 창 검사에서 `fresh` 뒤 plugin 표면이 20초 동안 `loading`에 머문 이유와, 그 뒤 애플리케이션을 다시 시작할 때까지 다음 검사들이 준비 단계에서 `diagnostics.fixture: the document did not reply within 10000 ms`로 실패한 이유를 찾는다.
@@ -1061,8 +1061,8 @@
     - [o] R3.5.1 — P1: 검사를 `@soksak/plugin-api`의 `soksak-records`와 `soksak-commits` 명령으로 제공한다. 2026-10-08에 완료했다. `records-check.js`와 `commits-check.js`가 검사와 명령을 담고, core는 `make records-check`, `make commits-check`, commit-msg hook으로 그것을 실행하며, `packages/plugin-api/test/records-check.test.mjs`가 4개 중 4개 통과한다.
     - [ ] R3.5.2 — P1: R3.5.1을 담은 core 릴리스의 `@soksak/plugin-api`로 plugin-browser, plugin-files, plugin-terminal, sidecar-files, sidecar-vt, registry의 `make test`와 CI에서 `soksak-records`와 `soksak-commits`를 실행한다.
 - [o] R4 — P1: `AGENTS.md`에 체크리스트 항목 하나는 따로 개발·검증·커밋하는 기능 하나이고, 더 큰 항목은 세부 항목으로 쪼개며, 완료한 항목은 changelog 항목을 쓰고 커밋한다고 적는다. 2026-10-08 완료.
-- [ ] R5 — P1: 모든 저장소의 코드, 명세, 기록에서 한 개념을 한 용어로 부른다.
-  - [ ] R5.1 — P1: 규칙을 `AGENTS.md`에 적고, 용어와 거부하는 동의어를 `docs/spec/terms.md`에 둔다.
+- [~] R5 — P1: 모든 저장소의 코드, 명세, 기록에서 한 개념을 한 용어로 부른다.
+  - [o] R5.1 — P1: 규칙을 `AGENTS.md`에 적고, 용어와 거부하는 동의어를 목록 하나에 둔다. 2026-10-08 완료: `AGENTS.md`가 규칙을 적고, `packages/plugin-api/terms.json`이 용어와 그 정의, 거부 동의어를 담으며, `docs/spec/terms.md`가 목록을 설명하고, `@soksak/plugin-api`의 `test/terms.test.mjs`가 그 형식을 검사한다.
   - [ ] R5.2 — P1: `make records-check`와 `soksak-records`가 문서, 주석, 식별자, 오류 문구의 거부 동의어를 보고한다.
   - [ ] R5.3 — P1: core, plugin, sidecar, registry의 거부 동의어를 바꾼다.
 

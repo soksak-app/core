@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R5.1: `AGENTS.md` names each concept with one term, and `packages/plugin-api/terms.json` lists the terms and their rejected synonyms.
 - F113.1: `document_typing_test` checks that a document region takes typed text in an inactive application.
 - F111.7.4: the comments that the `sok` change touched are written in English.
 - F111.7.3: the Tauri application starts its window from `sok://core/start.json`, so the `soksak` scheme is free for deep links.
