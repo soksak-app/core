@@ -224,13 +224,13 @@ fn invalid_json_closes_connection() {
 | `performance.trace.enable-without-services` | 서비스가 생기기 전에도 활성 호스트는 페이지 이벤트를 받는다. | both |
 | `performance.trace.already-off-writes-nothing` | 이미 비활성인 추적을 끄면 출력을 만들거나 덧붙이지 않는다. | both |
 | `performance.trace.relay-records-writer-pid` | 중계한 page 줄은 그 줄을 쓰는 host process를 `pid`로 기록한다. | both |
-| `performance.trace.rotates-at-10mb` | 10 MB 이상인 출력에 host 줄을 덧붙이면 먼저 그 출력을 `performance.ndjson.1`로 옮기고 새 출력을 시작한다. | both |
+| `performance.trace.rotates-at-100mb` | 100 MB 이상인 출력에 host 줄을 덧붙이면 먼저 그 출력을 `performance.ndjson.1`로 옮기고 이전 세대를 하나씩 뒤로 옮기며 다섯째를 지우고 새 출력을 시작한다. | both |
 | `performance.sampler.failed-reading-is-explicit` | 상주 크기를 얻지 못한 sampler 읽기는 `rss_host_kb` 대신 `error`를 기록한다. | both |
 | `performance.clock.before-epoch-is-explicit` | 유닉스 epoch 이전의 trace 시각은 epoch가 아니라 오류다. | tauriv2 only: Rust host는 epoch부터의 기간으로 시각을 적으므로 그 이전에서 실패하고, Go는 모든 시각을 적는다 |
 | `performance.trace.switch-and-relay-report-filesystem-errors` | 스위치와 중계 요청은 디렉터리·플래그·출력 실패를 반환한다. | both |
 | `performance.trace.invalid-switch-and-cleanup-errors` | 잘못된 스위치 읽기와 플래그 디렉터리는 오류이며 정리는 잘못된 디렉터리를 보존한다. | both |
 | `performance.trace.derive-service-flags-and-reset` | 새 서비스는 호스트 스위치를 받는다. 초기화와 비활성 재접속은 잔여 플래그를 제거하고 비활성 계측은 이벤트를 구성하지 않는다. | both |
-| `log.open.rotates-at-10mb` | 10 MB 이상인 로그 파일을 열면 먼저 `<이름>.1`로 옮겨 이전 세대를 대체하고 새 파일을 시작한다. | both |
+| `log.open.rotates-at-100mb` | 100 MB 이상인 로그 파일을 열면 먼저 `<이름>.1`로 옮기고 이전 세대를 하나씩 뒤로 옮기며 다섯째를 지우고 새 파일을 시작한다. | both |
 | `log.open.appends-below-bound` | 더 작은 로그 파일을 열면 거기에 덧붙이고, 새 로그 파일은 mode 0600이다. | both |
 | `platform.private.creates-owner-only-directories` | private directory 생성 연산은 경로에서 없는 모든 디렉터리를 mode 0700으로 만들고 이미 있는 디렉터리의 mode는 유지한다. | both |
 | `platform.private.appends-owner-only-file` | private append 연산은 없는 파일을 mode 0600으로 만들고, 있는 파일에는 덧붙이며, 있는 파일의 mode는 유지한다. | both |

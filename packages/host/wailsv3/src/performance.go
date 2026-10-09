@@ -245,17 +245,18 @@ func performanceWriteFlags(config, target string) error {
 	return errors.Join(failures...)
 }
 
-// performanceRotateBytes 는 출력이 이전 세대로 넘어가는 크기다(docs/spec/performance-trace.md).
-const performanceRotateBytes = 10 * 1024 * 1024
+// performanceRotateBytes 는 출력이 이전 세대로 넘어가는 크기다(docs/spec/performance-trace.md). 이전 세대의 수는 로그와
+// 같다(logGenerations).
+const performanceRotateBytes = logRotateBytes
 
 func performanceAppend(target string, record map[string]any) error {
 	encoded, err := json.Marshal(record)
 	if err != nil {
 		return fmt.Errorf("encode performance event: %w", err)
 	}
-	// 10 MB 에 이른 출력은 이전 세대(.1) 하나로 남기고 새 파일에 쓴다.
+	// 한도에 이른 출력은 이전 세대(.1)로 남기고 새 파일에 쓴다. 이전 세대는 logGenerations 개까지 남는다.
 	if info, err := os.Stat(target); err == nil && info.Size() >= performanceRotateBytes {
-		if err := os.Rename(target, target+".1"); err != nil {
+		if err := rotateGenerations(target); err != nil {
 			return fmt.Errorf("rotate performance output %s: %w", target, err)
 		}
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {

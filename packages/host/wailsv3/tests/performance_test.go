@@ -5,6 +5,7 @@ package host_test
 
 import (
 	"encoding/json"
+	"fmt"
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 	"os"
 	"path/filepath"
@@ -287,19 +288,47 @@ func TestRelayedPageLineCarriesTheWriterPid(t *testing.T) {
 	}
 }
 
-// contract: performance.trace.rotates-at-10mb
-func TestTraceRotatesAtTenMegabytes(t *testing.T) {
+// A trace file rotates at 100 MB and keeps the five earlier generations, so the records cover a long session.
+// contract: performance.trace.rotates-at-100mb
+func TestTraceRotatesAtOneHundredMegabytesAndKeepsFiveGenerations(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "performance.ndjson")
-	full := strings.Repeat("x", 10*1024*1024-1) + "\n"
-	if err := os.WriteFile(target, []byte(full), 0o600); err != nil {
+	small := strings.Repeat("x", 10*1024*1024-1) + "\n"
+	if err := os.WriteFile(target, []byte(small), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := host.PerformanceLine(target, "host", map[string]any{"event": "after"}); err != nil {
+	if err := host.PerformanceLine(target, "host", map[string]any{"event": "below"}); err != nil {
 		t.Fatal(err)
 	}
-	previous, err := os.ReadFile(target + ".1")
-	if err != nil || string(previous) != full {
-		t.Fatalf("the full output was not kept as the previous generation: %v (%d bytes)", err, len(previous))
+	if _, err := os.Stat(target + ".1"); !os.IsNotExist(err) {
+		t.Fatalf("a file of 10 MB was rotated: %v", err)
+	}
+	// Six rotations: the oldest generation is dropped and the others move up.
+	for generation := 1; generation <= 6; generation++ {
+		full := strings.Repeat(string(rune('a'+generation)), 100*1024*1024-1) + "\n"
+		if err := os.WriteFile(target, []byte(full), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := host.PerformanceLine(target, "host", map[string]any{"event": "after"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for generation := 1; generation <= 5; generation++ {
+		head := make([]byte, 1)
+		file, err := os.Open(fmt.Sprintf("%s.%d", target, generation))
+		if err != nil {
+			t.Fatalf("generation %d is missing: %v", generation, err)
+		}
+		if _, err := file.Read(head); err != nil {
+			t.Fatal(err)
+		}
+		file.Close()
+		// The newest rotated file is .1 (written sixth, letter 'g'); .5 is the second written ('c').
+		if want := byte('a' + 7 - generation); head[0] != want {
+			t.Fatalf("generation %d starts with %q, want %q", generation, head[0], want)
+		}
+	}
+	if _, err := os.Stat(target + ".6"); !os.IsNotExist(err) {
+		t.Fatalf("a sixth earlier generation was kept: %v", err)
 	}
 	current, err := os.ReadFile(target)
 	if err != nil || strings.Count(string(current), "\n") != 1 || !strings.Contains(string(current), `"event":"after"`) {

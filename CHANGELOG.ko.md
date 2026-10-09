@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F144.6: 두 host에서 로그 파일과 performance trace가 10 MB와 한 세대가 아니라 100 MB에서 회전하고 이전 세대 다섯 개(`.1`부터 `.5`까지)를 남기므로 기록이 긴 세션을 덮는다.
 - F144.4: 두 host가 sidecar로 보내는 각 요청(`sidecar.send`), sidecar에서 받는 각 메시지(`sidecar.receive`), native 영역의 각 event(`region`)를 같은 이름과 필드로 본문 전체와 함께 layer `host`의 trace event로 쓴다.
 - F144.3: terminal plugin 0.0.10과 terminal service 0.0.8이 입력 경로 전체를 기록한다(F144.5와 plugin 저장소 참고).
 - F144.2: native 라이브러리가 입력기의 모든 콜백(`keyDown`, `insertText`, `setMarkedText`, `unmarkText`, `doCommandBySelector`, 확정, 조합, 포커스, 입력 소스 변경)을 인자, 입력한 글, 전과 후의 입력 문서 상태를 담은 `info native input method`로, page로의 모든 보고를 `info native input report`로, 실패를 전체 상태와 함께 기록한다. `sp_log_info`와 기록의 시각(`clock_gettime`과 정수 산술이므로 치명 신호 처리기도 쓴다)이 새로 생겼고, 라이브러리의 기록은 `<time> <level> native <where>: <text>` 형식이다.

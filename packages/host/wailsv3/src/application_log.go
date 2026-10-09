@@ -11,8 +11,30 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// logRotateBytes 는 로그 파일을 열 때 이전 세대로 넘기는 크기다(docs/spec/hosts.md#application-log).
-const logRotateBytes = 10 * 1024 * 1024
+// logRotateBytes 는 로그 파일이 이전 세대로 넘어가는 크기이고, logGenerations 는 남기는 이전 세대의 수다
+// (docs/spec/diagnostics.md#files). 기록은 많을수록 좋으므로 한 세션을 덮을 만큼 크게 둔다.
+const (
+	logRotateBytes = 100 * 1024 * 1024
+	logGenerations = 5
+)
+
+// rotateGenerations 는 path 를 이전 세대 path.1 로 넘기고, 이전 세대는 하나씩 뒤로 옮기며, 마지막 세대는 지운다.
+func rotateGenerations(path string) error {
+	last := fmt.Sprintf("%s.%d", path, logGenerations)
+	if err := os.Remove(last); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove %s: %w", last, err)
+	}
+	for generation := logGenerations - 1; generation >= 1; generation-- {
+		from := fmt.Sprintf("%s.%d", path, generation)
+		if err := os.Rename(from, fmt.Sprintf("%s.%d", path, generation+1)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("rotate %s: %w", from, err)
+		}
+	}
+	if err := os.Rename(path, path+".1"); err != nil {
+		return fmt.Errorf("rotate %s: %w", path, err)
+	}
+	return nil
+}
 
 // Entry 는 시각이 없는 글 기록 하나다: level(error 또는 info), layer(page, host, native, sidecar), where(연산이나 대상의
 // 이름), text(내용). 한 기록은 한 줄이다(docs/spec/diagnostics.md#forms).
@@ -81,8 +103,8 @@ func OpenLog(path string) (*os.File, error) {
 		return nil, fmt.Errorf("create logs directory: %w", err)
 	}
 	if info, err := os.Stat(path); err == nil && info.Size() >= logRotateBytes {
-		if err := os.Rename(path, path+".1"); err != nil {
-			return nil, fmt.Errorf("rotate %s: %w", path, err)
+		if err := rotateGenerations(path); err != nil {
+			return nil, err
 		}
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("inspect %s: %w", path, err)

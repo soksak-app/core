@@ -258,20 +258,38 @@ fn relayed_page_line_carries_the_writer_pid() {
     );
 }
 
-// contract: performance.trace.rotates-at-10mb
+// A trace file rotates at 100 MB and keeps the five earlier generations, so the records cover a long session.
+// contract: performance.trace.rotates-at-100mb
 #[test]
-fn trace_rotates_at_ten_megabytes() {
+fn trace_rotates_at_one_hundred_megabytes_and_keeps_five_generations() {
     let directory = tempfile::tempdir().unwrap();
     let target = directory.path().join("performance.ndjson");
-    let full = format!("{}\n", "x".repeat(10 * 1024 * 1024 - 1));
-    std::fs::write(&target, &full).unwrap();
-    performance::line(&target, "host", json!({"event":"after"})).unwrap();
-    let previous =
-        std::fs::read_to_string(directory.path().join("performance.ndjson.1")).unwrap_or_default();
+    let small = format!("{}\n", "x".repeat(10 * 1024 * 1024 - 1));
+    std::fs::write(&target, &small).unwrap();
+    performance::line(&target, "host", json!({"event":"below"})).unwrap();
     assert!(
-        previous == full,
-        "the full output was not kept as the previous generation ({} bytes)",
-        previous.len()
+        !directory.path().join("performance.ndjson.1").exists(),
+        "a file of 10 MB was rotated"
+    );
+    // Six rotations: the oldest generation is dropped and the others move up.
+    for generation in 1..=6u8 {
+        let letter = (b'a' + generation) as char;
+        let full = format!("{}\n", letter.to_string().repeat(100 * 1024 * 1024 - 1));
+        std::fs::write(&target, &full).unwrap();
+        performance::line(&target, "host", json!({"event":"after"})).unwrap();
+    }
+    for generation in 1..=5u8 {
+        let path = directory
+            .path()
+            .join(format!("performance.ndjson.{generation}"));
+        let head = std::fs::read(&path)
+            .unwrap_or_else(|error| panic!("generation {generation} is missing: {error}"))[0];
+        // The newest rotated file is .1 (written sixth, letter 'g'); .5 is the second written ('c').
+        assert_eq!(head, b'a' + 7 - generation, "generation {generation}");
+    }
+    assert!(
+        !directory.path().join("performance.ndjson.6").exists(),
+        "a sixth earlier generation was kept"
     );
     let current = std::fs::read_to_string(&target).unwrap();
     assert!(

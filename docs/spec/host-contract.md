@@ -224,13 +224,13 @@ Items:
 | `performance.trace.enable-without-services` | The enabled host accepts page events before any service exists. | both |
 | `performance.trace.already-off-writes-nothing` | Disabling an already disabled trace does not create or append output. | both |
 | `performance.trace.relay-records-writer-pid` | A relayed page line records the host process that writes it as `pid`. | both |
-| `performance.trace.rotates-at-10mb` | A host line appended to an output of 10 MB or more first moves that output to `performance.ndjson.1` and starts a new one. | both |
+| `performance.trace.rotates-at-100mb` | A host line appended to an output of 100 MB or more first moves that output to `performance.ndjson.1`, moves the earlier generations up by one and drops the fifth, and starts a new one. | both |
 | `performance.sampler.failed-reading-is-explicit` | A sampler reading that cannot obtain a resident size records `error` instead of `rss_host_kb`. | both |
 | `performance.clock.before-epoch-is-explicit` | A trace timestamp before the Unix epoch is an error, not the epoch. | tauriv2 only: the Rust host formats timestamps from a duration since the epoch, which fails before it, while Go formats any time |
 | `performance.trace.switch-and-relay-report-filesystem-errors` | Switch and relay requests return directory, flag, and output failures. | both |
 | `performance.trace.invalid-switch-and-cleanup-errors` | Invalid switch reads and invalid flag directories are errors; cleanup preserves the invalid directory. | both |
 | `performance.trace.derive-service-flags-and-reset` | New services receive the host switch; reset and disabled reattachment remove stale flags, and disabled observation does not format events. | both |
-| `log.open.rotates-at-10mb` | Opening a log file of 10 MB or more first moves it to `<name>.1`, replacing the previous generation, and starts a new file. | both |
+| `log.open.rotates-at-100mb` | Opening a log file of 100 MB or more first moves it to `<name>.1`, moves the earlier generations up by one, drops the fifth, and starts a new file. | both |
 | `log.open.appends-below-bound` | Opening a smaller log file appends to it, and a new log file has mode 0600. | both |
 | `platform.private.creates-owner-only-directories` | The private-directory creation operation creates every missing directory of a path with mode 0700 and keeps the mode of an existing directory. | both |
 | `platform.private.appends-owner-only-file` | The private append operation creates a missing file with mode 0600, appends to an existing file, and keeps the mode of an existing file. | both |

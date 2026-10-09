@@ -218,19 +218,17 @@ pub fn relay(target: &Path, mut record: Value) -> Result<(), String> {
     append(target, &record)
 }
 
-/// 출력이 이전 세대로 넘어가는 크기(docs/spec/performance-trace.md).
-const ROTATE_BYTES: u64 = 10 * 1024 * 1024;
+/// 출력이 이전 세대로 넘어가는 크기(docs/spec/performance-trace.md). 로그와 같은 한도와 세대 수를 쓴다.
+const ROTATE_BYTES: u64 = crate::application_log::ROTATE_BYTES;
 
 fn append(target: &Path, record: &Value) -> Result<(), String> {
     let mut line =
         serde_json::to_vec(record).map_err(|error| format!("encode performance event: {error}"))?;
     line.push(b'\n');
-    // 10 MB 에 이른 출력은 이전 세대(.1) 하나로 남기고 새 파일에 쓴다.
+    // 한도에 이른 출력은 이전 세대(.1)로 남기고 새 파일에 쓴다. 이전 세대는 GENERATIONS 개까지 남는다.
     match std::fs::metadata(target) {
         Ok(meta) if meta.len() >= ROTATE_BYTES => {
-            let mut previous = target.as_os_str().to_owned();
-            previous.push(".1");
-            std::fs::rename(target, &previous).map_err(|error| {
+            crate::application_log::rotate_generations(target).map_err(|error| {
                 format!("rotate performance output {}: {error}", target.display())
             })?;
         }

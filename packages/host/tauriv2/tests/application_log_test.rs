@@ -15,19 +15,44 @@ const CHILD: &str = "SOKSAK_APPLICATION_LOG_CHILD";
 const NAME: &str =
     "start_application_log_writes_the_start_line_and_takes_the_standard_error_of_the_process_and_its_children";
 
-// contract: log.open.rotates-at-10mb
+// contract: log.open.rotates-at-100mb
 #[test]
-fn open_log_moves_a_file_of_ten_megabytes_to_the_earlier_generation() {
+fn open_log_moves_a_file_of_one_hundred_megabytes_to_the_earlier_generation() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("logs").join("application.log");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let full = "x".repeat(10 * 1024 * 1024);
+    let full = "x".repeat(100 * 1024 * 1024);
     std::fs::write(&path, &full).unwrap();
     let earlier = directory.path().join("logs").join("application.log.1");
     std::fs::write(&earlier, "older\n").unwrap();
+    for generation in 2..=5 {
+        let path = directory
+            .path()
+            .join("logs")
+            .join(format!("application.log.{generation}"));
+        std::fs::write(path, format!("generation {generation}\n")).unwrap();
+    }
     let mut file = open_log(&path).unwrap();
     file.write_all(b"new\n").unwrap();
     drop(file);
+    // The earlier generations move up by one and the fifth one is dropped.
+    for (generation, want) in [
+        (2, "older\n"),
+        (3, "generation 2\n"),
+        (4, "generation 3\n"),
+        (5, "generation 4\n"),
+    ] {
+        let moved = directory
+            .path()
+            .join("logs")
+            .join(format!("application.log.{generation}"));
+        assert_eq!(std::fs::read_to_string(moved).unwrap(), want);
+    }
+    assert!(!directory
+        .path()
+        .join("logs")
+        .join("application.log.6")
+        .exists());
     assert_eq!(
         std::fs::metadata(&earlier).unwrap().len(),
         full.len() as u64

@@ -4,6 +4,7 @@ package host_test
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -21,18 +22,23 @@ import (
 // applicationLogChild 는 자식 프로세스에 설정 디렉터리를 알리는 환경 변수다.
 const applicationLogChild = "SOKSAK_APPLICATION_LOG_CHILD"
 
-// contract: log.open.rotates-at-10mb
-func TestOpenLogMovesAFileOfTenMegabytesToTheEarlierGeneration(t *testing.T) {
+// contract: log.open.rotates-at-100mb
+func TestOpenLogMovesAFileOfOneHundredMegabytesToTheEarlierGeneration(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "logs", "application.log")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	full := strings.Repeat("x", 10*1024*1024)
+	full := strings.Repeat("x", 100*1024*1024)
 	if err := os.WriteFile(path, []byte(full), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path+".1", []byte("older\n"), 0o600); err != nil {
 		t.Fatal(err)
+	}
+	for generation := 2; generation <= 5; generation++ {
+		if err := os.WriteFile(fmt.Sprintf("%s.%d", path, generation), []byte(fmt.Sprintf("generation %d\n", generation)), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	file, err := host.OpenLog(path)
 	if err != nil {
@@ -54,6 +60,16 @@ func TestOpenLogMovesAFileOfTenMegabytesToTheEarlierGeneration(t *testing.T) {
 	}
 	if len(earlier) != len(full) || string(current) != "new\n" {
 		t.Fatalf("earlier generation %d bytes, current %q", len(earlier), current)
+	}
+	// The earlier generations move up by one and the fifth one is dropped.
+	for generation, want := range map[int]string{2: "older\n", 3: "generation 2\n", 4: "generation 3\n", 5: "generation 4\n"} {
+		data, err := os.ReadFile(fmt.Sprintf("%s.%d", path, generation))
+		if err != nil || string(data) != want {
+			t.Fatalf("generation %d is %q (%v), want %q", generation, data, err, want)
+		}
+	}
+	if _, err := os.Stat(path + ".6"); !os.IsNotExist(err) {
+		t.Fatalf("a sixth earlier generation was kept: %v", err)
 	}
 }
 

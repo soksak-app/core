@@ -58,8 +58,37 @@ pub fn log_failure(place: &str, result: Result<(), String>) {
     }
 }
 
-/// 로그 파일을 열 때 이전 세대로 넘기는 크기다.
-const ROTATE_BYTES: u64 = 10 * 1024 * 1024;
+/// 로그 파일이 이전 세대로 넘어가는 크기다(docs/spec/diagnostics.md#files). 기록은 많을수록 좋으므로 한 세션을 덮을 만큼
+/// 크게 둔다.
+pub const ROTATE_BYTES: u64 = 100 * 1024 * 1024;
+
+/// 남기는 이전 세대의 수다.
+pub const GENERATIONS: u32 = 5;
+
+/// path 를 이전 세대 path.1 로 넘기고, 이전 세대는 하나씩 뒤로 옮기며, 마지막 세대는 지운다.
+pub fn rotate_generations(path: &Path) -> Result<(), String> {
+    let numbered = |generation: u32| {
+        let mut name = path.as_os_str().to_owned();
+        name.push(format!(".{generation}"));
+        PathBuf::from(name)
+    };
+    let last = numbered(GENERATIONS);
+    match std::fs::remove_file(&last) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("remove {}: {error}", last.display())),
+    }
+    for generation in (1..GENERATIONS).rev() {
+        let from = numbered(generation);
+        match std::fs::rename(&from, numbered(generation + 1)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("rotate {}: {error}", from.display())),
+        }
+    }
+    std::fs::rename(path, numbered(1))
+        .map_err(|error| format!("rotate {}: {error}", path.display()))
+}
 
 /// 설정 디렉터리 config 의 애플리케이션 로그 경로다.
 pub fn application_log_path(config: &Path) -> PathBuf {
@@ -81,12 +110,7 @@ pub fn open_log(path: &Path) -> Result<File, String> {
             .map_err(|error| format!("create logs directory: {error}"))?;
     }
     match std::fs::metadata(path) {
-        Ok(metadata) if metadata.len() >= ROTATE_BYTES => {
-            let mut earlier = path.as_os_str().to_owned();
-            earlier.push(".1");
-            std::fs::rename(path, &earlier)
-                .map_err(|error| format!("rotate {}: {error}", path.display()))?;
-        }
+        Ok(metadata) if metadata.len() >= ROTATE_BYTES => rotate_generations(path)?,
         Ok(_) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(format!("inspect {}: {error}", path.display())),

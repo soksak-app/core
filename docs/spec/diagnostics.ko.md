@@ -12,9 +12,9 @@
 
 | 파일 | 쓰는 쪽 | 형태 | 한계 |
 |---|---|---|---|
-| `application.log` | 두 host, `report`를 거친 page, `sp_log_error`를 거친 native 라이브러리, host가 시작한 sidecar의 standard error | 한 형식의 글 기록([형태](#형태)) | 실행이 열 때 10 MB이면 `application.log.1`로 이름을 바꾼다 |
-| `<executable-name>.log` | 상주 service. host가 service의 standard error로 연다 | service가 쓰는 같은 형식의 글 기록 | host가 service를 시작할 때 10 MB이면 `<name>.1`로 이름을 바꾼다 |
-| `performance.ndjson` | page, 두 host, sidecar, sampler | 한 줄에 JSON event 하나 | 10 MB에서 `performance.ndjson.1`로 회전한다 |
+| `application.log` | 두 host, `report`를 거친 page, `sp_log_error`를 거친 native 라이브러리, host가 시작한 sidecar의 standard error | 한 형식의 글 기록([형태](#형태)) | 실행이 열 때 100 MB이면 `application.log.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
+| `<executable-name>.log` | 상주 service. host가 service의 standard error로 연다 | service가 쓰는 같은 형식의 글 기록 | host가 service를 시작할 때 100 MB이면 `<name>.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
+| `performance.ndjson` | page, 두 host, sidecar, sampler | 한 줄에 JSON event 하나 | 100 MB에서 `performance.ndjson.1`로 회전하고 이전 세대 다섯 개를 남긴다 |
 | `state-<time>.json` | debug view가 열릴 때 두 host | JSON 문서 하나 | 없음. 열 때마다 파일 하나 |
 | `captures/…` | 진단 빌드의 두 host | PNG와 frame 파일 | 요청한 쪽이 지운다 |
 
