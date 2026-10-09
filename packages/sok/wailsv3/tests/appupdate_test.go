@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,6 +20,14 @@ import (
 
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
+
+// requireBundles skips a test of an operation on application bundles, which only darwin implements.
+func requireBundles(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "darwin" {
+		t.Skip("application bundles are staged and replaced on darwin only")
+	}
+}
 
 // coreIndex builds a checked index that lists the given core versions, each with a release for the key.
 func coreIndex(t *testing.T, key string, revoked []string, versions ...string) *sok.Index {
@@ -97,6 +106,7 @@ func bundleZip(t *testing.T, version string) (path, sum string) {
 
 // contract: app-update.stage.verifies-and-extracts
 func TestStagingChecksTheHashExtractsTheBundleAndChecksItsVersion(t *testing.T) {
+	requireBundles(t)
 	config := t.TempDir()
 	path, sum := bundleZip(t, "0.0.9")
 	update := &sok.AppUpdate{Version: "0.0.9", Release: sok.Release{URL: "file://" + path, SHA256: sum}}
@@ -124,6 +134,7 @@ func TestStagingChecksTheHashExtractsTheBundleAndChecksItsVersion(t *testing.T) 
 
 // contract: app-update.stage.rejects-a-wrong-release
 func TestStagingRejectsAWrongHashAndAWrongBundleVersion(t *testing.T) {
+	requireBundles(t)
 	config := t.TempDir()
 	path, sum := bundleZip(t, "0.0.9")
 	wrongHash := &sok.AppUpdate{Version: "0.0.9", Release: sok.Release{URL: "file://" + path, SHA256: strings.Repeat("0", 64)}}
@@ -170,6 +181,7 @@ func endingProcess(t *testing.T) (int, func()) {
 
 // contract: app-update.replace.replaces-the-bundle-after-the-process-ended
 func TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts(t *testing.T) {
+	requireBundles(t)
 	parent := t.TempDir()
 	target := fakeBundle(t, parent, "soksak.app", "old")
 	staged := fakeBundle(t, filepath.Join(parent, "updates", "0.0.9"), "soksak.app", "new")
@@ -212,6 +224,7 @@ func TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts(t *testi
 
 // contract: app-update.replace.restores-the-bundle-when-the-start-fails
 func TestTheEarlierBundleStartsAgainWhenTheNewOneFailsToStart(t *testing.T) {
+	requireBundles(t)
 	parent := t.TempDir()
 	target := fakeBundle(t, parent, "soksak.app", "old")
 	staged := fakeBundle(t, parent, "staged.app", "new")
@@ -241,6 +254,7 @@ func TestTheEarlierBundleStartsAgainWhenTheNewOneFailsToStart(t *testing.T) {
 
 // contract: app-update.replace.refuses-before-it-changes-anything
 func TestTheReplacementRefusesWhatIsNotABundleOrWhenTheProcessKeepsRunning(t *testing.T) {
+	requireBundles(t)
 	parent := t.TempDir()
 	staged := fakeBundle(t, parent, "staged.app", "new")
 	pid, end := endingProcess(t)

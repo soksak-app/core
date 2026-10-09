@@ -168,6 +168,10 @@ fn update(zip: &Path, version: &str, sha256: &str) -> AppUpdate {
 
 // contract: app-update.stage.verifies-and-extracts
 #[test]
+#[cfg_attr(
+    not(target_os = "macos"),
+    ignore = "application bundles are staged and replaced on macOS only"
+)]
 fn staging_checks_the_hash_extracts_the_bundle_and_checks_its_version() {
     let (config, work) = (Dir::new(), Dir::new());
     let (zip, sum) = bundle_zip(&work.0, "0.0.9");
@@ -182,6 +186,10 @@ fn staging_checks_the_hash_extracts_the_bundle_and_checks_its_version() {
 
 // contract: app-update.stage.rejects-a-wrong-release
 #[test]
+#[cfg_attr(
+    not(target_os = "macos"),
+    ignore = "application bundles are staged and replaced on macOS only"
+)]
 fn staging_rejects_a_wrong_hash_and_a_wrong_bundle_version() {
     let (config, work) = (Dir::new(), Dir::new());
     let (zip, sum) = bundle_zip(&work.0, "0.0.9");
@@ -217,6 +225,10 @@ fn sleeping() -> std::process::Child {
 
 // contract: app-update.replace.replaces-the-bundle-after-the-process-ended
 #[test]
+#[cfg_attr(
+    not(target_os = "macos"),
+    ignore = "application bundles are staged and replaced on macOS only"
+)]
 fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
     let parent = Dir::new();
     let target = fake_bundle(&parent.0, "soksak.app", "old");
@@ -271,6 +283,10 @@ fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
 
 // contract: app-update.replace.restores-the-bundle-when-the-start-fails
 #[test]
+#[cfg_attr(
+    not(target_os = "macos"),
+    ignore = "application bundles are staged and replaced on macOS only"
+)]
 fn the_earlier_bundle_starts_again_when_the_new_one_fails_to_start() {
     let parent = Dir::new();
     let target = fake_bundle(&parent.0, "soksak.app", "old");
@@ -305,6 +321,10 @@ fn the_earlier_bundle_starts_again_when_the_new_one_fails_to_start() {
 
 // contract: app-update.replace.refuses-before-it-changes-anything
 #[test]
+#[cfg_attr(
+    not(target_os = "macos"),
+    ignore = "application bundles are staged and replaced on macOS only"
+)]
 fn the_replacement_refuses_what_is_not_a_bundle_or_when_the_process_keeps_running() {
     let parent = Dir::new();
     let staged = fake_bundle(&parent.0, "staged.app", "new");

@@ -154,14 +154,14 @@ fn joined(first: String, rest: Vec<Result<(), String>>) -> String {
     text
 }
 
+/// Starts the application bundle with arguments.
+pub type OpenApplication<'a> = &'a dyn Fn(&Path, &[String]) -> Result<(), String>;
+
 /// Replaces the bundle `target` with `bundle` after the process `pid` has ended and starts the application through
 /// `open` (docs/spec/installation.md#application-update). It copies the new bundle beside the target first, so a
 /// failure before the move leaves the target as it was, and it restores the earlier bundle and starts it when the new
 /// one cannot start.
-pub fn replace_app(
-    options: &ReplaceOptions,
-    open: &dyn Fn(&Path, &[String]) -> Result<(), String>,
-) -> Result<(), String> {
+pub fn replace_app(options: &ReplaceOptions, open: OpenApplication) -> Result<(), String> {
     for (name, path) in [("bundle", &options.bundle), ("target", &options.target)] {
         if !is_bundle(path) {
             return Err(format!(
