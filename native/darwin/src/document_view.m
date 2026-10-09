@@ -6,6 +6,7 @@
 #import <Cocoa/Cocoa.h>
 #import <CoreImage/CoreImage.h>
 #import <WebKit/WebKit.h>
+#import "application_log.h"
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
@@ -174,6 +175,7 @@ static NSString *pluginContentType(NSString *path) {
     NSData *data = file && [[NSFileManager defaultManager] fileExistsAtPath:file isDirectory:&directory] && !directory
         ? [NSData dataWithContentsOfFile:file] : nil;
     if (!data) {
+        sp_log_info("document view", [NSString stringWithFormat:@"plugin file not found: %@", url.absoluteString].UTF8String);
         [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorFileDoesNotExist
             userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"%@ is not found", url.absoluteString] }]];
         return;
@@ -201,7 +203,9 @@ static NSString *pluginContentType(NSString *path) {
         if ([body[@"message"] isKindOfClass:NSString.class]) {
             [view reportMessage:@{ @"text": body[@"message"] }];
         } else {
-            [view reportMessage:@{ @"error": [body[@"error"] isKindOfClass:NSString.class] ? body[@"error"] : @"the message has no data" }];
+            NSString *reason = [body[@"error"] isKindOfClass:NSString.class] ? body[@"error"] : @"the message has no data";
+            sp_log_info("document view", [NSString stringWithFormat:@"message without data: %@ (%@)", reason, view.URL.absoluteString].UTF8String);
+            [view reportMessage:@{ @"error": reason }];
         }
         return;
     }
@@ -351,6 +355,17 @@ static NSString *pluginContentType(NSString *path) {
     // 새 이동이 이전 이동을 취소한 경우는 실패가 아니다.
     if ([error.domain isEqualToString:NSURLErrorDomain] && error.code == NSURLErrorCancelled) return;
     self.failure = error.localizedDescription;
+    sp_log_info("document view", [NSString stringWithFormat:@"navigation failed: %@ (%@ %ld) %@", error.localizedDescription,
+        error.domain, (long)error.code, error.userInfo[NSURLErrorFailingURLStringErrorKey] ?: [error.userInfo[NSURLErrorFailingURLErrorKey] absoluteString] ?: self.URL.absoluteString ?: @"(no address)"].UTF8String);
+    [self report];
+}
+
+// The WebContent process of this document ended. The view stays without a document; the failure reaches the page that
+// owns the region through the document state.
+- (void)webViewWebContentProcessDidTerminate:(WKWebView *)view {
+    sp_log_error("document view", [NSString stringWithFormat:@"web content process terminated: %@", self.URL.absoluteString].UTF8String);
+    self.navigation = nil;
+    self.failure = @"the web content process ended";
     [self report];
 }
 
@@ -382,6 +397,7 @@ static BOOL webAddress(NSURL *url) {
     decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
     if (!webAddress(action.request.URL)) {
         self.failure = [NSString stringWithFormat:@"%@ is not a web address", action.request.URL.absoluteString];
+        sp_log_info("document view", [NSString stringWithFormat:@"navigation refused: %@", self.failure].UTF8String);
         // 거부한 주 프레임 이동은 시작되지 않는다. 진행 중인 이동은 이 결정을 받은 이동이다.
         if (action.targetFrame.isMainFrame) self.navigation = nil;
         [self report];

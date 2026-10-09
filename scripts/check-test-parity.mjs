@@ -1140,6 +1140,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.10.1",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "webViewWebContentProcessDidTerminate" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_view_test.m", id: "a failed navigation is recorded with its address" },
+    ],
+    expected: "The native library records the failures and refusals of a document view and the end of its WebContent process.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.9",
     implementation: [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func logDroppedMessage" },

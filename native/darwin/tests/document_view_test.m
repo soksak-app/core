@@ -17,6 +17,24 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
+/// The text that block writes to the standard error of the process.
+static NSString *capturedStandardError(void (^block)(void)) {
+    char path[] = "/tmp/document_view_test.XXXXXX";
+    int file = mkstemp(path);
+    if (file < 0) { perror("mkstemp"); exit(1); }
+    fflush(stderr);
+    int saved = dup(STDERR_FILENO);
+    if (saved < 0 || dup2(file, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
+    block();
+    fflush(stderr);
+    if (dup2(saved, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
+    close(saved);
+    close(file);
+    NSString *written = [NSString stringWithContentsOfFile:@(path) encoding:NSUTF8StringEncoding error:nil];
+    unlink(path);
+    return written ?: @"";
+}
+
 static void until(NSString *what, BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
@@ -342,11 +360,31 @@ int main(int argc, char **argv) { @autoreleasepool {
     check([evaluate(view, @"typeof window.__soksakNative + typeof window.__soksakBackground") isEqual:@"undefinedundefined"],
         @"the page has no application bridge or injected script");
 
-    evaluate(view, @"document.getElementById('app').click(); null");
-    settle(@"an application-scheme link was not refused", ^BOOL(NSDictionary *state) {
-        return [state[@"error"] isKindOfClass:NSString.class];
+    NSString *refusal = capturedStandardError(^{
+        evaluate(view, @"document.getElementById('app').click(); null");
+        settle(@"an application-scheme link was not refused", ^BOOL(NSDictionary *state) {
+            return [state[@"error"] isKindOfClass:NSString.class];
+        });
     });
     check([latest[@"url"] hasSuffix:@"/one"], @"an application-scheme link is refused and the document stays");
+    check([refusal containsString:@" info native document view: navigation refused: wails://wails/index.html is not a web address"],
+        [NSString stringWithFormat:@"a refused address is recorded (got %@)", refusal]);
+
+    // A navigation that fails and the end of the WebContent process are recorded with the address of the document.
+    NSString *failed = capturedStandardError(^{
+        check(sp_document_load(document, "file:///nonexistent/soksak-document-missing.html"), @"a missing file address is accepted");
+        // The state of the refused link still holds its error until the new navigation starts.
+        settle(@"the missing file did not fail", ^BOOL(NSDictionary *state) {
+            return [state[@"error"] isKindOfClass:NSString.class] && ![state[@"error"] containsString:@"is not a web address"];
+        });
+    });
+    check([failed containsString:@" info native document view: navigation failed: "] && [failed containsString:@"soksak-document-missing.html"],
+        [NSString stringWithFormat:@"a failed navigation is recorded with its address (got %@)", failed]);
+    NSString *ended = capturedStandardError(^{
+        [(id<WKNavigationDelegate>)view webViewWebContentProcessDidTerminate:view];
+    });
+    check([ended containsString:@" error native document view: web content process terminated: "],
+        [NSString stringWithFormat:@"the end of the WebContent process is recorded (got %@)", ended]);
 
     check(sp_document_load(document, [base stringByAppendingString:@"/two"].UTF8String), @"a second address is accepted");
     settle(@"the second document did not load", ^BOOL(NSDictionary *state) {

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F145.10.1: native 라이브러리가 document view의 실패를 쓴다. 이유와 주소를 담은 이동 실패, 거부한 주소, 찾지 못한 plugin 파일, 데이터 없는 메시지, WebContent process의 종료(오류)가 그 대상이며, 문서는 영역을 소유한 page를 위해 실패를 유지한다.
 - F145.9: 두 host가 소유 창이 없는 사이드카 메시지를 `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`로 쓰고, Wails host도 Tauri host처럼 가득 찬 큐를 기다리는 closed 알림을 `close <surface>: outbox full, buffered`로 쓴다.
 - F145.8: 두 host가 거부하는 image 영역의 각 프레임을 프레임과 영역의 현재 상태와 함께(`info host image frame: ... refused: notAttached|stale ...`, `error host image frame: ... refused: unsupported ...`), 봉투가 아닌 image 필드를 `error host image frame: ... malformed image envelope: <image>`로 쓴다.
 - F145.7: page API(plugin API의 `page.js`)가 표면이나 modal 문서의 오류, 로드되지 않은 module, 처리되지 않은 rejection을 아무도 읽지 않는 console 대신 `error page surface <id>: <text>`(표면 id가 없으면 `document`)로 같은 글은 한 번만 쓴다.
