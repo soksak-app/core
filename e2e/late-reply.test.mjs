@@ -8,7 +8,7 @@ import test from "node:test";
 
 import { APPS, failure, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-import { applicationLog, readLines } from "@soksak/window-check/application-log.mjs";
+import { applicationLog, readLines, withoutTime } from "@soksak/window-check/application-log.mjs";
 import { heldRepliesSent, lateReplyFindings } from "./late-reply.mjs";
 
 /** 탭 id 가 있는 카드. */
@@ -41,7 +41,7 @@ for (const app of Object.values(APPS)) {
     const sent = heldRepliesSent(tab, 1);
     await transcript.until((lines) => lines.includes(sent), `the page did not report "${sent}"`);
 
-    const { lines } = readLines(s.app.configDir, offset);
+    const lines = readLines(s.app.configDir, offset).lines.map(withoutTime);
     const { observations, errors } = lateReplyFindings(lines, tab);
     assert.deepEqual(errors, [], `the late reply of ${tab} wrote error lines`);
     assert.equal(observations.length, 1,

@@ -76,6 +76,26 @@ func LogInfo(where string, text any) {
 	Log(Entry{"info", "host", where, text})
 }
 
+// PageRecord 는 페이지가 `report` 호출로 보내는 기록이다. level 은 error 나 info, where 는 연산이나 대상의 이름, text 는
+// 내용이다.
+type PageRecord struct {
+	Level string `json:"level"`
+	Where string `json:"where"`
+	Text  string `json:"text"`
+}
+
+// PageEntry 는 페이지의 기록을 layer page 의 글 기록으로 만든다. level 이 error 나 info 가 아니거나, where 가 비었거나
+// 구분자 `: ` 나 줄바꿈을 담으면 거부한다. 조용히 바꿔 쓰지 않는다.
+func PageEntry(record PageRecord) (Entry, error) {
+	if record.Level != "error" && record.Level != "info" {
+		return Entry{}, fmt.Errorf("report level must be error or info, not %q", record.Level)
+	}
+	if record.Where == "" || strings.Contains(record.Where, ": ") || strings.ContainsAny(record.Where, "\r\n") {
+		return Entry{}, fmt.Errorf("report where must be a name without a separator or a line feed: %q", record.Where)
+	}
+	return Entry{record.Level, "page", record.Where, record.Text}, nil
+}
+
 // fatalError 는 오류 기록을 쓰고 프로세스를 상태 1 로 끝낸다. 로그를 연 뒤의 치명적 실패가 쓴다.
 func fatalError(where string, text any) {
 	LogError(where, text)

@@ -250,3 +250,25 @@ fn log_info_writes_an_info_record_to_the_application_log() {
         "application log {lines:?}"
     );
 }
+
+// A record that the page reports has the layer `page`; the host checks its level and its place before it writes it.
+// contract: log.page.record-form
+#[test]
+fn a_page_record_has_the_layer_page_and_rejects_an_invalid_level_or_place() {
+    use soksak_host_tauriv2::application_log::page_entry;
+    assert_eq!(
+        page_entry("error", "library plugins", "first\nsecond").unwrap(),
+        r"error page library plugins: first\nsecond"
+    );
+    for (name, level, place) in [
+        ("a level that is not error or info", "warning", "w"),
+        ("an empty place", "info", ""),
+        ("a place that holds the separator", "info", "a: b"),
+        ("a place with a line feed", "info", "a\nb"),
+    ] {
+        assert!(
+            page_entry(level, place, "t").is_err(),
+            "{name} was accepted"
+        );
+    }
+}

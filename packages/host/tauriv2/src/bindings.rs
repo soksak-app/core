@@ -424,13 +424,23 @@ fn set_menu_language(app: AppHandle, language: Argument<String>) -> Result<(), S
     menu::set_language(&app, &language)
 }
 
-/// 페이지 자체 검사가 보낸 한 줄을 표준 오류와 창의 기록을 요청한 연결에 보낸다. 페이지에는 쓸
+/// 페이지가 보낸 기록 하나를 layer page 의 글 기록으로 표준 오류와 창의 기록을 요청한 연결에 보낸다. 페이지에는 쓸
 /// 파일이 없고, 디버거 밖에서 실행할 때 페이지 콘솔은 읽지 않는다.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PageRecord {
+    level: String,
+    r#where: String,
+    text: String,
+}
+
 #[tauri::command]
-fn report(window: Window, line: Argument<String>) {
-    let Argument(line) = line;
-    eprintln!("{line}");
-    exposure::log(&window, &line);
+fn report(window: Window, record: Argument<PageRecord>) -> Result<(), String> {
+    let Argument(record) = record;
+    let entry = crate::application_log::page_entry(&record.level, &record.r#where, &record.text)?;
+    crate::application_log::log_entry(&entry);
+    exposure::log(&window, &entry);
+    Ok(())
 }
 
 /// 호스트가 보낸 요청에 대한 문서의 응답을 받는다.

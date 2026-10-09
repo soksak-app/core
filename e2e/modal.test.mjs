@@ -359,7 +359,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.debug.list");
     await assert.rejects(s.run("core.debug.save", { path: "settings.json" }),
       /debug: settings.json is not a file under logs\//);
-    s.expectError(/^error: .*debug: settings.json is not a file under logs\//);
+    s.expectError(/^error page .*debug: settings.json is not a file under logs\//);
     await s.run("core.debug.close");
     await s.until("core.debug", (debug) => !debug.open, "the debug view did not close");
     assert.equal((await s.get("core.screen")).modal, null);

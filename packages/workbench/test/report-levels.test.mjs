@@ -1,30 +1,32 @@
-// 페이지가 애플리케이션 로그로 보내는 줄의 수준을 검사한다. 오류는 `error: ` 로 시작하고 관측은 그렇지 않다
-// (docs/spec/hosts.md#application-log). 창 검사는 이 형식으로 검사 동안의 오류를 찾는다.
+// The records that the page sends to the host: a failure has the level error and an observation the level info, and a line
+// `<where>: <text>` is split at its first `: ` (docs/spec/diagnostics.md#forms). A window check finds the errors of a check by
+// the level.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 
+const shown = (record) => `${record.level} page ${record.where}: ${record.text}`;
 const lines = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
   on: () => {},
   page: (path) => path,
   call: async (name, payload) => {
-    if (name === "report") lines.push(payload);
+    if (name === "report") lines.push(shown(payload));
   },
 } } });
 const { log, report, surfaceContextRuntime } = await import("../host.js");
 
-test("a reported failure starts with error: and an observation does not", async () => {
+test("a reported failure has the level error and an observation has the level info", async () => {
   lines.length = 0;
   await report("surface probe mount failed: x");
   await log("focus moved to probe");
-  assert.deepEqual(lines.splice(0), ["error: surface probe mount failed: x", "focus moved to probe"]);
+  assert.deepEqual(lines.splice(0), ["error page surface probe mount failed: x", "info page page: focus moved to probe"]);
 });
 
 test("a surface module reports its failure as an error line", async () => {
   lines.length = 0;
   const runtime = surfaceContextRuntime({ surfaceId: "probe-1" });
   await runtime.native.call("report", "surface composition failed: probe");
-  assert.deepEqual(lines.splice(0), ["error: surface composition failed: probe"]);
+  assert.deepEqual(lines.splice(0), ["error page surface composition failed: probe"]);
 });
 
 test("a failed settling wait of a core command and a refused registration are error lines", async () => {
@@ -40,6 +42,6 @@ test("a failed settling wait of a core command and a refused registration are er
   });
   lines.length = 0;
   assert.equal(await registry.run("core.fixture.add", { n: 1 }), 2);
-  assert.deepEqual(lines.splice(0), ["error: exposure settled failed: surface tab-1 is not mounted"]);
+  assert.deepEqual(lines.splice(0), ["error page exposure settled failed: surface tab-1 is not mounted"]);
   assert.throws(() => revisitRegistrations(), /requires report/);
 });

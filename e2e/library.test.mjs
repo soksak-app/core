@@ -353,8 +353,8 @@ for (const app of Object.values(APPS)) {
     }
     rmSync(folder, { recursive: true });
     // 이 검사는 사라진 폴더를 library 에 보이고 그 프로젝트를 열지 못하게 한다. 두 오류는 화면에 보이고 기록된다.
-    s.expectError(new RegExp(`^error: library project ${folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: `));
-    s.expectError(/^error: library: project directory does not exist: /);
+    s.expectError(new RegExp(`^error page library project ${folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: `));
+    s.expectError(/^error page library: project directory does not exist: /);
 
     await s.run("core.projects.browse");
     const library = await s.until("core.library", (state) => state.folderErrors?.[missing.id] !== undefined,

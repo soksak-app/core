@@ -635,7 +635,7 @@ export async function prepareFixture(s, { settings = {}, performanceTrace = TRAC
   const verification = await s.collect("core.verify");
   const presentationErrors = [];
   const offErrors = s.client.on("diagnostics.log", (params) => {
-    if (params?.window === s.window && /^error: host (syncSurfaces|presentSurfaces) failed:/.test(params.line)) {
+    if (params?.window === s.window && /^error page host (syncSurfaces|presentSurfaces) failed:/.test(params.line)) {
       presentationErrors.push(params.line);
     }
   });

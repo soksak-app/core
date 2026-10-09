@@ -35,6 +35,7 @@
     "overlay-content.js",
     "environment.js",
     "app-update.js",
+    "report-record.js",
     "version-range.js",
     "installed-plugins.js",
     "surface-exposure.js",

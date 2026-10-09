@@ -107,8 +107,10 @@ const mainCalls = settlingCalls((name, arg) => {
   // 인자 수가 맞지 않는다고 거절한다.
   if (name === "sidecarSend") return call(method, arg.sidecar, arg.surface, arg.body);
   if (name === "report") {
-    if (typeof arg !== "string") return Promise.reject(new TypeError("report requires a string"));
-    return call(method, arg);
+    if (!arg || typeof arg !== "object" || typeof arg.level !== "string" || typeof arg.where !== "string" || typeof arg.text !== "string") {
+      return Promise.reject(new TypeError("report requires {level, where, text} strings"));
+    }
+    return call(method, { level: arg.level, where: arg.where, text: arg.text });
   }
   if (name === "imageCaret") return call(method, { surface: arg.surface, name: arg.name }, arg.x, arg.y, arg.width, arg.height);
   if (name === "imageText") return call(method, { surface: arg.surface, name: arg.name }, arg.text);

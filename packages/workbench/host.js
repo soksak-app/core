@@ -6,6 +6,7 @@
 //
 // 이 파일은 애플리케이션마다 복제하지 않는다. 애플리케이션별 차이는 전송 방식뿐이고
 // 런타임 모듈(@soksak/runtime)이 담당한다.
+import { recordOf } from "./report-record.js";
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
 import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar } from "@soksak/plugin-api";
@@ -195,7 +196,7 @@ export function surfaceContextRuntime(surface, declarations = {}) {
   const { surfaceId } = surface;
   if (typeof surfaceId !== "string" || !surfaceId) throw new TypeError("surface runtime requires surface.surfaceId");
   const invoke = (name, payload) => name === "report"
-    ? bridge.call(name, errorLine(payload))
+    ? bridge.call(name, errorRecord(payload))
     // 기본값: 매개변수가 없는 호출은 payload 를 생략한다.
     : bridge.call(name, { ...(payload ?? {}), surface: surfaceId });
   const listeners = new Map();
@@ -231,7 +232,7 @@ export function surfaceContextRuntime(surface, declarations = {}) {
       const send = () => bridge.call("exposureReply", { id, ...payload, surface: surfaceId });
       return replyGate === null ? send() : replyGate(surfaceId, send);
     },
-    report: (message) => bridge.call("report", errorLine(message)),
+    report: (message) => bridge.call("report", errorRecord(message)),
     unregister: () => {
       if (removeExposurePort === null) return;
       removeExposurePort();
@@ -313,23 +314,19 @@ export function watchCalls(fn) {
   watcher = fn;
 }
 
-/**
- * 오류 줄. 애플리케이션 로그에서 오류는 `error: ` 로 시작하고 관측은 그렇지 않으므로, 창 검사는 이 형식으로 검사 동안의
- * 오류를 찾는다(docs/spec/hosts.md#application-log).
- */
-const errorLine = (line) => `error: ${line}`;
+const errorRecord = (line) => recordOf("error", line);
 
 /** 실패 한 줄을 애플리케이션 로그로 보낸다. 호스트가 없는 문서(브라우저 예제)의 로그는 콘솔의 오류 수준이다. */
 /** Reloads this page after every sent call has its answer (docs/spec/native-host.md#page-reload). */
 export const reloadPage = () => bridge.reload();
 
-export const report = (line) => (bridge ? bridge.call("report", errorLine(line)) : console.error(line));
+export const report = (line) => (bridge ? bridge.call("report", errorRecord(line)) : console.error(line));
 
 /**
  * 관측 줄 하나를 애플리케이션 로그로 보낸다. 실패가 아닌 기록(포커스 전이, 저장 형식 변환)이다. 호스트가 없는
  * 문서(브라우저 예제)는 콘솔의 정보 수준에 쓴다. 실패는 report 로 보낸다.
  */
-export const log = (line) => (bridge ? bridge.call("report", line) : console.info(line));
+export const log = (line) => (bridge ? bridge.call("report", recordOf("info", line)) : console.info(line));
 
 /* 애플리케이션에는 콘솔이 없다. 여기서 실패를 잡으면 기록되지 않으므로 잡지
    않는다. 문서의 unhandledrejection 이 애플리케이션 로그로 전달한다. */
@@ -353,7 +350,7 @@ const tellInTurn = (name, payload) => {
   // 실패해도 다음 호출은 보낸다. 그 실패를 여기서 삼키면 아무 데도 남지 않으므로
   // 애플리케이션 로그에 적는다.
   turn = answered.catch((why) => {
-    bridge.call("report", errorLine(`host ${name} failed: ${why}`));
+    bridge.call("report", errorRecord(`host ${name} failed: ${why}`));
   });
   return answered;
 };
@@ -456,7 +453,7 @@ export const surfaces = native ? {
     },
 
     /** 실패 한 줄을 애플리케이션 로그로 전송한다. */
-    report: (line) => tell("report", errorLine(line)),
+    report: (line) => tell("report", errorRecord(line)),
 
     theme: (values) => tellInTurn("setTheme", values),
 

@@ -238,6 +238,7 @@ Items:
 | `platform.private.writes-owner-only-file` | The private write operation creates a missing file with mode 0600, replaces the contents of an existing file, and keeps the mode of an existing file. | both |
 | `log.application.start-replaces-standard-error` | Starting the application log writes the run's start line and makes the file the standard error of the process and of the children it starts. | both |
 | `log.error.line-form` | A host error written through the helper is the record `<time> error host <where>: <text>` in the application log. | both |
+| `log.page.record-form` | The page reports a record `{level, where, text}` through the host call `report`; the host writes it as `<time> <level> page <where>: <text>`, and refuses a level that is not `error` or `info`, an empty place and a place that holds `: ` or a line feed. | both |
 | `log.info.record-form` | A host observation written through `LogInfo` (Go) or `log_info` (Rust) is the record `<time> info host <where>: <text>` in the application log. | both |
 | `log.record.one-line` | A record is one line: a line feed in its text is written as the two characters `\n`, and the entry without its time is `<level> <layer> <where>: <text>`. | both |
 | `sidecars.trace.relay-records-every-message-with-its-body` | While the performance trace is on, each request that the host sends to a sidecar is the trace event `sidecar.send` and each message that it receives is `sidecar.receive`, of the layer `host`, with `sidecar`, `surface` and the whole `body`. | both |

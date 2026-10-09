@@ -29,6 +29,24 @@ pub fn log_entry(entry: &str) {
     eprintln!("{now} {entry}");
 }
 
+/// 페이지가 `report` 호출로 보낸 기록을 layer page 의 시각이 없는 기록 줄로 만든다. level 이 error 나 info 가 아니거나, place 가
+/// 비었거나 구분자 `: ` 나 줄바꿈을 담으면 거부한다. 조용히 바꿔 쓰지 않는다.
+pub fn page_entry(
+    level: &str,
+    place: &str,
+    text: impl std::fmt::Display,
+) -> Result<String, String> {
+    if level != "error" && level != "info" {
+        return Err(format!("report level must be error or info, not {level:?}"));
+    }
+    if place.is_empty() || place.contains(": ") || place.contains(['\r', '\n']) {
+        return Err(format!(
+            "report where must be a name without a separator or a line feed: {place:?}"
+        ));
+    }
+    Ok(entry_line(level, "page", place, text))
+}
+
 /// 호스트의 오류 기록에서 시각을 뺀 줄이다. place 는 실패한 연산이나 대상이고 text 는 실패 내용이다.
 pub fn error_line(place: &str, text: impl std::fmt::Display) -> String {
     entry_line("error", "host", place, text)

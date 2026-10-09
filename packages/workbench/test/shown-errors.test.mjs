@@ -2,11 +2,12 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 
+const shown = (record) => `${record.level} page ${record.where}: ${record.text}`;
 const lines = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
   on: () => {},
   page: (path) => path,
-  call: async (name, payload) => { if (name === "report") lines.push(payload); },
+  call: async (name, payload) => { if (name === "report") lines.push(shown(payload)); },
 } } });
 const { JSDOM } = await import("jsdom");
 const { document } = new JSDOM("<p></p>").window;
@@ -23,6 +24,6 @@ test("an error shown on the screen is logged once until it changes or clears", (
   assert.equal(el.dataset.error, undefined);
   showError(el, "library", "registry failed");
   assert.deepEqual(lines.splice(0), [
-    "error: library: folder is missing", "error: library: registry failed", "error: library: registry failed",
+    "error page library: folder is missing", "error page library: registry failed", "error page library: registry failed",
   ]);
 });

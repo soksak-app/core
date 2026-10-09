@@ -10,7 +10,6 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -91,10 +90,14 @@ func (h *Host) OverlayHide(ctx context.Context, idJSON json.RawMessage) error {
 	return s.OverlayHide(id)
 }
 
-// Report 는 페이지 검사의 한 줄을 로그에 적고 이 창의 진단 기록을 켠 연결에 보낸다. 페이지는
+// Report 는 페이지의 기록 하나를 layer page 의 글 기록으로 로그에 적고 이 창의 진단 기록을 켠 연결에 보낸다. 페이지는
 // 파일을 쓸 수 없고, 페이지의 콘솔은 디버거 밖에서 보이지 않는다.
-func (h *Host) Report(ctx context.Context, lineJSON json.RawMessage) error {
-	line, err := argument[string]("line", lineJSON)
+func (h *Host) Report(ctx context.Context, recordJSON json.RawMessage) error {
+	record, err := argument[PageRecord]("record", recordJSON)
+	if err != nil {
+		return err
+	}
+	entry, err := PageEntry(record)
 	if err != nil {
 		return err
 	}
@@ -102,8 +105,8 @@ func (h *Host) Report(ctx context.Context, lineJSON json.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	log.Println(line)
-	s.log(line)
+	Log(entry)
+	s.log(entry.Line())
 	return nil
 }
 

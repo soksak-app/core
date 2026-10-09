@@ -47,9 +47,9 @@ function runLoggedError(t, expected) {
   t.after(() => rmSync(`${dir}.log-offset`, { force: true }));
   t.after(() => rmSync(dir, { recursive: true }));
   mkdirSync(join(dir, "logs"));
-  const before = "error: rejected: an error of the previous check\n";
+  const before = "2026-10-09T05:50:00.000Z error page rejected: an error of the previous check\n";
   writeFileSync(join(dir, "logs", "application.log"), before +
-    "verify: 18 pass\nerror: ResizeObserver loop completed with undelivered notifications. @ wails://localhost/:0\n");
+    "2026-10-09T05:50:01.000Z info page verify: 18 pass\n2026-10-09T05:50:02.000Z error page page: ResizeObserver loop completed with undelivered notifications. @ wails://localhost/:0\n");
   const file = join(dir, "probe.test.mjs");
   writeFileSync(file, `import test from "node:test";
 import { finishSession } from ${JSON.stringify(app)};
@@ -71,7 +71,7 @@ test("probe body passes", async (t) => {
 test("an error line that the application logged during the check fails the check unless it is declared", { timeout: 30000 }, (t) => {
   const result = runLoggedError(t, "[]");
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stdout, /# application error: error: ResizeObserver loop completed/);
+  assert.match(result.stdout, /# application error: error page page: ResizeObserver loop completed/);
   assert.match(result.stdout, /probe: the application logged 1 error that the check did not declare/);
   assert.doesNotMatch(result.stdout, /an error of the previous check/);
 });
@@ -79,7 +79,7 @@ test("an error line that the application logged during the check fails the check
 test("an error line that the check declares does not fail the check", { timeout: 30000 }, (t) => {
   const result = runLoggedError(t, "[/ResizeObserver loop/]");
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /# application error: error: ResizeObserver loop completed/);
+  assert.match(result.stdout, /# application error: error page page: ResizeObserver loop completed/);
 });
 
 // 검사가 시작한 녹화는 검사가 끝날 때 지워져 있어야 한다. 남은 녹화 폴더는 검사의 실패이고, 다음 검사를 위해 지운다

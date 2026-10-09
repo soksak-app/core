@@ -34,14 +34,14 @@ const rejection = (reason) => ({ type: "unhandledrejection", reason });
 test("an error before the first screen is written as a page start error with its file and line", () => {
   const { target, lines } = fixture();
   target.dispatchEvent(error("boom", "/debug-ui.js", 12));
-  assert.deepEqual(lines, ["error: page start: boom @ /debug-ui.js:12"]);
+  assert.deepEqual(lines, ["start: boom @ /debug-ui.js:12"]);
 });
 
 test("a rejection before the first screen is written with its message", () => {
   const { target, lines } = fixture();
   target.dispatchEvent(rejection(new Error("denied")));
   target.dispatchEvent(rejection("plain"));
-  assert.deepEqual(lines, ["error: page start: denied", "error: page start: plain"]);
+  assert.deepEqual(lines, ["start: denied", "start: plain"]);
 });
 
 test("the same cause is written once", () => {
@@ -54,7 +54,7 @@ test("a module that fails to load is written with its address", () => {
   const { target, lines } = fixture();
   const failed = { type: "error", target: { src: "http://127.0.0.1/missing.js" } };
   target.dispatchEvent(failed);
-  assert.deepEqual(lines, ["error: page start: cannot load http://127.0.0.1/missing.js"]);
+  assert.deepEqual(lines, ["start: cannot load http://127.0.0.1/missing.js"]);
 });
 
 test("nothing is written after the page has drawn its first screen", () => {

@@ -10,12 +10,13 @@ const TIMEOUT = "the current image raster did not present within 10s; pending ta
 
 const dom = new JSDOM('<div id="applicationError"></div><button id="projectTab"></button>');
 globalThis.document = dom.window.document;
+const shown = (record) => `${record.level} page ${record.where}: ${record.text}`;
 const lines = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
   on: () => {},
   page: (path) => path,
   call: async (name, request) => {
-    if (name === "report") { lines.push(request); return; }
+    if (name === "report") { lines.push(shown(request)); return; }
     throw new Error(`unexpected host call ${name}`);
   },
 } } });
@@ -72,7 +73,7 @@ test("a layout failure of a project switch started from the interface writes one
   document.getElementById("projectTab").click();
   await settle();
   await settle();
-  assert.deepEqual(lines, [`error: page: surface presentation failed: ${TIMEOUT}`],
+  assert.deepEqual(lines, [`error page page: surface presentation failed: ${TIMEOUT}`],
     "one layout failure of a project switch must write exactly the line of the layout queue that shows it");
 });
 
@@ -84,6 +85,6 @@ test("a layout failure that no command waits for writes one page error line", as
   schedule();
   await settle();
   await settle();
-  assert.deepEqual(lines, [`error: page: surface presentation failed: ${TIMEOUT}`],
+  assert.deepEqual(lines, [`error page page: surface presentation failed: ${TIMEOUT}`],
     "one layout failure of a gesture must write exactly the line of the layout queue that shows it");
 });

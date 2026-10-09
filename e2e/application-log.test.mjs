@@ -25,9 +25,9 @@ for (const app of Object.values(APPS)) {
     const file = join(s.app.configDir, "logs", "application.log");
     assert.ok(existsSync(file), `${file} does not exist`);
     const log = readFileSync(file, "utf8").split("\n");
-    assert.ok(log.some((entry) => /^\S+ application log: \S+ pid \d+$/.test(entry)),
+    assert.ok(log.some((entry) => /^\S+ info host run: \S+ pid \d+$/.test(entry)),
       `${file} has no run start line: ${JSON.stringify(log.slice(0, 5))}`);
-    assert.ok(log.includes(line), `${file} does not hold "${line}": ${JSON.stringify(log.slice(-5))}`);
+    assert.ok(log.some((entry) => entry.endsWith(` info page page: ${line}`)), `${file} does not hold "${line}": ${JSON.stringify(log.slice(-5))}`);
   });
 }
 

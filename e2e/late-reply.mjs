@@ -8,17 +8,17 @@ const literal = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** 표면 surface 의 늦은 답을 버린 호스트의 관측 줄. 두 호스트는 표면 id 를 따옴표로 감싸 쓴다. */
 const observation = (surface) =>
-  new RegExp(`^exposure reply \\d+ of removed surface ${literal(JSON.stringify(surface))} arrived after its request ended$`);
+  new RegExp(`^info host exposure: exposure reply \\d+ of removed surface ${literal(JSON.stringify(surface))} arrived after its request ended$`);
 
 /** 붙잡은 답을 표면이 제거된 뒤에 보낸 페이지가 쓰는 줄(docs/spec/endpoint.md 의 diagnostics.surface.hold). */
 export const heldRepliesSent = (surface, count) =>
-  `held exposure replies of surface ${JSON.stringify(surface)} were sent after the surface closed (${count})`;
+  `info page page: held exposure replies of surface ${JSON.stringify(surface)} were sent after the surface closed (${count})`;
 
 /** 로그 줄 중 surface 의 늦은 답 관측과 오류 줄. */
 export function lateReplyFindings(lines, surface) {
   const pattern = observation(surface);
   return {
     observations: lines.filter((line) => pattern.test(line)),
-    errors: lines.filter((line) => line.startsWith("error: ")),
+    errors: lines.filter((line) => line.startsWith("error ")),
   };
 }

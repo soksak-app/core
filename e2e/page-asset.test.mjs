@@ -13,7 +13,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const first = `/missing-${process.pid}-first.js`;
     const second = `/missing-${process.pid}-second.js`;
-    s.expectError(new RegExp(`^error: page asset: /missing-${process.pid}-(first|second)\\.js: not found$`));
+    s.expectError(new RegExp(`^error host page asset: /missing-${process.pid}-(first|second)\\.js: not found$`));
     const before = readOffset(app.configDir);
     // The page requests each file twice; the host reports a path once.
     for (const path of [first, second, first]) {
@@ -24,8 +24,8 @@ for (const app of Object.values(APPS)) {
     }
     const { errors } = readErrors(app.configDir, before);
     assert.deepEqual(errors.filter((line) => line.includes(`missing-${process.pid}`)).sort(), [
-      `error: page asset: ${first}: not found`,
-      `error: page asset: ${second}: not found`,
+      `error host page asset: ${first}: not found`,
+      `error host page asset: ${second}: not found`,
     ]);
   });
 }

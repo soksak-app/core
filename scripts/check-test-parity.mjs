@@ -1112,6 +1112,34 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F138",
+    implementation: [
+      { file: "packages/host/wailsv3/src/application_log.go", symbol: "func PageEntry" },
+      { file: "packages/host/tauriv2/src/application_log.rs", symbol: "pub fn page_entry" },
+      { file: "packages/window-check/application-log.mjs", symbol: "export function parseRecord" },
+      { file: "native/darwin/src/application_log.m", symbol: "void sp_log_info" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestAPageRecordHasTheLayerPageAndRejectsAnInvalidLevelOrPlace" },
+      { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "a_page_record_has_the_layer_page_and_rejects_an_invalid_level_or_place" },
+      { file: "packages/window-check/test/application-log.test.mjs", id: "parseRecord splits a text record into its time, level, layer, place and text" },
+      { file: "packages/workbench/test/report-record.test.mjs", id: "a line `<where>: <text>` is split at its first `: `" },
+    ],
+    expected: "Every text line of the application log is one record of the form `<time> <level> <layer> <where>: <text>`, and the window check reads that form.",
+    levels: ["unit"],
+  },
+  {
+    id: "F146",
+    implementation: [
+      { file: "packages/workbench/debug-ui.js", symbol: "debug scroll position is not a number" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-scroll.test.mjs", id: "a negative scroll position of the native modal is kept as reported and a value that is not a number is refused" },
+    ],
+    expected: "The debug view keeps a negative scroll position that the native modal reports and refuses a value that is not a number.",
+    levels: ["unit"],
+  },
+  {
     id: "F137",
     implementation: [
       { file: "packages/sok/tauriv2/src/appupdate.rs", symbol: "pub type OpenApplication" },
@@ -1155,11 +1183,11 @@ const FEATURE_LINKS = [
     id: "F31",
     implementation: [
       { file: "packages/window-check/application-log.mjs", symbol: "export function readErrors" },
-      { file: "packages/workbench/host.js", symbol: "const errorLine" },
+      { file: "packages/workbench/report-record.js", symbol: "export function recordOf" },
     ],
     tests: [
       { file: "packages/window-check/test/session-cleanup.test.mjs", id: "an error line that the application logged during the check fails the check unless it is declared" },
-      { file: "packages/workbench/test/report-levels.test.mjs", id: "a reported failure starts with error: and an observation does not" },
+      { file: "packages/workbench/test/report-levels.test.mjs", id: "a reported failure has the level error and an observation has the level info" },
     ],
     expected: "Every error line that the application logs during a window check is printed and fails the check unless the check declares it.",
     levels: ["unit", "application"],

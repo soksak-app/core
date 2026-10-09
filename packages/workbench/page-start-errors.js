@@ -28,7 +28,7 @@ const rejectionText = (reason) => (reason instanceof Error ? reason.message : St
 export function installPageStartErrors({ target, report }) {
   const written = new Set();
   const write = (text) => {
-    const line = `error: page start: ${text}`;
+    const line = `start: ${text}`;
     if (written.has(line)) return;
     written.add(line);
     report(line);

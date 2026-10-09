@@ -86,12 +86,13 @@ test("Tauri page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["document_load", { request: { surface: "s1", document: "doc", url: "https://example.test" } }]);
   await host.call("documentPost", { surface: "s1", document: "doc", message: { ping: 1 } });
   assert.deepEqual(recorded.at(-1), ["document_post", { request: { surface: "s1", document: "doc", message: { ping: 1 } } }]);
-  await host.call("report", "ready");
-  assert.deepEqual(recorded.at(-1), ["report", { line: "ready" }]);
+  await host.call("report", { level: "info", where: "page", text: "ready" });
+  assert.deepEqual(recorded.at(-1), ["report", { record: { level: "info", where: "page", text: "ready" } }]);
   assert.deepEqual(await host.call("waitPresented"), { displayed: 42 });
   assert.deepEqual(recorded.at(-1), ["wait_presented", {}]);
   // 잘못된 인자는 Wails 런타임처럼 거부된 약속으로 알린다. 메인 페이지의 호출은 모두 settlingCalls 를 거친다.
-  await assert.rejects(host.call("report", { line: "ready" }), /report requires a string/);
+  await assert.rejects(host.call("report", "ready"), /report requires \{level, where, text\} strings/);
+  await assert.rejects(host.call("report", { level: "info", where: "page" }), /report requires \{level, where, text\} strings/);
   await host.call("sidecarSend", { sidecar: "x", surface: "s1", body: { value: 1 } });
   assert.deepEqual(recorded.at(-1), ["sidecar_send", { sidecar: "x", surface: "s1", body: { value: 1 } }]);
   await host.call("imageCaret", { surface: "s1", name: "img", x: 1, y: 2, width: 3, height: 4 });

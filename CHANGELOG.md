@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F138.4: the window check reads the text records of the application log (`parseRecord`, `withoutTime`): `readErrors` returns the records of level `error` as `error <layer> <where>: <text>` and the lines that have no form (the output of the operating system and the runtime) separately, and the checks of `e2e/` compare records instead of the earlier lines. F138 is complete.
+- F138.3: the page reports a record `{level, where, text}` through the host call `report` (`recordOf` in `report-record.js` splits a line `<where>: <text>` at its first `: `), both hosts check it and write `<time> <level> page <where>: <text>`, the start error handler writes the place `start`, and the native library writes its capture observations as records `info native capture: <text>`.
 - F146: the debug view keeps a negative scroll position that the native modal reports while its content is pulled past its start, instead of throwing `debug scroll position is invalid`; a value that is not a number is still refused.
 - F144.6: a log file and the performance trace rotate at 100 MB and keep the five earlier generations (`.1` to `.5`) in both hosts, instead of 10 MB and one generation, so the records cover a long session.
 - F144.4: both hosts write each request to a sidecar (`sidecar.send`), each message from a sidecar (`sidecar.receive`) and each event of a native region (`region`) as trace events of the layer `host` with their whole bodies, with the same names and fields.

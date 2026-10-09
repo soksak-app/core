@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F138.4: 창 검사가 애플리케이션 로그의 글 기록을 읽는다(`parseRecord`, `withoutTime`). `readErrors`는 level `error`인 기록을 `error <layer> <where>: <text>`로, 형식이 없는 줄(운영체제와 런타임의 출력)을 따로 돌려주고, `e2e/`의 검사는 이전 줄이 아니라 기록을 비교한다. F138이 끝났다.
+- F138.3: page가 host 호출 `report`로 기록 `{level, where, text}`를 보내고(`report-record.js`의 `recordOf`가 줄 `<where>: <text>`를 처음 나오는 `: `에서 나눈다), 두 host가 이를 검사해 `<time> <level> page <where>: <text>`로 쓰며, 시작 오류 handler는 place `start`를 쓰고, native 라이브러리는 capture 관측을 기록 `info native capture: <text>`로 쓴다.
 - F146: debug 화면은 내용이 시작을 지나 당겨진 동안 native modal이 보고하는 음수 스크롤 위치를 `debug scroll position is invalid`로 던지지 않고 그대로 두며, 숫자가 아닌 값은 계속 거부한다.
 - F144.6: 두 host에서 로그 파일과 performance trace가 10 MB와 한 세대가 아니라 100 MB에서 회전하고 이전 세대 다섯 개(`.1`부터 `.5`까지)를 남기므로 기록이 긴 세션을 덮는다.
 - F144.4: 두 host가 sidecar로 보내는 각 요청(`sidecar.send`), sidecar에서 받는 각 메시지(`sidecar.receive`), native 영역의 각 event(`region`)를 같은 이름과 필드로 본문 전체와 함께 layer `host`의 trace event로 쓴다.

@@ -1,10 +1,23 @@
-// 검사하는 애플리케이션의 로그에서 오류 줄을 읽는다. 페이지는 오류를 `error: ` 로 시작하는 줄로 보고하고 호스트는
-// 그 줄을 `logs/application.log` 에 쓴다(docs/spec/hosts.md#application-log). 문서의 오류 표시는 다음 reload 가
-// 지우지만 로그의 줄은 남으므로, 검사는 로그로 검사 동안의 모든 오류 발생을 판정한다.
+// 검사하는 애플리케이션의 로그에서 오류 기록을 읽는다. 로그의 줄은 `<time> <level> <layer> <where>: <text>` 형식의 글 기록이고
+// level 이 error 인 기록이 오류다(docs/spec/diagnostics.md#forms). 문서의 오류 표시는 다음 reload 가 지우지만 로그의 기록은
+// 남으므로, 검사는 로그로 검사 동안의 모든 오류 발생을 판정한다.
 import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const ERROR = "error: ";
+const RECORD = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) (error|info) (page|host|native|sidecar) (.+)$/;
+
+/**
+ * 줄을 글 기록 {time, level, layer, where, text} 로 읽는다. 형식이 없는 줄(운영체제와 런타임의 출력)은 null 이다. where 는
+ * 처음 나오는 `: ` 에서 끝나며, `: ` 가 없는 줄도 기록이 아니다.
+ */
+export function parseRecord(line) {
+  const match = RECORD.exec(line);
+  if (!match) return null;
+  const rest = match[4];
+  const at = rest.indexOf(": ");
+  if (at <= 0) return null;
+  return { time: match[1], level: match[2], layer: match[3], where: rest.slice(0, at), text: rest.slice(at + 2) };
+}
 
 /** 설정 폴더의 애플리케이션 로그와 그 이전 세대(크기 제한으로 이름을 바꾼 파일). */
 export const applicationLog = (configDir) => join(configDir, "logs", "application.log");
@@ -46,10 +59,26 @@ function readFrom(path, offset) {
   }
 }
 
-/** offset 뒤에 쓰인 오류 줄과 새 끝 위치. 읽는 범위는 readLines 와 같다. */
+/** 줄에서 시각을 뺀 기록 `<level> <layer> <where>: <text>`. 기록이 아닌 줄은 줄 그대로다. */
+export function withoutTime(line) {
+  const record = parseRecord(line);
+  return record === null ? line : `${record.level} ${record.layer} ${record.where}: ${record.text}`;
+}
+
+/**
+ * offset 뒤에 쓰인 오류 기록(시각을 뺀 `error <layer> <where>: <text>`), 형식이 없는 줄, 새 끝 위치. 읽는 범위는 readLines 와
+ * 같다. 형식이 없는 줄은 운영체제와 런타임의 출력이며 오류로 판정하지 않고 검사가 보고하도록 돌려준다.
+ */
 export function readErrors(configDir, offset) {
   const { lines, end } = readLines(configDir, offset);
-  return { errors: lines.filter((line) => line.startsWith(ERROR)), end };
+  const errors = [];
+  const unformatted = [];
+  for (const line of lines) {
+    const record = parseRecord(line);
+    if (record === null) unformatted.push(line);
+    else if (record.level === "error") errors.push(`error ${record.layer} ${record.where}: ${record.text}`);
+  }
+  return { errors, unformatted, end };
 }
 
 /**

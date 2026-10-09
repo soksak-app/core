@@ -13,12 +13,13 @@ test("one presentation timeout writes one page error line", async () => {
   globalThis.document = dom.window.document;
   // 문서의 animation frame. Node 에는 없으므로 요청한 자리에서 실행한다.
   globalThis.requestAnimationFrame = (run) => run(0);
+  const shown = (record) => `${record.level} page ${record.where}: ${record.text}`;
   const lines = [];
   mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {},
     page: (path) => path,
     call: async (name, request) => {
-      if (name === "report") { lines.push(request); return; }
+      if (name === "report") { lines.push(shown(request)); return; }
       if (name === "syncSurfaces") return {
         ticket: 1,
         placements: [{ id: "tab-1", x: 0, y: 0, w: 10, h: 10, visible: true }],
@@ -62,7 +63,7 @@ test("one presentation timeout writes one page error line", async () => {
 
   assert.equal(await registry.run("core.fixture.split"), null);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(lines, [`error: page: surface presentation failed: ${TIMEOUT}`],
+  assert.deepEqual(lines, [`error page page: surface presentation failed: ${TIMEOUT}`],
     "one presentation timeout must write exactly the line of the display that shows it");
   dom.window.close();
 });

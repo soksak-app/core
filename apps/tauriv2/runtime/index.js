@@ -81,8 +81,10 @@ const ARG = {
   },
   theme: () => ({}),
   report: (v) => {
-    if (typeof v !== "string") throw new TypeError("report requires a string");
-    return { line: v };
+    if (!v || typeof v !== "object" || typeof v.level !== "string" || typeof v.where !== "string" || typeof v.text !== "string") {
+      throw new TypeError("report requires {level, where, text} strings");
+    }
+    return { record: { level: v.level, where: v.where, text: v.text } };
   },
   overlayShow: (v) => ({ request: v }),
   overlayPlace: (v) => ({ request: v }),
