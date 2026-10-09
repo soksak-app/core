@@ -193,9 +193,12 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
             .ok_or_else(|| "name is required".into())
     })?;
     let revoked = read_json_file(dir, "revoked.json")?;
-    let mut index = install::validate_registry_index(
-        &json!({"format": 1, "plugins": plugins, "sidecars": sidecars, "packs": packs, "revoked": revoked}),
-    )?;
+    let mut root = json!({"format": 1, "plugins": plugins, "sidecars": sidecars, "packs": packs, "revoked": revoked});
+    // A registry without core.json lists no core release.
+    if dir.join("core.json").exists() {
+        root["core"] = read_json_file(dir, "core.json")?;
+    }
+    let mut index = install::validate_registry_index(&root)?;
     // 파일 이름 순서는 @scope 이름의 순서와 다르므로 목록을 id 와 이름으로 다시 정렬한다.
     index.plugins.sort_by(|a, b| a.id.cmp(&b.id));
     index.sidecars.sort_by(|a, b| a.name.cmp(&b.name));
@@ -215,6 +218,16 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
             }
         }
     }
+    let mut cores = 0;
+    if let Some(core) = index.core.as_mut() {
+        core.versions.sort_by(|a, b| a.version.cmp(&b.version));
+        for version in &core.versions {
+            cores += 1;
+            for (key, release) in &version.releases {
+                read_release(&format!("core {} {key}", version.version), release)?;
+            }
+        }
+    }
     let mut out = vec![];
     // 구조체 그대로 쓰므로 key 는 선언 순서이며 Go 구현과 같은 byte 를 쓴다.
     print_json(&mut out, &index)?;
@@ -222,7 +235,7 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
     replace_file(&path, &out)?;
     Ok(
         json!({"index": path.display().to_string(), "plugins": index.plugins.len(),
-        "sidecars": index.sidecars.len(), "packs": index.packs.len()}),
+        "sidecars": index.sidecars.len(), "packs": index.packs.len(), "core": cores}),
     )
 }
 

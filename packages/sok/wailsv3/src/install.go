@@ -544,6 +544,7 @@ type RevokedSidecar struct {
 type Revoked struct {
 	Plugins  []RevokedPlugin  `json:"plugins"`
 	Sidecars []RevokedSidecar `json:"sidecars"`
+	Core     []RevokedCore    `json:"core,omitempty"`
 }
 
 // Index 는 검사한 registry index 다.
@@ -551,8 +552,30 @@ type Index struct {
 	Format   int               `json:"format"`
 	Plugins  []RegistryPlugin  `json:"plugins"`
 	Sidecars []RegistrySidecar `json:"sidecars"`
-	Packs    []RegistryPack    `json:"packs"`
-	Revoked  Revoked           `json:"revoked"`
+	// Core lists the core releases; an index without it lists none (docs/spec/installation.md#application-update).
+	Core    *RegistryCore  `json:"core,omitempty"`
+	Packs   []RegistryPack `json:"packs"`
+	Revoked Revoked        `json:"revoked"`
+}
+
+// CoreHosts are the hosts of an application release.
+var CoreHosts = []string{"tauriv2", "wailsv3"}
+
+// CoreRelease is one core release of the registry: the zip of the application bundle for each platform and host.
+type CoreRelease struct {
+	Version  string             `json:"version"`
+	Releases map[string]Release `json:"releases"`
+}
+
+// RegistryCore lists the core releases of the registry.
+type RegistryCore struct {
+	Versions []CoreRelease `json:"versions"`
+}
+
+// RevokedCore is a core version that an application must not update to.
+type RevokedCore struct {
+	Version string `json:"version"`
+	Reason  string `json:"reason"`
 }
 
 // entryWhere 는 항목의 이름이 문자열이면 그것을 붙인 위치다.
@@ -697,6 +720,76 @@ func ValidateRegistrySidecar(value any) error {
 	return nil
 }
 
+// splitCoreKey splits the key of a core release into its platform and host.
+func splitCoreKey(key string) (platform, host string, err error) {
+	at := strings.LastIndex(key, "-")
+	if at < 0 {
+		return "", "", fmt.Errorf("%s is not <platform>-<host>", key)
+	}
+	platform, host = key[:at], key[at+1:]
+	// The last part of a platform key is an architecture, so it is not a host: the key lacks the host.
+	if slices.Contains(Platforms, key) {
+		return "", "", fmt.Errorf("%s is not <platform>-<host>", key)
+	}
+	if err := checkPlatform(platform); err != nil {
+		return "", "", err
+	}
+	if !slices.Contains(CoreHosts, host) {
+		return "", "", fmt.Errorf("unknown host %s", host)
+	}
+	return platform, host, nil
+}
+
+// ValidateRegistryCore checks the core list of the registry (`core.json`): each version has releases of platform and
+// host keys.
+func ValidateRegistryCore(value any) error {
+	core, err := object("registry core", value)
+	if err != nil {
+		return err
+	}
+	if err := only("registry core", core, "versions"); err != nil {
+		return err
+	}
+	versions, err := array("registry core versions", core["versions"])
+	if err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	for _, raw := range versions {
+		item, err := object("registry core version", raw)
+		if err != nil {
+			return err
+		}
+		if err := only("registry core version", item, "releases", "version"); err != nil {
+			return err
+		}
+		if err := checkVersion("registry core version", item["version"]); err != nil {
+			return err
+		}
+		version := item["version"].(string)
+		if seen[version] {
+			return fmt.Errorf("registry core: version %s appears twice", version)
+		}
+		seen[version] = true
+		releases, err := object("registry core "+version+" releases", item["releases"])
+		if err != nil {
+			return err
+		}
+		if len(releases) == 0 {
+			return fmt.Errorf("registry core %s: releases is empty", version)
+		}
+		for _, key := range sortedKeys(releases) {
+			if _, _, err := splitCoreKey(key); err != nil {
+				return fmt.Errorf("registry core %s: %w", version, err)
+			}
+			if err := checkReleaseEntry("registry core "+version+" "+key, releases[key]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // ValidateRegistryPack 은 registry 의 pack 항목 하나(`packs/<name>.json`)를 검사한다.
 func ValidateRegistryPack(value any) error {
 	entry, err := object("registry pack", value)
@@ -740,8 +833,30 @@ func ValidateRevoked(value any) error {
 	if err != nil {
 		return err
 	}
-	if err := only("registry revoked", revoked, "plugins", "sidecars"); err != nil {
+	if err := only("registry revoked", revoked, "core", "plugins", "sidecars"); err != nil {
 		return err
+	}
+	// A revoked list without core withdraws no core version.
+	if raw, ok := revoked["core"]; ok {
+		items, err := array("registry revoked core", raw)
+		if err != nil {
+			return err
+		}
+		for _, raw := range items {
+			item, err := object("registry revoked core", raw)
+			if err != nil {
+				return err
+			}
+			if err := only("registry revoked core", item, "reason", "version"); err != nil {
+				return err
+			}
+			if err := checkVersion("registry revoked core", item["version"]); err != nil {
+				return err
+			}
+			if _, ok := text(item["reason"]); !ok {
+				return fmt.Errorf("registry revoked core %v: reason is required", item["version"])
+			}
+		}
 	}
 	for _, kind := range [][2]string{{"plugins", "id"}, {"sidecars", "name"}} {
 		where := "registry revoked " + kind[0]
@@ -789,8 +904,13 @@ func ValidateRegistryIndex(value any) (*Index, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := only("registry index", root, "format", "packs", "plugins", "revoked", "sidecars"); err != nil {
+	if err := only("registry index", root, "core", "format", "packs", "plugins", "revoked", "sidecars"); err != nil {
 		return nil, err
+	}
+	if raw, ok := root["core"]; ok {
+		if err := ValidateRegistryCore(raw); err != nil {
+			return nil, err
+		}
 	}
 	if !isOne(root["format"]) {
 		return nil, fmt.Errorf("registry index: format must be %d", InstallFormat)
@@ -871,6 +991,11 @@ func ValidateRegistryIndex(value any) (*Index, error) {
 	for _, item := range index.Revoked.Sidecars {
 		if sidecar := sidecars[item.Name]; sidecar == nil || !slices.ContainsFunc(sidecar.Versions, func(candidate SidecarVersion) bool { return candidate.Version == item.Version }) {
 			return nil, fmt.Errorf("registry index: revoked sidecar %s %s is not listed", item.Name, item.Version)
+		}
+	}
+	for _, item := range index.Revoked.Core {
+		if index.Core == nil || !slices.ContainsFunc(index.Core.Versions, func(candidate CoreRelease) bool { return candidate.Version == item.Version }) {
+			return nil, fmt.Errorf("registry index: revoked core %s is not listed", item.Version)
 		}
 	}
 	return &index, nil

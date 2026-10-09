@@ -490,11 +490,36 @@ pub struct RevokedSidecar {
     pub reason: String,
 }
 
+/// A core version that an application must not update to.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct RevokedCore {
+    pub version: String,
+    pub reason: String,
+}
+
 /// 설치하거나 실행하면 안 되는 version.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Revoked {
     pub plugins: Vec<RevokedPlugin>,
     pub sidecars: Vec<RevokedSidecar>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub core: Vec<RevokedCore>,
+}
+
+/// The hosts of an application release.
+pub const CORE_HOSTS: [&str; 2] = ["tauriv2", "wailsv3"];
+
+/// One core release of the registry: the zip of the application bundle for each platform and host.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CoreRelease {
+    pub version: String,
+    pub releases: BTreeMap<String, Release>,
+}
+
+/// The core releases of the registry.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct RegistryCore {
+    pub versions: Vec<CoreRelease>,
 }
 
 /// 검사한 registry index.
@@ -503,6 +528,9 @@ pub struct Index {
     pub format: u64,
     pub plugins: Vec<RegistryPlugin>,
     pub sidecars: Vec<RegistrySidecar>,
+    /// The core releases; an index without them lists none (docs/spec/installation.md#application-update).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub core: Option<RegistryCore>,
     pub packs: Vec<RegistryPack>,
     pub revoked: Revoked,
 }
@@ -616,6 +644,49 @@ pub fn validate_registry_sidecar(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
+/// Splits the key of a core release into its platform and host.
+fn split_core_key(key: &str) -> Result<(&str, &str), String> {
+    let Some((platform, host)) = key.rsplit_once('-') else {
+        return Err(format!("{key} is not <platform>-<host>"));
+    };
+    // The last part of a platform key is an architecture, so it is not a host: the key lacks the host.
+    if PLATFORMS.contains(&key) {
+        return Err(format!("{key} is not <platform>-<host>"));
+    }
+    check_platform(platform)?;
+    if !CORE_HOSTS.contains(&host) {
+        return Err(format!("unknown host {host}"));
+    }
+    Ok((platform, host))
+}
+
+/// Checks the core list of the registry (`core.json`): each version has releases of platform and host keys.
+pub fn validate_registry_core(value: &Value) -> Result<(), String> {
+    let core = object("registry core", Some(value))?;
+    only("registry core", core, &["versions"])?;
+    let mut seen = BTreeSet::new();
+    for raw in array("registry core versions", core.get("versions"))? {
+        let item = object("registry core version", Some(raw))?;
+        only("registry core version", item, &["releases", "version"])?;
+        let version = check_version("registry core version", item.get("version"))?;
+        if !seen.insert(version.to_string()) {
+            return Err(format!("registry core: version {version} appears twice"));
+        }
+        let releases = object(
+            &format!("registry core {version} releases"),
+            item.get("releases"),
+        )?;
+        if releases.is_empty() {
+            return Err(format!("registry core {version}: releases is empty"));
+        }
+        for key in sorted_keys(releases) {
+            split_core_key(key).map_err(|error| format!("registry core {version}: {error}"))?;
+            check_release_entry(&format!("registry core {version} {key}"), releases.get(key))?;
+        }
+    }
+    Ok(())
+}
+
 /// Registry 의 pack 항목 하나(`packs/<name>.json`)를 검사한다.
 pub fn validate_registry_pack(value: &Value) -> Result<(), String> {
     let entry = object("registry pack", Some(value))?;
@@ -644,7 +715,23 @@ pub fn validate_registry_pack(value: &Value) -> Result<(), String> {
 /// Registry 의 revoked 목록(`revoked.json`)을 검사한다.
 pub fn validate_revoked(value: &Value) -> Result<(), String> {
     let revoked = object("registry revoked", Some(value))?;
-    only("registry revoked", revoked, &["plugins", "sidecars"])?;
+    only(
+        "registry revoked",
+        revoked,
+        &["core", "plugins", "sidecars"],
+    )?;
+    // A revoked list without core withdraws no core version.
+    if let Some(raw) = revoked.get("core") {
+        let at = "registry revoked core";
+        for raw in array(at, Some(raw))? {
+            let item = object(at, Some(raw))?;
+            only(at, item, &["reason", "version"])?;
+            let version = check_version(at, item.get("version"))?;
+            if text(item.get("reason")).is_none() {
+                return Err(format!("{at} {version}: reason is required"));
+            }
+        }
+    }
     for (kind, key) in [("plugins", "id"), ("sidecars", "name")] {
         let at = format!("registry revoked {kind}");
         for raw in array(&at, revoked.get(kind))? {
@@ -674,8 +761,11 @@ pub fn validate_registry_index(value: &Value) -> Result<Index, String> {
     only(
         "registry index",
         root,
-        &["format", "packs", "plugins", "revoked", "sidecars"],
+        &["core", "format", "packs", "plugins", "revoked", "sidecars"],
     )?;
+    if let Some(core) = root.get("core") {
+        validate_registry_core(core)?;
+    }
     if !is_one(root.get("format")) {
         return Err(format!("registry index: format must be {INSTALL_FORMAT}"));
     }
@@ -777,6 +867,19 @@ pub fn validate_registry_index(value: &Value) -> Result<Index, String> {
             return Err(format!(
                 "registry index: revoked sidecar {} {} is not listed",
                 item.name, item.version
+            ));
+        }
+    }
+    for item in &index.revoked.core {
+        let listed = index.core.as_ref().is_some_and(|core| {
+            core.versions
+                .iter()
+                .any(|candidate| candidate.version == item.version)
+        });
+        if !listed {
+            return Err(format!(
+                "registry index: revoked core {} is not listed",
+                item.version
             ));
         }
     }

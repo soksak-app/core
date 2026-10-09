@@ -3,6 +3,8 @@ package tests
 // registry build(docs/spec/cli.md)가 registry 폴더를 검사하고 index.json 을 쓰는지 검사한다.
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -62,7 +64,7 @@ func TestRegistryBuildWritesTheIndexAfterCheckingEveryRelease(t *testing.T) {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 	index := filepath.Join(dir, "index.json")
-	if want := "{\n  \"index\": \"" + index + "\",\n  \"packs\": 1,\n  \"plugins\": 1,\n  \"sidecars\": 1\n}\n"; stdout != want {
+	if want := "{\n  \"core\": 0,\n  \"index\": \"" + index + "\",\n  \"packs\": 1,\n  \"plugins\": 1,\n  \"sidecars\": 1\n}\n"; stdout != want {
 		t.Fatalf("stdout %q, want %q", stdout, want)
 	}
 	pluginRelease, pluginHash, _ := strings.Cut(plugin, " ")
@@ -234,5 +236,106 @@ func replaceIn(t *testing.T, path, old, replacement string, count int) {
 	}
 	if err := os.WriteFile(path, []byte(strings.Replace(string(data), old, replacement, count)), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// coreTree writes the registry of registryTree with a core.json that lists one core release, and returns its release.
+func coreTree(t *testing.T) (dir, release, sum string) {
+	t.Helper()
+	dir, _, _ = registryTree(t)
+	release = filepath.Join(t.TempDir(), "soksak-0.0.9-darwin-arm64-wailsv3.zip")
+	if err := os.WriteFile(release, []byte("the zip of an application bundle"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hash := sha256.Sum256([]byte("the zip of an application bundle"))
+	sum = hex.EncodeToString(hash[:])
+	writeTree(t, dir, map[string]string{
+		"core.json": `{"versions": [{"version": "0.0.9", "releases": {"darwin-arm64-wailsv3": {"url": "file://` + release + `", "sha256": "` + sum + `"}}}]}`,
+	})
+	return dir, release, sum
+}
+
+// contract: cli.registry.lists-core-releases
+func TestRegistryBuildListsTheCoreReleasesAfterCheckingTheirHashes(t *testing.T) {
+	dir, release, sum := coreTree(t)
+	code, stdout, stderr := run("registry", "build", dir)
+	if code != 0 {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	if !strings.Contains(stdout, "\"core\": 1,") {
+		t.Fatalf("stdout %q does not count the core release", stdout)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `  "core": {
+    "versions": [
+      {
+        "version": "0.0.9",
+        "releases": {
+          "darwin-arm64-wailsv3": {
+            "url": "file://` + release + `",
+            "sha256": "` + sum + `"
+          }
+        }
+      }
+    ]
+  },
+`
+	if !strings.Contains(string(data), want) {
+		t.Fatalf("the index has no core list %q: %s", want, data)
+	}
+	// An index of a registry without core.json lists no core release.
+	plain, _, _ := registryTree(t)
+	if code, stdout, stderr := run("registry", "build", plain); code != 0 || !strings.Contains(stdout, "\"core\": 0,") {
+		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+	data, err = os.ReadFile(filepath.Join(plain, "index.json"))
+	if err != nil || strings.Contains(string(data), `"core"`) {
+		t.Fatalf("the index of a registry without core.json holds a core list (%v): %s", err, data)
+	}
+}
+
+// contract: cli.registry.rejects-malformed-core-releases
+func TestRegistryBuildRejectsMalformedCoreReleasesWithoutWritingTheIndex(t *testing.T) {
+	cases := []struct {
+		change func(dir, release string)
+		want   string
+	}{
+		{func(dir, release string) {
+			replaceIn(t, filepath.Join(dir, "core.json"), `darwin-arm64-wailsv3`, `darwin-arm64`, 1)
+		}, "registry core 0.0.9: darwin-arm64 is not <platform>-<host>"},
+		{func(dir, release string) {
+			replaceIn(t, filepath.Join(dir, "core.json"), `darwin-arm64-wailsv3`, `darwin-arm64-electron`, 1)
+		}, "registry core 0.0.9: unknown host electron"},
+		{func(dir, release string) {
+			replaceIn(t, filepath.Join(dir, "core.json"), `darwin-arm64-wailsv3`, `plan9-arm64-wailsv3`, 1)
+		}, "registry core 0.0.9: unknown platform plan9-arm64"},
+		{func(dir, release string) {
+			replaceIn(t, filepath.Join(dir, "core.json"), `"versions": [`, `"versions": [{"version": "0.0.9", "releases": {"darwin-arm64-tauriv2": {"url": "file://`+release+`", "sha256": "`+strings.Repeat("a", 64)+`"}}}, `, 1)
+		}, "registry core: version 0.0.9 appears twice"},
+		{func(dir, release string) {
+			replaceIn(t, filepath.Join(dir, "core.json"), `{"versions"`, `{"extra": 1, "versions"`, 1)
+		}, "registry core: unknown field extra"},
+		{func(dir, release string) {
+			if err := os.WriteFile(release, []byte("another zip"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}, "core 0.0.9 darwin-arm64-wailsv3: "},
+		{func(dir, release string) {
+			replaceIn(t, filepath.Join(dir, "revoked.json"), `"sidecars": []`, `"sidecars": [], "core": [{"version": "0.0.8", "reason": "broken"}]`, 1)
+		}, "registry index: revoked core 0.0.8 is not listed"},
+	}
+	for _, c := range cases {
+		dir, release, _ := coreTree(t)
+		c.change(dir, release)
+		code, _, stderr := run("registry", "build", dir)
+		if code != 1 || !strings.Contains(stderr, c.want) {
+			t.Fatalf("code %d stderr %q, want %q", code, stderr, c.want)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "index.json")); !os.IsNotExist(err) {
+			t.Fatalf("a failed build wrote index.json: %v", err)
+		}
 	}
 }

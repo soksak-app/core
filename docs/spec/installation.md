@@ -46,7 +46,7 @@ The registry index `index.json` has `format` 1 and these lists:
 | --- | --- |
 | `plugins` | `{ id, package, name, description, license, repository, versions }`; each version is `{ version, release: { url, sha256 }, engines: { soksak }, sidecars }` where `sidecars` maps the sidecar dependencies of the version's `plugin.json` to their ranges and is `{}` for a plugin without sidecars; plugin dependencies are not listed in the index |
 | `sidecars` | `{ name, repository, versions }`; each version is `{ version, protocol: 1, releases }` where `releases` maps platforms to `{ url, sha256 }` |
-| `core` | `{ versions }`; each version is `{ version, releases }` where `releases` maps `<platform>-<host>` to `{ url, sha256 }`, the zip of the application bundle of that platform and host (`wailsv3` or `tauriv2`), for example `darwin-arm64-wailsv3` ([application update](#application-update)) |
+| `core` | Optional; an index without it lists no core release. `{ versions }`; each version is `{ version, releases }` where `releases` maps `<platform>-<host>` to `{ url, sha256 }`, the zip of the application bundle of that platform and host (`wailsv3` or `tauriv2`), for example `darwin-arm64-wailsv3` ([application update](#application-update)) |
 | `packs` | `{ name, description, plugins }`: plugin ids installed together |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }], core: [{ version, reason }] }` |
 

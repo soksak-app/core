@@ -173,7 +173,7 @@ fn registry_build_writes_the_index_after_checking_every_release() {
     let index_text = index.to_str().unwrap();
     assert_eq!(
         stdout,
-        format!("{{\n  \"index\": \"{index_text}\",\n  \"packs\": 1,\n  \"plugins\": 1,\n  \"sidecars\": 1\n}}\n")
+        format!("{{\n  \"core\": 0,\n  \"index\": \"{index_text}\",\n  \"packs\": 1,\n  \"plugins\": 1,\n  \"sidecars\": 1\n}}\n")
     );
     let want = format!(
         r#"{{
@@ -419,6 +419,147 @@ fn registry_build_rejects_a_mismatch_without_writing_the_index() {
     for (change, want) in cases {
         let registry = registry_tree();
         change(&registry);
+        let (code, _, stderr) = run(&["registry", "build", registry.dir.text()]);
+        assert!(
+            code == 1 && stderr.contains(want),
+            "code {code} stderr {stderr:?}, want {want:?}"
+        );
+        assert!(
+            !registry.dir.0.join("index.json").exists(),
+            "a failed build wrote index.json"
+        );
+    }
+}
+
+/// The sha256 of the bytes that core_tree writes as the zip of an application bundle.
+const CORE_SUM: &str = "9a4ecbf3c69aa41b219ba50b64dc4dbdaa99ee57e6217a3b50598f498892786d";
+
+/// Writes the registry of registry_tree with a core.json that lists one core release; returns the registry and the
+/// path of the release.
+fn core_tree() -> (Registry, PathBuf) {
+    let registry = registry_tree();
+    let release = registry.dir.0.join("soksak-0.0.9-darwin-arm64-wailsv3.zip");
+    std::fs::write(&release, "the zip of an application bundle").unwrap();
+    let core = format!(
+        r#"{{"versions": [{{"version": "0.0.9", "releases": {{"darwin-arm64-wailsv3": {{"url": "file://{}", "sha256": "{CORE_SUM}"}}}}}}]}}"#,
+        release.display()
+    );
+    write_tree(&registry.dir.0, &[("core.json", &core)]);
+    (registry, release)
+}
+
+// contract: cli.registry.lists-core-releases
+#[test]
+fn registry_build_lists_the_core_releases_after_checking_their_hashes() {
+    let (registry, release) = core_tree();
+    let (code, stdout, stderr) = run(&["registry", "build", registry.dir.text()]);
+    assert_eq!(code, 0, "{stderr}");
+    assert!(
+        stdout.contains("\"core\": 1,"),
+        "stdout {stdout:?} does not count the core release"
+    );
+    let index = std::fs::read_to_string(registry.dir.0.join("index.json")).unwrap();
+    let want = format!(
+        r#"  "core": {{
+    "versions": [
+      {{
+        "version": "0.0.9",
+        "releases": {{
+          "darwin-arm64-wailsv3": {{
+            "url": "file://{}",
+            "sha256": "{CORE_SUM}"
+          }}
+        }}
+      }}
+    ]
+  }},
+"#,
+        release.display()
+    );
+    assert!(index.contains(&want), "the index has no core list: {index}");
+    // An index of a registry without core.json lists no core release.
+    let plain = registry_tree();
+    let (code, stdout, stderr) = run(&["registry", "build", plain.dir.text()]);
+    assert_eq!(code, 0, "{stderr}");
+    assert!(stdout.contains("\"core\": 0,"), "{stdout}");
+    let index = std::fs::read_to_string(plain.dir.0.join("index.json")).unwrap();
+    assert!(!index.contains("\"core\""), "{index}");
+}
+
+// contract: cli.registry.rejects-malformed-core-releases
+#[test]
+fn registry_build_rejects_malformed_core_releases_without_writing_the_index() {
+    type Change = fn(&Registry, &Path);
+    let cases: [(Change, &str); 7] = [
+        (
+            |r, _| {
+                replace_in(
+                    &r.dir.0.join("core.json"),
+                    "darwin-arm64-wailsv3",
+                    "darwin-arm64",
+                )
+            },
+            "registry core 0.0.9: darwin-arm64 is not <platform>-<host>",
+        ),
+        (
+            |r, _| {
+                replace_in(
+                    &r.dir.0.join("core.json"),
+                    "darwin-arm64-wailsv3",
+                    "darwin-arm64-electron",
+                )
+            },
+            "registry core 0.0.9: unknown host electron",
+        ),
+        (
+            |r, _| {
+                replace_in(
+                    &r.dir.0.join("core.json"),
+                    "darwin-arm64-wailsv3",
+                    "plan9-arm64-wailsv3",
+                )
+            },
+            "registry core 0.0.9: unknown platform plan9-arm64",
+        ),
+        (
+            |r, release| {
+                let twice = format!(
+                    r#""versions": [{{"version": "0.0.9", "releases": {{"darwin-arm64-tauriv2": {{"url": "file://{}", "sha256": "{}"}}}}}}, "#,
+                    release.display(),
+                    "a".repeat(64)
+                );
+                replace_in(&r.dir.0.join("core.json"), r#""versions": ["#, &twice)
+            },
+            "registry core: version 0.0.9 appears twice",
+        ),
+        (
+            |r, _| {
+                replace_in(
+                    &r.dir.0.join("core.json"),
+                    r#"{"versions""#,
+                    r#"{"extra": 1, "versions""#,
+                )
+            },
+            "registry core: unknown field extra",
+        ),
+        (
+            |_, release| std::fs::write(release, "another zip").unwrap(),
+            "core 0.0.9 darwin-arm64-wailsv3: ",
+        ),
+        (
+            |r, _| {
+                replace_in(
+                    &r.dir.0.join("revoked.json"),
+                    r#""sidecars": []"#,
+                    r#""sidecars": [], "core": [{"version": "0.0.8", "reason": "broken"}]"#,
+                )
+            },
+            "registry index: revoked core 0.0.8 is not listed",
+        ),
+    ];
+    for (change, want) in cases {
+        let (registry, release) = core_tree();
+        change(&registry, &release);
         let (code, _, stderr) = run(&["registry", "build", registry.dir.text()]);
         assert!(
             code == 1 && stderr.contains(want),

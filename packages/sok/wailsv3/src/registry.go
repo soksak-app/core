@@ -10,9 +10,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -171,9 +174,16 @@ func BuildRegistry(dir string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	index, err := ValidateRegistryIndex(map[string]any{
-		"format": json.Number("1"), "plugins": plugins, "sidecars": sidecars, "packs": packs, "revoked": revoked,
-	})
+	root := map[string]any{"format": json.Number("1"), "plugins": plugins, "sidecars": sidecars, "packs": packs, "revoked": revoked}
+	// A registry without core.json lists no core release.
+	if _, err := os.Stat(filepath.Join(dir, "core.json")); err == nil {
+		if root["core"], err = readJSONFile(dir, "core.json"); err != nil {
+			return nil, err
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	index, err := ValidateRegistryIndex(root)
 	if err != nil {
 		return nil, err
 	}
@@ -198,6 +208,18 @@ func BuildRegistry(dir string) (map[string]any, error) {
 			}
 		}
 	}
+	cores := 0
+	if index.Core != nil {
+		slices.SortFunc(index.Core.Versions, func(a, b CoreRelease) int { return strings.Compare(a.Version, b.Version) })
+		for _, version := range index.Core.Versions {
+			cores++
+			for _, key := range slices.Sorted(maps.Keys(version.Releases)) {
+				if _, err := readRelease("core "+version.Version+" "+key, version.Releases[key]); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
 	var out bytes.Buffer
 	if err := printJSON(&out, index); err != nil {
 		return nil, err
@@ -209,7 +231,7 @@ func BuildRegistry(dir string) (map[string]any, error) {
 	if err := replaceFile(path, out.Bytes()); err != nil {
 		return nil, err
 	}
-	return map[string]any{"index": path, "plugins": len(index.Plugins), "sidecars": len(index.Sidecars), "packs": len(index.Packs)}, nil
+	return map[string]any{"index": path, "plugins": len(index.Plugins), "sidecars": len(index.Sidecars), "packs": len(index.Packs), "core": cores}, nil
 }
 
 // runRegistry 는 `sok registry build <directory>` 를 실행한다.

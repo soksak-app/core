@@ -46,7 +46,7 @@ Registry index `index.json`은 `format` 1과 다음 목록을 가진다.
 | --- | --- |
 | `plugins` | `{ id, package, name, description, license, repository, versions }`. 각 version은 `{ version, release: { url, sha256 }, engines: { soksak }, sidecars }`이며, `sidecars`는 그 version의 `plugin.json`의 sidecar 의존마다 범위를 정하고 sidecar가 없는 plugin은 `{}`다. plugin 의존은 index에 적지 않는다 |
 | `sidecars` | `{ name, repository, versions }`. 각 version은 `{ version, protocol: 1, releases }`이며, `releases`는 플랫폼마다 `{ url, sha256 }`을 정한다 |
-| `core` | `{ versions }`. 각 version은 `{ version, releases }`이며, `releases`는 `<platform>-<host>`마다 그 플랫폼과 host(`wailsv3` 또는 `tauriv2`)의 애플리케이션 번들 zip `{ url, sha256 }`을 정한다. 예: `darwin-arm64-wailsv3`([애플리케이션 업데이트](#애플리케이션-업데이트)) |
+| `core` | 선택이며 없는 index는 core release를 나열하지 않는다. `{ versions }`. 각 version은 `{ version, releases }`이며, `releases`는 `<platform>-<host>`마다 그 플랫폼과 host(`wailsv3` 또는 `tauriv2`)의 애플리케이션 번들 zip `{ url, sha256 }`을 정한다. 예: `darwin-arm64-wailsv3`([애플리케이션 업데이트](#애플리케이션-업데이트)) |
 | `packs` | `{ name, description, plugins }`: 함께 설치하는 plugin id |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }], core: [{ version, reason }] }` |
 

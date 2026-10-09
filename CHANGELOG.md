@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F121.1: `sok registry build` (Go and Rust) reads `core.json` of the registry folder, checks the `sha256` of every core release and writes `core` of the index; the index check accepts `core` with `<platform>-<host>` keys and `core` of `revoked`, refuses a malformed one, and an index without `core` lists no core release.
 - F121: the specification states the application update: the registry index lists the core releases in `core` and withdraws a version in `revoked.core`, the host calls `appUpdateState`, `appUpdateStage` and `appUpdateApply` prepare and start the update, and `sok app update --wait <pid> --bundle <path> --target <path>` replaces the bundle after the application quits; the checklist item is split into F121.1 to F121.7.
 - F125: the public registry index is published with `release` and `releases`, so `scripts/check-registry-manifests.mjs` reads it with the current core (7 of 7 plugin versions failed before) and a core release can be checked; applications of core 0.0.8 cannot read it and are installed again. The registry repository records this as its item G16.
 - F124.3.4: measured on both hosts that `core.debug.save` opens the save panel and that the native input of a check cannot press its buttons; `e2e/person/debug-save.test.mjs` and `pnpm -F @soksak/e2e verify:person` let a person press Save and Cancel while the check verifies the saved file and the answer.
