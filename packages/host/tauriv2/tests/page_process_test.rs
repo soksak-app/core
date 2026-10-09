@@ -9,7 +9,7 @@ fn the_page_process_end_is_an_error_line() {
     let (place, text) = page_process_ended("main", false).unwrap();
     assert_eq!(
         error_line(&place, text),
-        "error: page process: main: terminated"
+        "error host page process: main: terminated"
     );
     // The host ends the process on purpose while it quits.
     assert_eq!(page_process_ended("main", true), None);

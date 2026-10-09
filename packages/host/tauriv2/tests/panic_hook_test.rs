@@ -40,7 +40,7 @@ fn a_panic_writes_an_error_line_to_the_application_log() {
     let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
     let errors: Vec<&str> = log
         .lines()
-        .filter(|line| line.starts_with("error: panic: "))
+        .filter(|line| line.contains(" error host panic: "))
         .collect();
     assert!(
         errors.len() == 1

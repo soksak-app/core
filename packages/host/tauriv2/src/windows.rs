@@ -186,9 +186,10 @@ pub fn use_owner<W: Send + 'static, T: Send + 'static>(
             Ok(()) => {}
             // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
             Err(mpsc::SendError(Err(error))) => log_error("native window work", error),
-            Err(mpsc::SendError(Ok(_))) => {
-                eprintln!("native window result arrived after its request ended")
-            }
+            Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
+                "window",
+                "native window result arrived after its request ended",
+            ),
         }
     }))
     .map_err(NativeFailure::Failed)?;
@@ -439,7 +440,10 @@ pub(crate) fn window_new(app: AppHandle) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
     app.run_on_main_thread(move || {
         if tx.send(window_new_on_main(task)).is_err() {
-            eprintln!("window creation result arrived after its request ended");
+            crate::application_log::log_info(
+                "window",
+                "window creation result arrived after its request ended",
+            );
         }
     })
     .map_err(|e| e.to_string())?;
@@ -804,7 +808,10 @@ pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
     crate::exposure::windows_changed(window.app_handle());
     for ready in data.readied.lock().map_err(|e| e.to_string())?.drain(..) {
         if ready.send(()).is_err() {
-            eprintln!("window readiness arrived after its request ended");
+            crate::application_log::log_info(
+                "window",
+                "window readiness arrived after its request ended",
+            );
         }
     }
     crate::exposure::rewatch(window);
@@ -970,7 +977,10 @@ pub(crate) fn start_titlebar(window: &Window, common: &serde_json::Value) -> Res
             height,
             Box::new(move |result| {
                 if tx.send(result).is_err() {
-                    eprintln!("the start title bar result arrived after its request ended");
+                    crate::application_log::log_info(
+                        "window",
+                        "the start title bar result arrived after its request ended",
+                    );
                 }
             }),
         )

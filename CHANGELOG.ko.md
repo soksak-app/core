@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F138.2: 두 host가 모든 기록을 `<time> <level> <layer> <where>: <text>` 형식으로 쓴다. `LogError`/`log_error`는 level `error`를, 새 `LogInfo`/`log_info`는 관측(늦은 답, webkit 자식, sidecar 대기열과 교체, 무효화된 이미지 프레임)을 두 host에서 같은 문구로 쓰고, 실행은 `info host run: <identifier> pid <pid>`로 시작하며, 본문의 줄바꿈은 `\n`으로 쓰고, 표준 입출력 sidecar의 표준 오류 각 줄은 level `info`, layer `sidecar`, sidecar 이름의 기록이다. page와 native 라이브러리는 F138.3까지 이전 형식을 쓴다.
 - F138.1: 명세가 모든 글 기록의 한 형식을 정한다. `<time> <level> <layer> <where>: <text>`, level은 `error`와 `info`, layer는 `page`, `host`, `native`, `sidecar`, 기록 하나는 한 줄이며, 쓰는 쪽마다의 helper, sidecar 표준 오류를 감싸는 방법, 영속 서비스가 쓰는 형식을 함께 정하고 실패 표가 이를 쓴다. host, native 라이브러리, page는 F138.2와 F138.3까지 이전 형식을 쓴다.
 - F117.8.5: 공개 registry index가 core 0.0.9, terminal plugin 0.0.7, sidecar vt 0.0.7을 나열하고, 그 workflow는 core tag `v0.0.9`로 `sok`을 build한다.
 - F117.8.4: 선언된 모든 작업공간 버전은 0.0.9이며, 이 버전이 F117, F121, F122를 담는다.

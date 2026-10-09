@@ -164,7 +164,10 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 // 기본값: 기준선 개수 보고의 ps 가 실패해도 시작은 멈추지 않는다 — 이 보고는
                 // 관측일 뿐 수확 판정에 쓰이지 않는다.
                 .unwrap_or_else(|_| "unknown".into());
-            eprintln!("webkit children: baseline {foreign} foreign WebKit processes");
+            crate::application_log::log_info(
+                "webkit children",
+                format!("baseline {foreign} foreign WebKit processes"),
+            );
             exposure::start(app, &directory)?;
             // 애플리케이션 로그는 엔드포인트가 process lock 을 잡은 뒤에 연다. 그래서 같은 파일에 쓰는
             // 다른 실행이 없다(docs/spec/hosts.md#application-log).

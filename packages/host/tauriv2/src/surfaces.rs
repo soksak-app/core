@@ -448,9 +448,10 @@ pub(crate) fn isolate_webview(view: &Webview, page_focus: PageFocus) -> Result<(
             Ok(()) => {}
             // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
             Err(mpsc::SendError(Err(error))) => log_error("surface focus", error),
-            Err(mpsc::SendError(Ok(_))) => {
-                eprintln!("surface focus result arrived after its request ended")
-            }
+            Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
+                "surface",
+                "surface focus result arrived after its request ended",
+            ),
         }
     })
     .map_err(|e| e.to_string())?;
@@ -594,9 +595,10 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 Ok(()) => {}
                 // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
                 Err(mpsc::SendError(Err(error))) => log_error("main webview handle", error),
-                Err(mpsc::SendError(Ok(_))) => {
-                    eprintln!("main webview handle arrived after its request ended")
-                }
+                Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
+                    "surface",
+                    "main webview handle arrived after its request ended",
+                ),
             }
         })
         .map_err(|e| e.to_string())?;
@@ -610,7 +612,10 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 ticket,
                 Box::new(move |allowed| {
                     if tx.send(allowed).is_err() {
-                        eprintln!("surface preparation result arrived after its request ended");
+                        crate::application_log::log_info(
+                            "surface",
+                            "surface preparation result arrived after its request ended",
+                        );
                     }
                 }),
             )
@@ -830,7 +835,10 @@ pub(crate) async fn present(
                     &view,
                     Box::new(move || {
                         if ready.send(Ok(())).is_err() {
-                            eprintln!("surface readiness arrived after its request ended");
+                            crate::application_log::log_info(
+                                "surface",
+                                "surface readiness arrived after its request ended",
+                            );
                         }
                     }),
                 )
@@ -955,9 +963,10 @@ pub(crate) async fn present(
                 ),
                 // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
                 (true, Err(error)) => log_error("surface placement", error),
-                (true, Ok(_)) => {
-                    eprintln!("surface placement result arrived after its request ended")
-                }
+                (true, Ok(_)) => crate::application_log::log_info(
+                    "surface",
+                    "surface placement result arrived after its request ended",
+                ),
             }
         }
     }))?;
@@ -979,7 +988,10 @@ fn announce_run(window: &Window, running: &Running, going: bool) -> Result<(), S
         if !going {
             for done in running.settled.lock().map_err(|e| e.to_string())?.drain(..) {
                 if done.send(()).is_err() {
-                    eprintln!("surface settled notification arrived after its request ended");
+                    crate::application_log::log_info(
+                        "surface",
+                        "surface settled notification arrived after its request ended",
+                    );
                 }
             }
         }

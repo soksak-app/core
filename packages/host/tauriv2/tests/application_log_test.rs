@@ -133,12 +133,29 @@ fn log_error_writes_an_error_line_to_the_application_log() {
     let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
     let lines: Vec<&str> = log.lines().collect();
     assert!(
-        lines.len() == 2 && lines[1] == "error: surface input: the window has no content view",
+        lines.len() == 2
+            && is_record(lines[1])
+            && lines[1].ends_with(" error host surface input: the window has no content view"),
         "application log {lines:?}"
     );
 }
 
-/// 실행의 첫 줄 `<ISO-8601 시각> application log: com.soksak.test pid <pid>` 인지 판정한다.
+/// 줄이 `<ISO-8601 시각> <level> <layer> <where>: <text>` 형식의 글 기록인지 판정한다.
+fn is_record(line: &str) -> bool {
+    let mut parts = line.splitn(4, ' ');
+    let (Some(time), Some(level), Some(layer), Some(rest)) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return false;
+    };
+    time.len() == 24
+        && time.ends_with('Z')
+        && matches!(level, "error" | "info")
+        && matches!(layer, "page" | "host" | "native" | "sidecar")
+        && rest.contains(": ")
+}
+
+/// 실행의 첫 줄 `<ISO-8601 시각> info host run: com.soksak.test pid <pid>` 인지 판정한다.
 fn regex_start(line: &str) -> bool {
     let Some((time, rest)) = line.split_once(' ') else {
         return false;
@@ -148,8 +165,63 @@ fn regex_start(line: &str) -> bool {
         && time.ends_with('Z')
         && time.as_bytes()[10] == b'T'
         && time.as_bytes()[19] == b'.';
-    let Some(pid) = rest.strip_prefix("application log: com.soksak.test pid ") else {
+    let Some(pid) = rest.strip_prefix("info host run: com.soksak.test pid ") else {
         return false;
     };
     shape && digits(pid)
+}
+
+// contract: log.record.one-line
+#[test]
+fn a_record_is_one_line_and_escapes_a_line_feed() {
+    assert_eq!(
+        soksak_host_tauriv2::application_log::entry_line("error", "page", "start", "first\nsecond"),
+        r"error page start: first\nsecond"
+    );
+    let record = soksak_host_tauriv2::application_log::record_line("info", "host", "w", "a\nb");
+    assert!(
+        !record.contains('\n'),
+        "a record holds a line feed: {record:?}"
+    );
+    assert!(is_record(&record), "{record:?}");
+}
+
+// contract: log.info.record-form
+#[test]
+fn log_info_writes_an_info_record_to_the_application_log() {
+    if let Some(config) = std::env::var_os(CHILD) {
+        if let Err(error) = start_application_log(std::path::Path::new(&config), "com.soksak.test")
+        {
+            println!("{error}");
+            std::process::exit(2);
+        }
+        soksak_host_tauriv2::application_log::log_info("webkit children", "pid 7: gone");
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "log_info_writes_an_info_record_to_the_application_log",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(CHILD, config.path())
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "child ended with {:?}, output {:?}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
+    let lines: Vec<&str> = log.lines().collect();
+    assert!(
+        lines.len() == 2
+            && is_record(lines[1])
+            && lines[1].ends_with(" info host webkit children: pid 7: gone"),
+        "application log {lines:?}"
+    );
 }

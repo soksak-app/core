@@ -419,7 +419,7 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
     let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
     let lines: Vec<&str> = log.lines().collect();
     assert!(
-        lines.len() == 1 && lines[0].contains(" application log: com.soksak.test pid "),
+        lines.len() == 1 && lines[0].contains(" info host run: com.soksak.test pid "),
         "a presentation timeout wrote host lines: {lines:?}"
     );
 }
@@ -983,7 +983,7 @@ fn presentation_outcome_logs_a_replaced_frame_as_invalidated() {
         assert!(invalidated, "{detail}");
         assert_eq!(
             line,
-            format!("image frame invalidated before native presentation: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail}")
+            format!("info host image present: frame invalidated before native presentation: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail}")
         );
     }
 }
@@ -1010,7 +1010,7 @@ fn presentation_outcome_names_the_current_frame_of_a_failure() {
         assert!(!invalidated, "{detail}");
         assert_eq!(
             line,
-            format!("error: image present: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail} current generation=3 raster=2")
+            format!("error host image present: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail} current generation=3 raster=2")
         );
     }
 }

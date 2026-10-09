@@ -366,9 +366,9 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
                     .entry(self.sidecar_name.clone())
                     .or_default()
                     .push(line);
-                eprintln!(
-                    "sidecar {} response queue full: buffering {}",
-                    self.sidecar_name, key
+                crate::application_log::log_info(
+                    &format!("sidecar {}", self.sidecar_name),
+                    format!("response queue full, buffering {key}"),
                 );
                 Ok(())
             }
@@ -383,9 +383,10 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
 /// 기다리던 요청이 끝난 뒤에 도착한 서비스의 답을 남긴다. 실패한 답은 그 요청이 보고하지 않았으므로 오류 줄이다.
 fn late_reply(sidecar: &str, operation: &str, result: Result<(), String>) {
     match result {
-        Ok(()) => {
-            eprintln!("sidecar {sidecar}: the {operation} reply arrived after its request ended")
-        }
+        Ok(()) => crate::application_log::log_info(
+            &format!("sidecar {sidecar}"),
+            format!("the {operation} reply arrived after its request ended"),
+        ),
         Err(error) => log_error(
             &format!("sidecar {sidecar}"),
             format!("{operation}: {error}"),
@@ -399,7 +400,10 @@ fn shut_down_writer(name: &str, writer: &mut dyn PersistentStream) {
     match writer.shutdown() {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotConnected => {
-            eprintln!("sidecar {name}: the connection closed before its writer shut down")
+            crate::application_log::log_info(
+                &format!("sidecar {name}"),
+                "the connection closed before its writer shut down",
+            )
         }
         Err(error) => log_error(
             &format!("sidecar {name}"),
@@ -823,7 +827,10 @@ impl<O: Owner> Sidecars<O> {
             .is_some_and(|connection| !connection.connected.load(Ordering::Acquire));
         if disconnected {
             state.running.remove(name);
-            eprintln!("sidecar {name}: discarding disconnected persistent connection");
+            crate::application_log::log_info(
+                &format!("sidecar {name}"),
+                "discarding disconnected persistent connection",
+            );
         }
         // 끊김을 알린 적 없는 첫 시작은 알림이 없다. 시작이 앞선 연결 끊김의 기록을
         // 소진하면 이 호출이 연결 알림을 보낸다(V5-106). 시작에 실패하면 이 전송의
@@ -943,7 +950,10 @@ impl<O: Owner> Sidecars<O> {
                             .entry(name.clone())
                             .or_default()
                             .push(line.clone());
-                        eprintln!("sidecar {name}: close {surface}: outbox full, buffered");
+                        crate::application_log::log_info(
+                            &format!("sidecar {name}"),
+                            format!("close {surface}: outbox full, buffered"),
+                        );
                     } else {
                         log_error(
                             &format!("sidecar {name}"),
@@ -1261,7 +1271,10 @@ impl<O: Owner> Sidecars<O> {
                     .entry(name.to_string())
                     .or_default()
                     .push(line);
-                eprintln!("sidecar {name}: response queue full, buffering {key}");
+                crate::application_log::log_info(
+                    &format!("sidecar {name}"),
+                    format!("response queue full, buffering {key}"),
+                );
                 Ok(())
             }
             Err(TrySendError::Disconnected(_)) => {
@@ -1464,7 +1477,10 @@ fn service_endpoint_line(
         let read = BufReader::new(stdout).read_line(&mut line).map(|_| line);
         // 받는 쪽은 상한이 지나면 끝나고, 그 시간 초과는 시작의 오류로 보고된다.
         if sender.send(read).is_err() {
-            eprintln!("sidecar {reader_name}: the service output ended after the ready bound");
+            crate::application_log::log_info(
+                &format!("sidecar {reader_name}"),
+                "the service output ended after the ready bound",
+            );
         }
     });
     match receiver.recv_timeout(limit) {
@@ -1539,9 +1555,14 @@ impl<O: Owner> Core<O> {
         let mut child = Command::new(&program)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| format!("sidecar {name}: {}: {e}", program.display()))?;
+        // The host reads the standard error line by line and writes each line as a record (docs/spec/sidecars.md#log).
+        if let Some(stderr) = child.stderr.take() {
+            let place = name.to_string();
+            thread::spawn(move || write_stderr_records(stderr, &place));
+        }
         // 프로세스 등록부의 계기(V5-104): 뜨는 사이드카의 pid 와 역할을 남긴다.
         crate::performance::observe(&core.config_directory, "host", || {
             serde_json::json!({"event": "process", "role": "sidecar", "name": name,
@@ -1873,7 +1894,10 @@ impl<O: Owner> Core<O> {
                     {
                         Ok(read) => read,
                         Err(error) => {
-                            log_error(&format!("sidecar {sidecar}"), format!("persistent read: {error}"));
+                            log_error(
+                                &format!("sidecar {sidecar}"),
+                                format!("persistent read: {error}"),
+                            );
                             return None;
                         }
                     };
@@ -1915,7 +1939,9 @@ impl<O: Owner> Core<O> {
                                         Ok(()) => Ok(reply.closed),
                                         Err(error) => Err(error),
                                     };
-                                    if let Err(std::sync::mpsc::SendError(result)) = sender.send(result) {
+                                    if let Err(std::sync::mpsc::SendError(result)) =
+                                        sender.send(result)
+                                    {
                                         late_reply(&sidecar, "retain", result.map(|_| ()));
                                     }
                                 }
@@ -1924,7 +1950,9 @@ impl<O: Owner> Core<O> {
                                 if let Some(sender) =
                                     waiters.lock().expect("close waiters").remove(&request)
                                 {
-                                    if let Err(std::sync::mpsc::SendError(result)) = sender.send(reply.result) {
+                                    if let Err(std::sync::mpsc::SendError(result)) =
+                                        sender.send(reply.result)
+                                    {
                                         late_reply(&sidecar, "close-owner", result);
                                     }
                                 }
@@ -1935,7 +1963,9 @@ impl<O: Owner> Core<O> {
                                     .expect("shutdown waiters")
                                     .remove(&request)
                                 {
-                                    if let Err(std::sync::mpsc::SendError(result)) = sender.send(reply.result) {
+                                    if let Err(std::sync::mpsc::SendError(result)) =
+                                        sender.send(reply.result)
+                                    {
                                         late_reply(&sidecar, "shutdown", result);
                                     }
                                 }
@@ -2020,7 +2050,10 @@ impl<O: Owner> Core<O> {
                 Err("persistent service disconnected before close-owner ack".to_string());
             for (_, sender) in waiters.lock().expect("close waiters").drain() {
                 if sender.send(close_error.clone()).is_err() {
-                    eprintln!("sidecar {sidecar}: the close-owner failure arrived after its request ended");
+                    crate::application_log::log_info(
+                        &format!("sidecar {sidecar}"),
+                        "the close-owner failure arrived after its request ended",
+                    );
                 }
             }
             let error = Err("persistent service disconnected before shutdown ack".to_string());
@@ -2030,7 +2063,10 @@ impl<O: Owner> Core<O> {
                 .drain()
             {
                 if sender.send(error.clone()).is_err() {
-                    eprintln!("sidecar {sidecar}: the shutdown failure arrived after its request ended");
+                    crate::application_log::log_info(
+                        &format!("sidecar {sidecar}"),
+                        "the shutdown failure arrived after its request ended",
+                    );
                 }
             }
             if let Some(reason) = violation {
@@ -2152,9 +2188,9 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
         (Ok(true), Some(replaced)) => {
             // The replacement closed the connection on purpose and the installed service started: an expected state.
             let running = replaced.running.as_deref().unwrap_or("none"); // default: a service that sent no version has none to name
-            eprintln!(
-                "sidecar {name}: service {running} replaced by {}",
-                replaced.installed
+            crate::application_log::log_info(
+                &format!("sidecar {name}"),
+                format!("service {running} replaced by {}", replaced.installed),
             );
             let changed = core
                 .state
@@ -2566,5 +2602,32 @@ impl Owner for Window {
                 crate::composition::refresh_image_rasters(&window)
             },
         )
+    }
+}
+
+/// Writes each line of the standard error of the sidecar `name` as a record of level `info`, layer `sidecar` and `name`
+/// as the place. Bytes that are not UTF-8 are written as the replacement character, because a record is text. The
+/// thread ends when the sidecar closes its standard error.
+fn write_stderr_records(stderr: std::process::ChildStderr, name: &str) {
+    use std::io::{BufRead, BufReader};
+    let mut reader = BufReader::new(stderr);
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        match reader.read_until(b'\n', &mut line) {
+            Ok(0) => return,
+            Ok(_) => {
+                let text = String::from_utf8_lossy(&line);
+                let text = text.trim_end_matches(['\n', '\r']);
+                crate::application_log::log_record("info", "sidecar", name, text);
+            }
+            Err(error) => {
+                crate::application_log::log_error(
+                    &format!("sidecar {name}"),
+                    format!("standard error: {error}"),
+                );
+                return;
+            }
+        }
     }
 }

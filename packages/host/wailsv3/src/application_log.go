@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
@@ -13,22 +14,47 @@ import (
 // logRotateBytes 는 로그 파일을 열 때 이전 세대로 넘기는 크기다(docs/spec/hosts.md#application-log).
 const logRotateBytes = 10 * 1024 * 1024
 
-// ErrorLine 은 오류 한 줄 `error: <where>: <text>` 다. 페이지의 오류 줄과 같은 형식이므로 창 검사가 호스트의 실패도
-// 오류로 읽는다(docs/spec/hosts.md#application-log). where 는 실패한 연산이나 대상이고 text 는 실패 내용이다.
-func ErrorLine(where string, text any) string {
-	return fmt.Sprintf("error: %s: %v", where, text)
+// Entry 는 시각이 없는 글 기록 하나다: level(error 또는 info), layer(page, host, native, sidecar), where(연산이나 대상의
+// 이름), text(내용). 한 기록은 한 줄이다(docs/spec/diagnostics.md#forms).
+type Entry struct {
+	Level, Layer, Where string
+	Text                any
 }
 
-// LogError 는 오류 줄 하나를 표준 logger 의 출력에 한 번의 write 로 쓴다. 그 출력은 표준 오류이고 표준 오류는
-// StartApplicationLog 뒤에 애플리케이션 로그다. logger 의 시각 접두사 설정과 관계없이 줄은 `error: ` 로 시작한다. 쓰지
-// 못하면 그 실패를 알릴 곳이 없으므로 panic 한다.
-func LogError(where string, text any) {
-	if _, err := fmt.Fprintln(log.Writer(), ErrorLine(where, text)); err != nil {
+// Line 은 시각을 뺀 기록 `<level> <layer> <where>: <text>` 다. text 의 줄바꿈은 두 글자 `\n` 으로 쓴다.
+func (e Entry) Line() string {
+	return fmt.Sprintf("%s %s %s: %s", e.Level, e.Layer, e.Where, strings.ReplaceAll(fmt.Sprint(e.Text), "\n", `\n`))
+}
+
+// RecordLine 은 쓰는 시각을 맨 앞에 둔 기록 한 줄이다.
+func RecordLine(e Entry) string {
+	return performanceNow() + " " + e.Line()
+}
+
+// Log 는 기록 하나를 표준 logger 의 출력에 한 번의 write 로 쓴다. 그 출력은 표준 오류이고 표준 오류는
+// StartApplicationLog 뒤에 애플리케이션 로그다. 쓰지 못하면 그 실패를 알릴 곳이 없으므로 panic 한다.
+func Log(e Entry) {
+	if _, err := fmt.Fprintln(log.Writer(), RecordLine(e)); err != nil {
 		panic(fmt.Sprintf("write the application log: %v", err))
 	}
 }
 
-// fatalError 는 오류 줄을 쓰고 프로세스를 상태 1 로 끝낸다. 로그를 연 뒤의 치명적 실패가 쓴다.
+// ErrorLine 은 호스트의 오류 기록에서 시각을 뺀 줄이다. where 는 실패한 연산이나 대상이고 text 는 실패 내용이다.
+func ErrorLine(where string, text any) string {
+	return Entry{"error", "host", where, text}.Line()
+}
+
+// LogError 는 호스트의 오류 기록 하나를 쓴다.
+func LogError(where string, text any) {
+	Log(Entry{"error", "host", where, text})
+}
+
+// LogInfo 는 호스트의 관측 기록 하나를 쓴다. 관측은 예상된 상태를 기록하며 실패가 아니다.
+func LogInfo(where string, text any) {
+	Log(Entry{"info", "host", where, text})
+}
+
+// fatalError 는 오류 기록을 쓰고 프로세스를 상태 1 로 끝낸다. 로그를 연 뒤의 치명적 실패가 쓴다.
 func fatalError(where string, text any) {
 	LogError(where, text)
 	os.Exit(1)
@@ -79,7 +105,7 @@ func StartApplicationLog(config, identifier string) error {
 	if err != nil {
 		return fmt.Errorf("application log: %w", err)
 	}
-	_, writeErr := fmt.Fprintf(file, "%s application log: %s pid %d\n", performanceNow(), identifier, os.Getpid())
+	_, writeErr := fmt.Fprintln(file, RecordLine(Entry{"info", "host", "run", fmt.Sprintf("%s pid %d", identifier, os.Getpid())}))
 	var replaceErr error
 	if writeErr == nil {
 		replaceErr = system.ReplaceStandardError(file)

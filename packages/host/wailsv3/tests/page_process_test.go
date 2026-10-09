@@ -9,7 +9,7 @@ import (
 // contract: page.process.termination-writes-an-error-line
 func TestThePageProcessEndIsAnErrorLine(t *testing.T) {
 	place, text, reported := host.PageProcessEnded("main", false)
-	if line := host.ErrorLine(place, text); !reported || line != "error: page process: main: terminated" {
+	if line := host.ErrorLine(place, text); !reported || line != "error host page process: main: terminated" {
 		t.Fatalf("line %q, reported %v", line, reported)
 	}
 	// The host ends the process on purpose while it quits.

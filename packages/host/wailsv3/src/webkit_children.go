@@ -15,7 +15,6 @@ package host
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -196,19 +195,19 @@ func ReapRecordedWebKit(config string) {
 	}
 	if processExists(record.HostPid) && strings.Contains(processCommand(record.HostPid), "soksak") {
 		// 살아 있는 형제 인스턴스의 자식이다.
-		log.Printf("webkit children: host %d still owns its recorded children; not reaping", record.HostPid)
+		LogInfo("webkit children", fmt.Sprintf("host %d still owns its recorded children; not reaping", record.HostPid))
 		return
 	}
 	now := webkitProcesses()
 	for _, child := range record.Children {
 		if reason := ReapDecision(processExists(child.Pid), now[child.Pid] != "", processStartTime(child.Pid) == child.Lstart); reason != "" {
-			log.Printf("webkit children: pid %d: %s", child.Pid, reason)
+			LogInfo("webkit children", fmt.Sprintf("pid %d: %s", child.Pid, reason))
 			continue
 		}
 		if out, err := exec.Command("kill", "-9", strconv.Itoa(child.Pid)).Output(); err != nil {
 			LogError("webkit children", fmt.Sprintf("kill %d: %v: %s", child.Pid, err, strings.TrimSpace(string(out))))
 		} else {
-			log.Printf("webkit children: reaped orphaned %s pid %d left by host %d", child.Kind, child.Pid, record.HostPid)
+			LogInfo("webkit children", fmt.Sprintf("reaped orphaned %s pid %d left by host %d", child.Kind, child.Pid, record.HostPid))
 		}
 	}
 }

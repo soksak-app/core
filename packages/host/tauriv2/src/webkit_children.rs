@@ -189,9 +189,12 @@ pub fn reap_recorded(config: &Path) {
     }
     if exists(record.host_pid) && command(record.host_pid).contains("soksak") {
         // 살아 있는 형제 인스턴스의 자식이다.
-        eprintln!(
-            "webkit children: host {} still owns its recorded children; not reaping",
-            record.host_pid
+        crate::application_log::log_info(
+            "webkit children",
+            format!(
+                "host {} still owns its recorded children; not reaping",
+                record.host_pid
+            ),
         );
         return;
     }
@@ -207,16 +210,22 @@ pub fn reap_recorded(config: &Path) {
                 .args(["-9", &child.pid.to_string()])
                 .output()
             {
-                Ok(_) => eprintln!(
-                    "webkit children: reaped orphaned {} pid {} left by host {}",
-                    child.kind, child.pid, record.host_pid
+                Ok(_) => crate::application_log::log_info(
+                    "webkit children",
+                    format!(
+                        "reaped orphaned {} pid {} left by host {}",
+                        child.kind, child.pid, record.host_pid
+                    ),
                 ),
                 Err(error) => crate::application_log::log_error(
                     "webkit children",
                     format!("kill {}: {error}", child.pid),
                 ),
             },
-            Err(reason) => eprintln!("webkit children: pid {}: {}", child.pid, reason),
+            Err(reason) => crate::application_log::log_info(
+                "webkit children",
+                format!("pid {}: {}", child.pid, reason),
+            ),
         }
     }
 }

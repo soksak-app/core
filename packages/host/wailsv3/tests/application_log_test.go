@@ -115,7 +115,7 @@ func TestStartApplicationLogWritesTheStartLineAndTakesTheStandardErrorOfTheProce
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-	start := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z application log: com\.soksak\.test pid \d+$`)
+	start := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z info host run: com\.soksak\.test pid \d+$`)
 	if len(lines) < 3 || !start.MatchString(lines[0]) || lines[1] != "host line" || lines[2] != "child line" {
 		t.Fatalf("application log %q", lines)
 	}
@@ -142,7 +142,8 @@ func TestLogErrorWritesAnErrorLineToTheApplicationLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-	if len(lines) != 2 || lines[1] != "error: surface input: the window has no content view" {
+	recordLine := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z (error|info) (page|host|native|sidecar) .+: .*$`)
+	if len(lines) != 2 || !recordLine.MatchString(lines[1]) || !strings.HasSuffix(lines[1], " error host surface input: the window has no content view") {
 		t.Fatalf("application log %q", lines)
 	}
 }
@@ -161,5 +162,45 @@ func TestTheTransportReturnsAFailedCallWithoutLoggingIt(t *testing.T) {
 	}
 	if logged.Len() != 0 {
 		t.Fatalf("the transport logged the failure it returned: %q", logged.String())
+	}
+}
+
+// A record is one line: a line feed in its text is written as the two characters `\n`.
+// contract: log.record.one-line
+func TestARecordIsOneLineAndEscapesALineFeed(t *testing.T) {
+	line := host.Entry{Level: "error", Layer: "page", Where: "start", Text: "first\nsecond"}.Line()
+	if want := `error page start: first\nsecond`; line != want {
+		t.Fatalf("line %q, want %q", line, want)
+	}
+	if strings.Contains(host.RecordLine(host.Entry{Level: "info", Layer: "host", Where: "w", Text: "a\nb"}), "\n") {
+		t.Fatal("a record holds a line feed")
+	}
+}
+
+// A host observation is a record of level info through LogInfo.
+// contract: log.info.record-form
+func TestLogInfoWritesAnInfoRecordToTheApplicationLog(t *testing.T) {
+	if config := os.Getenv(applicationLogChild); config != "" {
+		if err := host.StartApplicationLog(config, "com.soksak.test"); err != nil {
+			os.Stdout.WriteString(err.Error() + "\n")
+			os.Exit(2)
+		}
+		host.LogInfo("webkit children", "pid 7: gone")
+		return
+	}
+	config := t.TempDir()
+	command := exec.Command(os.Args[0], "-test.run=^TestLogInfoWritesAnInfoRecordToTheApplicationLog$")
+	command.Env = append(os.Environ(), applicationLogChild+"="+config)
+	if output, err := command.Output(); err != nil {
+		t.Fatalf("child ended with %v, output %q", err, output)
+	}
+	data, err := os.ReadFile(host.ApplicationLogPath(config))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	record := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z info host webkit children: pid 7: gone$`)
+	if len(lines) != 2 || !record.MatchString(lines[1]) {
+		t.Fatalf("application log %q", lines)
 	}
 }

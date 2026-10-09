@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F138.2: both hosts write every record in the form `<time> <level> <layer> <where>: <text>`: `LogError`/`log_error` write level `error`, the new `LogInfo`/`log_info` write the observations (the late replies, the webkit children, the sidecar queue and replacement, the invalidated image frames) with the same wording on both hosts, the run starts with `info host run: <identifier> pid <pid>`, a line feed in a text is written as `\n`, and each line of the standard error of a sidecar of standard input and output is a record of level `info`, layer `sidecar` and the name of the sidecar. The page and the native library write the earlier form until F138.3.
 - F138.1: the specification states one form for every text record, `<time> <level> <layer> <where>: <text>` with the levels `error` and `info` and the layers `page`, `host`, `native` and `sidecar`, one record on one line, the helpers of each writer, the wrapping of the standard error of a sidecar and the form that a persistent service writes; the failure table uses it. The hosts, the native library and the page write the earlier form until F138.2 and F138.3.
 - F117.8.5: the public registry index lists core 0.0.9, the terminal plugin 0.0.7 and the sidecar vt 0.0.7, and its workflows build `sok` from the core tag `v0.0.9`.
 - F117.8.4: every declared workspace version is 0.0.9, the version that carries F117, F121 and F122.

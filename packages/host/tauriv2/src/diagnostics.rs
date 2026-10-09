@@ -175,7 +175,10 @@ fn native_objects(window: &Window, params: &Map<String, Value>) -> Result<Value,
             TIMEOUT.as_secs_f64(),
             Box::new(move |counts, reached| {
                 if tx.send((counts, reached)).is_err() {
-                    eprintln!("window object counts arrived after their request ended");
+                    crate::application_log::log_info(
+                        "diagnostics",
+                        "window object counts arrived after their request ended",
+                    );
                 }
             }),
         )
@@ -209,7 +212,10 @@ fn process_exit(window: &Window, params: &Map<String, Value>) -> Result<Value, F
             TIMEOUT.as_secs_f64(),
             Box::new(move |exited| {
                 if tx.send(exited).is_err() {
-                    eprintln!("process exit answer arrived after its request ended");
+                    crate::application_log::log_info(
+                        "diagnostics",
+                        "process exit answer arrived after its request ended",
+                    );
                 }
             }),
         )
@@ -637,7 +643,10 @@ fn delivered_notifications(window: &Window) -> Result<Value, Failure> {
     on_main(window, move || {
         platform::current()?.delivered_notifications(Box::new(move |list| {
             if tx.send(list).is_err() {
-                eprintln!("delivered notifications arrived after their request ended");
+                crate::application_log::log_info(
+                    "diagnostics",
+                    "delivered notifications arrived after their request ended",
+                );
             }
         }))
     })

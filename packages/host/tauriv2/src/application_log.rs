@@ -6,17 +6,49 @@ use std::path::{Path, PathBuf};
 
 use crate::platform;
 
-/// 오류 한 줄 `error: <place>: <text>` 이다. 페이지의 오류 줄과 같은 형식이므로 창 검사가 호스트의 실패도 오류로
-/// 읽는다. place 는 실패한 연산이나 대상이고 text 는 실패 내용이다.
-pub fn error_line(place: &str, text: impl std::fmt::Display) -> String {
-    format!("error: {place}: {text}")
+/// 시각이 없는 글 기록 `<level> <layer> <place>: <text>` 이다(docs/spec/diagnostics.md#forms). place 는 연산이나 대상의
+/// 이름이고 text 의 줄바꿈은 두 글자 `\n` 으로 쓴다. 기록 하나는 한 줄이다.
+pub fn entry_line(level: &str, layer: &str, place: &str, text: impl std::fmt::Display) -> String {
+    format!(
+        "{level} {layer} {place}: {}",
+        text.to_string().replace('\n', "\\n")
+    )
 }
 
-/// 오류 줄 하나를 표준 오류에 한 번의 write 로 쓴다. 표준 오류는 start_application_log 뒤에 애플리케이션 로그다.
+/// 쓰는 시각을 맨 앞에 둔 기록 한 줄이다.
+pub fn record_line(level: &str, layer: &str, place: &str, text: impl std::fmt::Display) -> String {
+    let now = crate::performance::timestamp(std::time::SystemTime::now())
+        .expect("clock is before the Unix epoch");
+    format!("{now} {}", entry_line(level, layer, place, text))
+}
+
+/// 시각이 없는 기록 줄 entry 에 쓰는 시각을 붙여 표준 오류에 한 번의 write 로 쓴다.
+pub fn log_entry(entry: &str) {
+    let now = crate::performance::timestamp(std::time::SystemTime::now())
+        .expect("clock is before the Unix epoch");
+    eprintln!("{now} {entry}");
+}
+
+/// 호스트의 오류 기록에서 시각을 뺀 줄이다. place 는 실패한 연산이나 대상이고 text 는 실패 내용이다.
+pub fn error_line(place: &str, text: impl std::fmt::Display) -> String {
+    entry_line("error", "host", place, text)
+}
+
+/// 기록 하나를 표준 오류에 한 번의 write 로 쓴다. 표준 오류는 start_application_log 뒤에 애플리케이션 로그다.
 /// 표준 오류에 쓰지 못하면 eprint! 처럼 panic 한다. 그 실패를 알릴 다른 곳이 없다.
-pub fn log_error(place: &str, text: impl std::fmt::Display) {
-    let line = format!("{}\n", error_line(place, text));
+pub fn log_record(level: &str, layer: &str, place: &str, text: impl std::fmt::Display) {
+    let line = format!("{}\n", record_line(level, layer, place, text));
     eprint!("{line}");
+}
+
+/// 호스트의 오류 기록 하나를 쓴다.
+pub fn log_error(place: &str, text: impl std::fmt::Display) {
+    log_record("error", "host", place, text);
+}
+
+/// 호스트의 관측 기록 하나를 쓴다. 관측은 예상된 상태를 기록하며 실패가 아니다.
+pub fn log_info(place: &str, text: impl std::fmt::Display) {
+    log_record("info", "host", place, text);
 }
 
 /// result 가 실패이면 그 오류를 place 의 오류 줄로 쓴다. 결과를 호출자에게 돌려줄 수 없는 작업이 쓴다.
@@ -74,8 +106,13 @@ pub fn start_application_log(config: &Path, identifier: &str) -> Result<(), Stri
         .map_err(|error| format!("application log: {error}"))?;
     writeln!(
         file,
-        "{now} application log: {identifier} pid {}",
-        std::process::id()
+        "{now} {}",
+        entry_line(
+            "info",
+            "host",
+            "run",
+            format!("{identifier} pid {}", std::process::id())
+        )
     )
     .map_err(|error| format!("application log: {error}"))?;
     // 표준 오류는 복제한 descriptor 를 가지므로 연 파일은 이 함수가 끝날 때 닫힌다.
@@ -89,7 +126,7 @@ pub fn start_application_log(config: &Path, identifier: &str) -> Result<(), Stri
     Ok(())
 }
 
-/// Writes each panic of the host as `error: panic: <file>:<line>: <message>` before the previous hook prints its message
+/// Writes each panic of the host as `error host panic: <file>:<line>: <message>` before the previous hook prints its message
 /// (docs/spec/diagnostics.md). The standard error is the application log once [`start_application_log`] ran.
 pub fn install_panic_hook() {
     let previous = std::panic::take_hook();

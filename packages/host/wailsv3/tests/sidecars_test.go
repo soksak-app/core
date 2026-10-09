@@ -685,7 +685,7 @@ func TestStopClosesUnreadOutput(t *testing.T) {
 		t.Errorf("stop took %v and reached the %v deadline: the host left the unread output open", elapsed, sidecars.StopTimeout)
 	}
 	logged := written()
-	if want := "error: sidecar @fixture/sidecar-echo: failed: unexpected close answer for s1\n"; !strings.Contains(logged, want) {
+	if want := "error host sidecar @fixture/sidecar-echo: failed: unexpected close answer for s1\n"; !strings.Contains(logged, want) {
 		t.Errorf("log %q does not contain %q", logged, want)
 	}
 	if strings.Contains(logged, "exited while stopping") {
@@ -721,7 +721,7 @@ func TestStopReadsOutputToItsEnd(t *testing.T) {
 	if data, err := os.ReadFile(filepath.Join(directory, "finished")); err != nil || string(data) != "finished\n" {
 		t.Errorf("the sidecar did not complete its writes on its way out: finished = %q, %v", data, err)
 	}
-	if logged := written(); strings.Contains(logged, "error: ") {
+	if logged := written(); strings.Contains(logged, "error host ") {
 		t.Errorf("stop logged an error: %q", logged)
 	}
 }
@@ -732,8 +732,8 @@ func TestStopReadsOutputToItsEnd(t *testing.T) {
 func TestStopReportsExitStatus(t *testing.T) {
 	written := captureLog(t)
 	for ending, want := range map[string]string{
-		"exit 3":        "error: sidecar @fixture/sidecar-echo: exited while stopping: exit status 3\n",
-		"kill -TERM $$": "error: sidecar @fixture/sidecar-echo: exited while stopping: signal 15\n",
+		"exit 3":        "error host sidecar @fixture/sidecar-echo: exited while stopping: exit status 3\n",
+		"kill -TERM $$": "error host sidecar @fixture/sidecar-echo: exited while stopping: signal 15\n",
 	} {
 		sidecars, _ := scriptSidecars(t, "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n"+ending+"\n")
 		sidecars.StopTimeout = stall
@@ -790,7 +790,7 @@ func TestStopForcedKill(t *testing.T) {
 		t.Errorf("forced kill stop took %v, want at least the %v deadline", elapsed, sidecars.StopTimeout)
 	}
 	logged := written()
-	if want := "error: sidecar @fixture/sidecar-echo: did not end within the stop timeout and was killed\n"; !strings.Contains(logged, want) {
+	if want := "error host sidecar @fixture/sidecar-echo: did not end within the stop timeout and was killed\n"; !strings.Contains(logged, want) {
 		t.Errorf("log %q does not contain %q", logged, want)
 	}
 	if strings.Contains(logged, "exited while stopping") {
@@ -927,7 +927,7 @@ func TestFailedCloseAnswerIsLogged(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if want := "error: sidecar @fixture/sidecar-echo: close s1: busy\n"; !strings.Contains(written.String(), want) {
+	if want := "error host sidecar @fixture/sidecar-echo: close s1: busy\n"; !strings.Contains(written.String(), want) {
 		t.Fatalf("log %q does not contain %q", written.String(), want)
 	}
 }
@@ -1070,3 +1070,27 @@ func captureLog(t *testing.T) func() string {
 type writerFunc func([]byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
+
+// A sidecar of standard input and output may write any text to its standard error: the host writes each line as a
+// record of level info, layer sidecar and the name of the sidecar, and the last text without a line feed too.
+// contract: sidecars.stderr.lines-are-written-as-records
+func TestTheStandardErrorOfASidecarIsWrittenAsRecords(t *testing.T) {
+	written := captureLog(t)
+	script := "#!/bin/sh\necho 'first line' >&2\nprintf 'no line feed' >&2\nwhile read line; do echo \"$line\"; done\n"
+	sidecars, _ := scriptSidecars(t, script)
+	sidecars.StopTimeout = stall
+	owner := newFakeOwner("/projects/test")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	if event := owner.next(t); event.Surface != "s1" {
+		t.Fatalf("echo event = %+v", event)
+	}
+	sidecars.Stop()
+	logged := written()
+	for _, want := range []string{" info sidecar @fixture/sidecar-echo: first line\n", " info sidecar @fixture/sidecar-echo: no line feed\n"} {
+		if !strings.Contains(logged, want) {
+			t.Errorf("log %q does not contain %q", logged, want)
+		}
+	}
+}

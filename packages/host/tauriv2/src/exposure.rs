@@ -504,7 +504,10 @@ impl Relay {
                 )))
                 .is_err()
             {
-                eprintln!("closed-document failure of {target} arrived after its request ended");
+                crate::application_log::log_info(
+                    "exposure",
+                    format!("closed-document failure of {target} arrived after its request ended"),
+                );
             }
         }
     }
@@ -620,7 +623,7 @@ pub(crate) fn reply(webview: &Webview, request: String) -> Result<(), String> {
                 .get("id")
                 .and_then(Value::as_u64)
                 .ok_or("exposure reply has no id")?;
-            eprintln!("{}", removed_surface_reply(id, surface));
+            crate::application_log::log_info("exposure", removed_surface_reply(id, surface));
             return Ok(());
         }
     }
@@ -1102,9 +1105,10 @@ pub(crate) fn app_on_main<T: Send + 'static>(
             Ok(()) => {}
             // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
             Err(mpsc::SendError(Err(error))) => log_error("main-thread work", error),
-            Err(mpsc::SendError(Ok(_))) => {
-                eprintln!("main-thread result arrived after its request ended")
-            }
+            Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
+                "exposure",
+                "main-thread result arrived after its request ended",
+            ),
         }
     })
     .map_err(|e| e.to_string())?;
@@ -1144,9 +1148,10 @@ fn with_view_if_present<T: Send + 'static>(
                 Ok(()) => {}
                 // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
                 Err(mpsc::SendError(Err(error))) => log_error("webview work", error),
-                Err(mpsc::SendError(Ok(_))) => {
-                    eprintln!("webview result arrived after its request ended")
-                }
+                Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
+                    "exposure",
+                    "webview result arrived after its request ended",
+                ),
             }
         })
         .map_err(|e| e.to_string())?;
@@ -1165,9 +1170,10 @@ pub(crate) fn with_view<T: Send + 'static>(
                 Ok(()) => {}
                 // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
                 Err(mpsc::SendError(Err(error))) => log_error("webview work", error),
-                Err(mpsc::SendError(Ok(_))) => {
-                    eprintln!("webview result arrived after its request ended")
-                }
+                Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
+                    "exposure",
+                    "webview result arrived after its request ended",
+                ),
             }
         })
         .map_err(|e| e.to_string())?;
@@ -1399,7 +1405,10 @@ fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
             on,
             Box::new(move || {
                 if tx.send(()).is_err() {
-                    eprintln!("fullscreen completion arrived after its request ended");
+                    crate::application_log::log_info(
+                        "exposure",
+                        "fullscreen completion arrived after its request ended",
+                    );
                 }
             }),
         )
@@ -1433,9 +1442,10 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
                         Ok(()) => {}
                         // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
                         Err(mpsc::SendError(Err(error))) => log_error("presentation", error),
-                        Err(mpsc::SendError(Ok(_))) => {
-                            eprintln!("presentation completion arrived after its request ended")
-                        }
+                        Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
+                            "exposure",
+                            "presentation completion arrived after its request ended",
+                        ),
                     }
                 }),
             ) {
@@ -1753,9 +1763,10 @@ impl Host {
                             Ok(()) => {}
                             // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
                             Err(mpsc::SendError(Err(error))) => log_error("activation", error),
-                            Err(mpsc::SendError(Ok(()))) => {
-                                eprintln!("activation result arrived after its request ended")
-                            }
+                            Err(mpsc::SendError(Ok(()))) => crate::application_log::log_info(
+                                "exposure",
+                                "activation result arrived after its request ended",
+                            ),
                         }
                     }),
                 )
@@ -1775,7 +1786,10 @@ impl Host {
                 RECEIPT,
                 Box::new(move |delivery| {
                     if tx.send(delivery).is_err() {
-                        eprintln!("pointer delivery arrived after its request ended");
+                        crate::application_log::log_info(
+                            "exposure",
+                            "pointer delivery arrived after its request ended",
+                        );
                     }
                 }),
             )

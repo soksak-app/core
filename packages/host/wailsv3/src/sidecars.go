@@ -16,12 +16,12 @@ package host
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -435,7 +435,7 @@ func (c *Sidecars) SendResponse(name, surface, image string, body json.RawMessag
 		process.muClosed.Lock()
 		process.pendingReplies = append(process.pendingReplies, line)
 		process.muClosed.Unlock()
-		log.Printf("sidecar %s: response queue full, buffering %s", name, responseKey)
+		LogInfo("sidecar "+name, fmt.Sprintf("response queue full, buffering %s", responseKey))
 		return nil
 	}
 }
@@ -1008,7 +1008,8 @@ func (c *Sidecars) launch(name string) (*sidecar, error) {
 		return c.processPersistent(name)
 	}
 	cmd := exec.Command(program)
-	cmd.Stderr = os.Stderr
+	// The host reads the standard error line by line and writes each line as a record (docs/spec/sidecars.md#log).
+	cmd.Stderr = &recordWriter{layer: "sidecar", where: name}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -1427,6 +1428,7 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 		}
 		process.violated = violation != ""
 		process.waitErr = process.cmd.Wait()
+		flushStderr(process.cmd)
 		close(process.exited)
 		return
 	}
@@ -1436,6 +1438,7 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 		reason = fmt.Sprintf("%s; kill: %v", reason, err)
 	}
 	exit := exitStatus(process.cmd, process.cmd.Wait())
+	flushStderr(process.cmd)
 	if violation == "" {
 		reason = "output closed: " + exit
 	}
@@ -1697,7 +1700,7 @@ func (c *Sidecars) revivePersistent(name string) {
 		if replaced.running != nil {
 			running = *replaced.running
 		}
-		log.Printf("sidecar %s: service %s replaced by %s", name, running, replaced.installed)
+		LogInfo("sidecar "+name, fmt.Sprintf("service %s replaced by %s", running, replaced.installed))
 		c.notifyConnection(name, nil)
 		c.closingChanged()
 	case announced:
@@ -1818,4 +1821,44 @@ func (s *sidecar) closeTransport() {
 	s.conn.Close()
 	close(s.outbox)
 	s.transportClosed = true
+}
+
+// flushStderr 는 프로세스가 끝난 뒤 줄바꿈 없이 끝난 표준 오류의 마지막 글을 기록으로 쓴다.
+func flushStderr(cmd *exec.Cmd) {
+	if w, ok := cmd.Stderr.(*recordWriter); ok {
+		w.Flush()
+	}
+}
+
+// recordWriter 는 비영속 사이드카의 표준 오류를 줄 단위로 읽어 level info 의 글 기록으로 쓴다
+// (docs/spec/sidecars.md#log). 줄바꿈이 오기 전의 글은 Flush 까지 둔다.
+type recordWriter struct {
+	layer, where string
+	mu           sync.Mutex
+	partial      []byte
+}
+
+func (w *recordWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.partial = append(w.partial, p...)
+	for {
+		end := bytes.IndexByte(w.partial, '\n')
+		if end < 0 {
+			return len(p), nil
+		}
+		line := bytes.TrimSuffix(w.partial[:end], []byte("\r"))
+		Log(Entry{"info", w.layer, w.where, string(line)})
+		w.partial = w.partial[end+1:]
+	}
+}
+
+// Flush 는 줄바꿈 없이 끝난 마지막 글을 기록으로 쓴다.
+func (w *recordWriter) Flush() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.partial) > 0 {
+		Log(Entry{"info", w.layer, w.where, string(w.partial)})
+		w.partial = nil
+	}
 }

@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"regexp"
 	"sort"
@@ -756,14 +755,14 @@ func presentationReason(reason string) string {
 // PresentationOutcome 은 표시하지 못한 프레임의 상세 detail 을 응답 사유와 로그 줄로 바꾼다. 대체된 프레임(stale,
 // notAttached, staleRaster ...)은 표시 실패가 아니라 무효화된 프레임이므로 invalidated 가 참이다. current 는 실패한
 // 영역의 현재 프레임 상태이며 표시 실패의 줄에만 남긴다.
-func PresentationOutcome(surface, name string, generation, raster uint64, sequence int, token uint32, detail, current string) (reason string, invalidated bool, line string) {
+func PresentationOutcome(surface, name string, generation, raster uint64, sequence int, token uint32, detail, current string) (reason string, invalidated bool, entry Entry) {
 	frame := fmt.Sprintf("surface=%s name=%s generation=%d raster=%d sequence=%d token=%d reason=%s",
 		surface, name, generation, raster, sequence, token, detail)
 	reason = presentationReason(detail)
 	if reason == "stale" {
-		return reason, true, "image frame invalidated before native presentation: " + frame
+		return reason, true, Entry{"info", "host", "image present", "frame invalidated before native presentation: " + frame}
 	}
-	return reason, false, ErrorLine("image present", frame+" current "+current)
+	return reason, false, Entry{"error", "host", "image present", frame + " current " + current}
 }
 
 // FrameState 는 거부한 프레임과 비교할 수 있도록 영역의 현재 프레임 상태를 글로 돌려준다.
@@ -826,7 +825,7 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 		if err != nil {
 			reason, invalidated, line := PresentationOutcome(surface, d.Name, d.Generation, d.Raster, d.Sequence, d.ID,
 				err.Error(), images.FrameState(key))
-			log.Print(line)
+			Log(line)
 			if !invalidated {
 				images.MarkPresentationFailed(key, d.Generation, d.Raster, d.Sequence, reason)
 				if err := recoverFrame(reason); err != nil {

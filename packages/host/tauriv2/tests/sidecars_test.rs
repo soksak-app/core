@@ -576,7 +576,7 @@ fn stop_closes_unread_output() {
         return;
     };
     let want =
-        "error: sidecar @fixture/sidecar-talkative: failed: unexpected close answer for s1\n";
+        "error host sidecar @fixture/sidecar-talkative: failed: unexpected close answer for s1\n";
     assert!(
         stderr.contains(want),
         "log {stderr:?} does not contain {want:?}"
@@ -666,7 +666,7 @@ fn stop_reads_output_to_its_end() {
         return;
     };
     assert!(
-        !stderr.contains("error: "),
+        !stderr.contains("error host "),
         "stop logged an error: {stderr:?}"
     );
 }
@@ -694,8 +694,43 @@ fn stop_reports_exit_status() {
         return;
     };
     for want in [
-        "error: sidecar @fixture/sidecar-echo: exited while stopping: exit status 3\n",
-        "error: sidecar @fixture/sidecar-echo: exited while stopping: signal 15\n",
+        "error host sidecar @fixture/sidecar-echo: exited while stopping: exit status 3\n",
+        "error host sidecar @fixture/sidecar-echo: exited while stopping: signal 15\n",
+    ] {
+        assert!(
+            stderr.contains(want),
+            "log {stderr:?} does not contain {want:?}"
+        );
+    }
+}
+
+// contract: sidecars.stderr.lines-are-written-as-records
+#[test]
+fn the_standard_error_of_a_sidecar_is_written_as_records() {
+    // A sidecar of standard input and output may write any text to its standard error: the host writes each line as a
+    // record of level info, layer sidecar and the name of the sidecar, and the last text without a line feed too.
+    let Some(stderr) = logged_by_child("the_standard_error_of_a_sidecar_is_written_as_records")
+    else {
+        let (mut sidecars, _directory) = script_sidecars(
+            "#!/bin/sh\necho 'first line' >&2\nprintf 'no line feed' >&2\nwhile read line; do echo \"$line\"; done\n",
+        );
+        sidecars.0.stop_timeout = STALL;
+        let (window, events) = owner("a", "/projects/test");
+        sidecars
+            .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
+            .unwrap();
+        let event = events
+            .recv_timeout(STALL)
+            .expect("no echo event; the test stalled");
+        assert_eq!(event.surface, "s1");
+        sidecars.stop();
+        // The reader of the standard error ends with the process; let it write its last record.
+        std::thread::sleep(Duration::from_millis(200));
+        return;
+    };
+    for want in [
+        " info sidecar @fixture/sidecar-echo: first line\n",
+        " info sidecar @fixture/sidecar-echo: no line feed\n",
     ] {
         assert!(
             stderr.contains(want),
@@ -801,7 +836,7 @@ fn stop_forced_kill() {
         return;
     };
     let want =
-        "error: sidecar @fixture/sidecar-stubborn: did not end within the stop timeout and was killed\n";
+        "error host sidecar @fixture/sidecar-stubborn: did not end within the stop timeout and was killed\n";
     assert!(
         stderr.contains(want),
         "log {stderr:?} does not contain {want:?}"
@@ -1171,7 +1206,7 @@ fn failed_close_answer_is_logged() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "the child check failed: {stderr}");
     assert!(
-        stderr.contains("error: sidecar @fixture/sidecar-echo: close s1: busy\n"),
+        stderr.contains("error host sidecar @fixture/sidecar-echo: close s1: busy\n"),
         "the failed close was not logged: {stderr}"
     );
 }

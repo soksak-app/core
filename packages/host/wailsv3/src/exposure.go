@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"sort"
 	"strings"
@@ -389,7 +388,7 @@ func (h *Host) ExposureReply(ctx context.Context, reqJSON json.RawMessage) error
 	if !attached {
 		// 표면을 제거할 때 그 표면의 요청은 surfacesClosed 가 이미 1003 으로 끝냈다. 늦은 답은 답할 요청이 없으므로
 		// 버리고 관측으로 남긴다(docs/spec/exposure.md).
-		log.Println(RemovedSurfaceReply(req.ID, surface))
+		LogInfo("exposure", RemovedSurfaceReply(req.ID, surface))
 		return nil
 	}
 	return h.relay.Resolve(req.ID, relayTarget{owner: s, surface: surface}, ExposureResult{Result: req.Result, Error: req.Error})

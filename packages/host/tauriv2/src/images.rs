@@ -1270,7 +1270,7 @@ where
                                 &detail,
                                 &images.frame_state(&key),
                             );
-                            eprintln!("{line}");
+                            crate::application_log::log_entry(&line);
                             Some(reason)
                         }
                     };
@@ -1347,7 +1347,12 @@ pub fn presentation_outcome(
         return (
             reason,
             true,
-            format!("image frame invalidated before native presentation: {frame}"),
+            crate::application_log::entry_line(
+                "info",
+                "host",
+                "image present",
+                format!("frame invalidated before native presentation: {frame}"),
+            ),
         );
     }
     (

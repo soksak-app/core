@@ -9,7 +9,6 @@ package host
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"path/filepath"
 	"regexp"
@@ -430,7 +429,7 @@ func (s *Surfaces) setDocumentsBackground(enabled bool) {
 // 이벤트는 앱 DOM으로 보내며 모듈의 수신기가 payload의 surface 소유자를 확인한다.
 func (s *Surfaces) emitToSurface(surface, name string, data any) {
 	if s.views[surface] == nil {
-		log.Printf("native event %s of closed surface %q arrived after the surface closed", name, surface)
+		LogInfo("document", fmt.Sprintf("native event %s of closed surface %q arrived after the surface closed", name, surface))
 		return
 	}
 	s.window.EmitEvent(name, data)

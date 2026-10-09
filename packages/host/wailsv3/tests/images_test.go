@@ -417,7 +417,7 @@ func TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine(t *testing.T
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-	if len(lines) != 1 || !strings.Contains(lines[0], " application log: com.soksak.test pid ") {
+	if len(lines) != 1 || !strings.Contains(lines[0], " info host run: com.soksak.test pid ") {
 		t.Fatalf("a presentation timeout wrote host lines: %q", lines)
 	}
 }
@@ -1097,8 +1097,9 @@ func TestShownSurfaceReconfiguresItsRaster(t *testing.T) {
 // contract: images.present.replaced-frame-is-logged-as-invalidated
 func TestPresentationOutcomeLogsAReplacedFrameAsInvalidated(t *testing.T) {
 	for _, detail := range []string{"stale", "notAttached", "staleRaster native=1520x573@2 frame=760x192@2", "staleRaster native=none"} {
-		reason, invalidated, line := host.PresentationOutcome("s1", "view", 3, 2, 1, 9, detail, "unused")
-		want := "image frame invalidated before native presentation: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason=" + detail
+		reason, invalidated, entry := host.PresentationOutcome("s1", "view", 3, 2, 1, 9, detail, "unused")
+		line := entry.Line()
+		want := "info host image present: frame invalidated before native presentation: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason=" + detail
 		if reason != "stale" || !invalidated || line != want {
 			t.Fatalf("%s: reason %q invalidated %v line %q", detail, reason, invalidated, line)
 		}
@@ -1108,8 +1109,9 @@ func TestPresentationOutcomeLogsAReplacedFrameAsInvalidated(t *testing.T) {
 // contract: images.present.failure-line-names-the-current-frame
 func TestPresentationOutcomeNamesTheCurrentFrameOfAFailure(t *testing.T) {
 	for detail, want := range map[string]string{"notFound": "notFound", "presentFailed": "presentFailed", "boom": "presentFailed"} {
-		reason, invalidated, line := host.PresentationOutcome("s1", "view", 3, 2, 1, 9, detail, "generation=3 raster=2")
-		wantLine := "error: image present: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason=" + detail + " current generation=3 raster=2"
+		reason, invalidated, entry := host.PresentationOutcome("s1", "view", 3, 2, 1, 9, detail, "generation=3 raster=2")
+		line := entry.Line()
+		wantLine := "error host image present: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason=" + detail + " current generation=3 raster=2"
 		if reason != want || invalidated || line != wantLine {
 			t.Fatalf("%s: reason %q invalidated %v line %q", detail, reason, invalidated, line)
 		}
