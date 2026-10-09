@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F148: 선언된 모든 workspace 버전이 0.0.10이다. 이 버전은 F138의 글 기록, F144의 입력 경로 기록, F146의 수정을 담는다.
 - F138.4: 창 검사가 애플리케이션 로그의 글 기록을 읽는다(`parseRecord`, `withoutTime`). `readErrors`는 level `error`인 기록을 `error <layer> <where>: <text>`로, 형식이 없는 줄(운영체제와 런타임의 출력)을 따로 돌려주고, `e2e/`의 검사는 이전 줄이 아니라 기록을 비교한다. F138이 끝났다.
 - F138.3: page가 host 호출 `report`로 기록 `{level, where, text}`를 보내고(`report-record.js`의 `recordOf`가 줄 `<where>: <text>`를 처음 나오는 `: `에서 나눈다), 두 host가 이를 검사해 `<time> <level> page <where>: <text>`로 쓰며, 시작 오류 handler는 place `start`를 쓰고, native 라이브러리는 capture 관측을 기록 `info native capture: <text>`로 쓴다.
 - F146: debug 화면은 내용이 시작을 지나 당겨진 동안 native modal이 보고하는 음수 스크롤 위치를 `debug scroll position is invalid`로 던지지 않고 그대로 두며, 숫자가 아닌 값은 계속 거부한다.

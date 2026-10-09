@@ -1,6 +1,6 @@
 {
   "name": "@soksak/host-tauriv2",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "private": true,
   "description": "Tauri v2 native host: project windows, native surfaces and document regions, modals, the local endpoint, the sidecar channel, and platform implementations."
 }
