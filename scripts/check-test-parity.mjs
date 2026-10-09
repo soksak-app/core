@@ -1069,6 +1069,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F121",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/appupdate.go", symbol: "func ReplaceApp" },
+      { file: "packages/sok/tauriv2/src/appupdate.rs", symbol: "pub fn replace_app" },
+      { file: "packages/host/wailsv3/src/app_update.go", symbol: "func PrepareAppUpdateStart" },
+      { file: "packages/host/tauriv2/src/app_update.rs", symbol: "pub fn prepare_start" },
+      { file: "packages/workbench/app-update.js", symbol: "export function createAppUpdate" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/appupdate_test.go", id: "TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts" },
+      { file: "packages/sok/tauriv2/tests/appupdate_test.rs", id: "the_bundle_is_replaced_after_the_process_ended_and_the_application_starts" },
+      { file: "packages/host/wailsv3/tests/app_update_test.go", id: "TestTheUpdateStartsSokFromACopyBesideTheUpdatesAndChecksTheStagedBundle" },
+      { file: "packages/host/tauriv2/tests/app_update_test.rs", id: "the_update_starts_sok_from_a_copy_beside_the_updates_and_checks_the_staged_bundle" },
+      { file: "packages/workbench/test/app-update.test.mjs", id: "updating stages the candidate, then applies the staged bundle, and reports each step" },
+    ],
+    expected: "The application stages the release of a newer core, replaces its bundle after it quits and starts again.",
+    levels: ["unit"],
+  },
+  {
     id: "F121.8",
     implementation: [
       { file: "scripts/check-app-update.mjs", symbol: "export function withCore" },
