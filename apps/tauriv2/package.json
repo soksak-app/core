@@ -1,6 +1,6 @@
 {
   "name": "@soksak/tauriv2",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "private": true,
   "type": "module",
   "description": "Tauri v2 application hosting the workbench with native webview surfaces.",

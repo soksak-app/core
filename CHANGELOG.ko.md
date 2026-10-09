@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F117.8.4: 선언된 모든 작업공간 버전은 0.0.9이며, 이 버전이 F117, F121, F122를 담는다.
 - F117.8.3: release workflow가 core release의 파일을 registry의 core release가 쓰는 이름 `soksak-<version>-darwin-arm64-wailsv3.zip`과 `soksak-<version>-darwin-arm64-tauriv2.zip`으로 짓고, 설치 안내가 그 이름을 쓴다.
 - F121.8: `make app-update-check HOST=wailsv3|tauriv2`가 빌드한 디버그 번들을 복사하고, 더 새 버전의 core release를 내고, 복사본을 일회용 설정 디렉터리로 시작하고, `core.app.update`를 실행한 뒤 `sok app update`가 두 host에서 번들을 교체하고 애플리케이션을 다시 시작했는지 검사한다. 시작한 애플리케이션을 끝내고 하나라도 남으면 실패한다.
 - F117.7.4: plugin 페이지의 업데이트 목록은 core release와 그 release 링크로 시작하며, F121.6이 이를 구현한다. 업데이트 N 컨트롤이 이를 센다.

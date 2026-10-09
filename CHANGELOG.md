@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F117.8.4: every declared workspace version is 0.0.9, the version that carries F117, F121 and F122.
 - F117.8.3: the release workflow names the files of a core release `soksak-<version>-darwin-arm64-wailsv3.zip` and `soksak-<version>-darwin-arm64-tauriv2.zip`, the names that the core releases of the registry use, and the install guide names them.
 - F121.8: `make app-update-check HOST=wailsv3|tauriv2` copies the built debug bundle, serves a core release of a newer version, starts the copy with a disposable configuration directory, runs `core.app.update`, and checks that `sok app update` replaced the bundle and restarted the application on both hosts; it ends the applications it started and fails when one remains.
 - F117.7.4: the update list of the plugin page starts with the core release and its release link, which F121.6 implements; the control 업데이트 N counts it.

@@ -30,7 +30,7 @@ func sokJSON(t *testing.T, args ...string) map[string]any {
 	return value
 }
 
-// pluginRegistry 는 fixtures/plugin-probe(sidecar 가 없는 plugin probe 0.0.8)의 release 와 그 registry 를
+// pluginRegistry 는 fixtures/plugin-probe(sidecar 가 없는 plugin probe 0.0.9)의 release 와 그 registry 를
 // 만들고 index.json 과 release 의 경로를 돌려준다. go test 는 package 폴더에서 실행하므로 fixture 는 그 아래에 있다.
 func pluginRegistry(t *testing.T) (index, release string) {
 	t.Helper()
@@ -39,7 +39,7 @@ func pluginRegistry(t *testing.T) (index, release string) {
 	release = packed["release"].(string)
 	writeInstalled(t, registry, map[string]string{
 		"plugins/probe.json": `{"id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
-			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.0.8",
+			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.0.9",
 			"release": {"url": "file://` + release + `", "sha256": "` + packed["sha256"].(string) + `"},
 			"engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}]}`,
 		"revoked.json": `{"plugins": [], "sidecars": []}`,
@@ -116,7 +116,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	if state.Registry != "file://"+index || state.Index["plugins"].([]any)[0].(map[string]any)["id"] != "probe" {
 		t.Fatalf("state with a registry %+v", state)
 	}
-	if plugin := state.Installed.Plugins["probe"]; plugin.Version != "0.0.8" || !plugin.Enabled {
+	if plugin := state.Installed.Plugins["probe"]; plugin.Version != "0.0.9" || !plugin.Enabled {
 		t.Fatalf("installed %+v", state.Installed)
 	}
 	if err := os.Remove(index); err != nil {
@@ -149,7 +149,7 @@ func TestPluginsRunChangesTheInstallationLikeTheCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"plugin":{"package":"plugin-probe","version":"0.0.8","path":"plugins/probe/0.0.8","enabled":true,"sidecars":{}},"sidecars":{}}`
+	want := `{"plugin":{"package":"plugin-probe","version":"0.0.9","path":"plugins/probe/0.0.9","enabled":true,"sidecars":{}},"sidecars":{}}`
 	if string(data) != want {
 		t.Fatalf("install result %s", data)
 	}
