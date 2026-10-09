@@ -48,6 +48,10 @@ test("Wails page regions expose operations but only composition places geometry"
   // 테스트 전에 기록된 호출을 지운다(모듈 import가 호출을 만들었을 수 있다)
   recorded.length = 0;
 
+  // A page of a surface reports a record of its own through the same host call as the main page.
+  await page.report({ level: "error", where: "sidecar @x/side", text: "send failed: gone" });
+  assert.deepEqual(recorded.at(-1), ["Report", [{ level: "error", where: "sidecar @x/side", text: "send failed: gone" }]]);
+  await assert.rejects(async () => page.report("send failed"), /report requires \{level, where, text\} strings/);
   await page.document.attach("doc");
   assert.deepEqual(recorded.at(-1), ["DocumentAttach", [{ surface: "s1", document: "doc" }]]);
   await page.document.load("doc", "https://example.test");

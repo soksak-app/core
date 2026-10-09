@@ -182,6 +182,13 @@ export const page = (() => {
       invoke("theme").then(fn);
       listen("theme", (e) => fn(e.payload));
     },
+    // 이 문서의 기록 하나를 호스트의 애플리케이션 로그에 쓴다(docs/spec/diagnostics.md#forms).
+    report: async (record) => {
+      if (!record || typeof record !== "object" || typeof record.level !== "string" || typeof record.where !== "string" || typeof record.text !== "string") {
+        throw new TypeError("report requires {level, where, text} strings");
+      }
+      return invoke("report", { record: { level: record.level, where: record.where, text: record.text } });
+    },
     sidecar: (name) => ({
       send: (surface, body) => invoke("sidecar_send", { sidecar: name, surface, body }),
       // 사이드카 이벤트는 창의 모든 페이지가 받는다. 사이드카와 표면이 일치하는 것만 처리한다.

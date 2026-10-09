@@ -26,7 +26,7 @@ function slowPort(delays) {
 
 test("sends reach the host in call order", async () => {
   const port = slowPort({ 1: 30, 2: 1, 3: 10 });
-  const sidecar = orderedSidecar(port);
+  const sidecar = orderedSidecar(port, () => {});
   await Promise.all([1, 2, 3].map((n) => sidecar.send("tab", { n })));
   assert.deepEqual(port.finished, [1, 2, 3]);
   assert.equal(port.overlapped(), false);
@@ -35,18 +35,30 @@ test("sends reach the host in call order", async () => {
 test("a failed send is reported and does not stop later sends", async () => {
   const port = slowPort({ 2: 1 });
   port.send = ((send) => (surface, body) => body.n === 1 ? Promise.reject(new Error("gone")) : send(surface, body))(port.send);
-  const sidecar = orderedSidecar(port);
+  const failures = [];
+  const sidecar = orderedSidecar(port, (error) => failures.push(error.message));
   const first = sidecar.send("tab", { n: 1 });
   const second = sidecar.send("tab", { n: 2 });
   await assert.rejects(first, /gone/);
   await second;
   assert.deepEqual(port.finished, [2]);
+  assert.deepEqual(failures, ["gone"]);
+});
+
+test("a failed send is passed to the failure handler with its error", async () => {
+  const failures = [];
+  const port = slowPort({});
+  port.send = () => Promise.reject(new Error("gone"));
+  const sidecar = orderedSidecar(port, (error) => failures.push(error.message));
+  await assert.rejects(sidecar.send("tab", { n: 1 }), /gone/);
+  await sidecar.send("tab", { n: 2 }).catch(() => {});
+  assert.deepEqual(failures, ["gone", "gone"]);
 });
 
 test("listening goes to the runtime port", () => {
   const port = slowPort({});
   const fn = () => {};
-  assert.deepEqual(orderedSidecar(port).on("tab", fn), { surface: "tab", fn });
+  assert.deepEqual(orderedSidecar(port, () => {}).on("tab", fn), { surface: "tab", fn });
 });
 
 test("failure listening goes to the runtime port", () => {

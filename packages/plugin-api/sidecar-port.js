@@ -4,18 +4,15 @@
 
 /**
  * port 는 런타임의 page.sidecar(name) 이다. 반환한 send 는 호출한 순서대로 전달되고, 각 전송의
- * 결과(실패 포함)를 호출자에게 돌려준다. 실패한 전송은 다음 전송을 막지 않는다.
+ * 결과(실패 포함)를 호출자에게 돌려준다. 실패한 전송은 다음 전송을 막지 않으며, 그 오류를 failed 에 알린다.
  */
-export function orderedSidecar(port) {
+export function orderedSidecar(port, failed) {
   let chain = Promise.resolve();
   return {
     send(surface, body) {
       const sent = chain.then(() => port.send(surface, body));
-      // 내부 체인에서만 에러를 기록한다. 호출자는 sent를 받으므로 실패 시 rejection이 전달된다.
-      chain = sent.catch((error) => {
-        // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
-        console.error(`sidecar send failed: ${error?.message ?? error}`);
-      });
+      // 내부 체인에서만 오류를 알린다. 호출자는 sent를 받으므로 실패 시 rejection이 전달된다.
+      chain = sent.catch(failed);
       return sent;
     },
     on: (surface, fn) => port.on(surface, fn),

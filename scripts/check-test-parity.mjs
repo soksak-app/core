@@ -1140,6 +1140,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.6",
+    implementation: [
+      { file: "packages/plugin-api/sidecar-port.js", symbol: "export function orderedSidecar" },
+      { file: "apps/wailsv3/runtime/index.js", symbol: "report: async (record)" },
+      { file: "apps/tauriv2/runtime/index.js", symbol: "report: async (record)" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/sidecar-port.test.mjs", id: "a failed send is passed to the failure handler with its error" },
+      { file: "apps/wailsv3/test/runtime-contract.test.mjs", id: "Wails page regions expose operations but only composition places geometry" },
+      { file: "apps/tauriv2/test/runtime-contract.test.mjs", id: "Tauri page regions expose operations but only composition places geometry" },
+    ],
+    expected: "A failed send of a page to a sidecar is written to the application log through the report call of the page runtime.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.5",
     implementation: [
       { file: "packages/workbench/core-exposure.js", symbol: "drop: received" },

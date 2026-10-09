@@ -20,7 +20,15 @@ const publicRuntimePage = runtimePage ? Object.fromEntries(
 export const page = runtimePage ? Object.freeze({
   ...publicRuntimePage,
   sidecar(name) {
-    if (!sidecars.has(name)) sidecars.set(name, orderedSidecar(runtimePage.sidecar(name)));
+    if (!sidecars.has(name)) {
+      // 전송 실패는 애플리케이션 로그에 쓴다. 표면의 문서에는 콘솔을 읽는 곳이 없다.
+      sidecars.set(name, orderedSidecar(runtimePage.sidecar(name), (error) => {
+        // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
+        runtimePage.report({ level: "error", where: `sidecar ${name}`, text: `send failed: ${error?.message ?? error}` })
+          // 이 기록이 실패하면 알릴 다른 곳이 없어 console 에 쓴다. 기본값: 던진 값이 Error 가 아니면 그 값을 적는다.
+          .catch((reportError) => console.error(`report of a failed send failed: ${reportError?.message ?? reportError}`));
+      }));
+    }
     return sidecars.get(name);
   },
 }) : null;
