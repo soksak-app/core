@@ -31,4 +31,4 @@ host 호출 `debugFiles()`는 `<config-dir>/logs/` 아래 모든 파일을 `path
 
 ## Status
 
-`core.debug`는 `{open, recorded, entries, viewing, scroll, operation, error}`를 보고한다: 화면이 열렸는지, 열기가 쓴 상태 파일의 경로나 `null`, 목록의 순서대로 나열된 항목 `{path, size, modified}`, 보이는 파일 `{path, size, truncated, kind, length}`(`length`는 보이는 글의 문자 수이며 이미지는 0)나 `null`, 보이는 내용의 스크롤 위치(point), 실행 중이거나 마지막 작업 `{action, path, state}`(`action`은 `save`나 `save-all`, `path`는 저장한 파일이나 `null`, `state`는 `running`, `done`, `failed`), 마지막 실패한 단계나 작업의 오류나 `null`. 화면이 열려 있는 동안 `core.screen`은 `modal` `debug`를 보고한다.
+`core.debug`는 `{open, recorded, entries, viewing, scroll, operation, error}`를 보고한다: 화면이 열렸는지, 열기가 쓴 상태 파일의 경로나 `null`, 목록의 순서대로 나열된 항목 `{path, size, modified}`, 보이는 파일 `{path, size, truncated, kind, length}`(`length`는 보이는 글의 문자 수이며 이미지는 0)나 `null`, 보이는 내용의 스크롤 위치(point, 내용이 시작을 지나 당겨진 동안은 native modal이 보고한 대로 음수이고 숫자가 아닌 값은 거부한다), 실행 중이거나 마지막 작업 `{action, path, state}`(`action`은 `save`나 `save-all`, `path`는 저장한 파일이나 `null`, `state`는 `running`, `done`, `failed`), 마지막 실패한 단계나 작업의 오류나 `null`. 화면이 열려 있는 동안 `core.screen`은 `modal` `debug`를 보고한다.

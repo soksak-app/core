@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F146: debug 화면은 내용이 시작을 지나 당겨진 동안 native modal이 보고하는 음수 스크롤 위치를 `debug scroll position is invalid`로 던지지 않고 그대로 두며, 숫자가 아닌 값은 계속 거부한다.
 - F144.6: 두 host에서 로그 파일과 performance trace가 10 MB와 한 세대가 아니라 100 MB에서 회전하고 이전 세대 다섯 개(`.1`부터 `.5`까지)를 남기므로 기록이 긴 세션을 덮는다.
 - F144.4: 두 host가 sidecar로 보내는 각 요청(`sidecar.send`), sidecar에서 받는 각 메시지(`sidecar.receive`), native 영역의 각 event(`region`)를 같은 이름과 필드로 본문 전체와 함께 layer `host`의 trace event로 쓴다.
 - F144.3: terminal plugin 0.0.10과 terminal service 0.0.8이 입력 경로 전체를 기록한다(F144.5와 plugin 저장소 참고).

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F146: the debug view keeps a negative scroll position that the native modal reports while its content is pulled past its start, instead of throwing `debug scroll position is invalid`; a value that is not a number is still refused.
 - F144.6: a log file and the performance trace rotate at 100 MB and keep the five earlier generations (`.1` to `.5`) in both hosts, instead of 10 MB and one generation, so the records cover a long session.
 - F144.4: both hosts write each request to a sidecar (`sidecar.send`), each message from a sidecar (`sidecar.receive`) and each event of a native region (`region`) as trace events of the layer `host` with their whole bodies, with the same names and fields.
 - F144.3: the terminal plugin 0.0.10 and the terminal service 0.0.8 record the whole input path (see F144.5 and the plugin repositories).

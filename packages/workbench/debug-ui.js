@@ -34,7 +34,7 @@ let viewing = null;
 let operation = null;
 /** The error of the last failed step or operation, or null. */
 let failure = null;
-/** The scroll position of the shown content in points that the native modal reported. */
+/** The scroll position of the shown content in points that the native modal reported; negative while it is pulled past its start. */
 let paneScroll = 0;
 
 /* Called when the view draws or closes. The exposure module registers it. */
@@ -177,8 +177,10 @@ function makeCard() {
 function answer(key, val) {
   if (!card || key === "") return;
   if (key === "scroll") {
-    const top = Number(val);
-    if (!Number.isFinite(top) || top < 0) throw new Error(`debug scroll position is invalid: ${val}`);
+    // A position is a measurement of the native modal: it is negative while the content is pulled past its start, so it is
+    // kept as reported. Only a value that is not a finite number is refused.
+    const top = typeof val === "string" && val.trim() === "" ? NaN : Number(val);
+    if (!Number.isFinite(top)) throw new Error(`debug scroll position is not a number: ${val}`);
     paneScroll = top;
     drawn();
     return;
