@@ -46,10 +46,28 @@ Registry index `index.json`은 `format` 1과 다음 목록을 가진다.
 | --- | --- |
 | `plugins` | `{ id, package, name, description, license, repository, versions }`. 각 version은 `{ version, release: { url, sha256 }, engines: { soksak }, sidecars }`이며, `sidecars`는 그 version의 `plugin.json`의 sidecar 의존마다 범위를 정하고 sidecar가 없는 plugin은 `{}`다. plugin 의존은 index에 적지 않는다 |
 | `sidecars` | `{ name, repository, versions }`. 각 version은 `{ version, protocol: 1, releases }`이며, `releases`는 플랫폼마다 `{ url, sha256 }`을 정한다 |
+| `core` | `{ versions }`. 각 version은 `{ version, releases }`이며, `releases`는 `<platform>-<host>`마다 그 플랫폼과 host(`wailsv3` 또는 `tauriv2`)의 애플리케이션 번들 zip `{ url, sha256 }`을 정한다. 예: `darwin-arm64-wailsv3`([애플리케이션 업데이트](#애플리케이션-업데이트)) |
 | `packs` | `{ name, description, plugins }`: 함께 설치하는 plugin id |
-| `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }] }` |
+| `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }], core: [{ version, reason }] }` |
 
 `url`은 게시된 release의 `https:` URL이거나 local release의 절대 `file:` URL([받기](#받기))이고, `sha256`은 소문자 16진수 64자리다. 설명은 1자에서 200자(Unicode code point)다. Index 검사는 이 밖에도 plugin id, package, sidecar, pack, version의 중복, 알 수 없는 plugin을 가리키는 pack, 알 수 없는 sidecar나 어떤 sidecar version도 채우지 않는 범위가 필요한 plugin version, 목록에 없는 revoked version을 거부한다. `sok registry build`는 각 plugin의 `plugin.json`도 읽어, 의존이 목록의 plugin도 목록의 sidecar도 가리키지 않거나 plugin 의존의 범위를 채우는 목록의 version이 없으면 실패한다.
+
+## 애플리케이션 업데이트
+
+애플리케이션 업데이트는 실행 중인 애플리케이션의 번들을 더 새로운 core release의 번들로 바꾼다. registry index가 `core`에 core release를 나열하고 `revoked.core`가 버전을 철회한다.
+
+후보는 `core`에서 실행 중인 core보다 새롭고, `revoked.core`에 없으며, 실행 중인 애플리케이션의 `<platform>-<host>` release를 가진 가장 새 버전이다. 애플리케이션은 plugin처럼 시작할 때와 창이 활성이 될 때 index를 읽는다([plugin 화면](#plugin-화면)).
+
+| host 호출 | 뜻 |
+| --- | --- |
+| `appUpdateState()` | `{ version, available }`을 돌려준다. `version`은 실행 중인 core의 버전이고 `available`은 후보의 `{ version, release: { url, sha256 } }` 또는 `null`이다. index의 오류로 거부된다 |
+| `appUpdateStage({ version })` | 후보 `version`의 release를 받고 `sha256`을 확인하고 `<config-dir>/updates/<version>/`을 지운 뒤 `ditto -x -k`로 그 안에 zip을 풀고, `Contents/Info.plist`의 `CFBundleShortVersionString`이 `version`인 `<name>.app` 하나를 담았는지 확인해 그 번들의 경로 `{ bundle }`을 돌려준다. 실패하면 단계를 밝힌 메시지로 거부된다 |
+| `appUpdateApply({ bundle })` | 실행 중인 애플리케이션의 `sok` 실행 파일을 `<config-dir>/updates/sok`에 복사하고, `sok app update --wait <pid> --bundle <bundle> --target <실행 중인 번들>`을 새 세션에서 시작한 뒤 `host.quit`처럼 애플리케이션을 종료한다. 다만 상주 service에 `close-owner`와 `shutdown`을 보내지 않으므로 service와 그 세션은 계속 실행된다 |
+
+`sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]`는 프로세스 `<pid>`가 끝날 때까지 기다리고, `<target>`을 `<target>.previous`로 옮기고, `<bundle>`을 `<target>`으로 옮기고, `<target>.previous`를 지우고, `--` 뒤의 인자로 `<target>`을 시작한다. `<target>`을 옮긴 뒤 한 단계가 실패하면 `<target>.previous`를 되돌리고 그 번들을 시작하며 그 단계의 메시지로 실패한다.
+
+plugin 화면은 업데이트 목록 맨 위에 core 업데이트를 `<실행 중> → <후보>`, 그 버전의 release 페이지 링크, 업데이트 동작(`core.app.update` 실행)과 함께 나열한다. `engines.soksak`이 후보를 포함하지 않는 plugin 버전은 업데이트 전에 후보를 포함하는 그 plugin의 가장 새 버전과 함께 나열한다.
+
 
 ## 받기
 

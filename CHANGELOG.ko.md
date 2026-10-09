@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F121: 명세가 애플리케이션 업데이트를 정한다. registry index가 `core`에 core release를 나열하고 `revoked.core`로 버전을 철회하며, host 호출 `appUpdateState`, `appUpdateStage`, `appUpdateApply`가 업데이트를 준비하고 시작하고, `sok app update --wait <pid> --bundle <path> --target <path>`가 애플리케이션이 종료한 뒤 번들을 바꾼다. 체크리스트 항목은 F121.1~F121.7로 나눴다.
 - F125: 공개 registry index가 `release`와 `releases`로 게시되어 `scripts/check-registry-manifests.mjs`가 현재 core로 이를 읽고(전에는 plugin 버전 7개 모두 실패) core release를 검사할 수 있다. core 0.0.8의 애플리케이션은 이를 읽지 못하며 다시 설치한다. registry 저장소는 이를 항목 G16으로 기록한다.
 - F124.3.4: 두 host에서 `core.debug.save`가 저장 패널을 열고 검사의 네이티브 입력이 그 단추를 누를 수 없다는 것을 측정했다. `e2e/person/debug-save.test.mjs`와 `pnpm -F @soksak/e2e verify:person`은 사람이 저장과 취소를 누르는 동안 검사가 저장된 파일과 답을 확인하게 한다.
 - F113.2: 애플리케이션이 활성이고 그 창이 key window이면 두 host의 문서 영역이 입력한 글자를 받는다(`e2e/activation/document-typing.test.mjs`). 실패했던 검사는 애플리케이션이 비활성인 채 실행되었고 `e2e/browser.test.mjs`에서 지웠다. F135는 일반 AppKit 창은 비활성일 때도 글자를 받고 host는 받지 못하는 차이를 기록한다.

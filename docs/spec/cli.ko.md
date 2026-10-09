@@ -21,6 +21,7 @@
 | `sok input pointer [window] --x <x> --y <y> --phase move\|down\|drag\|up\|scroll [--button left\|right] [--delta-x <n>] [--delta-y <n>] [--activate]` | Native pointer 입력을 보낸다 |
 | `sok input key [window] --key <key> --phase down\|up [--text <text>] [--modifiers shift,control,option,command]` | Native key 입력을 보낸다 |
 | `sok capture [window]` | 진단 build: 창에 focus를 주지 않고 정지 이미지를 쓴다 |
+| `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]` | 프로세스 `<pid>`가 끝난 뒤 애플리케이션 번들 `<target>`을 `<bundle>`로 바꾸고 시작한다([애플리케이션 업데이트](installation.ko.md#애플리케이션-업데이트)) |
 | `sok path install\|remove` | 이 애플리케이션의 경로 항목을 쓰거나 지운다. `install`은 파일과 그 안의 폴더를 출력한다 |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | 설치된 plugin을 바꾼다([설치](installation.ko.md)) |
 | `sok plugin list` | 설치된 plugin을 나열한다 |

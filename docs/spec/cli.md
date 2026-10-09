@@ -21,6 +21,7 @@
 | `sok input pointer [window] --x <x> --y <y> --phase move\|down\|drag\|up\|scroll [--button left\|right] [--delta-x <n>] [--delta-y <n>] [--activate]` | Sends native pointer input |
 | `sok input key [window] --key <key> --phase down\|up [--text <text>] [--modifiers shift,control,option,command]` | Sends native key input |
 | `sok capture [window]` | Diagnostic builds: writes a still image of the window without focusing it |
+| `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]` | Replaces the application bundle `<target>` with `<bundle>` after the process `<pid>` ended and starts it ([application update](installation.md#application-update)) |
 | `sok path install\|remove` | Writes or deletes the path entry of this application; `install` prints the file and the directory it holds |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | Changes the installed plugins ([installation](installation.md)) |
 | `sok plugin list` | Lists the installed plugins |

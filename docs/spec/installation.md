@@ -46,10 +46,28 @@ The registry index `index.json` has `format` 1 and these lists:
 | --- | --- |
 | `plugins` | `{ id, package, name, description, license, repository, versions }`; each version is `{ version, release: { url, sha256 }, engines: { soksak }, sidecars }` where `sidecars` maps the sidecar dependencies of the version's `plugin.json` to their ranges and is `{}` for a plugin without sidecars; plugin dependencies are not listed in the index |
 | `sidecars` | `{ name, repository, versions }`; each version is `{ version, protocol: 1, releases }` where `releases` maps platforms to `{ url, sha256 }` |
+| `core` | `{ versions }`; each version is `{ version, releases }` where `releases` maps `<platform>-<host>` to `{ url, sha256 }`, the zip of the application bundle of that platform and host (`wailsv3` or `tauriv2`), for example `darwin-arm64-wailsv3` ([application update](#application-update)) |
 | `packs` | `{ name, description, plugins }`: plugin ids installed together |
-| `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }] }` |
+| `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }], core: [{ version, reason }] }` |
 
 `url` is an `https:` URL of a published release or an absolute `file:` URL of a local one ([fetching](#fetching)); `sha256` is 64 lowercase hexadecimal digits. A description has 1 to 200 characters (Unicode code points). The index check also rejects a repeated plugin id, package, sidecar, pack or version; a pack that names an unknown plugin; a plugin version that needs an unknown sidecar or a range that no listed sidecar version satisfies; and a revoked version that is not listed. `sok registry build` also reads the `plugin.json` of each plugin and fails when a dependency names neither a listed plugin nor a listed sidecar, or when no listed version of a plugin dependency satisfies its range.
+
+## Application update
+
+An application update replaces the bundle of the running application with the bundle of a newer core release. The registry index lists the releases of core in `core`, and `revoked.core` withdraws a version.
+
+The candidate is the newest version in `core` that is newer than the version of the running core, is not in `revoked.core`, and has a release for `<platform>-<host>` of the running application. The application reads the index when it starts and when a window becomes active, as it does for the plugins ([plugin screen](#plugin-screen)).
+
+| Host call | Meaning |
+| --- | --- |
+| `appUpdateState()` | Returns `{ version, available }`: `version` is the version of the running core and `available` is `{ version, release: { url, sha256 } }` of the candidate or `null`; it rejects with the error of the index |
+| `appUpdateStage({ version })` | Downloads the release of the candidate `version`, checks its `sha256`, removes `<config-dir>/updates/<version>/`, extracts the zip into it with `ditto -x -k`, checks that it holds one `<name>.app` whose `Contents/Info.plist` `CFBundleShortVersionString` is `version`, and returns `{ bundle }`, the path of that bundle; a failure rejects with a message that names the step |
+| `appUpdateApply({ bundle })` | Copies the `sok` executable of the running application to `<config-dir>/updates/sok`, starts `sok app update --wait <pid> --bundle <bundle> --target <running bundle>` in a new session, and quits the application as `host.quit` does, except that it sends no `close-owner` and no `shutdown` to a persistent service, so the services and their sessions keep running |
+
+`sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]` waits until the process `<pid>` has ended, moves `<target>` to `<target>.previous`, moves `<bundle>` to `<target>`, removes `<target>.previous`, and starts `<target>` with the arguments after `--`. When a step fails after `<target>` moved, it moves `<target>.previous` back, starts that bundle, and fails with the message of the step.
+
+The plugin screen lists the core update first in the update list with `<running> → <available>`, a link to the release page of the version, and the action 업데이트, which runs `core.app.update`. A plugin version whose `engines.soksak` does not contain the candidate is listed with the newest version of that plugin that does, before the update.
+
 
 ## Fetching
 
