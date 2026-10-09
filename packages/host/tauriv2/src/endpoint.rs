@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use serde_json::{json, Map, Value};
 
-use crate::application_log::log_error;
+use crate::application_log::{log_error, log_info};
 use crate::platform::{self, Listener};
 
 pub use crate::platform::Connection;
@@ -295,6 +295,8 @@ struct Shared {
     lines: Mutex<HashMap<Topic, Line>>,
     next: AtomicU64,
     orders: AtomicU64,
+    /// 엔드포인트가 멈추어 연결을 닫기 시작했는지. 연결의 닫는 이유를 가른다.
+    stopping: AtomicBool,
 }
 
 /// 연결에 알림을 보낸다. 엔드포인트가 멈춘 뒤에는 보낼 연결이 없다.
@@ -519,6 +521,7 @@ impl Endpoint {
             lines: Mutex::new(HashMap::new()),
             next: AtomicU64::new(1),
             orders: AtomicU64::new(1),
+            stopping: AtomicBool::new(false),
         });
         let mut endpoint = Endpoint {
             shared,
@@ -613,6 +616,7 @@ impl Endpoint {
                 Ok(_) => {}
             },
         }
+        self.shared.stopping.store(true, Ordering::Relaxed);
         if let Ok(peers) = self.shared.peers.lock() {
             for peer in peers.values() {
                 if let Ok(writer) = peer.writer.lock() {
@@ -663,29 +667,55 @@ pub fn write_frame<W: Write + ?Sized, T: Serialize + ?Sized>(
     writer.flush().map_err(|e| e.to_string())
 }
 
-/// 메시지 하나를 읽는다. 메시지 경계에서 연결이 닫히면 None 을 반환한다.
-pub fn read_frame<R: Read + ?Sized>(reader: &mut R) -> Result<Option<Value>, String> {
+/// 메시지 본문을 읽는 데 실패한 이유.
+enum BodyError {
+    /// 본문 길이가 한도를 넘는다.
+    TooLarge(usize),
+    /// 연결을 읽지 못한다.
+    Io(String),
+}
+
+/// 메시지 하나의 본문을 읽는다. 메시지 경계에서 연결이 닫히면 None 을 반환한다.
+fn read_body<R: Read + ?Sized>(reader: &mut R) -> Result<Option<Vec<u8>>, BodyError> {
     let mut prefix = [0u8; 4];
     let mut filled = 0;
     while filled < prefix.len() {
         match reader.read(&mut prefix[filled..]) {
             Ok(0) if filled == 0 => return Ok(None),
-            Ok(0) => return Err("connection closed inside a length prefix".into()),
+            Ok(0) => {
+                return Err(BodyError::Io(
+                    "connection closed inside a length prefix".into(),
+                ))
+            }
             Ok(n) => filled += n,
             Err(e) if e.kind() == ErrorKind::Interrupted => {}
             Err(e) if filled == 0 && e.kind() == ErrorKind::ConnectionReset => return Ok(None),
-            Err(e) => return Err(e.to_string()),
+            Err(e) => return Err(BodyError::Io(e.to_string())),
         }
     }
     let length = u32::from_be_bytes(prefix) as usize;
     if length > MAX_FRAME {
-        return Err(format!("message of {length} bytes exceeds {MAX_FRAME}"));
+        return Err(BodyError::TooLarge(length));
     }
     let mut body = vec![0u8; length];
-    reader.read_exact(&mut body).map_err(|e| e.to_string())?;
-    serde_json::from_slice(&body)
-        .map(Some)
-        .map_err(|e| e.to_string())
+    reader
+        .read_exact(&mut body)
+        .map_err(|e| BodyError::Io(e.to_string()))?;
+    Ok(Some(body))
+}
+
+/// 메시지 하나를 읽는다. 메시지 경계에서 연결이 닫히면 None 을 반환한다.
+pub fn read_frame<R: Read + ?Sized>(reader: &mut R) -> Result<Option<Value>, String> {
+    match read_body(reader) {
+        Ok(None) => Ok(None),
+        Ok(Some(body)) => serde_json::from_slice(&body)
+            .map(Some)
+            .map_err(|e| e.to_string()),
+        Err(BodyError::TooLarge(length)) => {
+            Err(format!("message of {length} bytes exceeds {MAX_FRAME}"))
+        }
+        Err(BodyError::Io(error)) => Err(error),
+    }
 }
 
 /// 파일 이름을 바꿔 endpoint.json 을 한 번에 쓴다.
@@ -784,9 +814,25 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
             },
         );
     }
-    while let Ok(Some(message)) = read_frame(&mut connection) {
-        let Some(request) = parse(message) else { break };
+    let mut reason = String::from("peer closed");
+    loop {
+        let body = match read_body(&mut connection) {
+            Ok(Some(body)) => body,
+            Ok(None) | Err(BodyError::Io(_)) => break,
+            Err(BodyError::TooLarge(length)) => {
+                reason = format!("frame of {length} bytes exceeds the limit of {MAX_FRAME}");
+                break;
+            }
+        };
+        let Some(request) = serde_json::from_slice(&body).ok().and_then(parse) else {
+            reason = format!(
+                "frame is not a JSON-RPC 2.0 request: {}",
+                String::from_utf8_lossy(&body)
+            );
+            break;
+        };
         if !declared(&request.method) {
+            reason = format!("method {:?} is not declared", request.method);
             break;
         }
         let answer = Answer {
@@ -803,6 +849,10 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         let shared = shared.clone();
         std::thread::spawn(move || answer.send(run(&shared, &request.method, request.params)));
     }
+    if shared.stopping.load(Ordering::Relaxed) {
+        reason = String::from("the endpoint closed");
+    }
+    log_info("endpoint", format!("connection closed: {reason}"));
     if let Err(error) = connection.close() {
         log_error("endpoint connection close", error);
     }

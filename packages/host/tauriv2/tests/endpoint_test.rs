@@ -796,3 +796,89 @@ fn a_malformed_process_lock_is_refused() {
         assert_eq!(std::fs::read_to_string(&lock).unwrap(), contents);
     }
 }
+
+const CLOSE_CHILD: &str = "SOKSAK_ENDPOINT_CLOSE_CHILD";
+
+// contract: endpoint.transport.close-reason-is-recorded
+#[test]
+fn the_endpoint_records_why_a_connection_closes() {
+    if let Some(config) = std::env::var_os(CLOSE_CHILD) {
+        let config = Path::new(&config);
+        soksak_host_tauriv2::application_log::start_application_log(config, "com.soksak.test")
+            .unwrap();
+        let (fake, calls) = Fake::new();
+        let endpoint = start(config, "test-close-reason", fake);
+        let mut connection = open(&endpoint);
+        connection.write_all(b"GET / HTTP/1.1\r\n\r\n").unwrap();
+        assert_eq!(receive(&mut connection), None);
+        let mut connection = open(&endpoint);
+        let body = b"{not json";
+        connection
+            .write_all(&(body.len() as u32).to_be_bytes())
+            .unwrap();
+        connection.write_all(body).unwrap();
+        assert_eq!(receive(&mut connection), None);
+        let mut connection = open(&endpoint);
+        send(&mut connection, json!([1, 2]));
+        assert_eq!(receive(&mut connection), None);
+        let mut connection = open(&endpoint);
+        send(
+            &mut connection,
+            json!({"jsonrpc": "2.0", "id": 1, "method": "page.eval", "params": {"window": "w1"}}),
+        );
+        assert_eq!(receive(&mut connection), None);
+        // The record of a close by the peer is written before the page is told that the last watcher ended.
+        let mut connection = open(&endpoint);
+        request(
+            &mut connection,
+            1,
+            "status.watch",
+            json!({"window": "w1", "name": "core.layout"}),
+        );
+        drop(connection);
+        loop {
+            let (_, method, _) = calls.recv_timeout(Duration::from_secs(5)).unwrap();
+            if method == "status.unwatch" {
+                break;
+            }
+        }
+        endpoint.stop();
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "the_endpoint_records_why_a_connection_closes",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(CLOSE_CHILD, config.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "child ended with {:?}: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let log = std::fs::read_to_string(soksak_host_tauriv2::application_log::application_log_path(
+        config.path(),
+    ))
+    .unwrap();
+    for reason in [
+        "frame of 1195725856 bytes exceeds the limit of 16777216",
+        "frame is not a JSON-RPC 2.0 request: {not json",
+        "frame is not a JSON-RPC 2.0 request: [1,2]",
+        "method \"page.eval\" is not declared",
+        "peer closed",
+    ] {
+        let found = log.lines().any(|line| {
+            line.split_once(' ').is_some_and(|(_, rest)| {
+                rest == format!("info host endpoint: connection closed: {reason}")
+            })
+        });
+        assert!(found, "no close record {reason:?} in {log:?}");
+    }
+}

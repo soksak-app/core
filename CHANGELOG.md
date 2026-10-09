@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F145.1: both hosts write `info host endpoint: connection closed: <reason>` before the socket of an endpoint connection closes: the peer, a frame over the limit, a frame that is not a JSON-RPC 2.0 request (with its body), an undeclared method, the close of the endpoint, and in the Wails host a full output queue, a failed write and a reply that cannot be encoded.
 - F148: core 0.0.10 is released (tag `v0.0.10`, both bundles) and listed in the registry; every declared workspace version is 0.0.10, the version that carries the text records of F138, the records of the input path of F144 and the correction of F146.
 - F138.4: the window check reads the text records of the application log (`parseRecord`, `withoutTime`): `readErrors` returns the records of level `error` as `error <layer> <where>: <text>` and the lines that have no form (the output of the operating system and the runtime) separately, and the checks of `e2e/` compare records instead of the earlier lines. F138 is complete.
 - F138.3: the page reports a record `{level, where, text}` through the host call `report` (`recordOf` in `report-record.js` splits a line `<where>: <text>` at its first `: `), both hosts check it and write `<time> <level> page <where>: <text>`, the start error handler writes the place `start`, and the native library writes its capture observations as records `info native capture: <text>`.

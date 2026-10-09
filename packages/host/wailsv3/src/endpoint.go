@@ -324,7 +324,7 @@ func (e *Endpoint) Close() error {
 		errs = append(errs, listener.Close())
 	}
 	for _, c := range conns {
-		c.close()
+		c.close("the endpoint closed")
 	}
 	if file != "" {
 		var current EndpointInfo
@@ -461,8 +461,10 @@ type endpointConn struct {
 	once   sync.Once
 }
 
-func (c *endpointConn) close() {
+// close 는 연결을 닫는다. 처음 닫는 쪽의 이유 reason 을 소켓을 닫기 전에 기록하고, 이어지는 호출은 아무것도 하지 않는다.
+func (c *endpointConn) close(reason string) {
 	c.once.Do(func() {
+		LogInfo("endpoint", "connection closed: "+reason)
 		close(c.done)
 		if err := c.conn.Close(); err != nil {
 			LogError("endpoint connection close", err)
@@ -477,7 +479,7 @@ func (c *endpointConn) send(body []byte) {
 	case <-c.done:
 	default:
 		LogError("endpoint", "closing a connection that does not read")
-		c.close()
+		c.close("the output queue is full")
 	}
 }
 
@@ -489,7 +491,8 @@ func (c *endpointConn) write() {
 		case body := <-c.out:
 			frame := binary.BigEndian.AppendUint32(make([]byte, 0, 4+len(body)), uint32(len(body)))
 			if _, err := c.conn.Write(append(frame, body...)); err != nil {
-				c.close()
+				LogError("endpoint connection write", err)
+				c.close("write failed")
 				return
 			}
 		}
@@ -504,9 +507,10 @@ type request struct {
 	Params  json.RawMessage `json:"params"`
 }
 
-// read 는 연결의 프레임을 읽는다. 규칙을 어긴 프레임을 받으면 답하지 않고 연결을 닫는다.
+// read 는 연결의 프레임을 읽는다. 규칙을 어긴 프레임을 받으면 답하지 않고 연결을 닫으며, 닫는 이유를 기록한다.
 func (e *Endpoint) read(c *endpointConn) {
-	defer e.drop(c)
+	reason := "peer closed"
+	defer func() { e.drop(c, reason) }()
 	var size [4]byte
 	for {
 		if _, err := io.ReadFull(c.conn, size[:]); err != nil {
@@ -514,6 +518,7 @@ func (e *Endpoint) read(c *endpointConn) {
 		}
 		length := binary.BigEndian.Uint32(size[:])
 		if length > frameLimit {
+			reason = fmt.Sprintf("frame of %d bytes exceeds the limit of %d", length, frameLimit)
 			return
 		}
 		body := make([]byte, length)
@@ -522,6 +527,7 @@ func (e *Endpoint) read(c *endpointConn) {
 		}
 		var req request
 		if !json.Valid(body) || json.Unmarshal(body, &req) != nil || req.JSONRPC != "2.0" || req.Method == nil {
+			reason = "frame is not a JSON-RPC 2.0 request: " + string(body)
 			return
 		}
 		if parse, ok := e.subscription(*req.Method); ok {
@@ -530,6 +536,7 @@ func (e *Endpoint) read(c *endpointConn) {
 		}
 		method, declared := e.method(*req.Method)
 		if !declared {
+			reason = fmt.Sprintf("method %q is not declared", *req.Method)
 			return
 		}
 		go e.run(c, req, method)
@@ -598,9 +605,9 @@ func (e *Endpoint) drain(t topic) {
 }
 
 // drop 은 닫힌 연결을 목록에서 빼고 그 구독을 해제한다. 마지막 감시가 사라진 상태는 페이지에
-// 해제를 보낸다.
-func (e *Endpoint) drop(c *endpointConn) {
-	c.close()
+// 해제를 보낸다. 연결을 처음 닫는 쪽이 없으면 reason 이 닫는 이유다.
+func (e *Endpoint) drop(c *endpointConn, reason string) {
+	c.close(reason)
 	e.mu.Lock()
 	delete(e.conns, c)
 	held := make([]topic, 0, len(c.topics))
@@ -670,7 +677,7 @@ func (e *Endpoint) reply(c *endpointConn, req request, result any, err error) {
 	data, marshalErr := json.Marshal(reply)
 	if marshalErr != nil {
 		LogError("endpoint reply", fmt.Sprintf("cannot encode the reply for %s: %v", req.ID, marshalErr))
-		c.close()
+		c.close("the reply cannot be encoded")
 		return
 	}
 	c.send(data)

@@ -61,6 +61,7 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 | the Rust host panics | `error host panic: <file>:<line>: <message>` from the panic hook; the Go runtime writes the stack of a panic of the Wails host to the standard error |
 | a sidecar process of standard input and output ends while the host runs | `error host sidecar <name>: failed: output closed: <exit status>` |
 | the connection to a persistent service ends while the host runs | `error host sidecar <name>: connection lost; restarted`, or `connection lost; restart failed: <reason>` |
+| a connection of the endpoint closes | `info host endpoint: connection closed: <reason>`, written before the socket closes, where the reason is `peer closed`, `frame of <n> bytes exceeds the limit of <limit>`, `frame is not a JSON-RPC 2.0 request: <body>`, `method "<name>" is not declared`, `the endpoint closed`, or, in the Wails host, `the output queue is full`, `write failed` and `the reply cannot be encoded` |
 
 A failure that the caller of an operation receives, and that the caller shows through the error display, is recorded by that display: a request of the endpoint answers its failure to its client, a `sok` command ends with its status and its message on the standard error, and a plugin shows the failed navigation of its document region, which the host reports as the `failure` of the document, with `tab.error` ([plugins](plugins.md)), whose display writes `error page tab error <tab id>: <text>`.
 

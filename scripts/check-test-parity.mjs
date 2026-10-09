@@ -1129,6 +1129,30 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F148",
+    implementation: [
+      { file: "scripts/check-versions.mjs", symbol: "export const RELEASE" },
+    ],
+    tests: [
+      { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release version" },
+    ],
+    expected: "Every declared workspace version is the version of the release that carries the records of the application log.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.1",
+    implementation: [
+      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "connection closed: " },
+      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "connection closed: {reason}" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRecordsWhyAConnectionCloses" },
+      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "the_endpoint_records_why_a_connection_closes" },
+    ],
+    expected: "A connection of the endpoint that closes writes the reason of the close as an info record before the socket closes.",
+    levels: ["unit"],
+  },
+  {
     id: "F146",
     implementation: [
       { file: "packages/workbench/debug-ui.js", symbol: "debug scroll position is not a number" },

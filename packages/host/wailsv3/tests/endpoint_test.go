@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -985,4 +986,62 @@ func TestEndpointRejectsAMalformedLock(t *testing.T) {
 			t.Fatalf("lock %q changed: %q %v", contents, data, err)
 		}
 	}
+}
+
+// closeRecord reports whether the log holds exactly one close record that matches the text after the time.
+func closeRecord(t *testing.T, written func() string, text string) {
+	t.Helper()
+	record := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z info host endpoint: connection closed: ` + regexp.QuoteMeta(text) + `$`)
+	for _, line := range strings.Split(strings.TrimSuffix(written(), "\n"), "\n") {
+		if record.MatchString(line) {
+			return
+		}
+	}
+	t.Fatalf("no close record %q in %q", text, strings.Split(strings.TrimSuffix(written(), "\n"), "\n"))
+}
+
+// contract: endpoint.transport.close-reason-is-recorded
+func TestEndpointRecordsWhyAConnectionCloses(t *testing.T) {
+	written := captureLog(t)
+	backend := newFakeBackend()
+	_, address, _ := serve(t, backend)
+
+	conn := dial(t, address)
+	if _, err := conn.Write([]byte("GET / HTTP/1.1\r\n\r\n")); err != nil {
+		t.Fatal(err)
+	}
+	expectClosed(t, conn)
+	closeRecord(t, written, "frame of 1195725856 bytes exceeds the limit of 16777216")
+
+	conn = dial(t, address)
+	body := []byte("{not json")
+	frame := binary.BigEndian.AppendUint32(nil, uint32(len(body)))
+	if _, err := conn.Write(append(frame, body...)); err != nil {
+		t.Fatal(err)
+	}
+	expectClosed(t, conn)
+	closeRecord(t, written, "frame is not a JSON-RPC 2.0 request: {not json")
+
+	conn = dial(t, address)
+	send(t, conn, []int{1, 2})
+	expectClosed(t, conn)
+	closeRecord(t, written, "frame is not a JSON-RPC 2.0 request: [1,2]")
+
+	conn = dial(t, address)
+	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "page.eval", "params": map[string]any{"window": "main"}})
+	expectClosed(t, conn)
+	closeRecord(t, written, `method "page.eval" is not declared`)
+
+	// The record of a close by the peer is written before the page is told that the last watcher ended.
+	conn = dial(t, address)
+	if got := call(t, conn, 1, "status.watch", map[string]any{"window": "main", "name": "core.layout"}); got.Error != nil {
+		t.Fatalf("status.watch: %+v", got)
+	}
+	_ = conn.Close()
+	select {
+	case <-backend.unwatched:
+	case <-time.After(2 * time.Second):
+		t.Fatal("page did not receive status.unwatch after the last watcher closed")
+	}
+	closeRecord(t, written, "peer closed")
 }

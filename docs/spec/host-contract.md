@@ -134,6 +134,7 @@ Items:
 | `endpoint.transport.closing-a-disconnected-connection-succeeds` | Closing a connection whose socket is already disconnected succeeds; other shutdown errors are reported. | tauriv2 only: the Rust host shuts the socket down explicitly, which reports a disconnected socket, while Go closes the connection without a shutdown |
 | `endpoint.transport.non-jsonrpc-object-closes` | A JSON frame that is not a JSON-RPC 2.0 request closes the connection without a reply. | both |
 | `endpoint.transport.undeclared-method-closes` | An undeclared method closes the connection without a reply, and nothing reaches the page. | both |
+| `endpoint.transport.close-reason-is-recorded` | A connection that closes writes `info host endpoint: connection closed: <reason>` before the socket closes, with the reason of an oversized frame, a frame that is not a JSON-RPC 2.0 request (with its body), an undeclared method, or the peer. | both |
 | `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | In a release build diagnostics.transcript closes the connection and reaches no page; in a diagnostic build it is answered. | both |
 | `endpoint.rpc.round-trip-by-id` | Several requests on one connection each receive a JSON-RPC 2.0 reply with the matching id and result. | both |
 | `endpoint.rpc.page-params-omit-window` | The page receives forwarded params without the window field. | both |
