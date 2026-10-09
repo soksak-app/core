@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F152: a failed send of the main page to a sidecar no longer blocks the sends after it and is written as `error page sidecar <name>: send failed: <reason>`; `orderedSidecar` refuses a missing failure handler.
 - F145.11: both hosts write each line of the diagnostic transcript of a window (a rendered modal, a drag, a navigation callback) to the application log as `info host transcript <window>: <line>`, and the Wails host writes the errors that the transcript carried alone (`host.window`, `rewatch`) as error records.
 - F145.10.2: the delegate of the native web views of the Wails host (surfaces and modals) writes the end of their WebContent process as `error native surface webview: web content process terminated: <address>` through `sp_webview_log_process_end`; the Tauri host already wrote the end of every web view.
 - F145.10.1: the native library writes the failures of a document view: a failed navigation with its reason and address, a refused address, a plugin file that is not found, a message without data, and the end of its WebContent process as an error; the document keeps the failure for the page that owns the region.

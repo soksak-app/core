@@ -72,7 +72,7 @@
 
 ## 페이지 인터페이스
 
-`page.sidecar(name)`은 사이드카 이름을 받아 `send(surface, body)`, `on(surface, fn)`, `onFailure(surface, fn)`을 반환한다. `on`은 그 사이드카와 표면의 `sidecar-message` 이벤트마다 `fn(body)`를, `onFailure`는 그 사이드카와 표면의 `sidecar-failure` 이벤트마다 `fn(reason)`을 호출한다. 둘 다 구독 등록 후 완료되는 promise를 반환한다. 페이지는 첫 요청 전에 구독한다. 한 사이드카의 전송은 호출한 순서대로 host에 닿고, 실패한 전송은 호출자를 reject하며 `error page sidecar <name>: send failed: <reason>`으로 애플리케이션 로그에 쓴다. 표면의 문서는 `page.report({level, where, text})`로 layer page의 기록을 쓴다(메인 페이지의 host 호출 `report`도 같은 일을 한다).
+`page.sidecar(name)`은 사이드카 이름을 받아 `send(surface, body)`, `on(surface, fn)`, `onFailure(surface, fn)`을 반환한다. `on`은 그 사이드카와 표면의 `sidecar-message` 이벤트마다 `fn(body)`를, `onFailure`는 그 사이드카와 표면의 `sidecar-failure` 이벤트마다 `fn(reason)`을 호출한다. 둘 다 구독 등록 후 완료되는 promise를 반환한다. 페이지는 첫 요청 전에 구독한다. 한 사이드카의 전송은 호출한 순서대로 host에 닿고, 실패한 전송은 호출자를 reject하되 이후 전송을 막지 않으며, 표면 문서는 `page.report({level, where, text})`로, 메인 페이지는 host 호출 `report`로 `error page sidecar <name>: send failed: <reason>`을 애플리케이션 로그에 쓴다. 표면의 문서는 `page.report({level, where, text})`로 layer page의 기록을 쓴다(메인 페이지의 host 호출 `report`도 같은 일을 한다).
 
 애플리케이션 문서에서 워크벤치는 첫 사이드카 요청을 보내기 전에 `sidecar-failure` listener 하나를 설치한다. 이 listener는 표면 모듈·상태 모듈·background 세션이 워크벤치를 통해 그 사이드카와 표면에 등록한 실패 handler를 호출한다. 등록된 handler가 없으면 워크벤치는 실패를 페이지 오류로 보고한다. 창에 `error` 이벤트를 보내고, 이 이벤트가 실패를 애플리케이션 로그에 쓰고 애플리케이션 오류 알림에 표시한다.
 

@@ -124,6 +124,10 @@ function orderedSidecarPort(name) {
       // 실패 listener 가 설치된 뒤에 요청을 보내야 그 요청이 부른 실패를 놓치지 않는다.
       send: (surface, body) => listenSidecarFailures()
         .then(() => bridge.call("sidecarSend", { sidecar: name, surface, body })),
+    // 호출자가 받는 거부와 별개로, 실패한 전송은 애플리케이션 로그에 남긴다.
+    }, (error) => {
+      // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
+      report(`sidecar ${name}: send failed: ${error?.message ?? error}`);
     }));
   }
   return orderedSidecars.get(name);

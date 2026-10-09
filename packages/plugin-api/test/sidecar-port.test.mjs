@@ -55,6 +55,10 @@ test("a failed send is passed to the failure handler with its error", async () =
   assert.deepEqual(failures, ["gone", "gone"]);
 });
 
+test("a port without a failure handler is refused at the boundary", () => {
+  assert.throws(() => orderedSidecar(slowPort({})), /requires a failure handler/);
+});
+
 test("listening goes to the runtime port", () => {
   const port = slowPort({});
   const fn = () => {};
@@ -64,5 +68,5 @@ test("listening goes to the runtime port", () => {
 test("failure listening goes to the runtime port", () => {
   const port = { ...slowPort({}), onFailure: (surface, fn) => ({ failure: surface, fn }) };
   const fn = () => {};
-  assert.deepEqual(orderedSidecar(port).onFailure("tab", fn), { failure: "tab", fn });
+  assert.deepEqual(orderedSidecar(port, () => {}).onFailure("tab", fn), { failure: "tab", fn });
 });

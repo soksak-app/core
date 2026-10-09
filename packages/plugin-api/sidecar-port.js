@@ -7,6 +7,8 @@
  * 결과(실패 포함)를 호출자에게 돌려준다. 실패한 전송은 다음 전송을 막지 않으며, 그 오류를 failed 에 알린다.
  */
 export function orderedSidecar(port, failed) {
+  // 처리기가 없으면 실패한 전송이 체인을 거부된 채로 남겨 이후 전송을 모두 막으므로 경계에서 거부한다.
+  if (typeof failed !== "function") throw new TypeError("orderedSidecar requires a failure handler");
   let chain = Promise.resolve();
   return {
     send(surface, body) {

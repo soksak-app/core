@@ -1140,6 +1140,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F152",
+    implementation: [
+      { file: "packages/plugin-api/sidecar-port.js", symbol: "orderedSidecar requires a failure handler" },
+      { file: "packages/workbench/host.js", symbol: "send failed:" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/window-sidecar-send.test.mjs", id: "a send after a failed send to the same sidecar is delivered and the failure is reported" },
+      { file: "packages/plugin-api/test/sidecar-port.test.mjs", id: "a port without a failure handler is refused at the boundary" },
+    ],
+    expected: "A failed send of the main page to a sidecar is reported and the sends after it are delivered.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.11",
     implementation: [
       { file: "packages/host/wailsv3/src/application_log.go", symbol: "func TranscriptEntry" },
