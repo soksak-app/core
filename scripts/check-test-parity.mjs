@@ -125,6 +125,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("Darwin UI queue", "objective-c", ["native/darwin/src/ui_queue.m"], ["native/darwin/tests/ui_queue_test.m"], { sharedTests: true }),
   lane("Darwin process exit", "objective-c", ["native/darwin/src/process_exit.m"], ["native/darwin/tests/process_exit_test.m"], { sharedTests: true }),
   lane("Darwin application log", "objective-c", ["native/darwin/src/application_log.m"], ["native/darwin/tests/application_log_test.m"], { sharedTests: true }),
+  lane("Darwin event ring", "objective-c", ["native/darwin/src/event_ring.m"], ["native/darwin/tests/event_ring_test.m"], { sharedTests: true }),
   lane("Darwin mouse buttons", "objective-c", ["native/darwin/src/mouse_buttons.m"], ["native/darwin/tests/mouse_buttons_test.m"], { sharedTests: true }),
   lane("Darwin quit request", "objective-c", ["native/darwin/src/quit_request.m"], ["native/darwin/tests/quit_request_test.m"], { sharedTests: true }),
   lane("Darwin webview navigation", "objective-c", ["native/darwin/src/webview_navigation.m"], ["native/darwin/tests/webview_navigation_test.m"], { sharedTests: true }),
@@ -1139,6 +1140,18 @@ const FEATURE_LINKS = [
     ],
     expected: "Every declared workspace version is the version of the release that carries the records of the application log.",
     levels: ["unit"],
+  },
+  {
+    id: "F150.2.1",
+    implementation: [
+      { file: "native/darwin/src/event_ring.m", symbol: "bool sp_event_ring_push" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/event_ring_test.m", id: "producers deliver every event once and in order" },
+      { file: "native/darwin/tests/event_ring_test.m", id: "a full ring counts the lost events and bytes" },
+    ],
+    expected: "Many producer threads push events into the ring without a lock, one consumer drains them whole and in order, and a full ring counts the loss.",
+    levels: ["native"],
   },
   {
     id: "F150.1",

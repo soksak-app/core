@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.2.1: native 라이브러리에 event ring(`event_ring.h`)이 생겼다: 여러 생산자 스레드가 락, 할당, 시스템 호출 없이 가변 길이 event를 넣고 소비자 하나가 비우는 bounded lock-free ring이며, 가득 찼거나 ring의 절반보다 큰 event는 false를 돌려주고 잃은 event와 바이트를 센다. `make -C native/darwin benchmark`가 호출 스레드에서의 push(약 80~100 ns)를 현재 글 기록(약 1.1 마이크로초, 최악은 수십~수백 마이크로초)과 비교해 잰다.
 - F150.1: `docs/spec/logging.md`가 event 계약(구조, class와 정책, writer, 파일, catalog, 개인정보, 한계)을 정하고, `@soksak/log-contract`가 로그를 catalog로 감사하며(선언된 event와 field, `log.dropped`로 설명되는 틈 외의 연속된 `seq`, 선언된 사슬) golden catalog와 golden lines를 담고, 용어 `event`, `event class`, `correlation identifier`를 정의한다.
 - F149.1: window check가 두 host에서 endpoint의 native 입력으로 Enter를 입력하고, 입력 경로의 모든 층의 기록을 애플리케이션 로그와 성능 trace에서 시간순으로 요구한다.
 - F153: 주입한 키의 기록이 키를 받는 first responder의 class와 창이 key window인지를 밝히고, 입력 문서의 모든 상태가 애플리케이션이 active인지와 창이 key window인지를 기록한다.

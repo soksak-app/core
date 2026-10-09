@@ -9,6 +9,7 @@
 #   make test             입력 주입, 마우스 버튼 감시, 창 상태, 창 단추 배치, 배치 트랜잭션 안의 제목줄 높이 표시, 다시 읽기의 시작 트랜잭션, 표시 대기, 웹뷰 초점, 문서 영역, 그림 영역, 닫은 창의 해제 검사, 창 객체 수 검사를 실행한다. 애플리케이션을 활성화하지 않는다
 #   make test-activation  창 활성화 후 호버 검사, 겹친 웹뷰 입력 검사(기준 실행·등록 실행), 웹 인스펙터 검사, 문서 영역의 OS 이벤트 대기열 클릭·키 검사, 그림 영역의 한국어 입력기 조합 검사를
 #                         실행한다. 애플리케이션을 활성화해 포커스를 가져간다
+#   make benchmark        기록 한 건의 호출 스레드 비용을 잰다(현재 글 기록과 event ring). 단언하지 않고 숫자를 출력한다
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         test 대상 검사 하나를 연속 n번 실행하고 첫 실패에서 실행 번호와 시스템 부하를 보고한다
 #   make repeat-suite COUNT=<n>
@@ -28,7 +29,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test test-activation repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-activation benchmark repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -55,6 +56,13 @@ $(BUILD):
 # 모든 검사는 tests/support/no_activation.m 을 링크한다. 활성화를 선언하지 않은 검사는 종료할 때 활성이면 실패한다.
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
 	@clang $(CFLAGS) -I$(CURDIR)/src $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+
+# 측정 도구는 시험이 아니다. 숫자를 출력하고 단언하지 않으며 test 대상에 들어 있지 않다.
+$(BUILD)/%_benchmark: tests/%_benchmark.m $(LIBRARY) $(wildcard src/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM) -o $@
+
+benchmark: $(BUILD)/event_ring_benchmark
+	@$(BUILD)/event_ring_benchmark
 
 # 수용 검사 본문을 포함하는 검사는 그 본문이 바뀌면 다시 빌드한다.
 $(BUILD)/capture_checker_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_directory_checker_test: tests/capture_test.m
@@ -85,9 +93,10 @@ $(BUILD)/capture_metadata_test: src/capture.m
 
 $(BUILD)/capture_resize_test: src/capture.m
 
-test: $(BUILD)/application_log_test $(BUILD)/application_log_fatal_test $(BUILD)/capture_callback_test $(BUILD)/capture_cleanup_test $(BUILD)/capture_preparation_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_cycles_test $(BUILD)/capture_stop_late_test $(BUILD)/capture_directory_checker_test $(BUILD)/capture_frame_test $(BUILD)/capture_storage_test $(BUILD)/capture_metadata_test $(BUILD)/capture_resize_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_checker_test $(BUILD)/capture_pressure_test $(BUILD)/webview_input_receipts_test $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/mouse_buttons_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/window_titlebar_layout_test $(BUILD)/window_titlebar_reload_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/webview_process_test $(BUILD)/document_view_test $(BUILD)/document_plugin_test $(BUILD)/document_typing_test $(BUILD)/document_press_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/link_test $(BUILD)/capture_test $(BUILD)/dock_menu_test $(BUILD)/appearance_test $(BUILD)/window_occlusion_test $(BUILD)/window_reveal_test $(BUILD)/window_release_test $(BUILD)/window_objects_test $(BUILD)/process_exit_test $(BUILD)/webview_navigation_test $(BUILD)/quit_request_test
+test: $(BUILD)/application_log_test $(BUILD)/application_log_fatal_test $(BUILD)/event_ring_test $(BUILD)/capture_callback_test $(BUILD)/capture_cleanup_test $(BUILD)/capture_preparation_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_cycles_test $(BUILD)/capture_stop_late_test $(BUILD)/capture_directory_checker_test $(BUILD)/capture_frame_test $(BUILD)/capture_storage_test $(BUILD)/capture_metadata_test $(BUILD)/capture_resize_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_checker_test $(BUILD)/capture_pressure_test $(BUILD)/webview_input_receipts_test $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/mouse_buttons_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/window_titlebar_layout_test $(BUILD)/window_titlebar_reload_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/webview_process_test $(BUILD)/document_view_test $(BUILD)/document_plugin_test $(BUILD)/document_typing_test $(BUILD)/document_press_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/link_test $(BUILD)/capture_test $(BUILD)/dock_menu_test $(BUILD)/appearance_test $(BUILD)/window_occlusion_test $(BUILD)/window_reveal_test $(BUILD)/window_release_test $(BUILD)/window_objects_test $(BUILD)/process_exit_test $(BUILD)/webview_navigation_test $(BUILD)/quit_request_test
 	@$(BUILD)/application_log_test
 	@$(BUILD)/application_log_fatal_test
+	@$(BUILD)/event_ring_test
 	@$(BUILD)/surface_host_test
 	@$(BUILD)/ui_queue_test
 	@$(BUILD)/window_motion_test
