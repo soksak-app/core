@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.2.4.3: 두 host는 page event 배치를 하나라도 쓰기 전에 배치 전체를 검증하고(`LogCommand`, `log_command`) 모든 event를 page가 준 시각 그대로 계층 `page`로 저장한다. 이름이 `page.`로 시작하지 않는 event, 계약에 없는 level, 양의 정수가 아닌 `ts_us`, 객체가 아닌 `fields`는 `events[<index>]`를 가리키는 오류로 배치를 거부하며 그 배치는 아무것도 쓰이지 않는다.
 - F150.2.4.2: 두 host의 writer는 프로세스의 다른 계층이 중계한 event(`EmitRelayed`, `emit_relayed`)를 그 event가 가진 `layer`와 `ts_us` 그대로 받는다. 계층으로 시작하지 않는 event 이름, 계약에 없는 계층, JSON이 아닌 field는 오류로 거부하고 `seq`는 여전히 writer가 부여한다. `make benchmark-rust`와 `make benchmark-go`가 benchmark를 실행한다.
 - F150.2.4.1: page에 event 배치 모듈(`log-batch.js`)이 생겼다: `emit`은 event를 기다리지 않고 큐에 넣고, 한 턴의 event는 `batch` 호출 한 번으로 host에 가며, 호출은 한 번에 하나만 진행해 host가 순서대로 받고, 큐가 가득 차면 event를 거부하고 다음 배치가 그 수를 센 `page.log.dropped`로 시작하며, 실패한 호출은 `page event batch of <n> events failed: <reason>`으로 보고한다.
 - F150.2.2, F150.2.3: 두 host에 event writer(`event_log.rs`, `event_log.go`)가 생겼다: `emit`은 개수와 바이트로 제한한 큐에 직렬화한 event를 기다리지 않고 넣고 자리가 없으면 false를 돌려주며, writer 스레드 하나가 `seq`를 부여하고 첫 줄 `log.open`을 쓰며 100 ms마다 배치로, `error`는 즉시 쓰고, 거부된 event마다 그 범위 뒤에 `log.dropped`를 저장하고, `flush`는 받아들인 event가 디스크에 기록될 때까지 기다린다. 폴더는 mode 0700, 파일은 mode 0600이며, 계약 사례 `log.writer.*` 6개가 두 host에서 실행되고 `make benchmark-rust`와 `make benchmark-go`가 writer를 측정한다.

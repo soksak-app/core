@@ -28,6 +28,7 @@ mod diagnostics;
 pub mod documents;
 pub mod endpoint;
 pub mod event_log;
+pub mod event_relay;
 pub mod exposure;
 pub mod images;
 pub mod installed;

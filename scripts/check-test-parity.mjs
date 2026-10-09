@@ -1142,6 +1142,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.2.4.3",
+    implementation: [
+      { file: "packages/host/wailsv3/src/event_relay.go", symbol: "func LogCommand" },
+      { file: "packages/host/tauriv2/src/event_relay.rs", symbol: "pub fn log_command" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent" },
+      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "an_invalid_relayed_batch_writes_nothing_and_names_the_event" },
+    ],
+    expected: "A batch of page events is validated as a whole before any event is written, and every valid event is stored in the layer page with the time the page gave it.",
+    levels: ["unit"],
+  },
+  {
     id: "F150.2.4.2",
     implementation: [
       { file: "packages/host/wailsv3/src/event_log.go", symbol: "func (l *EventLog) EmitRelayed" },

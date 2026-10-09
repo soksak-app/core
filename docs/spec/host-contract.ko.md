@@ -525,3 +525,5 @@ fn invalid_json_closes_connection() {
 | `log.writer.output-follows-the-contract` | writer의 파일은 자신의 event를 선언한 catalog에 대해 `@soksak/log-contract` 감사를 통과한다. | both |
 | `log.writer.flush-at-exit` | `flush`는 받아들인 모든 event가 디스크에 기록된 뒤 돌아오며, 기한이 지나면 실패한다. | both |
 | `log.writer.relays-events-with-their-layer-and-time` | host의 writer는 프로세스의 다른 계층이 중계한 event를 그 event의 `layer`와 `ts_us`, writer의 `seq`로 저장하고, 계층으로 시작하지 않는 event 이름과 계약에 없는 계층은 오류로 거부한다. | both |
+| `log.batch.stores-page-events-in-order` | `log` 중계는 `batch` 요청의 event를 page가 준 `ts_us`와 writer의 `seq`로, 순서대로, 계층 `page`에 저장한다. | both |
+| `log.batch.rejects-an-invalid-batch-without-writing` | `log` 중계는 `batch`가 아닌 action, 배열이 아닌 `events`, `page.`로 시작하지 않는 event 이름, 계약에 없는 level, 양의 정수가 아닌 `ts_us`, 객체가 아닌 `fields`에 대해 배치 전체를 거부하고 그 배치는 아무것도 쓰지 않으며, 오류는 `events[<index>]`를 가리킨다. | both |
