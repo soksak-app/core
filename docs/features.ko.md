@@ -743,6 +743,9 @@
   - [o] F144.5 — P0: terminal sidecar: 받은 각 연산, PTY에 쓴 각 바이트열, PTY에서 읽은 각 덩어리가 이스케이프한 글의 바이트와 길이를 담은 trace event다.
   - [o] F144.6 — P0: 기록이 한 세션을 덮을 만큼 오래 남게 한다. performance trace는 10 MB에서 회전하고 이전 파일 하나만 두는데, 전체 기록은 몇 분 만에 이를 채운다. 기대: trace 파일의 한도와 이전 파일 수를 높이고(50 MB, 5개) 두 host와 sidecar에 적용하며 명세가 그 값을 정한다.
 - [o] F148 — P0: F138, F144의 기록과 F146의 수정을 담은 core 0.0.10을 릴리스해서, 설치된 애플리케이션이 F143에 필요한 native, host, page 기록을 쓰게 한다. 모든 workspace manifest에 0.0.10을 선언하고, 그 commit의 CI가 통과한 뒤 `v0.0.10`을 tag하고, release 파일을 읽고, registry에 등록한다(registry 저장소는 G25로 기록한다). 2026-10-09 완료: release v0.0.10이 두 번들을 담고, 공개된 index가 core 0.0.10을 나열한다.
+- [~] F149 — P0: 실행 중인 애플리케이션에서 입력 경로를 관측하고 기록에 빠진 것을 채운다. 입력: 입력 경로의 기록은 단위 테스트로만 확인했고, 결함의 재현과 기록 읽기는 사람에게 남겨졌다. 기대 동작: 창 검사가 각 host의 terminal에 영문, 조합한 한글 음절, Enter를 입력한 뒤 `application.log`와 `performance.ndjson`을 읽어 native 콜백, native 보고, host 중계 event, page event, plugin 전송, sidecar 요청, PTY 쓰기와 PTY 읽기를 입력한 글과 함께 시간순으로 찾고, 빠진 기록이나 필드를 검사가 통과할 때까지 더한다.
+- [ ] F150 — P0: 기록을 하나의 event 계약으로 다시 세운다([관측 기반 계획](plans/observability.ko.md) 참고): 모든 층에 같은 구조, 언어별 비차단 writer, 선언된 event catalog, page 호출·창과 애플리케이션 이벤트·registry 명령·sidecar 수명·오류의 자동 입구, native 콜백에서 PTY 쓰기까지의 상관 식별자 `cid`, 그리고 글 기록 형식·trace 형식·그 writer와 parser의 제거. 계획의 S1에서 S5 단계이며, 각 단계는 시험, 시험이 남긴 로그, 실행 중인 애플리케이션의 관측으로 검증한다.
+- [ ] F151 — P1: debug 화면을 F150의 parser 위에서 Console 수준의 viewer로 만든다([관측 기반 계획](plans/observability.ko.md)의 S6 단계): 필터와 따라가기가 있는 타임라인, 상태 보기, 파일 목록, 선택 저장, 명령 `sok debug timeline`.
 - [ ] F145 — P1: 2026-10-09 전수조사가 찾은 기록 공백을 표의 순서(입력과 터미널 먼저)로 메운다. 항목: F145.1 endpoint 연결이 닫히는 이유(`endpoint.go`, `endpoint.rs`), F145.2 native 영역이 버리는 입력(`image_region.m`의 글이 아닌 입력, 닫힌 영역), F145.3 webview 입력의 등록과 수신 시간 초과(`webview_input.m`), F145.4 주입한 포인터와 키 입력의 거부, F145.5 파일 드롭의 실패(`core-exposure.js`), F145.6 page가 sidecar로 보내는 요청의 실패(`sidecar-port.js`, `page.js`)를 `report`로, F145.7 native 표면의 webview 문서의 오류와 처리되지 않은 rejection(`bridge.js`, `plugin-api`), F145.8 이미지 프레임의 거부와 잘못된 봉투, 표시 실패의 이유(`images.go`, `surfaces.go`, `image_region.m`), F145.9 owner가 없어 버려지는 sidecar 메시지와 보관만 하는 닫기(`sidecars.go`, `sidecars.rs`), F145.10 문서 view의 실패와 거부(`document_view.m`)와 표면·문서·모달 webview process의 끝, F145.11 애플리케이션 로그에 닿지 않는 `s.log` 줄, F145.12 relay와 전체 화면의 시간 초과, F145.13 떼어 낸 `sok app update`의 결과와 `sok`의 실패, F145.14 창이 끝나 허용한 제거, settings 정리, 알림, `ps` 실패, F145.15 명세가 나열하나 코드에 없는 page, host, native 라이브러리, plugin의 event별 trace(`session_start`, 창과 표면 event, 모든 process의 sampler), F145.16 files와 shell sidecar의 글 기록 형식(`log.Fatalf`, 요청, watch, spawn, 종료, `Close`가 버리는 종료 상태), F145.17 browser, editor, hwp, shell, files의 trace(탐색, 로드, 저장, watch, 실행, 쓰기), F145.18 코드가 쓰나 명세 실패 표에 없는 행.
   - [o] F145.1 — P1: endpoint 연결이 닫히는 이유(`endpoint.go`, `endpoint.rs`)의 기록을 더한다.
   - [o] F145.2 — P1: native 영역이 버리는 입력(`image_region.m`의 글이 아닌 입력, 닫힌 영역)의 기록을 더한다.
@@ -757,7 +760,7 @@
     - [o] F145.10.1 — P1: native 라이브러리에서 document view(`document_view.m`)의 실패와 거부를 기록한다. 실패한 이동, 거부한 주소, 찾지 못한 plugin 파일, 데이터 없는 메시지, 그 WebContent process의 종료가 그 대상이다.
     - [o] F145.10.2 — P1: 창의 page process를 기록하듯 두 host에서 surface와 modal의 WebContent process 종료를 기록한다.
   - [o] F145.11 — P1: application log에 닿지 않는 `s.log`의 줄의 기록을 더한다.
-  - [ ] F145.12 — P1: relay와 전체 화면 timeout의 기록을 더한다.
+  - [~] F145.12 — P1: relay와 전체 화면 timeout의 기록을 더한다.
   - [ ] F145.13 — P1: 분리 실행한 `sok app update`의 결과와 `sok`의 실패의 기록을 더한다.
   - [ ] F145.14 — P1: 창이 끝나서 허용된 제거, 설정 정리, 알림, `ps` 실패의 기록을 더한다.
   - [ ] F145.15 — P1: 명세가 나열하고 코드에 없는 page, host, native 라이브러리, plugin의 event별 trace(`session_start`, 창과 surface event, 모든 process의 sampler)의 기록을 더한다.
