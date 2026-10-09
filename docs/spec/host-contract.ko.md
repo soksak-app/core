@@ -252,6 +252,7 @@ fn invalid_json_closes_connection() {
 | `images.envelope.rejects-unattached-image` | 연결된 적 없는 이미지 이름의 봉투에 notAttached로 응답한다. | both |
 | `images.envelope.refusal-echoes-name-and-sequence` | 거부 응답은 봉투의 name과 sequence를 담는다. | both |
 | `images.envelope.refusal-preserves-quoted-name` | 따옴표가 든 이름의 거부 응답은 올바른 JSON이며 이름을 유지한다. | both |
+| `images.envelope.refusal-is-recorded` | host가 거부한 프레임은 `<level> host image frame: surface=<s> name=<n> sender=<x> generation=<g> raster=<r> sequence=<q> refused: <reason> current <state>`를 쓰고(`unsupported`는 `error`, 나머지는 `info`), 봉투가 아닌 image 필드는 `error host image frame: surface=<s> sender=<x> malformed image envelope: <image>`를 쓴다. | both |
 | `images.envelope.rejects-other-sidecar` | 다른 사이드카가 보낸 연결된 이미지의 봉투에 notAttached로 응답한다. | both |
 | `images.envelope.presents-attached-current-frame` | 연결한 사이드카가 보낸 현재 raster 프레임은 토큰, 크기, 이름, sequence와 함께 표시된다. | both |
 | `images.envelope.present-carries-nonce-scale-generation-raster` | 표시할 프레임은 nonce, scale, generation, raster도 담는다. | both |

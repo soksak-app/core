@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1188,6 +1189,47 @@ func TestImageCallFailuresNameTheCall(t *testing.T) {
 	for method, call := range map[string]string{"ImageAttach": "imageAttach", "ImageFocus": "imageFocus", "ImageDetach": "imageDetach"} {
 		if _, err := host.InvokeNative(surfaces, 7, method, []json.RawMessage{request}); err == nil || err.Error() != call+": window is not available" {
 			t.Errorf("%s: %v, want %s: window is not available", method, err, call)
+		}
+	}
+}
+
+// A frame that the host refuses, and an envelope that is not valid, leave a record with the frame and the current state
+// of the region.
+// contract: images.envelope.refusal-is-recorded
+func TestImageFrameRefusalsAreRecorded(t *testing.T) {
+	written := captureLog(t)
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "tab-1", Name: "view"}
+	attachImage(t, images, key)
+	configured := configureImage(t, images, key, 800, 600, 2.0)
+	send := func(string, map[string]interface{}) error { return nil }
+	onMain := func(run func() error) error { return run() }
+	recoverFrame := func(string) error { return nil }
+
+	// A sidecar that does not own the region.
+	host.HandleEnvelope(configuredEnvelope(t, configured, 1), "sidecar-b", key.Surface, images, onMain, send, recoverFrame)
+	// A format that the host does not present.
+	var unsupported map[string]any
+	if err := json.Unmarshal(configuredEnvelope(t, configured, 2), &unsupported); err != nil {
+		t.Fatal(err)
+	}
+	unsupported["image"].(map[string]any)["format"] = "rgba8"
+	body, _ := json.Marshal(unsupported)
+	host.HandleEnvelope(body, "sidecar-a", key.Surface, images, onMain, send, recoverFrame)
+	// An image field that is not an envelope is not handled as an image, and the record shows it.
+	if host.HandleEnvelope([]byte(`{"image":{"name":5}}`), "sidecar-a", key.Surface, images, onMain, send, recoverFrame) {
+		t.Fatal("a malformed envelope was handled as an image")
+	}
+
+	log := written()
+	frame := "generation=" + strconv.FormatUint(configured.Generation, 10) + " raster=" + strconv.FormatUint(configured.Raster, 10)
+	for _, want := range []string{
+		" info host image frame: surface=tab-1 name=view sender=sidecar-b " + frame + " sequence=1 refused: notAttached current generation=",
+		" error host image frame: surface=tab-1 name=view sender=sidecar-a " + frame + " sequence=2 refused: unsupported current generation=",
+		` error host image frame: surface=tab-1 sender=sidecar-a malformed image envelope: {"name":5}`,
+	} {
+		if !strings.Contains(log, want) {
+			t.Fatalf("the log has no %q:\n%s", want, log)
 		}
 	}
 }

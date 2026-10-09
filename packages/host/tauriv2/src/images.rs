@@ -1007,6 +1007,11 @@ pub enum Decision {
     Reply {
         name: String,
         json: serde_json::Value,
+        /// 거부한 프레임: 거부 이유와 generation, raster, sequence.
+        reason: String,
+        generation: u64,
+        raster: u64,
+        sequence: i32,
     },
     /// 표시할 이미지.
     Present {
@@ -1031,6 +1036,10 @@ fn image_reply(reason: &str, name: &str, generation: u64, raster: u64, sequence:
                 "raster": raster, "sequence": sequence
             }
         }),
+        reason: reason.to_string(),
+        generation,
+        raster,
+        sequence,
     }
 }
 
@@ -1073,7 +1082,13 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
 
     let envelope: ImageEnvelope = match serde_json::from_value(image_val.clone()) {
         Ok(e) => e,
-        Err(_) => return Decision::NotImage,
+        Err(_) => {
+            log_error(
+                "image frame",
+                format!("surface={surface} sender={sender} malformed image envelope: {image_val}"),
+            );
+            return Decision::NotImage;
+        }
     };
 
     // 포맷과 토큰 종류 검증
@@ -1220,7 +1235,17 @@ where
 
     match decision {
         Decision::NotImage => false,
-        Decision::Reply { name, json } => {
+        Decision::Reply {
+            name,
+            json,
+            reason,
+            generation,
+            raster,
+            sequence,
+        } => {
+            log_refused_frame(
+                surface, sender, images, &name, generation, raster, sequence, &reason,
+            );
             if let Err(e) = send_response(&name, json) {
                 log_error(&format!("image reply {name}"), e);
             }
@@ -1316,6 +1341,16 @@ where
                     }
                 }
                 Err(_) => {
+                    log_refused_frame(
+                        surface,
+                        sender,
+                        images,
+                        &name,
+                        generation,
+                        raster,
+                        sequence,
+                        "notAttached",
+                    );
                     let response =
                         after_present(Err("notAttached"), &name, generation, raster, sequence);
                     if let Err(e) = send_response(&name, response) {
@@ -1326,6 +1361,35 @@ where
             true
         }
     }
+}
+
+/// 호스트가 거부한 프레임을 거부 이유와 영역의 현재 프레임 상태와 함께 기록한다. 지원하지 않는 프레임은 사이드카의
+/// 결함이므로 오류이고, 떼어졌거나 대체된 프레임은 정상 경합이므로 관측이다.
+#[allow(clippy::too_many_arguments)]
+fn log_refused_frame(
+    surface: &str,
+    sender: &str,
+    images: &Images,
+    name: &str,
+    generation: u64,
+    raster: u64,
+    sequence: i32,
+    reason: &str,
+) {
+    let level = if reason == "unsupported" {
+        "error"
+    } else {
+        "info"
+    };
+    crate::application_log::log_record(
+        level,
+        "host",
+        "image frame",
+        format!(
+            "surface={surface} name={name} sender={sender} generation={generation} raster={raster} sequence={sequence} refused: {reason} current {}",
+            images.frame_state(&(surface.to_string(), name.to_string()))
+        ),
+    );
 }
 
 /// 표시하지 못한 프레임의 상세 detail 을 응답 사유와 로그 줄로 바꾼다. 대체된 프레임(stale, notAttached,

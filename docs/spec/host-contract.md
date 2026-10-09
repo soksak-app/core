@@ -252,6 +252,7 @@ Items:
 | `images.envelope.rejects-unattached-image` | An envelope for an image name that was never attached is answered with notAttached. | both |
 | `images.envelope.refusal-echoes-name-and-sequence` | A refusal carries the name and sequence of the envelope. | both |
 | `images.envelope.refusal-preserves-quoted-name` | A refusal for a name containing a quote is valid JSON and keeps the name. | both |
+| `images.envelope.refusal-is-recorded` | A frame that the host refuses writes `<level> host image frame: surface=<s> name=<n> sender=<x> generation=<g> raster=<r> sequence=<q> refused: <reason> current <state>` (`error` for `unsupported`, `info` for the others), and an image field that is not an envelope writes `error host image frame: surface=<s> sender=<x> malformed image envelope: <image>`. | both |
 | `images.envelope.rejects-other-sidecar` | An envelope for an attached image from another sidecar is answered with notAttached. | both |
 | `images.envelope.presents-attached-current-frame` | A frame of the current raster from the attaching sidecar is presented with its token, size, name, and sequence. | both |
 | `images.envelope.present-carries-nonce-scale-generation-raster` | A presented frame also carries the nonce, scale, generation, and raster. | both |

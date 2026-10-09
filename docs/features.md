@@ -751,7 +751,7 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [o] F145.5 — P1: Record the failures of a file drop (`core-exposure.js`).
   - [o] F145.6 — P1: Record the failures of a sidecar send of the page (`sidecar-port.js`, `page.js`) through `report`.
   - [o] F145.7 — P1: Record the errors and unhandled rejections of the webview of a native surface (`bridge.js`, `plugin-api`).
-  - [ ] F145.8 — P1: Record the refusals and malformed envelopes of the image frames and the reasons of a failed presentation (`images.go`, `surfaces.go`, `image_region.m`).
+  - [o] F145.8 — P1: Record the refusals and malformed envelopes of the image frames and the reasons of a failed presentation (`images.go`, `surfaces.go`, `image_region.m`).
   - [ ] F145.9 — P1: Record the messages of a sidecar that are dropped because no owner exists, and the closes that are buffered (`sidecars.go`, `sidecars.rs`).
   - [ ] F145.10 — P1: Record the failures and refusals of the document views (`document_view.m`) and the end of the webview process of a surface, a document and a modal.
   - [ ] F145.11 — P1: Record the lines of `s.log` that never reach the application log.

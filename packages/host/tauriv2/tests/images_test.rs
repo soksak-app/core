@@ -77,7 +77,7 @@ fn unattached_image_is_refused() {
 
     // 이미지가 등록되지 않았으므로 notAttached 오류를 반환해야 함
     match decide(&body, "sidecar-a", "tab-1", &images) {
-        Decision::Reply { name, json } => {
+        Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
             assert!(json["image"]["error"]
                 .as_str()
@@ -106,7 +106,7 @@ fn image_from_another_sidecar_is_refused() {
         .unwrap();
     let body = configured_envelope(&configured, 1);
     match decide(&body, "sidecar-b", "tab-1", &images) {
-        Decision::Reply { name, json } => {
+        Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
             assert_eq!(json["image"]["error"], "notAttached");
         }
@@ -583,7 +583,7 @@ fn unsupported_image_is_refused() {
     .to_string();
 
     match decide(&body_wrong_format, "sidecar-a", "tab-1", &images) {
-        Decision::Reply { name, json } => {
+        Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
             assert!(json["image"]["error"]
                 .as_str()
@@ -614,7 +614,7 @@ fn unsupported_image_is_refused() {
     .to_string();
 
     match decide(&body_wrong_nonce, "sidecar-a", "tab-1", &images) {
-        Decision::Reply { name, json } => {
+        Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
             assert!(json["image"]["error"]
                 .as_str()
@@ -645,7 +645,7 @@ fn unsupported_image_is_refused() {
     .to_string();
 
     match decide(&body_wrong_kind, "sidecar-a", "tab-1", &images) {
-        Decision::Reply { name, json } => {
+        Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
             assert!(json["image"]["error"]
                 .as_str()
@@ -712,7 +712,7 @@ fn reply_escapes_names() {
 
     // 등록되지 않은 이미지이므로 Reply가 반환되어야 함
     match decide(&body, "sidecar-a", "tab-1", &images) {
-        Decision::Reply { name, json } => {
+        Decision::Reply { name, json, .. } => {
             assert_eq!(name, "a\"b");
             // 응답을 문자열로 변환하여 JSON 유효성 확인
             let response_str = serde_json::to_string(&json).unwrap();
@@ -1072,4 +1072,95 @@ fn an_image_call_failure_names_the_call() {
         ),
         "imageDetach: image \"view\" is not attached"
     );
+}
+
+/// 자식 프로세스에 설정 디렉터리를 알리는 환경 변수.
+const IMAGE_FRAME_CHILD: &str = "SOKSAK_IMAGE_FRAME_CHILD";
+
+// A frame that the host refuses, and an envelope that is not valid, leave a record with the frame and the current state
+// of the region.
+// contract: images.envelope.refusal-is-recorded
+#[test]
+fn image_frame_refusals_are_recorded() {
+    if let Some(config) = std::env::var_os(IMAGE_FRAME_CHILD) {
+        start_application_log(std::path::Path::new(&config), "com.soksak.test").unwrap();
+        let images = Images::default();
+        let key: Key = ("tab-1".to_string(), "view".to_string());
+        images.reserve(&key, "owner", "sidecar-a").unwrap();
+        assert!(images.set(&key, 100));
+        let configured = images
+            .configure_raster(&key, 800, 600, 2.0, true)
+            .unwrap()
+            .unwrap();
+        println!(
+            "frame generation={} raster={}",
+            configured.generation, configured.raster
+        );
+        let send = |_name: &str, _json: serde_json::Value| Ok(());
+        let on_main = |work: Box<dyn Fn() -> Result<(), String> + Send>| work();
+        // A sidecar that does not own the region.
+        handle_envelope(
+            &configured_envelope(&configured, 1),
+            "sidecar-b",
+            "tab-1",
+            &images,
+            on_main,
+            send,
+        );
+        // A format that the host does not present.
+        let mut unsupported: serde_json::Value =
+            serde_json::from_str(&configured_envelope(&configured, 2)).unwrap();
+        unsupported["image"]["format"] = json!("rgba8");
+        handle_envelope(
+            &unsupported.to_string(),
+            "sidecar-a",
+            "tab-1",
+            &images,
+            on_main,
+            send,
+        );
+        // An image field that is not an envelope is not handled as an image, and the record shows it.
+        assert!(!handle_envelope(
+            r#"{"image":{"name":5}}"#,
+            "sidecar-a",
+            "tab-1",
+            &images,
+            on_main,
+            send,
+        ));
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "image_frame_refusals_are_recorded",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(IMAGE_FRAME_CHILD, config.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "child ended with {:?}, output {:?}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // The harness writes `test <name> ... ` before the test runs, so the line starts after it.
+    let frame = stdout
+        .lines()
+        .find_map(|line| line.split_once("frame generation=").map(|(_, rest)| rest))
+        .map(|rest| format!("generation={rest}"))
+        .expect("the child printed the frame");
+    let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
+    for want in [
+        format!(" info host image frame: surface=tab-1 name=view sender=sidecar-b {frame} sequence=1 refused: notAttached current generation="),
+        format!(" error host image frame: surface=tab-1 name=view sender=sidecar-a {frame} sequence=2 refused: unsupported current generation="),
+        " error host image frame: surface=tab-1 sender=sidecar-a malformed image envelope: {\"name\":5}".to_string(),
+    ] {
+        assert!(log.contains(&want), "no {want:?} in {log}");
+    }
 }

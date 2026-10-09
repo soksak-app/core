@@ -1140,6 +1140,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.8",
+    implementation: [
+      { file: "packages/host/wailsv3/src/images.go", symbol: "func logRefusedFrame" },
+      { file: "packages/host/tauriv2/src/images.rs", symbol: "fn log_refused_frame" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/images_test.go", id: "TestImageFrameRefusalsAreRecorded" },
+      { file: "packages/host/tauriv2/tests/images_test.rs", id: "image_frame_refusals_are_recorded" },
+    ],
+    expected: "Both hosts record each refused frame of an image region and each image field that is not an envelope.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.7",
     implementation: [
       { file: "packages/plugin-api/document-errors.js", symbol: "export function installDocumentErrors" },

@@ -617,10 +617,13 @@ type Decision interface{}
 // NotImage 는 본문에 이미지 필드가 없음을 나타낸다.
 type NotImage struct{}
 
-// Reply 는 사이드카에 보낼 오류 응답을 나타낸다.
+// Reply 는 사이드카에 보낼 오류 응답을 나타낸다. Reason 과 Generation, Raster, Sequence 는 거부한 프레임이다.
 type Reply struct {
-	Name string
-	JSON map[string]interface{}
+	Name               string
+	JSON               map[string]interface{}
+	Reason             string
+	Generation, Raster uint64
+	Sequence           int
 }
 
 // Present 는 표시할 이미지를 나타낸다.
@@ -641,7 +644,7 @@ func imageReply(reason, name string, generation, raster uint64, sequence int) *R
 		"image": map[string]interface{}{
 			"error": reason, "name": name, "generation": generation, "raster": raster, "sequence": sequence,
 		},
-	}}
+	}, Reason: reason, Generation: generation, Raster: raster, Sequence: sequence}
 }
 
 // Decide 는 이미지 봉투를 파싱하고 유효성을 검사하여 의사 결정을 반환한다.
@@ -682,6 +685,7 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 	}
 
 	if err := json.Unmarshal(imageBytes, &envelope); err != nil {
+		LogError("image frame", fmt.Sprintf("surface=%s sender=%s malformed image envelope: %s", surface, sender, imageBytes))
 		return &NotImage{}
 	}
 
@@ -778,6 +782,17 @@ func (i *Images) FrameState(key ImageKey) string {
 		state.PresentedRaster, state.PresentedSequence)
 }
 
+// logRefusedFrame 은 호스트가 거부한 프레임을 거부 이유와 영역의 현재 프레임 상태와 함께 기록한다. 지원하지 않는
+// 프레임은 사이드카의 결함이므로 오류이고, 떼어졌거나 대체된 프레임은 정상 경합이므로 관측이다.
+func logRefusedFrame(surface, sender string, images *Images, name string, generation, raster uint64, sequence int, reason string) {
+	level := "info"
+	if reason == "unsupported" {
+		level = "error"
+	}
+	Log(Entry{level, "host", "image frame", fmt.Sprintf("surface=%s name=%s sender=%s generation=%d raster=%d sequence=%d refused: %s current %s",
+		surface, name, sender, generation, raster, sequence, reason, images.FrameState(ImageKey{Surface: surface, Name: name}))})
+}
+
 // HandleEnvelope 는 이미지 봉투를 처리한다. 메인 스레드에서 실행할 작업, 응답 전송 방식, 표시 실패 뒤의
 // 복구를 인자로 받는다. recoverFrame 은 현재 프레임이 네이티브 이유로 실패한 뒤 그 이유와 함께 호출된다
 // (notFound 는 표시할 IOSurface 가 없으므로 새 래스터 구성을 요청한다). 봉투를 처리했으면 true 를 반환한다.
@@ -790,6 +805,7 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 		return false
 
 	case *Reply:
+		logRefusedFrame(surface, sender, images, d.Name, d.Generation, d.Raster, d.Sequence, d.Reason)
 		if err := sendResponse(d.Name, d.JSON); err != nil {
 			LogError("image reply "+d.Name, err)
 		}
@@ -799,6 +815,7 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 		key := ImageKey{Surface: surface, Name: d.Name}
 		handle, err := images.Get(key)
 		if err != nil {
+			logRefusedFrame(surface, sender, images, d.Name, d.Generation, d.Raster, d.Sequence, "notAttached")
 			response := AfterPresent(false, "notAttached", d.Name, d.Generation, d.Raster, d.Sequence)
 			if err := sendResponse(d.Name, response); err != nil {
 				LogError("image notAttached "+d.Name, err)
