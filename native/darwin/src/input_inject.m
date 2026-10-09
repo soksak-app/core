@@ -458,10 +458,16 @@ static NSString *jsonText(const char *text) {
 
 sp_input_result sp_input_key(void *handle, const char *key, const char *text, unsigned modifiers, bool down) {
     const char *why = "";
+    // The view that holds the keyboard when the key is sent receives it; the record names it with the key window.
+    NSWindow *window = (__bridge NSWindow *)handle;
+    NSResponder *responder = window.firstResponder;
+    NSString *responderName = responder ? NSStringFromClass(responder.class) : @"none";
     sp_input_result result = keyInput(handle, key, text, modifiers, down, &why);
     NSString *record = [NSString stringWithFormat:
-        @"{\"kind\":\"key\",\"key\":%@,\"text\":%@,\"modifiers\":%u,\"down\":%s,\"result\":\"%s\",\"reason\":\"%s\"}",
-        jsonText(key), jsonText(text), modifiers, down ? "true" : "false", resultName(result), why];
+        @"{\"kind\":\"key\",\"key\":%@,\"text\":%@,\"modifiers\":%u,\"down\":%s,\"result\":\"%s\",\"reason\":\"%s\","
+        "\"responder\":\"%@\",\"keyWindow\":%s}",
+        jsonText(key), jsonText(text), modifiers, down ? "true" : "false", resultName(result), why, responderName,
+        window.isKeyWindow ? "true" : "false"];
     sp_log_info("input inject", record.UTF8String);
     return result;
 }

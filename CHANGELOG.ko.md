@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F153: 주입한 키의 기록이 키를 받는 first responder의 class와 창이 key window인지를 밝히고, 입력 문서의 모든 상태가 애플리케이션이 active인지와 창이 key window인지를 기록한다.
 - F145.12: 두 host가 제한 시간 오류 1005로 끝나는 endpoint 요청마다 client가 오류를 받기 전에 `error host endpoint timeout: <method>: <message>`를 써서, 시간이 초과된 대기를 애플리케이션 로그에 이름으로 남긴다.
 - F152: 메인 페이지에서 sidecar로 보낸 전송이 실패해도 이후 전송을 막지 않고 `error page sidecar <name>: send failed: <reason>`으로 기록하며, `orderedSidecar`는 없는 실패 처리기를 거부한다.
 - F145.11: 두 host가 창의 진단 기록 줄(렌더링된 modal, 끌기, navigation callback)을 `info host transcript <window>: <line>`으로 애플리케이션 로그에도 쓰고, Wails host는 진단 기록에만 실리던 오류(`host.window`, `rewatch`)를 오류 기록으로 쓴다.

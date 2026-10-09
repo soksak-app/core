@@ -365,6 +365,8 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"a rejected key is recorded with its reason (got %@)", records]);
         check(hasRecord(records, @[@"\"kind\":\"key\"", @"\"key\":\"Escape\"", @"\"text\":null", @"\"modifiers\":1", @"\"down\":true", @"\"result\":\"delivered\""]),
             [NSString stringWithFormat:@"a delivered key is recorded with its arguments (got %@)", records]);
+        check(hasRecord(records, @[@"\"kind\":\"key\"", @"\"key\":\"Escape\"", @"\"responder\":"]),
+            [NSString stringWithFormat:@"a key record names the first responder that receives the key (got %@)", records]);
         check(hasRecord(records, @[@"\"kind\":\"pointer\"", @"\"phase\":2", @"\"result\":\"rejected\"", @"\"reason\":\"no open press for the drag or release\""]),
             [NSString stringWithFormat:@"a rejected pointer input is recorded with its reason (got %@)", records]);
     }

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F153: the record of an injected key names the class of the first responder that receives it and whether the window is the key window, and every state of the input document records whether the application is active and whether the window is the key window.
 - F145.12: both hosts write `error host endpoint timeout: <method>: <message>` for each endpoint request that ends with the timeout error 1005, before the client receives the error, so the waiting that timed out is named in the application log.
 - F152: a failed send of the main page to a sidecar no longer blocks the sends after it and is written as `error page sidecar <name>: send failed: <reason>`; `orderedSidecar` refuses a missing failure handler.
 - F145.11: both hosts write each line of the diagnostic transcript of a window (a rendered modal, a drag, a navigation callback) to the application log as `info host transcript <window>: <line>`, and the Wails host writes the errors that the transcript carried alone (`host.window`, `rewatch`) as error records.

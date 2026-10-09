@@ -870,12 +870,13 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     NSString *source = self.inputContext.selectedKeyboardInputSource;
     return [NSString stringWithFormat:
         @"{\"document\":\"%@\",\"committed\":%lu,\"marked\":%@,\"selected\":%@,\"reportedPreedit\":\"%@\","
-        @"\"source\":%@,\"focus\":%@,\"closed\":%@,\"reports\":%lu}",
+        @"\"source\":%@,\"focus\":%@,\"closed\":%@,\"reports\":%lu,\"active\":%@,\"keyWindow\":%@}",
         [self jsonEscapedString:self.textStorage.string], (unsigned long)self.committedLength,
         [self hasMarkedText] ? [self jsonRange:self.markedRange] : @"null", [self jsonRange:self.selectedRange],
         [self jsonEscapedString:self.reportedPreedit ?: @""],
         source ? [NSString stringWithFormat:@"\"%@\"", [self jsonEscapedString:source]] : @"null",
-        self.hasFocus ? @"true" : @"false", self.closed ? @"true" : @"false", (unsigned long)self.reports];
+        self.hasFocus ? @"true" : @"false", self.closed ? @"true" : @"false", (unsigned long)self.reports,
+        NSApp.isActive ? @"true" : @"false", self.window.isKeyWindow ? @"true" : @"false"];
 }
 
 // One record of a callback of the input method: its name, its arguments (fields is `"name":value,…` or empty), the

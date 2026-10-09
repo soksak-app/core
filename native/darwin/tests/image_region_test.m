@@ -500,6 +500,9 @@ int main(int argc, char **argv) { @autoreleasepool {
             check([marked[@"call"] isEqual:@"setMarkedText"] && [marked[@"text"] isEqual:@"한"]
                 && [marked[@"selectedRange"][@"location"] isEqual:@1] && marked[@"replacementRange"] == NSNull.null,
                 [NSString stringWithFormat:@"TEST 8: setMarkedText is recorded with its text and ranges (got %@)", records]);
+            check(marked[@"before"][@"active"] != nil && marked[@"before"][@"keyWindow"] != nil
+                && marked[@"after"][@"active"] != nil && marked[@"after"][@"keyWindow"] != nil,
+                [NSString stringWithFormat:@"TEST 8: the state records whether the application is active and whether the window is the key window (got %@)", marked]);
             check([marked[@"before"][@"document"] isEqual:@""] && [marked[@"after"][@"document"] isEqual:@"한"]
                 && [marked[@"after"][@"marked"][@"length"] isEqual:@1] && [marked[@"after"][@"committed"] isEqual:@0]
                 && marked[@"before"][@"source"] != nil,

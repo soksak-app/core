@@ -1140,6 +1140,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F153",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "responderName" },
+      { file: "native/darwin/src/image_region.m", symbol: "NSApp.isActive ? @\"true\"" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "a key record names the first responder that receives the key" },
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: the state records whether the application is active and whether the window is the key window" },
+    ],
+    expected: "The records of the input path name the first responder, the active state of the application and the key window.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.12",
     implementation: [
       { file: "packages/host/wailsv3/src/endpoint.go", symbol: "endpoint timeout" },
