@@ -1068,6 +1068,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F137",
+    implementation: [
+      { file: "packages/sok/tauriv2/src/appupdate.rs", symbol: "pub type OpenApplication" },
+      { file: "packages/sok/wailsv3/tests/appupdate_test.go", symbol: "func requireBundles" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/appupdate_test.go", id: "TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts" },
+      { file: "packages/sok/tauriv2/tests/appupdate_test.rs", id: "the_bundle_is_replaced_after_the_process_ended_and_the_application_starts" },
+    ],
+    expected: "The Rust sok passes clippy, and the tests that stage and replace an application bundle run only on macOS.",
+    levels: ["unit"],
+  },
+  {
     id: "F29",
     implementation: [
       { file: "scripts/check-build-environment.sh", symbol: "pnpm_actual=$(pnpm --version" },
