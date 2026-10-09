@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F144.4: both hosts write each request to a sidecar (`sidecar.send`), each message from a sidecar (`sidecar.receive`) and each event of a native region (`region`) as trace events of the layer `host` with their whole bodies, with the same names and fields.
 - F144.3: the terminal plugin 0.0.10 and the terminal service 0.0.8 record the whole input path (see F144.5 and the plugin repositories).
 - F144.2: the native library records every callback of the input method (`keyDown`, `insertText`, `setMarkedText`, `unmarkText`, `doCommandBySelector`, the commits, the preedit, the focus and the input source change) as `info native input method` with its arguments, the typed text and the state of the input document before and after, every report to the page as `info native input report`, and the failures with the whole state; `sp_log_info` and the time of a record (`clock_gettime` and integer arithmetic, so the fatal handler writes it too) are new, and the records of the library have the form `<time> <level> native <where>: <text>`.
 - F144.1: the rule that a record holds no typed text is removed from [diagnostics](docs/spec/diagnostics.md); a record of the input path holds everything that the layer saw, and the specification lists the records of each layer.

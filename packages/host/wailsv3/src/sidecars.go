@@ -341,6 +341,7 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 		return fmt.Errorf("sidecar %s: %w", name, err)
 	}
 	line = append(line, '\n')
+	c.traceMessage("sidecar.send", name, surface, body)
 
 	// 이 전송이 끊김 뒤의 첫 시작이면 잠금 해제 뒤에 연결 알림을 보낸다(V5-106).
 	// 알림은 소유자 그림 재구성을 되부르므로 뮤텍스 안에서 실행할 수 없다.
@@ -1506,6 +1507,7 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 			if c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) {
 				continue
 			}
+			c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body)
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		}
 	}
@@ -1654,6 +1656,7 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 			if c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) {
 				continue
 			}
+			c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body)
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		}
 	}
@@ -1861,4 +1864,15 @@ func (w *recordWriter) Flush() {
 		Log(Entry{"info", w.layer, w.where, string(w.partial)})
 		w.partial = nil
 	}
+}
+
+// traceMessage 는 사이드카로 보낸 요청이나 사이드카에서 받은 메시지를 본문 전체와 함께 성능 trace 의 event 로 쓴다
+// (docs/spec/diagnostics.md). 이 trace 가 꺼져 있으면 아무것도 만들지 않는다.
+func (c *Sidecars) traceMessage(event, sidecar, surface string, body json.RawMessage) {
+	if c.configDir == "" {
+		return
+	}
+	PerformanceObserve(c.configDir, "host", func() map[string]any {
+		return map[string]any{"event": event, "sidecar": sidecar, "surface": surface, "body": body}
+	})
 }

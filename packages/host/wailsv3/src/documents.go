@@ -437,6 +437,10 @@ func (s *Surfaces) emitToSurface(surface, name string, data any) {
 
 // imageChanged 는 그림 영역 이벤트를 소유 표면에만 보내고 host.window 감시자에게 알린다. UI 스레드에서 호출된다.
 func (s *Surfaces) imageChanged(key ImageKey, event string) {
+	// Every event of a native region is recorded with its whole body before it is relayed (docs/spec/diagnostics.md).
+	PerformanceObserve(s.host.configDir, "host", func() map[string]any {
+		return map[string]any{"event": "region", "surface": key.Surface, "name": key.Name, "body": json.RawMessage(event)}
+	})
 	payload := map[string]any{"surface": key.Surface, "name": key.Name, "event": json.RawMessage(event)}
 	s.emitToSurface(key.Surface, "image-event", payload)
 	s.windowChanged()

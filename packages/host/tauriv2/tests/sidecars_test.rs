@@ -739,6 +739,55 @@ fn the_standard_error_of_a_sidecar_is_written_as_records() {
     }
 }
 
+// contract: sidecars.trace.relay-records-every-message-with-its-body
+#[test]
+fn the_relay_records_every_message_with_its_whole_body() {
+    // Every request that the host sends to a sidecar and every message that it receives is a trace event with its whole
+    // body, in the order of the relay (docs/spec/diagnostics.md).
+    let (mut sidecars, directory) = script_sidecars(
+        "#!/bin/sh\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\",\"text\":\"\\ud55c\"}}'\nwhile read line; do :; done\n",
+    );
+    sidecars.0.stop_timeout = STALL;
+    // The sidecars resolve the configuration directory, so the switch names the resolved path.
+    let config = std::fs::canonicalize(directory.path()).unwrap();
+    soksak_host_tauriv2::performance::enable(&config).unwrap();
+    let (window, events) = owner("a", "/projects/test");
+    sidecars
+        .send(
+            &window,
+            ECHO,
+            "s1",
+            &raw(r#"{"operation":"input","bytes":"7ZWc"}"#),
+        )
+        .unwrap();
+    let event = events
+        .recv_timeout(STALL)
+        .expect("no event; the test stalled");
+    assert_eq!(event.surface, "s1");
+    sidecars.stop();
+    let text = std::fs::read_to_string(soksak_host_tauriv2::performance::target(&config)).unwrap();
+    let records: Vec<serde_json::Value> = text
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("every line is one JSON object"))
+        .collect();
+    let sent = records
+        .iter()
+        .find(|record| record["event"] == "sidecar.send")
+        .expect("the request was not recorded");
+    assert_eq!(sent["layer"], "host");
+    assert_eq!(sent["sidecar"], ECHO);
+    assert_eq!(sent["surface"], "s1");
+    assert_eq!(sent["body"]["operation"], "input");
+    assert_eq!(sent["body"]["bytes"], "7ZWc");
+    let received = records
+        .iter()
+        .find(|record| record["event"] == "sidecar.receive")
+        .expect("the message was not recorded");
+    assert_eq!(received["surface"], "s1");
+    assert_eq!(received["body"]["event"], "state");
+    assert_eq!(received["body"]["text"], "한");
+}
+
 // contract: sidecars.stop.forgets-running-sidecars
 #[test]
 fn close_during_stop_sends_nothing() {

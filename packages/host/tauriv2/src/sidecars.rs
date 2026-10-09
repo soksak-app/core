@@ -807,6 +807,13 @@ impl<O: Owner> Sidecars<O> {
         })
         .map_err(|e| e.to_string())?;
         line.push(b'\n');
+        trace_message(
+            &self.core.config_directory,
+            "sidecar.send",
+            name,
+            surface,
+            body,
+        );
 
         let mut state = self.core.state.lock().map_err(|e| e.to_string())?;
         if state.stopped {
@@ -1617,9 +1624,10 @@ impl<O: Owner> Core<O> {
         let sidecar = name.to_string();
         let tx_clone = tx.clone();
         let pid = child.id();
+        let relay_config = core.config_directory.clone();
         threads.push(Box::new(move || {
             let mut reader = BufReader::new(stdout);
-            let violation = relay(&mut reader, &state, &sidecar, &tx_clone);
+            let violation = relay(&mut reader, &state, &sidecar, &tx_clone, &relay_config);
             // 읽기 끝을 닫아 아직 쓰는 프로세스가 쓰기에서 막히지 않게 한다.
             drop(reader);
             drop(tx_clone);
@@ -2001,6 +2009,13 @@ impl<O: Owner> Core<O> {
                         ) {
                             continue;
                         }
+                        trace_message(
+                            &reader_core.config_directory,
+                            "sidecar.receive",
+                            &sidecar,
+                            &event.surface,
+                            &event.body,
+                        );
                         owner.deliver(Message {
                             sidecar: sidecar.clone(),
                             surface: event.surface,
@@ -2346,6 +2361,7 @@ fn relay<O: Owner>(
     state: &Arc<Mutex<State<O>>>,
     sidecar: &str,
     tx: &SyncSender<Outgoing>,
+    config: &Path,
 ) -> Option<String> {
     let mut line = Vec::new();
     loop {
@@ -2410,12 +2426,33 @@ fn relay<O: Owner>(
         ) {
             continue;
         }
+        trace_message(
+            config,
+            "sidecar.receive",
+            sidecar,
+            &event.surface,
+            &event.body,
+        );
         owner.deliver(Message {
             sidecar: sidecar.to_string(),
             surface: event.surface,
             body: event.body,
         });
     }
+}
+
+/// Writes a request that the host sends to a sidecar, or a message that it receives, as a trace event with its whole
+/// body (docs/spec/diagnostics.md). It writes nothing while the performance trace is off.
+fn trace_message(config: &Path, event: &str, sidecar: &str, surface: &str, body: &RawValue) {
+    crate::performance::observe(config, "host", || {
+        serde_json::json!({
+            "event": event,
+            "sidecar": sidecar,
+            "surface": surface,
+            // A raw value holds valid JSON, so it always converts.
+            "body": serde_json::to_value(body).expect("a raw JSON value converts to a value"),
+        })
+    });
 }
 
 /// 끝난 사이드카의 종료를 `exit status <code>` 나 `signal <number>` 로 쓴다(docs/spec/sidecars.md#declaration-and-startup).
