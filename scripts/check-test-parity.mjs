@@ -1142,6 +1142,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.2.4.5",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "sp_input_result sp_input_key" },
+    ],
+    tests: [
+      { file: "e2e/input-latency.test.mjs", id: "input latency from the injected key to the prompt, trace off and on" },
+    ],
+    expected: "Every injected Enter is answered by a prompt with the performance trace off, on and off again, and the measured times are reported.",
+    levels: ["application"],
+  },
+  {
     id: "F150.2.4.4",
     implementation: [
       { file: "packages/host/wailsv3/src/event_log.go", symbol: "func StartHostEventLog" },

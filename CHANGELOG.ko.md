@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.2.4.5: window 검사가 native 입력으로 주입한 `Enter`부터 그 키가 PTY에 닿은 뒤 셸이 출력하는 프롬프트까지의 시간을 성능 trace를 끄고, 켜고, 다시 끈 상태에서 잰다(각 12개 키). debug 빌드, 부하가 낮은 기계: Wails 중앙값은 끔 20.3 ms, 켬 19.5 ms, 다시 끔 17.5 ms이고 Tauri 중앙값은 끔 20.3 ms, 켬 23.1 ms, 다시 끔 19.7 ms이다. 즉 trace는 Tauri에서 키마다 약 3 ms가 들고 Wails에서는 산포를 넘는 비용이 없다. 이 숫자는 입력 경로를 event writer로 옮길 때의 기준선이다.
 - F150.2.4.4: 두 host는 application log 뒤에 event writer를 시작하고(`logs/host-<boot>.jsonl`, mode 0600, 첫 줄 `log.open`), 종료 때 flush하며, page 호출 `log`에 배치 중계로 답한다. 두 애플리케이션의 runtime이 그 호출 이름을 가진다. 두 애플리케이션의 debug 빌드를 재시작해 관측했다: 프로세스의 파일에 프로세스 식별자를 담은 `log.open`과 연속인 `seq`가 있고 application log에는 오류가 늘지 않았다.
 - F150.2.4.3: 두 host는 page event 배치를 하나라도 쓰기 전에 배치 전체를 검증하고(`LogCommand`, `log_command`) 모든 event를 page가 준 시각 그대로 계층 `page`로 저장한다. 이름이 `page.`로 시작하지 않는 event, 계약에 없는 level, 양의 정수가 아닌 `ts_us`, 객체가 아닌 `fields`는 `events[<index>]`를 가리키는 오류로 배치를 거부하며 그 배치는 아무것도 쓰이지 않는다.
 - F150.2.4.2: 두 host의 writer는 프로세스의 다른 계층이 중계한 event(`EmitRelayed`, `emit_relayed`)를 그 event가 가진 `layer`와 `ts_us` 그대로 받는다. 계층으로 시작하지 않는 event 이름, 계약에 없는 계층, JSON이 아닌 field는 오류로 거부하고 `seq`는 여전히 writer가 부여한다. `make benchmark-rust`와 `make benchmark-go`가 benchmark를 실행한다.
