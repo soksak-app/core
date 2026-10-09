@@ -79,6 +79,54 @@ const ECHO: &str = "@fixture/sidecar-echo";
 // contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain, flush.buffer.consumed-acks-not-coalesced, flush.buffer.delivered-after-queued-bodies
 #[test]
 fn every_pending_reply_is_flushed_after_the_queue_drains() {
+    every_pending_reply_scenario();
+}
+
+const FLUSH_LOG_CHILD: &str = "SOKSAK_FLUSH_LOG_CHILD";
+
+// A close that waits for the full queue is recorded with its surface.
+// contract: sidecars.close.buffered-close-is-recorded
+#[test]
+fn a_buffered_close_is_recorded() {
+    if let Some(config) = std::env::var_os(FLUSH_LOG_CHILD) {
+        soksak_host_tauriv2::application_log::start_application_log(
+            Path::new(&config),
+            "com.soksak.test",
+        )
+        .unwrap();
+        every_pending_reply_scenario();
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "a_buffered_close_is_recorded",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(FLUSH_LOG_CHILD, config.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "child ended with {:?}, output {:?}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let log = std::fs::read_to_string(soksak_host_tauriv2::application_log::application_log_path(
+        config.path(),
+    ))
+    .unwrap();
+    for surface in ["s2", "s3"] {
+        let want = format!(" info host sidecar {ECHO}: close {surface}: outbox full, buffered");
+        assert!(log.contains(&want), "no {want:?} in {log}");
+    }
+}
+
+/// The scenario of the queue that fills, the replies and closes that wait for it, and the drain.
+fn every_pending_reply_scenario() {
     let directory = tempfile::tempdir().unwrap();
     let fifo_path = directory.path().join("go");
     let fifo_str = fifo_path.display().to_string();

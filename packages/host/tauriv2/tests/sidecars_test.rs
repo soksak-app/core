@@ -1376,3 +1376,62 @@ fn ended_sidecar_leaves_no_closing_surface() {
     assert_eq!(snapshots.recv_timeout(STALL).unwrap(), vec![]);
     sidecars.stop();
 }
+
+const DROPPED_LOG_CHILD: &str = "SOKSAK_DROPPED_LOG_CHILD";
+
+// A message of a surface that no window owns is discarded and recorded with its body.
+// contract: sidecars.protocol.dropped-message-is-recorded
+#[test]
+fn a_dropped_sidecar_message_is_recorded() {
+    if let Some(config) = std::env::var_os(DROPPED_LOG_CHILD) {
+        soksak_host_tauriv2::application_log::start_application_log(
+            std::path::Path::new(&config),
+            "com.soksak.test",
+        )
+        .unwrap();
+        let (sidecars, _directory) = script_sidecars(
+            "#!/bin/sh\nread open1\nread open2\nread closed2\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s1\",\"body\":\"after\"}'\nexec sleep 600\n",
+        );
+        let (window, events, _failures) = failing_owner("a", "/projects/a");
+        for surface in ["s1", "s2"] {
+            sidecars
+                .send(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+                .unwrap();
+        }
+        sidecars
+            .retain(&window, &|surface| surface != "s2")
+            .unwrap();
+        // The message of s1 follows the discarded one, so the record of s2 is written when it arrives.
+        let event = events
+            .recv_timeout(STALL)
+            .expect("no sidecar event; the test stalled");
+        assert_eq!(event.surface, "s1");
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "a_dropped_sidecar_message_is_recorded",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(DROPPED_LOG_CHILD, config.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "child ended with {:?}, output {:?}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let log = std::fs::read_to_string(soksak_host_tauriv2::application_log::application_log_path(
+        config.path(),
+    ))
+    .unwrap();
+    let want = format!(
+        " info host sidecar {ECHO}: message for surface s2 dropped: no window owns the surface: \"late\""
+    );
+    assert!(log.contains(&want), "no {want:?} in {log}");
+}

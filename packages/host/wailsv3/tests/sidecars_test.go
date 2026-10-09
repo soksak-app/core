@@ -828,8 +828,9 @@ func TestClosingASurfaceKeepsOtherSessions(t *testing.T) {
 	}
 }
 
-// contract: sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail
+// contract: sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail, sidecars.protocol.dropped-message-is-recorded
 func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
+	written := captureLog(t)
 	sidecars, directory := scriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nread open1\nread open2\nread closed2\n"+
 		"printf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s1\",\"body\":\"after\"}' '{\"surface\":\"ghost\",\"body\":\"x\"}'\nexec sleep 600\n")
 	owner := newFakeOwner("/projects/a")
@@ -848,6 +849,10 @@ func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 		t.Fatalf("failure = %+v", failure)
 	}
 	requireEnded(t, processID(t, directory))
+	// The discarded message of s2 is recorded with its body.
+	if want := ` info host sidecar @fixture/sidecar-echo: message for surface s2 dropped: no window owns the surface: "late"`; !strings.Contains(written(), want) {
+		t.Fatalf("the log has no %q:\n%s", want, written())
+	}
 }
 
 // closingSnapshots 는 closing 이 바뀔 때마다 그 값을 받는 채널이다.

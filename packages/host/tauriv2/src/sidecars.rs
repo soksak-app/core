@@ -335,6 +335,14 @@ fn forget_closing<O>(state: &mut State<O>, sidecar: &str) -> Option<ClosingChang
 }
 
 /// 읽기 스레드의 응답 전송기. 사이드카 outbox 채널로 응답을 전송한다.
+/// 소유 창이 없어 버리는 사이드카 메시지를 본문과 함께 기록한다.
+fn log_dropped_message(sidecar: &str, surface: &str, body: &str) {
+    crate::application_log::log_info(
+        &format!("sidecar {sidecar}"),
+        format!("message for surface {surface} dropped: no window owns the surface: {body}"),
+    );
+}
+
 /// 채널이 가득 차면 응답을 State.pending_replies 에 버퍼링한다.
 struct ReadThreadResponseSender<O: Owner> {
     sidecar_name: String,
@@ -2021,6 +2029,8 @@ impl<O: Owner> Core<O> {
                             surface: event.surface,
                             body: event.body,
                         });
+                    } else {
+                        log_dropped_message(&sidecar, &event.surface, event.body.get());
                     }
                 }
             })();
@@ -2409,6 +2419,7 @@ fn relay<O: Owner>(
             return Some(format!("unknown surface {}", event.surface));
         }
         let Some(owner) = owner else {
+            log_dropped_message(sidecar, &event.surface, event.body.get());
             continue;
         };
         let response_sender = ReadThreadResponseSender {

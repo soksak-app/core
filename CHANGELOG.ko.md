@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F145.9: 두 host가 소유 창이 없는 사이드카 메시지를 `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`로 쓰고, Wails host도 Tauri host처럼 가득 찬 큐를 기다리는 closed 알림을 `close <surface>: outbox full, buffered`로 쓴다.
 - F145.8: 두 host가 거부하는 image 영역의 각 프레임을 프레임과 영역의 현재 상태와 함께(`info host image frame: ... refused: notAttached|stale ...`, `error host image frame: ... refused: unsupported ...`), 봉투가 아닌 image 필드를 `error host image frame: ... malformed image envelope: <image>`로 쓴다.
 - F145.7: page API(plugin API의 `page.js`)가 표면이나 modal 문서의 오류, 로드되지 않은 module, 처리되지 않은 rejection을 아무도 읽지 않는 console 대신 `error page surface <id>: <text>`(표면 id가 없으면 `document`)로 같은 글은 한 번만 쓴다.
 - F145.6: 두 host의 runtime `page`에 표면 문서에서 layer page의 기록을 쓰는 `report({level, where, text})`를 더하고, page가 sidecar로 보낸 전송의 실패를 표면 문서의 console 대신 `error page sidecar <name>: send failed: <reason>`으로 쓴다.

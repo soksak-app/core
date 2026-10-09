@@ -1140,6 +1140,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.9",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func logDroppedMessage" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn log_dropped_message" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "a_dropped_sidecar_message_is_recorded" },
+      { file: "packages/host/wailsv3/tests/flush_test.go", id: "TestEveryPendingReplyIsFlushedAfterTheQueueDrains" },
+      { file: "packages/host/tauriv2/tests/flush_test.rs", id: "a_buffered_close_is_recorded" },
+    ],
+    expected: "Both hosts record a sidecar message that no window owns and a closed notice that waits for a full queue.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.8",
     implementation: [
       { file: "packages/host/wailsv3/src/images.go", symbol: "func logRefusedFrame" },

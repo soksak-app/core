@@ -314,6 +314,7 @@ Items:
 | `menu.application.help-has-debug` | The application menu's Help menu has the item 디버그 (Debug) without a key; it runs `core.debug.open` in the main page of the main window ([debug view](debug.md)). | both |
 | `sidecars.protocol.surface-keeps-its-first-root` | After the owning window changes project, requests and the closed notice of an open surface carry the root of its first request. | both |
 | `sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail` | A stdio sidecar message for a surface that the host closed is discarded, while a message for a surface that the host never sent to that process fails the sidecar with `unknown surface <surface>` delivered to the surfaces that sent. | both |
+| `sidecars.protocol.dropped-message-is-recorded` | A message of a sidecar that is discarded because no window owns its surface writes `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`. | both |
 | `sidecars.send.rejects-undeclared-sidecar` | Sending to a sidecar that no plugin declares fails with "not declared". | both |
 | `sidecars.send.rejects-after-stop` | Sending after the sidecars stop fails with "stopped". | both |
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | Without declared sidecars, construction succeeds and every send fails with "not declared by any plugin". | both |
@@ -330,6 +331,7 @@ Items:
 | `sidecars.send.slow-sidecar-does-not-block-others` | While one sidecar queue is full, a send to another sidecar returns within 50 ms. | both |
 | `sidecars.send.start-does-not-block-other-sidecars` | While a persistent service delays its hello reply, a send to another running sidecar returns within 50 ms. | both |
 | `sidecars.close.answer-ends-closing` | After `closed` is sent, `host.sidecars` lists the surface until the sidecar answers, then the list is empty. | both |
+| `sidecars.close.buffered-close-is-recorded` | A closed notice that waits because the queue of the sidecar is full writes `info host sidecar <name>: close <surface>: outbox full, buffered`. | both |
 | `sidecars.close.failed-answer-is-logged` | A close answer with `error` writes the error line "error host sidecar <name>: close <surface>: <error>" to the host log and ends the closing entry. | both |
 | `sidecars.declaration.replaces-changed-folder` | Declaring a sidecar whose folder changed stops its running standard input and output process without a failure, and the next send starts the executable of the new folder. | both |
 | `sidecars.close.repeated-close-awaits-each-answer` | A surface that is closed again before the sidecar answered the earlier close stays closing until the sidecar answered each close, and no answer fails the sidecar. | both |

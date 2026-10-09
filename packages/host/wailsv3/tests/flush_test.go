@@ -13,8 +13,9 @@ import (
 
 // TestEveryPendingReplyIsFlushedAfterTheQueueDrains 는 쓰기 queue 가 가득 찼을 때 버퍼링된
 // 모든 reply 와 close 가 queue 를 비운 뒤 올바른 순서로 기록되는지 검증한다.
-// contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain, flush.buffer.consumed-acks-not-coalesced, flush.buffer.delivered-after-queued-bodies
+// contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain, flush.buffer.consumed-acks-not-coalesced, flush.buffer.delivered-after-queued-bodies, sidecars.close.buffered-close-is-recorded
 func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
+	written := captureLog(t)
 	directory := t.TempDir()
 	fifo := filepath.Join(directory, "go")
 	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
@@ -67,6 +68,12 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	}
 	sidecars.Close("s2")
 	sidecars.Close("s3")
+	// A close that waits for the full queue is recorded with its surface.
+	for _, surface := range []string{"s2", "s3"} {
+		if want := " info host sidecar @fixture/sidecar-echo: close " + surface + ": outbox full, buffered"; !strings.Contains(written(), want) {
+			t.Errorf("the log has no %q:\n%s", want, written())
+		}
+	}
 	// 사이드카를 풀어 준다. 그 뒤로 아무것도 더 보내지 않는다.
 	f, err := os.OpenFile(fifo, os.O_WRONLY, 0)
 	if err != nil {

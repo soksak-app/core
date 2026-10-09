@@ -480,6 +480,7 @@ func (c *Sidecars) closeSurface(surface string) bool {
 			process.muClosed.Lock()
 			process.pendingCloses = append(process.pendingCloses, line)
 			process.muClosed.Unlock()
+			LogInfo("sidecar "+process.name, fmt.Sprintf("close %s: outbox full, buffered", surface))
 		}
 	}
 	return len(c.running) > 0
@@ -1509,6 +1510,8 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 			}
 			c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body)
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
+		} else {
+			logDroppedMessage(process.name, event)
 		}
 	}
 	if err := scanner.Err(); errors.Is(err, bufio.ErrTooLong) {
@@ -1658,6 +1661,8 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 			}
 			c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body)
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
+		} else {
+			logDroppedMessage(process.name, event)
 		}
 	}
 	// net.ErrClosed 는 이 host 가 연결을 닫았다는 뜻이다(종료나 실패 뒤의 정리). 상대가 닫으면 EOF 이고 오류가 없다.
@@ -1808,6 +1813,11 @@ func (c *Sidecars) notifyConnection(name string, failure error) {
 }
 
 // tryHandleImageEnvelope 은 이벤트가 이미지 봉투인지 확인하고 처리한다. 봉투면 true 를 반환한다.
+// logDroppedMessage 는 소유 창이 없어 버리는 사이드카 메시지를 본문과 함께 기록한다.
+func logDroppedMessage(sidecar string, event sidecarEvent) {
+	LogInfo("sidecar "+sidecar, fmt.Sprintf("message for surface %s dropped: no window owns the surface: %s", event.Surface, event.Body))
+}
+
 func (c *Sidecars) tryHandleImageEnvelope(owner SidecarOwner, sidecarName, surface string, body json.RawMessage) bool {
 	// 오너가 이미지 봉투 결정 핸들러를 가지고 있는지 확인
 	if decider, ok := owner.(interface {
