@@ -53,6 +53,18 @@ func RecordLine(e Entry) string {
 	return performanceNow() + " " + e.Line()
 }
 
+// TranscriptEntry 는 창 window 의 진단 기록 줄 line 이 애플리케이션 로그에도 쓰는 기록이다. 진단 기록은 그것을 켠
+// 연결에만 가므로 이 기록이 없으면 연결이 없을 때 그 줄이 사라진다.
+func TranscriptEntry(window, line string) Entry {
+	return Entry{"info", "host", "transcript " + window, line}
+}
+
+// TranscriptFailure 는 창 window 의 진단 기록이 싣는 오류 err 가 애플리케이션 로그에 쓰는 오류 기록이다. where 는
+// 실패한 연산이다.
+func TranscriptFailure(window, where string, err error) Entry {
+	return Entry{"error", "host", where + " " + window, err}
+}
+
 // Log 는 기록 하나를 표준 logger 의 출력에 한 번의 write 로 쓴다. 그 출력은 표준 오류이고 표준 오류는
 // StartApplicationLog 뒤에 애플리케이션 로그다. 쓰지 못하면 그 실패를 알릴 곳이 없으므로 panic 한다.
 func Log(e Entry) {

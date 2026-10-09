@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F145.11: 두 host가 창의 진단 기록 줄(렌더링된 modal, 끌기, navigation callback)을 `info host transcript <window>: <line>`으로 애플리케이션 로그에도 쓰고, Wails host는 진단 기록에만 실리던 오류(`host.window`, `rewatch`)를 오류 기록으로 쓴다.
 - F145.10.2: Wails host의 native web view(surface, modal)의 delegate가 WebContent process의 종료를 `sp_webview_log_process_end`로 `error native surface webview: web content process terminated: <address>`로 쓴다. Tauri host는 이미 모든 web view의 종료를 썼다.
 - F145.10.1: native 라이브러리가 document view의 실패를 쓴다. 이유와 주소를 담은 이동 실패, 거부한 주소, 찾지 못한 plugin 파일, 데이터 없는 메시지, WebContent process의 종료(오류)가 그 대상이며, 문서는 영역을 소유한 page를 위해 실패를 유지한다.
 - F145.9: 두 host가 소유 창이 없는 사이드카 메시지를 `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`로 쓰고, Wails host도 Tauri host처럼 가득 찬 큐를 기다리는 closed 알림을 `close <surface>: outbox full, buffered`로 쓴다.

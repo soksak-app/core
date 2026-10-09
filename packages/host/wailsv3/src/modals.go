@@ -358,7 +358,7 @@ func (s *Surfaces) ModalReady(id string, instance uint64) error {
 // 이 알림으로만 확인할 수 있으므로 진단 기록에도 남긴다.
 func (s *Surfaces) rendered(id string) {
 	s.Emit("modal-rendered", id)
-	s.log("diagnostics: modal rendered " + id)
+	s.note("diagnostics: modal rendered " + id)
 	s.windowChanged()
 }
 

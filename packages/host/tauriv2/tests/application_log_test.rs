@@ -272,3 +272,16 @@ fn a_page_record_has_the_layer_page_and_rejects_an_invalid_level_or_place() {
         );
     }
 }
+
+// A line of the diagnostic transcript of a window also reaches the application log.
+// contract: log.transcript.line-reaches-the-application-log
+#[test]
+fn transcript_lines_reach_the_application_log() {
+    assert_eq!(
+        soksak_host_tauriv2::application_log::transcript_entry(
+            "main",
+            "diagnostics: modal rendered m1"
+        ),
+        "info host transcript main: diagnostics: modal rendered m1"
+    );
+}

@@ -257,7 +257,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	var tickMu sync.Mutex
 	sent := []float64{}
 	ticks := plan.steps() * 2 * plan.Times
-	s.log(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g in %d steps, %d times", plan.Axis, plan.Line, plan.DX, plan.DY, plan.steps(), plan.Times))
+	s.note(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g in %d steps, %d times", plan.Axis, plan.Line, plan.DX, plan.DY, plan.steps(), plan.Times))
 	stop := make(chan struct{})
 	// 페이지가 드래그 요청을 받은 뒤에 첫 틱이 도착하도록 요청을 보낸 다음 틱을 시작한다.
 	reply := h.relay.Request(relayTarget{owner: s}, time.Duration(ticks)*frameStep+pageTimeout, func(id uint64) error {
@@ -345,7 +345,7 @@ func dragResult(s *Surfaces, reply ExposureResult) (map[string]any, error) {
 	case <-time.After(pageTimeout):
 		return nil, rpcError(codeTimeout, "the drag was not presented within %s", pageTimeout)
 	}
-	s.log("diagnostics: drag presented")
+	s.note("diagnostics: drag presented")
 	result := map[string]any{}
 	if len(reply.Result) > 0 && string(reply.Result) != "null" {
 		if err := json.Unmarshal(reply.Result, &result); err != nil {
@@ -799,5 +799,5 @@ func (d *navigationDelaySet) handle(s *Surfaces, handle func()) {
 	d.mu.Unlock()
 	time.Sleep(delay)
 	handle()
-	s.log(fmt.Sprintf("navigation callback handled after %d ms", delay.Milliseconds()))
+	s.note(fmt.Sprintf("navigation callback handled after %d ms", delay.Milliseconds()))
 }

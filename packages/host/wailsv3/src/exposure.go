@@ -1473,7 +1473,7 @@ func (s *Surfaces) windowChanged() {
 			return
 		}
 		if err != nil {
-			s.log(fmt.Sprintf("host.window: %v", err))
+			s.fail("host.window", err)
 			return
 		}
 		s.host.endpoint.StatusChanged(s.name, "host.window", "", state)
@@ -1500,9 +1500,21 @@ func (s *Surfaces) rewatch() {
 			_, err = s.host.ask(s, "status.watch", params, pageTimeout)
 		}
 		if err != nil {
-			s.log(fmt.Sprintf("rewatch %s: %v", t.name, err))
+			s.fail("rewatch "+t.name, err)
 		}
 	}
+}
+
+// note 는 진단 기록의 줄 하나를 애플리케이션 로그에 쓰고 진단 기록을 켠 연결에도 보낸다.
+func (s *Surfaces) note(line string) {
+	Log(TranscriptEntry(s.name, line))
+	s.log(line)
+}
+
+// fail 은 진단 기록이 싣는 오류를 애플리케이션 로그에 쓰고 진단 기록을 켠 연결에도 보낸다.
+func (s *Surfaces) fail(where string, err error) {
+	Log(TranscriptFailure(s.name, where, err))
+	s.log(fmt.Sprintf("%s: %v", where, err))
 }
 
 // log 는 이 창의 진단 기록을 켠 연결에 줄 하나를 보낸다. 진단 빌드가 아니면 보낼 곳이 없다.

@@ -240,6 +240,7 @@ fn invalid_json_closes_connection() {
 | `log.application.start-replaces-standard-error` | 애플리케이션 로그를 시작하면 실행의 첫 줄을 쓰고 그 파일을 프로세스와 그 프로세스가 시작하는 자식의 표준 오류로 만든다. | both |
 | `log.error.line-form` | 헬퍼로 쓴 호스트 오류는 애플리케이션 로그의 기록 `<time> error host <where>: <text>`다. | both |
 | `log.page.record-form` | page는 host 호출 `report`로 기록 `{level, where, text}`를 보내고, host는 이를 `<time> <level> page <where>: <text>`로 쓰며, `error`나 `info`가 아닌 level, 빈 place, `: `나 줄바꿈을 담은 place는 거부한다. | both |
+| `log.transcript.line-reaches-the-application-log` | 창의 진단 기록 줄은 `info host transcript <window>: <line>`으로도 쓰고, Wails host는 진단 기록이 싣는 오류를 `error host <operation> <window>: <error>`로도 써서, 진단 기록을 요청한 연결이 없어도 그 줄이 남는다. | both |
 | `log.info.record-form` | `LogInfo`(Go)나 `log_info`(Rust)로 쓴 호스트 관측은 애플리케이션 로그의 기록 `<time> info host <where>: <text>`다. | both |
 | `log.record.one-line` | 기록은 한 줄이다. 본문의 줄바꿈은 두 글자 `\n`으로 쓰고, 시각을 뺀 항목은 `<level> <layer> <where>: <text>`다. | both |
 | `sidecars.trace.relay-records-every-message-with-its-body` | performance trace가 켜진 동안 host가 sidecar로 보내는 각 요청은 trace event `sidecar.send`, 받는 각 메시지는 `sidecar.receive`이며, layer `host`에 `sidecar`, `surface`, 본문 전체를 담는다. | both |

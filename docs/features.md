@@ -756,7 +756,7 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [o] F145.10 — P1: Record the failures and refusals of the document views (`document_view.m`) and the end of the webview process of a surface, a document and a modal.
     - [o] F145.10.1 — P1: Record in the native library the failures and refusals of a document view (`document_view.m`): a failed navigation, a refused address, a plugin file that is not found, a message without data, and the end of its WebContent process.
     - [o] F145.10.2 — P1: Record in both hosts the end of the WebContent process of a surface and of a modal, as the page process of a window is recorded.
-  - [ ] F145.11 — P1: Record the lines of `s.log` that never reach the application log.
+  - [o] F145.11 — P1: Record the lines of `s.log` that never reach the application log.
   - [ ] F145.12 — P1: Record the relay and fullscreen timeouts.
   - [ ] F145.13 — P1: Record the result of the detached `sok app update` and the failures of `sok`.
   - [ ] F145.14 — P1: Record the removal that is allowed because a window ended, the settings cleanup, the notifications and the `ps` failures.

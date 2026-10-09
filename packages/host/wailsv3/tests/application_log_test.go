@@ -242,3 +242,16 @@ func TestAPageRecordHasTheLayerPageAndRejectsAnInvalidLevelOrPlace(t *testing.T)
 		}
 	}
 }
+
+// A line of the diagnostic transcript of a window, and an error that the transcript carries, also reach the application log.
+// contract: log.transcript.line-reaches-the-application-log
+func TestTranscriptLinesReachTheApplicationLog(t *testing.T) {
+	if got, want := host.TranscriptEntry("main", "diagnostics: modal rendered m1").Line(),
+		"info host transcript main: diagnostics: modal rendered m1"; got != want {
+		t.Fatalf("transcript line = %q, want %q", got, want)
+	}
+	if got, want := host.TranscriptFailure("main", "rewatch core.layout", errors.New("page timed out")).Line(),
+		"error host rewatch core.layout main: page timed out"; got != want {
+		t.Fatalf("transcript failure = %q, want %q", got, want)
+	}
+}

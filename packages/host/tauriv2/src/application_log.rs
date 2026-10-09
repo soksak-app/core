@@ -59,6 +59,12 @@ pub fn log_record(level: &str, layer: &str, place: &str, text: impl std::fmt::Di
     eprint!("{line}");
 }
 
+/// 창 label 의 진단 기록 줄 line 이 애플리케이션 로그에도 쓰는 기록 줄이다. 진단 기록은 그것을 켠 연결에만 가므로 이
+/// 기록이 없으면 연결이 없을 때 그 줄이 사라진다.
+pub fn transcript_entry(label: &str, line: &str) -> String {
+    entry_line("info", "host", &format!("transcript {label}"), line)
+}
+
 /// 호스트의 오류 기록 하나를 쓴다.
 pub fn log_error(place: &str, text: impl std::fmt::Display) {
     log_record("error", "host", place, text);

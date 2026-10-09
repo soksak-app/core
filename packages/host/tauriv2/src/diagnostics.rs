@@ -364,7 +364,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
     }
 
-    exposure::log(
+    exposure::note(
         window,
         &format!(
             "diagnostics: drag {}:{} by {},{} in {per} steps, {times} times",
@@ -426,7 +426,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
                 format!("the drag was not presented within {TIMEOUT:?}"),
             ));
         }
-        exposure::log(window, "diagnostics: drag presented");
+        exposure::note(window, "diagnostics: drag presented");
         let mut merged = match exposure::parsed(&result)? {
             Value::Object(fields) => fields,
             Value::Null => Map::new(),
@@ -592,7 +592,7 @@ pub(crate) fn handle_navigation(window: &Window, handle: impl FnOnce()) {
         .unwrap_or(0);
     std::thread::sleep(std::time::Duration::from_millis(delay));
     handle();
-    exposure::log(
+    exposure::note(
         window,
         &format!("navigation callback handled after {delay} ms"),
     );

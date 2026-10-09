@@ -1140,6 +1140,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.11",
+    implementation: [
+      { file: "packages/host/wailsv3/src/application_log.go", symbol: "func TranscriptEntry" },
+      { file: "packages/host/tauriv2/src/application_log.rs", symbol: "pub fn transcript_entry" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestTranscriptLinesReachTheApplicationLog" },
+      { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "transcript_lines_reach_the_application_log" },
+    ],
+    expected: "Both hosts write the lines of the diagnostic transcript of a window to the application log.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.10.2",
     implementation: [
       { file: "native/darwin/src/webview_geometry.m", symbol: "void sp_webview_log_process_end" },

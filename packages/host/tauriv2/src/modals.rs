@@ -371,7 +371,7 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
         };
         if modal.shown {
             emit_window(window, "modal-rendered", &id).map_err(|e| e.to_string())?;
-            exposure::log(window, &format!("observe: modal rendered {id}"));
+            exposure::note(window, &format!("observe: modal rendered {id}"));
             return Ok(());
         }
         modal.shown = true;
@@ -408,7 +408,7 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
         if let Err(error) = emit_window(&host, "modal-rendered", &id) {
             log_error("modal-rendered", error);
         }
-        exposure::log(&host, &format!("observe: modal rendered {id}"));
+        exposure::note(&host, &format!("observe: modal rendered {id}"));
         exposure::window_changed(&host);
     })
     .map_err(|e| e.to_string())
