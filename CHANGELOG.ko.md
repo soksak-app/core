@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F145.7: page API(plugin API의 `page.js`)가 표면이나 modal 문서의 오류, 로드되지 않은 module, 처리되지 않은 rejection을 아무도 읽지 않는 console 대신 `error page surface <id>: <text>`(표면 id가 없으면 `document`)로 같은 글은 한 번만 쓴다.
 - F145.6: 두 host의 runtime `page`에 표면 문서에서 layer page의 기록을 쓰는 `report({level, where, text})`를 더하고, page가 sidecar로 보낸 전송의 실패를 표면 문서의 console 대신 `error page sidecar <name>: send failed: <reason>`으로 쓴다.
 - F145.5: page가 각 파일 drop을 `info page drop: received <payload>`로, 명령이 받으면 `info page drop: command <name> accepted <n> file(s) on surface <id>`로, drop이 잘못되었거나 아래에 표면이 없거나 plugin이 drop 명령을 선언하지 않았거나 명령이 실패하면 `error page drop: <reason>`으로 쓴다. `core.drop`은 마지막 drop만 계속 유지한다.
 - F145.4: native 라이브러리가 endpoint가 주입하는 각 pointer·key 입력을 인자, 결과, 거부 이유(창 없음, 열린 누름 없음, 비활성 창, AppKit이 보고한 눌린 버튼, 알 수 없는 키 이름, 도착하지 않은 수신)와 함께 `info native input inject`로 쓴다.

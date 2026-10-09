@@ -7,6 +7,7 @@ import {
   EXPOSURE, MANIFEST, SURFACE_CORE, createExpose, declarationMap, modulePath, orderedSidecar, pagePackage,
   validateExposureFile, validateManifest,
 } from "@soksak/plugin-api";
+import { installDocumentErrors } from "./document-errors.js";
 import { createSurfaceCompositionController } from "./surface-composition.js";
 
 /* 사이드카 이름마다 하나의 포트. 같은 사이드카로 보내는 모든 전송이 한 순서를 따른다. */
@@ -32,6 +33,17 @@ export const page = runtimePage ? Object.freeze({
     return sidecars.get(name);
   },
 }) : null;
+
+// 이 문서의 오류와 처리되지 않은 rejection 은 발생할 때 애플리케이션 로그에 쓴다. 표면의 문서에는 콘솔을 읽는 곳이 없다.
+if (page) {
+  const surface = new URLSearchParams(location.search).get("id");
+  installDocumentErrors({
+    target: globalThis,
+    report: (text) => page.report({ level: "error", where: surface ? `surface ${surface}` : "document", text })
+      // 이 기록이 실패하면 알릴 다른 곳이 없어 console 에 쓴다.
+      .catch((error) => console.error(`report of a document error failed: ${error.message}`)),
+  });
+}
 
 /**
  * 받은 테마를 이 문서의 루트에 설정한다. 값이 바뀌면 다시 호출된다.

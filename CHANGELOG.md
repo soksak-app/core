@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F145.7: the page API (`page.js` of the plugin API) writes the errors, the modules that do not load and the unhandled rejections of the document of a surface or a modal as `error page surface <id>: <text>` (`document` without a surface id), once for the same text, instead of the console that nothing reads.
 - F145.6: the runtime `page` of both hosts has `report({level, where, text})`, which writes a record of the page layer from the document of a surface, and a failed send of a page to a sidecar is written as `error page sidecar <name>: send failed: <reason>` instead of the console of the surface document.
 - F145.5: the page writes `info page drop: received <payload>` for each file drop, `info page drop: command <name> accepted <n> file(s) on surface <id>` when a command accepts it, and `error page drop: <reason>` when the drop is invalid, no surface is under it, the plugin declares no drop command or the command fails; `core.drop` still keeps only the last drop.
 - F145.4: the native library writes `info native input inject` for each pointer and key input that the endpoint injects, with its arguments, its result and the reason of a refusal (no window, no open press, an inactive window, a pressed button that AppKit reports, an unknown key name, a receipt that did not arrive).

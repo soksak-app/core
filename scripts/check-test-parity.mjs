@@ -1140,6 +1140,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.7",
+    implementation: [
+      { file: "packages/plugin-api/document-errors.js", symbol: "export function installDocumentErrors" },
+      { file: "packages/plugin-api/page.js", symbol: "installDocumentErrors({" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/document-errors.test.mjs", id: "a script error, a resource that does not load and an unhandled rejection are reported once each" },
+    ],
+    expected: "The errors and unhandled rejections of the document of a surface are written to the application log.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.6",
     implementation: [
       { file: "packages/plugin-api/sidecar-port.js", symbol: "export function orderedSidecar" },
