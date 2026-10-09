@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
+#import "application_log.h"
 #import "webview_geometry.h"
 #import "window_objects.h"
 #import "private/webkit.h"
@@ -706,6 +707,11 @@ bool sp_webview_kill_content_process(void *handle) {
                                  beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
     }
     return view._webProcessIdentifier == 0;
+}
+
+void sp_webview_log_process_end(void *handle, const char *kind) {
+    WKWebView *view = (WKWebView *)handle;
+    sp_log_error(kind, [NSString stringWithFormat:@"web content process terminated: %@", view.URL.absoluteString ?: @"(no address)"].UTF8String);
 }
 
 bool sp_webview_collect_garbage(void *handle) {

@@ -55,6 +55,7 @@
 | main page의 module이 불러오지 못하거나 불러오는 중 던진다 | `error page start: <text> @ <file>:<line>`([page 시작](native-host.ko.md#page-시작)) |
 | host가 page가 요청한 파일을 내줄 수 없다 | `error host page asset: <path>: not found`, 경로마다 한 번 |
 | main page가 첫 화면 뒤에 던지거나 reject한다 | page 오류 표시의 `error page <where>: <text>` |
+| Wails host에서 surface나 modal의 WebContent process가 끝난다 | `error native surface webview: web content process terminated: <address>`. Tauri host는 surface와 modal을 포함한 모든 web view의 종료를 `error host page process: <label>: terminated`로 쓴다 |
 | 창의 WebContent process가 끝난다 | `error host page process: <window>: terminated` |
 | native 호출이 실패한다 | `sp_log_error`의 `error native <where>: <text>` |
 | Tauri host의 fatal signal이나 잡히지 않은 예외 | `error native fatal: <signal name>` 또는 `error native fatal: uncaught exception <name>: <reason>` 기록 하나, 그 뒤 process가 끝난다. Wails host의 fatal signal은 Go runtime이 보고를 표준 오류에 쓴다 |

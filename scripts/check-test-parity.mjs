@@ -1140,6 +1140,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.10.2",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "void sp_webview_log_process_end" },
+      { file: "packages/host/wailsv3/src/platform/darwin/webview.m", symbol: "webViewWebContentProcessDidTerminate" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_process_test.m", id: "the end of the WebContent process is recorded with the address" },
+    ],
+    expected: "The end of the WebContent process of a native web view is recorded with its address.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.10.1",
     implementation: [
       { file: "native/darwin/src/document_view.m", symbol: "webViewWebContentProcessDidTerminate" },

@@ -34,6 +34,9 @@ void webviewSetSurfaceHidden(void *webview, bool hidden);
 void webviewSetSurfaceAlpha(void *webview, double alpha);
 // 현재 WebContent 프로세스를 종료한다. 애플리케이션 종료가 WebKit 자식 프로세스를 남기지 않으려고 부른다.
 bool sp_webview_kill_content_process(void *webview);
+// 웹뷰의 WebContent 프로세스가 끝났음을 `error native <kind>: web content process terminated: <address>` 로 기록한다.
+// 프레임워크가 만들지 않은 웹뷰(표면, modal)의 navigation delegate 가 프로세스 종료 알림에서 부른다.
+void sp_webview_log_process_end(void *webview, const char *kind);
 // 진단 build 의 측정용: webview 의 process pool 에 있는 WebContent process 들이 JavaScript 객체의 쓰레기 수집을 하게 한다.
 // WebKit 은 바뀐 이전 페이지를 나중의 수집에서 지우므로, 메모리 검사는 다시 읽은 뒤 이것으로 수집하고 잰다.
 // 시험용 수집이 없으면 false 다.

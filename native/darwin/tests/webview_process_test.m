@@ -13,6 +13,24 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
+/// The text that block writes to the standard error of the process.
+static NSString *capturedStandardError(void (^block)(void)) {
+    char path[] = "/tmp/webview_process_test.XXXXXX";
+    int file = mkstemp(path);
+    if (file < 0) { perror("mkstemp"); exit(1); }
+    fflush(stderr);
+    int saved = dup(STDERR_FILENO);
+    if (saved < 0 || dup2(file, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
+    block();
+    fflush(stderr);
+    if (dup2(saved, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
+    close(saved);
+    close(file);
+    NSString *written = [NSString stringWithContentsOfFile:@(path) encoding:NSUTF8StringEncoding error:nil];
+    unlink(path);
+    return written ?: @"";
+}
+
 static void until(BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
@@ -37,7 +55,8 @@ static void until(BOOL (^done)(void)) {
     self.finished = YES;
 }
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
-    (void)webView;
+    // The delegate of a native webview of the application records the end as this call does.
+    sp_webview_log_process_end((__bridge void *)webView, "surface webview");
     self.terminated = YES;
 }
 @end
@@ -98,9 +117,13 @@ int main(void) { @autoreleasepool {
     [window orderBack:nil];
     SPLoaded *first = load(view, @"<p id='first'>first</p>");
 
-    check(sp_webview_kill_content_process(view),
-          @"the WebContent process termination operation is available");
-    until(^BOOL { return first.terminated; });
+    NSString *ended = capturedStandardError(^{
+        check(sp_webview_kill_content_process(view),
+              @"the WebContent process termination operation is available");
+        until(^BOOL { return first.terminated; });
+    });
+    check([ended containsString:@" error native surface webview: web content process terminated: about:blank"],
+          [NSString stringWithFormat:@"the end of the WebContent process is recorded with the address (got %@)", ended]);
     view.navigationDelegate = nil;
     [first release];
     SPLoaded *second = load(view, @"<p id='second'>second</p>");

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F145.10.2: the delegate of the native web views of the Wails host (surfaces and modals) writes the end of their WebContent process as `error native surface webview: web content process terminated: <address>` through `sp_webview_log_process_end`; the Tauri host already wrote the end of every web view.
 - F145.10.1: the native library writes the failures of a document view: a failed navigation with its reason and address, a refused address, a plugin file that is not found, a message without data, and the end of its WebContent process as an error; the document keeps the failure for the page that owns the region.
 - F145.9: both hosts write `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>` for a sidecar message that no window owns, and the Wails host writes `close <surface>: outbox full, buffered` for a closed notice that waits for a full queue, as the Tauri host did.
 - F145.8: both hosts write each frame of an image region that they refuse (`info host image frame: ... refused: notAttached|stale ...`, `error host image frame: ... refused: unsupported ...`) with the frame and the current state of the region, and an image field that is not an envelope as `error host image frame: ... malformed image envelope: <image>`.

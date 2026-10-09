@@ -753,9 +753,9 @@
   - [o] F145.7 — P1: native surface의 webview 오류와 처리되지 않은 rejection(`bridge.js`, `plugin-api`)의 기록을 더한다.
   - [o] F145.8 — P1: image frame의 거부와 잘못된 envelope, 실패한 presentation의 이유(`images.go`, `surfaces.go`, `image_region.m`)의 기록을 더한다.
   - [o] F145.9 — P1: owner가 없어 버려지는 sidecar 메시지와 버퍼에 남는 close(`sidecars.go`, `sidecars.rs`)의 기록을 더한다.
-  - [ ] F145.10 — P1: document view의 실패와 거부(`document_view.m`), surface, document, modal의 webview process 종료의 기록을 더한다.
+  - [o] F145.10 — P1: document view의 실패와 거부(`document_view.m`), surface, document, modal의 webview process 종료의 기록을 더한다.
     - [o] F145.10.1 — P1: native 라이브러리에서 document view(`document_view.m`)의 실패와 거부를 기록한다. 실패한 이동, 거부한 주소, 찾지 못한 plugin 파일, 데이터 없는 메시지, 그 WebContent process의 종료가 그 대상이다.
-    - [ ] F145.10.2 — P1: 창의 page process를 기록하듯 두 host에서 surface와 modal의 WebContent process 종료를 기록한다.
+    - [o] F145.10.2 — P1: 창의 page process를 기록하듯 두 host에서 surface와 modal의 WebContent process 종료를 기록한다.
   - [ ] F145.11 — P1: application log에 닿지 않는 `s.log`의 줄의 기록을 더한다.
   - [ ] F145.12 — P1: relay와 전체 화면 timeout의 기록을 더한다.
   - [ ] F145.13 — P1: 분리 실행한 `sok app update`의 결과와 `sok`의 실패의 기록을 더한다.

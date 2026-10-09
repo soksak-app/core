@@ -46,6 +46,10 @@ extern void nativeCommitted(unsigned long long identifier);
         if (error) sp_log_error("surface background", error.localizedDescription.UTF8String);
     }];
 }
+// The WebContent process of a surface or a modal ended; the host records it as it records the page process of a window.
+- (void)webViewWebContentProcessDidTerminate:(WKWebView *)view {
+    sp_webview_log_process_end((__bridge void *)view, "surface webview");
+}
 - (void)dealloc {
     [_baseURL release];
     [super dealloc];

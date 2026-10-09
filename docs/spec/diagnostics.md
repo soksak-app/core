@@ -55,6 +55,7 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 | a module of the main page fails to load or throws while it loads | `error page start: <text> @ <file>:<line>` ([page start](native-host.md#page-start)) |
 | the host cannot serve a file that the page requests | `error host page asset: <path>: not found`, once for each path |
 | the main page throws or rejects after its first screen | `error page <where>: <text>` of the page's error display |
+| the WebContent process of a surface or a modal ends in the Wails host | `error native surface webview: web content process terminated: <address>`; the Tauri host writes the end of every web view, including a surface and a modal, as `error host page process: <label>: terminated` |
 | the WebContent process of a window ends | `error host page process: <window>: terminated` |
 | a native call fails | `error native <where>: <text>` from `sp_log_error` |
 | a fatal signal or an uncaught exception of the Tauri host | one `error native fatal: <signal name>` or `error native fatal: uncaught exception <name>: <reason>` record, then the process ends; the Go runtime writes the report of a fatal signal of the Wails host to the standard error |
