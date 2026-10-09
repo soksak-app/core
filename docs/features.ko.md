@@ -734,9 +734,9 @@
 - [ ] F142 — P1: 카드가 전체 화면을 벗어나면 터미널을 곧바로 카드에 맞춘다. 입력: 사람이 카드의 전체 화면 아이콘을 눌렀다가 작은 크기로 되돌리면 터미널(시험한 유일한 표면)이 전체 화면 때의 크기를 유지하고 이후의 다른 사건이 있을 때까지 카드에 맞지 않는다. 기대: 터미널이 전체 화면이 끝나는 같은 표시에서 카드의 크기를 가진다. 두 host의 창 검사로 `terminal.session`의 행과 열과 그 영역의 사각형을 잰다.
 - [ ] F143 — P0: 릴리스한 터미널의 입력이 엉망이 되는 원인을 찾는다. 입력: 릴리스 0.0.9(tauri, 셸과 터미널 탭)의 애플리케이션 로그에 `native image: input method replaced committed text at 28 (committed 29)`와 `at 62 (committed 63)`이 있다. 입력기가 터미널이 이미 PTY로 보낸 글자를 고쳐 쓸 때 `image_region.m`이 쓰는 줄이다. trace에는 길이 1의 `native-insert`가 약 0.2초마다 있고, 한 밀리초 안에 insert 둘과 길이 0의 `native-compose`가 있다. 사람은 입력이 엉망이라고 보고한다. 기대: 증상(키, 입력 소스, 결과)을 밝히고, 소유 모듈에 추적하는 테스트로 재현해 Red 증거를 남기며, 확정한 모든 음절이 PTY에 한 번 순서대로 닿게 고친다. 관련: debug 화면은 overscroll의 음수 스크롤 위치에 `debug scroll position is invalid: -2`를 보고한다(별개 결함).
 - [ ] F144 — P0: 입력 경로 전체를 관측할 수 있는 모든 값으로 기록한다. 입력: 입력의 기록은 종류와 길이만 담고 입력한 글자를 담지 않아서, F143의 엉망인 입력을 기록으로 읽을 수 없다. 기대: 입력을 다루는 각 계층이 받은 것, 결정한 것, 보낸 것을 글자, 모든 범위, 모든 플래그, 문서의 상태, 시각과 함께 쓰므로 입력의 결함을 파일만으로 찾는다. 기록은 입력한 글자를 담지 않는다는 [진단](spec/diagnostics.ko.md)의 규칙은 지운다.
-  - [ ] F144.1 — P0: 입력 경로의 기록이 입력한 글자와 모든 필드를 담는다고 [진단](spec/diagnostics.ko.md)에 정하고, 계층(웹뷰, native 라이브러리, host, sidecar, PTY)별 기록을 나열한다.
-  - [ ] F144.2 — P0: native 라이브러리: 입력기의 각 콜백(`keyDown`, `insertText`, `setMarkedText`, `unmarkText`, `doCommandBySelector`), 각 확정, page로의 각 보고가 인자와 문서의 상태(글, 확정 길이, 조합과 선택 범위, 입력 소스)를 담은 기록 하나를 쓰고, 각 실패는 전체 상태를 쓴다.
-  - [ ] F144.3 — P0: terminal plugin: 이미지 영역의 모든 이벤트와 sidecar로 보내고 받은 모든 메시지가 본문 전체를 담은 trace event다.
+  - [o] F144.1 — P0: 입력 경로의 기록이 입력한 글자와 모든 필드를 담는다고 [진단](spec/diagnostics.ko.md)에 정하고, 계층(웹뷰, native 라이브러리, host, sidecar, PTY)별 기록을 나열한다.
+  - [o] F144.2 — P0: native 라이브러리: 입력기의 각 콜백(`keyDown`, `insertText`, `setMarkedText`, `unmarkText`, `doCommandBySelector`), 각 확정, page로의 각 보고가 인자와 문서의 상태(글, 확정 길이, 조합과 선택 범위, 입력 소스)를 담은 기록 하나를 쓰고, 각 실패는 전체 상태를 쓴다.
+  - [o] F144.3 — P0: terminal plugin: 이미지 영역의 모든 이벤트와 sidecar로 보내고 받은 모든 메시지가 본문 전체를 담은 trace event다.
   - [ ] F144.4 — P0: 두 host: 중계하는 sidecar의 모든 메시지와 native 영역의 모든 이벤트가 중계 순서대로 본문 전체를 담은 layer `host`의 trace event다.
   - [ ] F144.5 — P0: terminal sidecar: 받은 각 연산, PTY에 쓴 각 바이트열, PTY에서 읽은 각 덩어리가 이스케이프한 글의 바이트와 길이를 담은 trace event다.
   - [ ] F144.6 — P0: 기록이 한 세션을 덮을 만큼 오래 남게 한다. performance trace는 10 MB에서 회전하고 이전 파일 하나만 두는데, 전체 기록은 몇 분 만에 이를 채운다. 기대: trace 파일의 한도와 이전 파일 수를 높이고(50 MB, 5개) 두 host와 sidecar에 적용하며 명세가 그 값을 정한다.

@@ -40,7 +40,8 @@
 - 실패 지점의 기록은 아래 표에 있다. 표에 없는 실패 지점은 이 문서의 결함이다.
 - 기록은 실패가 일어난 순간 그것을 알리는 event가 쓴다. timer나 polling으로 실패를 찾지 않는다. 한 원인은 한 줄을 쓰고, 같은 원인의 반복 보고는 아무것도 더하지 않는다.
 - 각 파일의 크기 한계는 쓰는 쪽이 파일을 열 때 적용한다. 쓰는 쪽이 하나인 performance trace는 쓰는 동안에도 적용하고, 한 descriptor를 여럿이 쓰는 application log와 service log는 다음에 열 때까지 커진다.
-- 기록은 종류와 길이만 담고 입력한 글자나 파일 내용은 담지 않는다.
+- 입력 경로의 기록은 계층이 본 모든 것을 담는다: 입력한 글자, 모든 범위와 플래그, PTY에 쓰고 읽은 모든 바이트, 전과 후의 입력 문서 상태, 시각. 입력의 결함을 파일만으로 찾으므로 기록은 자르지 않고 계층은 볼 수 있는 값을 빼지 않는다. 파일은 사람의 컴퓨터의 `logs/`에 있고, 사람이 친 글자는 비밀번호를 포함해 그 안에 있다. 결함을 알릴 때 사람이 그 폴더를 넘긴다. 사람이 여는 파일의 내용은 입력이 아니므로 기록하지 않는다.
+- 입력 경로의 기록: native 라이브러리는 입력기의 각 콜백(`keyDown`, `insertText`, `setMarkedText`, `unmarkText`, `doCommandBySelector`, `commitThrough`, `reportPreedit`, `clearDocument`, `commitPending`, `inputSourceChanged`, `becomeFirstResponder`, `resignFirstResponder`)을 인자와 문서의 `before`, `after` 상태(`document`, `committed`, `marked`, `selected`, `reportedPreedit`, `source`, `focus`, `closed`, `reports`)를 담은 JSON 객체의 `info native input method`로, page로 보내는 각 JSON 보고를 `info native input report`로 쓴다. plugin은 trace event `region`, `ime`, `input`, `send`, `send.result`, `sidecar.event`를 본문 전체와 함께 쓰고, host는 중계하는 각 영역 event와 sidecar 메시지를 layer `host`의 trace event로 쓰며, terminal sidecar는 본문 전체를 담은 `request`, 덩어리마다 길이와 글과 16진수 바이트를 담은 `pty_write`와 `pty_read`, 그리고 `session_open`, `pty_eof`, `pty_read_error`, `session_exit`를 쓴다.
 - 기록을 쓰지 못하는 쪽은 할 수 있는 곳에 오류를 알린다. application log를 열지 못한 host는 시작하지 않는다.
 - 각 실패 지점에는 그 실패를 일으키고 기록을 읽는 test가 있다.
 - state file은 host가 가진 값만으로 완성된다. 그래서 page가 시작하지 못한 창도 `ready` 값과 마지막 오류 줄과 함께 그 안에 있다.

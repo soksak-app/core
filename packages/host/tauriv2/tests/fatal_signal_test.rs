@@ -38,9 +38,15 @@ fn a_fatal_signal_writes_an_error_line_to_the_application_log() {
         String::from_utf8_lossy(&output.stdout)
     );
     let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
+    // A record is `<time> <level> <layer> <where>: <text>`; the fatal record of the native library has no other text.
     let fatal: Vec<&str> = log
         .lines()
-        .filter(|line| line.starts_with("error: fatal: "))
+        .filter(|line| line.contains(" error native fatal: "))
+        .map(|line| line.split_once(' ').expect("a time and a record").1)
         .collect();
-    assert_eq!(fatal, ["error: fatal: SIGABRT"], "application log {log:?}");
+    assert_eq!(
+        fatal,
+        ["error native fatal: SIGABRT"],
+        "application log {log:?}"
+    );
 }

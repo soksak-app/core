@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F144.3: terminal plugin 0.0.10과 terminal service 0.0.8이 입력 경로 전체를 기록한다(F144.5와 plugin 저장소 참고).
+- F144.2: native 라이브러리가 입력기의 모든 콜백(`keyDown`, `insertText`, `setMarkedText`, `unmarkText`, `doCommandBySelector`, 확정, 조합, 포커스, 입력 소스 변경)을 인자, 입력한 글, 전과 후의 입력 문서 상태를 담은 `info native input method`로, page로의 모든 보고를 `info native input report`로, 실패를 전체 상태와 함께 기록한다. `sp_log_info`와 기록의 시각(`clock_gettime`과 정수 산술이므로 치명 신호 처리기도 쓴다)이 새로 생겼고, 라이브러리의 기록은 `<time> <level> native <where>: <text>` 형식이다.
+- F144.1: 기록이 입력한 글자를 담지 않는다는 규칙을 [진단](docs/spec/diagnostics.ko.md)에서 지웠다. 입력 경로의 기록은 계층이 본 모든 것을 담고, 명세가 계층별 기록을 나열한다.
 - F138.2: 두 host가 모든 기록을 `<time> <level> <layer> <where>: <text>` 형식으로 쓴다. `LogError`/`log_error`는 level `error`를, 새 `LogInfo`/`log_info`는 관측(늦은 답, webkit 자식, sidecar 대기열과 교체, 무효화된 이미지 프레임)을 두 host에서 같은 문구로 쓰고, 실행은 `info host run: <identifier> pid <pid>`로 시작하며, 본문의 줄바꿈은 `\n`으로 쓰고, 표준 입출력 sidecar의 표준 오류 각 줄은 level `info`, layer `sidecar`, sidecar 이름의 기록이다. page와 native 라이브러리는 F138.3까지 이전 형식을 쓴다.
 - F138.1: 명세가 모든 글 기록의 한 형식을 정한다. `<time> <level> <layer> <where>: <text>`, level은 `error`와 `info`, layer는 `page`, `host`, `native`, `sidecar`, 기록 하나는 한 줄이며, 쓰는 쪽마다의 helper, sidecar 표준 오류를 감싸는 방법, 영속 서비스가 쓰는 형식을 함께 정하고 실패 표가 이를 쓴다. host, native 라이브러리, page는 F138.2와 F138.3까지 이전 형식을 쓴다.
 - F117.8.5: 공개 registry index가 core 0.0.9, terminal plugin 0.0.7, sidecar vt 0.0.7을 나열하고, 그 workflow는 core tag `v0.0.9`로 `sok`을 build한다.

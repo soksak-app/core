@@ -2,6 +2,7 @@
 #import <WebKit/WebKit.h>
 #import <IOSurface/IOSurface.h>
 #import <objc/runtime.h>
+#include <unistd.h>
 #import "image_region.h"
 #import "webview_geometry.h"
 
@@ -42,6 +43,24 @@ static void testEvent(void *context, const char *json) {
     }
     if (!collectedEvents) collectedEvents = [NSMutableArray new];
     [collectedEvents addObject:[NSString stringWithUTF8String:json]];
+}
+
+/// The text that block writes to the standard error of the process.
+static NSString *capturedStandardError(void (^block)(void)) {
+    char path[] = "/tmp/image_region_test.XXXXXX";
+    int file = mkstemp(path);
+    if (file < 0) { perror("mkstemp"); exit(1); }
+    fflush(stderr);
+    int saved = dup(STDERR_FILENO);
+    if (saved < 0 || dup2(file, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
+    block();
+    fflush(stderr);
+    if (dup2(saved, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
+    close(saved);
+    close(file);
+    NSString *written = [NSString stringWithContentsOfFile:@(path) encoding:NSUTF8StringEncoding error:nil];
+    unlink(path);
+    return written ?: @"";
 }
 
 // from 이후 insert 이벤트의 확정 문자열 목록.
@@ -445,6 +464,54 @@ int main(int argc, char **argv) { @autoreleasepool {
         check([committedTexts(0) isEqualToArray:@[@"한글"]] && [lastPreedit(0) isEqual:@""]
             && regionView.textStorage.length == 0,
             [NSString stringWithFormat:@"TEST 8: inserted text is committed exactly once by the focus change (got %@)", collectedEvents]);
+
+        // Every callback of the input method and every report to the page is a record of the standard error with its
+        // arguments, the typed text and the state of the input document before and after (docs/spec/diagnostics.md).
+        sp_region_focus(region8);
+        {
+            NSString *records = capturedStandardError(^{
+                [(id<NSTextInputClient>)regionView setMarkedText:@"한" selectedRange:NSMakeRange(1, 0)
+                    replacementRange:NSMakeRange(NSNotFound, 0)];
+                [(id<NSTextInputClient>)regionView insertText:@"한글" replacementRange:NSMakeRange(0, 1)];
+                // Leaving the focus commits what the document holds.
+                [window makeFirstResponder:nil];
+            });
+            NSMutableArray *calls = [NSMutableArray array];
+            NSMutableArray *reports = [NSMutableArray array];
+            for (NSString *line in [records componentsSeparatedByString:@"\n"]) {
+                NSRange at = [line rangeOfString:@" info native input method: "];
+                if (at.location != NSNotFound) {
+                    NSData *json = [[line substringFromIndex:NSMaxRange(at)] dataUsingEncoding:NSUTF8StringEncoding];
+                    id parsed = [NSJSONSerialization JSONObjectWithData:json options:0 error:nil];
+                    if ([parsed isKindOfClass:NSDictionary.class]) [calls addObject:parsed];
+                }
+                at = [line rangeOfString:@" info native input report: "];
+                if (at.location != NSNotFound) [reports addObject:[line substringFromIndex:NSMaxRange(at)]];
+            }
+            // A callback records the processing that it causes (the preedit, the commit) before its own record.
+            NSDictionary * (^named)(NSString *) = ^NSDictionary *(NSString *name) {
+                for (NSDictionary *call in calls) if ([call[@"call"] isEqual:name]) return call;
+                return nil;
+            };
+            NSDictionary *marked = named(@"setMarkedText");
+            NSDictionary *inserted = named(@"insertText");
+            check(named(@"reportPreedit") != nil && named(@"commitThrough") != nil,
+                [NSString stringWithFormat:@"TEST 8: the preedit and the commit that a callback causes are recorded (got %@)", records]);
+            check([marked[@"call"] isEqual:@"setMarkedText"] && [marked[@"text"] isEqual:@"한"]
+                && [marked[@"selectedRange"][@"location"] isEqual:@1] && marked[@"replacementRange"] == NSNull.null,
+                [NSString stringWithFormat:@"TEST 8: setMarkedText is recorded with its text and ranges (got %@)", records]);
+            check([marked[@"before"][@"document"] isEqual:@""] && [marked[@"after"][@"document"] isEqual:@"한"]
+                && [marked[@"after"][@"marked"][@"length"] isEqual:@1] && [marked[@"after"][@"committed"] isEqual:@0]
+                && marked[@"before"][@"source"] != nil,
+                @"TEST 8: the record holds the document, the marked range, the committed length and the input source before and after");
+            check([inserted[@"call"] isEqual:@"insertText"] && [inserted[@"text"] isEqual:@"한글"]
+                && [inserted[@"replacementRange"][@"location"] isEqual:@0] && [inserted[@"replacementRange"][@"length"] isEqual:@1],
+                @"TEST 8: insertText is recorded with its text and its replacement range");
+            BOOL reportedCompose = NO;
+            for (NSString *report in reports) if ([report containsString:@"\"type\":\"compose\""] && [report containsString:@"\\ud55c"]) reportedCompose = YES;
+            check(reportedCompose, [NSString stringWithFormat:@"TEST 8: every report to the page is recorded as sent (got %@)", reports]);
+        }
+        [window makeFirstResponder:nil];
 
         // An input method edits its previous insert through a replacement range: ㅎ → 하 → 한.
         sp_region_focus(region8);

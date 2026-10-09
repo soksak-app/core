@@ -185,7 +185,7 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
     if (self.queued - captureBefore >= kCaptureMaxFrames) {
         if (!captureLimitReached) {
             captureLimitReached = true;
-            fprintf(stderr, "observe: capture frame limit reached (%d)\n", kCaptureMaxFrames);
+            sp_log_info("capture", [NSString stringWithFormat:@"frame limit reached (%d)", kCaptureMaxFrames].UTF8String);
         }
         return;
     }
@@ -294,7 +294,7 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
         reportCaptureStreamFailure(stream,
             [NSString stringWithFormat:@"capture stopped with error: %@", error.localizedDescription]);
     } else {
-        fprintf(stderr, "observe: capture stopped without a delegate error (stream=%p)\n", stream);
+        sp_log_info("capture", [NSString stringWithFormat:@"stopped without a delegate error (stream=%p)", stream].UTF8String);
     }
 }
 
@@ -467,10 +467,10 @@ bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
                 (size_t)(filter.contentRect.size.width * filter.pointPixelScale),
                 (size_t)(filter.contentRect.size.height * filter.pointPixelScale));
             // 녹화 크기가 창과 다를 때 원인을 가릴 수 있도록 읽은 창 frame 과 준비한 출력 크기를 남긴다.
-            fprintf(stderr, "observe: capture prepared window %ld frame %s filter %s scale %g output %zux%zu\n",
-                windowNumber, NSStringFromRect(NSRectFromCGRect(window.frame)).UTF8String,
-                NSStringFromRect(NSRectFromCGRect(filter.contentRect)).UTF8String, filter.pointPixelScale,
-                config.width, config.height);
+            sp_log_info("capture", [NSString stringWithFormat:@"prepared window %ld frame %@ filter %@ scale %g output %zux%zu",
+                windowNumber, NSStringFromRect(NSRectFromCGRect(window.frame)),
+                NSStringFromRect(NSRectFromCGRect(filter.contentRect)), filter.pointPixelScale,
+                config.width, config.height].UTF8String);
             [result completeWithFilter:filter configuration:config error:nil];
             return;
         }
@@ -678,17 +678,17 @@ int sp_capture_stop(double after) {
     int *counts = captureSink.statuses;
     mach_timebase_info_data_t timebase;
     mach_timebase_info(&timebase);
-    fprintf(stderr, "observe: %d complete frames received, %d written, %d rejected for pending writer capacity, "
-        "slowest write %.1fms, longest display gap %.1fms\n",
+    sp_log_info("capture", [NSString stringWithFormat:@"%d complete frames received, %d written, %d rejected for pending writer capacity, "
+        "slowest write %.1fms, longest display gap %.1fms",
         captureSink.complete, captureSink.written - captureBefore, captureSink.rejected, captureSink.slowestWrite * 1000,
-        (double)captureSink.longestGap * timebase.numer / timebase.denom / 1e6);
+        (double)captureSink.longestGap * timebase.numer / timebase.denom / 1e6].UTF8String);
     if (counts[SCFrameStatusBlank] || counts[SCFrameStatusSuspended]) {
-        fprintf(stderr, "observe: %d blank and %d suspended frames were not written\n",
-            counts[SCFrameStatusBlank], counts[SCFrameStatusSuspended]);
+        sp_log_info("capture", [NSString stringWithFormat:@"%d blank and %d suspended frames were not written",
+            counts[SCFrameStatusBlank], counts[SCFrameStatusSuspended]].UTF8String);
     }
     if (captureSink.written == captureBefore && captureSink.idle > 0) {
-        fprintf(stderr, "observe: the window was not redrawn during %d frames; "
-            "the display is off or the window is not on screen\n", captureSink.idle);
+        sp_log_info("capture", [NSString stringWithFormat:@"the window was not redrawn during %d frames; "
+            "the display is off or the window is not on screen", captureSink.idle].UTF8String);
     }
     return captureSink.written - captureBefore;
 }

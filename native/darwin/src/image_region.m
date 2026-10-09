@@ -8,6 +8,7 @@
 #import <WebKit/WebKit.h>
 #import <IOSurface/IOSurface.h>
 #import <QuartzCore/QuartzCore.h>
+#import "application_log.h"
 #import "image_region.h"
 #import "webview_geometry.h"
 
@@ -54,6 +55,10 @@
 - (void)report:(const char *)json;
 - (void)reject:(NSString *)reason;
 - (NSString *)jsonRange:(NSRange)range;
+- (NSString *)jsonEscapedString:(NSString *)string;
+- (NSString *)inputState;
+- (void)performInsertText:(id)string text:(NSString *)text range:(NSRange)range;
+- (void)logInput:(NSString *)call fields:(NSString *)fields before:(NSString *)before;
 - (void)surfaceScaleChanged;
 - (void)observeSurface:(NSView *)surface;
 @end
@@ -391,12 +396,18 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)report:(const char *)json {
-    if (self.closed || !self.event) return;
+    // Every report to the page is recorded as it is sent, and a report that is dropped is recorded as dropped.
+    if (self.closed || !self.event) {
+        sp_log_info("input report dropped", json);
+        return;
+    }
+    sp_log_info("input report", json);
     self.reports++;
     self.event(self.context, json);
 }
 
 - (void)reject:(NSString *)reason {
+    sp_log_error("image region", [NSString stringWithFormat:@"%@ (state %@)", reason, [self inputState]].UTF8String);
     self.presentationError = reason;
     NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"type": @"error", @"reason": reason } options:0 error:NULL];
     NSString *json = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
@@ -404,7 +415,9 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (BOOL)becomeFirstResponder {
+    NSString *before = [self inputState];
     BOOL result = [super becomeFirstResponder];
+    [self logInput:@"becomeFirstResponder" fields:[NSString stringWithFormat:@"\"result\":%@", result ? @"true" : @"false"] before:before];
     if (result && !self.hasFocus) {
         self.hasFocus = YES;
         [self report:"{\"type\":\"focus\",\"focused\":true}"];
@@ -413,8 +426,10 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (BOOL)resignFirstResponder {
+    NSString *before = [self inputState];
     [self commitPending];
     BOOL result = [super resignFirstResponder];
+    [self logInput:@"resignFirstResponder" fields:[NSString stringWithFormat:@"\"result\":%@", result ? @"true" : @"false"] before:before];
     if (result && self.hasFocus) {
         SPImageRegion *pressed = spRegionUnderPress(self);
         if (pressed == self) {
@@ -449,6 +464,13 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)keyDown:(NSEvent *)event {
+    // The record holds the whole event: the key code, the characters with and without the modifiers, the modifier flags,
+    // the repeat flag and the time of the event.
+    [self logInput:@"keyDown" fields:[NSString stringWithFormat:
+        @"\"keyCode\":%hu,\"characters\":\"%@\",\"charactersIgnoringModifiers\":\"%@\",\"modifierFlags\":%lu,\"isARepeat\":%@,\"timestamp\":%.6f",
+        event.keyCode, [self jsonEscapedString:event.characters ?: @""],
+        [self jsonEscapedString:event.charactersIgnoringModifiers ?: @""], (unsigned long)event.modifierFlags,
+        event.isARepeat ? @"true" : @"false", event.timestamp] before:nil];
     // Command 조합은 보고하지 않고 메뉴에 넘긴다.
     if (event.modifierFlags & NSEventModifierFlagCommand) {
         [super keyDown:event];
@@ -606,12 +628,15 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         NSString *reason = [NSString stringWithFormat:
             @"input method did not answer native keyCode=%hu outside the key window of the active application",
             event.keyCode];
+        sp_log_error("input method", [NSString stringWithFormat:@"%@: state %@", reason, [self inputState]].UTF8String);
         NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"type": @"error", @"reason": reason } options:0 error:NULL];
         [self report:[[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease].UTF8String];
     }
 }
 
 - (void)doCommandBySelector:(SEL)selector {
+    [self logInput:@"doCommandBySelector" fields:[NSString stringWithFormat:@"\"selector\":\"%@\",\"unhandledKey\":\"%@\"",
+        [self jsonEscapedString:NSStringFromSelector(selector)], [self jsonEscapedString:self.unhandledKey ?: @""]] before:nil];
     // 입력기가 처리하지 않은 특수 키는 명령이 아니라 원래 키로 보고한다.
     NSString *key = [[self.unhandledKey retain] autorelease];
     if (key) {
@@ -642,12 +667,27 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     NSString *text = [string isKindOfClass:NSAttributedString.class]
         ? [(NSAttributedString *)string string]
         : ([string isKindOfClass:NSString.class] ? (NSString *)string : nil);
-    if (!text) return;
+    NSString *before = [self inputState];
+    NSString *fields = [NSString stringWithFormat:@"\"text\":%@,\"attributed\":%@,\"replacementRange\":%@",
+        text ? [NSString stringWithFormat:@"\"%@\"", [self jsonEscapedString:text]] : @"null",
+        [string isKindOfClass:NSAttributedString.class] ? @"true" : @"false", [self jsonRange:range]];
+    if (!text) {
+        [self logInput:@"insertText" fields:[fields stringByAppendingString:@",\"dropped\":\"not text\""] before:before];
+        return;
+    }
+    [self performInsertText:string text:text range:range];
+    [self logInput:@"insertText" fields:fields before:before];
+}
 
+// The processing of an insert of the input method: the replacement of committed text is reported as an error, the text
+// enters the document, and what the document holds is committed or reported as preedit.
+- (void)performInsertText:(id)string text:(NSString *)text range:(NSRange)range {
     if (range.location != NSNotFound && range.location < self.committedLength) {
         // 이미 PTY 로 보낸 문자열은 되돌릴 수 없다. 교체를 버리지 않고 오류로 알린다.
         NSString *reason = [NSString stringWithFormat:@"input method replaced committed text at %lu (committed %lu)",
             (unsigned long)range.location, (unsigned long)self.committedLength];
+        sp_log_error("input method", [NSString stringWithFormat:@"%@: text \"%@\" replacement %@ state %@", reason,
+            [self jsonEscapedString:text], [self jsonRange:range], [self inputState]].UTF8String);
         NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"type": @"error", @"reason": reason } options:0 error:NULL];
         [self report:[[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease].UTF8String];
     }
@@ -672,9 +712,27 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {
-    if (![string isKindOfClass:NSAttributedString.class] && ![string isKindOfClass:NSString.class]) return;
+    BOOL attributed = [string isKindOfClass:NSAttributedString.class];
+    NSString *text = attributed ? [(NSAttributedString *)string string]
+        : ([string isKindOfClass:NSString.class] ? (NSString *)string : nil);
+    NSString *before = [self inputState];
+    NSString *fields = [NSString stringWithFormat:
+        @"\"text\":%@,\"attributed\":%@,\"selectedRange\":%@,\"replacementRange\":%@",
+        text ? [NSString stringWithFormat:@"\"%@\"", [self jsonEscapedString:text]] : @"null",
+        attributed ? @"true" : @"false", [self jsonRange:selectedRange], [self jsonRange:replacementRange]];
+    if (!text) {
+        [self logInput:@"setMarkedText" fields:[fields stringByAppendingString:@",\"dropped\":\"not text\""] before:before];
+        return;
+    }
     [super setMarkedText:string selectedRange:selectedRange replacementRange:replacementRange];
     [self reportPreedit];
+    [self logInput:@"setMarkedText" fields:fields before:before];
+}
+
+- (void)unmarkText {
+    NSString *before = [self inputState];
+    [super unmarkText];
+    [self logInput:@"unmarkText" fields:@"" before:before];
 }
 
 // 선택된 입력 소스가 입력기인지 확인한다. 자판(keyboard layout)은 넣은 문자열을 고쳐 쓰지 않는다.
@@ -703,7 +761,10 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     if (end <= self.committedLength) return;
     NSString *committed = [self.textStorage.string substringWithRange:
         NSMakeRange(self.committedLength, end - self.committedLength)];
+    NSUInteger from = self.committedLength;
     self.committedLength = end;
+    [self logInput:@"commitThrough" fields:[NSString stringWithFormat:@"\"from\":%lu,\"to\":%lu,\"committed\":\"%@\"",
+        (unsigned long)from, (unsigned long)end, [self jsonEscapedString:committed]] before:nil];
     NSString *json = [NSString stringWithFormat:@"{\"type\":\"insert\",\"text\":\"%@\",\"replacementRange\":null,\"attributed\":false}",
         [self jsonEscapedString:committed]];
     [self report:json.UTF8String];
@@ -713,8 +774,14 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 - (void)reportPreedit {
     NSString *storage = self.textStorage.string;
     NSString *preedit = self.committedLength <= storage.length ? [storage substringFromIndex:self.committedLength] : @"";
-    if ([preedit isEqualToString:self.reportedPreedit]) return;
+    if ([preedit isEqualToString:self.reportedPreedit]) {
+        [self logInput:@"reportPreedit" fields:[NSString stringWithFormat:@"\"preedit\":\"%@\",\"changed\":false",
+            [self jsonEscapedString:preedit]] before:nil];
+        return;
+    }
     self.reportedPreedit = preedit;
+    [self logInput:@"reportPreedit" fields:[NSString stringWithFormat:@"\"preedit\":\"%@\",\"changed\":true",
+        [self jsonEscapedString:preedit]] before:nil];
     NSRange selected = self.selectedRange;
     NSRange local = selected.location != NSNotFound && selected.location >= self.committedLength
         ? NSMakeRange(selected.location - self.committedLength, selected.length) : NSMakeRange(NSNotFound, 0);
@@ -724,21 +791,29 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)clearDocument {
+    NSString *before = [self inputState];
     [self.textStorage deleteCharactersInRange:NSMakeRange(0, self.textStorage.length)];
     self.committedLength = 0;
     [self reportPreedit];
+    [self logInput:@"clearDocument" fields:@"" before:before];
 }
 
 // 명령·특수 키·포커스 해제·입력 소스 전환·닫기 전에 남은 문자열을 확정하고 입력기의 조합을 끝낸다.
 // 입력기가 marked text 를 가진 동안은 입력기가 확정을 결정한다.
 - (void)commitPending {
-    if (self.hasMarkedText || self.textStorage.length == 0) return;
+    if (self.hasMarkedText || self.textStorage.length == 0) {
+        [self logInput:@"commitPending" fields:@"\"skipped\":true" before:nil];
+        return;
+    }
+    [self logInput:@"commitPending" fields:@"\"skipped\":false" before:nil];
     [self commitThrough:self.textStorage.length];
     [self.inputContext discardMarkedText];
     [self clearDocument];
 }
 
 - (void)inputSourceChanged:(NSNotification *)notification {
+    [self logInput:@"inputSourceChanged" fields:[NSString stringWithFormat:@"\"ownContext\":%@",
+        notification.object == self.inputContext ? @"true" : @"false"] before:nil];
     if (notification.object == self.inputContext) [self commitPending];
 }
 
@@ -783,6 +858,30 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         }
     }
     return escaped;
+}
+
+// The state of the input document as JSON: the text, the committed length, the marked and selected ranges, the preedit
+// that was reported last, the selected input source and the focus. Every record of the input holds it, so a defect of the
+// input is located from the files alone.
+- (NSString *)inputState {
+    NSString *source = self.inputContext.selectedKeyboardInputSource;
+    return [NSString stringWithFormat:
+        @"{\"document\":\"%@\",\"committed\":%lu,\"marked\":%@,\"selected\":%@,\"reportedPreedit\":\"%@\","
+        @"\"source\":%@,\"focus\":%@,\"closed\":%@,\"reports\":%lu}",
+        [self jsonEscapedString:self.textStorage.string], (unsigned long)self.committedLength,
+        [self hasMarkedText] ? [self jsonRange:self.markedRange] : @"null", [self jsonRange:self.selectedRange],
+        [self jsonEscapedString:self.reportedPreedit ?: @""],
+        source ? [NSString stringWithFormat:@"\"%@\"", [self jsonEscapedString:source]] : @"null",
+        self.hasFocus ? @"true" : @"false", self.closed ? @"true" : @"false", (unsigned long)self.reports];
+}
+
+// One record of a callback of the input method: its name, its arguments (fields is `"name":value,…` or empty), the
+// state of the document before the call (before, or the state now when nil) and the state after it.
+- (void)logInput:(NSString *)call fields:(NSString *)fields before:(NSString *)before {
+    NSString *after = [self inputState];
+    NSString *json = [NSString stringWithFormat:@"{\"call\":\"%@\",%@\"before\":%@,\"after\":%@}",
+        call, fields.length ? [fields stringByAppendingString:@","] : @"", before ?: after, after];
+    sp_log_info("input method", json.UTF8String);
 }
 
 - (NSAccessibilityRole)accessibilityRole {
