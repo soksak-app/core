@@ -1142,6 +1142,30 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.2.2",
+    implementation: [
+      { file: "packages/host/tauriv2/src/event_log.rs", symbol: "pub fn emit" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "a_full_queue_returns_false_and_the_writer_records_the_range_as_dropped" },
+      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "the_file_passes_the_audit_of_the_contract_package" },
+    ],
+    expected: "The Rust writer never blocks a producer, assigns consecutive seq, counts every refused event in log.dropped and writes a file that the audit of the contract accepts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.2.3",
+    implementation: [
+      { file: "packages/host/wailsv3/src/event_log.go", symbol: "func (l *EventLog) Emit" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestAFullEventQueueReturnsFalseAndTheWriterRecordsTheRangeAsDropped" },
+      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestTheEventLogPassesTheAuditOfTheContractPackage" },
+    ],
+    expected: "The Go writer never blocks a producer, assigns consecutive seq, counts every refused event in log.dropped and writes a file that the audit of the contract accepts.",
+    levels: ["unit"],
+  },
+  {
     id: "F150.2.1",
     implementation: [
       { file: "native/darwin/src/event_ring.m", symbol: "bool sp_event_ring_push" },

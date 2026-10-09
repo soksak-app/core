@@ -518,3 +518,9 @@ fn invalid_json_closes_connection() {
 | `installed.shared.serve-extension-point-modules` | `/shared/<plugin id>.<point>/<specifier>.js`는 켜진 설치 plugin의 `plugin.json` `extends.<point>.modules`가 specifier에 대응한, 그 plugin의 기록된 `path` 안의 파일을 제공한다. `.js`로 끝나지 않는 경로, plugin이 선언하지 않은 지점, 지점이 대응하지 않은 specifier, 없는 파일, 빈 부분이나 `.`, `..` 부분이 있는 경로, 꺼졌거나 알 수 없는 plugin은 찾을 수 없고, 읽을 수 없는 `plugin.json`은 그 경로와 함께 실패한다. | both |
 | `installed.sidecars.resolve-installed-folders` | Host의 sidecar는 켜진 설치 plugin의 `plugin.json`이 지정한 것이며, 각각 sidecar 폴더의 기록된 `path`와 거기의 `sidecar.json`을 가진다. 설치 version이 없는 sidecar는 실패하고, 빈 설정에는 sidecar가 없다. | both |
 | `installed.sidecars.leave-out-plugin-dependencies` | 켜졌든 꺼졌든 설치된 plugin을 지정하는 `plugin.json`의 dependency는 host의 sidecar가 아니다. | both |
+| `log.writer.assigns-seq-and-opens-with-log-open` | host 로그 파일은 `schema`, `pid`, `role`, `boot`를 담은 `log.open`으로 시작하며, writer는 모든 줄에 1부터 연속인 `seq`를 부여한다. | both |
+| `log.writer.never-blocks-and-counts-loss` | `emit`은 기다리지 않고 돌아온다. 큐에 자리가 없으면 false를 돌려주고, writer는 거부된 event 수와 같은 `count`를 가진 `log.dropped` 하나를 그것이 가리키는 `seq` 범위 뒤에 저장한다. | both |
+| `log.writer.error-wakes-the-writer` | level이 `error`인 event는 배치 간격을 기다리지 않고 기록된다. | both |
+| `log.writer.files-are-private` | 로그 폴더는 mode 0700, 로그 파일은 mode 0600이다. | both |
+| `log.writer.output-follows-the-contract` | writer의 파일은 자신의 event를 선언한 catalog에 대해 `@soksak/log-contract` 감사를 통과한다. | both |
+| `log.writer.flush-at-exit` | `flush`는 받아들인 모든 event가 디스크에 기록된 뒤 돌아오며, 기한이 지나면 실패한다. | both |

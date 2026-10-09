@@ -13,6 +13,12 @@ path = "src/host.rs"
 diagnostics = ["soksak-sok-tauriv2/diagnostics"]
 dev = ["soksak-sok-tauriv2/dev"]
 
+# 측정 도구는 시험이 아니다. 숫자를 출력하고 단언하지 않는다(docs/spec/logging.md#writers).
+[[bench]]
+name = "event_log_benchmark"
+path = "tests/event_log_benchmark_test.rs"
+harness = false
+
 [build-dependencies]
 pkg-config = "0.3"
 

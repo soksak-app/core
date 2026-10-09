@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory app-update-check
+.PHONY: benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -115,6 +115,13 @@ rust-tests-alone:
 
 # Rust 패키지의 테스트를 COUNT 번 차례로 실행한다. TEST 를 주면 그 이름의 테스트만 실행한다.
 # 간헐 실패를 재현하고 수용하는 대상이다. 첫 실패에서 실행 번호, 시스템 부하, 그 실행의 출력을 보고한다.
+# 기록기의 비용을 잰다. 시험이 아니며 숫자를 출력하고 단언하지 않는다. Rust writer 는 cargo bench 로, native ring 은 native/darwin 의 benchmark 로 잰다.
+benchmark-rust:
+	@cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_log_benchmark
+
+benchmark-go:
+	@$(GO_ENV) go test -count=1 -ldflags "$(GO_LINK)" -run '^$$' -bench EventLogEmit -benchtime 1x -v ./packages/host/wailsv3/tests
+
 rust-repeat:
 	@case "$(PACKAGE)" in '') echo "rust-repeat requires PACKAGE=<cargo package> COUNT=<n> [TEST=<name>] [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "rust-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
