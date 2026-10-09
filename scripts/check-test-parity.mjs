@@ -70,6 +70,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platforms.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs"]),
+  lane("log contract", "js-ts", ["packages/log-contract/*.js"], ["packages/log-contract/test/**/*.mjs"]),
   lane("workbench", "js-ts", ["packages/workbench/*.js", "packages/workbench/*.mjs"], ["packages/workbench/test/**/*.js", "packages/workbench/test/**/*.mjs"], { sharedTests: true }),
   lane("client", "js-ts", [
     "packages/client/*.js",
@@ -1137,6 +1138,18 @@ const FEATURE_LINKS = [
       { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release version" },
     ],
     expected: "Every declared workspace version is the version of the release that carries the records of the application log.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.1",
+    implementation: [
+      { file: "packages/log-contract/index.js", symbol: "export function auditLog" },
+    ],
+    tests: [
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a log with declared events, consecutive seq and a complete chain passes" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a declared chain with a missing hop is a finding for its correlation identifier" },
+    ],
+    expected: "The audit of a log accepts a log that follows the event contract and reports undeclared events, missing fields, unexplained gaps of seq and incomplete chains.",
     levels: ["unit"],
   },
   {

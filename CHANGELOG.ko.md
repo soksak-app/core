@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.1: `docs/spec/logging.md`가 event 계약(구조, class와 정책, writer, 파일, catalog, 개인정보, 한계)을 정하고, `@soksak/log-contract`가 로그를 catalog로 감사하며(선언된 event와 field, `log.dropped`로 설명되는 틈 외의 연속된 `seq`, 선언된 사슬) golden catalog와 golden lines를 담고, 용어 `event`, `event class`, `correlation identifier`를 정의한다.
 - F149.1: window check가 두 host에서 endpoint의 native 입력으로 Enter를 입력하고, 입력 경로의 모든 층의 기록을 애플리케이션 로그와 성능 trace에서 시간순으로 요구한다.
 - F153: 주입한 키의 기록이 키를 받는 first responder의 class와 창이 key window인지를 밝히고, 입력 문서의 모든 상태가 애플리케이션이 active인지와 창이 key window인지를 기록한다.
 - F145.12: 두 host가 제한 시간 오류 1005로 끝나는 endpoint 요청마다 client가 오류를 받기 전에 `error host endpoint timeout: <method>: <message>`를 써서, 시간이 초과된 대기를 애플리케이션 로그에 이름으로 남긴다.

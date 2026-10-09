@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F150.1: `docs/spec/logging.md` states the event contract (structure, classes and policy, writers, files, catalog, privacy, limits); `@soksak/log-contract` audits a log against a catalog (declared events and fields, consecutive `seq` with gaps explained by `log.dropped`, declared chains) and holds the golden catalog and golden lines; the terms `event`, `event class` and `correlation identifier` are defined.
 - F149.1: a window check types Enter through the native input of the endpoint on both hosts and requires the records of every layer of the input path, in time order, in the application log and the performance trace.
 - F153: the record of an injected key names the class of the first responder that receives it and whether the window is the key window, and every state of the input document records whether the application is active and whether the window is the key window.
 - F145.12: both hosts write `error host endpoint timeout: <method>: <message>` for each endpoint request that ends with the timeout error 1005, before the client receives the error, so the waiting that timed out is named in the application log.

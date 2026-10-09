@@ -1,0 +1,23 @@
+{
+  "name": "@soksak/log-contract",
+  "version": "0.0.10",
+  "private": true,
+  "description": "The checker of the event contract of docs/spec/logging.md: the schema of an event line, the catalog schema, and the audit of the logs that tests leave.",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "fixtures"
+  ],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/soksak-app/core.git"
+  }
+}

@@ -89,6 +89,30 @@
         "debug dialog"
       ],
       "allowed": []
+    },
+    {
+      "term": "event",
+      "definition": "One record of the contract in docs/spec/logging.md: a JSON object with a time, a sequence number, a level, a layer, a declared name and fields.",
+      "rejected": [],
+      "allowed": [
+        "text record",
+        "performance event",
+        "log record"
+      ]
+    },
+    {
+      "term": "event class",
+      "definition": "The declared kind of an event (lifecycle, input, call, io, frame) that decides how the writer stores it.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "correlation identifier",
+      "definition": "The identifier that one native input receives from the layer that first sees it and that every later layer carries (cids in an event).",
+      "rejected": [
+        "correlation id"
+      ],
+      "allowed": []
     }
   ]
 }
