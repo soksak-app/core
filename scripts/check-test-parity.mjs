@@ -1069,6 +1069,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F117",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) Replace" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn replace" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestAnOutdatedServiceIsReplaced" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "an_outdated_service_is_replaced" },
+    ],
+    expected: "A persistent service that runs another version than the installed one is replaced after its sessions end.",
+    levels: ["unit"],
+  },
+  {
     id: "F121",
     implementation: [
       { file: "packages/sok/wailsv3/src/appupdate.go", symbol: "func ReplaceApp" },

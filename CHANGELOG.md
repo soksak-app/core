@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F117.8.5: the public registry index lists core 0.0.9, the terminal plugin 0.0.7 and the sidecar vt 0.0.7, and its workflows build `sok` from the core tag `v0.0.9`.
 - F117.8.4: every declared workspace version is 0.0.9, the version that carries F117, F121 and F122.
 - F117.8.3: the release workflow names the files of a core release `soksak-<version>-darwin-arm64-wailsv3.zip` and `soksak-<version>-darwin-arm64-tauriv2.zip`, the names that the core releases of the registry use, and the install guide names them.
 - F121.8: `make app-update-check HOST=wailsv3|tauriv2` copies the built debug bundle, serves a core release of a newer version, starts the copy with a disposable configuration directory, runs `core.app.update`, and checks that `sok app update` replaced the bundle and restarted the application on both hosts; it ends the applications it started and fails when one remains.
