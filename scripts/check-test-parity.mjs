@@ -1140,6 +1140,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F149.1",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static void logPointer" },
+    ],
+    tests: [
+      { file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" },
+    ],
+    expected: "A key typed through the native input of the endpoint leaves a record in every layer of the input path, in time order.",
+    levels: ["application"],
+  },
+  {
     id: "F153",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "responderName" },

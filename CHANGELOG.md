@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F149.1: a window check types Enter through the native input of the endpoint on both hosts and requires the records of every layer of the input path, in time order, in the application log and the performance trace.
 - F153: the record of an injected key names the class of the first responder that receives it and whether the window is the key window, and every state of the input document records whether the application is active and whether the window is the key window.
 - F145.12: both hosts write `error host endpoint timeout: <method>: <message>` for each endpoint request that ends with the timeout error 1005, before the client receives the error, so the waiting that timed out is named in the application log.
 - F152: a failed send of the main page to a sidecar no longer blocks the sends after it and is written as `error page sidecar <name>: send failed: <reason>`; `orderedSidecar` refuses a missing failure handler.
