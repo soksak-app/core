@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F117.7.4: the update list of the plugin page starts with the core release and its release link, which F121.6 implements; the control 업데이트 N counts it.
 - F137: the type `OpenApplication` names the opener of `replace_app` in the Rust `sok`, so `cargo clippy` passes, and the tests of `sok` that stage and replace an application bundle skip on Linux (`requireBundles` in Go, `ignore` outside macOS in Rust), because only macOS implements those operations.
 - F121.7: the core update row of the plugin page lists each installed plugin whose `engines.soksak` does not contain the candidate with the newest non-revoked version of that plugin that does, or the note that none does; the status `core.app` carries them as `incompatible`, and the workbench reads the version ranges of the specification with `satisfies` in `version-range.js`.
 - F121.6: the plugin page lists the core update first in its update list as `core: <running> → <available>` with the release page of the version, the action 업데이트 and the step or error of the operation; the status `core.app` and the commands `core.app.update` and `core.app.release` are declared, the window reads the candidate when it starts, becomes active, changes its registry and opens the plugin page, and the control 업데이트 N counts the core update. A window check on both hosts serves a registry index with a newer core release, which the operation refuses at the download.
