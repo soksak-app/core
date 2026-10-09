@@ -66,6 +66,7 @@ writer는 프로세스에서 event를 파일의 줄로 바꾸는 부분이다.
 - 프로세스마다 writer 스레드 하나가 `seq`를 붙이고, JSON으로 직렬화하고, 배치(100 ms마다, 64 KB가 쌓일 때, 또는 `error` 뒤 즉시)로 쓰고, 파일을 회전한다. `error`는 writer를 깨우고 돌아오며 생산자는 디스크를 기다리지 않는다.
 - writer는 손실 카운터를 `log.dropped` event `{from_seq, to_seq, class, count, bytes, reason}`로 바꾼다. 쓰기가 실패하면(디스크 가득 참, 입출력 오류) writer는 손실을 세고 상태로 보이며, 쓰기가 다시 되면 `log.dropped`를 기록한다. heartbeat가 끝난 writer 스레드를 감지하면 프로세스는 fatal 오류를 보고하고 끝난다.
 - 모든 종료 경로는 프로세스가 끝나기 전에 deadline을 두고 큐를 flush한다: Go host의 shutdown, Rust host의 exit, `panic = abort`, `os.Exit`.
+- host의 writer는 같은 프로세스의 다른 계층의 event(page 배치, native ring)를 그 event가 가진 시각과 계층 그대로 받는다. 이런 event의 이름은 계층으로 시작해야 하고, 계약에 없는 계층과 JSON이 아닌 field는 오류로 거부하며, `seq`는 여전히 writer가 부여한다.
 - native 라이브러리에는 writer가 없다. C의 bounded lock-free ring을 소유하며, `sp_event`가 어느 스레드에서든 event를 ring에 복사하고 host의 writer 스레드가 `sp_event_drain` 호출로 ring을 비운다. 어떤 생산자 스레드도 Go나 Rust를 부르지 않는다. host writer가 생기기 전에 쓴 event는 ring에서 기다린다.
 - page는 `context.log.<level>(event, fields)`로 기록한다. event는 배열에 모였다가 host로 가는 배치 호출 하나로 나간다. 100 ms 타이머, 크기 상한에 닿을 때, `pagehide`와 `visibilitychange`에서 나가며 생산자는 응답을 기다리지 않는다. `console.*`, 전역 `error` event, `unhandledrejection` event도 같은 입구로 들어간다.
 - fatal 신호 처리기는 프로세스가 시작할 때 열어 둔 파일 descriptor에 async-signal-safe 호출만으로 짧은 줄을 쓴다. Go의 runtime fatal 오류는 가로챌 수 없으므로 그 출력은 프로세스의 crash 파일로 가고, 각 goroutine 진입점의 `recover`가 `error` event를 쓴다. Rust host는 panic hook에서 `error` event를 쓰고 flush한다.

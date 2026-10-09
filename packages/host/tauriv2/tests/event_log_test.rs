@@ -201,3 +201,40 @@ fn flush_writes_every_accepted_event_before_it_returns() {
         .count();
     assert_eq!(stored, 40);
 }
+
+// contract: log.writer.relays-events-with-their-layer-and-time
+#[test]
+fn a_relayed_event_keeps_its_layer_and_time_and_gets_the_seq_of_the_writer() {
+    let directory = tempfile::tempdir().unwrap();
+    let log = EventLog::start(options(directory.path())).unwrap();
+    let fields = serde_json::value::to_raw_value(&json!({"index": 7})).unwrap();
+    assert_eq!(
+        log.emit_relayed(
+            1_791_000_000_000_123,
+            "page",
+            Level::Warn,
+            "page.test.event",
+            fields
+        ),
+        Ok(true)
+    );
+    let bad_layer = serde_json::value::to_raw_value(&json!({})).unwrap();
+    let error = log
+        .emit_relayed(1, "page", Level::Info, "host.test.event", bad_layer)
+        .unwrap_err();
+    assert!(error.contains("does not start with its layer"), "{error}");
+    let unknown = serde_json::value::to_raw_value(&json!({})).unwrap();
+    let error = log
+        .emit_relayed(1, "unknown", Level::Info, "unknown.test.event", unknown)
+        .unwrap_err();
+    assert!(error.contains("is not one of"), "{error}");
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    let events = read(&path);
+    assert_eq!(events.len(), 2, "{events:?}");
+    assert_eq!(events[1]["layer"], "page");
+    assert_eq!(events[1]["ts_us"], 1_791_000_000_000_123u64);
+    assert_eq!(events[1]["seq"], 2);
+    assert_eq!(events[1]["level"], "warn");
+    assert_eq!(events[1]["fields"]["index"], 7);
+}

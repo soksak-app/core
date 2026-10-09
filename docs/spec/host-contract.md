@@ -524,3 +524,4 @@ Items:
 | `log.writer.files-are-private` | The log folder has mode 0700 and the log file has mode 0600. | both |
 | `log.writer.output-follows-the-contract` | The file of a writer passes the audit of `@soksak/log-contract` against a catalog that declares its events. | both |
 | `log.writer.flush-at-exit` | `flush` returns after every accepted event is on disk, or fails when the deadline passes. | both |
+| `log.writer.relays-events-with-their-layer-and-time` | The writer of a host stores an event that another layer of the process relays with the `layer` and `ts_us` it carries and the `seq` of the writer, and refuses an event name that does not start with its layer and a layer outside the contract with an error. | both |

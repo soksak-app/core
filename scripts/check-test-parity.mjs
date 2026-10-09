@@ -84,7 +84,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
 
-  lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/benches/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json"], { testExtensions: new Set([".rs", ".json"]) }),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs"], { testLanguage: "js-ts", sharedTests: true }),
 
   lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/diagnostics_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
@@ -1139,6 +1139,19 @@ const FEATURE_LINKS = [
       { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release version" },
     ],
     expected: "Every declared workspace version is the version of the release that carries the records of the application log.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.2.4.2",
+    implementation: [
+      { file: "packages/host/wailsv3/src/event_log.go", symbol: "func (l *EventLog) EmitRelayed" },
+      { file: "packages/host/tauriv2/src/event_log.rs", symbol: "pub fn emit_relayed" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter" },
+      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "a_relayed_event_keeps_its_layer_and_time_and_gets_the_seq_of_the_writer" },
+    ],
+    expected: "A writer stores a relayed event with the layer and the time it carries and the seq of the writer, and refuses a name outside its layer and a layer outside the contract.",
     levels: ["unit"],
   },
   {
@@ -2977,7 +2990,7 @@ export function auditJsFailurePropagation(files, readSource = (file) => readFile
 export function auditRustFailurePropagation(files, readSource, scope) {
   const errors = [];
   for (const file of [...new Set(files)].sort()) {
-    if (!file.startsWith(scope) || !file.endsWith(".rs") || /(^|\/)(test|tests)\//.test(file)) continue;
+    if (!file.startsWith(scope) || !file.endsWith(".rs") || /(^|\/)(test|tests|benches)\//.test(file)) continue;
     let source;
     try { source = readSource(file); }
     catch (error) {
@@ -3078,7 +3091,7 @@ export function discoverInventory(files) {
     if (manifestNames.has(name)) manifests.push(file);
     const language = declarationNames.has(name) ? "declaration" : sourceLanguages.get(extname(file));
     if (!language) continue;
-    const isTest = /(^|\/)(test|tests)\//.test(file) || /(^|\/)e2e\//.test(file) || /[._]test\.(mjs|js|cjs|ts|go|rs|m|mm)$/.test(file);
+    const isTest = /(^|\/)(test|tests|benches)\//.test(file) || /(^|\/)e2e\//.test(file) || /[._]test\.(mjs|js|cjs|ts|go|rs|m|mm)$/.test(file);
     (isTest ? tests : implementations).push({ file, language });
   }
   return { implementations, tests, manifests, generated };

@@ -233,3 +233,36 @@ func TestEventLogFlushWritesEveryAcceptedEventBeforeItReturns(t *testing.T) {
 		t.Fatalf("stored %d of 40", stored)
 	}
 }
+
+// contract: log.writer.relays-events-with-their-layer-and-time
+func TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter(t *testing.T) {
+	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, err := log.EmitRelayed(1_791_000_000_000_123, "page", host.LevelWarn, "page.test.event", json.RawMessage(`{"index":7}`))
+	if err != nil || !accepted {
+		t.Fatalf("accepted %v, error %v", accepted, err)
+	}
+	if _, err := log.EmitRelayed(1, "page", host.LevelInfo, "host.test.event", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "does not start with its layer") {
+		t.Fatalf("a name outside its layer: %v", err)
+	}
+	if _, err := log.EmitRelayed(1, "unknown", host.LevelInfo, "unknown.test.event", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "is not one of") {
+		t.Fatalf("a layer outside the contract: %v", err)
+	}
+	if _, err := log.EmitRelayed(1, "page", host.LevelInfo, "page.test.event", json.RawMessage(`{broken`)); err == nil || !strings.Contains(err.Error(), "fields") {
+		t.Fatalf("fields that are not JSON: %v", err)
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	if len(events) != 2 {
+		t.Fatalf("events %v", events)
+	}
+	relayed := events[1]
+	if relayed["layer"] != "page" || relayed["ts_us"] != float64(1_791_000_000_000_123) || relayed["seq"] != float64(2) ||
+		relayed["level"] != "warn" || relayed["fields"].(map[string]any)["index"] != float64(7) {
+		t.Fatalf("relayed event %v", relayed)
+	}
+}

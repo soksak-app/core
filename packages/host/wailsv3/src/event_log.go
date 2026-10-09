@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -50,6 +52,7 @@ type EventLogOptions struct {
 // pendingEvent is one event waiting for the writer. seq is assigned when the writer serializes it.
 type pendingEvent struct {
 	tsMicros int64
+	layer    string
 	level    Level
 	event    string
 	// fields is the fields as JSON text, serialized once by the producer.
@@ -109,7 +112,7 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 		path:        path,
 		done:        make(chan struct{}),
 	}
-	open := &pendingEvent{tsMicros: time.Now().UnixMicro(), level: LevelInfo, event: "log.open", fields: fields}
+	open := &pendingEvent{tsMicros: time.Now().UnixMicro(), layer: "host", level: LevelInfo, event: "log.open", fields: fields}
 	go log.write(file, options.BatchInterval, open)
 	return log, nil
 }
@@ -139,12 +142,40 @@ func (l *EventLog) Emit(level Level, event string, fields any) bool {
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
 		return false
 	}
+	return l.enqueue(time.Now().UnixMicro(), "host", level, event, text)
+}
+
+// layers are the layers of the event contract (docs/spec/logging.md#event).
+var layers = []string{"native", "host", "page", "plugin", "sidecar"}
+
+// EmitRelayed queues an event that another layer of this process produced, with the time and the layer it carries. The
+// event name must start with the layer, so the name and the layer cannot disagree. It returns an error for a layer
+// outside the contract, a name that does not start with it, or fields that are not JSON, and false, with the loss
+// counted, when the queue has no room.
+func (l *EventLog) EmitRelayed(tsMicros int64, layer string, level Level, event string, fields json.RawMessage) (bool, error) {
+	if !slices.Contains(layers, layer) {
+		return false, fmt.Errorf("the layer %q of %s is not one of %v", layer, event, layers)
+	}
+	if !strings.HasPrefix(event, layer+".") {
+		return false, fmt.Errorf("the event %q does not start with its layer %q", event, layer)
+	}
+	if !json.Valid(fields) {
+		return false, fmt.Errorf("the fields of %s are not JSON", event)
+	}
+	if l.queuedEvents.Load() >= l.queueEvents {
+		l.countLoss(len(event))
+		return false, nil
+	}
+	return l.enqueue(tsMicros, layer, level, event, fields), nil
+}
+
+func (l *EventLog) enqueue(tsMicros int64, layer string, level Level, event string, text json.RawMessage) bool {
 	bytes := len(text) + len(event)
 	if l.queuedBytes.Load()+int64(bytes) > l.queueBytes {
 		l.countLoss(bytes)
 		return false
 	}
-	pending := &pendingEvent{tsMicros: time.Now().UnixMicro(), level: level, event: event, fields: text, bytes: bytes}
+	pending := &pendingEvent{tsMicros: tsMicros, layer: layer, level: level, event: event, fields: text, bytes: bytes}
 	l.queuedBytes.Add(int64(bytes))
 	l.queuedEvents.Add(1)
 	select {
@@ -205,7 +236,7 @@ type eventRecord struct {
 }
 
 func eventLine(seq uint64, e *pendingEvent) ([]byte, error) {
-	line, err := json.Marshal(eventRecord{TsMicros: e.tsMicros, Seq: seq, Level: e.level, Layer: "host", Event: e.event, Fields: e.fields})
+	line, err := json.Marshal(eventRecord{TsMicros: e.tsMicros, Seq: seq, Level: e.level, Layer: e.layer, Event: e.event, Fields: e.fields})
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +272,7 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 		// The fields are numbers and a fixed text, so they are written as text without a serializer that can fail.
 		fields := json.RawMessage(fmt.Sprintf(`{"from_seq":%d,"to_seq":%d,"count":%d,"bytes":%d,"reason":"the queue was full"}`,
 			from, seq, events, bytes))
-		push(&pendingEvent{tsMicros: time.Now().UnixMicro(), level: LevelWarn, event: "log.dropped", fields: fields})
+		push(&pendingEvent{tsMicros: time.Now().UnixMicro(), layer: "host", level: LevelWarn, event: "log.dropped", fields: fields})
 	}
 	write := func() {
 		if len(batch) == 0 {

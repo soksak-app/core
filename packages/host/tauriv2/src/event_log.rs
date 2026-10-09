@@ -3,6 +3,7 @@
 //! A producer pushes an event to a queue bounded by count and by bytes without waiting. One writer thread assigns `seq`,
 //! serializes the JSON line, writes batches and records the events that the queue refused as `log.dropped`.
 
+use std::borrow::Cow;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
@@ -61,6 +62,7 @@ pub struct Options {
 /// One event waiting for the writer. `seq` is assigned when the writer serializes it.
 struct Pending {
     ts_us: u64,
+    layer: Cow<'static, str>,
     level: Level,
     event: String,
     /// The fields as JSON text, serialized once by the producer.
@@ -97,6 +99,9 @@ pub struct EventLog {
     path: PathBuf,
     writer: Mutex<Option<JoinHandle<()>>>,
 }
+
+/// The layers of the event contract (docs/spec/logging.md#event).
+const LAYERS: [&str; 5] = ["native", "host", "page", "plugin", "sidecar"];
 
 fn now_us() -> u64 {
     SystemTime::now()
@@ -135,6 +140,7 @@ impl EventLog {
         });
         let open = Pending {
             ts_us: now_us(),
+            layer: Cow::Borrowed("host"),
             level: Level::Info,
             event: "log.open".into(),
             fields: to_raw_value(&json!({
@@ -199,13 +205,53 @@ impl EventLog {
                 return false;
             }
         };
+        self.enqueue(now_us(), Cow::Borrowed("host"), level, event, fields)
+    }
+
+    /// Queues an event that another layer of this process produced, with the time and the layer it carries. The event
+    /// name must start with the layer, so the name and the layer cannot disagree. Returns an error for a layer outside
+    /// the contract or a name that does not start with it, and false, with the loss counted, when the queue has no room.
+    pub fn emit_relayed(
+        &self,
+        ts_us: u64,
+        layer: &str,
+        level: Level,
+        event: &str,
+        fields: Box<RawValue>,
+    ) -> Result<bool, String> {
+        if !LAYERS.contains(&layer) {
+            return Err(format!(
+                "the layer {layer:?} of {event} is not one of {LAYERS:?}"
+            ));
+        }
+        if !event.starts_with(layer) || !event[layer.len()..].starts_with('.') {
+            return Err(format!(
+                "the event {event:?} does not start with its layer {layer:?}"
+            ));
+        }
+        if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
+            self.count_loss(event.len());
+            return Ok(false);
+        }
+        Ok(self.enqueue(ts_us, Cow::Owned(layer.to_string()), level, event, fields))
+    }
+
+    fn enqueue(
+        &self,
+        ts_us: u64,
+        layer: Cow<'static, str>,
+        level: Level,
+        event: &str,
+        fields: Box<RawValue>,
+    ) -> bool {
         let bytes = fields.get().len() + event.len();
         if self.queued_bytes.load(Ordering::Relaxed) + bytes > self.queue_bytes {
             self.count_loss(bytes);
             return false;
         }
         let pending = Pending {
-            ts_us: now_us(),
+            ts_us,
+            layer,
             level,
             event: event.to_string(),
             fields,
@@ -260,10 +306,11 @@ impl Drop for EventLog {
 fn line(seq: u64, pending: &Pending) -> String {
     // The fields are already JSON text, so the line is assembled without parsing them again.
     format!(
-        "{{\"ts_us\":{},\"seq\":{},\"level\":\"{}\",\"layer\":\"host\",\"event\":{},\"fields\":{}}}",
+        "{{\"ts_us\":{},\"seq\":{},\"level\":\"{}\",\"layer\":\"{}\",\"event\":{},\"fields\":{}}}",
         pending.ts_us,
         seq,
         pending.level.name(),
+        pending.layer,
         serde_json::to_string(&pending.event).expect("a string serializes"),
         pending.fields.get()
     )
@@ -297,6 +344,7 @@ fn write_loop(
         let from = *seq + 1;
         *seq += events;
         let dropped = Pending {
+            layer: Cow::Borrowed("host"),
             ts_us: now_us(),
             level: Level::Warn,
             event: "log.dropped".into(),

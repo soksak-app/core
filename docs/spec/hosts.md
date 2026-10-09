@@ -148,6 +148,7 @@ On Windows both hosts implement only directory identity (`platform/windows/ident
 | H5 | `src/diagnostics_test.go` | none | The diagnostic-only Go unit test is colocated with the implementation to test the unexported capture payload helper without widening the host API; Rust diagnostic coverage is in the host's integration tests |
 | H6 | `src/menu.go`, `tests/menu_test.go` | none | The Wails default application menu zooms and reloads the whole main webview from its View menu, so the Wails host defines its application menu; the Tauri host uses Tauri's default menu, whose View menu has only full screen |
 | H7 | none | `tests/panic_hook_test.rs`, `tests/fatal_signal_test.rs` | The Go runtime writes the stack of a panic and the report of a fatal signal to the standard error, which is the application log; a Rust panic needs the hook of `application_log.rs`, and a fatal signal needs the handlers of the native library, to write their error lines |
+| H8 | `tests/event_log_benchmark_test.go` | `benches/event_log_benchmark.rs` | A measurement is a `Benchmark` function of a Go test file and a `harness = false` target of `cargo bench` in Rust; both print numbers and assert nothing, and `make benchmark-go` and `make benchmark-rust` run them. |
 | A1 | content differs | content differs | `runtime/index.js` uses each framework's call mechanism |
 | A2 | none | `build.rs` | Tauri requires `tauri_build::build()` |
 | A3 | none | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri configuration |
