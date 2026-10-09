@@ -748,7 +748,7 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [o] F145.2 — P1: Record the dropped input of the native region (`image_region.m` non-text input, a closed region).
   - [o] F145.3 — P1: Record the registration and receipt timeouts of the webview input (`webview_input.m`).
   - [o] F145.4 — P1: Record the refusals of injected pointer and key input.
-  - [ ] F145.5 — P1: Record the failures of a file drop (`core-exposure.js`).
+  - [o] F145.5 — P1: Record the failures of a file drop (`core-exposure.js`).
   - [ ] F145.6 — P1: Record the failures of a sidecar send of the page (`sidecar-port.js`, `page.js`) through `report`.
   - [ ] F145.7 — P1: Record the errors and unhandled rejections of the webview of a native surface (`bridge.js`, `plugin-api`).
   - [ ] F145.8 — P1: Record the refusals and malformed envelopes of the image frames and the reasons of a failed presentation (`images.go`, `surfaces.go`, `image_region.m`).

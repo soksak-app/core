@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F145.5: the page writes `info page drop: received <payload>` for each file drop, `info page drop: command <name> accepted <n> file(s) on surface <id>` when a command accepts it, and `error page drop: <reason>` when the drop is invalid, no surface is under it, the plugin declares no drop command or the command fails; `core.drop` still keeps only the last drop.
 - F145.4: the native library writes `info native input inject` for each pointer and key input that the endpoint injects, with its arguments, its result and the reason of a refusal (no window, no open press, an inactive window, a pressed button that AppKit reports, an unknown key name, a receipt that did not arrive).
 - F145.3: the native library records the end of each wait for a webview input receipt: a timeout with its type and limit, a refused send, a registration that ends the wait, a receipt that matches no wait or arrives from another frame, and a missing WebKit pointer API.
 - F145.2: the native library records every input that a region drops with its reason: a `noop:` command (`"dropped":"noop"`), an insert or marked text that is not text (`"dropped":"not text"`) and a report to a closed region (`info native input report dropped`).

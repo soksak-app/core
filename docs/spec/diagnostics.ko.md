@@ -61,6 +61,7 @@
 | Rust host가 panic한다 | panic hook의 `error host panic: <file>:<line>: <message>`. Wails host의 panic은 Go runtime이 stack을 표준 오류에 쓴다 |
 | host가 실행되는 동안 표준 입출력 sidecar process가 끝난다 | `error host sidecar <name>: failed: output closed: <exit status>` |
 | webview에서 합성 pointer 입력이 끝나지 않는다 | `error native webview input: receipt of <type> did not arrive within <seconds> seconds`, `send of <type> was refused`, `_setIgnoresMouseMoveEvents: is unavailable`, `_doAfterProcessingAllPendingMouseEvents: is unavailable`, `receipt message ignored: <reason>`; `info native webview input: wait for <type> ended by the end of the registration`, `receipt of <type> arrived without a wait` |
+| 창에 놓인 파일을 표면에 넘길 수 없다 | `error page drop: <reason>`(잘못된 drop, drop 지점 아래에 표면 없음, plugin이 drop 명령을 선언하지 않음, 명령 실패). 모든 drop은 `info page drop: received <payload>`를 쓰고, 명령이 받으면 `info page drop: command <name> accepted <n> file(s) on surface <id>`도 쓴다 |
 | endpoint 연결이 닫힌다 | `info host endpoint: connection closed: <reason>`을 소켓을 닫기 전에 쓴다. reason은 `peer closed`, `frame of <n> bytes exceeds the limit of <limit>`, `frame is not a JSON-RPC 2.0 request: <body>`, `method "<name>" is not declared`, `the endpoint closed`이며 Wails host는 `the output queue is full`, `write failed`, `the reply cannot be encoded`도 쓴다 |
 | host가 실행되는 동안 상주 service의 연결이 끝난다 | `error host sidecar <name>: connection lost; restarted`, 또는 `connection lost; restart failed: <reason>` |
 

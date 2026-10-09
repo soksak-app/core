@@ -1140,6 +1140,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.5",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "drop: received" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/file-drop-records.test.mjs", id: "a failed file drop is reported with its reason and every drop is logged" },
+    ],
+    expected: "The page records each file drop and the reason that a drop fails.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.4",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "static void logPointer" },

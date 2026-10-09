@@ -67,6 +67,7 @@ let lastDrop = null;
  */
 async function dropFiles(payload) {
   const record = { urls: null, x: null, y: null, surface: null, command: null, error: null };
+  log(`drop: received ${payload}`);
   try {
     // 호스트는 네이티브 놓기 뷰가 만든 JSON 문자열을 그대로 보낸다.
     const { urls, x, y } = JSON.parse(payload);
@@ -83,8 +84,10 @@ async function dropFiles(payload) {
     record.command = command;
     const reply = await registry.handle({ method: "command.run", params: { name: command, params: { urls }, surface: record.surface } });
     if (reply.error) throw new Error(reply.error.message);
+    log(`drop: command ${command} accepted ${urls.length} file(s) on surface ${record.surface}`);
   } catch (error) {
     record.error = error.message;
+    report(`drop: ${error.message}`);
   }
   lastDrop = record;
 }

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F145.5: page가 각 파일 drop을 `info page drop: received <payload>`로, 명령이 받으면 `info page drop: command <name> accepted <n> file(s) on surface <id>`로, drop이 잘못되었거나 아래에 표면이 없거나 plugin이 drop 명령을 선언하지 않았거나 명령이 실패하면 `error page drop: <reason>`으로 쓴다. `core.drop`은 마지막 drop만 계속 유지한다.
 - F145.4: native 라이브러리가 endpoint가 주입하는 각 pointer·key 입력을 인자, 결과, 거부 이유(창 없음, 열린 누름 없음, 비활성 창, AppKit이 보고한 눌린 버튼, 알 수 없는 키 이름, 도착하지 않은 수신)와 함께 `info native input inject`로 쓴다.
 - F145.3: native 라이브러리가 webview 입력 수신 대기가 끝나는 모든 경우를 기록한다. 종류와 한도를 담은 timeout, 거부된 전송, 등록 종료로 끝난 대기, 대기와 맞지 않거나 다른 frame에서 온 수신, 없는 WebKit pointer API가 그 대상이다.
 - F145.2: native 라이브러리가 영역이 버리는 모든 입력을 이유와 함께 기록한다. `noop:` 명령(`"dropped":"noop"`), 글이 아닌 insert나 marked text(`"dropped":"not text"`), 닫힌 영역으로 가는 보고(`info native input report dropped`)가 그 대상이다.
