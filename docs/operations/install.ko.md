@@ -2,7 +2,7 @@
 
 [English](install.md)
 
-각 release는 macOS arm64 애플리케이션 두 개, `soksak-<version>-macos-arm64-wails.zip`과 `soksak-<version>-macos-arm64-tauri.zip`을 게시한다. 둘 다 `soksak.app`을 담고, 데이터는 서로 다른 설정 폴더 `app.soksak.wails`와 `app.soksak.tauri`에 둔다([projects](../spec/projects.ko.md#저장)). 둘 다 설치하려면 하나의 이름을 바꾼다. 예를 들면 `soksak (Tauri).app`이다.
+각 release는 macOS arm64 애플리케이션 두 개, `soksak-<version>-darwin-arm64-wailsv3.zip`과 `soksak-<version>-darwin-arm64-tauriv2.zip`, 즉 [registry](../spec/installation.ko.md#애플리케이션-업데이트)의 core release가 쓰는 이름을 게시한다. 둘 다 `soksak.app`을 담고, 데이터는 서로 다른 설정 폴더 `app.soksak.wails`와 `app.soksak.tauri`에 둔다([projects](../spec/projects.ko.md#저장)). 둘 다 설치하려면 하나의 이름을 바꾼다. 예를 들면 `soksak (Tauri).app`이다.
 
 애플리케이션은 Developer ID로 서명하거나 공증하지 않았으므로, macOS는 받은 사본의 첫 시작을 거부한다. 설치하는 방법은 다음과 같다.
 

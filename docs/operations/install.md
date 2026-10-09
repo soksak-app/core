@@ -2,7 +2,7 @@
 
 [한국어](install.ko.md)
 
-Each release publishes two macOS arm64 applications, `soksak-<version>-macos-arm64-wails.zip` and `soksak-<version>-macos-arm64-tauri.zip`. Both hold `soksak.app`; they keep their data in separate configuration folders, `app.soksak.wails` and `app.soksak.tauri` ([projects](../spec/projects.md#persistence)). To install both, rename one of them, for example `soksak (Tauri).app`.
+Each release publishes two macOS arm64 applications, `soksak-<version>-darwin-arm64-wailsv3.zip` and `soksak-<version>-darwin-arm64-tauriv2.zip`, the names that the core releases of the [registry](../spec/installation.md#application-update) use. Both hold `soksak.app`; they keep their data in separate configuration folders, `app.soksak.wails` and `app.soksak.tauri` ([projects](../spec/projects.md#persistence)). To install both, rename one of them, for example `soksak (Tauri).app`.
 
 The applications are not signed with a Developer ID or notarized, so macOS refuses the first start of a downloaded copy. To install one:
 

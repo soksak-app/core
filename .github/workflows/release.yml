@@ -31,8 +31,8 @@ jobs:
           version="${{ github.ref_name }}"
           version="${version#v}"
           mkdir dist
-          ditto -c -k --keepParent target/release/wailsv3/soksak.app "dist/soksak-$version-macos-arm64-wails.zip"
-          ditto -c -k --keepParent target/release/tauriv2/soksak.app "dist/soksak-$version-macos-arm64-tauri.zip"
+          ditto -c -k --keepParent target/release/wailsv3/soksak.app "dist/soksak-$version-darwin-arm64-wailsv3.zip"
+          ditto -c -k --keepParent target/release/tauriv2/soksak.app "dist/soksak-$version-darwin-arm64-tauriv2.zip"
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
