@@ -38,6 +38,8 @@ An event is one JSON object on one line:
 
 The first line of every file is `log.open`. It holds the schema number (`schema`), `pid`, the role of the process (`role`), the identifier of the run (`boot`), the version of the writer and the policy in force. A reader that meets a schema number it does not know rejects the file with an error that names the file and the number.
 
+A file that the writer rotates ends before the line that would take it past the bound. The new file starts with `log.open` and then `log.rotated` `{bytes, kept, removed}`: `bytes` is the size of the file that was closed, `kept` the number of generations that are kept, and `removed` the file name of the generation that the rotation removed, or `null` when none was removed. `seq` continues across the rotation, so a reader orders the generations by their first `seq`.
+
 ### Correlation identifier
 
 A native input callback (a key event, a paste, a drop, a pointer report) receives one identifier `<boot>.<n>` from the layer that first sees it. The callbacks that it causes (`setMarkedText`, `insertText`, `commitThrough`) take the identifier of the callback that caused them. The identifier travels with the native report, the host relay and the page event; the plugin passes it with the send; the host puts it in the request envelope to the sidecar, so the body of the request stays the plugin's. A send that coalesces several inputs carries all of their identifiers, and the sidecar writes them in the events that the request causes, down to `pty_write`. A sidecar that does not know the envelope field ignores it.

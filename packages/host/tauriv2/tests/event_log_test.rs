@@ -27,6 +27,8 @@ fn options(directory: &Path) -> Options {
         queue_events: 64,
         queue_bytes: 64 * 1024,
         batch_interval: Duration::from_millis(20),
+        rotate_bytes: 1 << 30,
+        generations: 5,
     }
 }
 
@@ -237,4 +239,83 @@ fn a_relayed_event_keeps_its_layer_and_time_and_gets_the_seq_of_the_writer() {
     assert_eq!(events[1]["seq"], 2);
     assert_eq!(events[1]["level"], "warn");
     assert_eq!(events[1]["fields"]["index"], 7);
+}
+
+// contract: log.writer.rotates-at-the-bound-and-keeps-generations
+#[test]
+fn the_log_rotates_at_the_bound_and_keeps_the_newest_generations() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut opts = options(directory.path());
+    opts.rotate_bytes = 4000;
+    opts.generations = 2;
+    // The queue holds every event, so no refusal makes a gap of seq that log.dropped would explain.
+    opts.queue_events = 1000;
+    let log = EventLog::start(opts).unwrap();
+    for index in 0..300 {
+        assert!(
+            log.emit(
+                Level::Info,
+                "host.test.event",
+                &json!({"index": index, "padding": "xxxxxxxxxxxxxxxxxxxx"}),
+            ),
+            "event {index} was refused"
+        );
+    }
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(10)).unwrap();
+    let generation = |n: usize| {
+        let mut name = path.clone().into_os_string();
+        name.push(format!(".{n}"));
+        std::path::PathBuf::from(name)
+    };
+    let files = [path.clone(), generation(1), generation(2)];
+    for file in &files {
+        assert!(file.exists(), "generation {file:?}");
+    }
+    assert!(!generation(3).exists(), "a third generation was kept");
+    let current = read(&path);
+    assert_eq!(current[0]["event"], "log.open");
+    assert_eq!(current[1]["event"], "log.rotated");
+    assert_eq!(current[1]["fields"]["kept"], 2);
+    // A file is closed when the next line would pass the bound, so it is full to within one line of 150 bytes.
+    let full = current[1]["fields"]["bytes"].as_u64().unwrap();
+    assert!(
+        (4000 - 150..=4000).contains(&full),
+        "log.rotated bytes {full}"
+    );
+    // Every generation is a file of the contract: it opens with log.open, and its seq is consecutive.
+    for file in &files {
+        assert!(fs::metadata(file).unwrap().len() <= 4000, "{file:?}");
+        let events = read(file);
+        assert_eq!(events[0]["event"], "log.open", "{file:?}");
+        for pair in events.windows(2) {
+            assert_eq!(
+                pair[1]["seq"].as_u64().unwrap(),
+                pair[0]["seq"].as_u64().unwrap() + 1,
+                "{file:?}"
+            );
+        }
+    }
+    assert!(
+        current[0]["seq"].as_u64().unwrap() > read(&generation(1))[0]["seq"].as_u64().unwrap(),
+        "seq does not continue across the rotation"
+    );
+}
+
+// contract: log.writer.refuses-an-unbounded-file
+#[test]
+fn a_log_without_a_rotation_bound_is_refused() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut opts = options(directory.path());
+    opts.rotate_bytes = 0;
+    match EventLog::start(opts) {
+        Err(error) => assert!(error.contains("rotate_bytes"), "{error}"),
+        Ok(_) => panic!("a log without a rotation bound started"),
+    }
+    let mut opts = options(directory.path());
+    opts.generations = 0;
+    match EventLog::start(opts) {
+        Err(error) => assert!(error.contains("generations"), "{error}"),
+        Ok(_) => panic!("a log without a generation count started"),
+    }
 }

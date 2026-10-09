@@ -31,7 +31,7 @@ func summary(name string, samples []int64) string {
 func BenchmarkEventLogEmit(b *testing.B) {
 	log, err := host.StartEventLog(host.EventLogOptions{
 		Directory: b.TempDir(), Role: "bench", Boot: "b1", QueueEvents: 1 << 16, QueueBytes: 64 << 20,
-		BatchInterval: 100 * time.Millisecond,
+		BatchInterval: 100 * time.Millisecond, RotateBytes: 100 << 20, Generations: 5,
 	})
 	if err != nil {
 		b.Fatal(err)

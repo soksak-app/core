@@ -754,7 +754,7 @@
     - [o] F150.2.1 — P0: native event ring: 여러 생산자 스레드와 소비자 하나를 위한 bounded lock-free ring, 가변 길이 event를 막힘 없이 복사하는 `sp_event`, host writer가 부르는 `sp_event_drain`, ring이 가득 찰 때의 손실 계수. 시험: 왕복, wrap, 가득 찬 ring, 여러 생산자와 소비자 하나. 현재 `sp_log_info`와 `sp_event`의 비용 benchmark.
     - [o] F150.2.2 — P0: host의 Rust writer: 큐, writer 스레드, 배치, `log.dropped`, 종료 때 flush; benchmark. 완료: `packages/host/tauriv2/tests/event_log_test.rs`, `make benchmark-rust`.
     - [o] F150.2.3 — P0: 같은 계약 사례를 가진 host의 Go writer. 완료: `packages/host/wailsv3/tests/event_log_test.go`, `make benchmark-go`.
-    - [ ] F150.2.5 — P0: 두 host writer의 로그 파일 회전: 100 MB, 5개 보관([logging](spec/logging.ko.md) 참조).
+    - [o] F150.2.5 — P0: 두 host writer의 로그 파일 회전: 100 MB, 5개 보관([logging](spec/logging.ko.md) 참조). 완료: `packages/host/wailsv3/tests/event_log_test.go`, `packages/host/tauriv2/tests/event_log_test.rs`.
     - [ ] F150.2.6 — P0: native ring을 Go writer로 가져오는 cgo pull과 Rust writer로 가져오는 FFI pull, cgo·FFI를 건너는 benchmark.
     - [o] F150.2.4 — P0: page 배치 중계와 그 benchmark; 두 host에서 logging을 켜고 껐을 때 키 주입부터 PTY 쓰기까지의 입력 지연.
       - [o] F150.2.4.1 — P0: page 배치 모듈 `log-batch.js`: 한 턴의 event는 `batch` 호출 한 번으로 host에 가고, 한 번에 호출 하나만 진행하며, 큐가 가득 차면 event를 거부하고 다음 배치가 `page.log.dropped`로 시작하고, 실패한 호출은 event 수와 함께 보고한다. 완료: `packages/workbench/test/log-batch.test.mjs`.

@@ -38,6 +38,8 @@ event는 한 줄의 JSON 객체 하나다.
 
 모든 파일의 첫 줄은 `log.open`이다. schema 번호(`schema`), `pid`, 프로세스의 역할(`role`), 실행의 식별자(`boot`), writer의 버전, 적용 중인 정책을 담는다. 모르는 schema 번호를 만난 reader는 파일 이름과 그 번호를 담은 오류로 그 파일을 거부한다.
 
+writer가 회전하는 파일은 경계를 넘게 될 줄 앞에서 끝난다. 새 파일은 `log.open`으로 시작하고 이어서 `log.rotated` `{bytes, kept, removed}`가 온다. `bytes`는 닫은 파일의 크기, `kept`는 보관하는 세대 수, `removed`는 이 회전이 지운 세대의 파일 이름이며 지운 것이 없으면 `null`이다. `seq`는 회전을 건너 이어지므로 독자는 세대를 첫 `seq`로 정렬한다.
+
 ### 상관 식별자
 
 native 입력 콜백 하나(키 event, 붙여넣기, drop, 포인터 보고)는 그것을 처음 본 층에서 식별자 `<boot>.<n>` 하나를 받는다. 그 콜백이 일으키는 콜백(`setMarkedText`, `insertText`, `commitThrough`)은 일으킨 콜백의 식별자를 쓴다. 식별자는 native 보고, host 중계, page event와 함께 가고, plugin이 전송에 실어 넘기며, host가 sidecar로 가는 요청 envelope에 넣으므로 요청의 본문은 plugin의 것으로 남는다. 입력 여럿을 합치는 전송은 그 식별자를 모두 나르고, sidecar는 그 요청이 일으키는 event, 곧 `pty_write`까지 이를 적는다. envelope field를 모르는 sidecar는 이를 무시한다.

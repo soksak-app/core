@@ -18,7 +18,7 @@ import (
 func eventLogOptions(directory string) host.EventLogOptions {
 	return host.EventLogOptions{
 		Directory: directory, Role: "host", Boot: "b1", QueueEvents: 64, QueueBytes: 64 * 1024,
-		BatchInterval: 20 * time.Millisecond,
+		BatchInterval: 20 * time.Millisecond, RotateBytes: 1 << 30, Generations: 5,
 	}
 }
 
@@ -264,5 +264,76 @@ func TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter(t *testing.T)
 	if relayed["layer"] != "page" || relayed["ts_us"] != float64(1_791_000_000_000_123) || relayed["seq"] != float64(2) ||
 		relayed["level"] != "warn" || relayed["fields"].(map[string]any)["index"] != float64(7) {
 		t.Fatalf("relayed event %v", relayed)
+	}
+}
+
+// contract: log.writer.rotates-at-the-bound-and-keeps-generations
+func TestTheEventLogRotatesAtTheBoundAndKeepsTheNewestGenerations(t *testing.T) {
+	options := eventLogOptions(t.TempDir())
+	options.RotateBytes = 4000
+	options.Generations = 2
+	// The queue holds every event, so no refusal makes a gap of seq that log.dropped would explain.
+	options.QueueEvents = 1000
+	log, err := host.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index < 300; index++ {
+		if !log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index, "padding": "xxxxxxxxxxxxxxxxxxxx"}) {
+			t.Fatalf("event %d was refused", index)
+		}
+	}
+	if err := log.Flush(10 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	names := []string{log.Path(), log.Path() + ".1", log.Path() + ".2"}
+	for _, name := range names {
+		if _, err := os.Stat(name); err != nil {
+			t.Fatalf("generation %s: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(log.Path() + ".3"); err == nil {
+		t.Fatal("a third generation was kept")
+	}
+	current := readEventLog(t, log.Path())
+	if current[0]["event"] != "log.open" || current[1]["event"] != "log.rotated" {
+		t.Fatalf("a rotated file starts with %v and %v", current[0]["event"], current[1]["event"])
+	}
+	rotated := current[1]["fields"].(map[string]any)
+	// A file is closed when the next line would pass the bound, so it is full to within one line of 150 bytes.
+	if rotated["kept"] != float64(2) || rotated["bytes"].(float64) > 4000 || rotated["bytes"].(float64) < 4000-150 {
+		t.Fatalf("log.rotated fields %v", rotated)
+	}
+	// Every generation is a file of the contract: it opens with log.open, and its seq is consecutive.
+	for _, name := range names {
+		if info, err := os.Stat(name); err != nil || info.Size() > 4000 {
+			t.Fatalf("%s: %v, %v", name, info, err)
+		}
+		events := readEventLog(t, name)
+		if events[0]["event"] != "log.open" {
+			t.Fatalf("%s starts with %v", name, events[0]["event"])
+		}
+		for position := 1; position < len(events); position++ {
+			if events[position]["seq"].(float64) != events[position-1]["seq"].(float64)+1 {
+				t.Fatalf("%s: seq %v follows %v", name, events[position]["seq"], events[position-1]["seq"])
+			}
+		}
+	}
+	if current[0]["seq"].(float64) <= readEventLog(t, log.Path()+".1")[0]["seq"].(float64) {
+		t.Fatal("seq does not continue across the rotation")
+	}
+}
+
+// contract: log.writer.refuses-an-unbounded-file
+func TestAnEventLogWithoutARotationBoundIsRefused(t *testing.T) {
+	options := eventLogOptions(t.TempDir())
+	options.RotateBytes = 0
+	if _, err := host.StartEventLog(options); err == nil || !strings.Contains(err.Error(), "RotateBytes") {
+		t.Fatalf("error %v", err)
+	}
+	options = eventLogOptions(t.TempDir())
+	options.Generations = 0
+	if _, err := host.StartEventLog(options); err == nil || !strings.Contains(err.Error(), "Generations") {
+		t.Fatalf("error %v", err)
 	}
 }

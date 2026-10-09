@@ -25,6 +25,8 @@ fn start(directory: &Path) -> EventLog {
         queue_events: 64,
         queue_bytes: 64 * 1024,
         batch_interval: Duration::from_millis(20),
+        rotate_bytes: 1 << 30,
+        generations: 5,
     })
     .unwrap()
 }

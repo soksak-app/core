@@ -28,6 +28,8 @@ fn main() {
             queue_events: 1 << 16,
             queue_bytes: 64 << 20,
             batch_interval: Duration::from_millis(100),
+            rotate_bytes: 100 << 20,
+            generations: 5,
         })
         .unwrap(),
     );

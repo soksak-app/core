@@ -57,6 +57,10 @@ pub struct Options {
     pub queue_bytes: usize,
     /// How long the writer waits for more events before it writes a batch.
     pub batch_interval: Duration,
+    /// The size at which the writer starts a new file; the file that was full becomes generation 1.
+    pub rotate_bytes: u64,
+    /// The number of earlier files that are kept (`.1` is the newest); the oldest one is removed.
+    pub generations: usize,
 }
 
 /// One event waiting for the writer. `seq` is assigned when the writer serializes it.
@@ -104,6 +108,8 @@ pub struct EventLog {
 const HOST_QUEUE_EVENTS: usize = 8192;
 const HOST_QUEUE_BYTES: usize = 16 << 20;
 const HOST_BATCH_INTERVAL: Duration = Duration::from_millis(100);
+const HOST_ROTATE_BYTES: u64 = 100 << 20;
+const HOST_GENERATIONS: usize = 5;
 
 /// The layers of the event contract (docs/spec/logging.md#event).
 const LAYERS: [&str; 5] = ["native", "host", "page", "plugin", "sidecar"];
@@ -130,11 +136,19 @@ impl EventLog {
             queue_events: HOST_QUEUE_EVENTS,
             queue_bytes: HOST_QUEUE_BYTES,
             batch_interval: HOST_BATCH_INTERVAL,
+            rotate_bytes: HOST_ROTATE_BYTES,
+            generations: HOST_GENERATIONS,
         })
     }
 
     /// Creates the folder (mode 0700) and the file (mode 0600), writes `log.open` and starts the writer thread.
     pub fn start(options: Options) -> Result<EventLog, String> {
+        if options.rotate_bytes == 0 {
+            return Err("event writer: rotate_bytes must be positive".into());
+        }
+        if options.generations == 0 {
+            return Err("event writer: generations must be positive".into());
+        }
         std::fs::DirBuilder::new()
             .recursive(true)
             .mode(0o700)
@@ -179,11 +193,14 @@ impl EventLog {
             let queued_events = Arc::clone(&queued_events);
             let loss = Arc::clone(&loss);
             let interval = options.batch_interval;
+            let path_for_writer = path.clone();
+            let rotate_bytes = options.rotate_bytes;
+            let generations = options.generations;
             std::thread::Builder::new()
                 .name("event-log-writer".into())
                 .spawn(move || {
                     write_loop(
-                        file,
+                        Output::new(file, path_for_writer, rotate_bytes, generations, &open),
                         receiver,
                         queued_bytes,
                         queued_events,
@@ -338,8 +355,169 @@ fn line(seq: u64, pending: &Pending) -> String {
     )
 }
 
+/// The file of the writer with its batch, its size and the sequence number of the last line.
+struct Output {
+    file: File,
+    path: PathBuf,
+    rotate_bytes: u64,
+    generations: usize,
+    /// The fields of `log.open`, written again at the start of every file.
+    open_fields: String,
+    batch: String,
+    /// The bytes of the current file, written or waiting in the batch.
+    size: u64,
+    seq: u64,
+}
+
+impl Output {
+    fn new(
+        file: File,
+        path: PathBuf,
+        rotate_bytes: u64,
+        generations: usize,
+        open: &Pending,
+    ) -> Output {
+        Output {
+            file,
+            path,
+            rotate_bytes,
+            generations,
+            open_fields: open.fields.get().to_string(),
+            batch: String::new(),
+            size: 0,
+            seq: 0,
+        }
+    }
+
+    /// Adds the line of an event with the next `seq`.
+    fn append(&mut self, pending: &Pending) {
+        self.seq += 1;
+        let text = format!("{}\n", line(self.seq, pending));
+        self.size += text.len() as u64;
+        self.batch.push_str(&text);
+    }
+
+    /// Adds an event. A file that the line would take past the bound is closed first; the new file opens with
+    /// `log.open` and the record of the rotation, so every file of the contract starts with `log.open` and `seq`
+    /// continues.
+    fn push(&mut self, pending: &Pending) {
+        let next = line(self.seq + 1, pending).len() as u64 + 1;
+        if self.size > 0 && self.size + next > self.rotate_bytes {
+            self.flush();
+            let full = self.size;
+            if let Some(removed) = self.rotate() {
+                self.size = 0;
+                let open = Pending {
+                    ts_us: now_us(),
+                    layer: Cow::Borrowed("host"),
+                    level: Level::Info,
+                    event: "log.open".into(),
+                    fields: RawValue::from_string(self.open_fields.clone())
+                        .expect("the fields of log.open are JSON"),
+                    bytes: 0,
+                };
+                self.append(&open);
+                let rotated = Pending {
+                    ts_us: now_us(),
+                    layer: Cow::Borrowed("host"),
+                    level: Level::Info,
+                    event: "log.rotated".into(),
+                    fields: to_raw_value(&json!({
+                        "bytes": full,
+                        "kept": self.generations,
+                        "removed": removed,
+                    }))
+                    .expect("a json value serializes"),
+                    bytes: 0,
+                };
+                self.append(&rotated);
+            }
+        }
+        self.append(pending);
+    }
+
+    /// Writes the batch. A failed write is reported on the standard error; the writer keeps running for the next batch.
+    fn flush(&mut self) {
+        if self.batch.is_empty() {
+            return;
+        }
+        if let Err(error) = self.file.write_all(self.batch.as_bytes()) {
+            eprintln!("event writer: {error}");
+        }
+        self.batch.clear();
+    }
+
+    /// Moves the full file to generation 1 and the older generations one step up, removes the generation beyond the kept
+    /// ones, and opens a new file. Returns None when a step failed (the failure is reported and the writer keeps the
+    /// file it has), otherwise the name of the removed generation, if there was one.
+    fn rotate(&mut self) -> Option<Option<String>> {
+        let path = self.path.clone();
+        let generation = |n: usize| {
+            let mut name = path.clone().into_os_string();
+            name.push(format!(".{n}"));
+            PathBuf::from(name)
+        };
+        let oldest = generation(self.generations);
+        let removed = match std::fs::remove_file(&oldest) {
+            Ok(()) => oldest
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => {
+                eprintln!(
+                    "event writer: rotation could not remove {}: {error}",
+                    oldest.display()
+                );
+                return None;
+            }
+        };
+        for n in (1..self.generations).rev() {
+            match std::fs::rename(generation(n), generation(n + 1)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    eprintln!(
+                        "event writer: rotation could not move {}: {error}",
+                        generation(n).display()
+                    );
+                    return None;
+                }
+            }
+        }
+        if let Err(error) = std::fs::rename(&path, generation(1)) {
+            eprintln!(
+                "event writer: rotation could not move {}: {error}",
+                path.display()
+            );
+            return None;
+        }
+        // The new file is opened before the old one is released, so a failure leaves the writer with a file to write.
+        let next = match OpenOptions::new()
+            .create(true)
+            .append(true)
+            .mode(0o600)
+            .custom_flags(libc::O_CLOEXEC)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(error) => {
+                eprintln!(
+                    "event writer: rotation could not open {}: {error}",
+                    path.display()
+                );
+                return None;
+            }
+        };
+        let full = std::mem::replace(&mut self.file, next);
+        if let Err(error) = full.sync_all() {
+            eprintln!("event writer: rotation could not sync the full file: {error}");
+        }
+        Some(removed)
+    }
+}
+
 fn write_loop(
-    mut file: File,
+    mut out: Output,
     receiver: Receiver<Message>,
     queued_bytes: Arc<AtomicUsize>,
     queued_events: Arc<AtomicUsize>,
@@ -347,15 +525,8 @@ fn write_loop(
     interval: Duration,
     open: Pending,
 ) {
-    let mut seq = 0u64;
-    let mut batch = String::new();
-    let push = |batch: &mut String, seq: &mut u64, pending: &Pending| {
-        *seq += 1;
-        batch.push_str(&line(*seq, pending));
-        batch.push('\n');
-    };
-    push(&mut batch, &mut seq, &open);
-    let record_loss = |batch: &mut String, seq: &mut u64| {
+    out.push(&open);
+    let record_loss = |out: &mut Output| {
         let events = loss.events.swap(0, Ordering::Relaxed);
         if events == 0 {
             return;
@@ -363,8 +534,8 @@ fn write_loop(
         let bytes = loss.bytes.swap(0, Ordering::Relaxed);
         // The refused events had no seq. Their numbers are skipped, and log.dropped is stored after the range that it
         // names (docs/spec/logging.md#event).
-        let from = *seq + 1;
-        *seq += events;
+        let from = out.seq + 1;
+        out.seq += events;
         let dropped = Pending {
             layer: Cow::Borrowed("host"),
             ts_us: now_us(),
@@ -372,7 +543,7 @@ fn write_loop(
             event: "log.dropped".into(),
             fields: to_raw_value(&json!({
                 "from_seq": from,
-                "to_seq": *seq,
+                "to_seq": out.seq,
                 "count": events,
                 "bytes": bytes,
                 "reason": "the queue was full",
@@ -380,39 +551,27 @@ fn write_loop(
             .expect("a json value serializes"),
             bytes: 0,
         };
-        *seq += 1;
-        batch.push_str(&line(*seq, &dropped));
-        batch.push('\n');
+        out.push(&dropped);
     };
-    let write = |file: &mut File, batch: &mut String| {
-        if batch.is_empty() {
-            return;
-        }
-        // A failed write is reported on the standard error; the writer keeps running for the next batch.
-        if let Err(error) = file.write_all(batch.as_bytes()) {
-            eprintln!("event writer: {error}");
-        }
-        batch.clear();
-    };
-    let take = |batch: &mut String, seq: &mut u64, pending: &Pending| {
+    let take = |out: &mut Output, pending: &Pending| {
         queued_bytes.fetch_sub(pending.bytes, Ordering::Relaxed);
         queued_events.fetch_sub(1, Ordering::Relaxed);
-        push(batch, seq, pending);
+        out.push(pending);
     };
     // Takes every event that is queued now, then the loss counted so far, and writes them.
-    let drain = |file: &mut File, batch: &mut String, seq: &mut u64| -> Option<Message> {
+    let drain = |out: &mut Output| -> Option<Message> {
         let mut request = None;
         while let Ok(message) = receiver.try_recv() {
             match message {
-                Message::Event(pending) => take(batch, seq, &pending),
+                Message::Event(pending) => take(out, &pending),
                 other => {
                     request = Some(other);
                     break;
                 }
             }
         }
-        record_loss(batch, seq);
-        write(file, batch);
+        record_loss(out);
+        out.flush();
         request
     };
     loop {
@@ -420,27 +579,27 @@ fn write_loop(
             Ok(message) => message,
             Err(RecvTimeoutError::Timeout) => {
                 // The interval ended: write what has gathered, and handle a request that was queued behind it.
-                match drain(&mut file, &mut batch, &mut seq) {
+                match drain(&mut out) {
                     Some(request) => request,
                     None => continue,
                 }
             }
             Err(RecvTimeoutError::Disconnected) => {
-                drain(&mut file, &mut batch, &mut seq);
+                drain(&mut out);
                 return;
             }
         };
         match message {
             Message::Event(pending) => {
                 let urgent = pending.level == Level::Error;
-                take(&mut batch, &mut seq, &pending);
+                take(&mut out, &pending);
                 if urgent {
-                    record_loss(&mut batch, &mut seq);
-                    write(&mut file, &mut batch);
+                    record_loss(&mut out);
+                    out.flush();
                 }
             }
             Message::Flush(done) => {
-                let following = drain(&mut file, &mut batch, &mut seq);
+                let following = drain(&mut out);
                 if done.send(()).is_err() {
                     eprintln!("event writer: the flush was answered after its deadline");
                 }
@@ -449,7 +608,7 @@ fn write_loop(
                 }
             }
             Message::Stop => {
-                drain(&mut file, &mut batch, &mut seq);
+                drain(&mut out);
                 return;
             }
         }

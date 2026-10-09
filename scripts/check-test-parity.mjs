@@ -1142,6 +1142,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.2.5",
+    implementation: [
+      { file: "packages/host/wailsv3/src/event_log.go", symbol: "func (l *EventLog) rotate" },
+      { file: "packages/host/tauriv2/src/event_log.rs", symbol: "fn rotate" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestTheEventLogRotatesAtTheBoundAndKeepsTheNewestGenerations" },
+      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "the_log_rotates_at_the_bound_and_keeps_the_newest_generations" },
+    ],
+    expected: "A writer closes its file before the line that would pass the bound, keeps the newest generations, opens the new file with log.open and log.rotated, and continues seq.",
+    levels: ["unit"],
+  },
+  {
     id: "F150.2.4.5",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "sp_input_result sp_input_key" },

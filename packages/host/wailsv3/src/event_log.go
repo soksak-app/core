@@ -7,6 +7,7 @@ package host
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,6 +48,10 @@ type EventLogOptions struct {
 	QueueBytes int
 	// BatchInterval is how long the writer waits for more events before it writes a batch.
 	BatchInterval time.Duration
+	// RotateBytes is the size at which the writer starts a new file; the file that was full becomes generation 1.
+	RotateBytes int64
+	// Generations is the number of earlier files that are kept (`.1` is the newest); the oldest one is removed.
+	Generations int
 }
 
 // pendingEvent is one event waiting for the writer. seq is assigned when the writer serializes it.
@@ -81,12 +86,21 @@ type EventLog struct {
 	lostEvents   atomic.Uint64
 	lostBytes    atomic.Uint64
 	path         string
+	rotateBytes  int64
+	generations  int
+	openFields   json.RawMessage
 	done         chan struct{}
 	closeOnce    sync.Once
 }
 
 // StartEventLog creates the folder (mode 0700) and the file (mode 0600), writes log.open and starts the writer.
 func StartEventLog(options EventLogOptions) (*EventLog, error) {
+	if options.RotateBytes <= 0 {
+		return nil, fmt.Errorf("event writer: RotateBytes must be positive, not %d", options.RotateBytes)
+	}
+	if options.Generations <= 0 {
+		return nil, fmt.Errorf("event writer: Generations must be positive, not %d", options.Generations)
+	}
 	if err := os.MkdirAll(options.Directory, 0o700); err != nil {
 		return nil, err
 	}
@@ -110,6 +124,9 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 		queueEvents: int64(options.QueueEvents),
 		queueBytes:  int64(options.QueueBytes),
 		path:        path,
+		rotateBytes: options.RotateBytes,
+		generations: options.Generations,
+		openFields:  fields,
 		done:        make(chan struct{}),
 	}
 	open := &pendingEvent{tsMicros: time.Now().UnixMicro(), layer: "host", level: LevelInfo, event: "log.open", fields: fields}
@@ -122,6 +139,8 @@ const (
 	hostQueueEvents   = 8192
 	hostQueueBytes    = 16 << 20
 	hostBatchInterval = 100 * time.Millisecond
+	hostRotateBytes   = 100 << 20
+	hostGenerations   = 5
 )
 
 // StartHostEventLog starts the writer of the host in logs/ of the configuration folder; the boot identifier is the
@@ -130,6 +149,7 @@ func StartHostEventLog(config string) (*EventLog, error) {
 	return StartEventLog(EventLogOptions{
 		Directory: filepath.Join(config, "logs"), Role: "host", Boot: fmt.Sprintf("%d-%d", time.Now().Unix(), os.Getpid()),
 		QueueEvents: hostQueueEvents, QueueBytes: hostQueueBytes, BatchInterval: hostBatchInterval,
+		RotateBytes: hostRotateBytes, Generations: hostGenerations,
 	})
 }
 
@@ -259,12 +279,58 @@ func eventLine(seq uint64, e *pendingEvent) ([]byte, error) {
 	return append(line, '\n'), nil
 }
 
+// rotate moves the full file to generation 1 and the older generations one step up, removes the generation beyond the
+// kept ones, and opens a new file. It returns the new file and the name of the removed generation (empty when none was
+// removed). When a step fails, the failure is reported and the writer keeps the file it has.
+func (l *EventLog) rotate(file *os.File) (*os.File, string) {
+	generation := func(n int) string { return fmt.Sprintf("%s.%d", l.path, n) }
+	removed := ""
+	if err := os.Remove(generation(l.generations)); err == nil {
+		removed = filepath.Base(generation(l.generations))
+	} else if !errors.Is(err, os.ErrNotExist) {
+		fmt.Fprintf(os.Stderr, "event writer: rotation could not remove %s: %v\n", generation(l.generations), err)
+		return file, ""
+	}
+	for n := l.generations - 1; n >= 1; n-- {
+		if err := os.Rename(generation(n), generation(n+1)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			fmt.Fprintf(os.Stderr, "event writer: rotation could not move %s: %v\n", generation(n), err)
+			return file, ""
+		}
+	}
+	if err := os.Rename(l.path, generation(1)); err != nil {
+		fmt.Fprintf(os.Stderr, "event writer: rotation could not move %s: %v\n", l.path, err)
+		return file, ""
+	}
+	// The new file is opened before the old one is closed, so a failure leaves the writer with a file to write.
+	next, err := os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY|syscall.O_CLOEXEC, 0o600)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "event writer: rotation could not open %s: %v\n", l.path, err)
+		return file, ""
+	}
+	if err := file.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "event writer: rotation could not close the full file: %v\n", err)
+	}
+	return next, removed
+}
+
 func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEvent) {
 	defer close(l.done)
-	defer file.Close()
+	defer func() { file.Close() }()
 	var seq uint64
 	var batch []byte
-	push := func(e *pendingEvent) {
+	// size is the number of bytes of the current file, written or waiting in the batch.
+	var size int64
+	flush := func() {
+		if len(batch) == 0 {
+			return
+		}
+		// A failed write is reported on the standard error; the writer keeps running for the next batch.
+		if _, err := file.Write(batch); err != nil {
+			fmt.Fprintf(os.Stderr, "event writer: %v\n", err)
+		}
+		batch = batch[:0]
+	}
+	appendLine := func(e *pendingEvent) {
 		seq++
 		line, err := eventLine(seq, e)
 		if err != nil {
@@ -273,6 +339,37 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 			return
 		}
 		batch = append(batch, line...)
+		size += int64(len(line))
+	}
+	push := func(e *pendingEvent) {
+		// The line is serialized with the next seq. A file that this line would take past the bound is closed first;
+		// the new file opens with log.open and the record of the rotation, so every file of the contract starts with
+		// log.open and seq continues.
+		line, err := eventLine(seq+1, e)
+		if err == nil && size > 0 && size+int64(len(line)) > l.rotateBytes {
+			flush()
+			full := size
+			next, removed := l.rotate(file)
+			if next != file {
+				file = next
+				size = 0
+				appendLine(&pendingEvent{tsMicros: time.Now().UnixMicro(), layer: "host", level: LevelInfo, event: "log.open", fields: l.openFields})
+				name := "null"
+				if removed != "" {
+					quoted, err := json.Marshal(removed)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "event writer: the removed name cannot be written: %v\n", err)
+					} else {
+						name = string(quoted)
+					}
+				}
+				appendLine(&pendingEvent{tsMicros: time.Now().UnixMicro(), layer: "host", level: LevelInfo, event: "log.rotated",
+					fields: json.RawMessage(fmt.Sprintf(`{"bytes":%d,"kept":%d,"removed":%s}`, full, l.generations, name))})
+			}
+			appendLine(e)
+			return
+		}
+		appendLine(e)
 	}
 	push(open)
 	recordLoss := func() {
@@ -290,16 +387,7 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 			from, seq, events, bytes))
 		push(&pendingEvent{tsMicros: time.Now().UnixMicro(), layer: "host", level: LevelWarn, event: "log.dropped", fields: fields})
 	}
-	write := func() {
-		if len(batch) == 0 {
-			return
-		}
-		// A failed write is reported on the standard error; the writer keeps running for the next batch.
-		if _, err := file.Write(batch); err != nil {
-			fmt.Fprintf(os.Stderr, "event writer: %v\n", err)
-		}
-		batch = batch[:0]
-	}
+	write := flush
 	take := func(e *pendingEvent) {
 		l.queuedBytes.Add(-int64(e.bytes))
 		l.queuedEvents.Add(-1)
