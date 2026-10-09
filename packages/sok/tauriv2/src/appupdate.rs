@@ -81,10 +81,10 @@ pub fn stage_app_update(config_dir: &Path, update: &AppUpdate) -> Result<PathBuf
         std::fs::remove_dir_all(&folder).map_err(|error| format!("{at}: {error}"))?;
     }
     std::fs::create_dir_all(&folder).map_err(|error| format!("{at}: {error}"))?;
-    let platform = crate::platform::current().map_err(&fail)?;
+    let platform = crate::platform::current().map_err(fail)?;
     let release = folder.join("release.zip");
     std::fs::write(&release, data).map_err(|error| fail(error.to_string()))?;
-    platform.extract_bundle(&release, &folder).map_err(&fail)?;
+    platform.extract_bundle(&release, &folder).map_err(fail)?;
     std::fs::remove_file(&release).map_err(|error| fail(error.to_string()))?;
     let mut bundles = vec![];
     for entry in std::fs::read_dir(&folder).map_err(|error| fail(error.to_string()))? {
@@ -99,7 +99,7 @@ pub fn stage_app_update(config_dir: &Path, update: &AppUpdate) -> Result<PathBuf
             bundles.len()
         )));
     };
-    let got = platform.bundle_version(bundle).map_err(&fail)?;
+    let got = platform.bundle_version(bundle).map_err(fail)?;
     if got != update.version {
         return Err(fail(format!(
             "the bundle version is {got}, not {}",
