@@ -635,8 +635,11 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)doCommandBySelector:(SEL)selector {
-    [self logInput:@"doCommandBySelector" fields:[NSString stringWithFormat:@"\"selector\":\"%@\",\"unhandledKey\":\"%@\"",
-        [self jsonEscapedString:NSStringFromSelector(selector)], [self jsonEscapedString:self.unhandledKey ?: @""]] before:nil];
+    // A noop: command that no unhandled key accompanies is dropped below, and the record says so.
+    BOOL dropped = !self.unhandledKey && selector == @selector(noop:);
+    [self logInput:@"doCommandBySelector" fields:[NSString stringWithFormat:@"\"selector\":\"%@\",\"unhandledKey\":\"%@\"%@",
+        [self jsonEscapedString:NSStringFromSelector(selector)], [self jsonEscapedString:self.unhandledKey ?: @""],
+        dropped ? @",\"dropped\":\"noop\"" : @""] before:nil];
     // 입력기가 처리하지 않은 특수 키는 명령이 아니라 원래 키로 보고한다.
     NSString *key = [[self.unhandledKey retain] autorelease];
     if (key) {

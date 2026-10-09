@@ -601,7 +601,28 @@ int main(int argc, char **argv) { @autoreleasepool {
             && [lastPreedit(beforeNoop) isEqual:@"pending"],
             [NSString stringWithFormat:@"TEST 8: noop: preserves pending input without reporting a command (got %@)", collectedEvents]);
 
-        sp_region_close(region8);
+        // An input that the region drops is recorded with its reason: a command that does nothing, an insert that is not
+        // text, and a report to a region that is closed.
+        {
+            NSString *records = capturedStandardError(^{
+                [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(noop:)];
+                [(id<NSTextInputClient>)regionView insertText:@42 replacementRange:NSMakeRange(NSNotFound, 0)];
+            });
+            check([records containsString:@"\"call\":\"doCommandBySelector\""] && [records containsString:@"\"dropped\":\"noop\""],
+                [NSString stringWithFormat:@"TEST 8: a noop: command is recorded as dropped (got %@)", records]);
+            check([records containsString:@"\"call\":\"insertText\""] && [records containsString:@"\"dropped\":\"not text\""],
+                [NSString stringWithFormat:@"TEST 8: an insert that is not text is recorded as dropped (got %@)", records]);
+            [regionView retain];
+            sp_region_close(region8);
+            NSString *closed = capturedStandardError(^{
+                [(id<NSTextInputClient>)regionView insertText:@"x" replacementRange:NSMakeRange(NSNotFound, 0)];
+            });
+            [regionView release];
+            check([closed containsString:@" info native input report dropped: "],
+                [NSString stringWithFormat:@"TEST 8: a report to a closed region is recorded as dropped (got %@)", closed]);
+            region8 = NULL;
+        }
+
     }
 
     // TEST 9: 접근성 및 캐럿

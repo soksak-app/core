@@ -1140,6 +1140,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.2",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "input report dropped" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: a noop: command is recorded as dropped" },
+    ],
+    expected: "The native library records an input that a region drops with its reason.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.1",
     implementation: [
       { file: "packages/host/wailsv3/src/endpoint.go", symbol: "connection closed: " },
