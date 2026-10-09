@@ -260,7 +260,7 @@ func (c *Sidecars) Declare(declarations []SidecarDeclaration) error {
 	if forgot {
 		c.closingChanged()
 	}
-	c.stopProcesses(processes)
+	c.stopProcesses(processes, false)
 	return nil
 }
 
@@ -668,7 +668,15 @@ func (c *Sidecars) CloseOwner(owner SidecarOwner) {
 
 // Stop 은 모든 사이드카를 종료한다. 채널을 닫아 쓰기 고루틴에 EOF 신호를 보내고,
 // 최대 stopTimeout 동안 프로세스 종료를 기다린 뒤 응답하지 않으면 강제 종료한다.
-func (c *Sidecars) Stop() {
+func (c *Sidecars) Stop() { c.stop(false) }
+
+// Detach stops the sidecars as Stop does, except that a persistent service gets no close-owner and no shutdown: its
+// connection ends and its sessions stay, for the application that starts after an application update
+// (docs/spec/installation.md#application-update).
+func (c *Sidecars) Detach() { c.stop(true) }
+
+// stop stops the sidecars; with detach a persistent service only loses its connection.
+func (c *Sidecars) stop(detach bool) {
 	c.mu.Lock()
 	c.stopped = true
 	// 시작 중인 사이드카는 끝나면 등록되므로, 그 시작을 기다린 뒤 실행 중인 목록을 읽는다.
@@ -696,7 +704,7 @@ func (c *Sidecars) Stop() {
 	if forgot {
 		c.closingChanged()
 	}
-	c.stopProcesses(processes)
+	c.stopProcesses(processes, detach)
 }
 
 // detach removes a process that stops from the running list. A standard input and output sidecar ends, so its
@@ -712,7 +720,7 @@ func (c *Sidecars) detach(name string, process *sidecar) bool {
 
 // stopProcesses stops processes, which are out of the running list, by the stop rules and waits until they end
 // (docs/spec/sidecars.md#declaration-and-startup).
-func (c *Sidecars) stopProcesses(processes []*sidecar) {
+func (c *Sidecars) stopProcesses(processes []*sidecar, detach bool) {
 	// 모든 사이드카에 대해 채널을 닫아 EOF 신호를 보낸다.
 	// 쓰기 고루틴이 채널 닫힘을 감지하고 stdin을 닫는다.
 	for _, process := range processes {
@@ -730,6 +738,14 @@ func (c *Sidecars) stopProcesses(processes []*sidecar) {
 		wg.Add(1)
 		go func(p *sidecar) {
 			defer wg.Done()
+			if p.persistent && detach {
+				p.ownerMutex.Lock()
+				defer p.ownerMutex.Unlock()
+				if !p.transportClosed {
+					p.closeTransport()
+				}
+				return
+			}
 			if p.persistent {
 				if err := c.closePersistentOwner(p, ctx); err != nil {
 					LogError("sidecar "+p.name, fmt.Sprintf("close owner: %v", err))

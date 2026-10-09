@@ -1708,6 +1708,8 @@ struct ReplaceService {
     second: Receiver<std::time::Instant>,
     /// The time at which the process of the service was ended after the shutdown answer.
     ended: Receiver<std::time::Instant>,
+    /// Receives when the first connection ends, whichever side ends it.
+    first_ended: Receiver<()>,
 }
 
 fn serve_replace_service(
@@ -1750,6 +1752,7 @@ fn serve_replace_service(
     let operations = Arc::new(Mutex::new(Vec::new()));
     let recorded = Arc::clone(&operations);
     let (second_sender, second) = channel();
+    let (first_ended_sender, first_ended) = channel();
     let (ended_sender, ended) = channel();
     let ending = Arc::clone(&process);
     let (old, installed) = (old.to_string(), installed.to_string());
@@ -1770,7 +1773,19 @@ fn serve_replace_service(
             let recorded = Arc::clone(&recorded);
             let ending = Arc::clone(&ending);
             let ended_sender = ended_sender.clone();
+            let first_ended_sender = first.then(|| first_ended_sender.clone());
             thread::spawn(move || {
+                // The first connection reports its end whichever way the loop below returns.
+                struct Ended(Option<Sender<()>>);
+                impl Drop for Ended {
+                    fn drop(&mut self) {
+                        if let Some(sender) = &self.0 {
+                            // The check stopped waiting for the end, so no one receives it.
+                            let _ = sender.send(());
+                        }
+                    }
+                }
+                let _ended = Ended(first_ended_sender);
                 let mut reader = BufReader::new(stream.try_clone().unwrap());
                 let mut line = String::new();
                 while reader.read_line(&mut line).unwrap_or(0) > 0 {
@@ -1808,6 +1823,7 @@ fn serve_replace_service(
         operations,
         second,
         ended,
+        first_ended,
     }
 }
 
@@ -2106,4 +2122,43 @@ fn stop_does_not_close_the_owner_again_while_a_replacement_closes_it() {
     stopping.join().unwrap();
     replacing.join().unwrap().unwrap();
     service.join().unwrap();
+}
+
+// contract: sidecars-transport.detach.closes-the-connection-without-closing-the-owner
+#[test]
+fn detach_closes_the_connection_of_a_persistent_service_without_closing_the_owner() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service = serve_replace_service(
+        config_directory.path(),
+        executable_directory.path(),
+        "0.0.7",
+        "0.0.7",
+        Duration::ZERO,
+    );
+    let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
+    let (owner, events) = owner("detach", "/projects/detach");
+    sidecars
+        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv_timeout(STALL).unwrap();
+    sidecars.detach();
+    // The connection ends, which is the only thing that the service learns, and the sessions of the service stay.
+    service.first_ended.recv_timeout(STALL).unwrap();
+    let operations = service.operations.lock().unwrap().clone();
+    assert!(
+        !operations
+            .iter()
+            .any(|operation| operation == "close-owner" || operation == "shutdown"),
+        "the service received {operations:?}"
+    );
+    // Stopping after a detach does nothing more to the service.
+    sidecars.stop();
+    let operations = service.operations.lock().unwrap().clone();
+    assert!(
+        !operations
+            .iter()
+            .any(|operation| operation == "close-owner" || operation == "shutdown"),
+        "the stop after the detach sent to the service: {operations:?}"
+    );
 }

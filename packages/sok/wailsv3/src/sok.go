@@ -32,6 +32,8 @@ commands:
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
+  app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
+                            replaces the application bundle TARGET with BUNDLE after the process PID ended
   plugin pack DIRECTORY OUTPUT [--diagnostics]
                             writes the plugin into OUTPUT; --diagnostics adds diagnostics.json
   sidecar release DIRECTORY OUTPUT [--platform P]
@@ -61,7 +63,7 @@ var booleans = map[string]bool{"watch": true, "activate": true, "help": true, "d
 // options 는 값을 받는 flag 다.
 var options = map[string]bool{
 	"config-dir": true, "window": true, "project": true, "surface": true, "index": true, "value": true, "event": true,
-	"x": true, "y": true, "phase": true, "platform": true, "button": true, "delta-x": true, "delta-y": true, "key": true, "text": true, "modifiers": true,
+	"wait": true, "bundle": true, "target": true, "x": true, "y": true, "phase": true, "platform": true, "button": true, "delta-x": true, "delta-y": true, "key": true, "text": true, "modifiers": true,
 }
 
 type arguments struct {
@@ -509,6 +511,10 @@ func connectTo(values map[string]string, options Options) (*Client, error) {
 }
 
 func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
+	// The arguments after -- are those of the application that starts again, so the command parses its own.
+	if len(args) > 0 && args[0] == "app" {
+		return runApp(args[1:], stdout)
+	}
 	// 점이 있는 명령 단어는 선언된 command 다(docs/spec/cli.md).
 	if strings.Contains(commandWord(args), ".") {
 		return runCommand(args, stdout, options)

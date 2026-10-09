@@ -356,6 +356,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.stop.own-close-is-not-a-read-error` | 중지 중에 서비스 연결을 닫아도 `persistent read` 오류 줄을 쓰지 않는다. host 자신이 닫았기 때문이다. | both |
 | `sidecars-transport.stop.accepts-close-answers-sent-before-stop` | 지속 service가 중지 전에 보낸 closed 알림에 중지가 시작된 뒤 답해도 받아들인다. 중지는 shutdown을 보내고 닫는 중인 표면이 남지 않는다. | both |
 | `sidecars-transport.stop.leaves-the-close-of-a-replacement-to-the-replacement` | 지속 service의 owner 닫기는 연결마다 한 번 실행된다. 교체가 owner를 닫는 동안 시작한 종료는 두 번째 close-owner를 보내지 않고, 교체가 끝나기를 기다리며, transport를 다시 닫지 않는다. | both |
+| `sidecars-transport.detach.closes-the-connection-without-closing-the-owner` | 사이드카를 분리하면 상주 service의 연결만 끝나고 close-owner와 shutdown을 보내지 않으며, 분리 뒤의 stop은 더 보내지 않는다. | both |
 | `sidecars-transport.persistent.revives-a-lost-connection` | 서비스가 연결을 끊으면 호스트가 전송 없이 다시 시작하고 소유 표면이 연결 이벤트를 받는다. | both |
 | `sidecars-transport.persistent.lost-connection-writes-an-error-line` | host가 실행되는 동안 프로토콜 위반 없이 끝난 상주 service의 연결은 host가 다시 연결한 뒤 `error: sidecar <name>: connection lost; restarted`를 한 번 쓰고, 연결하지 못하면 `error: sidecar <name>: connection lost; restart failed: <reason>`을 쓴다. | both |
 | `sidecars-transport.replace.replaces-an-outdated-service` | `hello`의 version이 설치된 version과 다른 상주 service를 교체하면 `close-owner`와 `shutdown`을 보내고, 연결을 닫고, 생성 경로로 설치된 service를 시작하고, 그 sidecar로 보낸 각 표면에 연결 알림을 보내고, `host.sidecars`의 `outdated`에서 그 sidecar를 빼고, `sidecar <name>: service <running> replaced by <installed>`를 쓴다. | both |
@@ -460,6 +461,14 @@ fn invalid_json_closes_connection() {
 | `cli.registry.checks-plugin-dependencies` | `sok registry build`는 나열된 plugin을 지정하는 `plugin.json`의 dependency를 받아들이고 version의 `sidecars`에는 sidecar dependency만 쓴다. 나열된 plugin도 나열된 sidecar도 지정하지 않는 dependency와 나열된 어느 version도 채우지 않는 plugin dependency는 그 문구와 함께 종료 상태 1이며 `index.json`을 남기지 않는다. | both |
 | `cli.registry.lists-core-releases` | `sok registry build`는 registry 폴더의 `core.json`을 읽고 모든 core release의 `sha256`을 확인하며, 정렬한 목록을 `index.json`의 `sidecars`와 `packs` 사이에 `core`로 쓰고 결과에 `core`로 센다. `core.json`이 없는 registry는 `core`를 쓰지 않고 0으로 센다. | both |
 | `cli.registry.rejects-malformed-core-releases` | `sok registry build`는 알려진 platform과 host의 `<platform>-<host>`가 아닌 core release 키, 두 번 나열된 버전, 알 수 없는 field, hash가 다른 release, 나열되지 않은 철회 core 버전이 있으면 `index.json`을 쓰지 않는다. | both |
+| `app-update.state.selects-the-candidate` | 애플리케이션 업데이트의 후보는 `core`에서 실행 중인 core보다 새롭고 `revoked.core`에 없으며 `<platform>-<host>` 키의 release가 있는 가장 새 버전이다. `core`가 없는 index에는 후보가 없다. | both |
+| `app-update.stage.verifies-and-extracts` | 후보를 준비하면 release를 받고 `sha256`을 확인하고 `<config-dir>/updates/<version>/`을 지운 뒤 그 안에 zip을 풀고, `CFBundleShortVersionString`이 그 버전인 애플리케이션 번들 하나를 담았는지 확인해 번들의 경로를 돌려준다. | both |
+| `app-update.stage.rejects-a-wrong-release` | hash가 다르거나 번들 버전이 후보와 다르거나 읽을 수 없는 release는 단계를 밝힌 메시지로 실패하고 준비한 폴더를 남기지 않는다. | both |
+| `app-update.host.stages-only-the-candidate` | host는 지금 registry index의 후보인 버전만 준비하며, 다른 버전과 실행 중인 버전에는 `<version> is not the candidate of core <running>`으로 실패한다. | both |
+| `app-update.replace.replaces-the-bundle-after-the-process-ended` | `sok app update`는 커널 알림으로 프로세스의 끝을 기다리고, 새 번들을 target 옆에 복사하고, target을 옆으로 옮기고 복사본을 그 자리로 옮기고, `--` 뒤의 인자로 target을 시작한 뒤 이전 번들과 준비한 번들을 지우고 `{target}`을 출력한다. | both |
+| `app-update.replace.restores-the-bundle-when-the-start-fails` | 옮긴 뒤 시작이 실패하면 새 번들을 지우고 이전 번들을 되돌려 시작하며 시작의 메시지로 실패한다. | both |
+| `app-update.replace.refuses-before-it-changes-anything` | 응용 프로그램 번들이 아닌 target이나 bundle, 둘이 같은 폴더인 경우, 기한(60초) 뒤에도 실행 중인 프로세스는 target이 바뀌기 전에 실패한다. | both |
+| `app-update.apply.starts-sok-from-a-copy-and-checks-the-bundle` | 업데이트를 적용하면 실행 중인 번들의 `sok`을 `<config-dir>/updates/sok`에 복사하고 `sok app update --wait <pid> --bundle <bundle> --target <실행 중인 번들> [-- <인자>]`를 새 세션으로 준비한다. `updates/` 밖의 번들, `Info.plist`가 없는 폴더, 응용 프로그램 번들 밖의 애플리케이션은 거부한다. | both |
 | `cli.plugin.install-extracts-and-records` | `sok registry use`는 검사한 index를 `file:` URL로 기록한다. `sok plugin install`은 plugin과 그 sidecar version을 mode와 함께 풀고, 푼 폴더마다 절대 `path`를 담아 `installed.json`을 쓰고, plugin 항목과 sidecar version을 출력하며, 되풀이하면 아무것도 바꾸지 않는다. | both |
 | `cli.plugin.install-modes-ignore-the-umask` | umask 077에서도 `sok plugin install`은 실행 파일을 mode 0755로, 다른 파일을 mode 0644로 쓴다. | both |
 | `cli.plugin.install-failure-keeps-state` | `plugins/registry.json`이 없거나, hash가 index와 다른 release이거나, 폴더 밖 항목을 담은 release이면 `sok plugin install`은 종료 상태 1이며 `installed.json`, version 폴더, 푼 파일을 남기지 않는다. | both |

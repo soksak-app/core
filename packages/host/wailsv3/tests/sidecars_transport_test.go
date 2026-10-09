@@ -1769,6 +1769,8 @@ type replaceService struct {
 	// signal for each close-owner that the first service read.
 	hold       chan struct{}
 	closeOwner chan struct{}
+	// firstEnded, when set, is closed when the connection of the first service ends.
+	firstEnded chan struct{}
 	endedAt    time.Time
 	ended      sync.WaitGroup
 	secondAt   time.Time
@@ -1833,6 +1835,9 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 			}
 			go func(first bool) {
 				defer connection.Close()
+				if first && service.firstEnded != nil {
+					defer close(service.firstEnded)
+				}
 				reader := bufio.NewReader(connection)
 				for {
 					line, err := reader.ReadBytes('\n')
@@ -2099,5 +2104,37 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 	}
 	if closes != 1 {
 		t.Fatalf("the service received %d close-owner requests: %v", closes, service.received())
+	}
+}
+
+// contract: sidecars-transport.detach.closes-the-connection-without-closing-the-owner
+func TestDetachClosesTheConnectionOfAPersistentServiceWithoutClosingTheOwner(t *testing.T) {
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
+	service.firstEnded = make(chan struct{})
+	sidecars := replaceSidecars(t, root, service)
+	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.seen)
+	sidecars.Detach()
+	// The connection ends, which is the only thing that the service learns, and the sessions of the service stay.
+	select {
+	case <-service.firstEnded:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the connection of the service did not end")
+	}
+	for _, operation := range service.received() {
+		if operation == "close-owner" || operation == "shutdown" {
+			t.Fatalf("the service received %v", service.received())
+		}
+	}
+	// Stopping after a detach does nothing more to the service.
+	sidecars.Stop()
+	for _, operation := range service.received() {
+		if operation == "close-owner" || operation == "shutdown" {
+			t.Fatalf("the stop after the detach sent to the service: %v", service.received())
+		}
 	}
 }

@@ -38,6 +38,9 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         window_ready,
         window_close,
         window_close_kept,
+        app_update_state,
+        app_update_stage,
+        app_update_apply,
         window_new,
         workspace,
         folder_choose,
@@ -591,6 +594,51 @@ fn clipboard_read(
 fn link_open(window: Window, request: Argument<link::OpenRequest>) -> Result<(), String> {
     let Argument(request) = request;
     link::open(&window, request)
+}
+
+/// The version of the running core and the candidate of an application update.
+#[tauri::command(async)]
+fn app_update_state(window: Window) -> Result<soksak_sok::appupdate::AppUpdateState, String> {
+    let directory = window
+        .state::<crate::workspace::Workspace>()
+        .directory()
+        .to_path_buf();
+    crate::app_update::state(&directory)
+}
+
+/// Downloads, checks and extracts the release of the candidate of an application update.
+#[tauri::command(async)]
+fn app_update_stage(
+    window: Window,
+    request: Argument<crate::app_update::StageRequest>,
+) -> Result<crate::app_update::Staged, String> {
+    let Argument(request) = request;
+    let directory = window
+        .state::<crate::workspace::Workspace>()
+        .directory()
+        .to_path_buf();
+    crate::app_update::stage_call(&directory, request)
+}
+
+/// Prepares the replacement of the application bundle with a staged one and quits the application as host.quit does.
+#[tauri::command(async)]
+fn app_update_apply(
+    window: Window,
+    request: Argument<crate::app_update::ApplyRequest>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    let directory = window
+        .state::<crate::workspace::Workspace>()
+        .directory()
+        .to_path_buf();
+    let command = crate::app_update::apply_call(&directory, request)?;
+    *window
+        .state::<crate::windows::Windows>()
+        .update
+        .lock()
+        .expect("pending update") = Some(command);
+    window.app_handle().exit(0);
+    Ok(())
 }
 
 /// The files of the logs folder (docs/spec/debug.md).

@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F121.5: 두 host가 host 호출 `appUpdateApply`에 답한다. 실행 중인 번들의 `sok`을 설정 디렉터리의 `updates/`에 복사하고, 새 세션에서 시작할 `sok app update`를 준비하고, `host.quit`처럼 종료한다. 종료는 사이드카를 분리(Go `Detach`, Rust `detach`)하므로 상주 service는 연결만 끊기고 `close-owner`와 `shutdown`을 받지 않아 세션이 남으며, 명령은 종료에 답한 뒤 시작한다. 수정된 탭이 취소한 종료는 보류한 업데이트를 버린다.
+- F121.4: `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]`(Go와 Rust)가 커널 알림으로 프로세스의 끝을 기다리고, 옆에 만든 복사본으로 번들을 바꾸고, `--` 뒤의 인자로 애플리케이션을 다시 시작하며, 새 번들이 시작하지 못하면 이전 번들을 다시 시작한다. `sok`의 플랫폼 인터페이스에 `WaitProcessEnd`, `CopyBundle`, `OpenApplication`이 더해진다.
+- F121.3: 두 host가 host 호출 `appUpdateState`(실행 중인 core와 registry index의 후보)와 `appUpdateStage`에 답한다. `appUpdateStage`는 후보의 release를 받아 `sha256`을 확인하고 zip을 설정 디렉터리의 `updates/` 아래에 풀고 번들의 버전을 확인해 그 경로를 돌려주며, 후보가 아닌 버전은 거부한다. `sok`의 플랫폼 인터페이스에 `ExtractBundle`과 `BundleVersion`이 더해진다.
 - F121.2: registry 저장소가 `core.json`에 core release를 가진다. `add-version.mjs core`가 core 저장소의 release URL로 버전을 쓰고, `validate.mjs`가 그 URL을 검사하며, 게시된 index가 버전 없는 `core`를 나열한다. registry 저장소는 이를 항목 G17로 기록한다.
 - F121.1: `sok registry build`(Go와 Rust)가 registry 폴더의 `core.json`을 읽고 모든 core release의 `sha256`을 확인해 index의 `core`를 쓴다. index 검사는 `<platform>-<host>` 키의 `core`와 `revoked`의 `core`를 받아들이고 잘못된 것을 거부하며, `core`가 없는 index는 core release를 나열하지 않는다.
 - F121: 명세가 애플리케이션 업데이트를 정한다. registry index가 `core`에 core release를 나열하고 `revoked.core`로 버전을 철회하며, host 호출 `appUpdateState`, `appUpdateStage`, `appUpdateApply`가 업데이트를 준비하고 시작하고, `sok app update --wait <pid> --bundle <path> --target <path>`가 애플리케이션이 종료한 뒤 번들을 바꾼다. 체크리스트 항목은 F121.1~F121.7로 나눴다.

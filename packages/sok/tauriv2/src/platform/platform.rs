@@ -32,6 +32,25 @@ pub trait Platform {
     fn set_executable(&self, path: &std::path::Path, executable: bool) -> Result<(), String>;
     /// path 의 파일을 닫고 그 결과를 돌려준다. 표준 라이브러리의 drop 은 닫기 결과를 버린다.
     fn close_file(&self, file: std::fs::File, path: &std::path::Path) -> Result<(), String>;
+    /// Extracts the zip of an application bundle into the folder.
+    fn extract_bundle(&self, zip: &std::path::Path, folder: &std::path::Path)
+        -> Result<(), String>;
+    /// The version that the application bundle at the path declares.
+    fn bundle_version(&self, bundle: &std::path::Path) -> Result<String, String>;
+    /// Waits until the process pid has ended and reports false when it still runs after the timeout.
+    fn wait_process_end(&self, pid: i32, timeout: std::time::Duration) -> Result<bool, String>;
+    /// Copies an application bundle, also across volumes, keeping its modes and signature.
+    fn copy_bundle(
+        &self,
+        source: &std::path::Path,
+        destination: &std::path::Path,
+    ) -> Result<(), String>;
+    /// Starts a new instance of the application bundle with the arguments.
+    fn open_application(
+        &self,
+        bundle: &std::path::Path,
+        arguments: &[String],
+    ) -> Result<(), String>;
 }
 
 #[cfg(target_os = "macos")]

@@ -171,12 +171,24 @@ func Run(assets fs.FS, options Options) error {
 					}
 				})
 			}
-			sidecars.Stop()
+			// An application update keeps the persistent services running for the application that starts next.
+			update := host.takeUpdate()
+			if update != nil {
+				sidecars.Detach()
+			} else {
+				sidecars.Stop()
+			}
 			if err := host.endpoint.Close(); err != nil {
 				LogError("endpoint close", err)
 			}
 			// 저장과 정리를 마쳤으므로 받은 운영체제의 종료 요청에 답한다.
 			application.InvokeSync(system.AnswerQuitRequests)
+			// The command waits for the end of this process, so it starts last and in its own session.
+			if update != nil {
+				if err := update.Start(); err != nil {
+					LogError("application update", err)
+				}
+			}
 		},
 	})
 	// 클라이언트는 endpoint.json 을 읽자마자 첫 창에 요청하므로 창을 등록한 뒤 쓴다. 쓰지 못하면

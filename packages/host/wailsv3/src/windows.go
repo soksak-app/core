@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os/exec"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -40,7 +41,9 @@ const (
 
 // Host 는 호출한 창의 네이티브 상태를 선택한다. Wails 는 Host 의 공개 메서드를 페이지에 바인딩한다.
 type Host struct {
-	quit       Quit
+	quit Quit
+	// update is the command of an application update that the shutdown starts; h.mu guards it.
+	update     *exec.Cmd
 	removals   Removals
 	nextWindow uint64
 	workspace  *Workspace
@@ -204,6 +207,7 @@ func (h *Host) WindowCloseKept(ctx context.Context) error {
 		return err
 	}
 	h.quit.Cancel()
+	h.cancelUpdate()
 	// A request of the operating system waits for its answer; the application does not quit, so the answer is the
 	// cancellation.
 	application.InvokeSync(system.CancelQuitRequests)

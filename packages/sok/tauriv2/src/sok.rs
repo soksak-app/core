@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use serde_json::value::RawValue;
 use serde_json::{Map, Value};
 
+pub mod appupdate;
 mod command;
 #[cfg(feature = "diagnostics")]
 mod diagnostics;
@@ -41,6 +42,8 @@ commands:
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
+  app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
+                            replaces the application bundle TARGET with BUNDLE after the process PID ended
   plugin pack DIRECTORY OUTPUT [--diagnostics]
                             writes the plugin into OUTPUT; --diagnostics adds diagnostics.json
   sidecar release DIRECTORY OUTPUT [--platform P]
@@ -81,6 +84,9 @@ macro_rules! usage {
 
 const BOOLEANS: &[&str] = &["watch", "activate", "help", "diagnostics"];
 const OPTIONS: &[&str] = &[
+    "wait",
+    "bundle",
+    "target",
     "config-dir",
     "window",
     "project",
@@ -681,7 +687,16 @@ fn connect_to(values: &HashMap<String, String>, options: &Options) -> Result<Cli
     Ok(Client::dial(&endpoint)?)
 }
 
+/// Parses the options of a command that does its own parsing.
+pub(crate) fn parse_arguments(args: &[String]) -> Result<Arguments, Error> {
+    parse(args)
+}
+
 fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result<(), Error> {
+    // The arguments after -- are those of the application that starts again, so the command parses its own.
+    if args.first().map(String::as_str) == Some("app") {
+        return appupdate::run_app(&args[1..], stdout);
+    }
     // 점이 있는 명령 단어는 선언된 command 다(docs/spec/cli.md).
     if command::command_word(args).is_some_and(|word| word.contains('.')) {
         return command::run_command(args, stdout, options);

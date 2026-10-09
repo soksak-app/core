@@ -36,6 +36,38 @@ impl Platform for Windows {
         Err("path entries are not implemented on windows".into())
     }
 
+    fn extract_bundle(
+        &self,
+        _zip: &std::path::Path,
+        _folder: &std::path::Path,
+    ) -> Result<(), String> {
+        Err("application bundles are not implemented on windows".into())
+    }
+
+    fn wait_process_end(&self, _pid: i32, _timeout: std::time::Duration) -> Result<bool, String> {
+        Err("waiting for a process end is not implemented on windows".into())
+    }
+
+    fn copy_bundle(
+        &self,
+        _source: &std::path::Path,
+        _destination: &std::path::Path,
+    ) -> Result<(), String> {
+        Err("application bundles are not implemented on windows".into())
+    }
+
+    fn open_application(
+        &self,
+        _bundle: &std::path::Path,
+        _arguments: &[String],
+    ) -> Result<(), String> {
+        Err("application bundles are not implemented on windows".into())
+    }
+
+    fn bundle_version(&self, _bundle: &std::path::Path) -> Result<String, String> {
+        Err("application bundles are not implemented on windows".into())
+    }
+
     fn key(&self) -> Result<String, String> {
         Err("platform key is not implemented on windows".into())
     }

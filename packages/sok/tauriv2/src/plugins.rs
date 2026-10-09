@@ -83,7 +83,7 @@ fn create_parent(path: &Path) -> Result<(), String> {
 }
 
 /// plugins/registry.json 이 지정한 index 를 읽는다.
-fn read_registry(config_dir: &Path) -> Result<Index, String> {
+pub(crate) fn read_registry(config_dir: &Path) -> Result<Index, String> {
     let Some(url) = read_registry_url(config_dir)? else {
         return Err(format!(
             "{} does not exist; run sok registry use <index.json>",

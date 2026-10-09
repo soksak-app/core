@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"runtime"
 	"syscall"
+	"time"
 
 	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
@@ -32,6 +33,31 @@ func (linux) Key() (string, error) {
 		return "linux-x64", nil
 	}
 	return "", fmt.Errorf("linux/%s has no platform key", runtime.GOARCH)
+}
+
+// ExtractBundle is an error: an application bundle is a macOS file.
+func (linux) ExtractBundle(string, string) error {
+	return errors.New("application bundles are not implemented on linux")
+}
+
+// BundleVersion is an error: an application bundle is a macOS file.
+func (linux) BundleVersion(string) (string, error) {
+	return "", errors.New("application bundles are not implemented on linux")
+}
+
+// WaitProcessEnd is an error: the application update replaces a macOS bundle.
+func (linux) WaitProcessEnd(int, time.Duration) (bool, error) {
+	return false, errors.New("waiting for a process end is not implemented on linux")
+}
+
+// CopyBundle is an error: an application bundle is a macOS file.
+func (linux) CopyBundle(string, string) error {
+	return errors.New("application bundles are not implemented on linux")
+}
+
+// OpenApplication is an error: an application bundle is a macOS file.
+func (linux) OpenApplication(string, []string) error {
+	return errors.New("application bundles are not implemented on linux")
 }
 
 // PathsDir 는 오류다. Linux 의 shell 에는 파일마다 PATH 항목을 더하는 폴더가 없다.

@@ -697,7 +697,7 @@ impl<O: Owner> Sidecars<O> {
         if let Some(changed) = closing_changed {
             changed();
         }
-        self.stop_processes(processes);
+        self.stop_processes(processes, false);
         Ok(())
     }
 
@@ -1273,6 +1273,16 @@ impl<O: Owner> Sidecars<O> {
     /// 모든 사이드카를 종료한다. 채널에 Close 신호를 보내 쓰기 스레드를 종료하고 stdin을 닫은 후
     /// 프로세스 종료를 대기하고, 기한 초과 시 강제 종료한다.
     pub fn stop(&self) {
+        self.stop_all(false);
+    }
+
+    /// Stops the sidecars as `stop` does, except that a persistent service gets no close-owner and no shutdown: its
+    /// connection ends and its sessions stay for the application that starts next (docs/spec/installation.md#application-update).
+    pub fn detach(&self) {
+        self.stop_all(true);
+    }
+
+    fn stop_all(&self, detach: bool) {
         let (processes, changed): (Vec<(String, Process)>, Option<ClosingChanged>) = {
             let mut state = self.core.state.lock().expect("sidecar state");
             state.stopped = true;
@@ -1297,12 +1307,12 @@ impl<O: Owner> Sidecars<O> {
         if let Some(changed) = changed {
             changed();
         }
-        self.stop_processes(processes);
+        self.stop_processes(processes, detach);
     }
 
     /// Stops processes, which are out of the running list, by the stop rules and waits until they end
-    /// (docs/spec/sidecars.md#declaration-and-startup).
-    fn stop_processes(&self, processes: Vec<(String, Process)>) {
+    /// (docs/spec/sidecars.md#declaration-and-startup). With `detach` a persistent service only loses its connection.
+    fn stop_processes(&self, processes: Vec<(String, Process)>, detach: bool) {
         // 모든 프로세스를 병렬로 기다린다.
         let deadline = std::time::Instant::now() + self.stop_timeout;
         let mut handles = Vec::new();
@@ -1311,6 +1321,15 @@ impl<O: Owner> Sidecars<O> {
             let handle = thread::spawn(move || {
                 if process.child.is_none() {
                     if let Some(persistent) = process.persistent {
+                        if detach {
+                            if let Err(error) = process.outbox.send(Outgoing::Close) {
+                                log_error(
+                                    &format!("sidecar {name}"),
+                                    format!("close persistent transport: {error}"),
+                                );
+                            }
+                            return;
+                        }
                         let prefix = std::process::id().to_string();
                         let closed = close_persistent_owner(
                             &process.outbox,

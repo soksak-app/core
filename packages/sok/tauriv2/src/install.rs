@@ -1087,7 +1087,7 @@ pub struct Selection<'a> {
     pub sidecars: Vec<SelectedSidecar>,
 }
 
-fn newer(a: &str, b: &str) -> bool {
+pub(crate) fn newer(a: &str, b: &str) -> bool {
     matches!((parse_version(a), parse_version(b)), (Ok(x), Ok(y)) if x > y)
 }
 

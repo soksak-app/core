@@ -113,6 +113,8 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
 #[derive(Default)]
 pub(crate) struct Windows {
     pub(crate) quit: crate::quit::Quit,
+    /// The command of the pending application update, which the exit starts (docs/spec/installation.md#application-update).
+    pub(crate) update: Mutex<Option<std::process::Command>>,
     removals: crate::project_removal::Removals,
     next_window: AtomicU64,
     opening: Mutex<()>,
@@ -820,6 +822,11 @@ pub(crate) fn window_close(window: &Window) -> Result<(), String> {
 pub(crate) fn window_close_kept(window: &Window) -> Result<(), String> {
     window_data(window)?;
     window.state::<Windows>().quit.cancel();
+    *window
+        .state::<Windows>()
+        .update
+        .lock()
+        .expect("pending update") = None;
     // A request of the operating system waits for its answer; the application does not quit, so the answer is the
     // cancellation.
     window

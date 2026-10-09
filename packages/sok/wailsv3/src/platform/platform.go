@@ -3,7 +3,10 @@
 // 구현만 등록된다.
 package platform
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // Platform 은 운영체제별 동작이다.
 type Platform interface {
@@ -13,6 +16,16 @@ type Platform interface {
 	Key() (string, error)
 	// PathsDir 는 경로 항목을 두는 폴더다. 이 운영체제에 그런 폴더가 없으면 오류다(docs/spec/cli.md).
 	PathsDir() (string, error)
+	// ExtractBundle extracts the zip of an application bundle into the folder.
+	ExtractBundle(zipped, folder string) error
+	// BundleVersion is the version that the application bundle at the path declares.
+	BundleVersion(bundle string) (string, error)
+	// WaitProcessEnd waits until the process pid has ended, and reports false when it still runs after timeout.
+	WaitProcessEnd(pid int, timeout time.Duration) (bool, error)
+	// CopyBundle copies an application bundle, also across volumes, keeping its modes and signature.
+	CopyBundle(source, destination string) error
+	// OpenApplication starts a new instance of the application bundle with the arguments.
+	OpenApplication(bundle string, arguments []string) error
 }
 
 var current Platform

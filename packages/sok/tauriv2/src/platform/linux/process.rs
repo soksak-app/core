@@ -57,6 +57,38 @@ impl Platform for Linux {
         Err("path entries are not implemented on linux".into())
     }
 
+    fn extract_bundle(
+        &self,
+        _zip: &std::path::Path,
+        _folder: &std::path::Path,
+    ) -> Result<(), String> {
+        Err("application bundles are not implemented on linux".into())
+    }
+
+    fn wait_process_end(&self, _pid: i32, _timeout: std::time::Duration) -> Result<bool, String> {
+        Err("waiting for a process end is not implemented on linux".into())
+    }
+
+    fn copy_bundle(
+        &self,
+        _source: &std::path::Path,
+        _destination: &std::path::Path,
+    ) -> Result<(), String> {
+        Err("application bundles are not implemented on linux".into())
+    }
+
+    fn open_application(
+        &self,
+        _bundle: &std::path::Path,
+        _arguments: &[String],
+    ) -> Result<(), String> {
+        Err("application bundles are not implemented on linux".into())
+    }
+
+    fn bundle_version(&self, _bundle: &std::path::Path) -> Result<String, String> {
+        Err("application bundles are not implemented on linux".into())
+    }
+
     fn key(&self) -> Result<String, String> {
         match std::env::consts::ARCH {
             "aarch64" => Ok("linux-arm64".into()),

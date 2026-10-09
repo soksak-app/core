@@ -13,6 +13,7 @@
 
 use tauri::Manager;
 
+pub mod app_update;
 pub mod application_log;
 pub mod arguments;
 pub mod assets;
@@ -313,12 +314,29 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 }
             }
             if let tauri::RunEvent::Exit = event {
-                app.state::<WindowSidecars>().stop();
+                // An application update keeps the persistent services running for the application that starts next.
+                let update = app
+                    .state::<windows::Windows>()
+                    .update
+                    .lock()
+                    .expect("pending update")
+                    .take();
+                if update.is_some() {
+                    app.state::<WindowSidecars>().detach();
+                } else {
+                    app.state::<WindowSidecars>().stop();
+                }
                 exposure::stop(app);
                 // 저장과 정리를 마쳤으므로 받은 운영체제의 종료 요청에 답한다.
                 match platform::current() {
                     Ok(platform) => platform.answer_quit_requests(),
                     Err(error) => log_error("quit request answer", error),
+                }
+                // The command waits for the end of this process, so it starts last and in its own session.
+                if let Some(mut command) = update {
+                    if let Err(error) = command.spawn() {
+                        log_error("application update", error);
+                    }
                 }
             }
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
