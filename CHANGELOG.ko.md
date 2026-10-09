@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F145.4: native 라이브러리가 endpoint가 주입하는 각 pointer·key 입력을 인자, 결과, 거부 이유(창 없음, 열린 누름 없음, 비활성 창, AppKit이 보고한 눌린 버튼, 알 수 없는 키 이름, 도착하지 않은 수신)와 함께 `info native input inject`로 쓴다.
 - F145.3: native 라이브러리가 webview 입력 수신 대기가 끝나는 모든 경우를 기록한다. 종류와 한도를 담은 timeout, 거부된 전송, 등록 종료로 끝난 대기, 대기와 맞지 않거나 다른 frame에서 온 수신, 없는 WebKit pointer API가 그 대상이다.
 - F145.2: native 라이브러리가 영역이 버리는 모든 입력을 이유와 함께 기록한다. `noop:` 명령(`"dropped":"noop"`), 글이 아닌 insert나 marked text(`"dropped":"not text"`), 닫힌 영역으로 가는 보고(`info native input report dropped`)가 그 대상이다.
 - F145.1: 두 host가 endpoint 연결의 소켓을 닫기 전에 `info host endpoint: connection closed: <reason>`을 쓴다. 이유는 peer, 한도를 넘은 frame, JSON-RPC 2.0 요청이 아닌 frame(본문 포함), 선언되지 않은 메서드, endpoint의 종료이며, Wails host는 가득 찬 출력 대기열, 실패한 쓰기, 인코딩할 수 없는 답도 쓴다.

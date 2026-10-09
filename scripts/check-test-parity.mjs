@@ -1140,6 +1140,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.4",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static void logPointer" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "a rejected key is recorded with its reason" },
+    ],
+    expected: "The native library records each injected pointer and key input with its arguments, its result and the reason of a refusal.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.3",
     implementation: [
       { file: "native/darwin/src/webview_input.m", symbol: "logReceiptTimeout" },

@@ -13,6 +13,7 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "input_inject.h"
+#import "application_log.h"
 #import "webview_input.h"
 #import "webview_geometry.h"
 #import "private/coregraphics.h"
@@ -75,17 +76,21 @@ static bool moveTo(NSWindow *window, NSPoint point) {
 typedef struct {
     NSUInteger buttons;
     NSRunningApplication *front;
+    // 거부한 이유. 전달했으면 빈 문자열이다.
+    const char *why;
 } SPHeld;
 
 // held 는 결과가 SP_INPUT_BUTTON_HELD 일 때 거부한 차례의 mask 와 최전면 애플리케이션을 받는다.
 static sp_input_result pointerInput(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
     SPHeld *held) {
     NSWindow *window = (__bridge NSWindow *)handle;
-    if (!window || !NSThread.isMainThread) return SP_INPUT_REJECTED;
+    held->why = "";
+    if (!window || !NSThread.isMainThread) { held->why = "no window or not the main thread"; return SP_INPUT_REJECTED; }
     NSPoint point = windowPoint(window, x, y);
     if (phase == 0) {
-        if (!window.isKeyWindow) return SP_INPUT_INACTIVE;
-        return moveTo(window, point) ? SP_INPUT_DELIVERED : SP_INPUT_REJECTED;
+        if (!window.isKeyWindow) { held->why = "the window is not the key window"; return SP_INPUT_INACTIVE; }
+        if (!moveTo(window, point)) { held->why = "no tracking area at the point"; return SP_INPUT_REJECTED; }
+        return SP_INPUT_DELIVERED;
     }
     if (phase == 4) {
         // 공개 API 에는 창 정보를 가진 스크롤 이벤트를 만드는 방법이 없다. CGEvent 에 창 번호
@@ -95,7 +100,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
         // tests/input_inject_test.m 이 실제 스크롤 여부를 검사한다.
         CGEventRef scroll = CGEventCreateScrollWheelEvent2(NULL, kCGScrollEventUnitPixel, 2,
             (int32_t)-deltaY, (int32_t)-deltaX, 0);
-        if (!scroll) return SP_INPUT_REJECTED;
+        if (!scroll) { held->why = "the scroll event cannot be created"; return SP_INPUT_REJECTED; }
         // 원본 없는 이벤트는 실제 수정 키 상태를 물려받는다. 포인터 입력은 수정 키를 받지 않으므로 비운다.
         CGEventSetFlags(scroll, 0);
         NSPoint screen = [window convertPointToScreen:point];
@@ -105,15 +110,16 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
         CGEventSetWindowLocation(scroll, CGPointMake(point.x, NSHeight(window.frame) - point.y));
         NSEvent *event = [NSEvent eventWithCGEvent:scroll];
         CFRelease(scroll);
-        if (event.window != window) return SP_INPUT_REJECTED;
+        if (event.window != window) { held->why = "the scroll event has another window"; return SP_INPUT_REJECTED; }
         // 실제 휠 이벤트는 앱의 이벤트 모니터가 표면 좌표계 단위로 바꾼다. sendEvent 는 모니터를 거치지 않는다.
         [window sendEvent:webviewScrollInViewUnits(event, hitView(window, point))];
         return SP_INPUT_DELIVERED;
     }
     NSView *hit = pointerTarget(window, point, phase, button);
-    if (!hit) return SP_INPUT_REJECTED;
+    if (!hit) { held->why = phase == 2 || phase == 3 ? "no open press for the drag or release" : "no view at the point"; return SP_INPUT_REJECTED; }
     if (hit.window != window) {
         objc_setAssociatedObject(window, pressedViewKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        held->why = "the target view left the window";
         return SP_INPUT_REJECTED;
     }
     // WebKit 은 마우스 이벤트의 눌린 버튼을 이벤트가 아니라 +[NSEvent pressedMouseButtons] 로 읽는다.
@@ -124,13 +130,14 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
     if ((phase == 1 || phase == 3) && buttons != 0) {
         held->buttons = buttons;
         held->front = [NSWorkspace.sharedWorkspace.frontmostApplication retain];
+        held->why = "AppKit reports a pressed mouse button";
         return SP_INPUT_BUTTON_HELD;
     }
     BOOL right = button == 1;
     switch (phase) {
         case 1:
             // 열린 누름은 전달된 뗌이 끝낸다. 거부된 뗌은 누름을 열어 두므로 다음 누름은 그 사실을 알린다.
-            if (objc_getAssociatedObject(window, pressedViewKey(button))) return SP_INPUT_PRESS_OPEN;
+            if (objc_getAssociatedObject(window, pressedViewKey(button))) { held->why = "a press of this button is still open"; return SP_INPUT_PRESS_OPEN; }
             objc_setAssociatedObject(window, pressedViewKey(button), hit, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             // -[NSWindow sendEvent:] 는 누른 뷰가 받을 수 있으면 첫 응답자로 만든 뒤 누름을 전달한다.
             // 이 경로는 뷰에 직접 전달하므로 같은 순서를 따른다. 호스트의 표면 웹뷰는 누름만으로
@@ -149,13 +156,37 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
             objc_setAssociatedObject(window, pressedViewKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             return SP_INPUT_DELIVERED;
         default:
+            held->why = "unknown phase";
             return SP_INPUT_REJECTED;
     }
 }
 
+// 주입한 입력의 결과 이름.
+static const char *resultName(sp_input_result result) {
+    switch (result) {
+        case SP_INPUT_DELIVERED: return "delivered";
+        case SP_INPUT_REJECTED: return "rejected";
+        case SP_INPUT_INACTIVE: return "inactive";
+        case SP_INPUT_UNRECEIVED: return "unreceived";
+        case SP_INPUT_BUTTON_HELD: return "button held";
+        case SP_INPUT_PRESS_OPEN: return "press open";
+    }
+    return "unknown";
+}
+
+// 주입한 포인터 입력 하나를 인자, 결과, 거부 이유와 함께 기록한다. 호출자가 결과를 받는 모든 경로가 쓴다.
+static void logPointer(double x, double y, int phase, int button, double deltaX, double deltaY,
+    sp_input_result result, const char *why) {
+    NSString *text = [NSString stringWithFormat:
+        @"{\"kind\":\"pointer\",\"x\":%g,\"y\":%g,\"phase\":%d,\"button\":%d,\"deltaX\":%g,\"deltaY\":%g,\"result\":\"%s\",\"reason\":\"%s\"}",
+        x, y, phase, button, deltaX, deltaY, resultName(result), why ?: ""];
+    sp_log_info("input inject", text.UTF8String);
+}
+
 sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY) {
-    SPHeld held = {0, nil};
+    SPHeld held = {0, nil, ""};
     sp_input_result result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, &held);
+    logPointer(x, y, phase, button, deltaX, deltaY, result, held.why);
     [held.front release];
     return result;
 }
@@ -179,8 +210,9 @@ static void heldDone(sp_input_done done, void *context, sp_input_result result, 
 // 입력을 전달하고 결과를 곧바로 done 으로 알린다.
 static void pointerNow(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
     sp_input_done done, void *context) {
-    SPHeld held = {0, nil};
+    SPHeld held = {0, nil, ""};
     sp_input_result result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, &held);
+    logPointer(x, y, phase, button, deltaX, deltaY, result, held.why);
     heldDone(done, context, result, held);
 }
 
@@ -209,6 +241,7 @@ void sp_input_pointer_then(void *handle, double x, double y, int phase, int butt
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             if (finished) return;
             finished = YES;
+            logPointer(x, y, phase, button, deltaX, deltaY, SP_INPUT_UNRECEIVED, "the scroll target did not present within the limit");
             done(context, SP_INPUT_UNRECEIVED, NULL);
         });
         return;
@@ -224,13 +257,16 @@ void sp_input_pointer_then(void *handle, double x, double y, int phase, int butt
     // 문서가 pointerdown 이나 pointerup 을 받은 뒤 완료한다. 받은 뒤 WebKit 의 대기 중인 마우스 처리를
     // 기다리므로, 뗌이 만드는 click 도 다음 요청보다 먼저 처리된다.
     __block sp_input_result result = SP_INPUT_REJECTED;
-    __block SPHeld held = {0, nil};
+    __block SPHeld held = {0, nil, "the press or release was not sent"};
     webviewInputSendThen(target, phase == 3 ? @"pointerup" : @"pointerdown", timeoutSeconds, ^BOOL {
         result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, &held);
         return result == SP_INPUT_DELIVERED;
     }, ^(BOOL received) {
-        heldDone(done, context, result == SP_INPUT_DELIVERED && received ? SP_INPUT_DELIVERED :
-            result == SP_INPUT_DELIVERED ? SP_INPUT_UNRECEIVED : result, held);
+        sp_input_result final = result == SP_INPUT_DELIVERED && received ? SP_INPUT_DELIVERED :
+            result == SP_INPUT_DELIVERED ? SP_INPUT_UNRECEIVED : result;
+        logPointer(x, y, phase, button, deltaX, deltaY, final,
+            final == SP_INPUT_UNRECEIVED ? "the document did not receive the press or release within the limit" : held.why);
+        heldDone(done, context, final, held);
     });
 }
 
@@ -363,9 +399,11 @@ static CGEventFlags cgFlags(unsigned modifiers) {
     return result;
 }
 
-sp_input_result sp_input_key(void *handle, const char *key, const char *text, unsigned modifiers, bool down) {
+static sp_input_result keyInput(void *handle, const char *key, const char *text, unsigned modifiers, bool down,
+    const char **why) {
     NSWindow *window = (__bridge NSWindow *)handle;
-    if (!window || !key || !NSThread.isMainThread) return SP_INPUT_REJECTED;
+    *why = "";
+    if (!window || !key || !NSThread.isMainThread) { *why = "no window, no key or not the main thread"; return SP_INPUT_REJECTED; }
     NSString *name = [NSString stringWithUTF8String:key];
     unsigned short code = USHRT_MAX;
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
@@ -375,9 +413,9 @@ sp_input_result sp_input_key(void *handle, const char *key, const char *text, un
         }
     }
     if (code == USHRT_MAX) {
-        if (name.length != 1) return SP_INPUT_REJECTED;
+        if (name.length != 1) { *why = "unknown key name"; return SP_INPUT_REJECTED; }
         code = characterKeyCode([name characterAtIndex:0]);
-        if (code == USHRT_MAX) return SP_INPUT_REJECTED;
+        if (code == USHRT_MAX) { *why = "unknown key name"; return SP_INPUT_REJECTED; }
     }
     NSString *characters = text ? [NSString stringWithUTF8String:text] : nil;
     NSEvent *event = nil;
@@ -398,14 +436,32 @@ sp_input_result sp_input_key(void *handle, const char *key, const char *text, un
             context:nil characters:characters charactersIgnoringModifiers:characters
             isARepeat:NO keyCode:code];
     }
-    if (!event) return SP_INPUT_REJECTED;
+    if (!event) { *why = "the key event cannot be created"; return SP_INPUT_REJECTED; }
     // 사람의 키는 키 창에만 간다. 다른 창이 키 창이면 대상 창에 전달하지 않고 알린다.
     NSWindow *keyWindow = NSApp.keyWindow;
-    if (keyWindow && keyWindow != window) return SP_INPUT_INACTIVE;
+    if (keyWindow && keyWindow != window) { *why = "another window is the key window"; return SP_INPUT_INACTIVE; }
     // 대상 창이 키 창이면 사람의 키와 같이 -[NSApplication sendEvent:] 로 분배한다. 메뉴의 키 대응(Command+C,
     // Command+V)도 AppKit 이 판단한다. 키 창이 없는 비활성 애플리케이션에는 사람의 키가 오지 않으므로, 창을
     // 활성화하지 않는 검사를 위해 대상 창에 보낸다.
     if (keyWindow == window) [NSApp sendEvent:event];
     else [window sendEvent:event];
     return SP_INPUT_DELIVERED;
+}
+
+// text 의 JSON 문자열. text 가 NULL 이면 null 이다.
+static NSString *jsonText(const char *text) {
+    if (!text) return @"null";
+    NSData *data = [NSJSONSerialization dataWithJSONObject:[NSString stringWithUTF8String:text]
+        options:NSJSONWritingFragmentsAllowed error:NULL];
+    return data ? [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease] : @"null";
+}
+
+sp_input_result sp_input_key(void *handle, const char *key, const char *text, unsigned modifiers, bool down) {
+    const char *why = "";
+    sp_input_result result = keyInput(handle, key, text, modifiers, down, &why);
+    NSString *record = [NSString stringWithFormat:
+        @"{\"kind\":\"key\",\"key\":%@,\"text\":%@,\"modifiers\":%u,\"down\":%s,\"result\":\"%s\",\"reason\":\"%s\"}",
+        jsonText(key), jsonText(text), modifiers, down ? "true" : "false", resultName(result), why];
+    sp_log_info("input inject", record.UTF8String);
+    return result;
 }

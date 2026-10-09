@@ -34,6 +34,34 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
+/// The text that block writes to the standard error of the process.
+static NSString *capturedStandardError(void (^block)(void)) {
+    char path[] = "/tmp/input_inject_test.XXXXXX";
+    int file = mkstemp(path);
+    if (file < 0) { perror("mkstemp"); exit(1); }
+    fflush(stderr);
+    int saved = dup(STDERR_FILENO);
+    if (saved < 0 || dup2(file, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
+    block();
+    fflush(stderr);
+    if (dup2(saved, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
+    close(saved);
+    close(file);
+    NSString *written = [NSString stringWithContentsOfFile:@(path) encoding:NSUTF8StringEncoding error:nil];
+    unlink(path);
+    return written ?: @"";
+}
+
+/// Whether one line of records holds every part.
+static BOOL hasRecord(NSString *records, NSArray<NSString *> *parts) {
+    for (NSString *line in [records componentsSeparatedByString:@"\n"]) {
+        BOOL all = [line containsString:@" info native input inject: "];
+        for (NSString *part in parts) if (![line containsString:part]) all = NO;
+        if (all) return YES;
+    }
+    return NO;
+}
+
 static void until(BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
@@ -321,6 +349,25 @@ int main(void) { @autoreleasepool {
     check((sp_input_key(window, "a", "a", 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(window, "a", "a", 0, false) == SP_INPUT_DELIVERED), @"explicit text key accepted");
     check((sp_input_key(window, "Enter", NULL, 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(window, "Enter", NULL, 0, false) == SP_INPUT_DELIVERED), @"named key accepted");
     check(sp_input_key(window, "NoSuchKey", NULL, 0, true) == SP_INPUT_REJECTED, @"unknown key name rejected");
+    // Every injected input leaves a record with its arguments, its result and the reason of a refusal.
+    {
+        // A window of its own receives these, so no page of the other checks sees them.
+        NSWindow *recorded = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(120, 80))
+            styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
+        recorded.releasedWhenClosed = NO;
+        NSString *records = capturedStandardError(^{
+            sp_input_key(recorded, "NoSuchKey", NULL, 0, true);
+            sp_input_key(recorded, "Escape", NULL, 1, true);
+            sp_input_key(recorded, "Escape", NULL, 1, false);
+            sp_input_pointer(recorded, 10, 10, 2, 0, 0, 0);
+        });
+        check(hasRecord(records, @[@"\"kind\":\"key\"", @"\"key\":\"NoSuchKey\"", @"\"result\":\"rejected\"", @"\"reason\":\"unknown key name\""]),
+            [NSString stringWithFormat:@"a rejected key is recorded with its reason (got %@)", records]);
+        check(hasRecord(records, @[@"\"kind\":\"key\"", @"\"key\":\"Escape\"", @"\"text\":null", @"\"modifiers\":1", @"\"down\":true", @"\"result\":\"delivered\""]),
+            [NSString stringWithFormat:@"a delivered key is recorded with its arguments (got %@)", records]);
+        check(hasRecord(records, @[@"\"kind\":\"pointer\"", @"\"phase\":2", @"\"result\":\"rejected\"", @"\"reason\":\"no open press for the drag or release\""]),
+            [NSString stringWithFormat:@"a rejected pointer input is recorded with its reason (got %@)", records]);
+    }
     until(^BOOL { return [evaluate(view, @"probe.events.filter(e=>e.type==='keydown').length") intValue] >= 2; });
     NSArray *keysSeen = evaluate(view, @"probe.events.filter(e=>e.type==='keydown').map(e=>e.key)");
     check([keysSeen isEqual:@[@"a", @"Enter"]],
