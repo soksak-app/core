@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F124.3.4: measured on both hosts that `core.debug.save` opens the save panel and that the native input of a check cannot press its buttons; `e2e/person/debug-save.test.mjs` and `pnpm -F @soksak/e2e verify:person` let a person press Save and Cancel while the check verifies the saved file and the answer.
+- F113.2: with the application active and its window the key window, a document region takes typed text on both hosts (`e2e/activation/document-typing.test.mjs`); the check that failed ran while the application was inactive and is removed from `e2e/browser.test.mjs`. F135 records that a plain AppKit window takes text while inactive and the hosts do not.
 - F117.5.5: `e2e/plugin-outdated.test.mjs` observes in both hosts that the plugin page shows a persistent service of another version as outdated and that its action replaces the service; AGENTS.md lets a window check write a file of its own disposable configuration directory when no declared entry produces the state it observes.
 - F133: both hosts close the owner of a persistent service once for its connection, so a stop that begins while the replacement of an outdated service closes the owner no longer sends a second `close-owner`; the Rust host no longer answers the close of a surface twice and the Go host no longer panics with `close of closed channel`. F134 records a CI failure of a time-dependent test that did not recur.
 - F117.6: the terminal plugin repository registers the item P23, which starts the new shell of a replaced terminal service in the last working directory of the terminal.

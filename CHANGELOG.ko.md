@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F124.3.4: 두 host에서 `core.debug.save`가 저장 패널을 열고 검사의 네이티브 입력이 그 단추를 누를 수 없다는 것을 측정했다. `e2e/person/debug-save.test.mjs`와 `pnpm -F @soksak/e2e verify:person`은 사람이 저장과 취소를 누르는 동안 검사가 저장된 파일과 답을 확인하게 한다.
+- F113.2: 애플리케이션이 활성이고 그 창이 key window이면 두 host의 문서 영역이 입력한 글자를 받는다(`e2e/activation/document-typing.test.mjs`). 실패했던 검사는 애플리케이션이 비활성인 채 실행되었고 `e2e/browser.test.mjs`에서 지웠다. F135는 일반 AppKit 창은 비활성일 때도 글자를 받고 host는 받지 못하는 차이를 기록한다.
 - F117.5.5: `e2e/plugin-outdated.test.mjs`가 두 host에서 plugin 페이지가 다른 버전의 상주 service를 오래된 것으로 보이고 그 동작이 service를 교체하는 것을 관측한다. AGENTS.md는 창 검사가 관측할 상태를 만드는 선언된 항목이 없을 때 자기 일회용 설정 디렉터리의 파일을 쓰는 것을 허용한다.
 - F133: 두 host가 지속 service의 owner 닫기를 연결마다 한 번만 실행한다. 오래된 service의 교체가 owner를 닫는 동안 시작한 종료가 두 번째 `close-owner`를 보내지 않으므로, Rust host는 표면의 닫기에 두 번 답하지 않고 Go host는 `close of closed channel`로 패닉하지 않는다. F134는 재발하지 않은 시간 의존 테스트의 CI 실패를 기록한다.
 - F117.6: terminal 플러그인 저장소가 교체된 terminal service의 새 shell을 그 terminal의 마지막 작업 디렉터리에서 시작하는 항목 P23을 등록한다.

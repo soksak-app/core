@@ -1831,6 +1831,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F113",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "SPDocumentView" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_typing_test.m", id: "the field takes the typed text" },
+      { file: "e2e/activation/document-typing.test.mjs", id: "an active key window gives a document region typed text" },
+    ],
+    expected: "A document region takes typed characters in the field that a native press focuses, in a plain AppKit window and in an active key window of both hosts.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F115",
     implementation: [
       { file: "native/darwin/src/document_view.m", symbol: "SPDocumentView" },

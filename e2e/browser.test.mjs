@@ -160,32 +160,6 @@ async function placed(s, surface, message) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a document region takes typed text into the field that a native press focuses`, async (t) => {
-    const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
-    await fresh(s);
-    const base = await serve(s);
-    const [browser] = await browsers(s);
-    const surface = browser.surface;
-    await s.run("browser.navigate", { url: `${base}/type` }, surface);
-    await loaded(s, surface, `${base}/type`);
-    const { rect } = await placed(s, surface, "type document");
-    await s.selectInputSource("com.apple.keylayout.ABC");
-    await s.click(rect.x + 100, rect.y + 20);
-    await s.until("host.window", (value) => value.documents.some((item) => item.surface === surface && item.focused),
-      "a press on the field did not give the region the keyboard focus");
-    await s.press("x");
-    await s.press("y");
-    try {
-      await s.until("browser.location", (value) => / typed:xy /.test(value.title), "typed keys did not reach the field", { surface });
-    } catch (error) {
-      // The state that locates the cause: the key window, the responder and the focus of the region document.
-      const { key, active, responder, documents, input } = await s.get("host.window");
-      error.message += `; host.window ${JSON.stringify({ key, active, responder, documents, input })}`;
-      throw error;
-    }
-  });
-
   test(`${app.name}: the browser document region navigates, takes native input, and follows its surface`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

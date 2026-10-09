@@ -7,6 +7,7 @@
   "scripts": {
     "verify": "node --test --test-concurrency=1 --test-global-setup=./setup.mjs './*.test.mjs'",
     "verify:activation": "node --test --test-concurrency=1 --test-global-setup=./setup.mjs 'activation/*.test.mjs'",
+    "verify:person": "node --test --test-concurrency=1 --test-global-setup=./setup.mjs 'person/*.test.mjs'",
     "verify:real": "node --test --test-concurrency=1 --test-global-setup=./setup.mjs 'real/*.test.mjs'",
     "repeat": "soksak-window-repeat --setup ./setup.mjs",
     "test": "node --test test/*.test.mjs",
