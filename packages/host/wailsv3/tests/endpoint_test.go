@@ -39,6 +39,8 @@ type fakeBackend struct {
 	holding    bool
 	// unwatched 는 페이지가 status.unwatch 를 받을 때마다 신호를 받는다.
 	unwatched chan struct{}
+	// failures 는 메서드마다 페이지 요청이 돌려줄 오류다.
+	failures map[string]error
 }
 
 func newFakeBackend() *fakeBackend { return &fakeBackend{unwatched: make(chan struct{}, 8)} }
@@ -64,6 +66,12 @@ func (b *fakeBackend) PageRequest(window, method string, params json.RawMessage)
 	}
 	if method == "status.unwatch" {
 		b.unwatched <- struct{}{}
+	}
+	b.mu.Lock()
+	failure := b.failures[method]
+	b.mu.Unlock()
+	if failure != nil {
+		return nil, failure
 	}
 	if method == "exposure.list" {
 		return json.RawMessage(`{"status":[{"name":"core.layout","registered":true}],"commands":[],"dom":[]}`), nil
@@ -1044,4 +1052,22 @@ func TestEndpointRecordsWhyAConnectionCloses(t *testing.T) {
 		t.Fatal("page did not receive status.unwatch after the last watcher closed")
 	}
 	closeRecord(t, written, "peer closed")
+}
+
+// A request that ends with a timeout error writes the method and the reason to the application log before the client
+// receives the error.
+// contract: endpoint.timeout.is-recorded
+func TestEndpointRecordsATimeoutOfARequest(t *testing.T) {
+	written := captureLog(t)
+	backend := newFakeBackend()
+	backend.failures = map[string]error{"status.get": &host.RPCError{Code: 1005, Message: "the document did not reply within 10000 ms"}}
+	_, address, _ := serve(t, backend)
+	conn := dial(t, address)
+	got := call(t, conn, 1, "status.get", map[string]any{"window": "main", "name": "core.layout"})
+	if got.Error == nil || got.Error.Code != 1005 {
+		t.Fatalf("status.get answered %+v", got)
+	}
+	if want := " error host endpoint timeout: status.get: the document did not reply within 10000 ms"; !strings.Contains(written(), want) {
+		t.Fatalf("the log has no %q:\n%s", want, written())
+	}
 }

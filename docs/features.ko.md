@@ -761,7 +761,7 @@
     - [o] F145.10.1 — P1: native 라이브러리에서 document view(`document_view.m`)의 실패와 거부를 기록한다. 실패한 이동, 거부한 주소, 찾지 못한 plugin 파일, 데이터 없는 메시지, 그 WebContent process의 종료가 그 대상이다.
     - [o] F145.10.2 — P1: 창의 page process를 기록하듯 두 host에서 surface와 modal의 WebContent process 종료를 기록한다.
   - [o] F145.11 — P1: application log에 닿지 않는 `s.log`의 줄의 기록을 더한다.
-  - [~] F145.12 — P1: relay와 전체 화면 timeout의 기록을 더한다.
+  - [o] F145.12 — P1: relay와 전체 화면 timeout의 기록을 더한다.
   - [ ] F145.13 — P1: 분리 실행한 `sok app update`의 결과와 `sok`의 실패의 기록을 더한다.
   - [ ] F145.14 — P1: 창이 끝나서 허용된 제거, 설정 정리, 알림, `ps` 실패의 기록을 더한다.
   - [ ] F145.15 — P1: 명세가 나열하고 코드에 없는 page, host, native 라이브러리, plugin의 event별 trace(`session_start`, 창과 surface event, 모든 process의 sampler)의 기록을 더한다.

@@ -14,6 +14,8 @@ use soksak_host_tauriv2::endpoint::{self, raw, Connection, Endpoint, Failure, Se
 struct Fake {
     calls: Mutex<Vec<(String, String, Value)>>,
     seen: Mutex<Sender<(String, String, Value)>>,
+    /// A method of the page that ends with a timeout.
+    timing_out: Mutex<Option<String>>,
 }
 
 impl Fake {
@@ -23,6 +25,7 @@ impl Fake {
             Arc::new(Fake {
                 calls: Mutex::new(Vec::new()),
                 seen: Mutex::new(tx),
+                timing_out: Mutex::new(None),
             }),
             rx,
         )
@@ -59,6 +62,12 @@ impl Service for Fake {
         );
         self.calls.lock().unwrap().push(call.clone());
         let _ = self.seen.lock().unwrap().send(call);
+        if self.timing_out.lock().unwrap().as_deref() == Some(method) {
+            return Err(Failure::new(
+                endpoint::TIMED_OUT,
+                "the document did not reply within 10000 ms",
+            ));
+        }
         match method {
             "status.get" => raw(&json!(7)),
             _ => raw(&Value::Null),
@@ -881,4 +890,56 @@ fn the_endpoint_records_why_a_connection_closes() {
         });
         assert!(found, "no close record {reason:?} in {log:?}");
     }
+}
+
+const TIMEOUT_CHILD: &str = "SOKSAK_ENDPOINT_TIMEOUT_CHILD";
+
+// A request that ends with a timeout error writes the method and the reason to the application log before the client
+// receives the error.
+// contract: endpoint.timeout.is-recorded
+#[test]
+fn the_endpoint_records_a_timeout_of_a_request() {
+    if let Some(config) = std::env::var_os(TIMEOUT_CHILD) {
+        let config = Path::new(&config);
+        soksak_host_tauriv2::application_log::start_application_log(config, "com.soksak.test")
+            .unwrap();
+        let (fake, _calls) = Fake::new();
+        *fake.timing_out.lock().unwrap() = Some("status.get".to_string());
+        let endpoint = start(config, "test-timeout", fake);
+        let mut connection = open(&endpoint);
+        let reply = request(
+            &mut connection,
+            1,
+            "status.get",
+            json!({"window": "w1", "name": "core.layout"}),
+        );
+        assert_eq!(reply["error"]["code"], endpoint::TIMED_OUT);
+        endpoint.stop();
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "the_endpoint_records_a_timeout_of_a_request",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(TIMEOUT_CHILD, config.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "child ended with {:?}: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let log = std::fs::read_to_string(soksak_host_tauriv2::application_log::application_log_path(
+        config.path(),
+    ))
+    .unwrap();
+    let want =
+        " error host endpoint timeout: status.get: the document did not reply within 10000 ms";
+    assert!(log.contains(want), "no {want:?} in {log}");
 }

@@ -69,6 +69,7 @@
 | host가 창의 진단 단계(modal 렌더링, 끌기, navigation callback)를 서술하거나, Wails host가 창 상태를 읽지 못하거나 page에 다시 감시를 요청하지 못한다 | `info host transcript <window>: <line>`, Wails host는 `error host host.window <window>: <error>`, `error host rewatch <name> <window>: <error>`도 쓴다. 기록을 요청한 연결의 진단 기록도 같은 줄을 받는다 |
 | page가 sidecar로 보낸 전송이 실패한다 | `error page sidecar <name>: send failed: <reason>`, 표면 문서의 `page.report`로 쓴다 |
 | 창에 놓인 파일을 표면에 넘길 수 없다 | `error page drop: <reason>`(잘못된 drop, drop 지점 아래에 표면 없음, plugin이 drop 명령을 선언하지 않음, 명령 실패). 모든 drop은 `info page drop: received <payload>`를 쓰고, 명령이 받으면 `info page drop: command <name> accepted <n> file(s) on surface <id>`도 쓴다 |
+| endpoint 요청이 제한 시간 오류 1005로 끝난다(문서가 답하지 않음, 창이 표시되지 않음, 창이 전체 화면을 바꾸지 않음, 문서가 입력을 받지 않음) | `error host endpoint timeout: <method>: <message>` |
 | endpoint 연결이 닫힌다 | `info host endpoint: connection closed: <reason>`을 소켓을 닫기 전에 쓴다. reason은 `peer closed`, `frame of <n> bytes exceeds the limit of <limit>`, `frame is not a JSON-RPC 2.0 request: <body>`, `method "<name>" is not declared`, `the endpoint closed`이며 Wails host는 `the output queue is full`, `write failed`, `the reply cannot be encoded`도 쓴다 |
 | host가 실행되는 동안 상주 service의 연결이 끝난다 | `error host sidecar <name>: connection lost; restarted`, 또는 `connection lost; restart failed: <reason>` |
 

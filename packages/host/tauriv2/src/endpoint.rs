@@ -847,7 +847,19 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
             continue;
         }
         let shared = shared.clone();
-        std::thread::spawn(move || answer.send(run(&shared, &request.method, request.params)));
+        std::thread::spawn(move || {
+            let outcome = run(&shared, &request.method, request.params);
+            // 시간 초과는 요청한 쪽이 받는 오류이지만, 그 요청이 어느 메서드의 무엇을 기다렸는지는 이 기록만 남긴다.
+            if let Err(failure) = &outcome {
+                if failure.code == TIMED_OUT {
+                    log_error(
+                        "endpoint timeout",
+                        format!("{}: {}", request.method, failure.message),
+                    );
+                }
+            }
+            answer.send(outcome)
+        });
     }
     if shared.stopping.load(Ordering::Relaxed) {
         reason = String::from("the endpoint closed");

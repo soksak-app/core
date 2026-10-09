@@ -656,6 +656,11 @@ func (e *Endpoint) run(c *endpointConn, req request, method endpointMethod) {
 		}
 		return fields
 	})
+	// 시간 초과는 요청한 쪽이 받는 오류이지만, 그 요청이 어느 메서드의 무엇을 기다렸는지는 이 기록만 남긴다.
+	var coded *RPCError
+	if errors.As(err, &coded) && coded.Code == codeTimeout {
+		LogError("endpoint timeout", fmt.Sprintf("%s: %s", methodOf(req), coded.Message))
+	}
 	e.reply(c, req, result, err)
 }
 

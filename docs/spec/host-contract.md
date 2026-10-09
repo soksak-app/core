@@ -135,6 +135,7 @@ Items:
 | `endpoint.transport.non-jsonrpc-object-closes` | A JSON frame that is not a JSON-RPC 2.0 request closes the connection without a reply. | both |
 | `endpoint.transport.undeclared-method-closes` | An undeclared method closes the connection without a reply, and nothing reaches the page. | both |
 | `endpoint.transport.close-reason-is-recorded` | A connection that closes writes `info host endpoint: connection closed: <reason>` before the socket closes, with the reason of an oversized frame, a frame that is not a JSON-RPC 2.0 request (with its body), an undeclared method, or the peer. | both |
+| `endpoint.timeout.is-recorded` | A request of the endpoint that ends with the timeout error 1005 writes `error host endpoint timeout: <method>: <message>` before the client receives the error. | both |
 | `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | In a release build diagnostics.transcript closes the connection and reaches no page; in a diagnostic build it is answered. | both |
 | `endpoint.rpc.round-trip-by-id` | Several requests on one connection each receive a JSON-RPC 2.0 reply with the matching id and result. | both |
 | `endpoint.rpc.page-params-omit-window` | The page receives forwarded params without the window field. | both |

@@ -1140,6 +1140,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.12",
+    implementation: [
+      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "endpoint timeout" },
+      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "endpoint timeout" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRecordsATimeoutOfARequest" },
+      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "the_endpoint_records_a_timeout_of_a_request" },
+    ],
+    expected: "Both hosts write the method and the reason of an endpoint request that ends with a timeout.",
+    levels: ["unit"],
+  },
+  {
     id: "F152",
     implementation: [
       { file: "packages/plugin-api/sidecar-port.js", symbol: "orderedSidecar requires a failure handler" },
