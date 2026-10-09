@@ -68,7 +68,7 @@ writer는 프로세스에서 event를 파일의 줄로 바꾸는 부분이다.
 - 모든 종료 경로는 프로세스가 끝나기 전에 deadline을 두고 큐를 flush한다: Go host의 shutdown, Rust host의 exit, `panic = abort`, `os.Exit`.
 - host의 writer는 같은 프로세스의 다른 계층의 event(page 배치, native ring)를 그 event가 가진 시각과 계층 그대로 받는다. 이런 event의 이름은 계층으로 시작해야 하고, 계약에 없는 계층과 JSON이 아닌 field는 오류로 거부하며, `seq`는 여전히 writer가 부여한다.
 - native 라이브러리에는 writer가 없다. C의 bounded lock-free ring을 소유하며, `sp_event`가 어느 스레드에서든 event를 ring에 복사하고 host의 writer 스레드가 `sp_event_drain` 호출로 ring을 비운다. 어떤 생산자 스레드도 Go나 Rust를 부르지 않는다. host writer가 생기기 전에 쓴 event는 ring에서 기다린다.
-- page는 `context.log.<level>(event, fields)`로 기록한다. event는 배열에 모였다가 host로 가는 배치 호출 하나로 나간다. 100 ms 타이머, 크기 상한에 닿을 때, `pagehide`와 `visibilitychange`에서 나가며 생산자는 응답을 기다리지 않는다. `console.*`, 전역 `error` event, `unhandledrejection` event도 같은 입구로 들어간다.
+- page는 `context.log.<level>(event, fields)`로 기록한다. event는 배열에 모였다가 host로 가는 배치 호출 하나로 나간다. 100 ms 타이머, 크기 상한에 닿을 때, `pagehide`와 `visibilitychange`에서 나가며 생산자는 응답을 기다리지 않는다. `console.*`, 전역 `error` event, `unhandledrejection` event도 같은 입구로 들어간다. 배치 호출은 요청 `{action: "batch", events}`를 가진 host 호출 `log`이며, host는 배치 전체를 검증한 뒤에야 event를 저장하고, 모든 event를 page가 준 `ts_us`로 계층 `page`에 저장하며, 이름이 `page.`로 시작하지 않는 event, 계약에 없는 level, 양의 정수가 아닌 `ts_us`, 객체가 아닌 `fields`는 `events[<index>]`를 가리키는 오류로 거부한다.
 - fatal 신호 처리기는 프로세스가 시작할 때 열어 둔 파일 descriptor에 async-signal-safe 호출만으로 짧은 줄을 쓴다. Go의 runtime fatal 오류는 가로챌 수 없으므로 그 출력은 프로세스의 crash 파일로 가고, 각 goroutine 진입점의 `recover`가 `error` event를 쓴다. Rust host는 panic hook에서 `error` event를 쓰고 flush한다.
 
 event를 쓰는 각 저장소는 자기 작은 writer 구현을 가지며 `packages/log-contract/fixtures`의 golden lines와 golden catalog로 시험한다. 저장소 사이에 runtime 코드를 공유하지 않으며 sidecar는 실행 중에 core 릴리스에 의존하지 않는다.

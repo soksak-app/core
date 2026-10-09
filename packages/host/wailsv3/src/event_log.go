@@ -117,6 +117,22 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 	return log, nil
 }
 
+// The bounds of the writer of a host: events and bytes of serialized fields waiting for the batch interval.
+const (
+	hostQueueEvents   = 8192
+	hostQueueBytes    = 16 << 20
+	hostBatchInterval = 100 * time.Millisecond
+)
+
+// StartHostEventLog starts the writer of the host in logs/ of the configuration folder; the boot identifier is the
+// start time in seconds and the process identifier.
+func StartHostEventLog(config string) (*EventLog, error) {
+	return StartEventLog(EventLogOptions{
+		Directory: filepath.Join(config, "logs"), Role: "host", Boot: fmt.Sprintf("%d-%d", time.Now().Unix(), os.Getpid()),
+		QueueEvents: hostQueueEvents, QueueBytes: hostQueueBytes, BatchInterval: hostBatchInterval,
+	})
+}
+
 // Path is the file that this writer writes.
 func (l *EventLog) Path() string { return l.path }
 

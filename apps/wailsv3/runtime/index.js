@@ -66,6 +66,7 @@ const METHOD = {
   exposureForward: "ExposureForward",
   compositionDeclare: "CompositionDeclare",
   performance: "Performance",
+  log: "Log",
   compositionPlace: "CompositionPlace",
   imageAttach: "ImageAttach",
   imageFocus: "ImageFocus",

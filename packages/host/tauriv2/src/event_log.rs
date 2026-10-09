@@ -100,6 +100,11 @@ pub struct EventLog {
     writer: Mutex<Option<JoinHandle<()>>>,
 }
 
+/// The bounds of the writer of a host: events and bytes of serialized fields waiting for the batch interval.
+const HOST_QUEUE_EVENTS: usize = 8192;
+const HOST_QUEUE_BYTES: usize = 16 << 20;
+const HOST_BATCH_INTERVAL: Duration = Duration::from_millis(100);
+
 /// The layers of the event contract (docs/spec/logging.md#event).
 const LAYERS: [&str; 5] = ["native", "host", "page", "plugin", "sidecar"];
 
@@ -111,6 +116,23 @@ fn now_us() -> u64 {
 }
 
 impl EventLog {
+    /// Starts the writer of the host in `logs/` of the configuration folder; the boot identifier is the start time in
+    /// seconds and the process identifier.
+    pub fn start_host(config: &Path) -> Result<EventLog, String> {
+        let seconds = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| format!("clock is before the Unix epoch: {e}"))?
+            .as_secs();
+        EventLog::start(Options {
+            directory: config.join("logs"),
+            role: "host".into(),
+            boot: format!("{seconds}-{}", std::process::id()),
+            queue_events: HOST_QUEUE_EVENTS,
+            queue_bytes: HOST_QUEUE_BYTES,
+            batch_interval: HOST_BATCH_INTERVAL,
+        })
+    }
+
     /// Creates the folder (mode 0700) and the file (mode 0600), writes `log.open` and starts the writer thread.
     pub fn start(options: Options) -> Result<EventLog, String> {
         std::fs::DirBuilder::new()

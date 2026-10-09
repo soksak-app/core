@@ -174,6 +174,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             // 애플리케이션 로그는 엔드포인트가 process lock 을 잡은 뒤에 연다. 그래서 같은 파일에 쓰는
             // 다른 실행이 없다(docs/spec/hosts.md#application-log).
             application_log::start_application_log(&directory, soksak_sok::identity::identity())?;
+            tauri::Manager::manage(app, event_log::EventLog::start_host(&directory)?);
             Ok(())
         })
         .build();
@@ -332,6 +333,12 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     app.state::<WindowSidecars>().stop();
                 }
                 exposure::stop(app);
+                if let Err(error) = app
+                    .state::<event_log::EventLog>()
+                    .flush(std::time::Duration::from_secs(2))
+                {
+                    log_error("event log flush", error);
+                }
                 // 저장과 정리를 마쳤으므로 받은 운영체제의 종료 요청에 답한다.
                 match platform::current() {
                     Ok(platform) => platform.answer_quit_requests(),

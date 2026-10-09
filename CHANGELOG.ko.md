@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.2.4.4: 두 host는 application log 뒤에 event writer를 시작하고(`logs/host-<boot>.jsonl`, mode 0600, 첫 줄 `log.open`), 종료 때 flush하며, page 호출 `log`에 배치 중계로 답한다. 두 애플리케이션의 runtime이 그 호출 이름을 가진다. 두 애플리케이션의 debug 빌드를 재시작해 관측했다: 프로세스의 파일에 프로세스 식별자를 담은 `log.open`과 연속인 `seq`가 있고 application log에는 오류가 늘지 않았다.
 - F150.2.4.3: 두 host는 page event 배치를 하나라도 쓰기 전에 배치 전체를 검증하고(`LogCommand`, `log_command`) 모든 event를 page가 준 시각 그대로 계층 `page`로 저장한다. 이름이 `page.`로 시작하지 않는 event, 계약에 없는 level, 양의 정수가 아닌 `ts_us`, 객체가 아닌 `fields`는 `events[<index>]`를 가리키는 오류로 배치를 거부하며 그 배치는 아무것도 쓰이지 않는다.
 - F150.2.4.2: 두 host의 writer는 프로세스의 다른 계층이 중계한 event(`EmitRelayed`, `emit_relayed`)를 그 event가 가진 `layer`와 `ts_us` 그대로 받는다. 계층으로 시작하지 않는 event 이름, 계약에 없는 계층, JSON이 아닌 field는 오류로 거부하고 `seq`는 여전히 writer가 부여한다. `make benchmark-rust`와 `make benchmark-go`가 benchmark를 실행한다.
 - F150.2.4.1: page에 event 배치 모듈(`log-batch.js`)이 생겼다: `emit`은 event를 기다리지 않고 큐에 넣고, 한 턴의 event는 `batch` 호출 한 번으로 host에 가며, 호출은 한 번에 하나만 진행해 host가 순서대로 받고, 큐가 가득 차면 event를 거부하고 다음 배치가 그 수를 센 `page.log.dropped`로 시작하며, 실패한 호출은 `page event batch of <n> events failed: <reason>`으로 보고한다.

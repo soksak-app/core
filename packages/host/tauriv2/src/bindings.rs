@@ -35,6 +35,7 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         project_remove_answer,
         window_state,
         performance,
+        log,
         window_ready,
         window_close,
         window_close_kept,
@@ -159,6 +160,19 @@ fn performance(
     let Argument(request) = request;
     crate::performance::command(
         window.state::<crate::workspace::Workspace>().directory(),
+        serde_json::Value::Object(request),
+    )
+}
+
+/// Relays a batch of page events to the event writer of the host (docs/spec/logging.md#writers).
+#[tauri::command(async)]
+fn log(
+    window: Window,
+    request: Argument<serde_json::Map<String, serde_json::Value>>,
+) -> Result<serde_json::Value, String> {
+    let Argument(request) = request;
+    crate::event_relay::log_command(
+        &window.state::<crate::event_log::EventLog>(),
         serde_json::Value::Object(request),
     )
 }

@@ -80,3 +80,15 @@ func relayedEventOf(item any) (relayedEvent, error) {
 	}
 	return relayedEvent{tsMicros: int64(ts), level: Level(level), event: name, fields: text}, nil
 }
+
+// Log relays a batch of page events to the event writer of the host.
+func (h *Host) Log(requestJSON json.RawMessage) (any, error) {
+	request, err := argument[map[string]any]("request", requestJSON)
+	if err != nil {
+		return nil, err
+	}
+	if h.events == nil {
+		return nil, fmt.Errorf("the event writer is not running")
+	}
+	return LogCommand(h.events, request)
+}

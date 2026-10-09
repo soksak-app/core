@@ -91,3 +91,21 @@ test("a page sidecar failure reaches only the listener of that sidecar and surfa
     delete globalThis.location;
   }
 });
+
+test("the log command carries the page batch to the host", async () => {
+  const calls = [];
+  globalThis.window = { __TAURI__: {
+    core: { invoke: async (command, args) => { calls.push([command, args]); return null; } },
+    event: { listen: async () => () => {} },
+    webview: { getCurrentWebview: () => ({ label: "main" }) },
+  } };
+  globalThis.location = { search: "" };
+  try {
+    const { host } = await import("../runtime/index.js?test=log-command");
+    await host.call("log", { action: "batch", events: [] });
+    assert.deepEqual(calls, [["log", { request: { action: "batch", events: [] } }]]);
+  } finally {
+    delete globalThis.window;
+    delete globalThis.location;
+  }
+});

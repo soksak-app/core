@@ -1142,6 +1142,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.2.4.4",
+    implementation: [
+      { file: "packages/host/wailsv3/src/event_log.go", symbol: "func StartHostEventLog" },
+      { file: "packages/host/tauriv2/src/event_log.rs", symbol: "pub fn start_host" },
+    ],
+    tests: [
+      { file: "e2e/event-log.test.mjs", id: "the host writes its event log from the start of the process" },
+      { file: "apps/wailsv3/test/runtime.test.mjs", id: "the log command carries the page batch to the host" },
+      { file: "apps/tauriv2/test/runtime.test.mjs", id: "the log command carries the page batch to the host" },
+    ],
+    expected: "A running application has started the event writer of its host, and the runtime of each application carries the page call log to the host.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F150.2.4.3",
     implementation: [
       { file: "packages/host/wailsv3/src/event_relay.go", symbol: "func LogCommand" },
