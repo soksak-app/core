@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.2.4.1: page에 event 배치 모듈(`log-batch.js`)이 생겼다: `emit`은 event를 기다리지 않고 큐에 넣고, 한 턴의 event는 `batch` 호출 한 번으로 host에 가며, 호출은 한 번에 하나만 진행해 host가 순서대로 받고, 큐가 가득 차면 event를 거부하고 다음 배치가 그 수를 센 `page.log.dropped`로 시작하며, 실패한 호출은 `page event batch of <n> events failed: <reason>`으로 보고한다.
 - F150.2.2, F150.2.3: 두 host에 event writer(`event_log.rs`, `event_log.go`)가 생겼다: `emit`은 개수와 바이트로 제한한 큐에 직렬화한 event를 기다리지 않고 넣고 자리가 없으면 false를 돌려주며, writer 스레드 하나가 `seq`를 부여하고 첫 줄 `log.open`을 쓰며 100 ms마다 배치로, `error`는 즉시 쓰고, 거부된 event마다 그 범위 뒤에 `log.dropped`를 저장하고, `flush`는 받아들인 event가 디스크에 기록될 때까지 기다린다. 폴더는 mode 0700, 파일은 mode 0600이며, 계약 사례 `log.writer.*` 6개가 두 host에서 실행되고 `make benchmark-rust`와 `make benchmark-go`가 writer를 측정한다.
 - F150.2.1: native 라이브러리에 event ring(`event_ring.h`)이 생겼다: 여러 생산자 스레드가 락, 할당, 시스템 호출 없이 가변 길이 event를 넣고 소비자 하나가 비우는 bounded lock-free ring이며, 가득 찼거나 ring의 절반보다 큰 event는 false를 돌려주고 잃은 event와 바이트를 센다. `make -C native/darwin benchmark`가 호출 스레드에서의 push(약 80~100 ns)를 현재 글 기록(약 1.1 마이크로초, 최악은 수십~수백 마이크로초)과 비교해 잰다.
 - F150.1: `docs/spec/logging.md`가 event 계약(구조, class와 정책, writer, 파일, catalog, 개인정보, 한계)을 정하고, `@soksak/log-contract`가 로그를 catalog로 감사하며(선언된 event와 field, `log.dropped`로 설명되는 틈 외의 연속된 `seq`, 선언된 사슬) golden catalog와 golden lines를 담고, 용어 `event`, `event class`, `correlation identifier`를 정의한다.

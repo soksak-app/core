@@ -1142,6 +1142,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.2.4.1",
+    implementation: [
+      { file: "packages/workbench/log-batch.js", symbol: "export function createEventBatcher" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/log-batch.test.mjs", id: "events emitted in one turn are relayed in one call, in order" },
+      { file: "packages/workbench/test/log-batch.test.mjs", id: "a full queue refuses events and the next batch starts with the counted loss" },
+    ],
+    expected: "The events of one turn travel to the host in one ordered call, a full queue counts the refused events in page.log.dropped, and a failed call is reported with its event count.",
+    levels: ["unit"],
+  },
+  {
     id: "F150.2.2",
     implementation: [
       { file: "packages/host/tauriv2/src/event_log.rs", symbol: "pub fn emit" },
