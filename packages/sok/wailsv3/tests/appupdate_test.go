@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,13 +18,18 @@ import (
 	"time"
 
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
+	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
 
-// requireBundles skips a test of an operation on application bundles, which only darwin implements.
+// requireBundles skips a test of an operation on application bundles when the platform does not implement it.
 func requireBundles(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS != "darwin" {
-		t.Skip("application bundles are staged and replaced on darwin only")
+	current, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := current.BundleVersion(t.TempDir()); err != nil && strings.HasPrefix(err.Error(), "not implemented on ") {
+		t.Skip(err.Error())
 	}
 }
 

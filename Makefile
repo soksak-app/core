@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory
+.PHONY: preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -30,6 +30,11 @@ registry-manifest-check:
 
 # 실행 중인 애플리케이션의 main page process 메모리를 시작, 유휴, 다시 읽기 뒤에 잰다(docs/operations/examples.md).
 # APP 은 wailsv3 또는 tauriv2, CONFIG 는 그 애플리케이션의 설정 폴더, BUILD 는 release(기본) 또는 debug 다.
+# HOST 는 wailsv3 또는 tauriv2 다. 빌드한 디버그 번들의 복사본으로 애플리케이션 업데이트가 번들을 교체하는지 검사한다.
+app-update-check:
+	@case "$(HOST)" in wailsv3|tauriv2) ;; *) echo "app-update-check requires HOST=wailsv3|tauriv2" >&2; exit 2;; esac
+	@node scripts/check-app-update.mjs --host $(HOST) --bundle target/debug/soksak-$(HOST).app --registry target/registry/index.json
+
 page-memory:
 	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "page-memory requires APP=wailsv3|tauriv2 CONFIG=DIR [BUILD=release|debug] [MINUTES=60] [RELOADS=20]" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "page-memory requires CONFIG=DIR" >&2; exit 2;; esac

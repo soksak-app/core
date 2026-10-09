@@ -72,6 +72,19 @@ fn core_index(key: &str, revoked: &[&str], versions: &[&str]) -> Index {
 }
 
 // contract: app-update.state.selects-the-candidate
+/// Whether the platform implements the operations on application bundles. A test of those operations ends at once
+/// with the reason on the standard error when it does not, because a test cannot be skipped at run time.
+fn bundles_supported() -> bool {
+    let platform = soksak_sok::platform::current().expect("current platform");
+    match platform.bundle_version(&std::env::temp_dir()) {
+        Err(error) if error.starts_with("not implemented on ") => {
+            eprintln!("skipped: {error}");
+            false
+        }
+        _ => true,
+    }
+}
+
 #[test]
 fn the_candidate_is_the_newest_listed_core_after_the_running_one_with_a_release() {
     const KEY: &str = "darwin-arm64-tauriv2";
@@ -168,11 +181,10 @@ fn update(zip: &Path, version: &str, sha256: &str) -> AppUpdate {
 
 // contract: app-update.stage.verifies-and-extracts
 #[test]
-#[cfg_attr(
-    not(target_os = "macos"),
-    ignore = "application bundles are staged and replaced on macOS only"
-)]
 fn staging_checks_the_hash_extracts_the_bundle_and_checks_its_version() {
+    if !bundles_supported() {
+        return;
+    }
     let (config, work) = (Dir::new(), Dir::new());
     let (zip, sum) = bundle_zip(&work.0, "0.0.9");
     let bundle = stage_app_update(&config.0, &update(&zip, "0.0.9", &sum)).unwrap();
@@ -186,11 +198,10 @@ fn staging_checks_the_hash_extracts_the_bundle_and_checks_its_version() {
 
 // contract: app-update.stage.rejects-a-wrong-release
 #[test]
-#[cfg_attr(
-    not(target_os = "macos"),
-    ignore = "application bundles are staged and replaced on macOS only"
-)]
 fn staging_rejects_a_wrong_hash_and_a_wrong_bundle_version() {
+    if !bundles_supported() {
+        return;
+    }
     let (config, work) = (Dir::new(), Dir::new());
     let (zip, sum) = bundle_zip(&work.0, "0.0.9");
     let error = stage_app_update(&config.0, &update(&zip, "0.0.9", &"0".repeat(64))).unwrap_err();
@@ -225,11 +236,10 @@ fn sleeping() -> std::process::Child {
 
 // contract: app-update.replace.replaces-the-bundle-after-the-process-ended
 #[test]
-#[cfg_attr(
-    not(target_os = "macos"),
-    ignore = "application bundles are staged and replaced on macOS only"
-)]
 fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
+    if !bundles_supported() {
+        return;
+    }
     let parent = Dir::new();
     let target = fake_bundle(&parent.0, "soksak.app", "old");
     let staged = fake_bundle(&parent.0.join("updates/0.0.9"), "soksak.app", "new");
@@ -283,11 +293,10 @@ fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
 
 // contract: app-update.replace.restores-the-bundle-when-the-start-fails
 #[test]
-#[cfg_attr(
-    not(target_os = "macos"),
-    ignore = "application bundles are staged and replaced on macOS only"
-)]
 fn the_earlier_bundle_starts_again_when_the_new_one_fails_to_start() {
+    if !bundles_supported() {
+        return;
+    }
     let parent = Dir::new();
     let target = fake_bundle(&parent.0, "soksak.app", "old");
     let staged = fake_bundle(&parent.0, "staged.app", "new");
@@ -321,11 +330,10 @@ fn the_earlier_bundle_starts_again_when_the_new_one_fails_to_start() {
 
 // contract: app-update.replace.refuses-before-it-changes-anything
 #[test]
-#[cfg_attr(
-    not(target_os = "macos"),
-    ignore = "application bundles are staged and replaced on macOS only"
-)]
 fn the_replacement_refuses_what_is_not_a_bundle_or_when_the_process_keeps_running() {
+    if !bundles_supported() {
+        return;
+    }
     let parent = Dir::new();
     let staged = fake_bundle(&parent.0, "staged.app", "new");
     let mut process = sleeping();

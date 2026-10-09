@@ -66,6 +66,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("host structure audit", "js-ts", ["scripts/check-hosts.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("release diagnostic audit", "js-ts", ["scripts/check-release.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-release-paths.test.mjs"], { sharedTests: true }),
   lane("page memory measurement", "js-ts", ["scripts/measure-page-memory.mjs"], ["scripts/test/measure-page-memory.test.mjs"]),
+  lane("application update check", "js-ts", ["scripts/check-app-update.mjs"], ["scripts/test/check-app-update.test.mjs"]),
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platforms.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs"]),
@@ -1068,16 +1069,28 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F121.8",
+    implementation: [
+      { file: "scripts/check-app-update.mjs", symbol: "export function withCore" },
+    ],
+    tests: [
+      { file: "scripts/test/check-app-update.test.mjs", id: "the index lists one newer core release for the key and keeps the rest" },
+    ],
+    expected: "The application update check lists a core release of a newer version for the host and key of the built bundle.",
+    levels: ["unit"],
+  },
+  {
     id: "F137",
     implementation: [
       { file: "packages/sok/tauriv2/src/appupdate.rs", symbol: "pub type OpenApplication" },
       { file: "packages/sok/wailsv3/tests/appupdate_test.go", symbol: "func requireBundles" },
+      { file: "packages/sok/tauriv2/tests/appupdate_test.rs", symbol: "fn bundles_supported" },
     ],
     tests: [
       { file: "packages/sok/wailsv3/tests/appupdate_test.go", id: "TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts" },
       { file: "packages/sok/tauriv2/tests/appupdate_test.rs", id: "the_bundle_is_replaced_after_the_process_ended_and_the_application_starts" },
     ],
-    expected: "The Rust sok passes clippy, and the tests that stage and replace an application bundle run only on macOS.",
+    expected: "The Rust sok passes clippy, and the tests that stage and replace an application bundle end at once on a platform that does not implement those operations.",
     levels: ["unit"],
   },
   {

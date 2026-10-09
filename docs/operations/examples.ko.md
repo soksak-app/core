@@ -32,7 +32,7 @@ make wailsv3-build tauriv2-build
 
 `make parity-check`로 구조 목록 게이트를 실행한다. 언어별 고정 루트 없이 Git에 보이는 JS/TS·Rust·Go·Objective-C·네이티브 헤더·HTML/CSS·셸 스크립트·계약 선언·빌드 매니페스트를 발견한다. 생성된 라이브러리 출력·Tauri 스키마는 명시적 제외 사유를 갖고 소스/출력 일치는 별도 빌드 검사로 유지한다. 연결 없는 구현·테스트, 빈 패턴, 중복 소유는 실패한다. 테스트 공유를 이유로 구현 중복 소유를 허용하지 않는다.
 
-`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`와 `make go-format-check`를 실행한다. `make go-format-check`는 `gofmt`가 바꿀 추적 Go file을 모두 나열하고 실패한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 61개, 구현 파일 401개, 테스트 파일 469개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
+`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`와 `make go-format-check`를 실행한다. `make go-format-check`는 `gofmt`가 바꿀 추적 Go file을 모두 나열하고 실패한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 62개, 구현 파일 402개, 테스트 파일 470개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
 
 `pnpm test`는 패키지 검사 전에 감사·체크리스트·명령 감독 자체 검사를 실행한다. Rust 터미널 패키지 두 개는 실제 Cargo 검사를 호출한다. 패키지 명령 검사는 Cargo를 실패 fixture로 교체해 호출·실패 전달을 검증하며 엔진 동작 검사로 세지 않는다.
 
@@ -142,6 +142,8 @@ pnpm -F @soksak/e2e run verify
 ## page 메모리
 
 `make page-memory APP=wailsv3|tauriv2 CONFIG=DIR [BUILD=release|debug] [MINUTES=60] [RELOADS=20]`는 실행 중인 애플리케이션(기본은 release 빌드)의 main page process를 잰다: 번들의 `sok`으로 `host.window`에서 window의 `pageProcess`를 읽고, 시작 시점, 입력 없는 `MINUTES`분 뒤, `host.window.reload`를 `RELOADS`번 실행한 뒤에 `footprint`가 보고하는 physical footprint를 기록하며, 각각 JSON 한 줄 `{phase, elapsedMs, pageProcess, footprint}`를 출력한다. 유휴를 알리는 event가 없으므로 유휴 단계는 시간을 기다린다. 다시 읽기는 page를 새 process에서 열므로, 마지막 줄은 시작 때의 page process가 아직 있는지(`startProcessAlive`)도 기록한다. 측정은 값을 판정하지 않으며, window에 page process가 없으면 실패한다. 측정이 대화형 설정을 쓰지 않도록 애플리케이션을 일회용 설정 폴더로 시작한다(`open -g -n <bundle> --args --config-dir DIR`).
+
+`make app-update-check HOST=wailsv3|tauriv2`는 빌드한 디버그 번들의 복사본으로 애플리케이션 업데이트를 검사한다. 이 target은 번들을 두 번 복사하고, 두 번째 복사본에 버전 99.0.0과 ad-hoc 서명을 주고, 자신이 쓴 registry index의 core release로 압축하고, 첫 복사본을 빈 설치의 일회용 설정 디렉터리로 시작하고, `core.app`이 그 release를 나열하기를 기다리고, `core.app.update`를 실행하고, `sok app update`가 시작하는 애플리케이션을 기다린 뒤, 첫 복사본이 버전 99.0.0을 갖고 `.previous` 번들이 남지 않고 이전 프로세스가 끝났고 다시 시작한 애플리케이션이 그 release를 다시 나열하는지 검사한다. 상태는 `sok status <name> --watch`로 기다리며, 자신의 자식 프로세스가 아닌 애플리케이션의 끝을 기다릴 때만 프로세스의 존재를 100 ms마다 읽는다. 시작한 애플리케이션을 끝내고 폴더를 지우며, 프로세스가 남으면 실패한다.
 
 ## 브라우저 예제 검사
 

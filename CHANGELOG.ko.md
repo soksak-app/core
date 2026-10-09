@@ -4,8 +4,9 @@
 
 ## 미배포
 
+- F121.8: `make app-update-check HOST=wailsv3|tauriv2`가 빌드한 디버그 번들을 복사하고, 더 새 버전의 core release를 내고, 복사본을 일회용 설정 디렉터리로 시작하고, `core.app.update`를 실행한 뒤 `sok app update`가 두 host에서 번들을 교체하고 애플리케이션을 다시 시작했는지 검사한다. 시작한 애플리케이션을 끝내고 하나라도 남으면 실패한다.
 - F117.7.4: plugin 페이지의 업데이트 목록은 core release와 그 release 링크로 시작하며, F121.6이 이를 구현한다. 업데이트 N 컨트롤이 이를 센다.
-- F137: Rust `sok`의 `replace_app`이 쓰는 시작 함수의 타입에 `OpenApplication`이라는 이름을 붙여 `cargo clippy`가 통과하고, 애플리케이션 번들을 준비하고 교체하는 `sok` 테스트는 그 연산을 macOS만 구현하므로 Linux에서 건너뛴다(Go `requireBundles`, Rust는 macOS 밖에서 `ignore`).
+- F137: Rust `sok`의 `replace_app`이 쓰는 시작 함수의 타입에 `OpenApplication`이라는 이름을 붙여 `cargo clippy`가 통과하고, 애플리케이션 번들을 준비하고 교체하는 `sok` 테스트는 그 연산을 macOS만 구현하므로, 구현하지 않는 플랫폼에서는 그 플랫폼의 `not implemented on <os>` 메시지로 바로 끝난다(Go `requireBundles`, Rust `bundles_supported`).
 - F121.7: plugin 페이지의 core 업데이트 행은 `engines.soksak`이 후보를 포함하지 않는 설치된 plugin을, 범위가 후보를 포함하고 철회되지 않은 그 plugin의 가장 새 버전 또는 그런 버전이 없다는 표시와 함께 나열한다. status `core.app`은 이를 `incompatible`로 담고, workbench는 `version-range.js`의 `satisfies`로 명세의 버전 범위를 읽는다.
 - F121.6: plugin 페이지가 업데이트 목록 맨 위에 core 업데이트를 `core: <running> → <available>`, 그 버전의 release 페이지, 업데이트 동작, 동작의 단계와 오류와 함께 나열한다. status `core.app`과 명령 `core.app.update`, `core.app.release`를 선언했고, 창은 시작할 때, 활성이 될 때, registry를 바꿀 때, plugin 페이지를 열 때 후보를 읽으며, 창의 업데이트 N 컨트롤이 core 업데이트를 센다. 두 host의 창 검사가 더 새 core release를 나열하는 registry index를 내고, 동작이 내려받는 단계에서 그 release를 거부한다.
 - F121.5: 두 host가 host 호출 `appUpdateApply`에 답한다. 실행 중인 번들의 `sok`을 설정 디렉터리의 `updates/`에 복사하고, 새 세션에서 시작할 `sok app update`를 준비하고, `host.quit`처럼 종료한다. 종료는 사이드카를 분리(Go `Detach`, Rust `detach`)하므로 상주 service는 연결만 끊기고 `close-owner`와 `shutdown`을 받지 않아 세션이 남으며, 명령은 종료에 답한 뒤 시작한다. 수정된 탭이 취소한 종료는 보류한 업데이트를 버린다.
