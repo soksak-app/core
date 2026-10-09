@@ -2,17 +2,9 @@
 // 작업). host 는 pluginsState 와 pluginsRun 을 제공하며,
 // host 가 없으면 창이 불러온 플러그인만 보이고 작업은 없다.
 
-export const PLUGIN_ACTIONS = ["install", "update", "remove", "enable", "disable"];
+import { compareVersions } from "./version-range.js";
 
-/** x.y.z 버전 두 개를 숫자로 비교한다. registry index 는 버전 형식을 검사한 뒤 보낸다. */
-function compareVersions(a, b) {
-  const left = a.split(".").map(Number);
-  const right = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    if (left[i] !== right[i]) return left[i] - right[i];
-  }
-  return 0;
-}
+export const PLUGIN_ACTIONS = ["install", "update", "remove", "enable", "disable"];
 
 /**
  * 플러그인이 이름을 댄 사이드카를 이름 순서의 {name, range, version} 으로 만든다. 설치된 플러그인은 installed.json
@@ -191,5 +183,5 @@ export function createPluginOperations({ host, loaded, changed }) {
     return true;
   }
 
-  return { refresh, refreshOutdated, replace, run: runAction, updateAll, useRegistry, status, installStarter, failure: () => failure, hosted: Boolean(host) };
+  return { state: () => state, refresh, refreshOutdated, replace, run: runAction, updateAll, useRegistry, status, installStarter, failure: () => failure, hosted: Boolean(host) };
 }

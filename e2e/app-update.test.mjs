@@ -21,8 +21,9 @@ for (const app of Object.values(APPS)) {
   const key = `darwin-${process.arch === "arm64" ? "arm64" : "x64"}-${app.name}`;
 
   /** Serves an index with the core release `url` for this application and makes the window read it. */
-  async function serve(s, before, url, sha256) {
+  async function serve(s, before, url, sha256, edit = () => {}) {
     const index = JSON.parse(readFileSync(join(REGISTRY, "index.json"), "utf8"));
+    edit(index);
     index.core = { versions: [{ version: NEWER, releases: { [key]: { url, sha256 } } }] };
     const folder = mkdtempSync(join(tmpdir(), "soksak-app-update-"));
     writeFileSync(join(folder, "index.json"), JSON.stringify(index));
@@ -46,9 +47,17 @@ for (const app of Object.values(APPS)) {
     await keepCommonSettings(s);
     const before = await s.get("core.plugins");
     const url = "https://127.0.0.1:9/soksak-app/core/releases/download/v99.0.0/soksak-99.0.0.zip";
-    const listed = await serve(s, before, url, "0".repeat(64));
+    // The installed version of browser needs a core below 99.0.0, and a newer version of it needs a core from 99.0.0.
+    const installed = before.plugins.find((row) => row.id === "browser").installed.version;
+    const newer = `${installed.split(".").slice(0, 2).join(".")}.${Number(installed.split(".")[2]) + 1}`;
+    const listed = await serve(s, before, url, "0".repeat(64), (index) => {
+      const browser = index.plugins.find((plugin) => plugin.id === "browser");
+      browser.versions.find((item) => item.version === installed).engines.soksak = ">=0.0.1 <99.0.0";
+      browser.versions.push({ ...structuredClone(browser.versions.at(-1)), version: newer, engines: { soksak: ">=99.0.0" } });
+    });
     assert.equal(listed.available.release, "https://127.0.0.1:9/soksak-app/core/releases/tag/v99.0.0");
     assert.equal(listed.operation, null);
+    assert.deepEqual(listed.incompatible, [{ id: "browser", installed, range: ">=0.0.1 <99.0.0", compatible: newer }]);
 
     // The window shows the control 업데이트 N for the core release, which opens the plugin screen at the update list.
     const control = await s.rect("core.chrome.updates");
@@ -59,6 +68,8 @@ for (const app of Object.values(APPS)) {
     assert.ok(row.width > 0 && row.height > 0, `the core update row has no size: ${JSON.stringify(row)}`);
     await s.rect("core.library.app.release");
     await s.rect("core.library.app.update");
+    const note = await s.rect("core.library.app.incompatible", 0);
+    assert.ok(note.width > 0 && note.height > 0, `the incompatible plugin line has no size: ${JSON.stringify(note)}`);
 
     // The operation stops at the download of the release, reports the failed step, and the installation is unchanged.
     s.expectError(/application update 99\.0\.0: /);

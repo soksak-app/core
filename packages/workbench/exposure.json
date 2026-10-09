@@ -663,7 +663,7 @@
       },
       {
         "name": "core.app",
-        "description": "The application update of the window: the version of the running core or null before the first read, the candidate of the registry index with its version and the page of its release (null when its release URL names no published release) or null, the application update operation with its state (staging, applying or failed), the version and the error, or null, and the error of the last read of the registry index or null.",
+        "description": "The application update of the window: the version of the running core or null before the first read, the candidate of the registry index with its version and the page of its release (null when its release URL names no published release) or null, the application update operation with its state (staging, applying or failed), the version and the error, or null, the error of the last read of the registry index or null, and the installed plugins whose engines.soksak does not contain the candidate, by id, each with its installed version, that range and the newest version of the plugin that is not revoked and contains the candidate or null.",
         "schema": {
           "type": "object",
           "properties": {
@@ -697,6 +697,26 @@
             },
             "error": {
               "type": ["string", "null"]
+            },
+            "incompatible": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "installed": {
+                    "type": "string"
+                  },
+                  "range": {
+                    "type": "string"
+                  },
+                  "compatible": {
+                    "type": ["string", "null"]
+                  }
+                }
+              }
             }
           }
         }
@@ -3486,6 +3506,11 @@
       {
         "name": "core.library.app.update",
         "description": "The button that updates the application."
+      },
+      {
+        "name": "core.library.app.incompatible",
+        "description": "The lines of the installed plugins whose engines.soksak does not contain the candidate application update, each with the newest version of the plugin that does or the note that none does, below the row of the candidate.",
+        "many": true
       },
       {
         "name": "core.library.app.operation",

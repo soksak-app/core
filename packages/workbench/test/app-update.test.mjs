@@ -32,13 +32,14 @@ test("the status names the running version, the candidate with its release page 
   const host = fakeHost({ appUpdateState: { version: "0.0.8", available } });
   let changes = 0;
   const update = createAppUpdate({ host, changed: () => { changes += 1; } });
-  assert.deepEqual(update.status(), { version: null, available: null, operation: null, error: null });
+  assert.deepEqual(update.status(), { version: null, available: null, operation: null, error: null, incompatible: [] });
   await update.refresh();
   assert.deepEqual(update.status(), {
     version: "0.0.8",
     available: { version: "0.0.9", release: "https://github.com/soksak-app/core/releases/tag/v0.0.9" },
     operation: null,
     error: null,
+    incompatible: [],
   });
   assert.equal(changes, 1);
 });
@@ -47,7 +48,7 @@ test("a state that cannot be read is the error of the status and leaves no candi
   const host = fakeHost({ appUpdateState: new Error("registry: unreachable") });
   const update = createAppUpdate({ host, changed: () => {} });
   await update.refresh();
-  assert.deepEqual(update.status(), { version: null, available: null, operation: null, error: "registry: unreachable" });
+  assert.deepEqual(update.status(), { version: null, available: null, operation: null, error: "registry: unreachable", incompatible: [] });
 });
 
 test("updating stages the candidate, then applies the staged bundle, and reports each step", async () => {
@@ -90,4 +91,39 @@ test("opening the release page asks the host to open the page of the candidate a
   const other = createAppUpdate({ host: local, changed: () => {} });
   await other.refresh();
   await assert.rejects(other.openRelease(), /no release page/);
+});
+
+/** A plugin state whose index lists plugin versions with their `engines.soksak` ranges. */
+const pluginState = {
+  index: {
+    plugins: [
+      { id: "term", versions: [{ version: "0.1.0", engines: { soksak: "*" } }, { version: "0.2.0", engines: { soksak: "^0.0.8" } }, { version: "0.3.0", engines: { soksak: ">=0.0.9" } }, { version: "0.4.0", engines: { soksak: ">=0.0.9" } }] },
+      { id: "notes", versions: [{ version: "1.0.0", engines: { soksak: "^0.0.8" } }] },
+      { id: "any", versions: [{ version: "1.0.0", engines: { soksak: "*" } }] },
+      { id: "gone", versions: [{ version: "1.0.0", engines: { soksak: ">=0.0.9" } }] },
+    ],
+    revoked: { plugins: [{ id: "term", version: "0.4.0", reason: "broken" }], sidecars: [] },
+  },
+  installed: { plugins: { term: { version: "0.2.0" }, notes: { version: "1.0.0" }, any: { version: "1.0.0" }, absent: { version: "1.0.0" } } },
+};
+
+test("a plugin whose range does not contain the candidate is listed with its newest version that does", async () => {
+  const host = fakeHost({ appUpdateState: { version: "0.0.8", available: { ...available, version: "0.0.9" } } });
+  const update = createAppUpdate({ host, changed: () => {}, plugins: () => pluginState });
+  await update.refresh();
+  // term 0.2.0 needs ^0.0.8; 0.4.0 is revoked, so 0.3.0 is the newest version for 0.0.9. notes has no version for 0.0.9.
+  // A plugin whose installed version the index does not list is not judged.
+  assert.deepEqual(update.status().incompatible, [
+    { id: "notes", installed: "1.0.0", range: "^0.0.8", compatible: null },
+    { id: "term", installed: "0.2.0", range: "^0.0.8", compatible: "0.3.0" },
+  ]);
+});
+
+test("without a candidate or a plugin state no plugin is incompatible", async () => {
+  const none = createAppUpdate({ host: fakeHost({ appUpdateState: { version: "0.0.9", available: null } }), changed: () => {}, plugins: () => pluginState });
+  await none.refresh();
+  assert.deepEqual(none.status().incompatible, []);
+  const unread = createAppUpdate({ host: fakeHost({ appUpdateState: { version: "0.0.8", available } }), changed: () => {}, plugins: () => null });
+  await unread.refresh();
+  assert.deepEqual(unread.status().incompatible, []);
 });

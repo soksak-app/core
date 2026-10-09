@@ -10,7 +10,7 @@ const notify = () => { for (const fn of listeners) fn(); };
 export const pluginOperations = createPluginOperations({ host, loaded: pluginUnits, changed: notify });
 
 /** The application update of this window (app-update.js), which redraws the same listeners. */
-export const appUpdate = createAppUpdate({ host, changed: notify });
+export const appUpdate = createAppUpdate({ host, plugins: () => pluginOperations.state(), changed: notify });
 
 /** 플러그인 작업 상태가 바뀔 때마다 fn 을 부른다. */
 export function onPluginOperations(fn) {

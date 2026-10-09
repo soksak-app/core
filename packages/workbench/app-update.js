@@ -1,4 +1,5 @@
 // The application update state and operation of the window (docs/spec/installation.md#application-update).
+import { compareVersions, satisfies } from "./version-range.js";
 
 /**
  * The page of a published release for the URL of its file, `<repository>/releases/download/<tag>/<file>`; null for any
@@ -10,10 +11,33 @@ export function releasePage(url) {
 }
 
 /**
- * The application update of this window. `host` is null without the application host. `changed` is called whenever the
- * state or the operation changes.
+/**
+ * The installed plugins whose `engines.soksak` does not contain the candidate version, by id, each with the newest
+ * version of the plugin that does and is not revoked, or null. A plugin whose installed version the index does not list
+ * is not judged. `pluginsState` is the host's plugin state, or null before it was read.
  */
-export function createAppUpdate({ host, changed }) {
+function incompatiblePlugins(pluginsState, candidate) {
+  if (!pluginsState?.index?.plugins || !pluginsState.installed) return [];
+  const revoked = pluginsState.index.revoked.plugins;
+  const found = [];
+  for (const [id, record] of Object.entries(pluginsState.installed.plugins)) {
+    const entry = pluginsState.index.plugins.find((plugin) => plugin.id === id);
+    const installed = entry?.versions.find((item) => item.version === record.version);
+    if (!installed || satisfies(installed.engines.soksak, candidate)) continue;
+    const fits = entry.versions
+      .filter((item) => satisfies(item.engines.soksak, candidate) && !revoked.some((r) => r.id === id && r.version === item.version))
+      .map((item) => item.version)
+      .sort(compareVersions);
+    found.push({ id, installed: record.version, range: installed.engines.soksak, compatible: fits.length ? fits.at(-1) : null });
+  }
+  return found.sort((a, b) => (a.id < b.id ? -1 : 1));
+}
+
+/**
+ * The application update of this window. `host` is null without the application host. `plugins` returns the plugin
+ * state of the host or null. `changed` is called whenever the state or the operation changes.
+ */
+export function createAppUpdate({ host, plugins = () => null, changed }) {
   let state = null;
   let failure = null;
   let operation = null;
@@ -67,6 +91,7 @@ export function createAppUpdate({ host, changed }) {
       available: state?.available ? { version: state.available.version, release: releasePage(state.available.release.url) } : null,
       operation,
       error: failure,
+      incompatible: state?.available ? incompatiblePlugins(plugins(), state.available.version) : [],
     };
   }
 

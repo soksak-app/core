@@ -266,6 +266,12 @@ export function createLibrary(root, rendered = () => {}) {
     update.dataset.expose = 'core.library.app.update';
     mark(update, 'core.app.update');
     row.append(update);
+    for (const item of app.incompatible) {
+      const line = element('p', 'library-app-update__incompatible',
+        `${item.id} ${item.installed} (${item.range}): ${app.available.version}에 맞는 ${item.compatible ? `최신 버전 ${item.compatible}` : '버전 없음'}`);
+      line.dataset.expose = 'core.library.app.incompatible';
+      row.append(line);
+    }
     const operation = app.operation;
     if (operation) {
       const line = element('p', 'library-app-update__operation');

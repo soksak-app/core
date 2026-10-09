@@ -685,7 +685,7 @@
   - [o] F121.5 — P1: 두 host의 host 호출 `appUpdateApply`. `sok`을 복사하고 업데이트를 새 세션에서 시작하며 `close-owner`와 `shutdown` 없이 종료하므로 상주 service가 남는다.
   - [o] F121.6 — P1: plugin 화면의 업데이트 목록 맨 위에 core 업데이트를 release 링크와 업데이트 동작(`core.app.update`)과 함께 보이고, 단계의 status와 오류를 보인다. 더 새 core release를 나열하는 일회용 registry로 두 host의 창 검사를 두며, 동작은 첫 단계에서 그 release를 거부한다. 더 새 번들로 번들을 바꾸는 검사는 F121.8이다.
   - [ ] F121.8 — P1: 두 host의 창 검사로 애플리케이션 번들의 교체를 검사한다. 일회용 registry가 더 새 core release를 나열하고, `core.app.update`가 그 release를 준비하고 적용하며, `sok app update`가 준비한 번들로 검사용 애플리케이션을 다시 시작하고, 상주 service가 세션을 유지한다.
-  - [ ] F121.7 — P1: 후보를 포함하지 않는 `engines.soksak`의 plugin을 업데이트 전에 후보를 포함하는 그 plugin의 가장 새 버전과 함께 나열한다.
+  - [o] F121.7 — P1: 후보를 포함하지 않는 `engines.soksak`의 plugin을 업데이트 전에 후보를 포함하는 그 plugin의 가장 새 버전과 함께 나열한다.
 - [o] F122 — P1: 창을 닫을 때, 애플리케이션을 종료할 때, 스페이스나 프로젝트를 제거할 때 수정된 탭을 묻는다. 입력: [plugins](spec/plugins.ko.md)는 이 작업들이 탭을 닫을 때처럼 수정된 탭마다 묻는다고 정한다. 동작: `core.tab.close`와 `core.card.close`만 묻는다. `projects.js`의 `closeWindow`는 프로젝트를 저장하고 창을 닫으므로, 수정된 탭의 변경이 질문 없이 사라진다.
   - [o] F122.1 — P1: `projects.js`의 `closeWindow`는 저장하고 닫기 전에 창의 수정된 탭마다 탭을 닫을 때처럼 묻는다(`저장하고 닫기`, `저장하지 않고 닫기`, `닫지 않기`). 닫지 않은 탭이 있으면 창은 열려 있다. 애플리케이션 종료는 같은 요청으로 창마다 닫으므로 같은 방식으로 묻는다.
   - [o] F122.2 — P1: 질문이 취소한 종료는 두 host의 종료 상태를 끝낸다. page가 `windowCloseKept`를 알리고 host가 `quitting`을 지우므로, 이후 마지막 창을 닫아도 애플리케이션이 종료되지 않고 창의 web process가 종료로 끝났다고 보지 않는다. `docs/spec/host-contract.md`의 contract case와 Go, Rust test.
