@@ -962,6 +962,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F125",
+    implementation: [
+      { file: "scripts/check-registry-manifests.mjs", symbol: "export async function registryManifestErrors" },
+    ],
+    tests: [
+      { file: "scripts/test/registry-manifests.test.mjs", id: "each plugin version that the new core installs and whose manifest it rejects is reported" },
+    ],
+    expected: "The core of this checkout reads the published registry index, which holds the versions as release and releases, and reports each plugin version whose manifest it rejects.",
+    levels: ["unit"],
+  },
+  {
     id: "F129",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export async function prepareFixture" },
