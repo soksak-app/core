@@ -71,13 +71,12 @@ fn core_index(key: &str, revoked: &[&str], versions: &[&str]) -> Index {
     }
 }
 
-// contract: app-update.state.selects-the-candidate
 /// Whether the platform implements the operations on application bundles. A test of those operations ends at once
 /// with the reason on the standard error when it does not, because a test cannot be skipped at run time.
 fn bundles_supported() -> bool {
     let platform = soksak_sok::platform::current().expect("current platform");
     match platform.bundle_version(&std::env::temp_dir()) {
-        Err(error) if error.starts_with("not implemented on ") => {
+        Err(error) if error.contains("not implemented on ") => {
             eprintln!("skipped: {error}");
             false
         }
@@ -85,6 +84,7 @@ fn bundles_supported() -> bool {
     }
 }
 
+// contract: app-update.state.selects-the-candidate
 #[test]
 fn the_candidate_is_the_newest_listed_core_after_the_running_one_with_a_release() {
     const KEY: &str = "darwin-arm64-tauriv2";

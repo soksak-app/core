@@ -28,7 +28,7 @@ func requireBundles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := current.BundleVersion(t.TempDir()); err != nil && strings.HasPrefix(err.Error(), "not implemented on ") {
+	if _, err := current.BundleVersion(t.TempDir()); err != nil && strings.Contains(err.Error(), "not implemented on ") {
 		t.Skip(err.Error())
 	}
 }
