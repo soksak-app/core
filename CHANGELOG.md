@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F145.3: the native library records the end of each wait for a webview input receipt: a timeout with its type and limit, a refused send, a registration that ends the wait, a receipt that matches no wait or arrives from another frame, and a missing WebKit pointer API.
 - F145.2: the native library records every input that a region drops with its reason: a `noop:` command (`"dropped":"noop"`), an insert or marked text that is not text (`"dropped":"not text"`) and a report to a closed region (`info native input report dropped`).
 - F145.1: both hosts write `info host endpoint: connection closed: <reason>` before the socket of an endpoint connection closes: the peer, a frame over the limit, a frame that is not a JSON-RPC 2.0 request (with its body), an undeclared method, the close of the endpoint, and in the Wails host a full output queue, a failed write and a reply that cannot be encoded.
 - F148: core 0.0.10 is released (tag `v0.0.10`, both bundles) and listed in the registry; every declared workspace version is 0.0.10, the version that carries the text records of F138, the records of the input path of F144 and the correction of F146.

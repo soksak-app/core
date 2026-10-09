@@ -746,7 +746,7 @@
 - [ ] F145 — P1: 2026-10-09 전수조사가 찾은 기록 공백을 표의 순서(입력과 터미널 먼저)로 메운다. 항목: F145.1 endpoint 연결이 닫히는 이유(`endpoint.go`, `endpoint.rs`), F145.2 native 영역이 버리는 입력(`image_region.m`의 글이 아닌 입력, 닫힌 영역), F145.3 webview 입력의 등록과 수신 시간 초과(`webview_input.m`), F145.4 주입한 포인터와 키 입력의 거부, F145.5 파일 드롭의 실패(`core-exposure.js`), F145.6 page가 sidecar로 보내는 요청의 실패(`sidecar-port.js`, `page.js`)를 `report`로, F145.7 native 표면의 webview 문서의 오류와 처리되지 않은 rejection(`bridge.js`, `plugin-api`), F145.8 이미지 프레임의 거부와 잘못된 봉투, 표시 실패의 이유(`images.go`, `surfaces.go`, `image_region.m`), F145.9 owner가 없어 버려지는 sidecar 메시지와 보관만 하는 닫기(`sidecars.go`, `sidecars.rs`), F145.10 문서 view의 실패와 거부(`document_view.m`)와 표면·문서·모달 webview process의 끝, F145.11 애플리케이션 로그에 닿지 않는 `s.log` 줄, F145.12 relay와 전체 화면의 시간 초과, F145.13 떼어 낸 `sok app update`의 결과와 `sok`의 실패, F145.14 창이 끝나 허용한 제거, settings 정리, 알림, `ps` 실패, F145.15 명세가 나열하나 코드에 없는 page, host, native 라이브러리, plugin의 event별 trace(`session_start`, 창과 표면 event, 모든 process의 sampler), F145.16 files와 shell sidecar의 글 기록 형식(`log.Fatalf`, 요청, watch, spawn, 종료, `Close`가 버리는 종료 상태), F145.17 browser, editor, hwp, shell, files의 trace(탐색, 로드, 저장, watch, 실행, 쓰기), F145.18 코드가 쓰나 명세 실패 표에 없는 행.
   - [o] F145.1 — P1: endpoint 연결이 닫히는 이유(`endpoint.go`, `endpoint.rs`)의 기록을 더한다.
   - [o] F145.2 — P1: native 영역이 버리는 입력(`image_region.m`의 글이 아닌 입력, 닫힌 영역)의 기록을 더한다.
-  - [ ] F145.3 — P1: webview 입력의 등록과 수신 timeout(`webview_input.m`)의 기록을 더한다.
+  - [o] F145.3 — P1: webview 입력의 등록과 수신 timeout(`webview_input.m`)의 기록을 더한다.
   - [ ] F145.4 — P1: 주입한 pointer와 key 입력의 거부의 기록을 더한다.
   - [ ] F145.5 — P1: 파일 drop의 실패(`core-exposure.js`)의 기록을 더한다.
   - [ ] F145.6 — P1: page의 sidecar 전송 실패(`sidecar-port.js`, `page.js`)를 `report`로 기록의 기록을 더한다.

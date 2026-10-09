@@ -8,6 +8,23 @@ static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
 }
+/// The text that block writes to the standard error of the process.
+static NSString *capturedStandardError(void (^block)(void)) {
+    char path[] = "/tmp/webview_input_receipts_test.XXXXXX";
+    int file = mkstemp(path);
+    if (file < 0) { perror("mkstemp"); exit(1); }
+    fflush(stderr);
+    int saved = dup(STDERR_FILENO);
+    if (saved < 0 || dup2(file, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
+    block();
+    fflush(stderr);
+    if (dup2(saved, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
+    close(saved);
+    close(file);
+    NSString *written = [NSString stringWithContentsOfFile:@(path) encoding:NSUTF8StringEncoding error:nil];
+    unlink(path);
+    return written ?: @"";
+}
 static void until(BOOL (^condition)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!condition() && deadline.timeIntervalSinceNow > 0)
@@ -17,6 +34,7 @@ static void until(BOOL (^condition)(void)) {
 
 @interface SPReceiptView : WKWebView
 @property(nonatomic) BOOL missingDrain;
+@property(nonatomic) BOOL missingIgnore;
 @property(nonatomic) NSUInteger drains;
 // hold 이면 drain 콜백을 바로 실행하지 않고 held 에 보관한다. 시험이 원하는 시점에 실행한다.
 @property(nonatomic) BOOL hold;
@@ -25,6 +43,7 @@ static void until(BOOL (^condition)(void)) {
 @implementation SPReceiptView
 - (BOOL)respondsToSelector:(SEL)selector {
     if (selector == @selector(_doAfterProcessingAllPendingMouseEvents:) && self.missingDrain) return NO;
+    if (selector == @selector(_setIgnoresMouseMoveEvents:) && self.missingIgnore) return NO;
     return [super respondsToSelector:selector];
 }
 - (void)_doAfterProcessingAllPendingMouseEvents:(void (^)(void))done {
@@ -50,6 +69,11 @@ int main(void) { @autoreleasepool {
     BOOL accepted = webviewInputRegister(view);
     check(!accepted, @"registration rejects an unavailable pending-mouse drain API");
     if (accepted) webviewInputUnregister(view);
+    view.missingIgnore = YES;
+    NSString *refused = capturedStandardError(^{ check(!webviewInputRegister(view), @"registration rejects an unavailable pointer tracking API"); });
+    view.missingIgnore = NO;
+    check([refused containsString:@" error native webview input: _setIgnoresMouseMoveEvents: is unavailable"],
+        [NSString stringWithFormat:@"a refused registration is recorded with its reason (got %@)", refused]);
     view.missingDrain = NO;
     check(webviewInputRegister(view), @"available pointer APIs register");
     [view loadHTMLString:@"<!doctype html><script>window.ready=true</script>" baseURL:nil];
@@ -82,11 +106,23 @@ int main(void) { @autoreleasepool {
     }, ^(BOOL value) { received=value; completed++; });
     until(^BOOL { return completed > 0; });
     check(received && completed == 1 && view.drains == 2, @"successful receipt completes after the second drain");
+    // 전송이 거부되면 대기를 실패로 끝내고 그 이유를 기록한다.
+    view.hold=NO; view.held=nil; completed=0; received=YES;
+    NSString *refusedSend = capturedStandardError(^{
+        webviewInputSendThen(view, @"pointerdown", 1, ^BOOL { return NO; }, ^(BOOL value) { received=value; completed++; });
+        until(^BOOL { return completed > 0; });
+    });
+    check(!received && completed == 1 && [refusedSend containsString:@" error native webview input: send of pointerdown was refused"],
+        [NSString stringWithFormat:@"a refused send ends the wait and is recorded (got %@)", refusedSend]);
     // 전송 전 drain 이 끝나기 전에 대기가 시간 초과로 끝나면 늦은 drain 은 보내지 않고 다시 완료하지 않는다.
     view.hold=YES; view.held=nil; completed=0; received=YES; sent=0;
-    webviewInputSendThen(view, @"pointerdown", 0.05, ^BOOL { sent++; return NO; },
-        ^(BOOL value) { received=value; completed++; });
-    until(^BOOL { return completed > 0; });
+    NSString *timedOut = capturedStandardError(^{
+        webviewInputSendThen(view, @"pointerdown", 0.05, ^BOOL { sent++; return NO; },
+            ^(BOOL value) { received=value; completed++; });
+        until(^BOOL { return completed > 0; });
+    });
+    check([timedOut containsString:@" error native webview input: receipt of pointerdown did not arrive within 0.05 seconds"],
+        [NSString stringWithFormat:@"a timed-out wait is recorded with its type and limit (got %@)", timedOut]);
     check(view.held != nil, @"the pre-send drain is held");
     if (view.held) view.held();
     check(sent == 0 && completed == 1 && !received,
@@ -96,7 +132,9 @@ int main(void) { @autoreleasepool {
     view.held=nil; completed=0; received=YES; sent=0;
     webviewInputSendThen(view, @"pointerdown", 10, ^BOOL { sent++; return NO; },
         ^(BOOL value) { received=value; completed++; });
-    webviewInputUnregister(view);
+    NSString *ended = capturedStandardError(^{ webviewInputUnregister(view); });
+    check([ended containsString:@" info native webview input: wait for pointerdown ended by the end of the registration"],
+        [NSString stringWithFormat:@"a wait that the end of the registration completes is recorded (got %@)", ended]);
     check(view.held != nil && completed == 1 && !received, @"unregistration completes the pending wait once");
     if (view.held) view.held();
     check(sent == 0 && completed == 1,

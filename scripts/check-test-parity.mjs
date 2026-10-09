@@ -1140,6 +1140,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.3",
+    implementation: [
+      { file: "native/darwin/src/webview_input.m", symbol: "logReceiptTimeout" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_input_receipts_test.m", id: "a timed-out wait is recorded with its type and limit" },
+    ],
+    expected: "The native library records why a wait for a webview input receipt ends.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.2",
     implementation: [
       { file: "native/darwin/src/image_region.m", symbol: "input report dropped" },

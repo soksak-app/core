@@ -46,7 +46,11 @@ static NSString *const kReceiptScript =
 @implementation SPInputReceipts
 - (void)dealloc { [_waits release]; [super dealloc]; }
 - (void)userContentController:(WKUserContentController *)controller didReceiveScriptMessage:(WKScriptMessage *)message {
-    if (!message.frameInfo.isMainFrame || ![message.body isKindOfClass:NSString.class]) return;
+    if (!message.frameInfo.isMainFrame || ![message.body isKindOfClass:NSString.class]) {
+        sp_log_error("webview input", [NSString stringWithFormat:@"receipt message ignored: main frame %@, body class %@",
+            message.frameInfo.isMainFrame ? @"yes" : @"no", NSStringFromClass([message.body class])].UTF8String);
+        return;
+    }
     for (SPInputWait *wait in self.waits) {
         if (![wait.type isEqualToString:message.body]) continue;
         [[wait retain] autorelease];
@@ -54,6 +58,7 @@ static NSString *const kReceiptScript =
         wait.done(YES);
         return;
     }
+    sp_log_info("webview input", [NSString stringWithFormat:@"receipt of %@ arrived without a wait", message.body].UTF8String);
 }
 @end
 
@@ -77,7 +82,10 @@ static NSString *const kReceiptScript =
     self.controller = nil;
     NSArray *waits = [[self.receipts.waits copy] autorelease];
     [self.receipts.waits removeAllObjects];
-    for (SPInputWait *wait in waits) wait.done(NO);
+    for (SPInputWait *wait in waits) {
+        sp_log_info("webview input", [NSString stringWithFormat:@"wait for %@ ended by the end of the registration", wait.type].UTF8String);
+        wait.done(NO);
+    }
 }
 - (void)dealloc {
     sp_window_object_change(SP_WINDOW_OBJECT_INPUT_REGISTRATION, -1);
@@ -98,6 +106,11 @@ static BOOL hasPendingMouseDrain(WKWebView *view) {
     if ([view respondsToSelector:@selector(_doAfterProcessingAllPendingMouseEvents:)]) return YES;
     sp_log_error("webview input", "_doAfterProcessingAllPendingMouseEvents: is unavailable");
     return NO;
+}
+
+// 수신 대기가 시간 안에 끝나지 않았음을 기록한다.
+static void logReceiptTimeout(NSString *type, NSTimeInterval timeout) {
+    sp_log_error("webview input", [NSString stringWithFormat:@"receipt of %@ did not arrive within %g seconds", type, timeout].UTF8String);
 }
 
 static void installReceipts(WKWebView *view) {
@@ -127,6 +140,7 @@ void webviewInputReceive(WKWebView *view, NSString *type, NSTimeInterval timeout
     [handler.waits addObject:wait];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeout * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         if (![handler.waits containsObject:wait]) return;
+        logReceiptTimeout(type, timeout);
         [[wait retain] autorelease];
         [handler.waits removeObject:wait];
         wait.done(NO);
@@ -154,6 +168,7 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
     [handler.waits addObject:wait];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeout * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         if (![handler.waits containsObject:wait]) return;
+        logReceiptTimeout(type, timeout);
         [[wait retain] autorelease];
         [handler.waits removeObject:wait];
         wait.done(NO);
@@ -173,6 +188,7 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
         if (![handler.waits containsObject:wait]) return;
         BOOL sent = send();
         if (!sent && [handler.waits containsObject:wait]) {
+            sp_log_error("webview input", [NSString stringWithFormat:@"send of %@ was refused", type].UTF8String);
             [[wait retain] autorelease];
             [handler.waits removeObject:wait];
             wait.done(NO);
@@ -206,7 +222,10 @@ static NSEvent *routePointer(NSEvent *event) {
 
 BOOL webviewInputRegister(WKWebView *view) {
     NSCAssert(NSThread.isMainThread, @"Webview input registration requires the main thread");
-    if (![view respondsToSelector:@selector(_setIgnoresMouseMoveEvents:)]) return NO;
+    if (![view respondsToSelector:@selector(_setIgnoresMouseMoveEvents:)]) {
+        sp_log_error("webview input", "_setIgnoresMouseMoveEvents: is unavailable");
+        return NO;
+    }
     if (!hasPendingMouseDrain(view)) return NO;
     if (!inputViews) {
         inputViews = [[NSHashTable weakObjectsHashTable] retain];
@@ -242,7 +261,10 @@ BOOL webviewIgnorePageFocus(WKWebView *view) {
     // 페이지가 요소에 focus 를 주면 WebKit 은 first responder 를 web view 로 옮긴다
     // (PageClientImpl::makeFirstResponder). 로드를 마친 표면이 열린 메뉴나 입력 중인
     // 페이지에서 키 입력을 가져가게 된다.
-    if (![view respondsToSelector:@selector(_setShouldSuppressFirstResponderChanges:)]) return NO;
+    if (![view respondsToSelector:@selector(_setShouldSuppressFirstResponderChanges:)]) {
+        sp_log_error("webview input", "_setShouldSuppressFirstResponderChanges: is unavailable");
+        return NO;
+    }
     [view _setShouldSuppressFirstResponderChanges:YES];
     return YES;
 }
