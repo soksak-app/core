@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F121.2: the registry repository holds the core releases in `core.json`; `add-version.mjs core` writes a version with the release URL of the core repository, `validate.mjs` checks that URL, and the published index lists `core` without a version. The registry repository records this as its item G17.
 - F121.1: `sok registry build` (Go and Rust) reads `core.json` of the registry folder, checks the `sha256` of every core release and writes `core` of the index; the index check accepts `core` with `<platform>-<host>` keys and `core` of `revoked`, refuses a malformed one, and an index without `core` lists no core release.
 - F121: the specification states the application update: the registry index lists the core releases in `core` and withdraws a version in `revoked.core`, the host calls `appUpdateState`, `appUpdateStage` and `appUpdateApply` prepare and start the update, and `sok app update --wait <pid> --bundle <path> --target <path>` replaces the bundle after the application quits; the checklist item is split into F121.1 to F121.7.
 - F125: the public registry index is published with `release` and `releases`, so `scripts/check-registry-manifests.mjs` reads it with the current core (7 of 7 plugin versions failed before) and a core release can be checked; applications of core 0.0.8 cannot read it and are installed again. The registry repository records this as its item G16.

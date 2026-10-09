@@ -11,7 +11,8 @@
 | `plugins/<id>.json` | index의 plugin 항목 하나 | 항목 저장소의 소유자 |
 | `sidecars/<file name>.json` | index의 sidecar 항목 하나 | 항목 저장소의 소유자 |
 | `packs/<name>.json` | index의 pack 하나 | registry 관리자 |
-| `revoked.json` | index의 `{ plugins, sidecars }` | registry 관리자 |
+| `core.json` | index의 `core`: core release이며 `<platform>-<host>`마다 애플리케이션 번들 zip | registry 관리자 |
+| `revoked.json` | index의 `{ plugins, sidecars, core }` | registry 관리자 |
 | `.github/`, `scripts/`, `test/`, `CODEOWNERS` | 검사와 workflow | registry 관리자 |
 
 이 파일들이 index의 원천이다. `index.json`은 이 파일들로 `sok registry build`가 만들며([command line](cli.ko.md#release-registry)) commit하지 않는다. `CODEOWNERS`는 관리자만 바꾸는 모든 경로에 registry 관리자를 지정한다. core window check와 개발은 형제 checkout으로 `make registry`가 만드는 로컬 registry를 쓴다([repository](plugins.ko.md#repository)). 공개 registry에는 로컬 build가 없다.
@@ -22,6 +23,7 @@ plugin이나 sidecar 항목은 [registry index](installation.ko.md#registry-inde
 
 - `repository`는 항목의 release를 게시하는 저장소 `https://github.com/<owner>/<repo>`다.
 - 모든 `url`은 `repository`의 `<owner>`와 `<repo>`, 그리고 그 항목의 version을 쓴 `https://github.com/<owner>/<repo>/releases/download/v<version>/<file>`이다. `<file>`은 plugin version이면 `<id>-<version>.tgz`, platform의 sidecar release이면 `<file name>-<version>-<platform>.tar.gz`다([설치](installation.ko.md)).
+- `core.json`의 모든 `url`은 `https://github.com/soksak-app/core/releases/download/v<version>/soksak-<version>-<platform>-<host>.zip`이다.
 - 게시한 index에 있는 version은 바뀌지 않는다. 그 `url`, `sha256`, `engines`, `sidecars`, `protocol`, release는 그대로이며 지워지지 않는다. version은 `revoked.json` 항목으로만 거둔다.
 - plugin id, `package.json`의 plugin 이름, sidecar 이름은 항목 하나에만 속한다.
 

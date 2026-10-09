@@ -11,7 +11,8 @@ The public registry is the repository `soksak-app/registry`. It holds one file p
 | `plugins/<id>.json` | One plugin entry of the index | The owner of the entry's repository |
 | `sidecars/<file name>.json` | One sidecar entry of the index | The owner of the entry's repository |
 | `packs/<name>.json` | One pack of the index | Registry maintainers |
-| `revoked.json` | `{ plugins, sidecars }` of the index | Registry maintainers |
+| `core.json` | `core` of the index: the core releases, each `<platform>-<host>` with the zip of the application bundle | Registry maintainers |
+| `revoked.json` | `{ plugins, sidecars, core }` of the index | Registry maintainers |
 | `.github/`, `scripts/`, `test/`, `CODEOWNERS` | The checks and workflows | Registry maintainers |
 
 These files are the source of the index; `index.json` is built from them by `sok registry build` ([command line](cli.md#releases-and-the-registry)) and is not committed. `CODEOWNERS` names the registry maintainers for every path that only they change. Core window checks and development use a local registry built from sibling checkouts by `make registry` ([repositories](plugins.md#repositories)); the public registry has no local build.
@@ -22,6 +23,7 @@ A plugin or sidecar entry follows the [registry index](installation.md#registry-
 
 - `repository` is `https://github.com/<owner>/<repo>`, the repository that publishes the entry's releases.
 - Every `url` is `https://github.com/<owner>/<repo>/releases/download/v<version>/<file>` with the `<owner>` and `<repo>` of `repository` and the version of its entry. `<file>` is `<id>-<version>.tgz` for a plugin version and `<file name>-<version>-<platform>.tar.gz` for a sidecar release of a platform ([installation](installation.md)).
+- Every `url` of `core.json` is `https://github.com/soksak-app/core/releases/download/v<version>/soksak-<version>-<platform>-<host>.zip`.
 - A version that the published index lists does not change: its `url`, `sha256`, `engines`, `sidecars`, `protocol` and releases stay as they are, and it is not removed. A version is withdrawn only by a `revoked.json` entry.
 - A plugin id, the `name` of the plugin's `package.json` and a sidecar name belong to one entry.
 
