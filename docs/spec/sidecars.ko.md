@@ -66,6 +66,10 @@
 
 호스트가 사이드카를 종료하는 동안 출력의 끝은 실패가 아니다. 멈추는 동안의 다른 실패는 호스트 로그에 `sidecar <name>: failed: <reason>`으로 쓰고, 중지 뒤의 전송은 실패해 페이지가 세션을 다시 열 수 없으므로 호스트는 실패 이벤트를 보내지 않는다. 그다음 [선언과 시작](#선언과-시작)의 종료 규칙이 프로세스를 끝낸다. 멈추는 동안이든 아니든 실패 뒤 호스트가 사이드카의 출력을 더 읽지 않으면 파이프의 자기 쪽 끝을 닫으므로, 사이드카의 이후 쓰기는 막히지 않고 실패한다. 이 실패 규칙은 표준 입출력 transport에 적용된다. 영속 transport는 [터미널 런타임](terminal-runtime.ko.md)이 정의하는 대로 연결 끊김을 알린다.
 
+## 로그
+
+사이드카는 표준 오류의 한 줄을 글 기록 `<time> <level> <layer> <where>: <text>`([진단](diagnostics.ko.md#형태))로 쓰며 layer는 `sidecar`, `<where>`는 자기 이름이다. 호스트가 표준 입출력으로 시작한 사이드카는 아무 글이나 써도 되고, 호스트가 표준 오류의 각 줄을 읽어 level `info`의 기록으로 쓴다. 영속 서비스는 호스트로 파이프를 열지 않으므로 형식을 스스로 쓰며, 파일 `logs/<실행 파일 이름>.log`에는 그 형식의 기록만 있다.
+
 ## 페이지 인터페이스
 
 `page.sidecar(name)`은 사이드카 이름을 받아 `send(surface, body)`, `on(surface, fn)`, `onFailure(surface, fn)`을 반환한다. `on`은 그 사이드카와 표면의 `sidecar-message` 이벤트마다 `fn(body)`를, `onFailure`는 그 사이드카와 표면의 `sidecar-failure` 이벤트마다 `fn(reason)`을 호출한다. 둘 다 구독 등록 후 완료되는 promise를 반환한다. 페이지는 첫 요청 전에 구독한다.

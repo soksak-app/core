@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F138.1: 명세가 모든 글 기록의 한 형식을 정한다. `<time> <level> <layer> <where>: <text>`, level은 `error`와 `info`, layer는 `page`, `host`, `native`, `sidecar`, 기록 하나는 한 줄이며, 쓰는 쪽마다의 helper, sidecar 표준 오류를 감싸는 방법, 영속 서비스가 쓰는 형식을 함께 정하고 실패 표가 이를 쓴다. host, native 라이브러리, page는 F138.2와 F138.3까지 이전 형식을 쓴다.
 - F117.8.5: 공개 registry index가 core 0.0.9, terminal plugin 0.0.7, sidecar vt 0.0.7을 나열하고, 그 workflow는 core tag `v0.0.9`로 `sok`을 build한다.
 - F117.8.4: 선언된 모든 작업공간 버전은 0.0.9이며, 이 버전이 F117, F121, F122를 담는다.
 - F117.8.3: release workflow가 core release의 파일을 registry의 core release가 쓰는 이름 `soksak-<version>-darwin-arm64-wailsv3.zip`과 `soksak-<version>-darwin-arm64-tauriv2.zip`으로 짓고, 설치 안내가 그 이름을 쓴다.

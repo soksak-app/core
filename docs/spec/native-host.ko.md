@@ -31,7 +31,7 @@ main page의 module script는 `head`의 render-blocking script(`blocking="render
 
 WebKit은 window가 화면에 있는 동안에만 web view를 그리고, window가 화면에 올라갈 때 그 그리기를 기다리지 않는다. 그래서 page가 그리기 전에 보인 window는 열리는 동안 빈 window를 보인다. 두 host는 모든 window를 숨긴 채 만들고, 투명하게 한 뒤 화면에 올리고, main webview의 첫 읽기가 성공이든 실패든 끝나고 그 뒤의 presentation update가 끝나면 불투명하게 한다(`sp_window_reveal_after_load`). 첫 화면은 읽기가 끝나기 전에 그려지므로, 시작할 때의 첫 window를 포함해 새 window의 처음 보이는 frame은 그 완전한 첫 화면이고, 읽지 못한 page도 그 실패와 함께 보인다.
 
-시작 문서가 import하는 첫 module이 시작 오류 handler를 설치한다. page가 첫 화면을 그리기 전에는 `error` event(시작 문서의 module이 불러오지 못하거나 해석하지 못하거나 실행 중 던진 오류)와 `unhandledrejection` event가 `report` host 호출로 `error: page start: <text> @ <file>:<line>`을 애플리케이션 로그에 쓴다. 같은 문구는 한 번만 쓴다. page는 첫 화면을 그린 뒤 이 handler를 제거(`finishPageStart`)하고, 그 뒤에는 page의 오류 표시([애플리케이션 로그](hosts.ko.md#애플리케이션-로그))가 이어받는다. 그래서 page가 시작하지 못한 창의 오류는 `<config-dir>/logs/application.log`에 남는다.
+시작 문서가 import하는 첫 module이 시작 오류 handler를 설치한다. page가 첫 화면을 그리기 전에는 `error` event(시작 문서의 module이 불러오지 못하거나 해석하지 못하거나 실행 중 던진 오류)와 `unhandledrejection` event가 `report` host 호출로 `error page start: <text> @ <file>:<line>`을 애플리케이션 로그에 쓴다. 같은 문구는 한 번만 쓴다. page는 첫 화면을 그린 뒤 이 handler를 제거(`finishPageStart`)하고, 그 뒤에는 page의 오류 표시([애플리케이션 로그](hosts.ko.md#애플리케이션-로그))가 이어받는다. 그래서 page가 시작하지 못한 창의 오류는 `<config-dir>/logs/application.log`에 남는다.
 
 ## page 다시 읽기
 

@@ -66,6 +66,10 @@ A send after a failure follows the start rule: the next request to that sidecar 
 
 While the host stops its sidecars, the end of output is not a failure. Any other failure during a stop is written to the host log as `sidecar <name>: failed: <reason>`, and the host sends no failure event, because a send after the stop fails and a page cannot open its session again; the stop rules in [declaration and startup](#declaration-and-startup) then end the process. When the host stops reading a sidecar's output after a failure, during a stop or not, it closes its end of the pipe, so the sidecar's later writes fail instead of blocking. These failure rules apply to the standard input and output transport; the persistent transport reports connection loss as [terminal runtime](terminal-runtime.md) defines.
 
+## Log
+
+A sidecar writes a line of its standard error as a text record `<time> <level> <layer> <where>: <text>` ([diagnostics](diagnostics.md#forms)) with the layer `sidecar` and its own name as `<where>`. A sidecar that the host starts with standard input and output may write any text: the host reads each line of its standard error and writes it as a record of level `info`. A persistent service opens no pipe to the host, so it writes the form itself, and its file `logs/<executable-name>.log` holds only records of that form.
+
 ## Page interface
 
 `page.sidecar(name)` takes a sidecar and returns `send(surface, body)`, `on(surface, fn)`, and `onFailure(surface, fn)`. `on` calls `fn(body)` for each `sidecar-message` event of that sidecar and surface, and `onFailure` calls `fn(reason)` for each `sidecar-failure` event of that sidecar and surface. Both return a promise that resolves after the subscription is registered; a page subscribes before its first request.

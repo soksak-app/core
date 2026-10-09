@@ -12,8 +12,8 @@
 
 | 파일 | 쓰는 쪽 | 형태 | 한계 |
 |---|---|---|---|
-| `application.log` | 두 host, `report`를 거친 page, `sp_log_error`를 거친 native 라이브러리, host가 시작한 sidecar의 standard error | 글줄 | 실행이 열 때 10 MB이면 `application.log.1`로 이름을 바꾼다 |
-| `<executable-name>.log` | 상주 service. host가 service의 standard error로 연다 | 글 | host가 service를 시작할 때 10 MB이면 `<name>.1`로 이름을 바꾼다 |
+| `application.log` | 두 host, `report`를 거친 page, `sp_log_error`를 거친 native 라이브러리, host가 시작한 sidecar의 standard error | 한 형식의 글 기록([형태](#형태)) | 실행이 열 때 10 MB이면 `application.log.1`로 이름을 바꾼다 |
+| `<executable-name>.log` | 상주 service. host가 service의 standard error로 연다 | service가 쓰는 같은 형식의 글 기록 | host가 service를 시작할 때 10 MB이면 `<name>.1`로 이름을 바꾼다 |
 | `performance.ndjson` | page, 두 host, sidecar, sampler | 한 줄에 JSON event 하나 | 10 MB에서 `performance.ndjson.1`로 회전한다 |
 | `state-<time>.json` | debug view가 열릴 때 두 host | JSON 문서 하나 | 없음. 열 때마다 파일 하나 |
 | `captures/…` | 진단 빌드의 두 host | PNG와 frame 파일 | 요청한 쪽이 지운다 |
@@ -22,9 +22,16 @@
 
 ## 형태
 
-기록은 세 형태이고, 각 사실은 맞는 형태로 기록한다.
+기록은 세 형태이고, 각 사실은 맞는 형태로 기록한다. 줄 형태인 글 기록과 event는 시각을 맨 앞에 두고 같은 layer 이름을 쓰므로, 한 독자가 둘을 같은 순서로 읽는다.
 
-1. **오류 줄.** `application.log`의 한 줄 `error: <where>: <text>`. `<where>`는 실패한 동작이나 대상, `<text>`는 실패다. 모든 실패는 쓰는 쪽의 helper 하나(Go `LogError`, Rust `log_error`, native 라이브러리 `sp_log_error`, page `report`)로 이 줄을 쓴다. 실패가 아닌 상태를 말하는 줄은 `error: `로 시작하지 않는다.
+1. **글 기록.** `application.log`나 service log의 한 줄 `<time> <level> <layer> <where>: <text>`. 요소는 공백 하나로 구분한다.
+   - `<time>`은 쓴 시각의 UTC `YYYY-MM-DDTHH:MM:SS.mmmZ`로, event의 `ts`와 같은 형태다.
+   - `<level>`은 실패면 `error`, 실패가 아닌 상태면 `info`다.
+   - `<layer>`는 기록을 쓴 쪽으로 `page`, `host`, `native`, `sidecar` 중 하나다.
+   - `<where>`는 동작이나 대상의 이름이고 공백을 담을 수 있으며 처음 나오는 `: `에서 끝난다.
+   - `<text>`는 줄의 나머지다. 그 안의 줄바꿈은 두 글자 `\n`으로 써서 기록 하나가 항상 한 줄이다.
+
+   모든 실패는 level `error`의 기록을 쓰고, 그 밖의 기록은 level `info`다. 쓰는 쪽은 level마다 helper 하나를 가진다(Go `LogError`와 `LogInfo`, Rust `log_error`와 `log_info`, native 라이브러리 `sp_log_error`와 `sp_log_info`, page는 level을 받는 `report`). 두 host에 모두 있는 지점은 두 host에서 같은 `<where>`와 `<text>`를 쓴다. host는 읽는 sidecar의 표준 오류 줄마다 level `info`, layer `sidecar`, `<where>`가 sidecar 이름인 기록으로 쓰고, 상주 service는 같은 layer와 `<where>`로 자기 표준 오류를 이 형식으로 쓴다. 형식이 없는 글은 runtime이 쓰는 runtime의 crash 출력(Go panic과 fatal signal 보고, Rust 기본 panic hook의 메시지)뿐이다.
 2. **Event.** `performance.ndjson`의 한 줄: `ts`(밀리초가 있는 ISO-8601), `pid`, `layer`, `event`와 그 event의 필드를 가진 JSON 객체. event는 무슨 일이 언제 일어났는지를 계층을 가로지르는 한 시간선의 순서로 기록한다.
 3. **State file.** `state-<time>.json`: 한 시점의 애플리케이션 상태로, `time`, `host`, `versions`, `windows`, `page`를 가진다. 쓰는 쪽이 읽지 못한 부분은 그 오류와 함께 기록하고 파일 쓰기를 멈추지 않는다.
 
@@ -40,19 +47,21 @@
 
 ## 실패 지점
 
+표의 행은 시각이 없는 기록을 `<level> <layer> <where>: <text>`로 보인다.
+
 | 실패 | 기록 |
 |---|---|
-| main page의 module이 불러오지 못하거나 불러오는 중 던진다 | `error: page start: <text> @ <file>:<line>`([page 시작](native-host.ko.md#page-시작)) |
-| host가 page가 요청한 파일을 내줄 수 없다 | `error: page asset: <path>: not found`, 경로마다 한 번 |
-| main page가 첫 화면 뒤에 던지거나 reject한다 | page 오류 표시의 `error: <where>: <text>` |
-| 창의 WebContent process가 끝난다 | `error: page process: <window>: terminated` |
-| native 호출이 실패한다 | `sp_log_error`의 `error: <where>: <text>` |
-| Tauri host의 fatal signal이나 잡히지 않은 예외 | `error: fatal: <signal name>` 또는 `error: fatal: uncaught exception <name>: <reason>` 한 줄, 그 뒤 process가 끝난다. Wails host의 fatal signal은 Go runtime이 보고를 표준 오류에 쓴다 |
-| Rust host가 panic한다 | panic hook의 `error: panic: <file>:<line>: <message>`. Wails host의 panic은 Go runtime이 stack을 표준 오류에 쓴다 |
-| host가 실행되는 동안 표준 입출력 sidecar process가 끝난다 | `error: sidecar <name>: failed: output closed: <exit status>` |
-| host가 실행되는 동안 상주 service의 연결이 끝난다 | `error: sidecar <name>: connection lost; restarted`, 또는 `connection lost; restart failed: <reason>` |
+| main page의 module이 불러오지 못하거나 불러오는 중 던진다 | `error page start: <text> @ <file>:<line>`([page 시작](native-host.ko.md#page-시작)) |
+| host가 page가 요청한 파일을 내줄 수 없다 | `error host page asset: <path>: not found`, 경로마다 한 번 |
+| main page가 첫 화면 뒤에 던지거나 reject한다 | page 오류 표시의 `error page <where>: <text>` |
+| 창의 WebContent process가 끝난다 | `error host page process: <window>: terminated` |
+| native 호출이 실패한다 | `sp_log_error`의 `error native <where>: <text>` |
+| Tauri host의 fatal signal이나 잡히지 않은 예외 | `error native fatal: <signal name>` 또는 `error native fatal: uncaught exception <name>: <reason>` 기록 하나, 그 뒤 process가 끝난다. Wails host의 fatal signal은 Go runtime이 보고를 표준 오류에 쓴다 |
+| Rust host가 panic한다 | panic hook의 `error host panic: <file>:<line>: <message>`. Wails host의 panic은 Go runtime이 stack을 표준 오류에 쓴다 |
+| host가 실행되는 동안 표준 입출력 sidecar process가 끝난다 | `error host sidecar <name>: failed: output closed: <exit status>` |
+| host가 실행되는 동안 상주 service의 연결이 끝난다 | `error host sidecar <name>: connection lost; restarted`, 또는 `connection lost; restart failed: <reason>` |
 
-호출자가 받아 오류 표시로 보이는 실패는 그 표시가 기록한다. endpoint 요청은 실패를 client에 답하고, `sok` 명령은 상태와 메시지를 표준 오류로 끝내며, plugin은 host가 문서의 `failure`로 알린 document region의 탐색 실패를 `tab.error`([plugins](plugins.md))로 보이고 그 표시가 `error: tab error <tab id>: <text>`를 쓴다.
+호출자가 받아 오류 표시로 보이는 실패는 그 표시가 기록한다. endpoint 요청은 실패를 client에 답하고, `sok` 명령은 상태와 메시지를 표준 오류로 끝내며, plugin은 host가 문서의 `failure`로 알린 document region의 탐색 실패를 `tab.error`([plugins](plugins.md))로 보이고 그 표시가 `error page tab error <tab id>: <text>`를 쓴다.
 
 ## 읽기
 
