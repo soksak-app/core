@@ -662,6 +662,46 @@
         }
       },
       {
+        "name": "core.app",
+        "description": "The application update of the window: the version of the running core or null before the first read, the candidate of the registry index with its version and the page of its release (null when its release URL names no published release) or null, the application update operation with its state (staging, applying or failed), the version and the error, or null, and the error of the last read of the registry index or null.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": ["string", "null"]
+            },
+            "available": {
+              "type": ["object", "null"],
+              "properties": {
+                "version": {
+                  "type": "string"
+                },
+                "release": {
+                  "type": ["string", "null"]
+                }
+              }
+            },
+            "operation": {
+              "type": ["object", "null"],
+              "properties": {
+                "state": {
+                  "enum": ["staging", "applying", "failed"]
+                },
+                "version": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": ["string", "null"]
+                }
+              }
+            },
+            "error": {
+              "type": ["string", "null"]
+            }
+          }
+        }
+      },
+      {
         "name": "core.plugins",
         "description": "The plugin cards of the library plugin page: the registry index URL or null, the registry index or plugin state error or null, one entry per loaded, installed or registry plugin sorted by id with its name, description, state (loaded, disabled, available or reload), installed version and enabled value or null, newest registry version or null, and sidecars with their range and installed version, the latest plugin operation with its state (running, done or failed) and error, or null, whether a plugin waits for a page reload, and the installed plugins whose registry index lists a newer version.",
         "schema": {
@@ -2387,6 +2427,29 @@
         }
       },
       {
+        "name": "core.app.update",
+        "description": "Downloads, checks and extracts the release of the candidate application update, then replaces the application bundle and starts the application again; the operation of core.app reports the step, and a failed step rejects with its message. It fails when the registry index lists no candidate.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "core.app.release",
+        "description": "Opens the release page of the candidate application update in the default application of the person; it fails when the candidate has no release page.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.plugins.update-all",
         "description": "Updates the plugins that the registry lists in a newer version, in id order, one after the other, and reads the plugin state again after each; stops at the first failure with the host error and does nothing when no plugin has an update.",
         "params": {
@@ -3411,6 +3474,22 @@
         "name": "core.library.plugins.outdated",
         "description": "The rows of the outdated persistent services above the plugin cards, in sidecar order.",
         "many": true
+      },
+      {
+        "name": "core.library.app.row",
+        "description": "The row of the candidate application update, first in the update list of the plugin page: the versions, the release page and update controls and the step or error of the operation."
+      },
+      {
+        "name": "core.library.app.release",
+        "description": "The button that opens the release page of the candidate application update."
+      },
+      {
+        "name": "core.library.app.update",
+        "description": "The button that updates the application."
+      },
+      {
+        "name": "core.library.app.operation",
+        "description": "The step or the error of the application update operation, below the row of the candidate."
       },
       {
         "name": "core.library.plugins.updates",

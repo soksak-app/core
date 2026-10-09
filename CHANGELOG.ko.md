@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F121.6: plugin 페이지가 업데이트 목록 맨 위에 core 업데이트를 `core: <running> → <available>`, 그 버전의 release 페이지, 업데이트 동작, 동작의 단계와 오류와 함께 나열한다. status `core.app`과 명령 `core.app.update`, `core.app.release`를 선언했고, 창은 시작할 때, 활성이 될 때, registry를 바꿀 때, plugin 페이지를 열 때 후보를 읽으며, 창의 업데이트 N 컨트롤이 core 업데이트를 센다. 두 host의 창 검사가 더 새 core release를 나열하는 registry index를 내고, 동작이 내려받는 단계에서 그 release를 거부한다.
 - F121.5: 두 host가 host 호출 `appUpdateApply`에 답한다. 실행 중인 번들의 `sok`을 설정 디렉터리의 `updates/`에 복사하고, 새 세션에서 시작할 `sok app update`를 준비하고, `host.quit`처럼 종료한다. 종료는 사이드카를 분리(Go `Detach`, Rust `detach`)하므로 상주 service는 연결만 끊기고 `close-owner`와 `shutdown`을 받지 않아 세션이 남으며, 명령은 종료에 답한 뒤 시작한다. 수정된 탭이 취소한 종료는 보류한 업데이트를 버린다.
 - F121.4: `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]`(Go와 Rust)가 커널 알림으로 프로세스의 끝을 기다리고, 옆에 만든 복사본으로 번들을 바꾸고, `--` 뒤의 인자로 애플리케이션을 다시 시작하며, 새 번들이 시작하지 못하면 이전 번들을 다시 시작한다. `sok`의 플랫폼 인터페이스에 `WaitProcessEnd`, `CopyBundle`, `OpenApplication`이 더해진다.
 - F121.3: 두 host가 host 호출 `appUpdateState`(실행 중인 core와 registry index의 후보)와 `appUpdateStage`에 답한다. `appUpdateStage`는 후보의 release를 받아 `sha256`을 확인하고 zip을 설정 디렉터리의 `updates/` 아래에 풀고 번들의 버전을 확인해 그 경로를 돌려주며, 후보가 아닌 버전은 거부한다. `sok`의 플랫폼 인터페이스에 `ExtractBundle`과 `BundleVersion`이 더해진다.

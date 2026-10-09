@@ -6,7 +6,7 @@ import { icon } from "./icons.js";
 import { preview } from "./library-preview.js";
 import { delegate, mark } from "./commands.js";
 import { contributionsState, onContributionsChange } from "./contributions.js";
-import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
+import { appUpdate, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { matchPlugins } from "./plugin-search.js";
 import { hasUpdate } from "./plugin-operations.js";
 import { hideError, showError } from "./shown-errors.js";
@@ -251,6 +251,36 @@ export function createLibrary(root, rendered = () => {}) {
     return card;
   }
 
+  /** The row of the core update: the versions, the release page, the action, and the step or error of the operation. */
+  function coreUpdateRow(app) {
+    const row = element('div', 'library-app-update');
+    row.dataset.expose = 'core.library.app.row';
+    row.append(element('p', 'library-updates__row', `core: ${app.version} → ${app.available.version}`));
+    if (app.available.release) {
+      const release = element('button', 'ui-button', '릴리스 페이지'); release.type = 'button';
+      release.dataset.expose = 'core.library.app.release';
+      mark(release, 'core.app.release');
+      row.append(release);
+    }
+    const update = element('button', 'ui-button', '업데이트'); update.type = 'button';
+    update.dataset.expose = 'core.library.app.update';
+    mark(update, 'core.app.update');
+    row.append(update);
+    const operation = app.operation;
+    if (operation) {
+      const line = element('p', 'library-app-update__operation');
+      line.dataset.expose = 'core.library.app.operation';
+      if (operation.state === 'failed') {
+        line.setAttribute('role', 'alert');
+        showError(line, 'library app update', `${operation.version} 업데이트하지 못했습니다: ${operation.error}`);
+      } else {
+        line.textContent = `${operation.version} ${operation.state === 'staging' ? '받는 중' : '적용하는 중'}`;
+      }
+      row.append(line);
+    }
+    return row;
+  }
+
   /** 플러그인 페이지. 상태를 읽지 못한 글과 검색어에 맞는 플러그인 카드다. */
   function renderPlugins() {
     if (pluginSearch.value !== pluginQuery) pluginSearch.value = pluginQuery;
@@ -273,20 +303,25 @@ export function createLibrary(root, rendered = () => {}) {
       hideError(null, 'library plugins');
     }
     // The plugins that the registry lists in a newer version, with the action that updates all of them.
-    if (pluginOperations.hosted && status.updates.length) {
-      const key = JSON.stringify(status.updates);
+    const app = appUpdate.status();
+    if (app.operation?.state !== 'failed') hideError(null, 'library app update');
+    if (pluginOperations.hosted && (status.updates.length || app.available)) {
+      const key = JSON.stringify([app, status.updates]);
       if (updateList.key !== key) {
         updateList.key = key;
         const node = element('div', 'library-updates');
+        if (app.available) node.append(coreUpdateRow(app));
         for (const update of status.updates) {
           const row = element('p', 'library-updates__row', `${update.id}: ${update.installed} → ${update.latest}`);
           row.dataset.expose = 'core.library.plugins.updates'; row.dataset.plugin = update.id;
           node.append(row);
         }
-        const all = element('button', 'ui-button', '모두 업데이트'); all.type = 'button';
-        all.dataset.expose = 'core.library.plugins.update-all';
-        mark(all, 'core.plugins.update-all');
-        node.append(all);
+        if (status.updates.length) {
+          const all = element('button', 'ui-button', '모두 업데이트'); all.type = 'button';
+          all.dataset.expose = 'core.library.plugins.update-all';
+          mark(all, 'core.plugins.update-all');
+          node.append(all);
+        }
         updateList.node = node;
       }
       wanted.push(updateList.node);
@@ -461,7 +496,7 @@ export function createLibrary(root, rendered = () => {}) {
       if(!PAGES.some(([id])=>id===next)) throw new Error(`unknown library page ${next}`);
       page=next;
       // 플러그인 페이지는 보일 때 host 의 상태를 읽는다. 읽기 실패는 상태의 error 로 보고된다.
-      if(page==='plugins') { pluginOperations.refresh(); pluginOperations.refreshOutdated(); }
+      if(page==='plugins') { pluginOperations.refresh(); pluginOperations.refreshOutdated(); appUpdate.refresh(); }
       render();
     },
     /** Shows the plugin page with the update list at the top of the list. */

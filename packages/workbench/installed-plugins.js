@@ -1,13 +1,16 @@
 // 이 창의 플러그인 작업 상태 하나(plugin-operations.js). core.plugins status 와 설정 창의 플러그인 절이 함께 쓴다.
 import { host } from "@soksak/runtime";
 import { pluginUnits } from "./environment.js";
+import { createAppUpdate } from "./app-update.js";
 import { createPluginOperations } from "./plugin-operations.js";
 
 const listeners = new Set();
+const notify = () => { for (const fn of listeners) fn(); };
 
-export const pluginOperations = createPluginOperations({
-  host, loaded: pluginUnits, changed: () => { for (const fn of listeners) fn(); },
-});
+export const pluginOperations = createPluginOperations({ host, loaded: pluginUnits, changed: notify });
+
+/** The application update of this window (app-update.js), which redraws the same listeners. */
+export const appUpdate = createAppUpdate({ host, changed: notify });
 
 /** 플러그인 작업 상태가 바뀔 때마다 fn 을 부른다. */
 export function onPluginOperations(fn) {
@@ -33,7 +36,7 @@ export function followPluginChanges(apply) {
  * the state.
  */
 export function followActivation() {
-  if (host) host.on("window-active", () => { pluginOperations.refresh(); });
+  if (host) host.on("window-active", () => { pluginOperations.refresh(); appUpdate.refresh(); });
 }
 
 /** On sidecars-changed from the host, reads the outdated sidecars again (docs/spec/installation.md). */

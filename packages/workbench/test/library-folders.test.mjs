@@ -30,6 +30,7 @@ test("a project whose folder cannot be read shows the reason in the library and 
   t.mock.module("../installed-plugins.js", { namedExports: {
     pluginOperations: { hosted: false, status: () => ({ plugins: [], operation: null }), failure: () => null, refresh: async () => {} },
     onPluginOperations: () => {},
+    appUpdate: { status: () => ({ version: null, available: null, operation: null, error: null }), refresh: async () => {} },
   } });
   const { createLibrary } = await import("../library.js?folders");
   const library = createLibrary(document.getElementById("library"));

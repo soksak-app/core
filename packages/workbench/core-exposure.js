@@ -39,7 +39,7 @@ import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
 import { foldSection, onSectionsChange, selectSection, sidebarsState } from "./sidebar-sections.js";
 import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
-import { followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
+import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 
 /* 감시 중인 코어 status 의 수신자. */
 const watchers = new Set();
@@ -295,6 +295,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   status("core.contributions", contributionsState);
   onContributionsChange(coreChanged);
   status("core.plugins", () => pluginOperations.status());
+  status("core.app", () => appUpdate.status());
   status("core.picker", pickerState);
   status("core.library", () => library.state());
   status("core.verify", () => verified);
@@ -429,6 +430,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.plugins.disable", pluginCommand("disable"));
   registry.command("core.plugins.apply", () => applyPluginChange());
   registry.command("core.plugins.update-all", () => pluginOperations.updateAll());
+  registry.command("core.app.update", () => appUpdate.update());
+  registry.command("core.app.release", () => appUpdate.openRelease());
   registry.command("core.plugins.replace", async ({ sidecar }) => {
     if (typeof sidecar !== "string" || sidecar === "") {
       throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "sidecar must be a non-empty string");
@@ -440,6 +443,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
       throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "index must be a non-empty string");
     }
     await pluginOperations.useRegistry(index);
+    await appUpdate.refresh();
   });
   // 플러그인 관리는 설정 창을 닫고 라이브러리의 플러그인 페이지를 보인다.
   registry.command("core.plugins.browse", async () => {

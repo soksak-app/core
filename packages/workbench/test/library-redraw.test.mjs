@@ -28,6 +28,7 @@ test("a library render keeps the controls of unchanged project cards in the docu
   t.mock.module("../installed-plugins.js", { namedExports: {
     pluginOperations: { hosted: false, status: () => ({ plugins: [], operation: null, outdated: [], updates: [] }), failure: () => null, refresh: async () => {}, refreshOutdated: async () => {} },
     onPluginOperations: () => {},
+    appUpdate: { status: () => ({ version: null, available: null, operation: null, error: null }), refresh: async () => {} },
   } });
   const { createLibrary } = await import("../library.js?redraw");
   const library = createLibrary(document.getElementById("library"));
@@ -72,6 +73,7 @@ test("a plugin page render keeps the controls of unchanged plugin cards in the d
   t.mock.module("../installed-plugins.js", { namedExports: {
     pluginOperations: { hosted: true, status: () => status, failure: () => null, refresh: async () => {}, refreshOutdated: async () => {} },
     onPluginOperations: () => {},
+    appUpdate: { status: () => ({ version: null, available: null, operation: null, error: null }), refresh: async () => {} },
   } });
   const { createLibrary } = await import("../library.js?redraw-plugins");
   const library = createLibrary(document.getElementById("library"));

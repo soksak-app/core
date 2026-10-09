@@ -34,6 +34,7 @@
     "scroll-keep.js",
     "overlay-content.js",
     "environment.js",
+    "app-update.js",
     "installed-plugins.js",
     "surface-exposure.js",
     "host.js",

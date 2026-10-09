@@ -48,6 +48,7 @@ test("the plugin page of the library lists each plugin with its description, ver
   };
   t.mock.module("../installed-plugins.js", { namedExports: {
     pluginOperations: operations, onPluginOperations: (fn) => { listeners.push(fn); },
+    appUpdate: { status: () => ({ version: "0.0.8", available: null, operation: null, error: null }), refresh: async () => {} },
   } });
   const { createLibrary } = await import("../library.js?plugins");
   const root = document.getElementById("library");

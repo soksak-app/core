@@ -24,7 +24,7 @@
    함수 호출 시점에 읽는다. */
 import { pageStart } from "./page-start-errors-install.js";
 import { defaultRegistry, installEnvironment, starterPack } from "./environment.js";
-import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
+import { appUpdate, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { installExposure } from "./exposure.js";
 /* 첫 화면을 첫 await 전에 그리도록 선언 파일과 설치 목록을 module graph 로 가져온다(docs/spec/native-host.md#page-start). */
 import exposureFile from "./exposure.json" with { type: "json" };
@@ -489,7 +489,7 @@ function drawBars() {
   // 크롬 단추는 한 번 만든 요소를 유지하고 바뀐 속성만 고친다. 다시 만들면 누름과 뗌 사이에 누른 단추가 교체되어
   // 브라우저가 click 을 만들지 않는다(G1.4-14-4-3).
   // 라이브러리 화면에는 배치가 없으므로 프로젝트 목록과 자동 정렬 단추를 빼고 둔다.
-  const updates = pluginOperations.status().updates.length;
+  const updates = pluginOperations.status().updates.length + (appUpdate.status().available ? 1 : 0);
   if (updates > 0 && updatesButton.textContent !== `업데이트 ${updates}`) updatesButton.textContent = `업데이트 ${updates}`;
   const base = browsing ? chromeButtons.slice(2) : chromeButtons;
   const wanted = updates > 0 ? [updatesButton, ...base] : base;
@@ -563,6 +563,7 @@ const coreExposure = installCoreExposure({
 // 자리 표시를 다시 그린다. 읽기 실패는 그 상태의 오류로 남는다.
 await pluginOperations.refresh();
 await pluginOperations.refreshOutdated();
+await appUpdate.refresh();
 // 첫 실행이면 starter pack 을 설치하고, 설치한 plugin 을 불러오도록 page 를 다시 불러온다(docs/spec/installation.md).
 // 다시 불러오는 동안 이 page 는 space 를 만들지 않는다.
 if (await pluginOperations.installStarter(starterPack(), defaultRegistry(), log, showError)) {
