@@ -1,10 +1,10 @@
-// 창 검사가 임의 코드 실행과 옛 관측 통로를 쓰지 않는지 검사한다.
+// Checks that window checks use neither arbitrary code execution nor the former observation channels.
 //
-// 창 검사는 로컬 엔드포인트의 선언된 항목(status, command, dom)과 네이티브 입력만 사용한다.
-// 문서에 코드를 보내 실행하는 방법은 없으며, 그런 호출을 적은 검사는 거부한다.
-// 상태는 status.watch 알림으로 기다린다. 정해진 시간만큼 기다리는 대기와 반복 조회는
-// 거부한다. setTimeout 은 기다림의 상한(시간이 지나면 거절)으로만 쓸 수 있다.
-// e2e 와 창 검사 harness(packages/window-check) 아래의 모든 .mjs 파일을 검사한다(node_modules 제외).
+// Window checks use only the declared entries of the local endpoint (status, command, dom) and native input.
+// There is no way to send code to a document and run it, and a check that writes such a call is rejected.
+// State is awaited through status.watch notifications. Waits of a fixed duration and repeated queries are
+// rejected. setTimeout may be used only as the upper bound of a wait (the wait is rejected when the time passes).
+// Checks every .mjs file under e2e and the window check harness (packages/window-check) (node_modules excluded).
 //
 //   node scripts/check-e2e.mjs
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -22,22 +22,22 @@ const RULES = [
   { what: "a repeating timer", pattern: /\bsetInterval\s*\(/ },
   { what: "a fixed sleep", pattern: /\b(sleep|delay|pause)\s*\(|timers\/promises/, inputPacing: true },
   { what: "application activation that takes user focus", pattern: /\bactivate\s*:\s*true\b/, activationTier: true },
-  // 창 검사의 정리는 session.cleanup 에 둔다. open 의 정리가 실패하면 그 뒤에 등록한 t.after 는 실행되지 않으므로,
-  // 서버나 process 가 남아 검사 process 가 끝나지 않는다. 세션의 정리는 하나가 실패해도 모두 실행한다.
+  // The cleanup of a window check goes into session.cleanup. When the cleanup of open fails, a t.after registered after it does not run,
+  // so a server or process remains and the check process does not end. The cleanup of a session runs every step even when one fails.
   { what: "t.after for cleanup; register it with session.cleanup", pattern: /\bt\.after\s*\(/, sessionCleanup: true },
-  // 창 검사는 다른 구성 요소의 소스 경로를 읽지 않고 선언된 status 로 값을 받는다.
+  // A window check does not read source paths of other components and receives values through declared status entries.
   { what: "a source path of another repository component", pattern: /(["'`/]|\.\.\/)(packages|plugins|sidecars|native|apps)\// },
 ];
 
-// e2e/activation 과 e2e/real 의 검사는 사용자가 승인한 실행에서만 돌며 앱을 활성화할 수 있다.
+// The checks of e2e/activation and e2e/real run only in runs the user approved and may activate the app.
 const ACTIVATION_DIRS = ["e2e/activation/", "e2e/real/"];
-// 실제 입력 도구는 사람이 움직이는 속도로 HID 이벤트 사이에 간격을 둔다. 상태를 기다리는 대기가 아니며,
-// 간격 없이 보낸 끌기 이벤트는 창 서버가 합친다. 이 파일 밖에서는 고정 대기를 쓸 수 없다.
+// The real input tool leaves an interval between HID events at the speed of a human movement. It is not a wait for state, and
+// the window server coalesces drag events sent without an interval. A fixed wait is not allowed outside this file.
 const INPUT_PACING_FILE = "e2e/real/hid.mjs";
-// 세션을 만드는 harness 의 app.mjs 와, 창 검사가 아닌 단위 검사는 t.after 를 쓴다.
+// app.mjs of the harness, which creates sessions, and unit checks that are not window checks use t.after.
 const SESSION_CLEANUP_EXEMPT = ["packages/window-check/app.mjs", "packages/window-check/test/", "e2e/test/"];
 
-/* setTimeout 은 콜백이 거절(reject)하는 상한으로만 허용한다. */
+/* setTimeout is allowed only as the upper bound that the callback rejects. */
 const TIMEOUT = /\bsetTimeout\s*\(/g;
 const DEADLINE_WINDOW = 240;
 

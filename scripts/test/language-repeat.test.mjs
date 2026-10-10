@@ -1,4 +1,4 @@
-// Go 와 Rust 반복 실행 대상이 build tag 와 feature 를 넘기고, 실행된 테스트가 없는 실행을 통과로 세지 않는지 검증한다.
+// Verifies that the Go and Rust repeat targets pass the build tag and the feature, and do not count a run in which no test ran as a pass.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdirSync,mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
@@ -6,8 +6,8 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 
-// tool 이라는 이름의 가짜 실행 파일을 PATH 앞에 두고 대상을 실행한다. 가짜는 받은 인자를 args 파일에 쓰고 output 을 출력한다.
-// Makefile 은 $(HOME)/.cargo/bin 을 PATH 맨 앞에 두므로 HOME 을 임시 폴더로 바꾸고 가짜를 그 아래에도 둔다.
+// Puts a fake executable named tool in front of PATH and runs the target. The fake writes the arguments it received to the args file and prints the output.
+// The Makefile puts $(HOME)/.cargo/bin at the very front of PATH, so HOME is changed to a temporary folder and the fake is also placed under it.
 function repeat(t,tool,output,target){
  const directory=mkdtempSync(join(tmpdir(),'soksak-language-repeat-'));
  t.after(()=>rmSync(directory,{recursive:true}));
@@ -16,7 +16,7 @@ function repeat(t,tool,output,target){
  mkdirSync(bin,{recursive:true});
  writeFileSync(join(bin,tool),`#!${process.execPath}\nrequire('node:fs').appendFileSync(${JSON.stringify(args)},JSON.stringify(process.argv.slice(2))+'\\n');\nprocess.stdout.write(${JSON.stringify(output)});\n`,{mode:0o755});
  const result=spawnSync('make',target,{cwd:resolve(import.meta.dirname,'../..'),env:{...process.env,HOME:directory,PATH:bin+':'+process.env.PATH},encoding:'utf8',timeout:20000});
- // 기본값: 가짜가 실행되지 않았으면 받은 인자가 없다.
+ // default: when the fake did not run, it received no arguments.
  let calls=[];
  try{calls=readFileSync(args,'utf8').trim().split('\n').map(line=>JSON.parse(line));}catch(error){if(error.code!=='ENOENT')throw error;}
  return {...result,calls};

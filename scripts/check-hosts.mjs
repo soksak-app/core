@@ -1,7 +1,7 @@
-// 두 네이티브 호스트와 두 네이티브 애플리케이션의 파일 구조가 같은지 검사한다.
+// Checks that the file structures of the two native hosts and the two native applications are the same.
 //
-// .go 와 .rs 는 확장자를 뺀 경로로 비교하고, 그 밖의 파일은 경로 그대로 비교한다.
-// 한쪽에만 있는 파일은 아래 허용 목록(docs/spec/hosts.md 의 차이 ID)에 있을 때만 통과한다.
+// .go and .rs files are compared by the path without the extension, and other files are compared by the path as it is.
+// A file that exists on only one side passes only when it is in the allow list below (the difference IDs of docs/spec/hosts.md).
 //
 //   node scripts/check-hosts.mjs
 import { execFileSync } from "node:child_process";
@@ -53,7 +53,7 @@ const PAIRS = [
   },
 ];
 
-/** 디렉터리 아래 파일을 비교용 경로로 바꾼다. */
+/** Converts the files under a directory to paths for comparison. */
 function tree(dir) {
   const prefix = `${dir}/`;
   return new Set(tracked
@@ -84,7 +84,7 @@ export function auditHostPairs(tracked, pairs = PAIRS) {
   return errors;
 }
 
-// stub 구현을 검사한다(회귀 방지 검사)
+// Checks for stub implementations (a regression guard).
 const { readFileSync } = await import("node:fs");
 const STUB_PATTERNS = [
   /TODO:\s*Implement/,
@@ -97,13 +97,13 @@ const PRODUCT_DIRS = [
   "packages/host/tauriv2/src",
   "native/darwin/src",
 ];
-/** 검사하지 않는 경로. 테스트와 Windows unsupported 구현은 stub 문구를 정당하게 담는다. */
+/** Paths that are not checked. Tests and the Windows unsupported implementation legitimately hold stub wording. */
 const EXCLUDE = /(^|\/)(test|tests|windows)(\/|$)/;
 const STUB_SOURCE = /\.(go|rs|m|js|mjs)$/;
 
 /**
- * 제품 소스의 stub 구현 줄을 돌려준다. files 는 저장소 상대 경로, read(file) 은 그 원문이다. 읽지 못한 파일은
- * 검사하지 못한 것이므로 경로를 담은 오류로 실패한다.
+ * Returns the lines of stub implementations in product sources. files are repository-relative paths and read(file) is their text. A file that cannot be read
+ * was not checked, so the check fails with an error that holds the path.
  */
 export function findStubs(files, read) {
   const stubs = [];
@@ -122,12 +122,12 @@ export function findStubs(files, read) {
   return stubs;
 }
 
-// Tauri 명령의 인자는 framework 객체가 아니면 Argument<T> 다. 그래야 host 의 인자 decoder 가 해석하고 Wails host 와
-// 같은 문장으로 거부한다(docs/spec/native-host.md#host-calls).
+// An argument of a Tauri command is Argument<T> unless it is a framework object. Then the argument decoder of the host interprets it and rejects it with the same sentence as the Wails host
+// (docs/spec/native-host.md#host-calls).
 const FRAMEWORK_ARGUMENT = /^(Window|Webview|AppHandle|(tauri::)?State<.*>)$/s;
 const COMMAND = /#\[tauri::command[^\]]*\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\(crate\))?\s+)?(?:async\s+)?fn\s+(\w+)(?:<[^>]*>)?\(([^)]*)\)/g;
 
-/** source 의 Tauri 명령 중 framework 객체도 Argument<T> 도 아닌 인자를 돌려준다. */
+/** Returns the arguments of the Tauri commands in source that are neither a framework object nor Argument<T>. */
 export function findUndecodedCommandArguments(source, file) {
   const errors = [];
   for (const [, name, params] of source.matchAll(COMMAND)) {

@@ -1,10 +1,10 @@
-// 코어 패키지가 플러그인과 사이드카의 이름을 코드에 적지 않았는지 검사한다.
+// Checks that core packages do not name plugins or sidecars in code.
 //
-// 구성 요소는 설정 파일로만 연결된다. 플러그인과 사이드카는 자기 repository 에 있고
-// (docs/spec/plugins.md#repositories), 그 이름은 scripts/workspace-registry.json 이 선언한 폴더의
-// package.json 과 plugin.json 에서 읽는다. 코어 패키지끼리의 참조는 이 검사의 대상이 아니다. 각 플러그인과
-// 사이드카 repository 의 소스는 그 repository 가 검사한다. 애플리케이션(apps/)과 창 검사(e2e/)는 조합을
-// 소유하므로 검사하지 않는다. 선언 파일(package.json, plugin.json, sidecar.json)과 문서(.md)도 검사하지 않는다.
+// Components are connected only by declaration files. Plugins and sidecars live in their own repositories
+// (docs/spec/plugins.md#repositories), and their names are read from the package.json and plugin.json of the folders that scripts/workspace-registry.json
+// declares. References between core packages are not checked here. Each plugin and sidecar repository checks its own sources.
+// Applications (apps/) and window checks (e2e/) own the combination, so they are not checked.
+// Declaration files (package.json, plugin.json, sidecar.json) and documents (.md) are not checked either.
 //
 //   node scripts/check-boundaries.mjs [core checkout]
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -21,7 +21,7 @@ const listDirs = (path) => existsSync(path)
   ? readdirSync(path).map((name) => join(path, name)).filter((dir) => existsSync(join(dir, "package.json")))
   : [];
 
-/** 구성 요소. kind 는 core, plugin, sidecar 중 하나다. 소스를 읽는 것은 이 checkout 의 core 뿐이다. */
+/** A component. kind is one of core, plugin, and sidecar. Only the core of this checkout has sources that are read. */
 function components() {
   const found = [];
   const add = (dir, kind) => {

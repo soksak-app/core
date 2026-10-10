@@ -1,4 +1,4 @@
-// Windows 컴파일 검사 대상의 결과와 hosts-check 연결을 대상의 소유 경계에서 검증한다.
+// Verifies the result of the Windows compile check target and its connection to hosts-check at the ownership boundary of the target.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';

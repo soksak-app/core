@@ -6,7 +6,7 @@ import { checkChangelogTranslations, checkChecklistTranslations, checkCompletedI
 const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { encoding: "utf8" }).split("\0"))].filter((file) => file.endsWith(".md") && existsSync(file));
 const errors = [];
-// 코드 블록을 같은 수의 빈 줄로 바꾼다. 오류의 줄 번호가 원본과 같게 유지된다.
+// Replaces a code block with the same number of blank lines, so the line numbers of errors stay the same as in the source.
 const withoutCode = (text) => text.replace(/^(`{3,}|~{3,}).*\n[\s\S]*?^\1\s*$/gm, (block) => block.replace(/[^\n]/g, ""));
 const anchors = (text) => {
   const found = new Set();

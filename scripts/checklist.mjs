@@ -1,4 +1,4 @@
-// 번역 문장 대신 작업 ID·깊이·상태를 비교한다.
+// Compares task ID, depth, and state instead of translated sentences.
 export function checklist(text, file, errors) {
   const entries = [], identifiers = new Set();
   const lines = text.split("\n");
@@ -18,7 +18,7 @@ export function checklist(text, file, errors) {
       const missing = [!hasContent(causeValue) && (korean ? "원인" : "cause"), !hasContent(retryValue) && (korean ? "재시도 조건" : "retry condition")].filter(Boolean);
       if (missing.length) errors.push(`${file}:${index + 1}: blocked checklist item ${id ?? "without an identifier"} requires nonempty ${missing.join(" and ")}`);
     }
-    // [-] 는 재현하지 못해 닫은 항목이다. 닫기 전에 시도한 내용을 기록한다.
+    // [-] is an item closed because it was not reproduced. The attempts made before closing are recorded.
     if (state === "-") {
       const korean = file.endsWith(".ko.md");
       const record = (korean ? /재현되지 않음:\s*(.+)$/u : /Not reproduced:\s*(.+)$/i).exec(label)?.[1]?.trim();
@@ -78,8 +78,8 @@ export function retiredChecklistItems(english, korean) {
   return { ids: new Set(errors.length ? [] : enIds), errors };
 }
 
-// 변경 기록과 번역이 같은 정보를 같은 순서로 담는지 검사한다. 구역 제목의 수, 구역별 항목 수, 그리고 위치마다
-// 번역하지 않는 작업 ID와 코드 조각이 같아야 한다.
+// Checks that the changelog and its translation hold the same information in the same order: the number of section headings, the number of items per section, and, at each position, the
+// task IDs and code spans that are not translated must be the same.
 export function checkChangelogTranslations(english, korean) {
   const sections = (text) => {
     const result = [];

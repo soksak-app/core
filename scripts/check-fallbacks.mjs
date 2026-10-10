@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// 제품 코드의 대체값과 삼킨 오류를 찾는다. AGENTS.md 는 대체값 강제 변환, 무시한 결과, 알리지 않은 오류를 금지한다.
-// 기본값이 계약의 일부인 자리는 그 줄이나 바로 위 주석 줄에 `기본값:`(packages/soksak 에서는 `default:`)으로
-// 시작하는 까닭을 적는다. 까닭 없이 찾은 자리는 실패다.
+// Finds substitute values and swallowed errors in product code. AGENTS.md forbids substitute values, coercion, ignored results, and unreported errors.
+// A place where a default is part of the contract states its reason on that line or in the comment line right above it, starting with `default:`
+// (the check also accepts the Korean form of that marker). A place found without a reason fails.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -9,13 +9,13 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** 제품 코드. 테스트, 검사 도구, 벤치, 생성물은 뺀다. */
-// packages/window-check 는 실행 중인 앱을 검사하는 harness 다. 앱에 실리지 않는 검사 코드이므로 e2e 와 같이 제품
-// 코드에서 뺀다(F25.1 에서 e2e 에서 옮겼다).
+/** Product code. Tests, check tools, benchmarks, and generated output are excluded. */
+// packages/window-check is the harness that checks a running app. It is check code that the app does not carry, so it is excluded from product
+// code like e2e (moved from e2e in F25.1).
 const PRODUCT = /^(packages\/(?!window-check\/)|native\/|apps\/)/;
 const EXCLUDED = /(^|\/)(test|tests|testing|bench|dist|build|scripts|node_modules)\/|\.test\.|_test\.(go|rs|m)$|\.d\.(ts|mts|cts)$/;
 
-/** 언어별 형태. 한 줄에서 찾는다. */
+/** The forms by language. They are searched in one line. */
 const PATTERNS = {
   js: [
     ["nullish default", /\?\?(?!=)/],
@@ -48,18 +48,18 @@ const language = (file) => {
   return null;
 };
 
-/** 이 줄 또는 바로 위에 이어진 주석 줄에 적힌 기본값의 까닭. */
+/** The reason of a default written on this line or in the comment lines that continue right above it. */
 const REASON = /(기본값|default): \S.{9,}/;
 const COMMENT = /^\s*(\/\/|\*|\/\*)/;
 const OR_OPERATOR = /\|\|(?![=])/g;
 
-/** 값 fallback으로 쓰인 논리 OR. boolean 조건은 평범한 논리로 남는다. */
+/** A logical OR used as a value fallback. A boolean condition remains plain logic. */
 function hasOrDefault(line) {
   for (const match of line.matchAll(OR_OPERATOR)) {
     const before = line.slice(0, match.index);
     const after = line.slice(match.index + match[0].length).trimStart();
-    // 조건이나 boolean을 만드는 식 안의 `||`는 fallback이 아니다.
-    // 이 감사는 모든 논리 OR가 아니라 값 위치를 의도적으로 대상으로 삼는다.
+    // A `||` inside an expression that makes a condition or a boolean is not a fallback.
+    // This audit targets value positions on purpose, not every logical OR.
     if (/\b(?:if|while|for)\s*\(/.test(before)) continue;
     if (/(?:===|!==|==|!=|<=|>=|(?<![=!<>])<(?![=])|(?<![=!<>])>(?![=]))/.test(line)) continue;
     if (/\bBoolean\s*\([^)]*$/.test(before) || /\breturn\s+!!/.test(before)) continue;
@@ -91,7 +91,7 @@ function reasonFor(lines, index) {
   return null;
 }
 
-/** 제품 코드에서 발견한 모든 기본값·오류 버림과 그 문서화된 이유를 돌려준다. */
+/** Returns every default and discarded error found in product code, with its documented reason. */
 export function listFallbacks(files, read) {
   const found = [];
   for (const file of files) {
@@ -126,7 +126,7 @@ export function listFallbacks(files, read) {
   return found;
 }
 
-/** 까닭이 적히지 않은 자리를 돌려준다. */
+/** Returns the places where no reason is written. */
 export function findFallbacks(files, read) {
   return listFallbacks(files, read).filter((item) => item.reason === null);
 }

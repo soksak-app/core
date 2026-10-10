@@ -40,7 +40,7 @@ test("checklist permits translated text and linked follow-up identifiers", { tim
 });
 
 test("the audit reads a committed checklist larger than one mebibyte", { timeout: 3000 }, (t) => {
-  // execFileSync 의 기본 출력 한도는 1 MiB 이므로 그보다 큰 체크리스트로 확인한다.
+  // The default output limit of execFileSync is 1 MiB, so a checklist larger than that is used.
   const english = `- [o] G1 — ${"x".repeat(1100000)}\n`;
   const korean = `- [o] G1 — ${"가".repeat(400000)}\n`;
   const result = check(t, english, korean, english);
@@ -90,8 +90,8 @@ for (const [name, english, korean] of [
   });
 }
 
-// [-] 는 한 번 관측된 실패를 정한 시도 뒤에도 재현하지 못해 닫은 항목이다. 시도한 내용을 기록해야 하고, 닫은 뒤에는
-// 다시 열지 않으며 다시 나면 연결된 새 ID 로 연다.
+// [-] is an item closed because a failure observed once was not reproduced after the set attempts. The attempts must be recorded, and after closing the item
+// is not reopened; when the failure occurs again, a new linked ID is opened.
 test("checklist permits an item closed as not reproduced with the record of its attempts", { timeout: 3000 }, (t) => {
   const english = "- [-] G1 — failed once. Not reproduced: three full runs, one under load.\n";
   const korean = "- [-] G1 — 한 번 실패했다. 재현되지 않음: 전체 실행 세 번, 한 번은 부하에서.\n";

@@ -1,4 +1,4 @@
-// 반복 실행의 성공 출력과 실패 전파를 대상의 소유 경계에서 검증한다.
+// Verifies the success output and the failure propagation of the repeat run at the ownership boundary of the target.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
@@ -27,7 +27,7 @@ test('node repeat rejects a run without a matching passed case',{timeout:15000},
  const result=repeat(t,'empty');assert.notEqual(result.status,0);assert.match(result.stderr,/no test .* matched/);
 });
 
-// 실제 node 실행기의 출력으로 센다. 이 검사의 node:test 실행 문맥(NODE_TEST_CONTEXT)은 넘기지 않는다.
+// Counts from the output of the real node runner. The node:test execution context (NODE_TEST_CONTEXT) of this check is not passed on.
 const {NODE_TEST_CONTEXT,...environment}=process.env;
 function repeatReal(t,name,color){
  const directory=mkdtempSync(join(tmpdir(),'soksak-repeat-real-'));

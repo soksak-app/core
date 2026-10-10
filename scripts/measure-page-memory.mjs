@@ -1,19 +1,19 @@
-// 실행 중인 애플리케이션의 main page process 메모리를 시작 시점, 유휴 뒤, 다시 읽기 뒤에 잰다.
+// Measures the memory of the main page process of a running application at start, after idle, and after reload.
 //
-// 애플리케이션 번들의 sok 으로 창의 host.window 상태(pageProcess)를 읽고 host.window.reload 를 실행하므로 release 빌드도
-// 잰다. 메모리는 운영체제의 footprint 가 보고하는 physical footprint 다. 유휴 구간은 아무 사건도 기다리지 않는 시간이므로
-// 시간으로 정한다. 단계마다 {phase, elapsedMs, pageProcess, footprint} 를 JSON 한 줄로 출력하고, 판정하지 않는다. 다시
-// 읽기는 새 page process 에서 문서를 열므로(docs/spec/native-host.md), 마지막 단계는 시작 때의 process 가 아직 있는지
-// (startProcessAlive)도 기록한다.
-// `make page-memory` 가 실행한다.
+// Reads the host.window state (pageProcess) of the window with the sok of the application bundle and runs host.window.reload, so a release build is also
+// measured. The memory is the physical footprint that the operating system footprint reports. The idle interval is a time that waits for no event, so it is
+// set by duration. For each step it prints {phase, elapsedMs, pageProcess, footprint} as one JSON line and makes no judgment. Reload
+// opens the document in a new page process (docs/spec/native-host.md), so the last step also records whether the process of the start still exists
+// (startProcessAlive).
+// `make page-memory` runs it.
 //
 //   node scripts/measure-page-memory.mjs --sok PATH --config-dir DIR [--idle-minutes N] [--reloads N]
 import { execFileSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 
 /**
- * 단계를 차례로 잰다. status() 는 host.window 상태, reload() 는 다시 읽기 한 번, footprint(pid) 는 바이트 수, wait(ms) 는
- * 유휴 구간이다. alive(pid) 는 그 process 가 아직 있는지다.
+ * Measures the steps in sequence. status() is the host.window state, reload() is one reload, footprint(pid) is the number of bytes, and wait(ms) is
+ * the idle interval. alive(pid) tells whether that process still exists.
  */
 export async function measure({ status, reload, footprint, alive, wait, idleMs, reloads, log, now = Date.now }) {
   const started = now();
@@ -31,14 +31,14 @@ export async function measure({ status, reload, footprint, alive, wait, idleMs, 
   await record("reloads", () => ({ startProcessAlive: alive(start.pageProcess) }));
 }
 
-/** footprint 출력의 바이트 수. */
+/** The number of bytes in the footprint output. */
 export function parseFootprint(text) {
   const match = text.match(/Footprint: (\d+) B/);
   if (!match) throw new Error(`footprint reported no byte count: ${text.slice(0, 200)}`);
   return Number(match[1]);
 }
 
-/** 명령줄 옵션. */
+/** The command line options. */
 export function parseOptions(args) {
   const options = { idleMinutes: 60, reloads: 20 };
   for (let index = 0; index < args.length; index += 2) {

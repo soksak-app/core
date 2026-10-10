@@ -9,8 +9,8 @@ import { runCommand } from '../test-command.mjs';
 const node = process.execPath;
 const task = (source) => [node, ['-e', source]];
 
-// 끝난 프로세스는 부모가 거둘 때까지 좀비로 남고, 좀비에 대한 kill(pid, 0) 은 성공한다. 그래서 프로세스 표의 상태로 판정한다.
-// 이 파일의 다른 테스트가 바꾸는 childProcess.execFileSync 가 아니라 가져올 때의 함수를 쓴다.
+// An ended process remains a zombie until its parent reaps it, and kill(pid, 0) on a zombie succeeds. So the judgment uses the state in the process table.
+// This file uses the function as imported, not childProcess.execFileSync, which other tests of this file replace.
 function assertEnded(pid) {
   let state;
   try {
@@ -66,8 +66,8 @@ test('reports an absent executable as fail with an error', { timeout: 2000 }, as
 });
 
 test('a forced kill after the child already ended on SIGTERM still reports timeout', { timeout: 10000 }, async () => {
-  // SIGTERM 으로 끝난 자식의 종료를 루프가 아직 처리하지 않은 동안 100 ms 뒤의 SIGKILL 이 실행되게 한다. 부하로 루프가
-  // 늦을 때와 같은 순서다. 끝난 자식만 남은 프로세스 그룹에 보낸 신호를 macOS 는 EPERM 으로 거부할 수 있다.
+  // Makes the SIGKILL after 100 ms run while the loop has not yet handled the end of a child that ended with SIGTERM. It is the same order as when the loop is
+  // late under load. macOS can reject with EPERM a signal sent to a process group in which only ended children remain.
   const [command, args] = task('setTimeout(() => {}, 5000)');
   let held = false;
   const result = await runCommand({
@@ -76,7 +76,7 @@ test('a forced kill after the child already ended on SIGTERM still reports timeo
       if (event.type !== 'progress' || held) return;
       held = true;
       const until = performance.now() + 150;
-      while (performance.now() < until) { /* 루프를 붙잡는다 */ }
+      while (performance.now() < until) { /* holds the loop */ }
     },
   });
   assert.equal(held, true, 'the progress event did not hold the loop');
@@ -84,8 +84,8 @@ test('a forced kill after the child already ended on SIGTERM still reports timeo
 });
 
 test('a refused forced kill of a group that ended on SIGTERM still reports timeout', { timeout: 10000 }, async (t) => {
-  // SIGTERM 으로 끝난 그룹에 100 ms 뒤 보내는 SIGKILL 을 macOS 가 EPERM 으로 거부한 경우를 주입한다. 그룹이 사라졌는지는
-  // 정리 단계가 확인하므로, 거부된 강제 종료만으로 실패하지 않는다.
+  // Injects the case in which macOS rejects with EPERM the SIGKILL sent after 100 ms to a group that ended with SIGTERM. The cleanup step checks whether the group is gone,
+  // so a rejected forced termination alone does not fail.
   const originalKill = process.kill;
   t.after(() => { process.kill = originalKill; });
   process.kill = (pid, signal) => {
@@ -96,8 +96,8 @@ test('a refused forced kill of a group that ended on SIGTERM still reports timeo
     }
     return originalKill(pid, signal);
   };
-  // 자식은 SIGTERM 을 받고 120 ms 뒤에 끝난다. 그래서 100 ms 뒤의 강제 종료가 먼저 실행되어 주입된 거부를 받는다. 300 ms
-  // 한도는 자식이 처리기를 둔 뒤에 SIGTERM 이 가게 한다.
+  // The child receives SIGTERM and ends 120 ms later. So the forced termination after 100 ms runs first and receives the injected rejection. The 300 ms
+  // limit makes SIGTERM arrive after the child has installed its handler.
   const [command, args] = task("process.on('SIGTERM', () => setTimeout(() => process.exit(0), 120)); setTimeout(() => {}, 5000)");
   const result = await runCommand({ id: 'refused-kill', command, args, timeoutMs: 300, onEvent: () => {} });
   assert.equal(result.status, 'timeout', JSON.stringify({ error: result.error }));
@@ -217,7 +217,7 @@ test('reports process-group signal failure without an unhandled timer error', { 
   const result = await runCommand({ id: 'signal-error', command, args, timeoutMs: 20, onEvent: () => {} });
   assert.equal(result.status, 'fail');
   assert.equal(result.error.code, 'EPERM');
-  // 실패한 신호와 프로세스 그룹을 남긴다. 다음 발생에서 어느 단계의 신호인지 알 수 있다.
+  // Keeps the failed signal and the process group. The next occurrence shows which step's signal it was.
   assert.match(result.error.message, /^SIGTERM to process group \d+: blocked process-group signal$/);
 });
 
@@ -240,7 +240,7 @@ test('forwards CLI SIGTERM to command cancellation and cleanup', { timeout: 3000
     await rm(directory, { recursive: true, force: true });
   });
   const descendantSource = `const {writeFileSync}=require('node:fs'); process.on('SIGTERM',()=>writeFileSync(${JSON.stringify(markerFile)},'term')); process.send('ready'); setTimeout(()=>{},2000);`;
-  // pid 파일은 임시 파일에 쓴 뒤 이름을 바꿔 만든다. 읽는 쪽이 쓰기 도중의 빈 파일을 읽지 않는다.
+  // The pid file is created by writing a temporary file and renaming it. The reader never reads an empty file in the middle of the write.
   const commandSource = `const {spawn}=require('node:child_process'); const {renameSync,writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e',${JSON.stringify(descendantSource)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile + '.tmp')},String(child.pid)); renameSync(${JSON.stringify(pidFile + '.tmp')},${JSON.stringify(pidFile)});}}); setTimeout(()=>{},2000);`;
   cli = spawn(node, [join(process.cwd(), 'scripts/test-command.mjs'), '--id', 'cli-signal', '--timeout-ms', '1500', '--', node, '-e', commandSource], { stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '';
@@ -280,7 +280,7 @@ test('rejects invalid arguments', { timeout: 2000 }, () => {
 });
 
 test('does not convert denied cleanup verification after SIGKILL into success', { timeout: 3000 }, async (t) => {
-  // 확인이 거부되고 프로세스 표가 실행 중인 구성원을 보여 주는 상태를 주입한다. 이 사용자가 신호를 보낼 수 없는 구성원이다.
+  // Injects the state in which the check is rejected and the process table shows a running member. This user cannot send a signal to that member.
   const originalKill = process.kill;
   const originalExecFileSync = childProcess.execFileSync;
   let killAttempted = false;
@@ -311,8 +311,8 @@ test('does not convert denied cleanup verification after SIGKILL into success', 
 });
 
 test('counts a process group that holds only zombies as gone after a denied probe', { timeout: 3000 }, async (t) => {
-  // 측정된 상태를 주입한다. 구성원이 모두 끝났지만 거둬지지 않은 그룹에 macOS 의 kill(-pgid, sig) 는 EPERM 을 돌려주고,
-  // 프로세스 표는 그 구성원을 좀비(Z)로 보여 준다.
+  // Injects the measured state. For a group in which every member has ended but has not been reaped, kill(-pgid, sig) of macOS returns EPERM, and
+  // the process table shows that member as a zombie (Z).
   const originalKill = process.kill;
   const originalExecFileSync = childProcess.execFileSync;
   t.after(() => {
@@ -339,7 +339,7 @@ test('counts a process group that holds only zombies as gone after a denied prob
 });
 
 test('reads the members of a group from the real process table after a denied probe', { timeout: 3000 }, async (t) => {
-  // 확인만 거부하고 프로세스 표는 실제 ps 로 읽는다. 첫 확인에서 남은 자손은 실행 중으로 보이고, 정리의 SIGTERM 뒤에는 사라진다.
+  // Only the check is rejected, and the process table is read with the real ps. A descendant that remained at the first check appears running and disappears after the SIGTERM of the cleanup.
   const directory = await mkdtemp(join(tmpdir(), 'test-command-members-'));
   const pidFile = join(directory, 'pid');
   const originalKill = process.kill;

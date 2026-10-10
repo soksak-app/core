@@ -54,7 +54,7 @@ function git(root, args) {
   }
 }
 
-// git 출력의 SHA-256. 출력을 버퍼에 모으지 않으므로 큰 바이너리 patch 도 크기 한도 없이 해시한다.
+// SHA-256 of git output. The output is not collected in a buffer, so even a large binary patch is hashed without a size limit.
 function gitDigest(root, args) {
   return new Promise((resolve, reject) => {
     const child = spawn('git', ['-C', root, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -76,7 +76,7 @@ function gitDigest(root, args) {
 }
 
 async function dirtyState(root) {
-  // -z 는 경로를 따옴표 없이 NUL 로 끝내고, 이름 바뀜과 복사 항목 뒤에 원래 경로를 따로 둔다.
+  // -z ends a path with NUL without quotes and places the original path separately after a rename or copy entry.
   const fields = git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all']).split('\0');
   const files = [];
   for (let index = 0; index < fields.length && fields[index]; index++) {
@@ -206,7 +206,7 @@ export function validateEvidence(record) {
       resultShape(attempt);
     });
     if (JSON.stringify(record.result) !== JSON.stringify(record.attempts.at(-1))) {
-      // 결과는 시도 번호를 뺀 최신 결과다. 그 필드를 명시적으로 비교한다.
+      // The result is the latest result without the attempt number. Those fields are compared explicitly.
       const latest = record.attempts.at(-1);
       if (record.result.status !== latest.status || record.result.elapsedMs !== latest.elapsedMs || JSON.stringify(record.result.expected) !== JSON.stringify(latest.expected) || JSON.stringify(record.result.actual) !== JSON.stringify(latest.actual)) throw invalid('latest result does not match the attempt history');
     }

@@ -1,8 +1,8 @@
-// 두 호스트(Wails, Tauri)가 호스트 명세의 계약 사례를 같은 수준으로 실행하는지 검사한다.
+// Checks that the two hosts (Wails and Tauri) run the contract cases of the host specification at the same level.
 //
-// 계약 사례는 docs/spec/host-contract.md 의 "Contract cases" 표가 정의한다. 각 호스트의 테스트 함수는 바로 위의
-// `// contract: <id>[, <id>]` 줄로 실행하는 사례를 선언한다. 검사는 두 호스트의 테스트를 기본 구성과 diagnostics
-// 구성으로 실제 실행하고, 선언한 테스트가 실행되어 통과했는지 결과로 판단한다. 파일 이름이나 개수는 쓰지 않는다.
+// The contract cases are defined by the "Contract cases" table of docs/spec/host-contract.md. The test function of each host declares the case it runs with the line
+// `// contract: <id>[, <id>]` right above it. The check actually runs the tests of both hosts in the default configuration and the diagnostics
+// configuration and judges from the results whether the declared tests ran and passed. It does not use file names or counts.
 import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
@@ -16,7 +16,7 @@ const SPEC = 'docs/spec/host-contract.md';
 const HOSTS = ['wailsv3', 'tauriv2'];
 const CASE_ID = /^[a-z][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+$/;
 
-/** 명세의 "Contract cases" 표에서 사례 ID, 동작, 범위를 읽는다. 범위는 `both` 이거나 한 호스트 이름이다. */
+/** Reads the case ID, behavior, and scope from the "Contract cases" table of the specification. The scope is `both` or the name of one host. */
 export function parseContractCases(markdown) {
   const start = markdown.indexOf('\n## Contract cases\n');
   if (start < 0) throw new Error(`${SPEC} has no "Contract cases" section`);

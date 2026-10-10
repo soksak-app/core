@@ -29,7 +29,7 @@ const sources = {
 };
 const [page, card, release] = ["<main>작업</main>", "export const card = 1;", "// 진단 빌드가 아니다.\nexport {};\n"];
 
-/** 실행 파일처럼 NUL 로 구분한 바이트를 latin1 문자열로 만든다. */
+/** Makes a latin1 string from bytes separated by NUL, like an executable. */
 const executable = (...parts) => Buffer.concat(parts.flatMap((part) => [bytes("\0"), bytes(part)])).toString("latin1");
 
 function audit(text) {
@@ -76,7 +76,7 @@ test("minimum audit requires the declared minimum in Info.plist and the applicat
   assert.deepEqual(audit("<plist><dict></dict></plist>", []), ["app.app/Contents/Info.plist: LSMinimumSystemVersion is missing, not the macOS minimum 14.4"]);
 });
 
-/** 애플리케이션 실행 파일과 추가 실행 파일을 가진 가짜 번들 두 개를 만든다. */
+/** Makes two fake bundles that hold an application executable and an extra executable. */
 function bundles(t, extra = {}) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-release-bundles-"));
   t.after(() => rmSync(dir, { recursive: true }));

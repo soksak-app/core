@@ -30,7 +30,7 @@ function validateTimeout(timeoutMs, language) {
   return value;
 }
 
-/** manifest에서 명시적 케이스를 찾는다. 어떤 케이스도 추론하거나 조용히 버리지 않는다. */
+/** Finds explicit cases in the manifest. It neither infers a case nor drops one silently. */
 export function discoverLanguageCases(manifest) {
   if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.cases) || manifest.cases.length === 0) {
     throw invalid('manifest.cases must contain at least one case');
@@ -100,7 +100,7 @@ function parseGo(output) {
       if (event.Action === 'fail') failed++;
       if (event.Action === 'skip') skipped++;
     } catch {
-      // go test -json은 컴파일러와 도구 텍스트를 허용한다. 명령 결과는 여전히 보이게 남는다.
+      // go test -json permits compiler and tool text. The command result still remains visible.
     }
   }
   return { tests, failed, skipped, cancelled: 0, todo: 0 };
