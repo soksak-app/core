@@ -1,5 +1,5 @@
-// 창 검사 뒤 페이스트보드가 앞과 다를 때 무엇이 다른지 밝히는지 검사한다. 내용은 사용자의 자료이므로 길이와
-// sha256 앞부분만 밝힌다.
+// Checks that, when the pasteboard after a window check differs from the one before, the report states what differs.
+// The content is data of the user, so only the length and the first part of the sha256 are stated.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { pasteboardDifference } from "../pasteboard.mjs";

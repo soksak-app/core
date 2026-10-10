@@ -1,6 +1,6 @@
-// 캡처가 기록한 프레임 하나를 읽는다.
+// Reads one frame that a capture recorded.
 //
-// 프레임은 메타데이터와 체크섬이 있는 LZ4 블록으로 모든 BGRA 바이트를 복원한다.
+// A frame restores all BGRA bytes from an LZ4 block with metadata and a checksum.
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { crc32 } from "node:zlib";
@@ -9,12 +9,12 @@ import { decodeLz4 } from "./lz4.mjs";
 const HEAD = 80;
 
 /**
- * 파일 하나를 { width, height, stride, content, contentScale, scale, time, data } 로 읽는다.
- * content 는 버퍼 안에서 창이 그려진 사각형(버퍼 포인트), time 은 표시 시각(ms)이다.
+ * Reads one file as { width, height, stride, content, contentScale, scale, time, data }. content is the rectangle in
+ * the buffer where the window is drawn (buffer points), and time is the display time (ms).
  *
- * 짧은 파일은 거절한다. 녹화가 멈추는 사이에 쓰이던 프레임은 끝이 잘리고, 잘린
- * 자리를 읽으면 undefined 가 나와 어떤 색 검사에도 걸리지 않는다. 그대로 두면
- * 깨진 프레임을 온전한 프레임으로 처리하게 된다.
+ * Rejects a short file. A frame that was being written while the recording stopped is cut off, and reading a cut-off
+ * position gives undefined, which no color check catches. Left as it is, a broken frame would be treated as a whole
+ * frame.
  */
 export function readFrame(path) {
   const file = readFileSync(path);
@@ -36,10 +36,10 @@ export function readFrame(path) {
   return { width, height, stride, content: { x, y, width: w, height: h }, contentScale, scale, time, data };
 }
 
-/** 한 폴더의 프레임을 적힌 순서대로. */
+/** The frames of one folder in the written order. */
 export function frames(directory) {
-  // 한 process 의 녹화는 frame 번호를 이어서 매기므로 번호가 9999 를 넘으면 이름의 문자열 순서가 frame 순서와 다르다.
-  // 이름의 번호로 정렬한다(docs/spec/endpoint.md).
+  // The recording of one process continues the frame numbers, so after the number passes 9999 the string order of the
+  // names differs from the frame order. The frames are sorted by the number in the name (docs/spec/endpoint.md).
   const number = (name) => {
     const match = /^frame-(\d+)\.bgra$/.exec(name);
     if (!match) throw new Error(`recording ${directory} has an unexpected frame file ${name}`);
@@ -51,7 +51,7 @@ export function frames(directory) {
     .map((name) => join(directory, name));
 }
 
-/** 한 픽셀의 [r, g, b]. */
+/** The [r, g, b] of one pixel. */
 export function pixel(frame, x, y) {
   const i = y * frame.stride + x * 4;
   return [frame.data[i + 2], frame.data[i + 1], frame.data[i]];

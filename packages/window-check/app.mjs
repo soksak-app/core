@@ -1,8 +1,8 @@
-// 실행 중인 예제 앱의 로컬 엔드포인트에 연결해 상태를 준비하고 끌기를 기록한다.
+// Connects to the local endpoint of a running example application, prepares its state and records drags.
 //
-// 검사는 앱을 실행하지 않는다. 앱은 `--config-dir <tmpdir>/soksak-check-<app>` 로 실행되어
-// 있어야 하고, 하네스는 그 폴더의 endpoint.json 으로 연결한다. 명세는 docs/spec/endpoint.md 와
-// docs/spec/exposure.md 에 있다.
+// The checks do not launch the application. The application must already run with `--config-dir
+// <tmpdir>/soksak-check-<app>`, and the harness connects through the endpoint.json of that folder. The specification is
+// in docs/spec/endpoint.md and docs/spec/exposure.md.
 import { closeSync, existsSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,9 +13,10 @@ import { pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { readEventErrors, readEventOffsets, writeEventOffsets } from "./event-log.mjs";
 import { pasteboardDifference, readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
-// 검사하는 애플리케이션 실행 파일은 실행이 선언한다. SOKSAK_BINARY_WAILSV3 와 SOKSAK_BINARY_TAURIV2 가 각 앱의
-// 번들 안 실행 파일 경로다(docs/operations/examples.md#window-checks). core 의 검사는 build 출력 폴더에서 그 경로를 찾아
-// 넘기고, 다른 저장소의 검사는 검사할 build 를 직접 선언한다.
+// The launch declares the application executables that are checked. SOKSAK_BINARY_WAILSV3 and SOKSAK_BINARY_TAURIV2
+// hold the executable path inside the bundle of each application (docs/operations/examples.md#window-checks). The
+// checks of core find these paths in the build output folder and pass them on; the checks of other repositories declare
+// the build to check themselves.
 const declared = (name) => {
   const variable = `SOKSAK_BINARY_${name.toUpperCase()}`;
   const path = process.env[variable];
@@ -23,7 +24,7 @@ const declared = (name) => {
   return path;
 };
 
-/** 검사 대상 앱. 실행 파일과 설정 폴더. */
+/** The applications to check: the executable and the configuration folder. */
 const appNames = process.env.SOKSAK_APP ? [process.env.SOKSAK_APP] : ["wailsv3", "tauriv2"];
 if (!appNames.every((name) => ["wailsv3", "tauriv2"].includes(name))) {
   throw new Error(`unknown SOKSAK_APP: ${process.env.SOKSAK_APP}`);
@@ -31,13 +32,15 @@ if (!appNames.every((name) => ["wailsv3", "tauriv2"].includes(name))) {
 
 export const APPS = Object.fromEntries(appNames.map((name) => [name, {
   name,
-  // 실행 파일은 쓸 때 읽는다. 선언이 없으면 그 앱을 검사하는 자리에서 변수 이름을 밝혀 실패한다.
+  // The executable is read when it is used. Without a declaration, the check that tests that application fails and
+  // names the variable.
   get binary() { return declared(name); },
-  // default: 실행이 명시적인 config 디렉터리나 격리된 root를 주지 않으면 창 검사는 일회용 임시 endpoint 디렉터리를 사용한다.
+  // default: without an explicit configuration directory or isolated root from the launch, window checks use a
+  // disposable temporary endpoint directory.
   configDir: process.env.SOKSAK_CONFIG_DIR ?? join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), `soksak-check-${name}`),
 }]));
 
-/** 실행 중인 엔드포인트가 현재 빌드보다 오래되지 않았는지 검증한다. */
+/** Verifies that the running endpoint is not older than the current build. */
 export function assertEndpointUsesCurrentBuild(endpoint, resolvedBinary, binaryMtimeMs) {
   if (endpoint.executable !== resolvedBinary) {
     throw new Error(`process ${endpoint.pid} runs ${endpoint.executable}, not ${resolvedBinary}; restart the application from this checkout`);
@@ -57,12 +60,12 @@ export function assertEndpointUsesCurrentBuild(endpoint, resolvedBinary, binaryM
   }
 }
 
-/** 한 요청의 기본 대기 시간. 호스트의 문서 응답 시간보다 길다. */
+/** The default wait time of one request. It is longer than the document response time of the host. */
 const REQUEST = 20_000;
 
 /**
- * 검사 파일 사이의 순차 실행 잠금. 두 번째 검사 실행은 기다리지 않고 실패한다. 잠금 파일에는
- * 소유 프로세스 번호를 적고, 그 프로세스가 없으면 남은 잠금으로 보고 교체한다.
+ * The sequential-run lock between check files. A second check run fails without waiting. The lock file holds the number
+ * of the owning process; when that process does not exist, the lock is a remnant and is replaced.
  */
 const LOCK = join(tmpdir(), "soksak-check.lock");
 
@@ -79,10 +82,13 @@ let locked = false;
 const sessionTails = new Map();
 let baselineFrontmost = null;
 let baselineCaptured = false;
-/** 이 프로세스의 검사가 연 호스트의 프로세스 번호. 검사 뒤 이 중 하나가 활성으로 남으면 검사가 실패한다. */
+/**
+ * The process numbers of the hosts that the checks of this process opened. A check fails when one of them stays active
+ * after the check.
+ */
 const testedHosts = new Set();
 
-/** 같은 앱 창을 조작하는 Node 테스트의 중복 세션을 즉시 거부한다. */
+/** Rejects at once a duplicate session of a Node test that operates the windows of the same application. */
 export async function acquireWindowCheckSlot(appName) {
   if (sessionTails.has(appName)) {
     throw new Error(
@@ -112,7 +118,7 @@ function lock() {
         try {
           if (readFileSync(LOCK, "utf8") === String(process.pid)) unlinkSync(LOCK);
         } catch (error) {
-          // 잠금 파일이 없으면 다른 실행이 이미 지웠다. 다른 오류는 보고한다.
+          // When the lock file does not exist, another run has already removed it. Any other error is reported.
           if (error.code !== "ENOENT") throw error;
         }
       });
@@ -134,11 +140,11 @@ function lock() {
 }
 
 /**
- * 앱 하나에 연결한다. 실행 파일이 없으면 null 을 반환하고 검사는 건너뛴다. 연결은 검사가
- * 끝나면 닫힌다.
+ * Connects to one application. When the executable does not exist, it returns null and the check is skipped. The
+ * connection is closed when the check ends.
  *
- * endpoint.json 의 프로세스가 이 저장소의 실행 파일인지 확인한다. 다른 체크아웃이나 이전
- * 빌드의 앱을 검사하지 않기 위해서다.
+ * Verifies that the process of endpoint.json is the executable of this repository, so that the check does not test an
+ * application of another checkout or an earlier build.
  */
 export async function open(t, app) {
   if (!existsSync(app.binary)) return null;
@@ -158,11 +164,13 @@ export async function open(t, app) {
     );
   }
   const session = new Session(app, client);
-  // 검사는 사용자의 페이스트보드를 쓸 수 있다. 모든 항목 형식을 저장하고, 다른 정리가 모두 끝난 뒤 되돌려
-  // 확인한다. 정리는 등록의 역순으로 실행하므로 이 정리가 마지막이다.
+  // A check can write the pasteboard of the user. This cleanup saves every item format and verifies the restored
+  // pasteboard after all other cleanups have finished. Cleanups run in reverse order of registration, so this one is
+  // last.
   const pasteboard = readPasteboard();
-  // 전체 화면 전환이나 새 프로젝트 창은 애플리케이션을 활성화한다. 검사가 활성화했으면 끝날 때 앞서 활성이던
-  // 애플리케이션을 되돌린다. 다음 검사의 합성 끌기는 비활성 애플리케이션을 전제한다.
+  // A full-screen transition or a new project window activates the application. When the check activated it, the check
+  // restores the application that was active before at the end. The synthetic drag of the next check requires an
+  // inactive application.
   testedHosts.add(client.endpoint.pid);
   const previous = frontmostApp();
   if (!baselineCaptured) {
@@ -188,11 +196,12 @@ export async function open(t, app) {
       throw new Error(`${app.name}: the pasteboard after the check differs from before it: ${difference}`);
     }
   });
-  // 검사가 열어 둔 누름은 검사의 정리 뒤에 뗀다. 정리는 등록의 역순으로 실행한다.
+  // A press that the check left open is released after the cleanup of the check. Cleanups run in reverse order of
+  // registration.
   session.cleanup(async () => {
     for (const line of await session.releasePresses()) t.diagnostic(line);
   });
-  // 검사의 정리는 연결을 닫기 전에 실행한다. node:test 는 after 훅을 등록 순서로 실행한다.
+  // The cleanup of a check runs before the connection is closed. node:test runs after hooks in registration order.
   t.after(() => finishSession(t, session, () => {
     client.close();
     releaseSlot();
@@ -215,9 +224,10 @@ export function recordingFolders(configDir) {
 }
 
 /**
- * 세션의 정리를 등록의 역순으로 모두 실행한 뒤 close 를 부른다. 정리 하나가 실패해도(앱이 응답하지 않는 경우 등)
- * 나머지 정리는 실행하고, 실패는 모아서 알린다. node:test 는 본문이 이미 실패한 검사의 after 훅이 던진 오류를
- * 출력하지 않으므로, 실패마다 진단으로도 알린다.
+ * Runs every cleanup of the session in reverse order of registration and then calls close. When one cleanup fails (for
+ * example, when the application does not respond), the remaining cleanups still run and the failures are reported
+ * together. node:test does not print an error that the after hook throws for a check whose body already failed, so each
+ * failure is also reported as a diagnostic.
  */
 export async function finishSession(t, session, close) {
   const failures = [];
@@ -230,8 +240,9 @@ export async function finishSession(t, session, close) {
         t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
       }
     }
-    // 검사 동안 애플리케이션 로그에 쓰인 오류 줄은 모두 진단으로 남기고, 검사가 선언하지 않은 오류는 검사의 실패다.
-    // 문서의 오류 표시는 reload 가 지우므로 로그로 판정한다. 정리가 일으킨 오류도 포함하도록 정리 뒤에 읽는다.
+    // Every error line written to the application log during the check is kept as a diagnostic, and an error that the
+    // check did not declare fails the check. A reload clears the error display of a document, so the log decides. The
+    // log is read after the cleanups so that it includes the errors they cause.
     try {
       const { errors, offsets } = readEventErrors(session.app.configDir, session.eventStart);
       writeEventOffsets(session.app.configDir, offsets);
@@ -245,8 +256,9 @@ export async function finishSession(t, session, close) {
       failures.push(error);
       t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
     }
-    // 검사가 시작한 녹화는 검사의 정리가 지운다. 정리 뒤에 남은 새 녹화 폴더는 검사의 실패이고, 다음 검사가 같은
-    // 상태에서 시작하도록 지운다. SOKSAK_KEEP_FAILURE_CAPTURE 는 실패한 검사의 녹화를 남기므로 이름만 알린다.
+    // The cleanup of a check removes the recordings that the check started. A new recording folder that remains after
+    // the cleanup fails the check and is removed so that the next check starts from the same state.
+    // SOKSAK_KEEP_FAILURE_CAPTURE keeps the recording of a failed check, so only its name is reported.
     const left = recordingFolders(session.app.configDir).filter((name) => !session.recordingsBefore.includes(name))
       .map((name) => join(session.app.configDir, "logs", "captures", name));
     if (left.length && process.env.SOKSAK_KEEP_FAILURE_CAPTURE) {
@@ -265,18 +277,21 @@ export async function finishSession(t, session, close) {
   if (failures.length) throw new AggregateError(failures, `${failures.length} cleanup steps failed`);
 }
 
-/** 한 앱과의 연결. 요청은 창 하나를 대상으로 한다. */
+/** The connection to one application. A request targets one window. */
 export class Session {
   constructor(app, client) {
     this.app = app;
     this.client = client;
     this.window = "main";
     this.cleanups = [];
-    // 검사가 읽기 시작하는 애플리케이션 로그의 위치와 검사가 일으킨다고 선언한 오류의 형식. finishSession 이 쓴다.
+    // The location of the application log that the check starts reading and the format of the errors that the check
+    // declares it causes. finishSession uses them.
     this.expectedErrors = [];
-    // 세션을 열 때 있던 녹화 폴더. finishSession 은 이것에 없는 폴더를 검사가 남긴 녹화로 판정한다.
+    // The recording folders that existed when the session opened. finishSession judges a folder not in this set as a
+    // recording that the check left.
     this.recordingsBefore = [];
-    // 전달된 down 부터 같은 버튼의 up 이 전달될 때까지 열린 합성 누름. 창과 버튼으로 찾는다(docs/spec/exposure.md).
+    // The synthetic presses that stay open from the delivered down until the up of the same button is delivered. They
+    // are found by window and button (docs/spec/exposure.md).
     this.presses = new Map();
     // The moment the session opened. step writes the time of each step from it.
     this.started = performance.now();
@@ -288,26 +303,29 @@ export class Session {
     process.stderr.write(`step ${this.app.name} +${((performance.now() - this.started) / 1000).toFixed(1)} s ${what}\n`);
   }
 
-  /** 연결을 닫기 전에 실행할 정리. 등록의 역순으로 실행한다. */
+  /** Cleanups to run before the connection is closed. They run in reverse order of registration. */
   cleanup(fn) {
     this.cleanups.push(fn);
   }
 
-  /** 이 검사가 일부러 일으켜 애플리케이션 로그에 쓰이는 오류 줄의 형식. 그 오류는 검사의 실패가 아니다. */
+  /**
+   * The format of the error lines that this check causes on purpose and that are written to the application log. Those
+   * errors are not a failure of the check.
+   */
   expectError(pattern) {
     this.expectedErrors.push(pattern);
   }
 
   /**
-   * 이 창을 일반 닫기 동작으로 닫는다. 닫히는 창의 문서가 요청에 답하기 전에 사라지면 1003 이며,
-   * 그것도 닫힌 것이다.
+   * Closes this window with the ordinary close action. When the document of the closing window disappears before it
+   * answers the request, the code is 1003, which also means the window is closed.
    */
   async close() {
     const code = await failure(this.run("host.window.close"));
     if (code !== null && code !== 1003) throw new Error(`${this.app.name}: closing ${this.window} failed with ${code}`);
   }
 
-  /** 다른 창을 대상으로 하는 세션. 같은 연결을 쓴다. */
+  /** A session that targets another window. It uses the same connection. */
   on(window) {
     const other = new Session(this.app, this.client);
     other.cleanups = this.cleanups;
@@ -321,15 +339,17 @@ export class Session {
   request(method, params = {}, { timeout = REQUEST } = {}) {
     const what = `${this.app.name} ${method} ${params.name ?? ""}`.trimEnd();
     this.step(`${method} ${params.name ?? ""}`.trimEnd());
-    // 답하지 않으면 그 순간 이 호스트와 그 page 프로세스의 thread 를 설정 폴더의 logs 에 기록한다(F69).
+    // When the host does not answer, the check records at that moment the threads of this host and of its page process
+    // in the logs of the configuration folder (F69).
     const sample = async () => sampleStall({
       host: this.client.endpoint.pid, pages: pageProcesses(this.app.configDir), directory: join(this.app.configDir, "logs"),
     }).join(", ");
-    // 실패한 요청의 이름을 오류에 남긴다. code 는 그대로 둔다.
+    // The error keeps the name of the failed request. The code stays unchanged.
     const answer = this.client.request(method, { window: this.window, ...params }).catch(async (error) => {
       if (error instanceof EndpointError) {
         error.message = `${what}: ${error.message}`;
-        // 호스트가 page 의 답을 기다리다 끝낸 요청도 답하지 않은 멈춤이므로 그 순간을 기록한다.
+        // A request that the host ended while waiting for the answer of the page is also an unanswered stall, so that
+        // moment is recorded.
         if (/did not reply within/.test(error.message)) {
           try {
             error.message += `; the host's threads at that moment: ${await sample()}`;
@@ -360,8 +380,9 @@ export class Session {
   }
 
   async pointer(x, y, phase, options = {}) {
-    // macOS 의 협조적 활성화는 사용자가 활성화한 적 없는 앱의 자기 활성화 요청을 거절한다. 사용자가 앱을 전환하듯
-    // 검사 프로세스가 먼저 앱을 활성화하고, 호스트는 그 뒤 키 창과 웹뷰의 활성 상태를 기다린다.
+    // The cooperative activation of macOS rejects a self-activation request of an application that the user has not
+    // activated. Like a user who switches applications, the check process activates the application first, and the host
+    // then waits for the active state of the key window and the web view.
     if (options.activate) activateApp(this.client.endpoint.pid);
     const button = options.button ?? "left";
     const key = JSON.stringify([this.window, button]);
@@ -374,19 +395,22 @@ export class Session {
       delivered();
       return result;
     } catch (error) {
-      // 1005 는 누름이나 뗌을 전달했지만 문서가 받았다는 알림이 늦은 것이다. 창의 누름 상태는 전달대로 바뀌었다.
+      // 1005 means that the press or release was delivered but the notification that the document received it was late.
+      // The press state of the window changed as delivered.
       if (error.code === 1005) delivered();
-      // 거부된 사건이 누름인지 뗌인지가 열린 누름이 남는지를 정하므로, 오류는 단계와 자리를 밝힌다.
+      // Whether the rejected event was a press or a release decides whether an open press remains, so the error names
+      // the step and the location.
       error.message = `input.pointer ${phase} of the ${button} button at ${x},${y} in ${this.window}: ${error.message}`;
       throw error;
     }
   }
 
   /**
-   * 세션이 열어 둔 누름마다 그 자리에서 up 을 보낸다. 거부된 뗌은 누름을 열어 두므로, 끝내지 않으면 그 창의 다음
-   * 검사가 누를 수 없다(1008). 사람이 버튼을 누르고 있는 동안 input.pointer 는 뗌을 1007 로 거부하므로, 먼저
-   * host.buttons 가 mask 0 을 알릴 때까지 알림으로 기다린 뒤 보내고, 그 뗌이 전달되기를 요구한다
-   * (docs/spec/exposure.md). 끝낸 누름마다 기다린 시간을 담은 줄을 돌려주고, 끝내지 못한 누름은 모아서 알린다.
+   * Sends up at its position for each press that the session left open. A rejected release leaves the press open, and
+   * unless it is ended the check cannot press in that window (1008). While a person holds a button, input.pointer
+   * rejects a release with 1007, so the cleanup first waits by notification until host.buttons reports mask 0, then
+   * sends the release and requires that it is delivered (docs/spec/exposure.md). It returns a line with the waited time
+   * for each ended press, and it reports the presses that it could not end together.
    */
   async releasePresses() {
     const failures = [];
@@ -409,9 +433,9 @@ export class Session {
   }
 
   /**
-   * 녹화를 시작한다. 반환한 stop 은 diagnostics.capture.stop 을 한 번 보내고 그 결과나 오류를 돌려준다. host 는
-   * stop 이 실패해도 녹화를 이미 끝냈을 수 있으므로 두 번째 stop 은 보내지 않는다. 세션 정리는 stop 을 보낸 적이
-   * 없을 때만 stop 을 보내고 녹화 폴더를 지운다(docs/operations/examples.md).
+   * Starts a recording. The returned stop sends diagnostics.capture.stop once and returns its result or error. When
+   * stop fails, the host may already have ended the recording, so a second stop is not sent. The cleanup of the session
+   * sends stop only if none was sent, and removes the recording folder (docs/operations/examples.md).
    */
   async record(params = {}) {
     const { frames } = await this.request("diagnostics.capture.start", params);
@@ -442,16 +466,17 @@ export class Session {
     return this.request("input.key", { key, phase, ...options });
   }
 
-  /** 누르고 떼는 네이티브 클릭. */
+  /** A native click with press and release. */
   async click(x, y) {
     await this.pointer(x, y, "down");
     await this.pointer(x, y, "up");
   }
 
   /**
-   * 활성화 등급 검사에서 시스템 포인터가 창 밖에 있도록 창을 포인터의 왼쪽이나 오른쪽으로 옮긴다. 활성
-   * 애플리케이션의 키 창은 포인터 위치를 이동으로 받으므로, 창 안의 포인터는 합성 누름과 뗌 사이에 이동으로
-   * 끼어든다. 창이 어느 쪽에도 들어가지 않으면 창 폭을 넓은 쪽에 맞게 줄인다.
+   * In activation-tier checks, moves the window to the left or right of the pointer so that the system pointer is
+   * outside the window. The key window of an active application receives the pointer position as a move, so a pointer
+   * inside the window would interleave a move between the synthetic press and release. When the window fits on neither
+   * side, the window width is reduced to fit the wider side.
    */
   async keepPointerOutside() {
     const window = await this.get("host.window");
@@ -479,8 +504,9 @@ export class Session {
   }
 
   /**
-   * 키보드 입력 소스를 고르고 검사가 끝나면 이전 입력 소스로 되돌린다. 네이티브 키의 문자는 현재 입력
-   * 소스가 정하므로, 영문을 입력하는 검사는 영문 자판을 먼저 고른다. 입력 소스 선택은 창을 활성화하지 않는다.
+   * Selects the keyboard input source and restores the earlier input source when the check ends. The current input
+   * source decides the characters of native keys, so a check that types English selects an English layout first.
+   * Selecting an input source does not activate a window.
    */
   async selectInputSource(id) {
     const original = (await this.request("diagnostics.input.source")).current;
@@ -489,26 +515,26 @@ export class Session {
     if (selected.current !== id) throw new Error(`${this.app.name}: input source ${id} was not selected (current ${selected.current})`);
   }
 
-  /** 누르고 떼는 네이티브 키. */
+  /** A native key with press and release. */
   async press(key, options = {}) {
     await this.key(key, "down", options);
     await this.key(key, "up", options);
   }
 
-  /** status 가 predicate 를 만족할 때까지 알림으로 기다린다. */
+  /** Waits by notification until the status satisfies the predicate. */
   until(name, predicate, message, { surface, timeout = REQUEST } = {}) {
     this.step(`until ${name}`);
     return this.client.watch(this.window, name, predicate, { surface, timeout }).catch((error) => {
       if (error.code === "ETIMEDOUT") error.message = `${this.app.name}: ${message} (${error.message})`;
-      // 감시나 첫 값 요청이 실패하면 어느 상태였는지 오류에 남긴다. code 는 그대로 둔다.
+      // When the watch or the first value request fails, the error names the status. The code stays unchanged.
       else if (error instanceof EndpointError) error.message = `${this.app.name} status ${name}: ${error.message}`;
       throw error;
     });
   }
 
   /**
-   * status 의 모든 변경을 모은다. 감시를 시작할 때의 값도 포함한다. stop() 은 감시를 끝내고
-   * 모은 값을 반환한다.
+   * Collects every change of the status, including the value at the start of the watch. stop() ends the watch and
+   * returns the collected values.
    */
   async collect(name) {
     const values = [];
@@ -529,23 +555,29 @@ export class Session {
     };
   }
 
-  /** 메인 페이지와 보이는 앱 문서가 현재 배치를 표시할 때까지 기다린다. 결과는 그 화면의 표시 시각 { displayed } 다. */
+  /**
+   * Waits until the main page and the visible application document show the current layout. The result is the display
+   * time { displayed } of that screen.
+   */
   presented() {
     return this.run("host.window.presented");
   }
 
-  /** host.windows 에서 창 수가 count 이고 모든 창의 페이지가 준비될 때까지 기다린다. */
+  /** Waits until host.windows reports count windows and the page of every window is ready. */
   windows(count, message) {
     return this.until("host.windows", (list) => list.length === count && list.every((w) => w.ready), message);
   }
 
-  /** 보이는 표면. plugin 이 주어지면 그 플러그인의 표면만. core.surfaces 의 항목이다. */
+  /** The visible surfaces; with plugin given, only the surfaces of that plugin. The entries of core.surfaces. */
   async surfaces(plugin) {
     const all = await this.get("core.surfaces");
     return all.filter((surface) => surface.visible && (plugin === undefined || surface.plugin === plugin));
   }
 
-  /** 페이지가 보고하는 전사 줄을 모은다. stop() 은 전사를 끄고 모은 줄을 반환한다. */
+  /**
+   * Collects the transcript lines that the page reports. stop() turns the transcript off and returns the collected
+   * lines.
+   */
   async transcript() {
     const lines = [];
     const off = this.client.on("diagnostics.log", (params) => {
@@ -554,7 +586,7 @@ export class Session {
     await this.request("diagnostics.transcript", { on: true });
     return {
       lines,
-      /** 줄이 predicate 를 만족할 때까지 기다린다. */
+      /** Waits until a line satisfies the predicate. */
       until: (predicate, message, timeout = REQUEST) => new Promise((resolve, reject) => {
         const check = () => {
           if (predicate(lines)) {
@@ -584,8 +616,9 @@ function compact(object) {
 }
 
 /**
- * promise 가 ms 안에 답하지 않으면 실패한다. sample 이 있으면 실패하기 전에 그 순간의 호스트 thread 를 기록하고 그
- * 기록의 경로를 오류에 적는다(F69). 기록하지 못하면 그 까닭을 오류에 적는다.
+ * Fails when the promise does not answer within ms. When sample is given, it records the host threads at that moment
+ * before failing and writes the path of that record into the error (F69). When recording fails, the error states the
+ * reason.
  */
 export function within(promise, ms, what, sample) {
   let timer;
@@ -603,7 +636,7 @@ export function within(promise, ms, what, sample) {
   return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
 }
 
-/** 요청이 실패하면 EndpointError 의 code 를 반환하고, 성공하면 null 을 반환한다. */
+/** Returns the code of the EndpointError when the request fails, and null when it succeeds. */
 export async function failure(promise) {
   try {
     await promise;
@@ -614,13 +647,14 @@ export async function failure(promise) {
   }
 }
 
-/** 두 호스트가 새 창에 쓰는 콘텐츠 크기. 검사는 이 크기에서 시작한다. */
+/** The content size that both hosts use for a new window. The checks start from this size. */
 const START = { width: 1200, height: 760 };
 
 /**
- * 창을 검사 시작 상태로 만든다. 다른 창을 닫고, 창 크기와 자리를 시작 상태로 되돌리고, 테스트 프로젝트를 settings 로
- * 새 배치(diagnostics.fixture)로 열고, 메인 문서를 다시 읽은 뒤, 그 사이 표시 실패가 없었는지 확인한다. 배치의
- * 표면을 기다리는 일은 그 표면을 아는 저장소의 준비가 한다.
+ * Puts the window into the start state of a check. It closes the other windows, restores the size and position of the
+ * window, opens the test project with the settings in a new layout (diagnostics.fixture), reloads the main document and
+ * verifies that no display failure occurred in between. Waiting for the surfaces of the layout is done by the
+ * preparation of the repository that knows those surfaces.
  */
 export async function prepareFixture(s, { settings = {}, performanceTrace = TRACE } = {}) {
   // Remember the values before the preparation changes the settings. A person also uses the check application, so the
@@ -635,7 +669,8 @@ export async function prepareFixture(s, { settings = {}, performanceTrace = TRAC
   await s.until("host.window", (w) => w.content.width === START.width && w.content.height === START.height,
     "the window did not return to its start size");
   await place(s);
-  // 픽스처 교체 중의 표시 실패를 다음 문서의 정상 상태로 덮어 통과시키지 않는다.
+  // A display failure during the fixture replacement is not covered up and passed by the normal state of the next
+  // document.
   const verification = await s.collect("core.verify");
   const presentationErrors = [];
   const offErrors = s.client.on("diagnostics.log", (params) => {
@@ -667,8 +702,9 @@ export async function prepareFixture(s, { settings = {}, performanceTrace = TRAC
 }
 
 /**
- * 지금의 공통 설정을 기억하고, 검사가 끝나면 바뀐 값을 되돌린다. 공통 설정을 바꾸는 검사는 준비 뒤에 이것을
- * 부른다. 검사 앱은 사람도 쓰므로 검사가 바꾼 값이 남으면 안 된다.
+ * Remembers the current shared settings and restores the changed values when the check ends. A check that changes
+ * shared settings calls this after its preparation. The check application is also used by people, so a value changed by
+ * a check must not remain.
  */
 export async function keepCommonSettings(s) {
   const before = (await s.get("core.settings")).values;
@@ -681,10 +717,12 @@ export async function keepCommonSettings(s) {
 }
 
 /**
- * 검사 앱마다 정해진 창 자리. 첫 앱은 주 화면 작업 영역의 왼쪽 위, 둘째 앱은 오른쪽 위에 둔다. 검사마다 창의
- * 자리가 앞선 검사가 옮긴 자리에 따라 달라지지 않는다. 작업 영역이 두 창 폭의 합보다 좁으면 가운데가 겹친다.
- * 같은 자리의 두 창도 서로를 완전히 가리지 않으며(창의 그림자가 보인다, V5-86), 다른 애플리케이션의 창은 이
- * 자리와 무관하게 검사 창을 가릴 수 있다. 창 이동은 애플리케이션을 활성화하지 않는다.
+ * The window position that is fixed for each check application. The first application sits at the upper left of the
+ * work area of the main screen and the second at the upper right. The window position of a check therefore does not
+ * depend on the position that an earlier check moved it to. When the work area is narrower than the sum of two window
+ * widths, the middle overlaps. Two windows at the same position do not hide each other completely (the shadow of the
+ * window is visible, V5-86), and a window of another application can cover a check window regardless of this position.
+ * Moving a window does not activate the application.
  */
 async function place(s) {
   const [screen] = await s.get("host.screens");
@@ -697,15 +735,16 @@ async function place(s) {
   await s.until("host.window", (w) => w.frame.x === x && w.frame.y === y, `the window did not move to its check frame ${x},${y}`);
 }
 
-// SOKSAK_PERFORMANCE_TRACE=1 은 모든 검사 준비에서 성능 기록을 켜서 등록 손실의 순서를 남긴다. 다른 값은 거부한다.
+// SOKSAK_PERFORMANCE_TRACE=1 turns the performance trace on in every check preparation to keep the order of
+// registration losses. Other values are rejected.
 export const TRACE = { undefined: false, "1": true }[process.env.SOKSAK_PERFORMANCE_TRACE];
 if (TRACE === undefined) throw new Error(`SOKSAK_PERFORMANCE_TRACE must be unset or 1, not ${process.env.SOKSAK_PERFORMANCE_TRACE}`);
 
 /**
- * 경계 끌기를 호스트 시각으로 실행한다. capture 이면 창을 기록하고 프레임 폴더를 반환한다.
- * 기록은 검사가 끝나면 통과 여부와 무관하게 remove() 로 지운다.
+ * Runs a boundary drag with the host clock. With capture, it records the window and returns the frame folder. The
+ * recording is removed with remove() when the check ends, whether it passed or not.
  *
- * 끌기가 요청한 속도로 실행되지 않으면(한 번 재시도 후) 실패한다. 느린 끌기의 통과는 통과가 아니다.
+ * Fails when the drag does not run at the requested rate (after one retry). A pass of a slow drag is not a pass.
  */
 export async function drag(t, s, plan, { capture = false } = {}) {
   let result = await dragOnce(s, plan, capture);
@@ -724,12 +763,18 @@ export async function drag(t, s, plan, { capture = false } = {}) {
 
 const MARGIN = 1.25;
 
-/** 녹화 프레임 사이 표시 간격의 허용 한도(ms). 끌기 동안 화면은 프레임마다 바뀐다. */
+/**
+ * The allowed limit (ms) of the display interval between recorded frames. During a drag the screen changes with every
+ * frame.
+ */
 const GAP = 100;
 
 const paced = ({ took, asked }) => took <= asked * MARGIN && took >= asked / MARGIN;
 
-/** 창을 덮은 다른 창의 소유자 이름. 가려져 재지 않는 까닭으로 적는다. */
+/**
+ * The owner name of the other window that covers the window. It is stated as the reason why the measurement is skipped
+ * because the window is covered.
+ */
 export function coveredBy(s, window) {
   const covering = coveringWindows(s.client.endpoint.pid, window.frame);
   return covering.length ? covering.map(({ owner, frame }) => `${owner} at ${JSON.stringify(frame)}`).join(", ")
@@ -737,10 +782,12 @@ export function coveredBy(s, window) {
 }
 
 async function dragOnce(s, plan, capture) {
-  // 활성 창은 배치가 바뀔 때 AppKit 의 커서 갱신을 받고, 창은 실제 포인터 위치를 페이지에 이동으로 넘긴다.
-  // 버튼 없이 합성한 진단 끌기는 그 이동과 섞이므로 비활성 애플리케이션에서만 잰다.
+  // An active window receives the cursor update of AppKit when the layout changes, and the window passes the real
+  // pointer position to the page as a move. A diagnostic drag that is synthesized without a button mixes with that
+  // move, so it is measured only in an inactive application.
   const window = await s.get("host.window");
-  // 다른 창에 완전히 가려진 창은 WebKit 이 그리기를 늦추므로, 그 상태의 지연과 녹화는 사람이 보는 화면이 아니다.
+  // WebKit delays the painting of a window that another window covers completely, so the latency and the recording in
+  // that state are not the screen that a person sees.
   if (window.occluded) {
     throw new Error(`${s.app.name}'s window is completely covered by ${coveredBy(s, window)}, so WebKit renders it less often. ` +
       "Nothing was measured: uncover the window, without activating the application, and run the check again.");
@@ -757,13 +804,14 @@ async function dragOnce(s, plan, capture) {
   if (!process.env.SOKSAK_KEEP_FAILURE_CAPTURE) {
     s.cleanup(() => rmSync(result.frames, { recursive: true, force: true }));
   }
-  // 끌기의 마지막 화면이 표시되는 시각까지 녹화한다.
+  // Records until the time when the last screen of the drag is displayed.
   const { displayed } = await s.presented();
   const stopped = await s.request("diagnostics.capture.stop", { after: displayed });
   if (stopped.limited) {
     throw new Error("the recording reached its finite frame limit before the gesture completed");
   }
-  // 녹화가 한 번에 이만큼 넘게 끊겼다면 그 사이 화면은 기록되지 않았다. 측정되지 않은 구간은 통과가 아니다.
+  // When the recording was interrupted for longer than this at once, the screen in between was not recorded. An
+  // unmeasured interval is not a pass.
   if (stopped.longestGap > GAP) {
     throw new Error(`the recording has a ${stopped.longestGap.toFixed(0)}ms gap between frames; ` +
       `frames longer than ${GAP}ms apart were not recorded, so this run did not measure the whole gesture`);

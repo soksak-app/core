@@ -1,8 +1,12 @@
-// 두 텍스트가 처음 달라지는 자리와 그 주변. 긴 요청이 다를 때 실패 메시지가 차이를 밝힌다(F40).
+// The place where two texts first differ and its surroundings. When long requests differ, the failure message states
+// the difference (F40).
 
 const AROUND = 40;
 
-/** a 와 b 가 같으면 null, 다르면 처음 달라지는 글자 번호와 그 앞뒤 AROUND 글자. */
+/**
+ * null when a and b are equal; otherwise the number of the first differing character and AROUND characters before and
+ * after it.
+ */
 export function textDifference(a, b) {
   if (a === b) return null;
   let index = 0;

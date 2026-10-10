@@ -1,4 +1,5 @@
-// 두 host 의 긴 요청이 다를 때 실패 메시지가 처음 달라지는 자리와 그 주변을 밝히는지 검사한다(F40).
+// Checks that, when the long requests of two hosts differ, the failure message states the place where they first differ
+// and its surroundings (F40).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { textDifference } from "../text-difference.mjs";

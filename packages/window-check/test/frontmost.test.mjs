@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { restoreFrontmost, sessionBaseline } from "../frontmost.mjs";
 
-// 활성 애플리케이션을 읽고 바꾸는 동작을 가짜로 주입하여 검사 뒤 기준 복원을 검사한다.
+// Injects fakes for reading and changing the active application and checks the baseline restore after a check.
 function fake(states) {
   const calls = [];
   return {
@@ -30,7 +30,7 @@ test("a check that leaves the baseline frontmost changes nothing", async () => {
 });
 
 test("an application the user brought forward is reported without activating anything", async () => {
-  // 검사는 다른 애플리케이션을 활성화하지 않으므로 다른 애플리케이션이 맨 앞이면 사용자가 바꾼 것이다.
+  // The checks do not activate another application, so when another application is in front, the user changed it.
   const f = fake([30, 30]);
   assert.deepEqual(await restoreFrontmost({ name: "tauriv2", baseline: 10, host: 20, hosts: [20, 21], ...f }),
     { before: 30, after: 30 });

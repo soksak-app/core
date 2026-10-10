@@ -1,4 +1,4 @@
-// 창 검사의 정리 실패가 검사 본문의 실패와 함께 보고되는지 검사한다.
+// Checks that a cleanup failure of a window check is reported together with the failure of the check body.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -8,8 +8,8 @@ import test from "node:test";
 
 const app = new URL("../app.mjs", import.meta.url).href;
 
-// 검사 본문과 정리가 모두 실패하는 검사 파일을 별도의 node:test 실행으로 돌린다. node:test 가 정리 오류를 다루는
-// 방식이 검사 대상이므로 이 검사의 실행 문맥(NODE_TEST_CONTEXT)은 넘기지 않는다.
+// Runs a check file whose body and cleanup both fail in a separate node:test run. How node:test handles the cleanup
+// error is the subject of the check, so the execution context of this check (NODE_TEST_CONTEXT) is not passed on.
 function run(t) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-session-cleanup-"));
   t.after(() => rmSync(dir, { recursive: true }));
@@ -102,8 +102,9 @@ test("a record event of level error fails the check as the line of the text form
   assert.match(declared.stdout, /# application error: error page page: ResizeObserver loop completed/);
 });
 
-// 검사가 시작한 녹화는 검사가 끝날 때 지워져 있어야 한다. 남은 녹화 폴더는 검사의 실패이고, 다음 검사를 위해 지운다
-// (AGENTS.md, docs/features.md F83). 검사가 시작하기 전부터 있던 폴더는 그 검사의 것이 아니다.
+// A recording that the check started must be removed when the check ends. A recording folder that remains fails the
+// check and is removed for the next check (AGENTS.md, docs/features.md F83). A folder that existed before the check
+// started is not of that check.
 test("a recording folder that the check left fails the check and is removed", { timeout: 30000 }, (t) => {
   const dir = mkdtempSync(join(tmpdir(), "soksak-session-recording-"));
   t.after(() => rmSync(dir, { recursive: true }));

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// 창 검사 하나를 정한 횟수만큼 차례로 실행하고, 처음 실패한 실행에서 멈춘다.
+// Runs one window check in sequence for the given number of times and stops at the first failed run.
 //
-//   soksak-window-repeat --setup ./setup.mjs --file <검사 파일> --name "<검사 이름>" --count 16
+// soksak-window-repeat --setup ./setup.mjs --file <check file> --name "<check name>" --count 16
 //
-// 간헐 실패의 재현과 수용은 이 대상으로 한다. 실행마다 새 node:test 프로세스를 쓰며, 앱을 실행하지
-// 않는다. SOKSAK_APP 으로 호스트 하나를 고를 수 있다. 검사 파일과 --setup 의 실행 시작 모듈은 부른 저장소의 현재
-// 폴더를 기준으로 한다.
+// An intermittent failure is reproduced and accepted with this target. Each run uses a new node:test process and does
+// not launch an application. SOKSAK_APP selects one host. The check file and the launch start module of --setup are
+// relative to the current folder of the calling repository.
 import { spawnSync } from "node:child_process";
 
 const USAGE = "usage: soksak-window-repeat --setup <global setup module> --file <test file> --name <test name pattern> --count <n>";
@@ -28,8 +28,9 @@ if (!options.setup || !options.file || !options.name || !Number.isInteger(count)
 
 const pattern = new RegExp(options.name);
 for (let run = 1; run <= count; run++) {
-  // 실행한 검사 수는 기계 형식인 TAP 에서 센다. 사람이 읽는 출력은 환경에 따라 색 코드가 붙는다. 이름이
-  // 맞는 검사가 없으면 파일 자체가 결과 한 줄로 보고되므로, 제목이 이름 패턴에 맞고 건너뛰지 않은 결과만 센다.
+  // The number of checks that ran is counted from TAP, the machine format. The human-readable output carries color
+  // codes depending on the environment. When no check matches the name, the file itself is reported as one result line,
+  // so only results whose title matches the name pattern and that were not skipped are counted.
   const result = spawnSync(process.execPath,
     ["--test", "--test-concurrency=1", `--test-global-setup=${options.setup}`, "--test-reporter=tap", `--test-name-pattern=${options.name}`, options.file],
     { encoding: "utf8" });
@@ -47,8 +48,8 @@ for (let run = 1; run <= count; run++) {
     process.exit(1);
   }
   console.log(`PASS run ${run} of ${count}: ${passed} tests`);
-  // 검사가 t.diagnostic 으로 남긴 측정값을 실행마다 출력한다. TAP 에서 진단은 최상위 plan 줄(`1..N`) 앞의 `#` 줄이고,
-  // plan 줄 뒤의 `#` 줄은 실행 요약이다.
+  // Prints the measurements that a check left with t.diagnostic for each run. In TAP a diagnostic is a `#` line before
+  // the top-level plan line (`1..N`), and a `#` line after the plan line is the run summary.
   for (const line of result.stdout.split("\n")) {
     if (/^1\.\.\d+$/.test(line)) break;
     const diagnostic = /^\s*# (.*)$/.exec(line)?.[1];

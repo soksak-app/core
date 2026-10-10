@@ -1,4 +1,4 @@
-// LZ4 RAW 블록을 선언한 크기로 복원하며 잘린 입력과 잘못된 참조를 거부한다.
+// Restores an LZ4 RAW block to the declared size and rejects truncated input and invalid references.
 export function decodeLz4(source, expected) {
   const data = Buffer.alloc(expected);
   let input = 0, output = 0, finished = false;

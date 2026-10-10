@@ -1,4 +1,4 @@
-// 관측 PNG의 투명도와 좌표 경계를 검증한다. 창을 실행하거나 활성화하지 않는다.
+// Verifies the transparency and the coordinate bounds of an observed PNG. It does not launch or activate a window.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";

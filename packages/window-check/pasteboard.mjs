@@ -1,12 +1,12 @@
-// 일반 페이스트보드의 모든 항목을 형식별로 읽고 쓴다. 하네스는 창 검사마다 사용자의 페이스트보드를 저장하고
-// 검사가 끝나면 되돌린다(e2e/app.mjs 의 open).
+// Reads and writes every item of the general pasteboard by format. The harness saves the pasteboard of the user for
+// each window check and restores it when the check ends (open in e2e/app.mjs).
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// osascript 의 JavaScript 로 스크립트를 실행하고 JSON 결과를 돌려준다.
+// Runs a script with the JavaScript of osascript and returns the JSON result.
 function jxa(body) {
   const script = `ObjC.import("AppKit");
 function run(argv) { const input = JSON.parse(argv[0]); ${body} }`;
@@ -34,7 +34,7 @@ for (let i = 0; i < list.count; i++) {
 }
 return JSON.stringify({ changeCount: board.changeCount, items });`);
 
-// 항목은 명령 인자 크기 제한을 넘을 수 있으므로 파일로 넘긴다.
+// An item can exceed the size limit of command arguments, so it is passed as a file.
 const writeItems = jxa(`
 const text = $.NSString.stringWithContentsOfFileEncodingError(input.file, $.NSUTF8StringEncoding, null).js;
 input.items = JSON.parse(text);
@@ -51,12 +51,12 @@ for (const entry of input.items) {
 if (input.items.length > 0 && !board.writeObjects(objects)) throw new Error("pasteboard write failed");
 return JSON.stringify(board.changeCount);`);
 
-/** 일반 페이스트보드의 모든 항목을 형식별 base64 로 읽는다. */
+/** Reads every item of the general pasteboard as base64 by format. */
 export function readPasteboard() {
   return readItems();
 }
 
-/** 일반 페이스트보드를 items 로 바꾼다. items 는 readPasteboard().items 의 모양이다. */
+/** Replaces the general pasteboard with items. items has the shape of readPasteboard().items. */
 export function writePasteboard(items) {
   const directory = mkdtempSync(join(tmpdir(), "soksak-pasteboard-"));
   try {
@@ -68,14 +68,17 @@ export function writePasteboard(items) {
   }
 }
 
-/** 일반 페이스트보드의 텍스트. 텍스트가 없으면 null 이다. */
+/** The text of the general pasteboard; null when there is no text. */
 export function pasteboardText() {
   const { items } = readPasteboard();
   const text = items.find((item) => item["public.utf8-plain-text"] !== undefined)?.["public.utf8-plain-text"];
   return text === undefined ? null : Buffer.from(text, "base64").toString("utf8");
 }
 
-/** base64 자료의 길이와 sha256 앞 12자리. 내용은 사용자의 자료이므로 밝히지 않는다. */
+/**
+ * The length of base64 data and the first 12 digits of its sha256. The content is data of the user, so it is not
+ * disclosed.
+ */
 function digest(base64) {
   if (base64 === undefined) return "absent";
   const data = Buffer.from(base64, "base64");
@@ -83,8 +86,9 @@ function digest(base64) {
 }
 
 /**
- * 창 검사 뒤의 페이스트보드 항목 after 가 앞의 before 와 다른 첫 차이를 `<after> instead of <before>` 로 돌려준다.
- * 항목 안 형식의 순서는 쓴 순서대로 남지 않으므로 비교하지 않는다. 같으면 null 이다.
+ * Returns the first difference of the pasteboard items after a window check (after) from the items before (before) as
+ * `<after> instead of <before>`. The order of the formats inside an item does not remain as written, so it is not
+ * compared. It returns null when they are equal.
  */
 export function pasteboardDifference(before, after) {
   if (before.length !== after.length) return `${after.length} items instead of ${before.length}`;

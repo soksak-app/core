@@ -7,8 +7,8 @@ import test from "node:test";
 import { Session } from "../app.mjs";
 
 /**
- * 녹화 하나를 가진 host 를 흉내 내는 연결. stop 은 녹화를 가져간 뒤 stopFails 이면 실패한다. 녹화가 없으면
- * host 처럼 `no capture is running` 으로 거부한다.
+ * A connection that imitates a host with one recording. stop takes the recording and then fails when stopFails is set.
+ * Without a recording, it rejects with `no capture is running` like the host.
  */
 function fakeClient(directory, { stopFails = false } = {}) {
   const requests = [];

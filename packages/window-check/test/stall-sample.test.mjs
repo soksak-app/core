@@ -1,5 +1,5 @@
-// 요청이 한도 안에 답하지 않으면 그때 호스트 프로세스의 stack 을 남긴다(F69). 답하지 않은 동안 main thread 가 무엇을
-// 했는지는 그 순간에만 볼 수 있다.
+// When a request does not answer within the limit, the check keeps the stacks of the host process at that time (F69).
+// What the main thread did while it did not answer can be seen only at that moment.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { within } from "../app.mjs";
@@ -64,7 +64,8 @@ test("a request that the page did not answer names the stall records or why they
   const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-config-"));
   const client = { endpoint: { pid: 999999 }, request: async () => { throw new EndpointError({ code: -32603, message: "the document did not reply within 10000 ms" }); } };
   const s = new Session({ name: "tauriv2", configDir }, client);
-  // 이 설정 폴더에는 WebKit 자식 기록이 없으므로 기록하지 못한 까닭이 오류에 남는다.
+  // This configuration folder has no record of WebKit children, so the reason why it could not be recorded stays in the
+  // error.
   await assert.rejects(s.request("status.get", { name: "core.verify" }),
     /^EndpointError: tauriv2 status\.get core\.verify: the document did not reply within 10000 ms; sampling the host failed: .*webkit-children\.json: ENOENT/);
 });
