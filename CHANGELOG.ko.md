@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.5.3.1: host가 등록하는 모든 창 event는 `window`와 `kind`(`resize`, `move`, `scale_factor_changed`, `show`, `hide`, `occlusion_changed`, `focus`, `lost_focus`, `close_requested`, `closed`, `web_process_ended`, `navigation_committed`)를 가진 event `host.window.event`로 event log에 저장된다. 흐름으로 오는 세 kind는 level `debug`다. 두 애플리케이션에서 관측했다: 열렸다 닫히는 새 창은 `closed`를 저장한다.
 - F150.5.5.2: 두 host는 영구 service 연결을 event `host.sidecar.connect`(`name`, `pid`, `spawned`), 그 끝을 `host.sidecar.disconnect`(`name`, `pid`, `stopping`, `violation`)로 level `info`에 저장한다.
 - F150.5.5.1: 두 host는 표준 입출력 sidecar 프로세스의 시작을 event `host.sidecar.start`(`name`, `pid`), 종료를 `host.sidecar.exit`(`name`, `pid`, `status`, `stopping`)로 level `info`의 event log에 저장한다. `EmitHost`와 `emit_host`는 기록이 아닌 host 원천의 event를 위한 입구다.
 - F150.5.4: page의 모든 `command.run` 요청은 성능 trace가 켜져 있든 꺼져 있든 필드 `name`, `micros`, `ok`, `error`를 가진 event `page.command`다(level `debug`, 실패한 명령은 `warn`).

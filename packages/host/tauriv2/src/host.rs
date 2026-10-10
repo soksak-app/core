@@ -51,6 +51,7 @@ mod shapes;
 pub mod sidecars;
 pub mod start;
 pub mod surfaces;
+pub mod window_events;
 pub use surfaces::surface_owner_id;
 pub mod termination;
 mod theme;

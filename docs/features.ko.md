@@ -783,7 +783,9 @@
   - [~] F150.5 — P0: 원천을 입구에서 자동으로 기록한다: host의 page 호출, 창과 애플리케이션 event, registry command, sidecar 수명, 오류의 표시 경로. F145.13~F145.18을 흡수한다(R5 단계).
     - [o] F150.5.1 — P0: 메인 page의 host 호출은 `page.call` event다(이름, 인자, 시간, 결과). 완료: `packages/workbench/test/host-calls.test.mjs`, `packages/workbench/test/page-log.test.mjs`.
     - [ ] F150.5.2 — P0: 표면 문서(`page`)의 host 호출을 같은 event로 기록한다.
-    - [ ] F150.5.3 — P0: 창·애플리케이션 이벤트를 각 host의 등록 helper 하나에서 기록한다.
+    - [~] F150.5.3 — P0: 창·애플리케이션 이벤트를 각 host의 등록 helper 하나에서 기록한다.
+      - [o] F150.5.3.1 — P0: host의 창 event는 창과 kind를 가진 event `host.window.event`다. 완료: `packages/host/wailsv3/tests/window_events_test.go`, `packages/host/tauriv2/tests/window_events_test.rs`, 두 애플리케이션의 window check `e2e/event-log.test.mjs`.
+      - [ ] F150.5.3.2 — P0: 각 host의 애플리케이션 event(시작, 활성화, 종료 요청, 종료)를 기록한다.
     - [o] F150.5.4 — P0: page의 모든 `command.run` 요청은 trace가 켜져 있든 꺼져 있든 event `page.command`(이름, 시간, 결과)다. 완료: `packages/workbench/test/exposure-replies-sent.test.mjs`.
     - [o] F150.5.5 — P0: sidecar 수명(launch, exit, 종료 상태)을 launch와 exit 한 곳에서 기록한다.
       - [o] F150.5.5.1 — P0: 표준 입출력 sidecar의 시작과 종료는 event `host.sidecar.start`와 `host.sidecar.exit`다. 완료: `packages/host/wailsv3/tests/sidecars_test.go`, `packages/host/tauriv2/tests/sidecars_test.rs`.

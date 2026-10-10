@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
+import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the host writes its event log from the start of the process`, { timeout: 30000 }, async (t) => {
@@ -25,5 +26,20 @@ for (const app of Object.values(APPS)) {
     assert.equal(events[0].fields.role, "host");
     assert.equal(events[0].fields.schema, 1);
     events.forEach((event, index) => assert.equal(event.seq, index + 1, `${path} line ${index + 1} has seq ${event.seq}`));
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a window that opens and closes leaves the events of the window`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    const offsets = currentEventOffsets(app.configDir);
+    await s.run("core.window.new");
+    const list = await s.windows(2, "the new window did not open");
+    const child = s.on(list.find((w) => w.window !== s.window).window);
+    await child.close();
+    const closed = await untilEventLine(app.configDir, offsets,
+      (line) => line.startsWith("info host host.window.event:") && line.includes('"kind":"closed"'), 30000);
+    assert.match(closed, /"window":"[^"]+"/);
   });
 }

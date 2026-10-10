@@ -483,11 +483,33 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     let occluded = window.clone();
     platform.observe_occlusion(
         owner,
-        Box::new(move || crate::exposure::window_changed(&occluded)),
+        Box::new(move || {
+            crate::window_events::record_window_event(occluded.label(), "occlusion_changed");
+            crate::exposure::window_changed(&occluded)
+        }),
     )?;
     // 제목줄은 페이지가 첫 행 높이로 요청할 때까지 처음 높이를 갖는다. 창이 보이기 전에 정한다.
     initial_titlebar(&window)?;
     let host = window.clone();
+    let window_events_label = window.label().to_string();
+    let recorded = context.clone();
+    window.on_window_event(move |event| {
+        let kind = match event {
+            tauri::WindowEvent::CloseRequested { .. } if recorded.ready.load(Ordering::Relaxed) => {
+                Some("close_requested")
+            }
+            tauri::WindowEvent::CloseRequested { .. } => Some("closed"),
+            tauri::WindowEvent::Resized(_) => Some("resize"),
+            tauri::WindowEvent::Moved(_) => Some("move"),
+            tauri::WindowEvent::ScaleFactorChanged { .. } => Some("scale_factor_changed"),
+            tauri::WindowEvent::Focused(true) => Some("focus"),
+            tauri::WindowEvent::Focused(false) => Some("lost_focus"),
+            _ => None,
+        };
+        if let Some(kind) = kind {
+            crate::window_events::record_window_event(window_events_label.as_str(), kind);
+        }
+    });
     window.on_window_event(move |event| match event {
         tauri::WindowEvent::CloseRequested { api, .. } if context.ready.load(Ordering::Relaxed) => {
             api.prevent_close();

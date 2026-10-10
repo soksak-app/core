@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F150.5.3.1: every window event that a host registers is the event `host.window.event` with the `window` and the `kind` (`resize`, `move`, `scale_factor_changed`, `show`, `hide`, `occlusion_changed`, `focus`, `lost_focus`, `close_requested`, `closed`, `web_process_ended`, `navigation_committed`) in the event log; the three kinds that arrive in streams are at the level `debug`. Observed in both applications: a new window that opens and closes stores `closed`.
 - F150.5.5.2: both hosts store the connection to a persistent service as the event `host.sidecar.connect` (`name`, `pid`, `spawned`) and its end as `host.sidecar.disconnect` (`name`, `pid`, `stopping`, `violation`) at the level `info`.
 - F150.5.5.1: both hosts store the start of a sidecar process of standard input and output as the event `host.sidecar.start` (`name`, `pid`) and its end as `host.sidecar.exit` (`name`, `pid`, `status`, `stopping`), in the event log at the level `info`; `EmitHost` and `emit_host` are the entrance for events of the host that are not records.
 - F150.5.4: every `command.run` request of the page is the event `page.command` with the fields `name`, `micros`, `ok` and `error` (level `debug`, `warn` for a failed command), whether or not the performance trace is on.

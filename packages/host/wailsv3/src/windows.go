@@ -334,9 +334,14 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		s.windowChanged()
 		go h.windowsChanged()
 	}
-	for _, event := range []events.WindowEventType{events.Common.WindowDidResize, events.Common.WindowDidMove,
-		events.Common.WindowFocus, events.Common.WindowLostFocus, events.Common.WindowShow, events.Common.WindowHide} {
-		win.OnWindowEvent(event, changed)
+	for event, kind := range map[events.WindowEventType]string{
+		events.Common.WindowDidResize: "resize", events.Common.WindowDidMove: "move", events.Common.WindowFocus: "focus",
+		events.Common.WindowLostFocus: "lost_focus", events.Common.WindowShow: "show", events.Common.WindowHide: "hide",
+	} {
+		win.OnWindowEvent(event, func(e *application.WindowEvent) {
+			RecordWindowEvent(s.name, kind)
+			changed(e)
+		})
 	}
 	// The page reads state that no event announces, such as the registry index, when its window becomes active
 	// (docs/spec/installation.md).
@@ -344,11 +349,13 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	// The framework loads the page again after the WebContent process ends; the host writes the end as an error line
 	// (docs/spec/diagnostics.md).
 	win.OnWindowEvent(events.Mac.WebViewWebContentProcessDidTerminate, func(*application.WindowEvent) {
+		RecordWindowEvent(s.name, "web_process_ended")
 		if place, text, reported := PageProcessEnded(s.name, h.quit.Active()); reported {
 			LogError(place, text)
 		}
 	})
 	win.OnWindowEvent(events.Mac.WebViewDidCommitNavigation, func(*application.WindowEvent) {
+		RecordWindowEvent(s.name, "navigation_committed")
 		// 이 callback 은 별도 goroutine 에서 새 페이지의 호출보다 늦게 실행될 수 있다. 이전 페이지의 정리는
 		// 새 페이지의 시작 문서 요청(startPage)이 하고, 여기서는 이 실행의 WebKit 자식 기록만 갱신한다(V5-113).
 		committed := func() {
@@ -374,10 +381,12 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		quit := h.quit.Active() && len(h.windows) == 0
 		h.mu.Unlock()
 		if ready {
+			RecordWindowEvent(s.name, "close_requested")
 			e.Cancel()
 			s.Emit("project-close-request")
 			return
 		}
+		RecordWindowEvent(s.name, "closed")
 		s.close()
 		h.relay.Abandon(func(t relayTarget) bool { return t.owner == s })
 		h.notifyWorkspace()

@@ -96,7 +96,8 @@ The catalog also declares the chains an input kind must leave, as the ordered li
 These entrances record without a call site writing the record:
 
 - the host calls of the main page: the wrapper that both runtimes put around `host.call` (`settlingCalls`) emits the event `page.call` with the fields `name`, `args` (the JSON of the arguments, cut at 1024 characters with `truncated: true`), `micros`, `ok` and, for a refused call, `error`. It is at the level `debug`, and `warn` for a refused call. The calls `log` and `performance` are not recorded, because a recorded `log` call would record itself;
-- window and application events (one registration helper in each host);
+- window events: every event that a host registers for a window is the event `host.window.event` with the `window` and the `kind`. A host emits the kinds its framework reports (Wails reports `show`, `hide`, `focus`, `lost_focus`, `web_process_ended` and `navigation_committed`, Tauri reports `occlusion_changed`), so the kinds a host stores are a subset of the list in [host contract](host-contract.md);
+- application events (one registration helper in each host);
 - registry commands: the page answers every request `command.run` through one function that emits the event `page.command` with the fields `name`, `micros`, `ok` and, for a failed command, `error` (level `debug`, and `warn` for a failed command), whether or not the performance trace is on;
 - sidecar lifetime: a sidecar process of standard input and output is the event `host.sidecar.start` (`name`, `pid`) when the host starts it and `host.sidecar.exit` (`name`, `pid`, `status`, `stopping`) when it ends, and the connection to a persistent service is `host.sidecar.connect` (`name`, `pid`, `spawned`) and `host.sidecar.disconnect` (`name`, `pid`, `stopping`, `violation`), all at the level `info`;
 - the display of an error that a person sees, which emits the `error` event.

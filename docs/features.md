@@ -783,7 +783,9 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [~] F150.5 — P0: Record the sources automatically at their entrances: the page calls of the hosts, the window and application events, the registry commands, the lifetime of the sidecars, and the display path of errors; this absorbs F145.13 to F145.18 (step R5).
     - [o] F150.5.1 — P0: The host calls of the main page are the event `page.call` (name, arguments, duration, outcome). Done: `packages/workbench/test/host-calls.test.mjs`, `packages/workbench/test/page-log.test.mjs`.
     - [ ] F150.5.2 — P0: Record the host calls of a surface document (`page`) as the same event.
-    - [ ] F150.5.3 — P0: Record the window and application events in one registration helper of each host.
+    - [~] F150.5.3 — P0: Record the window and application events in one registration helper of each host.
+      - [o] F150.5.3.1 — P0: A window event of a host is the event `host.window.event` with the window and the kind. Done: `packages/host/wailsv3/tests/window_events_test.go`, `packages/host/tauriv2/tests/window_events_test.rs`, and the window check `e2e/event-log.test.mjs` on both applications.
+      - [ ] F150.5.3.2 — P0: Record the application events (start, activation, quit request, exit) of each host.
     - [o] F150.5.4 — P0: Every `command.run` request of the page is the event `page.command` (name, duration, outcome) whether or not the trace is on. Done: `packages/workbench/test/exposure-replies-sent.test.mjs`.
     - [o] F150.5.5 — P0: Record the lifetime of the sidecars (launch, exit, exit status) in one place for launch and one for exit.
       - [o] F150.5.5.1 — P0: The start and the end of a sidecar of standard input and output are the events `host.sidecar.start` and `host.sidecar.exit`. Done: `packages/host/wailsv3/tests/sidecars_test.go`, `packages/host/tauriv2/tests/sidecars_test.rs`.

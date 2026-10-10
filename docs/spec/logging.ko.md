@@ -96,7 +96,8 @@ catalog는 입력 종류마다 남겨야 하는 사슬도 선언한다. 첫 층�
 다음 입구는 호출 지점이 기록을 쓰지 않아도 기록한다.
 
 - 메인 page의 host 호출: 두 runtime이 `host.call` 둘레에 두는 감싸개(`settlingCalls`)가 필드 `name`, `args`(인자의 JSON, 1024자에서 자르며 `truncated: true`), `micros`, `ok`, 거절된 호출이면 `error`를 가진 event `page.call`을 낸다. level은 `debug`이고 거절된 호출은 `warn`이다. 호출 `log`와 `performance`는 기록하지 않는다. 기록된 `log` 호출이 자기 자신을 기록하기 때문이다;
-- 창·애플리케이션 이벤트(각 host의 등록 helper 하나);
+- 창 event: host가 창에 등록하는 모든 event는 `window`와 `kind`를 가진 event `host.window.event`다. host는 자기 framework가 알리는 kind를 낸다(Wails는 `show`, `hide`, `focus`, `lost_focus`, `web_process_ended`, `navigation_committed`를, Tauri는 `occlusion_changed`를 알린다). 그래서 host가 저장하는 kind는 [host 계약](host-contract.ko.md)의 목록의 부분집합이다;
+- 애플리케이션 event(각 host의 등록 helper 하나);
 - registry 명령: page는 요청 `command.run`에 모두 함수 하나로 답하며, 그 함수가 필드 `name`, `micros`, `ok`, 실패한 명령이면 `error`를 가진 event `page.command`를 낸다(level은 `debug`, 실패한 명령은 `warn`). 성능 trace가 켜져 있든 꺼져 있든 같다;
 - sidecar 수명: 표준 입출력 sidecar 프로세스는 host가 시작할 때 event `host.sidecar.start`(`name`, `pid`), 끝났을 때 `host.sidecar.exit`(`name`, `pid`, `status`, `stopping`)이고, 영구 service 연결은 `host.sidecar.connect`(`name`, `pid`, `spawned`)와 `host.sidecar.disconnect`(`name`, `pid`, `stopping`, `violation`)이며 모두 level은 `info`다;
 - 사람이 보는 오류의 표시. 이것이 `error` event를 낸다.
