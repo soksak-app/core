@@ -757,8 +757,8 @@ Completed entries and their scoped evidence are historical records; follow-up it
     - [o] F150.2.5 — P0: Rotation of the log files of both host writers at 100 MB with 5 files kept (see [logging](spec/logging.md)). Done: `packages/host/wailsv3/tests/event_log_test.go`, `packages/host/tauriv2/tests/event_log_test.rs`.
     - [~] F150.2.6 — P0: The pull of the native ring into both host writers and its benchmark across cgo and FFI.
       - [o] F150.2.6.1 — P0: The ring of the native process: `sp_event` stores the time, the level, the name and the fields, `sp_event_drain` returns the records in order, `sp_event_take_loss` counts the refused events. Done: `native/darwin/tests/event_ring_test.m`.
-      - [ ] F150.2.6.2 — P0: The platform operation that pulls the records into the Go writer, and the pull of the writer at its batch interval; the polling is stated because a native thread must not call into Go.
-      - [ ] F150.2.6.3 — P0: The same platform operation and pull in the Rust writer.
+      - [o] F150.2.6.2 — P0: The platform operation that pulls the records into the Go writer, and the pull of the writer at its batch interval; the polling is stated because a native thread must not call into Go. Done: `packages/host/wailsv3/tests/event_native_test.go`, `packages/host/wailsv3/tests/event_native_platform_test.go`.
+      - [o] F150.2.6.3 — P0: The same platform operation and pull in the Rust writer. Done: `packages/host/tauriv2/tests/event_native_test.rs`, `packages/host/tauriv2/tests/event_native_platform_test.rs`.
       - [ ] F150.2.6.4 — P0: The benchmark of the pull across cgo and FFI.
     - [o] F150.2.4 — P0: The page batch relay and its benchmark; the input latency from key injection to the PTY write with logging on and off on both hosts.
       - [o] F150.2.4.1 — P0: The page batcher `log-batch.js`: events of one turn travel to the host in one `batch` call, one call is in flight at a time, a full queue refuses events and the next batch starts with `page.log.dropped`, and a failed call is reported with its event count. Done: `packages/workbench/test/log-batch.test.mjs`.

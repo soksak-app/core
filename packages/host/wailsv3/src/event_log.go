@@ -6,6 +6,7 @@ package host
 // seq, serializes the JSON line, writes batches and records the events that the queue refused as log.dropped.
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // EventLogSchema is the schema number of the lines that this writer writes.
@@ -52,6 +55,10 @@ type EventLogOptions struct {
 	RotateBytes int64
 	// Generations is the number of earlier files that are kept (`.1` is the newest); the oldest one is removed.
 	Generations int
+	// Pull moves whole records of the native ring into buffer and returns the number of bytes written; nil when the
+	// process has no native ring. PullLoss returns the events and bytes that the ring refused since the last call.
+	Pull     func(buffer []byte) (int, error)
+	PullLoss func() (events, bytes uint64)
 }
 
 // pendingEvent is one event waiting for the writer. seq is assigned when the writer serializes it.
@@ -89,6 +96,8 @@ type EventLog struct {
 	rotateBytes  int64
 	generations  int
 	openFields   json.RawMessage
+	pull         func(buffer []byte) (int, error)
+	pullLoss     func() (uint64, uint64)
 	done         chan struct{}
 	closeOnce    sync.Once
 }
@@ -127,6 +136,8 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 		rotateBytes: options.RotateBytes,
 		generations: options.Generations,
 		openFields:  fields,
+		pull:        options.Pull,
+		pullLoss:    options.PullLoss,
 		done:        make(chan struct{}),
 	}
 	open := &pendingEvent{tsMicros: time.Now().UnixMicro(), layer: "host", level: LevelInfo, event: "log.open", fields: fields}
@@ -146,7 +157,23 @@ const (
 // StartHostEventLog starts the writer of the host in logs/ of the configuration folder; the boot identifier is the
 // start time in seconds and the process identifier.
 func StartHostEventLog(config string) (*EventLog, error) {
+	system, err := platform.Current()
+	if err != nil {
+		return nil, err
+	}
+	// A platform that cannot pull the native ring fails here, at the start, instead of running without native events.
+	if _, err := system.PullNativeEvents(make([]byte, 1)); err != nil {
+		return nil, err
+	}
 	return StartEventLog(EventLogOptions{
+		Pull: system.PullNativeEvents,
+		PullLoss: func() (uint64, uint64) {
+			events, bytes, err := system.TakeNativeEventLoss()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "event writer: the loss of the native ring cannot be read: %v\n", err)
+			}
+			return events, bytes
+		},
 		Directory: filepath.Join(config, "logs"), Role: "host", Boot: fmt.Sprintf("%d-%d", time.Now().Unix(), os.Getpid()),
 		QueueEvents: hostQueueEvents, QueueBytes: hostQueueBytes, BatchInterval: hostBatchInterval,
 		RotateBytes: hostRotateBytes, Generations: hostGenerations,
@@ -372,20 +399,65 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 		appendLine(e)
 	}
 	push(open)
-	recordLoss := func() {
-		events := l.lostEvents.Swap(0)
+	// dropped stores one log.dropped after the range of seq that the refused events would have had.
+	dropped := func(events, bytes uint64, reason string) {
 		if events == 0 {
 			return
 		}
-		bytes := l.lostBytes.Swap(0)
 		// The refused events had no seq. Their numbers are skipped, and log.dropped is stored after the range that it
 		// names (docs/spec/logging.md#event).
 		from := seq + 1
 		seq += events
 		// The fields are numbers and a fixed text, so they are written as text without a serializer that can fail.
-		fields := json.RawMessage(fmt.Sprintf(`{"from_seq":%d,"to_seq":%d,"count":%d,"bytes":%d,"reason":"the queue was full"}`,
-			from, seq, events, bytes))
+		fields := json.RawMessage(fmt.Sprintf(`{"from_seq":%d,"to_seq":%d,"count":%d,"bytes":%d,"reason":%q}`,
+			from, seq, events, bytes, reason))
 		push(&pendingEvent{tsMicros: time.Now().UnixMicro(), layer: "host", level: LevelWarn, event: "log.dropped", fields: fields})
+	}
+	// pullNative takes the records of the native ring. No event source reaches the writer from there: a native thread
+	// must not call into Go, so the writer pulls at its batch interval and when it flushes.
+	var pulled []byte
+	pullNative := func() {
+		if l.pull == nil {
+			return
+		}
+		if pulled == nil {
+			pulled = make([]byte, nativePullBytes)
+		}
+		var refused, refusedBytes uint64
+		for pass := 0; pass < nativePullPasses; pass++ {
+			n, err := l.pull(pulled)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "event writer: the pull of the native ring failed: %v\n", err)
+				break
+			}
+			if n == 0 {
+				break
+			}
+			for offset := 0; offset < n; {
+				length, event, err := nativeEventOf(pulled[offset:n])
+				if err != nil {
+					// The rest of the buffer cannot be located after a record whose length is wrong.
+					fmt.Fprintf(os.Stderr, "event writer: a native record was refused: %v\n", err)
+					refused++
+					refusedBytes += uint64(n - offset)
+					if length == 0 {
+						break
+					}
+				} else {
+					push(event)
+				}
+				offset += length
+			}
+		}
+		dropped(refused, refusedBytes, "a native record was refused")
+		if l.pullLoss != nil {
+			events, bytes := l.pullLoss()
+			dropped(events, bytes, "the native ring was full")
+		}
+	}
+	recordLoss := func() {
+		events := l.lostEvents.Swap(0)
+		dropped(events, l.lostBytes.Swap(0), "the queue was full")
 	}
 	write := flush
 	take := func(e *pendingEvent) {
@@ -396,6 +468,7 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 	// drain takes every event that is queued now, then the loss counted so far, writes them, and returns the request
 	// that it met, if any.
 	drain := func() *eventMessage {
+		pullNative()
 		for {
 			select {
 			case message := <-l.messages:
@@ -427,6 +500,7 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 				}
 				continue
 			}
+			pullNative()
 			recordLoss()
 			write()
 			if message.flush != nil {
@@ -447,4 +521,48 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 			timer.Reset(interval)
 		}
 	}
+}
+
+// nativePullBytes is the size of the buffer of one pull; nativePullPasses bounds the passes of one pull, so a flood of
+// native events cannot hold the writer; the records left in the ring wait for the next pull.
+const (
+	nativePullBytes  = 256 << 10
+	nativePullPasses = 64
+)
+
+// nativeLevels maps the level byte of a native record to the level of the contract.
+var nativeLevels = []Level{LevelError, LevelWarn, LevelInfo, LevelDebug, LevelTrace}
+
+// nativeEventOf decodes the record at the start of buffer: a 4-byte length, then the time in microseconds (8 bytes), the
+// level (1 byte), the length of the name (1 byte), the name and the fields as JSON text, in the byte order of the host.
+// It returns the number of bytes the record takes. When the length itself is wrong it returns 0, so the caller
+// abandons the rest of the buffer.
+func nativeEventOf(buffer []byte) (int, *pendingEvent, error) {
+	if len(buffer) < 4 {
+		return 0, nil, fmt.Errorf("%d bytes are left, which is less than a length", len(buffer))
+	}
+	length := int(binary.NativeEndian.Uint32(buffer))
+	if length < 10 || 4+length > len(buffer) {
+		return 0, nil, fmt.Errorf("the length %d does not fit %d bytes", length, len(buffer)-4)
+	}
+	total := 4 + length
+	body := buffer[4:total]
+	level := int(body[8])
+	nameLength := int(body[9])
+	if level >= len(nativeLevels) {
+		return total, nil, fmt.Errorf("the level %d is not defined", level)
+	}
+	if 10+nameLength > len(body) {
+		return total, nil, fmt.Errorf("the name of %d bytes does not fit the record", nameLength)
+	}
+	name := string(body[10 : 10+nameLength])
+	if !strings.HasPrefix(name, "native.") {
+		return total, nil, fmt.Errorf("the event %q does not start with its layer \"native\"", name)
+	}
+	fields := body[10+nameLength:]
+	if !json.Valid(fields) || len(fields) == 0 || fields[0] != '{' {
+		return total, nil, fmt.Errorf("the fields of %s are not a JSON object", name)
+	}
+	return total, &pendingEvent{tsMicros: int64(binary.NativeEndian.Uint64(body)), layer: "native", level: nativeLevels[level],
+		event: name, fields: append(json.RawMessage(nil), fields...)}, nil
 }

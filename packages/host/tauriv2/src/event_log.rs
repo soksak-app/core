@@ -61,7 +61,16 @@ pub struct Options {
     pub rotate_bytes: u64,
     /// The number of earlier files that are kept (`.1` is the newest); the oldest one is removed.
     pub generations: usize,
+    /// Moves whole records of the native ring into the buffer and returns the number of bytes written; `None` when the
+    /// process has no native ring. `pull_loss` returns the events and bytes that the ring refused since the last call.
+    pub pull: Option<Pull>,
+    pub pull_loss: Option<PullLoss>,
 }
+
+/// The pull of the native ring, called on the writer thread.
+pub type Pull = Box<dyn Fn(&mut [u8]) -> Result<usize, String> + Send>;
+/// The loss of the native ring since the last call, as events and bytes.
+pub type PullLoss = Box<dyn Fn() -> (u64, u64) + Send>;
 
 /// One event waiting for the writer. `seq` is assigned when the writer serializes it.
 struct Pending {
@@ -125,6 +134,9 @@ impl EventLog {
     /// Starts the writer of the host in `logs/` of the configuration folder; the boot identifier is the start time in
     /// seconds and the process identifier.
     pub fn start_host(config: &Path) -> Result<EventLog, String> {
+        let system = crate::platform::current()?;
+        // A platform that cannot pull the native ring fails here, at the start, instead of running without native events.
+        system.pull_native_events(&mut [0u8; 1])?;
         let seconds = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| format!("clock is before the Unix epoch: {e}"))?
@@ -138,6 +150,21 @@ impl EventLog {
             batch_interval: HOST_BATCH_INTERVAL,
             rotate_bytes: HOST_ROTATE_BYTES,
             generations: HOST_GENERATIONS,
+            pull: Some(Box::new(|buffer| {
+                crate::platform::current()?.pull_native_events(buffer)
+            })),
+            pull_loss: Some(Box::new(|| {
+                match crate::platform::current().and_then(|system| system.take_native_event_loss())
+                {
+                    Ok(loss) => loss,
+                    Err(error) => {
+                        eprintln!(
+                            "event writer: the loss of the native ring cannot be read: {error}"
+                        );
+                        (0, 0)
+                    }
+                }
+            })),
         })
     }
 
@@ -196,6 +223,8 @@ impl EventLog {
             let path_for_writer = path.clone();
             let rotate_bytes = options.rotate_bytes;
             let generations = options.generations;
+            let pull = options.pull;
+            let pull_loss = options.pull_loss;
             std::thread::Builder::new()
                 .name("event-log-writer".into())
                 .spawn(move || {
@@ -207,6 +236,8 @@ impl EventLog {
                         loss,
                         interval,
                         open,
+                        pull,
+                        pull_loss,
                     )
                 })
                 .map_err(|e| format!("event writer thread: {e}"))?
@@ -436,6 +467,32 @@ impl Output {
         self.append(pending);
     }
 
+    /// Stores one `log.dropped` after the range of `seq` that the refused events would have had. The refused events had no
+    /// `seq`; their numbers are skipped (docs/spec/logging.md#event).
+    fn dropped(&mut self, events: u64, bytes: u64, reason: &str) {
+        if events == 0 {
+            return;
+        }
+        let from = self.seq + 1;
+        self.seq += events;
+        let pending = Pending {
+            layer: Cow::Borrowed("host"),
+            ts_us: now_us(),
+            level: Level::Warn,
+            event: "log.dropped".into(),
+            fields: to_raw_value(&json!({
+                "from_seq": from,
+                "to_seq": self.seq,
+                "count": events,
+                "bytes": bytes,
+                "reason": reason,
+            }))
+            .expect("a json value serializes"),
+            bytes: 0,
+        };
+        self.push(&pending);
+    }
+
     /// Writes the batch. A failed write is reported on the standard error; the writer keeps running for the next batch.
     fn flush(&mut self) {
         if self.batch.is_empty() {
@@ -516,6 +573,79 @@ impl Output {
     }
 }
 
+/// The size of the buffer of one pull, and the passes of one pull: a flood of native events cannot hold the writer, and the
+/// records left in the ring wait for the next pull.
+const NATIVE_PULL_BYTES: usize = 256 << 10;
+const NATIVE_PULL_PASSES: usize = 64;
+
+/// Decodes the record at the start of `buffer`: a 4-byte length, then the time in microseconds (8 bytes), the level
+/// (1 byte), the length of the name (1 byte), the name and the fields as JSON text, in the byte order of the host.
+/// Returns the number of bytes the record takes with the event or the reason it is refused. When the length itself is wrong
+/// the number of bytes is 0, so the caller abandons the rest of the buffer.
+fn native_event_of(buffer: &[u8]) -> Result<(usize, Pending), (usize, String)> {
+    if buffer.len() < 4 {
+        return Err((
+            0,
+            format!(
+                "{} bytes are left, which is less than a length",
+                buffer.len()
+            ),
+        ));
+    }
+    let length = u32::from_ne_bytes(buffer[..4].try_into().expect("four bytes")) as usize;
+    if length < 10 || 4 + length > buffer.len() {
+        return Err((
+            0,
+            format!(
+                "the length {length} does not fit {} bytes",
+                buffer.len() - 4
+            ),
+        ));
+    }
+    let total = 4 + length;
+    let body = &buffer[4..total];
+    let level = match body[8] {
+        0 => Level::Error,
+        1 => Level::Warn,
+        2 => Level::Info,
+        3 => Level::Debug,
+        4 => Level::Trace,
+        other => return Err((total, format!("the level {other} is not defined"))),
+    };
+    let name_length = body[9] as usize;
+    if 10 + name_length > body.len() {
+        return Err((
+            total,
+            format!("the name of {name_length} bytes does not fit the record"),
+        ));
+    }
+    let name = String::from_utf8_lossy(&body[10..10 + name_length]).into_owned();
+    if !name.starts_with("native.") {
+        return Err((
+            total,
+            format!("the event {name:?} does not start with its layer \"native\""),
+        ));
+    }
+    let fields = &body[10 + name_length..];
+    let fields = std::str::from_utf8(fields)
+        .ok()
+        .filter(|text| text.starts_with('{'))
+        .and_then(|text| RawValue::from_string(text.to_string()).ok())
+        .ok_or_else(|| (total, format!("the fields of {name} are not a JSON object")))?;
+    Ok((
+        total,
+        Pending {
+            ts_us: u64::from_ne_bytes(body[..8].try_into().expect("eight bytes")),
+            layer: Cow::Borrowed("native"),
+            level,
+            event: name,
+            fields,
+            bytes: 0,
+        },
+    ))
+}
+
+#[allow(clippy::too_many_arguments)]
 fn write_loop(
     mut out: Output,
     receiver: Receiver<Message>,
@@ -524,34 +654,60 @@ fn write_loop(
     loss: Arc<Loss>,
     interval: Duration,
     open: Pending,
+    pull: Option<Pull>,
+    pull_loss: Option<PullLoss>,
 ) {
     out.push(&open);
+    // No event source reaches the writer from the native ring: a native thread must not call into this process's Rust
+    // code, so the writer pulls at its batch interval and when it flushes.
+    let mut pulled = Vec::new();
+    let mut pull_native = |out: &mut Output| {
+        let Some(pull) = pull.as_ref() else {
+            return;
+        };
+        if pulled.is_empty() {
+            pulled.resize(NATIVE_PULL_BYTES, 0u8);
+        }
+        let (mut refused, mut refused_bytes) = (0u64, 0u64);
+        'passes: for _ in 0..NATIVE_PULL_PASSES {
+            let n = match pull(&mut pulled) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(error) => {
+                    eprintln!("event writer: the pull of the native ring failed: {error}");
+                    break;
+                }
+            };
+            let mut offset = 0;
+            while offset < n {
+                match native_event_of(&pulled[offset..n]) {
+                    Ok((length, event)) => {
+                        out.push(&event);
+                        offset += length;
+                    }
+                    Err((length, error)) => {
+                        // The rest of the buffer cannot be located after a record whose length is wrong.
+                        eprintln!("event writer: a native record was refused: {error}");
+                        refused += 1;
+                        refused_bytes += (n - offset) as u64;
+                        if length == 0 {
+                            continue 'passes;
+                        }
+                        offset += length;
+                    }
+                }
+            }
+        }
+        out.dropped(refused, refused_bytes, "a native record was refused");
+        if let Some(pull_loss) = pull_loss.as_ref() {
+            let (events, bytes) = pull_loss();
+            out.dropped(events, bytes, "the native ring was full");
+        }
+    };
     let record_loss = |out: &mut Output| {
         let events = loss.events.swap(0, Ordering::Relaxed);
-        if events == 0 {
-            return;
-        }
         let bytes = loss.bytes.swap(0, Ordering::Relaxed);
-        // The refused events had no seq. Their numbers are skipped, and log.dropped is stored after the range that it
-        // names (docs/spec/logging.md#event).
-        let from = out.seq + 1;
-        out.seq += events;
-        let dropped = Pending {
-            layer: Cow::Borrowed("host"),
-            ts_us: now_us(),
-            level: Level::Warn,
-            event: "log.dropped".into(),
-            fields: to_raw_value(&json!({
-                "from_seq": from,
-                "to_seq": out.seq,
-                "count": events,
-                "bytes": bytes,
-                "reason": "the queue was full",
-            }))
-            .expect("a json value serializes"),
-            bytes: 0,
-        };
-        out.push(&dropped);
+        out.dropped(events, bytes, "the queue was full");
     };
     let take = |out: &mut Output, pending: &Pending| {
         queued_bytes.fetch_sub(pending.bytes, Ordering::Relaxed);
@@ -559,7 +715,8 @@ fn write_loop(
         out.push(pending);
     };
     // Takes every event that is queued now, then the loss counted so far, and writes them.
-    let drain = |out: &mut Output| -> Option<Message> {
+    let mut drain = |out: &mut Output| -> Option<Message> {
+        pull_native(out);
         let mut request = None;
         while let Ok(message) = receiver.try_recv() {
             match message {

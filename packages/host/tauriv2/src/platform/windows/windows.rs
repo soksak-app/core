@@ -440,6 +440,12 @@ impl Platform for Windows {
     fn instant_window_resize(&self) -> Result<(), String> {
         unsupported::instant_window_resize()
     }
+    fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String> {
+        unsupported::pull_native_events(buffer)
+    }
+    fn take_native_event_loss(&self) -> Result<(u64, u64), String> {
+        unsupported::take_native_event_loss()
+    }
     fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String> {
         unsupported::replace_standard_error(file)
     }

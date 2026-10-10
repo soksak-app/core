@@ -2,6 +2,8 @@
 // a variable-length event into the ring without a lock, an allocation or a system call; a full ring returns false and
 // counts the loss. The consumer drains whole events into a buffer.
 
+#pragma once
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

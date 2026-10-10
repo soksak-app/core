@@ -466,6 +466,13 @@ type Platform interface {
 	// 창을 만들기 전에 호출한다.
 	InstantWindowResize() error
 
+	// PullNativeEvents moves whole records of the native event ring into buffer and returns the number of bytes written;
+	// 0 means the ring is empty (docs/spec/logging.md#writers).
+	PullNativeEvents(buffer []byte) (int, error)
+
+	// TakeNativeEventLoss returns the events and bytes that the native ring refused since the last call.
+	TakeNativeEventLoss() (events, bytes uint64, err error)
+
 	// ReplaceStandardError 는 프로세스의 표준 오류를 file 로 바꾼다. 이후 시작하는 자식 프로세스도 그
 	// descriptor 를 물려받는다(docs/spec/hosts.md#application-log).
 	ReplaceStandardError(file *os.File) error

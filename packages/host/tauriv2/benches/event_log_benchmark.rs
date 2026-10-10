@@ -30,6 +30,8 @@ fn main() {
             batch_interval: Duration::from_millis(100),
             rotate_bytes: 100 << 20,
             generations: 5,
+            pull: None,
+            pull_loss: None,
         })
         .unwrap(),
     );

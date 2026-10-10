@@ -442,6 +442,14 @@ pub fn install_fatal_handlers() -> Result<(), String> {
     Err("install fatal handlers: not implemented on windows".to_string())
 }
 
+pub fn pull_native_events(_buffer: &mut [u8]) -> Result<usize, String> {
+    missing("native event pull")
+}
+
+pub fn take_native_event_loss() -> Result<(u64, u64), String> {
+    missing("native event loss")
+}
+
 pub fn replace_standard_error(_file: &std::fs::File) -> Result<(), String> {
     missing("standard error replacement")
 }

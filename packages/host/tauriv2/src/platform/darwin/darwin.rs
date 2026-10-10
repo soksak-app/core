@@ -47,6 +47,8 @@ mod layout;
 #[path = "link.rs"]
 mod link;
 
+#[path = "events.rs"]
+mod events;
 #[path = "mouse_buttons.rs"]
 mod mouse_buttons;
 mod notifications;
@@ -571,6 +573,12 @@ impl Platform for Darwin {
     fn instant_window_resize(&self) -> Result<(), String> {
         window::instant_resize();
         Ok(())
+    }
+    fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String> {
+        events::pull(buffer)
+    }
+    fn take_native_event_loss(&self) -> Result<(u64, u64), String> {
+        events::take_loss()
     }
     fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String> {
         standard_error::replace(file)

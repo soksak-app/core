@@ -27,6 +27,8 @@ fn start(directory: &Path) -> EventLog {
         batch_interval: Duration::from_millis(20),
         rotate_bytes: 1 << 30,
         generations: 5,
+        pull: None,
+        pull_loss: None,
     })
     .unwrap()
 }

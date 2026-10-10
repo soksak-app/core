@@ -527,5 +527,10 @@ fn invalid_json_closes_connection() {
 | `log.writer.relays-events-with-their-layer-and-time` | host의 writer는 프로세스의 다른 계층이 중계한 event를 그 event의 `layer`와 `ts_us`, writer의 `seq`로 저장하고, 계층으로 시작하지 않는 event 이름과 계약에 없는 계층은 오류로 거부한다. | both |
 | `log.writer.rotates-at-the-bound-and-keeps-generations` | writer는 파일을 `rotate_bytes`를 넘게 될 줄 앞에서 닫고, 최신 `generations`개를 `.1`부터 `.N`으로 보관하며 가장 오래된 것을 지우고, 새 파일을 `log.open`과 `log.rotated`로 시작하되 `seq`를 이어 가고, 모든 세대가 계약의 파일이다. | both |
 | `log.writer.refuses-an-unbounded-file` | 양의 회전 경계나 양의 세대 수 없이 시작한 writer는 그 옵션을 가리키는 오류로 시작에 실패한다. | both |
+| `log.native.stores-pulled-records-in-the-layer-native` | writer는 native ring에서 pull한 record를 library가 준 시각과 level, 이름, field, writer의 `seq`로 계층 `native`에 저장한다. | both |
+| `log.native.counts-refused-records-and-ring-loss` | writer는 native ring이 거부한 event를 이유 `the native ring was full`의 `log.dropped`로 세고, 계층 `native` 밖의 이름, 정의되지 않은 level, JSON 객체가 아닌 field, 맞지 않는 길이를 가진 pull한 record를 이유 `a native record was refused`의 `log.dropped`로 센다. | both |
+| `log.native.pulls-at-the-batch-interval` | writer는 배치 간격마다 native ring을 pull하므로, 나중에 도착한 record는 flush 요청 없이 저장된다. | both |
+| `log.native.platform-pulls-the-ring` | 플랫폼은 빈 native ring을 0바이트와 손실 없음으로 pull하고, 빈 buffer로의 pull은 거부한다. | both |
+| `log.native.host-writer-starts-with-the-platform-pull` | host의 writer는 플랫폼의 pull과 함께 시작하고 `log.open`을 먼저 쓴다. | both |
 | `log.batch.stores-page-events-in-order` | `log` 중계는 `batch` 요청의 event를 page가 준 `ts_us`와 writer의 `seq`로, 순서대로, 계층 `page`에 저장한다. | both |
 | `log.batch.rejects-an-invalid-batch-without-writing` | `log` 중계는 `batch`가 아닌 action, 배열이 아닌 `events`, `page.`로 시작하지 않는 event 이름, 계약에 없는 level, 양의 정수가 아닌 `ts_us`, 객체가 아닌 `fields`에 대해 배치 전체를 거부하고 그 배치는 아무것도 쓰지 않으며, 오류는 `events[<index>]`를 가리킨다. | both |

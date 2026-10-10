@@ -621,6 +621,11 @@ pub trait Platform: Send + Sync {
 
     // 표준 오류
 
+    /// Moves whole records of the native event ring into `buffer` and returns the number of bytes written; 0 means the ring
+    /// is empty (docs/spec/logging.md#writers).
+    fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String>;
+    /// Returns the events and bytes that the native ring refused since the last call.
+    fn take_native_event_loss(&self) -> Result<(u64, u64), String>;
     /// 프로세스의 표준 오류를 file 로 바꾼다. 이후 시작하는 자식 프로세스도 그 descriptor 를
     /// 물려받는다(docs/spec/hosts.md#application-log).
     fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String>;

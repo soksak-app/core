@@ -1142,6 +1142,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.2.6.2",
+    implementation: [
+      { file: "packages/host/wailsv3/src/event_log.go", symbol: "func nativeEventOf" },
+      { file: "packages/host/wailsv3/src/platform/darwin/events.go", symbol: "PullNativeEvents" },
+      { file: "packages/host/tauriv2/src/event_log.rs", symbol: "fn native_event_of" },
+      { file: "packages/host/tauriv2/src/platform/darwin/events.rs", symbol: "pub fn pull" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/event_native_test.go", id: "TestARefusedNativeRecordAndTheLossOfTheRingAreCountedAsDropped" },
+      { file: "packages/host/wailsv3/tests/event_native_platform_test.go", id: "TestThePlatformPullsAnEmptyNativeRingAsZeroBytesAndNoLoss" },
+      { file: "packages/host/tauriv2/tests/event_native_test.rs", id: "a_refused_native_record_and_the_loss_of_the_ring_are_counted_as_dropped" },
+      { file: "packages/host/tauriv2/tests/event_native_platform_test.rs", id: "the_platform_pulls_an_empty_native_ring_as_zero_bytes_and_no_loss" },
+    ],
+    expected: "The writer of each host pulls the native ring through the platform, stores the records in the layer native, and counts the records it refuses and the events the ring refused.",
+    levels: ["unit"],
+  },
+  {
     id: "F150.2.6.1",
     implementation: [
       { file: "native/darwin/src/event_ring.m", symbol: "bool sp_event(" },

@@ -123,6 +123,14 @@ func (implementation) InstantWindowResize() error {
 	return unsupported("window resize animation")
 }
 
+func (implementation) PullNativeEvents([]byte) (int, error) {
+	return 0, unsupported("native event pull")
+}
+
+func (implementation) TakeNativeEventLoss() (uint64, uint64, error) {
+	return 0, 0, unsupported("native event loss")
+}
+
 func (implementation) ReplaceStandardError(*os.File) error {
 	return unsupported("standard error replacement")
 }
