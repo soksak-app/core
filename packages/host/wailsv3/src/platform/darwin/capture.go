@@ -2,7 +2,7 @@
 
 package darwin
 
-// 창을 녹화한다. 녹화 구현은 native/darwin 의 capture.m 이다. 진단 빌드에만 들어간다.
+// Records a window. The recording implementation is capture.m of native/darwin. It is included only in diagnostic builds.
 
 /*
 #cgo CFLAGS: -x objective-c -fmodules
@@ -19,9 +19,9 @@ static void listDeliveredNotifications(void) {
 }
 #import <Cocoa/Cocoa.h>
 
-// 이 창과 이 창에 붙은 창의 윈도 서버 번호를 최대 max 개 기록하고 기록한 수를 반환한다.
-// 캡처 도구는 이 번호로 창을 지정하므로, 창을 앞으로 옮기지 않고 윈도 서버가 합성한
-// 페이지, 표면과 모달을 읽는다. 이 앱의 창 번호가 처음이다.
+// Records at most max window server numbers of this window and the windows attached to it, and returns the number recorded.
+// The capture tool names a window by this number, so it reads the page, surfaces and modals composited by the window server without
+// moving the window to the front. The window number of this app comes first.
 static int windowNumbers(void* nsWindow, long* out, int max) {
     NSWindow* window = (NSWindow*)nsWindow;
     if (window == nil || max <= 0) return 0;
@@ -51,7 +51,7 @@ func captureError(operation string) error {
 	return fmt.Errorf("capture %s: %s", operation, message)
 }
 
-// 호출자가 소유하는 준비·시작·정지 캡처 오류를 읽고 해제한다.
+// Reads and releases the prepare, start and stop capture errors that the caller owns.
 func captureCallError(operation string, success bool, nativeError *C.char) error {
 	if nativeError != nil {
 		defer C.free(unsafe.Pointer(nativeError))
@@ -119,7 +119,7 @@ func (implementation) CaptureLongestGap() float64 { return float64(C.sp_capture_
 
 func (implementation) CaptureClock() float64 { return float64(C.sp_capture_clock()) }
 
-// deliveredDone 은 진행 중인 알림 조회의 결과를 받는다.
+// deliveredDone receives the result of the notification query in progress.
 var deliveredDone func(string)
 
 //export deliveredNotifications

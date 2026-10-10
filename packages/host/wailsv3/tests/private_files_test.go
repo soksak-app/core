@@ -1,4 +1,4 @@
-// 현재 사용자 전용 파일과 디렉터리의 platform 연산 테스트(docs/spec/hosts.md#platform-interface).
+// Tests of the platform operations for files and directories exclusive to the current user (docs/spec/hosts.md#platform-interface).
 package host_test
 
 import (
@@ -45,7 +45,7 @@ func TestCreatePrivateDirectoriesMakesMissingDirectoriesOwnerOnly(t *testing.T) 
 			t.Fatalf("%s has mode %o, want 700", path, mode)
 		}
 	}
-	// 이미 있는 디렉터리의 권한은 바꾸지 않는다.
+	// The permissions of a directory that already exists are not changed.
 	if err := currentPlatform(t).CreatePrivateDirectories(root); err != nil {
 		t.Fatalf("create an existing directory: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestAppendPrivateFileCreatesAnOwnerOnlyFileAndAppends(t *testing.T) {
 	if mode := perm(t, path); mode != 0o600 {
 		t.Fatalf("new file has mode %o, want 600", mode)
 	}
-	// 이미 있는 파일의 권한은 바꾸지 않는다.
+	// The permissions of a file that already exists are not changed.
 	shared := filepath.Join(t.TempDir(), "shared.log")
 	if err := os.WriteFile(shared, nil, 0o644); err != nil {
 		t.Fatal(err)
@@ -130,7 +130,7 @@ func TestWritePrivateFileCreatesAnOwnerOnlyFileAndReplacesItsContents(t *testing
 	if mode := perm(t, path); mode != 0o600 {
 		t.Fatalf("new file has mode %o, want 600", mode)
 	}
-	// 이미 있는 파일의 권한은 바꾸지 않는다.
+	// The permissions of a file that already exists are not changed.
 	shared := filepath.Join(t.TempDir(), "shared.json")
 	if err := os.WriteFile(shared, nil, 0o644); err != nil {
 		t.Fatal(err)

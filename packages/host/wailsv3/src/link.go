@@ -10,14 +10,14 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// linkMaxLength 는 열 수 있는 URL 의 최대 글자 수다.
+// linkMaxLength is the maximum number of characters of a URL that can be opened.
 const linkMaxLength = 8192
 
 type LinkOpenRequest struct {
 	URL string `json:"url"`
 }
 
-// ValidateLink 는 사용자의 기본 애플리케이션으로 열 수 있는 절대 http, https, mailto URL 만 허용한다.
+// ValidateLink allows only an absolute http, https, or mailto URL that can be opened with the default application of the user.
 func ValidateLink(value string) error {
 	if len(value) > linkMaxLength {
 		return fmt.Errorf("link URL is longer than %d characters", linkMaxLength)

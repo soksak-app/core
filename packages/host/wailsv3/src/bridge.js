@@ -1,4 +1,4 @@
-// 앱이 만든 네이티브 웹뷰의 각 문서가 시작할 때 실행한다.
+// Runs when each document of a native web view that the application created starts.
 (() => {
   const epoch = `${Date.now()}-${Math.random()}`;
   const pending = new Map();
@@ -24,7 +24,7 @@
     },
     receive(message) {
       if (message.event) {
-        // 기본값: 그 이벤트에 등록한 수신자가 없으면 알릴 곳이 없다.
+        // default: no listener is registered for that event, so there is nobody to notify.
         for (const fn of listeners.get(message.event) ?? []) fn(message.data);
         return;
       }

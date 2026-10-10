@@ -21,7 +21,7 @@ import (
 	"unsafe"
 )
 
-// buttonsReceiver 는 마우스 버튼 mask 를 받는 함수다. 감시는 프로세스에 하나이므로 하나만 둔다.
+// buttonsReceiver is the function that receives the mouse button mask. There is one watch per process, so only one is kept.
 var buttonsReceiver func(uint64)
 
 //export mouseButtonsChanged
@@ -29,7 +29,7 @@ func mouseButtonsChanged(_ unsafe.Pointer, mask C.ulonglong) {
 	buttonsReceiver(uint64(mask))
 }
 
-// WatchButtons 는 native/darwin 의 sp_mouse_buttons_watch 로 감시를 설치한다.
+// WatchButtons installs the watch with sp_mouse_buttons_watch of native/darwin.
 func (implementation) WatchButtons(changed func(mask uint64)) error {
 	if buttonsReceiver != nil {
 		return errors.New("the mouse buttons are already watched")

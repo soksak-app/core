@@ -9,7 +9,7 @@ import (
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
-// labels 는 메뉴와 하위 메뉴의 모든 항목 이름을 순서대로 모은다.
+// labels collects the names of all items of the menus and submenus in order.
 func labels(menu *application.Menu) []string {
 	var out []string
 	for index := 0; menu.ItemAt(index) != nil; index++ {
@@ -22,7 +22,7 @@ func labels(menu *application.Menu) []string {
 	return out
 }
 
-// submenuOf 는 제목이 title 인 하위 메뉴를 찾는다.
+// submenuOf finds the submenu whose title is title.
 func submenuOf(menu *application.Menu, title string) *application.Menu {
 	for index := 0; menu.ItemAt(index) != nil; index++ {
 		if item := menu.ItemAt(index); item.Label() == title {
@@ -34,7 +34,7 @@ func submenuOf(menu *application.Menu, title string) *application.Menu {
 
 // contract: menu.application.view-has-full-screen-and-text-size
 func TestApplicationMenuViewHasFullScreenAndTextSize(t *testing.T) {
-	// 앱 메뉴의 About 항목은 애플리케이션 이름을 읽으므로 실행하지 않는 애플리케이션을 만든다.
+	// The About item of the app menu reads the application name, so an application that does not run is created.
 	application.New(application.Options{Name: "soksak-menu-test"})
 	menu, err := host.ApplicationMenuFor("en")
 	if err != nil {
@@ -44,8 +44,8 @@ func TestApplicationMenuViewHasFullScreenAndTextSize(t *testing.T) {
 	if view == nil {
 		t.Fatalf("the application menu has no View menu: %v", labels(menu))
 	}
-	// 전체 화면 항목은 시스템이 넣어 주지 않음을 실측해(V5-112) 빌더가 만든다. 제목과
-	// 단축키는 프레임워크가 정하므로 넷째 항목은 존재와 빈 제목 아님만 검사한다.
+	// The builder creates the full screen item because it was measured that the system does not add it (V5-112). The title and
+	// shortcut are decided by the framework, so for the fourth item only its existence and a non-empty title are checked.
 	want := []string{"Bigger Text", "Smaller Text", "Default Text Size"}
 	if got := labels(view)[:3]; !slices.Equal(got, want) {
 		t.Fatalf("View menu text items = %v, want %v", got, want)
@@ -74,7 +74,7 @@ func TestApplicationMenuViewHasFullScreenAndTextSize(t *testing.T) {
 // contract: menu.application.view-has-full-screen-and-text-size
 func TestApplicationMenuLanguages(t *testing.T) {
 	application.New(application.Options{Name: "soksak-menu-test"})
-	// 각 언어의 file·edit·view 하위 메뉴 제목과 항목 순서는 계약 표와 같다.
+	// The titles and the item order of the file, edit and view submenus of each language equal the contract table.
 	want := []struct {
 		language string
 		menu     string
@@ -104,7 +104,7 @@ func TestApplicationMenuLanguages(t *testing.T) {
 			t.Fatalf("%s %s items = %v, want %v", expected.language, expected.menu, got, expected.items)
 		}
 	}
-	// 계약 표에 없는 언어는 메뉴를 만들지 않는다.
+	// A language that is not in the contract table does not build a menu.
 	if _, err := host.ApplicationMenuFor("fr"); err == nil {
 		t.Fatal("an unknown menu language built a menu")
 	}

@@ -97,7 +97,7 @@ func TestAlreadyOffWritesNothing(t *testing.T) {
 
 // contract: performance.sampler.failed-reading-is-explicit
 func TestSamplerReportsAFailedReading(t *testing.T) {
-	// 존재하지 않는 pid 의 상주 크기는 읽을 수 없다. 0 으로 바꾸지 않고 오류로 기록한다.
+	// The resident size of a pid that does not exist cannot be read. It is recorded as an error and not converted to 0.
 	record := host.PerformanceMemory(1 << 30)
 	if _, ok := record["rss_host_kb"]; ok {
 		t.Fatalf("a failed reading was recorded as a size: %v", record)

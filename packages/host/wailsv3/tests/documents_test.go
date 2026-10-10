@@ -146,9 +146,9 @@ func TestDocumentEntryRequiresANonZeroOffset(t *testing.T) {
 	}
 }
 
-// TestDispatcherHandlesACommitBeforeTheMessagesAfterIt 는 같은 웹뷰에서 commit 뒤에 받은 메시지가 그 commit 의
-// 처리가 끝난 뒤에 처리되는지 검증한다. 새 문서의 첫 배치 요청이 commit 보다 먼저 처리되면 이전 문서의 리비전에
-// 걸리고, 늦은 commit 이 새 문서의 그림 영역을 닫는다. 다른 웹뷰의 메시지는 기다리지 않는다.
+// TestDispatcherHandlesACommitBeforeTheMessagesAfterIt verifies that a message received after a commit in the same web view is handled after the handling of that
+// commit ends. If the first layout request of a new document were handled before the commit, it would hit the revision of the previous document,
+// and the late commit would close the picture regions of the new document. The messages of another web view are not waited for.
 // contract: documents.commit.precedes-messages
 func TestDispatcherHandlesACommitBeforeTheMessagesAfterIt(t *testing.T) {
 	release := make(chan struct{})
@@ -166,7 +166,7 @@ func TestDispatcherHandlesACommitBeforeTheMessagesAfterIt(t *testing.T) {
 	dispatcher.Message(7, "place")
 	dispatcher.Message(8, "other")
 
-	// 다른 웹뷰의 메시지는 commit 을 기다리지 않는다. 같은 웹뷰의 메시지는 처리되기 전에 보류된다.
+	// The messages of another web view do not wait for the commit. A message of the same web view is held before it is handled.
 	seen := map[string]bool{}
 	for !seen["other"] || !seen["held"] {
 		select {

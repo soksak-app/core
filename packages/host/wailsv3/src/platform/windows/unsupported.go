@@ -13,18 +13,18 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// implementation 은 Windows 의 platform.Platform 이다.
+// implementation is the platform.Platform of Windows.
 type implementation struct{}
 
 func init() { platform.Register(implementation{}) }
 
-// unsupported 는 Windows 에 구현하지 않은 동작 name 의 오류를 반환한다.
+// unsupported returns the error for the operation name, which is not implemented on Windows.
 func unsupported(name string) error {
 	return fmt.Errorf("%s is not implemented on windows", name)
 }
 
-// unreachable 은 오류 결과가 없는 동작에서 실패한다. Windows 에서 Run 은 창을 열기 전에 미구현 오류로
-// 끝나므로 이 동작은 호출되지 않는다. 호출되면 그 시작 계약이 깨진 것이므로 동작 이름의 오류로 멈춘다.
+// unreachable fails in an operation that has no error result. On Windows, Run ends with the not implemented error before it opens a window,
+// so this operation is not called. If it is called, that start contract is broken, so it stops with an error that names the operation.
 func unreachable(name string) {
 	panic(unsupported(name))
 }
@@ -113,10 +113,10 @@ func (implementation) OnQuitRequest(func()) error {
 	return unsupported("quit requests")
 }
 
-// AnswerQuitRequests 는 받은 종료 요청이 없으므로 답할 것이 없다. OnQuitRequest 가 실패하면 애플리케이션이 시작하지 않는다.
+// AnswerQuitRequests has nothing to answer because no termination request was received. When OnQuitRequest fails, the application does not start.
 func (implementation) AnswerQuitRequests() {}
 
-// CancelQuitRequests 는 받은 종료 요청이 없으므로 취소할 것이 없다.
+// CancelQuitRequests has nothing to cancel because no termination request was received.
 func (implementation) CancelQuitRequests() {}
 
 func (implementation) InstantWindowResize() error {

@@ -40,7 +40,7 @@ static bool windowFileDrop(void *main, uintptr_t context) {
     return sp_window_file_drop(main, fileDroppedBridge, fileDropReleasedBridge, (void *)context);
 }
 
-// 연속적인 표면 크기 변경의 시작과 종료를 웹뷰에 전달한다.
+// Passes the start and the end of a continuous surface resize to the web view.
 static void surfaceBeginLiveResize(void* handle) {
     [(WKWebView*)handle viewWillStartLiveResize];
 }
@@ -49,8 +49,8 @@ static void surfaceEndLiveResize(void* handle) {
     [(WKWebView*)handle viewDidEndLiveResize];
 }
 
-// 모달은 메인 창 안의 WKWebView 다. 레이어가 모서리를 자르고, 모달의 위치와 초점은
-// OS 창 계층을 바꾸지 않는다.
+// A modal is a WKWebView inside the main window. A layer clips the corners, and the position and the focus of the modal
+// do not change the OS window hierarchy.
 static void modalViewConfigure(void* handle, const char* title, double radius) {
     NSView* view = (NSView*)handle;
     [view setWantsLayer:YES];
@@ -76,8 +76,8 @@ static void modalViewFocus(void* handle, int take) {
     }
 }
 
-// 페이지 좌표의 모달 영역을 디스플레이 픽셀 격자에 안쪽으로 맞춘다. 바깥쪽으로 맞추면
-// 표면과 마찬가지로 카드의 테두리를 덮는다.
+// Fits the modal region in page coordinates inward to the display pixel grid. Fitting outward would cover the border of the card,
+// as with a surface.
 static void modalAligned(void* parentWindow, double x, double y, double w, double h,
                          double* out) {
     NSWindow* parent = (NSWindow*)parentWindow;
@@ -93,7 +93,7 @@ static void modalAligned(void* parentWindow, double x, double y, double w, doubl
     out[3] = r.size.height;
 }
 
-// 뷰의 불투명도를 정한다. 페이지는 초점을 잃은 표면을 흐리게 표시한다.
+// Sets the opacity of the view. The page dims a surface that lost focus.
 */
 import "C"
 
@@ -106,8 +106,8 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// dispatcher 는 웹뷰의 commit 과 메시지를 수신 함수에 넘긴다. 수신 함수는 마지막으로 만든 웹뷰의 것이며, 호스트는
-// 모든 웹뷰에 같은 함수를 전달한다.
+// dispatcher passes the commit and the messages of a web view to the receiver function. The receiver function is that of the last created web view, and the host
+// passes the same function to all web views.
 var dispatcher platform.Dispatcher
 
 //export nativeCommitted
@@ -174,7 +174,7 @@ func fileDropped(context unsafe.Pointer, json *C.char) {
 	dropped(C.GoString(json))
 }
 
-// 놓기 뷰가 수신기를 더 쓰지 않게 되면 그 핸들을 지운다.
+// Clears the handle when the drop view no longer uses the receiver.
 //
 //export fileDropReleased
 func fileDropReleased(context unsafe.Pointer) {
@@ -219,8 +219,8 @@ func (implementation) CollectGarbage(view unsafe.Pointer) error {
 	return fmt.Errorf("the JavaScript garbage collection request is unavailable")
 }
 
-// WebviewFrame 은 표면의 현재 영역을 반환한다. 호스트가 선언된 영역을 픽셀에 맞추므로
-// 페이지가 보낸 영역과 다를 수 있고, 페이지는 그 차이를 전달받는다.
+// WebviewFrame returns the current region of a surface. The host fits the declared region to pixels, so
+// it can differ from the region that the page sent, and the page receives that difference.
 func (implementation) WebviewFrame(view unsafe.Pointer) platform.Rect {
 	var out [4]C.double
 	C.webviewGetFrame(view, &out[0])
@@ -290,8 +290,8 @@ func (implementation) SetSurfaceOverlays(view unsafe.Pointer, overlays []platfor
 	C.webviewSetSurfaceOverlays(view, data, C.size_t(len(overlays)))
 }
 
-// SetWebviewResizing 은 표면의 연속 크기 변경을 시작하거나 끝낸다. 페이지는 방금 보낸
-// 갱신이 마지막인지 알리고, 끝나지 않은 갱신은 연속 크기 변경이다.
+// SetWebviewResizing starts or ends the continuous resize of a surface. The page tells whether the update it just sent
+// is the last one, and an update that has not ended is a continuous resize.
 func (implementation) SetWebviewResizing(view unsafe.Pointer, live bool) {
 	if live {
 		C.surfaceBeginLiveResize(view)

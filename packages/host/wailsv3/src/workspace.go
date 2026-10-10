@@ -1,4 +1,4 @@
-// 공통 설정, 프로젝트 설정과 프로젝트 레지스트리 저장.
+// Storage of the common settings, the project settings and the project registry.
 
 package host
 
@@ -16,14 +16,14 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// Workspace 는 설정 디렉터리의 projects.json 과 settings.json, 각 프로젝트의
-// .soksak/settings.json 을 읽고 쓴다.
+// Workspace reads and writes projects.json and settings.json of the configuration directory and the
+// .soksak/settings.json of each project.
 type Workspace struct {
 	mu        sync.Mutex
 	directory string
 }
 
-// PrepareConfigDirectory 는 저장소와 서비스가 함께 사용하는 설정 디렉터리를 생성하고 정규화한다.
+// PrepareConfigDirectory creates and normalizes the configuration directory that the storage and the service use together.
 func PrepareConfigDirectory(path string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("config directory is required")
@@ -42,19 +42,19 @@ func PrepareConfigDirectory(path string) (string, error) {
 	return filepath.EvalSymlinks(absolute)
 }
 
-// NewWorkspace 는 설정 디렉터리 directory 의 저장소를 반환한다.
+// NewWorkspace returns the storage of the configuration directory directory.
 func NewWorkspace(directory string) *Workspace {
 	return &Workspace{directory: directory}
 }
 
-// Record 는 JSON 객체 하나다.
+// Record is one JSON object.
 type Record map[string]any
 
-// commonOnly 는 프로젝트 설정이 덮어쓸 수 없는 공통 설정이다(docs/spec/projects.md#persistence). 호스트는 페이지 시작
-// 전에 공통 설정의 textSize 로 창 제목줄을 정한다(docs/spec/native-surfaces.md#title-bar-height).
+// commonOnly are the common settings that the project settings cannot override (docs/spec/projects.md#persistence). The host sets the window title bar before the page starts
+// from textSize of the common settings (docs/spec/native-surfaces.md#title-bar-height).
 var commonOnly = []string{"projectOpening", "textSize"}
 
-// WorkspaceRequest 는 저장소 작업 하나다. Kind 는 snapshot, add, patch, remove, move, settings 중 하나다.
+// WorkspaceRequest is one storage operation. Kind is one of snapshot, add, patch, remove, move, and settings.
 type WorkspaceRequest struct {
 	Kind    string   `json:"kind"`
 	ID      string   `json:"id,omitempty"`
@@ -111,8 +111,8 @@ func writeJSON(path string, value any) error {
 	return os.Rename(file.Name(), path)
 }
 
-// Apply 는 작업 req 를 수행하고 그 결과를 반환한다.
-// Directory 는 이 저장소의 설정 디렉터리를 반환한다.
+// Apply performs the operation req and returns its result.
+// Directory returns the configuration directory of this storage.
 func (w *Workspace) Directory() string {
 	return w.directory
 }
@@ -255,8 +255,8 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 	return true, writeJSON(registry, projects)
 }
 
-// Workspace 는 저장소 작업을 수행한다. add 는 프로젝트 폴더를 확인해 저장하고, snapshot 은
-// 열린 프로젝트 id 를 함께 반환하고, 나머지 작업은 모든 창에 workspace-changed 를 발행한다.
+// Workspace performs the storage operations. add checks and stores the project folder, snapshot returns
+// the open project ids together, and the other operations publish workspace-changed to all windows.
 func (h *Host) Workspace(requestJSON json.RawMessage) (any, error) {
 	req, err := argument[WorkspaceRequest]("request", requestJSON)
 	if err != nil {

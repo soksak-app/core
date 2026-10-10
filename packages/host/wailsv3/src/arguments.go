@@ -11,13 +11,13 @@ import (
 	"strings"
 )
 
-// 페이지가 보낸 host 호출 인자를 해석한다(docs/spec/native-host.md#host-calls). encoding/json 은 빠진 field 와
-// 숫자 field 의 null 을 오류 없이 zero value 로 두므로, 먼저 JSON 값을 선언된 형식과 대조해 다르면 거부하고
-// 같을 때만 해석한다. Tauri host 의 인자 decoder 와 같은 문장으로 거부한다.
+// Decodes the host call arguments that the page sent (docs/spec/native-host.md#host-calls). encoding/json leaves a missing field and a
+// null in a numeric field as the zero value without an error, so the JSON value is first compared with the declared type, rejected when it differs,
+// and decoded only when it matches. The rejection uses the same sentence as the argument decoder of the Tauri host.
 
 var rawMessageType = reflect.TypeOf(json.RawMessage(nil))
 
-// decodeArgument 는 이름이 name 인 인자 raw 를 into 로 해석한다.
+// decodeArgument decodes the argument raw named name into into.
 func decodeArgument(name string, raw json.RawMessage, into any) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
@@ -31,7 +31,7 @@ func decodeArgument(name string, raw json.RawMessage, into any) error {
 	return json.Unmarshal(raw, into)
 }
 
-// jsonKind 는 JSON 값의 형식 이름이다.
+// jsonKind is the type name of a JSON value.
 func jsonKind(value any) string {
 	switch value.(type) {
 	case nil:
@@ -53,7 +53,7 @@ func mismatch(path, expected string, value any) error {
 	return fmt.Errorf("argument %s must be %s, not %s", path, expected, jsonKind(value))
 }
 
-// integerRange 는 정수 형식 t 의 범위를 문장으로 쓴다.
+// integerRange writes the range of the integer type t as a sentence.
 func integerRange(t reflect.Type) string {
 	bits := t.Bits()
 	switch t.Kind() {
@@ -63,7 +63,7 @@ func integerRange(t reflect.Type) string {
 	return fmt.Sprintf("from 0 to %d", uint64(math.MaxUint64)>>(64-bits))
 }
 
-// checkArgument 는 JSON 값 value 가 형식 t 를 따르는지 path 의 자리에서 확인한다.
+// checkArgument checks at the position path that the JSON value value follows the type t.
 func checkArgument(value any, t reflect.Type, path string) error {
 	if t == rawMessageType || t.Kind() == reflect.Interface {
 		return nil
@@ -138,8 +138,8 @@ func checkArgument(value any, t reflect.Type, path string) error {
 	return nil
 }
 
-// checkFields 는 객체 fields 가 구조체 t 의 field 를 따르는지 확인한다. 이름 없이 포함한 구조체는 같은 객체의
-// field 다. pointer field 와 json tag 에 omitempty 가 있는 field 는 빠질 수 있다.
+// checkFields checks that the object fields follows the fields of the struct t. A struct embedded without a name contributes fields of the same object.
+// A pointer field and a field whose json tag has omitempty may be missing.
 func checkFields(fields map[string]any, t reflect.Type, path string) error {
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
@@ -160,7 +160,7 @@ func checkFields(fields map[string]any, t reflect.Type, path string) error {
 		if name == "" {
 			name = field.Name
 		}
-		// null 인 field 는 빠진 field 다(docs/spec/native-host.md#host-calls).
+		// A field that is null is a missing field (docs/spec/native-host.md#host-calls).
 		item := fields[name]
 		if item == nil {
 			if field.Type.Kind() == reflect.Pointer || slices.Contains(tag[1:], "omitempty") {
@@ -175,7 +175,7 @@ func checkFields(fields map[string]any, t reflect.Type, path string) error {
 	return nil
 }
 
-// argument 는 이름이 name 인 binding 인자 raw 를 T 로 해석한다.
+// argument decodes the binding argument raw named name as T.
 func argument[T any](name string, raw json.RawMessage) (T, error) {
 	var value T
 	err := decodeArgument(name, raw, &value)

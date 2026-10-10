@@ -4,37 +4,37 @@ package darwin
 
 import "os"
 
-// CreatePrivateDirectories 는 path 에서 없는 디렉터리를 mode 0700 으로 만든다. 이미 있는 디렉터리의 권한은
-// 바꾸지 않는다.
+// CreatePrivateDirectories creates the missing directories of path with mode 0700. It does not change the permissions of a directory
+// that already exists.
 func (implementation) CreatePrivateDirectories(path string) error {
 	return os.MkdirAll(path, 0o700)
 }
 
-// AppendPrivateFile 은 path 의 파일을 덧붙이기로 연다. 없으면 mode 0600 으로 만든다. 있는 파일의 권한은 바꾸지
-// 않는다.
+// AppendPrivateFile opens the file at path for appending. When it does not exist, it creates it with mode 0600. It does not change the permissions of an existing
+// file.
 func (implementation) AppendPrivateFile(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 }
 
-// CreatePrivateFile 은 path 에 mode 0600 의 새 파일을 만들어 쓰기로 연다. path 가 이미 있으면 os.ErrExist 인
-// 오류다.
+// CreatePrivateFile creates a new file at path with mode 0600 and opens it for writing. When path already exists, the error is
+// os.ErrExist.
 func (implementation) CreatePrivateFile(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 }
 
-// WritePrivateFile 은 path 의 파일 내용을 data 로 바꾼다. 없으면 mode 0600 으로 만든다. 있는 파일의 권한은
-// 바꾸지 않는다.
+// WritePrivateFile replaces the content of the file at path with data. When it does not exist, it creates it with mode 0600. It does not change the permissions of an existing
+// file.
 func (implementation) WritePrivateFile(path string, data []byte) error {
 	return os.WriteFile(path, data, 0o600)
 }
 
-// SecureServiceDirectory 는 영구 service 디렉터리 path 의 권한을 0700 으로 바꾼다.
+// SecureServiceDirectory changes the permissions of the persistent service directory path to 0700.
 func (implementation) SecureServiceDirectory(path string) error {
 	return os.Chmod(path, 0o700)
 }
 
-// PrivateDirectory 는 path 를 현재 사용자만 접근할 수 있는 디렉터리로 만들고, 이미 있으면 종류, 소유자, 권한을
-// 확인한다.
+// PrivateDirectory makes path a directory that only the current user can access and, when it already exists, checks the kind, the owner and
+// the permissions.
 func (implementation) PrivateDirectory(path string) error {
 	return privateDirectory(path)
 }

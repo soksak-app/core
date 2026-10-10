@@ -7,7 +7,7 @@ import (
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
-// buttonsBackend 는 host.buttons 를 buttons 의 값으로 답하는 fakeBackend 다.
+// buttonsBackend is a fakeBackend that answers host.buttons with the value of buttons.
 type buttonsBackend struct {
 	*fakeBackend
 	buttons *host.Buttons
@@ -20,7 +20,7 @@ func (b buttonsBackend) HostStatus(window, name string) (any, error) {
 	return b.fakeBackend.HostStatus(window, name)
 }
 
-// nextMask 는 host.buttons 의 다음 알림의 mask 를 읽는다.
+// nextMask reads the mask of the next notification of host.buttons.
 func nextMask(t *testing.T, read func() (message, error)) uint64 {
 	t.Helper()
 	got, err := read()
@@ -53,7 +53,7 @@ func TestButtonsNotifyEachMaskChange(t *testing.T) {
 	if got := call(t, conn, 2, "status.get", watch); got.Error != nil || string(got.Result) != `{"mask":0}` {
 		t.Fatalf("host.buttons before a report: %+v", got)
 	}
-	// 같은 mask 의 보고는 알리지 않는다. 다음 알림은 다음의 다른 mask 다.
+	// A report of the same mask is not announced. The next notification is the next different mask.
 	backend.buttons.Report(0)
 	backend.buttons.Report(1)
 	if mask := nextMask(t, read); mask != 1 {
@@ -68,7 +68,7 @@ func TestButtonsNotifyEachMaskChange(t *testing.T) {
 	if mask := nextMask(t, read); mask != 0 {
 		t.Fatalf("third notification mask %d, want 0", mask)
 	}
-	// 남은 알림이 있으면 이 요청의 답보다 먼저 온다.
+	// A remaining notification comes before the reply to this request.
 	if got := call(t, conn, 3, "status.get", watch); got.Error != nil || string(got.Result) != `{"mask":0}` {
 		t.Fatalf("host.buttons after the reports: %+v", got)
 	}

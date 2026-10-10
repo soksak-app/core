@@ -2,7 +2,7 @@
 
 package darwin
 
-// 표면 그림 영역. 구현은 native/darwin 의 image_region.m 이다.
+// The surface picture region. The implementation is image_region.m of native/darwin.
 
 /*
 #include <stdbool.h>
@@ -28,7 +28,7 @@ import (
 	"unsafe"
 )
 
-// images 는 그림 영역 핸들별 이벤트 수신 핸들이다. UI 스레드에서만 읽고 바꾼다.
+// images are the event receiver handles of each picture region handle. They are read and changed only on the UI thread.
 var images = map[unsafe.Pointer]cgo.Handle{}
 
 //export imageChanged

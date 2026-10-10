@@ -1,7 +1,7 @@
-// 페이지가 호출하는 함수와 그 등록.
+// The functions that the page calls and their registration.
 //
-// 메인 페이지는 Wails 서비스로 등록한 Host 의 공개 메서드를 호출한다. 앱이 만든 웹뷰의
-// 문서는 bridge.js 가 제공하는 좁은 인터페이스로 invokeNative 의 메서드만 호출한다.
+// The main page calls the public methods of Host, which is registered as a Wails service. The document
+// of a web view that the application created calls only the methods of invokeNative, through the narrow interface that bridge.js provides.
 
 package host
 
@@ -17,10 +17,10 @@ import (
 //go:embed bridge.js
 var webviewBootstrap string
 
-// backgroundScript 는 스테이징한 프런트엔드의 background.js 다. Run 이 읽는다.
+// backgroundScript is the background.js of the staged frontend. Run reads it.
 var backgroundScript string
 
-// 아래 메서드는 호출한 창의 Surfaces 에 요청을 전달한다.
+// The methods below forward the request to the Surfaces of the calling window.
 
 func (h *Host) WindowControls(ctx context.Context) (Chrome, error) {
 	s, err := h.surface(ctx)
@@ -102,7 +102,7 @@ func (h *Host) SetTheme(ctx context.Context, themeJSON json.RawMessage) error {
 	return s.SetTheme(theme)
 }
 
-// Theme 은 surface theme 갱신을 구독하는 페이지의 실제 appearance 를 반환한다.
+// Theme returns the actual appearance to a page that subscribes to surface theme updates.
 func (h *Host) Theme(ctx context.Context) (Theme, error) {
 	s, err := h.surface(ctx)
 	if err != nil {
@@ -155,8 +155,8 @@ func (h *Host) OverlayUpdate(ctx context.Context, reqJSON json.RawMessage) error
 	return s.OverlayUpdate(req)
 }
 
-// 메인 페이지의 document, image, composition 호출은 등록된 window ID 를
-// 인증된 유일한 메인 호출자 identity 로 사용한다.
+// The document, image and composition calls of the main page use the registered window ID
+// as the identity of the only authenticated main caller.
 func (h *Host) CompositionDeclare(ctx context.Context, reqJSON json.RawMessage) error {
 	req, err := argument[CompositionDeclareRequest]("request", reqJSON)
 	if err != nil {
@@ -324,17 +324,17 @@ func (h *Host) ImageDetach(ctx context.Context, reqJSON json.RawMessage) error {
 	return ImageCallError("imageDetach", s.detachImage(uint64(s.window.ID()), req))
 }
 
-// RetainRequest 는 모든 프로젝트 레이아웃이 가진 표면 목록이다.
+// RetainRequest is the list of surfaces that every project layout holds.
 type RetainRequest struct {
 	Surfaces []RetainedSurface `json:"surfaces"`
 }
 
-// RetainResult 는 영속 서비스가 닫은 세션 수다.
+// RetainResult is the number of sessions that the persistent service closed.
 type RetainResult struct {
 	Closed int `json:"closed"`
 }
 
-// SidecarsRetain 은 영속 사이드카 서비스에서 어떤 레이아웃에도 없는 표면의 세션을 닫는다
+// SidecarsRetain closes, in the persistent sidecar service, the sessions of surfaces that no layout holds
 // (docs/spec/terminal-runtime.md).
 func (h *Host) SidecarsRetain(ctx context.Context, reqJSON json.RawMessage) (RetainResult, error) {
 	req, err := argument[RetainRequest]("request", reqJSON)
@@ -394,7 +394,7 @@ func (h *Host) SidecarSend(ctx context.Context, nameJSON json.RawMessage, surfac
 	return s.sidecarSendFrom(uint64(s.window.ID()), name, surface, body, cids)
 }
 
-// nativeCall 은 bridge.js 가 보낸 호출 하나다.
+// nativeCall is one call that bridge.js sent.
 type nativeCall struct {
 	Epoch  string            `json:"epoch"`
 	ID     uint64            `json:"id"`
@@ -402,13 +402,13 @@ type nativeCall struct {
 	Args   []json.RawMessage `json:"args"`
 }
 
-// nativeArg 는 native 호출 인자 하나의 이름과 해석할 자리다.
+// nativeArg is the name of one argument of a native call and the destination it decodes into.
 type nativeArg struct {
 	name string
 	into any
 }
 
-// nativeArgs 는 call 의 인자를 args 의 순서대로 해석한다. 보내지 않은 인자는 null 이다
+// nativeArgs decodes the arguments of call in the order of args. An argument that was not sent is null
 // (docs/spec/native-host.md#host-calls).
 func nativeArgs(call nativeCall, args ...nativeArg) error {
 	if len(call.Args) > len(args) {
@@ -426,14 +426,14 @@ func nativeArgs(call nativeCall, args ...nativeArg) error {
 	return nil
 }
 
-// InvokeNative 는 네이티브 웹뷰 viewID 의 문서가 method 를 args 로 호출한 것처럼 실행한다. 검사가 native 호출의 인자
-// 해석을 이 함수로 확인한다.
+// InvokeNative runs method with args as if the document of the native web view viewID had called it. The check verifies the argument decoding of native
+// calls through this function.
 func InvokeNative(s *Surfaces, viewID uint64, method string, args []json.RawMessage) (any, error) {
 	return invokeNative(s, viewID, nativeCall{Method: method, Args: args})
 }
 
-// invokeNative 는 네이티브 웹뷰 viewID 의 문서가 호출한 메서드를 실행한다. 추가 문서의
-// 인터페이스는 Wails 바인딩과 별개다.
+// invokeNative runs the method that the document of the native web view viewID called. The interface of an additional document
+// is separate from the Wails bindings.
 func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 	var id, key, value string
 	var instance uint64
@@ -532,7 +532,7 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 	}
 }
 
-// committedNative 는 네이티브 웹뷰 viewID 가 새 문서를 표시하기 시작했음을 소유 창에 알린다.
+// committedNative notifies the owning window that the native web view viewID started to show a new document.
 func committedNative(viewID uint64) {
 	var owner *Surfaces
 	application.InvokeSync(func() {
@@ -545,7 +545,7 @@ func committedNative(viewID uint64) {
 	}
 }
 
-// dispatchNative 는 네이티브 웹뷰 viewID 의 메시지를 실행하고 응답을 그 웹뷰에 보낸다.
+// dispatchNative runs the message of the native web view viewID and sends the reply to that web view.
 func dispatchNative(viewID uint64, body string) {
 	var call nativeCall
 	if err := json.Unmarshal([]byte(body), &call); err != nil {

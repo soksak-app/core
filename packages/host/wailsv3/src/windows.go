@@ -1,4 +1,4 @@
-// 프로젝트 창, 창 레지스트리, 준비·닫기·종료 처리와 창 상태.
+// Project windows, the window registry, ready, close and termination handling, and the window state.
 
 package host
 
@@ -17,13 +17,13 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
-// windowTitle 은 프로젝트를 열지 않은 창의 제목이고, titleSuffix 는 프로젝트 창 제목의 끝이다.
+// windowTitle is the title of a window that has no open project, and titleSuffix is the end of the title of a project window.
 const (
 	windowTitle = "soksak / Wails v3"
 	titleSuffix = " / Wails v3"
 )
 
-// setTitle 은 창 제목을 바꾸고 windows.list 가 반환할 값으로 기록한다.
+// setTitle changes the window title and records it as the value that windows.list returns.
 func (s *Surfaces) setTitle(title string) {
 	s.mu.Lock()
 	s.title = title
@@ -34,13 +34,13 @@ func (s *Surfaces) setTitle(title string) {
 	}
 }
 
-// 창을 만들 때의 콘텐츠 크기.
+// The content size when a window is created.
 const (
 	startWidth  = 1200
 	startHeight = 760
 )
 
-// Host 는 호출한 창의 네이티브 상태를 선택한다. Wails 는 Host 의 공개 메서드를 페이지에 바인딩한다.
+// Host selects the native state of the calling window. Wails binds the public methods of Host to the page.
 type Host struct {
 	quit Quit
 	// update is the command of an application update that the shutdown starts; h.mu guards it.
@@ -54,26 +54,26 @@ type Host struct {
 	owners     map[string]*Surfaces
 	sidecars   *Sidecars
 	plugins    *Plugins
-	// buttons 는 host.buttons 의 값이다. 애플리케이션이 시작한 뒤 endpoint.json 을 쓰기 전에 감시를 설치한다.
+	// buttons is the value of host.buttons. It installs the watch after the application started and before endpoint.json is written.
 	buttons   *Buttons
 	configDir string
 	// events is the event writer of the host; Run starts it after the application log.
 	events *EventLog
-	// endpoint 는 로컬 엔드포인트이고 relay 는 페이지에 보낸 노출 요청이다.
+	// endpoint is the local endpoint and relay is the exposure requests sent to the page.
 	endpoint *Endpoint
 	relay    *Relay[relayTarget]
-	// notifications 는 알림 센터가 마지막으로 알린 권한 상태다.
+	// notifications is the permission state that the notification center announced last.
 	notifications NotificationState
 }
 
-// errNoWindow 는 이 애플리케이션의 창이 없을 때 반환한다. 여기의 호출은 모두 그 창에
-// 무언가를 배치하거나 읽으므로 어느 것도 성공할 수 없다.
+// errNoWindow is returned when this application has no window. Every call here lays out or reads something of that window,
+// so none of them can succeed.
 var errNoWindow = errors.New("the main window is gone")
 
-// UseNativeWindow 는 invoke 가 실행하는 UI 스레드의 한 단계에서 native 로 창 name 의 네이티브 창을 읽고 그 창으로
-// use 를 실행한다. Wails 의 destroy 는 UI 스레드에서 창을 닫고 네이티브 창을 nil 로 만드므로, 그 단계 전에 닫힌
-// 창은 nil 이다. 그 창은 use 를 실행하지 않고 없는 창의 오류 1003 을 반환한다. 네이티브 코드는 닫힌 창을 받지
-// 않는다.
+// UseNativeWindow reads the native window of the window name with native in one step of the UI thread that invoke runs, and runs use with that window.
+// The destroy of Wails closes the window on the UI thread and sets the native window to nil, so a window closed before that step
+// is nil. For that window, it does not run use and returns the error 1003 of a window that does not exist. Native code does not receive a closed
+// window.
 func UseNativeWindow(invoke func(func()), name string, native func() unsafe.Pointer, use func(window unsafe.Pointer) error) error {
 	var err error
 	invoke(func() {
@@ -87,12 +87,12 @@ func UseNativeWindow(invoke func(func()), name string, native func() unsafe.Poin
 	return err
 }
 
-// useWindow 는 UI 스레드의 한 단계에서 이 창의 네이티브 창으로 use 를 실행한다. 그 단계 전에 닫힌 창은 1003 이다.
+// useWindow runs use with the native window of this window in one step of the UI thread. A window that closed before that step gives 1003.
 func (s *Surfaces) useWindow(use func(window unsafe.Pointer) error) error {
 	return UseNativeWindow(application.InvokeSync, s.name, s.window.NativeWindow, use)
 }
 
-// nativeError 는 네이티브 창을 쓴 작업의 오류를 code 의 오류로 바꾼다. 닫힌 창의 오류 1003 은 그대로 둔다.
+// nativeError converts the error of an operation that used a native window to an error of code. The error 1003 of a closed window is left as it is.
 func nativeError(code int, err error) error {
 	var coded *RPCError
 	if err == nil || errors.As(err, &coded) {
@@ -232,14 +232,14 @@ func (h *Host) WindowCloseKept(ctx context.Context) error {
 	return nil
 }
 
-// prepareWindow 는 창의 콘텐츠와 메인 웹뷰의 크기를 맞춘다. UI 스레드에서 호출한다.
+// prepareWindow fits the sizes of the content and the main web view of the window. Call it on the UI thread.
 func prepareWindow(win *application.WebviewWindow) {
 	if err := system.PrepareWindow(win.NativeWindow()); err != nil {
 		LogError("window prepare", err)
 	}
 }
 
-// cancelLayout 은 창에서 진행 중인 표면 배치를 취소한다. UI 스레드에서 호출한다.
+// cancelLayout cancels the surface layout in progress in the window. Call it on the UI thread.
 func cancelLayout(win *application.WebviewWindow) {
 	owner := win.NativeWindow()
 	if err := system.EnqueueUI(func() {
@@ -251,11 +251,11 @@ func cancelLayout(win *application.WebviewWindow) {
 	}
 }
 
-// handleNavigation 은 진단 빌드에서 main webview navigation callback 의 처리를 감싼다. 검사가 처리를 늦추고
-// 끝났음을 기록에서 확인한다. 다른 빌드에서는 nil 이다.
+// handleNavigation wraps the handling of the main webview navigation callback in a diagnostic build. A check delays the handling and
+// confirms from the record that it finished. It is nil in other builds.
 var handleNavigation func(s *Surfaces, handle func())
 
-// 앱 DOM 재로드는 모든 플러그인 문서를 교체하지만 터미널 세션은 종료하지 않는다.
+// An app DOM reload replaces all plugin documents but does not end the terminal sessions.
 func (s *Surfaces) reloadSurfaceDocuments() {
 	if err := system.CancelLayout(s.window.NativeWindow()); err != nil {
 		LogError("surface layout cancel", err)
@@ -276,12 +276,12 @@ func (s *Surfaces) reloadSurfaceDocuments() {
 	s.windowChanged()
 }
 
-// newWindow 는 창 레지스트리 잠금을 해제한 상태에서 UI 스레드의 창 생성을 실행한다.
+// newWindow runs the window creation on the UI thread in a state in which the window registry lock is released.
 func (h *Host) newWindow(name, url string) *Surfaces {
 	win := application.Get().Window.NewWithOptions(application.WebviewWindowOptions{
 		Name: name, Title: windowTitle, Width: startWidth, Height: startHeight,
 		Mac: application.MacWindow{TitleBar: application.MacTitleBarHidden},
-		// 창은 첫 화면이 표시된 뒤에 보인다(docs/spec/native-host.md#page-start). 준비가 끝나면 reveal 이 보인다.
+		// The window is shown after the first screen is displayed (docs/spec/native-host.md#page-start). When the preparation ends, reveal shows it.
 		URL: url, DevToolsEnabled: true, BackgroundColour: application.NewRGB(16, 17, 23), Hidden: true,
 	})
 	s := NewSurfaces(win, h.sidecars)
@@ -290,7 +290,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	h.windows[win.ID()] = s
 	h.mu.Unlock()
 	go h.windowsChanged()
-	// 네이티브 뷰는 DOM 위에 놓였으므로 놓인 파일은 페이지가 그 점의 DOM 요소를 기준으로 처리한다.
+	// The native view is placed over the DOM, so the page handles a dropped file based on the DOM element at that point.
 	var dropOnce sync.Once
 	place := func(*application.WindowEvent) {
 		application.InvokeSync(func() {
@@ -301,12 +301,12 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 				fatalError("main window configuration", err)
 			}
 			prepareWindow(win)
-			// 놓기 뷰는 창 합성 뷰에 들어가고, 합성 뷰는 만들 때의 메인 웹뷰 크기를 가진다. 메인 웹뷰를 내용
-			// 영역에 맞춘 뒤에 등록한다.
+			// The drop view enters the window composition view, and the composition view has the size of the main web view at the time it was created. It is registered after the main web view
+			// is fitted to the content area.
 			dropOnce.Do(func() {
 				main, err := system.MainWebview(win.NativeWindow())
 				if err == nil {
-					// 내용의 해석과 오류 보고는 페이지가 한다(core.drop).
+					// The page interprets the content and reports errors (core.drop).
 					err = system.FileDrop(main, func(payload string) {
 						s.Emit("files-dropped", payload)
 					})
@@ -319,15 +319,15 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	}
 	win.OnWindowEvent(events.Common.WindowDidResize, place)
 	win.OnWindowEvent(events.Common.WindowShow, place)
-	// WindowShow 는 창의 가림 상태가 보임으로 바뀔 때 온다. 다른 애플리케이션의 창에 완전히 가려진 채 열린
-	// 창에는 오지 않으므로, 네이티브 창이 있으면 만든 직후에 준비한다. 애플리케이션이 실행되기 전에 만든
-	// 첫 창은 애플리케이션이 시작하면 준비한다.
-	// 창을 투명하게 화면에 올리고 첫 화면이 표시되면 불투명하게 한다. Show 는 UI 스레드 밖에서 부른다.
+	// WindowShow arrives when the occlusion state of the window changes to visible. It does not arrive for a window that was opened while completely covered by the window of another application,
+	// so when a native window exists, it is prepared right after it is created. The first window created before the application runs is prepared
+	// when the application starts.
+	// The window is put on the screen transparent and made opaque when the first screen is displayed. Call Show outside the UI thread.
 	var revealed sync.Once
 	s.prepareNative = func() {
 		place(nil)
 		revealed.Do(func() {
-			// 제목줄은 페이지가 첫 행 높이로 요청할 때까지 처음 높이를 갖는다. 창이 보이기 전에 정한다.
+			// The title bar keeps its initial height until the page requests the first row height. It is set before the window is visible.
 			var titled error
 			application.InvokeSync(func() { titled = system.SetTitlebarHeight(win.NativeWindow(), initialTitlebarHeight) })
 			if titled != nil {
@@ -344,8 +344,8 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	if win.NativeWindow() != nil {
 		s.prepareNative()
 	}
-	// host.window 를 감시하는 연결에 창의 위치, 크기, 키 상태와 가림 상태 변경을 알린다. Wails 는 macOS 의 가림
-	// 상태 변경을 WindowShow(보임)와 WindowHide(완전히 가려짐)로 보낸다.
+	// Tells the connections that watch host.window about changes of the window position, size, key state and occlusion state. Wails sends the occlusion
+	// state change of macOS as WindowShow (visible) and WindowHide (completely covered).
 	changed := func(*application.WindowEvent) {
 		s.windowChanged()
 		go h.windowsChanged()
@@ -372,8 +372,8 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	})
 	win.OnWindowEvent(events.Mac.WebViewDidCommitNavigation, func(*application.WindowEvent) {
 		RecordWindowEvent(s.name, "navigation_committed")
-		// 이 callback 은 별도 goroutine 에서 새 페이지의 호출보다 늦게 실행될 수 있다. 이전 페이지의 정리는
-		// 새 페이지의 시작 문서 요청(startPage)이 하고, 여기서는 이 실행의 WebKit 자식 기록만 갱신한다(V5-113).
+		// This callback may run in a separate goroutine later than the calls of the new page. The cleanup of the previous page
+		// is done by the start document request (startPage) of the new page, and here only the record of the WebKit children of this run is updated (V5-113).
 		committed := func() {
 			if h.workspace != nil {
 				RefreshWebKitChildren(h.workspace.Directory())
@@ -441,15 +441,15 @@ func (h *Host) shouldQuit() bool {
 	return len(windows) == 0
 }
 
-// Chrome 은 페이지가 첫 행을 그리는 데 쓰는 창의 값이다. Controls 는 창 단추가 차지하는 영역이고
-// Row 는 제목줄의 높이(pt)다. 전체 화면처럼 제목줄이 없으면 Row 는 0 이다.
+// Chrome is the window values that the page uses to draw the first row. Controls is the region that the window buttons occupy and
+// Row is the title bar height (pt). When there is no title bar, as in full screen, Row is 0.
 type Chrome struct {
 	Controls Rect    `json:"controls"`
 	Row      float64 `json:"row"`
 }
 
-// WindowChrome 은 창 단추 영역과 제목줄 높이를 반환한다. 페이지는 첫 행에서 단추만큼을 비우고
-// 제목줄이 행과 다르면 행을 담은 배치를 준비한다(docs/spec/native-surfaces.md#title-bar-height).
+// WindowChrome returns the window button region and the title bar height. The page leaves room for the buttons in the first row and,
+// when the title bar differs from the row, prepares a layout that contains the row (docs/spec/native-surfaces.md#title-bar-height).
 func (s *Surfaces) WindowChrome() (Chrome, error) {
 	controls, err := s.WindowControls()
 	if err != nil {
@@ -468,12 +468,12 @@ func (s *Surfaces) WindowChrome() (Chrome, error) {
 	return Chrome{Controls: controls, Row: row}, nil
 }
 
-// initialTitlebarHeight 는 창을 만들 때 정하는 제목줄 높이(pt)다. 프레임 글자 배율 1 의 첫 행 높이와 같다
-// (packages/workbench/app.css 의 --chrome-h).
+// initialTitlebarHeight is the title bar height (pt) set when a window is created. It equals the height of the first row at frame text scale 1
+// (--chrome-h of packages/workbench/app.css).
 const initialTitlebarHeight = 40
 
-// ValidateTitlebarHeight 는 표면 준비가 담은 제목줄 높이(pt)를 검사한다. 첫 행은 40pt 에서 프레임 글자 배율 3 의
-// 108pt 사이다. AppKit 은 0 이하의 값을 사용자 지정 높이가 없다는 뜻으로 쓰므로 그 값도 이 범위 밖이다.
+// ValidateTitlebarHeight checks the title bar height (pt) that a surface preparation carries. The first row is between 40pt and 108pt at frame text scale 3.
+// AppKit uses a value of 0 or less to mean that there is no custom height, so such a value is also outside this range.
 func ValidateTitlebarHeight(height float64) error {
 	if math.IsNaN(height) || height < 32 || height > 200 {
 		return errors.New("title bar height must be a finite number from 32 through 200 points")
@@ -481,9 +481,9 @@ func ValidateTitlebarHeight(height float64) error {
 	return nil
 }
 
-// titlebarChrome 은 창의 제목줄을 height(pt)로 만들고 그 뒤의 창 단추 영역과 제목줄 높이, 그리고 이전 높이로 되돌리는
-// 함수를 반환한다. 표면 준비가 창의 배치 트랜잭션 안에서 UI 스레드에서 호출하므로 새 높이는 그 트랜잭션의 커밋과 함께
-// 화면에 나간다. 전체 화면인 창은 높이를 바꾸지 않고 Row 0 을 반환하며, 되돌릴 것이 없다.
+// titlebarChrome sets the title bar of the window to height (pt) and returns the window button region and title bar height after that and the function that restores the previous height.
+// A surface preparation calls it on the UI thread inside the layout transaction of the window, so the new height goes to the screen together with the commit of that transaction.
+// A full screen window does not change the height, returns Row 0, and has nothing to restore.
 func titlebarChrome(window unsafe.Pointer, height float64) (Chrome, func() error, error) {
 	previous, err := system.TitlebarHeight(window)
 	if err != nil {
@@ -509,9 +509,9 @@ func titlebarChrome(window unsafe.Pointer, height float64) (Chrome, func() error
 	return Chrome{Controls: Rect(controls), Row: row}, restore, nil
 }
 
-// StartTitlebarHeight 는 페이지의 첫 그리기가 보일 첫 행의 높이(pt)다. 공통 설정 textSize 의 round(max(40, 36 ×
-// textSize)) 이고, 설정이 없으면 40 이다(docs/spec/native-surfaces.md#title-bar-height). textSize 는 공통 전용이므로
-// 페이지는 같은 값으로 첫 행을 그린다.
+// StartTitlebarHeight is the height (pt) of the first row that the first draw of the page will show. It is round(max(40, 36 ×
+// textSize)) for the common setting textSize, and 40 when the setting is missing (docs/spec/native-surfaces.md#title-bar-height). textSize is exclusive to the common settings, so
+// the page draws the first row with the same value.
 func StartTitlebarHeight(common Record) (float64, error) {
 	value, has := common["textSize"]
 	if !has {
@@ -527,9 +527,9 @@ func StartTitlebarHeight(common Record) (float64, error) {
 	return math.Round(math.Max(initialTitlebarHeight, 36*factor)), nil
 }
 
-// startTitlebar 는 시작 문서에 답하기 전에 창의 제목줄을 공통 설정의 첫 행 높이로 정한다. 아직 보이지 않는 새 창은
-// 바로 정하고, 이전 페이지를 보이는 창은 새 ticket 의 시작 트랜잭션 안에서 정해 새 페이지의 첫 표시와 함께 커밋한다
-// (docs/spec/native-surfaces.md#title-bar-height). 전체 화면인 창은 높이를 바꾸지 않는다.
+// startTitlebar sets the title bar of the window to the first row height of the common settings before it answers the start document. A new window that is not visible yet
+// is set immediately, and a window that shows the previous page is set inside the start transaction of the new ticket and committed together with the first display of the new page
+// (docs/spec/native-surfaces.md#title-bar-height). A full screen window does not change the height.
 func (s *Surfaces) startTitlebar(common Record) error {
 	height, err := StartTitlebarHeight(common)
 	if err != nil {
@@ -549,8 +549,8 @@ func (s *Surfaces) startTitlebar(common Record) error {
 	return <-done
 }
 
-// WindowControls 는 창 단추가 차지하는 영역을 페이지 좌표로 반환한다. 페이지는 첫 행에서
-// 그만큼을 비운다. 빈 영역은 창이 단추를 그리지 않는다는 뜻이다.
+// WindowControls returns the region that the window buttons occupy in page coordinates. The page leaves
+// that much room in the first row. An empty region means that the window does not draw buttons.
 func (s *Surfaces) WindowControls() (Rect, error) {
 	win, ok := s.window, s.window != nil
 	if !ok {
@@ -566,7 +566,7 @@ func (s *Surfaces) WindowControls() (Rect, error) {
 	return at, err
 }
 
-// close 는 창이 닫힐 때 창의 네이티브 뷰, 입력 감시와 사이드카 표면을 정리한다.
+// close cleans up the native views, the input watch and the sidecar surfaces of a window when the window closes.
 func (s *Surfaces) close() {
 	// A window that ends keeps no tab, so a removal that asked it is allowed.
 	s.host.removals.Abandon(s.name)
@@ -580,8 +580,8 @@ func (s *Surfaces) close() {
 				view.Close()
 			}
 		}
-		// 논리 표면은 nativeViews 가 아니라 s.views 에 있다. 표면은 메인 웹뷰를 보유하므로 닫지 않으면 메인
-		// 웹뷰와 그 웹 콘텐츠 프로세스가 남는다.
+		// A logical surface is in s.views and not in nativeViews. A surface holds the main web view, so unless it is closed, the main
+		// web view and its web content process remain.
 		handles := make(map[string]unsafe.Pointer, len(s.views))
 		views := make(map[unsafe.Pointer]*nativeWebview, len(s.views))
 		for id, view := range s.views {

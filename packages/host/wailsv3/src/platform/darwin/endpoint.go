@@ -17,8 +17,8 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// privateDirectory 는 path 를 현재 사용자만 접근할 수 있는 디렉터리로 만든다. 이미 있으면
-// 종류, 소유자, 권한을 차례로 확인한다. 다른 사용자가 소켓에 접근할 수 있으면 실패한다.
+// privateDirectory makes path a directory that only the current user can access. When it already exists, it
+// checks the kind, the owner and the permissions in turn. It fails when another user can access the socket.
 func privateDirectory(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
@@ -43,8 +43,8 @@ func privateDirectory(path string) error {
 	return nil
 }
 
-// removeEnded 는 directory 에서 끝난 프로세스가 남긴 application 의 소켓을 제거한다. 강제 종료된
-// 프로세스는 자기 소켓을 지우지 못한다. 번호의 프로세스가 있으면 다른 프로그램이어도 남긴다.
+// removeEnded removes from directory the application sockets that ended processes left. A process that was
+// killed cannot delete its own socket. When a process with the number exists, the socket is kept even if the process is another program.
 func removeEnded(directory, application string) error {
 	entries, err := os.ReadDir(directory)
 	if err != nil {
@@ -67,9 +67,9 @@ func removeEnded(directory, application string) error {
 	return nil
 }
 
-// Listen 은 directory 에 Unix 도메인 소켓을 만든다. directory 는 이 사용자만 접근하는 0700
-// 디렉터리여야 한다. 끝난 프로세스가 남긴 소켓을 먼저 제거한다. 소켓 경로는 104 바이트로 제한되므로 애플리케이션은 설정 디렉터리가 아니라
-// 임시 디렉터리를 사용한다.
+// Listen creates a Unix domain socket in directory. directory must be a 0700
+// directory that only this user accesses. It first removes the sockets that ended processes left. The socket path is limited to 104 bytes, so the application uses the
+// temporary directory and not the configuration directory.
 func (implementation) Listen(directory, application string) (net.Listener, platform.Endpoint, error) {
 	if err := privateDirectory(directory); err != nil {
 		return nil, platform.Endpoint{}, err
@@ -78,7 +78,7 @@ func (implementation) Listen(directory, application string) (net.Listener, platf
 		return nil, platform.Endpoint{}, err
 	}
 	address := filepath.Join(directory, fmt.Sprintf("%s-%d.sock", application, os.Getpid()))
-	// 같은 프로세스 번호를 사용한 이전 프로세스가 남긴 소켓이다.
+	// A socket that a previous process with the same process number left.
 	if err := os.Remove(address); err != nil && !os.IsNotExist(err) {
 		return nil, platform.Endpoint{}, err
 	}
@@ -93,11 +93,11 @@ func (implementation) Listen(directory, application string) (net.Listener, platf
 	return listener, platform.Endpoint{Transport: "unix", Address: address}, nil
 }
 
-// ServiceProcessExists 는 persistent service endpoint의 프로세스가 아직 존재하는지
-// 확인한다. 시그널을 받을 수 있는 프로세스만 존재한다. 기다리지 않은 스폰은 좀비로 남아
-// kill(pid, 0) 을 통과하므로(V5-106), 통과한 프로세스는 상태를 읽어 좀비를 가려낸다 —
-// 좀비는 이미 끝났고, 그 endpoint 는 낡은 것이다. 다른 사용자의 프로세스에 대한 거부(EPERM)는 그 프로세스가
-// 있다는 뜻이다. 존재를 확인하지 못하면 오류다.
+// ServiceProcessExists checks whether the process of a persistent service endpoint still exists.
+// Only a process that can receive a signal exists. A spawn that was not waited for stays as a zombie and
+// passes kill(pid, 0) (V5-106), so for a process that passed, the state is read to tell zombies apart;
+// a zombie has already ended, and its endpoint is stale. A refusal (EPERM) for a process of another user means that the process
+// exists. It is an error when the existence cannot be determined.
 func (implementation) ServiceProcessExists(pid int) (bool, error) {
 	if pid <= 0 {
 		return false, nil
@@ -109,7 +109,7 @@ func (implementation) ServiceProcessExists(pid int) (bool, error) {
 	if err != nil && err != syscall.EPERM {
 		return false, fmt.Errorf("cannot inspect service process %d: %w", pid, err)
 	}
-	// ps 의 종료 상태가 아니라 출력한 상태 문자만 판정에 쓴다. ps 를 실행하지 못하면 오류다.
+	// Only the state character that ps printed is used for the decision, not the exit status of ps. It is an error when ps cannot be run.
 	state, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
 	var exit *exec.ExitError
 	if err != nil && !errors.As(err, &exit) {
@@ -158,13 +158,13 @@ func (implementation) WaitServiceProcessEnd(pid int, timeout time.Duration) (boo
 	}
 }
 
-// NewSession 은 command 가 setsid 로 새 session 의 leader 가 되게 한다.
+// NewSession makes command the leader of a new session with setsid.
 func (implementation) NewSession(command *exec.Cmd) error {
 	command.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	return nil
 }
 
-// ExitStatus 는 끝난 프로세스의 종료를 wait 상태에서 읽어 `exit status <code>` 나 `signal <number>` 로 쓴다.
+// ExitStatus reads the exit of an ended process from the wait status and writes it as `exit status <code>` or `signal <number>`.
 func (implementation) ExitStatus(state *os.ProcessState) (string, error) {
 	status, ok := state.Sys().(syscall.WaitStatus)
 	if !ok {

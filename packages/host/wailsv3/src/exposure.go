@@ -1,9 +1,9 @@
-// 노출 요청의 전달과 호스트 항목.
+// Forwarding of exposure requests and the host entries.
 //
-// 엔드포인트의 요청은 창의 메인 페이지에 exposure-request 이벤트로 전달하고, 페이지는
-// ExposureReply 로 답한다. 표면 페이지가 등록한 항목은 메인 페이지가 ExposureForward 로
-// 요청하고, 호스트가 그 표면 페이지에 전달한다. host 소유 항목은 호스트가 직접 처리한다.
-// 형식은 docs/spec/exposure.md 에 정의한다.
+// The host forwards a request of the endpoint to the main page of the window as an exposure-request event, and the page replies with
+// ExposureReply. For an entry that a surface page registered, the main page requests it through ExposureForward and
+// the host forwards it to that surface page. The host handles host-owned entries directly.
+// The forms are defined in docs/spec/exposure.md.
 
 package host
 
@@ -24,17 +24,17 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// pageTimeout 은 문서의 답을 기다리는 시간이다.
+// pageTimeout is the time to wait for a reply of a document.
 const pageTimeout = 10 * time.Second
 
-// hostEntry 는 호스트가 선언한 항목 하나다.
+// hostEntry is one entry that the host declares.
 type hostEntry struct {
 	Description string
-	// Schema 는 상태 값, Params 와 Result 는 명령의 매개변수와 결과 스키마다.
+	// Schema is the schema of a status value, and Params and Result are the parameter and result schemas of a command.
 	Schema, Params, Result map[string]any
 }
 
-// rectSchema 는 {x, y, width, height} 의 스키마다.
+// rectSchema is the schema of {x, y, width, height}.
 var rectSchema = map[string]any{"type": "object", "properties": map[string]any{
 	"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"},
 	"width": map[string]any{"type": "number"}, "height": map[string]any{"type": "number"},
@@ -43,7 +43,7 @@ var rectSchema = map[string]any{"type": "object", "properties": map[string]any{
 var emptyObject = map[string]any{"type": "object", "properties": map[string]any{}}
 var nullSchema = map[string]any{"type": "null"}
 
-// presentedSchema 는 host.window.presented 의 결과다. displayed 는 표시 시각(ms, mach 절대 시각)이다.
+// presentedSchema is the result of host.window.presented. displayed is the display time (ms, mach absolute time).
 var presentedSchema = map[string]any{"type": "object", "properties": map[string]any{"displayed": map[string]any{"type": "number"}}}
 
 var hostStatus = map[string]hostEntry{
@@ -177,7 +177,7 @@ var hostCommands = map[string]hostEntry{
 	"host.quit": {Description: "Requests normal application termination, including pending saves.", Params: emptyObject, Result: nullSchema},
 }
 
-// listedEntries 는 exposure.list 에 넣을 호스트 항목을 이름 순서로 반환한다.
+// listedEntries returns the host entries to put into exposure.list, in the order of their names.
 func listedEntries(entries map[string]hostEntry, status bool) []map[string]any {
 	names := make([]string, 0, len(entries))
 	for name := range entries {
@@ -199,23 +199,23 @@ func listedEntries(entries map[string]hostEntry, status bool) []map[string]any {
 	return out
 }
 
-// ExposureResult 는 문서가 보낸 답이다. 결과 또는 오류 하나를 담는다. ExposureForward 가 반환한다.
+// ExposureResult is the reply that a document sent. It holds one result or one error. ExposureForward returns it.
 type ExposureResult struct {
 	Result json.RawMessage `json:"result,omitempty"`
 	Error  *RPCError       `json:"error,omitempty"`
 }
 
-// Relay 는 문서에 보낸 요청과 그 답을 연결한다. T 는 요청을 받은 문서를 가리키며, 답은 같은 문서에서 와야 한다.
+// Relay connects a request sent to a document with its reply. T identifies the document that received the request, and the reply must come from the same document.
 type Relay[T comparable] struct {
 	mu      sync.Mutex
 	next    uint64
 	waiting map[uint64]*relayWaiter[T]
-	// expired 는 시간이 초과된 최근 요청이다. 늦은 답의 지연을 오류에 밝히기 위해 relayExpiredLimit 개까지
-	// 기억하고 가장 오래된 것을 버린다(docs/spec/exposure.md#errors).
+	// expired are the recent requests that timed out. To state the delay of a late reply in the error, it remembers up to relayExpiredLimit
+	// of them and discards the oldest (docs/spec/exposure.md#errors).
 	expired []relayExpired[T]
 }
 
-// relayExpiredLimit 는 늦은 답을 위해 기억하는 시간 초과 요청 수다.
+// relayExpiredLimit is the number of timed-out requests remembered for late replies.
 const relayExpiredLimit = 256
 
 type relayExpired[T comparable] struct {
@@ -230,14 +230,14 @@ type relayWaiter[T comparable] struct {
 	reply  chan ExposureResult
 }
 
-// NewRelay 는 빈 중계를 만든다.
+// NewRelay creates an empty relay.
 func NewRelay[T comparable]() *Relay[T] {
 	return &Relay[T]{waiting: map[uint64]*relayWaiter[T]{}}
 }
 
-// Request 는 target 에 보낼 요청 id 를 만들고 send 로 보낸 뒤 답을 기다린다. send 가 실패하면 기다리지 않고
-// 1003 오류를 반환한다. 제한 시간이 지나면 요청을 지우고 1005 오류를 반환한다. timeout 이 0 이면 답이나
-// Abandon 까지 기다린다.
+// Request creates a request id to send to target, sends it with send, and waits for the reply. When send fails, it does not wait and
+// returns a 1003 error. When the time limit passes, it deletes the request and returns a 1005 error. When timeout is 0, it waits for a reply or
+// Abandon.
 func (r *Relay[T]) Request(target T, timeout time.Duration, send func(id uint64) error) ExposureResult {
 	r.mu.Lock()
 	r.next++
@@ -278,7 +278,7 @@ func (r *Relay[T]) Request(target T, timeout time.Duration, send func(id uint64)
 	}
 }
 
-// Resolve 는 요청 id 의 답을 전달한다. 요청을 받은 문서가 아닌 곳에서 온 답과 이미 끝난 요청의 답은 오류다.
+// Resolve delivers the reply of a request id. A reply from a document other than the one that received the request and a reply to a request that already ended are errors.
 func (r *Relay[T]) Resolve(id uint64, from T, reply ExposureResult) error {
 	r.mu.Lock()
 	w := r.waiting[id]
@@ -299,7 +299,7 @@ func (r *Relay[T]) Resolve(id uint64, from T, reply ExposureResult) error {
 	return nil
 }
 
-// Abandon 은 match 가 참인 문서에 보낸 요청에 1003 오류로 답한다. 사라진 문서는 답하지 않는다.
+// Abandon answers the requests sent to the documents for which match is true with a 1003 error. A document that disappeared does not reply.
 func (r *Relay[T]) Abandon(match func(T) bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -312,15 +312,15 @@ func (r *Relay[T]) Abandon(match func(T) bool) {
 	}
 }
 
-// relayTarget 은 창의 메인 문서(surface 가 빈 값) 또는 표면 문서다.
+// relayTarget is the main document of a window (surface is empty) or a surface document.
 type relayTarget struct {
 	owner   *Surfaces
 	surface string
 }
 
-// ask 는 창 s 의 메인 페이지에 요청을 보내고 답을 기다린다. timeout 이 0 이면 답이나 페이지 종료까지
-// 기다린다. 준비되지 않은 페이지는 요청을 받지 못하므로 1003 을 반환한다. 요청을 등록한 뒤 준비
-// 여부를 보므로, 그 사이 다시 읽힌 페이지의 요청은 여기서 거부되거나 Abandon 으로 끝난다.
+// ask sends a request to the main page of window s and waits for the reply. When timeout is 0, it waits for a reply or for the page to
+// end. A page that is not ready cannot receive the request, so it returns 1003. It checks readiness after it registers the request, so
+// the request of a page that was read again in between is rejected here or ends through Abandon.
 func (h *Host) ask(s *Surfaces, method string, params any, timeout time.Duration) (json.RawMessage, error) {
 	reply := h.relay.Request(relayTarget{owner: s}, timeout, func(id uint64) error {
 		h.mu.Lock()
@@ -341,7 +341,7 @@ func (h *Host) ask(s *Surfaces, method string, params any, timeout time.Duration
 	return reply.Result, nil
 }
 
-// ExposureReplyRequest 는 문서가 요청 하나에 보낸 답이다. surface 가 없으면 메인 문서의 답이다.
+// ExposureReplyRequest is the reply that a document sent to one request. Without surface, it is the reply of the main document.
 type ExposureReplyRequest struct {
 	ID      uint64          `json:"id"`
 	Surface json.RawMessage `json:"surface,omitempty"`
@@ -349,8 +349,8 @@ type ExposureReplyRequest struct {
 	Error   *RPCError       `json:"error"`
 }
 
-// ReplySurface 는 답을 보낸 표면을 반환한다. surface 필드가 없으면 메인 문서이므로 빈 값이다. null, 빈 문자열,
-// 문자열이 아닌 값은 메인 문서의 답으로 바꾸지 않고 오류로 거부한다.
+// ReplySurface returns the surface that sent the reply. Without the surface field, the reply is from the main document, so the value is empty. null, an empty string, and
+// a value that is not a string are rejected as errors and not converted to a reply of the main document.
 func ReplySurface(surface json.RawMessage) (string, error) {
 	if len(surface) == 0 {
 		return "", nil
@@ -362,7 +362,7 @@ func ReplySurface(surface json.RawMessage) (string, error) {
 	return id, nil
 }
 
-// ExposureReply 는 메인 페이지가 exposure-request 에 보낸 답을 받는다.
+// ExposureReply receives the reply that the main page sent to exposure-request.
 func (h *Host) ExposureReply(ctx context.Context, reqJSON json.RawMessage) error {
 	req, err := argument[ExposureReplyRequest]("request", reqJSON)
 	if err != nil {
@@ -386,28 +386,28 @@ func (h *Host) ExposureReply(ctx context.Context, reqJSON json.RawMessage) error
 	_, attached := s.compositions[surface]
 	s.mu.Unlock()
 	if !attached {
-		// 표면을 제거할 때 그 표면의 요청은 surfacesClosed 가 이미 1003 으로 끝냈다. 늦은 답은 답할 요청이 없으므로
-		// 버리고 관측으로 남긴다(docs/spec/exposure.md).
+		// When a surface is removed, surfacesClosed already ended the requests of that surface with 1003. A late reply has no request to answer, so it is
+		// discarded and kept as an observation (docs/spec/exposure.md).
 		LogInfo("exposure", RemovedSurfaceReply(req.ID, surface))
 		return nil
 	}
 	return h.relay.Resolve(req.ID, relayTarget{owner: s, surface: surface}, ExposureResult{Result: req.Result, Error: req.Error})
 }
 
-// RemovedSurfaceReply 는 제거된 표면이 보낸 늦은 답의 관측 줄이다.
+// RemovedSurfaceReply is the observation line of a late reply that a removed surface sent.
 func RemovedSurfaceReply(id uint64, surface string) string {
 	return fmt.Sprintf("exposure reply %d of removed surface %q arrived after its request ended", id, surface)
 }
 
-// ExposureChange 는 감시 중인 상태의 새 값이다.
+// ExposureChange is the new value of a watched status.
 type ExposureChange struct {
 	Name    string `json:"name"`
 	Surface string `json:"surface,omitempty"`
-	// Value 는 상태의 새 값이다. 값이 null 이거나 없는 변경은 값이 null 인 변경이다.
+	// Value is the new value of the status. A change whose value is null or missing is a change whose value is null.
 	Value json.RawMessage `json:"value,omitempty"`
 }
 
-// CheckPageStatusChange 는 페이지가 이름 name 의 상태 변경을 보낼 수 있는지 확인한다. host 상태는 host 만 바꾼다.
+// CheckPageStatusChange checks whether the page can send a status change of the name name. Only the host changes host statuses.
 func CheckPageStatusChange(name string) error {
 	if isHostName(name) {
 		return fmt.Errorf("the page cannot change host status %s", name)
@@ -415,7 +415,7 @@ func CheckPageStatusChange(name string) error {
 	return nil
 }
 
-// ExposureChanged 는 메인 페이지가 알린 상태 변경을 그 상태를 감시하는 연결에 전달한다.
+// ExposureChanged forwards a status change that the main page reported to the connections that watch that status.
 func (h *Host) ExposureChanged(ctx context.Context, changeJSON json.RawMessage) error {
 	change, err := argument[ExposureChange]("request", changeJSON)
 	if err != nil {
@@ -436,20 +436,20 @@ func (h *Host) ExposureChanged(ctx context.Context, changeJSON json.RawMessage) 
 	return nil
 }
 
-// ExposureForwardRequest 는 메인 페이지가 표면 페이지에 전달할 요청이다.
+// ExposureForwardRequest is the request that the main page forwards to a surface page.
 type ExposureForwardRequest struct {
 	Surface string          `json:"surface"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params,omitempty"`
-	// Timeout 은 이 요청의 제한 시간(ms)이다. 없으면 10 초다. 선언의 timeout 을 페이지가 전달한다.
+	// Timeout is the time limit (ms) of this request. Without it, the limit is 10 seconds. The page forwards the timeout of the declaration.
 	Timeout json.RawMessage `json:"timeout,omitempty"`
 }
 
-// maxForwardTimeout 은 전달 요청이 지정할 수 있는 가장 긴 제한 시간이다.
+// maxForwardTimeout is the longest time limit that a forwarded request can specify.
 const maxForwardTimeout = 600000
 
-// ForwardTimeout 은 전달 요청의 제한 시간을 정한다. status.next 는 값이 바뀔 때까지 답하지 않으므로
-// 제한 시간이 없고(0), timeout 을 받지 않는다. timeout 은 1 이상 600000 이하의 정수 ms 다.
+// ForwardTimeout decides the time limit of a forwarded request. status.next does not reply until the value changes, so
+// it has no time limit (0) and does not accept timeout. timeout is an integer in ms from 1 to 600000.
 func ForwardTimeout(method string, timeout json.RawMessage) (time.Duration, *RPCError) {
 	if len(timeout) == 0 || string(timeout) == "null" {
 		if method == "status.next" {
@@ -467,8 +467,8 @@ func ForwardTimeout(method string, timeout json.RawMessage) (time.Duration, *RPC
 	return time.Duration(ms) * time.Millisecond, nil
 }
 
-// ExposureForward 는 요청을 표면 페이지에 전달하고 그 답 {result} 또는 {error} 를 반환한다.
-// 표면이 없거나 답하지 않으면 오류를 담은 답을 반환한다.
+// ExposureForward forwards a request to a surface page and returns its reply {result} or {error}.
+// When the surface does not exist or does not reply, it returns a reply that carries an error.
 func (h *Host) ExposureForward(ctx context.Context, reqJSON json.RawMessage) (ExposureResult, error) {
 	req, err := argument[ExposureForwardRequest]("request", reqJSON)
 	if err != nil {
@@ -482,7 +482,7 @@ func (h *Host) ExposureForward(ctx context.Context, reqJSON json.RawMessage) (Ex
 	if invalid != nil {
 		return ExposureResult{Error: invalid}, nil
 	}
-	// status.next 는 제한 시간이 없다. 표면이 닫히면 1003 으로 끝난다.
+	// status.next has no time limit. It ends with 1003 when the surface closes.
 	reply := h.relay.Request(relayTarget{owner: s, surface: req.Surface}, timeout, func(id uint64) error {
 		var sent bool
 		application.InvokeSync(func() {
@@ -504,14 +504,14 @@ func (h *Host) ExposureForward(ctx context.Context, reqJSON json.RawMessage) (Ex
 	return reply, nil
 }
 
-// SurfaceRegistration 은 표면 페이지가 등록한 항목이다.
+// SurfaceRegistration is an entry that a surface page registered.
 type SurfaceRegistration struct {
 	Surface string `json:"surface"`
 	Kind    string `json:"kind"`
 	Name    string `json:"name"`
 }
 
-// surfaceOf 는 네이티브 웹뷰 viewID 가 표시하는 표면의 id 를 반환한다. 표면이 아니면 빈 값이다.
+// surfaceOf returns the id of the surface that the native web view viewID shows. It is empty when the view is not a surface.
 func (s *Surfaces) surfaceOf(viewID uint64) string {
 	var id string
 	application.InvokeSync(func() {
@@ -522,8 +522,8 @@ func (s *Surfaces) surfaceOf(viewID uint64) string {
 	return id
 }
 
-// AuthorizeSurfaceCaller 는 surface 요청을 명시된 호출자 identity 와 대조해 검증한다. 소유한 surface
-// view 또는 명시된 메인 페이지 identity 하나만 허용하며, 알 수 없는 view 를 메인 페이지로 취급하지 않는다.
+// AuthorizeSurfaceCaller verifies a surface request against the explicit caller identity. It allows only an owned surface
+// view or the explicit main page identity, and does not treat an unknown view as the main page.
 func AuthorizeSurfaceCaller(caller, requested string, callerID, mainID uint64) error {
 	if caller != "" {
 		if caller != requested {
@@ -544,7 +544,7 @@ func (s *Surfaces) authorizeSurface(viewID uint64, requested string) error {
 	return AuthorizeSurfaceCaller(s.surfaceOf(viewID), requested, viewID, uint64(s.window.ID()))
 }
 
-// exposureRegister 는 표면 페이지의 등록을 메인 페이지에 전달한다.
+// exposureRegister forwards the registration of a surface page to the main page.
 func (s *Surfaces) exposureRegister(viewID uint64, req SurfaceRegistration) error {
 	if surface := s.surfaceOf(viewID); surface == "" || surface != req.Surface {
 		return fmt.Errorf("this document is not surface %q", req.Surface)
@@ -552,7 +552,7 @@ func (s *Surfaces) exposureRegister(viewID uint64, req SurfaceRegistration) erro
 	if req.Kind != "status" && req.Kind != "command" && req.Kind != "dom" {
 		return fmt.Errorf("unknown exposure kind %q", req.Kind)
 	}
-	// 표면이 등록하는 코어 이름은 core.surface.* 뿐이다(docs/spec/exposure.md).
+	// The only core names that a surface registers are core.surface.* (docs/spec/exposure.md).
 	core := strings.HasPrefix(req.Name, "core.") && !strings.HasPrefix(req.Name, "core.surface.")
 	if !namePattern.MatchString(req.Name) || isHostName(req.Name) || core {
 		return fmt.Errorf("a surface cannot register %q", req.Name)
@@ -573,8 +573,8 @@ func (s *Surfaces) exposureRegister(viewID uint64, req SurfaceRegistration) erro
 	return nil
 }
 
-// replayRegistrations 는 표면 페이지의 등록을 다시 읽힌 메인 페이지에 다시 알린다. 표면은 메인
-// 페이지가 다시 읽혀도 남으므로, 새 페이지는 이전 페이지가 받은 등록을 이 호출로 받는다.
+// replayRegistrations announces the registrations of surface pages again to a main page that was read again. A surface remains even when the main
+// page is read again, so the new page receives through this call the registrations that the previous page received.
 func (s *Surfaces) replayRegistrations() {
 	s.mu.Lock()
 	var all []SurfaceRegistration
@@ -587,9 +587,9 @@ func (s *Surfaces) replayRegistrations() {
 	}
 }
 
-// reloadPage 는 메인 페이지를 같은 WebContent 프로세스에서 다시 읽게 하고, 새 페이지가 준비를 알릴 때까지 기다린다.
-// 준비된 페이지는 먼저 대기 중인 저장을 끝낸다(docs/spec/projects.md#persistence). WebKit 은 새 페이지가 보이는
-// 내용을 처음 그릴 때까지 이전 페이지를 화면에 두고, 이전 페이지의 정리는 새 페이지의 시작 문서 요청이 한다
+// reloadPage makes the main page read again in the same WebContent process and waits until the new page reports that it is ready.
+// A ready page first finishes the pending save (docs/spec/projects.md#persistence). WebKit keeps the previous page on the screen until the new page first draws visible
+// content, and the start document request of the new page cleans up the previous page
 // (docs/spec/native-host.md#page-start).
 func (s *Surfaces) reloadPage() error {
 	s.host.mu.Lock()
@@ -606,8 +606,8 @@ func (s *Surfaces) reloadPage() error {
 	s.readied = append(s.readied, ready)
 	s.host.mu.Unlock()
 	if pageReady {
-		// 준비된 페이지는 보낸 호출이 모두 답을 받은 뒤 스스로 다시 읽는다. 호스트가 다시 읽으면 그 순간 쓰고 있던
-		// 응답이 사라진다(docs/spec/native-host.md#page-reload).
+		// A ready page reads again by itself after all calls it sent received a reply. When the host reads again, the reply that was being
+		// written at that moment is lost (docs/spec/native-host.md#page-reload).
 		s.window.EmitEvent("page-reload")
 	} else {
 		application.InvokeSync(func() { s.window.Reload() })
@@ -620,8 +620,8 @@ func (s *Surfaces) reloadPage() error {
 	}
 }
 
-// exposureReply 는 표면 페이지가 전달받은 요청에 보낸 답을 받는다.
-// surfacesClosed 는 제거된 표면의 등록 해제를 메인 페이지에 알리고 그 표면에 보낸 요청을 끝낸다.
+// exposureReply receives the reply that a surface page sent to a forwarded request.
+// surfacesClosed announces the unregistration of removed surfaces to the main page and ends the requests sent to those surfaces.
 func (s *Surfaces) surfacesClosed(ids []string) {
 	if len(ids) == 0 {
 		return
@@ -639,7 +639,7 @@ func (s *Surfaces) surfacesClosed(ids []string) {
 	s.host.relay.Abandon(func(t relayTarget) bool { return t.owner == s && closed[t.surface] })
 }
 
-// byName 은 이름이 name 인 창을 반환한다.
+// byName returns the window with the name name.
 func (h *Host) byName(name string) *Surfaces {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -651,8 +651,8 @@ func (h *Host) byName(name string) *Surfaces {
 	return nil
 }
 
-// hostBackend 는 엔드포인트에 창과 페이지를 제공한다. Host 의 공개 메서드는 페이지에 바인딩되므로
-// 이 메서드들은 별도 형식에 둔다.
+// hostBackend provides windows and pages to the endpoint. The public methods of Host are bound to the page, so
+// these methods are placed in a separate type.
 type hostBackend struct{ h *Host }
 
 func (b hostBackend) Windows() []WindowEntry {
@@ -695,7 +695,7 @@ func (b hostBackend) PageRequest(window, method string, params json.RawMessage) 
 	if err != nil {
 		return nil, err
 	}
-	// 메인 페이지는 표면에 전달한 명령을 선언의 제한 시간 안에 끝내므로 command.run 에는 제한을 두지 않는다.
+	// The main page finishes a command forwarded to a surface within the time limit of the declaration, so command.run has no limit.
 	timeout := pageTimeout
 	if method == "command.run" {
 		timeout = 0
@@ -830,16 +830,16 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 
 var pointerPhaseCodes = map[string]int{"move": 0, "down": 1, "drag": 2, "up": 3, "scroll": 4}
 
-// receiveTimeout 은 input.pointer 의 누름과 뗌이 문서의 수신을 기다리는 시간이다.
+// receiveTimeout is the time that the press and release of input.pointer wait for a document to receive them.
 const receiveTimeout = 2 * time.Second
 
-// activateTimeout 은 input.pointer 의 activate 가 활성화를 기다리는 시간이다.
+// activateTimeout is the time that the activate of input.pointer waits for activation.
 const activateTimeout = 5 * time.Second
 
-// errInactive 는 창이 키 창이 아니어서 이동을 전달하지 못했을 때의 오류다.
+// errInactive is the error for the case in which the window is not the key window and the move could not be delivered.
 func errInactive() *RPCError { return rpcError(codeInactive, "the window is not active") }
 
-// delivered 는 네이티브 키 입력의 결과를 엔드포인트 오류로 바꾼다.
+// delivered converts the result of a native key input to an endpoint error.
 func delivered(ok bool, err error) error {
 	if err != nil {
 		return rpcError(codeNoInput, "%v", err)
@@ -899,8 +899,8 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	return nil
 }
 
-// ButtonHeldMessage 는 1007 오류의 메시지를 만든다. 거부한 차례의 mask 와 최전면 애플리케이션을
-// 적는다(docs/spec/exposure.md).
+// ButtonHeldMessage builds the message of the 1007 error. It writes the mask at the time of the rejection and the frontmost application
+// (docs/spec/exposure.md).
 func ButtonHeldMessage(held platform.ButtonHeld) string {
 	frontmost := "no application"
 	if f := held.Frontmost; f != nil {
@@ -914,8 +914,8 @@ func ButtonHeldMessage(held platform.ButtonHeld) string {
 		held.Mask, frontmost)
 }
 
-// activate 는 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤, 창의 웹뷰가 활성 상태를 받을
-// 때까지 기다린다. 활성화가 끝나지 않으면 멈춘 단계를 적은 1006 오류를 반환한다.
+// activate activates the application, makes the window the key window, and waits until the web view of the window receives the active state.
+// When activation does not finish, it returns a 1006 error that names the stage where it stopped.
 func (s *Surfaces) activate(x, y float64) error {
 	done := make(chan error, 1)
 	err := s.useWindow(func(window unsafe.Pointer) error {
@@ -950,8 +950,8 @@ func (b hostBackend) Key(window string, input KeyInput) error {
 	return delivered(result == platform.PointerDelivered, nil)
 }
 
-// native 는 UI 스레드에서 read 로 네이티브 JSON 을 읽어 into 에 넣는다. inspect 는 같은 UI 스레드
-// 작업에서 읽은 뒤 실행한다.
+// native reads the native JSON with read on the UI thread and puts it into into. inspect runs after the read in the same UI thread
+// task.
 func native(read func() (string, error), into any, inspect func()) error {
 	var text string
 	var err error
@@ -967,8 +967,8 @@ func native(read func() (string, error), into any, inspect func()) error {
 	return json.Unmarshal([]byte(text), into)
 }
 
-// nativeFacts 는 UI 스레드의 한 단계에서 이 창의 네이티브 창으로 read 가 읽은 네이티브 JSON 을 into 에 넣는다.
-// inspect 는 같은 단계에서 읽은 뒤 실행한다. 그 단계 전에 닫힌 창은 1003 이다.
+// nativeFacts puts into into the native JSON that read read from the native window of this window in one step of the UI thread.
+// inspect runs after the read in the same step. A window that closed before that step gives 1003.
 func (s *Surfaces) nativeFacts(read func(window unsafe.Pointer) (string, error), into any, inspect func()) error {
 	var text string
 	err := s.useWindow(func(window unsafe.Pointer) error {
@@ -985,7 +985,7 @@ func (s *Surfaces) nativeFacts(read func(window unsafe.Pointer) (string, error),
 	return json.Unmarshal([]byte(text), into)
 }
 
-// frame 은 {x, y, width, height} 이다.
+// frame is {x, y, width, height}.
 type frame struct {
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
@@ -993,13 +993,13 @@ type frame struct {
 	Height float64 `json:"height"`
 }
 
-// point 는 화면 좌표의 한 점이다.
+// point is one point in screen coordinates.
 type point struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
 }
 
-// windowFacts 는 native/darwin 의 sp_window_facts 결과다.
+// windowFacts is the result of sp_window_facts of native/darwin.
 type windowFacts struct {
 	Responder struct {
 		Class   string `json:"class"`
@@ -1042,7 +1042,7 @@ type windowFacts struct {
 	DocumentWebviews int `json:"documentWebviews"`
 }
 
-// WindowSurface 는 host.window 의 표면 하나다.
+// WindowSurface is one surface of host.window.
 type WindowSurface struct {
 	ID      string `json:"id"`
 	Frame   frame  `json:"frame"`
@@ -1050,7 +1050,7 @@ type WindowSurface struct {
 	Order   int    `json:"order"`
 }
 
-// WindowDocument 는 host.window 의 문서 영역 하나다.
+// WindowDocument is one document region of host.window.
 type WindowDocument struct {
 	Surface  string `json:"surface"`
 	Document string `json:"document"`
@@ -1060,7 +1060,7 @@ type WindowDocument struct {
 	Order    int    `json:"order"`
 }
 
-// WindowWebview 는 창 좌표계에서 웹뷰 하나의 프레임이다.
+// WindowWebview is the frame of one web view in the window coordinate system.
 type WindowWebview struct {
 	Frame    frame `json:"frame"`
 	Main     bool  `json:"main"`
@@ -1070,13 +1070,13 @@ type WindowWebview struct {
 	Order    int   `json:"order"`
 }
 
-// ModalBackground 는 모달 웹뷰의 배경 그리기 상태다.
+// ModalBackground is the background drawing state of a modal web view.
 type ModalBackground struct {
 	Draws bool    `json:"draws"`
 	Alpha float64 `json:"alpha"`
 }
 
-// WindowModal 은 host.window 의 열린 모달이다. 뷰가 아직 없으면 Frame, Order, Background 가 null 이다.
+// WindowModal is an open modal of host.window. When the view does not exist yet, Frame, Order and Background are null.
 type WindowModal struct {
 	ID         string           `json:"id"`
 	Mode       string           `json:"mode"`
@@ -1086,13 +1086,13 @@ type WindowModal struct {
 	Background *ModalBackground `json:"background"`
 }
 
-// WindowControl 은 창 단추 하나의 영역이다.
+// WindowControl is the region of one window button.
 type WindowControl struct {
 	frame
 	Hidden bool `json:"hidden"`
 }
 
-// WindowRegion 는 host.window 의 이미지 영역 하나다.
+// WindowRegion is one picture region of host.window.
 type WindowRegion struct {
 	Surface   string `json:"surface"`
 	Name      string `json:"name"`
@@ -1111,9 +1111,9 @@ type WindowRegion struct {
 	Error *string `json:"error"`
 }
 
-// WindowResponder 는 창의 첫 응답자다. Owner 는 그것을 담은 웹뷰의 종류이며 page, surface,
-// document, modal, webview, native 중 하나다. webview 는 등록되지 않은 웹뷰이고, native 는
-// 웹뷰 밖의 뷰(예: 이미지 영역)다. Surface 는 첫 응답자를 담은 표면이다.
+// WindowResponder is the first responder of the window. Owner is the kind of web view that contains it, one of page, surface,
+// document, modal, webview, and native. webview is a web view that is not registered, and native is a view outside
+// the web views (for example a picture region). Surface is the surface that contains the first responder.
 type WindowResponder struct {
 	Class    string  `json:"class"`
 	Owner    string  `json:"owner"`
@@ -1121,7 +1121,7 @@ type WindowResponder struct {
 	Document *string `json:"document"`
 }
 
-// WindowStatus 는 host.window 의 값이다.
+// WindowStatus is the value of host.window.
 type WindowStatus struct {
 	Responder        WindowResponder  `json:"responder"`
 	Frame            frame            `json:"frame"`
@@ -1146,7 +1146,7 @@ type WindowStatus struct {
 	Modal            *WindowModal     `json:"modal"`
 }
 
-// viewNames 는 UI 스레드에서 표면 웹뷰의 id 와 모달 웹뷰의 주소를 읽는다.
+// viewNames reads, on the UI thread, the ids of the surface web views and the addresses of the modal web views.
 func (s *Surfaces) viewNames() (named map[uint64]string) {
 	named = map[uint64]string{}
 	for view, id := range s.named {
@@ -1155,7 +1155,7 @@ func (s *Surfaces) viewNames() (named map[uint64]string) {
 	return named
 }
 
-// windowState 는 host.window 의 현재 값을 읽는다.
+// windowState reads the current value of host.window.
 func (s *Surfaces) windowState() (WindowStatus, error) {
 	var facts windowFacts
 	var named map[uint64]string
@@ -1273,7 +1273,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	return out, nil
 }
 
-// screens 는 host.screens 의 현재 값을 읽는다.
+// screens reads the current value of host.screens.
 func screens() (any, error) {
 	var out []map[string]any
 	if err := native(system.Screens, &out, nil); err != nil {
@@ -1282,8 +1282,8 @@ func screens() (any, error) {
 	return out, nil
 }
 
-// menuItems 는 host.menu 의 현재 값을 읽는다. language 는 호스트가 관리하는 메뉴 언어이고
-// menus 는 구성된 메뉴다. 언어는 호스트 자신의 상태이지 메뉴 제목에서 추측하는 값이 아니다.
+// menuItems reads the current value of host.menu. language is the menu language that the host manages and
+// menus are the configured menus. The language is the state of the host itself and is not a value inferred from the menu titles.
 func menuItems() (any, error) {
 	var menus []any
 	if err := native(system.MenuItems, &menus, nil); err != nil {
@@ -1292,7 +1292,7 @@ func menuItems() (any, error) {
 	return map[string]any{"language": currentMenuLanguage(), "menus": menus}, nil
 }
 
-// dockItems 는 host.dock 의 현재 값을 읽는다.
+// dockItems reads the current value of host.dock.
 func dockItems() (any, error) {
 	var out []string
 	if err := native(system.DockItems, &out, nil); err != nil {
@@ -1301,7 +1301,7 @@ func dockItems() (any, error) {
 	return out, nil
 }
 
-// hit 은 창 좌표 (x, y) 의 소유자를 반환한다.
+// hit returns the owner at the window coordinates (x, y).
 func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 	var got struct {
 		View       uint64 `json:"view"`
@@ -1330,8 +1330,8 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 	}
 }
 
-// fullscreen 은 창을 전체 화면으로 바꾸거나 되돌리고 전환이 끝난 뒤 반환한다. macOS 는 전환 중의
-// 요청을 무시하므로 네이티브 코드가 그 전환이 끝난 뒤에 이어서 처리한다.
+// fullscreen switches the window to full screen or back and returns after the transition ends. macOS ignores a request during a
+// transition, so the native code continues the handling after that transition ends.
 func (s *Surfaces) fullscreen(on bool) error {
 	done := make(chan struct{}, 1)
 	err := s.useWindow(func(window unsafe.Pointer) error {
@@ -1348,8 +1348,8 @@ func (s *Surfaces) fullscreen(on bool) error {
 	}
 }
 
-// presented 는 창의 표면 배치 트랜잭션과 현재 그림 래스터가 확정되고 메인 페이지와 보이는 앱 문서가
-// 그 배치를 표시할 때까지 기다리고, 그 화면이 표시되는 시각(ms, mach 절대 시각)을 반환한다.
+// presented waits until the surface layout transaction of the window and the current picture raster are fixed and the main page and the visible app document
+// display that layout, and returns the time (ms, mach absolute time) at which that screen is displayed.
 func (s *Surfaces) presented() (float64, error) {
 	deadline := time.Now().Add(pageTimeout)
 	waitFrame := func() (float64, error) {
@@ -1393,7 +1393,7 @@ func (s *Surfaces) presented() (float64, error) {
 			return 0, rpcError(codeTimeout, "the current image raster did not present within %s; pending %s",
 				pageTimeout, s.images.PendingRasters())
 		}
-		// 표시 장벽 대기의 계기(V5-104): 이 대기가 타임아웃에 걸리면 화면이 멈춘다.
+		// Instrument of the display barrier wait (V5-104): when this wait hits the timeout, the screen is stopped.
 		barrierStarted := time.Now()
 		barrierErr := s.images.WaitCurrentError(remaining)
 		PerformanceObserve("host", func() map[string]any {
@@ -1419,9 +1419,9 @@ func (s *Surfaces) presented() (float64, error) {
 	}
 }
 
-// windowsChanged 는 host.windows 를 감시하는 연결에 창 목록을 보낸다. 값은 windows.list 의 결과이고,
-// 창이 열리거나 닫히거나 제목, 프로젝트, 키 상태가 바뀔 때 호출한다.
-// sidecarsState 는 host.sidecars 의 현재 값이다.
+// windowsChanged sends the window list to the connections that watch host.windows. The value is the result of windows.list, and
+// it is called when a window opens or closes or when a title, a project, or the key state changes.
+// sidecarsState is the current value of host.sidecars.
 func (b hostBackend) sidecarsState() map[string]any {
 	closing := []ClosingSurface{}
 	outdated := []OutdatedSidecar{}
@@ -1432,7 +1432,7 @@ func (b hostBackend) sidecarsState() map[string]any {
 	return map[string]any{"closing": closing, "outdated": outdated}
 }
 
-// sidecarsChanged 는 host.sidecars 를 감시하는 연결에 새 값을 보낸다.
+// sidecarsChanged sends the new value to the connections that watch host.sidecars.
 func (h *Host) sidecarsChanged() {
 	h.notifySidecars()
 	if h.endpoint == nil {
@@ -1459,8 +1459,8 @@ func (h *Host) windowsChanged() {
 	}
 }
 
-// windowChanged 는 host.window 를 감시하는 연결에 새 값을 보낸다. 감시하는 연결이 없으면
-// 값을 읽지 않는다. UI 스레드에서도 호출하므로 값은 다른 고루틴에서 읽는다.
+// windowChanged sends the new value to the connections that watch host.window. When no connection watches, it does not
+// read the value. It is also called on the UI thread, so the value is read in another goroutine.
 func (s *Surfaces) windowChanged() {
 	if s.host == nil || s.host.endpoint == nil || !s.host.endpoint.Watching(s.name, "host.window") {
 		return
@@ -1469,7 +1469,7 @@ func (s *Surfaces) windowChanged() {
 		state, err := s.windowState()
 		var coded *RPCError
 		if errors.As(err, &coded) && coded.Code == codeNoWindow {
-			// 상태를 읽기 전에 닫힌 창은 알릴 상태가 없다.
+			// A window that closed before the status was read has no status to announce.
 			return
 		}
 		if err != nil {
@@ -1480,7 +1480,7 @@ func (s *Surfaces) windowChanged() {
 	}()
 }
 
-// rewatch 는 다시 로드된 메인 페이지에 이 창의 감시와 진단 구독을 다시 요청한다.
+// rewatch requests the watches and diagnostic subscriptions of this window again from the reloaded main page.
 func (s *Surfaces) rewatch() {
 	if s.host == nil || s.host.endpoint == nil {
 		return
@@ -1505,19 +1505,19 @@ func (s *Surfaces) rewatch() {
 	}
 }
 
-// note 는 진단 기록의 줄 하나를 애플리케이션 로그에 쓰고 진단 기록을 켠 연결에도 보낸다.
+// note writes one line of the diagnostic transcript to the application log and also sends it to the connections that enabled the diagnostic transcript.
 func (s *Surfaces) note(line string) {
 	Log(TranscriptEntry(s.name, line))
 	s.log(line)
 }
 
-// fail 은 진단 기록이 싣는 오류를 애플리케이션 로그에 쓰고 진단 기록을 켠 연결에도 보낸다.
+// fail writes an error that the diagnostic transcript carries to the application log and also sends it to the connections that enabled the diagnostic transcript.
 func (s *Surfaces) fail(where string, err error) {
 	Log(TranscriptFailure(s.name, where, err))
 	s.log(fmt.Sprintf("%s: %v", where, err))
 }
 
-// log 는 이 창의 진단 기록을 켠 연결에 줄 하나를 보낸다. 진단 빌드가 아니면 보낼 곳이 없다.
+// log sends one line to the connections that enabled the diagnostic transcript of this window. A build that is not a diagnostic build has no destination.
 func (s *Surfaces) log(line string) {
 	if transcribe != nil && s.host != nil && s.host.endpoint != nil {
 		transcribe(s.host.endpoint, s.name, line)

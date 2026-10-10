@@ -1,6 +1,6 @@
 package host_test
 
-// main page 의 시작 문서(docs/spec/native-host.md#page-start)를 검사한다.
+// Checks the start document of the main page (docs/spec/native-host.md#page-start).
 
 import (
 	"errors"

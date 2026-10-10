@@ -1,6 +1,6 @@
 package host
 
-// 표면 하나의 모든 네이티브 영역과 선언된 DOM 오버레이를 완전한 스냅샷으로 배치한다.
+// Lays out all native regions of one surface and the declared DOM overlays as one complete snapshot.
 
 import (
 	"encoding/json"
@@ -64,7 +64,7 @@ func (s *Surfaces) sendImageConfigurations(configurations []pendingConfigure) er
 	return nil
 }
 
-// rasterFacts 는 래스터 크기를 정하지 못한 영역의 측정 상태(배치, 크기, 표면 배율)를 오류에 싣는다.
+// rasterFacts carries the measured state (layout, size, surface scale) of a region whose raster size could not be decided in the error.
 func rasterFacts(handle unsafe.Pointer) string {
 	facts, err := system.FactsImage(handle)
 	if err != nil {
@@ -73,8 +73,8 @@ func rasterFacts(handle unsafe.Pointer) string {
 	return facts
 }
 
-// observeRaster 는 그림 영역의 래스터 결정을 성능 트레이스에 남긴다. configured 는 사이드카에 보낼 크기를 정한 것이고,
-// deferred 는 표면이 아직 배치되지 않아 크기를 정하지 못하고 미룬 것이다(docs/spec/performance-trace.md).
+// observeRaster records the raster decision of a picture region in the performance trace. configured means the size to send to the sidecar was decided,
+// and deferred means the size could not be decided and was postponed because the surface is not laid out yet (docs/spec/performance-trace.md).
 func (s *Surfaces) observeRaster(key ImageKey, phase, from string, width, height int, scale float64) {
 	PerformanceObserve("host", func() map[string]any {
 		return map[string]any{"event": "image.raster", "surface": key.Surface, "name": key.Name, "phase": phase,
@@ -82,14 +82,14 @@ func (s *Surfaces) observeRaster(key ImageKey, phase, from string, width, height
 	})
 }
 
-// 표면 복귀나 바깥 크기 변경은 DOM 여백이 같아도 실제 네이티브 래스터를 갱신해야 한다.
+// A surface return or an outer size change must update the actual native raster even when the DOM margins are the same.
 func (s *Surfaces) refreshImageRasters() error {
 	return s.refreshRastersWhere("refresh", func() map[ImageKey]unsafe.Pointer { return s.images.Visible() })
 }
 
-// RefreshSidecarRasters 는 영속 사이드카의 연결이 다시 맺히면 그 사이드카의 그림
-// configure 를 다시 보낸다(V5-106). 새 연결의 서비스는 그림 상태가 없고, 크기가 같아도
-// configure 상태는 연결과 함께 죽었으므로(InvalidateSidecar) 같은 크기의 재전송이 일어난다.
+// RefreshSidecarRasters sends the picture configure of a persistent sidecar again
+// when the connection to that sidecar is made again (V5-106). The service of the new connection has no picture state, and even for the same size the
+// configure state ended with the connection (InvalidateSidecar), so the same size is sent again.
 func (s *Surfaces) RefreshSidecarRasters(sidecar string) error {
 	s.images.InvalidateSidecar(sidecar)
 	return s.refreshRastersWhere("reconnect", func() map[ImageKey]unsafe.Pointer {
@@ -102,7 +102,7 @@ func (s *Surfaces) refreshRastersWhere(from string, visible func() map[ImageKey]
 	var failure error
 	application.InvokeSync(func() {
 		for key, handle := range visible() {
-			// 아직 배치되지 않은 표면의 영역은 래스터 크기가 없다. 표면을 배치하는 다음 준비에서 갱신한다.
+			// The regions of a surface that is not laid out yet have no raster size. They are updated at the next preparation that lays out the surface.
 			if !system.SurfacePlacedImage(handle) {
 				s.observeRaster(key, "deferred", from, 0, 0, 0)
 				continue
@@ -158,8 +158,8 @@ func exactPlacements(values []CompositionPlacement, names []string, what string)
 	return got, nil
 }
 
-// declareComposition 은 surface 가 첫 frame 을 배치하기 전에 변경할 수 없는
-// composition contract 를 등록한다.
+// declareComposition registers the composition contract that cannot change
+// before the surface lays out its first frame.
 func (s *Surfaces) declareComposition(viewID uint64, request CompositionDeclareRequest) error {
 	if request.Surface == "" {
 		return fmt.Errorf("composition declaration requires a surface")
@@ -215,8 +215,8 @@ func (s *Surfaces) placeComposition(viewID uint64, request CompositionPlaceReque
 		return err
 	}
 
-	// 리비전 검사와 모든 네이티브 적용을 UI 스레드의 작업 하나로 실행한다. 호출 고루틴의
-	// 도착 순서가 뒤집혀도 이전 리비전은 새 스냅샷 뒤에 적용되지 않는다.
+	// The revision check and every native application run as one task of the UI thread. Even when the arrival
+	// order of the calling goroutines is reversed, an earlier revision is not applied after a newer snapshot.
 	application.InvokeSync(func() {
 		if request.Revision <= s.compositionRevisions[request.Surface] {
 			err = fmt.Errorf("stale composition revision %d", request.Revision)

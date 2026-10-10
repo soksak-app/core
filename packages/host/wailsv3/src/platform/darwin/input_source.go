@@ -2,7 +2,7 @@
 
 package darwin
 
-// 키보드 입력 소스를 읽고 선택한다. 구현은 native/darwin 의 input_source.m 이다. 진단 빌드에만 들어간다.
+// Reads and selects the keyboard input source. The implementation is input_source.m of native/darwin. It is included only in diagnostic builds.
 
 /*
 #cgo CFLAGS: -x objective-c -fmodules
@@ -19,7 +19,7 @@ import (
 	"unsafe"
 )
 
-// InputSource 는 현재 선택된 키보드 입력 소스의 식별자를 반환한다. 메인 스레드에서 호출한다.
+// InputSource returns the identifier of the currently selected keyboard input source. Call it on the main thread.
 func (implementation) InputSource() (string, error) {
 	pointer := C.sp_input_source_current()
 	if pointer == nil {
@@ -29,7 +29,7 @@ func (implementation) InputSource() (string, error) {
 	return C.GoString(pointer), nil
 }
 
-// SelectInputSource 는 켜져 있는 입력 소스 가운데 identifier 를 선택한다. 메인 스레드에서 호출한다.
+// SelectInputSource selects identifier among the enabled input sources. Call it on the main thread.
 func (implementation) SelectInputSource(identifier string) error {
 	if strings.IndexByte(identifier, 0) >= 0 {
 		return errors.New("input source identifier contains NUL")

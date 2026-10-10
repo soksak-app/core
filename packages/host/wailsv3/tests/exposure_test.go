@@ -83,7 +83,7 @@ func TestExposureListHostEntriesAreSortedAndDescribed(t *testing.T) {
 	if !slices.Equal(names(list.Commands), commands) {
 		t.Fatalf("commands %v, want %v", names(list.Commands), commands)
 	}
-	// 첫 상태 항목은 페이지 항목이므로 호스트 항목만 설명을 확인한다.
+	// The first status entries are page entries, so only the descriptions of the host entries are checked.
 	for _, e := range append(list.Status[1:], list.Commands...) {
 		if !e.Registered || e.Description == "" {
 			t.Fatalf("%s: registered %v, description %q", e.Name, e.Registered, e.Description)
@@ -95,7 +95,7 @@ func TestExposureListHostEntriesAreSortedAndDescribed(t *testing.T) {
 	}
 }
 
-// listBackend 는 페이지의 exposure.list 답을 reply 로 바꾼 fakeBackend 다.
+// listBackend is a fakeBackend that converts the exposure.list reply of the page to reply.
 type listBackend struct {
 	*fakeBackend
 	reply json.RawMessage
@@ -147,7 +147,7 @@ func TestForwardedRequestsUseTheDeclaredTimeout(t *testing.T) {
 	}
 }
 
-// relayWait 는 중계 테스트가 답을 기다리는 시간이다.
+// relayWait is the time that the relay tests wait for a reply.
 const relayWait = 5 * time.Second
 
 // contract: exposure.relay.reply-resolves-request
@@ -268,7 +268,7 @@ func TestRelayClosedDocumentFailsItsPendingRequests(t *testing.T) {
 func TestRelayRequestWithoutTimeoutWaitsUntilTheDocumentCloses(t *testing.T) {
 	relay := host.NewRelay[string]()
 	got := relay.Request("surface-main-a", 0, func(uint64) error {
-		// 응답 대기가 시작된 뒤 다른 고루틴이 문서 종료를 알린다.
+		// After the wait for the reply started, another goroutine announces that the document ended.
 		go relay.Abandon(func(target string) bool { return target == "surface-main-a" })
 		return nil
 	})

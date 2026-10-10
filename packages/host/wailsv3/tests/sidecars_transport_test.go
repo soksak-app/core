@@ -42,7 +42,7 @@ func (o *harnessOwner) Emit(name string, data ...any) {
 	}
 }
 
-// harnessDeclarations 는 folder 에 설치된 영속 사이드카 하나의 선언이다.
+// harnessDeclarations is the declaration of one persistent sidecar installed in folder.
 func harnessDeclarations(folder string) []SidecarDeclaration {
 	return []SidecarDeclaration{{Name: "fixture-service", Folder: folder,
 		Data: []byte(`{"executable":"service","protocol":1,"transport":"persistent"}`)}}
@@ -65,9 +65,9 @@ func writeHarnessEndpoint(t *testing.T, directory, socket string) {
 	}
 }
 
-// serveHarnessConnections 는 connections 개의 연결을 받는다. 연결마다 인증 뒤 요청을 되돌리고, open 요청을
-// 되돌린 연결은 끊어 실행 중 연결 끊김을 재현한다. 끊을 연결은 받은 순서가 아니라 요청으로 고른다:
-// 한 host 가 다시 맺은 연결이 다른 host 의 첫 연결보다 먼저 올 수 있다. close-owner 에는 실패로 답한다.
+// serveHarnessConnections accepts connections connections. For each connection, it returns the requests after authentication, and a connection that returned the open request is
+// cut to reproduce a connection loss while running. The connection to cut is chosen by the request and not by the order received:
+// a connection that one host connected again can arrive before the first connection of another host. It replies to close-owner with a failure.
 func serveHarnessConnections(t *testing.T, listener net.Listener, connections int) <-chan error {
 	t.Helper()
 	done := make(chan error, 1)
@@ -120,8 +120,8 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 						return
 					}
 					_, _ = connection.Write(line)
-					// 페이지 요청의 operation 은 body 안에 있다. 재연결은 endpoint 를 사용하고
-					// host 가 선언한 identity 를 유지해야 한다.
+					// The operation of a page request is inside the body. A reconnection uses the endpoint and
+					// must keep the identity that the host declared.
 					if body, ok := request["body"].(map[string]any); ok && body["operation"] == "open" {
 						return
 					}
@@ -138,8 +138,8 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 
 // contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
 func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t *testing.T) {
-	// 두 host 가 동시에 연다. 한 host 가 끊김 뒤 다시 맺은 연결을 다른 host 의 첫 연결보다 먼저
-	// 맺는 순서도 검사한다. 서비스는 그 순서와 상관없이 host 마다 첫 연결을 끊어야 한다.
+	// Two hosts open at the same time. The order in which a connection that one host connected again after a loss is made before the first connection of another host
+	// is also checked. The service must cut the first connection of each host regardless of that order.
 	t.Run("concurrent", func(t *testing.T) { runHarnessReconnect(t, false) })
 	t.Run("second opens after the first reconnected", func(t *testing.T) { runHarnessReconnect(t, true) })
 }
@@ -178,8 +178,8 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 			t.Fatal("no initial event; the test stalled")
 		}
 	}
-	// 끊긴 socket 을 host 는 곧바로 다시 맺고 연결 이벤트를 보낸다. 그 이벤트를 받은 뒤의
-	// send 는 다시 맺은 연결로 가므로 endpoint 재사용과 재연결을 검증한다.
+	// The host connects the cut socket again immediately and sends the connection event. A send after
+	// it receives that event goes to the connection made again, so endpoint reuse and reconnection are verified.
 	awaitConnection := func(owner *harnessOwner) {
 		select {
 		case event := <-owner.seen:
@@ -191,7 +191,7 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 		}
 	}
 	if sequential {
-		// 첫 host 가 끊기고 다시 맺은 연결을 서비스가 받은 뒤에 둘째 host 가 첫 연결을 맺는다.
+		// The second host makes its first connection after the first host was cut and the service received the connection made again.
 		if err := first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatal(err)
 		}
@@ -252,7 +252,7 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 	startStop := time.Now()
 	first.Stop()
 	second.Stop()
-	// 실패한 close-owner 답은 Stop 의 기한을 기다리지 않고 끝난다. 기한까지 걸렸으면 답을 기다리지 않은 것이다.
+	// A failed close-owner reply ends without waiting for the deadline of Stop. If it took until the deadline, it did not wait for the reply.
 	if elapsed := time.Since(startStop); elapsed >= first.StopTimeout {
 		t.Fatalf("close-owner failure was not reported before the %s stop deadline: %s", first.StopTimeout, elapsed)
 	}
@@ -277,7 +277,7 @@ func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
 	defer listener.Close()
 	writeHarnessEndpoint(t, root, socket)
 
-	// 서비스는 hello, open, close-owner, shutdown 을 이 순서로 받아야 한다.
+	// The service must receive hello, open, close-owner and shutdown in this order.
 	operations := make(chan []string, 1)
 	serverDone := make(chan error, 1)
 	go func() {
@@ -374,7 +374,7 @@ func TestPersistentStopDoesNotLogItsOwnCloseAsAReadError(t *testing.T) {
 	}))
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
 
-	// 서비스는 shutdown 에 답한 뒤에도 연결을 닫지 않는다. 연결은 host 가 닫는다.
+	// The service does not close the connection even after it replied to shutdown. The host closes the connection.
 	release := make(chan struct{})
 	served := make(chan error, 1)
 	go func() {
@@ -453,7 +453,7 @@ func TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop(t *testing.T) {
 	defer listener.Close()
 	writeHarnessEndpoint(t, root, socket)
 
-	// 서비스는 closed 에 바로 답하지 않고 close-owner 를 받은 뒤에 답한다. 그 답은 중지가 시작된 뒤에 온다.
+	// The service does not reply to closed at once and replies after it receives close-owner. That reply comes after the stop started.
 	operations := make(chan []string, 1)
 	go func() {
 		var seen []string
@@ -855,7 +855,7 @@ func TestPersistentRetainSendsLayoutAndKnownSurfaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	// 레이아웃에 표면이 없고 이 프로세스가 보낸 표면도 없으면 빈 배열을 보낸다.
+	// When the layout has no surface and this process sent no surface, it sends an empty array.
 	if closed, err := sidecars.Retain([]host.RetainedSurface{}); err != nil || closed != 2 {
 		t.Fatalf("retain with no surfaces = %d, %v; want the service's count 2", closed, err)
 	}
@@ -885,8 +885,8 @@ func TestPersistentRetainSendsLayoutAndKnownSurfaces(t *testing.T) {
 	}
 }
 
-// TestPersistentRetainInterruptedByStopSendsNothing 은 Retain 이 서비스를 준비한 뒤 보내기 전에 Stop 이 끝나면 retain 을
-// 보내지 않고 멈춤으로 실패하는지 검증한다. 애플리케이션이 끝날 때 창의 retain 과 Stop 이 겹칠 수 있다.
+// TestPersistentRetainInterruptedByStopSendsNothing verifies that, when Stop ends after Retain prepared the service and before it sent, retain is
+// not sent and it fails with the stop. The retain of a window and Stop can overlap when the application ends.
 // contract: sidecars.retain.rejects-after-stop
 func TestPersistentRetainInterruptedByStopSendsNothing(t *testing.T) {
 	root := t.TempDir()
@@ -988,8 +988,8 @@ func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
 	}
 	writeHarnessEndpoint(t, root, socket)
 
-	// 첫 연결은 요청 하나를 되돌린 뒤 스스로 끊는다. 다시 맺은 연결은 닫지 않는다 —
-	// 끊김이 한 번만 일어나야 재시작도 한 번만 일어난다.
+	// The first connection returns one request and then cuts itself. The connection made again is not closed:
+	// the cut must happen only once so that the restart also happens only once.
 	serverDone := make(chan struct{})
 	go func() {
 		defer close(serverDone)
@@ -1044,7 +1044,7 @@ func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
 		t.Fatalf("the first message was not the open echo: %v %s", first.Surface, first.Body)
 	}
 
-	// 연결이 끊기면 전송 없이 다시 맞아야 한다 — 연결 이벤트가 그 증거다(V5-106).
+	// When the connection is cut, it must be connected again without a send; the connection event is the evidence (V5-106).
 	revived := receiveSidecarMessage(t, owner.seen)
 	if revived.Surface != "surface-1" {
 		t.Fatalf("the connection notice went to %q", revived.Surface)
@@ -1057,7 +1057,7 @@ func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
 		t.Fatalf("the connection notice is not a successful reconnection: %v", notice)
 	}
 
-	// 다음 전송은 다시 맺은 연결로 지나간다.
+	// The next send passes through the connection made again.
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"input"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -1086,8 +1086,8 @@ func TestPersistentTransportReportsFailedReviveToOwner(t *testing.T) {
 	}
 	writeHarnessEndpoint(t, root, socket)
 
-	// 첫 연결은 요청 하나를 되돌린 뒤, 수신기가 닫힌 뒤에야 끊는다 — 재시작의 연결이
-	// 큐에 쌓이는 대신 거절되어야 실패 알림이 결정적으로 도착한다.
+	// The first connection returns one request and cuts only after the receiver closed. The connection of the restart
+	// must be refused instead of piling up in the queue so that the failure notification arrives deterministically.
 	closed := make(chan struct{})
 	serverDone := make(chan struct{})
 	go func() {
@@ -1111,7 +1111,7 @@ func TestPersistentTransportReportsFailedReviveToOwner(t *testing.T) {
 		if _, err := connection.Write(line); err != nil {
 			return
 		}
-		// 수신기가 닫힌 뒤에야 연결을 끊는다.
+		// Cuts the connection only after the receiver closed.
 		<-closed
 	}()
 
@@ -1128,13 +1128,13 @@ func TestPersistentTransportReportsFailedReviveToOwner(t *testing.T) {
 		t.Fatalf("the first message was not the open echo: %v %s", first.Surface, first.Body)
 	}
 
-	// 수신기를 먼저 닫은 뒤 연결이 끊긴다. 엔드포인트의 pid 는 이 검사 프로세스이므로
-	// 살아 있고, 재시작은 같은 소켓에 연결을 시도해 거절된다.
+	// The connection is cut after the receiver closed first. The pid of the endpoint is this check process, so
+	// it is alive, and the restart tries to connect to the same socket and is refused.
 	listener.Close()
 	close(closed)
 	<-serverDone
 
-	// 재시작이 실패하면 연결 끊김과 그 까닭이 표면에 알려진다(V5-106).
+	// When the restart fails, the connection loss and its reason are announced to the surface (V5-106).
 	failure := receiveSidecarMessage(t, owner.seen)
 	if failure.Surface != "surface-1" {
 		t.Fatalf("the failure notice went to %q", failure.Surface)
@@ -1164,7 +1164,7 @@ func receiveSidecarMessage(t *testing.T, seen <-chan SidecarMessage) SidecarMess
 	}
 }
 
-// failureOwner 는 사이드카 메시지와 실패를 따로 모으는 창이다.
+// failureOwner is a window that collects sidecar messages and failures separately.
 type failureOwner struct {
 	root     string
 	seen     chan SidecarMessage
@@ -1181,8 +1181,8 @@ func (o *failureOwner) Emit(name string, data ...any) {
 	}
 }
 
-// serveOneBadLine 은 연결 하나에 hello 로 답하고 요청 한 줄을 받은 뒤 payload 를 쓴다. host 가 연결을 닫으면
-// closed 를 닫는다. payload 를 다 쓰기 전에 host 가 닫으면 쓰기 오류는 기대한 결과다.
+// serveOneBadLine replies to hello on one connection, receives one request line, and then writes payload. When the host closes the connection, it
+// closes closed. If the host closes before payload is fully written, the write error is the expected result.
 func serveOneBadLine(t *testing.T, payload []byte) (root string, closed <-chan struct{}) {
 	t.Helper()
 	root = t.TempDir()
@@ -1217,7 +1217,7 @@ func serveOneBadLine(t *testing.T, payload []byte) (root string, closed <-chan s
 			return
 		}
 		go connection.Write(payload)
-		// host 가 연결을 닫으면 읽기가 EOF 로 끝난다.
+		// When the host closes the connection, the read ends with EOF.
 		io.Copy(io.Discard, reader)
 	}()
 	return root, done
@@ -1263,8 +1263,8 @@ func TestPersistentTransportFailsTheConnectionOnAnOversizeLine(t *testing.T) {
 	expectConnectionFailure(t, bytes.Repeat([]byte("x"), messageLimit+2), fmt.Sprintf("message exceeds %d bytes", messageLimit))
 }
 
-// 영속 사이드카의 시작(service 연결과 hello)은 다른 사이드카로의 전송을 기다리게 하지 않는다. service 는 hello 에
-// 500 ms 늦게 답하고, 그동안 이미 실행 중인 다른 사이드카로 보낸다.
+// The start of a persistent sidecar (the service connection and hello) does not make the send to another sidecar wait. The service replies to hello
+// 500 ms late, and meanwhile it sends to another sidecar that is already running.
 // contract: sidecars.send.start-does-not-block-other-sidecars
 func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	root := t.TempDir()
@@ -1329,7 +1329,7 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	}
 }
 
-// hello 를 받고 답하지 않는 service 로의 시작은 5초 뒤 정해진 문장으로 실패한다.
+// A start to a service that received hello and does not reply fails after 5 seconds with a fixed sentence.
 // contract: sidecars-transport.hello.times-out
 func TestPersistentStartFailsWhenHelloIsNotAnswered(t *testing.T) {
 	root := t.TempDir()
@@ -1368,9 +1368,9 @@ func TestPersistentStartFailsWhenHelloIsNotAnswered(t *testing.T) {
 	}
 }
 
-// 새로 시작한 service 가 endpoint 를 출력하지 않으면 시작은 ReadyTimeout 뒤 정해진 문장으로 실패하고, 호스트는 그
-// service 를 끝내고 회수한다. 검사는 기본 30초 대신 1초를 준다. service 는 상한보다 늦게 일을 시작하므로 부하와
-// 상관없이 시작하자마자 끝나며, 검사는 그 고유한 경로로 실행 중인 process 가 남지 않았는지 본다.
+// When a newly started service does not print the endpoint, the start fails after ReadyTimeout with a fixed sentence, and the host ends and reaps
+// that service. The check gives 1 second instead of the default 30 seconds. The service starts its work later than the bound, so it ends right at the start regardless of
+// the load, and the check looks through that distinct path to see that no process remains running.
 // contract: sidecars-transport.startup.times-out
 func TestPersistentStartFailsWhenTheServicePrintsNoEndpoint(t *testing.T) {
 	folder := t.TempDir()
@@ -1395,7 +1395,7 @@ func TestPersistentStartFailsWhenTheServicePrintsNoEndpoint(t *testing.T) {
 	}
 }
 
-// sendWithin 은 fixture-service 로 보내고 그 결과를 limit 안에 돌려준다. 돌아오지 않으면 검사가 실패한다.
+// sendWithin sends to fixture-service and returns the result within limit. If it does not return, the check fails.
 func sendWithin(t *testing.T, sidecars *host.Sidecars, owner *harnessOwner, limit time.Duration) error {
 	t.Helper()
 	result := make(chan error, 1)
@@ -1411,7 +1411,7 @@ func sendWithin(t *testing.T, sidecars *host.Sidecars, owner *harnessOwner, limi
 	}
 }
 
-// 새로 시작한 service 의 표준 오류는 설정 디렉터리의 그 실행 파일 이름 로그에 쌓인다.
+// The standard error of a newly started service accumulates in the log named after that executable in the configuration directory.
 // contract: log.service.standard-error-goes-to-service-log
 func TestPersistentServiceWritesItsStandardErrorToItsLog(t *testing.T) {
 	folder := t.TempDir()
@@ -1436,8 +1436,8 @@ func TestPersistentServiceWritesItsStandardErrorToItsLog(t *testing.T) {
 	}
 }
 
-// 호스트가 시작한 service 는 새 session 의 leader 다. 그래서 애플리케이션의 프로세스 그룹과 터미널의 신호를 받지
-// 않는다. service 는 자기 번호를 파일에 쓰고 endpoint 를 출력한 뒤 검사가 끝낼 때까지 남는다.
+// A service that the host started is the leader of a new session. So it does not receive the signals of the process group and the terminal of the application.
+// The service writes its number to a file, prints the endpoint, and remains until the check ends it.
 // contract: sidecars-transport.persistent.starts-in-new-session
 func TestPersistentServiceStartsInANewSession(t *testing.T) {
 	executableDir := t.TempDir()
@@ -1507,7 +1507,7 @@ func TestPersistentServiceStartsInANewSession(t *testing.T) {
 	if err := sendWithin(t, sidecars, owner, 30*time.Second); err != nil {
 		t.Fatal(err)
 	}
-	// service 는 endpoint 를 출력하기 전에 번호를 썼다.
+	// The service wrote its number before it printed the endpoint.
 	data, err := os.ReadFile(pidPath)
 	if err != nil {
 		t.Fatal(err)
@@ -1535,7 +1535,7 @@ func TestPersistentServiceStartsInANewSession(t *testing.T) {
 	}
 }
 
-// 서비스 로그를 열 수 없으면 서비스를 시작하지 않고 정해진 문장으로 실패한다.
+// When the service log cannot be opened, the service is not started and it fails with a fixed sentence.
 // contract: log.service.open-failure-fails-start
 func TestPersistentStartFailsWhenTheServiceLogCannotOpen(t *testing.T) {
 	folder := t.TempDir()
@@ -1544,7 +1544,7 @@ func TestPersistentStartFailsWhenTheServiceLogCannotOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	config := t.TempDir()
-	// logs 가 파일이면 로그 디렉터리를 만들 수 없다.
+	// When logs is a file, the log directory cannot be created.
 	if err := os.WriteFile(filepath.Join(config, "logs"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -1562,7 +1562,7 @@ func TestPersistentStartFailsWhenTheServiceLogCannotOpen(t *testing.T) {
 	}
 }
 
-// 새로 시작한 service 가 endpoint 를 출력하기 전에 끝나면 시작은 정해진 문장으로 실패한다.
+// When a newly started service ends before it prints the endpoint, the start fails with a fixed sentence.
 // contract: sidecars-transport.startup.exits-before-endpoint
 func TestPersistentStartFailsWhenTheServiceExitsBeforeItsEndpoint(t *testing.T) {
 	folder := t.TempDir()

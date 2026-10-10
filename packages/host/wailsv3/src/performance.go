@@ -34,7 +34,7 @@ func PerformanceObserve(layer string, fields func() map[string]any) {
 	}
 }
 
-// Performance 는 페이지의 성능 요청을 처리한다.
+// Performance handles the performance requests of the page.
 func (h *Host) Performance(requestJSON json.RawMessage) (any, error) {
 	request, err := argument[map[string]any]("request", requestJSON)
 	if err != nil {
@@ -186,8 +186,8 @@ func PerformanceSamplerRunning() bool {
 	return samplerStop != nil
 }
 
-// PerformanceMemory 는 sampler 가 기록하는 pid 의 메모리 사건이다.
-// 읽기에 실패하면 크기 대신 그 오류를 기록한다.
+// PerformanceMemory is the memory event of pid that the sampler records.
+// When the read fails, it records that error instead of a size.
 func PerformanceMemory(pid int) map[string]any {
 	size, err := residentKB(pid)
 	if err != nil {
@@ -196,7 +196,7 @@ func PerformanceMemory(pid int) map[string]any {
 	return map[string]any{"event": "memory", "rss_host_kb": size}
 }
 
-// residentKB 는 pid 의 상주 크기(KB)다. ps 를 실행하지 못하거나 크기를 돌려주지 않으면(프로세스가 끝났으면) 오류다.
+// residentKB is the resident size (KB) of pid. It is an error when ps cannot be run or returns no size (the process ended).
 func residentKB(pid int) (uint64, error) {
 	out, err := exec.Command("ps", "-o", "rss=", "-p", strconv.Itoa(pid)).Output()
 	if err != nil {

@@ -1,6 +1,6 @@
 package host_test
 
-// 설정 폴더에 설치된 plugin 의 제공과 그 sidecar 찾기(docs/spec/installation.md 의 설치된 plugin 제공)를 검사한다.
+// Checks the providing of plugins installed in the configuration folder and finding their sidecars (providing installed plugins in docs/spec/installation.md).
 
 import (
 	"encoding/json"
@@ -15,7 +15,7 @@ import (
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
-// writeInstalled 는 경로마다 내용을 설정 폴더에 쓴다.
+// writeInstalled writes the content for each path into the configuration folder.
 func writeInstalled(t *testing.T, config string, files map[string]string) {
 	t.Helper()
 	for name, content := range files {
@@ -29,7 +29,7 @@ func writeInstalled(t *testing.T, config string, files map[string]string) {
 	}
 }
 
-// installedFixture 는 켜진 plugin 둘과 꺼진 plugin 하나, 그리고 sidecar 하나를 설치한 설정 폴더다.
+// installedFixture is a configuration folder in which two enabled plugins, one disabled plugin, and one sidecar are installed.
 func installedFixture(t *testing.T) string {
 	config := t.TempDir()
 	writeInstalled(t, config, map[string]string{

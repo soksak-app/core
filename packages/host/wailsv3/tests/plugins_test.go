@@ -1,6 +1,6 @@
 package host_test
 
-// 애플리케이션 안의 plugin 작업(docs/spec/installation.md#plugin-operations-in-the-application)을 검사한다.
+// Checks the plugin operations inside the application (docs/spec/installation.md#plugin-operations-in-the-application).
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
-// sokJSON 은 sok 명령을 실행하고 그 JSON 출력을 돌려준다.
+// sokJSON runs the sok command and returns its JSON output.
 func sokJSON(t *testing.T, args ...string) map[string]any {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
@@ -30,8 +30,8 @@ func sokJSON(t *testing.T, args ...string) map[string]any {
 	return value
 }
 
-// pluginRegistry 는 fixtures/plugin-probe(sidecar 가 없는 plugin probe 0.0.10)의 release 와 그 registry 를
-// 만들고 index.json 과 release 의 경로를 돌려준다. go test 는 package 폴더에서 실행하므로 fixture 는 그 아래에 있다.
+// pluginRegistry builds the release of fixtures/plugin-probe (the plugin probe 0.0.10 without a sidecar) and its registry, and
+// returns the paths of index.json and the release. go test runs in the folder of the Go package, so the fixture is below it.
 func pluginRegistry(t *testing.T) (index, release string) {
 	t.Helper()
 	releases, registry := t.TempDir(), t.TempDir()
@@ -48,7 +48,7 @@ func pluginRegistry(t *testing.T) (index, release string) {
 	return filepath.Join(registry, "index.json"), release
 }
 
-// changes 는 plugins-changed 알림을 모은다.
+// changes collects the plugins-changed notifications.
 type changes struct {
 	mu   sync.Mutex
 	seen []host.PluginsChanged
@@ -225,7 +225,7 @@ func TestPluginsRunRejectsInvalidAndConcurrentOperations(t *testing.T) {
 			t.Fatalf("%+v: %v, want %s", request.request, err, request.want)
 		}
 	}
-	// release 를 FIFO 로 바꾸면 설치는 그 FIFO 를 읽는 동안 멈춘다. FIFO 를 쓰기로 연 순간 설치는 실행 중이다.
+	// When the release is replaced by a FIFO, the installation stops while it reads that FIFO. At the moment the FIFO is opened for writing, the installation is running.
 	data, err := os.ReadFile(release)
 	if err != nil {
 		t.Fatal(err)

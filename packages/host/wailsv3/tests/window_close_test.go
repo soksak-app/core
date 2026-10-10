@@ -26,7 +26,7 @@ func TestClosingAWindowClosesEachSurfaceAfterItsRegions(t *testing.T) {
 			t.Fatalf("document %v was not attached", key)
 		}
 	}
-	// 만드는 중인 문서 영역은 닫을 핸들이 없다.
+	// A document region that is being created has no handle to close.
 	pending := host.DocumentKey{Surface: "tab-2", Name: "pending"}
 	if err := documents.Reserve(pending); err != nil {
 		t.Fatal(err)
@@ -105,13 +105,13 @@ func TestClosingAWindowReportsEveryFailureAndClosesTheRest(t *testing.T) {
 	}
 }
 
-// 창의 네이티브 창은 그 창을 쓰는 UI 스레드 단계에서 읽는다. 그 단계 전에 Wails 의 destroy 가 닫은 창은
-// 네이티브 코드에 넘기지 않고 1003 으로 답한다.
+// The native window of a window is read in the UI thread step that uses that window. A window that the destroy of Wails closed before that step is
+// not passed to native code and is answered with 1003.
 // contract: window-close.native-window.used-in-reading-step
 func TestACloseBeforeTheNativeStepDoesNotReachNativeCode(t *testing.T) {
 	var window int
 	native := unsafe.Pointer(&window)
-	// 시험의 UI 스레드. 다른 스레드가 보낸 작업은 다음 단계를 실행하기 전에 차례대로 실행한다.
+	// The UI thread of the test. Work sent by other threads runs in order before the next step runs.
 	var pending []func()
 	invoke := func(step func()) {
 		queued := pending
@@ -129,7 +129,7 @@ func TestACloseBeforeTheNativeStepDoesNotReachNativeCode(t *testing.T) {
 	if err := host.UseNativeWindow(invoke, "w2", func() unsafe.Pointer { return native }, use); err != nil {
 		t.Fatalf("an open window: %v", err)
 	}
-	// 엔드포인트가 창을 찾은 뒤 UI 스레드가 그 창의 destroy 를 처리한다. destroy 는 네이티브 창을 nil 로 만든다.
+	// After the endpoint found the window, the UI thread handles the destroy of that window. The destroy sets the native window to nil.
 	pending = append(pending, func() { native = nil })
 	err := host.UseNativeWindow(invoke, "w2", func() unsafe.Pointer { return native }, use)
 	var coded *host.RPCError

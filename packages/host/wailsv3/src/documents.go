@@ -1,10 +1,10 @@
 package host
 
-// 표면 페이지 안의 문서 영역. docs/spec/native-surfaces.md 의 "문서 영역"이다.
+// Document regions inside a surface page, as in the section Document regions of docs/spec/native-surfaces.md.
 //
-// 표면 페이지가 자기 요소 하나에 외부 문서를 붙인다. 호스트는 그 표면 웹뷰 안에 문서 웹뷰를 두고,
-// 페이지가 알린 여백으로 배치하며, 문서 상태를 그 표면에만 보낸다. 문서 웹뷰는 표면 웹뷰의 하위
-// 뷰이므로 표면과 함께 옮겨지고 숨겨진다. 표면이 제거되거나 표면 페이지가 다시 읽히면 닫는다.
+// A surface page attaches an external document to one of its elements. The host places a document web view inside that surface web view,
+// lays it out with the margins that the page reported, and sends the document state only to that surface. The document web view is a subview of
+// the surface web view, so it moves and hides together with the surface. It closes when the surface is removed or the surface page is read again.
 
 import (
 	"encoding/json"
@@ -18,13 +18,13 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// documentData 는 문서 영역의 영구 사이트 데이터를 두는 설정 디렉터리 안의 디렉터리다. 앱 문서의
-// 저장소와 다르다(docs/spec/native-surfaces.md#document-regions).
+// documentData is the directory inside the configuration directory that holds the persistent site data of document regions. It differs from the
+// storage of the app document (docs/spec/native-surfaces.md#document-regions).
 const documentData = "document-data"
 
 var documentName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
-// DocumentRequest 는 표면 페이지의 문서 영역 호출이다. 필드는 호출마다 필요한 것만 쓴다.
+// DocumentRequest is a document region call of a surface page. Each call uses only the fields it needs.
 type DocumentRequest struct {
 	Surface  string   `json:"surface"`
 	Document string   `json:"document"`
@@ -55,7 +55,7 @@ func DocumentMessage(surface, document, value string) (payload map[string]any, r
 	return map[string]any{"surface": surface, "document": document, "message": received.Message}, "", nil
 }
 
-// ZoomFactor 는 문서의 글자 배율이다(docs/spec/text-size.md). 없거나 유한한 양수가 아니면 오류다.
+// ZoomFactor is the text scale of the document (docs/spec/text-size.md). It is an error when it is missing or not a finite positive number.
 func (r DocumentRequest) ZoomFactor() (float64, error) {
 	if r.Zoom == nil || math.IsNaN(*r.Zoom) || math.IsInf(*r.Zoom, 0) || *r.Zoom <= 0 {
 		return 0, fmt.Errorf("document zoom must be a finite positive number")
@@ -63,19 +63,19 @@ func (r DocumentRequest) ZoomFactor() (float64, error) {
 	return *r.Zoom, nil
 }
 
-// DocumentState 는 document-state 이벤트의 값이다.
+// DocumentState is the value of the document-state event.
 type DocumentState struct {
 	Surface  string          `json:"surface"`
 	Document string          `json:"document"`
 	State    json.RawMessage `json:"state"`
 }
 
-// DocumentKey 는 표면과 문서 이름의 쌍이다.
+// DocumentKey is the pair of a surface and a document name.
 type DocumentKey struct {
 	Surface, Name string
 }
 
-// CheckDocument 는 표면 호출자의 surface 소유권을 확인하고 키를 반환한다.
+// CheckDocument checks the surface ownership of the surface caller and returns the key.
 func CheckDocument(caller string, req DocumentRequest) (DocumentKey, error) {
 	if caller == "" || caller != req.Surface {
 		return DocumentKey{}, fmt.Errorf("this document is not surface %q", req.Surface)
@@ -97,7 +97,7 @@ func (s *Surfaces) checkDocument(viewID uint64, req DocumentRequest) (DocumentKe
 	return CheckDocument(caller, req)
 }
 
-// Documents 는 창의 문서 영역이다. 값은 문서 웹뷰이고, 만드는 중인 영역은 nil 이다.
+// Documents are the document regions of a window. A value is a document web view, and a region that is being created is nil.
 type Documents struct {
 	mu      sync.Mutex
 	handles map[DocumentKey]unsafe.Pointer
@@ -105,7 +105,7 @@ type Documents struct {
 
 func NewDocuments() *Documents { return &Documents{handles: map[DocumentKey]unsafe.Pointer{}} }
 
-// Reserve 는 이름을 차지한다. 같은 이름이 이미 있으면 오류다.
+// Reserve takes a name. It is an error when the same name already exists.
 func (d *Documents) Reserve(key DocumentKey) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -116,7 +116,7 @@ func (d *Documents) Reserve(key DocumentKey) error {
 	return nil
 }
 
-// Set 은 차지한 이름에 만든 문서를 적는다. 그 사이에 이름이 제거되었으면 false 다.
+// Set writes the created document to the reserved name. It returns false when the name was removed in the meantime.
 func (d *Documents) Set(key DocumentKey, handle unsafe.Pointer) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -127,7 +127,7 @@ func (d *Documents) Set(key DocumentKey, handle unsafe.Pointer) bool {
 	return true
 }
 
-// Get 은 만들어진 문서를 반환한다.
+// Get returns the created document.
 func (d *Documents) Get(key DocumentKey) (unsafe.Pointer, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -137,7 +137,7 @@ func (d *Documents) Get(key DocumentKey) (unsafe.Pointer, error) {
 	return nil, fmt.Errorf("document %q is not attached", key.Name)
 }
 
-// Remove 는 이름을 제거하고 그 문서를 반환한다. 만드는 중이던 이름이면 nil 이다.
+// Remove removes the name and returns its document. It returns nil when the name was still being created.
 func (d *Documents) Remove(key DocumentKey) (unsafe.Pointer, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -149,7 +149,7 @@ func (d *Documents) Remove(key DocumentKey) (unsafe.Pointer, error) {
 	return handle, nil
 }
 
-// RemoveSurface 는 표면의 이름을 모두 제거하고 만들어진 문서를 반환한다.
+// RemoveSurface removes all names of a surface and returns the created documents.
 func (d *Documents) RemoveSurface(surface string) []unsafe.Pointer {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -166,7 +166,7 @@ func (d *Documents) RemoveSurface(surface string) []unsafe.Pointer {
 	return removed
 }
 
-// Names 는 만들어진 문서의 주소별 키다.
+// Names are the keys of the created documents by address.
 func (d *Documents) Names() map[uint64]DocumentKey {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -179,7 +179,7 @@ func (d *Documents) Names() map[uint64]DocumentKey {
 	return names
 }
 
-// All 은 만들어진 문서다.
+// All are the created documents.
 func (d *Documents) All() []unsafe.Pointer {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -194,8 +194,8 @@ func (d *Documents) All() []unsafe.Pointer {
 
 var documentActions = map[string]int{"back": 0, "forward": 1, "reload": 2, "stop": 3, "entry": 4}
 
-// DocumentGoAction 은 go 요청의 동작 번호와 거리를 반환한다. entry 는 0 이 아닌 offset 이 필요하고
-// 다른 동작은 offset 을 받지 않는다.
+// DocumentGoAction returns the action number and the distance of a go request. entry needs a non-zero offset and
+// the other actions do not accept an offset.
 func DocumentGoAction(req DocumentRequest) (int, int, error) {
 	action, ok := documentActions[req.Action]
 	if !ok {
@@ -213,7 +213,7 @@ func DocumentGoAction(req DocumentRequest) (int, int, error) {
 	return action, 0, nil
 }
 
-// attachDocument 는 표면 안에 숨긴 문서 영역을 만든다. 같은 이름이 이미 있으면 오류다.
+// attachDocument creates a hidden document region inside a surface. It is an error when the same name already exists.
 func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 	key, err := s.checkDocument(viewID, req)
 	if err != nil {
@@ -259,7 +259,7 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 		s.documents.Remove(key)
 		return err
 	}
-	// 만드는 동안 표면이 제거되었으면 만든 문서를 닫는다. 등록과 닫기는 UI 스레드에서 한다.
+	// When the surface was removed during creation, the created document is closed. Registration and closing run on the UI thread.
 	var registered bool
 	application.InvokeSync(func() {
 		registered = s.documents.Set(key, handle)
@@ -273,7 +273,7 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 	return nil
 }
 
-// documentChanged 는 문서 상태를 소유 표면에만 보내고 host.window 감시자에게 알린다. UI 스레드에서 호출된다.
+// documentChanged sends the document state only to the owning surface and notifies the host.window watchers. It is called on the UI thread.
 func (s *Surfaces) documentChanged(key DocumentKey, state string) {
 	payload := DocumentState{Surface: key.Surface, Document: key.Name, State: json.RawMessage(state)}
 	s.emitToSurface(key.Surface, "document-state", payload)
@@ -281,7 +281,7 @@ func (s *Surfaces) documentChanged(key DocumentKey, state string) {
 }
 
 // documentMessage sends a message of a plugin document to the owning surface, or writes its failure to the
-// application log. UI 스레드에서 호출된다.
+// application log. It is called on the UI thread.
 func (s *Surfaces) documentMessage(key DocumentKey, value string) {
 	payload, reason, err := DocumentMessage(key.Surface, key.Name, value)
 	if err != nil {
@@ -301,7 +301,7 @@ func (s *Surfaces) documentEvent(key DocumentKey, event string) {
 	s.windowChanged()
 }
 
-// withDocument 는 열린 문서 영역에 대해 UI 스레드에서 run 을 실행한다.
+// withDocument runs run on the UI thread for an open document region.
 func (s *Surfaces) withDocument(viewID uint64, req DocumentRequest, run func(handle unsafe.Pointer) error) error {
 	key, err := s.checkDocument(viewID, req)
 	if err != nil {
@@ -310,8 +310,8 @@ func (s *Surfaces) withDocument(viewID uint64, req DocumentRequest, run func(han
 	if err := s.requireRegion(key.Surface, key.Name, "document", ""); err != nil {
 		return err
 	}
-	// 조회와 사용을 UI 스레드의 한 작업에서 한다. 닫기도 UI 스레드에서 등록 해제와 함께 일어나므로,
-	// 조회한 핸들은 이 작업 동안 해제되지 않는다.
+	// The lookup and the use run as one task of the UI thread. Closing also happens on the UI thread together with unregistering, so
+	// the looked-up handle is not released during this task.
 	application.InvokeSync(func() {
 		var handle unsafe.Pointer
 		handle, err = s.documents.Get(key)
@@ -344,7 +344,7 @@ func (s *Surfaces) postDocument(viewID uint64, req DocumentRequest) error {
 	})
 }
 
-// zoomDocument 는 문서의 페이지 확대를 글자 배율로 정한다.
+// zoomDocument sets the page zoom of the document from the text scale.
 func (s *Surfaces) zoomDocument(viewID uint64, req DocumentRequest) error {
 	zoom, err := req.ZoomFactor()
 	if err != nil {
@@ -358,7 +358,7 @@ func (s *Surfaces) zoomDocument(viewID uint64, req DocumentRequest) error {
 	})
 }
 
-// goDocument 는 기록 이동, 기록 항목 열기, 다시 읽기, 멈춤을 실행하고 실행했는지 반환한다.
+// goDocument runs history navigation, opening a history entry, reload, and stop, and returns whether it ran.
 func (s *Surfaces) goDocument(viewID uint64, req DocumentRequest) (bool, error) {
 	action, offset, err := DocumentGoAction(req)
 	if err != nil {
@@ -377,7 +377,7 @@ func (s *Surfaces) detachDocument(viewID uint64, req DocumentRequest) error {
 	if err != nil {
 		return err
 	}
-	// 등록 해제와 닫기를 UI 스레드의 한 작업에서 한다. 사이에 다른 작업이 핸들을 쓰지 않는다.
+	// Unregistering and closing run as one task of the UI thread. No other task uses the handle in between.
 	application.InvokeSync(func() {
 		var handle unsafe.Pointer
 		handle, err = s.documents.Remove(key)
@@ -392,7 +392,7 @@ func (s *Surfaces) detachDocument(viewID uint64, req DocumentRequest) error {
 	return nil
 }
 
-// closeSurfaceDocuments 는 표면의 문서 영역을 모두 닫는다. UI 스레드에서 호출한다.
+// closeSurfaceDocuments closes all document regions of a surface. Call it on the UI thread.
 func (s *Surfaces) closeSurfaceDocuments(surface string) {
 	handles := s.documents.RemoveSurface(surface)
 	for _, handle := range handles {
@@ -403,8 +403,8 @@ func (s *Surfaces) closeSurfaceDocuments(surface string) {
 	}
 }
 
-// surfaceCommitted 는 표면 페이지가 새 문서를 표시하기 시작했을 때 이전 문서와 그림 영역의 등록과 정리를 한다.
-// 새 문서는 자기 항목과 문서 영역을 다시 만든다.
+// surfaceCommitted registers and cleans up the previous document and the picture regions when the surface page started to show a new document.
+// The new document creates its own entries and document regions again.
 func (s *Surfaces) surfaceCommitted(viewID uint64) {
 	surface := s.surfaceOf(viewID)
 	if surface == "" {
@@ -419,14 +419,14 @@ func (s *Surfaces) surfaceCommitted(viewID uint64) {
 	s.surfacesClosed([]string{surface})
 }
 
-// setDocumentsBackground 는 대화 상자가 열린 동안 문서 영역을 흐리게 표시한다. UI 스레드에서 호출한다.
+// setDocumentsBackground dims the document regions while a dialog is open. Call it on the UI thread.
 func (s *Surfaces) setDocumentsBackground(enabled bool) {
 	for _, handle := range s.documents.All() {
 		system.SetDocumentBackground(handle, enabled)
 	}
 }
 
-// 이벤트는 앱 DOM으로 보내며 모듈의 수신기가 payload의 surface 소유자를 확인한다.
+// The event goes to the app DOM, and the receiver of the module checks the surface owner of the payload.
 func (s *Surfaces) emitToSurface(surface, name string, data any) {
 	if s.views[surface] == nil {
 		LogInfo("document", fmt.Sprintf("native event %s of closed surface %q arrived after the surface closed", name, surface))
@@ -435,7 +435,7 @@ func (s *Surfaces) emitToSurface(surface, name string, data any) {
 	s.window.EmitEvent(name, data)
 }
 
-// imageChanged 는 그림 영역 이벤트를 소유 표면에만 보내고 host.window 감시자에게 알린다. UI 스레드에서 호출된다.
+// imageChanged sends the picture region event only to the owning surface and notifies the host.window watchers. It is called on the UI thread.
 func (s *Surfaces) imageChanged(key ImageKey, event string) {
 	// Every event of a native region is recorded with its whole body before it is relayed (docs/spec/diagnostics.md).
 	PerformanceObserve("host", func() map[string]any {
@@ -446,7 +446,7 @@ func (s *Surfaces) imageChanged(key ImageKey, event string) {
 	s.windowChanged()
 }
 
-// attachImage 는 표면 안에 숨긴 그림 영역을 만든다. 같은 이름이 이미 있으면 오류다.
+// attachImage creates a hidden picture region inside a surface. It is an error when the same name already exists.
 func (s *Surfaces) attachImage(viewID uint64, req ImageRequest) error {
 	key, err := s.checkImage(viewID, req)
 	if err != nil {
@@ -476,7 +476,7 @@ func (s *Surfaces) attachImage(viewID uint64, req ImageRequest) error {
 		s.images.Remove(key)
 		return err
 	}
-	// 만드는 동안 표면이 제거되었으면 만든 그림 영역을 닫는다. 등록과 닫기는 UI 스레드에서 한다.
+	// When the surface was removed during creation, the created picture region is closed. Registration and closing run on the UI thread.
 	var registered bool
 	application.InvokeSync(func() {
 		registered = s.images.Set(key, handle)
@@ -491,7 +491,7 @@ func (s *Surfaces) attachImage(viewID uint64, req ImageRequest) error {
 	return nil
 }
 
-// withImage 는 열린 그림 영역에 대해 UI 스레드에서 run 을 실행한다.
+// withImage runs run on the UI thread for an open picture region.
 func (s *Surfaces) withImage(viewID uint64, req ImageRequest, run func(handle unsafe.Pointer) error) error {
 	key, err := s.checkImage(viewID, req)
 	if err != nil {
@@ -500,8 +500,8 @@ func (s *Surfaces) withImage(viewID uint64, req ImageRequest, run func(handle un
 	if err := s.requireRegion(key.Surface, key.Name, "image", ""); err != nil {
 		return err
 	}
-	// 조회와 사용을 UI 스레드의 한 작업에서 한다. 닫기도 UI 스레드에서 등록 해제와 함께 일어나므로,
-	// 조회한 핸들은 이 작업 동안 해제되지 않는다.
+	// The lookup and the use run as one task of the UI thread. Closing also happens on the UI thread together with unregistering, so
+	// the looked-up handle is not released during this task.
 	application.InvokeSync(func() {
 		var handle unsafe.Pointer
 		handle, err = s.images.Get(key)
@@ -537,12 +537,12 @@ func (s *Surfaces) textImage(viewID uint64, req ImageRequest, text string) error
 	})
 }
 
-// closeSurfaceImages 는 표면의 그림 영역을 모두 닫는다. UI 스레드에서 호출한다.
+// closeSurfaceImages closes all picture regions of a surface. Call it on the UI thread.
 func (s *Surfaces) closeSurfaceImages(surface string) {
 	s.images.CloseSurface(surface, func(handle unsafe.Pointer) {
 		system.CloseImage(handle)
 	})
-	// 영역 변경을 알린다.
+	// Announces the region change.
 }
 
 func (s *Surfaces) detachImage(viewID uint64, req ImageRequest) error {
@@ -550,7 +550,7 @@ func (s *Surfaces) detachImage(viewID uint64, req ImageRequest) error {
 	if err != nil {
 		return err
 	}
-	// 등록 해제와 닫기를 UI 스레드의 한 작업에서 한다. 사이에 다른 작업이 핸들을 쓰지 않는다.
+	// Unregistering and closing run as one task of the UI thread. No other task uses the handle in between.
 	application.InvokeSync(func() {
 		var handle unsafe.Pointer
 		handle, err = s.images.Remove(key)

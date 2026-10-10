@@ -1,4 +1,4 @@
-// 표면 동기화가 창 덮개를 놓고 배치를 시작하는 순서와, 실패할 때 시작한 배치를 남기지 않는지 검사한다.
+// Checks the order in which the surface synchronization places the window cover and starts the layout, and that a layout that started is not left when it fails.
 package host_test
 
 import (

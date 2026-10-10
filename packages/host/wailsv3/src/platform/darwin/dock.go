@@ -19,7 +19,7 @@ import (
 	"unsafe"
 )
 
-// dockNewWindow 는 Dock 메뉴의 새 창 항목이 호출하는 함수다.
+// dockNewWindow is the function that the new window item of the Dock menu calls.
 var dockNewWindow func()
 
 //export goDockNewWindow
@@ -41,8 +41,8 @@ func (implementation) MenuItems() (string, error) {
 	return facts(C.sp_menu_items(), "application menu")
 }
 
-// PreferredLanguage 는 시스템 선호 언어의 주 태그를 반환한다(window_facts.h 의
-// sp_preferred_language). 그 태그가 계약 표의 언어인지는 호출자가 정한다.
+// PreferredLanguage returns the main tag of the system preferred language (sp_preferred_language of
+// window_facts.h). The caller decides whether that tag is a language of the contract table.
 func (implementation) PreferredLanguage() (string, error) {
 	tag := C.sp_preferred_language()
 	defer C.free(unsafe.Pointer(tag))

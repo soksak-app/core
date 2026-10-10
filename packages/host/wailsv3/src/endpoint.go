@@ -1,8 +1,8 @@
-// 로컬 엔드포인트의 JSON-RPC 서버.
+// The JSON-RPC server of the local endpoint.
 //
-// 형식은 docs/spec/endpoint.md 와 docs/spec/exposure.md 에 정의한다. 전송은 운영체제 구현이
-// 만든 리스너이고, 이 파일은 프레임 해석, 메서드 분배, 연결별 감시와 알림, endpoint.json 을
-// 처리한다. 창과 페이지는 Backend 로 접근하므로 검사는 애플리케이션 없이 이 서버를 실행한다.
+// The forms are defined in docs/spec/endpoint.md and docs/spec/exposure.md. The transport is the listener that the operating system implementation
+// creates, and this file handles frame decoding, method dispatch, per-connection watches and notifications, and endpoint.json.
+// Windows and pages are reached through Backend, so a check runs this server without the application.
 
 package host
 
@@ -26,10 +26,10 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// 프레임 본문의 최대 길이.
+// The maximum length of a frame body.
 const frameLimit = 16 << 20
 
-// 오류 번호. docs/spec/exposure.md 의 오류 표와 같다.
+// Error numbers. They equal the error table of docs/spec/exposure.md.
 const (
 	codeInternal      = -32603
 	codeInvalidParams = -32602
@@ -44,7 +44,7 @@ const (
 	codePressOpen     = 1008
 )
 
-// RPCError 는 JSON-RPC 오류 객체다.
+// RPCError is the JSON-RPC error object.
 type RPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -56,24 +56,24 @@ func rpcError(code int, format string, args ...any) *RPCError {
 	return &RPCError{Code: code, Message: fmt.Sprintf(format, args...)}
 }
 
-// errMissingWindow 는 창이 없을 때의 오류를 만든다.
+// errMissingWindow creates the error for a missing window.
 func errMissingWindow(window string) *RPCError {
 	return rpcError(codeNoWindow, "window %q does not exist", window)
 }
 
-// WindowEntry 는 windows.list 의 항목이다.
+// WindowEntry is an item of windows.list.
 type WindowEntry struct {
 	Window string `json:"window"`
 	Title  string `json:"title"`
-	// Project 는 창에 마지막으로 열린 프로젝트의 루트 디렉터리다. 없으면 null 이다.
+	// Project is the root directory of the project that was opened last in the window. It is null when there is none.
 	Project *string `json:"project"`
 	Key     bool    `json:"key"`
-	// Ready 는 창의 메인 페이지가 준비를 알렸는지다. 다시 읽는 동안에는 거짓이다.
+	// Ready tells whether the main page of the window reported that it is ready. It is false while the page is read again.
 	Ready bool `json:"ready"`
 }
 
-// PointerInput 은 input.pointer 의 값이다. Phase 는 move, down, drag, up, scroll 중 하나이고
-// Button 은 left 또는 right 다. Activate 는 move 에만 참일 수 있다.
+// PointerInput is the value of input.pointer. Phase is one of move, down, drag, up, and scroll, and
+// Button is left or right. Activate can be true only for move.
 type PointerInput struct {
 	X, Y           float64
 	Phase          string
@@ -82,7 +82,7 @@ type PointerInput struct {
 	Activate       bool
 }
 
-// KeyInput 은 input.key 의 값이다. Modifiers 는 비트 합이다: 1 Shift, 2 Control, 4 Option, 8 Command.
+// KeyInput is the value of input.key. Modifiers is a bit sum: 1 Shift, 2 Control, 4 Option, 8 Command.
 type KeyInput struct {
 	Key       string
 	Text      string
@@ -90,27 +90,27 @@ type KeyInput struct {
 	Down      bool
 }
 
-// Backend 는 엔드포인트가 사용하는 창과 페이지다. 오류가 *RPCError 이면 그 번호로 답한다.
+// Backend is the windows and pages that the endpoint uses. When the error is an *RPCError, the reply uses its number.
 type Backend interface {
-	// Windows 는 열린 창의 목록이다.
+	// Windows is the list of open windows.
 	Windows() []WindowEntry
-	// HasWindow 는 창 window 가 있는지 반환한다.
+	// HasWindow returns whether the window window exists.
 	HasWindow(window string) bool
-	// PageRequest 는 창 window 의 메인 페이지에 요청을 보내고 그 답을 기다린다.
+	// PageRequest sends a request to the main page of the window window and waits for its reply.
 	PageRequest(window, method string, params json.RawMessage) (json.RawMessage, error)
-	// HostStatus 는 호스트 상태 name 의 값이다.
+	// HostStatus is the value of the host status name.
 	HostStatus(window, name string) (any, error)
-	// HostCommand 는 호스트 명령 name 을 실행한다.
+	// HostCommand runs the host command name.
 	HostCommand(window, name string, params json.RawMessage) (any, error)
-	// Pointer 와 Key 는 창에 네이티브 입력을 전달한다.
+	// Pointer and Key deliver native input to a window.
 	Pointer(window string, input PointerInput) error
 	Key(window string, input KeyInput) error
 }
 
-// SocketDirectory 는 애플리케이션이 소켓을 두는 디렉터리다. 사용자별 임시 디렉터리 아래에 있다.
+// SocketDirectory is the directory in which the application places its socket. It is under the temporary directory of the user.
 func SocketDirectory() string { return filepath.Join(os.TempDir(), "soksak") }
 
-// EndpointInfo 는 endpoint.json 의 내용이다.
+// EndpointInfo is the content of endpoint.json.
 type EndpointInfo struct {
 	Transport   string    `json:"transport"`
 	Address     string    `json:"address"`
@@ -121,14 +121,14 @@ type EndpointInfo struct {
 	Started     time.Time `json:"started"`
 }
 
-// endpointMethod 는 선언된 메서드 하나의 처리다.
+// endpointMethod is the handling of one declared method.
 type endpointMethod func(e *Endpoint, c *endpointConn, params json.RawMessage) (any, error)
 
-// diagnosticMethods 는 진단 빌드가 init 에서 추가하는 메서드다. 진단 빌드가 아니면 비어 있다.
+// diagnosticMethods are the methods that a diagnostic build adds in init. It is empty when the build is not a diagnostic build.
 var diagnosticMethods = map[string]endpointMethod{}
 
-// subscriptionMethod 는 연결의 구독을 바꾸는 메서드의 params 를 읽고 바꿀 topic 과 방향을 반환한다.
-// 이 메서드들은 받은 순서대로 적용한다.
+// subscriptionMethod reads the params of a method that changes the subscription of a connection and returns the topic and the direction to change.
+// These methods are applied in the order received.
 type subscriptionMethod func(e *Endpoint, params json.RawMessage) (topic, bool, error)
 
 var subscriptionMethods = map[string]subscriptionMethod{
@@ -136,18 +136,18 @@ var subscriptionMethods = map[string]subscriptionMethod{
 	"status.unwatch": func(e *Endpoint, p json.RawMessage) (topic, bool, error) { return watchTopic(e, p, false) },
 }
 
-// diagnosticSubscriptions 는 진단 빌드가 init 에서 추가하는 구독 메서드다.
+// diagnosticSubscriptions are the subscription methods that a diagnostic build adds in init.
 var diagnosticSubscriptions = map[string]subscriptionMethod{}
 
-// topic 은 알림을 받는 대상이다. 상태 감시는 상태 이름, 진단 구독은 diagnosticTopics 의 이름을 사용한다.
+// topic is the target that receives notifications. A status watch uses the status name and a diagnostic subscription uses a name of diagnosticTopics.
 type topic struct {
 	window string
 	name   string
-	// surface 는 감시가 지정한 표면이다. 지정하지 않은 감시는 빈 문자열이다.
+	// surface is the surface that the watch specified. A watch that did not specify one has an empty string.
 	surface string
 }
 
-// watchParams 는 페이지에 보낼 감시 요청의 params 다.
+// watchParams are the params of the watch request to send to the page.
 func (t topic) watchParams() map[string]string {
 	params := map[string]string{"name": t.name}
 	if t.surface != "" {
@@ -156,17 +156,17 @@ func (t topic) watchParams() map[string]string {
 	return params
 }
 
-// diagnosticTopics 는 진단 빌드가 init 에서 추가하는 구독 대상이다. 값은 구독의 시작(on)과
-// 끝을 페이지에 알리는 요청의 메서드와 params 를 만든다. 진단 빌드가 아니면 비어 있다.
+// diagnosticTopics are the subscription targets that a diagnostic build adds in init. A value builds the method and params of the request that
+// tells the page about the start (on) and the end of a subscription. It is empty when the build is not a diagnostic build.
 var diagnosticTopics = map[string]func(on bool) (method string, params any){}
 
-// transcribe 는 창의 진단 기록을 켠 연결에 줄 하나를 보낸다. 진단 빌드가 init 에서 정한다.
+// transcribe sends one line to a connection that enabled the diagnostic transcript of a window. A diagnostic build sets it in init.
 var transcribe func(e *Endpoint, window, line string)
 
-// Endpoint 는 연결을 받고 요청을 처리한다.
+// Endpoint accepts connections and handles requests.
 type Endpoint struct {
 	backend Backend
-	// 구성 디렉터리. 성능 트레이스의 스위치와 대상이 여기에 있다(V5-104).
+	// The configuration directory. The switch and the target of the performance trace are here (V5-104).
 	configDir string
 
 	mu          sync.Mutex
@@ -176,16 +176,16 @@ type Endpoint struct {
 	owner       EndpointInfo
 	published   bool
 	conns       map[*endpointConn]bool
-	// counts 는 topic 마다 구독한 연결의 수다.
+	// counts is the number of subscribed connections for each topic.
 	counts map[topic]int
-	// queues 는 topic 마다 받은 순서대로 실행할 구독 변경이다. 목록이 있으면 그 topic 의 실행
-	// 고루틴이 있다. queueMu 로 보호한다.
+	// queues are the subscription changes to run in the order received for each topic. When a list exists, a goroutine that runs
+	// that topic exists. queueMu protects it.
 	queueMu sync.Mutex
 	queues  map[topic][]func()
 }
 
-// processLock 은 애플리케이션 프로세스 하나에 configuration 디렉터리의 배타적 소유권을
-// 주고, 비정상 종료 뒤 오래된 lock 을 교체하는 데 필요한 PID 를 보관한다.
+// processLock gives one application process exclusive ownership of the configuration directory
+// and keeps the PID needed to replace a stale lock after an abnormal exit.
 type processLock struct {
 	path string
 	file *os.File
@@ -258,13 +258,13 @@ func (lock *processLock) close() error {
 	return errors.Join(errs...)
 }
 
-// NewEndpoint 는 backend 를 사용하는 엔드포인트를 만든다.
+// NewEndpoint creates an endpoint that uses backend.
 func NewEndpoint(backend Backend) *Endpoint {
 	return &Endpoint{backend: backend, conns: map[*endpointConn]bool{}, counts: map[topic]int{}, queues: map[topic][]func(){}}
 }
 
-// Serve 는 configDir 의 소유권을 얻고 listener 의 연결을 받기 시작한다. endpoint.json 은
-// 첫 창을 등록한 뒤 Publish 가 쓴다.
+// Serve obtains the ownership of configDir and starts accepting connections of listener. Publish writes endpoint.json
+// after the first window is registered.
 func (e *Endpoint) Serve(listener net.Listener, info EndpointInfo, configDir string) error {
 	e.configDir = configDir
 
@@ -288,8 +288,8 @@ func (e *Endpoint) Serve(listener net.Listener, info EndpointInfo, configDir str
 	return nil
 }
 
-// Publish 는 창 window 가 등록되어 있으면 endpoint.json 을 쓴다. 파일을 읽은 클라이언트가 그 창에
-// 바로 요청할 수 있도록 첫 창을 등록한 뒤 한 번 호출한다.
+// Publish writes endpoint.json when the window window is registered. It is called once after the first window is registered so that
+// a client that read the file can request that window immediately.
 func (e *Endpoint) Publish(window string) error {
 	if !e.backend.HasWindow(window) {
 		return fmt.Errorf("endpoint.json is not written: window %s does not exist", window)
@@ -309,7 +309,7 @@ func (e *Endpoint) Publish(window string) error {
 	return nil
 }
 
-// Close 는 연결을 받지 않고, 열린 연결을 닫고, endpoint.json 을 제거한다.
+// Close stops accepting connections, closes the open connections, and removes endpoint.json.
 func (e *Endpoint) Close() error {
 	e.mu.Lock()
 	listener, processLock, file, owner := e.listener, e.processLock, e.file, e.owner
@@ -364,8 +364,8 @@ func (e *Endpoint) accept(listener net.Listener) {
 	}
 }
 
-// StatusChanged 는 창 window 의 상태 name 을 감시하는 연결에 새 값을 알린다. surface 는 감시가
-// 지정한 표면이며, 지정하지 않은 감시의 변경이면 빈 문자열이다.
+// StatusChanged announces the new value to the connections that watch the status name of the window window. surface is the surface that the watch
+// specified, and it is an empty string for a change of a watch that did not specify one.
 func (e *Endpoint) StatusChanged(window, name, surface string, value any) {
 	params := map[string]any{"window": window, "name": name, "value": value}
 	if surface != "" {
@@ -374,8 +374,8 @@ func (e *Endpoint) StatusChanged(window, name, surface string, value any) {
 	e.publish(topic{window, name, surface}, "status.changed", params)
 }
 
-// NotifyWatchers 는 창에 매이지 않은 상태 name 을 표면 지정 없이 감시하는 연결에 창마다 새 값을 알린다.
-// 알림은 호출한 차례대로 각 연결의 송신 대기열에 들어가고 호출자를 막지 않는다.
+// NotifyWatchers announces the new value of the status name, which is not bound to a window, for each window to the connections that watch it without specifying a surface.
+// The notifications enter the send queue of each connection in the order of the calls and do not block the caller.
 func (e *Endpoint) NotifyWatchers(name string, value any) {
 	e.mu.Lock()
 	windows := make([]string, 0)
@@ -391,7 +391,7 @@ func (e *Endpoint) NotifyWatchers(name string, value any) {
 	}
 }
 
-// Watching 은 창 window 의 상태 name 을 감시하는 연결이 있는지 반환한다.
+// Watching returns whether a connection watches the status name of the window window.
 func (e *Endpoint) Watching(window, name string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -417,7 +417,7 @@ func (e *Endpoint) publish(t topic, method string, params any) {
 	}
 }
 
-// subscribe 는 연결 c 의 topic 구독을 바꾸고, 그 변경이 첫 구독이나 마지막 해제인지 반환한다.
+// subscribe changes the topic subscription of connection c and returns whether the change is the first subscription or the last release.
 func (e *Endpoint) subscribe(c *endpointConn, t topic, on bool) (edge bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -438,8 +438,8 @@ func (e *Endpoint) subscribe(c *endpointConn, t topic, on bool) (edge bool) {
 	return true
 }
 
-// topics 는 페이지가 알림을 보내야 하는 창 window 의 topic 이다. 페이지가 다시 로드되면 호스트가
-// 이 목록으로 감시를 다시 요청한다.
+// topics are the topics for which the page of the window window must send notifications. When the page is loaded again, the host
+// requests the watches again with this list.
 func (e *Endpoint) topics(window string) []topic {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -452,7 +452,7 @@ func (e *Endpoint) topics(window string) []topic {
 	return out
 }
 
-// endpointConn 은 연결 하나와 그 연결의 구독이다. topics 는 Endpoint.mu 로 보호한다.
+// endpointConn is one connection and its subscriptions. topics is protected by Endpoint.mu.
 type endpointConn struct {
 	conn   net.Conn
 	topics map[topic]bool
@@ -461,7 +461,7 @@ type endpointConn struct {
 	once   sync.Once
 }
 
-// close 는 연결을 닫는다. 처음 닫는 쪽의 이유 reason 을 소켓을 닫기 전에 기록하고, 이어지는 호출은 아무것도 하지 않는다.
+// close closes the connection. It records the reason reason of the first closer before it closes the socket, and later calls do nothing.
 func (c *endpointConn) close(reason string) {
 	c.once.Do(func() {
 		LogInfo("endpoint", "connection closed: "+reason)
@@ -472,7 +472,7 @@ func (c *endpointConn) close(reason string) {
 	})
 }
 
-// send 는 프레임 하나를 쓰기 대기열에 넣는다. 대기열이 차면 읽지 않는 연결이므로 닫는다.
+// send puts one frame into the write queue. When the queue is full, the connection does not read, so it is closed.
 func (c *endpointConn) send(body []byte) {
 	select {
 	case c.out <- body:
@@ -499,7 +499,7 @@ func (c *endpointConn) write() {
 	}
 }
 
-// request 는 받은 JSON-RPC 객체다. id 가 없으면 알림이므로 답하지 않는다.
+// request is the received JSON-RPC object. A request without id is a notification, so it gets no reply.
 type request struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id"`
@@ -507,7 +507,7 @@ type request struct {
 	Params  json.RawMessage `json:"params"`
 }
 
-// read 는 연결의 프레임을 읽는다. 규칙을 어긴 프레임을 받으면 답하지 않고 연결을 닫으며, 닫는 이유를 기록한다.
+// read reads the frames of the connection. When it receives a frame that breaks a rule, it does not reply but closes the connection and records the reason for closing.
 func (e *Endpoint) read(c *endpointConn) {
 	reason := "peer closed"
 	defer func() { e.drop(c, reason) }()
@@ -543,7 +543,7 @@ func (e *Endpoint) read(c *endpointConn) {
 	}
 }
 
-// subscription 은 구독을 바꾸는 선언된 메서드의 처리를 반환한다.
+// subscription returns the handling of a declared method that changes a subscription.
 func (e *Endpoint) subscription(name string) (subscriptionMethod, bool) {
 	if parse, ok := subscriptionMethods[name]; ok {
 		return parse, true
@@ -552,8 +552,8 @@ func (e *Endpoint) subscription(name string) (subscriptionMethod, bool) {
 	return parse, ok
 }
 
-// changeInOrder 는 구독 변경 요청 하나를 그 topic 의 대기열 끝에 넣는다. 읽기 루프에서 호출하므로
-// 같은 topic 의 변경과 페이지에 보내는 메시지는 받은 순서대로 실행되고, 답은 페이지가 답한 뒤 보낸다.
+// changeInOrder puts one subscription change request at the end of the queue of its topic. It is called from the read loop, so
+// changes of the same topic and messages to the page run in the order received, and the reply is sent after the page replied.
 func (e *Endpoint) changeInOrder(c *endpointConn, req request, parse subscriptionMethod) {
 	t, on, err := parse(e, req.Params)
 	if err != nil {
@@ -563,8 +563,8 @@ func (e *Endpoint) changeInOrder(c *endpointConn, req request, parse subscriptio
 	e.enqueue(t, func() { e.reply(c, req, nil, e.change(c, t, on)) })
 }
 
-// change 는 연결 c 의 topic 구독을 바꾸고, 첫 구독이나 마지막 해제이면 페이지에 알린다. 페이지가
-// 첫 구독을 거부하면 구독을 되돌린다.
+// change changes the topic subscription of connection c and, for the first subscription or the last release, notifies the page. When the page
+// rejects the first subscription, the subscription is reverted.
 func (e *Endpoint) change(c *endpointConn, t topic, on bool) error {
 	if !e.subscribe(c, t, on) {
 		return nil
@@ -576,7 +576,7 @@ func (e *Endpoint) change(c *endpointConn, t topic, on bool) error {
 	return err
 }
 
-// enqueue 는 job 을 topic t 의 대기열에 넣고, 실행 중인 고루틴이 없으면 시작한다.
+// enqueue puts job into the queue of topic t and starts a goroutine when none is running.
 func (e *Endpoint) enqueue(t topic, job func()) {
 	e.queueMu.Lock()
 	defer e.queueMu.Unlock()
@@ -587,7 +587,7 @@ func (e *Endpoint) enqueue(t topic, job func()) {
 	}
 }
 
-// drain 은 topic t 의 대기열이 빌 때까지 작업을 차례로 실행한다.
+// drain runs the jobs in order until the queue of topic t is empty.
 func (e *Endpoint) drain(t topic) {
 	for {
 		e.queueMu.Lock()
@@ -604,8 +604,8 @@ func (e *Endpoint) drain(t topic) {
 	}
 }
 
-// drop 은 닫힌 연결을 목록에서 빼고 그 구독을 해제한다. 마지막 감시가 사라진 상태는 페이지에
-// 해제를 보낸다. 연결을 처음 닫는 쪽이 없으면 reason 이 닫는 이유다.
+// drop removes a closed connection from the list and releases its subscriptions. For the state in which the last watch disappeared, it sends
+// the release to the page. When no one closed the connection first, reason is the reason for closing.
 func (e *Endpoint) drop(c *endpointConn, reason string) {
 	c.close(reason)
 	e.mu.Lock()
@@ -624,7 +624,7 @@ func (e *Endpoint) drop(c *endpointConn, reason string) {
 	}
 }
 
-// notifyPage 는 topic 의 첫 구독이나 마지막 해제를 페이지에 보낸다. 호스트 상태는 페이지에 보내지 않는다.
+// notifyPage sends the first subscription or the last release of a topic to the page. Host statuses are not sent to the page.
 func (e *Endpoint) notifyPage(t topic, on bool) error {
 	var err error
 	request, diagnostic := diagnosticTopics[t.name]
@@ -642,8 +642,8 @@ func (e *Endpoint) notifyPage(t topic, on bool) error {
 }
 
 func (e *Endpoint) run(c *endpointConn, req request, method endpointMethod) {
-	// 모든 엔드포인트 메서드의 시간과 결과를 성능 트레이스에 남긴다(V5-104).
-	// 거부도 그대로 기록한다 — 어긋난 값은 오류 문자열이 담는다.
+	// The time and result of every endpoint method are recorded in the performance trace (V5-104).
+	// A rejection is also recorded as it is; a mismatched value is carried in the error string.
 	started := time.Now()
 	result, err := method(e, c, req.Params)
 	PerformanceObserve("host", func() map[string]any {
@@ -656,7 +656,7 @@ func (e *Endpoint) run(c *endpointConn, req request, method endpointMethod) {
 		}
 		return fields
 	})
-	// 시간 초과는 요청한 쪽이 받는 오류이지만, 그 요청이 어느 메서드의 무엇을 기다렸는지는 이 기록만 남긴다.
+	// A timeout is an error that the requester receives, but only this record keeps which method and what the request waited for.
 	var coded *RPCError
 	if errors.As(err, &coded) && coded.Code == codeTimeout {
 		LogError("endpoint timeout", fmt.Sprintf("%s: %s", methodOf(req), coded.Message))
@@ -664,7 +664,7 @@ func (e *Endpoint) run(c *endpointConn, req request, method endpointMethod) {
 	e.reply(c, req, result, err)
 }
 
-// reply 는 요청 req 의 결과나 오류를 보낸다. id 가 없는 요청에는 답하지 않는다.
+// reply sends the result or the error of the request req. It does not reply to a request without id.
 func (e *Endpoint) reply(c *endpointConn, req request, result any, err error) {
 	if len(req.ID) == 0 || string(req.ID) == "null" {
 		return
@@ -696,7 +696,7 @@ func mustJSON(value any) json.RawMessage {
 	return data
 }
 
-// method 는 선언된 메서드의 처리를 반환한다.
+// method returns the handling of a declared method.
 func (e *Endpoint) method(name string) (endpointMethod, bool) {
 	if method, ok := endpointMethods[name]; ok {
 		return method, true
@@ -716,19 +716,19 @@ var endpointMethods = map[string]endpointMethod{
 	"input.key":     inputKey,
 }
 
-// namePattern 은 항목 이름의 형식이다.
+// namePattern is the form of an entry name.
 var namePattern = regexp.MustCompile(`^[a-z0-9-]+(\.[a-z0-9-]+)+$`)
 
 func isHostName(name string) bool { return strings.HasPrefix(name, "host.") }
 
-// target 은 창을 지정하는 요청의 공통 매개변수다.
+// target is the common parameter of a request that specifies a window.
 type target struct {
 	Window  *string `json:"window"`
 	Name    *string `json:"name"`
 	Surface *string `json:"surface"`
 }
 
-// decode 는 params 를 into 로 읽는다. 객체가 아니면 매개변수 오류다.
+// decode reads params into into. It is a parameter error when params is not an object.
 func decode(params json.RawMessage, into any) error {
 	if len(params) == 0 || params[0] != '{' {
 		return rpcError(codeInvalidParams, "params must be an object")
@@ -739,7 +739,7 @@ func decode(params json.RawMessage, into any) error {
 	return nil
 }
 
-// window 는 params 의 창을 읽고 그 창이 있는지 확인한다.
+// window reads the window of params and checks that the window exists.
 func (e *Endpoint) window(params json.RawMessage) (string, error) {
 	var t target
 	if err := decode(params, &t); err != nil {
@@ -754,7 +754,7 @@ func (e *Endpoint) window(params json.RawMessage) (string, error) {
 	return *t.Window, nil
 }
 
-// named 는 params 의 창과 이름을 읽는다.
+// named reads the window and the name of params.
 func (e *Endpoint) named(params json.RawMessage) (string, string, error) {
 	var t target
 	if err := decode(params, &t); err != nil {
@@ -767,7 +767,7 @@ func (e *Endpoint) named(params json.RawMessage) (string, string, error) {
 	return window, *t.Name, err
 }
 
-// withoutWindow 는 페이지에 보낼 params 에서 window 를 뺀다.
+// withoutWindow removes window from the params to send to the page.
 func withoutWindow(params json.RawMessage) json.RawMessage {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(params, &fields); err != nil {
@@ -790,7 +790,7 @@ func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, er
 	if err := json.Unmarshal(reply, &list); err != nil {
 		return nil, rpcError(codeInternal, "page exposure.list: %v", err)
 	}
-	// JSON null 은 오류 없이 nil 맵으로 해석되므로 객체가 아닌 목록으로 거부한다.
+	// A JSON null is decoded as a nil map without an error, so it is rejected as a list that is not an object.
 	if list == nil {
 		return nil, rpcError(codeInternal, "page exposure.list is %s, not an object", reply)
 	}
@@ -820,7 +820,7 @@ func statusGet(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error
 	return e.backend.PageRequest(window, "status.get", withoutWindow(params))
 }
 
-// watchTopic 은 status.watch 와 status.unwatch 의 params 에서 바꿀 topic 을 읽는다.
+// watchTopic reads the topic to change from the params of status.watch and status.unwatch.
 func watchTopic(e *Endpoint, params json.RawMessage, on bool) (topic, bool, error) {
 	window, name, err := e.named(params)
 	if err != nil {
@@ -922,7 +922,7 @@ func inputPointer(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, er
 		DeltaX: p.DeltaX, DeltaY: p.DeltaY, Activate: p.Activate})
 }
 
-// modifierBits 는 input.key 의 modifiers 이름과 네이티브 입력의 비트다.
+// modifierBits are the modifiers names of input.key and the bits of the native input.
 var modifierBits = map[string]uint{"shift": 1, "control": 2, "option": 4, "command": 8}
 
 func inputKey(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
@@ -956,7 +956,7 @@ func inputKey(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error)
 	return nil, e.backend.Key(window, KeyInput{Key: k.Key, Text: k.Text, Modifiers: mask, Down: k.Phase == "down"})
 }
 
-// 요청의 메서드 이름. 없는 요청은 빈 문자열이다.
+// The method name of the request. A request without one has an empty string.
 func methodOf(req request) string {
 	if req.Method == nil {
 		return ""

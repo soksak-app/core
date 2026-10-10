@@ -11,14 +11,14 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// logRotateBytes 는 로그 파일이 이전 세대로 넘어가는 크기이고, logGenerations 는 남기는 이전 세대의 수다
-// (docs/spec/diagnostics.md#files). 기록은 많을수록 좋으므로 한 세션을 덮을 만큼 크게 둔다.
+// logRotateBytes is the size at which the log file moves to the previous generation, and logGenerations is the number of previous generations kept
+// (docs/spec/diagnostics.md#files). More records are better, so the size is large enough to cover one session.
 const (
 	logRotateBytes = 100 * 1024 * 1024
 	logGenerations = 5
 )
 
-// rotateGenerations 는 path 를 이전 세대 path.1 로 넘기고, 이전 세대는 하나씩 뒤로 옮기며, 마지막 세대는 지운다.
+// rotateGenerations moves path to the previous generation path.1, shifts each previous generation back by one, and deletes the last generation.
 func rotateGenerations(path string) error {
 	last := fmt.Sprintf("%s.%d", path, logGenerations)
 	if err := os.Remove(last); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -36,26 +36,26 @@ func rotateGenerations(path string) error {
 	return nil
 }
 
-// Entry 는 시각이 없는 글 기록 하나다: level(error 또는 info), layer(page, host, native, sidecar), where(연산이나 대상의
-// 이름), text(내용). 한 기록은 한 줄이다(docs/spec/diagnostics.md#forms).
+// Entry is one text record without a time: level (error or info), layer (page, host, native, sidecar), where (the name of the operation or
+// target), and text (the content). One record is one line (docs/spec/diagnostics.md#forms).
 type Entry struct {
 	Level, Layer, Where string
 	Text                any
 }
 
-// Line 은 시각을 뺀 기록 `<level> <layer> <where>: <text>` 다. text 의 줄바꿈은 두 글자 `\n` 으로 쓴다.
+// Line is the record without its time, `<level> <layer> <where>: <text>`. A line break in text is written as the two characters `\n`.
 func (e Entry) Line() string {
 	return fmt.Sprintf("%s %s %s: %s", e.Level, e.Layer, e.Where, strings.ReplaceAll(fmt.Sprint(e.Text), "\n", `\n`))
 }
 
-// TranscriptEntry 는 창 window 의 진단 기록 줄 line 이 애플리케이션 로그에도 쓰는 기록이다. 진단 기록은 그것을 켠
-// 연결에만 가므로 이 기록이 없으면 연결이 없을 때 그 줄이 사라진다.
+// TranscriptEntry is the record that the application log also receives for the diagnostic transcript line line of the window window. The diagnostic transcript
+// goes only to the connection that enabled it, so without this record the line is lost when no connection exists.
 func TranscriptEntry(window, line string) Entry {
 	return Entry{"info", "host", "transcript " + window, line}
 }
 
-// TranscriptFailure 는 창 window 의 진단 기록이 싣는 오류 err 가 애플리케이션 로그에 쓰는 오류 기록이다. where 는
-// 실패한 연산이다.
+// TranscriptFailure is the error record that the application log receives for the error err that the diagnostic transcript of the window window carries. where is
+// the failed operation.
 func TranscriptFailure(window, where string, err error) Entry {
 	return Entry{"error", "host", where + " " + window, err}
 }
@@ -65,22 +65,22 @@ func Log(e Entry) {
 	emitRecord(e)
 }
 
-// ErrorLine 은 호스트의 오류 기록에서 시각을 뺀 줄이다. where 는 실패한 연산이나 대상이고 text 는 실패 내용이다.
+// ErrorLine is the line of an error record of the host without its time. where is the failed operation or target and text is the failure content.
 func ErrorLine(where string, text any) string {
 	return Entry{"error", "host", where, text}.Line()
 }
 
-// LogError 는 호스트의 오류 기록 하나를 쓴다.
+// LogError writes one error record of the host.
 func LogError(where string, text any) {
 	Log(Entry{"error", "host", where, text})
 }
 
-// LogInfo 는 호스트의 관측 기록 하나를 쓴다. 관측은 예상된 상태를 기록하며 실패가 아니다.
+// LogInfo writes one observation record of the host. An observation records an expected state and is not a failure.
 func LogInfo(where string, text any) {
 	Log(Entry{"info", "host", where, text})
 }
 
-// fatalError 는 오류 기록을 쓰고 프로세스를 상태 1 로 끝낸다. 로그를 연 뒤의 치명적 실패가 쓴다.
+// fatalError writes an error record and ends the process with status 1. A fatal failure after the log is open uses it.
 func fatalError(where string, text any) {
 	LogError(where, text)
 	if err := FlushRecords(2 * time.Second); err != nil {
@@ -89,13 +89,13 @@ func fatalError(where string, text any) {
 	os.Exit(1)
 }
 
-// ServiceLogPath 는 영속 서비스 program 의 표준 오류를 받는 로그 경로다.
+// ServiceLogPath is the log path that receives the standard error of the persistent service program.
 func ServiceLogPath(config, program string) string {
 	return filepath.Join(config, "logs", filepath.Base(program)+".log")
 }
 
-// OpenLog 는 로그 파일 path 를 mode 0600 의 덧붙이기로 연다. 10 MB 이상인 파일은 먼저 path.1 로
-// 옮겨 이전 세대를 대체한다. 그 파일에 쓰는 다른 프로세스가 없을 때만 부른다.
+// OpenLog opens the log file path for appending with mode 0600. A file of 10 MB or more is first
+// moved to path.1, which replaces the previous generation. Call it only when no other process writes to that file.
 func OpenLog(path string) (*os.File, error) {
 	system, err := platform.Current()
 	if err != nil {

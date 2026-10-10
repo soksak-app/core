@@ -1,4 +1,4 @@
-// 종료 신호 테스트. 신호는 프로세스 전체에 영향을 주므로 자식 프로세스에서 확인한다.
+// Termination signal tests. A signal affects the whole process, so it is checked in a child process.
 package host_test
 
 import (
@@ -12,7 +12,7 @@ import (
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
-// terminationChild 는 자식 프로세스임을 알리는 환경 변수다.
+// terminationChild is the environment variable that tells that the process is a child process.
 const terminationChild = "SOKSAK_TERMINATION_CHILD"
 
 // contract: termination.signal.first-requests-quit-second-ends-process
@@ -23,7 +23,7 @@ func TestTerminationSignalRequestsQuitOnceAndTheNextEndsTheProcess(t *testing.T)
 	}
 	command := exec.Command(os.Args[0], "-test.run=^TestTerminationSignalRequestsQuitOnceAndTheNextEndsTheProcess$")
 	command.Env = append(os.Environ(), terminationChild+"=1")
-	// 자식은 표준 입력을 읽으며 기다린다. 부모가 쓰는 쪽을 열어 두므로 신호 없이는 끝나지 않는다.
+	// The child waits while it reads standard input. The parent keeps the writing side open, so it does not end without a signal.
 	stdin, err := command.StdinPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestTerminationSignalRequestsQuitOnceAndTheNextEndsTheProcess(t *testing.T)
 	}
 }
 
-// terminate 는 종료 신호를 두 번 받는다. 첫 신호는 quit 를 부르고, 둘째 신호는 프로세스를 끝낸다.
+// terminate receives the termination signal twice. The first signal calls quit and the second signal ends the process.
 func terminate() {
 	quit := make(chan struct{})
 	if err := host.OnTermination(func() { close(quit) }); err != nil {

@@ -19,7 +19,7 @@ import (
 	"syscall"
 )
 
-// terminationSignals 는 프로세스 종료를 요청하는 신호다.
+// terminationSignals are the signals that request the end of the process.
 var terminationSignals = []os.Signal{syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP}
 
 func (implementation) OnTermination(quit func()) error {
@@ -27,14 +27,14 @@ func (implementation) OnTermination(quit func()) error {
 	signal.Notify(received, terminationSignals...)
 	go func() {
 		<-received
-		// 다음 신호는 기본 동작으로 프로세스를 끝낸다. 종료 중 저장이 멈춰도 끝낼 수 있다.
+		// The next signal ends the process with the default action. This allows ending even when the save during termination hangs.
 		signal.Reset(terminationSignals...)
 		quit()
 	}()
 	return nil
 }
 
-// quitRequest 는 운영체제의 종료 요청이 호출하는 함수다.
+// quitRequest is the function that the termination request of the operating system calls.
 var quitRequest func()
 
 //export goQuitRequest

@@ -5,6 +5,7 @@
 ## 미배포
 
 - F104.5: `packages/sok`, `packages/plugin-api`, `packages/window-check`, `packages/client`, `packages/mcp`, `packages/soksak`, `packages/log-contract`의 주석 1,070줄이 영어이며, `scripts/check-comment-language.mjs`가 나열하지 않는 `packages/plugin-api/records-check.js`의 6줄을 포함한다. 주석 줄만 바뀌었고 해당 테스트가 통과한다.
+- F104.2.1: `packages/host/wailsv3`의 주석(85개 파일의 1,798줄)이 영어이다. `scripts/check-comment-language.mjs`가 이곳에서 보고하는 줄이 없고, 모든 파일의 코드가 주석을 뺀 채 같으며, macOS에서 `go vet`과 `tests`의 컴파일이 성공한다.
 - F104.5.1, F104.6.1: `apps`, `e2e`(`e2e/hwp.test.mjs` 제외), `scripts`, Makefile의 주석이 영어이다. `scripts/check-comment-language.mjs`가 이 파일들에서 보고하는 주석 줄이 없고, 주석 줄만 바뀌었다.
 - R5.4: `plugins/installed.json`이 `package`를 담지 않는다. `sok`, 두 host, workbench staging은 설치된 plugin의 `name`을 기록된 `path`의 `package.json`에서 읽고, Go와 Rust reader는 `package`를 담은 plugin을 `<file>: plugins/installed.json <id>: unknown field package`로 거부한다. `sok plugin install`의 출력에 더 이상 `package`가 없다.
 - F104.4: `native/darwin`의 주석(`src`, `tests`, `Makefile`의 95개 파일 1,327줄)이 영어이다. `scripts/check-comment-language.mjs`가 그곳에서 한 줄도 보고하지 않고, 모든 파일의 코드는 주석을 빼면 같으며, `make -C native/darwin all`과 native 시험 실행 파일의 빌드가 성공한다. 틀린 주석 세 개(`applyInsets`, `sp_region_facts`, `appearance.h`의 주석)를 고쳤다.

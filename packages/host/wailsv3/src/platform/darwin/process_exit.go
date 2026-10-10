@@ -2,7 +2,7 @@
 
 package darwin
 
-// 프로세스의 종료를 기다린다. 구현은 native/darwin 의 process_exit.m 이다. 진단 빌드에만 들어간다.
+// Waits for the exit of a process. The implementation is process_exit.m of native/darwin. It is included only in diagnostic builds.
 
 /*
 #cgo CFLAGS: -x objective-c -fmodules
@@ -23,14 +23,14 @@ import "runtime/cgo"
 
 //export processExitAnswered
 func processExitAnswered(handle C.uintptr_t, exited C.bool) {
-	// handle 은 WhenProcessExited 가 만든 값이고 라이브러리는 done 을 한 번 호출한다.
+	// handle is the value that WhenProcessExited created, and the library calls done once.
 	h := cgo.Handle(handle)
 	done := h.Value().(func(bool))
 	h.Delete()
 	done(bool(exited))
 }
 
-// WhenProcessExited 는 pid 의 프로세스가 끝나거나 seconds 가 지나면 done 에 답한다. 메인 스레드에서 호출한다.
+// WhenProcessExited replies to done when the process pid ends or seconds pass. Call it on the main thread.
 func (implementation) WhenProcessExited(pid int32, seconds float64, done func(bool)) {
 	C.whenExited(C.pid_t(pid), C.double(seconds), C.uintptr_t(cgo.NewHandle(done)))
 }

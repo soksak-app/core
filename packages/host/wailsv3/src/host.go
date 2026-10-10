@@ -1,11 +1,11 @@
-// Package host 는 soksak 워크벤치를 실행하는 Wails v3 네이티브 호스트다.
+// Package host is the Wails v3 native host that runs the soksak workbench.
 //
-// Wails 가 창과 자산 서버를 제공한다. 이 패키지는 창마다 페이지가 선언한 표면을 네이티브
-// 웹뷰로 배치하고, [data-native-modal] 요소를 모달 웹뷰로 표시하고, 사이드카 채널을
-// 연결하고, 로컬 엔드포인트로 노출 항목을 제공한다. 운영체제별 동작은 platform 패키지가 선택한 구현이 수행한다.
+// Wails provides the windows and the asset server. For each window, this package lays out the surfaces that the page declared as native
+// web views, shows [data-native-modal] elements as modal web views, connects the sidecar channels, and
+// provides the exposure entries through the local endpoint. The implementation that the platform package selected performs the operating system specific behavior.
 //
-// 애플리케이션은 스테이징한 프런트엔드를 frontend/ 아래에 포함한 파일 시스템을 Run 에
-// 전달한다. Wails 는 index.html 이 있는 디렉터리를 자산 루트로 사용하므로 창은 "/" 를 연다.
+// The application passes to Run a file system that contains the staged frontend under frontend/.
+// Wails uses the directory that holds index.html as the asset root, so the window opens "/".
 package host
 
 import (
@@ -25,44 +25,44 @@ import (
 	_ "github.com/soksak-app/core/packages/host/wailsv3/src/platform/darwin"
 	_ "github.com/soksak-app/core/packages/host/wailsv3/src/platform/windows"
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
-	// plugin 작업(plugins.go)은 command line 의 installer library 를 쓰므로 그 platform 구현도 등록한다.
+	// The plugin work (plugins.go) uses the installer library of the command line, so its platform implementation is also registered.
 	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/darwin"
 	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/linux"
 	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/windows"
 )
 
-// Options 는 애플리케이션이 명령행에서 읽어 전달하는 값이다.
+// Options are the values that the application reads from the command line and passes.
 type Options struct {
-	// ConfigDir 은 설정 디렉터리다. 비어 있으면 사용자 설정 디렉터리 아래 이 build 의 식별자 디렉터리를 사용한다
+	// ConfigDir is the configuration directory. When empty, it uses the identifier directory of this build under the user configuration directory
 	// (docs/spec/projects.md#persistence).
 	ConfigDir string
-	// RegistryCA 는 진단 build 의 --registry-ca 다. registry 받기가 신뢰하는 인증 기관의 PEM 파일이다.
+	// RegistryCA is --registry-ca of a diagnostic build. It is the PEM file of the certificate authority that the registry download trusts.
 	RegistryCA string
 }
 
-// 엔드포인트가 알리는 애플리케이션 이름과 버전.
+// The application name and version that the endpoint announces.
 const (
 	applicationName    = "wailsv3"
 	applicationVersion = "0.0.10"
 )
 
-// system 은 Run 이 선택한 운영체제 구현이다.
+// system is the operating system implementation that Run selected.
 var system platform.Platform
 
-// Run 은 assets 의 frontend/ 를 자산 루트로 사용하는 애플리케이션을 실행하고, 종료할 때 반환한다.
+// Run runs the application that uses frontend/ of assets as the asset root and returns when it ends.
 func Run(assets fs.FS, options Options) error {
 	current, err := platform.Current()
 	if err != nil {
 		return err
 	}
 	system = current
-	// 창 확대 애니메이션은 창 프레임만 움직이고 웹 문서는 그 뒤에 따라온다. AppKit 이 기본값을
-	// 읽기 전에 그 길이를 줄인다.
+	// The window zoom animation moves only the window frame, and the web document follows it. This shortens that duration before AppKit
+	// reads the default.
 	if err := system.InstantWindowResize(); err != nil {
 		return err
 	}
-	// 종료 신호는 엔드포인트를 만들기 전부터 받는다. 일반 종료는 애플리케이션이 시작한 뒤에
-	// 요청한다. 일반 종료는 준비된 창의 저장을 마친 뒤 엔드포인트를 닫는다.
+	// The termination signals are received before the endpoint is created. A normal termination is
+	// requested after the application started. A normal termination closes the endpoint after the save of the ready windows finishes.
 	started := make(chan struct{})
 	if err := system.OnTermination(func() {
 		<-started
@@ -92,16 +92,16 @@ func Run(assets fs.FS, options Options) error {
 	if err != nil {
 		return fmt.Errorf("config directory: %w", err)
 	}
-	// 지난 실행이 남긴 WebKit 자식을 기록으로 수확하고, 남의 것을 덮지 않게 지금 떠 있는
-	// WebKit 을 기준선으로 찍는다(V5-113). 아직 창이 없으므로 이 실행의 WebKit 은 없다.
+	// Harvests the WebKit children that the previous run left into the record, and takes the currently running
+	// WebKit processes as the baseline so that it does not overwrite those of others (V5-113). No window exists yet, so this run has no WebKit.
 	ReapRecordedWebKit(configDirectory)
 	SnapshotBaseline()
 	host, err := newHost(configDirectory)
 	if err != nil {
 		return err
 	}
-	// 엔드포인트는 창을 표시하기 전에 만든다. 만들 수 없으면 애플리케이션을 시작하지 않는다.
-	// endpoint.json 은 첫 창을 등록하고 애플리케이션이 시작한 뒤 쓴다.
+	// The endpoint is created before a window is shown. When it cannot be created, the application does not start.
+	// endpoint.json is written after the first window is registered and the application started.
 	listener, address, err := system.Listen(SocketDirectory(), applicationName)
 	if err != nil {
 		return fmt.Errorf("local endpoint: %w", err)
@@ -130,10 +130,10 @@ func Run(assets fs.FS, options Options) error {
 	if err := StartStandardError(configDirectory, identifier); err != nil {
 		return err
 	}
-	// 호스트의 줄은 두 호스트가 같은 형식으로 접두사 없이 쓴다. 시각은 실행의 첫 줄이 가진다.
+	// Both hosts write the host lines in the same form without a prefix. The first line of a run carries the time.
 	log.SetFlags(0)
-	// 설치 상태는 process lock 을 잡고 애플리케이션 로그를 연 뒤에 읽는다. 읽기 오류는 애플리케이션 로그에 남는다
-	// (docs/spec/installation.md). 아직 endpoint.json 이 없으므로 sidecar 를 쓰는 요청은 오지 않는다.
+	// The install state is read after the process lock is taken and the application log is open. A read error is kept in the application log
+	// (docs/spec/installation.md). endpoint.json does not exist yet, so no request that uses a sidecar arrives.
 	declarations, err := InstalledSidecars(configDirectory)
 	if err != nil {
 		return fmt.Errorf("installed plugins: %w", err)
@@ -151,18 +151,18 @@ func Run(assets fs.FS, options Options) error {
 		}},
 		Services:   []application.Service{application.NewService(host)},
 		ShouldQuit: host.shouldQuit,
-		// Wails 의 기본 신호 처리기는 SIGHUP 을 받지 않고, 첫 신호 뒤의 신호를 받아 두기만 해서
-		// 기본 동작으로 프로세스를 끝내지 않는다. 호스트 명세의 종료 신호 계약은 Run 이 등록한
-		// 처리기가 지킨다(docs/spec/hosts.md).
+		// The default signal handler of Wails does not receive SIGHUP and only holds the signals after the first one, so
+		// it does not end the process with the default action. The handler that Run registered
+		// keeps the termination signal contract of the host specification (docs/spec/hosts.md).
 		DisableDefaultSignalHandler: true,
-		// Wails 의 오류는 기본 logger 의 수준 접두사 대신 호스트의 오류 줄로 쓴다. 창 검사가 그 줄을 오류로 읽는다
+		// Wails errors are written as error lines of the host instead of the level prefix of the default logger. The window check reads those lines as errors
 		// (docs/spec/hosts.md#application-log).
 		ErrorHandler: func(err error) { LogError("wails", err) },
 		OnShutdown: func() {
 			RecordAppEvent("exit")
-			// 종료 전에 모든 창의 웹 프로세스를 죽인다. AppKit 은 XPC 서비스를 클라이언트보다
-			// 오래 살려두므로(V5-105), 죽이지 않으면 WebContent·GPU·Networking 프로세스가
-			// 앱 종료 후에도 남아 메모리를 차지한다.
+			// Kills the web processes of all windows before exit. AppKit keeps XPC services alive
+			// longer than their clients (V5-105), so unless they are killed, the WebContent, GPU and Networking processes
+			// remain after the application exits and occupy memory.
 			host.mu.Lock()
 			shutdown := make([]*application.WebviewWindow, 0, len(host.windows))
 			for _, s := range host.windows {
@@ -197,12 +197,12 @@ func Run(assets fs.FS, options Options) error {
 			if err := host.events.Flush(2 * time.Second); err != nil {
 				LogError("event log flush", err)
 			}
-			// 저장과 정리를 마쳤으므로 받은 운영체제의 종료 요청에 답한다.
+			// The save and the cleanup are finished, so the termination request of the operating system that was received is answered.
 			application.InvokeSync(system.AnswerQuitRequests)
 		},
 	})
-	// 클라이언트는 endpoint.json 을 읽자마자 첫 창에 요청하므로 창을 등록한 뒤 쓴다. 쓰지 못하면
-	// 애플리케이션을 끝내고 그 오류를 반환한다.
+	// A client requests the first window as soon as it reads endpoint.json, so it is written after the window is registered. When it cannot be written,
+	// the application ends and the error is returned.
 	unpublished := make(chan error, 1)
 	app.Event.OnApplicationEvent(events.Mac.ApplicationDidBecomeActive, func(*application.ApplicationEvent) {
 		RecordAppEvent("activated")
@@ -213,14 +213,14 @@ func Run(assets fs.FS, options Options) error {
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		RecordAppEvent("started")
 		close(started)
-		// 알림 센터를 쓸 수 없으면 애플리케이션을 시작하지 않는다(docs/spec/hosts.md).
+		// When the notification center cannot be used, the application does not start (docs/spec/hosts.md).
 		if err := host.startNotifications(); err != nil {
 			unpublished <- err
 			app.Quit()
 			return
 		}
-		// host.buttons 는 endpoint.json 을 쓰기 전에 운영체제의 값을 가진다. 감시할 수 없으면 애플리케이션을 시작하지
-		// 않는다(docs/spec/exposure.md#host-entries).
+		// host.buttons holds the value of the operating system before endpoint.json is written. When the watch is not possible, the application does not
+		// start (docs/spec/exposure.md#host-entries).
 		if err := host.watchButtons(); err != nil {
 			unpublished <- err
 			app.Quit()
@@ -231,9 +231,9 @@ func Run(assets fs.FS, options Options) error {
 			app.Quit()
 		}
 	})
-	// 메뉴의 새 창 항목은 Host.WindowNew 로 창을 연다. 초기 메뉴 언어는 시스템 선호 언어를 계약
-	// 표의 언어에 대응한 값이고 페이지가 설정 언어를 알리면 SetMenuLanguage 가 같은 표로 메뉴를
-	// 다시 만든다(docs/spec/host-contract.md 의 Application menu).
+	// The new window item of the menu opens a window with Host.WindowNew. The initial menu language is the system preferred language mapped to the language of the contract
+	// table, and when the page reports the settings language, SetMenuLanguage rebuilds the menu with the same table
+	// (Application menu of docs/spec/host-contract.md).
 	menuWindowNew = host.WindowNew
 	language, err := InitialMenuLanguage()
 	if err != nil {
@@ -260,8 +260,8 @@ func Run(assets fs.FS, options Options) error {
 	}
 }
 
-// setupQuitRequest 는 애플리케이션이 시작하면 운영체제의 종료 요청이 host.quit 과 같은 종료를 실행하게 한다.
-// 그 요청에는 OnShutdown 이 저장을 마친 뒤 답한다(docs/spec/hosts.md#process-lifecycle).
+// setupQuitRequest makes the termination request of the operating system run the same termination as host.quit once the application started.
+// OnShutdown answers that request after the save finishes (docs/spec/hosts.md#process-lifecycle).
 func setupQuitRequest() {
 	application.Get().Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		application.InvokeSync(func() {
@@ -272,7 +272,7 @@ func setupQuitRequest() {
 	})
 }
 
-// setupDockMenu 는 애플리케이션이 시작하면 Dock 메뉴를 등록한다.
+// setupDockMenu registers the Dock menu once the application started.
 func setupDockMenu(host *Host) {
 	application.Get().Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		application.InvokeSync(func() {

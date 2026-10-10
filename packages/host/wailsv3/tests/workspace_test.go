@@ -225,7 +225,7 @@ func TestFolderIdentity(t *testing.T) {
 	}
 }
 
-// readJSON 은 path 의 JSON 객체를 into 에 읽는다.
+// readJSON reads the JSON object of path into into.
 func readJSON(t *testing.T, path string, into *host.Record) error {
 	t.Helper()
 	data, err := os.ReadFile(path)

@@ -1,5 +1,5 @@
-// host 호출 인자의 해석을 검사한다(docs/spec/native-host.md#host-calls). 두 host 는 같은 인자를 같은 문장으로
-// 거부한다.
+// Checks the decoding of the host call arguments (docs/spec/native-host.md#host-calls). Both hosts reject the same arguments with the same
+// sentence.
 package host_test
 
 import (
@@ -100,11 +100,11 @@ func TestArgumentRefusalMessages(t *testing.T) {
 		{"array length", func() error {
 			return h.SetShape(background, raw(`{"id":"s","rect":{"x":0,"y":0,"w":1,"h":1},"radius":0,"lineWidth":0,"fill":[0,0,0],"line":[0,0,0,0]}`))
 		}, "argument request.fill must be an array of 4 items"},
-		// 선택 field 는 빠지거나 null 일 수 있다. 해석이 끝나면 호출은 창을 찾는 다음 단계에서 실패한다.
+		// An optional field can be missing or null. After the decoding finishes, the call fails at the next step, which finds the window.
 		{"optional fields", func() error {
 			return h.DocumentAttach(background, raw(`{"surface":"s","document":"d","url":null}`))
 		}, "host call has no window"},
-		// 상태 값은 null 일 수 있고, 값이 없는 상태 변경은 값이 null 인 변경이다.
+		// A status value can be null, and a status change without a value is a change whose value is null.
 		{"null status value", func() error {
 			return h.ExposureChanged(background, raw(`{"name":"core.grid","value":null}`))
 		}, "host call has no window"},

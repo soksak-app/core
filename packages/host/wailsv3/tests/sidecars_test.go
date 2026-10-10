@@ -21,16 +21,16 @@ import (
 
 const echoSidecar = "@fixture/sidecar-echo"
 
-// stall 은 멈춘 검사를 끝내는 상한이다. 성공은 받은 event 와 끝난 process 로 판정하며 이 시간으로 판정하지 않는다.
-// 부하가 큰 기계에서도 sidecar 의 답과 종료는 이 안에 온다.
+// stall is the upper bound that ends a hung check. Success is decided by the received events and the ended processes and not by this time.
+// Even on a heavily loaded machine, the reply and the exit of the sidecar arrive within it.
 const stall = 120 * time.Second
 
-// declare 는 directory 에 설치된 사이드카 하나의 선언이다.
+// declare is the declaration of one sidecar installed in directory.
 func declare(directory, sidecar string) []host.SidecarDeclaration {
 	return []host.SidecarDeclaration{{Name: echoSidecar, Folder: directory, Data: []byte(sidecar)}}
 }
 
-// fakeOwner 는 받은 사이드카 이벤트와 실패 이벤트를 기록하는 창이다.
+// fakeOwner is a window that records the sidecar events and the failure events it received.
 type fakeOwner struct {
 	root     string
 	mu       sync.Mutex
@@ -71,14 +71,14 @@ func (o *fakeOwner) next(t *testing.T) host.SidecarMessage {
 	return o.events[len(o.events)-1]
 }
 
-// sidecarFailure 는 sidecar-failure 이벤트 값의 JSON 형태다(docs/spec/sidecars.md#failure).
+// sidecarFailure is the JSON form of the sidecar-failure event value (docs/spec/sidecars.md#failure).
 type sidecarFailure struct {
 	Sidecar string `json:"sidecar"`
 	Surface string `json:"surface"`
 	Reason  string `json:"reason"`
 }
 
-// failure 는 다음 실패 이벤트를 기다려 JSON 형태로 반환한다.
+// failure waits for the next failure event and returns it in the JSON form.
 func (o *fakeOwner) failure(t *testing.T) sidecarFailure {
 	t.Helper()
 	var value any
@@ -98,11 +98,11 @@ func (o *fakeOwner) failure(t *testing.T) sidecarFailure {
 	return failure
 }
 
-// messageLimit 은 사이드카 메시지 한 줄의 줄바꿈 앞 최대 크기다(docs/spec/sidecars.md#messages).
+// messageLimit is the maximum size before the line break in one line of a sidecar message (docs/spec/sidecars.md#messages).
 const messageLimit = 64 << 20
 
-// scriptSidecars 는 script 를 실행하는 fake 사이드카를 선언한 채널과 그 디렉터리를 만든다.
-// script 안의 DIR 은 그 디렉터리로 바뀐다.
+// scriptSidecars creates a channel that declares a fake sidecar that runs script, and its directory.
+// DIR in script is replaced by that directory.
 func scriptSidecars(t *testing.T, script string) (*host.Sidecars, string) {
 	t.Helper()
 	directory := t.TempDir()
@@ -114,13 +114,13 @@ func scriptSidecars(t *testing.T, script string) (*host.Sidecars, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 검사가 실패해도 fake 사이드카 프로세스를 남기지 않는다.
+	// Even when the check fails, no fake sidecar process is left.
 	t.Cleanup(sidecars.Stop)
 	return sidecars, directory
 }
 
-// paddedMessageScript 는 요청 하나를 읽은 뒤 줄바꿈 앞이 size byte 인 s1 메시지를 보내고 then 을 실행하는 스크립트다.
-// 본문은 문자열 하나이고 셸 파이프라인이 쓰므로 스크립트 프로세스는 쓰기가 끝날 때까지 기다린다.
+// paddedMessageScript is a script that reads one request, sends an s1 message of size bytes before the line break, and then runs then.
+// The body is one string and a shell pipeline writes it, so the script process waits until the write ends.
 func paddedMessageScript(size int, then string) (string, int) {
 	prefix, suffix := `{"surface":"s1","body":"`, `"}`
 	padding := size - len(prefix) - len(suffix)
@@ -128,7 +128,7 @@ func paddedMessageScript(size int, then string) (string, int) {
 		prefix, padding, suffix, then), padding
 }
 
-// processID 는 fake 사이드카가 기록한 프로세스 id 다.
+// processID is the process id that the fake sidecar recorded.
 func processID(t *testing.T, directory string) int {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(directory, "pid"))
@@ -142,7 +142,7 @@ func processID(t *testing.T, directory string) int {
 	return pid
 }
 
-// requireEnded 는 프로세스 pid 가 끝나고 회수되었는지 검사한다.
+// requireEnded checks that the process pid ended and was reaped.
 func requireEnded(t *testing.T, pid int) {
 	t.Helper()
 	if err := syscall.Kill(pid, 0); !errors.Is(err, syscall.ESRCH) {
@@ -217,7 +217,7 @@ func TestSidecarOutputCloseNotifiesEachSurface(t *testing.T) {
 			t.Fatalf("%s: failure = %+v", surface, failure)
 		}
 	}
-	// 실패 뒤의 전송은 새 프로세스를 시작한다.
+	// A send after the failure starts a new process.
 	if err := sidecars.Send(first, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatalf("send after failure: %v", err)
 	}
@@ -236,8 +236,8 @@ func TestSidecarOutputCloseNotifiesEachSurface(t *testing.T) {
 	}
 }
 
-// echoSidecars 는 받은 줄을 그대로 출력하는 fake 사이드카를 선언한 채널을 만든다.
-// 요청의 surface 와 body 가 그대로 이벤트로 돌아오고, 요청 기록 파일에 모든 요청이 남는다.
+// echoSidecars creates a channel that declares a fake sidecar that outputs the lines it received as they are.
+// The surface and body of the request come back as an event as they are, and every request remains in the request record file.
 func echoSidecars(t *testing.T) (*host.Sidecars, string) {
 	t.Helper()
 	directory := t.TempDir()
@@ -250,8 +250,8 @@ func echoSidecars(t *testing.T) (*host.Sidecars, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Stop 은 stdin 을 닫고 echo 가 남은 줄을 기록하고 끝나기를 기다린다. 기한이 짧으면 부하 속에서 기록 전에
-	// 강제로 끝내므로 기한을 stall 로 둔다. echo 는 EOF 에 곧 끝나므로 검사가 느려지지 않는다.
+	// Stop closes stdin and waits for echo to record the remaining lines and end. With a short deadline, under load it would force the end before the record,
+	// so the deadline is stall. echo ends soon at EOF, so the check does not become slow.
 	sidecars.StopTimeout = stall
 	return sidecars, record
 }
@@ -297,7 +297,7 @@ func TestSurfaceKeepsTheRootItWasOpenedWith(t *testing.T) {
 	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	// 같은 창이 다른 프로젝트로 바뀐 뒤에도 이미 열린 표면은 처음 root 로 보낸다.
+	// Even after the same window changed to another project, a surface that is already open sends with the first root.
 	owner.root = "/projects/b"
 	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
 		t.Fatal(err)
@@ -403,13 +403,13 @@ func TestPersistentTransportRequiresConfigDirectory(t *testing.T) {
 
 // contract: sidecars.persistent.accepts-non-canonical-config-directory
 func TestPersistentTransportAcceptsNonCanonicalConfigDirectory(t *testing.T) {
-	// filepath.Join 은 "." 를 지우므로 문자열로 이어 정규화되지 않은 경로를 만든다.
+	// filepath.Join removes ".", so the path that is not normalized is built by string concatenation.
 	configDirectory := t.TempDir()
 	sidecars, err := host.NewSidecars(declare(t.TempDir(), `{"executable":"echo","protocol":1,"transport":"persistent"}`), configDirectory+string(os.PathSeparator)+".")
 	if err != nil {
 		t.Fatalf("non-canonical config directory was rejected: %v", err)
 	}
-	// 실행 파일이 없으므로 서비스 시작에서 실패하고, 그 전에 서비스 디렉터리를 설정 디렉터리 아래에 만든다.
+	// There is no executable, so the service start fails, and before that the service directory is created under the configuration directory.
 	err = sidecars.Send(newFakeOwner("/projects/test"), echoSidecar, "s1", json.RawMessage(`{}`))
 	if err == nil || !strings.Contains(err.Error(), "sidecar") {
 		t.Fatalf("send = %v, want a sidecar start error", err)
@@ -433,28 +433,28 @@ func TestApplicationWithoutSidecarsRejectsSends(t *testing.T) {
 
 // contract: sidecars.send.fails-fast-when-sidecar-not-keeping-up, sidecars.send.slow-sidecar-does-not-block-others, sidecars.stop.honors-stop-timeout
 func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
-	// 느린 사이드카는 stdin 을 읽지 않고, 다른 사이드카는 정상적으로 동작한다.
-	// 느린 사이드카에 257번 보내면 256번째는 성공하고 257번째는 "is not keeping up" 오류로 실패한다.
-	// 이 테스트는 두 가지 성질을 확인한다:
-	// 1. 느린 사이드카 채널이 가득 찼을 때도, 빠른 사이드카로의 Send() 는 블로킹되지 않는다.
-	// 2. Stop() 이 StopTimeout 을 지키고 있다.
+	// The slow sidecar does not read stdin, and the other sidecar works normally.
+	// When 257 sends go to the slow sidecar, the 256th succeeds and the 257th fails with the "is not keeping up" error.
+	// This test checks two properties:
+	// 1. Even when the channel of the slow sidecar is full, Send() to the fast sidecar does not block.
+	// 2. Stop() keeps StopTimeout.
 
 	directory := t.TempDir()
 
-	// 느린 사이드카: stdin 을 읽지 않으므로 pipe 가 차고 Stop 은 기한 뒤 kill 한다. cat 처럼 stdin 을 읽는 program 은
-	// 읽는 속도가 부하에 달려 있어 채널이 차는지가 정해지지 않는다.
+	// The slow sidecar: it does not read stdin, so the pipe fills and Stop kills it after the deadline. A program that reads stdin, such as cat,
+	// reads at a speed that depends on the load, so whether the channel fills is not determined.
 	slowScript := "#!/bin/sh\nexec sleep 600\n"
 	if err := os.WriteFile(filepath.Join(directory, "slow"), []byte(slowScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	// 빠른 사이드카: 받은 줄을 그대로 출력한다.
+	// The fast sidecar: it outputs the lines it received as they are.
 	fastScript := "#!/bin/sh\ntee /dev/null\n"
 	if err := os.WriteFile(filepath.Join(directory, "fast"), []byte(fastScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	// 두 사이드카를 선언한다.
+	// Declares the two sidecars.
 	sidecars, err := host.NewSidecars([]host.SidecarDeclaration{
 		{Name: "@fixture/sidecar-slow", Folder: directory, Data: []byte(`{"executable":"slow","protocol":1}`)},
 		{Name: "@fixture/sidecar-fast", Folder: directory, Data: []byte(`{"executable":"fast","protocol":1}`)},
@@ -462,47 +462,47 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 테스트를 위해 기한을 100ms로 설정한다.
+	// Sets the deadline to 100ms for the test.
 	sidecars.StopTimeout = 100 * time.Millisecond
 
 	owner := newFakeOwner("/projects/test")
 
-	// 빠른 사이드카의 첫 Send 는 그 프로세스를 띄운다. 기동 시간은 성질 1 과 무관하므로 먼저 띄우고 기록만 한다.
+	// The first Send to the fast sidecar launches that process. The start time is unrelated to property 1, so it is launched first and only recorded.
 	started := time.Now()
 	if err := sidecars.Send(owner, "@fixture/sidecar-fast", "s2", json.RawMessage(`{"data":"start"}`)); err != nil {
 		t.Fatalf("fast start: %v", err)
 	}
 	t.Logf("the first fast send, which starts the process, took %v", time.Since(started))
 
-	// 느린 사이드카에 채널이 가득 찰 때까지 보낸다.
-	// 파이프 버퍼(64KB)를 빠르게 채우기 위해 각 메시지를 크게 만든다.
+	// Sends to the slow sidecar until the channel is full.
+	// Each message is made large to fill the pipe buffer (64KB) quickly.
 	largeBody := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
 	var lastErr error
 	sentCount := 0
-	for i := 0; i < 500; i++ { // 최대 500번 시도
+	for i := 0; i < 500; i++ { // At most 500 attempts
 		err := sidecars.Send(owner, "@fixture/sidecar-slow", "s1", largeBody)
 		if err != nil {
 			lastErr = err
 			if strings.Contains(err.Error(), "is not keeping up") {
-				break // 채널이 가득 찬 것을 확인했다
+				break // Confirmed that the channel is full
 			}
 			t.Fatalf("send %d: unexpected error: %v", i, err)
 		}
 		sentCount++
 	}
 
-	// 마침내 "is not keeping up" 오류를 받았는지 확인한다.
+	// Checks that the "is not keeping up" error was finally received.
 	if lastErr == nil || !strings.Contains(lastErr.Error(), "is not keeping up") {
 		t.Fatalf("after %d sends: want 'is not keeping up', got %v", sentCount, lastErr)
 	}
 
 	err = lastErr
 
-	// 성질 1: 느린 사이드카 채널이 가득 찼을 때도 빠른 사이드카 Send() 는 블로킹되지 않는다.
-	// Send() 는 이미 띄운 프로세스의 채널에 넣고 즉시 돌아올 뿐이므로 50ms 미만이어야 한다.
+	// Property 1: even when the channel of the slow sidecar is full, Send() to the fast sidecar does not block.
+	// Send() only puts into the channel of the process that is already launched and returns immediately, so it must take less than 50ms.
 	start := time.Now()
 
-	// 빠른 사이드카로 보낸다 (이것이 일반적인 경우다).
+	// Sends to the fast sidecar (this is the ordinary case).
 	if err := sidecars.Send(owner, "@fixture/sidecar-fast", "s2", json.RawMessage(`{"data":"test"}`)); err != nil {
 		t.Fatalf("fast send: %v", err)
 	}
@@ -512,13 +512,13 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 		t.Errorf("fast send took %v, want < 50ms", sendElapsed)
 	}
 
-	// 성질 2: Stop() 이 StopTimeout(100ms) 을 지키고 있다.
-	// 200ms 기한으로 단언하면, 기본 5초와 명확히 구별된다.
-	// 이전 코드는 send 와 stop 을 함께 재서 110ms 단언했는데, 이는
-	// "OS 가 프로세스를 죽이고 수거하는 데 10ms 이하" 라는 불합리한 주장이었다.
+	// Property 2: Stop() keeps StopTimeout (100ms).
+	// Asserting with a deadline of 200ms clearly distinguishes it from the default of 5 seconds.
+	// The earlier code measured send and stop together and asserted 110ms, which was
+	// the unreasonable claim that "the OS kills and reaps the process in 10ms or less".
 	start = time.Now()
 
-	// Stop() 호출.
+	// Calls Stop().
 	sidecars.Stop()
 
 	stopElapsed := time.Since(start)
@@ -527,42 +527,42 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 	}
 }
 
-// TestStopGracefulShutdown 은 사이드카가 실제로 stdin 을 읽고 있을 때 Stop() 이 stdin EOF 에 의해
-// 정상 종료되는지 검증한다. 측정은 사이드카가 Send 의 에코를 받은 뒤 시작해서, 기한(1초)까지
-// 기다리지 않고 즉시 종료되는지 확인한다.
+// TestStopGracefulShutdown verifies that, when the sidecar actually reads stdin, Stop() ends
+// normally by stdin EOF. The measurement starts after the sidecar received the echo of Send, and it checks that the sidecar ends immediately without
+// waiting until the deadline (1 second).
 // contract: sidecars.stop.graceful-on-stdin-eof
 func TestStopGracefulShutdown(t *testing.T) {
 	directory := t.TempDir()
 
-	// 사이드카: 받은 줄을 그대로 에코하고 stdin EOF 에 정상 종료한다.
+	// The sidecar: echoes the lines it received as they are and ends normally at stdin EOF.
 	gracefulScript := "#!/bin/sh\nwhile read line; do echo \"$line\"; done\nexit 0\n"
 	if err := os.WriteFile(filepath.Join(directory, "graceful"), []byte(gracefulScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	// 사이드카를 선언한다.
+	// Declares the sidecar.
 	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"graceful","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Stop() 은 기한이 지나야만 강제로 끝낸다. 기한보다 먼저 돌아오면 사이드카가 stdin EOF 로 스스로 끝난 것이다.
-	// 기한은 기계 부하 속의 프로세스 종료 시간보다 충분히 길게 stall 로 둔다.
+	// Stop() forces the end only after the deadline passes. If it returns before the deadline, the sidecar ended by itself at stdin EOF.
+	// The deadline is set to stall, which is sufficiently longer than the process exit time on a loaded machine.
 	sidecars.StopTimeout = stall
 
 	owner := newFakeOwner("/projects/test")
 
-	// 사이드카를 시작한다.
+	// Starts the sidecar.
 	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 
-	// 사이드카가 실제로 stdin 을 읽고 있음을 확인한다: 에코 이벤트를 기다린다.
-	// 이렇게 하면 shell 프로세스 기동 시간이 측정에 포함되지 않는다.
+	// Checks that the sidecar is actually reading stdin: waits for the echo event.
+	// This keeps the start time of the shell process out of the measurement.
 	if event := owner.next(t); event.Sidecar != echoSidecar || event.Surface != "s1" {
 		t.Fatalf("echo event = %+v", event)
 	}
 
-	// 이제 Stop() 호출을 시간 측정한다. stdin EOF 에 정상 종료되어야 한다.
+	// Now measures the time of the Stop() call. It must end normally at stdin EOF.
 	start := time.Now()
 	sidecars.Stop()
 	elapsed := time.Since(start)
@@ -572,14 +572,14 @@ func TestStopGracefulShutdown(t *testing.T) {
 	}
 }
 
-// TestCloseDuringStopSendsNothing 은 Stop 이 입력을 끝낸 뒤 프로세스가 끝나기 전의 표면 닫기와 창 닫기가 아무것도
-// 보내지 않는지 검증한다. 애플리케이션이 끝날 때 Stop 과 함께 창이 닫히며 CloseOwner 를 부른다.
+// TestCloseDuringStopSendsNothing verifies that a surface close and a window close after Stop ended the input and before the process ends send nothing.
+// When the application ends, windows close together with Stop and call CloseOwner.
 // contract: sidecars.stop.forgets-running-sidecars
 func TestCloseDuringStopSendsNothing(t *testing.T) {
 	directory := t.TempDir()
-	// 사이드카: 시작할 때 ended 와 release 를 읽고 쓰기로 열어 둔다. 받은 줄을 에코하고, 입력이 끝나면 ended 에 한 줄을
-	// 쓰고 release 에 한 줄이 올 때까지 살아 있다. 사이드카가 두 파이프를 열어 두므로 쓴 줄은 버려지지 않고 여는 쪽은
-	// 막히지 않는다.
+	// The sidecar: at start it opens ended and release for reading and writing. It echoes the lines it received, and when the input ends it writes one line to ended and
+	// stays alive until one line arrives on release. The sidecar keeps both pipes open, so the line it wrote is not discarded and the opening side
+	// does not block.
 	ended := filepath.Join(directory, "ended")
 	release := filepath.Join(directory, "release")
 	for _, fifo := range []string{ended, release} {
@@ -592,7 +592,7 @@ func TestCloseDuringStopSendsNothing(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "lingering"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// 검사가 도중에 끝나도 사이드카가 남지 않게 release 에 한 줄을 쓴다.
+	// Writes one line to release so that no sidecar remains even if the check ends midway.
 	var released sync.Once
 	releaseSidecar := func() {
 		released.Do(func() {
@@ -630,7 +630,7 @@ func TestCloseDuringStopSendsNothing(t *testing.T) {
 		sidecars.Stop()
 		close(stopped)
 	}()
-	// 사이드카가 ended 에 쓰면 Stop 은 입력을 끝냈고 프로세스는 아직 실행 중이다.
+	// When the sidecar writes to ended, Stop has ended the input and the process is still running.
 	signal, err := os.Open(ended)
 	if err != nil {
 		t.Fatal(err)
@@ -655,9 +655,9 @@ func TestCloseDuringStopSendsNothing(t *testing.T) {
 	}
 }
 
-// TestStopClosesUnreadOutput 은 멈추는 동안의 프로토콜 실패를 로그에 쓰고, 호스트가 더 읽지 않는 출력의 읽기 끝을
-// 닫아, 그 뒤 파이프가 담는 것보다 많이 쓰는 사이드카도 강제 종료 없이 끝나는지 검증한다. 출력은 호스트가 닫지 않은
-// 표면의 닫기 응답이다. 그 프로세스의 종료는 닫힌 파이프 때문이므로 보고하지 않는다.
+// TestStopClosesUnreadOutput verifies that a protocol failure while stopping is written to the log, the read end of the output that the host no longer reads is
+// closed, and a sidecar that writes more than the pipe can hold afterward also ends without a forced termination. The output is
+// the close reply of a surface that the host did not close. The exit of that process is not reported because it is caused by the closed pipe.
 // contract: sidecars.stop.closes-unread-output
 func TestStopClosesUnreadOutput(t *testing.T) {
 	written := captureLog(t)
@@ -671,7 +671,7 @@ func TestStopClosesUnreadOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Stop 은 기한이 지나야만 강제로 끝낸다. 기한보다 먼저 돌아오면 사이드카가 출력을 다 쓰고 스스로 끝난 것이다.
+	// Stop forces the end only after the deadline passes. If it returns before the deadline, the sidecar wrote all its output and ended by itself.
 	sidecars.StopTimeout = stall
 	owner := newFakeOwner("/projects/test")
 	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
@@ -694,9 +694,9 @@ func TestStopClosesUnreadOutput(t *testing.T) {
 	}
 }
 
-// TestStopReadsOutputToItsEnd 는 멈추는 동안 호스트가 출력을 끝까지 읽는지 검증한다. 사이드카는 중지 전에 받은 닫기에
-// 입력이 끝난 뒤에야 답하고, 그다음 파이프가 담는 것보다 많이 쓴 뒤 모든 쓰기가 성공했을 때만 finished 를 기록한다.
-// 애플리케이션이 끝날 때 창 닫기가 보낸 closed 에 files 사이드카가 답하는 순서와 같다.
+// TestStopReadsOutputToItsEnd verifies that the host reads the output to the end while stopping. The sidecar answers the close it received before the stop
+// only after the input ended, then writes more than the pipe can hold, and records finished only when all writes succeeded.
+// This is the same order as the files sidecar answering the closed that a window close sent when the application ends.
 // contract: sidecars.stop.reads-output-to-end
 func TestStopReadsOutputToItsEnd(t *testing.T) {
 	written := captureLog(t)
@@ -727,8 +727,8 @@ func TestStopReadsOutputToItsEnd(t *testing.T) {
 	}
 }
 
-// TestStopReportsExitStatus 는 멈추는 동안 0 이 아닌 종료 상태나 신호로 끝난 사이드카를 두 호스트에 같은 형식으로
-// 로그에 쓰는지 검증한다.
+// TestStopReportsExitStatus verifies that, while stopping, a sidecar that ended with a non-zero exit status or a signal is written to the log in the same form on both
+// hosts.
 // contract: sidecars.stop.reports-exit-status
 func TestStopReportsExitStatus(t *testing.T) {
 	written := captureLog(t)
@@ -752,41 +752,41 @@ func TestStopReportsExitStatus(t *testing.T) {
 	}
 }
 
-// TestStopForcedKill 은 기한을 초과해도 종료하지 않는 사이드카를 kill 하는지 검증한다.
+// TestStopForcedKill verifies that a sidecar that does not end after the deadline is killed.
 // contract: sidecars.stop.kills-after-timeout
 func TestStopForcedKill(t *testing.T) {
 	written := captureLog(t)
 	directory := t.TempDir()
 
-	// 사이드카: stdin 을 읽지 않으므로 stdin EOF 뒤에도 계속 실행한다. background 명령의 stdin 은 shell 에 따라 /dev/null 이
-	// 되어 곧바로 끝날 수 있으므로 쓰지 않는다.
+	// The sidecar: it does not read stdin, so it keeps running after stdin EOF. The stdin of a background command can become /dev/null depending on the shell and
+	// end immediately, so it is not used.
 	stubborn := "#!/bin/sh\nexec sleep 600\n"
 	if err := os.WriteFile(filepath.Join(directory, "stubborn"), []byte(stubborn), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	// 사이드카를 선언한다.
+	// Declares the sidecar.
 	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"stubborn","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 테스트를 위해 기한을 100ms로 설정한다.
+	// Sets the deadline to 100ms for the test.
 	sidecars.StopTimeout = 100 * time.Millisecond
 
 	owner := newFakeOwner("/projects/test")
 
-	// 사이드카를 시작한다.
+	// Starts the sidecar.
 	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 
-	// Stop() 호출. 기한 후 kill 되어야 한다.
+	// Calls Stop(). It must be killed after the deadline.
 	start := time.Now()
 	sidecars.Stop()
 	elapsed := time.Since(start)
 
-	// Stop() 은 기한까지 기다린 뒤 kill 한다. 기한보다 먼저 돌아오면 기다리지 않은 것이고, 상한은 멈춤만 잡는다.
-	// kill 뒤 process 가 끝나는 시간은 부하에 따라 늘어나므로 상한으로 성공을 판정하지 않는다.
+	// Stop() kills after it waits for the deadline. If it returns before the deadline, it did not wait, and the upper bound catches only a hang.
+	// The time until the process ends after the kill grows with the load, so success is not decided by the upper bound.
 	if elapsed < sidecars.StopTimeout || elapsed > stall {
 		t.Errorf("forced kill stop took %v, want at least the %v deadline", elapsed, sidecars.StopTimeout)
 	}
@@ -809,7 +809,7 @@ func TestClosingASurfaceKeepsOtherSessions(t *testing.T) {
 		}
 	}
 	sidecars.Close("s1")
-	// 창의 프로젝트가 빠진 뒤에도 닫히지 않은 세션은 처음 root 로 보낸다.
+	// Even after the project of the window left, a session that was not closed sends with the first root.
 	owner.root = ""
 	if err := sidecars.Send(owner, echoSidecar, "state:files:p1", json.RawMessage(`{"operation":"watch"}`)); err != nil {
 		t.Fatal(err)
@@ -841,7 +841,7 @@ func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 		}
 	}
 	sidecars.Close("s2")
-	// s2 의 늦은 메시지는 버려지고, 그 뒤의 s1 메시지가 첫 이벤트다.
+	// The late message of s2 is discarded, and the s1 message after it is the first event.
 	if event := owner.next(t); event.Surface != "s1" || string(event.Body) != `"after"` {
 		t.Fatalf("first event = %+v", event)
 	}
@@ -856,14 +856,14 @@ func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 	}
 }
 
-// closingSnapshots 는 closing 이 바뀔 때마다 그 값을 받는 채널이다.
+// closingSnapshots is a channel that receives the value of closing every time closing changes.
 func closingSnapshots(sidecars *host.Sidecars) chan []host.ClosingSurface {
 	snapshots := make(chan []host.ClosingSurface, 64)
 	sidecars.ClosingChanged = func() { snapshots <- sidecars.Closing() }
 	return snapshots
 }
 
-// nextClosing 은 다음 closing 값을 받는다. 오지 않으면 검사가 실패한다.
+// nextClosing receives the next closing value. If none arrives, the check fails.
 func nextClosing(t *testing.T, snapshots chan []host.ClosingSurface) []host.ClosingSurface {
 	t.Helper()
 	select {
@@ -875,7 +875,7 @@ func nextClosing(t *testing.T, snapshots chan []host.ClosingSurface) []host.Clos
 	}
 }
 
-// closingScript 는 sidecar 실행 파일을 directory 에 쓰고 그 선언을 만든다.
+// closingScript writes a sidecar executable in directory and builds its declaration.
 func closingSidecars(t *testing.T, script string) *host.Sidecars {
 	t.Helper()
 	directory := t.TempDir()
@@ -892,7 +892,7 @@ func closingSidecars(t *testing.T, script string) *host.Sidecars {
 
 // contract: sidecars.close.answer-ends-closing
 func TestClosedSurfaceStaysClosingUntilTheSidecarAnswers(t *testing.T) {
-	// 받은 줄을 그대로 돌려준다. closed 줄을 돌려주면 그것이 closed 의 답이다.
+	// Returns the line it received as it is. Returning a closed line is the reply to closed.
 	sidecars := closingSidecars(t, "#!/bin/sh\ntee /dev/null\n")
 	snapshots := closingSnapshots(sidecars)
 	owner := newFakeOwner("/projects/closing")
@@ -1030,7 +1030,7 @@ func TestRepeatedCloseAwaitsEachAnswer(t *testing.T) {
 
 // contract: sidecars.close.process-end-clears-closing
 func TestEndedSidecarLeavesNoClosingSurface(t *testing.T) {
-	// 첫 요청에 답하고, closed 를 받으면 답하지 않고 끝난다.
+	// Replies to the first request, and when it receives closed, it ends without a reply.
 	sidecars := closingSidecars(t, "#!/bin/sh\nread line\necho \"$line\"\nread line\nexit 0\n")
 	snapshots := closingSnapshots(sidecars)
 	owner := newFakeOwner("/projects/closing")
@@ -1058,7 +1058,7 @@ func captureLog(t *testing.T) func() string {
 	}
 }
 
-// writerFunc 는 함수를 io.Writer 로 쓴다.
+// writerFunc uses a function as an io.Writer.
 type writerFunc func([]byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) { return f(p) }

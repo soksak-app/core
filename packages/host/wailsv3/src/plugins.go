@@ -9,29 +9,29 @@ import (
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
-// PluginsRunRequest 는 pluginsRun 호출의 인자다(docs/spec/installation.md#plugin-operations-in-the-application).
-// Plugin 은 문자열이 아닌 값을 거부하기 위해 형을 정하지 않고 받는다.
+// PluginsRunRequest is the argument of the pluginsRun call (docs/spec/installation.md#plugin-operations-in-the-application).
+// Plugin is received without a fixed type so that a value that is not a string is rejected.
 type PluginsRunRequest struct {
 	Action string `json:"action"`
 	Plugin any    `json:"plugin"`
 }
 
-// PluginsRegistryRequest 는 pluginsUseRegistry 호출의 인자다. Index 는 문자열이 아닌 값을 거부하기 위해 형을 정하지
-// 않고 받는다.
+// PluginsRegistryRequest is the argument of the pluginsUseRegistry call. Index is received without a fixed type so that a value that is not a string
+// is rejected.
 type PluginsRegistryRequest struct {
 	Index any `json:"index"`
 }
 
-// PluginsChanged 는 plugins-changed event 의 값이다.
+// PluginsChanged is the value of the plugins-changed event.
 type PluginsChanged struct {
 	Action string `json:"action"`
 	Plugin string `json:"plugin"`
 }
 
-// errPluginOperationRunning 은 다른 plugin 작업이 실행 중일 때의 거부다.
+// errPluginOperationRunning is the rejection when another plugin operation is running.
 var errPluginOperationRunning = errors.New("another plugin operation is running")
 
-// Plugins 는 설정 폴더의 plugin 설치를 command line 의 installer library 로 바꾼다.
+// Plugins converts the plugin installation of the configuration folder to the installer library of the command line.
 // It runs one operation at a time, applies a change to the sidecars with apply and then notifies changed
 // (docs/spec/installation.md#applying-a-change).
 type Plugins struct {
@@ -43,7 +43,7 @@ type Plugins struct {
 	changed   func(PluginsChanged)
 }
 
-// NewPlugins 는 이 애플리케이션의 core version 과 platform 으로 작업하는 Plugins 를 만든다.
+// NewPlugins creates a Plugins that works with the core version and the platform of this application.
 func NewPlugins(configDir string, apply func() error, changed func(PluginsChanged)) (*Plugins, error) {
 	platform, err := sok.CurrentPlatform()
 	if err != nil {
@@ -52,12 +52,12 @@ func NewPlugins(configDir string, apply func() error, changed func(PluginsChange
 	return &Plugins{configDir: configDir, core: sok.CoreVersion, platform: platform, apply: apply, changed: changed}, nil
 }
 
-// State 는 registry 주소, 검사한 index, 설치 상태를 돌려준다.
+// State returns the registry address, the index that was checked, and the install state.
 func (p *Plugins) State() (*sok.PluginsState, error) {
 	return sok.ReadPluginsState(p.configDir)
 }
 
-// Run 은 sok plugin <action> <plugin> 과 같은 작업을 실행하고 그 출력을 돌려준다.
+// Run runs an operation such as sok plugin <action> <plugin> and returns its output.
 func (p *Plugins) Run(request PluginsRunRequest) (any, error) {
 	switch request.Action {
 	case "install", "update", "remove", "enable", "disable":
@@ -87,7 +87,7 @@ func (p *Plugins) Run(request PluginsRunRequest) (any, error) {
 	return result, nil
 }
 
-// UseRegistry 는 sok registry use <index> 와 같이 registry index 를 정하고 그 출력을 돌려준다.
+// UseRegistry sets the registry index as sok registry use <index> does and returns its output.
 func (p *Plugins) UseRegistry(request PluginsRegistryRequest) (any, error) {
 	index, ok := request.Index.(string)
 	if !ok || index == "" {
@@ -104,12 +104,12 @@ func (p *Plugins) UseRegistry(request PluginsRegistryRequest) (any, error) {
 	return map[string]string{"index": url}, nil
 }
 
-// PluginsState 는 page 의 pluginsState 호출이다.
+// PluginsState is the pluginsState call of the page.
 func (h *Host) PluginsState() (*sok.PluginsState, error) {
 	return h.plugins.State()
 }
 
-// PluginsRun 은 page 의 pluginsRun 호출이다.
+// PluginsRun is the pluginsRun call of the page.
 func (h *Host) PluginsRun(requestJSON json.RawMessage) (any, error) {
 	request, err := argument[PluginsRunRequest]("request", requestJSON)
 	if err != nil {
@@ -118,7 +118,7 @@ func (h *Host) PluginsRun(requestJSON json.RawMessage) (any, error) {
 	return h.plugins.Run(request)
 }
 
-// PluginsUseRegistry 는 page 의 pluginsUseRegistry 호출이다.
+// PluginsUseRegistry is the pluginsUseRegistry call of the page.
 func (h *Host) PluginsUseRegistry(requestJSON json.RawMessage) (any, error) {
 	request, err := argument[PluginsRegistryRequest]("request", requestJSON)
 	if err != nil {
@@ -140,7 +140,7 @@ func (h *Host) notifySidecars() {
 	}
 }
 
-// notifyPlugins 는 모든 창에 plugins-changed 를 보낸다.
+// notifyPlugins sends plugins-changed to all windows.
 func (h *Host) notifyPlugins(change PluginsChanged) {
 	h.mu.Lock()
 	windows := make([]*Surfaces, 0, len(h.windows))
