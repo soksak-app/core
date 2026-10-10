@@ -83,7 +83,7 @@ async function serve(s) {
       @media (prefers-color-scheme: dark) {
         body { background:rgb(21,28,42); color:rgb(235,238,245); }
       }
-    </style>${name === "scheme" ? "<script>document.title = matchMedia('(prefers-color-scheme: dark)').matches ? 'scheme-dark' : 'scheme-light'</script>" : ""}<body>${name === "block" ? BLOCK : ""}<div style="height:6000px">${name}</div>`);
+    </style>${name === "scheme" ? "<script>document.title = matchMedia('(prefers-color-scheme: dark)').matches ? 'scheme-dark' : 'scheme-light'</script>" : ""}${name === "scheme-live" ? "<script>const query = matchMedia('(prefers-color-scheme: dark)'); const report = () => { document.title = query.matches ? 'live-dark' : 'live-light'; }; query.addEventListener('change', report); report();</script>" : ""}<body>${name === "block" ? BLOCK : ""}<div style="height:6000px">${name}</div>`);
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   s.cleanup(() => new Promise((resolve) => {
@@ -612,6 +612,60 @@ for (const app of Object.values(APPS)) {
       `the site's own appearance was overwritten by the host theme: ${JSON.stringify({ ...measuredLight, dark })}`);
     assert.equal((await s.get("browser.location", surface)).url, location.url,
       "host theme change must not change the site location");
+  });
+}
+
+// The page of a card receives the new color scheme in the presentation that applies the setting: the media query of the document
+// changes without an input event (the document reports each change as the title).
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a change of the color scheme reaches the document of a browser card at once`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    await s.run("core.settings.set", { patch: { mode: "light" } });
+    await s.until("core.settings", (value) => value.values.mode === "light" && !value.saving, "host did not settle light theme");
+    const base = await serve(s);
+    await s.run("browser.navigate", { url: `${base}/scheme-live` }, surface);
+    await s.until("browser.location", (value) => value.url === `${base}/scheme-live` && !value.loading && value.title === "live-light",
+      "the live document did not report the light scheme", { surface });
+    await s.run("core.settings.set", { patch: { mode: "dark" } });
+    await s.until("browser.location", (value) => value.title === "live-dark",
+      "the document of a visible card kept the light scheme after the setting changed to dark", { surface });
+    await s.run("core.settings.set", { patch: { mode: "light" } });
+    await s.until("browser.location", (value) => value.title === "live-light",
+      "the document of a visible card kept the dark scheme after the setting changed to light", { surface });
+  });
+}
+
+// A card that is hidden by the full screen of another card also has the new scheme when it is shown again.
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a change of the color scheme reaches the document of a hidden browser card`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    await s.run("core.settings.set", { patch: { mode: "light" } });
+    await s.until("core.settings", (value) => value.values.mode === "light" && !value.saving, "host did not settle light theme");
+    const base = await serve(s);
+    await s.run("browser.navigate", { url: `${base}/scheme-live` }, surface);
+    await s.until("browser.location", (value) => value.url === `${base}/scheme-live` && !value.loading && value.title === "live-light",
+      "the live document did not report the light scheme", { surface });
+    const grid = await s.get("core.grid");
+    const { card } = await s.run("core.card.split", { card: grid.cards.find((c) => c.tabs.some((x) => x.id === surface)).id,
+      side: "right", plugin: "browser" });
+    await s.run("core.card.fullscreen", { card });
+    await s.until("host.window", (state) => state.documents.every((item) => item.surface !== surface || !item.visible),
+      "the document of the other card was not hidden by the full screen");
+    await s.run("core.settings.set", { patch: { mode: "dark" } });
+    await s.until("core.settings", (value) => value.values.mode === "dark" && !value.saving, "host did not settle dark theme");
+    await s.run("core.card.fullscreen", { card });
+    await s.until("host.window", (state) => state.documents.some((item) => item.surface === surface && item.visible),
+      "the document was not shown again after the full screen ended");
+    await s.until("browser.location", (value) => value.title === "live-dark",
+      "the document of a card that was hidden kept the light scheme after it was shown again", { surface });
   });
 }
 
