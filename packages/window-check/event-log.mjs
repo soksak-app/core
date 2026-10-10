@@ -154,3 +154,33 @@ export async function untilEventLine(configDir, offsets, predicate, timeout) {
   const lines = await untilEventLines(configDir, offsets, (all) => all.some(predicate), timeout);
   return lines.find(predicate);
 }
+
+const TRACE_PREFIX = "page.trace.";
+
+/**
+ * The events of the trace of the page as rows in the shape of the trace file of earlier runs: the layer, the event name
+ * without the prefix, the time as an ISO-8601 text with milliseconds, and the fields of the event.
+ */
+export function traceRows(events) {
+  return events.filter((event) => event.event.startsWith(TRACE_PREFIX)).map((event) => ({
+    layer: event.layer,
+    event: event.event.slice(TRACE_PREFIX.length),
+    ts: new Date(event.ts_us / 1000).toISOString(),
+    ...event.fields,
+  }));
+}
+
+/**
+ * The end of the complete lines of every host event log now. A check that reads what the application wrote after a moment
+ * takes this position first; `readEventOffsets` is the position at which the earlier session ended, which the harness uses
+ * to judge the errors between two checks.
+ */
+export function currentEventOffsets(configDir) {
+  const logs = join(configDir, "logs");
+  const offsets = {};
+  for (const name of readdirSync(logs).filter((entry) => HOST_LOG.test(entry)).sort()) {
+    const data = readFileSync(join(logs, name));
+    offsets[name] = data.lastIndexOf(0x0a) + 1;
+  }
+  return offsets;
+}

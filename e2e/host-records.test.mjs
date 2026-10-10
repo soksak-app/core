@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { readEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
+import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
@@ -21,7 +21,7 @@ for (const app of Object.values(APPS)) {
     const transcript = await s.transcript();
     s.cleanup(() => transcript.stop());
     const line = "focus in core.library.search";
-    const offsets = readEventOffsets(s.app.configDir);
+    const offsets = currentEventOffsets(s.app.configDir);
     await s.run("core.focus.set", { name: "core.library.search" });
     // The transcript holds the record in the text form of the application log.
     await transcript.until((lines) => lines.includes(`info page page: ${line}`), `the page did not report "${line}"`);

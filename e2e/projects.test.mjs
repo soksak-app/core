@@ -8,7 +8,8 @@ import test from "node:test";
 import { APPS, failure, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frontmostApp } from "@soksak/window-check/frontmost.mjs";
-import { openStages, systemState, traceLength } from "./open-report.mjs";
+import { readEvents, currentEventOffsets, traceRows } from "@soksak/window-check/event-log.mjs";
+import { openStages, systemState } from "./open-report.mjs";
 
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 
@@ -410,15 +411,18 @@ for (const app of Object.values(APPS)) {
       await s.run("core.projects.flush");
     });
 
-    const trace = join(app.configDir, "logs", "performance.ndjson");
-    const offset = traceLength(trace);
+    const offsets = currentEventOffsets(app.configDir);
+    const stages = async () => {
+      await s.flushLog();
+      return openStages(traceRows(readEvents(app.configDir, offsets).events));
+    };
     const started = performance.now();
     let opened;
     try {
       opened = await s.run("core.project.open", { root, color: "#7db4ff" });
     } catch (error) {
       throw new Error(`core.project.open failed after ${(performance.now() - started).toFixed(0)}ms: ${error.message}; ` +
-        `stages: ${openStages(trace, offset)}; ${systemState()}`, { cause: error });
+        `stages: ${await stages()}; ${systemState()}`, { cause: error });
     }
     t.diagnostic(`core.project.open replied in ${(performance.now() - started).toFixed(0)}ms; ${systemState()}`);
     assert.equal(opened.root, root);

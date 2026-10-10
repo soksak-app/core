@@ -1142,6 +1142,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.3.5.1",
+    implementation: [
+      { file: "packages/workbench/performance.js", symbol: "export function createTracer" },
+      { file: "packages/window-check/event-log.mjs", symbol: "export function traceRows" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/performance.test.mjs", id: "an enabled trace relays its events of one turn in one log call, and the line has no timestamp of its own" },
+      { file: "packages/host/wailsv3/tests/performance_test.go", id: "TestTheSwitchAcceptsOnAndOffOnly" },
+      { file: "packages/host/tauriv2/tests/performance_test.rs", id: "the_switch_accepts_on_and_off_only" },
+      { file: "e2e/settings.test.mjs", id: "performance tracing records enabled card focus and stops while disabled" },
+    ],
+    expected: "The trace of the page leaves as events of one batch through the call log, the switch accepts on and off only, and the events are in the event log.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F150.3.3",
     implementation: [
       { file: "native/darwin/src/application_log.m", symbol: "static void storeRecord" },

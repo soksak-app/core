@@ -1,22 +1,26 @@
-// 페이지의 성능 트레이스 생산자. 스위치와 중계 요청은 응답 순서로 처리한다.
+// The trace of the page (docs/spec/performance-trace.md). An event of the trace is the event `page.trace.<event>` of the
+// event contract (docs/spec/logging.md#writers): it is queued without waiting and relayed to the host in a batch through the
+// call `log`. The switch is the call `performance`; its requests run in the order they were made.
 import { host as bridge } from "@soksak/runtime";
+import { createEventBatcher } from "./log-batch.js";
 
 function reportRelayError(error) {
   console.error("performance trace relay failed:", error);
   if (typeof ErrorEvent === "function") {
-    // 기본값: dispatchEvent 가 없는 실행 환경(Node 단위 검사)에서는 위 console.error 의 보고만 남는다.
+    // default: an execution environment without dispatchEvent (the unit tests under Node) keeps only the console.error report above.
     globalThis.dispatchEvent?.(new ErrorEvent("error", { message: error.message, error }));
   }
 }
 
-export function createTracer(call, report = reportRelayError) {
+export function createTracer(call, report = reportRelayError, log = null) {
   let enabled = false;
   let switching = false;
   let revision = 0;
   let pending = Promise.resolve();
+  const batcher = log ? createEventBatcher({ call: log, report }) : null;
   const enqueue = (work) => {
-    // 앞선 요청의 실패는 그 요청의 호출자나 중계 오류 보고기가 이미 전달받는다.
-    // 이후 명시적 요청은 별도의 결과를 갖고 순서대로 실행한다.
+    // The failure of an earlier request reached the caller of that request.
+    // A later explicit request has its own result and runs in order.
     const result = pending.then(work, work);
     pending = result;
     return result;
@@ -29,6 +33,8 @@ export function createTracer(call, report = reportRelayError) {
     switching = true;
     return enqueue(async () => {
       try {
+        // The events that were accepted leave before the switch goes off.
+        if (!on && batcher) await batcher.flush();
         await call({ action: on ? "on" : "off" });
         if (mine === revision) enabled = on;
       } finally {
@@ -37,13 +43,10 @@ export function createTracer(call, report = reportRelayError) {
     });
   };
   const trace = (event, fields = {}) => {
-    if (!enabled) return Promise.resolve();
-    const line = { ts: new Date().toISOString(), event, ...fields };
+    if (!enabled || !batcher) return;
     const memory = globalThis.performance?.memory;
-    if (memory) line.jsHeapMB = Math.round(memory.usedJSHeapSize / 1048576);
-    const result = enqueue(() => call({ action: "line", line }));
-    result.catch(report);
-    return result;
+    const payload = memory ? { ...fields, jsHeapMB: Math.round(memory.usedJSHeapSize / 1048576) } : fields;
+    batcher.emit("debug", `page.trace.${event}`, payload);
   };
   const timed = async (name, answer) => {
     if (!enabled) return answer();
@@ -54,7 +57,7 @@ export function createTracer(call, report = reportRelayError) {
       return result;
     } catch (error) {
       trace("command", { name, us: Math.round((performance.now() - started) * 1000), ok: false,
-        // 기본값: Error 가 아닌 throw 값은 그 값 자체를 문자열로 기록한다.
+        // default: a thrown value that is not an Error is recorded as its own text.
         error: String(error?.message ?? error) });
       throw error;
     }
@@ -62,7 +65,11 @@ export function createTracer(call, report = reportRelayError) {
   return { setEnabled, trace, timed };
 }
 
-const tracer = createTracer(bridge ? (request) => bridge.call("performance", request) : null);
+const tracer = createTracer(
+  bridge ? (request) => bridge.call("performance", request) : null,
+  reportRelayError,
+  bridge ? (request) => bridge.call("log", request) : null,
+);
 export const setTraceEnabled = tracer.setEnabled;
 export const trace = tracer.trace;
 export const timed = tracer.timed;

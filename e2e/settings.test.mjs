@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
 
 /** 설정 창의 현재 컨트롤. */
@@ -365,16 +366,20 @@ for (const app of Object.values(APPS)) {
     const services = join(config, "services");
     const serviceFlags = () => existsSync(services) ? readdirSync(services, { withFileTypes: true })
       .filter((entry) => entry.isDirectory()).map((entry) => join(services, entry.name, "performance")) : [];
-    const read = () => existsSync(file) ? readFileSync(file, "utf8") : "";
+    // The events of the trace of the page are in the event log; the file of the trace holds what the sidecars write.
+    const traced = async (offsets) => {
+      await s.flushLog();
+      return traceRows(readEvents(config, offsets).events);
+    };
     const change = (enabled) => s.run("core.settings.set", {
       scope: "common", patch: { "diagnostics.performance": enabled },
     });
     await change(false);
     assert.ok(!existsSync(flag), "disabled host retained its runtime switch");
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.length).id;
-    const before = read();
+    const before = currentEventOffsets(config);
     await s.run("core.card.focus", { card });
-    assert.equal(read(), before, "disabled focus changed the trace output");
+    assert.deepEqual(await traced(before), [], "disabled focus changed the trace output");
     await change(true);
     assert.equal(readFileSync(flag, "utf8"), `${file}\n`, "enabled host switch does not contain its trace target");
     for (const serviceFlag of serviceFlags()) {
@@ -387,14 +392,14 @@ for (const app of Object.values(APPS)) {
       assert.ok(!existsSync(serviceFlag), `host disable retained a service flag: ${serviceFlag}`);
     }
     assert.ok(existsSync(file), "enabled tracing did not create its declared output");
-    const after = read();
-    const events = after.slice(before.length).trim().split("\n").filter(Boolean).map(JSON.parse);
+    const events = await traced(before);
+    const after = currentEventOffsets(config);
     assert.ok(events.some((line) => line.layer === "page" && line.event === "action"
       && line.kind === "card.focus" && line.card === card), "enabled focus action was not recorded");
     assert.ok(events.some((line) => line.layer === "page" && line.event === "command"
       && line.name === "core.card.focus" && line.ok === true), "enabled focus command was not recorded");
     await s.run("core.card.focus", { card });
-    assert.equal(read(), after, "focus after disable changed the trace output");
+    assert.deepEqual(await traced(after), [], "focus after disable changed the trace output");
   });
 
   test(`${app.name}: a new inset sidebar opens at 190 points`, { timeout: 60000 }, async (t) => {

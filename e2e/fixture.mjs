@@ -1,10 +1,9 @@
 // core 창 검사의 시작 배치. diagnostics.fixture 의 기본 배치는 터미널 탭을 가지므로, 준비는 harness 의 prepareFixture 로
 // 배치를 연 뒤 그 터미널이 준비될 때까지 기다린다(F25.2 가 core 의 검사를 fixture plugin 으로 바꾸기 전까지 이 모듈이
 // 터미널을 안다).
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { keepCommonSettings, prepareFixture, TRACE } from "@soksak/window-check/app.mjs";
+import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
 
 /** 창 검사 터미널의 셸. 로그인 셸의 프로필에 따라 달라지는 프롬프트를 피한다. */
 const CHECK_SHELL = fileURLToPath(new URL("./check-shell", import.meta.url));
@@ -24,18 +23,15 @@ export async function terminalCardSidebar(s) {
     "the terminal card sidebar did not appear");
 }
 
-/** 기록 파일의 offset 뒤에 쓰인 표면 등록 기록. */
-function registrationTimeline(s, offset) {
-  const file = join(s.app.configDir, "logs", "performance.ndjson");
-  if (!existsSync(file)) return [];
-  return readFileSync(file, "utf8").slice(offset).trim().split("\n").filter(Boolean)
-    .map((line) => JSON.parse(line)).filter((row) => row.event === "surface.registration");
+/** The surface registration rows of the trace that the event log gained after the offsets. */
+async function registrationTimeline(s, offsets) {
+  await s.flushLog();
+  return traceRows(readEvents(s.app.configDir, offsets).events).filter((row) => row.event === "surface.registration");
 }
 
 /** 창을 검사 시작 상태로 만들고, 창 검사의 터미널이 검사용 셸(check-shell)로 준비될 때까지 기다린 뒤 그 터미널을 반환한다. */
 export async function fresh(s, { performanceTrace = TRACE } = {}) {
-  const traceFile = join(s.app.configDir, "logs", "performance.ndjson");
-  const traceOffset = existsSync(traceFile) ? readFileSync(traceFile, "utf8").length : 0;
+  const traceOffsets = currentEventOffsets(s.app.configDir);
   // 창 검사의 터미널은 사용자의 로그인 셸과 무관하게 검사용 셸(check-shell)로 시작한다.
   await prepareFixture(s, { settings: { "terminal.shell": CHECK_SHELL }, performanceTrace });
   let terminal;
@@ -43,7 +39,7 @@ export async function fresh(s, { performanceTrace = TRACE } = {}) {
     [terminal] = await terminalReady(s);
   } catch (error) {
     if (!performanceTrace) throw error;
-    throw new Error(`${error.message}; registration timeline: ${JSON.stringify(registrationTimeline(s, traceOffset))}`, { cause: error });
+    throw new Error(`${error.message}; registration timeline: ${JSON.stringify(await registrationTimeline(s, traceOffsets))}`, { cause: error });
   }
   await s.presented();
   try {

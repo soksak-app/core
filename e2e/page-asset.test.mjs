@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { readEventOffsets, untilEventLines } from "@soksak/window-check/event-log.mjs";
+import { currentEventOffsets, untilEventLines } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
@@ -14,7 +14,7 @@ for (const app of Object.values(APPS)) {
     const first = `/missing-${process.pid}-first.js`;
     const second = `/missing-${process.pid}-second.js`;
     s.expectError(new RegExp(`^error host page asset: /missing-${process.pid}-(first|second)\\.js: not found$`));
-    const before = readEventOffsets(app.configDir);
+    const before = currentEventOffsets(app.configDir);
     // The page requests each file twice; the host reports a path once.
     for (const path of [first, second, first]) {
       const answer = await s.request("diagnostics.page.request", { path });

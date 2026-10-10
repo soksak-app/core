@@ -3,8 +3,10 @@
 const LEVELS = new Set(["error", "warn", "info", "debug", "trace"]);
 const DEFAULT_MAX_EVENTS = 4096;
 
+// The page has only the wall clock, at the resolution of a millisecond (docs/spec/logging.md#limits). The clock of the
+// performance timeline drifts from it, so an event of the page would be ordered after the events of the host that follow it.
 function microsNow() {
-  return Math.round((performance.timeOrigin + performance.now()) * 1000);
+  return Date.now() * 1000;
 }
 
 export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS }) {

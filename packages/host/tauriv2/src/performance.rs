@@ -204,20 +204,6 @@ pub fn line(target: &Path, layer: &str, fields: Value) -> Result<(), String> {
     append(target, &Value::Object(record))
 }
 
-/// 페이지 이벤트의 계층을 지정하여 기록하고 거부·쓰기 실패를 반환한다.
-pub fn relay(target: &Path, mut record: Value) -> Result<(), String> {
-    let object = record
-        .as_object_mut()
-        .ok_or("line requires the page event object")?;
-    if object.get("event").and_then(Value::as_str).is_none() {
-        return Err("event must be a string".into());
-    }
-    object.insert("layer".into(), json!("page"));
-    // 이 줄을 파일에 쓰는 프로세스는 호스트다.
-    object.insert("pid".into(), json!(std::process::id()));
-    append(target, &record)
-}
-
 /// 출력이 이전 세대로 넘어가는 크기(docs/spec/performance-trace.md). 로그와 같은 한도와 세대 수를 쓴다.
 const ROTATE_BYTES: u64 = crate::application_log::ROTATE_BYTES;
 
@@ -248,14 +234,15 @@ fn append(target: &Path, record: &Value) -> Result<(), String> {
         .map_err(|error| format!("append performance output {}: {error}", target.display()))
 }
 
-/// 스위치와 중계를 같은 순서로 실행한다.
+/// Runs the switch requests of the page in the order they arrive. The events of the page travel through the call `log`
+/// (event_relay.rs), not through this call.
 pub fn command(config: &Path, request: Value) -> Result<Value, String> {
     let action = request
         .get("action")
         .and_then(Value::as_str)
-        .ok_or("action must be on, off, or line")?;
-    if !["on", "off", "line"].contains(&action) {
-        return Err(format!("action must be on, off, or line, not {action}"));
+        .ok_or("action must be on or off")?;
+    if !["on", "off"].contains(&action) {
+        return Err(format!("action must be on or off, not {action}"));
     }
     let _writing = WRITING
         .lock()
@@ -284,17 +271,6 @@ pub fn command(config: &Path, request: Value) -> Result<Value, String> {
                 errors.push(error);
             }
             report_errors(errors)?;
-            Ok(Value::Null)
-        }
-        "line" => {
-            let record = request
-                .get("line")
-                .cloned()
-                .ok_or("line requires the page event object")?;
-            if !enabled {
-                return Err("the performance trace is off".into());
-            }
-            relay(&target(config), record)?;
             Ok(Value::Null)
         }
         _ => unreachable!("validated performance action"),

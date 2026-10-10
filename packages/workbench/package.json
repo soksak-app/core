@@ -55,6 +55,7 @@
     "projects.js",
     "plugin-states.js",
     "registry.js",
+    "log-batch.js",
     "performance.js",
     "settings.js",
     "sidebar-sets.js",

@@ -1,21 +1,16 @@
 // 프로젝트 열기 검사가 늦은 응답의 단계와 그때의 시스템 상태를 보고하는 데 쓰는 함수.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
 import { availableParallelism, loadavg } from "node:os";
 
-/** 성능 기록 파일의 현재 길이. 이 위치 뒤에 쓰인 줄이 이후 동작의 기록이다. */
-export const traceLength = (file) => (existsSync(file) ? readFileSync(file, "utf8").length : 0);
-
 /**
- * 성능 기록에서 offset 뒤 페이지 배치 단계와 명령 결과를 처음 줄 기준 경과 ms 로 적는다. 프로젝트 열기가 늦을 때 어느
- * 단계가 시간을 썼는지 보고한다.
+ * The page rows of the trace (earlier lines of the stages of the page) with their elapsed time from the first row: the layout
+ * queue phases, the actions and the command results. It reports which stage used the time when a project opens late.
  */
-export function openStages(file, offset) {
-  const rows = readFileSync(file, "utf8").slice(offset).trim().split("\n").filter(Boolean).map((line) => JSON.parse(line))
-    .filter((row) => row.layer === "page" && ["action", "layout", "command"].includes(row.event));
-  if (!rows.length) return "no page trace rows";
-  const start = Date.parse(rows[0].ts);
-  return rows.map((row) => `${row.event === "layout" ? `layout ${row.id} ${row.phase}` : `${row.event} ${row.kind ?? row.name}`}` +
+export function openStages(rows) {
+  const stages = rows.filter((row) => row.layer === "page" && ["action", "layout", "command"].includes(row.event));
+  if (!stages.length) return "no page trace rows";
+  const start = Date.parse(stages[0].ts);
+  return stages.map((row) => `${row.event === "layout" ? `layout ${row.id} ${row.phase}` : `${row.event} ${row.kind ?? row.name}`}` +
     `@${Date.parse(row.ts) - start}ms`).join(", ");
 }
 

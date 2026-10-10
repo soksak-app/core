@@ -10,7 +10,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { readEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
+import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 
 const SIDECAR = "@soksak/sidecar-vt-alacritty";
@@ -69,7 +69,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(row.width > 0 && row.height > 0, `the outdated row has no size: ${JSON.stringify(row)}`);
 
     // The action ends the sessions of the service and replaces it; the host writes the replacement to its log.
-    const offsets = readEventOffsets(app.configDir);
+    const offsets = currentEventOffsets(app.configDir);
     await s.act("core.library.plugins.replace", "click");
     await untilEventLine(app.configDir, offsets, (line) => line.includes(`service ${running.version} replaced by ${newer}`), 10000);
   });

@@ -1,20 +1,43 @@
 // 성능 트레이스 호스트 쪽 계약(docs/spec/performance-trace.md, V5-104).
 // 켜기는 로그 파일과 사이드카 플래그 파일을 만들고, 끄기는 플래그를 지운다.
-// 페이지 줄 중계는 객체 형식을 검증하며 거부와 쓰기 오류를 명시적으로 반환한다.
+// 스위치는 on 과 off 만 받고 거부와 쓰기 오류를 명시적으로 반환한다. 페이지 event 는 호출 log 로 간다(event_relay).
 use serde_json::json;
 use soksak_host_tauriv2::performance;
 
 // contract: performance.trace.enable-without-services
 #[test]
-fn enable_without_services_accepts_page_events() {
+fn enable_without_services_creates_the_output() {
     let directory = tempfile::tempdir().unwrap();
     let config = directory.path();
     performance::command(config, json!({"action":"on"})).unwrap();
-    let result = performance::command(config, json!({"action":"line","line":{"event":"focus"}}));
+    let created = performance::target(config).exists();
     performance::disable(config).unwrap();
     assert!(
-        result.is_ok(),
-        "enabled trace rejected a page event without services: {result:?}"
+        created,
+        "enabling without a service directory created no output"
+    );
+}
+
+// contract: performance.trace.switch-accepts-on-and-off-only
+#[test]
+fn the_switch_accepts_on_and_off_only() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = directory.path();
+    for request in [
+        json!({}),
+        json!({"action": 7}),
+        json!({"action":"line","line":{"event":"focus"}}),
+        json!({"action":"toggle"}),
+    ] {
+        let error = performance::command(config, request.clone()).unwrap_err();
+        assert!(
+            error.contains("action must be on or off"),
+            "request {request}: {error}"
+        );
+    }
+    assert!(
+        !performance::target(config).exists(),
+        "a refused request created output"
     );
 }
 
@@ -31,9 +54,9 @@ fn already_off_writes_nothing() {
     );
 }
 
-// contract: performance.trace.switch-and-relay-report-filesystem-errors
+// contract: performance.trace.switch-reports-filesystem-errors
 #[test]
-fn switch_and_relay_report_filesystem_errors() {
+fn switch_reports_filesystem_errors() {
     let directory = tempfile::tempdir().unwrap();
     let config = directory.path();
     std::fs::write(config.join("services"), "not a directory").unwrap();
@@ -46,29 +69,11 @@ fn switch_and_relay_report_filesystem_errors() {
     std::fs::create_dir_all(&flag).unwrap();
     let flag_error = performance::command(config, json!({"action":"on"})).is_err();
     std::fs::remove_dir(&flag).unwrap();
-    performance::command(config, json!({"action":"on"})).unwrap();
-    let target = performance::target(config);
-    std::fs::remove_file(&target).unwrap();
-    std::fs::create_dir(&target).unwrap();
-    let result = performance::command(config, json!({"action":"line","line":{"event":"focus"}}));
-    performance::disable(config).unwrap();
     assert_eq!(
-        [directory_error, flag_error, result.is_err()],
-        [true; 3],
-        "directory, flag, and output errors must all be returned"
+        [directory_error, flag_error],
+        [true; 2],
+        "directory and flag errors must both be returned"
     );
-}
-
-// contract: performance.trace.relay-requires-object-with-event
-#[test]
-fn relay_rejects_invalid_event_explicitly() {
-    let directory = tempfile::tempdir().unwrap();
-    let config = directory.path();
-    std::fs::create_dir_all(config.join("services").join("fixture-service")).unwrap();
-    performance::command(config, json!({"action":"on"})).unwrap();
-    let result = performance::command(config, json!({"action":"line","line":{"event":7}}));
-    performance::disable(config).unwrap();
-    assert!(result.is_err(), "relay accepted a non-string event");
 }
 
 // contract: performance.trace.invalid-switch-and-cleanup-errors
@@ -77,8 +82,7 @@ fn invalid_switch_and_cleanup_errors() {
     let directory = tempfile::tempdir().unwrap();
     let config = directory.path();
     std::fs::create_dir(config.join("performance")).unwrap();
-    let error = performance::command(config, json!({"action":"line","line":{"event":"focus"}}))
-        .unwrap_err();
+    let error = performance::command(config, json!({"action":"off"})).unwrap_err();
     assert!(
         error.contains("performance switch"),
         "invalid switch was hidden: {error}"
@@ -184,23 +188,6 @@ fn disable_removes_the_sidecar_flags_but_keeps_the_log() {
     directory.close().unwrap();
 }
 
-// contract: performance.trace.relay-requires-object-with-event
-#[test]
-fn relayed_page_lines_require_an_object_with_an_event() {
-    let directory = temp_config("relay");
-    let config = directory.path();
-    let target = performance::enable(config).unwrap();
-    performance::relay(&target, json!({"event": "action", "kind": "resize"})).unwrap();
-    assert!(performance::relay(&target, json!({"kind": "resize"})).is_err());
-    assert!(performance::relay(&target, json!("action")).is_err());
-    let text = std::fs::read_to_string(&target).unwrap();
-    assert_eq!(text.lines().count(), 1, "rejected lines append nothing");
-    let record: serde_json::Value = serde_json::from_str(text.trim()).unwrap();
-    assert_eq!(record["layer"], "page");
-    assert_eq!(record["kind"], "resize");
-    directory.close().unwrap();
-}
-
 // contract: performance.sampler.failed-reading-is-explicit
 #[test]
 fn sampler_reports_a_failed_reading() {
@@ -239,22 +226,18 @@ fn a_clock_before_the_epoch_is_reported() {
     );
 }
 
-// contract: performance.trace.relay-records-writer-pid
+// contract: performance.trace.line-records-writer-pid
 #[test]
-fn relayed_page_line_carries_the_writer_pid() {
+fn a_host_line_carries_the_writer_pid() {
     let directory = tempfile::tempdir().unwrap();
     let target = directory.path().join("performance.ndjson");
-    performance::relay(
-        &target,
-        json!({"ts":"2026-10-01T00:00:00.000Z","event":"focus"}),
-    )
-    .unwrap();
+    performance::line(&target, "host", json!({"event":"focus"})).unwrap();
     let record: serde_json::Value =
         serde_json::from_str(std::fs::read_to_string(&target).unwrap().trim()).unwrap();
     assert_eq!(
         record["pid"].as_u64(),
         Some(std::process::id() as u64),
-        "a relayed page line does not name the writing process: {record}"
+        "a host line does not name the writing process: {record}"
     );
 }
 

@@ -149,17 +149,6 @@ func PerformanceLine(target, layer string, fields map[string]any) error {
 	return performanceAppend(target, record)
 }
 
-// PerformanceRelay 는 페이지 이벤트의 계층을 지정하여 기록하고 거부·쓰기 실패를 반환한다.
-func PerformanceRelay(target string, record map[string]any) error {
-	if _, ok := record["event"].(string); !ok {
-		return fmt.Errorf("event must be a string")
-	}
-	record["layer"] = "page"
-	// 이 줄을 파일에 쓰는 프로세스는 호스트다.
-	record["pid"] = os.Getpid()
-	return performanceAppend(target, record)
-}
-
 // Performance 는 페이지의 성능 요청을 처리한다.
 func (h *Host) Performance(requestJSON json.RawMessage) (any, error) {
 	request, err := argument[map[string]any]("request", requestJSON)
@@ -169,14 +158,15 @@ func (h *Host) Performance(requestJSON json.RawMessage) (any, error) {
 	return PerformanceCommand(h.configDir, request)
 }
 
-// PerformanceCommand 는 스위치와 중계를 같은 순서로 실행한다.
+// PerformanceCommand runs the switch requests of the page in the order they arrive. The events of the page travel through
+// the call log (event_relay.go), not through this call.
 func PerformanceCommand(config string, request map[string]any) (any, error) {
 	action, ok := request["action"].(string)
 	if !ok {
-		return nil, fmt.Errorf("action must be on, off, or line")
+		return nil, fmt.Errorf("action must be on or off")
 	}
-	if action != "on" && action != "off" && action != "line" {
-		return nil, fmt.Errorf("action must be on, off, or line, not %q", action)
+	if action != "on" && action != "off" {
+		return nil, fmt.Errorf("action must be on or off, not %q", action)
 	}
 	performanceMu.Lock()
 	defer performanceMu.Unlock()
@@ -205,15 +195,6 @@ func PerformanceCommand(config string, request map[string]any) (any, error) {
 			writeErr = PerformanceLine(target, "host", map[string]any{"event": "trace_off"})
 		}
 		return nil, errors.Join(writeErr, PerformanceDisable(config))
-	case "line":
-		record, ok := request["line"].(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("line requires the page event object")
-		}
-		if !enabled {
-			return nil, fmt.Errorf("the performance trace is off")
-		}
-		return nil, PerformanceRelay(target, record)
 	}
 	panic("validated performance action is unreachable")
 }

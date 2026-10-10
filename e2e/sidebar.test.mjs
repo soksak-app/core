@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { readEventLines, readEventOffsets } from "@soksak/window-check/event-log.mjs";
+import { readEventLines, currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
@@ -498,7 +498,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.card.focus", { card: "browser" });
     const mounted = (value) => value.find((item) => item.sidebar === sidebar)?.sections.find((item) => item.id === "browser.tabs")?.mounted;
     await s.until("core.sidebars", mounted, "the right sidebar did not mount browser.tabs");
-    const offsets = readEventOffsets(s.app.configDir);
+    const offsets = currentEventOffsets(s.app.configDir);
     // 섹션은 첫 화면 뒤에 비동기로 마운트된다. 그때 따르는 core 상태는 이미 등록되어 있어야 한다(docs/spec/plugins.md#sections).
     await s.run("host.window.reload");
     await s.until("core.sidebars", mounted, "the right sidebar did not mount browser.tabs after the reload");

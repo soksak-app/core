@@ -7,7 +7,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { eventLine, readEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
+import { eventLine, currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
 
@@ -46,7 +46,7 @@ for (const app of Object.values(APPS)) {
     `the terminal region ${terminal.surface} did not take the keyboard after the press`);
 
     const logs = join(app.configDir, "logs");
-    const eventOffsets = readEventOffsets(s.app.configDir);
+    const eventOffsets = currentEventOffsets(s.app.configDir);
     const traceOffset = sizeOf(join(logs, "performance.ndjson"));
     // Enter does not pass through the input method, so it reaches the sidecar in an application that is not active.
     await s.key("Enter", "down");
@@ -57,9 +57,10 @@ for (const app of Object.values(APPS)) {
     // The native library stores its records in the ring of the process, the writer of the host pulls them at its next batch,
     // and the flush waits until they are in the event log.
     await s.flushLog();
-    const log = readEvents(s.app.configDir, eventOffsets).events
-      .map((event) => ({ text: eventLine(event), ts: new Date(event.ts_us / 1000).toISOString() }));
-    const trace = traceRecords(readFrom(join(logs, "performance.ndjson"), traceOffset));
+    const events = readEvents(s.app.configDir, eventOffsets).events;
+    const log = events.map((event) => ({ text: eventLine(event), ts: new Date(event.ts_us / 1000).toISOString() }));
+    // The trace of the page is in the event log; the host and the sidecar still write the trace file.
+    const trace = [...traceRows(events), ...traceRecords(readFrom(join(logs, "performance.ndjson"), traceOffset))];
     // Each layer must hold the key with its own fields; `find` names the record that the layer lacks.
     const nativeLine = (pattern) => log.find((line) => pattern.test(line.text));
     const traced = (match) => trace.find(match);

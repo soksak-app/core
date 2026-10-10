@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { eventLine, readEventErrors, readEventLines, readEventOffsets, untilEventLine, untilEventLines, writeEventOffsets } from "../event-log.mjs";
+import { currentEventOffsets, eventLine, traceRows, readEventErrors, readEventLines, readEventOffsets, untilEventLine, untilEventLines, writeEventOffsets } from "../event-log.mjs";
 
 function configDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-event-log-"));
@@ -148,4 +148,29 @@ test("untilEventLines sees a file that another process creates", async (t) => {
   t.after(() => creator.kill());
   const lines = await untilEventLines(dir, offsets, (all) => all.includes("info host w: new file"), 3000);
   assert.deepEqual(lines, ["info host w: new file"]);
+});
+
+test("traceRows turns the events page.trace.<event> into rows with the layer, the event, the time and the fields", () => {
+  const events = [
+    { ts_us: 1791000000123456, level: "debug", layer: "page", event: "page.trace.surface.registration", fields: { phase: "registered", name: "core.x" } },
+    { ts_us: 1791000000200000, level: "info", layer: "host", event: "host.record.info", fields: { where: "w", text: "t" } },
+    { ts_us: 1791000000300000, level: "debug", layer: "page", event: "page.trace.action", fields: { kind: "resize" } },
+  ];
+  assert.deepEqual(traceRows(events), [
+    { layer: "page", event: "surface.registration", ts: "2026-10-03T04:00:00.123Z", phase: "registered", name: "core.x" },
+    { layer: "page", event: "action", ts: "2026-10-03T04:00:00.300Z", kind: "resize" },
+  ]);
+});
+
+test("currentEventOffsets is the end of the complete lines of every host event log, not the offsets that were stored", (t) => {
+  const dir = configDir(t);
+  const first = join(dir, "logs", "host-1-10.jsonl");
+  writeFileSync(first, line(1, "info", "log.open") + line(2, "info", "host.record.info", { where: "a", text: "b" }) + '{"ts_us":1,"seq":3');
+  writeEventOffsets(dir, { "host-1-10.jsonl": 5 });
+  const now = currentEventOffsets(dir);
+  assert.deepEqual(Object.keys(now), ["host-1-10.jsonl"]);
+  assert.equal(now["host-1-10.jsonl"], Buffer.byteLength(line(1, "info", "log.open") + line(2, "info", "host.record.info", { where: "a", text: "b" })));
+  assert.deepEqual(readEventLines(dir, now).lines, [], "nothing is after the end");
+  appendFileSync(first, ',"level":"info","layer":"host","event":"host.record.info","fields":{"where":"c","text":"d"}}\n');
+  assert.deepEqual(readEventLines(dir, now).lines, ["info host c: d"], "the unfinished line is read once it is complete");
 });

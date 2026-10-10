@@ -75,34 +75,26 @@ func TestDisableRemovesTheFlagsButKeepsTheLog(t *testing.T) {
 	}
 }
 
-// contract: performance.trace.relay-requires-object-with-event
-func TestRelayedPageLinesRequireAnEvent(t *testing.T) {
+// contract: performance.trace.switch-accepts-on-and-off-only
+func TestTheSwitchAcceptsOnAndOffOnly(t *testing.T) {
 	config := tempConfig(t)
-	target, err := host.PerformanceEnable(config)
-	if err != nil {
-		t.Fatal(err)
+	for _, request := range []map[string]any{
+		{},
+		{"action": 7},
+		{"action": "line", "line": map[string]any{"event": "focus"}},
+		{"action": "toggle"},
+	} {
+		if _, err := host.PerformanceCommand(config, request); err == nil || !strings.Contains(err.Error(), "action must be on or off") {
+			t.Errorf("request %v: error %v", request, err)
+		}
 	}
-	if err := host.PerformanceRelay(target, map[string]any{"event": "action", "kind": "resize"}); err != nil {
-		t.Fatal(err)
-	}
-	text, err := os.ReadFile(target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count := strings.Count(strings.TrimSpace(string(text)), "\n") + 1; count != 1 {
-		t.Fatalf("rejected lines append nothing, got %d lines", count)
-	}
-	var record map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimSpace(string(text))), &record); err != nil {
-		t.Fatal(err)
-	}
-	if record["layer"] != "page" || record["kind"] != "resize" {
-		t.Fatalf("record %v", record)
+	if _, err := os.Stat(host.PerformanceTarget(config)); !os.IsNotExist(err) {
+		t.Fatalf("a refused request created output: %v", err)
 	}
 }
 
 // contract: performance.trace.enable-without-services
-func TestEnableWithoutServicesAcceptsPageEvents(t *testing.T) {
+func TestEnableWithoutServicesCreatesTheOutput(t *testing.T) {
 	config := t.TempDir()
 	if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err != nil {
 		t.Fatal(err)
@@ -112,8 +104,8 @@ func TestEnableWithoutServicesAcceptsPageEvents(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	if _, err := host.PerformanceCommand(config, map[string]any{"action": "line", "line": map[string]any{"event": "focus"}}); err != nil {
-		t.Fatalf("enabled trace rejected a page event without services: %v", err)
+	if _, err := os.Stat(host.PerformanceTarget(config)); err != nil {
+		t.Fatalf("enabling without a service directory created no output: %v", err)
 	}
 }
 
@@ -131,8 +123,8 @@ func TestAlreadyOffWritesNothing(t *testing.T) {
 	}
 }
 
-// contract: performance.trace.switch-and-relay-report-filesystem-errors
-func TestSwitchAndRelayReportFilesystemErrors(t *testing.T) {
+// contract: performance.trace.switch-reports-filesystem-errors
+func TestSwitchReportsFilesystemErrors(t *testing.T) {
 	t.Run("service-directory", func(t *testing.T) {
 		config := t.TempDir()
 		if err := os.WriteFile(filepath.Join(config, "services"), []byte("not a directory"), 0o600); err != nil {
@@ -151,42 +143,6 @@ func TestSwitchAndRelayReportFilesystemErrors(t *testing.T) {
 			t.Fatal("enable hid a service flag write failure")
 		}
 	})
-	t.Run("event-output", func(t *testing.T) {
-		config := tempConfig(t)
-		if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() {
-			if err := host.PerformanceDisable(config); err != nil {
-				t.Error(err)
-			}
-		})
-		if err := os.Remove(host.PerformanceTarget(config)); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Mkdir(host.PerformanceTarget(config), 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := host.PerformanceCommand(config, map[string]any{"action": "line", "line": map[string]any{"event": "focus"}}); err == nil {
-			t.Fatal("relay hid an output write failure")
-		}
-	})
-}
-
-// contract: performance.trace.relay-requires-object-with-event
-func TestRelayRejectsInvalidEventExplicitly(t *testing.T) {
-	config := tempConfig(t)
-	if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := host.PerformanceDisable(config); err != nil {
-			t.Error(err)
-		}
-	})
-	if _, err := host.PerformanceCommand(config, map[string]any{"action": "line", "line": map[string]any{"event": 7}}); err == nil {
-		t.Fatal("relay accepted a non-string event")
-	}
 }
 
 // contract: performance.trace.invalid-switch-and-cleanup-errors
@@ -195,7 +151,7 @@ func TestInvalidSwitchAndCleanupErrors(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(config, "performance"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := host.PerformanceCommand(config, map[string]any{"action": "line", "line": map[string]any{"event": "focus"}}); err == nil || !strings.Contains(err.Error(), "performance switch") {
+	if _, err := host.PerformanceCommand(config, map[string]any{"action": "off"}); err == nil || !strings.Contains(err.Error(), "performance switch") {
 		t.Fatalf("invalid switch was hidden: %v", err)
 	}
 	if err := os.Remove(filepath.Join(config, "performance")); err != nil {
@@ -269,10 +225,10 @@ func TestSamplerReportsAFailedReading(t *testing.T) {
 	}
 }
 
-// contract: performance.trace.relay-records-writer-pid
-func TestRelayedPageLineCarriesTheWriterPid(t *testing.T) {
+// contract: performance.trace.line-records-writer-pid
+func TestAHostLineCarriesTheWriterPid(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "performance.ndjson")
-	if err := host.PerformanceRelay(target, map[string]any{"ts": "2026-10-01T00:00:00.000Z", "event": "focus"}); err != nil {
+	if err := host.PerformanceLine(target, "host", map[string]any{"event": "focus"}); err != nil {
 		t.Fatal(err)
 	}
 	text, err := os.ReadFile(target)
@@ -284,7 +240,7 @@ func TestRelayedPageLineCarriesTheWriterPid(t *testing.T) {
 		t.Fatal(err)
 	}
 	if pid, _ := record["pid"].(float64); int(pid) != os.Getpid() {
-		t.Fatalf("a relayed page line does not name the writing process: %v", record)
+		t.Fatalf("a host line does not name the writing process: %v", record)
 	}
 }
 
