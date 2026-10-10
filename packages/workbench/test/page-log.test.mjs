@@ -3,6 +3,7 @@
 // and relayed to the host in a batch through the call `log`.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
+import { settled } from "./support/records.mjs";
 
 const calls = [];
 let failing = null;
@@ -57,4 +58,62 @@ test("a relay that fails is reported on the console with the number of records, 
   }
   assert.deepEqual(errors, ["page event batch of 1 events failed: host closed"]);
   assert.equal(events().at(-1).fields.text, "kept");
+});
+
+const { captureConsole, emitEvent } = await import("../page-log.js");
+
+test("emitEvent queues an event of a plugin with its level, name and fields in the batch of the turn", async () => {
+  calls.length = 0;
+  emitEvent("debug", "plugin.fixture.input", { key: "a", surface: "tab-1" });
+  emitEvent("warn", "plugin.fixture.slow", { us: 9 });
+  await settled();
+  assert.deepEqual(events().map((event) => [event.level, event.event, event.fields]), [
+    ["debug", "plugin.fixture.input", { key: "a", surface: "tab-1" }],
+    ["warn", "plugin.fixture.slow", { us: 9 }],
+  ]);
+  assert.equal(calls.filter(({ name }) => name === "log").length, 1);
+});
+
+// A console is the output of code that does not use the entrance of the records: console.error is stored at the level warn, so
+// it is in the log and does not fail a window check, as it did not before it was recorded. The entrance `log.error` is for errors.
+test("captureConsole records what the page writes to its console and keeps the console working", async () => {
+  calls.length = 0;
+  const written = [];
+  const target = { error: (...a) => written.push(["error", a]), warn: (...a) => written.push(["warn", a]),
+    info: (...a) => written.push(["info", a]), log: (...a) => written.push(["log", a]), debug: (...a) => written.push(["debug", a]) };
+  captureConsole(target);
+  captureConsole(target);
+  target.error("failed:", { code: 7 }, new Error("boom"));
+  target.warn("careful");
+  target.info("note", 1);
+  target.log("plain");
+  target.debug(undefined, null, "d");
+  await settled();
+  assert.deepEqual(written.map(([kind]) => kind), ["error", "warn", "info", "log", "debug"], "the original methods still ran once each");
+  assert.deepEqual(events().map((event) => [event.level, event.event, event.fields.text]), [
+    ["warn", "page.console.error", 'failed: {"code":7} Error: boom'],
+    ["warn", "page.console.warn", "careful"],
+    ["info", "page.console.info", "note 1"],
+    ["info", "page.console.log", "plain"],
+    ["debug", "page.console.debug", "undefined null d"],
+  ]);
+});
+
+test("a failed relay is reported on the original console and does not become a console event again", async () => {
+  calls.length = 0;
+  const reported = [];
+  const target = { error: (...a) => reported.push(a.join(" ")), warn() {}, info() {}, log() {}, debug() {} };
+  const original = console.error;
+  console.error = (...a) => reported.push(a.join(" "));
+  try {
+    captureConsole(target);
+    failing = new Error("host closed");
+    emitEvent("info", "plugin.fixture.x", {});
+    await settled();
+    failing = null;
+  } finally {
+    console.error = original;
+  }
+  assert.equal(events().some((event) => event.event === "page.console.error"), false);
+  assert.ok(reported.some((line) => line.includes("page event batch of 1 events failed: host closed")));
 });

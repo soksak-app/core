@@ -1142,6 +1142,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.4.2",
+    implementation: [
+      { file: "packages/plugin-api/surface.js", symbol: "log: Object.freeze" },
+      { file: "packages/workbench/page-log.js", symbol: "export function captureConsole" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/surface.test.mjs", id: "surface context logs an event of the plugin at each level with the surface in its fields" },
+      { file: "packages/workbench/test/page-log.test.mjs", id: "captureConsole records what the page writes to its console and keeps the console working" },
+      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestARelayedBatchStoresAPluginEventInTheLayerPlugin" },
+      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_relayed_batch_stores_a_plugin_event_in_the_layer_plugin" },
+    ],
+    expected: "A plugin stores events plugin.<plugin>.<event> through its context, the page stores its console output as events, and the host stores each in the layer of its prefix.",
+    levels: ["unit"],
+  },
+  {
     id: "F150.4.1",
     implementation: [
       { file: "packages/workbench/page-log.js", symbol: "export function reportRecord" },

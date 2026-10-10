@@ -1,7 +1,7 @@
 package host
 
 // The `log` call of the page (docs/spec/logging.md#writers): the page relays a batch of events. The host validates the
-// whole batch before it writes any event, then stores every event in the layer `page` with the time the page gave it.
+// whole batch before it writes any event, then stores every event in the layer `page` or `plugin` that its name starts with, with the time the page gave it.
 
 import (
 	"context"
@@ -18,6 +18,8 @@ type relayedEvent struct {
 	level    Level
 	event    string
 	fields   json.RawMessage
+	// layer is `page` or `plugin`, the prefix of the name of the event.
+	layer string
 	// record is the record of the page that the event carries, when it is a `page.record.<level>` event.
 	record *Entry
 }
@@ -45,7 +47,7 @@ func LogCommand(log *EventLog, request map[string]any) ([]string, error) {
 		events = append(events, event)
 	}
 	for index, event := range events {
-		if _, err := log.EmitRelayed(event.tsMicros, "page", event.level, event.event, event.fields); err != nil {
+		if _, err := log.EmitRelayed(event.tsMicros, event.layer, event.level, event.event, event.fields); err != nil {
 			// The batch was validated as a whole, so a refusal here is a defect of the validation; nothing is written
 			// after it.
 			return nil, fmt.Errorf("events[%d]: %w", index, err)
@@ -85,8 +87,14 @@ func relayedEventOf(item any) (relayedEvent, error) {
 	if err != nil {
 		return relayedEvent{}, fmt.Errorf("fields cannot be serialized: %w", err)
 	}
-	if !strings.HasPrefix(name, "page.") {
-		return relayedEvent{}, fmt.Errorf("the event %q does not start with its layer %q", name, "page")
+	var layer string
+	switch {
+	case strings.HasPrefix(name, "page."):
+		layer = "page"
+	case strings.HasPrefix(name, "plugin."):
+		layer = "plugin"
+	default:
+		return relayedEvent{}, fmt.Errorf("the event %q does not start with page. or plugin.", name)
 	}
 	var record *Entry
 	if strings.HasPrefix(name, "page.record.") {
@@ -97,7 +105,7 @@ func relayedEventOf(item any) (relayedEvent, error) {
 		}
 		record = &Entry{Level: level, Layer: "page", Where: where, Text: body}
 	}
-	return relayedEvent{tsMicros: int64(ts), level: Level(level), event: name, fields: text, record: record}, nil
+	return relayedEvent{tsMicros: int64(ts), level: Level(level), event: name, fields: text, layer: layer, record: record}, nil
 }
 
 // Log relays a batch of page events to the event writer of the host and shows its page records in the transcript of the

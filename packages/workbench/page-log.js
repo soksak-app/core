@@ -6,9 +6,19 @@ import { host } from "@soksak/runtime";
 import { createEventBatcher } from "./log-batch.js";
 import { recordOf } from "./report-record.js";
 
-// A failure to relay cannot be reported through the relay, so it goes to the console.
+// The console as the page had it before the capture: a failure to relay cannot be reported through the relay, and what it
+// writes to the console must not become an event again.
+// The writer to the console that does not pass through the capture: it is the method of the console when the capture starts, and
+// until then the method of the console itself.
+let rawError = (...args) => console.error(...args);
+let rawInfo = (...args) => console.info(...args);
+export const rawConsole = {
+  error: (...args) => rawError(...args),
+  info: (...args) => rawInfo(...args),
+};
+
 const batcher = host
-  ? createEventBatcher({ call: (request) => host.call("log", request), report: (error) => console.error(error.message) })
+  ? createEventBatcher({ call: (request) => host.call("log", request), report: (error) => rawConsole.error(error.message) })
   : null;
 
 /**
@@ -18,9 +28,57 @@ const batcher = host
  */
 export function reportRecord(level, line) {
   if (!batcher) {
-    (level === "error" ? console.error : console.info)(line);
+    (level === "error" ? rawConsole.error : rawConsole.info)(line);
     return Promise.resolve();
   }
   const { where, text } = recordOf(level, line);
   return batcher.emitAndWait(level, `page.record.${level}`, { where, text });
+}
+
+/** Queues an event of a plugin or of the page with its level, name and fields; nothing happens in a page without a host. */
+export function emitEvent(level, event, fields) {
+  batcher?.emit(level, event, fields);
+}
+
+// The methods of the console and the level of the event that each one makes. A console is the output of code that does not
+// use the entrance of the records, so `console.error` is stored at the level `warn`: it is in the log under its own event name
+// `page.console.error` and it does not fail a window check, as it did not before it was recorded. The entrance for errors is
+// `reportRecord`, and for a plugin `context.runtime.log.error`.
+const CONSOLE_LEVELS = { error: "warn", warn: "warn", info: "info", log: "info", debug: "debug" };
+
+/** The text of the arguments of a console call: the arguments as the page wrote them, separated by a space. */
+function consoleText(args) {
+  return args.map((arg) => {
+    if (typeof arg === "string") return arg;
+    if (arg instanceof Error) return String(arg);
+    try {
+      const text = JSON.stringify(arg);
+      // default: JSON has no text for undefined and for a function; the value is written as String shows it.
+      return text === undefined ? String(arg) : text;
+    } catch {
+      // default: a value that JSON cannot serialize (a cycle, a BigInt) is written as String shows it.
+      return String(arg);
+    }
+  }).join(" ");
+}
+
+const captured = new WeakSet();
+
+/**
+ * Records what the page writes to its console as the events `page.console.<method>` with the field `text`, and keeps the
+ * console working: each method still runs. Calling it again for the same console changes nothing.
+ */
+export function captureConsole(target = console) {
+  if (captured.has(target)) return;
+  captured.add(target);
+  for (const [method, level] of Object.entries(CONSOLE_LEVELS)) {
+    const original = target[method]?.bind(target);
+    if (!original) continue;
+    if (target === console && method === "error") rawError = original;
+    if (target === console && method === "info") rawInfo = original;
+    target[method] = (...args) => {
+      original(...args);
+      emitEvent(level, `page.console.${method}`, { text: consoleText(args) });
+    };
+  }
 }

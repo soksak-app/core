@@ -537,5 +537,6 @@ fn invalid_json_closes_connection() {
 | `log.record.start-buffer-counts-its-loss` | 시작 buffer는 1024개를 담고 그 너머의 기록은 거부하며, writer는 거부한 기록을 그 수와 함께 `log.dropped`로 기록한다. | both |
 | `log.record.flush-stores-the-records-written-so-far` | 기록 flush는 지금까지 쓴 기록이 event log에 들어갈 때까지 기다리고, 붙은 writer가 없으면 곧바로 돌아온다. | both |
 | `log.batch.stores-page-events-in-order` | `log` 중계는 `batch` 요청의 event를 page가 준 `ts_us`와 writer의 `seq`로, 순서대로, 계층 `page`에 저장한다. | both |
-| `log.batch.rejects-an-invalid-batch-without-writing` | `log` 중계는 `batch`가 아닌 action, 배열이 아닌 `events`, `page.`로 시작하지 않는 event 이름, 계약에 없는 level, 양의 정수가 아닌 `ts_us`, 객체가 아닌 `fields`에 대해 배치 전체를 거부하고 그 배치는 아무것도 쓰지 않으며, 오류는 `events[<index>]`를 가리킨다. | both |
+| `log.batch.rejects-an-invalid-batch-without-writing` | `log` 중계는 `batch`가 아닌 action, 배열이 아닌 `events`, `page.`와 `plugin.` 어느 쪽으로도 시작하지 않는 event 이름, 계약에 없는 level, 양의 정수가 아닌 `ts_us`, 객체가 아닌 `fields`에 대해 배치 전체를 거부하고 그 배치는 아무것도 쓰지 않으며, 오류는 `events[<index>]`를 가리킨다. | both |
 | `log.batch.returns-the-transcript-lines-of-page-records` | `log` 중계는 배치의 page 기록(문자열 field `where`와 `text`를 가진 `page.record.<level>`)의 줄 `<level> page <where>: <text>`을 돌려주며 host는 그것을 창의 transcript에 보이고, 그 문자열 field가 아닌 page 기록은 거부한다. | both |
+| `log.batch.stores-plugin-events-in-the-layer-plugin` | `log` 중계는 이름이 `plugin.`으로 시작하는 event를 계층 `plugin`에, `page.`로 시작하는 event를 계층 `page`에, 각각 page가 준 시각과 writer의 `seq`로 저장한다. | both |

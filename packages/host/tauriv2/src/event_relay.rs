@@ -12,6 +12,8 @@ struct Relayed {
     level: Level,
     event: String,
     fields: Box<serde_json::value::RawValue>,
+    /// `page` or `plugin`, the prefix of the name of the event.
+    layer: &'static str,
     /// The record of the page that the event carries, when it is a `page.record.<level>` event.
     record: Option<crate::application_log::Entry>,
 }
@@ -52,11 +54,15 @@ fn relayed_of(item: &Value) -> Result<Relayed, String> {
         .get("fields")
         .filter(|fields| fields.is_object())
         .ok_or_else(|| "fields must be an object".to_string())?;
-    if !event.starts_with("page.") {
+    let layer = if event.starts_with("page.") {
+        "page"
+    } else if event.starts_with("plugin.") {
+        "plugin"
+    } else {
         return Err(format!(
-            "the event {event:?} does not start with its layer \"page\""
+            "the event {event:?} does not start with page. or plugin."
         ));
-    }
+    };
     let record = if event.starts_with("page.record.") {
         let text_of = |name: &str| fields.get(name).and_then(Value::as_str);
         let (Some(place), Some(text)) = (text_of("where"), text_of("text")) else {
@@ -74,6 +80,7 @@ fn relayed_of(item: &Value) -> Result<Relayed, String> {
         event: event.to_string(),
         fields: to_raw_value(fields)
             .map_err(|error| format!("fields cannot be serialized: {error}"))?,
+        layer,
         record,
     })
 }
@@ -99,8 +106,14 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<Vec<String>, String
     for (index, event) in events.into_iter().enumerate() {
         // The batch was validated as a whole, so a refusal here is a defect of the validation; nothing is written after
         // it.
-        log.emit_relayed(event.ts_us, "page", event.level, &event.event, event.fields)
-            .map_err(|error| format!("events[{index}]: {error}"))?;
+        log.emit_relayed(
+            event.ts_us,
+            event.layer,
+            event.level,
+            &event.event,
+            event.fields,
+        )
+        .map_err(|error| format!("events[{index}]: {error}"))?;
         if let Some(record) = event.record {
             lines.push(record.line());
         }

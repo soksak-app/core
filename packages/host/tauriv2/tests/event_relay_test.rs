@@ -80,7 +80,7 @@ fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
         (
             "a layer other than page",
             json!({"action": "batch", "events": [event("page.test.ok", 1), event("host.test.forged", 2)]}),
-            "events[1]: the event \"host.test.forged\" does not start with its layer \"page\"",
+            "events[1]: the event \"host.test.forged\" does not start with page. or plugin.",
         ),
         (
             "a level outside the contract",
@@ -140,4 +140,20 @@ fn a_relayed_batch_returns_the_transcript_lines_of_its_page_records() {
         error.contains("events[0]: fields where and text must be strings"),
         "{error}"
     );
+}
+
+// contract: log.batch.stores-plugin-events-in-the-layer-plugin
+#[test]
+fn a_relayed_batch_stores_a_plugin_event_in_the_layer_plugin() {
+    let directory = tempfile::tempdir().unwrap();
+    let log = start(directory.path());
+    let request = json!({"action": "batch", "events": [event("plugin.fixture.input", 1), event("page.console.error", 2)]});
+    log_command(&log, request).unwrap();
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    let events = read(&path);
+    assert_eq!(events.len(), 3, "{events:?}");
+    assert_eq!(events[1]["layer"], "plugin");
+    assert_eq!(events[1]["event"], "plugin.fixture.input");
+    assert_eq!(events[2]["layer"], "page");
 }

@@ -80,6 +80,17 @@ export function createSurfaceContext({
         // default: a page without a host (the browser application, a test) has no trace, as a trace that is off.
         runtime.trace?.(event, { ...fields, plugin: pluginId, surface: surfaceId });
       },
+      // Stores an event of this plugin in the event log (docs/spec/plugins.md#logging): the name is `plugin.<plugin>.<event>`, the
+      // fields carry the surface, and a level has one function. A page without a host has no event log, as a log that is off.
+      log: Object.freeze(Object.fromEntries(["error", "warn", "info", "debug", "trace"].map((level) => [level, (event, fields = {}) => {
+        if (typeof event !== "string" || !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/.test(event)) {
+          throw new TypeError("log requires an event name of lowercase words separated by dots");
+        }
+        if (fields === null || typeof fields !== "object" || Array.isArray(fields)) throw new TypeError("log requires fields as an object");
+        if ("surface" in fields) throw new TypeError("log fields must not name the surface; the context adds it");
+        // default: a page without a host (the browser application, a test) has no event log, as a log that is off.
+        runtime.log?.(level, `plugin.${pluginId}.${event}`, { ...fields, surface: surfaceId });
+      }]))),
     }),
     exposure: Object.freeze(runtime.exposure),
     events: Object.freeze({

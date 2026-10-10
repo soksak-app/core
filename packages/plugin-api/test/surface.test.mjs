@@ -126,3 +126,31 @@ test("surface context traces an event with the plugin and the surface", () => {
   assert.throws(() => context.runtime.trace("", {}), /trace requires an event name/);
   assert.throws(() => context.runtime.trace("fixture.input", null), /trace requires fields as an object/);
 });
+
+// A plugin writes an event of the event log through the surface context: the name of the event is `plugin.<plugin>.<event>`, the
+// fields carry the surface, and a page without a host has no event log, as a log that is off (docs/spec/plugins.md#logging).
+test("surface context logs an event of the plugin at each level with the surface in its fields", () => {
+  const root = { appendChild() {} };
+  const events = [];
+  const context = createSurfaceContext({ root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
+    exposure: { command() {} }, sidecar() {}, emit() {}, native: {},
+    log: (level, event, fields) => events.push([level, event, fields]),
+  } });
+  for (const level of ["error", "warn", "info", "debug", "trace"]) context.runtime.log[level]("input.key", { key: "a" });
+  context.runtime.log.info("started");
+  assert.deepEqual(events.map(([level, event]) => [level, event]), [
+    ["error", "plugin.fixture.input.key"], ["warn", "plugin.fixture.input.key"], ["info", "plugin.fixture.input.key"],
+    ["debug", "plugin.fixture.input.key"], ["trace", "plugin.fixture.input.key"], ["info", "plugin.fixture.started"],
+  ]);
+  assert.deepEqual(events[0][2], { key: "a", surface: "tab-1" });
+  assert.deepEqual(events.at(-1)[2], { surface: "tab-1" });
+  for (const bad of ["", "Input", "input key", "input..key", ".input", 7]) {
+    assert.throws(() => context.runtime.log.info(bad, {}), /log requires an event name/, String(bad));
+  }
+  assert.throws(() => context.runtime.log.info("input", null), /log requires fields as an object/);
+  assert.throws(() => context.runtime.log.info("input", { surface: "other" }), /log fields must not name the surface/);
+  const hostless = createSurfaceContext({ root, surfaceId: "tab-2", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
+    exposure: { command() {} }, sidecar() {}, emit() {}, native: {},
+  } });
+  hostless.runtime.log.error("input", {});
+});

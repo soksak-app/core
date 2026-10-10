@@ -3,9 +3,10 @@
 // call `log`. The switch is the call `performance`; its requests run in the order they were made.
 import { host as bridge } from "@soksak/runtime";
 import { createEventBatcher } from "./log-batch.js";
+import { rawConsole } from "./page-log.js";
 
 function reportRelayError(error) {
-  console.error("performance trace relay failed:", error);
+  rawConsole.error("performance trace relay failed:", error);
   if (typeof ErrorEvent === "function") {
     // default: an execution environment without dispatchEvent (the unit tests under Node) keeps only the console.error report above.
     globalThis.dispatchEvent?.(new ErrorEvent("error", { message: error.message, error }));

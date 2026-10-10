@@ -49,7 +49,7 @@ func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 		"another action": {map[string]any{"action": "line", "events": []any{}}, "action must be batch, not \"line\""},
 		"no events":      {map[string]any{"action": "batch"}, "events must be an array"},
 		"a layer other than page": {map[string]any{"action": "batch", "events": []any{relayEvent("page.test.ok", 1), relayEvent("host.test.forged", 2)}},
-			"events[1]: the event \"host.test.forged\" does not start with its layer \"page\""},
+			"events[1]: the event \"host.test.forged\" does not start with page. or plugin."},
 		"a level outside the contract": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "level": "loud", "event": "page.test.event", "fields": map[string]any{}}}},
 			"events[0]: level must be one of error, warn, info, debug, trace"},
 		"a time that is not a number": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": "now", "level": "info", "event": "page.test.event", "fields": map[string]any{}}}},
@@ -99,5 +99,24 @@ func TestARelayedBatchReturnsTheTranscriptLinesOfItsPageRecords(t *testing.T) {
 	bad := map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "level": "info", "event": "page.record.info", "fields": map[string]any{"where": 7}}}}
 	if _, err := host.LogCommand(log, bad); err == nil || !strings.Contains(err.Error(), "events[0]: fields where and text must be strings") {
 		t.Fatalf("error %v", err)
+	}
+}
+
+// contract: log.batch.stores-plugin-events-in-the-layer-plugin
+func TestARelayedBatchStoresAPluginEventInTheLayerPlugin(t *testing.T) {
+	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := map[string]any{"action": "batch", "events": []any{relayEvent("plugin.fixture.input", 1), relayEvent("page.console.error", 2)}}
+	if _, err := host.LogCommand(log, request); err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	if len(events) != 3 || events[1]["layer"] != "plugin" || events[1]["event"] != "plugin.fixture.input" || events[2]["layer"] != "page" {
+		t.Fatalf("events %v", events)
 	}
 }
