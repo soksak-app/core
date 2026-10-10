@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.5.2: 표면 문서의 runtime `page` 객체가 보내는 모든 host 호출은 event `page.call`이다(메인 page와 같은 필드와 level이며 하나의 `callEvent`가 만든다). 문서의 batcher에 쌓이므로 한 turn의 호출은 host 호출 `log` 한 번으로 간다. 문서의 `report`도 같은 batcher 뒤에 쌓이고, Tauri runtime은 Wails runtime과 같은 호출 이름과 인자로 command와 인자를 정한다. 중계가 실패하면 문서의 console에 쓴다.
 - F154.3: `make host-contract-check`는 두 호스트의 패키지를 빌드하고 모든 시험을 실행기로 시험마다 자기 프로세스에서 병렬로 실행하며 시험마다 한도는 120초다. 옛 출력 파서는 제거했고, `--run`과 `--only`는 계약 검사 없이 일부만 실행한다.
 - F154.2: `scripts/test-discovery.mjs`는 Go 패키지(`go test -c`)와 Rust 패키지(`cargo test --no-run`)를 실행기로 빌드해 시험 목록을 만들며, 시험마다 자기 패키지의 작업 디렉터리에서 자기 프로세스로 실행된다. 빌드되지 않는 패키지는 그 패키지를 밝히는 실패이고, `#[ignore]`인 Rust 시험은 건너뜀이다.
 - F154.1: `scripts/test-runner.mjs`는 시험 목록을 시험마다 자기 프로세스로 제한된 풀에서 실행한다. 시험마다 자기 한도(600초 이하)를 갖고, 출력은 시험마다 시작(`RUN`), 끝(`PASS`, `FAIL`, `TIME`)과 경과 시간, 일정 간격으로 실행 중인 시험과 그 실행 시간, 가장 느린 시험, 합계를 밝힌다.

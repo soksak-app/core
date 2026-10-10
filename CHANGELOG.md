@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F150.5.2: every host call of the runtime `page` object of a surface document is the event `page.call` (the same fields and levels as the main page, built by one `callEvent`), queued on a batcher of the document so that the calls of one turn travel in one host call `log`; the `report` of the document is queued behind the same batcher, and the runtime of Tauri names its commands and arguments by the same call names and arguments as the runtime of Wails. A failed relay is written to the console of the document.
 - F154.3: `make host-contract-check` builds the packages of both hosts and runs every test as a process of its own through the runner, in parallel, with a limit of 120 s for a test; the old output parsers are removed, and `--run` and `--only` run a part of the check without the contract audit.
 - F154.2: `scripts/test-discovery.mjs` builds the Go packages (`go test -c`) and the Rust packages (`cargo test --no-run`) through the runner and lists their tests, so each test runs as a process of its own in the working directory of its package; a package that does not build is a failure that names it, and a Rust test that is `#[ignore]` is a skip.
 - F154.1: `scripts/test-runner.mjs` runs a list of tests as separate processes in a bounded pool; each test has its own limit (at most 600 s), and the output names the start (`RUN`), the end (`PASS`, `FAIL`, `TIME`) and the elapsed time of each test, the tests in flight with their running time at an interval, the slowest tests and the totals.
