@@ -365,3 +365,30 @@ for (const app of Object.values(APPS)) {
     assert.equal((await s.get("core.screen")).modal, null);
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the debug timeline shows the rows of the host event file and applies its filter`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const titles = HELP_TITLES[(await s.get("host.menu")).language];
+    s.cleanup(() => s.run("core.debug.close"));
+    s.cleanup(() => {
+      for (const folder of recordingFolders(s.app.configDir)) {
+        if (!s.recordingsBefore.includes(folder)) rmSync(join(s.app.configDir, "logs", "captures", folder), { recursive: true, force: true });
+      }
+    });
+    await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
+    await s.until("core.debug", (debug) => debug.open && debug.entries.length > 0, "the debug view did not list the files");
+    await s.run("core.debug.timeline");
+    const shown = await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.total > 0,
+      "the timeline did not show any row of the host event file");
+    assert.ok(shown.timeline.sources.some((path) => /^logs\/host-\d+-\d+\.jsonl$/.test(path)), `no host event file in ${JSON.stringify(shown.timeline.sources)}`);
+    assert.equal(shown.timeline.shown, shown.timeline.total, "a timeline without a filter hides rows");
+    assert.equal(shown.error, null);
+    await s.run("core.debug.timeline.filter", { layer: "host", text: "host.app.event" });
+    const filtered = await s.until("core.debug", (debug) => debug.timeline.layer === "host" && debug.timeline.text === "host.app.event",
+      "the filter was not applied");
+    assert.ok(filtered.timeline.shown > 0 && filtered.timeline.shown < filtered.timeline.total, `the filter shows ${filtered.timeline.shown} of ${filtered.timeline.total} rows`);
+  });
+}
