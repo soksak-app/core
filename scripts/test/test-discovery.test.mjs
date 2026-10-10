@@ -15,15 +15,16 @@ test("a Go package lists its tests and each test runs in the folder of its packa
   writeFileSync(join(root, "a_test.go"), [
     "package fixture", "", 'import ("os"; "testing")', "",
     "func TestPasses(t *testing.T) { if _, err := os.Stat(\"a_test.go\"); err != nil { t.Fatal(err) } }",
-    'func TestFails(t *testing.T) { t.Fatal("on purpose") }', "",
+    'func TestFails(t *testing.T) { t.Fatal("on purpose") }',
+    'func TestSkips(t *testing.T) { t.Skip("on purpose") }', "",
   ].join("\n"));
   const lines = [];
   const { tests, failures } = await discoverGo({ patterns: ["./..."], cwd: root, buildDir: join(root, "bin"), id: "go", write: (l) => lines.push(l), concurrency: 2 });
   assert.deepEqual(failures, []);
-  assert.deepEqual(tests.map((item) => item.testName).sort(), ["TestFails", "TestPasses"]);
+  assert.deepEqual(tests.map((item) => item.testName).sort(), ["TestFails", "TestPasses", "TestSkips"]);
   assert.ok(lines.some((line) => /^PASS build go fixture /.test(line)), `no build line: ${JSON.stringify(lines)}`);
   const { results } = await runTests({ tests, concurrency: 2, defaultTimeoutMs: 20000, write() {} });
-  assert.deepEqual(tests.map((item) => [item.testName, auditStatus(results.get(item.name))]).sort(), [["TestFails", "fail"], ["TestPasses", "pass"]]);
+  assert.deepEqual(tests.map((item) => [item.testName, auditStatus(results.get(item.name))]).sort(), [["TestFails", "fail"], ["TestPasses", "pass"], ["TestSkips", "skip"]]);
 });
 
 test("a Go package that does not build is a failure that names the package", async () => {

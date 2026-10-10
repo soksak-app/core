@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { auditHostContract, parseContractCases, parseDeclarations, parseGoResults, parseRustResults } from '../check-host-contract.mjs';
+import { auditHostContract, parseContractCases, groupResults, parseDeclarations } from '../check-host-contract.mjs';
 
 const SPEC = `# Hosts
 
@@ -97,16 +97,16 @@ test('the case table rejects duplicate ids, invalid ids, and a limited scope wit
   assert.throws(() => parseContractCases('# none\n'), /no "Contract cases" section/);
 });
 
-test('runner output parsers keep top-level results and ignore subtests', () => {
-  const go = [
-    '{"Action":"run","Test":"TestA"}',
-    '{"Action":"pass","Test":"TestA/sub"}',
-    '{"Action":"pass","Test":"TestA"}',
-    '{"Action":"skip","Test":"TestB"}',
-    '{"Action":"fail","Test":"TestC"}',
-    'not json',
-  ].join('\n');
-  assert.deepEqual([...parseGoResults(go)], [['TestA', 'pass'], ['TestB', 'skip'], ['TestC', 'fail']]);
-  const rust = 'running 3 tests\ntest a ... ok\ntest m::b ... FAILED\ntest c ... ignored\ntest result: FAILED.';
-  assert.deepEqual([...parseRustResults(rust)], [['a', 'pass'], ['m::b', 'fail'], ['c', 'skip']]);
+test('results are grouped by run, and a name that several packages share keeps a failure, then a pass, then a skip', () => {
+  const item = (name, run, testName) => ({ name, run, testName });
+  const items = [item('r1 p1.A', 'r1', 'A'), item('r1 p2.A', 'r1', 'A'), item('r1 p1.B', 'r1', 'B'),
+    item('r1 p1.C', 'r1', 'C'), item('r1 p2.C', 'r1', 'C'), item('r2 p1.A', 'r2', 'A')];
+  const result = (status, output = '') => ({ status, output });
+  const results = new Map([
+    ['r1 p1.A', result('pass')], ['r1 p2.A', result('fail')], ['r1 p1.B', result('timeout')],
+    ['r1 p1.C', result('pass', '--- SKIP: C (0.00s)')], ['r1 p2.C', result('pass')], ['r2 p1.A', result('pass')],
+  ]);
+  const runs = groupResults(items, results);
+  assert.deepEqual([...runs.get('r1')], [['A', 'fail'], ['B', 'fail'], ['C', 'pass']]);
+  assert.deepEqual([...runs.get('r2')], [['A', 'pass']]);
 });

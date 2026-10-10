@@ -42,8 +42,8 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
     const binary = join(buildDir, `${id}-${index}.test`);
     const names = await execFileAsync(binary, ['-test.list', '.'], { cwd: pkg.dir, maxBuffer: 1 << 24 });
     for (const testName of names.stdout.split('\n').filter((line) => /^(Test|Example)/.test(line))) {
-      tests.push({ name: `${id} ${pkg.importPath}.${testName}`, testName, command: binary,
-        args: ['-test.run', `^${testName}$`, '-test.count=1'], cwd: pkg.dir });
+      tests.push({ name: `${id} ${pkg.importPath}.${testName}`, run: id, testName, command: binary,
+        args: ['-test.run', `^${testName}$`, '-test.count=1', '-test.v'], cwd: pkg.dir });
     }
   }
   return { tests, failures };
@@ -77,14 +77,17 @@ export async function discoverRust({ packageName, features, cwd, env, id, write 
     const listed = await execFileAsync(executable, ['--list', '--format', 'terse'], { cwd: dir, maxBuffer: 1 << 24 });
     for (const line of listed.stdout.split('\n')) {
       const match = line.match(/^(.+): test$/);
-      if (match) tests.push({ name: `${id} ${target}::${match[1]}`, testName: match[1], command: executable, args: ['--exact', match[1]], cwd: dir, env });
+      if (match) tests.push({ name: `${id} ${target}::${match[1]}`, run: id, testName: match[1], command: executable, args: ['--exact', match[1]], cwd: dir, env });
     }
   }
   return { tests, failures: [] };
 }
 
-/** The status of a finished test for the contract audit: `skip` for a Rust test that was ignored, else the runner status. */
+/**
+ * The status of a finished test for the contract audit: `skip` for a Go test that skipped itself (`--- SKIP`) and for a Rust
+ * test that was ignored, else the runner status; a test over its limit is a failure.
+ */
 export function auditStatus(result) {
-  if (result.status === 'pass' && /\b0 passed\b.*\b[1-9]\d* ignored\b/.test(result.output)) return 'skip';
+  if (result.status === 'pass' && (/^--- SKIP: /m.test(result.output) || /\b0 passed\b.*\b[1-9]\d* ignored\b/.test(result.output))) return 'skip';
   return { pass: 'pass', fail: 'fail', timeout: 'fail' }[result.status];
 }

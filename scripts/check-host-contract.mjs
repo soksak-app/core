@@ -3,10 +3,13 @@
 // 계약 사례는 docs/spec/host-contract.md 의 "Contract cases" 표가 정의한다. 각 호스트의 테스트 함수는 바로 위의
 // `// contract: <id>[, <id>]` 줄로 실행하는 사례를 선언한다. 검사는 두 호스트의 테스트를 기본 구성과 diagnostics
 // 구성으로 실제 실행하고, 선언한 테스트가 실행되어 통과했는지 결과로 판단한다. 파일 이름이나 개수는 쓰지 않는다.
-import { readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { runCommand } from './test-command.mjs';
+import { cpus } from 'node:os';
+import { auditStatus, discoverGo, discoverRust } from './test-discovery.mjs';
+import { runTests } from './test-runner.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SPEC = 'docs/spec/host-contract.md';
@@ -80,27 +83,20 @@ export function parseDeclarations(source, language, file) {
   return { tests, errors };
 }
 
-/** `go test -json` 출력에서 최상위 테스트의 결과를 읽는다. */
-export function parseGoResults(output) {
-  const results = new Map();
-  for (const line of output.split('\n')) {
-    if (!line.startsWith('{')) continue;
-    let event;
-    try { event = JSON.parse(line); } catch { continue; }
-    if (!event.Test || event.Test.includes('/')) continue;
-    if (event.Action === 'pass' || event.Action === 'fail' || event.Action === 'skip') results.set(event.Test, event.Action);
+/**
+ * Per run id, the test name to its audit status (`pass`, `fail`, `skip`) from the finished tests. A name that several packages
+ * of one run share keeps a failure, then a pass, then a skip.
+ */
+export function groupResults(items, results) {
+  const order = { fail: 3, pass: 2, skip: 1 };
+  const runs = new Map();
+  for (const item of items) {
+    const status = auditStatus(results.get(item.name));
+    const named = runs.get(item.run) ?? new Map();
+    if (!named.has(item.testName) || order[status] > order[named.get(item.testName)]) named.set(item.testName, status);
+    runs.set(item.run, named);
   }
-  return results;
-}
-
-/** `cargo test` 출력에서 테스트 결과를 읽는다. 모듈 안의 테스트 이름은 경로를 포함한다. */
-export function parseRustResults(output) {
-  const results = new Map();
-  for (const line of output.split('\n')) {
-    const match = line.match(/^test (\S+) \.\.\. (ok|FAILED|ignored)\b/);
-    if (match) results.set(match[1], { ok: 'pass', FAILED: 'fail', ignored: 'skip' }[match[2]]);
-  }
-  return results;
+  return runs;
 }
 
 function statusOf(test, language, runs) {
@@ -170,50 +166,73 @@ const HOST_SOURCES = {
   tauriv2: { language: 'rust', files: () => [...sources('packages/host/tauriv2/tests', '.rs'), ...sources('packages/host/tauriv2/src', '.rs'), ...sources('packages/sok/tauriv2/tests', '.rs')] },
 };
 
-function hostRuns(goLinkFlags) {
-  return {
-    wailsv3: [
-      { id: 'wailsv3-tests', command: 'go', args: ['test', '-count=1', '-json', '-ldflags', goLinkFlags, './packages/host/wailsv3/...'] },
-      { id: 'wailsv3-diagnostics-tests', command: 'go', args: ['test', '-count=1', '-json', '-tags', 'diagnostics', '-ldflags', goLinkFlags, './packages/host/wailsv3/...'] },
-      { id: 'wailsv3-sok-tests', command: 'go', args: ['test', '-count=1', '-json', './packages/sok/wailsv3/...'] },
-      { id: 'wailsv3-sok-diagnostics-tests', command: 'go', args: ['test', '-count=1', '-json', '-tags', 'diagnostics', './packages/sok/wailsv3/...'] },
-      { id: 'wailsv3-sok-dev-tests', command: 'go', args: ['test', '-count=1', '-json', '-tags', 'diagnostics dev', './packages/sok/wailsv3/...'] },
-    ],
-    tauriv2: [
-      { id: 'tauriv2-tests', command: 'cargo', args: ['test', '-p', 'soksak-host-tauriv2'] },
-      { id: 'tauriv2-diagnostics-tests', command: 'cargo', args: ['test', '-p', 'soksak-host-tauriv2', '--features', 'diagnostics'] },
-      { id: 'tauriv2-sok-tests', command: 'cargo', args: ['test', '-p', 'soksak-sok-tauriv2'] },
-      { id: 'tauriv2-sok-diagnostics-tests', command: 'cargo', args: ['test', '-p', 'soksak-sok-tauriv2', '--features', 'diagnostics'] },
-      { id: 'tauriv2-sok-dev-tests', command: 'cargo', args: ['test', '-p', 'soksak-sok-tauriv2', '--features', 'diagnostics,dev'] },
-    ],
-  };
-}
+/** The limit of one contract test. A test that needs more is reported by the run and gets its own limit with its reason. */
+const TEST_TIMEOUT_MS = 120_000;
+
+const GO_RUNS = (ldflags) => [
+  { id: 'wailsv3-tests', patterns: ['./packages/host/wailsv3/...'], ldflags },
+  { id: 'wailsv3-diagnostics-tests', patterns: ['./packages/host/wailsv3/...'], tags: 'diagnostics', ldflags },
+  { id: 'wailsv3-sok-tests', patterns: ['./packages/sok/wailsv3/...'] },
+  { id: 'wailsv3-sok-diagnostics-tests', patterns: ['./packages/sok/wailsv3/...'], tags: 'diagnostics' },
+  { id: 'wailsv3-sok-dev-tests', patterns: ['./packages/sok/wailsv3/...'], tags: 'diagnostics dev' },
+];
+
+const RUST_RUNS = [
+  { id: 'tauriv2-tests', packageName: 'soksak-host-tauriv2' },
+  { id: 'tauriv2-diagnostics-tests', packageName: 'soksak-host-tauriv2', features: 'diagnostics' },
+  { id: 'tauriv2-sok-tests', packageName: 'soksak-sok-tauriv2' },
+  { id: 'tauriv2-sok-diagnostics-tests', packageName: 'soksak-sok-tauriv2', features: 'diagnostics' },
+  { id: 'tauriv2-sok-dev-tests', packageName: 'soksak-sok-tauriv2', features: 'diagnostics,dev' },
+];
 
 async function main(argv) {
   const flagIndex = argv.indexOf('--go-ldflags');
   if (flagIndex < 0 || !argv[flagIndex + 1]) throw new Error('usage: check-host-contract.mjs --go-ldflags <flags>');
   const cases = parseContractCases(readFileSync(join(ROOT, SPEC), 'utf8'));
-  const runs = hostRuns(argv[flagIndex + 1]);
+  const write = (line) => process.stdout.write(`${line}\n`);
+  const concurrency = Math.max(2, cpus().length - 2);
+  const buildDir = mkdtempSync(join(tmpdir(), 'host-contract-'));
+  // Go builds run together; the Rust builds share one cargo lock, so they follow one another. Both languages build at once.
+  // A scoped run builds only the runs whose id contains the text of --run.
+  const runIndex = argv.indexOf('--run');
+  const runText = runIndex < 0 ? '' : argv[runIndex + 1];
+  if (runIndex >= 0 && !runText) throw new Error('--run needs a text that the id of a run contains');
+  const goDiscovery = Promise.all(GO_RUNS(argv[flagIndex + 1]).filter((run) => run.id.includes(runText)).map((run) => discoverGo({ ...run, cwd: ROOT, buildDir, write, concurrency })));
+  const rustDiscovery = (async () => {
+    const found = [];
+    for (const run of RUST_RUNS.filter((entry) => entry.id.includes(runText))) found.push(await discoverRust({ ...run, cwd: ROOT, write }));
+    return found;
+  })();
+  const [goFound, rustFound] = await Promise.all([goDiscovery, rustDiscovery]);
+  const found = { wailsv3: goFound, tauriv2: rustFound };
+  const onlyIndex = argv.indexOf('--only');
+  const only = onlyIndex < 0 ? null : argv[onlyIndex + 1];
+  if (onlyIndex >= 0 && !only) throw new Error('--only needs a text that the name of a test contains');
+  const items = [...goFound, ...rustFound].flatMap((entry) => entry.tests).filter((item) => only === null || item.name.includes(only));
+  if (only !== null) {
+    // A scoped run shows the tests it ran; the contract audit needs every test, so it belongs to the full run.
+    if (items.length === 0) throw new Error(`no test name contains ${JSON.stringify(only)}`);
+    write(`RUN  ${items.length} tests with ${concurrency} at once, each limited to ${TEST_TIMEOUT_MS / 1000}s (scoped by ${JSON.stringify(only)}; no contract audit)`);
+    const scoped = await runTests({ tests: items, concurrency, defaultTimeoutMs: TEST_TIMEOUT_MS, write });
+    return [...scoped.results.values()].every((result) => result.status === 'pass') ? 0 : 1;
+  }
+  write(`RUN  ${items.length} tests with ${concurrency} at once, each limited to ${TEST_TIMEOUT_MS / 1000}s`);
+  const { results } = await runTests({ tests: items, concurrency, defaultTimeoutMs: TEST_TIMEOUT_MS, write });
   const hosts = [];
   for (const name of HOSTS) {
     const { language, files } = HOST_SOURCES[name];
     const tests = [];
-    const errors = [];
+    const errors = found[name].flatMap((entry) => entry.failures);
     for (const file of files()) {
       const parsed = parseDeclarations(readFileSync(join(ROOT, file), 'utf8'), language, relative(ROOT, join(ROOT, file)));
       tests.push(...parsed.tests);
       errors.push(...parsed.errors);
     }
-    const results = [];
-    for (const run of runs[name]) {
-      const result = await runCommand({ ...run, cwd: ROOT, timeoutMs: 600_000, onEvent: (event) => {
-        if (event.type !== 'progress') process.stderr.write(`${event.id} ${event.type} ${event.elapsedMs}ms\n`);
-      } });
-      const parsed = language === 'go' ? parseGoResults(result.stdout) : parseRustResults(`${result.stdout}\n${result.stderr}`);
-      if (result.status !== 'pass') errors.push(`${run.id} ${result.status} (exit ${result.exitCode}, signal ${result.signal})`);
-      results.push(parsed);
+    const own = found[name].flatMap((entry) => entry.tests);
+    for (const item of own) {
+      if (results.get(item.name).status === 'timeout') errors.push(`${item.name} exceeded its limit of ${TEST_TIMEOUT_MS / 1000}s`);
     }
-    hosts.push({ name, language, tests, errors, runs: results });
+    hosts.push({ name, language, tests, errors, runs: [...groupResults(own, results).values()] });
   }
   const { errors, covered } = auditHostContract(cases, hosts);
   for (const host of hosts) {
