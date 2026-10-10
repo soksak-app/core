@@ -1700,6 +1700,30 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F154.4.3",
+    implementation: [
+      { file: "scripts/node-tests.mjs", symbol: "export function parseTestScript" },
+    ],
+    tests: [
+      { file: "scripts/test/node-tests.test.mjs", id: "another script of the packages that have it is discovered, and quotes around a glob are not part of the path" },
+    ],
+    expected: "The window-check files run one at a time through the test runner with the start, the end, the elapsed time and a limit of 600 s for each file.",
+    levels: ["unit"],
+  },
+  {
+    id: "F154.4",
+    implementation: [
+      { file: "scripts/node-tests.mjs", symbol: "export function discoverNodeTests" },
+      { file: "scripts/native-tests.mjs", symbol: "export async function runNativeTests" },
+    ],
+    tests: [
+      { file: "scripts/test/node-tests.test.mjs", id: "each test file of a package is a test with the folder and the flags of its package" },
+      { file: "scripts/test/native-tests.test.mjs", id: "the native tests run one at a time, each with its start and end, and a failure fails the run" },
+    ],
+    expected: "The Node test files, the native tests and the window checks run through the test runner with the same output and limits.",
+    levels: ["unit"],
+  },
+  {
     id: "F154.4.2",
     implementation: [
       { file: "scripts/native-tests.mjs", symbol: "export async function runNativeTests" },

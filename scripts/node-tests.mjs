@@ -1,7 +1,8 @@
 // Runs the Node test files of the workspace as processes of their own through the test runner, so each file is named when it
 // starts and ends with its elapsed time, has its own limit, and runs in parallel (docs/operations/examples.md#test-runner).
 // The test script of each package names the flags and the paths: `node --test [flags] <paths>`, optionally after commands such as
-// `pnpm build`. The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it.
+// `pnpm build`. `--script <name>` reads another script of the packages that have it (`verify` runs the window checks, with
+// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600). The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it.
 import { execFileSync } from 'node:child_process';
 import { existsSync, globSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { cpus } from 'node:os';
@@ -25,7 +26,7 @@ export function parseTestScript(script, where) {
   for (const step of steps) {
     if (step.startsWith('node --test ')) {
       if (tests !== null) throw new Error(`${where}: the test script "${script}" runs node --test twice`);
-      const words = step.slice('node --test '.length).split(/\s+/).filter(Boolean);
+      const words = step.slice('node --test '.length).split(/\s+/).filter(Boolean).map((word) => word.replace(/^'(.*)'$/, '$1'));
       tests = { flags: words.filter((word) => word.startsWith('--')), paths: words.filter((word) => !word.startsWith('--')) };
     } else if (step === 'pnpm -r test') {
       continue;
@@ -62,14 +63,14 @@ function filesOf(folder, path) {
  * The tests of the packages (folders relative to `root`, or `.` for the root): one test per file, with the folder of its package
  * and the flags of its script, and the commands to run before them.
  */
-export function discoverNodeTests({ root, packages }) {
+export function discoverNodeTests({ root, packages, script: scriptName = 'test' }) {
   const tests = [];
   const before = [];
   for (const folder of packages) {
     const directory = join(root, folder);
     const manifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'));
     // The test script of the root runs this runner, so the root names the files of its own scripts in `test:scripts`.
-    const key = folder === '.' ? 'test:scripts' : 'test';
+    const key = folder === '.' && scriptName === 'test' ? 'test:scripts' : scriptName;
     if (manifest.scripts?.[key] === undefined) continue;
     const script = parseTestScript(manifest.scripts[key], folder);
     for (const step of script.before) {
@@ -92,9 +93,12 @@ function workspacePackages(root) {
 }
 
 async function main(argv) {
-  const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : '';
+  const option = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
+  const only = option('--only', '');
+  const scriptName = option('--script', 'test');
+  const limitMs = Number(option('--timeout', TEST_TIMEOUT_MS / 1000)) * 1000;
   const write = (line) => process.stdout.write(`${line}\n`);
-  const { tests: all, before } = discoverNodeTests({ root: ROOT, packages: workspacePackages(ROOT) });
+  const { tests: all, before } = discoverNodeTests({ root: ROOT, packages: workspacePackages(ROOT), script: scriptName });
   const tests = all.filter((item) => item.name.includes(only));
   if (tests.length === 0) throw new Error(`no test file contains ${JSON.stringify(only)}`);
   // The commands before the tests run one at a time, each with its elapsed time, and a failure ends the run.
@@ -103,9 +107,9 @@ async function main(argv) {
     const built = await runTests({ tests: prepare, concurrency: 1, defaultTimeoutMs: 300_000, write });
     if ([...built.results.values()].some((result) => result.status !== 'pass')) return 1;
   }
-  const concurrency = Math.max(2, cpus().length - 2);
-  write(`RUN  ${tests.length} test files with ${concurrency} at once, each limited to ${TEST_TIMEOUT_MS / 1000}s`);
-  const { results } = await runTests({ tests, concurrency, defaultTimeoutMs: TEST_TIMEOUT_MS, write });
+  const concurrency = Number(option('--concurrency', Math.max(2, cpus().length - 2)));
+  write(`RUN  ${tests.length} test files with ${concurrency} at once, each limited to ${limitMs / 1000}s`);
+  const { results } = await runTests({ tests, concurrency, defaultTimeoutMs: limitMs, write });
   return [...results.values()].every((result) => result.status === 'pass') ? 0 : 1;
 }
 

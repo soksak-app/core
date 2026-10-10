@@ -81,3 +81,14 @@ test("the root names its own test files in test:scripts because its test script 
   const { tests } = discoverNodeTests({ root, packages: ["."] });
   assert.deepEqual(tests.map((item) => [item.name, item.cwd]), [["scripts/test/x.test.mjs", join(root, ".")]]);
 });
+
+test("another script of the packages that have it is discovered, and quotes around a glob are not part of the path", () => {
+  const root = workspace();
+  put(root, "e2e/package.json", JSON.stringify({ name: "e2e", scripts: { test: "node --test test/*.test.mjs", verify: "node --test --test-concurrency=1 --test-global-setup=./setup.mjs './*.test.mjs'" } }));
+  put(root, "e2e/a.test.mjs", "");
+  put(root, "e2e/test/unit.test.mjs", "");
+  put(root, "other/package.json", JSON.stringify({ name: "other", scripts: { test: "node --test test/" } }));
+  put(root, "other/test/x.test.mjs", "");
+  const { tests } = discoverNodeTests({ root, packages: ["e2e", "other"], script: "verify" });
+  assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1)]), [["e2e/a.test.mjs", ["--test", "--test-concurrency=1", "--test-global-setup=./setup.mjs"]]]);
+});

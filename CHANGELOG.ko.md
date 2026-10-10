@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F154.4.3: `pnpm verify:windows`가 창 검사 파일을 파일마다 자기 프로세스로 test runner에 하나씩 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 10초마다 실행 중인 파일, 파일마다 600초 한도를 쓴다.
 - F154.4.2: `make -C native/darwin test`가 native 시험을 test runner로 하나씩 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 실행 중인 시험의 10초 간격 줄, 시험마다 120초 한도를 쓰며 `NATIVE_TEST_ONLY=<text>`로 범위를 정한다.
 - F154.4.1: `pnpm test`가 workspace의 Node 시험 파일을 파일마다 자기 프로세스로 test runner에 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 실행 중인 파일, 가장 느린 파일, 파일마다 120초 한도를 쓰며 `--only <text>`로 범위를 정한다.
 - F107: 제거된 plugin만 선언한 세트를 가리키는 저장된 연결이 더 이상 설정 불러오기를 실패시키지 않는다. `validateSidebars`가 불러오지 않은 plugin의 연결을 유지하고, 불러온 plugin의 없는 세트 연결은 계속 실패한다.
