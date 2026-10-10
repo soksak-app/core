@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F104.2.1: the comments of `packages/host/wailsv3` (1,798 lines in 85 files) are English; `scripts/check-comment-language.mjs` reports no line there, the code of every file is the same without its comments, and `go vet` and the compilation of `tests` succeed on macOS.
 - F104.5.1, F104.6.1: the comments of `apps`, `e2e` (except `e2e/hwp.test.mjs`), `scripts` and the Makefile are English; `scripts/check-comment-language.mjs` lists no comment line of these files, and only comment lines changed.
 - R5.4: `plugins/installed.json` holds no `package`; `sok`, both hosts and the staging of the workbench read the `name` of an installed plugin from the `package.json` in its recorded `path`, and the Go and Rust readers refuse a plugin that holds `package` with `<file>: plugins/installed.json <id>: unknown field package`; the output of `sok plugin install` no longer has `package`.
 - F104.4: the comments of `native/darwin` (`src`, `tests` and `Makefile`, 1,327 lines in 95 files) are English; `scripts/check-comment-language.mjs` reports no line there, the code of every file is the same without its comments, and `make -C native/darwin all` and the build of the native test executables succeed. Three wrong comments are corrected (`applyInsets`, `sp_region_facts` and the comment of `appearance.h`).
