@@ -1447,3 +1447,73 @@ fn a_dropped_sidecar_message_is_recorded() {
     );
     assert!(log.contains(&want), "no {want:?} in {log}");
 }
+
+// contract: sidecars.lifetime.start-and-exit-events
+#[test]
+fn the_lifetime_of_a_sidecar_is_recorded_as_events() {
+    // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
+    if let Some(config) = std::env::var_os("SOKSAK_LIFETIME_CHILD") {
+        // The first process ends by itself with a status; the second ends when the host stops it.
+        let (mut sidecars, _directory) = script_sidecars(
+            "#!/bin/sh\nif [ ! -f DIR/ran ]; then touch DIR/ran; read first; exit 3; fi\ncat >/dev/null\n",
+        );
+        sidecars.0.stop_timeout = STALL;
+        let writer = records::start_writer(Path::new(&config));
+        let (first, _first_events, failures) = failing_owner("a", "/projects/a");
+        sidecars
+            .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+        failures
+            .recv_timeout(STALL)
+            .expect("no sidecar failure; the test stalled");
+        sidecars
+            .send(&first, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+        sidecars.stop();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "the_lifetime_of_a_sidecar_is_recorded_as_events",
+            "--nocapture",
+        ])
+        .env("SOKSAK_LIFETIME_CHILD", config.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the child check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut pids = std::collections::BTreeSet::new();
+    let seen: Vec<(String, String)> = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| {
+            matches!(
+                event["event"].as_str(),
+                Some("host.sidecar.start" | "host.sidecar.exit")
+            )
+        })
+        .map(|event| {
+            assert_eq!(event["fields"]["name"], ECHO);
+            pids.insert(event["fields"]["pid"].as_u64().unwrap());
+            (
+                event["event"].as_str().unwrap().to_string(),
+                event["fields"]["status"].as_str().unwrap_or("").to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        seen,
+        vec![
+            ("host.sidecar.start".to_string(), String::new()),
+            ("host.sidecar.exit".to_string(), "exit status 3".to_string()),
+            ("host.sidecar.start".to_string(), String::new()),
+            ("host.sidecar.exit".to_string(), "exit status 0".to_string()),
+        ]
+    );
+    assert_eq!(pids.len(), 2, "processes {pids:?}");
+}

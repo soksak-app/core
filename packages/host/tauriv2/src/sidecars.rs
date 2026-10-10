@@ -1431,8 +1431,17 @@ impl<O: Owner> Sidecars<O> {
                         .get(&name)
                         .is_some_and(|stopping| stopping.violated)
                 };
+                let pid = child.id();
+                let stop_exit = |status: &str| {
+                    crate::event_record::emit_host(
+                        crate::event_log::Level::Info,
+                        "host.sidecar.exit",
+                        serde_json::json!({"name": name, "pid": pid, "status": status, "stopping": true}),
+                    );
+                };
                 match waited {
                     Ok(Some(status)) => {
+                        stop_exit(&exit_text(status));
                         if !status.success() && !violated(&state) {
                             log_error(
                                 &format!("sidecar {name}"),
@@ -1449,8 +1458,12 @@ impl<O: Owner> Sidecars<O> {
                             ),
                             Err(e) => log_error(&format!("sidecar {name}"), format!("kill: {e}")),
                         }
-                        if let Err(e) = child.wait() {
-                            log_error(&format!("sidecar {name}"), format!("wait after kill: {e}"));
+                        match child.wait() {
+                            Ok(status) => stop_exit(&exit_text(status)),
+                            Err(e) => log_error(
+                                &format!("sidecar {name}"),
+                                format!("wait after kill: {e}"),
+                            ),
                         }
                     }
                     Err(e) => {
@@ -1578,6 +1591,11 @@ impl<O: Owner> Core<O> {
             let place = name.to_string();
             thread::spawn(move || write_stderr_records(stderr, &place));
         }
+        crate::event_record::emit_host(
+            crate::event_log::Level::Info,
+            "host.sidecar.start",
+            serde_json::json!({"name": name, "pid": child.id()}),
+        );
         // 프로세스 등록부의 계기(V5-104): 뜨는 사이드카의 pid 와 역할을 남긴다.
         crate::performance::observe(&core.config_directory, "host", || {
             serde_json::json!({"event": "process", "role": "sidecar", "name": name,
@@ -2540,6 +2558,11 @@ fn fail<O: Owner>(
         }
         None => "no child process".to_string(),
     };
+    crate::event_record::emit_host(
+        crate::event_log::Level::Info,
+        "host.sidecar.exit",
+        serde_json::json!({"name": sidecar, "pid": pid, "status": exit, "stopping": false}),
+    );
     // 쓰기 스레드는 모든 송신자가 사라지면 보관분을 쓰고 끝난다.
     drop(outbox);
     // 기본값: 프로토콜 위반이 없으면 출력이 끝난 것이 실패 원인이다(docs/spec/sidecars.md#failure).

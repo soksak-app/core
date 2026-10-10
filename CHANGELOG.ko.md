@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.5.5.1: 두 host는 표준 입출력 sidecar 프로세스의 시작을 event `host.sidecar.start`(`name`, `pid`), 종료를 `host.sidecar.exit`(`name`, `pid`, `status`, `stopping`)로 level `info`의 event log에 저장한다. `EmitHost`와 `emit_host`는 기록이 아닌 host 원천의 event를 위한 입구다.
 - F150.5.4: page의 모든 `command.run` 요청은 성능 trace가 켜져 있든 꺼져 있든 필드 `name`, `micros`, `ok`, `error`를 가진 event `page.command`다(level `debug`, 실패한 명령은 `warn`).
 - F150.5.1: 메인 page의 모든 host 호출은 event `page.call`이다(level `debug`, 거절된 호출은 `warn`). 필드는 `name`, `args`(1024자에서 자름), `micros`, `ok`, `error`이며, 두 runtime이 `host.call` 둘레에 두는 감싸개가 기록한다. 호출 `log`와 `performance`는 기록하지 않는다.
 - F150.4.3: 표면의 context에 `context.closing`이 있다. 워크벤치는 표면 제거가 시작될 때 모듈 composition의 region을 떼기 전과 `dispose` 전에 이 `AbortSignal`을 abort한다. fixture 초기화 1초쯤 뒤 떼어진 region에 입력이 닿던 오류(`terminal input failed: image view is detached`)는 detach와 `dispose` 사이에 plugin이 사이드카의 커서 event를 처리해서 생겼다. 신호를 읽지 않는 모듈은 떼어진 region의 거절을 그대로 받는다.

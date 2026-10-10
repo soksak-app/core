@@ -159,6 +159,22 @@ pub fn emit_trace(layer: &str, fields: serde_json::Value) -> Result<(), String> 
     Ok(())
 }
 
+/// Stores an event of the layer `host` with the level, the name `host.<subsystem>.<event>` and the fields. It is the entrance of
+/// the sources of the host that are not records (docs/spec/logging.md#automatic-entrances). A name outside `host.` and fields
+/// that cannot be serialized are reported on the standard error and nothing is stored.
+pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
+    if !event.starts_with("host.") {
+        eprintln!("event writer: the event {event:?} does not start with host.");
+        return;
+    }
+    match to_raw_value(&fields) {
+        Ok(text) => store_event(level, "host", event, event, text),
+        Err(error) => {
+            eprintln!("event writer: the fields of {event} cannot be serialized: {error}")
+        }
+    }
+}
+
 /// Waits until the records written so far are in the event log, at most `deadline`. The paths that end the process (a panic
 /// hook, a fatal handler) call it, so the record of the failure is stored before the process ends. Without an attached
 /// writer there is nothing to wait for: the records wait in the start buffer, and the standard error holds the failure.

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F150.5.5.1: both hosts store the start of a sidecar process of standard input and output as the event `host.sidecar.start` (`name`, `pid`) and its end as `host.sidecar.exit` (`name`, `pid`, `status`, `stopping`), in the event log at the level `info`; `EmitHost` and `emit_host` are the entrance for events of the host that are not records.
 - F150.5.4: every `command.run` request of the page is the event `page.command` with the fields `name`, `micros`, `ok` and `error` (level `debug`, `warn` for a failed command), whether or not the performance trace is on.
 - F150.5.1: every host call of the main page is the event `page.call` (level `debug`, `warn` for a refused call) with the fields `name`, `args` (cut at 1024 characters), `micros`, `ok` and `error`, recorded by the wrapper that both runtimes put around `host.call`; the calls `log` and `performance` are not recorded.
 - F150.4.3: the context of a surface has `context.closing`, an `AbortSignal` that the workbench aborts when the removal of the surface starts, before it detaches the regions of the module's compositions and before `dispose`; the input that reached a detached region about a second after a fixture reset (`terminal input failed: image view is detached`) came from the plugin handling sidecar cursor events between the detach and `dispose`. A module that does not read the signal still gets the rejection of a detached region.

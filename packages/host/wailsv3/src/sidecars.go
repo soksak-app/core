@@ -1026,6 +1026,7 @@ func (c *Sidecars) launch(name string) (*sidecar, error) {
 		stdout.Close()
 		return nil, fmt.Errorf("sidecar %s: %w", name, err)
 	}
+	EmitHost(LevelInfo, "host.sidecar.start", map[string]any{"name": name, "pid": cmd.Process.Pid})
 	process := &sidecar{
 		name: name, cmd: cmd, stdin: stdin,
 		outbox:         make(chan []byte, 256),
@@ -1431,6 +1432,8 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 		process.violated = violation != ""
 		process.waitErr = process.cmd.Wait()
 		flushStderr(process.cmd)
+		EmitHost(LevelInfo, "host.sidecar.exit", map[string]any{"name": process.name, "pid": process.cmd.Process.Pid,
+			"status": exitStatus(process.cmd, process.waitErr), "stopping": true})
 		close(process.exited)
 		return
 	}
@@ -1444,6 +1447,8 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 	if violation == "" {
 		reason = "output closed: " + exit
 	}
+	EmitHost(LevelInfo, "host.sidecar.exit", map[string]any{"name": process.name, "pid": process.cmd.Process.Pid,
+		"status": exit, "stopping": false})
 	close(process.exited)
 	LogError("sidecar "+process.name, "failed: "+reason)
 	for _, item := range owned {

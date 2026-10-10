@@ -1136,3 +1136,46 @@ func TestTheRelayRecordsEveryMessageWithItsWholeBody(t *testing.T) {
 		t.Fatalf("the message body was not recorded whole: %v", received["fields"])
 	}
 }
+
+// contract: sidecars.lifetime.start-and-exit-events
+func TestSidecarLifetimeIsRecordedAsEvents(t *testing.T) {
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+	// The first process ends by itself with a status; the second ends when the host stops it.
+	sidecars, _ := scriptSidecars(t, "#!/bin/sh\nif [ ! -f DIR/ran ]; then touch DIR/ran; read first; exit 3; fi\ncat >/dev/null\n")
+	owner := newFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	owner.failure(t)
+	if err := sidecars.Send(owner, echoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	sidecars.Stop()
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var seen []string
+	pids := map[string]bool{}
+	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		name, _ := event["event"].(string)
+		if name != "host.sidecar.start" && name != "host.sidecar.exit" {
+			continue
+		}
+		fields := event["fields"].(map[string]any)
+		if fields["name"] != echoSidecar {
+			t.Fatalf("%s fields = %v", name, fields)
+		}
+		pid, ok := fields["pid"].(float64)
+		if !ok || pid <= 0 {
+			t.Fatalf("%s pid = %v", name, fields["pid"])
+		}
+		pids[fmt.Sprint(pid)] = true
+		status, _ := fields["status"].(string)
+		seen = append(seen, name+" "+status)
+	}
+	want := []string{"host.sidecar.start ", "host.sidecar.exit exit status 3", "host.sidecar.start ", "host.sidecar.exit exit status 0"}
+	if strings.Join(seen, "|") != strings.Join(want, "|") || len(pids) != 2 {
+		t.Fatalf("lifetime events = %q (%d processes), want %q (2 processes)", seen, len(pids), want)
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -122,6 +123,22 @@ func emitTrace(layer string, fields map[string]any) error {
 	}
 	storeEvent(LevelDebug, "host", "host."+kind+"."+event, event, text)
 	return nil
+}
+
+// EmitHost stores an event of the layer `host` with the level, the name `host.<subsystem>.<event>` and the fields. It is the
+// entrance of the sources of the host that are not records (docs/spec/logging.md#automatic-entrances). A name outside
+// `host.` and fields that cannot be serialized are reported on the standard error and nothing is stored.
+func EmitHost(level Level, event string, fields map[string]any) {
+	if !strings.HasPrefix(event, "host.") {
+		fmt.Fprintf(os.Stderr, "event writer: the event %q does not start with host.\n", event)
+		return
+	}
+	text, err := json.Marshal(fields)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
+		return
+	}
+	storeEvent(level, "host", event, event, text)
 }
 
 // FlushRecords waits until the records written so far are in the event log, at most deadline. The paths that end the process
