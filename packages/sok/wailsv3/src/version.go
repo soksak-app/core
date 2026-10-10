@@ -1,5 +1,5 @@
 package sok
 
-// CoreVersion 은 이 command line 이 속한 core release 의 version 이다. plugin 의 engines.soksak 과 비교한다.
-// scripts/check-versions.mjs 가 다른 manifest 의 version 과 같은지 검사한다.
+// CoreVersion is the version of the core release that this command line belongs to. It is compared with engines.soksak
+// of a plugin. scripts/check-versions.mjs checks that it equals the version of the other manifests.
 const CoreVersion = "0.0.10"

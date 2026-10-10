@@ -1,6 +1,6 @@
 package tests
 
-// plugin pack 과 sidecar release(docs/spec/cli.md)가 쓰는 release 와 SHA256SUMS 를 검사한다.
+// Checks the release and SHA256SUMS that plugin pack and sidecar release (docs/spec/cli.md) write.
 
 import (
 	"archive/tar"
@@ -16,7 +16,7 @@ import (
 	"testing"
 )
 
-// writeTree 는 경로마다 내용을 쓴다. 이름이 * 로 끝나면 실행 bit 를 붙인다.
+// writeTree writes the content of each path. A name that ends with * gets the executable bit.
 func writeTree(t *testing.T, dir string, files map[string]string) {
 	t.Helper()
 	for name, content := range files {
@@ -114,7 +114,7 @@ func TestPluginPackWritesASortedReleaseOfTheListedFiles(t *testing.T) {
 	if entries[3].content != "b" {
 		t.Fatalf("content %q", entries[3].content)
 	}
-	// 같은 폴더를 다시 pack 하면 같은 byte 를 쓴다.
+	// Packing the same folder again writes the same bytes.
 	if code, again, _ := run("plugin", "pack", dir, out); code != 0 || again != stdout {
 		t.Fatalf("repeat %d %q", code, again)
 	}
@@ -189,7 +189,7 @@ func TestSidecarReleaseWritesTheAssetAndKeepsSHA256SUMSSorted(t *testing.T) {
 		}
 		sums = append(sums, sum+"  "+name)
 	}
-	// 같은 이름의 세 번째 release 는 첫 줄을 바꾸고, 줄은 release 이름 순서다.
+	// A third release of the same name changes the first line, and the lines are in the order of release names.
 	data, err := os.ReadFile(filepath.Join(out, "SHA256SUMS"))
 	if err != nil || string(data) != sums[1]+"\n"+sums[2]+"\n" {
 		t.Fatalf("SHA256SUMS %q %v", data, err)

@@ -1,6 +1,6 @@
 package sok
 
-// 파일 오류의 문구(docs/spec/cli.md). 두 구현은 같은 실패를 같은 문구로 보고한다.
+// Wording of file errors (docs/spec/cli.md). The two implementations report the same failure with the same wording.
 
 import (
 	"errors"
@@ -9,8 +9,9 @@ import (
 	"syscall"
 )
 
-// fileError 는 path 의 파일 작업 실패를 "<path>: <이유>" 로 적는다. 이유는 운영체제 오류 문구이며 소문자로
-// 시작한다. 원래 오류를 감싸므로 errors.Is(err, fs.ErrNotExist) 같은 검사는 그대로 쓴다.
+// fileError writes the failure of a file operation on path as "<path>: <reason>". The reason is the operating system
+// error text and starts with a lowercase letter. It wraps the original error, so checks such as errors.Is(err,
+// fs.ErrNotExist) keep working.
 func fileError(path string, err error) error {
 	var pathErr *fs.PathError
 	if errors.As(err, &pathErr) {
@@ -19,7 +20,8 @@ func fileError(path string, err error) error {
 	return fmt.Errorf("%s: %w", path, err)
 }
 
-// osReason 은 운영체제 오류의 이유 문구다. 시스템 호출 오류면 그 문구이고, 아니면 오류 문구 그대로다.
+// osReason is the reason text of an operating system error. For a system call error it is that text; otherwise it is
+// the error text itself.
 func osReason(err error) string {
 	var errno syscall.Errno
 	if errors.As(err, &errno) {
@@ -28,8 +30,9 @@ func osReason(err error) string {
 	return err.Error()
 }
 
-// withCleanup 은 실패한 작업이 남긴 임시 경로를 remove 로 지운다. 지우지 못하면 원래 오류에 그 실패를
-// "; cleanup <경로>: <이유>" 로 덧붙인다. 이미 없는 경로는 남은 것이 없으므로 지운 것과 같다.
+// withCleanup removes with remove the temporary path that a failed operation left. When the removal fails, it appends
+// that failure to the original error as "; cleanup <path>: <reason>". A path that no longer exists leaves nothing, so
+// it counts as removed.
 func withCleanup(err error, temp string, remove func(string) error) error {
 	if cleanupErr := remove(temp); cleanupErr != nil && !errors.Is(cleanupErr, fs.ErrNotExist) {
 		return fmt.Errorf("%w; cleanup %w", err, fileError(temp, cleanupErr))

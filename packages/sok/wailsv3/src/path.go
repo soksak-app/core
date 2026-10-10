@@ -1,7 +1,7 @@
 package sok
 
-// 이 command line 의 경로 항목(docs/spec/cli.md)을 쓰고 지운다. 항목은 paths.d 폴더의 <identifier> 파일이며 sok 이
-// 있는 폴더를 한 줄로 담는다.
+// Writes and removes the path entry of this command line (docs/spec/cli.md). The entry is the file <identifier> in the
+// paths.d folder and holds the folder of sok in one line.
 
 import (
 	"encoding/json"
@@ -31,7 +31,8 @@ func runPath(action string, stdout io.Writer, options Options) error {
 		if err := os.WriteFile(file, []byte(directory+"\n"), 0o644); err != nil {
 			return fmt.Errorf("cannot write %w; run sudo sok path install", fileError(file, err))
 		}
-		// 경로의 &, <, > 를 그대로 쓰도록 HTML escape 를 끈다. Rust 구현과 같은 출력이다.
+		// Turns off HTML escaping so that &, < and > of a path are written unchanged. The output is the same as that of the
+		// Rust implementation.
 		encoder := json.NewEncoder(stdout)
 		encoder.SetEscapeHTML(false)
 		encoder.SetIndent("", "  ")

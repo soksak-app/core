@@ -1,6 +1,6 @@
 package tests
 
-// 설치 형식(docs/spec/installation.md)의 검사와 version 선택을 검사한다.
+// Checks the validation of the installation format (docs/spec/installation.md) and the version selection.
 
 import (
 	"encoding/json"
@@ -47,7 +47,7 @@ func decode(t *testing.T, text string) any {
 	return value
 }
 
-// at 은 fixture 안의 객체나 배열 원소를 경로로 찾는다.
+// at finds an object or an array element inside the fixture by path.
 func at(value any, path ...any) any {
 	for _, step := range path {
 		switch key := step.(type) {
@@ -81,7 +81,7 @@ func TestVersionRangesAcceptExactCaretTildeAndBoundedForms(t *testing.T) {
 	if !sok.Satisfies("0.0.9", ">=0.0.2 <0.1.0") || sok.Satisfies("0.1.0", ">=0.0.2 <0.1.0") {
 		t.Fatal("bounded range bounds")
 	}
-	// * 는 >=0.0.0, 곧 상한이 없는 모든 version 이다.
+	// is >=0.0.0, that is, every version without an upper bound.
 	if r, err := sok.ParseRange("*"); err != nil || r.Min.String() != "0.0.0" || r.Below != nil {
 		t.Fatalf("*: %v %v", r, err)
 	}
@@ -90,7 +90,7 @@ func TestVersionRangesAcceptExactCaretTildeAndBoundedForms(t *testing.T) {
 			t.Fatalf("* does not contain %s", version)
 		}
 	}
-	// >=x.y.z 는 하한만 있고 상한이 없다.
+	// >=x.y.z has only a lower bound and no upper bound.
 	if r, err := sok.ParseRange(">=0.0.6"); err != nil || r.Min.String() != "0.0.6" || r.Below != nil {
 		t.Fatalf(">=0.0.6: %v %v", r, err)
 	}
@@ -244,7 +244,7 @@ func TestInstallationResolvesNewestUsablePluginAndSidecarVersions(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 0.3.0 은 revoked 이므로 0.2.0 을 고르고, sidecar 는 darwin-arm64 asset 이 있는 가장 새 0.1.1 을 고른다.
+	// 0.3.0 is revoked, so 0.2.0 is chosen, and for the sidecar the newest 0.1.1 that has a darwin-arm64 asset is chosen.
 	arm, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", emptyInstalled(), nil)
 	if err != nil || arm.Version.Version != "0.2.0" || strings.Join(versions(arm), ",") != "@scope/sidecar-worker 0.1.1" {
 		t.Fatalf("darwin-arm64: %v %v", arm, err)
@@ -252,7 +252,7 @@ func TestInstallationResolvesNewestUsablePluginAndSidecarVersions(t *testing.T) 
 	if arm.Sidecars[0].Release.URL != "file:///releases/c" {
 		t.Fatalf("release %v", arm.Sidecars[0].Release)
 	}
-	// darwin-x64 asset 은 0.1.0 에만 있다.
+	// The darwin-x64 asset exists only for 0.1.0.
 	x64, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-x64", emptyInstalled(), nil)
 	if err != nil || strings.Join(versions(x64), ",") != "@scope/sidecar-worker 0.1.0" {
 		t.Fatalf("darwin-x64: %v %v", x64, err)
@@ -284,20 +284,20 @@ func TestInstallationKeepsOneSidecarVersionThatSatisfiesEveryInstalledPlugin(t *
 		state.Sidecars["@scope/sidecar-worker"] = sok.InstalledSidecar{Version: version, Path: "/config/sidecars/scope-sidecar-worker/" + version + "/darwin-arm64"}
 		return state
 	}
-	// 다른 plugin 이 0.1.0 을 쓰고 있고 그 version 이 두 범위를 채우므로 더 새 0.1.1 대신 0.1.0 을 그대로 둔다.
+	// Another plugin uses 0.1.0 and that version satisfies both ranges, so 0.1.0 stays instead of the newer 0.1.1.
 	kept, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", other("^0.1.0", "0.1.0"), nil)
 	if err != nil || strings.Join(versions(kept), ",") != "@scope/sidecar-worker 0.1.0" {
 		t.Fatalf("kept: %v %v", kept, err)
 	}
-	// 다른 plugin 의 범위가 0.1.0 만 허용하면 두 범위를 채우는 0.1.0 을 고른다.
+	// When the range of another plugin allows only 0.1.0, 0.1.0, which satisfies both ranges, is chosen.
 	exact, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", other("0.1.0", "0.1.0"), nil)
 	if err != nil || strings.Join(versions(exact), ",") != "@scope/sidecar-worker 0.1.0" {
 		t.Fatalf("exact: %v %v", exact, err)
 	}
-	// 범위를 함께 채우는 version 이 없으면 각 plugin 과 범위를 밝혀 실패한다.
+	// When no version satisfies the ranges together, the installation fails and names each plugin and range.
 	_, err = sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", other("^0.2.0", "0.2.0"), nil)
 	rejects(t, err, "sidecar @scope/sidecar-worker has no version for darwin-arm64 that satisfies every installed plugin: probe 0.2.0 needs ^0.1.0, other 1.0.0 needs ^0.2.0")
-	// 같은 plugin 의 이전 version 범위는 새 version 을 막지 않는다.
+	// The range of an earlier version of the same plugin does not block the new version.
 	self := emptyInstalled()
 	self.Plugins["probe"] = sok.InstalledPlugin{Version: "0.1.0", Path: "/config/plugins/probe/0.1.0", Enabled: true, Sidecars: map[string]string{"@scope/sidecar-worker": "0.1.0"}}
 	self.Sidecars["@scope/sidecar-worker"] = sok.InstalledSidecar{Version: "0.1.0", Path: "/config/sidecars/scope-sidecar-worker/0.1.0/darwin-arm64"}

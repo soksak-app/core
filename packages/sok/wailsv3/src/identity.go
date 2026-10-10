@@ -4,13 +4,13 @@ package sok
 // the path entry. A build with the dev tag adds .dev, so a debug build that runs beside the installed application does
 // not use its data; a diagnostic release without the tag keeps the release identifier.
 
-// ReleaseIdentifier 는 release build 의 식별자이며 번들 식별자다.
+// ReleaseIdentifier is the identifier of the release build and is the bundle identifier.
 const ReleaseIdentifier = "app.soksak.wails"
 
 // devBuild is set by the init of a build with the dev tag.
 var devBuild bool
 
-// Identity 는 이 build 의 식별자다.
+// Identity is the identifier of this build.
 func Identity() string {
 	if devBuild {
 		return ReleaseIdentifier + ".dev"

@@ -19,7 +19,7 @@ type darwin struct{}
 
 func init() { platform.Register(darwin{}) }
 
-// ProcessRunning 은 signal 0 으로 프로세스가 있는지 본다. 다른 사용자의 프로세스(EPERM)도 실행 중이다.
+// ProcessRunning checks with signal 0 whether the process exists. A process of another user (EPERM) is also running.
 func (darwin) ProcessRunning(pid int) error {
 	if err := syscall.Kill(pid, 0); err != nil && !errors.Is(err, syscall.EPERM) {
 		return fmt.Errorf("process %d is not running: %w", pid, err)
@@ -27,7 +27,7 @@ func (darwin) ProcessRunning(pid int) error {
 	return nil
 }
 
-// PathsDir 는 macOS 의 경로 항목 폴더다. shell 은 이 폴더의 파일마다 그 줄을 PATH 에 더한다.
+// PathsDir is the path entry folder on macOS. The shell adds the line of each file in this folder to PATH.
 func (darwin) PathsDir() (string, error) { return "/etc/paths.d", nil }
 
 // Key is the release key of macOS.

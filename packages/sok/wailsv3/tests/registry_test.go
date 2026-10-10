@@ -1,6 +1,6 @@
 package tests
 
-// registry build(docs/spec/cli.md)가 registry 폴더를 검사하고 index.json 을 쓰는지 검사한다.
+// Checks that registry build (docs/spec/cli.md) checks the registry folder and writes index.json.
 
 import (
 	"crypto/sha256"
@@ -14,7 +14,7 @@ import (
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
-// registryTree 는 pack 과 release 로 release 를 만들고 그 주소와 hash 를 담은 registry 폴더를 쓴다.
+// registryTree makes a release from a pack and a release, and writes a registry folder that holds its address and hash.
 func registryTree(t *testing.T) (dir, pluginSum, sidecarSum string) {
 	t.Helper()
 	platform, err := sok.CurrentPlatform()

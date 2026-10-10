@@ -1,7 +1,8 @@
 package sok
 
-// 선언된 command 를 실행한다(docs/spec/cli.md). 매개변수 flag 는 고른 창의 exposure.list 가 보고하는 매개변수
-// schema 로 해석하며, 맞지 않는 flag 와 값은 command 를 보내기 전에 거부한다.
+// Runs a declared command (docs/spec/cli.md). The parameter flags are interpreted with the parameter schema that
+// exposure.list of the chosen window reports; a flag or value that does not match the schema is rejected before the
+// command is sent.
 
 import (
 	"encoding/json"
@@ -13,10 +14,10 @@ import (
 	"strings"
 )
 
-// commonValues 는 선언된 command 와 함께 쓰는, 값을 받는 공통 option 이다.
+// commonValues are the common options that take a value and are used together with a declared command.
 var commonValues = map[string]bool{"config-dir": true, "window": true, "project": true, "surface": true, "params": true}
 
-// commandWord 는 첫 위치 인자를 돌려준다. 공통 option 의 값은 위치 인자가 아니다.
+// commandWord returns the first positional argument. The value of a common option is not a positional argument.
 func commandWord(args []string) string {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -31,7 +32,8 @@ func commandWord(args []string) string {
 	return ""
 }
 
-// commandArguments 는 선언된 command 의 인자다. flags 는 schema 로 해석하기 전의 매개변수 flag 다.
+// commandArguments are the arguments of a declared command. flags are the parameter flags before they are interpreted
+// with the schema.
 type commandArguments struct {
 	name   string
 	common map[string]string
@@ -52,7 +54,8 @@ func parseCommand(args []string) (commandArguments, error) {
 		name, value, inline := strings.Cut(arg[2:], "=")
 		if !commonValues[name] {
 			parsed.flags = append(parsed.flags, arg)
-			// 값을 = 뒤에 주지 않은 flag 의 다음 인자는 그 값일 수 있다. boolean 인지는 schema 를 읽은 뒤 정한다.
+			// When a flag has no value after =, the next argument can be its value. Whether the flag is a boolean is decided
+			// after the schema is read.
 			if !inline && i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
 				i++
 				parsed.flags = append(parsed.flags, args[i])
@@ -74,7 +77,7 @@ func parseCommand(args []string) (commandArguments, error) {
 	return parsed, nil
 }
 
-// schema 는 매개변수 하나의 선언이다.
+// schema is the declaration of one parameter.
 type schema struct {
 	Type json.RawMessage `json:"type"`
 	Enum []any           `json:"enum"`
@@ -95,7 +98,7 @@ func (s schema) types() ([]string, error) {
 	return many, nil
 }
 
-// convert 는 flag 의 텍스트를 매개변수 schema 의 값으로 바꾼다.
+// convert turns the text of a flag into a value of the parameter schema.
 func convert(name, text string, declared schema) (any, error) {
 	if len(declared.Enum) > 0 {
 		for _, option := range declared.Enum {
@@ -113,7 +116,7 @@ func convert(name, text string, declared schema) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	// 목록에 null 이 있으면 텍스트 null 은 다른 type 보다 먼저 null 이다(docs/spec/cli.md).
+	// When the type list holds null, the text null is null before any other type (docs/spec/cli.md).
 	for _, kind := range types {
 		if kind == "null" && text == "null" {
 			return nil, nil
@@ -155,7 +158,7 @@ func convert(name, text string, declared schema) (any, error) {
 	return nil, usage("--%s must be %s", name, strings.Join(failures, " or "))
 }
 
-// declaredCommand 는 exposure.list 의 command 하나다.
+// declaredCommand is one command of exposure.list.
 type declaredCommand struct {
 	Name   string `json:"name"`
 	Params struct {
@@ -163,7 +166,7 @@ type declaredCommand struct {
 	} `json:"params"`
 }
 
-// parameters 는 매개변수 flag 를 schema 로 해석한 매개변수 객체다.
+// parameters is the parameter object that interprets the parameter flags with the schema.
 func parameters(command declaredCommand, flags []string) (map[string]any, error) {
 	params := map[string]any{}
 	names := make([]string, 0, len(command.Params.Properties))
@@ -208,7 +211,7 @@ func parameters(command declaredCommand, flags []string) (map[string]any, error)
 	return params, nil
 }
 
-// runCommand 는 선언된 command 하나를 실행하고 결과를 출력한다.
+// runCommand runs one declared command and prints its result.
 func runCommand(args []string, stdout io.Writer, options Options) error {
 	parsed, err := parseCommand(args)
 	if err != nil {

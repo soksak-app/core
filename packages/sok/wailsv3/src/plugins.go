@@ -1,7 +1,8 @@
 package sok
 
-// 설정 폴더에 plugin 을 설치하고 바꾼다(docs/spec/cli.md, docs/spec/installation.md). release 는 임시 폴더에 푼 뒤
-// 이름을 바꿔 제자리에 두고, installed.json 은 마지막에 한 번에 바꾸므로 실패한 설치는 이전 설치를 바꾸지 않는다.
+// Installs and changes plugins in the configuration directory (docs/spec/cli.md, docs/spec/installation.md). A release
+// is extracted into a temporary folder and then moved into place by rename, and installed.json is replaced once at the
+// end, so a failed installation does not change the earlier installation.
 
 import (
 	"archive/tar"
@@ -19,10 +20,11 @@ import (
 	"strings"
 )
 
-// RegistryFile 은 설정 폴더 안에서 설치가 읽는 registry index 의 주소를 담는 파일이다.
+// RegistryFile is the file inside the configuration directory that holds the address of the registry index that
+// installations read.
 const RegistryFile = "plugins/registry.json"
 
-// configDirOf 는 --config-dir 이나 이 애플리케이션의 설정 폴더다.
+// configDirOf is --config-dir or the configuration directory of this application.
 func configDirOf(values map[string]string, options Options) (string, error) {
 	if dir, ok := values["config-dir"]; ok {
 		return dir, nil
@@ -34,7 +36,8 @@ func configDirOf(values map[string]string, options Options) (string, error) {
 	return filepath.Join(base, options.Identifier), nil
 }
 
-// fileURL 은 절대 경로의 `file:` URL 이다. 경로 문자 중 URL 에서 뜻을 가진 문자와 공백은 %XX 로 쓴다.
+// fileURL is the `file:` URL of an absolute path. Path characters that have a meaning in a URL, and spaces, are written
+// as %XX.
 func fileURL(path string) string {
 	var out strings.Builder
 	out.WriteString("file://")
@@ -48,8 +51,8 @@ func fileURL(path string) string {
 	return out.String()
 }
 
-// ReadIndexAt 은 경로, `file:` URL, `https:` URL 의 registry index 를 읽고 검사한다. 경로는 그 절대 `file:` URL 이
-// 된다. 돌려주는 주소는 읽은 index 의 URL 이다.
+// ReadIndexAt reads and checks the registry index at a path, a `file:` URL or an `https:` URL. A path becomes its
+// absolute `file:` URL. The returned address is the URL of the index that was read.
 func ReadIndexAt(location string, fetcher Fetcher) (*Index, string, error) {
 	url := location
 	if !strings.Contains(location, ":") {
@@ -63,7 +66,7 @@ func ReadIndexAt(location string, fetcher Fetcher) (*Index, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	// 오류는 file: 이면 경로를, https: 면 URL 을 밝힌다.
+	// For file: the error names the path, and for https: it names the URL.
 	shown := url
 	if path, err := FilePath(url); err == nil {
 		shown = path
@@ -79,7 +82,7 @@ func ReadIndexAt(location string, fetcher Fetcher) (*Index, string, error) {
 	return index, url, nil
 }
 
-// UseRegistry 는 registry index 를 검사하고 그 주소를 plugins/registry.json 에 쓴다.
+// UseRegistry checks the registry index and writes its address to plugins/registry.json.
 func UseRegistry(configDir, location string, fetcher Fetcher) (string, error) {
 	_, url, err := ReadIndexAt(location, fetcher)
 	if err != nil {
@@ -99,7 +102,7 @@ func UseRegistry(configDir, location string, fetcher Fetcher) (string, error) {
 	return url, nil
 }
 
-// readRegistry 는 plugins/registry.json 이 지정한 index 를 읽는다.
+// readRegistry reads the index that plugins/registry.json designates.
 func readRegistry(configDir string) (*Index, error) {
 	url, exists, err := readRegistryURL(configDir)
 	if err != nil {
@@ -112,7 +115,7 @@ func readRegistry(configDir string) (*Index, error) {
 	return index, err
 }
 
-// readRegistryURL 은 plugins/registry.json 의 index 주소를 읽는다. 파일이 없으면 exists 가 false 다.
+// readRegistryURL reads the index address of plugins/registry.json. When the file does not exist, exists is false.
 func readRegistryURL(configDir string) (url string, exists bool, err error) {
 	path := filepath.Join(configDir, RegistryFile)
 	data, err := os.ReadFile(path)
@@ -146,18 +149,18 @@ func readRegistryURL(configDir string) (url string, exists bool, err error) {
 	return url, true, nil
 }
 
-// PluginsState 는 애플리케이션이 plugin 목록에 쓰는 registry 와 설치 상태다
+// PluginsState is the registry and the installation state that the application uses for its plugin list.
 // (docs/spec/installation.md#plugin-operations-in-the-application).
 type PluginsState struct {
 	Registry  *string         `json:"registry"`
 	Index     any             `json:"index"`
 	Installed *InstalledState `json:"installed"`
-	// FirstRun 은 plugins/installed.json 이 없으면 true 다. 애플리케이션은 이때 starter pack 을 설치한다.
+	// FirstRun is true when plugins/installed.json does not exist. The application then installs the starter pack.
 	FirstRun bool `json:"firstRun"`
 }
 
-// ReadPluginsState 는 registry 주소, 검사한 index, 설치 상태를 읽는다. index 를 읽지 못하면
-// 그 오류를 index 자리에 담고, 설치 상태를 읽지 못하면 실패한다.
+// ReadPluginsState reads the registry address, the checked index and the installation state. When the index cannot be
+// read, it holds that error in the index field, and when the installation state cannot be read, it fails.
 func ReadPluginsState(configDir string) (*PluginsState, error) {
 	installed, err := ReadInstalled(configDir)
 	if err != nil {
@@ -184,8 +187,8 @@ func ReadPluginsState(configDir string) (*PluginsState, error) {
 	return state, nil
 }
 
-// RunPluginAction 은 sok plugin <action> <id> 와 같은 작업을 실행하고 그 출력을 돌려준다.
-// action 은 install, update, remove, enable, disable 중 하나다.
+// RunPluginAction runs the same operation as sok plugin <action> <id> and returns its output. action is one of install,
+// update, remove, enable and disable.
 func RunPluginAction(configDir, action, id, core, platform string) (any, error) {
 	switch action {
 	case "install", "update":
@@ -197,8 +200,8 @@ func RunPluginAction(configDir, action, id, core, platform string) (any, error) 
 	}
 }
 
-// ReadInstalled 는 plugins/installed.json 을 읽는다. 파일이 없으면 아무것도 설치하지 않은 상태다. 현재 형식이 아닌
-// 파일은 오류다(docs/spec/installation.md).
+// ReadInstalled reads plugins/installed.json. When the file does not exist, nothing is installed. A file that is not in
+// the current format is an error (docs/spec/installation.md).
 func ReadInstalled(configDir string) (*InstalledState, error) {
 	path := filepath.Join(configDir, Installed)
 	data, err := os.ReadFile(path)
@@ -219,7 +222,7 @@ func ReadInstalled(configDir string) (*InstalledState, error) {
 	return state, nil
 }
 
-// writeInstalled 는 installed.json 을 한 번에 바꾼다.
+// writeInstalled replaces installed.json in one step.
 func writeInstalled(configDir string, state *InstalledState) error {
 	var out bytes.Buffer
 	if err := printJSON(&out, state); err != nil {
@@ -232,8 +235,8 @@ func writeInstalled(configDir string, state *InstalledState) error {
 	return replaceFile(path, out.Bytes())
 }
 
-// extract 는 tar.gz release 를 target 옆 임시 폴더에 푼 뒤 이름을 바꿔 target 에 둔다. 일반 파일과 폴더만 받고,
-// 절대 경로와 `..` 는 거부한다.
+// extract extracts a tar.gz release into a temporary folder next to target and then moves it to target by rename. It
+// accepts only regular files and folders and rejects absolute paths and `..`.
 func extract(data []byte, target string) (err error) {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return fileError(filepath.Dir(target), err)
@@ -282,7 +285,7 @@ func extract(data []byte, target string) (err error) {
 			if err != nil {
 				return fileError(path, err)
 			}
-			// 만들 때의 mode 는 프로세스의 umask 가 좁히므로 명세의 mode 를 따로 정한다.
+			// The process umask narrows the mode given at creation, so the mode of the specification is set separately.
 			err = file.Chmod(mode)
 			if err == nil {
 				_, err = io.Copy(file, reader)
@@ -303,7 +306,7 @@ func extract(data []byte, target string) (err error) {
 	return nil
 }
 
-// installRelease 는 아직 없는 version 폴더에 release 를 확인해 푼다.
+// installRelease verifies the release and extracts it into a version folder that does not exist yet.
 func installRelease(where string, release Release, target string) error {
 	if _, err := os.Stat(target); err == nil {
 		return nil
@@ -320,7 +323,7 @@ func installRelease(where string, release Release, target string) error {
 	return nil
 }
 
-// pluginResult 는 plugin 명령의 출력이다.
+// pluginResult is the output of a plugin command.
 func pluginResult(state *InstalledState, id string) map[string]any {
 	plugin := state.Plugins[id]
 	sidecars := map[string]string{}
@@ -645,7 +648,7 @@ func (p *dependencyPlan) replace(id string, current InstalledPlugin, installed b
 	return nil
 }
 
-// dropUnnamedSidecars 는 어느 plugin 도 지정하지 않은 sidecar 를 지운다.
+// dropUnnamedSidecars removes the sidecars that no plugin designates.
 func dropUnnamedSidecars(state *InstalledState) {
 	for name := range state.Sidecars {
 		named := false
@@ -659,7 +662,7 @@ func dropUnnamedSidecars(state *InstalledState) {
 	}
 }
 
-// stateValue 는 설치 상태를 형식 검사에 쓰는 값으로 바꾼다.
+// stateValue turns the installation state into the value that the format check uses.
 func stateValue(state *InstalledState) (any, error) {
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -668,8 +671,9 @@ func stateValue(state *InstalledState) (any, error) {
 	return DecodeJSON(data)
 }
 
-// pruneFolders 는 설치된 plugin 의 쓰는 version 과 previous 가 아닌 plugin 폴더와 version 폴더, installed.json 이
-// 지정하지 않은 sidecar 폴더와 version 폴더를 지운다. 지우지 못한 폴더를 모두 보고한다.
+// pruneFolders removes the plugin folders and version folders that are not the version in use or previous of an
+// installed plugin, and the sidecar folders and version folders that installed.json does not designate. It reports
+// every folder that it could not remove.
 func pruneFolders(configDir string, state *InstalledState) error {
 	var failures []error
 	remove := func(path string) {
@@ -735,7 +739,7 @@ func pruneFolders(configDir string, state *InstalledState) error {
 	return errors.Join(failures...)
 }
 
-// ChangePlugin 은 설치된 plugin 을 지우거나 켜고 끈다.
+// ChangePlugin removes an installed plugin or turns it on or off.
 func ChangePlugin(configDir, id, action string) (any, error) {
 	state, err := ReadInstalled(configDir)
 	if err != nil {
@@ -785,7 +789,7 @@ func ChangePlugin(configDir, id, action string) (any, error) {
 	return state.Plugins[id], nil
 }
 
-// runPlugins 는 registry use 와 plugin install, update, remove, enable, disable, list 를 실행한다.
+// runPlugins runs registry use and plugin install, update, remove, enable, disable and list.
 func runPlugins(a arguments, stdout io.Writer, options Options) error {
 	configDir, err := configDirOf(a.values, options)
 	if err != nil {
@@ -817,7 +821,7 @@ func runPlugins(a arguments, stdout io.Writer, options Options) error {
 		}
 		result = state
 	case "plugin install", "plugin update", "plugin remove", "plugin enable", "plugin disable":
-		// platform 은 버전을 고르는 install 과 update 에만 필요하다.
+		// platform is needed only by install and update, which choose the version.
 		platform := ""
 		if action := a.positionals[1]; action == "install" || action == "update" {
 			if platform, err = CurrentPlatform(); err != nil {

@@ -1,6 +1,7 @@
 package tests
 
-// plugin 설치(docs/spec/cli.md)가 release 를 확인해 풀고 installed.json 을 한 번에 바꾸는지 검사한다.
+// Checks that a plugin installation verifies and extracts the release and replaces installed.json in one step
+// (docs/spec/cli.md).
 
 import (
 	"archive/tar"
@@ -20,14 +21,14 @@ import (
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
-// pluginVersions 는 plugin probe 의 version 마다 pack 한 release 와 sidecar 0.1.0 의 release 로 registry 를 만들고
-// build 한 뒤 index.json 의 경로를 돌려준다.
+// pluginVersions builds a registry from one packed release for each version of the plugin probe and a release of
+// sidecar 0.1.0, and returns the path of index.json after the build.
 func pluginVersions(t *testing.T, versions ...string) string {
 	t.Helper()
 	return pluginVersionsFor(t, "0.0.2", versions...)
 }
 
-// pluginVersionsFor 는 plugin 이 core version core 를 요구하는 registry 를 만든다.
+// pluginVersionsFor builds a registry in which the plugin requires core version core.
 func pluginVersionsFor(t *testing.T, core string, versions ...string) string {
 	t.Helper()
 	platform, err := sok.CurrentPlatform()
@@ -137,7 +138,7 @@ func TestPluginInstallExtractsCheckedReleasesAndRecordsTheState(t *testing.T) {
 	if !strings.Contains(installed, sidecarPath) || !strings.Contains(installed, `"version": "0.2.0"`) {
 		t.Fatalf("installed.json %s", installed)
 	}
-	// 같은 version 을 다시 설치하면 아무것도 바꾸지 않는다.
+	// Installing the same version again changes nothing.
 	if code, again, _ := run("plugin", "install", "probe", "--config-dir", config); code != 0 || again != stdout {
 		t.Fatalf("repeat %d %q", code, again)
 	}
@@ -146,7 +147,8 @@ func TestPluginInstallExtractsCheckedReleasesAndRecordsTheState(t *testing.T) {
 	}
 }
 
-// unsafeRelease 는 package.json 과 plugin.json 옆에 폴더 밖 경로를 담은 release 를 쓰고 그 sha256 을 돌려준다.
+// unsafeRelease writes a release that holds a path outside the folder next to package.json and plugin.json, and returns
+// its sha256.
 func unsafeRelease(t *testing.T, path string) string {
 	t.Helper()
 	var data bytes.Buffer
@@ -184,7 +186,7 @@ func TestPluginInstallFailureKeepsThePreviousState(t *testing.T) {
 	if code != 1 || stderr != "sok: "+filepath.Join(config, "plugins/registry.json")+" does not exist; run sok registry use <index.json>\n" {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
-	// index 를 쓴 뒤 release 가 바뀌면 hash 비교가 설치를 멈춘다.
+	// When the release changes after index was written, the hash comparison stops the installation.
 	index := pluginVersions(t, "0.2.0")
 	runJSON(t, "registry", "use", index, "--config-dir", config)
 	var registry map[string]any
@@ -203,7 +205,7 @@ func TestPluginInstallFailureKeepsThePreviousState(t *testing.T) {
 	if exists(filepath.Join(config, "plugins/installed.json")) || exists(filepath.Join(config, "plugins/probe/0.2.0")) {
 		t.Fatal("a failed install changed the installation")
 	}
-	// 폴더 밖 경로를 담은 release 는 풀지 않는다.
+	// A release that holds a path outside the folder is not extracted.
 	sum := unsafeRelease(t, release)
 	registryDir := filepath.Dir(index)
 	replaceIn(t, filepath.Join(registryDir, "plugins/probe.json"), `"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]`, `"sidecars": {}}]`, 1)
@@ -277,7 +279,7 @@ func TestPluginUpdateKeepsPreviousAndRemoveDeletesTheFolders(t *testing.T) {
 	}
 }
 
-// stateJSON 은 ReadPluginsState 의 결과를 JSON 문장으로 만든다.
+// stateJSON turns the result of ReadPluginsState into a JSON text.
 func stateJSON(t *testing.T, config string) string {
 	t.Helper()
 	state, err := sok.ReadPluginsState(config)
@@ -318,7 +320,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	if state.FirstRun {
 		t.Fatal("the state after an install reports a first run")
 	}
-	// 읽지 못한 index 는 오류를 index 자리에 담고, 설치 상태는 그대로 보고한다.
+	// An index that cannot be read holds its error in the index field, and the installation state is reported unchanged.
 	if err := os.Remove(index); err != nil {
 		t.Fatal(err)
 	}
@@ -400,11 +402,11 @@ func TestPluginInstallSetsTheModesWhateverTheUmask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 빌드한 sok 은 이 package 의 CoreVersion 으로 plugin 을 고른다.
+	// The built sok chooses plugins with the CoreVersion of this Go package.
 	index := pluginVersionsFor(t, sok.CoreVersion, "0.2.0")
 	config := t.TempDir()
 	runJSON(t, "registry", "use", index, "--config-dir", config)
-	// 프로세스의 umask 는 실행 파일 단위이므로 sok 을 빌드해 umask 077 의 shell 에서 실행한다.
+	// The umask belongs to the executable process, so the check builds sok and runs it in a shell with umask 077.
 	binary := filepath.Join(t.TempDir(), "sok")
 	if output, err := exec.Command("go", "build", "-o", binary, "github.com/soksak-app/core/packages/sok/wailsv3/src/cmd/sok").CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, output)
