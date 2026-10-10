@@ -36,16 +36,45 @@ struct Child {
     lstart: String,
 }
 
-/// 살아 있는 WebKit XPC 의 (pid, 종류) 목록.
-fn webkit_processes() -> Vec<(u32, String)> {
-    let Ok(output) = std::process::Command::new("ps")
-        .args(["-axo", "pid=,command="])
+/// ps 를 args 로 실행해 표준 출력을 돌려준다. pid 하나를 묻는 질의(-p)에서 그 프로세스가 없으면 ps 는 출력 없이 상태 1 로
+/// 끝나며, 이는 실패가 아니라 "그 프로세스가 없다"는 답이다. 그 밖의 실패는 질의와 ps 의 메시지를 담은 오류이고, 호출자가
+/// 기록한다.
+fn ps_query(args: &[&str]) -> Result<String, String> {
+    let output = std::process::Command::new("ps")
+        .args(args)
         .output()
-    else {
-        return Vec::new();
+        .map_err(|error| format!("ps {}: {error}", args.join(" ")))?;
+    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    if output.status.success() {
+        return Ok(text);
+    }
+    if output.status.code() == Some(1) && text.trim().is_empty() && args.contains(&"-p") {
+        return Ok(String::new());
+    }
+    Err(format!(
+        "ps {}: {}: {}",
+        args.join(" "),
+        output.status,
+        String::from_utf8_lossy(&output.stderr).trim()
+    ))
+}
+
+/// 실패한 ps 질의를 기록한다. 질의의 답이 없으면 호출자는 판정을 죽이는 쪽이 아니라 죽이지 않는 쪽으로 정한다.
+fn ps_failed(error: String) {
+    crate::application_log::log_error("webkit children", error);
+}
+
+/// 살아 있는 WebKit XPC 의 (pid, 종류) 목록. ps 가 실패하면 그 오류를 기록하고 빈 목록을 돌려준다.
+fn webkit_processes() -> Vec<(u32, String)> {
+    let output = match ps_query(&["-axo", "pid=,command="]) {
+        Ok(output) => output,
+        Err(error) => {
+            ps_failed(error);
+            return Vec::new();
+        }
     };
     let mut found = Vec::new();
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
+    for line in output.lines() {
         let Some((pid, command)) = line.split_once(char::is_whitespace) else {
             continue;
         };
@@ -63,37 +92,38 @@ fn webkit_processes() -> Vec<(u32, String)> {
     found
 }
 
-/// pid 의 프로세스가 살아 있는가. ps 로 묻는다(시그널을 쓰지 않는다).
+/// pid 의 프로세스가 살아 있는가. ps 로 묻는다(시그널을 쓰지 않는다). ps 가 실패하면 기록하고 없다고 답한다.
 fn exists(pid: u32) -> bool {
-    std::process::Command::new("ps")
-        .args(["-o", "pid=", "-p", &pid.to_string()])
-        .output()
-        .is_ok_and(|out| !String::from_utf8_lossy(&out.stdout).trim().is_empty())
-}
-
-/// pid 프로세스의 시작 시각. 없으면 빈 문자열이다 — 빈 문자열은 기록의 어떤 lstart 와도
-/// 같지 않으므로 판정이 그 항목을 죽이지 않는다(모호하면 죽이지 않는다).
-fn start_time(pid: u32) -> String {
-    match std::process::Command::new("ps")
-        .args(["-o", "lstart=", "-p", &pid.to_string()])
-        .output()
-    {
-        // 기본값: ps 가 실패하면 빈 문자열 — 판정이 그 항목을 죽이지 않게 한다.
-        Ok(out) => String::from_utf8_lossy(&out.stdout).trim().to_string(),
-        Err(_) => String::new(),
+    match ps_query(&["-o", "pid=", "-p", &pid.to_string()]) {
+        Ok(output) => !output.trim().is_empty(),
+        Err(error) => {
+            ps_failed(error);
+            false
+        }
     }
 }
 
-/// pid 프로세스의 명령줄. 없으면 빈 문자열이다 — 형제 인스턴스 판정은 `soksak` 문구를
-/// 찾지 못해 거짓이 되고, 수확은 계속 진행된다.
+/// pid 프로세스의 시작 시각. 없으면 빈 문자열이다 — 빈 문자열은 기록의 어떤 lstart 와도 같지 않으므로 판정이 그 항목을
+/// 죽이지 않는다(모호하면 죽이지 않는다). ps 가 실패하면 기록하고 빈 문자열을 돌려준다.
+fn start_time(pid: u32) -> String {
+    match ps_query(&["-o", "lstart=", "-p", &pid.to_string()]) {
+        Ok(output) => output.trim().to_string(),
+        Err(error) => {
+            ps_failed(error);
+            String::new()
+        }
+    }
+}
+
+/// pid 프로세스의 명령줄. 없으면 빈 문자열이다 — 형제 인스턴스 판정은 `soksak` 문구를 찾지 못해 거짓이 되고, 수확은 계속
+/// 진행된다. ps 가 실패하면 기록하고 빈 문자열을 돌려준다.
 fn command(pid: u32) -> String {
-    match std::process::Command::new("ps")
-        .args(["-o", "command=", "-p", &pid.to_string()])
-        .output()
-    {
-        // 기본값: ps 가 실패하면 빈 문자열 — 형제 판정이 거짓이 되어 수확이 멈추지 않는다.
-        Ok(out) => String::from_utf8_lossy(&out.stdout).trim().to_string(),
-        Err(_) => String::new(),
+    match ps_query(&["-o", "command=", "-p", &pid.to_string()]) {
+        Ok(output) => output.trim().to_string(),
+        Err(error) => {
+            ps_failed(error);
+            String::new()
+        }
     }
 }
 
@@ -209,8 +239,19 @@ pub fn reap_recorded(config: &Path) {
             Ok(()) => match std::process::Command::new("kill")
                 .args(["-9", &child.pid.to_string()])
                 .output()
-            {
-                Ok(_) => crate::application_log::log_info(
+                .map_err(|error| error.to_string())
+                .and_then(|output| {
+                    if output.status.success() {
+                        Ok(())
+                    } else {
+                        Err(format!(
+                            "{}: {}",
+                            output.status,
+                            String::from_utf8_lossy(&output.stderr).trim()
+                        ))
+                    }
+                }) {
+                Ok(()) => crate::application_log::log_info(
                     "webkit children",
                     format!(
                         "reaped orphaned {} pid {} left by host {}",

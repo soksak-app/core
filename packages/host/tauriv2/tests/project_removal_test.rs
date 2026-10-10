@@ -1,6 +1,9 @@
 //! A removal request for a project resolves with the answer of the window that shows it
 //! (docs/spec/projects.md).
 
+#[path = "support/records.rs"]
+mod records;
+
 use soksak_host_tauriv2::project_removal::Removals;
 
 // contract: project-removal.ask.waits-for-the-owner-answer
@@ -37,4 +40,51 @@ fn a_project_removal_request_resolves_with_the_owner_answer() {
         asked.recv().unwrap(),
         "the end of the asked window did not allow the removal"
     );
+}
+
+// contract: project-removal.abandon.records-each-allowed-removal
+#[test]
+fn the_end_of_a_window_records_each_removal_it_allows() {
+    // The writer of the records belongs to the process, so the scenario runs in a child process.
+    if let Some(config) = std::env::var_os("SOKSAK_REMOVAL_CHILD") {
+        let config = std::path::PathBuf::from(config);
+        let writer = records::start_writer(&config);
+        let removals = Removals::default();
+        let _asked: Vec<_> = [
+            ("prj-a", "project-one"),
+            ("prj-b", "project-one"),
+            ("prj-c", "project-two"),
+        ]
+        .iter()
+        .map(|(id, owner)| removals.begin(id, owner).unwrap())
+        .collect();
+        removals.abandon("project-one");
+        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "the_end_of_a_window_records_each_removal_it_allows",
+            "--nocapture",
+        ])
+        .env("SOKSAK_REMOVAL_CHILD", config.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the child check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut allowed: Vec<String> = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| event["event"] == "host.project.removal_allowed")
+        .map(|event| {
+            assert_eq!(event["fields"]["window"], "project-one");
+            event["fields"]["project"].as_str().unwrap().to_string()
+        })
+        .collect();
+    allowed.sort();
+    assert_eq!(allowed, ["prj-a", "prj-b"]);
 }

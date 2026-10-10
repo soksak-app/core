@@ -50,18 +50,19 @@ func (r *Removals) Answer(id string, allowed bool) error {
 }
 
 // Abandon resolves every request that the window owner has not answered with true, because a window that ends
-// keeps no tab.
+// keeps no tab. Each allowed removal is the event `host.project.removal_allowed` with the window and the project.
 func (r *Removals) Abandon(owner string) {
 	r.mu.Lock()
-	var ended []chan bool
+	ended := map[string]chan bool{}
 	for id, asked := range r.pending {
 		if asked.owner == owner {
-			ended = append(ended, asked.reply)
+			ended[id] = asked.reply
 			delete(r.pending, id)
 		}
 	}
 	r.mu.Unlock()
-	for _, reply := range ended {
+	for id, reply := range ended {
+		EmitHost(LevelInfo, "host.project.removal_allowed", map[string]any{"window": owner, "project": id})
 		reply <- true
 	}
 }

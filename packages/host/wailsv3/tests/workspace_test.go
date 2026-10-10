@@ -4,11 +4,47 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
+
+// contract: workspace.settings.records-each-change
+func TestEachSettingsChangeIsRecordedWithItsKeys(t *testing.T) {
+	root := t.TempDir()
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+	store := host.NewWorkspace(config)
+	for _, req := range []host.WorkspaceRequest{
+		{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "1:2"}},
+		{Kind: "settings", Patch: host.Record{"mode": "light", "gap": 6}},
+		{Kind: "settings", Remove: []string{"gap", "missing"}},
+		{Kind: "settings", ID: "prj-test", Patch: host.Record{"gap": 12}},
+	} {
+		if _, err := store.Apply(req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var seen []string
+	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		if event["event"] != "host.workspace.settings" {
+			continue
+		}
+		fields := event["fields"].(map[string]any)
+		seen = append(seen, fields["scope"].(string)+" set="+fields["set"].(string)+" removed="+fields["removed"].(string))
+	}
+	want := []string{"common set=gap,mode removed=", "common set= removed=gap", "prj-test set=gap removed="}
+	if !slices.Equal(seen, want) {
+		t.Fatalf("host.workspace.settings events = %q, want %q", seen, want)
+	}
+}
 
 // contract: workspace.config-dir.creates-requested-path, workspace.config-dir.rejects-empty-path, workspace.config-dir.rejects-path-under-file
 func TestNewConfigDirectoryPreservesRequestedPath(t *testing.T) {

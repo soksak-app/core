@@ -14,9 +14,11 @@ package host
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,14 +45,38 @@ type webkitRecord struct {
 	Children []childRecord `json:"children"`
 }
 
-// webkitProcesses 는 살아 있는 WebKit XPC 의 pid 과 종류를 돌려준다.
-func webkitProcesses() map[int]string {
-	out, err := exec.Command("ps", "-axo", "pid=,command=").Output()
+// psQuery 는 ps 를 args 로 실행해 표준 출력을 돌려준다. pid 하나를 묻는 질의(-p)에서 그 프로세스가 없으면 ps 는 출력 없이
+// 상태 1 로 끝나며, 이는 실패가 아니라 "그 프로세스가 없다"는 답이다. 그 밖의 실패는 질의와 ps 의 메시지를 담은 오류이고,
+// 호출자가 기록한다.
+func psQuery(args ...string) (string, error) {
+	out, err := exec.Command("ps", args...).Output()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		if exit.ExitCode() == 1 && len(strings.TrimSpace(string(out))) == 0 && slices.Contains(args, "-p") {
+			return "", nil
+		}
+		return "", fmt.Errorf("ps %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(exit.Stderr)))
+	}
 	if err != nil {
+		return "", fmt.Errorf("ps %s: %w", strings.Join(args, " "), err)
+	}
+	return string(out), nil
+}
+
+// psFailed 는 실패한 ps 질의를 기록한다. 질의의 답이 없으면 호출자는 판정을 죽이는 쪽이 아니라 죽이지 않는 쪽으로 정한다.
+func psFailed(err error) {
+	LogError("webkit children", err)
+}
+
+// webkitProcesses 는 살아 있는 WebKit XPC 의 pid 과 종류를 돌려준다. ps 가 실패하면 그 오류를 기록하고 빈 집합을 돌려준다.
+func webkitProcesses() map[int]string {
+	out, err := psQuery("-axo", "pid=,command=")
+	if err != nil {
+		psFailed(err)
 		return map[int]string{}
 	}
 	found := map[int]string{}
-	for _, line := range strings.Split(string(out), "\n") {
+	for _, line := range strings.Split(out, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
 			continue
@@ -69,28 +95,34 @@ func webkitProcesses() map[int]string {
 	return found
 }
 
-// processExists 는 pid 프로세스가 살아 있는지 ps 로 묻는다(시그널을 쓰지 않는다).
+// processExists 는 pid 프로세스가 살아 있는지 ps 로 묻는다(시그널을 쓰지 않는다). ps 가 실패하면 기록하고 없다고 답한다.
 func processExists(pid int) bool {
-	out, err := exec.Command("ps", "-o", "pid=", "-p", strconv.Itoa(pid)).Output()
-	return err == nil && strings.TrimSpace(string(out)) != ""
+	out, err := psQuery("-o", "pid=", "-p", strconv.Itoa(pid))
+	if err != nil {
+		psFailed(err)
+		return false
+	}
+	return strings.TrimSpace(out) != ""
 }
 
-// processStartTime 은 pid 프로세스의 시작 시각을 돌려준다. 없으면 빈 문자열.
+// processStartTime 은 pid 프로세스의 시작 시각을 돌려준다. 없으면 빈 문자열. ps 가 실패하면 기록하고 빈 문자열을 돌려준다.
 func processStartTime(pid int) string {
-	out, err := exec.Command("ps", "-o", "lstart=", "-p", strconv.Itoa(pid)).Output()
+	out, err := psQuery("-o", "lstart=", "-p", strconv.Itoa(pid))
 	if err != nil {
+		psFailed(err)
 		return ""
 	}
-	return strings.TrimSpace(string(out))
+	return strings.TrimSpace(out)
 }
 
-// processCommand 는 pid 프로세스의 명령줄을 돌려준다. 없으면 빈 문자열.
+// processCommand 는 pid 프로세스의 명령줄을 돌려준다. 없으면 빈 문자열. ps 가 실패하면 기록하고 빈 문자열을 돌려준다.
 func processCommand(pid int) string {
-	out, err := exec.Command("ps", "-o", "command=", "-p", strconv.Itoa(pid)).Output()
+	out, err := psQuery("-o", "command=", "-p", strconv.Itoa(pid))
 	if err != nil {
+		psFailed(err)
 		return ""
 	}
-	return strings.TrimSpace(string(out))
+	return strings.TrimSpace(out)
 }
 
 // SnapshotBaseline 은 시작 시점의 WebKit XPC 를 기준선으로 찍는다. 이 실행이 WebKit 을 만들기

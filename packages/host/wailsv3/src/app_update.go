@@ -131,6 +131,9 @@ func PrepareAppUpdateStart(configDir, executable, bundle string, pid int, argume
 		args = append(args, arguments...)
 	}
 	command := exec.Command(copied, args...)
+	// The command outlives this process, so its failure message has no other reader than the standard error file of this run
+	// (docs/spec/logging.md#files); a command without a standard error would discard it.
+	command.Stderr = os.Stderr
 	current, err := platform.Current()
 	if err != nil {
 		return nil, fmt.Errorf("application update: %w", err)
@@ -165,6 +168,17 @@ func (h *Host) AppUpdateApply(ctx context.Context, requestJSON json.RawMessage) 
 	h.update = command
 	h.mu.Unlock()
 	go application.Get().Quit()
+	return nil
+}
+
+// StartAppUpdate starts the detached command that replaces the bundle and stores the event `host.update.start` with the pid
+// of the command and its command line. The command waits for the end of this process, so the host starts it before the
+// final flush of the event log, which then holds the event and the error of a start that fails.
+func StartAppUpdate(command *exec.Cmd) error {
+	if err := command.Start(); err != nil {
+		return fmt.Errorf("application update: start %s: %w", command.Path, err)
+	}
+	EmitHost(LevelInfo, "host.update.start", map[string]any{"pid": command.Process.Pid, "command": strings.Join(command.Args, " ")})
 	return nil
 }
 

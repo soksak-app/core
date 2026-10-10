@@ -1448,6 +1448,44 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.13",
+    implementation: [
+      { file: "packages/host/wailsv3/src/app_update.go", symbol: "StartAppUpdate" },
+      { file: "packages/host/tauriv2/src/app_update.rs", symbol: "start_update" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/app_update_test.go", id: "TestTheDetachedUpdateCommandKeepsItsErrorsAndIsRecordedWhenItStarts" },
+      { file: "packages/host/tauriv2/tests/app_update_test.rs", id: "the_detached_update_command_keeps_its_errors_and_is_recorded_when_it_starts" },
+    ],
+    expected: "The detached update command keeps the standard error of the host, and both hosts store host.update.start with the pid and the command line before the final flush.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.14",
+    implementation: [
+      { file: "packages/host/wailsv3/src/project_removal.go", symbol: "host.project.removal_allowed" },
+      { file: "packages/host/tauriv2/src/project_removal.rs", symbol: "host.project.removal_allowed" },
+      { file: "packages/host/wailsv3/src/workspace.go", symbol: "host.workspace.settings" },
+      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "host.workspace.settings" },
+      { file: "packages/host/wailsv3/src/notifications.go", symbol: "host.notification.event" },
+      { file: "packages/host/tauriv2/src/notifications.rs", symbol: "host.notification.event" },
+      { file: "packages/host/wailsv3/src/webkit_children.go", symbol: "psQuery" },
+      { file: "packages/host/tauriv2/src/webkit_children.rs", symbol: "ps_query" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/project_removal_test.go", id: "TestTheEndOfAWindowRecordsEachRemovalItAllows" },
+      { file: "packages/host/tauriv2/tests/project_removal_test.rs", id: "the_end_of_a_window_records_each_removal_it_allows" },
+      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestEachSettingsChangeIsRecordedWithItsKeys" },
+      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "each_settings_change_is_recorded_with_its_keys" },
+      { file: "packages/host/wailsv3/tests/notifications_test.go", id: "TestEachNotificationEventAndFailureIsRecorded" },
+      { file: "packages/host/tauriv2/tests/notifications_test.rs", id: "each_notification_event_and_failure_is_recorded" },
+      { file: "packages/host/wailsv3/tests/webkit_children_test.go", id: "TestAFailedPsQueryIsReportedAndAMissingProcessIsNot" },
+      { file: "packages/host/tauriv2/tests/webkit_children_test.rs", id: "a_failed_ps_query_is_reported_and_a_missing_process_is_not" },
+    ],
+    expected: "Both hosts store an event for each removal that the end of a window allows, each settings change and each event of the notification center, record the failures of the notification center, and report a failed ps query without reporting a missing process.",
+    levels: ["unit"],
+  },
+  {
     id: "F152",
     implementation: [
       { file: "packages/plugin-api/sidecar-port.js", symbol: "orderedSidecar requires a failure handler" },

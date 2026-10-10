@@ -99,6 +99,7 @@ Items:
 | `links.open.rejects-other-schemes` | A URL with another scheme, a URL that does not parse, and a URL longer than 8192 characters are rejected. | both |
 | `notifications.request.accepts-tab-notices` | A notification with a surface and title of 1 to 256 characters and a body of 1 to 1024 characters without control characters is accepted, and a removal needs only the surface. | both |
 | `notifications.request.rejects-invalid-fields` | An empty, too long, or control-character surface, title, or body is rejected with an error that names the field. | both |
+| `notifications.event.records-each-event-and-failure` | Each event of the notification center that the host understands is the event `host.notification.event` with the `type`, the `authorization` of a state and the `window` and `surface` of a notice, and each failure (an event that cannot be read or has an unknown type, a notice without a window and surface, a window that is closed, a failure that the center reports) is an `error` record of the place `notification`. | go: the whole path; rust: the reading of the event, because the window lookup needs the application handle |
 | `diagnostics.capture-stop.payload-reports-frame-limit` | The capture stop payload of a limited capture reports frames, count, limited true, and the longest gap. | both |
 | `diagnostics.capture-stop.payload-reports-unbounded` | The capture stop payload of a capture below its limit reports limited false. | both |
 | `diagnostics.capture-stop.payload-reports-layout-timeline` | The capture stop payload always reports a `layouts` array, also when no layout transaction was recorded. | both |
@@ -382,6 +383,7 @@ Items:
 | `webkit-children.reap.requires-alive-webkit-same-start` | A recorded WebKit child is killed only when it is alive, still a WebKit process, and its start time matches the record. | both |
 | `webkit-children.record.owner-only` | The record of the WebKit children that a refresh writes has mode 0600. | both |
 | `webkit-children.record.concurrent-refreshes` | Record writes that run at the same time all succeed and leave no temporary file. | both |
+| `webkit-children.ps.reports-a-failed-query` | A `ps` query that cannot run or that ends with a status other than the status 1 of a process that does not exist is an `error` record of the place `webkit children` that names the query and the message of `ps`; a query for a process that does not exist is not an error. | both |
 | `surface-activation.owner.resolves-registered-view` | A registered native view resolves to its surface id. | both |
 | `surface-activation.owner.ignores-unknown-view` | An unregistered native view resolves to no surface. | both |
 | `surface-activation.owner.ignores-empty-owner` | A view registered with an empty surface id resolves to no surface. | both |
@@ -421,6 +423,7 @@ Items:
 | `workspace.settings.rejects-project-opening-override` | A project override of projectOpening is rejected. | both |
 | `workspace.settings.invalid-common-file-not-overwritten` | An invalid common settings file makes a settings change fail and stays byte-identical. | both |
 | `workspace.settings.concurrent-patches-preserved` | Concurrent common settings changes of different keys are all kept. | both |
+| `workspace.settings.records-each-change` | Each settings change is the event `host.workspace.settings` with the `scope` (`common` or the project id), the `set` keys and the `removed` keys that were present, each as a sorted list separated by commas. | both |
 | `workspace.projects.move-reorders` | Moving a project changes its position in the saved order. | both |
 | `workspace.projects.move-requires-delta` | A `move` request without `delta`, or with `delta` `null`, fails with `move delta is missing` and leaves the order unchanged. | both |
 | `workspace.projects.plugin-data-patched` | A project patch stores its `plugins` object, and a patch of another unknown field is rejected. | both |
@@ -457,6 +460,7 @@ Items:
 | `page.process.termination-writes-an-error-line` | When the WebContent process of a window ends while the host runs, the host writes `error host page process: <window>: terminated` once for that end, except while the host quits, which ends the process on purpose. | both |
 | `quit.cancel.ends-the-quit-state` | A quit state that began stays active until `windowCloseKept` cancels it; beginning and cancelling are idempotent, and `host.window` reports the state as `quitting`. | both |
 | `project-removal.ask.waits-for-the-owner-answer` | A removal request for a project resolves with the answer of the window that shows it; a second request for the same project while one is pending, an answer without a request, and an invalid project id fail with an error; a window that ends while it is asked answers that the removal is allowed. | both |
+| `project-removal.abandon.records-each-allowed-removal` | The end of a window that is asked about a removal allows the removal and stores the event `host.project.removal_allowed` with the `window` and the `project` for each such request, and none for the requests of another window. | both |
 | `debug.record.writes-the-state-file` | Recording writes `logs/state-<time>.json` with the given state and its UTC `time` `YYYYMMDDTHHMMSSZ` and answers its relative path. | both |
 | `debug.record.keeps-the-newest-20-state-files` | After a state file is written, the host removes the `logs/state-<time>.json` files beyond the newest 20 by their time and keeps other files of `logs/`. | both |
 | `cli.identity.build-identifier` | A build with the `dev` flag uses `app.soksak.<wails or tauri>.dev`; any other build, also a diagnostic one, uses `app.soksak.<wails or tauri>`. | both |
@@ -483,6 +487,7 @@ Items:
 | `app-update.replace.restores-the-bundle-when-the-start-fails` | A start that fails after the move removes the new bundle, moves the earlier bundle back, starts it, and fails with the message of the start. | both |
 | `app-update.replace.refuses-before-it-changes-anything` | A target or bundle that is not an application bundle, the same folder for both, and a process that still runs after the timeout (60 seconds) fail before the target changes. | both |
 | `app-update.apply.starts-sok-from-a-copy-and-checks-the-bundle` | Applying an update copies `sok` of the running bundle to `<config-dir>/updates/sok` and prepares `sok app update --wait <pid> --bundle <bundle> --target <running bundle> [-- <arguments>]` in a new session; a bundle outside `updates/`, a folder without `Info.plist` and an application outside an application bundle are refused. | both |
+| `app-update.apply.records-the-detached-command` | The detached command keeps the standard error of the host, so its message is in the standard error file of the run, and the host stores the event `host.update.start` with the `pid` of the command and its `command` line when it starts the command; a command that cannot start is an error that names it. | both |
 | `cli.plugin.install-extracts-and-records` | `sok registry use` records the checked index as a `file:` URL; `sok plugin install` extracts the plugin and its sidecar version with their modes, writes `installed.json` with the absolute `path` of each extracted folder, prints the plugin entry and its sidecar versions, and changes nothing when repeated. | both |
 | `cli.plugin.install-modes-ignore-the-umask` | Under the umask 077, `sok plugin install` still writes an executable at mode 0755 and another file at mode 0644. | both |
 | `cli.plugin.install-failure-keeps-state` | Without `plugins/registry.json`, with an release whose hash differs from the index, or with an release entry outside the folder, `sok plugin install` exits 1 and leaves no `installed.json`, version folder or extracted file. | both |

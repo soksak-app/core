@@ -79,35 +79,94 @@ struct Event {
     identifier: String,
 }
 
-/// 알림 센터의 사건을 창에 알린다. 권한 상태는 모든 창에, 누른 알림은 그 창에 간다.
-fn event(app: &AppHandle, raw: String) {
-    let parsed: Event = match serde_json::from_str(&raw) {
+/// 알림 센터가 알린, 기록을 마친 사건이다.
+pub enum Reported {
+    /// 권한 상태와 마지막 실패.
+    State(NotificationState),
+    /// 창 `window` 의 표면 `surface` 의 알림이 게시되었거나(`posted`) 눌렸다(`activated`).
+    Notice {
+        kind: String,
+        window: String,
+        surface: String,
+    },
+}
+
+/// 알림 센터의 사건 하나를 해석하고 event `host.notification.event` 로 기록한다. 해석하지 못하는 사건과 알림 센터가 알린 실패는
+/// `notification` 의 오류로 기록하고, 해석하지 못한 사건은 그 사유를 오류로 돌려준다.
+pub fn record_event(raw: &str) -> Result<Reported, String> {
+    let rejected = |reason: String| {
+        log_error("notification", &reason);
+        Err(reason)
+    };
+    let parsed: Event = match serde_json::from_str(raw) {
         Ok(parsed) => parsed,
-        Err(error) => return failed(app, format!("notification event {raw:?}: {error}")),
+        Err(error) => return rejected(format!("notification event {raw:?}: {error}")),
     };
     match parsed.kind.as_str() {
         "state" => {
-            if let Ok(mut state) = STATE.lock() {
-                *state = NotificationState {
-                    authorization: parsed.authorization,
-                    error: parsed.error,
-                };
+            crate::event_record::emit_host(
+                crate::event_log::Level::Info,
+                "host.notification.event",
+                serde_json::json!({
+                    "type": parsed.kind,
+                    "authorization": parsed.authorization,
+                    "window": "",
+                    "surface": "",
+                }),
+            );
+            if let Some(error) = &parsed.error {
+                log_error("notification", error);
             }
-            emit_state(app);
+            Ok(Reported::State(NotificationState {
+                authorization: parsed.authorization,
+                error: parsed.error,
+            }))
         }
-        kind @ ("posted" | "activated") => {
+        "posted" | "activated" => {
             // 기본값: 읽지 못한 식별자는 빈 목록이 되어 바로 아래에서 알림 실패로 보고된다.
             let target: Vec<String> = serde_json::from_str(&parsed.identifier).unwrap_or_default();
             let [window, surface] = target.as_slice() else {
-                return failed(
-                    app,
-                    format!(
-                        "{kind} notification {:?} has no window and surface",
-                        parsed.identifier
-                    ),
-                );
+                return rejected(format!(
+                    "{} notification {:?} has no window and surface",
+                    parsed.kind, parsed.identifier
+                ));
             };
-            let Some(owner) = app.get_window(window) else {
+            crate::event_record::emit_host(
+                crate::event_log::Level::Info,
+                "host.notification.event",
+                serde_json::json!({
+                    "type": parsed.kind,
+                    "authorization": "",
+                    "window": window,
+                    "surface": surface,
+                }),
+            );
+            Ok(Reported::Notice {
+                kind: parsed.kind,
+                window: window.clone(),
+                surface: surface.clone(),
+            })
+        }
+        _ => rejected(format!("notification event {raw:?} has an unknown type")),
+    }
+}
+
+/// 알림 센터의 사건을 창에 알린다. 권한 상태는 모든 창에, 누른 알림은 그 창에 간다.
+fn event(app: &AppHandle, raw: String) {
+    match record_event(&raw) {
+        Err(reason) => set_error(app, reason),
+        Ok(Reported::State(state)) => {
+            if let Ok(mut current) = STATE.lock() {
+                *current = state;
+            }
+            emit_state(app);
+        }
+        Ok(Reported::Notice {
+            kind,
+            window,
+            surface,
+        }) => {
+            let Some(owner) = app.get_window(&window) else {
                 return failed(
                     app,
                     format!("the window {window:?} of a {kind} notification is closed"),
@@ -128,15 +187,17 @@ fn event(app: &AppHandle, raw: String) {
                 failed(app, format!("{name}: {error}"));
             }
         }
-        _ => failed(
-            app,
-            format!("notification event {raw:?} has an unknown type"),
-        ),
     }
 }
 
-/// 실패를 알림 상태의 오류로 모든 창에 알린다.
+/// 실패를 기록하고 알림 상태의 오류로 모든 창에 알린다. 창이 없으면 알림 상태가 오류를 보이지 못한다.
 fn failed(app: &AppHandle, reason: String) {
+    log_error("notification", &reason);
+    set_error(app, reason);
+}
+
+/// 기록한 실패를 알림 상태의 오류로 모든 창에 알린다.
+fn set_error(app: &AppHandle, reason: String) {
     if let Ok(mut state) = STATE.lock() {
         state.error = Some(reason);
     }

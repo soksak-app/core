@@ -5,11 +5,59 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
+
+// psErrors returns the texts of the error records of the place `webkit children` that the host stored after it reaped the
+// record of an earlier run whose host and child no longer exist.
+func psErrors(t *testing.T, path string) []string {
+	t.Helper()
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+	record := `{"host_pid": 2147483000, "children": [{"pid": 2147483001, "kind": "WebContent", "lstart": "x"}]}`
+	if err := os.WriteFile(filepath.Join(config, "webkit-children.json"), []byte(record), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", path)
+	host.ReapRecordedWebKit(config)
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var texts []string
+	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		fields, _ := event["fields"].(map[string]any)
+		if event["event"] == "host.record.error" && fields["where"] == "webkit children" {
+			texts = append(texts, fields["text"].(string))
+		}
+	}
+	return texts
+}
+
+// contract: webkit-children.ps.reports-a-failed-query
+func TestAFailedPsQueryIsReportedAndAMissingProcessIsNot(t *testing.T) {
+	if texts := psErrors(t, os.Getenv("PATH")); len(texts) != 0 {
+		t.Fatalf("ps answered that no process exists, and the host reported %q", texts)
+	}
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "ps"), []byte("#!/bin/sh\necho 'ps: boom' >&2\nexit 2\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	texts := psErrors(t, bin)
+	if len(texts) != 4 {
+		t.Fatalf("a failing ps gave the error records %q, want one for each of the four queries of the reap", texts)
+	}
+	for _, text := range texts {
+		if !strings.Contains(text, "boom") || !strings.Contains(text, "ps ") {
+			t.Fatalf("the error record %q names neither the query nor the message of ps", text)
+		}
+	}
+}
 
 // contract: webkit-children.reap.requires-alive-webkit-same-start
 func TestAReapDecisionKillsOnlyTheProvenOrphan(t *testing.T) {
