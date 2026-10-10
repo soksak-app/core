@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F151.5: 디버그 화면이 상태 파일 `logs/state-<time>.json`을 key와 값의 트리로 보이고(`core.debug.state`, 상태 파일 행의 상태 단추) 다른 상태 파일과 값이 다른 경로를 나열해 비교한다(`core.debug.state.compare`). 상태가 아닌 파일은 파일과 찾은 값을 밝혀 거부하고, `core.debug`는 `state`를 보고한다. 원본 `.stderr`와 `.crash` 파일은 목록에 나열되고 글로 보인다. 실행 중인 애플리케이션에서 관측하지 않았다.
 - F150.7.3: 그림 영역은 자신이 답하는 입력기 질의(`markedRange`, `selectedRange`, `hasMarkedText`, `firstRectForCharacterRange`, `characterIndexForPoint`)마다 인자, 답, 포커스를 가진 level `debug`의 event `native.input.query`를 기록한다.
 - F150.7.2: native 라이브러리는 창의 first responder 변경마다 창 번호와 변경 전후의 class를 가진 event `native.window.first_responder`를 기록한다. 창은 갱신마다 이전 갱신의 first responder와 비교한다. 창을 key-value observing으로 관찰하면 Wails host가 첫 창 표시에서 죽었기 때문이다.
 - F150.7.1: native 라이브러리는 애플리케이션(활성화, 숨김), 창(key, main, 최소화, 가림), 입력 소스의 알림을 ring의 event `native.app.*`, `native.window.*`, `native.input.source_changed`로 기록하고, 두 host는 writer를 시작할 때 플랫폼 연산 `ObserveActivity`로 observer를 설치한다.

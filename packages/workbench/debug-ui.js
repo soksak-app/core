@@ -11,6 +11,7 @@ import { registry } from "./exposure.js";
 import { hideError, showError } from "./shown-errors.js";
 import { newestFirst } from "./debug-order.js";
 import { CLEAR_FILTER, contextRows, eventLine, filterRows, hostEventFiles, LAYERS, LEVELS, mergeRows, parseEvents } from "./debug-timeline.js";
+import { compareStates, parseState, stateFiles, stateLines } from "./debug-state.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 
 /** The name of the view: its visible title and the name the host gives its window. */
@@ -26,6 +27,9 @@ let text = null;
 let image = null;
 let timelineView = null;
 let timelineRows = null;
+let stateBox = null;
+let stateTree = null;
+let stateDiffs = null;
 
 /** The path of the state file that opening wrote, or null. */
 let recorded = null;
@@ -35,6 +39,8 @@ let entries = [];
 let viewing = null;
 /** The timeline of the host event files {files, truncated, rows, shown, lines, filter}, or null while the list or a file is shown. */
 let timeline = null;
+/** The state file that the view shows {path, state, lines, with, differences}, or null while another content is shown. */
+let stateShown = null;
 /** The running or last operation {action, path, state}, or null. */
 let operation = null;
 /** The error of the last failed step or operation, or null. */
@@ -56,9 +62,15 @@ function timelineState() {
   return { sources: timeline.files, truncated: timeline.truncated, total: timeline.rows.length, shown: timeline.shown.length, lines: timeline.lines.length, ...timeline.filter };
 }
 
+/** The state part of the status core.debug. */
+function stateStatus() {
+  if (stateShown === null) return null;
+  return { path: stateShown.path, lines: stateShown.lines.length, with: stateShown.with, differences: stateShown.differences.length };
+}
+
 /** The status core.debug. */
 export function debugState() {
-  return { open: card !== null, recorded, entries, viewing, timeline: timelineState(), scroll: debugScroll(), operation, error: failure };
+  return { open: card !== null, recorded, entries, viewing, timeline: timelineState(), state: stateStatus(), scroll: debugScroll(), operation, error: failure };
 }
 
 /** A size in bytes as text. */
@@ -89,7 +101,7 @@ function draw() {
   // The same content keeps its scroll position; another content starts at the top, and the text of a file at its end.
   const positions = scrollPositions(card);
   const pane = card.querySelector(".dbg-card__pane");
-  pane.dataset.scrollKey = viewing !== null ? `view:${viewing.path}` : timeline !== null ? "timeline" : "list";
+  pane.dataset.scrollKey = viewing !== null ? `view:${viewing.path}` : timeline !== null ? "timeline" : stateShown !== null ? `state:${stateShown.path}` : "list";
   if (viewing === null && timeline === null) delete pane.dataset.scrollEnd;
   else pane.dataset.scrollEnd = "";
   list.textContent = "";
@@ -105,15 +117,19 @@ function draw() {
     facts.textContent = `${sizeText(file.size)} · ${timeText(file.modified)}`;
     const acts = document.createElement("span");
     acts.className = "dbg-row__acts";
+    const isState = stateFiles([file]).length === 1;
+    acts.append(isState ? button(`state:${file.path}`, "core.debug.state", "상태", "core.debug.state", { path: file.path }) : document.createElement("span"));
     acts.append(button(`view:${file.path}`, "core.debug.view", "보기", "core.debug.view", { path: file.path }));
     acts.append(button(`save:${file.path}`, "core.debug.save", "저장", "core.debug.save", { path: file.path }));
     row.append(path, facts, acts);
     list.appendChild(row);
   }
-  list.hidden = viewing !== null || timeline !== null;
+  list.hidden = viewing !== null || timeline !== null || stateShown !== null;
   view.hidden = viewing === null;
   timelineView.hidden = timeline === null;
+  stateBox.hidden = stateShown === null;
   if (timeline !== null) drawTimeline();
+  if (stateShown !== null) drawState();
   if (viewing !== null) {
     view.querySelector(".dbg-card__path").textContent = `${viewing.path} · ${sizeText(viewing.size)}`;
     view.querySelector(".dbg-card__cut").hidden = !viewing.truncated;
@@ -149,6 +165,36 @@ function drawTimeline() {
     el.dataset.expose = "core.debug.timeline.row";
     el.textContent = eventLine(row);
     timelineRows.appendChild(el);
+  }
+}
+
+/** Draws the tree of the shown state file, the choice of the file to compare with, and the differences. */
+function drawState() {
+  stateBox.querySelector(".dbg-card__path").textContent = stateShown.path;
+  const choice = stateBox.querySelector("select");
+  choice.textContent = "";
+  for (const [value, label] of [["", "비교 안 함"], ...stateFiles(entries).filter((path) => path !== stateShown.path).map((path) => [path, path])]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    if (value === (stateShown.with ?? "")) option.setAttribute("selected", "");
+    choice.appendChild(option);
+  }
+  stateDiffs.textContent = "";
+  for (const { path, a, b } of stateShown.differences) {
+    const el = document.createElement("div");
+    el.className = "dbg-card__line";
+    el.dataset.expose = "core.debug.state.difference";
+    el.textContent = `${path}: ${a ?? "(없음)"} -> ${b ?? "(없음)"}`;
+    stateDiffs.appendChild(el);
+  }
+  stateTree.textContent = "";
+  for (const { depth, key, value, size } of stateShown.lines) {
+    const el = document.createElement("div");
+    el.className = "dbg-card__line";
+    el.dataset.expose = "core.debug.state.line";
+    el.textContent = `${"  ".repeat(depth)}${key}${value === null ? ` ${size}` : `: ${value}`}`;
+    stateTree.appendChild(el);
   }
 }
 
@@ -230,6 +276,12 @@ function makeCard() {
         '<pre class="dbg-card__text" data-expose="core.debug.text"></pre>' +
         '<img class="dbg-card__image" data-expose="core.debug.image" alt="" hidden>' +
       '</div>' +
+      '<div class="dbg-card__state" hidden>' +
+        '<div class="dbg-card__bar"><span class="dbg-card__path"></span></div>' +
+        '<div class="dbg-card__choice"><select data-key="state-with" data-expose="core.debug.state.with" aria-label="비교할 상태 파일"></select></div>' +
+        '<div class="dbg-card__rows" data-expose="core.debug.state.differences"></div>' +
+        '<div class="dbg-card__rows" data-expose="core.debug.state.tree"></div>' +
+      '</div>' +
       '<div class="dbg-card__timeline" hidden>' +
         '<div class="dbg-card__bar"><span class="dbg-card__cut" hidden>앞부분 생략</span></div>' +
         '<div class="dbg-card__filters"></div>' +
@@ -240,6 +292,8 @@ function makeCard() {
     button("save-all", "core.debug.save-all", "모두 저장", "core.debug.save-all", {}),
     button("timeline", "core.debug.timeline", "타임라인", "core.debug.timeline", {}));
   el.querySelector(".dbg-card__view .dbg-card__bar").prepend(button("list", "core.debug.list", "목록", "core.debug.list", {}));
+  mark(el.querySelector(".dbg-card__state select"), "core.debug.state.compare", {}, "with");
+  el.querySelector(".dbg-card__state .dbg-card__bar").prepend(button("state-list", "core.debug.state.list", "목록", "core.debug.list", {}));
   el.querySelector(".dbg-card__timeline .dbg-card__bar").prepend(button("timeline-list", "core.debug.timeline.list", "목록", "core.debug.list", {}));
   const text = document.createElement("input");
   text.type = "text";
@@ -306,8 +360,11 @@ export async function openDebug() {
   image = view.querySelector(".dbg-card__image");
   timelineView = card.querySelector(".dbg-card__timeline");
   timelineRows = timelineView.querySelector(".dbg-card__rows");
+  stateBox = card.querySelector(".dbg-card__state");
+  [stateDiffs, stateTree] = stateBox.querySelectorAll(".dbg-card__rows");
   viewing = null;
   timeline = null;
+  stateShown = null;
   recorded = null;
   entries = [];
   operation = null;
@@ -352,8 +409,12 @@ export function closeDebug() {
   image = null;
   timelineView = null;
   timelineRows = null;
+  stateBox = null;
+  stateTree = null;
+  stateDiffs = null;
   viewing = null;
   timeline = null;
+  stateShown = null;
 }
 
 /** Shows the content of one text file of logs/ in the view. */
@@ -361,6 +422,7 @@ export async function viewDebugFile(path) {
   if (!card) throw new Error("the debug view is not open");
   failure = null;
   timeline = null;
+  stateShown = null;
   try {
     const read = await debug.read({ path });
     text.textContent = read.kind === "text" ? read.text : "";
@@ -382,6 +444,7 @@ export function listDebugFiles() {
   if (!card) throw new Error("the debug view is not open");
   viewing = null;
   timeline = null;
+  stateShown = null;
   text.textContent = "";
   image.removeAttribute("src");
   draw();
@@ -403,11 +466,60 @@ export async function showDebugTimeline() {
     const filter = { ...CLEAR_FILTER };
     timeline = { files, truncated: loaded.filter((file) => file.truncated).map((file) => file.path), rows, shown: filterRows(rows, filter), lines: contextRows(rows, filter), filter };
     viewing = null;
+    stateShown = null;
     text.textContent = "";
     image.removeAttribute("src");
   } catch (reason) {
     timeline = null;
     fail("timeline", reason);
+    throw reason;
+  } finally {
+    draw();
+  }
+}
+
+/** Reads and parses one listed state file. */
+async function readState(path) {
+  if (!stateFiles(entries).includes(path)) throw new Error(`${path} is not a state file of the list`);
+  const read = await debug.read({ path });
+  if (read.kind !== "text") throw new Error(`${path}: a state file must be text, found ${read.kind}`);
+  return parseState(path, read.text, read.truncated);
+}
+
+/** Shows one state file of logs/ as a tree. */
+export async function showDebugState(path) {
+  if (!card) throw new Error("the debug view is not open");
+  failure = null;
+  try {
+    const state = await readState(path);
+    stateShown = { path, state, lines: stateLines(state), with: null, differences: [] };
+    viewing = null;
+    timeline = null;
+    text.textContent = "";
+    image.removeAttribute("src");
+  } catch (reason) {
+    fail("state", reason);
+    throw reason;
+  } finally {
+    draw();
+  }
+}
+
+/** Compares the shown state file with another state file of the list; an empty path ends the comparison. */
+export async function compareDebugState(path) {
+  if (!card) throw new Error("the debug view is not open");
+  if (stateShown === null) throw new Error("the debug state is not shown");
+  failure = null;
+  try {
+    if (path === "") {
+      stateShown = { ...stateShown, with: null, differences: [] };
+      return;
+    }
+    if (path === stateShown.path) throw new Error(`${path} is the shown state file`);
+    const other = await readState(path);
+    stateShown = { ...stateShown, with: path, differences: compareStates(stateShown.state, other) };
+  } catch (reason) {
+    fail("compare", reason);
     throw reason;
   } finally {
     draw();
