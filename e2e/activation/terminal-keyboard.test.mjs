@@ -35,6 +35,23 @@ async function clickAndExecute(session, surface, marker) {
     `${surface} did not execute its first post-context command`);
 }
 
+/**
+ * A folder for a project that the check opens. The library keeps the project after its window closes, so the cleanup closes it
+ * (which removes it from the library) before it removes the folder; cleanups run in the order they were registered.
+ */
+function temporaryProject(s, prefix) {
+  const folder = mkdtempSync(join(tmpdir(), prefix));
+  const name = folder.slice(folder.lastIndexOf("/"));
+  s.cleanup(async () => {
+    for (const listed of await s.get("core.projects")) {
+      if (listed.root.endsWith(name)) await s.run("core.project.close", { id: listed.id });
+    }
+    await s.run("core.projects.flush");
+  });
+  s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
+  return folder;
+}
+
 for (const app of Object.values(APPS)) {
   test(`${app.name}: native keyboard edits and executes independently in three terminals`, { timeout: 180000 }, async (t) => {
     const s = await open(t, app);
@@ -194,10 +211,9 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: PASS focus after project return`);
 
     t.diagnostic(`${app.name}: START focus after window switch`);
-    const temporaryProject = mkdtempSync(join(tmpdir(), "soksak-terminal-focus-"));
-    s.cleanup(() => rmSync(temporaryProject, { recursive: true, force: true }));
+    const focusProject = temporaryProject(s, "soksak-terminal-focus-");
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
-    const opened = await s.run("core.project.open", { root: temporaryProject, color: "#7fe3b0" });
+    const opened = await s.run("core.project.open", { root: focusProject, color: "#7fe3b0" });
     const child = s.on((await s.windows(2, "focus test project window did not open"))
       .find((window) => window.window !== s.window).window);
     await child.until("core.grid", (grid) => grid.cards.length > 0, "focus test project window did not render");
@@ -239,8 +255,7 @@ for (const app of Object.values(APPS)) {
     "the terminal did not receive native focus in the active window");
 
     // 다른 프로젝트 창이 키 창이 되면 사람의 키는 첫 창에 닿지 않는다. 진단 키도 다른 창에 전달하지 않고 거부한다.
-    const project = mkdtempSync(join(tmpdir(), "soksak-terminal-key-window-"));
-    s.cleanup(() => rmSync(project, { recursive: true, force: true }));
+    const project = temporaryProject(s, "soksak-terminal-key-window-");
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
     await s.run("core.project.open", { root: project, color: "#7fe3b0" });
     const child = s.on((await s.windows(2, "the second project window did not open"))
