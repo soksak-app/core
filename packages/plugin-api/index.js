@@ -766,9 +766,10 @@ export function normalizeSidebarDefaults(environment, manifests) {
 
 /**
  * 사이드바 세트(sets)와 연결(links)의 형식을 검사한다. environment.json 의 sidebars 와 설정에
- * 저장된 sets, links 가 같은 규칙을 따른다. 틀리면 where 로 시작하는 예외를 던진다.
+ * 저장된 sets, links 가 같은 규칙을 따른다. 틀리면 where 로 시작하는 예외를 던진다. loaded 가 불러온 플러그인 id 의
+ * 집합이면, 불러오지 않은 플러그인의 연결은 그 플러그인이 다시 설치되면 쓰이도록 알려진 세트를 요구하지 않고 유지한다.
  */
-export function validateSidebars(sidebars, where) {
+export function validateSidebars(sidebars, where, loaded = null) {
   if (!isObject(sidebars) || !Array.isArray(sidebars.sets) || !Array.isArray(sidebars.links)) {
     throw new Error(`${where}: sidebars requires sets and links`);
   }
@@ -804,7 +805,8 @@ export function validateSidebars(sidebars, where) {
     const general = link.place === "left" || link.place === "right";
     if (general && link.plugin !== null) throw new Error(`${where}: a general window link requires plugin null`);
     if (!general && link.plugin === null) throw new Error(`${where}: a ${link.place} link names a plugin`);
-    if (!setIds.has(link.set)) throw new Error(`${where}: a ${link.place} link requires a known set`);
+    const kept = loaded !== null && link.plugin !== null && !loaded.has(link.plugin);
+    if (!kept && !setIds.has(link.set)) throw new Error(`${where}: a ${link.place} link requires a known set`);
     // 기본값: plugin 이 없는 연결은 일반 사이드바 연결이며, 겹침 검사 키에서 general 로 적는다.
     const key = `${link.place} ${link.plugin ?? "general"}`;
     if (seen.has(key)) throw new Error(`${where}: link ${key} appears twice`);

@@ -246,7 +246,7 @@ let manifestList = [];
 /** 유효 설정의 sets 와 links 를 environment.json 의 sidebars 와 같은 함수로 검사한다. */
 function checkSidebars(values) {
   const sidebars = { sets: values.sets, links: values.links };
-  validateSidebars(sidebars, "settings");
+  validateSidebars(sidebars, "settings", new Set(manifestList.map((manifest) => manifest.id)));
   checkSidebarReferences(sidebars, manifestList, "settings");
 }
 

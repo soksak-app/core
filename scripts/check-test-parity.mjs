@@ -1630,6 +1630,19 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F107",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export function validateSidebars" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/settings-removed-plugin.test.mjs", id: "a stored link to the set of a plugin that was removed is kept and the settings load" },
+      { file: "packages/workbench/test/settings-removed-plugin.test.mjs", id: "a stored link of a loaded plugin to a missing set still fails the settings load" },
+      { file: "packages/plugin-api/test/sidebar-defaults.test.mjs", id: "a link of a plugin that is not loaded keeps its set and a link of a loaded plugin needs a known set" },
+    ],
+    expected: "A stored link to the set of a plugin that is no longer loaded is kept and the settings load, and a link of a loaded plugin to a missing set fails.",
+    levels: ["unit"],
+  },
+  {
     id: "F151",
     implementation: [
       { file: "packages/workbench/debug-ui.js", symbol: "export async function showDebugState" },

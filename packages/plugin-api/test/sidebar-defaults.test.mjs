@@ -67,3 +67,14 @@ test("plugin defaults reject malformed IDs, fields, layouts, and side references
     assert.throws(() => api.validateManifest(manifest), message);
   }
 });
+
+test("a link of a plugin that is not loaded keeps its set and a link of a loaded plugin needs a known set", async () => {
+  const { validateSidebars } = await import("../index.js");
+  const sets = [{ id: "probe.default", title: "Probe", layout: "list", sections: [] }];
+  const link = (plugin, set) => ({ place: "card-left", plugin, set });
+  assert.throws(() => validateSidebars({ sets, links: [link("gone", "gone.default")] }, "settings"), /a card-left link requires a known set/, "without the loaded plugins every set must be known");
+  assert.throws(() => validateSidebars({ sets, links: [link("probe", "gone.default")] }, "settings", new Set(["probe"])), /a card-left link requires a known set/);
+  const kept = { sets, links: [link("probe", "probe.default"), link("gone", "gone.default")] };
+  assert.equal(validateSidebars(kept, "settings", new Set(["probe"])), kept);
+  assert.throws(() => validateSidebars({ sets, links: [link("gone", "a"), link("gone", "b")] }, "settings", new Set(["probe"])), /link card-left gone appears twice/);
+});
