@@ -10,6 +10,7 @@ import { commandOf, delegate, mark, run } from "./commands.js";
 import { registry } from "./exposure.js";
 import { hideError, showError } from "./shown-errors.js";
 import { newestFirst } from "./debug-order.js";
+import { eventLine, filterRows, hostEventFiles, LAYERS, LEVELS, mergeRows, parseEvents } from "./debug-timeline.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 
 /** The name of the view: its visible title and the name the host gives its window. */
@@ -23,6 +24,8 @@ let error = null;
 let view = null;
 let text = null;
 let image = null;
+let timelineView = null;
+let timelineRows = null;
 
 /** The path of the state file that opening wrote, or null. */
 let recorded = null;
@@ -30,6 +33,8 @@ let recorded = null;
 let entries = [];
 /** The file that the view shows, {path, size, truncated}, or null while the list is shown. */
 let viewing = null;
+/** The timeline of the host event files {files, truncated, rows, shown, filter}, or null while the list or a file is shown. */
+let timeline = null;
 /** The running or last operation {action, path, state}, or null. */
 let operation = null;
 /** The error of the last failed step or operation, or null. */
@@ -45,9 +50,15 @@ export function onDebugDrawn(fn) {
   drawn = fn;
 }
 
+/** The timeline part of the status core.debug. */
+function timelineState() {
+  if (timeline === null) return null;
+  return { sources: timeline.files, truncated: timeline.truncated, total: timeline.rows.length, shown: timeline.shown.length, ...timeline.filter };
+}
+
 /** The status core.debug. */
 export function debugState() {
-  return { open: card !== null, recorded, entries, viewing, scroll: debugScroll(), operation, error: failure };
+  return { open: card !== null, recorded, entries, viewing, timeline: timelineState(), scroll: debugScroll(), operation, error: failure };
 }
 
 /** A size in bytes as text. */
@@ -78,8 +89,8 @@ function draw() {
   // The same content keeps its scroll position; another content starts at the top, and the text of a file at its end.
   const positions = scrollPositions(card);
   const pane = card.querySelector(".dbg-card__pane");
-  pane.dataset.scrollKey = viewing === null ? "list" : `view:${viewing.path}`;
-  if (viewing === null) delete pane.dataset.scrollEnd;
+  pane.dataset.scrollKey = viewing !== null ? `view:${viewing.path}` : timeline !== null ? "timeline" : "list";
+  if (viewing === null && timeline === null) delete pane.dataset.scrollEnd;
   else pane.dataset.scrollEnd = "";
   list.textContent = "";
   for (const file of entries) {
@@ -99,8 +110,10 @@ function draw() {
     row.append(path, facts, acts);
     list.appendChild(row);
   }
-  list.hidden = viewing !== null;
+  list.hidden = viewing !== null || timeline !== null;
   view.hidden = viewing === null;
+  timelineView.hidden = timeline === null;
+  if (timeline !== null) drawTimeline();
   if (viewing !== null) {
     view.querySelector(".dbg-card__path").textContent = `${viewing.path} · ${sizeText(viewing.size)}`;
     view.querySelector(".dbg-card__cut").hidden = !viewing.truncated;
@@ -112,6 +125,51 @@ function draw() {
   if (native) overlay.place(card, rect);
   else standIn(true, rect);
   restoreScroll(card, positions);
+}
+
+/** Draws the filters and the rows of the timeline. Attributes carry the values because the host draws a copy of the element. */
+function drawTimeline() {
+  for (const field of timelineView.querySelectorAll("[data-set]")) {
+    const value = timeline.filter[field.dataset.set];
+    if (field.tagName === "SELECT") {
+      for (const option of field.options) {
+        if (option.value === value) option.setAttribute("selected", "");
+        else option.removeAttribute("selected");
+      }
+    } else {
+      field.setAttribute("value", value);
+    }
+  }
+  timelineView.querySelector(".dbg-card__cut").hidden = timeline.truncated.length === 0;
+  timelineRows.textContent = "";
+  for (const row of timeline.shown) {
+    const el = document.createElement("div");
+    el.className = "dbg-card__line";
+    el.dataset.expose = "core.debug.timeline.row";
+    el.textContent = eventLine(row);
+    timelineRows.appendChild(el);
+  }
+}
+
+/** A filter control of the timeline: its key is the filter member that it sets. */
+function filterControl(el, name, expose, label) {
+  el.dataset.set = name;
+  el.dataset.expose = expose;
+  el.setAttribute("aria-label", label);
+  mark(el, "core.debug.timeline.filter", {}, name);
+  return el;
+}
+
+/** A selection box for a filter member of the timeline. */
+function filterSelect(name, expose, label, values) {
+  const el = document.createElement("select");
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    el.appendChild(option);
+  }
+  return filterControl(el, name, expose, label);
 }
 
 /** Records a failed step or operation and shows it. */
@@ -162,9 +220,25 @@ function makeCard() {
         '<pre class="dbg-card__text" data-expose="core.debug.text"></pre>' +
         '<img class="dbg-card__image" data-expose="core.debug.image" alt="" hidden>' +
       '</div>' +
+      '<div class="dbg-card__timeline" hidden>' +
+        '<div class="dbg-card__bar"><span class="dbg-card__cut" hidden>앞부분 생략</span></div>' +
+        '<div class="dbg-card__filters"></div>' +
+        '<div class="dbg-card__rows" data-expose="core.debug.timeline.rows"></div>' +
+      '</div>' +
     '</div>';
-  el.querySelector(".set-actions").append(button("save-all", "core.debug.save-all", "모두 저장", "core.debug.save-all", {}));
-  el.querySelector(".dbg-card__bar").prepend(button("list", "core.debug.list", "목록", "core.debug.list", {}));
+  el.querySelector(".set-actions").append(
+    button("save-all", "core.debug.save-all", "모두 저장", "core.debug.save-all", {}),
+    button("timeline", "core.debug.timeline", "타임라인", "core.debug.timeline", {}));
+  el.querySelector(".dbg-card__view .dbg-card__bar").prepend(button("list", "core.debug.list", "목록", "core.debug.list", {}));
+  el.querySelector(".dbg-card__timeline .dbg-card__bar").prepend(button("timeline-list", "core.debug.timeline.list", "목록", "core.debug.list", {}));
+  const text = document.createElement("input");
+  text.type = "text";
+  text.className = "set-text";
+  text.placeholder = "찾을 글자";
+  el.querySelector(".dbg-card__filters").append(
+    filterSelect("level", "core.debug.timeline.level", "가장 낮은 level", LEVELS),
+    filterSelect("layer", "core.debug.timeline.layer", "layer", ["all", ...LAYERS]),
+    filterControl(text, "text", "core.debug.timeline.text", "찾을 글자"));
   // Without a host this document's card receives input; a control runs the command that it points to.
   delegate(el);
   return el;
@@ -186,7 +260,8 @@ function answer(key, val) {
     return;
   }
   const pressed = card.querySelector(`[data-key="${CSS.escape(key)}"]`);
-  const found = pressed ? commandOf(pressed) : null;
+  const field = pressed ? null : card.querySelector(`[data-set="${CSS.escape(key)}"]`);
+  const found = pressed ? commandOf(pressed) : field ? commandOf(field, val) : null;
   if (!found) throw new Error(`debug control ${key} is not in the card`);
   return run(found.name, found.params);
 }
@@ -212,7 +287,10 @@ export async function openDebug() {
   view = card.querySelector(".dbg-card__view");
   text = view.querySelector(".dbg-card__text");
   image = view.querySelector(".dbg-card__image");
+  timelineView = card.querySelector(".dbg-card__timeline");
+  timelineRows = timelineView.querySelector(".dbg-card__rows");
   viewing = null;
+  timeline = null;
   recorded = null;
   entries = [];
   operation = null;
@@ -255,13 +333,17 @@ export function closeDebug() {
   view = null;
   text = null;
   image = null;
+  timelineView = null;
+  timelineRows = null;
   viewing = null;
+  timeline = null;
 }
 
 /** Shows the content of one text file of logs/ in the view. */
 export async function viewDebugFile(path) {
   if (!card) throw new Error("the debug view is not open");
   failure = null;
+  timeline = null;
   try {
     const read = await debug.read({ path });
     text.textContent = read.kind === "text" ? read.text : "";
@@ -282,8 +364,51 @@ export async function viewDebugFile(path) {
 export function listDebugFiles() {
   if (!card) throw new Error("the debug view is not open");
   viewing = null;
+  timeline = null;
   text.textContent = "";
   image.removeAttribute("src");
+  draw();
+}
+
+/** The filter of a timeline that has just been loaded: every level and layer, any text. */
+const CLEAR_FILTER = { level: "trace", layer: "all", text: "" };
+
+/** Shows the rows of the event files of the host in `logs/` in time order. */
+export async function showDebugTimeline() {
+  if (!card) throw new Error("the debug view is not open");
+  failure = null;
+  try {
+    const files = hostEventFiles(entries);
+    if (files.length === 0) throw new Error("logs/ has no host event file");
+    const loaded = await Promise.all(files.map(async (path) => {
+      const read = await debug.read({ path });
+      if (read.kind !== "text") throw new Error(`${path}: the timeline needs a text file, found ${read.kind}`);
+      return { path, truncated: read.truncated, rows: parseEvents(path, read.text, read.truncated) };
+    }));
+    const rows = mergeRows(loaded.map((file) => file.rows));
+    const filter = { ...CLEAR_FILTER };
+    timeline = { files, truncated: loaded.filter((file) => file.truncated).map((file) => file.path), rows, shown: filterRows(rows, filter), filter };
+    viewing = null;
+    text.textContent = "";
+    image.removeAttribute("src");
+  } catch (reason) {
+    timeline = null;
+    fail("timeline", reason);
+    throw reason;
+  } finally {
+    draw();
+  }
+}
+
+/** Sets the level, layer or text filter of the shown timeline; the members that are not given keep their value. */
+export function filterDebugTimeline(change) {
+  if (!card) throw new Error("the debug view is not open");
+  if (timeline === null) throw new Error("the debug timeline is not shown");
+  const unknown = Object.keys(change).filter((name) => !Object.hasOwn(CLEAR_FILTER, name));
+  if (unknown.length > 0) throw new Error(`timeline filter has no member ${unknown.join(", ")}`);
+  if (Object.keys(change).length === 0) throw new Error("timeline filter needs level, layer or text");
+  const filter = { ...timeline.filter, ...change };
+  timeline = { ...timeline, filter, shown: filterRows(timeline.rows, filter) };
   draw();
 }
 
