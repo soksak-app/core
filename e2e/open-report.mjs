@@ -1,4 +1,4 @@
-// 프로젝트 열기 검사가 늦은 응답의 단계와 그때의 시스템 상태를 보고하는 데 쓰는 함수.
+// Functions that the project opening checks use to report the stage of a late reply and the system state at that time.
 import { spawnSync } from "node:child_process";
 import { availableParallelism, loadavg } from "node:os";
 
@@ -14,7 +14,7 @@ export function openStages(rows) {
     `@${Date.parse(row.ts) - start}ms`).join(", ");
 }
 
-/** 측정 때의 시스템 상태: 부하 평균과 CPU 사용이 큰 프로세스 다섯 개. 늦은 응답이 다른 프로세스의 부하 때문인지 가린다. */
+/** The system state at the measurement: the load average and the five processes with the highest CPU use. It separates whether a late reply is caused by the load of other processes. */
 export function systemState() {
   const ps = spawnSync("ps", ["-Ao", "pcpu,comm", "-r"], { encoding: "utf8" });
   if (ps.status !== 0) throw new Error(`ps failed with ${ps.status}: ${ps.stderr}`);

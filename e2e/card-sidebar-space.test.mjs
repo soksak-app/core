@@ -1,4 +1,4 @@
-// 공간 조건, 수동 접힘과 세트 조합의 실제 표시·저장·녹화 좌표를 검사한다.
+// Checks the real display, the storage, and the recording coordinates of the space condition, the manual collapse, and the set combination.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
@@ -9,9 +9,9 @@ import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 const sides = ["top", "bottom", "left", "right"];
 const near = (a, b, label) => assert.ok(Math.abs(a - b) <= 1, `${label}: actual ${a}, expected ${b}`);
 /**
- * 명세(docs/spec/example-model.md)대로 계산한 한 카드의 표시: 면마다 { shown, auto }. 축의 공간은 카드 크기에서
- * 테두리 2, (높이는) 머리와 발 54, 내용 최소 96, 선택으로 접은 면의 손잡이 6 을 뺀 값이다. last 는 축마다 마지막으로
- * 조작한 면이다.
+ * The display of one card computed as the specification (docs/spec/example-model.md) defines: { shown, auto } for each face. The space of an axis is the card size minus
+ * 2 for the border, (for height) 54 for the head and foot, 96 for the minimum content, and 6 for the handle of a face collapsed by choice. last is the face that was
+ * operated last for each axis.
  */
 function expectedPresentation(card, choices, last) {
   const result = {};
@@ -41,7 +41,7 @@ function recorded(frame, rect) {
       Math.floor(frame.content.x * frame.scale + x * scale),
       Math.floor(frame.content.y * frame.scale + y * scale),
     );
-  // 축소된 1포인트 선은 인접 배경과 혼합된다. 손잡이 중앙 표시를 제외하고 선의 혼합 비율을 검사한다.
+  // A reduced 1-point line blends with the adjacent background. The blend ratio of the line is checked, excluding the center mark of the handle.
   const edge = (vertical, coordinate, cross) =>
     [-1, -0.5, 0, 0.5, 1].some((offset) =>
       [-24, -18, -12, 12, 18, 24].every((delta) => {
@@ -100,7 +100,7 @@ for (const app of Object.values(APPS))
           { set: side === "right" ? "space-tabs" : "space-list", size: 120, collapsed: false },
         ]),
       );
-      // 축마다 마지막으로 조작한 면. 두 면이 함께 들어가지 않을 때 그 면이 열린다.
+      // The face operated last for each axis. When both faces do not fit together, that face opens.
       const last = {};
       for (const side of sides) {
         await s.run("core.card.sidebar.set", { card: card.id, side, set: choices[side].set });
@@ -111,7 +111,7 @@ for (const app of Object.values(APPS))
         .filter((item) => item.tabs.length === 0)
         .map((item) => item.id)
         .sort();
-      // 녹화는 창의 장치 픽셀 크기를 따라가므로 현재 크기에서 시작한다(docs/spec/endpoint.md).
+      // The recording follows the device pixel size of the window, so it starts at the current size (docs/spec/endpoint.md).
       await s.presented();
       let recordingStopped = false;
       let recording = await s.request("diagnostics.capture.start", {});
@@ -165,7 +165,7 @@ for (const app of Object.values(APPS))
           if (!bar.sidebar.startsWith(`${card.id}:`)) continue;
           const side = bar.sidebar.slice(card.id.length + 1),
             state = current.sidebars[side];
-          // 펼친 top 과 bottom 패널은 카드의 내용 열 폭을 차지한다.
+          // The expanded top and bottom panels occupy the content column width of the card.
           if ((side === "top" || side === "bottom") && !state.collapsed) {
             requireContentWidth(await s.rect("core.sidebar", barIndex), current, 1, 6, `${label}: ${side}`);
           }
@@ -247,7 +247,7 @@ for (const app of Object.values(APPS))
         await s.run("host.window.resize", { width: 1200, height: 754 });
         await s.until("host.window", (window) => window.content.height === 754, "window did not reach short height");
         await check("short normal");
-        // 작은 창에서 녹화를 시작하고 큰 창으로 바뀌는 전환을 기록한다.
+        // Starts the recording in a small window and records the transition to a large window.
         recording = await s.request("diagnostics.capture.start", {});
         recordingStopped = false;
         await s.run("host.window.resize", { width: 1200, height: 880 });
@@ -271,14 +271,14 @@ for (const app of Object.values(APPS))
         await check("wide sidebars restored");
         recording = await s.request("diagnostics.capture.start", {});
         recordingStopped = false;
-        // 왼쪽이 열려 보이면 클릭은 접힘을 저장한다. 접혀 보이면 펼침을 저장하므로 먼저 보이는 상태를 확인한다.
+        // When the left appears open, a click saves the collapse. When it appears collapsed, a click saves the expansion, so the check confirms the visible state first.
         const leftShown = (await s.get("core.grid")).cards.find((item) => item.id === card.id).sidebars.left;
         assert.equal(leftShown.collapsed, false, "the left panel must be shown open before the manual fold");
         await s.run("core.card.sidebar.toggle", { card: card.id, side: "left" });
         choices.left.collapsed = true;
         last.width = "left";
-        // 접은 왼쪽은 divider 폭(6)만 쓰므로 762pt 카드에서 내용 폭은 762 - 2(경계) - 6 - 480 = 274pt 로 최소
-        // 96pt 보다 크다. 오른쪽 요청은 공간이 충분하여 자동으로 접히지 않는다(docs/spec/example-model.md).
+        // The collapsed left uses only the divider width (6), so in a 762pt card the content width is 762 - 2 (border) - 6 - 480 = 274pt, which is larger than the minimum
+        // 96pt. The right request has enough space and is not collapsed automatically (docs/spec/example-model.md).
         await check("manual left fold");
         recording = await s.request("diagnostics.capture.start", {});
         recordingStopped = false;
@@ -294,7 +294,7 @@ for (const app of Object.values(APPS))
         await s.run("core.card.fullscreen", { card: card.id });
         await s.run("host.window.resize", { width: 1200, height: 754 });
         await s.until("host.window", (window) => window.content.height === 754, "window did not restore height");
-        // 폭은 manual left fold 와 같으므로 오른쪽은 펼쳐지고, 높이만 부족하다.
+        // The width equals the manual left fold, so the right is expanded and only the height is insufficient.
         await check("manual fold short restore");
       } catch (error) {
         errors.push(error);

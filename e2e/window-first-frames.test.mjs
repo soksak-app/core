@@ -1,6 +1,6 @@
-// 새 창이 처음 보이는 frame 부터 완전한 첫 화면을 그리는지 녹화로 잰다(docs/spec/surface-composition.md). 녹화는 창이 생긴
-// 뒤에만 시작할 수 있으므로, 기존 창이 있는 디스플레이에서 이 앱의 창을 모두 담는 디스플레이 녹화로 새 창이 생기는 순간을
-// 담는다. 새 창의 영역은 녹화가 끝난 뒤 그 창의 화면 좌표로 정한다.
+// Measures by recording whether a new window draws a complete first screen from the first frame in which it is visible (docs/spec/surface-composition.md). A recording can start only after
+// the window exists, so on a display that has existing windows, a display recording that covers all windows of this application captures the moment the new window
+// appears. The region of the new window is set with the screen coordinates of that window after the recording ends.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -8,14 +8,14 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
-/** 디스플레이 녹화 frame 에서 화면 좌표(포인트) point 의 픽셀. 디스플레이의 원점은 display 다. */
+/** The pixel at screen coordinate (points) point in a display recording frame. The origin of the display is display. */
 function sample(frame, display, point) {
   const scale = frame.scale * frame.contentScale;
   return pixel(frame, Math.floor((frame.content.x + point.x - display.x) * scale),
     Math.floor((frame.content.y + point.y - display.y) * scale));
 }
 
-/** rect(화면 좌표) 안에서 격자 step 마다 본 픽셀들. */
+/** The pixels seen at every grid step inside rect (screen coordinates). */
 function grid(frame, display, rect, step) {
   const values = [];
   for (let y = rect.y + step / 2; y < rect.y + rect.height; y += step) {
@@ -24,7 +24,7 @@ function grid(frame, display, rect, step) {
   return values;
 }
 
-/** 두 격자에서 채널 차이가 tolerance 를 넘는 점의 비율. */
+/** The ratio of points where the channel difference between the two grids exceeds tolerance. */
 function differing(a, b, tolerance) {
   let count = 0;
   for (let i = 0; i < a.length; i++) if (a[i].some((value, channel) => Math.abs(value - b[i][channel]) > tolerance)) count++;
@@ -48,7 +48,7 @@ for (const app of Object.values(APPS)) {
       const stop = await recording.stop({ after: Math.max(displayed, shown.displayed) + 100 });
       assert.equal(stop.limited, false, "the recording reached its frame cap");
       const window = (await child.get("host.window")).frame;
-      // 디스플레이 녹화는 녹화한 창의 중심이 있는 디스플레이를 담는다(native/darwin/src/capture.m).
+      // A display recording covers the display that holds the center of the recorded window (native/darwin/src/capture.m).
       const own = (await s.get("host.window")).frame;
       const centre = { x: own.x + own.width / 2, y: own.y + own.height / 2 };
       const display = (await s.get("host.screens")).find((screen) => centre.x >= screen.x && centre.x < screen.x + screen.width &&
@@ -57,12 +57,12 @@ for (const app of Object.values(APPS)) {
       const captured = frames(recording.frames).map(readFrame);
       assert.ok(captured.length > 1, `the recording has ${captured.length} frames`);
       const region = { x: window.x, y: window.y, width: window.width, height: window.height };
-      // 창이 열리는 애니메이션은 창을 조금 작게 시작하므로, 창이 처음부터 덮는 안쪽 영역에서 내용을 센다.
+      // The window opening animation starts the window slightly smaller, so the content is counted in the inner region that the window covers from the start.
       const inner = { x: region.x + region.width * 0.06, y: region.y + region.height * 0.06,
         width: region.width * 0.88, height: region.height * 0.88 };
       const before = grid(captured[0], display, region, 16);
       const last = captured.at(-1);
-      // 첫 화면의 바탕은 라이브러리 아래쪽 빈 자리의 색이다.
+      // The background of the first screen is the color of the empty area below the library.
       const background = sample(last, display, { x: region.x + region.width / 2, y: region.y + region.height * 0.85 });
       const ink = (frame) => grid(frame, display, inner, 8)
         .filter((value) => value.some((channel, index) => Math.abs(channel - background[index]) > 40)).length;

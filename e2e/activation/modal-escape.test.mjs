@@ -1,4 +1,4 @@
-// 활성 키 창의 네이티브 Escape 가 선택기 문서에 도착하는지 검사한다.
+// Checks that the native Escape of the active key window reaches the picker document.
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";

@@ -1,19 +1,19 @@
-// 실제 입력 창 검사가 터미널 안에서 실행하는 전체 화면 TUI. alternate screen 에서 ?1003 motion 보고와 ?1006 SGR
-// 인코딩을 켜고, 받은 마우스 보고로 직접 선택한 칸을 반전해 그린다. 터미널의 마우스 보고, 선택, 초점 경로를 외부
-// 프로그램 없이 같은 조건으로 검사한다.
+// A full-screen TUI that the real-input window check runs inside the terminal. On the alternate screen it turns on ?1003 motion reporting and ?1006 SGR
+// encoding, and draws the cells it selected itself in inverse from the mouse reports it receives. It checks the mouse reporting, selection, and focus paths of the terminal
+// under the same conditions without an external program.
 //
-//   node e2e/fixture-tui.mjs        q 또는 Ctrl-C 로 끝낸다.
+//   node e2e/fixture-tui.mjs        Ends with q or Ctrl-C.
 import { pathToFileURL } from "node:url";
 
-/** 첫 행의 머리글과 선택 대상 낱말. */
+/** The header of the first row and the word to select. */
 export const HEADER = "  >_ Fixture TUI";
 export const HEADER_WORD = "Fixture";
-/** 입력 행의 안내문. */
+/** The guide text of the input row. */
 export const PROMPT = "Ask fixture";
 
 /**
- * SGR 마우스 보고(`ESC [ < b ; x ; y M|m`)를 읽는다. 반환값은 {events, rest} 이며 events 의 칸 좌표는 0부터 센다.
- * 끝이 잘린 보고는 rest 로 남겨 다음 입력과 잇는다. 보고가 아닌 바이트는 keys 로 돌려준다.
+ * Reads SGR mouse reports (`ESC [ < b ; x ; y M|m`). The return value is {events, rest}, and the cell coordinates of events count from 0.
+ * A report that is cut at the end is left in rest and joined with the next input. Bytes that are not a report are returned as keys.
  */
 export function parseInput(text) {
   const events = [];
@@ -23,7 +23,7 @@ export function parseInput(text) {
     if (text.startsWith("\x1b[<", index)) {
       const match = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/.exec(text.slice(index));
       if (!match) {
-        // 끝까지 숫자와 구분자뿐이면 잘린 보고다. 그 밖의 바이트가 섞이면 보고가 아니다.
+        // If only digits and separators remain until the end, the report is cut. If other bytes are mixed in, it is not a report.
         if (/^\x1b\[<[\d;]*$/.test(text.slice(index))) return { events, keys, rest: text.slice(index) };
         throw new Error(`invalid mouse report ${JSON.stringify(text.slice(index, index + 16))}`);
       }
@@ -39,9 +39,9 @@ export function parseInput(text) {
 }
 
 /**
- * 마우스 보고 하나로 선택을 바꾼다. 왼쪽 누름은 그 칸에서 새 선택을 시작하고, 누른 채 움직임과 뗌은 끝 칸을 옮긴다.
- * 선택은 누른 행의 [시작 칸, 끝 칸) 이므로 같은 칸의 클릭은 빈 선택이다. 누르지 않은 움직임(?1003)은 선택을 바꾸지
- * 않는다.
+ * Changes the selection with one mouse report. A left press starts a new selection at that cell, and a motion while pressed and the release move the end cell.
+ * The selection is [start cell, end cell) in the pressed row, so a click on the same cell is an empty selection.
+ * A motion without a press (?1003) does not change the selection.
  */
 export function select(selection, event) {
   const button = event.code & 0b11;
@@ -52,13 +52,13 @@ export function select(selection, event) {
   return { ...selection, end: event.col, pressed: !event.release };
 }
 
-/** 선택이 덮는 칸의 [처음, 끝) 범위. 선택이 없으면 null 이다. */
+/** The [first, end) range of cells that the selection covers. It is null when there is no selection. */
 export function selectedRange(selection) {
   if (!selection || selection.anchor === selection.end) return null;
   return { row: selection.row, from: Math.min(selection.anchor, selection.end), to: Math.max(selection.anchor, selection.end) };
 }
 
-/** 화면의 각 행 문자열. 첫 행 다음에 머리글, 마지막에서 두 번째 행에 안내문을 둔다. */
+/** The string of each row of the screen. The header is after the first row, and the guide text is in the second row from the last. */
 export function screenLines(rows, cols) {
   const lines = Array.from({ length: rows }, () => "");
   lines[1] = HEADER;
@@ -66,7 +66,7 @@ export function screenLines(rows, cols) {
   return lines.map((line) => line.slice(0, cols).padEnd(cols, " "));
 }
 
-/** 화면 전체를 그리는 바이트. 선택한 칸은 반전(SGR 7)으로 그린다. */
+/** The bytes that draw the whole screen. Selected cells are drawn in inverse (SGR 7). */
 export function render(rows, cols, selection) {
   const range = selectedRange(selection);
   const lines = screenLines(rows, cols);
@@ -109,5 +109,5 @@ function main() {
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) main();
 
-/** 검사 셸에서 이 TUI 를 실행하는 입력. 검사를 실행하는 node 로 이 파일을 실행한다. */
+/** The input that runs this TUI in the check shell. It runs this file with the node that runs the check. */
 export const LAUNCH = `'${process.execPath}' '${new URL(import.meta.url).pathname}'\r`;

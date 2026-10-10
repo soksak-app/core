@@ -1,5 +1,5 @@
-// 터미널 표면의 입력이 터미널 사이드카를 거쳐 같은 표면의 출력으로 돌아오는지 검사한다.
-// 창 크기가 바뀌어도 터미널 그림이 영역과 DOM 을 따라가는지 검사한다.
+// Checks that input of a terminal surface returns through the terminal sidecar as output of the same surface.
+// Checks that the terminal drawing follows its region and the DOM when the window size changes.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -7,7 +7,7 @@ import { tmpdir, userInfo } from "node:os";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
 
-// 애플리케이션 메뉴는 하나의 ko/en 표로 만들어지므로 검사도 메뉴 언어를 따라간다.
+// The application menu is built from one ko/en table, so the check follows the menu language.
 const MENU_TITLES = {
   ko: { menu: "보기", larger: "글자 크게" },
   en: { menu: "View", larger: "Bigger Text" },
@@ -25,7 +25,7 @@ import {
   cellBackgrounds, ensureTerminals, isColor, MEASURED_BACKGROUND, readScreenUntil, selectionBackground, setMeasuredBackground,
 } from "./terminal-screen.mjs";
 
-// 1x1 RGBA PNG 이미지.
+// A 1x1 RGBA PNG image.
 const PNG = Buffer.from("89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000A49444154789C63000100000500010D0A2DB40000000049454E44AE426082", "hex");
 
 
@@ -107,7 +107,7 @@ async function terminalColorBounds(session, surface, color) {
   let count = 0;
   let minY = Infinity;
   let maxY = -Infinity;
-  // 실패하면 무엇이 그려졌는지 알 수 있도록 영역의 색을 센다.
+  // Counts the colors of the region so that a failure shows what was drawn.
   const histogram = new Map();
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
@@ -302,11 +302,11 @@ for (const app of Object.values(APPS)) {
       (current) => current.every((surface) => surface.plugin !== "terminal"),
       "terminal surfaces did not close",
     );
-    // 서비스는 셸을 회수한 뒤에야 closed 에 답하고, 호스트는 답을 받을 때까지 그 표면을 host.sidecars 에 둔다
+    // The service answers closed only after it has reclaimed the shell, and the host keeps the surface in host.sidecars until it receives the answer
     // (docs/spec/sidecars.md#messages).
     await s.until("host.sidecars", (state) => !state.closing.some((entry) => surfaces.includes(entry.surface)),
       "the terminal service did not answer the closes");
-    // 대기가 실제로 닫기 답을 기다렸음을 보인다. 각 터미널 표면은 닫는 동안 host.sidecars 에 있었다.
+    // Shows that the wait actually waited for the close answer. Each terminal surface was in host.sidecars while closing.
     const listed = new Set((await closing.stop()).flatMap((state) => state.closing.map((entry) => entry.surface)));
     assert.deepEqual(surfaces.filter((surface) => !listed.has(surface)), [],
       `terminal surfaces never awaited a close answer: ${JSON.stringify([...listed])}`);
@@ -330,19 +330,19 @@ for (const app of Object.values(APPS)) {
     const before = await s.rect("terminal.view", undefined, surface);
     const { cols, rows } = await s.get("terminal.session", surface);
     for (const [side, value] of Object.entries(padding)) await set(side, value);
-    // 격자는 padding 안쪽의 그림 영역에 맞춰 다시 정해진다.
+    // The grid is set again to fit the drawing region inside the padding.
     await s.until("terminal.session", (session) => session.cols < cols && session.rows < rows,
       "the terminal grid did not shrink inside the padding", { surface });
     const view = await s.rect("terminal.view", undefined, surface);
     const inset = { top: view.y - before.y, right: before.x + before.width - (view.x + view.width),
       bottom: before.y + before.height - (view.y + view.height), left: view.x - before.x };
     assert.deepEqual(inset, padding, `the view is not inset by the padding: ${JSON.stringify({ before, view })}`);
-    // 네이티브 그림 영역은 안쪽 영역을 따른다.
+    // The native drawing region follows the inner region.
     const frame = { x: view.document.x + view.x, y: view.document.y + view.y, width: view.width, height: view.height };
     await s.until("host.window", (window) => window.regions.some((region) => region.surface === surface &&
       Object.keys(frame).every((key) => Math.abs(region.frame[key] - frame[key]) <= 1)),
       `the image region did not follow the padded view ${JSON.stringify(frame)}`);
-    // padding 자리는 터미널의 기본 배경색이다.
+    // The padding area has the default background color of the terminal.
     await s.request("diagnostics.capture.start", {});
     const { displayed } = await s.presented();
     const { frames: dir } = await s.request("diagnostics.capture.stop", { after: displayed });
@@ -374,7 +374,7 @@ for (const app of Object.values(APPS)) {
     const held = terminalProcessSnapshot(app.configDir).shells;
     assert.ok(held.length > 0, "the first project has no terminal shell");
 
-    // 같은 창에서 다른 프로젝트를 열면 첫 프로젝트의 세션은 보존된다.
+    // Opening another project in the same window keeps the sessions of the first project.
     s.cleanup(() => s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" }));
     await s.run("core.settings.set", { patch: { projectOpening: "tabs" }, scope: "common" });
     const other = mkdtempSync(join(tmpdir(), "soksak-retain-"));
@@ -384,7 +384,7 @@ for (const app of Object.values(APPS)) {
     const preserved = terminalProcessSnapshot(app.configDir).shells;
     assert.ok(held.every((pid) => preserved.includes(pid)), `opening another project ended the first project's shells: ${held} -> ${preserved}`);
 
-    // fixture 는 두 프로젝트를 지운다. 지운 레이아웃의 탭은 다시 붙을 곳이 없으므로 그 세션은 끝난다.
+    // The fixture deletes both projects. A tab of a deleted layout has nowhere to attach again, so its session ends.
     await s.request("diagnostics.fixture");
     const after = terminalProcessSnapshot(app.configDir).shells;
     const left = held.filter((pid) => after.includes(pid));
@@ -397,7 +397,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const terminals = await ensureTerminals(s, 3);
     await s.presented();
-    // 누른 카드의 포커스와 네이티브 키보드 포커스는 같은 터미널을 가리켜야 한다(V5-46).
+    // The focus of the pressed card and the native keyboard focus must point to the same terminal (V5-46).
     for (const terminal of [...terminals, terminals[0]]) {
       const view = await s.rect("terminal.view", undefined, terminal.surface);
       await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
@@ -416,7 +416,7 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => closeTerminalTabs(s));
     const existing = await ensureTerminals(s, 1);
     await s.run("core.settings.change", { key: "terminal.shell", value: "login", scope: "common" });
-    // 설정은 그 뒤에 여는 세션에 적용된다. 새 터미널을 연다.
+    // A setting applies to sessions that open after it. Opens a new terminal.
     const terminals = await ensureTerminals(s, existing.length + 1);
     const opened = terminals.find((terminal) => !existing.some((item) => item.surface === terminal.surface));
     assert.ok(opened, "no new terminal opened after the setting changed");
@@ -437,14 +437,14 @@ for (const app of Object.values(APPS)) {
       const terminals = await ensureTerminals(s, existing.length + 1);
       const opened = terminals.find((terminal) => !existing.some((item) => item.surface === terminal.surface));
       assert.ok(opened, "no new terminal opened after the setting changed");
-      // 셸 통합이 첫 프롬프트를 알려야 크기 변경에서 프롬프트 행을 지운다.
+      // The shell integration must report the first prompt so that a size change erases the prompt rows.
       await s.until("terminal.session", (session) => session.vendor?.shell?.marker === "prompt.start",
         `${shell} did not report an OSC 133 prompt start`, { surface: opened.surface });
       const { cols } = await s.get("terminal.session", opened.surface);
-      // 화면 상태의 행은 끝의 기본 칸을 생략하므로 열 수까지 채운다. 출력 행 뒤의 행을 이어 붙이면 프롬프트의 논리적 행이다.
+      // Rows of the screen state omit the trailing default cells, so each row is padded to the column count. Joining the rows after the output row gives the logical row of the prompt.
       const rowsOf = (lines, width) => lines.map((row) => row.map((cell) =>
         cell.ch === undefined ? " ".repeat(cell.width) : cell.ch).join("").padEnd(width, " "));
-      // 프롬프트 바로 위의 출력 행도 크기 변경 뒤 그대로 있어야 한다. 셸이 올라가는 행 수가 틀리면 이 행을 덮어쓴다.
+      // The output row directly above the prompt must also stay after the size change. A wrong number of rows that the shell moves up overwrites this row.
       const above = "ABOVE-LINE";
       await s.run("terminal.input", { bytes: `printf '${above}\\n'\r` }, opened.surface);
       await s.until("terminal.screen", (lines) => {
@@ -452,16 +452,16 @@ for (const app of Object.values(APPS)) {
         const index = rows.lastIndexOf(above.padEnd(cols, " "));
         return index >= 0 && rows[index + 1]?.trim().length > 0;
       }, `${shell} did not show a prompt after the output line`, { surface: opened.surface });
-      // 입력은 실행하지 않고 두 행 가까이 차지하게 한다. 공백은 앞에만 있어 행 경계에 걸리지 않는다.
+      // Makes the input take close to two rows without running it. The blanks are only at the start, so they do not fall on a row boundary.
       const input = `true START-${"x".repeat(Math.max(20, cols - 20))}-END`;
       await s.run("terminal.input", { bytes: input }, opened.surface);
       const promptLine = (rows, width) => {
         const index = rows.lastIndexOf(above.padEnd(width, " "));
         return index < 0 ? null : { row: index + 1, text: rows.slice(index + 1).join("") };
       };
-      // 좁아지는 재배치는 커서 행을 두고 그 위의 행을 기록으로 올린다(프로젝트 폴더 경로의 프롬프트는 좁은 폭에서
-      // 여러 행이다). 출력 행과 프롬프트의 순서는 기록과 화면을 이어서 읽는다. 기록은 선언된 명령으로 뷰포트를
-      // 옮겨 읽고 다시 최신 출력으로 돌아온다.
+      // A reflow that narrows the screen keeps the cursor row and moves the rows above it into the history (the prompt with a project folder path
+      // takes several rows at a narrow width). The order of the output row and the prompt is read from the history and the screen in sequence. The history is read
+      // by moving the viewport with a declared command and then returns to the latest output.
       const history = async (width) => {
         const { scrollback, rows } = await s.get("terminal.session", opened.surface);
         if (scrollback.history === 0) return [];
@@ -475,10 +475,10 @@ for (const app of Object.values(APPS)) {
           "the viewport did not return to the newest output", { surface: opened.surface });
         return earlier;
       };
-      // 출력 행 바로 다음 행에서 프롬프트와 입력이 한 번만 이어지고, 커서가 입력의 끝에 있어야 한다.
+      // The prompt and the input must continue once on the row right after the output row, and the cursor must be at the end of the input.
       const consistent = async (width, label, prompt) => {
         let measured = "";
-        // 셸이 다시 그리면 화면에 입력이 한 번 나온다. 그리기 전에는 엔진이 프롬프트 행을 지워 없다.
+        // When the shell redraws, the input appears once on the screen. Before the redraw the engine has erased the prompt row, so there is none.
         try {
           await s.until("terminal.screen", (lines) => {
             const rows = rowsOf(lines, width);
@@ -498,7 +498,7 @@ for (const app of Object.values(APPS)) {
         const starts = line && (prompt === undefined ? line.text.indexOf(input) > 0 : line.text.startsWith(prompt + input));
         assert.ok(count === 1 && starts, `${label}: the prompt line does not follow ${above} once: START- ${count} times in ` +
           `${JSON.stringify(all.map((row) => row.trimEnd()))} (${earlier.length} history rows)`);
-        // 커서는 화면에서 입력의 끝 바로 뒤에 있다.
+        // The cursor is on the screen directly after the end of the input.
         const end = current.join("").indexOf(input) + input.length;
         await s.until("terminal.cursor",
           (value) => value.row === Math.floor(end / width) && value.col === end % width,
@@ -520,7 +520,7 @@ for (const app of Object.values(APPS)) {
       await s.until("terminal.session", (session) => session.cols === cols,
         "the terminal did not return to its width", { surface: opened.surface });
       await consistent(cols, `after widening to ${cols} columns`, prompt);
-      // 경계를 끌면 셸이 다시 그리는 사이에도 크기가 연달아 바뀐다.
+      // Dragging the boundary changes the size repeatedly, also while the shell redraws.
       await drag(t, s, { axis: "x", line: card.c0, dx: Math.round(card.w / 2), dy: 0, ms: 96, times: 1 });
       await s.until("terminal.session", (session) => session.cols === cols,
         "the terminal did not return to its width after the drag", { surface: opened.surface });
@@ -542,7 +542,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.grid", (grid) => label(grid) === null, "the name setting kept the program title");
     await s.run("core.settings.change", { key: "terminal.title", value: "program", scope: "common" });
     await s.until("core.grid", (grid) => label(grid) === "TITLE-CHECK", "the program setting did not show the last title");
-    // 제목 초기화(빈 제목)는 탭 이름으로 돌아간다.
+    // Resetting the title (an empty title) returns to the tab name.
     await s.run("terminal.input", { bytes: "printf '\\033]2;\\007'\r" }, terminal.surface);
     await s.until("core.grid", (grid) => label(grid) === null, "an empty program title did not remove the title");
   });
@@ -557,7 +557,7 @@ for (const app of Object.values(APPS)) {
     const notice = (grid, surface) => cardOf(grid, surface).tabs.find((tab) => tab.id === surface).notice;
     await s.run("core.card.focus", { card: cardOf(await s.get("core.grid"), shown.surface).id });
     await s.until("core.grid", (grid) => cardOf(grid, shown.surface).focused, "the first terminal card did not take focus");
-    // 보이는 탭(포커스된 카드의 활성 탭)의 알림은 두지 않는다.
+    // No notification is kept for a visible tab (the active tab of the focused card).
     await s.run("terminal.input", { bytes: "printf '\\033]9;SHOWN-NOTICE\\007'\r" }, shown.surface);
     await s.until("terminal.session", (session) => session.vendor?.notification === "SHOWN-NOTICE",
       "the focused terminal did not receive its notification", { surface: shown.surface });
@@ -583,8 +583,8 @@ for (const app of Object.values(APPS)) {
       await s.run("terminal.input", { bytes: "printf '\\033]9;SYSTEM-POLICY\\007'\r" }, hidden.surface);
       await s.until("terminal.session", (session) => session.vendor?.notification === "SYSTEM-POLICY",
         "the system notification policy did not reach the terminal", { surface: hidden.surface });
-      // 시스템 정책의 결과는 게시, native 오류, 거부된 권한 중 하나다. 거부는 게시도 오류도 없이 권한 상태로만
-      // 알려진다(V5-111). 애플리케이션 bundle 의 알림 권한은 사용자가 시스템의 질문에 답해야 정해진다.
+      // The result of the system policy is one of: posted, native error, or denied permission. A denial is reported only through the permission state, without a post or an error
+      // (V5-111). The notification permission of the application bundle is set only when the user answers the system question.
       const decided = (state) => state.posted.includes(hidden.surface) || state.error !== null || state.authorization === "denied";
       try {
         await s.until("core.notifications", decided,
@@ -634,8 +634,8 @@ for (const app of Object.values(APPS)) {
       const scale = frame.scale;
       const background = pixel(frame, Math.round((region.frame.x + 20.5 * session.cellWidth) * scale),
         Math.round((region.frame.y + (row + 0.5) * session.cellHeight) * scale));
-      // 셀 아래쪽 4분의 1에서, 배경과 다른 픽셀이 가장 많은 한 픽셀 행의 픽셀 수를 센다. 밑줄은 셀 폭 전체를
-      // 채우는 행이고, 글자 아래 끝은 행의 일부만 채운다.
+      // In the lower quarter of the cell, counts the pixels of the one pixel row that has the most pixels different from the background. An underline is a row that fills the whole cell width,
+      // and the lower end of a glyph fills only a part of a row.
       const fullestRow = (column0, column1) => {
         const top = Math.round((region.frame.y + (row + 0.75) * session.cellHeight) * scale);
         const bottom = Math.round((region.frame.y + (row + 1) * session.cellHeight) * scale);
@@ -670,7 +670,7 @@ for (const app of Object.values(APPS)) {
     const surface = terminal.surface;
     await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 60 ]; do echo row$i; i=$((i+1)); done\r" }, surface);
     await s.until("terminal.session", (session) => session.scrollback?.history > 0, "the rows did not exceed the screen", { surface });
-    // macOS clear 는 ED 3 과 ED 2 를 보낸다. 사용자가 보고한 명령 그대로 실행한다.
+    // macOS clear sends ED 3 and ED 2. Runs the command exactly as the user reported it.
     await s.run("terminal.input", { bytes: "clear; printf '\\n한\\n'\r" }, surface);
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.trim() === "한"), "the output after clear did not render");
     const session = await s.until("terminal.session", (value) => value.scrollback?.history === 0,
@@ -686,19 +686,19 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => closeTerminalTabs(s));
     const [terminal] = await ensureTerminals(s, 1);
     await s.presented();
-    // 서비스를 멈추면 분할의 표시가 기존 터미널의 새 래스터를 기다리다 실패한다.
+    // Stopping the service makes the display of the split wait for a new raster of the existing terminal and fail.
     const { service } = terminalProcessSnapshot(app.configDir);
     process.kill(service, "SIGSTOP");
     let stopped = true;
     s.cleanup(() => { if (stopped) process.kill(service, "SIGCONT"); });
     const card = (await s.get("core.grid")).cards.find((item) => item.active === terminal.surface);
-    // 분할의 표시 요청이 받은 제한 시간은 페이지가 오류 표시 한 줄로 쓴다. 호스트와 다른 경로는 같은 실패를 다시 쓰지 않는다
+    // The time limit that the display request of the split received is shown by the page as one error line. The host and other paths do not write the same failure again
     // (docs/spec/hosts.md#application-log).
     s.expectError(/^error page page: surface presentation failed: the current image raster did not present within /);
     const { tab } = await s.run("core.card.split", { card: card.id, side: "right", plugin: "terminal" });
     await s.until("core.page.error", (error) => /did not present/.test(error ?? ""),
       "the presentation did not fail while the terminal service was stopped");
-    // 실패 뒤 새 터미널 페이지가 영역을 배치한다. 배치가 끝나거나 표면이 오류를 보고할 때까지 서비스를 멈춰 둔다.
+    // After the failure, a new terminal page places the region. The service stays stopped until the placement ends or the surface reports an error.
     const placed = s.until("host.window", (value) => value.regions.some((region) => region.surface === tab),
       "the new terminal did not place its region").then(() => null);
     const failure = s.until("core.surfaces", (surfaces) => surfaces.find((item) => item.surface === tab)?.status.phase === "error",
@@ -707,7 +707,7 @@ for (const app of Object.values(APPS)) {
     process.kill(service, "SIGCONT");
     stopped = false;
     assert.equal(error, null, "the new terminal failed to place its region after the failed presentation");
-    // 실패한 검사의 정리와 다음 검사의 준비를 같은 순서로 실행한다.
+    // Runs the cleanup of the failed check and the preparation of the next check in the same order.
     await closeTerminalTabs(s);
     await fresh(s);
     const terminals = await ensureTerminals(s, 3);
@@ -728,7 +728,7 @@ for (const app of Object.values(APPS)) {
     const directory = realpathSync(mkdtempSync(join(tmpdir(), "soksak-origin ")));
     s.cleanup(() => rmSync(directory, { recursive: true, force: true }));
     const existing = await ensureTerminals(s, 1);
-    // 셸 통합이 작업 디렉터리를 알리는 셸로 연다.
+    // Opens with a shell whose shell integration reports the working directory.
     await s.run("core.settings.change", { key: "terminal.shell", value: "/bin/zsh", scope: "common" });
     const terminals = await ensureTerminals(s, existing.length + 1);
     const source = terminals.find((terminal) => !existing.some((item) => item.surface === terminal.surface));
@@ -746,9 +746,9 @@ for (const app of Object.values(APPS)) {
       item.exposes.includes("status terminal.session")), "the split terminal did not register");
     await s.until("terminal.session", (session) => session.vendor?.shell?.marker === "prompt.start",
       "the split terminal did not show a prompt", { surface: made.tab });
-    // 경로 전체 대신 고유한 마지막 이름을 출력한다.
+    // Prints the unique last name instead of the whole path.
     await s.run("terminal.input", { bytes: "printf 'START=%s\\n' \"$(basename \"$(pwd -P)\")\"\r" }, made.tab);
-    // 좁은 카드에서는 출력이 줄바꿈되고 행 끝의 공백은 잘리므로 공백을 빼고 비교한다.
+    // In a narrow card the output wraps and the blanks at the end of a row are cut, so the comparison leaves out the blanks.
     const printed = `START=${basename(directory)}`.replaceAll(" ", "");
     await readScreenUntil(s, made.tab, (lines) => lines.join("").replaceAll(" ", "").includes(printed),
       `the split terminal did not start in ${directory}`);
@@ -763,7 +763,7 @@ for (const app of Object.values(APPS)) {
     const before = await s.until("terminal.session", (state) => Boolean(state?.sessionId), "the terminal session did not open", { surface });
     const shells = terminalProcessSnapshot(app.configDir).shells;
 
-    // 다시 읽은 페이지는 시작할 때 모든 레이아웃의 표면을 남기도록 서비스에 알린다. 레이아웃이 가진 세션은 남는다.
+    // The page that reads again tells the service at start to keep the surfaces of all layouts. Sessions that a layout holds stay.
     const log = await s.transcript();
     const document = (await s.get("core.window.document")).timeOrigin;
     await s.run("host.window.reload");
@@ -874,7 +874,7 @@ for (const app of Object.values(APPS)) {
         return ordered[1].card.l / frame.scale;
       });
       try {
-        // 오래 머문 배치는 모두 녹화에 나와야 한다. 한 번의 표시보다 짧게 머문 위치는 대신될 수 있다.
+        // Every placement that stayed long must appear in the recording. A position that stayed shorter than one display can be replaced.
         assertHeldStatesShown(positions.map((position, index) => ({ time: times[index], position })),
           result.ticks, result.boundary);
       } catch (error) {
@@ -911,8 +911,8 @@ for (const app of Object.values(APPS)) {
         throw new Error(`project return set ${set}: ${error.message}; ${JSON.stringify(await s.get("host.window"))}`,
           { cause: error });
       }
-      // surface 모듈은 호스트가 현재 transaction을 표시한 뒤에만 ready를 해제한다.
-      // native 사실을 읽기 전에 그 lifecycle 경계를 지킨다.
+      // The surface module releases ready only after the host displays the current transaction.
+      // Keeps that lifecycle boundary before reading native facts.
       const displayed = await s.presented();
       assert.equal(typeof displayed.displayed, "number", `project return set ${set} did not report a displayed frame`);
       const state = await s.get("host.window");
@@ -936,16 +936,16 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     await assertGridFillsPlane(s, "initial terminal layout");
 
-    // 터미널 탭을 활성화한다. core.grid 는 상태이므로 상태 읽기로 카드와 탭을 얻는다.
+    // Activates the terminal tab. core.grid is a status, so the card and tab come from a status read.
     const grid = await s.get("core.grid");
     const card = grid.cards.find((c) => c.tabs.some((tab) => tab.plugin === "terminal"));
     if (!card) return t.skip("terminal tab not found");
     const terminalTab = card.tabs.find((tab) => tab.plugin === "terminal");
 
-    // 터미널 탭을 선택하는 명령을 실행한다.
+    // Runs the command that selects the terminal tab.
     await s.run("core.tab.select", { tab: terminalTab.id });
 
-    // 터미널 세션이 준비될 때까지 기다린다.
+    // Waits until the terminal session is ready.
     let terminalSurface;
     await s.until(
       "core.surfaces",
@@ -961,7 +961,7 @@ for (const app of Object.values(APPS)) {
       "terminal surface did not become visible"
     );
 
-    // 터미널 sessionId 가 생길 때까지 기다린다.
+    // Waits until the terminal sessionId exists.
     await s.until(
       "terminal.session",
       (session) => session && session.sessionId,
@@ -970,11 +970,11 @@ for (const app of Object.values(APPS)) {
     );
     await setMeasuredBackground(s, terminalSurface);
 
-    // 명령을 보낸다.
+    // Sends the command.
     await s.run("terminal.input", { bytes: "echo hi\r" }, terminalSurface);
 
-    // 출력 줄을 읽을 때까지 기다린다.
-    // 화면이 읽혔는지 확인한다.
+    // Waits until the output line is read.
+    // Confirms that the screen was read.
     const screenLines = await readScreenUntil(
       s,
       terminalSurface,
@@ -982,11 +982,11 @@ for (const app of Object.values(APPS)) {
       'terminal output does not contain "hi"'
     );
 
-    // 창 캡처로 터미널 영역에 글자가 나왔는지 확인한다.
+    // Confirms with a window capture that glyphs appeared in the terminal region.
     const terminalRect = await s.rect("terminal.view", undefined, terminalSurface);
     const capture = await s.request("diagnostics.capture.start", {});
 
-    // 캡처를 즉시 중지하되, 마지막 표시 시각까지의 프레임을 기록한다.
+    // Stops the capture immediately and records the frames up to the last display time.
     const { frames: frameDir } = await s.request("diagnostics.capture.stop", {
       after: (await s.presented()).displayed,
     });
@@ -999,18 +999,18 @@ for (const app of Object.values(APPS)) {
     const frameFiles = frames(frameDir);
     assert.ok(frameFiles.length > 0, "no frames were captured");
 
-    // 마지막 프레임을 읽는다.
+    // Reads the last frame.
     const lastFramePath = frameFiles[frameFiles.length - 1];
     const frame = readFrame(lastFramePath);
 
-    // 터미널 영역 내에서 네이티브 IOSurface 가 덮고 있고 글자가 나왔는지 확인한다.
+    // Confirms that the native IOSurface covers the terminal region and glyphs appeared.
     const BG_COLOR = MEASURED_BACKGROUND;
     const COLOR_TOLERANCE = 10;
     const BRIGHT_TEXT_THRESHOLD = 160;
     const BRIGHT_TEXT_MIN = 20;
     const BG_SAMPLE_RATIO_MIN = 0.5;
 
-    // 창 좌표는 point 이고 frame 은 device pixel 이므로 frame 배율을 곱한다.
+    // Window coordinates are points and the frame is in device pixels, so multiplies by the frame scale.
     const termX = Math.round(terminalRect.x * frame.scale);
     const termY = Math.round(terminalRect.y * frame.scale);
     const termWidth = Math.round(terminalRect.width * frame.scale);
@@ -1020,18 +1020,18 @@ for (const app of Object.values(APPS)) {
     let totalSampleCount = 0;
     let brightTextCount = 0;
 
-    // 두 픽셀마다 하나씩 표본 추출하여 배경 비율과 밝은 픽셀 개수를 센다.
+    // Samples one of every two pixels and counts the background ratio and the number of bright pixels.
     for (let y = termY; y < termY + termHeight; y += 2) {
       for (let x = termX; x < termX + termWidth; x += 2) {
         if (y < 0 || y >= frame.height || x < 0 || x >= frame.width) continue;
         const px = pixel(frame, x, y);
         totalSampleCount++;
 
-        // (a) 배경색 픽셀 개수
+        // (a) number of background color pixels
         const isBG = px.every((v, i) => Math.abs(v - BG_COLOR[i]) <= COLOR_TOLERANCE);
         if (isBG) bgPixelCount++;
 
-        // (b) 밝은 픽셀 개수
+        // (b) number of bright pixels
         const brightness = (px[0] + px[1] + px[2]) / 3;
         if (brightness >= BRIGHT_TEXT_THRESHOLD) brightTextCount++;
       }
@@ -1057,7 +1057,7 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => closeTerminalTabs(s));
     await s.until("terminal.session", (state) => Boolean(state?.sessionId && state.rows > 8),
       "inline-image terminal session did not open", { surface });
-    // 셸이 프롬프트를 낸 뒤에 입력한다. 그 전의 입력은 터미널이 먼저 한 번 보여 준다.
+    // Types after the shell prints the prompt. The terminal shows input from before that once first.
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "the shell prompt did not appear");
 
     const red = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwH4QBEfcD/ePF9e8AAAAASUVORK5CYII=";
@@ -1118,12 +1118,12 @@ for (const app of Object.values(APPS)) {
     await s.until("terminal.session", (state) => Boolean(state?.sessionId && state.theme),
       "terminal session did not report its effective theme", { surface: terminal.surface });
     const rect = await s.rect("terminal.view", undefined, terminal.surface);
-    // 테마 값은 워크벤치가 보고하는 테마 목록 그대로다.
+    // The theme values are the theme list that the workbench reports, unchanged.
     const THEMES = await s.get("core.themes");
     for (const { name: theme } of THEMES) {
       for (const mode of ["dark", "light"]) {
         await s.run("core.settings.theme", { name: theme, mode, scope: "common" });
-        // 터미널 배경은 카드 색(--card)이다.
+        // The terminal background is the card color (--card).
         const token = THEMES.find((item) => item.name === theme)[mode].card;
         await s.until("terminal.session", (state) => state?.theme === mode && state.background === token,
           `the terminal did not apply ${theme} ${mode} background ${token}`, { surface: terminal.surface });
@@ -1204,13 +1204,13 @@ for (const app of Object.values(APPS)) {
       `settings control ${key} did not appear`);
       return modal.controls.find((control) => control.key === key);
     };
-    // 터미널 설정은 플러그인 구역의 터미널 페이지에 있다. 두 단계 모두 선언된 컨트롤의 명령으로 연다.
+    // The terminal settings are on the terminal page of the plugin section. Both steps open through the command of a declared control.
     const plugins = await modalControl("nav:plugins");
     await s.run(plugins.command.name, plugins.command.params);
     const page = await modalControl("plugin:terminal");
     await s.run(page.command.name, page.command.params);
     await s.until("core.settings-modal", (modal) => modal.plugin === "terminal", "the terminal settings page did not open");
-    // 선택지는 선택 상자다. 고른 값은 그 컨트롤이 가리키는 명령의 value 로 간다(docs/spec/settings.md 의 Controls).
+    // The choices are a select box. The chosen value goes to the value of the command that the control points to (Controls in docs/spec/settings.md).
     const pick = async (setting, expected) => {
       const control = await modalControl(setting);
       assert.ok(control.command, `settings control ${setting} has no command`);
@@ -1222,7 +1222,7 @@ for (const app of Object.values(APPS)) {
     await pick("terminal.cursor.shape", "underline");
     await pick("terminal.cursor.blink", "Never");
     await pick("terminal.cursor.unfocused", "beam");
-    // 숫자 설정은 값 입력 컨트롤이 가리키는 명령으로 바꾼다.
+    // A numeric setting changes through the command that the value input control points to.
     const enter = async (key, value) => {
       const modal = await s.until("core.settings-modal", (state) =>
         state.controls.some((control) => control.name === "core.settings-modal.set" && control.key === key),
@@ -1282,10 +1282,10 @@ for (const app of Object.values(APPS)) {
       const field = { "terminal.cursor.shape": "shape", "terminal.cursor.blink": "blink", "terminal.cursor.unfocused": "unfocused" }[key];
       await s.until("terminal.cursor", (state) => state[field] === value, `the terminal did not apply ${key}=${value}`, { surface });
     };
-    // 깜박임을 끄면 커서는 한 모양으로 머문다.
+    // With blinking off, the cursor stays in one shape.
     await set({ "terminal.cursor.blink": "Never" });
 
-    // 커서 칸의 장치 픽셀에서 배경과 다른 픽셀의 비율을 테두리 띠와 안쪽으로 나누어 잰다.
+    // Measures the ratio of device pixels of the cursor cell that differ from the background, split into the border band and the inside.
     const measure = async (label) => {
       const cursor = await s.run("terminal.screen.read", {}, surface).then(() => s.get("terminal.cursor", surface));
       await s.presented();
@@ -1310,9 +1310,9 @@ for (const app of Object.values(APPS)) {
           for (let y = fy; y < fy + fh; y++) for (let x = fx; x < fx + fw; x++) if (ink(x, y)) count++;
           return count / (fw * fh);
         };
-        // 커서 선은 2장치 픽셀이다. 띠는 칸 가장자리의 장치 픽셀 한 줄이고, 안쪽은 그 선 안쪽이다.
+        // The cursor line is 2 device pixels. The band is one line of device pixels at the cell edge, and the inside is inside that line.
         const line = 2;
-        // 실패 보고용: 커서 칸과 그 둘레 한 칸의 잉크 지도.
+        // For the failure report: an ink map of the cursor cell and one cell around it.
         const map = [];
         for (let y = -height; y < 2 * height; y++) {
           let row = "";
@@ -1347,7 +1347,7 @@ for (const app of Object.values(APPS)) {
       assert.ok(rules[shape], `${value.label} did not render a ${shape} cursor: ${JSON.stringify(bands)}\n${map.join("\n")}`);
     };
 
-    // 포커스 전: 포커스 없는 커서 설정이 모양을 정한다.
+    // Before focus: the unfocused cursor setting decides the shape.
     await s.until("host.window", (host) => host.regions.some((region) => region.surface === surface && !region.focused),
       "the terminal started with keyboard focus");
     for (const [unfocused, shape] of [["hollow", "hollow"], ["solid", "block"], ["underline", "underline"], ["beam", "beam"]]) {
@@ -1356,7 +1356,7 @@ for (const app of Object.values(APPS)) {
     }
     await set({ "terminal.cursor.unfocused": "hollow" });
 
-    // 포커스 뒤: 커서 모양 설정이 모양을 정한다.
+    // After focus: the cursor shape setting decides the shape.
     const view = await s.rect("terminal.view", undefined, surface);
     await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
     await s.until("host.window", (host) => host.regions.some((region) => region.surface === surface && region.focused),
@@ -1366,7 +1366,7 @@ for (const app of Object.values(APPS)) {
       expect(await measure(`focused ${shape}`), shape);
     }
 
-    // 프로그램이 숨긴 커서는 그리지 않는다.
+    // A cursor that the program hides is not drawn.
     await s.run("terminal.input", { bytes: "printf '\\033[?25l'\r" }, surface);
     await s.until("terminal.cursor", (state) => state.visible === false, "the program did not hide the cursor", { surface });
     expect(await measure("hidden"), "hidden");
@@ -1381,7 +1381,7 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => closeTerminalTabs(s));
     await s.until("terminal.session", (state) => Boolean(state?.sessionId) && state.fontSize === 13,
       "the terminal did not open at 13 points", { surface });
-    // 빨간 글자 한 줄의 픽셀 높이가 그려진 글꼴 크기를 나타낸다.
+    // The pixel height of one line of red glyphs shows the drawn font size.
     const red = async (marker) => {
       await s.run("terminal.input", { bytes: `printf '\\033[2J\\033[H\\033[31m${marker}\\033[0m\\n'\r` }, surface);
       await readScreenUntil(s, surface, (lines) => lines.some((line) => line.trim() === marker), `${marker} did not render`);
@@ -1434,11 +1434,11 @@ for (const app of Object.values(APPS)) {
     await s.pointer(viewX + 5.5 * metrics.cellWidth, y, "down", { button: "left" });
     await s.pointer(viewX + 20.5 * metrics.cellWidth, y, "drag", { button: "left" });
     await s.pointer(viewX + 20.5 * metrics.cellWidth, y, "up", { button: "left" });
-    // 사이드카가 해제에 답하거나 오류를 보고할 때까지 기다린다.
+    // Waits until the sidecar answers the release or reports an error.
     const state = await s.until("terminal.session",
       (value) => value?.selectionReleases > released || value?.error !== undefined,
       "the sidecar did not answer the selection release", { surface });
-    // 선택한 칸은 테마의 선택 배경으로 그리고 페이지의 화면 셀에는 색이 없으므로, 끈 구간을 픽셀로 잰다.
+    // A selected cell is drawn with the selection background of the theme and the screen cells of the page have no color, so measures the turned-off range in pixels.
     const selection = await selectionBackground(s);
     const columns = Array.from({ length: 16 }, (_, index) => 5 + index);
     const shown = await cellBackgrounds(s, surface, columns.map((col) => ({ col, row })));
@@ -1476,9 +1476,9 @@ for (const app of Object.values(APPS)) {
     const top = view.document.y + view.y;
     const released = metrics.selectionReleases;
     await s.pointer(viewX + 0.5 * metrics.cellWidth, top + 0.5 * metrics.cellHeight, "down", { button: "left" });
-    // 선택은 포인터가 칸의 가로 가운데를 지나야 그 칸을 덮는다(docs/spec/terminal-runtime.md). 넷째 칸의 가운데 앞까지
-    // 끌면 마지막 행의 앞 세 칸, 가운데를 지나면 네 칸이다. 사이드카는 끌기를 차례로 처리하므로 화면 읽기의 답은 선택을
-    // 반영한 뒤에 온다. 선택은 색으로만 보이므로 픽셀로 잰다.
+    // A selection covers a cell only when the pointer passes the horizontal middle of the cell (docs/spec/terminal-runtime.md). Dragging up to just before the middle of the fourth cell
+    // selects the first three cells of the last row, and passing the middle selects four cells. The sidecar handles drags in order, so the answer of a screen read comes
+    // after it reflects the selection. The selection is visible only by color, so it is measured in pixels.
     const selection = await selectionBackground(s);
     const last = metrics.rows - 1;
     const below = top + metrics.rows * metrics.cellHeight + padding / 2;
@@ -1512,7 +1512,7 @@ for (const app of Object.values(APPS)) {
 
     const transcript = await s.transcript();
     s.cleanup(() => transcript.stop());
-    // 선택 제스처 동안 터미널 화면이 바뀌었는지 실패 보고에 쓴다.
+    // Writes into the failure report whether the terminal screen changed during the selection gesture.
     const screens = [];
     const offScreens = s.client.on("status.changed", (params) => {
       if (params?.name === "terminal.screen" && params.surface === surface) {
@@ -1540,7 +1540,7 @@ for (const app of Object.values(APPS)) {
     const before = await terminalFrame(s);
     const viewX = view.document.x + view.x;
     const viewY = view.document.y + view.y;
-    // 선택은 포인터가 칸의 가운데를 지나야 그 칸을 덮으므로 첫 칸의 왼쪽 가장자리 가까이에서 누른다.
+    // A selection covers a cell only when the pointer passes the middle of the cell, so presses close to the left edge of the first cell.
     const start = {
       x: viewX + (col + 0.2) * metrics.cellWidth,
       y: viewY + (row + 0.5) * metrics.cellHeight,
@@ -1568,7 +1568,7 @@ for (const app of Object.values(APPS)) {
 
     const after = await terminalFrame(s);
     let changed = 0;
-    // 창 좌표는 point 이고 frame 은 device pixel 이므로 frame 배율을 곱한다.
+    // Window coordinates are points and the frame is in device pixels, so multiplies by the frame scale.
     const scale = after.scale;
     const x0 = Math.max(0, Math.round((viewX + col * metrics.cellWidth) * scale));
     const x1 = Math.min(after.width, Math.round((viewX + (col + marker.length) * metrics.cellWidth) * scale));
@@ -1606,7 +1606,7 @@ for (const app of Object.values(APPS)) {
     execFileSync("osascript", ["-e", `set the clipboard to (read (POSIX file "${image}") as «class PNGf»)`]);
 
     await s.run("terminal.paste", {}, surface);
-    // 긴 경로는 터미널 폭에서 줄바꿈되므로 줄을 이어 읽는다.
+    // A long path wraps at the terminal width, so reads the lines joined.
     const quoted = /'([^']*\/pasted-image-[^'/]*\.png)'/;
     const pasted = await readScreenUntil(s, surface, (lines) => quoted.test(lines.join("")),
       "the PNG paste did not insert a quoted image path");
@@ -1617,7 +1617,7 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(readFileSync(saved), PNG, "the saved image differs from the clipboard PNG");
     assert.equal((await s.get("terminal.session", surface)).error, undefined);
 
-    // PNG 로 해석되지 않는 클립보드 바이트는 읽기에서 명시적 오류가 되고 저장되지 않는다.
+    // Clipboard bytes that do not parse as a PNG become an explicit error on read and are not stored.
     execFileSync("osascript", ["-e", "set the clipboard to «data PNGf706E67»"]);
     await assert.rejects(() => s.run("terminal.paste", {}, surface), /PNG decode failed/);
   });
@@ -1639,7 +1639,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(!lines.some((line) => line.includes("command not found")), "file drop must not execute a command");
   });
 
-  // 진단 빌드의 표면은 플러그인 진단 모듈(diagnostics.json)이 등록한 항목을 갖는다.
+  // The surface of a diagnostic build has the entries that the plugin diagnostic module (diagnostics.json) registered.
   test(`${app.name}: diagnostic terminal entries inject preedit and record terminal input`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
@@ -1660,7 +1660,7 @@ for (const app of Object.values(APPS)) {
       [["terminal-input", "compose", "글은"], ["terminal-input", "compose", ""]]);
   });
 
-  // 세션 오류는 관련 없는 이벤트(테마 확인)가 지우지 않고, 그 오류를 해소하는 이벤트(새 trace)만 지운다.
+  // An unrelated event (a theme check) does not clear a session error; only the event that resolves the error (a new trace) clears it.
   test(`${app.name}: a terminal session error stays until the event that resolves it`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
@@ -1674,7 +1674,7 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => s.run("core.settings.theme", { name: "midnight", mode: original, scope: "common" }));
     await s.run("terminal.ime.trace", { action: "start" }, surface);
     s.cleanup(() => s.run("terminal.ime.trace", { action: "stop" }, surface));
-    // trace 용량은 256 이다. Control-U 는 셸의 입력 줄만 지운다.
+    // The trace capacity is 256. Control-U erases only the input line of the shell.
     for (let i = 0; i < 257; i++) await s.run("terminal.input", { bytes: "\u0015" }, surface);
     const overflow = "IME diagnostic trace capacity exceeded";
     await s.until("terminal.session", (state) => state.error === overflow,
@@ -1694,7 +1694,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     await assertGridFillsPlane(s, "initial terminal resize layout");
 
-    // 터미널 탭을 활성화한다. core.grid 는 상태이므로 상태 읽기로 카드와 탭을 얻는다.
+    // Activates the terminal tab. core.grid is a status, so the card and tab come from a status read.
     const grid = await s.get("core.grid");
     const card = grid.cards.find((c) => c.tabs.some((tab) => tab.plugin === "terminal"));
     if (!card) return t.skip("terminal tab not found");
@@ -1725,7 +1725,7 @@ for (const app of Object.values(APPS)) {
     );
     await setMeasuredBackground(s, terminalSurface);
 
-    // 화면에 글자를 둔다.
+    // Places glyphs on the screen.
     await s.run("terminal.input", { bytes: "echo hi\r" }, terminalSurface);
     await readScreenUntil(
       s,
@@ -1738,8 +1738,8 @@ for (const app of Object.values(APPS)) {
 
     const marker = "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH-IIII-JJJJ-KKKK-LLLL-MMMM-NNNN-OOOO-PPPP";
 
-    // 먼저 좁은 터미널에 긴 논리 행을 출력한다. 화면에 보이는 줄을 보존하는 것만으로는
-    // 충분하지 않으므로, 모든 셀의 문자열을 합쳐 잘림이 없는지 확인한다.
+    // First prints a long logical row in a narrow terminal. Keeping the lines visible on the screen is
+    // not enough, so joins the strings of all cells and confirms that nothing is cut.
     await s.run("host.window.resize", { width: 800, height: 920 });
     await s.until(
       "host.window",
@@ -1771,7 +1771,7 @@ for (const app of Object.values(APPS)) {
       index > 0 && (narrowLines.slice(0, index).join("") + line).includes(marker)),
     "narrow terminal did not preserve the marker across wrapped rows");
 
-    // 다시 넓히면 sidecar의 열 수와 화면의 논리 행이 함께 복원되어야 한다.
+    // When widened again, the column count of the sidecar and the logical row of the screen must be restored together.
     await s.run("host.window.resize", { width: 1500, height: 920 });
     await s.until(
       "host.window",
@@ -1783,8 +1783,8 @@ for (const app of Object.values(APPS)) {
       && Math.round(grid.height) === Math.round(grid.plane.h),
       "the wide window did not resize the DOM plane");
 
-    // 사이드카의 resize 응답 state 이벤트가 세션 상태에 도달해야 한다.
-    // 셀 크기가 빠진 state 이벤트는 플러그인이 오류로 내놓으므로 cols 가 그대로 남는다.
+    // The state event in the resize answer of the sidecar must reach the session state.
+    // The plugin raises a state event without the cell size as an error, so cols stays unchanged.
     const after = await s.until(
       "terminal.session",
       (session) =>
@@ -1809,7 +1809,7 @@ for (const app of Object.values(APPS)) {
 
     await s.presented();
 
-    // 커진 영역 안에서 그림이 영역을 덮는지 수치로 잰다.
+    // Measures numerically that the drawing covers the region inside the enlarged region.
     const terminalRect = await s.rect("terminal.view", undefined, terminalSurface);
     assert.ok(
       terminalRect.width > 0 && terminalRect.height > 0,
@@ -1835,7 +1835,7 @@ for (const app of Object.values(APPS)) {
     const BRIGHT_TEXT_THRESHOLD = 160;
     const BG_SAMPLE_RATIO_MIN = 0.5;
 
-    // 창 좌표는 point 이고 frame 은 device pixel 이므로 frame 배율을 곱한다.
+    // Window coordinates are points and the frame is in device pixels, so multiplies by the frame scale.
     const termX = Math.round(terminalRect.x * frame.scale);
     const termY = Math.round(terminalRect.y * frame.scale);
     const termWidth = Math.round(terminalRect.width * frame.scale);
@@ -1881,9 +1881,9 @@ for (const app of Object.values(APPS)) {
       const session = await s.get("terminal.session", surface.surface);
       before.set(surface.surface, { cellWidth: session.cellWidth, cellHeight: session.cellHeight });
       const marker = `DRAG-TEXT-${index}`;
-      // 배경을 먼저 바꾼다. 아래의 지우기가 그 출력과 기록을 함께 지운다.
+      // Changes the background first. The erase below clears that output and the history together.
       await setMeasuredBackground(s, surface.surface);
-      // 기록도 지운다(ED 3). 이 검사는 네이티브 영역의 정렬을 재며, 기록이 있으면 보이는 스크롤바는 따로 검사한다.
+      // Clears the history too (ED 3). This check measures the alignment of the native region; with a history, the visible scrollbar is checked separately.
       await s.run("terminal.input", { bytes: `printf '\\033[2J\\033[3J\\033[H${marker}\\n'\r` }, surface.surface);
       await readScreenUntil(
         s,
@@ -1895,14 +1895,14 @@ for (const app of Object.values(APPS)) {
     }
     const beforeGrid = await s.get("core.grid");
     const terminalY = (await s.rect("terminal.view", undefined, terminals[0].surface)).y;
-    // 여러 터미널이 있는 상태에서 한 번의 빠른 드래그를 수행한다. 반복 왕복과
-    // 프로젝트 복귀는 F1.3에서 별도의 전체 캡처 행렬로 검사한다.
+    // Performs one fast drag with several terminals present. Repeated round trips and
+    // returning to the project are checked separately in F1.3 with a full capture matrix.
     const terminalCard = beforeGrid.cards.filter((card) => terminals.some((surface) => card.active === surface.surface))
       .sort((a, b) => a.x - b.x)[0];
     assert.ok(terminalCard, "terminal card is missing");
     const result = await drag(t, s, { axis: "x", line: terminalCard.c1, dx: 500, dy: 0, ms: 96, times: 1 }, { capture: true });
-    // 녹화는 바뀐 프레임만 담으므로 프레임 수는 화면 재생률을 따른다. 끌기 시간 동안 화면이 그릴 수 있는 프레임의
-    // 7/8 이상을 요구한다. 120Hz 에서 192ms 끌기는 이전 기준과 같은 21 프레임이다.
+    // A recording holds only changed frames, so the frame count follows the refresh rate of the display. Requires at least 7/8 of the frames that the display can draw during the drag time.
+    // At 120Hz a drag of 192ms gives 21 frames, the same as the earlier criterion.
     const { refreshRate } = await s.get("host.window");
     assert.ok(refreshRate > 0, `the window reports no refresh rate: ${refreshRate}`);
     const minimum = Math.ceil(result.asked * refreshRate / 1000 * 7 / 8);
@@ -1913,9 +1913,9 @@ for (const app of Object.values(APPS)) {
     assert.equal(result.late, 0, `divider input arrived late: ${result.late} steps`);
     assert.equal(result.deepest, 0, `divider input queue accumulated ${result.deepest} steps`);
 
-    // 왕복의 끝은 시작 좌표와 같아야 한다. 실제 이동은 각 캡처의 카드 좌표로 검사한다.
+    // The end of the round trip must equal the start coordinate. The actual movement is checked with the card coordinates of each capture.
     const { displayed } = await s.presented();
-    // frame 시각은 host 의 표시 시계(ms)다. 실패 문장에 performance trace 의 벽시계 시각으로 적어 trace 와 맞춘다.
+    // The frame time is the display clock (ms) of the host. The failure text gives it as the wall-clock time of the performance trace to match the trace.
     const clockOffset = Date.now() - displayed;
     const at = (time) => new Date(time + clockOffset).toISOString();
     const host = await s.get("host.window");
@@ -1938,8 +1938,8 @@ for (const app of Object.values(APPS)) {
         assert.ok(leftGap >= scale && leftGap <= 2 * scale,
           `frame ${index} at ${at(frame.time)}: terminal left gap is ${leftGap}px; ` +
           `(surface=${box.l}..${box.r}, card=${box.card.l}..${box.card.r}, scale=${scale})`);
-        // surfaceBoxes.r는 배타적 좌표이고 span().card.r는 카드의 마지막 픽셀이다.
-        // 네이티브 영역은 오른쪽 보더의 안쪽 경계 바로 앞에서 끝나야 한다.
+        // surfaceBoxes.r is an exclusive coordinate and span().card.r is the last pixel of the card.
+        // The native region must end just before the inner edge of the right border.
         assert.ok(rightGap >= 0 && rightGap <= 2 * scale,
           `frame ${index} at ${at(frame.time)}: terminal right gap is ${rightGap}px; ` +
           `(surface=${box.l}..${box.r}, card=${box.card.l}..${box.card.r}, scale=${scale})`);
@@ -1957,7 +1957,7 @@ for (const app of Object.values(APPS)) {
           `frame ${index}: terminal glyph raster width changed beyond subpixel rounding`);
       }
     }
-    // 오래 머문 배치는 모두 녹화에 나와야 한다. 한 번의 표시보다 짧게 머문 위치는 대신될 수 있다.
+    // Every placement that stayed long must appear in the recording. A position that stayed shorter than one display can be replaced.
     assertHeldStatesShown(positions, result.ticks, result.boundary);
     for (const surface of await s.surfaces("terminal")) {
       const session = await s.get("terminal.session", surface.surface);

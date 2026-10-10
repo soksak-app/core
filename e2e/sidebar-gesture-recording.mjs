@@ -1,4 +1,4 @@
-// 사방 손잡이 녹화의 모든 프레임에서 경계 좌표를 검사한다.
+// Checks the boundary coordinates in every frame of the recording of the four-direction handle.
 import assert from "node:assert/strict";
 import { pixel } from "@soksak/window-check/frame.mjs";
 const sign = (side) => (side === "top" || side === "left" ? 1 : -1);

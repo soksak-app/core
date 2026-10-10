@@ -1,4 +1,4 @@
-// 현재 창의 사용자 탭·설정을 보존하며 터미널 오른쪽 설정과 전체화면 복귀를 관측한다.
+// Observes the right-hand settings of the terminal and the return from the full screen while it preserves the user tabs and settings of the current window.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";

@@ -1,4 +1,4 @@
-// 고정 좌우 사이드바의 플러그인 오버라이드와 결합 보더를 실제 호스트 기록으로 검사한다.
+// Checks the plugin overrides of the fixed left and right sidebars and the combined border with real host records.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
@@ -34,7 +34,7 @@ for (const app of Object.values(APPS))
     t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
     await fresh(s);
     await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
-    // 터미널 카드에 브라우저 탭을 더해 한 카드에 다른 플러그인의 탭을 둔다.
+    // Adds a browser tab to a terminal card to put the tab of another plugin in one card.
     const { tab: added } = await s.run("core.card.add-tab", { card: "terminal", plugin: "browser" });
     s.cleanup(() => s.run("core.tab.close", { tab: added }));
     const initial = await s.get("core.grid");
@@ -147,7 +147,7 @@ for (const app of Object.values(APPS))
     }
   });
 
-// 탭을 옮기거나 닫아도 고정 사이드바는 초점 카드의 활성 탭으로 문맥을 정하고, 자기 열을 옮기지 않는다.
+// Even when a tab is moved or closed, the fixed sidebar sets its context from the active tab of the focused card and does not move its own column.
 for (const app of Object.values(APPS))
   test(
     `${app.name}: fixed sidebar context follows tab moves and removal without moving its column`,
@@ -190,7 +190,7 @@ for (const app of Object.values(APPS))
           );
           const shown = bar.find((item) => item.sidebar === side);
           assert.equal(shown.set, (override ?? general).set, `${label}: ${side} sidebar shows the wrong set`);
-          // 목록 배치는 모든 섹션을, 탭 배치는 고른 탭의 섹션만 그린다(docs/spec/plugins.md).
+          // The list layout draws all sections, and the tab layout draws only the sections of the chosen tab (docs/spec/plugins.md).
           const drawn =
             shown.layout === "tabs" ? shown.sections.filter((section) => section.id === shown.tab) : shown.sections;
           assert.ok(
@@ -201,7 +201,7 @@ for (const app of Object.values(APPS))
         assert.deepEqual(await columns(), baseline, `${label}: a tab change moved or resized a fixed sidebar column`);
         t.diagnostic(`${label}: ${focused.id}/${tab.plugin}`);
       }
-      // 터미널 카드에 탭 하나를 더 둔다. 활성 탭을 옮겨도 카드가 남아 다른 플러그인의 탭이 문맥이 된다.
+      // Adds one more tab to the terminal card. Even when the active tab is moved, the card stays and the tab of another plugin becomes the context.
       const before = (await s.get("core.grid")).cards.find((card) => card.id === "terminal");
       const { tab: kept } = await s.run("core.card.add-tab", { card: "terminal", plugin: "browser" });
       s.cleanup(() => s.run("core.tab.close", { tab: kept }));

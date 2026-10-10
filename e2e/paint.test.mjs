@@ -1,7 +1,7 @@
-// 경계를 흔드는 동안 표면에 렌더링되지 않은 영역이 나타나는지 검사한다.
+// Checks whether an unrendered area appears in the surface while the boundary is shaken.
 //
-// 웹뷰는 레이아웃한 영역만 렌더링하고 나머지는 흰색으로 채운다. 터미널 표면과 카드는 모두 어두우므로, 카드 색에
-// 맞붙은 흰 픽셀이 렌더링되지 않은 영역이다.
+// A web view renders only the area it laid out and fills the rest with white. The terminal surface and the card are both dark, so a white pixel
+// adjoining the card color is an unrendered area.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -12,11 +12,11 @@ import { terminalMarks } from "./outside.mjs";
 import { bare, cardSize } from "./surface.mjs";
 
 /**
- * 흔들 경계와 폭.
+ * The boundaries to shake and the width.
  *
- * 예제의 초기 배치는 고정되어 있다. x:2 는 터미널 카드의 왼쪽 경계, y:1 은 그 아래
- * 경계다. 둘 다 터미널 표면이 커졌다 작아진다. 누른 채로 왕복하므로 경계는 원래 위치로
- * 돌아온다. 경계를 좌표가 아니라 번호로 지정하므로 창의 크기가 달라도 빗나가지 않는다.
+ * The initial layout of the example is fixed. x:2 is the left boundary of the terminal card and y:1 is the boundary below it.
+ * In both, the terminal surface grows and shrinks. The pointer goes back and forth while pressed, so the boundary returns to its original position.
+ * The boundary is designated by number and not by coordinate, so it does not miss when the window size differs.
  */
 const PLANS = {
   "vertical boundary": { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 },
@@ -24,10 +24,10 @@ const PLANS = {
 };
 
 /**
- * 경계가 움직였다고 판정할 터미널 카드 폭이나 높이의 변화량(점).
+ * The change (points) of the width or the height of the terminal card by which the boundary counts as moved.
  *
- * 경계가 최소 카드 크기에 걸려 있으면 이 값은 0 에 가깝고, 그때 렌더링 검사는 아무것도
- * 검사하지 않고 통과하므로 먼저 녹화에서 경계가 실제로 움직였는지 확인한다. 두 끌기는 180pt 이상 움직인다.
+ * If the boundary sits at the minimum card size, this value is close to 0, and the rendering check then passes
+ * without checking anything, so the check first confirms in the recording that the boundary actually moved. The two drags move by at least 180pt.
  */
 const MOVED = 100;
 
@@ -38,7 +38,7 @@ for (const app of Object.values(APPS)) {
       if (!s) return t.skip(`${app.binary} is not built`);
       await fresh(s);
       const marks = await terminalMarks(s);
-      // 페이지의 검증기는 렌더마다 돌고 결과를 core.verify 로 공개한다. 끌기 동안의 모든 결과를 모은다.
+      // The verifier of the page runs at every render and publishes the result as core.verify. The check collects all results during the drag.
       const verify = await s.collect("core.verify");
       const run = await drag(t, s, plan, { capture: true });
       const verified = (await verify.stop()).filter(Boolean);

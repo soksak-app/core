@@ -1,6 +1,6 @@
-// 페이지가 바뀌는 동안 창이 덜 그려진 화면을 보이지 않는지 녹화로 잰다(docs/spec/surface-composition.md). 프레임마다 두 자리를
-// 본다. 머리 줄의 로고 글자는 신호등 단추 오른쪽의 제자리에 있어야 하고(앱 스타일이 적용되기 전에는 로고가 단추 쪽으로
-// 밀린다), 카드 머리는 카드 색이어야 한다(작업 공간이 비면 창 배경만 보인다).
+// Measures by recording whether the window shows an incompletely drawn screen while the page changes (docs/spec/surface-composition.md). It looks at two places in each frame.
+// The logo text of the head row must be in its place to the right of the traffic light buttons (before the application style applies, the logo is pushed toward
+// the buttons), and the card head must have the card color (if the workspace is empty, only the window background shows).
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
@@ -11,14 +11,14 @@ import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
 const near = (a, b, tolerance) => a.every((value, index) => Math.abs(value - b[index]) <= tolerance);
 
-/** 창 좌표(포인트) point 의 프레임 픽셀. */
+/** The frame pixel at the window coordinate (points) point. */
 function sample(frame, point) {
   const scale = frame.scale * frame.contentScale;
   return pixel(frame, Math.floor(frame.content.x * frame.scale + point.x * scale),
     Math.floor(frame.content.y * frame.scale + point.y * scale));
 }
 
-/** rect(창 좌표) 안에 background 와 40 넘게 다른 픽셀의 수. */
+/** The number of pixels inside rect (window coordinates) that differ from background by more than 40. */
 function ink(frame, rect, background) {
   let count = 0;
   for (let y = rect.y; y < rect.y + rect.height; y++) {
@@ -30,8 +30,8 @@ function ink(frame, rect, background) {
 }
 
 /**
- * 덜 그려진 프레임. logo 는 제자리의 로고 글자 영역, card 는 카드 색이어야 하는 한 점이다(없으면 보지 않는다). 기준은
- * 녹화의 첫 프레임이다.
+ * An incompletely drawn frame. logo is the area of the logo text in its place, and card is one point that must have the card color (it is not examined when absent). The reference is
+ * the first frame of the recording.
  */
 function undrawn(captured, logo, card) {
   const first = captured[0];
@@ -53,7 +53,7 @@ async function record(s, action) {
     assert.equal(stop.limited, false, "the recording reached its frame cap");
     return frames(recording.frames).map(readFrame);
   } finally {
-    // 녹화를 멈추지 못한 실패는 세션 정리가 멈춘다(Session.record).
+    // If the recording cannot be stopped, the session cleanup stops it (Session.record).
     rmSync(recording.frames, { recursive: true, force: true });
   }
 }
@@ -63,7 +63,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
-    // 로고 글자는 창 머리 줄에서 로고 아이콘 오른쪽에 있다. 로고가 신호등 단추 쪽으로 밀리면 이 영역은 빈다.
+    // The logo text is to the right of the logo icon in the window head row. If the logo is pushed toward the traffic light buttons, this area is empty.
     const logo = { x: 112, y: 13, width: 48, height: 12 };
     const grid = await s.get("core.grid");
     const content = grid.cards.find((item) => item.tabs?.length);

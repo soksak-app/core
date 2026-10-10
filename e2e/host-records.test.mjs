@@ -15,7 +15,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.projects.browse"));
-    // 초점이 옮겨지면 페이지가 그 전이를 report 로 호스트 로그에 적는다.
+    // When the focus moves, the page writes the transition to the host log as a report.
     await s.run("core.projects.browse");
     await s.until("core.library", (library) => library.shown.length > 0, "the library did not open");
     const transcript = await s.transcript();
@@ -43,7 +43,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(files.length >= 1, true, "logs/ holds no stderr file of a run");
     const file = join(s.app.configDir, "logs", files.sort().at(-1));
     const offset = readFileSync(file).length;
-    // 새로고침이 멈춘 요청에 쓴 호스트 응답은 사라지고 Wails 는 그 실패를 기록한다(docs/spec/native-host.md#page-reload).
+    // The host reply that a reload wrote to a stalled request is lost, and Wails records that failure (docs/spec/native-host.md#page-reload).
     for (let reload = 0; reload < 2; reload++) await s.run("host.window.reload");
     await s.presented();
     const lost = readFileSync(file).subarray(offset).toString("utf8").split("\n")

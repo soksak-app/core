@@ -1,7 +1,7 @@
-// UI 조작 명령을 실행하고 그 결과를 status 로 검사한다.
+// Runs the UI operation commands and checks their results through status.
 //
-// 사람이 누르는 컨트롤은 같은 명령을 실행하므로(docs/spec/exposure.md), 명령의 결과가
-// status 에 나타나면 컨트롤의 결과도 같다.
+// The controls that a person presses run the same commands (docs/spec/exposure.md), so when the result of a command
+// appears in status, the result of the control is the same.
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
@@ -9,13 +9,13 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
-/** 카드 id 의 카드. */
+/** The card with the card id. */
 const cardOf = (grid, id) => grid?.cards.find((c) => c.id === id);
 
-/** 탭 id 가 있는 카드. */
+/** A card that has a tab id. */
 const holder = (grid, tab) => grid?.cards.find((c) => c.tabs.some((t) => t.id === tab));
 
-/** 조작할 수 있는 카드(도구 버튼이 있는 카드). 사이드바와 레일 자리는 제외한다. */
+/** A card that can be operated (a card with tool buttons). Sidebar and rail places are excluded. */
 const panes = (grid) => grid.cards.filter((c) => c.pane !== null);
 
 const ids = (grid) => panes(grid).map((c) => c.id).sort();
@@ -34,7 +34,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.card.focus", { card: "browser" });
     await s.until("core.grid", (grid) => cardOf(grid, "browser").focused, "core.card.focus did not focus the card");
 
-    // 추가 메뉴를 열고 닫은 뒤, 다시 열어 항목을 고른다.
+    // Opens and closes the add menu, then opens it again and chooses an item.
     await s.run("core.card.menu", { card: "terminal", menu: "add" });
     const menu = await s.until("core.picker", (picker) => picker.open && picker.items.length > 0,
       "core.card.menu did not open the add menu");
@@ -60,7 +60,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.grid", (grid) => cardOf(grid, "terminal").tabs.length === terminal.tabs.length,
       "core.tab.close did not close the tab");
 
-    // 탭을 다른 카드의 가운데로, 그다음 변으로 옮긴다.
+    // Moves the tab to the center of another card, and then to the next side.
     const { tab } = await s.run("core.card.add-tab", { card: "terminal", plugin: "browser" });
     await s.until("core.grid", (grid) => holder(grid, tab)?.id === "terminal", "core.card.add-tab did not add the tab");
     await s.run("core.tab.move", { tab, card: "browser", zone: "centre" });
@@ -75,7 +75,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.card.close", { card: made.id });
     await s.until("core.grid", (grid) => panes(grid).length === panes(start).length, "core.card.close did not close the card");
 
-    // 분할은 새 카드를 정한 변에 둔다. 왼쪽과 위는 새 카드가 원래 카드보다 앞이고, 오른쪽과 아래는 뒤다.
+    // A split puts the new card on the given side. For left and top the new card is before the original card, and for right and bottom it is after.
     const beside = {
       left: (born, base) => born.x + born.w <= base.x, right: (born, base) => born.x >= base.x + base.w,
       top: (born, base) => born.y + born.h <= base.y, bottom: (born, base) => born.y >= base.y + base.h,
@@ -130,7 +130,7 @@ for (const app of Object.values(APPS)) {
 
     const mode = (await s.get("core.settings")).values.mode;
     const other = mode === "dark" ? "light" : "dark";
-    // 모드는 선택 상자다. 고른 값은 명령의 value 로 간다(docs/spec/settings.md 의 Controls).
+    // The mode is a select box. The chosen value goes to the command as value (Controls in docs/spec/settings.md).
     const pick = moved.controls.find((c) => c.key === "mode");
     assert.ok(pick?.command, "the appearance control must name its command");
     assert.ok(pick.options.includes(other), `the mode select box does not offer ${other}`);
@@ -178,8 +178,8 @@ for (const app of Object.values(APPS)) {
         y: (rect.document?.y ?? 0) + rect.y + rect.height / 2,
       };
       const owner = await s.run("host.hit", point);
-      // hit testing이 다른 소유자를 보고해도 native 클릭을 보낸다. 쓸모 있는 Red를 위해
-      // hit 결과와 명령의 효과를 따로 기록한다.
+      // Sends the native click even when hit testing reports another owner. For a useful Red,
+      // the hit result and the effect of the command are recorded separately.
       await s.click(point.x, point.y);
       const inMainWebview = point.x >= main.frame.x && point.x < main.frame.x + main.frame.width &&
         point.y >= main.frame.y && point.y < main.frame.y + main.frame.height;
@@ -190,9 +190,9 @@ for (const app of Object.values(APPS)) {
         active: geometry.active, key: geometry.key };
     };
 
-    // 사용 가능한 화면 폭의 절반부터 보이는 frame 안에 들어가는 가장 큰 content 폭까지
-    // 측정한다. 단계는 point 단위이므로 backing scale과 무관하며, 보고된 2048 physical-pixel
-    // viewport를 포함한다.
+    // Measures from half of the usable screen width up to the largest content width that fits in the visible frame.
+    // The steps are in points, so they do not depend on the backing scale, and they include the reported 2048 physical-pixel
+    // viewport.
     const center = {
       x: initialWindow.frame.x + initialWindow.frame.width / 2,
       y: initialWindow.frame.y + initialWindow.frame.height / 2,
@@ -200,8 +200,8 @@ for (const app of Object.values(APPS)) {
     const screen = (await s.get("host.screens")).find((item) => center.x >= item.x && center.x < item.x + item.width &&
       center.y >= item.y && center.y < item.y + item.height);
     assert.ok(screen, `the initial window center ${JSON.stringify(center)} is outside every screen`);
-    // `fresh` 는 Tauri 창을 시작 너비에서 오른쪽에 둔다. 폭을 키울 때 전체 검사가 화면 안에 남도록 왼쪽으로 옮긴다.
-    // 그렇지 않으면 넓은 표본의 단추 좌표가 화면 밖으로 나가 보이는 창의 동작을 측정하지 못한다.
+    // `fresh` places the Tauri window on the right at the start width. When the width grows, the window is moved to the left so that the whole check stays on the screen.
+    // Otherwise the button coordinates of a wide sample go off the screen and the behavior of the visible window is not measured.
     await s.run("host.window.move", { x: screen.visible.x, y: screen.visible.y });
     await s.until("host.window", (window) => window.frame.x === screen.visible.x && window.frame.y === screen.visible.y,
       "the width sweep window did not move to the visible screen origin");
@@ -281,7 +281,7 @@ for (const app of Object.values(APPS)) {
       projects.effect = projects.after === "library";
       if (projectResult.error) {
         projects.waitError = projectResult.error;
-        // 페이지가 받은 pointer 순서. 누른 요소가 뗄 때 교체되었으면 click 이 없다.
+        // The pointer sequence that the page received. If the pressed element was replaced at release, there is no click.
         projects.pointer = await s.get("core.pointer");
       }
       outcomes.push(projects);
@@ -381,7 +381,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    /** 문서에 그려진 카드 요소들의 너비. */
+    /** The widths of the card elements drawn in the document. */
     const drawnWidths = async () => {
       const widths = [];
       for (let index = 0; ; index++) {

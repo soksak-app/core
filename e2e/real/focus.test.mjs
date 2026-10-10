@@ -1,7 +1,7 @@
-// 터미널 카드를 실제로 누를 때 browser 카드의 주소창이 순간 초점을 받지 않는지 검사한다(V5-114, V5-114-1).
-// 터미널 영역은 클릭 투명이라 누르면 메인 문서가 초점을 되찾을 수 있고, activeElement 로 남은 주소창이 그 순간
-// 초점을 받아 보였다. 실제 HID 클릭의 전 과정을 녹화하고, 그 동안의 core.focus 변화를 모두 모아 주소창으로 들어온
-// 초점 전이가 없는지, 네이티브 first responder 가 누른 터미널로 가는지 확인한다.
+// Checks that the address bar of a browser card does not receive the focus for a moment when the terminal card is really pressed (V5-114, V5-114-1).
+// The terminal area is click-transparent, so a press lets the main document take the focus back, and the address bar that stayed as activeElement
+// received the focus at that moment and was shown. The check records the whole process of a real HID click, collects every core.focus change in that time, and confirms that there is no
+// focus transition into the address bar and that the native first responder goes to the pressed terminal.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -25,14 +25,14 @@ for (const app of Object.values(APPS)) {
       "the browser surface did not register its address field");
     await s.presented();
 
-    // 주소창을 실제로 눌러 초점을 준다. 문서의 activeElement 는 그 뒤로 주소창에 남는다.
+    // Really presses the address bar to give it the focus. The activeElement of the document stays on the address bar after that.
     const field = await s.rect("browser.address", undefined, browser);
     const point = await bringFront(s, app, field);
     click(point.x, point.y);
     await s.until("core.focus", (focus) => focus?.name === "browser.address" && focus.surface === browser,
       "a real click on the address field did not give it focus in core.focus");
 
-    // 녹화의 stop 은 한 번만 보내고, 세션 정리가 멈추지 않은 녹화를 멈추고 폴더를 지운다(Session.record).
+    // The recording sends stop once, and the session cleanup stops a recording that was not stopped and deletes the folder (Session.record).
     const recording = await s.record();
     const directory = recording.frames;
     const focus = await s.collect("core.focus");
@@ -49,7 +49,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(stopped.limited, false, "the recording reached its frame limit");
     assert.ok(frames(directory).length > 0, "the recording has no frames");
     assert.ok(stopped.longestGap <= 100, `the recording has a ${stopped.longestGap}ms gap`);
-    // 첫 값은 감시를 시작할 때의 상태(주소창)다. 그 뒤 주소창으로 다시 들어온 초점은 모두 전이다.
+    // The first value is the state (address bar) when the watch starts. Every focus that enters the address bar again after that is a transition.
     const transitions = values.slice(1).filter((value, index) => value?.name === "browser.address" &&
       values[index]?.name !== "browser.address");
     assert.deepEqual(transitions, [], `focus moved to the address field during the terminal presses: ${JSON.stringify(values)}`);

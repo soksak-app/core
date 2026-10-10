@@ -1,7 +1,7 @@
-// 프레임 글자 배율이 바뀌는 동안 녹화한 모든 프레임에서 창 단추가 첫 행의 가운데에 있는지 잰다
-// (docs/spec/native-surfaces.md#title-bar-height). 배율이 1 에서 3 까지 한 단계씩 오르고 1 까지 내려오는 동안과,
-// 다른 창이 배율을 바꾼 뒤 이 창을 다시 읽는 동안을 녹화한다. 단추와 첫 행은 프레임의 픽셀로 잰다
-// (titlebar-measurement.mjs). DOM 의 값은 그 프레임이 보인 화면을 말하지 않는다.
+// Measures in every frame recorded while the frame text scale changes that the window buttons are at the center of the first row
+// (docs/spec/native-surfaces.md#title-bar-height). Records the time while the scale rises one step at a time from 1 to 3 and comes back down to 1, and the time
+// while this window reads again after another window changes the scale. The buttons and the first row are measured in the pixels of the frame
+// (titlebar-measurement.mjs). A value in the DOM does not tell the screen that the frame showed.
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
@@ -12,18 +12,18 @@ import { missingPoses } from "./card-panel-checks.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { TOLERANCE, measureTitlebar, misaligned, rowHeight } from "./titlebar-measurement.mjs";
 
-// 1 에서 3 까지 오르는 배율 단계(docs/spec/text-size.md).
+// The scale steps that rise from 1 to 3 (docs/spec/text-size.md).
 const UP = [1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 const DOWN = [2.5, 2, 1.75, 1.5, 1.25, 1.1, 1];
 
-/** 프레임 배율을 factor 로 정하고 그 화면이 표시될 때까지 기다린다. */
+/** Sets the frame scale to factor and waits until that screen is displayed. */
 async function setFrame(s, factor) {
   await s.run("core.settings.set", { patch: { textSize: factor }, scope: "common" });
   await s.until("core.text", (value) => value.frame === factor, `the frame factor did not become ${factor}`);
   await s.presented();
 }
 
-/** 녹화할 창의 단추 사각형과 화면 갱신 빈도. 가려진 창은 WebKit 이 덜 그리므로 재지 않는다. */
+/** The button rectangle of the window to record and the refresh rate of the display. An occluded window is not measured because WebKit draws it less. */
 async function recordable(s) {
   const window = await s.get("host.window");
   if (window.occluded) {
@@ -36,8 +36,8 @@ async function recordable(s) {
 }
 
 /**
- * 창을 녹화하는 동안 action(displayed) 를 실행한다. action 은 녹화 동안 표시된 상태 { displayed, at }(표시 시각,
- * 첫 행의 높이)를 순서대로 반환한다. 프레임마다 단추와 첫 행을 재고 녹화 폴더는 지운다.
+ * Runs action(displayed) while the window is recorded. action returns, in order, the states { displayed, at } displayed during the recording (display time,
+ * first-row height). It measures the buttons and the first row in each frame and deletes the recording folder.
  */
 async function record(s, buttons, action) {
   const { displayed } = await s.presented();
@@ -46,18 +46,18 @@ async function record(s, buttons, action) {
     const poses = await action(displayed);
     const stop = await recording.stop({ after: poses.at(-1).displayed + 100 });
     assert.equal(stop.limited, false, "the recording reached its frame cap");
-    // 프레임을 하나씩 읽고 잰다. 녹화 전체를 메모리에 두지 않는다.
+    // Reads and measures one frame at a time. The whole recording is not held in memory.
     const measured = frames(recording.frames).map((path, index) => ({ index, ...measureTitlebar(readFrame(path), buttons) }));
     return { poses, stop, measured };
   } finally {
-    // 녹화를 멈추지 못한 실패는 세션 정리가 멈춘다(Session.record).
+    // A failure to stop the recording is stopped by the session cleanup (Session.record).
     rmSync(recording.frames, { recursive: true, force: true });
   }
 }
 
 /**
- * 모든 프레임에서 단추 가운데와 첫 행 가운데가 TOLERANCE 안에 있고, 표시된 모든 상태가 표시 뒤 화면 두 프레임 안에
- * 녹화되었는지 판정한다.
+ * Judges that in every frame the button center and the first-row center are within TOLERANCE, and that every displayed state was recorded within two screen frames
+ * after its display.
  */
 function judge(t, label, { poses, stop, measured }, refreshRate) {
   assert.ok(measured.length > 1, `${label}: the recording has ${measured.length} frames`);
@@ -80,7 +80,7 @@ for (const app of Object.values(APPS)) {
       await fresh(s);
       s.cleanup(() => setFrame(s, 1));
       await setFrame(s, 1);
-      // 프레임을 누르면 글자 크기 명령의 범위가 프레임이 된다.
+      // Pressing the frame makes the frame the scope of the text size command.
       const spaceTab = await s.rect("core.space-tab", 0);
       await s.click((spaceTab.document?.x ?? 0) + spaceTab.x + spaceTab.width / 2,
         (spaceTab.document?.y ?? 0) + spaceTab.y + spaceTab.height / 2);
@@ -113,8 +113,8 @@ for (const app of Object.values(APPS)) {
       await other.until("core.screen", (value) => value.screen === "library", "the new window did not show the library");
       const { buttons, refreshRate } = await recordable(s);
       const before = (await s.get("core.window.document")).timeOrigin;
-      // 다른 창의 설정이 공통 배율을 바꾸고, 이 창은 그 알림을 그리기 전이나 뒤에 다시 읽는다. 어느 쪽이든 모든 프레임이
-      // 기준을 지켜야 한다.
+      // The setting of another window changes the common scale, and this window reads again before or after it draws that notification. Either way every frame must keep the
+      // criterion.
       judge(t, "reload", await record(s, buttons, async (displayed) => {
         await other.run("core.settings.change", { key: "textSize", value: 2, scope: "common" });
         await other.until("core.text", (value) => value.frame === 2, "the other window did not take frame factor 2");

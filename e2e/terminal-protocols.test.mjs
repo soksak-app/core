@@ -1,6 +1,6 @@
-// 터미널 프로토콜 창 검사: 구현한 CSI 와 OSC 시퀀스를 셸로 PTY 에 쓰고, 화면, 커서, 세션 상태나 응답을 확인한다.
+// Terminal protocol window check: writes the implemented CSI and OSC sequences to the PTY through the shell and checks the screen, the cursor, the session state or the response.
 //
-// 응답이 있는 시퀀스는 셸의 read 가 응답을 받아 16진수로 화면에 쓴다. 화면 효과는 12행에 완료 표시를 쓴 뒤 읽는다.
+// For a sequence with a response, the read of the shell receives the response and writes it to the screen in hexadecimal. A screen effect is read after a completion mark is written on row 12.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -9,18 +9,18 @@ import { fresh } from "./fixture.mjs";
 import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
 import { cellBackgrounds, ensureTerminals, isColor, readScreenUntil, selectionBackground } from "./terminal-screen.mjs";
 
-// d N: 커서를 12행으로 옮기고 완료 표시를 쓴다. r SEQ END N: SEQ 를 쓰고 END 까지의 응답을 16진수로 쓴다.
+// d N: moves the cursor to row 12 and writes the completion mark. r SEQ END N: writes SEQ and writes the response up to END in hexadecimal.
 const SETUP = "b=$(printf '\\007'); d() { printf '\\033[12;1HDONE%s\\n' \"$1\"; }; " +
   "r() { printf \"$1\"; IFS= read -r -s -d \"$2\" -t 5 R; printf '\\033[12;1HR%s:%s\\n' \"$3\" " +
   "\"$(printf '%s' \"$R\" | od -An -tx1 | tr -d ' \\n')\"; }; " +
-  // m ON COUNT N OFF: ON 을 쓰고, 입력 COUNT 바이트를 원시 모드로 읽어 16진수로 쓴 뒤 OFF 를 쓴다. 읽기 전에 W<N> 을 쓴다.
+  // m ON COUNT N OFF: writes ON, reads the input COUNT bytes in raw mode and writes them in hexadecimal, and then writes OFF. W<N> is written before the read.
   "m() { printf \"$1\"; stty raw -echo; printf '\\033[12;1HW%s\\r\\n' \"$3\"; " +
   "R=$(dd bs=1 count=\"$2\" 2>/dev/null | od -An -tx1 | tr -d ' \\n'); stty sane; printf \"$4\"; " +
   "printf '\\033[12;1HR%s:%s\\n' \"$3\" \"$R\"; }; clear\r";
 
 let serial = 0;
 
-/** 화면을 지우고 printf 로 bytes 를 쓴 뒤 완료 표시가 보일 때 화면 셀을 돌려준다. */
+/** Clears the screen, writes bytes with printf and returns the screen cells when the completion mark is visible. */
 async function effect(s, surface, bytes) {
   const id = ++serial;
   await s.run("terminal.input", { bytes: `clear; printf '${bytes}'; d ${id}\r` }, surface);
@@ -29,7 +29,7 @@ async function effect(s, surface, bytes) {
   return s.get("terminal.screen", surface);
 }
 
-/** bytes 를 쓰고 end 로 끝나는 응답을 돌려준다. end 는 셸 단어다. */
+/** Writes bytes and returns the response that ends with end. end is a shell word. */
 async function reply(s, surface, bytes, end) {
   const id = ++serial;
   await s.run("terminal.input", { bytes: `clear; r '${bytes}' ${end} ${id}\r` }, surface);
@@ -39,13 +39,13 @@ async function reply(s, surface, bytes, end) {
   return Buffer.from(hex, "hex").toString("latin1");
 }
 
-/** on 으로 모드를 켜고 act 가 만든 입력 count 바이트를 돌려준다. off 로 모드를 끈다. */
+/** Turns the mode on with on and returns the input count bytes that act produced. Turns the mode off with off. */
 async function report(s, surface, on, count, off, act) {
   const id = ++serial;
   await s.run("terminal.input", { bytes: `clear; m '${on}' ${count} ${id} '${off}'\r` }, surface);
   await readScreenUntil(s, surface, (lines) => lines.some((line) => line.startsWith(`W${id}`)), `${JSON.stringify(on)} did not start reading`);
   await act();
-  // 응답이 오지 않으면 실패 위치를 가리도록 sidecar 가 마지막으로 잰 마우스 입력과 표면 상태를 함께 보고한다.
+  // If the response does not arrive, it also reports the mouse input that the sidecar measured last and the surface state so that the failure location is clear.
   const lines = await readScreenUntil(s, surface, (screen) => screen.some((line) => line.startsWith(`R${id}:`)),
     `${JSON.stringify(on)} did not receive ${count} bytes`).catch(async (error) => {
     const { mouse, cols, rows } = await s.get("terminal.session", surface);
@@ -56,7 +56,7 @@ async function report(s, surface, on, count, off, act) {
   return Buffer.from(hex, "hex").toString("latin1");
 }
 
-/** 검사가 쓴 응답 줄(R<n>:…)이 검사 뒤에 남지 않도록 터미널 탭을 닫는다. */
+/** Closes the terminal tab so that the response line that the check wrote (R<n>:…) does not remain after the check. */
 async function closeTerminalTabs(s) {
   const grid = await s.get("core.grid");
   for (const tab of grid.cards.flatMap((card) => card.tabs).filter((tab) => tab.plugin === "terminal")) {
@@ -78,19 +78,19 @@ for (const app of Object.values(APPS)) {
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
     await s.run("terminal.input", { bytes: SETUP }, surface);
 
-    // A/B/C/D/G/H/f 와 s/u.
+    // A/B/C/D/G/H/f and s/u.
     let screen = await effect(s, surface, "\\033[4;10fP\\033[2AQ\\033[BR\\033[3DS\\033[2GT\\033[6;5HX\\033[sY\\033[7;2HZ\\033[uW");
     assert.deepEqual([at(screen, 3, 9), at(screen, 1, 10), at(screen, 2, 11), at(screen, 2, 9), at(screen, 2, 1)],
       ["P", "Q", "R", "S", "T"], "cursor movement");
     assert.deepEqual([at(screen, 5, 4), at(screen, 5, 5), at(screen, 6, 1)], ["X", "W", "Z"], "cursor save and restore");
-    // E/F 와 3C.
+    // E/F and 3C.
     screen = await effect(s, surface, "\\033[3;5H\\033[2EX\\033[1FY\\033[8;1HA\\033[3CB");
     assert.deepEqual([at(screen, 4, 0), at(screen, 3, 0), text(screen, 7)], ["X", "Y", "A   B"], "next and previous line");
     // m.
     screen = await effect(s, surface, "\\033[1;1H\\033[1;3;4;7mZ\\033[0mN");
     assert.deepEqual(screen[0][0], { ch: "Z", width: 1, bold: true, italic: true, underline: true, inverse: true }, "SGR attributes");
     assert.deepEqual(screen[0][1], { ch: "N", width: 1 }, "SGR reset");
-    // S/T 와 r.
+    // S/T and r.
     const five = "\\033[1;1HL1\\033[2;1HL2\\033[3;1HL3\\033[4;1HL4\\033[5;1HL5";
     screen = await effect(s, surface, `${five}\\033[2;4r\\033[1S\\033[r`);
     assert.deepEqual([0, 1, 2, 3, 4].map((row) => text(screen, row)), ["L1", "L3", "L4", "", "L5"], "scroll up in a region");
@@ -104,7 +104,7 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual([text(screen, 0), text(screen, 1)], ["A  BCD", "AD"], "insert and delete characters");
     screen = await effect(s, surface, "\\033[1;1HM1\\033[2;1HM2\\033[3;1HM3\\033[2;1H\\033[1L\\033[5;1HN1\\033[6;1HN2\\033[5;1H\\033[1M");
     assert.deepEqual([0, 1, 2, 3, 4].map((row) => text(screen, row)), ["M1", "", "M2", "M3", "N2"], "insert and delete lines");
-    // I/Z 와 b.
+    // I/Z and b.
     screen = await effect(s, surface, "\\033[1;1H\\033[2IX\\033[2;20H\\033[ZY\\033[3;1HQ\\033[3b");
     assert.deepEqual([at(screen, 0, 16), at(screen, 1, 16), text(screen, 2)], ["X", "Y", "QQQQ"], "tabulation and repeat");
     // ?1049h/l.
@@ -117,7 +117,7 @@ for (const app of Object.values(APPS)) {
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.startsWith(`DONE${id}`)) &&
       lines[0].startsWith("PRIMARY"), "leaving the alternate screen did not restore the primary screen");
 
-    // ?25h/l, ?12h/l, SP q. drawn 은 사이드카가 프로그램의 요청을 적용해 그린 커서다.
+    // ?25h/l, ?12h/l, SP q. drawn is the cursor that the sidecar drew after applying the request of the program.
     await s.run("terminal.focus", {}, surface);
     await s.until("terminal.cursor", (cursor) => cursor.focused === true, "the terminal did not take focus", { surface });
     await effect(s, surface, "\\033[?25l");
@@ -141,14 +141,14 @@ for (const app of Object.values(APPS)) {
     assert.match(await reply(s, surface, "\\033[>c", "c"), /^\x1b\[>0;\d+;1$/);
     const session = await s.get("terminal.session", surface);
     const size = await reply(s, surface, "\\033[14t", "t");
-    // 장치 픽셀은 창이 놓인 화면의 배율을 따른다.
+    // The device pixel follows the scale of the screen that holds the window.
     const { scale } = await s.get("host.window");
     assert.equal(size, `\x1b[4;${Math.round(session.rows * session.cellHeight * scale)};${Math.round(session.cols * session.cellWidth * scale)}`,
       `14t did not report the text area in device pixels: ${JSON.stringify(size)}`);
 
-    // 지원하지 않는 CSI 는 명시적인 오류로 남는다.
+    // An unsupported CSI remains as an explicit error.
     await effect(s, surface, "\\033[18t");
-    // 거부한 시퀀스는 프로그램의 출력이므로 세션 오류가 아니라 거부 기록에 남는다.
+    // A rejected sequence is output of the program, so it remains in the rejection record, not as a session error.
     const rejected = await s.until("terminal.session", (value) => value.rejected.includes("unsupported CSI window report 18t"),
       "an unsupported CSI window report was not recorded as rejected", { surface });
     assert.equal(rejected.error, undefined, "a rejected program sequence became a terminal error");
@@ -164,7 +164,7 @@ for (const app of Object.values(APPS)) {
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
     await s.run("terminal.input", { bytes: SETUP }, surface);
 
-    // 0 과 2: 탭 제목.
+    // 0 and 2: tab title.
     await effect(s, surface, "\\033]2;OSC-TWO\\007");
     await s.until("core.grid", (grid) => grid.cards.some((card) => card.tabs.some((tab) => tab.id === surface && tab.label === "OSC-TWO")),
       "OSC 2 did not title the tab");
@@ -172,7 +172,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.grid", (grid) => grid.cards.some((card) => card.tabs.some((tab) => tab.id === surface && tab.label === "OSC-ZERO")),
       "OSC 0 did not title the tab");
 
-    // 4 와 104: 색 번호의 설정, 조회, 초기화.
+    // 4 and 104: set, query and reset of a color number.
     const color = (selector) => reply(s, surface, `\\033]${selector};?\\007`, "\"$b\"");
     const original = await color("4;1");
     assert.match(original, /^\x1b\]4;1;rgb:[0-9a-f]{4}\/[0-9a-f]{4}\/[0-9a-f]{4}$/, "OSC 4 query");
@@ -183,7 +183,7 @@ for (const app of Object.values(APPS)) {
     await effect(s, surface, "\\033]4;1;rgb:12/34/56\\007\\033]104\\007");
     assert.equal(await color("4;1"), original, "OSC 104 without parameters");
 
-    // 10–12 와 110–112: 전경, 배경, 커서 색.
+    // 10–12 and 110–112: foreground, background and cursor colors.
     for (const selector of [10, 11, 12]) {
       const before = await color(selector);
       assert.match(before, new RegExp(`^\\x1b\\]${selector};rgb:[0-9a-f]{4}/[0-9a-f]{4}/[0-9a-f]{4}$`), `OSC ${selector} query`);
@@ -193,7 +193,7 @@ for (const app of Object.values(APPS)) {
       assert.equal(await color(selector), before, `OSC ${selector + 100} reset`);
     }
 
-    // 50: 커서 모양.
+    // 50: cursor shape.
     await s.run("terminal.focus", {}, surface);
     await s.until("terminal.cursor", (cursor) => cursor.focused === true, "the terminal did not take focus", { surface });
     await effect(s, surface, "\\033]50;CursorShape=1\\007");
@@ -201,7 +201,7 @@ for (const app of Object.values(APPS)) {
     await effect(s, surface, "\\033]50;CursorShape=0\\007");
     await s.until("terminal.cursor", (cursor) => cursor.drawn.shape === "block", "OSC 50 CursorShape=0 did not draw a block", { surface });
 
-    // 5, 6, 105, 106: 굵게, 밑줄, 반전, 기울임 글자의 특수 색. 깜빡임(2)은 적용할 수 없어 오류다.
+    // 5, 6, 105, 106: special colors of bold, underline, reverse and italic glyphs. Blink (2) cannot be applied, so it is an error.
     const special = await color("5;0");
     assert.match(special, /^\x1b\]5;0;rgb:[0-9a-f]{4}\/[0-9a-f]{4}\/[0-9a-f]{4}$/, "OSC 5 query");
     await effect(s, surface, "\\033]5;0;rgb:11/22/33\\007\\033]6;0;1\\007\\033]106;0;0\\007");
@@ -213,13 +213,13 @@ for (const app of Object.values(APPS)) {
     await s.until("terminal.session", (value) => value.rejected.some((reason) => /blink/.test(reason)),
       "the blink color was not rejected", { surface });
 
-    // 22: 포인터 모양.
+    // 22: pointer shape.
     await effect(s, surface, "\\033]22;crosshair\\007");
     await s.until("terminal.session", (value) => value.pointer === "crosshair", "OSC 22 did not set the pointer", { surface });
     await effect(s, surface, "\\033]22;\\007");
     await s.until("terminal.session", (value) => value.pointer === "default", "an empty OSC 22 did not restore the pointer", { surface });
 
-    // 17, 19, 117, 119: 선택 영역의 강조 색.
+    // 17, 19, 117, 119: highlight colors of the selection.
     const highlight = await color("17");
     const highlightText = await color("19");
     assert.match(highlight, /^\x1b\]17;rgb:[0-9a-f]{4}\/[0-9a-f]{4}\/[0-9a-f]{4}$/, "OSC 17 query");
@@ -246,13 +246,13 @@ for (const app of Object.values(APPS)) {
     assert.equal(await color("19"), highlightText, "OSC 119 reset");
     await effect(s, surface, "\\033[1;1HHIGHLIGHT");
     await selectFirstCells();
-    // 강조 색이 없으면 선택한 칸은 테마의 선택 배경(--edge) 위에 그린다(docs/spec/terminal-runtime.md).
+    // Without a highlight color, a selected cell is drawn on the selection background of the theme (--rail) (docs/spec/terminal-runtime.md).
     const selection = await selectionBackground(s);
     const [plain] = await cellBackgrounds(s, surface, [{ col: 1, row: 0 }]);
     assert.ok(isColor(plain, selection),
       `a selected cell without highlight colors was drawn on rgb(${plain}) instead of the theme selection background ${selection}`);
 
-    // 52: 기본 정책은 거부하고, 허용하면 텍스트를 저장하고 조회에 답한다.
+    // 52: the default policy rejects it, and when allowed it stores the text and answers a query.
     const before = pasteboardText();
     await effect(s, surface, `\\033]52;c;${Buffer.from("OSC52-DENIED").toString("base64")}\\007`);
     await s.until("terminal.session", (value) => /clipboard/i.test(value.error ?? ""), "a denied OSC 52 store was not reported", { surface });
@@ -272,8 +272,8 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => closeTerminalTabs(s));
     const surface = terminal.surface;
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
-    // ?1005 는 96 열 이상의 좌표에서만 UTF-8 두 바이트를 쓴다. 기본 창 폭에서는 고정 사이드바 때문에 터미널이 그보다
-    // 좁으므로 창을 잠시 넓히고 검사 뒤 되돌린다.
+    // ?1005 uses two UTF-8 bytes only for coordinates from column 96. At the default window width the terminal is narrower than that because of the fixed sidebar,
+    // so the window is widened briefly and restored after the check.
     const { content } = await s.get("host.window");
     s.cleanup(() => s.run("host.window.resize", { width: content.width, height: content.height }));
     await s.run("host.window.resize", { width: content.width + 160, height: content.height });
@@ -282,20 +282,20 @@ for (const app of Object.values(APPS)) {
     await s.presented();
     const view = await s.rect("terminal.view", undefined, surface);
     const { cellWidth, cellHeight } = await s.get("terminal.session", surface);
-    // 1부터 센 칸 (col, row) 의 가운데.
+    // Center of the cell (col, row) counted from 1.
     const cell = (col, row) => ({ x: view.document.x + view.x + (col - 0.5) * cellWidth, y: view.document.y + view.y + (row - 0.5) * cellHeight });
 
-    // ?1000 과 ?1006: 누름과 뗌을 SGR 로 알린다.
+    // ?1000 and ?1006: reports a press and a release as SGR.
     const click = cell(10, 5);
     const clicked = "\x1b[<0;10;5M\x1b[<0;10;5m";
     assert.equal(await report(s, surface, "\\033[?1000h\\033[?1006h", clicked.length, "\\033[?1000l\\033[?1006l",
       () => s.click(click.x, click.y)), clicked, "?1000 and ?1006 click report");
-    // ?1000 과 ?1005: 95 열을 넘는 좌표를 UTF-8 로 알린다.
+    // ?1000 and ?1005: reports coordinates beyond column 95 as UTF-8.
     const far = cell(100, 5);
     assert.equal(Buffer.from(await report(s, surface, "\\033[?1000h\\033[?1005h", 14, "\\033[?1000l\\033[?1005l",
       () => s.click(far.x, far.y)), "latin1").toString("hex"), Buffer.from("\x1b[M \u0084%\x1b[M#\u0084%", "utf8").toString("hex"),
       "?1005 UTF-8 coordinates");
-    // ?1002: 누른 채 움직이면 움직임을 알린다.
+    // ?1002: reports movement while moving with a button pressed.
     const to = cell(12, 5);
     const dragged = "\x1b[<0;10;5M\x1b[<32;12;5M\x1b[<0;12;5m";
     assert.equal(await report(s, surface, "\\033[?1002h\\033[?1006h", dragged.length, "\\033[?1002l\\033[?1006l", async () => {
@@ -303,8 +303,8 @@ for (const app of Object.values(APPS)) {
       await s.pointer(to.x, to.y, "drag");
       await s.pointer(to.x, to.y, "up");
     }), dragged, "?1002 button motion report");
-    // ?1000 과 ?1006 에서 휠은 줄마다 휠 단추를 알린다. 페이지는 받은 이동량의 칸 높이마다 한 줄을 보낸다. 주입한 픽셀
-    // 이동량이 페이지에 몇 배로 도착하는지는 WebKit 이 정하므로, 마우스 보고 없이 기록을 스크롤해 그 배율을 잰다.
+    // In ?1000 and ?1006, the wheel reports a wheel button for every line. The page sends one line for every cell height of the received movement. WebKit decides how many times the injected pixel
+    // movement arrives at the page, so the factor is measured by scrolling the history without mouse reporting.
     await s.run("terminal.input", { bytes: "clear; i=0; while [ $i -lt 40 ]; do echo H$i; i=$((i+1)); done\r" }, surface);
     await s.until("terminal.session", (value) => value.scrollback?.history >= 6, "the output did not exceed the screen", { surface });
     const calibration = Math.round(3 * cellHeight);
@@ -317,23 +317,23 @@ for (const app of Object.values(APPS)) {
     await s.pointer(click.x, click.y, "scroll", { deltaY: calibration });
     await s.until("terminal.session", (value) => value.scrollback.offset === offset, "the calibration wheel did not scroll back", { surface });
     t.diagnostic(`a wheel of ${calibration} points moved ${moved} lines: the page receives ${factor} times the injected delta`);
-    // 2.5 줄의 이동량은 두 줄이다.
+    // A movement of 2.5 lines is two lines.
     const wheelDelta = Math.round(2.5 * cellHeight / factor);
     const wheel = await report(s, surface, "\\033[?1000h\\033[?1006h", "\x1b[<64;10;5M".length * 2, "\\033[?1000l\\033[?1006l",
       () => s.pointer(click.x, click.y, "scroll", { deltaY: wheelDelta }));
     assert.match(wheel, /^(\x1b\[<6[45];10;5M){2}$/, `?1000 wheel report: ${JSON.stringify(wheel)}`);
-    // ?1007: 대체 화면에서 휠은 방향키가 된다. ?1 이 켜지면 방향키는 응용 커서 키(ESC O)다.
+    // ?1007: on the alternate screen, the wheel becomes arrow keys. When ?1 is on, the arrow keys are application cursor keys (ESC O).
     const arrows = await report(s, surface, "\\033[?1049h\\033[?1007h", 6, "\\033[?1007l\\033[?1049l",
       () => s.pointer(click.x, click.y, "scroll", { deltaY: wheelDelta }));
     assert.match(arrows, /^(\x1b\[[AB]){2}$/, `?1007 alternate scroll: ${JSON.stringify(arrows)}`);
     const application = await report(s, surface, "\\033[?1h\\033[?1049h\\033[?1007h", 6, "\\033[?1007l\\033[?1049l\\033[?1l",
       () => s.pointer(click.x, click.y, "scroll", { deltaY: wheelDelta }));
     assert.match(application, /^(\x1bO[AB]){2}$/, `?1 application cursor keys: ${JSON.stringify(application)}`);
-    // ?2004: 붙여넣기를 괄호로 감싼다.
+    // ?2004: wraps a paste in brackets.
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("PASTE").toString("base64") }]);
     assert.equal(await report(s, surface, "\\033[?2004h", 17, "\\033[?2004l", () => s.run("terminal.paste", {}, surface)),
       "\x1b[200~PASTE\x1b[201~", "?2004 bracketed paste");
-    // ?1004: 초점을 잃고 얻을 때 알린다.
+    // ?1004: reports when the focus is lost and gained.
     await s.run("terminal.focus", {}, surface);
     await s.until("terminal.cursor", (cursor) => cursor.focused === true, "the terminal did not take focus", { surface });
     const outside = await s.rect("core.card.close", 0);

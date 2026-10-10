@@ -1,6 +1,6 @@
-// 이미 실행 중인 호스트에서 선언된 command.run -> host.quit 생명주기를 검증한다.
-// 이 검사는 애플리케이션을 시작하거나 활성화하지 않는다. 실행 전에
-// SOKSAK_APP이 선택한 설정 디렉터리로 호스트를 시작한다.
+// Verifies the declared command.run -> host.quit lifecycle on an already running host.
+// This check does not start or activate the application. Before the run,
+// it starts the host with the configuration directory that SOKSAK_APP selects.
 // SOKSAK_SHUTDOWN_BY=signal sends SIGTERM to the host instead, which requests the same quit (docs/spec/hosts.md). With
 // SOKSAK_SHUTDOWN_TERMINAL=1 the quit also ends the terminal service, because a normal quit ends the owned sessions and
 // shuts the service down (docs/spec/terminal-runtime.md).
@@ -105,10 +105,10 @@ function serviceProcess() {
   return JSON.parse(readFileSync(join(directory, services[0], "endpoint.json"), "utf8")).pid;
 }
 
-// 프로세스 종료는 설정 디렉터리의 파일 이벤트를 만들지 않는다. 호스트는 종료하기 전에
-// endpoint.json 을 지우므로 파일 이벤트만 기다리면 그 뒤의 종료를 확인하지 못한다. Node 는
-// 다른 프로세스의 종료 알림(kqueue NOTE_EXIT)을 제공하지 않으므로, 그 알림으로 pid 의 종료를
-// 기다리는 macOS 의 `caffeinate -w` 로 기다린다.
+// The exit of a process creates no file event in the configuration directory. The host deletes
+// endpoint.json before it exits, so waiting only for the file event cannot confirm the exit after it. Node
+// offers no exit notification of another process (kqueue NOTE_EXIT), so the check waits for the exit of the pid with
+// `caffeinate -w` of macOS, which waits on that notification.
 function waitForExit(pid) {
   const child = spawn("/usr/bin/caffeinate", ["-w", String(pid)], { stdio: "ignore" });
   const exited = new Promise((resolve, reject) => {

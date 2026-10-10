@@ -1,4 +1,4 @@
-// 사이드바마다 고른 탭과 접은 섹션이 스페이스와 함께 저장되어 다시 불러온 뒤에도 보이는지 검사한다
+// Checks that the tab and the folded sections chosen for each sidebar are saved together with the space and are visible again after reload
 // (docs/spec/projects.md#persistence).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -16,7 +16,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await terminalCardSidebar(s);
-    // 터미널 카드의 안쪽 왼쪽 사이드바는 tabs 세트, 왼쪽 고정 사이드바는 list 세트로 둔다.
+    // The inner left sidebar of the terminal card uses a tabs set and the fixed left sidebar uses a list set.
     const sets = (await s.get("core.settings")).values.sets;
     await s.run("core.settings.set", { patch: {
       sets: sets.map((set) => (set.id === "set-files" ? { ...set, layout: "tabs" } : set)) }, scope: "common" });
@@ -31,14 +31,14 @@ for (const app of Object.values(APPS)) {
     await s.until("core.sidebars", chosen, "the tab and the fold were not applied");
     await s.run("core.projects.flush");
 
-    // 저장된 스페이스가 선택을 담는다.
+    // The saved space holds the choice.
     const project = await s.get("core.project");
     const record = read(join(dirname(project.root), "projects.json")).find((item) => item.id === project.id);
     const layout = record.spaces.find((space) => space.id === record.activeSpaceId).layout;
     assert.deepEqual(layout.sidebars["terminal:left"], { tab: "files.bookmarks", folded: [] });
     assert.deepEqual(layout.sidebars.left.folded, ["files.bookmarks"]);
 
-    // 문서를 다시 불러오면 저장된 스페이스에서 같은 선택이 보인다.
+    // After the document reloads, the same choice is visible in the saved space.
     const before = (await s.get("core.window.document")).timeOrigin;
     await s.run("host.window.reload");
     await s.until("core.window.document", (doc) => doc.timeOrigin !== before && doc.readyState === "complete",

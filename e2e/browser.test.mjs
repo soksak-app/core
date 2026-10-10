@@ -1,12 +1,12 @@
-// 브라우저 표면의 문서 영역이 검사가 띄운 로컬 HTTP 서버의 문서를 열고, 기록을 이동하고, 네이티브
-// 입력을 받고, 표면을 따라 배치되고, 표면과 함께 닫히는지 검사한다.
+// Checks that the document region of the browser surface opens a document of the local HTTP server that the check starts, moves through the history, receives native
+// input, is laid out along the surface, and closes with the surface.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-// 애플리케이션 메뉴는 하나의 ko/en 표로 만들어지므로 검사도 메뉴 언어를 따라간다.
+// The application menu is built from one ko/en table, so the check also follows the menu language.
 const MENU_TITLES = {
   ko: { menu: "보기", larger: "글자 크게" },
   en: { menu: "View", larger: "Bigger Text" },
@@ -18,10 +18,10 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
-/** block 문서의 왼쪽 위에 놓는 CSS 크기 120×60 의 빨간 블록. 페이지 확대만큼 픽셀이 커진다. */
+/** A red block of CSS size 120x60 placed at the upper left of the block document. Its pixels grow with the page zoom. */
 const BLOCK = '<div style="position:absolute;left:0;top:0;width:120px;height:60px;background:rgb(220,30,30)"></div>';
 
-/** 문서 영역에서 빨간 블록의 픽셀 폭과 높이를 잰다. */
+/** Measures the pixel width and height of the red block in the document region. */
 async function blockSize(s, surface) {
   const { rect } = await placed(s, surface, "block document");
   const { displayed } = await s.presented();
@@ -48,15 +48,15 @@ async function blockSize(s, surface) {
   }
 }
 
-/** 경로 이름을 제목으로 갖는 긴 문서를 주는 루프백 서버. 검사가 끝나면 닫는다. */
+/** A loopback server that serves a long document whose title is the path name. It is closed when the check ends. */
 async function serve(s) {
   const server = createServer((request, response) => {
     const name = new URL(request.url, "http://127.0.0.1").pathname.slice(1) || "index";
     const url = new URL(request.url, "http://127.0.0.1");
-    // set-cookie 는 질의의 값을 쿠키 run 으로 저장하고, cookie 는 문서의 쿠키를 제목으로 보인다.
+    // set-cookie stores the value of the query as the cookie run, and cookie shows the cookie of the document as the title.
     const headers = { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" };
     if (name === "set-cookie") headers["set-cookie"] = `run=${url.searchParams.get("run")}; Path=/; Max-Age=3600`;
-    // fixed 는 색 구성표와 무관하게 스스로 정한 모양을 보이는 문서다.
+    // fixed is a document that shows an appearance that it decides on its own, regardless of the color scheme.
     if (name === "fixed") {
       response.writeHead(200, headers);
       response.end("<!doctype html><title>fixed</title><style>:root, body { width:100%; height:100%; margin:0; background:rgb(120,60,30); }</style>");
@@ -96,7 +96,7 @@ async function serve(s) {
 const LIGHT_DOCUMENT = [231, 233, 238];
 const DARK_DOCUMENT = [21, 28, 42];
 
-/** 현재 문서 영역 중앙의 실제 창 픽셀을 캡처해 읽는다. */
+/** Captures and reads the real window pixels at the center of the current document region. */
 async function documentPixel(s, surface, at = (rect) => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 })) {
   const rect = await regionRect(s, surface);
   const recording = await s.record();
@@ -105,7 +105,7 @@ async function documentPixel(s, surface, at = (rect) => ({ x: rect.x + rect.widt
   const files = frames(result.frames);
   assert.ok(files.length > 0, "document pixel capture produced no frames");
   const frame = readFrame(files.at(-1));
-  // 창 좌표는 point 이고 frame 은 device pixel 이므로 frame 배율을 곱한다.
+  // Window coordinates are in points and the frame is in device pixels, so the frame is multiplied by the scale.
   const point = at(rect);
   const x = Math.floor(point.x * frame.scale);
   const y = Math.floor(point.y * frame.scale);
@@ -118,7 +118,7 @@ async function documentPixel(s, surface, at = (rect) => ({ x: rect.x + rect.widt
 
 const nearColour = (actual, expected) => actual.every((value, index) => Math.abs(value - expected[index]) <= 3);
 
-/** 보이는 브라우저 표면이 browser.location 을 등록할 때까지 기다리고 활성 표면들을 반환한다. */
+/** Waits until a visible browser surface registers browser.location, and returns the active surfaces. */
 async function browsers(s) {
   await s.until("core.surfaces",
     (list) => list.some((x) => x.visible && x.plugin === "browser" && x.exposes.includes("status browser.location")),
@@ -127,29 +127,29 @@ async function browsers(s) {
   const current = await s.get("core.surfaces");
   const selected = current.filter((x) => x.visible && x.plugin === "browser" && active.has(x.surface));
   assert.ok(selected.length > 0, "current grid has no active visible browser surface");
-  // 주소가 없는 표면은 문서 영역을 숨기므로 영역의 표시는 각 검사가 주소를 연 뒤에 확인한다.
+  // A surface without an address hides its document region, so each check confirms the visibility of the region after it opens an address.
   return selected;
 }
 
-/** 문서 영역이 url 을 다 읽고 제목을 알릴 때까지 기다린다. 제목은 읽기가 끝난 뒤에 올 수 있다. */
+/** Waits until the document region has read the url and reported the title. The title can arrive after the reading ends. */
 function loaded(s, surface, url) {
   const title = new URL(url).pathname.slice(1);
   return s.until("browser.location", (at) => at.url === url && !at.loading && at.error === null && at.title === title,
     `surface ${surface} did not load ${url} with the title ${title}`, { surface });
 }
 
-/** browser.document 요소의 창 좌표 사각형. */
+/** The rectangle of the browser.document element in window coordinates. */
 async function regionRect(s, surface) {
   const rect = await s.rect("browser.document", undefined, surface);
   return { x: rect.document.x + rect.x, y: rect.document.y + rect.y, width: rect.width, height: rect.height };
 }
 
-/** 네이티브 프레임은 장치 픽셀 단위이고 요소의 사각형은 CSS 픽셀이므로 한 장치 픽셀까지 허용한다. */
+/** The native frame is in device pixels and the rectangle of the element is in CSS pixels, so a difference of up to one device pixel is allowed. */
 const DEVICE_PIXEL = 0.5;
 
 const near = (a, b) => ["x", "y", "width", "height"].every((key) => Math.abs(a[key] - b[key]) <= DEVICE_PIXEL);
 
-/** host.window 의 문서 영역 프레임이 요소의 사각형과 같아질 때까지 기다린다. */
+/** Waits until the document region frame of host.window equals the rectangle of the element. */
 async function placed(s, surface, message) {
   await s.presented();
   const rect = await regionRect(s, surface);
@@ -181,7 +181,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(await s.run("browser.forward", {}, surface), true);
     await loaded(s, surface, at("two"));
 
-    // 주소창을 네이티브 입력으로 누르고 주소를 입력한다.
+    // Presses the address bar with native input and types an address.
     const field = await s.rect("browser.address", undefined, surface);
     await s.click(field.document.x + field.x + field.width / 2, field.document.y + field.y + field.height / 2);
     await s.press("a", { text: at("three") });
@@ -189,20 +189,20 @@ for (const app of Object.values(APPS)) {
     const third = await loaded(s, surface, at("three"));
     assert.deepEqual(third.scroll, { x: 0, y: 0 });
 
-    // 문서 영역은 요소 자리에 있고, 그 점의 소유자다.
+    // The document region is at the position of the element and owns that point.
     const { rect, state } = await placed(s, surface, "after loading");
     const center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     assert.deepEqual(await s.run("host.hit", center), { kind: "document", surface, document: "page" });
 
-    // 네이티브 스크롤은 문서를 요청한 거리만큼 움직이고 앱을 활성화하지 않는다.
+    // A native scroll moves the document by the requested distance and does not activate the app.
     await s.pointer(center.x, center.y, "scroll", { deltaY: 120 });
-    // WebKit 은 휠 이벤트 하나를 여러 단계로 스크롤할 수 있으므로 요청한 거리에 도달할 때까지 기다린다.
+    // WebKit can scroll one wheel event in several steps, so the check waits until the requested distance is reached.
     const scrolled = await s.until("browser.location", (value) => value.scroll.y >= 120,
       "the document did not scroll by the requested distance", { surface });
     assert.deepEqual(scrolled.scroll, { x: 0, y: 120 });
     assert.equal((await s.get("host.window")).active, state.active, "native input must not change application activation");
 
-    // 표면이 옮겨지고 크기가 바뀌면 문서 영역이 따라간다.
+    // When the surface is moved and resized, the document region follows.
     const grid = await s.get("core.grid");
     await s.run("core.boundary.move", { axis: "y", line: 1, position: grid.lines.y[1] + 40 });
     const moved = await placed(s, surface, "after the surface moved");
@@ -211,19 +211,19 @@ for (const app of Object.values(APPS)) {
     const resized = await placed(s, surface, "after the surface resized");
     assert.ok(resized.rect.width < moved.rect.width, `the region did not shrink: ${moved.rect.width} → ${resized.rect.width}`);
 
-    // 다른 브라우저 표면은 이 표면의 문서 상태를 받지 않는다.
+    // Another browser surface does not receive the document state of this surface.
     const { tab } = await s.run("core.card.split", { card: grid.cards.find((c) => c.tabs.some((x) => x.id === surface)).id,
       side: "right", plugin: "browser" });
     await s.until("core.surfaces", (list) => list.some((x) => x.surface === tab && x.exposes.includes("status browser.location")),
       "the second browser surface did not register");
     const other = await s.get("browser.location", tab);
     assert.ok(!other.url.startsWith(base), `surface ${tab} received this surface's document: ${other.url}`);
-    // 주소가 없는 두 번째 표면은 문서 영역을 숨긴다.
+    // A second surface without an address hides its document region.
     assert.equal(other.url, "", `surface ${tab} has an address: ${other.url}`);
     await s.until("host.window", (w) => w.documents.some((d) => d.surface === tab && d.document === "page" && !d.visible),
       "the second browser without an address shows its document region");
 
-    // 표면을 닫으면 문서 영역도 닫힌다.
+    // When the surface is closed, the document region is closed too.
     await s.run("core.tab.close", { tab: surface });
     await s.until("host.window", (w) => !w.documents.some((d) => d.surface === surface),
       "the document region stayed after its surface closed");
@@ -240,7 +240,7 @@ for (const app of Object.values(APPS)) {
     const surface = browser.surface;
     assert.equal((await s.get("browser.location", surface)).url, "", "the fresh browser surface already has an address");
 
-    // 주소가 없으면 문서 영역은 보이지 않고 빈 상태가 문서 자리를 차지한다.
+    // Without an address the document region is not visible and the empty state occupies the place of the document.
     await s.presented();
     const hidden = await s.until("host.window", (w) => w.documents.some((d) => d.surface === surface && d.document === "page"),
       "the browser surface has no document region");
@@ -249,13 +249,13 @@ for (const app of Object.values(APPS)) {
     const empty = await s.rect("browser.empty", undefined, surface);
     assert.ok(empty.width > 0 && empty.height > 0, `the empty state is not shown: ${JSON.stringify(empty)}`);
 
-    // 빈 상태를 누르면 주소창이 초점을 받아 입력한 주소를 연다.
+    // Pressing the empty state focuses the address bar and opens the typed address.
     const point = { x: empty.document.x + empty.x + empty.width / 2, y: empty.document.y + empty.y + empty.height / 2 };
     assert.deepEqual(await s.run("host.hit", point), { kind: "page" },
       "the empty state point does not belong to the page");
     await s.click(point.x, point.y);
-    // 빈 상태의 누름은 browser.address.select 명령을 거쳐 주소창에 초점을 준다. 그 명령은 누름 뒤에 비동기로
-    // 실행되므로, 초점이 옮겨진 것을 core.focus 로 확인한 뒤 입력한다.
+    // A press on the empty state focuses the address bar through the browser.address.select command. That command runs asynchronously after the press,
+    // so the check confirms through core.focus that the focus has moved, and then types.
     await s.until("core.focus", (focus) => focus?.name === "browser.address" && focus.surface === surface,
       "a click on the empty state did not focus the address field");
     await s.press("a", { text: `${base}/empty` });
@@ -275,7 +275,7 @@ for (const app of Object.values(APPS)) {
     const surface = browser.surface;
     const at = (path) => `${base}/${path}`;
 
-    // 입력한 주소를 연 뒤에도 주소창은 초점을 유지한다.
+    // After the typed address is opened, the address bar keeps the focus.
     const field = await s.rect("browser.address", undefined, surface);
     await s.click(field.document.x + field.x + field.width / 2, field.document.y + field.y + field.height / 2);
     await s.press("a", { text: at("typed") });
@@ -284,13 +284,13 @@ for (const app of Object.values(APPS)) {
     await s.until("browser.address.text", (text) => text.focused && text.value === at("typed"),
       "the typed address is not in the focused address field", { surface });
 
-    // 입력에서 오지 않은 이동은 주소창에 연 주소를 보인다.
+    // A navigation that did not come from typing shows the opened address in the address bar.
     await s.run("browser.navigate", { url: at("other") }, surface);
     await loaded(s, surface, at("other"));
     await s.until("browser.address.text", (text) => text.value === at("other"),
       "the address field does not show the address opened by browser.navigate", { surface });
 
-    // 입력 중인 글자는 문서 상태가 바뀌어도 바뀌지 않는다.
+    // The text being typed does not change when the document state changes.
     await s.press("a", { text: "partial" });
     const typing = await s.until("browser.address.text", (text) => text.focused && text.value.endsWith("partial"),
       "the typed text did not reach the address field", { surface });
@@ -315,7 +315,7 @@ for (const app of Object.values(APPS)) {
       buttons.push({ name, x: rect.document.x + rect.x, y: rect.document.y + rect.y });
     }
 
-    /** 단추 안의 픽셀 중 단추 모서리 픽셀과 다른 것의 수와 모서리 픽셀. */
+    /** The number of pixels inside the button that differ from the button corner pixel, and the corner pixel. */
     const ink = async ({ x, y }) => {
       const { displayed } = await s.presented();
       await s.request("diagnostics.capture.start", {});
@@ -340,7 +340,7 @@ for (const app of Object.values(APPS)) {
     };
     for (const button of buttons) {
       const measured = await ink(button);
-      // 14px 셰브런의 두 획은 길이 약 12 CSS 픽셀, 굵기 약 1 CSS 픽셀이다.
+      // The two strokes of the 14px chevron are about 12 CSS pixels long and about 1 CSS pixel thick.
       assert.ok(measured.count >= 12 * measured.scale ** 2, `${button.name} draws ${measured.count} icon pixels: ${JSON.stringify(measured)}`);
     }
   });
@@ -360,7 +360,7 @@ for (const app of Object.values(APPS)) {
     const read = await s.until("browser.location", (at) => at.url === `${base}/cookie` && at.title.startsWith("cookie:"),
       "the cookie page did not report its cookies", { surface });
     assert.ok(read.title.includes(`run=${run}`), `the document store did not keep the cookie: ${read.title}`);
-    // 저장소는 실행 중인 앱의 --config-dir 안에 사이트 데이터를 둔다(docs/spec/native-surfaces.md#document-regions).
+    // The storage keeps site data inside the --config-dir of the running app (docs/spec/native-surfaces.md#document-regions).
     const directory = join(app.configDir, "document-data");
     let stat = null;
     try { stat = statSync(directory); } catch (error) { if (error.code !== "ENOENT") throw error; }
@@ -374,7 +374,7 @@ for (const app of Object.values(APPS)) {
     const base = await serve(s);
     const home = `${base}/home`;
 
-    // 홈 주소는 설정 창의 브라우저 플러그인 페이지에 라벨과 함께 보인다.
+    // The home address is shown with its label on the browser plugin page of the settings window.
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
     const nav = (await s.until("core.settings-modal", (modal) => modal.open &&
@@ -422,14 +422,14 @@ for (const app of Object.values(APPS)) {
     await s.run("browser.navigate", { url: `${base}/focus` }, surface);
     await loaded(s, surface, `${base}/focus`);
     await placed(s, surface, "focus document");
-    // 기본 배치에는 카드 사이드바가 없으므로 inherit 가 off 와 같다. 터미널 카드 왼쪽에 공통 세트를 이어 두어
-    // inherit 가 사이드바를 보이게 한다.
+    // The default layout has no card sidebar, so inherit equals off. A common set is attached to the left of the terminal card so that
+    // inherit makes the sidebar visible.
     await terminalCardSidebar(s);
     s.cleanup(() => s.run("core.card.sidebar.set", { card: "terminal", side: "left", set: "inherit" }));
 
-    // 준비 요청은 창의 레이어 트랜잭션 안에서 적용되어 커밋 전에는 화면에 나오지 않는다. 그동안 화면에 보이는
-    // 표면이 숨으면 그 자리의 누름은 표면 대신 페이지로 간다. 터미널 카드의 안쪽 사이드바를 끄고 켜면 터미널 표면만
-    // 움직이고 브라우저 표면은 제자리에 있으므로, 배치 요청은 브라우저 표면을 숨기지 않아야 한다.
+    // A prepare request is applied inside the layer transaction of the window and does not appear on screen before the commit. While that, a surface that is visible on screen
+    // is hidden, a press at its position goes to the page instead of the surface. Turning the inner sidebar of the terminal card off and on moves only the terminal surface
+    // and the browser surface stays in place, so a layout request must not hide the browser surface.
     const log = await s.transcript();
     for (const set of ["off", "inherit", "off"]) {
       await s.run("core.card.sidebar.set", { card: "terminal", side: "left", set });
@@ -467,7 +467,7 @@ for (const app of Object.values(APPS)) {
       document.surface === surface && document.document === "page" && document.visible &&
       document.frame.width > 0 && document.frame.height > 0),
     "the focused browser document did not settle after card selection");
-    // 카드 선택이 만든 배치가 모두 표시된 뒤 잰다. 준비 중인 배치는 표면을 숨긴다.
+    // Measures after every layout that the card selection created is displayed. A layout that is being prepared hides the surface.
     await s.presented();
     assert.deepEqual(await s.run("host.hit", firstPoint), { kind: "document", surface, document: "page" },
       "the click coordinate stopped hitting the focused browser document");
@@ -552,7 +552,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
-    // 막대의 안쪽 여백(주소 칸 바로 위)과 주소가 없을 때의 빈 화면은 모두 카드 색(--card)으로 칠한다.
+    // The inner margin of the bar (directly above the address field) and the empty screen without an address are both painted with the card color (--card).
     const sample = async (mode) => {
       await s.run("core.settings.set", { patch: { mode } });
       await s.until("core.settings", (value) => value.values.mode === mode && !value.saving, `host did not settle ${mode} theme`);
@@ -576,7 +576,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
-    // 앱 밝은 모드에서 문서 영역이 받는 prefers-color-scheme 을 로컬 문서의 제목으로 잰다.
+    // Measures, through the title of a local document, the prefers-color-scheme that the document region receives in the app light mode.
     await s.run("core.settings.set", { patch: { mode: "light" } });
     await s.until("core.settings", (value) => value.values.mode === "light" && !value.saving, "host did not settle light theme");
     const base = await serve(s);
@@ -593,7 +593,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.settings", (value) => value.values.mode === "light" && !value.saving,
       "host did not settle light theme for the fixed document");
     const light = await documentPixel(s, surface);
-    // 실패하면 표본 점과 모서리의 픽셀, 점의 소유자, 문서 영역, 앱 모드와 문서 상태를 함께 알린다.
+    // On failure it reports the pixels at the sample point and the corner, the owner of the point, the document region, the app mode and the document state together.
     const rect = await regionRect(s, surface);
     const sample = { x: Math.floor(rect.x + rect.width / 2), y: Math.floor(rect.y + rect.height / 2) };
     const measuredLight = { light, scheme, sample, hit: await s.run("host.hit", sample),
@@ -605,7 +605,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.settings", (value) => value.values.mode === "dark" && !value.saving,
       "host did not settle dark theme for the fixed document");
     const dark = await documentPixel(s, surface);
-    // 계약은 앱 모드가 사이트가 스스로 정한 모양을 바꾸지 않는 것이고, 문서 영역의 prefers-color-scheme 은 앱 모드를 따른다.
+    // The contract is that the app mode does not change the appearance that a site decides on its own, and the prefers-color-scheme of the document region follows the app mode.
     assert.equal(scheme, "scheme-light", `the region did not receive the light color scheme: ${JSON.stringify(measuredLight)}`);
     assert.ok(nearColour(light, [120, 60, 30]), `the fixed document did not show its own colour: ${JSON.stringify(measuredLight)}`);
     assert.deepEqual(dark, light,
@@ -680,12 +680,12 @@ for (const app of Object.values(APPS)) {
     const url = `${base}/block`;
     await s.run("browser.navigate", { url }, surface);
     await loaded(s, surface, url);
-    // 브라우저 카드를 누르면 그 카드가 범위다. 누르면 포커스가 바뀌어 배치도 바뀌므로 그 뒤에 잰다.
+    // Pressing a browser card makes that card the scope. A press changes the focus and so the layout, so the measurement follows it.
     const address = await s.rect("browser.address", undefined, surface);
     await s.click(address.document.x + address.x + address.width / 2, address.document.y + address.y + address.height / 2);
     await s.until("core.text", (value) => value.scope.kind === "card", "pressing the browser card did not make it the scope");
     const before = await blockSize(s, surface);
-    // 두 단계 뒤 배율은 1.25 다.
+    // After two steps the scale is 1.25.
     const titles = await largerTitle(s);
     await s.run("host.menu.select", { menu: titles.menu, title: titles.larger });
     await s.run("host.menu.select", { menu: titles.menu, title: titles.larger });
@@ -694,7 +694,7 @@ for (const app of Object.values(APPS)) {
     const after = await blockSize(s, surface);
     assert.ok(Math.abs(after.width / before.width - 1.25) <= 0.05 && Math.abs(after.height / before.height - 1.25) <= 0.05,
       `the document block must grow by the factor: ${JSON.stringify(before)} → ${JSON.stringify(after)}`);
-    // blockSize 는 영역이 자기 요소의 사각형에 놓일 때까지 기다린 뒤 잰다. 카드 글자가 커지면 주소창도
-    // 커지므로 요소의 높이는 줄 수 있다.
+    // blockSize measures after the region is placed at the rectangle of its own element. When the card text grows, the address bar
+    // grows too, so the height of the element can shrink.
   });
 }

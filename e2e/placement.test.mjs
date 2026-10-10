@@ -1,4 +1,4 @@
-// 검사 창 자리와 가림 보고: fresh 가 두 검사 앱을 정해진 자리에 두고, 가려진 창은 가림 상태를 감시자에게 알린다.
+// Position of the check windows and the report of covering: fresh puts the two check applications at fixed positions, and a covered window tells the observer its covered state.
 import assert from "node:assert/strict";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,8 +16,8 @@ test("fresh places the two check windows at their own frames", async (t) => {
     sessions.push(s);
   }
   if (sessions.length < 2) return t.skip("only one check application is selected");
-  // 두 창을 같은 자리에 겹친 뒤 fresh 가 각자의 자리로 되돌리는지 본다. 자리 정하기가 정하는 것은 창의 자리뿐이다.
-  // 다른 애플리케이션의 창이 검사 창을 가리는지는 자리와 무관하므로 여기서 재지 않는다.
+  // Overlaps both windows at the same position and then checks that fresh returns each to its own position. Positioning sets only the position of the window.
+  // Whether a window of another application covers a check window does not depend on the position, so this check does not measure it.
   const { frame } = await sessions[0].get("host.window");
   await sessions[1].run("host.window.move", { x: frame.x, y: frame.y });
   await sessions[1].until("host.window", (w) => w.frame.x === frame.x && w.frame.y === frame.y, "the second window did not move onto the first");
@@ -28,13 +28,13 @@ test("fresh places the two check windows at their own frames", async (t) => {
   assert.deepEqual([left.x, left.y], [area.x, area.y], `${sessions[0].app.name} is not at the top left of the visible area`);
   assert.deepEqual([right.x + right.width, right.y], [area.x + area.width, area.y],
     `${sessions[1].app.name} is not at the top right of the visible area`);
-  // 두 창은 서로의 자리를 모두 덮지 않는다.
+  // The two windows do not cover each other's position completely.
   const contains = (a, b) => a.x <= b.x && a.y <= b.y && a.x + a.width >= b.x + b.width && a.y + a.height >= b.y + b.height;
   assert.ok(!contains(left, right) && !contains(right, left), `one check window covers the other: ${JSON.stringify([left, right])}`);
 });
 
-// 앞뒤 순서는 활성화 없이 바꿀 수 없으므로, 각 앱의 창을 그 앱이 새로 연 프로젝트 창으로 덮는다. 새 창은 그 앱의
-// 앞 창이 된다. 검사가 활성화한 애플리케이션은 하네스가 검사가 끝날 때 앞서 활성이던 것으로 되돌린다.
+// The front-to-back order cannot be changed without activation, so the window of each application is covered by the project window that the application newly opened. The new window becomes the front window of that application.
+// The application that the check activated is restored by the harness, when the check ends, to the one that was active before.
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a check window that another window covers reports occluded to its watchers`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);

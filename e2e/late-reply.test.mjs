@@ -1,7 +1,7 @@
-// 표면이 닫힌 뒤 도착한 표면의 답을 호스트가 오류 없이 버리고 관측으로 남기는지 검사한다(docs/spec/exposure.md#relay).
+// Checks that the host discards, without an error, the reply of a surface that arrives after the surface closed, and keeps it as an observation (docs/spec/exposure.md#relay).
 //
-// 진단 메서드 diagnostics.surface.hold 가 표면의 답을 호스트가 그 표면을 제거할 때까지 붙잡으므로, 답은 시간에 기대지
-// 않고 요청이 끝난 뒤에 도착한다(docs/spec/endpoint.md).
+// The diagnostic method diagnostics.surface.hold holds the reply of the surface until the host removes that surface, so the reply does not depend on time
+// and arrives after the request ended (docs/spec/endpoint.md).
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -10,7 +10,7 @@ import { fresh } from "./fixture.mjs";
 import { readEventLines } from "@soksak/window-check/event-log.mjs";
 import { heldRepliesSent, lateReplyFindings } from "./late-reply.mjs";
 
-/** 탭 id 가 있는 카드. */
+/** A card that has a tab id. */
 const holder = (grid, tab) => grid?.cards.find((card) => card.tabs.some((entry) => entry.id === tab));
 
 for (const app of Object.values(APPS)) {
@@ -19,7 +19,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const { tab } = await s.run("core.card.add-tab", { card: "browser", plugin: "browser" });
-    // 검사가 탭을 닫기 전에 실패하면 남은 탭을 닫는다. 닫힌 표면의 붙잡기도 그때 끝난다.
+    // If the check fails before it closes the tab, it closes the remaining tab. The hold of the closed surface ends then as well.
     s.cleanup(async () => {
       if (holder(await s.get("core.grid"), tab)) await s.run("core.tab.close", { tab });
     });
@@ -36,7 +36,7 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`the reply of ${tab} is held; closing the tab`);
     await s.run("core.tab.close", { tab });
     assert.equal(await pending, 1003, "the request to the closed surface did not end with 1003");
-    // 페이지는 호스트가 붙잡은 답에 응답한 뒤 이 줄을 보낸다. 호스트의 관측 줄은 그 응답 전에 로그에 쓰였다.
+    // The page sends this line after it answered the reply that the host held. The observation line of the host was written to the log before that answer.
     const sent = heldRepliesSent(tab, 1);
     await transcript.until((lines) => lines.includes(sent), `the page did not report "${sent}"`);
 

@@ -1,8 +1,8 @@
-// 공개 registry 를 https 로 읽는 plugin 작업을 검사 소유 TLS registry 로 검사한다(docs/spec/installation.md 의 Fetching).
+// Checks the plugin operations that read the public registry over https against the check-owned TLS registry (Fetching in docs/spec/installation.md).
 //
-// check 애플리케이션은 진단 build 이고 `make e2e-registry-tls` 가 만든 인증 기관으로 시작되어 있어야 한다:
-// `--registry-ca <root>/soksak-check-registry-tls/ca.pem`(docs/operations/examples.md). 검사는 workspace registry
-// (`make install-plugins` 가 만든 target/registry)를 https 로 제공하고, 끝나면 원래 registry 와 설치를 되돌린다.
+// The check application is a diagnostic build and must have been started with the certificate authority that `make e2e-registry-tls` creates:
+// `--registry-ca <root>/soksak-check-registry-tls/ca.pem` (docs/operations/examples.md). The check serves the workspace registry
+// (target/registry that `make install-plugins` creates) over https and restores the original registry and installation when it ends.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:https";
@@ -17,7 +17,7 @@ import { fresh } from "./fixture.mjs";
 const TLS = join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), "soksak-check-registry-tls");
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 
-/** 검사 소유 TLS registry. index 변형마다 경로가 있고, release 는 /releases/<file> 로 제공한다. */
+/** Check-owned TLS registry. Each index variant has a path, and a release is served as /releases/<file>. */
 async function serveRegistry() {
   for (const file of ["server.pem", "server-key.pem", "ca.pem"]) {
     if (!existsSync(join(TLS, file))) throw new Error(`${join(TLS, file)} is missing; run make e2e-registry-tls and start the check applications with --registry-ca ${join(TLS, "ca.pem")}`);
@@ -28,7 +28,7 @@ async function serveRegistry() {
   const server = createServer({ cert: readFileSync(join(TLS, "server.pem")), key: readFileSync(join(TLS, "server-key.pem")) });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const base = `https://127.0.0.1:${server.address().port}`;
-  // release 의 file: 주소를 이 server 의 주소로 바꾼다. sha256 은 같은 파일이므로 그대로다.
+  // Replaces the file: address of the release with the address of this server. The sha256 stays the same because the file is the same.
   const index = JSON.parse(JSON.stringify(original).replaceAll(prefix, `${base}/releases/`));
   const browser = index.plugins.find((plugin) => plugin.id === "browser");
   const version = browser.versions.at(-1).version;
@@ -63,7 +63,7 @@ for (const app of Object.values(APPS)) {
     await keepCommonSettings(s);
     const before = await s.get("core.plugins");
     const registry = await serveRegistry();
-    // 검사가 중간에 실패해도 다음 검사가 같은 registry 와 설치에서 시작하게 되돌린다. 정리는 등록의 역순이다.
+    // Restores the state so that the next check starts from the same registry and installation even if the check fails midway. The cleanup runs in the reverse order of the registration.
     s.cleanup(registry.close);
     s.cleanup(async () => {
       await s.run("core.plugins.registry", { index: before.registry });
@@ -98,7 +98,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.plugins", (value) => value.operation?.action === "install" && value.operation.state === "done"
       && value.plugins.find((row) => row.id === "browser")?.installed, "browser was not installed again");
 
-    // 닿지 않는 registry 는 그 주소와 연결 실패를 밝히고, 지금의 registry 를 바꾸지 않는다.
+    // An unreachable registry names its address and the connection failure and does not change the current registry.
     const closed = `${registry.base}/good/index.json`;
     await registry.close();
     await assert.rejects(s.run("core.plugins.registry", { index: closed }), /cannot connect/);

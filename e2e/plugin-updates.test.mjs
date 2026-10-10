@@ -47,7 +47,7 @@ for (const app of Object.values(APPS)) {
       "the registry with a newer version did not list an update");
     assert.deepEqual(listed.updates, [{ id: "browser", installed, latest: newer }]);
 
-    // The window shows the control 업데이트 N while an update exists; it opens the plugin screen at the update list.
+    // The window shows the update control with the count N while an update exists; it opens the plugin screen at the update list.
     const control = await s.rect("core.chrome.updates");
     assert.ok(control.width > 0 && control.height > 0, `the update control has no size: ${JSON.stringify(control)}`);
     await s.act("core.chrome.updates", "click");
@@ -57,7 +57,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(row.width > 0 && row.height > 0, `the update row has no size: ${JSON.stringify(row)}`);
     await s.rect("core.library.plugins.update-all", undefined);
 
-    // 모두 업데이트 runs the update, which the wrong hash refuses, and the installation does not change.
+    // The update-all action runs the update, which the wrong hash refuses, and the installation does not change.
     // The library shows the refusal through its error display, which writes the error line.
     s.expectError(/has sha256 [0-9a-f]{64}, the entry says 0{64}/);
     await s.act("core.library.plugins.update-all", "click");

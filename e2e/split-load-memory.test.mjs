@@ -19,8 +19,8 @@ function memory(appName) {
 }
 
 /**
- * 창이 가진 웹 문서의 목록. 분할과 다시 읽기가 문서, 문서 영역, 그림 영역을 남기면 목록이 커진다. 페이지 process 의
- * 메모리는 WebKit 이 다시 읽은 이전 문서를 메모리 압박 때까지 두므로 판정하지 않는다(docs/operations/private-native-apis.md).
+ * List of the web documents that the window holds. If a split and a reload leave documents, document regions and picture regions, the list grows. The memory of the page process
+ * is not judged because WebKit keeps the previous reloaded document until memory pressure (docs/operations/private-native-apis.md).
  */
 function inventory(window) {
   return JSON.stringify({ webviews: window.webviews.length, surfaces: window.surfaces.map((surface) => surface.id).sort(),
@@ -97,12 +97,12 @@ for (const app of Object.values(APPS)) {
     const measured = samples.filter((sample) => Number.isInteger(sample.host));
     assert.equal(measured.length, samples.length, "stress produced an unmeasurable host RSS sample");
     const maxHost = Math.max(...measured.map((sample) => sample.host));
-    // 만든 카드를 모두 닫았으므로 창은 처음과 같은 문서를 가진다.
+    // All created cards were closed, so the window holds the same documents as at the start.
     const settled = await session.until("host.window", (window) => inventory(window) === before,
       `the window documents differ from ${before} after the stress`);
     t.diagnostic(`split-load-memory ${JSON.stringify({ app: app.name, samples: samples.length,
       baselineHost: baseline.host, maxHost, hostGrowth: maxHost - baseline.host, documents: before })}`);
-    // reload 는 새 문서를 새 page process 에서 열고 이전 process 를 끝낸다(docs/spec/native-host.md#page-reload).
+    // A reload opens the new document in a new page process and ends the previous process (docs/spec/native-host.md#page-reload).
     assert.notEqual(settled.pageProcess, initialWindow.pageProcess, "the reloads kept the page process");
     await session.request("diagnostics.process.exit", { pid: initialWindow.pageProcess }).catch((error) => {
       throw new Error(`the reloads left the first page process ${initialWindow.pageProcess} running: ${error.message}`);

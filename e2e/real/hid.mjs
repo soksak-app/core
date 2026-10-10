@@ -1,14 +1,14 @@
-// 실제 입력 등급 창 검사의 입력 도구. 호스트 진단은 이벤트를 뷰에 직접 넣으므로 창 서버, NSApp 이벤트 분배,
-// 키 창, 첫 응답자, 메뉴 키 대응을 거치지 않는다. 이 모듈은 CGEventPost 로 HID 이벤트를 보내 사용자와 같은
-// 경로를 쓴다. 검사를 실행하는 터미널에 손쉬운 사용 권한이 있어야 하며, 사용자의 포인터와 키보드를 쓰므로
-// 사용자가 승인한 실행에서만 pnpm -F @soksak/e2e verify:real 로 실행한다.
+// The input tool of the real-input-tier window checks. The host diagnostics put events directly into a view, so they do not pass through the window server, the NSApp event dispatch,
+// the key window, the first responder or the menu key equivalents. This module sends HID events with CGEventPost and so uses the same
+// path as the user. The terminal that runs the checks needs the Accessibility permission. The module uses the pointer and the keyboard of the user, so
+// run it only in a run that the user approved, with pnpm -F @soksak/e2e verify:real.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 
-// osascript 의 JavaScript 로 스크립트를 실행하고 JSON 결과를 돌려준다.
+// Runs a script as osascript JavaScript and returns the JSON result.
 function jxa(body) {
   const script = `ObjC.import("CoreGraphics"); ObjC.import("AppKit"); ObjC.import("ApplicationServices");
 function run(argv) { const input = JSON.parse(argv[0]); ${body} }`;
@@ -20,13 +20,13 @@ function run(argv) { const input = JSON.parse(argv[0]); ${body} }`;
 
 const trusted = jxa(`return JSON.stringify($.AXIsProcessTrusted());`);
 
-/** 검사를 실행하는 프로세스가 HID 이벤트를 보낼 수 있어야 한다. 없으면 이벤트가 조용히 버려진다. */
+/** The process that runs the checks must be able to send HID events. Otherwise the events are discarded silently. */
 export function requireTrusted() {
   assert.equal(trusted(), true, "the terminal that runs real-input checks has no Accessibility permission; " +
     "posted HID events would be dropped");
 }
 
-// 이벤트 종류와 마우스 버튼 값은 CGEventTypes.h 의 값이다.
+// The event types and the mouse button values are the values of CGEventTypes.h.
 const TYPES = { move: 5, down: 1, up: 2, drag: 6, rightDown: 3, rightUp: 4 };
 const FLAGS = { shift: 0x20000, control: 0x40000, option: 0x80000, command: 0x100000 };
 
@@ -83,25 +83,25 @@ for (const step of input.steps) {
 return JSON.stringify(input.sampleCursor ? cursors : times);`);
 
 /**
- * HID 이벤트를 차례로 보낸다. step 은 {type, x, y, modifiers, wait, clicks} 이다. clicks 는 누름 횟수다. type 은 move, down, up, drag,
- * rightDown, rightUp, wheel({lines, unit}), key({code, down}) 이다. 좌표는 화면 좌표(왼쪽 위 원점, 포인트)다.
- * 각 이벤트를 보낸 시각(ms, 녹화 프레임의 표시 시각과 같은 시계)의 배열을 돌려준다.
+ * Sends HID events in order. step is {type, x, y, modifiers, wait, clicks}. clicks is the number of presses. type is move, down, up, drag,
+ * rightDown, rightUp, wheel({lines, unit}) or key({code, down}). Coordinates are screen coordinates (origin at the top left, points).
+ * Returns an array of the times (ms, on the same clock as the display time of the recording frames) at which each event was sent.
  */
 export function post(steps) {
   return postSteps({ steps: steps.map((step) => ({ wait: 16, ...step })) });
 }
 
-/** HID 이동 사이에도 시스템 커서를 읽어 한 프레임만 나타나는 모양을 센다. */
+/** Reads the system cursor also between HID moves and counts the shapes that appear for only one frame. */
 export function postWithCursorSamples(steps) {
   return postSteps({ steps: steps.map((step) => ({ wait: 16, ...step })), sampleCursor: true });
 }
 
-/** 누르고 떼는 클릭이다. */
+/** A click that presses and releases. */
 export function click(x, y, modifiers = []) {
   post([{ type: "move", x, y, modifiers }, { type: "down", x, y, modifiers }, { type: "up", x, y, modifiers }]);
 }
 
-/** from 에서 눌러 steps 걸음으로 to 까지 끌고 뗀다. */
+/** Presses at from, drags to to in steps steps, and releases. */
 export function dragPath(from, to, steps = 20) {
   const events = [{ type: "move", ...from }, { type: "down", ...from }];
   for (let i = 1; i <= steps; i++) {
@@ -111,12 +111,12 @@ export function dragPath(from, to, steps = 20) {
   post(events);
 }
 
-/** 가상 키 코드 code 를 modifiers 와 함께 누르고 뗀다. */
+/** Presses and releases the virtual key code code with modifiers. */
 export function key(code, modifiers = []) {
   post([{ type: "key", code, down: true, modifiers }, { type: "key", code, down: false, modifiers }]);
 }
 
-/** 키 코드. Carbon Events.h 의 kVK 값이다. */
+/** Key codes. They are the kVK values of Carbon Events.h. */
 export const KEYS = { c: 8, v: 9, a: 0, escape: 53, return: 36 };
 
 const windowAt = jxa(`
@@ -130,9 +130,9 @@ for (const item of list) {
 }
 return JSON.stringify(null);`);
 
-// 알림 센터가 보이는 배너 가운데 본문이 input.body 인 것의 화면 사각형. 배너는 알림 센터의 화면 전체 창 안에
-// 그려지므로 창 목록이 아니라 손쉬운 사용 트리에서 찾는다. 배너는 다른 프로세스가 그리고, 검사하는
-// 애플리케이션은 배너가 나타날 때 사건을 받지 않으므로 input.within 밀리초 동안 다시 읽는다.
+// The screen rectangle of the visible banner of the notification center whose body is input.body. The banner is drawn
+// inside the full-screen window of the notification center, so the function finds it in the Accessibility tree and not in the window list. Another process draws the banner, and the application
+// under check receives no event when the banner appears, so the function reads again for input.within milliseconds.
 const bannerWith = jxa(`
 const center = Application("System Events").processes.whose({ bundleIdentifier: "com.apple.notificationcenterui" });
 const find = () => {
@@ -161,7 +161,7 @@ while (!banner && Date.now() < until) {
 }
 return JSON.stringify(banner);`);
 
-/** 본문이 body 인 알림 배너를 within 밀리초 안에 찾아 {x, y, width, height, texts}(화면 좌표) 로 돌려준다. 없으면 null. */
+/** Finds the notification banner whose body is body within within milliseconds and returns {x, y, width, height, texts} (screen coordinates). It returns null when there is none. */
 export function waitNotificationBanner(body, within) {
   return bannerWith({ body, within });
 }
@@ -212,40 +212,40 @@ const names = [];
 for (let i = 0; i < types.count; i++) names.push(types.objectAtIndex(i).js);
 return JSON.stringify({ changeCount: board.changeCount, types: names });`);
 
-/** 끌기 페이스트보드의 변경 횟수와 형식. 끌기 세션이 시작되면 바뀐다. */
+/** The change count and the formats of the drag pasteboard. They change when a drag session starts. */
 export function dragPasteboard() {
   return dragBoard();
 }
 
-/** directory 를 목록 보기의 Finder 창으로 bounds {x, y, width, height}(화면 좌표) 에 열고 창 번호를 돌려준다. */
+/** Opens directory in a Finder window in list view at bounds {x, y, width, height} (screen coordinates) and returns the window number. */
 export function openFinderWindow(directory, bounds) {
   return finderOpen({ directory, bounds });
 }
 
-/** openFinderWindow 가 연 창만 닫는다. */
+/** Closes only the window that openFinderWindow opened. */
 export function closeFinderWindow(id) {
   finderClose({ id });
 }
 
-/** 맨 앞 Finder 창에서 이름이 name 인 항목 이름의 화면 가운데. */
+/** The screen center of the item name whose name is name in the frontmost Finder window. */
 export function finderItemCenter(name) {
   const center = finderItem({ name });
   assert.ok(center, `the Finder window does not show ${name}`);
   return center;
 }
 
-/** 화면 점 (x, y) 에서 맨 앞에 있는 일반 창의 소유 프로세스. */
+/** The process that owns the frontmost ordinary window at the screen point (x, y). */
 export function frontWindowAt(x, y) {
   return windowAt({ x, y });
 }
 
 
-/** 설정 디렉터리의 endpoint.json 이 적은 애플리케이션 프로세스. */
+/** The application process that endpoint.json of the configuration directory names. */
 export function appPid(app) {
   return JSON.parse(readFileSync(join(app.configDir, "endpoint.json"), "utf8")).pid;
 }
 
-/** 창 안의 rect(s.rect 의 결과) 중심을 화면 좌표로 바꾼다. */
+/** Converts the center of a rect in the window (the result of s.rect) to screen coordinates. */
 export async function screenCenter(s, rect) {
   const { frame, content } = await s.get("host.window");
   return {
@@ -255,8 +255,8 @@ export async function screenCenter(s, rect) {
 }
 
 /**
- * 창을 활성화하고 rect 중심에서 맨 앞 창이 이 애플리케이션인지 확인한 뒤 그 화면 좌표를 돌려준다. 다른 창이
- * 앞에 있으면 보낸 이벤트는 그 창으로 가므로 검사는 실패한다.
+ * Activates the window, confirms that the frontmost window at the center of rect belongs to this application, and returns its screen coordinates. If another window is
+ * in front, the events that were sent go to that window, so the check fails.
  */
 export async function bringFront(s, app, rect) {
   await s.pointer(rect.document.x + rect.x + rect.width / 2, rect.document.y + rect.y + rect.height / 2,
@@ -270,7 +270,7 @@ export async function bringFront(s, app, rect) {
   return point;
 }
 
-// 시스템 커서를 AppKit 표준 커서와 그림으로 비교한다. 표준 커서는 NSApplication 이 있어야 만들어진다.
+// Compares the system cursor with the AppKit standard cursors by image. A standard cursor can be created only when an NSApplication exists.
 const readCursor = jxa(`
 $.NSApplication.sharedApplication;
 const current = $.NSCursor.currentSystemCursor;
@@ -285,15 +285,15 @@ for (const name of Object.keys(names)) {
 }
 return JSON.stringify("other");`);
 
-/** 지금 화면의 시스템 커서 이름: arrow, openHand, closedHand, pointingHand, iBeam, resizeLeftRight, resizeUpDown,
- * columnResize, rowResize, other, 또는 null. */
+/** The name of the system cursor on the screen now: arrow, openHand, closedHand, pointingHand, iBeam, resizeLeftRight, resizeUpDown,
+ * columnResize, rowResize, other, or null. */
 export function systemCursor() {
   return readCursor();
 }
 
 const activateFinderApp = jxa(`Application("Finder").activate(); return "";`);
 
-/** Finder 를 활성 애플리케이션으로 만든다. 다시 활성화될 때의 창 상태를 검사하려고 쓴다. */
+/** Makes Finder the active application. It is used to check the window state when the application is activated again. */
 export function activateFinder() {
   activateFinderApp();
 }

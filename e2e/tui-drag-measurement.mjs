@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-// 기록된 새 입력만 판정한다. 회복 시도의 성공은 앞선 실패의 증거를 바꾸지 않는다.
+// Judges only new recorded input. The success of a recovery attempt does not change the evidence of the earlier failure.
 export function assertTuiGesture({ expected, events, visual, capture, overflow, dom, pointerStart, pointerEnd, waitError,
   selectionByFrame, selectionWaitError, selectionWaitMs }) {
   assert.equal(overflow, false, "pointer trace overflow or missing trace status");
@@ -27,7 +27,7 @@ export function assertTuiGesture({ expected, events, visual, capture, overflow, 
     "input results are missing, stale, duplicated, or out of order");
   for (const event of events) {
     assert.ok(event.error == null, `input error: ${event.error}`);
-    // 같은 칸 안의 움직임은 VT 계약에 따라 보고하지 않지만 down/up은 반드시 보고한다.
+    // Motion within the same cell is not reported by the VT contract, but down/up must always be reported.
     if (event.phase !== "move" || event.reported) {
       assert.equal(event.reported, true, "drag was not reported");
       assert.equal(event.written, true, "drag was not written to PTY");
@@ -40,10 +40,10 @@ export function assertTuiGesture({ expected, events, visual, capture, overflow, 
   if (selectionWaitMs !== undefined) {
     assert.equal(selectionWaitError, undefined, `selection status did not arrive: ${selectionWaitError}`);
     assert.ok(selectionWaitMs <= 1050, `selection appeared after ${selectionWaitMs}ms`);
-    // 선택이 다음 제스처까지 남는 것은 올바른 동작이므로 사전 무결결 대신, 이 녹화 안에서 선택이
-    // 형성됐음을 요구한다. 드래그의 down 은 이전 선택을 무너뜨리고 새 선택을 만들므로 완전한 선택
-    // 프레임보다 앞에 덜 선택된 프레임이 반드시 잡힌다. 처음부터 끝까지 같은 선택만 보이는 녹화는
-    // 이 제스처의 결과가 아니다.
+    // A selection that stays until the next gesture is correct behavior, so instead of a precondition of integrity, requires that the selection was
+    // formed within this recording. The down of a drag breaks the earlier selection and makes a new one, so a less selected frame is always captured before the
+    // fully selected frame. A recording that shows the same selection from start to end
+    // is not a result of this gesture.
     const counts = (selectionByFrame ?? []).map((frame) => frame.selectedCells.length);
     const want = visual.expectedCells.length;
     assert.ok(counts.some((count, index) => count < want && counts.lastIndexOf(want) > index),
@@ -62,9 +62,9 @@ export function assertTuiCycle({ first, direct }) {
 }
 
 /**
- * 기록 항목 중 이 제스처의 DOM 포인터 사건. 검사는 앞 클릭을 보낸 직후 기록을 시작하므로, 그 클릭의 pointerup 이 기록
- * 앞부분에 들어올 수 있다. 제스처는 첫 pointerdown 에서 시작하므로 그 앞 사건은 앞 입력의 것이다. pointerdown 이 없으면
- * 모든 사건을 돌려주어 판정이 빠진 down 을 보고하게 한다.
+ * The DOM pointer events of this gesture among the recorded entries. The check starts recording right after it sends the preceding click, so the pointerup of that click may be at the start
+ * of the record. The gesture starts at the first pointerdown, so events before it belong to the preceding input. When there is no pointerdown,
+ * it returns all events so that the judgement reports the missing down.
  */
 export function gestureDom(entries) {
   const dom = entries.filter((entry) => entry.kind === "pointer-dom");

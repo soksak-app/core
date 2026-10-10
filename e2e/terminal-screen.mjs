@@ -1,4 +1,4 @@
-// 창 검사가 터미널 표면을 준비하고 화면 글자를 읽는 도우미.
+// Helper with which a window check prepares the terminal surface and reads the screen glyphs.
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 
@@ -13,7 +13,7 @@ export function textLines(screen) {
 }
 
 export async function readScreenUntil(session, surface, predicate, message) {
-  // 현재 화면을 한 번 읽고 이후 출력은 알림으로 기다린다. 리사이즈도 이 읽기에 반영된다.
+  // Reads the current screen once and waits for the later output by notification. A resize is also reflected in this read.
   await session.run("terminal.screen.read", {}, surface);
   const screen = await session.until("terminal.screen",
     (lines) => predicate(textLines({ lines })), message, { surface });
@@ -21,9 +21,9 @@ export async function readScreenUntil(session, surface, predicate, message) {
 }
 
 export async function ensureTerminals(session, count) {
-  // fixture의 터미널 카드는 첫 터미널 탭이 활성인 상태로 시작한다. 보이는 native terminal surface를 측정하기
-  // 전에 선언된 terminal을 선택한다. 비활성 탭을 기다리면 테스트 준비 실수가
-  // 거짓 런타임 실패로 바뀐다.
+  // The terminal card of the fixture starts with the first terminal tab active. Before measuring the visible native terminal surface,
+  // the declared terminal is selected. Waiting for an inactive tab would turn a mistake in test preparation
+  // into a false runtime failure.
   const initialGrid = await session.get("core.grid");
   const terminalTab = initialGrid.cards.flatMap((card) => card.tabs)
     .find((tab) => tab.plugin === "terminal");
@@ -37,8 +37,8 @@ export async function ensureTerminals(session, count) {
   );
   let terminals = (await session.surfaces("terminal")).length;
   while (terminals < count) {
-    // 가장 큰 터미널 카드를 긴 쪽으로 나눈다. 고정 사이드바와 카드 사이드바가 공간을 차지하므로 한 방향으로만 나누면
-    // 최소 크기 규칙에 걸린다.
+    // Splits the largest terminal card along its longer side. The fixed sidebar and the card sidebar take space, so splitting in only one direction
+    // would hit the minimum size rule.
     const grid = await session.get("core.grid");
     const [card] = grid.cards.filter((item) => item.active && item.tabs.some((tab) => tab.plugin === "terminal"))
       .sort((a, b) => b.w * b.h - a.w * a.h);
@@ -65,12 +65,12 @@ export async function ensureTerminals(session, count) {
 }
 
 /**
- * 픽셀 측정용 터미널 배경. 터미널은 카드 색(--card)으로 그리므로 배경만으로는 카드와 구별되지 않는다.
- * 검사는 프로그램이 쓰는 OSC 11 로 기본 배경을 이 색으로 바꾸어 네이티브 래스터가 칠한 자리만 이 색이 되게 한다.
+ * Terminal background for pixel measurement. The terminal draws with the card color (--card), so the background alone cannot be distinguished from the card.
+ * The check changes the default background to this color with OSC 11, which a program writes, so that only the places the native raster painted take this color.
  */
 export const MEASURED_BACKGROUND = [30, 30, 30];
 
-/** OSC 11 로 터미널의 기본 배경을 MEASURED_BACKGROUND 로 바꾸고 그 뒤의 출력이 화면에 나올 때까지 기다린다. */
+/** Changes the default background of the terminal to MEASURED_BACKGROUND with OSC 11 and waits until the later output appears on the screen. */
 export async function setMeasuredBackground(session, surface) {
   const hex = MEASURED_BACKGROUND.map((value) => value.toString(16).padStart(2, "0")).join("/");
   const marker = `BACKGROUND-${surface}`;
@@ -80,8 +80,8 @@ export async function setMeasuredBackground(session, surface) {
 }
 
 /**
- * 표시된 창 프레임에서 칸마다 배경 픽셀을 읽는다. 페이지의 화면 셀은 색을 싣지 않으므로 선택처럼 색으로만
- * 보이는 상태는 픽셀로 잰다. 칸의 왼쪽 위 모서리 가까이를 읽어 글자 획을 피한다. cells 는 {col, row} 목록이다.
+ * Reads the background pixel of every cell in the displayed window frame. A screen cell of the page carries no color, so a state that is visible only by color, such as a selection,
+ * is measured by pixels. It reads near the upper left corner of the cell to avoid the glyph strokes. cells is a list of {col, row}.
  */
 export async function cellBackgrounds(session, surface, cells) {
   await session.request("diagnostics.capture.start", {});
@@ -101,14 +101,14 @@ export async function cellBackgrounds(session, surface, cells) {
   }
 }
 
-/** 강조 색이 없을 때 선택한 칸의 배경. 현재 테마의 --rail 다(docs/spec/terminal-runtime.md). */
+/** Background of a selected cell when there is no highlight color. It is --rail of the current theme (docs/spec/terminal-runtime.md). */
 export async function selectionBackground(session) {
   const { values } = await session.get("core.settings");
   const THEMES = await session.get("core.themes");
   return THEMES.find((item) => item.name === values.theme)[values.mode].rail;
 }
 
-/** 픽셀이 #rrggbb 색과 채널마다 2 이내인지. */
+/** Whether the pixel is within 2 per channel of the #rrggbb color. */
 export function isColor(sample, hex) {
   return sample.every((value, index) => Math.abs(value - parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16)) <= 2);
 }

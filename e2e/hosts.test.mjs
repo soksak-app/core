@@ -1,4 +1,4 @@
-// 두 호스트의 최종 요청과 표시 좌표를 비교한다.
+// Compares the final requests and the display coordinates of the two hosts.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -12,7 +12,7 @@ const PLAN = { axis: "x", line: 2, dx: -120, dy: 0, ms: 48, times: 2 };
 
 const LINE = /^host (\w+) (\{.*\}|\[.*\]|null) -> (.*)$/;
 
-/** 전사 줄을 호출 이름별 요청과 응답 목록으로 정리한다. 창마다 다른 id 는 순서 이름으로 바꾼다. */
+/** Arranges the transcript lines into a list of requests and replies per call name. The id that differs per window is replaced by the order name. */
 function transcript(lines) {
   const names = new Map();
   const same = (text) =>
@@ -39,11 +39,11 @@ const atRest = (calls) => {
 
 const SIZE = { width: 1000, height: 620 };
 
-/** 전사에서 확정된 배치 요청마다 첫 표면의 x. */
+/** The x of the first surface for each layout request that the transcript settled. */
 const settledX = (lines) => (transcript(lines).get("syncSurfaces") ?? [])
   .filter((call) => /"settled":true/.test(call.request)).map((call) => JSON.parse(call.request).surfaces[0]?.x);
 
-/** 마지막 layout 요청에서 보이고 settled 상태인 모든 surface frame. */
+/** Every surface frame that is visible and settled in the last layout request. */
 const settledFrames = (lines) => {
   const call = [...(transcript(lines).get("syncSurfaces") ?? [])].reverse()
     .find((entry) => /"settled":true/.test(entry.request));
@@ -51,10 +51,10 @@ const settledFrames = (lines) => {
     .map(({ x, y, w, h }) => ({ x, y, width: w, height: h }));
 };
 
-/** 페이지가 확정된 배치를 표시했다는 줄. */
+/** The line that says the page displayed the settled layout. */
 const settled = (lines) => lines.some((line) => /^host presentSurfaces .*"settled":true.* ->/.test(line));
 
-/** 호스트 결과를 비교할 때 콘텐츠 크기와 레이아웃 입력을 기록한다. */
+/** Records the content size and the layout input when the host results are compared. */
 async function layoutState(s) {
   const [window, document, settings] = await Promise.all([
     s.get("host.window"), s.get("core.window.document"), s.get("core.settings"),
@@ -75,7 +75,7 @@ async function layoutState(s) {
   };
 }
 
-/** 두 앱에 모두 연결한다. 한쪽이 빌드되지 않았으면 null 이다. */
+/** Connects to both applications. It is null when one of them is not built. */
 async function both(t) {
   const sessions = {};
   for (const app of Object.values(APPS)) {
@@ -96,14 +96,14 @@ test("both hosts answer the same page the same way", async (t) => {
   for (const [name, s] of Object.entries(sessions)) {
     await fresh(s);
     states[name] = { fresh: await layoutState(s) };
-    // 끌기의 확정 배치는 설정 모달을 열기 전에 기록을 멈춰 얻는다. 모달은 창 전체의 오버레이로 다음 배치를
-    // 바꾸며, 그 배치가 기록에 들어오는 시점은 호스트마다 다르다.
+    // The settled layout of the drag is taken by stopping the recording before the settings modal opens. The modal is an overlay of the whole window and changes the next layout,
+    // and the moment at which that layout enters the recording differs per host.
     const start = (await s.get("host.window")).surfaces.find((item) => item.frame.width > 0)?.frame.x;
     const expectedFrames = states[name].fresh.window.surfaces.filter((item) => item.visible).map((item) => item.frame);
     const dragLog = await s.transcript();
     results[name] = await drag(t, s, PLAN);
-    // 끌기 도중 멈춘 순간에도 확정 배치가 생긴다. 끌기는 제자리로 돌아오므로, 마지막 확정 배치가 끌기 전
-    // 배치와 같아질 때까지 기다린다.
+    // A settled layout also occurs at a moment where the drag is stopped. The drag returns to its place, so the check waits until the last settled layout equals the layout
+    // before the drag.
     try {
       await dragLog.until((lines) => {
         const actualFrames = settledFrames(lines);
@@ -137,7 +137,7 @@ test("both hosts answer the same page the same way", async (t) => {
   const restedTauri = atRest(transcript(dragged.tauriv2));
   assert.ok(restedWails, `the Wails host recorded no settled commit:\n${dragged.wailsv3.join("\n")}`);
   assert.ok(restedTauri, `the Tauri host recorded no settled commit:\n${dragged.tauriv2.join("\n")}`);
-  // 실패하면 호스트마다 확정된 배치의 첫 표면 x 순서와 끌기 결과의 경계를 적는다.
+  // On failure, it writes the order of the x of the first surface of the settled layouts of each host and the boundary of the drag result.
   const boundary = (result) => result.boundary && [result.boundary[0], result.boundary.at(-1)];
   const dragState = Object.fromEntries(Object.entries(results).map(([name, result]) => [name, {
     from: result.from, steps: result.steps, took: result.took, asked: result.asked,
@@ -161,9 +161,9 @@ test("both hosts answer the same page the same way", async (t) => {
     if (name === "syncSurfaces" || name === "presentSurfaces") continue;
     const mine = wails.get(name).at(-1);
     const theirs = tauri.get(name).at(-1);
-    // 간헐적인 차이를 분류할 수 있도록 실패 메시지에 두 호스트의 요청과 응답을 모두 적는다.
+    // To classify an intermittent difference, the failure message holds all requests and replies of both hosts.
     const answers = `\nWails ${mine.request} -> ${mine.answer}\nTauri ${theirs.request} -> ${theirs.answer}`;
-    // 긴 요청은 메시지에서 잘리므로 처음 달라지는 자리를 먼저 밝힌다(F40).
+    // A long request is cut in the message, so the message first names the place where the requests first differ (F40).
     assert.equal(theirs.request, mine.request,
       `${name} was asked differently, Tauri ${textDifference(theirs.request, mine.request)} of Wails; ${stateReport}:${answers}`);
     assert.equal(theirs.answer, mine.answer,
@@ -194,22 +194,22 @@ test("both hosts lay out the same page the same way after a resize", async (t) =
     `the two hosts place the same surfaces differently at ${SIZE.width}x${SIZE.height}`);
 });
 
-/** 호스트 계약 명세의 메뉴 표. 선언이 곧 기준이므로 검사는 명세 파일에서 읽는다. */
+/** The menu table of the host contract specification. The declaration is the reference, so the check reads it from the specification file. */
 async function menuContract() {
   const { specMenuTables } = await import("../scripts/check-host-parity.mjs");
   return specMenuTables(readFileSync(new URL("../docs/spec/host-contract.md", import.meta.url), "utf8"));
 }
 
-/** 계약표의 보기 메뉴에서 빌더가 만드는(title) 항목 제목의 수. 시스템 행은 이보다 많은 항목을 기다린다. */
+/** The number of item titles that the builder creates (title) in the View menu of the contract table. The system row waits for more items than this. */
 function declaredViewTitles(contract) {
   return contract.items.filter(([menu, , source]) => menu === "view" && source === "title");
 }
 
-/** 관측된 메뉴에서 호스트마다 다른 값(앱 이름, 창 목록, 시스템이 더한 꼬리)을 정규화한다.
-    계약표의 행 수만큼만 비교한다. 그 뒤의 항목(자동 완성·받아쓰기·이모지 대체키 등)은 macOS 가
-    프레임워크 구성에 따라 제각각 더하므로 어느 호스트도 소유하지 않는다. */
+/** Normalizes the values of the observed menu that differ per host (the application name, the window list, the tail that the system adds).
+    It compares only as many rows as the contract table has. The items after them (automatic completion, dictation, emoji substitution key and others) are added by macOS
+    in different ways per framework configuration, so no host owns them. */
 function normalizeMenus(menus, names, windowTitles, declaredCounts) {
-  // 이름은 긴 것부터 바꾼다(짧은 이름이 긴 이름의 앞부분이기 때문이다).
+  // Names are replaced from the longest, because a shorter name is the beginning of a longer one.
   const neutralize = (text) => [...names].sort((a, b) => b.length - a.length)
     .reduce((value, name) => value.replaceAll(name, "APP"), text);
   return menus.map((menu, index) => ({
@@ -225,15 +225,15 @@ test("both hosts serve the declared application menu", async (t) => {
   const sessions = await both(t);
   if (!sessions) return t.skip("both hosts must be built");
   const contract = await menuContract();
-  // 호스트가 보고한 활성 언어가 기준이다. 제목에서 추측하지 않는다(docs/spec/host-contract.md).
-  // 보고된 언어는 표의 언어 열이어야 하고, 새 언어는 열을 추가해 선언된다.
+  // The active language that the host reports is the reference. The check does not guess it from the title (docs/spec/host-contract.md).
+  // The reported language must be a language column of the table, and a new language is declared by adding a column.
   const columns = contract.languages;
-  // 각 상위 메뉴에서 비교할 항목 수는 계약표의 행 수다(시스템 꼬리는 제외).
+  // The number of items to compare in each top-level menu is the number of rows of the contract table (the system tail is excluded).
   const declaredCounts = contract.menus.map(([id]) => contract.items.filter(([menu]) => menu === id).length);
   const observed = {};
   for (const [name, s] of Object.entries(sessions)) {
-    // 전체 화면 항목은 이제 호스트가 만든다(V5-112) — 시스템의 지연 삽입을 기다리던 메뉴
-    // 막대 자동화는 버리고, 선언된 자릿수가 채워지기를 구조로 기다린다.
+    // The host now creates the full screen item (V5-112), so the menu bar automation that waited for the delayed insertion by the system is dropped,
+    // and the check waits structurally until the declared number of items is filled.
     const settled = await s.until("host.menu", (value) => {
       const view = value?.menus?.find((menu) => menu.title === "보기" || menu.title === "View");
       return view && view.items.length >= declaredCounts[contract.menus.findIndex(([id]) => id === "view")]
@@ -242,8 +242,8 @@ test("both hosts serve the declared application menu", async (t) => {
     const report = settled;
     assert.ok(typeof report?.language === "string" && columns.includes(report.language),
       `host.menu must report a declared language: ${JSON.stringify(report).slice(0, 200)}`);
-    // 앱 이름은 메뉴 제목과 항목 제목에서 서로 다른 길이로 나타난다(예: soksak 과
-    // soksak-tauriv2). 둘 다 앱 이름이므로 함께 지운다.
+    // The application name appears with different lengths in a menu title and an item title (for example soksak and
+    // soksak-tauriv2). Both are application names, so both are removed.
     const names = [...new Set([report.menus[0].title, `soksak-${name}`])];
     const titles = (await s.get("host.windows")).map((entry) => entry.title);
     observed[name] = { language: report.language, menus: normalizeMenus(report.menus, names, titles, declaredCounts) };
@@ -252,7 +252,7 @@ test("both hosts serve the declared application menu", async (t) => {
   assert.equal(new Set(languages).size, 1, `both hosts must serve the same menu language: ${JSON.stringify(languages)}`);
   const column = columns.indexOf(languages[0]) + 1;
 
-  // 관측된 메뉴는 선언된 상위 메뉴 순서와 제목을 따른다. app 메뉴 제목은 정규화된 앱 이름이다.
+  // The observed menus follow the order and the titles of the declared top-level menus. The title of the app menu is the normalized application name.
   const [first, ...rest] = Object.values(observed).map((value) => value.menus);
   for (const menus of [first, ...rest]) {
     assert.equal(menus.length, contract.menus.length, `menu count differs: ${JSON.stringify(menus.map((m) => m.title))}`);
@@ -263,12 +263,12 @@ test("both hosts serve the declared application menu", async (t) => {
     });
   }
 
-  // 각 메뉴의 처음 항목들은 선언된 표와 같다. title 항목은 제목과 키까지 같아야 하고 system 항목은
-  // 자리와 존재만 같으면 된다(제목은 프레임워크가 언어에 따라 정한다). 표 뒤의 항목들은 시스템이
-  // 더한 것이므로 호스트 사이 같음만 확인한다.
+  // The first items of each menu equal the declared table. A title item must equal the title and the key, and a system item
+  // needs to equal only the position and the existence (the framework sets the title by language). The items after the table are
+  // added by the system, so the check confirms only equality between the hosts.
   const declared = Object.fromEntries(contract.menus.map(([id]) => [id, []]));
-  // app 메뉴의 about·hide·quit 제목은 앱 이름을 앞에 단다(관측 정규화가 앱 이름을 APP 로
-  // 바꾸므로 기대값도 같은 꼴로 맞춘다).
+  // The about, hide and quit titles of the app menu start with the application name (the observation normalization replaces the application name with APP,
+  // so the expectation takes the same form).
   const appPrefixed = new Set(["about", "hide", "quit"]);
   for (const row of contract.items) {
     declared[row[0]].push({
@@ -290,8 +290,8 @@ test("both hosts serve the declared application menu", async (t) => {
       });
     });
   }
-  // system 항목의 제목과 단축키는 프레임워크가 정하므로 호스트 간 비교에서는 자리 표시로
-  // 바꾼다(위의 표 대조가 이미 자리와 존재를 검사한다).
+  // The title and the shortcut of a system item are set by the framework, so the comparison between hosts
+  // replaces them with a placeholder (the table comparison above already checks position and existence).
   const markSystemItems = (menus) => menus.map((menu, index) => {
     const rows = contract.items.filter(([rowMenu]) => rowMenu === contract.menus[index][0]);
     return {
@@ -302,7 +302,7 @@ test("both hosts serve the declared application menu", async (t) => {
   assert.deepEqual(markSystemItems(first), markSystemItems(rest[0]),
     "the two hosts must serve the same application menu");
 
-  // 배치와 네이티브 표면은 웹뷰 확대를 따르지 않고, 다시 읽기는 메인 페이지 상태를 바꾼다.
+  // The layout and the native surfaces do not follow the web view zoom, and a reload changes the state of the main page.
   const forbidden = Object.values(observed).flatMap(({ menus }) => menus.flatMap((menu) => menu.items))
     .filter((item) => /zoom in|zoom out|actual size|reload/i.test(item.title));
   assert.deepEqual(forbidden, [], "no menu item zooms or reloads the whole webview");

@@ -1,4 +1,4 @@
-// 카드 사방 지정 검사: 저장 세트와 공간에 따른 표시를 구분하고 탭 전환 뒤에도 유지한다.
+// Card four-side assignment check: distinguishes the display by the saved set and the space, and keeps it after a tab switch.
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import { dirname } from "node:path";
@@ -26,7 +26,7 @@ for (const app of Object.values(APPS)) {
     const measuredCard = grid.cards.find((item) => item.id === card.id);
     const surface = (await s.surfaces()).find((item) => item.surface === measuredCard.active);
     assert.ok(surface?.applied, `no applied native surface for ${JSON.stringify(measuredCard)}`);
-    // 카드 보더 1포인트씩을 제외하고 좌우 190포인트만 한 번씩 차지해야 한다.
+    // Excluding 1 point of card border on each side, the left and right panels must occupy only 190 points each, once.
     const drawn = await s.get("core.sidebars");
     for (const side of ["left", "right"]) {
       assert.equal(drawn.filter((item) => item.sidebar === `${card.id}:${side}`).length, 1,
@@ -52,26 +52,26 @@ for (const app of Object.values(APPS)) {
     const foldedSurface = (await s.surfaces()).find((item) => item.surface === measuredCard.active);
     assert.ok(Math.abs(foldedSurface.applied.w - (measuredCard.w - 12 - 2)) <= 1,
       `folded sidebars must reserve only two 6-point dividers: ${JSON.stringify(foldedSurface)}`);
-    // 접힌 면은 카드 사이 divider 와 같은 길이(라이브러리 grip 길이 24 CSS 픽셀)의 짧은 grip 만 그린다. 카드 폭이나
-    // 높이 전체의 선은 경계선이 하나 더 있는 것처럼 보인다.
+    // A collapsed face draws only a short grip of the same length as the divider between cards (library grip length 24 CSS pixels). A line across the whole card width or
+    // height looks like one more boundary line.
     const still = (await s.request("diagnostics.capture.still", {})).path;
     const image = readPng(still);
     rmSync(dirname(still), { recursive: true, force: true });
     const ratio = image.width / (await s.get("host.window")).content.width;
     for (let index = 0; index < 4; index++) {
       const grip = await s.rect("core.card.sidebar.grip", index);
-      // 세로 띠는 카드 아래 끝까지 이어진다. 맨 아래의 발 높이 구간은 접혀서 빈 상태 줄 자리이며 카드의 둥근 모서리
-      // 테두리가 지나가므로, 두 번째 선을 찾는 측정에서 뺀다.
+      // The vertical band continues to the bottom end of the card. The foot-height section at the very bottom is collapsed and is the place of the empty-state row, and the border of the rounded corner of the card
+      // passes through it, so it is excluded from the measurement that looks for the second line.
       const vertical = grip.height > grip.width;
       const ink = gripInk(image, vertical ? { ...grip, height: grip.height - 22 } : grip, ratio);
-      // 접힌 사이드바의 손잡이는 카드 divider 의 막대와 구별되는 점 세 개다(docs/spec/example-model.md).
+      // The handle of a collapsed sidebar is three dots, which are distinct from the bar of the card divider (docs/spec/example-model.md).
       assert.ok(ink.runs === 3 && ink.span > 0 && ink.span <= 24 * ratio + 2,
         `folded divider ${index} must show three dots within 24 points: ${JSON.stringify({ grip, ink })}`);
     }
   });
 
-  // 사용자 release 에서 셸 카드에 left/right/top 을 190 포인트씩 지정했는데 native 표면이 카드 폭과 거의 같았다
-  // (V5-116-4-11-2). 같은 지정에서 native 사각형, grip 등록, DOM 과 native 의 일치를 함께 잰다.
+  // In a user release, left/right/top were assigned 190 points each on the shell card, but the native surface was almost as wide as the card
+  // (V5-116-4-11-2). The check measures together, for the same assignment, the native rectangle, the grip registration, and the agreement of DOM and native.
   test(`${app.name}: left, right and top panels on the terminal card reserve their space in the native surface`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
@@ -101,7 +101,7 @@ for (const app of Object.values(APPS)) {
     const drawn = (await s.get("core.sidebars")).filter((item) => item.sidebar.startsWith(`${card.id}:`));
     assert.deepEqual(drawn.map((item) => item.sidebar).sort(), ["terminal:left", "terminal:right", "terminal:top"],
       "the terminal card does not draw exactly its three assigned panels");
-    // 카드 패널마다 grip 하나가 입력 영역을 가진다.
+    // Each card panel has one grip with an input region.
     const panels = (await s.get("core.sidebars")).filter((item) => /:(left|right|top|bottom)$/.test(item.sidebar));
     for (let index = 0; index < panels.length; index++) {
       const grip = await s.rect("core.card.sidebar.grip", index);
@@ -112,8 +112,8 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`terminal panels ${JSON.stringify({ expected, applied: surface.applied })}`);
   });
 
-  // 끌기는 소수 크기를 넘긴다. 카드 테두리, divider, 준비한 표면 사각형은 장치 pixel 격자를 쓴다
-  // (docs/spec/native-surfaces.md). 격자 밖의 크기도 표시는 격자 위에 있고, 선언과 적용이 같아야 한다(V5-115-1-3).
+  // A drag passes fractional sizes. The card border, the divider, and the prepared surface rectangle use the device pixel grid
+  // (docs/spec/native-surfaces.md). Even for a size off the grid, the display is on the grid, and the declaration and the application must be equal (V5-115-1-3).
   test(`${app.name}: fractional panel sizes place the native surface on the device-pixel grid`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
@@ -142,8 +142,8 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`fractional panels at ${scale}x ${JSON.stringify({ declared: surface.declared, applied: surface.applied })}`);
   });
 
-  // 보고된 상태: 높이 342pt 카드의 위·아래 패널. 공간 부족으로 접힌 면은 클릭으로 열리고, 접힌 면을 끌면 포인터가
-  // 최소 크기에 닿을 때 그 자리에서 열린다(docs/spec/example-model.md).
+  // Reported state: top and bottom panels of a card of height 342pt. A face collapsed for lack of space opens by click, and when a collapsed face is dragged, it opens at the place where the pointer
+  // reaches the minimum size (docs/spec/example-model.md).
   test(`${app.name}: a click opens a side folded for lack of space and a drag opens a folded side under the pointer`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
@@ -160,7 +160,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(room < 380 && room - 6 >= 120, `the fixture card must fit one 190-point side but not two: room ${room}`);
     assert.equal(panelsOf(grid).top.collapsed, false, "the top panel must open while the bottom folds");
     await s.presented();
-    // core.card.sidebar.grip 은 그린 순서(위, 아래)의 손잡이다.
+    // core.card.sidebar.grip is the handle in the drawn order (top, bottom).
     const gripOf = async (side) => {
       const grips = [];
       for (let index = 0; index < 2; index++) grips.push(await s.rect("core.card.sidebar.grip", index));
@@ -176,7 +176,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(opened.top.autoCollapsed, true, "the top panel must fold when the clicked bottom panel opens");
     assert.equal(opened.top.size, 190, "the stored size changed");
     await s.presented();
-    // 접힌 위를 30pt 끌면 최소 크기에 닿지 않으므로 접힌 채 있고, 150pt 끌면 6 + 150 = 156pt 로 열린다.
+    // Dragging the collapsed top by 30pt does not reach the minimum size, so it stays collapsed; dragging it by 150pt opens it at 6 + 150 = 156pt.
     const top = await gripOf("top");
     const x = top.x + top.width / 2, y = top.y + top.height / 2;
     await s.pointer(x, y, "down");
@@ -185,7 +185,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(panelsOf(await s.get("core.grid")).top.collapsed, true, "a drag shorter than the minimum opened the top panel");
     for (const dy of [60, 90, 120, 150]) await s.pointer(x, y + dy, "drag");
     await s.pointer(x, y + 150, "up");
-    // 끌기는 여러 크기 명령을 차례로 보내므로 마지막 포인터 위치의 크기까지 기다린다.
+    // A drag sends several size commands in sequence, so the check waits until the size at the last pointer position.
     grid = await s.until("core.grid", (value) => panelsOf(value).top.collapsed === false && Math.abs(panelsOf(value).top.size - 156) <= 1,
       "a drag past the minimum did not open the top panel at the pointer");
     const dragged = panelsOf(grid);
@@ -206,8 +206,8 @@ for (const app of Object.values(APPS)) {
     const grid0 = await s.get("core.grid");
     let card0 = grid0.cards.find((item) => item.tabs.length);
     assert.ok(card0, "no content card to hold panels");
-    // 탭 전환 검사는 항상 다른 플러그인의 탭으로 한다. 카드에 없으면 다른 카드의 탭을 옮기지 않고 브라우저 탭을
-    // 더한다. 옮기면 그 카드가 비어 사라지고 배치가 바뀐다.
+    // The tab switch check always uses a tab of another plugin. If the card has none, it adds a browser tab instead of moving a tab of another card.
+    // Moving it would leave that card empty, remove it, and change the layout.
     if (!card0.tabs.some((tab) => tab.plugin !== card0.tabs.find((item) => item.id === card0.active).plugin)) {
       const { tab } = await s.run("core.card.add-tab", { card: card0.id, plugin: "browser" });
       s.cleanup(() => s.run("core.tab.close", { tab }));
@@ -216,7 +216,7 @@ for (const app of Object.values(APPS)) {
     card0 = (await s.get("core.grid")).cards.find((item) => item.id === card0.id);
     const { original, other } = tabSwitchPair(card0, [card0]);
 
-    // 사방 지정 — 카드 데이터이므로 어떤 카드든 받는다.
+    // Four-side assignment: it is card data, so any card accepts it.
     for (const side of ["top", "bottom", "left", "right"]) {
       await s.run("core.card.sidebar.set", { card: card0.id, side, set: set.id });
     }
@@ -229,13 +229,13 @@ for (const app of Object.values(APPS)) {
     assert.ok(assigned.h-56-380<96,'the normal fixture must have insufficient height for two 190-point sides');
     assert.ok(assigned.w-2-380>=96,'the normal fixture must retain sufficient width for two 190-point sides');
     const saved=(await s.get('core.layout')).state.cards.find(item=>item.id===card0.id).data.sidebars;
-    // 높이에는 190 두 개가 최소 크기로도 들어가지 않으므로, 조작 전 우선인 위가 들어가는 크기로 열리고 아래만 접힌다
-    // (docs/spec/example-model.md). 높이 공간은 카드 높이에서 테두리 2, 머리와 발 54, 내용 최소 96 을 뺀 값이다.
+    // In this height two 190 panels do not fit even at the minimum size, so the top, which has priority before any manual operation, opens at the size that fits and only the bottom collapses
+    // (docs/spec/example-model.md). The height space is the card height minus 2 for the border, 54 for the head and foot, and 96 for the minimum content.
     const room=assigned.h-2-54-96;
     for (const side of ["top", "bottom", "left", "right"]) {
       const autoCollapsed=side==='bottom';
       const shownSize=side==='top'?Math.min(190,room-6):side==='bottom'?null:190;
-      // 그린 카드 높이는 장치 픽셀 격자에 놓이므로 보이는 크기는 1pt 안에서 비교한다.
+      // The drawn card height lies on the device pixel grid, so the visible size is compared within 1pt.
       const { shownSize: shown, ...panel } = panels[side];
       assert.deepEqual(panel, { set: set.id, size: 190, collapsed: autoCollapsed,
         requestedCollapsed:false,autoCollapsed,collapseReason:autoCollapsed?'insufficient-height':null },
@@ -245,7 +245,7 @@ for (const app of Object.values(APPS)) {
       assert.equal(Object.hasOwn(saved[side],'autoCollapsed'),false,'automatic presentation was saved');
     }
 
-    // 연동 차단: 활성 탭을 다른 플러그인으로 바꿔도 지정 세트는 그대로다.
+    // Link blocking: even when the active tab is changed to another plugin, the assigned set stays the same.
     await s.run("core.tab.select", { tab: other.id });
     await s.until("core.grid", (value) => value.cards.find((item) => item.id === card0.id)?.active === other.id,
       "the tab did not switch");
@@ -253,19 +253,19 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(geometry(afterGrid),geometry(grid),'tab selection changed internal or external card geometry');
     assert.deepEqual(afterGrid.cards.find(item=>item.id===card0.id).sidebars,panels,'tab selection changed assigned sets or presentation');
     assert.deepEqual((await s.get('core.layout')).state.cards.find(item=>item.id===card0.id).data.sidebars,saved,'tab selection changed saved assignments');
-    // 전환한 탭의 native 표면도 같은 자리에 앉는다(V7a/V7b/V7c).
+    // The native surface of the switched tab sits at the same place too (V7a/V7b/V7c).
     await s.presented();
     assert.deepEqual((await s.get("core.verify")).rows.filter((row) => !row.ok), [], "tab selection left DOM and native geometry apart");
     t.diagnostic(`normal card ${assigned.w}x${assigned.h}; top opens at the room, bottom auto-folds, left/right open; different-plugin tabs ${original.plugin}/${other.plugin} preserve all geometry`);
 
-    // 패널은 core.sidebars 에 카드:변 아이디로 보고된다(스펙: 사이드바 식별).
+    // A panel is reported in core.sidebars with the card:side id (specification: sidebar identification).
     const drawn = await s.until("core.sidebars",
       (value) => ["top", "bottom", "left", "right"].every((side) =>
         value.some((item) => item.sidebar === `${card0.id}:${side}` && item.set === set.id)),
       "the drawn panels did not appear in core.sidebars");
     assert.ok(drawn.length >= 4, "core.sidebars reports the four panels");
 
-    // 열려 보이는 위를 누르면 접힘을 저장한다.
+    // Pressing the top that appears open saves the collapse.
     const beforeLayout = (await s.get("core.grid")).cards.find((item) => item.id === card0.id);
     await s.run("core.card.sidebar.toggle", { card: card0.id, side: "top" });
     const folded = await s.until("core.grid",
@@ -286,7 +286,7 @@ for (const app of Object.values(APPS)) {
     await assert.rejects(s.run("core.card.sidebar.size", { card: card0.id, side: "right", size: 60 }), /120 to 480/);
     await assert.rejects(s.run("core.card.sidebar.set", { card: card0.id, side: "middle", set: set.id }), /invalid params/);
 
-    // 해지: 그 변만 사라진다.
+    // Release: only that side disappears.
     await s.run("core.card.sidebar.set", { card: card0.id, side: "top", set: "off" });
     const cleared = await s.until("core.grid",
       (value) => value.cards.find((item) => item.id === card0.id)?.sidebars
@@ -294,11 +294,11 @@ for (const app of Object.values(APPS)) {
       "the turned-off panel did not disappear");
     assert.ok("right" in cleared.cards.find((item) => item.id === card0.id).sidebars,
       "turning off one side removed another");
-    // off는 기본 세트를 따르지 않고 해당 변을 명시적으로 끈다.
+    // off does not follow the default set and turns the given side off explicitly.
     for (const side of ["bottom", "left", "right"]) {
       await s.run("core.card.sidebar.set", { card: card0.id, side, set: "off" });
     }
-    // 카드가 남아 있고 패널이 하나도 없어야 한다. 카드가 사라진 것은 정리가 아니다.
+    // The card must remain and have no panel. A card that disappeared is not a cleanup.
     const clearedAll = await s.until("core.grid", (value) => {
       const item = value.cards.find((candidate) => candidate.id === card0.id);
       return Boolean(item) && Object.keys(item.sidebars).length === 0;
@@ -307,7 +307,7 @@ for (const app of Object.values(APPS)) {
   });
 }
 
-// 새 카드 위치는 공개된 연결 명령의 입력 계약에서도 허용되어야 한다(V5-116-4).
+// A new card position must also be accepted by the input contract of the public link command (V5-116-4).
 for (const app of Object.values(APPS)) {
   test(`${app.name}: sidebar link commands accept all four card places`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
@@ -340,7 +340,7 @@ for (const app of Object.values(APPS)) {
   });
 }
 
-// 연결 기본 패널도 같은 접기·크기 명령을 받는다(V5-116-4).
+// A linked default panel receives the same collapse and size commands (V5-116-4).
 for (const app of Object.values(APPS)) {
   test(`${app.name}: linked card panels accept fold and size without an explicit assignment`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
@@ -353,7 +353,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  // 카드 사이드바는 자기 하단 줄로 끝나고, 카드의 내용 하단 줄은 카드 아래 끝에서 내용 열만 차지한다
+  // The card sidebar ends at its own bottom row, and the content bottom row of the card occupies only the content column at the bottom end of the card
   // (docs/spec/example-model.md).
   test(`${app.name}: a card sidebar ends in its own status line and the content footer spans only the content`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
@@ -386,7 +386,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  // 카드 머리는 카드가 보이는 면마다 접기·펼치기 단추를 둔다. 접힌 면도 머리의 단추로 다시 연다(docs/spec/example-model.md).
+  // The card head has a collapse/expand button for each face that the card shows. A collapsed face is opened again with the button of the head (docs/spec/example-model.md).
   test(`${app.name}: the card header has a fold control for each sidebar the card shows`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
@@ -400,7 +400,7 @@ for (const app of Object.values(APPS)) {
     const card = grid.cards.find((item) => item.id === "terminal");
     const header = { x: grid.plane.x + card.x, y: grid.plane.y + card.y, w: card.w, h: 32 };
     const controls = [];
-    // 머리의 단추 수는 모든 카드가 보이는 면의 수다.
+    // The number of buttons in the head is the number of faces that all cards show.
     const shown = grid.cards.reduce((sum, item) => sum + Object.keys(item.sidebars).length, 0);
     for (let index = 0; index < shown; index++) {
       const rect = await s.rect("core.card.sidebar.fold", index);
@@ -418,13 +418,13 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  // 접힌 사이드바 띠와 카드 divider 가 붙어 있을 때, 간격은 divider 가, 카드 안의 띠는 사이드바가 받는다
+  // When a collapsed sidebar band and the card divider touch, the divider receives the gap and the sidebar receives the band inside the card
   // (docs/spec/example-model.md).
   test(`${app.name}: a folded sidebar strip next to a card divider keeps each input to its own control`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    // 터미널 카드를 오른쪽으로 쪼개 두 일반 카드가 세로 경계를 나누게 하고, 왼쪽 카드의 오른쪽 사이드바를 접는다.
+    // Splits the terminal card to the right so that two ordinary cards share a vertical boundary, and collapses the right sidebar of the left card.
     await s.run("core.card.split", { card: "terminal", side: "right", plugin: "terminal" });
     const set = (await s.get("core.settings")).values.sets[0];
     await s.run("core.card.sidebar.set", { card: "terminal", side: "right", set: set.id });
@@ -439,7 +439,7 @@ for (const app of Object.values(APPS)) {
     const card = grid.cards.find((item) => item.id === "terminal");
     const edge = grid.plane.x + card.x + card.w;
     const y = grid.plane.y + card.y + card.h / 2;
-    // 카드 바깥 테두리까지(간격)는 divider 가, 그 안의 접힌 띠는 사이드바 손잡이가 받는다. 띠를 누르면 사이드바가 펼쳐진다.
+    // The divider receives the area up to the outer border of the card (the gap), and the sidebar handle receives the collapsed band inside it. Pressing the band expands the sidebar.
     const press = async (x) => {
       const before = (await s.get("core.pointer")).sequence;
       await s.click(x, y);

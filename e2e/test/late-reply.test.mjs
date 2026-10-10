@@ -1,4 +1,4 @@
-// 늦은 표면 답 검사가 애플리케이션 로그의 줄을 판정하는 방법을 검사한다(docs/spec/exposure.md#relay).
+// Checks how the late surface reply check judges lines of the application log (docs/spec/exposure.md#relay).
 import assert from "node:assert/strict";
 import test from "node:test";
 

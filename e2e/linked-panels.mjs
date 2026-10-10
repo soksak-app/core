@@ -1,8 +1,8 @@
-// 연결로만 만든 카드 사이드바가 명시 지정 없이 접기와 크기 명령을 받는지 검사한다. 창 검사와 그 검사기의
-// 단위 검사가 이 함수를 같이 쓴다.
+// Checks that a card sidebar made only by a link receives the collapse and size commands without an explicit specification. A window check and the unit check of that checker
+// share this function.
 import assert from "node:assert/strict";
 
-/** 세션 s 의 첫 활성 플러그인 카드에서 네 변의 연결 사이드바를 검사한다. name 은 진단에 쓰는 앱 이름이다. */
+/** Checks the linked sidebars of the four sides on the first active plugin card of session s. name is the application name used in diagnostics. */
 export async function checkLinkedPanels(s, t, name) {
   const settings = await s.get("core.settings");
   const set = settings.values.sets[0];
@@ -14,7 +14,7 @@ export async function checkLinkedPanels(s, t, name) {
   const failures = [];
   for (const side of ["top", "bottom", "left", "right"]) {
     await s.run("core.card.sidebar.set", { card: card.id, side, set: "inherit" });
-    // 전체 설정 쓰기는 파일에 저장한 연결과 같은 독립된 공개 입력 경로다.
+    // Writing the whole settings is an independent public input path equal to the link stored in the file.
     const links = (await s.get("core.settings")).values.links.filter((link) =>
       !(link.place === `card-${side}` && link.plugin === plugin));
     links.push({ place: `card-${side}`, plugin, set: set.id });
@@ -22,8 +22,8 @@ export async function checkLinkedPanels(s, t, name) {
     await s.until("core.grid", (value) =>
       value.cards.find((item) => item.id === card.id)?.sidebars?.[side]?.set === set.id,
     `linked ${side} panel did not appear`);
-    // 한 명령의 실패로 다른 명령의 관측을 생략하지 않는다. 오류는 모두 보고하고 끝에서 실패한다.
-    // 클릭(toggle)은 보이는 상태를 뒤집어 저장하고, 끌기(size)는 크기와 펼침을 저장한다(docs/spec/example-model.md).
+    // The failure of one command does not skip the observation of the other commands. The check reports all errors and fails at the end.
+    // A click (toggle) inverts the visible state and stores it, and a drag (size) stores the size and the expansion (docs/spec/example-model.md).
     const shownCollapsed = async () => (await s.get("core.grid")).cards.find((item) => item.id === card.id).sidebars[side].collapsed;
     for (const [command, extra] of [["core.card.sidebar.toggle", {}], ["core.card.sidebar.size", { size: 260 }]]) {
       const start = performance.now();

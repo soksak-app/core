@@ -1,4 +1,4 @@
-// 카드 전체 화면의 표시 기하와 원래 배치 복원을 공개 계약으로 검사한다.
+// Checks the display geometry of card full screen and the restoration of the original layout through the public contract.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
@@ -80,7 +80,7 @@ for (const app of Object.values(APPS)) {
     const icon = await s.rect("core.card.fullscreen", shown.pane);
     const close = await s.rect("core.card.close", shown.pane);
     assert.ok(icon.x + icon.width <= close.x && icon.y === close.y, "fullscreen icon does not precede close X");
-    // 눌린 토글은 창 머리의 토글처럼 초점 색(--focus)으로 그린다. 옆의 닫기 아이콘은 그 색이 아니다.
+    // A pressed toggle is drawn with the focus color (--focus), like the toggle in the window head. The close icon beside it does not have that color.
     const still = (await s.request("diagnostics.capture.still", {})).path;
     const image = readPng(still);
     rmSync(dirname(still), { recursive: true, force: true });
@@ -207,7 +207,7 @@ for (const app of Object.values(APPS)) {
     await s.click((rect.document?.x ?? 0) + rect.x + rect.width / 2, (rect.document?.y ?? 0) + rect.y + rect.height / 2);
     await s.until("core.grid", grid => grid.cards.find(item => item.id === "terminal").active === other.id,
       "the click did not switch the tab");
-    // 누름과 뗌이 만든 그리기가 모두 표시된 뒤의 상태를 읽는다.
+    // Reads the state after all drawing that the press and the release caused is displayed.
     await s.presented();
     const after = await s.get("core.grid");
     assert.equal(after.fullscreen, "terminal", `the tab click left fullscreen: ${JSON.stringify(after.cards.map(c => ({ id: c.id, w: c.w, fullscreen: c.fullscreen })))}`);

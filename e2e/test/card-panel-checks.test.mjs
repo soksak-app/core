@@ -12,21 +12,21 @@ test("a pose without a recorded frame within two display frames is missing", () 
 
 test("a pose displayed before the recording started counts from the first recorded frame", () => {
   const frames = [{ time: 200, edges: [10] }, { time: 216, edges: [20] }];
-  // 녹화는 200 에 시작했고 첫 상태는 그 전에 표시되었다. 첫 프레임이 그 상태를 담으면 녹화된 것이다.
+  // The recording started at 200 and the first state was displayed before that. If the first frame holds that state, it was recorded.
   assert.deepEqual(missingPoses(frames, [{ displayed: 100, at: 10 }, { displayed: 210, at: 20 }], 60), []);
-  // 녹화 시작 전에 다음 상태로 바뀐 상태는 녹화될 수 없으므로 첫 프레임으로 셀 수 없다.
+  // A state that changed to the next state before the recording started cannot be recorded, so it cannot be counted as the first frame.
   assert.deepEqual(missingPoses(frames, [{ displayed: 100, at: 30 }, { displayed: 150, at: 10 }], 60), [{ displayed: 100, at: 30 }]);
 });
 
 test("a pose shown before its reported display time and after the previous pose counts as recorded", () => {
-  // 측정 예: 상태는 보고된 표시 시각보다 45, 29, 12ms 앞선 프레임에 있고, 21ms 뒤에는 다음 상태다.
+  // Measured example: the state is in frames 45, 29, and 12ms before the reported display time, and 21ms after it is the next state.
   const frames = [
     { time: -62, edges: [235] }, { time: -45, edges: [245] }, { time: -29, edges: [245] },
     { time: -12, edges: [245] }, { time: 21, edges: [255] },
   ];
   const poses = [{ displayed: -100, at: 235 }, { displayed: 0, at: 245 }, { displayed: 60, at: 255 }];
   assert.deepEqual(missingPoses(frames, poses, 60), []);
-  // 이전 상태가 표시되기 전의 프레임은 이 상태의 기록이 아니다.
+  // A frame before the earlier state was displayed is not a record of this state.
   const stale = [{ time: -150, edges: [245] }, { time: -95, edges: [235] }, { time: 21, edges: [255] }];
   assert.deepEqual(missingPoses(stale, poses, 60), [{ displayed: 0, at: 245 }]);
 });
@@ -52,16 +52,16 @@ test("a top or bottom panel must span the card's content column", () => {
 });
 
 test("grip ink measures the run that differs from the strip background along the middle line", () => {
-  // 세로 grip 6x100(CSS), 배율 2. 가운데 열(x=6)의 y 80..127 만 밝다.
+  // A vertical grip of 6x100 (CSS) at scale 2. Only y 80..127 of the middle column (x=6) is bright.
   const image = { pixel: (x, y) => (x === 6 && y >= 80 && y < 128 ? [150, 150, 150] : [30, 30, 30]) };
   assert.deepEqual(gripInk(image, { x: 0, y: 0, width: 6, height: 100 }, 2), { longest: 48, total: 48, runs: 1, span: 48, length: 200 });
-  // 가로 grip 의 전체 길이 선은 길이 전체가 잉크다.
+  // The full-length line of a horizontal grip is ink over its whole length.
   const line = { pixel: (x, y) => (y === 3 ? [150, 150, 150] : [30, 30, 30]) };
   assert.deepEqual(gripInk(line, { x: 10, y: 0, width: 50, height: 6 }, 1), { longest: 50, total: 50, runs: 1, span: 50, length: 50 });
-  // 띠 바깥 끝의 카드 테두리는 배경이 아니다. 짧은 grip 만 잉크로 센다.
+  // The card border at the outer end of the band is not background. Only the short grip counts as ink.
   const bordered = { pixel: (x, y) => (x === 0 ? [60, 60, 60] : x === 3 && y >= 40 && y < 64 ? [150, 150, 150] : [30, 30, 30]) };
   assert.deepEqual(gripInk(bordered, { x: 0, y: 0, width: 6, height: 100 }, 1), { longest: 24, total: 24, runs: 1, span: 24, length: 100 });
-  // 점 세 개는 구간 세 개이며, 첫 점에서 마지막 점까지의 길이가 span 이다.
+  // Three points are three intervals, and the length from the first point to the last point is the span.
   const dots = { pixel: (x, y) => (x === 3 && [40, 41, 46, 47, 52, 53].includes(y) ? [150, 150, 150] : [30, 30, 30]) };
   assert.deepEqual(gripInk(dots, { x: 0, y: 0, width: 6, height: 100 }, 1), { longest: 2, total: 6, runs: 3, span: 14, length: 100 });
 });

@@ -1,4 +1,4 @@
-// 다시 읽기 전에 바꾼 배치가 다시 읽은 페이지에 남는지 검사한다(docs/spec/projects.md#persistence).
+// Checks that a layout changed before a reload remains in the reloaded page (docs/spec/projects.md#persistence).
 import assert from "node:assert/strict";
 import test from "node:test";
 

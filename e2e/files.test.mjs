@@ -1,6 +1,6 @@
-// 파일 플러그인 검사: 표면이 없는 플러그인의 상태 모듈이 프로젝트 폴더를 나열하고, 좌측 사이드바의 파일 트리가
-// @pierre/trees 로 그 상태를 그리며, 트리 안의 네이티브 클릭이 폴더를 열고 파일을 고르고, 디스크의 변경과 git
-// 상태가 새로 고침 없이 따라오며, 북마크가 다시 읽은 뒤에도 남는지 검사한다.
+// Files plugin check: the state module of a plugin without a surface lists the project folder, the file tree in the left sidebar
+// draws that state with @pierre/trees, and native clicks inside the tree open folders and select files; the check confirms that changes on disk and git
+// state follow without a refresh, and that bookmarks remain after they are read again.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -11,14 +11,14 @@ import { APPS, coveredBy, open } from "@soksak/window-check/app.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
 import { distance, readPng } from "@soksak/window-check/png.mjs";
 
-/** 요소의 가운데를 네이티브 입력으로 누른다. */
+/** Presses the center of the element with native input. */
 const press = async (s, name, index) => {
   const rect = await s.rect(name, index);
   assert.ok(rect.width > 0 && rect.height > 0, `${name} ${index} has no area`);
   await s.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
 };
 
-/** 문서 순서의 core.sidebar.section.control 중 sidebar 의 section 이 그린 at 번째 조작 요소의 index. */
+/** The index of the at-th interactive element that the section of sidebar drew, among core.sidebar.section.control in document order. */
 const controlIndex = (sidebars, sidebar, section, at) => {
   let index = 0;
   for (const item of sidebars) {
@@ -33,11 +33,11 @@ const controlIndex = (sidebars, sidebar, section, at) => {
   throw new Error(`no section ${section} in ${sidebar}`);
 };
 
-/* 파일 트리 섹션의 조작 요소 순서: 선택을 받는 섹션 상자, 별, 새로 고침, 트리를 담은 요소. */
+/* Order of the interactive elements of the file tree section: the section box that receives the selection, the star, refresh, and the element that holds the tree. */
 const STAR = 1;
 const REFRESH = 2;
 const HOLDER = 3;
-/* 트리 행의 높이(pt). 사이드바 목록의 행 높이다(files plugin repository 의 ui/sections/tree.js). */
+/* Height (pt) of a tree row. It is the row height of the sidebar list (ui/sections/tree.js of the files plugin repository). */
 const ROW = 20;
 
 for (const app of Object.values(APPS)) {
@@ -56,7 +56,7 @@ for (const app of Object.values(APPS)) {
     const text = (sidebars, id) => sidebars.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === id)?.text;
     const rowIndex = (tree, path) => tree.entries.findIndex((entry) => entry.path === path);
 
-    // 파일 트리: 상태 모듈이 프로젝트 폴더를 나열하고, git 상태가 저장소의 새 파일을 untracked 로 보고한다.
+    // File tree: the state module lists the project folder, and the git state reports a new file of the repository as untracked.
     await s.run("files.refresh");
     let tree = await s.until("files.tree", (value) => value?.root === project.root && rowIndex(value, folder) >= 0,
       "files.tree did not list the project folder");
@@ -64,7 +64,7 @@ for (const app of Object.values(APPS)) {
     await s.until("files.git", (value) => value.some((entry) => entry.path === `${folder}/note.txt` && entry.status === "untracked"),
       "files.git did not report the untracked file");
 
-    /** 트리의 행 path 의 가운데를 네이티브 클릭으로 누른다. 행은 담은 요소의 위에서부터 ROW 간격이다. */
+    /** Presses the center of the tree row path with a native click. A row is ROW apart from the top of the element that holds it. */
     const clickRow = async (value, path) => {
       const sidebars = await s.get("core.sidebars");
       const holder = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", HOLDER));
@@ -73,12 +73,12 @@ for (const app of Object.values(APPS)) {
       await s.click(holder.x + holder.width / 2, holder.y + (at + 0.5) * ROW);
     };
 
-    // 트리의 폴더를 네이티브 클릭으로 열면 files.tree.toggle 이 그 폴더를 나열한다.
+    // When a folder of the tree is opened with a native click, files.tree.toggle lists that folder.
     await clickRow(tree, folder);
     tree = await s.until("files.tree", (value) => rowIndex(value, `${folder}/note.txt`) >= 0,
       "a click on the folder in the tree did not open it");
 
-    // 애플리케이션 밖에서 만들거나 지운 파일은 감시로 새로 고침 없이 나타나고 사라지며, git 상태도 따라온다.
+    // A file created or deleted outside the application appears or disappears through the watcher without a refresh, and the git state follows.
     writeFileSync(join(directory, "watched.txt"), "watched\n");
     await s.until("files.tree", (value) => rowIndex(value, `${folder}/watched.txt`) >= 0,
       "a file created on disk did not appear without a refresh");
@@ -88,11 +88,11 @@ for (const app of Object.values(APPS)) {
     tree = await s.until("files.tree", (value) => rowIndex(value, `${folder}/watched.txt`) < 0,
       "a file removed on disk did not leave without a refresh");
 
-    // 새로 고침 조작이 files.refresh 를 실행한다.
+    // The refresh control runs files.refresh.
     let sidebars = await s.get("core.sidebars");
     await press(s, "core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", REFRESH));
 
-    // 북마크: 트리에서 파일을 고르고 ☆ 를 누르면 files.bookmarks.add 가 실행되고, 다시 읽은 뒤에도 남는다.
+    // Bookmark: when a file is selected in the tree and the star is pressed, files.bookmarks.add runs, and it remains after it is read again.
     const note = `${folder}/note.txt`;
     tree = await s.get("files.tree");
     await clickRow(tree, note);
@@ -111,14 +111,14 @@ for (const app of Object.values(APPS)) {
     sidebars = await s.until("core.sidebars", (value) => text(value, "files.bookmarks")?.includes(note),
       "the bookmark did not survive a reload");
 
-    // 삭제 조작이 files.bookmarks.remove 를 실행한다.
+    // The delete control runs files.bookmarks.remove.
     const bookmarks = await s.get("files.bookmarks");
     await press(s, "core.sidebar.section.control", controlIndex(sidebars, "left", "files.bookmarks", bookmarks.indexOf(note)));
     await s.until("files.bookmarks", (value) => !value.includes(note), "a click on 삭제 did not remove the bookmark");
   });
 }
 
-/** 캡처의 한 줄 띠에서 바탕과 다른 첫 열(pt). band 는 pt 사각형, 바탕은 띠 왼쪽 끝의 색이다. */
+/** The first column (pt) in a one-line band of the capture that differs from the background. band is a rectangle in pt, and the background is the color of the left end of the band. */
 function firstInk(image, scale, band, { from = band.x, to = band.x + band.width } = {}) {
   const background = image.pixel(Math.round(from * scale) + 1, Math.round((band.y + band.height / 2) * scale));
   for (let x = Math.round(from * scale); x < Math.round(to * scale); x++) {
@@ -129,7 +129,7 @@ function firstInk(image, scale, band, { from = band.x, to = band.x + band.width 
   return null;
 }
 
-/** 띠 안의 잉크 열 묶음. gap 장치 픽셀 이상 떨어진 열은 다른 묶음이다. 묶음마다 [시작, 끝] 장치 픽셀이다. */
+/** Groups of ink columns inside the band. Columns that are gap device pixels or more apart belong to different groups. Each group is [start, end] in device pixels. */
 function inkRuns(image, scale, band, gap) {
   const left = Math.round(band.x * scale);
   const background = image.pixel(left + 1, Math.round((band.y + band.height / 2) * scale));
@@ -153,8 +153,8 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const project = await s.get("core.project");
-    // 이름 전체가 잉크 덩어리 하나로 측정되도록 마침표를 쓰지 않는다. 마침표 앞뒤의 빈칸은 덩어리를 나누고, 나뉜 위치는
-    // 서브픽셀 위치에 따라 행마다 달라진다.
+    // Periods are not used, so that the whole name is measured as one ink group. Spaces before and after a period split the group, and where it splits
+    // differs by row depending on the subpixel position.
     const name = `grid-${process.pid}`;
     writeFileSync(join(project.root, name), "grid\n");
     s.cleanup(() => rmSync(join(project.root, name), { force: true }));
@@ -170,7 +170,7 @@ for (const app of Object.values(APPS)) {
     const image = readPng(path);
     const scale = image.width / (await s.get("host.window")).content.width;
 
-    // 섹션 머리: list 레이아웃의 머리 중 좌측 사이드바 files.tree 의 머리.
+    // Section head: the head of files.tree of the left sidebar, among the heads of the list layout.
     let headerIndex = 0;
     for (const item of sidebars.filter((value) => value.layout === "list")) {
       if (item.sidebar === "left") { headerIndex += item.sections.findIndex((value) => value.id === "files.tree"); break; }
@@ -179,7 +179,7 @@ for (const app of Object.values(APPS)) {
     const header = await s.rect("core.sidebar.section.header", headerIndex);
     const holder = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", HOLDER));
     const star = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", STAR));
-    // 격자는 섹션 머리의 접기 표시가 그려진 첫 열이다. 머리 글자와 트리 행의 첫 표시도 그 열에서 시작한다.
+    // The grid is the first column where the collapse indicator of the section head is drawn. The head text and the first display of the tree rows also start at that column.
     const chevron = firstInk(image, scale, header);
     const grid = chevron;
     const title = firstInk(image, scale, { x: holder.x, y: star.y, width: star.x - holder.x, height: star.height });
@@ -191,16 +191,16 @@ for (const app of Object.values(APPS)) {
     }
     assert.ok(holder.x <= header.x + 0.5 && holder.width >= header.width - 1, `the section body pads the tree: holder ${JSON.stringify(holder)}, header ${JSON.stringify(header)}`);
 
-    // 글자 크기: 같은 이름을 12pt 사이드바 글자로 그린 북마크 행과 트리 행의 잉크 폭이 같다. 각 행의 마지막 덩어리가 이름 전체다.
-    // 1배율 캡처에서 12pt 글자 사이의 빈칸은 3px 까지 생기고, 아이콘과 이름 사이의 빈칸은 8pt 이므로 4pt 이하의 빈칸을 잇는다.
+    // Text size: a bookmark row and a tree row that draw the same name with 12pt sidebar text have the same ink width. The last group of each row is the whole name.
+    // In a 1x capture, gaps between 12pt glyphs are up to 3px, and the gap between the icon and the name is 8pt, so gaps of 4pt or less are joined.
     const WORD_GAP = 4;
     const at = tree.entries.findIndex((entry) => entry.path === name);
     const treeRuns = inkRuns(image, scale, { x: holder.x, y: holder.y + at * ROW, width: holder.width, height: ROW }, WORD_GAP * scale);
     const bookmarks = await s.get("files.bookmarks");
     const remove = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.bookmarks", bookmarks.indexOf(name)));
     const bookmarkRuns = inkRuns(image, scale, { x: header.x, y: remove.y, width: remove.x - header.x - 2, height: remove.height }, WORD_GAP * scale);
-    // 북마크의 삭제 단추는 경로와 떨어져 있다. 행 전체에서 단추 왼쪽 경계 앞의 마지막 잉크 열과 경계부터의 첫 잉크 열
-    // 사이를 잰다. 경계를 넘는 덩어리는 경계에서 나눈다.
+    // The delete button of a bookmark is apart from the path. In the whole row, it measures between the last ink column before the left boundary of the button and the first ink column from the boundary.
+    // A group that crosses the boundary is split at the boundary.
     const rowRuns = inkRuns(image, scale, { x: header.x, y: remove.y, width: remove.x + remove.width - header.x, height: remove.height }, 0);
     const boundary = Math.round(remove.x * scale);
     const pathEnd = Math.max(...rowRuns.filter(([start]) => start < boundary).map(([, end]) => Math.min(end, boundary - 1)));
@@ -210,19 +210,19 @@ for (const app of Object.values(APPS)) {
     const width = ([start, end]) => (end - start + 1) / scale;
     const treeLabel = width(treeRuns.at(-1));
     const bookmarkLabel = width(bookmarkRuns.at(-1));
-    // 이름의 양 끝은 안티에일리어싱으로 각각 1 장치 픽셀까지 달라진다. 허용 폭은 2 장치 픽셀(2배율에서 1pt)이며,
-    // 1pt 큰 글자는 이 이름에서 약 6pt 넓으므로 구분된다.
+    // Both ends of the name differ by up to 1 device pixel each because of anti-aliasing. The allowed width is 2 device pixels (1pt at 2x), and
+    // text 1pt larger is about 6pt wider for this name, so it is distinguished.
     assert.ok(Math.abs(treeLabel - bookmarkLabel) <= 2 / scale,
       `the tree row label is ${treeLabel} pt wide and the 12-point bookmark label ${bookmarkLabel} pt (scale ${scale}): tree runs ${JSON.stringify(treeRuns)}, bookmark runs ${JSON.stringify(bookmarkRuns)}`);
 
-    // 트리는 사이드바가 준 높이를 채운다.
+    // The tree fills the height that the sidebar gave.
     const section = await s.rect("core.sidebar.section", headerIndex);
     assert.ok(holder.y + holder.height >= section.y + section.height - 1,
       `the tree ends at ${holder.y + holder.height}, before its section ends at ${section.y + section.height}`);
   });
 }
 
-/** 캡처에서 트리를 담은 요소의 위에서부터 잉크가 있는 행의 수. 첫 빈 행에서 멈춘다. */
+/** The number of rows with ink, counted from the top of the element that holds the tree in the capture. It stops at the first empty row. */
 function drawnRows(image, scale, holder) {
   let rows = 0;
   while ((rows + 1) * ROW <= holder.height) {
@@ -239,7 +239,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await terminalCardSidebar(s);
-    // 터미널 카드의 안쪽 왼쪽 사이드바에 파일 트리만 둔다. 좌측 고정 사이드바의 트리와 함께 둘이 마운트된다.
+    // Puts only the file tree in the inner left sidebar of the terminal card. Together with the tree of the left fixed sidebar, two are mounted.
     const sets = (await s.get("core.settings")).values.sets;
     await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-files" ? { ...set, sections: ["files.tree"] } : set) },
       scope: "common" });
@@ -254,8 +254,8 @@ for (const app of Object.values(APPS)) {
       "files.tree did not list the folder");
     const mountedTrees = (value) => ["left", "terminal:left"].every((id) => value.find((item) => item.sidebar === id)
       ?.sections.find((item) => item.id === "files.tree")?.mounted);
-    // 트리는 files.tree 값을 받은 콜백에서 머리 제목을 적고 같은 콜백에서 행을 바꾼다. 두 트리의 제목이 보이면
-    // 두 트리가 값을 받은 것이다.
+    // The tree writes the head title and changes the rows in the callback that received the files.tree value. When the titles of both trees are visible,
+    // both trees have received the value.
     const titled = (value) => mountedTrees(value) && ["left", "terminal:left"].every((id) => value.find((item) => item.sidebar === id)
       ?.sections.find((item) => item.id === "files.tree")?.text.includes(project.root.split("/").at(-1)));
     let sidebars = await s.until("core.sidebars", titled, "the left and inset trees did not receive files.tree");
@@ -264,7 +264,7 @@ for (const app of Object.values(APPS)) {
       return Promise.all(["left", "terminal:left"].map((id) =>
         s.rect("core.sidebar.section.control", controlIndex(value, id, "files.tree", HOLDER))));
     };
-    /** 두 트리가 그린 행의 수. 캡처는 검사가 끝나기 전에 지운다. */
+    /** The number of rows that the two trees drew. The capture is removed before the check ends. */
     const rowsDrawn = async () => {
       await s.presented();
       const window = await s.get("host.window");
@@ -291,7 +291,7 @@ for (const app of Object.values(APPS)) {
     };
     await same("after the listing");
 
-    // inset 트리에서 폴더를 네이티브 클릭으로 열면 files.tree 가 펼치고, 두 트리가 같이 펼친다.
+    // When a folder is opened with a native click in the inset tree, files.tree expands it, and both trees expand together.
     const [, inset] = await holders();
     const at = tree.entries.findIndex((entry) => entry.path === folder);
     await s.click(inset.x + inset.width / 2, inset.y + (at + 0.5) * ROW);
@@ -299,13 +299,13 @@ for (const app of Object.values(APPS)) {
       "a click on the folder in the inset tree did not open it");
     await same("after the inset tree opened the folder");
 
-    // 디스크에서 지운 폴더는 두 트리에서 함께 사라진다.
+    // A folder deleted on disk disappears from both trees together.
     rmSync(directory, { recursive: true, force: true });
     tree = await s.until("files.tree", (value) => !value.entries.some((entry) => entry.path.startsWith(folder)),
       "the removed folder stayed in files.tree");
     await same("after the folder was removed on disk");
 
-    // 북마크: inset 트리에서 파일을 네이티브 클릭으로 고르고 inset 트리의 별을 누른다.
+    // Bookmark: selects a file with a native click in the inset tree and presses the star of the inset tree.
     mkdirSync(directory);
     writeFileSync(join(directory, "a.txt"), "a\n");
     await s.until("files.tree", (value) => value.entries.some((entry) => entry.path === folder), "the folder did not come back");
@@ -316,13 +316,13 @@ for (const app of Object.values(APPS)) {
       assert.ok(index >= 0, `${path} is not a row`);
       await s.click(insetNow.x + insetNow.width / 2, insetNow.y + (index + 0.5) * ROW);
     };
-    // 다른 카드가 포커스를 가진 채로 inset 트리를 누른다. 누름이 셸 카드에 포커스를 옮기며 사이드바를 다시 그린다.
+    // Presses the inset tree while another card has the focus. The press moves the focus to the shell card and redraws the sidebar.
     await s.run("core.card.focus", { card: "browser" });
     await clickInset(await s.get("files.tree"), folder);
     const file = { path: `${folder}/a.txt` };
     await clickInset(await s.until("files.tree", (value) => value.entries.some((entry) => entry.path === file.path),
       "the inset tree did not open the folder again"), file.path);
-    // 선택은 프로젝트의 상태여서 두 트리가 함께 보이고, 어느 트리의 별도 그 파일을 북마크한다.
+    // The selection is state of the project, so both trees show it together, and the star of either tree bookmarks that file.
     await s.until("files.selection", (value) => value === file.path, "the selection in the inset tree did not reach files.selection");
     const star = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", STAR));
     await s.click(star.x + star.width / 2, star.y + star.height / 2);

@@ -1,4 +1,4 @@
-// 카드 사방 손잡이의 네이티브 포인터 입력과 녹화한 경계 좌표를 검사한다.
+// Checks the native pointer input of the card four-side handles and the recorded boundary coordinates.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
@@ -170,7 +170,7 @@ for (const app of Object.values(APPS)) {
                 `${side}: pointer input or capture failed: ${gestureErrors.map((error) => error.message).join("; ")}`);
             const captured = frames(directory).map(readFrame);
             captured.forEach((frame, index) => {
-              // 실패하면 그 프레임의 버퍼 크기, 창 사각형, 배율을 적는다.
+              // On failure it reports the buffer size, the window rectangle, and the scale of that frame.
               const measuredFrame = `frame ${index + 1} of ${captured.length}: buffer ${frame.width}x${frame.height}, ` +
                 `content ${JSON.stringify(frame.content)} at content scale ${frame.contentScale}, scale ${frame.scale}`;
               assert.equal(
@@ -211,14 +211,14 @@ for (const app of Object.values(APPS)) {
               ),
               `${side}: no intermediate movement frame`,
             );
-            // 표시된 모든 상태는 표시 뒤 화면 두 프레임 안의 녹화 프레임에 그 경계로 남아야 한다.
+            // Every displayed state must remain with its boundary in a recorded frame within two screen frames after the display.
             const recorded = captured.map((frame, frameIndex) => ({ time: frame.time, edges: measured[frameIndex] }));
             const missing = missingPoses(
               recorded,
               poses.map((pose) => ({ phase: pose.phase, displayed: pose.displayed, at: initial + sign(side) * (pose.size - 120) })),
               recordingWindow.refreshRate,
             );
-            // 놓친 상태마다 그 경계를 보인 프레임과 표시 시각 전후 프레임의 시각(표시 시각 기준 ms)을 보고한다.
+            // For each missed state it reports the frame that showed its boundary and the times of the frames before and after the display time (ms relative to the display time).
             const around = missing.map((pose) => ({
               ...pose,
               shown: recorded.filter((frame) => frame.edges.some((edge) => Math.abs(edge - pose.at) <= 1))

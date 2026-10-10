@@ -1,4 +1,4 @@
-// 합성한 프레임으로 창 단추와 첫 행의 측정과 판정을 검사한다. 실제 창의 단추 위치를 대신하지 않는다.
+// Checks the measurement and the judgement of the window buttons and the first row with synthetic frames. It does not stand in for the button position of an actual window.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -7,14 +7,14 @@ import { measureTitlebar, misaligned, rowHeight } from "../titlebar-measurement.
 const CARD = [25, 27, 36];
 const EDGE = [43, 46, 61];
 const BACKGROUND = [16, 17, 23];
-// 비활성 창의 단추 색.
+// The button color of an inactive window.
 const BUTTON = [72, 72, 78];
-// 창 좌표(pt)의 단추 세 개. 세로 위치는 측정에 쓰지 않는다.
+// Three buttons in window coordinates (pt). The vertical position is not used for the measurement.
 const BUTTONS = [9, 29, 49].map((x) => ({ x, y: 0, width: 14, height: 14 }));
 
 /**
- * 창 위에서 row pt 높이의 첫 행(아래 1pt 는 테두리)과 세로 가운데가 centre pt 인 지름 14pt 단추들을 그린 프레임.
- * 창은 버퍼의 offset(버퍼 pt)에 있고, 창 밖과 왼쪽 위 모서리는 검은색이다.
+ * A frame that draws, at the top of the window, a first row of height row pt (the lower 1pt is the border) and buttons of diameter 14pt whose vertical center is centre pt.
+ * The window is at offset (buffer pt) of the buffer, and the area outside the window and the upper left corner are black.
  */
 function synthetic({ row, centre, buttons = BUTTONS, scale = 2, offset = { x: 3, y: 2 }, time = 0 }) {
   const size = { width: 200, height: 240 };
@@ -23,7 +23,7 @@ function synthetic({ row, centre, buttons = BUTTONS, scale = 2, offset = { x: 3,
   const data = Buffer.alloc(width * height * 4);
   for (let dy = 0; dy < height; dy++) {
     for (let dx = 0; dx < width; dx++) {
-      // 화소 가운데의 창 좌표(pt).
+      // The window coordinate (pt) of a pixel center.
       const x = (dx + 0.5) / scale - offset.x;
       const y = (dy + 0.5) / scale - offset.y;
       let colour = [0, 0, 0];
@@ -52,7 +52,7 @@ test("buttons centred in the first row measure no difference at every row height
 });
 
 test("buttons 6px off the first-row centre fail the frame", () => {
-  // 행은 54px 로 그려졌는데 단추는 이전 제목줄 66pt 의 가운데에 있다.
+  // The row was drawn at 54px, but the buttons are at the center of the earlier title bar of 66pt.
   const measured = [measureTitlebar(synthetic({ row: 54, centre: 27, time: 1 }), BUTTONS),
     measureTitlebar(synthetic({ row: 54, centre: 33, time: 2 }), BUTTONS)];
   assert.equal(measured[1].difference, 6);

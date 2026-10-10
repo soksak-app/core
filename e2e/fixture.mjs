@@ -1,17 +1,17 @@
-// core 창 검사의 시작 배치. diagnostics.fixture 의 기본 배치는 터미널 탭을 가지므로, 준비는 harness 의 prepareFixture 로
-// 배치를 연 뒤 그 터미널이 준비될 때까지 기다린다(F25.2 가 core 의 검사를 fixture plugin 으로 바꾸기 전까지 이 모듈이
-// 터미널을 안다).
+// Starting layout of the core window checks. The default layout of diagnostics.fixture has a terminal tab, so the preparation opens
+// the layout through prepareFixture of the harness and waits until that terminal is ready (this module knows the terminal until
+// F25.2 replaces the core checks with a fixture plugin).
 import { fileURLToPath } from "node:url";
 import { keepCommonSettings, prepareFixture, TRACE } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
 
-/** 창 검사 터미널의 셸. 로그인 셸의 프로필에 따라 달라지는 프롬프트를 피한다. */
+/** The shell of the window-check terminal. It avoids a prompt that depends on the profile of the login shell. */
 const CHECK_SHELL = fileURLToPath(new URL("./check-shell", import.meta.url));
 
 /**
- * 터미널 카드에 안쪽 왼쪽 사이드바를 둔다. 기본 배치에는 카드 사이드바가 없으므로, 카드 사이드바를 검사하는 검사는
- * 세트 set-files(files.tree, files.bookmarks, list)와 터미널의 card-left 연결을 공통 설정에 더한다. 검사가 끝나면
- * keepCommonSettings 가 세트와 연결을 함께 되돌리므로 호출자는 sets 를 따로 초기화하지 않는다.
+ * Puts an inner left sidebar on the terminal card. The default layout has no card sidebar, so a check of the card sidebar
+ * adds the set set-files (files.tree, files.bookmarks, list) and the card-left link of the terminal to the common settings. When the check ends,
+ * keepCommonSettings restores the set and the link together, so the caller does not reset sets separately.
  */
 export async function terminalCardSidebar(s) {
   await keepCommonSettings(s);
@@ -29,10 +29,10 @@ async function registrationTimeline(s, offsets) {
   return traceRows(readEvents(s.app.configDir, offsets).events).filter((row) => row.event === "surface.registration");
 }
 
-/** 창을 검사 시작 상태로 만들고, 창 검사의 터미널이 검사용 셸(check-shell)로 준비될 때까지 기다린 뒤 그 터미널을 반환한다. */
+/** Puts the window in the start state of a check, waits until the terminal of the window check is ready with the check shell (check-shell), and returns that terminal. */
 export async function fresh(s, { performanceTrace = TRACE } = {}) {
   const traceOffsets = currentEventOffsets(s.app.configDir);
-  // 창 검사의 터미널은 사용자의 로그인 셸과 무관하게 검사용 셸(check-shell)로 시작한다.
+  // The terminal of a window check starts with the check shell (check-shell), whatever the login shell of the user is.
   await prepareFixture(s, { settings: { "terminal.shell": CHECK_SHELL }, performanceTrace });
   let terminal;
   try {
@@ -51,7 +51,7 @@ export async function fresh(s, { performanceTrace = TRACE } = {}) {
   return terminal;
 }
 
-/** 보이는 터미널 표면들이 등록되고 테마를 적용할 때까지 기다린 뒤 그 표면들을 반환한다. */
+/** Waits until the visible terminal surfaces are registered and apply their theme, then returns those surfaces. */
 export async function terminalReady(s) {
   await s.until("core.surfaces",
     (all) => all.some((x) => x.visible && x.plugin === "terminal" &&
@@ -59,9 +59,9 @@ export async function terminalReady(s) {
       x.exposes.includes("status terminal.session") &&
       x.exposes.includes("dom terminal.view")),
     "no visible terminal surface registered its document, session, and view");
-  // predicate를 만족하는 알림은 reload가 surface를 교체하기 바로 전의 surface를
-  // 설명할 수 있다. id를 반환하기 전에 현재 registry를 읽는다. 오래된 surface id로
-  // 진행하지 않는다.
+  // A notification that satisfies the predicate can describe the surface just before a reload replaces it.
+  // The function reads the current registry before it returns the id. It does not
+  // proceed with a stale surface id.
   const active = new Set((await s.get("core.grid")).cards
     .map((card) => card.active)
     .filter(Boolean));

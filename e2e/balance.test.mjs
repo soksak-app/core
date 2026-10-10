@@ -1,4 +1,4 @@
-// 프로젝트 목록 단추 뒤의 카드 자동 정렬 단추와 그 명령(packages/soksak/docs/layout.md#balancing).
+// The card auto-arrange button after the project list button, and its command (packages/soksak/docs/layout.md#balancing).
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -14,7 +14,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
-    // 윗줄은 1/2, 1/4, 1/4 로 나누고 아랫줄은 1/4 씩 넷으로 나눈 뒤, 아랫줄의 경계 하나를 옮겨 고르지 않게 한다.
+    // The upper row is divided into 1/2, 1/4 and 1/4, the lower row into four times 1/4, and then one boundary of the lower row is moved to make the division uneven.
     const split = async (from, side) => (await s.run("core.card.split", { card: from, side, plugin: "browser" })).card;
     const start = panes(await s.get("core.grid")).length;
     const lower = await split("terminal", "bottom");
@@ -34,7 +34,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(spread(upper.map((id) => card(before, id).w)) > 10, `the upper row started even: ${JSON.stringify(before.cards)}`);
     assert.ok(spread(below.map((id) => card(before, id).w)) > 10, `the lower row started even: ${JSON.stringify(before.cards)}`);
 
-    // 단추는 첫 행의 오른쪽 단추 줄에서 프로젝트 목록 단추 바로 뒤에 있다.
+    // The button is in the right button row of the first row, directly after the project list button.
     const projects = await s.rect("core.chrome.projects");
     const button = await s.rect("core.chrome.balance");
     const after = projects.x + projects.width;

@@ -1,4 +1,4 @@
-// 250pt를 400ms에 이동하는 두 왕복을 녹화해 표면의 카드 내부 표시를 검사한다.
+// Records two round trips that move 250pt in 400ms and checks the display of the surface inside its card.
 import assert from "node:assert/strict";
 import { availableParallelism, loadavg } from "node:os";
 import test from "node:test";
@@ -10,14 +10,14 @@ import { outside, terminalMarks, whitePixels } from "./outside.mjs";
 import { alignment, alignmentDelta } from "./alignment.mjs";
 import { assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag, transactionCadence } from "./drag-measurement.mjs";
 
-// 1번 세로 선은 왼쪽 고정 사이드바와 터미널 카드 사이 경계다. 끌면 터미널 카드의 왼쪽 가장자리가 움직인다.
+// Vertical line 1 is the boundary between the left fixed sidebar and the terminal card. Dragging it moves the left edge of the terminal card.
 const PLAN = { axis: "x", line: 1, dx: 250, dy: 0, ms: 400, times: 2 };
 
 const READ = 0.5;
 
-// 격자가 한 배치를 떠난 뒤 그 배치가 화면에 남아 있어도 되는 시간. 화면 갱신 주기의 프레임 수다
-// (docs/spec/native-surfaces.md). 표시는 입력 도착, 이전 배치의 프레임, WebKit 렌더링 갱신, 화면 vsync 의 경계를
-// 지나므로 최대는 4 프레임이고, 평소 지연은 중앙값 2.5 프레임과 p90 3 프레임 안에 있다.
+// The time for which a layout may stay on the screen after the grid left it. It is a number of frames of the display refresh period
+// (docs/spec/native-surfaces.md). A display passes the boundaries of the input arrival, the frame of the previous layout, the WebKit rendering update and the display vsync,
+// so the maximum is 4 frames, and the usual delay is within a median of 2.5 frames and a p90 of 3 frames.
 const LAG_FRAMES = { median: 2.5, p90: 3, worst: 4 };
 
 function assertAligned(run, marks, refreshRate) {
@@ -64,7 +64,7 @@ function assertAligned(run, marks, refreshRate) {
       `offset ${lag.shown?.toFixed(1)}pt at ${lag.time?.toFixed(1)}ms matches step ${lag.step} while step ${lag.sent} was sent; ` +
       `median ${lag.median.toFixed(1)}ms, p90 ${lag.p90.toFixed(1)}ms; ` +
       `transactions ${lag.stages}; ` +
-      // 표시 지연은 다른 프로세스의 CPU 사용에 따라 달라지므로 측정 때의 시스템 부하를 함께 적는다.
+      // The display delay depends on the CPU use of other processes, so the check also writes the system load at the measurement.
       `load average ${loadavg().map((value) => value.toFixed(1)).join(" ")} on ${availableParallelism()} processors`);
 
   assert.ok(delayed.delta <= 1,
@@ -92,7 +92,7 @@ function assertNoWhiteSurfaceBleed(run, message, marks) {
     assert.ok(measured, `${message}: terminal/card geometry could not be measured in frame ${frameIndex}`);
     const { l, r } = measured.card;
     samples.push({ time: frame.time, position: l / measured.scale });
-    // 가로 끌기 동안 표면의 위아래는 움직이지 않는다. 카드 테두리 사이, 표면의 위부터 아래까지를 잰다.
+    // During the horizontal drag, the top and the bottom of the surface do not move. The check measures from the top to the bottom of the surface, between the card borders.
     const y0 = Math.round(marks.top * frame.scale);
     const y1 = Math.round(marks.bottom * frame.scale);
     const left = l + measured.scale, right = r - measured.scale + 1;
@@ -104,7 +104,7 @@ function assertNoWhiteSurfaceBleed(run, message, marks) {
     `${message}: white pixels ${(worst.ratio * 100).toFixed(2)}% in frame ${worst.frame} ` +
       `within card ${worst.measured?.card?.l}..${worst.measured?.card?.r}, ` +
       `rows ${worst.y0}..${worst.y1}`);
-  // 한 걸음마다 16ms 이므로 이 끌기의 짧은 되돌아오기는 한 번의 표시보다 짧을 수 있다. 오래 머문 배치만 요구한다.
+  // Each step is 16ms, so the short return of this drag can be shorter than one display. The check requires only a layout that stayed for a long time.
   assertHeldStatesShown(samples, run.ticks, run.boundary);
 }
 
@@ -113,13 +113,13 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    // 터미널의 오른쪽 오버라이드가 고정 사이드바와 레일을 터미널 카드에 묶는다.
+    // The right override of the terminal ties the fixed sidebar and the rail to the terminal card.
     await keepCommonSettings(s);
     await s.run("core.settings.link", { place: "window-right", plugin: "terminal", set: "set-install", scope: "common" });
     await s.until("core.rail", (rail) => rail.groups.length === 1, "the terminal override drew no rail");
     const marks = await terminalMarks(s, { measured: true });
     const run = await drag(t, s, PLAN, { capture: true });
-    // 트랜잭션 주기는 지연 판정 전에 알린다. 판정이 실패해도 그 주기가 출력에 남는다(F92).
+    // The transaction period is reported before the delay judgment. Even if the judgment fails, that period stays in the output (F92).
     t.diagnostic(`transaction cadence (ms): ${JSON.stringify(transactionCadence(run.layouts))}`);
     const lag = assertAligned(run, marks, (await s.get("host.window")).refreshRate);
     t.diagnostic(`pointer lag: worst ${lag.lag.toFixed(1)}ms, p90 ${lag.p90.toFixed(1)}ms, median ${lag.median.toFixed(1)}ms; transactions ${lag.stages}`);
@@ -130,7 +130,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    // 왼쪽 고정 사이드바와 터미널 카드 사이 경계를 끈다.
+    // Drags the boundary between the left fixed sidebar and the terminal card.
     const marks = await terminalMarks(s, { measured: true });
     const narrow = await drag(t, s,
       { axis: "x", line: 1, dx: 290, dy: 0, ms: 96, times: 4 }, { capture: true });
@@ -141,8 +141,8 @@ for (const app of Object.values(APPS)) {
   });
 }
 
-// 터미널 표면은 카드와 같은 색이므로 픽셀로는 네이티브 자리와 문서의 폭을 가를 수 없다. 표면 문서가 알리는 크기
-// (core.surface.document)와 호스트가 앉힌 네이티브 자리(host.window)를 비교한다.
+// The terminal surface has the same color as the card, so pixels cannot separate the native position from the width of the document. The check compares the size that the surface document reports
+// (core.surface.document) with the native position that the host placed (host.window).
 async function assertDocumentFillsFrame(s, surface, label) {
   await s.presented();
   const frame = (await s.get("host.window")).surfaces.find((item) => item.id === surface)?.frame;

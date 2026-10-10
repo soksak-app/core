@@ -59,7 +59,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(listed.operation, null);
     assert.deepEqual(listed.incompatible, [{ id: "browser", installed, range: ">=0.0.1 <99.0.0", compatible: newer }]);
 
-    // The window shows the control 업데이트 N for the core release, which opens the plugin screen at the update list.
+    // The window shows the update control with the update count for the core release, which opens the plugin screen at the update list.
     const control = await s.rect("core.chrome.updates");
     assert.ok(control.width > 0 && control.height > 0, `the update control has no size: ${JSON.stringify(control)}`);
     await s.run("core.plugins.show-updates");

@@ -1,4 +1,4 @@
-// 설정 창의 절(일반, 플러그인, 사이드바), 세트 만들기·편집·삭제, 배치 값 설정을 검사한다(docs/spec/settings.md).
+// Checks the sections of the settings window (General, Plugins, Sidebar), creating, editing and deleting a set, and setting the layout values (docs/spec/settings.md).
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,17 +9,17 @@ import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
 
-/** 설정 창의 현재 컨트롤. */
+/** Current controls of the settings window. */
 const controls = async (s) => (await s.get("core.settings-modal")).controls;
 
-/** 이름과 키로 컨트롤을 찾을 때까지 기다린다. */
+/** Waits until the control is found by name and key. */
 async function control(s, name, key) {
   const modal = await s.until("core.settings-modal",
     (value) => value.controls.some((c) => c.name === name && c.key === key), `settings control ${name} ${key} did not appear`);
   return modal.controls.find((c) => c.name === name && c.key === key);
 }
 
-/** 컨트롤이 가리키는 명령을 실행한다. value 가 있으면 값 입력으로 보낸다. */
+/** Runs the command that the control points to. If value is present, it is sent as a value input. */
 async function press(s, name, key, value, param = "value") {
   const found = await control(s, name, key);
   assert.ok(found.command, `${name} ${key} has no command`);
@@ -76,7 +76,7 @@ for (const app of Object.values(APPS)) {
     const navs = opened.controls.filter((c) => c.name === "core.settings-modal.nav").map((c) => c.key);
     assert.deepEqual(navs, ["nav:general", "nav:plugins", "nav:sidebars"]);
 
-    // 일반: 사이드바 모양이 여기 있고 플러그인 설정은 없다.
+    // General: the sidebar appearance is here and plugin settings are not.
     await section(s, "general");
     await control(s, "core.settings-modal.set", "left");
     await control(s, "core.settings-modal.set", "right");
@@ -88,14 +88,14 @@ for (const app of Object.values(APPS)) {
     const general = (await controls(s)).map((c) => c.key ?? "");
     assert.deepEqual(general.filter((key) => pluginKeys.includes(key)), [], "일반 shows plugin settings");
 
-    // 사이드바: 세트 목록과 새 세트만 있다.
+    // Sidebar: only the set list and a new set are here.
     await section(s, "sidebars");
     const sidebars = (await controls(s)).filter((c) => !["core.settings-modal.nav", "core.settings-modal.scope",
       "core.settings-modal.grip", "core.settings-modal.close"].includes(c.name)).map((c) => c.name);
     assert.deepEqual([...new Set(sidebars)].sort(),
       ["core.settings-modal.create", "core.settings-modal.delete", "core.settings-modal.edit", "core.settings-modal.set-caption"]);
 
-    // 플러그인: 검색 칸과 목록. 검색어가 목록을 거르고, 행이 페이지를 열고, 목록이 돌아온다.
+    // Plugins: a search field and a list. The search term filters the list, a row opens a page, and the list returns.
     await section(s, "plugins");
     const list = await s.until("core.settings-modal", (modal) => modal.plugin === null && modal.listed.length > 0,
       "the plugin list did not show");
@@ -103,7 +103,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(list.query, "");
     const rows = list.controls.filter((c) => c.name === "core.settings-modal.plugin");
     assert.deepEqual(rows.map((c) => c.key), list.listed.map((id) => `plugin:${id}`));
-    // 행은 플러그인 이름만 보인다. 설명과 설치 동작은 라이브러리의 플러그인 페이지에 있다(docs/spec/settings.md).
+    // A row shows only the plugin name. The description and the install actions are on the plugin page of the library (docs/spec/settings.md).
     const names = Object.fromEntries((await s.get("core.plugins")).plugins.map((row) => [row.id, row.name]));
     assert.deepEqual(rows.map((c) => c.label), list.listed.map((id) => names[id]));
     assert.deepEqual(list.controls.filter((c) => c.name === "core.settings-modal.manage").map((c) => c.command),
@@ -119,7 +119,7 @@ for (const app of Object.values(APPS)) {
     await press(s, "core.settings-modal.plugin", "plugin:terminal");
     const terminal = await s.until("core.settings-modal", (modal) => modal.plugin === "terminal", "terminal page did not open");
     assert.deepEqual(terminal.listed, [], "the page still shows the plugin list");
-    // 행은 manifest 가 선언한 설정마다 하나이며 선언 순서를 따른다. 플러그인 설정의 기본값은 그 순서로 등록된다.
+    // There is one row per setting that the manifest declares, in the declaration order. The default values of the plugin settings are registered in that order.
     const declared = Object.keys((await s.get("core.settings")).values).filter((key) => key.startsWith("terminal."));
     assert.deepEqual(terminal.rows.map((row) => row.key), declared, `terminal rows: ${JSON.stringify(terminal.rows)}`);
     assert.deepEqual(terminal.rows.find((row) => row.key === "terminal.cursor.shape"), {
@@ -131,7 +131,7 @@ for (const app of Object.values(APPS)) {
       assert.equal((await control(s, "core.settings-modal.set", `link:card-${side}:terminal`)).value, "off",
         `the missing card-${side} link did not display off`);
     }
-    // 선택지는 값 수와 관계없이 선택 상자다(docs/spec/settings.md 의 Controls).
+    // A choice is a select box regardless of the number of values (Controls in docs/spec/settings.md).
     const shape = await control(s, "core.settings-modal.set", "terminal.cursor.shape");
     assert.deepEqual(shape.options, ["block", "underline", "beam"]);
     await press(s, "core.settings-modal.set", "terminal.cursor.shape", "beam");
@@ -179,7 +179,7 @@ for (const app of Object.values(APPS)) {
     const sets = await settingsValue(s, "sets");
     assert.ok(sets.length > 0, "the check needs a sidebar set");
     for (const [index, set] of sets.entries()) {
-      // 줄 하나의 높이는 같은 행의 편집 단추보다 낮다. 두 줄 이상으로 접힌 줄은 단추보다 높다.
+      // The height of one line is lower than the edit button of the same row. A line folded into two or more lines is higher than the button.
       const line = await s.rect("core.settings-modal.set-caption", index);
       const edit = await s.rect("core.settings-modal.edit", index);
       assert.ok(line.height <= edit.height,
@@ -212,7 +212,7 @@ for (const app of Object.values(APPS)) {
     const saved = (want, message) => s.until("core.settings", (value) => !value.saving &&
       value.values.sets.find((item) => item.id === made.id)?.sections.join() === want.join(), message);
 
-    // +는 세트에 없는 첫 등록 섹션을 더한다. 세 번 누르면 세 행이다.
+    // + adds the first registered section that is not in the set. Pressing it three times gives three rows.
     for (let n = 1; n <= 3; n++) {
       await press(s, "core.settings-modal.add", `add:${made.id}`);
       await s.until("core.settings", (value) => !value.saving &&
@@ -222,7 +222,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(new Set(three).size, 3);
     const editor = await s.until("core.settings-modal", (modal) =>
       modal.controls.filter((c) => c.name === "core.settings-modal.row").length === 3, "the editor did not draw three rows");
-    // 편집기는 등록된 섹션마다의 컨트롤을 두지 않는다. 행마다 선택 상자 하나와 ▲▼− 가 있고 + 는 하나다.
+    // The editor has no control for each registered section. Each row has one select box and ▲▼−, and there is one +.
     assert.equal(editor.controls.filter((c) => c.name === "core.settings-modal.section").length, 0);
     assert.equal(editor.controls.filter((c) => c.name === "core.settings-modal.add").length, 1);
     assert.deepEqual(editor.controls.filter((c) => c.name === "core.settings-modal.row-act").map((c) => c.key), [
@@ -278,26 +278,26 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     await keepCommonSettings(s);
     const sets = await settingsValue(s, "sets");
-    // 불러온 files 플러그인이 선언하지 않은 섹션은 거부한다.
+    // A section that the loaded files plugin does not declare is rejected.
     const broken = sets.map((item, index) => (index === 0 ? { ...item, sections: [...item.sections, "files.gone"] } : item));
     await assert.rejects(s.run("core.settings.set", { patch: { sets: broken }, scope: "common" }),
       /names unknown section files.gone/);
     await assert.rejects(s.run("core.settings.set", { patch: { links: [{ place: "left", plugin: null, set: "set-none" }] }, scope: "common" }),
       /known set/);
     assert.deepEqual(await settingsValue(s, "sets"), sets, "a rejected change altered the sets");
-    // 불러오지 않은 플러그인의 섹션은 세트에 남는다(docs/spec/plugins.md).
+    // A section of a plugin that is not loaded stays in the set (docs/spec/plugins.md).
     const kept = sets.map((item, index) => (index === 0 ? { ...item, sections: [...item.sections, "gone.section"] } : item));
     await s.run("core.settings.set", { patch: { sets: kept }, scope: "common" });
     assert.deepEqual(await settingsValue(s, "sets"), kept, "a set naming a section of a plugin that is not loaded was not kept");
     await s.run("core.settings.set", { patch: { sets }, scope: "common" });
 
-    // 프로젝트 설정 파일에 등록되지 않은 섹션을 담은 세트가 있으면 그 프로젝트를 여는 명령이 그 오류로 거부된다.
-    // 실패는 거절을 받은 호출자가 한 번 보고한다(docs/spec/settings.md).
+    // If a set holds a section that is not registered in the project settings file, the command that opens that project is rejected with that error.
+    // The caller that received the rejection reports the failure once (docs/spec/settings.md).
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-sets-")));
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
     mkdirSync(join(root, ".soksak"), { recursive: true });
     writeFileSync(join(root, ".soksak/settings.json"), JSON.stringify({ sets: broken }));
-    // 이 검사가 저장한 잘못된 세트는 그 프로젝트의 설정을 다시 불러올 때마다 page 오류로도 보고된다.
+    // The invalid set that this check saved is also reported as a page error every time the settings of that project are reloaded.
     s.expectError(/settings: set .* names unknown section files\.gone/);
     await s.run("core.settings.set", { patch: { projectOpening: "tabs" }, scope: "common" });
     const opened = s.run("core.project.open", { root, color: "#7fe3b0" }).catch((error) => error);
@@ -320,16 +320,16 @@ for (const app of Object.values(APPS)) {
       await s.run("core.card.focus", { card });
       await s.until("core.sidebars", (bars) => (bars.find((bar) => bar.sidebar === "right")?.set ?? null) === want, message);
     };
-    // 일반 선택은 place right, 플러그인 오버라이드는 place window-right 이다. off 는 그 연결을 없앤다.
+    // A general choice is place right and a plugin override is place window-right. off removes that connection.
     const general = (set) => s.run("core.settings.link", { place: "right", plugin: null, set, scope: "common" });
     const override = (plugin, set) => s.run("core.settings.link", { place: "window-right", plugin, set, scope: "common" });
-    // 기본값에는 일반 선택이 없다. 터미널에 오버라이드 set-install 을 둔다.
+    // The default has no general choice. An override set-install is placed on the terminal.
     await override("terminal", "set-install");
     await right("terminal", "set-install", "the terminal override did not show while no general choice exists");
-    // 일반 세트가 있어도 초점 플러그인의 오버라이드가 앞선다.
+    // Even if a general set exists, the override of the focused plugin takes precedence.
     await general("set-page");
     await right("terminal", "set-install", "the general set replaced the terminal override");
-    // 오버라이드를 없애면 일반 세트가 드러난다.
+    // Removing the override reveals the general set.
     await override("terminal", "off");
     await right("terminal", "set-page", "removing the terminal override did not show the general set");
     await right("browser", "set-browser", "the browser override did not take precedence over the general set");
@@ -345,7 +345,7 @@ for (const app of Object.values(APPS)) {
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left),
       "no card holds an internal sidebar after a card-left link");
     assert.equal(grid.cards.some((card) => card.id.startsWith("rail-")), false, "a rail column stands in a fresh configuration");
-    // 카드 사이드바의 위치 설정은 없다. 고정 창 사이드바와 카드 안쪽 사이드바만 있다.
+    // There is no position setting for the card sidebar. There are only the fixed window sidebar and the sidebar inside the card.
     assert.equal(Object.hasOwn((await s.get("core.settings")).values, "cardSidebar"), false);
     await assert.rejects(s.run("core.settings.set", { patch: { cardSidebar: "inset" }, scope: "common" }), /Unknown setting: cardSidebar/);
     await s.run("core.settings.open");
@@ -359,7 +359,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
-    // 호스트는 설정 디렉터리의 심볼릭 링크를 해소한 경로를 사용한다.
+    // The host uses the path in which the symbolic link of the configuration directory is resolved.
     const config = realpathSync(app.configDir);
     const services = join(config, "services");
     // The process of the host holds the switch: the switch writes no file of the configuration folder and no flag into a
@@ -423,12 +423,12 @@ for (const app of Object.values(APPS)) {
     await s.run("core.settings.open");
     const { card } = await s.until("core.settings-modal", (modal) => modal.open && modal.scroll === 0,
       "the settings window did not open at its top");
-    // 휠은 표시된 모달 웹뷰가 받는다. 표시 전의 휠은 메인 페이지로 간다.
+    // The wheel goes to the displayed modal web view. A wheel before the display goes to the main page.
     await s.until("host.window", (w) => w.modal?.id === "settings" && w.modal.shown, "the settings window was not shown");
-    // 일반 절을 아래로 내린다. 위치는 네이티브 창이 보고한다.
+    // Scrolls the General section down. The native window reports the position.
     await s.pointer(card.x + card.w / 2, card.y + card.h / 2, "scroll", { deltaY: 240 });
     const { scroll } = await s.until("core.settings-modal", (modal) => modal.scroll > 0, "the settings window did not scroll");
-    // 값을 바꾸면 창을 다시 그린다. 다시 그린 뒤에도 같은 내용이므로 위치를 유지한다.
+    // Changing a value redraws the window. The content stays the same after the redraw, so the position is kept.
     const drawn = await s.collect("core.settings-modal");
     await s.run("core.settings.change", { key: "dim", value: String(!dim), scope: "common" });
     await s.until("core.settings", (value) => value.values.dim === !dim && !value.saving, "the setting did not change");

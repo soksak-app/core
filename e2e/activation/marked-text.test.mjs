@@ -1,11 +1,11 @@
-// 활성화 등급 창 검사: marked text 를 쓰는 macOS 일본어 입력기의 조합이 끝날 때 터미널이 그 문자열을
-// PTY 에 정확히 한 번 쓰는지 확인한다(F8-7).
+// Activation-tier window check: confirms that, when the composition of a macOS Japanese input method that uses marked text ends, the terminal writes that string
+// to the PTY exactly once (F8-7).
 //
-// 일본어(로마자) 입력기는 입력한 가나를 marked text 로 두고(실시간 변환이 켜져 있으면 한자로 바꾼다),
-// 입력 소스를 바꾸면 조합을 끝낸다. 기대하는 확정 문자열은 입력기가 마지막으로 보고한 marked text 다. 이 검사는
-// 앱을 활성화해 사용자 포커스를 가져가고 진단 빌드의 diagnostics.input.source 로 입력 소스를 바꾸며,
-// 끝나면 이전 입력 소스를 되돌린다. 입력 소스가 켜져 있지 않으면 실패한다. 사용자가 승인한 실행에서
-// pnpm -F @soksak/e2e verify:activation 으로만 실행한다.
+// The Japanese (romaji) input method keeps the typed kana as marked text (and converts it to kanji when live conversion is on),
+// and ends the composition when the input source changes. The expected committed string is the marked text that the input method reported last. This check
+// activates the app and takes the user's focus, switches the input source through diagnostics.input.source of the diagnostic build,
+// and restores the previous input source at the end. It fails when the input source is not enabled. A run that the user approved runs it
+// only through pnpm -F @soksak/e2e verify:activation.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -30,7 +30,7 @@ for (const app of Object.values(APPS)) {
       const original = (await s.request("diagnostics.input.source")).current;
       s.cleanup(() => s.request("diagnostics.input.source", { select: original }));
 
-      // 키 창은 포인터 위치를 이동으로 받으므로 창을 포인터 밖에 둔다.
+      // The key window receives the pointer position as a movement, so the window is placed away from the pointer.
       await s.keepPointerOutside();
       const view = await s.rect("terminal.view", undefined, surface);
       const x = view.document.x + view.x + view.width / 2;
@@ -47,14 +47,14 @@ for (const app of Object.values(APPS)) {
       assert.equal((await s.request("diagnostics.input.source", { select: JAPANESE })).current, JAPANESE,
         `the ${JAPANESE} input source is not enabled`);
       for (const key of ["n", "i", "h", "o", "n", "n"]) await s.press(key);
-      // 마지막 n 뒤 marked text 에는 로마자가 남지 않는다.
+      // No romaji remains in the marked text after the last n.
       const marked = (await s.until("terminal.compose", (compose) => compose.text.length > 0 && !/[a-z]/.test(compose.text),
         "the input method did not show marked text for nihonn", { surface })).text;
       const screen = await s.get("terminal.screen", surface);
       assert.ok(!screen.some((cells) => cells.map((cell) => cell.ch).join("").includes(marked)),
         "marked text reached the PTY before the composition ended");
 
-      // 입력 소스를 바꾸면 입력기가 조합을 끝내고 AppKit 이 marked text 를 확정한다.
+      // When the input source changes, the input method ends the composition and AppKit commits the marked text.
       assert.equal((await s.request("diagnostics.input.source", { select: ABC })).current, ABC);
       await s.until("terminal.compose", (compose) => compose.text === "",
         "the ended composition left a preedit", { surface });
