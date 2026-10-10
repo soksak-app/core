@@ -409,21 +409,24 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .picker{position:absolute;z-index:41;min-width:170px;max-width:260px;max-height:238px;
   overflow-y:auto;scrollbar-width:thin;padding:4px;
   background:var(--card);border-radius:var(--r-sm);
-  border:var(--bw) solid var(--edge);box-shadow:0 12px 28px rgb(0 0 0 / .34)}
+  border:var(--bw) solid var(--edge);box-shadow:0 12px 28px rgb(0 0 0 / .34);
+  --picker-pad:8px;--picker-icon:14px;--picker-gap:8px;--picker-indent:12px}
 .picker[hidden]{display:none}
 .picker__head{padding:4px 8px 6px;font-size:var(--text-caption);color:var(--muted);letter-spacing:var(--section-tracking)}
 /* 묶음 목록(스페이스 앱)은 항목이 많으므로 높이 상한을 키운다. 묶음 제목은 판 지도와 이름이며 나무 깊이만큼 들여쓴다. */
-.picker--grouped{max-width:300px;max-height:min(480px,calc(100vh - 24px))}
-.picker__group{display:flex;align-items:center;gap:6px;padding:6px 8px 3px calc(8px + var(--depth,0) * 12px);
+.picker--grouped{max-width:300px;max-height:min(480px,calc(100vh - 24px));--picker-icon:22px}
+/* 제목과 항목은 같은 깊이에서 아이콘 칸의 x 와 이름의 x 가 같다. 칸 너비·안쪽 여백·간격·들여쓰기는 .picker 의 변수 하나씩이 정한다. */
+.picker__group{display:flex;align-items:center;gap:var(--picker-gap);
+  padding:6px var(--picker-pad) 3px calc(var(--picker-pad) + var(--depth,0) * var(--picker-indent));
   font-size:var(--text-caption);color:var(--muted)}
-.picker__group svg{width:22px;height:14px;flex:0 0 auto}
+.picker__group svg{width:var(--picker-icon);height:14px;flex:0 0 auto}
 .picker__group rect{fill:none;stroke:currentColor;stroke-width:.6}
 .picker__group rect[data-own=true]{fill:currentColor}
-.picker--grouped .picker__item[data-group]{padding-left:calc(16px + var(--depth,0) * 12px)}
-.picker__item{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;
+.picker__item{display:flex;align-items:center;gap:var(--picker-gap);width:100%;
+  padding:5px var(--picker-pad) 5px calc(var(--picker-pad) + var(--depth,0) * var(--picker-indent));
   border:0;border-radius:var(--r-xs);background:transparent;color:var(--fg);
   font:inherit;font-size:var(--text-control);text-align:left;cursor:pointer}
-.picker__item svg{width:14px;height:14px;flex:0 0 auto;fill:none;stroke:currentColor;
+.picker__item svg{width:var(--picker-icon);height:14px;flex:0 0 auto;fill:none;stroke:currentColor;
   stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
 .picker__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .picker__item small{margin-left:auto;padding-left:8px;color:var(--muted);font-size:var(--text-caption);flex:0 0 auto}
