@@ -69,3 +69,23 @@ test("a limit above ten minutes, a missing limit and an empty list are refused",
   await assert.rejects(runTests({ tests: [node("x", "0")], concurrency: 1, write() {} }), /defaultTimeoutMs/);
   await assert.rejects(runTests({ tests: [], concurrency: 1, defaultTimeoutMs: 1000, write() {} }), /no tests/);
 });
+
+test("a test starts only after the gate of the runner opened, and the wait is not part of its limit", async () => {
+  const lines = [];
+  let open;
+  const gate = new Promise((resolve) => { open = resolve; });
+  const calls = [];
+  const run = runTests({
+    tests: [{ name: "gated", command: process.execPath, args: ["-e", "setTimeout(() => {}, 150)"], timeoutMs: 3000 }],
+    concurrency: 1, defaultTimeoutMs: 3000, write: (line) => lines.push(line),
+    beforeEach: async (item) => { calls.push(item.name); await gate; },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.deepEqual(calls, ["gated"]);
+  assert.equal(lines.some((line) => line.startsWith("RUN  gated")), false, "the test started before the gate opened");
+  assert.equal(lines.some((line) => line.startsWith("WAIT gated")), true, "the wait is not named");
+  open();
+  const { results } = await run;
+  assert.equal(results.get("gated").status, "pass");
+  assert.ok(lines.some((line) => line.startsWith("RUN  gated")));
+});

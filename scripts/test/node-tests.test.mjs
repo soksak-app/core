@@ -92,3 +92,14 @@ test("another script of the packages that have it is discovered, and quotes arou
   const { tests } = discoverNodeTests({ root, packages: ["e2e", "other"], script: "verify" });
   assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1)]), [["e2e/a.test.mjs", ["--test", "--test-concurrency=1", "--test-global-setup=./setup.mjs"]]]);
 });
+
+test("the idle gate waits until the person gave no input for the given seconds", async () => {
+  const { whenIdle } = await import("../node-tests.mjs");
+  const readings = [2, 4, 31];
+  const lines = [];
+  await whenIdle(30, { idle: () => readings.shift(), intervalMs: 1, write: (line) => lines.push(line) })({ name: "e2e/x.test.mjs" });
+  assert.deepEqual(readings, []);
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /^WAIT e2e\/x\.test\.mjs: the person was active 2s ago, waiting for 30s without input$/);
+  await assert.rejects(whenIdle(30, { idle: () => null })({ name: "x" }), /the system does not report the idle time of the input/);
+});

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F154.4.3: `pnpm verify:windows --when-idle <seconds>` starts each window-check file only after the person gave no input for that long, so the checks neither take the focus of the person nor fail on the input of the person; the runner names a waiting test with `WAIT`.
 - F156: the debug view places the native modal again when an image loads, so the modal has the height of the card with the image.
 - F157: the timeline of the debug view draws the newest 1000 lines and states how many it leaves out, spaces the updates that follow a growing file by 500 ms, and reads a file without a line as no row, in the view and in `sok debug timeline`; the page no longer stops answering on large event files.
 - F154.3: the full run of `make host-contract-check` (1586 tests in 480 s) found one Tauri test that waited 120 s for a message that the service never sends, so it passed only at the limit of the runner; the wait is removed and the test takes 0.3 s. The contract cases of `sok debug timeline` and the scope of the notification case are written in the table.

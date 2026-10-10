@@ -64,7 +64,8 @@ function runOne(item, limitMs) {
  * Runs `tests` (`{name, command, args, cwd?, env?, timeoutMs?}`) with at most `concurrency` processes at once. `write(line)`
  * receives one line per event: `RUN`, `PASS`, `FAIL`, `TIME`, a `RUNNING` line every `heartbeatMs` that names the tests in
  * flight with their running time, the `SLOWEST` tests, and the `TOTAL`. Resolves with `{results, slowest}`; a result is
- * `{status, elapsedMs, output}` with the status `pass`, `fail` or `timeout`.
+ * `{status, elapsedMs, output}` with the status `pass`, `fail` or `timeout`. `beforeEach(item)`, when given, is awaited before each test
+ * starts; the line `WAIT <name>` names the test that waits for it.
  */
 export async function runTests(options) {
   validate(options);
@@ -82,6 +83,11 @@ export async function runTests(options) {
   }, heartbeatMs);
   const worker = async () => {
     for (let item = queue.shift(); item; item = queue.shift()) {
+      // The gate decides when the test may start (for example only while the person is away); the wait is not part of its limit.
+      if (options.beforeEach) {
+        write(`WAIT ${item.name}`);
+        await options.beforeEach(item);
+      }
       running.set(item.name, performance.now());
       write(`RUN  ${item.name} (${running.size} running)`);
       const limit = item.timeoutMs ?? defaultTimeoutMs;

@@ -2,13 +2,36 @@
 // starts and ends with its elapsed time, has its own limit, and runs in parallel (docs/operations/examples.md#test-runner).
 // The test script of each package names the flags and the paths: `node --test [flags] <paths>`, optionally after commands such as
 // `pnpm build`. `--script <name>` reads another script of the packages that have it (`verify` runs the window checks, with
-// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600). The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it.
+// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it.
 import { execFileSync } from 'node:child_process';
 import { existsSync, globSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runTests } from './test-runner.mjs';
+
+/** The seconds since the last keyboard or pointer input of the person, or null when the system does not report it. */
+export function idleSeconds() {
+  const text = execFileSync('ioreg', ['-c', 'IOHIDSystem'], { encoding: 'utf8', maxBuffer: 1 << 24 });
+  const match = /"HIDIdleTime" = (\d+)/.exec(text);
+  return match === null ? null : Number(match[1]) / 1e9;
+}
+
+/**
+ * A gate that opens when the person has been idle for `seconds`. The system reports no event for the end of an input, so the gate
+ * reads the idle time every `intervalMs` (docs/operations/examples.md#test-runner).
+ */
+export function whenIdle(seconds, { idle = idleSeconds, intervalMs = 5000, write = () => {} } = {}) {
+  return async (item) => {
+    for (;;) {
+      const value = idle();
+      if (value === null) throw new Error('the system does not report the idle time of the input');
+      if (value >= seconds) return;
+      write(`WAIT ${item.name}: the person was active ${value.toFixed(0)}s ago, waiting for ${seconds}s without input`);
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  };
+}
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 /** The limit of one test file. */
@@ -109,7 +132,9 @@ async function main(argv) {
   }
   const concurrency = Number(option('--concurrency', Math.max(2, cpus().length - 2)));
   write(`RUN  ${tests.length} test files with ${concurrency} at once, each limited to ${limitMs / 1000}s`);
-  const { results } = await runTests({ tests, concurrency, defaultTimeoutMs: limitMs, write });
+  const idle = option('--when-idle', null);
+  const beforeEach = idle === null ? undefined : whenIdle(Number(idle), { write });
+  const { results } = await runTests({ tests, concurrency, defaultTimeoutMs: limitMs, write, beforeEach });
   return [...results.values()].every((result) => result.status === 'pass') ? 0 : 1;
 }
 
