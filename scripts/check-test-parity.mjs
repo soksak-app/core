@@ -1617,6 +1617,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F151.3",
+    implementation: [
+      { file: "packages/workbench/debug-timeline.js", symbol: "export function contextRows" },
+      { file: "packages/workbench/debug-ui.js", symbol: "export function filterDebugTimeline" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-timeline.test.mjs", id: "context rows add the rows before and after each row that passes, once, marked as context" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the timeline filters by identifiers and time and shows context rows marked apart" },
+    ],
+    expected: "The debug timeline filters rows by event name, surface, session, correlation identifier and UTC time range, rejects an invalid value with an error, and shows the requested number of context rows around each row that passes.",
+    levels: ["unit"],
+  },
+  {
     id: "F151.1",
     implementation: [
       { file: "packages/workbench/debug-timeline.js", symbol: "export function parseEvents" },

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { eventLine, filterRows, hostEventFiles, mergeRows, parseEvents } from "../debug-timeline.js";
+import { CLEAR_FILTER, contextRows, eventLine, filterRows, hostEventFiles, mergeRows, parseEvents } from "../debug-timeline.js";
 
 const line = (event) => JSON.stringify(event);
 const open = (boot, ts_us = 1) => line({ ts_us, seq: 0, level: "info", layer: "host", event: "log.open", fields: { schema: 1, boot } });
@@ -60,17 +60,68 @@ test("rows are filtered by the least level, the layer and a case-insensitive tex
   ].join("\n");
   const rows = parseEvents("logs/host-b1.jsonl", text, false);
   const seqs = (filter) => filterRows(rows, filter).map((row) => row.seq);
-  assert.deepEqual(seqs({ level: "trace", layer: "all", text: "" }), [0, 1, 2, 3]);
-  assert.deepEqual(seqs({ level: "warn", layer: "all", text: "" }), [2, 3]);
-  assert.deepEqual(seqs({ level: "trace", layer: "page", text: "" }), [2]);
-  assert.deepEqual(seqs({ level: "trace", layer: "all", text: "ALPHA" }), [1]);
-  assert.deepEqual(seqs({ level: "info", layer: "all", text: "alpha" }), []);
-  assert.throws(() => filterRows(rows, { level: "loud", layer: "all", text: "" }), /timeline level "loud" is not one of/);
-  assert.throws(() => filterRows(rows, { level: "trace", layer: "kernel", text: "" }), /timeline layer "kernel" is not one of/);
-  assert.throws(() => filterRows(rows, { level: "trace", layer: "all", text: 3 }), /timeline text must be a string, found 3/);
+  assert.deepEqual(seqs({ ...CLEAR_FILTER }), [0, 1, 2, 3]);
+  assert.deepEqual(seqs({ ...CLEAR_FILTER, level: "warn", layer: "all", text: "" }), [2, 3]);
+  assert.deepEqual(seqs({ ...CLEAR_FILTER, level: "trace", layer: "page", text: "" }), [2]);
+  assert.deepEqual(seqs({ ...CLEAR_FILTER, level: "trace", layer: "all", text: "ALPHA" }), [1]);
+  assert.deepEqual(seqs({ ...CLEAR_FILTER, level: "info", layer: "all", text: "alpha" }), []);
+  assert.throws(() => filterRows(rows, { ...CLEAR_FILTER, level: "loud", layer: "all", text: "" }), /timeline level "loud" is not one of/);
+  assert.throws(() => filterRows(rows, { ...CLEAR_FILTER, level: "trace", layer: "kernel", text: "" }), /timeline layer "kernel" is not one of/);
+  assert.throws(() => filterRows(rows, { ...CLEAR_FILTER, level: "trace", layer: "all", text: 3 }), /timeline text must be a string, found 3/);
 });
 
 test("the event files of the host are the listed logs/host-<boot>.jsonl files in path order", () => {
   const paths = ["logs/host-b.jsonl", "logs/host-a.jsonl", "logs/host-a.jsonl.1", "logs/sidecar-a.jsonl", "logs/application.log", "logs/captures/host-x.jsonl"];
   assert.deepEqual(hostEventFiles(paths.map((path) => ({ path, size: 1, modified: 1 }))), ["logs/host-a.jsonl", "logs/host-b.jsonl"]);
+});
+
+const identified = () => parseEvents("logs/host-b1.jsonl", [
+  open("b1"),
+  event(1791500000000000, 1, "info", "host", "host.window.created", { window: "w1", surface: "tab-a", session: "s1", cids: ["c1"] }),
+  event(1791500001000000, 2, "info", "page", "page.call.begin", { surface: "tab-a", session: "s1", cids: ["c1", "c2"] }),
+  event(1791500002000000, 3, "warn", "page", "page.call.slow", { surface: "tab-b", session: "s2", cids: ["c2"] }),
+  event(1791500003000000, 4, "info", "native", "native.input.key_down", { surface: "tab-b" }),
+  event(1791500004000000, 5, "info", "host", "host.window.closed", { window: "w1" }),
+].join("\n"), false);
+
+test("rows are filtered by event name, surface, session, correlation identifier and time range", () => {
+  const rows = identified();
+  const seqs = (change) => filterRows(rows, { ...CLEAR_FILTER, ...change }).map((row) => row.seq);
+  assert.deepEqual(seqs({ event: "PAGE.CALL" }), [2, 3]);
+  assert.deepEqual(seqs({ surface: "tab-a" }), [1, 2]);
+  assert.deepEqual(seqs({ surface: "tab" }), []);
+  assert.deepEqual(seqs({ session: "s2" }), [3]);
+  assert.deepEqual(seqs({ cid: "c2" }), [2, 3]);
+  assert.deepEqual(seqs({ cid: "c" }), []);
+  assert.deepEqual(seqs({ from: "2026-10-08T22:53:21Z", to: "2026-10-08T22:53:22.000000Z" }), [2, 3]);
+  assert.deepEqual(seqs({ from: "2026-10-08T22:53:23Z" }), [4, 5]);
+  assert.deepEqual(seqs({ to: "2026-10-08T22:53:20.999999Z" }), [0, 1]);
+  assert.deepEqual(seqs({ surface: "tab-b", cid: "c2", event: "slow" }), [3]);
+});
+
+test("invalid event, surface, session, correlation identifier, time and context values are rejected", () => {
+  const rows = identified();
+  const bad = (change, expected) => assert.throws(() => filterRows(rows, { ...CLEAR_FILTER, ...change }), expected);
+  bad({ event: 3 }, /timeline event must be a string, found 3/);
+  bad({ surface: null }, /timeline surface must be a string, found null/);
+  bad({ session: 1 }, /timeline session must be a string, found 1/);
+  bad({ cid: [] }, /timeline cid must be a string, found \[\]/);
+  bad({ from: "yesterday" }, /timeline from "yesterday" is not a UTC time like 2026-10-08T22:53:20\.123456Z or empty/);
+  bad({ to: "2026-10-08 22:53:20Z" }, /timeline to "2026-10-08 22:53:20Z" is not a UTC time/);
+  bad({ from: "2026-02-30T00:00:00Z" }, /timeline from "2026-02-30T00:00:00Z" is not a UTC time/);
+  bad({ from: "2026-10-08T22:53:22Z", to: "2026-10-08T22:53:21Z" }, /timeline from is later than to/);
+  bad({ context: 2 }, /timeline context must be decimal digits, found 2/);
+  bad({ context: "-1" }, /timeline context must be decimal digits, found "-1"/);
+  bad({ context: "12345" }, /timeline context must be decimal digits, found "12345"/);
+});
+
+test("context rows add the rows before and after each row that passes, once, marked as context", () => {
+  const rows = identified();
+  const shape = (change) => contextRows(rows, { ...CLEAR_FILTER, ...change }).map((entry) => `${entry.row.seq}${entry.match ? "*" : ""}`);
+  assert.deepEqual(shape({ event: "slow" }), ["3*"]);
+  assert.deepEqual(shape({ event: "slow", context: "1" }), ["2", "3*", "4"]);
+  assert.deepEqual(shape({ event: "page.call", context: "1" }), ["1", "2*", "3*", "4"]);
+  assert.deepEqual(shape({ event: "log.open", context: "2" }), ["0*", "1", "2"]);
+  assert.deepEqual(shape({ event: "closed", context: "9" }), ["0", "1", "2", "3", "4", "5*"]);
+  assert.deepEqual(shape({ event: "nothing", context: "3" }), []);
 });

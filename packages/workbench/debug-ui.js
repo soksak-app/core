@@ -10,7 +10,7 @@ import { commandOf, delegate, mark, run } from "./commands.js";
 import { registry } from "./exposure.js";
 import { hideError, showError } from "./shown-errors.js";
 import { newestFirst } from "./debug-order.js";
-import { eventLine, filterRows, hostEventFiles, LAYERS, LEVELS, mergeRows, parseEvents } from "./debug-timeline.js";
+import { CLEAR_FILTER, contextRows, eventLine, filterRows, hostEventFiles, LAYERS, LEVELS, mergeRows, parseEvents } from "./debug-timeline.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 
 /** The name of the view: its visible title and the name the host gives its window. */
@@ -33,7 +33,7 @@ let recorded = null;
 let entries = [];
 /** The file that the view shows, {path, size, truncated}, or null while the list is shown. */
 let viewing = null;
-/** The timeline of the host event files {files, truncated, rows, shown, filter}, or null while the list or a file is shown. */
+/** The timeline of the host event files {files, truncated, rows, shown, lines, filter}, or null while the list or a file is shown. */
 let timeline = null;
 /** The running or last operation {action, path, state}, or null. */
 let operation = null;
@@ -53,7 +53,7 @@ export function onDebugDrawn(fn) {
 /** The timeline part of the status core.debug. */
 function timelineState() {
   if (timeline === null) return null;
-  return { sources: timeline.files, truncated: timeline.truncated, total: timeline.rows.length, shown: timeline.shown.length, ...timeline.filter };
+  return { sources: timeline.files, truncated: timeline.truncated, total: timeline.rows.length, shown: timeline.shown.length, lines: timeline.lines.length, ...timeline.filter };
 }
 
 /** The status core.debug. */
@@ -142,9 +142,10 @@ function drawTimeline() {
   }
   timelineView.querySelector(".dbg-card__cut").hidden = timeline.truncated.length === 0;
   timelineRows.textContent = "";
-  for (const row of timeline.shown) {
+  for (const { row, match } of timeline.lines) {
     const el = document.createElement("div");
     el.className = "dbg-card__line";
+    if (!match) el.dataset.context = "true";
     el.dataset.expose = "core.debug.timeline.row";
     el.textContent = eventLine(row);
     timelineRows.appendChild(el);
@@ -158,6 +159,15 @@ function filterControl(el, name, expose, label) {
   el.setAttribute("aria-label", label);
   mark(el, "core.debug.timeline.filter", {}, name);
   return el;
+}
+
+/** A text field for a filter member of the timeline. */
+function filterField(name, expose, label) {
+  const el = document.createElement("input");
+  el.type = "text";
+  el.className = "set-text";
+  el.placeholder = label;
+  return filterControl(el, name, expose, label);
 }
 
 /** A selection box for a filter member of the timeline. */
@@ -238,7 +248,14 @@ function makeCard() {
   el.querySelector(".dbg-card__filters").append(
     filterSelect("level", "core.debug.timeline.level", "가장 낮은 level", LEVELS),
     filterSelect("layer", "core.debug.timeline.layer", "layer", ["all", ...LAYERS]),
-    filterControl(text, "text", "core.debug.timeline.text", "찾을 글자"));
+    filterControl(text, "text", "core.debug.timeline.text", "찾을 글자"),
+    filterField("event", "core.debug.timeline.event", "event 이름"),
+    filterField("surface", "core.debug.timeline.surface", "surface"),
+    filterField("session", "core.debug.timeline.session", "session"),
+    filterField("cid", "core.debug.timeline.cid", "correlation identifier"),
+    filterField("from", "core.debug.timeline.from", "시작 시각 (UTC)"),
+    filterField("to", "core.debug.timeline.to", "끝 시각 (UTC)"),
+    filterSelect("context", "core.debug.timeline.context", "앞뒤 줄 수", ["0", "1", "2", "3", "5", "10"]));
   // Without a host this document's card receives input; a control runs the command that it points to.
   delegate(el);
   return el;
@@ -370,9 +387,6 @@ export function listDebugFiles() {
   draw();
 }
 
-/** The filter of a timeline that has just been loaded: every level and layer, any text. */
-const CLEAR_FILTER = { level: "trace", layer: "all", text: "" };
-
 /** Shows the rows of the event files of the host in `logs/` in time order. */
 export async function showDebugTimeline() {
   if (!card) throw new Error("the debug view is not open");
@@ -387,7 +401,7 @@ export async function showDebugTimeline() {
     }));
     const rows = mergeRows(loaded.map((file) => file.rows));
     const filter = { ...CLEAR_FILTER };
-    timeline = { files, truncated: loaded.filter((file) => file.truncated).map((file) => file.path), rows, shown: filterRows(rows, filter), filter };
+    timeline = { files, truncated: loaded.filter((file) => file.truncated).map((file) => file.path), rows, shown: filterRows(rows, filter), lines: contextRows(rows, filter), filter };
     viewing = null;
     text.textContent = "";
     image.removeAttribute("src");
@@ -400,15 +414,15 @@ export async function showDebugTimeline() {
   }
 }
 
-/** Sets the level, layer or text filter of the shown timeline; the members that are not given keep their value. */
+/** Sets the filter members of the shown timeline; the members that are not given keep their value. */
 export function filterDebugTimeline(change) {
   if (!card) throw new Error("the debug view is not open");
   if (timeline === null) throw new Error("the debug timeline is not shown");
   const unknown = Object.keys(change).filter((name) => !Object.hasOwn(CLEAR_FILTER, name));
   if (unknown.length > 0) throw new Error(`timeline filter has no member ${unknown.join(", ")}`);
-  if (Object.keys(change).length === 0) throw new Error("timeline filter needs level, layer or text");
+  if (Object.keys(change).length === 0) throw new Error(`timeline filter needs ${Object.keys(CLEAR_FILTER).slice(0, -1).join(", ")} or context`);
   const filter = { ...timeline.filter, ...change };
-  timeline = { ...timeline, filter, shown: filterRows(timeline.rows, filter) };
+  timeline = { ...timeline, filter, shown: filterRows(timeline.rows, filter), lines: contextRows(timeline.rows, filter) };
   draw();
 }
 

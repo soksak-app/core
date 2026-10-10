@@ -1011,7 +1011,7 @@
       },
       {
         "name": "core.debug",
-        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files that were truncated, the counts of all and shown rows and its filter or null, the scroll position of the shown content in points, the running or last save operation, and the error of the last failed step or operation or null.",
+        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files that were truncated, the counts of all rows, rows that pass the filter and shown lines with the context rows, and its filter or null, the scroll position of the shown content in points, the running or last save operation, and the error of the last failed step or operation or null.",
         "schema": {
           "type": "object",
           "properties": {
@@ -1092,6 +1092,30 @@
                 },
                 "text": {
                   "type": "string"
+                },
+                "event": {
+                  "type": "string"
+                },
+                "surface": {
+                  "type": "string"
+                },
+                "session": {
+                  "type": "string"
+                },
+                "cid": {
+                  "type": "string"
+                },
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                },
+                "context": {
+                  "type": "string"
+                },
+                "lines": {
+                  "type": "number"
                 }
               }
             },
@@ -1852,7 +1876,7 @@
       },
       {
         "name": "core.debug.timeline.filter",
-        "description": "Sets the filter of the shown debug timeline: level is the least severe level shown, layer is a layer or all, and text is a case-insensitive part of the text line of a row. A member that is not given keeps its value; at least one member is required.",
+        "description": "Sets the filter of the shown debug timeline: level is the least severe level shown, layer is a layer or all, and text is a case-insensitive part of the text line of a row, event is a case-insensitive part of the event name, surface and session are whole identifiers, cid is one correlation identifier of a row, from and to are inclusive UTC times like 2026-10-08T22:53:20.123456Z, and context is the number of rows shown before and after each passing row as decimal digits; an empty text leaves event, surface, session, cid, from or to open. A member that is not given keeps its value; at least one member is required.",
         "params": {
           "type": "object",
           "properties": {
@@ -1863,6 +1887,27 @@
               "enum": ["all", "native", "host", "page", "plugin", "sidecar"]
             },
             "text": {
+              "type": "string"
+            },
+            "event": {
+              "type": "string"
+            },
+            "surface": {
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            },
+            "cid": {
+              "type": "string"
+            },
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            },
+            "context": {
               "type": "string"
             }
           }
@@ -3713,12 +3758,40 @@
         "description": "The text field of the part of a row that the timeline requires."
       },
       {
+        "name": "core.debug.timeline.event",
+        "description": "The text field of the part of the event name that the timeline requires."
+      },
+      {
+        "name": "core.debug.timeline.surface",
+        "description": "The text field of the surface that the timeline requires."
+      },
+      {
+        "name": "core.debug.timeline.session",
+        "description": "The text field of the session that the timeline requires."
+      },
+      {
+        "name": "core.debug.timeline.cid",
+        "description": "The text field of the correlation identifier that a row of the timeline requires."
+      },
+      {
+        "name": "core.debug.timeline.from",
+        "description": "The text field of the first UTC time that the timeline shows."
+      },
+      {
+        "name": "core.debug.timeline.to",
+        "description": "The text field of the last UTC time that the timeline shows."
+      },
+      {
+        "name": "core.debug.timeline.context",
+        "description": "The selection box of the number of rows shown before and after each row that passes the filter."
+      },
+      {
         "name": "core.debug.timeline.rows",
         "description": "The container of the rows of the timeline."
       },
       {
         "name": "core.debug.timeline.row",
-        "description": "The rows of the timeline in time order, each the text line of one event.",
+        "description": "The rows of the timeline in time order, each the text line of one event; a row shown only as context has data-context.",
         "many": true
       },
       {

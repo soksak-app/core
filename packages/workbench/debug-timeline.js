@@ -98,18 +98,81 @@ export function eventLine(row) {
   return parts.join(" ");
 }
 
+/** The filter of a timeline that has just been loaded: every level and layer, no text, identifier or time bound, no context rows. */
+export const CLEAR_FILTER = { level: "trace", layer: "all", text: "", event: "", surface: "", session: "", cid: "", from: "", to: "", context: "0" };
+
+/** The accepted text of a time bound: UTC with seconds and up to six fractional digits. */
+const UTC_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?Z$/;
+
+/** The microseconds of a time bound, or null for the empty text that leaves the bound open. */
+function boundOf(name, value) {
+  if (typeof value !== "string") throw new Error(`timeline ${name} must be a string, found ${found(value)}`);
+  if (value === "") return null;
+  const invalid = () => new Error(`timeline ${name} ${found(value)} is not a UTC time like 2026-10-08T22:53:20.123456Z or empty`);
+  const match = UTC_TIME.exec(value);
+  if (match === null) throw invalid();
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  // A date that the calendar does not have (for example February 30) moves to another day in Date.UTC.
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day || hour > 23 || minute > 59 || second > 59) throw invalid();
+  return date.getTime() * 1000 + Number((match[7] ?? "").padEnd(6, "0"));
+}
+
+/** The number of context rows of a filter: decimal digits, at most four. */
+function contextCount(value) {
+  if (typeof value !== "string" || !/^[0-9]{1,4}$/.test(value)) throw new Error(`timeline context must be decimal digits, found ${found(value)}`);
+  return Number(value);
+}
+
 /**
- * The rows that pass the filter: `level` is the least severe level shown, `layer` is a layer or `all`, and `text` is
- * a case-insensitive part of the text line of the row.
+ * The rows that pass the filter: `level` is the least severe level shown, `layer` is a layer or `all`, `text` is
+ * a case-insensitive part of the text line of the row, `event` is a case-insensitive part of the event name, `surface`
+ * and `session` are the whole identifier, `cid` is one of the correlation identifiers of the row, `from` and `to`
+ * are inclusive UTC times, and an empty text leaves a member open. `context` only applies to `contextRows`.
  */
-export function filterRows(rows, { level, layer, text }) {
+export function filterRows(rows, filter) {
+  const { level, layer, text, event, surface, session, cid, from, to } = filter;
   if (!LEVELS.includes(level)) throw new Error(`timeline level ${found(level)} is not one of ${LEVELS.join(", ")}`);
   if (layer !== "all" && !LAYERS.includes(layer)) throw new Error(`timeline layer ${found(layer)} is not one of all, ${LAYERS.join(", ")}`);
-  if (typeof text !== "string") throw new Error(`timeline text must be a string, found ${found(text)}`);
+  for (const [name, value] of Object.entries({ text, event, surface, session, cid })) {
+    if (typeof value !== "string") throw new Error(`timeline ${name} must be a string, found ${found(value)}`);
+  }
+  contextCount(filter.context);
+  const first = boundOf("from", from);
+  const last = boundOf("to", to);
+  if (first !== null && last !== null && first > last) throw new Error(`timeline from is later than to: ${found(from)} ${found(to)}`);
   const least = LEVELS.indexOf(level);
   const needle = text.toLowerCase();
+  const name = event.toLowerCase();
   return rows.filter((row) =>
     LEVELS.indexOf(row.level) <= least
     && (layer === "all" || row.layer === layer)
+    && (name === "" || row.event.toLowerCase().includes(name))
+    && (surface === "" || row.surface === surface)
+    && (session === "" || row.session === session)
+    && (cid === "" || (row.cids?.includes(cid) ?? false))
+    && (first === null || row.ts_us >= first)
+    && (last === null || row.ts_us <= last)
     && (needle === "" || eventLine(row).toLowerCase().includes(needle)));
+}
+
+/**
+ * The rows that pass the filter with `context` rows of `rows` before and after each of them, once, in the order of
+ * `rows`, as {row, match}; `match` is false for a row that is shown only as context.
+ */
+export function contextRows(rows, filter) {
+  const passing = new Set(filterRows(rows, filter));
+  const count = contextCount(filter.context);
+  const shown = [];
+  let until = -1;
+  rows.forEach((row, index) => {
+    if (passing.has(row)) {
+      for (let before = Math.max(until + 1, index - count); before < index; before += 1) shown.push({ row: rows[before], match: false });
+      shown.push({ row, match: true });
+      until = index + count;
+    } else if (index <= until) {
+      shown.push({ row, match: false });
+    }
+  });
+  return shown;
 }
