@@ -28,6 +28,7 @@
     "debug-ui.js",
     "debug-order.js",
     "debug-timeline.js",
+    "debug-state.js",
     "page-start-errors.js",
     "page-start-errors-install.js",
     "surface-status.js",

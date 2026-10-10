@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F151.5: `debug-state.js` is listed in the files of the workbench package, and a state file whose `page` member is an array (as the host writes it) is shown as a tree.
 - F150.6.1: a page request to a sidecar can carry the correlation identifiers of the inputs it continues: `send(surface, body, cids)` of the sidecar port, the host call `sidecarSend` of both runtimes and both hosts pass `cids`, and the request line has the field `cids` between `root` and `body` only when the list is not empty.
 - F151.5: the debug view shows a state file `logs/state-<time>.json` as a tree of keys and values (`core.debug.state`, the 상태 button of a state file row) and compares it with another state file by listing the paths whose values differ (`core.debug.state.compare`); a file that is not a state is refused with its name and what was found, and `core.debug` reports `state`. The raw `.stderr` and `.crash` files are listed and shown as text. Not observed in a running application.
 - F150.7.3: an image region records each query of the input method that it answers (`markedRange`, `selectedRange`, `hasMarkedText`, `firstRectForCharacterRange`, `characterIndexForPoint`) as the event `native.input.query` at the level `debug` with the arguments, the answer and the focus.

@@ -24,9 +24,9 @@ export function parseState(file, text, truncated) {
   if (state === null || typeof state !== "object" || Array.isArray(state)) throw new Error(`${file}: not a state object: ${text.slice(0, 80)}`);
   if (typeof state.time !== "string") throw new Error(`${file}: time must be a string, found ${found(state.time)}`);
   if (!HOSTS.includes(state.host)) throw new Error(`${file}: host ${found(state.host)} is not one of ${HOSTS.join(", ")}`);
-  for (const name of ["versions", "page"]) {
-    if (state[name] === null || typeof state[name] !== "object" || Array.isArray(state[name])) throw new Error(`${file}: ${name} must be an object, found ${found(state[name])}`);
-  }
+  if (state.versions === null || typeof state.versions !== "object" || Array.isArray(state.versions)) throw new Error(`${file}: versions must be an object, found ${found(state.versions)}`);
+  // `page` is the value the page sent (docs/spec/debug.md): the entries of its exposure, so an array is as valid as an object.
+  if (state.page === null || typeof state.page !== "object") throw new Error(`${file}: page must be an object or an array, found ${found(state.page)}`);
   if (!Array.isArray(state.windows)) throw new Error(`${file}: windows must be an array, found ${found(state.windows)}`);
   return state;
 }

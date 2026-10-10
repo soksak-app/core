@@ -55,3 +55,9 @@ test("a comparison lists the paths whose values differ, including paths present 
   ]);
   assert.deepEqual(compareStates(a, a), []);
 });
+
+test("the page member of a state file is the value the page sent: an array of entries is accepted", () => {
+  const state = { time: "20261010T151707Z", host: "wailsv3", versions: { core: "0.0.10" }, windows: [], page: [{ name: "core.screen", surface: null, result: { modal: null } }] };
+  assert.deepEqual(parseState("logs/state-a.json", JSON.stringify(state), false).page, state.page);
+  assert.throws(() => parseState("logs/state-a.json", JSON.stringify({ ...state, page: "text" }), false), /logs\/state-a\.json: page must be an object or an array, found "text"/);
+});

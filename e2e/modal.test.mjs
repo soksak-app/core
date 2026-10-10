@@ -392,3 +392,34 @@ for (const app of Object.values(APPS)) {
     assert.ok(filtered.timeline.shown > 0 && filtered.timeline.shown < filtered.timeline.total, `the filter shows ${filtered.timeline.shown} of ${filtered.timeline.total} rows`);
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the debug view filters the timeline by event name with context and shows a state file as a tree`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const titles = HELP_TITLES[(await s.get("host.menu")).language];
+    s.cleanup(() => s.run("core.debug.close"));
+    s.cleanup(() => {
+      for (const folder of recordingFolders(s.app.configDir)) {
+        if (!s.recordingsBefore.includes(folder)) rmSync(join(s.app.configDir, "logs", "captures", folder), { recursive: true, force: true });
+      }
+    });
+    await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
+    const opened = await s.until("core.debug", (debug) => debug.open && debug.recorded !== null && debug.entries.length > 0,
+      "the debug view did not record the state and list the files");
+    await s.run("core.debug.timeline");
+    await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.total > 0, "the timeline did not show any row");
+    await s.run("core.debug.timeline.filter", { event: "host.app.event", context: "0" });
+    const plain = await s.until("core.debug", (debug) => debug.timeline.event === "host.app.event" && debug.timeline.context === "0", "the event filter was not applied");
+    await s.run("core.debug.timeline.filter", { context: "2" });
+    const wide = await s.until("core.debug", (debug) => debug.timeline.context === "2", "the context was not applied");
+    assert.ok(plain.timeline.shown > 0, "the event filter shows no row");
+    assert.ok(wide.timeline.lines > plain.timeline.lines, `context rows do not add lines: ${plain.timeline.lines} then ${wide.timeline.lines}`);
+    await s.run("core.debug.list");
+    await s.run("core.debug.state", { path: opened.recorded });
+    const state = await s.until("core.debug", (debug) => debug.state !== null && debug.state.lines > 0, "the state file was not shown as a tree");
+    assert.equal(state.state.path, opened.recorded);
+    assert.equal(state.error, null);
+  });
+}
