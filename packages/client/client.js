@@ -1,4 +1,4 @@
-// 로컬 엔드포인트 클라이언트: endpoint.json 을 읽고 연결해 JSON-RPC 요청과 알림을 처리한다.
+// Local endpoint client: reads endpoint.json, connects, and handles JSON-RPC requests and notifications.
 import { readFile } from "node:fs/promises";
 import { connect as connectSocket } from "node:net";
 import { join } from "node:path";
@@ -6,7 +6,7 @@ import { isDeepStrictEqual } from "node:util";
 import { encodeFrame, FrameReader } from "./frame.js";
 import { transport as platformTransport } from "./platform/platform.js";
 
-/** 엔드포인트 오류 응답을 code 를 가진 Error 로 만든다. */
+/** Turns an endpoint error response into an Error that has a code. */
 export class EndpointError extends Error {
   constructor({ code, message, data }) {
     super(message);
@@ -16,7 +16,7 @@ export class EndpointError extends Error {
   }
 }
 
-// pid 의 프로세스가 있는지 확인한다. EPERM 은 다른 사용자의 프로세스가 있다는 뜻이다.
+// Checks whether a process with the pid exists. EPERM means that a process of another user exists.
 function running(pid) {
   try {
     process.kill(pid, 0);
@@ -26,7 +26,7 @@ function running(pid) {
   }
 }
 
-/** <configDir>/endpoint.json 을 읽고 검사한다. */
+/** Reads and validates <configDir>/endpoint.json. */
 export async function readEndpoint(configDir) {
   const file = join(configDir, "endpoint.json");
   let text;
@@ -54,12 +54,12 @@ export async function readEndpoint(configDir) {
   return endpoint;
 }
 
-/** 설정 디렉터리의 엔드포인트에 연결하고 클라이언트를 반환한다. */
+/** Connects to the endpoint of the configuration directory and returns the client. */
 export async function connect({ configDir }) {
   if (!configDir) throw new Error("configDir is required");
   const endpoint = await readEndpoint(configDir);
   const socket = await new Promise((resolve, reject) => {
-    // net.connect 의 path 는 Unix 소켓 경로와 named pipe 이름을 모두 받는다.
+    // The path of net.connect accepts both a Unix socket path and a named pipe name.
     const s = connectSocket({ path: endpoint.address });
     s.once("connect", () => {
       s.off("error", reject);
@@ -75,7 +75,7 @@ class Client {
   #nextId = 1;
   #pending = new Map();
   #listeners = new Map();
-  // window, name, surface 별 status.watch 사용 수. 호스트는 연결당 하나의 감시만 기록하므로 마지막 사용이 끝날 때 unwatch 한다.
+  // The number of status.watch uses per window, name and surface. The host records one watch per connection, so the last use calls unwatch when it ends.
   #watches = new Map();
   #subscriptions = new Map();
   #closed = null;
@@ -98,7 +98,7 @@ class Client {
     socket.on("close", () => this.#fail(new Error("endpoint connection closed")));
   }
 
-  /** 요청을 보내고 결과를 반환한다. 오류 응답은 EndpointError 로 거부된다. */
+  /** Sends a request and returns the result. An error response rejects with an EndpointError. */
   request(method, params) {
     if (this.#closed) return Promise.reject(this.#closed);
     const id = this.#nextId++;
@@ -110,7 +110,7 @@ class Client {
     });
   }
 
-  /** 알림 수신 함수를 등록하고 해제 함수를 반환한다. */
+  /** Registers a notification listener and returns the function that removes it. */
   on(method, fn) {
     let set = this.#listeners.get(method);
     if (!set) this.#listeners.set(method, (set = new Set()));
@@ -119,12 +119,12 @@ class Client {
   }
 
   /**
-   * status.watch 로 값을 감시하고 predicate 를 만족하는 첫 값으로 이행한다.
-   * 현재 값도 검사한다. timeout(ms) 안에 만족하지 않으면 code "ETIMEDOUT" 로 거부한다.
-   * surface 는 표면 페이지가 등록한 이름의 표면을 지정한다.
+   * Watches a value with status.watch and resolves with the first value that satisfies the predicate.
+   * It also checks the current value. If the predicate is not satisfied within timeout (ms), it rejects with code "ETIMEDOUT".
+   * surface names the surface that a surface page registered under that name.
    */
   watch(window, name, predicate, { timeout = 10000, surface } = {}) {
-    // 기본값: surface 는 선택 옵션이며, 없으면 페이지 상태를 감시하므로 키의 표면 자리는 null 이다.
+    // default: surface is an optional option; without it the page status is watched, so the surface part of the key is null.
     const key = JSON.stringify([window, name, surface ?? null]);
     const target = surface === undefined ? { window, name } : { window, name, surface };
     return new Promise((resolve, reject) => {
@@ -157,7 +157,7 @@ class Client {
         }
         if (ok) finish(null, value);
       };
-      // status.watch 응답 전에 도착하는 알림도 받도록 먼저 등록한다.
+      // Registers first so that a notification that arrives before the status.watch response is also received.
       const off = this.on("status.changed", (params) => {
         if (params?.window === window && params?.name === name && params?.surface === surface) check(params.value);
       });
@@ -179,7 +179,7 @@ class Client {
     });
   }
 
-  /** 연결을 닫는다. 대기 중인 요청은 거부된다. */
+  /** Closes the connection. Pending requests are rejected. */
   close() {
     this.#fail(new Error("endpoint connection closed"));
   }
@@ -188,7 +188,7 @@ class Client {
     return this.#closed !== null;
   }
 
-  /** 연결이 끝나면 종료 원인 Error 로 이행하는 promise. */
+  /** A promise that resolves with the Error of the closing cause when the connection ends. */
   get ended() {
     return this.#ended;
   }
@@ -205,11 +205,11 @@ class Client {
   }
 
   /**
-   * 대상 하나의 구독 요청을 보낸 순서대로 이어 붙인다. 구독 해제와 다음 구독이 이 순서로
-   * 전송되고 적용되어야 한다(docs/spec/endpoint.md).
+   * Chains the subscription requests of one target in the order they were sent. The unsubscription and the next subscription
+   * must be sent and applied in this order (docs/spec/endpoint.md).
    */
   #subscribe(key, send) {
-    // 기본값: 같은 키의 앞선 구독 요청이 없으면 기다릴 것이 없다.
+    // default: without an earlier subscription request of the same key, there is nothing to wait for.
     const previous = this.#subscriptions.get(key) ?? Promise.resolve();
     const sent = previous.then(send);
     const settled = sent.then(() => {}, () => {});
@@ -241,7 +241,7 @@ class Client {
     if (entry.count > 0) return Promise.resolve();
     this.#watches.delete(key);
     if (this.#closed) return Promise.resolve();
-    // 구독은 이 차례보다 앞에 있으므로 여기서는 결과가 정해져 있다. 실패한 구독은 해제하지 않는다.
+    // The subscription precedes this turn, so its result is already decided here. A failed subscription is not unsubscribed.
     const released = this.#subscribe(key, () => entry.ready.then(() => this.request("status.unwatch", target), (error) => {
       throw new Error(`status.unwatch skipped because status.watch failed: ${error.message}`);
     }));
@@ -261,7 +261,7 @@ class Client {
       return;
     }
     if (typeof message?.method === "string") {
-      // 기본값: 그 알림에 등록한 수신자가 없으면 알릴 곳이 없다.
+      // default: a notification without a registered listener has nowhere to be delivered.
       for (const fn of [...(this.#listeners.get(message.method) ?? [])]) fn(message.params);
     }
   }
@@ -278,7 +278,7 @@ class Client {
   }
 }
 
-/** 두 JSON 값이 같은지 비교한다. watch 의 predicate 작성에 쓴다. */
+/** Compares whether two JSON values are equal. Used to write the predicate of watch. */
 export function equals(a, b) {
   return isDeepStrictEqual(a, b);
 }

@@ -107,13 +107,13 @@ test("the options refuse a value that is not one, at construction and after", ()
     assert.equal(grid.height, 0, `height fell back from ${bad}`);
   }
 
-  // 축 이름이 아닌 것과 마찬가지로, 모드 이름이 아닌 것도 거절한다.
+  // Like a value that is not an axis name, a value that is not a mode name is also rejected.
   const asked = new Soksak(undefined, { width: W, height: H, snap: "sideways" });
   assert.equal(asked.snap, "merge", "an unknown snap mode is refused");
   asked.snap = "off";
   assert.equal(asked.snap, "off", "a known one is taken");
 
-  // 크기가 값이 아니면 판의 크기를 바꾸지 않는다. 바꾸면 모든 사각형이 NaN 이 된다.
+  // A size that is not a number does not change the size of the board. Otherwise every rectangle becomes NaN.
   const sized = new Soksak(undefined, { width: W, height: H });
   sized.resize(NaN, H);
   assert.equal(sized.width, W, "resize kept the width");
@@ -436,7 +436,7 @@ test("replace updates the canonical arrangement without replacing the grid", () 
   assert.equal(grid.card("card"), undefined);
   assert.equal(grid.card("upper").data.program, "upper");
   assert.deepEqual(grid.rect("lower"), { x: 312, y: 0, w: 888, h: 800 });
-  // 판은 그대로이고 배치만 바뀌었다. 바뀌기 전의 카드는 이 배치에 없다.
+  // The board is the same and only the arrangement changed. The card before the change is not in this arrangement.
   assert.equal(first.id, "card");
   assert.equal(grid.card(first.id), undefined, "the card that was replaced is gone");
 });

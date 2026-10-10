@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// soksak-mcp: 로컬 엔드포인트의 exposure 를 MCP 도구로 제공하는 stdio 서버.
-// 네트워크 포트를 열지 않는다. stdout 에는 MCP 메시지만 쓰고 진단은 stderr 에 쓴다.
+// soksak-mcp: a stdio server that provides the exposure of the local endpoint as MCP tools.
+// It opens no network port. It writes only MCP messages to stdout and diagnostics to stderr.
 import { createInterface } from "node:readline";
 import { isDeepStrictEqual, parseArgs } from "node:util";
 import { connect } from "@soksak/client";
 
-// 이 서버가 구현하는 MCP 개정판. 2026-07-28 은 요청별 _meta 방식, 2025-11-25 는 initialize 방식이다.
+// The MCP revisions that this server implements. 2026-07-28 uses the per-request _meta form, 2025-11-25 the initialize form.
 const MODERN_VERSION = "2026-07-28";
 const LEGACY_VERSION = "2025-11-25";
 const SUPPORTED_VERSIONS = [MODERN_VERSION, LEGACY_VERSION];
@@ -39,13 +39,13 @@ if (configDir === undefined) {
   process.exit(2);
 }
 
-// 엔드포인트 연결은 첫 도구 요청에서 만들고, 끊기면 다음 요청에서 다시 만든다.
+// The endpoint connection is created at the first tool request and created again at the next request after it breaks.
 let connection = null;
 function client() {
   if (!connection) {
     connection = connect({ configDir }).then(
       (c) => {
-        // 연결 종료를 stderr 에 기록한다. 다음 요청은 새 연결을 만든다.
+        // Records the connection end to stderr. The next request creates a new connection.
         c.ended.then((error) => process.stderr.write(`soksak-mcp: ${error.message}\n`));
         return c;
       },
@@ -62,12 +62,12 @@ function client() {
   });
 }
 
-// 인자의 window, 시작 옵션의 --window, windows.list 의 key 창 순서로 창을 정한다.
+// The window is chosen by the window argument, the --window start option, then the key window order of windows.list.
 async function selectWindow(c, requested) {
   if (requested !== undefined) return requested;
   if (values.window !== undefined) return values.window;
   const windows = await c.request("windows.list");
-  // 기본값: 키 창이 없으면(애플리케이션이 비활성이면) windows.list 의 첫 창이다(선택 순서는 위 주석).
+  // default: without a key window (the application is inactive), the first window of windows.list (the selection order is above).
   const selected = windows.find((w) => w.key) ?? windows[0];
   if (!selected) throw new Error("the application has no window");
   return selected.window;
@@ -88,15 +88,15 @@ function describe(entries) {
   return entries.map((entry) => `${entry.name}${entry.registered ? "" : " (not registered)"}: ${entry.description}`).join("\n");
 }
 
-// 명령 선언은 params 스키마를 반드시 담는다(docs/spec/exposure.md).
+// A command declaration always holds the params schema (docs/spec/exposure.md).
 function paramsOf(command) {
   if (!command.params) throw new Error(`command ${command.name} declares no params schema`);
   return command.params;
 }
 
-// exposure.list 결과로 도구 목록을 만든다.
+// Builds the tool list from the result of exposure.list.
 function buildTools(window, exposure) {
-  // exposure.list 는 항상 세 목록을 모두 담는다(docs/spec/endpoint.md). 빠진 목록은 응답 오류다.
+  // exposure.list always holds all three lists (docs/spec/endpoint.md). A missing list is a response error.
   for (const key of ["status", "commands", "dom"]) {
     if (!Array.isArray(exposure[key])) throw new Error(`exposure.list has no ${key} list`);
   }
@@ -209,7 +209,7 @@ async function listTools() {
   return { tools: buildTools(window, await c.request("exposure.list", { window })) };
 }
 
-// 인자에서 window 를 뺀 나머지를 엔드포인트 params 로 옮긴다.
+// Moves the arguments except window to the endpoint params.
 function withWindow(window, args, keys) {
   const params = { window };
   for (const key of keys) if (args[key] !== undefined) params[key] = args[key];
@@ -218,7 +218,7 @@ function withWindow(window, args, keys) {
 
 async function callTool(params) {
   const name = params?.name;
-  // 기본값: MCP tools/call 의 arguments 는 선택 필드이며, 없으면 인자가 없는 호출이다.
+  // default: arguments of MCP tools/call is an optional field; without it the call has no arguments.
   const args = params?.arguments ?? {};
   if (typeof name !== "string") throw new RpcError(-32602, "tools/call requires name");
   if (typeof args !== "object" || Array.isArray(args)) throw new RpcError(-32602, "arguments must be an object");
@@ -256,7 +256,7 @@ async function callTool(params) {
           value = await c.request("command.run", {
             ...withWindow(window, args, ["surface"]),
             name: name.slice(COMMAND_PREFIX.length).replaceAll("_", "."),
-            // 기본값: 명령 도구의 params 는 선택 인자이며, 없으면 빈 매개변수로 실행한다.
+            // default: params of a command tool is an optional argument; without it the command runs with empty parameters.
             params: args.params ?? {},
           });
       }
@@ -265,19 +265,19 @@ async function callTool(params) {
     const code = error.code !== undefined ? ` (${error.code})` : "";
     return { content: [{ type: "text", text: `${error.message}${code}` }], isError: true };
   }
-  // 기본값: 결과가 없는 요청은 undefined 이고, JSON 에는 undefined 가 없으므로 null 로 적는다.
+  // default: a request without a result gives undefined, and JSON has no undefined, so it is written as null.
   return { content: [{ type: "text", text: JSON.stringify(value ?? null) }] };
 }
 
 async function watchOnce(c, window, args) {
   if (typeof args.name !== "string") throw new Error("name is required");
-  // 기본값: watch 도구 설명이 밝힌 기본 대기 시간 10000 ms 다.
+  // default: the default wait time of 10000 ms that the watch tool description states.
   const timeout = args.timeout ?? 10000;
   const surface = args.surface;
   if ("equals" in args) {
     return c.watch(window, args.name, (value) => isDeepStrictEqual(value, args.equals), { timeout, surface });
   }
-  // 현재 값을 건너뛰고 다음 변경 알림의 값을 반환한다.
+  // Skips the current value and returns the value of the next change notification.
   let changed;
   const off = c.on("status.changed", (params) => {
     if (changed === undefined && params?.window === window && params?.name === args.name && params?.surface === surface) {
@@ -285,8 +285,8 @@ async function watchOnce(c, window, args) {
     }
   });
   try {
-    // 이 수신 함수가 watch 의 수신 함수보다 먼저 등록되었으므로, 알림 값으로 predicate 가 호출될 때 changed 가 이미 있다.
-    // status.get 의 현재 값으로 호출될 때는 알림이 없으면 만족하지 않는다.
+    // This listener was registered before the listener of watch, so changed already exists when the predicate is called with a notification value.
+    // When it is called with the current value of status.get, it is not satisfied unless a notification arrived.
     await c.watch(window, args.name, () => changed !== undefined, { timeout, surface });
     return changed.value;
   } finally {
@@ -294,7 +294,7 @@ async function watchOnce(c, window, args) {
   }
 }
 
-// 요청의 개정판을 판정한다. 반환값은 결과에 붙일 _meta 방식이다.
+// Determines the revision of the request. The return value is the _meta form to attach to the result.
 let legacySession = false;
 function era(params) {
   const meta = params?._meta;
@@ -311,7 +311,7 @@ function era(params) {
 }
 
 function complete(result) {
-  // 기본값: _meta 는 MCP 결과의 선택 필드다. 없으면 서버 정보만 담는다.
+  // default: _meta is an optional field of an MCP result. Without it the result holds only the server information.
   return { resultType: "complete", ...result, _meta: { ...(result._meta ?? {}), [META_SERVER]: SERVER_INFO } };
 }
 
@@ -364,11 +364,11 @@ lines.on("line", (line) => {
     return;
   }
   if (!message || typeof message !== "object" || Array.isArray(message) || message.jsonrpc !== "2.0") {
-    // 기본값: JSON-RPC 2.0 은 요청 id 를 알 수 없는 오류 응답의 id 를 null 로 정한다.
+    // default: JSON-RPC 2.0 sets the id of an error response to null when the request id cannot be known.
     send({ id: message?.id ?? null, error: { code: -32600, message: "Invalid Request" } });
     return;
   }
-  // 응답과 알림은 처리하지 않는다. 이 서버는 클라이언트에 요청을 보내지 않는다.
+  // Responses and notifications are not handled. This server sends no request to the client.
   if (typeof message.method !== "string" || message.id === undefined || message.id === null) return;
   handle(message.method, message.params).then(
     (result) => send({ id: message.id, result }),
@@ -385,7 +385,7 @@ lines.on("close", async () => {
     try {
       (await connection).close();
     } catch {
-      // 연결을 만들지 못한 경우 닫을 것이 없다.
+      // When the connection could not be created, there is nothing to close.
     }
   }
   process.exit(0);

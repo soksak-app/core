@@ -1,8 +1,8 @@
-// Windows 의 로컬 엔드포인트 전송: named pipe.
+// Local endpoint transport of Windows: a named pipe.
 export const name = "windows";
 export const transport = "pipe";
 
-/** 프로세스별 named pipe 이름을 만든다. 파이프는 서버가 닫히면 제거되므로 remove 는 할 일이 없다. */
+/** Creates a named pipe name per process. The pipe is removed when the server closes, so remove has nothing to do. */
 export function createAddress(label) {
   return { address: `\\\\.\\pipe\\${label}-${process.pid}`, remove: () => {} };
 }

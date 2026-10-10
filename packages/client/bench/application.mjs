@@ -1,11 +1,11 @@
-// 실행 중인 애플리케이션의 경로별 JSON-RPC 왕복 지연 측정.
+// Measures the JSON-RPC round-trip latency of a running application per route.
 //
-// 세 경로를 순차 요청으로 잰다.
-//   host    windows.list: 호스트만 응답한다
-//   page    status.get core.screen: 호스트가 메인 페이지에 중계한다
-//   surface status.get core.surface.document: 호스트가 메인 페이지를 거쳐 표면 페이지에 중계한다
+// Measures three routes with sequential requests.
+//   host    windows.list: only the host answers
+//   page    status.get core.screen: the host relays it to the main page
+//   surface status.get core.surface.document: the host relays it through the main page to the surface page
 //
-// 사용법: node bench/application.mjs --config-dir <dir> [--requests <n>] [--json]
+// Usage: node bench/application.mjs --config-dir <dir> [--requests <n>] [--json]
 import { connect } from "../client.js";
 
 const WARMUP = 200;
@@ -26,7 +26,7 @@ function parseArgs(argv) {
   return options;
 }
 
-// 오름차순 정렬 배열에서 nearest-rank 백분위수를 구한다. bench/transport.mjs 와 같은 정의다.
+// Returns the nearest-rank percentile of an ascending sorted array. The definition equals bench/transport.mjs.
 function percentile(sorted, p) {
   const rank = Math.ceil((p / 100) * sorted.length);
   return sorted[Math.min(sorted.length, Math.max(1, rank)) - 1];
