@@ -45,7 +45,7 @@ const TEST_FUNCTION = {
   rust: /^\s*(?:pub\s+)?(?:async\s+)?fn (\w+)\s*\(/,
 };
 
-/** 테스트 소스에서 테스트 함수와 그 함수가 선언한 계약 사례를 읽는다. */
+/** Reads the test functions from the test source and the contract cases that each function declares.
 export function parseDeclarations(source, language, file) {
   const pattern = TEST_FUNCTION[language];
   if (!pattern) throw new Error(`unsupported language ${language}`);
@@ -113,8 +113,8 @@ function statusOf(test, language, runs) {
 }
 
 /**
- * 계약 사례와 호스트별 선언·실행 결과를 비교한다.
- * hosts: [{ name, language, tests, errors, runs }] — runs 는 구성마다 테스트 이름 → 결과 Map 이다.
+ * Compares the contract cases with the declarations and the run results of each host.
+ * hosts: [{ name, language, tests, errors, runs }] — runs maps the test name to its result for each configuration.
  */
 export function auditHostContract(cases, hosts) {
   const errors = [];

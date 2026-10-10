@@ -24,7 +24,7 @@ for (const file of files) {
   if (!existsSync(partner)) errors.push(`${file}: missing translation pair ${partner}`);
   const text = withoutCode(readFileSync(file, "utf8"));
   if (file.startsWith("docs/spec/")) errors.push(...checkSpecificationIds(text, file));
-  // 빈 줄로 끊긴 표: 표 행, 빈 줄, 표 행이 이어지면 뒤의 행은 표에 속하지 않는다.
+  // A table cut by a blank line: when a table row, a blank line and a table row follow, the later row does not belong to the table.
   const lines = text.split("\n");
   lines.forEach((line, index) => {
     if (line.startsWith("|") && index >= 2 && lines[index - 1].trim() === "" && lines[index - 2].startsWith("|")) {
@@ -53,7 +53,7 @@ const retired = retiredChecklistItems(changelogEnglish, changelogKorean);
 errors.push(...retired.errors);
 errors.push(...checkChecklistTranslations(...statusFiles.map((file) => readFileSync(file, "utf8"))));
 for (const file of statusFiles) {
-  // execFileSync 의 기본 출력 한도(1 MiB)는 체크리스트보다 작으므로 커밋된 파일의 크기를 한도로 쓴다.
+  // The default output limit of execFileSync (1 MiB) is smaller than the checklist, so the size of the committed file is the limit.
   const size = Number(execFileSync("git", ["cat-file", "-s", `HEAD:${file}`], { encoding: "utf8" }));
   const previous = execFileSync("git", ["show", `HEAD:${file}`], { encoding: "utf8", maxBuffer: size + 1 });
   errors.push(...checkCompletedItems(previous, readFileSync(file, "utf8"), file, retired.ids));

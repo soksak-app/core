@@ -3411,10 +3411,10 @@ function ownerReferences(source) {
 }
 
 /**
- * 소유자 경계를 검사한다. 선언 파일만 플러그인과 사이드카를 연결할 수 있다.
- * 이 함수는 동작 테스트가 아니라 구현·테스트 소스의 금지된 참조를 기계적으로
- * 판정한다. 앱과 e2e는 공개 계약의 소비자이므로 다른 공개 패키지를 사용할 수 있지만
- * private/src/tests 경로는 모든 소유자에서 금지한다.
+ * Checks the owner boundaries. Only declaration files may connect a plugin and a sidecar.
+ * This function is not a behavior test: it mechanically decides on the forbidden references in implementation and test sources.
+ * The apps and e2e consume the public contract, so they may use other public packages,
+ * but the private, src and tests paths are forbidden for every owner.
  */
 export function auditOwnership(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
   const errors = [];
@@ -3561,7 +3561,7 @@ export function auditFailureMatrix(files, readSource = (file) => readFileSync(`$
   };
 }
 
-// 언어별 고정 루트를 두지 않는다. 한 패키지의 다른 언어도 모두 발견한다.
+// There is no fixed root per language: every other language of a package is found too.
 export function discoverInventory(files) {
   const implementations = [], tests = [], manifests = [], generated = [];
   for (const file of [...new Set(files)].sort()) {
@@ -3604,7 +3604,7 @@ function repositoryFiles() {
   }).split("\0").filter((file) => file && existsSync(`${ROOT}${file}`));
 }
 
-// 선언에 사용하는 *, **, ? 패턴만 확장한다.
+// Only the patterns *, **, and ? that declarations use are expanded.
 function globRegex(glob) {
   let source = "^";
   for (let index = 0; index < glob.length; index += 1) {
@@ -3788,7 +3788,7 @@ export function auditCompletedFeatureLinks(features, checklistSource = readFileS
     .map((id) => `${id}: completed capability has no feature link`);
 }
 
-// 현재 inventory 수는 운영 문서의 현재 상태 문장에 기록한다. 완료된 체크리스트 항목의 증거는 바꾸지 않는다.
+// The current inventory counts are recorded in the sentence of the operations document that states the current state. The evidence of a completed checklist item is not changed.
 export function auditRecordedInventoryCounts(
   inventory,
   english = readFileSync(`${ROOT}docs/operations/examples.md`, "utf8"),
@@ -3835,7 +3835,7 @@ export function auditCommittedEvidenceWording(checklistSource = readFileSync(`${
   const line = checklistSource.split("\n").find((entry) => entry.includes("F0.1 — Unblock native input measurement"));
   if (!line) return ["F0.1 evidence line is missing"];
   if (line.includes("current dirty implementation")) return ["F0.1 evidence still claims a current dirty implementation"];
-  // 기록은 commit id 를 적지 않는다(AGENTS.md Documentation). 증거는 자기 build 를 체크리스트 ID 로 가리킨다.
+  // A record does not state a commit id (AGENTS.md Documentation). Evidence points to its build by checklist ID.
   if (!line.includes("this F0.1 change")) return ["F0.1 evidence does not identify its build by its checklist ID"];
   return [];
 }

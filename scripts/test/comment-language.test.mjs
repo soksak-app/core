@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { comments, findKoreanComments, workingTreeFiles } from "../check-comment-language.mjs";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const scan = (files) => findKoreanComments(Object.keys(files), (file) => files[file])
   .map((item) => `${item.file}:${item.line}`);
@@ -46,4 +52,23 @@ test("a cgo preamble is C code, and only its C comments are checked", () => {
 test("the check reads the working tree: new files are read and deleted files are not", () => {
   const listed = { "--deleted": ["a/removed.rs"], "--cached --others --exclude-standard": ["a/kept.go", "a/removed.rs", "a/new.js"] };
   assert.deepEqual(workingTreeFiles((...args) => listed[args.join(" ")]), ["a/kept.go", "a/new.js"]);
+});
+
+test("a backslash before a line feed in a string keeps the line numbers of the comments after it", () => {
+  assert.deepEqual(scan({
+    "packages/a/a.rs": "let s = \"one \\\ntwo \\\nthree\";\n// 주석\n",
+  }), ["packages/a/a.rs:4"]);
+});
+
+test("a regular expression literal with a quote does not hide the comments after it", () => {
+  assert.deepEqual(scan({
+    "packages/a/a.js": "const quote = /\"/;\n// 주석\nconst pair = x.replace(/[`']/g, \"\"); // 둘째\n",
+  }), ["packages/a/a.js:2", "packages/a/a.js:3"]);
+  assert.deepEqual(scan({ "packages/a/b.js": "const ratio = a / b; // fine\nconst text = \"it's\"; // fine\n" }), []);
+});
+
+test("no tracked source file of the repository holds a Hangul comment", () => {
+  const files = workingTreeFiles((...args) => execFileSync("git", ["ls-files", ...args], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean));
+  const found = findKoreanComments(files, (file) => readFileSync(join(ROOT, file), "utf8")).map((item) => `${item.file}:${item.line} ${item.text}`);
+  assert.deepEqual(found, []);
 });

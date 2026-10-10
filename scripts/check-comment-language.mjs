@@ -21,11 +21,12 @@ function language(file) {
   if (file.endsWith(".html")) return "html";
   if (file.endsWith(".rs")) return "rust";
   if (file.endsWith(".go")) return "go";
+  if (/\.(js|mjs|cjs|ts|html)$/.test(file)) return "js";
   return "c";
 }
 
 /** The quotes that open a string. A Rust single quote also marks a lifetime, so it does not open a string. */
-const QUOTES = { c: "\"'`", go: "\"'`", rust: "\"", css: "\"'", hash: "\"'" };
+const QUOTES = { c: "\"'`", js: "\"'`", go: "\"'`", rust: "\"", css: "\"'", hash: "\"'" };
 
 /**
  * Returns the comments of the source text line by line, each { line, text } with lines counted from 1.
@@ -57,6 +58,8 @@ function scan(text, kind, firstLine) {
   let state = "code";
   let quote = "";
   let current = "";
+  // The last character of the code that is not a space: a slash after an operator or an opening bracket starts a regular expression.
+  let previous = "";
   const flush = () => {
     found.push({ line, text: current });
     current = "";
@@ -72,10 +75,23 @@ function scan(text, kind, firstLine) {
       }
       if (kind !== "hash" && kind !== "css" && ch === "/" && next === "/") { state = "line"; i++; continue; }
       if (kind !== "hash" && ch === "/" && next === "*") { state = "block"; i++; continue; }
+      if (kind === "js" && ch === "/" && (previous === "" || "(,=:[!&|?{};+-*%<>~^".includes(previous))) {
+        // A regular expression literal ends at the next slash outside a class, on the same line; its quotes are not strings.
+        let inClass = false;
+        let end = i + 1;
+        for (; end < text.length && text[end] !== "\n"; end++) {
+          if (text[end] === "\\") { end++; continue; }
+          if (text[end] === "[") inClass = true;
+          else if (text[end] === "]") inClass = false;
+          else if (text[end] === "/" && !inClass) break;
+        }
+        if (text[end] === "/") { i = end; previous = "/"; continue; }
+      }
       if (quotes.includes(ch)) { state = "string"; quote = ch; continue; }
+      if (!/\s/.test(ch)) previous = ch;
     } else if (state === "string") {
-      if (ch === "\\") { i++; continue; }
-      if (ch === quote) { state = "code"; continue; }
+      if (ch === "\\") { if (next === "\n") line++; i++; continue; }
+      if (ch === quote) { state = "code"; previous = quote; continue; }
       if (ch === "\n" && quote !== "`") { state = "code"; line++; continue; }
       if (ch === "\n") line++;
     } else if (state === "line") {
