@@ -18,8 +18,8 @@ static void normalizeCoordinateBounds(SPSurfaceCoordinates *coordinates) {
     if (!NSEqualRects(coordinates.bounds, expected)) coordinates.bounds = expected;
 }
 
-// 표면마다 하나인 네이티브 소유 경계. 이 뷰만 바깥 표면 프레임을 가지며 모든 네이티브
-// 영역과 DOM 웹뷰를 함께 자르고 이동한다.
+// Native-owned boundary, one per surface. Only this view has the outer surface frame, and it clips and moves
+// all native regions and DOM web views together.
 @interface SPSurfaceNativePlane : NSView
 @end
 
@@ -38,9 +38,8 @@ static void normalizeCoordinateBounds(SPSurfaceCoordinates *coordinates) {
 @property(nonatomic, copy) NSArray<NSValue *> *domOverlays;
 @end
 
-// Hybrid 표면은 네이티브 영역을 WebView 아래에 둔다. CSS 투명도는 WebKit 의
-// 네이티브 불투명 backing 을 끄지 않으므로, 네이티브 plane 위의 모든 WebView 는
-// 같은 투명 backing 규칙을 사용해야 한다.
+// A Hybrid surface places native regions below the WebView. CSS transparency does not turn off the native opaque
+// backing of WebKit, so every WebView above the native plane must use the same transparent backing rule.
 static void configureWebViewTransparency(WKWebView *view) {
     view.underPageBackgroundColor = NSColor.clearColor;
     [view setValue:@NO forKey:@"drawsBackground"];
@@ -57,10 +56,9 @@ static void reconfigureSurfaceWebviews(NSView *root) {
     for (NSView *child in root.subviews) reconfigureSurfaceWebviews(child);
 }
 
-// 창의 유일한 네이티브 끌기 대상. 다른 애플리케이션에서 끈 파일을 받아 놓인 점과 함께 호스트에 알리고,
-// 호스트는 이를 페이지로 보낸다. 네이티브 뷰는 DOM 위에 놓인 것이므로 놓인 파일의 처리는 그 점의 DOM 요소를
-// 기준으로 페이지가 정한다. 파일 URL 만 받고 적중 검사에서 뷰를 돌려주지 않으므로 포인터와 다른 끌기는 아래
-// 뷰로 간다.
+// The only native drag target of a window. It receives files dragged from another application and reports them to the host
+// with the drop point, and the host sends them to the page. The native view is placed above the DOM, so the page decides how to handle a
+// dropped file from the DOM element at that point. It accepts only file URLs and returns no view in the hit test, so pointers and other drags go to the view below.
 @interface SPFileDropView : NSView
 @property(nonatomic, assign) sp_file_drop_event event;
 @property(nonatomic, assign) sp_file_drop_release releaseContext;
@@ -70,8 +68,8 @@ static void reconfigureSurfaceWebviews(NSView *root) {
 
 @implementation SPFileDropView
 - (BOOL)isFlipped { return YES; }
-// 호스트의 수신기는 이 뷰가 쓰는 동안 살아 있어야 하고, 다 쓴 뒤에는 호스트가 해제해야 한다. 바뀐 수신기와 뷰와 함께
-// 끝나는 수신기를 release 로 돌려준다.
+// The receiver of the host must stay alive while this view uses it, and the host must release it afterwards. release
+// returns the replaced receiver and the receiver that ends together with the view.
 - (void)receive:(sp_file_drop_event)event release:(sp_file_drop_release)release context:(void *)context {
     sp_file_drop_release previous = self.releaseContext;
     void *previousContext = self.context;
@@ -100,7 +98,7 @@ static void reconfigureSurfaceWebviews(NSView *root) {
     if (!self.event || urls.count == 0) return NO;
     NSPoint point = [self convertPoint:sender.draggingLocation fromView:nil];
     NSMutableArray<NSString *> *strings = [NSMutableArray arrayWithCapacity:urls.count];
-    // Finder 는 파일 참조 URL(file:///.file/id=…)을 둔다. 페이지와 표면은 경로를 쓰므로 경로 URL 로 바꾼다.
+    // The file manager provides a file reference URL (file:///.file/id=...). The page and the surface use paths, so it is converted to a path URL.
     for (NSURL *url in urls) {
         NSURL *path = url.filePathURL;
         if (!path) return NO;
@@ -115,7 +113,7 @@ static void reconfigureSurfaceWebviews(NSView *root) {
 }
 @end
 
-// 하나의 앱 DOM과 그 아래 네이티브 평면의 입력 소유권을 선택한다.
+// Selects the input ownership of one app DOM and the native plane below it.
 @interface SPWindowComposition : NSView
 @property(nonatomic, retain) WKWebView *mainWebview;
 @property(nonatomic, assign) SPSurfaceCoordinates *coordinates;
@@ -138,7 +136,7 @@ static void reconfigureSurfaceWebviews(NSView *root) {
     [_overlays release];
     [super dealloc];
 }
-// 파일 놓기 뷰는 합성 뷰의 맨 위에 둔다. 나중에 더한 뷰가 있어도 놓인 파일은 페이지가 받는다.
+// The file drop view is placed at the top of the composite view. The page receives a dropped file even when a view was added later.
 - (void)didAddSubview:(NSView *)subview {
     [super didAddSubview:subview];
     if (self.fileDrop && subview != self.fileDrop && self.subviews.lastObject != self.fileDrop) {
@@ -148,11 +146,12 @@ static void reconfigureSurfaceWebviews(NSView *root) {
         [self.fileDrop release];
     }
 }
-// 창의 뷰 배치가 바뀌면 AppKit 은 포인터 아래 뷰에 cursorUpdate: 로 지금 위치의 커서를 정하라고 요청한다. WKWebView 는
-// 이 메시지를 처리하지 않아 창의 기본 동작이 화살표를 설정하고, 페이지가 정한 커서(디바이더의 크기 조절, 아이콘의
-// 손)를 덮는다. WebKit 은 포인터 위치를 추적 영역 소유자의 mouseMoved: 로 받아 페이지 커서를 계산하며, 레이아웃 뒤에는
-// 스스로 같은 위치의 이동으로 다시 계산한다. 그래서 실제 포인터 위치를 포인터 아래 문서의 그 입구로 넘긴다. 버튼을
-// 누른 동안은 끌기이므로 넘기지 않는다.
+// When the view layout of a window changes, AppKit asks the view under the pointer with cursorUpdate: to set the
+// cursor for the current position. WKWebView does not handle this message, so the default behavior of the window sets the
+// arrow and overwrites the cursor that the page set (the resize cursor of a divider, the hand of an icon). WebKit
+// receives the pointer position as mouseMoved: of the tracking area owner and computes the page cursor, and after layout
+// it recomputes with a move at the same position by itself. Therefore the real pointer position is passed to that entry
+// of the document under the pointer. It is not passed while a button is pressed, because that is a drag.
 - (void)cursorUpdate:(NSEvent *)event {
     NSWindow *window = self.window;
     if (!window || NSEvent.pressedMouseButtons != 0) return;
@@ -164,8 +163,8 @@ static void reconfigureSurfaceWebviews(NSView *root) {
         modifierFlags:NSEvent.modifierFlags timestamp:NSProcessInfo.processInfo.systemUptime
         windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:0 pressure:0];
     for (NSTrackingArea *area in hit.trackingAreas) {
-        // WebKit 의 추적 영역은 보이는 영역 전체(NSTrackingInVisibleRect)이므로 rect 를 비교하지 않는다. 뷰는 이미
-        // 포인터 위치의 히트 테스트로 골랐다.
+        // The tracking area of WebKit is the whole visible rect (NSTrackingInVisibleRect), so the rect is not compared. The view was already chosen
+        // by the hit test at the pointer position.
         if ((area.options & NSTrackingMouseMoved) && [area.owner respondsToSelector:@selector(mouseMoved:)]) {
             [area.owner mouseMoved:moved];
             return;
@@ -216,9 +215,9 @@ static void notifyScale(NSView *view) {
     [super dealloc];
 }
 - (BOOL)isFlipped { return YES; }
-// 보이는 선언 overlay 의 사각형(호스트 좌표). hit test 와 네이티브 마스크가 같은 사각형을 쓴다.
-// 표면 DOM 좌표는 CSS/AppKit point 다. 문서 영역은 다른 pageZoom 을 사용할 수 있지만,
-// 같은 point 공간 네이티브 plane 의 하위 뷰이므로 overlay 사각형을 확대·축소하면 안 된다.
+// Rectangles of the visible declared overlays (host coordinates). The hit test and the native mask use the same
+// rectangles. Surface DOM coordinates are CSS/AppKit points. A document region can use a different pageZoom, but it is
+// a subview of the native plane in the same point space, so the overlay rectangle must not be scaled.
 - (NSArray<NSValue *> *)visibleOverlayRects {
     CGFloat zoom = self.webview.pageZoom > 0 ? self.webview.pageZoom : 1;
     NSMutableArray<NSValue *> *rects = [NSMutableArray array];
@@ -233,8 +232,8 @@ static void notifyScale(NSView *view) {
     }
     return rects;
 }
-// 네이티브 평면은 DOM 백킹 위에 합성되므로, 보이는 overlay 아래의 네이티브 픽셀을 잘라내야 논리적으로 위에 있는
-// overlay 의 DOM 이 보인다(docs/spec/surface-composition.md). 평면 전체에서 overlay 사각형을 뺀 모양으로 자른다.
+// The native plane is composited above the DOM backing, so the native pixels below a visible overlay must be cut out for
+// the DOM of the logically upper overlay to show (docs/spec/surface-composition.md). The plane is clipped to the shape of the whole plane minus the overlay rectangles.
 - (void)applyOverlayMask {
     NSView *plane = self.nativePlane;
     if (!plane.layer) return;
@@ -315,9 +314,8 @@ static void notifyScale(NSView *view) {
 }
 - (BOOL)isFlipped { return YES; }
 - (void)setBounds:(NSRect)bounds {
-    // 숨겨진 표면이 돌아올 때 AppKit 이 flipped 컨테이너의 크기를 backing-pixel 좌표로
-    // 바꿀 수 있다. 컨테이너의 frame 과 bounds 는 모두 AppKit point 이며, 둘이 어긋나면
-    // 모든 하위 배치가 확대·축소된다.
+    // When a hidden surface returns, AppKit can change the size of the flipped container to backing-pixel coordinates.
+    // The frame and bounds of the container are both AppKit points, and if they differ, every subview layout is scaled.
     NSSize frameSize = self.frame.size;
     if (frameSize.width > 0 && frameSize.height > 0) {
         bounds.size = frameSize;
@@ -326,14 +324,14 @@ static void notifyScale(NSView *view) {
 }
 - (NSView *)hitTest:(NSPoint)point {
     if (self.hidden || self.alphaValue <= 0 || NSWidth(self.frame) <= 0 || NSHeight(self.frame) <= 0) return nil;
-    // AppKit 은 부모의 hitTest: 에서 자식에게 frame 단위 좌표를 넘긴다. 이 컨테이너는
-    // 부모와 축 방향이 다르고 bounds 도 장치 배율만큼 크므로 둘을 명시적으로 변환한다.
+    // AppKit passes frame-unit coordinates to the child in the hitTest: of the parent. This container has a different axis
+    // direction from its parent and its bounds are larger by the device scale, so the two are converted explicitly.
     CGFloat x = NSMinX(self.bounds) + point.x * NSWidth(self.bounds) / NSWidth(self.frame);
     CGFloat yFraction = point.y / NSHeight(self.frame);
     if (self.isFlipped != self.superview.isFlipped) yFraction = 1 - yFraction;
     NSPoint local = NSMakePoint(x, NSMinY(self.bounds) + yFraction * NSHeight(self.bounds));
     if (!NSPointInRect(local, self.bounds)) return nil;
-    // 위쪽 호스트부터 묻고 호스트 사이의 빈 곳은 아래 메인 웹뷰로 통과한다.
+    // Asks the topmost host first, and a gap between hosts passes through to the main web view below.
     for (NSView *child in [self.subviews reverseObjectEnumerator]) {
         NSPoint childPoint = [child convertPoint:local fromView:self];
         NSView *hit = [child hitTest:childPoint];
@@ -345,8 +343,7 @@ static void notifyScale(NSView *view) {
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     [super setFrameSize:size];
-    // NSView geometry 는 AppKit point 로 표현한다. Backing scale 은 raster 크기에
-    // 속하며, frame 이나 bounds 좌표에는 속하지 않는다.
+    // NSView geometry is expressed in AppKit points. The backing scale belongs to the raster size and not to frame or bounds coordinates.
     self.bounds = NSMakeRect(0, 0, size.width, size.height);
     [CATransaction commit];
 }
@@ -356,15 +353,14 @@ static void notifyScale(NSView *view) {
         [self.superview addSubview:self positioned:NSWindowAbove relativeTo:self.mainView];
     }
     CGFloat scale = self.window.backingScaleFactor;
-    // bounds 변경이 backing 속성 알림을 다시 발생시키므로 같은 배율은 갱신하지 않는다.
+    // A bounds change raises the backing property notification again, so the same scale is not updated.
     if (scale == self.scale) return;
     self.scale = scale;
     self.bounds = NSMakeRect(0, 0, self.frame.size.width, self.frame.size.height);
     for (SPSurfaceHost *host in self.subviews) {
         if (![host isKindOfClass:SPSurfaceHost.class]) continue;
-        // AppKit frame 과 CSS 크기는 모두 point 다. Backing scale 은 raster 밀도만
-        // 바꾼다. 문서를 zoom 하면 2x 디스플레이에서 CSS viewport 가
-        // 절반이 된다.
+        // The AppKit frame and the CSS size are both points. The backing scale changes only the raster density. Zooming the
+        // document would halve the CSS viewport on a 2x display.
         host.webview.pageZoom = 1;
         [host.webview _setOverrideDeviceScaleFactor:scale];
         notifyScale(host.nativePlane);
@@ -386,16 +382,13 @@ NSEvent *webviewScrollInViewUnits(NSEvent *event, NSView *view) {
             break;
         }
     }
-    // 표면 페이지는 AppKit point 와 CSS pixel 을 1:1 로 사용한다. 문서 영역은 네이티브
-    // frame 을 표면의 device-pixel 좌표 공간으로 표현하므로 pageZoom == scale 을
-    // 유지한다. 이벤트 거리 변환은 그 문서 영역 경로에만
-    // 필요하다.
+    // A surface page uses AppKit points and CSS pixels 1:1. A document region expresses the native frame in the device-pixel
+    // coordinate space of the surface, so pageZoom == scale is kept. The event distance conversion is needed only for that document region path.
     if ([view isKindOfClass:WKWebView.class] && ((WKWebView *)view).pageZoom <= 1.0) return event;
     if (scale <= 0 || scale == 1) return event;
     CGEventRef copy = CGEventCreateCopy(event.CGEvent);
     if (!copy) return event;
-    // 줄, 포인트, 고정소수점 이동량을 모두 바꾼다. NSEvent 는 연속 스크롤에서 포인트 값을,
-    // 줄 단위 스크롤에서 고정소수점 값을 이동량으로 쓴다.
+    // Converts line, point, and fixed-point deltas. NSEvent uses the point value as the delta for continuous scrolling and the fixed-point value for line scrolling.
     const CGEventField lines[2] = { kCGScrollWheelEventDeltaAxis1, kCGScrollWheelEventDeltaAxis2 };
     const CGEventField points[2] = { kCGScrollWheelEventPointDeltaAxis1, kCGScrollWheelEventPointDeltaAxis2 };
     const CGEventField fixed[2] = { kCGScrollWheelEventFixedPtDeltaAxis1, kCGScrollWheelEventFixedPtDeltaAxis2 };
@@ -434,11 +427,11 @@ void webviewAttachSurface(void *handle, void *mainHandle) {
     [container addSubview:host];
     [host addSubview:view positioned:NSWindowAbove relativeTo:host.nativePlane];
     view.frame = host.bounds;
-    // 로컬 좌표 한 단위를 실제 장치 픽셀 하나로 렌더링한다. CSS 크기는 유지한다.
+    // Renders one local coordinate unit as one real device pixel. The CSS size is kept.
     view.pageZoom = 1;
     [view _setOverrideDeviceScaleFactor:container.scale];
-    // 주 웹뷰처럼 창이 가려져도 문서를 숨기지 않는다. 가려진 창에서도 표면의 캡처와 그림 확인이 끝나야 한다.
-    // 이 선택자가 없으면 주 웹뷰 등록(sp_window_set_main_webview)이 이미 실패하므로 여기서는 있다.
+    // Like the main web view, the document is not hidden when the window is occluded. The capture and drawing check of the surface must finish
+    // even in an occluded window. Without this selector, the registration of the main web view (sp_window_set_main_webview) already fails, so it exists here.
     view._windowOcclusionDetectionEnabled = NO;
     [view release];
 }
@@ -451,7 +444,7 @@ static SPSurfaceHost *surfaceHost(NSView *view) {
     return nil;
 }
 
-// 메인 웹뷰를 담는 창 합성 뷰. 없으면 만든다.
+// Window composite view that holds the main web view. Created when it does not exist.
 static SPWindowComposition *windowComposition(WKWebView *main) {
     if (![main isKindOfClass:WKWebView.class] || !main.window || !main.superview) return nil;
     configureWebViewTransparency(main);
@@ -461,10 +454,8 @@ static SPWindowComposition *windowComposition(WKWebView *main) {
     } else {
         NSView *parent = main.superview;
         composition = [[[SPWindowComposition alloc] initWithFrame:main.frame] autorelease];
-        // Platform host 는 AppKit autoresizing 에 의존하지 않고 앱 WebView 의 크기를
-        // 직접 바꿀 수 있다. Compositor 는 그 WebView 를 감싸며, 네이티브 hit testing 이
-        // 창 콘텐츠 영역 전체를 덮도록 여전히 부모를
-        // 채워야 한다.
+        // The platform host can resize the app WebView directly without depending on AppKit autoresizing. The compositor wraps
+        // that WebView and must still fill its parent so that native hit testing covers the whole window content area.
         composition.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
         composition.mainWebview = main;
         [main retain];
@@ -479,9 +470,9 @@ static SPWindowComposition *windowComposition(WKWebView *main) {
         coordinates.mainView = main;
         composition.coordinates = coordinates;
         [composition addSubview:coordinates positioned:NSWindowAbove relativeTo:main];
-        // 창의 커서는 페이지를 그리는 WebKit 이 추적 영역으로 정한다. 창 콘텐츠 뷰가 cursor rect 를 두면(Tauri 의 tao 는
-        // 콘텐츠 전체에 화살표 rect 를 둔다) AppKit 이 rect 를 다시 적용할 때마다 페이지가 정한 커서를 화살표로 덮는다
-        // (docs/features.md F95). 이 창은 cursor rect 를 쓰지 않으므로 그 관리를 끈다.
+        // The window cursor is set by WebKit, which draws the page, through its tracking areas. When the window content view has cursor rects
+        // (tao of Tauri places an arrow rect on the whole content), AppKit overwrites the cursor that the page set with the arrow each time it reapplies the rects
+        // (docs/features.md F95). This window does not use cursor rects, so that management is turned off.
         [main.window disableCursorRects];
     }
     return composition;
@@ -534,10 +525,8 @@ void *sp_surface_main_webview(void *handle) {
 double sp_surface_scale(void *handle) {
     for (NSView *view = (NSView *)handle; view; view = view.superview) {
         if ([view isKindOfClass:SPSurfaceCoordinates.class]) {
-            // 창이 기준이다. 숨겨진 표면은 뷰 backing 알림을 받지 않고 backing-scale
-            // context 사이를 옮겨 갈 수 있다. 그때 캐시된 좌표 scale 을 사용하면
-            // 복원할 때 모든 네이티브 영역에 이전 디스플레이 scale 이
-            // 곱해진다.
+            // The window is the reference. A hidden surface receives no view backing notification and can move between backing-scale
+            // contexts. Using the cached coordinate scale then multiplies every native region by the scale of the earlier display when it is restored.
             NSWindow *window = view.window;
             CGFloat current = window ? window.backingScaleFactor : 0;
             if (current > 0) return current;
@@ -583,7 +572,7 @@ void webviewMatchSurface(void *handle, void *surfaceHandle) {
     WKWebView *view = (WKWebView *)handle;
     NSView *surface = (NSView *)surfaceHandle;
     view.pageZoom = sp_surface_scale(surface);
-    // 장치 픽셀 좌표계의 표면 안에서는 표면과 같이 로컬 좌표 한 단위를 장치 픽셀 하나로 렌더링한다.
+    // Inside a surface in the device-pixel coordinate system, one local coordinate unit is rendered as one device pixel, like the surface.
     if (surfaceHost(surface)) [view _setOverrideDeviceScaleFactor:1];
 }
 
@@ -592,12 +581,9 @@ void webviewSetFrame(void *handle, double x, double y, double width, double heig
     NSWindow *window = view.window;
     if (!window) return;
     NSRect frame = NSMakeRect(x, window.contentView.bounds.size.height - y - height, width, height);
-    // 표면 frame 은 논리 AppKit point 다. 모든 가장자리를 backing pixel 에 맞춰 안쪽으로
-    // 정렬하면 소수 위치의 divider 에서 표면이 device pixel 하나만큼 줄어들어, 네이티브
-    // 영역 옆에 오래된 DOM 가장자리가 보인다. 네이티브 plane 이 영역을 잘라내므로,
-    // 선언된 논리 frame 을 보존하는 것이 안전한 경계다. 그 image layer 가 그 frame 에서
-    // raster 변환을
-    // 수행한다.
+    // The surface frame is a logical AppKit point. Aligning every edge inward to backing pixels would shrink the surface by
+    // one device pixel at a divider at a fractional position, and a stale DOM edge would show next to a native region. The native plane
+    // clips the region, so preserving the declared logical frame is the safe boundary. The image layer performs the raster conversion at that frame.
     SPSurfaceHost *host = surfaceHost(view);
     NSView *placedView = host ?: view;
     if ([placedView.superview isKindOfClass:SPSurfaceCoordinates.class]) {
@@ -607,17 +593,14 @@ void webviewSetFrame(void *handle, double x, double y, double width, double heig
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     placedView.frame = placed;
-    // host frame 을 직접 설정하면 setFrameSize: 가 확실히 호출되지 않는다.
-    // 하위 image region 이 raster 를 측정하기 전에 네이티브 plane 과 표면 webview 를
-    // 같은 좌표 공간에 둔다.
+    // Setting the host frame directly does not guarantee that setFrameSize: is called. The native plane and the surface web view are placed
+    // in the same coordinate space before the subordinate image region measures the raster.
     if (host) {
         host.bounds = NSMakeRect(0, 0, placed.size.width, placed.size.height);
         host.nativePlane.frame = host.bounds;
         if (view != host) view.frame = host.bounds;
-        // Composition 배치는 host 가 복원된 논리 frame 을 받기 전에 실행되었을 수 있다.
-        // host 와 plane 이 확정된 뒤 네이티브 영역을 다시 적용한다. 그렇지 않으면
-        // 다음 resize 까지 image region 에 이전 scale/size 가
-        // 남는다.
+        // The composition layout may have run before the host received the restored logical frame. The native regions are applied
+        // again after the host and the plane are settled. Otherwise the image region keeps the earlier scale and size until the next resize.
         notifyScale(host.nativePlane);
     }
     [CATransaction commit];
@@ -636,8 +619,8 @@ void webviewGetFrame(void *handle, double *out) {
     out[3] = frame.size.height;
 }
 
-// 첫 응답자를 담은 뷰를 숨기면 AppKit 은 첫 응답자를 다른 뷰나 창으로 옮긴다. 배치는 DOM 이
-// 그려질 때까지만 표면을 숨기므로, 숨긴 표면은 키보드 소유자와 AppKit 이 대신 정한 응답자를 기록한다.
+// When a view that holds the first responder is hidden, AppKit moves the first responder to another view or window. The layout hides the surface only until the DOM
+// is drawn, so a hidden surface records the keyboard owner and the responder that AppKit chose instead.
 @interface SPHiddenResponder : NSObject
 @property(nonatomic, retain) NSView *owner;
 @property(nonatomic, assign) NSResponder *replacement;
@@ -657,9 +640,8 @@ void webviewSetSurfaceHidden(void *handle, bool hidden) {
     NSResponder *first = window.firstResponder;
     NSView *owner = hidden && !surface.hidden && [first isKindOfClass:NSView.class]
         && [(NSView *)first isDescendantOf:surface] ? (NSView *)first : nil;
-    // 네이티브 영역은 geometry 를 적용하는 동안 표면 상위 뷰 체인을 검사한다. 다시
-    // 적용하기 전에 상위 뷰 체인을 확정한다. 그렇지 않으면 표면을 복원할 때 host 가
-    // 보이게 된 뒤에도 그 문서가 숨겨진 채 남는다.
+    // Native regions inspect the superview chain of the surface while applying geometry. The superview chain is settled
+    // before applying again. Otherwise, after the surface is restored, that document stays hidden even after the host became visible.
     surface.hidden = hidden;
     view.hidden = hidden;
     if (owner) {
@@ -669,7 +651,7 @@ void webviewSetSurfaceHidden(void *handle, bool hidden) {
         objc_setAssociatedObject(surface, &hiddenResponderKey, held, OBJC_ASSOCIATION_RETAIN);
     }
     if (!hidden) {
-        // 숨긴 동안 포커스가 옮겨지지 않았고 소유자가 아직 표면 안에 있을 때만 되돌린다.
+        // Focus is restored only when it was not moved while hidden and the owner is still inside the surface.
         SPHiddenResponder *held = objc_getAssociatedObject(surface, &hiddenResponderKey);
         if (held) {
             if (window && window.firstResponder == held.replacement && [held.owner isDescendantOf:surface]) {
@@ -681,10 +663,8 @@ void webviewSetSurfaceHidden(void *handle, bool hidden) {
         if ([coordinates isKindOfClass:SPSurfaceCoordinates.class]) {
             reconfigureSurfaceWebviews(coordinates);
         }
-        // 숨겨진 표면은 창이 복원되는 동안 frame/backing 알림을 놓칠 수 있다.
-        // 표면을 노출하기 전에 모든 네이티브 영역의 논리 geometry 를 다시 적용해,
-        // scale 에 의존하는 오래된 frame 이 보이지
-        // 않게 한다.
+        // A hidden surface can miss the frame/backing notifications while the window is restored. Before the surface is exposed, the
+        // logical geometry of every native region is applied again, so that a stale frame that depends on the scale is not visible.
         notifyScale(host.nativePlane);
     }
 }
@@ -717,8 +697,7 @@ void sp_webview_log_process_end(void *handle, const char *kind) {
 bool sp_webview_collect_garbage(void *handle) {
     NSCAssert(NSThread.isMainThread, @"garbage collection requests require the UI thread");
     WKWebView *view = (WKWebView *)handle;
-    // WKProcessPool 의 폐기 예고는 pool 을 여럿 만드는 것이 효과가 없다는 뜻이다. 시험용 수집은 이 클래스에만 있으므로
-    // webview 가 쓰는 pool 하나에 요청한다.
+    // The deprecation notice of WKProcessPool means that creating several pools has no effect. The collection for testing exists only in this class, so it is requested on the one pool that the web view uses.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
     WKProcessPool *pool = view.configuration.processPool;

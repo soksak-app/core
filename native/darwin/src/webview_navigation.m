@@ -2,11 +2,12 @@
 #import "webview_navigation.h"
 #import "private/webkit.h"
 
-// 프레임워크의 navigation delegate 앞에 놓는 전달자. WKWebView 는 delegate 를 약하게 참조하므로 전달자는 웹뷰의
-// 연관 객체로 유지하고, 프레임워크 delegate 는 약하게 참조한다. 프레임워크 delegate 가 웹뷰를 붙잡아도 순환이 없다.
+// Forwarder placed in front of the navigation delegate of the framework. WKWebView references its delegate
+// weakly, so the forwarder is kept as an associated object of the web view and references the framework
+// delegate weakly. There is no cycle even if the framework delegate retains the web view.
 @interface SPNavigationForwarder : NSProxy <WKNavigationDelegate> {
 @public
-    // 원소 하나. 프레임워크 delegate 가 해제되면 nil 이 된다.
+    // One element. It becomes nil when the framework delegate is released.
     NSPointerArray *target;
 }
 @end
@@ -22,7 +23,8 @@
     [super dealloc];
 }
 
-// 이 전달자가 직접 처리하는 선택자. 나머지는 프레임워크 delegate 가 구현한 것만 응답한다.
+// Selectors that this forwarder handles itself. For the others it responds only to what the framework
+// delegate implements.
 static BOOL handled(SEL selector) {
     return selector == @selector(webView:decidePolicyForNavigationAction:decisionHandler:) ||
         selector == @selector(webView:didCommitNavigation:);
@@ -41,7 +43,8 @@ static BOOL handled(SEL selector) {
     id current = self.target;
     NSMethodSignature *signature = [current methodSignatureForSelector:selector];
     if (!signature) {
-        // 기본값: 프레임워크 delegate 가 사라진 뒤의 알림은 받을 곳이 없으므로 void 시그니처로 받아 버린다.
+        // default: a notification after the framework delegate is gone has no receiver, so it is
+        // received with a void signature and discarded.
         signature = [NSMethodSignature signatureWithObjCTypes:"v@:"];
     }
     return signature;
@@ -52,7 +55,7 @@ static BOOL handled(SEL selector) {
     if ([current respondsToSelector:invocation.selector]) [invocation invokeWithTarget:current];
 }
 
-// 같은 문서 안의 이동인지: fragment 만 다르다.
+// Whether the navigation stays within the same document: only the fragment differs.
 static BOOL sameDocument(NSURL *from, NSURL *to) {
     if (!from || !to || !to.fragment) return NO;
     NSURLComponents *a = [NSURLComponents componentsWithURL:from resolvingAgainstBaseURL:NO];
@@ -76,7 +79,8 @@ static BOOL sameDocument(NSURL *from, NSURL *to) {
 }
 
 - (void)webView:(WKWebView *)webView didCommitNavigation:(WKNavigation *)navigation {
-    // 새 문서가 commit 되었으므로 뒤로 이동을 위해 멈춰 둔 이전 문서와 그 프로세스를 놓는다.
+    // The new document has committed, so release the previous document, which was paused for back
+    // navigation, and its process.
     [webView _clearBackForwardCache];
     id current = self.target;
     if ([current respondsToSelector:_cmd]) [current webView:webView didCommitNavigation:navigation];
@@ -91,7 +95,7 @@ bool sp_webview_replace_documents_in_new_process(WKWebView *view) {
     SPNavigationForwarder *installed = objc_getAssociatedObject(view, &forwarderKey);
     if (installed && (id)view.navigationDelegate == installed) return true;
     if (![view respondsToSelector:@selector(_clearBackForwardCache)]) return false;
-    // delegate 가 없는 웹뷰는 모든 navigation 을 허용하는 것과 같으므로 전달자만 둔다.
+    // A web view without a delegate behaves as if it allows every navigation, so only the forwarder is set.
     id delegate = view.navigationDelegate;
     SPNavigationForwarder *forwarder = [SPNavigationForwarder alloc];
     forwarder->target = [[NSPointerArray weakObjectsPointerArray] retain];

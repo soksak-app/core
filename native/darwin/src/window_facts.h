@@ -1,63 +1,70 @@
 #include <stdbool.h>
 
-// 창과 화면의 상태를 JSON 문자열로 반환한다. 반환한 문자열은 sp_facts_free 로 해제한다.
-// 모든 함수는 메인 스레드에서 호출한다. 화면 좌표는 주 디스플레이 왼쪽 위 기준이고 y 가
-// 아래로 증가하는 포인트 값이며, 창 좌표는 콘텐츠 영역 왼쪽 위 기준이다.
+// Returns the state of windows and screens as a JSON string. Free the returned string with sp_facts_free.
+// Call every function on the main thread. Screen coordinates are point values relative to the top left of
+// the primary display with y increasing downward, and window coordinates are relative to the top left of
+// the content area.
 
-// 창의 앱 DOM 웹뷰를 명시적으로 등록한다. 그리기 순서로 메인 뷰를 추측하지 않는다.
-// 웹뷰가 창에 부착되지 않았거나 다른 메인이 이미 등록되었으면 false다.
+// Registers the app DOM web view of a window explicitly. The main view is not guessed from the drawing
+// order. Returns false when the web view is not attached to the window or another main view is already
+// registered.
 bool sp_window_set_main_webview(void *window, void *main);
 
-// 등록된 앱 DOM 웹뷰만 반환한다. 등록되지 않은 창은 NULL 이다.
+// Returns only the registered app DOM web view. A window that is not registered gives NULL.
 void *sp_window_main_webview(void *window);
 
 // {frame, content, scale, key, active, children, controls, webviews, nativeSurfaces, appDomWebviews, documentWebviews}
-//   frame     창 프레임 {x, y, width, height}, 화면 좌표
-//   content   콘텐츠 영역 {width, height}
-//   controls  창 단추 [{x, y, width, height, hidden}], 창 좌표
-//   webviews  창 안의 WKWebView 를 그리기 순서로 나열한다(메인 위치를 가정하지 않는다)
-//             [{view, x, y, width, height, hidden, focused, draws, alpha}], 창 좌표.
-//             view 는 뷰 주소, draws 는 자기 배경을 칠하는지, alpha 는 페이지 아래 배경색의 알파다
-//   nativeSurfaces 논리 표면 컨테이너 [{view, x, y, width, height, hidden}], 창 좌표.
-// 창이나 등록된 메인 웹뷰가 없으면 NULL 을 반환한다.
+//   frame     window frame {x, y, width, height}, screen coordinates
+//   content   content area {width, height}
+//   controls  window buttons [{x, y, width, height, hidden}], window coordinates
+//   webviews  lists the WKWebViews in the window in drawing order (the main position is not assumed)
+//             [{view, x, y, width, height, hidden, focused, draws, alpha}], window coordinates.
+//             view is the view address, draws tells whether it paints its own background, and alpha is the
+//             alpha of the background color under the page
+//   nativeSurfaces logical surface containers [{view, x, y, width, height, hidden}], window coordinates.
+// Returns NULL when there is no window or registered main web view.
 char *sp_window_facts(void *window);
 
-// 창 좌표 (x, y) 의 히트 테스트 결과 {view, main, identifier, hit}. view 는 점을 포함한 WKWebView 의
-// 주소이며 없으면 0 이다. main 은 그 웹뷰가 메인 페이지인지다. identifier 는 히트한 뷰의 identifier 다.
-// hit 는 {class, frame} 이며 leaf 뷰가 없으면 null 이다. frame 은 콘텐츠 영역의 왼쪽 위 원점 창 좌표다.
-// 창이나 메인 웹뷰가 없으면 NULL 이다.
+// Hit test result {view, main, identifier, hit} at window coordinates (x, y). view is the address of the
+// WKWebView that contains the point and is 0 when there is none. main tells whether that web view is the
+// main page. identifier is the identifier of the hit view. hit is {class, frame} and is null when there is
+// no leaf view. frame is in window coordinates with the top left of the content area as the origin.
+// Returns NULL when there is no window or main web view.
 char *sp_window_hit(void *window, double x, double y);
 
-// 디스플레이 [{x, y, width, height, scale}], 화면 좌표.
+// Displays [{x, y, width, height, scale}], screen coordinates.
 char *sp_screens(void);
 
-// 창 프레임의 왼쪽 위를 화면 좌표 (x, y) 로 옮긴다.
+// Moves the top left of the window frame to screen coordinates (x, y).
 bool sp_window_move(void *window, double x, double y);
 
-// 애플리케이션 메뉴(JSON 배열). 하위 메뉴마다 {title, items: [{title, key}]} 이며 구분선은 뺀다.
-// key 는 단축키로, 수정 키를 ctrl, opt, shift, cmd 순서로 + 로 이어 붙인 뒤 키 문자를 붙인다.
+// Application menu (JSON array). Each submenu is {title, items: [{title, key}]}; separators are omitted.
+// key is the shortcut: the modifier keys in the order ctrl, opt, shift, cmd joined with +, followed by
+// the key character.
 char *sp_menu_items(void);
 
-/** 시스템 선호 언어의 주 태그. 지원 여부는 호출자의 표가 정한다. sp_facts_free 로 해제한다. */
+/** Primary tag of the preferred system language. The caller's table decides which languages are supported.
+ * Free it with sp_facts_free. */
 char *sp_preferred_language(void);
 
-// 제목이 menu 인 하위 메뉴에서 제목이 title 인 항목을 실행한다. 항목이 없으면 false 다.
+// Runs the item titled title in the submenu titled menu. Returns false when there is no such item.
 bool sp_menu_select(const char *menu, const char *title);
 
-// 애플리케이션의 주 창. 주 창이 없으면(한 번도 활성화되지 않은 애플리케이션) 가장 앞의 보이는 창이고,
-// 그것도 없으면 NULL 이다.
+// Main window of the application. When there is no main window (an application that was never activated),
+// it is the frontmost visible window, and NULL when there is none.
 void *sp_app_main_window(void);
 
-// Dock 메뉴 항목의 제목 목록(JSON 배열).
+// Titles of the Dock menu items (JSON array).
 char *sp_dock_items(void);
 
-// 제목이 title 인 Dock 메뉴 항목을 실행한다. 항목이 없으면 false 다.
+// Runs the Dock menu item titled title. Returns false when there is no such item.
 bool sp_dock_select(const char *title);
 
 void sp_facts_free(char *text);
 
-// 창의 가림 상태가 바뀔 때마다(NSWindowDidChangeOcclusionStateNotification) changed 를 메인 스레드에서
-// 호출한다. 관찰은 창이 해제될 때 끝난다. 창에 이미 관찰이 있으면 교체한다. 창이 없으면 false 다.
+// Calls changed on the main thread each time the occlusion state of the window changes
+// (NSWindowDidChangeOcclusionStateNotification). The observation ends when the window is released. An
+// existing observation of the window is replaced. Returns false when there is no window.
 #ifdef __BLOCKS__
 bool sp_window_observe_occlusion(void *window, void (^changed)(void));
 #endif

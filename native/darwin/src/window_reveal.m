@@ -1,12 +1,12 @@
-// 새 창을 첫 화면이 표시된 뒤에 보인다(window_reveal.h).
+// Shows a new window after its first screen is presented (window_reveal.h).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "window_facts.h"
 #import "window_reveal.h"
 #import "private/webkit.h"
 
-// 메인 웹뷰의 loading 을 관찰하고 첫 읽기가 끝나면 창을 불투명하게 한다. 창을 드러낸 뒤 관찰을 끝내고
-// 스스로를 해제한다.
+// Observes loading of the main web view and makes the window opaque when the first load ends. After the
+// window is revealed it ends the observation and releases itself.
 @interface SPWindowReveal : NSObject {
     NSWindow *_window;
     WKWebView *_webview;
@@ -28,13 +28,13 @@
 
 - (void)start {
     _observing = YES;
-    // Initial 은 등록할 때 이미 끝난 읽기도 알린다.
+    // Initial also reports a load that already ended at registration.
     [_webview addObserver:self forKeyPath:@"loading" options:NSKeyValueObservingOptionInitial context:NULL];
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
-    // 읽기가 시작되기 전에는 기다린다. 등록할 때 이미 끝난 읽기는 URL 이 남아 있다. 실패한 읽기는 끝날 때 URL 을
-    // 지우므로 시작을 본 뒤의 끝으로 판단한다.
+    // Wait until a load starts. A load that already ended at registration still has its URL. A failed load
+    // clears the URL when it ends, so the end is judged as an end that follows an observed start.
     if (!_observing) return;
     if (_webview.loading) {
         _started = YES;
@@ -67,7 +67,7 @@ bool sp_window_reveal_after_load(void *handle, char **error) {
         return false;
     }
     window.alphaValue = 0;
-    // 관찰 객체는 창을 드러낼 때 스스로를 해제한다.
+    // The observer releases itself when the window is revealed.
     [[[SPWindowReveal alloc] initWithWindow:window webview:main] start];
     return true;
 }

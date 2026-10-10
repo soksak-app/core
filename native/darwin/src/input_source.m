@@ -1,4 +1,4 @@
-// 선택된 키보드 입력 소스를 읽고 바꾼다. Text Input Sources(HIToolbox)의 공개 API 를 사용한다.
+// Reads and changes the selected keyboard input source. Uses the public API of Text Input Sources (HIToolbox).
 #import <Carbon/Carbon.h>
 #import <Foundation/Foundation.h>
 #import "input_source.h"

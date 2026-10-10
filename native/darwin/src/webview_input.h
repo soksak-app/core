@@ -1,25 +1,27 @@
 #import <WebKit/WebKit.h>
 
-// 메인 스레드 전용이다. pointer tracking 이나 pending-mouse 처리를 사용할 수 없으면 NO 를 반환한다.
-// 등록은 webviewInputUnregister 를 호출하거나 웹뷰가 해제될 때 끝난다. 끝날 때 웹뷰의 사용자 콘텐츠
-// 컨트롤러에서 수신 메시지 처리기를 제거하므로 컨트롤러가 웹뷰보다 오래 남지 않는다.
+// Main thread only. Returns NO when pointer tracking or pending-mouse handling is unavailable.
+// The registration ends when webviewInputUnregister is called or the web view is released. Ending it
+// removes the receipt message handler from the web view's user content controller, so the controller does
+// not outlive the web view.
 BOOL webviewInputRegister(WKWebView *view);
 void webviewInputUnregister(WKWebView *view);
 
-// 메인 스레드 전용이다. view 의 문서가 type("pointerdown" 또는 "pointerup")의 다음 trusted DOM
-// 이벤트를 받으면 done(YES) 를 호출하고, timeout 초가 지나면 done(NO) 를 호출한다. 수신은
-// 페이지가 볼 수 없는 별도 WebKit content world 의 스크립트가 보고한다. 등록되지 않은
-// view 는 수신 기록이 없으며 즉시 done(YES) 를 받는다. 이벤트를 전달한 직후 같은
-// 메인 스레드 turn 에서 호출한다.
+// Main thread only. Calls done(YES) when the document of view receives the next trusted DOM event of
+// type ("pointerdown" or "pointerup") and calls done(NO) after timeout seconds. A script in a separate
+// WebKit content world, which the page cannot see, reports the receipt. A view that is not registered
+// has no receipt record and receives done(YES) immediately. Call it in the same main thread turn
+// that delivers the event.
 void webviewInputReceive(WKWebView *view, NSString *type, NSTimeInterval timeout, void (^done)(BOOL received));
 
-// 전송 전에 수신 대기를 등록하고 전송한 이벤트를 관측한 뒤 완료한다.
-// 등록한 뷰의 처리 완료 API가 없으면 전송 없이 done(NO)이며 수신 후 부재도 done(NO)다.
+// Registers the receipt wait before sending, then completes after the sent event is observed.
+// Without the pending-mouse completion API on the registered view, done(NO) runs without sending; a
+// missing receipt also gives done(NO).
 void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeout,
     BOOL (^send)(void), void (^done)(BOOL received));
 
 
-// 메인 스레드 전용이다. view 의 페이지는 요소에 focus 를 주어 창의 키보드 focus 를
-// 옮길 수 없다. AppKit 클릭과 host 는 여전히 옮길 수 있다. WebKit 인터페이스를
-// 사용할 수 없으면 NO 를 반환한다.
+// Main thread only. The page of view cannot move the keyboard focus of the window by giving focus to an
+// element. AppKit clicks and the host can still move it. Returns NO when the WebKit interface is
+// unavailable.
 BOOL webviewIgnorePageFocus(WKWebView *view);

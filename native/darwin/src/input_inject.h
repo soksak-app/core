@@ -1,66 +1,67 @@
 #include <stdbool.h>
 
-// sp_input_pointer 의 결과.
+// Result of sp_input_pointer.
 typedef enum {
     SP_INPUT_DELIVERED = 0,
-    SP_INPUT_REJECTED = 1, // 창, 좌표, 단계, 스레드가 올바르지 않다
-    SP_INPUT_INACTIVE = 2, // 버튼 없는 이동이며 창이 키 창이 아니다(WebKit 은 이 이동으로 호버를 갱신하지 않는다), 또는 활성 애플리케이션의 키 창이 아닌 창에 보낸 키다
-    SP_INPUT_UNRECEIVED = 3, // 누름이나 뗌을 문서가 제한 시간 안에 받지 않았거나, 스크롤 대상이 제한 시간 안에 표시하지 않았다
-    SP_INPUT_BUTTON_HELD = 4, // AppKit 이 눌린 마우스 단추를 보고해 합성 누름이나 뗌을 전달하지 않았다
-    SP_INPUT_PRESS_OPEN = 5, // 그 창에서 그 단추의 합성 누름이 아직 열려 있어 누름을 전달하지 않았다
+    SP_INPUT_REJECTED = 1, // the window, coordinates, phase, or thread is invalid
+    SP_INPUT_INACTIVE = 2, // a move without a button while the window is not the key window (WebKit does not update hover for this move), or a key sent to a window that is not the key window of the active application
+    SP_INPUT_UNRECEIVED = 3, // the document did not receive the press or release within the timeout, or the scroll target did not render within the timeout
+    SP_INPUT_BUTTON_HELD = 4, // AppKit reports a pressed mouse button, so the synthetic press or release was not delivered
+    SP_INPUT_PRESS_OPEN = 5, // a synthetic press of that button is still open in that window, so the press was not delivered
 } sp_input_result;
 
-// 창에 네이티브 입력을 전달한다. 좌표는 콘텐츠 영역 왼쪽 위 기준 포인트 값이다.
+// Delivers native input to a window. Coordinates are points relative to the top-left of the content area.
 //
-// phase: 0 이동, 1 누름, 2 끌기, 3 뗌, 4 스크롤. button: 0 왼쪽, 1 오른쪽.
-// 끌기와 뗌은 창·버튼별 누름 대상에 전달한다. 누름 없는 끌기·뗌과 중복 누름은 거부한다.
+// phase: 0 move, 1 press, 2 drag, 3 release, 4 scroll. button: 0 left, 1 right.
+// A drag and a release are delivered to the press target of the window and button. A drag or release without a press and a duplicate press are rejected.
 sp_input_result sp_input_pointer(void *window, double x, double y, int phase, int button, double deltaX, double deltaY);
 
-// SP_INPUT_BUTTON_HELD 로 거부한 차례에 측정한 상태. 이 상태만으로는 원인을 알 수 없으므로 거부를
-// 받은 쪽이 원인을 찾도록 보고한다.
+// State measured in the same turn that rejected the input with SP_INPUT_BUTTON_HELD. This state alone does not
+// identify the cause, so the rejection is reported for the receiver to find the cause.
 typedef struct {
     unsigned long long mask; // NSEvent.pressedMouseButtons
-    int pid; // 최전면 애플리케이션의 pid. AppKit 이 최전면 애플리케이션을 보고하지 않으면 -1 이다
-    const char *bundleIdentifier; // 최전면 애플리케이션의 번들 식별자. 없거나 pid 가 -1 이면 NULL 이다
+    int pid; // pid of the frontmost application; -1 when AppKit does not report a frontmost application
+    const char *bundleIdentifier; // bundle identifier of the frontmost application; NULL when absent or when pid is -1
 } sp_input_held;
 
-// held 는 result 가 SP_INPUT_BUTTON_HELD 일 때만 NULL 이 아니고, done 이 반환할 때까지만 유효하다.
+// held is non-NULL only when result is SP_INPUT_BUTTON_HELD, and it is valid only until done returns.
 typedef void (*sp_input_done)(void *context, sp_input_result result, const sp_input_held *held);
 
-// sp_input_pointer 와 같고, 누름과 뗌은 제스처를 소유한 문서가 그 이벤트를 받은 뒤 done 을 호출한다.
-// WebKit 은 입력 칸에 초점이 있으면 마우스 이벤트를 입력기에 먼저 비동기로 넘기므로, 곧바로 이어서
-// 전달한 누름과 뗌의 순서가 문서에서 바뀔 수 있다. 스크롤은 좌표의 웹뷰가 현재 상태를 표시한 뒤
-// 전달한다. 새 문서의 스크롤 트리가 표시되기 전에 받은 휠 이벤트는 문서를 움직이지 않는다.
-// timeoutSeconds 안에 수신이나 표시가 없으면 SP_INPUT_UNRECEIVED 다. done 은 메인 스레드에서 한 번
-// 호출된다. 메인 스레드에서 호출한다.
+// Same as sp_input_pointer, except that for a press and a release done is called after the document that owns the gesture
+// has received the event. When an input field has focus, WebKit first passes mouse events to the input method
+// asynchronously, so a press and a release delivered back to back can be reordered in the document. A scroll is
+// delivered after the web view at the coordinates has rendered its current state; a wheel event received before the
+// scroll tree of a new document is rendered does not move the document. When no receipt or rendering occurs within
+// timeoutSeconds, the result is SP_INPUT_UNRECEIVED. done is called once on the main thread. Call this function on
+// the main thread.
 void sp_input_pointer_then(void *window, double x, double y, int phase, int button, double deltaX, double deltaY,
     double timeoutSeconds, sp_input_done done, void *context);
 
-// sp_input_activate 의 결과. 실패는 활성화가 멈춘 단계를 나타낸다.
+// Result of sp_input_activate. A failure identifies the stage at which activation stopped.
 typedef enum {
     SP_ACTIVATE_DONE = 0,
-    SP_ACTIVATE_REJECTED = 1, // 창이 없거나 메인 스레드가 아니다
-    SP_ACTIVATE_REFUSED = 2,  // 제한 시간 안에 애플리케이션이 활성화되지 않았다
-    SP_ACTIVATE_NOT_KEY = 3,  // 애플리케이션은 활성이지만 제한 시간 안에 창이 키 창이 되지 않았다
-    SP_ACTIVATE_PENDING = 4,  // 창의 웹뷰가 제한 시간 안에 활성 상태를 웹 프로세스에 보내지 않았다
-    SP_ACTIVATE_LOST = 5,     // 웹뷰가 활성 상태를 보낸 뒤에는 앱이 비활성이거나 창이 키 창이 아니다
+    SP_ACTIVATE_REJECTED = 1, // there is no window, or the caller is not on the main thread
+    SP_ACTIVATE_REFUSED = 2,  // the application did not become active within the timeout
+    SP_ACTIVATE_NOT_KEY = 3,  // the application is active, but the window did not become the key window within the timeout
+    SP_ACTIVATE_PENDING = 4,  // the web view of the window did not send its activity state to the web process within the timeout
+    SP_ACTIVATE_LOST = 5,     // after the web view sent its activity state, the application is inactive or the window is not the key window
 } sp_activate_result;
 
-// frontmost 는 결과가 SP_ACTIVATE_DONE 이 아닐 때 그 시점의 최전면 애플리케이션 이름이다(번들
-// 식별자, 없으면 표시 이름, 모르면 NULL). done 이 반환할 때까지만 유효하다.
+// When the result is not SP_ACTIVATE_DONE, frontmost is the name of the frontmost application at that time (bundle
+// identifier; the display name when there is none; NULL when unknown). It is valid only until done returns.
 typedef void (*sp_activate_done)(void *context, sp_activate_result result, const char *frontmost);
 
-// 애플리케이션을 활성화하고 창을 키 창으로 만든다. 창이 키 창이 되고 창 안의 모든 웹뷰가 활성
-// 상태를 웹 프로세스에 보낸 뒤 done 을 SP_ACTIVATE_DONE 으로 호출한다. 이 과정이 timeoutSeconds
-// 안에 끝나지 않으면 멈춘 단계를 결과로 호출한다. done 은 메인 스레드에서 한 번만 호출된다.
-// 메인 스레드에서 호출한다.
+// Activates the application and makes the window the key window. After the window is the key window and every web view
+// in the window has sent its activity state to the web process, done is called with SP_ACTIVATE_DONE. When this does
+// not finish within timeoutSeconds, done is called with the stage at which it stopped. done is called once on the main
+// thread. Call this function on the main thread.
 void sp_input_activate(void *window, double timeoutSeconds, sp_activate_done done, void *context);
 
-// 애플리케이션과 창을 활성화하고 좌표의 웹뷰만 활성 상태를 반영한 뒤 done 을 호출한다.
-// 좌표가 네이티브 표면이면 웹뷰 대기 없이 창 활성화만 완료한다.
+// Activates the application and the window, waits until only the web view at the coordinates reflects the active state, and calls done.
+// When the coordinates are on a native surface, only the window activation completes, without waiting for a web view.
 void sp_input_activate_at(void *window, double x, double y, double timeoutSeconds, sp_activate_done done, void *context);
 
-// key 는 키 이름(Enter, Tab, Escape, Backspace, ArrowLeft 등) 또는 문자 하나다. text 는 입력할
-// 문자열이며 NULL 이면 key 를 사용한다. modifiers 는 비트 합: 1 Shift, 2 Control, 4 Option,
-// 8 Command. down 이 참이면 누름, 거짓이면 뗌이다.
+// key is a key name (Enter, Tab, Escape, Backspace, ArrowLeft, and so on) or one character. text is the string to
+// type; when it is NULL, key is used. modifiers is a bit sum: 1 Shift, 2 Control, 4 Option, 8 Command. down true is a
+// press and false is a release.
 sp_input_result sp_input_key(void *window, const char *key, const char *text, unsigned modifiers, bool down);

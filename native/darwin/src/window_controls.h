@@ -1,14 +1,16 @@
 #include <stdbool.h>
 
-// 창 단추 세 개가 보이는 영역을 콘텐츠 왼쪽 위 기준 {x, y, width, height} 로 out 에 쓴다.
+// Writes the area where the three window buttons are visible, as {x, y, width, height} relative to the
+// top left of the content, to out.
 void windowControls(void *window, double *out);
 
-// 창의 제목줄 높이(pt)를 반환한다. 전체 화면처럼 제목줄을 보이지 않는 동안 0 이고, 표준 단추나 콘텐츠 뷰가
-// 없어 제목줄을 가질 수 없는 창은 -1 이다.
+// Returns the title bar height (pt) of the window. It is 0 while the title bar is not visible, as in full
+// screen, and -1 for a window that cannot have a title bar because it has no standard buttons or content view.
 double windowTitlebarHeight(void *window);
 
-// 창의 제목줄을 height(pt)로 만든다. AppKit 이 그 높이의 세로 가운데에 창 단추를 두므로 단추를 옮기지
-// 않는다. height 가 양의 유한수가 아니거나 창이 제목줄을 가질 수 없으면 false 를 반환하고 failure 에 malloc 한
-// 문장을 쓴다. 호출자가 해제한다. 전체 화면인 창은 제목줄을 보이지 않고 AppKit 이 나올 때 들어갈 때의 높이를
-// 되돌리므로, 높이를 바꾸지 않고 true 를 반환한다.
+// Sets the title bar of the window to height (pt). AppKit places the window buttons at the vertical center
+// of that height, so the buttons are not moved. Returns false and writes a malloc'd sentence to failure when
+// height is not a positive finite number or the window cannot have a title bar; the caller frees it. A
+// window in full screen does not show the title bar, and AppKit restores the height from entry on exit, so
+// it returns true without changing the height.
 bool windowSetTitlebarHeight(void *window, double height, char **failure);

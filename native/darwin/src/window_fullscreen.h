@@ -1,12 +1,13 @@
 #include <stdbool.h>
 
-// Wails 의 cgo 코드에도 windowFullscreen 이 있어 이름이 겹치면 링커가 하나를 고른다. 공개 이름은
-// sp_ 로 시작한다.
+// Wails also has a windowFullscreen in its cgo code, and the linker picks one of the two when the names
+// collide. Public names start with sp_.
 //
-// 창을 전체 화면으로 바꾸거나 되돌리고, 전환이 끝나면 done 을 메인 스레드에서 호출한다.
-//
-// macOS 는 전환이 진행 중인 동안 새 요청을 무시하므로, 진행 중이면 끝난 뒤에 이어서 바꾼다.
-// 이미 원하는 상태이면 done 을 바로 호출한다. 창이 전체 화면을 지원하지 않으면 false 를 반환한다.
+// Switches the window to full screen or back, and calls done on the main thread when the transition ends.
+// macOS ignores new requests while a transition is in progress, so a request made during a transition is
+// applied after it ends.
+// When the window is already in the requested state, done is called immediately. Returns false when the
+// window does not support full screen.
 #ifdef __BLOCKS__
 bool sp_window_fullscreen(void *window, bool on, void (^done)(void));
 #endif

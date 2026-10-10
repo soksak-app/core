@@ -17,12 +17,12 @@ void sp_process_when_exited(pid_t pid, double seconds, sp_process_exit_done done
     dispatch_source_set_event_handler(source, ^{ answer(true); });
     dispatch_source_set_cancel_handler(source, ^{ dispatch_release(source); });
     dispatch_resume(source);
-    // 등록 전에 끝난 프로세스는 알림을 내지 않는다. 등록한 뒤 프로세스가 없으면 끝난 것이다. 다른 사용자의 프로세스는
-    // EPERM 이고 살아 있다.
+    // A process that ended before registration produces no notification. After registration, a process that does not exist has ended. A process of
+    // another user returns EPERM and is alive.
     if (kill(pid, 0) != 0 && errno == ESRCH) {
         dispatch_async(main, ^{ answer(true); });
         return;
     }
-    // 끝나지 않는 프로세스에는 알릴 사건이 없다. 기한은 그 실패를 알리는 데만 쓴다.
+    // A process that does not end has no event to report. The deadline is used only to report that failure.
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(seconds * NSEC_PER_SEC)), main, ^{ answer(false); });
 }

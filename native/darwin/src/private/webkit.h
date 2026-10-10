@@ -1,5 +1,5 @@
-// 이 라이브러리와 검사가 사용하는 WebKit 비공개 선언이다.
-// 목록과 사용 조건: docs/operations/private-native-apis.md
+// Private WebKit declarations that this library and its checks use.
+// List and conditions of use: docs/operations/private-native-apis.md
 #import <WebKit/WebKit.h>
 
 // _WKInspector.h
@@ -28,28 +28,28 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 @interface WKProcessPool (SPPrivate)
-// WKProcessPoolPrivate.h: pool 의 WebContent process 들이 JavaScript 객체를 수집하게 한다(시험용).
+// WKProcessPoolPrivate.h: makes the WebContent processes of the pool collect JavaScript objects (for tests).
 - (void)_garbageCollectJavaScriptObjectsForTesting;
 @end
 #pragma clang diagnostic pop
 
-// WKNavigationDelegatePrivate.h: navigation 을 새 WebContent 프로세스에서 진행하게 하는 정책.
+// WKNavigationDelegatePrivate.h: policy that makes a navigation proceed in a new WebContent process.
 static const WKNavigationActionPolicy SPNavigationActionPolicyAllowInNewProcess = (WKNavigationActionPolicy)(WKNavigationActionPolicyAllow + 3);
 
 @interface WKWebView (SPPrivate)
 @property(nonatomic, readonly) pid_t _webProcessIdentifier;
-// WKWebViewPrivate.h: 현재 WebContent 프로세스를 종료해 reload 가 새 프로세스를 시작하게 한다.
+// WKWebViewPrivate.h: terminates the current WebContent process so that a reload starts a new process.
 - (void)_killWebContentProcessAndResetState;
 // WKWebViewPrivate.h
 - (void)_setOverrideDeviceScaleFactor:(double)scale;
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))completion;
-// WKWebViewPrivate.h: 뒤로·앞으로 이동을 위해 멈춰 둔 이전 문서와 그 프로세스를 놓는다.
+// WKWebViewPrivate.h: releases the previous document and its process that were kept paused for back and forward navigation.
 - (void)_clearBackForwardCache;
 // WKWebViewPrivate.h (mac)
 - (void)_setIgnoresMouseMoveEvents:(BOOL)ignore;
 @property (nonatomic, setter=_setWindowOcclusionDetectionEnabled:) BOOL _windowOcclusionDetectionEnabled;
 - (void)_setShouldSuppressFirstResponderChanges:(BOOL)suppress;
-// WKWebViewPrivate.h: 인스펙터 검사 전용
+// WKWebViewPrivate.h: for inspector checks only
 @property (nonatomic, readonly) id<SPInspector> _inspector;
 // WKWebViewPrivateForTesting.h
 - (void)_doAfterActivityStateUpdate:(void (^)(void))completion;

@@ -15,7 +15,7 @@
 - (void)dealloc { [_ready release]; [super dealloc]; }
 @end
 
-// SPSettleRequest 는 창의 배치 트랜잭션이 모두 확정되기를 기다리는 표시 대기다.
+// SPSettleRequest is a presentation wait for every layout transaction of the window to be settled.
 @interface SPSettleRequest : NSObject
 @property(nonatomic, retain) WKWebView *main;
 @property(nonatomic, copy) void (^done)(double, const char *);
@@ -32,8 +32,7 @@ static bool injectSettledFailure;
 
 static void releaseSettled(void);
 
-// 진단 추적. 트랜잭션마다 ticket, begun, presented, committed 를 기록한다. 끌기 검사가 녹화 프레임의
-// 지연을 단계로 나누는 데 쓴다.
+// Diagnostic trace. Records ticket, begun, presented, and committed for each transaction. The drag check uses it to divide the delay of the recording frames into stages.
 static NSMutableArray<NSMutableArray<NSNumber *> *> *trace;
 
 static void traceMark(uint64_t ticket, NSUInteger stage) {
@@ -47,7 +46,7 @@ static void traceMark(uint64_t ticket, NSUInteger stage) {
         record = [NSMutableArray arrayWithObjects:@(ticket), @(NAN), @(NAN), @(NAN), @(NAN), nil];
         [trace addObject:record];
     }
-    // 한 트랜잭션이 표시를 여러 번 확인하면 마지막 확인을 남긴다.
+    // When one transaction checks the presentation several times, the last check is kept.
     record[stage] = @(now);
 }
 
@@ -91,7 +90,7 @@ static void nextLayout(void) {
     }
 }
 
-// CATransaction은 UI 스레드 단위이므로 여러 창의 준비·표시를 직렬화한다.
+// CATransaction is per UI thread, so the preparation and presentation of several windows are serialized.
 void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int)) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
     SPLayoutRequest *request = [[[SPLayoutRequest alloc] init] autorelease];
@@ -127,8 +126,8 @@ void surfaceLayoutCancel(void *owner) {
     releaseSettled();
 }
 
-// SPDisplayedFrame 은 화면의 다음 갱신 목표 시각을 한 번 읽는다. 표시 갱신이 끝난 뒤 커밋된 내용은
-// 늦어도 그 갱신에 화면에 나온다. 창이 가려져도 화면의 갱신은 계속되므로 화면의 링크를 쓴다.
+// SPDisplayedFrame reads the target time of the next display refresh once. Content committed after a presentation
+// update finishes appears on the screen by that refresh at the latest. The refresh of the screen continues even when the window is occluded, so the display link is used.
 @interface SPDisplayedFrame : NSObject
 @property(nonatomic, copy) void (^done)(double, const char *);
 - (void)tick:(CADisplayLink *)link;
@@ -149,15 +148,14 @@ static void afterNextFrame(NSScreen *screen, void (^done)(double, const char *))
     }
     SPDisplayedFrame *frame = [[SPDisplayedFrame new] autorelease];
     frame.done = done;
-    // 링크는 무효화될 때까지 대상을 보유한다.
+    // A link retains its target until it is invalidated.
     CADisplayLink *link = [screen displayLinkWithTarget:frame selector:@selector(tick:)];
     [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
 }
 
-// WebKit 은 macOS 에서 페이지 렌더링 갱신을 60fps 근처로 묶는 기능을 기본으로 켠다. 배치 한 번은
-// 앱 DOM 의 다음 표시(_doAfterNextPresentationUpdate)를 기다리므로, 120Hz 화면에서도 배치가 60Hz
-// 주기로 묶이고 끌기 중 화면이 포인터보다 두 주기 이상 늦는다. 이 기능은 WebKit 의 기능 플래그
-// 목록(_WKFeature)으로 켜고 끈다.
+// On macOS, WebKit enables by default the feature that limits page rendering updates to about 60 fps. One layout
+// waits for the next presentation of the app DOM (_doAfterNextPresentationUpdate), so even on a 120 Hz display the
+// layout is limited to a 60 Hz cycle and during a drag the screen lags the pointer by two or more cycles. This feature is turned on and off with the feature flag list of WebKit (_WKFeature).
 static _WKFeature *near60FPSFeature(void) {
     for (_WKFeature *feature in [WKPreferences _features]) {
         if ([feature.key isEqualToString:@"PreferPageRenderingUpdatesNear60FPSEnabled"]) return feature;
@@ -184,10 +182,10 @@ int surfaceLayoutPrefersNear60FPS(void *handle) {
 void surfaceLayoutAfterPresentation(void *handle, void (^done)(void)) {
     NSCAssert(NSThread.isMainThread, @"surface presentation requires the UI thread");
     WKWebView *main = (WKWebView *)handle;
-    // 모든 플러그인 DOM은 이 웹뷰에 있다. 다른 웹뷰는 독립적인 문서 콘텐츠다.
+    // All plugin DOM is in this web view. Other web views are independent document content.
     uint64_t ticket = preparation;
-    // 페이지가 그린 DOM 의 표시 확인을 요청한 시각. 표시까지의 대기가 그린 frame 의 갱신을 기다리는지 그 다음 갱신을
-    // 기다리는지 이 시각과 presented 로 잰다(docs/features.md F92).
+    // Time at which the presentation check of the DOM drawn by the page was requested. This time and presented measure whether the wait
+    // for presentation waits for the update of the frame that was drawn or for the update after it (docs/features.md F92).
     traceMark(ticket, 4);
     void (^finish)(void) = [[done copy] autorelease];
     [main _doAfterNextPresentationUpdate:^{
@@ -196,8 +194,8 @@ void surfaceLayoutAfterPresentation(void *handle, void (^done)(void)) {
     }];
 }
 
-// 창 owner 에 열렸거나 열릴 차례인 배치 트랜잭션이 있는지 반환한다. 트랜잭션이 열린 동안에는 창의
-// 어떤 변경도 화면에 나가지 않는다.
+// Returns whether the window owner has a layout transaction that is open or waiting to open. While a transaction is open,
+// no change of the window reaches the screen.
 static bool layoutOpen(void *owner) {
     if (activeOwner == owner) return true;
     for (SPLayoutRequest *request in waiting) {
@@ -225,9 +223,9 @@ static void settle(WKWebView *main, void (^done)(double, const char *)) {
             [main release];
             return;
         }
-        // DOM 평가는 레이아웃만 끝낸다. 웹 콘텐츠 프로세스가 그 DOM 의 렌더링을 커밋해야 화면에 나온다.
+        // DOM evaluation only finishes layout. The web content process must commit the rendering of that DOM before it appears on the screen.
         [main _doAfterNextPresentationUpdate:^{
-            // 표시를 기다리는 사이 새 트랜잭션이 열렸으면 그 트랜잭션의 확정부터 다시 기다린다.
+            // When a new transaction opened while waiting for presentation, the wait starts again from the settlement of that transaction.
             if (layoutOpen(main.window)) settle(main, finish);
             else afterNextFrame(main.window.screen, finish);
             [main release];
@@ -259,9 +257,9 @@ void surfaceLayoutInjectSettledFailure(void) {
     injectSettledFailure = true;
 }
 
-// SPStartCommit 은 새 페이지의 읽기가 끝난 뒤 다음 표시 갱신에 시작 트랜잭션을 커밋하고 스스로를 해제한다.
-// window_reveal.m 이 새 창을 드러내는 때와 같다. 그 사이 같은 창의 새 준비가 트랜잭션을 이어받았으면 ticket 이 바뀌어
-// 커밋하지 않고, 그 준비의 표시가 커밋한다.
+// SPStartCommit commits the start transaction at the next presentation update after the read of the new page finishes,
+// and releases itself. This is the same time at which window_reveal.m reveals a new window. When a new preparation of
+// the same window took over the transaction in the meantime, the ticket changed, so SPStartCommit does not commit and the presentation of that preparation commits.
 @interface SPStartCommit : NSObject {
     WKWebView *_webview;
     void *_owner;
@@ -278,7 +276,7 @@ void surfaceLayoutInjectSettledFailure(void) {
         _webview = [webview retain];
         _owner = owner;
         _ticket = ticket;
-        // 시작 문서는 새 페이지의 읽기 중에 요청되므로 읽기는 이미 시작했다.
+        // The start document is requested during the read of the new page, so the read has already started.
         _started = webview.loading;
     }
     return self;
@@ -325,7 +323,7 @@ void surfaceLayoutStartPage(void *owner, uint64_t ticket, double height, void (^
         return;
     }
     char *failure = NULL;
-    // 보이지 않는 창에는 이전 페이지가 없다. 새 창은 첫 페이지가 표시될 때까지 투명하다(window_reveal.h).
+    // A window that is not visible has no previous page. A new window is transparent until the first page presents (window_reveal.h).
     if (!window.isVisible || window.alphaValue == 0) {
         bool set = windowSetTitlebarHeight(window, height, &failure);
         ready(set ? NULL : failure);
@@ -348,7 +346,7 @@ void surfaceLayoutStartPage(void *owner, uint64_t ticket, double height, void (^
             [main release];
             return;
         }
-        // 관찰 객체는 커밋할 때 스스로를 해제한다.
+        // The observer releases itself when it commits.
         [[[SPStartCommit alloc] initWithWebview:main owner:owner ticket:ticket] start];
         finish(NULL);
         [main release];
