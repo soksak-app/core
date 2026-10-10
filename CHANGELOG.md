@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F145.17: the trace of the browser, editor, hwp, shell and files plugins is tracked in the checklists of their own repositories (P17, E14, H12, P4, P20), against the entrance `context.runtime.log` of the plugin API; no core code changed.
 - F145.16: the event file of the files and shell sidecars is tracked in the checklists of their own repositories (S18 and S4), against the event contract, the field `cids` of the request envelope and the member `events` of `sidecar.json`; no core code changed.
 - F145.15.3: the first module of the main page emits the event `page.start` with `time_origin` and `url`, so a reload is a marked boundary in the timeline.
 - F145.15.2: both hosts store the surface lifecycle of the trace as `host.trace.surface` with the phases `created`, `placed` (with `x`, `y`, `w`, `h` and `visible`) and `destroyed`; they stored `destroyed` alone.
