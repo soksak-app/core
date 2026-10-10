@@ -165,11 +165,26 @@ func traceOn(t *testing.T) {
 	}
 }
 
+// waitForFirstSample returns when the event log holds the first sample of the host that the sampler stored after the switch turned on.
+func waitForFirstSample(t *testing.T, config string, log *host.EventLog) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for len(traceFields(t, config, log, "host.sampler.memory")) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the sampler stored no sample within 10 s of the switch")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 // contract: performance.sampler.reads-every-registered-process
 func TestTheSamplerReadsEveryRegisteredProcess(t *testing.T) {
 	config := t.TempDir()
 	log := support.StartWriter(t, config)
 	traceOn(t)
+	// The sampler that the switch started stores its first sample at once; the check starts after it, so that a sample that began
+	// before the removal below cannot be stored after it.
+	waitForFirstSample(t, config, log)
 	child := exec.Command("sleep", "30")
 	if err := child.Start(); err != nil {
 		t.Fatal(err)
