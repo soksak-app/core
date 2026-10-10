@@ -450,6 +450,8 @@ fn invalid_json_closes_connection() {
 | `debug.files.lists-the-logs-folder` | 디버그 파일은 `<config-dir>/logs/` 아래 모든 파일이고, 설정 폴더에 대한 상대 경로, 크기, 수정 시각을 담아 경로 순으로 나열된다. | both |
 | `debug.save.copies-a-file-of-the-logs-folder-only` | 저장은 `logs/` 아래 파일을 복사한다. `logs/` 밖, `..`가 든 경로, 폴더, 없는 파일은 `debug: <path> is not a file under logs/`로 거부한다. | both |
 | `debug.save-all.writes-the-logs-folder-as-tar` | 모두 저장은 `logs/`의 파일을 그 경로로 담은 gzip 압축 tar 파일을 쓴다. | both |
+| `debug.save-text.writes-the-text-to-the-destination` | 글 저장은 요청의 글을 줄바꿈과 ASCII가 아닌 글자를 그대로 둔 채 목적지에 쓴다. | both |
+| `debug.save-text.refuses-a-name-that-is-not-a-file-name-and-text-that-is-empty-or-too-large` | 빈 이름, `.`, `..`, `/`나 `\`를 가진 이름은 `debug: name "<name>" is not a file name`으로, 빈 글은 `debug: text is empty`로, 16 MiB를 넘는 글은 `debug: text is <n> bytes, over the limit of 16777216`으로 요청을 거절한다. | both |
 | `debug.read.returns-the-end-of-a-text-file` | `debugRead`는 `logs/` 아래 글 파일의 전체 내용을, 더 크면 문자 경계에서 시작하는 마지막 262144 byte를 `truncated` true와 함께 `kind` `text`인 `{path, size, truncated, kind, text}`로 답한다. | both |
 | `debug.read.returns-a-png-file-as-an-image` | `debugRead`는 PNG 파일 전체의 `data:image/png;base64,` 주소를 `kind` `image`인 `{path, size, truncated, kind, image}`로 답하고, PNG signature로 시작하지 않는 `.png` 파일과 16 MB보다 큰 PNG 파일은 거부한다. | both |
 | `debug.read.refuses-a-path-outside-logs-and-a-file-that-is-not-text` | `debugRead`는 `logs/` 밖의 경로, 파일이 아닌 경로, 내용이 UTF-8 글이 아닌 파일을 그 경로를 밝히는 오류로 거부한다. | both |

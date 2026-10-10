@@ -242,3 +242,54 @@ fn debug_write_state_keeps_the_newest_20_state_files() {
     assert!(states[19].starts_with("state-20261010T"), "{states:?}");
     assert!(config.path().join("logs/application.log").exists());
 }
+
+// contract: debug.save-text.writes-the-text-to-the-destination
+#[test]
+fn debug_write_text_writes_the_text_of_the_request() {
+    let target = tempfile::tempdir().unwrap();
+    let destination = target.path().join("rows.txt");
+    let request = debug::TextRequest {
+        name: "rows.txt".into(),
+        text: "first\nsecond 한글\n".into(),
+    };
+    debug::write_text(&destination, &request).unwrap();
+    assert_eq!(std::fs::read_to_string(&destination).unwrap(), request.text);
+}
+
+// contract: debug.save-text.refuses-a-name-that-is-not-a-file-name-and-text-that-is-empty-or-too-large
+#[test]
+fn debug_text_request_refuses_what_is_not_a_file_name_and_text_of_no_use() {
+    let request = |name: &str, text: String| debug::TextRequest {
+        name: name.into(),
+        text,
+    };
+    for (given, want) in [
+        (
+            request("", "x".into()),
+            r#"debug: name "" is not a file name"#.to_string(),
+        ),
+        (
+            request("../rows.txt", "x".into()),
+            r#"debug: name "../rows.txt" is not a file name"#.to_string(),
+        ),
+        (
+            request("logs/rows.txt", "x".into()),
+            r#"debug: name "logs/rows.txt" is not a file name"#.to_string(),
+        ),
+        (
+            request("..", "x".into()),
+            r#"debug: name ".." is not a file name"#.to_string(),
+        ),
+        (
+            request("rows.txt", String::new()),
+            "debug: text is empty".to_string(),
+        ),
+        (
+            request("rows.txt", "x".repeat((16 << 20) + 1)),
+            "debug: text is 16777217 bytes, over the limit of 16777216".to_string(),
+        ),
+    ] {
+        assert_eq!(given.validate(), Err(want), "validate {:?}", given.name);
+    }
+    assert_eq!(request("rows.txt", "x".into()).validate(), Ok(()));
+}

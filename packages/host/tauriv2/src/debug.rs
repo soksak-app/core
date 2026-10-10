@@ -289,6 +289,47 @@ pub struct SaveRequest {
     pub path: String,
 }
 
+/// The largest text that debugSaveText writes, in bytes.
+const TEXT_LIMIT: usize = 16 << 20;
+
+/// The argument of the debugSaveText call: the text that the page built and the file name that the save panel offers.
+#[derive(Debug, Deserialize)]
+pub struct TextRequest {
+    pub name: String,
+    pub text: String,
+}
+
+impl TextRequest {
+    /// Refuses a name that is not a file name (empty, `.`, `..`, or holding a separator) and text that is empty or over
+    /// `TEXT_LIMIT` bytes.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.name.is_empty()
+            || self.name == "."
+            || self.name == ".."
+            || self.name.contains(['/', '\\'])
+        {
+            return Err(format!("debug: name {:?} is not a file name", self.name));
+        }
+        if self.text.is_empty() {
+            return Err("debug: text is empty".into());
+        }
+        if self.text.len() > TEXT_LIMIT {
+            return Err(format!(
+                "debug: text is {} bytes, over the limit of {TEXT_LIMIT}",
+                self.text.len()
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Validates the request and writes its text to `destination`.
+pub fn write_text(destination: &Path, request: &TextRequest) -> Result<(), String> {
+    request.validate()?;
+    std::fs::write(destination, request.text.as_bytes())
+        .map_err(|error| format!("debug: {}: {error}", destination.display()))
+}
+
 /// The answer of debugSave and debugSaveAll: the chosen path, or `None` when the person cancelled.
 #[derive(Debug, Serialize)]
 pub struct Saved {
@@ -387,6 +428,18 @@ pub(crate) fn save(window: &Window, request: SaveRequest) -> Result<Saved, Strin
         return Ok(Saved { saved: None });
     };
     copy(&directory, &request.path, &chosen)?;
+    Ok(Saved {
+        saved: Some(chosen.to_string_lossy().into_owned()),
+    })
+}
+
+/// The page's debugSaveText call: saves text that the page built where the person chooses.
+pub(crate) fn save_text(window: &Window, request: TextRequest) -> Result<Saved, String> {
+    request.validate()?;
+    let Some(chosen) = save_to(window, &request.name)? else {
+        return Ok(Saved { saved: None });
+    };
+    write_text(&chosen, &request)?;
     Ok(Saved {
         saved: Some(chosen.to_string_lossy().into_owned()),
     })

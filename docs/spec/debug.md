@@ -24,6 +24,7 @@ The host call `debugFiles()` answers `[{path, size, modified}]` for every file u
 
 - `core.debug.save {path}` runs the host call `debugSave({path})`, which shows the macOS save panel with the file name and copies the file to the chosen place. It answers `{saved}`, the chosen path, or `{saved: null}` when the person cancels. A `path` outside `logs/` or of no file is refused with an error that names it.
 - `core.debug.save-all` runs the host call `debugSaveAll()`, which shows the save panel with the name `soksak-<host>-debug-<time>.tar.gz` and writes a gzip-compressed tar file of `<config-dir>/logs/`. It answers like `debugSave`.
+- The host call `debugSaveText({name, text})` saves text that the page built (for example the selected rows of the timeline): the host refuses a `name` that is not a file name (empty, `.`, `..`, or holding `/` or `\`) and a `text` that is empty or over 16 MiB with an error that names what it found, shows the save panel with `name`, writes the text to the chosen place, and answers `{saved}` like `debugSave`.
 
 ## Viewing
 

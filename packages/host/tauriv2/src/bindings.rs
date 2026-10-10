@@ -96,6 +96,7 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         debug_files,
         debug_record,
         debug_save,
+        debug_save_text,
         debug_save_all,
         debug_read
     ]
@@ -690,6 +691,16 @@ fn debug_save(
 ) -> Result<crate::debug::Saved, String> {
     let Argument(request) = request;
     crate::debug::save(&window, request)
+}
+
+/// Saves text that the page built through the save panel.
+#[tauri::command(async)]
+fn debug_save_text(
+    window: Window,
+    request: Argument<crate::debug::TextRequest>,
+) -> Result<crate::debug::Saved, String> {
+    let Argument(request) = request;
+    crate::debug::save_text(&window, request)
 }
 
 /// Saves the logs folder as one gzip-compressed tar file through the save panel.

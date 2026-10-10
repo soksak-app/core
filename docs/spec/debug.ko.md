@@ -24,6 +24,7 @@ host 호출 `debugFiles()`는 `<config-dir>/logs/` 아래 모든 파일을 `path
 
 - `core.debug.save {path}`는 host 호출 `debugSave({path})`를 실행한다. host는 파일 이름으로 macOS 저장 창을 보이고 고른 곳에 파일을 복사한다. 고른 경로 `{saved}`로, 취소하면 `{saved: null}`로 답한다. `logs/` 밖이거나 파일이 없는 `path`는 그 경로를 밝히는 오류로 거부한다.
 - `core.debug.save-all`은 host 호출 `debugSaveAll()`을 실행한다. host는 이름 `soksak-<host>-debug-<time>.tar.gz`로 저장 창을 보이고 `<config-dir>/logs/`를 gzip으로 압축한 tar 파일로 쓴다. `debugSave`처럼 답한다.
+- host 호출 `debugSaveText({name, text})`는 page가 만든 글(예: 타임라인에서 고른 행)을 저장한다. host는 파일 이름이 아닌 `name`(빈 이름, `.`, `..`, `/`나 `\`를 가진 이름)과 비었거나 16 MiB를 넘는 `text`를 무엇을 찾았는지 밝히는 오류로 거절하고, `name`으로 저장 창을 보여 고른 곳에 글을 쓰며, `debugSave`처럼 `{saved}`로 답한다.
 
 ## 보기
 

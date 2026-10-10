@@ -242,3 +242,34 @@ func TestDebugWriteStateKeepsTheNewest20StateFiles(t *testing.T) {
 		t.Fatalf("the application log was removed: %v", err)
 	}
 }
+
+// contract: debug.save-text.writes-the-text-to-the-destination
+func TestDebugWriteTextWritesTheTextOfTheRequest(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "rows.txt")
+	request := host.DebugTextRequest{Name: "rows.txt", Text: "first\nsecond 한글\n"}
+	if err := host.DebugWriteText(destination, request); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(destination); string(data) != request.Text {
+		t.Fatalf("wrote %q, want %q", data, request.Text)
+	}
+}
+
+// contract: debug.save-text.refuses-a-name-that-is-not-a-file-name-and-text-that-is-empty-or-too-large
+func TestDebugTextRequestRefusesWhatIsNotAFileNameAndTextOfNoUse(t *testing.T) {
+	for request, want := range map[host.DebugTextRequest]string{
+		{Name: "", Text: "x"}:                                   `debug: name "" is not a file name`,
+		{Name: "../rows.txt", Text: "x"}:                        `debug: name "../rows.txt" is not a file name`,
+		{Name: "logs/rows.txt", Text: "x"}:                      `debug: name "logs/rows.txt" is not a file name`,
+		{Name: "..", Text: "x"}:                                 `debug: name ".." is not a file name`,
+		{Name: "rows.txt", Text: ""}:                            "debug: text is empty",
+		{Name: "rows.txt", Text: strings.Repeat("x", 16<<20+1)}: "debug: text is 16777217 bytes, over the limit of 16777216",
+	} {
+		if err := request.Validate(); err == nil || err.Error() != want {
+			t.Fatalf("validate %q (%d bytes): %v, want %q", request.Name, len(request.Text), err, want)
+		}
+	}
+	if err := (host.DebugTextRequest{Name: "rows.txt", Text: "x"}).Validate(); err != nil {
+		t.Fatal(err)
+	}
+}

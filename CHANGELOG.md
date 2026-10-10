@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F151.4.1: the host call `debugSaveText({name, text})` of both hosts saves text that the page built where the person chooses; it refuses a name that is not a file name and text that is empty or over 16 MiB, shows the same save panel and answers `{saved}`.
 - F150.7.4: `docs/spec/events.json` is the catalog of the events of the layers `native`, `host` and `page`; `make events-check` requires that a source names each declared event, `node scripts/check-events.mjs --logs <config-dir>…` audits the host event files that the window checks left (declared events, required fields of their type), and a catalog name with a placeholder declares a family. The audit found that `native.window.occlusion` stored `visible` as a number; it is a boolean.
 - F151.5: `debug-state.js` is listed in the files of the workbench package, and a state file whose `page` member is an array (as the host writes it) is shown as a tree.
 - F150.6.1: a page request to a sidecar can carry the correlation identifiers of the inputs it continues: `send(surface, body, cids)` of the sidecar port, the host call `sidecarSend` of both runtimes and both hosts pass `cids`, and the request line has the field `cids` between `root` and `body` only when the list is not empty.

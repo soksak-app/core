@@ -301,6 +301,42 @@ type DebugSaveRequest struct {
 	Path string `json:"path"`
 }
 
+// debugTextLimit is the largest text that debugSaveText writes, in bytes.
+const debugTextLimit = 16 << 20
+
+// DebugTextRequest is the argument of the debugSaveText call: the text that the page built and the file name that the save
+// panel offers.
+type DebugTextRequest struct {
+	Name string `json:"name"`
+	Text string `json:"text"`
+}
+
+// Validate refuses a name that is not a file name (empty, `.`, `..`, or holding a separator) and text that is empty or over
+// debugTextLimit bytes.
+func (r DebugTextRequest) Validate() error {
+	if r.Name == "" || r.Name == "." || r.Name == ".." || strings.ContainsAny(r.Name, `/\`) {
+		return fmt.Errorf("debug: name %q is not a file name", r.Name)
+	}
+	if r.Text == "" {
+		return fmt.Errorf("debug: text is empty")
+	}
+	if len(r.Text) > debugTextLimit {
+		return fmt.Errorf("debug: text is %d bytes, over the limit of %d", len(r.Text), debugTextLimit)
+	}
+	return nil
+}
+
+// DebugWriteText validates the request and writes its text to destination.
+func DebugWriteText(destination string, request DebugTextRequest) error {
+	if err := request.Validate(); err != nil {
+		return err
+	}
+	if err := os.WriteFile(destination, []byte(request.Text), 0o644); err != nil {
+		return fmt.Errorf("debug: %s: %w", destination, err)
+	}
+	return nil
+}
+
 // DebugSaved is the answer of debugSave and debugSaveAll: the chosen path, or nil when the person cancelled.
 type DebugSaved struct {
 	Saved *string `json:"saved"`
@@ -401,6 +437,25 @@ func (h *Host) DebugSave(ctx context.Context, requestJSON json.RawMessage) (Debu
 		return DebugSaved{}, err
 	}
 	if err := DebugCopy(h.configDir, request.Path, *chosen); err != nil {
+		return DebugSaved{}, err
+	}
+	return DebugSaved{Saved: chosen}, nil
+}
+
+// DebugSaveText is the page's debugSaveText call: it saves text that the page built where the person chooses.
+func (h *Host) DebugSaveText(ctx context.Context, requestJSON json.RawMessage) (DebugSaved, error) {
+	request, err := argument[DebugTextRequest]("request", requestJSON)
+	if err != nil {
+		return DebugSaved{}, err
+	}
+	if err := request.Validate(); err != nil {
+		return DebugSaved{}, err
+	}
+	chosen, err := h.debugSaveTo(ctx, request.Name)
+	if err != nil || chosen == nil {
+		return DebugSaved{}, err
+	}
+	if err := DebugWriteText(*chosen, request); err != nil {
 		return DebugSaved{}, err
 	}
 	return DebugSaved{Saved: chosen}, nil
