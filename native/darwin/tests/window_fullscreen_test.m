@@ -1,6 +1,6 @@
-// 전체 화면 전환이 끝난 뒤에 알리는지, 전환 중에 들어온 요청을 그다음에 처리하는지 검사한다.
-// macOS 는 전환 중의 -toggleFullScreen: 을 무시한다. 창이 전체 화면을 차지하므로 애플리케이션을
-// 활성화한다.
+// Checks that the end of a full screen transition is notified and that a request that arrives during the transition
+// is handled afterwards. macOS ignores -toggleFullScreen: during a transition. The window occupies the full screen,
+// so the check activates the application.
 #import <Cocoa/Cocoa.h>
 #import "window_fullscreen.h"
 
@@ -22,7 +22,7 @@ static BOOL fullscreen(NSWindow *window) {
     return (window.styleMask & NSWindowStyleMaskFullScreen) != 0;
 }
 
-// tests/support/no_activation.m: 이 검사는 make test-activation 에서 앱을 활성화한다.
+// tests/support/no_activation.m: this check activates the app in make test-activation.
 void sp_test_declare_activation(void);
 
 int main(void) { @autoreleasepool {
@@ -43,8 +43,8 @@ int main(void) { @autoreleasepool {
     until(^BOOL { return entered; });
     check(entered && fullscreen(window), @"entering full screen answers after the transition");
 
-    // 전환 중에 들어온 요청. macOS 는 그 순간의 -toggleFullScreen: 을 무시하므로 전환이 끝난 뒤에
-    // 이어서 처리해야 한다.
+    // A request that arrives during the transition. macOS ignores -toggleFullScreen: at that moment, so it must be
+    // handled after the transition ends.
     __block int answers = 0;
     __block BOOL back = NO;
     sp_window_fullscreen(window, false, ^{ answers++; });

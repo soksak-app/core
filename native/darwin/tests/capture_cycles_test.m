@@ -1,6 +1,7 @@
-// 한 프로세스에서 비활성 창의 녹화를 연속으로 시작하고 멈춘다. 창 검사는 테마마다 녹화를 시작하자마자
-// 멈추므로, 한 주기만 실행하는 수용 검사가 만들지 못하는 순서를 만든다. 실제 API 결과는 바꾸지 않고
-// 시작·종료·대리자 콜백을 기록한다. 애플리케이션을 활성화하지 않는다.
+// Starts and stops the recording of an inactive window repeatedly in one process. The window check stops the
+// recording of each theme as soon as it starts, so this creates a sequence that an acceptance check running
+// only one cycle cannot create. It does not change the actual API results and records the start, stop, and
+// delegate callbacks. It does not activate the application.
 #import "../src/capture.m"
 #import <objc/runtime.h>
 
@@ -74,7 +75,7 @@ int main(void) { @autoreleasepool {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
     }
     check(onScreen(), @"the window server shows the capture window");
-    // 수용 검사처럼 첫 합성 프레임이 안정될 때까지 창을 바꾸지 않는다.
+    // As in the acceptance check, do not change the window until the first composited frame is stable.
     NSDate *settled = [NSDate dateWithTimeIntervalSinceNow:3];
     while (settled.timeIntervalSinceNow > 0) {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
@@ -84,7 +85,7 @@ int main(void) { @autoreleasepool {
     NSArray<NSColor *> *colors = @[NSColor.redColor, NSColor.blueColor, NSColor.greenColor];
     int completed = 0;
     for (int cycle = 1; cycle <= CYCLES && failures == 0; cycle++) {
-        // 창 검사처럼 주기마다 창 내용을 바꾼다.
+        // As in the window check, change the window content each cycle.
         window.backgroundColor = colors[cycle % colors.count];
         [window display];
         char template[] = "/tmp/soksak-capture-cycles-XXXXXX";
@@ -104,7 +105,7 @@ int main(void) { @autoreleasepool {
             int first = sp_capture_wait();
             check(first == 1, [NSString stringWithFormat:@"cycle %d produces a first frame (%s)", cycle, sp_capture_error()]);
             int frames = sp_capture_stop(0);
-            // 오류 문자열은 공유 상태이므로 판정과 보고에 같은 사본을 쓴다.
+            // The error string is shared state, so use the same copy for the verdict and the report.
             const char *stopError = sp_capture_error();
             NSString *stopText = stopError == NULL ? nil : [NSString stringWithUTF8String:stopError];
             check(stopText != nil && stopText.length == 0 && frames > 0,

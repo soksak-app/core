@@ -1,4 +1,4 @@
-// 논리 표면은 앱 DOM 웹뷰를 추가하지 않으며 네이티브 내용만 소유한다.
+// A logical surface does not add an app DOM webview and owns only native content.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
@@ -25,8 +25,8 @@ int main(void) { @autoreleasepool {
     host.autoresizesSubviews = YES;
     [window.contentView addSubview:host];
     WKWebView *main = [[WKWebView alloc] initWithFrame:host.bounds];
-    // TaoView 는 WKWebView 의 크기를 직접 조정한다. 따라서 공유 compositor 가 그
-    // webview 를 감쌀 때 webview 에 autoresizing mask 가 없을 수 있다.
+    // TaoView resizes the WKWebView directly, so the webview may have no autoresizing mask when the shared compositor
+    // wraps it.
     main.autoresizingMask = NSViewNotSizable;
     [host addSubview:main];
     check(sp_window_set_main_webview(window, main), "the window registers its app DOM identity");
@@ -115,7 +115,8 @@ int main(void) { @autoreleasepool {
     NSPoint outside = [surface convertPoint:NSMakePoint(-1, 10) toView:window.contentView.superview];
     hit = [window.contentView hitTest:outside];
     check(hit != field && ![hit isDescendantOf:field], "native input cannot cross the surface boundary");
-    // 배치 준비는 DOM 이 그려질 때까지 표면을 숨겼다가 다시 보인다. 그 사이 키보드 소유자가 바뀌면 안 된다.
+    // Layout preparation hides the surface until the DOM is drawn and shows it again. The keyboard owner must not
+    // change in between.
     WKWebView *focusedDocument = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 100, 40)] autorelease];
     [plane addSubview:focusedDocument];
     check([window makeFirstResponder:focusedDocument], "a document in the surface takes keyboard focus");

@@ -1,7 +1,9 @@
-// 등록한 앱 DOM 웹뷰의 main frame 이 다른 문서로 바뀔 때마다 새 WebContent 프로세스에서 문서를 열고 이전 프로세스를
-// 끝내는지 검사한다. WebKit 은 같은 프로세스에서 교체한 문서를 querySelectorAll 결과 캐시 때문에 메모리 압박 전까지
-// 남기므로(docs/operations/private-native-apis.md), 프로세스가 끝나야 이전 문서가 해제된다. 프레임워크가 설정한
-// navigation delegate 는 계속 모든 알림을 받아야 한다. 애플리케이션을 활성화하지 않는다.
+// Checks that whenever the main frame of a registered app DOM webview changes to another document, the new document
+// opens in a new WebContent process and the previous process ends. WebKit keeps a document replaced in the same
+// process until memory pressure because of the querySelectorAll result cache
+// (docs/operations/private-native-apis.md), so the previous document is released only when the process ends. The
+// navigation delegate that the framework sets must keep receiving every notification. The check does not activate the
+// application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "process_exit.h"
@@ -28,7 +30,8 @@ static void until(BOOL (^done)(void), NSString *what) {
     }
 }
 
-// 프레임워크의 navigation delegate 를 대신한다. 모든 navigation 을 허용하고 받은 알림을 센다.
+// Stands in for the navigation delegate of the framework. Allows every navigation and counts the notifications it
+// receives.
 @interface SPFrameworkDelegate : NSObject <WKNavigationDelegate>
 @property int decisions;
 @property int finished;
@@ -60,7 +63,7 @@ static void exited(void *context, bool value) {
     state->exited = value;
 }
 
-// 이전 프로세스가 끝났는지 커널의 종료 알림으로 확인한다.
+// Checks that the previous process ended through the kernel exit notification.
 static BOOL processEnds(pid_t pid) {
     SPExited state = {0};
     SPExited *answer = &state;
@@ -97,7 +100,7 @@ int main(void) { @autoreleasepool {
     view.navigationDelegate = framework;
     check(sp_window_set_main_webview(window, view), @"the app DOM webview is registered");
 
-    // 교체한 문서를 남기는 페이지: 캐시되는 querySelectorAll 결과가 있다.
+    // A page that keeps the replaced document: it has a cached querySelectorAll result.
     NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
     NSURL *file = [NSURL fileURLWithPath:[directory stringByAppendingPathComponent:@"page.html"]];
     check([NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil] &&
@@ -122,7 +125,7 @@ int main(void) { @autoreleasepool {
     check(view._webProcessIdentifier != before && processEnds(before), [NSString stringWithFormat:
         @"loading a document again opens it in a new process and ends the previous process %d", before]);
 
-    // 같은 문서 안의 이동은 문서를 바꾸지 않으므로 프로세스를 바꾸지 않는다.
+    // Navigation inside the same document does not change the document, so it does not change the process.
     pid_t current = view._webProcessIdentifier;
     evaluate(view, @"location.hash = 'moved'; location.hash");
     check(view._webProcessIdentifier == current && [evaluate(view, @"location.hash") isEqualToString:@"#moved"],

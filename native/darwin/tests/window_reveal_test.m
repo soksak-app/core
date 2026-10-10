@@ -1,5 +1,6 @@
-// 새 창이 메인 웹뷰의 첫 읽기와 그 다음 표시가 끝난 뒤에 불투명해지는지 검사한다. 드러난 창의 정지 화면이 페이지의
-// 색인지 재고, 읽기가 실패한 창도 드러나는지 본다. 애플리케이션을 활성화하지 않는다.
+// Checks that a new window becomes opaque after the first load of the main webview and the following display have
+// finished. Measures whether the still image of the revealed window has the color of the page and whether a window
+// whose load failed is also revealed. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "capture.h"
@@ -24,8 +25,8 @@ static NSWindow *makeWindow(WKWebView **webview) {
     return window;
 }
 
-// 창이 불투명해질 때까지 run loop 를 돌린다. 드러날 때의 loading 값을 loadingAtReveal 에 남긴다. 10초 안에
-// 드러나지 않으면 NO 다.
+// Runs the run loop until the window becomes opaque. Stores the loading value at the time of the reveal in
+// loadingAtReveal. It is NO if the window is not revealed within 10 seconds.
 static BOOL waitRevealed(NSWindow *window, WKWebView *webview, BOOL *loadingAtReveal) {
     NSDate *limit = [NSDate dateWithTimeIntervalSinceNow:10];
     while (window.alphaValue == 0 && limit.timeIntervalSinceNow > 0) {
@@ -70,7 +71,8 @@ int main(void) { @autoreleasepool {
     free(captureError);
     if (captured) {
         NSBitmapImageRep *image = [NSBitmapImageRep imageRepWithData:[NSData dataWithContentsOfFile:still]];
-        // 창 아래쪽 가운데는 웹뷰가 덮는 자리다. 페이지의 sRGB 색을 정지 화면의 색 공간으로 옮겨 같은 공간에서 비교한다.
+        // The lower center of the window is where the webview covers. Converts the sRGB color of the page to the
+        // color space of the still image and compares in the same space.
         NSColor *seen = [image colorAtX:image.pixelsWide / 2 y:image.pixelsHigh * 3 / 4];
         NSColor *page = [[NSColor colorWithSRGBRed:1 green:0 blue:0 alpha:1] colorUsingColorSpace:seen.colorSpace];
         double distance = MAX(fabs(seen.redComponent - page.redComponent),
@@ -88,7 +90,8 @@ int main(void) { @autoreleasepool {
     NSWindow *failed = makeWindow(&failing);
     check(sp_window_reveal_after_load(failed, &error), @"a window whose load fails is prepared");
     [failed orderFrontRegardless];
-    // 닫힌 로컬 포트는 연결이 거부되어 읽기가 실패한다. 다른 애플리케이션에 넘겨지는 URL 은 쓰지 않는다.
+    // A closed local port refuses the connection, so the load fails. A URL that is passed to another application is
+    // not used.
     [failing loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"http://127.0.0.1:1/"]]];
     check(waitRevealed(failed, failing, &loading), @"a window whose first load fails becomes opaque and shows the failure");
     [failed close];

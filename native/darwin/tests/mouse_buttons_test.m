@@ -1,8 +1,8 @@
-// 마우스 버튼 감시가 설치한 차례와 애플리케이션에 전달된 마우스 버튼의 누름과 뗌마다 AppKit 이 보고하는 mask 를
-// 알리는지 검사한다. 애플리케이션을 활성화하지 않는다.
+// Checks that the mouse button monitor reports the mask at the moment of installation and, for each press and release of a mouse button delivered to the application, the mask that AppKit reports.
+// It does not activate the application.
 //
-// 다른 애플리케이션에 전달되는 누름과 뗌(global event monitor)은 사람의 버튼이나 창 서버에 게시한 실제 입력으로만
-// 생기므로 이 검사는 다루지 않는다. 그 경로는 창 검사가 host.buttons 로 관측한다.
+// Presses and releases delivered to other applications (global event monitor) arise only from a human button or real input posted to the window server,
+// so this check does not cover them. The window check observes that path through host.buttons.
 #import <Cocoa/Cocoa.h>
 #import "mouse_buttons.h"
 
@@ -13,7 +13,7 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// 알림마다 mask 와 그 차례에 AppKit 이 보고한 mask 를 기록한다.
+// Records, for each notification, the mask and the mask that AppKit reported at that point.
 static NSMutableArray<NSArray<NSNumber *> *> *reports;
 
 static void changed(void *context, unsigned long long mask) {
@@ -26,7 +26,7 @@ static NSEvent *mouse(NSEventType type) {
         clickCount:type == NSEventTypeMouseMoved ? 0 : 1 pressure:0];
 }
 
-// 이벤트 대기열의 이벤트를 꺼내 애플리케이션에 전달한다. 로컬 이벤트 감시는 이 전달에서 이벤트를 받는다.
+// Takes the events of the event queue and delivers them to the application. The local event monitor receives events in this delivery.
 static void pump(NSString *what, BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
@@ -42,7 +42,7 @@ int main(void) { @autoreleasepool {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     reports = [NSMutableArray array];
 
-    // dispatch_sync 는 블록을 호출한 스레드에서 실행할 수 있으므로 다른 스레드에서 실행하고 끝나기를 기다린다.
+    // dispatch_sync can run the block on the calling thread, so the block is run on another thread and waited for.
     __block bool background = true;
     dispatch_semaphore_t finished = dispatch_semaphore_create(0);
     [NSThread detachNewThreadWithBlock:^{
@@ -58,7 +58,7 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the watch reports the current mask once on the main thread when it is installed: %@", reports]);
     check(!sp_mouse_buttons_watch(changed, (void *)8) && reports.count == 1, @"a second watch is refused");
 
-    // 버튼 없는 이동은 알리지 않는다. 대기열은 차례대로 꺼내므로 마지막 뗌을 알린 뒤에는 이동도 전달되었다.
+    // A move without a button is not reported. The queue is taken in order, so after the last release is reported the move has been delivered too.
     NSEventType types[] = {
         NSEventTypeMouseMoved,
         NSEventTypeLeftMouseDown, NSEventTypeLeftMouseUp,
@@ -67,7 +67,7 @@ int main(void) { @autoreleasepool {
         NSEventTypeMouseMoved,
     };
     for (size_t i = 0; i < sizeof types / sizeof types[0]; i++) [NSApp postEvent:mouse(types[i]) atStart:NO];
-    // 마지막 이동 뒤에 표지를 넣어 대기열의 모든 이벤트가 전달된 차례를 안다.
+    // Puts a marker after the last move to know the point at which all events of the queue have been delivered.
     __block BOOL drained = NO;
     NSEvent *marker = [NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0
         timestamp:0 windowNumber:0 context:nil subtype:0x4654 data1:0 data2:0];

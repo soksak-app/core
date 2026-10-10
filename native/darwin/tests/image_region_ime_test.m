@@ -1,11 +1,11 @@
-// 활성 키 창에 물리 키를 보내 macOS 한국어 2벌식 입력기의 조합 결과를 검사한다.
+// Sends physical keys to the active key window and checks the composition result of the macOS Korean 2-set input method.
 //
-// 입력기는 키 창의 활성 입력 컨텍스트만 처리하므로 이 검사는 애플리케이션을 활성화해 포커스를 가져가고,
-// 검사 동안 입력 소스를 영문과 한국어 2벌식으로 바꾼다. 끝나면 이전 입력 소스와 이전 앱을 되돌린다.
-// make test 에 포함하지 않고 make test-activation 으로만 실행한다. 한국어 2벌식이 켜져 있지 않으면 실패한다.
-// 키는 endpoint 주입기와 같은 -[NSWindow sendEvent:] 경로로 보낸다. AppKit 텍스트 뷰 대조군이 이 경로로
-// 올바른 문서를 만드는지 먼저 확인하고, 문서가 없는 최소 입력 클라이언트의 콜백을 측정값으로 기록한 뒤,
-// 그림 영역이 사용자 보고 순서(ddd 뒤 한글)를 정확히 확정하는지 검사한다.
+// The input method handles only the active input context of the key window, so this check activates the application and takes the focus,
+// and during the check switches the input source between English and Korean 2-set. At the end it restores the previous input source and the previous application.
+// It is not part of make test and runs only by make test-activation. It fails if the Korean 2-set input source is not enabled.
+// Keys are sent through the same -[NSWindow sendEvent:] path as the endpoint injector. The check first confirms that the AppKit text view control produces
+// the correct document through this path, records the callbacks of a minimal input client without a document as measured values,
+// and then checks that the image region commits exactly the order reported by the user (Hangul after ddd).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "image_region.h"
@@ -31,7 +31,7 @@ static void regionEvent(void *context, const char *json) {
     [events addObject:event ?: @{@"type": @"invalid", @"raw": [NSString stringWithUTF8String:json]}];
 }
 
-// 앱 이벤트를 꺼내 처리하며 기다린다. 활성화와 입력기 응답은 이벤트로 도착한다.
+// Takes and processes application events while waiting. Activation and input method responses arrive as events.
 static BOOL pump(BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
@@ -49,7 +49,7 @@ static NSString *currentSourceID(void) {
     return result;
 }
 
-// 대조군 텍스트 뷰. 입력기가 보낸 콜백과 범위를 그대로 기록한다.
+// The control text view. It records the callbacks and ranges that the input method sent, unchanged.
 @interface SPRecordingTextView : NSTextView
 @property(retain) NSMutableArray *calls;
 @end
@@ -85,7 +85,7 @@ static NSString *currentSourceID(void) {
 - (void)dealloc { [_calls release]; [super dealloc]; }
 @end
 
-// 문서를 갖지 않는 최소 입력 클라이언트. 확정 문자열을 보관하지 않고 조합 문자열만 가진다.
+// A minimal input client without a document. It does not keep the committed string and holds only the composition string.
 @interface SPMinimalClient : NSView <NSTextInputClient>
 @property(retain) NSMutableArray *calls;
 @property(copy) NSString *marked;
@@ -123,8 +123,8 @@ static NSString *currentSourceID(void) {
 - (void)dealloc { [_calls release]; [_marked release]; [_committed release]; [super dealloc]; }
 @end
 
-// 문서를 스스로 가진 일반 NSView 입력 클라이언트. NSTextView 없이 입력기의 교체 범위를 문서에 적용한다.
-// 그림 영역의 NSTextView 상위 클래스가 필요한지 같은 순서로 비교하는 대조군이다(F8-9).
+// A plain NSView input client that holds its own document. It applies the replacement range of the input method to the document without NSTextView.
+// It is a control that compares, in the same order, whether the NSTextView superclass of the image region is needed (F8-9).
 @interface SPDocumentClient : NSView <NSTextInputClient>
 @property(retain) NSMutableString *document;
 @property NSRange marked;
@@ -179,8 +179,8 @@ static NSArray *valuesOfType(NSString *type, NSUInteger from) {
     return values;
 }
 
-// 사용자가 보고한 순서를 입력한다. 영문 입력 소스로 ddd 를 치고 한국어 2벌식으로 바꿔 한글(g k s r m f)과
-// Space 를 친다. 키마다 answered 가 늘어날 때까지 기다린다.
+// Types the order reported by the user. Types ddd with the English input source, switches to Korean 2-set, and types Hangul (g k s r m f) and
+// Space. For each key it waits until answered increases.
 static void typeKey(NSWindow *window, NSString *key, NSUInteger (^answered)(void)) {
     NSUInteger before = answered();
     BOOL sent = (sp_input_key(window, key.UTF8String, NULL, 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(window, key.UTF8String, NULL, 0, false) == SP_INPUT_DELIVERED);
@@ -196,7 +196,7 @@ static void selectSource(NSString *source, NSTextInputContext *context) {
     pump(^BOOL { return [context.selectedKeyboardInputSource isEqual:source]; });
 }
 
-// 입력 소스 전환 직후 첫 음절(한)과 Space 를 친다. 입력기는 이 음절을 교체 범위로 조합한다.
+// Types the first syllable (U+D55C) and Space right after the input source switch. The input method composes this syllable with a replacement range.
 static void typeSwitchedSyllable(NSWindow *window, NSTextInputContext *context, NSUInteger (^answered)(void)) {
     selectSource(ABC, context);
     selectSource(KOREAN_2SET, context);
@@ -210,7 +210,7 @@ static void typeDddHangul(NSWindow *window, NSTextInputContext *context, NSUInte
     for (NSString *key in @[@"g", @"k", @"s", @"r", @"m", @"f", @"Space"]) typeKey(window, key, answered);
 }
 
-// tests/support/no_activation.m: 이 검사는 make test-activation 에서 앱을 활성화한다.
+// tests/support/no_activation.m: this check activates the application in make test-activation.
 void sp_test_declare_activation(void);
 
 int main(void) { @autoreleasepool {
@@ -252,15 +252,15 @@ int main(void) { @autoreleasepool {
     check(pump(^BOOL { return NSApp.isActive && window.isKeyWindow; }), @"the test window becomes the key window");
     sp_region_focus(region);
     check(window.firstResponder == (NSResponder *)region, @"the image region is the first responder");
-    // 키를 보내기 전에 영역의 입력 컨텍스트가 한국어 2벌식을 선택했는지 기다린다.
+    // Waits until the input context of the region has selected Korean 2-set before sending keys.
     NSTextInputContext *context = ((NSView *)region).inputContext;
     check(pump(^BOOL { return NSTextInputContext.currentInputContext == context
             && [context.selectedKeyboardInputSource isEqual:KOREAN_2SET]; }),
         [NSString stringWithFormat:@"the region's input context is current and selects Korean 2-Set (current %d, selected %@)",
             NSTextInputContext.currentInputContext == context, context.selectedKeyboardInputSource]);
-    // 대조: AppKit 기본 텍스트 뷰가 같은 경로(-[NSWindow sendEvent:], endpoint 주입기와 같다)로 받은 키를
-    // 올바른 문서로 조합하는지 확인한다. 전환 직후 입력기는 확정한 글자를 교체 범위로 고쳐 쓰므로
-    // marked 상태가 아니라 최종 문서를 비교한다.
+    // Control: confirms that the AppKit default text view composes the keys received through the same path (-[NSWindow sendEvent:], same as the endpoint injector) into
+    // the correct document. Right after the switch the input method rewrites the committed character through a replacement range, so
+    // the final document is compared, not the marked state.
     SPRecordingTextView *control = [[[SPRecordingTextView alloc] initWithFrame:NSMakeRect(300, 10, 150, 40)] autorelease];
     control.calls = [NSMutableArray array];
     [window.contentView addSubview:control];
@@ -278,7 +278,7 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"control: an AppKit text view receives ddd한글 through the injected keys (text %@, calls %@)",
             control.string, control.calls]);
     printf("MEASURE: text view calls for ddd한글 Space Enter: %s\n", [control.calls componentsJoinedByString:@"; "].UTF8String);
-    // 입력기는 조합하던 음절의 위치를 기억하고 입력 소스 전환 때 그 위치에 다시 확정하므로, 문서를 비우기 전에 조합을 끝낸다.
+    // The input method remembers the position of the syllable being composed and commits again at that position on an input source switch, so the composition is ended before the document is cleared.
     [control.inputContext discardMarkedText];
     control.string = @"";
     [control.calls removeAllObjects];
@@ -288,7 +288,7 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"control: an AppKit text view receives the first syllable after a switch and a space (text %@, calls %@)",
             control.string, control.calls]);
     printf("MEASURE: text view calls for a switch, 한 Space Enter: %s\n", [control.calls componentsJoinedByString:@"; "].UTF8String);
-    // V5-8: 주입한 이름 있는 키는 물리 키와 같은 경로로 입력기에 도착한다. 조합 중 Backspace 는 입력기가 처리한다(한 → 하).
+    // V5-8: An injected named key arrives at the input method through the same path as a physical key. The input method handles Backspace during composition (U+D55C to U+D558).
     [control.inputContext discardMarkedText];
     control.string = @"";
     [control.calls removeAllObjects];
@@ -298,7 +298,7 @@ int main(void) { @autoreleasepool {
     check([control.string isEqual:@"하"],
         [NSString stringWithFormat:@"control: an injected Backspace during a composition reaches the input method and leaves 하 (text %@, calls %@)",
             control.string, control.calls]);
-    // F8: 조합 중 Escape 는 입력기가 조합을 끝낸다. 대조 컨트롤이 남기는 문서를 먼저 잰다.
+    // F8: Escape during composition makes the input method end the composition. First measures the document that the control leaves.
     [control.inputContext discardMarkedText];
     control.string = @"";
     [control.calls removeAllObjects];
@@ -310,7 +310,7 @@ int main(void) { @autoreleasepool {
             control.string, control.hasMarkedText, control.calls]);
     [control removeFromSuperview];
 
-    // 대조: 문서가 없는 최소 입력 클라이언트에서 입력기가 쓰는 방식을 기록한다.
+    // Control: records how the input method works with a minimal input client without a document.
     SPMinimalClient *minimal = [[[SPMinimalClient alloc] initWithFrame:NSMakeRect(300, 60, 150, 40)] autorelease];
     minimal.calls = [NSMutableArray array];
     minimal.committed = [NSMutableString string];
@@ -319,12 +319,12 @@ int main(void) { @autoreleasepool {
     pump(^BOOL { return NSTextInputContext.currentInputContext == minimal.inputContext
         && [minimal.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
     typeDddHangul(window, minimal.inputContext, ^NSUInteger { return minimal.calls.count; });
-    // 측정값만 기록한다. 이 클라이언트는 제품 코드가 아니며, 문서가 없을 때 입력기가 보내는 콜백을 보여 준다.
+    // Only measured values are recorded. This client is not product code; it shows the callbacks that the input method sends when there is no document.
     printf("MEASURE: minimal client committed %s, marked %s, calls %s\n", minimal.committed.UTF8String,
         minimal.marked.UTF8String, [minimal.calls componentsJoinedByString:@"; "].UTF8String);
     [minimal removeFromSuperview];
 
-    // 대조: 문서를 가진 일반 NSView 클라이언트가 같은 순서에서 텍스트 뷰와 같은 문서를 만드는지 본다.
+    // Control: checks whether a plain NSView client holding a document produces the same document as the text view in the same order.
     SPDocumentClient *plain = [[[SPDocumentClient alloc] initWithFrame:NSMakeRect(300, 60, 150, 40)] autorelease];
     plain.document = [NSMutableString string];
     plain.marked = NSMakeRange(NSNotFound, 0);
@@ -347,11 +347,11 @@ int main(void) { @autoreleasepool {
         @"the region's input context is current again");
     [events removeAllObjects];
 
-    // 사용자 보고: ddd한글 을 치면 ddd글 이 된다. 그림 영역의 확정 입력은 정확히 ddd한글 이어야 한다.
+    // User report: typing ddd followed by the Hangul word U+D55C U+AE00 yields ddd followed by only U+AE00. The committed input of the image region must be exactly ddd followed by the whole word.
     [events removeAllObjects];
     NSUInteger (^regionAnswered)(void) = ^NSUInteger { return events.count; };
     typeDddHangul(window, context, regionAnswered);
-    // F8-16: Space 가 조합을 끝내면 다음 키 없이 공백까지 확정되고 조합 문자열이 비어야 한다.
+    // F8-16: When Space ends the composition, the space is committed without a next key, and the composition string must be empty.
     NSString *committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
     NSString *preedit = [valuesOfType(@"compose", 0) lastObject] ?: @"";
     check([committed isEqual:@"ddd한글 "] && [preedit isEqual:@""],
@@ -364,7 +364,7 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"image region: ddd한글 and a space are committed exactly once before Enter (committed %@, events %@)",
             committed, events]);
 
-    // 글 뒤에 은을 조합한 경우에도 Space 가 다음 키 없이 한글과 공백을 확정해야 한다.
+    // Also when the syllable U+C740 is composed after U+AE00, Space must commit the Hangul and the space without a next key.
     [events removeAllObjects];
     selectSource(ABC, context);
     for (NSString *key in @[@"d", @"d", @"d"]) typeKey(window, key, regionAnswered);
@@ -379,7 +379,7 @@ int main(void) { @autoreleasepool {
             committed, preedit, events]);
     typeKey(window, @"Enter", regionAnswered);
 
-    // Tauri 에서 관찰한 것처럼 마지막 음절과 Space 가 한 번의 insert 에 남는 콜백도 검사한다.
+    // Also checks the callback in which the last syllable and Space remain in a single insert, as observed in Tauri.
     [events removeAllObjects];
     NSUInteger batchStart = ((NSTextView *)region).textStorage.length;
     [(id<NSTextInputClient>)region insertText:@"은" replacementRange:NSMakeRange(NSNotFound, 0)];
@@ -391,7 +391,7 @@ int main(void) { @autoreleasepool {
             committed, preedit, events]);
     [(id<NSTextInputClient>)region doCommandBySelector:@selector(insertNewline:)];
 
-    // 전환 직후 교체 범위로 조합한 첫 음절 뒤의 Space 도 다음 키 없이 확정되어야 한다.
+    // Space after the first syllable composed with a replacement range right after the switch must also be committed without a next key.
     [events removeAllObjects];
     typeSwitchedSyllable(window, context, regionAnswered);
     committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
@@ -401,7 +401,7 @@ int main(void) { @autoreleasepool {
             committed, preedit, events]);
     typeKey(window, @"Enter", regionAnswered);
 
-    // F8-16-1: 음절 뒤 숫자도 다음 키 없이 음절과 함께 확정된다.
+    // F8-16-1: A digit after a syllable is also committed together with the syllable without a next key.
     [events removeAllObjects];
     selectSource(ABC, context);
     selectSource(KOREAN_2SET, context);
@@ -413,7 +413,7 @@ int main(void) { @autoreleasepool {
             committed, preedit, events]);
     typeKey(window, @"Enter", regionAnswered);
 
-    // F8-20: 조합 중 Backspace 는 입력기가 음절을 편집하며(한 → 하) PTY 에 키나 문자열을 보내지 않는다.
+    // F8-20: Backspace during composition makes the input method edit the syllable (U+D55C to U+D558) and sends no key or string to the PTY.
     [events removeAllObjects];
     selectSource(ABC, context);
     selectSource(KOREAN_2SET, context);
@@ -433,12 +433,12 @@ int main(void) { @autoreleasepool {
     NSDictionary *enter = events.lastObject;
     check([committed isEqual:@"하"] && [enter[@"key"] isEqual:@"Enter"] && keyCount(@"Enter") == 1,
         [NSString stringWithFormat:@"image region: Enter commits the edited syllable once and is reported after it (committed '%@', events %@)", committed, events]);
-    // 조합이 없을 때 Backspace 는 키로 보고한다.
+    // Without composition, Backspace is reported as a key.
     [events removeAllObjects];
     typeKey(window, @"Backspace", regionAnswered);
     check(keyCount(@"Backspace") == 1 && [valuesOfType(@"insert", 0) count] == 0,
         [NSString stringWithFormat:@"image region: Backspace without a composition is reported as a key (events %@)", events]);
-    // 조합 중 Escape 는 남은 조합을 한 번 확정하고 그 뒤에 Escape 를 키로 보고한다(docs/spec/terminal-runtime.md).
+    // Escape during composition commits the remaining composition once and then reports Escape as a key (docs/spec/terminal-runtime.md).
     [events removeAllObjects];
     selectSource(ABC, context);
     selectSource(KOREAN_2SET, context);

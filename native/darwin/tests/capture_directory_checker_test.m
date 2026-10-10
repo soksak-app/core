@@ -1,5 +1,5 @@
-// 인수 검사가 녹화 폴더의 나열 실패와 정리 실패를 빈 폴더나 성공으로 받아들이지 않는지 검사한다. 첫 종료 뒤
-// 폴더를 읽을 수 없게 하고, 녹화 종료 뒤 프레임 파일을 지울 수 없게 한다.
+// Checks that the argument check does not accept a failed listing or a failed cleanup of the recording folder as an empty folder or as success. After the first stop,
+// the test makes the folder unreadable, and after a recording stops it makes the frame files undeletable.
 #import <Cocoa/Cocoa.h>
 #import "capture.h"
 #include <sys/stat.h>
@@ -18,7 +18,7 @@ static int stopWithFaults(double after) {
     int count = sp_capture_stop(after);
     stopCalls++;
     if (stopCalls == 1) {
-        // 다음 줄의 폴더 나열이 실패하게 한다.
+        // Makes the folder listing on the next line fail.
         listingFault = chmod(fixtureDirectory, 0) == 0;
         if (!listingFault) fprintf(stderr, "fixture listing fault failed: %s\n", strerror(errno));
     } else if (count > 0) {
@@ -30,7 +30,7 @@ static int stopWithFaults(double after) {
 }
 
 static bool stillAfterListing(long window, const char *path, char **error) {
-    // 나열 뒤 첫 정지 캡처 전에 폴더 권한을 되돌린다.
+    // Restores the folder permissions after the listing and before the first still capture.
     if (stillCalls++ == 0 && chmod(fixtureDirectory, 0700) != 0) fprintf(stderr, "fixture permission restore failed: %s\n", strerror(errno));
     return sp_capture_still(window, path, error);
 }
@@ -50,7 +50,7 @@ int main(void) {
     fprintf(stderr, "START: native capture directory checker\n");
     int result = captureAcceptanceMain();
     BOOL rejected = listingFault && cleanupFault && result != 0 && failures == 2;
-    // 고정 장치가 만든 상태를 되돌리고 폴더를 지운다.
+    // Restores the state that the fixture created and deletes the folder.
     NSString *directory = fixtureDirectory == NULL ? nil : [NSString stringWithUTF8String:fixtureDirectory];
     NSString *file = [directory stringByAppendingPathComponent:@"frame-0001.bgra"];
     if (file != nil && chflags(file.fileSystemRepresentation, 0) != 0 && errno != ENOENT) {

@@ -1,5 +1,5 @@
-// 실제 5000ms 제한이 지난 뒤 도착한 종료 완료가 다음 녹화의 오류와 결과를 바꾸지 않고, 그 오류를 버리지 않고
-// 진단 출력에 보고하는지 검사한다. 종료 완료는 고정 장치가 붙잡았다가 늦게 전달한다.
+// Checks that a stop completion that arrives after the real 5000 ms limit changes neither the error nor the result of the next recording, and that the error is reported
+// to the diagnostic output instead of being dropped. The fixture holds the stop completion and delivers it late.
 #import "../src/capture.m"
 #import "support/records.h"
 
@@ -34,7 +34,7 @@ int main(void) { @autoreleasepool {
         @"the stop that outlives its deadline reports its timeout");
     check(held.completion != nil, @"the fixture holds the stop completion");
 
-    // 다음 녹화는 오류 없이 진행 중이다.
+    // The next recording is in progress without an error.
     clearCaptureError();
     captureStream = (SCStream *)[NSObject new];
     NSString *observed = capturedRecords(^{

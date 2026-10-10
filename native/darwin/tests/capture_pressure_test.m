@@ -1,4 +1,4 @@
-// 실제 샘플 처리기에 큐 용량과 파일 쓰기 결함을 주입한다. 캡처 내부 상태는 소유 검사에서만 접근한다.
+// Injects queue capacity and file write faults into the real sample handler. Capture internal state is accessed only by the ownership check.
 #import "../src/capture.m"
 #import <objc/runtime.h>
 
@@ -8,7 +8,7 @@ static void check(BOOL ok, NSString *label) {
     if (!ok) failures++;
 }
 
-// 실제 10초 제한 뒤 콜백을 전달하여 호출별 상태의 수명을 확인한다.
+// Delivers the callback after the real 10 second limit to check the lifetime of the per-call state.
 static void (^heldStillReply)(SCShareableContent *, NSError *);
 static void holdStillQuery(id receiver, SEL selector, void (^reply)(SCShareableContent *, NSError *)) {
     heldStillReply = [reply copy];
@@ -58,7 +58,7 @@ static void reset(NSString *directory, long capacity) {
     capturePending = dispatch_semaphore_create(capacity);
     if (captureFirstFrame) dispatch_release(captureFirstFrame);
     captureFirstFrame = dispatch_semaphore_create(0);
-    // 고정 장치의 녹화는 시작 요청이 완료된 상태다.
+    // A recording of the fixture is in the state in which the start request has completed.
     if (captureStartDone) dispatch_release(captureStartDone);
     captureStartDone = dispatch_semaphore_create(1);
 }
@@ -79,7 +79,7 @@ int main(void) { @autoreleasepool {
     });
     BOOL finished = dispatch_semaphore_wait(completed, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC)) == 0;
     check(finished, @"exhausted writer capacity never blocks the sample callback");
-    // 잘못된 대기를 재현해도 테스트 큐를 해제해서 뒤의 검사를 실행한다.
+    // Even when the wrong wait is reproduced, the test queue is released so that the following checks run.
     dispatch_semaphore_signal(capturePending);
     if (!finished) check(dispatch_semaphore_wait(completed, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC)) == 0,
         @"the blocked Red callback is released for cleanup");
@@ -117,7 +117,7 @@ int main(void) { @autoreleasepool {
     reset(directory, 1);
     [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
     captureStream = (SCStream *)[NSObject new];
-    // 비동기 시작 완료가 기록하는 동일한 오류 경계를 첫 프레임 뒤에 주입한다.
+    // Injects, after the first frame, the same error boundary that the asynchronous start completion records.
     setCaptureError(@"capture did not start: fixture asynchronous start failure");
     check(sp_capture_wait() == 0,
         @"a known asynchronous start failure rejects written first frame readiness");

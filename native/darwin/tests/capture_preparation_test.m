@@ -1,4 +1,4 @@
-// 실제 준비 완료를 시간 초과 뒤 전달하여 이후 녹화 상태와 객체 소유를 검사한다.
+// Delivers the real preparation completion after the timeout and checks the following recording state and object ownership.
 #import "../src/capture.m"
 #import <objc/runtime.h>
 #include <signal.h>
@@ -35,7 +35,7 @@ static SCStreamConfiguration *collisionConfig;
 static void holdQuery(id receiver, SEL selector, void (^reply)(SCShareableContent *, NSError *)) {
     check(heldReply == nil, @"the controlled query has one completion");
     if (collisionContent != nil) {
-        // 대기 중 다른 녹화가 시작되는 상태를 완료 직전에 주입한다.
+        // Injects, just before the completion, the state in which another recording starts during the wait.
         captureFilter = collisionFilter; captureConfig = collisionConfig;
         captureStream = (SCStream *)[NSObject new];
         clearCaptureError(); setCaptureError(@"fixture active before publication");
@@ -95,7 +95,7 @@ int main(void) { @autoreleasepool {
                 @"held preparation returns an explicit owned timeout");
             check(filterReleased && configReleased,
                 @"preparation releases both obsolete inactive target objects");
-            // Red에서도 이전 저장소의 누수를 검사 파일 안에서 정리한다.
+            // Cleans up the leak of the previous store within the test file even in the Red run.
             if (captureFilter == (SCContentFilter *)obsoleteFilter) captureFilter = nil;
             if (captureConfig == (SCStreamConfiguration *)obsoleteConfig) captureConfig = nil;
             if (!filterReleased) [obsoleteFilter release];

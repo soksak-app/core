@@ -1,4 +1,5 @@
-// 실제 생성한 스트림의 시작 완료를 보류하고 교체 뒤 전달하여 오류 소유를 검사한다.
+// Holds the start completion of a stream that was actually created and delivers it after replacement, to
+// check error ownership.
 #import "../src/capture.m"
 #import "support/records.h"
 #import <objc/runtime.h>
@@ -29,7 +30,8 @@ static BOOL start(NSString *directory) {
     free(error); return started;
 }
 static void discard(void) {
-    // 녹화를 실제 시작하지 않은 소유 결함 주입의 스트림·큐만 해제한다.
+    // Release only the stream and queue of the ownership fault injection that did not actually start
+    // a recording.
     [captureStream release]; captureStream = nil;
     if (captureQueue != NULL) { dispatch_release(captureQueue); captureQueue = NULL; }
 }
@@ -75,7 +77,8 @@ int main(void) { @autoreleasepool {
                     check(strcmp(sp_capture_error(), failed ? "fixture current recording error" : "") == 0,
                         @"late start preserves the exact current recording error");
                     if (!failed) {
-                        // 붙잡은 현재 시작 대신 고정 장치가 현재 시작 완료를 알린다.
+                        // The fixture reports the current start completion
+                        // instead of the current start that was held.
                         dispatch_semaphore_signal(captureStartDone);
                         dispatch_semaphore_signal(captureFirstFrame);
                         check(sp_capture_wait() == 1, @"late start cannot invalidate healthy first-frame readiness");

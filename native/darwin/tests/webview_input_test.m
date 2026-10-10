@@ -1,9 +1,9 @@
-// 설치된 WebKit에서 겹친 웹뷰의 포인터·키보드 입력과 제거 후 복원을 검사한다.
+// Checks pointer and keyboard input of overlapping webviews and restoration after removal on the installed WebKit.
 //
-// WebKit 은 키 창에서만 호버를 갱신하므로 이 검사는 애플리케이션을 활성화해 사용자의 포커스를
-// 가져간다. make test 에 포함하지 않고 make test-activation 으로만 실행한다. AppKit 은 실제
-// 포인터가 있는 추적 영역에도 이동을 전달하므로, 창을 포인터에서 떨어진 곳에 두고 포인터가 창에
-// 들어오면 측정을 실패로 보고한다.
+// WebKit updates hover only in the key window, so this check activates the application and takes the focus of the
+// user. It is not part of make test and runs only through make test-activation. AppKit also delivers movement to a
+// tracking area that holds the real pointer, so the check places the window away from the pointer and reports the
+// measurement as a failure if the pointer enters the window.
 #import <Cocoa/Cocoa.h>
 #import "input_inject.h"
 #import "webview_input.h"
@@ -13,7 +13,8 @@ static void require(BOOL condition, NSString *message) {
     if (!condition) { fprintf(stderr, "FAIL: %s\n", message.UTF8String); exit(1); }
 }
 
-// 활성화 알림은 애플리케이션 이벤트로 도착하므로 이벤트를 꺼내 처리하며 기다린다.
+// The activation notification arrives as an application event, so the check waits while it takes events and handles
+// them.
 static void until(BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
@@ -61,9 +62,8 @@ static id observer(WKWebView *view) {
     return nil;
 }
 
-// AppKit 은 게시된 이동 이벤트를 실제 pointer 가 있는 tracking area 에도 전달한다.
-// 창은 pointer 에서 떨어진 곳에 두며, 이동 이벤트는 pointer 가 창 밖에 있는 동안에만
-// 유효하다.
+// AppKit also delivers a posted movement event to a tracking area that holds the real pointer. The window is placed
+// away from the pointer, and a movement event is valid only while the pointer is outside the window.
 static void pointerOutside(NSWindow *window) {
     require(!NSPointInRect(NSEvent.mouseLocation, window.frame),
         @"the pointer is over the test window, so AppKit delivers movements to its tracking areas too; "
@@ -76,10 +76,9 @@ static void deliver(NSWindow *window, NSArray *views, NSPoint point, BOOL baseli
     NSEvent *event = [NSEvent mouseEventWithType:NSEventTypeMouseMoved location:point
         modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime
         windowNumber:window.windowNumber context:nil eventNumber:1 clickCount:0 pressure:0];
-    // -[NSApplication sendEvent:] 는 pointer 를 라우팅하는 local monitor 를 실행한다.
-    // 그다음 AppKit 은 이동 이벤트를 그 지점의 최상위 등록 WebKit observer 에 전달한다.
-    // 모든 observer 에 전달하면 네이티브 z-order 를 우회하고 겹친 페이지를
-    // 중복 집계한다.
+    // [NSApplication sendEvent:] runs the local monitor that routes the pointer. Then AppKit delivers the movement
+    // event to the topmost registered WebKit observer at that point. Delivering to every observer would bypass the
+    // native z-order and count overlapping pages twice.
     [NSApp postEvent:event atStart:NO];
     NSEvent *posted = [NSApp nextEventMatchingMask:NSEventMaskMouseMoved untilDate:[NSDate dateWithTimeIntervalSinceNow:1]
         inMode:NSDefaultRunLoopMode dequeue:YES];
@@ -91,8 +90,8 @@ static void deliver(NSWindow *window, NSArray *views, NSPoint point, BOOL baseli
         [observer(manualTarget) mouseMoved:event];
     } else if ([views.lastObject isHidden] ||
                [window.contentView.subviews indexOfObject:views.firstObject] > [window.contentView.subviews indexOfObject:views.lastObject]) {
-        // 덮고 있던 뷰가 네이티브 enter/exit 전환 없이 숨겨지면 AppKit 은 새로 드러난
-        // tracking area 에 다시 진입하지 않는다.
+        // If a covering view is hidden without a native enter/exit transition, AppKit does not re-enter the newly
+        // revealed tracking area.
         [observer(views.firstObject) mouseMoved:event];
     }
     pointerOutside(window);
@@ -110,7 +109,8 @@ static void expectMoves(NSArray *views, NSArray *expected, NSString *stage) {
     printf("PASS: %s %s\n", stage.UTF8String, actual.description.UTF8String);
 }
 
-// 뷰를 창에 다시 붙이면 WebKit 이 활성 상태 전송을 다시 예약한다. 그 전송이 끝난 뒤에 이동을 보낸다.
+// When a view is attached to the window again, WebKit schedules the active state transmission again. Sends the
+// movement after that transmission ends.
 static void settle(WKWebView *view) {
     __block BOOL done = NO;
     [view _doAfterActivityStateUpdate:^{ done = YES; }];
@@ -121,7 +121,7 @@ static void reset(NSArray *views) {
     for (WKWebView *view in views) evaluate(view, @"probe.moves = 0");
 }
 
-// tests/support/no_activation.m: 이 검사는 make test-activation 에서 앱을 활성화한다.
+// tests/support/no_activation.m: this check activates the app in make test-activation.
 void sp_test_declare_activation(void);
 
 int main(int argc, const char **argv) { @autoreleasepool {
@@ -133,7 +133,7 @@ int main(int argc, const char **argv) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
-    // 창을 포인터에서 떨어진 곳에 둔다. 포인터가 있는 화면의 반대쪽 절반이다.
+    // Places the window away from the pointer, in the half of the screen opposite to the one that holds the pointer.
     NSPoint pointer = NSEvent.mouseLocation;
     NSRect screen = NSScreen.mainScreen.visibleFrame;
     for (NSScreen *candidate in NSScreen.screens) {
@@ -204,7 +204,7 @@ int main(int argc, const char **argv) { @autoreleasepool {
         [cover removeFromSuperview];
         [cover release];
 
-        // pointer 소유권이 키보드 focus 를 가져가면 안 된다.
+        // Pointer ownership must not take the keyboard focus.
         [window makeFirstResponder:top];
         evaluate(top, @"document.getElementById('field').focus()");
         move(window, views, NSMakePoint(400,150), baseline, nil);

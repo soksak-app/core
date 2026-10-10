@@ -1,7 +1,7 @@
-// 페이지가 animation frame 안에서 보낸 script message 를 UI process 가 그 frame 의 렌더링 갱신이 커밋되기 전에
-// 받는지 잰다. 메시지를 받은 즉시 표시 확인을 등록한다. 확인이 메시지를 받은 뒤의 첫 화면 갱신(display link) 전에
-// 오면 그 갱신의 커밋에 붙은 것이고, 그 뒤에 오면 다음 갱신에 붙은 것이다(docs/features.md F92).
-// 애플리케이션을 활성화하지 않는다.
+// Measures whether the UI process receives the script message that the page sends inside an animation frame before the rendering update of that frame is committed.
+// A presentation acknowledgement is registered immediately upon receiving the message. If the acknowledgement arrives before the first screen update (display link) after the message,
+// it is attached to the commit of that update; if it arrives after, it is attached to the next update (docs/features.md F92).
+// It does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
@@ -21,7 +21,7 @@ static void spin(NSTimeInterval seconds) {
     }
 }
 
-// "drawn" 메시지를 받으면 받은 시각을 적고 표시 확인을 등록한다. 확인이 오면 그 시각을 적는다.
+// On receiving a "drawn" message, records the receipt time and registers a presentation acknowledgement. When the acknowledgement arrives, records its time.
 @interface SPDrawnReceiver : NSObject <WKScriptMessageHandler>
 @property (nonatomic, assign) WKWebView *webview;
 @property (nonatomic, retain) NSMutableArray<NSArray<NSNumber *> *> *waits;
@@ -35,7 +35,7 @@ static void spin(NSTimeInterval seconds) {
         [waits addObject:@[@(received), @(CACurrentMediaTime() * 1000)]];
     }];
 }
-// 화면 갱신마다 그 갱신의 시각(ms)을 적는다.
+// Records the time (ms) of each screen update.
 - (void)refresh:(CADisplayLink *)link { [self.refreshes addObject:@(link.timestamp * 1000)]; }
 - (void)dealloc { [_waits release]; [_refreshes release]; [super dealloc]; }
 @end
@@ -59,10 +59,10 @@ int main(void) { @autoreleasepool {
     [configuration.userContentController addScriptMessageHandler:receiver name:@"drawn"];
     WKWebView *webview = [[[WKWebView alloc] initWithFrame:window.contentView.bounds configuration:configuration] autorelease];
     receiver.webview = webview;
-    // 활성화하지 않은 창은 가려진 것으로 판정되어 렌더링이 멈출 수 있으므로 앱의 주 웹뷰처럼 판정을 끈다.
+    // A window that is not activated is judged occluded and rendering may stop, so the judgment is disabled like the main web view of the application.
     webview._windowOcclusionDetectionEnabled = NO;
     [window.contentView addSubview:webview];
-    // 그리기마다 상자의 폭을 바꾸고 같은 animation frame 에서 메시지를 보낸다. 그리기 사이는 쉬어 앞 확인이 끝나게 한다.
+    // Each draw changes the width of the box and sends a message in the same animation frame. Pauses between draws so that the previous acknowledgement finishes.
     static const int draws = 40;
     NSString *html = [NSString stringWithFormat:@"<!doctype html><body style='margin:0'><div id=box style='height:50px;"
         "width:10px;background:#36c'></div><script>let n=0;function draw(){requestAnimationFrame(()=>{"
@@ -78,7 +78,7 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"every draw was confirmed (%lu of %d)", (unsigned long)receiver.waits.count, draws]);
 
     [link invalidate];
-    // 메시지를 받은 뒤 첫 화면 갱신 전에 확인이 온 수. 그 갱신은 메시지를 보낸 frame 의 커밋을 보인다.
+    // The number of acknowledgements that arrived before the first screen update after the message. That update shows the commit of the frame that sent the message.
     int same = 0;
     NSMutableArray<NSNumber *> *waited = [NSMutableArray array];
     for (NSArray<NSNumber *> *wait in receiver.waits) {

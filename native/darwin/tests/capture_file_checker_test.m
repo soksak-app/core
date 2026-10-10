@@ -1,4 +1,4 @@
-// 실제로 기록한 파일을 크기 헤더까지만 남겨 인수 검사의 불완전한 버퍼 거부를 검사한다.
+// Truncates a file that was really recorded to its size header to check that the argument check rejects the incomplete buffer.
 #import <Cocoa/Cocoa.h>
 #import "capture.h"
 #include <unistd.h>

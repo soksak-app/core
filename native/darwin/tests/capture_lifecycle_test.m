@@ -1,4 +1,4 @@
-// 실제 API의 결과를 그대로 전달하며 시작·종료·대리자 콜백 순서를 기록한다.
+// Passes the results of the real API through unchanged and records the order of the start, stop, and delegate callbacks.
 #import "../src/capture.m"
 #import <objc/runtime.h>
 

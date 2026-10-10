@@ -1,5 +1,5 @@
-// 녹화 경로가 완성 프레임의 필수 정보(상태, 표시 시각, 창 사각형, 배율, 이미지)가 빠진 샘플을 명시적 오류로
-// 거부하고, 이미지가 없는 idle 프레임은 계속 세기만 하는지 실제 쓰기 경로로 검사한다.
+// Checks through the real write path that the recording path rejects with an explicit error a sample that lacks a required field of a completed frame (state, presentation time, window rectangle, scale, image),
+// and that an idle frame without an image is only counted.
 #import "../src/capture.m"
 
 static int failures;
@@ -8,7 +8,7 @@ static void check(BOOL ok, NSString *label) {
     if (!ok) failures++;
 }
 
-// 작은 이미지와 지정한 프레임 정보를 가진 샘플을 만든다. image 가 NO 이면 이미지 없는 샘플이다.
+// Builds a sample with a small image and the given frame information. With image NO the sample has no image.
 static CMSampleBufferRef sample(BOOL image, NSDictionary *metadata) {
     CMSampleBufferRef result = NULL;
     CMSampleTimingInfo timing = {kCMTimeInvalid, kCMTimeZero, kCMTimeInvalid};
@@ -37,7 +37,7 @@ static CMSampleBufferRef sample(BOOL image, NSDictionary *metadata) {
     return result;
 }
 
-// 완성 프레임이 가지는 모든 정보. without 이름을 뺀 사전을 돌려준다.
+// All fields that a completed frame holds. Returns the dictionary without the key named by without.
 static NSDictionary *complete(NSString *without) {
     NSDictionary *rect = [(NSDictionary *)CGRectCreateDictionaryRepresentation(CGRectMake(0, 0, 4, 2)) autorelease];
     NSMutableDictionary *metadata = [[@{SCStreamFrameInfoStatus: @(SCFrameStatusComplete),
@@ -49,7 +49,7 @@ static NSDictionary *complete(NSString *without) {
 
 static NSString *directory;
 
-// 새 녹화 상태에서 샘플 하나를 쓰고 기록이 끝나기를 기다린 뒤, 오류 문자열을 돌려준다.
+// Writes one sample in a new recording state, waits for the recording to finish, and returns the error string.
 static NSString *record(CMSampleBufferRef frame, SPCapture **used) {
     static int statuses[6];
     memset(statuses, 0, sizeof statuses);

@@ -25,9 +25,9 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// 이벤트를 JSON 형태로 모은다
+// Collects events in JSON form
 static NSMutableArray *collectedEvents = nil;
-// 두 영역의 초점 전환을 가릴 때 쓰는 별도 수집기들(V5-114 의 A->B 검사).
+// Separate collectors used to tell apart the focus change between two regions (A->B check of V5-114).
 static NSMutableArray *eventsA16 = nil;
 static NSMutableArray *eventsB16 = nil;
 
@@ -46,7 +46,7 @@ static void testEvent(void *context, const char *json) {
     [collectedEvents addObject:[NSString stringWithUTF8String:json]];
 }
 
-// from 이후 insert 이벤트의 확정 문자열 목록.
+// List of the committed strings of insert events after from.
 static NSArray *committedTexts(NSUInteger from) {
     NSMutableArray *texts = [NSMutableArray array];
     for (NSUInteger i = from; i < collectedEvents.count; i++) {
@@ -57,7 +57,7 @@ static NSArray *committedTexts(NSUInteger from) {
     return texts;
 }
 
-// from 이후 마지막 compose 이벤트의 조합 문자열. 없으면 nil.
+// Composition string of the last compose event after from. nil if there is none.
 static NSString *lastPreedit(NSUInteger from) {
     NSString *text = nil;
     for (NSUInteger i = from; i < collectedEvents.count; i++) {
@@ -68,7 +68,7 @@ static NSString *lastPreedit(NSUInteger from) {
     return text;
 }
 
-// 네 모서리를 다른 색으로 칠한 전역 IOSurface를 만든다
+// Creates a global IOSurface with the four corners painted in different colors
 static IOSurfaceRef createColoredGlobalSurface(size_t width, size_t height, unsigned char *nonce) {
     IOSurfaceRef surface = IOSurfaceCreate((CFDictionaryRef)@{
         (id)kIOSurfaceWidth: @(width),
@@ -79,26 +79,26 @@ static IOSurfaceRef createColoredGlobalSurface(size_t width, size_t height, unsi
 
     if (!surface) return NULL;
 
-    // 논스를 만들고 설정한다
+    // Creates and sets the nonce
     arc4random_buf(nonce, 16);
     CFDataRef nonceData = CFDataCreate(NULL, nonce, 16);
     IOSurfaceSetValue(surface, CFSTR("soksak.frame"), nonceData);
     CFRelease(nonceData);
 
-    // 버퍼에 접근해서 네 모서리를 다르게 칠한다
+    // Accesses the buffer and paints the four corners differently
     IOSurfaceLock(surface, 0, NULL);
     void *ptr = IOSurfaceGetBaseAddress(surface);
     size_t pitch = IOSurfaceGetBytesPerRow(surface);
     if (ptr) {
         uint32_t *pixels = (uint32_t *)ptr;
-        // 왼쪽 위: 빨강
+        // Top left: red
         pixels[0] = 0xFFFF0000;
-        // 오른쪽 위: 초록
+        // Top right: green
         pixels[width - 1] = 0xFF00FF00;
-        // 왼쪽 아래
+        // Bottom left
         uint32_t *bottomLeft = (uint32_t *)((char *)ptr + (height - 1) * pitch);
         bottomLeft[0] = 0xFF0000FF;
-        // 오른쪽 아래
+        // Bottom right
         bottomLeft[width - 1] = 0xFFFFFF00;
     }
     IOSurfaceUnlock(surface, 0, NULL);
@@ -109,8 +109,8 @@ static IOSurfaceRef createColoredGlobalSurface(size_t width, size_t height, unsi
 void sp_test_declare_activation(void);
 
 int main(int argc, char **argv) { @autoreleasepool {
-    // --activation 은 앱을 활성화해 OS 이벤트 대기열의 눌림이 웹뷰를 첫 응답자로 만드는지 검사한다.
-    // make test-activation 만 사용한다.
+    // activation activates the application and checks whether a press in the OS event queue makes the web view the first responder.
+    // Used only by make test-activation.
     BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
     if (activation) sp_test_declare_activation();
     [NSApplication sharedApplication];
@@ -134,7 +134,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     webviewSetFrame(surface, 0, 0, 500, 400);
     NSView *nativePlane = (NSView *)webviewSurfaceNativePlane(surface);
 
-    // TEST 1: 방향·크기 - 레이어 속성과 표면 ID 확인
+    // TEST 1: orientation and size - checks layer properties and surface ID
     {
         [collectedEvents removeAllObjects];
         Class notificationCenterClass = NSNotificationCenter.class;
@@ -142,7 +142,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             @selector(addObserver:selector:name:object:));
         originalAddObserverImplementation = method_getImplementation(addObserverMethod);
         method_setImplementation(addObserverMethod, (IMP)countSurfaceObserverRegistration);
-        // 등록부는 생성 호출의 autorelease pool보다 오래 살아야 한다(V5-116-4-1).
+        // The registry must outlive the autorelease pool of the create call (V5-116-4-1).
         void *bootstrapRegion = NULL;
         @autoreleasepool {
             bootstrapRegion = sp_region_create(surface, "pool-lifetime", testEvent, NULL);
@@ -172,7 +172,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             raster1[0], raster1[1], raster1[2]);
         check(presented, @"TEST 1: sp_region_present succeeded");
 
-        // 레이어를 찾아서 속성을 확인한다
+        // Finds the layer and checks its properties
         NSView *regionView = (NSView *)region1;
         [regionView updateTrackingAreas];
         NSUInteger cursorAreas = 0;
@@ -181,7 +181,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         }
         check(cursorAreas == 0, [NSString stringWithFormat:@"TEST 1: image input view has no cursor tracking area (%lu)",
             (unsigned long)cursorAreas]);
-        // 구현에서 imageLayer는 SPImageRegion의 sublayer
+        // In the implementation, imageLayer is a sublayer of SPImageRegion
         NSArray *sublayers = regionView.layer.sublayers;
         CALayer *imageLayer = [sublayers firstObject];
         check(imageLayer != NULL, @"TEST 1: image layer found");
@@ -204,7 +204,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                 @"TEST 1: mutating the transfer IOSurface does not change the presented snapshot");
             CFRelease(copied);
 
-            // 레이어 한 단위가 덮는 장치 픽셀 수와 같아야 그림 한 픽셀이 장치 한 픽셀이 된다.
+            // The number of device pixels that one layer unit covers must be equal, so that one pixel of the image becomes one device pixel.
             NSView *regionView1 = (NSView *)region1;
             CGFloat perUnit = NSWidth([regionView1 convertRectToBacking:regionView1.bounds]) / NSWidth(regionView1.bounds);
             check(imageLayer.contentsScale == perUnit,
@@ -218,7 +218,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         CFRelease(testSurface1);
     }
 
-    // TEST 2: 논스 불일치 - false 반환 및 "forbidden" 이벤트
+    // TEST 2: nonce mismatch - false return and "forbidden" event
     {
         [collectedEvents removeAllObjects];
         unsigned char nonce2[16];
@@ -242,7 +242,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         CFRelease(testSurface2);
     }
 
-    // TEST 3: 없는 ID - false 반환 및 "notFound" 이벤트
+    // TEST 3: unknown ID - false return and "notFound" event
     {
         [collectedEvents removeAllObjects];
         unsigned char nonce3[16];
@@ -262,7 +262,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region3);
     }
 
-    // TEST 4: 크기 불일치 - false 반환 및 "size" 이벤트
+    // TEST 4: size mismatch - false return and "size" event
     {
         [collectedEvents removeAllObjects];
         unsigned char nonce4[16];
@@ -270,7 +270,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         IOSurfaceID sid4 = IOSurfaceGetID(testSurface4);
 
         void *region4 = sp_region_create(surface, "test4", testEvent, NULL);
-        BOOL presented = sp_region_present(region4, sid4, nonce4, 200, 200, window.backingScaleFactor);  // 잘못된 크기
+        BOOL presented = sp_region_present(region4, sid4, nonce4, 200, 200, window.backingScaleFactor);  // Wrong size
         check(!presented, @"TEST 4: sp_region_present returns false with wrong size");
 
         check([collectedEvents count] > 0, @"TEST 4: event received");
@@ -284,7 +284,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         CFRelease(testSurface4);
     }
 
-    // TEST 5: 배치 - 여백 유지
+    // TEST 5: placement - margins are kept
     {
         [collectedEvents removeAllObjects];
 
@@ -293,32 +293,32 @@ int main(int argc, char **argv) { @autoreleasepool {
 
         double frame[6] = {0};
         sp_region_frame(region5, frame);
-        // 초기: 500x400, 여백 L:50, T:60, R:70, B:80 → 실제 크기: 500-50-70=380, 400-60-80=260
+        // Initial: 500x400, margins L:50, T:60, R:70, B:80 -> actual size: 500-50-70=380, 400-60-80=260
         check(frame[0] == 50 && frame[1] == 60 && frame[2] == 380 && frame[3] == 260,
             [NSString stringWithFormat:@"TEST 5: initial frame has correct insets (%.0f, %.0f, %.0f, %.0f)",
                 frame[0], frame[1], frame[2], frame[3]]);
 
-        // 창 크기를 바꾼다
+        // Changes the window size
         [window setContentSize:NSMakeSize(600, 500)];
-        // 위도우의 contentView가 자동으로 크기 조정되지 않을 수 있으므로 명시적으로 설정한다
+        // The contentView of the window may not be resized automatically, so it is set explicitly
         webviewSetFrame(surface, 0, 0, 600, 500);
-        // 런루프를 처리해서 프레임 변경 알림이 전달되도록 한다
+        // Runs the run loop so that the frame change notification is delivered
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
         sp_region_frame(region5, frame);
-        // 600x500, 여백 유지: 600-50-70=480, 500-60-80=360
+        // 600x500, margins kept: 600-50-70=480, 500-60-80=360
         check(frame[0] == 50 && frame[1] == 60 && frame[2] == 480 && frame[3] == 360,
             [NSString stringWithFormat:@"TEST 5: frame follows surface size (%.0f, %.0f, %.0f, %.0f)",
                 frame[0], frame[1], frame[2], frame[3]]);
 
-        // 창을 다시 원래 크기로
+        // Returns the window to its original size
         [window setContentSize:NSMakeSize(500, 400)];
         webviewSetFrame(surface, 0, 0, 500, 400);
 
         sp_region_close(region5);
     }
 
-    // TEST 5A: 준비 프레임은 새 래스터의 정확한 크기를 사용한다.
+    // TEST 5A: the prepared frame uses the exact size of the new raster.
     {
         [collectedEvents removeAllObjects];
 
@@ -331,8 +331,8 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(sp_region_present(region5a, IOSurfaceGetID(testSurface5a), nonce5a,
             raster5a[0], raster5a[1], raster5a[2]), @"TEST 5A: initial snapshot is presented");
 
-        // 실제 표시 중에는 SurfaceHost의 열린 CATransaction이 이 준비 기하를
-        // 가리며, 호스트가 일치하는 래스터와 함께 한 번에 커밋한다.
+        // During real presentation, the open CATransaction of SurfaceHost
+        // hides this prepared geometry, and the host commits it at once together with the matching raster.
         sp_region_place(region5a, 100, 40, 20, 30, true);
         double frame5a[6] = {0};
         sp_region_frame(region5a, frame5a);
@@ -358,7 +358,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         CFRelease(testSurface5aNew);
     }
 
-    // TEST 6: pointer 입력은 계속 DOM anchor 가 소유한다.
+    // TEST 6: pointer input is still owned by the DOM anchor.
     {
         [collectedEvents removeAllObjects];
 
@@ -366,14 +366,14 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_place(region6, 10, 10, 10, 10, true);
 
         NSView *regionView = (NSView *)region6;
-        NSPoint testPoint = NSMakePoint(20, 20);  // 영역 내의 점
+        NSPoint testPoint = NSMakePoint(20, 20);  // A point inside the region
         NSView *hitView = [regionView hitTest:testPoint];
         check(hitView == nil, @"TEST 6: hitTest returns nil so the DOM receives pointer input");
 
         sp_region_close(region6);
     }
 
-    // TEST 7: 초점 - focus 이벤트 및 hasFocus 상태
+    // TEST 7: focus - focus event and hasFocus state
     {
         [collectedEvents removeAllObjects];
 
@@ -400,10 +400,10 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region7);
     }
 
-    // TEST 8: 합성 NSTextInputClient 호출. 이 테스트는 활성 입력 소스를 거치지 않는다.
-    // 삽입한 텍스트가 즉시 커밋되는지 편집 가능한 preedit 로 남는지는 선택된 입력 소스에
-    // 따라 다르므로, 각 경우는 focus 변경으로 커밋한 뒤 모든 입력 소스에서 같은
-    // 커밋된 텍스트를 확인한다.
+    // TEST 8: synthetic NSTextInputClient calls. This test does not go through the active input source.
+    // Whether inserted text is committed immediately or remains as an editable preedit depends on the selected input source,
+    // so each case is committed by a focus change, and then the same
+    // committed text is checked under every input source.
     {
         void *region8 = sp_region_create(surface, "test8", testEvent, NULL);
         sp_region_place(region8, 10, 10, 10, 10, true);
@@ -411,7 +411,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSTextView *regionView = (NSTextView *)region8;
         check([window.firstResponder isKindOfClass:NSTextView.class],
             @"TEST 8: image input responder delegates text-system state to NSTextView");
-        // F8-9: NSTextView 가 상속하는 편집은 모두 꺼져 있거나 입력에 영향이 없다.
+        // F8-9: All editing that NSTextView inherits is turned off or does not affect input.
         check(!regionView.automaticQuoteSubstitutionEnabled && !regionView.automaticDashSubstitutionEnabled
             && !regionView.automaticTextReplacementEnabled && !regionView.automaticSpellingCorrectionEnabled
             && !regionView.automaticLinkDetectionEnabled && !regionView.automaticDataDetectionEnabled
@@ -499,7 +499,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         }
         [window makeFirstResponder:nil];
 
-        // An input method edits its previous insert through a replacement range: ㅎ → 하 → 한.
+        // An input method edits its previous insert through a replacement range: U+314E -> U+D558 -> U+D55C.
         sp_region_focus(region8);
         void (^inputMethod)(NSString *, NSRange) = ^(NSString *text, NSRange range) {
             [(id<NSTextInputClient>)regionView insertText:text replacementRange:range];
@@ -520,8 +520,8 @@ int main(int argc, char **argv) { @autoreleasepool {
                 && [[collectedEvents lastObject] rangeOfString:@"insertNewline:"].location != NSNotFound,
                 [NSString stringWithFormat:@"TEST 8: a command commits the remaining preedit before it is reported (got %@)", collectedEvents]);
 
-            // F8-16-1: 한국어 입력기는 Hangul 만 조합한다. 입력기가 음절을 확정한 뒤 삽입하는 텍스트
-            // (Space 또는 숫자)는 그 음절과 함께 즉시 커밋된다. 새 자모는 preedit 로 남는다.
+            // F8-16-1: The Korean input method composes only Hangul. Text that the input method inserts after it commits a syllable
+            // (Space or a digit) is committed immediately together with that syllable. A new jamo remains as preedit.
             if ([regionView.inputContext.selectedKeyboardInputSource hasPrefix:@"com.apple.inputmethod.Korean."]) {
                 NSUInteger beforeSpace = [collectedEvents count];
                 NSUInteger base = regionView.textStorage.length;
@@ -568,7 +568,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSUInteger beforeUnmark = [collectedEvents count];
         [regionView unmarkText];
         [window makeFirstResponder:nil];
-        // NSTextInputClient 계약에서 unmarkText 는 marked text 를 일반 입력으로 받아들인다.
+        // In the NSTextInputClient contract, unmarkText accepts marked text as ordinary input.
         check([committedTexts(beforeUnmark) isEqualToArray:@[@"한글"]] && [lastPreedit(beforeUnmark) isEqual:@""]
             && !regionView.hasMarkedText && regionView.textStorage.length == 0,
             [NSString stringWithFormat:@"TEST 8: unmarkText commits the marked text exactly once (got %@)", collectedEvents]);
@@ -611,7 +611,7 @@ int main(int argc, char **argv) { @autoreleasepool {
 
     }
 
-    // TEST 9: 접근성 및 캐럿
+    // TEST 9: accessibility and caret
     {
         [collectedEvents removeAllObjects];
 
@@ -620,30 +620,30 @@ int main(int argc, char **argv) { @autoreleasepool {
 
         id regionView = (id)region9;
 
-        // 접근성 텍스트 설정
+        // Sets the accessibility text
         const char *testText = "Hello 접근성";
         sp_region_text(region9, testText);
 
-        // 접근성 값 확인
+        // Checks the accessibility value
         NSString *accessibilityValue = [regionView accessibilityValue];
         check([accessibilityValue isEqualToString:@"Hello 접근성"],
             [NSString stringWithFormat:@"TEST 9: accessibility text matches (got: %@)", accessibilityValue]);
 
-        // 역할 확인
+        // Checks the role
         NSAccessibilityRole role = [regionView accessibilityRole];
         check([role isEqualToString:NSAccessibilityTextAreaRole],
             [NSString stringWithFormat:@"TEST 9: accessibility role is TextAreaRole (got: %@)", role]);
 
-        // 캐럿 위치 설정 및 확인
+        // Sets and checks the caret position
         sp_region_caret(region9, 25, 30, 2, 16);
         NSRange charRange = NSMakeRange(0, 1);
         NSRect caretRect = [(id<NSTextInputClient>)regionView firstRectForCharacterRange:charRange actualRange:NULL];
-        // 넣은 크기가 그대로 돌아와야 한다("0이 아니다" 는 상수를 돌려줘도 통과한다).
+        // The size that was set must come back unchanged (a check of "is not 0" also passes when a constant is returned).
         check(caretRect.size.width == 2 && caretRect.size.height == 16,
             [NSString stringWithFormat:@"TEST 9: caret rect keeps the size we set (x:%.0f y:%.0f w:%.0f h:%.0f)",
                 caretRect.origin.x, caretRect.origin.y, caretRect.size.width, caretRect.size.height]);
 
-        // 다른 캐럿을 넣으면 결과가 따라 움직인다.
+        // When a different caret is set, the result moves accordingly.
         NSRect first = caretRect;
         sp_region_caret(region9, 25, 60, 3, 20);
         NSRect second = [(id<NSTextInputClient>)regionView firstRectForCharacterRange:charRange actualRange:NULL];
@@ -668,7 +668,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region9);
     }
 
-    // TEST 10: 키 이벤트 - 위 화살표
+    // TEST 10: key event - up arrow
     {
         [collectedEvents removeAllObjects];
 
@@ -706,7 +706,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region10);
     }
 
-    // TEST 11: 키 이벤트 - Return
+    // TEST 11: key event - Return
     {
         [collectedEvents removeAllObjects];
 
@@ -741,13 +741,13 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region11);
     }
 
-    // 포인터 입력과 같이 끌어 놓기도 영역을 지나 페이지로 간다. 영역은 끌기 형식을 등록하지 않는다.
+    // Like pointer input, drag and drop also passes the region and goes to the page. The region does not register drag types.
     {
         void *region = sp_region_create(surface, "drag", testEvent, NULL);
         sp_region_place(region, 10, 10, 10, 10, true);
         NSArray *types = [(NSView *)region registeredDraggedTypes];
         check(types.count == 0, [NSString stringWithFormat:@"drag: the region registers no dragged types (got %@)", types]);
-        // NSTextView 는 초점을 받거나 편집 상태가 바뀔 때 끌기 형식을 다시 등록한다.
+        // NSTextView registers drag types again when it gains focus or its editing state changes.
         sp_region_focus(region);
         [(NSTextView *)region setEditable:YES];
         types = [(NSView *)region registeredDraggedTypes];
@@ -755,7 +755,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region);
     }
 
-    // 숫자 키패드 키는 입력기를 거치지 않고 키패드 키 이름으로 보고한다. 응용 키패드 모드의 인코딩은 사이드카가 정한다.
+    // Numeric keypad keys are reported by keypad key name without going through the input method. The sidecar determines the encoding of the application keypad mode.
     {
         void *region = sp_region_create(surface, "keypad", testEvent, NULL);
         sp_region_place(region, 10, 10, 10, 10, true);
@@ -777,7 +777,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region);
     }
 
-    // TEST 12: 키 이벤트 - Backspace
+    // TEST 12: key event - Backspace
     {
         [collectedEvents removeAllObjects];
 
@@ -812,7 +812,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region12);
     }
 
-    // TEST 13: 키 이벤트 - Ctrl+C
+    // TEST 13: key event - Ctrl+C
     {
         [collectedEvents removeAllObjects];
 
@@ -851,7 +851,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region13);
     }
 
-    // TEST 13a: 한글 입력 소스 문자가 와도 Ctrl 키는 물리 ANSI 키로 전달한다
+    // TEST 13a: Even when a Korean input source character arrives, the Ctrl key is delivered as a physical ANSI key
     {
         [collectedEvents removeAllObjects];
 
@@ -888,7 +888,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region13a);
     }
 
-    // TEST 13b: 지원하지 않는 물리 Ctrl 키는 네이티브 키와 수신한 scalar 를 보고한다
+    // TEST 13b: An unsupported physical Ctrl key reports the native key and the received scalar
     {
         [collectedEvents removeAllObjects];
 
@@ -926,7 +926,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region13b);
     }
 
-    // TEST 14: 키 이벤트 - 일반 문자 'a'
+    // TEST 14: key event - ordinary character 'a'
     {
         [collectedEvents removeAllObjects];
 
@@ -960,7 +960,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region14);
     }
 
-    // TEST 15: 키 이벤트 - Shift+Tab
+    // TEST 15: key event - Shift+Tab
     {
         [collectedEvents removeAllObjects];
 
@@ -996,7 +996,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region15);
     }
 
-    // TEST 16: 조합 중 Return - key 이벤트 없음
+    // TEST 16: Return during composition - no key event
     {
         [collectedEvents removeAllObjects];
 
@@ -1006,11 +1006,11 @@ int main(int argc, char **argv) { @autoreleasepool {
 
         id regionView = (id)region16;
 
-        // 조합 시작
+        // Starts composition
         [(id<NSTextInputClient>)regionView setMarkedText:@"ㅎ" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
         [collectedEvents removeAllObjects];
 
-        // 조합 중에 Return
+        // Return during composition
         NSEvent *returnEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown
             location:NSZeroPoint
             modifierFlags:0
@@ -1037,7 +1037,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region16);
     }
 
-    // TEST 17: Command+C - key/insert 이벤트 없음
+    // TEST 17: Command+C - no key/insert event
     {
         [collectedEvents removeAllObjects];
 
@@ -1074,7 +1074,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region17);
     }
 
-    // TEST 18: 클립 뷰가 SurfaceHost의 네이티브 평면 안에서 DOM 평면 아래에 있는지 확인
+    // TEST 18: checks that the clip view is below the DOM plane within the native plane of SurfaceHost
     {
         [collectedEvents removeAllObjects];
 
@@ -1092,8 +1092,8 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(surfaceSuperSuperview == nativePlane && nativePlane.superview == surface.superview,
             @"TEST 18: clipView is inside the surface host native plane");
 
-        // SurfaceHost 내부에서는 DOM 웹뷰가 native plane 위에 있고,
-        // 바깥 compositor에서 SurfaceHost 전체가 앱 DOM backing 위에 있다.
+        // Inside SurfaceHost the DOM web view is above the native plane,
+        // and in the outer compositor the whole SurfaceHost is above the application DOM backing.
         NSArray *subviews = surface.superview.subviews;
         NSUInteger surfaceIndex = [subviews indexOfObject:surface];
         NSUInteger nativeIndex = [subviews indexOfObject:nativePlane];
@@ -1104,11 +1104,11 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region18);
     }
 
-    // TEST 19: 표시된 이미지의 scale이 실제 창 backing scale로 설정되는지 확인한다.
+    // TEST 19: checks that the scale of the displayed image is set to the actual window backing scale.
     {
         [collectedEvents removeAllObjects];
         void *region19 = sp_region_create(surface, "test19", testEvent, NULL);
-        // 인셋을 크게 설정해서 영역 크기 = 대략 100x80이 되도록
+        // Sets large insets so that the region size is about 100x80
         // 500 - 200 - 200 = 100, 400 - 160 - 160 = 80
         sp_region_place(region19, 200, 160, 200, 160, true);
         double raster19[3] = {0};
@@ -1124,15 +1124,15 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSView *regionView = (NSView *)region19;
         NSView *clipView = regionView.superview;
 
-        // SurfaceHost의 로컬 단위는 AppKit point이고 backing scale은 레이어에만
-        // 적용한다. 100x80 point 영역은 raster에서 200x160 device pixel이다.
+        // The local unit of SurfaceHost is the AppKit point, and the backing scale is applied only to the layer.
+        // A 100x80 point region is 200x160 device pixels in the raster.
         double clipWidth = NSWidth(clipView.bounds);
         double clipHeight = NSHeight(clipView.bounds);
         check(clipWidth == 100 && clipHeight == 80,
             [NSString stringWithFormat:@"TEST 19: clipView bounds are point units (expected 100x80, got %.0f x%.0f)",
                 clipWidth, clipHeight]);
 
-        // imageLayer의 bounds도 마찬가지
+        // The same holds for the bounds of imageLayer
         CALayer *imageLayer = [regionView.layer.sublayers firstObject];
         double layerWidth = NSWidth(imageLayer.bounds);
         double layerHeight = NSHeight(imageLayer.bounds);
@@ -1148,7 +1148,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         CFRelease(testSurface19);
     }
 
-    // TEST 20: 영역의 wanted 플래그가 작동한다
+    // TEST 20: the wanted flag of the region works
     {
         [collectedEvents removeAllObjects];
 
@@ -1158,13 +1158,13 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSView *regionView = (NSView *)region20;
         check(!regionView.isHidden, @"TEST 20: region is visible initially");
 
-        // 영역을 숨기기 위해 placement를 업데이트한다 (visible=false)
+        // Updates the placement to hide the region (visible=false)
         sp_region_place(region20, 10, 10, 10, 10, false);
 
         check(regionView.isHidden,
             @"TEST 20: region is hidden when placed with visible=false");
 
-        // 다시 표시한다
+        // Shows it again
         sp_region_place(region20, 10, 10, 10, 10, true);
 
         check(!regionView.isHidden,
@@ -1173,7 +1173,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region20);
     }
 
-    // TEST 21: SurfaceHost의 장치 픽셀 좌표에서 그림 한 픽셀은 장치 한 픽셀이다.
+    // TEST 21: In device pixel coordinates of SurfaceHost, one pixel of the image is one device pixel.
     {
         void *region21 = sp_region_create(surface, "test21", testEvent, NULL);
         sp_region_place(region21, 0, 0, 0, 0, true);
@@ -1198,7 +1198,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         CFRelease(testSurface21);
     }
 
-    // TEST 22: 숨겨진 표면에서 배치한 영역은 표면을 다시 표시하면 함께 표시된다.
+    // TEST 22: A region placed on a hidden surface is shown together when the surface is shown again.
     {
         void *region22 = sp_region_create(surface, "test22", testEvent, NULL);
         [surface setHidden:YES];
@@ -1211,7 +1211,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region22);
     }
 
-    // TEST 22: 창 배율과 다른 배율로 그린 그림은 표시하지 않는다(글자 크기가 틀어진다).
+    // TEST 22: An image drawn at a scale different from the window scale is not displayed (the text size would be wrong).
     {
         [collectedEvents removeAllObjects];
         void *region22 = sp_region_create(surface, "test22", testEvent, NULL);
@@ -1239,7 +1239,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         CFRelease(testSurface22);
     }
 
-    // 바깥 표면을 바꾼 직후, 페이지 배치 통보 없이 영역과 래스터가 같은 크기여야 한다.
+    // Right after the outer surface changes, the region and the raster must have the same size without a page placement notification.
     {
         void *region = sp_region_create(surface, "fractional-resize", testEvent, NULL);
         sp_region_place(region, 0, 0, 0, 0, true);
@@ -1258,7 +1258,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region);
     }
 
-    // Edit 메뉴의 붙여넣기는 입력기 문서가 아니라 페이지의 붙여넣기 명령으로 간다(V5-42).
+    // Paste from the Edit menu goes to the page paste command, not to the input method document (V5-42).
     {
         void *region = sp_region_create(surface, "edit-actions", testEvent, NULL);
         sp_region_place(region, 0, 0, 0, 0, true);
@@ -1270,7 +1270,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         check([reported isEqualToArray:@[@"{\"type\":\"action\",\"name\":\"paste\"}", @"{\"type\":\"action\",\"name\":\"paste\"}"]]
             && regionView.textStorage.length == 0,
             [NSString stringWithFormat:@"edit actions: paste reports one paste action and leaves the input document empty (got %@)", reported]);
-        // 복사는 터미널 선택을 복사하는 페이지 명령으로 가며, 입력기 문서를 페이스트보드에 쓰지 않는다.
+        // Copy goes to the page command that copies the terminal selection and does not write the input method document to the pasteboard.
         NSInteger changes = NSPasteboard.generalPasteboard.changeCount;
         NSUInteger beforeCopy = collectedEvents.count;
         [NSApp sendAction:@selector(copy:) to:regionView from:nil];
@@ -1290,8 +1290,8 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region);
     }
 
-    // 첫 배치를 받지 않은 표면의 영역은 래스터 크기가 없고, 표면이 배치되지 않았다고 알린다.
-    // 표면이 배치되면 두 값이 함께 생긴다.
+    // The region of a surface that has not received its first placement has no raster size and reports that the surface is not placed.
+    // When the surface is placed, both values appear together.
     {
         WKWebView *unplaced = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
         [window.contentView addSubview:unplaced];
@@ -1312,10 +1312,10 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region);
     }
 
-    // 영역 프레임 안의 포인터 눌림은 터미널 초점 상실로 보고되지 않는다. 포인터는 이 뷰를 뚫고
-    // 페이지로 가므로(hitTest 가 nil) WebKit 이 눌린 웹뷰를 첫 응답자로 만들고, 페이지의 포커스
-    // 명령이 영역으로 되돌린다. 그 왕복의 resign 을 ?1004 자식에게 보고하면 자식이 진행 중인
-    // 드래그를 취소하므로, 눌림 지점이 영역 안일 때의 resign 은 초점 변화가 아니다.
+    // A pointer press inside the region frame is not reported as terminal focus loss. The pointer passes through this view
+    // to the page (hitTest is nil), so WebKit makes the pressed web view the first responder, and the page focus
+    // command returns it to the region. If the resign of that round trip were reported to the ?1004 child, the child would cancel a drag
+    // in progress, so a resign while the press point is inside the region is not a focus change.
     if (activation) {
         void *region15 = sp_region_create(surface, "test15", testEvent, NULL);
         sp_region_place(region15, 100, 150, 100, 50, true);
@@ -1355,7 +1355,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(window.firstResponder == (NSResponder *)region15,
             @"press focus: the pass-through press does not leave the page webview holding the terminal responder");
 
-        // 영역 밖 눌림은 실제 초점 이동이므로 그대로 보고한다. 과억제 방지 대조군이다.
+        // A press outside the region is a real focus move, so it is reported as is. This is a control against over-suppression.
         [collectedEvents removeAllObjects];
         NSPoint outside15 = NSMinX(frame15) - 40 > 0 ? NSMakePoint(NSMinX(frame15) - 40, NSMidY(frame15))
             : NSMakePoint(NSMaxX(frame15) + 40, NSMidY(frame15));
@@ -1384,14 +1384,14 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region15);
     }
 
-    // 영역 A에 초점이 있는 상태에서 다른 영역 B의 프레임 안을 누르면, 눌림은 B 를 뚫고 페이지
-    // 웹뷰로 가며 NSWindow 가 웹뷰를 첫 응답자로 만든다. 이 창 동안 페이지가 키보드 초점을
-    // 얻어 activeElement 인 브라우저 주소창에 focus 가 재발화된다(V5-114 의 도약). 올바른
-    // 동작: A 는 초점 상실을 보고하고(실제 전이다) 응답자는 B 로 곧바로 옮겨간다 — 페이지
-    // 웹뷰가 응답자를 가진 창이 없어야 한다.
+    // When region A has focus and another region B is pressed inside its frame, the press passes through B to the page
+    // web view, and NSWindow makes the web view the first responder. During this interval the page obtains keyboard focus
+    // and focus fires again on the browser address bar that is the activeElement (the V5-114 jump). Correct
+    // behavior: A reports focus loss (a real transition) and the responder moves to B directly; there must be no interval in which the page
+    // web view holds the responder.
     if (activation) {
-        // 앞 구간의 마지막 mouse-up 이 대기열에 남아 이 구간 도중에 처리되면 응답자 전환이
-        // 눌림이 아닌 뗌 중에 일어난다. 눌림 중의 전환만 재기 위해 대기열을 먼저 비운다.
+        // If the last mouse-up of the previous section remains in the queue and is processed in the middle of this section, the responder change happens
+        // during a release, not a press. The queue is drained first to measure only changes during a press.
         while (YES) {
             NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
                 untilDate:[NSDate dateWithTimeIntervalSinceNow:0.1] inMode:NSDefaultRunLoopMode dequeue:YES];
@@ -1400,12 +1400,12 @@ int main(int argc, char **argv) { @autoreleasepool {
         }
         void *regionA16 = sp_region_create(surface, "testA16", testEvent, (void *)1);
         void *regionB16 = sp_region_create(surface, "testB16", testEvent, (void *)2);
-        // 배치 인자는 인셋(left, top, right, bottom)이다. B 는 test15 와 같은 자리(눌림 라우팅이
-        // 검증된 좌표), A 는 아래쪽 띠로 겹치지 않게 나눈다.
+        // The placement arguments are insets (left, top, right, bottom). B is at the same position as test15 (coordinates whose press routing was
+        // verified), and A is placed in the lower band so that they do not overlap.
         sp_region_place(regionA16, 100, 20, 100, 340, true);
         sp_region_place(regionB16, 100, 150, 100, 50, true);
-        // 활성화·선행 창을 먼저 마친 뒤 A 에 초점을 둔다 — 활성화가 응답자를 다시 정하면
-        // A 의 resign 이 눌림이 아닌 곳에서 일어나 재현이 흐트러진다.
+        // Finish activation and the preceding window first and then focus A; if activation sets the responder again,
+        // the resign of A happens at a place other than a press and the reproduction is disturbed.
         [NSApp activateIgnoringOtherApps:YES];
         [window makeKeyAndOrderFront:nil];
         NSDate *settleB16 = [NSDate dateWithTimeIntervalSinceNow:0.3];
@@ -1436,7 +1436,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                 inMode:NSDefaultRunLoopMode dequeue:YES];
             if (pending) [NSApp sendEvent:pending];
         }
-        // 비동기 반환(makeFirstResponder) 이 흐르도록 대기열을 한 번 더 돈다.
+        // Runs the queue once more so that the asynchronous return (makeFirstResponder) flows.
         NSDate *drainB16b = [NSDate dateWithTimeIntervalSinceNow:0.3];
         while ([drainB16b timeIntervalSinceNow] > 0) {
             NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]

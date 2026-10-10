@@ -29,10 +29,10 @@ int main(void) { @autoreleasepool {
     NSError *listError = nil;
     NSArray *files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:
         [NSString stringWithUTF8String:directory] error:&listError];
-    // 나열에 실패한 폴더를 빈 폴더로 받아들이지 않는다.
+    // A folder whose listing failed is not accepted as an empty folder.
     check(files != nil && files.count == 0,
         [NSString stringWithFormat:@"an invalid capture leaves no frame files (listing error %@)", listError]);
-    // 정지 캡처: 활성화하지 않은 창을 PNG 로 찍는다. 관측 자료이며 크기와 색으로 내용을 확인한다.
+    // Still capture: captures a window that is not activated as PNG. It is observation data; the content is checked by size and color.
     NSString *still = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"still.png"];
     char *stillError = NULL;
     check(!sp_capture_still(-1, still.UTF8String, &stillError) && stillError != NULL && strlen(stillError) > 0,
@@ -41,12 +41,12 @@ int main(void) { @autoreleasepool {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 200, 100)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
-    // 나타나는 애니메이션 도중의 창은 작은 사각형으로 합성된다.
+    // A window during the appearing animation is composited as a small rectangle.
     window.animationBehavior = NSWindowAnimationBehaviorNone;
     window.backgroundColor = [NSColor colorWithSRGBRed:1 green:0 blue:0 alpha:1];
-    // 앱을 활성화하지 않고 창을 앞에 둔다. 가림 상태가 보임이 되면 윈도 서버가 합성한 것이다.
+    // Puts the window in front without activating the application. When the occlusion state becomes visible, the window server has composited the window.
     [window orderFrontRegardless];
-    // 윈도 서버가 창을 화면에 올린 뒤 찍는다. 올리기 전의 창은 화면 사각형이 없다. 다른 창에 가려져 있어도 된다.
+    // Captures after the window server has put the window on screen. A window before that has no screen rectangle. Other windows may cover it.
     BOOL (^onScreen)(void) = ^BOOL {
         NSArray *info = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow,
             (CGWindowID)window.windowNumber) autorelease];
@@ -70,7 +70,7 @@ int main(void) { @autoreleasepool {
     check(centre.redComponent > 0.9 && centre.greenComponent < 0.3 && centre.blueComponent < 0.1,
         [NSString stringWithFormat:@"the still image shows the window content (centre %@)", centre]);
     check(!NSApp.isActive, @"the still capture does not activate the application");
-    // 녹화 대상은 초기 compositor 프레임이 idle 상태가 될 만큼 오래 바뀌지 않는다.
+    // The recording target does not change long enough for the initial compositor frame to become idle.
     NSDate *settled = [NSDate dateWithTimeIntervalSinceNow:3];
     while (settled.timeIntervalSinceNow > 0) {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
@@ -91,7 +91,7 @@ int main(void) { @autoreleasepool {
         check(stopError != NULL && strlen(stopError) == 0,
             [NSString stringWithFormat:@"recording stops without error (%s)", stopError]);
         check(frames > 0, [NSString stringWithFormat:@"recording writes a complete frame (got %d)", frames]);
-        // 정지 이미지와 녹화 모두 창의 장치 픽셀 크기를 보존한다.
+        // Both the still image and the recording preserve the device pixel size of the window.
         NSString *first = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"frame-0001.bgra"];
         NSData *recorded = [NSData dataWithContentsOfFile:first];
         uint32_t dimensions[3] = {0, 0, 0};

@@ -1,7 +1,8 @@
-// 창의 배치 트랜잭션(surfaceLayoutBegin)이 열린 동안 바꾼 제목줄 높이가 커밋 전에는 화면에 나오지 않고
-// 커밋 뒤에 나오는지 윈도 서버가 보여 준 창 녹화로 검사한다. 페이지는 새 첫 행을 그리는 프레임의
-// 트랜잭션에서 제목줄 높이를 바꾸므로, 창 단추가 그 커밋과 같은 프레임에 옮겨져야 한다.
-// 애플리케이션을 활성화하지 않는다.
+// Checks, with a window recording that the window server showed, that a title bar height changed while the layout
+// transaction (surfaceLayoutBegin) of the window is open does not appear on screen before the commit and appears
+// after the commit. The page changes the title bar height in the transaction of the frame in which it draws the new
+// first row, so the window buttons must move in the same frame as that commit. The check does not activate the
+// application.
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
@@ -9,7 +10,7 @@
 #import "capture.h"
 #import "support/capture_frame.m"
 
-// 트랜잭션이 열린 동안과 커밋 뒤에 기다리는 화면 갱신 수.
+// The number of display refreshes to wait while the transaction is open and after the commit.
 static const int kRefreshes = 12;
 
 static int failures = 0;
@@ -19,7 +20,7 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// 콜백 타임아웃으로 프로세스가 종료돼도 녹화 파일을 남기지 않는다.
+// Leaves no recording file even if the process is terminated by a callback timeout.
 static NSString *recordingDirectory;
 static void cleanupRecording(void) {
     if (recordingDirectory == nil) return;
@@ -38,7 +39,7 @@ static void until(BOOL (^done)(void)) {
     if (!done()) { fprintf(stderr, "FAIL: the display did not refresh within 10 seconds\n"); exit(1); }
 }
 
-// 화면 갱신을 정해진 수만큼 센다.
+// Counts a fixed number of display refreshes.
 @interface SPFrames : NSObject
 @property int left;
 - (void)tick:(CADisplayLink *)link;
@@ -49,8 +50,8 @@ static void until(BOOL (^done)(void)) {
 }
 @end
 
-// 화면 갱신 count 번 동안 실행 루프를 돌린다. AppKit 의 배치·표시 주기도 그동안 실행된다.
-// 걸린 시간(ms)을 반환한다.
+// Runs the run loop for count display refreshes. The layout and display cycle of AppKit also runs meanwhile. Returns
+// the elapsed time (ms).
 static double waitFrames(NSScreen *screen, int count) {
     double start = CACurrentMediaTime() * 1000;
     SPFrames *frames = [[SPFrames new] autorelease];
@@ -61,8 +62,8 @@ static double waitFrames(NSScreen *screen, int count) {
     return CACurrentMediaTime() * 1000 - start;
 }
 
-// 두 호스트의 창과 같이 제목 표시줄을 숨기고 콘텐츠가 창 전체를 차지하는 창. 도구막대는 없다.
-// 콘텐츠는 한 색으로 칠해 단추만 다른 색으로 남게 한다.
+// A window like the windows of both hosts: the title bar is hidden and the content fills the whole window. It has no
+// toolbar. The content is painted with one color so that only the buttons remain in a different color.
 static NSWindow *hostLikeWindow(void) {
     NSWindow *window = [[[NSWindow alloc] initWithContentRect:NSMakeRect(140, 140, 480, 240)
         styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable
@@ -87,8 +88,8 @@ static bool setHeight(NSWindow *window, double height) {
     return set;
 }
 
-// 모델 값: windowControls 의 단추 영역 가운데(콘텐츠 위 기준 pt), 닫기 단추 레이어의 모델 프레임과
-// presentationLayer 프레임.
+// Model values: the center of the button area of windowControls (pt from the content top), and the model frame and
+// presentationLayer frame of the close button layer.
 static NSString *modelValues(NSWindow *window) {
     double area[4] = {0, 0, 0, 0};
     windowControls(window, area);
@@ -110,8 +111,9 @@ static double buttonsCentre(NSWindow *window) {
     return area[1] + area[3] / 2;
 }
 
-// 녹화 프레임 하나에서 창 단추가 차지한 행의 가운데(창 위 기준 pt)를 잰다. 콘텐츠 색과 다른 화소가 있는
-// 첫 행과 마지막 행의 가운데다. 창 테두리와 둥근 모서리를 피해 왼쪽 위 6pt 를 건너뛴다. 단추가 없으면 NAN.
+// Measures the center (pt from the window top) of the rows that the window buttons occupy in one recording frame. It
+// is the center of the first row and the last row that have pixels different from the content color. It skips the top
+// left 6pt to avoid the window border and rounded corner. NAN if there is no button.
 static double measuredCentre(NSData *data, double *displayed) {
     uint32_t head[3] = {0}; double info[7] = {0};
     if (data.length < sizeof(head) + sizeof(info)) return NAN;
@@ -123,7 +125,7 @@ static double measuredCentre(NSData *data, double *displayed) {
     *displayed = info[6];
     const uint8_t *pixels = (const uint8_t *)data.bytes + sizeof(head) + sizeof(info);
     double scale = info[4] * info[5];
-    // 콘텐츠 색은 단추가 없는 곳(창 위 100pt, 왼쪽 300pt)에서 읽는다.
+    // The content color is read at a place without buttons (100pt from the window top, 300pt from the left).
     size_t bx = (size_t)floor((info[0] + 300) * scale), by = (size_t)floor((info[1] + 100) * scale);
     if (bx >= head[0] || by >= head[1]) return NAN;
     const uint8_t *background = pixels + by * head[2] + bx * 4;
@@ -144,10 +146,12 @@ static double measuredCentre(NSData *data, double *displayed) {
     return ((first - top) + (last - top) + 1) / 2.0 / scale;
 }
 
-// 바꾼 제목줄 높이(height), 바꾼 시각(set)과 커밋 시각(committed), 바꾸기 전과 뒤의 단추 가운데(from, to).
+// The changed title bar height (height), the time of the change (set) and the commit time (committed), and the button
+// center before and after the change (from, to).
 typedef struct { double height; double set; double committed; double from; double to; } SPChange;
 
-// 트랜잭션을 열고 제목줄을 to 로 바꾼 뒤 kRefreshes 번의 화면 갱신 동안 커밋하지 않고, 그 뒤에 커밋한다.
+// Opens a transaction, changes the title bar to to, does not commit during kRefreshes display refreshes, and commits
+// afterwards.
 static SPChange change(NSWindow *window, uint64_t ticket, double to) {
     SPChange result = { to, 0, 0, buttonsCentre(window), 0 };
     __block BOOL allowed = NO;
@@ -169,8 +173,9 @@ static SPChange change(NSWindow *window, uint64_t ticket, double to) {
     return result;
 }
 
-// 녹화 프레임을 표시 시각 순서로 바꿈마다 판정한다. 제목줄을 바꾼 뒤 커밋 전에 표시된 프레임은 모두 이전
-// 자리이고, 커밋 뒤 다음 바꿈 전의 마지막 프레임은 새 자리이며, 새 자리가 나온 뒤 이전 자리로 돌아가지 않는다.
+// Judges the recording frames at every change, in display time order. Every frame displayed after the title bar
+// change and before the commit has the previous position, the last frame after the commit and before the next change
+// has the new position, and the position does not return to the previous one after the new one appears.
 static void judge(NSString *directory, int count, const SPChange *changes, int total) {
     double centres[count], shown[count];
     for (int index = 0; index < count; index++) {
@@ -209,7 +214,7 @@ static void judge(NSString *directory, int count, const SPChange *changes, int t
         }
         fprintf(stdout, "%.1fpt title bar: %d frames between the change and the commit, %d frames after the commit, "
             "first new frame %.1fms after the commit\n", at->height, held, after, firstNew);
-        // 커밋 전 프레임이 없으면 화면에 나오지 않았다는 관측이 아니다.
+        // If there is no frame before the commit, it is not an observation that the change did not appear on screen.
         check(held > 0, [NSString stringWithFormat:@"%.1fpt title bar: the recording has frames displayed while the "
             "transaction is open (%d)", at->height, held]);
         check(lastAfter >= 0 && fabs(centres[lastAfter] - at->to) <= 0.5 && !returned, [NSString stringWithFormat:
@@ -243,7 +248,7 @@ int main(void) { @autoreleasepool {
     free(operationError);
     if (started) {
         check(sp_capture_wait() > 0, @"the title bar recording contains its initial frame");
-        // 높이는 프레임 글자 배율 1 과 2 의 첫 행이다. 올렸다가 내린다.
+        // The heights are the first rows for frame font scales 1 and 2. Raises then lowers.
         SPChange changes[2];
         changes[0] = change(window, 201, 80);
         changes[1] = change(window, 202, 40);

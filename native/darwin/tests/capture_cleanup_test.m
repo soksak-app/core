@@ -1,4 +1,5 @@
-// 실제 쓰기·닫기·커밋·삭제 결과를 제어하여 각 원인과 남은 파일을 검사한다.
+// Controls the results of actual write, close, commit, and delete operations to check each cause and the
+// remaining files.
 #import <Cocoa/Cocoa.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -13,7 +14,7 @@ static FILE *controlledOpen(const char *path, const char *mode) {
 }
 static size_t controlledWrite(const void *data, size_t size, size_t count, FILE *file) {
     if (failWrite) {
-        // 실제 부분 파일을 남겨 삭제 성공·실패를 구분한다.
+        // Leave an actual partial file to distinguish delete success from delete failure.
         if (fwrite(data, 1, 1, file) != 1) {
             fprintf(stderr, "FAIL: the partial-file fixture cannot write its byte: %s\n", strerror(errno));
             abort();
@@ -26,7 +27,7 @@ static int controlledClose(FILE *file) {
     int closed = fclose(file);
     if (closed != 0) return closed;
     if (failClose) { errno = EIO; return EOF; }
-    // 성공한 다음 호출이 errno를 바꿔도 이전 쓰기 오류는 보존해야 한다.
+    // The earlier write error must be preserved even if a later successful call changes errno.
     errno = EBADF; return 0;
 }
 static int controlledCommit(const char *from, const char *to) {

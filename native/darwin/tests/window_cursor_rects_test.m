@@ -1,5 +1,6 @@
-// 창 구성이 창의 cursor rect 관리를 끄고, 창에 흔히 일어나는 변경 뒤에도 꺼진 채로 두는지 검사한다. 콘텐츠 뷰는
-// Tauri 의 tao 처럼 자기 영역 전체에 화살표 cursor rect 를 둔다(docs/features.md F95). 애플리케이션을 활성화하지 않는다.
+// Checks that the window configuration turns off the cursor rect management of the window and keeps it off after
+// common changes to the window. The content view places an arrow cursor rect over its whole area, like tao of Tauri
+// (docs/features.md F95). The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
@@ -18,7 +19,7 @@ static void spin(NSTimeInterval seconds) {
     }
 }
 
-// tao 의 TaoView 처럼 자기 영역 전체에 화살표 cursor rect 를 두는 콘텐츠 뷰.
+// A content view that places an arrow cursor rect over its whole area, like TaoView of tao.
 @interface SPArrowContentView : NSView
 @end
 @implementation SPArrowContentView

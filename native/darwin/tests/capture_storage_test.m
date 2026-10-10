@@ -1,4 +1,4 @@
-// 실제 샘플 쓰기 경로의 저장량과 무손실 코덱 비용을 같은 픽셀로 측정한다.
+// Measures the storage amount of the real sample write path and the cost of the lossless codec on the same pixels.
 #import "../src/capture.m"
 #include <compression.h>
 #include <zlib.h>
@@ -21,7 +21,7 @@ static CMSampleBufferRef sample(BOOL noise, NSData **original) {
     for (size_t y = 0; y < 1520; y++) {
         for (size_t x = 0; x < stride; x++) {
             random ^= random << 13; random ^= random >> 17; random ^= random << 5;
-            // 평면 배경과 작은 글자 영역, 행 패딩도 복원 비교에 포함한다.
+            // A flat background, a small text area, and row padding are also included in the restoration comparison.
             base[y * stride + x] = noise ? (uint8_t)random
                 : (x / 4 % 113 < 7 && y % 29 < 9 ? 180 : (uint8_t[]){29, 26, 25, 255}[x % 4]);
         }

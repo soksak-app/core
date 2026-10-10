@@ -1,5 +1,5 @@
-// WebContent 프로세스 종료는 명시적이고 사용 가능한 동작이어야 하고, 같은 프로세스의 다시 읽기는 WebKit 의 결과 캐시가
-// 붙잡는 이전 문서를 남긴다.
+// Ending a WebContent process must be an explicit and usable operation, and a reload in the same process leaves the
+// previous document that the WebKit result cache holds.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <libproc.h>
@@ -52,14 +52,16 @@ static SPLoaded *load(WKWebView *view, NSString *html) {
     return [loaded retain];
 }
 
-// process 의 physical footprint(바이트). 상주 메모리는 해제한 page 를 할당기가 붙들고 있으면 줄지 않는다.
+// The physical footprint (bytes) of the process. Resident memory does not shrink while the allocator holds released
+// pages.
 static long processFootprint(pid_t pid) {
     struct rusage_info_v2 info;
     return proc_pid_rusage(pid, RUSAGE_INFO_V2, (rusage_info_t *)&info) == 0 ? (long)info.ri_phys_footprint : -1;
 }
 
-// html 파일을 열고 네 번 다시 읽은 뒤 늘어난 footprint(바이트). 다시 읽을 때마다 JavaScript 객체를 수집한다.
-// 문자열로 연 문서는 다시 읽으면 빈 문서가 되므로 임시 디렉터리의 파일로 연다.
+// The footprint (bytes) that grew after opening an html file and reloading it four times. Collects JavaScript objects
+// at every reload. A document opened from a string becomes an empty document on reload, so the check opens it from a
+// file in a temporary directory.
 static long reloadGrowth(WKWebView *view, NSString *html) {
     NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
     NSURL *file = [NSURL fileURLWithPath:[directory stringByAppendingPathComponent:@"page.html"]];
@@ -125,10 +127,11 @@ int main(void) { @autoreleasepool {
           @"a page can reload after WebContent termination");
     [value release];
 
-    // WebKit 의 문서별 querySelectorAll 결과 캐시는 결과 요소를 붙잡고, 요소는 문서를 붙잡는다. teardown 은 이 캐시를
-    // 비우지 않으므로 같은 process 에서 다시 읽으면 이전 문서가 메모리 압박 전까지 남는다. 쿼리가 없는 같은 페이지는
-    // 남기지 않는다.
-    // 표식은 쿼리에 걸리는 요소의 속성이다. 같은 값의 속성은 문서끼리 문자열 하나를 나눠 쓰므로 문서마다 다른 값을 쓴다.
+    // The per-document querySelectorAll result cache of WebKit holds the result elements, and the elements hold the
+    // document. Teardown does not empty this cache, so a reload in the same process leaves the previous document
+    // until memory pressure. The same page without the query does not leave it. The marker is an attribute of an
+    // element that the query matches. Attributes with the same value share one string between documents, so each
+    // document uses a different value.
     NSString *marked = @"<span class=k></span><script>document.querySelector('.k').setAttribute('data-marker', performance.timeOrigin + 'x'.repeat(50 << 20));";
     long uncached = reloadGrowth(view, [marked stringByAppendingString:@"</script>"]);
     long cached = reloadGrowth(view, [marked stringByAppendingString:@"document.body.querySelectorAll('.k').length;</script>"]);
