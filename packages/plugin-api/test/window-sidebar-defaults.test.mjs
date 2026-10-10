@@ -85,6 +85,6 @@ test("window references accept section-only plugins but card references still re
   const links = sidebars([{ place: "window-right", plugin: "tree", set: "set-1" }]);
   assert.doesNotThrow(() => checkSidebarReferences(links, all, "settings"));
   assert.throws(() => checkSidebarReferences(sidebars([{ place: "card-left", plugin: "tree", set: "set-1" }]), all, "settings"), /plugin tree without a surface/);
-  // 불러오지 않은 플러그인의 연결은 유지한다(docs/spec/plugins.md).
+  // The link of a plugin that is not loaded is kept (docs/spec/plugins.md).
   assert.doesNotThrow(() => checkSidebarReferences(sidebars([{ place: "window-left", plugin: "absent", set: "set-1" }]), all, "settings"));
 });

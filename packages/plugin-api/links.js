@@ -1,4 +1,4 @@
-// 링크 열기 capability. 호스트가 스킴을 검사하고 사용자의 기본 애플리케이션으로 연다
+// The link opening capability. The host checks the scheme and opens the link with the default application of the user
 // (docs/spec/plugins.md#opening-links).
 
 export function createLinkBridge(call) {

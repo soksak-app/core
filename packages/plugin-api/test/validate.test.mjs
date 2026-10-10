@@ -35,7 +35,7 @@ test("a manifest with a page surface or with sections only is accepted", () => {
   assert.equal(validateManifest(side), side);
   assert.equal(validateManifest({ ...side, sections: [{ ...side.sections[0], fill: true }] }).sections[0].fill, true);
   assert.equal(validateManifest({ ...card, preview: { ink: "--surface-fg" } }).preview.ink, "--surface-fg");
-  // 범위는 sok 과 같은 형식이다: `*`, 하한만 있는 `>=x.y.z`, 상한이 있는 `>=x.y.z <a.b.c`(docs/spec/installation.md).
+  // The range has the same format as sok: `*`, `>=x.y.z` with only a lower bound, and `>=x.y.z <a.b.c` with an upper bound (docs/spec/installation.md).
   for (const range of ["*", ">=0.0.6", ">=0.0.2 <0.1.0", "^1.2.0", "~1.2.0", "1.2.0"]) {
     assert.equal(validateManifest({ ...card, dependencies: { "@scope/sidecar-worker": range } }).dependencies["@scope/sidecar-worker"], range);
   }
@@ -332,7 +332,7 @@ test("sidebar links allow independent window and card choices and reject repeats
 });
 
 test("references to plugins that are not loaded are kept without failing the load", () => {
-  // probe 를 끄거나 제거하면 환경과 저장된 사이드바가 여전히 그것을 가리킨다(docs/spec/plugins.md).
+  // When the probe is turned off or removed, the environment and the stored sidebars still point to it (docs/spec/plugins.md).
   const value = environment();
   value.sidebars.sets[0].sections.push("probe.tree");
   value.sidebars.links.push({ place: "card-left", plugin: "probe", set: "set-side" });

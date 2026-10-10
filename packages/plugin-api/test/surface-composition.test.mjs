@@ -232,7 +232,7 @@ test("an observed overlay change submits every region and overlay through compos
   });
   assert.equal(r.documentCalls.some(([operation]) => operation === "place"), false);
   assert.equal(r.imageCalls.some(([operation]) => operation === "place"), false);
-  // 관찰은 다음 animation frame 에 시작한다.
+  // The observation starts at the next animation frame.
   f.frame();
   assert(f.observed.includes("toolbar"), "the overlay itself is observed");
   assert(f.observed.includes("overlay-parent"), "the overlay ancestor is observed");
@@ -449,7 +449,7 @@ test("a shadow-root composition scopes the marker and measures from its viewport
   assert.equal(window.document.body.style.getPropertyValue("background-color"), "");
   assert.deepEqual(r.placements[0].regions, [{ name: "page", left: 10, top: 20, right: 90, bottom: 180, visible: true }]);
   assert.deepEqual(r.placements[0].overlays, [{ name: "overlay", left: 20, top: 30, right: 320, bottom: 250, visible: true }]);
-  // 관찰은 다음 animation frame 에 시작한다.
+  // The observation starts at the next animation frame.
   for (const frame of frames.splice(0)) frame();
   assert(observed.includes(slot), "the surface slot is observed for size changes");
   assert.equal(host.style.getPropertyValue("background-color"), "transparent");
@@ -472,8 +472,8 @@ test("the document region handle loads a session history entry by its offset", a
 });
 
 test("the controller starts observing at the next animation frame, before that frame's observation round", async () => {
-  // 관찰 round 도중에 시작한 관찰은 이미 지나간 깊이의 첫 관찰을 다음 frame 으로 미루고 WebKit 은 그때
-  // ResizeObserver loop 오류를 낸다. animation frame 은 그 frame 의 관찰 round 보다 먼저 실행된다(F32).
+  // An observation that starts during the observation round defers the first observation of a depth that has already passed to the next frame, and WebKit then
+  // reports a ResizeObserver loop error. An animation frame runs before the observation round of that frame (F32).
   const f = fixture();
   const r = runtime();
   await createSurfaceCompositionController(r.page, declaration, {

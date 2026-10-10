@@ -1,4 +1,4 @@
-// 그림 영역이 요소의 뷰포트 여백을 알리고, 호출 순서를 지키고, 자기 이벤트만 받는지 검사한다.
+// Checks that the image region reports the viewport margins of the element, keeps the call order and receives only its own events.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
@@ -7,7 +7,7 @@ import { attachImage } from "../image-region.js";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-/** 요소의 사각형을 정할 수 있는 창. ResizeObserver 는 observe 한 요소와 콜백을 기록한다. */
+/** A window in which the rectangle of an element can be set. ResizeObserver records the observed element and the callback. */
 function fixture() {
   const { window } = new JSDOM("<body><div id=outer><div id=region></div></div></body>", { url: "https://example.test/" });
   const observed = [];
@@ -17,7 +17,7 @@ function fixture() {
     observe(node) { observed.push(node); }
     disconnect() { this.disconnected = true; callbacks.length = 0; }
   };
-  // 관찰은 animation frame 에서 시작한다. frame() 이 기다리는 콜백을 실행한다.
+  // The observation starts at an animation frame. frame() runs the waiting callback.
   const frames = [];
   window.requestAnimationFrame = (fn) => frames.push(fn);
   window.cancelAnimationFrame = () => {};
@@ -50,7 +50,7 @@ function port() {
     caret: async (name, x, y, w, h) => { calls.push(["caret", name, x, y, w, h]); },
     text: async (name, text) => { calls.push(["text", name, text]); },
     detach: async (name) => { calls.push(["detach", name]); },
-    // 런타임의 listen 처럼 등록을 끝내는 함수를 돌려준다.
+    // Returns the function that ends the registration, like listen of the runtime.
     on: (fn) => { eventListeners = fn; return Promise.resolve(() => { calls.push(["unlisten"]); }); },
     send: (name, event) => { if (eventListeners) eventListeners(name, event); },
   };
@@ -197,7 +197,7 @@ test("an event without a type is reported as an error, not dropped", async () =>
   const p = port();
   attachImage(p, f.element, "preview", "writer", f.window, { report: f.report });
   await settle();
-  p.send("preview", { data: "test" }); // type 필드가 없다
+  p.send("preview", { data: "test" }); // no type field
   await settle();
   assert.deepEqual(f.reported, ['image preview: event has no type: {"data":"test"}']);
 });

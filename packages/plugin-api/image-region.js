@@ -1,20 +1,20 @@
-// 표면 페이지의 요소 하나에 붙는 그림 영역.
+// The image region attached to one element of a surface page.
 //
-// 호스트는 표면 웹뷰 안에 그림 영역을 두고, 이 모듈이 알린 뷰포트 여백으로 배치한다. 요소의
-// 위치와 크기는 ResizeObserver 와 창 resize, scroll 이벤트로 따라간다.
+// The host places an image region inside the surface webview, positioned with the viewport margins that this module reports. The
+// position and size of the element are followed with ResizeObserver and the window resize and scroll events.
 
 import { regionInsets, observeRegionInsets } from "./document-region.js";
 
-/** 이름 규칙. 호스트도 같은 규칙으로 확인한다. */
+/** The name rule. The host checks with the same rule. */
 export const IMAGE_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 /**
- * element 에 그림 영역 name 을 붙인다. port 는 런타임의 page.image 이고 view 는 요소의 창이다.
- * 반환한 영역의 호출은 붙이기가 끝난 뒤 순서대로 실행된다. detach 뒤에는 호출할 수 없다.
+ * Attaches the image region name to element. port is page.image of the runtime and view is the window of the element.
+ * The calls on the returned region run in order after the attachment finishes. It cannot be called after detach.
  */
 export function attachImage(port, element, name, sidecar, view = element.ownerDocument.defaultView, options = {}) {
   if (!IMAGE_NAME.test(name)) throw new Error(`invalid image name ${JSON.stringify(name)}`);
-  // 호출자에게 돌아가지 않는 실패(관찰 중의 배치, 처리할 곳이 없는 사건)는 이 함수로 오류를 알린다.
+  // A failure that does not return to a caller (a placement during observation, an event with no handler) is reported as an error with this function.
   const { report } = options;
   if (typeof report !== "function") throw new TypeError(`image ${name} requires a report for its failures`);
   const listeners = new Map();
@@ -23,7 +23,7 @@ export function attachImage(port, element, name, sidecar, view = element.ownerDo
   const queue = (work) => {
     if (detached) return Promise.reject(new Error(`image ${name} is detached`));
     const next = chain.then(work);
-    // 실패는 next 를 받은 호출자에게 rejection 으로 전달된다. 체인은 다음 작업을 위해 그 실패 뒤에도 이어진다.
+    // The failure is delivered as a rejection to the caller that received next. The chain continues after that failure for the next operation.
     chain = next.then(() => undefined, () => undefined);
     return next;
   };
@@ -31,7 +31,7 @@ export function attachImage(port, element, name, sidecar, view = element.ownerDo
   const unlisten = Promise.resolve(port.on((imageName, event) => {
     if (imageName !== name || detached) return;
     const eventType = typeof event === "string" ? event : event?.type;
-    // 처리할 곳이 없는 사건은 버리지 않고 오류로 알린다.
+    // An event with no handler is not discarded but reported as an error.
     if (!eventType) {
       report(`image ${name}: event has no type: ${JSON.stringify(event)}`);
       return;
@@ -45,7 +45,7 @@ export function attachImage(port, element, name, sidecar, view = element.ownerDo
   }));
 
   const placeAt = ({ insets, visible }) => queue(() => port.place(name, insets, visible));
-  // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
+  // default: the thrown value may not be an Error, so without message the value itself is written.
   const failed = (error) => report(`image ${name} place: ${error?.message ?? error}`);
   const stopObserving = options.observe === false ? () => {} : observeRegionInsets(element, view, placeAt, failed);
 

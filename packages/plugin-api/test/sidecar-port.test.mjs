@@ -1,9 +1,9 @@
-// 사이드카 전송이 호출한 순서대로 호스트에 전달되는지 검사한다.
+// Checks that sidecar transports are delivered to the host in the order called.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { orderedSidecar } from "@soksak/plugin-api";
 
-/** 전송을 기록하고, 전송마다 정한 시간 뒤에 끝나는 포트. 호출이 겹치면 늦게 시작한 전송이 먼저 끝날 수 있다. */
+/** A port that records transports and ends each after a set time. When calls overlap, a transport that started later can end first. */
 function slowPort(delays) {
   const started = [];
   const finished = [];

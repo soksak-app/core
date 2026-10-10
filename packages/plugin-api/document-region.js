@@ -1,25 +1,25 @@
-// 표면 페이지의 요소 하나에 붙는 문서 영역. docs/spec/native-surfaces.md 의 "문서 영역"이다.
+// The document region attached to one element of a surface page. It is the "document region" of docs/spec/native-surfaces.md.
 //
-// 호스트는 표면 웹뷰 안에 문서 웹뷰를 두고, 이 모듈이 알린 뷰포트 여백으로 배치한다. 요소의
-// 위치와 크기는 ResizeObserver 와 창 resize, scroll 이벤트로 따라간다. 요소나 조상의 크기가
-// 바뀌지 않고 위치만 바뀌는 배치는 조상의 크기 변화로 드러난다.
+// The host places a document webview inside the surface webview, positioned with the viewport margins that this module reports. The
+// position and size of the element are followed with ResizeObserver and the window resize and scroll events. A layout in which
+// only the position changes while the size of the element or an ancestor does not change shows up as a size change of an ancestor.
 
-/** 이름 규칙. 호스트도 같은 규칙으로 확인한다. */
+/** The name rule. The host checks with the same rule. */
 export const DOCUMENT_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export const DOCUMENT_ACTIONS = Object.freeze(["back", "forward", "reload", "stop"]);
 
 /**
- * 요소와 조상이 CSS visibility/display로 숨겨져 있는지 확인한다.
- * getComputedStyle을 사용하여 표준 방법으로 판정한다.
- * 모든 지원 범위(macOS 14.0+)에서 작동한다.
+ * Checks whether the element and its ancestors are hidden by CSS visibility or display.
+ * It decides with getComputedStyle, the standard method.
+ * It works in the whole supported range (macOS 14.0 and later).
  */
 function isElementVisible(element, view) {
-  // 요소부터 시작하여 조상 체인을 따라가며 visibility/display 확인
+  // Follows the ancestor chain from the element and checks visibility and display.
   let el = element;
   while (el && el !== view.document.body.parentElement) {
     const style = view.getComputedStyle(el);
-    // visibility: hidden 또는 display: none 이면 보이지 않음
+    // The element is not visible when visibility is hidden or display is none.
     if (style.visibility === "hidden" || style.display === "none") {
       return false;
     }
@@ -28,7 +28,7 @@ function isElementVisible(element, view) {
   return true;
 }
 
-/** 요소의 뷰포트 여백. 요소가 표시되지 않으면 visible 이 false 다. */
+/** The viewport margins of the element. visible is false when the element is not shown. */
 export function regionInsets(element, view) {
   const rect = element.getBoundingClientRect();
   const insets = {
@@ -43,9 +43,9 @@ export function regionInsets(element, view) {
 }
 
 /**
- * 요소의 뷰포트 여백을 관찰하고 변화를 onPlace 로 통보한다. 관찰을 멈길 수 있는 정리 함수를 반환한다.
- * onPlace 는 비동기 작업을 되돌려주고, 반환이 이행되어야 다음 배치를 보낸다. onPlace 의 실패는 받을 호출자가 없으므로
- * report(line) 로 오류를 알린다. 관찰은 다음 animation frame 에 시작한다(AGENTS.md).
+ * Observes the viewport margins of the element and reports changes with onPlace. Returns a cleanup function that stops the observation.
+ * onPlace returns an asynchronous operation, and the next placement is sent after that return is fulfilled. A failure of onPlace has no caller to receive it, so it is reported with
+ * report(line). The observation starts at the next animation frame (AGENTS.md).
  */
 export function observeRegionInsets(element, view, onPlace, report) {
   if (typeof report !== "function") throw new TypeError("observing region insets requires a report for its failures");
@@ -57,7 +57,7 @@ export function observeRegionInsets(element, view, onPlace, report) {
     const key = JSON.stringify(next);
     if (key === placed) return;
     placed = key;
-    // 배치 작업이 실패해도 관찰은 계속 진행한다. 실패는 오류로 알린다.
+    // The observation continues when a placement operation fails. The failure is reported as an error.
     onPlace(next).catch(report);
   };
   const observer = new view.ResizeObserver(place);
@@ -79,14 +79,14 @@ export function observeRegionInsets(element, view, onPlace, report) {
 }
 
 /**
- * element 에 문서 영역 name 을 붙인다. port 는 런타임의 page.document 이고 view 는 요소의 창이다.
+ * Attaches the document region name to element. port is page.document of the runtime and view is the window of the element.
  *
- * 반환한 영역의 호출은 붙이기가 끝난 뒤 순서대로 실행된다. state 는 호스트가 마지막으로 알린
- * 문서 상태이고 onState 는 상태가 바뀔 때마다 호출된다. detach 뒤에는 호출할 수 없다.
+ * The calls on the returned region run in order after the attachment finishes. state is the last
+ * document state that the host reported and onState is called each time the state changes. It cannot be called after detach.
  */
 export function attachRegion(port, element, name, view = element.ownerDocument.defaultView, options = {}) {
   if (!DOCUMENT_NAME.test(name)) throw new Error(`invalid document name ${JSON.stringify(name)}`);
-  // 호출자에게 돌아가지 않는 실패(관찰 중의 배치)는 이 함수로 오류를 알린다.
+  // A failure that does not return to a caller (a placement during observation) is reported as an error with this function.
   const { report } = options;
   if (typeof report !== "function") throw new TypeError(`document ${name} requires a report for its failures`);
   const listeners = new Set();
@@ -96,7 +96,7 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
   const queue = (work) => {
     if (detached) return Promise.reject(new Error(`document ${name} is detached`));
     const next = chain.then(work);
-    // 실패는 next 를 받은 호출자에게 rejection 으로 전달된다. 체인은 다음 작업을 위해 그 실패 뒤에도 이어진다.
+    // The failure is delivered as a rejection to the caller that received next. The chain continues after that failure for the next operation.
     chain = next.then(() => undefined, () => undefined);
     return next;
   };
@@ -114,7 +114,7 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
   }));
 
   const placeAt = ({ insets, visible }) => queue(() => port.place(name, insets, visible));
-  // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
+  // default: the thrown value may not be an Error, so without message the value itself is written.
   const failed = (error) => report(`document ${name} place: ${error?.message ?? error}`);
   const stopObserving = options.observe === false ? () => {} : observeRegionInsets(element, view, placeAt, failed);
 
@@ -126,7 +126,7 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
-    /** 요소가 바뀐 배치를 알린다. 관찰로 드러나지 않는 이동에 쓴다. */
+    /** Reports a placement that the element changed. Used for a move that the observation does not reveal. */
     place: () => {
       const { insets, visible } = regionInsets(element, view);
       return placeAt({ insets, visible });
@@ -140,13 +140,13 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       messageListeners.add(fn);
       return () => messageListeners.delete(fn);
     },
-    /** 문서의 페이지 확대를 글자 배율로 정한다(docs/spec/text-size.md). */
+    /** Sets the page zoom of the document as a text size scale (docs/spec/text-size.md). */
     zoom: (factor) => queue(() => port.zoom(name, factor)),
     go(action) {
       if (!DOCUMENT_ACTIONS.includes(action)) return Promise.reject(new Error(`unknown document action ${action}`));
       return queue(() => port.go(name, action));
     },
-    /** 현재 항목에서 offset 만큼 떨어진 세션 기록 항목을 연다. offset 은 0 이 아닌 정수다. */
+    /** Opens the session history entry offset away from the current entry. offset is a non-zero integer. */
     entry(offset) {
       if (!Number.isInteger(offset) || offset === 0) return Promise.reject(new Error(`invalid history offset ${offset}`));
       return queue(() => port.go(name, "entry", offset));

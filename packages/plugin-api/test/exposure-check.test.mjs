@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { checkPluginRepository, coreExposure } from "../exposure-check.js";
 
-/** plugin.json 과 ui 소스로 된 임시 plugin repository. */
+/** A temporary plugin repository made of plugin.json and ui sources. */
 function repository(t, manifest, files) {
   const root = mkdtempSync(join(tmpdir(), "plugin-exposure-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));

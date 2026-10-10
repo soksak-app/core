@@ -1,35 +1,35 @@
-// 문서의 UI 요소를 선언된 명령에 연결한다.
+// Connects the UI elements of a document to declared commands.
 //
-// 사람의 조작과 외부 요청(CLI, MCP)이 같은 명령을 거치도록, UI 요소는 실행할 명령을
-// data-command 로 가리키고 그 처리기는 명령을 실행한다. 고정된 매개변수는 data-params 에
-// JSON 으로 적는다. 값을 입력하는 요소는 그 값을 data-value 가 가리키는 매개변수
-// 이름(기본 value)으로 더한다.
+// So that human operation and external requests (CLI, MCP) pass through the same command, a UI element points to the command to run
+// with data-command and its handler runs the command. Fixed parameters are written as JSON in data-params. An element
+// that enters a value adds that value as the parameter named by data-value
+// (default value).
 //
-// 연결한 요소와 위임한 루트를 기록하므로, audit 가 명령에 연결되지 않은 조작 요소를
-// 실행 중인 문서에서 찾는다. docs/spec/exposure.md 의 "User interface" 가 규칙이다.
+// The binder records the connected elements and the delegated roots, so audit finds the operable elements that are not connected to a command
+// in the running document. The rules are "User interface" in docs/spec/exposure.md.
 
-/** 조작 요소. audit 는 이 요소마다 명령과 dom 이름을 요구한다. */
+/** An operable element. For each such element, audit requires a command and a dom name. */
 export const INTERACTIVE = 'button, input, select, textarea, [role="button"], [contenteditable]:not([contenteditable="false"])';
 
-/** 값 입력 요소의 현재 값. 체크박스는 불리언이다. */
+/** The current value of a value input element. A checkbox yields a boolean. */
 export const valueOf = (el) => (el.type === "checkbox" ? el.checked : el.value);
 
-/** 요소가 가리키는 명령과 매개변수. value 가 있으면 값 매개변수로 더한다. */
+/** The command and parameters that the element points to. When value exists, it is added as the value parameter. */
 export function commandOf(el, value) {
   const name = el.dataset.command;
   if (!name) return null;
   const params = el.dataset.params ? JSON.parse(el.dataset.params) : {};
-  // 기본값: data-value 가 없는 컨트롤은 값을 value 매개변수로 보낸다(docs/spec/exposure.md).
+  // default: a control without data-value sends its value as the value parameter (docs/spec/exposure.md).
   if (value !== undefined) params[el.dataset.value ?? "value"] = value;
   return { name, params };
 }
 
 /**
- * 연결기 하나를 만든다.
+ * Creates one binder.
  *
- *   run(name, params, el)  명령 실행. el 은 조작한 요소다. promise 를 반환한다
- *   check(name)        선언된 명령이 아니면 예외를 던진다
- *   changed()          연결이 바뀌면 호출된다. audit 결과가 달라졌을 수 있다
+ *     run(name, params, el)  runs a command. el is the operated element. Returns a promise
+ *     check(name)        throws when the name is not a declared command
+ *     changed()          called when the connections change. The audit result may have changed
  */
 export function createBinder(run, { check, changed = () => {} }) {
   if (typeof check !== "function") throw new Error("createBinder requires check");
@@ -37,7 +37,7 @@ export function createBinder(run, { check, changed = () => {} }) {
   const roots = new WeakSet();
   const cleanup = new Set();
 
-  /** 요소에 명령 표시를 붙인다. 입력은 delegate 한 루트나 부르는 쪽이 전달한다. */
+  /** Marks an element with a command. The caller passes an input that a delegated root or the caller handles. */
   function mark(el, name, params, valueName) {
     check(name);
     el.dataset.command = name;
@@ -48,11 +48,11 @@ export function createBinder(run, { check, changed = () => {} }) {
   }
 
   /**
-   * 요소를 명령에 연결한다. event 가 발생하면 명령을 실행한다.
+   * Connects an element to a command. Runs the command when event occurs.
    *
-   * params 가 함수이면 실행할 때 이벤트로 계산한다. 그런 요소는 data-params 를 갖지
-   * 않는다. when(event) 이 거짓이면 실행하지 않는다. 실행이 실패하면 failed(error) 를
-   * 호출하고, failed 가 없으면 거절이 문서의 unhandledrejection 으로 간다.
+   * When params is a function, it is evaluated with the event at run time. Such an element has no data-params.
+   * The command does not run when when(event) is false. When the run fails, failed(error) is
+   * called; without failed, the rejection goes to unhandledrejection of the document.
    */
   function bind(el, name, params = {}, { event = "click", stop = false, when, failed } = {}) {
     mark(el, name, typeof params === "function" ? null : params);
@@ -70,8 +70,8 @@ export function createBinder(run, { check, changed = () => {} }) {
   }
 
   /**
-   * root 안의 data-command 요소를 위임으로 연결한다. 누름은 click, 값 입력은 change 와
-   * input 으로 실행한다(input 은 data-live 가 있는 요소만). bind 로 직접 연결한 요소는 실행하지 않는다.
+   * Connects the data-command elements in root by delegation. A press runs on click and a value input runs on change and
+   * input (input only for elements with data-live). Elements connected directly with bind do not run.
    */
   function delegate(root, { failed } = {}) {
     const go = (found, el) => {
@@ -80,7 +80,7 @@ export function createBinder(run, { check, changed = () => {} }) {
     };
     const click = (e) => {
       const el = e.target.closest("[data-command]");
-      // 직접 연결한 요소는 자기 이벤트로만 실행한다. 위임으로 다시 실행하면 명령이 두 번 돈다.
+      // A directly connected element runs only with its own event. Running it again by delegation would run the command twice.
       if (!el || !root.contains(el) || bound.has(el) || el.matches("input, select, textarea")) return;
       return go(commandOf(el), el);
     };
@@ -101,35 +101,35 @@ export function createBinder(run, { check, changed = () => {} }) {
     return root;
   }
 
-  /** 요소가 명령에 연결되었는가. 직접 연결했거나, 위임한 루트 안에서 명령을 가리킨다. */
+  /** Whether the element is connected to a command: connected directly, or pointing to a command inside a delegated root. */
   function connected(el) {
     if (bound.has(el)) return true;
     if (!el.dataset.command) return false;
-    // parentElement는 ShadowRoot에서 멈춘다. surface 모듈은 shadow tree 안에 mount되므로
-    // 위임된 root에 닿으려면 parentNode를 따라간다.
+    // parentElement stops at a ShadowRoot. A surface module is mounted inside a shadow tree,
+    // so reaching the delegated root requires following parentNode.
     for (let at = el; at; at = at.parentNode) if (roots.has(at)) return true;
     return false;
   }
 
   /**
-   * root 안에서 명령에 연결되지 않았거나 dom 이름이 없는 조작 요소.
-   * 요소마다 {tag, expose, command, text} 다.
+   * The operable elements in root that are not connected to a command or have no dom name.
+   * Each element is {tag, expose, command, text}.
    */
   function audit(root) {
     return [...root.querySelectorAll(INTERACTIVE)]
       .filter((el) => !connected(el) || !el.dataset.expose)
       .map((el) => ({
         tag: el.tagName.toLowerCase(),
-        // 기본값: 감사 행은 없는 dom 이름과 명령을 null 로 적는다.
+        // default: an audit row writes a missing dom name and command as null.
         expose: el.dataset.expose ?? null,
-        // 기본값: 감사 행은 없는 dom 이름과 명령을 null 로 적는다.
+        // default: an audit row writes a missing dom name and command as null.
         command: connected(el) ? el.dataset.command ?? null : null,
-        // 기본값: 요소를 알아보게 하는 글은 접근 가능한 이름, 제목, 글자 순이며 셋 다 없는 요소는 빈 글이다.
+        // default: the text that identifies an element is the accessible name, then the title, then the text content; an element with none of the three has empty text.
         text: (el.getAttribute("aria-label") || el.title || el.textContent || "").trim().slice(0, 40),
       }));
   }
 
-  /** 선언된 명령을 실행한다. 연속 동작의 결과나 네이티브 동작처럼 요소 이벤트가 아닌 사용자 조작이 쓴다. */
+  /** Runs a declared command. It is used by user operations that are not element events, such as the result of a continuous gesture or a native action. */
   function runDeclared(name, params = {}) {
     check(name);
     return run(name, params);

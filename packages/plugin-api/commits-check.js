@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// 커밋 메시지가 `type(scope): Subject (#ID)`, 빈 줄, 비지 않은 본문, 꼬리말 없음의 형식인지 검사한다. 인자가 파일이면 그
-// 메시지를(commit-msg hook), 아니면 git 범위의 각 커밋을 검사한다.
+// Checks that a commit message has the form `type(scope): Subject (#ID)`, a blank line, a non-empty body and no footer. When the argument is a file, it checks that
+// message (commit-msg hook); otherwise it checks each commit of a git range.
 //
 //   soksak-commits <message file | revision range>
 import { execFileSync } from "node:child_process";
@@ -8,14 +8,14 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { commitMessageErrors } from "./records-check.js";
 
-/** target 의 메시지마다 [이름, 메시지]. 파일은 그 메시지 하나, 범위는 merge 가 아닌 각 커밋이다. */
+/** [name, message] for each message of target. A file is that one message; a range is each commit that is not a merge. */
 export function commitMessages(target) {
   if (existsSync(target)) return [["message", readFileSync(target, "utf8").replace(/^#.*\n?/gm, "")]];
   return execFileSync("git", ["rev-list", "--no-merges", target], { encoding: "utf8" }).split("\n").filter(Boolean)
     .map((commit) => [commit.slice(0, 12), execFileSync("git", ["log", "-1", "--format=%B", commit], { encoding: "utf8" })]);
 }
 
-// package manager 는 package 를 link 로 두므로 시작한 경로를 풀어서 이 module 과 비교한다.
+// A package manager places a package as a link, so the started path is resolved before it is compared with this module.
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const [target] = process.argv.slice(2);
   if (!target) {

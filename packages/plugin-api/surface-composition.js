@@ -1,4 +1,4 @@
-// 선언된 네이티브 영역과 DOM 오버레이를 한 합성 스냅샷으로 관리한다.
+// Manages the declared native regions and the DOM overlays as one composition snapshot.
 
 import { attachRegion, regionInsets } from "./document-region.js";
 import { attachImage } from "./image-region.js";
@@ -7,7 +7,7 @@ function sameNames(actual, expected, what) {
   const left = [...actual].sort();
   const right = [...expected].sort();
   if (left.length !== right.length || left.some((name, index) => name !== right[index])) {
-    // 기본값: 선언이 빈 목록이면 오류 문장은 기대한 이름을 none 으로 적는다.
+    // default: when the declaration is an empty list, the error sentence writes the expected names as none.
     throw new Error(`${what} must exactly match the surface declaration (expected ${right.join(", ") || "none"})`);
   }
 }
@@ -81,8 +81,8 @@ function installHybridPaintBoundary(regionElements, overlayElements, view, viewp
   if (viewport) {
     for (let node = viewport; node; node = node.parentElement) {
       ancestors.add(node);
-      // plane은 명시적인 app-DOM paint 경계다. 그 조상들은 창 배경을 칠하므로
-      // 전역으로 투명하게 만들면 안 된다.
+      // plane is an explicit app-DOM paint boundary. Its ancestors paint the window background,
+      // so they must not be made transparent globally.
       if (node.classList?.contains("plane")) break;
     }
   }
@@ -117,7 +117,7 @@ function installHybridPaintBoundary(regionElements, overlayElements, view, viewp
     });
     observers.push(observer);
   };
-  // 기본값: 영역이 없는 표면은 문서 전체를 관찰한다.
+  // default: a surface without regions observes the whole document.
   observe(regionElements.length ? regionElements[0].getRootNode() : view.document.documentElement);
   if (viewport) observe(viewport);
   return {
@@ -141,8 +141,8 @@ function installHybridPaintBoundary(regionElements, overlayElements, view, viewp
 }
 
 /**
- * 검증한 선언과 런타임 포트로 표면 합성을 만든다. page.js만 이 내부 함수를 호출하며,
- * 별도 모듈로 둔 이유는 전체 스냅샷과 실패 정리를 브라우저 없이 검증하기 위해서다.
+ * Creates the surface composition from the validated declaration and the runtime port. Only page.js calls this internal function.
+ * It is a separate module so that the full snapshot and the failure cleanup can be verified without a browser.
  */
 export async function createSurfaceCompositionController(
   runtimePage,
@@ -160,11 +160,11 @@ export async function createSurfaceCompositionController(
     inThisDocument(element, name, view);
   }
 
-  // DOM surface에는 선언하거나 배치할 native plane이 없다. 여기서 호스트 composition API를
-  // 호출하면 lifecycle 경쟁이 생긴다: DOM 모듈은 첫 native surface sync 전에
-  // mount될 수 있고, surface가 제거된 뒤에도 frame을 계속 발행할 수 있다.
-  // hybrid surface는 아래 controller를 사용하고, DOM surface는 모듈을 위한
-  // lifecycle handle만 필요하다.
+  // A DOM surface has no native plane to declare or place. Calling the host composition API here
+  // creates a lifecycle race: a DOM module can be mounted before the first native surface sync,
+  // and can keep issuing frames after the surface is removed.
+  // A hybrid surface uses the controller below, and a DOM surface only needs
+  // the lifecycle handle for the module.
   if (declaration.kind === "dom") {
     let active = true;
     return Object.freeze({
@@ -180,7 +180,7 @@ export async function createSurfaceCompositionController(
   }
 
   const viewportOf = () => typeof viewport === "function" ? viewport() : viewport;
-  // 기본값: viewport 를 넘기지 않은 페이지는 문서 전체가 합성 뿌리다.
+  // default: for a page that did not pass viewport, the whole document is the composition root.
   const compositionRoot = viewportOf() ?? view.document.documentElement;
   const root = compositionRoot;
   const previousComposition = root.dataset.surfaceComposition;
@@ -191,7 +191,7 @@ export async function createSurfaceCompositionController(
   let observer = null;
   let changed = null;
   let resizeFrame = null;
-  // 관찰을 시작할 animation frame. 시작 전에 정리하면 취소한다.
+  // The animation frame that starts the observation. Cleanup before the start cancels it.
   let observeFrame = null;
   let pending = Promise.resolve();
   const inactiveError = () => Object.assign(
@@ -199,14 +199,14 @@ export async function createSurfaceCompositionController(
     { code: "SURFACE_COMPOSITION_INACTIVE" },
   );
   const reportFailure = (error) => {
-    // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
+    // default: the thrown value may not be an Error, so without message the value itself is written.
     const message = `surface composition failed: ${error?.message ?? error}`;
     runtimePage.surfaces.report(message);
     console.error(message);
   };
 
   let cleanupPromise = null;
-  // 기본값: 반복 호출은 동일한 정리 작업을 기다려야 한다.
+  // default: a repeated call must wait for the same cleanup operation.
   const detachAll = () => cleanupPromise ??= (async () => {
     active = false;
     observer?.disconnect();
@@ -221,7 +221,7 @@ export async function createSurfaceCompositionController(
     paintBoundary?.restore();
     restoreDataset(root, previousComposition);
     const failures = results.filter((result) => result.status === "rejected");
-    // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
+    // default: the thrown value may not be an Error, so without message the value itself is written.
     for (const failure of failures) runtimePage.surfaces.report(`surface composition cleanup failed: ${failure.reason?.message ?? failure.reason}`);
     if (failures.length) throw new AggregateError(failures.map(({ reason }) => reason), "surface composition cleanup failed");
   })();
@@ -283,16 +283,16 @@ export async function createSurfaceCompositionController(
       return work;
     };
 
-    // 지오메트리 변화는 옵저버가 잡는다 — 폴링하지 않는다.
-    // ResizeObserver 는 지역과 모든 조상과 뷰포트의 크기 변화를 잡고, scroll/resize 리스너는
-    // 창 크기와 스크롤을 잡는다. MutationObserver 는 스타일 변경으로 같은 크기의 위치 이동을
-    // 잡는다(예: 그리드가 left/top 을 바꿀 때 ResizeObserver 는 발화하지 않는다).
+    // Observers catch geometry changes; there is no polling.
+    // ResizeObserver catches size changes of the region, all its ancestors and the viewport, and the scroll and resize listeners catch
+    // the window size and the scroll. MutationObserver catches a position move of the same size caused by a style change
+    // (for example, ResizeObserver does not fire when a grid changes left or top).
     const submit = () => { place().catch(reportFailure); };
     observer = new view.ResizeObserver(submit);
-    // 관찰은 다음 animation frame 에 시작한다. 그 frame 의 관찰 round 보다 먼저 실행되므로 첫 관찰이 한 round 에 모두
-    // 전달된다. 관찰 round 도중(다른 callback 의 microtask)에 시작하면 이미 지나간 깊이의 첫 관찰이 다음 frame 으로
-    // 밀리고 WebKit 이 ResizeObserver loop 오류를 낸다(F32). 그 사이의 크기는 아래의 첫 place() 가 보내고, 그 뒤의 변화는
-    // 첫 관찰이 받는다.
+    // The observation starts at the next animation frame. That runs before the observation round of that frame, so the first observations are all
+    // delivered in one round. An observation that starts during the observation round (in the microtask of another callback) defers the first observation of a depth that has already passed
+    // to the next frame, and WebKit reports a ResizeObserver loop error (F32). The size in between is sent by the first place() below, and later changes are
+    // received by the first observation.
     observeFrame = view.requestAnimationFrame(() => {
       observeFrame = null;
       if (!active) return;

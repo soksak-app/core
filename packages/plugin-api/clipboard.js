@@ -1,4 +1,4 @@
-// surface 모듈과 애플리케이션 런타임이 공유하는 타입 있는 클립보드 기능.
+// The typed clipboard function that surface modules and the application runtime share.
 
 export const CLIPBOARD_TYPES = Object.freeze(["text", "png", "fileURLs"]);
 
@@ -38,7 +38,7 @@ function bytesFrom(value) {
   return bytes;
 }
 
-/** 명령이 아니라 셸 인자를 반환한다. */
+/** Returns shell arguments, not a command. */
 export function shellQuotePath(path) {
   if (typeof path !== "string" || path.length === 0) throw new ClipboardError("clipboard file path is invalid");
   return `'${path.replaceAll("'", "'\\''")}'`;
@@ -67,8 +67,8 @@ function readValue(type, response) {
 }
 
 /**
- * 애플리케이션 transport 위에 범위가 정해진 플러그인 기능을 만든다.
- * 호출자가 플러그인 전용 기능을 선택하지 않으면 `persistPNG` 는 의도적으로 뺀다.
+ * Creates a scoped plugin function on the application transport.
+ * `persistPNG` is omitted on purpose unless the caller selects the plugin-only function.
  */
 export function createClipboardBridge(call, { allowPersist = false } = {}) {
   if (typeof call !== "function") throw new TypeError("clipboard bridge requires a call function");

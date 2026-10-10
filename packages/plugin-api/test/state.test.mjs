@@ -1,4 +1,4 @@
-// 표면 없는 플러그인의 상태 모듈과 프로젝트 데이터 선언을 검사한다.
+// Checks the state module and the project data declaration of a plugin without a surface.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { checkProjectData, validateManifest } from "../index.js";

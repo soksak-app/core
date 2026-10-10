@@ -1,5 +1,5 @@
-// drawList 는 key 가 같은 요소를 문서에 둔 채 갱신한다. 누름과 뗌 사이에 눌린 요소가 문서에서 빠지면 WebKit 은
-// click 을 보내지 않는다(core docs/spec/exposure.md, F67).
+// drawList updates elements with the same key while leaving them in the document. When a pressed element is removed from the document between a press and a release, WebKit does not send
+// click (core docs/spec/exposure.md, F67).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
