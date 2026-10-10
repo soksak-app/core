@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F145.18: `make failures-check` (part of `make docs-check`, `scripts/check-failure-table.mjs`) reads the place of every error record that a host or the native library writes at a literal place and fails when the failure table of the diagnostics, in English or Korean, lacks it; the table gained the rows of the roughly one hundred places it omitted (events a host cannot deliver to a window, the endpoint, shutdown, windows, surfaces, documents, images, modals, sidecars, the WebKit children, screen capture and the input method).
 - F145.17: the trace of the browser, editor, hwp, shell and files plugins is tracked in the checklists of their own repositories (P17, E14, H12, P4, P20), against the entrance `context.runtime.log` of the plugin API; no core code changed.
 - F145.16: the event file of the files and shell sidecars is tracked in the checklists of their own repositories (S18 and S4), against the event contract, the field `cids` of the request envelope and the member `events` of `sidecar.json`; no core code changed.
 - F145.15.3: the first module of the main page emits the event `page.start` with `time_origin` and `url`, so a reload is a marked boundary in the timeline.

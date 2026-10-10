@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F145.18: `make failures-check`(`make docs-check`에 포함, `scripts/check-failure-table.mjs`)가 host나 네이티브 라이브러리가 리터럴 장소로 쓰는 모든 오류 기록의 장소를 읽고, diagnostics의 실패 표가 영어나 한국어에서 그것을 빠뜨리면 실패한다. 표는 빠뜨렸던 약 백 곳의 행(host가 창에 전달하지 못하는 event, endpoint, 종료, 창, 표면, 문서, 이미지, 모달, 사이드카, WebKit 자식, 화면 캡처, 입력기)을 얻었다.
 - F145.17: browser, editor, hwp, shell, files plugin의 trace는 plugin API의 입구 `context.runtime.log`를 향해 각 저장소의 체크리스트(P17, E14, H12, P4, P20)로 추적한다. core 코드는 바뀌지 않았다.
 - F145.16: files와 shell 사이드카의 event 파일은 event 계약, 요청 봉투의 필드 `cids`, `sidecar.json`의 member `events`를 향해 각 저장소의 체크리스트(S18, S4)로 추적한다. core 코드는 바뀌지 않았다.
 - F145.15.3: 메인 page의 첫 모듈이 `time_origin`과 `url`을 가진 event `page.start`를 내므로, reload가 timeline의 표시된 경계가 된다.

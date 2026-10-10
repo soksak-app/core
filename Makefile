@@ -1,9 +1,10 @@
 SHELL := /bin/sh
 
-.PHONY: events-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory app-update-check
+.PHONY: events-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
+	@node scripts/check-failure-table.mjs
 	@node packages/plugin-api/records-check.js
 
 # 문서와 설정 주석이 저장소에 관한 사실만 적는지 검사한다(AGENTS.md Documentation).
@@ -49,6 +50,10 @@ boundaries:
 # `node scripts/check-events.mjs --logs <설정 폴더>...` 이다(docs/operations/examples.md).
 events-check:
 	@node scripts/check-events.mjs
+
+# 호스트와 네이티브 라이브러리가 소스에 적힌 장소로 쓰는 오류 기록마다 docs/spec/diagnostics.md 의 실패 표에 행이 있는지 검사한다.
+failures-check:
+	@node scripts/check-failure-table.mjs
 
 # registry window check 의 TLS 인증서(docs/operations/examples.md). 검사 소유 인증 기관과 127.0.0.1 의 server 인증서를
 # 만든다. 진단 build 의 check 애플리케이션은 --registry-ca <폴더>/ca.pem 으로 시작한다. 이미 있으면 바꾸지 않는다.

@@ -44,6 +44,7 @@ lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/tes
 lane("test runner", "js-ts", ["scripts/test-runner.mjs"], ["scripts/test/test-runner.test.mjs"]),
 lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/test-discovery.test.mjs"]),
 lane("event catalog", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/check-events.test.mjs"]),
+lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/test/check-failure-table.test.mjs"]),
 lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs"]),
 lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
 lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/test-evidence.test.mjs"]),
@@ -1465,6 +1466,17 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/page-log.test.mjs", id: "the start of a page is the event page.start with the origin of the document clock and its address" },
     ],
     expected: "The sampler of both hosts reads the host and every registered sidecar process, the surface lifecycle of the trace holds the geometry, and a document of the main page marks its start.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.18",
+    implementation: [
+      { file: "scripts/check-failure-table.mjs", symbol: "export function recordsMissingFromTable" },
+    ],
+    tests: [
+      { file: "scripts/test/check-failure-table.test.mjs", id: "every error record that a host or the native library writes at a literal place is in the failure table of the diagnostics" },
+    ],
+    expected: "Every error record that a host or the native library writes at a literal place is a row of the failure table of the diagnostics in both languages.",
     levels: ["unit"],
   },
   {
