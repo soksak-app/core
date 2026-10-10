@@ -35,7 +35,10 @@ export function fillPicker(el, ask, groups, mark) {
       b.type = "button";
       b.dataset.key = item.key;
       b.dataset.active = String(item.active === true);
-      if (heading) b.dataset.group = heading.id;
+      if (heading) {
+        b.dataset.group = heading.id;
+        b.style.setProperty("--depth", String(heading.depth));
+      }
       // 기본값: 플러그인 표시는 16 단위 그림이고, 다른 크기의 그림을 넘기는 항목만 viewBox 를 함께 준다.
       const box = item.viewBox === undefined ? "0 0 16 16" : item.viewBox;
       b.innerHTML = `<svg viewBox="${box}" aria-hidden="true">${item.svg}</svg>` +
