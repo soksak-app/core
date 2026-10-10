@@ -1689,6 +1689,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F104",
+    implementation: [
+      { file: "scripts/check-comment-language.mjs", symbol: "export function findKoreanComments" },
+    ],
+    tests: [
+      { file: "scripts/test/comment-language.test.mjs", id: "no tracked source file of the repository holds a Hangul comment" },
+      { file: "scripts/test/comment-language.test.mjs", id: "a regular expression literal with a quote does not hide the comments after it" },
+    ],
+    expected: "Every comment of the tracked source files is English, and the repository test of pnpm test reports each comment line that holds Hangul.",
+    levels: ["unit"],
+  },
+  {
     id: "F140",
     implementation: [
       { file: "packages/workbench/file-open.js", symbol: "export function chooseOpener" },
