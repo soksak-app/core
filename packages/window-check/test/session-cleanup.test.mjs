@@ -20,7 +20,6 @@ test("probe body fails", async (t) => {
   const session = {
     app: { name: "probe" },
     cleanups: [async () => { throw new Error("probe press stayed open"); }, async () => {}],
-    logStart: 0,
     expectedErrors: [],
   };
   t.after(() => finishSession(t, session, () => {}));
@@ -39,26 +38,30 @@ test("a cleanup failure is reported when the check body already failed", { timeo
   assert.match(result.stdout, /# cleanup failed: Error: probe press stayed open/);
 });
 
-// 본문이 통과해도 검사 동안 애플리케이션 로그에 쓰인 오류 줄은 검사의 실패다. reload 가 문서에서 지운 오류도
-// 로그에는 남는다. 검사가 시작하기 전의 줄은 그 검사의 것이 아니고, 검사가 선언한 오류는 실패가 아니다(F31).
-/** The event log of a probe application: log.open, and an error event when the probe asks for one. */
-function writeEventLog(dir, eventError) {
-  const open = JSON.stringify({ ts_us: 1791000000000001, seq: 1, level: "info", layer: "host", event: "log.open", fields: { schema: 1 } });
-  const error = eventError === null ? "" : `\n${JSON.stringify({ ts_us: 1791000000000002, seq: 2, level: "error", layer: "host", event: eventError, fields: { text: "closed" } })}`;
-  writeFileSync(join(dir, "logs", "host-1-1.jsonl"), `${open}${error}\n`);
+// A check that passes its body still fails on an error event that the application stored in its event log during the check.
+// A reload removes the error from the document but the event log keeps it. An event stored before the check started is not
+// the check's, and an error that the check declares is not a failure (F31).
+const event = (seq, level, name, fields, layer = "host") =>
+  JSON.stringify({ ts_us: 1791000000000000 + seq, seq, level, layer, event: name, fields });
+
+/** The probe's event log, and the number of bytes that were in it before the check started. */
+function writeEventLog(dir, lines) {
+  const before = `${lines.before.join("\n")}\n`;
+  writeFileSync(join(dir, "logs", "host-1-1.jsonl"), `${before}${lines.during.join("\n")}${lines.during.length ? "\n" : ""}`);
+  return Buffer.byteLength(before);
 }
 
-function runLoggedError(t, expected, eventError = null) {
+const OPEN = event(1, "info", "log.open", { schema: 1 });
+const PREVIOUS = event(2, "error", "page.record.error", { where: "rejected", text: "an error of the previous check" }, "page");
+const RESIZE = event(4, "error", "page.record.error", { where: "page", text: "ResizeObserver loop completed with undelivered notifications. @ wails://localhost/:0" }, "page");
+
+function runLoggedError(t, expected, during) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-session-log-error-"));
-  // 검사는 읽은 위치를 설정 폴더 옆의 파일에 남긴다.
-  t.after(() => rmSync(`${dir}.log-offset`, { force: true }));
+  // The check keeps the positions it read in a file beside the configuration folder.
   t.after(() => rmSync(`${dir}.event-offsets`, { force: true }));
   t.after(() => rmSync(dir, { recursive: true }));
   mkdirSync(join(dir, "logs"));
-  writeEventLog(dir, eventError);
-  const before = "2026-10-09T05:50:00.000Z error page rejected: an error of the previous check\n";
-  writeFileSync(join(dir, "logs", "application.log"), before +
-    "2026-10-09T05:50:01.000Z info page verify: 18 pass\n2026-10-09T05:50:02.000Z error page page: ResizeObserver loop completed with undelivered notifications. @ wails://localhost/:0\n");
+  const started = writeEventLog(dir, { before: [OPEN, PREVIOUS], during });
   const file = join(dir, "probe.test.mjs");
   writeFileSync(file, `import test from "node:test";
 import { finishSession } from ${JSON.stringify(app)};
@@ -66,8 +69,7 @@ test("probe body passes", async (t) => {
   const session = {
     app: { name: "probe", configDir: ${JSON.stringify(dir)} },
     cleanups: [],
-    logStart: ${Buffer.byteLength(before)},
-    eventStart: {},
+    eventStart: { "host-1-1.jsonl": ${started} },
     expectedErrors: ${expected},
   };
   t.after(() => finishSession(t, session, () => {}));
@@ -78,39 +80,36 @@ test("probe body passes", async (t) => {
     { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
 }
 
+const FAILED = event(3, "error", "host.test.failed", { text: "closed" });
+
 test("an error event of the event log fails the check unless it is declared", { timeout: 30000 }, (t) => {
-  const undeclared = runLoggedError(t, "[]", "host.test.failed");
+  const undeclared = runLoggedError(t, "[]", [FAILED, RESIZE]);
   assert.equal(undeclared.status, 1, undeclared.stdout + undeclared.stderr);
   assert.match(undeclared.stdout, /# application error: error host host\.test\.failed: \{"text":"closed"\}/);
   assert.match(undeclared.stdout, /probe: the application logged 2 errors that the check did not declare/);
-  const declared = runLoggedError(t, "[/host\\.test\\.failed/, /ResizeObserver loop/]", "host.test.failed");
+  assert.doesNotMatch(undeclared.stdout, /an error of the previous check/);
+  const declared = runLoggedError(t, "[/host\\.test\\.failed/, /ResizeObserver loop/]", [FAILED, RESIZE]);
   assert.equal(declared.status, 0, declared.stdout + declared.stderr);
 });
 
-test("an error line that the application logged during the check fails the check unless it is declared", { timeout: 30000 }, (t) => {
-  const result = runLoggedError(t, "[]");
+test("a record event of level error fails the check as the line of the text form unless it is declared", { timeout: 30000 }, (t) => {
+  const result = runLoggedError(t, "[]", [RESIZE]);
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /# application error: error page page: ResizeObserver loop completed/);
   assert.match(result.stdout, /probe: the application logged 1 error that the check did not declare/);
-  assert.doesNotMatch(result.stdout, /an error of the previous check/);
-});
-
-test("an error line that the check declares does not fail the check", { timeout: 30000 }, (t) => {
-  const result = runLoggedError(t, "[/ResizeObserver loop/]");
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /# application error: error page page: ResizeObserver loop completed/);
+  const declared = runLoggedError(t, "[/ResizeObserver loop/]", [RESIZE]);
+  assert.equal(declared.status, 0, declared.stdout + declared.stderr);
+  assert.match(declared.stdout, /# application error: error page page: ResizeObserver loop completed/);
 });
 
 // 검사가 시작한 녹화는 검사가 끝날 때 지워져 있어야 한다. 남은 녹화 폴더는 검사의 실패이고, 다음 검사를 위해 지운다
 // (AGENTS.md, docs/features.md F83). 검사가 시작하기 전부터 있던 폴더는 그 검사의 것이 아니다.
 test("a recording folder that the check left fails the check and is removed", { timeout: 30000 }, (t) => {
   const dir = mkdtempSync(join(tmpdir(), "soksak-session-recording-"));
-  t.after(() => rmSync(`${dir}.log-offset`, { force: true }));
   t.after(() => rmSync(dir, { recursive: true }));
   t.after(() => rmSync(`${dir}.event-offsets`, { force: true }));
   mkdirSync(join(dir, "logs"));
-  writeEventLog(dir, null);
-  writeFileSync(join(dir, "logs", "application.log"), "");
+  writeEventLog(dir, { before: [OPEN], during: [] });
   mkdirSync(join(dir, "logs", "captures", "earlier"), { recursive: true });
   const file = join(dir, "probe.test.mjs");
   writeFileSync(file, `import test from "node:test";
@@ -119,7 +118,7 @@ import { join } from "node:path";
 import { finishSession, recordingFolders } from ${JSON.stringify(app)};
 test("probe body passes", async (t) => {
   const configDir = ${JSON.stringify(dir)};
-  const session = { app: { name: "probe", configDir }, cleanups: [], logStart: 0, eventStart: {}, expectedErrors: [],
+  const session = { app: { name: "probe", configDir }, cleanups: [], eventStart: {}, expectedErrors: [],
     recordingsBefore: recordingFolders(configDir) };
   mkdirSync(join(configDir, "logs", "captures", "left"));
   writeFileSync(join(configDir, "logs", "captures", "left", "frame-0001.bgra"), "x");

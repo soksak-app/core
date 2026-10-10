@@ -8,15 +8,13 @@ use std::process::{Command, Stdio};
 #[path = "support/records.rs"]
 mod records;
 
-use soksak_host_tauriv2::application_log::{
-    application_log_path, log_error, open_log, start_application_log,
-};
+use soksak_host_tauriv2::application_log::{log_error, open_log, start_standard_error};
 
 /// 자식 프로세스에 설정 디렉터리를 알리는 환경 변수.
 const CHILD: &str = "SOKSAK_APPLICATION_LOG_CHILD";
 
 const NAME: &str =
-    "start_application_log_writes_the_start_line_and_takes_the_standard_error_of_the_process_and_its_children";
+    "start_standard_error_writes_the_start_line_and_takes_the_standard_error_of_the_process_and_its_children";
 
 // contract: log.open.rotates-at-100mb
 #[test]
@@ -89,11 +87,11 @@ fn open_log_appends_to_a_smaller_file_and_creates_a_private_file() {
 
 // contract: log.application.start-replaces-standard-error
 #[test]
-fn start_application_log_writes_the_start_line_and_takes_the_standard_error_of_the_process_and_its_children(
+fn start_standard_error_writes_the_start_line_and_takes_the_standard_error_of_the_process_and_its_children(
 ) {
     if let Some(config) = std::env::var_os(CHILD) {
-        if let Err(error) = start_application_log(std::path::Path::new(&config), "com.soksak.test")
-        {
+        let writer = records::start_writer(std::path::Path::new(&config));
+        if let Err(error) = start_standard_error(std::path::Path::new(&config), "com.soksak.test") {
             println!("{error}");
             std::process::exit(2);
         }
@@ -104,6 +102,7 @@ fn start_application_log_writes_the_start_line_and_takes_the_standard_error_of_t
             .status()
             .unwrap();
         assert!(status.success());
+        writer.flush(std::time::Duration::from_secs(5)).unwrap();
         return;
     }
     let config = tempfile::tempdir().unwrap();
@@ -119,12 +118,22 @@ fn start_application_log_writes_the_start_line_and_takes_the_standard_error_of_t
         output.status,
         String::from_utf8_lossy(&output.stdout)
     );
-    let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
-    let lines: Vec<&str> = log.lines().collect();
-    let start = regex_start(lines.first().copied().unwrap_or(""));
+    // The raw standard error of the process and its children is in the stderr file of the run, beside the event log.
+    assert_eq!(
+        records::standard_error_text(config.path()),
+        "host line\nchild line\n"
+    );
+    // The run record is an event of the event log, not a line of the stderr file.
+    let events = records::read_events(&records::event_log_path(config.path()));
+    let run = events.last().unwrap();
     assert!(
-        start && lines.get(1) == Some(&"host line") && lines.get(2) == Some(&"child line"),
-        "application log {lines:?}"
+        run["event"] == "host.record.info"
+            && run["fields"]["where"] == "run"
+            && run["fields"]["text"]
+                .as_str()
+                .unwrap()
+                .starts_with("com.soksak.test pid "),
+        "event log {events:?}"
     );
 }
 
@@ -132,8 +141,7 @@ fn start_application_log_writes_the_start_line_and_takes_the_standard_error_of_t
 #[test]
 fn log_error_writes_an_error_event_to_the_event_log() {
     if let Some(config) = std::env::var_os(CHILD) {
-        if let Err(error) = start_application_log(std::path::Path::new(&config), "com.soksak.test")
-        {
+        if let Err(error) = start_standard_error(std::path::Path::new(&config), "com.soksak.test") {
             println!("{error}");
             std::process::exit(2);
         }
@@ -161,12 +169,14 @@ fn log_error_writes_an_error_event_to_the_event_log() {
         String::from_utf8_lossy(&output.stdout)
     );
     let events = records::read_events(&records::event_log_path(config.path()));
+    // The run record precedes it.
+    let record = events.last().unwrap();
     assert!(
-        events.len() == 2
-            && events[1]["event"] == "host.record.error"
-            && events[1]["level"] == "error"
-            && events[1]["fields"]["where"] == "surface input"
-            && events[1]["fields"]["text"] == "the window has no content view",
+        events.len() == 3
+            && record["event"] == "host.record.error"
+            && record["level"] == "error"
+            && record["fields"]["where"] == "surface input"
+            && record["fields"]["text"] == "the window has no content view",
         "event log {events:?}"
     );
 }
@@ -184,22 +194,6 @@ fn is_record(line: &str) -> bool {
         && matches!(level, "error" | "info")
         && matches!(layer, "page" | "host" | "native" | "sidecar")
         && rest.contains(": ")
-}
-
-/// 실행의 첫 줄 `<ISO-8601 시각> info host run: com.soksak.test pid <pid>` 인지 판정한다.
-fn regex_start(line: &str) -> bool {
-    let Some((time, rest)) = line.split_once(' ') else {
-        return false;
-    };
-    let digits = |text: &str| !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit());
-    let shape = time.len() == 24
-        && time.ends_with('Z')
-        && time.as_bytes()[10] == b'T'
-        && time.as_bytes()[19] == b'.';
-    let Some(pid) = rest.strip_prefix("info host run: com.soksak.test pid ") else {
-        return false;
-    };
-    shape && digits(pid)
 }
 
 // contract: log.record.one-line
@@ -221,8 +215,7 @@ fn a_record_is_one_line_and_escapes_a_line_feed() {
 #[test]
 fn log_info_writes_an_info_event_to_the_event_log() {
     if let Some(config) = std::env::var_os(CHILD) {
-        if let Err(error) = start_application_log(std::path::Path::new(&config), "com.soksak.test")
-        {
+        if let Err(error) = start_standard_error(std::path::Path::new(&config), "com.soksak.test") {
             println!("{error}");
             std::process::exit(2);
         }
@@ -250,12 +243,14 @@ fn log_info_writes_an_info_event_to_the_event_log() {
         String::from_utf8_lossy(&output.stdout)
     );
     let events = records::read_events(&records::event_log_path(config.path()));
+    // The run record precedes it.
+    let record = events.last().unwrap();
     assert!(
-        events.len() == 2
-            && events[1]["event"] == "host.record.info"
-            && events[1]["level"] == "info"
-            && events[1]["fields"]["where"] == "webkit children"
-            && events[1]["fields"]["text"] == "pid 7: gone",
+        events.len() == 3
+            && record["event"] == "host.record.info"
+            && record["level"] == "info"
+            && record["fields"]["where"] == "webkit children"
+            && record["fields"]["text"] == "pid 7: gone",
         "event log {events:?}"
     );
 }

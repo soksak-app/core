@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 #[path = "support/records.rs"]
 mod records;
 
-use soksak_host_tauriv2::application_log::start_application_log;
+use soksak_host_tauriv2::application_log::start_standard_error;
 
 const CHILD: &str = "SOKSAK_PANIC_HOOK_CHILD";
 
@@ -13,8 +13,7 @@ const CHILD: &str = "SOKSAK_PANIC_HOOK_CHILD";
 #[test]
 fn a_panic_writes_an_error_event_to_the_event_log() {
     if let Some(config) = std::env::var_os(CHILD) {
-        if let Err(error) = start_application_log(std::path::Path::new(&config), "com.soksak.test")
-        {
+        if let Err(error) = start_standard_error(std::path::Path::new(&config), "com.soksak.test") {
             println!("{error}");
             std::process::exit(2);
         }

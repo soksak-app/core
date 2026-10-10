@@ -1,17 +1,19 @@
-//! A fatal signal of the host after its application log is open writes an error line (docs/spec/diagnostics.md).
+//! A fatal signal of the host after its standard error file is open writes an error line (docs/spec/diagnostics.md).
 
 use std::process::{Command, Stdio};
 
-use soksak_host_tauriv2::application_log::{application_log_path, start_application_log};
+#[path = "support/records.rs"]
+mod records;
+
+use soksak_host_tauriv2::application_log::start_standard_error;
 
 const CHILD: &str = "SOKSAK_FATAL_SIGNAL_CHILD";
 
 // contract: log.fatal-signal.writes-an-error-line
 #[test]
-fn a_fatal_signal_writes_an_error_line_to_the_application_log() {
+fn a_fatal_signal_writes_an_error_line_to_the_standard_error_file() {
     if let Some(config) = std::env::var_os(CHILD) {
-        if let Err(error) = start_application_log(std::path::Path::new(&config), "com.soksak.test")
-        {
+        if let Err(error) = start_standard_error(std::path::Path::new(&config), "com.soksak.test") {
             println!("{error}");
             std::process::exit(2);
         }
@@ -21,7 +23,7 @@ fn a_fatal_signal_writes_an_error_line_to_the_application_log() {
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
-            "a_fatal_signal_writes_an_error_line_to_the_application_log",
+            "a_fatal_signal_writes_an_error_line_to_the_standard_error_file",
             "--nocapture",
             "--test-threads=1",
         ])
@@ -37,7 +39,7 @@ fn a_fatal_signal_writes_an_error_line_to_the_application_log() {
         output.status,
         String::from_utf8_lossy(&output.stdout)
     );
-    let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
+    let log = records::standard_error_text(config.path());
     // A record is `<time> <level> <layer> <where>: <text>`; the fatal record of the native library has no other text.
     let fatal: Vec<&str> = log
         .lines()
@@ -47,6 +49,6 @@ fn a_fatal_signal_writes_an_error_line_to_the_application_log() {
     assert_eq!(
         fatal,
         ["error native fatal: SIGABRT"],
-        "application log {log:?}"
+        "standard error file {log:?}"
     );
 }

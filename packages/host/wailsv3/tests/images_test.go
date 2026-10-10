@@ -388,8 +388,14 @@ func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 
 // contract: images.wait.timeout-writes-no-log-line
 func TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine(t *testing.T) {
-	if config := os.Getenv(applicationLogChild); config != "" {
-		if err := host.StartApplicationLog(config, "com.soksak.test"); err != nil {
+	if config := os.Getenv(standardErrorChild); config != "" {
+		log, err := host.StartHostEventLog(config)
+		if err != nil {
+			os.Stdout.WriteString(err.Error() + "\n")
+			os.Exit(2)
+		}
+		host.UseHostEventLog(log)
+		if err := host.StartStandardError(config, "com.soksak.test"); err != nil {
 			os.Stdout.WriteString(err.Error() + "\n")
 			os.Exit(2)
 		}
@@ -405,21 +411,21 @@ func TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine(t *testing.T
 		if err := images.WaitCurrentError(20 * time.Millisecond); err == nil || err.Error() != "presentationTimeout" {
 			t.Fatalf("the presentation wait ended with %v", err)
 		}
+		if err := log.Flush(5 * time.Second); err != nil {
+			t.Fatal(err)
+		}
 		return
 	}
 	config := t.TempDir()
 	command := exec.Command(os.Args[0], "-test.run=^TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine$")
-	command.Env = append(os.Environ(), applicationLogChild+"="+config)
+	command.Env = append(os.Environ(), standardErrorChild+"="+config)
 	if output, err := command.Output(); err != nil {
 		t.Fatalf("child ended with %v, output %q", err, output)
 	}
-	data, err := os.ReadFile(host.ApplicationLogPath(config))
-	if err != nil {
-		t.Fatal(err)
-	}
-	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-	if len(lines) != 1 || !strings.Contains(lines[0], " info host run: com.soksak.test pid ") {
-		t.Fatalf("a presentation timeout wrote host lines: %q", lines)
+	// The wait ended with its own failure, so the event log holds log.open and the run record and nothing else.
+	events := readHostEventLog(t, config)
+	if len(events) != 2 || events[1]["fields"].(map[string]any)["where"] != "run" {
+		t.Fatalf("a presentation timeout wrote events: %v", events)
 	}
 }
 

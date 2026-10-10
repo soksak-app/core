@@ -92,7 +92,7 @@ const FLUSH_LOG_CHILD: &str = "SOKSAK_FLUSH_LOG_CHILD";
 #[test]
 fn a_buffered_close_is_recorded() {
     if let Some(config) = std::env::var_os(FLUSH_LOG_CHILD) {
-        soksak_host_tauriv2::application_log::start_application_log(
+        soksak_host_tauriv2::application_log::start_standard_error(
             Path::new(&config),
             "com.soksak.test",
         )

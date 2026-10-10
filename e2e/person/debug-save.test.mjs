@@ -19,24 +19,27 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await s.run("core.debug.open");
-    await s.until("core.debug", (debug) => debug.open && debug.entries.some((file) => file.path === "logs/application.log"),
-      "the debug view did not list the application log");
+    const isEventLog = (file) => /^logs\/host-.+\.jsonl$/.test(file.path);
+    const listing = await s.until("core.debug", (debug) => debug.open && debug.entries.some(isEventLog),
+      "the debug view did not list the event log of the host");
     s.cleanup(() => s.run("core.debug.close"));
-    const source = readFileSync(join(app.configDir, "logs", "application.log"));
+    const entry = listing.entries.find(isEventLog).path;
+    const name = entry.split("/").at(-1);
+    const source = readFileSync(join(app.configDir, entry));
 
     // The panel shows the name of the file; the person presses Save in it.
-    t.diagnostic(`${app.name}: PRESS SAVE in the save panel (name: application.log)`);
-    const saved = await s.run("core.debug.save", { path: "logs/application.log" }, undefined, { timeout: PERSON });
+    t.diagnostic(`${app.name}: PRESS SAVE in the save panel (name: ${name})`);
+    const saved = await s.run("core.debug.save", { path: entry }, undefined, { timeout: PERSON });
     assert.equal(typeof saved?.saved, "string", `the panel answered ${JSON.stringify(saved)}`);
     s.cleanup(() => rmSync(saved.saved, { force: true }));
-    assert.ok(saved.saved.endsWith("application.log") || saved.saved.includes("application"), `the saved file is ${saved.saved}`);
+    assert.ok(saved.saved.endsWith(name), `the saved file is ${saved.saved}`);
     assert.ok(existsSync(saved.saved), `${saved.saved} was not written`);
-    // The log grows while the view runs, so the saved file starts with the log that existed before the save.
-    assert.ok(readFileSync(saved.saved).subarray(0, source.length).equals(source), "the saved file does not start with the application log");
+    // The event log grows while the view runs, so the saved file starts with the log that existed before the save.
+    assert.ok(readFileSync(saved.saved).subarray(0, source.length).equals(source), "the saved file does not start with the event log");
 
     // The person presses Cancel in the panel.
     t.diagnostic(`${app.name}: PRESS CANCEL in the save panel`);
-    const cancelled = await s.run("core.debug.save", { path: "logs/application.log" }, undefined, { timeout: PERSON });
+    const cancelled = await s.run("core.debug.save", { path: entry }, undefined, { timeout: PERSON });
     assert.equal(cancelled?.saved ?? null, null, `a cancelled panel answered ${JSON.stringify(cancelled)}`);
   });
 }

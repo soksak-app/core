@@ -1,6 +1,7 @@
-// 호스트가 애플리케이션 로그를 설정 디렉터리의 파일에 남기는지 검사한다(docs/spec/hosts.md#application-log).
+// The host stores its records in the event log and its raw standard error in the stderr file of the run, under the logs folder
+// of the configuration directory (docs/spec/logging.md#files).
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -9,7 +10,7 @@ import { readEventOffsets, untilEventLine } from "@soksak/window-check/event-log
 import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the event log holds the records the page reports and the application log holds the run line`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: the event log holds the run record and the records the page reports`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -24,11 +25,10 @@ for (const app of Object.values(APPS)) {
     await s.run("core.focus.set", { name: "core.library.search" });
     // The transcript holds the record in the text form of the application log.
     await transcript.until((lines) => lines.includes(`info page page: ${line}`), `the page did not report "${line}"`);
-    const file = join(s.app.configDir, "logs", "application.log");
-    assert.ok(existsSync(file), `${file} does not exist`);
-    const log = readFileSync(file, "utf8").split("\n");
-    assert.ok(log.some((entry) => /^\S+ info host run: \S+ pid \d+$/.test(entry)),
-      `${file} has no run start line: ${JSON.stringify(log.slice(0, 5))}`);
+    const logs = readdirSync(join(s.app.configDir, "logs"));
+    assert.ok(logs.some((name) => /^host-.+\.jsonl$/.test(name)), `logs/ holds no host event log: ${JSON.stringify(logs)}`);
+    const run = await untilEventLine(s.app.configDir, {}, (entry) => /^info host run: \S+ pid \d+$/.test(entry), 10000);
+    assert.ok(run, "the event log has no run record");
     // The writer stores the record at its next batch, so the check reads the event log until the record is there.
     assert.equal(await untilEventLine(s.app.configDir, offsets, (entry) => entry === `info page page: ${line}`, 10000), `info page page: ${line}`);
   });
@@ -39,7 +39,9 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    const file = join(s.app.configDir, "logs", "application.log");
+    const files = readdirSync(join(s.app.configDir, "logs")).filter((name) => /^host-.+\.stderr$/.test(name));
+    assert.equal(files.length >= 1, true, "logs/ holds no stderr file of a run");
+    const file = join(s.app.configDir, "logs", files.sort().at(-1));
     const offset = readFileSync(file).length;
     // 새로고침이 멈춘 요청에 쓴 호스트 응답은 사라지고 Wails 는 그 실패를 기록한다(docs/spec/native-host.md#page-reload).
     for (let reload = 0; reload < 2; reload++) await s.run("host.window.reload");

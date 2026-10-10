@@ -816,7 +816,7 @@ const CLOSE_CHILD: &str = "SOKSAK_ENDPOINT_CLOSE_CHILD";
 fn the_endpoint_records_why_a_connection_closes() {
     if let Some(config) = std::env::var_os(CLOSE_CHILD) {
         let config = Path::new(&config);
-        soksak_host_tauriv2::application_log::start_application_log(config, "com.soksak.test")
+        soksak_host_tauriv2::application_log::start_standard_error(config, "com.soksak.test")
             .unwrap();
         let writer = records::start_writer(config);
         let (fake, calls) = Fake::new();
@@ -905,7 +905,7 @@ const TIMEOUT_CHILD: &str = "SOKSAK_ENDPOINT_TIMEOUT_CHILD";
 fn the_endpoint_records_a_timeout_of_a_request() {
     if let Some(config) = std::env::var_os(TIMEOUT_CHILD) {
         let config = Path::new(&config);
-        soksak_host_tauriv2::application_log::start_application_log(config, "com.soksak.test")
+        soksak_host_tauriv2::application_log::start_standard_error(config, "com.soksak.test")
             .unwrap();
         let writer = records::start_writer(config);
         let (fake, _calls) = Fake::new();

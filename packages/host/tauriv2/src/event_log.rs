@@ -120,6 +120,25 @@ const HOST_BATCH_INTERVAL: Duration = Duration::from_millis(100);
 const HOST_ROTATE_BYTES: u64 = 100 << 20;
 const HOST_GENERATIONS: usize = 5;
 
+/// The identifier of this run, shared by the files of the run: the start time in seconds and the process identifier.
+fn process_boot() -> &'static str {
+    static BOOT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    BOOT.get_or_init(|| {
+        let seconds = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock is before the Unix epoch")
+            .as_secs();
+        format!("{seconds}-{}", std::process::id())
+    })
+}
+
+/// The stderr file of this run under the logs folder of `config`.
+pub fn standard_error_path(config: &Path) -> PathBuf {
+    config
+        .join("logs")
+        .join(format!("host-{}.stderr", process_boot()))
+}
+
 /// The layers of the event contract (docs/spec/logging.md#event).
 const LAYERS: [&str; 5] = ["native", "host", "page", "plugin", "sidecar"];
 
@@ -137,14 +156,10 @@ impl EventLog {
         let system = crate::platform::current()?;
         // A platform that cannot pull the native ring fails here, at the start, instead of running without native events.
         system.pull_native_events(&mut [0u8; 1])?;
-        let seconds = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|e| format!("clock is before the Unix epoch: {e}"))?
-            .as_secs();
         EventLog::start(Options {
             directory: config.join("logs"),
             role: "host".into(),
-            boot: format!("{seconds}-{}", std::process::id()),
+            boot: process_boot().to_string(),
             queue_events: HOST_QUEUE_EVENTS,
             queue_bytes: HOST_QUEUE_BYTES,
             batch_interval: HOST_BATCH_INTERVAL,

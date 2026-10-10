@@ -154,6 +154,23 @@ const (
 	hostGenerations   = 5
 )
 
+var (
+	bootOnce sync.Once
+	bootName string
+)
+
+// processBoot is the identifier of this run, shared by the files of the run: the start time in seconds and the process
+// identifier.
+func processBoot() string {
+	bootOnce.Do(func() { bootName = fmt.Sprintf("%d-%d", time.Now().Unix(), os.Getpid()) })
+	return bootName
+}
+
+// StandardErrorPath is the stderr file of this run under the logs folder of config.
+func StandardErrorPath(config string) string {
+	return filepath.Join(config, "logs", "host-"+processBoot()+".stderr")
+}
+
 // StartHostEventLog starts the writer of the host in logs/ of the configuration folder; the boot identifier is the
 // start time in seconds and the process identifier.
 func StartHostEventLog(config string) (*EventLog, error) {
@@ -174,7 +191,7 @@ func StartHostEventLog(config string) (*EventLog, error) {
 			}
 			return events, bytes
 		},
-		Directory: filepath.Join(config, "logs"), Role: "host", Boot: fmt.Sprintf("%d-%d", time.Now().Unix(), os.Getpid()),
+		Directory: filepath.Join(config, "logs"), Role: "host", Boot: processBoot(),
 		QueueEvents: hostQueueEvents, QueueBytes: hostQueueBytes, BatchInterval: hostBatchInterval,
 		RotateBytes: hostRotateBytes, Generations: hostGenerations,
 	})

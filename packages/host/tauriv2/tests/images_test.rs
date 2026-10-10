@@ -1,7 +1,7 @@
 //! 그림 봉투의 의사결정 로직과 표현 확인을 검사한다.
 
 use serde_json::json;
-use soksak_host_tauriv2::application_log::{application_log_path, start_application_log};
+use soksak_host_tauriv2::application_log::start_standard_error;
 use soksak_host_tauriv2::images::{
     after_present, decide, handle_envelope, handle_envelope_with_recovery, Configure, Decision,
     Images, Key,
@@ -381,8 +381,7 @@ const APPLICATION_LOG_CHILD: &str = "SOKSAK_APPLICATION_LOG_CHILD";
 #[test]
 fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
     if let Some(config) = std::env::var_os(APPLICATION_LOG_CHILD) {
-        if let Err(error) = start_application_log(std::path::Path::new(&config), "com.soksak.test")
-        {
+        if let Err(error) = start_standard_error(std::path::Path::new(&config), "com.soksak.test") {
             println!("{error}");
             std::process::exit(2);
         }
@@ -421,17 +420,10 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
         output.status,
         String::from_utf8_lossy(&output.stdout)
     );
-    let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
-    let lines: Vec<&str> = log.lines().collect();
-    assert!(
-        lines.len() == 1 && lines[0].contains(" info host run: com.soksak.test pid "),
-        "a presentation timeout wrote host lines: {lines:?}"
-    );
-    // The event log holds log.open and no record of the host.
+    // The wait ended with its own failure, so the event log holds log.open and the run record and nothing else.
     let events = records::read_events(&records::event_log_path(config.path()));
-    assert_eq!(
-        events.len(),
-        1,
+    assert!(
+        events.len() == 2 && events[1]["fields"]["where"] == "run",
         "a presentation timeout wrote events: {events:?}"
     );
 }
@@ -1095,7 +1087,7 @@ const IMAGE_FRAME_CHILD: &str = "SOKSAK_IMAGE_FRAME_CHILD";
 #[test]
 fn image_frame_refusals_are_recorded() {
     if let Some(config) = std::env::var_os(IMAGE_FRAME_CHILD) {
-        start_application_log(std::path::Path::new(&config), "com.soksak.test").unwrap();
+        start_standard_error(std::path::Path::new(&config), "com.soksak.test").unwrap();
         let writer = records::start_writer(std::path::Path::new(&config));
         let images = Images::default();
         let key: Key = ("tab-1".to_string(), "view".to_string());

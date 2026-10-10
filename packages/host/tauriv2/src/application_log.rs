@@ -1,7 +1,6 @@
 //! 애플리케이션 로그(docs/spec/hosts.md#application-log).
 
 use std::fs::File;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::platform;
@@ -120,11 +119,6 @@ pub fn rotate_generations(path: &Path) -> Result<(), String> {
         .map_err(|error| format!("rotate {}: {error}", path.display()))
 }
 
-/// 설정 디렉터리 config 의 애플리케이션 로그 경로다.
-pub fn application_log_path(config: &Path) -> PathBuf {
-    config.join("logs").join("application.log")
-}
-
 /// 영속 서비스 program 의 표준 오류를 받는 로그 경로다. basename 은 실행 파일 이름이다.
 pub fn service_log_path(config: &Path, basename: &str) -> PathBuf {
     config.join("logs").join(format!("{basename}.log"))
@@ -150,38 +144,28 @@ pub fn open_log(path: &Path) -> Result<File, String> {
         .map_err(|error| format!("open {error}"))
 }
 
-/// 설정 디렉터리 config 의 애플리케이션 로그를 열고 실행의 첫 줄을 쓴 뒤 그 파일을 프로세스의 표준
-/// 오류로 만든다. 설정 디렉터리의 process lock 을 잡은 뒤 한 번 부른다.
-pub fn start_application_log(config: &Path, identifier: &str) -> Result<(), String> {
+/// Opens the stderr file of this run, `logs/host-<boot>.stderr`, makes it the standard error of the process and of its
+/// children, installs the fatal handlers and the panic hook, and stores the run record (docs/spec/logging.md#files). The file
+/// holds only what no writer of the contract writes: the crash output of the runtime and the fatal lines of the native
+/// library. Call it once, after the process lock of the configuration directory is held.
+pub fn start_standard_error(config: &Path, identifier: &str) -> Result<(), String> {
     let platform = platform::current()?;
-    let mut file = open_log(&application_log_path(config))
-        .map_err(|error| format!("application log: {error}"))?;
-    let now = crate::performance::timestamp(std::time::SystemTime::now())
-        .map_err(|error| format!("application log: {error}"))?;
-    writeln!(
-        file,
-        "{now} {}",
-        entry_line(
-            "info",
-            "host",
-            "run",
-            format!("{identifier} pid {}", std::process::id())
-        )
-    )
-    .map_err(|error| format!("application log: {error}"))?;
-    // 표준 오류는 복제한 descriptor 를 가지므로 연 파일은 이 함수가 끝날 때 닫힌다.
+    let file = open_log(&crate::event_log::standard_error_path(config))
+        .map_err(|error| format!("standard error file: {error}"))?;
+    // The standard error holds a duplicate of the descriptor, so the opened file is closed when this function ends.
     platform
         .replace_standard_error(&file)
-        .map_err(|error| format!("application log: {error}"))?;
+        .map_err(|error| format!("standard error file: {error}"))?;
     platform
         .install_fatal_handlers()
-        .map_err(|error| format!("application log: {error}"))?;
+        .map_err(|error| format!("standard error file: {error}"))?;
     install_panic_hook();
+    log_info("run", format!("{identifier} pid {}", std::process::id()));
     Ok(())
 }
 
 /// Writes each panic of the host as `error host panic: <file>:<line>: <message>` before the previous hook prints its message
-/// (docs/spec/diagnostics.md). The standard error is the application log once [`start_application_log`] ran.
+/// (docs/spec/diagnostics.md). The standard error is the stderr file once [`start_standard_error`] ran.
 pub fn install_panic_hook() {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {

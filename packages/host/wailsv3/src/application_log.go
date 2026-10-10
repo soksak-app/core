@@ -114,11 +114,6 @@ func fatalError(where string, text any) {
 	os.Exit(1)
 }
 
-// ApplicationLogPath 는 설정 디렉터리 config 의 애플리케이션 로그 경로다.
-func ApplicationLogPath(config string) string {
-	return filepath.Join(config, "logs", "application.log")
-}
-
 // ServiceLogPath 는 영속 서비스 program 의 표준 오류를 받는 로그 경로다.
 func ServiceLogPath(config, program string) string {
 	return filepath.Join(config, "logs", filepath.Base(program)+".log")
@@ -148,26 +143,25 @@ func OpenLog(path string) (*os.File, error) {
 	return file, nil
 }
 
-// StartApplicationLog 는 설정 디렉터리 config 의 애플리케이션 로그를 열고 실행의 첫 줄을 쓴 뒤 그 파일을
-// 프로세스의 표준 오류로 만든다. 설정 디렉터리의 process lock 을 잡은 뒤 한 번 부른다.
-func StartApplicationLog(config, identifier string) error {
+// StartStandardError opens the stderr file of this run, `logs/host-<boot>.stderr`, makes it the standard error of the process
+// and of its children, and stores the run record (docs/spec/logging.md#files). The file holds only what no writer
+// of the contract writes: the crash output of the runtime and the fatal lines of the native library. Call it once, after the
+// process lock of the configuration directory is held.
+func StartStandardError(config, identifier string) error {
 	system, err := platform.Current()
 	if err != nil {
 		return err
 	}
-	file, err := OpenLog(ApplicationLogPath(config))
+	file, err := OpenLog(StandardErrorPath(config))
 	if err != nil {
-		return fmt.Errorf("application log: %w", err)
+		return fmt.Errorf("standard error file: %w", err)
 	}
-	_, writeErr := fmt.Fprintln(file, RecordLine(Entry{"info", "host", "run", fmt.Sprintf("%s pid %d", identifier, os.Getpid())}))
-	var replaceErr error
-	if writeErr == nil {
-		replaceErr = system.ReplaceStandardError(file)
-	}
-	// 표준 오류는 복제한 descriptor 를 가지므로 연 파일은 닫는다.
+	// The standard error holds a duplicate of the descriptor, so the opened file is closed.
+	replaceErr := system.ReplaceStandardError(file)
 	closeErr := file.Close()
-	if err := errors.Join(writeErr, replaceErr, closeErr); err != nil {
-		return fmt.Errorf("application log: %w", err)
+	if err := errors.Join(replaceErr, closeErr); err != nil {
+		return fmt.Errorf("standard error file: %w", err)
 	}
+	LogInfo("run", fmt.Sprintf("%s pid %d", identifier, os.Getpid()))
 	return nil
 }

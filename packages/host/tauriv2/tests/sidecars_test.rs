@@ -1395,7 +1395,7 @@ const DROPPED_LOG_CHILD: &str = "SOKSAK_DROPPED_LOG_CHILD";
 #[test]
 fn a_dropped_sidecar_message_is_recorded() {
     if let Some(config) = std::env::var_os(DROPPED_LOG_CHILD) {
-        soksak_host_tauriv2::application_log::start_application_log(
+        soksak_host_tauriv2::application_log::start_standard_error(
             std::path::Path::new(&config),
             "com.soksak.test",
         )

@@ -21,8 +21,8 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// applicationLogChild 는 자식 프로세스에 설정 디렉터리를 알리는 환경 변수다.
-const applicationLogChild = "SOKSAK_APPLICATION_LOG_CHILD"
+// standardErrorChild 는 자식 프로세스에 설정 디렉터리를 알리는 환경 변수다.
+const standardErrorChild = "SOKSAK_APPLICATION_LOG_CHILD"
 
 // contract: log.open.rotates-at-100mb
 func TestOpenLogMovesAFileOfOneHundredMegabytesToTheEarlierGeneration(t *testing.T) {
@@ -107,9 +107,15 @@ func TestOpenLogAppendsToASmallerFileAndCreatesAPrivateFile(t *testing.T) {
 }
 
 // contract: log.application.start-replaces-standard-error
-func TestStartApplicationLogWritesTheStartLineAndTakesTheStandardErrorOfTheProcessAndItsChildren(t *testing.T) {
-	if config := os.Getenv(applicationLogChild); config != "" {
-		if err := host.StartApplicationLog(config, "com.soksak.test"); err != nil {
+func TestStartStandardErrorWritesTheRunRecordAsAnEventAndTakesTheStandardErrorOfTheProcessAndItsChildren(t *testing.T) {
+	if config := os.Getenv(standardErrorChild); config != "" {
+		log, err := host.StartHostEventLog(config)
+		if err != nil {
+			os.Stdout.WriteString(err.Error() + "\n")
+			os.Exit(2)
+		}
+		host.UseHostEventLog(log)
+		if err := host.StartStandardError(config, "com.soksak.test"); err != nil {
 			os.Stdout.WriteString(err.Error() + "\n")
 			os.Exit(2)
 		}
@@ -120,28 +126,42 @@ func TestStartApplicationLogWritesTheStartLineAndTakesTheStandardErrorOfTheProce
 			os.Stdout.WriteString(err.Error() + "\n")
 			os.Exit(2)
 		}
+		if err := log.Flush(5 * time.Second); err != nil {
+			os.Stdout.WriteString(err.Error() + "\n")
+			os.Exit(2)
+		}
 		return
 	}
 	config := t.TempDir()
-	command := exec.Command(os.Args[0], "-test.run=^TestStartApplicationLogWritesTheStartLineAndTakesTheStandardErrorOfTheProcessAndItsChildren$")
-	command.Env = append(os.Environ(), applicationLogChild+"="+config)
+	command := exec.Command(os.Args[0], "-test.run=^TestStartStandardErrorWritesTheRunRecordAsAnEventAndTakesTheStandardErrorOfTheProcessAndItsChildren$")
+	command.Env = append(os.Environ(), standardErrorChild+"="+config)
 	if output, err := command.Output(); err != nil {
 		t.Fatalf("child ended with %v, output %q", err, output)
 	}
-	data, err := os.ReadFile(host.ApplicationLogPath(config))
+	// The raw standard error of the process and its children is in the stderr file of the run, beside the event log.
+	stderr, err := filepath.Glob(filepath.Join(config, "logs", "host-*.stderr"))
+	if err != nil || len(stderr) != 1 {
+		t.Fatalf("stderr files %v, %v", stderr, err)
+	}
+	data, err := os.ReadFile(stderr[0])
 	if err != nil {
 		t.Fatal(err)
 	}
-	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-	start := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z info host run: com\.soksak\.test pid \d+$`)
-	if len(lines) < 3 || !start.MatchString(lines[0]) || lines[1] != "host line" || lines[2] != "child line" {
-		t.Fatalf("application log %q", lines)
+	if got := string(data); got != "host line\nchild line\n" {
+		t.Fatalf("stderr file %q", got)
+	}
+	// The run record is an event of the event log, not a line of the stderr file.
+	events := readHostEventLog(t, config)
+	run := events[len(events)-1]
+	fields, _ := run["fields"].(map[string]any)
+	if run["event"] != "host.record.info" || fields["where"] != "run" || !regexp.MustCompile(`^com\.soksak\.test pid \d+$`).MatchString(fields["text"].(string)) {
+		t.Fatalf("event log %v", events)
 	}
 }
 
 // contract: log.error.line-form
 func TestLogErrorWritesAnErrorEventToTheEventLog(t *testing.T) {
-	if config := os.Getenv(applicationLogChild); config != "" {
+	if config := os.Getenv(standardErrorChild); config != "" {
 		log, err := host.StartHostEventLog(config)
 		if err != nil {
 			os.Stdout.WriteString(err.Error() + "\n")
@@ -157,7 +177,7 @@ func TestLogErrorWritesAnErrorEventToTheEventLog(t *testing.T) {
 	}
 	config := t.TempDir()
 	command := exec.Command(os.Args[0], "-test.run=^TestLogErrorWritesAnErrorEventToTheEventLog$")
-	command.Env = append(os.Environ(), applicationLogChild+"="+config)
+	command.Env = append(os.Environ(), standardErrorChild+"="+config)
 	if output, err := command.Output(); err != nil {
 		t.Fatalf("child ended with %v, output %q", err, output)
 	}
@@ -201,7 +221,7 @@ func TestARecordIsOneLineAndEscapesALineFeed(t *testing.T) {
 // A host observation is a record of level info through LogInfo.
 // contract: log.info.record-form
 func TestLogInfoWritesAnInfoEventToTheEventLog(t *testing.T) {
-	if config := os.Getenv(applicationLogChild); config != "" {
+	if config := os.Getenv(standardErrorChild); config != "" {
 		log, err := host.StartHostEventLog(config)
 		if err != nil {
 			os.Stdout.WriteString(err.Error() + "\n")
@@ -217,7 +237,7 @@ func TestLogInfoWritesAnInfoEventToTheEventLog(t *testing.T) {
 	}
 	config := t.TempDir()
 	command := exec.Command(os.Args[0], "-test.run=^TestLogInfoWritesAnInfoEventToTheEventLog$")
-	command.Env = append(os.Environ(), applicationLogChild+"="+config)
+	command.Env = append(os.Environ(), standardErrorChild+"="+config)
 	if output, err := command.Output(); err != nil {
 		t.Fatalf("child ended with %v, output %q", err, output)
 	}

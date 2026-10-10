@@ -81,3 +81,17 @@ pub fn capturing(body: impl FnOnce()) {
     use_host_event_log(None);
     eprint!("{text}");
 }
+
+/// The raw standard error of the run, from the only stderr file under the logs folder of a configuration folder.
+pub fn standard_error_text(config: &Path) -> String {
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(config.join("logs"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "stderr")
+        })
+        .collect();
+    assert_eq!(paths.len(), 1, "stderr files {paths:?}");
+    std::fs::read_to_string(paths.remove(0)).unwrap()
+}

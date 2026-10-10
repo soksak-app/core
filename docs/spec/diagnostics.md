@@ -12,7 +12,7 @@ Every diagnostic file of an application is under `<config-dir>/logs/`. A person 
 
 | File | Writer | Form | Bound |
 |---|---|---|---|
-| `application.log` | the run record of both hosts, the fatal records of the native library, the standard error of the sidecars that the host starts | text records of one form ([Forms](#forms)) | renamed to `application.log.1` at 100 MB, when a run opens it, and the five earlier generations are kept |
+| `host-<boot>.stderr` | the raw standard error of the host process: the crash output of the runtime and the fatal lines of the native library | text | renamed to `host-<boot>.stderr.1` at 100 MB, when a run opens it, and the five earlier generations are kept |
 | `host-<boot>.jsonl` | the host process: its own records, the records of the page through `report`, and the events of the native library | events of the [logging contract](logging.md) | rotated at 100 MB to `host-<boot>.jsonl.1`, and the five earlier generations are kept |
 | `<executable-name>.log` | a persistent service, opened by the host as the standard error of the service | text records of the same form, written by the service | renamed to `<name>.1` at 100 MB, when the host starts the service, and the five earlier generations are kept |
 | `performance.ndjson` | the page, both hosts, the sidecars and the sampler | one JSON event per line | rotated at 100 MB to `performance.ndjson.1`, and the five earlier generations are kept |
@@ -25,7 +25,7 @@ Every diagnostic file of an application is under `<config-dir>/logs/`. A person 
 
 Three forms of record exist, and each fact has the form that fits it. The two line forms, the text record and the event, put the time first and the same layer names in them, so one reader can order both.
 
-1. **Text record.** One line of `application.log` or of a service log: `<time> <level> <layer> <where>: <text>`, separated by single spaces.
+1. **Text record.** One line of a service log, and the view of a record event: `<time> <level> <layer> <where>: <text>`, separated by single spaces.
    - `<time>` is the UTC time `YYYY-MM-DDTHH:MM:SS.mmmZ` of the write, the form of `ts` of an event.
    - `<level>` is `error` for a failure and `info` for a state without a failure.
    - `<layer>` is who wrote the record: `page`, `host`, `native`, or `sidecar`.

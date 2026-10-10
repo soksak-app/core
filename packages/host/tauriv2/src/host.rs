@@ -172,12 +172,13 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 format!("baseline {foreign} foreign WebKit processes"),
             );
             exposure::start(app, &directory)?;
-            // 애플리케이션 로그는 엔드포인트가 process lock 을 잡은 뒤에 연다. 그래서 같은 파일에 쓰는
-            // 다른 실행이 없다(docs/spec/hosts.md#application-log).
-            application_log::start_application_log(&directory, soksak_sok::identity::identity())?;
+            // The event log and the stderr file are opened after the endpoint holds the process lock, so no other run writes
+            // the same files (docs/spec/hosts.md#application-log). The run record waits in the start buffer until the writer
+            // exists.
             let events = std::sync::Arc::new(event_log::EventLog::start_host(&directory)?);
             event_record::use_host_event_log(Some(std::sync::Arc::clone(&events)));
             tauri::Manager::manage(app, events);
+            application_log::start_standard_error(&directory, soksak_sok::identity::identity())?;
             Ok(())
         })
         .build();

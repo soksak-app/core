@@ -1001,7 +1001,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportWritesAnErrorLineForALostConnection" },
       { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_lost_connection_is_reported_as_an_error_line" },
       { file: "packages/host/tauriv2/tests/panic_hook_test.rs", id: "a_panic_writes_an_error_event_to_the_event_log" },
-      { file: "packages/host/tauriv2/tests/fatal_signal_test.rs", id: "a_fatal_signal_writes_an_error_line_to_the_application_log" },
+      { file: "packages/host/tauriv2/tests/fatal_signal_test.rs", id: "a_fatal_signal_writes_an_error_line_to_the_standard_error_file" },
     ],
     expected: "The end of a page process, a lost connection to a persistent service, a panic of the Tauri host and a fatal signal each write one error line to the application log.",
     levels: ["unit", "application"],
@@ -1118,13 +1118,13 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/host/wailsv3/src/application_log.go", symbol: "func PageEntry" },
       { file: "packages/host/tauriv2/src/application_log.rs", symbol: "pub fn page_entry" },
-      { file: "packages/window-check/application-log.mjs", symbol: "export function parseRecord" },
+      { file: "packages/window-check/event-log.mjs", symbol: "export function eventLine" },
       { file: "native/darwin/src/application_log.m", symbol: "void sp_log_info" },
     ],
     tests: [
       { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestAPageRecordHasTheLayerPageAndRejectsAnInvalidLevelOrPlace" },
       { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "a_page_record_has_the_layer_page_and_rejects_an_invalid_level_or_place" },
-      { file: "packages/window-check/test/application-log.test.mjs", id: "parseRecord splits a text record into its time, level, layer, place and text" },
+      { file: "packages/window-check/test/event-log.test.mjs", id: "a record event reads as the line of the text form, and another event as its name and fields" },
       { file: "packages/workbench/test/report-record.test.mjs", id: "a line `<where>: <text>` is split at its first `: `" },
     ],
     expected: "Every text line of the application log is one record of the form `<time> <level> <layer> <where>: <text>`, and the window check reads that form.",
@@ -1162,7 +1162,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/wailsv3/tests/event_record_test.go", id: "TestAnErrorAnObservationAndAPageRecordAreEventsWithWhereAndText" },
       { file: "packages/host/tauriv2/tests/event_record_test.rs", id: "an_error_an_observation_and_a_page_record_are_events_with_where_and_text" },
-      { file: "e2e/application-log.test.mjs", id: "the event log holds the records the page reports and the application log holds the run line" },
+      { file: "e2e/host-records.test.mjs", id: "the event log holds the run record and the records the page reports" },
       { file: "e2e/page-process.test.mjs", id: "the end of the web content process is written to the event log" },
     ],
     expected: "The records of the host and of the page are events of the event log with where and text, a start buffer holds them until the writer exists, and a running application stores them.",
@@ -1585,11 +1585,11 @@ const FEATURE_LINKS = [
   {
     id: "F31",
     implementation: [
-      { file: "packages/window-check/application-log.mjs", symbol: "export function readErrors" },
+      { file: "packages/window-check/event-log.mjs", symbol: "export function readEventErrors" },
       { file: "packages/workbench/report-record.js", symbol: "export function recordOf" },
     ],
     tests: [
-      { file: "packages/window-check/test/session-cleanup.test.mjs", id: "an error line that the application logged during the check fails the check unless it is declared" },
+      { file: "packages/window-check/test/session-cleanup.test.mjs", id: "a record event of level error fails the check as the line of the text form unless it is declared" },
       { file: "packages/workbench/test/report-levels.test.mjs", id: "a reported failure has the level error and an observation has the level info" },
     ],
     expected: "Every error line that the application logs during a window check is printed and fails the check unless the check declares it.",

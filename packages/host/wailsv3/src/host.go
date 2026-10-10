@@ -118,17 +118,17 @@ func Run(assets fs.FS, options Options) error {
 		return fmt.Errorf("local endpoint: %w", err)
 	}
 	defer host.endpoint.Close()
-	// 애플리케이션 로그는 Serve 가 process lock 을 잡은 뒤에 연다. 그래서 같은 파일에 쓰는 다른
-	// 실행이 없다(docs/spec/hosts.md#application-log).
-	if err := StartApplicationLog(configDirectory, identifier); err != nil {
-		return err
-	}
+	// The event log and the stderr file are opened after Serve holds the process lock, so no other run writes the same files
+	// (docs/spec/hosts.md#application-log). The run record waits in the start buffer until the writer exists.
 	eventLog, err := StartHostEventLog(configDirectory)
 	if err != nil {
 		return fmt.Errorf("event log: %w", err)
 	}
 	host.events = eventLog
 	UseHostEventLog(eventLog)
+	if err := StartStandardError(configDirectory, identifier); err != nil {
+		return err
+	}
 	// 호스트의 줄은 두 호스트가 같은 형식으로 접두사 없이 쓴다. 시각은 실행의 첫 줄이 가진다.
 	log.SetFlags(0)
 	// 설치 상태는 process lock 을 잡고 애플리케이션 로그를 연 뒤에 읽는다. 읽기 오류는 애플리케이션 로그에 남는다
