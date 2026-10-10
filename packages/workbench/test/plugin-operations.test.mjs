@@ -1,4 +1,4 @@
-// 설치된 플러그인 목록과 작업(docs/spec/installation.md 의 Plugin screen).
+// The list of installed plugins and their operations (Plugin screen in docs/spec/installation.md).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createPluginOperations, pluginRows } from "../plugin-operations.js";
@@ -61,7 +61,7 @@ test("a row names its sidecars from the installed entry, else the newest registr
   assert.deepEqual(rows.find((row) => row.id === "term").sidecars, [{ name: vt, range: "^0.1.0", version: "0.1.2" }]);
   assert.deepEqual(rows.find((row) => row.id === "db").sidecars,
     [{ name: "@a/b", range: "1.0.0", version: null }, { name: "@x/db", range: "^1.0.0", version: null }]);
-  // host 가 없으면 불러온 manifest 의 dependencies 를 쓴다.
+  // Without a host, it uses the dependencies of the loaded manifest.
   assert.deepEqual(pluginRows([term], null)[0].sidecars, [{ name: vt, range: "^0.1.0", version: null }]);
 });
 
@@ -80,7 +80,7 @@ test("status reports the installed plugins that the registry lists in a newer ve
   assert.deepEqual(operations.status().updates, [{ id: "term", installed: "0.1.0", latest: "0.10.0" }]);
 });
 
-/** 호출을 기록하고 정한 답을 주는 host. */
+/** A host that records the calls and gives the set replies. */
 function fakeHost(answers) {
   const calls = [];
   return {
@@ -128,7 +128,7 @@ test("an unreadable registry index keeps the installed rows and an unreadable st
   await assert.rejects(operations.run("rename", "db"), /unknown plugin action rename/);
 });
 
-/** pluginsState 와 pluginsRun 을 흉내 내는 host. installed 가 비어 있으면 installed.json 이 없는 첫 실행이다. */
+/** A host that imitates pluginsState and pluginsRun. When installed is empty, it is the first run, in which installed.json does not exist. */
 function starterHost({ registry = "file:///registry/index.json", index, firstRun = true }) {
   const calls = [];
   let first = firstRun;
@@ -153,7 +153,7 @@ test("the first run installs the starter pack in its order and asks for a reload
   assert.equal(await operations.installStarter("starter", null, () => assert.fail("nothing to log")), true);
   assert.deepEqual(host.calls.filter(([method]) => method === "pluginsRun").map(([, params]) => params),
     [{ action: "install", plugin: "alpha" }, { action: "install", plugin: "beta" }]);
-  // installed.json 이 생긴 뒤에는 다시 설치하지 않는다.
+  // After installed.json exists, the plugins are not installed again.
   assert.equal(await operations.installStarter("starter", null, () => {}), false);
 });
 
@@ -174,7 +174,7 @@ test("the first run without a registry logs and a missing pack or unreadable ind
   const shown = [];
   assert.equal(await unset.installStarter("starter", null, (line) => lines.push(line), (message) => shown.push(message)), false);
   assert.deepEqual(lines, ["first run: no registry is set; the starter pack starter was not installed"]);
-  // plugin 이 없는 창은 그 이유를 화면에 밝힌다.
+  // A window without a plugin states the reason on the screen.
   assert.deepEqual(shown, ["플러그인 레지스트리가 없어 시작 플러그인 묶음 starter을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요."]);
   const missing = createPluginOperations({ host: starterHost({ index: { plugins: [], packs: [] } }), loaded: () => [], changed: () => {} });
   await missing.refresh();

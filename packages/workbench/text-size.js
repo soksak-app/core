@@ -1,14 +1,14 @@
-// 글자 크기의 단계와 범위. docs/spec/text-size.md
+// The steps and the scope of the text size. docs/spec/text-size.md
 //
-// 범위는 사용자가 마지막으로 누른 곳이다. 카드를 누르면 그 카드, 판 밖의 프레임을 누르면
-// 프레임이다. 아직 누르지 않았으면 null 이고, 그때는 포커스된 카드가 범위다.
+// The scope is the place the user pressed last. Pressing a card makes it that card, and pressing the frame outside the plane makes it the
+// frame. It is null if nothing was pressed yet, and then the focused card is the scope.
 
-/** 글자 크기 배율의 단계. */
+/** The steps of the text size scale. */
 export const TEXT_STEPS = Object.freeze([0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3]);
 
 /**
- * value 에서 direction 으로 옮긴 배율. 1 은 다음 큰 단계, -1 은 다음 작은 단계, 0 은 1 이다.
- * 끝 단계에서 더 옮기면 값은 그대로다. 단계에 없는 값과 다른 방향은 오류다.
+ * The scale moved from value in direction. 1 is the next larger step, -1 is the next smaller step, and 0 is 1.
+ * Moving further from an end step leaves the value unchanged. A value that is not a step and any other direction are errors.
  */
 export function nextTextSize(value, direction) {
   if (direction !== 1 && direction !== -1 && direction !== 0) {
@@ -26,41 +26,41 @@ const sizeListeners = new Set();
 
 let resolveSurface = null;
 
-/** 표면의 실제 배율을 계산하는 함수를 정한다. 판이 정한다. */
+/** Sets the function that computes the actual scale of a surface. The plane sets it. */
 export function setSurfaceTextSize(fn) {
   resolveSurface = fn;
 }
 
-/** 표면의 실제 배율. 판에 없는 표면은 null 이다. 계산하는 함수가 정해지기 전에는 오류다. */
+/** The actual scale of a surface. It is null for a surface that is not in the plane. It is an error before the computing function is set. */
 export function surfaceTextSize(surfaceId) {
   if (!resolveSurface) throw new Error("the surface text size is not available before the plane starts");
   return resolveSurface(surfaceId);
 }
 
-/** 배율이 바뀌었을 수 있음을 알린다. 표면은 자기 실제 배율을 다시 읽는다. */
+/** Tells that the scale may have changed. A surface reads its actual scale again. */
 export function notifyTextSize() {
   for (const fn of sizeListeners) fn();
 }
 
-/** 배율이 바뀌었을 수 있을 때 호출할 함수를 등록한다. 등록을 끝내는 함수를 반환한다. */
+/** Registers a function to call when the scale may have changed. It returns the function that ends the registration. */
 export function onTextSize(fn) {
   sizeListeners.add(fn);
   return () => sizeListeners.delete(fn);
 }
 
-/** 현재 범위. {kind: "card", card} 이거나 {kind: "frame"} 이며, 누르기 전에는 null 이다. */
+/** The current scope. It is {kind: "card", card} or {kind: "frame"}, and null before any press. */
 export const textScope = () => scope;
 
 /**
- * 글자 크기를 바꿀 범위. 누른 곳이 있으면 그곳이고, 없으면 포커스된 카드다. 포커스된 카드가 없는 창(space 가 열리기
- * 전의 library)은 frame 이다(docs/spec/text-size.md#scope).
+ * The scope in which the text size changes. It is the place pressed if there is one, and otherwise the focused card. A window without a focused card (the library before
+ * a space opens) uses frame (docs/spec/text-size.md#scope).
  */
 export function effectiveTextScope(pressed, focused) {
   if (pressed) return pressed;
   return typeof focused === "string" && focused ? { kind: "card", card: focused } : { kind: "frame" };
 }
 
-/** 범위를 바꾸고 알린다. */
+/** Changes the scope and notifies. */
 export function setTextScope(next) {
   if (next?.kind === "card") {
     if (typeof next.card !== "string" || !next.card) throw new Error("a card text scope requires a card");
@@ -73,7 +73,7 @@ export function setTextScope(next) {
   for (const fn of listeners) fn(scope);
 }
 
-/** 범위가 바뀔 때 호출할 함수를 등록한다. 등록을 끝내는 함수를 반환한다. */
+/** Registers a function to call when the scope changes. It returns the function that ends the registration. */
 export function onTextScope(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);

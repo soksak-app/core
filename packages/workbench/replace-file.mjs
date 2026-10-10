@@ -1,11 +1,11 @@
-// 스테이징한 실행 파일을 새 파일로 바꾼다.
+// Replaces a staged executable file with a new file.
 //
-// macOS 는 실행 파일의 코드 서명 정보를 파일(vnode)에 보관한다. 실행된 적이 있는 파일을 같은
-// 자리에서 덮어쓰면 이전 서명 정보가 남아, 새 내용으로 시작한 프로세스를 커널이 종료한다(SIGKILL).
-// 같은 디렉터리의 임시 파일에 쓴 뒤 이름을 바꾸면 새 파일이 된다.
+// macOS keeps the code signature information of an executable in the file (vnode). Overwriting a file that has been run at the same
+// place leaves the earlier signature information, and the kernel terminates (SIGKILL) a process started with the new content.
+// Writing to a temporary file in the same directory and then renaming it makes a new file.
 import { copyFileSync, renameSync, rmSync } from "node:fs";
 
-/** from 을 to 로 복사한다. to 는 기존 파일과 다른 새 파일이 된다. 권한은 from 과 같다. */
+/** Copies from to to. to becomes a new file different from the existing file. The permissions are the same as from. */
 export function replaceFile(from, to) {
   const pending = `${to}.partial-${process.pid}`;
   try {

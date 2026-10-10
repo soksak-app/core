@@ -39,7 +39,7 @@ test("native closure before authorization cannot erase the mounted module's core
     module, surfaceId, pluginId, declarations, sidecars: [], composition: { kind: "dom" },
   });
   try {
-    // 승인 전 등록 요청의 마이크로태스크를 완료한 뒤 이전 네이티브 종료를 주입한다.
+    // After the microtasks of the registration request before authorization complete, the test injects the earlier native termination.
     await new Promise((resolve) => setImmediate(resolve));
     registry.registered({ surface: surfaceId, closed: true });
     authorizeSurface(surfaceId);

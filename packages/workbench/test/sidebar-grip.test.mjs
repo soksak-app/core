@@ -42,7 +42,7 @@ test("a drag from a folded side opens it only when the pointer reaches the minim
   const el = dom.window.document.querySelector('article');
   const body = el.querySelector('aside');
   const handle = body.firstElementChild;
-  // 접힌 위쪽 면은 손잡이 폭 6 만큼의 띠다.
+  // The collapsed upper side is a strip as wide as the grip width of 6.
   body.getBoundingClientRect = () => ({width:760,height:6});
   handle.setPointerCapture = () => {};
   const calls = [];
@@ -54,10 +54,10 @@ test("a drag from a folded side opens it only when the pointer reaches the minim
   }
   try {
     pointer('pointerdown',400,100);
-    // 6 + 20 = 26 은 최소 크기보다 작으므로 면은 접힌 채 있다. 첫 움직임에서 120 으로 튀지 않는다.
+    // 6 + 20 = 26 is smaller than the minimum size, so the side stays collapsed. It does not jump to 120 at the first movement.
     pointer('pointermove',400,120);
     assert.deepEqual(calls,[]);
-    // 6 + 130 = 136 에서 열리고, 경계는 포인터를 따른다.
+    // It opens at 6 + 130 = 136, and the boundary follows the pointer.
     pointer('pointermove',400,230);
     pointer('pointermove',400,250);
     pointer('pointerup',400,250);

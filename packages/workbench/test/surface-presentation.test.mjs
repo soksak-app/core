@@ -71,7 +71,7 @@ test("native preparation cannot present before DOM drawing and presents each tic
       await assert.rejects(surfaces.place({ ...changed, drawn: true }), /injected presentSurfaces failure/);
     }
     await new Promise((resolve) => setImmediate(resolve));
-    // 배치를 요청한 쪽이 그 실패를 받아 보고하므로 대기열은 같은 실패를 다시 쓰지 않는다(docs/spec/hosts.md#application-log).
+    // The side that requested the layout receives and reports the failure, so the queue does not write the same failure again (docs/spec/hosts.md#application-log).
     await settled();
     assert.deepEqual(calls.flatMap((call) => recordsOf(call.name, call.request)), [],
       `${stage} rejection that the place request received must not be written again by the layout queue`);

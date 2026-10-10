@@ -4,7 +4,7 @@ import { createSurfaceReplyHold } from "../surface-reply-hold.js";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-/* 보낸 답과 각 전송을 끝내는 함수를 기록하는 가짜 전송. */
+/* A fake transport that records the replies sent and the function that ends each transmission. */
 function fakeSend(name, sent) {
   let finish;
   const send = () => new Promise((resolve, reject) => {

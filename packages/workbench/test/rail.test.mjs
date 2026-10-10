@@ -1,9 +1,9 @@
-// 레일 외곽선은 판의 CSS 픽셀에 그린다.
+// The rail outline is drawn in the CSS pixels of the plane.
 //
-// SVG 요소에 좌표계(viewBox)를 두면 그 좌표계는 요소의 상자에 맞춰진다. 창이 커지면 요소는 판을 따라
-// 먼저 커지고, 다시 그리기 전까지 이전 경로가 그 상자에 맞춰 옮겨지거나 늘어난다. 그 동안 카드는 아직
-// 이전 자리에 있으므로, 외곽선만 카드보다 먼저 움직인 화면이 보인다. 좌표계를 두지 않으면 경로의 수는
-// CSS 픽셀이고, 요소의 상자가 바뀌어도 경로는 다시 그릴 때까지 제자리에 있다.
+// When an SVG element has a coordinate system (viewBox), that coordinate system is fitted to the box of the element. When the window grows, the element
+// grows with the plane first, and until the next redraw the earlier path is moved or stretched to fit that box. The cards are still at the
+// earlier position in the meantime, so the screen shows the outline moving before the cards. Without a coordinate system, the path numbers are
+// CSS pixels, and the path stays in place until the next redraw even when the box of the element changes.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-// 라이브러리의 플러그인 페이지는 플러그인마다 이름, 설명, 상태, 버전, 사이드카와 작업 단추를 보인다
-// (docs/spec/installation.md 의 Plugin screen).
+// The plugin page of the library shows the name, description, state, version, sidecars, and operation buttons of each plugin
+// (Plugin screen in docs/spec/installation.md).
 test("the plugin page of the library lists each plugin with its description, versions, sidecars and actions", async (t) => {
   const dom = new JSDOM("<body><div id=library></div></body>");
   globalThis.document = dom.window.document;
@@ -101,7 +101,7 @@ test("the plugin page of the library lists each plugin with its description, ver
     assert.equal(text("plain", "sidecars"), "사이드카 없음");
     const actions = (id) => [...card(id).querySelectorAll('[data-expose="core.library.plugins.action"]')]
       .map((button) => [button.textContent, button.dataset.command, button.dataset.params, button.disabled]);
-    // 작업이 실행되는 동안에는 모든 카드의 작업 단추가 비활성이다.
+    // While an operation runs, the operation buttons of all cards are disabled.
     assert.deepEqual(actions("db"), [["설치", "core.plugins.install", JSON.stringify({ plugin: "db" }), true]]);
     assert.deepEqual(actions("term"), [
       ["업데이트", "core.plugins.update", JSON.stringify({ plugin: "term" }), true],
@@ -127,7 +127,7 @@ test("the plugin page of the library lists each plugin with its description, ver
     assert.equal(root.querySelector(".library-plugins-none")?.textContent, "찾는 플러그인이 없습니다.");
     library.actions.searchPlugins("");
 
-    // host 가 없으면 작업 단추가 없다.
+    // Without a host there are no operation buttons.
     operations.hosted = false;
     library.render();
     assert.deepEqual(actions("term"), []);

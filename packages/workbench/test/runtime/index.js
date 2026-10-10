@@ -1,4 +1,4 @@
-// 워크벤치 테스트용 런타임. 네이티브 호스트가 없다.
+// The runtime for workbench tests. It has no native host.
 export const host = null;
 export const page = null;
 

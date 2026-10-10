@@ -626,6 +626,8 @@
   - [ ] F104.2 — P2: `packages/host`의 주석을 영어로 다시 쓴다.
   - [ ] F104.3 — P2: `packages/workbench`의 주석을 영어로 다시 쓴다.
   - [o] F104.4 — P2: `native/darwin`의 주석을 영어로 다시 쓴다. 2026-10-11에 완료했다. `native/darwin`(`src`, `tests`, `Makefile`)의 95개 파일에서 한글을 담은 주석 1,327줄이 영어가 되었고, `node scripts/check-comment-language.mjs`가 `native/darwin`에 대해 0줄을 보고한다. 각 파일을 이전 내용과 주석을 뺀 채 비교하면 코드가 같고, `make -C native/darwin all`과 모든 native 시험 실행 파일의 빌드가 성공한다. 틀린 주석 세 개를 고쳤다(`document_view.m`의 `applyInsets` 주석은 문장 중간에서 끝났고, `sp_region_facts`는 `malloc()` 복사본을 정적 버퍼라고 적었고, `appearance.h`의 주석은 `bool dark`를 요청한 이름이라고 적었다).
+  - [o] F104.3 — P2: `packages/workbench`의 주석을 영어로 다시 쓴다. 2026-10-11에 완료했다. 한글을 담았던 `packages/workbench`의 주석 2,368줄(파일 138개)이 영어이고, `node scripts/check-comment-language.mjs`가 이 폴더에서 보고하는 줄이 0이다(이전 2,368). `기본값:`으로 시작하던 주석은 `default:`로 시작한다. 주석만 바뀌었다. 바뀐 파일마다 주석을 뺀 코드가 기준과 같고, 바뀐 script마다 `node --check`가 통과하며, `packages/workbench`의 `node --test --experimental-test-module-mocks test/`가 macOS에서 420개 중 420개 통과한다.
+  - [ ] F104.4 — P2: `native/darwin`의 주석을 영어로 다시 쓴다.
   - [ ] F104.5 — P2: `packages/sok`, `packages/plugin-api`, `packages/window-check`, `packages/client`, `apps`의 주석을 영어로 다시 쓴다.
     - [o] F104.5.1 — P2: `apps`의 주석을 영어로 다시 쓴다. 2026-10-11에 완료했다. `apps`의 한글 주석 135줄이 영어이고, `scripts/check-comment-language.mjs`가 보고하는 줄이 없으며, 주석 줄만 바뀌었다. `packages/sok`, `packages/plugin-api`, `packages/window-check`, `packages/client`가 남는다.
   - [~] F104.6 — P2: `e2e`, `scripts`, Makefile과 나머지 파일의 주석을 영어로 다시 쓰고, `pnpm test`에서 저장소 전체 검사를 실행한다.

@@ -1,4 +1,4 @@
-// 호스트가 없는 문서(브라우저 예제)의 표면 인터페이스는 이 문서가 앉힌 자리를 실제 자리로 답한다.
+// In a document without a host (the browser example), the surface interface answers the position this document placed as the actual position.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";

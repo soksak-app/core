@@ -1,13 +1,13 @@
-// 사용자에게 오류를 보이는 유일한 경로. 화면의 오류 표시는 다음 그리기나 reload 가 지우므로, 보이는 순간 애플리케이션
-// 로그에 남긴 기록이 그 오류의 흔적이다(AGENTS.md, docs/spec/hosts.md#application-log). 오류 색은 이 경로가 붙이는
-// `data-error` 요소에만 쓴다. 같은 자리에 같은 오류를 다시 그리면 다시 쓰지 않는다.
+// The only path that shows an error to the user. The next drawing or reload erases the error display on the screen, so the record written to the application
+// log at the moment it is shown is the trace of that error (AGENTS.md, docs/spec/hosts.md#application-log). The error color is used only for the
+// `data-error` element that this path attaches. Drawing the same error again at the same place does not write it again.
 import { report } from "./host.js";
 
 const shown = new Map();
 
 /**
- * 요소 element 에 where 자리의 오류 text 를 보이고, 그 자리의 오류가 바뀌었을 때만 `error: <where>: <text><detail>` 를 쓴다.
- * detail 은 화면에는 보이지 않고 로그에만 남는 세부(오류의 위치나 stack)다.
+ * Shows the error text of the place where on the element element, and writes `error: <where>: <text><detail>` only when the error of that place changed.
+ * detail is a detail (the location or stack of the error) that is not shown on the screen and is kept only in the log.
  */
 export function showError(element, where, text, detail = "") {
   element.textContent = text;
@@ -18,7 +18,7 @@ export function showError(element, where, text, detail = "") {
   report(`${where}: ${text}${detail}`);
 }
 
-/** where 자리의 오류 표시를 거둔다. 요소 없이 그려지지 않은 자리도 거둘 수 있다. 다음에 같은 오류가 보이면 다시 쓴다. */
+/** Withdraws the error display of the place where. A place that is not drawn, with no element, can be withdrawn too. If the same error is shown next time, it is written again. */
 export function hideError(element, where) {
   if (element) delete element.dataset.error;
   shown.delete(where);

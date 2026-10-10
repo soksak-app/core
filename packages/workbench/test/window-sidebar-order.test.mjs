@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { arrangeWindowSidebars, windowSidebarCards } from "../window-sidebars.js";
 
-// 판의 열 이동 경계를 기록하는 가짜 판으로 고정 사이드바 배치를 실행한다.
+// Runs the fixed sidebar layout with a fake plane that records the column move boundary of the plane.
 for (const side of ["left", "right"]) test(`window ${side} sidebar retains its edge and width across plugin overrides`, () => {
   const units = [{ id: "alpha" }, { id: "beta" }];
   const links = [{ place: side, plugin: null, set: "general" }, ...units.map((unit) => ({ place: `window-${side}`, plugin: unit.id, set: unit.id }))];

@@ -12,7 +12,7 @@ const workbenchDir = dirname(testDir);
 const packagesDir = dirname(workbenchDir);
 const root = dirname(packagesDir);
 
-/** 파일이 없을 때만 null 을 돌려준다. 다른 오류는 경로를 붙여 던진다. */
+/** Returns null only when the file does not exist. Any other error is thrown with the path attached. */
 function statOrNull(path) {
   try {
     return statSync(path);
@@ -22,7 +22,7 @@ function statOrNull(path) {
   }
 }
 
-/** 파일을 읽는다. 실패하면 경로를 붙여 던진다. */
+/** Reads the file. On failure it throws with the path attached. */
 function readText(path) {
   try {
     return readFileSync(path, "utf8");
@@ -31,7 +31,7 @@ function readText(path) {
   }
 }
 
-/** JSON 파일을 읽는다. 읽거나 해석하지 못하면 경로를 붙여 던진다. */
+/** Reads a JSON file. If it cannot be read or parsed, it throws with the path attached. */
 function readJson(path) {
   const text = readText(path);
   try {
@@ -44,7 +44,7 @@ function readJson(path) {
 /** The source folders by the name of their package.json. */
 function getSourceFolders(base = root) {
   const packages = new Map();
-  // plugin 은 자기 repository 에 있다(docs/spec/plugins.md#repositories).
+  // A plugin lives in its own repository (docs/spec/plugins.md#repositories).
   const places = ["packages"];
 
   for (const place of places) {
@@ -55,7 +55,7 @@ function getSourceFolders(base = root) {
 
     for (const dir of dirs) {
       const packageJsonPath = join(placeDir, dir, "package.json");
-      // package.json 이 없는 폴더는 패키지가 아니다. 있는데 읽지 못하면 실패한다.
+      // A folder without package.json is not an npm package. If package.json exists but cannot be read, the test fails.
       if (!statOrNull(packageJsonPath)) continue;
       packages.set(readJson(packageJsonPath).name, join(placeDir, dir));
     }
@@ -64,17 +64,17 @@ function getSourceFolders(base = root) {
   return packages;
 }
 
-/** 파일이 배포 목록에 포함되는지 확인한다. */
+/** Checks whether a file is included in the publish list. */
 function isInPublishedFiles(publishedPath, filesArray, packageDir) {
   for (const fileEntry of filesArray) {
     const fullPath = join(packageDir, fileEntry);
 
-    // 디렉터리면 그 아래의 모든 파일이 포함된다. 없는 항목은 디렉터리가 아니다.
+    // If the entry is a directory, all files below it are included. An entry that does not exist is not a directory.
     if (statOrNull(fullPath)?.isDirectory() && publishedPath.startsWith(fileEntry + "/")) {
       return true;
     }
 
-    // 정확히 일치하는 파일
+    // A file that matches exactly
     if (fileEntry === publishedPath) {
       return true;
     }
@@ -83,11 +83,11 @@ function isInPublishedFiles(publishedPath, filesArray, packageDir) {
   return false;
 }
 
-/** JavaScript 파일에서 상대 경로 import 추출 */
+/** Extracts relative import paths from a JavaScript file */
 function extractJsImports(content) {
   const imports = [];
 
-  // from "..." 또는 from '...' 형태를 모두 찾기
+  // Finds both the from "..." and the from '...' forms
   const fromRegex = /from\s+["'](\.[^"']*?)["']/g;
   let match;
   while ((match = fromRegex.exec(content)) !== null) {
@@ -95,21 +95,21 @@ function extractJsImports(content) {
     imports.push(importPath);
   }
 
-  // import "./x" 형식의 부수 효과 import
+  // Side-effect imports of the form import "./x"
   const importSideEffectRegex = /import\s+["'](\.[^"']*?)["']/g;
   while ((match = importSideEffectRegex.exec(content)) !== null) {
     const importPath = match[1];
     imports.push(importPath);
   }
 
-  return [...new Set(imports)]; // 중복 제거
+  return [...new Set(imports)]; // Removes duplicates
 }
 
-/** HTML 파일에서 상대 경로 import 추출 */
+/** Extracts relative import paths from an HTML file */
 function extractHtmlImports(content) {
   const imports = [];
 
-  // <script type="module"> 안의 import
+  // Imports inside <script type="module">
   const scriptRegex = /<script\s+type\s*=\s*["']module["']\s*>([\s\S]*?)<\/script>/gi;
   let match;
   while ((match = scriptRegex.exec(content)) !== null) {
@@ -128,14 +128,14 @@ function extractHtmlImports(content) {
   return imports;
 }
 
-/** 상대 import를 절대 경로로 해석 */
+/** Resolves a relative import to an absolute path */
 function resolveImportPath(importPath, fromDir) {
   let resolvedPath = resolve(fromDir, importPath);
 
-  // 확장자가 없으면 .js 추가 시도
+  // Tries adding .js when there is no extension
   if (!resolvedPath.endsWith(".js") && !resolvedPath.endsWith(".json")) {
     const stat = statOrNull(resolvedPath);
-    // 없는 경로는 확장자를 뺀 import 이므로 .js 를 붙인다.
+    // A path that does not exist is an import without an extension, so .js is appended.
     if (!stat) resolvedPath = resolvedPath + ".js";
     else if (stat.isDirectory()) resolvedPath = join(resolvedPath, "index.js");
   }
@@ -143,23 +143,23 @@ function resolveImportPath(importPath, fromDir) {
   return resolvedPath;
 }
 
-/** 절대 경로를 패키지 기준 상대 경로로 변환 */
+/** Converts an absolute path to a path relative to the package folder */
 function makeRelativePath(absolutePath, packageDir) {
   let relPath = relative(packageDir, absolutePath);
-  // 역슬래시를 전진슬래시로
+  // Converts backslashes to forward slashes
   return relPath.split("\\").join("/");
 }
 
-/** 패키지의 build 스크립트가 있는지 확인 */
+/** Checks whether the package has a build script */
 function hasBuildScript(packageDir) {
   return Boolean(readJson(join(packageDir, "package.json")).scripts?.build);
 }
 
-/** 빌드 산출 디렉터리 목록 구성. package.json의 files와 빌드 스크립트 기반. */
+/** Builds the list of build output directories. It is based on files in package.json and on the build script. */
 function getBuildOutputDirs(packageDir, filesArray) {
   const buildDirs = new Set();
 
-  // 빌드 스크립트가 없으면 산출 디렉터리가 없다
+  // Without a build script there is no output directory
   if (!hasBuildScript(packageDir)) {
     return buildDirs;
   }
@@ -171,7 +171,7 @@ function getBuildOutputDirs(packageDir, filesArray) {
     if (stat?.isDirectory()) {
       buildDirs.add(fileEntry);
     } else if (!stat && (fileEntry.endsWith("/") || !fileEntry.includes("."))) {
-      // 없는 디렉터리는 아직 빌드되지 않은 산출물이다. 경로가 /로 끝나거나 확장자가 없으면 산출 디렉터리다.
+      // A directory that does not exist is an output that has not been built yet. A path that ends with / or has no extension is an output directory.
       buildDirs.add(fileEntry);
     }
   }
@@ -179,7 +179,7 @@ function getBuildOutputDirs(packageDir, filesArray) {
   return buildDirs;
 }
 
-/** 경로가 빌드 산출 디렉터리 아래인지 확인 */
+/** Checks whether a path is below a build output directory */
 function isInBuildOutputDir(resolvedPath, packageDir, buildOutputDirs) {
   for (const dir of buildOutputDirs) {
     const normDir = dir.replace(/\/$/, "");
@@ -190,12 +190,12 @@ function isInBuildOutputDir(resolvedPath, packageDir, buildOutputDirs) {
   return false;
 }
 
-/** 모든 배포 파일 스캔. 존재하지 않는 파일은 결과에 missing: true로 포함된다 */
+/** Scans all published files. A file that does not exist is included in the result with missing: true */
 function collectPublishedImports(name, packageDir, filesArray) {
   const results = [];
   const checkedFiles = new Set();
   const buildOutputDirs = getBuildOutputDirs(packageDir, filesArray);
-  // 워크벤치는 스테이징이 만드는 파일들을 import할 수 있다
+  // The workbench can import the files that staging creates
   const isWorkbench = name === "@soksak/workbench";
 
   function processFile(filePath) {
@@ -214,22 +214,22 @@ function collectPublishedImports(name, packageDir, filesArray) {
         results.push({ file, importPath, resolvedPath: relativePath, inPublished: isInPublishedFiles(relativePath, filesArray, packageDir) });
         continue;
       }
-      // 워크벤치는 스테이징이 모든 빌드에서 만드는 파일을 import 할 수 있다.
+      // The workbench can import the files that staging creates in every build.
       if (isWorkbench && STAGED.always.includes(relativePath)) {
         results.push({ file, importPath, resolvedPath: relativePath, inPublished: true, isStaged: true, stagedType: "always" });
         continue;
       }
-      // host 가 제공하는 문서는 스테이징된 파일이 아니라 host 의 응답이다.
+      // A document that the host provides is a reply of the host, not a staged file.
       if (isWorkbench && STAGED.served.includes(relativePath)) {
         results.push({ file, importPath, resolvedPath: relativePath, inPublished: true, isStaged: true, stagedType: "served" });
         continue;
       }
-      // 진단 빌드에서만 만드는 파일을 무조건 import 하면 릴리스에서 없다.
+      // An unconditional import of a file that only the diagnostic build creates is missing in a release.
       if (isWorkbench && STAGED.diagnostics.includes(relativePath)) {
         results.push({ file, importPath, resolvedPath: relativePath, inPublished: false, missing: true, isDiagnosticsOnly: true });
         continue;
       }
-      // 빌드 산출물은 검사 때 아직 없을 수 있다.
+      // A build output may not exist yet when the test runs.
       if (isInBuildOutputDir(relativePath, packageDir, buildOutputDirs)) {
         results.push({ file, importPath, resolvedPath: relativePath, inPublished: true, isBuildOutput: true });
         continue;
@@ -238,7 +238,7 @@ function collectPublishedImports(name, packageDir, filesArray) {
     }
   }
 
-  /** 디렉터리 안의 모든 JS/HTML 파일을 처리한다. */
+  /** Processes all JS/HTML files in the directory. */
   function walkDir(dir) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const fullEntry = join(dir, entry.name);
@@ -247,7 +247,7 @@ function collectPublishedImports(name, packageDir, filesArray) {
     }
   }
 
-  // 모든 published 파일 처리. 없는 항목은 빌드 산출물일 때만 허용하고, 아니면 누락으로 보고한다.
+  // Processes all published files. An entry that does not exist is allowed only when it is a build output; otherwise it is reported as missing.
   for (const fileEntry of filesArray) {
     const fullPath = join(packageDir, fileEntry);
     const stat = statOrNull(fullPath);
@@ -267,7 +267,7 @@ function collectPublishedImports(name, packageDir, filesArray) {
 test("every import of a published file is listed in its package files", () => {
   const packages = getSourceFolders();
   const errors = [];
-  const allowed = []; // 스테이징이나 빌드로 생성되는 파일들
+  const allowed = []; // Files that staging or the build generates
 
   for (const [name, packageDir] of packages) {
     const packageJsonPath = join(packageDir, "package.json");
@@ -276,32 +276,32 @@ test("every import of a published file is listed in its package files", () => {
       const pkg = readJson(packageJsonPath);
 
       if (!Array.isArray(pkg.files)) {
-        // files가 없으면 이 패키지는 배포하지 않음
+        // Without files, this package is not published
         continue;
       }
 
       const imports = collectPublishedImports(name, packageDir, pkg.files);
 
       for (const imp of imports) {
-        // 스테이징이 만드는 파일은 허용 (배포 때 stage.mjs가 만듦)
+        // Files that staging creates are allowed (stage.mjs creates them at publish time)
         if (imp.isStaged) {
           allowed.push(`${name}: ${imp.file} → ${imp.resolvedPath} (${imp.stagedType === "served" ? "host 가 제공" : "스테이징이 생성"})`);
           continue;
         }
 
-        // 빌드 산출물은 허용 (테스트 때 아직 생성되지 않지만 build 후 생김)
+        // Build outputs are allowed (they are not generated yet during the test but exist after the build)
         if (imp.isBuildOutput) {
           allowed.push(`${name}: ${imp.file} → ${imp.resolvedPath} (빌드 산출물)`);
           continue;
         }
 
-        // 존재하지 않는 파일은 실패
+        // A file that does not exist fails
         if (imp.missing) {
           errors.push(`패키지 ${name}의 ${imp.file}이 import 하는 ${imp.resolvedPath}이 존재하지 않는다`);
           continue;
         }
 
-        // 존재하지만 files에 없는 파일은 실패
+        // A file that exists but is not in files fails
         if (!imp.inPublished) {
           errors.push(`패키지 ${name}의 ${imp.file}이 import 하는 ${imp.resolvedPath}이 files에 없다`);
         }
@@ -309,7 +309,7 @@ test("every import of a published file is listed in its package files", () => {
     }
   }
 
-  // 테스트 출력에 허용된 항목들을 기록
+  // Records the allowed entries in the test output
   if (allowed.length > 0) {
     console.log(`ℹ 스테이징이나 빌드로 생성되는 import: ${allowed.length}개`);
     for (const item of allowed) {
@@ -323,31 +323,31 @@ test("every import of a published file is listed in its package files", () => {
 });
 
 test("an import of a missing file is reported as missing", () => {
-  // 임시 픽스처 패키지 생성
+  // Creates a temporary fixture package
   const tmpDir = join(tmpdir(), `fixture-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(tmpDir, { recursive: true });
 
   try {
-    // package.json: app.js를 files에 포함시킴
+    // package.json: includes app.js in files
     writeFileSync(join(tmpDir, "package.json"), JSON.stringify({
       name: "test-fixture-missing-import",
       files: ["app.js"]
     }, null, 2));
 
-    // app.js: 존재하지 않는 파일 import
+    // app.js: imports a file that does not exist
     writeFileSync(join(tmpDir, "app.js"), `import "./missing-dependency.js";\n`);
 
-    // collectPublishedImports 호출하면 missing: true인 항목이 나와야 함
+    // Calling collectPublishedImports must return an entry with missing: true
     const imports = collectPublishedImports("test-fixture", tmpDir, ["app.js"]);
 
-    // missing 플래그가 있는 항목을 찾음
+    // Finds the entry that has the missing flag
     const missingItems = imports.filter(imp => imp.missing);
 
     assert.ok(missingItems.length > 0, "누락된 import을 감지해야 함");
     assert.ok(missingItems[0].resolvedPath.includes("missing-dependency"),
       "missing-dependency.js가 누락된 것으로 보고되어야 함");
 
-    // 이제 이 결과로 테스트 실패를 검증
+    // Now the test failure is verified with this result
     const errors = [];
     for (const imp of imports) {
       if (imp.missing) {
@@ -362,30 +362,30 @@ test("an import of a missing file is reported as missing", () => {
 });
 
 test("an unconditional import of a diagnostics-only file is reported", () => {
-  // transcript.js는 진단 빌드에서만 생기므로, 이를 import하는 것을 검증
-  // 임시 워크벤치 픽스처 생성
+  // transcript.js exists only in the diagnostic build, so the test verifies the import of it.
+  // Creates a temporary workbench fixture
   const tmpDir = join(tmpdir(), `fixture-diag-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(tmpDir, { recursive: true });
 
   try {
-    // 워크벤치 스타일 package.json
+    // package.json in the workbench style
     writeFileSync(join(tmpDir, "package.json"), JSON.stringify({
       name: "@soksak/workbench",
       files: ["app.js", "app.html"]
     }, null, 2));
 
-    // 파일 1: JavaScript에서 진단 전용 파일 import
+    // File 1: a JavaScript file imports a diagnostics-only file
     writeFileSync(join(tmpDir, "app.js"), `import "./transcript.js";\n`);
 
-    // 파일 2: HTML에서 진단 전용 파일 import (side-effect)
+    // File 2: an HTML file imports a diagnostics-only file (side effect)
     writeFileSync(join(tmpDir, "app.html"), `<script type="module">
 import "./transcript.js";
 </script>\n`);
 
-    // collectPublishedImports 호출
+    // Calls collectPublishedImports
     const imports = collectPublishedImports("@soksak/workbench", tmpDir, ["app.js", "app.html"]);
 
-    // transcript.js import이 isDiagnosticsOnly: true로 표시되어야 함
+    // The transcript.js import must be marked isDiagnosticsOnly: true
     const diagnosticsOnlyImports = imports.filter(imp => imp.isDiagnosticsOnly);
 
     assert.ok(diagnosticsOnlyImports.length > 0, "진단 전용 import을 감지해야 함");
@@ -394,7 +394,7 @@ import "./transcript.js";
       "transcript.js가 진단 전용으로 표시되어야 함"
     );
 
-    // 이런 import은 missing: true이므로 테스트를 통과하지 못함
+    // Such an import is missing: true, so the test does not pass it
     const errors = [];
     for (const imp of imports) {
       if (imp.missing && imp.isDiagnosticsOnly) {

@@ -1,27 +1,27 @@
 :root{
   color-scheme:dark;
 
-  /* 색. 설정이 테마에서 읽어 심는다. 여기 값은 이 문서를 단독으로 열었을 때의 것이다.
+  /* Colors. Settings read them from the theme and set them. The values here apply when this document is opened alone.
 
-     선은 역할별로 넷이고 서로 다른 색이다. 하나의 강조색을 농도만 바꿔 쓰면
-     무엇이 한 묶음인지 보이지 않는다.
-       --edge   카드와 상자의 테두리. 바탕에서 한 단계만 밝다
-       --rule   판을 나누는 경계선과 divider
-       --rail   사이드바와 카드를 하나로 묶는 선
-       --focus  지금 입력을 받는 곳                                            */
+     There are four lines by role, each in a different color. Using one accent color at different intensities
+     hides which items form one group.
+       --edge   border of cards and boxes. One step lighter than the background
+       --rule   boundary line that divides the plane, and the divider
+       --rail   line that joins a sidebar and a card into one
+       --focus  the place that currently receives input                                            */
   --bg:#101117;--card:#191b24;--fg:#ececf5;--muted:#8f92a4;
   --edge:#2b2e3d;--rule:#22242f;--rail:#7279ff;--focus:#ffb36b;
   --no:#ff7c7c;
 
-  /* 형태. 모드와 무관하다. */
+  /* Shape. Independent of the mode. */
   --r:10px;--half-gap:6px;--bw:1px;
   --font:ui-monospace,SFMono-Regular,Menlo,monospace;--size:13px;
-  /* 카드 안 사이드바 경계선의 누르고 끄는 폭. 접은 사이드바에 남는 폭이기도 하다. */
+  /* Width in which the boundary line of a sidebar inside a card is pressed and dragged. It is also the width that remains of a collapsed sidebar. */
   --divider:6px;
-  /* 사이드바 섹션 이름과 빈 상태 문구의 한글 UI 글꼴. */
+  /* Korean UI font for sidebar section names and empty-state text. */
   --ui-font:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",system-ui,sans-serif;
 
-  /* 모든 화면의 글자 크기와 간격. 글자 크기는 설정의 기본 크기에 비례한다. */
+  /* Font size and spacing of every screen. The font size is proportional to the default size of the settings. */
   --text-control:calc(var(--size) * 12 / 13);
   --text-small:calc(var(--size) * 11 / 13);
   --text-caption:calc(var(--size) * 10 / 13);
@@ -29,86 +29,86 @@
   --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;
 
 
-  /* 반경 척도. 둥근 상자는 다섯이고 값은 셋이다. 카드가 기준이고 나머지는 거기서
-     나오므로, 테마가 --r 을 바꾸면 다섯이 함께 움직인다.
-       --r       카드, 사이드바
-       --r-sm    모달, 선택 목록
-       --r-xs    탭 이름, 아이콘 그룹, 그 안의 컨트롤
-       --r-rail  카드를 통로 밖에서 감싸는 레일과 판
+  /* Radius scale. There are five rounded boxes and three values. The card is the base and the others derive
+     from it, so when a theme changes --r, all five move together.
+       --r       card, sidebar
+       --r-sm    modal, picker list
+       --r-xs    tab name, icon group, controls inside it
+       --r-rail  rail and plane that wrap the cards from outside the passage
 
-     비율을 곱하면 소수가 나온다. --r 이 10px 이면 7.5px 과 5px 이고, 7.5px 은
-     한 배율 화면에서 픽셀 사이에 걸린다. 픽셀 단위로 맞춘다. */
+     Multiplying by the ratios produces fractions. With --r of 10px the results are 7.5px and 5px, and 7.5px
+     falls between pixels at a scale of 1. The values are rounded to whole pixels. */
   --r-sm:round(calc(var(--r) * .75),1px);
   --r-xs:round(calc(var(--r) * .5),1px);
   --r-rail:calc(var(--r) + var(--half-gap));
 
-  /* 칩의 바탕. 회색을 직접 쓰면 테마가 달라도 같은 색이 된다. */
+  /* Background of a chip. A literal gray would be the same color in every theme. */
   --chip:color-mix(in srgb,var(--fg) 7%,transparent);
   --chip-hover:color-mix(in srgb,var(--fg) 12%,transparent);
   --chip-on:color-mix(in srgb,var(--rail) 22%,transparent);
   --chip-sel:color-mix(in srgb,var(--fg) 15%,transparent);
   --inset:color-mix(in srgb,var(--fg) 10%,transparent);
 
-  /* 선과 divider 는 뷰가 그린다. 이 문서는 색만 지정하고 모양과 커서는 뷰가 갖는다. */
+  /* The view draws the line and the divider. This document specifies only the color; the view owns the shape and the cursor. */
   --sp-line:var(--rule);
   --sp-line-crossing:color-mix(in srgb,var(--rule) 45%,transparent);
   --sp-grip:color-mix(in srgb,var(--muted) 70%,transparent);
   --sp-grip-active:var(--focus);
 }
 *{box-sizing:border-box}
-/* 판이 남은 공간을 차지한다. 문서 흐름에 두면 위쪽 요소가 커질 때마다 판의 위치가
-   이동하고 네이티브 표면이 그 변화를 받지 못한다. 여기서는 위치가 아니라 크기만
-   바뀐다. */
+/* The plane takes the remaining space. In the document flow, the position of the plane would move whenever an
+   element above it grows, and the native surface would not receive that change. Here only the size changes,
+   not the position. */
 html,body{height:100%}
-/* 한국어 글은 음절이 아니라 띄어쓰기에서 줄을 바꾼다. */
+/* Korean text breaks lines at word spaces, not between syllables. */
 body{margin:0;background:transparent;color:var(--fg);word-break:keep-all;
   font:var(--size)/var(--line-height) var(--font);letter-spacing:var(--letter-spacing);
   box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;isolation:isolate}
-/* 창 배경은 하나의 페인트 소유자다. compositor.js가 문서에 넣는 스타일 노드가 네이티브
-   표면 사각형만 잘라내므로 합성 조상은 네이티브 픽셀을 드러내고 전체 앱 배경은 유지한다. */
+/* The window background has one paint owner. The style node that compositor.js adds to the document cuts out only the native
+   surface rectangles, so composited ancestors reveal the native pixels and the whole application background is kept. */
 body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:var(--bg)}
 
 button,input,select,textarea{font:inherit;letter-spacing:inherit}
 button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 
-/* ── 창의 크롬 ────────────────────────────────────────────────────────────
-   행 하나에 브랜드, 프로젝트 탭, 아이콘 스위치가 들어간다. 페이지가 행의 높이를 정하고, 배치의 준비가 그 높이를
-   담아 호스트가 같은 트랜잭션에서 창 제목줄을 정한다(frame-text.js 의 chromeRow 가 --chrome-row 와 같은 값을
-   계산한다). 창이 그 높이의 가운데에 자기 단추를 두므로 두 값이 어긋나지 않는다.
-   스페이스 탭은 판 바로 위의 별도 행이다.                                    */
+/* Window chrome
+   One row holds the brand, the project tabs and the icon switches. The page sets the height of the row, the layout preparation
+   carries that height, and the host sets the window title bar in the same transaction (chromeRow in frame-text.js
+   computes the same value as --chrome-row). The window centers its own buttons in that height, so the two values do not diverge.
+   The space tabs are a separate row directly above the plane.                                    */
 :root{--chrome-row-h:36px}
 
-/* 첫 행의 가장 작은 높이. 호스트가 창을 만들 때 정하는 제목줄 높이와 같다. 창의 답에서 읽지 않는다. 읽으면
-   행이 제목줄을, 제목줄이 행을 따라 배율을 내려도 행이 줄지 않는다. */
+/* Smallest height of the first row. It equals the title bar height that the host sets when it creates the window. It is not read from the
+   window reply. If it were read, the row would not shrink when the row follows the title bar and the title bar follows the row in scale. */
 :root{--chrome-h:40px}
 
-/* 창이 그리는 단추가 차지하는 폭. 창이 단추를 그리지 않으면 0 이고, 브라우저에는
-   창이 없으므로 0 이다. */
+/* Width that the buttons drawn by the window occupy. It is 0 when the window draws no buttons, and 0 in a browser
+   because there is no window. */
 :root{--controls-w:0px}
-/* 프레임 글자 배율(docs/spec/text-size.md). 첫 행은 --chrome-h 보다 작아지지 않고, 확대된 탭 행이
-   더 높으면 그 높이를 따른다. */
+/* Frame text scale (docs/spec/text-size.md). The first row never becomes smaller than --chrome-h, and when the enlarged tab row
+   is higher, the row follows that height. */
 :root{--frame-text:1}
 :root[data-frame-text] .chrome-bar > .brand,:root[data-frame-text] .chrome-bar > .tabs--project,
 :root[data-frame-text] .chrome-bar__acts,:root[data-frame-text] .tabs--space,
 :root[data-frame-text] .workarea > .tabs--project{zoom:var(--frame-text)}
-/* 판 위와 왼쪽의 줄은 배율을 곱한 크기를 1px 단위로 맞춘다. 소수 크기는 판의 원점을 device pixel 밖에 두어, 호스트가
-   격자에 앉힌 네이티브 표면과 DOM 이 반 pixel 어긋나고 카드 테두리가 흐려진다(F36). zoom 요소는 지정한 크기에 배율을
-   곱해 그리므로 맞춘 크기를 배율로 나눠 지정한다. */
+/* The lines above and to the left of the plane round the scaled size to whole pixels. A fractional size places the origin of the plane between device pixels, so the
+   native surface that the host seats on the grid and the DOM differ by half a pixel and the card border blurs (F36). A zoom element draws the
+   specified size multiplied by the scale, so the rounded size is divided by the scale before it is specified. */
 .chrome-bar{--chrome-row:round(nearest,max(var(--chrome-h),calc(var(--chrome-row-h) * var(--frame-text))),1px)}
 .chrome-bar{position:relative;flex:0 0 var(--chrome-row);height:var(--chrome-row);display:flex;align-items:center;
   gap:var(--space-2);padding:0 var(--space-3) 0 calc(var(--space-3) + var(--controls-w));
   border-bottom:var(--bw) solid var(--edge);background:var(--card);user-select:none}
-/* 창을 끄는 영역. 막대 전체를 덮고, 탭과 단추는 그 위에 배치된다.
+/* Area that drags the window. It covers the whole bar, and the tabs and buttons are placed above it.
 
-   탭 줄이 막대의 가운데를 모두 차지하므로, 탭 줄은 누름을 받지 않고 그 안의 탭만
-   받는다. 그러지 않으면 끌 수 있는 영역이 남지 않는다. */
+   The tab strip occupies the whole center of the bar, so the strip does not receive presses and only the tabs inside it do.
+   Otherwise no draggable area would remain. */
 .chrome-bar__drag{position:absolute;inset:0;z-index:0}
 .chrome-bar .tabs,.chrome-bar__acts{position:relative;z-index:1}
 .chrome-bar .tabs{pointer-events:none}
 .chrome-bar .tabs > *{pointer-events:auto}
-/* 이 글자는 누름을 받지 않는다. 누름은 아래의 끄는 영역에 도달한다. */
-/* soksak 로고의 글자는 dark 에서 밝은 색, light 에서 어두운 색이다. 아이콘 타일의 색은 로고에 고정되어 있다. */
+/* This text does not receive presses. A press reaches the drag area below. */
+/* The letters of the soksak logo are light in dark mode and dark in light mode. The color of the icon tile is fixed to the logo. */
 .brand{flex:0 0 auto;color:#EDE6D8;margin-right:2px;pointer-events:none;display:flex;align-items:center}
 :root[data-mode=light] .brand{color:#16181D}
 .brand__logo{display:block;height:calc(var(--size) * 20 / 13);width:auto}
@@ -116,12 +116,12 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 
 .chrome-bar__acts{display:flex;align-items:center;gap:6px;flex:0 0 auto}
 
-/* 프로젝트 탭 행. 높이는 --chrome-row-h 가 정한다. */
+/* Project tab row. Its height is set by --chrome-row-h. */
 .tabs{display:flex;align-items:stretch;gap:4px;flex:1 1 auto;min-width:0;
   height:var(--chrome-row-h);padding-block:5px;overflow:hidden}
 .tabs--project{align-self:center}
 
-/* 스페이스 탭 행. 판 바로 위에 위치하므로 탭의 아래가 판과 이어진다. */
+/* Space tab row. It sits directly above the plane, so the bottom of a tab continues into the plane. */
 .tabs--space{flex:0 0 auto;gap:2px;height:calc(round(nearest,calc(var(--chrome-row-h) * var(--frame-text)),1px) / var(--frame-text));
   padding:5px var(--space-3);
   align-items:center;background:var(--card);border-bottom:var(--bw) solid var(--edge)}
@@ -140,7 +140,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .bar-tab__root{padding:0 8px;border:var(--bw) solid var(--focus);border-radius:var(--r-xs);
   background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control);width:180px}
 
-/* 아이콘 스위치. */
+/* Icon switches. */
 .act{display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;
   flex:0 0 auto;padding:0;border:0;border-radius:var(--r-xs);background:transparent;
   color:var(--muted);cursor:pointer}
@@ -150,52 +150,52 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .act svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;
   stroke-linecap:round;stroke-linejoin:round}
 
-/* 프로젝트 탭이 왼쪽에 배치될 때. 스페이스 행보다 위에서 시작해 아래까지 이어진다. */
+/* When the project tabs are placed on the left. They start above the space row and continue to the bottom. */
 .workarea{display:flex;flex:1 1 auto;min-height:0}
 .work{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
 .project-column{display:flex;flex-direction:column;gap:4px;width:calc(round(nearest,calc(64px * var(--frame-text)),1px) / var(--frame-text));flex:0 0 auto;
   padding:5px;background:var(--card);border-right:var(--bw) solid var(--edge)}
 .project-column .bar-tab{position:relative;width:100%;height:36px;justify-content:center;padding:0 4px}
 .project-column .bar-tab__name{max-width:100%;text-align:center}
-/* 세로 레일에서는 이름만 담을 폭이므로 닫기 버튼이 들어가지 않는다. 표시하되
-   눌렸을 때만 드러나게 하지 않고, 이름 위에 겹쳐 둔다. */
+/* A vertical rail is wide enough only for the name, so the close button does not fit. It is not shown only when
+   pressed; it is placed over the name. */
 .project-column .bar-tab__x{position:absolute;top:2px;right:2px;opacity:0}
 .project-column .bar-tab:hover .bar-tab__x,
 .project-column .bar-tab:focus-within .bar-tab__x{opacity:1}
 .project-column .bar-tab--add{width:100%;height:24px;justify-content:center}
 
-/* ── 판 ───────────────────────────────────────────────────────────────── */
+/* Plane */
 .stage{position:relative;flex:1 1 auto;min-height:0;padding:var(--half-gap);
   border:var(--bw) solid var(--rule);border-radius:var(--r-rail)}
 .plane{position:relative;width:100%;height:100%}
 
-/* 카드는 한 종류이고 역할만 다르다. 비율을 받는지 px 를 받는지, 이동 가능한지가
-   차이다. z 순서는 CSS 가 아니라 합성이 정한다. 네이티브 표면은 OS 뷰라 CSS 스택에
-   참여하지 않으므로 시뮬레이터는 표면 레이어를 위에 두어 재현한다. */
+/* There is one kind of card and only the roles differ: whether it takes a ratio or px, and whether it can be moved.
+   The z order is set by composition, not by CSS. A native surface is an OS view and does not
+   take part in the CSS stack, so the simulator reproduces it by putting the surface layer on top. */
 .card{position:absolute;z-index:1;display:grid;grid-template-columns:minmax(0,1fr);
   grid-template-rows:minmax(0,var(--head)) minmax(0,1fr) minmax(0,var(--foot));
   min-width:0;overflow:hidden;border:var(--bw) solid var(--edge);border-radius:var(--r);
   background:var(--card);outline:0}
-/* 그리드 자식의 min-width 기본값 auto 는 열을 min-content 까지 확장하고,
-   overflow:hidden 은 표시만 자를 뿐 rect 를 줄이지 않는다. 그러면 네이티브 표면이
-   카드 밖에 그려진다. 선언 rect 는 클립 영역보다 클 수 없다. */
+/* The default min-width auto of a grid child expands the column to min-content, and
+   overflow:hidden only clips the display and does not shrink the rect. Then the native surface
+   would be drawn outside the card. The declared rect cannot be larger than the clip area. */
 .card > *{min-width:0}
-/* 네이티브 합성은 카드 본문을 정확한 구멍으로 연다. 크롬과 상태 행은
-   각 행이 배경을 소유하므로 카드 배경으로 다시 덮지 않는다. */
+/* Native composition opens the card body as an exact hole. The chrome and the status row
+   each own their background, so they are not covered again with the card background. */
 .card > .chrome,.card > .status{background:var(--card)}
-/* 사이드바도 카드와 같은 조용한 테두리를 갖는다. 레일과 같은 색을 주면 레일 획과
-   테두리가 통로 하나를 사이에 두고 두 겹이 된다. 묶는 일은 획이 한다. */
-/* 포커스는 테두리를 추가하지 않고 기존 테두리의 색으로 표시한다. 링을 덧대면 선이
-   두 겹이 되고 그 사이 1px 이 빈 공간으로 보인다. */
+/* A sidebar has the same quiet border as a card. With the same color as the rail, the rail stroke and the
+   border would be two layers with one passage between them. The stroke does the joining.
+   Focus is shown by the color of the existing border, without adding a border. A ring on top would make the line
+   two layers and show the 1px between them as empty space. */
 :root[data-focus-ind=border] .card[data-focused=true]{border-color:var(--focus)}
-/* 포커스 선과 레일 획은 통로 하나를 두고 만난다. 통로가 선 하나 폭이면 둘이 같은
-   자리에 놓이므로 순서를 정해야 한다. 포커스가 위다. 어느 카드인지는 어느 묶음인지
-   보다 좁은 뜻이고, 순서를 정하지 않으면 묶음의 바깥 변만 레일 색이 되어 카드의 네
-   변이 서로 다른 색이 된다. 레일은 .rail 이 z 3 이다. */
+/* The focus line and the rail stroke meet with one passage between them. When the passage is one line wide, both lie at the same
+   place, so an order must be set. Focus is on top. Which card is a narrower meaning than which group, and
+   without an order only the outer edge of the group would take the rail color and the four sides of a card would have
+   different colors. The rail has z 3 in .rail. */
 .card[data-focused=true]{z-index:4}
 
-/* 포커스 표식은 본문의 네 모서리에만 표시한다. 네이티브 표면은 CSS 스택 밖이라 카드
-   안에 그리면 표면 아래에 가려지므로 표면과 같은 층에 배치한다. */
+/* The focus mark is shown only at the four corners of the body. A native surface is outside the CSS stack, so a mark drawn inside the
+   card would be hidden under the surface; it is placed on the same layer as the surface. */
 .focus-mark{position:absolute;z-index:80;pointer-events:none;
   --len:14px;--t:1px;
   background-image:
@@ -214,16 +214,16 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
   background-repeat:no-repeat}
 .focus-mark[hidden]{display:none}
 
-/* ── 이음새 ───────────────────────────────────────────────────────────────
-   통로를 0 으로 내리면 통로의 폭이 선 굵기 하나가 되고, 그 자리가 두 카드의 공유
-   보더가 된다. 카드는 자기 테두리와 반경을 갖지 않고 판을 나누는 선 하나만 남는다.
-   바깥은 판의 테두리가 닫는다.
+/* Seam
+   Lowering the passage to 0 makes the passage one line thick, and that place becomes the shared
+   border of two cards. A card has no border or radius of its own, and only the one line that divides the plane remains.
+   The border of the plane closes the outside.
 
-   카드 안의 선도 같은 색이다. 머리 아래와 상태줄 위. 이음새와 한 종류로 보인다.
+   The lines inside a card have the same color: below the head and above the status line. They look like one kind with the seam.
 
-   포커스는 이음새 그 자체를 자기 색으로 칠한다. outline 은 카드 rect 바깥에
-   그려지고, 그 바깥이 곧 이음새다. 머리나 상태줄의 선에 칠하면 이음새에서 22px,
-   32px 떨어진 다른 선을 칠하는 것이 되어 카드의 경계를 말하지 못한다.          */
+   Focus paints the seam itself in its own color. The outline is drawn outside the card rect, and that outside
+   is the seam. Painting the line of the head or the status line would paint another line 22px or
+   32px away from the seam, which does not express the boundary of the card.          */
 :root[data-seam=line] .stage{padding:0;border-radius:0}
 :root[data-seam=line] .card{border-width:0;border-radius:0}
 :root[data-seam=line] .chrome{border-bottom-color:var(--rule)}
@@ -232,19 +232,19 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
   outline:var(--bw) solid var(--focus)}
 :root[data-seam=line] .drop{border-radius:0}
 
-/* ── 카드의 머리 ─────────────────────────────────────────────────────────── */
+/* Card head */
 .chrome{display:flex;align-items:center;gap:4px;padding:0 4px;overflow:hidden;
   border-bottom:var(--bw) solid var(--edge)}
-/* 탭 목록은 넘치면 가로 스크롤한다. 탭을 제거하거나 축소하지 않는다. 헤더 높이가
-   32px 이라 스크롤바가 탭보다 두꺼워서 표시하지 않는다. */
+/* The tab list scrolls horizontally when it overflows. Tabs are not removed or shrunk. The header height is
+   32px, so a scrollbar would be thicker than the tabs and is not shown. */
 .chrome__tabs{display:flex;align-items:center;gap:3px;flex:1 1 auto;min-width:0;
   overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .chrome__tabs::-webkit-scrollbar{display:none}
-/* 헤더 너비에 따른 세 단계.
-     strip  탭 전체를 표시한다. 넘치면 가로 스크롤한다
-     one    ≡ 와 활성 탭 1개를 표시한다
-     ham    ≡ 만 표시한다
-   단계가 내려가도 탭을 제거하지 않는다. ≡ 는 항상 탭 전체를 목록으로 표시한다. */
+/* Three levels by header width.
+     strip  shows all tabs. Scrolls horizontally when it overflows
+     one    shows ≡ and the one active tab
+     ham    shows only ≡
+   Tabs are not removed when the level goes down. ≡ always shows all tabs as a list. */
 .chrome__ham{display:none;place-items:center;width:20px;height:20px;padding:0;border:0;
   flex:0 0 auto;background:transparent;color:var(--muted);border-radius:var(--r-xs);
   cursor:pointer}
@@ -252,14 +252,14 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .chrome__ham svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round}
 .chrome__ham:hover{background:var(--inset);color:var(--fg)}
 .chrome[data-fit=one] .chrome__tabs .tab:not([data-active=true]){display:none}
-/* 전체 화면 카드는 머리 맨 앞에 스페이스 앱 단추를 보이고, 자기 탭 목록 단추는 보이지 않는다. 스페이스 목록이 그 탭을 담는다. */
+/* A full-screen card shows the space app button at the start of the head and does not show its own tab list button. The space list holds those tabs. */
 .chrome__apps{display:none;place-items:center;width:20px;height:20px;padding:0;border:0;flex:0 0 auto;
   background:transparent;color:var(--muted);border-radius:var(--r-xs);cursor:pointer}
 .chrome__apps svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round}
 .chrome__apps:hover{background:var(--inset);color:var(--fg)}
 .card[data-fullscreen=true] .chrome__apps{display:grid}
 .card[data-fullscreen=true] .chrome__ham{display:none}
-/* 도구가 한 줄에 들어가지 않으면 도구 줄 대신 ⋯ 를 보인다. 메뉴는 같은 단추와 명령을 나열한다. */
+/* When the tools do not fit in one line, ⋯ is shown instead of the tool row. The menu lists the same buttons and commands. */
 .chrome__more{display:none;place-items:center;width:20px;height:20px;padding:0;border:0;margin-left:auto;
   flex:0 0 auto;background:transparent;color:var(--muted);border-radius:var(--r-xs);cursor:pointer}
 .chrome__more svg{width:14px;height:14px;fill:currentColor;stroke:none}
@@ -274,13 +274,13 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .tab[data-active=true]{color:var(--fg);background:var(--chip-sel)}
 .tab[data-dragging=true]{opacity:.4}
 .tab__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-/* 표면이 알린 알림이 있는 탭과 그 카드의 탭 목록 버튼은 점을 보인다. */
+/* A tab with a notification reported by a surface and the tab list button of its card show a dot. */
 .tab[data-notice=true]::before,.chrome__ham[data-notice=true]::after,.picker__item[data-notice=true]::before{
   content:"";width:6px;height:6px;border-radius:50%;background:var(--focus);flex:0 0 auto}
 .chrome__ham{position:relative}
 .chrome__ham[data-notice=true]::after{position:absolute;top:2px;right:2px}
-/* one 단계에서 활성 탭은 남은 너비만 사용하고 제목을 말줄임한다.
-   제목 전체가 들어갈 때만 표시하면 탭이 불필요하게 숨겨진다. */
+/* At the one level, the active tab uses only the remaining width and truncates the title with an ellipsis.
+   Showing it only when the whole title fits would hide the tab unnecessarily. */
 .chrome[data-fit=one] .tab[data-active=true]{flex:0 1 auto;min-width:0}
 .tab__x{border:0;background:transparent;color:inherit;padding:0 2px;line-height:1;
   font-size:var(--text-small);border-radius:var(--r-xs);opacity:.6;cursor:pointer}
@@ -294,30 +294,30 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .chrome__act .half{fill:currentColor;stroke:none;opacity:.28}
 .chrome__act:hover:not(:disabled){background:var(--inset);color:var(--fg)}
 .chrome__act:disabled{opacity:.25;cursor:not-allowed}
-/* 눌린 토글(전체 화면)은 창 머리의 토글(.act[data-on=true])처럼 초점 색으로 그린다. */
+/* A pressed toggle (full screen) is drawn in the focus color, like the toggle in the window head (.act[data-on=true]). */
 .chrome__act[aria-pressed=true],.chrome__act[aria-pressed=true]:hover{color:var(--focus)}
-/* `[hidden]` 은 display:grid 를 이기지 못하므로 여기서 명시한다. */
+/* `[hidden]` does not override display:grid, so it is stated explicitly here. */
 .chrome__act[hidden]{display:none}
 .slot{position:relative}
-/* 카드 내부의 사방 사이드바와 내용 자리를 행과 열로 배치한다. */
+/* Places the sidebars on four sides and the content slot inside a card in rows and columns. */
 .card:has(> .card-sidebar){
   grid-template-columns:var(--pl,0px) minmax(0,1fr) var(--pr,0px);
   grid-template-rows:minmax(0,var(--head)) var(--pt,0px) minmax(0,1fr) var(--pb,0px) minmax(0,var(--foot));
 }
-/* 좌·우 사이드바는 머리 아래에서 카드 아래 끝까지 이어지고, 내용 열은 위 사이드바·내용·아래 사이드바·내용 발이다.
-   카드 아래 끝은 좌·우 사이드바의 상태 줄과 내용 발이 한 줄로 놓인 발 높이의 띠다. */
+/* The left and right sidebars continue from below the head to the bottom edge of the card, and the content column is the top sidebar, the content, the bottom sidebar and the content foot.
+   The bottom edge of the card is a band of foot height in which the status lines of the left and right sidebars and the content foot lie in one line. */
 .card:has(> .card-sidebar) > .chrome{grid-column:1 / -1}
 .card:has(> .card-sidebar) > .status{grid-column:2}
 .card > .chrome{grid-row:1}
 .card > .status{grid-row:-2 / -1}
 .card:has(> .card-sidebar) > .slot{grid-row:3;grid-column:2}
-/* 사방 사이드바(V5-115). 상하는 카드 전체 폭(1/-1), 좌우는 중앙 칸의 양옆 열에 선다. */
+/* Sidebars on four sides (V5-115). The top and bottom ones span the full card width (1/-1), and the left and right ones stand in the columns beside the center cell. */
 .card-sidebar{position:relative;min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column;user-select:none;background:var(--card)}
 .card-sidebar[data-side-of=top]{grid-row:2;grid-column:2;border-bottom:var(--bw) solid var(--edge)}
 .card-sidebar[data-side-of=bottom]{grid-row:4;grid-column:2;border-top:var(--bw) solid var(--edge)}
 .card-sidebar[data-side-of=left]{grid-row:2 / -1;grid-column:1;border-right:var(--bw) solid var(--edge)}
 .card-sidebar[data-side-of=right]{grid-row:2 / -1;grid-column:3;border-left:var(--bw) solid var(--edge)}
-/* 접은 사이드바은 내용을 숨기고 경계선 폭만 남는다. */
+/* A collapsed sidebar hides its content and keeps only the width of the boundary line. */
 .card[data-sidebar-top=folded] > .card-sidebar[data-side-of=top] > .set,
 .card[data-sidebar-bottom=folded] > .card-sidebar[data-side-of=bottom] > .set,
 .card[data-sidebar-left=folded] > .card-sidebar[data-side-of=left] > .set,
@@ -326,7 +326,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .card[data-sidebar-bottom=folded] > .card-sidebar[data-side-of=bottom] > .card-sidebar__status,
 .card[data-sidebar-left=folded] > .card-sidebar[data-side-of=left] > .card-sidebar__status,
 .card[data-sidebar-right=folded] > .card-sidebar[data-side-of=right] > .card-sidebar__status{display:none}
-/* 경계선은 사이드바의 안쪽 변 위에 절대 위치로 겹친다: 끌기는 크기, 누름은 접기. */
+/* The boundary line overlaps the inner edge of the sidebar by absolute position: dragging changes the size, pressing collapses. */
 .card-sidebar__grip{position:absolute;z-index:2;background:transparent}
 .card-sidebar__grip[data-side-of=top],.card-sidebar__grip[data-side-of=bottom]{left:0;right:0;height:var(--divider);cursor:row-resize}
 .card-sidebar__grip[data-side-of=top]{bottom:0}
@@ -334,13 +334,13 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .card-sidebar__grip[data-side-of=left],.card-sidebar__grip[data-side-of=right]{top:0;bottom:0;width:var(--divider);cursor:col-resize}
 .card-sidebar__grip[data-side-of=left]{right:0}
 .card-sidebar__grip[data-side-of=right]{left:0}
-/* 접은 사이드바의 경계선은 남은 줄을 누를 수 있게 한다. */
+/* The boundary line of a collapsed sidebar makes the remaining strip pressable. */
 .card[data-sidebar-top=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=top],
 .card[data-sidebar-bottom=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=bottom],
 .card[data-sidebar-left=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=left],
 .card[data-sidebar-right=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=right]{cursor:pointer}
-/* 접힌 변은 가운데에 점 세 개만 그린다. 카드 divider 의 막대 grip 과 구별되고, 변 전체의 선은 카드 경계가 하나 더 있는 것처럼
-   보이므로 그리지 않는다. 점은 가운데 원과 그 양옆 그림자이며 모두 currentColor 다. */
+/* A collapsed side draws only three dots at its center. This is distinguished from the bar grip of the card divider, and a line along the whole side is not drawn because it
+   would look like one more card boundary. The dots are a center circle and its shadows on both sides, all in currentColor. */
 .card[data-sidebar-top=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=top]::after,
 .card[data-sidebar-bottom=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=bottom]::after,
 .card[data-sidebar-left=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=left]::after,
@@ -352,8 +352,8 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .card-sidebar__grip[data-side-of=left]::after,.card-sidebar__grip[data-side-of=right]::after{
   box-shadow:0 -6px currentColor,0 6px currentColor}
 .card-sidebar__grip:hover::after,.card-sidebar__grip:active::after{color:var(--sp-grip-active)}
-/* 상태줄은 카드가 좁아져도 한 줄을 유지한다. 줄바꿈이 생기면 22px 안에서 잘려
-   두 번째 줄이 사라지고 첫 줄의 세로 정렬도 어긋난다. */
+/* The status line stays on one line when the card becomes narrow. If it wrapped, it would be cut off within 22px,
+   the second line would disappear, and the vertical alignment of the first line would also shift. */
 .status{display:flex;align-items:center;padding:0 var(--space-2);font-size:var(--text-caption);
   border-top:var(--bw) solid var(--edge);color:var(--muted);
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
@@ -365,47 +365,47 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .surface-status[hidden]{display:none}
 @keyframes surface-status-spin{to{transform:rotate(360deg)}}
 
-/* ── 선 ───────────────────────────────────────────────────────────────────
-   경계선은 한 좌표가 판을 가로지르는 전체 구간이다. 카드가 실제로 접하는 구간은
-   실선이고 나머지는 카드가 가로지르는 구간이다. 둘은 같은 좌표에 있고 길이만 다르다.
-   실선만 그리면 위는 나뉘고 아래는 이어진 곳에서 선이 둘로 보인다. 세 값 중 하나다.
-   · over  표면 위에 그린다. DOM 오버레이는 애플리케이션에서도 표면 위에 그릴 수 있다.
-   · under 카드 아래에 그린다. 카드가 덮는 구간은 보이지 않는다.
-   · none  그리지 않는다.                                                     */
+/* Line
+   A boundary line is the whole span that one coordinate crosses on the plane. The span where cards actually touch is
+   a solid line and the rest is the span that cards cross. Both lie at the same coordinate and differ only in length.
+   Drawing only the solid line would show two lines where the upper part is divided and the lower part is continuous. It is one of three values.
+   · over  draws on top of the surface. In the application a DOM overlay can also be drawn on top of the surface.
+   · under draws below the card. The span that the card covers is not visible.
+   · none  draws nothing.                                                     */
 :root[data-full-rule=over] .sp-rule[data-virtual=true]{z-index:70}
 :root[data-full-rule=none] .sp-rule[data-virtual=true]{display:none}
 .sp-divider{z-index:4}
 
-/* 레일 외곽선은 통로 안에만 그린다. 카드 안쪽을 덮는 채움은 애플리케이션에서
-   네이티브 표면에 가려지므로 여기서도 그리지 않는다. */
+/* The rail outline is drawn only inside the passage. A fill that covers the inside of a card would be hidden by the native surface
+   in the application, so it is not drawn here either. */
 .rail{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:visible}
 .rail path{fill:none;stroke:var(--rail);stroke-width:var(--bw);
   stroke-linejoin:round;vector-effect:non-scaling-stroke}
 
-/* ── 표면 ─────────────────────────────────────────────────────────────────
-   모사한 네이티브 표면. 컴포지터가 applied 프레임에 배치한다. 카드가 클립하므로
-   모서리를 따로 두지 않는다.                                                  */
+/* Surface
+   Simulated native surface. The compositor places it at the applied frame. The card clips it,
+   so no separate corners are set.                                                  */
 .surface{position:absolute;z-index:50;background:var(--card);color:var(--fg);
   font-size:var(--text-small);padding:6px 9px;overflow:hidden;pointer-events:none}
 .surface[data-hidden=true]{display:none}
-/* 포커스를 잃은 표면. 애플리케이션은 뷰의 알파를 같은 값으로 낮춘다. */
+/* A surface that lost focus. The application lowers the alpha of the view to the same value. */
 .surface[data-dim=true]{opacity:.45}
 .surface b{color:var(--fg)}
 
-/* `.standin` 은 표면과 동일하게 보여야 하므로 `.surface` 와 같은 값을 사용한다.
-   값이 다르면 표면을 숨기는 시점에 화면이 바뀐다. */
+/* `.standin` must look the same as the surface, so it uses the same values as `.surface`.
+   With different values the screen would change at the moment the surface is hidden. */
 .standin{position:absolute;inset:0;background:var(--card);color:var(--fg);
   font-size:var(--text-small);padding:6px 9px;overflow:hidden}
 .standin b{color:var(--fg)}
-/* 드롭 구획은 DOM 이므로 표면이 숨겨진 동안에만 보인다. z 를 표면보다 낮게 둔다.
-   높이면 애플리케이션의 동작과 달라진다. */
+/* The drop zone is DOM, so it is visible only while the surface is hidden. Its z is lower than the surface.
+   A higher z would differ from the behavior of the application. */
 .drop{position:absolute;z-index:40;pointer-events:none;border-radius:var(--r);
   background:color-mix(in srgb,var(--focus) 18%,transparent);
   border:2px solid var(--focus)}
 .drop[hidden]{display:none}
 
-/* 선택 레이어는 DOM 요소다. z 를 표면보다 낮게 두고 겹치는 표면만 숨긴다.
-   높이면 애플리케이션에서 표면에 가려진다. */
+/* The picker layer is a DOM element. Its z is lower than the surface and only the overlapping surface is hidden.
+   A higher z would be hidden by the surface in the application. */
 .picker{position:absolute;z-index:41;min-width:170px;max-width:260px;max-height:238px;
   overflow-y:auto;scrollbar-width:thin;padding:4px;
   background:var(--card);border-radius:var(--r-sm);
@@ -413,9 +413,9 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
   --picker-pad:8px;--picker-icon:14px;--picker-gap:8px;--picker-indent:12px}
 .picker[hidden]{display:none}
 .picker__head{padding:4px 8px 6px;font-size:var(--text-caption);color:var(--muted);letter-spacing:var(--section-tracking)}
-/* 묶음 목록(스페이스 앱)은 항목이 많으므로 높이 상한을 키운다. 묶음 제목은 판 지도와 이름이며 나무 깊이만큼 들여쓴다. */
+/* The group list (space app) has many items, so its height limit is raised. A group title is a plane map and a name, indented by the tree depth. */
 .picker--grouped{max-width:300px;max-height:min(480px,calc(100vh - 24px));--picker-icon:22px}
-/* 제목과 항목은 같은 깊이에서 아이콘 칸의 x 와 이름의 x 가 같다. 칸 너비·안쪽 여백·간격·들여쓰기는 .picker 의 변수 하나씩이 정한다. */
+/* A title and an item at the same depth have the same x for the icon cell and the same x for the name. The cell width, inner padding, gap and indentation are each set by one variable of .picker. */
 .picker__group{display:flex;align-items:center;gap:var(--picker-gap);
   padding:6px var(--picker-pad) 3px calc(var(--picker-pad) + var(--depth,0) * var(--picker-indent));
   font-size:var(--text-caption);color:var(--muted)}
@@ -434,13 +434,13 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .picker__item:hover,.picker__item:focus-visible{outline:0;color:var(--fg);
   background:var(--chip-hover)}
 
-/* ── 설정 ─────────────────────────────────────────────────────────────────
-   판 전체를 덮는 오버레이와 그 안의 카드. 오버레이가 모달이 열린 동안 뒤의 divider
-   드래그를 차단한다. 색을 칠하지는 않는다. 네이티브 표면이 이 문서 위에 합성되므로
-   화면의 일부만 어두워진다.
+/* Settings
+   An overlay that covers the whole plane and the card inside it. While a modal is open, the overlay blocks the divider
+   drag behind it. It does not paint a color. Native surfaces are composited above this document, so only part of the
+   screen would be darkened.
 
-   컨트롤은 브라우저 기본 모양을 쓰지 않는다. 기본 select 와 checkbox 는 테마의 색을
-   따르지 않아 테마를 바꿔도 그 자리만 그대로다.                                */
+   Controls do not use the default browser appearance. The default select and checkbox do not follow the theme colors,
+   so only they would stay unchanged when the theme changes.                                */
 .set-scrim{position:fixed;inset:0;z-index:200}
 .set-card{position:absolute;left:50%;top:72px;transform:translateX(-50%);
   width:560px;max-height:74vh;display:flex;flex-direction:column;
@@ -455,8 +455,8 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 
 .set-card__nav{display:flex;flex-direction:column;gap:2px;width:136px;flex:0 0 auto;
   padding:10px 8px;border-right:var(--bw) solid var(--edge)}
-/* 현재 절은 왼쪽에 레일과 같은 색의 표시를 갖는다. 사이드바를 카드에 묶는 선과 같은
-   뜻이다. */
+/* The current section has a mark on the left in the same color as the rail. It has the same
+   meaning as the line that joins a sidebar to a card. */
 .set-nav{position:relative;text-align:left;padding:7px 10px;border:0;
   border-radius:var(--r-xs);background:transparent;color:var(--muted);
   font:inherit;font-size:var(--text-control);cursor:pointer}
@@ -479,7 +479,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set-row{display:grid;grid-template-columns:124px 1fr;align-items:center;gap:12px;
   min-height:30px}
 .set-row__name{font-size:var(--text-control);color:var(--muted)}
-/* 세트 행은 이름 칸 대신 세트 줄이 남은 너비를 쓰고, 단추는 줄 오른쪽에 붙는다. */
+/* In a set row, the set line uses the remaining width instead of a name cell, and the buttons attach to the right of the line. */
 .set-row:has(> .set-caption){grid-template-columns:1fr auto}
 .set-row > .set-caption{margin:0;min-width:0}
 
@@ -494,7 +494,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .dbg-row__path{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-control);color:var(--fg)}
 .dbg-row__acts{display:grid;grid-template-columns:repeat(3,56px);gap:var(--space-2)}
 .dbg-row__acts .ui-button{width:100%}
-/* The bar of a shown file stays at the top of the scrolling pane, so the 목록 button is in view at the end of a long text. */
+/* The bar of a shown file stays at the top of the scrolling pane, so the list button is in view at the end of a long text. */
 .dbg-card__bar{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:12px;margin:0 0 var(--space-3);padding:var(--space-1) 0;min-height:30px;background:var(--card)}
 .dbg-card__path{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-control);color:var(--fg)}
 .dbg-card__cut{font-size:var(--text-small);color:var(--muted)}
@@ -513,7 +513,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .dbg-card__warning{font-size:var(--text-small);color:var(--muted)}
 .dbg-row__facts{font-size:var(--text-small);color:var(--muted);font-variant-numeric:tabular-nums}
 
-/* select. 화살표는 감싼 요소가 그리고 select 자체는 기본 모양을 쓰지 않는다. */
+/* select. The wrapping element draws the arrow, and the select itself does not use the default appearance. */
 .select-field{position:relative;display:block}
 .select-field::after{content:"▾";position:absolute;right:10px;top:50%;translate:0 -50%;
   font-size:var(--text-caption);color:var(--muted);pointer-events:none}
@@ -524,7 +524,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .select-field select:hover,.text-field:hover{border-color:var(--rail)}
 .select-field select:focus-visible,.text-field:focus-visible{outline:0;border-color:var(--focus)}
 
-/* 값이 둘이나 셋인 설정은 목록이 아니라 한 줄에 늘어놓는다. */
+/* A setting with two or three values is laid out in one row instead of a list. */
 .set-seg{justify-self:start;display:inline-flex;gap:2px;padding:2px;border:var(--bw) solid var(--edge);
   border-radius:var(--r-xs);background:var(--bg)}
 .set-seg button{padding:3px 11px;border:0;border-radius:var(--r-xs);background:transparent;
@@ -532,7 +532,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set-seg button:hover{color:var(--fg)}
 .set-seg button[data-on=true]{background:var(--chip-sel);color:var(--fg)}
 
-/* 켜고 끄는 값. */
+/* On/off value. */
 .set-switch{justify-self:start;appearance:none;position:relative;width:34px;height:19px;flex:0 0 auto;
   margin:0;border:0;border-radius:19px;background:var(--inset);cursor:pointer}
 .set-switch::after{content:"";position:absolute;left:3px;top:3px;width:13px;height:13px;
@@ -554,13 +554,13 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
   background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control);cursor:pointer}
 .ui-button:hover{border-color:var(--rail)}
 
-/* 테마 견본. 그 테마가 가진 값을 그 테마의 값으로 그린다. 바탕과 카드 두 칸만
-   칠하면 테마 사이의 차이가 보이지 않는다.
+/* Theme swatch. It draws the values that the theme has with the values of that theme. Painting only the background and two cards
+   would not show the differences between themes.
 
-     상자 바탕   --bg          카드 둘      --card 와 --edge
-     왼쪽 띠     --rail        둘 사이      --rule (통로가 0 인 테마)
-     오른쪽 점   --focus       모서리       그 테마의 반경
-     둘의 간격   그 테마의 통로                                              */
+     box background   --bg          two cards     --card and --edge
+     left band        --rail        between them  --rule (theme with passage 0)
+     right dot        --focus       corners       radius of that theme
+     gap between      passage of that theme                                              */
 .th-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;
   margin:0 0 14px}
 .th{display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:3px;
@@ -576,7 +576,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .th__dot{position:absolute;right:3px;bottom:3px;width:6px;height:6px;border-radius:50%}
 .th__name{text-align:center}
 
-/* 오류 색은 오류 표시 경로(shown-errors.js)가 붙이는 data-error 요소에만 쓴다(AGENTS.md). */
+/* The error color is used only on a data-error element that the error display path (shown-errors.js) attaches (AGENTS.md). */
 [data-error] { color: var(--no); }
 #applicationError {
   padding: 8px 12px;
@@ -589,18 +589,18 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set-reset { font-size: var(--text-caption); }
 .set-row:has(.set-reset) { flex-wrap: wrap; }
 
-/* 카드 내용의 글자 배율은 프레임 배율과 카드 배율의 곱이다(docs/spec/text-size.md). 판은 그 값이 1 이
-   아닐 때만 data-text-zoom 과 --text-zoom 을 쓴다. WebKit 은 zoom 요소의 퍼센트 크기를 확대하지 않으므로
-   호스트는 그대로 슬롯을 채우고 그 안의 내용만 커진다. 슬롯 사각형과 네이티브 배치는 바뀌지 않는다. */
+/* The text scale of card content is the product of the frame scale and the card scale (docs/spec/text-size.md). The plane uses data-text-zoom and --text-zoom only when that value is not
+   1. WebKit does not enlarge the percentage size of a zoom element, so the host
+   still fills the slot and only the content inside it grows. The slot rectangle and the native layout do not change. */
 .card[data-text-zoom] .surface-module-host,.card[data-text-zoom] > .set{zoom:var(--text-zoom)}
-/* 사이드바. 세트 제목 줄과 자리 표시 없이 섹션이 맨 위에서 시작하고, 26pt 상태 줄로 끝난다.
-   섹션 머리는 사이드바보다 한 단계 밝은 띠이고, 접으면 머리만 남는다. 색은 모두 테마 토큰에서 온다. */
+/* Sidebar. The section starts at the top without a set title row or a placeholder, and ends with a 26pt status line.
+   The section head is a band one step lighter than the sidebar, and a collapsed section keeps only the head. All colors come from theme tokens. */
 .card[data-place]{grid-template-rows:0 minmax(0,1fr) minmax(0,var(--foot))}
 .card[data-place] > .chrome{display:none}
 .card[data-place] > .set{grid-row:2}
 .card[data-place] > .status{grid-row:3}
 .set{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column}
-/* 상태 줄은 카드 발과 같은 높이와 글자여서 사이드바와 이웃 카드의 아래 선이 한 줄에 놓인다. */
+/* The status line has the same height and text as the card foot, so the bottom lines of the sidebar and the neighboring card lie in one line. */
 .sidebar-status__fold{display:grid;place-items:center;margin-left:auto;width:18px;height:18px;padding:0;border:0;border-radius:var(--r-xs);
   background:transparent;color:var(--muted);cursor:pointer}
 .sidebar-status__fold:hover{background:var(--inset);color:var(--fg)}
@@ -608,24 +608,24 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .sidebar-status,.card-sidebar__status{display:flex;align-items:center;gap:6px;height:var(--foot);flex:0 0 var(--foot);box-sizing:border-box;
   padding:0 var(--space-2);border-top:var(--bw) solid var(--edge);font-size:var(--text-caption);color:var(--muted);
   white-space:nowrap;overflow:hidden}
-/* 머리는 카드 머리 높이여서 사이드바 첫 머리의 아래 선이 이웃 카드 머리의 아래 선과 한 줄에 놓인다. */
+/* The head has the height of the card head, so the bottom line of the first sidebar head and the bottom line of the neighboring card head lie in one line. */
 .set__head,.set__tab{display:flex;align-items:center;gap:6px;height:var(--head);flex:0 0 var(--head);box-sizing:border-box;padding:0 10px;
   border:0;background:color-mix(in srgb,var(--fg) 3%,var(--card));color:var(--fg);
   font:600 11.5px var(--ui-font);letter-spacing:0;text-align:left;cursor:pointer}
-/* 머리 선은 안쪽 그림자여서 어느 상태에서도 머리의 내용 상자가 같고 이름이 움직이지 않는다. 아래 선은 늘 있고,
-   위 선은 앞 섹션이 펼쳐져 본문이 끝나는 자리에만 그린다. 앞 섹션이 접혀 있으면 그 머리의 아래 선이 경계다. */
+/* The head line is an inner shadow, so the content box of the head is the same in every state and the name does not move. The bottom line is always present,
+   and the top line is drawn only where the body ends because the previous section is expanded. When the previous section is collapsed, the bottom line of its head is the boundary. */
 .set__head{width:100%;box-shadow:inset 0 calc(0px - var(--bw)) 0 var(--edge)}
 .set__section:not([data-folded=true]) + .set__section .set__head{
   box-shadow:inset 0 var(--bw) 0 var(--edge),inset 0 calc(0px - var(--bw)) 0 var(--edge)}
 .set__head:hover,.set__tab:hover{background:color-mix(in srgb,var(--fg) 7%,var(--card))}
-/* 접기 표시는 코어의 획 아이콘(chevron-down)이고 머리 글자 크기다. 접으면 오른쪽을 향하도록 돌린다. */
+/* The collapse indicator is the stroke icon of the core (chevron-down) at the head text size. It is rotated to point right when collapsed. */
 .set__chevron{display:flex;flex:0 0 1em;width:1em;height:1em;color:var(--muted)}
 .set__chevron svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .set__head[aria-expanded=false] .set__chevron{transform:rotate(-90deg)}
 .set__name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .set__section[data-folded=true] .set__body{display:none}
-/* 탭 줄은 카드 탭 줄처럼 넘치면 가로로 스크롤하고, 탭은 줄바꿈하거나 줄어들지 않는다. 아래 선은 그림자여서
-   탭이 줄의 높이를 그대로 채운다. */
+/* The tab strip scrolls horizontally when it overflows, like the card tab strip, and tabs neither wrap nor shrink. The bottom line is a shadow, so
+   the tabs fill the full height of the strip. */
 .set__tabs{display:flex;flex:0 0 var(--head);height:var(--head);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
   box-shadow:inset 0 calc(0px - var(--bw)) 0 var(--edge);background:color-mix(in srgb,var(--fg) 3%,var(--card))}
 .set__tabs::-webkit-scrollbar{display:none}
@@ -634,16 +634,16 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set__body{padding:9px 14px;font:12px/1.6 var(--font);color:color-mix(in srgb,var(--fg) 80%,var(--muted))}
 .set__body ul{margin:0;padding:0;list-style:none}
 .set__body p{margin:0;overflow-wrap:anywhere}
-/* 목록이 비면 플러그인이 목록 자리에 빈 상태 문구를 적는다. 문구는 UI 글꼴의 흐린 색이다. */
+/* When the list is empty, the plugin writes empty-state text in the list place. The text uses the UI font in a faded color. */
 .set__body ul:not(:has(li)),.set__empty{font:12px/1.6 var(--ui-font);color:var(--muted)}
 .set__empty{margin:0;padding:9px 14px}
 .set__body li button{border:0;padding:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .set__body li button:hover{color:var(--fg);text-decoration:underline}
 .set__section{flex:0 0 auto}
-/* fill 섹션은 다른 섹션이 쓰고 남은 높이를 나눠 갖고 본문을 그 안에서 스크롤한다. 접히면 머리만 남는다. */
+/* A fill section shares the height that the other sections leave and scrolls its body inside it. When collapsed, only the head remains. */
 .set__section[data-fill=true]:not([data-folded=true]):not([hidden]){flex:1 1 0;min-height:min-content;display:flex;flex-direction:column}
 .set__section[data-fill=true]:not([data-folded=true]) > .set__body{flex:1 1 auto;min-height:min-content;overflow:auto}
-/* 가로 목록은 같은 높이 안에서 섹션 폭을 나누고 각 본문을 스크롤한다. */
+/* A horizontal list divides the section width within the same height and scrolls each body. */
 .set[data-orientation=horizontal][data-layout=list]{flex-direction:row;min-width:0}
 .set[data-orientation=horizontal][data-layout=list] > .set__section:not([data-folded=true]){flex:1 1 0;min-width:0;min-height:0;display:flex;flex-direction:column}
 .set[data-orientation=horizontal][data-layout=list] > .set__section > .set__body{flex:1 1 auto;min-height:0;overflow:auto}

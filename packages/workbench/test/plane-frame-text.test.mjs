@@ -1,5 +1,5 @@
-// 프레임 배율의 변경은 준비한 배치가 그린다. 준비는 다음 그리기가 보일 첫 행의 높이를 담고, 배율은 그 그리기에서
-// 문서에 쓰인다. 그래야 호스트가 같은 트랜잭션에서 정한 제목줄과 행이 같은 프레임에 나온다
+// The prepared layout draws a change of the frame scale. The preparation holds the height of the first row that the next drawing will show, and the scale is
+// applied to the document in that drawing. This way the title bar and the row that the host sets in the same transaction appear in the same frame
 // (docs/spec/native-surfaces.md#title-bar-height).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -60,13 +60,13 @@ test("a frame factor change prepares the row of the next draw and writes the fac
   const root = document.documentElement;
   const drawnFactor = () => root.style.getPropertyValue("--frame-text");
   try {
-    // 첫 그리기는 준비하지 않는다(index.html 과 같다).
+    // The first drawing is not prepared (same as index.html).
     plane.adopt(plane.fresh());
     let held = null;
     plane.onLayout((made, draw, seated, titlebar) => { held = { made, draw, seated, titlebar }; });
     const before = drawnFactor();
 
-    // index.html 이 설정 변경에 하는 일: 판 크기를 다시 재고 그린다.
+    // What index.html does on a settings change: it measures the plane size again and draws.
     await settings.set({ textSize: 1.5 }, "common");
     plane.setGap(settings.halfGap());
     plane.settle();
@@ -83,7 +83,7 @@ test("a frame factor change prepares the row of the next draw and writes the fac
     assert.equal(records.at(-1).drawn, true);
     assert.equal(records.at(-1).titlebar, 54, "the record after the draw carries the drawn row");
 
-    // 배율을 내리면 행이 줄어든다. 창의 답이 행을 정하지 않는다.
+    // Lowering the scale shrinks the row. The reply of the window does not set the row.
     held = null;
     await settings.set({ textSize: 1 }, "common");
     plane.setGap(settings.halfGap());

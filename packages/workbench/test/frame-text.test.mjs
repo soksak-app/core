@@ -1,4 +1,4 @@
-// 페이지가 준비에 담는 첫 행의 높이는 app.css 의 --chrome-row 와 같은 값이어야 한다(docs/spec/native-surfaces.md#title-bar-height).
+// The height of the first row that the page puts in a preparation must equal --chrome-row of app.css (docs/spec/native-surfaces.md#title-bar-height).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -7,14 +7,14 @@ import { TEXT_STEPS } from "../text-size.js";
 
 const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
 
-/** app.css 에서 name 의 선언 값을 하나만 찾는다. 없거나 둘 이상이면 실패한다. */
+/** Finds exactly one declared value of name in app.css. It fails when there is none or more than one. */
 function declared(name) {
   const found = [...css.matchAll(new RegExp(`${name}:([^;}]+)[;}]`, "g"))].map((m) => m[1].trim());
   assert.equal(found.length, 1, `app.css declares ${name} ${found.length} times`);
   return found[0];
 }
 
-/** --chrome-row 의 식을 CSS 의미대로 계산한다. round(nearest, x, 1px) 는 가운데 값에서 큰 쪽을 고른다. */
+/** Computes the expression of chrome-row with CSS semantics. round(nearest, x, 1px) picks the larger side at the middle value. */
 function cssRow(factor) {
   const expression = declared("--chrome-row");
   assert.equal(expression, "round(nearest,max(var(--chrome-h),calc(var(--chrome-row-h) * var(--frame-text))),1px)",
@@ -45,7 +45,7 @@ test("a factor is written into the document only by a draw, and a measurement re
   t.after(() => { delete globalThis.document; dom.window.close(); });
   const { applyFrameText, drawnFrameText, measureAt } = await import("../frame-text.js?test=apply");
   const root = dom.window.document.documentElement;
-  // 쓰기 전에는 app.css 의 :root 값 1 이다.
+  // Before it is written, the value is 1, the :root value of app.css.
   assert.equal(drawnFrameText(), 1);
   applyFrameText(1.5);
   assert.equal(drawnFrameText(), 1.5);
@@ -61,9 +61,9 @@ test("a factor is written into the document only by a draw, and a measurement re
   assert.equal(root.dataset.frameText, undefined, "factor 1 declares no zoom");
 });
 
-// 판이 없는 창의 배율 변경과 라이브러리로의 전환은 준비한 배치로 그린다. 전환은 그 전에 준비한 배치의 그리기를 취소하므로,
-// 전환의 그리기가 지금 배율을 써야 취소된 그리기의 배율이 사라지지 않는다. 라이브러리 화면은 같은 그리기에서 판을 지운 뒤
-// 그린다(F43).
+// A scale change in a window without a plane and the switch to the library are drawn with the prepared layout. The switch cancels the drawing of
+// the layout prepared before it, so the drawing of the switch must use the current scale, or the scale of the canceled drawing is lost. The library
+// screen clears the plane in the same drawing and then draws (F43).
 test("a frame layout prepares the row of its factor and writes the factor and shows the screen after clearing the plane", async (t) => {
   const dom = new JSDOM("<!doctype html><html><body></body></html>");
   globalThis.document = dom.window.document;

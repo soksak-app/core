@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-// 설정 창의 플러그인 절은 불러온 플러그인의 설정만 담는다. 설치와 설명은 라이브러리의 플러그인 페이지가 맡는다
-// (docs/spec/settings.md 의 플러그인 절).
+// The plugin section of the settings window holds only the settings of loaded plugins. Installation and description belong to the plugin page of the library
+// (plugin section in docs/spec/settings.md).
 test("the plugins section lists only loaded plugins by name and leaves operations to the plugin screen", async (t) => {
   const dom = new JSDOM("<body><div id=plane></div></body>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
@@ -18,7 +18,7 @@ test("the plugins section lists only loaded plugins by name and leaves operation
     { id: "alpha", name: "알파", description: "알파 표면.", version: "1.0.0", surface: true, sections: [], dependencies: {} },
     { id: "beta", name: "베타", description: "베타 목록.", version: "1.0.0", surface: false, sections: [], dependencies: {} },
   ] } });
-  // 레지스트리에만 있는 플러그인은 설정 창에 나오지 않는다.
+  // A plugin that exists only in the registry does not appear in the settings window.
   const status = {
     registry: "file:///registry/index.json", error: null, restart: false, operation: null,
     plugins: [

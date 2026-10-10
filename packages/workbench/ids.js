@@ -1,15 +1,15 @@
-// 식별자 생성.
+// Identifier generation.
 //
-// 형식은 `<세 글자>-<base32 여섯>`. 한두 글자로는 종류가 겹친다: `s-` 는 space,
-// split, session 에 모두 해당한다.
+// The form is `<three letters>-<six base32 characters>`. One or two letters make kinds overlap: `s-` applies to
+// space, split, and session alike.
 //
-// 카운터를 사용하지 않는다. 재시작할 때마다 1 로 돌아가 같은 값이 다른 대상에
-// 할당된다.
+// No counter is used. A counter returns to 1 at every restart, and the same value
+// is assigned to a different target.
 //
-// id 는 주소이고 정체성은 자연키가 결정한다. 프로젝트 중복 여부는 id 가 아니라
-// root 로 판정한다.
+// An id is an address, and the natural key decides the identity. Whether a project is a duplicate
+// is decided by root, not by id.
 
-/** 0 과 1 을 제외한다. o, l 과 혼동되는 문자를 생성하지 않는다. */
+/** 0 and 1 are excluded. Characters that can be confused with o and l are not generated. */
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 const LEN = 6;
 
@@ -19,7 +19,7 @@ const PREFIX = {
   tab: "tab-",
 };
 
-/** 식별자 하나를 생성해 반환한다. */
+/** Generates and returns one identifier. */
 export function issueId(kind) {
   const prefix = PREFIX[kind];
   if (!prefix) throw new Error(`unknown id kind: ${kind}`);

@@ -1,5 +1,5 @@
-// 준비는 제목줄 높이를 담고, 페이지는 표시를 확인한 준비의 창 단추 영역을 커밋된 상태로 읽는다. 그리기 뒤에 제목줄을
-// 따로 요청하는 호출은 없다(docs/spec/native-surfaces.md#title-bar-height).
+// A preparation holds the title bar height, and the page reads the window button region of the preparation whose presentation it confirmed as the committed state. No call
+// requests the title bar separately after drawing (docs/spec/native-surfaces.md#title-bar-height).
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
@@ -20,7 +20,7 @@ test("the preparation carries the title bar height and the presented chrome is t
         return {
           ticket: prepared,
           placements: [{ id: "surface", x: 1, y: 2, w: 3, h: 4, visible: true }],
-          // 호스트가 트랜잭션 안에서 제목줄을 정한 뒤 읽은 창 단추 영역: 단추 14pt 가 행의 가운데에 있다.
+          // The window button region that the host read after it set the title bar inside the transaction: the 14 pt buttons are centered in the row.
           chrome: { controls: { x: 13, y: (request.titlebar - 14) / 2, w: 54, h: 14 }, row: request.titlebar },
         };
       }
@@ -53,15 +53,15 @@ test("the preparation carries the title bar height and the presented chrome is t
       "the presentation sends the prepared ticket and placements");
     assert.deepEqual(chrome.presented(), { controls: { x: 13, y: 20, w: 54, h: 14 }, row: 54 });
 
-    // 다음 배치의 준비는 표시를 확인하기 전까지 커밋된 상태를 바꾸지 않는다.
+    // The preparation of the next layout does not change the committed state until its presentation is confirmed.
     await surfaces.place(record(40, false));
     assert.equal(calls.at(-1).request.titlebar, 40);
     assert.equal(chrome.presented().row, 54, "an unpresented preparation replaced the committed chrome");
     await surfaces.place(record(40, true));
     assert.equal(chrome.presented().row, 40);
 
-    // 같은 요청은 다시 보내지 않는다. 창의 상태가 요청 없이 바뀌었으면(전체 화면에서 나온 창) forget 뒤의 같은
-    // 요청을 보낸다.
+    // The same request is not sent again. When the state of the window changed without a request (a window that left full screen), the same
+    // request is sent after forget.
     calls.length = 0;
     await surfaces.place(record(40, false));
     assert.deepEqual(calls, [], "an unchanged request was sent");

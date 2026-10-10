@@ -1,9 +1,9 @@
-// 판 하나. 카드, 탭, 드래그, 레일, 선택 레이어, 렌더링을 담당한다.
+// One plane. It handles cards, tabs, dragging, the rail, the picker layer, and rendering.
 //
-// 표면의 위치를 카드 안 슬롯 요소에 기록하고, 그 위에 DOM 을 그릴 때 표면을 숨기도록
-// 요청한다. 표면을 측정하고 보고하는 방법은 알지 않는다.
+// It records the position of a surface in the slot element inside a card and asks the surface to hide when DOM is drawn
+// over it. It does not know how a surface is measured and reported.
 //
-// 검증의 존재를 알지 않는다. 렌더링 완료만 통지하고 이후 처리는 문서가 정한다.
+// It does not know that verification exists. It only announces that rendering finished, and the document decides what follows.
 import { Soksak, SoksakView, outline, sliceTree } from "soksak";
 import { borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
 import { effectiveTextScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
@@ -48,22 +48,22 @@ const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary
   }
 }
 
-/* 카드의 머리와 발 높이. 이 값이 드롭 구획의 경계이자 스타일시트의 행 높이다. 두
-   곳에 적으면 한쪽만 바뀌었을 때 구획이 머리 끝에서 어긋난다. */
+/* The height of the head and the foot of a card. This value is the boundary of the drop zones and also the row height of the
+   stylesheet. If each is written in its own place, the zones drift at the end of the head when only one of them changes. */
 const HEADER = 32, FOOTER = 22;
 document.documentElement.style.setProperty("--head", `${HEADER}px`);
 document.documentElement.style.setProperty("--foot", `${FOOTER}px`);
 
 
-/* 포커스를 잃은 표면의 흐림 여부. 표면은 카드마다 하나이므로 카드 단위로 판정한다. */
+/* Whether a surface that lost focus is dimmed. A card has one surface, so it is decided per card. */
 const dimmed = (cardId) =>
   value("dim") && cardId !== focusedId;
 
-/* 표면은 네이티브 뷰이므로 그 위의 클릭이 이 문서에 도달하지 않는다. 애플리케이션이
-   표면 id 를 보고하면 해당 슬롯 요소에서 pointerdown 을 발생시킨다. 포커스 이동과
-   레이어 닫기를 이미 pointerdown 을 수신하는 쪽이 처리한다.
+/* A surface is a native view, so a click on it does not reach this document. When the application reports a surface id, the
+   plane dispatches pointerdown on the matching slot element. The code that already receives pointerdown handles the focus
+   move and the closing of the layer.
 
-   표면 하나는 탭 하나이므로 그 id 는 탭의 id 다. */
+   One surface is one tab, so its id is the id of the tab. */
 const pressSurface = (tabId) => {
   const slot = document.querySelector(
     `[data-native-surface-id="${tabId}"][data-native-surface]`);
@@ -71,19 +71,18 @@ const pressSurface = (tabId) => {
   slot.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
 };
 
-/* 호스트가 넘긴 드래그를 잡고 있는 divider. 누를 때 정해지고 놓을 때 비운다. */
+/* The divider that holds a drag passed by the host. It is set on press and cleared on release. */
 let heldDivider = null;
 
-/* 왼쪽 버튼의 한 걸음. 호스트가 좌표를 이 문서의 것으로 변환해 보낸다.
-   phase 는 0 이 누름, 1 이 이동, 2 가 놓음이다.
+/* One step of the left button. The host converts the coordinates into those of this document and sends them.
+   phase is 0 for press, 1 for move, and 2 for release.
 
-   divider 의 잡는 영역은 통로보다 넓다. 통로가 선 하나 폭이면 그 영역 전체가 표면
-   아래에 놓여 누름이 이 문서에 도달하지 않으므로, 호스트가 좌표를 넘기고 여기서
-   그 좌표가 어느 divider 위인지 판정한다. 뷰는 mouse 이벤트로도 divider 를 움직일
-   수 있으므로 판이 아니라 그 요소에 이벤트를 낸다. */
+   The grab area of a divider is wider than the gap. When the gap is one line wide, the whole area lies under a surface and
+   the press does not reach this document, so the host passes the coordinates and this code decides which divider they are
+   on. The view can also move a divider through mouse events, so the event is dispatched on that element and not on the plane. */
 export const surfaceInput = ({ phase, x, y }) => {
   if (phase === 0) {
-    // 기본값: 누른 점에 경계선이 없으면 잡은 경계선이 없다(null).
+    // default: a point with no boundary line under it grabs no boundary line (null).
     heldDivider = document.elementFromPoint(x, y)?.closest(".sp-divider") ?? null;
     heldDivider?.dispatchEvent(new MouseEvent("mousedown", {
       bubbles: true, clientX: x, clientY: y, button: 0, buttons: 1,
@@ -109,34 +108,34 @@ const railPath = document.getElementById("railPath");
 const dropEl = document.getElementById("drop");
 const pickerEl = document.getElementById("picker");
 
-// 창 사이드바의 폭과 소유 탭을 공간에 보관하고 숨김·재표시 후에도 유지한다.
+// It keeps the width and the owning tab of the window sidebar in the space and retains them after hiding and showing again.
 let windowSidebars = {};
 
 let grid, view, focusedId;
-// 탭 제목의 번호. 식별자가 아니라 표시용 이름이므로 카운터로 만든다.
+// The number in a tab title. It is a display name and not an identifier, so a counter produces it.
 let named = 0;
 
-/* ── 탭 규칙 ──────────────────────────────────────────────────────────────
-   T1 카드는 탭 목록과 활성 탭 하나를 갖는다
-   T2 + 와 쪼개기는 종류를 먼저 묻고 새 탭을 생성한다. + 는 같은 카드에, 쪼개기는 새 카드에
-      기존 탭의 이동은 T3·T4 가 담당한다
-   T3 가운데 드롭 = 대상 카드의 탭이 된다. 배치는 그대로다
-   T4 변에 드롭 = 그쪽에 새 자리가 필요하다
-   T5 마지막 탭이 떠나면 그 카드는 사라진다 — 빈 카드는 남지 않는다        */
+/* ── Tab rules ──────────────────────────────────────────────────────────────
+   T1 A card has a tab list and one active tab.
+   T2 + and split ask for the kind first and then create a new tab. + puts it in the same card, split puts it in a new card.
+      T3 and T4 handle moving an existing tab.
+   T3 Drop in the center = the tab joins the target card. The layout stays as it is.
+   T4 Drop on an edge = a new slot is needed on that side.
+   T5 When the last tab leaves, the card disappears — no empty card remains.        */
 // A tab stores params only when it was opened with them (docs/spec/plugins.md#pluginjson).
 const tab = (plugin, title, params) => (params === null
   ? { id: issueId("tab"), plugin, title } : { id: issueId("tab"), plugin, title, params });
-// 기본값: 고정 좌우 사이드바 카드는 data가 null이므로 표면 탭이 없다.
+// default: the fixed left and right sidebar cards have null data, so they have no surface tab.
 const tabsOf = (card) => card?.data?.tabs ?? [];
 const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId);
-// 기본값: 포커스된 카드가 없거나 탭이 없는 자리 카드이면 포커스된 플러그인이 없다(null).
+// default: when no card is focused, or the focused card is a place card without tabs, there is no focused plugin (null).
 const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
-/** 탭에 보이는 이름: 표면이 알린 제목이 있으면 그것, 없으면 탭 이름. */
-// 기본값: 표면이 제목을 알리지 않았으면 탭 이름을 보인다(docs/spec/plugins.md 의 tab.title).
+/** The name shown on a tab: the title that the surface announced if there is one, otherwise the tab name. */
+// default: a surface that announced no title shows the tab name (tab.title in docs/spec/plugins.md).
 // A modified tab shows a dot before its name (docs/spec/plugins.md#tab-reports).
 const tabName = (t) => `${tabModified(t.id) ? "● " : ""}${tabLabel(t.id) ?? t.title}`;
 
-/** 새 탭 하나. 번호는 화면에 보이는 이름일 뿐이고 id 는 ids.js 가 발급한다. */
+/** One new tab. The number is only a displayed name; ids.js issues the id. */
 function newTab(kind, params) {
   const t = tab(kind, "", params);
   t.title = `${plugin(kind).mark} 탭 ${++named}`;
@@ -144,16 +143,16 @@ function newTab(kind, params) {
 }
 
 /**
- * 해당 자리에 연결된 세트를 반환한다.
+ * Returns the set linked to the slot.
  *
- * 연결된 세트가 없으면 null 을 반환하고 사이드바를 표시하지 않는다.
+ * Returns null when no set is linked, and the sidebar is not shown.
  */
 function standingSet(place) {
   const link = standingLink(place, windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()));
   return link === null ? null : linkedSet(link.place, link.plugin);
 }
 
-/** environment.json 의 workspace.grid 로 새 스페이스의 배치를 만든다. 탭 id 는 새로 발급한다. */
+/** It builds the layout of a new space from workspace.grid of environment.json. Tab ids are issued anew. */
 function initial() {
   const { grid: declared } = environment().workspace;
   const cards = declared.cards.map(({ tabs, ...card }) => {
@@ -165,7 +164,7 @@ function initial() {
 }
 
 
-/* ── 카드 ─────────────────────────────────────────────────────────────── */
+/* ── Card ─────────────────────────────────────────────────────────────── */
 
 function createCard(card) {
   const el = document.createElement("article");
@@ -174,18 +173,18 @@ function createCard(card) {
   el.innerHTML = isPlace(card.id)
     ? '<header class="chrome"></header><div class="set"></div><footer class="status sidebar-status" data-expose="core.sidebar.status"></footer>'
     : '<header class="chrome" data-expose="core.card.header"></header><div class="slot"></div><footer class="status" data-expose="core.card.status"></footer>';
-  // 카드 객체를 클로저에 담지 않고 요소의 data-card-id 를 읽는다. 스페이스를
-  // 바꾸면 같은 id 로 새 카드 객체가 만들어지므로, 담아 둔 참조는 없어진 객체다.
+  // It reads data-card-id of the element and does not capture the card object in a closure. Switching the space creates new
+  // card objects with the same ids, so a captured reference is an object that no longer exists.
   el.dataset.command = "core.card.focus";
   el.addEventListener("pointerdown", (e) => {
     const id = el.dataset.cardId;
-    // 누른 카드가 글자 크기의 범위다(docs/spec/text-size.md).
+    // The pressed card is the scope of the text size (docs/spec/text-size.md).
     if (id) setTextScope({ kind: "card", card: id });
     if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham, .card-sidebar__grip, .set button")) return;
     const active = activeTab(grid.card(id));
     if (focusedId !== id) {
-      // 카드 포커스가 만든 렌더는 표시를 마치면 대기 중인 표면 포커스를 가져간다. 명령이 끝난 뒤에 적으면
-      // 렌더가 먼저 끝나 포커스가 다음 렌더로 밀리므로, 명령을 실행하기 전에 적는다(V5-46).
+      // A render caused by card focus takes the pending surface focus after it finishes drawing. If the focus is written after the
+      // command ends, the render finishes first and the focus moves to the next render, so it is written before the command runs (V5-46).
       if (active) requestSurfaceFocus(active.id);
       return Promise.resolve(run("core.card.focus", { card: id })).catch((error) => {
         if (active) cancelSurfaceFocus(active.id);
@@ -198,22 +197,22 @@ function createCard(card) {
 }
 
 /**
- * 변경된 부분만 갱신한다.
+ * Updates only the changed parts.
  *
- * 이전에는 렌더마다 `chrome.innerHTML = ""` 로 다시 만들었다. 노드 87개 중 포인터
- * 이동 한 번에 52개가 교체되어 hover 와 포커스가 끊기고, 드래그 중이던 탭이 사라져
- * `pointerup` 이 도착하지 않았다. 탭 목록이 실제로 달라졌을 때만 다시 만든다.
+ * Earlier, every render rebuilt the chrome with `chrome.innerHTML = ""`. A single pointer move replaced 52 of 87 nodes, which
+ * broke hover and focus, and the dragged tab disappeared so `pointerup` never arrived. The chrome is rebuilt only when the
+ * tab list actually changed.
  */
 const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
 const setHTML = (el, html) => { if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; } };
 
 function updateCard(el, card, rect) {
-  // 네이티브 준비를 기다리던 이전 배치는 그 사이 닫힌 카드를 담을 수 있다. 닫힌 카드는 탭이 없고 그 표면은 이미
-  // 해제되었으므로 내용을 고치거나 표면을 다시 마운트하지 않는다. 다음 배치가 그 카드를 지운다.
+  // A previous layout that waited for native preparation can contain a card closed in the meantime. A closed card has no tabs
+  // and its surface is already released, so its content is not fixed and its surface is not mounted again. The next layout removes that card.
   if (!grid.card(card.id)) return;
   const place = isPlace(card.id) ? card.id : null;
-  // 카드 내용의 실제 글자 배율(프레임 배율 × 카드 배율). 배율이 1 이면 zoom 을 선언하지 않는다. 값이 1 인
-  // zoom 선언만으로도 WebKit 이 표면 내용을 다시 그리는 비용이 커져 끌기 중 표시가 줄었다.
+  // The actual text scale of the card content (frame scale × card scale). When the scale is 1, no zoom is declared. Even a zoom
+  // declaration with the value 1 raised the cost for WebKit to redraw the surface content and reduced the display during a drag.
   const textZoom = value("textSize") * cardTextSize(card);
   if (textZoom === 1) {
     delete el.dataset.textZoom;
@@ -235,22 +234,22 @@ function updateCard(el, card, rect) {
 
   if (place) {
     const { plugin: kind, side } = windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()).find(item => item.id === place);
-    // 사이드바 카드는 머리 줄을 보이지 않는다. 섹션이 맨 위에서 시작하고 자리 설명은 상태 줄이 한다.
+    // A sidebar card does not show a head row. The section starts at the top, and the status line describes the slot.
     el.dataset.place = place;
     const set = standingSet(place);
     const holder = el.querySelector(".set");
     if (set) {
-      // 플러그인 오버라이드는 포커스 카드의 활성 표면을 사용한다.
+      // A plugin override uses the active surface of the focused card.
       const owner = kind === null ? { card: null, surface: null }
         : { card: focusedId, surface: activeTab(grid.card(focusedId)).id };
-      // 일반 사이드바 내용은 카드·표면 연결과 레일이 없다.
+      // The content of an ordinary sidebar has no card-surface link and no rail.
       drawSet(holder, card.id, set, { ...owner, orientation: "vertical", window: true, plugin: kind, side });
     } else {
       clearSet(holder);
       holder.replaceChildren();
     }
     setText(statusText, `${side === "left" ? "왼쪽" : "오른쪽"} 창 사이드바${kind ? ` · ${kind}` : ""}`);
-    // 상태 줄 끝의 접기 단추는 이 사이드바를 끈다. 다시 켜는 단추는 창 머리에 있다(docs/spec/plugins.md#sections).
+    // The fold button at the end of the status line turns this sidebar off. The button that turns it on again is in the window head (docs/spec/plugins.md#sections).
     let fold = status.querySelector(".sidebar-status__fold");
     if (!fold || fold.dataset.side !== side) {
       fold?.remove();
@@ -283,7 +282,7 @@ function updateCard(el, card, rect) {
     bind(ham, "core.card.tab-list", () => ({ card: el.dataset.cardId }));
     chrome.insertBefore(ham, chrome.firstChild);
   }
-  // 전체 화면 카드의 머리 맨 앞에 서는 스페이스 앱 단추. 전체 화면이 아니면 CSS 가 숨긴다(docs/spec/example-model.md).
+  // The space app button at the very start of the head of a fullscreen card. CSS hides it when the card is not fullscreen (docs/spec/example-model.md).
   if (!chrome.querySelector(".chrome__apps")) {
     const apps = document.createElement("button");
     apps.className = "chrome__apps";
@@ -300,7 +299,7 @@ function updateCard(el, card, rect) {
   if (!strip) {
     strip = document.createElement("div");
     strip.className = "chrome__tabs";
-    ham.after(strip);                                 // ≡, 탭 목록, 도구 순으로 배치한다
+    ham.after(strip);                                 // Arranged in the order ≡, tab list, tools
   }
   let acts = chrome.querySelector(".chrome__acts");
 
@@ -314,11 +313,11 @@ function updateCard(el, card, rect) {
       b.dataset.tabId = t.id;
       b.draggable = false;
       mark(b, "core.tab.select", { tab: t.id });
-      // 제목은 `textContent` 로 설정한다. 사용자 입력을 마크업으로 해석하지 않는다.
+      // The title is set with `textContent`. User input is not interpreted as markup.
       b.innerHTML = '<span class="tab__name"></span>' +
         '<button class="tab__x" title="닫기" data-expose="core.card.tab-close">&#10005;</button>';
       b.querySelector(".tab__name").textContent = tabName(t);
-      // 누름은 탭을 고르고 드래그를 시작한다. 놓은 자리의 결과는 core.tab.move 가 만든다.
+      // A press selects the tab and starts a drag. The result at the drop position is produced by core.tab.move.
       b.addEventListener("pointerdown", (e) => {
         if (e.target.closest(".tab__x")) return;
         const own = grid.card(el.dataset.cardId);
@@ -338,7 +337,7 @@ function updateCard(el, card, rect) {
   if (!acts) {
     acts = createCardTools(card.id);
     chrome.appendChild(acts);
-    // 도구가 한 줄에 들어가지 않는 좁은 머리에서 도구를 대신하는 메뉴 단추. 도구 뒤에 둔다.
+    // The menu button that replaces the tools in a narrow head where the tools do not fit in one row. It is placed after the tools.
     const more = document.createElement("button");
     more.className = "chrome__more";
     more.dataset.expose = "core.card.tools";
@@ -358,16 +357,16 @@ function updateCard(el, card, rect) {
   });
   drawSideToggles(acts, el, card.id);
 
-  // 표면의 슬롯. 컴포지터는 판의 구조를 알지 않으므로 필요한 값을 여기에 기록한다.
+  // The slot of a surface. The compositor does not know the structure of the plane, so the needed values are recorded here.
   //
-  // 표면의 정체는 탭이다. 카드로 하면 같은 카드의 다른 탭들이 표면 하나를 나눠
-  // 쓰고, 카드 id 는 스페이스마다 같은 값이라 스페이스가 달라도 같은 표면이 된다.
+  // The identity of a surface is the tab. If it were the card, the tabs of one card would share one surface, and since a card
+  // id has the same value in every space, the same surface would be used even in a different space.
   const slot = el.querySelector(".slot");
   const shown = activeTab(card);
   const paramsProblem = hasPlugin(shown.plugin) ? storedParamsProblem(shown.plugin,
     pluginUnits().find((unit) => unit.id === shown.plugin).version, plugin(shown.plugin).params, shown.params) : null;
   if (!hasPlugin(shown.plugin) || paramsProblem) {
-    // 불러오지 않은 플러그인의 탭은 표면이 아니라 자리 표시다. 컴포지터가 표면으로 보지 않도록 표면 표시를 지운다.
+    // The tab of a plugin that is not loaded is a placeholder and not a surface. The surface mark is cleared so the compositor does not treat it as a surface.
     for (const key of ["nativeSurface", "nativeSurfaceId", "nativeLayer", "nativePlugin", "nativeTitle", "nativeDim"]) delete slot.dataset[key];
     placePluginPlaceholder(slot, shown.id, pluginPlaceholder(shown, paramsProblem));
     slot.dataset.surfaceStatus = "ready";
@@ -422,18 +421,18 @@ function showTabError(status, tabId) {
   hideError(line, where);
 }
 
-// 카드마다 마지막으로 그린 공간 부족 접힘 문구. 탭이 하단 글을 바꾸면 다시 그리지 않고 발만 고친다.
+// The last drawn out-of-space fold text of each card. When a tab changes the bottom text, only the foot is fixed and nothing is redrawn.
 const cardFolds = new Map();
-/** 카드 내용 발의 글: 활성 탭의 플러그인이 알린 하단 글과 공간 부족으로 접힌 면(docs/spec/example-model.md). */
+/** The text of the card content foot: the bottom text announced by the plugin of the active tab, and the side folded because of lack of space (docs/spec/example-model.md). */
 function cardStatusText(card, tabs, folded) {
-  // 기본값: 탭이 없거나 하단 글을 알리지 않은 탭의 발은 빈 글이다.
+  // default: the foot of a card without tabs, or of a tab that announced no bottom text, is empty text.
   const text = tabs.length ? tabFooter(activeTab(card).id) ?? "" : "";
   return [text, folded].filter((part) => part !== null && part !== "").join(" · ");
 }
 
-/* ── 불러오지 않은 플러그인의 탭(docs/spec/plugins.md) ───────────────── */
+/* ── Tab of a plugin that is not loaded (docs/spec/plugins.md) ───────────────── */
 
-/** 이유마다 자리 표시의 글. */
+/** The text of the placeholder for each reason. */
 const PLACEHOLDER_LINES = {
   missing: (id) => `${id} 플러그인이 설치되어 있지 않습니다.`,
   disabled: (id) => `${id} 플러그인을 사용하지 않습니다.`,
@@ -442,7 +441,7 @@ const PLACEHOLDER_LINES = {
   unread: (id) => `${id} 플러그인의 설치 상태를 읽지 못했습니다.`,
 };
 
-/** 불러오지 않은 플러그인 탭의 이유. 워크벤치는 첫 스페이스를 열기 전에 플러그인 상태를 읽는다. */
+/** The reason of a tab of a plugin that is not loaded. The workbench reads the plugin states before it opens the first space. */
 function placeholderReason(id) {
   if (!pluginOperations.hosted) return "host";
   if (pluginOperations.failure()?.kind === "state") return "unread";
@@ -478,75 +477,73 @@ function pluginPlaceholder(tab, paramsProblem) {
   return el;
 }
 
-// 플러그인 상태가 바뀌면 자리 표시의 이유와 버튼을 다시 정한다.
+// When a plugin state changes, the reason and the button of the placeholder are decided again.
 onPluginOperations(() => {
   if (grid && grid.cards.some((card) => tabsOf(card).some((tab) => !hasPlugin(tab.plugin)))) settle();
 });
 
-/* ── T5 — 마지막 탭이 이동하면 카드를 닫는다 ─────────────────────────── */
+/* ── T5 — closing the card when the last tab moves ─────────────────────────── */
 
 async function closeTab(cardId, tabId) {
   const card = grid.card(cardId);
   if (!card) return;
   if (!tabsOf(card).some((t) => t.id === tabId)) return;
-  // 탭 닫기는 모듈이 native composition과 sidecar 세션을 해제한 뒤에야
-  // 완료된다. command registry는 settled barrier를 실행하기 전에 이 promise를
-  // 기다린다. 그렇지 않으면 barrier가 비동기 dispose와 경쟁하여, 탭이 아직
-  // 호스트에 보이는 동안 시간 초과될 수 있다.
+  // Closing a tab completes only after the module has released the native composition and the sidecar session. The command
+  // registry awaits this promise before it runs the settled barrier. Otherwise the barrier races the asynchronous dispose
+  // and can time out while the host still shows the tab.
   await disposeSurface(tabId);
   card.data.tabs = tabsOf(card).filter((t) => t.id !== tabId);
   if (card.data.tabs.length === 0) {
-    // 닫을 수 없는 카드는 남으므로 탭 하나를 다시 넣는다. 종류는 포커스가 보던
-    // 것이고, 없으면 등록된 첫 플러그인이다. 여기에 이름을 적으면 플러그인을 더할
-    // 때마다 이 파일을 고쳐야 한다.
+    // A card that cannot be closed remains, so one tab is inserted again. Its kind is what the focus was showing, or the first
+    // registered plugin if there is none. If a name were written here, this file would have to change each time a plugin is added.
     if (grid.canClose(cardId)) grid.close(cardId);
-    // 기본값: 위 주석대로 포커스된 플러그인이 없으면 등록된 첫 플러그인의 탭을 연다.
+    // default: as the comment above says, when no plugin is focused, a tab of the first registered plugin is opened.
     else card.data.tabs = [newTab(focusedPlugin() ?? plugins()[0].id, null)];
   }
   if (!tabsOf(card).some((t) => t.id === card.data?.activeId)) {
-    // 기본값: 탭이 남지 않은 카드는 활성 탭이 없다(null).
+    // default: a card with no tabs left has no active tab (null).
     if (card.data) card.data.activeId = tabsOf(card)[0]?.id ?? null;
   }
-  // 기본값: 자리 카드만 남으면 포커스할 카드가 없다(null).
+  // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   settle();
 }
 
-/* ── 탭 드래그 — T3/T4/T5 ─────────────────────────────────────────────── */
+/* ── Tab drag — T3/T4/T5 ─────────────────────────────────────────────── */
 
 let tabDrag = null;
 
-/* 탭 드래그의 상태가 바뀔 때 호출할 함수. 공개 항목이 등록한다. */
+/* The function to call when the state of a tab drag changes. The public entry registers it. */
 let dragChanged = () => {};
 
-/** 탭 드래그의 상태가 바뀔 때 호출할 함수를 등록한다. */
+/** Registers the function to call when the state of a tab drag changes. */
 export function onDrag(fn) {
   dragChanged = fn;
 }
 
-/* 지금 그린 드롭 미리보기. 판 좌표다. */
+/* The drop preview drawn now, in plane coordinates. */
 let dropPreview = null;
 
-/** 진행 중인 탭 드래그. 끌리는 탭, 출발 카드, 놓을 자리, 미리보기 사각형이다. */
+/** The tab drag in progress: the dragged tab, the origin card, the drop position, and the preview rectangle. */
 export const dragState = () => (tabDrag ? {
   tab: tabDrag.tabId, card: tabDrag.cardId, moved: tabDrag.moved,
   target: tabDrag.hit ? { card: tabDrag.hit.id, zone: tabDrag.hit.zone } : null,
   preview: dropPreview,
 } : null);
 
-/* 카드 보더의 두께. 머리와 발은 보더 안쪽의 행이고 zoneAt 은 카드의 rect 로 재는데
-   그 rect 는 보더를 포함하므로, 보더만큼 더해야 구획의 경계가 그려진 머리의 끝에
-   선다. 이음새에서는 보더가 0 이므로 값을 적지 않고 그려진 카드에서 잰다. */
+/* The thickness of the card border. The head and the foot are rows inside the border, and zoneAt measures with the rect of
+   the card, which includes the border, so the border is added for the zone boundary to stand at the end of the drawn head.
+   At the seam the border is 0, so the value is not written but measured from the drawn card. */
 const cardBorder = () => {
   const el = plane.querySelector(".card");
   return el ? parseFloat(getComputedStyle(el).borderTopWidth) : 0;
 };
 
 /**
- * 드롭 구획이 카드의 머리와 발에 내주는 높이(px).
+ * The height (px) that the drop zones leave to the head and the foot of a card.
  *
- * 판이 `zoneAt` 에 넘기는 값이고, 검증이 그려진 머리·발과 비교하는 값이다. 두 곳이
- * 각자 계산하면 한쪽만 고쳤을 때 검증이 통과한 채로 구획이 어긋난다.
+ * The plane passes this value to `zoneAt`, and verification compares it with the drawn head and foot. If each computed it
+ * alone, a fix in only one place would leave the zones misaligned while verification still passed.
  */
 export const dropBands = () => {
   const edge = cardBorder();
@@ -555,7 +552,7 @@ export const dropBands = () => {
 
 function beginTabDrag(e, cardId, tabId) {
   e.preventDefault();
-  // 보더는 드래그 한 번 동안 바뀌지 않으므로 시작할 때 한 번 잰다.
+  // The border does not change during one drag, so it is measured once at the start.
   const band = dropBands();
   tabDrag = { cardId, tabId, from: { x: e.clientX, y: e.clientY }, moved: false, hit: null };
   const el = e.currentTarget;
@@ -567,14 +564,14 @@ function beginTabDrag(e, cardId, tabId) {
     if (!tabDrag) return;
     if (Math.hypot(ev.clientX - tabDrag.from.x, ev.clientY - tabDrag.from.y) > 4) tabDrag.moved = true;
     if (!tabDrag.moved) return;
-    // 움직인 누름만 드래그다. 드롭 구획은 일반 배치의 카드에 있으므로 그때 전체 화면을 풀고, 움직이지 않은 누름(클릭)은
-    // 전체 화면을 유지한다(docs/spec/example-model.md#card-fullscreen).
+    // Only a press that moved is a drag. The drop zones are on cards of the ordinary layout, so fullscreen is released then;
+    // a press that did not move (a click) keeps fullscreen (docs/spec/example-model.md#card-fullscreen).
     if (!tabDrag.stood) { tabDrag.stood = true; restoreFullscreen(); standIn(true); }
     const host = plane.getBoundingClientRect();
     const only = tabsOf(grid.card(tabDrag.cardId)).length === 1 ? tabDrag.cardId : undefined;
     tabDrag.hit = grid.zoneAt(ev.clientX - host.left, ev.clientY - host.top,
       { headerPx: band.headerPx, footerPx: band.footerPx, centreOnly: only });
-    // 구획이 없는 드롭은 놓아도 배치가 거절한다. 그 자리를 잡지 않는다.
+    // A drop with no zone is rejected by the layout even if released. That position is not taken.
     if (!showDrop(tabDrag.cardId, tabDrag.hit)) tabDrag.hit = null;
     dragChanged();
   };
@@ -598,34 +595,34 @@ function beginTabDrag(e, cardId, tabId) {
   el.addEventListener("pointercancel", onUp);
 }
 
-/* ── 선택 레이어 ──────────────────────────────────────────────────────────
-   레이어는 카드가 아니므로 배치에 영향을 주지 않고 Soksak 도 인식하지 않는다.
-   배치가 바뀌면 레이어의 기준 위치가 무효가 되므로 settle 이 먼저 닫는다.     */
+/* ── Picker layer ──────────────────────────────────────────────────────────
+   A layer is not a card, so it does not affect the layout and Soksak does not recognize it.
+   When the layout changes, the reference position of the layer becomes invalid, so settle closes it first.     */
 
 let picker = null;
 
-/* 표면 페이지의 상태(불러오는 중, 준비, 오류). 카드 상태 줄에 보이는 값과 같다. */
+/* The state of a surface page (loading, ready, error). It is the same value that the card status line shows. */
 const surfaceStates = new Map();
 let surfaceStateChanged = () => {};
 
-/** 표면 상태가 바뀔 때 호출할 함수를 등록한다. */
+/** Registers the function to call when a surface state changes. */
 export function onSurfaceState(fn) {
   surfaceStateChanged = fn;
 }
 
-/** 표면 id 의 상태 {phase, error}. 아직 보고가 없으면 불러오는 중이다. */
-// 기본값: 위 주석대로 아직 상태를 알리지 않은 표면은 불러오는 중이다.
+/** The state {phase, error} of a surface id. A surface with no report yet is loading. */
+// default: as the comment above says, a surface that has announced no state is loading.
 export const surfaceState = (id) => surfaceStates.get(id) ?? { phase: "loading", error: null };
 
-/* 선택 레이어가 열리고 닫힐 때 호출할 함수. 공개 항목이 등록한다. */
+/* The function to call when the picker layer opens and closes. The public entry registers it. */
 let pickerChanged = () => {};
 
-/** 선택 레이어가 열리고 닫힐 때 호출할 함수를 등록한다. */
+/** Registers the function to call when the picker layer opens and closes. */
 export function onPicker(fn) {
   pickerChanged = fn;
 }
 
-/** 선택 레이어의 상태. 제목과 항목을 요소에서 읽는다. */
+/** The state of the picker layer. The title and the items are read from the element. */
 export const pickerState = () => ({
   open: picker !== null,
   title: picker ? pickerEl.getAttribute("aria-label") : "",
@@ -634,7 +631,7 @@ export const pickerState = () => ({
   columns: picker ? picker.columns : { groups: [], items: [] },
 });
 
-/* 카드 도구 버튼의 data-do 와 core.card.menu 의 menu 값. */
+/* The data-do of a card tool button and the menu value of core.card.menu. */
 const MENU_OF = CARD_TOOL_MENUS;
 const DO_OF = Object.fromEntries(Object.entries(MENU_OF).map(([what, menu]) => [menu, what]));
 
@@ -648,8 +645,8 @@ delegate(pickerEl);
 
 const onPickerOutside = (e) => {
   if (pickerEl.contains(e.target)) return;
-  // 레이어를 연 버튼은 자기 클릭으로 레이어를 닫으므로, 그 버튼 위의 누름은 바깥
-  // 누름이 아니다. 여기서 닫으면 그 클릭이 레이어를 다시 연다.
+  // The button that opened the layer closes the layer with its own click, so a press on that button is not an outside press.
+  // If it were closed here, that click would open the layer again.
   if (picker?.anchor?.contains(e.target)) return;
   return run("core.picker.close");
 };
@@ -659,19 +656,19 @@ const onPickerKey = (e) => {
   return run("core.picker.close");
 };
 
-/** 새 탭의 플러그인 종류를 선택받는다. + 와 분할 버튼이 함께 사용한다. */
+/** Asks which plugin kind a new tab takes. The + button and the split button share it. */
 function openPicker(anchor, what, cardId) {
   openLayer(anchor, PICKER_ASK[what],
     plugins().map((p) => ({ key: p.id, name: p.name, mark: p.mark, svg: p.svg })),
     (k) => (what === "add" ? addTab(cardId, k, null) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k)));
 }
 
-/** 활성화할 탭을 선택받는다. 헤더가 접혔을 때 탭 목록을 표시한다. */
+/** Asks which tab to activate. It shows the tab list when the header is folded. */
 function openTabList(anchor, cardId) {
   const card = grid.card(cardId);
   if (!card?.data) return;
   openLayer(anchor, `탭 ${tabsOf(card).length}개`, tabsOf(card).map((t) => ({
-    // 불러오지 않은 플러그인의 탭은 표시 없이 이름만 보인다.
+    // The tab of a plugin that is not loaded shows only its name, without a mark.
     key: t.id, name: tabName(t), mark: hasPlugin(t.plugin) ? plugin(t.plugin).mark : "?", svg: hasPlugin(t.plugin) ? plugin(t.plugin).svg : "",
     notice: tabNotice(t.id),
     active: t.id === card.data.activeId,
@@ -685,16 +682,16 @@ function openTabList(anchor, cardId) {
 }
 
 /**
- * 기준 버튼 아래에 배치하고 판 경계 안으로 제한한다. 판 밖에는 표시할 수 없다.
+ * It is placed below the reference button and limited to the plane boundary. Nothing can be shown outside the plane.
  *
- * 항목 이름은 `textContent` 로 설정한다. 탭 제목은 사용자 입력이므로 마크업으로
- * 삽입하면 제목이 레이어 구조를 변경할 수 있다.
+ * The item name is set with `textContent`. A tab title is user input, so if it were inserted as markup, the title could
+ * change the structure of the layer.
  */
 function openLayer(anchor, ask, items, pick, align = "right", groups = [{ heading: null, items }]) {
   closePicker();
-  // 호스트가 이 레이어를 창으로 그릴 때 창 이름으로 쓴다. 보이는 물음과 같은 값이다.
+  // The window name when the host draws this layer as a window. It is the same value as the visible question.
   pickerEl.setAttribute("aria-label", ask);
-  // 묶음 제목이 있는 목록은 항목이 많으므로 더 높게 그린다.
+  // A list with group titles has many items, so it is drawn taller.
   pickerEl.classList.toggle("picker--grouped", groups.some((group) => group.heading));
   const keys = fillPicker(pickerEl, ask, groups, (b, index, it) => {
     mark(b, "core.picker.pick", { index });
@@ -719,12 +716,12 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   pickerEl.style.top = `${rect.y}px`;
   picker = { anchor, pick, rect, keys, columns: pickerColumns(pickerEl) };
   pickerChanged();
-  // DOM 은 네이티브 뷰 위에 그릴 수 없고, 웹뷰는 DOM 을 렌더링하는 네이티브 뷰다.
-  // 애플리케이션이 이 요소를 받아 그런 뷰에 렌더링하므로 아래의 표면은 계속 실행된다.
-  // 요소를 통째로 넘기므로 애플리케이션은 그 내용을 알 필요가 없다.
+  // DOM cannot be drawn over a native view, and a web view is a native view that renders DOM. The application receives this
+  // element and renders it in such a view, so the surfaces below keep running. The whole element is passed, so the
+  // application does not need to know its content.
   if (native) {
-    // 모달은 닫힘을 빈 key 로 보고한다. 그것을 선택으로 넘기면 등록되지 않은
-    // 플러그인을 찾다 예외가 난다.
+    // A modal reports closing with an empty key. If that were passed on as a selection, the lookup of an unregistered plugin
+    // would throw an exception.
     overlay.show(pickerEl, rect, (key) => {
       const index = keys.indexOf(key);
       return index < 0 ? run("core.picker.close") : run("core.picker.pick", { index });
@@ -735,11 +732,10 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   }
   document.addEventListener("pointerdown", onPickerOutside, true);
   document.addEventListener("keydown", onPickerKey, true);
-  // native picker는 자체 WebView를 가지며 ready를 보고할 때 focus를 받는다.
-  // 여기서 이제 숨겨진 DOM 항목에 focus를 주면 first responder가 main WebView로
-  // 돌아가고, native picker가 닫히기 전에 Escape를 잃는다.
+  // The native picker has its own WebView and receives focus when it reports ready. If focus were given here to the now
+  // hidden DOM item, the first responder would return to the main WebView, and Escape would be lost before the native picker closes.
   if (!native) {
-    // 기본값: 고른 항목이 없는 선택기는 첫 항목에 포커스한다.
+    // default: a picker with no chosen item focuses the first item.
     (pickerEl.querySelector('.picker__item[data-active=true]') ??
      pickerEl.querySelector(".picker__item"))?.focus();
   }
@@ -760,7 +756,7 @@ function closePicker() {
   dismiss?.();
 }
 
-/** + 버튼의 후속 처리. 배치를 변경하지 않고 탭만 추가한다. */
+/** Follow-up of the + button. It adds only a tab and does not change the layout. */
 function addTab(cardId, plugin, params) {
   if (view.fullscreenCard !== cardId) restoreFullscreen();
   const card = grid.card(cardId);
@@ -774,8 +770,8 @@ function addTab(cardId, plugin, params) {
   return t.id;
 }
 
-/** 쪼개기 버튼의 후속 처리. 새 카드를 만들고 선택한 종류의 탭을 그 카드에 추가한다. */
-/** 새 카드를 놓는 변. 카드 도구의 세로선 분할은 오른쪽, 가로선 분할은 아래에 새 카드를 둔다. */
+/** Follow-up of the split button. It creates a new card and adds a tab of the selected kind to that card. */
+/** The side where the new card is placed: the vertical-line split of the card tools puts it on the right, the horizontal-line split below. */
 const SPLIT_SIDES = ["left", "right", "top", "bottom"];
 const TOOL_SPLIT_SIDE = { x: "right", y: "bottom" };
 
@@ -785,31 +781,30 @@ function splitWith(cardId, side, plugin) {
   if (!card?.data) return;
   const t = newTab(plugin, null);
   recordOrigin(t.id, activeTab(card)?.id);
-  // 공간이 없으면 splitToward 가 null 을 반환한다. 원본 카드에서 제거한 탭이 없으므로
-  // 복구할 상태가 없다.
+  // When there is no space, splitToward returns null. No tab was removed from the source card, so there is no state to
+  // restore.
   const born = grid.splitToward(cardId, side, { data: { tabs: [t], activeId: t.id } });
   if (born) focusedId = born;
   settle();
   return born ? { card: born, tab: t.id } : null;
 }
 
-/* 미리보기가 호스트의 뷰에 있는가. 드래그 한 번 동안 그 뷰를 유지하고 위치만
-   갱신한다. 매 프레임 다시 만들면 깜빡인다. */
+/* Whether the preview is in a view of the host. The view is kept during one drag and only its position is updated.
+   Recreating it every frame makes it flicker. */
 let dropShown = false;
 
 /**
- * 이 드롭이 낳는 카드의 사각형. 배치가 그 연산을 거절하면 undefined 를 반환한다.
+ * The rectangle of the card that this drop produces. It returns undefined when the layout rejects the operation.
  *
- * 판의 사본에서 그 연산을 수행하고 결과를 읽는다. 사본이므로 살아 있는 판은 바뀌지
- * 않는다. 대상 카드의 절반을 계산하면 그려지는 자리와 다르다: 잘린 두 쪽은 사이의
- * 통로를 나눠 가지므로 각각 rect 의 절반이 아니고, 이동은 먼저 닫고 그 뒤에 자르므로
- * 대상의 크기가 자르기 전에 달라진다.
+ * The operation runs on a copy of the plane and the result is read. Because it is a copy, the live plane does not change.
+ * Computing half of the target card differs from the drawn position: the two cut pieces share the gap between them, so
+ * each is not half of the rect, and a move closes first and cuts afterward, so the size of the target differs from before the cut.
  */
 function dropRect(fromId, hit) {
   const copy = new Soksak(grid.toJSON(),
     { gap: grid.gap, minSize: grid.minSize, width: grid.width, height: grid.height });
   if (hit.zone === "centre") return copy.rect(hit.id);
-  // T5 — 탭이 하나뿐인 카드는 카드째 이동한다.
+  // T5 — a card with only one tab moves as a whole card.
   if (tabsOf(grid.card(fromId)).length === 1) {
     return copy.move(fromId, hit.id, hit.zone) ? copy.rect(fromId) : undefined;
   }
@@ -818,18 +813,18 @@ function dropRect(fromId, hit) {
 }
 
 /**
- * 드롭 미리보기를 그리고 그린 사각형을 반환한다. 그릴 것이 없으면 null 이다.
+ * Draws the drop preview and returns the drawn rectangle. It returns null when there is nothing to draw.
  *
- * 배치가 거절하는 드롭에는 낳을 자리가 없으므로 그리지 않는다. 그리면 놓아도 아무
- * 일도 일어나지 않는 자리를 자리라고 표시한다.
+ * A drop that the layout rejects has no slot to create, so nothing is drawn. If it were drawn, it would mark as a slot a
+ * position where releasing does nothing.
  */
 function showDrop(fromId, hit) {
   const half = hit && !isPlace(hit.id) ? dropRect(fromId, hit) : undefined;
   if (!half) { hideDrop(); return null; }
   dropPreview = { x: half.x, y: half.y, w: half.w, h: half.h };
-  // 미리보기는 표면 위에 그려야 한다. 호스트가 있으면 네이티브 도형으로 그린다 —
-  // 채움이 반투명이라 웹뷰로는 표면 위에 합성되지 않는다. 모양은 이 문서의 CSS 가
-  // 정하고 그 계산값을 그대로 보낸다.
+  // The preview must be drawn over the surface. When there is a host, it is drawn as a native shape — the fill is
+  // translucent, so a web view cannot compose it over a surface. The CSS of this document decides the shape, and its computed
+  // values are sent as they are.
   if (native) {
     const css = getComputedStyle(dropEl);
     shapes.set("drop", half, {
@@ -847,7 +842,7 @@ function showDrop(fromId, hit) {
   return half;
 }
 
-/** 미리보기를 지운다. 호스트가 그리고 있으면 그 도형도 없앤다. */
+/** Clears the preview. If the host is drawing it, that shape is removed too. */
 function hideDrop() {
   dropPreview = null;
   if (dropShown) {
@@ -858,10 +853,10 @@ function hideDrop() {
 }
 
 /**
- * T4 와 T5 가 배치 연산을 결정한다.
- *   출발 카드의 탭이 1개  → 카드를 이동한다. 빈 카드가 남지 않는다   move()
- *   2개 이상             → 카드는 유지하고 탭만 이동한다            splitToward()
- * 첫 번째 경우 때문에 move 가 close + split 조합이 아니라 하나의 연산이어야 한다.
+ * T4 and T5 decide the layout operation.
+ * The origin card has 1 tab    → move the card. No empty card remains.            move()
+ * It has 2 or more tabs        → keep the card and move only the tab.             splitToward()
+ * Because of the first case, move must be one operation and not a combination of close + split.
  */
 function dropTab(fromId, tabId, hit) {
   const from = grid.card(fromId);
@@ -877,23 +872,23 @@ function dropTab(fromId, tabId, hit) {
     target.data.activeId = tabId;
     focusedId = target.id;
     if (tabsOf(from).length === 0 && grid.canClose(fromId)) grid.close(fromId);
-    // 기본값: 탭이 남지 않은 카드는 활성 탭이 없다(null).
+    // default: a card with no tabs left has no active tab (null).
     else if (!tabsOf(from).some((t) => t.id === from.data.activeId)) from.data.activeId = tabsOf(from)[0]?.id ?? null;
     return settle();
   }
 
-  if (tabsOf(from).length === 1) {                               // T5 — 남길 것이 없다
+  if (tabsOf(from).length === 1) {                               // T5 — nothing is left to keep
     if (fromId === hit.id) return settle();
     grid.move(fromId, hit.id, hit.zone);
     focusedId = fromId;
     return settle();
   }
 
-  from.data.tabs = tabsOf(from).filter((t) => t.id !== tabId);   // T4 — 자리는 남고 탭만
+  from.data.tabs = tabsOf(from).filter((t) => t.id !== tabId);   // T4 — the slot stays and only the tab moves
   if (!tabsOf(from).some((t) => t.id === from.data.activeId)) from.data.activeId = tabsOf(from)[0].id;
   const born = grid.splitToward(hit.id, hit.zone,
     { data: { tabs: [moving], activeId: moving.id } });
-  if (born === null) {                                           // 자리가 없으면 되돌린다
+  if (born === null) {                                           // If there is no slot, revert
     from.data.tabs.push(moving);
     from.data.activeId = moving.id;
   } else {
@@ -902,10 +897,10 @@ function dropTab(fromId, tabId, hit) {
   settle();
 }
 
-/* ── 카드 사이드바 ─────────────────────────────────────────────────────
-   각 변의 세트와 배치는 독립적이다. 사이드바는 카드 크기를 바꾸지 않고 내용 영역을 나눈다. */
+/* ── Card sidebar ─────────────────────────────────────────────────────
+   The set and the layout of each side are independent. A sidebar does not change the card size; it divides the content area. */
 
-/** 카드 사이드바의 공용 크기 설정. */
+/** The common size settings of the card sidebars. */
 const sidebarDefaults = () => ({ size: value("sidebarWidth"), min: value("sidebarMinWidth"), max: value("sidebarMaxWidth") });
 const sidebarSets = () => Object.fromEntries(value("sets").map((set) => [set.id, set]));
 function sidebarCard(id) {
@@ -927,15 +922,15 @@ export function cardSidebars(card, rect) {
   const el = cardElement(card.id);
   if (!el || !rect) throw new Error(`card ${card.id} has no sidebar presentation geometry`);
   const style = getComputedStyle(el);
-  // 기본값: 조작한 면이 없는 카드는 축마다 위나 왼쪽을 먼저 연다(빈 선택, docs/spec/example-model.md).
+  // default: a card with no operated side opens the top or the left first on each axis (empty selection, docs/spec/example-model.md).
   const operated = sidebarOperated.get(card.data) ?? {};
   return presentSidebars(report, rect, { header: HEADER, footer: FOOTER, border: parseFloat(style.getPropertyValue("--bw")),
     divider: parseFloat(style.getPropertyValue("--divider")), minimum: grid.minSize, sidebarMinimum: sidebarDefaults().min },
     operated);
 }
-// 카드마다 축별로 마지막으로 클릭하거나 끈 면. 두 면이 함께 들어가지 않을 때 이 면을 연다(docs/spec/example-model.md).
-// 표시 순간의 선택이므로 저장하지 않고 카드의 데이터 객체에 묶는다. 배치를 바꾸거나 복원하면 새 데이터 객체이므로
-// 같은 id 의 카드에도 앞 배치의 선택이 남지 않는다.
+// The side that was last clicked or turned off on each axis of each card. When two sides do not fit together, this side
+// opens (docs/spec/example-model.md). It is the selection at the moment of display, so it is not stored and is bound to the
+// data object of the card. Changing or restoring the layout creates a new data object, so the selection of the previous layout does not remain even for a card with the same id.
 const sidebarOperated = new WeakMap();
 function operateSidebar(card, side) {
   const axis = side === "left" || side === "right" ? "width" : "height";
@@ -960,19 +955,19 @@ export function resizeSidebar(id, side, size) {
   settle();
 }
 
-/** 카드의 사방 사이드바를 그리고, 공간이 부족해 접힌 면이 있으면 상태 줄 문구를 돌려준다(없으면 null). 없는 변은 공간을 차지하지 않는다. */
+/** Draws the sidebars on all four sides of the card, and returns the status line text when a side is folded for lack of space (null if none). A side that does not exist takes no space. */
 function drawCardSidebars(el, card, rect) {
-  // 기본값: 사이드바 기록이 없는 카드에는 공간 부족으로 접힌 면이 없다(null).
+  // default: a card with no sidebar record has no side folded for lack of space (null).
   if (!card.data) return null;
   const defaults = sidebarDefaults();
   const sets = sidebarSets();
-  // 배치 transaction 의 그리기는 그 transaction 이 표면 자리를 예측할 때 쓴 표시 상태를 그린다. 그 뒤의 크기 명령이
-  // 이전 transaction 의 그리기에 섞이면 DOM 과 네이티브 표면이 어긋난다(F33).
-  // 기본값: 예측하지 않은 그리기(호스트가 없는 문서, 예측 때 요소가 없던 카드)는 지금의 상태를 그린다.
+  // The drawing of a layout transaction draws the display state that the transaction used when it predicted the surface
+  // positions. If a later size command mixed into the drawing of the previous transaction, the DOM and the native surface would diverge (F33).
+  // default: a drawing that was not predicted (a document without a host, a card with no element at prediction time) draws the current state.
   const presentation = transactionSeats?.get(card.id)?.presentation ?? cardSidebars(card, rect);
   for (const side of SIDEBAR_SIDES) {
     const existing = el.querySelector(`:scope > .card-sidebar[data-side-of="${side}"]`);
-    // 기본값: 표시 상태가 없는 면에는 사이드바가 없다.
+    // default: a side with no display state has no sidebar.
     const state = presentation[side] ?? null;
     const set = resolveSidebarSet(card, side, sets, defaults, linkedCardSet(card, side));
     if (state === null || set === null) {
@@ -987,14 +982,14 @@ function drawCardSidebars(el, card, rect) {
       body = document.createElement("aside");
       body.className = "card-sidebar";
       body.dataset.sideOf = side;
-      // 사이드바는 자기 면과 세트를 말하는 상태 줄로 끝난다(docs/spec/example-model.md).
+      // A sidebar ends with a status line that describes its own side and set (docs/spec/example-model.md).
       body.innerHTML = '<div class="set"></div><footer class="card-sidebar__status" data-expose="core.card.sidebar.status"></footer>';
       const handle = document.createElement("div");
       handle.className = "card-sidebar__grip";
       handle.dataset.sideOf = side;
       handle.dataset.expose = "core.card.sidebar.grip";
       body.appendChild(handle);
-      // 그림 영역 뒤는 표면이 아니라 사이드바 프레임이므로 .slot 뒤가 아니라 카드 끝에 둔다.
+      // What follows the drawing area is the sidebar frame and not a surface, so it is placed at the end of the card and not after .slot.
       const status = el.querySelector(".status");
       if (!status) throw new Error(`card ${card.id} has no status region`);
       status.before(body);
@@ -1007,7 +1002,7 @@ function drawCardSidebars(el, card, rect) {
     handle.title = state.autoCollapsed ? `공간 부족으로 ${name} 사이드바 자동 접힘` : state.collapsed ? `눌러 ${name} 사이드바 펼치기` : `끌어 크기 바꾸기 · 눌러 ${name} 사이드바 접기`;
     el.dataset[`sidebar${side[0].toUpperCase()}${side.slice(1)}`] = state.collapsed ? "folded" : "open";
     el.style.setProperty(`--p${side[0]}`, state.collapsed ? "var(--divider)" : `${deviceGridSize(state.shownSize, devicePixelRatio)}px`);
-    // 기본값: 탭 없는 카드의 사이드바 섹션에는 표면 문맥이 없다(null) — 좌측 창 사이드바와 같은 문맥이다.
+    // default: a sidebar section of a card with no tabs has no surface context (null) — it is the same context as the left window sidebar.
     const surface = activeTab(card) === null || activeTab(card) === undefined ? null : activeTab(card).id;
     drawSet(body.querySelector(".set"), `${card.id}:${side}`, set, { card: card.id, surface, orientation: side === "top" || side === "bottom" ? "horizontal" : "vertical" });
   }
@@ -1015,52 +1010,51 @@ function drawCardSidebars(el, card, rect) {
 }
 
 /**
- * 고정 자리를 제거한다.
+ * Removes the fixed slot.
  *
- * `fixed` 는 레이아웃이 그 카드를 이동하거나 닫지 않는다는 뜻이므로 제거 전에 해제한다.
- * `canClose` 는 `fixed` 카드에 항상 false 를 반환한다.
+ * `fixed` means that the layout neither moves nor closes that card, so it is released before removal.
+ * `canClose` always returns false for a `fixed` card.
  */
 function dismiss(id) {
   if (!grid.card(id)) return;
   grid.setFixed(id, false);
-  if (!grid.close(id)) { grid.setFixed(id, true); throw new Error(`cannot remove window sidebar ${id}`); }   // 치우지 못했으면 역할도 그대로
-  // 카드를 닫으면 그 카드가 참조하던 선을 아무도 참조하지 않는다. 라이브러리는 그런
-  // 선을 남기고 제거 시점을 호스트에 맡긴다. 남겨 두면 확장된 카드가 그 선을 가로질러
-  // `standings` 가 후보로 반환하지 않고, 사이드바가 다시 열릴 때 새 선이 추가되어 같은
-  // 자리에 선이 누적된다.
+  if (!grid.close(id)) { grid.setFixed(id, true); throw new Error(`cannot remove window sidebar ${id}`); }   // If it could not be removed, the role stays as it was
+  // After a card is closed, nothing references the lines that card referenced. The library leaves such lines and leaves the time
+  // of their removal to the host. If they remain, an expanded card does not cross such a line and `standings` does not return
+  // it as a candidate, and when the sidebar opens again a new line is added, so lines accumulate in the same slot.
   grid.tidy();
 }
 
 /**
- * 판의 끝에 위치하는 사이드바를 추가하거나 제거한다. 좌·우가 같은 동작이므로 같은
- * 함수를 쓴다.
+ * Adds or removes the sidebar at the end of the plane. The left and the right behave the same, so they use the same
+ * function.
  *
- * `splitToward` 가 아니라 `insertAt` 을 사용한다. 분할하면 분할된 카드의 행 범위를
- * 상속해 한 행만 차지하지만, 사이드바는 판을 가로질러야 한다.
+ * It uses `insertAt` and not `splitToward`. A split inherits the row range of the split card and occupies only one row,
+ * but a sidebar must span the plane.
  */
 function settle() {
   if (!grid) return;
   closePicker();
   arrangeWindowSidebars(grid, windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()), windowSidebars,
     value("sidebarWidth"), side => value(side), dismiss);
-  // 기본값: 자리 카드만 남으면 포커스할 카드가 없다(null).
+  // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   view.render();
   syncBackgroundSessions();
 }
 
-/* 진행 중인 scrollend 대기. 다음 요청이 이전 대기를 취소한다. */
+/* The scrollend wait in progress. The next request cancels the previous wait. */
 const landing = new WeakMap();
 
-// 카드 focus는 같은 위치의 native surface를 교체할 수 있다. native 입력 소유자는
-// 그 표시 전이 아니라 표시 뒤에 focus를 받아야 한다.
+// Card focus can replace the native surface at the same position. The native input owner must receive focus after that
+// display, not before it.
 let pendingSurfaceFocus = null;
 
 export function requestSurfaceFocus(surfaceId) {
   pendingSurfaceFocus = surfaceId;
 }
 
-/** 명령이 실패해 렌더가 없으면 대기 중인 표면 포커스를 지운다. */
+/** When a command fails and no render follows, the pending surface focus is cleared. */
 export function cancelSurfaceFocus(surfaceId) {
   if (pendingSurfaceFocus === surfaceId) pendingSurfaceFocus = null;
 }
@@ -1071,8 +1065,8 @@ export function takeSurfaceFocus() {
   return surfaceId;
 }
 
-// 영속 터미널 actor는 네이티브 이미지 표면이 아니라 창 사이드카가 소유한다.
-// 따라서 숨겨진 탭은 WebView나 이미지 영역을 만들지 않고 PTY를 유지한다.
+// A persistent terminal actor is owned by the window sidecar and not by a native image surface.
+// So a hidden tab keeps its PTY without creating a WebView or an image region.
 const backgroundSessions = new Map();
 
 function syncBackgroundSessions() {
@@ -1080,7 +1074,7 @@ function syncBackgroundSessions() {
   const tabs = new Map();
   for (const card of grid.cards) for (const tab of tabsOf(card)) tabs.set(tab.id, tab);
   for (const tab of tabs.values()) {
-    // 불러오지 않은 플러그인의 탭에는 배경 세션이 없다.
+    // The tab of a plugin that is not loaded has no background session.
     const descriptor = hasPlugin(tab.plugin) ? plugin(tab.plugin).background : null;
     if (!descriptor || tabs.get(tab.id) !== tab) continue;
     const owner = grid.cards.find((card) => tabsOf(card).some((item) => item.id === tab.id));
@@ -1089,18 +1083,18 @@ function syncBackgroundSessions() {
     if (!port) throw new Error(`background sidecar unavailable: ${descriptor.sidecar}`);
     const state = { stop: null };
     backgroundSessions.set(tab.id, state);
-    // manifest가 연산을 명시한다. 사이드카 전송은 기존 wire 필드 `op`를 유지하며
-    // 이 위치가 유일한 프로토콜 변환 지점이다.
-    // background.settings 가 선언한 요청 필드에 그 플러그인 설정의 현재 값을 넣는다.
+    // The manifest states the operation. The sidecar transport keeps the existing wire field `op`, and this location is the
+    // only protocol conversion point.
+    // The request fields declared by background.settings receive the current values of the settings of that plugin.
     const open = () => {
       const values = pluginSettings(tab.plugin);
-      // 기본값: background.settings 는 선택 필드이며 없으면 설정 값을 넣지 않는다(docs/spec/plugins.md).
+      // default: background.settings is an optional field, and when it is absent no setting value is added (docs/spec/plugins.md).
       const fields = Object.fromEntries(Object.entries(descriptor.settings ?? {}).map(([field, setting]) => [field, values[setting]]));
       return port.send(tab.id, { ...fields, operation: descriptor.operation });
     };
     Promise.resolve(port.on(tab.id, (body) => {
-      // 영속 사이드카의 연결이 다시 맺히면 백그라운드 세션도 다시 연다 — 재스폰된
-      // 서비스에는 그 세션이 없다(V5-106). 실패 알림은 세션 오류로 남긴다.
+      // When the connection of a persistent sidecar is made again, the background session is opened again — the respawned
+      // service does not have that session (V5-106). A failure notification is left as a session error.
       if (body?.event === "connection") {
         if (body.connected === true) {
           open().catch((error) => {
@@ -1125,36 +1119,36 @@ function syncBackgroundSessions() {
   }
   for (const [tabId, state] of backgroundSessions) {
     if (tabs.has(tabId)) continue;
-    // 기본값: 수신 등록은 비동기로 끝나므로 그 전에 탭이 사라지면 멈출 함수가 아직 없다.
+    // default: the subscription finishes asynchronously, so if the tab disappears before that, there is no function to stop yet.
     state.stop?.();
     backgroundSessions.delete(tabId);
   }
 }
 
 /**
- * 활성 탭을 탭 목록의 가운데로 스크롤한다.
+ * Scrolls the active tab to the center of the tab list.
  *
- * 애니메이션은 사용자가 탭을 선택했을 때만 사용한다. 배치 변경으로 가운데를
- * 다시 계산할 때는 즉시 이동한다. divider 드래그 중에는 너비가 프레임마다
- * 바뀌므로, 매번 새 애니메이션을 시작하면 목표 위치에 도달하지 못한다.
+ * Animation is used only when the user selected the tab. When a layout change recomputes the center, it moves
+ * immediately. During a divider drag the width changes every frame, so starting a new animation each time never reaches the
+ * target position.
  *
- * `behavior:"smooth"` 는 브라우저가 처리하며, 창이 비활성이면 애니메이션이
- * 실행되지 않고 요청이 무시된다. 스크롤이 끝나면 scrollend 가 발생하므로, 그때
- * 도착 여부를 확인하고 미도달이면 즉시 이동시킨다.
+ * `behavior:"smooth"` is handled by the browser, and when the window is inactive the animation does not run and the
+ * request is ignored. When the scroll ends, scrollend fires; then it checks whether the target was reached, and moves
+ * immediately if it was not.
  */
 function centreTab(strip, activeId) {
   const active = strip.querySelector(".tab[data-active=true]");
   if (!active) { strip.scrollLeft = 0; return; }
   const room = strip.scrollWidth - strip.clientWidth;
-  // 두 rect 의 차이로 계산한다. `offsetLeft` 는 offsetParent 기준이고 탭 목록이
-  // static 이라 기준이 카드가 되어 헤더 좌우 padding 만큼 오차가 생긴다.
+  // It is computed from the difference of two rects. `offsetLeft` is relative to the offsetParent, and the tab list is
+  // static, so the reference becomes the card and an error of the left and right padding of the header arises.
   const a = active.getBoundingClientRect(), box = strip.getBoundingClientRect();
   const to = room <= 0 ? 0 : Math.max(0, Math.min(
     strip.scrollLeft + (a.left + a.width / 2) - (box.left + box.width / 2), room));
   const picked = strip.dataset.centred !== String(activeId);
-  // 기본값: 활성 탭이 없는 카드는 가운데 둔 탭이 없다(빈 문자열).
+  // default: a card with no active tab has no centered tab (empty string).
   strip.dataset.centred = String(activeId ?? "");
-  landing.get(strip)?.abort();                        // 이전 대기 취소
+  landing.get(strip)?.abort();                        // Cancel the previous wait
   if (Math.abs(strip.scrollLeft - to) < 0.5) return;
   if (!picked) { strip.scrollLeft = to; return; }
   const wait = new AbortController();
@@ -1166,38 +1160,38 @@ function centreTab(strip, activeId) {
 }
 
 /**
- * 헤더 너비를 측정해 표시 단계를 결정한다.
+ * Measures the header width and decides the display stage.
  *
- * 측정 전에 strip 단계와 도구 줄로 되돌려 모든 탭과 도구를 표시한다. 접힌 상태로
- * 측정하면 접힌 너비를 얻고, 그 값으로 단계를 다시 정하면 한 번 접힌 헤더가 넓어져도
- * 복귀하지 못한다. 두 번의 쓰기 사이에는 렌더링이 일어나지 않으므로 화면에 나타나지 않는다.
+ * Before measuring, it returns to the strip stage and the tool row so all tabs and tools are shown. Measuring in the
+ * folded state yields the folded width, and if the stage were decided again from that value, a header folded once could not
+ * return even after it widened. No rendering happens between the two writes, so nothing appears on the screen.
  *
- * 도구가 현재 탭 제목과 함께 들어가지 않으면 도구 줄을 ⋯ 메뉴로 접는다(F81). 제목이
- * 도구보다 오래 남는다.
+ * If the tools do not fit with the current tab title, the tool row folds into the ⋯ menu (F81). The title stays longer
+ * than the tools.
  */
-// PEEK    strip 단계를 유지하는 데 필요한 활성 탭 외 여유 너비
-// MIN_TAB 말줄임한 활성 탭의 최소 너비. 이보다 좁으면 ham 단계로 내려간다
+// PEEK    the spare width other than the active tab that is needed to keep the strip stage
+// MIN_TAB the minimum width of an active tab that is truncated with an ellipsis. Narrower than this, it drops to the ham stage
 const PEEK = 56, MIN_TAB = 48;
 
 function fitChrome(chrome, strip) {
   const acts = chrome.querySelector(".chrome__acts");
   if (!acts) return;
-  // 모든 단계에서 재기 위해 탭 전체와 도구 줄을 보인 상태에서 시작한다.
+  // To measure at every stage, it starts with all tabs and the tool row shown.
   chrome.dataset.fit = "strip";
   chrome.dataset.tools = "bar";
-  // 머리의 좌우 여백과 그 안의 요소 사이 간격, 그리고 ≡ 와 ⋯ 의 너비는 스타일시트가
-  // 정하므로 재서 얻는다. 여기에 적으면 스타일시트와 갈리고, 갈린 만큼 헤더가
-  // 접히는 너비가 어긋난다. 탭 사이의 간격을 재는 것과 같은 이유다.
+  // The side margins of the head, the gap between the elements inside it, and the widths of ≡ and ⋯ are decided by the
+  // stylesheet, so they are obtained by measuring. If they were written here, they would diverge from the stylesheet, and the
+  // width at which the header folds would shift by that difference. It is the same reason as measuring the gap between tabs.
   const head = getComputedStyle(chrome);
-  // 기본값: columnGap 의 계산값 normal 은 수가 아니며 flex 에서 0 이다.
+  // default: the computed value normal of columnGap is not a number and is 0 in flex.
   const gap = parseFloat(head.columnGap) || 0;
-  // 전체 화면 카드는 맨 앞에 스페이스 앱 단추를 보이므로 그 너비만큼 줄인 머리로 맞춘다.
+  // A fullscreen card shows the space app button at the start, so the head is fitted at a width reduced by the width of that button.
   const apps = chrome.querySelector(".chrome__apps");
   const lead = chrome.closest(".card")?.dataset.fullscreen === "true" && apps
     ? parseFloat(getComputedStyle(apps).width) + gap : 0;
   const inner = chrome.clientWidth
     - parseFloat(head.paddingLeft) - parseFloat(head.paddingRight) - lead;
-  // ≡ 와 ⋯ 는 strip 단계에서 그려지지 않으므로 rect 가 아니라 선언된 너비를 읽는다.
+  // ≡ and ⋯ are not drawn in the strip stage, so the declared width is read and not the rect.
   const ham = parseFloat(getComputedStyle(chrome.querySelector(".chrome__ham")).width);
   const more = parseFloat(getComputedStyle(chrome.querySelector(".chrome__more")).width);
   const tools = acts.getBoundingClientRect().width;
@@ -1205,12 +1199,12 @@ function fitChrome(chrome, strip) {
   const tabs = [...strip.querySelectorAll(".tab")];
   const active = strip.querySelector(".tab[data-active=true]");
   const activeW = active ? active.getBoundingClientRect().width : 0;
-  // 탭 사이의 간격은 탭 목록이 갖는 값이다.
-  // 기본값: columnGap 의 계산값 normal 은 수가 아니며 flex 에서 0 이다.
+  // The gap between tabs is a value that the tab list holds.
+  // default: the computed value normal of columnGap is not a number and is 0 in flex.
   const between = parseFloat(getComputedStyle(strip).columnGap) || 0;
   const whole = tabs.reduce((n, t) => n + t.getBoundingClientRect().width, 0)
     + Math.max(0, tabs.length - 1) * between;
-  // 머리는 다른 탭, 도구(메뉴로), 제목의 최소 폭까지, 제목 순으로 접는다. 앞의 단계가 들어가는 첫 단계를 쓴다.
+  // The head folds in this order: the other tabs, the tools (into a menu) down to the minimum width of the title, then the title. The first stage whose preceding stage fits is used.
   const withTools = inner - tools - gap;
   const withMenu = inner - more - gap;
   const [fit, folded] =
@@ -1222,8 +1216,8 @@ function fitChrome(chrome, strip) {
   chrome.dataset.tools = folded;
 }
 
-/* 렌더 완료 후에 측정한다. 너비가 갱신되기 전에 측정하면 잘못된 위치를 계산한다.
-   탭 드래그 중에는 스크롤하지 않는다. 드래그 중인 탭의 좌표가 어긋난다. */
+/* It measures after the render completes. Measuring before the width is updated computes a wrong position.
+   It does not scroll during a tab drag. The coordinates of the dragged tab would be misaligned. */
 function centreTabs() {
   for (const strip of plane.querySelectorAll(".chrome__tabs")) {
     const chrome = strip.parentElement;
@@ -1235,20 +1229,19 @@ function centreTabs() {
 }
 
 /**
- * 포커스 표식을 포커스 카드의 본문 영역에 배치하되 획 두께만큼 바깥에 둔다.
+ * The focus mark is placed in the body area of the focused card, outside it by the stroke width.
  *
- * 본문에 맞추면 표식이 네이티브 표면 위에 겹쳐 표면 내용을 가린다. 획 두께만큼
- * 바깥이면 획이 표면 경계 밖에 놓여 본문을 덮지 않는다. 그 두께는 스타일시트가
- * 정하므로 재서 얻는다.
+ * If it fit the body, the mark would overlap the native surface and hide the surface content. When it is outside by the
+ * stroke width, the stroke lies outside the surface boundary and does not cover the body. The stylesheet decides that
+ * thickness, so it is obtained by measuring.
  *
- * 카드 안이 아니라 표면과 같은 층에 둔다. 표면은 CSS 스택에 참여하지 않으므로 카드
- * 안에 그린 표식은 애플리케이션에서 표면 아래에 가려진다.
+ * It is placed in the same layer as the surface and not inside the card. A surface does not take part in the CSS stack, so a
+ * mark drawn inside the card is hidden under the surface in the application.
  */
 function markFocus() {
   const mark = document.getElementById("focusMark");
   const on = value("focusInd") === "corner";
-  // 슬롯은 탭 단위이고 포커스는 카드 단위다. 포커스 카드의 활성 탭이 그 카드의
-  // 슬롯이다.
+  // A slot is per tab and focus is per card. The active tab of the focused card is the slot of that card.
   const card = on ? grid.card(focusedId) : null;
   const shown = card ? activeTab(card) : null;
   const slot = shown
@@ -1257,7 +1250,7 @@ function markFocus() {
   if (!slot) { mark.hidden = true; return; }
   const host = plane.getBoundingClientRect();
   const r = slot.getBoundingClientRect();
-  // 표식은 획 두께만큼 바깥에 선다. 그 두께는 스타일시트가 정하므로 재서 얻는다.
+  // The mark stands outside by the stroke width. The stylesheet decides that thickness, so it is obtained by measuring.
   const out = parseFloat(getComputedStyle(mark).getPropertyValue("--t"));
   mark.style.left = `${r.left - host.left - out}px`;
   mark.style.top = `${r.top - host.top - out}px`;
@@ -1266,15 +1259,15 @@ function markFocus() {
   mark.hidden = false;
 }
 
-/* 마지막으로 그린 레일 외곽선. 검증기가 읽는다. */
+/* The rail outline drawn last. The verifier reads it. */
 let railShape = { shape: { path: "", loops: [], corners: 0, sharp: 0 }, rects: [], groups: [] };
 
-/** 마지막으로 그린 레일 외곽선과 그 대상 사각형. */
+/** The rail outline drawn last and its target rectangle. */
 export const railOutline = () => railShape;
 
 function drawRail() {
   const sidebars = railSidebars(windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()), id => grid.card(id));
-  // 합침은 반 통로의 pad 로 정하고, 선이 반 통로 안쪽의 온전한 픽셀에 그려지도록 합친 윤곽을 선 굵기의 절반만큼 줄인다.
+  // The merge is decided by the pad of half a gap, and the merged outline is reduced by half of the line width so the line is drawn on whole pixels inside the half gap.
   const pad = grid.gap / 2, corner = cardRadius(), inset = borderWidth() / 2;
   const groups = [];
   if (sidebars.length) {
@@ -1292,37 +1285,37 @@ function drawRail() {
 }
 
 
-/* 렌더 완료 수신자. 검증과 보고가 여기에 연결된다. */
+/* The render-completion receiver. Verification and reporting connect to it. */
 let listener = null;
 
-/** 판을 다시 그릴 때마다 호출할 함수를 등록한다. */
+/** Registers the function to call each time the plane is redrawn. */
 export function onRender(fn) {
   listener = fn;
 }
 
-/* 배치를 바꾸기로 했을 때의 수신자. 그리기 전에 호출된다. */
+/* The receiver for when the layout is decided to change. It is called before drawing. */
 let layouter = null;
-/* 그리는 중인 배치 transaction 이 예측한 카드별 자리와 사이드바 표시 상태. 그리기 밖에서는 null 이다. */
+/* The per-card slots and the sidebar display state that the layout transaction being drawn predicted. It is null outside drawing. */
 let transactionSeats = null;
 
 /**
- * 배치를 렌더링하기 전에 호출할 함수를 등록한다.
+ * Registers the function to call before the layout is rendered.
  *
- * 판 위에는 CSS 가 적용되지 않는 OS 뷰가 있고 별도 경로로 배치된다. 그 경로가 더
- * 느리므로 먼저 처리한다. 받은 사각형으로 OS 뷰를 옮긴 뒤 draw 를 호출하면 둘이 같은
- * 프레임에 반영된다. 등록하지 않으면 판이 즉시 렌더링한다.
+ * Above the plane there are OS views to which CSS does not apply, and they are placed through a separate path. That path is
+ * slower, so it is handled first. If draw is called after the OS view is moved to the received rectangle, both are reflected
+ * in the same frame. When nothing is registered, the plane renders immediately.
  */
 export function onLayout(fn) {
   layouter = fn;
 }
 
 /**
- * 이 판이 앉힐 표면: 카드 id 마다 그 카드가 보여줄 탭의 id 와 흐림 여부.
+ * The surfaces this plane will seat: for each card id, the id of the tab that card will show and whether it is dimmed.
  *
- * 표면의 정체는 탭이므로, 카드가 보여주는 탭이 바뀌면 같은 자리에 다른 표면이 앉는다.
- * 아직 그리기 전의 DOM 은 이전 탭을 담고 있고, 그것만 읽으면 지난 표면을 새 배치에
- * 앉히라고 호스트에 알리게 된다. 흐림도 같은 이유로 여기서 전달한다. 포커스는 그리기
- * 전에 이미 이동했으므로, DOM 에서 읽으면 지난 포커스의 흐림을 게시한다.
+ * The identity of a surface is the tab, so when the tab shown by a card changes, a different surface is seated in the same
+ * position. The DOM before drawing still holds the previous tab, and reading only that would tell the host to seat the old
+ * surface in the new layout. Dimming is passed here for the same reason. Focus already moved before drawing, so reading it
+ * from the DOM would publish the dimming of the previous focus.
  */
 function seats(rects) {
   const out = new Map();
@@ -1331,15 +1324,15 @@ function seats(rects) {
     const el = cardElement(card.id);
     const slot = el?.querySelector(":scope > .slot[data-native-surface]");
     let inset = null;
-    // 예측에 쓴 사방의 띠 폭. 검증 V7c 가 그려진 띠와 비교해 어긋난 원인을 밝힌다(F33).
+    // The width of the bands on all four sides used for the prediction. Verification V7c compares it with the drawn bands to find the cause of a mismatch (F33).
     let bands = null;
-    // 예측에 쓴 사이드바 표시 상태. 이 transaction 의 그리기가 같은 상태를 그린다.
-    // 기본값: 요소가 아직 없는 카드는 예측하지 않으므로 표시 상태가 없다(null).
+    // The sidebar display state used for the prediction. The drawing of this transaction draws the same state.
+    // default: a card with no element yet is not predicted, so it has no display state (null).
     const presentation = el && card.data ? cardSidebars(card, rects.get(card.id)) : null;
     if (slot) {
       const folded = parseFloat(getComputedStyle(el).getPropertyValue("--divider"));
       if (!Number.isFinite(folded) || folded < 0) throw new Error("invalid sidebar divider width");
-      // 기본값: 사이드바 기록이 없는 카드에는 사이드바가 없다.
+      // default: a card with no sidebar record has no sidebar.
       const effective = presentation ?? {};
       bands = Object.fromEntries(SIDEBAR_SIDES.map(side => {
         const state = effective[side];
@@ -1357,13 +1350,13 @@ function restoreWindowState(kept) {
   return restoreWindowSidebars(Object.hasOwn(kept, "windowSidebars") ? kept.windowSidebars : {});
 }
 
-/** 판을 처음부터 다시 만든다. */
+/** Rebuilds the plane from the start. */
 function build(kept) {
   const restored = restoreWindowState(kept);
   view?.destroy();
   named = kept.named;
-  // 사이드바마다 고른 탭과 접은 섹션. sidebars 가 없는 배치에는 저장된 선택이 없다(docs/spec/projects.md#persistence).
-  // 기본값: sidebars 가 없는 저장 배치에는 저장된 선택이 없다(docs/spec/projects.md#persistence).
+  // The tab and the folded sections chosen for each sidebar. A layout without sidebars has no stored selection (docs/spec/projects.md#persistence).
+  // default: a stored layout without sidebars has no stored selection (docs/spec/projects.md#persistence).
   restoreSidebarChoices(Object.hasOwn(kept, "sidebars") ? kept.sidebars : {});
   windowSidebars = restored;
   const half = halfGap();
@@ -1371,11 +1364,11 @@ function build(kept) {
   focusedId = kept.focusedId;
   view = new SoksakView(plane, grid, {
     createCard, updateCard,
-    // 판은 stage 안쪽으로 이 값만큼 들어와 있다. 호스트만 아는 값이므로 뷰에 전달해야
-    // 판 가장자리에 닿는 선이 stage 경계까지 이어진다.
+    // The plane is inset inside the stage by this value. Only the host knows the value, so it must be passed to the view so
+    // that lines touching the plane edge continue to the stage boundary.
     bleed: stagePad(),
-    // 그리기는 지금 설정의 프레임 배율을 문서에 쓴다. 준비는 그 배율의 첫 행 높이를 담아 호스트가 같은 트랜잭션에서
-    // 창 제목줄을 정하게 한다(docs/spec/native-surfaces.md#title-bar-height).
+    // Drawing writes the frame scale of the current settings into the document. Preparation includes the first-row height at
+    // that scale, so the host decides the window title bar in the same transaction (docs/spec/native-surfaces.md#title-bar-height).
     commit: (made, draw) => {
       const factor = value("textSize");
       if (!layouter) {
@@ -1393,28 +1386,28 @@ function build(kept) {
         }
       }, seated, chromeRow(factor));
     },
-    // 판의 렌더는 뷰가 그리는 것과 이 문서가 그리는 것으로 이루어진다. onChange 는
-    // 뷰가 그린 직후에 발생하므로, 나머지를 여기서 그리고 그 뒤에 수신자를 호출한다.
+    // The render of the plane consists of what the view draws and what this document draws. onChange fires right after the
+    // view draws, so the rest is drawn here and the receiver is called afterward.
     onChange: (reason) => {
-      // 경계선의 잡는 영역은 뷰가 만든다. 이름은 여기서 붙인다.
+      // The view creates the grab area of a boundary line. The name is attached here.
       for (const divider of plane.querySelectorAll(".sp-divider:not([data-expose])")) {
         divider.dataset.expose = "core.divider";
       }
       markFocus();
-      // 보이게 된 탭의 알림을 지운다.
+      // Clears the notification of a tab that became visible.
       clearVisibleNotices();
       centreTabs();
       railShape = drawRail();
-      // 탭이 카드를 옮기거나 카드 배율이 바뀌면 표면의 실제 배율이 바뀐다.
+      // When a tab moves to another card or the card scale changes, the actual scale of the surface changes.
       notifyTextSize();
-      // 기본값: onRender 가 수신자를 등록하기 전의 그리기는 알릴 곳이 없다.
+      // default: a drawing before onRender registers the receiver has nowhere to report to.
       listener?.(reason);
     },
   });
   settle();
 }
 
-/** 알림이 있는 탭과, 그런 탭을 가진 카드의 탭 목록 버튼에 점과 도움말을 둔다. */
+/** Puts a dot and a tooltip on the tab with a notification and on the tab list button of a card that has such a tab. */
 function drawNotices(chrome, tabs) {
   for (const b of chrome.querySelectorAll(".chrome__tabs .tab[data-tab-id]")) {
     const notice = tabNotice(b.dataset.tabId);
@@ -1434,14 +1427,14 @@ function drawNotices(chrome, tabs) {
   ham.title = notices.length ? systemNotifications.tooltip(notices.join("\n")) : "탭 목록";
 }
 
-// 탭이 보인다는 것은 포커스된 카드의 활성 탭이라는 뜻이다. 그 탭에 온 알림은 두지 않는다.
+// A visible tab means the active tab of the focused card. No notification is kept for that tab.
 setVisibleTab((id) => {
   const card = grid?.card(focusedId);
   return Boolean(card?.data) && activeTab(card)?.id === id;
 });
 
-// 표면이 탭 제목이나 알림을 알리면 탭 이름과 점만 다시 쓴다. 레이아웃은 바뀌지 않으므로 다시 그리거나 저장하지 않는다.
-// 시스템 알림 권한이 바뀌면 알림 도움말도 다시 쓴다.
+// When a surface announces a tab title or a notification, only the tab name and the dot are rewritten. The layout does not change, so nothing is redrawn or stored.
+// When the system notification permission changes, the notification tooltip is rewritten too.
 const redrawTabReports = () => {
   for (const el of document.querySelectorAll(".card[data-card-id]")) {
     const card = grid?.card(el.dataset.cardId);
@@ -1453,7 +1446,7 @@ const redrawTabReports = () => {
     }
     drawNotices(chrome, tabsOf(card));
     const statusText = el.querySelector(":scope > .status .status__text");
-    // 기본값: 아직 그리지 않은 카드에는 접힌 면 문구가 없다.
+    // default: a card not drawn yet has no folded-side text.
     if (statusText && !isPlace(card.id)) setText(statusText, cardStatusText(card, tabsOf(card), cardFolds.get(card.id) ?? null));
     if (statusText && !isPlace(card.id) && tabsOf(card).length) showTabError(statusText.parentElement, activeTab(card).id);
   }
@@ -1461,7 +1454,7 @@ const redrawTabReports = () => {
 onTabReports(redrawTabReports);
 systemNotifications.onChange(redrawTabReports);
 
-// 시스템 알림의 제목은 탭 이름이고, 누른 알림은 선언된 명령으로 그 탭을 고른다.
+// The title of a system notification is the tab name, and a pressed notification selects that tab through a declared command.
 configureSystemNotifications({
   tabName: (id) => {
     const card = grid?.card(cardOfTab(id)?.id);
@@ -1471,23 +1464,23 @@ configureSystemNotifications({
   select: (id) => run("core.tab.select", { tab: id }),
 });
 
-/** 통로 값을 판과 뷰에 적용한다. */
+/** Applies the gap value to the plane and the view. */
 export function setGap(half) {
   if (!grid) return;
   grid.gap = half * 2;
   view.bleed = stagePad();
-  // 통로는 stage 의 안쪽 여백이기도 하므로 통로가 바뀌면 판의 크기도 바뀐다. 옵저버를
-  // 기다리면 그 사이의 렌더가 이전 크기로 그려지고 표면에도 그 값이 전달된다.
-  // 프레임 배율은 다음 그리기가 문서에 쓰므로, 판의 크기는 그 배율에서 잰다(frame-text.js).
+  // The gap is also the inner margin of the stage, so the plane size changes when the gap changes. If the code waited for the
+  // observer, a render in the meantime would draw with the previous size and pass that value to the surface too.
+  // The frame scale is written into the document by the next drawing, so the plane size is measured at that scale (frame-text.js).
   const [width, height] = measureAt(value("textSize"), () => [plane.clientWidth, plane.clientHeight]);
   grid.resize(width, height);
 }
 
 /**
- * 현재 판의 상태를 한 벌로 반환한다. 스페이스가 이 값을 보관한다.
+ * Returns the current plane state as one set. The space stores this value.
  *
- * 배치, 포커스와 고정 창 사이드바 폭은 공간의 값이다.
- * 판은 한 번에 스페이스 하나를 그린다.
+ * The layout, the focus, and the widths of the fixed window sidebars are values of the space.
+ * The plane draws one space at a time.
  */
 export const capture = () => {
   keepWindowSidebarWidths(grid.cards, windowSidebars);
@@ -1498,7 +1491,7 @@ export const capture = () => {
   };
 };
 
-/** 보관해 둔 상태 한 벌을 판에 적용한다. */
+/** Applies one stored set of state to the plane. */
 export function adopt(kept) {
   if (!grid) return build(kept);
   const restored = restoreWindowState(kept);
@@ -1506,18 +1499,18 @@ export function adopt(kept) {
   focusedId = kept.focusedId;
   windowSidebars = restored;
   named = kept.named;
-  // 기본값: sidebars 가 없는 저장 배치에는 저장된 선택이 없다(docs/spec/projects.md#persistence).
+  // default: a stored layout without sidebars has no stored selection (docs/spec/projects.md#persistence).
   restoreSidebarChoices(Object.hasOwn(kept, "sidebars") ? kept.sidebars : {});
   settle();
 }
 
-/** 빈 스페이스 상태를 반환한다. 새 스페이스가 이 값으로 시작한다. */
+/** Returns an empty space state. A new space starts with this value. */
 export const fresh = () => ({
   state: initial(),
   focusedId: environment().workspace.focus,
   windowSidebars: Object.fromEntries(environment().workspace.grid.cards
     .filter(card => card.id === "left" || card.id === "right")
-    // 기본값: 환경 선언에서 너비를 생략한 고정 사이드바는 sidebarWidth 설정의 너비로 시작한다.
+    // default: a fixed sidebar whose width the environment declaration omits starts with the width of the sidebarWidth setting.
     .map(card => [card.id, { width: card.width ?? value("sidebarWidth") }])),
   named: 0,
   sidebars: {},
@@ -1531,17 +1524,17 @@ export function clear() {
   document.getElementById("focusMark").hidden = true;
 }
 
-/* ── 명령이 부르는 연산 ────────────────────────────────────────────────────
-   UI 요소는 명령을 실행하고, 명령은 아래 연산을 부른다. 잘못된 대상은 예외로 알린다. */
+/* ── Operations that commands call ────────────────────────────────────────────────────
+   A UI element runs a command, and the command calls the operations below. An invalid target is reported by an exception. */
 
-/** 판의 일반 카드. 없거나 자리 카드이면 예외를 던진다. */
+/** An ordinary card of the plane. It throws an exception if there is none or it is a place card. */
 function paneCard(id) {
   const card = grid?.card(id);
   if (!card || isPlace(id)) throw new Error(`no card ${id}`);
   return card;
 }
 
-/** 탭을 가진 카드. 없으면 예외를 던진다. */
+/** A card with tabs. It throws an exception if there is none. */
 function cardOfTab(tabId) {
   const card = grid?.cards.find((c) => tabsOf(c).some((t) => t.id === tabId));
   if (!card) throw new Error(`no tab ${tabId}`);
@@ -1552,10 +1545,10 @@ function knownPlugin(id) {
   if (!plugins().some((p) => p.id === id)) throw new Error(`unknown plugin ${id}`);
 }
 
-/** 카드의 요소. 도구 버튼과 탭 목록 버튼이 그 안에 있다. */
+/** The element of a card. The tool buttons and the tab list button are inside it. */
 const cardElement = (id) => plane.querySelector(`.card[data-card-id="${CSS.escape(id)}"]`);
 
-// 기본값: 전체 화면 카드가 없으면 null 이다.
+// default: it is null when there is no fullscreen card.
 export const fullscreenCard = () => plane.querySelector('.card[data-fullscreen="true"]')?.dataset.cardId ?? null;
 export const presentedCardRect = (id) => view?.painted(id);
 
@@ -1577,7 +1570,7 @@ export function focusCard(id) {
   settle();
 }
 
-/** 카드의 추가·분할 메뉴를 연다. 같은 메뉴가 열려 있으면 닫는다. */
+/** Opens the add and split menu of a card. If the same menu is open, it closes it. */
 export function openCardMenu(id, menu) {
   paneCard(id);
   const what = DO_OF[menu];
@@ -1592,8 +1585,9 @@ export function openCardMenu(id, menu) {
 }
 
 /**
- * 카드의 도구 메뉴를 연다. 열려 있으면 닫는다. 메뉴는 머리에 보일 사이드바 단추와 활성 도구를 같은 순서로 나열하고,
- * 고른 항목은 그 단추와 같은 명령을 실행한다. 탭 추가와 쪼개기는 같은 단추 아래에 새 탭의 플러그인을 묻는다.
+ * Opens the tool menu of a card. If it is open, it closes it. The menu lists the sidebar buttons that will be visible in
+ * the head and the active tools in the same order, and the chosen item runs the same command as that button. Adding a tab
+ * and splitting ask for the plugin of the new tab under the same button.
  */
 export function openCardTools(id) {
   paneCard(id);
@@ -1602,7 +1596,7 @@ export function openCardTools(id) {
   if (picker?.anchor === anchor) { closePicker(); return; }
   const acts = cardElement(id).querySelector(".chrome__acts");
   const items = [...acts.querySelectorAll(".chrome__act")].filter((b) => !b.disabled).map((b) => ({
-    // 사이드바 단추는 data-do 가 없고 data-side 로 면을 가리킨다.
+    // A sidebar button has no data-do and points to a side with data-side.
     key: b.classList.contains("chrome__side") ? `side-${b.dataset.side}` : b.dataset.do,
     name: b.title.split(" — ")[0],
     mark: "",
@@ -1621,9 +1615,10 @@ export function openCardTools(id) {
 }
 
 /**
- * 전체 화면 카드의 스페이스 앱 목록을 연다. 열려 있으면 닫는다. 목록은 스페이스의 모든 탭을 내용 카드마다 묶고, 묶음은
- * 배치의 slicing tree 를 판의 처음부터 읽은 순서이며, 제목은 판 지도와 `카드 N` 과 tree 깊이를 보인다
- * (docs/spec/example-model.md#card-fullscreen). 고른 탭의 카드로 전체 화면을 옮긴다.
+ * Opens the space app list of a fullscreen card. If it is open, it closes it. The list groups all tabs of the space by
+ * content card, the groups are in the order of reading the slicing tree of the layout from the start of the plane, and the
+ * title shows the plane map, `card N` and the tree depth (docs/spec/example-model.md#card-fullscreen). The chosen tab moves
+ * fullscreen to its card.
  */
 export function openSpaceApps(id) {
   paneCard(id);
@@ -1643,7 +1638,7 @@ export function openSpaceApps(id) {
       `height="${(r.h * sy).toFixed(2)}" rx=".6" data-own="${card.id === own}"/>`;
   }).join("");
   const groups = [];
-  // 카드는 그 위의 자르기 수에서 하나를 뺀 깊이에 선다. 같은 자르기 아래의 카드는 같은 깊이다.
+  // A card stands at the depth of the number of cuts above it minus one. Cards under the same cut have the same depth.
   const walk = (slice, cuts) => {
     if ("card" in slice) {
       const card = slice.card;
@@ -1668,7 +1663,7 @@ export function openSpaceApps(id) {
   }, "left", groups);
 }
 
-/** 전체 화면을 카드 cardId 로 옮기고 그 탭 tabId 를 보인다. 전체 화면은 유지한다. */
+/** Moves fullscreen to the card cardId and shows its tab tabId. Fullscreen is kept. */
 function showFullscreen(cardId, tabId) {
   const card = grid.card(cardId);
   if (!card?.data || !tabsOf(card).some((t) => t.id === tabId)) throw new Error(`no tab ${tabId} in card ${cardId}`);
@@ -1678,7 +1673,7 @@ function showFullscreen(cardId, tabId) {
   settle();
 }
 
-/** 카드의 탭 목록을 연다. 열려 있으면 닫는다. */
+/** Opens the tab list of a card. If it is open, it closes it. */
 export function openCardTabs(id) {
   paneCard(id);
   const anchor = cardElement(id)?.querySelector(".chrome__ham");
@@ -1713,7 +1708,7 @@ export function closeCard(id) {
   }
   restoreFullscreen();
   grid.close(id);
-  // 기본값: 자리 카드만 남으면 포커스할 카드가 없다(null).
+  // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   settle();
   return { closed: true };
@@ -1854,7 +1849,7 @@ export async function closeTabById(tabId) {
 
 const ZONES = ["centre", "left", "right", "top", "bottom"];
 
-/** 탭을 카드의 가운데나 변으로 옮긴다. 드래그를 놓은 결과와 같다. */
+/** Moves a tab to the center or an edge of a card. It is the same as the result of releasing a drag. */
 export function moveTab(tabId, cardId, zone) {
   const from = cardOfTab(tabId);
   paneCard(cardId);
@@ -1867,7 +1862,7 @@ export function moveTab(tabId, cardId, zone) {
   dropTab(from.id, tabId, hit);
 }
 
-/** 열린 선택 레이어의 항목 하나를 고른다. */
+/** Chooses one item of the open picker layer. */
 export function pickItem(index) {
   if (!picker) throw new Error("no menu is open");
   const key = picker.keys[index];
@@ -1881,8 +1876,8 @@ export function pickItem(index) {
 export { closePicker };
 
 /**
- * 카드 머리의 사이드바 단추. 카드가 보이는 면마다 하나를 도구 앞에 위·아래·왼쪽·오른쪽 순으로 둔다. 단추는 그 면을
- * 접거나 펼치고, 면이 펼쳐져 있는 동안 눌린 상태다. 접힌 면도 머리에 남으므로 다시 펼칠 수 있다(docs/spec/example-model.md).
+ * The sidebar buttons in a card head. One button per side that the card shows is placed before the tools in the order top,
+ * bottom, left, right. A button folds or unfolds that side, and is pressed while the side is unfolded. A folded side also remains in the head, so it can be unfolded again (docs/spec/example-model.md).
  */
 function drawSideToggles(acts, el, cardId) {
   const shownButtons = [];
@@ -1907,8 +1902,8 @@ function drawSideToggles(acts, el, cardId) {
     button.setAttribute("aria-label", button.title);
     shownButtons.push(button);
   }
-  // 자리가 틀린 단추만 옮긴다. insertBefore 는 옮길 단추를 문서에서 먼저 빼고, WebKit 은 누름을 받은 노드가 빠지면 그
-  // 누름의 click 을 보내지 않는다(F65). 뒤에서부터 각 단추의 다음 형제가 다음 단추(마지막은 도구)인지 본다.
+  // Only a button in the wrong position is moved. insertBefore first removes the button to move from the document, and WebKit
+  // does not send the click of a press when the node that received the press is removed (F65). From the back, it checks whether the next sibling of each button is the next button (the tools for the last).
   let next = acts.querySelector(".chrome__act[data-do]");
   for (const button of shownButtons.reverse()) {
     if (button.nextElementSibling !== next) acts.insertBefore(button, next);
@@ -1916,22 +1911,22 @@ function drawSideToggles(acts, el, cardId) {
   }
 }
 
-/** 카드 도구 버튼의 상태. 비활성, 숨김, 머리의 접힘 단계. */
+/** The state of a card tool button: disabled, hidden, and the folding stage of the head. */
 export function cardActs(id) {
   const chrome = cardElement(id)?.querySelector(".chrome");
   const acts = chrome?.querySelector(".chrome__acts");
   if (!acts) return null;
   const buttons = Object.fromEntries([...acts.querySelectorAll(".chrome__act[data-do]")].map((b) => [
     ["close", "fullscreen"].includes(b.dataset.do) ? b.dataset.do : MENU_OF[b.dataset.do],
-    // 도구를 메뉴로 접은 머리는 도구 줄을 그리지 않는다.
+    // A head that folded the tools into a menu does not draw the tool row.
     { enabled: !b.disabled, hidden: b.hidden || chrome.dataset.tools === "menu", title: b.title },
   ]));
-  // 기본값: 탭 줄을 아직 맞추지 않은 카드의 머리는 접히지 않은 strip 이다.
-  // 기본값: 머리를 아직 맞추지 않은 카드는 도구를 한 줄에 보인다.
+  // default: the head of a card whose tab row is not yet fitted is an unfolded strip.
+  // default: a card whose head is not yet fitted shows the tools in one row.
   return { ...buttons, fit: chrome.dataset.fit ?? "strip", tools: chrome.dataset.tools ?? "bar" };
 }
 
-/** 레일 외곽선과 포커스 표식. */
+/** The rail outline and the focus mark. */
 export function railState() {
   const mark = document.getElementById("focusMark");
   return {
@@ -1946,16 +1941,16 @@ export function railState() {
 
 export { settle, tabsOf, activeTab, plane };
 export const currentGrid = () => grid;
-/** 카드의 글자 크기 배율. 값이 없으면 1 이다. */
-// 기본값: 위 주석대로 글자 크기 배율을 정하지 않은 카드는 1 이다.
+/** The text size scale of a card. It is 1 when there is no value. */
+// default: as the comment above says, a card with no text size scale is 1.
 const cardTextSize = (card) => card?.data?.textSize ?? 1;
 
-/** 글자 크기의 현재 범위(docs/spec/text-size.md#scope). */
+/** The current scope of the text size (docs/spec/text-size.md#scope). */
 export function currentTextScope() {
   return effectiveTextScope(textScope(), focusedId);
 }
 
-/** 표면(탭)의 실제 글자 배율. 프레임 배율과 그 탭을 담은 카드의 배율을 곱한다. 판에 없는 탭은 null 이다. */
+/** The actual text scale of a surface (tab). It is the frame scale multiplied by the scale of the card that holds the tab. A tab not in the plane is null. */
 function surfaceTextSize(surfaceId) {
   const card = grid?.cards.find((item) => tabsOf(item).some((t) => t.id === surfaceId));
   return card ? value("textSize") * cardTextSize(card) : null;
@@ -1963,15 +1958,15 @@ function surfaceTextSize(surfaceId) {
 
 setSurfaceTextSize(surfaceTextSize);
 
-/** 모든 카드의 글자 크기 배율. */
+/** The text size scale of all cards. */
 export function cardTextSizes() {
-  // 기본값: 판을 만들기 전에는 카드가 없다.
+  // default: before the plane is created there are no cards.
   return Object.fromEntries((grid?.cards ?? []).map((card) => [card.id, cardTextSize(card)]));
 }
 
 /**
- * 현재 범위의 글자 크기를 direction 으로 옮긴다. 1 은 크게, -1 은 작게, 0 은 기본이다.
- * 프레임 배율은 공통 설정이고, 카드 배율은 카드의 레이아웃 데이터에 저장된다.
+ * Moves the text size of the current scope in direction. 1 is larger, -1 is smaller, and 0 is the default.
+ * The frame scale is a common setting, and the card scale is stored in the layout data of the card.
  */
 export async function changeTextSize(direction) {
   const scope = currentTextScope();
@@ -1981,10 +1976,10 @@ export async function changeTextSize(direction) {
   }
   const card = grid?.card(scope.card);
   if (!card) throw new Error(`text size card ${scope.card} is not in the layout`);
-  // 기본값: 자리 카드는 data 가 null 이므로 글자 크기만 담는다.
+  // default: a place card has null data, so it holds only the text size.
   grid.setData(card.id, { ...(card.data ?? {}), textSize: nextTextSize(cardTextSize(card), direction) });
   settle();
 }
 
-/** 포커스된 카드의 id. */
+/** The id of the focused card. */
 export const focused = () => focusedId;

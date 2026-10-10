@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-// 설정 창은 설정의 형식마다 정해진 컨트롤 하나로 그린다(docs/spec/settings.md 의 Controls).
+// The settings window draws each setting format with one fixed control (Controls in docs/spec/settings.md).
 test("every setting form is drawn with its one control", async (t) => {
   const dom = new JSDOM("<body><div id=plane></div></body>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
@@ -30,7 +30,7 @@ test("every setting form is drawn with its one control", async (t) => {
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const ui = await import("../settings-ui.js");
-  /** 설정 키의 컨트롤: 태그, 입력 종류, 명령 이름과 선택 상자의 값. */
+  /** The control of a setting key: the tag, the input kind, the command name, and the value of the select box. */
   const controlOf = (key) => {
     const control = ui.settingsModalState().controls.find((item) => item.key === key);
     assert.ok(control, `no control for ${key}`);
@@ -40,7 +40,7 @@ test("every setting form is drawn with its one control", async (t) => {
   try {
     ui.openSettings();
     ui.showSection("general");
-    // 선택지는 값이 몇 개든 선택 상자다. 단추를 늘어놓는 선택지는 없다.
+    // A choice is a select box regardless of how many values it has. There is no choice that lays out buttons.
     for (const key of ["projectOpening", "mode", "font", "projectTabs", "focusInd", "fullRule", "language"]) {
       const control = controlOf(key);
       assert.deepEqual([control.tag, control.command], ["SELECT", "core.settings.change"], `${key} is not a select box`);

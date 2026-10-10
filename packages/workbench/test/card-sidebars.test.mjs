@@ -99,7 +99,7 @@ test('presentation folds an insufficient axis and restores expansion without cha
  const before=structuredClone(requested);
  const metrics={header:32,footer:22,border:1,divider:6,minimum:96,sidebarMinimum:120};
  const narrow=model.presentSidebars(requested,{w:984,h:343.5},metrics);
- // 높이 공간 191.5 에 120 두 개가 최소 크기로도 들어가지 않으므로 위는 120 으로 열고 아래만 접는다.
+ // The height space of 191.5 cannot hold two 120 sidebars even at the minimum size, so the upper one opens at 120 and only the lower one collapses.
  assert.equal(narrow.top.collapsed,false);
  assert.equal(narrow.top.shownSize,120);
  assert.equal(narrow.bottom.collapsed,true);
@@ -138,7 +138,7 @@ test("the status names the sides that stay folded for lack of space after the us
   const chosen = { collapsed: true, requestedCollapsed: true, autoCollapsed: true };
   assert.equal(model.spaceFoldText({ top: space, bottom: space, left: open }), "위·아래 사이드바: 공간 부족으로 접힘");
   assert.equal(model.spaceFoldText({ left: space }), "왼쪽 사이드바: 공간 부족으로 접힘");
-  // 사용자가 접은 면은 공간과 관계없이 접혀 있으므로 이유를 보이지 않는다.
+  // A side the user collapsed stays collapsed regardless of the space, so it shows no reason.
   assert.equal(model.spaceFoldText({ top: chosen, left: open }), null);
   assert.equal(model.spaceFoldText({}), null);
 });
@@ -153,13 +153,13 @@ const METRICS = { header: 32, footer: 22, border: 1, divider: 6, minimum: 96, si
 const open = (size) => ({ set: "first", size, collapsed: false });
 
 test("a side that fits opens although the two sides of its axis do not fit together", () => {
-  // 보고된 카드: 높이 342.4, 위 190, 아래 120. 높이 공간은 190.4 이다.
+  // Reported card: height 342.4, upper 190, lower 120. The height space is 190.4.
   const shown = model.presentSidebars({ top: open(190), bottom: open(120) }, { w: 762, h: 342.4 }, METRICS);
   assert.equal(shown.top.collapsed, false);
   assert.ok(Math.abs(shown.top.shownSize - 184.4) < 1e-9, `${shown.top.shownSize}`);
   assert.equal(shown.bottom.collapsed, true);
   assert.equal(shown.bottom.collapseReason, "insufficient-height");
-  // 마지막으로 조작한 면이 아래면 아래를 저장 크기로 열고 위를 접는다.
+  // When the side operated last is the lower one, the lower side opens at its stored size and the upper side collapses.
   const last = model.presentSidebars({ top: open(190), bottom: open(120) }, { w: 762, h: 342.4 }, METRICS, { height: "bottom" });
   assert.equal(last.bottom.collapsed, false);
   assert.equal(last.bottom.shownSize, 120);

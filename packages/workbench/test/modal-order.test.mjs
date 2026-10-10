@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { modalOrder } from "../modal-order.js";
 
-/** 적용한 호출을 순서대로 기록하는 모달 문서. */
+/** A modal document that records the applied calls in order. */
 function record() {
   const applied = [];
   const order = modalOrder(

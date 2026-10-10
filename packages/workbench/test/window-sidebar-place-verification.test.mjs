@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { windowSidebarsPlaced } from "../verify-checks.js";
 
-/** 가로 선 xs, 세로 선 두 개, 그려진 폭 drawn 을 가진 판. */
+/** A plane with the horizontal line xs, two vertical lines, and the drawn width drawn. */
 function grid(cards, drawn = {}) {
   return {
     cards,

@@ -1,2 +1,2 @@
-// 진단 빌드가 아니다. 진단 메서드가 없다.
+// This is not a diagnostic build. It has no diagnostic methods.
 export {};

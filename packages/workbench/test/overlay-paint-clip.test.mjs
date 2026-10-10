@@ -1,5 +1,5 @@
-// 대화상자 문서에는 메인 문서의 native paint clip 을 복사하지 않는다(docs/spec/native-modals.md). clip 은 커밋 다음 frame 에
-// 바뀌므로 복사하면 요청이 그 시점에 따라 달라진다(F40).
+// The native paint clip of the main document is not copied to the dialog document (docs/spec/native-modals.md). The clip changes in the frame after a commit,
+// so copying it would make the request depend on that timing (F40).
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
@@ -10,7 +10,7 @@ globalThis.document = dom.window.document;
 globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
 globalThis.innerWidth = 800;
 globalThis.innerHeight = 600;
-// WebKit 문서에는 있고 jsdom 에는 없는 목록이다.
+// This is a list that a WebKit document has and jsdom does not.
 document.adoptedStyleSheets = [];
 const calls = [];
 mock.module("@soksak/runtime", { namedExports: { host: {

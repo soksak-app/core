@@ -4,8 +4,8 @@ import { JSDOM } from "jsdom";
 
 import { registerSurfaceExposure } from "../surface-exposure.js";
 
-// core.surface.document 의 body 는 표면 내용의 크기, viewport 는 보이는 자리다(docs/spec/exposure.md).
-// jsdom 은 배치를 계산하지 않으므로 호스트의 상자와 스크롤 크기를 정해 둔다.
+// The body of core.surface.document is the size of the surface content, and the viewport is the visible place (docs/spec/exposure.md).
+// jsdom does not compute layout, so the test sets the box and the scroll size of the host.
 function documentOf({ width, height, scrollWidth, clientWidth, scrollHeight, clientHeight }) {
   const dom = new JSDOM("<main><div id=host></div></main>", { url: "http://localhost/" });
   const host = dom.window.document.querySelector("#host");

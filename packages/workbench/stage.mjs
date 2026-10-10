@@ -1,27 +1,27 @@
 #!/usr/bin/env node
-// 애플리케이션의 프런트엔드를 한 디렉터리에 배치한다(docs/spec/plugins.md 의 스테이징 배치).
+// Places the frontend of the application in one directory (staging layout in docs/spec/plugins.md).
 //
-//   soksak-stage <출력 디렉터리> [--diagnostics] [--installed <설정 디렉터리>]
+//   soksak-stage <output directory> [--diagnostics] [--installed <configuration directory>]
 //
-// 현재 디렉터리의 애플리케이션 패키지에서 environment.json 을 읽는다. 패키지 위치는
-// Node 모듈 해석으로 찾는다. 파일은 복사만 하고 내용을 바꾸지 않는다.
+// Reads environment.json from the application package in the current directory. The package location is found
+// by Node module resolution. Files are only copied and their content is not changed.
 //
-//   <출력>/                        워크벤치 패키지의 files
+//   <output>/                        files of the workbench package
 //   <output>/modules/<package.json name>/   the files of soksak and plugin-api
-//   <출력>/runtime/                 environment.json 의 runtime 디렉터리
-//   <출력>/environment.json         애플리케이션의 environment.json
-//   <출력>/diagnostics.js           --diagnostics 이면 워크벤치의 observe.js(페이지 진단 메서드),
-//                                  아니면 release-diagnostics.js(빈 모듈). 진단 코드는 진단 빌드에만
-//                                  들어간다
-//   <출력>/transcript.js 등          --diagnostics 이면 진단 모듈이 쓰는 파일(staged.js 의 STAGED.diagnostics)
+//   <output>/runtime/                 runtime directory of environment.json
+//   <output>/environment.json         environment.json of the application
+//   <output>/diagnostics.js           observe.js of the workbench (page diagnostic methods) with --diagnostics,
+//   otherwise release-diagnostics.js (an empty module). Diagnostic code
+//   goes only into diagnostic builds
+//   <output>/transcript.js etc.       files that the diagnostic module uses with --diagnostics (STAGED.diagnostics of staged.js)
 //
-// 플러그인은 bundle 에 넣지 않는다. 네이티브 host 는 설정 디렉터리에 설치된 플러그인을 제공한다
-// (docs/spec/installation.md). host 가 없는 애플리케이션(브라우저 예제)은 --installed 로 설정 디렉터리를 주며,
-// 그러면 host 가 제공할 문서를 쓴다.
+// Plugins are not put into the bundle. The native host provides the plugins installed in the configuration directory
+// (docs/spec/installation.md). An application without a host (the browser example) gives the configuration directory with --installed,
+// and then it writes the documents that the host would provide.
 //
-//   <출력>/installed-plugins.json   켜진 설치 플러그인 목록과 manifest. diagnostics 는 --diagnostics 일 때만 담는다
-//   <출력>/modules/<플러그인>/       켜진 각 설치 플러그인의 파일
-//   <출력>/shared/<id>.<point>/      the shared modules of extension points
+//   <output>/installed-plugins.json   list and manifests of the enabled installed plugins; diagnostics only with --diagnostics
+//   <output>/modules/<plugin>/       files of each enabled installed plugin
+//   <output>/shared/<id>.<point>/      the shared modules of extension points
 
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -52,12 +52,12 @@ const target = resolve(app, out);
 const workbench = dirname(fileURLToPath(import.meta.url));
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 
-/** from 패키지의 의존성으로 name 패키지의 디렉터리를 찾는다. */
+/** Finds the directory of the package name through the dependencies of the package from. */
 function packageDir(from, name) {
   return dirname(createRequire(join(from, "package.json")).resolve(`${name}/package.json`));
 }
 
-/** 패키지의 files 항목을 dest 에 복사한다. files 가 없으면 실패한다. */
+/** Copies the files entries of a package to dest. Fails if files is absent. */
 function copyPackage(dir, dest) {
   const { name, files } = readJson(join(dir, "package.json"));
   if (!Array.isArray(files)) throw new Error(`${name}: package.json requires files`);
@@ -65,14 +65,14 @@ function copyPackage(dir, dest) {
 }
 
 /**
- * 설정 디렉터리의 plugins/installed.json 에서 켜진 플러그인을 id 순서로 읽는다. 형식은 command line sok 이 쓰고
- * 검사한다(docs/spec/installation.md). 여기서는 쓰는 필드가 있는지만 보고, 없으면 실패한다.
+ * Reads the enabled plugins in id order from plugins/installed.json of the configuration directory. The format is written and validated by the command line sok
+ * (docs/spec/installation.md). Here it only checks that the fields in use exist, and fails if they do not.
  */
 function enabledInstalledPlugins(configuration) {
   const file = join(configuration, "plugins", "installed.json");
   if (!existsSync(file)) throw new Error(`${file} does not exist; install plugins with sok first`);
   const installed = readJson(file);
-  // 형식 1 파일은 sok 이나 애플리케이션이 읽을 때 형식 2 로 바꾼다.
+  // A format 1 file is converted to format 2 when sok or the application reads it.
   if (installed?.format !== 2 || typeof installed.plugins !== "object" || installed.plugins === null) {
     throw new Error(`${file}: expected format 2 with plugins`);
   }
@@ -83,8 +83,8 @@ function enabledInstalledPlugins(configuration) {
       if (typeof plugin.version !== "string" || typeof plugin.path !== "string") {
         throw new Error(`${file}: plugin ${id} requires version and path`);
       }
-      // 파일은 설치가 설정 디렉터리에 대한 상대 경로로 기록한 폴더에서만 읽는다(docs/spec/installation.md).
-      // 이름은 그 폴더의 package.json 의 name 이다.
+      // Files are read only from the folder that the installation recorded as a path relative to the configuration directory (docs/spec/installation.md).
+      // The name is the name of the package.json in that folder.
       const dir = join(configuration, plugin.path);
       const { name } = readJson(join(dir, "package.json"));
       if (typeof name !== "string") throw new Error(`${join(dir, "package.json")}: expected a package.json name`);
@@ -129,7 +129,7 @@ if (installedDirectory) {
       }
     }
     const declared = join(plugin.dir, "diagnostics.json");
-    // 기본값: diagnostics.json 이 없는 플러그인은 진단 선언이 없다.
+    // default: a plugin without diagnostics.json has no diagnostic declaration.
     if (diagnostics && existsSync(declared)) entry.diagnostics = readJson(declared);
     document.push(entry);
   }
@@ -137,8 +137,8 @@ if (installedDirectory) {
   writeFileSync(join(target, INSTALLED_PLUGINS), `${JSON.stringify({ plugins: document })}\n`);
 }
 
-// STAGED 목록의 파일들이 실제로 만들어졌는지 검증.
-// 선언과 실제가 갈라지지 않도록 한다.
+// Verifies that the files of the STAGED list were actually created,
+// so the declaration and the result do not diverge.
 for (const stagedFile of STAGED.always) {
   if (!existsSync(join(target, stagedFile))) throw new Error(`declared always-staged file not created: ${stagedFile}`);
 }

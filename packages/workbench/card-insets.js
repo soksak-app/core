@@ -1,4 +1,4 @@
-// 그려진 슬롯에서 이전 사이드바를 빼고 요청한 사이드바의 여백을 계산한다.
+// Subtracts the previous sidebar from the drawn slot and computes the inset of the requested sidebar.
 const sides = ["left", "right", "top", "bottom"];
 export function targetCardInsets(card, slot, bands) {
   for (const side of sides) {
@@ -9,7 +9,7 @@ export function targetCardInsets(card, slot, bands) {
   if (inner.width <= 0 || inner.height <= 0) return null;
   const drawn = Object.fromEntries(sides.map(side => {
     const region = card.querySelector(`:scope > .card-sidebar[data-side-of="${side}"]`);
-    // 없는 사이드바는 영역을 차지하지 않는다.
+    // A sidebar that does not exist takes no area.
     const rect = region?.getBoundingClientRect();
     return [side, rect ? (side === "left" || side === "right" ? rect.width : rect.height) : 0];
   }));

@@ -3,7 +3,7 @@ import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
 import { EXPOSURE_ERRORS } from "@soksak/plugin-api";
 
-// 이 문서가 답하는 명령도 선언된 timeout 이나 기본 10초 안에 답하지 않으면 실패로 보고한다(docs/spec/exposure.md).
+// A command that this document answers also fails with a report when it does not answer within its declared timeout or the default 10 seconds (docs/spec/exposure.md).
 const dom = new JSDOM("<body></body>", { url: "https://example.test/" });
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
@@ -53,7 +53,7 @@ test("a main-page command without a declared timeout fails after 10 seconds", { 
 
 test("a command bound covers its handler and not the presentation it waits for afterwards", { timeout: 5000 }, async () => {
   const made = registry();
-  // 표시는 명령의 handler 예산(50ms)보다 오래 걸린다. 표시의 한도는 표시를 기다리는 쪽이 정한다.
+  // The presentation takes longer than the handler budget of the command (50 ms). The limit of a presentation is set by the side that waits for it.
   made.configure({ settled: () => new Promise((resolve) => setTimeout(resolve, 150)) });
   made.declare("core", {
     status: [],
@@ -81,7 +81,7 @@ test("a handler that throws fails its command and leaves no reply timer behind",
   });
   made.command("core.fixture.throws", () => { throw new Error("fixture handler failed"); });
   await assert.rejects(made.run("core.fixture.throws", {}), /fixture handler failed/);
-  // 처리기가 동기로 던져도 응답 한도의 타이머는 해제되어, 10초 뒤 응답하지 않았다는 거부가 따로 생기지 않는다.
+  // Even when the handler throws synchronously, the timer of the reply limit is cleared, so no separate rejection for a missing reply appears after 10 seconds.
   mock.timers.tick(10000);
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(unhandled.map(String), []);

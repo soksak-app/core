@@ -4,8 +4,8 @@ import { JSDOM } from "jsdom";
 
 import { focusName, focusState } from "../focus-state.js";
 
-// 표면 모듈은 메인 문서의 shadow root 안에 마운트된다. 문서의 activeElement 와 focus 사건의 target 은 shadow host 로
-// 바뀌어 보이므로, 초점 상태는 shadow root 를 따라가 실제 요소와 그 표면을 읽어야 한다.
+// A surface module mounts inside a shadow root of the main document. The activeElement of the document and the target of a focus event
+// appear as the shadow host, so the focus state must follow the shadow root to read the actual element and its surface.
 test("focus inside a surface's shadow root is reported by its exposed name and surface", () => {
   const dom = new JSDOM('<main><div data-native-surface-id="tab-1"><div class="surface-module-host"></div></div>' +
     '<button data-expose="core.chrome.projects"></button></main>');

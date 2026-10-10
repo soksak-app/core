@@ -1,8 +1,8 @@
-// 기본값, 공통값, 프로젝트 덮어쓰기 순서로 설정을 적용한다.
+// Applies settings in the order defaults, common values, project overrides.
 
 export function effectiveSettings(defaults, common, project) {
   const values = { ...defaults, ...common, ...project };
-  // 기본값: projectOpening 은 공통 값만 있으며 저장하지 않았으면 기본값이다.
+  // default: projectOpening has only a common value, and it is the default when it has not been stored.
   values.projectOpening = common.projectOpening ?? defaults.projectOpening;
   return values;
 }

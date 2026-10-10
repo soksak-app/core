@@ -1,4 +1,4 @@
-// 표면이 알린 탭 제목과 작업 디렉터리, 새 탭의 출처 디렉터리.
+// The tab title and working directory that a surface reported, and the origin directory of a new tab.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { clearVisibleNotices, forgetTab, onTabReports, recordOrigin, reportDirectory, reportError, reportModified, reportNotice, reportTitle,

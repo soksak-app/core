@@ -1,4 +1,4 @@
-// 섹션 모듈이 받는 문맥(status 관찰과 명령 연결)과 core.sidebars 의 섹션 내용을 검사한다.
+// Checks the context that a section module receives (status observation and command connection) and the section content of core.sidebars.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -7,7 +7,7 @@ import { JSDOM } from "jsdom";
 const dom = new JSDOM("<body></body>", { url: "https://example.test/" });
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
-// 페이지 오류 보고를 기록한다.
+// Records the page error reports.
 const reported = [];
 globalThis.ErrorEvent = dom.window.ErrorEvent;
 globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
@@ -24,7 +24,7 @@ registry.declare("probe", {
   dom: [],
 });
 
-// 섹션 모듈: 관찰한 값과 표면을 한 줄로 그리고, 명령에 연결한 단추 하나를 둔다.
+// A section module: it draws the observed value and the surface in one line, and has one button connected to a command.
 const source = `export function mount(root, context) {
   const line = document.createElement("p");
   const button = document.createElement("button");
@@ -35,7 +35,7 @@ const source = `export function mount(root, context) {
   return { dispose() { stop(); line.remove(); button.remove(); } };
 }`;
 registerSection({ id: "probe.view", name: "보기", module: `data:text/javascript,${encodeURIComponent(source)}` });
-// 코어 status 를 따라가고 코어 명령에 연결하는 섹션과 다른 플러그인의 이름을 쓰는 섹션.
+// A section that follows a core status and connects to a core command, and a section that uses the name of another plugin.
 const coreSource = `export function mount(root, context) {
   const line = document.createElement("p");
   const button = document.createElement("button");

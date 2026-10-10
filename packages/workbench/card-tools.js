@@ -1,4 +1,4 @@
-// 카드 머리 도구의 표시와 명령 바인딩을 관리한다.
+// Manages the display and the command bindings of the card header tools.
 import { bind } from "./commands.js";
 
 export const CARD_TOOL_MENUS = { add: "add", x: "split-x", y: "split-y" };

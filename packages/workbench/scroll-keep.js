@@ -1,8 +1,8 @@
-// 다시 그려도 같은 내용이면 스크롤 위치를 유지한다(docs/spec/settings.md). 스크롤하는 요소는 data-scroll-key 로
-// 보이는 내용을 밝힌다. 키가 같으면 같은 내용이고, 키가 다르면 맨 위에서 시작한다. data-scroll-end 가 있는 요소는
-// 키가 다를 때 끝에서 시작한다.
+// Keeps the scroll position when the content is the same after a redraw (docs/spec/settings.md). A scrolling element states the visible content with data-scroll-key.
+// The same key means the same content, and a different key starts at the top. An element with data-scroll-end
+// starts at the end when the key differs.
 
-/** root 안의 data-scroll-key 요소마다 스크롤 위치를 키별로 읽는다. */
+/** Reads the scroll position by key for each data-scroll-key element inside root. */
 export function scrollPositions(root) {
   const positions = new Map();
   for (const element of root.querySelectorAll("[data-scroll-key]")) {
@@ -11,7 +11,7 @@ export function scrollPositions(root) {
   return positions;
 }
 
-/** root 안의 data-scroll-key 요소 가운데 positions 에 같은 키가 있는 요소의 위치를 되돌린다. */
+/** Restores the position of the data-scroll-key elements inside root whose key also exists in positions. */
 export function restoreScroll(root, positions) {
   for (const element of root.querySelectorAll("[data-scroll-key]")) {
     const position = positions.get(element.dataset.scrollKey);

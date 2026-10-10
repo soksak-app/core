@@ -12,7 +12,7 @@ import { active } from "./projects.js";
 import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
 const mounted = new Map();
-/* 호스트가 없는 문서에서 마운트하지 않은 표면의 자리 표시. 표면 id 마다 요소다. */
+/* Placeholder of a surface that is not mounted in a document without a host: one element for each surface id. */
 const placeholders = new Map();
 const parking = document.createDocumentFragment();
 const authorization = new Map();
@@ -33,18 +33,18 @@ export function authorizeSurface(id) {
   else authorization.set(id, { promise: Promise.resolve(), resolve() {} });
 }
 
-// 호스트가 native handle을 만든 뒤에만 native surface 모듈을 시작한다.
-// 이 준비 callback이 production 승인 경로다. 이것이 없으면 native mount는
-// 원인을 밝힐 수 있는 오류를 보고하기 전에 무기한 기다린다.
+// Starts a native surface module only after the host has created the native handle.
+// This preparation callback is the production approval path. Without it, the native mount
+// waits indefinitely before reporting an error whose cause can be identified.
 if (native) {
   onSurfacePrepared((placements) => {
     for (const placement of placements) authorizeSurface(placement.id);
   });
 }
 
-// 이 문서가 호스트에 보낸 마지막 composition revision. 호스트는 표면마다 revision 이 커지기를 요구하고, 표면이 파괴되거나
-// 문서가 바뀔 때만 그 값을 지운다. 같은 문서에서 다시 마운트한 표면의 새 composition 은 1부터 세므로, 문서의 모든 배치를
-// 하나의 증가하는 번호로 보낸다(docs/spec/surface-composition.md).
+// The last composition revision that this document sent to the host. The host requires the revision of each surface to increase, and it clears the value only when the surface is destroyed or
+// the document changes. The new composition of a surface mounted again in the same document counts from 1, so every layout of the document
+// is sent with one increasing number (docs/spec/surface-composition.md).
 let compositionRevision = 0;
 
 function pageRuntime(surface, scoped, compositionReady) {
@@ -81,7 +81,7 @@ function pageRuntime(surface, scoped, compositionReady) {
           throw error;
         }
       },
-      // composition 안의 순서는 호출 순서와 같으므로 composition 의 revision 대신 문서의 다음 번호를 보낸다.
+      // The order inside a composition equals the call order, so the next number of the document is sent instead of the revision of the composition.
       place: (_revision, regions, overlays) => {
         const revision = ++compositionRevision;
         return invoke("compositionPlace", { revision, regions, overlays });
@@ -92,8 +92,8 @@ function pageRuntime(surface, scoped, compositionReady) {
 }
 
 /**
- * 불러오지 않은 플러그인 탭의 자리 표시를 slot 에 둔다(docs/spec/plugins.md). 같은 slot 의 마운트된 표면은
- * 다른 표면을 마운트할 때처럼 보관 자리로 옮긴다. 자리 표시는 탭이 닫히면 disposeSurface 가 지운다.
+ * Puts the placeholder of a plugin tab that is not loaded in the slot (docs/spec/plugins.md). A mounted surface in the same slot
+ * is moved to the holding place, as when another surface is mounted. disposeSurface removes the placeholder when the tab is closed.
  */
 export function placePluginPlaceholder(slot, surfaceId, element) {
   for (const other of mounted.values()) {
@@ -110,7 +110,7 @@ export function placePluginPlaceholder(slot, surfaceId, element) {
   placeholders.set(surfaceId, element);
 }
 
-/** slot 에 남은 다른 탭의 자리 표시를 지운다. 같은 카드의 다른 탭이 보이면 그 탭의 자리 표시는 남지 않는다. */
+/** Removes the placeholder of another tab left in the slot. If another tab of the same card is visible, the placeholder of that tab does not remain. */
 function clearSlotPlaceholders(slot, surfaceId) {
   for (const [id, element] of placeholders) {
     if (id !== surfaceId && element.parentNode === slot) {
@@ -123,7 +123,7 @@ function clearSlotPlaceholders(slot, surfaceId) {
 export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   if (!slot || !surface?.module) throw new TypeError("surface module mount requires a slot and module");
   clearSlotPlaceholders(slot, surface.surfaceId);
-  // 호스트가 없으면 사이드카와 네이티브 영역이 없다. 그것이 필요한 표면은 마운트하지 않고 자리 표시를 그린다
+  // Without a host there are no sidecars and no native regions. A surface that needs them is not mounted and a placeholder is drawn.
   // (docs/spec/plugins.md#runtime-module).
   if (!native && (surface.sidecars.length > 0 || surface.composition?.kind === "hybrid")) {
     const placeholder = document.createElement("div");
@@ -154,7 +154,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     }
     const host = document.createElement("div");
     host.className = "surface-module-host";
-    // 글자 배율은 app.css 의 .surface-module-host 가 정한다(docs/spec/text-size.md).
+    // The text scale is set by .surface-module-host in app.css (docs/spec/text-size.md).
     host.style.cssText = "position:absolute;inset:0;overflow:hidden";
     slot.append(host);
     const shadow = host.attachShadow({ mode: "open" });
@@ -172,7 +172,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     let viewport = slot;
     const eventListeners = new Map();
     const emit = (type, detail) => {
-      // 기본값: 듣는 곳이 없는 사건 종류는 알릴 수신자가 없다.
+      // default: an event kind that nothing listens to has no receiver to notify.
       for (const listener of eventListeners.get(type) ?? []) listener(detail);
     };
     const on = (type, listener) => {
@@ -180,7 +180,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       eventListeners.get(type).add(listener);
       return () => eventListeners.get(type)?.delete(listener);
     };
-    // 모듈이 만든 composition. 표면을 제거할 때 모듈의 dispose 보다 먼저 해제한다(disposeModule).
+    // The composition that the module created. When a surface is removed, it is released before the dispose of the module (disposeModule).
     const compositions = [];
     const composition = {
       create: async (elements) => {
@@ -192,10 +192,10 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         return controller;
       },
     };
-    // 마운트는 탭이 판에 있을 때 시작한다. 탭이 판에서 빠지면 해제될 때까지 마지막 배율을 유지한다
-    // (docs/spec/text-size.md). 마운트 도중 빠져도 모듈은 마운트를 시작한 때의 배율을 읽는다.
+    // The mount starts when the tab is in the plane. When the tab leaves the plane, it keeps the last scale until it is released
+    // (docs/spec/text-size.md). Even if it leaves during the mount, the module reads the scale from the time the mount started.
     let factor = surfaceTextSize(surface.surfaceId);
-    // 진단 모듈. 모듈을 불러오기 전에 채운다.
+    // Diagnostic module. It is filled before the module is loaded.
     let diagnostics = null;
     const closing = new AbortController();
     const context = createSurfaceContext({
@@ -208,21 +208,21 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         modified: (value) => reportModified(surface.surfaceId, value), error: (text) => reportError(surface.surfaceId, text),
         params: surface.params },
       origin: tabOrigin(surface.surfaceId),
-      // 표면 창이 보이는 프로젝트의 정규 루트(docs/spec/plugins.md#tab-reports). 라이브러리 창에는 없다.
+      // Canonical root of the project that the surface window shows (docs/spec/plugins.md#tab-reports). A library window has none.
       project: active() ? { root: active().root } : null,
       icon,
       runtime: { sidecar: scoped.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
         clipboard: scoped.clipboard,
         links: scoped.links,
         theme: scoped.theme,
-        // 이 표면의 실제 글자 배율(docs/spec/text-size.md). 알림마다 다시 읽고 바뀐 값만 전달한다.
+        // Actual text scale of this surface (docs/spec/text-size.md). It is read again at each notification and only a changed value is delivered.
         textSize: { read: () => {
-          // 기본값: 판에 없는 탭의 배율은 null 이므로 마지막으로 알린 배율을 유지한다.
+          // default: the scale of a tab that is not in the plane is null, so the last notified scale is kept.
           factor = surfaceTextSize(surface.surfaceId) ?? factor;
           if (factor === null) throw new Error(`surface ${surface.surfaceId} is not in the layout`);
           return factor;
         }, on: (listener) => {
-          // 기본값: 판에 없는 탭의 배율은 null 이므로 마지막으로 알린 배율을 유지한다.
+          // default: the scale of a tab that is not in the plane is null, so the last notified scale is kept.
           let last = surfaceTextSize(surface.surfaceId) ?? factor;
           return onTextSize(() => {
             const next = surfaceTextSize(surface.surfaceId);
@@ -247,10 +247,10 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     mounted.set(surface.surfaceId, entry);
     entry.mounted = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())
       .then(async () => {
-        // 승인 대기 중 제거된 표면의 등록과 모듈을 시작하지 않는다.
+        // Does not start the registration and module of a surface that was removed while waiting for approval.
         if (entry.disposed) return null;
         entry.authorized = true;
-        // 코어와 플러그인의 등록을 같은 네이티브 승인 뒤에 시작한다.
+        // Starts the registrations of the core and the plugin after the same native approval.
         entry.exposure = registerSurfaceExposure({ root: shadow, expose: context.exposure, view,
           declarations: registry.surfaceDeclarations() });
         await entry.exposure.ready;
@@ -268,10 +268,9 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
           return null;
         }
         entry.module = mountedModule;
-        // 새로 만든 native surface는 첫 표시가 그 image raster를 기다릴 수 있기 전에
-        // image를 선언하고 배치해야 한다. 여기서 기다리면
-        // 순환이 생긴다: 표시는 모듈을 기다리고, 모듈의
-        // composition은 raster를 구성하는 작업이다.
+        // A newly created native surface must declare and lay out its image before its first presentation can wait for the raster of that image.
+        // Waiting here creates a cycle: the presentation waits for the module, and the
+        // composition of the module is the work that builds the raster.
         releaseSurfaceReady(context);
         return mountedModule;
       }).catch((error) => {
@@ -306,8 +305,8 @@ export async function waitSurfaceCompositionDeclared(surfaceId) {
 }
 
 /**
- * mount된 surface의 카드가 settled된 뒤 그 native 입력 소유자에게 focus를 준다. 기다리는 동안 탭이 닫혀 표면의 해제가
- * 시작되면 해제된 모듈의 영역은 focus 를 받지 않으므로 focus 를 주지 않고 false 를 돌려준다.
+ * After the card of the mounted surface has settled, gives focus to its native input owner. If the tab is closed while waiting and the release of the surface
+ * starts, the region of the released module does not receive focus, so it gives no focus and returns false.
  */
 export async function focusSurface(surfaceId) {
   if (placeholders.has(surfaceId)) return false;
@@ -327,9 +326,9 @@ export function suspendSurface(surfaceId) {
 }
 
 /**
- * 표면의 영역을 떼고 모듈을 해제한다. 모듈의 dispose 는 사이드카 세션을 끝내고, 공급자는 세션을 끝낼 때 전송 그림을
- * 놓는다. 영역을 먼저 떼므로 공급자가 그 전에 보낸 프레임은 stale 로 답하고, 붙은 영역이 놓인 그림을 표시하지 않는다
- * (docs/spec/plugins.md#surface-module-ownership). composition 의 해제는 반복해도 같은 정리를 기다리므로 모듈이 다시 해제해도 된다.
+ * Detaches the region of the surface and releases the module. The dispose of the module ends the sidecar session, and the provider releases the transfer image when it ends the session.
+ * The region is detached first, so a frame that the provider sent before that is answered as stale, and the attached region does not show the released image
+ * (docs/spec/plugins.md#surface-module-ownership). Repeating the release of a composition waits for the same cleanup, so the module may release it again.
  */
 async function disposeModule(entry, module) {
   for (const composition of entry.compositions) await composition.dispose();
@@ -345,8 +344,8 @@ export async function disposeSurface(surfaceId) {
   entry.disposed = true;
   entry.closing.abort();
   entry.disposing = (async () => {
-    // 여기서 승인을 기다리지 않는다. 제거된 탭은 모듈이 mount를 허가받은 적이 없다는
-    // 이유만으로 layout commit을 살려 두면 안 된다.
+    // It does not wait for approval here. A removed tab must not keep a layout commit alive only because
+    // the module was never permitted to mount.
     // A module that has not finished mounting is not waited for: closing removes the surface at once, the compositions
     // that the module created are released here, and a mount that ends later disposes its module (entry.ready).
     if (entry.module) await disposeModule(entry, entry.module);
@@ -363,10 +362,10 @@ export async function disposeSurface(surfaceId) {
   return entry.disposing;
 }
 
-// 기본값: 마운트되지 않은 표면은 null 이다.
+// default: a surface that is not mounted is null.
 export const mountedSurface = (surfaceId) => mounted.get(surfaceId) ?? null;
 
-/** 현재 workspace가 더 이상 선언하지 않는 탭의 모듈을 dispose한다. */
+/** Disposes the modules of the tabs that the current workspace no longer declares. */
 export async function disposeSurfacesExcept(surfaceIds) {
   for (const [id, placeholder] of placeholders) {
     if (surfaceIds.has(id)) continue;

@@ -1,6 +1,6 @@
-// 아이콘.
+// Icons.
 //
-// 전부 24 뷰박스의 획(stroke)이다.
+// All are strokes on a 24 viewBox.
 
 const PATHS = {
   star: '<path d="m12 3 2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.4 6.3-.9Z"/>',
@@ -21,14 +21,14 @@ const PATHS = {
             '2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 ' +
             '2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
   close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
-  // Lucide 의 chevron-down, chevron-left, chevron-right, rotate-cw 다.
+  // They are chevron-down, chevron-left, chevron-right, and rotate-cw of Lucide.
   "chevron-down": '<path d="m6 9 6 6 6-6"/>',
   "chevron-left": '<path d="m15 18-6-6 6-6"/>',
   "chevron-right": '<path d="m9 18 6-6-6-6"/>',
   "rotate-cw": '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
 };
 
-/** 그 이름의 아이콘 하나. 없는 이름은 부르는 쪽의 잘못이므로 실패한다. */
+/** The one icon of that name. A name that does not exist is a fault of the caller, so it fails. */
 export function icon(name) {
   const body = PATHS[name];
   if (!body) throw new Error(`unknown icon: ${name}`);

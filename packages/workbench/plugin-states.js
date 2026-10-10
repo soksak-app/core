@@ -1,13 +1,13 @@
-// 플러그인 상태 모듈을 창이 보이는 프로젝트마다 마운트한다(docs/spec/plugins.md#plugin-state).
+// Mounts the plugin state modules for each project that the window shows (docs/spec/plugins.md#plugin-state).
 //
-// 창이 다른 프로젝트나 라이브러리를 보이면 먼저 모든 상태 모듈을 해제하고 그 등록을 지운다.
+// When the window shows another project or the library, it first releases all state modules and clears their registrations.
 import { checkProjectData } from "@soksak/plugin-api";
 import { registry } from "./exposure.js";
 import { log } from "./host.js";
 
 const states = [];
 let options = null;
-/* 보이는 프로젝트 id 와 마운트한 상태 모듈. */
+/* The visible project id and the mounted state modules. */
 let shown = null;
 let mounts = [];
 let turn = Promise.resolve();
@@ -16,30 +16,30 @@ const failed = (plugin) => (error) =>
   dispatchEvent(new ErrorEvent("error", { message: `plugin ${plugin} state: ${error.message}` }));
 
 /**
- * 상태 모듈이 쓰는 호스트 기능을 정한다.
+ * Sets the host functions that the state modules use.
  *   sidecar(name)                      {send(surface, body), on(surface, fn), onFailure(surface, fn)}
- *   data.get(project, plugin)          저장된 플러그인 데이터 객체
- *   data.set(project, plugin, key, v)  값 하나를 저장하는 promise
+ *   data.get(project, plugin)          the stored plugin data object
+ *   data.set(project, plugin, key, v)  a promise that stores one value
  */
 export function configureStates(values) {
   options = values;
 }
 
-/** 상태 모듈 하나를 등록한다. state 는 {plugin, module, sidecars, data} 다. */
+/** Registers one state module. state is {plugin, module, sidecars, data}. */
 export function registerState(state) {
   states.push(state);
 }
 
-// 기본값: format 은 plugin.json data 키의 선택 필드이며 없으면 1 이다(docs/spec/plugins.md#project-data).
+// default: format is an optional field of a plugin.json data key and is 1 when absent (docs/spec/plugins.md#project-data).
 const formatOf = (entry) => entry.format ?? 1;
 
-/** 현재 형태의 저장 항목인가. 정확히 양의 정수 format 과 value 만 가진 객체다. */
+/** Whether the stored entry has the current form: an object that has only a positive integer format and value. */
 const isEntry = (stored) => stored !== null && typeof stored === "object" && !Array.isArray(stored)
   && Object.keys(stored).sort().join() === "format,value" && Number.isInteger(stored.format) && stored.format > 0;
 
 /**
- * 이전 형태나 format 으로 저장된 선언 키를 한 번 변환해 저장한다. 변환하지 못한 키는 저장 값을 두고, 그 키를
- * 읽을 때 낼 오류를 돌려준다(docs/spec/plugins.md#project-data).
+ * Converts once and stores a declared key that was stored in an earlier form or format. For a key that could not be converted, it keeps the stored value and returns the error to
+ * raise when that key is read (docs/spec/plugins.md#project-data).
  */
 async function convertData(state, project, module, declared) {
   const failures = new Map();
@@ -82,7 +82,7 @@ async function convertData(state, project, module, declared) {
 
 function contextOf(state, project, table, failures) {
   const session = `state:${state.plugin}:${project.id}`;
-  // 기본값: data 는 plugin.json 의 선택 필드이며 없으면 프로젝트 데이터가 없다(docs/spec/plugins.md).
+  // default: data is an optional field of plugin.json, and when absent there is no project data (docs/spec/plugins.md).
   const declared = state.data ?? {};
   const read = (key) => {
     const stored = options.data.get(project.id, state.plugin);
@@ -121,11 +121,11 @@ function contextOf(state, project, table, failures) {
 }
 
 async function show(project) {
-  // 기본값: 프로젝트가 없는 창의 프로젝트 id 는 null 이다.
+  // default: the project id of a window without a project is null.
   if ((project?.id ?? null) === shown) return;
   const previous = mounts;
   mounts = [];
-  // 기본값: 프로젝트가 없는 창의 프로젝트 id 는 null 이다.
+  // default: the project id of a window without a project is null.
   shown = project?.id ?? null;
   for (const { state, table, done } of previous) {
     try {
@@ -140,7 +140,7 @@ async function show(project) {
     const table = registry.plugin(state.plugin);
     const done = import(state.module).then(async (module) => {
       if (typeof module.mount !== "function") throw new TypeError(`state module of ${state.plugin} has no mount()`);
-      // 기본값: data 는 plugin.json 의 선택 필드이며 없으면 프로젝트 데이터가 없다(docs/spec/plugins.md).
+      // default: data is an optional field of plugin.json, and when absent there is no project data (docs/spec/plugins.md).
       const declared = state.data ?? {};
       const failures = await convertData(state, project, module, declared);
       const result = await module.mount(contextOf(state, project, table, failures));
@@ -153,7 +153,7 @@ async function show(project) {
   }
 }
 
-/** 창이 보이는 프로젝트 {id, root} 또는 null 을 알린다. 받은 순서대로 처리한다. */
+/** Reports the project {id, root} that the window shows, or null. They are handled in the order received. */
 export function showStates(project) {
   const done = turn.then(() => show(project));
   turn = done.catch(failed("states"));

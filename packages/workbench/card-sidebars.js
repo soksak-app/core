@@ -1,4 +1,4 @@
-// 카드 내부의 변별 지정과 배치를 관리한다. 파생 세트와 배치 상태는 독립적이다.
+// Manages the per-side assignment and the layout inside a card. The derived set and the layout state are independent.
 export const SIDEBAR_SIDES = ["top", "bottom", "left", "right"];
 function assertSide(side) {
   if (!SIDEBAR_SIDES.includes(side)) throw new Error(`unknown sidebar side ${String(side)}`);
@@ -27,7 +27,7 @@ function state(card, side) {
   return Object.hasOwn(sides, side) ? sides[side] : {};
 }
 function store(card, side, next) {
-  // 기본값: data.sidebars 는 선택 필드이므로 첫 저장에서 빈 기록을 만든다.
+  // default: data.sidebars is an optional field, so the first save creates an empty record.
   card.data.sidebars ??= {};
   card.data.sidebars[side] = next;
 }
@@ -36,10 +36,10 @@ export function effectiveSidebar(card, side, defaults, linked) {
   if (Object.hasOwn(own, "size") && (own.size < defaults.min || own.size > defaults.max)) {
     throw new Error(`invalid sidebar size outside ${defaults.min} to ${defaults.max} points`);
   }
-  // 기본값: 명시 선택이 없으면 활성 플러그인의 기본 연결을 쓰고, 그것도 없으면 그 면은 꺼진다(docs/spec/example-model.md).
+  // default: without an explicit choice, the default link of the active plugin is used, and without that the side is off (docs/spec/example-model.md).
   const set = Object.hasOwn(own, "set") ? own.set : linked?.id ?? null;
   if (set === "off" || set === null) return null;
-  // 기본값: 생략한 size 와 collapsed 는 선언된 기본 크기와 펼친 상태다(docs/spec/example-model.md).
+  // default: an omitted size and collapsed are the declared default size and the expanded state (docs/spec/example-model.md).
   return { set, size: own.size ?? defaults.size, collapsed: own.collapsed ?? false };
 }
 export function resolveSidebarSet(card, side, sets, defaults, linked) {
@@ -58,7 +58,7 @@ export function setSidebar(card, side, choice, sets) {
   else next.set = choice;
   store(card, side, next);
 }
-/** 클릭은 보이는 상태를 뒤집는다: 접혀 보이는 면(shownCollapsed)은 열고, 열려 보이는 면은 접는다. */
+/** A click inverts the visible state: a side that is shown collapsed (shownCollapsed) opens, and a side that is shown open collapses. */
 export function toggleSidebar(card, side, defaults, linked, shownCollapsed) {
   const current = effectiveSidebar(card, side, defaults, linked);
   if (current === null) throw new Error(`card ${String(card.id)} has no ${String(side)} sidebar`);
@@ -71,21 +71,21 @@ export function sizeSidebar(card, side, size, defaults, linked) {
   if (!Number.isFinite(size) || size < defaults.min || size > defaults.max) {
     throw new Error(`sidebar size must be ${defaults.min} to ${defaults.max} points`);
   }
-  // 끌기는 면을 연다.
+  // A drag opens the side.
   store(card, side, { ...state(card, side), collapsed: false, size });
 }
 
 /**
- * 저장된 패널 크기를 화면의 장치 pixel 격자에 맞춘 표시 크기. 카드 테두리, divider, 준비한 표면 사각형은 같은 격자를
- * 쓰므로(docs/spec/native-surfaces.md) 격자 밖의 크기도 격자 위에 그린다. 저장된 크기는 바꾸지 않는다.
+ * The display size of the stored panel size, aligned to the device pixel grid of the screen. The card border, the divider, and the prepared surface rectangles use the same grid
+ * (docs/spec/native-surfaces.md), so a size off the grid is drawn on the grid too. The stored size is not changed.
  */
 export function deviceGridSize(size, ratio) {
   if (!Number.isFinite(size) || !Number.isFinite(ratio) || ratio <= 0) throw new Error("invalid sidebar size or device pixel ratio");
   return Math.round(size * ratio) / ratio;
 }
 
-// 저장된 펼침 선택을 현재 카드 공간에 적용한다(docs/spec/example-model.md). 저장된 크기와 선택은 바꾸지 않고, 보이는
-// 크기(shownSize)와 공간 부족에 따른 자동 접힘만 정한다. prefer 는 축마다 마지막으로 조작한 면이다.
+// Applies the stored expansion choice to the current card space (docs/spec/example-model.md). It does not change the stored size and choice; it only decides the visible
+// size (shownSize) and the automatic collapse caused by lack of space. prefer is the side operated last on each axis.
 export function presentSidebars(requested, rect, metrics, prefer = {}) {
   const values=[rect.w,rect.h,metrics.header,metrics.footer,metrics.border,metrics.divider,metrics.minimum,metrics.sidebarMinimum];
   if(values.some(value=>!Number.isFinite(value)||value<0)||metrics.minimum===0) throw new Error('invalid sidebar presentation geometry');
@@ -110,7 +110,7 @@ export function presentSidebars(requested, rect, metrics, prefer = {}) {
       if(open.every(side=>scaled[side]>=metrics.sidebarMinimum)){
         Object.assign(shown,scaled);
       }else{
-        // 기본값: 조작 전에는 위나 왼쪽을 먼저 연다.
+        // default: before any operation, the upper or left side opens first.
         const first=open.includes(prefer[axis])?prefer[axis]:open[0];
         const alone=Math.min(requested[first].size,room-(open.length-1)*metrics.divider);
         if(alone>=metrics.sidebarMinimum) shown[first]=alone;
@@ -121,7 +121,7 @@ export function presentSidebars(requested, rect, metrics, prefer = {}) {
       const autoCollapsed=!state.collapsed&&!Object.hasOwn(shown,side);
       result[side]={...state,requestedCollapsed:state.collapsed,collapsed:state.collapsed||autoCollapsed,
         autoCollapsed,collapseReason:autoCollapsed?`insufficient-${axis}`:null,
-        // 기본값: 접힌 면은 손잡이 폭만 차지하므로 보이는 크기가 없다(null).
+        // default: a collapsed side takes only the grip width, so it has no visible size (null).
         shownSize:Object.hasOwn(shown,side)?shown[side]:null};
     }
   }
@@ -130,7 +130,7 @@ export function presentSidebars(requested, rect, metrics, prefer = {}) {
 
 const SIDE_NAMES = { top: "위", bottom: "아래", left: "왼쪽", right: "오른쪽" };
 
-/** 카드 사이드바 면의 한국어 이름. */
+/** The Korean names of the card sidebar sides. */
 export function sideName(side) {
   const name = SIDE_NAMES[side];
   if (name === undefined) throw new Error(`unknown sidebar side ${side}`);
@@ -138,8 +138,8 @@ export function sideName(side) {
 }
 
 /**
- * 사용자가 펼쳤지만 공간이 부족해 접혀 있는 면을 알리는 상태 줄 문구. 그런 면이 없으면 null 이다. 손잡이를 눌러도
- * 공간이 생기기 전에는 펼쳐지지 않으므로 상태 줄이 그 이유를 보인다.
+ * The status line text that tells about a side the user expanded but that is collapsed for lack of space. It is null when there is no such side. Pressing the grip does not
+ * expand the side until space is available, so the status line shows that reason.
  */
 export function spaceFoldText(presentation) {
   const sides = SIDEBAR_SIDES.filter((side) => presentation[side]?.autoCollapsed && !presentation[side].requestedCollapsed);

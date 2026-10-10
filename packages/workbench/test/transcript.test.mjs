@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createTranscript } from "../transcript.js";
 
-/** 보낸 줄과, 각 전송을 끝내는 함수를 기록하는 가짜 전송. */
+/** A fake transport that records the lines sent and the function that ends each transmission. */
 function fakeSend() {
   const started = [];
   const finish = [];

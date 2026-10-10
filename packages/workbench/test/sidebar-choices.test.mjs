@@ -1,4 +1,4 @@
-// 사이드바마다 고른 탭과 접은 섹션이 스페이스에 저장되고 다시 적용되는지 검사한다(docs/spec/projects.md#persistence).
+// Checks that the tab chosen and the sections collapsed in each sidebar are stored in the space and applied again (docs/spec/projects.md#persistence).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";

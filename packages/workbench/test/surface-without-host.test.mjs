@@ -1,4 +1,4 @@
-// 호스트가 없는 문서는 호스트가 필요한 표면(사이드카나 혼합 합성을 선언한 표면)을 마운트하지 않고 자리 표시를 그린다.
+// A document without a host does not mount a surface that needs a host (a surface that declares a sidecar or a mixed composition) and draws a placeholder.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";

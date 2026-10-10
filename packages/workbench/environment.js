@@ -1,7 +1,7 @@
-// 애플리케이션의 environment.json 과 설정 폴더에 설치된 플러그인의 manifest 를 등록한다.
+// Registers the environment.json of the application and the manifests of the plugins installed in the configuration directory.
 //
-// 워크벤치는 특정 플러그인을 알지 않는다. 플러그인 목록은 host 가 제공하는 /installed-plugins.json 에서 오고
-// (docs/spec/installation.md), 새 스페이스의 배치와 사이드바 기본값은 environment.json 에서 온다.
+// The workbench does not know any specific plugin. The plugin list comes from /installed-plugins.json that the host provides
+// (docs/spec/installation.md), and the layout of a new space and the sidebar defaults come from environment.json.
 import { contributionsOf, installContributions } from "./contributions.js";
 import { registry as exposure } from "./exposure.js";
 import { registerState } from "./plugin-states.js";
@@ -17,17 +17,17 @@ let units = [];
 let starter = null;
 let registry = null;
 
-/** 첫 실행이 설치하는 starter pack 의 이름. environment.json 에 없으면 null 이다(docs/spec/installation.md). */
+/** Name of the starter pack that the first run installs. null if environment.json has none (docs/spec/installation.md). */
 export function starterPack() {
   return starter;
 }
 
-/** 첫 실행이 정하는 기본 registry index 의 위치. environment.json 에 없으면 null 이다(docs/spec/installation.md). */
+/** Location of the default registry index that the first run sets. null if environment.json has none (docs/spec/installation.md). */
 export function defaultRegistry() {
   return registry;
 }
 
-/** 표면 선언을 탭 id 로 표면 모듈 대상을 반환하는 함수로 바꾼다. */
+/** Converts a surface declaration into a function that returns the surface module target for a tab id. */
 function surfaceOf(name, pluginId, surface) {
   const module = `/${modulePath(name, surface.module)}`;
   return (tabId) => ({ module, composition: surface.composition, surfaceId: tabId,
@@ -35,20 +35,20 @@ function surfaceOf(name, pluginId, surface) {
     contributions: (point) => contributionsOf(pluginId, point) });
 }
 
-/* 진단 빌드에서 플러그인 id 마다 불러온 진단 모듈. 등록이 불러오기를 시작하고 표면을 올릴 때 기다린다. */
+/* Diagnostic module loaded for each plugin id in a diagnostic build. The registration starts the loading and waits for it when it raises a surface. */
 let diagnosticModules = Promise.resolve(new Map());
 
 /**
- * environment.json 과 설치된 플러그인 목록(manifest 포함)을 검사하고 플러그인, 섹션, 사이드바 기본값을 등록한다.
- * 첫 화면을 첫 await 전에 그리도록 동기로 등록한다(docs/spec/native-host.md#page-start). 진단 빌드의 host 는 플러그인마다
- * diagnostics.json 의 선언을 보내며, 그 선언을 플러그인의 표면 선언에 더하고 진단 모듈은 pluginDiagnostics 로 내준다.
+ * Validates environment.json and the list of installed plugins (with manifests) and registers the plugins, sections and sidebar defaults.
+ * It registers synchronously so the first screen is drawn before the first await (docs/spec/native-host.md#page-start). The host of a diagnostic build sends the declaration of
+ * diagnostics.json for each plugin; that declaration is added to the surface declaration of the plugin, and the diagnostic module is given out as pluginDiagnostics.
  */
 export function installEnvironment(environmentDocument, installedDocument) {
   if (loaded) throw new Error("environment is already loaded");
   const environment = validateEnvironment(environmentDocument);
-  // 기본값: starter 는 environment.json 의 선택 필드이며 없으면 첫 실행이 아무것도 설치하지 않는다.
+  // default: starter is an optional field of environment.json; without it the first run installs nothing.
   starter = environment.starter ?? null;
-  // 기본값: environment.json 에 registry 가 없으면 첫 실행이 정할 기본 registry 가 없다.
+  // default: if environment.json has no registry, there is no default registry for the first run to set.
   registry = environment.registry ?? null;
   const installed = validateInstalledPlugins(installedDocument);
   const manifests = installed.map(({ package: name, version, manifest }) => ({ name, manifest, version }));
@@ -58,24 +58,24 @@ export function installEnvironment(environmentDocument, installedDocument) {
   checkReferences(environment, manifests.map((m) => m.manifest));
   const diagnosticPlugins = Object.fromEntries(installed.filter((plugin) => plugin.diagnostics)
     .map((plugin) => [plugin.package, validateDiagnostics(plugin.manifest, plugin.diagnostics)]));
-  // 기본값: environment.json 의 settings 는 선택 필드이며 없으면 플러그인 설정을 덮어쓰지 않는다.
+  // default: settings is an optional field of environment.json; without it no plugin settings are overridden.
   setPluginSettings(manifests.map((m) => m.manifest), environment.settings ?? {});
   diagnosticModules = Promise.all(installed.filter((plugin) => diagnosticPlugins[plugin.package]).map(async (plugin) =>
     [plugin.id, await import(`/${modulePath(plugin.package, diagnosticPlugins[plugin.package].module)}`)]))
     .then((entries) => new Map(entries));
   for (const { name, manifest } of manifests) {
-    // 기본값: 진단 모듈은 진단 빌드의 일부 플러그인에만 있으며 없으면 null 이다.
+    // default: the diagnostic module exists only in some plugins of a diagnostic build; without it the value is null.
     const diagnostics = diagnosticPlugins[name] ?? null;
-    // 기본값: exposes 는 plugin.json 의 선택 필드이며 없으면 선언이 없다(docs/spec/plugins.md).
+    // default: exposes is an optional field of plugin.json; without it there is no declaration (docs/spec/plugins.md).
     const exposes = diagnostics ? mergeExposes(manifest.exposes ?? {}, diagnostics.exposes) : manifest.exposes;
     if (manifest.surface) {
       registerPlugin({
         id: manifest.id, name: manifest.name, mark: manifest.mark, svg: manifest.icon,
-        // 기본값: preview 는 plugin.json 의 선택 필드이며 없으면 미리 보기 잉크가 없다(null).
+        // default: preview is an optional field of plugin.json; without it there is no preview ink (null).
         ink: manifest.preview?.ink ?? null,
-        // 기본값: background 는 plugin.json 의 선택 필드이며 없으면 배경 세션이 없다(null).
+        // default: background is an optional field of plugin.json; without it there is no background session (null).
         background: manifest.background ?? null,
-        // 기본값: surface.drop 은 선택 필드이며 없으면 그 표면은 놓기를 받지 않는다(null).
+        // default: surface.drop is an optional field; without it that surface does not accept drops (null).
         drop: manifest.surface?.drop ?? null,
         // default: surface.params is optional; a plugin without it opens tabs without parameters (null).
         params: manifest.surface.params ?? null,
@@ -85,14 +85,14 @@ export function installEnvironment(environmentDocument, installedDocument) {
         save: manifest.surface.save ?? null,
         surface: surfaceOf(name, manifest.id, {
           ...manifest.surface,
-          // 기본값: exposes 는 plugin.json 의 선택 필드이며 없으면 선언이 없다.
+          // default: exposes is an optional field of plugin.json; without it there is no declaration.
           declarations: exposes ?? {},
           sidecars: manifestSidecars(manifest, pluginNames),
         }),
       });
     }
-    // 섹션 모듈은 표면 모듈처럼 그 패키지 경로에서 불러온다.
-    // 기본값: sections 는 plugin.json 의 선택 필드이며 없으면 섹션이 없다.
+    // A section module is loaded from the path of its plugin, like a surface module.
+    // default: sections is an optional field of plugin.json; without it there are no sections.
     for (const section of manifest.sections ?? []) {
       const module = typeof section.module === "string" ? `/${modulePath(name, section.module)}`
         : Object.fromEntries(Object.entries(section.module).map(([mode, path]) => [mode, `/${modulePath(name, path)}`]));
@@ -101,32 +101,32 @@ export function installEnvironment(environmentDocument, installedDocument) {
     if (exposes) exposure.declare(manifest.id, exposes);
     if (manifest.state) {
       registerState({ plugin: manifest.id, module: `/${modulePath(name, manifest.state.module)}`,
-        // 기본값: data 는 plugin.json 의 선택 필드이며 없으면 비어 있다.
+        // default: data is an optional field of plugin.json; without it the value is empty.
         sidecars: manifestSidecars(manifest, pluginNames), data: manifest.data ?? {} });
     }
   }
   setSidebarDefaults(normalizeSidebarDefaults(environment, manifests.map(({ manifest }) => manifest)));
   units = manifests.map(({ manifest, version }) => ({
     id: manifest.id, name: manifest.name, description: manifest.description, version, surface: Boolean(manifest.surface),
-    // 기본값: sections 는 plugin.json 의 선택 필드이며 없으면 섹션이 없다.
+    // default: sections is an optional field of plugin.json; without it there are no sections.
     sections: (manifest.sections ?? []).map((s) => s.id),
-    // 기본값: dependencies 는 plugin.json 의 선택 필드이며 없으면 사이드카가 없다.
+    // default: dependencies is an optional field of plugin.json; without it there are no sidecars.
     dependencies: manifest.dependencies ?? {},
   }));
   loaded = environment;
 }
 
-/** 플러그인 id 의 진단 모듈. 진단 빌드의 일부 플러그인에만 있으며 없으면 null 이다. 불러오기 실패는 거절이다. */
-// 기본값: 진단 모듈을 선언하지 않은 플러그인은 진단이 없다(docs/spec/plugins.md).
+/** Diagnostic module of a plugin id. It exists only in some plugins of a diagnostic build; without it the value is null. A load failure is a rejection. */
+// default: a plugin that declares no diagnostic module has no diagnostics (docs/spec/plugins.md).
 export const pluginDiagnostics = (id) => diagnosticModules.then((modules) => modules.get(id) ?? null);
 
 /**
- * 설치된 플러그인을 id 순서로 반환한다. 설정 창과 라이브러리의 플러그인 목록이 쓴다.
- * 표면이 없는 플러그인도 포함한다. 항목은 {id, name, description, version, surface, sections, sidecars} 다.
+ * Returns the installed plugins in id order. The settings window and the plugin list of the library use it.
+ * It includes plugins without a surface. An item is {id, name, description, version, surface, sections, sidecars}.
  */
 export const pluginUnits = () => units;
 
-/** 불러온 environment.json 을 반환한다. 불러오기 전이면 예외를 던진다. */
+/** Returns the loaded environment.json. Throws before it is loaded. */
 export function environment() {
   if (!loaded) throw new Error("environment is not loaded");
   return loaded;

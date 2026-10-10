@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// 가짜 애플리케이션 파일. 실제 플러그인 이름과 경로를 사용하지 않는다.
+// A fake application file. It uses no real plugin name or path.
 const files = {
   "/environment.json": {
     runtime: "runtime",
@@ -30,7 +30,7 @@ const files = {
   },
   side: { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] },
 };
-// release 빌드의 설치 목록에는 진단 선언이 없다.
+// The install list of a release build has no diagnostics declaration.
 const installed = { plugins: [
   { id: "card", package: "@fixture/card", version: "0.0.1", manifest: files.card },
   { id: "side", package: "@fixture/side", version: "0.0.1", manifest: files.side },

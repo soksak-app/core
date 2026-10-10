@@ -1,4 +1,4 @@
-// 설정 창의 세트 편집과 배치 값 설정(docs/spec/settings.md).
+// Set editing and layout value settings in the settings window (docs/spec/settings.md).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { changeRow, chooseLink, createSet, deleteSet, resolveSidebar, updateSet } from "../sidebar-sets.js";
@@ -42,7 +42,7 @@ test("the layout values are settings with the former constants as defaults", () 
   assert.equal(defaults.sidebarMaxWidth, 480);
   assert.equal(defaults.sidebarWidth, 190);
   assert.equal(Object.hasOwn(defaults, "railWidth"), false, "the rail starts at sidebarWidth");
-  // 세 값은 한 범위를 함께 쓰므로 같은 값이 같은 슬라이더 위치에 놓인다.
+  // The three values share one range, so the same value sits at the same slider position.
   assert.deepEqual(LAYOUT_RANGES, { sidebarMinWidth: [60, 800], sidebarMaxWidth: [60, 800], sidebarWidth: [60, 800] });
 });
 
@@ -55,9 +55,9 @@ test("a layout value outside its range or order is rejected before anything chan
 });
 
 test("the menu language follows the setting, the supported system tag, or the default", async () => {
-  // set 의 적용은 문서 루트에 값을 심고 저장소에 쓴다. 검사 문맥에 문서와 저장소가 없으므로
-  // 최소한의 루트와 메모리 저장소를 둔다. 질의 문자로 이 검사만 별도의 모듈 사본을 써서
-  // 다른 검사의 모듈 상태(저장소 연결 여부)를 오염시키지 않는다.
+  // Applying a set writes the value to the document root and to the store. The test context has no document and no store, so
+  // the test provides a minimal root and a memory store. With a query string, only this test uses its own copy of the module,
+  // so it does not contaminate the module state of other tests (whether the store is connected).
   const realDocument = globalThis.document;
   globalThis.document = { documentElement: { dataset: {}, style: { setProperty() {} } } };
   const memory = { common: {}, projects: [] };
@@ -73,8 +73,8 @@ test("the menu language follows the setting, the supported system tag, or the de
     });
     assert.equal(value("language"), "auto");
     assert.deepEqual(MENU_LANGUAGES.map(({ id }) => id), ["ko", "en"]);
-    // auto 는 시스템 언어의 주 태그를 표에서 찾는다. 검사 문맥의 시스템 언어와 무관하게
-    // 표에 있는 태그는 그대로, 없는 태그는 기본 언어로 내려간다.
+    // auto looks up the primary tag of the system language in the table. Regardless of the system language of the test context,
+    // a tag in the table is kept as it is, and a tag not in the table falls back to the default language.
     assert.ok(["ko", "en"].includes(menuLanguage()), `auto resolves to a declared language: ${menuLanguage()}`);
     await change({ language: "ko" }, "common");
     assert.equal(menuLanguage(), "ko");
@@ -158,7 +158,7 @@ test("a stored set or link that breaks the sidebars rules is rejected before any
   assert.throws(() => set({ sets: stored((v) => { v[0].layout = "grid"; }) }, "common"), /layout must be list or tabs/);
   assert.throws(() => set({ sets: stored((v) => { v[0].title = ""; }) }, "common"), /title must be 1 to 40/);
   assert.throws(() => set({ links: [{ place: "left", plugin: null, set: "set-9" }] }, "common"), /known set/);
-  // 이름 바꿈(V5-116-1): 낡은 rail 자리는 알 수 없는 자리로 거부된다.
+  // Rename (V5-116-1): the old rail place is rejected as an unknown place.
   assert.throws(() => set({ links: [{ place: "rail", plugin: "alpha", set: "set-1" }] }, "common"), /requires a place/);
   assert.throws(() => set({ links: [{ place: "card-left", plugin: "gamma", set: "set-1" }] }, "common"), /plugin gamma without a surface/);
 });

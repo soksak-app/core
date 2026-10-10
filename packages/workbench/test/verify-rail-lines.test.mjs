@@ -1,5 +1,5 @@
-// 검증 R 은 판이 마지막으로 그린 크기 그대로일 때만 선을 잰다. 새 배치가 기다리던 배치를 대체하면 grid 는 이미 새 크기이고
-// 선은 아직 이전 크기로 그려져 있으므로, grid 의 크기가 아니라 그려진 카드의 범위와 판을 비교한다(F34).
+// Verification R measures the lines only when the plane is at the size it last drew. When a new layout replaces the awaited layout, the grid already has the new size and
+// the lines are still drawn at the earlier size, so the test compares the extent of the drawn cards with the plane, not the size of the grid (F34).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
@@ -13,7 +13,7 @@ async function railRow(t, painted) {
   globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
   t.after(() => dom.window.close());
   const plane = document.querySelector("#plane");
-  // 창이 줄어 판은 이미 400×300 이고, 선은 이전의 700×300 판에 그려져 있다.
+  // The window shrank, so the plane is already 400×300, and the lines are drawn on the earlier 700×300 plane.
   plane.getBoundingClientRect = () => rect(6, 6, 400, 300);
   document.querySelector("#stage").getBoundingClientRect = () => rect(0, 0, 412, 312);
   document.querySelector(".sp-rule").getBoundingClientRect = () => rect(6, 6, 700, 1);

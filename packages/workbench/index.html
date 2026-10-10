@@ -16,64 +16,64 @@
 </script>
 <link rel="stylesheet" href="./app.css">
 <link rel="stylesheet" href="./library.css">
-<!-- 이 module 은 첫 화면을 첫 await 전에 그린다. head 의 render-blocking script 이므로 그 실행이 끝나기 전에는 문서를 그리지
-     않고, WebKit 은 다시 읽기의 이전 페이지를 화면에 둔다(docs/spec/native-host.md#page-start). module 은 문서를 다 읽은 뒤
-     실행된다. -->
+<!-- This module draws the first screen before the first await. It is a render-blocking script in head, so the document is not drawn before its execution ends,
+     and WebKit keeps the previous page of a reload on screen (docs/spec/native-host.md#page-start). The module runs after the document
+     is fully read. -->
 <script type="module" blocking="render">
-/* environment.json 을 가장 먼저 불러온다. 아래 모듈은 등록된 플러그인과 기본값을
-   함수 호출 시점에 읽는다. */
+/* environment.json is loaded first. The modules below read the registered plugins and the defaults
+   at the time a function is called. */
 import { pageStart } from "./page-start-errors-install.js";
 import { defaultRegistry, installEnvironment, starterPack } from "./environment.js";
 import { appUpdate, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { installExposure } from "./exposure.js";
-/* 첫 화면을 첫 await 전에 그리도록 선언 파일과 설치 목록을 module graph 로 가져온다(docs/spec/native-host.md#page-start). */
+/* The declaration files and the installed list are imported as a module graph so that the first screen is drawn before the first await (docs/spec/native-host.md#page-start). */
 import exposureFile from "./exposure.json" with { type: "json" };
 import environmentFile from "./environment.json" with { type: "json" };
 import installedPlugins from "./installed-plugins.json" with { type: "json" };
 import { openStore, windows } from "@soksak/runtime";
-/* 시작 문서를 가져오는 요청이 이 창의 page 를 시작한다(docs/spec/native-host.md#page-start). */
+/* The request that fetches the start document starts the page of this window (docs/spec/native-host.md#page-start). */
 import start from "./runtime/start.js";
 
 import { installTheme } from "soksak";
 
-/* 판 외부의 값은 settings 가 갖는다. 이 문서는 값이 바뀌었을 때 판을 다시 만든다.
-   설정이 판을 직접 호출하면 설정을 추가할 때마다 호출할 함수를 정해야 한다. */
+/* Values outside the plane belong to settings. This document recreates the plane when a value changes.
+   If settings called the plane directly, a function to call would have to be chosen for each added setting. */
 import {
   halfGap, install, modeName, onSettingsChange, value, connectSettings,
 } from "./settings.js";
 
-/* 표면을 모사하고 보고한다. 판은 슬롯 요소에 값을 기록만 하고 측정과 보고는 이쪽이
-   담당한다. */
+/* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
+   are done here. */
 import { latest, onCommit, onRun, publish, publishAhead } from "./compositor.js";
 import { authorizeSurface, disposeSurfacesExcept, focusSurface, waitSurfaceCompositionDeclared } from "./surface-modules.js";
 
-/* 판 하나. 이 문서는 판의 렌더링 방식을 알지 않고 렌더 완료만 수신한다. */
+/* One plane. This document does not know how the plane renders and only receives the render completion. */
 import {
   currentGrid, onLayout, onRender, takeSurfaceFocus, setGap, settle, settleModifiedTabsToClose, tabsOf,
 } from "./plane.js";
 
-/* 판과 컴포지터를 읽어 검증한다. 아무것도 변경하지 않으므로 그 둘은 이 모듈을
-   알지 않는다. */
+/* Reads the plane and the compositor and verifies them. It changes nothing, so those two do not
+   know this module. */
 import { verify } from "./verify.js";
-/* 오류 표시와 배치 대기열의 배선. 이 문서가 문서, 호스트, 판, 컴포지터를 넘긴다. */
+/* Wiring of the error display and the layout queue. This document passes the document, the host, the plane and the compositor. */
 import { createErrorDisplay, createPageLayout, reportUncaught } from "./page-layout.js";
 
-/* 애플리케이션 인터페이스. 없으면 아무 일도 하지 않는 구현이 온다. */
+/* Application interface. When it is absent, an implementation that does nothing is used. */
 import { chrome, log, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
 import { setTextScope } from "./text-size.js";
 import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
 
-/* 코어의 공개 항목과 진단 메서드. 등록소가 호스트의 요청에 답한다. */
+/* Public entries and diagnostic methods of the core. The registry answers requests of the host. */
 import { coreChanged, installCoreExposure, setVerify } from "./core-exposure.js";
-/* 진단 빌드에서만 진단 메서드가 들어 있다. 다른 빌드에서는 빈 모듈이다. */
+/* Only a diagnostic build contains the diagnostic methods. In other builds this is an empty module. */
 import "./diagnostics.js";
 
-/* 프로젝트와 그 안의 스페이스. 판은 한 번에 스페이스 하나를 그리고, 전환은 현재
-   상태를 저장한 뒤 다른 상태를 적용하는 것이다. */
+/* Projects and the spaces inside them. The plane draws one space at a time, and a switch saves the current
+   state and then applies another state. */
 import * as projects from "./projects.js";
 import * as registry from "./registry.js";
 
-/* 설정 모달. 사이드바를 연결할 자리 목록은 등록된 플러그인이 정한다. */
+/* Settings modal. The registered plugins determine the list of places to connect sidebars. */
 import { drawSettings } from "./settings-ui.js";
 import { bind, run } from "./commands.js";
 import { icon } from "./icons.js";
@@ -83,18 +83,18 @@ import { onChoicesChange } from "./sidebar-sections.js";
 
 import { createLibrary } from "./library.js";
 
-/* 메인 문서의 오류 배너. 처리되지 않은 오류도 이 배너에 보이고 애플리케이션 로그로 보낸다(page-layout.js). 시작을 멈추는
-   오류도 보이도록 다른 무엇보다 먼저 설치한다. */
+/* Error banner of the main document. An unhandled error is also shown in this banner and sent to the application log (page-layout.js). It is installed before anything else
+   so that an error that stops the start is shown too. */
 const showError = createErrorDisplay({ document, changed: coreChanged });
 reportUncaught(globalThis, showError);
-/* 마지막으로 읽은 창 단추 영역의 오른쪽 끝(px). 첫 행은 그만큼 비운다. 시작이 멈춰도 첫 행이 창 단추를 덮지 않도록 시작
-   문서의 단추 영역을 먼저 적용한다. */
+/* Right end (px) of the window button area read last. The first row leaves that much empty. The window button area of the start
+   document is applied first so that the first row does not cover the window buttons even when the start stops. */
 let controlsWidth = 0;
 if (chrome) applyControls(start.controls);
 
 installExposure(exposureFile);
-// 설치 plugin 의 manifest 를 거부하면 page 는 시작할 수 없다. 그 오류를 보이고 시작을 여기서 멈춘다. 다시 읽기는
-// host.window.reload 가 한다(docs/spec/installation.md).
+// When the manifest of an installed plugin is rejected, the page cannot start. The error is shown and the start stops here. The reload
+// is done by host.window.reload (docs/spec/installation.md).
 try {
   installEnvironment(environmentFile, installedPlugins);
 } catch (error) {
@@ -102,23 +102,23 @@ try {
   await new Promise(() => {});
 }
 
-// 선과 divider 의 모양은 이 시트가 정의한다. 이 문서는 색만 지정하고 아래 :root 가
-// 그 토큰을 이 문서의 색에 연결한다.
+// This sheet defines the shape of the line and the divider. This document specifies only the colors, and :root below
+// connects those tokens to the colors of this document.
 installTheme(document);
 
-/* 설정값을 문서 루트에 설정한다. 스타일시트가 그 값을 읽는다. */
+/* Sets the setting values on the document root. The stylesheet reads them. */
 install();
 
 
-/* ── 배선 ─────────────────────────────────────────────────────────────── */
+/* Wiring */
 
 /**
- * 검증을 실행하고 결과가 달라졌을 때만 기록한다.
+ * Runs the verification and records only when the result has changed.
  *
- * 검증은 렌더마다 실행된다. 매번 기록하면 같은 줄이 반복되어 변경 시점을 알 수 없다.
+ * The verification runs on every render. Recording every time would repeat the same line, and the time of a change could not be known.
  *
- * 같음은 실행 하나 안에서만 따진다. 애플리케이션 하나가 경계를 여러 번 몰므로,
- * 일생에 걸쳐 따지면 두 번째 실행부터는 결과가 어디에도 남지 않는다.
+ * Equality is judged only within one run. One application drives the boundary several times,
+ * and judging over its whole life would leave the result nowhere from the second run on.
  */
 let lastSaid = "";
 
@@ -140,26 +140,26 @@ function check() {
       failed.map((r) => `${r.name} (${r.note})`).join(" · ");
   if (line === lastSaid) return;
   lastSaid = line;
-  // 애플리케이션은 자체 로그에 기록한다. 호스트가 없으면 콘솔에만 남는다. 통과는 관측이고 실패는 오류다.
+  // The application writes to its own log. Without a host it goes to the console only. A pass is an observation and a failure is an error.
   if (failed.length === 0) log(line);
   else host.report(line);
 }
 
-/* 표면이 하나도 서지 않는 자리. 잠든 표면은 크기가 없다. */
+/* Places where no surface stands. A sleeping surface has no size. */
 const NOWHERE = { x: 0, y: 0, w: 0, h: 0 };
 
 /**
- * 지금 그려지지 않는 탭들의 표면.
+ * Surfaces of the tabs that are not drawn now.
  *
- * 표면은 탭마다 하나이고, 보이는 것은 그려지는 카드의 활성 탭뿐이다. 나머지도
- * 선언해야 호스트가 살려 둔다 — 그래야 스페이스나 프로젝트를 넘나들어도 셸과
- * 페이지가 그대로다. 선언하지 않으면 호스트가 없는 표면으로 보고 없앤다.
+ * There is one surface per tab, and the only visible one is the active tab of a drawn card. The others
+ * must be declared too for the host to keep them alive, so that the shell and the page stay as they are when moving across spaces or projects.
+ * Without the declaration, the host treats them as surfaces without an owner and removes them.
  */
 function dormant(shown) {
   const seen = new Set(shown.map((s) => s.id));
   const out = [];
   const add = (tab) => {
-    // 불러오지 않은 플러그인의 탭은 표면이 없고 자리 표시만 있다(docs/spec/plugins.md).
+    // A tab of a plugin that is not loaded has no surface, only a placeholder (docs/spec/plugins.md).
     if (seen.has(tab.id) || !registry.hasPlugin(tab.plugin)) return;
     seen.add(tab.id);
     out.push({
@@ -168,9 +168,9 @@ function dormant(shown) {
       surface: registry.plugin(tab.plugin).surface(tab.id),
     });
   };
-  // 지금 판의 탭들. 활성 탭이 아닌 것이 여기서 걸린다.
+  // Tabs of the current plane. Those that are not the active tab are collected here.
   for (const card of currentGrid()?.cards ?? []) for (const t of tabsOf(card)) add(t);
-  // 다른 스페이스의 탭들. 활성 스페이스는 저장된 배치가 아니라 위의 판이 맞다.
+  // Tabs of the other spaces. For the active space, the plane above is correct, not the stored layout.
   const here = projects.active();
   for (const p of projects.local()) {
     for (const space of p.spaces) {
@@ -183,12 +183,12 @@ function dormant(shown) {
   return out;
 }
 
-/* 커밋이 끝나면 호스트에 표면을 알린다. 컴포지터는 이 판의 표면만 알고, 무엇이
-   살아 있어야 하는지는 이 문서가 안다. 호스트의 답을 그대로 돌려준다. */
+/* Reports the surfaces to the host when the commit ends. The compositor knows only the surfaces of this plane, and this
+   document knows what must stay alive. The reply of the host is returned as it is. */
 onCommit((record) => {
   const all = [...record.surfaces, ...dormant(record.surfaces)];
   const ids = new Set(all.map((surface) => surface.id));
-  // 불러오지 않은 플러그인의 탭은 표면이 아니지만 자리 표시가 살아 있어야 한다(docs/spec/plugins.md).
+  // A tab of a plugin that is not loaded is not a surface, but its placeholder must stay alive (docs/spec/plugins.md).
   for (const card of currentGrid()?.cards ?? []) {
     for (const tab of tabsOf(card)) if (!registry.hasPlugin(tab.plugin)) ids.add(tab.id);
   }
@@ -201,8 +201,8 @@ onCommit((record) => {
   });
 });
 
-/* 판이 다시 그려지면 검증하고 표면을 보고한다. 판은 둘을 알지 않고 둘은 판을 읽기만
-   하므로 이 문서에서 연결한다. */
+/* When the plane is redrawn, it is verified and the surfaces are reported. The plane does not know the two and the two only read the plane,
+   so they are connected in this document. */
 let presented = Promise.resolve();
 onRender(() => {
   const done = publish();
@@ -225,7 +225,7 @@ onRender(() => {
   });
 });
 
-/* 배치 대기열. 판의 배치, 판이 없는 창의 첫 행, 프로젝트 전환의 빈 판을 하나씩 표시한다. */
+/* Layout queue. It marks the layout of the plane, the first row of a window without a plane, and the empty plane of a project switch, one by one. */
 const pageLayout = createPageLayout({
   document, showError, setVerify, log, surfaces: host,
   plane: { currentGrid, settle, clear },
@@ -234,46 +234,46 @@ const pageLayout = createPageLayout({
   rendered: () => presented,
   waitSurfaceCompositionDeclared,
 });
-// 사이드바의 탭 선택과 접기는 스페이스에 저장한다(docs/spec/projects.md#persistence).
+// The tab selection and collapse of a sidebar are stored in the space (docs/spec/projects.md#persistence).
 onChoicesChange(() => projects.keep());
 
-/* 스페이스가 바뀌면 현재 판을 저장하고 다른 상태를 적용한다. 프로젝트 전환도 같은
-   동작이다. */
+/* When the space changes, the current plane is saved and another state is applied. A project switch is the same
+   operation. */
 projects.onSwitch({ check: checkStoredLayout, save: capture, load: adopt, update: settle,
-// 어떤 레이아웃에도 없는 탭의 표면 모듈을 정리한다. 불러오지 않은 플러그인의 자리 표시도 그 탭과 함께 사라진다.
+// Clears the surface modules of tabs that are in no layout. The placeholder of a plugin that is not loaded disappears with its tab.
 retain: (surfaceIds) => disposeSurfacesExcept(surfaceIds),
 presented: pageLayout.presented, empty: pageLayout.empty, settleTabs: settleModifiedTabsToClose });
 
 
-/* ── 프로젝트와 스페이스 행 ─────────────────────────────────────────────
-   프로젝트를 전환하면 스페이스 목록 전체가, 스페이스를 전환하면 판의 배치 전체가
-   교체된다. 같은 동작이므로 경로가 하나다.                                */
+/* Project and space rows
+   A project switch replaces the whole space list, and a space switch replaces the whole layout of the plane.
+   They are the same operation, so there is one path.                                */
 
 const projectBar = document.getElementById("projectBar");
 const workarea = document.getElementById("workarea");
 const spaceBar = document.getElementById("spaceBar");
 const chromeActs = document.getElementById("chromeActs");
 
-/* 창을 끄는 영역과, 창이 그리는 단추가 차지하는 영역.
+/* The area that drags the window, and the area that the buttons drawn by the window occupy.
 
-   단추는 OS 가 그린다. 제목 표시줄만 투명하고 콘텐츠가 창 전체를 차지하므로 그
-   단추가 이 막대 위에 배치된다. 그 폭은 호스트에 요청해서 받고, 막대의 왼쪽을
-   그만큼 비운다.
+   The OS draws the buttons. Only the title bar is transparent and the content occupies the whole window, so those
+   buttons are placed over this bar. Their width is requested from the host, and the left side of the bar
+   is left empty by that width.
 
-   창 제목줄의 높이는 배치의 준비가 담고 호스트가 그 트랜잭션에서 정한다(docs/spec/native-surfaces.md#title-bar-height).
-   검증 W 는 표시를 확인한 준비의 단추 영역(controlsAt)을 그려진 첫 행과 비교한다.
+   The height of the window title bar is carried by the layout preparation, and the host sets it in that transaction (docs/spec/native-surfaces.md#title-bar-height).
+   Verification W compares the button area (controlsAt) of the preparation whose display was confirmed with the drawn first row.
 
-   브라우저에는 창이 없다. 그때 chrome 은 null 이고 막대를 들여쓰지 않는다. */
+   A browser has no window. Then chrome is null and the bar is not indented. */
 let controlsAt = null;
 
 if (chrome) {
   chrome.draggable(document.getElementById("winDrag"));
-  // 창의 크기가 바뀌면 OS 가 단추를 다시 배치하므로, 그 영역을 다시 읽는다. 전체 화면에서 나온 창은 AppKit 이
-  // 되돌린 제목줄 높이를 여기서 알린다.
+  // When the window size changes, the OS places the buttons again, so that area is read again. For a window that left full screen, the title bar height that AppKit
+  // restored is reported here.
   addEventListener("resize", askControls);
 }
 
-/** 창 단추 영역을 읽어 첫 행의 들여쓰기를 설정하고, 제목줄이 첫 행과 다르면 첫 행을 다시 준비한다. */
+/** Reads the window button area, sets the indent of the first row, and prepares the first row again when the title bar differs from the first row. */
 function askControls() {
   chrome.controls().then((answer) => {
     applyControls(answer);
@@ -281,7 +281,7 @@ function askControls() {
   });
 }
 
-/** 창 단추 답으로 첫 행의 들여쓰기를 설정한다. 단추가 없는 답이면 설정하지 않는다. */
+/** Sets the indent of the first row from the window button reply. When the reply has no buttons, nothing is set. */
 function applyControls(answer) {
   const at = answer.controls;
   if (at.w <= 0) return;
@@ -290,9 +290,9 @@ function applyControls(answer) {
 }
 
 /**
- * 답에 제목줄이 있고(row > 0) 그 높이가 지금 배율의 첫 행과 다르면, 창이 페이지의 그리기 없이 제목줄을 바꾼 것이다
- * (창을 만들 때의 40pt, 전체 화면에서 나올 때 AppKit 이 되돌린 높이). 그때는 마지막 요청을 잊고 첫 행을 담은 배치를
- * 다시 준비한다. 행의 높이는 페이지가 정하고 창의 답에서 읽지 않는다.
+ * When the reply has a title bar (row > 0) and its height differs from the first row at the current scale, the window changed the title bar without a draw of the page
+ * (40pt when the window is created, the height that AppKit restores when leaving full screen). Then the last request is forgotten and a layout containing the first row is
+ * prepared again. The page sets the row height and does not read it from the window reply.
  */
 function fitTitlebar(answer) {
   if (answer.row > 0 && answer.row !== chromeRow(value("textSize"))) {
@@ -301,13 +301,13 @@ function fitTitlebar(answer) {
   }
 }
 
-/** 표시를 확인한 준비의 창 단추 영역. 제목줄이 없는 창(전체 화면)이나 단추를 그리지 않는 창이면 null 이다. */
+/** Window button area of the preparation whose display was confirmed. It is null for a window without a title bar (full screen) or a window that draws no buttons. */
 function presentedControls() {
   const committed = chrome?.presented();
   return committed && committed.row > 0 && committed.controls.w > 0 ? committed.controls : null;
 }
 
-/** 크롬 행의 아이콘 버튼 하나를 만든다. 누르면 command 를 params 로 실행한다. */
+/** Creates one icon button of the chrome row. When pressed, it runs command with params. */
 function act(name, title, on, command, params, expose) {
   const b = document.createElement("button");
   b.className = "act";
@@ -321,11 +321,11 @@ function act(name, title, on, command, params, expose) {
 }
 
 /**
- * 탭 하나를 만든다. 클릭은 전환, 더블클릭은 이름 변경, ✕ 는 닫기다. 셋 다 명령이다.
+ * Creates one tab. A click switches, a double click renames, and ✕ closes. All three are commands.
  *
  *   pick    {command, params}
- *   close   {command, params} 또는 없음
- *   rename  {kind, id} 또는 없음
+ *   close   {command, params} or none
+ *   rename  {kind, id} or none
  */
 function tab(text, on, { dot, pick, close, rename, expose, closeExpose }) {
   if (rename && renaming?.kind === rename.kind && renaming.id === rename.id) return renameField(text);
@@ -335,7 +335,7 @@ function tab(text, on, { dot, pick, close, rename, expose, closeExpose }) {
   el.type = "button";
   el.dataset.on = String(on);
   el.title = text;
-  // 프로젝트 색은 선택된 탭의 배경으로 표시한다. 별도 표식을 두지 않는다.
+  // The project color is shown as the background of the selected tab. No separate mark is used.
   if (dot && on) el.style.background = `color-mix(in srgb, ${dot} 24%, transparent)`;
   const name = document.createElement("span");
   name.className = "bar-tab__name";
@@ -358,16 +358,16 @@ function tab(text, on, { dot, pick, close, rename, expose, closeExpose }) {
   return el;
 }
 
-/* 진행 중인 이름 변경. {kind: "project"|"space", id, value}. */
+/* Rename in progress. {kind: "project"|"space", id, value}. */
 let renaming = null;
 
-/** 이름 변경 중인 탭 자리의 입력 칸. Enter 는 확정, Escape 는 취소, 초점을 잃으면 확정한다. */
+/** Input field in the place of the tab being renamed. Enter confirms, Escape cancels, and losing focus confirms. */
 function renameField(was) {
   const input = document.createElement("input");
   input.className = "bar-tab__root";
   input.dataset.expose = "core.rename.input";
   input.value = renaming.value ?? was;
-  // 입력한 값은 core.rename.set 으로 기록한다. 확정은 그 값을 쓴다.
+  // The entered value is recorded with core.rename.set. The confirmation uses that value.
   bind(input, "core.rename.set", () => ({ value: input.value }), { event: "input" });
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") return run("core.rename.commit");
@@ -378,7 +378,7 @@ function renameField(was) {
   return input;
 }
 
-/** 이름 변경 명령이 부르는 연산. */
+/** Operations that the rename commands call. */
 const renames = {
   begin({ kind, id }) {
     const list = kind === "project" ? projects.all() : kind === "space" ? projects.active()?.spaces ?? [] : null;
@@ -415,7 +415,7 @@ const renames = {
   state: () => renaming && { ...renaming },
 };
 
-/** 「+」 버튼을 만든다. */
+/** Creates the "+" button. */
 function addTabButton(text, command, expose) {
   const b = document.createElement("button");
   b.className = "bar-tab bar-tab--add";
@@ -431,10 +431,10 @@ function drawBars() {
   const browsing = projects.inLibrary();
   document.body.dataset.screen = browsing ? "library" : "workspace";
   const toLeft = !browsing && value("projectTabs") === "left";
-  /* 프로젝트 열은 왼쪽 모드에서만 만든다. 숨기지 않고 제거한다. [hidden] 은 display 를
-     정하는 규칙을 이기지 못하고 .project-column 는 display:flex 이므로, 숨기면 빈
-     영역이 남는다. 크롬 행은 반대로 항상 둔다. 비어 있어도 그 행이 버튼들을
-     오른쪽으로 밀어낸다. */
+  /* The project column is created only in the left mode. It is removed, not hidden. [hidden] does not override the rule that
+     sets display and .project-column is display:flex, so hiding it would leave an empty
+     area. The chrome row, in contrast, is always kept. Even when empty, that row pushes the buttons
+     to the right. */
   let column = workarea.querySelector(".project-column");
   if (toLeft && !column) {
     column = document.createElement("div");
@@ -458,7 +458,7 @@ function drawBars() {
       rename: { kind: "project", id: p.id },
       close: { command: "core.project.close", params: { id: p.id } },
     });
-    // 끌어 놓은 순서 변경은 core.project.move 가 만든다.
+    // The reorder by drag and drop is made by core.project.move.
     if (el.tagName === "BUTTON") {
       el.draggable = true;
       el.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", p.id));
@@ -486,9 +486,9 @@ function drawBars() {
   }
   if (here) spaceBar.appendChild(addTabButton("+", "core.space.add", "core.space-tab.add"));
 
-  // 크롬 단추는 한 번 만든 요소를 유지하고 바뀐 속성만 고친다. 다시 만들면 누름과 뗌 사이에 누른 단추가 교체되어
-  // 브라우저가 click 을 만들지 않는다(G1.4-14-4-3).
-  // 라이브러리 화면에는 배치가 없으므로 프로젝트 목록과 자동 정렬 단추를 빼고 둔다.
+  // The chrome buttons keep an element once created and fix only the changed attributes. Recreating one would replace the pressed button between press and release, so
+  // the browser would not produce a click (G1.4-14-4-3).
+  // The library screen has no layout, so the project list and auto-arrange buttons are left out there.
   const updates = pluginOperations.status().updates.length + (appUpdate.status().available ? 1 : 0);
   if (updates > 0 && updatesButton.textContent !== `업데이트 ${updates}`) updatesButton.textContent = `업데이트 ${updates}`;
   const base = browsing ? chromeButtons.slice(2) : chromeButtons;
@@ -505,25 +505,25 @@ function drawBars() {
   }
 }
 
-/* 크롬 단추: 프로젝트 목록, 카드 자동 정렬, 좌측과 우측 사이드바 위치, 밝게/어둡게, 설정. 명령 인자는 누른 때의
-   값으로 계산한다. */
+/* Chrome buttons: project list, card auto-arrange, left and right sidebar position, light/dark, settings. The command arguments are computed from
+   the values at the time of the press. */
 const chromeButtons = [
   act("projects", "프로젝트 목록", false, "core.projects.browse", {}, "core.chrome.projects"),
-  // 배치를 유지하고 카드에 공정한 몫을 준다(packages/soksak/docs/layout.md#balancing).
+  // Keeps the layout and gives the cards a fair share (packages/soksak/docs/layout.md#balancing).
   act("columns-3", "카드 자동 정렬", false, "core.layout.balance", {}, "core.chrome.balance"),
   act("panel-left", "좌측 사이드바 위치", value("left"), "core.settings.set", () => ({ patch: { left: !value("left") } }), "core.chrome.left"),
   act("panel-right", "우측 사이드바 위치", value("right"), "core.settings.set", () => ({ patch: { right: !value("right") } }), "core.chrome.right"),
-  // 모달의 모드 세그먼트와 같은 경로다. 테마 명령은 테마의 형태 값까지 다시
-  // 적용하므로, 그것을 부르면 사용자가 정한 통로와 모서리가 되돌아간다.
+  // The same path as the mode segment of the modal. The theme command also applies the shape values of the theme
+  // again, so calling it would revert the passage and corners that the user set.
   act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,
       "core.settings.set", () => ({ patch: { mode: modeName() === "dark" ? "light" : "dark" } }), "core.chrome.mode"),
-  // 모달이 열린 동안에는 오버레이가 이 버튼을 덮으므로 다시 눌리지 않는다. 켜짐
-  // 상태도 표시하지 않는다. 구 프로젝트의 settings-toggle 과 같다.
+  // While the modal is open, the overlay covers this button, so it cannot be pressed again. The on
+  // state is not shown either. This is the same as settings-toggle of the former project.
   act("settings", "설정", false, "core.settings.open", {}, "core.chrome.settings"),
 ];
 chromeButtons[4].dataset.icon = modeName() === "dark" ? "sun" : "moon";
 
-/* The control 업데이트 N is in the bar only while the registry lists an update (docs/spec/installation.md). */
+/* The update control with the count N is in the bar only while the registry lists an update (docs/spec/installation.md). */
 const updatesButton = document.createElement("button");
 updatesButton.className = "act act--text";
 updatesButton.dataset.expose = "core.chrome.updates";
@@ -534,55 +534,55 @@ onPluginOperations(() => drawBars());
 
 const library = createLibrary(document.getElementById("library"), coreChanged);
 
-/* 첫 화면. 시작 문서로 단추 여백과 설정을 적용하고 창이 여는 프로젝트의 판이나 라이브러리를 첫 await 전에 그린다.
-   WebKit 은 다시 읽기의 이전 페이지를 새 페이지가 보이는 내용을 처음 그릴 때까지 화면에 두므로 첫 프레임이 이
-   화면이다(docs/spec/native-host.md#page-start). 판의 첫 그리기는 네이티브 준비를 기다리지 않도록 배치 대기열을 그
-   뒤에 연결한다. 플러그인 내용과 네이티브 표면은 이어서 채운다. */
+/* First screen. The start document applies the button margin and the settings, and the plane of the project that the window opens or the library is drawn before the first await.
+   WebKit keeps the previous page of a reload on screen until the new page first draws visible content, so the first frame is
+   this screen (docs/spec/native-host.md#page-start). The layout queue is connected after it so that the first draw of the plane does not wait for
+   the native preparation. The plugin content and the native surfaces are filled in afterwards. */
 projects.onChange(() => { drawBars(); drawSettings(); library.refreshFolders(); library.render(); coreChanged(); });
 projects.begin(start.workspace);
-// 판의 첫 그리기는 프레임 배율을 문서에 쓴다. 판이 없는 첫 화면(라이브러리)에는 그 그리기가 없으므로 여기서 쓴다.
+// The first draw of the plane writes the frame scale to the document. The first screen without a plane (library) has no such draw, so it is written here.
 applyFrameText(value("textSize"));
 onLayout(pageLayout.onLayout);
-// 호스트는 창을 40pt 제목줄로 만든다. 첫 행이 다르면 첫 행을 담은 배치를 준비한다.
+// The host creates the window with a 40pt title bar. When the first row differs, a layout containing the first row is prepared.
 if (chrome) fitTitlebar(start.controls);
 // The first screen is drawn, so the start error handler ends and the error display of this document takes the later errors.
 pageStart.finish();
 
-// 코어 공개 항목은 첫 await 전에 등록한다. 첫 화면의 사이드바 섹션은 그 뒤에 비동기로 마운트되며 코어 상태를 따를 수
-// 있다(docs/spec/plugins.md#sections). 호스트와의 연결은 아래에서 기다린다.
+// The core public entries are registered before the first await. The sidebar sections of the first screen are mounted asynchronously after that and can follow the core state
+// (docs/spec/plugins.md#sections). The connection with the host is awaited below.
 const coreExposure = installCoreExposure({
   library, renames,
-  // 판의 그리기 순서. 배치를 바꾼 코어 명령은 이것을 기다린 뒤 답한다(page-layout.js).
+  // Draw order of the plane. A core command that changed the layout replies after awaiting this (page-layout.js).
   drawn: pageLayout.drawn,
   chrome: () => ({
     controlsWidth,
     projectTabs: workarea.querySelector(".project-column") ? "left" : "top",
   }),
 });
-// 불러오지 않은 플러그인의 탭은 설치 상태에 따라 자리 표시의 이유가 정해진다(docs/spec/plugins.md). 상태를 읽으면
-// 자리 표시를 다시 그린다. 읽기 실패는 그 상태의 오류로 남는다.
+// The reason for the placeholder of a tab of a plugin that is not loaded is set by the installation state (docs/spec/plugins.md). When the state is read,
+// the placeholder is drawn again. A read failure is left as an error of that state.
 await pluginOperations.refresh();
 await pluginOperations.refreshOutdated();
 await appUpdate.refresh();
-// 첫 실행이면 starter pack 을 설치하고, 설치한 plugin 을 불러오도록 page 를 다시 불러온다(docs/spec/installation.md).
-// 다시 불러오는 동안 이 page 는 space 를 만들지 않는다.
+// On the first run, the starter pack is installed and the page is reloaded to load the installed plugins (docs/spec/installation.md).
+// While reloading, this page does not create a space.
 if (await pluginOperations.installStarter(starterPack(), defaultRegistry(), log, showError)) {
   location.reload();
   await new Promise(() => {});
 }
 await coreExposure;
 onDrag(coreChanged);
-/* 키보드 단축키도 명령을 실행한다. */
+/* Keyboard shortcuts also run commands. */
 addEventListener("keydown", (event) => {
   if (!(event.metaKey || event.ctrlKey)) return;
   if (!chrome && event.shiftKey && event.key.toLowerCase() === "n") { event.preventDefault(); return run("core.window.new"); }
   if (event.key.toLowerCase() === "k" && projects.inLibrary()) {
     event.preventDefault();
-    // 라이브러리의 보이는 페이지의 검색 칸으로 간다.
+    // Goes to the search field of the visible page of the library.
     return run("core.focus.set", { name: library.state().page === "plugins" ? "core.library.plugins.search" : "core.library.search" });
   }
 });
-/* 판 밖의 프레임을 누르면 글자 크기의 범위는 프레임이다(docs/spec/text-size.md). */
+/* When a frame outside the plane is pressed, the scope of the text size is the frame (docs/spec/text-size.md). */
 addEventListener("pointerdown", (event) => {
   if (event.target.closest?.(".chrome-bar, .tabs--space, .tabs--project")) setTextScope({ kind: "frame" });
 }, true);
@@ -595,7 +595,7 @@ onMenuCommand((name) => {
   }
   Promise.resolve(run(name)).catch((error) => showError(`${name} failed: ${error.message}`));
 });
-/* 키보드 초점의 이동을 core.focus 로 알린다. */
+/* Reports the move of the keyboard focus with core.focus. */
 addEventListener("focusin", coreChanged);
 addEventListener("focusout", coreChanged);
 
@@ -603,7 +603,7 @@ const storage = await openStore();
 await connectSettings(storage);
 await projects.initialise(storage);
 drawBars();
-// 앱이 다시 시작하거나 페이지가 실패한 뒤, 어떤 레이아웃에도 없는 표면의 사이드카 세션을 닫는다.
+// After the application restarts or the page fails, closes the sidecar sessions of surfaces that are in no layout.
 retainSidecarSessions(projects.layoutSurfaces()).catch(showError);
 
 let geometrySave;
@@ -613,24 +613,24 @@ addEventListener("resize", () => {
 });
 if (!chrome) addEventListener("pagehide", () => { projects.flush().catch(showError); });
 
-/* 합성 손잡이가 바뀌면 다시 그린다. 손잡이는 렌더에서 읽히므로 다시 그리지 않으면
-   바꾼 값이 나타나지 않는다. */
+/* Redraws when a composition handle changes. The handle is read in the render, so without a redraw
+   the changed value would not appear. */
 
-/* 설정이 바뀌면 판과 크롬을 다시 그린다. 첫 프로젝트를 만든 뒤에 등록한다. 그 전에
-   호출되면 그릴 프로젝트가 없다. */
+/* When a setting changes, the plane and the chrome are redrawn. This is registered after the first project is created. If it were called
+   earlier, there would be no project to draw. */
 onSettingsChange(() => {
   const half = halfGap();
   setGap(half);
-  // 판이 없는 창은 프레임 배율이 바뀔 때만 첫 행을 다시 그린다. 판은 설정이 바뀔 때마다 다시 그린다.
+  // A window without a plane redraws the first row only when the frame scale changes. The plane is redrawn on every setting change.
   if (currentGrid() || drawnFrameText() !== value("textSize")) pageLayout.drawFrame();
   drawBars();
   drawSettings();
   coreChanged();
 });
 
-/* 창 크기가 바뀌면 SoksakView 의 ResizeObserver 가 다시 그린다. 여기서 같은
-   것을 관측하면 옵저버가 둘이 되고, 하나가 이전 크기로 배치한 뒤 다른 하나가 다시
-   배치한다. */
+/* When the window size changes, the ResizeObserver of SoksakView redraws. Observing the same
+   thing here would make two observers, and after one lays out with the previous size the other would
+   lay out again. */
 
 </script>
 </head>
@@ -639,14 +639,14 @@ onSettingsChange(() => {
 
 
 
-<!-- 창의 크롬. 브랜드, 프로젝트 탭, 그리고 자주 쓰는 스위치.
-     프로젝트 탭은 설정에 따라 여기 서거나 왼쪽 세로 레일로 간다. -->
+<!-- Window chrome. The brand, the project tabs and the frequently used switches.
+     Depending on the settings, the project tabs stand here or go to the vertical rail on the left. -->
 <header class="chrome-bar" data-expose="core.chrome.bar">
-  <!-- 창을 끄는 영역. 막대의 빈 곳 전체를 덮고, 단추와 탭은 그 위에 배치된다.
-       막대 자체에 표시하면 그 표시가 자식에게 상속되어 단추를 눌러도 창이
-       이동한다. -->
+  <!-- The area that drags the window. It covers all the empty space of the bar, and the buttons and tabs are placed above it.
+       If the bar itself were marked, the mark would be inherited by the children and the window
+       would move even when a button is pressed. -->
   <div class="chrome-bar__drag" id="winDrag"></div>
-  <!-- soksak 로고. 아이콘 타일의 색은 고정이고, 글자는 모드에 따라 app.css 의 .brand 색을 따른다. -->
+  <!-- soksak logo. The color of the icon tile is fixed, and the letters follow the .brand color of app.css by mode. -->
   <div class="brand" data-expose="core.brand" role="img" aria-label="soksak">
     <svg class="brand__logo" viewBox="0 0 323 80" aria-hidden="true">
       <svg x="0" y="0" width="80" height="80" viewBox="0 0 128 128"><rect x="1" y="1" width="126" height="126" rx="27" fill="#16181D" stroke="#33373F" stroke-width="2"/><path d="M26 37 L56 64 M53 61.3 L26 91" fill="none" stroke="#7FE3B8" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><rect x="70" y="87" width="38" height="10" rx="5" fill="#EDE6D8"/></svg>
@@ -657,11 +657,11 @@ onSettingsChange(() => {
   <div class="chrome-bar__acts" id="chromeActs"></div>
 </header>
 
-<!-- 프로젝트 탭이 왼쪽에 설 때, 레일이 이 안의 첫 자리에 생긴다. 스페이스 줄보다
-     위에서 시작해 아래까지 내려간다 — 프로젝트가 스페이스를 담기 때문이다. -->
+<!-- When the project tabs stand on the left, the rail is created at the first place inside this. It starts above the space row
+     and goes down to the bottom, because a project contains spaces. -->
 <div class="workarea" id="workarea">
   <div class="work">
-  <!-- 스페이스 줄. 한 프로젝트 안의 판들. -->
+  <!-- Space row. The planes inside one project. -->
   <div class="tabs tabs--space" id="spaceBar"></div>
 
 <main class="stage"><div class="plane" id="plane">
@@ -673,8 +673,8 @@ onSettingsChange(() => {
   </div>
 </div>
 
-<!-- 애플리케이션마다 같은 문서를 사용한다. 런타임 차이는 @soksak/runtime 이 담당하고,
-     플러그인과 기본값은 environment.json 이 정한다. -->
+<!-- Every application uses the same document. The runtime differences are handled by @soksak/runtime, and
+     the plugins and defaults are set by environment.json. -->
 <script src="./background.js"></script>
 <script type="module" src="./host.js"></script>
 

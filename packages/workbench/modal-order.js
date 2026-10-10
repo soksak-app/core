@@ -1,12 +1,12 @@
 /**
- * 모달 문서가 받은 내용과 위치를 호스트가 바꾼 순서대로 적용한다.
+ * Applies the content and position that the modal document received in the order in which the host changed them.
  *
- * 호스트는 모달의 내용이나 위치를 바꿀 때마다 revision 을 올린다. 문서는 처음 내용을 호출의
- * 응답으로, 이후 변경을 이벤트로 받는다. 둘은 다른 경로로 도착하므로 응답이 더 늦게 만든
- * 이벤트보다 나중에 올 수 있다. 이미 적용한 것보다 오래된 내용과 위치는 버린다.
+ * The host raises revision whenever it changes the content or position of a modal. The document receives the first content as the reply of a call
+ * and later changes as events. The two arrive by different paths, so a reply can come after an
+ * event that was made later. Content and positions older than what was already applied are discarded.
  *
- * render(content, card) 는 내용을 그린다. card 는 그 내용의 위치가 적용한 위치보다 새로울
- * 때만 있고, 아니면 null 이다. place(card) 는 위치만 바꾼다.
+ * render(content, card) draws the content. card is present only when the position of that content is newer than the applied
+ * position, and null otherwise. place(card) changes only the position.
  */
 export function modalOrder(render, place) {
   let content = 0;

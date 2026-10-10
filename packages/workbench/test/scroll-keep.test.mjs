@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { restoreScroll, scrollPositions } from "../scroll-keep.js";
 
-/** data-scroll-key 요소들을 가진 root. */
+/** A root that has elements with data-scroll-key. */
 function rootOf(...elements) {
   return { querySelectorAll: (selector) => (selector === "[data-scroll-key]" ? elements : []) };
 }

@@ -1,11 +1,11 @@
-// mount된 surface를 위한 항상 켜진 core exposure. 진단 fixture/drag/transcript 코드는
-// diagnostics.js를 통해 따로 staging되며 이 모듈에 속하지 않는다.
+// The always-on core exposure for mounted surfaces. Diagnostic fixture, drag, and transcript code is staged separately
+// through diagnostics.js and does not belong to this module.
 const INPUT_TYPES = ["pointerdown", "pointerup", "pointermove", "click", "wheel", "keydown"];
 const INPUT_KEPT = 32;
-// 이벤트가 담은 수정 키. 네이티브 이벤트의 플래그가 그대로 드러난다.
+// The modifier keys that the event carries. The flags of the native event are exposed as they are.
 const MODIFIERS = [["shiftKey", "shift"], ["altKey", "alt"], ["ctrlKey", "control"], ["metaKey", "command"]];
 
-// root 는 표면 호스트 요소의 그림자 루트, view 는 그 문서의 창이다. declarations 가 null 이면 모든 노출을 등록한다.
+// root is the shadow root of the surface host element, and view is the window of that document. If declarations is null, every exposure is registered.
 export function registerSurfaceExposure({ root, expose, view, declarations = null }) {
   if (!root?.host || !expose || !view) throw new TypeError("surface exposure requires a shadow root, exposure, and a view");
   const host = root.host;
@@ -26,7 +26,7 @@ export function registerSurfaceExposure({ root, expose, view, declarations = nul
       readyState: doc.readyState,
       themed: Boolean(style.getPropertyValue("--bg") || (style.colorScheme && style.colorScheme !== "normal")),
       scale: view.devicePixelRatio,
-      // body 는 보이는 상자에 넘치거나 스크롤되는 내용을 더한 크기, viewport 는 보이는 상자다.
+      // body is the visible box plus the content that overflows or scrolls, and viewport is the visible box.
       body: {
         width: frame.width + Math.max(0, host.scrollWidth - host.clientWidth),
         height: frame.height + Math.max(0, host.scrollHeight - host.clientHeight),
@@ -40,7 +40,7 @@ export function registerSurfaceExposure({ root, expose, view, declarations = nul
     const frame = rect();
     events.push({ sequence: ++sequence, type: event.type, trusted: event.isTrusted,
       x: event.clientX === undefined ? null : event.clientX - frame.left,
-      // 기본값: 포인터 이벤트에는 키가 없으므로 key 는 null 이다.
+      // default: a pointer event has no key, so key is null.
       y: event.clientY === undefined ? null : event.clientY - frame.top, key: event.key ?? null,
       modifiers: MODIFIERS.filter(([property]) => event[property]).map(([, name]) => name) });
     if (events.length > INPUT_KEPT) events.shift();

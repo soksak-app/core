@@ -1,4 +1,4 @@
-// ResizeObserver 루프 오류 뒤 다음 frame 에 전달된 관찰을 기록하는지 검사한다(G1.4-115).
+// Checks that the observation delivered in the next frame after a ResizeObserver loop error is recorded (G1.4-115).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
@@ -92,9 +92,9 @@ test("each DOM change is reported in the callback slot of the round it happened 
   let made = 0;
   watchResizeLoop(window, (line) => reported.push(line), () => `probe@wails://localhost/probe.js:${++made}:1`);
   const plane = window.document.getElementById("plane");
-  // callback 1 의 변경 기록은 그 callback 뒤 microtask checkpoint 에서 MutationObserver 로 전달된다.
+  // The change records of callback 1 are delivered to the MutationObserver at the microtask checkpoint after that callback.
   new window.ResizeObserver(() => plane.setAttribute("data-height", "517"));
-  // callback 2 의 변경 기록은 checkpoint 없이 callback 3 이 오므로 전달되지 않은 기록으로 남는다.
+  // The change records of callback 2 remain undelivered, because callback 3 comes without a checkpoint.
   new window.ResizeObserver(() => plane.setAttribute("title", "tree"));
   new window.ResizeObserver(() => {});
   const entry = { target: plane, contentRect: { width: 188, height: 498 } };
@@ -104,7 +104,7 @@ test("each DOM change is reported in the callback slot of the round it happened 
   observers[1].callback([entry], observers[1]);
   observers[2].callback([entry], observers[2]);
   window.dispatchEvent(new window.ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }));
-  // 관찰 round 가 끝난 뒤의 task 가 바꾼 것은 round 안의 변경이 아니다.
+  // What a task after the end of the observation round changed is not a change inside the round.
   await new Promise((resolve) => setTimeout(resolve, 0));
   plane.hidden = true;
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -122,15 +122,15 @@ test("each DOM change is reported in the callback slot of the round it happened 
   ]);
 });
 
-// MutationObserver 기록에는 바꾼 코드가 없다. 관찰 round 의 callback slot 안에서 body 의 dataset 을 쓴 코드의 stack 을
-// 그 slot 의 줄 뒤에 적어, 화면 전환을 시작한 코드를 측정으로 찾는다(F43).
+// A MutationObserver record does not hold the code that made the change. The test appends the stack of the code that wrote the dataset of body inside a callback slot of the observation round
+// after the line of that slot, so a measurement finds the code that started the screen switch (F43).
 test("a body dataset write inside a callback slot is reported with the stack of the code that wrote it", async () => {
   const { window, observers, frame } = fakeView();
   const reported = [];
   watchResizeLoop(window, (line) => reported.push(line), () => "probe@wails://localhost/probe.js:1:1",
     () => "drawBars@wails://localhost/index.html:419:30 < @wails://localhost/projects.js:64:5");
   const body = window.document.body;
-  // round 밖의 쓰기는 기록하지 않는다.
+  // A write outside the round is not recorded.
   body.dataset.screen = "workspace";
   const plane = window.document.getElementById("plane");
   new window.ResizeObserver(() => queueMicrotask(() => { body.dataset.screen = "library"; delete body.dataset.dragging; }));
