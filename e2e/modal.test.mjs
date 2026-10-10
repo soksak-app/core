@@ -419,7 +419,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(two.error, null);
     await s.run("core.debug.timeline.select", { row: 0, selected: false });
     await s.until("core.debug", (debug) => debug.timeline.selected === 1, "the unselected row was not reported");
-    await assert.rejects(s.run("core.debug.timeline.select", { row: shown.timeline.total, selected: true }), /is not one of the/);
+    await assert.rejects(s.run("core.debug.timeline.select", { row: shown.timeline.total + 1_000_000, selected: true }), /is not one of the/);
     s.expectError(/^error page .*timeline row \d+ is not one of the \d+ rows/);
   });
 }
