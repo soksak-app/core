@@ -559,10 +559,7 @@ pub(crate) fn stop(app: &AppHandle) {
 
 /// 진단 기록의 줄 하나를 애플리케이션 로그에 쓰고 창 window 의 기록을 요청한 연결에도 보낸다.
 pub(crate) fn note(window: &Window, line: &str) {
-    crate::application_log::log_entry(&crate::application_log::transcript_entry(
-        window.label(),
-        line,
-    ));
+    crate::application_log::transcript_entry(window.label(), line).log();
     log(window, line);
 }
 

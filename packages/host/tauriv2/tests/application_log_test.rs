@@ -181,21 +181,6 @@ fn log_error_writes_an_error_event_to_the_event_log() {
     );
 }
 
-/// 줄이 `<ISO-8601 시각> <level> <layer> <where>: <text>` 형식의 글 기록인지 판정한다.
-fn is_record(line: &str) -> bool {
-    let mut parts = line.splitn(4, ' ');
-    let (Some(time), Some(level), Some(layer), Some(rest)) =
-        (parts.next(), parts.next(), parts.next(), parts.next())
-    else {
-        return false;
-    };
-    time.len() == 24
-        && time.ends_with('Z')
-        && matches!(level, "error" | "info")
-        && matches!(layer, "page" | "host" | "native" | "sidecar")
-        && rest.contains(": ")
-}
-
 // contract: log.record.one-line
 #[test]
 fn a_record_is_one_line_and_escapes_a_line_feed() {
@@ -203,12 +188,12 @@ fn a_record_is_one_line_and_escapes_a_line_feed() {
         soksak_host_tauriv2::application_log::entry_line("error", "page", "start", "first\nsecond"),
         r"error page start: first\nsecond"
     );
-    let record = soksak_host_tauriv2::application_log::record_line("info", "host", "w", "a\nb");
+    let entry = soksak_host_tauriv2::application_log::Entry::new("info", "host", "w", "a\nb");
     assert!(
-        !record.contains('\n'),
-        "a record holds a line feed: {record:?}"
+        !entry.line().contains('\n'),
+        "a record holds a line feed: {:?}",
+        entry.line()
     );
-    assert!(is_record(&record), "{record:?}");
 }
 
 // contract: log.info.record-form
@@ -261,7 +246,9 @@ fn log_info_writes_an_info_event_to_the_event_log() {
 fn a_page_record_has_the_layer_page_and_rejects_an_invalid_level_or_place() {
     use soksak_host_tauriv2::application_log::page_entry;
     assert_eq!(
-        page_entry("error", "library plugins", "first\nsecond").unwrap(),
+        page_entry("error", "library plugins", "first\nsecond")
+            .unwrap()
+            .line(),
         r"error page library plugins: first\nsecond"
     );
     for (name, level, place) in [
@@ -285,7 +272,8 @@ fn transcript_lines_reach_the_application_log() {
         soksak_host_tauriv2::application_log::transcript_entry(
             "main",
             "diagnostics: modal rendered m1"
-        ),
+        )
+        .line(),
         "info host transcript main: diagnostics: modal rendered m1"
     );
 }

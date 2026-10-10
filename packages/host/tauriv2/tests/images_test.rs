@@ -980,13 +980,13 @@ fn presentation_outcome_logs_a_replaced_frame_as_invalidated() {
         "staleRaster native=1520x573@2 frame=760x192@2",
         "staleRaster native=none",
     ] {
-        let (reason, invalidated, line) = soksak_host_tauriv2::images::presentation_outcome(
+        let (reason, invalidated, entry) = soksak_host_tauriv2::images::presentation_outcome(
             "s1", "view", 3, 2, 1, 9, detail, "unused",
         );
         assert_eq!(reason, "stale", "{detail}");
         assert!(invalidated, "{detail}");
         assert_eq!(
-            line,
+            entry.line(),
             format!("info host image present: frame invalidated before native presentation: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail}")
         );
     }
@@ -1000,7 +1000,7 @@ fn presentation_outcome_names_the_current_frame_of_a_failure() {
         ("presentFailed", "presentFailed"),
         ("boom", "presentFailed"),
     ] {
-        let (reason, invalidated, line) = soksak_host_tauriv2::images::presentation_outcome(
+        let (reason, invalidated, entry) = soksak_host_tauriv2::images::presentation_outcome(
             "s1",
             "view",
             3,
@@ -1013,7 +1013,7 @@ fn presentation_outcome_names_the_current_frame_of_a_failure() {
         assert_eq!(reason, want, "{detail}");
         assert!(!invalidated, "{detail}");
         assert_eq!(
-            line,
+            entry.line(),
             format!("error host image present: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail} current generation=3 raster=2")
         );
     }

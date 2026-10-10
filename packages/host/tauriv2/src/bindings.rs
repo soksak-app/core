@@ -452,8 +452,8 @@ struct PageRecord {
 fn report(window: Window, record: Argument<PageRecord>) -> Result<(), String> {
     let Argument(record) = record;
     let entry = crate::application_log::page_entry(&record.level, &record.r#where, &record.text)?;
-    crate::application_log::log_entry(&entry);
-    exposure::log(&window, &entry);
+    entry.log();
+    exposure::log(&window, &entry.line());
     Ok(())
 }
 

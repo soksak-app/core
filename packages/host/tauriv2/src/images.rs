@@ -1297,7 +1297,7 @@ where
                     let reason = match presentation {
                         Ok(()) => None,
                         Err(detail) => {
-                            let (reason, _, line) = presentation_outcome(
+                            let (reason, _, entry) = presentation_outcome(
                                 &key.0,
                                 &name,
                                 generation,
@@ -1307,7 +1307,7 @@ where
                                 &detail,
                                 &images.frame_state(&key),
                             );
-                            crate::application_log::log_entry(&line);
+                            entry.log();
                             Some(reason)
                         }
                     };
@@ -1405,7 +1405,7 @@ pub fn presentation_outcome(
     token: u32,
     detail: &str,
     current: &str,
-) -> (&'static str, bool, String) {
+) -> (&'static str, bool, crate::application_log::Entry) {
     let frame = format!(
         "surface={surface} name={name} generation={generation} raster={raster} sequence={sequence} token={token} reason={detail}"
     );
@@ -1423,7 +1423,7 @@ pub fn presentation_outcome(
         return (
             reason,
             true,
-            crate::application_log::entry_line(
+            crate::application_log::Entry::new(
                 "info",
                 "host",
                 "image present",
@@ -1434,6 +1434,11 @@ pub fn presentation_outcome(
     (
         reason,
         false,
-        crate::application_log::error_line("image present", format!("{frame} current {current}")),
+        crate::application_log::Entry::new(
+            "error",
+            "host",
+            "image present",
+            format!("{frame} current {current}"),
+        ),
     )
 }

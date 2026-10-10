@@ -5,8 +5,39 @@ use std::path::{Path, PathBuf};
 
 use crate::platform;
 
-/// 시각이 없는 글 기록 `<level> <layer> <place>: <text>` 이다(docs/spec/diagnostics.md#forms). place 는 연산이나 대상의
-/// 이름이고 text 의 줄바꿈은 두 글자 `\n` 으로 쓴다. 기록 하나는 한 줄이다.
+/// A record before it is stored: the level (`error` or `info`), the layer (`page`, `host`, `native`, `sidecar`), the place (the
+/// name of the operation or the object) and the text. The record is stored as an event of the event log ([`Entry::log`]), and
+/// its line `<level> <layer> <place>: <text>` is the view that the transcript of a window shows ([`Entry::line`]).
+pub struct Entry {
+    pub level: String,
+    pub layer: String,
+    pub place: String,
+    pub text: String,
+}
+
+impl Entry {
+    pub fn new(level: &str, layer: &str, place: &str, text: impl std::fmt::Display) -> Entry {
+        Entry {
+            level: level.to_string(),
+            layer: layer.to_string(),
+            place: place.to_string(),
+            text: text.to_string(),
+        }
+    }
+
+    /// The line `<level> <layer> <place>: <text>` (docs/spec/diagnostics.md#forms). A line feed in the text is written as
+    /// the two characters `\n`, so the line is one line.
+    pub fn line(&self) -> String {
+        entry_line(&self.level, &self.layer, &self.place, &self.text)
+    }
+
+    /// Stores the record as an event of the event log.
+    pub fn log(&self) {
+        log_record(&self.level, &self.layer, &self.place, &self.text);
+    }
+}
+
+/// The line `<level> <layer> <place>: <text>` of a record; a line feed in the text is written as `\n`.
 pub fn entry_line(level: &str, layer: &str, place: &str, text: impl std::fmt::Display) -> String {
     format!(
         "{level} {layer} {place}: {}",
@@ -14,35 +45,9 @@ pub fn entry_line(level: &str, layer: &str, place: &str, text: impl std::fmt::Di
     )
 }
 
-/// 쓰는 시각을 맨 앞에 둔 기록 한 줄이다.
-pub fn record_line(level: &str, layer: &str, place: &str, text: impl std::fmt::Display) -> String {
-    let now = crate::performance::timestamp(std::time::SystemTime::now())
-        .expect("clock is before the Unix epoch");
-    format!("{now} {}", entry_line(level, layer, place, text))
-}
-
-/// Stores a record given as the line `<level> <layer> <place>: <text>` of the text form (see [`entry_line`]). A line of
-/// another form is reported on the standard error and not stored.
-pub fn log_entry(entry: &str) {
-    let mut parts = entry.splitn(3, ' ');
-    let (Some(level), Some(layer), Some(rest)) = (parts.next(), parts.next(), parts.next()) else {
-        eprintln!("event writer: the record line {entry:?} is not <level> <layer> <place>: <text>");
-        return;
-    };
-    let Some((place, text)) = rest.split_once(": ") else {
-        eprintln!("event writer: the record line {entry:?} is not <level> <layer> <place>: <text>");
-        return;
-    };
-    log_record(level, layer, place, text);
-}
-
-/// 페이지가 `report` 호출로 보낸 기록을 layer page 의 시각이 없는 기록 줄로 만든다. level 이 error 나 info 가 아니거나, place 가
+/// 페이지가 `report` 호출로 보낸 기록을 layer page 의 기록으로 만든다. level 이 error 나 info 가 아니거나, place 가
 /// 비었거나 구분자 `: ` 나 줄바꿈을 담으면 거부한다. 조용히 바꿔 쓰지 않는다.
-pub fn page_entry(
-    level: &str,
-    place: &str,
-    text: impl std::fmt::Display,
-) -> Result<String, String> {
+pub fn page_entry(level: &str, place: &str, text: impl std::fmt::Display) -> Result<Entry, String> {
     if level != "error" && level != "info" {
         return Err(format!("report level must be error or info, not {level:?}"));
     }
@@ -51,7 +56,7 @@ pub fn page_entry(
             "report where must be a name without a separator or a line feed: {place:?}"
         ));
     }
-    Ok(entry_line(level, "page", place, text))
+    Ok(Entry::new(level, "page", place, text))
 }
 
 /// 호스트의 오류 기록에서 시각을 뺀 줄이다. place 는 실패한 연산이나 대상이고 text 는 실패 내용이다.
@@ -66,8 +71,8 @@ pub fn log_record(level: &str, layer: &str, place: &str, text: impl std::fmt::Di
 
 /// 창 label 의 진단 기록 줄 line 이 애플리케이션 로그에도 쓰는 기록 줄이다. 진단 기록은 그것을 켠 연결에만 가므로 이
 /// 기록이 없으면 연결이 없을 때 그 줄이 사라진다.
-pub fn transcript_entry(label: &str, line: &str) -> String {
-    entry_line("info", "host", &format!("transcript {label}"), line)
+pub fn transcript_entry(label: &str, line: &str) -> Entry {
+    Entry::new("info", "host", &format!("transcript {label}"), line)
 }
 
 /// 호스트의 오류 기록 하나를 쓴다.

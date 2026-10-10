@@ -48,11 +48,6 @@ func (e Entry) Line() string {
 	return fmt.Sprintf("%s %s %s: %s", e.Level, e.Layer, e.Where, strings.ReplaceAll(fmt.Sprint(e.Text), "\n", `\n`))
 }
 
-// RecordLine 은 쓰는 시각을 맨 앞에 둔 기록 한 줄이다.
-func RecordLine(e Entry) string {
-	return performanceNow() + " " + e.Line()
-}
-
 // TranscriptEntry 는 창 window 의 진단 기록 줄 line 이 애플리케이션 로그에도 쓰는 기록이다. 진단 기록은 그것을 켠
 // 연결에만 가므로 이 기록이 없으면 연결이 없을 때 그 줄이 사라진다.
 func TranscriptEntry(window, line string) Entry {

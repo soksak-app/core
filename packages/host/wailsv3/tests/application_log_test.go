@@ -213,7 +213,7 @@ func TestARecordIsOneLineAndEscapesALineFeed(t *testing.T) {
 	if want := `error page start: first\nsecond`; line != want {
 		t.Fatalf("line %q, want %q", line, want)
 	}
-	if strings.Contains(host.RecordLine(host.Entry{Level: "info", Layer: "host", Where: "w", Text: "a\nb"}), "\n") {
+	if strings.Contains(host.Entry{Level: "info", Layer: "host", Where: "w", Text: "a\nb"}.Line(), "\n") {
 		t.Fatal("a record holds a line feed")
 	}
 }

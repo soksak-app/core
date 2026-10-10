@@ -1142,6 +1142,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.3.6",
+    implementation: [
+      { file: "packages/host/tauriv2/src/application_log.rs", symbol: "pub struct Entry" },
+      { file: "packages/host/wailsv3/src/application_log.go", symbol: "type Entry struct" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "a_page_record_has_the_layer_page_and_rejects_an_invalid_level_or_place" },
+      { file: "packages/host/tauriv2/tests/images_test.rs", id: "presentation_outcome_names_the_current_frame_of_a_failure" },
+      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestAPageRecordHasTheLayerPageAndRejectsAnInvalidLevelOrPlace" },
+    ],
+    expected: "A record travels as a structured entry that is stored as an event and shown as its line, in both hosts.",
+    levels: ["unit"],
+  },
+  {
     id: "F150.3.5.2",
     implementation: [
       { file: "packages/host/wailsv3/src/event_record.go", symbol: "func emitTrace" },
