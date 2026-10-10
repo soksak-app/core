@@ -69,7 +69,7 @@ test("surface sidecar access is resolved from the declared surface and takes no 
   const port = runtime.sidecar();
   await port.send("declared-sidecar-surface", { operation: "open" });
   assert.deepEqual(calls.at(-1), ["sidecarSend", {
-    sidecar: "@fixture/sidecar", surface: "declared-sidecar-surface", body: { operation: "open" },
+    sidecar: "@fixture/sidecar", surface: "declared-sidecar-surface", body: { operation: "open" }, cids: [],
   }]);
   assert.throws(() => runtime.sidecar("@fixture/sidecar"), /takes no argument; it uses the declared sidecar/);
 });
