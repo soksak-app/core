@@ -1012,7 +1012,6 @@ func sortedNames(m map[string]string) []string {
 
 // InstalledPlugin 은 설치한 plugin 하나다. Path 는 설치가 쓰는 version 을 푼 폴더이며 설정 폴더에 대한 상대 경로다.
 type InstalledPlugin struct {
-	Package  string            `json:"package"`
 	Version  string            `json:"version"`
 	Path     string            `json:"path"`
 	Enabled  bool              `json:"enabled"`
@@ -1027,9 +1026,8 @@ type InstalledSidecar struct {
 	Path    string `json:"path"`
 }
 
-// InstalledState 는 설치 상태 파일(`plugins/installed.json`)이다. plugin id 마다 package 이름, 쓰는 version, 푼
-// 폴더, 켜짐 여부, 그 version 의 sidecar 범위, 되돌릴 이전 version 을 담고, sidecar 마다 모든 plugin 이 함께 쓰는
-// version 하나와 그 폴더를 담는다. 폴더는 설치가 기록하며 host 는 기록된 폴더만 읽는다.
+// InstalledState 는 설치 상태 파일(`plugins/installed.json`)이다. plugin id 마다 쓰는 version, 푼 폴더, 켜짐 여부, 그 version 의 sidecar
+// 범위, 되돌릴 이전 version 을 담고, sidecar 마다 모든 plugin 이 함께 쓰는 version 하나와 그 폴더를 담는다. 폴더는 설치가 기록하며 host 는 기록된 폴더만 읽는다.
 type InstalledState struct {
 	Format   int                         `json:"format"`
 	Plugins  map[string]InstalledPlugin  `json:"plugins"`
@@ -1078,7 +1076,6 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 	if err != nil {
 		return nil, err
 	}
-	packages := map[string]bool{}
 	for _, id := range sortedKeys(plugins) {
 		where := Installed + " " + id
 		if !isIdentifier(id) {
@@ -1088,20 +1085,12 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := only(where, item, "enabled", "package", "path", "previous", "sidecars", "version"); err != nil {
+		if err := only(where, item, "enabled", "path", "previous", "sidecars", "version"); err != nil {
 			return nil, err
 		}
 		if _, ok := item["enabled"].(bool); !ok {
 			return nil, fmt.Errorf("%s: enabled must be true or false", where)
 		}
-		if err := checkPackageJSONName(where+" package", item["package"]); err != nil {
-			return nil, err
-		}
-		name := item["package"].(string)
-		if packages[name] {
-			return nil, fmt.Errorf("%s: package %s is installed twice", where, name)
-		}
-		packages[name] = true
 		if previous, ok := item["previous"]; ok {
 			if err := checkVersion(where+" previous", previous); err != nil {
 				return nil, err

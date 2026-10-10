@@ -280,7 +280,7 @@ func TestInstallationKeepsOneSidecarVersionThatSatisfiesEveryInstalledPlugin(t *
 	}
 	other := func(rng, version string) *sok.InstalledState {
 		state := emptyInstalled()
-		state.Plugins["other"] = sok.InstalledPlugin{Package: "plugin-other", Version: "1.0.0", Path: "/config/plugins/other/1.0.0", Enabled: true, Sidecars: map[string]string{"@scope/sidecar-worker": rng}}
+		state.Plugins["other"] = sok.InstalledPlugin{Version: "1.0.0", Path: "/config/plugins/other/1.0.0", Enabled: true, Sidecars: map[string]string{"@scope/sidecar-worker": rng}}
 		state.Sidecars["@scope/sidecar-worker"] = sok.InstalledSidecar{Version: version, Path: "/config/sidecars/scope-sidecar-worker/" + version + "/darwin-arm64"}
 		return state
 	}
@@ -299,7 +299,7 @@ func TestInstallationKeepsOneSidecarVersionThatSatisfiesEveryInstalledPlugin(t *
 	rejects(t, err, "sidecar @scope/sidecar-worker has no version for darwin-arm64 that satisfies every installed plugin: probe 0.2.0 needs ^0.1.0, other 1.0.0 needs ^0.2.0")
 	// 같은 plugin 의 이전 version 범위는 새 version 을 막지 않는다.
 	self := emptyInstalled()
-	self.Plugins["probe"] = sok.InstalledPlugin{Package: "@scope/plugin-probe", Version: "0.1.0", Path: "/config/plugins/probe/0.1.0", Enabled: true, Sidecars: map[string]string{"@scope/sidecar-worker": "0.1.0"}}
+	self.Plugins["probe"] = sok.InstalledPlugin{Version: "0.1.0", Path: "/config/plugins/probe/0.1.0", Enabled: true, Sidecars: map[string]string{"@scope/sidecar-worker": "0.1.0"}}
 	self.Sidecars["@scope/sidecar-worker"] = sok.InstalledSidecar{Version: "0.1.0", Path: "/config/sidecars/scope-sidecar-worker/0.1.0/darwin-arm64"}
 	again, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", self, nil)
 	if err != nil || strings.Join(versions(again), ",") != "@scope/sidecar-worker 0.1.0" {
@@ -333,8 +333,8 @@ func TestReleasesAndInstallationPathsFollowTheDeclaredNames(t *testing.T) {
 // contract: install.installed.consistency
 func TestInstalledStateNamesOneVersionOfEachPluginAndSidecar(t *testing.T) {
 	text := `{"format": 2, "plugins": {
-		"probe": {"package": "@scope/plugin-probe", "version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true, "previous": "0.1.0", "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
-		"side": {"package": "plugin-side", "version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}},
+		"probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true, "previous": "0.1.0", "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+		"side": {"version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}},
 		"sidecars": {"@scope/sidecar-worker": {"version": "0.1.1", "path": "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"}}}`
 	state, err := sok.ValidateInstalled(decode(t, text))
 	if err != nil || state.Plugins["probe"].Previous != "0.1.0" || state.Sidecars["@scope/sidecar-worker"].Version != "0.1.1" ||
@@ -346,7 +346,7 @@ func TestInstalledStateNamesOneVersionOfEachPluginAndSidecar(t *testing.T) {
 		want   string
 	}{
 		{func(v any) { delete(at(v, "plugins", "probe").(map[string]any), "enabled") }, "plugins/installed.json probe: enabled must be true or false"},
-		{func(v any) { at(v, "plugins", "side").(map[string]any)["package"] = "@scope/plugin-probe" }, "plugins/installed.json side: package @scope/plugin-probe is installed twice"},
+		{func(v any) { at(v, "plugins", "side").(map[string]any)["package"] = "plugin-side" }, "plugins/installed.json side: unknown field package"},
 		{func(v any) { delete(v.(map[string]any), "sidecars") }, "plugins/installed.json sidecars: expected an object"},
 		{func(v any) { delete(at(v, "plugins", "side").(map[string]any), "sidecars") }, "plugins/installed.json side sidecars: expected an object"},
 		{func(v any) { v.(map[string]any)["sidecars"] = map[string]any{} }, "plugins/installed.json probe: sidecar @scope/sidecar-worker has no version in use"},

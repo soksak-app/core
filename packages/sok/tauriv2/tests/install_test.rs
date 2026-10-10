@@ -374,12 +374,11 @@ fn installation_resolves_newest_usable_plugin_and_sidecar_versions() {
     );
 }
 
-fn installed(id: &str, package: &str, version: &str, range: &str, used: &str) -> InstalledState {
+fn installed(id: &str, version: &str, range: &str, used: &str) -> InstalledState {
     let mut state = InstalledState::empty();
     state.plugins.insert(
         id.into(),
         InstalledPlugin {
-            package: package.into(),
             version: version.into(),
             path: format!("/config/plugins/{id}/{version}"),
             enabled: true,
@@ -401,7 +400,7 @@ fn installed(id: &str, package: &str, version: &str, range: &str, used: &str) ->
 #[test]
 fn installation_keeps_one_sidecar_version_that_satisfies_every_installed_plugin() {
     let index = install::validate_registry_index(&index()).expect("index");
-    let other = |range: &str, used: &str| installed("other", "plugin-other", "1.0.0", range, used);
+    let other = |range: &str, used: &str| installed("other", "1.0.0", range, used);
     // 다른 plugin 이 0.1.0 을 쓰고 있고 그 version 이 두 범위를 채우므로 더 새 0.1.1 대신 0.1.0 을 그대로 둔다.
     let kept = install::resolve_install(
         &index,
@@ -430,7 +429,7 @@ fn installation_keeps_one_sidecar_version_that_satisfies_every_installed_plugin(
         "sidecar @scope/sidecar-worker has no version for darwin-arm64 that satisfies every installed plugin: probe 0.2.0 needs ^0.1.0, other 1.0.0 needs ^0.2.0",
     );
     // 같은 plugin 의 이전 version 범위는 새 version 을 막지 않는다.
-    let own = installed("probe", "@scope/plugin-probe", "0.1.0", "0.1.0", "0.1.0");
+    let own = installed("probe", "0.1.0", "0.1.0", "0.1.0");
     let again = install::resolve_install(&index, "probe", "0.0.2", "darwin-arm64", &own, &[])
         .expect("self");
     assert_eq!(versions(&again), ["@scope/sidecar-worker 0.1.0"]);
@@ -467,9 +466,9 @@ fn releases_and_installation_paths_follow_the_declared_names() {
 #[test]
 fn installed_state_names_one_version_of_each_plugin_and_sidecar() {
     let state = json!({"format": 2, "plugins": {
-        "probe": {"package": "@scope/plugin-probe", "version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true,
+        "probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true,
             "previous": "0.1.0", "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
-        "side": {"package": "plugin-side", "version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}},
+        "side": {"version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}},
         "sidecars": {"@scope/sidecar-worker": {"version": "0.1.1", "path": "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"}}});
     let read = install::validate_installed(&state).expect("installed");
     assert_eq!(read.plugins["probe"].previous.as_deref(), Some("0.1.0"));
@@ -478,7 +477,7 @@ fn installed_state_names_one_version_of_each_plugin_and_sidecar() {
     type Change = fn(&mut Value);
     let cases: [(Change, &str); 14] = [
         (|v| _ = v["plugins"]["probe"].as_object_mut().unwrap().remove("enabled"), "plugins/installed.json probe: enabled must be true or false"),
-        (|v| v["plugins"]["side"]["package"] = json!("@scope/plugin-probe"), "plugins/installed.json side: package @scope/plugin-probe is installed twice"),
+        (|v| v["plugins"]["side"]["package"] = json!("plugin-side"), "plugins/installed.json side: unknown field package"),
         (|v| _ = v.as_object_mut().unwrap().remove("sidecars"), "plugins/installed.json sidecars: expected an object"),
         (|v| _ = v["plugins"]["side"].as_object_mut().unwrap().remove("sidecars"), "plugins/installed.json side sidecars: expected an object"),
         (|v| v["sidecars"] = json!({}), "plugins/installed.json probe: sidecar @scope/sidecar-worker has no version in use"),

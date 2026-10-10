@@ -889,7 +889,6 @@ pub fn validate_registry_index(value: &Value) -> Result<Index, String> {
 /// 설치한 plugin 하나.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct InstalledPlugin {
-    pub package: String,
     pub version: String,
     /// 설치가 쓰는 version 을 푼 절대 폴더.
     pub path: String,
@@ -963,7 +962,6 @@ pub fn validate_installed(value: &Value) -> Result<InstalledState, String> {
         return Err(format!("{INSTALLED}: format must be {INSTALLED_FORMAT}"));
     }
     let plugins = object(&format!("{INSTALLED} plugins"), root.get("plugins"))?;
-    let mut packages = BTreeSet::new();
     let mut named = BTreeSet::new();
     for id in sorted_keys(plugins) {
         let at = format!("{INSTALLED} {id}");
@@ -974,16 +972,10 @@ pub fn validate_installed(value: &Value) -> Result<InstalledState, String> {
         only(
             &at,
             item,
-            &[
-                "enabled", "package", "path", "previous", "sidecars", "version",
-            ],
+            &["enabled", "path", "previous", "sidecars", "version"],
         )?;
         if !item.get("enabled").is_some_and(Value::is_boolean) {
             return Err(format!("{at}: enabled must be true or false"));
-        }
-        let name = check_package_json_name(&format!("{at} package"), item.get("package"))?;
-        if !packages.insert(name) {
-            return Err(format!("{at}: package {name} is installed twice"));
         }
         if let Some(previous) = item.get("previous") {
             check_version(&format!("{at} previous"), Some(previous))?;

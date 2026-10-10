@@ -192,7 +192,6 @@ fn plugin_install_extracts_checked_releases_and_records_the_state() {
         run(&["plugin", "install", "probe", "--config-dir", config.text()]);
     let want = r#"{
   "plugin": {
-    "package": "@scope/plugin-probe",
     "version": "0.2.0",
     "path": "plugins/probe/0.2.0",
     "enabled": true,
@@ -726,7 +725,6 @@ fn plugin_install_installs_the_plugin_dependencies() {
     let stdout = succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
     let want = r#"{
   "plugin": {
-    "package": "@scope/plugin-ext",
     "version": "1.0.0",
     "path": "plugins/ext/1.0.0",
     "enabled": true,
@@ -914,5 +912,50 @@ fn plugin_remove_and_disable_refuse_a_plugin_that_an_enabled_plugin_requires() {
     assert_eq!(
         succeeds(&["plugin", "remove", "base", "--config-dir", config.text()]),
         "null\n"
+    );
+}
+
+// contract: cli.plugin.installed-reads-name-from-package-json
+#[test]
+fn plugin_dependents_read_the_name_from_the_package_json_of_the_installed_plugin() {
+    let config = Dir::new();
+    let registry = dependency_registry(&[base("1.0.0"), ext("^1.0.0")]);
+    use_registry(&config, &registry);
+    succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
+    let text = read_text(&config.0.join("plugins/installed.json"));
+    assert!(
+        !text.contains("\"package\""),
+        "installed.json holds package: {text}"
+    );
+    let file = config.0.join("plugins/base/1.0.0/package.json");
+    let data = read_text(&file);
+    let renamed = data.replacen("@scope/plugin-base", "@scope/plugin-renamed", 1);
+    assert_ne!(
+        renamed, data,
+        "package.json does not name the plugin: {data}"
+    );
+    std::fs::write(&file, renamed).expect("write package.json");
+    succeeds(&["plugin", "disable", "base", "--config-dir", config.text()]);
+    assert!(!installed_of(&config).plugins["base"].enabled);
+}
+
+// contract: cli.plugin.installed-refuses-package
+#[test]
+fn read_installed_refuses_a_package_field() {
+    let config = Dir::new();
+    let installed = config.0.join("plugins/installed.json");
+    std::fs::create_dir_all(installed.parent().unwrap()).expect("create plugins");
+    std::fs::write(
+        &installed,
+        r#"{"format": 2, "plugins": {"side": {"package": "plugin-side", "version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}}, "sidecars": {}}"#,
+    )
+    .expect("write installed.json");
+    let error = soksak_sok::plugins::read_installed(&config.0).expect_err("package field");
+    assert_eq!(
+        error,
+        format!(
+            "{}: plugins/installed.json side: unknown field package",
+            installed.display()
+        )
     );
 }
