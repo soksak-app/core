@@ -355,13 +355,15 @@ fn sidecar_send(
     sidecar: Argument<String>,
     surface: Argument<String>,
     body: Argument<Box<RawValue>>,
+    cids: Argument<Vec<String>>,
 ) -> Result<(), String> {
     let Argument(sidecar) = sidecar;
     let Argument(surface) = surface;
     let Argument(body) = body;
+    let Argument(cids) = cids;
     window
         .state::<WindowSidecars>()
-        .send(&window, &sidecar, &surface, &body)
+        .send_with_cids(&window, &sidecar, &surface, &body, &cids)
 }
 
 /// retain 요청의 표면 하나. 표면과 그 표면을 연 프로젝트 루트다.

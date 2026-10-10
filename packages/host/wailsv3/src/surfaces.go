@@ -257,15 +257,15 @@ func (s *Surfaces) ProjectRoot() string {
 }
 
 // SidecarSend 는 이 창의 표면 페이지가 보낸 메시지를 사이드카에 전달한다.
-func (s *Surfaces) SidecarSend(name, surface string, body json.RawMessage) error {
-	return s.sidecars.Send(s, name, surface, body)
+func (s *Surfaces) SidecarSend(name, surface string, body json.RawMessage, cids []string) error {
+	return s.sidecars.SendWithCids(s, name, surface, body, cids)
 }
 
-func (s *Surfaces) sidecarSendFrom(viewID uint64, name, surface string, body json.RawMessage) error {
+func (s *Surfaces) sidecarSendFrom(viewID uint64, name, surface string, body json.RawMessage, cids []string) error {
 	if err := s.authorizeSurface(viewID, surface); err != nil {
 		return err
 	}
-	return s.SidecarSend(name, surface, body)
+	return s.SidecarSend(name, surface, body, cids)
 }
 
 // SidecarReconnected 는 영속 사이드카의 연결이 끊긴 뒤 다시 맺히면 그 사이드카의 그림

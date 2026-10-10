@@ -70,3 +70,12 @@ test("failure listening goes to the runtime port", () => {
   const fn = () => {};
   assert.deepEqual(orderedSidecar(port, () => {}).onFailure("tab", fn), { failure: "tab", fn });
 });
+
+test("a send carries the correlation identifiers of the inputs it continues, and none when it continues no input", async () => {
+  const sent = [];
+  const port = { send: async (surface, body, cids) => { sent.push([surface, body, cids]); }, on() {}, onFailure() {} };
+  const sidecar = orderedSidecar(port, () => {});
+  await sidecar.send("tab", { n: 1 }, ["b1.7"]);
+  await sidecar.send("tab", { n: 2 });
+  assert.deepEqual(sent, [["tab", { n: 1 }, ["b1.7"]], ["tab", { n: 2 }, []]]);
+});

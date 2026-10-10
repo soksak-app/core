@@ -1517,3 +1517,32 @@ fn the_lifetime_of_a_sidecar_is_recorded_as_events() {
     );
     assert_eq!(pids.len(), 2, "processes {pids:?}");
 }
+
+// contract: sidecars.protocol.request-line-carries-cids
+#[test]
+fn a_request_carries_the_correlation_identifiers() {
+    let (mut sidecars, directory) = script_sidecars("#!/bin/sh\ntee DIR/requests\n");
+    sidecars.0.stop_timeout = STALL;
+    let (window, events) = owner("a", "/projects/a");
+    sidecars
+        .send_with_cids(
+            &window,
+            ECHO,
+            "s1",
+            &raw(r#"{"operation":"input"}"#),
+            &["b1.7".to_string(), "b1.8".to_string()],
+        )
+        .unwrap();
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
+        .unwrap();
+    events.recv_timeout(STALL).unwrap();
+    events.recv_timeout(STALL).unwrap();
+    sidecars.stop();
+    let requests = std::fs::read_to_string(directory.path().join("requests")).unwrap();
+    assert_eq!(
+        requests,
+        "{\"surface\":\"s1\",\"root\":\"/projects/a\",\"cids\":[\"b1.7\",\"b1.8\"],\"body\":{\"operation\":\"input\"}}\n\
+         {\"surface\":\"s1\",\"root\":\"/projects/a\",\"body\":{\"operation\":\"input\"}}\n"
+    );
+}

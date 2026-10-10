@@ -1179,3 +1179,28 @@ func TestSidecarLifetimeIsRecordedAsEvents(t *testing.T) {
 		t.Fatalf("lifetime events = %q (%d processes), want %q (2 processes)", seen, len(pids), want)
 	}
 }
+
+// contract: sidecars.protocol.request-line-carries-cids
+func TestSidecarRequestCarriesTheCorrelationIdentifiers(t *testing.T) {
+	sidecars, record := echoSidecars(t)
+	owner := newFakeOwner("/projects/a")
+	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"input"}`), []string{"b1.7", "b1.8"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+		t.Fatal(err)
+	}
+	owner.next(t)
+	owner.next(t)
+	sidecars.Stop()
+	requests, err := os.ReadFile(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"surface":"s1","root":"/projects/a","cids":["b1.7","b1.8"],"body":{"operation":"input"}}
+{"surface":"s1","root":"/projects/a","body":{"operation":"input"}}
+`
+	if string(requests) != want {
+		t.Fatalf("requests =\n%s\nwant\n%s", requests, want)
+	}
+}

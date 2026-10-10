@@ -106,7 +106,7 @@ const mainCalls = settlingCalls((name, arg) => {
   if (!method) return Promise.reject(new Error(`unknown host call: ${name}`));
   // 인자가 없는 호출은 인자를 보내지 않는다. undefined 를 하나 보내면 바인딩이
   // 인자 수가 맞지 않는다고 거절한다.
-  if (name === "sidecarSend") return call(method, arg.sidecar, arg.surface, arg.body);
+  if (name === "sidecarSend") return call(method, arg.sidecar, arg.surface, arg.body, arg.cids);
   if (name === "imageCaret") return call(method, { surface: arg.surface, name: arg.name }, arg.x, arg.y, arg.width, arg.height);
   if (name === "imageText") return call(method, { surface: arg.surface, name: arg.name }, arg.text);
   return arg === undefined ? call(method) : call(method, arg);
@@ -175,7 +175,7 @@ export const page = (() => {
       return calls.record(record.level, `page.record.${record.level}`, { where: record.where, text: record.text });
     },
     sidecar: (name) => ({
-      send: (surface, body) => call("sidecarSend", name, surface, body),
+      send: (surface, body, cids = []) => call("sidecarSend", name, surface, body, cids),
       // 사이드카 이벤트는 창의 모든 페이지가 받는다. 사이드카와 표면이 일치하는 것만 처리한다.
       on: (surface, fn) => listen("sidecar-message", (message) => {
         if (message.sidecar === name && message.surface === surface) fn(message.body);

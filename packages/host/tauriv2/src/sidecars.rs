@@ -97,6 +97,9 @@ struct Request<'a> {
     root: Option<&'a str>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     closed: bool,
+    /// The correlation identifiers of the inputs that the request continues (docs/spec/sidecars.md#protocol).
+    #[serde(skip_serializing_if = "<[String]>::is_empty")]
+    cids: &'a [String],
     #[serde(skip_serializing_if = "Option::is_none")]
     body: Option<&'a RawValue>,
 }
@@ -799,6 +802,19 @@ impl<O: Owner> Sidecars<O> {
         surface: &str,
         body: &RawValue,
     ) -> Result<(), String> {
+        self.send_with_cids(owner, name, surface, body, &[])
+    }
+
+    /// Sends a page request that continues the inputs named by `cids`; the request line carries them as the field `cids`,
+    /// and no field when `cids` is empty.
+    pub fn send_with_cids(
+        &self,
+        owner: &O,
+        name: &str,
+        surface: &str,
+        body: &RawValue,
+        cids: &[String],
+    ) -> Result<(), String> {
         let current = owner.root()?;
         let root = {
             let state = self.core.state.lock().map_err(|e| e.to_string())?;
@@ -811,6 +827,7 @@ impl<O: Owner> Sidecars<O> {
             surface,
             root: Some(&root),
             closed: false,
+            cids,
             body: Some(body),
         })
         .map_err(|e| e.to_string())?;
@@ -931,6 +948,7 @@ impl<O: Owner> Sidecars<O> {
                 surface: &surface,
                 root: root.as_deref(),
                 closed: true,
+                cids: &[],
                 body: None,
             })
             .map_err(|e| e.to_string())?;

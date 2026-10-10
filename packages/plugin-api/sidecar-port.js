@@ -11,8 +11,10 @@ export function orderedSidecar(port, failed) {
   if (typeof failed !== "function") throw new TypeError("orderedSidecar requires a failure handler");
   let chain = Promise.resolve();
   return {
-    send(surface, body) {
-      const sent = chain.then(() => port.send(surface, body));
+    // cids are the correlation identifiers of the inputs that the request continues (docs/spec/sidecars.md#protocol); a request
+    // that continues no input sends none.
+    send(surface, body, cids = []) {
+      const sent = chain.then(() => port.send(surface, body, cids));
       // 내부 체인에서만 오류를 알린다. 호출자는 sent를 받으므로 실패 시 rejection이 전달된다.
       chain = sent.catch(failed);
       return sent;

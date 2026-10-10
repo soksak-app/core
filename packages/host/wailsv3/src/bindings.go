@@ -374,7 +374,7 @@ func (h *Host) SidecarsReplace(ctx context.Context, reqJSON json.RawMessage) err
 	return h.sidecars.Replace(ctx, req.Sidecar)
 }
 
-func (h *Host) SidecarSend(ctx context.Context, nameJSON json.RawMessage, surfaceJSON json.RawMessage, body json.RawMessage) error {
+func (h *Host) SidecarSend(ctx context.Context, nameJSON json.RawMessage, surfaceJSON json.RawMessage, body json.RawMessage, cidsJSON json.RawMessage) error {
 	name, err := argument[string]("sidecar", nameJSON)
 	if err != nil {
 		return err
@@ -383,11 +383,15 @@ func (h *Host) SidecarSend(ctx context.Context, nameJSON json.RawMessage, surfac
 	if err != nil {
 		return err
 	}
+	cids, err := argument[[]string]("cids", cidsJSON)
+	if err != nil {
+		return err
+	}
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
 	}
-	return s.sidecarSendFrom(uint64(s.window.ID()), name, surface, body)
+	return s.sidecarSendFrom(uint64(s.window.ID()), name, surface, body, cids)
 }
 
 // nativeCall 은 bridge.js 가 보낸 호출 하나다.
@@ -447,10 +451,11 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		return s.Theme(), nil
 	case "SidecarSend":
 		var body json.RawMessage
-		if err := nativeArgs(call, nativeArg{"sidecar", &key}, nativeArg{"surface", &id}, nativeArg{"body", &body}); err != nil {
+		var cids []string
+		if err := nativeArgs(call, nativeArg{"sidecar", &key}, nativeArg{"surface", &id}, nativeArg{"body", &body}, nativeArg{"cids", &cids}); err != nil {
 			return nil, err
 		}
-		return nil, s.sidecarSendFrom(viewID, key, id, body)
+		return nil, s.sidecarSendFrom(viewID, key, id, body, cids)
 	case "CompositionDeclare":
 		var req CompositionDeclareRequest
 		if err := nativeArgs(call, nativeArg{"request", &req}); err != nil {

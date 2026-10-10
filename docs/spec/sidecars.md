@@ -36,7 +36,7 @@ Each message is one JSON object on one line. A sidecar message on standard outpu
 
 | Direction | Message |
 | --- | --- |
-| Host → sidecar | `{"surface": id, "root": path, "body": value}` for a page request. `root` is the project directory of the owning window when the host first sends for the surface; later requests for the surface keep that root after the window changes project, because a sidecar may identify a session by root and surface |
+| Host → sidecar | `{"surface": id, "root": path, "cids": [id, …], "body": value}` for a page request. `cids` is present only when the request continues inputs, and it lists their correlation identifiers (see [logging](logging.md#event)); a sidecar that records the request copies them into its events. `root` is the project directory of the owning window when the host first sends for the surface; later requests for the surface keep that root after the window changes project, because a sidecar may identify a session by root and surface |
 | Host → sidecar | `{"surface": id, "root": path, "closed": true}` when the surface is removed or its window closes, with the surface's root |
 | Sidecar → host | `{"surface": id, "body": value}` |
 | Sidecar → host | `{"surface": id, "closed": true}` once the sidecar has released the resources of a closed surface, such as its sessions, processes and watches, or `{"surface": id, "closed": true, "error": text}` when it could not release them |

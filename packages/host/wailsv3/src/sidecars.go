@@ -56,10 +56,12 @@ type SidecarFailure struct {
 const sidecarMessageLimit = 64 << 20
 
 type sidecarRequest struct {
-	Surface string          `json:"surface"`
-	Root    string          `json:"root,omitempty"`
-	Closed  bool            `json:"closed,omitempty"`
-	Body    json.RawMessage `json:"body,omitempty"`
+	Surface string `json:"surface"`
+	Root    string `json:"root,omitempty"`
+	Closed  bool   `json:"closed,omitempty"`
+	// Cids are the correlation identifiers of the inputs that this request continues (docs/spec/sidecars.md#protocol).
+	Cids []string        `json:"cids,omitempty"`
+	Body json.RawMessage `json:"body,omitempty"`
 }
 
 type sidecarEvent struct {
@@ -329,6 +331,12 @@ func (c *Sidecars) declaration(name string) (program string, persistent, ok bool
 // Send 는 owner 창의 표면 surface 에서 온 body 를 사이드카 name 에 전달한다.
 // 뮤텍스 밖에서 직렬화하고 논블로킹 채널로 전송하므로, 사이드카가 느려도 다른 전송을 차단하지 않는다.
 func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawMessage) error {
+	return c.SendWithCids(owner, name, surface, body, nil)
+}
+
+// SendWithCids sends a page request that continues the inputs named by cids; the request line carries them as the field
+// `cids`, and no field when cids is empty.
+func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body json.RawMessage, cids []string) error {
 	c.mu.Lock()
 	root, known := c.roots[surface]
 	c.mu.Unlock()
@@ -336,7 +344,7 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 		root = owner.ProjectRoot()
 	}
 	// JSON 직렬화는 뮤텍스 밖에서 한다.
-	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Body: body})
+	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Cids: cids, Body: body})
 	if err != nil {
 		return fmt.Errorf("sidecar %s: %w", name, err)
 	}

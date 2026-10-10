@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.6.1: 사이드카로 가는 페이지 요청은 이어받는 입력의 상관 식별자를 나를 수 있다. 사이드카 포트의 `send(surface, body, cids)`, 두 runtime의 host 호출 `sidecarSend`, 두 host가 `cids`를 전달하고, 요청 줄은 목록이 비어 있지 않을 때만 `root`와 `body` 사이에 필드 `cids`를 가진다.
 - F150.7.3: 그림 영역은 자신이 답하는 입력기 질의(`markedRange`, `selectedRange`, `hasMarkedText`, `firstRectForCharacterRange`, `characterIndexForPoint`)마다 인자, 답, 포커스를 가진 level `debug`의 event `native.input.query`를 기록한다.
 - F150.7.2: native 라이브러리는 창의 first responder 변경마다 창 번호와 변경 전후의 class를 가진 event `native.window.first_responder`를 기록한다. 창은 갱신마다 이전 갱신의 first responder와 비교한다. 창을 key-value observing으로 관찰하면 Wails host가 첫 창 표시에서 죽었기 때문이다.
 - F150.7.1: native 라이브러리는 애플리케이션(활성화, 숨김), 창(key, main, 최소화, 가림), 입력 소스의 알림을 ring의 event `native.app.*`, `native.window.*`, `native.input.source_changed`로 기록하고, 두 host는 writer를 시작할 때 플랫폼 연산 `ObserveActivity`로 observer를 설치한다.

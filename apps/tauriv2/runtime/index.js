@@ -108,7 +108,7 @@ const ARG = {
   documentGo: (request) => ({ request }),
   documentPost: (request) => ({ request }),
   documentDetach: (request) => ({ request }),
-  sidecarSend: ({ sidecar, surface, body }) => ({ sidecar, surface, body }),
+  sidecarSend: ({ sidecar, surface, body, cids }) => ({ sidecar, surface, body, cids }),
   sidecarsRetain: (request) => ({ request }),
   sidecarsReplace: (request) => ({ request }),
   sidecarsOutdated: () => ({}),
@@ -175,7 +175,7 @@ function surfaceWire(surface) {
   const request = (name, command) => [name, { command, arguments: (value) => ({ request: value }) }];
   return Object.fromEntries([
     ["theme", { command: "theme", arguments: () => ({}) }],
-    ["sidecarSend", { command: "sidecar_send", arguments: (sidecar, from, body) => ({ sidecar, surface: from, body }) }],
+    ["sidecarSend", { command: "sidecar_send", arguments: (sidecar, from, body, cids) => ({ sidecar, surface: from, body, cids }) }],
     request("exposureRegister", "exposure_register"),
     ["exposureReply", { command: "exposure_reply", arguments: (reply) => ({ request: JSON.stringify({ ...reply, ...(surface ? { surface } : {}) }) }) }],
     request("documentAttach", "document_attach"),
@@ -225,7 +225,7 @@ export const page = (() => {
       return calls.record(record.level, `page.record.${record.level}`, { where: record.where, text: record.text });
     },
     sidecar: (name) => ({
-      send: (surface, body) => call("sidecarSend", name, surface, body),
+      send: (surface, body, cids = []) => call("sidecarSend", name, surface, body, cids),
       // 사이드카 이벤트는 창의 모든 페이지가 받는다. 사이드카와 표면이 일치하는 것만 처리한다.
       on: (surface, fn) => listen("sidecar-message", (e) => {
         if (e.payload.sidecar === name && e.payload.surface === surface) fn(e.payload.body);
