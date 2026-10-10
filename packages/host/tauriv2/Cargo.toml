@@ -18,6 +18,10 @@ dev = ["soksak-sok-tauriv2/dev"]
 name = "event_log_benchmark"
 harness = false
 
+[[bench]]
+name = "event_native_benchmark"
+harness = false
+
 [build-dependencies]
 pkg-config = "0.3"
 

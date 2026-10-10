@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.2.6.4: benchmark가 빈 native ring의 pull 한 번과 손실 읽기 한 번을 cgo와 FFI에서 잰다(debug 빌드): pull은 cgo 평균 35 ns·p99 125 ns, FFI 평균 17 ns·p99 42 ns(타이머 단위가 약 42 ns)이므로 경계 비용은 배치 간격 100 ms에 비해 없는 것과 같다. `make benchmark-go`와 `make benchmark-rust`가 실행한다.
 - F150.2.6.2, F150.2.6.3: 두 host writer가 플랫폼 연산 `PullNativeEvents`와 `TakeNativeEventLoss`(Go는 cgo, Rust는 FFI이며 Windows 플랫폼은 `not implemented on windows`를 돌려준다)로 배치 간격마다와 flush할 때 native ring을 pull하고, pull한 record를 library가 준 시각 그대로 계층 `native`로 저장하며, ring이 거부한 event를 이유 `the native ring was full`의 `log.dropped`로 세고, `native.` 밖의 이름, 정의되지 않은 level, JSON 객체가 아닌 field, 맞지 않는 길이를 가진 record는 거부해 표준 오류에 보고하고 이유 `a native record was refused`의 `log.dropped`로 센다. ring을 pull하지 못하는 플랫폼은 host의 시작에 실패한다.
 - F150.2.6.1: native 라이브러리에 프로세스의 ring이 생겼다: `sp_event(level, name, fields_json)`은 어느 스레드에서든 마이크로초 단위 wall clock, level, 이름(1~255바이트), field를 저장하고, `sp_event_drain`은 record를 순서대로 돌려주며, `sp_event_take_loss`는 없거나 비었거나 더 긴 이름, 열거에 없는 level, 없는 field, 가득 찬 4 MiB ring이 거부한 event의 수를 돌려준다.
 - F150.2.5: 두 host writer가 파일을 회전한다: 파일은 `rotate_bytes`(host에서 100 MB)를 넘게 될 줄 앞에서 닫히고, 최신 `generations`개(5)가 `.1`부터 `.5`로 보관되며, 가장 오래된 것은 지워지고, 새 파일은 `log.open`과 `log.rotated` `{bytes, kept, removed}`로 시작하되 `seq`는 이어진다. 양의 경계나 세대 수가 없는 writer는 시작을 거부하고, 실패한 회전 단계는 보고하되 writer는 가진 파일로 계속 쓴다.

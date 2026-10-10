@@ -117,10 +117,10 @@ rust-tests-alone:
 # 간헐 실패를 재현하고 수용하는 대상이다. 첫 실패에서 실행 번호, 시스템 부하, 그 실행의 출력을 보고한다.
 # 기록기의 비용을 잰다. 시험이 아니며 숫자를 출력하고 단언하지 않는다. Rust writer 는 cargo bench 로, native ring 은 native/darwin 의 benchmark 로 잰다.
 benchmark-rust:
-	@$(CARGO_ENV) cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_log_benchmark
+	@$(CARGO_ENV) cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_log_benchmark --bench event_native_benchmark
 
 benchmark-go:
-	@$(GO_ENV) go test -count=1 -ldflags "$(GO_LINK)" -run '^$$' -bench EventLogEmit -benchtime 1x -v ./packages/host/wailsv3/tests
+	@$(GO_ENV) go test -count=1 -ldflags "$(GO_LINK)" -run '^$$' -bench 'EventLogEmit|NativePull' -benchtime 1x -v ./packages/host/wailsv3/tests
 
 rust-repeat:
 	@case "$(PACKAGE)" in '') echo "rust-repeat requires PACKAGE=<cargo package> COUNT=<n> [TEST=<name>] [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
