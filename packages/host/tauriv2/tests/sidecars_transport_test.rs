@@ -2105,11 +2105,12 @@ fn stop_does_not_close_the_owner_again_while_a_replacement_closes_it() {
         config_directory.path(),
         executable_directory.path(),
     ));
-    let (owner, events) = owner("replacing", "/projects/replacing");
+    let (owner, _events) = owner("replacing", "/projects/replacing");
     sidecars
         .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    events.recv_timeout(STALL).ok();
+    // The service sends no message to the owner, so the check does not wait for one: the loop below waits until the
+    // service has read the close-owner of the replacement.
     let replacing = {
         let sidecars = Arc::clone(&sidecars);
         thread::spawn(move || sidecars.replace(ECHO))

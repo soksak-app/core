@@ -99,7 +99,7 @@ fn invalid_json_closes_connection() {
 | `links.open.rejects-other-schemes` | 다른 스킴의 URL, 해석되지 않는 URL, 8192자보다 긴 URL은 거부한다. | both |
 | `notifications.request.accepts-tab-notices` | 제어 문자 없이 1–256자인 표면과 제목, 1–1024자인 본문의 알림을 받아들이며, 제거에는 표면만 필요하다. | both |
 | `notifications.request.rejects-invalid-fields` | 비었거나 너무 길거나 제어 문자가 있는 표면, 제목, 본문은 그 필드를 적은 오류로 거부한다. | both |
-| `notifications.event.records-each-event-and-failure` | host가 해석하는 알림 센터의 사건마다 `type`, 상태의 `authorization`, 알림의 `window`와 `surface`를 가진 event `host.notification.event`가 있고, 실패(읽을 수 없거나 알 수 없는 종류의 사건, 창과 표면이 없는 알림, 닫힌 창, 알림 센터가 알린 실패)마다 장소 `notification`의 `error` 기록이 있다. | go: 전체 경로. rust: 사건을 읽는 부분(창을 찾는 데 애플리케이션 핸들이 필요하다) |
+| `notifications.event.records-each-event-and-failure` | host가 해석하는 알림 센터의 사건마다 `type`, 상태의 `authorization`, 알림의 `window`와 `surface`를 가진 event `host.notification.event`가 있고, 실패(읽을 수 없거나 알 수 없는 종류의 사건, 창과 표면이 없는 알림, 닫힌 창, 알림 센터가 알린 실패)마다 장소 `notification`의 `error` 기록이 있다. Go 시험은 전체 경로를, Rust 시험은 이벤트를 읽는 부분까지를 다룬다. 창 조회에는 application handle이 필요하기 때문이다. | both |
 | `diagnostics.capture-stop.payload-reports-frame-limit` | 한도에 도달한 녹화의 중지 페이로드는 frames, count, limited true, 가장 긴 간격을 보고한다. | both |
 | `diagnostics.capture-stop.payload-reports-unbounded` | 한도에 도달하지 않은 녹화의 중지 페이로드는 limited false를 보고한다. | both |
 | `diagnostics.capture-stop.payload-reports-layout-timeline` | 녹화 중지 페이로드는 기록된 layout transaction이 없어도 항상 `layouts` 배열을 보고한다. | both |
@@ -504,6 +504,9 @@ fn invalid_json_closes_connection() {
 | `cli.plugin.state-reads-registry-and-installed` | Installer library는 `{registry, index, installed}`를 보고한다. `plugins/registry.json`이 없으면 registry와 index가 `null`이고, 있으면 index URL과 검사한 index이며, 읽지 못한 index는 그 읽기 오류를 `index`로, 잘못된 `installed.json`은 오류를 보고한다. | both |
 | `cli.plugin.action-runs-the-command` | Installer library는 `install`, `update`, `remove`, `enable`, `disable`을 같은 `sok plugin` 명령의 결과로 실행하고, 다른 action은 `unknown plugin action`으로 거부한다. | both |
 | `cli.file.errors-name-the-path-and-the-reason` | 실패한 파일 작업은 `<경로>: <이유>`로 보고하며, 이유는 소문자로 시작하는 운영체제 오류 문구다. 없는 registry index는 `<경로>: no such file or directory`, 읽을 수 없는 `installed.json`은 `<경로>: permission denied`를 보고한다 | both |
+| `cli.debug.timeline-golden-lines` | `sok debug timeline`이 모든 filter 사례에서 golden 파일 `packages/log-contract/fixtures/timeline`의 글 줄을, debug 화면과 같은 줄로 출력한다. | both |
+| `cli.debug.timeline-errors` | `sok debug timeline`은 event 파일이 event 구조를 어기면 파일과 줄 번호를 담은 오류로, event 파일이 없으면 폴더를 담은 오류로 실패하고, 줄바꿈으로 끝나지 않은 줄은 읽지 않는다. | both |
+| `cli.debug.timeline-filter-values` | `sok debug timeline`은 잘못된 filter 값을 flag 값을 담은 사용법 오류로, debug 화면과 같은 문구로 거부한다. | both |
 | `install.version.ranges-and-order` | 범위 `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z <a.b.c`는 선언한 경계를 가지고, `*`는 상한이 없는 `>=0.0.0`이다. Version은 숫자로 비교한다. 다른 형식, 앞자리 0, 빈 범위, 4294967295를 넘는 자리는 `invalid version`으로 거부한다. | both |
 | `install.package-json.fields-and-manifest` | Plugin `package.json`에는 `name`, `version`, `engines.soksak`, plugin 안의 `plugin.json`을 나열한 `files`가 있어야 한다. `soksak`은 거부하고, `plugin.json`의 `dependencies`는 각각 올바른 범위다. 실패마다 필드를 밝힌다. | both |
 | `install.registry.entries` | Registry plugin, sidecar, pack, revoked 항목은 알 수 없는 필드, 절대 `file:` URL이 아니거나 query, fragment, 잘못된 escape를 가진 URL, 소문자 16진수 64자리가 아닌 `sha256`, 중복 version, 알 수 없는 플랫폼, 1이 아닌 `protocol`, 200 code point를 넘는 설명, 빈 pack, 이유 없는 revoked 항목을 거부한다. | both |
