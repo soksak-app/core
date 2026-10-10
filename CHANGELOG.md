@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F150.5.5.2: both hosts store the connection to a persistent service as the event `host.sidecar.connect` (`name`, `pid`, `spawned`) and its end as `host.sidecar.disconnect` (`name`, `pid`, `stopping`, `violation`) at the level `info`.
 - F150.5.5.1: both hosts store the start of a sidecar process of standard input and output as the event `host.sidecar.start` (`name`, `pid`) and its end as `host.sidecar.exit` (`name`, `pid`, `status`, `stopping`), in the event log at the level `info`; `EmitHost` and `emit_host` are the entrance for events of the host that are not records.
 - F150.5.4: every `command.run` request of the page is the event `page.command` with the fields `name`, `micros`, `ok` and `error` (level `debug`, `warn` for a failed command), whether or not the performance trace is on.
 - F150.5.1: every host call of the main page is the event `page.call` (level `debug`, `warn` for a refused call) with the fields `name`, `args` (cut at 1024 characters), `micros`, `ok` and `error`, recorded by the wrapper that both runtimes put around `host.call`; the calls `log` and `performance` are not recorded.

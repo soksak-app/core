@@ -22,6 +22,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 type SidecarMessage = host.SidecarMessage
@@ -2135,5 +2136,96 @@ func TestDetachClosesTheConnectionOfAPersistentServiceWithoutClosingTheOwner(t *
 		if operation == "close-owner" || operation == "shutdown" {
 			t.Fatalf("the stop after the detach sent to the service: %v", service.received())
 		}
+	}
+}
+
+// eventsService is the name of the service of the event check; the process shares the writer of the records, so the events of the
+// services of the other checks are told apart by the name.
+const eventsService = "fixture-events-service"
+
+// contract: sidecars-transport.persistent.connection-events
+func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDirectory)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeHarnessEndpoint(t, root, socket)
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+
+	// The first connection answers one request and closes; the second stays open.
+	serverDone := make(chan struct{})
+	go func() {
+		defer close(serverDone)
+		for index := 0; index < 2; index++ {
+			connection, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			keepOpen := index == 1
+			go func() {
+				defer connection.Close()
+				reader := bufio.NewReader(connection)
+				if _, err := reader.ReadBytes('\n'); err != nil {
+					return
+				}
+				if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+					return
+				}
+				for {
+					line, err := reader.ReadBytes('\n')
+					if err != nil {
+						return
+					}
+					if _, err := connection.Write(line); err != nil {
+						return
+					}
+					if !keepOpen {
+						return
+					}
+				}
+			}()
+		}
+	}()
+
+	sidecars, err := NewSidecars([]SidecarDeclaration{{Name: eventsService, Folder: t.TempDir(),
+		Data: []byte(`{"executable":"service","protocol":1,"transport":"persistent"}`)}}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/only", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, eventsService, "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.seen) // the echo
+	receiveSidecarMessage(t, owner.seen) // the notice of the reconnection
+	sidecars.Stop()
+	listener.Close()
+	<-serverDone
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var seen []string
+	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		name, _ := event["event"].(string)
+		if name != "host.sidecar.connect" && name != "host.sidecar.disconnect" {
+			continue
+		}
+		fields := event["fields"].(map[string]any)
+		if fields["name"] != eventsService {
+			continue
+		}
+		seen = append(seen, fmt.Sprintf("%s %v", name, fields["stopping"]))
+	}
+	want := []string{"host.sidecar.connect <nil>", "host.sidecar.disconnect false", "host.sidecar.connect <nil>", "host.sidecar.disconnect true"}
+	if strings.Join(seen, "|") != strings.Join(want, "|") {
+		t.Fatalf("connection events = %q, want %q", seen, want)
 	}
 }

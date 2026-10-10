@@ -246,6 +246,7 @@ fn invalid_json_closes_connection() {
 | `log.record.one-line` | 기록은 한 줄이다. 본문의 줄바꿈은 두 글자 `\n`으로 쓰고, 시각을 뺀 항목은 `<level> <layer> <where>: <text>`다. | both |
 | `sidecars.trace.relay-records-every-message-with-its-body` | performance trace가 켜진 동안 host가 sidecar로 보내는 각 요청은 event log의 event `host.trace.sidecar.send`, 받는 각 메시지는 `host.trace.sidecar.receive`이며, field에 `sidecar`, `surface`, 본문 전체를 담는다. | both |
 | `sidecars.lifetime.start-and-exit-events` | 호스트가 시작하는 표준 입출력 사이드카 프로세스마다 `name`과 `pid`를 가진 event `host.sidecar.start`가 있고, 그 종료는 `name`, `pid`, `status`(`exit status <code>` 또는 `signal <number>`), 호스트가 멈추는 중이었는지 알려 주는 `stopping`을 가진 event `host.sidecar.exit`다. | both |
+| `sidecars-transport.persistent.connection-events` | host가 영구 service에 연결할 때마다 `name`, service `pid`, `spawned`를 가진 event `host.sidecar.connect`가 있고, 그 끝은 `name`, `pid`, `stopping`, 위반 문구 `violation`(service가 연결을 닫았으면 빈 문자열)을 가진 event `host.sidecar.disconnect`다. | both |
 | `sidecars.stderr.lines-are-written-as-records` | 표준 입출력 사이드카의 표준 오류 각 줄과 줄바꿈 없이 끝난 마지막 글은 기록 `<time> info sidecar <name>: <line>`으로 쓴다. | both |
 | `log.panic.writes-an-error-line` | 애플리케이션 로그를 연 뒤 host가 panic하면 기본 panic 메시지보다 먼저 `error host panic: <file>:<line>: <message>`를 쓴다. | tauriv2 only: Go runtime은 panic의 stack을 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다 |
 | `log.fatal-signal.writes-an-error-line` | 애플리케이션 로그를 연 뒤 host process가 fatal signal을 받으면 그 signal로 process가 끝나기 전에 `error: fatal: <signal name>`을 한 번 쓴다. | tauriv2 only: Go runtime은 fatal signal을 스스로 처리하고 보고를 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다 |

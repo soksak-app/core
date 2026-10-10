@@ -1904,6 +1904,7 @@ impl<O: Owner> Core<O> {
         let shutdown_waiters_for_reader = Arc::clone(&shutdown_waiters);
         let retain_waiters_for_reader = Arc::clone(&retain_waiters);
         let tx_clone = tx.clone();
+        let reader_service_pid = endpoint.pid;
         let reader_connected = Arc::clone(&connected);
         threads.push(Box::new(move || {
             struct ConnectionGuard(Arc<AtomicBool>);
@@ -2053,9 +2054,11 @@ impl<O: Owner> Core<O> {
                 }
             })();
             let mut was_current = false;
+            let mut stopping = false;
             let mut owned = Vec::new();
             let mut changed = None;
             if let Ok(mut state) = state.lock() {
+                stopping = state.stopped;
                 let is_current = state
                     .running
                     .get(&sidecar)
@@ -2089,6 +2092,12 @@ impl<O: Owner> Core<O> {
             if let Some(changed) = changed {
                 changed();
             }
+            crate::event_record::emit_host(
+                crate::event_log::Level::Info,
+                "host.sidecar.disconnect",
+                serde_json::json!({"name": sidecar, "pid": reader_service_pid, "stopping": stopping,
+                    "violation": violation.clone().unwrap_or_default()}),
+            );
             let close_error =
                 Err("persistent service disconnected before close-owner ack".to_string());
             for (_, sender) in waiters.lock().expect("close waiters").drain() {
@@ -2131,6 +2140,11 @@ impl<O: Owner> Core<O> {
                 revive_persistent(&reader_core, &sidecar);
             }
         }));
+        crate::event_record::emit_host(
+            crate::event_log::Level::Info,
+            "host.sidecar.connect",
+            serde_json::json!({"name": name, "pid": endpoint.pid, "spawned": child.is_some()}),
+        );
         // application 종료는 bootstrap child를 기다리거나 kill하지 않아야 한다.
         drop(child);
         Ok(Started {

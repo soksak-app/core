@@ -1247,6 +1247,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		conn.Close()
 		return nil, fmt.Errorf("sidecar %s: service protocol mismatch in hello response", name)
 	}
+	EmitHost(LevelInfo, "host.sidecar.connect", map[string]any{"name": name, "pid": endpoint.PID, "spawned": cmd != nil})
 	process := &sidecar{
 		name: name, cmd: cmd, conn: conn, persistent: true, version: response.Version, servicePID: endpoint.PID,
 		outbox: make(chan []byte, 256), exited: make(chan struct{}),
@@ -1533,6 +1534,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	wasCurrent := false
 	var owned []ownedSurface
 	c.mu.Lock()
+	stopping := c.stopped
 	waiters := make([]chan error, 0, len(process.closeWaiters))
 	for request, waiter := range process.closeWaiters {
 		delete(process.closeWaiters, request)
@@ -1563,6 +1565,8 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		waiter <- errors.New("persistent service disconnected before close-owner ack")
 	}
 	close(process.exited)
+	EmitHost(LevelInfo, "host.sidecar.disconnect", map[string]any{"name": process.name, "pid": process.servicePID,
+		"stopping": stopping, "violation": violation})
 	if violation != "" {
 		// 서비스가 프로토콜을 어겼다. 같은 메시지가 다음 연결도 끝내므로 곧바로 다시 맺지 않고, 다음 전송이
 		// 생성 경로로 다시 맺는다(docs/spec/terminal-runtime.md#service-transport).

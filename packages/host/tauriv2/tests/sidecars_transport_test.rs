@@ -12,6 +12,9 @@ use std::net::Shutdown;
 use std::os::unix::net::UnixListener;
 use std::process::Command;
 
+#[path = "support/records.rs"]
+mod records;
+
 use serde_json::value::RawValue;
 use soksak_host_tauriv2::sidecars::{
     Failure, Message, OutdatedSidecar, Owner, SidecarDeclaration, Sidecars,
@@ -2160,5 +2163,117 @@ fn detach_closes_the_connection_of_a_persistent_service_without_closing_the_owne
             .iter()
             .any(|operation| operation == "close-owner" || operation == "shutdown"),
         "the stop after the detach sent to the service: {operations:?}"
+    );
+}
+
+// contract: sidecars-transport.persistent.connection-events
+#[test]
+fn persistent_connections_are_recorded_as_events() {
+    // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
+    if let Some(config) = std::env::var_os("SOKSAK_CONNECTION_EVENTS_CHILD") {
+        let executable_directory = tempfile::tempdir().unwrap();
+        let config_directory = tempfile::tempdir().unwrap();
+        let service_directory = config_directory.path().join("services/echo");
+        std::fs::create_dir_all(&service_directory).unwrap();
+        let socket_path = service_directory.join("events.sock");
+        let listener = UnixListener::bind(&socket_path).unwrap();
+        std::fs::write(
+            service_directory.join("endpoint.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "protocol": 1, "pid": std::process::id(), "socket": socket_path, "token": "events-token"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        // The first connection answers one request and closes; the second stays open.
+        let service = thread::spawn(move || {
+            let mut workers = Vec::new();
+            for index in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                workers.push(thread::spawn(move || {
+                    stream
+                        .set_read_timeout(Some(Duration::from_secs(30)))
+                        .unwrap();
+                    let mut reader = BufReader::new(stream.try_clone().unwrap());
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    stream
+                        .write_all(b"{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}\n")
+                        .unwrap();
+                    loop {
+                        line.clear();
+                        if reader.read_line(&mut line).unwrap() == 0 {
+                            return;
+                        }
+                        stream.write_all(line.as_bytes()).unwrap();
+                        if index == 0 {
+                            stream.shutdown(Shutdown::Both).unwrap();
+                            return;
+                        }
+                    }
+                }));
+            }
+            for worker in workers {
+                worker.join().unwrap();
+            }
+        });
+        let writer = records::start_writer(Path::new(&config));
+        let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+        let sidecars = Sidecars::new(
+            &declare(&fixture, executable_directory.path()),
+            config_directory.path().to_path_buf(),
+        )
+        .unwrap();
+        let (owner, events) = owner("only", "/projects/only");
+        sidecars
+            .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+        events.recv_timeout(STALL).unwrap(); // the echo
+        events.recv_timeout(STALL).unwrap(); // the notice of the reconnection
+        sidecars.stop();
+        service.join().unwrap();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "persistent_connections_are_recorded_as_events",
+            "--nocapture",
+        ])
+        .env("SOKSAK_CONNECTION_EVENTS_CHILD", config.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the child check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let seen: Vec<String> = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| {
+            matches!(
+                event["event"].as_str(),
+                Some("host.sidecar.connect" | "host.sidecar.disconnect")
+            )
+        })
+        .map(|event| {
+            assert_eq!(event["fields"]["name"], ECHO);
+            format!(
+                "{} {}",
+                event["event"].as_str().unwrap(),
+                event["fields"]["stopping"]
+            )
+        })
+        .collect();
+    assert_eq!(
+        seen,
+        vec![
+            "host.sidecar.connect null",
+            "host.sidecar.disconnect false",
+            "host.sidecar.connect null",
+            "host.sidecar.disconnect true"
+        ]
     );
 }
