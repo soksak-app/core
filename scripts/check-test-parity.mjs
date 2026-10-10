@@ -1672,6 +1672,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F151.2.3",
+    implementation: [
+      { file: "packages/workbench/debug-timeline.js", symbol: "export function parseAppended" },
+      { file: "packages/workbench/debug-ui.js", symbol: "export async function followDebugTimeline" },
+      { file: "packages/workbench/page-log.js", symbol: "\"debugReadRange\"" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-timeline.test.mjs", id: "appended lines become rows numbered after the lines read before and need no log.open" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "a file longer than one range read is read in ranges from its start" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the load stops at the row limit and the status names the file that was not read to its end" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "a changed host event file appends its grown lines in time order and keeps the filter and the selection" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "stopping follows no more reads and resuming reads what grew while stopped" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "an appended line that is not an event stops following and is shown with its file and line" },
+      { file: "packages/workbench/test/page-log.test.mjs", id: "every host call is the event page.call with its name, arguments, duration and outcome, except the calls of the log itself and the range reads of the debug timeline" },
+    ],
+    expected: "The debug timeline reads the host event files in ranges, appends the lines that a debug-log-changed notice reports in time order while keeping the filter and the selection, stops and resumes following by a command, stops following with an error for a line that is not an event, and its range reads are not recorded as page calls.",
+    levels: ["unit"],
+  },
+  {
     id: "F137",
     implementation: [
       { file: "packages/sok/tauriv2/src/appupdate.rs", symbol: "pub type OpenApplication" },

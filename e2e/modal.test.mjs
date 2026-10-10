@@ -425,6 +425,42 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
+  test(`${app.name}: the debug timeline follows the host event file, stops, and catches up when it resumes`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const titles = HELP_TITLES[(await s.get("host.menu")).language];
+    s.cleanup(() => s.run("core.debug.close"));
+    s.cleanup(() => {
+      for (const folder of recordingFolders(s.app.configDir)) {
+        if (!s.recordingsBefore.includes(folder)) rmSync(join(s.app.configDir, "logs", "captures", folder), { recursive: true, force: true });
+      }
+    });
+    await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
+    await s.until("core.debug", (debug) => debug.open && debug.entries.length > 0, "the debug view did not list the files");
+    await s.run("core.debug.timeline");
+    const shown = await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.total > 0, "the timeline did not show any row");
+    assert.equal(shown.timeline.following, true, "a new timeline does not follow");
+    assert.equal(shown.timeline.appended, 0);
+    // A run command stores the event page.command, which the host writes and announces with debug-log-changed.
+    await s.run("core.debug.timeline.filter", { context: "0" });
+    const grown = await s.until("core.debug", (debug) => debug.timeline.total > shown.timeline.total, "the timeline did not append the rows of a command");
+    assert.ok(grown.timeline.appended > 0, "the appended rows are not counted");
+    assert.equal(grown.error, null);
+    await s.run("core.debug.timeline.follow", { on: false });
+    const stopped = await s.until("core.debug", (debug) => debug.timeline.following === false, "the timeline did not stop following");
+    await s.run("core.debug.timeline.filter", { context: "0" });
+    await s.run("core.debug.timeline.filter", { context: "0" });
+    const held = await s.get("core.debug");
+    assert.equal(held.timeline.total, stopped.timeline.total, "a stopped timeline appended rows");
+    await s.run("core.debug.timeline.follow", { on: true });
+    const resumed = await s.until("core.debug", (debug) => debug.timeline.following === true && debug.timeline.total > stopped.timeline.total,
+      "the timeline did not catch up with the rows written while it was stopped");
+    assert.equal(resumed.error, null);
+  });
+}
+
+for (const app of Object.values(APPS)) {
   test(`${app.name}: the debug view filters the timeline by event name with context and shows a state file as a tree`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

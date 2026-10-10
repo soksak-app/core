@@ -48,6 +48,7 @@
     "core.debug.state",
     "core.debug.state.compare",
     "core.debug.timeline",
+    "core.debug.timeline.follow",
     "core.debug.timeline.select",
     "core.debug.timeline.filter",
     "core.projects.browse",

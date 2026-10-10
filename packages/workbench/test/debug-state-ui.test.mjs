@@ -28,6 +28,7 @@ async function openView(t, files = FILES) {
       },
       save: async () => {},
       saveAll: async () => {},
+      onChanged: () => Promise.resolve(() => {}),
     },
     overlay: { show: () => {}, update: () => {}, place: () => {}, hide: () => {} },
   } });

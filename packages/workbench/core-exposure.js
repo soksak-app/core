@@ -27,7 +27,7 @@ import {
 import {
   closeSettings, editSet, moveSettings, onSettingsDrawn, openSettings, settingsModalState, searchPlugins, showPlugin, showScope, showSection,
 } from "./settings-ui.js";
-import { closeDebug, compareDebugState, debugState, filterDebugTimeline, listDebugFiles, onDebugDrawn, openDebug, saveDebugFile, saveDebugFiles, saveDebugRows, selectDebugRow, showDebugState, showDebugTimeline, viewDebugFile } from "./debug-ui.js";
+import { closeDebug, compareDebugState, debugState, filterDebugTimeline, followDebugTimeline, listDebugFiles, onDebugDrawn, openDebug, saveDebugFile, saveDebugFiles, saveDebugRows, selectDebugRow, showDebugState, showDebugTimeline, viewDebugFile } from "./debug-ui.js";
 import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
 import { pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
@@ -385,6 +385,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.debug.state.compare", ({ with: other }) => compareDebugState(other));
   registry.command("core.debug.timeline", () => showDebugTimeline());
   registry.command("core.debug.timeline.filter", (change) => { filterDebugTimeline(change); });
+  registry.command("core.debug.timeline.follow", ({ on }) => followDebugTimeline(on));
   registry.command("core.debug.timeline.select", ({ row, selected }) => { selectDebugRow(row, selected); });
   registry.command("core.debug.timeline.save", () => saveDebugRows());
   // 프로젝트 목록은 라이브러리의 프로젝트 페이지를 보인다.

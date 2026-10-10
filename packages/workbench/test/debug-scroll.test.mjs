@@ -13,7 +13,7 @@ test("a negative scroll position of the native modal is kept as reported and a v
   const overlay = { show: (card, rect, handler) => { answer = handler; }, update: () => {}, place: () => {}, hide: () => {} };
   t.mock.module("../host.js", { namedExports: {
     native: true,
-    debug: { record: async () => ({ path: "logs/state.json" }), files: async () => [], read: async () => ({}), save: async () => {}, saveAll: async () => {} },
+    debug: { record: async () => ({ path: "logs/state.json" }), files: async () => [], read: async () => ({}), save: async () => {}, saveAll: async () => {}, onChanged: () => Promise.resolve(() => {}) },
     overlay,
   } });
   t.mock.module("../compositor.js", { namedExports: { standIn: () => {} } });

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F151.2.3: debug 타임라인이 각 host event 파일을 `debugReadRange`로 범위로 나누어 읽고(`ROW_LIMIT` 행까지이며 상태의 `limited`가 거기서 멈춘 파일을 밝힌다), host event `debug-log-changed`를 따라 늘어난 줄을 시간 순서로 덧붙이며 필터와 행 선택을 유지한다. `core.debug.timeline.follow {on}`이 따라가기를 멈추고 다시 시작한다(다시 시작하면 먼저 늘어난 것을 읽는다). 상태 `core.debug`는 `truncated` 대신 `following`, `appended`, `limited`를 보고하고, 타임라인은 더 이상 `debugRead`로 파일 끝을 읽지 않으며, `debugReadRange` 호출은 `page.call` event로 기록하지 않는다. 창 검사는 `e2e/modal.test.mjs`에 있고 실행하지 않았다.
 - F151.2.1, F151.2.2: 두 host의 host 호출 `debugReadRange({path, offset})`는 `logs/` 아래 파일의 온전한 줄을 offset부터 돌려주고 그 뒤의 offset을 알린다. host는 event 기록기가 한 묶음을 쓴 뒤 모든 창에 host event `debug-log-changed {path, size}`를 알린다(기록기가 observer를 부르고, 창에 알리는 동안 오는 알림은 하나가 된다).
 - F139: 상태 `core.picker`는 `columns`, 곧 제목과 항목마다 아이콘과 이름의 x를 선택 레이어 기준으로 보고한다. 선택 레이어가 열릴 때 재는데, 네이티브 뷰가 그리는 동안 메인 문서가 선택 레이어를 숨겨 그 요소에 상자가 없기 때문이다.
 - F151.4.2: debug 타임라인의 행을 선택하고 선택 해제할 수 있다(`core.debug.timeline.select {row, selected}`, 각 행 앞의 단추). `core.debug.timeline.save`는 선택한 행의 글 줄을 타임라인 순서로 `debugSaveText`를 통해 `soksak-timeline-<time>.txt`로 저장한다(저장 창 취소는 오류가 아니고 빈 선택은 오류로 거부한다). 파일에 입력한 글자가 들어 있을 수 있다는 경고가 저장 단추 옆에 있고, `core.debug`가 `selected`, `warning`과 작업 `save-rows`를 보고한다. 단위 검증만 했다. window check `e2e/modal.test.mjs`와 저장 창은 실행 중인 애플리케이션에서 실행하지 않았다.
