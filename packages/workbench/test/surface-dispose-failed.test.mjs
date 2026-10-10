@@ -6,7 +6,7 @@ import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
 
-// 플러그인 모듈의 마운트가 실패한 탭도 닫을 수 있어야 한다. 마운트 오류는 마운트가 보고했으므로 해제는 정리를 마친다.
+// A tab whose plugin module failed to mount must also be closable. The mount reported the mount error, so the release finishes the cleanup.
 test("disposing a native surface whose module failed to mount removes it", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;

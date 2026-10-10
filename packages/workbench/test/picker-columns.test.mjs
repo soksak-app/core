@@ -5,8 +5,8 @@ import { JSDOM } from "jsdom";
 
 import { fillPicker } from "../picker-layer.js";
 
-// 묶음 목록(스페이스 앱)의 제목과 항목은 아이콘 칸의 x 와 이름의 x 가 같다(docs/spec/example-model.md).
-// jsdom 은 var() 를 계산하지 않으므로 app.css 의 선언을 읽어 칸의 x 를 직접 계산한다.
+// In the title and the items of a grouped list (the space app), the x of the icon column equals the x of the name (docs/spec/example-model.md).
+// jsdom does not compute var(), so the test reads the declarations of app.css and computes the x of the column itself.
 const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
 
 function declarations(selector) {
@@ -22,7 +22,7 @@ function declarations(selector) {
   return out;
 }
 
-// var() 를 풀어 px 값으로 계산한다. 정의되지 않은 변수와 해석하지 못하는 식은 오류다.
+// Resolves var() and computes a px value. An undefined variable and an expression that cannot be interpreted are errors.
 function px(value, vars, depth) {
   let text = value;
   for (let i = 0; i < 8 && /var\(/.test(text); i += 1) {

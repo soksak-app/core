@@ -1,4 +1,4 @@
-// 라이브러리 열기와 프로젝트 전환이 받은 순서대로 끝나는지 검사한다.
+// Checks that opening the library and switching a project finish in the order they were received.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 
@@ -7,7 +7,7 @@ const PROJECT = {
   activeSpaceId: "spc-one", spaces: [{ id: "spc-one", title: "SPACE1", layout: { state: { cards: [], name: "one" } } }], settings: {},
 };
 
-// 창 열기 요청을 받은 프로젝트.
+// The project that received the window open request.
 const openRequests = [];
 mock.module("@soksak/runtime", {
   namedExports: {
@@ -29,7 +29,7 @@ mock.module("@soksak/runtime", {
     },
   },
 });
-// 사이드카 세션 정리 호출을 기록한다.
+// Records the calls that clean up sidecar sessions.
 const retained = [];
 mock.module("../host.js", {
   namedExports: {
@@ -38,7 +38,7 @@ mock.module("../host.js", {
     windowSidecar: () => null,
   },
 });
-/* 창이 보인 프로젝트를 상태 모듈에 알린 순서. */
+/* The order in which the project that the window showed was reported to the state module. */
 const shownStates = [];
 let stateOptions = null;
 mock.module("../plugin-states.js", {
@@ -47,9 +47,9 @@ mock.module("../plugin-states.js", {
     showStates: async (project) => { shownStates.push(project?.id ?? null); },
   },
 });
-/* 첫 화면이 설정을 고른 프로젝트. */
+/* The project that the first screen chose for the settings. */
 const begunSettings = [];
-/* 설정 프로젝트 선택의 호스트 답. 검사가 답을 붙잡을 수 있다. */
+/* The host reply of the settings project selection. The test can hold the reply. */
 let selection = async () => {};
 mock.module("../settings.js", {
   namedExports: {
@@ -60,7 +60,7 @@ mock.module("../settings.js", {
   },
 });
 
-// 프로젝트 모듈이 쓰는 문서 전역. 창 오류 이벤트로 보고한 실패를 기록한다.
+// The document global that the project module uses. It records the failures reported through the window error event.
 const reported = [];
 globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
 globalThis.location = new URL("http://soksak.test/index.html");
@@ -69,8 +69,8 @@ globalThis.history = { replaceState: (state, title, url) => { globalThis.locatio
 const projects = await import("../projects.js");
 
 /**
- * 판의 역할을 하는 기록기. hold() 뒤의 비우기는 release() 할 때까지 끝나지 않는다. rejected 배치는 검사에서 거부한다.
- * 비우기의 그리기는 판을 지우고 받은 화면 그리기(show)를 실행한다. drawing 은 그 그리기 동안 참이다.
+ * A recorder that acts as the plane. A clear after hold() does not finish until release(). The test rejects a rejected layout.
+ * The drawing of a clear erases the plane and runs the screen drawing it received (show). drawing is true during that drawing.
  */
 const plane = { layout: null, events: [], gate: Promise.resolve(), rejected: null, drawing: false };
 plane.hold = () => {
@@ -84,7 +84,7 @@ projects.onSwitch({
   },
   load: (layout) => { plane.layout = layout; plane.events.push("load"); },
   update: () => {},
-  // 남은 레이아웃의 탭 밖의 표면 모듈을 정리한다. 세션 정리와의 순서를 retained 에 함께 기록한다.
+  // Cleans up the surface modules outside the tabs of the remaining layout. It also records the order relative to the session cleanup in retained.
   retain: async (surfaceIds) => { retained.push({ modules: [...surfaceIds] }); },
   presented: async () => {},
   empty: async (show) => {
@@ -115,8 +115,8 @@ test("opening a project while the library is still clearing the plane loads it a
   plane.hold();
   const browsing = projects.browse();
   const opening = projects.activate(PROJECT.id);
-  // 가짜 저장소와 런타임은 모두 마이크로태스크 안에서 끝난다. 다음 매크로태스크까지 기다리면
-  // 비우기에 막히지 않은 작업은 모두 끝난 상태다.
+  // The fake store and the fake runtime all finish within microtasks. After waiting for the next macrotask,
+  // all work that the clear did not block has finished.
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(plane.events, ["empty started"], "the project was loaded while the plane was being cleared");
   plane.release();
@@ -164,7 +164,7 @@ test("the surfaces of every layout are listed with their project root, and remov
   ]);
   retained.length = 0;
   await projects.close("prj-two");
-  // 지운 프로젝트의 표면 모듈을 먼저 정리한다. 모듈이 남아 있으면 끝난 세션을 지운 폴더에서 다시 연다(F44).
+  // It cleans up the surface modules of the deleted project first. If a module remains, it reopens the finished session in the deleted folder (F44).
   assert.deepEqual(retained, [{ modules: ["tab-one"] }, [{ surface: "tab-one", root: "/work/one" }]],
     "removing a project disposes the surface modules of its tabs before it ends their sidecar sessions");
   listed[0].spaces[0].layout = { state: {} };
@@ -192,7 +192,7 @@ test("a saved layout that fails the plane check rejects the open before any proj
   assert.deepEqual(plane.events, [], "the rejected open replaced the plane");
   assert.equal(plane.layout, shown);
   await projects.flush();
-  // 거부된 열기는 거절을 받은 이 호출자가 보고한다. 전환 순서는 같은 실패를 창 오류로 다시 보고하지 않는다(G1.4-113).
+  // This caller, which received the rejection, reports the rejected open. The switch sequence does not report the same failure again as a window error (G1.4-113).
   assert.deepEqual(reported, [], "the rejected open was reported again as a window error");
   plane.rejected = null;
   await projects.flush();
@@ -207,13 +207,13 @@ test("opening a project whose folder cannot be read rejects with the host's mess
   await assert.rejects(projects.activate("prj-missing"),
     { message: "project directory does not exist: /work/missing" });
   assert.deepEqual(openRequests, [], "the failed open asked the host for a window");
-  // 실패는 거절을 받은 호출자가 한 번 보고한다. 전환 순서는 같은 실패를 창 오류로 다시 보고하지 않는다(G1.4-113).
+  // The caller that received the rejection reports the failure once. The switch sequence does not report the same failure again as a window error (G1.4-113).
   await projects.flush();
   assert.deepEqual(reported, [], "the failed switch was reported again as a window error");
 });
 
 test("switching to or closing into a space that fails the plane check changes neither the active space nor the plane", async () => {
-  // 이 창이 소유한 프로젝트는 메모리의 스페이스를 유지하므로 앞선 검사와 다른 프로젝트를 쓴다.
+  // The project that this window owns keeps its space in memory, so the test uses a different project from the earlier tests.
   const project = { ...structuredClone(PROJECT), id: "prj-spaces", root: "/work/spaces", spaces: [
     { id: "spc-one", title: "SPACE1", layout: { state: { cards: [], name: "one" } } },
     { id: "spc-bad", title: "SPACE2", layout: { state: { cards: [], name: "bad" } } },
@@ -224,7 +224,7 @@ test("switching to or closing into a space that fails the plane check changes ne
   plane.events.length = 0;
   assert.throws(() => projects.activateSpace("spc-bad"), /fixture layout cannot be opened/);
   assert.equal(projects.active().activeSpaceId, "spc-one", "the rejected switch changed the active space");
-  // 활성 스페이스를 닫으면 다음 스페이스로 이동한다. 그 스페이스가 검사에서 실패하면 닫기도 실패한다.
+  // Closing the active space moves to the next space. If that space fails in the test, the close fails too.
   assert.throws(() => projects.closeSpace("spc-one"), /fixture layout cannot be opened/);
   assert.deepEqual(projects.active().spaces.map((space) => space.id), ["spc-one", "spc-bad"], "the rejected close removed a space");
   assert.equal(projects.active().activeSpaceId, "spc-one");
@@ -276,7 +276,7 @@ test("a project that the start document drew falls back to the library when its 
 });
 
 test("a project removed from the registry by another window ends in the window that shows it as closing its tab does", async () => {
-  /** 카드 하나에 탭 하나를 가진 프로젝트. */
+  /** A project with one tab in one card. */
   const project = (id, tab) => ({ ...structuredClone(PROJECT), id, root: `/work/${id}`, spaces: [
     { id: `spc-${id}`, title: "SPACE1", layout: { state: { cards: [{ id: `card-${id}`, data: { tabs: [{ id: tab }] } }] } } },
   ], activeSpaceId: `spc-${id}` });
@@ -288,11 +288,11 @@ test("a project removed from the registry by another window ends in the window t
     patch: async (id, patch) => { patches.push(id); },
     onChange: (fn) => { notify = fn; } });
   reported.length = 0;
-  // 이 창은 두 프로젝트를 탭으로 보이고 prj-shown 이 활성이다. prj-other 는 다른 창의 프로젝트다.
+  // This window shows two projects as tabs, and prj-shown is active. prj-other is the project of another window.
   await projects.activate("prj-next");
   await projects.activate("prj-shown");
-  // 다른 창이 prj-shown 을 지우고 저장소가 이 창에 바뀜을 알린다. 가짜 저장소와 런타임은 마이크로태스크 안에서 끝나므로
-  // 다음 매크로태스크까지 기다리면 알림의 처리가 끝난 상태다.
+  // Another window deletes prj-shown, and the store notifies this window of the change. The fake store and the fake runtime finish within microtasks, so
+  // after waiting for the next macrotask, the handling of the notification has finished.
   const removeElsewhere = async (id) => {
     listed = listed.filter((item) => item.id !== id);
     retained.length = 0;
@@ -319,10 +319,10 @@ test("a project removed from the registry by another window ends in the window t
   await projects.flush();
 });
 
-// WebKit 은 호스트 답이 이행한 promise 의 반응을 다음 microtask checkpoint 에서 실행하고, 그 checkpoint 는 다음
-// rendering update 의 ResizeObserver callback 뒤일 수 있다. 라이브러리로의 화면 전환이 그 반응에서 일어나면 관찰 round 가
-// 이미 전달한 작업 영역의 요소(파일 트리, 터미널 화면)가 0x0 이 되어 loop 오류가 난다(F43). 전환은 판을 비우는 그리기,
-// 곧 관찰 round 밖에서 실행되는 다음 task 에서 일어나야 한다.
+// WebKit runs the reaction of a promise that the host reply fulfilled at the next microtask checkpoint, and that checkpoint can come after the ResizeObserver callback of the next
+// rendering update. If the switch to the library happens in that reaction, elements of the work area that the observation round
+// already delivered (the file tree, the terminal screen) become 0x0 and a loop error occurs (F43). The switch must happen in the drawing that clears the plane,
+// that is, in the next task, which runs outside the observation round.
 test("browsing shows the library in the draw that empties the plane, not where a later host reply resolves", async () => {
   await projects.initialise(store);
   await projects.activate(PROJECT.id);
@@ -334,13 +334,13 @@ test("browsing shows the library in the draw that empties the plane, not where a
     if (next !== screen) switches.push(`${next} in ${plane.drawing ? "the empty draw" : inRound ? "the observation round" : "a task"}`);
     screen = next;
   });
-  // 설정 프로젝트 선택의 호스트 답은 파일 트리 observer 의 callback 뒤 checkpoint 에서 이행된다.
+  // The host reply of the settings project selection is fulfilled at the checkpoint after the callback of the file tree observer.
   const reply = Promise.withResolvers();
   selection = () => reply.promise;
   try {
     const browsing = projects.browse();
     await new Promise((resolve) => setImmediate(resolve));
-    // 관찰 round: 트리 callback 이 실행되고, 그 checkpoint 에서 붙잡힌 답이 이행된다.
+    // Observation round: the tree callback runs, and the held reply is fulfilled at that checkpoint.
     inRound = true;
     reply.resolve();
     await new Promise((resolve) => setImmediate(resolve));

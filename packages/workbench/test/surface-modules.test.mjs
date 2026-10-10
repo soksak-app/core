@@ -3,15 +3,15 @@ import test, { mock } from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
 
-// 진단 모듈은 environment 가 등록 때 불러오기 시작해 pluginDiagnostics 로 내준다. 소비자 test 는 그 경계를 대신한다.
+// The diagnostics module is started by environment at registration and handed out as pluginDiagnostics. The consumer test replaces that boundary.
 const diagnostics = { attach() {} };
 mock.module("../environment.js", { namedExports: {
   pluginDiagnostics: async (id) => (id === "fixture-diagnostics" ? diagnostics : null),
 } });
 
-// 아래 플러그인은 release 빌드처럼 진단 모듈이 없다.
+// The plugin below has no diagnostics module, like a release build.
 for (const id of ["fixture", "fixture-integration"]) registerPlugin({ id, surface: () => null });
-// 앱에서는 판이 표면보다 먼저 시작해 표면의 글자 배율을 계산하는 함수를 정한다. 여기서는 모든 표면이 배율 1 이다.
+// In the app, the plane starts before the surfaces and sets the function that computes the text scale of a surface. Here every surface has scale 1.
 const { setSurfaceTextSize } = await import("../text-size.js");
 setSurfaceTextSize(() => 1);
 
@@ -132,7 +132,7 @@ test("a tab that leaves the layout during its mount reads the factor it was moun
   const { mountSurface } = await import("../surface-modules.js");
   let inLayout = true;
   setSurfaceTextSize((id) => (id === "tab-leaving" && inLayout ? 1.5 : null));
-  // 모듈은 기다리는 동안 탭이 판에서 빠진 뒤에 배율을 읽는다(분할한 카드를 곧 닫는 경우).
+  // The module reads the scale after the tab left the plane while it was waiting (a split card that is closed soon after).
   globalThis.leaveLayout = () => { inLayout = false; };
   const moduleUrl = "data:text/javascript,export async function mount(root,c){await Promise.resolve();" +
     "globalThis.leaveLayout();globalThis.readFactor=c.runtime.textSize.read();return {dispose(){}}}";

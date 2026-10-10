@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// 저장 배치 검사와 창 사이드바 기록 복원은 각 모듈의 내보낸 함수로 검사한다.
+// The stored layout check and the restoration of the window sidebar record are tested through the exported functions of each module.
 const environmentFile = {
   runtime: "runtime",
   workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
@@ -25,7 +25,7 @@ test("saved window state rejects obsolete and unknown cards before replacing the
     assert.throws(() => checkStoredLayout({ state: { cards: [card] }, windowSidebars: {} }), /stored|obsolete|unknown/);
   }
   checkStoredLayout({ state: { cards: [{ id: "a", data: { tabs: [{ id: "t", plugin: "pane" }], activeId: "t" } }] }, windowSidebars: {} });
-  // 불러오지 않은 플러그인의 탭은 placeholder 로 열린다(docs/spec/plugins.md).
+  // A tab of a plugin that is not loaded opens as a placeholder (docs/spec/plugins.md).
   checkStoredLayout({ state: { cards: [{ id: "a", data: { tabs: [{ id: "t", plugin: "missing" }], activeId: "t" } }] }, windowSidebars: {} });
 });
 

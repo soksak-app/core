@@ -4,7 +4,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { EXPOSURE_ERRORS, SURFACE_CORE, validateExposureFile } from "@soksak/plugin-api";
 
-// 가짜 문서와 가짜 플러그인 선언. 실제 플러그인 이름을 사용하지 않는다.
+// A fake document and fake plugin declarations. They use no real plugin name.
 const dom = new JSDOM(`<body>
   <button data-expose="core.fixture.button">b</button>
   <span data-expose="core.fixture.row">r0</span><span data-expose="core.fixture.row">r1</span>
@@ -95,7 +95,7 @@ const probeExposes = () => ({
   dom: [{ name: "probe.lines", description: "Output." }],
 });
 
-/** 호스트 호출을 기록하고, exposureForward 에는 answer 가 정한 답을 준다. */
+/** Records the host calls and gives exposureForward the reply that answer sets. */
 function fakeHost(answer = () => ({ result: null })) {
   const calls = [];
   return {
@@ -119,12 +119,12 @@ test("the core declaration file is valid and every main-page entry is registered
   validateExposureFile(file);
   const source = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
   const code = source("core-exposure.js");
-  // core.surface.* 는 표면 문서가 @soksak/plugin-api/page 로 등록한다.
+  // The surface document registers core.surface.* through @soksak/plugin-api/page.
   const main = (list) => list.filter(({ name }) => !name.startsWith(SURFACE_CORE));
   assert.ok(file.exposes.status.some(({ name }) => name.startsWith(SURFACE_CORE)), "surface document entries are declared");
   for (const { name } of main(file.exposes.status)) assert.match(code, new RegExp(`status\\("${name}"`), name);
   for (const { name } of main(file.exposes.commands)) assert.match(code, new RegExp(`command\\("${name}"`), name);
-  // 스테이징 선언의 모든 소유 모듈을 읽는다. 분리된 조작 모듈도 같은 이름 검사를 받는다.
+  // Reads every owning module of the staging declaration. A separated operation module passes the same name check.
   const modules = JSON.parse(source("package.json")).files.filter((name) => name.endsWith(".js"));
   const markup = ["index.html", ...modules].map(source).join("\n");
   for (const { name } of file.exposes.dom) {

@@ -1,4 +1,4 @@
-// 탭 알림의 시스템 알림(docs/spec/plugins.md#tab-reports).
+// System notifications of tab reports (docs/spec/plugins.md#tab-reports).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSystemNotifications, DENIED_LINE } from "../system-notifications.js";

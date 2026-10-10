@@ -1,4 +1,4 @@
-// 플러그인 상태 모듈을 보이는 프로젝트마다 마운트하고, 문맥의 등록·사이드카·프로젝트 데이터를 검사한다.
+// Mounts the plugin state module for each visible project and checks the registration, sidecars, and project data of the context.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";

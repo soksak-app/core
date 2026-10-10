@@ -1,4 +1,4 @@
-// 화면에 보인 오류가 그 순간 애플리케이션 로그에 남는지 검사한다.
+// Checks that an error shown on screen is written to the application log at that moment.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { recordsOf, settled, shownRecord } from "./support/records.mjs";

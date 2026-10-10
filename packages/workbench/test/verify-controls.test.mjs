@@ -3,8 +3,8 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Soksak } from "soksak";
 
-// AppKit 은 창 단추를 device pixel 에 맞추므로, 남는 높이가 홀수 pixel 이면 위와 아래는 한 pixel 다르다.
-// W 행은 그 차이를 한 device pixel(1 / devicePixelRatio) 안에서 가운데로 판정한다.
+// AppKit aligns the window buttons to device pixels, so when the remaining height is an odd number of pixels, the top and the bottom differ by one pixel.
+// Row W judges that difference as centered within one device pixel (1 / devicePixelRatio).
 test("the window buttons count as centred within one device pixel of the first row", async (t) => {
   const dom = new JSDOM('<div class="chrome-bar"></div><div id="plane"></div>');
   globalThis.document = dom.window.document;

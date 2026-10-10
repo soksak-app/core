@@ -4,8 +4,8 @@ import { JSDOM } from "jsdom";
 
 import { trackPointer } from "../pointer-state.js";
 
-// 누름과 뗌 사이에 누른 요소가 교체되면 브라우저는 click 을 만들지 않는다. 문서가 받은 pointer 순서와 누른 요소가
-// 뗄 때 문서에 남아 있었는지를 기록해 사라진 click 의 까닭을 가린다.
+// If the pressed element is replaced between a press and a release, the browser creates no click. The test records the pointer order that the document received and whether the pressed element
+// was still in the document at the release, to identify the reason for a lost click.
 test("the last pointer sequence names its targets and whether the pressed element survived", () => {
   const dom = new JSDOM('<button data-expose="core.chrome.projects">p</button>');
   const { document, PointerEvent, MouseEvent } = dom.window;

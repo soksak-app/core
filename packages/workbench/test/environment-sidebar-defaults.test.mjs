@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// 소비자 픽스처는 패키지 구현 대신 선언된 manifest 경계를 사용한다.
+// The consumer fixture uses the declared manifest boundary instead of the implementation of the plugin.
 const files = {
   "/environment.json": { runtime: "runtime", workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
       { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "fixture", title: "Fixture" }] },

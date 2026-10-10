@@ -1,7 +1,7 @@
-// 카드 머리의 사이드바 단추는 판을 다시 그려도 문서에서 빠지지 않아야 한다. WebKit 은 누름을 받은 노드가 문서에서
-// 빠지면 그 누름의 click 대상을 지우고(EventHandler::nodeWillBeRemoved), 뗌에서 click 을 보내지 않는다. insertBefore 로
-// 이미 있는 노드를 옮겨도 먼저 빠진다. 접기 명령의 배치는 준비 뒤 다음 task 에서 그려지므로(F43, F92), 누름과 뗌
-// 사이에 그 그리기가 오면 단추의 click 이 사라진다(F65).
+// The sidebar button of a card header must not leave the document when the plane is redrawn. When the node that received a press leaves the document, WebKit
+// clears the click target of that press (EventHandler::nodeWillBeRemoved) and sends no click on the release. Moving an existing node with insertBefore
+// also removes it first. The layout of a collapse command is drawn in the next task after the preparation (F43, F92), so if that drawing comes between a press and a release,
+// the click of the button is lost (F65).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -14,7 +14,7 @@ const setId = "fixture-set";
 test("a draw keeps the pressed card header fold control in the document", { timeout: 5000 }, async (t) => {
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const dom = new JSDOM(markup, { url: "http://localhost/" });
-  // JSDOM 에 없는 matchMedia. 뷰는 해상도 변경 구독에만 쓰고, 이 검사는 해상도를 바꾸지 않는다.
+  // matchMedia, which JSDOM does not have. The view uses it only to subscribe to resolution changes, and this test does not change the resolution.
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
     addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;
@@ -23,13 +23,13 @@ test("a draw keeps the pressed card header fold control in the document", { time
   globalThis.CSS = dom.window.CSS;
   globalThis.PointerEvent = dom.window.PointerEvent;
   globalThis.MouseEvent = dom.window.MouseEvent;
-  // 사이드바 띠는 장치 pixel 격자에 맞춘다. 이 검사의 화면 배율은 2 다.
+  // The sidebar strip is aligned to the device pixel grid. The screen scale of this test is 2.
   globalThis.devicePixelRatio = 2;
-  // 판의 크기. JSDOM 은 배치를 계산하지 않으므로 두 사이드바가 들어갈 크기를 준다.
+  // The size of the plane. JSDOM does not compute layout, so the test gives a size that holds two sidebars.
   const planeEl = document.getElementById("plane");
   Object.defineProperty(planeEl, "clientWidth", { value: 800 });
   Object.defineProperty(planeEl, "clientHeight", { value: 600 });
-  // 앱 스타일시트가 카드에 주는 테두리 폭과 접힌 사이드바 폭. JSDOM 은 app.css 를 불러오지 않는다.
+  // The border width that the app stylesheet gives a card and the width of a collapsed sidebar. JSDOM does not load app.css.
   const style = document.createElement("style");
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
@@ -48,7 +48,7 @@ test("a draw keeps the pressed card header fold control in the document", { time
     } } }),
     pluginUnits: () => [{ id: pluginId, name: "Fixture", description: "검사용 표면.", surface: true, sections: [] }],
   } });
-  // 섹션이 없는 세트 하나. 카드의 위와 왼쪽 면에 붙인다.
+  // One set without sections. It is attached to the top and left sides of the card.
   const actualSettings = await import("../settings.js");
   const sets = [{ id: setId, title: "Fixture", layout: "list", sections: [] }];
   t.mock.module("../settings.js", { exports: { ...actualSettings,
@@ -63,7 +63,7 @@ test("a draw keeps the pressed card header fold control in the document", { time
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const plane = await import("../plane.js");
   try {
-    // 수신자는 그리기 함수를 보관하고 즉시 그리지 않는다. 네이티브 준비와 다음 task 를 기다리는 페이지와 같다.
+    // The receiver keeps the drawing function and does not draw immediately. This is the same as a page that waits for the native preparation and the next task.
     let held = null;
     plane.onLayout((made, draw) => { held = draw; });
     const drawHeld = () => { const draw = held; held = null; draw(); };
@@ -78,7 +78,7 @@ test("a draw keeps the pressed card header fold control in the document", { time
     assert.deepEqual(controls(), ["top", "left"], "the header does not show the top and left fold controls");
     const left = card.querySelector('.chrome__side[data-side="left"]');
 
-    // 첫 누름이 왼쪽 면을 접고, 그 배치의 그리기는 아직 기다린다. 다음 누름이 그 단추에 닿은 뒤 그리기가 실행된다.
+    // The first press collapses the left side, and the drawing of that layout still waits. The drawing runs after the next press reaches the button.
     plane.foldSidebar("main", "left");
     const acts = left.parentElement;
     const observer = new dom.window.MutationObserver(() => {});

@@ -4,11 +4,11 @@ import { JSDOM } from "jsdom";
 
 const calls = [];
 let registerEventListener;
-/* 호출 하나의 완료를 검사가 정할 때 쓴다. 없으면 호출은 바로 끝난다. */
+/* Used when the test decides the completion of one call. Without it, the call ends immediately. */
 let answerCall;
-/* 설치된 모든 네이티브 listener. 모듈 상태의 listener 는 앞선 검사에서 설치될 수 있다. */
+/* All installed native listeners. A listener in the module state may have been installed by an earlier test. */
 const nativeListeners = [];
-/* listener 설치의 완료를 검사가 정할 때 쓴다. 없으면 설치는 바로 끝난다. */
+/* Used when the test decides the completion of a listener installation. Without it, the installation ends immediately. */
 let installListener;
 mock.module("@soksak/runtime", {
   namedExports: {
@@ -26,7 +26,7 @@ mock.module("@soksak/runtime", {
   },
 });
 
-/* 창에 보낸 error 이벤트의 message 를 기록한다. */
+/* Records the message of the error event sent to the window. */
 function windowErrors() {
   const dom = new JSDOM("<body></body>", { url: "http://localhost/" });
   const messages = [];
@@ -38,7 +38,7 @@ function windowErrors() {
   return { messages, close: () => { delete globalThis.dispatchEvent; delete globalThis.ErrorEvent; dom.window.close(); } };
 }
 
-/* 설치된 sidecar-failure listener 로 실패 하나를 보낸다. */
+/* Sends one failure to the installed sidecar-failure listener. */
 function deliverFailure(failure) {
   const installed = nativeListeners.filter(([name]) => name === "sidecar-failure");
   assert.equal(installed.length, 1, "one sidecar-failure listener is installed");
@@ -260,7 +260,7 @@ test("the first sidecar request waits until the failure listener is installed", 
     ? new Promise((resolve) => { install = () => resolve(() => {}); })
     : Promise.resolve(() => {});
   try {
-    // 이 검사만 별도의 모듈 사본을 쓴다 — 실패 listener 는 모듈마다 한 번 설치된다.
+    // Only this test uses its own copy of the module, because the failure listener is installed once per module.
     const { windowSidecar } = await import("../host.js?test=failure-listener-order");
     calls.length = 0;
     const sent = windowSidecar("@fixture/ordered-failure").send("first-tab", { operation: "open" });

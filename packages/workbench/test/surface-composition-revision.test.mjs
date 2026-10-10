@@ -6,13 +6,13 @@ import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
 
-// 같은 문서에서 해제한 표면을 같은 id 로 다시 마운트하면 새 composition 의 배치도 그 표면의 이전 배치보다 큰 revision 을
-// 보내야 한다. 호스트는 표면마다 revision 이 커지기를 요구하고, 표면이 파괴되거나 문서가 바뀔 때만 그 값을 지운다.
+// When a surface released in the same document is mounted again with the same id, the layout of the new composition must send a revision larger than the earlier layout of that
+// surface. The host requires the revision to grow for each surface, and clears that value only when the surface is destroyed or the document changes.
 test("a surface mounted again in the same document continues its composition revisions", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
-  // 관찰은 다음 animation frame 에 시작하며, 이 검사는 frame 을 진행하지 않는다.
+  // Observation starts in the next animation frame, and this test does not advance frames.
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
   const placed = [];
@@ -21,7 +21,7 @@ test("a surface mounted again in the same document continues its composition rev
     ...actualHost,
     native: true,
     onSurfacePrepared: () => () => {},
-    // 호스트에 가는 호출만 기록하고, 나머지 표면 런타임은 실제 것을 쓴다.
+    // Records only the calls that go to the host, and uses the real surface runtime for the rest.
     surfaceContextRuntime: (surface, declarations) => {
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
       return { ...runtime, native: { ...runtime.native, call: async (name, payload) => {
@@ -48,7 +48,7 @@ test("a surface mounted again in the same document continues its composition rev
     await disposeSurface(surfaceId);
     authorizeSurface(surfaceId);
     await mountSurface(slot, surface);
-    // 탭이 닫혔다가 같은 id 로 다시 열려도(저장된 탭의 복원) 번호는 이어진다.
+    // Even when a tab is closed and opened again with the same id (restoring a stored tab), the number continues.
     await disposeSurfacesExcept(new Set());
     authorizeSurface(surfaceId);
     await mountSurface(slot, surface);

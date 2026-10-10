@@ -1,4 +1,4 @@
-// 검증 V7c 가 실패하면 원인을 찾을 수 있도록 가장 크게 어긋난 표면과 그 두 자리를 밝힌다(F33).
+// When verification V7c fails, it names the surface that is off the most and its two places so that the cause can be found (F33).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
@@ -14,7 +14,7 @@ test("a failed V7c names the surface and both of its rectangles", async (t) => {
   const plane = document.querySelector("#plane");
   plane.getBoundingClientRect = () => rect(6, 6, 400, 300);
   document.querySelector(".slot").getBoundingClientRect = () => rect(36, 40, 370, 240);
-  // 그려진 카드의 자리와 style, 페이지의 device pixel ratio 는 실패 문장이 밝히는 측정값이다(F90).
+  // The place and style of a drawn card and the device pixel ratio of the page are the measured values that the failure sentence states (F90).
   const card = document.querySelector(".card");
   card.getBoundingClientRect = () => rect(6, 6, 400, 300);
   card.style.width = "400px";

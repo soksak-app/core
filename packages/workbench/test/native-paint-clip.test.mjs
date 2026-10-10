@@ -22,7 +22,7 @@ async function fixture(name) {
   slot.getBoundingClientRect = () => ({ left: 20, top: 25, width, height: 100 });
   const compositor = await import(`../compositor.js?paint-clip-${name}`);
   const requests = [];
-  // unsent 가 참이면 다음 커밋은 직전 요청과 같아 호스트에 보내지 않은 것처럼 답이 없다(host.js 와 같다).
+  // When unsent is true, the next commit has no reply, as if it were the same as the previous request and was not sent to the host (same as host.js).
   const state = { unsent: false };
   compositor.onCommit((record) => {
     if (state.unsent) { state.unsent = false; return undefined; }
@@ -102,7 +102,7 @@ for (const [index, [value, error]] of [
 test("a placement answer that arrives after a newer one does not replace the newer background holes", async () => {
   const f = await fixture("order");
   try {
-    // 끌기 중의 배치(폭 160)와 끌기 뒤의 배치(폭 200)를 보낸다. 부하에서 앞 배치의 답이 뒤 배치의 답보다 늦게 온다.
+    // Sends the layout during the drag (width 160) and the layout after the drag (width 200). Under load, the reply of the earlier layout arrives later than the reply of the later layout.
     f.resize(160);
     const older = f.compositor.publish();
     f.resize(200);
@@ -121,16 +121,16 @@ test("a placement answer that arrives after a newer one does not replace the new
 test("a drawn commit equal to the prepared placement writes the holes of that placement", async () => {
   const f = await fixture("unsent");
   try {
-    // 끌기 중의 그린 배치(폭 160)가 클립을 쓴다.
+    // The drawn layout during the drag (width 160) uses the clip.
     f.resize(160);
     const dragged = f.compositor.publish();
     f.answer(); await dragged; f.frame();
     const during = f.clip();
-    // 끌기 뒤의 준비 배치(폭 200)는 그리기 전이라 클립을 쓰지 않는다.
+    // The prepared layout after the drag (width 200) is before drawing, so it does not use the clip.
     const prepared = f.compositor.publishAhead(new Map([["card", { x: 10, y: 20, w: 200, h: 100 }]]),
       new Map([["card", { id: "surface", dim: false, inset: { left: 0, top: 0, width: 0, height: 0 } }]]));
     f.answer(); await prepared; f.frame();
-    // 그린 뒤의 커밋은 준비 요청과 같아 보내지 않는다. 화면에는 준비한 배치가 보이므로 클립도 그 배치를 따라야 한다.
+    // The commit after drawing is the same as the preparation request, so it is not sent. The prepared layout is what the screen shows, so the clip must follow that layout too.
     f.resize(200);
     f.state.unsent = true;
     f.compositor.publish();

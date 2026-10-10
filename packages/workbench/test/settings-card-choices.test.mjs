@@ -33,7 +33,7 @@ test("missing card sidebar links display off without an inherit option", async (
       assert.equal(select.selectedOptions[0].textContent, "사용 안 함");
       assert.equal([...select.options].some((option) => option.value === "inherit"), false);
     }
-    // 유효하지 않은 소비자 경계 값을 브라우저의 첫 항목으로 바꾸지 않는다.
+    // An invalid value at the consumer boundary is not replaced with the first item of the browser.
     links = [{ place: "card-right", plugin: "fixture", set: "missing-set" }];
     assert.throws(() => ui.drawSettings(), /unknown settings choice missing-set/);
     for (const set of [null, undefined]) {

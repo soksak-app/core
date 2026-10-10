@@ -1,4 +1,4 @@
-// UI 요소가 명령을 가리키고, 누름과 값 입력이 그 명령을 실행하는지 검사한다.
+// Checks that a UI element points to a command, and that a press and a value input run that command.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";

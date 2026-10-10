@@ -9,7 +9,7 @@ test("a layout published before drawing waits for the host's placement answer", 
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
-  // compositor 는 배치 답 뒤의 다음 프레임에 페인트 클립을 갱신하므로 페이지의 rAF 를 제공한다.
+  // The compositor updates the paint clip in the frame after a layout reply, so the test provides the rAF of the page.
   globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
   const card = document.querySelector("[data-card-id]");
   const slot = document.querySelector("[data-native-surface]");
@@ -32,8 +32,8 @@ test("a layout published before drawing waits for the host's placement answer", 
   pending.then(() => { drawn = true; });
   await Promise.resolve();
   assert.equal(drawn, false, "the DOM must wait while the native placement is outstanding");
-  // 준비는 창의 레이어 트랜잭션 안에서 적용되어 커밋 전에는 화면에 나오지 않는다. 위치를 잰 표면을 숨기면
-  // 화면에는 보이는 표면이 그동안 입력을 받지 못한다(docs/spec/native-surfaces.md).
+  // A preparation is applied inside the layer transaction of the window and does not appear on screen before the commit. When a surface
+  // whose position was measured is hidden, the visible surface on screen cannot receive input in the meantime (docs/spec/native-surfaces.md).
   assert.equal(prepared.surfaces[0].visible, true,
     "native preparation keeps a surface whose future slot was measured visible at its new rectangle");
   assert.deepEqual(prepared.surfaces[0].declared, { x: 22, y: 30, w: 176, h: 100 });
@@ -49,7 +49,7 @@ test("a layout published before drawing waits for the host's placement answer", 
   answer();
   await replacement;
 
-  // 다음 배치에 카드가 없는 표면도 숨긴다. 호스트는 visible 을 불리언으로 요구한다.
+  // A surface that has no card in the next layout is hidden too. The host requires visible to be a boolean.
   const removed = publishAhead(new Map(), new Map());
   assert.strictEqual(prepared.surfaces[0].visible, false, "content whose card leaves the layout must be hidden with a boolean");
   answer();

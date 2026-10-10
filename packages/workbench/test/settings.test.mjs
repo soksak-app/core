@@ -190,7 +190,7 @@ test('a stored link to a set that does not exist is refused and not written', as
   }
 });
 
-// 호스트가 페이지 시작 전에 공통 설정의 textSize 로 창 제목줄을 정하므로, 프레임 배율은 공통 전용이다
+// The host sets the window title bar from textSize of the common settings before the page starts, so the frame scale is common only
 // (docs/spec/native-surfaces.md#title-bar-height).
 test('the frame text factor is common-only', async () => {
   const realDocument = globalThis.document;

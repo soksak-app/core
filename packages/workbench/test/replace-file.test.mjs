@@ -1,4 +1,4 @@
-// 실행 파일 교체가 기존 파일을 덮어쓰지 않고 새 파일로 바꾸는지 검사한다.
+// Checks that replacing an executable file switches to a new file without overwriting the existing file.
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

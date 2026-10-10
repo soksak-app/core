@@ -6,8 +6,8 @@ import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
 
-// 모든 코어 명령은 답하기 전에 보이는 네이티브 표면의 composition 선언을 기다린다. 마운트가 실패한 표면은 선언하지
-// 않으므로, 그 기다림은 마운트 오류로 끝나야 한다.
+// Every core command waits for the composition declaration of the visible native surfaces before it replies. A surface whose mount failed does not declare one,
+// so that wait must end with the mount error.
 test("a native surface whose module fails to mount ends its composition wait with the mount error", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
@@ -32,7 +32,7 @@ test("a native surface whose module fails to mount ends its composition wait wit
     await assert.rejects(mounting, /fixture mount failed/);
     await assert.rejects(waitSurfaceCompositionDeclared(surfaceId), /fixture mount failed/);
   } finally {
-    // 실패한 마운트의 해제는 surface-dispose-failed.test.mjs 가 검사한다.
+    // The release of a failed mount is checked by surface-dispose-failed.test.mjs.
     dom.window.close();
   }
 });

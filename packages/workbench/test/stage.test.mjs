@@ -1,4 +1,4 @@
-// 스테이징이 진단 모듈을 진단 빌드에만 넣고, host 가 없는 애플리케이션에는 설치된 플러그인을 host 처럼 쓰는지 검사한다.
+// Checks that staging puts the diagnostics module only in the diagnostic build, and that an application without a host uses the installed plugins as the host.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -11,7 +11,7 @@ const STAGE = fileURLToPath(new URL("../stage.mjs", import.meta.url));
 const OBSERVE = fileURLToPath(new URL("../observe.js", import.meta.url));
 const RELEASE_DIAGNOSTICS = fileURLToPath(new URL("../release-diagnostics.js", import.meta.url));
 
-/** 플러그인이 없는 가짜 애플리케이션. */
+/** A fake application without plugins. */
 function fixtureApp(t) {
   const app = mkdtempSync(join(tmpdir(), "soksak-stage-"));
   t.after(() => rmSync(app, { recursive: true, force: true }));
@@ -52,7 +52,7 @@ test("unknown staging arguments are rejected", (t) => {
   assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--release"], { cwd: app, stdio: "pipe" }), /usage/);
 });
 
-/** 켜진 플러그인 둘과 꺼진 플러그인 하나를 설치한 설정 디렉터리. probe 는 진단 선언을 담는다. */
+/** A configuration directory with two enabled plugins and one disabled plugin installed. probe holds the diagnostics declaration. */
 function installedConfiguration(t) {
   const configuration = mkdtempSync(join(tmpdir(), "soksak-installed-"));
   t.after(() => rmSync(configuration, { recursive: true, force: true }));

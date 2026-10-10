@@ -6,8 +6,8 @@ import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
 
-// 렌더 뒤의 표면 포커스는 모듈 준비와 호스트 표시를 기다린다. 그 사이 탭이 닫혀 표면이 해제되면 해제된 모듈의
-// focus 를 부르지 않고 포커스를 주지 않았다고 답한다. 해제된 모듈의 그림 영역은 focus 를 거부한다(F91).
+// After a render, the surface focus waits for the module preparation and the host presentation. If the tab closes in between and the surface is released, the test does not call the
+// focus of the released module and answers that focus was not given. The drawing region of a released module refuses focus (F91).
 test("a surface removed while its focus waits for presentation takes no focus", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
@@ -23,7 +23,7 @@ test("a surface removed while its focus waits for presentation takes no focus", 
     ...actualHost,
     native: true,
     onSurfacePrepared: () => () => {},
-    // 호스트 표시는 검사가 끝낼 때까지 기다린다.
+    // The host presentation waits until the test ends it.
     surfaces: { ...actualHost.surfaces, waitPresented: () => new Promise((resolve) => { presented = resolve; }) },
     surfaceContextRuntime: (surface, declarations) => {
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
@@ -37,7 +37,7 @@ test("a surface removed while its focus waits for presentation takes no focus", 
   const pluginId = "fixture-focus-dispose";
   const surfaceId = "fixture-focus-dispose-surface";
   registerPlugin({ id: pluginId, surface: () => null });
-  // 모듈은 터미널처럼 focus 를 그림 영역에 넘긴다.
+  // The module passes focus to the drawing region, like a terminal.
   const module = `data:text/javascript,${encodeURIComponent(`export async function mount(root, context) {
     root.innerHTML = "<div id=view></div>";
     const composition = await context.composition.create({ regions: { view: root.querySelector("#view") } });
@@ -51,7 +51,7 @@ test("a surface removed while its focus waits for presentation takes no focus", 
     authorizeSurface(surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     const focused = focusSurface(surfaceId);
-    // focusSurface 가 호스트 표시를 기다리기 시작할 때까지 진행한다.
+    // Proceeds until focusSurface starts to wait for the host presentation.
     while (!presented) await new Promise((resolve) => setImmediate(resolve));
     await disposeSurface(surfaceId);
     presented();

@@ -1,12 +1,12 @@
-// 사용자에게 보이는 오류는 하나의 표시 경로(shown-errors.js)로만 보이고, 오류 색은 그 경로가 붙이는 data-error 요소에만
-// 쓴다(AGENTS.md). 이 검사는 stylesheet 와 원본에서 그 규칙을 어긴 곳을 찾는다.
+// An error that the user sees appears only through one display path (shown-errors.js), and the error color is used only for the data-error element that
+// this path attaches (AGENTS.md). This test looks for places in the stylesheet and the sources that violate that rule.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const here = new URL("../", import.meta.url);
 const files = (extension) => readdirSync(here).filter((name) => name.endsWith(extension));
-// 오류가 아닌 곳의 오류 색. 탭 닫기 단추의 hover 는 닫기라는 동작을 강조할 뿐 오류를 보이지 않는다.
+// The error color in a place that is not an error. The hover of the tab close button only emphasizes the action of closing and shows no error.
 const NOT_ERRORS = new Set([".tab__x:hover"]);
 
 test("the error color is used only by the elements of the error display path", () => {

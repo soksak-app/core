@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-// 라이브러리 미리보기는 저장 배치를 여는 것과 같은 검사로 받아들이거나 거부한다.
+// The library preview accepts or rejects with the same check that opens a stored layout.
 globalThis.document = new JSDOM("<body></body>").window.document;
 const environmentFile = {
   runtime: "runtime",

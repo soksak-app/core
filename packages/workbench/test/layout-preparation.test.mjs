@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createLayoutQueue, drawPrepared } from "../layout-queue.js";
 
-// 문서가 배치마다 대기열에 넣는 그리기 순서를 가짜 준비·그리기·표시로 실행한다.
+// Runs the drawing order that the document queues for each layout with a fake preparation, drawing, and presentation.
 function fixture() {
   const calls = [];
   const errors = [];
@@ -68,13 +68,13 @@ test("a changed layout epoch cancels an old draw after pending native preparatio
   assert.deepEqual(f.errors, []);
 });
 
-// WebKit 의 관찰 round 는 callback 마다 microtask checkpoint 를 실행하고, 그 뒤 이미 전달한 깊이 이하의 요소 크기가
-// 바뀌었으면 그 관찰을 다음 frame 으로 미루고 loop 오류를 낸다. 준비 응답이 그 checkpoint 에서 이행되어도 그리기는
-// 그 round 밖의 다음 task 에서 실행되어야 한다(F43).
+// An observation round of WebKit runs a microtask checkpoint after each callback. If the size of an element at or below the depth already delivered
+// changed after that, WebKit defers the observation to the next frame and raises a loop error. Even when the preparation reply is fulfilled at that checkpoint, the drawing
+// must run in the next task outside that round (F43).
 test("a prepared draw runs after the observation round when its preparation is answered inside it", async () => {
   const frames = [];
   const answered = Promise.withResolvers();
-  // 판을 비우면 파일 트리를 담은 카드가 사라지고 트리 컨테이너의 크기가 0 이 된다.
+  // Clearing the plane removes the card that holds the file tree, and the size of the tree container becomes 0.
   const tree = { height: 498 };
   const layouts = createLayoutQueue({ failed: assert.fail, superseded: assert.fail });
   const done = layouts.run(() => drawPrepared({
@@ -85,7 +85,7 @@ test("a prepared draw runs after the observation round when its preparation is a
     presented: async () => {},
   }));
   await new Promise((resolve) => setImmediate(resolve));
-  // 관찰 round: 트리 observer 의 callback 이 높이 498 을 전달받고, 그 checkpoint 에서 준비 응답이 이행된다.
+  // Observation round: the callback of the tree observer receives height 498, and the preparation reply is fulfilled at that checkpoint.
   let delivered = null;
   const callback = () => {
     delivered = tree.height;
@@ -93,7 +93,7 @@ test("a prepared draw runs after the observation round when its preparation is a
   };
   callback();
   await new Promise((resolve) => setImmediate(resolve));
-  // round 의 다음 수집: 전달한 깊이의 트리 컨테이너 크기가 바뀌었으면 WebKit 은 그 관찰을 미룬다.
+  // Next gathering of the round: when the size of the tree container at the delivered depth changed, WebKit defers that observation.
   assert.equal(tree.height, delivered, "the draw changed the tree container inside the observation round");
   for (const run of frames.splice(0)) run();
   await done;

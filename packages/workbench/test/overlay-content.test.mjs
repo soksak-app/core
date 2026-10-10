@@ -1,5 +1,5 @@
-// 모달 문서의 내용 갱신은 바뀌지 않은 조작 요소를 문서에 둔다(docs/spec/exposure.md). 누름과 뗌 사이의 갱신이 눌린
-// 요소를 문서에서 빼면 WebKit 은 click 을 보내지 않는다(F66.2).
+// A content update of a modal document keeps unchanged operation elements in the document (docs/spec/exposure.md). If an update between a press and a release
+// removes the pressed element from the document, WebKit does not send a click (F66.2).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";

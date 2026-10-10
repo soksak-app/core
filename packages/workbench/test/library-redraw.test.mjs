@@ -1,5 +1,5 @@
-// 라이브러리를 다시 그려도 바뀌지 않은 카드의 조작 요소는 문서에 남는다(docs/spec/exposure.md). 누름과 뗌 사이에
-// 눌린 요소가 문서에서 빠지면 WebKit 은 click 을 보내지 않는다(F66.1).
+// When the library is redrawn, the operation elements of cards that did not change stay in the document (docs/spec/exposure.md). If the
+// pressed element leaves the document between a press and a release, WebKit does not send a click (F66.1).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";

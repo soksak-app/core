@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 
 import { fillPicker, pickerColumns, pickerGroups, pickerItems } from "../picker-layer.js";
 
-// 선택 레이어는 묶음 제목을 누름을 받지 않는 요소로 그리고, 고르는 index 는 항목만 센다(docs/spec/example-model.md).
+// The picker layer draws a group title as an element that does not receive presses, and the index that is chosen counts only items (docs/spec/example-model.md).
 test("a grouped picker draws headings that take no press and counts only the items", () => {
   const { document } = new JSDOM("<div id=picker></div>").window;
   const el = document.getElementById("picker");
@@ -38,7 +38,7 @@ test("an ungrouped picker draws its items with no heading and no group", () => {
   assert.deepEqual(pickerItems(el), [{ key: "t1", name: "터미널", active: false, group: null }]);
 });
 
-// 열의 x 를 창 검사가 재도록 제목과 항목의 그림과 이름은 선언된 dom 이름을 달고, 제목은 core.picker 의 groups 로 보고된다.
+// So that a window check can measure the x of the columns, the icon and name of a title and an item carry declared dom names, and the title is reported as groups of core.picker.
 test("the icon and the name of a heading and of an item carry declared dom names and the headings are reported", () => {
   const { document } = new JSDOM("<div id=picker></div>").window;
   const el = document.getElementById("picker");

@@ -1,7 +1,7 @@
-// 표시 실패 하나가 애플리케이션 로그에 쓰는 줄을 검사한다. 실패를 받은 요청자가 그 실패를 보고하고, 같은 실패를 받은
-// 다른 경로는 다시 쓰지 않는다(docs/spec/hosts.md#application-log). 페이지에서 그 요청자는 배치 대기열의 failed 이며,
-// 그 실패를 메인 문서의 오류 표시로 보인다. 연결은 index.html 이 쓰는 page-layout.js 의 배치 배선이고, 이 검사는
-// 호스트 브리지, 컴포지터, 판의 렌더와 animation frame 만 가짜로 둔다.
+// Checks the lines that one presentation failure writes to the application log. The requester that received the failure reports it, and any other path that received the same failure does not write it again
+// (docs/spec/hosts.md#application-log). In the page, that requester is failed of the layout queue, and it shows the failure
+// through the error display of the main document. The connection is the layout wiring of page-layout.js that index.html uses, and this test fakes only the
+// host bridge, the compositor, the render of the plane, and the animation frame.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
@@ -12,7 +12,7 @@ const TIMEOUT = "the current image raster did not present within 10s; pending ta
 test("one presentation timeout writes one page error line", async () => {
   const dom = new JSDOM('<div id="plane"></div><div id="applicationError"></div>');
   globalThis.document = dom.window.document;
-  // 문서의 animation frame. Node 에는 없으므로 요청한 자리에서 실행한다.
+  // The animation frame of the document. Node does not have one, so it runs at the requested place.
   globalThis.requestAnimationFrame = (run) => run(0);
   const lines = [];
   mock.module("@soksak/runtime", { namedExports: { host: {
@@ -41,7 +41,7 @@ test("one presentation timeout writes one page error line", async () => {
     }],
     settled: true, drawn: false, titlebar: 40,
   };
-  // 판의 렌더가 커밋한 표시(index.html 의 onRender). 그린 배치의 표시를 호스트에 요청한다.
+  // The presentation that the render of the plane committed (onRender of index.html). It requests the presentation of the drawn layout from the host.
   let rendered = Promise.resolve();
   const showError = createErrorDisplay({ document, changed: () => {} });
   const page = createPageLayout({
